@@ -995,17 +995,22 @@ async function apolloSearch(countryCode,keywords,seniorities,industry){
 // FIRECRAWL
 async function firecrawlScrape(pageUrl) {
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(()=>controller.abort(), 12000);
     const res = await fetch("https://apollo-proxy.edgars-7e7.workers.dev/firecrawl-scrape", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({url: pageUrl, formats: ["markdown"], waitFor: 1500})
+      body: JSON.stringify({url: pageUrl, formats: ["markdown"]}),
+      signal: controller.signal
     });
+    clearTimeout(timeout);
     if(!res.ok) return "";
     const text = await res.text();
-    if(!text || text.trim()==="") return "";
+    if(!text || text.trim().length < 10) return "";
     let data;
     try { data = JSON.parse(text); } catch(e) { return ""; }
-    if(data.success && data.data && data.data.markdown) return data.data.markdown.substring(0,6000);
+    if(data && data.success && data.data && data.data.markdown) return data.data.markdown.substring(0,6000);
+    if(data && data.data && data.data.content) return data.data.content.substring(0,6000);
     return "";
   } catch(e) { return ""; }
 }
@@ -1045,15 +1050,19 @@ async function enrichCompany(coId) {
 
   // FIRECRAWL PRE-SCAN
   var firecrawlData = "";
-  if(coDomain) {
+  if(coDomain && CLAUDE_KEY) {
     try {
       if(btn) { btn.textContent="Scanning website..."; }
-      firecrawlData = await firecrawlMulti(coDomain);
-      console.log("Firecrawl got "+firecrawlData.length+" chars for "+co.name);
-    } catch(e) { console.warn("Firecrawl failed:", e); }
+      var fcResult = await Promise.race([
+        firecrawlMulti(coDomain),
+        new Promise(function(r){setTimeout(function(){r("");},15000);})
+      ]);
+      firecrawlData = fcResult || "";
+      if(firecrawlData) console.log("Firecrawl got "+firecrawlData.length+" chars for "+co.name);
+    } catch(e) { firecrawlData = ""; }
   }
   var firecrawlSection = firecrawlData ?
-    "\n\n REAL WEBSITE DATA (scraped live)\nExtract ALL emails, phones, names, titles from this:\n\n" + firecrawlData + "\n END WEBSITE DATA\n" : "";
+    "\n\nREAL WEBSITE DATA (scraped live - prioritize this):\n" + firecrawlData + "\nEND WEBSITE DATA\n" : "";
   const coCountry = (co.country||"Latvia").toLowerCase();
   // Derive domain from website, or guess from company name + country TLD
   var tldGuess = coCountry.includes("lithuania")||coCountry.includes("lt") ? ".lt" :
