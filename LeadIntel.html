@@ -1047,6 +1047,17 @@ async function enrichCompany(coId) {
     "(No contacts yet — find ALL key people from scratch: CEO, directors, sales leaders)";
 
   const coWebsite = co.website ? (co.website.startsWith("http") ? co.website : "https://"+co.website) : "";
+  const coCountry = (co.country||"Latvia").toLowerCase();
+  const tldGuess = coCountry.includes("lithuania")||coCountry.includes("lt") ? ".lt" :
+                   coCountry.includes("estonia")||coCountry.includes("ee") ? ".ee" :
+                   coCountry.includes("sweden")||coCountry.includes("se") ? ".se" :
+                   coCountry.includes("norway")||coCountry.includes("no") ? ".no" :
+                   coCountry.includes("denmark")||coCountry.includes("dk") ? ".dk" :
+                   coCountry.includes("finland")||coCountry.includes("fi") ? ".fi" :
+                   coCountry.includes("germany")||coCountry.includes("de") ? ".de" :
+                   coCountry.includes("poland")||coCountry.includes("pl") ? ".pl" : ".lv";
+  const coDomain = coWebsite ? coWebsite.replace(/https?:\/\//,"").split("/")[0] :
+    (co.name.toLowerCase().replace(/[^a-z0-9]/g,"") + tldGuess);
 
   // FIRECRAWL PRE-SCAN
   var firecrawlData = "";
