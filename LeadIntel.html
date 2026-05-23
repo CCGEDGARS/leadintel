@@ -1065,8 +1065,7 @@ async function enrichCompany(coId) {
                    coCountry.includes("finland")||coCountry.includes("fi") ? ".fi" :
                    coCountry.includes("germany")||coCountry.includes("de") ? ".de" :
                    coCountry.includes("poland")||coCountry.includes("pl") ? ".pl" : ".lv";
-  const coDomain = coWebsite ? coWebsite.replace(/https?:\/\//,"").split("/")[0] :
-    (co.name.toLowerCase().replace(/[^a-z0-9]/g,"") + tldGuess);
+  // coDomain already declared above
 
   // FIRECRAWL PRE-SCAN
   var firecrawlData = "";
@@ -1083,9 +1082,8 @@ async function enrichCompany(coId) {
   }
   var firecrawlSection = firecrawlData ?
     "\n\nREAL WEBSITE DATA (scraped live - prioritize this):\n" + firecrawlData + "\nEND WEBSITE DATA\n" : "";
-  const coCountry = (co.country||"Latvia").toLowerCase();
   // Derive domain from website, or guess from company name + country TLD
-  var tldGuess = coCountry.includes("lithuania")||coCountry.includes("lt") ? ".lt" :
+  var tldGuess2 = coCountry.includes("lithuania")||coCountry.includes("lt") ? ".lt" :
                  coCountry.includes("estonia")||coCountry.includes("ee") ? ".ee" :
                  coCountry.includes("sweden")||coCountry.includes("se") ? ".se" :
                  coCountry.includes("norway")||coCountry.includes("no") ? ".no" :
@@ -1094,7 +1092,7 @@ async function enrichCompany(coId) {
                  coCountry.includes("germany")||coCountry.includes("de") ? ".de" :
                  coCountry.includes("poland")||coCountry.includes("pl") ? ".pl" : ".lv";
   const coDomain = coWebsite ? coWebsite.replace(/https?:\/\//,"").split("/")[0] :
-    (co.name.toLowerCase().replace(/[^a-z0-9]/g,"") + tldGuess);
+    (co.name.toLowerCase().replace(/[^a-z0-9]/g,"") + tldGuess2);
 
   // Market-specific intelligence sources
   var marketSources = "";
