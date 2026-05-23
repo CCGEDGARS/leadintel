@@ -1027,18 +1027,89 @@ async function firecrawlScrape(pageUrl) {
 async function firecrawlMulti(domain) {
   const pages = [
     "https://"+domain,
-    "https://"+domain+"/about",
     "https://"+domain+"/contact",
-    "https://"+domain+"/team",
+    "https://"+domain+"/kontakti",
+    "https://"+domain+"/about",
     "https://"+domain+"/par-mums",
-    "https://"+domain+"/kontakti"
+    "https://"+domain+"/team"
   ];
-  const results = await Promise.allSettled(pages.slice(0,3).map(p => firecrawlScrape(p)));
+  const results = await Promise.allSettled(pages.slice(0,3).map(function(p){return firecrawlScrape(p);}));
   return results
-    .filter(r => r.status==="fulfilled" && r.value)
-    .map(r => r.value)
+    .filter(function(r){return r.status==="fulfilled" && r.value && r.value.length>50;})
+    .map(function(r){return r.value;})
     .join("\n\n---PAGE---\n\n")
-    .substring(0,12000);
+    .substring(0,10000);
+}
+
+// Mandatory registry scraping — top 3 sources per country in parallel
+async function firecrawlRegistries(coName, coCountry, domain) {
+  var enc = encodeURIComponent(coName);
+  var urls = [];
+  if(coCountry.includes("latvia")||coCountry.includes("lv")) {
+    urls = [
+      "https://lursoft.lv/search?text="+enc,
+      "https://www.firmas.lv/lv/uznemumi?q="+enc+"&type=companies",
+      "https://ur.gov.lv/lv/mekleshana?company_name="+enc,
+      "https://www.rekvizitai.lv/en/company/search/?q="+enc,
+      "https://www.saraksts.lv/search?q="+enc
+    ];
+  } else if(coCountry.includes("lithuania")||coCountry.includes("lt")) {
+    urls = [
+      "https://rekvizitai.vz.lt/en/company/search/?q="+enc,
+      "https://www.registrucentras.lt/jar/p/index.php?p_pavadinimas="+enc,
+      "https://www.jars.lt/search?q="+enc
+    ];
+  } else if(coCountry.includes("estonia")||coCountry.includes("ee")) {
+    urls = [
+      "https://ariregister.rik.ee/est/company/search?q="+enc,
+      "https://teatmik.ee/en/company/search?q="+enc,
+      "https://www.inforegister.ee/search?q="+enc
+    ];
+  } else if(["sweden","sverige","se"].some(function(x){return coCountry.includes(x);})) {
+    urls = [
+      "https://www.proff.se/search?q="+enc,
+      "https://www.allabolag.se/what/"+enc
+    ];
+  } else if(["norway","norge","no"].some(function(x){return coCountry.includes(x);})) {
+    urls = [
+      "https://www.proff.no/s%C3%B8k?q="+enc,
+      "https://www.brreg.no/en/business/search/?name="+enc
+    ];
+  } else if(["denmark","danmark","dk"].some(function(x){return coCountry.includes(x);})) {
+    urls = [
+      "https://datacvr.virk.dk/search?query="+enc,
+      "https://www.proff.dk/s%C3%B8g?q="+enc
+    ];
+  } else if(["finland","suomi","fi"].some(function(x){return coCountry.includes(x);})) {
+    urls = [
+      "https://www.finder.fi/search?what="+enc,
+      "https://www.ytj.fi/yrityshaku.aspx?p=0&SearchType=1&yritysnimi="+enc
+    ];
+  } else if(["germany","deutschland","de"].some(function(x){return coCountry.includes(x);})) {
+    urls = [
+      "https://www.northdata.de/"+enc,
+      "https://www.handelsregister.de/rp_web/search.do?schlagwoerter="+enc
+    ];
+  } else if(["poland","polska","pl"].some(function(x){return coCountry.includes(x);})) {
+    urls = [
+      "https://aleo.com/int/en/search/results?q="+enc,
+      "https://www.krs.ms.gov.pl/index.php?option=com_krs&task=szukaj&Itemid=45&search="+enc
+    ];
+  }
+  if(!urls.length) return "";
+  // Scrape top 3 in parallel — 12s timeout each (built into firecrawlScrape)
+  var top3 = urls.slice(0, 3);
+  var results = await Promise.allSettled(top3.map(function(u){return firecrawlScrape(u);}));
+  var sections = [];
+  top3.forEach(function(u, i){
+    var r = results[i];
+    if(r.status==="fulfilled" && r.value && r.value.length > 80) {
+      var host = u.replace(/^https?:\/\/([^\/]+).*$/, "$1");
+      sections.push("["+host.toUpperCase()+"]\n"+r.value.substring(0,4000));
+    }
+  });
+  if(!sections.length) return "";
+  return sections.join("\n\n---REGISTRY---\n\n");
 }
 
 // OSINT ENRICHMENT
@@ -1068,21 +1139,27 @@ async function enrichCompany(coId) {
   const coDomain = coWebsite ? coWebsite.replace(/https?:\/\//,"").split("/")[0] :
     (co.name.toLowerCase().replace(/[^a-z0-9]/g,"") + tldGuess);
 
-  // FIRECRAWL PRE-SCAN
-  var firecrawlData = "";
-  if(coDomain && CLAUDE_KEY) {
+  // FIRECRAWL PRE-SCAN — website + country registries in parallel (mandatory)
+  var firecrawlWebData = "";
+  var firecrawlRegData = "";
+  if(FIRECRAWL_KEY) {
+    if(btn) { btn.textContent="Scanning registries..."; }
     try {
-      if(btn) { btn.textContent="Scanning website..."; }
-      var fcResult = await Promise.race([
-        firecrawlMulti(coDomain),
-        new Promise(function(r){setTimeout(function(){r("");},15000);})
+      var fcPair = await Promise.allSettled([
+        Promise.race([firecrawlMulti(coDomain), new Promise(function(r){setTimeout(function(){r("");},20000);})]),
+        Promise.race([firecrawlRegistries(co.name, coCountry, coDomain), new Promise(function(r){setTimeout(function(){r("");},45000);})])
       ]);
-      firecrawlData = fcResult || "";
-      if(firecrawlData) console.log("Firecrawl got "+firecrawlData.length+" chars for "+co.name);
-    } catch(e) { firecrawlData = ""; }
+      firecrawlWebData = fcPair[0].status==="fulfilled" ? (fcPair[0].value||"") : "";
+      firecrawlRegData = fcPair[1].status==="fulfilled" ? (fcPair[1].value||"") : "";
+      if(firecrawlWebData) console.log("Website scan: "+firecrawlWebData.length+" chars for "+co.name);
+      if(firecrawlRegData) console.log("Registry scan: "+firecrawlRegData.length+" chars for "+co.name);
+    } catch(e) { console.warn("Firecrawl scan error:", e); }
   }
-  var firecrawlSection = firecrawlData ?
-    "\n\nREAL WEBSITE DATA (scraped live - prioritize this):\n" + firecrawlData + "\nEND WEBSITE DATA\n" : "";
+  var firecrawlSection = (firecrawlWebData||firecrawlRegData) ?
+    "\n\n━━━ PRE-SCRAPED REAL DATA — USE AS PRIMARY SOURCE ━━━\n" +
+    (firecrawlWebData ? "\n[COMPANY WEBSITE]\n"+firecrawlWebData+"\n" : "") +
+    (firecrawlRegData ? "\n[REGISTRY DATA]\n"+firecrawlRegData+"\n" : "") +
+    "\n━━━ END PRE-SCRAPED DATA ━━━\n" : "";
 
   // Market-specific intelligence sources
   var marketSources = "";
@@ -1165,37 +1242,35 @@ COUNTRY: ${co.country||"Latvia"}
 WEBSITE: ${coWebsite||"https://"+coDomain}
 DOMAIN: ${coDomain}
 INDUSTRY: ${co.industry||"unknown"}
-KNOWN CONTACTS (find surnames + all details):${firecrawlSection}
+${firecrawlSection}
+APOLLO CONTACTS — enrich each, find missing surnames + email + phone:
 ${contactList}
 ${sniperUrlSection}═══════════════════════════════════════
 
+INSTRUCTIONS: The PRE-SCRAPED DATA above contains real registry + website data. Extract all names, emails, phones, turnover from it first. Then use web_search to fill gaps.
+
 EXECUTE ALL PHASES — DO NOT SKIP ANY:
 
-━━━ PHASE 1: WEBSITE DEEP SCAN ━━━
-Visit ALL these URLs:
-• ${coWebsite||"https://"+coDomain}
-• ${coWebsite||"https://"+coDomain}/kontakti (or /contact /contacts /kontakt /kontaktai /yhteystiedot)
-• ${coWebsite||"https://"+coDomain}/par-mums (or /about /om-oss /tietoa /about-us /uber-uns)
-• ${coWebsite||"https://"+coDomain}/komanda (or /team /leadership /management /tiimi /laget)
-• ${coWebsite||"https://"+coDomain}/vadiba (or /board /management /johto /ledelse)
-Extract: ALL named people + titles, ALL email addresses, ALL phone numbers, email pattern from footer.
+━━━ PHASE 1: EXTRACT FROM PRE-SCRAPED DATA ━━━
+From the PRE-SCRAPED DATA above:
+• Extract ALL named people with full names + titles
+• Extract ALL email addresses and phone numbers
+• Extract turnover / revenue figures
+• Extract board members / amatpersonas / officials
+• Identify email pattern from domain and found emails
+If PRE-SCRAPED DATA is empty, proceed to Phase 2.
 
-━━━ PHASE 2: GOOGLE INTELLIGENCE ━━━
-Run ALL these searches:
+━━━ PHASE 2: WEBSITE + GOOGLE INTELLIGENCE ━━━
+• Visit: ${coWebsite||"https://"+coDomain}/kontakti and /par-mums and /komanda
 • "${co.name}" CEO OR director OR executive email phone ${co.country||"Latvia"}
-• site:${coDomain} team OR kontakti OR about OR par-mums
 • "${co.name}" "@${coDomain}"
-• "${coDomain}" director OR vadītājs OR CEO kontakti
-• "${co.name}" "${co.country||"Latvia"}" linkedin.com/in
-• "${co.name}" site:firmas.lv OR site:lursoft.lv
-• Google Maps: search "${co.name} ${co.country||"Riga"}" — get phone from Maps listing
+• site:${coDomain} team OR contacts OR leadership
+• Google Maps: "${co.name} ${co.country||"Riga"}" — get phone from Maps listing
 
-━━━ PHASE 3: MARKET-SPECIFIC REGISTRIES ━━━
-IMPORTANT: Try ALL these name variations in registries:
-• "${co.name}" (exact)
-• "${co.name.replace(/\s+/g,'')}" (no spaces)
-• "${co.name.split(' ').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ')}" (capitalized)
-• "${co.name.toUpperCase()}" (uppercase)
+━━━ PHASE 3: REGISTRY INTELLIGENCE ━━━
+Check PRE-SCRAPED DATA above first. Then use web_search to fill gaps:
+• "${co.name}" site:firmas.lv OR site:lursoft.lv OR site:ur.gov.lv
+• "${co.name}" site:rekvizitai.vz.lt OR site:ariregister.rik.ee OR site:allabolag.se
 ${marketSources}
 
 ━━━ PHASE 4: LINKEDIN DEEP SEARCH ━━━
