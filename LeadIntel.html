@@ -1006,9 +1006,9 @@ async function firecrawlScrape(pageUrl) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(()=>controller.abort(), 12000);
-    const res = await fetch("https://apollo-proxy.edgars-7e7.workers.dev/firecrawl-scrape", {
+    const res = await fetch("https://api.firecrawl.dev/v1/scrape", {
       method: "POST",
-      headers: {"Content-Type":"application/json"},
+      headers: {"Content-Type":"application/json","Authorization":"Bearer "+FIRECRAWL_KEY},
       body: JSON.stringify({url: pageUrl, formats: ["markdown"]}),
       signal: controller.signal
     });
@@ -1065,7 +1065,8 @@ async function enrichCompany(coId) {
                    coCountry.includes("finland")||coCountry.includes("fi") ? ".fi" :
                    coCountry.includes("germany")||coCountry.includes("de") ? ".de" :
                    coCountry.includes("poland")||coCountry.includes("pl") ? ".pl" : ".lv";
-  // coDomain already declared above
+  const coDomain = coWebsite ? coWebsite.replace(/https?:\/\//,"").split("/")[0] :
+    (co.name.toLowerCase().replace(/[^a-z0-9]/g,"") + tldGuess);
 
   // FIRECRAWL PRE-SCAN
   var firecrawlData = "";
@@ -1082,17 +1083,6 @@ async function enrichCompany(coId) {
   }
   var firecrawlSection = firecrawlData ?
     "\n\nREAL WEBSITE DATA (scraped live - prioritize this):\n" + firecrawlData + "\nEND WEBSITE DATA\n" : "";
-  // Derive domain from website, or guess from company name + country TLD
-  var tldGuess2 = coCountry.includes("lithuania")||coCountry.includes("lt") ? ".lt" :
-                 coCountry.includes("estonia")||coCountry.includes("ee") ? ".ee" :
-                 coCountry.includes("sweden")||coCountry.includes("se") ? ".se" :
-                 coCountry.includes("norway")||coCountry.includes("no") ? ".no" :
-                 coCountry.includes("denmark")||coCountry.includes("dk") ? ".dk" :
-                 coCountry.includes("finland")||coCountry.includes("fi") ? ".fi" :
-                 coCountry.includes("germany")||coCountry.includes("de") ? ".de" :
-                 coCountry.includes("poland")||coCountry.includes("pl") ? ".pl" : ".lv";
-  const coDomain = coWebsite ? coWebsite.replace(/https?:\/\//,"").split("/")[0] :
-    (co.name.toLowerCase().replace(/[^a-z0-9]/g,"") + tldGuess2);
 
   // Market-specific intelligence sources
   var marketSources = "";
@@ -1279,8 +1269,31 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
     const data = JSON.parse(clean);
     console.log("OSINT parsed contacts:", data.contacts ? data.contacts.length : 0, data.contacts);
 
-    // Merge enriched data into existing contacts
-    if(data.contacts && data.contacts.length) {
+    // Always save company-level intel regardless of contacts
+    if(data.companyPhone&&data.companyPhone!=="DATA MISSING"&&!co.phone) co.phone=data.companyPhone;
+    if(data.companyEmail&&data.companyEmail!=="DATA MISSING"&&!co.email) co.email=data.companyEmail;
+    if(data.companyAddress&&data.companyAddress!=="DATA MISSING") co.address=data.companyAddress;
+    if(data.notes) co.osintNotes=data.notes;
+    if(data.hiring&&data.hiring!=="none") co._hiring=data.hiring;
+    if(data.brandType) co._brandType=data.brandType;
+    if(data.dmProcess) co._dmOverride=data.dmProcess;
+    if(data.emailPattern&&data.emailPattern!=="DATA MISSING") co.emailPattern=data.emailPattern;
+    // Build intelligence summary
+    co._intel = {
+      phone: (data.companyPhone&&data.companyPhone!=="DATA MISSING")?data.companyPhone:null,
+      email: (data.companyEmail&&data.companyEmail!=="DATA MISSING")?data.companyEmail:null,
+      address: (data.companyAddress&&data.companyAddress!=="DATA MISSING")?data.companyAddress:null,
+      emailPattern: (data.emailPattern&&data.emailPattern!=="DATA MISSING")?data.emailPattern:null,
+      mxDomain: (data.mxDomain&&data.mxDomain!=="DATA MISSING")?data.mxDomain:coDomain,
+      hiring: data.hiring||"none",
+      brandType: data.brandType||null,
+      dmProcess: data.dmProcess||null,
+      notes: data.notes||null,
+      contacts: data.contacts?data.contacts.length:0,
+      verifiedEmails: data.contacts?data.contacts.filter(function(c){return c.email&&c.email!=="DATA MISSING";}).length:0
+    };
+    // Merge contact-level data if found
+    if(data.contacts&&data.contacts.length) {
       data.contacts.forEach(function(ec){
         // Find matching existing contact or add new
         const existing = co.contacts.find(function(c){
@@ -1321,11 +1334,10 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
           });
         }
       });
-      if(data.emailPattern) co.emailPattern=data.emailPattern;
-      // EMAIL PATTERN ENGINE — apply pattern to ALL existing Apollo contacts
-      if(data.emailPattern && data.emailPattern!=="DATA MISSING" && co._intel && co._intel.mxDomain){
+      // EMAIL PATTERN ENGINE — apply pattern to ALL contacts without email
+      if(data.emailPattern&&data.emailPattern!=="DATA MISSING") {
         var pat = data.emailPattern.toLowerCase();
-        var dom = co._intel.mxDomain || coDomain;
+        var dom = co._intel.mxDomain||coDomain;
         co.contacts.forEach(function(ct){
           if(ct.email) return; // already has email
           var parts = ct.name.trim().split(/\s+/);
@@ -1346,26 +1358,6 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
           }
         });
       }
-      if(data.notes) co.osintNotes=data.notes;
-      if(data.hiring&&data.hiring!=="none") co._hiring=data.hiring;
-      if(data.companyPhone&&data.companyPhone!=="DATA MISSING"&&!co.phone) co.phone=data.companyPhone;
-      if(data.companyEmail&&data.companyEmail!=="DATA MISSING"&&!co.email) co.email=data.companyEmail;
-      if(data.companyAddress&&data.companyAddress!=="DATA MISSING") co.address=data.companyAddress;
-      // Build intelligence summary
-      co._intel = {
-        phone: data.companyPhone!=="DATA MISSING"?data.companyPhone:null,
-        email: data.companyEmail!=="DATA MISSING"?data.companyEmail:null,
-        address: data.companyAddress!=="DATA MISSING"?data.companyAddress:null,
-        emailPattern: data.emailPattern!=="DATA MISSING"?data.emailPattern:null,
-        hiring: data.hiring||"none",
-        brandType: data.brandType||null,
-        dmProcess: data.dmProcess||null,
-        notes: data.notes||null,
-        contacts: data.contacts?data.contacts.length:0,
-        verifiedEmails: data.contacts?data.contacts.filter(function(c){return c.email&&c.email!=="DATA MISSING";}).length:0
-      };
-      if(data.brandType) co._brandType=data.brandType;
-      if(data.dmProcess) co._dmOverride=data.dmProcess;
       // Rescore with new intelligence
       if(co.contacts.length){
         var best2=co.contacts.reduce(function(b,c){var sm={c_suite:4,vp:4,director:3,manager:2,senior:1};return(sm[c.seniority]||1)>(sm[b.seniority]||1)?c:b;},co.contacts[0]);
@@ -2326,10 +2318,10 @@ function savePareto(){
   }
   paretoRules = {
     th: {
-      vip: parseInt(document.getElementById("pcat-thresh-VIP").textContent)||13,
-      a:   parseInt(document.getElementById("pcat-thresh-A").textContent)||9,
-      b:   parseInt(document.getElementById("pcat-thresh-B").textContent)||5,
-      c:   parseInt(document.getElementById("pcat-thresh-C").textContent)||1
+      vip: parseInt((document.getElementById("th-vip")||{}).value)||13,
+      a:   parseInt((document.getElementById("th-a")||{}).value)||9,
+      b:   parseInt((document.getElementById("th-b")||{}).value)||5,
+      c:   parseInt((document.getElementById("th-c")||{}).value)||1
     },
     pdm: {single:4,committee:3,division:2,proc:1},
     pe:  {p500:4,p100:3,p50:2,p10:1},
@@ -2436,10 +2428,12 @@ function updateCatSummaries(){
 function loadParetoUI(){
   if(paretoRules.pills) pillSelections = paretoRules.pills;
   var t = paretoRules.th||{vip:13,a:9,b:5,c:1};
-  document.getElementById("pcat-thresh-VIP").textContent = t.vip;
-  document.getElementById("pcat-thresh-A").textContent   = t.a;
-  document.getElementById("pcat-thresh-B").textContent   = t.b;
-  document.getElementById("pcat-thresh-C").textContent   = t.c;
+  var vipEl=document.getElementById("th-vip"), aEl=document.getElementById("th-a"),
+      bEl=document.getElementById("th-b"), cEl2=document.getElementById("th-c");
+  if(vipEl) vipEl.value=t.vip;
+  if(aEl) aEl.value=t.a;
+  if(bEl) bEl.value=t.b;
+  if(cEl2) cEl2.value=t.c;
   updateCatSummaries();
   updateParetoPreview();
   // Update quick preview on Screen 1
@@ -2459,10 +2453,10 @@ function loadParetoUI(){
 function updateParetoPreview(){
   var el=document.getElementById("pareto-preview");if(!el)return;
   var t=paretoRules.th||{vip:13,a:9,b:5,c:1};
-  var tvip=parseInt(document.getElementById("pcat-thresh-VIP").textContent)||t.vip;
-  var ta=parseInt(document.getElementById("pcat-thresh-A").textContent)||t.a;
-  var tb=parseInt(document.getElementById("pcat-thresh-B").textContent)||t.b;
-  var tc=parseInt(document.getElementById("pcat-thresh-C").textContent)||t.c;
+  var tvip=parseInt((document.getElementById("th-vip")||{}).value)||t.vip;
+  var ta=parseInt((document.getElementById("th-a")||{}).value)||t.a;
+  var tb=parseInt((document.getElementById("th-b")||{}).value)||t.b;
+  var tc=parseInt((document.getElementById("th-c")||{}).value)||t.c;
   var maxScore=3+1+4+4+4+3; // max possible: DM(3)+emp(1)+trn(4)+sales(4)+brand(4)+hire(3)
   el.innerHTML=[
     '<span style="color:#C9A961;font-weight:700">★ VIP &mdash; Top Business Potential</span> &mdash; Call personally this week',
@@ -2489,7 +2483,7 @@ if(localStorage.getItem("li_hide_apollo_banner")){
 }
 // Set correct limit button on load
 (function(){
-  var saved = localStorage.getItem("li_search_limit")||"50";
+  var saved = localStorage.getItem("li_search_limit")||"10";
   document.querySelectorAll(".limit-btn").forEach(function(b){
     b.classList.toggle("sel", b.dataset.val===saved);
   });
