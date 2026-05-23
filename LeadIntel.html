@@ -1190,7 +1190,7 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
 }`;
 
   try {
-    const raw = await claude(prompt, 3000);
+    const raw = await claude(prompt, 8000);
     console.log("OSINT raw for "+co.name+":", raw.substring(0,500));
     // Extract JSON block - Claude sometimes adds preamble text before the JSON
     var clean = raw;
@@ -1247,6 +1247,30 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
         }
       });
       if(data.emailPattern) co.emailPattern=data.emailPattern;
+      // EMAIL PATTERN ENGINE — apply pattern to ALL existing Apollo contacts
+      if(data.emailPattern && data.emailPattern!=="DATA MISSING" && co._intel && co._intel.mxDomain){
+        var pat = data.emailPattern.toLowerCase();
+        var dom = co._intel.mxDomain || coDomain;
+        co.contacts.forEach(function(ct){
+          if(ct.email) return; // already has email
+          var parts = ct.name.trim().split(/\s+/);
+          var fn = parts[0]||""; var ln = parts[parts.length-1]||"";
+          var fi = fn.charAt(0);
+          var predicted = "";
+          if(pat.includes("firstname.lastname")) predicted = fn+"."+ln+"@"+dom;
+          else if(pat.includes("f.lastname")) predicted = fi+"."+ln+"@"+dom;
+          else if(pat.includes("firstnamelastname")) predicted = fn+ln+"@"+dom;
+          else if(pat.includes("firstname_lastname")) predicted = fn+"_"+ln+"@"+dom;
+          else if(pat.includes("lastname.firstname")) predicted = ln+"."+fn+"@"+dom;
+          else if(pat.includes("firstname@")) predicted = fn+"@"+dom;
+          else if(pat.includes("flastname")) predicted = fi+ln+"@"+dom;
+          if(predicted){
+            ct.email = predicted.toLowerCase();
+            ct.emailConfidence = "PREDICTED";
+            ct._emailSource = "Pattern: "+data.emailPattern;
+          }
+        });
+      }
       if(data.notes) co.osintNotes=data.notes;
       if(data.hiring&&data.hiring!=="none") co._hiring=data.hiring;
       if(data.companyPhone&&data.companyPhone!=="DATA MISSING"&&!co.phone) co.phone=data.companyPhone;
@@ -1931,7 +1955,7 @@ function renderResultsPage(){
       tblHtml+='<td class="td-name">'+(c.name||"—")+'</td>';
       tblHtml+='<td class="td-title">'+(c.title||"—")+'</td>';
       tblHtml+='<td>'+(c.seniority?'<span class="sen-tag">'+(SEN_LABELS[c.seniority]||c.seniority)+'</span>':"—")+'</td>';
-      var emailConf = c.confidence ? ' <span style="font-size:9px;padding:1px 4px;border-radius:3px;vertical-align:middle;background:'+(c.confidence==="HIGH"?"rgba(122,219,184,0.15)":c.confidence==="MEDIUM"?"rgba(201,169,97,0.12)":"rgba(138,138,154,0.1)")+';color:'+(c.confidence==="HIGH"?"#7ADBB8":c.confidence==="MEDIUM"?"var(--g)":"var(--muted)")+'">'+(c.confidence||"")+'</span>' : "";
+      var emailConf = c.emailConfidence==="PREDICTED" ? ' <span title="'+( c._emailSource||"Pattern predicted")+'" style="font-size:9px;padding:1px 5px;border-radius:3px;vertical-align:middle;background:rgba(201,169,97,0.1);color:var(--g);border:1px solid rgba(201,169,97,0.25);cursor:help">~predicted</span>' : (c.confidence ? ' <span style="font-size:9px;padding:1px 4px;border-radius:3px;vertical-align:middle;background:'+(c.confidence==="HIGH"?"rgba(122,219,184,0.15)":c.confidence==="MEDIUM"?"rgba(201,169,97,0.12)":"rgba(138,138,154,0.1)")+';color:'+(c.confidence==="HIGH"?"#7ADBB8":c.confidence==="MEDIUM"?"var(--g)":"var(--muted)")+'">'+(c.confidence||"")+'</span>' : "");
       tblHtml+='<td>'+(c.email?'<a href="mailto:'+c.email+'" class="td-link td-email">'+c.email+'</a>'+emailConf:'<span class="td-miss">—</span>')+'</td>';
       tblHtml+='<td>'+(c.phone?'<a href="tel:'+c.phone+'" class="td-link td-phone">'+c.phone+'</a>':'<span class="td-miss">—</span>')+'</td>';
       var liDisplay="—";
