@@ -1,0 +1,2550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Lead Intel — B2B Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--g:#C9A961;--gd:#A8893F;--dark:#070B12;--dark2:#0D1421;--dark3:#111827;--border:rgba(201,169,97,0.18);--text:#F0EDE8;--muted:#8A8A9A;--font:'DM Sans',sans-serif;--display:'Playfair Display',serif}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--dark);color:var(--text);font-family:var(--font);min-height:100vh}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.nav{display:flex;align-items:center;justify-content:space-between;padding:14px 32px;border-bottom:1px solid var(--border);background:rgba(13,20,33,0.97);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);flex-wrap:wrap;gap:10px}
+.nav-brand{font-family:var(--display);font-size:20px;color:var(--g)}
+.nav-sub{font-size:11px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
+.nav-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.step{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;font-size:12px;font-weight:500;color:var(--muted);cursor:pointer;border-radius:7px;border:1px solid transparent;background:none;font-family:var(--font);transition:all .2s}
+.step:hover{color:var(--text);border-color:var(--border)}
+.step.active{color:var(--g);background:rgba(201,169,97,0.1);border-color:var(--border)}
+.step.done{color:#6DB86D}
+.step-num{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;background:rgba(201,169,97,0.12);color:var(--g);border:1px solid rgba(201,169,97,0.25);flex-shrink:0}
+.btn-reset{padding:6px 12px;border-radius:7px;border:1px solid rgba(255,255,255,0.08);background:transparent;color:var(--muted);font-family:var(--font);font-size:12px;cursor:pointer}
+.btn-reset:hover{border-color:rgba(201,169,97,0.25);color:var(--text)}
+.main{max-width:900px;margin:0 auto;padding:40px 20px}
+.screen{display:none}.screen.active{display:block}
+.pg-title{font-family:var(--display);font-size:28px;color:var(--text);margin-bottom:6px}
+.pg-sub{font-size:14px;color:var(--muted);margin-bottom:32px;line-height:1.6}
+.card{background:var(--dark2);border:1px solid var(--border);border-radius:13px;padding:24px;margin-bottom:18px}
+.card-title{font-size:12px;font-weight:600;color:var(--g);letter-spacing:.1em;text-transform:uppercase;margin-bottom:14px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+label{display:block;font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;font-weight:500}
+input,select,textarea{width:100%;padding:10px 13px;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font);font-size:14px;outline:none;transition:border-color .2s;resize:vertical}
+input:focus,select:focus,textarea:focus{border-color:var(--g)}
+input::placeholder,textarea::placeholder{color:rgba(138,138,154,0.4)}
+select option{background:var(--dark3)}
+.btn{padding:11px 22px;border-radius:8px;border:none;cursor:pointer;font-family:var(--font);font-size:14px;font-weight:600;transition:all .2s;display:inline-flex;align-items:center;gap:7px}
+.btn-gold{background:linear-gradient(135deg,#C9A961,#B8943A);color:#000;box-shadow:0 4px 16px rgba(201,169,97,0.22)}
+.btn-gold:hover{background:linear-gradient(135deg,#D4B86E,#C9A961);transform:translateY(-1px)}
+.btn-gold:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.btn-outline{background:transparent;border:1px solid rgba(201,169,97,0.25);color:var(--text)}
+.btn-outline:hover{border-color:var(--g);color:var(--g)}
+.btn-ghost{background:transparent;border:1px solid rgba(255,255,255,0.08);color:var(--muted)}
+.btn-ghost:hover{border-color:rgba(201,169,97,0.2);color:var(--text)}
+.btn-sm{padding:6px 14px;font-size:12px;border-radius:7px}
+.btn-full{width:100%;justify-content:center;padding:13px}
+.upload-zone{border:1px dashed rgba(201,169,97,0.2);border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:all .25s;display:block}
+.upload-zone:hover{border-color:rgba(201,169,97,0.45);background:rgba(201,169,97,0.03)}
+.upload-zone.filled{border-color:rgba(201,169,97,0.4);background:rgba(201,169,97,0.05);border-style:solid}
+.upload-icon{font-size:28px;margin-bottom:8px}
+.upload-label{font-size:13px;color:var(--muted)}
+.upload-name{font-size:13px;color:var(--g);font-weight:600;margin-top:5px}
+.upload-meta{font-size:11px;color:rgba(138,138,154,0.55);margin-top:3px}
+.summary-box{background:rgba(201,169,97,0.05);border:1px solid rgba(201,169,97,0.2);border-radius:10px;padding:18px;margin-top:14px}
+.summary-label{font-size:11px;color:var(--g);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px}
+.summary-text{font-size:14px;color:var(--text);line-height:1.72}
+.prog-wrap{margin-top:16px}
+.prog-bar{height:3px;background:rgba(201,169,97,0.12);border-radius:2px;overflow:hidden}
+.prog-fill{height:100%;background:linear-gradient(90deg,#C9A961,#E8D08A);border-radius:2px;transition:width .5s}
+.prog-status{font-size:13px;color:var(--muted);text-align:center;padding:8px 0 0}
+.cat-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.cat-card{border:1px solid rgba(201,169,97,0.15);border-radius:11px;padding:16px;cursor:pointer;transition:all .25s;background:var(--dark2);position:relative;user-select:none}
+.cat-card:hover{border-color:rgba(201,169,97,0.3)}
+.cat-card.active{border-color:var(--g);background:rgba(201,169,97,0.07)}
+.cat-card.inactive{opacity:.4}
+.cat-toggle{position:absolute;top:12px;right:12px;width:32px;height:18px;border-radius:9px;background:rgba(255,255,255,0.07);border:1px solid rgba(201,169,97,0.2);display:flex;align-items:center;padding:2px;transition:all .2s}
+.cat-card.active .cat-toggle{background:rgba(201,169,97,0.28);border-color:var(--g)}
+.cat-knob{width:12px;height:12px;border-radius:50%;background:var(--muted);transition:all .2s}
+.cat-card.active .cat-knob{background:var(--g);transform:translateX(14px)}
+.cat-icon{font-size:20px;margin-bottom:7px}
+.cat-name{font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;padding-right:38px}
+.cat-desc{font-size:12px;color:var(--muted);line-height:1.55}
+.cat-kws{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+.cat-kw{font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(201,169,97,0.08);color:var(--g);border:1px solid rgba(201,169,97,0.15)}
+.chip-row{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+.c-chip{padding:6px 14px;border-radius:18px;border:1px solid rgba(201,169,97,0.15);font-size:12px;font-weight:500;cursor:pointer;transition:all .2s;background:transparent;color:var(--muted);font-family:var(--font)}
+.c-chip:hover{border-color:rgba(201,169,97,0.35);color:var(--text)}
+.c-chip.sel{background:rgba(201,169,97,0.12);border-color:var(--g);color:var(--g)}
+.add-row{display:flex;gap:8px;margin-top:10px}
+.add-row input{flex:1}
+.conv-box{background:rgba(201,169,97,0.05);border:1px solid rgba(201,169,97,0.2);border-radius:9px;padding:14px;margin-top:12px}
+.conv-label{font-size:11px;color:var(--g);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px}
+.kw-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:7px}
+.kw-chip{font-size:12px;padding:3px 9px;border-radius:5px;background:rgba(201,169,97,0.1);border:1px solid rgba(201,169,97,0.22);color:var(--g)}
+.res-bar{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;gap:12px;flex-wrap:wrap}
+.res-stat{font-size:14px;color:var(--muted);margin-top:4px}
+.res-stat strong{color:var(--g);font-size:17px}
+.res-actions{display:flex;gap:8px;flex-wrap:wrap}
+.filter-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+.filter-row input{padding:7px 12px;font-size:13px;border-radius:7px;width:200px}
+.f-btn{padding:6px 13px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:var(--font);font-size:12px;font-weight:600;transition:all .2s}
+.f-btn.sel{border-color:var(--g);background:rgba(201,169,97,0.1);color:var(--g)}
+.co-card{background:var(--dark2);border:1px solid var(--border);border-radius:13px;margin-bottom:13px;overflow:hidden;transition:border-color .2s}
+.co-card:hover{border-color:rgba(201,169,97,0.28)}
+.co-head{padding:18px 20px;border-bottom:1px solid var(--border)}
+.co-top{display:flex;align-items:center;gap:13px;margin-bottom:8px}
+.co-av{width:42px;height:42px;border-radius:9px;background:rgba(201,169,97,0.08);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:var(--display);font-size:18px;color:var(--g);flex-shrink:0;font-weight:700}
+.co-name{font-size:15px;font-weight:700;color:var(--text)}
+.co-meta{font-size:12px;color:var(--muted);margin-top:2px}
+.co-badges{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.badge{padding:3px 9px;border-radius:10px;font-size:11px;font-weight:700;letter-spacing:.04em}
+.b-vip{background:rgba(201,169,97,0.15);color:var(--g);border:1px solid rgba(201,169,97,0.3)}
+.b-a{background:rgba(122,184,232,0.1);color:#7AB8E8;border:1px solid rgba(122,184,232,0.25)}
+.b-b{background:rgba(122,219,184,0.1);color:#7ADBB8;border:1px solid rgba(122,219,184,0.25)}
+.b-c{background:rgba(138,138,154,0.08);color:var(--muted);border:1px solid var(--border)}
+.b-out{background:rgba(220,80,80,0.07);color:rgba(220,80,80,0.8);border:1px solid rgba(220,80,80,0.2)}
+.b-cat{background:rgba(122,184,232,0.07);color:#7AB8E8;border:1px solid rgba(122,184,232,0.18);font-size:10px}
+.co-links{display:flex;gap:14px;flex-wrap:wrap;font-size:12px}
+.co-links a,.co-link{color:var(--g);text-decoration:none;transition:opacity .2s}
+.co-links a:hover,.co-link:hover{opacity:.72;text-decoration:underline}
+.co-score-info{font-size:11px;color:var(--muted);padding:2px 7px;border-radius:5px;background:rgba(255,255,255,0.03);border:1px solid var(--border)}
+.trn-row{display:flex;align-items:center;gap:7px;margin-top:8px}
+.trn-row input{width:130px;padding:5px 10px;font-size:12px;border-radius:6px}
+.trn-row span{font-size:11px;color:var(--muted)}
+.co-contacts{padding:16px 20px}
+.contacts-hd{font-size:11px;color:var(--g);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px}
+table.ct{width:100%;border-collapse:collapse;font-size:13px}
+table.ct th{text-align:left;padding:7px 10px;font-size:10px;font-weight:600;color:var(--g);letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid rgba(201,169,97,0.15);white-space:nowrap}
+table.ct td{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,0.04);vertical-align:middle}
+table.ct tr:last-child td{border-bottom:none}
+table.ct tr:hover td{background:rgba(255,255,255,0.02)}
+.td-name{font-weight:600;color:var(--text);white-space:nowrap}
+.td-title{color:var(--muted);max-width:180px}
+.td-link{text-decoration:none;transition:opacity .2s}
+.td-link:hover{opacity:.72;text-decoration:underline}
+.td-email{color:#7AB8E8}
+.td-phone{color:#7ADBB8}
+.td-li{color:var(--g)}
+.td-miss{color:rgba(138,138,154,0.28)}
+.sen-tag{font-size:10px;padding:2px 6px;border-radius:6px;background:rgba(201,169,97,0.07);color:var(--g);border:1px solid var(--border);white-space:nowrap}
+.save-btn{padding:3px 9px;border-radius:5px;border:1px solid;font-size:11px;cursor:pointer;font-family:var(--font);background:none;transition:all .2s;white-space:nowrap}
+.save-vip{border-color:rgba(201,169,97,0.25);color:var(--muted)}
+.save-vip.on{border-color:rgba(201,169,97,0.5);color:var(--g);font-weight:700}
+.save-crm{border-color:rgba(201,169,97,0.2);color:var(--muted);margin-left:4px}
+.save-crm.on{border-color:rgba(109,184,109,0.35);color:#6DB86D}
+.empty-state{text-align:center;padding:60px 20px;color:var(--muted)}
+.empty-icon{font-size:44px;margin-bottom:14px}
+.empty-title{font-family:var(--display);font-size:22px;color:var(--text);margin-bottom:8px}
+.empty-tips{background:rgba(201,169,97,0.05);border:1px solid rgba(201,169,97,0.15);border-radius:9px;padding:14px;text-align:left;max-width:460px;margin:14px auto 0;font-size:12px;color:var(--muted);line-height:1.85}
+.empty-tips strong{color:var(--text)}
+.alert{padding:11px 15px;border-radius:8px;font-size:13px;margin-bottom:14px}
+.alert-err{background:rgba(220,80,80,0.07);border:1px solid rgba(220,80,80,0.2);color:#E88080}
+.alert-info{background:rgba(201,169,97,0.07);border:1px solid rgba(201,169,97,0.2);color:var(--g)}
+.divider{display:flex;align-items:center;gap:10px;margin:20px 0;color:var(--muted);font-size:12px}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:rgba(201,169,97,0.1)}
+.crm-tabs{display:flex;gap:7px;margin-bottom:18px}
+.crm-tab{padding:7px 16px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;transition:all .2s}
+.crm-tab.active{border-color:var(--g);background:rgba(201,169,97,0.1);color:var(--g)}
+.pag{display:flex;justify-content:center;align-items:center;gap:8px;margin-top:20px;padding-bottom:32px}
+.pag button{padding:7px 16px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;font-family:var(--font);font-size:13px}
+.pag button:disabled{opacity:.35;cursor:not-allowed}
+.pag span{font-size:13px;color:var(--muted)}
+.crit-grid{display:flex;flex-direction:column;gap:10px}
+.crit-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 14px;background:rgba(255,255,255,0.02);border-radius:8px;border:1px solid rgba(255,255,255,0.04)}
+.crit-row:hover{background:rgba(255,255,255,0.035)}
+.crit-label{display:flex;align-items:center;gap:10px;flex:1}
+.crit-badge{padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600;white-space:nowrap}
+.crit-desc{font-size:12px;color:var(--muted);line-height:1.4}
+.crit-input{width:56px;padding:6px;text-align:center;font-size:16px;font-weight:700;border-radius:7px;flex-shrink:0}
+.pcat-card{border:2px solid;border-radius:13px;padding:18px;text-align:center;position:relative}
+.pcat-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,0.2)}
+.pcat-card.active{transform:translateY(-2px)}
+.pcat-thresh{font-size:12px;color:var(--muted);margin-bottom:8px}
+.pcat-summary{font-size:11px;color:var(--muted);line-height:1.5;min-height:32px}
+.pcat-arrow{font-size:10px;color:var(--muted);margin-top:8px;transition:transform .2s}
+.pcat-card.active .pcat-arrow{transform:rotate(180deg)}
+.crit-section{margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid rgba(255,255,255,0.05)}
+.crit-section:last-of-type{border-bottom:none}
+.crit-sec-label{font-size:12px;font-weight:700;color:var(--g);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.crit-sec-desc{font-size:12px;color:var(--muted);margin-bottom:10px}
+.pill-row{display:flex;flex-wrap:wrap;gap:8px}
+.pill{padding:7px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:var(--font);transition:all .2s;white-space:nowrap}
+.pill:hover{border-color:rgba(201,169,97,0.4);color:var(--text)}
+.pill.sel{border-color:var(--pill-color,var(--g));background:var(--pill-bg,rgba(201,169,97,0.12));color:var(--pill-color,var(--g));font-weight:700}
+.pill.out{border-color:rgba(220,80,80,0.3);color:rgba(220,80,80,0.6)}
+.pill.out.sel{background:rgba(220,80,80,0.08);border-color:rgba(220,80,80,0.5);color:rgba(220,80,80,0.8)}
+.limit-btn{padding:10px 18px;border-radius:9px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;text-align:center;transition:all .2s;line-height:1.7}
+.limit-btn:hover{border-color:rgba(201,169,97,0.3);color:var(--text)}
+.limit-btn.sel{border-color:var(--g);background:rgba(201,169,97,0.1);color:var(--g)}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div>
+    <div class="nav-brand">Lead Intel</div>
+    <div class="nav-sub">B2B Intelligence · ccgroup.lv</div>
+  </div>
+  <div class="nav-right">
+    <button class="btn-reset" onclick="resetAll()">Start Over</button>
+    <button class="step" id="nav-profile" onclick="goTo('profile')"><span class="step-num">1</span>Profile</button>
+    <button class="step" id="nav-targets" onclick="goTo('targets')"><span class="step-num">2</span>Search</button>
+    <button class="step" id="nav-results" onclick="goTo('results')"><span class="step-num" id="sn-results">3</span>Results</button>
+    <button class="step" id="nav-crm" onclick="goTo('crm')"><span class="step-num">★</span><span id="crm-label">CRM</span></button>
+    <button class="step" id="nav-pareto" onclick="goTo('pareto')"><span class="step-num">⚙</span>Scoring</button>
+  </div>
+</nav>
+
+<div class="main">
+  <div id="alert-box" style="display:none"></div>
+
+  <!-- SCREEN 1: PROFILE -->
+  <div class="screen active" id="screen-profile">
+    <div class="pg-title">Your Intelligence Profile</div>
+    <div class="pg-sub">Tell us about your company. AI will build your Ideal Customer Profile and generate target categories.</div>
+    <div class="card">
+      <div class="card-title">Company Details</div>
+      <div class="grid2" style="margin-bottom:14px">
+        <div><label>Company Name</label><input id="p-company" placeholder="Coaching &amp; Consulting Group"/></div>
+        <div><label>Website</label><input id="p-website" placeholder="ccgroup.lv"/></div>
+      </div>
+      <div><label>What do you do? <span style="color:var(--muted);font-size:10px;text-transform:none;letter-spacing:0">(optional)</span></label>
+        <textarea id="p-about" rows="3" placeholder="e.g. We provide NLP-based sales training to enterprise companies. Our clients are sales directors at 100-500 person B2B companies..."></textarea>
+      </div>
+      <div id="summary-box" style="display:none" class="summary-box">
+        <div class="summary-label">AI Company Summary</div>
+        <div class="summary-text" id="summary-text"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Existing Customers <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(optional — improves targeting)</span></div>
+      <label for="csv-up" class="upload-zone" id="csv-zone">
+        <div class="upload-icon">📁</div>
+        <div class="upload-label">Upload customer list — CSV or Excel (.xlsx)</div>
+        <div class="upload-name" id="csv-name" style="display:none"></div>
+        <div class="upload-meta" id="csv-meta" style="display:none"></div>
+        <input type="file" id="csv-up" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleFile(this)"/>
+      </label>
+    </div>
+
+    <div id="profile-loading" style="display:none" class="prog-wrap">
+      <div class="prog-bar"><div class="prog-fill" id="pp-fill" style="width:0%"></div></div>
+      <div class="prog-status" id="pp-status">Analyzing...</div>
+    </div>
+    <div class="card" style="background:rgba(201,169,97,0.04);border-color:rgba(201,169,97,0.2);cursor:pointer" onclick="goTo('pareto')">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div class="card-title" style="margin-bottom:6px">Pareto Scoring Rules</div>
+          <div id="pareto-quick-preview" style="font-size:13px;color:var(--muted);line-height:1.8"></div>
+        </div>
+        <div style="font-size:15px;padding:8px 12px;border-radius:8px;background:rgba(201,169,97,0.12);border:1px solid rgba(201,169,97,0.35);color:#C9A961;margin-left:16px;font-weight:700;letter-spacing:.05em">Configure &#9654;</div>
+      </div>
+    </div>
+    <!-- Apollo Upgrade Banner -->
+    <div id="apollo-banner" style="background:linear-gradient(135deg,rgba(13,20,33,0.95),rgba(17,24,39,0.95));border:1px solid rgba(201,169,97,0.25);border-radius:12px;padding:18px 20px;margin-bottom:18px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:14px;flex:1">
+          <div style="font-size:30px">🚀</div>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--g);margin-bottom:5px">Get Full Emails &amp; Phones with Apollo Basic</div>
+            <div style="font-size:12px;color:var(--muted);line-height:1.75">
+              <span style="color:#7ADBB8;font-weight:600">✓</span> 1,000 verified work emails/month &nbsp;·&nbsp;
+              <span style="color:#7ADBB8;font-weight:600">✓</span> 75 direct phone numbers &nbsp;·&nbsp;
+              <span style="color:#7ADBB8;font-weight:600">✓</span> Works instantly — zero setup<br/>
+              <span style="color:rgba(138,138,154,0.6)">Currently on free plan: 10 emails/month. Upgrade to unlock full contact intelligence.</span>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
+          <div style="text-align:center;padding:8px 14px;background:rgba(201,169,97,0.08);border-radius:8px;border:1px solid rgba(201,169,97,0.2)">
+            <div style="font-size:22px;font-weight:800;color:var(--g)">$49</div>
+            <div style="font-size:10px;color:var(--muted);letter-spacing:.05em">/MONTH</div>
+          </div>
+          <a href="https://www.apollo.io/pricing" target="_blank"
+            style="padding:10px 20px;border-radius:8px;background:linear-gradient(135deg,#C9A961,#B8943A);color:#000;font-weight:700;font-size:13px;text-decoration:none;white-space:nowrap;display:inline-block"
+            onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+            Upgrade Apollo ↗
+          </a>
+          <button onclick="document.getElementById('apollo-banner').style.display='none';localStorage.setItem('li_hide_apollo_banner','1')"
+            style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;line-height:1;padding:4px" title="Dismiss">×</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="api-keys-card">
+      <div class="card-title">API Keys</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Stored locally in your browser only — never shared.</div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div>
+          <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.07em">Claude API Key <span style="color:rgba(220,80,80,0.7)">*</span></label>
+          <input id="p-claude-key" type="password" placeholder="sk-ant-api03-..." style="width:100%;box-sizing:border-box" oninput="CLAUDE_KEY=this.value;localStorage.setItem('li_claude_key',this.value)"/>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Get at <a href="https://console.anthropic.com/keys" target="_blank" style="color:var(--g)">console.anthropic.com/keys</a></div>
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.07em">Apollo API Key <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">(for lead search)</span></label>
+          <input id="p-apollo-key" type="password" placeholder="Apollo API key..." style="width:100%;box-sizing:border-box" oninput="APOLLO_KEY=this.value;localStorage.setItem('li_apollo_key',this.value)"/>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Get free at <a href="https://app.apollo.io/settings/integrations/api" target="_blank" style="color:var(--g)">apollo.io → Settings → Integrations → API</a></div>
+        </div>
+      </div>
+      <button onclick="saveApiKeys()" style="margin-top:16px;width:100%;padding:11px;border-radius:9px;border:1px solid rgba(255,255,255,0.15);background:#0A1628;color:#fff;font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;letter-spacing:.02em">💾 Save API Keys</button>
+      <div id="keys-saved-msg" style="display:none;text-align:center;margin-top:8px;font-size:13px;color:#7ADBB8">✓ Keys saved — ready to use</div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-gold" style="flex:1;justify-content:center;padding:13px" onclick="profileNext()" id="profile-btn">Analyze and Build Target Categories</button>
+      <button class="btn btn-ghost" onclick="quickSearch()">Quick Search</button>
+    </div>
+  </div>
+
+  <!-- SCREEN 2: SEARCH -->
+  <div class="screen" id="screen-targets">
+    <div class="pg-title">Target Categories</div>
+    <div class="pg-sub">Claude identified these customer segments. Toggle on/off — each drives the Apollo search automatically.</div>
+    <div id="targets-summary" style="display:none" class="summary-box" style="margin-bottom:20px">
+      <div class="summary-label">Your Profile</div>
+      <div class="summary-text" id="ts-text" style="font-size:13px"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <span style="font-size:13px;color:var(--muted)" id="cats-count">0 active</span>
+      <div style="display:flex;gap:7px">
+        <button class="btn btn-ghost btn-sm" onclick="activateAll()">All On</button>
+        <button class="btn btn-ghost btn-sm" onclick="deactivateAll()">All Off</button>
+      </div>
+    </div>
+    <div class="cat-grid" id="cat-grid"></div>
+    <div style="display:flex;gap:8px;margin-bottom:18px">
+      <input id="custom-cat" placeholder="Add custom category..." onkeydown="if(event.key==='Enter')addCustomCat()" style="flex:1"/>
+      <button class="btn btn-outline btn-sm" onclick="addCustomCat()">+ Add</button>
+    </div>
+    <div class="divider">Or Research a Specific Company</div>
+    <div class="card" style="border-color:rgba(201,169,97,0.3);background:rgba(201,169,97,0.04)">
+      <div class="card-title">Sniper Mode — Direct Company Research</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Skip Apollo entirely. Enter any company name or website and Claude runs full OSINT research immediately.</div>
+      <div style="display:flex;gap:10px;margin-bottom:10px">
+        <input id="sniper-company" placeholder="Company name — e.g. heise marketing" style="flex:1" onkeydown="if(event.key==='Enter')sniperSearch()"/>
+        <input id="sniper-website" placeholder="Website — heisemarketing.lv *required" style="flex:1;border-color:rgba(201,169,97,0.4)" onkeydown="if(event.key==='Enter')sniperSearch()"/>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <input id="sniper-country" placeholder="Country (Latvia)" style="width:150px"/>
+        <input id="sniper-industry" placeholder="Industry" style="width:130px"/>
+        <button class="btn btn-gold btn-sm" onclick="sniperSearch()" id="sniper-btn" style="flex:1;justify-content:center">🎯 Research This Company</button>
+      </div>
+      <div id="sniper-status" style="display:none;margin-top:12px;font-size:13px;color:#7ADBB8;display:flex;align-items:center;gap:8px">
+        <span style="animation:spin 1.2s linear infinite;display:inline-block">⟳</span>
+        <span id="sniper-status-text">Running OSINT research...</span>
+      </div>
+    </div>
+
+    <div class="divider">Search Configuration</div>
+    <div class="card">
+      <div class="card-title">Results Limit</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">How many companies to find per search. More = slower + more OSINT cost.</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="limit-btn sel" data-val="10" onclick="setLimit(this)">10 companies<br/><span style="font-size:10px;opacity:.6">Quick test · ~1 min OSINT</span></button>
+        <button class="limit-btn" data-val="50" onclick="setLimit(this)">50 companies<br/><span style="font-size:10px;opacity:.6">Fast · ~2 min OSINT</span></button>
+        <button class="limit-btn" data-val="100" onclick="setLimit(this)">100 companies<br/><span style="font-size:10px;opacity:.6">Standard · ~4 min OSINT</span></button>
+        <button class="limit-btn" data-val="200" onclick="setLimit(this)">200 companies<br/><span style="font-size:10px;opacity:.6">Deep · ~8 min OSINT</span></button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Target Regions</div>
+      <div class="chip-row" id="country-chips"></div>
+      <div class="add-row">
+        <input id="custom-country" placeholder="Add country code (PL, DE, SE, FI...)" onkeydown="if(event.key==='Enter')addCountry()"/>
+        <button class="btn btn-outline btn-sm" onclick="addCountry()">+ Add</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Describe What You Are Looking For <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:10px;line-height:1.6">Write in plain language — AI converts it to search parameters automatically.</div>
+      <textarea id="free-search" rows="3" placeholder="e.g. Companies with 50+ employees in retail, manufacturing or logistics with dedicated sales or B2B teams..."></textarea>
+      <div id="conv-box" style="display:none" class="conv-box">
+        <div class="conv-label">Converted Parameters</div>
+        <div class="kw-chips" id="conv-kws"></div>
+        <div style="font-size:12px;color:var(--muted)" id="conv-note"></div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="clearConv()">Clear</button>
+      </div>
+    </div>
+    <div id="search-loading" style="display:none" class="prog-wrap">
+      <div class="prog-bar"><div class="prog-fill" id="sp-fill" style="width:0%"></div></div>
+      <div class="prog-status" id="sp-status">Searching...</div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-ghost" onclick="goTo('profile')">Back</button>
+      <button class="btn btn-gold" style="flex:1;justify-content:center;padding:13px" onclick="runSearch()" id="search-btn">Search Leads</button>
+    </div>
+  </div>
+
+  <!-- SCREEN 3: RESULTS -->
+  <div class="screen" id="screen-results">
+    <div class="res-bar">
+      <div>
+        <div class="pg-title">Results</div>
+        <div class="res-stat"><strong id="r-cos">0</strong> companies &middot; <strong id="r-cts">0</strong> contacts</div>
+      </div>
+      <div class="res-actions">
+        <button class="btn btn-ghost btn-sm" onclick="goTo('targets')">Back</button>
+        <button class="btn btn-outline btn-sm" onclick="saveAllToCRM()" id="save-all-btn" style="display:none">+ Save All to CRM</button>
+        <select id="chunk-size-sel" onchange="CHUNK_SIZE=parseInt(this.value)" style="padding:6px 10px;border-radius:7px;border:1px solid rgba(122,219,184,0.3);background:var(--dark2);color:#7ADBB8;font-family:var(--font);font-size:12px;cursor:pointer;display:none" id="chunk-sel">
+          <option value="10">10 per chunk</option>
+          <option value="20">20 per chunk</option>
+          <option value="50">50 per chunk</option>
+        </select>
+        <button class="btn btn-gold btn-sm" onclick="exportCSV()" id="export-btn" style="display:none">Export CSV</button>
+      </div>
+    </div>
+    <div id="osint-status-bar" style="display:none;background:rgba(122,219,184,0.06);border:1px solid rgba(122,219,184,0.2);border-radius:12px;padding:14px 18px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="animation:spin 1.2s linear infinite;display:inline-block;font-size:16px">⟳</span>
+          <span id="enrich-status" style="font-size:13px;color:#7ADBB8;font-weight:600">OSINT enrichment running...</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px">
+          <span id="osint-timer" style="font-size:12px;color:var(--muted)">0:00</span>
+          <span id="osint-pct" style="font-size:13px;font-weight:700;color:#7ADBB8">0%</span>
+        </div>
+      </div>
+      <div style="height:4px;background:rgba(122,219,184,0.12);border-radius:2px;overflow:hidden">
+        <div id="osint-prog-bar" style="height:100%;background:linear-gradient(90deg,#7ADBB8,#4EC99A);border-radius:2px;transition:width .8s ease;width:0%"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:6px">
+        <span style="font-size:11px;color:var(--muted)">Results update as each company is researched</span>
+        <span id="osint-count" style="font-size:11px;color:var(--muted)">0 / 0 companies</span>
+      </div>
+    </div>
+    <style>@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style>
+    <div class="filter-row" id="filter-bar"></div>
+    <div id="results-list"></div>
+  </div>
+
+  <!-- SCREEN 4: CRM -->
+  <div class="screen" id="screen-crm">
+    <div class="res-bar">
+      <div>
+        <div class="pg-title">My CRM</div>
+        <div class="res-stat"><strong id="crm-total">0</strong> contacts &middot; <strong id="vip-total" style="color:var(--g)">0</strong> VIP</div>
+      </div>
+      <div class="res-actions">
+        <button class="btn btn-ghost btn-sm" onclick="addManual()">+ Add Manually</button>
+        <button class="btn btn-outline btn-sm" onclick="exportCRM()">Export CSV</button>
+        <button class="btn btn-ghost btn-sm" onclick="if(confirm('Clear all CRM data?')){crmList=[];vipList=[];saveLists();renderCRM();updateNavCounts();}">Clear All</button>
+      </div>
+    </div>
+    <div class="crm-tabs">
+      <button class="crm-tab active" id="ctab-all" onclick="setCRMTab('all')">All Contacts</button>
+      <button class="crm-tab" id="ctab-vip" onclick="setCRMTab('vip')">VIP List</button>
+    </div>
+    <div id="crm-list"></div>
+  </div>
+
+  <!-- SCREEN 5: PARETO SCORING -->
+  <div class="screen" id="screen-pareto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <div class="pg-title" style="margin-bottom:0">Pareto Scoring Rules</div>
+      <button onclick="goTo('profile')" class="btn btn-ghost btn-sm" style="gap:6px">&#8592; Back to Profile</button>
+    </div>
+    <div class="pg-sub">Click any category to define what qualifies. Companies are scored and ranked automatically.</div>
+
+    <!-- 4 CATEGORY CARDS -->
+    <div id="pareto-cat-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px">
+      <!-- VIP -->
+      <div class="pcat-card" id="pcat-VIP" onclick="openPareto('VIP')" style="border-color:rgba(201,169,97,0.5);background:rgba(201,169,97,0.07);cursor:pointer;transition:all .25s">
+        <div style="font-size:22px;font-weight:800;color:#C9A961;margin-bottom:4px">★ VIP</div>
+        <div class="pcat-thresh" style="display:none"><span id="pcat-thresh-VIP">13</span></div>
+        <div style="font-size:11px;color:rgba(201,169,97,0.6);font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">Top Business Potential</div>
+        <div class="pcat-summary" id="pcat-sum-VIP">Click to configure</div>
+        <div class="pcat-arrow" style="color:#C9A961;margin-top:10px">▼</div>
+      </div>
+      <!-- A -->
+      <div class="pcat-card" id="pcat-A" onclick="openPareto('A')" style="border-color:rgba(122,184,232,0.4);background:rgba(122,184,232,0.06);cursor:pointer;transition:all .25s">
+        <div style="font-size:22px;font-weight:800;color:#7AB8E8;margin-bottom:4px">A</div>
+        <div class="pcat-thresh" style="display:none"><span id="pcat-thresh-A">9</span></div>
+        <div style="font-size:11px;color:rgba(122,184,232,0.6);font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">High Potential</div>
+        <div class="pcat-summary" id="pcat-sum-A">Click to configure</div>
+        <div class="pcat-arrow" style="color:#7AB8E8;margin-top:10px">▼</div>
+      </div>
+      <!-- B -->
+      <div class="pcat-card" id="pcat-B" onclick="openPareto('B')" style="border-color:rgba(122,219,184,0.4);background:rgba(122,219,184,0.06);cursor:pointer;transition:all .25s">
+        <div style="font-size:22px;font-weight:800;color:#7ADBB8;margin-bottom:4px">B</div>
+        <div class="pcat-thresh" style="display:none"><span id="pcat-thresh-B">5</span></div>
+        <div style="font-size:11px;color:rgba(122,219,184,0.6);font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">Medium Potential</div>
+        <div class="pcat-summary" id="pcat-sum-B">Click to configure</div>
+        <div class="pcat-arrow" style="color:#7ADBB8;margin-top:10px">▼</div>
+      </div>
+      <!-- C -->
+      <div class="pcat-card" id="pcat-C" onclick="openPareto('C')" style="border-color:rgba(138,138,154,0.3);background:rgba(138,138,154,0.04);cursor:pointer;transition:all .25s">
+        <div style="font-size:22px;font-weight:800;color:#8A8A9A;margin-bottom:4px">C</div>
+        <div class="pcat-thresh" style="display:none"><span id="pcat-thresh-C">1</span></div>
+        <div style="font-size:11px;color:rgba(138,138,154,0.5);font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">Low Potential</div>
+        <div class="pcat-summary" id="pcat-sum-C">Click to configure</div>
+        <div class="pcat-arrow" style="color:#8A8A9A;margin-top:10px">▼</div>
+      </div>
+    </div>
+
+    <!-- EXPANDED EDITOR PANEL -->
+    <div id="pareto-editor" style="display:none">
+      <div class="card" style="border-color:var(--editor-color,var(--border))">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+          <div>
+            <div id="editor-title" style="font-size:20px;font-weight:700;margin-bottom:4px"></div>
+            <div style="font-size:13px;color:var(--muted)">Select which tiers qualify for this category</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="number" id="editor-thresh" min="1" max="25" oninput="updateThresh()" style="display:none"/>
+            <button onclick="closePareto()" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:var(--font);font-size:13px;transition:all .2s" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--muted)'">&#10005; Close</button>
+          </div>
+        </div>
+
+        <!-- CRITERION 1: COMPANY SIZE -->
+        <div class="crit-section">
+          <div class="crit-sec-label">1. Company Size</div>
+          <div class="crit-sec-desc">Number of employees</div>
+          <div class="pill-row" id="pills-emp"></div>
+        </div>
+
+        <!-- CRITERION 2: TURNOVER -->
+        <div class="crit-section">
+          <div class="crit-sec-label">2. Annual Turnover</div>
+          <div class="crit-sec-desc">Company revenue (enter manually or found via OSINT)</div>
+          <div class="pill-row" id="pills-trn"></div>
+        </div>
+
+        <!-- CRITERION 3: DECISION MAKING -->
+        <div class="crit-section">
+          <div class="crit-sec-label">3. Decision Making Process</div>
+          <div class="crit-sec-desc">How decisions are made in this company (inferred from size, title, industry)</div>
+          <div class="pill-row" id="pills-dm"></div>
+        </div>
+
+        <!-- CRITERION 4: SALES STRUCTURE -->
+        <div class="crit-section">
+          <div class="crit-sec-label">4. Sales Structure</div>
+          <div class="crit-sec-desc">Type of sales or commercial team</div>
+          <div class="pill-row" id="pills-sales"></div>
+        </div>
+
+        <!-- CRITERION 5: BRAND TYPE -->
+        <div class="crit-section">
+          <div class="crit-sec-label">5. Brand Type</div>
+          <div class="crit-sec-desc">Global brand, regional subsidiary, or local company</div>
+          <div class="pill-row" id="pills-brand"></div>
+        </div>
+
+        <!-- CRITERION 6: HIRING SIGNAL -->
+        <div class="crit-section">
+          <div class="crit-sec-label">6. Active Hiring Signal</div>
+          <div class="crit-sec-desc">Currently hiring sales or commercial roles (checked during OSINT)</div>
+          <div class="pill-row" id="pills-hire"></div>
+        </div>
+
+        <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap">
+          <button class="btn btn-gold" style="flex:1;justify-content:center;padding:12px;min-width:200px" onclick="applyParetoToAll()">Save and Apply to All Results</button>
+          <button onclick="closePareto()" class="btn btn-ghost">Done</button>
+          <button onclick="closePareto();goTo('results')" class="btn btn-ghost" style="border-color:rgba(201,169,97,0.25);color:var(--g)" id="back-to-results-btn">&#8592; Back to Results</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCORE PREVIEW -->
+    <div class="summary-box">
+      <div class="summary-label">Live Score Preview</div>
+      <div id="pareto-preview" style="font-size:13px;color:var(--muted);line-height:2.2"></div>
+    </div>
+  </div>
+
+  <!-- SCREEN 4: CRM -->
+  <div class="screen" id="screen-crm">
+    <div class="res-bar">
+      <div>
+        <div class="pg-title">My CRM</div>
+        <div class="res-stat"><strong id="crm-total">0</strong> contacts &middot; <strong id="vip-total" style="color:var(--g)">0</strong> VIP</div>
+      </div>
+      <div class="res-actions">
+        <button class="btn btn-ghost btn-sm" onclick="addManual()">+ Add Manually</button>
+        <button class="btn btn-outline btn-sm" onclick="exportCRM()">Export CSV</button>
+        <button class="btn btn-ghost btn-sm" onclick="if(confirm('Clear all CRM data?')){crmList=[];vipList=[];saveLists();renderCRM();updateNavCounts();}">Clear All</button>
+      </div>
+    </div>
+    <div class="crm-tabs">
+      <button class="crm-tab active" id="ctab-all" onclick="setCRMTab('all')">All Contacts</button>
+      <button class="crm-tab" id="ctab-vip" onclick="setCRMTab('vip')">VIP List</button>
+    </div>
+    <div id="crm-list"></div>
+  </div>
+
+  <!-- SCREEN 5: PARETO SCORING -->
+  <div class="screen" id="screen-pareto">
+    <div class="pg-title">Pareto Scoring Rules</div>
+    <div class="pg-sub">Set your ideal customer criteria. Each company is scored automatically — VIP companies get OSINT enriched first.</div>
+
+    <!-- THRESHOLDS -->
+    <div class="card">
+      <div class="card-title">Category Thresholds</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Minimum total score to reach each category. Max possible score: ~20 pts.</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div class="thresh-chip" data-cat="VIP" style="background:rgba(201,169,97,0.1);border:2px solid var(--g);border-radius:10px;padding:14px 20px;text-align:center;cursor:pointer;flex:1;min-width:100px">
+          <div style="font-size:18px;font-weight:700;color:var(--g)">★ VIP</div>
+          <div style="font-size:11px;color:var(--muted);margin:4px 0">min score</div>
+          <input type="number" id="th-vip" value="13" min="1" max="20" oninput="savePareto()" style="width:60px;text-align:center;font-size:18px;font-weight:700;color:var(--g);background:transparent;border:none;border-bottom:1px solid var(--g);padding:2px"/>
+        </div>
+        <div class="thresh-chip" style="background:rgba(122,184,232,0.08);border:2px solid #7AB8E8;border-radius:10px;padding:14px 20px;text-align:center;flex:1;min-width:100px">
+          <div style="font-size:18px;font-weight:700;color:#7AB8E8">A</div>
+          <div style="font-size:11px;color:var(--muted);margin:4px 0">min score</div>
+          <input type="number" id="th-a" value="9" min="1" max="20" oninput="savePareto()" style="width:60px;text-align:center;font-size:18px;font-weight:700;color:#7AB8E8;background:transparent;border:none;border-bottom:1px solid #7AB8E8;padding:2px"/>
+        </div>
+        <div class="thresh-chip" style="background:rgba(122,219,184,0.08);border:2px solid #7ADBB8;border-radius:10px;padding:14px 20px;text-align:center;flex:1;min-width:100px">
+          <div style="font-size:18px;font-weight:700;color:#7ADBB8">B</div>
+          <div style="font-size:11px;color:var(--muted);margin:4px 0">min score</div>
+          <input type="number" id="th-b" value="5" min="1" max="20" oninput="savePareto()" style="width:60px;text-align:center;font-size:18px;font-weight:700;color:#7ADBB8;background:transparent;border:none;border-bottom:1px solid #7ADBB8;padding:2px"/>
+        </div>
+        <div class="thresh-chip" style="background:rgba(138,138,154,0.06);border:2px solid var(--muted);border-radius:10px;padding:14px 20px;text-align:center;flex:1;min-width:100px">
+          <div style="font-size:18px;font-weight:700;color:var(--muted)">C</div>
+          <div style="font-size:11px;color:var(--muted);margin:4px 0">min score</div>
+          <input type="number" id="th-c" value="1" min="1" max="20" oninput="savePareto()" style="width:60px;text-align:center;font-size:18px;font-weight:700;color:var(--muted);background:transparent;border:none;border-bottom:1px solid var(--muted);padding:2px"/>
+        </div>
+      </div>
+    </div>
+
+    <!-- CRITERION 1: DECISION MAKING -->
+    <div class="card">
+      <div class="card-title">1 — Decision Making Process <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">Claude infers from size, title, industry — you can override per company</span></div>
+      <div class="crit-grid">
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(201,169,97,0.12);color:var(--g)">Single Decision Maker</span><div class="crit-desc">CEO/Owner decides alone. Fast cycle, direct conversation. Typical in SMEs.</div></div><input type="number" id="pdm-single" value="4" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,184,232,0.1);color:#7AB8E8">Small Committee</span><div class="crit-desc">2-3 stakeholders (CEO + HR or Sales Director). Common in mid-size companies.</div></div><input type="number" id="pdm-committee" value="3" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,219,184,0.1);color:#7ADBB8">Divisional Approval</span><div class="crit-desc">Department head approves, needs sign-off from above. Large local companies.</div></div><input type="number" id="pdm-division" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(138,138,154,0.08);color:var(--muted)">Corporate Procurement</span><div class="crit-desc">Formal tender process, multiple approvals. Global brands, banks, government.</div></div><input type="number" id="pdm-proc" value="1" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-top:12px;padding:10px;background:rgba(201,169,97,0.04);border-radius:7px;line-height:1.7">
+        <strong style="color:var(--g)">How Claude infers this:</strong> Small company + CEO contact = Single DM. 
+        100-500 emp + Sales Director = Small Committee. 
+        500+ emp or Bank/Government = Procurement. 
+        Global brand = Procurement (high brand, lower DM score).
+      </div>
+    </div>
+
+    <!-- CRITERION 2: COMPANY SIZE -->
+    <div class="card">
+      <div class="card-title">2 — Company Size <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">Number of employees (from Apollo)</span></div>
+      <div class="crit-grid">
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(201,169,97,0.12);color:var(--g)">500+ employees</span><div class="crit-desc">Large enterprise with dedicated training budgets</div></div><input type="number" id="pe-500" value="4" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,184,232,0.1);color:#7AB8E8">100–499 employees</span><div class="crit-desc">Mid-size company, structured HR and sales teams</div></div><input type="number" id="pe-100" value="3" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,219,184,0.1);color:#7ADBB8">50–99 employees</span><div class="crit-desc">Growing company, likely has sales team</div></div><input type="number" id="pe-50" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(138,138,154,0.08);color:var(--muted)">10–49 employees</span><div class="crit-desc">Small company, limited training budget</div></div><input type="number" id="pe-10" value="1" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(220,80,80,0.07);color:rgba(220,80,80,0.8)">Under 10</span><div class="crit-desc">Too small — auto disqualified</div></div><input value="0" disabled class="crit-input" style="opacity:.35"/></div>
+      </div>
+    </div>
+
+    <!-- CRITERION 3: TURNOVER -->
+    <div class="card">
+      <div class="card-title">3 — Annual Turnover <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">Entered manually or via OSINT enrichment</span></div>
+      <div class="crit-grid">
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(201,169,97,0.12);color:var(--g)">EUR 10M+</span><div class="crit-desc">Significant training budget available</div></div><input type="number" id="ptrn-10m" value="4" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,184,232,0.1);color:#7AB8E8">EUR 1M–10M</span><div class="crit-desc">Established revenue, some training budget</div></div><input type="number" id="ptrn-1m" value="3" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,219,184,0.1);color:#7ADBB8">EUR 200K–1M</span><div class="crit-desc">Minimum viable budget</div></div><input type="number" id="ptrn-200k" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(220,80,80,0.07);color:rgba(220,80,80,0.8)">Under EUR 200K</span><div class="crit-desc">Too small — auto disqualified</div></div><input value="0" disabled class="crit-input" style="opacity:.35"/></div>
+      </div>
+    </div>
+
+    <!-- CRITERION 4: SALES STRUCTURE -->
+    <div class="card">
+      <div class="card-title">4 — Sales Structure <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">Inferred from industry, title and OSINT</span></div>
+      <div class="crit-grid">
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(201,169,97,0.12);color:var(--g)">B2B Sales Team</span><div class="crit-desc">Dedicated B2B sales reps, account managers, key account team</div></div><input type="number" id="pt-b2b" value="4" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,184,232,0.1);color:#7AB8E8">B2C / Phone Center</span><div class="crit-desc">Retail sales team, call center, telesales</div></div><input type="number" id="pt-b2c" value="3" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,219,184,0.1);color:#7ADBB8">Customer Service</span><div class="crit-desc">Support team, e-commerce helpdesk, service center</div></div><input type="number" id="pt-cs" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(138,138,154,0.08);color:var(--muted)">Marketing / Biz Dev</span><div class="crit-desc">Marketing-led growth, no dedicated sales team</div></div><input type="number" id="pt-mkt" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(220,80,80,0.07);color:rgba(220,80,80,0.8)">No Sales Team</span><div class="crit-desc">Under 50 emp with no visible sales structure — low priority</div></div><input value="0" disabled class="crit-input" style="opacity:.35"/></div>
+      </div>
+    </div>
+
+    <!-- CRITERION 5: BRAND TYPE -->
+    <div class="card">
+      <div class="card-title">5 — Brand Type <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">Inferred from company name, size and industry</span></div>
+      <div class="crit-grid">
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(201,169,97,0.12);color:var(--g)">Global Brand</span><div class="crit-desc">International company with Baltic office (IKEA, Tele2, Swedbank, Samsung)</div></div><input type="number" id="pb-global" value="4" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,184,232,0.1);color:#7AB8E8">Regional Subsidiary</span><div class="crit-desc">Nordic/EU company branch in Latvia with local management</div></div><input type="number" id="pb-regional" value="3" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,219,184,0.1);color:#7ADBB8">Local Established</span><div class="crit-desc">Latvian-owned company, 50+ employees, known brand</div></div><input type="number" id="pb-local" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(138,138,154,0.08);color:var(--muted)">Small Local</span><div class="crit-desc">Latvian SME under 50 employees</div></div><input type="number" id="pb-small" value="1" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(220,80,80,0.07);color:rgba(220,80,80,0.8)">Startup</span><div class="crit-desc">Early stage, under 3 years, no established revenue</div></div><input type="number" id="pb-startup" value="0" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+      </div>
+    </div>
+
+    <!-- CRITERION 6: HIRING SIGNAL -->
+    <div class="card">
+      <div class="card-title">6 — Active Hiring Signal <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">Checked automatically during OSINT enrichment</span></div>
+      <div class="crit-grid">
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(201,169,97,0.12);color:var(--g)">Hiring Sales Roles Now</span><div class="crit-desc">Active job ads for Sales Manager, Account Executive, Sales Rep on LinkedIn/CV.lv</div></div><input type="number" id="ph-sales" value="3" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,184,232,0.1);color:#7AB8E8">Hiring Commercial Roles</span><div class="crit-desc">Business Development, Customer Success, Marketing Manager</div></div><input type="number" id="ph-commercial" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(138,138,154,0.08);color:var(--muted)">Not Hiring / Unknown</span><div class="crit-desc">No active sales job postings found</div></div><input value="0" disabled class="crit-input" style="opacity:.35"/></div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-top:12px;padding:10px;background:rgba(201,169,97,0.04);border-radius:7px;line-height:1.7">
+        <strong style="color:var(--g)">Logic:</strong> Company hiring sales people = has sales team + budget to invest in training. 
+        Claude checks LinkedIn Jobs and CV.lv during OSINT enrichment automatically.
+      </div>
+    </div>
+
+    <!-- PREVIEW -->
+    <div class="summary-box" style="margin-bottom:18px">
+      <div class="summary-label">Score Preview</div>
+      <div id="pareto-preview" style="font-size:13px;color:var(--muted);line-height:2.2"></div>
+    </div>
+    <button class="btn btn-gold btn-full" onclick="applyParetoToAll()">Save and Apply to All Results</button>
+  </div>
+
+</div>
+
+<script>
+var APOLLO_KEY = localStorage.getItem("li_apollo_key")||"";
+var CLAUDE_KEY = localStorage.getItem("li_claude_key")||"";
+
+const BALTIC = [
+  {code:"LV",name:"Latvia"},
+  {code:"LT",name:"Lithuania"},
+  {code:"EE",name:"Estonia"},
+  {code:"SE",name:"Sweden"},
+  {code:"NO",name:"Norway"},
+  {code:"DK",name:"Denmark"},
+  {code:"FI",name:"Finland"},
+  {code:"PL",name:"Poland"},
+  {code:"DE",name:"Germany"},
+  {code:"NL",name:"Netherlands"}
+];
+const CLOCS = {
+  LV:["Latvia","Riga"],
+  LT:["Lithuania","Vilnius"],
+  EE:["Estonia","Tallinn"],
+  SE:["Sweden","Stockholm"],
+  NO:["Norway","Oslo"],
+  DK:["Denmark","Copenhagen"],
+  FI:["Finland","Helsinki"],
+  PL:["Poland","Warsaw"],
+  DE:["Germany","Berlin"],
+  NL:["Netherlands","Amsterdam"],
+  FR:["France","Paris"],
+  GB:["United Kingdom","London"],
+  CZ:["Czech Republic","Prague"],
+  HU:["Hungary","Budapest"],
+  RO:["Romania","Bucharest"],
+  AT:["Austria","Vienna"],
+  CH:["Switzerland","Zurich"],
+  BE:["Belgium","Brussels"],
+  ES:["Spain","Madrid"],
+  IT:["Italy","Milan"],
+  PT:["Portugal","Lisbon"],
+  IE:["Ireland","Dublin"],
+  SK:["Slovakia","Bratislava"],
+  SI:["Slovenia","Ljubljana"],
+  HR:["Croatia","Zagreb"]
+};
+const SEN_LABELS = {c_suite:"C-Suite",vp:"VP",director:"Director",manager:"Manager",senior:"Senior"};
+
+// STATE
+let csvData = null;
+let crmList = JSON.parse(localStorage.getItem("li_crm")||"[]");
+let vipList = JSON.parse(localStorage.getItem("li_vip")||"[]");
+let leads = [];
+let categories = [];
+let selectedCountries = ["LV"];
+let customCountries = [];
+let convParams = null;
+let companySummary = "";
+let expandedIds = new Set();
+let currentPage = 1;
+const PAGE = 20;
+let filterCat = "ALL";
+let filterQ = "";
+let crmTab = "all";
+var _PARETO_DEFAULT = {
+  th:{vip:12,a:8,b:5,c:1},
+  pdm:{single:4,committee:3,division:2,proc:1},
+  pe:{p500:4,p100:3,p50:2,p10:1},
+  trn:{m10:4,m1:3,k200:2},
+  pt:{b2b:4,b2c:3,cs:2,mkt:2},
+  pb:{global:4,regional:3,local:2,small:1,startup:0},
+  ph:{sales:3,commercial:2}
+};
+// Load from localStorage but validate structure — clear stale data if keys missing
+var _saved = JSON.parse(localStorage.getItem("li_pareto")||"null");
+var paretoRules = (_saved && _saved.pdm && _saved.pb && _saved.ph) ? _saved : _PARETO_DEFAULT;
+if(!_saved || !_saved.pdm || !_saved.pb) {
+  localStorage.removeItem("li_pareto"); // clear old format
+}
+
+function saveLists(){localStorage.setItem("li_crm",JSON.stringify(crmList));localStorage.setItem("li_vip",JSON.stringify(vipList));}
+function ckKey(co,c){return co.name+"__"+c.name+"__"+(c.email||c.title||"");}
+function inCRM(k){return crmList.some(x=>x._k===k);}
+function inVIP(k){return vipList.some(x=>x._k===k);}
+
+function updateNavCounts(){
+  const el = document.getElementById("crm-label");
+  if(el) el.textContent = "CRM ("+(crmList.length)+")"+(vipList.length?" / VIP:"+vipList.length:"");
+}
+
+// NAVIGATION
+function goTo(screen){
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+  const sc = document.getElementById("screen-"+screen);
+  if(sc) sc.classList.add("active");
+  document.querySelectorAll(".step").forEach(s=>s.classList.remove("active"));
+  const nav = document.getElementById("nav-"+screen);
+  if(nav) nav.classList.add("active");
+  window.scrollTo(0,0);
+  if(screen==="crm") renderCRM();
+  if(screen==="pareto") loadParetoUI();
+}
+
+function showAlert(msg, type){
+  type = type||"err";
+  const b=document.getElementById("alert-box");
+  b.className="alert alert-"+type;
+  b.textContent=msg;
+  b.style.display="block";
+  setTimeout(()=>b.style.display="none",5000);
+}
+
+function resetAll(){
+  csvData=null; leads=[]; categories=[]; convParams=null; companySummary=""; enrichedUpTo=0; enriching=false;
+  selectedCountries=["LV"]; customCountries=[]; expandedIds=new Set();
+  filterCat="ALL"; filterQ=""; currentPage=1;
+  document.getElementById("p-company").value="";
+  document.getElementById("p-website").value="";
+  document.getElementById("p-about").value="";
+  document.getElementById("free-search").value="";
+  document.getElementById("summary-box").style.display="none";
+  document.getElementById("conv-box").style.display="none";
+  document.getElementById("csv-zone").classList.remove("filled");
+  document.getElementById("csv-name").style.display="none";
+  document.getElementById("csv-meta").style.display="none";
+  var pz=document.getElementById("pdf-zone"); if(pz) pz.classList.remove("filled");
+  var pn=document.getElementById("pdf-name"); if(pn) pn.style.display="none";
+  renderCountryChips();
+  goTo("profile");
+}
+
+// FILE HANDLING
+function handleFile(input){
+  const file=input.files[0]; if(!file) return;
+  const isXL=/\.(xlsx|xls)$/i.test(file.name);
+  document.getElementById("csv-zone").classList.add("filled");
+  document.getElementById("csv-name").textContent=file.name;
+  document.getElementById("csv-name").style.display="block";
+  if(isXL){
+    const reader=new FileReader();
+    reader.onload=function(e){
+      try{
+        if(!window.XLSX){showAlert("Excel parser not ready - try again in 2 seconds");return;}
+        const wb=XLSX.read(new Uint8Array(e.target.result),{type:"array"});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        let data=XLSX.utils.sheet_to_json(ws,{defval:""});
+        if(data.length>0){
+          const fk=Object.keys(data[0])[0]||"";
+          if(fk.length>20||fk==="__EMPTY"||/LEAD INTEL|Intelligence/i.test(fk)){
+            data=XLSX.utils.sheet_to_json(ws,{defval:"",range:1});
+          }
+        }
+        csvData=data;
+        const cols=Object.keys(csvData[0]||{}).slice(0,5).join(", ");
+        document.getElementById("csv-meta").textContent=csvData.length+" rows - "+cols;
+        document.getElementById("csv-meta").style.display="block";
+      }catch(err){showAlert("Excel error: "+err.message);console.error(err);}
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    const reader=new FileReader();
+    reader.onload=function(e){
+      try{
+        const lines=e.target.result.trim().split("\n");
+        const hdrs=lines[0].split(",").map(h=>h.trim().replace(/"/g,""));
+        csvData=lines.slice(1).map(line=>{
+          const vals=line.split(",").map(v=>v.trim().replace(/"/g,""));
+          return Object.fromEntries(hdrs.map((h,i)=>[h,vals[i]||""]));
+        });
+        document.getElementById("csv-meta").textContent=csvData.length+" rows";
+        document.getElementById("csv-meta").style.display="block";
+      }catch(err){showAlert("CSV error: "+err.message);}
+    };
+    reader.readAsText(file);
+  }
+}
+
+function handlePDF(input){
+  const f=input.files[0]; if(!f) return;
+  document.getElementById("pdf-zone").classList.add("filled");
+  document.getElementById("pdf-name").textContent=f.name;
+  document.getElementById("pdf-name").style.display="block";
+}
+
+// CLAUDE API
+async function claude(prompt,maxTok){
+  maxTok=maxTok||2000;
+  const res=await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",
+    headers:{"Content-Type":"application/json","x-api-key":CLAUDE_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+    body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:maxTok,tools:[{type:"web_search_20250305",name:"web_search"}],messages:[{role:"user",content:prompt}]})
+  });
+  const d=await res.json();
+  if(!d.content) return "";
+  // Extract all text blocks (web_search returns multiple content blocks)
+  return d.content.filter(function(b){return b.type==="text";}).map(function(b){return b.text;}).join("");
+}
+
+// SUMMARY
+async function generateSummary(){
+  const company=document.getElementById("p-company").value;
+  const website=document.getElementById("p-website").value;
+  const about=document.getElementById("p-about").value;
+  if(!company&&!website) return;
+  const snip=csvData?csvData.slice(0,20).map(r=>{
+    const cn=r["Company Name"]||r["Company"]||r["Uznemums"]||"";
+    const ind=r["Industry"]||r["Nozare"]||"";
+    if(cn) return cn+(ind?" | "+ind:"");
+    return Object.values(r).filter(v=>v&&String(v).length>1).slice(0,3).join(" | ");
+  }).filter(Boolean).join("\n"):"";
+  const p="Research this company using web search and write a clean 3-4 sentence professional summary. Company: "+company+", Website: "+website+(about?", Info: "+about:"")+(snip?"\nKnown clients:\n"+snip:"")+"\n\nRULES: Return ONLY the summary. No preamble like 'Based on search results' or 'I can see'. No thinking out loud. Start directly with the company name. Maximum 4 sentences.";
+  const r=await claude(p,400);
+  // Strip thinking/preamble patterns
+  var clean=r.replace(/^(Based on (the |my |)search results[^.]*[.]\s*)*/i,"").replace(/^(I (can see|found|now have|searched)[^.]*[.]\s*)*/i,"").replace(/^(Let me (search|look)[^.]*[.]\s*)*/i,"").trim();
+  companySummary=clean;
+  document.getElementById("summary-text").textContent=clean;
+}
+
+// CATEGORIES
+async function generateCategories(){
+  const company=document.getElementById("p-company").value;
+  const website=document.getElementById("p-website").value;
+  const snip=csvData?csvData.slice(0,30).map(r=>{
+    const cn=r["Company Name"]||r["Company"]||"";
+    const ind=r["Industry"]||"";
+    const sz=r["Size"]||"";
+    if(cn) return [cn,ind,sz].filter(Boolean).join(" | ");
+    return Object.values(r).filter(v=>v&&String(v).length>1).join(" | ");
+  }).filter(Boolean).join("\n"):"No customer data.";
+  const p="You are a B2B sales strategist. Generate 5-6 ideal target customer categories for this company.\nCOMPANY: "+(companySummary||company)+"\nWEBSITE: "+website+"\nCLIENTS:\n"+snip+"\n\nReturn ONLY a raw JSON array:\n[{\"id\":\"c1\",\"icon\":\"emoji\",\"name\":\"Name 3-5 words\",\"description\":\"2 sentences\",\"keywords\":[\"industry term\",\"sector\"],\"industry\":\"single industry\",\"active\":true}]\nKEYWORDS must be INDUSTRY SECTOR tags only (retail, manufacturing, software, logistics). NEVER use 'sales teams', 'salespeople'.";
+  const raw=await claude(p,2000);
+  var c2=raw; var a1=raw.indexOf('['),a2=raw.lastIndexOf(']'); if(a1>-1&&a2>a1) c2=raw.slice(a1,a2+1); else c2=raw.replace(/```json|```/g,'').trim();
+  categories=JSON.parse(c2);
+  renderCategories();
+  updateCatsCount();
+}
+
+async function profileNext(){
+  const company=document.getElementById("p-company").value;
+  if(!CLAUDE_KEY){
+    showAlert("Please enter your Claude API key in the API Keys section.");
+    var kc=document.getElementById("api-keys-card");
+    if(kc) kc.scrollIntoView({behavior:"smooth"});
+    var pk=document.getElementById("p-claude-key");
+    if(pk) setTimeout(function(){pk.focus();},400);
+    return;
+  }
+  const website=document.getElementById("p-website").value;
+  if(!company&&!website){showAlert("Enter company name or website first.");return;}
+  const btn=document.getElementById("profile-btn");
+  btn.disabled=true; btn.textContent="Analyzing...";
+  document.getElementById("profile-loading").style.display="block";
+  document.getElementById("pp-fill").style.width="20%";
+  document.getElementById("pp-status").textContent="Generating company summary...";
+  try{
+    if(!companySummary) await generateSummary();
+    document.getElementById("pp-fill").style.width="55%";
+    document.getElementById("pp-status").textContent="Building target categories...";
+    await generateCategories();
+    document.getElementById("pp-fill").style.width="100%";
+    if(companySummary){
+      document.getElementById("ts-text").textContent=companySummary;
+      document.getElementById("targets-summary").style.display="block";
+    }
+    renderCountryChips();
+    goTo("targets");
+  }catch(err){showAlert("Analysis failed: "+err.message);}
+  document.getElementById("profile-loading").style.display="none";
+  btn.disabled=false; btn.textContent="Analyze and Build Target Categories";
+}
+
+function quickSearch(){
+  categories=[];
+  renderCategories();
+  updateCatsCount();
+  renderCountryChips();
+  goTo("targets");
+}
+
+// CATEGORIES UI
+function renderCategories(){
+  const grid=document.getElementById("cat-grid");
+  grid.innerHTML="";
+  categories.forEach(function(cat){
+    const active=cat.active!==false;
+    const div=document.createElement("div");
+    div.className="cat-card "+(active?"active":"inactive");
+    div.id="cat-"+cat.id;
+    div.onclick=function(){toggleCat(cat.id);};
+    div.innerHTML='<div class="cat-toggle"><div class="cat-knob"></div></div><div class="cat-icon">'+(cat.icon||"?")+'</div><div class="cat-name">'+cat.name+'</div><div class="cat-desc">'+cat.description+'</div>'+(cat.keywords&&cat.keywords.length?'<div class="cat-kws">'+cat.keywords.map(function(k){return'<span class="cat-kw">'+k+'</span>';}).join("")+"</div>":"");
+    grid.appendChild(div);
+  });
+}
+function toggleCat(id){
+  const cat=categories.find(function(c){return c.id===id;});
+  if(!cat) return;
+  cat.active=cat.active===false?true:false;
+  const el=document.getElementById("cat-"+id);
+  if(el){el.className="cat-card "+(cat.active?"active":"inactive");}
+  updateCatsCount();
+}
+function activateAll(){categories.forEach(function(c){c.active=true;});renderCategories();updateCatsCount();}
+function deactivateAll(){categories.forEach(function(c){c.active=false;});renderCategories();updateCatsCount();}
+function updateCatsCount(){
+  const active=categories.filter(function(c){return c.active!==false;}).length;
+  document.getElementById("cats-count").textContent=active+" of "+categories.length+" active";
+}
+function addCustomCat(){
+  const val=document.getElementById("custom-cat").value.trim();
+  if(!val) return;
+  categories.push({id:"cc"+Date.now(),icon:"?",name:val,description:"Custom category.",keywords:[val.toLowerCase()],industry:"",active:true});
+  renderCategories();updateCatsCount();
+  document.getElementById("custom-cat").value="";
+}
+
+// COUNTRY CHIPS
+function renderCountryChips(){
+  const row=document.getElementById("country-chips");
+  row.innerHTML="";
+  var groups=[
+    {label:"Baltics", codes:["LV","LT","EE"]},
+    {label:"Scandinavia", codes:["SE","NO","DK","FI"]},
+    {label:"EU", codes:["PL","DE","NL"]}
+  ];
+  groups.forEach(function(g){
+    var groupDiv=document.createElement("div");
+    groupDiv.style.cssText="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;width:100%";
+    var lbl=document.createElement("span");
+    lbl.textContent=g.label;
+    lbl.style.cssText="font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;font-weight:600;min-width:80px";
+    groupDiv.appendChild(lbl);
+    g.codes.forEach(function(code){
+      var c=BALTIC.find(function(x){return x.code===code;});
+      if(!c) return;
+      var btn=document.createElement("button");
+      btn.className="c-chip"+(selectedCountries.includes(c.code)?" sel":"");
+      btn.textContent=c.name;
+      btn.onclick=function(){toggleCountry(c.code,btn);};
+      groupDiv.appendChild(btn);
+    });
+    row.appendChild(groupDiv);
+  });
+  // Custom countries
+  if(customCountries.length){
+    var customDiv=document.createElement("div");
+    customDiv.style.cssText="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;width:100%";
+    var lbl2=document.createElement("span");
+    lbl2.textContent="Custom";
+    lbl2.style.cssText="font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;font-weight:600;min-width:80px";
+    customDiv.appendChild(lbl2);
+    customCountries.forEach(function(c){
+      var btn=document.createElement("button");
+      btn.className="c-chip sel";
+      btn.textContent=c+" ✕";
+      btn.onclick=function(){customCountries=customCountries.filter(function(x){return x!==c;});renderCountryChips();};
+      customDiv.appendChild(btn);
+    });
+    row.appendChild(customDiv);
+  }
+}
+function toggleCountry(code,btn){
+  if(selectedCountries.includes(code)){
+    selectedCountries=selectedCountries.filter(function(c){return c!==code;});
+    btn.classList.remove("sel");
+  } else {
+    selectedCountries.push(code);
+    btn.classList.add("sel");
+  }
+}
+function addCountry(){
+  const v=document.getElementById("custom-country").value.toUpperCase().trim();
+  if(v.length>=2&&!customCountries.includes(v)&&!selectedCountries.includes(v)){
+    customCountries.push(v);renderCountryChips();
+    document.getElementById("custom-country").value="";
+  }
+}
+
+// FREE SEARCH CONVERT
+async function convertFreeSearch(){
+  const text=document.getElementById("free-search").value.trim();
+  if(!text) return null;
+  const p="Convert this description to Apollo.io search parameters. Return ONLY JSON:\n{\"keywords\":[\"industry tag\"],\"seniorities\":[\"c_suite\"],\"explanation\":\"one sentence\"}\nRULES: keywords = INDUSTRY SECTOR tags only (retail, manufacturing, software). NEVER use 'sales teams'.\nDescription: "+text;
+  try{
+    const raw=await claude(p,500);
+    // Extract JSON array even if Claude adds preamble text
+    var catClean=raw;
+    var arrStart=raw.indexOf('['), arrEnd=raw.lastIndexOf(']');
+    if(arrStart>-1&&arrEnd>arrStart) catClean=raw.slice(arrStart,arrEnd+1);
+    else catClean=raw.replace(/```json|```/g,"").trim();
+    const parsed=JSON.parse(catClean);
+    convParams=parsed;
+    const box=document.getElementById("conv-box");
+    document.getElementById("conv-kws").innerHTML=(parsed.keywords||[]).map(function(k){return'<span class="kw-chip">'+k+'</span>';}).join("")+(parsed.seniorities||[]).map(function(s){return'<span class="kw-chip" style="color:#7AB8E8">'+s+'</span>';}).join("");
+    document.getElementById("conv-note").textContent=parsed.explanation||"";
+    box.style.display="block";
+    return parsed;
+  }catch(e){return null;}
+}
+function clearConv(){convParams=null;document.getElementById("conv-box").style.display="none";document.getElementById("free-search").value="";}
+
+// APOLLO
+function getLocs(code){return CLOCS[code.toUpperCase()]||[code];}
+
+async function apolloSearch(countryCode,keywords,seniorities,industry){
+  keywords=keywords||[];seniorities=seniorities||[];industry=industry||"";
+  const body={api_key:APOLLO_KEY,page:1,per_page:Math.min(100,searchLimit),
+    person_seniorities:seniorities.length?seniorities:["c_suite","vp","director","manager","senior"],
+    person_locations:getLocs(countryCode),
+    contact_email_status:["verified","guessed","unavailable","bounced","pending_manual_fulfillment"]
+  };
+  const VALID=["retail","manufacturing","software","technology","logistics","fintech","real estate","healthcare","construction","education","hospitality","energy","automotive","finance","banking","insurance","media","marketing","telecommunications","agriculture","pharmaceutical","consulting","legal","accounting","food","beverage","fashion","ecommerce","saas","it services","staffing","recruitment","engineering","design","advertising","transportation","warehousing","wholesale","distribution"];
+  const tags=[];
+  if(industry) tags.push(industry);
+  keywords.forEach(function(k){
+    const kl=k.toLowerCase().trim();
+    const ok=VALID.some(function(v){return kl.includes(v)||v.includes(kl);});
+    const bad=["sales team","salespeople","b2b sales","outbound","with sales"].some(function(b){return kl.includes(b);});
+    if(ok&&!bad&&!tags.includes(k)) tags.push(k);
+  });
+  if(tags.length) body.q_organization_keyword_tags=tags.slice(0,5);
+  console.log("Apollo:",JSON.stringify({locs:getLocs(countryCode),tags:tags}));
+  if(!APOLLO_KEY){showAlert("Please enter your Apollo API key on the Profile screen.","err");throw new Error("No Apollo key");}
+  // Route Apollo through dedicated Cloudflare Worker proxy
+  var apolloBody = JSON.stringify(body);
+  const res = await fetch("https://apollo-proxy.edgars-7e7.workers.dev/",{
+    method:"POST",
+    headers:{"Content-Type":"application/json","X-Api-Key":APOLLO_KEY},
+    body:apolloBody
+  });
+  if(!res.ok){ showAlert("Apollo API error: "+res.status+". Check your API key.","err"); throw new Error("Apollo failed"); }
+  const data=await res.json();
+  console.log("Apollo response:",data.pagination&&data.pagination.total_entries,"total,",data.people&&data.people.length,"people, error:",data.error||"none");
+  return data;
+}
+
+// OSINT ENRICHMENT
+async function enrichCompany(coId) {
+  const co = leads.find(function(l){return l.id===coId;});
+  if(!co) return;
+
+  const btn = document.getElementById("enrich-"+coId);
+  if(btn){ btn.textContent="Researching..."; btn.disabled=true; }
+
+  const contactList = co.contacts.length ?
+    co.contacts.slice(0,6).map(function(c){
+      return "- "+c.name+(c.title?" ("+c.title+")":"");
+    }).join("\n") :
+    "(No contacts yet — find ALL key people from scratch: CEO, directors, sales leaders)";
+
+  const coWebsite = co.website ? (co.website.startsWith("http") ? co.website : "https://"+co.website) : "";
+  const coCountry = (co.country||"Latvia").toLowerCase();
+  // Derive domain from website, or guess from company name + country TLD
+  var tldGuess = coCountry.includes("lithuania")||coCountry.includes("lt") ? ".lt" :
+                 coCountry.includes("estonia")||coCountry.includes("ee") ? ".ee" :
+                 coCountry.includes("sweden")||coCountry.includes("se") ? ".se" :
+                 coCountry.includes("norway")||coCountry.includes("no") ? ".no" :
+                 coCountry.includes("denmark")||coCountry.includes("dk") ? ".dk" :
+                 coCountry.includes("finland")||coCountry.includes("fi") ? ".fi" :
+                 coCountry.includes("germany")||coCountry.includes("de") ? ".de" :
+                 coCountry.includes("poland")||coCountry.includes("pl") ? ".pl" : ".lv";
+  const coDomain = coWebsite ? coWebsite.replace(/https?:\/\//,"").split("/")[0] :
+    (co.name.toLowerCase().replace(/[^a-z0-9]/g,"") + tldGuess);
+
+  // Market-specific intelligence sources
+  var marketSources = "";
+  var emailTld = ".lv";
+  if(coCountry.includes("latvia") || coCountry.includes("lv")){
+    emailTld = ".lv";
+    marketSources = `LATVIAN SOURCES — USE ALL:
+- firmas.lv: search "${co.name}" AND also try "${coDomain.replace('.lv','')}" → find amatpersonas (board members)
+- firmas.lv URL: https://www.firmas.lv/lv/uznemumi?q=${encodeURIComponent(co.name)}
+- lursoft.lv: search "${co.name}" → verify officials and revenue
+- saraksts.lv: search for "${co.name}" contacts
+- 1188.lv: phone directory — search "${co.name}"
+- Google Maps: search "${co.name} Rīga Latvia" → get phone number from Maps business listing
+- Also try visiting: https://www.heisemarketing.lv/kontakti AND https://www.heisemarketing.lv/par-mums AND https://www.heisemarketing.lv/komanda`;
+  } else if(coCountry.includes("lithuania") || coCountry.includes("lt")){
+    emailTld = ".lt";
+    marketSources = `LITHUANIAN SOURCES — USE ALL:
+- rekvizitai.lt: search "${co.name}" → find company officials and contacts
+- registrucentras.lt: official company registry
+- info.lt: business directory
+- Google Maps: "${co.name} Vilnius" for phone/address
+- Search: "${co.name}" vadovas OR direktorius OR kontaktai`;
+  } else if(coCountry.includes("estonia") || coCountry.includes("ee")){
+    emailTld = ".ee";
+    marketSources = `ESTONIAN SOURCES — USE ALL:
+- ariregister.rik.ee: search "${co.name}" → official registry with board members
+- inforegister.ee: business directory with contacts
+- teatmik.ee: company directory
+- Google Maps: "${co.name} Tallinn" for phone/address
+- Search: "${co.name}" juhatuse liige OR kontakt OR juhtkond`;
+  } else if(["sweden","sverige","se"].some(x=>coCountry.includes(x))){
+    emailTld = ".se";
+    marketSources = `SWEDISH SOURCES — USE ALL:
+- allabolag.se: search "${co.name}" → company officials
+- hitta.se: contact directory
+- eniro.se: phone/address directory
+- Google Maps: "${co.name} Stockholm OR Gothenburg" for phone
+- Search: "${co.name}" VD OR CEO OR kontakt site:linkedin.com/in`;
+  } else if(["norway","norge","no"].some(x=>coCountry.includes(x))){
+    emailTld = ".no";
+    marketSources = `NORWEGIAN SOURCES — USE ALL:
+- proff.no: search "${co.name}" → company officials and financials
+- gulesider.no: phone directory
+- brreg.no: official business registry
+- Google Maps: "${co.name} Oslo" for phone
+- Search: "${co.name}" daglig leder OR CEO OR kontakt`;
+  } else if(["denmark","danmark","dk"].some(x=>coCountry.includes(x))){
+    emailTld = ".dk";
+    marketSources = `DANISH SOURCES — USE ALL:
+- cvr.dk: official company registry with board members
+- krak.dk: phone/address directory
+- borsen.dk: business news search for executives
+- Google Maps: "${co.name} København" for phone
+- Search: "${co.name}" direktør OR CEO OR kontakt site:linkedin.com/in`;
+  } else if(["finland","suomi","fi"].some(x=>coCountry.includes(x))){
+    emailTld = ".fi";
+    marketSources = `FINNISH SOURCES — USE ALL:
+- ytj.fi: official Finnish business registry
+- finder.fi: company directory with contacts
+- kauppalehti.fi: business news and executive search
+- Google Maps: "${co.name} Helsinki" for phone
+- Search: "${co.name}" toimitusjohtaja OR CEO OR yhteystiedot`;
+  } else {
+    emailTld = ".com";
+    marketSources = `INTERNATIONAL SOURCES:
+- Google: "${co.name}" CEO OR director OR contact email phone
+- LinkedIn: site:linkedin.com/in "${co.name}" executive
+- Company website team/about/contact pages
+- Google Maps for phone/address`;
+  }
+
+  var sniperUrlSection = co.sniperUrl ?
+    "\n⚡ PRIORITY URL — READ THIS FIRST:\n"+co.sniperUrl+"\nExtract ALL contact data from this specific page before doing anything else.\n" : "";
+
+  const prompt = `You are CONTACT INTEL — the world's most advanced B2B intelligence analyst. Research this company with MAXIMUM effort. Be exhaustive. Be relentless.
+
+═══════════════════════════════════════
+TARGET: ${co.name}
+COUNTRY: ${co.country||"Latvia"}
+WEBSITE: ${coWebsite||"https://"+coDomain}
+DOMAIN: ${coDomain}
+INDUSTRY: ${co.industry||"unknown"}
+KNOWN CONTACTS (find surnames + all details):
+${contactList}
+${sniperUrlSection}═══════════════════════════════════════
+
+EXECUTE ALL PHASES — DO NOT SKIP ANY:
+
+━━━ PHASE 1: WEBSITE DEEP SCAN ━━━
+Visit ALL these URLs:
+• ${coWebsite||"https://"+coDomain}
+• ${coWebsite||"https://"+coDomain}/kontakti (or /contact /contacts /kontakt /kontaktai /yhteystiedot)
+• ${coWebsite||"https://"+coDomain}/par-mums (or /about /om-oss /tietoa /about-us /uber-uns)
+• ${coWebsite||"https://"+coDomain}/komanda (or /team /leadership /management /tiimi /laget)
+• ${coWebsite||"https://"+coDomain}/vadiba (or /board /management /johto /ledelse)
+Extract: ALL named people + titles, ALL email addresses, ALL phone numbers, email pattern from footer.
+
+━━━ PHASE 2: GOOGLE INTELLIGENCE ━━━
+Run ALL these searches:
+• "${co.name}" CEO OR director OR executive email phone ${co.country||"Latvia"}
+• site:${coDomain} team OR kontakti OR about OR par-mums
+• "${co.name}" "@${coDomain}"
+• "${coDomain}" director OR vadītājs OR CEO kontakti
+• "${co.name}" "${co.country||"Latvia"}" linkedin.com/in
+• "${co.name}" site:firmas.lv OR site:lursoft.lv
+• Google Maps: search "${co.name} ${co.country||"Riga"}" — get phone from Maps listing
+
+━━━ PHASE 3: MARKET-SPECIFIC REGISTRIES ━━━
+IMPORTANT: Try ALL these name variations in registries:
+• "${co.name}" (exact)
+• "${co.name.replace(/\s+/g,'')}" (no spaces)
+• "${co.name.split(' ').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ')}" (capitalized)
+• "${co.name.toUpperCase()}" (uppercase)
+${marketSources}
+
+━━━ PHASE 4: LINKEDIN DEEP SEARCH ━━━
+• Search: site:linkedin.com/in "${co.name}"
+• For each known first name: "${co.name}" "FIRSTNAME" site:linkedin.com/in
+• Find EXACT profile slug — verify it loads, do not guess
+• Check company LinkedIn page for employee list
+
+━━━ PHASE 5: EMAIL FORENSICS ━━━
+Test these patterns with ${coDomain}:
+• firstname.lastname@${coDomain}
+• f.lastname@${coDomain}
+• firstname@${coDomain}
+• lastname.firstname@${coDomain}
+Confidence HIGH=found on website, MEDIUM=pattern confirmed 2+ sources, LOW=single source.
+
+━━━ PHASE 6: HIRING SIGNALS ━━━
+• LinkedIn Jobs: search "${co.name}" for sales/commercial roles
+• Company website /karjera /careers /jobs /vacatures /vakancer
+• Local job boards (cv.lv / cvmarket.lt / cv.ee / linkedin.com/jobs)
+Result: "sales" / "commercial" / "none"
+
+━━━ PHASE 7: COMPANY INTELLIGENCE ━━━
+• Google Maps: "${co.name}" → phone, address, hours
+• News search: "${co.name}" last 12 months — any leadership changes?
+• Revenue/size signals from registry or news
+
+RULES:
+✓ Visit actual URLs — do not assume
+✓ HIGH = found on official source with exact URL proof
+✓ MEDIUM = derived from confirmed pattern
+✗ NEVER fabricate data
+✗ DATA MISSING if not found after thorough search
+
+Return ONLY the raw JSON object. No introduction, no explanation, no markdown fences. Start your response with { and end with }. Example start: {"emailPattern":
+{
+  "emailPattern": "firstname.lastname@${coDomain} or DATA MISSING",
+  "mxDomain": "${coDomain}",
+  "companyPhone": "+XXX XXXXXXXX or DATA MISSING",
+  "companyEmail": "info@${coDomain} or DATA MISSING",
+  "companyAddress": "street, city or DATA MISSING",
+  "contacts": [
+    {
+      "name": "Full Name",
+      "title": "Current Title",
+      "email": "email@${coDomain} or DATA MISSING",
+      "phone": "+XXX XXXXXXXX or DATA MISSING",
+      "linkedin": "https://www.linkedin.com/in/exact-verified-slug or DATA MISSING",
+      "confidence": "HIGH|MEDIUM|LOW",
+      "source": "exact URL where found"
+    }
+  ],
+  "notes": "key intelligence about company, team structure, recent news",
+  "hiring": "sales|commercial|none",
+  "brandType": "global|regional|local|small|startup",
+  "dmProcess": "single|committee|division|proc"
+}`;
+
+  try {
+    const raw = await claude(prompt, 3000);
+    console.log("OSINT raw for "+co.name+":", raw.substring(0,500));
+    // Extract JSON block - Claude sometimes adds preamble text before the JSON
+    var clean = raw;
+    var jsonStart = raw.indexOf('{');
+    var jsonEnd = raw.lastIndexOf('}');
+    if(jsonStart > -1 && jsonEnd > jsonStart){
+      clean = raw.slice(jsonStart, jsonEnd+1);
+    } else {
+      clean = raw.replace(/```json|```/g,"").trim();
+    }
+    const data = JSON.parse(clean);
+    console.log("OSINT parsed contacts:", data.contacts ? data.contacts.length : 0, data.contacts);
+
+    // Merge enriched data into existing contacts
+    if(data.contacts && data.contacts.length) {
+      data.contacts.forEach(function(ec){
+        // Find matching existing contact or add new
+        const existing = co.contacts.find(function(c){
+          return c.name && ec.name && c.name.toLowerCase().includes(ec.name.split(" ")[0].toLowerCase());
+        });
+        if(existing){
+          // Always update name if OSINT found a fuller version (has surname)
+          if(ec.name && ec.name.includes(" ") && (!existing.name.includes(" ")||existing.name.length<ec.name.length)){
+            existing.name=ec.name;
+          }
+          if(ec.title && ec.title!=="DATA MISSING" && !existing.title) existing.title=ec.title;
+          if(ec.email && ec.email!=="DATA MISSING" && !existing.email) existing.email=ec.email;
+          if(ec.phone && ec.phone!=="DATA MISSING" && !existing.phone) existing.phone=ec.phone;
+          if(ec.linkedin && ec.linkedin!=="DATA MISSING" && !existing.linkedin){
+            // Ensure proper LinkedIn URL format
+            var li=ec.linkedin.trim();
+            if(li && !li.startsWith("http") && li.includes("linkedin")) li="https://"+li;
+            if(li && li.startsWith("http")) existing.linkedin=li;
+          }
+          existing.confidence=ec.confidence;
+          existing.source=ec.source;
+        } else if(ec.name && ec.name!=="DATA MISSING" && ec.name.trim().length>1){
+          // New contact found by OSINT - add directly
+          var newLi2=(!ec.linkedin||ec.linkedin==="DATA MISSING")?"":ec.linkedin.trim();
+          if(newLi2 && !newLi2.startsWith("http")) newLi2="";
+          var newEmail2=(!ec.email||ec.email==="DATA MISSING")?"":ec.email.trim();
+          var newPhone2=(!ec.phone||ec.phone==="DATA MISSING")?"":ec.phone.trim();
+          co.contacts.push({
+            name:ec.name.trim(),
+            title:(!ec.title||ec.title==="DATA MISSING")?"":ec.title,
+            seniority:"",
+            email:newEmail2,
+            phone:newPhone2,
+            linkedin:newLi2,
+            confidence:ec.confidence||"MEDIUM",
+            source:ec.source||"OSINT",
+            _osint:true
+          });
+        }
+      });
+      if(data.emailPattern) co.emailPattern=data.emailPattern;
+      if(data.notes) co.osintNotes=data.notes;
+      if(data.hiring&&data.hiring!=="none") co._hiring=data.hiring;
+      if(data.companyPhone&&data.companyPhone!=="DATA MISSING"&&!co.phone) co.phone=data.companyPhone;
+      if(data.companyEmail&&data.companyEmail!=="DATA MISSING"&&!co.email) co.email=data.companyEmail;
+      if(data.companyAddress&&data.companyAddress!=="DATA MISSING") co.address=data.companyAddress;
+      // Build intelligence summary
+      co._intel = {
+        phone: data.companyPhone!=="DATA MISSING"?data.companyPhone:null,
+        email: data.companyEmail!=="DATA MISSING"?data.companyEmail:null,
+        address: data.companyAddress!=="DATA MISSING"?data.companyAddress:null,
+        emailPattern: data.emailPattern!=="DATA MISSING"?data.emailPattern:null,
+        hiring: data.hiring||"none",
+        brandType: data.brandType||null,
+        dmProcess: data.dmProcess||null,
+        notes: data.notes||null,
+        contacts: data.contacts?data.contacts.length:0,
+        verifiedEmails: data.contacts?data.contacts.filter(function(c){return c.email&&c.email!=="DATA MISSING";}).length:0
+      };
+      if(data.brandType) co._brandType=data.brandType;
+      if(data.dmProcess) co._dmOverride=data.dmProcess;
+      // Rescore with new intelligence
+      if(co.contacts.length){
+        var best2=co.contacts.reduce(function(b,c){var sm={c_suite:4,vp:4,director:3,manager:2,senior:1};return(sm[c.seniority]||1)>(sm[b.seniority]||1)?c:b;},co.contacts[0]);
+        var r2=scoreContact(co,best2,co._turnover);
+        co.parCat=r2.cat;co.parScore=r2.score;co.parBd=r2.bd;co.dmType=r2.dmType;
+      }
+    }
+
+    // Re-score and re-render
+    scoreAllLeads();
+    renderResultsPage();
+    showAlert("OSINT enrichment complete for "+co.name,"info");
+  } catch(e){
+    showAlert("OSINT failed: "+e.message);
+    console.error(e);
+  }
+
+  if(btn){ btn.textContent="Re-enrich"; btn.disabled=false; }
+}
+
+// OSINT ALL - enrich top 10 companies
+async function enrichAll() {
+  const topCos = leads.slice(0,10);
+  showAlert("Enriching top "+topCos.length+" companies with OSINT... this takes 2-3 minutes","info");
+  for(var i=0;i<topCos.length;i++){
+    await enrichCompany(topCos[i].id);
+    await new Promise(function(r){setTimeout(r,3000);}); // 3s delay between requests
+  }
+  showAlert("OSINT enrichment complete for top "+topCos.length+" companies","info");
+}
+
+// PARETO SCORING
+function scoreContact(co,contact,turnover){
+  // Safety: ensure all rule groups exist
+  var r=paretoRules;
+  if(!r.pdm) r.pdm=_PARETO_DEFAULT.pdm;
+  if(!r.pb) r.pb=_PARETO_DEFAULT.pb;
+  if(!r.ph) r.ph=_PARETO_DEFAULT.ph;
+  if(!r.trn) r.trn=_PARETO_DEFAULT.trn;
+  if(!r.pt) r.pt=_PARETO_DEFAULT.pt;
+  if(!r.pe) r.pe=_PARETO_DEFAULT.pe;
+  if(!r.th) r.th=_PARETO_DEFAULT.th;
+  var emp=parseInt(co.employees)||0;
+  var ind=(co.industry||"").toLowerCase();
+  var tit=(contact.title||"").toLowerCase();
+  var combo=ind+" "+tit;
+  var coName=(co.name||"").toLowerCase();
+
+  // ── 1. DECISION MAKING PROCESS (inferred) ──────────────────────────────────
+  // Use manual override if set, otherwise infer
+  var dmScore=0;
+  var dmType=co._dmOverride||"";
+  if(!dmType){
+    // Infer from size + title + industry
+    var isBank=/bank|apdrošin|insurance|financ|government|municipality|pasvaldib|ministrij/.test(combo+coName);
+    var isGlobal=co._brandType==="global"||/ikea|tele2|swedbank|luminor|seb|tet|maxima|rimi|lidl|bmw|toyota|samsung|apple|microsoft|google|amazon/.test(coName);
+    var sen=contact.seniority||"";
+    if(isGlobal||isBank||emp>=500) dmType="proc";
+    else if(emp>=200) dmType="division";
+    else if(emp>=50||(sen==="director"||sen==="vp")) dmType="committee";
+    else dmType="single";
+  }
+  var dmMap={single:3,committee:2,division:1,proc:0};
+  dmScore=dmMap[dmType]||1;
+
+  // ── 2. COMPANY SIZE ─────────────────────────────────────────────────────────
+  var empTier = emp>=500?"p500":emp>=100?"p100":emp>=50?"p50":emp>=10?"p10":emp>0?"out":"unknown";
+  var ep=0;
+  if(empTier==="out") return {score:0,cat:"OUT",bd:{dm:dmScore,emp:0}};
+  else if(empTier==="unknown") ep=1; // don't penalize unknown
+  else ep=1; // all known sizes = 1pt (qualifier only)
+
+  // ── 3. TURNOVER ─────────────────────────────────────────────────────────────
+  var trp=null;
+  if(turnover!==null&&turnover!==undefined){
+    var t=parseFloat(turnover);
+    if(!isNaN(t)){
+      if(t<200000) return {score:0,cat:"OUT",bd:{dm:dmScore,emp:ep,trn:0}};
+      trp=t>=10000000?r.trn.m10:t>=1000000?r.trn.m1:r.trn.k200;
+    }
+  }
+
+  // ── 4. SALES STRUCTURE ──────────────────────────────────────────────────────
+  var tp=0;
+  if(/b2b|corporate.sales|enterprise|key.account|business.to.business/.test(combo)) tp=r.pt.b2b;
+  else if(/retail|b2c|consumer|phone.cent|call.cent|telesales/.test(combo)) tp=r.pt.b2c;
+  else if(/customer.serv|support|helpdesk|ecommerce|e.commerce/.test(combo)) tp=r.pt.cs;
+  else if(/sales|commercial|komerc|tirdzniec|pard/.test(combo)) tp=r.pt.b2b;
+  else if(/marketing|business.dev|partner|account/.test(combo)) tp=r.pt.mkt;
+  else tp=emp>=200?r.pt.cs:emp>=50?1:0;
+  if(tp===0&&emp<50) return {score:0,cat:"C",bd:{dm:dmScore,emp:ep,team:0}};
+
+  // ── 5. BRAND TYPE ───────────────────────────────────────────────────────────
+  var bp=0;
+  var brand=co._brandType||"";
+  if(!brand){
+    // Infer brand type
+    if(/ikea|tele2|swedbank|luminor|seb|tet|maxima|rimi|lidl|bmw|toyota|samsung|apple|microsoft|lindex|h&m|nestle|philips/.test(coName)) brand="global";
+    else if(emp>=500&&ind&&!/startup/.test(ind)) brand="global";
+    else if(emp>=200) brand="regional";
+    else if(emp>=50) brand="local";
+    else if(emp>=10) brand="small";
+    else brand="small";
+  }
+  var pbMap={global:r.pb.global,regional:r.pb.regional,local:r.pb.local,small:r.pb.small,startup:0};
+  bp=pbMap[brand]||r.pb.small;
+
+  // ── 6. HIRING SIGNAL ────────────────────────────────────────────────────────
+  var hp=0;
+  if(co._hiring==="sales") hp=r.ph.sales;
+  else if(co._hiring==="commercial") hp=r.ph.commercial;
+
+  // ── TOTAL SCORE ─────────────────────────────────────────────────────────────
+  var score=dmScore+ep+(trp||0)+tp+bp+hp;
+  var cat;
+  if(score>=r.th.vip) cat="VIP";
+  else if(score>=r.th.a) cat="A";
+  else if(score>=r.th.b) cat="B";
+  else if(score>=r.th.c) cat="C";
+  else cat="OUT";
+
+  return {score:score,cat:cat,brand:brand,dmType:dmType,
+    bd:{dm:dmScore,emp:ep,trn:trp,team:tp,brand:bp,hire:hp}};
+}
+
+function catColor(c){return c==="VIP"?"#C9A961":c==="A"?"#7AB8E8":c==="B"?"#7ADBB8":c==="C"?"#8A8A9A":"rgba(220,80,80,0.75)";}
+function catBg(c){return c==="VIP"?"rgba(201,169,97,0.12)":c==="A"?"rgba(122,184,232,0.08)":c==="B"?"rgba(122,219,184,0.08)":c==="C"?"rgba(138,138,154,0.06)":"rgba(220,80,80,0.06)";}
+function catBadge(c){
+  if(!c) return "";
+  var lbl=c==="VIP"?"★ VIP":c;
+  return '<span class="badge" style="background:'+catBg(c)+';color:'+catColor(c)+';border:1px solid '+catColor(c)+'40">'+lbl+'</span>';
+}
+
+function scoreAllLeads(){
+  leads.forEach(function(co){
+    if(!co.contacts.length) return;
+    const best=co.contacts.reduce(function(b,c){
+      const sm={c_suite:4,vp:4,director:3,manager:2,senior:1};
+      return (sm[c.seniority]||1)>(sm[b.seniority]||1)?c:b;
+    },co.contacts[0]);
+    const r=scoreContact(co,best,co._turnover||null);
+    co.parCat=r.cat; co.parScore=r.score; co.parBd=r.bd;
+  });
+  leads.sort(function(a,b){
+    var o={VIP:0,A:1,B:2,C:3,OUT:4};
+    var catDiff=(o[a.parCat]||5)-(o[b.parCat]||5);
+    if(catDiff!==0) return catDiff;
+    return b.contacts.length-a.contacts.length;
+  });
+
+}
+// RUN SEARCH
+async function runSearch(){
+  const allCountries=selectedCountries.concat(customCountries);
+  if(!allCountries.length){showAlert("Select at least one country.");return;}
+  const btn=document.getElementById("search-btn");
+  btn.disabled=true; btn.textContent="Searching...";
+  document.getElementById("search-loading").style.display="block";
+  leads=[];
+
+  function setProg(p,msg){
+    document.getElementById("sp-fill").style.width=p+"%";
+    document.getElementById("sp-status").textContent=msg;
+  }
+
+  var extraKws=[],extraSen=[];
+  const freeText=document.getElementById("free-search").value.trim();
+  if(freeText&&!convParams){
+    setProg(5,"Converting description to search parameters...");
+    const parsed=await convertFreeSearch();
+    if(parsed){extraKws=parsed.keywords||[];extraSen=parsed.seniorities||[];}
+  } else if(convParams){
+    extraKws=convParams.keywords||[];extraSen=convParams.seniorities||[];
+  }
+
+  const activeCats=categories.filter(function(c){return c.active!==false;});
+  const allPeople=[];
+  const orgMap={};
+
+  if(activeCats.length===0){
+    for(var ci=0;ci<allCountries.length;ci++){
+      var cc=allCountries[ci];
+      setProg(10+Math.round((ci/allCountries.length)*75),"Broad search in "+cc+"...");
+      try{
+        const data=await apolloSearch(cc,extraKws,extraSen,"");
+        if(data&&data.people) data.people.forEach(function(p){p._cat="Broad Search";allPeople.push(p);});
+      }catch(e){console.warn("Apollo err:",e);}
+    }
+  } else {
+    var total=activeCats.length*allCountries.length,done=0;
+    for(var ai=0;ai<activeCats.length;ai++){
+      var cat=activeCats[ai];
+      for(var ci=0;ci<allCountries.length;ci++){
+        var cc=allCountries[ci];
+        setProg(10+Math.round((done/total)*75),'Searching "'+cat.name+'" in '+cc+"...");
+        try{
+          const kws=(cat.keywords||[]).concat(extraKws);
+          const data=await apolloSearch(cc,kws,extraSen,cat.industry||"");
+          if(data&&data.people) data.people.forEach(function(p){p._cat=cat.name;allPeople.push(p);});
+        }catch(e){console.warn("Apollo err:",e);}
+        done++;
+      }
+    }
+  }
+
+  setProg(82,"Processing "+allPeople.length+" contacts...");
+
+  allPeople.forEach(function(p){
+    const orgName=p.organization&&p.organization.name?p.organization.name:p.organization_name||(p.employment_history&&p.employment_history.length?p.employment_history[0].organization_name:"")||"";
+    if(!orgName||orgName==="Unknown") return;
+    const key=orgName.toLowerCase().replace(/\s+/g,"");
+    if(!orgMap[key]){
+      orgMap[key]={
+        id:key,name:orgName,
+        website:(p.organization&&(p.organization.website_url||p.organization.primary_domain||p.organization.website))||"",
+        industry:(p.organization&&p.organization.industry)||p.industry||"",
+        country:p.country||(p.organization&&p.organization.country)||"",
+        employees:(p.organization&&(p.organization.estimated_num_employees||p.organization.num_employees))||p.num_employees||"",
+        linkedin:(p.organization&&p.organization.linkedin_url)||"",
+        phone:(p.organization&&(p.organization.phone||p.organization.sanitized_phone))||"",
+        category:p._cat||"",
+        contacts:[],parCat:"",parScore:0,parBd:{},_turnover:null
+      };
+    }
+    // ALWAYS build from first_name + last_name first (most reliable)
+    var fn=(p.first_name||"").trim();
+    var ln=(p.last_name||"").trim();
+    var combined=(fn+(ln?" "+ln:"")).trim();
+    // Only fall back to p.name if combined is empty or single word
+    var fullName=combined.length>1&&ln?combined:(p.name||p.full_name||p.display_name||combined||"");
+    if(!fullName) return;
+    const dup=orgMap[key].contacts.find(function(c){return c.name===fullName;});
+    if(!dup){
+      orgMap[key].contacts.push({
+        name:fullName,
+        title:p.title||"",
+        seniority:p.seniority||"",
+        email:p.email||p.work_email||"",
+        phone:p.phone||p.mobile_phone||(p.phone_numbers&&p.phone_numbers.length?p.phone_numbers[0].sanitized_number||p.phone_numbers[0].raw_number:"")||"",
+        linkedin:(function(){var l=p.linkedin_url||p.linkedin||"";if(l&&!l.startsWith("http"))l="https://"+l;return l;})()
+      });
+    }
+  });
+
+  leads=Object.values(orgMap).filter(function(c){return c.contacts.length>0;}).slice(0,searchLimit);
+  setProg(90,"Scoring with Pareto rules...");
+  scoreAllLeads();
+
+  if(companySummary&&leads.length){
+    setProg(92,"AI scoring ICP match...");
+    try{
+      const sample=leads.slice(0,35).map(function(c){return c.name+"|"+c.industry+"|"+(c.employees||"?")+" emp";}).join("\n");
+      const sp="Given: "+companySummary+"\nScore HIGH/MEDIUM/LOW for fit. JSON only:\n[{\"name\":\"X\",\"score\":\"HIGH\"}]\nCompanies:\n"+sample;
+      const raw=await claude(sp,1200);
+      var sc=raw; var si=raw.indexOf('['),se=raw.lastIndexOf(']'); if(si>-1&&se>si) sc=raw.slice(si,se+1); else sc=raw.replace(/```json|```/g,'').trim();
+      const scores=JSON.parse(sc);
+      scores.forEach(function(s){
+        const key=s.name&&s.name.toLowerCase().replace(/\s+/g,"");
+        if(orgMap[key]) orgMap[key].icpScore=s.score;
+      });
+    }catch(e){console.warn("ICP scoring skipped");}
+  }
+
+  setProg(100,"Done — "+leads.length+" companies found");
+  document.getElementById("search-loading").style.display="none";
+  btn.disabled=false; btn.textContent="Search Leads";
+  renderResults();
+  goTo("results");
+
+  // Sort by Pareto priority before enriching (VIP first)
+  leads.sort(function(a,b){var o={VIP:0,A:1,B:2,C:3,OUT:4};var d=(o[a.parCat]||5)-(o[b.parCat]||5);return d!==0?d:b.contacts.length-a.contacts.length;});
+  enrichedUpTo = 0;
+  enrichChunk(0);
+}
+
+var CHUNK_SIZE = 10;
+var searchLimit = parseInt(localStorage.getItem("li_search_limit")||"10");
+
+function setLimit(btn){
+  searchLimit = parseInt(btn.dataset.val);
+  localStorage.setItem("li_search_limit", searchLimit);
+  document.querySelectorAll(".limit-btn").forEach(function(b){ b.classList.remove("sel"); });
+  btn.classList.add("sel");
+}
+var enrichedUpTo = 0;
+var enriching = false;
+
+var osintStartTime = null;
+var osintTimerInterval = null;
+
+function updateOsintProgress(done, total, coName){
+  var pct = total > 0 ? Math.round((done/total)*100) : 0;
+  var pctEl = document.getElementById("osint-pct");
+  var barEl = document.getElementById("osint-prog-bar");
+  var cntEl = document.getElementById("osint-count");
+  var statusEl = document.getElementById("enrich-status");
+  if(pctEl) pctEl.textContent = pct+"%";
+  if(barEl) barEl.style.width = pct+"%";
+  if(cntEl) cntEl.textContent = done+" / "+total+" companies";
+  if(statusEl) statusEl.textContent = "Researching: "+coName;
+}
+
+function startOsintTimer(){
+  osintStartTime = Date.now();
+  osintTimerInterval = setInterval(function(){
+    var elapsed = Math.floor((Date.now()-osintStartTime)/1000);
+    var mins = Math.floor(elapsed/60);
+    var secs = elapsed%60;
+    var timerEl = document.getElementById("osint-timer");
+    if(timerEl) timerEl.textContent = mins+":"+(secs<10?"0":"")+secs;
+  }, 1000);
+}
+
+function stopOsintTimer(){
+  if(osintTimerInterval){ clearInterval(osintTimerInterval); osintTimerInterval=null; }
+}
+
+async function enrichChunk(startIdx){
+  if(enriching) return;
+  enriching = true;
+  var chunk = leads.slice(startIdx, startIdx + CHUNK_SIZE);
+  if(!chunk.length){ enriching=false; return; }
+  var end = startIdx + chunk.length;
+  var total = startIdx + chunk.length;
+  var bar = document.getElementById("osint-status-bar");
+  if(bar) bar.style.display="block";
+  startOsintTimer();
+  for(var i=0;i<chunk.length;i++){
+    var co = chunk[i];
+    updateOsintProgress(startIdx+i, total, co.name);
+    try { await enrichCompany(co.id); } catch(e){ console.warn("OSINT failed for "+co.name,e); }
+    if((i+1)%3===0) renderResultsPage();
+    await new Promise(function(r){setTimeout(r,1500);});
+  }
+  enrichedUpTo = end;
+  enriching = false;
+  renderResultsPage();
+  // Update load more button
+  var lmBtn = document.getElementById("load-more-btn");
+  if(lmBtn){
+    if(enrichedUpTo >= leads.length){
+      lmBtn.style.display="none";
+    } else {
+      lmBtn.textContent = "Enrich Next "+Math.min(CHUNK_SIZE, leads.length-enrichedUpTo)+" Companies (OSINT)";
+      lmBtn.disabled = false;
+    }
+  }
+  stopOsintTimer();
+  updateOsintProgress(end-startIdx, end-startIdx, "Complete");
+  var pctEl2=document.getElementById("osint-pct");if(pctEl2)pctEl2.textContent="100%";
+  var barEl2=document.getElementById("osint-prog-bar");if(barEl2)barEl2.style.width="100%";
+  var elapsed=osintStartTime?Math.floor((Date.now()-osintStartTime)/1000):0;
+  var mins=Math.floor(elapsed/60),secs=elapsed%60;
+  setTimeout(function(){
+    var bar2 = document.getElementById("osint-status-bar");
+    if(bar2) bar2.style.display="none";
+  }, 3000);
+  showAlert("OSINT complete: "+(end-startIdx)+" companies in "+mins+"m "+secs+"s","info");
+}
+
+function enrichMore(){
+  if(enrichedUpTo >= leads.length){showAlert("All companies enriched.","info");return;}
+  enrichChunk(enrichedUpTo);
+}
+
+// CONTACT EDITOR
+function editContact(coId, ci){
+  var co = leads.find(function(l){return l.id===coId;});
+  if(!co||!co.contacts[ci]) return;
+  var c = co.contacts[ci];
+
+  // Build modal
+  var modal = document.getElementById("edit-modal");
+  if(!modal){
+    modal = document.createElement("div");
+    modal.id = "edit-modal";
+    modal.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center";
+    document.body.appendChild(modal);
+  }
+
+  modal.innerHTML = '<div style="background:#0E1825;border:1px solid rgba(201,169,97,0.3);border-radius:14px;padding:28px;width:480px;max-width:95vw">' +
+    '<div style="font-size:16px;font-weight:700;color:var(--g);margin-bottom:6px">Edit Contact</div>' +
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:20px">'+co.name+'</div>' +
+    '<div style="display:flex;flex-direction:column;gap:12px">' +
+    '<div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em">Full Name</label>' +
+    '<input id="ec-name" value="'+(c.name||"")+'" style="width:100%;box-sizing:border-box"/></div>' +
+    '<div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em">Title</label>' +
+    '<input id="ec-title" value="'+(c.title||"")+'" style="width:100%;box-sizing:border-box"/></div>' +
+    '<div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em">Email</label>' +
+    '<input id="ec-email" value="'+(c.email||"")+'" style="width:100%;box-sizing:border-box"/></div>' +
+    '<div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em">Phone</label>' +
+    '<input id="ec-phone" value="'+(c.phone||"")+'" style="width:100%;box-sizing:border-box"/></div>' +
+    '<div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em">LinkedIn URL</label>' +
+    '<input id="ec-linkedin" value="'+(c.linkedin||"")+'" placeholder="https://linkedin.com/in/..." style="width:100%;box-sizing:border-box"/></div>' +
+    '</div>' +
+    '<div style="display:flex;gap:10px;margin-top:22px;justify-content:flex-end">' +
+    '<button onclick="closeEditModal()" style="padding:8px 18px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:var(--font)">Cancel</button>' +
+    '<button onclick="saveEditModal()" style="padding:8px 22px;border-radius:8px;border:none;background:var(--g);color:#000;cursor:pointer;font-family:var(--font);font-weight:700">Save</button>' +
+    '</div>' +
+    '</div>';
+
+  modal.dataset.coId = coId;
+  modal.dataset.ci = ci;
+  modal.style.display = "flex";
+  setTimeout(function(){ document.getElementById("ec-name").focus(); }, 100);
+}
+
+function saveEditModal(){
+  var modal = document.getElementById("edit-modal");
+  if(!modal) return;
+  saveEditContact(modal.dataset.coId, parseInt(modal.dataset.ci));
+}
+
+function saveApiKeys(){
+  var ck = document.getElementById("p-claude-key");
+  var ak = document.getElementById("p-apollo-key");
+  if(ck && ck.value.trim()){
+    CLAUDE_KEY = ck.value.trim();
+    localStorage.setItem("li_claude_key", CLAUDE_KEY);
+  }
+  if(ak && ak.value.trim()){
+    APOLLO_KEY = ak.value.trim();
+    localStorage.setItem("li_apollo_key", APOLLO_KEY);
+  }
+  if(!ck.value.trim() && !ak.value.trim()){
+    showAlert("Please enter at least one API key.","err");
+    return;
+  }
+  var msg = document.getElementById("keys-saved-msg");
+  if(msg){ msg.style.display="block"; setTimeout(function(){ msg.style.display="none"; }, 3000); }
+  showAlert("API keys saved successfully.","info");
+}
+
+function closeEditModal(){
+  var m=document.getElementById("edit-modal");
+  if(m) m.style.display="none";
+}
+
+function saveEditContact(coId, ci){
+  var co = leads.find(function(l){return l.id===coId;});
+  if(!co||!co.contacts[ci]) return;
+  var c = co.contacts[ci];
+  c.name    = document.getElementById("ec-name").value.trim()    || c.name;
+  c.title   = document.getElementById("ec-title").value.trim()   || c.title;
+  c.email   = document.getElementById("ec-email").value.trim();
+  c.phone   = document.getElementById("ec-phone").value.trim();
+  c.linkedin= document.getElementById("ec-linkedin").value.trim();
+  c._edited = true;
+  document.getElementById("edit-modal").style.display = "none";
+  scoreAllLeads();
+  renderResultsPage();
+  showAlert("Contact updated.","info");
+}
+
+// Delegated handlers for edit buttons and modal backdrop
+document.addEventListener("click", function(e){
+  var modal = document.getElementById("edit-modal");
+  if(modal && e.target === modal) modal.style.display = "none";
+  if(e.target.classList.contains("edit-contact-btn")){
+    editContact(e.target.dataset.coid, parseInt(e.target.dataset.ci));
+  }
+});
+
+// SNIPER MODE
+function updateSniperWebsite(){
+  var name = document.getElementById("sniper-company").value.trim().toLowerCase();
+  var ws = document.getElementById("sniper-website");
+  if(!ws.value && name){
+    ws.placeholder = name.replace(/\s+/g,"")+".lv";
+  }
+}
+
+async function sniperSearch(){
+  var name = document.getElementById("sniper-company").value.trim();
+  var website = document.getElementById("sniper-website").value.trim();
+  var country = document.getElementById("sniper-country").value.trim()||"Latvia";
+  var industry = document.getElementById("sniper-industry").value.trim()||"";
+  if(!website){
+    showAlert("Enter a website — e.g. heisemarketing.lv","err");
+    document.getElementById("sniper-website").focus();
+    return;
+  }
+  // Auto-extract company name from website if not provided
+  if(!name){
+    var ws2 = website.replace(/https?:\/\//,"").replace(/^www\./,"").split("/")[0];
+    name = ws2.replace(/\.(lv|lt|ee|se|no|dk|fi|de|pl|com|net|org)/,"").replace(/[-_]/g," ");
+    name = name.charAt(0).toUpperCase() + name.slice(1);
+  }
+
+  var btn = document.getElementById("sniper-btn");
+  var status = document.getElementById("sniper-status");
+  btn.disabled=true; btn.textContent="Researching...";
+  status.style.display="flex";
+  document.getElementById("sniper-status-text").textContent="Running full OSINT on "+name+"...";
+
+  // Build a fake company object for enrichCompany
+  var coId = "sniper_"+Date.now();
+  var sniperUrl = document.getElementById("sniper-url") ? document.getElementById("sniper-url").value.trim() : "";
+  var wsGuess = website || (name.toLowerCase().replace(/\s+/g,"") + (
+    country.toLowerCase().includes("lithuania") ? ".lt" :
+    country.toLowerCase().includes("estonia") ? ".ee" :
+    country.toLowerCase().includes("sweden") ? ".se" :
+    country.toLowerCase().includes("norway") ? ".no" :
+    country.toLowerCase().includes("finland") ? ".fi" :
+    country.toLowerCase().includes("denmark") ? ".dk" : ".lv"
+  ));
+  var co = {
+    id:coId, name:name,
+    website:wsGuess,
+    sniperUrl:sniperUrl,
+    industry:industry, country:country,
+    employees:"", contacts:[], parCat:"", parScore:0, parBd:{},
+    category:"Sniper Research", _turnover:null
+  };
+
+  // Always add fresh sniper company at top - remove old entry with same name
+  leads = leads.filter(function(l){return l.name.toLowerCase()!==name.toLowerCase();});
+  leads.unshift(co);
+
+  goTo("results");
+  renderResults();
+  // Reset enriching flag in case previous run left it stuck
+  enriching = false;
+  enrichedUpTo = 0;
+  // Show status bar immediately
+  var sBar=document.getElementById("osint-status-bar");
+  if(sBar) sBar.style.display="block";
+  var sStat=document.getElementById("enrich-status");
+  if(sStat) sStat.textContent="Running full OSINT research on "+name+"...";
+  startOsintTimer();
+  // Small delay to let UI render
+  await new Promise(function(r){setTimeout(r,400);});
+  try{
+    await enrichCompany(co.id);
+    scoreAllLeads();
+    enrichedUpTo = 1;
+    renderResults();
+    showAlert("OSINT complete for "+name,"info");
+  } catch(e){
+    console.error("Sniper OSINT error:",e);
+    showAlert("OSINT failed: "+e.message);
+  }
+
+  btn.disabled=false; btn.textContent="Research This Company";
+  status.style.display="none";
+}
+
+// RESULTS
+function getFiltered(){
+  return leads.filter(function(co){
+    const mq=!filterQ||co.name.toLowerCase().includes(filterQ.toLowerCase());
+    const mc=filterCat==="ALL"||co.parCat===filterCat;
+    return mq&&mc;
+  });
+}
+
+function renderResults(){
+  const total=leads.reduce(function(a,c){return a+c.contacts.length;},0);
+  document.getElementById("r-cos").textContent=leads.length;
+  document.getElementById("r-cts").textContent=total;
+  document.getElementById("export-btn").style.display=leads.length?"flex":"none";
+
+  var cs=document.getElementById("chunk-size-sel");if(cs)cs.style.display=leads.length?"block":"none";
+  document.getElementById("save-all-btn").style.display=leads.length?"flex":"none";
+  renderResultsPage();
+}
+
+function renderResultsPage(){
+  const filtered=getFiltered();
+  const totalPg=Math.ceil(filtered.length/PAGE);
+  if(currentPage>totalPg&&totalPg>0) currentPage=1;
+  const page=filtered.slice((currentPage-1)*PAGE,currentPage*PAGE);
+
+  const vip=leads.filter(function(c){return c.parCat==="VIP";}).length;
+  const a=leads.filter(function(c){return c.parCat==="A";}).length;
+  const b=leads.filter(function(c){return c.parCat==="B";}).length;
+  const cc=leads.filter(function(c){return c.parCat==="C";}).length;
+
+  const bar=document.getElementById("filter-bar");
+  bar.innerHTML="";
+  [["ALL","All ("+leads.length+")"],["VIP","VIP ("+vip+")"],["A","A ("+a+")"],["B","B ("+b+")"],["C","C ("+cc+")"]].forEach(function(pair){
+    const btn=document.createElement("button");
+    btn.className="f-btn"+(filterCat===pair[0]?" sel":"");
+    btn.textContent=pair[1];
+    var fc=pair[0];
+    btn.onclick=function(){filterCat=fc;currentPage=1;renderResultsPage();};
+    bar.appendChild(btn);
+  });
+  const qi=document.createElement("input");
+  qi.value=filterQ;
+  qi.placeholder="Filter by company name...";
+  qi.oninput=function(){filterQ=this.value;currentPage=1;renderResultsPage();};
+  bar.appendChild(qi);
+
+  const list=document.getElementById("results-list");
+  list.innerHTML="";
+
+  if(!leads.length){
+    list.innerHTML='<div class="empty-state"><div class="empty-icon">?</div><div class="empty-title">No results yet</div><p>Run a search to find leads</p></div>';
+    return;
+  }
+  if(!filtered.length){
+    list.innerHTML='<div class="empty-state"><div class="empty-icon">?</div><div class="empty-title">No matches</div><p>Try a different filter</p></div>';
+    return;
+  }
+
+  page.forEach(function(co){
+    const ws=co.website?(co.website.startsWith("http")?co.website:"https://"+co.website):"";
+    // Firmas.lv search - opens search results for this company name
+    const firmasUrl="https://www.firmas.lv/lv/uznemumi?q="+encodeURIComponent(co.name)+"&type=companies";
+    const emailCt=co.contacts.filter(function(c){return c.email;}).length;
+    const phoneCt=co.contacts.filter(function(c){return c.phone;}).length;
+    var bd=co.parBd||{};
+    var scoreInfo=""; // hidden from user
+    var dmType=co.dmType||"";
+    var dmLabel=dmType?({single:"Single DM",committee:"Committee",division:"Divisional",proc:"Procurement"}[dmType]||""):"";
+    var enrichedBadge=co.osintNotes||co.emailPattern?'<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(122,219,184,0.1);color:#7ADBB8;border:1px solid rgba(122,219,184,0.2);margin-left:6px">✓ OSINT</span>':"";
+
+    const div=document.createElement("div");
+    div.className="co-card";
+
+    let headsHtml='<div class="co-head"><div class="co-top"><div class="co-av" style="background:'+catBg(co.parCat)+';color:'+catColor(co.parCat)+';border-color:'+catColor(co.parCat)+'40">'+co.name.charAt(0)+'</div><div style="flex:1"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap"><div class="co-name">'+co.name+'</div>'+catBadge(co.parCat)+catBadge(co.category)+enrichedBadge+'</div><div class="co-meta">'+(co.industry?co.industry+' · ':'')+( co.country?co.country+' · ':'')+( co.employees?co.employees+' emp.':'')+(dmLabel?' · <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(201,169,97,0.08);color:var(--g)">'+dmLabel+'</span>':'')+'</div></div><div style="font-size:12px;color:var(--muted);text-align:right">'+co.contacts.length+' contacts'+(emailCt?' &middot; '+emailCt+' emails':'')+(phoneCt?' &middot; '+phoneCt+' phones':'')+'</div></div>';
+    headsHtml+='<div class="co-links">';
+    var cardDomain = ws ? ws.replace(/https?:\/\//,'').split('/')[0] : '';
+    if(ws) headsHtml+='<a href="'+ws+'" target="_blank" style="color:var(--g);font-weight:600">🌐 '+cardDomain+'</a>';
+    if(co.phone) headsHtml+='<span style="color:#7ADBB8">📞 '+co.phone+'</span>';
+    if(co.email) headsHtml+='<a href="mailto:'+co.email+'" style="color:#7AB8E8">✉ '+co.email+'</a>';
+    headsHtml+='<a href="'+firmasUrl+'" target="_blank" style="color:rgba(122,219,184,0.7);font-size:12px">Firmas.lv ↗</a>';
+
+    // scoreInfo hidden
+    headsHtml+='</div>';
+    headsHtml+='<div class="trn-row"><input type="number" placeholder="Turnover EUR" oninput="updateTrn(\''+co.id+'\',this.value)" style="width:140px;padding:5px 9px;font-size:12px;border-radius:6px"/><span>enter to rescore</span></div>';
+    headsHtml+='</div>';
+
+    // Intelligence summary card (shows after OSINT)
+    var intelHtml = "";
+    if(co._intel){
+      var intel = co._intel;
+      var intelItems = [];
+      if(intel.phone) intelItems.push('<span>📞 '+intel.phone+'</span>');
+      if(intel.email) intelItems.push('<a href="mailto:'+intel.email+'" class="td-link" style="color:#7AB8E8">✉ '+intel.email+'</a>');
+      if(intel.address) intelItems.push('<span>📍 '+intel.address+'</span>');
+      if(intel.emailPattern) intelItems.push('<span style="color:var(--g)">@ Pattern: '+intel.emailPattern+'</span>');
+      if(intel.verifiedEmails>0) intelItems.push('<span style="color:#7ADBB8">✓ '+intel.verifiedEmails+' verified email'+(intel.verifiedEmails>1?"s":"")+'</span>');
+      if(intel.hiring&&intel.hiring!=="none") intelItems.push('<span style="color:#C9A961">📢 Hiring '+intel.hiring+' roles</span>');
+      var dmMap2={single:"Single DM",committee:"Committee",division:"Divisional",proc:"Procurement"};
+      if(intel.dmProcess) intelItems.push('<span>Decision: '+( dmMap2[intel.dmProcess]||intel.dmProcess)+'</span>');
+      if(intel.notes) intelItems.push('<span style="color:var(--muted);font-style:italic">'+intel.notes.substring(0,120)+(intel.notes.length>120?"...":"")+'</span>');
+      if(intelItems.length){
+        intelHtml = '<div style="margin:0 20px 0;padding:12px 16px;background:rgba(201,169,97,0.04);border:1px solid rgba(201,169,97,0.15);border-radius:9px;display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--muted)">'+
+          '<span style="font-size:10px;font-weight:700;color:var(--g);letter-spacing:.1em;text-transform:uppercase;width:100%">Intelligence Summary</span>'+
+          intelItems.join('<span style="color:var(--border)">·</span>')+
+          '</div><div style="height:12px"></div>';
+      }
+    }
+
+    let tblHtml='<div class="co-contacts"><div class="contacts-hd">All Contacts ('+co.contacts.length+')</div><table class="ct"><thead><tr><th>Name</th><th>Title</th><th>Seniority</th><th>Email</th><th>Phone</th><th>LinkedIn</th><th></th><th>Save</th></tr></thead><tbody>';
+    co.contacts.forEach(function(c,ci){
+      var ck=ckKey(co,c);
+      var iv=inVIP(ck),ic=inCRM(ck);
+      tblHtml+='<tr>';
+      tblHtml+='<td class="td-name">'+(c.name||"—")+'</td>';
+      tblHtml+='<td class="td-title">'+(c.title||"—")+'</td>';
+      tblHtml+='<td>'+(c.seniority?'<span class="sen-tag">'+(SEN_LABELS[c.seniority]||c.seniority)+'</span>':"—")+'</td>';
+      var emailConf = c.confidence ? ' <span style="font-size:9px;padding:1px 4px;border-radius:3px;vertical-align:middle;background:'+(c.confidence==="HIGH"?"rgba(122,219,184,0.15)":c.confidence==="MEDIUM"?"rgba(201,169,97,0.12)":"rgba(138,138,154,0.1)")+';color:'+(c.confidence==="HIGH"?"#7ADBB8":c.confidence==="MEDIUM"?"var(--g)":"var(--muted)")+'">'+(c.confidence||"")+'</span>' : "";
+      tblHtml+='<td>'+(c.email?'<a href="mailto:'+c.email+'" class="td-link td-email">'+c.email+'</a>'+emailConf:'<span class="td-miss">—</span>')+'</td>';
+      tblHtml+='<td>'+(c.phone?'<a href="tel:'+c.phone+'" class="td-link td-phone">'+c.phone+'</a>':'<span class="td-miss">—</span>')+'</td>';
+      var liDisplay="—";
+      // LinkedIn: always use people search (direct profile URLs often 404)
+      // Search includes both person name AND company for precision
+      if(c.name){
+        var liQ = encodeURIComponent(c.name + " " + co.name);
+        var liSearchUrl = "https://www.linkedin.com/search/results/people/?keywords=" + liQ + "&origin=GLOBAL_SEARCH_HEADER";
+        liDisplay = '<a href="' + liSearchUrl + '" target="_blank" class="td-link td-li" title="Search LinkedIn for ' + c.name + ' at ' + co.name + '">LinkedIn</a>';
+      }
+      tblHtml+='<td>'+liDisplay+'</td>';
+      tblHtml+='<td style="white-space:nowrap"><button class="edit-contact-btn" data-coid="'+co.id+'" data-ci="'+ci+'" style="padding:2px 8px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:11px" title="Edit contact">✏️</button></td>';
+      tblHtml+='<td style="white-space:nowrap"><button class="save-btn save-vip'+(iv?" on":"") + '" data-coid="'+co.id+'" data-ci="'+ci+'" onclick="vipBtn(this)">'+(iv?"★ VIP":"VIP")+'</button><button class="save-btn save-crm'+(ic?" on":"") + '" data-coid="'+co.id+'" data-ci="'+ci+'" onclick="crmBtn(this)">'+(ic?"In CRM":"+ CRM")+'</button></td>';
+      tblHtml+='</tr>';
+    });
+    tblHtml+='</tbody></table></div>';
+
+    div.innerHTML=headsHtml+intelHtml+tblHtml;
+    list.appendChild(div);
+  });
+
+  if(totalPg>1){
+    const pag=document.createElement("div");
+    pag.className="pag";
+    const prev=document.createElement("button");
+    prev.textContent="Prev";
+    prev.disabled=currentPage===1;
+    prev.onclick=function(){currentPage--;renderResultsPage();window.scrollTo(0,0);};
+    const info=document.createElement("span");
+    info.textContent="Page "+currentPage+" of "+totalPg+" ("+filtered.length+" companies)";
+    const next=document.createElement("button");
+    next.textContent="Next";
+    next.disabled=currentPage===totalPg;
+    next.onclick=function(){currentPage++;renderResultsPage();window.scrollTo(0,0);};
+    pag.appendChild(prev);pag.appendChild(info);pag.appendChild(next);
+    list.appendChild(pag);
+  }
+
+  // Load More OSINT button
+  if(leads.length > 0){
+    const lm = document.createElement("div");
+    lm.style.cssText="text-align:center;padding:20px 0 32px";
+    var remaining = leads.length - enrichedUpTo;
+    var nextChunk = Math.min(CHUNK_SIZE, remaining);
+    if(remaining > 0){
+      lm.innerHTML = '<button id="load-more-btn" onclick="enrichMore()" style="padding:11px 28px;border-radius:9px;border:1px solid rgba(122,219,184,0.35);background:rgba(122,219,184,0.05);color:#7ADBB8;cursor:pointer;font-family:var(--font);font-size:14px;font-weight:600">Enrich Next '+nextChunk+' Companies (OSINT) &rarr;</button><div style="font-size:12px;color:var(--muted);margin-top:8px">'+enrichedUpTo+' of '+leads.length+' companies enriched</div>';
+    } else {
+      lm.innerHTML = '<div style="font-size:13px;color:var(--muted)">All '+leads.length+' companies OSINT enriched</div>';
+    }
+    list.appendChild(lm);
+  }
+}
+
+function updateTrn(coId,val){
+  const co=leads.find(function(l){return l.id===coId;});
+  if(!co) return;
+  co._turnover=parseFloat(val)||null;
+  if(!co.contacts.length) return;
+  const best=co.contacts.reduce(function(b,c){var sm={c_suite:4,vp:4,director:3,manager:2,senior:1};return (sm[c.seniority]||1)>(sm[b.seniority]||1)?c:b;},co.contacts[0]);
+  const r=scoreContact(co,best,co._turnover);
+  co.parCat=r.cat;co.parScore=r.score;co.parBd=r.bd;
+  renderResultsPage();
+}
+
+// VIP / CRM BUTTONS
+function vipBtn(btn){
+  const coId=btn.dataset.coid,ci=parseInt(btn.dataset.ci);
+  const co=leads.find(function(l){return l.id===coId;});
+  if(!co) return;
+  const c=co.contacts[ci];
+  const key=ckKey(co,c);
+  if(inVIP(key)){showAlert("Already in VIP list.","info");return;}
+  const res=scoreContact(co,c,co._turnover);
+  vipList.push(Object.assign({},c,{_k:key,_company:co.name,_website:co.website,_industry:co.industry,_country:co.country,_employees:co.employees,_parCat:res.cat,_parScore:res.score,_status:"VIP",_added:new Date().toLocaleDateString()}));
+  saveLists();updateNavCounts();
+  btn.textContent="★ VIP";btn.classList.add("on");
+  showAlert(c.name+" added to VIP.","info");
+}
+
+function crmBtn(btn){
+  const coId=btn.dataset.coid,ci=parseInt(btn.dataset.ci);
+  const co=leads.find(function(l){return l.id===coId;});
+  if(!co) return;
+  const c=co.contacts[ci];
+  const key=ckKey(co,c);
+  if(inCRM(key)){showAlert("Already in CRM.","info");return;}
+  const res=scoreContact(co,c,co._turnover);
+  const status=res.cat==="VIP"?"VIP":res.cat==="A"?"Hot":"Cold";
+  crmList.push(Object.assign({},c,{_k:key,_company:co.name,_website:co.website,_industry:co.industry,_country:co.country,_employees:co.employees,_parCat:res.cat,_parScore:res.score,_status:status,_added:new Date().toLocaleDateString()}));
+  saveLists();updateNavCounts();
+  btn.textContent="In CRM";btn.classList.add("on");
+}
+
+function saveAllToCRM(){
+  var added=0;
+  leads.forEach(function(co){
+    co.contacts.forEach(function(c){
+      const key=ckKey(co,c);
+      if(!inCRM(key)){
+        const res=scoreContact(co,c,co._turnover);
+        const status=res.cat==="VIP"?"VIP":res.cat==="A"?"Hot":"Cold";
+        crmList.push(Object.assign({},c,{_k:key,_company:co.name,_website:co.website,_industry:co.industry,_country:co.country,_employees:co.employees,_parCat:res.cat,_parScore:res.score,_status:status,_added:new Date().toLocaleDateString()}));
+        added++;
+      }
+    });
+  });
+  saveLists();updateNavCounts();
+  showAlert(added+" contacts saved to CRM.","info");
+}
+
+// CRM
+function setCRMTab(tab){
+  crmTab=tab;
+  ["all","vip"].forEach(function(t){
+    const el=document.getElementById("ctab-"+t);
+    if(el) el.className="crm-tab"+(t===tab?" active":"");
+  });
+  renderCRM();
+}
+
+function renderCRM(){
+  document.getElementById("crm-total").textContent=crmList.length;
+  document.getElementById("vip-total").textContent=vipList.length;
+  const contacts=crmTab==="vip"?vipList:crmList;
+  const list=document.getElementById("crm-list");
+  if(!list) return;
+  if(!contacts.length){
+    list.innerHTML='<div class="empty-state"><div class="empty-icon">'+(crmTab==="vip"?"?":"?")+'</div><div class="empty-title">'+(crmTab==="vip"?"No VIP contacts":"CRM is empty")+'</div><p>'+(crmTab==="vip"?"Click VIP on any contact in Results":"Search and save contacts")+'</p><button class="btn btn-gold" onclick="goTo(\'targets\')" style="margin-top:16px">Go to Search</button></div>';
+    return;
+  }
+  const byComp={};
+  contacts.forEach(function(c){const co=c._company||"Unknown";if(!byComp[co])byComp[co]=[];byComp[co].push(c);});
+  let html="";
+  Object.keys(byComp).forEach(function(comp){
+    const cons=byComp[comp];
+    const ws=cons[0]._website?(cons[0]._website.startsWith("http")?cons[0]._website:"https://"+cons[0]._website):"";
+    html+='<div class="co-card"><div class="co-head"><div class="co-top"><div class="co-av">'+comp.charAt(0)+'</div><div><div class="co-name">'+comp+'</div><div class="co-meta">'+(cons[0]._industry||"")+(cons[0]._country?" &middot; "+cons[0]._country:"")+'</div></div></div>';
+    html+='<div class="co-links">'+(ws?'<a href="'+ws+'" target="_blank">Website</a>':"")+'</div></div>';
+    html+='<div class="co-contacts"><table class="ct"><thead><tr><th>Name</th><th>Title</th><th>Category</th><th>Email</th><th>Phone</th><th>Status</th><th></th></tr></thead><tbody>';
+    cons.forEach(function(c){
+      html+='<tr><td class="td-name">'+(c.name||"—")+'</td><td class="td-title">'+(c.title||"—")+'</td>';
+      html+='<td>'+(c._parCat?catBadge(c._parCat):"—")+'</td>';
+      html+='<td>'+(c.email?'<a href="mailto:'+c.email+'" class="td-link td-email">'+c.email+'</a>':'<span class="td-miss">—</span>')+'</td>';
+      html+='<td>'+(c.phone?'<a href="tel:'+c.phone+'" class="td-link td-phone">'+c.phone+'</a>':'<span class="td-miss">—</span>')+'</td>';
+      html+='<td><select onchange="updateStatus(\''+crmTab+'\',\''+c._k+'\',this.value)" style="background:var(--dark3);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;padding:2px 5px;font-family:var(--font)"><option>Cold</option><option>Hot</option><option>Meeting</option><option>Proposal</option><option>Client</option><option>Lost</option><option>VIP</option></select></td>';
+      html+='<td><button onclick="removeContact(\''+crmTab+'\',\''+c._k+'\')" style="background:none;border:none;color:rgba(220,80,80,0.5);cursor:pointer;font-size:14px">X</button></td>';
+      html+='</tr>';
+    });
+    html+='</tbody></table></div></div>';
+  });
+  list.innerHTML=html;
+  // Set select values
+  contacts.forEach(function(c){
+    const selects=list.querySelectorAll("select");
+    selects.forEach(function(sel){
+      Array.from(sel.options).forEach(function(opt){if(opt.value===c._status)opt.selected=true;});
+    });
+  });
+}
+
+function updateStatus(tab,key,status){
+  const arr=tab==="vip"?vipList:crmList;
+  const c=arr.find(function(x){return x._k===key;});
+  if(c){c._status=status;saveLists();}
+}
+function removeContact(tab,key){
+  if(tab==="vip") vipList=vipList.filter(function(c){return c._k!==key;});
+  else crmList=crmList.filter(function(c){return c._k!==key;});
+  saveLists();updateNavCounts();renderCRM();
+}
+function addManual(){
+  var name=prompt("Full Name:");if(!name)return;
+  var company=prompt("Company:")||"";
+  var title=prompt("Title:")||"";
+  var email=prompt("Email:")||"";
+  var phone=prompt("Phone:")||"";
+  var li=prompt("LinkedIn URL:")||"";
+  var key="manual__"+name+"__"+Date.now();
+  crmList.push({name:name,_company:company,title:title,email:email,phone:phone,linkedin:li,_k:key,_status:"Cold",_added:new Date().toLocaleDateString(),_parCat:"",_industry:"",_country:"Latvia"});
+  saveLists();updateNavCounts();renderCRM();
+}
+
+function exportCSV(){
+  var hdrs=["Company","Website","Industry","Country","Employees","Pareto","Score","Category","Name","Title","Seniority","Email","Phone","LinkedIn"];
+  var rows=[hdrs];
+  leads.forEach(function(co){
+    co.contacts.forEach(function(c){
+      rows.push([co.name,co.website,co.industry,co.country,co.employees,co.parCat||"",co.parScore||"",co.category||"",c.name,c.title,c.seniority,c.email,c.phone,c.linkedin]);
+    });
+  });
+  var csv=rows.map(function(r){return r.map(function(v){return'"'+(String(v||"")).replace(/"/g,'""')+'"';}).join(",");}).join("\n");
+  var blob=new Blob([csv],{type:"text/csv"});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement("a");a.href=url;a.download="leads.csv";a.click();
+}
+
+function exportCRM(){
+  var all=crmList.concat(vipList.filter(function(v){return !inCRM(v._k);}));
+  var hdrs=["Company","Name","Title","Category","Score","Email","Phone","LinkedIn","Status","Industry","Country","Added"];
+  var rows=[hdrs];
+  all.forEach(function(c){rows.push([c._company||"",c.name||"",c.title||"",c._parCat||"",c._parScore||"",c.email||"",c.phone||"",c.linkedin||"",c._status||"",c._industry||"",c._country||"",c._added||""]);});
+  var csv=rows.map(function(r){return r.map(function(v){return'"'+(String(v||"")).replace(/"/g,'""')+'"';}).join(",");}).join("\n");
+  var blob=new Blob([csv],{type:"text/csv"});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement("a");a.href=url;a.download="my_crm.csv";a.click();
+}
+
+// PARETO SETTINGS
+// ── PARETO PILL UI ───────────────────────────────────────────────────────────
+// Criteria definitions: id, label, points awarded, OUT flag
+var PARETO_CRITERIA = {
+  emp: {
+    label:"Company Size",
+    pills:[
+      {id:"p500", label:"500+ emp",    pts:1},
+      {id:"p100", label:"100-499 emp", pts:1},
+      {id:"p50",  label:"50-99 emp",   pts:1},
+      {id:"p10",  label:"10-49 emp",   pts:1},
+      {id:"out",  label:"Under 10",    pts:0, out:true}
+    ]
+  },
+  trn: {
+    label:"Annual Turnover",
+    pills:[
+      {id:"m10",  label:"EUR 10M+",    pts:4},
+      {id:"m1",   label:"EUR 1M-10M",  pts:3},
+      {id:"k200", label:"EUR 200K-1M", pts:2},
+      {id:"out",  label:"Under 200K",  pts:0, out:true}
+    ]
+  },
+  dm: {
+    label:"Decision Making",
+    pills:[
+      {id:"single",   label:"Single DM",    pts:3, desc:"CEO/Owner decides alone"},
+      {id:"committee",label:"Committee",    pts:2, desc:"2-3 stakeholders"},
+      {id:"division", label:"Divisional",   pts:1, desc:"Dept head + approval"},
+      {id:"proc",     label:"Procurement",  pts:0, desc:"Formal tender process"}
+    ]
+  },
+  sales: {
+    label:"Sales Structure",
+    pills:[
+      {id:"b2b", label:"B2B Sales",      pts:4},
+      {id:"b2c", label:"B2C / Phone",    pts:3},
+      {id:"cs",  label:"Customer Serv.", pts:2},
+      {id:"mkt", label:"Marketing",      pts:2},
+      {id:"none",label:"No Sales Team",  pts:0, out:true}
+    ]
+  },
+  brand: {
+    label:"Brand Type",
+    pills:[
+      {id:"global",   label:"Global Brand",   pts:4, desc:"IKEA, Tele2, Swedbank..."},
+      {id:"regional", label:"Regional Sub.",   pts:3, desc:"Nordic/EU branch in LV"},
+      {id:"local",    label:"Local Est.",      pts:2, desc:"Latvian-owned 50+ emp"},
+      {id:"small",    label:"Small Local",     pts:1, desc:"Under 50 emp"},
+      {id:"startup",  label:"Startup",         pts:0}
+    ]
+  },
+  hire: {
+    label:"Hiring Signal",
+    pills:[
+      {id:"sales",      label:"Hiring Sales",      pts:3},
+      {id:"commercial", label:"Hiring Biz Dev",    pts:2},
+      {id:"none",       label:"Not Hiring",        pts:0}
+    ]
+  }
+};
+
+// pillSelections[cat][criterion] = array of selected pill ids
+var pillSelections = {
+  VIP: {emp:["p500","p100"],     trn:["m10","m1"],        dm:["single"],                              sales:["b2b"],                brand:["global","regional"], hire:["sales","commercial"]},
+  A:   {emp:["p100","p50"],      trn:["m10","m1","k200"], dm:["single","committee"],                  sales:["b2b","b2c"],           brand:["global","regional","local"], hire:["sales","commercial","none"]},
+  B:   {emp:["p50","p10"],       trn:["m1","k200"],       dm:["single","committee","division"],        sales:["b2b","b2c","cs","mkt"],brand:["regional","local","small"], hire:["sales","commercial","none"]},
+  C:   {emp:["p10"],             trn:["k200"],            dm:["single","committee","division","proc"], sales:["b2b","b2c","cs","mkt","none"],brand:["local","small"], hire:["none"]}
+};
+
+var activeParetocat = null;
+var catColors = {VIP:"#C9A961",A:"#7AB8E8",B:"#7ADBB8",C:"#8A8A9A"};
+var catBgs    = {VIP:"rgba(201,169,97,0.12)",A:"rgba(122,184,232,0.08)",B:"rgba(122,219,184,0.08)",C:"rgba(138,138,154,0.06)"};
+
+function savePareto(){
+  // Convert pill selections to numeric points for scoreContact
+  function maxPts(crit, catId){
+    var sel = pillSelections[catId][crit]||[];
+    var cdef = PARETO_CRITERIA[crit];
+    if(!cdef) return 0;
+    var pts = 0;
+    cdef.pills.forEach(function(p){ if(sel.includes(p.id) && !p.out) pts = Math.max(pts, p.pts); });
+    return pts;
+  }
+  paretoRules = {
+    th: {
+      vip: parseInt(document.getElementById("pcat-thresh-VIP").textContent)||13,
+      a:   parseInt(document.getElementById("pcat-thresh-A").textContent)||9,
+      b:   parseInt(document.getElementById("pcat-thresh-B").textContent)||5,
+      c:   parseInt(document.getElementById("pcat-thresh-C").textContent)||1
+    },
+    pdm: {single:4,committee:3,division:2,proc:1},
+    pe:  {p500:4,p100:3,p50:2,p10:1},
+    trn: {m10:4,m1:3,k200:2},
+    pt:  {b2b:4,b2c:3,cs:2,mkt:2},
+    pb:  {global:4,regional:3,local:2,small:1,startup:0},
+    ph:  {sales:3,commercial:2},
+    pills: pillSelections
+  };
+  localStorage.setItem("li_pareto", JSON.stringify(paretoRules));
+  updateCatSummaries();
+  updateParetoPreview();
+}
+
+function openPareto(cat){
+  if(activeParetocat === cat){ closePareto(); return; }
+  activeParetocat = cat;
+  // Update active state on cards
+  ["VIP","A","B","C"].forEach(function(c){
+    document.getElementById("pcat-"+c).classList.toggle("active", c===cat);
+  });
+  var col = catColors[cat];
+  var bg  = catBgs[cat];
+  document.documentElement.style.setProperty("--editor-color", col);
+  document.getElementById("editor-title").innerHTML =
+    '<span style="color:'+col+'">'+(cat==="VIP"?"★ VIP":cat)+'</span> &mdash; Define qualifying criteria';
+  document.getElementById("editor-title").style.color = col;
+  // Set threshold
+  var thMap={VIP:"pcat-thresh-VIP",A:"pcat-thresh-A",B:"pcat-thresh-B",C:"pcat-thresh-C"};
+  document.getElementById("editor-thresh").value = document.getElementById(thMap[cat]).textContent;
+  document.getElementById("editor-thresh").style.borderColor = col;
+  document.getElementById("editor-thresh").style.color = col;
+  // Render pill rows
+  Object.keys(PARETO_CRITERIA).forEach(function(critKey){
+    renderPills(critKey, cat, col, bg);
+  });
+  document.getElementById("pareto-editor").style.display = "block";
+  document.getElementById("pareto-editor").scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+
+function closePareto(){
+  activeParetocat = null;
+  ["VIP","A","B","C"].forEach(function(c){
+    document.getElementById("pcat-"+c).classList.remove("active");
+  });
+  document.getElementById("pareto-editor").style.display = "none";
+  savePareto();
+}
+
+function renderPills(critKey, cat, col, bg){
+  var cdef = PARETO_CRITERIA[critKey];
+  var container = document.getElementById("pills-"+critKey);
+  if(!container) return;
+  var selected = pillSelections[cat][critKey]||[];
+  container.innerHTML = "";
+  cdef.pills.forEach(function(p){
+    var btn = document.createElement("button");
+    btn.className = "pill" + (p.out?" out":"") + (selected.includes(p.id)?" sel":"");
+    btn.style.setProperty("--pill-color", col);
+    btn.style.setProperty("--pill-bg", bg);
+    var lbl = p.label;
+    if(p.pts > 0) lbl += ' <span style="font-size:10px;opacity:.6">+'+p.pts+'pt</span>';
+    if(p.desc) lbl += '<br/><span style="font-size:10px;font-weight:400;opacity:.55">'+p.desc+'</span>';
+    btn.innerHTML = lbl;
+    btn.onclick = function(){ togglePill(critKey, p.id, cat, col, bg); };
+    container.appendChild(btn);
+  });
+}
+
+function togglePill(critKey, pillId, cat, col, bg){
+  var sel = pillSelections[cat][critKey]||[];
+  var idx = sel.indexOf(pillId);
+  if(idx > -1) sel.splice(idx,1);
+  else sel.push(pillId);
+  pillSelections[cat][critKey] = sel;
+  renderPills(critKey, cat, col, bg);
+  updateCatSummary(cat);
+  updateParetoPreview();
+}
+
+function updateThresh(){
+  if(!activeParetocat) return;
+  var val = document.getElementById("editor-thresh").value;
+  var spanId = "pcat-thresh-"+activeParetocat;
+  document.getElementById(spanId).textContent = val;
+  updateParetoPreview();
+}
+
+function updateCatSummary(cat){
+  var el = document.getElementById("pcat-sum-"+cat);
+  if(!el) return;
+  var sel = pillSelections[cat];
+  var parts = [];
+  if(sel.dm&&sel.dm.length)   parts.push(sel.dm.join("/")+" DM");
+  if(sel.emp&&sel.emp.filter(function(x){return x!=="out";}).length) parts.push(sel.emp.filter(function(x){return x!=="out";}).join("/")+" emp");
+  if(sel.brand&&sel.brand.length) parts.push(sel.brand.join("/")+" brand");
+  el.textContent = parts.length ? parts.slice(0,2).join(" · ") : "Not configured";
+}
+
+function updateCatSummaries(){
+  ["VIP","A","B","C"].forEach(updateCatSummary);
+}
+
+function loadParetoUI(){
+  if(paretoRules.pills) pillSelections = paretoRules.pills;
+  var t = paretoRules.th||{vip:13,a:9,b:5,c:1};
+  document.getElementById("pcat-thresh-VIP").textContent = t.vip;
+  document.getElementById("pcat-thresh-A").textContent   = t.a;
+  document.getElementById("pcat-thresh-B").textContent   = t.b;
+  document.getElementById("pcat-thresh-C").textContent   = t.c;
+  updateCatSummaries();
+  updateParetoPreview();
+  // Update quick preview on Screen 1
+  var qp = document.getElementById("pareto-quick-preview");
+  if(qp){
+    qp.innerHTML =
+      '<span style="color:#C9A961;font-weight:700">★ VIP</span> Top Business Potential &nbsp;·&nbsp; '+
+      '<span style="color:#7AB8E8;font-weight:700">A</span> High Potential &nbsp;·&nbsp; '+
+      '<span style="color:#7ADBB8;font-weight:700">B</span> Medium Potential &nbsp;·&nbsp; '+
+      '<span style="color:#8A8A9A;font-weight:700">C</span> Low Potential'+
+      '<br/><span style="font-size:11px;opacity:.5">Click to configure criteria →</span>';
+  }
+}
+
+// loadParetoUI is defined above in pill section
+
+function updateParetoPreview(){
+  var el=document.getElementById("pareto-preview");if(!el)return;
+  var t=paretoRules.th||{vip:13,a:9,b:5,c:1};
+  var tvip=parseInt(document.getElementById("pcat-thresh-VIP").textContent)||t.vip;
+  var ta=parseInt(document.getElementById("pcat-thresh-A").textContent)||t.a;
+  var tb=parseInt(document.getElementById("pcat-thresh-B").textContent)||t.b;
+  var tc=parseInt(document.getElementById("pcat-thresh-C").textContent)||t.c;
+  var maxScore=3+1+4+4+4+3; // max possible: DM(3)+emp(1)+trn(4)+sales(4)+brand(4)+hire(3)
+  el.innerHTML=[
+    '<span style="color:#C9A961;font-weight:700">★ VIP &mdash; Top Business Potential</span> &mdash; Call personally this week',
+    '<span style="color:#7AB8E8;font-weight:700">A &mdash; High Potential</span> &mdash; Follow up within 7 days',
+    '<span style="color:#7ADBB8;font-weight:700">B &mdash; Medium Potential</span> &mdash; Nurture quarterly',
+    '<span style="color:#8A8A9A;font-weight:700">C &mdash; Low Potential</span> &mdash; Newsletter only',
+    '<span style="color:rgba(220,80,80,0.6);font-weight:600">OUT &mdash; Disqualified</span> &mdash; Too small, no sales team, or under EUR 200K turnover'
+  ].join("<br/>");
+}
+
+function applyParetoToAll(){
+  savePareto();
+  scoreAllLeads();
+  showAlert("Scoring rules saved and applied.","info");
+  if(leads.length) renderResults();
+}
+
+// INIT
+loadParetoUI();
+// Show/hide Apollo banner based on dismiss state
+if(localStorage.getItem("li_hide_apollo_banner")){
+  var ab=document.getElementById("apollo-banner");
+  if(ab) ab.style.display="none";
+}
+// Set correct limit button on load
+(function(){
+  var saved = localStorage.getItem("li_search_limit")||"50";
+  document.querySelectorAll(".limit-btn").forEach(function(b){
+    b.classList.toggle("sel", b.dataset.val===saved);
+  });
+})();
+// Delegated click for OSINT buttons (avoids inline onclick quote issues)
+document.addEventListener("click", function(e){
+  if(e.target.classList.contains("osint-btn")){
+    var coId = e.target.dataset.coid;
+    e.target.textContent="Researching...";
+    e.target.disabled=true;
+    enrichCompany(coId);
+  }
+});
+
+  // Populate key fields from localStorage
+  var ck=document.getElementById("p-claude-key");
+  var ak=document.getElementById("p-apollo-key");
+  if(ck) ck.value=CLAUDE_KEY;
+  if(ak) ak.value=APOLLO_KEY;
+renderCountryChips();
+updateNavCounts();
+</script>
+</body>
+</html>
