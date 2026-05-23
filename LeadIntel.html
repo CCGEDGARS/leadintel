@@ -2470,7 +2470,7 @@ if(localStorage.getItem("li_hide_apollo_banner")){
 // Delegated click for OSINT buttons (avoids inline onclick quote issues)
 document.addEventListener("click", function(e){
   if(e.target.classList.contains("osint-btn")){
-    var coId = e.target.dataset.coid;
+    var coId = e.target.dataset.id;
     e.target.textContent="Researching...";
     e.target.disabled=true;
     enrichCompany(coId);
