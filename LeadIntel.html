@@ -561,6 +561,7 @@ table.ct tr:hover td{background:rgba(255,255,255,0.02)}
 
 <script>
 var APOLLO_KEY = localStorage.getItem("li_apollo_key")||"";
+var FIRECRAWL_KEY = "fc-20ed0a810ec74477aca6dbbd467aca37";
 var CLAUDE_KEY = localStorage.getItem("li_claude_key")||"";
 
 const BALTIC = [
@@ -989,6 +990,41 @@ async function apolloSearch(countryCode,keywords,seniorities,industry){
   const data=await res.json();
   console.log("Apollo response:",data.pagination&&data.pagination.total_entries,"total,",data.people&&data.people.length,"people, error:",data.error||"none");
   return data;
+}
+
+// FIRECRAWL
+async function firecrawlScrape(pageUrl) {
+  try {
+    const res = await fetch("https://apollo-proxy.edgars-7e7.workers.dev/firecrawl-scrape", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({url: pageUrl, formats: ["markdown"], waitFor: 1500})
+    });
+    if(!res.ok) return "";
+    const text = await res.text();
+    if(!text || text.trim()==="") return "";
+    let data;
+    try { data = JSON.parse(text); } catch(e) { return ""; }
+    if(data.success && data.data && data.data.markdown) return data.data.markdown.substring(0,6000);
+    return "";
+  } catch(e) { return ""; }
+}
+
+async function firecrawlMulti(domain) {
+  const pages = [
+    "https://"+domain,
+    "https://"+domain+"/about",
+    "https://"+domain+"/contact",
+    "https://"+domain+"/team",
+    "https://"+domain+"/par-mums",
+    "https://"+domain+"/kontakti"
+  ];
+  const results = await Promise.allSettled(pages.slice(0,3).map(p => firecrawlScrape(p)));
+  return results
+    .filter(r => r.status==="fulfilled" && r.value)
+    .map(r => r.value)
+    .join("\n\n---PAGE---\n\n")
+    .substring(0,12000);
 }
 
 // OSINT ENRICHMENT
