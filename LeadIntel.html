@@ -742,13 +742,22 @@ function handlePDF(input){
 }
 
 // CLAUDE API
-async function claude(prompt,maxTok){
-  maxTok=maxTok||2000;
+async function claude(prompt,maxTok,retry){
+  maxTok=maxTok||2000; retry=retry||0;
   const res=await fetch("https://api.anthropic.com/v1/messages",{
     method:"POST",
     headers:{"Content-Type":"application/json","x-api-key":CLAUDE_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
     body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:maxTok,tools:[{type:"web_search_20250305",name:"web_search"}],messages:[{role:"user",content:prompt}]})
   });
+  if(res.status===429){
+    if(retry<3){
+      var wait=(retry+1)*8000;
+      console.log("Rate limited, waiting "+wait+"ms then retry "+(retry+1));
+      await new Promise(function(r){setTimeout(r,wait);});
+      return claude(prompt,maxTok,retry+1);
+    }
+    return "";
+  }
   const d=await res.json();
   if(!d.content) return "";
   // Extract all text blocks (web_search returns multiple content blocks)
