@@ -1006,6 +1006,18 @@ async function enrichCompany(coId) {
     "(No contacts yet — find ALL key people from scratch: CEO, directors, sales leaders)";
 
   const coWebsite = co.website ? (co.website.startsWith("http") ? co.website : "https://"+co.website) : "";
+
+  // FIRECRAWL PRE-SCAN
+  var firecrawlData = "";
+  if(coDomain) {
+    try {
+      if(btn) { btn.textContent="Scanning website..."; }
+      firecrawlData = await firecrawlMulti(coDomain);
+      console.log("Firecrawl got "+firecrawlData.length+" chars for "+co.name);
+    } catch(e) { console.warn("Firecrawl failed:", e); }
+  }
+  var firecrawlSection = firecrawlData ?
+    "\n\n REAL WEBSITE DATA (scraped live)\nExtract ALL emails, phones, names, titles from this:\n\n" + firecrawlData + "\n END WEBSITE DATA\n" : "";
   const coCountry = (co.country||"Latvia").toLowerCase();
   // Derive domain from website, or guess from company name + country TLD
   var tldGuess = coCountry.includes("lithuania")||coCountry.includes("lt") ? ".lt" :
@@ -1100,7 +1112,7 @@ COUNTRY: ${co.country||"Latvia"}
 WEBSITE: ${coWebsite||"https://"+coDomain}
 DOMAIN: ${coDomain}
 INDUSTRY: ${co.industry||"unknown"}
-KNOWN CONTACTS (find surnames + all details):
+KNOWN CONTACTS (find surnames + all details):${firecrawlSection}
 ${contactList}
 ${sniperUrlSection}═══════════════════════════════════════
 
