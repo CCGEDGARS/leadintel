@@ -1054,6 +1054,77 @@ async function firecrawlSearch(query) {
   } catch(e) { return ""; }
 }
 
+// Enhanced scrape: JS wait + scroll actions + LLM-structured JSON extraction
+async function firecrawlScrapeRich(pageUrl) {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(function(){controller.abort();}, 22000);
+    const res = await fetch("https://api.firecrawl.dev/v1/scrape", {
+      method: "POST",
+      headers: {"Content-Type":"application/json","Authorization":"Bearer "+FIRECRAWL_KEY},
+      body: JSON.stringify({
+        url: pageUrl,
+        formats: ["markdown","json"],
+        waitFor: 1500,
+        actions: [
+          {type:"wait", milliseconds:1000},
+          {type:"scroll", direction:"down"}
+        ],
+        jsonOptions: {
+          prompt: "Extract all contact information: full names and titles of people, email addresses, phone numbers, physical address",
+          schema: {
+            type:"object",
+            properties:{
+              people:{type:"array",items:{type:"object",properties:{name:{type:"string"},title:{type:"string"},email:{type:"string"},phone:{type:"string"}}}},
+              emails:{type:"array",items:{type:"string"}},
+              phones:{type:"array",items:{type:"string"}},
+              address:{type:"string"}
+            }
+          }
+        }
+      }),
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    if(!res.ok) return "";
+    let data;
+    try { data = await res.json(); } catch(e) { return ""; }
+    var parts = [];
+    if(data && data.data) {
+      if(data.data.markdown && data.data.markdown.length > 50) parts.push(data.data.markdown.substring(0,4000));
+      if(data.data.json) {
+        var j = data.data.json;
+        if(typeof j === "string") try { j = JSON.parse(j); } catch(e) { j = null; }
+        if(j) parts.push("[EXTRACTED]\n"+JSON.stringify(j,null,2).substring(0,1500));
+      }
+    }
+    return parts.join("\n\n").substring(0,6000);
+  } catch(e) { return ""; }
+}
+
+// Discover real contact/team/about pages on a domain via /v1/map
+async function firecrawlMap(domain) {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(function(){controller.abort();}, 12000);
+    const res = await fetch("https://api.firecrawl.dev/v1/map", {
+      method: "POST",
+      headers: {"Content-Type":"application/json","Authorization":"Bearer "+FIRECRAWL_KEY},
+      body: JSON.stringify({url:"https://"+domain, search:"contact team about leadership management people", limit:15}),
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    if(!res.ok) return [];
+    const data = await res.json();
+    var links = (data && (data.links || data.urls)) || [];
+    var keywords = ["contact","about","team","people","leadership","staff","management","kontakt","par-mums","komanda","about-us","who-we-are","our-team","meet"];
+    return links
+      .map(function(l){return typeof l==="string" ? l : (l.url||"");})
+      .filter(function(u){return u && keywords.some(function(k){return u.toLowerCase().includes(k);});})
+      .slice(0,5);
+  } catch(e) { return []; }
+}
+
 async function firecrawlMulti(domain) {
   const pages = [
     "https://"+domain, "https://"+domain+"/contact", "https://"+domain+"/kontakti",
@@ -1222,12 +1293,8 @@ async function enrichCompany(coId) {
     ];
   }
 
-  // Always add: all company website pages in parallel
-  srcDefs.push({key:"website", label:"website", multi:[
-    "https://"+coDomain, "https://"+coDomain+"/contact", "https://"+coDomain+"/kontakti",
-    "https://"+coDomain+"/about", "https://"+coDomain+"/par-mums",
-    "https://"+coDomain+"/team", "https://"+coDomain+"/komanda"
-  ]});
+  // Always add: map domain → discover real contact/team/about URLs → rich scrape each
+  srcDefs.push({key:"website", label:"website", mapScrape: coDomain});
   // Google search via Firecrawl search API
   if(FIRECRAWL_KEY) {
     srcDefs.push({key:"g-emails",   label:'emails@domain', search:'"'+co.name+'" "@'+coDomain+'"'});
@@ -1261,6 +1328,18 @@ async function enrichCompany(coId) {
     var prom;
     if(src.search) {
       prom = firecrawlSearch(src.search);
+    } else if(src.mapScrape) {
+      var _domain = src.mapScrape;
+      var _fallback = ["https://"+_domain, "https://"+_domain+"/contact", "https://"+_domain+"/about", "https://"+_domain+"/team"];
+      prom = firecrawlMap(_domain).then(function(mapUrls){
+        var urls = (mapUrls && mapUrls.length > 0)
+          ? (["https://"+_domain].concat(mapUrls)).slice(0,4)
+          : _fallback;
+        return Promise.allSettled(urls.map(function(u){return firecrawlScrapeRich(u);})).then(function(rs){
+          return rs.filter(function(r){return r.status==="fulfilled"&&r.value&&r.value.length>50;})
+                   .map(function(r){return r.value;}).join("\n\n---PAGE---\n\n").substring(0,14000);
+        });
+      });
     } else if(src.multi) {
       prom = Promise.allSettled(src.multi.map(function(u){return firecrawlScrape(u);})).then(function(rs){
         return rs.filter(function(r){return r.status==="fulfilled"&&r.value&&r.value.length>50;})
