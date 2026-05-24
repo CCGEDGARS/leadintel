@@ -785,7 +785,7 @@ async function claude(prompt,maxTok,retry){
   const res=await fetch("https://api.anthropic.com/v1/messages",{
     method:"POST",
     headers:{"Content-Type":"application/json","x-api-key":CLAUDE_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-    body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:maxTok,tools:[{type:"web_search_20250305",name:"web_search"}],messages:[{role:"user",content:prompt}]})
+    body:JSON.stringify({model:"claude-opus-4-7",max_tokens:maxTok,tools:[{type:"web_search_20260209",name:"web_search"}],messages:[{role:"user",content:prompt}]})
   });
   if(res.status===429){
     if(retry<3){
@@ -2996,7 +2996,7 @@ async function claudeChat(prompt, maxTok) {
     var res = await fetch("https://api.anthropic.com/v1/messages", {
       method:"POST",
       headers:{"Content-Type":"application/json","x-api-key":CLAUDE_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:maxTok||1200,messages:[{role:"user",content:prompt}]})
+      body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:maxTok||1200,messages:[{role:"user",content:prompt}]})
     });
     var d = await res.json();
     if(!d.content) return "";
