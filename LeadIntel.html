@@ -231,6 +231,7 @@ table.ct tr:hover td{background:rgba(255,255,255,0.02)}
     <button class="step" id="nav-targets" onclick="goTo('targets')"><span class="step-num">2</span>Search</button>
     <button class="step" id="nav-results" onclick="goTo('results')"><span class="step-num" id="sn-results">3</span>Results</button>
     <button class="step" id="nav-crm" onclick="goTo('crm')"><span class="step-num">★</span><span id="crm-label">CRM</span></button>
+    <button class="step" id="nav-kb" onclick="goTo('kb')"><span class="step-num">📚</span><span id="kb-label">Knowledge</span></button>
     <button class="step" id="nav-pareto" onclick="goTo('pareto')"><span class="step-num">⚙</span>Scoring</button>
   </div>
 </nav>
@@ -476,7 +477,30 @@ table.ct tr:hover td{background:rgba(255,255,255,0.02)}
     <div id="crm-list"></div>
   </div>
 
-  <!-- SCREEN 5: PARETO SCORING -->
+  <!-- SCREEN 5: KNOWLEDGE BASE -->
+  <div class="screen" id="screen-kb">
+    <div class="pg-title">Knowledge Base</div>
+    <div class="pg-sub">Books, frameworks, and voice guidelines injected into every outreach Claude generates.</div>
+
+    <div class="card">
+      <div class="card-title">My Books <span style="font-size:11px;font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">— toggle ON to include in outreach generation</span></div>
+      <div id="kb-books-list"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">My Frameworks</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Proprietary methodologies, NLP patterns, and sales frameworks Claude should apply.</div>
+      <textarea id="kb-frameworks" rows="7" oninput="saveKB()" style="width:100%;box-sizing:border-box;resize:vertical"></textarea>
+    </div>
+
+    <div class="card">
+      <div class="card-title">My Voice</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Communication style, signature phrases, and what to never say.</div>
+      <textarea id="kb-voice" rows="5" oninput="saveKB()" style="width:100%;box-sizing:border-box;resize:vertical"></textarea>
+    </div>
+  </div>
+
+  <!-- SCREEN 6: PARETO SCORING -->
   <div class="screen" id="screen-pareto">
     <div class="pg-title">Pareto Scoring Rules</div>
     <div class="pg-sub">Set your ideal customer criteria. Each company is scored automatically — VIP companies get OSINT enriched first.</div>
@@ -700,6 +724,16 @@ function inVIP(k){return vipList.some(x=>x._k===k);}
 function updateNavCounts(){
   const el = document.getElementById("crm-label");
   if(el) el.textContent = "CRM ("+(crmList.length)+")"+(vipList.length?" / VIP:"+vipList.length:"");
+  const kbEl = document.getElementById("kb-label");
+  if(kbEl){
+    var kbCount = [1,2,3,4,5].filter(function(i){
+      try{var b=JSON.parse(localStorage.getItem("li_book_"+i)||"{}");return b.on&&(b.title||b.content);}catch(e){return false;}
+    }).length;
+    var hasFrameworks = !!(localStorage.getItem("li_frameworks")||"").trim();
+    var hasVoice = !!(localStorage.getItem("li_voice")||"").trim();
+    var total = kbCount + (hasFrameworks?1:0) + (hasVoice?1:0);
+    kbEl.textContent = total > 0 ? "Knowledge ("+total+")" : "Knowledge";
+  }
 }
 
 // NAVIGATION
@@ -713,6 +747,7 @@ function goTo(screen){
   window.scrollTo(0,0);
   if(screen==="crm") renderCRM();
   if(screen==="pareto") loadParetoUI();
+  if(screen==="kb") renderKB();
 }
 
 function showAlert(msg, type){
@@ -3173,8 +3208,13 @@ function initOutreachModal() {
     '<div class="om-box">',
     '<button class="om-close" onclick="closeOutreach()">✕</button>',
     '<div class="om-header">',
-      '<div class="om-contact-name" id="om-cname">—</div>',
-      '<div class="om-contact-sub" id="om-csub">—</div>',
+      '<div style="display:flex;align-items:center;justify-content:space-between">',
+        '<div>',
+          '<div class="om-contact-name" id="om-cname">—</div>',
+          '<div class="om-contact-sub" id="om-csub">—</div>',
+        '</div>',
+        '<span id="om-kb-badge" style="display:none;font-size:11px;padding:3px 9px;border-radius:5px;background:rgba(122,219,184,0.1);color:#7ADBB8;border:1px solid rgba(122,219,184,0.28);font-weight:600">📚 KB Active</span>',
+      '</div>',
     '</div>',
     '<div class="om-mode-row">',
       '<button class="om-mode-btn active" id="om-mode-linkedin" onclick="setOutreachMode(\'linkedin\')">💼 LinkedIn</button>',
@@ -3251,6 +3291,7 @@ function openOutreach(coId, ci, mode) {
   var rb = document.getElementById("om-regen-btn"); if(rb) rb.textContent = "↺ Regenerate";
   var modal = document.getElementById("outreach-modal");
   modal.style.display = "flex";
+  updateKBBadge();
   _syncOutreachUI();
   document.getElementById("om-textarea").value = "";
   generateOutreach();
@@ -3440,12 +3481,111 @@ async function recreateScript() {
     ((co._intel&&co._intel.notes)?"Intel: "+co._intel.notes+"\n":"")+
     "\nInstructions: Rewrite this script completely fresh — same structure and core message, "+
     "entirely different words every single time. Fill in the real contact details naturally. "+
-    "Keep my voice: direct, confident, no corporate fluff. Write only the message. No preamble.";
+    "Keep my voice: direct, confident, no corporate fluff. Write only the message. No preamble."+
+    getKBBlock();
   var result = await claudeChat(prompt, 1200);
   if(ta){ ta.value = result||"(Generation failed — check API key)"; ta.disabled = false; }
   if(rb){ rb.disabled = false; }
   if(cb){ cb.disabled = false; }
   updateOutreachCharCount();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// KNOWLEDGE BASE
+// ═══════════════════════════════════════════════════════════════
+
+var KB_FRAMEWORK_DEFAULT = "Hero's Journey for Sales: The prospect is always the Hero. You are the Mentor.\nStage 1: Their Ordinary World — understand their daily reality before the disruption.\nStage 2: The Challenge they face — name it precisely, don't soften it.\nStage 3: You appear with the insight — the mentor arrives at the right moment.\nStage 4: The transformation — paint the after picture vividly.\nStage 5: The invitation to act — low friction, high clarity.";
+
+var KB_VOICE_DEFAULT = "Direct, confident, story-driven. Never corporate speak. Never 'I hope this email finds you well'. Never 'I wanted to reach out'. Always lead with a specific insight, provocation, or pattern interrupt. One idea per sentence. Short paragraphs. End with clarity, not desperation. Sign off: Edgars Untals — Sales is the Greatest Story Ever Told.";
+
+function loadKBData() {
+  return {
+    books: [1,2,3,4,5].map(function(i){
+      try { return JSON.parse(localStorage.getItem("li_book_"+i)||"{}"); } catch(e){ return {}; }
+    }),
+    frameworks: localStorage.getItem("li_frameworks") || KB_FRAMEWORK_DEFAULT,
+    voice: localStorage.getItem("li_voice") || KB_VOICE_DEFAULT
+  };
+}
+
+function saveKB() {
+  var fw = document.getElementById("kb-frameworks");
+  var vo = document.getElementById("kb-voice");
+  if(fw) localStorage.setItem("li_frameworks", fw.value);
+  if(vo) localStorage.setItem("li_voice", vo.value);
+  [1,2,3,4,5].forEach(function(i){ saveKBBook(i); });
+  updateNavCounts();
+  updateKBBadge();
+}
+
+function saveKBBook(i) {
+  var ti = document.getElementById("kb-book-title-"+i);
+  var au = document.getElementById("kb-book-author-"+i);
+  var ct = document.getElementById("kb-book-content-"+i);
+  var on = document.getElementById("kb-book-on-"+i);
+  if(!ti) return;
+  var data = {
+    title: ti.value, author: au?au.value:"",
+    content: ct?ct.value:"",
+    on: on?on.checked:true
+  };
+  localStorage.setItem("li_book_"+i, JSON.stringify(data));
+}
+
+function renderKB() {
+  var kb = loadKBData();
+  // Books
+  var container = document.getElementById("kb-books-list");
+  if(container) {
+    container.innerHTML = "";
+    [1,2,3,4,5].forEach(function(i){
+      var b = kb.books[i-1]||{};
+      var slot = document.createElement("div");
+      slot.style.cssText = "border:1px solid rgba(201,169,97,0.13);border-radius:10px;padding:16px;margin-bottom:12px;background:rgba(255,255,255,0.02);transition:border-color .2s";
+      slot.innerHTML =
+        '<div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">'+
+          '<span style="font-size:10px;font-weight:700;color:var(--g);letter-spacing:.07em;text-transform:uppercase;white-space:nowrap;min-width:44px">Book '+i+'</span>'+
+          '<input id="kb-book-title-'+i+'" placeholder="Book title..." value="'+escHtml(b.title||"")+'" oninput="saveKBBook('+i+');updateNavCounts();updateKBBadge()" style="flex:1;padding:7px 10px;border-radius:6px;border:1px solid rgba(201,169,97,0.2);background:rgba(201,169,97,0.04);color:var(--text);font-family:var(--font);font-size:13px;outline:none"/>'+
+          '<input id="kb-book-author-'+i+'" placeholder="Author" value="'+escHtml(b.author||"")+'" oninput="saveKBBook('+i+')" style="width:160px;padding:7px 10px;border-radius:6px;border:1px solid rgba(201,169,97,0.15);background:transparent;color:var(--muted);font-family:var(--font);font-size:13px;outline:none"/>'+
+          '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;font-size:12px;color:var(--muted)">'+
+            '<input type="checkbox" id="kb-book-on-'+i+'" '+(b.on!==false?'checked':'')+' onchange="saveKBBook('+i+');updateNavCounts();updateKBBadge()" style="accent-color:var(--g);width:15px;height:15px"/>'+
+            '<span style="font-weight:600;color:'+(b.on!==false?'var(--g)':'var(--muted)')+'">Use</span>'+
+          '</label>'+
+        '</div>'+
+        '<textarea id="kb-book-content-'+i+'" rows="4" oninput="saveKBBook('+i+');updateKBBadge()" placeholder="Paste key principles, frameworks, quotes from this book..." style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.02);border:1px solid rgba(201,169,97,0.1);border-radius:8px;color:var(--text);font-family:var(--font);font-size:12px;line-height:1.65;padding:10px 12px;resize:vertical;outline:none">'+escHtml(b.content||"")+'</textarea>';
+      container.appendChild(slot);
+    });
+  }
+  // Frameworks & Voice
+  var fw = document.getElementById("kb-frameworks");
+  var vo = document.getElementById("kb-voice");
+  if(fw) fw.value = kb.frameworks;
+  if(vo) vo.value = kb.voice;
+  updateKBBadge();
+}
+
+function escHtml(s){ return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+
+function getKBBlock() {
+  var kb = loadKBData();
+  var parts = [];
+  kb.books.forEach(function(b, i){
+    if(b.on!==false && (b.content||"").trim()) {
+      var hdr = [b.title, b.author].filter(Boolean).join(" by ");
+      parts.push((hdr?"[Book: "+hdr+"]\n":"[Book "+(i+1)+"]\n")+b.content.trim());
+    }
+  });
+  if((kb.frameworks||"").trim()) parts.push("[Frameworks & Methodologies]\n"+kb.frameworks.trim());
+  if((kb.voice||"").trim()) parts.push("[Voice & Style Guidelines]\n"+kb.voice.trim());
+  if(!parts.length) return "";
+  return "\n\nKNOWLEDGE BASE — apply these principles and frameworks:\n\n"+parts.join("\n\n---\n\n");
+}
+
+function updateKBBadge() {
+  var badge = document.getElementById("om-kb-badge");
+  if(!badge) return;
+  var hasKB = !!getKBBlock();
+  badge.style.display = hasKB ? "inline" : "none";
 }
 
 function _buildOutreachPrompt(co, c) {
@@ -3537,7 +3677,8 @@ function _buildOutreachPrompt(co, c) {
     intelBlock+"\n\n"+
     modeFormat[mode]+"\n\n"+
     "LANGUAGE: "+langStr+"\n\n"+
-    "Write only the message(s). No preamble. No 'Here is your...' intro. Start directly with the content.";
+    "Write only the message(s). No preamble. No 'Here is your...' intro. Start directly with the content."+
+    getKBBlock();
 }
 
 </script>
