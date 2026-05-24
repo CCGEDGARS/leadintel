@@ -1038,7 +1038,7 @@ async function firecrawlSearch(query) {
     const res = await fetch("https://api.firecrawl.dev/v1/search", {
       method: "POST",
       headers: {"Content-Type":"application/json","Authorization":"Bearer "+FIRECRAWL_KEY},
-      body: JSON.stringify({query: query, limit: 5}),
+      body: JSON.stringify({query: query, limit: 5, scrapeOptions: {formats: ["markdown"]}}),
       signal: controller.signal
     });
     clearTimeout(timeout);
@@ -1046,8 +1046,9 @@ async function firecrawlSearch(query) {
     const data = await res.json();
     if(data && data.data && data.data.length) {
       return data.data.map(function(r){
-        return "["+r.url+"]\n"+(r.markdown||r.description||"").substring(0,800);
-      }).join("\n\n---RESULT---\n\n").substring(0, 5000);
+        var content = r.markdown || r.description || "";
+        return "[SOURCE: "+r.url+"]\n"+content.substring(0, 2000);
+      }).join("\n\n---RESULT---\n\n").substring(0, 10000);
     }
     return "";
   } catch(e) { return ""; }
@@ -1072,13 +1073,8 @@ async function firecrawlRegistries(coName, coCountry, domain) {
   var enc = encodeURIComponent(coName);
   var urls = [];
   if(coCountry.includes("latvia")||coCountry.includes("lv")) {
-    urls = [
-      "https://lursoft.lv/lv/uznemumu-registrs?search="+enc,
-      "https://firmas.lv/search?q="+enc,
-      "https://www.ur.gov.lv/lv/meklesana/?term="+enc,
-      "https://rekvizitai.lv/search/?query="+enc,
-      "https://saraksts.lv/search?q="+enc
-    ];
+    // Note: these search URLs don't work — use firecrawlSearch instead (see enrichCompany)
+    urls = [];
   } else if(coCountry.includes("lithuania")||coCountry.includes("lt")) {
     urls = [
       "https://rekvizitai.vz.lt/en/company/search/?q="+enc,
@@ -1171,12 +1167,16 @@ async function enrichCompany(coId) {
 
   // Country-specific registries
   if(coCountry.includes("latvia")||coCountry.includes("lv")) {
+    // firmas.lv direct page — slug from name, then scrape (returns reg#, address, employees, news)
+    var firmasSlug = co.name.toLowerCase()
+      .replace(/[āa]/g,"a").replace(/[čc]/g,"c").replace(/[ēe]/g,"e").replace(/[ģg]/g,"g")
+      .replace(/[īi]/g,"i").replace(/[ķk]/g,"k").replace(/[ļl]/g,"l").replace(/[ņn]/g,"n")
+      .replace(/[šs]/g,"s").replace(/[ūu]/g,"u").replace(/[žz]/g,"z")
+      .replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
     srcDefs = [
-      {key:"lursoft",      label:"lursoft.lv",          url:"https://lursoft.lv/lv/uznemumu-registrs?search="+enc},
-      {key:"firmas",       label:"firmas.lv",            url:"https://firmas.lv/search?q="+enc},
-      {key:"ur-gov",       label:"ur.gov.lv",            url:"https://www.ur.gov.lv/lv/meklesana/?term="+enc},
-      {key:"rekvizitai",   label:"rekvizitai.lv",        url:"https://rekvizitai.lv/search/?query="+enc},
-      {key:"saraksts",     label:"saraksts.lv",          url:"https://saraksts.lv/search?q="+enc}
+      {key:"firmas-lv",  label:"firmas.lv",     url:"https://www.firmas.lv/lv/uznemumi/"+firmasSlug},
+      {key:"firmas-src", label:"firmas-search",  search:'"'+co.name+'" site:firmas.lv'},
+      {key:"lv-contacts",label:"LV-web-search",  search:'"'+co.name+'" Latvia CEO email phone kontakti direktors amatpersonas'}
     ];
   } else if(coCountry.includes("lithuania")||coCountry.includes("lt")) {
     srcDefs = [
