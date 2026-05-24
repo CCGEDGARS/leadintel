@@ -97,6 +97,8 @@ select option{background:var(--dark3)}
 .co-top{display:flex;align-items:center;gap:13px;margin-bottom:8px}
 .co-av{width:42px;height:42px;border-radius:9px;background:rgba(201,169,97,0.08);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-family:var(--display);font-size:18px;color:var(--g);flex-shrink:0;font-weight:700}
 .co-name{font-size:15px;font-weight:700;color:var(--text)}
+.co-name-link{font-size:15px;font-weight:700;color:var(--g);text-decoration:none;transition:opacity .2s}
+.co-name-link:hover{text-decoration:underline;opacity:.85}
 .co-meta{font-size:12px;color:var(--muted);margin-top:2px}
 .co-badges{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
 .badge{padding:3px 9px;border-radius:10px;font-size:11px;font-weight:700;letter-spacing:.04em}
@@ -1246,50 +1248,58 @@ async function enrichCompany(coId) {
       .replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
     srcDefs = [
       {key:"firmas-lv",  label:"firmas.lv",     url:"https://www.firmas.lv/lv/uznemumi/"+firmasSlug},
+      {key:"1188-lv",    label:"1188.lv",        url:"https://www.1188.lv/search?q="+enc},
       {key:"firmas-src", label:"firmas-search",  search:'"'+co.name+'" site:firmas.lv'},
       {key:"lv-contacts",label:"LV-web-search",  search:'"'+co.name+'" Latvia CEO email phone kontakti direktors amatpersonas'}
     ];
   } else if(coCountry.includes("lithuania")||coCountry.includes("lt")) {
     srcDefs = [
       {key:"rekvizitai-lt",    label:"rekvizitai.vz.lt",    url:"https://rekvizitai.vz.lt/en/company/search/?q="+enc},
+      {key:"1588-lt",          label:"1588.lt",               url:"https://www.1588.lt/search?q="+enc},
       {key:"registrucentras",  label:"registrucentras.lt",   url:"https://www.registrucentras.lt/jar/p/index.php?p_pavadinimas="+enc},
       {key:"jars-lt",          label:"jars.lt",              url:"https://www.jars.lt/search?q="+enc}
     ];
   } else if(coCountry.includes("estonia")||coCountry.includes("ee")) {
     srcDefs = [
       {key:"ariregister",  label:"ariregister.rik.ee",   url:"https://ariregister.rik.ee/est/company/search?q="+enc},
-      {key:"teatmik",      label:"teatmik.ee",            url:"https://teatmik.ee/en/company/search?q="+enc},
+      {key:"teatmik",      label:"teatmik.ee",            url:"https://teatmik.ee/search?q="+enc},
       {key:"inforegister", label:"inforegister.ee",       url:"https://www.inforegister.ee/search?q="+enc}
     ];
   } else if(["sweden","sverige","se"].some(function(x){return coCountry.includes(x);})) {
     srcDefs = [
       {key:"proff-se",   label:"proff.se",     url:"https://www.proff.se/search?q="+enc},
+      {key:"hitta-se",   label:"hitta.se",     url:"https://www.hitta.se/search?q="+enc},
       {key:"allabolag",  label:"allabolag.se",  url:"https://www.allabolag.se/what/"+enc}
     ];
   } else if(["norway","norge","no"].some(function(x){return coCountry.includes(x);})) {
     srcDefs = [
-      {key:"proff-no",  label:"proff.no",   url:"https://www.proff.no/s%C3%B8k?q="+enc},
-      {key:"brreg",     label:"brreg.no",   url:"https://www.brreg.no/en/business/search/?name="+enc}
+      {key:"proff-no",     label:"proff.no",       url:"https://www.proff.no/s%C3%B8k?q="+enc},
+      {key:"gulesider-no", label:"gulesider.no",   url:"https://www.gulesider.no/search?q="+enc},
+      {key:"brreg",        label:"brreg.no",       url:"https://www.brreg.no/en/business/search/?name="+enc}
     ];
   } else if(["denmark","danmark","dk"].some(function(x){return coCountry.includes(x);})) {
     srcDefs = [
-      {key:"cvr-dk",   label:"cvr.dk",    url:"https://datacvr.virk.dk/search?query="+enc},
-      {key:"proff-dk", label:"proff.dk",  url:"https://www.proff.dk/s%C3%B8g?q="+enc}
+      {key:"cvr-dk",      label:"cvr.dk",          url:"https://datacvr.virk.dk/search?query="+enc},
+      {key:"degulesider", label:"degulesider.dk",  url:"https://www.degulesider.dk/search?q="+enc},
+      {key:"proff-dk",    label:"proff.dk",         url:"https://www.proff.dk/s%C3%B8g?q="+enc}
     ];
   } else if(["finland","suomi","fi"].some(function(x){return coCountry.includes(x);})) {
     srcDefs = [
-      {key:"finder-fi", label:"finder.fi",  url:"https://www.finder.fi/search?what="+enc},
-      {key:"ytj",       label:"ytj.fi",     url:"https://www.ytj.fi/yrityshaku.aspx?p=0&SearchType=1&yritysnimi="+enc}
+      {key:"fonecta",   label:"fonecta.fi",  url:"https://www.fonecta.fi/search?q="+enc},
+      {key:"finder-fi", label:"finder.fi",   url:"https://www.finder.fi/search?what="+enc},
+      {key:"ytj",       label:"ytj.fi",      url:"https://www.ytj.fi/yrityshaku.aspx?p=0&SearchType=1&yritysnimi="+enc}
     ];
   } else if(["germany","deutschland","de"].some(function(x){return coCountry.includes(x);})) {
     srcDefs = [
+      {key:"gelbeseiten",    label:"gelbeseiten.de",     url:"https://www.gelbeseiten.de/search?q="+enc},
       {key:"northdata",      label:"northdata.de",       url:"https://www.northdata.de/"+enc},
       {key:"handelsregister",label:"handelsregister.de", url:"https://www.handelsregister.de/rp_web/search.do?schlagwoerter="+enc}
     ];
   } else if(["poland","polska","pl"].some(function(x){return coCountry.includes(x);})) {
     srcDefs = [
-      {key:"aleo", label:"aleo.com",        url:"https://aleo.com/int/en/search/results?q="+enc},
-      {key:"krs",  label:"krs.ms.gov.pl",   url:"https://www.krs.ms.gov.pl/index.php?option=com_krs&task=szukaj&Itemid=45&search="+enc}
+      {key:"panoramafirm", label:"panoramafirm.pl",  url:"https://www.panoramafirm.pl/search?q="+enc},
+      {key:"aleo",         label:"aleo.com",          url:"https://aleo.com/int/en/search/results?q="+enc},
+      {key:"krs",          label:"krs.ms.gov.pl",     url:"https://www.krs.ms.gov.pl/index.php?option=com_krs&task=szukaj&Itemid=45&search="+enc}
     ];
   }
 
@@ -1385,7 +1395,7 @@ async function enrichCompany(coId) {
       co._sources["fb-phone"] = {status:"scraping", label:"maps-phone"};
       renderResultsPage();
       fbPromises.push(
-        firecrawlSearch('"'+co.name+'" phone contact').then(function(val){
+        firecrawlSearch('"'+co.name+'" '+(co.country||'')+ ' phone').then(function(val){
           scraped["fb-phone"] = val||"";
           markSrc("fb-phone", val&&val.length>80?"found":"empty", val);
         }).catch(function(){ scraped["fb-phone"]=""; markSrc("fb-phone","empty"); })
@@ -2333,7 +2343,7 @@ function renderResultsPage(){
     const div=document.createElement("div");
     div.className="co-card";
 
-    let headsHtml='<div class="co-head"><div class="co-top"><div class="co-av" style="background:'+catBg(co.parCat)+';color:'+catColor(co.parCat)+';border-color:'+catColor(co.parCat)+'40">'+co.name.charAt(0)+'</div><div style="flex:1"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap"><div class="co-name">'+co.name+'</div>'+catBadge(co.parCat)+catBadge(co.category)+enrichedBadge+'</div><div class="co-meta">'+(co.industry?co.industry+' · ':'')+( co.country?co.country+' · ':'')+( co.employees?co.employees+' emp.':'')+(dmLabel?' · <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(201,169,97,0.08);color:var(--g)">'+dmLabel+'</span>':'')+'</div></div><div style="font-size:12px;color:var(--muted);text-align:right">'+co.contacts.length+' contacts'+(emailCt?' &middot; '+emailCt+' emails':'')+(phoneCt?' &middot; '+phoneCt+' phones':'')+'</div></div>';
+    let headsHtml='<div class="co-head"><div class="co-top"><div class="co-av" style="background:'+catBg(co.parCat)+';color:'+catColor(co.parCat)+';border-color:'+catColor(co.parCat)+'40">'+co.name.charAt(0)+'</div><div style="flex:1"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap"><a class="co-name-link" href="'+(ws||'https://www.google.com/search?q='+encodeURIComponent(co.name))+'" target="_blank">'+co.name+'</a>'+catBadge(co.parCat)+catBadge(co.category)+enrichedBadge+'</div><div class="co-meta">'+(co.industry?co.industry+' · ':'')+( co.country?co.country+' · ':'')+( co.employees?co.employees+' emp.':'')+(dmLabel?' · <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(201,169,97,0.08);color:var(--g)">'+dmLabel+'</span>':'')+'</div></div><div style="font-size:12px;color:var(--muted);text-align:right">'+co.contacts.length+' contacts'+(emailCt?' &middot; '+emailCt+' emails':'')+(phoneCt?' &middot; '+phoneCt+' phones':'')+'</div></div>';
     headsHtml+='<div class="co-links">';
     var cardDomain = ws ? ws.replace(/https?:\/\//,'').split('/')[0] : '';
     if(ws) headsHtml+='<a href="'+ws+'" target="_blank" style="color:var(--g);font-weight:600">🌐 '+cardDomain+'</a>';
@@ -2366,25 +2376,33 @@ function renderResultsPage(){
         badges + '</div>';
     }
 
-    // Intelligence summary card (shows after OSINT)
+    // General Contact card + Intelligence summary (shows after OSINT)
     var intelHtml = "";
-    if(co._intel){
-      var intel = co._intel;
-      var intelItems = [];
-      if(intel.phone) intelItems.push('<span>📞 '+intel.phone+'</span>');
-      if(intel.email) intelItems.push('<a href="mailto:'+intel.email+'" class="td-link" style="color:#7AB8E8">✉ '+intel.email+'</a>');
-      if(intel.address) intelItems.push('<span>📍 '+intel.address+'</span>');
-      if(intel.emailPattern) intelItems.push('<span style="color:var(--g)">@ Pattern: '+intel.emailPattern+'</span>');
-      if(intel.verifiedEmails>0) intelItems.push('<span style="color:#7ADBB8">✓ '+intel.verifiedEmails+' verified email'+(intel.verifiedEmails>1?"s":"")+'</span>');
-      if(intel.hiring&&intel.hiring!=="none") intelItems.push('<span style="color:#C9A961">📢 Hiring '+intel.hiring+' roles</span>');
-      var dmMap2={single:"Single DM",committee:"Committee",division:"Divisional",proc:"Procurement"};
-      if(intel.dmProcess) intelItems.push('<span>Decision: '+( dmMap2[intel.dmProcess]||intel.dmProcess)+'</span>');
-      if(intel.notes) intelItems.push('<span style="color:var(--muted);font-style:italic">'+intel.notes.substring(0,120)+(intel.notes.length>120?"...":"")+'</span>');
-      if(intelItems.length){
-        intelHtml = '<div style="margin:0 20px 0;padding:12px 16px;background:rgba(201,169,97,0.04);border:1px solid rgba(201,169,97,0.15);border-radius:9px;display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--muted)">'+
-          '<span style="font-size:10px;font-weight:700;color:var(--g);letter-spacing:.1em;text-transform:uppercase;width:100%">Intelligence Summary</span>'+
-          intelItems.join('<span style="color:var(--border)">·</span>')+
-          '</div><div style="height:12px"></div>';
+    var gcPhone   = co.phone   || (co._intel && co._intel.phone)   || "";
+    var gcEmail   = co.email   || (co._intel && co._intel.email)   || "";
+    var gcAddress = co.address || (co._intel && co._intel.address) || "";
+    var gcPattern = co.emailPattern || (co._intel && co._intel.emailPattern) || "";
+    if(gcPhone || gcEmail || gcAddress || gcPattern || co._intel) {
+      var gcItems = [];
+      if(gcPhone)   gcItems.push('<div style="display:flex;align-items:center;gap:6px"><span style="color:#7ADBB8">📞</span><a href="tel:'+gcPhone+'" style="color:#7ADBB8;font-weight:700;font-size:13px;text-decoration:none;letter-spacing:.01em">'+gcPhone+'</a></div>');
+      if(gcEmail)   gcItems.push('<div style="display:flex;align-items:center;gap:6px"><span style="color:#7AB8E8">✉</span><a href="mailto:'+gcEmail+'" style="color:#7AB8E8;font-size:12px;text-decoration:none">'+gcEmail+'</a></div>');
+      if(gcAddress) gcItems.push('<div style="display:flex;align-items:center;gap:6px"><span>📍</span><span style="color:var(--muted);font-size:11px">'+gcAddress+'</span></div>');
+      var intelMeta = [];
+      if(gcPattern) intelMeta.push('<span style="color:var(--g)">@ '+gcPattern+'</span>');
+      if(co._intel) {
+        var intel = co._intel;
+        if(intel.verifiedEmails>0) intelMeta.push('<span style="color:#7ADBB8">✓ '+intel.verifiedEmails+' verified email'+(intel.verifiedEmails>1?"s":"")+'</span>');
+        if(intel.hiring&&intel.hiring!=="none") intelMeta.push('<span style="color:#C9A961">📢 Hiring '+intel.hiring+'</span>');
+        var dmMap2={single:"Single DM",committee:"Committee",division:"Divisional",proc:"Procurement"};
+        if(intel.dmProcess) intelMeta.push('<span>Decision: '+(dmMap2[intel.dmProcess]||intel.dmProcess)+'</span>');
+        if(intel.notes) intelMeta.push('<span style="color:var(--muted);font-style:italic">'+intel.notes.substring(0,110)+(intel.notes.length>110?"...":"")+'</span>');
+      }
+      if(gcItems.length || intelMeta.length) {
+        intelHtml = '<div style="margin:12px 20px 0;padding:14px 18px;background:rgba(201,169,97,0.04);border:1px solid rgba(201,169,97,0.22);border-radius:9px">';
+        intelHtml += '<div style="font-size:9px;font-weight:800;color:var(--g);letter-spacing:.15em;text-transform:uppercase;margin-bottom:10px">General Contact</div>';
+        if(gcItems.length) intelHtml += '<div style="display:flex;flex-wrap:wrap;gap:18px;margin-bottom:'+(intelMeta.length?'10px':'0')+'">'+gcItems.join('')+'</div>';
+        if(intelMeta.length) intelHtml += '<div style="display:flex;flex-wrap:wrap;gap:8px;font-size:11px;color:var(--muted);border-top:1px solid rgba(201,169,97,0.1);padding-top:8px;margin-top:'+(gcItems.length?'0':'0')+'">'+intelMeta.join('<span style="color:var(--border)"> · </span>')+'</div>';
+        intelHtml += '</div><div style="height:14px"></div>';
       }
     }
 
