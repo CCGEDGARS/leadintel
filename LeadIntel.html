@@ -186,6 +186,36 @@ table.ct tr:hover td{background:rgba(255,255,255,0.02)}
 .src-found{border-color:rgba(122,219,184,0.4);color:#7ADBB8;background:rgba(122,219,184,0.07)}
 .src-empty{border-color:rgba(138,138,154,0.08);color:rgba(138,138,154,0.2);background:transparent;text-decoration:line-through}
 @keyframes scrpulse{from{opacity:.55}to{opacity:1}}
+/* Outreach buttons */
+.out-btn{padding:3px 7px;border-radius:5px;border:1px solid rgba(201,169,97,0.28);background:rgba(201,169,97,0.06);color:var(--g);cursor:pointer;font-size:13px;transition:all .2s;line-height:1}
+.out-btn:hover{background:rgba(201,169,97,0.16);border-color:rgba(201,169,97,0.55)}
+/* Outreach Modal */
+.om-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.88);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box}
+.om-box{background:#080E18;border:1px solid rgba(201,169,97,0.32);border-radius:16px;width:700px;max-width:100%;max-height:88vh;overflow-y:auto;box-shadow:0 24px 80px rgba(0,0,0,0.75);position:relative}
+.om-header{padding:22px 26px 16px;border-bottom:1px solid rgba(201,169,97,0.1)}
+.om-contact-name{font-size:18px;font-weight:700;color:var(--text);margin-bottom:3px}
+.om-contact-sub{font-size:13px;color:var(--muted)}
+.om-mode-row{display:flex;gap:8px;padding:14px 26px;border-bottom:1px solid rgba(255,255,255,0.04);align-items:center;flex-wrap:wrap}
+.om-mode-btn{padding:7px 16px;border-radius:8px;border:1px solid rgba(201,169,97,0.22);background:transparent;color:var(--muted);cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;transition:all .2s}
+.om-mode-btn.active,.om-mode-btn:hover{border-color:rgba(201,169,97,0.65);background:rgba(201,169,97,0.11);color:var(--g)}
+.om-lang-toggle{display:flex;gap:4px;margin-left:auto}
+.om-lang-btn{padding:5px 13px;border-radius:6px;border:1px solid rgba(201,169,97,0.2);background:transparent;color:var(--muted);cursor:pointer;font-family:var(--font);font-size:12px;font-weight:700;transition:all .2s}
+.om-lang-btn.active{border-color:rgba(201,169,97,0.6);background:rgba(201,169,97,0.1);color:var(--g)}
+.om-tabs{display:flex;gap:0;padding:0 26px;border-bottom:1px solid rgba(201,169,97,0.1)}
+.om-tab{padding:11px 15px;border:none;background:transparent;color:var(--muted);cursor:pointer;font-family:var(--font);font-size:12px;font-weight:600;border-bottom:2px solid transparent;transition:all .2s;margin-bottom:-1px;white-space:nowrap}
+.om-tab.active{color:var(--g);border-bottom-color:var(--g)}
+.om-tab:hover{color:var(--text)}
+.om-body{padding:20px 26px 26px}
+.om-textarea{width:100%;box-sizing:border-box;min-height:270px;background:rgba(255,255,255,0.03);border:1px solid rgba(201,169,97,0.18);border-radius:10px;color:var(--text);font-family:var(--font);font-size:13px;line-height:1.68;padding:14px 16px;resize:vertical;outline:none;transition:border-color .2s}
+.om-textarea:focus{border-color:rgba(201,169,97,0.4)}
+.om-actions{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+.om-copy-btn{padding:9px 22px;border-radius:8px;border:1px solid rgba(122,219,184,0.4);background:rgba(122,219,184,0.08);color:#7ADBB8;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:700;transition:all .2s}
+.om-copy-btn:hover{background:rgba(122,219,184,0.16)}
+.om-regen-btn{padding:9px 22px;border-radius:8px;border:1px solid rgba(201,169,97,0.4);background:rgba(201,169,97,0.08);color:var(--g);cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;transition:all .2s}
+.om-regen-btn:hover{background:rgba(201,169,97,0.16)}
+.om-charcount{font-size:12px;font-weight:700;margin-left:auto;transition:color .2s}
+.om-close{position:absolute;top:16px;right:18px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:22px;line-height:1;padding:4px 6px;transition:color .2s;z-index:1}
+.om-close:hover{color:var(--text)}
 </style>
 </head>
 <body>
@@ -2462,7 +2492,7 @@ function renderResultsPage(){
       }
     }
 
-    let tblHtml='<div class="co-contacts"><div class="contacts-hd">All Contacts ('+co.contacts.length+')</div><table class="ct"><thead><tr><th>Name</th><th>Title</th><th>Seniority</th><th>Email</th><th>Phone</th><th>LinkedIn</th><th></th><th>Save</th></tr></thead><tbody>';
+    let tblHtml='<div class="co-contacts"><div class="contacts-hd">All Contacts ('+co.contacts.length+')</div><table class="ct"><thead><tr><th>Name</th><th>Title</th><th>Seniority</th><th>Email</th><th>Phone</th><th>LinkedIn</th><th></th><th>Save</th><th>Outreach</th></tr></thead><tbody>';
     co.contacts.forEach(function(c,ci){
       var ck=ckKey(co,c);
       var iv=inVIP(ck),ic=inCRM(ck);
@@ -2484,6 +2514,7 @@ function renderResultsPage(){
       tblHtml+='<td>'+liDisplay+'</td>';
       tblHtml+='<td style="white-space:nowrap"><button class="edit-contact-btn" data-coid="'+co.id+'" data-ci="'+ci+'" style="padding:2px 8px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:11px" title="Edit contact">✏️</button></td>';
       tblHtml+='<td style="white-space:nowrap"><button class="save-btn save-vip'+(iv?" on":"") + '" data-coid="'+co.id+'" data-ci="'+ci+'" onclick="vipBtn(this)">'+(iv?"★ VIP":"VIP")+'</button><button class="save-btn save-crm'+(ic?" on":"") + '" data-coid="'+co.id+'" data-ci="'+ci+'" onclick="crmBtn(this)">'+(ic?"In CRM":"+ CRM")+'</button></td>';
+      tblHtml+='<td style="white-space:nowrap"><button class="out-btn" title="LinkedIn outreach" onclick="openOutreach(\''+co.id+'\','+ci+',\'linkedin\')">💼</button> <button class="out-btn" title="Email outreach" onclick="openOutreach(\''+co.id+'\','+ci+',\'email\')">📧</button> <button class="out-btn" title="Call script" onclick="openOutreach(\''+co.id+'\','+ci+',\'call\')">📞</button></td>';
       tblHtml+='</tr>';
     });
     tblHtml+='</tbody></table></div>';
@@ -2951,6 +2982,241 @@ document.addEventListener("click", function(e){
   if(ak) ak.value=APOLLO_KEY;
 renderCountryChips();
 updateNavCounts();
+
+// ═══════════════════════════════════════════════════════════════
+// SALES OUTREACH GENERATOR
+// ═══════════════════════════════════════════════════════════════
+
+var _ors = { coId:null, ci:null, mode:"linkedin", tpl:"heros", lang:"EN", cache:{} };
+
+// Claude call without web_search (fast, for creative content)
+async function claudeChat(prompt, maxTok) {
+  if(!CLAUDE_KEY) return "(No Claude API key — add it in Settings)";
+  try {
+    var res = await fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST",
+      headers:{"Content-Type":"application/json","x-api-key":CLAUDE_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:maxTok||1200,messages:[{role:"user",content:prompt}]})
+    });
+    var d = await res.json();
+    if(!d.content) return "";
+    return d.content.filter(function(b){return b.type==="text";}).map(function(b){return b.text;}).join("");
+  } catch(e){ return "(Error: "+e.message+")"; }
+}
+
+function initOutreachModal() {
+  if(document.getElementById("outreach-modal")) return;
+  var m = document.createElement("div");
+  m.id = "outreach-modal";
+  m.className = "om-overlay";
+  m.style.display = "none";
+  m.innerHTML = [
+    '<div class="om-box">',
+    '<button class="om-close" onclick="closeOutreach()">✕</button>',
+    '<div class="om-header">',
+      '<div class="om-contact-name" id="om-cname">—</div>',
+      '<div class="om-contact-sub" id="om-csub">—</div>',
+    '</div>',
+    '<div class="om-mode-row">',
+      '<button class="om-mode-btn active" id="om-mode-linkedin" onclick="setOutreachMode(\'linkedin\')">💼 LinkedIn</button>',
+      '<button class="om-mode-btn" id="om-mode-email" onclick="setOutreachMode(\'email\')">📧 Email</button>',
+      '<button class="om-mode-btn" id="om-mode-call" onclick="setOutreachMode(\'call\')">📞 Call Script</button>',
+      '<div class="om-lang-toggle">',
+        '<button class="om-lang-btn active" id="om-lang-en" onclick="setOutreachLang(\'EN\')">EN</button>',
+        '<button class="om-lang-btn" id="om-lang-lv" onclick="setOutreachLang(\'LV\')">LV</button>',
+      '</div>',
+    '</div>',
+    '<div class="om-tabs">',
+      '<button class="om-tab" id="om-tab-interrupt" onclick="setOutreachTpl(\'interrupt\')">⚡ Pattern Interrupt</button>',
+      '<button class="om-tab" id="om-tab-honesty" onclick="setOutreachTpl(\'honesty\')">🎯 Brutal Honesty</button>',
+      '<button class="om-tab" id="om-tab-corporate" onclick="setOutreachTpl(\'corporate\')">🏢 Corporate</button>',
+      '<button class="om-tab active" id="om-tab-heros" onclick="setOutreachTpl(\'heros\')">🗺 Hero\'s Journey</button>',
+    '</div>',
+    '<div class="om-body">',
+      '<textarea class="om-textarea" id="om-textarea" oninput="updateOutreachCharCount()" placeholder="Generating..."></textarea>',
+      '<div class="om-actions">',
+        '<button class="om-copy-btn" id="om-copy-btn" onclick="copyOutreach()">📋 Copy</button>',
+        '<button class="om-regen-btn" id="om-regen-btn" onclick="regenOutreach()">↺ Regenerate</button>',
+        '<span class="om-charcount" id="om-charcount" style="display:none"></span>',
+      '</div>',
+    '</div>',
+    '</div>'
+  ].join("");
+  m.addEventListener("click", function(e){ if(e.target===m) closeOutreach(); });
+  document.body.appendChild(m);
+}
+
+function openOutreach(coId, ci, mode) {
+  initOutreachModal();
+  _ors.coId = coId; _ors.ci = ci; _ors.mode = mode; _ors.tpl = "heros"; _ors.cache = {};
+  var co = leads.find(function(l){return l.id===coId;});
+  var c = co && co.contacts[ci];
+  if(!co||!c) return;
+  document.getElementById("om-cname").textContent = c.name || "—";
+  document.getElementById("om-csub").textContent = [c.title, co.name].filter(Boolean).join(" · ");
+  var modal = document.getElementById("outreach-modal");
+  modal.style.display = "flex";
+  _syncOutreachUI();
+  document.getElementById("om-textarea").value = "";
+  generateOutreach();
+}
+
+function closeOutreach() {
+  var m = document.getElementById("outreach-modal");
+  if(m) m.style.display = "none";
+}
+
+function setOutreachMode(mode) { _ors.mode = mode; _ors.cache = {}; _syncOutreachUI(); generateOutreach(); }
+function setOutreachTpl(tpl)   { _ors.tpl  = tpl;  _syncOutreachUI(); generateOutreach(); }
+function setOutreachLang(lang) { _ors.lang = lang;  _ors.cache = {}; _syncOutreachUI(); generateOutreach(); }
+function regenOutreach()       { var k=_ors.tpl+"_"+_ors.mode+"_"+_ors.lang; delete _ors.cache[k]; generateOutreach(); }
+
+function _syncOutreachUI() {
+  ["linkedin","email","call"].forEach(function(m){
+    var b=document.getElementById("om-mode-"+m); if(b) b.classList.toggle("active",m===_ors.mode);
+  });
+  ["interrupt","honesty","corporate","heros"].forEach(function(t){
+    var b=document.getElementById("om-tab-"+t); if(b) b.classList.toggle("active",t===_ors.tpl);
+  });
+  var en=document.getElementById("om-lang-en"); if(en) en.classList.toggle("active",_ors.lang==="EN");
+  var lv=document.getElementById("om-lang-lv"); if(lv) lv.classList.toggle("active",_ors.lang==="LV");
+  var cc=document.getElementById("om-charcount");
+  if(cc){ cc.style.display=_ors.mode==="linkedin"?"inline":"none"; }
+}
+
+function updateOutreachCharCount() {
+  var ta=document.getElementById("om-textarea");
+  var cc=document.getElementById("om-charcount");
+  if(!ta||!cc||_ors.mode!=="linkedin") return;
+  // Count only connection note (text before separator or full text)
+  var txt = ta.value;
+  var sepIdx = txt.indexOf("---");
+  var noteLen = sepIdx > 0 ? txt.substring(0,sepIdx).replace(/^\s+|\s+$/g,"").length : txt.length;
+  cc.textContent = "Connection note: "+noteLen+" / 300 chars";
+  cc.style.color = noteLen > 300 ? "#DC5050" : noteLen > 260 ? "#C9A961" : "#7ADBB8";
+}
+
+async function generateOutreach() {
+  var k = _ors.tpl+"_"+_ors.mode+"_"+_ors.lang;
+  var ta = document.getElementById("om-textarea");
+  var regen = document.getElementById("om-regen-btn");
+  var copy = document.getElementById("om-copy-btn");
+  if(!ta) return;
+  if(_ors.cache[k]) { ta.value=_ors.cache[k]; updateOutreachCharCount(); return; }
+  ta.value = "✦ Generating "+_ors.tpl.replace("heros","Hero's Journey").replace("interrupt","Pattern Interrupt").replace("honesty","Brutal Honesty").replace("corporate","Corporate")+" in "+(_ors.lang==="LV"?"Latvian":"English")+"...";
+  ta.disabled=true; if(regen)regen.disabled=true; if(copy)copy.disabled=true;
+  var co = leads.find(function(l){return l.id===_ors.coId;});
+  var c = co && co.contacts[_ors.ci];
+  if(!co||!c){ ta.value="(Contact not found)"; ta.disabled=false; return; }
+  var prompt = _buildOutreachPrompt(co, c);
+  var result = await claudeChat(prompt, 1400);
+  ta.value = result || "(Generation failed — check API key)";
+  ta.disabled=false; if(regen)regen.disabled=false; if(copy)copy.disabled=false;
+  _ors.cache[k] = ta.value;
+  updateOutreachCharCount();
+}
+
+function copyOutreach() {
+  var ta = document.getElementById("om-textarea");
+  if(!ta) return;
+  navigator.clipboard.writeText(ta.value).then(function(){
+    var btn = document.getElementById("om-copy-btn");
+    if(btn){ var orig=btn.textContent; btn.textContent="✓ Copied!"; setTimeout(function(){btn.textContent=orig;},1800); }
+  });
+}
+
+function _buildOutreachPrompt(co, c) {
+  var mode = _ors.mode, tpl = _ors.tpl, lang = _ors.lang;
+  var langStr = lang==="LV" ? "Latvian" : "English";
+  var intelLines = [];
+  if(co._intel) {
+    if(co._intel.hiring&&co._intel.hiring!=="none") intelLines.push("Actively hiring for: "+co._intel.hiring+" roles (growth signal)");
+    if(co._intel.address) intelLines.push("Office: "+co._intel.address);
+    if(co._intel.notes) intelLines.push("Intel: "+co._intel.notes);
+    if(co._intel.dmProcess) intelLines.push("Decision process: "+co._intel.dmProcess);
+  }
+  if(co.osintNotes) intelLines.push("Notes: "+co.osintNotes);
+  var intelBlock = intelLines.length ? "\nCOMPANY INTELLIGENCE:\n"+intelLines.map(function(l){return "• "+l;}).join("\n") : "";
+
+  var tplInstructions = {
+    interrupt:
+      "TEMPLATE: Pattern Interrupt\n"+
+      "Open with a single provocative, unexpected statement that breaks autopilot thinking — not a compliment, a pattern break.\n"+
+      "Reference something SPECIFIC about "+co.name+" from the intelligence below (hiring, size, industry, geography).\n"+
+      "Make them stop and think 'how did they know that?' before reading further.\n"+
+      "Keep the opener under 2 sentences. Then deliver the value.",
+
+    honesty:
+      "TEMPLATE: Brutal Honesty\n"+
+      "Open EXACTLY with: 'I'm going to try to sell you something. Here's why it's worth [X] minutes of your time...'\n"+
+      "Be completely transparent about the purpose. No corporate fluff.\n"+
+      "Use "+c.name+"'s specific situation — their title ("+( c.title||"executive")+") at "+co.name+" in "+( co.industry||co.country||"their industry")+".\n"+
+      "Raw, honest, respectful. End with a direct but low-pressure ask.",
+
+    corporate:
+      "TEMPLATE: Corporate Professional\n"+
+      "Professional, formal tone. Reference "+co.name+"'s industry position and apparent growth trajectory.\n"+
+      "Demonstrate clear understanding of their business context and the pressures a "+( c.title||"leader")+" faces.\n"+
+      "Clear value proposition. No slang, no NLP tricks. Straight business language.\n"+
+      "Professional CTA — suggest a brief call or meeting.",
+
+    heros:
+      "TEMPLATE: Hero's Journey\n"+
+      c.name+" is the HERO facing a real challenge in their role as "+(c.title||"leader")+" at "+co.name+".\n"+
+      "Edgars Untals is the MENTOR who appears with insight/tools that change the journey (like Gandalf, Yoda, Morpheus).\n"+
+      "Use ALL available intelligence below. Reference specifics — hiring signals, industry, size, geography.\n"+
+      "Embed NLP patterns naturally (not obviously):\n"+
+      "  • Presupposition: 'When you start noticing X...' (assumes they will)\n"+
+      "  • Future pacing: 'Imagine 6 months from now, your team...'\n"+
+      "  • Embedded command: '...and you can find yourself curious about...'\n"+
+      "End with a LOW-FRICTION CTA — not 'let's schedule a call', something easier like 'worth a quick reply?'"
+  };
+
+  var modeFormat = {
+    linkedin:
+      "CHANNEL: LinkedIn\n"+
+      "Write TWO sections:\n\n"+
+      "CONNECTION NOTE (STRICT maximum 300 characters total — count every character carefully):\n"+
+      "[write the connection note — short, punchy, personal]\n\n"+
+      "---\n\n"+
+      "INMAIL VERSION (when already connected — 250-400 words, more detailed):\n"+
+      "[write the InMail message]",
+
+    email:
+      "CHANNEL: Email\n"+
+      "Write:\n"+
+      "SUBJECT: [subject line — specific, curiosity-inducing, under 60 chars]\n\n"+
+      "[email body — personal opening, value, CTA]",
+
+    call:
+      "CHANNEL: Sales Call\n"+
+      "Write:\n\n"+
+      "OPENING LINE:\n"+
+      "[1-2 sentences to open the call after they pick up]\n\n"+
+      "TALKING POINTS:\n"+
+      "1. [point]\n2. [point]\n3. [point]\n\n"+
+      "OBJECTION HANDLERS:\n"+
+      "\"Not interested\" → [response]\n"+
+      "\"No budget right now\" → [response]\n"+
+      "\"Just send me some info\" → [response]"
+  };
+
+  return "You are Edgars Untals — NLP Trainer, Sales Coach, author of 'Sales Magician'. "+
+    "15+ years, 15,000+ sales meetings. Corporate clients include Apple, Microsoft, Samsung, Toyota. "+
+    "Philosophy: Sales Is The Greatest Story Ever Told. "+
+    "Voice: direct, confident, story-driven, never corporate-speak. Write in first person as Edgars.\n\n"+
+    tplInstructions[tpl]+"\n\n"+
+    "CONTACT:\nName: "+(c.name||"—")+"\nTitle: "+(c.title||"—")+
+    "\nCompany: "+co.name+"\nIndustry: "+(co.industry||"—")+
+    "\nCountry: "+(co.country||"Latvia")+"\nEmployees: "+(co.employees||"—")+
+    (c.email?"\nEmail: "+c.email:"")+
+    (co.phone?"\nCompany phone: "+co.phone:"")+
+    intelBlock+"\n\n"+
+    modeFormat[mode]+"\n\n"+
+    "LANGUAGE: "+langStr+"\n\n"+
+    "Write only the message(s). No preamble. No 'Here is your...' intro. Start directly with the content.";
+}
+
 </script>
 </body>
 </html>
