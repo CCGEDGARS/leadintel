@@ -394,11 +394,7 @@ table.ct tr:hover td{background:rgba(255,255,255,0.02)}
       <div class="res-actions">
         <button class="btn btn-ghost btn-sm" onclick="goTo('targets')">Back</button>
         <button class="btn btn-outline btn-sm" onclick="saveAllToCRM()" id="save-all-btn" style="display:none">+ Save All to CRM</button>
-        <select id="chunk-size-sel" onchange="CHUNK_SIZE=parseInt(this.value)" style="padding:6px 10px;border-radius:7px;border:1px solid rgba(122,219,184,0.3);background:var(--dark2);color:#7ADBB8;font-family:var(--font);font-size:12px;cursor:pointer;display:none">
-          <option value="10">10 per chunk</option>
-          <option value="20">20 per chunk</option>
-          <option value="50">50 per chunk</option>
-        </select>
+        <button class="btn btn-gold btn-sm" onclick="researchAll()" id="research-all-btn" style="display:none">🔍 Research All</button>
         <button class="btn btn-gold btn-sm" onclick="exportCSV()" id="export-btn" style="display:none">Export CSV</button>
       </div>
     </div>
@@ -422,6 +418,10 @@ table.ct tr:hover td{background:rgba(255,255,255,0.02)}
       </div>
     </div>
     <style>@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style>
+    <div id="research-progress" style="display:none;padding:11px 18px;background:rgba(201,169,97,0.06);border:1px solid rgba(201,169,97,0.22);border-radius:10px;margin-bottom:14px;align-items:center;justify-content:space-between">
+      <span id="rp-text" style="font-size:13px;font-weight:700;color:var(--g)">Researched 0 of 0 companies</span>
+      <span id="rp-current" style="font-size:11px;color:var(--muted)"></span>
+    </div>
     <div class="filter-row" id="filter-bar"></div>
     <div id="results-list"></div>
   </div>
@@ -1738,8 +1738,13 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
   }
 
   co._scraping = false;
+  co._enrichComplete = true;
+  co._enrichStats = {
+    emails: co.contacts.filter(function(c){return c.email;}).length,
+    phones: co.contacts.filter(function(c){return c.phone;}).length + (co.phone ? 1 : 0)
+  };
   renderResultsPage();
-  if(btn){ btn.textContent="Re-research"; btn.disabled=false; }
+  if(btn){ btn.textContent="🔄 Re-research"; btn.disabled=false; }
 }
 
 // OSINT ALL - enrich top 10 companies
@@ -1991,10 +1996,10 @@ async function runSearch(){
   renderResults();
   goTo("results");
 
-  // Sort by Pareto priority before enriching (VIP first)
+  // Sort by Pareto priority (VIP first) then auto-enrich only the #1 ranked company
   leads.sort(function(a,b){var o={VIP:0,A:1,B:2,C:3,OUT:4};var d=(o[a.parCat]||5)-(o[b.parCat]||5);return d!==0?d:b.contacts.length-a.contacts.length;});
   enrichedUpTo = 0;
-  enrichChunk(0);
+  if(leads.length > 0) { enrichCompany(leads[0].id); }
 }
 
 var CHUNK_SIZE = 10;
@@ -2085,6 +2090,54 @@ async function enrichChunk(startIdx){
 function enrichMore(){
   if(enrichedUpTo >= leads.length){showAlert("All companies enriched.","info");return;}
   enrichChunk(enrichedUpTo);
+}
+
+var _raRunning = false;
+var _raDone = 0;
+var _raTotal = 0;
+
+function updateResearchProgress(currentName){
+  var rp = document.getElementById("research-progress");
+  var rpText = document.getElementById("rp-text");
+  var rpCurr = document.getElementById("rp-current");
+  if(!rp) return;
+  if(_raTotal === 0){ rp.style.display="none"; return; }
+  rp.style.display = "flex";
+  if(rpText) rpText.textContent = "Researched "+_raDone+" of "+_raTotal+" companies";
+  if(rpCurr) rpCurr.textContent = currentName ? "Now: "+currentName : (_raDone>=_raTotal ? "✓ All complete" : "");
+}
+
+async function researchAll(){
+  if(_raRunning){ showAlert("Research already in progress","info"); return; }
+  var queue = leads.filter(function(l){ return !l._enrichComplete; });
+  if(!queue.length){ showAlert("All companies already researched","info"); return; }
+  _raRunning = true;
+  _raTotal = queue.length;
+  _raDone = 0;
+  var btn = document.getElementById("research-all-btn");
+  if(btn){ btn.disabled=true; btn.textContent="⟳ Researching..."; }
+  updateResearchProgress();
+
+  for(var i=0; i<queue.length; i++){
+    var co = queue[i];
+    _raDone = i;
+    updateResearchProgress(co.name);
+    renderResultsPage();
+    await new Promise(function(r){setTimeout(r,150);});
+    var el = document.getElementById("enrich-"+co.id);
+    if(el){ var card=el.closest(".co-card"); if(card) card.scrollIntoView({behavior:"smooth",block:"start"}); }
+    try { await enrichCompany(co.id); } catch(e){ console.warn("Research failed for "+co.name, e); }
+    renderResultsPage();
+    if(i < queue.length-1){
+      await new Promise(function(r){setTimeout(r,5000);});
+    }
+  }
+
+  _raDone = queue.length;
+  _raRunning = false;
+  updateResearchProgress();
+  if(btn){ btn.disabled=false; btn.textContent="🔍 Research All"; }
+  showAlert("Research complete: "+queue.length+" companies","info");
 }
 
 // CONTACT EDITOR
@@ -2283,9 +2336,8 @@ function renderResults(){
   document.getElementById("r-cos").textContent=leads.length;
   document.getElementById("r-cts").textContent=total;
   document.getElementById("export-btn").style.display=leads.length?"flex":"none";
-
-  var cs=document.getElementById("chunk-size-sel");if(cs)cs.style.display=leads.length?"block":"none";
   document.getElementById("save-all-btn").style.display=leads.length?"flex":"none";
+  var rab=document.getElementById("research-all-btn");if(rab)rab.style.display=leads.length?"flex":"none";
   renderResultsPage();
 }
 
@@ -2338,7 +2390,13 @@ function renderResultsPage(){
     var scoreInfo=""; // hidden from user
     var dmType=co.dmType||"";
     var dmLabel=dmType?({single:"Single DM",committee:"Committee",division:"Divisional",proc:"Procurement"}[dmType]||""):"";
-    var enrichedBadge=co.osintNotes||co.emailPattern?'<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(122,219,184,0.1);color:#7ADBB8;border:1px solid rgba(122,219,184,0.2);margin-left:6px">✓ OSINT</span>':"";
+    var isEnriched = co.osintNotes || co.emailPattern || co._enrichComplete;
+    var enrichedBadge = "";
+    if(co._enrichComplete && co._enrichStats) {
+      enrichedBadge = '<span style="font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(122,219,184,0.1);color:#7ADBB8;border:1px solid rgba(122,219,184,0.25);margin-left:4px;white-space:nowrap">✓ '+co._enrichStats.emails+' emails · '+co._enrichStats.phones+' phones</span>';
+    } else if(co.osintNotes || co.emailPattern) {
+      enrichedBadge = '<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(122,219,184,0.1);color:#7ADBB8;border:1px solid rgba(122,219,184,0.2);margin-left:6px">✓ OSINT</span>';
+    }
 
     const div=document.createElement("div");
     div.className="co-card";
@@ -2350,11 +2408,9 @@ function renderResultsPage(){
     if(co.phone) headsHtml+='<span style="color:#7ADBB8">📞 '+co.phone+'</span>';
     if(co.email) headsHtml+='<a href="mailto:'+co.email+'" style="color:#7AB8E8">✉ '+co.email+'</a>';
     headsHtml+='<a href="'+firmasUrl+'" target="_blank" style="color:rgba(122,219,184,0.7);font-size:12px">Firmas.lv ↗</a>';
-    var enrichLabel = co.osintNotes||co.emailPattern ? '🔄 Re-research' : '🔍 Research';
-    headsHtml+='<button class="osint-btn" data-id="'+co.id+'" id="enrich-'+co.id+'" style="padding:3px 10px;border-radius:6px;border:1px solid rgba(201,169,97,0.35);background:rgba(201,169,97,0.08);color:var(--g);font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;transition:all .2s">'+enrichLabel+'</button>';
-
-    // scoreInfo hidden
+    if(isEnriched) headsHtml+='<button class="osint-btn" data-id="'+co.id+'" id="enrich-'+co.id+'" style="padding:3px 10px;border-radius:6px;border:1px solid rgba(201,169,97,0.35);background:rgba(201,169,97,0.08);color:var(--g);font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;transition:all .2s">🔄 Re-research</button>';
     headsHtml+='</div>';
+    if(!isEnriched) headsHtml+='<div style="padding:8px 0 4px"><button class="osint-btn" data-id="'+co.id+'" id="enrich-'+co.id+'" style="padding:10px 22px;border-radius:8px;border:1px solid rgba(201,169,97,0.55);background:rgba(201,169,97,0.12);color:var(--g);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;transition:all .25s;letter-spacing:.02em">🔍 Deep Research This Company</button></div>';
     headsHtml+='<div class="trn-row"><input type="number" placeholder="Turnover EUR" oninput="updateTrn(\''+co.id+'\',this.value)" style="width:140px;padding:5px 9px;font-size:12px;border-radius:6px"/><span>enter to rescore</span></div>';
     headsHtml+='</div>';
 
