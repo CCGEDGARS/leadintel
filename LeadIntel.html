@@ -1359,6 +1359,42 @@ async function enrichCompany(coId) {
 
   await Promise.allSettled(srcPromises);
 
+  // ── FALLBACK: zero emails or zero phone found → run targeted Google searches ──
+  if(FIRECRAWL_KEY) {
+    var allScrapedText = Object.values(scraped).join(" ");
+    var domainRoot = coDomain.replace(/^www\./,"").split(".")[0];
+    var domainEmailsFound = (allScrapedText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g)||[])
+      .filter(function(e){ return e.toLowerCase().includes(domainRoot); });
+    var hasPhone = (allScrapedText.match(/\+?\d[\d\s\-\(\)\.]{6,14}\d/g)||[])
+      .some(function(p){ return p.replace(/\D/g,"").length >= 9; });
+
+    var fbPromises = [];
+
+    if(!domainEmailsFound.length) {
+      co._sources["fb-email"] = {status:"scraping", label:"email-hunt"};
+      renderResultsPage();
+      fbPromises.push(
+        firecrawlSearch('"@'+coDomain+'"').then(function(val){
+          scraped["fb-email"] = val||"";
+          markSrc("fb-email", val&&val.length>80?"found":"empty", val);
+        }).catch(function(){ scraped["fb-email"]=""; markSrc("fb-email","empty"); })
+      );
+    }
+
+    if(!hasPhone) {
+      co._sources["fb-phone"] = {status:"scraping", label:"maps-phone"};
+      renderResultsPage();
+      fbPromises.push(
+        firecrawlSearch('"'+co.name+'" phone contact').then(function(val){
+          scraped["fb-phone"] = val||"";
+          markSrc("fb-phone", val&&val.length>80?"found":"empty", val);
+        }).catch(function(){ scraped["fb-phone"]=""; markSrc("fb-phone","empty"); })
+      );
+    }
+
+    if(fbPromises.length) await Promise.allSettled(fbPromises);
+  }
+
   // Compile scraped data for Claude
   var regSrcs = srcDefs.filter(function(s){return s.key!=="website"&&s.key.indexOf("g-")!==0;});
   var regData = regSrcs.map(function(s){
@@ -1366,7 +1402,7 @@ async function enrichCompany(coId) {
     return "["+s.label.toUpperCase()+"]\n"+scraped[s.key].substring(0,3500);
   }).filter(Boolean).join("\n\n---REGISTRY---\n\n");
   var webData = scraped["website"]||"";
-  var googleData = [scraped["g-emails"]||"", scraped["g-linkedin"]||""].filter(Boolean).join("\n\n---GOOGLE---\n\n");
+  var googleData = [scraped["g-emails"]||"", scraped["g-linkedin"]||"", scraped["fb-email"]||"", scraped["fb-phone"]||""].filter(Boolean).join("\n\n---GOOGLE---\n\n");
 
   var firecrawlSection = (webData||regData||googleData) ?
     "\n\n━━━ PRE-SCRAPED REAL DATA — USE AS PRIMARY SOURCE ━━━\n" +
@@ -1647,6 +1683,33 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
           }
         });
       }
+
+      // CROSS-COMPANY PATTERN FALLBACK — inherit pattern from another lead with same domain
+      if((!co.emailPattern||co.emailPattern==="DATA MISSING") && co.contacts.some(function(ct){return !ct.email;})) {
+        var sibling = leads.find(function(l){
+          return l.id!==co.id && l.emailPattern && l.emailPattern!=="DATA MISSING" &&
+            (l._intel&&l._intel.mxDomain ? l._intel.mxDomain : "") === coDomain;
+        });
+        if(sibling) {
+          co.emailPattern = sibling.emailPattern;
+          var sibPat = co.emailPattern.toLowerCase();
+          var dom2 = (co._intel&&co._intel.mxDomain) ? co._intel.mxDomain : coDomain;
+          co.contacts.forEach(function(ct){
+            if(ct.email) return;
+            var pts=ct.name.trim().split(/\s+/); var fn2=pts[0]||""; var ln2=pts[pts.length-1]||""; var fi2=fn2.charAt(0);
+            var pred="";
+            if(sibPat.includes("firstname.lastname")) pred=fn2+"."+ln2+"@"+dom2;
+            else if(sibPat.includes("f.lastname")) pred=fi2+"."+ln2+"@"+dom2;
+            else if(sibPat.includes("firstnamelastname")) pred=fn2+ln2+"@"+dom2;
+            else if(sibPat.includes("firstname_lastname")) pred=fn2+"_"+ln2+"@"+dom2;
+            else if(sibPat.includes("lastname.firstname")) pred=ln2+"."+fn2+"@"+dom2;
+            else if(sibPat.includes("firstname@")) pred=fn2+"@"+dom2;
+            else if(sibPat.includes("flastname")) pred=fi2+ln2+"@"+dom2;
+            if(pred){ ct.email=pred.toLowerCase(); ct.emailConfidence="PREDICTED"; ct._emailSource="Pattern from "+sibling.name; }
+          });
+        }
+      }
+
       // Rescore with new intelligence
       if(co.contacts.length){
         var best2=co.contacts.reduce(function(b,c){var sm={c_suite:4,vp:4,director:3,manager:2,senior:1};return(sm[c.seniority]||1)>(sm[b.seniority]||1)?c:b;},co.contacts[0]);
