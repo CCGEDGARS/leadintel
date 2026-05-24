@@ -2060,6 +2060,13 @@ async function runSearch(){
     }
   });
 
+  // Sort each company's contacts by seniority (c_suite/vp first) and cap at 10
+  var SEN_RANK = {c_suite:5,vp:4,director:3,manager:2,senior:1};
+  Object.values(orgMap).forEach(function(co){
+    co.contacts.sort(function(a,b){return (SEN_RANK[b.seniority]||0)-(SEN_RANK[a.seniority]||0);});
+    if(co.contacts.length > 10) co.contacts = co.contacts.slice(0,10);
+  });
+
   // Quality filter: must have at least one contact with a title, OR have a website/phone/email
   leads=Object.values(orgMap).filter(function(c){
     if(!c.contacts.length) return false;
@@ -2091,26 +2098,21 @@ async function runSearch(){
   renderResults();
   goTo("results");
 
-  // Sort: unverified at bottom, then by Pareto priority
-  leads.sort(function(a,b){
-    if(a._verified===false&&b._verified!==false) return 1;
-    if(b._verified===false&&a._verified!==false) return -1;
-    var o={VIP:0,A:1,B:2,C:3,OUT:4};
-    var d=(o[a.parCat]||5)-(o[b.parCat]||5);
-    return d!==0?d:b.contacts.length-a.contacts.length;
-  });
+  // Sort: contacts descending (most data first), unverified at bottom
+  function sortLeads(arr){
+    arr.sort(function(a,b){
+      if(a._verified===false&&b._verified!==false) return 1;
+      if(b._verified===false&&a._verified!==false) return -1;
+      return b.contacts.length-a.contacts.length;
+    });
+  }
+  sortLeads(leads);
   enrichedUpTo = 0;
   if(leads.length > 0) { enrichCompany(leads[0].id); }
-  // Async validation pass — badges appear as results come in
+  // Async validation pass — re-sort after badges arrive
   if(allCountries.length===1){
     validateLeads(leads, allCountries[0]).then(function(){
-      leads.sort(function(a,b){
-        if(a._verified===false&&b._verified!==false) return 1;
-        if(b._verified===false&&a._verified!==false) return -1;
-        var o={VIP:0,A:1,B:2,C:3,OUT:4};
-        var d=(o[a.parCat]||5)-(o[b.parCat]||5);
-        return d!==0?d:b.contacts.length-a.contacts.length;
-      });
+      sortLeads(leads);
       renderResultsPage();
     });
   }
@@ -2615,7 +2617,7 @@ function renderResultsPage(){
     const div=document.createElement("div");
     div.className="co-card";
 
-    let headsHtml='<div class="co-head"><div class="co-top"><div class="co-av" style="background:'+catBg(co.parCat)+';color:'+catColor(co.parCat)+';border-color:'+catColor(co.parCat)+'40">'+co.name.charAt(0)+'</div><div style="flex:1"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap"><a class="co-name-link" href="'+(ws||'https://www.google.com/search?q='+encodeURIComponent(co.name))+'" target="_blank">'+co.name+'</a>'+catBadge(co.parCat)+catBadge(co.category)+enrichedBadge+verifiedBadge+'</div><div class="co-meta">'+(co.industry?co.industry+' · ':'')+( co.country?co.country+' · ':'')+( co.employees?co.employees+' emp.':'')+(dmLabel?' · <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(201,169,97,0.08);color:var(--g)">'+dmLabel+'</span>':'')+'</div></div><div style="font-size:12px;color:var(--muted);text-align:right">'+co.contacts.length+' contacts'+(emailCt?' &middot; '+emailCt+' emails':'')+(phoneCt?' &middot; '+phoneCt+' phones':'')+'</div></div>';
+    let headsHtml='<div class="co-head"><div class="co-top"><div class="co-av" style="background:'+catBg(co.parCat)+';color:'+catColor(co.parCat)+';border-color:'+catColor(co.parCat)+'40">'+co.name.charAt(0)+'</div><div style="flex:1"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap"><a class="co-name-link" href="'+(ws||'https://www.google.com/search?q='+encodeURIComponent(co.name))+'" target="_blank">'+co.name+'</a>'+catBadge(co.parCat)+catBadge(co.category)+enrichedBadge+verifiedBadge+'</div><div class="co-meta">'+(co.industry?co.industry+' · ':'')+( co.country?co.country+' · ':'')+( co.employees?co.employees+' emp.':'')+(dmLabel?' · <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(201,169,97,0.08);color:var(--g)">'+dmLabel+'</span>':'')+'</div></div><div style="text-align:right;flex-shrink:0"><div style="font-size:28px;font-weight:800;color:'+(co.contacts.length>=7?'var(--g)':co.contacts.length>=4?'#7AB8E8':'var(--muted)')+';line-height:1">'+co.contacts.length+'</div><div style="font-size:10px;color:var(--muted);letter-spacing:.05em;margin-top:1px">CONTACTS'+(emailCt?' · '+emailCt+'✉':'')+(phoneCt?' · '+phoneCt+'📞':'')+'</div></div></div>';
     headsHtml+='<div class="co-links">';
     var cardDomain = ws ? ws.replace(/https?:\/\//,'').split('/')[0] : '';
     if(ws) headsHtml+='<a href="'+ws+'" target="_blank" style="color:var(--g);font-weight:600">🌐 '+cardDomain+'</a>';
