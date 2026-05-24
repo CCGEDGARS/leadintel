@@ -117,16 +117,24 @@ select option{background:var(--dark3)}
 .trn-row span{font-size:11px;color:var(--muted)}
 .co-contacts{padding:16px 20px}
 .contacts-hd{font-size:11px;color:var(--g);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px}
-table.ct{width:100%;border-collapse:collapse;font-size:13px}
-table.ct th{text-align:left;padding:7px 10px;font-size:10px;font-weight:600;color:var(--g);letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid rgba(201,169,97,0.15);white-space:nowrap}
-table.ct td{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,0.04);vertical-align:middle}
+table.ct{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed}
+table.ct th{text-align:left;padding:7px 10px;font-size:10px;font-weight:600;color:var(--g);letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid rgba(201,169,97,0.15);white-space:nowrap;overflow:hidden}
+table.ct td{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,0.04);vertical-align:middle;overflow:hidden}
 table.ct tr:last-child td{border-bottom:none}
 table.ct tr:hover td{background:rgba(255,255,255,0.02)}
-.td-name{font-weight:600;color:var(--text);white-space:nowrap}
-.td-title{color:var(--muted);max-width:180px}
+table.ct .col-name{width:130px}
+table.ct .col-title{width:160px}
+table.ct .col-email{width:180px}
+table.ct .col-phone{width:110px}
+table.ct .col-li{width:80px}
+table.ct .col-edit{width:36px}
+table.ct .col-save{width:110px}
+table.ct .col-out{width:90px}
+.td-name{font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px}
+.td-title{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
 .td-link{text-decoration:none;transition:opacity .2s}
 .td-link:hover{opacity:.72;text-decoration:underline}
-.td-email{color:#7AB8E8}
+.td-email{color:#7AB8E8;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
 .td-phone{color:#7ADBB8}
 .td-li{color:var(--g)}
 .td-miss{color:rgba(138,138,154,0.28)}
@@ -183,8 +191,10 @@ table.ct tr:hover td{background:rgba(255,255,255,0.02)}
 .src-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid;font-weight:600;white-space:nowrap;transition:all .3s;margin:2px 0}
 .src-pending{border-color:rgba(138,138,154,0.15);color:rgba(138,138,154,0.35);background:transparent}
 .src-scraping{border-color:rgba(201,169,97,0.4);color:#C9A961;background:rgba(201,169,97,0.07);animation:scrpulse .8s ease-in-out infinite alternate}
-.src-found{border-color:rgba(122,219,184,0.4);color:#7ADBB8;background:rgba(122,219,184,0.07)}
+.src-found{border-color:rgba(122,219,184,0.4);color:#7ADBB8;background:rgba(122,219,184,0.07);animation:badgeFadeIn .4s ease}
 .src-empty{border-color:rgba(138,138,154,0.08);color:rgba(138,138,154,0.2);background:transparent;text-decoration:line-through}
+@keyframes badgeFadeIn{from{opacity:0;transform:scale(.88)}to{opacity:1;transform:scale(1)}}
+@keyframes shimmer{0%{background-position:-200% center}100%{background-position:200% center}}
 @keyframes scrpulse{from{opacity:.55}to{opacity:1}}
 /* Outreach buttons */
 .out-btn{padding:3px 7px;border-radius:5px;border:1px solid rgba(201,169,97,0.28);background:rgba(201,169,97,0.06);color:var(--g);cursor:pointer;font-size:13px;transition:all .2s;line-height:1}
@@ -449,6 +459,22 @@ table.ct tr:hover td{background:rgba(255,255,255,0.02)}
       </div>
     </div>
     <style>@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style>
+    <div id="ri-bar" style="display:none;position:sticky;top:0;z-index:20;background:linear-gradient(135deg,rgba(14,12,10,0.97),rgba(22,18,12,0.97));border-bottom:2px solid rgba(201,169,97,0.28);padding:11px 20px 12px;margin:-8px -8px 14px;backdrop-filter:blur(8px)">
+      <div style="height:3px;background:rgba(201,169,97,0.12);border-radius:2px;overflow:hidden;margin-bottom:9px">
+        <div id="ri-fill" style="height:100%;width:0%;border-radius:2px;background:linear-gradient(90deg,#A8893A,#E8C97A,#C9A961,#E8C97A,#A8893A);background-size:200% 100%;animation:shimmer 1.8s linear infinite;transition:width .6s ease"></div>
+      </div>
+      <div id="ri-searching" style="display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:7px;min-width:0">
+          <span style="font-size:13px;flex-shrink:0">🔍</span>
+          <span style="font-size:12px;color:var(--g);font-weight:700;flex-shrink:0">Researching</span>
+          <span id="ri-name" style="font-size:12px;color:var(--text);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px"></span>
+          <span style="font-size:11px;color:rgba(138,138,154,0.4);flex-shrink:0">·</span>
+          <span id="ri-src" style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px">starting...</span>
+        </div>
+        <span id="ri-pct" style="font-size:13px;font-weight:800;color:var(--g);font-variant-numeric:tabular-nums;flex-shrink:0;margin-left:12px">0%</span>
+      </div>
+      <div id="ri-msg" style="display:none;font-size:12px;font-weight:700;color:#7ADBB8"></div>
+    </div>
     <div id="research-progress" style="display:none;padding:11px 18px;background:rgba(201,169,97,0.06);border:1px solid rgba(201,169,97,0.22);border-radius:10px;margin-bottom:14px;align-items:center;justify-content:space-between">
       <span id="rp-text" style="font-size:13px;font-weight:700;color:var(--g)">Researched 0 of 0 companies</span>
       <span id="rp-current" style="font-size:11px;color:var(--muted)"></span>
@@ -1320,6 +1346,52 @@ async function firecrawlRegistries(coName, coCountry, domain) {
   return sections.join("\n\n---REGISTRY---\n\n");
 }
 
+// ─── STICKY RESEARCH PROGRESS BAR ───────────────────────────────────────────
+var _riBar = {coId:null, total:0, done:0};
+
+function showResearchBar(coId, coName, srcCount) {
+  _riBar.coId = coId; _riBar.total = srcCount; _riBar.done = 0;
+  var bar = document.getElementById("ri-bar"); if(!bar) return;
+  bar.style.transition = ""; bar.style.opacity = "1"; bar.style.display = "block";
+  var nm = document.getElementById("ri-name"); if(nm) nm.textContent = coName;
+  var sr = document.getElementById("ri-src"); if(sr) sr.textContent = "starting...";
+  var pc = document.getElementById("ri-pct"); if(pc) pc.textContent = "0%";
+  var fl = document.getElementById("ri-fill"); if(fl) fl.style.width = "0%";
+  var ms = document.getElementById("ri-msg"); if(ms) ms.style.display = "none";
+  var sg = document.getElementById("ri-searching"); if(sg) sg.style.display = "flex";
+}
+
+function updateResearchBar(coId, srcLabel, status) {
+  if(!_riBar.coId || _riBar.coId !== coId) return;
+  if(status === "scraping") {
+    var sr = document.getElementById("ri-src"); if(sr) sr.textContent = srcLabel;
+  } else if(status === "found" || status === "empty") {
+    _riBar.done++;
+    var pct = _riBar.total > 0 ? Math.min(94, Math.round((_riBar.done / _riBar.total) * 100)) : 0;
+    var pc = document.getElementById("ri-pct"); if(pc) pc.textContent = pct + "%";
+    var fl = document.getElementById("ri-fill"); if(fl) fl.style.width = pct + "%";
+  }
+}
+
+function completeResearchBar(coId, emails, phones) {
+  if(!_riBar.coId || _riBar.coId !== coId) return;
+  var fl = document.getElementById("ri-fill"); if(fl) fl.style.width = "100%";
+  var pc = document.getElementById("ri-pct"); if(pc) pc.textContent = "100%";
+  setTimeout(function() {
+    var sg = document.getElementById("ri-searching"); if(sg) sg.style.display = "none";
+    var ms = document.getElementById("ri-msg"); if(ms) {
+      ms.textContent = "✓ Research complete — " + emails + " email" + (emails !== 1 ? "s" : "") + " · " + phones + " phone" + (phones !== 1 ? "s" : "") + " found";
+      ms.style.display = "flex";
+    }
+    setTimeout(function() {
+      var bar = document.getElementById("ri-bar"); if(!bar) return;
+      bar.style.transition = "opacity 1s ease";
+      bar.style.opacity = "0";
+      setTimeout(function() { if(bar) bar.style.display = "none"; _riBar.coId = null; }, 1000);
+    }, 3000);
+  }, 400);
+}
+
 // OSINT ENRICHMENT
 async function enrichCompany(coId) {
   const co = leads.find(function(l){return l.id===coId;});
@@ -1429,6 +1501,7 @@ async function enrichCompany(coId) {
   co._scraping = true;
   co._sources = {};
   srcDefs.forEach(function(s){ co._sources[s.key] = {status:"pending", label:s.label}; });
+  showResearchBar(co.id, co.name, srcDefs.length);
   renderResultsPage();
 
   var scraped = {};
@@ -1443,6 +1516,7 @@ async function enrichCompany(coId) {
       var found = emails.slice(0,3).concat(phones.slice(0,2)).join(" · ").substring(0,60);
       if(found) co._sources[key].found = found;
     }
+    updateResearchBar(co.id, co._sources[key].label, status);
     renderResultsPage();
   }
 
@@ -1683,7 +1757,7 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
 {
   "emailPattern": "firstname.lastname@${coDomain} or DATA MISSING",
   "mxDomain": "${coDomain}",
-  "companyPhone": "+XXX XXXXXXXX or DATA MISSING",
+  "companyPhone": "full phone number or DATA MISSING",
   "companyEmail": "info@${coDomain} or DATA MISSING",
   "companyAddress": "street, city or DATA MISSING",
   "contacts": [
@@ -1691,7 +1765,7 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
       "name": "Full Name",
       "title": "Current Title",
       "email": "email@${coDomain} or DATA MISSING",
-      "phone": "+XXX XXXXXXXX or DATA MISSING",
+      "phone": "full phone number or DATA MISSING",
       "linkedin": "https://www.linkedin.com/in/exact-verified-slug or DATA MISSING",
       "confidence": "HIGH|MEDIUM|LOW",
       "source": "exact URL where found"
@@ -1931,6 +2005,7 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
     emails: co.contacts.filter(function(c){return c.email;}).length,
     phones: co.contacts.filter(function(c){return c.phone;}).length + (co.phone ? 1 : 0)
   };
+  completeResearchBar(co.id, co._enrichStats.emails, co._enrichStats.phones);
   renderResultsPage();
   if(btn){ btn.textContent="🔄 Re-research"; btn.disabled=false; }
 }
@@ -2683,20 +2758,19 @@ function renderResultsPage(){
       }
     }
 
-    let tblHtml='<div class="co-contacts"><div class="contacts-hd">All Contacts ('+co.contacts.length+')</div><table class="ct"><thead><tr><th>Name</th><th>Title</th><th>Seniority</th><th>Email</th><th>Phone</th><th>LinkedIn</th><th></th><th>Save</th><th>Outreach</th></tr></thead><tbody>';
+    let tblHtml='<div class="co-contacts"><div class="contacts-hd">All Contacts ('+co.contacts.length+')</div><table class="ct"><thead><tr><th class="col-name">Name</th><th class="col-title">Title</th><th class="col-email">Email</th><th class="col-phone">Phone</th><th class="col-li">LinkedIn</th><th class="col-edit"></th><th class="col-save">Save</th><th class="col-out">Outreach</th></tr></thead><tbody>';
     co.contacts.forEach(function(c,ci){
       var ck=ckKey(co,c);
       var iv=inVIP(ck),ic=inCRM(ck);
       tblHtml+='<tr>';
-      tblHtml+='<td class="td-name">'+(c.name||"—")+'</td>';
-      tblHtml+='<td class="td-title">'+(c.title||"—")+'</td>';
-      tblHtml+='<td>'+(c.seniority?'<span class="sen-tag">'+(SEN_LABELS[c.seniority]||c.seniority)+'</span>':"—")+'</td>';
+      tblHtml+='<td class="td-name" title="'+(c.name||"")+'">'+(c.name||"—")+'</td>';
+      tblHtml+='<td class="td-title" title="'+(c.title||"")+'">'+(c.title||"—")+'</td>';
       var confLabel = c.emailConfidence==="HIGH" ? "✓ verified" : c.emailConfidence==="MEDIUM" ? "~ pattern" : c.emailConfidence==="PREDICTED" ? "~ predicted" : (c.confidence||"");
       var confBg = (c.emailConfidence==="HIGH"||c.confidence==="HIGH") ? "rgba(122,219,184,0.15)" : (c.emailConfidence==="MEDIUM"||c.confidence==="MEDIUM") ? "rgba(201,169,97,0.12)" : "rgba(138,138,154,0.1)";
       var confColor = (c.emailConfidence==="HIGH"||c.confidence==="HIGH") ? "#7ADBB8" : (c.emailConfidence==="MEDIUM"||c.confidence==="MEDIUM") ? "var(--g)" : "var(--muted)";
       var emailConf = confLabel ? ' <span title="'+(c._emailSource||c.confidence||"")+'" style="font-size:9px;padding:1px 5px;border-radius:3px;vertical-align:middle;background:'+confBg+';color:'+confColor+';border:1px solid '+confColor+'44;cursor:help">'+confLabel+'</span>' : '';
-      tblHtml+='<td>'+(c.email?'<a href="mailto:'+c.email+'" class="td-link td-email">'+c.email+'</a>'+emailConf:'<span class="td-miss">—</span>')+'</td>';
-      tblHtml+='<td>'+(c.phone?'<a href="tel:'+c.phone+'" class="td-link td-phone">'+c.phone+'</a>':'<span class="td-miss">—</span>')+'</td>';
+      tblHtml+='<td style="max-width:180px">'+(c.email?'<a href="mailto:'+c.email+'" class="td-link td-email" title="'+c.email+'">'+c.email+'</a>'+emailConf:'<span class="td-miss">—</span>')+'</td>';
+      tblHtml+='<td class="col-phone">'+(c.phone?'<a href="tel:'+c.phone+'" class="td-link td-phone" style="white-space:nowrap">'+c.phone+'</a>':'<span class="td-miss">—</span>')+'</td>';
       var liDisplay="—";
       if(c.linkedin && c._linkedinVerified) {
         liDisplay = '<a href="'+c.linkedin+'" target="_blank" class="td-link td-li" style="color:#7ADBB8" title="Verified LinkedIn profile">✓ LinkedIn</a>';
