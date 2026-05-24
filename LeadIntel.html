@@ -3190,13 +3190,43 @@ function initOutreachModal() {
       '<button class="om-tab" id="om-tab-honesty" onclick="setOutreachTpl(\'honesty\')">🎯 Brutal Honesty</button>',
       '<button class="om-tab" id="om-tab-corporate" onclick="setOutreachTpl(\'corporate\')">🏢 Corporate</button>',
       '<button class="om-tab active" id="om-tab-heros" onclick="setOutreachTpl(\'heros\')">🗺 Hero\'s Journey</button>',
+      '<button class="om-tab" id="om-tab-scripts" onclick="setOutreachTpl(\'scripts\')" style="margin-left:auto;border-left:1px solid rgba(201,169,97,0.15);padding-left:16px">📝 My Scripts</button>',
     '</div>',
-    '<div class="om-body">',
+    '<div class="om-body" id="om-body">',
       '<textarea class="om-textarea" id="om-textarea" oninput="updateOutreachCharCount()" placeholder="Generating..."></textarea>',
       '<div class="om-actions">',
         '<button class="om-copy-btn" id="om-copy-btn" onclick="copyOutreach()">📋 Copy</button>',
         '<button class="om-regen-btn" id="om-regen-btn" onclick="regenOutreach()">↺ Regenerate</button>',
         '<span class="om-charcount" id="om-charcount" style="display:none"></span>',
+        '<a id="om-back-scripts" href="javascript:void(0)" onclick="showScriptsPanel()" style="display:none;font-size:12px;color:var(--muted);text-decoration:none;margin-left:auto;padding:4px 0">← Scripts</a>',
+      '</div>',
+    '</div>',
+    '<div id="om-scripts-panel" style="display:none;padding:16px 26px 22px">',
+      [1,2,3].map(function(i){return [
+        '<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(201,169,97,0.13);border-radius:10px;padding:14px;margin-bottom:12px">',
+          '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">',
+            '<span style="font-size:10px;font-weight:700;color:var(--g);letter-spacing:.07em;text-transform:uppercase;white-space:nowrap;min-width:52px">Script '+i+'</span>',
+            '<input id="om-sname-'+i+'" placeholder="Script name..." oninput="saveScript('+i+')" style="flex:1;padding:6px 10px;border-radius:6px;border:1px solid rgba(201,169,97,0.2);background:rgba(201,169,97,0.04);color:var(--text);font-family:var(--font);font-size:12px;outline:none"/>',
+            '<button onclick="activateScript('+i+')" style="padding:6px 16px;border-radius:6px;border:1px solid rgba(122,219,184,0.38);background:rgba(122,219,184,0.07);color:#7ADBB8;cursor:pointer;font-family:var(--font);font-size:12px;font-weight:700;white-space:nowrap;transition:all .2s">▶ Use</button>',
+          '</div>',
+          '<textarea id="om-stpl-'+i+'" rows="4" oninput="saveScript('+i+')" placeholder="Write your template... use {name} {company} {title} {insight} etc." style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.02);border:1px solid rgba(201,169,97,0.11);border-radius:8px;color:var(--text);font-family:var(--font);font-size:12px;line-height:1.6;padding:10px 12px;resize:vertical;outline:none;transition:border-color .2s"></textarea>',
+        '</div>'
+      ].join("");}).join(""),
+      '<div style="margin-top:2px">',
+        '<button onclick="togglePhRef()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-family:var(--font);font-size:12px;padding:4px 0;display:flex;align-items:center;gap:5px"><span id="om-ph-arrow">▸</span> Available placeholders</button>',
+        '<div id="om-ph-list" style="display:none;margin-top:8px;padding:12px 14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:8px;font-size:11px;color:var(--muted);line-height:2.1">',
+          '<span style="color:var(--g);font-weight:600">{name}</span> first name &nbsp;·&nbsp; ',
+          '<span style="color:var(--g);font-weight:600">{fullname}</span> full name &nbsp;·&nbsp; ',
+          '<span style="color:var(--g);font-weight:600">{title}</span> job title &nbsp;·&nbsp; ',
+          '<span style="color:var(--g);font-weight:600">{company}</span> company &nbsp;·&nbsp; ',
+          '<span style="color:var(--g);font-weight:600">{industry}</span> industry &nbsp;·&nbsp; ',
+          '<span style="color:var(--g);font-weight:600">{email}</span> email &nbsp;·&nbsp; ',
+          '<span style="color:var(--g);font-weight:600">{phone}</span> phone &nbsp;·&nbsp;<br/>',
+          '<span style="color:var(--g);font-weight:600">{hiring}</span> active hiring roles &nbsp;·&nbsp; ',
+          '<span style="color:var(--g);font-weight:600">{insight}</span> OSINT intel notes &nbsp;·&nbsp; ',
+          '<span style="color:var(--g);font-weight:600">{address}</span> office address &nbsp;·&nbsp; ',
+          '<span style="color:var(--g);font-weight:600">{pattern}</span> email pattern',
+        '</div>',
       '</div>',
     '</div>',
     '</div>'
@@ -3208,11 +3238,17 @@ function initOutreachModal() {
 function openOutreach(coId, ci, mode) {
   initOutreachModal();
   _ors.coId = coId; _ors.ci = ci; _ors.mode = mode; _ors.tpl = "heros"; _ors.cache = {};
+  _ors.activeScriptTemplate = null; _ors.activeScriptSlot = null;
   var co = leads.find(function(l){return l.id===coId;});
   var c = co && co.contacts[ci];
   if(!co||!c) return;
   document.getElementById("om-cname").textContent = c.name || "—";
   document.getElementById("om-csub").textContent = [c.title, co.name].filter(Boolean).join(" · ");
+  // Ensure AI body visible, scripts panel hidden
+  var sp = document.getElementById("om-scripts-panel"); if(sp) sp.style.display = "none";
+  var ob = document.getElementById("om-body"); if(ob) ob.style.display = "block";
+  var bl = document.getElementById("om-back-scripts"); if(bl) bl.style.display = "none";
+  var rb = document.getElementById("om-regen-btn"); if(rb) rb.textContent = "↺ Regenerate";
   var modal = document.getElementById("outreach-modal");
   modal.style.display = "flex";
   _syncOutreachUI();
@@ -3225,22 +3261,39 @@ function closeOutreach() {
   if(m) m.style.display = "none";
 }
 
-function setOutreachMode(mode) { _ors.mode = mode; _ors.cache = {}; _syncOutreachUI(); generateOutreach(); }
-function setOutreachTpl(tpl)   { _ors.tpl  = tpl;  _syncOutreachUI(); generateOutreach(); }
-function setOutreachLang(lang) { _ors.lang = lang;  _ors.cache = {}; _syncOutreachUI(); generateOutreach(); }
-function regenOutreach()       { var k=_ors.tpl+"_"+_ors.mode+"_"+_ors.lang; delete _ors.cache[k]; generateOutreach(); }
+function setOutreachMode(mode) { _ors.mode = mode; _ors.cache = {}; _syncOutreachUI(); if(_ors.tpl!=="scripts") generateOutreach(); }
+function setOutreachTpl(tpl) {
+  _ors.tpl = tpl;
+  if(tpl === "scripts") {
+    showScriptsPanel();
+  } else {
+    // Leave scripts mode: restore AI body
+    var sp = document.getElementById("om-scripts-panel"); if(sp) sp.style.display = "none";
+    var ob = document.getElementById("om-body"); if(ob) ob.style.display = "block";
+    var bl = document.getElementById("om-back-scripts"); if(bl) bl.style.display = "none";
+    var rb = document.getElementById("om-regen-btn"); if(rb) rb.textContent = "↺ Regenerate";
+    _ors.activeScriptTemplate = null; _ors.activeScriptSlot = null;
+    _syncOutreachUI();
+    generateOutreach();
+  }
+}
+function setOutreachLang(lang) { _ors.lang = lang; _ors.cache = {}; _syncOutreachUI(); if(_ors.tpl!=="scripts") generateOutreach(); }
+function regenOutreach() {
+  if(_ors.tpl === "scripts" && _ors.activeScriptTemplate) { recreateScript(); return; }
+  var k=_ors.tpl+"_"+_ors.mode+"_"+_ors.lang; delete _ors.cache[k]; generateOutreach();
+}
 
 function _syncOutreachUI() {
   ["linkedin","email","call"].forEach(function(m){
     var b=document.getElementById("om-mode-"+m); if(b) b.classList.toggle("active",m===_ors.mode);
   });
-  ["interrupt","honesty","corporate","heros"].forEach(function(t){
+  ["interrupt","honesty","corporate","heros","scripts"].forEach(function(t){
     var b=document.getElementById("om-tab-"+t); if(b) b.classList.toggle("active",t===_ors.tpl);
   });
   var en=document.getElementById("om-lang-en"); if(en) en.classList.toggle("active",_ors.lang==="EN");
   var lv=document.getElementById("om-lang-lv"); if(lv) lv.classList.toggle("active",_ors.lang==="LV");
   var cc=document.getElementById("om-charcount");
-  if(cc){ cc.style.display=_ors.mode==="linkedin"?"inline":"none"; }
+  if(cc){ cc.style.display=(_ors.mode==="linkedin"&&_ors.tpl!=="scripts")?"inline":"none"; }
 }
 
 function updateOutreachCharCount() {
@@ -3282,6 +3335,117 @@ function copyOutreach() {
     var btn = document.getElementById("om-copy-btn");
     if(btn){ var orig=btn.textContent; btn.textContent="✓ Copied!"; setTimeout(function(){btn.textContent=orig;},1800); }
   });
+}
+
+// ── MY SCRIPTS ─────────────────────────────────────────────────────────────
+var _scripts = [1,2,3].map(function(i){
+  try { return JSON.parse(localStorage.getItem("li_script_"+i)||"{}"); } catch(e){ return {}; }
+});
+
+function saveScript(slot) {
+  var idx = slot-1;
+  var nm = document.getElementById("om-sname-"+slot);
+  var tp = document.getElementById("om-stpl-"+slot);
+  if(!nm||!tp) return;
+  _scripts[idx] = {name:nm.value, template:tp.value};
+  localStorage.setItem("li_script_"+slot, JSON.stringify(_scripts[idx]));
+}
+
+function loadScriptsUI() {
+  [1,2,3].forEach(function(i){
+    var s = _scripts[i-1]||{};
+    var nm = document.getElementById("om-sname-"+i);
+    var tp = document.getElementById("om-stpl-"+i);
+    if(nm) nm.value = s.name||"";
+    if(tp) tp.value = s.template||"";
+  });
+}
+
+function showScriptsPanel() {
+  _ors.tpl = "scripts";
+  var sp = document.getElementById("om-scripts-panel"); if(sp) sp.style.display = "block";
+  var ob = document.getElementById("om-body"); if(ob) ob.style.display = "none";
+  _syncOutreachUI();
+  loadScriptsUI();
+}
+
+function fillScriptPlaceholders(template, co, c) {
+  var firstName = c.name ? c.name.split(" ")[0] : "";
+  var hiring = (co._intel&&co._intel.hiring&&co._intel.hiring!=="none") ? co._intel.hiring : "";
+  var insight = (co._intel&&co._intel.notes) ? co._intel.notes : (co.osintNotes||"");
+  var address = (co._intel&&co._intel.address) ? co._intel.address : (co.address||"");
+  var pattern = co.emailPattern||"";
+  return template
+    .replace(/\{name\}/gi,     firstName)
+    .replace(/\{fullname\}/gi, c.name||"")
+    .replace(/\{title\}/gi,    c.title||"")
+    .replace(/\{company\}/gi,  co.name||"")
+    .replace(/\{industry\}/gi, co.industry||"")
+    .replace(/\{email\}/gi,    c.email||"")
+    .replace(/\{phone\}/gi,    c.phone||co.phone||"")
+    .replace(/\{hiring\}/gi,   hiring)
+    .replace(/\{insight\}/gi,  insight)
+    .replace(/\{address\}/gi,  address)
+    .replace(/\{pattern\}/gi,  pattern);
+}
+
+function activateScript(slot) {
+  var s = _scripts[slot-1]||{};
+  if(!s.template) { showAlert("Script "+slot+" is empty — write a template first","err"); return; }
+  var co = leads.find(function(l){return l.id===_ors.coId;});
+  var c = co && co.contacts[_ors.ci];
+  if(!co||!c) return;
+  _ors.activeScriptTemplate = s.template;
+  _ors.activeScriptSlot = slot;
+  var ta = document.getElementById("om-textarea");
+  if(ta){ ta.value = fillScriptPlaceholders(s.template, co, c); ta.disabled = false; }
+  var sp = document.getElementById("om-scripts-panel"); if(sp) sp.style.display = "none";
+  var ob = document.getElementById("om-body"); if(ob) ob.style.display = "block";
+  var bl = document.getElementById("om-back-scripts"); if(bl) bl.style.display = "inline";
+  var rb = document.getElementById("om-regen-btn"); if(rb) rb.textContent = "🔄 Recreate";
+  updateOutreachCharCount();
+}
+
+function togglePhRef() {
+  var el = document.getElementById("om-ph-list");
+  var ar = document.getElementById("om-ph-arrow");
+  if(!el) return;
+  var open = el.style.display === "none";
+  el.style.display = open ? "block" : "none";
+  if(ar) ar.textContent = open ? "▾" : "▸";
+}
+
+async function recreateScript() {
+  if(!_ors.activeScriptTemplate) return;
+  var co = leads.find(function(l){return l.id===_ors.coId;});
+  var c = co && co.contacts[_ors.ci];
+  if(!co||!c) return;
+  var ta = document.getElementById("om-textarea");
+  var rb = document.getElementById("om-regen-btn");
+  var cb = document.getElementById("om-copy-btn");
+  if(ta){ ta.value = "✦ Recreating script variation..."; ta.disabled = true; }
+  if(rb) rb.disabled = true;
+  if(cb) cb.disabled = true;
+  var prompt =
+    "You are Edgars Untals — NLP Trainer, Sales Coach, author of 'Sales Magician'. "+
+    "15+ years, 15,000+ sales meetings. Voice: direct, confident, story-driven, never corporate-speak.\n\n"+
+    "Here is my sales script template:\n\n---\n"+_ors.activeScriptTemplate+"\n---\n\n"+
+    "REAL CONTACT DATA:\n"+
+    "First name: "+(c.name?c.name.split(" ")[0]:"—")+"\n"+
+    "Full name: "+(c.name||"—")+"\nTitle: "+(c.title||"—")+"\nCompany: "+co.name+"\n"+
+    "Industry: "+(co.industry||"—")+"\nCountry: "+(co.country||"Latvia")+"\n"+
+    (c.email?"Email: "+c.email+"\n":"")+
+    (c.phone||co.phone?"Phone: "+(c.phone||co.phone)+"\n":"")+
+    ((co._intel&&co._intel.hiring&&co._intel.hiring!=="none")?"Actively hiring: "+co._intel.hiring+"\n":"")+
+    ((co._intel&&co._intel.notes)?"Intel: "+co._intel.notes+"\n":"")+
+    "\nInstructions: Rewrite this script completely fresh — same structure and core message, "+
+    "entirely different words every single time. Fill in the real contact details naturally. "+
+    "Keep my voice: direct, confident, no corporate fluff. Write only the message. No preamble.";
+  var result = await claudeChat(prompt, 1200);
+  if(ta){ ta.value = result||"(Generation failed — check API key)"; ta.disabled = false; }
+  if(rb){ rb.disabled = false; }
+  if(cb){ cb.disabled = false; }
+  updateOutreachCharCount();
 }
 
 function _buildOutreachPrompt(co, c) {
