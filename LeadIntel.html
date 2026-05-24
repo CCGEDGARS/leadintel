@@ -1325,10 +1325,11 @@ async function enrichCompany(coId) {
       .replace(/[šs]/g,"s").replace(/[ūu]/g,"u").replace(/[žz]/g,"z")
       .replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
     srcDefs = [
-      {key:"firmas-lv",  label:"firmas.lv",     url:"https://www.firmas.lv/lv/uznemumi/"+firmasSlug},
-      {key:"1188-lv",    label:"1188.lv",        url:"https://www.1188.lv/search?q="+enc},
-      {key:"firmas-src", label:"firmas-search",  search:'"'+co.name+'" site:firmas.lv'},
-      {key:"lv-contacts",label:"LV-web-search",  search:'"'+co.name+'" Latvia CEO email phone kontakti direktors amatpersonas'}
+      {key:"firmas-lv",  label:"firmas.lv",   url:"https://www.firmas.lv/lv/uznemumi/"+firmasSlug},
+      {key:"1188-lv",    label:"1188.lv",     url:"https://www.1188.lv/search?q="+enc},
+      {key:"lursoft-lv", label:"lursoft.lv",  search:'"'+co.name+'" site:lursoft.lv'},
+      {key:"ur-gov-lv",  label:"ur.gov.lv",   search:'"'+co.name+'" site:ur.gov.lv'},
+      {key:"saraksts-lv",label:"saraksts.lv", search:'"'+co.name+'" site:saraksts.lv'}
     ];
   } else if(coCountry.includes("lithuania")||coCountry.includes("lt")) {
     srcDefs = [
