@@ -178,6 +178,12 @@ table.ct tr:hover td{background:rgba(255,255,255,0.02)}
 .limit-btn{padding:10px 18px;border-radius:9px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;text-align:center;transition:all .2s;line-height:1.7}
 .limit-btn:hover{border-color:rgba(201,169,97,0.3);color:var(--text)}
 .limit-btn.sel{border-color:var(--g);background:rgba(201,169,97,0.1);color:var(--g)}
+.src-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid;font-weight:600;white-space:nowrap;transition:all .3s;margin:2px 0}
+.src-pending{border-color:rgba(138,138,154,0.15);color:rgba(138,138,154,0.35);background:transparent}
+.src-scraping{border-color:rgba(201,169,97,0.4);color:#C9A961;background:rgba(201,169,97,0.07);animation:scrpulse .8s ease-in-out infinite alternate}
+.src-found{border-color:rgba(122,219,184,0.4);color:#7ADBB8;background:rgba(122,219,184,0.07)}
+.src-empty{border-color:rgba(138,138,154,0.08);color:rgba(138,138,154,0.2);background:transparent;text-decoration:line-through}
+@keyframes scrpulse{from{opacity:.55}to{opacity:1}}
 </style>
 </head>
 <body>
@@ -1024,21 +1030,41 @@ async function firecrawlScrape(pageUrl) {
   } catch(e) { return ""; }
 }
 
+// Firecrawl web search API — returns scraped search results for a query
+async function firecrawlSearch(query) {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(function(){controller.abort();}, 15000);
+    const res = await fetch("https://api.firecrawl.dev/v1/search", {
+      method: "POST",
+      headers: {"Content-Type":"application/json","Authorization":"Bearer "+FIRECRAWL_KEY},
+      body: JSON.stringify({query: query, limit: 5}),
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    if(!res.ok) return "";
+    const data = await res.json();
+    if(data && data.data && data.data.length) {
+      return data.data.map(function(r){
+        return "["+r.url+"]\n"+(r.markdown||r.description||"").substring(0,800);
+      }).join("\n\n---RESULT---\n\n").substring(0, 5000);
+    }
+    return "";
+  } catch(e) { return ""; }
+}
+
 async function firecrawlMulti(domain) {
   const pages = [
-    "https://"+domain,
-    "https://"+domain+"/contact",
-    "https://"+domain+"/kontakti",
-    "https://"+domain+"/about",
-    "https://"+domain+"/par-mums",
-    "https://"+domain+"/team"
+    "https://"+domain, "https://"+domain+"/contact", "https://"+domain+"/kontakti",
+    "https://"+domain+"/about", "https://"+domain+"/par-mums",
+    "https://"+domain+"/team", "https://"+domain+"/komanda"
   ];
-  const results = await Promise.allSettled(pages.slice(0,3).map(function(p){return firecrawlScrape(p);}));
+  const results = await Promise.allSettled(pages.map(function(p){return firecrawlScrape(p);}));
   return results
     .filter(function(r){return r.status==="fulfilled" && r.value && r.value.length>50;})
     .map(function(r){return r.value;})
     .join("\n\n---PAGE---\n\n")
-    .substring(0,10000);
+    .substring(0,12000);
 }
 
 // Mandatory registry scraping — top 3 sources per country in parallel
@@ -1047,11 +1073,11 @@ async function firecrawlRegistries(coName, coCountry, domain) {
   var urls = [];
   if(coCountry.includes("latvia")||coCountry.includes("lv")) {
     urls = [
-      "https://lursoft.lv/search?text="+enc,
-      "https://www.firmas.lv/lv/uznemumi?q="+enc+"&type=companies",
-      "https://ur.gov.lv/lv/mekleshana?company_name="+enc,
-      "https://www.rekvizitai.lv/en/company/search/?q="+enc,
-      "https://www.saraksts.lv/search?q="+enc
+      "https://lursoft.lv/lv/uznemumu-registrs?search="+enc,
+      "https://firmas.lv/search?q="+enc,
+      "https://www.ur.gov.lv/lv/meklesana/?term="+enc,
+      "https://rekvizitai.lv/search/?query="+enc,
+      "https://saraksts.lv/search?q="+enc
     ];
   } else if(coCountry.includes("lithuania")||coCountry.includes("lt")) {
     urls = [
@@ -1139,26 +1165,135 @@ async function enrichCompany(coId) {
   const coDomain = coWebsite ? coWebsite.replace(/https?:\/\//,"").split("/")[0] :
     (co.name.toLowerCase().replace(/[^a-z0-9]/g,"") + tldGuess);
 
-  // FIRECRAWL PRE-SCAN — website + country registries in parallel (mandatory)
-  var firecrawlWebData = "";
-  var firecrawlRegData = "";
-  if(FIRECRAWL_KEY) {
-    if(btn) { btn.textContent="Scanning registries..."; }
-    try {
-      var fcPair = await Promise.allSettled([
-        Promise.race([firecrawlMulti(coDomain), new Promise(function(r){setTimeout(function(){r("");},20000);})]),
-        Promise.race([firecrawlRegistries(co.name, coCountry, coDomain), new Promise(function(r){setTimeout(function(){r("");},45000);})])
-      ]);
-      firecrawlWebData = fcPair[0].status==="fulfilled" ? (fcPair[0].value||"") : "";
-      firecrawlRegData = fcPair[1].status==="fulfilled" ? (fcPair[1].value||"") : "";
-      if(firecrawlWebData) console.log("Website scan: "+firecrawlWebData.length+" chars for "+co.name);
-      if(firecrawlRegData) console.log("Registry scan: "+firecrawlRegData.length+" chars for "+co.name);
-    } catch(e) { console.warn("Firecrawl scan error:", e); }
+  // ULTRA-AGGRESSIVE PRE-SCAN — ALL sources in parallel with live per-source progress
+  var enc = encodeURIComponent(co.name);
+  var srcDefs = [];
+
+  // Country-specific registries
+  if(coCountry.includes("latvia")||coCountry.includes("lv")) {
+    srcDefs = [
+      {key:"lursoft",      label:"lursoft.lv",          url:"https://lursoft.lv/lv/uznemumu-registrs?search="+enc},
+      {key:"firmas",       label:"firmas.lv",            url:"https://firmas.lv/search?q="+enc},
+      {key:"ur-gov",       label:"ur.gov.lv",            url:"https://www.ur.gov.lv/lv/meklesana/?term="+enc},
+      {key:"rekvizitai",   label:"rekvizitai.lv",        url:"https://rekvizitai.lv/search/?query="+enc},
+      {key:"saraksts",     label:"saraksts.lv",          url:"https://saraksts.lv/search?q="+enc}
+    ];
+  } else if(coCountry.includes("lithuania")||coCountry.includes("lt")) {
+    srcDefs = [
+      {key:"rekvizitai-lt",    label:"rekvizitai.vz.lt",    url:"https://rekvizitai.vz.lt/en/company/search/?q="+enc},
+      {key:"registrucentras",  label:"registrucentras.lt",   url:"https://www.registrucentras.lt/jar/p/index.php?p_pavadinimas="+enc},
+      {key:"jars-lt",          label:"jars.lt",              url:"https://www.jars.lt/search?q="+enc}
+    ];
+  } else if(coCountry.includes("estonia")||coCountry.includes("ee")) {
+    srcDefs = [
+      {key:"ariregister",  label:"ariregister.rik.ee",   url:"https://ariregister.rik.ee/est/company/search?q="+enc},
+      {key:"teatmik",      label:"teatmik.ee",            url:"https://teatmik.ee/en/company/search?q="+enc},
+      {key:"inforegister", label:"inforegister.ee",       url:"https://www.inforegister.ee/search?q="+enc}
+    ];
+  } else if(["sweden","sverige","se"].some(function(x){return coCountry.includes(x);})) {
+    srcDefs = [
+      {key:"proff-se",   label:"proff.se",     url:"https://www.proff.se/search?q="+enc},
+      {key:"allabolag",  label:"allabolag.se",  url:"https://www.allabolag.se/what/"+enc}
+    ];
+  } else if(["norway","norge","no"].some(function(x){return coCountry.includes(x);})) {
+    srcDefs = [
+      {key:"proff-no",  label:"proff.no",   url:"https://www.proff.no/s%C3%B8k?q="+enc},
+      {key:"brreg",     label:"brreg.no",   url:"https://www.brreg.no/en/business/search/?name="+enc}
+    ];
+  } else if(["denmark","danmark","dk"].some(function(x){return coCountry.includes(x);})) {
+    srcDefs = [
+      {key:"cvr-dk",   label:"cvr.dk",    url:"https://datacvr.virk.dk/search?query="+enc},
+      {key:"proff-dk", label:"proff.dk",  url:"https://www.proff.dk/s%C3%B8g?q="+enc}
+    ];
+  } else if(["finland","suomi","fi"].some(function(x){return coCountry.includes(x);})) {
+    srcDefs = [
+      {key:"finder-fi", label:"finder.fi",  url:"https://www.finder.fi/search?what="+enc},
+      {key:"ytj",       label:"ytj.fi",     url:"https://www.ytj.fi/yrityshaku.aspx?p=0&SearchType=1&yritysnimi="+enc}
+    ];
+  } else if(["germany","deutschland","de"].some(function(x){return coCountry.includes(x);})) {
+    srcDefs = [
+      {key:"northdata",      label:"northdata.de",       url:"https://www.northdata.de/"+enc},
+      {key:"handelsregister",label:"handelsregister.de", url:"https://www.handelsregister.de/rp_web/search.do?schlagwoerter="+enc}
+    ];
+  } else if(["poland","polska","pl"].some(function(x){return coCountry.includes(x);})) {
+    srcDefs = [
+      {key:"aleo", label:"aleo.com",        url:"https://aleo.com/int/en/search/results?q="+enc},
+      {key:"krs",  label:"krs.ms.gov.pl",   url:"https://www.krs.ms.gov.pl/index.php?option=com_krs&task=szukaj&Itemid=45&search="+enc}
+    ];
   }
-  var firecrawlSection = (firecrawlWebData||firecrawlRegData) ?
+
+  // Always add: all company website pages in parallel
+  srcDefs.push({key:"website", label:"website", multi:[
+    "https://"+coDomain, "https://"+coDomain+"/contact", "https://"+coDomain+"/kontakti",
+    "https://"+coDomain+"/about", "https://"+coDomain+"/par-mums",
+    "https://"+coDomain+"/team", "https://"+coDomain+"/komanda"
+  ]});
+  // Google search via Firecrawl search API
+  if(FIRECRAWL_KEY) {
+    srcDefs.push({key:"g-emails",   label:'emails@domain', search:'"'+co.name+'" "@'+coDomain+'"'});
+    srcDefs.push({key:"g-linkedin", label:"linkedin",       search:'"'+co.name+'" site:linkedin.com/in'});
+  }
+
+  // Initialize live progress UI
+  co._scraping = true;
+  co._sources = {};
+  srcDefs.forEach(function(s){ co._sources[s.key] = {status:"pending", label:s.label}; });
+  renderResultsPage();
+
+  var scraped = {};
+
+  function markSrc(key, status, val) {
+    if(!co._sources[key]) return;
+    co._sources[key].status = status;
+    if(val && val.length > 80) {
+      var emails = (val.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g)||[])
+        .filter(function(e){return !e.includes("example")&&!e.includes("test")&&!e.includes("sentry")&&!e.includes("noreply");});
+      var phones = (val.match(/\+?\d[\d\s\-\(\)\.]{6,14}\d/g)||[]).map(function(p){return p.trim();}).filter(function(p){return p.replace(/\D/g,"").length>=7;});
+      var found = emails.slice(0,3).concat(phones.slice(0,2)).join(" · ").substring(0,60);
+      if(found) co._sources[key].found = found;
+    }
+    renderResultsPage();
+  }
+
+  // Launch ALL sources in parallel — results appear as they come in
+  var srcPromises = srcDefs.map(function(src){
+    markSrc(src.key, "scraping");
+    var prom;
+    if(src.search) {
+      prom = firecrawlSearch(src.search);
+    } else if(src.multi) {
+      prom = Promise.allSettled(src.multi.map(function(u){return firecrawlScrape(u);})).then(function(rs){
+        return rs.filter(function(r){return r.status==="fulfilled"&&r.value&&r.value.length>50;})
+                 .map(function(r){return r.value;}).join("\n\n---PAGE---\n\n").substring(0,12000);
+      });
+    } else {
+      prom = firecrawlScrape(src.url);
+    }
+    return prom.then(function(val){
+      scraped[src.key] = val||"";
+      markSrc(src.key, val&&val.length>80?"found":"empty", val);
+    }).catch(function(){
+      scraped[src.key]="";
+      markSrc(src.key, "empty");
+    });
+  });
+
+  await Promise.allSettled(srcPromises);
+
+  // Compile scraped data for Claude
+  var regSrcs = srcDefs.filter(function(s){return s.key!=="website"&&s.key.indexOf("g-")!==0;});
+  var regData = regSrcs.map(function(s){
+    if(!scraped[s.key]||scraped[s.key].length<80) return "";
+    return "["+s.label.toUpperCase()+"]\n"+scraped[s.key].substring(0,3500);
+  }).filter(Boolean).join("\n\n---REGISTRY---\n\n");
+  var webData = scraped["website"]||"";
+  var googleData = [scraped["g-emails"]||"", scraped["g-linkedin"]||""].filter(Boolean).join("\n\n---GOOGLE---\n\n");
+
+  var firecrawlSection = (webData||regData||googleData) ?
     "\n\n━━━ PRE-SCRAPED REAL DATA — USE AS PRIMARY SOURCE ━━━\n" +
-    (firecrawlWebData ? "\n[COMPANY WEBSITE]\n"+firecrawlWebData+"\n" : "") +
-    (firecrawlRegData ? "\n[REGISTRY DATA]\n"+firecrawlRegData+"\n" : "") +
+    (webData    ? "\n[COMPANY WEBSITE]\n"+webData+"\n" : "") +
+    (regData    ? "\n[REGISTRY DATA]\n"+regData+"\n" : "") +
+    (googleData ? "\n[GOOGLE SEARCH RESULTS]\n"+googleData+"\n" : "") +
     "\n━━━ END PRE-SCRAPED DATA ━━━\n" : "";
 
   // Market-specific intelligence sources
@@ -1450,7 +1585,9 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
     console.error(e);
   }
 
-  if(btn){ btn.textContent="Re-enrich"; btn.disabled=false; }
+  co._scraping = false;
+  renderResultsPage();
+  if(btn){ btn.textContent="Re-research"; btn.disabled=false; }
 }
 
 // OSINT ALL - enrich top 10 companies
@@ -2069,6 +2206,24 @@ function renderResultsPage(){
     headsHtml+='<div class="trn-row"><input type="number" placeholder="Turnover EUR" oninput="updateTrn(\''+co.id+'\',this.value)" style="width:140px;padding:5px 9px;font-size:12px;border-radius:6px"/><span>enter to rescore</span></div>';
     headsHtml+='</div>';
 
+    // Live scraping progress (shown while enrichment is running)
+    var progressHtml = "";
+    if(co._scraping && co._sources) {
+      var badges = "";
+      var srcKeys = Object.keys(co._sources);
+      for(var si=0; si<srcKeys.length; si++) {
+        var sk = srcKeys[si];
+        var srcObj = co._sources[sk];
+        var icon = {pending:"⏳",scraping:"◌",found:"✓",empty:"✗"}[srcObj.status]||"⏳";
+        var cls = "src-"+(srcObj.status||"pending");
+        var foundTip = srcObj.found ? ' · <span style="font-style:normal;opacity:.7">'+srcObj.found+'</span>' : '';
+        badges += '<span class="src-badge '+cls+'" title="'+srcObj.label+'">'+icon+' '+srcObj.label+foundTip+'</span>';
+      }
+      progressHtml = '<div style="padding:10px 20px;border-top:1px solid rgba(201,169,97,0.12);display:flex;flex-wrap:wrap;gap:5px;align-items:center">' +
+        '<span style="font-size:9px;font-weight:800;color:var(--g);letter-spacing:.14em;text-transform:uppercase;margin-right:6px;flex-shrink:0">SCANNING</span>' +
+        badges + '</div>';
+    }
+
     // Intelligence summary card (shows after OSINT)
     var intelHtml = "";
     if(co._intel){
@@ -2117,7 +2272,7 @@ function renderResultsPage(){
     });
     tblHtml+='</tbody></table></div>';
 
-    div.innerHTML=headsHtml+intelHtml+tblHtml;
+    div.innerHTML=headsHtml+progressHtml+intelHtml+tblHtml;
     list.appendChild(div);
   });
 
