@@ -374,17 +374,6 @@ table.ct tr:hover td{background:rgba(255,255,255,0.02)}
       </div>
     </div>
 
-    <div class="divider">Or Search a Company List</div>
-    <div class="card" style="border-color:rgba(201,169,97,0.25);background:rgba(201,169,97,0.03)">
-      <div class="card-title">Sniper List — Bulk Company Search</div>
-      <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Paste company names one per line. LeadIntel searches Apollo for each by exact name and auto-enriches results.</div>
-      <textarea id="sniper-list-input" rows="5" placeholder="Rietumu Banka&#10;Latvenergo&#10;Sun Finance Group&#10;Bite Latvija&#10;Elko Group" style="width:100%;box-sizing:border-box;resize:vertical"></textarea>
-      <div style="display:flex;gap:10px;align-items:center;margin-top:10px">
-        <select id="sniper-list-country" style="padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--dark2);color:var(--text);font-family:var(--font);font-size:13px;min-width:140px"></select>
-        <button class="btn btn-gold btn-sm" onclick="sniperListSearch()" id="sniper-list-btn" style="flex:1;justify-content:center">🎯 Search Company List</button>
-      </div>
-    </div>
-
     <div class="divider">Search Configuration</div>
     <div class="card">
       <div class="card-title">Results Limit</div>
@@ -2438,100 +2427,6 @@ async function sniperSearch(){
   status.style.display="none";
 }
 
-async function sniperListSearch(){
-  var raw = (document.getElementById("sniper-list-input").value||"").trim();
-  var names = raw.split("\n").map(function(n){return n.trim();}).filter(function(n){return n.length>1;});
-  if(!names.length){ showAlert("Paste at least one company name","err"); return; }
-  if(!APOLLO_KEY){ showAlert("Apollo API key required","err"); return; }
-  var cc = (document.getElementById("sniper-list-country").value||selectedCountries[0]||"LV").toUpperCase();
-  var btn = document.getElementById("sniper-list-btn");
-  btn.disabled=true; btn.textContent="⟳ Searching...";
-  document.getElementById("search-loading").style.display="block";
-  var orgMap = {};
-  for(var i=0; i<names.length; i++){
-    var cname = names[i];
-    document.getElementById("sp-status").textContent = "Searching "+cname+"... ("+(i+1)+"/"+names.length+")";
-    document.getElementById("sp-fill").style.width = Math.round(((i+1)/names.length)*90)+"%";
-    try {
-      var body = {
-        api_key:APOLLO_KEY,
-        q_organization_name:cname,
-        page:1, per_page:10,
-        organization_locations:getOrgLocs(cc),
-        contact_email_status:["verified","guessed","unavailable","bounced","pending_manual_fulfillment"],
-        person_seniorities:["c_suite","vp","director","manager","senior"]
-      };
-      var res = await fetch("https://apollo-proxy.edgars-7e7.workers.dev/",{
-        method:"POST",
-        headers:{"Content-Type":"application/json","X-Api-Key":APOLLO_KEY},
-        body:JSON.stringify(body)
-      });
-      if(res.ok){
-        var data = await res.json();
-        if(data.people && data.people.length){
-          data.people.forEach(function(p){
-            var orgName=(p.organization&&p.organization.name)||p.organization_name||cname;
-            var key=orgName.toLowerCase().replace(/\s+/g,"");
-            if(!orgMap[key]){
-              orgMap[key]={
-                id:key,name:orgName,
-                website:(p.organization&&(p.organization.website_url||p.organization.primary_domain||p.organization.website))||"",
-                industry:(p.organization&&p.organization.industry)||p.industry||"",
-                country:p.country||(p.organization&&p.organization.country)||"",
-                employees:(p.organization&&(p.organization.estimated_num_employees||p.organization.num_employees))||"",
-                linkedin:(p.organization&&p.organization.linkedin_url)||"",
-                phone:(p.organization&&(p.organization.phone||p.organization.sanitized_phone))||"",
-                category:"Sniper List",contacts:[],parCat:"",parScore:0,parBd:{},_turnover:null,_sniperName:cname
-              };
-            }
-            var fn=(p.first_name||"").trim(),ln=(p.last_name||"").trim();
-            var fullName=(fn+(ln?" "+ln:"")).trim()||p.name||p.full_name||"";
-            if(!fullName) return;
-            var dup=orgMap[key].contacts.find(function(c){return c.name===fullName;});
-            if(!dup) orgMap[key].contacts.push({
-              name:fullName,title:p.title||"",seniority:p.seniority||"",
-              email:p.email||p.work_email||"",
-              phone:p.phone||p.mobile_phone||(p.phone_numbers&&p.phone_numbers.length?p.phone_numbers[0].sanitized_number||p.phone_numbers[0].raw_number:"")||"",
-              linkedin:(function(){var l=p.linkedin_url||"";return l&&!l.startsWith("http")?"https://"+l:l;})()
-            });
-          });
-        } else {
-          // Create empty placeholder so searched name appears in results
-          var key2=cname.toLowerCase().replace(/\s+/g,"");
-          if(!orgMap[key2]) orgMap[key2]={
-            id:key2,name:cname,website:"",industry:"",country:"",employees:"",linkedin:"",phone:"",
-            category:"Sniper List",contacts:[],parCat:"",parScore:0,parBd:{},_turnover:null,_sniperName:cname,_notFound:true
-          };
-        }
-      }
-    } catch(e){ console.warn("Sniper list error for "+cname,e); }
-    if(i<names.length-1) await new Promise(function(r){setTimeout(r,500);});
-  }
-  document.getElementById("search-loading").style.display="none";
-  btn.disabled=false; btn.textContent="🎯 Search Company List";
-  leads=Object.values(orgMap);
-  scoreAllLeads();
-  validateLeads(leads,cc);
-  goTo("results");
-  renderResults();
-  leads.sort(function(a,b){
-    if(a._notFound&&!b._notFound) return 1;
-    if(b._notFound&&!a._notFound) return -1;
-    return b.contacts.length-a.contacts.length;
-  });
-  renderResultsPage();
-  if(leads.filter(function(l){return !l._notFound;}).length){
-    showAlert(leads.length+" companies found — use Research All to enrich","info");
-    setTimeout(function(){
-      var allBtn=document.getElementById("research-all-btn");
-      if(allBtn) allBtn.style.background="rgba(201,169,97,0.25)";
-      setTimeout(function(){if(allBtn)allBtn.style.background="";},2000);
-    },500);
-  } else {
-    showAlert("No contacts found — try the single Sniper Mode with a website URL","info");
-  }
-}
-
 // RESULTS
 function getFiltered(){
   return leads.filter(function(co){
@@ -3167,28 +3062,6 @@ document.addEventListener("click", function(e){
   if(ck) ck.value=CLAUDE_KEY;
   if(ak) ak.value=APOLLO_KEY;
 renderCountryChips();
-// Populate Sniper List country selector
-(function(){
-  var sel = document.getElementById("sniper-list-country");
-  if(!sel) return;
-  var all = [
-    {code:"LV",name:"Latvia"},{code:"LT",name:"Lithuania"},{code:"EE",name:"Estonia"},
-    {code:"SE",name:"Sweden"},{code:"NO",name:"Norway"},{code:"DK",name:"Denmark"},
-    {code:"FI",name:"Finland"},{code:"PL",name:"Poland"},{code:"DE",name:"Germany"},
-    {code:"NL",name:"Netherlands"},{code:"FR",name:"France"},{code:"GB",name:"United Kingdom"},
-    {code:"CZ",name:"Czech Republic"},{code:"HU",name:"Hungary"},{code:"RO",name:"Romania"},
-    {code:"AT",name:"Austria"},{code:"CH",name:"Switzerland"},{code:"BE",name:"Belgium"},
-    {code:"ES",name:"Spain"},{code:"IT",name:"Italy"},{code:"PT",name:"Portugal"},
-    {code:"IE",name:"Ireland"}
-  ];
-  all.forEach(function(c){
-    var opt=document.createElement("option");
-    opt.value=c.code;
-    opt.textContent=c.name;
-    if(c.code===(selectedCountries[0]||"LV")) opt.selected=true;
-    sel.appendChild(opt);
-  });
-})();
 updateNavCounts();
 
 // ═══════════════════════════════════════════════════════════════
