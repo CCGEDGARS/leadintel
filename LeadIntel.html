@@ -374,6 +374,17 @@ table.ct tr:hover td{background:rgba(255,255,255,0.02)}
       </div>
     </div>
 
+    <div class="divider">Or Search a Company List</div>
+    <div class="card" style="border-color:rgba(201,169,97,0.25);background:rgba(201,169,97,0.03)">
+      <div class="card-title">Sniper List — Bulk Company Search</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Paste company names one per line. LeadIntel searches Apollo for each by exact name and auto-enriches results.</div>
+      <textarea id="sniper-list-input" rows="5" placeholder="Rietumu Banka&#10;Latvenergo&#10;Sun Finance Group&#10;Bite Latvija&#10;Elko Group" style="width:100%;box-sizing:border-box;resize:vertical"></textarea>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:10px">
+        <select id="sniper-list-country" style="padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--dark2);color:var(--text);font-family:var(--font);font-size:13px;min-width:140px"></select>
+        <button class="btn btn-gold btn-sm" onclick="sniperListSearch()" id="sniper-list-btn" style="flex:1;justify-content:center">🎯 Search Company List</button>
+      </div>
+    </div>
+
     <div class="divider">Search Configuration</div>
     <div class="card">
       <div class="card-title">Results Limit</div>
@@ -615,8 +626,8 @@ const BALTIC = [
   {code:"NL",name:"Netherlands"}
 ];
 const CLOCS = {
-  LV:["Latvia","Riga"],
-  LT:["Lithuania","Vilnius"],
+  LV:["Latvia","Riga","Latvija"],
+  LT:["Lithuania","Vilnius","Lietuva"],
   EE:["Estonia","Tallinn"],
   SE:["Sweden","Stockholm"],
   NO:["Norway","Oslo"],
@@ -640,6 +651,23 @@ const CLOCS = {
   SK:["Slovakia","Bratislava"],
   SI:["Slovenia","Ljubljana"],
   HR:["Croatia","Zagreb"]
+};
+// Organization-level location filters (city/country combinations Apollo understands for org HQ)
+const ORG_LOCS = {
+  LV:["Latvia","Riga"],LT:["Lithuania","Vilnius"],EE:["Estonia","Tallinn"],
+  SE:["Sweden","Stockholm"],NO:["Norway","Oslo"],DK:["Denmark","Copenhagen"],
+  FI:["Finland","Helsinki"],PL:["Poland","Warsaw"],DE:["Germany","Berlin"],
+  NL:["Netherlands","Amsterdam"],FR:["France","Paris"],GB:["United Kingdom","London"],
+  CZ:["Czech Republic","Prague"],HU:["Hungary","Budapest"],RO:["Romania","Bucharest"],
+  AT:["Austria","Vienna"],CH:["Switzerland","Zurich"],BE:["Belgium","Brussels"],
+  ES:["Spain","Madrid"],IT:["Italy","Milan"],PT:["Portugal","Lisbon"],
+  IE:["Ireland","Dublin"],SK:["Slovakia","Bratislava"],SI:["Slovenia","Ljubljana"],HR:["Croatia","Zagreb"]
+};
+// Registry site for Firecrawl validation queries per country code
+const REGISTRY_SITES = {
+  LV:"site:firmas.lv",LT:"site:rekvizitai.vz.lt",EE:"site:teatmik.ee",
+  SE:"site:allabolag.se",NO:"site:brreg.no",DK:"site:datacvr.virk.dk",
+  FI:"site:ytj.fi",DE:"site:northdata.de",PL:"site:aleo.com",NL:"site:opencorporates.com"
 };
 const SEN_LABELS = {c_suite:"C-Suite",vp:"VP",director:"Director",manager:"Manager",senior:"Senior"};
 
@@ -1006,12 +1034,14 @@ function clearConv(){convParams=null;document.getElementById("conv-box").style.d
 
 // APOLLO
 function getLocs(code){return CLOCS[code.toUpperCase()]||[code];}
+function getOrgLocs(code){return ORG_LOCS[code.toUpperCase()]||[code];}
 
 async function apolloSearch(countryCode,keywords,seniorities,industry){
   keywords=keywords||[];seniorities=seniorities||[];industry=industry||"";
   const body={api_key:APOLLO_KEY,page:1,per_page:Math.min(100,searchLimit),
     person_seniorities:seniorities.length?seniorities:["c_suite","vp","director","manager","senior"],
     person_locations:getLocs(countryCode),
+    organization_locations:getOrgLocs(countryCode),
     contact_email_status:["verified","guessed","unavailable","bounced","pending_manual_fulfillment"]
   };
   const VALID=["retail","manufacturing","software","technology","logistics","fintech","real estate","healthcare","construction","education","hospitality","energy","automotive","finance","banking","insurance","media","marketing","telecommunications","agriculture","pharmaceutical","consulting","legal","accounting","food","beverage","fashion","ecommerce","saas","it services","staffing","recruitment","engineering","design","advertising","transportation","warehousing","wholesale","distribution"];
@@ -1037,6 +1067,35 @@ async function apolloSearch(countryCode,keywords,seniorities,industry){
   const data=await res.json();
   console.log("Apollo response:",data.pagination&&data.pagination.total_entries,"total,",data.people&&data.people.length,"people, error:",data.error||"none");
   return data;
+}
+
+// VALIDATION — async per-company registry check, sets co._verified
+async function validateLeads(leadsArr, countryCode){
+  var cc = (countryCode||"LV").toUpperCase();
+  var regSite = REGISTRY_SITES[cc];
+  var tasks = leadsArr.map(function(co){
+    // Companies with a website are treated as verified immediately
+    if(co.website && co.website.length > 3){
+      co._verified = true;
+      return Promise.resolve();
+    }
+    // Without a website, check registry via Firecrawl search
+    if(!regSite || !FIRECRAWL_KEY){
+      co._verified = undefined;
+      return Promise.resolve();
+    }
+    return firecrawlSearch('"'+co.name+'" '+regSite).then(function(val){
+      co._verified = !!(val && val.length > 100);
+    }).catch(function(){
+      co._verified = undefined;
+    });
+  });
+  // Run max 8 in parallel to avoid hammering Firecrawl
+  var BATCH = 8;
+  for(var i=0; i<tasks.length; i+=BATCH){
+    await Promise.allSettled(tasks.slice(i, i+BATCH));
+    renderResultsPage();
+  }
 }
 
 // FIRECRAWL
@@ -2001,7 +2060,13 @@ async function runSearch(){
     }
   });
 
-  leads=Object.values(orgMap).filter(function(c){return c.contacts.length>0;}).slice(0,searchLimit);
+  // Quality filter: must have at least one contact with a title, OR have a website/phone/email
+  leads=Object.values(orgMap).filter(function(c){
+    if(!c.contacts.length) return false;
+    var hasTitled = c.contacts.some(function(ct){return ct.title&&ct.title.length>1;});
+    var hasData = !!(c.website||c.phone||c.email||c.contacts.some(function(ct){return ct.email;}));
+    return hasTitled||hasData;
+  }).slice(0,searchLimit);
   setProg(90,"Scoring with Pareto rules...");
   scoreAllLeads();
 
@@ -2026,10 +2091,29 @@ async function runSearch(){
   renderResults();
   goTo("results");
 
-  // Sort by Pareto priority (VIP first) then auto-enrich only the #1 ranked company
-  leads.sort(function(a,b){var o={VIP:0,A:1,B:2,C:3,OUT:4};var d=(o[a.parCat]||5)-(o[b.parCat]||5);return d!==0?d:b.contacts.length-a.contacts.length;});
+  // Sort: unverified at bottom, then by Pareto priority
+  leads.sort(function(a,b){
+    if(a._verified===false&&b._verified!==false) return 1;
+    if(b._verified===false&&a._verified!==false) return -1;
+    var o={VIP:0,A:1,B:2,C:3,OUT:4};
+    var d=(o[a.parCat]||5)-(o[b.parCat]||5);
+    return d!==0?d:b.contacts.length-a.contacts.length;
+  });
   enrichedUpTo = 0;
   if(leads.length > 0) { enrichCompany(leads[0].id); }
+  // Async validation pass — badges appear as results come in
+  if(allCountries.length===1){
+    validateLeads(leads, allCountries[0]).then(function(){
+      leads.sort(function(a,b){
+        if(a._verified===false&&b._verified!==false) return 1;
+        if(b._verified===false&&a._verified!==false) return -1;
+        var o={VIP:0,A:1,B:2,C:3,OUT:4};
+        var d=(o[a.parCat]||5)-(o[b.parCat]||5);
+        return d!==0?d:b.contacts.length-a.contacts.length;
+      });
+      renderResultsPage();
+    });
+  }
 }
 
 var CHUNK_SIZE = 10;
@@ -2352,6 +2436,100 @@ async function sniperSearch(){
   status.style.display="none";
 }
 
+async function sniperListSearch(){
+  var raw = (document.getElementById("sniper-list-input").value||"").trim();
+  var names = raw.split("\n").map(function(n){return n.trim();}).filter(function(n){return n.length>1;});
+  if(!names.length){ showAlert("Paste at least one company name","err"); return; }
+  if(!APOLLO_KEY){ showAlert("Apollo API key required","err"); return; }
+  var cc = (document.getElementById("sniper-list-country").value||selectedCountries[0]||"LV").toUpperCase();
+  var btn = document.getElementById("sniper-list-btn");
+  btn.disabled=true; btn.textContent="⟳ Searching...";
+  document.getElementById("search-loading").style.display="block";
+  var orgMap = {};
+  for(var i=0; i<names.length; i++){
+    var cname = names[i];
+    document.getElementById("sp-status").textContent = "Searching "+cname+"... ("+(i+1)+"/"+names.length+")";
+    document.getElementById("sp-fill").style.width = Math.round(((i+1)/names.length)*90)+"%";
+    try {
+      var body = {
+        api_key:APOLLO_KEY,
+        q_organization_name:cname,
+        page:1, per_page:10,
+        organization_locations:getOrgLocs(cc),
+        contact_email_status:["verified","guessed","unavailable","bounced","pending_manual_fulfillment"],
+        person_seniorities:["c_suite","vp","director","manager","senior"]
+      };
+      var res = await fetch("https://apollo-proxy.edgars-7e7.workers.dev/",{
+        method:"POST",
+        headers:{"Content-Type":"application/json","X-Api-Key":APOLLO_KEY},
+        body:JSON.stringify(body)
+      });
+      if(res.ok){
+        var data = await res.json();
+        if(data.people && data.people.length){
+          data.people.forEach(function(p){
+            var orgName=(p.organization&&p.organization.name)||p.organization_name||cname;
+            var key=orgName.toLowerCase().replace(/\s+/g,"");
+            if(!orgMap[key]){
+              orgMap[key]={
+                id:key,name:orgName,
+                website:(p.organization&&(p.organization.website_url||p.organization.primary_domain||p.organization.website))||"",
+                industry:(p.organization&&p.organization.industry)||p.industry||"",
+                country:p.country||(p.organization&&p.organization.country)||"",
+                employees:(p.organization&&(p.organization.estimated_num_employees||p.organization.num_employees))||"",
+                linkedin:(p.organization&&p.organization.linkedin_url)||"",
+                phone:(p.organization&&(p.organization.phone||p.organization.sanitized_phone))||"",
+                category:"Sniper List",contacts:[],parCat:"",parScore:0,parBd:{},_turnover:null,_sniperName:cname
+              };
+            }
+            var fn=(p.first_name||"").trim(),ln=(p.last_name||"").trim();
+            var fullName=(fn+(ln?" "+ln:"")).trim()||p.name||p.full_name||"";
+            if(!fullName) return;
+            var dup=orgMap[key].contacts.find(function(c){return c.name===fullName;});
+            if(!dup) orgMap[key].contacts.push({
+              name:fullName,title:p.title||"",seniority:p.seniority||"",
+              email:p.email||p.work_email||"",
+              phone:p.phone||p.mobile_phone||(p.phone_numbers&&p.phone_numbers.length?p.phone_numbers[0].sanitized_number||p.phone_numbers[0].raw_number:"")||"",
+              linkedin:(function(){var l=p.linkedin_url||"";return l&&!l.startsWith("http")?"https://"+l:l;})()
+            });
+          });
+        } else {
+          // Create empty placeholder so searched name appears in results
+          var key2=cname.toLowerCase().replace(/\s+/g,"");
+          if(!orgMap[key2]) orgMap[key2]={
+            id:key2,name:cname,website:"",industry:"",country:"",employees:"",linkedin:"",phone:"",
+            category:"Sniper List",contacts:[],parCat:"",parScore:0,parBd:{},_turnover:null,_sniperName:cname,_notFound:true
+          };
+        }
+      }
+    } catch(e){ console.warn("Sniper list error for "+cname,e); }
+    if(i<names.length-1) await new Promise(function(r){setTimeout(r,500);});
+  }
+  document.getElementById("search-loading").style.display="none";
+  btn.disabled=false; btn.textContent="🎯 Search Company List";
+  leads=Object.values(orgMap);
+  scoreAllLeads();
+  validateLeads(leads,cc);
+  goTo("results");
+  renderResults();
+  leads.sort(function(a,b){
+    if(a._notFound&&!b._notFound) return 1;
+    if(b._notFound&&!a._notFound) return -1;
+    return b.contacts.length-a.contacts.length;
+  });
+  renderResultsPage();
+  if(leads.filter(function(l){return !l._notFound;}).length){
+    showAlert(leads.length+" companies found — use Research All to enrich","info");
+    setTimeout(function(){
+      var allBtn=document.getElementById("research-all-btn");
+      if(allBtn) allBtn.style.background="rgba(201,169,97,0.25)";
+      setTimeout(function(){if(allBtn)allBtn.style.background="";},2000);
+    },500);
+  } else {
+    showAlert("No contacts found — try the single Sniper Mode with a website URL","info");
+  }
+}
+
 // RESULTS
 function getFiltered(){
   return leads.filter(function(co){
@@ -2427,11 +2605,17 @@ function renderResultsPage(){
     } else if(co.osintNotes || co.emailPattern) {
       enrichedBadge = '<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(122,219,184,0.1);color:#7ADBB8;border:1px solid rgba(122,219,184,0.2);margin-left:6px">✓ OSINT</span>';
     }
+    var verifiedBadge = "";
+    if(co._verified === true) {
+      verifiedBadge = '<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(50,200,100,0.09);color:#3DC878;border:1px solid rgba(50,200,100,0.28);margin-left:4px;white-space:nowrap">✓ VERIFIED</span>';
+    } else if(co._verified === false) {
+      verifiedBadge = '<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(220,80,80,0.07);color:rgba(220,100,100,0.85);border:1px solid rgba(220,80,80,0.25);margin-left:4px;white-space:nowrap">⚠ UNVERIFIED</span>';
+    }
 
     const div=document.createElement("div");
     div.className="co-card";
 
-    let headsHtml='<div class="co-head"><div class="co-top"><div class="co-av" style="background:'+catBg(co.parCat)+';color:'+catColor(co.parCat)+';border-color:'+catColor(co.parCat)+'40">'+co.name.charAt(0)+'</div><div style="flex:1"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap"><a class="co-name-link" href="'+(ws||'https://www.google.com/search?q='+encodeURIComponent(co.name))+'" target="_blank">'+co.name+'</a>'+catBadge(co.parCat)+catBadge(co.category)+enrichedBadge+'</div><div class="co-meta">'+(co.industry?co.industry+' · ':'')+( co.country?co.country+' · ':'')+( co.employees?co.employees+' emp.':'')+(dmLabel?' · <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(201,169,97,0.08);color:var(--g)">'+dmLabel+'</span>':'')+'</div></div><div style="font-size:12px;color:var(--muted);text-align:right">'+co.contacts.length+' contacts'+(emailCt?' &middot; '+emailCt+' emails':'')+(phoneCt?' &middot; '+phoneCt+' phones':'')+'</div></div>';
+    let headsHtml='<div class="co-head"><div class="co-top"><div class="co-av" style="background:'+catBg(co.parCat)+';color:'+catColor(co.parCat)+';border-color:'+catColor(co.parCat)+'40">'+co.name.charAt(0)+'</div><div style="flex:1"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap"><a class="co-name-link" href="'+(ws||'https://www.google.com/search?q='+encodeURIComponent(co.name))+'" target="_blank">'+co.name+'</a>'+catBadge(co.parCat)+catBadge(co.category)+enrichedBadge+verifiedBadge+'</div><div class="co-meta">'+(co.industry?co.industry+' · ':'')+( co.country?co.country+' · ':'')+( co.employees?co.employees+' emp.':'')+(dmLabel?' · <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(201,169,97,0.08);color:var(--g)">'+dmLabel+'</span>':'')+'</div></div><div style="font-size:12px;color:var(--muted);text-align:right">'+co.contacts.length+' contacts'+(emailCt?' &middot; '+emailCt+' emails':'')+(phoneCt?' &middot; '+phoneCt+' phones':'')+'</div></div>';
     headsHtml+='<div class="co-links">';
     var cardDomain = ws ? ws.replace(/https?:\/\//,'').split('/')[0] : '';
     if(ws) headsHtml+='<a href="'+ws+'" target="_blank" style="color:var(--g);font-weight:600">🌐 '+cardDomain+'</a>';
@@ -2981,6 +3165,28 @@ document.addEventListener("click", function(e){
   if(ck) ck.value=CLAUDE_KEY;
   if(ak) ak.value=APOLLO_KEY;
 renderCountryChips();
+// Populate Sniper List country selector
+(function(){
+  var sel = document.getElementById("sniper-list-country");
+  if(!sel) return;
+  var all = [
+    {code:"LV",name:"Latvia"},{code:"LT",name:"Lithuania"},{code:"EE",name:"Estonia"},
+    {code:"SE",name:"Sweden"},{code:"NO",name:"Norway"},{code:"DK",name:"Denmark"},
+    {code:"FI",name:"Finland"},{code:"PL",name:"Poland"},{code:"DE",name:"Germany"},
+    {code:"NL",name:"Netherlands"},{code:"FR",name:"France"},{code:"GB",name:"United Kingdom"},
+    {code:"CZ",name:"Czech Republic"},{code:"HU",name:"Hungary"},{code:"RO",name:"Romania"},
+    {code:"AT",name:"Austria"},{code:"CH",name:"Switzerland"},{code:"BE",name:"Belgium"},
+    {code:"ES",name:"Spain"},{code:"IT",name:"Italy"},{code:"PT",name:"Portugal"},
+    {code:"IE",name:"Ireland"}
+  ];
+  all.forEach(function(c){
+    var opt=document.createElement("option");
+    opt.value=c.code;
+    opt.textContent=c.name;
+    if(c.code===(selectedCountries[0]||"LV")) opt.selected=true;
+    sel.appendChild(opt);
+  });
+})();
 updateNavCounts();
 
 // ═══════════════════════════════════════════════════════════════
