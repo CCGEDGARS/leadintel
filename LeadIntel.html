@@ -1815,6 +1815,80 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
     console.error(e);
   }
 
+  // ── SURNAME DISCOVERY — fill in last names for first-name-only contacts ──────
+  if(FIRECRAWL_KEY) {
+    var firstNameOnlyContacts = co.contacts.filter(function(ct){
+      return ct.name && !ct.name.trim().includes(' ');
+    }).slice(0, 5); // cap at 5 to limit API calls
+
+    if(firstNameOnlyContacts.length > 0) {
+      co._sources['surname-disc'] = {status:'scraping', label:'surnames'};
+      renderResultsPage();
+
+      for(var sdi=0; sdi<firstNameOnlyContacts.length; sdi++) {
+        var sdct = firstNameOnlyContacts[sdi];
+        var sdFirst = sdct.name.trim();
+        try {
+          var sdResult = await firecrawlSearch('"'+sdFirst+'" "'+co.name+'" site:linkedin.com/in');
+          if(sdResult && sdResult.length > 80) {
+            // Extract LinkedIn profile URL from [SOURCE: ...] marker
+            var sdUrlMatch = sdResult.match(/\[SOURCE:\s*(https?:\/\/[^\]]*linkedin\.com\/in\/[^\]\s?#&]+)/i);
+            var sdLiUrl = sdUrlMatch ? sdUrlMatch[1].replace(/[?#&].*$/,'') : '';
+
+            // Extract full name: look for FirstName + Capitalised word nearby
+            var sdNamePat = new RegExp(sdFirst+'\\s+([A-ZÁČĒĢĪĶĻŅŠŪŽÀ-ÖØ-Þ][a-záčēģīķļņšūžäöüõàâéèêëïîôùûüÿæøåóíúñßà-öø-ÿ\'\\-]{1,30})', 'i');
+            var sdNameMatch = sdResult.match(sdNamePat);
+            var sdLastName = sdNameMatch ? sdNameMatch[1].trim() : '';
+
+            // Never generate firstname.firstname@ — skip if same as first name
+            if(sdLastName && sdLastName.toLowerCase() === sdFirst.toLowerCase()) sdLastName = '';
+
+            if(sdLastName) {
+              sdct.name = sdFirst + ' ' + sdLastName;
+            }
+            if(sdLiUrl && !sdct.linkedin) {
+              sdct.linkedin = sdLiUrl;
+              sdct._linkedinVerified = true;
+            }
+
+            // Email: generate from pattern using discovered surname, then verify
+            if(sdLastName && !sdct.email) {
+              var sdDom = (co._intel&&co._intel.mxDomain) ? co._intel.mxDomain : coDomain;
+              var sdPat = co.emailPattern ? co.emailPattern.toLowerCase() : 'firstname.lastname';
+              var sdFn = sdFirst.toLowerCase(), sdLn = sdLastName.toLowerCase(), sdFi = sdFn.charAt(0);
+              var sdPred = '';
+              if(sdPat.includes('firstname.lastname'))      sdPred = sdFn+'.'+sdLn+'@'+sdDom;
+              else if(sdPat.includes('f.lastname'))         sdPred = sdFi+'.'+sdLn+'@'+sdDom;
+              else if(sdPat.includes('firstnamelastname'))  sdPred = sdFn+sdLn+'@'+sdDom;
+              else if(sdPat.includes('firstname_lastname')) sdPred = sdFn+'_'+sdLn+'@'+sdDom;
+              else if(sdPat.includes('lastname.firstname')) sdPred = sdLn+'.'+sdFn+'@'+sdDom;
+              else if(sdPat.includes('flastname'))          sdPred = sdFi+sdLn+'@'+sdDom;
+              else if(sdPat.includes('firstname@'))         sdPred = sdFn+'@'+sdDom;
+              else                                          sdPred = sdFn+'.'+sdLn+'@'+sdDom;
+
+              if(sdPred) {
+                try {
+                  var sdVerify = await firecrawlSearch('"'+sdPred+'"');
+                  sdct.email = sdPred;
+                  sdct.emailConfidence = (sdVerify && sdVerify.length > 80) ? 'HIGH' : 'MEDIUM';
+                  sdct._emailSource = sdct.emailConfidence==='HIGH' ? 'LinkedIn surname + verified' : 'LinkedIn surname + pattern';
+                } catch(e) {
+                  sdct.email = sdPred;
+                  sdct.emailConfidence = 'MEDIUM';
+                  sdct._emailSource = 'LinkedIn surname + pattern';
+                }
+              }
+            }
+          }
+        } catch(e) { console.warn('Surname discovery failed for '+sdFirst, e); }
+        renderResultsPage();
+        if(sdi < firstNameOnlyContacts.length-1) await new Promise(function(r){setTimeout(r,700);});
+      }
+      co._sources['surname-disc'].status = 'found';
+      renderResultsPage();
+    }
+  }
+
   co._scraping = false;
   co._enrichComplete = true;
   co._enrichStats = {
@@ -2581,13 +2655,16 @@ function renderResultsPage(){
       tblHtml+='<td class="td-name">'+(c.name||"—")+'</td>';
       tblHtml+='<td class="td-title">'+(c.title||"—")+'</td>';
       tblHtml+='<td>'+(c.seniority?'<span class="sen-tag">'+(SEN_LABELS[c.seniority]||c.seniority)+'</span>':"—")+'</td>';
-      var emailConf = c.emailConfidence==="PREDICTED" ? ' <span title="'+( c._emailSource||"Pattern predicted")+'" style="font-size:9px;padding:1px 5px;border-radius:3px;vertical-align:middle;background:rgba(201,169,97,0.1);color:var(--g);border:1px solid rgba(201,169,97,0.25);cursor:help">~predicted</span>' : (c.confidence ? ' <span style="font-size:9px;padding:1px 4px;border-radius:3px;vertical-align:middle;background:'+(c.confidence==="HIGH"?"rgba(122,219,184,0.15)":c.confidence==="MEDIUM"?"rgba(201,169,97,0.12)":"rgba(138,138,154,0.1)")+';color:'+(c.confidence==="HIGH"?"#7ADBB8":c.confidence==="MEDIUM"?"var(--g)":"var(--muted)")+'">'+(c.confidence||"")+'</span>' : "");
+      var confLabel = c.emailConfidence==="HIGH" ? "✓ verified" : c.emailConfidence==="MEDIUM" ? "~ pattern" : c.emailConfidence==="PREDICTED" ? "~ predicted" : (c.confidence||"");
+      var confBg = (c.emailConfidence==="HIGH"||c.confidence==="HIGH") ? "rgba(122,219,184,0.15)" : (c.emailConfidence==="MEDIUM"||c.confidence==="MEDIUM") ? "rgba(201,169,97,0.12)" : "rgba(138,138,154,0.1)";
+      var confColor = (c.emailConfidence==="HIGH"||c.confidence==="HIGH") ? "#7ADBB8" : (c.emailConfidence==="MEDIUM"||c.confidence==="MEDIUM") ? "var(--g)" : "var(--muted)";
+      var emailConf = confLabel ? ' <span title="'+(c._emailSource||c.confidence||"")+'" style="font-size:9px;padding:1px 5px;border-radius:3px;vertical-align:middle;background:'+confBg+';color:'+confColor+';border:1px solid '+confColor+'44;cursor:help">'+confLabel+'</span>' : '';
       tblHtml+='<td>'+(c.email?'<a href="mailto:'+c.email+'" class="td-link td-email">'+c.email+'</a>'+emailConf:'<span class="td-miss">—</span>')+'</td>';
       tblHtml+='<td>'+(c.phone?'<a href="tel:'+c.phone+'" class="td-link td-phone">'+c.phone+'</a>':'<span class="td-miss">—</span>')+'</td>';
       var liDisplay="—";
-      // LinkedIn: always use people search (direct profile URLs often 404)
-      // Search includes both person name AND company for precision
-      if(c.name){
+      if(c.linkedin && c._linkedinVerified) {
+        liDisplay = '<a href="'+c.linkedin+'" target="_blank" class="td-link td-li" style="color:#7ADBB8" title="Verified LinkedIn profile">✓ LinkedIn</a>';
+      } else if(c.name) {
         var liQ = encodeURIComponent(c.name + " " + co.name);
         var liSearchUrl = "https://www.linkedin.com/search/results/people/?keywords=" + liQ + "&origin=GLOBAL_SEARCH_HEADER";
         liDisplay = '<a href="' + liSearchUrl + '" target="_blank" class="td-link td-li" title="Search LinkedIn for ' + c.name + ' at ' + co.name + '">LinkedIn</a>';
