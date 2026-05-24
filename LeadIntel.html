@@ -129,8 +129,8 @@ table.ct .col-phone{width:120px}
 table.ct .col-li{width:90px}
 .td-name{font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;margin-bottom:5px}
 .td-title{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
-.ct-actions{display:flex;gap:3px;flex-wrap:wrap;padding-top:5px;border-top:1px solid rgba(255,255,255,0.05);margin-top:4px}
-.cta{font-size:10px;padding:2px 7px;border-radius:4px;border:1px solid rgba(201,169,97,0.22);background:transparent;color:rgba(138,138,154,0.7);cursor:pointer;font-family:var(--font);transition:all .18s;white-space:nowrap;line-height:1.5}
+.ct-actions{display:flex;gap:2px;flex-wrap:nowrap;padding-top:5px;border-top:1px solid rgba(255,255,255,0.05);margin-top:4px;overflow:hidden}
+.cta{font-size:9px;padding:2px 6px;border-radius:4px;border:1px solid rgba(201,169,97,0.22);background:transparent;color:rgba(138,138,154,0.7);cursor:pointer;font-family:var(--font);transition:all .18s;white-space:nowrap;line-height:1.5;flex-shrink:0}
 .cta:hover{border-color:rgba(201,169,97,0.5);color:var(--g);background:rgba(201,169,97,0.06)}
 .cta-vip.on{border-color:rgba(201,169,97,0.6);color:var(--g);background:rgba(201,169,97,0.1);font-weight:700}
 .cta-crm.on{border-color:rgba(109,184,109,0.5);color:#6DB86D;background:rgba(109,184,109,0.08);font-weight:700}
@@ -713,6 +713,31 @@ const REGISTRY_SITES = {
   FI:"site:ytj.fi",DE:"site:northdata.de",PL:"site:aleo.com",NL:"site:opencorporates.com"
 };
 const SEN_LABELS = {c_suite:"C-Suite",vp:"VP",director:"Director",manager:"Manager",senior:"Senior"};
+
+// ─── DATA CLEANING UTILITIES ─────────────────────────────────────────────────
+var PERSONAL_DOMAINS = /^(gmail|yahoo|hotmail|outlook|icloud|proton|protonmail|inbox|mail\.ru|aol|msn|live|me\.com|yandex|gmx|web\.de|libero|virgilio|free\.fr|laposte|bbox|sfr|orange\.fr|wanadoo|skynet|telenet|pandora|mac\.com|googlemail|inbox\.lv|inbox\.lt|inbox\.ee)/i;
+
+function isPersonalEmail(email) {
+  if(!email) return false;
+  var dom = email.split("@")[1] || "";
+  var base = dom.split(".")[0] || "";
+  return PERSONAL_DOMAINS.test(base) || PERSONAL_DOMAINS.test(dom);
+}
+
+function cleanPhone(p) {
+  if(!p || p === "DATA MISSING") return "";
+  if(/[Xx]{2,}/.test(p)) return "";   // masked number e.g. +371 2XXXXXX
+  if(/\(\s*xxx\s*\)/i.test(p)) return "";
+  return p.trim();
+}
+
+function cleanContactName(n) {
+  if(!n) return n;
+  return n
+    .replace(/\s*\([^)]*(?:unconfirm|unknown|surname|nicht bekannt|nav zin|neatrad)[^)]*\)/gi, "")
+    .replace(/'\s*$/, "")
+    .trim();
+}
 
 // STATE
 let csvData = null;
@@ -1768,7 +1793,8 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
     {
       "name": "Full Name",
       "title": "Current Title",
-      "email": "email@${coDomain} or DATA MISSING",
+      "email": "work email@${coDomain} or DATA MISSING",
+      "personalEmail": "gmail/personal email if found on LinkedIn profile or DATA MISSING",
       "phone": "full phone number or DATA MISSING",
       "linkedin": "https://www.linkedin.com/in/exact-verified-slug or DATA MISSING",
       "confidence": "HIGH|MEDIUM|LOW",
@@ -1797,7 +1823,7 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
     console.log("OSINT parsed contacts:", data.contacts ? data.contacts.length : 0, data.contacts);
 
     // Always save company-level intel regardless of contacts
-    if(data.companyPhone&&data.companyPhone!=="DATA MISSING"&&!co.phone) co.phone=data.companyPhone;
+    if(data.companyPhone&&data.companyPhone!=="DATA MISSING"&&!co.phone) co.phone=cleanPhone(data.companyPhone)||co.phone||"";
     if(data.companyEmail&&data.companyEmail!=="DATA MISSING"&&!co.email) co.email=data.companyEmail;
     if(data.companyAddress&&data.companyAddress!=="DATA MISSING") co.address=data.companyAddress;
     if(data.notes) co.osintNotes=data.notes;
@@ -1829,13 +1855,18 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
         if(existing){
           // Always update name if OSINT found a fuller version (has surname)
           if(ec.name && ec.name.includes(" ") && (!existing.name.includes(" ")||existing.name.length<ec.name.length)){
-            existing.name=ec.name;
+            existing.name=cleanContactName(ec.name);
           }
           if(ec.title && ec.title!=="DATA MISSING" && !existing.title) existing.title=ec.title;
-          if(ec.email && ec.email!=="DATA MISSING" && !existing.email) existing.email=ec.email;
-          if(ec.phone && ec.phone!=="DATA MISSING" && !existing.phone) existing.phone=ec.phone;
+          // Handle email: detect if work or personal
+          if(ec.email && ec.email!=="DATA MISSING") {
+            var ecEmail=ec.email.trim();
+            if(isPersonalEmail(ecEmail)) { if(!existing.personalEmail) existing.personalEmail=ecEmail; }
+            else if(!existing.email) existing.email=ecEmail;
+          }
+          if(ec.personalEmail && ec.personalEmail!=="DATA MISSING" && !existing.personalEmail) existing.personalEmail=ec.personalEmail.trim();
+          if(ec.phone && ec.phone!=="DATA MISSING") { var epClean=cleanPhone(ec.phone); if(epClean&&!existing.phone) existing.phone=epClean; }
           if(ec.linkedin && ec.linkedin!=="DATA MISSING" && !existing.linkedin){
-            // Ensure proper LinkedIn URL format
             var li=ec.linkedin.trim();
             if(li && !li.startsWith("http") && li.includes("linkedin")) li="https://"+li;
             if(li && li.startsWith("http")) existing.linkedin=li;
@@ -1846,13 +1877,16 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
           // New contact found by OSINT - add directly
           var newLi2=(!ec.linkedin||ec.linkedin==="DATA MISSING")?"":ec.linkedin.trim();
           if(newLi2 && !newLi2.startsWith("http")) newLi2="";
-          var newEmail2=(!ec.email||ec.email==="DATA MISSING")?"":ec.email.trim();
-          var newPhone2=(!ec.phone||ec.phone==="DATA MISSING")?"":ec.phone.trim();
+          var rawEmail2=(!ec.email||ec.email==="DATA MISSING")?"":ec.email.trim();
+          var newEmail2=(!rawEmail2||isPersonalEmail(rawEmail2))?"":rawEmail2;
+          var newPersonal2=rawEmail2&&isPersonalEmail(rawEmail2)?rawEmail2:((!ec.personalEmail||ec.personalEmail==="DATA MISSING")?"":ec.personalEmail.trim());
+          var newPhone2=(!ec.phone||ec.phone==="DATA MISSING")?"":cleanPhone(ec.phone);
           co.contacts.push({
-            name:ec.name.trim(),
+            name:cleanContactName(ec.name.trim()),
             title:(!ec.title||ec.title==="DATA MISSING")?"":ec.title,
             seniority:"",
             email:newEmail2,
+            personalEmail:newPersonal2,
             phone:newPhone2,
             linkedin:newLi2,
             confidence:ec.confidence||"MEDIUM",
@@ -2213,7 +2247,7 @@ async function runSearch(){
         country:p.country||(p.organization&&p.organization.country)||"",
         employees:(p.organization&&(p.organization.estimated_num_employees||p.organization.num_employees))||p.num_employees||"",
         linkedin:(p.organization&&p.organization.linkedin_url)||"",
-        phone:(p.organization&&(p.organization.phone||p.organization.sanitized_phone))||"",
+        phone:cleanPhone((p.organization&&(p.organization.phone||p.organization.sanitized_phone))||"")||"",
         category:p._cat||"",
         contacts:[],parCat:"",parScore:0,parBd:{},_turnover:null
       };
@@ -2228,11 +2262,11 @@ async function runSearch(){
     const dup=orgMap[key].contacts.find(function(c){return c.name===fullName;});
     if(!dup){
       orgMap[key].contacts.push({
-        name:fullName,
+        name:cleanContactName(fullName),
         title:p.title||"",
         seniority:p.seniority||"",
         email:p.email||p.work_email||"",
-        phone:p.phone||p.mobile_phone||(p.phone_numbers&&p.phone_numbers.length?p.phone_numbers[0].sanitized_number||p.phone_numbers[0].raw_number:"")||"",
+        phone:cleanPhone(p.phone||p.mobile_phone||(p.phone_numbers&&p.phone_numbers.length?p.phone_numbers[0].sanitized_number||p.phone_numbers[0].raw_number:"")||"")||"",
         linkedin:(function(){var l=p.linkedin_url||p.linkedin||"";if(l&&!l.startsWith("http"))l="https://"+l;return l;})()
       });
     }
@@ -2767,9 +2801,10 @@ function renderResultsPage(){
       var ck=ckKey(co,c);
       var iv=inVIP(ck),ic=inCRM(ck);
       var coId=co.id;
-      // Name cell: name on top, action row below
+      // Name cell: cleaned name on top, action row below (single line)
+      var dispName = cleanContactName(c.name) || "—";
       var nameCell=
-        '<div class="td-name" title="'+(c.name||"")+'">'+(c.name||"—")+'</div>'+
+        '<div class="td-name" title="'+dispName+'">'+dispName+'</div>'+
         '<div class="ct-actions">'+
           '<button class="cta cta-vip'+(iv?" on":"")+'" data-coid="'+coId+'" data-ci="'+ci+'" onclick="vipBtn(this)" title="Save as VIP">'+(iv?"★ VIP":"⭐ VIP")+'</button>'+
           '<button class="cta cta-crm'+(ic?" on":"")+'" data-coid="'+coId+'" data-ci="'+ci+'" onclick="crmBtn(this)" title="Add to CRM">'+(ic?"✓ CRM":"+ CRM")+'</button>'+
@@ -2784,7 +2819,11 @@ function renderResultsPage(){
       var confBg = (c.emailConfidence==="HIGH"||c.confidence==="HIGH") ? "rgba(122,219,184,0.15)" : (c.emailConfidence==="MEDIUM"||c.confidence==="MEDIUM") ? "rgba(201,169,97,0.12)" : "rgba(138,138,154,0.1)";
       var confColor = (c.emailConfidence==="HIGH"||c.confidence==="HIGH") ? "#7ADBB8" : (c.emailConfidence==="MEDIUM"||c.confidence==="MEDIUM") ? "var(--g)" : "var(--muted)";
       var emailConf = confLabel ? ' <span title="'+(c._emailSource||c.confidence||"")+'" style="font-size:9px;padding:1px 5px;border-radius:3px;vertical-align:middle;background:'+confBg+';color:'+confColor+';border:1px solid '+confColor+'44;cursor:help">'+confLabel+'</span>' : '';
-      tblHtml+='<td class="col-email">'+(c.email?'<a href="mailto:'+c.email+'" class="td-link td-email" title="'+c.email+'">'+c.email+'</a>'+emailConf:'<span class="td-miss">—</span>')+'</td>';
+      var emailCell = c.email
+        ? '<a href="mailto:'+c.email+'" class="td-link td-email" title="'+c.email+'">'+c.email+'</a>'+emailConf
+        : '<span class="td-miss">—</span>';
+      if(c.personalEmail) emailCell += '<div style="margin-top:3px"><a href="mailto:'+c.personalEmail+'" class="td-link" style="font-size:11px;color:rgba(138,138,154,0.7);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px" title="'+c.personalEmail+'">'+c.personalEmail+'</a><span style="font-size:9px;padding:1px 4px;border-radius:3px;background:rgba(138,138,154,0.08);color:rgba(138,138,154,0.5);border:1px solid rgba(138,138,154,0.15);vertical-align:middle">personal</span></div>';
+      tblHtml+='<td class="col-email">'+emailCell+'</td>';
       tblHtml+='<td class="col-phone">'+(c.phone?'<a href="tel:'+c.phone+'" class="td-link td-phone" style="white-space:nowrap">'+c.phone+'</a>':'<span class="td-miss">—</span>')+'</td>';
       var liDisplay="—";
       if(c.linkedin && c._linkedinVerified) {
