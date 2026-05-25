@@ -139,7 +139,7 @@ table.ct .col-li{width:90px}
 .td-link{text-decoration:none;transition:opacity .2s}
 .td-link:hover{opacity:.72;text-decoration:underline}
 .td-email{color:#7AB8E8;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
-.td-phone{color:#7ADBB8}
+.td-phone{color:var(--g);font-weight:600}
 .td-li{color:var(--g)}
 .td-miss{color:rgba(138,138,154,0.28)}
 .sen-tag{font-size:10px;padding:2px 6px;border-radius:6px;background:rgba(201,169,97,0.07);color:var(--g);border:1px solid var(--border);white-space:nowrap}
@@ -2864,8 +2864,8 @@ function renderResultsPage(){
       if(c.personalEmail) emailCell += '<div style="margin-top:3px"><a href="mailto:'+c.personalEmail+'" class="td-link" style="font-size:11px;color:rgba(138,138,154,0.7);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px" title="'+c.personalEmail+'">'+c.personalEmail+'</a><span style="font-size:9px;padding:1px 4px;border-radius:3px;background:rgba(138,138,154,0.08);color:rgba(138,138,154,0.5);border:1px solid rgba(138,138,154,0.15);vertical-align:middle">personal</span></div>';
       tblHtml+='<td class="col-email">'+emailCell+'</td>';
       var phoneCell='';
-      if(c.phone) phoneCell+='<a href="tel:'+c.phone+'" class="td-link td-phone" style="white-space:nowrap;display:block">'+c.phone+'</a>';
-      if(c.phone2) phoneCell+='<a href="tel:'+c.phone2+'" class="td-link td-phone" style="white-space:nowrap;display:block;margin-top:2px;font-size:11px;opacity:.8">'+c.phone2+'</a>';
+      if(c.phone) phoneCell+='<a href="tel:'+c.phone+'" class="td-link td-phone" style="white-space:nowrap;display:block">📞 '+c.phone+'</a>';
+      if(c.phone2) phoneCell+='<a href="tel:'+c.phone2+'" class="td-link td-phone" style="white-space:nowrap;display:block;margin-top:2px;font-size:11px;opacity:.8">📞 '+c.phone2+'</a>';
       tblHtml+='<td class="col-phone">'+(phoneCell||'<span class="td-miss">—</span>')+'</td>';
       var liDisplay="—";
       if(c.linkedin && c._linkedinVerified) {
@@ -3584,8 +3584,15 @@ function omSendClick() {
     var c=co&&co.contacts[_ors.ci];
     if(!co||!c) return;
     var phone=c.phone||co.phone||"";
-    if(phone) window.open("tel:"+phone,"_self");
-    else showAlert("No phone number stored for this contact.","err");
+    if(phone){
+      window.location.href="tel:"+phone;
+    } else {
+      var ta=document.getElementById("om-textarea");
+      if(ta&&ta.value) navigator.clipboard.writeText(ta.value).then(function(){
+        showAlert("No phone stored — call script copied to clipboard for manual dialing.","info");
+      });
+      else showAlert("No phone number stored for this contact.","err");
+    }
   }
 }
 
