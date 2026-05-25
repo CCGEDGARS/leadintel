@@ -1187,7 +1187,7 @@ async function firecrawlScrape(pageUrl) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(()=>controller.abort(), 12000);
-    const res = await fetch("http://localhost:3131/firecrawl-scrape", {
+    const res = await fetch("https://apollo-proxy.edgars-7e7.workers.dev/firecrawl-scrape", {
       method: "POST",
       headers: {"Content-Type":"application/json","X-Firecrawl-Key":FIRECRAWL_KEY},
       body: JSON.stringify({url: pageUrl, formats: ["markdown"]}),
@@ -1210,7 +1210,7 @@ async function firecrawlSearch(query) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(function(){controller.abort();}, 15000);
-    const res = await fetch("http://localhost:3131/firecrawl-search", {
+    const res = await fetch("https://apollo-proxy.edgars-7e7.workers.dev/firecrawl-search", {
       method: "POST",
       headers: {"Content-Type":"application/json","X-Firecrawl-Key":FIRECRAWL_KEY},
       body: JSON.stringify({query: query, limit: 5, scrapeOptions: {formats: ["markdown"]}}),
@@ -1234,7 +1234,7 @@ async function firecrawlScrapeRich(pageUrl) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(function(){controller.abort();}, 22000);
-    const res = await fetch("http://localhost:3131/firecrawl-scrape", {
+    const res = await fetch("https://apollo-proxy.edgars-7e7.workers.dev/firecrawl-scrape", {
       method: "POST",
       headers: {"Content-Type":"application/json","X-Firecrawl-Key":FIRECRAWL_KEY},
       body: JSON.stringify({
@@ -1282,7 +1282,7 @@ async function firecrawlMap(domain) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(function(){controller.abort();}, 12000);
-    const res = await fetch("http://localhost:3131/firecrawl-map", {
+    const res = await fetch("https://apollo-proxy.edgars-7e7.workers.dev/firecrawl-map", {
       method: "POST",
       headers: {"Content-Type":"application/json","X-Firecrawl-Key":FIRECRAWL_KEY},
       body: JSON.stringify({url:"https://"+domain, search:"contact team about leadership management people", limit:15}),
