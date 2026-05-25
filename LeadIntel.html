@@ -3815,7 +3815,11 @@ async function recreateScript() {
 
 var KB_FRAMEWORK_DEFAULT = "Hero's Journey for Sales: The prospect is always the Hero. You are the Mentor.\nStage 1: Their Ordinary World — understand their daily reality before the disruption.\nStage 2: The Challenge they face — name it precisely, don't soften it.\nStage 3: You appear with the insight — the mentor arrives at the right moment.\nStage 4: The transformation — paint the after picture vividly.\nStage 5: The invitation to act — low friction, high clarity.";
 
-var KB_BOOK_ANALYSIS_PROMPT = "You are extracting a complete practical communication and influence toolkit from this book for immediate use in B2B sales. Extract EVERYTHING usable directly today:\n\n1. EXACT PHRASES & SENTENCES — word-for-word lines for emails, LinkedIn, calls. Opening lines, transitions, closings, hooks.\n\n2. SCRIPTS & DIALOGUES — complete conversation flows, cold call openers, voicemail scripts, follow-up sequences with exact wording.\n\n3. FORMULAS & FRAMEWORKS — SPIN, AIDA, PAS, Hero's Journey, Challenger, any named formula. Step-by-step with exact language for each step.\n\n4. TEMPLATES — email templates, LinkedIn message structures, proposal frameworks. Copy-paste ready.\n\n5. POWER WORDS & TRIGGERS — specific words that trigger buying decisions, create urgency, build trust, reduce resistance. List with context of use.\n\n6. OBJECTION HANDLERS — exact responses to: price too high, bad timing, happy with current provider, need to think about it, need to talk to boss. Word-for-word rebuttals.\n\n7. POWERFUL QUESTIONS — questions that uncover pain, create insight, qualify, advance the sale, make prospect sell themselves.\n\n8. STORIES & ANALOGIES — metaphors and stories that can be retold to illustrate value, create emotion, justify decisions.\n\n9. MILTON ERICKSON HYPNOTIC LANGUAGE PATTERNS — extract or identify any of these if present: embedded commands, presuppositions, double binds, tag questions, pacing and leading, cause and effect linkage, complex equivalence, universal quantifiers, modal operators, nominalizations, unspecified verbs, mind reading, lost performatives. Provide exact example phrases for each pattern found.\n\n10. NLP TECHNIQUES — anchoring scripts, reframing phrases, future pacing language, rapport-building techniques, meta-model violations used intentionally, representational system language (visual/auditory/kinesthetic words), submodality language patterns.\n\n11. PSYCHOLOGICAL INFLUENCE PRINCIPLES — Cialdini's 7 principles applied with exact phrases, scarcity and urgency language, social proof scripts, authority positioning statements, liking and rapport builders, commitment and consistency triggers, reciprocity openers.\n\n12. PATTERN INTERRUPTS — unexpected phrases, questions, or statements that break autopilot thinking and create attention. List with context.\n\n13. FUTURE PACING SCRIPTS — language that helps prospect visualize success after buying. Exact phrases.\n\n14. EMOTIONAL TRIGGERS — language that creates desire, fear of loss, excitement, curiosity, trust. Categorized by emotion with exact phrases.\n\nFormat every item as READY TO USE. Include exact wording. Label each category clearly. Minimum 60 items, target 100. This is a practical toolkit to be used immediately in real sales conversations, emails, and LinkedIn messages. Prioritize specificity over generality — give the exact words, not descriptions of words.";
+function buildKBAnalysisPrompt(title, author, text) {
+  var maxChars = 90000;
+  var excerpt = text.length > maxChars ? text.substring(0, maxChars) + "\n\n[text truncated for length]" : text;
+  return "You are extracting a complete practical sales and influence toolkit from this book. The author is " + (author||"unknown") + ", title is " + (title||"this book") + ".\n\nExtract EVERYTHING usable directly in B2B sales communication TODAY:\n\n1. EXACT PHRASES & SENTENCES - word-for-word lines for emails, LinkedIn, calls\n2. SCRIPTS & DIALOGUES - complete conversation flows, objection handlers, cold call openers\n3. FORMULAS & FRAMEWORKS - named formulas with exact language for each step\n4. TEMPLATES - copy-paste ready email and message templates\n5. POWER WORDS & TRIGGERS - specific words that trigger buying decisions\n6. OBJECTION HANDLERS - exact word-for-word responses to common objections\n7. POWERFUL QUESTIONS - questions that uncover pain and advance the sale\n8. STORIES & ANALOGIES - metaphors that can be retold in sales conversations\n9. MILTON ERICKSON HYPNOTIC LANGUAGE PATTERNS - embedded commands, presuppositions, double binds, pacing and leading, cause and effect, future pacing. Give exact example phrases.\n10. NLP TECHNIQUES - anchoring, reframing, rapport-building, representational system language\n11. PSYCHOLOGICAL INFLUENCE - Cialdini principles with exact phrases, scarcity, social proof, authority, reciprocity language\n12. PATTERN INTERRUPTS - unexpected phrases that break autopilot thinking\n13. EMOTIONAL TRIGGERS - language that creates desire, urgency, trust, curiosity\n14. CLOSING TECHNIQUES - exact closing phrases and sequences\n\nFormat: numbered list, each item labeled with category, exact wording preserved. Minimum 60 items. This is a practical toolkit - give the exact words not descriptions.\n\nBOOK TEXT:\n\n" + excerpt;
+}
 
 var KB_VOICE_DEFAULT = "Direct, confident, story-driven. Never corporate speak. Never 'I hope this email finds you well'. Never 'I wanted to reach out'. Always lead with a specific insight, provocation, or pattern interrupt. One idea per sentence. Short paragraphs. End with clarity, not desperation. Sign off: Edgars Untals — Sales is the Greatest Story Ever Told.";
 
@@ -3855,33 +3859,62 @@ function saveKBBook(i) {
 
 function renderKB() {
   var kb = loadKBData();
-  // Books
   var container = document.getElementById("kb-books-list");
   if(container) {
     container.innerHTML = "";
     [1,2,3,4,5].forEach(function(i){
       var b = kb.books[i-1]||{};
       var slot = document.createElement("div");
-      slot.style.cssText = "border:1px solid rgba(201,169,97,0.13);border-radius:10px;padding:16px;margin-bottom:12px;background:rgba(255,255,255,0.02);transition:border-color .2s";
-      slot.innerHTML =
-        '<div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">'+
-          '<span style="font-size:10px;font-weight:700;color:var(--g);letter-spacing:.07em;text-transform:uppercase;white-space:nowrap;min-width:44px">Book '+i+'</span>'+
-          '<input id="kb-book-title-'+i+'" placeholder="Book title..." value="'+escHtml(b.title||"")+'" oninput="saveKBBook('+i+');updateNavCounts();updateKBBadge()" style="flex:1;padding:7px 10px;border-radius:6px;border:1px solid rgba(201,169,97,0.2);background:rgba(201,169,97,0.04);color:var(--text);font-family:var(--font);font-size:13px;outline:none"/>'+
-          '<input id="kb-book-author-'+i+'" placeholder="Author" value="'+escHtml(b.author||"")+'" oninput="saveKBBook('+i+')" style="width:160px;padding:7px 10px;border-radius:6px;border:1px solid rgba(201,169,97,0.15);background:transparent;color:var(--muted);font-family:var(--font);font-size:13px;outline:none"/>'+
-          '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;font-size:12px;color:var(--muted)">'+
-            '<input type="checkbox" id="kb-book-on-'+i+'" '+(b.on!==false?'checked':'')+' onchange="saveKBBook('+i+');updateNavCounts();updateKBBadge()" style="accent-color:var(--g);width:15px;height:15px"/>'+
-            '<span style="font-weight:600;color:'+(b.on!==false?'var(--g)':'var(--muted)')+'">Use</span>'+
-          '</label>'+
-        '</div>'+
-        '<textarea id="kb-book-content-'+i+'" rows="4" oninput="saveKBBook('+i+');updateKBBadge()" placeholder="Paste book content or excerpts here, then click Analyze with AI to extract a full sales toolkit..." style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.02);border:1px solid rgba(201,169,97,0.1);border-radius:8px;color:var(--text);font-family:var(--font);font-size:12px;line-height:1.65;padding:10px 12px;resize:vertical;outline:none">'+escHtml(b.content||"")+'</textarea>'+
-        '<div style="margin-top:8px;display:flex;align-items:center;gap:10px">'+
-          '<button id="kb-analyze-btn-'+i+'" onclick="analyzeKBBook('+i+')" style="padding:7px 16px;border-radius:7px;border:1px solid rgba(201,169,97,0.4);background:rgba(201,169,97,0.1);color:var(--g);font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;transition:all .2s">🤖 Analyze with AI</button>'+
-          '<span style="font-size:11px;color:var(--muted)">Paste book text above → AI extracts phrases, scripts, NLP patterns, objection handlers &amp; more</span>'+
-        '</div>';
+      slot.id = "kb-slot-"+i;
+      slot.style.cssText = "border:1px solid rgba(201,169,97,0.13);border-radius:10px;padding:16px;margin-bottom:12px;background:rgba(255,255,255,0.02)";
+      slot.innerHTML = [
+        '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">',
+          '<span style="font-size:10px;font-weight:700;color:var(--g);letter-spacing:.07em;text-transform:uppercase;min-width:44px;white-space:nowrap">Book '+i+'</span>',
+          '<input id="kb-book-title-'+i+'" placeholder="Book title..." value="'+escHtml(b.title||"")+'" oninput="saveKBBook('+i+');updateNavCounts();updateKBBadge()" style="flex:1;min-width:120px;padding:7px 10px;border-radius:6px;border:1px solid rgba(201,169,97,0.2);background:rgba(201,169,97,0.04);color:var(--text);font-family:var(--font);font-size:13px;outline:none"/>',
+          '<input id="kb-book-author-'+i+'" placeholder="Author" value="'+escHtml(b.author||"")+'" oninput="saveKBBook('+i+')" style="width:145px;padding:7px 10px;border-radius:6px;border:1px solid rgba(201,169,97,0.15);background:transparent;color:var(--muted);font-family:var(--font);font-size:13px;outline:none"/>',
+          '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;font-size:12px;color:var(--muted)">',
+            '<input type="checkbox" id="kb-book-on-'+i+'" '+(b.on!==false?'checked':'')+' onchange="saveKBBook('+i+');updateNavCounts();updateKBBadge()" style="accent-color:var(--g);width:15px;height:15px"/>',
+            '<span style="font-weight:600;color:'+(b.on!==false?'var(--g)':'var(--muted)')+'">Use</span>',
+          '</label>',
+          '<button id="kb-remove-'+i+'" onclick="kbClearBook('+i+')" style="display:none;padding:4px 10px;border-radius:6px;border:1px solid rgba(220,80,80,0.3);background:none;color:rgba(220,80,80,0.6);cursor:pointer;font-family:var(--font);font-size:12px;transition:all .2s">🗑️ Remove</button>',
+        '</div>',
+        '<textarea id="kb-book-content-'+i+'" style="display:none">'+escHtml(b.content||"")+'</textarea>',
+        '<input type="file" id="kb-pdf-input-'+i+'" accept=".pdf" style="display:none" onchange="kbHandleFile('+i+',this)">',
+        '<div id="kb-upload-area-'+i+'">',
+          '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">',
+            '<button onclick="document.getElementById(\'kb-pdf-input-'+i+'\').click()" style="padding:8px 18px;border-radius:7px;border:1px solid rgba(201,169,97,0.4);background:rgba(201,169,97,0.08);color:var(--g);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;transition:all .2s">📤 Upload PDF</button>',
+            '<span style="color:var(--muted);font-size:12px">or</span>',
+            '<button onclick="kbShowPasteArea('+i+')" style="padding:8px 14px;border-radius:7px;border:1px solid rgba(138,138,154,0.2);background:none;color:var(--muted);font-family:var(--font);font-size:12px;cursor:pointer">✏️ Paste text</button>',
+          '</div>',
+          '<div id="kb-paste-area-'+i+'" style="display:none;margin-top:10px">',
+            '<textarea id="kb-book-raw-'+i+'" rows="5" placeholder="Paste book content or excerpts here..." style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.02);border:1px solid rgba(201,169,97,0.1);border-radius:8px;color:var(--text);font-family:var(--font);font-size:12px;line-height:1.65;padding:10px 12px;resize:vertical;outline:none"></textarea>',
+            '<div style="margin-top:6px;display:flex;gap:10px;align-items:center">',
+              '<button onclick="kbAnalyzeManual('+i+')" style="padding:7px 16px;border-radius:7px;border:1px solid rgba(201,169,97,0.4);background:rgba(201,169,97,0.1);color:var(--g);font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;transition:all .2s">🤖 Analyze with AI</button>',
+              '<span style="font-size:11px;color:var(--muted)">AI extracts 60+ phrases, scripts, NLP patterns &amp; more</span>',
+            '</div>',
+          '</div>',
+        '</div>',
+        '<div id="kb-progress-area-'+i+'" style="display:none;padding:4px 0">',
+          '<div style="background:rgba(201,169,97,0.12);border-radius:6px;overflow:hidden;height:8px;margin-bottom:8px">',
+            '<div id="kb-prog-bar-'+i+'" style="height:100%;background:var(--g);width:0%;transition:width .4s ease;border-radius:6px"></div>',
+          '</div>',
+          '<div id="kb-prog-txt-'+i+'" style="font-size:12px;color:var(--g)">Preparing...</div>',
+        '</div>',
+        '<div id="kb-done-area-'+i+'" style="display:none">',
+          '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">',
+            '<span id="kb-done-badge-'+i+'" style="font-size:12px;padding:4px 12px;border-radius:5px;background:rgba(122,219,184,0.1);color:#7ADBB8;border:1px solid rgba(122,219,184,0.3);font-weight:700">✓ Done</span>',
+            '<button id="kb-prev-btn-'+i+'" onclick="kbTogglePreview('+i+')" style="padding:5px 12px;border-radius:6px;border:1px solid rgba(201,169,97,0.25);background:none;color:var(--muted);cursor:pointer;font-family:var(--font);font-size:12px">▼ Preview</button>',
+            '<button onclick="kbReanalyze('+i+')" style="padding:5px 12px;border-radius:6px;border:1px solid rgba(201,169,97,0.2);background:none;color:var(--muted);cursor:pointer;font-family:var(--font);font-size:12px">🔄 Re-analyze</button>',
+          '</div>',
+          '<div id="kb-preview-'+i+'" style="display:none;margin-top:10px;max-height:280px;overflow-y:auto;border:1px solid rgba(201,169,97,0.1);border-radius:8px;padding:10px 12px;background:rgba(0,0,0,0.15)">',
+            '<pre id="kb-preview-content-'+i+'" style="margin:0;font-size:11px;color:var(--muted);white-space:pre-wrap;font-family:var(--font);line-height:1.6"></pre>',
+          '</div>',
+        '</div>',
+      ].join("");
       container.appendChild(slot);
+      kbSetState(i, b.content ? "done" : "empty", b.content||"");
     });
   }
-  // Frameworks & Voice
   var fw = document.getElementById("kb-frameworks");
   var vo = document.getElementById("kb-voice");
   if(fw) fw.value = kb.frameworks;
@@ -3889,30 +3922,194 @@ function renderKB() {
   updateKBBadge();
 }
 
-async function analyzeKBBook(i) {
-  if(!CLAUDE_KEY){ showAlert("Add your Claude API key first.","err"); return; }
+// ── PDF.js lazy loader ──────────────────────────────────────────────────────
+function loadPDFjs(cb) {
+  if(window.pdfjsLib) { cb(); return; }
+  var s = document.createElement("script");
+  s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+  s.onload = function() {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    cb();
+  };
+  s.onerror = function(){ showAlert("Failed to load PDF.js — check internet connection.","err"); };
+  document.head.appendChild(s);
+}
+
+// ── Slot state management ────────────────────────────────────────────────────
+function kbSetState(i, state, content) {
+  var upload   = document.getElementById("kb-upload-area-"+i);
+  var progress = document.getElementById("kb-progress-area-"+i);
+  var done     = document.getElementById("kb-done-area-"+i);
+  var removeBtn= document.getElementById("kb-remove-"+i);
+  if(upload)    upload.style.display    = state==="empty"    ? "block" : "none";
+  if(progress)  progress.style.display  = (state==="extracting"||state==="analyzing") ? "block" : "none";
+  if(done)      done.style.display      = state==="done"     ? "block" : "none";
+  if(removeBtn) removeBtn.style.display = state==="done"     ? "inline-block" : "none";
+
+  if(state==="extracting") {
+    kbSetProgress(i, 0, 100, "Extracting text");
+  } else if(state==="analyzing") {
+    var bar = document.getElementById("kb-prog-bar-"+i);
+    var txt = document.getElementById("kb-prog-txt-"+i);
+    if(bar) bar.style.width = "95%";
+    if(txt) txt.textContent = "🤖 Analyzing with AI...";
+  } else if(state==="done" && content) {
+    var lines = content.split("\n").filter(function(l){ return /^\d+\./.test(l.trim()); });
+    var count = lines.length || Math.max(1, Math.floor(content.split("\n").filter(function(l){return l.trim().length>30;}).length/2));
+    var badge = document.getElementById("kb-done-badge-"+i);
+    if(badge) badge.textContent = "✓ Done — " + count + " principles extracted";
+    var prevEl = document.getElementById("kb-preview-content-"+i);
+    if(prevEl) prevEl.textContent = content.substring(0, 4000) + (content.length > 4000 ? "\n\n[… preview truncated — full content saved]" : "");
+  }
+}
+
+function kbSetProgress(i, current, total, label) {
+  var bar = document.getElementById("kb-prog-bar-"+i);
+  var txt = document.getElementById("kb-prog-txt-"+i);
+  if(!bar||!txt) return;
+  var pct = total > 0 ? Math.round(current/total*100) : 0;
+  bar.style.width = pct + "%";
+  txt.textContent = label + "... page " + current + " of " + total;
+}
+
+// ── Slot actions ─────────────────────────────────────────────────────────────
+function kbTogglePreview(i) {
+  var prev = document.getElementById("kb-preview-"+i);
+  var btn  = document.getElementById("kb-prev-btn-"+i);
+  if(!prev) return;
+  var open = prev.style.display === "none";
+  prev.style.display = open ? "block" : "none";
+  if(btn) btn.textContent = open ? "▲ Hide" : "▼ Preview";
+}
+
+function kbShowPasteArea(i) {
+  var pa = document.getElementById("kb-paste-area-"+i);
+  if(pa) pa.style.display = "block";
+}
+
+function kbClearBook(i) {
+  if(!confirm("Remove book " + i + "? All extracted content will be deleted.")) return;
+  localStorage.removeItem("li_book_"+i);
+  renderKB();
+  updateKBBadge();
+  updateNavCounts();
+}
+
+function kbReanalyze(i) {
+  // Reset to upload area; keeps title/author
   var ct = document.getElementById("kb-book-content-"+i);
+  if(ct) ct.value = "";
+  saveKBBook(i);
+  kbSetState(i, "empty");
+  updateKBBadge();
+}
+
+// ── File upload handler ───────────────────────────────────────────────────────
+function kbHandleFile(i, input) {
+  var file = input.files[0];
+  if(!file) return;
+  // Auto-fill title from filename if field is empty
+  var titleEl = document.getElementById("kb-book-title-"+i);
+  if(titleEl && !titleEl.value.trim()) {
+    titleEl.value = file.name.replace(/\.pdf$/i,"").replace(/[-_]/g," ");
+    saveKBBook(i);
+  }
+  if(!CLAUDE_KEY) { showAlert("Add your Claude API key in Settings first.","err"); return; }
+  loadPDFjs(function(){ kbExtractAndAnalyze(i, file); });
+  // Reset input so the same file can be re-uploaded
+  input.value = "";
+}
+
+// ── PDF extraction + AI analysis pipeline ───────────────────────────────────
+async function kbExtractAndAnalyze(i, file) {
+  kbSetState(i, "extracting");
+  try {
+    var arrayBuffer = await new Promise(function(resolve, reject) {
+      var r = new FileReader();
+      r.onload = function(e){ resolve(e.target.result); };
+      r.onerror = reject;
+      r.readAsArrayBuffer(file);
+    });
+
+    var pdf = await pdfjsLib.getDocument({data: new Uint8Array(arrayBuffer)}).promise;
+    var numPages = pdf.numPages;
+
+    // Try to read PDF metadata for title/author
+    var meta = await pdf.getMetadata().catch(function(){ return null; });
+    if(meta && meta.info) {
+      var ti = document.getElementById("kb-book-title-"+i);
+      var au = document.getElementById("kb-book-author-"+i);
+      if(meta.info.Title && ti && !ti.value.trim()) ti.value = meta.info.Title;
+      if(meta.info.Author && au && !au.value.trim()) au.value = meta.info.Author;
+      saveKBBook(i);
+    }
+
+    if(numPages > 500) {
+      showAlert("PDF has " + numPages + " pages — processing first 300 pages only.", "info");
+    }
+    var maxPages = Math.min(numPages, 300);
+
+    var fullText = "";
+    for(var p = 1; p <= maxPages; p++) {
+      if(p === 1 || p % 5 === 0 || p === maxPages) kbSetProgress(i, p, maxPages, "Extracting text");
+      var page = await pdf.getPage(p);
+      var content = await page.getTextContent();
+      fullText += content.items.map(function(it){ return it.str; }).join(" ") + "\n";
+      if(p % 20 === 0) await new Promise(function(r){ setTimeout(r, 0); }); // yield to UI
+    }
+
+    kbSetState(i, "analyzing");
+
+    var ti = document.getElementById("kb-book-title-"+i);
+    var au = document.getElementById("kb-book-author-"+i);
+    var prompt = buildKBAnalysisPrompt(ti?ti.value.trim():"", au?au.value.trim():"", fullText);
+    var result = await claudeChat(prompt, 8000);
+
+    if(result && !result.startsWith("(Error") && !result.startsWith("(No Claude")) {
+      var ct = document.getElementById("kb-book-content-"+i);
+      if(ct) ct.value = result;
+      saveKBBook(i);
+      updateKBBadge();
+      updateNavCounts();
+      kbSetState(i, "done", result);
+    } else {
+      kbSetState(i, "empty");
+      showAlert("Analysis failed — " + (result||"check your Claude API key"), "err");
+    }
+  } catch(err) {
+    console.error("PDF extraction error:", err);
+    kbSetState(i, "empty");
+    showAlert("PDF error: " + (err.message||err), "err");
+  }
+}
+
+// ── Manual paste → analyze ───────────────────────────────────────────────────
+async function kbAnalyzeManual(i) {
+  if(!CLAUDE_KEY){ showAlert("Add your Claude API key first.","err"); return; }
+  var raw = document.getElementById("kb-book-raw-"+i);
+  var text = raw ? raw.value.trim() : "";
+  if(!text){ showAlert("Paste some book content first.","err"); return; }
   var ti = document.getElementById("kb-book-title-"+i);
   var au = document.getElementById("kb-book-author-"+i);
-  var btn = document.getElementById("kb-analyze-btn-"+i);
-  var bookText = ct ? ct.value.trim() : "";
-  if(!bookText){ showAlert("Paste some book content in the text area first, then click Analyze.","err"); return; }
-  var bookTitle = (ti ? ti.value.trim() : "") || "this book";
-  var bookAuthor = au ? au.value.trim() : "";
-  var header = bookTitle + (bookAuthor ? " by "+bookAuthor : "");
-  if(btn){ btn.disabled=true; btn.textContent="Analyzing..."; }
-  var prompt = "Book: "+header+"\n\nContent to analyze:\n\n"+bookText+"\n\n---\n\n"+KB_BOOK_ANALYSIS_PROMPT;
+  kbSetState(i, "analyzing");
+  var prompt = buildKBAnalysisPrompt(ti?ti.value.trim():"", au?au.value.trim():"", text);
   var result = await claudeChat(prompt, 8000);
-  if(result && ct){
-    ct.value = result;
+  if(result && !result.startsWith("(Error") && !result.startsWith("(No Claude")) {
+    var ct = document.getElementById("kb-book-content-"+i);
+    if(ct) ct.value = result;
     saveKBBook(i);
     updateKBBadge();
-    showAlert("Book analyzed — toolkit saved to Knowledge Base.","info");
+    updateNavCounts();
+    kbSetState(i, "done", result);
   } else {
-    showAlert("Analysis failed — check your Claude key and try again.","err");
+    kbSetState(i, "empty");
+    showAlert("Analysis failed — check your Claude API key.", "err");
   }
-  if(btn){ btn.disabled=false; btn.textContent="🤖 Analyze with AI"; }
 }
+
+// Keep old name as alias for any external references
+var analyzeKBBook = kbAnalyzeManual;
 
 function escHtml(s){ return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 
@@ -3934,8 +4131,12 @@ function getKBBlock() {
 function updateKBBadge() {
   var badge = document.getElementById("om-kb-badge");
   if(!badge) return;
+  var kb = loadKBData();
+  var activeBooks = kb.books.filter(function(b){ return b.on!==false && (b.content||"").trim(); });
   var hasKB = !!getKBBlock();
   badge.style.display = hasKB ? "inline" : "none";
+  if(hasKB && activeBooks.length) badge.textContent = "📚 KB Active — " + activeBooks.length + " book" + (activeBooks.length===1?"":"s");
+  else if(hasKB) badge.textContent = "📚 KB Active";
 }
 
 function _buildOutreachPrompt(co, c) {
