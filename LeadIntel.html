@@ -2822,14 +2822,13 @@ function renderResultsPage(){
     let tblHtml='<div class="co-contacts"><div class="contacts-hd">All Contacts ('+co.contacts.length+')</div><table class="ct"><thead><tr><th class="col-name">Name</th><th class="col-title">Title</th><th class="col-email">Email</th><th class="col-phone">Phone</th><th class="col-li">LinkedIn</th></tr></thead><tbody>';
     co.contacts.forEach(function(c,ci){
       var ck=ckKey(co,c);
-      var iv=inVIP(ck),ic=inCRM(ck);
+      var ic=inCRM(ck);
       var coId=co.id;
       // Name cell: cleaned name on top, action row below (single line)
       var dispName = cleanContactName(c.name) || "—";
       var nameCell=
         '<div class="td-name" title="'+dispName+'">'+dispName+'</div>'+
         '<div class="ct-actions">'+
-          '<button class="cta cta-vip'+(iv?" on":"")+'" data-coid="'+coId+'" data-ci="'+ci+'" onclick="vipBtn(this)" title="Save as VIP">'+(iv?"★ VIP":"⭐ VIP")+'</button>'+
           '<button class="cta cta-crm'+(ic?" on":"")+'" data-coid="'+coId+'" data-ci="'+ci+'" onclick="crmBtn(this)" title="Add to CRM">'+(ic?"✓ CRM":"+ CRM")+'</button>'+
           '<button class="cta cta-out" title="LinkedIn outreach" onclick="openOutreach(\''+coId+'\','+ci+',\'linkedin\')">💼</button>'+
           '<button class="cta cta-out" title="Email outreach" onclick="openOutreach(\''+coId+'\','+ci+',\'email\')">📧</button>'+
@@ -2933,8 +2932,7 @@ function crmBtn(btn){
   const key=ckKey(co,c);
   if(inCRM(key)){showAlert("Already in CRM.","info");return;}
   const res=scoreContact(co,c,co._turnover);
-  const status=res.cat==="VIP"?"VIP":res.cat==="A"?"Hot":"Cold";
-  crmList.push(Object.assign({},c,{_k:key,_company:co.name,_website:co.website,_industry:co.industry,_country:co.country,_employees:co.employees,_parCat:res.cat,_parScore:res.score,_status:status,_added:new Date().toLocaleDateString()}));
+  crmList.push(Object.assign({},c,{_k:key,_company:co.name,_website:co.website,_industry:co.industry,_country:co.country,_employees:co.employees,_parCat:res.cat,_parScore:res.score,_status:"Cold",_added:new Date().toLocaleDateString()}));
   saveLists();updateNavCounts();
   btn.textContent="✓ CRM";btn.classList.add("on");
 }
@@ -2946,8 +2944,7 @@ function saveAllToCRM(){
       const key=ckKey(co,c);
       if(!inCRM(key)){
         const res=scoreContact(co,c,co._turnover);
-        const status=res.cat==="VIP"?"VIP":res.cat==="A"?"Hot":"Cold";
-        crmList.push(Object.assign({},c,{_k:key,_company:co.name,_website:co.website,_industry:co.industry,_country:co.country,_employees:co.employees,_parCat:res.cat,_parScore:res.score,_status:status,_added:new Date().toLocaleDateString()}));
+        crmList.push(Object.assign({},c,{_k:key,_company:co.name,_website:co.website,_industry:co.industry,_country:co.country,_employees:co.employees,_parCat:res.cat,_parScore:res.score,_status:"Cold",_added:new Date().toLocaleDateString()}));
         added++;
       }
     });
@@ -2984,10 +2981,10 @@ function renderCRM(){
     const ws=cons[0]._website?(cons[0]._website.startsWith("http")?cons[0]._website:"https://"+cons[0]._website):"";
     html+='<div class="co-card"><div class="co-head"><div class="co-top"><div class="co-av">'+comp.charAt(0)+'</div><div><div class="co-name">'+comp+'</div><div class="co-meta">'+(cons[0]._industry||"")+(cons[0]._country?" &middot; "+cons[0]._country:"")+'</div></div></div>';
     html+='<div class="co-links">'+(ws?'<a href="'+ws+'" target="_blank">Website</a>':"")+'</div></div>';
-    html+='<div class="co-contacts"><table class="ct"><thead><tr><th>Name</th><th>Title</th><th>Category</th><th>Email</th><th>Phone</th><th>Status</th><th></th></tr></thead><tbody>';
+    html+='<div class="co-contacts"><table class="ct"><thead><tr><th>Name</th><th>Title</th><th>Email</th><th>Phone</th><th>Status</th><th></th></tr></thead><tbody>';
     cons.forEach(function(c){
-      html+='<tr><td class="td-name">'+(c.name||"—")+'</td><td class="td-title">'+(c.title||"—")+'</td>';
-      html+='<td>'+(c._parCat?catBadge(c._parCat):"—")+'</td>';
+      var catBadgeHtml=c._parCat?(' '+catBadge(c._parCat)):"";
+      html+='<tr><td class="td-name">'+(c.name||"—")+catBadgeHtml+'</td><td class="td-title">'+(c.title||"—")+'</td>';
       html+='<td>'+(c.email?'<a href="mailto:'+c.email+'" class="td-link td-email">'+c.email+'</a>':'<span class="td-miss">—</span>')+'</td>';
       var crmPhoneCell='';
       if(c.phone) crmPhoneCell+='<a href="tel:'+c.phone+'" class="td-link td-phone" style="display:block">'+c.phone+'</a>';
