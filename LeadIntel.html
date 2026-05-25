@@ -136,6 +136,8 @@ table.ct .col-li{width:90px}
 .cta-crm.on{border-color:rgba(109,184,109,0.5);color:#6DB86D;background:rgba(109,184,109,0.08);font-weight:700}
 .cta-out{border-color:rgba(122,184,232,0.18);color:rgba(122,184,232,0.6)}
 .cta-out:hover{border-color:rgba(122,184,232,0.5);color:#7AB8E8;background:rgba(122,184,232,0.06)}
+.cta-wa{border-color:rgba(37,211,102,0.18);color:rgba(37,211,102,0.55)}
+.cta-wa:hover{border-color:rgba(37,211,102,0.55);color:#25D366;background:rgba(37,211,102,0.07)}
 .td-link{text-decoration:none;transition:opacity .2s}
 .td-link:hover{opacity:.72;text-decoration:underline}
 .td-email{color:#7AB8E8;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
@@ -1624,12 +1626,27 @@ async function enrichCompany(coId) {
 
     if(!hasPhone) {
       co._sources["fb-phone"] = {status:"scraping", label:"maps-phone"};
+      co._sources["gm-phone"] = {status:"scraping", label:"google-maps"};
       renderResultsPage();
       fbPromises.push(
         firecrawlSearch('"'+co.name+'" '+(co.country||'')+ ' phone').then(function(val){
           scraped["fb-phone"] = val||"";
           markSrc("fb-phone", val&&val.length>80?"found":"empty", val);
         }).catch(function(){ scraped["fb-phone"]=""; markSrc("fb-phone","empty"); })
+      );
+      fbPromises.push(
+        firecrawlSearch('"'+co.name+'" '+(co.country||'Latvia')+' kontakti telefons OR "phone number"').then(function(val){
+          scraped["gm-phone"] = val||"";
+          if(val && val.length > 30) {
+            var nums = (val.match(/\+?\d[\d\s\-\(\)\.]{6,14}\d/g)||[])
+              .map(function(p){ return cleanPhone(p.trim()); }).filter(Boolean);
+            if(nums.length) {
+              co.mapsPhone = nums[0];
+              if(!co.phone) co.phone = co.mapsPhone;
+            }
+          }
+          markSrc("gm-phone", co.mapsPhone?"found":"empty", val);
+        }).catch(function(){ scraped["gm-phone"]=""; markSrc("gm-phone","empty"); })
       );
     }
 
@@ -1643,7 +1660,7 @@ async function enrichCompany(coId) {
     return "["+s.label.toUpperCase()+"]\n"+scraped[s.key].substring(0,3500);
   }).filter(Boolean).join("\n\n---REGISTRY---\n\n");
   var webData = scraped["website"]||"";
-  var googleData = [scraped["g-emails"]||"", scraped["g-linkedin"]||"", scraped["fb-email"]||"", scraped["fb-phone"]||""].filter(Boolean).join("\n\n---GOOGLE---\n\n");
+  var googleData = [scraped["g-emails"]||"", scraped["g-linkedin"]||"", scraped["fb-email"]||"", scraped["fb-phone"]||"", scraped["gm-phone"]||""].filter(Boolean).join("\n\n---GOOGLE---\n\n");
 
   var firecrawlSection = (webData||regData||googleData) ?
     "\n\n━━━ PRE-SCRAPED REAL DATA — USE AS PRIMARY SOURCE ━━━\n" +
@@ -2808,13 +2825,15 @@ function renderResultsPage(){
     var intelHtml = "";
     var gcPhone   = co.phone   || (co._intel && co._intel.phone)   || "";
     var gcPhone2  = co.phone2  || (co._intel && co._intel.phone2)  || "";
+    var gcMapsPhone = (co.mapsPhone && co.mapsPhone!==gcPhone && co.mapsPhone!==gcPhone2) ? co.mapsPhone : "";
     var gcEmail   = co.email   || (co._intel && co._intel.email)   || "";
     var gcAddress = co.address || (co._intel && co._intel.address) || "";
     var gcPattern = co.emailPattern || (co._intel && co._intel.emailPattern) || "";
-    if(gcPhone || gcPhone2 || gcEmail || gcAddress || gcPattern || co._intel) {
+    if(gcPhone || gcPhone2 || gcMapsPhone || gcEmail || gcAddress || gcPattern || co._intel) {
       var gcItems = [];
       if(gcPhone)   gcItems.push('<div style="display:flex;align-items:center;gap:6px"><span style="color:#7ADBB8">📞</span><a href="tel:'+gcPhone+'" style="color:#7ADBB8;font-weight:700;font-size:13px;text-decoration:none;letter-spacing:.01em">'+gcPhone+'</a></div>');
       if(gcPhone2)  gcItems.push('<div style="display:flex;align-items:center;gap:6px"><span style="color:#7ADBB8">📞</span><a href="tel:'+gcPhone2+'" style="color:#7ADBB8;font-weight:700;font-size:13px;text-decoration:none;letter-spacing:.01em">'+gcPhone2+'</a></div>');
+      if(gcMapsPhone) gcItems.push('<div style="display:flex;align-items:center;gap:6px"><span>📍</span><a href="tel:'+gcMapsPhone+'" style="color:#7ADBB8;font-weight:700;font-size:13px;text-decoration:none;letter-spacing:.01em">'+gcMapsPhone+'</a><span style="font-size:10px;color:var(--muted);margin-left:2px">Google Maps</span></div>');
       if(gcEmail)   gcItems.push('<div style="display:flex;align-items:center;gap:6px"><span style="color:#7AB8E8">✉</span><a href="mailto:'+gcEmail+'" style="color:#7AB8E8;font-size:12px;text-decoration:none">'+gcEmail+'</a></div>');
       if(gcAddress) gcItems.push('<div style="display:flex;align-items:center;gap:6px"><span>📍</span><span style="color:var(--muted);font-size:11px">'+gcAddress+'</span></div>');
       var intelMeta = [];
@@ -2850,6 +2869,7 @@ function renderResultsPage(){
           '<button class="cta cta-out" title="LinkedIn outreach" onclick="openOutreach(\''+coId+'\','+ci+',\'linkedin\')">💼</button>'+
           '<button class="cta cta-out" title="Email outreach" onclick="openOutreach(\''+coId+'\','+ci+',\'email\')">📧</button>'+
           '<button class="cta cta-out" title="Call script" onclick="openOutreach(\''+coId+'\','+ci+',\'call\')">📞</button>'+
+          '<button class="cta cta-wa" title="WhatsApp" onclick="waBtn(this,\''+coId+'\','+ci+')">💬</button>'+
           '<button class="cta edit-contact-btn" data-coid="'+coId+'" data-ci="'+ci+'" title="Edit contact">✏️</button>'+
         '</div>';
       tblHtml+='<tr><td class="col-name">'+nameCell+'</td>';
@@ -3567,6 +3587,45 @@ function copyOutreach() {
     var btn = document.getElementById("om-copy-btn");
     if(btn){ var orig=btn.textContent; btn.textContent="✓ Copied!"; setTimeout(function(){btn.textContent=orig;},1800); }
   });
+}
+
+function showBtnTooltip(btn, msg) {
+  var old = document.getElementById("btn-tooltip");
+  if(old) old.remove();
+  var tip = document.createElement("div");
+  tip.id = "btn-tooltip";
+  tip.textContent = msg;
+  tip.style.cssText = "position:fixed;z-index:9999;background:#1a1a22;border:1px solid rgba(37,211,102,0.35);color:#7ADBB8;font-size:11px;padding:6px 12px;border-radius:7px;pointer-events:none;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.45)";
+  document.body.appendChild(tip);
+  var r = btn.getBoundingClientRect();
+  tip.style.left = Math.max(4, r.left + r.width/2 - tip.offsetWidth/2) + "px";
+  tip.style.top = (r.top - tip.offsetHeight - 6) + "px";
+  setTimeout(function(){ tip.remove(); }, 2500);
+}
+
+function waBtn(btn, coId, ci) {
+  var co = leads.find(function(l){ return l.id===coId; });
+  var c = co && co.contacts[ci];
+  if(!co||!c) return;
+  var phone = c.phone || c.phone2 || co.phone || co.mapsPhone || "";
+  if(!phone) {
+    showBtnTooltip(btn, "No phone number found — research this company first");
+    return;
+  }
+  // Normalise: drop spaces, dashes, brackets, replace leading + with digits
+  var cleaned = phone.replace(/[\s\-\(\)\.]/g, "").replace(/^\+/, "");
+  var firstName = (c.name||"").split(" ")[0] || "there";
+  var msg = "Hi " + firstName + ", ";
+  // Use cached Hero's Journey LinkedIn note for this contact if available
+  if(_ors.coId===coId && _ors.ci===ci && _ors.cache && _ors.cache["heros_linkedin_EN"]) {
+    var cached = _ors.cache["heros_linkedin_EN"];
+    var sentences = (cached.match(/[^.!?]+[.!?]+/g)||[]).map(function(s){return s.trim();}).filter(Boolean);
+    var preview = sentences.slice(0,2).join(" ").trim();
+    msg += preview || ("I came across " + co.name + " and wanted to connect briefly.");
+  } else {
+    msg += "I came across " + co.name + " and wanted to connect briefly.";
+  }
+  window.open("https://wa.me/" + cleaned + "?text=" + encodeURIComponent(msg), "_blank");
 }
 
 function omSendClick() {
