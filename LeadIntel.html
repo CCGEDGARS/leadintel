@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Lead Intel — B2B Intelligence v2.1 · 2026-05-25</title>
+<title>Lead Intel — B2B Intelligence v2.5</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -260,8 +260,8 @@ table.ct .col-li{width:90px}
     <div class="card">
       <div class="card-title">Company Details</div>
       <div class="grid2" style="margin-bottom:14px">
-        <div><label>Company Name</label><input id="p-company" placeholder="Coaching &amp; Consulting Group"/></div>
-        <div><label>Website</label><input id="p-website" placeholder="ccgroup.lv"/></div>
+        <div><label>Company Name <span style="color:var(--muted);font-size:10px;text-transform:none;letter-spacing:0">(optional)</span></label><input id="p-company" placeholder="Coaching &amp; Consulting Group"/></div>
+        <div><label>Website <span style="color:var(--muted);font-size:10px;text-transform:none;letter-spacing:0">(optional)</span></label><input id="p-website" placeholder="ccgroup.lv"/></div>
       </div>
       <div><label>About your company <span style="color:var(--muted);font-size:10px;text-transform:none;letter-spacing:0">(optional)</span></label>
         <textarea id="p-about" rows="3" placeholder="e.g. We are a Latvian premium oak furniture manufacturer with 15 years of experience. We produce dining sets, bedroom furniture and office collections. Currently exporting to Estonia and Lithuania, looking to expand into Scandinavian and German markets. Our competitive advantages are fast 4-week delivery, FSC certified wood, and custom sizing options."></textarea>
@@ -932,7 +932,7 @@ async function generateSummary(){
     if(cn) return cn+(ind?" | "+ind:"");
     return Object.values(r).filter(v=>v&&String(v).length>1).slice(0,3).join(" | ");
   }).filter(Boolean).join("\n"):"";
-  const p="Research this company using web search and write a clean 3-4 sentence professional summary. Company: "+company+", Website: "+website+(about?", Info: "+about:"")+(snip?"\nKnown clients:\n"+snip:"")+"\n\nRULES: Return ONLY the summary. No preamble like 'Based on search results' or 'I can see'. No thinking out loud. Start directly with the company name. Maximum 4 sentences.";
+  const p="Research this company using web search and write a clean 3-4 sentence professional summary. Company: "+(company||"Your Company")+(website?", Website: "+website:"")+(about?", Info: "+about:"")+(snip?"\nKnown clients:\n"+snip:"")+"\n\nRULES: Return ONLY the summary. No preamble like 'Based on search results' or 'I can see'. No thinking out loud. Start directly with the company name. Maximum 4 sentences.";
   const r=await claude(p,400);
   // Strip thinking/preamble patterns
   var clean=r.replace(/^(Based on (the |my |)search results[^.]*[.]\s*)*/i,"").replace(/^(I (can see|found|now have|searched)[^.]*[.]\s*)*/i,"").replace(/^(Let me (search|look)[^.]*[.]\s*)*/i,"").trim();
@@ -953,7 +953,7 @@ async function generateCategories(){
   }).filter(Boolean).join("\n"):"No customer data.";
   const targetDesc=(localStorage.getItem("li_target_description")||"").trim();
   const targetLine=targetDesc?"\nTARGET PROFILE: The user is specifically targeting: "+targetDesc+". Build search categories that match this exact buyer profile.":"";
-  const p="You are a B2B sales strategist. Generate 5-6 ideal target customer categories for this company.\nCOMPANY: "+(companySummary||company)+"\nWEBSITE: "+website+"\nCLIENTS:\n"+snip+targetLine+"\n\nReturn ONLY a raw JSON array:\n[{\"id\":\"c1\",\"icon\":\"emoji\",\"name\":\"Name 3-5 words\",\"description\":\"2 sentences\",\"keywords\":[\"industry term\",\"sector\"],\"industry\":\"single industry\",\"active\":true}]\nKEYWORDS must be INDUSTRY SECTOR tags only (retail, manufacturing, software, logistics). NEVER use 'sales teams', 'salespeople'.";
+  const p="You are a B2B sales strategist. Generate 5-6 ideal target customer categories for this company.\nCOMPANY: "+(companySummary||company||"Your Company")+(website?"\nWEBSITE: "+website:"")+"\nCLIENTS:\n"+snip+targetLine+"\n\nReturn ONLY a raw JSON array:\n[{\"id\":\"c1\",\"icon\":\"emoji\",\"name\":\"Name 3-5 words\",\"description\":\"2 sentences\",\"keywords\":[\"industry term\",\"sector\"],\"industry\":\"single industry\",\"active\":true}]\nKEYWORDS must be INDUSTRY SECTOR tags only (retail, manufacturing, software, logistics). NEVER use 'sales teams', 'salespeople'.";
   const raw=await claude(p,2000);
   var c2=raw; var a1=raw.indexOf('['),a2=raw.lastIndexOf(']'); if(a1>-1&&a2>a1) c2=raw.slice(a1,a2+1); else c2=raw.replace(/```json|```/g,'').trim();
   categories=JSON.parse(c2);
@@ -972,7 +972,6 @@ async function profileNext(){
     return;
   }
   const website=document.getElementById("p-website").value;
-  if(!company&&!website){showAlert("Enter company name or website first.");return;}
   const btn=document.getElementById("profile-btn");
   btn.disabled=true; btn.textContent="Analyzing...";
   document.getElementById("profile-loading").style.display="block";
