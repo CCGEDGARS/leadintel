@@ -340,6 +340,11 @@ table.ct .col-li{width:90px}
           <input id="p-apollo-key" type="password" placeholder="Apollo API key..." style="width:100%;box-sizing:border-box" oninput="APOLLO_KEY=this.value;localStorage.setItem('li_apollo_key',this.value)"/>
           <div style="font-size:11px;color:var(--muted);margin-top:4px">Get free at <a href="https://app.apollo.io/settings/integrations/api" target="_blank" style="color:var(--g)">apollo.io → Settings → Integrations → API</a></div>
         </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.07em">Firecrawl API Key <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">(for OSINT enrichment)</span></label>
+          <input id="p-firecrawl-key" type="password" placeholder="fc-..." style="width:100%;box-sizing:border-box" oninput="FIRECRAWL_KEY=this.value;localStorage.setItem('li_firecrawl_key',this.value)"/>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Get at <a href="https://www.firecrawl.dev/app/api-keys" target="_blank" style="color:var(--g)">firecrawl.dev → API Keys</a></div>
+        </div>
       </div>
       <button onclick="saveApiKeys()" style="margin-top:16px;width:100%;padding:11px;border-radius:9px;border:1px solid rgba(255,255,255,0.15);background:#0A1628;color:#fff;font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;letter-spacing:.02em">💾 Save API Keys</button>
       <div id="keys-saved-msg" style="display:none;text-align:center;margin-top:8px;font-size:13px;color:#7ADBB8">✓ Keys saved — ready to use</div>
@@ -653,7 +658,7 @@ table.ct .col-li{width:90px}
 
 <script>
 var APOLLO_KEY = localStorage.getItem("li_apollo_key")||"";
-var FIRECRAWL_KEY = "fc-20ed0a810ec74477aca6dbbd467aca37";
+var FIRECRAWL_KEY = localStorage.getItem("li_firecrawl_key")||"";
 var CLAUDE_KEY = localStorage.getItem("li_claude_key")||"";
 
 const BALTIC = [
@@ -1182,9 +1187,9 @@ async function firecrawlScrape(pageUrl) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(()=>controller.abort(), 12000);
-    const res = await fetch("https://api.firecrawl.dev/v1/scrape", {
+    const res = await fetch("http://localhost:3131/firecrawl-scrape", {
       method: "POST",
-      headers: {"Content-Type":"application/json","Authorization":"Bearer "+FIRECRAWL_KEY},
+      headers: {"Content-Type":"application/json","X-Firecrawl-Key":FIRECRAWL_KEY},
       body: JSON.stringify({url: pageUrl, formats: ["markdown"]}),
       signal: controller.signal
     });
@@ -1205,9 +1210,9 @@ async function firecrawlSearch(query) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(function(){controller.abort();}, 15000);
-    const res = await fetch("https://api.firecrawl.dev/v1/search", {
+    const res = await fetch("http://localhost:3131/firecrawl-search", {
       method: "POST",
-      headers: {"Content-Type":"application/json","Authorization":"Bearer "+FIRECRAWL_KEY},
+      headers: {"Content-Type":"application/json","X-Firecrawl-Key":FIRECRAWL_KEY},
       body: JSON.stringify({query: query, limit: 5, scrapeOptions: {formats: ["markdown"]}}),
       signal: controller.signal
     });
@@ -1229,9 +1234,9 @@ async function firecrawlScrapeRich(pageUrl) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(function(){controller.abort();}, 22000);
-    const res = await fetch("https://api.firecrawl.dev/v1/scrape", {
+    const res = await fetch("http://localhost:3131/firecrawl-scrape", {
       method: "POST",
-      headers: {"Content-Type":"application/json","Authorization":"Bearer "+FIRECRAWL_KEY},
+      headers: {"Content-Type":"application/json","X-Firecrawl-Key":FIRECRAWL_KEY},
       body: JSON.stringify({
         url: pageUrl,
         formats: ["markdown","json"],
@@ -1277,9 +1282,9 @@ async function firecrawlMap(domain) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(function(){controller.abort();}, 12000);
-    const res = await fetch("https://api.firecrawl.dev/v1/map", {
+    const res = await fetch("http://localhost:3131/firecrawl-map", {
       method: "POST",
-      headers: {"Content-Type":"application/json","Authorization":"Bearer "+FIRECRAWL_KEY},
+      headers: {"Content-Type":"application/json","X-Firecrawl-Key":FIRECRAWL_KEY},
       body: JSON.stringify({url:"https://"+domain, search:"contact team about leadership management people", limit:15}),
       signal: controller.signal
     });
@@ -2519,6 +2524,7 @@ function saveEditModal(){
 function saveApiKeys(){
   var ck = document.getElementById("p-claude-key");
   var ak = document.getElementById("p-apollo-key");
+  var fk = document.getElementById("p-firecrawl-key");
   if(ck && ck.value.trim()){
     CLAUDE_KEY = ck.value.trim();
     localStorage.setItem("li_claude_key", CLAUDE_KEY);
@@ -2527,7 +2533,11 @@ function saveApiKeys(){
     APOLLO_KEY = ak.value.trim();
     localStorage.setItem("li_apollo_key", APOLLO_KEY);
   }
-  if(!ck.value.trim() && !ak.value.trim()){
+  if(fk && fk.value.trim()){
+    FIRECRAWL_KEY = fk.value.trim();
+    localStorage.setItem("li_firecrawl_key", FIRECRAWL_KEY);
+  }
+  if(!ck.value.trim() && !ak.value.trim() && !fk.value.trim()){
     showAlert("Please enter at least one API key.","err");
     return;
   }
@@ -3296,8 +3306,10 @@ document.addEventListener("click", function(e){
   // Populate key fields from localStorage
   var ck=document.getElementById("p-claude-key");
   var ak=document.getElementById("p-apollo-key");
+  var fk=document.getElementById("p-firecrawl-key");
   if(ck) ck.value=CLAUDE_KEY;
   if(ak) ak.value=APOLLO_KEY;
+  if(fk) fk.value=FIRECRAWL_KEY;
 renderCountryChips();
 updateNavCounts();
 
