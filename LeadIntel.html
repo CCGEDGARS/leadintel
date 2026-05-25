@@ -3632,6 +3632,8 @@ async function recreateScript() {
 
 var KB_FRAMEWORK_DEFAULT = "Hero's Journey for Sales: The prospect is always the Hero. You are the Mentor.\nStage 1: Their Ordinary World — understand their daily reality before the disruption.\nStage 2: The Challenge they face — name it precisely, don't soften it.\nStage 3: You appear with the insight — the mentor arrives at the right moment.\nStage 4: The transformation — paint the after picture vividly.\nStage 5: The invitation to act — low friction, high clarity.";
 
+var KB_BOOK_ANALYSIS_PROMPT = "You are extracting a complete practical communication and influence toolkit from this book for immediate use in B2B sales. Extract EVERYTHING usable directly today:\n\n1. EXACT PHRASES & SENTENCES — word-for-word lines for emails, LinkedIn, calls. Opening lines, transitions, closings, hooks.\n\n2. SCRIPTS & DIALOGUES — complete conversation flows, cold call openers, voicemail scripts, follow-up sequences with exact wording.\n\n3. FORMULAS & FRAMEWORKS — SPIN, AIDA, PAS, Hero's Journey, Challenger, any named formula. Step-by-step with exact language for each step.\n\n4. TEMPLATES — email templates, LinkedIn message structures, proposal frameworks. Copy-paste ready.\n\n5. POWER WORDS & TRIGGERS — specific words that trigger buying decisions, create urgency, build trust, reduce resistance. List with context of use.\n\n6. OBJECTION HANDLERS — exact responses to: price too high, bad timing, happy with current provider, need to think about it, need to talk to boss. Word-for-word rebuttals.\n\n7. POWERFUL QUESTIONS — questions that uncover pain, create insight, qualify, advance the sale, make prospect sell themselves.\n\n8. STORIES & ANALOGIES — metaphors and stories that can be retold to illustrate value, create emotion, justify decisions.\n\n9. MILTON ERICKSON HYPNOTIC LANGUAGE PATTERNS — extract or identify any of these if present: embedded commands, presuppositions, double binds, tag questions, pacing and leading, cause and effect linkage, complex equivalence, universal quantifiers, modal operators, nominalizations, unspecified verbs, mind reading, lost performatives. Provide exact example phrases for each pattern found.\n\n10. NLP TECHNIQUES — anchoring scripts, reframing phrases, future pacing language, rapport-building techniques, meta-model violations used intentionally, representational system language (visual/auditory/kinesthetic words), submodality language patterns.\n\n11. PSYCHOLOGICAL INFLUENCE PRINCIPLES — Cialdini's 7 principles applied with exact phrases, scarcity and urgency language, social proof scripts, authority positioning statements, liking and rapport builders, commitment and consistency triggers, reciprocity openers.\n\n12. PATTERN INTERRUPTS — unexpected phrases, questions, or statements that break autopilot thinking and create attention. List with context.\n\n13. FUTURE PACING SCRIPTS — language that helps prospect visualize success after buying. Exact phrases.\n\n14. EMOTIONAL TRIGGERS — language that creates desire, fear of loss, excitement, curiosity, trust. Categorized by emotion with exact phrases.\n\nFormat every item as READY TO USE. Include exact wording. Label each category clearly. Minimum 60 items, target 100. This is a practical toolkit to be used immediately in real sales conversations, emails, and LinkedIn messages. Prioritize specificity over generality — give the exact words, not descriptions of words.";
+
 var KB_VOICE_DEFAULT = "Direct, confident, story-driven. Never corporate speak. Never 'I hope this email finds you well'. Never 'I wanted to reach out'. Always lead with a specific insight, provocation, or pattern interrupt. One idea per sentence. Short paragraphs. End with clarity, not desperation. Sign off: Edgars Untals — Sales is the Greatest Story Ever Told.";
 
 function loadKBData() {
@@ -3688,7 +3690,11 @@ function renderKB() {
             '<span style="font-weight:600;color:'+(b.on!==false?'var(--g)':'var(--muted)')+'">Use</span>'+
           '</label>'+
         '</div>'+
-        '<textarea id="kb-book-content-'+i+'" rows="4" oninput="saveKBBook('+i+');updateKBBadge()" placeholder="Paste key principles, frameworks, quotes from this book..." style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.02);border:1px solid rgba(201,169,97,0.1);border-radius:8px;color:var(--text);font-family:var(--font);font-size:12px;line-height:1.65;padding:10px 12px;resize:vertical;outline:none">'+escHtml(b.content||"")+'</textarea>';
+        '<textarea id="kb-book-content-'+i+'" rows="4" oninput="saveKBBook('+i+');updateKBBadge()" placeholder="Paste book content or excerpts here, then click Analyze with AI to extract a full sales toolkit..." style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.02);border:1px solid rgba(201,169,97,0.1);border-radius:8px;color:var(--text);font-family:var(--font);font-size:12px;line-height:1.65;padding:10px 12px;resize:vertical;outline:none">'+escHtml(b.content||"")+'</textarea>'+
+        '<div style="margin-top:8px;display:flex;align-items:center;gap:10px">'+
+          '<button id="kb-analyze-btn-'+i+'" onclick="analyzeKBBook('+i+')" style="padding:7px 16px;border-radius:7px;border:1px solid rgba(201,169,97,0.4);background:rgba(201,169,97,0.1);color:var(--g);font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;transition:all .2s">🤖 Analyze with AI</button>'+
+          '<span style="font-size:11px;color:var(--muted)">Paste book text above → AI extracts phrases, scripts, NLP patterns, objection handlers &amp; more</span>'+
+        '</div>';
       container.appendChild(slot);
     });
   }
@@ -3698,6 +3704,31 @@ function renderKB() {
   if(fw) fw.value = kb.frameworks;
   if(vo) vo.value = kb.voice;
   updateKBBadge();
+}
+
+async function analyzeKBBook(i) {
+  if(!CLAUDE_KEY){ showAlert("Add your Claude API key first.","err"); return; }
+  var ct = document.getElementById("kb-book-content-"+i);
+  var ti = document.getElementById("kb-book-title-"+i);
+  var au = document.getElementById("kb-book-author-"+i);
+  var btn = document.getElementById("kb-analyze-btn-"+i);
+  var bookText = ct ? ct.value.trim() : "";
+  if(!bookText){ showAlert("Paste some book content in the text area first, then click Analyze.","err"); return; }
+  var bookTitle = (ti ? ti.value.trim() : "") || "this book";
+  var bookAuthor = au ? au.value.trim() : "";
+  var header = bookTitle + (bookAuthor ? " by "+bookAuthor : "");
+  if(btn){ btn.disabled=true; btn.textContent="Analyzing..."; }
+  var prompt = "Book: "+header+"\n\nContent to analyze:\n\n"+bookText+"\n\n---\n\n"+KB_BOOK_ANALYSIS_PROMPT;
+  var result = await claudeChat(prompt, 8000);
+  if(result && ct){
+    ct.value = result;
+    saveKBBook(i);
+    updateKBBadge();
+    showAlert("Book analyzed — toolkit saved to Knowledge Base.","info");
+  } else {
+    showAlert("Analysis failed — check your Claude key and try again.","err");
+  }
+  if(btn){ btn.disabled=false; btn.textContent="🤖 Analyze with AI"; }
 }
 
 function escHtml(s){ return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
