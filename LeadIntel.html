@@ -731,9 +731,13 @@ function isPersonalEmail(email) {
 
 function cleanPhone(p) {
   if(!p || p === "DATA MISSING") return "";
-  if(/[Xx]{2,}/.test(p)) return "";   // masked number e.g. +371 2XXXXXX
-  if(/\(\s*xxx\s*\)/i.test(p)) return "";
-  return p.trim();
+  var s = p.replace(/\s*\(?partial\)?/gi, "").trim(); // strip Apollo "(partial)" suffix
+  if(!s) return "";
+  if(/[Xx]{3,}/.test(s)) return "";   // masked number e.g. +371 2XXXXXX
+  if(/\(\s*xxx\s*\)/i.test(s)) return "";
+  if(/\*{3,}/.test(s)) return "";     // ***-masked numbers
+  if(s.replace(/\D/g,"").length < 7) return ""; // too short to be a real number
+  return s;
 }
 
 function cleanContactName(n) {
@@ -2278,7 +2282,15 @@ async function runSearch(){
         title:p.title||"",
         seniority:p.seniority||"",
         email:p.email||p.work_email||"",
-        phone:cleanPhone(p.phone||p.mobile_phone||(p.phone_numbers&&p.phone_numbers.length?p.phone_numbers[0].sanitized_number||p.phone_numbers[0].raw_number:"")||"")||"",
+        phone:(function(){
+          var nums=(p.phone_numbers||[]).map(function(n){return cleanPhone(n.sanitized_number||n.raw_number||"");}).filter(Boolean);
+          return cleanPhone(p.phone||p.mobile_phone||nums[0]||"")||nums[0]||"";
+        })(),
+        phone2:(function(){
+          var nums=(p.phone_numbers||[]).map(function(n){return cleanPhone(n.sanitized_number||n.raw_number||"");}).filter(Boolean);
+          var first=cleanPhone(p.phone||p.mobile_phone||nums[0]||"")||nums[0]||"";
+          return nums.find(function(n){return n&&n!==first;})||"";
+        })(),
         linkedin:(function(){var l=p.linkedin_url||p.linkedin||"";if(l&&!l.startsWith("http"))l="https://"+l;return l;})()
       });
     }
