@@ -115,6 +115,13 @@ select option{background:var(--dark3)}
 .trn-row{display:flex;align-items:center;gap:7px;margin-top:8px}
 .trn-row input{width:130px;padding:5px 10px;font-size:12px;border-radius:6px}
 .trn-row span{font-size:11px;color:var(--muted)}
+.score-bars{padding:10px 20px;border-top:1px solid rgba(201,169,97,0.08);display:flex;flex-direction:column;gap:6px}
+.score-bar-row{display:flex;align-items:center;gap:8px;font-size:11px}
+.score-bar-label{width:110px;color:var(--muted);flex-shrink:0;white-space:nowrap}
+.score-bar-track{flex:1;height:5px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden}
+.score-bar-fill{height:100%;border-radius:3px;transition:width .6s}
+.score-bar-pts{width:34px;text-align:right;font-weight:700;flex-shrink:0}
+.score-bar-detail{flex:1;color:rgba(138,138,154,0.6);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .co-contacts{padding:16px 20px}
 .contacts-hd{font-size:11px;color:var(--g);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px}
 table.ct{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed}
@@ -542,121 +549,95 @@ table.ct .col-li{width:90px}
 
   <!-- SCREEN 6: PARETO SCORING -->
   <div class="screen" id="screen-pareto">
-    <div class="pg-title">Pareto Scoring Rules</div>
-    <div class="pg-sub">Set your ideal customer criteria. Each company is scored automatically — VIP companies get OSINT enriched first.</div>
+    <div class="pg-title">Scoring System</div>
+    <div class="pg-sub">Two-layer scoring: Company quality (60%) + Contact relevance (40%). Scores update automatically as OSINT data is collected.</div>
 
-    <!-- THRESHOLDS -->
+    <!-- SCORING WEIGHTS -->
     <div class="card">
-      <div class="card-title">Category Thresholds</div>
-      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Minimum total score to reach each category. Max possible score: ~20 pts.</div>
-      <div style="display:flex;gap:12px;flex-wrap:wrap">
-        <div class="thresh-chip" data-cat="VIP" style="background:rgba(201,169,97,0.1);border:2px solid var(--g);border-radius:10px;padding:14px 20px;text-align:center;cursor:pointer;flex:1;min-width:100px">
-          <div style="font-size:18px;font-weight:700;color:var(--g)">★ VIP</div>
-          <div style="font-size:11px;color:var(--muted);margin:4px 0">min score</div>
-          <input type="number" id="th-vip" value="13" min="1" max="20" oninput="savePareto()" style="width:60px;text-align:center;font-size:18px;font-weight:700;color:var(--g);background:transparent;border:none;border-bottom:1px solid var(--g);padding:2px"/>
+      <div class="card-title">Scoring Weights</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Adjust how much Company quality vs Contact relevance influences the final score.</div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+        <span style="font-size:12px;color:#7ADBB8;font-weight:600;width:120px">🏢 Company</span>
+        <input type="range" id="weight-company" min="20" max="80" value="60" oninput="updateWeightDisplay()" style="flex:1;accent-color:var(--g)"/>
+        <span style="font-size:12px;color:#7AB8E8;font-weight:600;width:120px;text-align:right">👤 Contact</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:16px">
+        <span id="weight-company-pct" style="color:#7ADBB8;font-weight:700">60%</span>
+        <span style="color:var(--muted);font-size:11px">drag to adjust</span>
+        <span id="weight-contact-pct" style="color:#7AB8E8;font-weight:700">40%</span>
+      </div>
+      <button class="btn btn-gold" onclick="saveWeights()">💾 Save Weights &amp; Rescore</button>
+    </div>
+
+    <!-- LAYER 1 -->
+    <div class="card">
+      <div class="card-title">Layer 1 — Company Score (max 100pts)</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="crit-row" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+          <div><span style="font-size:12px;color:var(--text);font-weight:600">Turnover / Revenue</span><div style="font-size:11px;color:var(--muted);margin-top:2px">€50M+=30 · €10M=22 · €1M=15 · €100K=8 · unknown=10</div></div>
+          <span style="font-size:13px;font-weight:700;color:var(--g)">30pts</span>
         </div>
-        <div class="thresh-chip" style="background:rgba(122,184,232,0.08);border:2px solid #7AB8E8;border-radius:10px;padding:14px 20px;text-align:center;flex:1;min-width:100px">
-          <div style="font-size:18px;font-weight:700;color:#7AB8E8">A</div>
-          <div style="font-size:11px;color:var(--muted);margin:4px 0">min score</div>
-          <input type="number" id="th-a" value="9" min="1" max="20" oninput="savePareto()" style="width:60px;text-align:center;font-size:18px;font-weight:700;color:#7AB8E8;background:transparent;border:none;border-bottom:1px solid #7AB8E8;padding:2px"/>
+        <div class="crit-row" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+          <div><span style="font-size:12px;color:var(--text);font-weight:600">Number of Locations</span><div style="font-size:11px;color:var(--muted);margin-top:2px">50+=25 · 20-50=20 · 5-20=12 · 2-5=6 · 1=2 · unknown=8</div></div>
+          <span style="font-size:13px;font-weight:700;color:var(--g)">25pts</span>
         </div>
-        <div class="thresh-chip" style="background:rgba(122,219,184,0.08);border:2px solid #7ADBB8;border-radius:10px;padding:14px 20px;text-align:center;flex:1;min-width:100px">
-          <div style="font-size:18px;font-weight:700;color:#7ADBB8">B</div>
-          <div style="font-size:11px;color:var(--muted);margin:4px 0">min score</div>
-          <input type="number" id="th-b" value="5" min="1" max="20" oninput="savePareto()" style="width:60px;text-align:center;font-size:18px;font-weight:700;color:#7ADBB8;background:transparent;border:none;border-bottom:1px solid #7ADBB8;padding:2px"/>
+        <div class="crit-row" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+          <div><span style="font-size:12px;color:var(--text);font-weight:600">Employee Count</span><div style="font-size:11px;color:var(--muted);margin-top:2px">500+=20 · 100=16 · 50=12 · 20=8 · 10=4 · &lt;10=1</div></div>
+          <span style="font-size:13px;font-weight:700;color:var(--g)">20pts</span>
         </div>
-        <div class="thresh-chip" style="background:rgba(138,138,154,0.06);border:2px solid var(--muted);border-radius:10px;padding:14px 20px;text-align:center;flex:1;min-width:100px">
-          <div style="font-size:18px;font-weight:700;color:var(--muted)">C</div>
-          <div style="font-size:11px;color:var(--muted);margin:4px 0">min score</div>
-          <input type="number" id="th-c" value="1" min="1" max="20" oninput="savePareto()" style="width:60px;text-align:center;font-size:18px;font-weight:700;color:var(--muted);background:transparent;border:none;border-bottom:1px solid var(--muted);padding:2px"/>
+        <div class="crit-row" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+          <div><span style="font-size:12px;color:var(--text);font-weight:600">Hiring Signal</span><div style="font-size:11px;color:var(--muted);margin-top:2px">Hiring sales=15 · hiring any=8 · not hiring=0</div></div>
+          <span style="font-size:13px;font-weight:700;color:var(--g)">15pts</span>
+        </div>
+        <div class="crit-row" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0">
+          <div><span style="font-size:12px;color:var(--text);font-weight:600">International Activity</span><div style="font-size:11px;color:var(--muted);margin-top:2px">3+ countries=10 · 2 countries=6 · local only=0 · unknown=3</div></div>
+          <span style="font-size:13px;font-weight:700;color:var(--g)">10pts</span>
         </div>
       </div>
     </div>
 
-    <!-- CRITERION 1: DECISION MAKING -->
+    <!-- LAYER 2 -->
     <div class="card">
-      <div class="card-title">1 — Decision Making Process <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">Claude infers from size, title, industry — you can override per company</span></div>
-      <div class="crit-grid">
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(201,169,97,0.12);color:var(--g)">Single Decision Maker</span><div class="crit-desc">CEO/Owner decides alone. Fast cycle, direct conversation. Typical in SMEs.</div></div><input type="number" id="pdm-single" value="4" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,184,232,0.1);color:#7AB8E8">Small Committee</span><div class="crit-desc">2-3 stakeholders (CEO + HR or Sales Director). Common in mid-size companies.</div></div><input type="number" id="pdm-committee" value="3" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,219,184,0.1);color:#7ADBB8">Divisional Approval</span><div class="crit-desc">Department head approves, needs sign-off from above. Large local companies.</div></div><input type="number" id="pdm-division" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(138,138,154,0.08);color:var(--muted)">Corporate Procurement</span><div class="crit-desc">Formal tender process, multiple approvals. Global brands, banks, government.</div></div><input type="number" id="pdm-proc" value="1" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-      </div>
-      <div style="font-size:12px;color:var(--muted);margin-top:12px;padding:10px;background:rgba(201,169,97,0.04);border-radius:7px;line-height:1.7">
-        <strong style="color:var(--g)">How Claude infers this:</strong> Small company + CEO contact = Single DM. 
-        100-500 emp + Sales Director = Small Committee. 
-        500+ emp or Bank/Government = Procurement. 
-        Global brand = Procurement (high brand, lower DM score).
+      <div class="card-title">Layer 2 — Contact Score (max 100pts)</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="crit-row" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+          <div><span style="font-size:12px;color:var(--text);font-weight:600">Title Match to Target</span><div style="font-size:11px;color:var(--muted);margin-top:2px">Perfect=40 · Related=30 · Partial=20 · Senior other dept=10 · No match=0</div></div>
+          <span style="font-size:13px;font-weight:700;color:#7AB8E8">40pts</span>
+        </div>
+        <div class="crit-row" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+          <div><span style="font-size:12px;color:var(--text);font-weight:600">Seniority Level</span><div style="font-size:11px;color:var(--muted);margin-top:2px">C-suite/Owner=30 · VP/Director=24 · Senior Mgr=18 · Manager=12 · Other=5</div></div>
+          <span style="font-size:13px;font-weight:700;color:#7AB8E8">30pts</span>
+        </div>
+        <div class="crit-row" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+          <div><span style="font-size:12px;color:var(--text);font-weight:600">Decision-Making Power</span><div style="font-size:11px;color:var(--muted);margin-top:2px">Chief/Director/Owner=20 · Manager/Lead=14 · Specialist=6 · Unknown=8</div></div>
+          <span style="font-size:13px;font-weight:700;color:#7AB8E8">20pts</span>
+        </div>
+        <div class="crit-row" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0">
+          <div><span style="font-size:12px;color:var(--text);font-weight:600">Contact Data Quality</span><div style="font-size:11px;color:var(--muted);margin-top:2px">Verified email + phone=10 · Verified email=7 · Predicted=4 · No email=1</div></div>
+          <span style="font-size:13px;font-weight:700;color:#7AB8E8">10pts</span>
+        </div>
       </div>
     </div>
 
-    <!-- CRITERION 2: COMPANY SIZE -->
+    <!-- DYNAMIC BONUS -->
     <div class="card">
-      <div class="card-title">2 — Company Size <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">Number of employees (from Apollo)</span></div>
-      <div class="crit-grid">
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(201,169,97,0.12);color:var(--g)">500+ employees</span><div class="crit-desc">Large enterprise with dedicated training budgets</div></div><input type="number" id="pe-500" value="4" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,184,232,0.1);color:#7AB8E8">100–499 employees</span><div class="crit-desc">Mid-size company, structured HR and sales teams</div></div><input type="number" id="pe-100" value="3" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,219,184,0.1);color:#7ADBB8">50–99 employees</span><div class="crit-desc">Growing company, likely has sales team</div></div><input type="number" id="pe-50" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(138,138,154,0.08);color:var(--muted)">10–49 employees</span><div class="crit-desc">Small company, limited training budget</div></div><input type="number" id="pe-10" value="1" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(220,80,80,0.07);color:rgba(220,80,80,0.8)">Under 10</span><div class="crit-desc">Too small — auto disqualified</div></div><input value="0" disabled class="crit-input" style="opacity:.35"/></div>
+      <div class="card-title">Dynamic AI Match Bonus (max +20pts)</div>
+      <div style="font-size:13px;color:var(--muted);line-height:1.7">When <strong style="color:var(--text)">"Who are you looking for?"</strong> is filled in the Profile, Claude rates how well each company + contact matches your target description after OSINT completes. Adds 0–20 bonus points and shows the reason in the score tooltip.</div>
+    </div>
+
+    <!-- TIERS -->
+    <div class="card">
+      <div class="card-title">Category Tiers (Combined Score)</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:120px;padding:14px;border-radius:9px;background:rgba(201,169,97,0.08);border:1px solid rgba(201,169,97,0.25);text-align:center"><div style="font-size:16px;font-weight:800;color:#C9A961">★ VIP</div><div style="font-size:20px;font-weight:800;color:#C9A961;margin:4px 0">75+</div><div style="font-size:11px;color:var(--muted)">Call personally</div></div>
+        <div style="flex:1;min-width:120px;padding:14px;border-radius:9px;background:rgba(122,184,232,0.06);border:1px solid rgba(122,184,232,0.2);text-align:center"><div style="font-size:16px;font-weight:800;color:#7AB8E8">A</div><div style="font-size:20px;font-weight:800;color:#7AB8E8;margin:4px 0">60–74</div><div style="font-size:11px;color:var(--muted)">Follow up 7d</div></div>
+        <div style="flex:1;min-width:120px;padding:14px;border-radius:9px;background:rgba(122,219,184,0.06);border:1px solid rgba(122,219,184,0.2);text-align:center"><div style="font-size:16px;font-weight:800;color:#7ADBB8">B</div><div style="font-size:20px;font-weight:800;color:#7ADBB8;margin:4px 0">45–59</div><div style="font-size:11px;color:var(--muted)">Nurture</div></div>
+        <div style="flex:1;min-width:120px;padding:14px;border-radius:9px;background:rgba(138,138,154,0.06);border:1px solid rgba(138,138,154,0.15);text-align:center"><div style="font-size:16px;font-weight:800;color:var(--muted)">C</div><div style="font-size:20px;font-weight:800;color:var(--muted);margin:4px 0">30–44</div><div style="font-size:11px;color:var(--muted)">Newsletter</div></div>
+        <div style="flex:1;min-width:120px;padding:14px;border-radius:9px;background:rgba(220,80,80,0.05);border:1px solid rgba(220,80,80,0.15);text-align:center"><div style="font-size:16px;font-weight:800;color:rgba(220,80,80,0.8)">OUT</div><div style="font-size:20px;font-weight:800;color:rgba(220,80,80,0.8);margin:4px 0">&lt;30</div><div style="font-size:11px;color:var(--muted)">Skip</div></div>
       </div>
     </div>
 
-    <!-- CRITERION 3: TURNOVER -->
-    <div class="card">
-      <div class="card-title">3 — Annual Turnover <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">Entered manually or via OSINT enrichment</span></div>
-      <div class="crit-grid">
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(201,169,97,0.12);color:var(--g)">EUR 10M+</span><div class="crit-desc">Significant training budget available</div></div><input type="number" id="ptrn-10m" value="4" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,184,232,0.1);color:#7AB8E8">EUR 1M–10M</span><div class="crit-desc">Established revenue, some training budget</div></div><input type="number" id="ptrn-1m" value="3" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,219,184,0.1);color:#7ADBB8">EUR 200K–1M</span><div class="crit-desc">Minimum viable budget</div></div><input type="number" id="ptrn-200k" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(220,80,80,0.07);color:rgba(220,80,80,0.8)">Under EUR 200K</span><div class="crit-desc">Too small — auto disqualified</div></div><input value="0" disabled class="crit-input" style="opacity:.35"/></div>
-      </div>
-    </div>
-
-    <!-- CRITERION 4: SALES STRUCTURE -->
-    <div class="card">
-      <div class="card-title">4 — Sales Structure <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">Inferred from industry, title and OSINT</span></div>
-      <div class="crit-grid">
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(201,169,97,0.12);color:var(--g)">B2B Sales Team</span><div class="crit-desc">Dedicated B2B sales reps, account managers, key account team</div></div><input type="number" id="pt-b2b" value="4" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,184,232,0.1);color:#7AB8E8">B2C / Phone Center</span><div class="crit-desc">Retail sales team, call center, telesales</div></div><input type="number" id="pt-b2c" value="3" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,219,184,0.1);color:#7ADBB8">Customer Service</span><div class="crit-desc">Support team, e-commerce helpdesk, service center</div></div><input type="number" id="pt-cs" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(138,138,154,0.08);color:var(--muted)">Marketing / Biz Dev</span><div class="crit-desc">Marketing-led growth, no dedicated sales team</div></div><input type="number" id="pt-mkt" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(220,80,80,0.07);color:rgba(220,80,80,0.8)">No Sales Team</span><div class="crit-desc">Under 50 emp with no visible sales structure — low priority</div></div><input value="0" disabled class="crit-input" style="opacity:.35"/></div>
-      </div>
-    </div>
-
-    <!-- CRITERION 5: BRAND TYPE -->
-    <div class="card">
-      <div class="card-title">5 — Brand Type <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">Inferred from company name, size and industry</span></div>
-      <div class="crit-grid">
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(201,169,97,0.12);color:var(--g)">Global Brand</span><div class="crit-desc">International company with Baltic office (IKEA, Tele2, Swedbank, Samsung)</div></div><input type="number" id="pb-global" value="4" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,184,232,0.1);color:#7AB8E8">Regional Subsidiary</span><div class="crit-desc">Nordic/EU company branch in Latvia with local management</div></div><input type="number" id="pb-regional" value="3" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,219,184,0.1);color:#7ADBB8">Local Established</span><div class="crit-desc">Latvian-owned company, 50+ employees, known brand</div></div><input type="number" id="pb-local" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(138,138,154,0.08);color:var(--muted)">Small Local</span><div class="crit-desc">Latvian SME under 50 employees</div></div><input type="number" id="pb-small" value="1" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(220,80,80,0.07);color:rgba(220,80,80,0.8)">Startup</span><div class="crit-desc">Early stage, under 3 years, no established revenue</div></div><input type="number" id="pb-startup" value="0" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-      </div>
-    </div>
-
-    <!-- CRITERION 6: HIRING SIGNAL -->
-    <div class="card">
-      <div class="card-title">6 — Active Hiring Signal <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">Checked automatically during OSINT enrichment</span></div>
-      <div class="crit-grid">
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(201,169,97,0.12);color:var(--g)">Hiring Sales Roles Now</span><div class="crit-desc">Active job ads for Sales Manager, Account Executive, Sales Rep on LinkedIn/CV.lv</div></div><input type="number" id="ph-sales" value="3" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,184,232,0.1);color:#7AB8E8">Hiring Commercial Roles</span><div class="crit-desc">Business Development, Customer Success, Marketing Manager</div></div><input type="number" id="ph-commercial" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(138,138,154,0.08);color:var(--muted)">Not Hiring / Unknown</span><div class="crit-desc">No active sales job postings found</div></div><input value="0" disabled class="crit-input" style="opacity:.35"/></div>
-      </div>
-      <div style="font-size:12px;color:var(--muted);margin-top:12px;padding:10px;background:rgba(201,169,97,0.04);border-radius:7px;line-height:1.7">
-        <strong style="color:var(--g)">Logic:</strong> Company hiring sales people = has sales team + budget to invest in training. 
-        Claude checks LinkedIn Jobs and CV.lv during OSINT enrichment automatically.
-      </div>
-    </div>
-
-    <!-- PREVIEW -->
-    <div class="summary-box" style="margin-bottom:18px">
-      <div class="summary-label">Score Preview</div>
-      <div id="pareto-preview" style="font-size:13px;color:var(--muted);line-height:2.2"></div>
-    </div>
-    <button class="btn btn-gold btn-full" onclick="applyParetoToAll()">Save and Apply to All Results</button>
+    <button class="btn btn-gold btn-full" onclick="applyParetoToAll()">Apply Scoring to All Results</button>
   </div>
 
 </div>
@@ -765,21 +746,11 @@ const PAGE = 20;
 let filterCat = "ALL";
 let filterQ = "";
 let crmTab = "all";
-var _PARETO_DEFAULT = {
-  th:{vip:12,a:8,b:5,c:1},
-  pdm:{single:4,committee:3,division:2,proc:1},
-  pe:{p500:4,p100:3,p50:2,p10:1},
-  trn:{m10:4,m1:3,k200:2},
-  pt:{b2b:4,b2c:3,cs:2,mkt:2},
-  pb:{global:4,regional:3,local:2,small:1,startup:0},
-  ph:{sales:3,commercial:2}
-};
-// Load from localStorage but validate structure — clear stale data if keys missing
-var _saved = JSON.parse(localStorage.getItem("li_pareto")||"null");
-var paretoRules = (_saved && _saved.pdm && _saved.pb && _saved.ph) ? _saved : _PARETO_DEFAULT;
-if(!_saved || !_saved.pdm || !_saved.pb) {
-  localStorage.removeItem("li_pareto"); // clear old format
-}
+var _SCORING_WEIGHTS_DEFAULT = {company:60, contact:40};
+var _swSaved = JSON.parse(localStorage.getItem("li_scoring_weights")||"null");
+var scoringWeights = (_swSaved && _swSaved.company) ? _swSaved : _SCORING_WEIGHTS_DEFAULT;
+// Keep paretoRules as dummy for any legacy references
+var paretoRules = {};
 
 function saveLists(){localStorage.setItem("li_crm",JSON.stringify(crmList));localStorage.setItem("li_vip",JSON.stringify(vipList));}
 function ckKey(co,c){return co.name+"__"+c.name+"__"+(c.email||c.title||"");}
@@ -1813,6 +1784,8 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
       "source": "exact URL where found"
     }
   ],
+  "locations": 0,
+  "countries": [],
   "notes": "key intelligence about company, team structure, recent news",
   "hiring": "sales|commercial|none",
   "brandType": "global|regional|local|small|startup",
@@ -1842,6 +1815,8 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
     if(data.hiring&&data.hiring!=="none") co._hiring=data.hiring;
     if(data.brandType) co._brandType=data.brandType;
     if(data.dmProcess) co._dmOverride=data.dmProcess;
+    if(data.locations !== undefined && data.locations !== null) co._locations = parseInt(data.locations) || null;
+    if(data.countries && Array.isArray(data.countries) && data.countries.length) co._countryCount = data.countries.length;
     if(data.emailPattern&&data.emailPattern!=="DATA MISSING") co.emailPattern=data.emailPattern;
     // Build intelligence summary
     co._intel = {
@@ -1961,8 +1936,10 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
       // Rescore with new intelligence
       if(co.contacts.length){
         var best2=co.contacts.reduce(function(b,c){var sm={c_suite:4,vp:4,director:3,manager:2,senior:1};return(sm[c.seniority]||1)>(sm[b.seniority]||1)?c:b;},co.contacts[0]);
-        var r2=scoreContact(co,best2,co._turnover);
-        co.parCat=r2.cat;co.parScore=r2.score;co.parBd=r2.bd;co.dmType=r2.dmType;
+        var r2=scoreContact(co,best2);
+        co.parCat=r2.cat;co.parScore=r2.score;co.parBd=r2.companyBd;
+        co.companyScore=r2.companyScore;co.contactScore=r2.contactScore;
+        co.companyBd=r2.companyBd;co.contactBd=r2.contactBd;co._bestContact=best2;
       }
     }
 
@@ -1970,6 +1947,7 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
     scoreAllLeads();
     renderResultsPage();
     showAlert("OSINT enrichment complete for "+co.name,"info");
+    applyMatchBonus(co);
   } catch(e){
     showAlert("OSINT failed: "+e.message);
     console.error(e);
@@ -2072,124 +2050,188 @@ async function enrichAll() {
 }
 
 // PARETO SCORING
-function scoreContact(co,contact,turnover){
-  // Safety: ensure all rule groups exist
-  var r=paretoRules;
-  if(!r.pdm) r.pdm=_PARETO_DEFAULT.pdm;
-  if(!r.pb) r.pb=_PARETO_DEFAULT.pb;
-  if(!r.ph) r.ph=_PARETO_DEFAULT.ph;
-  if(!r.trn) r.trn=_PARETO_DEFAULT.trn;
-  if(!r.pt) r.pt=_PARETO_DEFAULT.pt;
-  if(!r.pe) r.pe=_PARETO_DEFAULT.pe;
-  if(!r.th) r.th=_PARETO_DEFAULT.th;
-  var emp=parseInt(co.employees)||0;
-  var ind=(co.industry||"").toLowerCase();
-  var tit=(contact.title||"").toLowerCase();
-  var combo=ind+" "+tit;
-  var coName=(co.name||"").toLowerCase();
+// ── LAYER 1: Company Score (0-100 pts) ──────────────────────────────────────
+function calcCompanyScore(co) {
+  var bd = {};
+  var score = 0;
+  var trn = parseFloat(co._turnover);
+  var trnPts, trnLabel;
+  if(co._turnover === null || co._turnover === undefined || isNaN(trn)) { trnPts=10; trnLabel="revenue unknown"; }
+  else if(trn >= 50000000) { trnPts=30; trnLabel="€50M+"; }
+  else if(trn >= 10000000) { trnPts=22; trnLabel="€10M-50M"; }
+  else if(trn >= 1000000)  { trnPts=15; trnLabel="€1M-10M"; }
+  else if(trn >= 100000)   { trnPts=8;  trnLabel="€100K-1M"; }
+  else                     { trnPts=2;  trnLabel="under €100K"; }
+  bd.turnover = {pts:trnPts, label:trnLabel}; score += trnPts;
+  var locs = co._locations !== undefined && co._locations !== null ? parseInt(co._locations) : NaN;
+  var locPts, locLabel;
+  if(isNaN(locs))      { locPts=8;  locLabel="locations unknown"; }
+  else if(locs >= 50)  { locPts=25; locLabel=locs+" locations"; }
+  else if(locs >= 20)  { locPts=20; locLabel=locs+" locations"; }
+  else if(locs >= 5)   { locPts=12; locLabel=locs+" locations"; }
+  else if(locs >= 2)   { locPts=6;  locLabel=locs+" locations"; }
+  else if(locs === 1)  { locPts=2;  locLabel="1 location"; }
+  else                 { locPts=8;  locLabel="locations unknown"; }
+  bd.locations = {pts:locPts, label:locLabel}; score += locPts;
+  var emp = parseInt(co.employees) || 0;
+  var empPts, empLabel;
+  if(emp >= 500)      { empPts=20; empLabel=emp+" employees"; }
+  else if(emp >= 100) { empPts=16; empLabel=emp+" employees"; }
+  else if(emp >= 50)  { empPts=12; empLabel=emp+" employees"; }
+  else if(emp >= 20)  { empPts=8;  empLabel=emp+" employees"; }
+  else if(emp >= 10)  { empPts=4;  empLabel=emp+" employees"; }
+  else if(emp > 0)    { empPts=1;  empLabel=emp+" employees"; }
+  else                { empPts=8;  empLabel="employees unknown"; }
+  bd.employees = {pts:empPts, label:empLabel}; score += empPts;
+  var hiringVal = co._hiring || "";
+  var hirePts = hiringVal==="sales" ? 15 : (hiringVal && hiringVal!=="none") ? 8 : 0;
+  var hireLabel = hirePts===15 ? "hiring sales" : hirePts===8 ? "hiring" : "no hiring";
+  bd.hiring = {pts:hirePts, label:hireLabel}; score += hirePts;
+  var cc = co._countryCount;
+  var intlPts, intlLabel;
+  if(cc === undefined || cc === null) { intlPts=3;  intlLabel="intl unknown"; }
+  else if(cc >= 3)  { intlPts=10; intlLabel=cc+" countries"; }
+  else if(cc >= 2)  { intlPts=6;  intlLabel="2 countries"; }
+  else if(cc === 1) { intlPts=0;  intlLabel="local only"; }
+  else              { intlPts=3;  intlLabel="intl unknown"; }
+  bd.international = {pts:intlPts, label:intlLabel}; score += intlPts;
+  return {score:Math.min(score, 100), bd:bd};
+}
 
-  // ── 1. DECISION MAKING PROCESS (inferred) ──────────────────────────────────
-  // Use manual override if set, otherwise infer
-  var dmScore=0;
-  var dmType=co._dmOverride||"";
-  if(!dmType){
-    // Infer from size + title + industry
-    var isBank=/bank|apdrošin|insurance|financ|government|municipality|pasvaldib|ministrij/.test(combo+coName);
-    var isGlobal=co._brandType==="global"||/ikea|tele2|swedbank|luminor|seb|tet|maxima|rimi|lidl|bmw|toyota|samsung|apple|microsoft|google|amazon/.test(coName);
-    var sen=contact.seniority||"";
-    if(isGlobal||isBank||emp>=500) dmType="proc";
-    else if(emp>=200) dmType="division";
-    else if(emp>=50||(sen==="director"||sen==="vp")) dmType="committee";
-    else dmType="single";
+// ── LAYER 2: Contact Score (0-100 pts) ───────────────────────────────────────
+function calcContactScore(contact) {
+  var bd = {};
+  var score = 0;
+  var tit = (contact.title || "").toLowerCase();
+  var sen = contact.seniority || "";
+  var targetDesc = (localStorage.getItem("li_target_description") || "").trim().toLowerCase();
+  var titlePts;
+  if(targetDesc) {
+    var tdWords = targetDesc.match(/\b(?:ceo|cfo|cto|coo|vp|owner|founder|director|manager|head|chief|purchas\w*|procure\w*|supply|sourcing|buying|buyer|commercial|sales|marketing|hr|human|operations|finance|legal|product|engineering|technical|digital|logistic\w*|warehouse|retail|category|vendor|account)\b/g) || [];
+    var perfect = tdWords.length > 0 && tdWords.some(function(w){ return tit.includes(w); });
+    var related = !perfect && tdWords.some(function(w){
+      var rels={purchas:["procurement","buying","supply","sourcing","vendor"],procurement:["purchas","buying","supply"],sales:["commercial","business dev","revenue","account"],hr:["people","talent","recruit"]};
+      return Object.keys(rels).some(function(k){ return w.includes(k) && rels[k].some(function(r){return tit.includes(r);}); });
+    });
+    var seniorOther = !perfect && !related && /chief|director|head|owner|founder|ceo|cfo|cto/.test(tit);
+    if(perfect) titlePts=40;
+    else if(related) titlePts=30;
+    else if(seniorOther) titlePts=10;
+    else titlePts=0;
+  } else {
+    if(/ceo|owner|founder|president|chief|chairman/.test(tit)) titlePts=35;
+    else if(/\bvp\b|vice.pres|director|head of/.test(tit)) titlePts=28;
+    else if(/manager|lead/.test(tit)) titlePts=18;
+    else titlePts=8;
   }
-  var dmMap={single:3,committee:2,division:1,proc:0};
-  dmScore=dmMap[dmType]||1;
+  bd.title = {pts:titlePts, label:contact.title||"?"}; score += titlePts;
+  var senPts;
+  if(sen==="c_suite"||sen==="vp") senPts=30;
+  else if(sen==="director") senPts=24;
+  else if(sen==="senior") senPts=18;
+  else if(sen==="manager") senPts=12;
+  else if(sen) senPts=5;
+  else if(/\b(?:ceo|cfo|cto|coo|chief|founder|owner|president)\b/.test(tit)) senPts=30;
+  else if(/\b(?:vp|vice.pres|director|head of)\b/.test(tit)) senPts=24;
+  else if(/\bsenior\b/.test(tit)) senPts=18;
+  else if(/\bmanager\b|\blead\b/.test(tit)) senPts=12;
+  else senPts=5;
+  bd.seniority = {pts:senPts, label:senPts>=30?"C-suite":senPts>=24?"Director":senPts>=18?"Senior Mgr":senPts>=12?"Manager":"Other"}; score += senPts;
+  var dmPts;
+  if(/chief|director|head of|owner|founder/.test(tit)) dmPts=20;
+  else if(/manager|lead/.test(tit)) dmPts=14;
+  else if(/specialist|coordinator|assistant/.test(tit)) dmPts=6;
+  else dmPts=8;
+  bd.decisionPower = {pts:dmPts, label:dmPts>=20?"decision maker":dmPts>=14?"influencer":"contributor"}; score += dmPts;
+  var ec = contact.emailConfidence || contact.confidence || "";
+  var emailPts;
+  if((ec==="HIGH"||ec==="high") && contact.phone) emailPts=10;
+  else if(ec==="HIGH"||ec==="high") emailPts=7;
+  else if(ec==="MEDIUM"||ec==="PREDICTED") emailPts=4;
+  else if(contact.email) emailPts=2;
+  else emailPts=1;
+  bd.emailQuality = {pts:emailPts, label:emailPts>=10?"verified+phone":emailPts>=7?"verified email":emailPts>=4?"predicted email":contact.email?"email only":"no email"}; score += emailPts;
+  return {score:Math.min(score, 100), bd:bd};
+}
 
-  // ── 2. COMPANY SIZE ─────────────────────────────────────────────────────────
-  var empTier = emp>=500?"p500":emp>=100?"p100":emp>=50?"p50":emp>=10?"p10":emp>0?"out":"unknown";
-  var ep=0;
-  if(empTier==="out") return {score:0,cat:"OUT",bd:{dm:dmScore,emp:0}};
-  else if(empTier==="unknown") ep=1; // don't penalize unknown
-  else ep=1; // all known sizes = 1pt (qualifier only)
+// Backward-compatible wrapper
+function scoreContact(co, contact) {
+  var cRes = calcCompanyScore(co);
+  var ctRes = calcContactScore(contact);
+  var wC = (scoringWeights.company || 60) / 100;
+  var wCt = (scoringWeights.contact || 40) / 100;
+  var combined = Math.round(cRes.score * wC + ctRes.score * wCt + (co._matchBonus || 0));
+  var cat = combined>=75?"VIP":combined>=60?"A":combined>=45?"B":combined>=30?"C":"OUT";
+  return {score:combined, cat:cat, bd:cRes.bd, companyScore:cRes.score, contactScore:ctRes.score, companyBd:cRes.bd, contactBd:ctRes.bd};
+}
 
-  // ── 3. TURNOVER ─────────────────────────────────────────────────────────────
-  var trp=null;
-  if(turnover!==null&&turnover!==undefined){
-    var t=parseFloat(turnover);
-    if(!isNaN(t)){
-      if(t<200000) return {score:0,cat:"OUT",bd:{dm:dmScore,emp:ep,trn:0}};
-      trp=t>=10000000?r.trn.m10:t>=1000000?r.trn.m1:r.trn.k200;
+async function applyMatchBonus(co) {
+  var targetDesc = (localStorage.getItem("li_target_description")||"").trim();
+  if(!targetDesc || !CLAUDE_KEY) return;
+  var summary = "Company: "+co.name+(co.employees?", "+co.employees+" employees":"")+(co._turnover?", €"+co._turnover+" revenue":"")+(co._hiring&&co._hiring!=="none"?", hiring "+co._hiring:"")+(co.industry?", "+co.industry:"")+(co._bestContact?"\nBest contact: "+co._bestContact.title:"");
+  var p = 'User is targeting: '+targetDesc+'\n\nLead: '+summary+'\n\nRate how well this lead matches the target on 0-20. Return ONLY JSON: {"matchBonus":0,"reason":"one sentence"}';
+  try {
+    var raw = await claudeChat(p, 200);
+    var j1=raw.indexOf('{'), j2=raw.lastIndexOf('}');
+    if(j1>-1 && j2>j1) {
+      var res = JSON.parse(raw.slice(j1, j2+1));
+      co._matchBonus = Math.min(20, Math.max(0, parseInt(res.matchBonus)||0));
+      co._matchReason = res.reason || "";
+      scoreAllLeads();
+      renderResultsPage();
     }
-  }
-
-  // ── 4. SALES STRUCTURE ──────────────────────────────────────────────────────
-  var tp=0;
-  if(/b2b|corporate.sales|enterprise|key.account|business.to.business/.test(combo)) tp=r.pt.b2b;
-  else if(/retail|b2c|consumer|phone.cent|call.cent|telesales/.test(combo)) tp=r.pt.b2c;
-  else if(/customer.serv|support|helpdesk|ecommerce|e.commerce/.test(combo)) tp=r.pt.cs;
-  else if(/sales|commercial|komerc|tirdzniec|pard/.test(combo)) tp=r.pt.b2b;
-  else if(/marketing|business.dev|partner|account/.test(combo)) tp=r.pt.mkt;
-  else tp=emp>=200?r.pt.cs:emp>=50?1:0;
-  if(tp===0&&emp<50) return {score:0,cat:"C",bd:{dm:dmScore,emp:ep,team:0}};
-
-  // ── 5. BRAND TYPE ───────────────────────────────────────────────────────────
-  var bp=0;
-  var brand=co._brandType||"";
-  if(!brand){
-    // Infer brand type
-    if(/ikea|tele2|swedbank|luminor|seb|tet|maxima|rimi|lidl|bmw|toyota|samsung|apple|microsoft|lindex|h&m|nestle|philips/.test(coName)) brand="global";
-    else if(emp>=500&&ind&&!/startup/.test(ind)) brand="global";
-    else if(emp>=200) brand="regional";
-    else if(emp>=50) brand="local";
-    else if(emp>=10) brand="small";
-    else brand="small";
-  }
-  var pbMap={global:r.pb.global,regional:r.pb.regional,local:r.pb.local,small:r.pb.small,startup:0};
-  bp=pbMap[brand]||r.pb.small;
-
-  // ── 6. HIRING SIGNAL ────────────────────────────────────────────────────────
-  var hp=0;
-  if(co._hiring==="sales") hp=r.ph.sales;
-  else if(co._hiring==="commercial") hp=r.ph.commercial;
-
-  // ── TOTAL SCORE ─────────────────────────────────────────────────────────────
-  var score=dmScore+ep+(trp||0)+tp+bp+hp;
-  var cat;
-  if(score>=r.th.vip) cat="VIP";
-  else if(score>=r.th.a) cat="A";
-  else if(score>=r.th.b) cat="B";
-  else if(score>=r.th.c) cat="C";
-  else cat="OUT";
-
-  return {score:score,cat:cat,brand:brand,dmType:dmType,
-    bd:{dm:dmScore,emp:ep,trn:trp,team:tp,brand:bp,hire:hp}};
+  } catch(e) { console.warn("Match bonus failed", e); }
 }
 
 function catColor(c){return c==="VIP"?"#C9A961":c==="A"?"#7AB8E8":c==="B"?"#7ADBB8":c==="C"?"#8A8A9A":"rgba(220,80,80,0.75)";}
 function catBg(c){return c==="VIP"?"rgba(201,169,97,0.12)":c==="A"?"rgba(122,184,232,0.08)":c==="B"?"rgba(122,219,184,0.08)":c==="C"?"rgba(138,138,154,0.06)":"rgba(220,80,80,0.06)";}
-function catBadge(c){
+function catBadge(c,tooltip){
   if(!c) return "";
   var lbl=c==="VIP"?"★ VIP":c;
-  return '<span class="badge" style="background:'+catBg(c)+';color:'+catColor(c)+';border:1px solid '+catColor(c)+'40">'+lbl+'</span>';
+  var tip=tooltip?' title="'+tooltip.replace(/"/g,"&quot;")+'"':'';
+  return '<span class="badge"'+tip+' style="'+(tooltip?'cursor:help;':'')+' background:'+catBg(c)+';color:'+catColor(c)+';border:1px solid '+catColor(c)+'40">'+lbl+'</span>';
+}
+
+function buildScoreTooltip(co) {
+  if(!co || !co.parScore) return "";
+  var lines = [];
+  if(co.companyBd) {
+    var cParts = [];
+    if(co.companyBd.turnover) cParts.push(co.companyBd.turnover.label);
+    if(co.companyBd.employees) cParts.push(co.companyBd.employees.label);
+    if(co.companyBd.hiring && co.companyBd.hiring.pts > 0) cParts.push(co.companyBd.hiring.label);
+    if(co.companyBd.locations && co.companyBd.locations.pts > 0) cParts.push(co.companyBd.locations.label);
+    if(co.companyBd.international) cParts.push(co.companyBd.international.label);
+    lines.push("Company: "+(co.companyScore||0)+"pts ("+(cParts.slice(0,3).join(" · "))+")");
+  }
+  if(co.contactBd && co._bestContact) {
+    var ctParts = [];
+    if(co.contactBd.title) ctParts.push(co.contactBd.title.label);
+    if(co.contactBd.emailQuality) ctParts.push(co.contactBd.emailQuality.label);
+    lines.push("Contact: "+(co.contactScore||0)+"pts ("+(ctParts.join(" · "))+")");
+  }
+  if(co._matchBonus && co._matchBonus > 0) lines.push("AI match: +"+co._matchBonus+"pts"+(co._matchReason?" ("+co._matchReason+")":""));
+  lines.push("Combined: "+co.parScore+"pts → "+(co.parCat||"?"));
+  return lines.join("\n");
 }
 
 function scoreAllLeads(){
+  var wC = (scoringWeights.company||60)/100;
+  var wCt = (scoringWeights.contact||40)/100;
   leads.forEach(function(co){
-    if(!co.contacts.length) return;
-    const best=co.contacts.reduce(function(b,c){
-      const sm={c_suite:4,vp:4,director:3,manager:2,senior:1};
-      return (sm[c.seniority]||1)>(sm[b.seniority]||1)?c:b;
-    },co.contacts[0]);
-    const r=scoreContact(co,best,co._turnover||null);
-    co.parCat=r.cat; co.parScore=r.score; co.parBd=r.bd;
+    var cRes = calcCompanyScore(co);
+    co.companyScore = cRes.score; co.companyBd = cRes.bd;
+    if(co.contacts.length){
+      var best=co.contacts.reduce(function(b,c){var sm={c_suite:4,vp:4,director:3,manager:2,senior:1};return (sm[c.seniority]||1)>(sm[b.seniority]||1)?c:b;},co.contacts[0]);
+      var ctRes = calcContactScore(best);
+      co.contactScore = ctRes.score; co.contactBd = ctRes.bd; co._bestContact = best;
+    } else { co.contactScore=0; co.contactBd={}; }
+    var combined = Math.round(co.companyScore*wC + co.contactScore*wCt + (co._matchBonus||0));
+    co.parScore = combined;
+    co.parCat = combined>=75?"VIP":combined>=60?"A":combined>=45?"B":combined>=30?"C":"OUT";
+    co.parBd = co.companyBd;
   });
-  leads.sort(function(a,b){
-    var o={VIP:0,A:1,B:2,C:3,OUT:4};
-    var catDiff=(o[a.parCat]||5)-(o[b.parCat]||5);
-    if(catDiff!==0) return catDiff;
-    return b.contacts.length-a.contacts.length;
-  });
-
+  leads.sort(function(a,b){ return b.parScore-a.parScore; });
 }
 // RUN SEARCH
 async function runSearch(){
@@ -2261,7 +2303,7 @@ async function runSearch(){
         linkedin:(p.organization&&p.organization.linkedin_url)||"",
         phone:cleanPhone((p.organization&&(p.organization.phone||p.organization.sanitized_phone))||"")||"",
         category:p._cat||"",
-        contacts:[],parCat:"",parScore:0,parBd:{},_turnover:null
+        contacts:[],parCat:"",parScore:0,parBd:{},companyScore:0,contactScore:0,companyBd:{},contactBd:{},_turnover:null
       };
     }
     // ALWAYS build from first_name + last_name first (most reliable)
@@ -2631,7 +2673,7 @@ async function sniperSearch(){
     website:wsGuess,
     sniperUrl:sniperUrl,
     industry:industry, country:country,
-    employees:"", contacts:[], parCat:"", parScore:0, parBd:{},
+    employees:"", contacts:[], parCat:"", parScore:0, parBd:{}, companyScore:0, contactScore:0, companyBd:{}, contactBd:{},
     category:"Sniper Research", _turnover:null
   };
 
@@ -2752,7 +2794,7 @@ function renderResultsPage(){
     const div=document.createElement("div");
     div.className="co-card";
 
-    let headsHtml='<div class="co-head"><div class="co-top"><div class="co-av" style="background:'+catBg(co.parCat)+';color:'+catColor(co.parCat)+';border-color:'+catColor(co.parCat)+'40">'+co.name.charAt(0)+'</div><div style="flex:1"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap"><a class="co-name-link" href="'+(ws||'https://www.google.com/search?q='+encodeURIComponent(co.name))+'" target="_blank">'+co.name+'</a>'+catBadge(co.parCat)+catBadge(co.category)+enrichedBadge+verifiedBadge+'</div><div class="co-meta">'+(co.industry?co.industry+' · ':'')+( co.country?co.country+' · ':'')+( co.employees?co.employees+' emp.':'')+(dmLabel?' · <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(201,169,97,0.08);color:var(--g)">'+dmLabel+'</span>':'')+'</div></div><div style="text-align:right;flex-shrink:0"><div style="font-size:28px;font-weight:800;color:'+(co.contacts.length>=7?'var(--g)':co.contacts.length>=4?'#7AB8E8':'var(--muted)')+';line-height:1">'+co.contacts.length+'</div><div style="font-size:10px;color:var(--muted);letter-spacing:.05em;margin-top:1px">CONTACTS'+(emailCt?' · '+emailCt+'✉':'')+(phoneCt?' · '+phoneCt+'📞':'')+'</div></div></div>';
+    let headsHtml='<div class="co-head"><div class="co-top"><div class="co-av" style="background:'+catBg(co.parCat)+';color:'+catColor(co.parCat)+';border-color:'+catColor(co.parCat)+'40">'+co.name.charAt(0)+'</div><div style="flex:1"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap"><a class="co-name-link" href="'+(ws||'https://www.google.com/search?q='+encodeURIComponent(co.name))+'" target="_blank">'+co.name+'</a>'+catBadge(co.parCat, buildScoreTooltip(co))+catBadge(co.category)+enrichedBadge+verifiedBadge+'</div><div class="co-meta">'+(co.industry?co.industry+' · ':'')+( co.country?co.country+' · ':'')+( co.employees?co.employees+' emp.':'')+(dmLabel?' · <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(201,169,97,0.08);color:var(--g)">'+dmLabel+'</span>':'')+'</div></div><div style="text-align:right;flex-shrink:0"><div style="font-size:28px;font-weight:800;color:'+(co.contacts.length>=7?'var(--g)':co.contacts.length>=4?'#7AB8E8':'var(--muted)')+';line-height:1">'+co.contacts.length+'</div><div style="font-size:10px;color:var(--muted);letter-spacing:.05em;margin-top:1px">CONTACTS'+(emailCt?' · '+emailCt+'✉':'')+(phoneCt?' · '+phoneCt+'📞':'')+'</div></div></div>';
     headsHtml+='<div class="co-links">';
     var cardDomain = ws ? ws.replace(/https?:\/\//,'').split('/')[0] : '';
     if(ws) headsHtml+='<a href="'+ws+'" target="_blank" style="color:var(--g);font-weight:600">🌐 '+cardDomain+'</a>';
@@ -2762,6 +2804,19 @@ function renderResultsPage(){
     if(isEnriched) headsHtml+='<button class="osint-btn" data-id="'+co.id+'" id="enrich-'+co.id+'" style="padding:3px 10px;border-radius:6px;border:1px solid rgba(201,169,97,0.35);background:rgba(201,169,97,0.08);color:var(--g);font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;transition:all .2s">🔄 Re-research</button>';
     headsHtml+='</div>';
     if(!isEnriched) headsHtml+='<div style="padding:8px 0 4px"><button class="osint-btn" data-id="'+co.id+'" id="enrich-'+co.id+'" style="padding:10px 22px;border-radius:8px;border:1px solid rgba(201,169,97,0.55);background:rgba(201,169,97,0.12);color:var(--g);font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;transition:all .25s;letter-spacing:.02em">🔍 Deep Research This Company</button></div>';
+    if(co.companyScore > 0 || co.contactScore > 0) {
+      var coFill = (co.companyScore||0)+"%";
+      var ctFill = (co.contactScore||0)+"%";
+      var coColor = co.companyScore>=75?"#C9A961":co.companyScore>=50?"#7ADBB8":"#7AB8E8";
+      var coBd = co.companyBd||{};
+      var ctBd = co.contactBd||{};
+      var coSig = [coBd.turnover?coBd.turnover.label:"",coBd.employees?coBd.employees.label:"",coBd.hiring&&coBd.hiring.pts>0?coBd.hiring.label:""].filter(Boolean).slice(0,2).join(" · ");
+      var ctSig = [ctBd.title?ctBd.title.label:"",ctBd.emailQuality?ctBd.emailQuality.label:""].filter(Boolean).join(" · ");
+      headsHtml += '<div class="score-bars">';
+      headsHtml += '<div class="score-bar-row"><span class="score-bar-label">🏢 Company</span><div class="score-bar-track"><div class="score-bar-fill" style="width:'+coFill+';background:'+coColor+'"></div></div><span class="score-bar-pts" style="color:'+coColor+'">'+(co.companyScore||0)+'</span><span class="score-bar-detail">'+coSig+'</span></div>';
+      headsHtml += '<div class="score-bar-row"><span class="score-bar-label">👤 Contact</span><div class="score-bar-track"><div class="score-bar-fill" style="width:'+ctFill+';background:#7AB8E8"></div></div><span class="score-bar-pts" style="color:#7AB8E8">'+(co.contactScore||0)+'</span><span class="score-bar-detail">'+ctSig+'</span></div>';
+      headsHtml += '</div>';
+    }
     headsHtml+='<div class="trn-row"><input type="number" placeholder="Turnover EUR" oninput="updateTrn(\''+co.id+'\',this.value)" style="width:140px;padding:5px 9px;font-size:12px;border-radius:6px"/><span>enter to rescore</span></div>';
     headsHtml+='</div>';
 
@@ -2894,10 +2949,7 @@ function updateTrn(coId,val){
   const co=leads.find(function(l){return l.id===coId;});
   if(!co) return;
   co._turnover=parseFloat(val)||null;
-  if(!co.contacts.length) return;
-  const best=co.contacts.reduce(function(b,c){var sm={c_suite:4,vp:4,director:3,manager:2,senior:1};return (sm[c.seniority]||1)>(sm[b.seniority]||1)?c:b;},co.contacts[0]);
-  const r=scoreContact(co,best,co._turnover);
-  co.parCat=r.cat;co.parScore=r.score;co.parBd=r.bd;
+  scoreAllLeads();
   renderResultsPage();
 }
 
@@ -2909,7 +2961,7 @@ function vipBtn(btn){
   const c=co.contacts[ci];
   const key=ckKey(co,c);
   if(inVIP(key)){showAlert("Already in VIP list.","info");return;}
-  const res=scoreContact(co,c,co._turnover);
+  const res=scoreContact(co,c);
   vipList.push(Object.assign({},c,{_k:key,_company:co.name,_website:co.website,_industry:co.industry,_country:co.country,_employees:co.employees,_parCat:res.cat,_parScore:res.score,_status:"VIP",_added:new Date().toLocaleDateString()}));
   saveLists();updateNavCounts();
   btn.textContent="★ VIP";btn.classList.add("on");
@@ -3045,244 +3097,45 @@ function exportCRM(){
 }
 
 // PARETO SETTINGS
-// ── PARETO PILL UI ───────────────────────────────────────────────────────────
-// Criteria definitions: id, label, points awarded, OUT flag
-var PARETO_CRITERIA = {
-  emp: {
-    label:"Company Size",
-    pills:[
-      {id:"p500", label:"500+ emp",    pts:1},
-      {id:"p100", label:"100-499 emp", pts:1},
-      {id:"p50",  label:"50-99 emp",   pts:1},
-      {id:"p10",  label:"10-49 emp",   pts:1},
-      {id:"out",  label:"Under 10",    pts:0, out:true}
-    ]
-  },
-  trn: {
-    label:"Annual Turnover",
-    pills:[
-      {id:"m10",  label:"EUR 10M+",    pts:4},
-      {id:"m1",   label:"EUR 1M-10M",  pts:3},
-      {id:"k200", label:"EUR 200K-1M", pts:2},
-      {id:"out",  label:"Under 200K",  pts:0, out:true}
-    ]
-  },
-  dm: {
-    label:"Decision Making",
-    pills:[
-      {id:"single",   label:"Single DM",    pts:3, desc:"CEO/Owner decides alone"},
-      {id:"committee",label:"Committee",    pts:2, desc:"2-3 stakeholders"},
-      {id:"division", label:"Divisional",   pts:1, desc:"Dept head + approval"},
-      {id:"proc",     label:"Procurement",  pts:0, desc:"Formal tender process"}
-    ]
-  },
-  sales: {
-    label:"Sales Structure",
-    pills:[
-      {id:"b2b", label:"B2B Sales",      pts:4},
-      {id:"b2c", label:"B2C / Phone",    pts:3},
-      {id:"cs",  label:"Customer Serv.", pts:2},
-      {id:"mkt", label:"Marketing",      pts:2},
-      {id:"none",label:"No Sales Team",  pts:0, out:true}
-    ]
-  },
-  brand: {
-    label:"Brand Type",
-    pills:[
-      {id:"global",   label:"Global Brand",   pts:4, desc:"IKEA, Tele2, Swedbank..."},
-      {id:"regional", label:"Regional Sub.",   pts:3, desc:"Nordic/EU branch in LV"},
-      {id:"local",    label:"Local Est.",      pts:2, desc:"Latvian-owned 50+ emp"},
-      {id:"small",    label:"Small Local",     pts:1, desc:"Under 50 emp"},
-      {id:"startup",  label:"Startup",         pts:0}
-    ]
-  },
-  hire: {
-    label:"Hiring Signal",
-    pills:[
-      {id:"sales",      label:"Hiring Sales",      pts:3},
-      {id:"commercial", label:"Hiring Biz Dev",    pts:2},
-      {id:"none",       label:"Not Hiring",        pts:0}
-    ]
-  }
-};
-
-// pillSelections[cat][criterion] = array of selected pill ids
-var pillSelections = {
-  VIP: {emp:["p500","p100"],     trn:["m10","m1"],        dm:["single"],                              sales:["b2b"],                brand:["global","regional"], hire:["sales","commercial"]},
-  A:   {emp:["p100","p50"],      trn:["m10","m1","k200"], dm:["single","committee"],                  sales:["b2b","b2c"],           brand:["global","regional","local"], hire:["sales","commercial","none"]},
-  B:   {emp:["p50","p10"],       trn:["m1","k200"],       dm:["single","committee","division"],        sales:["b2b","b2c","cs","mkt"],brand:["regional","local","small"], hire:["sales","commercial","none"]},
-  C:   {emp:["p10"],             trn:["k200"],            dm:["single","committee","division","proc"], sales:["b2b","b2c","cs","mkt","none"],brand:["local","small"], hire:["none"]}
-};
-
-var activeParetocat = null;
 var catColors = {VIP:"#C9A961",A:"#7AB8E8",B:"#7ADBB8",C:"#8A8A9A"};
 var catBgs    = {VIP:"rgba(201,169,97,0.12)",A:"rgba(122,184,232,0.08)",B:"rgba(122,219,184,0.08)",C:"rgba(138,138,154,0.06)"};
 
-function savePareto(){
-  // Convert pill selections to numeric points for scoreContact
-  function maxPts(crit, catId){
-    var sel = pillSelections[catId][crit]||[];
-    var cdef = PARETO_CRITERIA[crit];
-    if(!cdef) return 0;
-    var pts = 0;
-    cdef.pills.forEach(function(p){ if(sel.includes(p.id) && !p.out) pts = Math.max(pts, p.pts); });
-    return pts;
-  }
-  paretoRules = {
-    th: {
-      vip: parseInt((document.getElementById("th-vip")||{}).value)||13,
-      a:   parseInt((document.getElementById("th-a")||{}).value)||9,
-      b:   parseInt((document.getElementById("th-b")||{}).value)||5,
-      c:   parseInt((document.getElementById("th-c")||{}).value)||1
-    },
-    pdm: {single:4,committee:3,division:2,proc:1},
-    pe:  {p500:4,p100:3,p50:2,p10:1},
-    trn: {m10:4,m1:3,k200:2},
-    pt:  {b2b:4,b2c:3,cs:2,mkt:2},
-    pb:  {global:4,regional:3,local:2,small:1,startup:0},
-    ph:  {sales:3,commercial:2},
-    pills: pillSelections
-  };
-  localStorage.setItem("li_pareto", JSON.stringify(paretoRules));
-  updateCatSummaries();
-  updateParetoPreview();
+function updateWeightDisplay() {
+  var compW = parseInt(document.getElementById("weight-company").value) || 60;
+  var contW = 100 - compW;
+  var cEl = document.getElementById("weight-company-pct");
+  var ctEl = document.getElementById("weight-contact-pct");
+  if(cEl) cEl.textContent = compW+"%";
+  if(ctEl) ctEl.textContent = contW+"%";
 }
 
-function openPareto(cat){
-  if(activeParetocat === cat){ closePareto(); return; }
-  activeParetocat = cat;
-  // Update active state on cards
-  ["VIP","A","B","C"].forEach(function(c){
-    document.getElementById("pcat-"+c).classList.toggle("active", c===cat);
-  });
-  var col = catColors[cat];
-  var bg  = catBgs[cat];
-  document.documentElement.style.setProperty("--editor-color", col);
-  document.getElementById("editor-title").innerHTML =
-    '<span style="color:'+col+'">'+(cat==="VIP"?"★ VIP":cat)+'</span> &mdash; Define qualifying criteria';
-  document.getElementById("editor-title").style.color = col;
-  // Set threshold
-  var thMap={VIP:"pcat-thresh-VIP",A:"pcat-thresh-A",B:"pcat-thresh-B",C:"pcat-thresh-C"};
-  document.getElementById("editor-thresh").value = document.getElementById(thMap[cat]).textContent;
-  document.getElementById("editor-thresh").style.borderColor = col;
-  document.getElementById("editor-thresh").style.color = col;
-  // Render pill rows
-  Object.keys(PARETO_CRITERIA).forEach(function(critKey){
-    renderPills(critKey, cat, col, bg);
-  });
-  document.getElementById("pareto-editor").style.display = "block";
-  document.getElementById("pareto-editor").scrollIntoView({behavior:"smooth",block:"nearest"});
-}
-
-function closePareto(){
-  activeParetocat = null;
-  ["VIP","A","B","C"].forEach(function(c){
-    document.getElementById("pcat-"+c).classList.remove("active");
-  });
-  document.getElementById("pareto-editor").style.display = "none";
-  savePareto();
-}
-
-function renderPills(critKey, cat, col, bg){
-  var cdef = PARETO_CRITERIA[critKey];
-  var container = document.getElementById("pills-"+critKey);
-  if(!container) return;
-  var selected = pillSelections[cat][critKey]||[];
-  container.innerHTML = "";
-  cdef.pills.forEach(function(p){
-    var btn = document.createElement("button");
-    btn.className = "pill" + (p.out?" out":"") + (selected.includes(p.id)?" sel":"");
-    btn.style.setProperty("--pill-color", col);
-    btn.style.setProperty("--pill-bg", bg);
-    var lbl = p.label;
-    if(p.pts > 0) lbl += ' <span style="font-size:10px;opacity:.6">+'+p.pts+'pt</span>';
-    if(p.desc) lbl += '<br/><span style="font-size:10px;font-weight:400;opacity:.55">'+p.desc+'</span>';
-    btn.innerHTML = lbl;
-    btn.onclick = function(){ togglePill(critKey, p.id, cat, col, bg); };
-    container.appendChild(btn);
-  });
-}
-
-function togglePill(critKey, pillId, cat, col, bg){
-  var sel = pillSelections[cat][critKey]||[];
-  var idx = sel.indexOf(pillId);
-  if(idx > -1) sel.splice(idx,1);
-  else sel.push(pillId);
-  pillSelections[cat][critKey] = sel;
-  renderPills(critKey, cat, col, bg);
-  updateCatSummary(cat);
-  updateParetoPreview();
-}
-
-function updateThresh(){
-  if(!activeParetocat) return;
-  var val = document.getElementById("editor-thresh").value;
-  var spanId = "pcat-thresh-"+activeParetocat;
-  document.getElementById(spanId).textContent = val;
-  updateParetoPreview();
-}
-
-function updateCatSummary(cat){
-  var el = document.getElementById("pcat-sum-"+cat);
-  if(!el) return;
-  var sel = pillSelections[cat];
-  var parts = [];
-  if(sel.dm&&sel.dm.length)   parts.push(sel.dm.join("/")+" DM");
-  if(sel.emp&&sel.emp.filter(function(x){return x!=="out";}).length) parts.push(sel.emp.filter(function(x){return x!=="out";}).join("/")+" emp");
-  if(sel.brand&&sel.brand.length) parts.push(sel.brand.join("/")+" brand");
-  el.textContent = parts.length ? parts.slice(0,2).join(" · ") : "Not configured";
-}
-
-function updateCatSummaries(){
-  ["VIP","A","B","C"].forEach(updateCatSummary);
+function saveWeights() {
+  var compW = parseInt((document.getElementById("weight-company")||{}).value) || 60;
+  scoringWeights = {company: compW, contact: 100-compW};
+  localStorage.setItem("li_scoring_weights", JSON.stringify(scoringWeights));
+  applyParetoToAll();
+  showAlert("Weights saved and applied.","info");
 }
 
 function loadParetoUI(){
-  if(paretoRules.pills) pillSelections = paretoRules.pills;
-  var t = paretoRules.th||{vip:13,a:9,b:5,c:1};
-  var vipEl=document.getElementById("th-vip"), aEl=document.getElementById("th-a"),
-      bEl=document.getElementById("th-b"), cEl2=document.getElementById("th-c");
-  if(vipEl) vipEl.value=t.vip;
-  if(aEl) aEl.value=t.a;
-  if(bEl) bEl.value=t.b;
-  if(cEl2) cEl2.value=t.c;
-  updateCatSummaries();
-  updateParetoPreview();
-  // Update quick preview on Screen 1
+  var wEl = document.getElementById("weight-company");
+  if(wEl) { wEl.value = scoringWeights.company || 60; updateWeightDisplay(); }
   var qp = document.getElementById("pareto-quick-preview");
   if(qp){
     qp.innerHTML =
-      '<span style="color:#C9A961;font-weight:700">★ VIP</span> Top Business Potential &nbsp;·&nbsp; '+
-      '<span style="color:#7AB8E8;font-weight:700">A</span> High Potential &nbsp;·&nbsp; '+
-      '<span style="color:#7ADBB8;font-weight:700">B</span> Medium Potential &nbsp;·&nbsp; '+
-      '<span style="color:#8A8A9A;font-weight:700">C</span> Low Potential'+
-      '<br/><span style="font-size:11px;opacity:.5">Click to configure criteria →</span>';
+      '<span style="color:#C9A961;font-weight:700">★ VIP</span> 75+ pts &nbsp;·&nbsp; '+
+      '<span style="color:#7AB8E8;font-weight:700">A</span> 60-74 &nbsp;·&nbsp; '+
+      '<span style="color:#7ADBB8;font-weight:700">B</span> 45-59 &nbsp;·&nbsp; '+
+      '<span style="color:#8A8A9A;font-weight:700">C</span> 30-44'+
+      '<br/><span style="font-size:11px;opacity:.5">Company 60% + Contact 40% · Click to configure →</span>';
   }
 }
 
-// loadParetoUI is defined above in pill section
-
-function updateParetoPreview(){
-  var el=document.getElementById("pareto-preview");if(!el)return;
-  var t=paretoRules.th||{vip:13,a:9,b:5,c:1};
-  var tvip=parseInt((document.getElementById("th-vip")||{}).value)||t.vip;
-  var ta=parseInt((document.getElementById("th-a")||{}).value)||t.a;
-  var tb=parseInt((document.getElementById("th-b")||{}).value)||t.b;
-  var tc=parseInt((document.getElementById("th-c")||{}).value)||t.c;
-  var maxScore=3+1+4+4+4+3; // max possible: DM(3)+emp(1)+trn(4)+sales(4)+brand(4)+hire(3)
-  el.innerHTML=[
-    '<span style="color:#C9A961;font-weight:700">★ VIP &mdash; Top Business Potential</span> &mdash; Call personally this week',
-    '<span style="color:#7AB8E8;font-weight:700">A &mdash; High Potential</span> &mdash; Follow up within 7 days',
-    '<span style="color:#7ADBB8;font-weight:700">B &mdash; Medium Potential</span> &mdash; Nurture quarterly',
-    '<span style="color:#8A8A9A;font-weight:700">C &mdash; Low Potential</span> &mdash; Newsletter only',
-    '<span style="color:rgba(220,80,80,0.6);font-weight:600">OUT &mdash; Disqualified</span> &mdash; Too small, no sales team, or under EUR 200K turnover'
-  ].join("<br/>");
-}
+function savePareto(){ saveWeights(); }
 
 function applyParetoToAll(){
-  savePareto();
   scoreAllLeads();
-  showAlert("Scoring rules saved and applied.","info");
+  showAlert("Scoring applied.","info");
   if(leads.length) renderResults();
 }
 
