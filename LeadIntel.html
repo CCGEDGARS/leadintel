@@ -136,12 +136,10 @@ table.ct .col-li{width:90px}
 .cta-crm.on{border-color:rgba(109,184,109,0.5);color:#6DB86D;background:rgba(109,184,109,0.08);font-weight:700}
 .cta-out{border-color:rgba(122,184,232,0.18);color:rgba(122,184,232,0.6)}
 .cta-out:hover{border-color:rgba(122,184,232,0.5);color:#7AB8E8;background:rgba(122,184,232,0.06)}
-.cta-wa{border-color:rgba(37,211,102,0.18);color:rgba(37,211,102,0.55)}
-.cta-wa:hover{border-color:rgba(37,211,102,0.55);color:#25D366;background:rgba(37,211,102,0.07)}
 .td-link{text-decoration:none;transition:opacity .2s}
 .td-link:hover{opacity:.72;text-decoration:underline}
 .td-email{color:#7AB8E8;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
-.td-phone{color:var(--g);font-weight:600}
+.td-phone{color:#7ADBB8}
 .td-li{color:var(--g)}
 .td-miss{color:rgba(138,138,154,0.28)}
 .sen-tag{font-size:10px;padding:2px 6px;border-radius:6px;background:rgba(201,169,97,0.07);color:var(--g);border:1px solid var(--border);white-space:nowrap}
@@ -229,12 +227,7 @@ table.ct .col-li{width:90px}
 .om-copy-btn:hover{background:rgba(122,219,184,0.16)}
 .om-regen-btn{padding:9px 22px;border-radius:8px;border:1px solid rgba(201,169,97,0.4);background:rgba(201,169,97,0.08);color:var(--g);cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;transition:all .2s}
 .om-regen-btn:hover{background:rgba(201,169,97,0.16)}
-.om-send-btn{padding:9px 22px;border-radius:8px;border:none;background:var(--g);color:#000;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:700;transition:all .2s;white-space:nowrap}
-.om-send-btn:hover{filter:brightness(1.12)}
-.om-send-popup{position:absolute;bottom:calc(100% + 8px);right:0;background:#1a1a22;border:1px solid rgba(201,169,97,0.35);border-radius:10px;padding:6px;min-width:190px;z-index:20;box-shadow:0 8px 32px rgba(0,0,0,.55)}
-.om-send-popup button{display:block;width:100%;padding:9px 14px;border-radius:7px;border:none;background:transparent;color:var(--text);font-family:var(--font);font-size:13px;text-align:left;cursor:pointer;transition:background .15s}
-.om-send-popup button:hover{background:rgba(255,255,255,0.06)}
-.om-charcount{font-size:12px;font-weight:700;transition:color .2s}
+.om-charcount{font-size:12px;font-weight:700;margin-left:auto;transition:color .2s}
 .om-close{position:absolute;top:16px;right:18px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:22px;line-height:1;padding:4px 6px;transition:color .2s;z-index:1}
 .om-close:hover{color:var(--text)}
 </style>
@@ -253,6 +246,7 @@ table.ct .col-li{width:90px}
     <button class="step" id="nav-results" onclick="goTo('results')"><span class="step-num" id="sn-results">3</span>Results</button>
     <button class="step" id="nav-crm" onclick="goTo('crm')"><span class="step-num">★</span><span id="crm-label">CRM</span></button>
     <button class="step" id="nav-kb" onclick="goTo('kb')"><span class="step-num">📚</span><span id="kb-label">Knowledge</span></button>
+    <button class="step" id="nav-pareto" onclick="goTo('pareto')"><span class="step-num">⚙</span>Scoring</button>
   </div>
 </nav>
 
@@ -269,8 +263,13 @@ table.ct .col-li{width:90px}
         <div><label>Company Name</label><input id="p-company" placeholder="Coaching &amp; Consulting Group"/></div>
         <div><label>Website</label><input id="p-website" placeholder="ccgroup.lv"/></div>
       </div>
-      <div><label>What do you do? <span style="color:var(--muted);font-size:10px;text-transform:none;letter-spacing:0">(optional)</span></label>
-        <textarea id="p-about" rows="3" placeholder="e.g. We provide NLP-based sales training to enterprise companies. Our clients are sales directors at 100-500 person B2B companies..."></textarea>
+      <div><label>About your company <span style="color:var(--muted);font-size:10px;text-transform:none;letter-spacing:0">(optional)</span></label>
+        <textarea id="p-about" rows="3" placeholder="e.g. We are a Latvian premium oak furniture manufacturer with 15 years of experience. We produce dining sets, bedroom furniture and office collections. Currently exporting to Estonia and Lithuania, looking to expand into Scandinavian and German markets. Our competitive advantages are fast 4-week delivery, FSC certified wood, and custom sizing options."></textarea>
+      </div>
+      <div style="margin-top:14px">
+        <label>Who are you looking for?</label>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:400;text-transform:none;letter-spacing:0">The more specific you are, the better AI performs. Include titles, company size, industry, country, their pain points.</div>
+        <textarea id="p-target" rows="4" placeholder="e.g. Purchasing managers and procurement directors at furniture retail chains and interior design studios in Germany, Sweden and Denmark. Companies with 20+ locations or €5M+ annual purchasing budget. Decision makers who manage supplier relationships, value quality over price, and are actively looking for reliable European furniture suppliers with FSC certification and flexible MOQ." oninput="localStorage.setItem('li_target_description',this.value)"></textarea>
       </div>
       <div id="summary-box" style="display:none" class="summary-box">
         <div class="summary-label">AI Company Summary</div>
@@ -292,15 +291,14 @@ table.ct .col-li{width:90px}
       <div class="prog-bar"><div class="prog-fill" id="pp-fill" style="width:0%"></div></div>
       <div class="prog-status" id="pp-status">Analyzing...</div>
     </div>
-    <div class="card" style="padding:0;overflow:hidden;border-color:rgba(201,169,97,0.2)">
-      <button onclick="toggleScoringRules()" id="scoring-toggle-btn" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:16px 20px;background:rgba(201,169,97,0.04);border:none;cursor:pointer;font-family:var(--font);text-align:left">
+    <div class="card" style="background:rgba(201,169,97,0.04);border-color:rgba(201,169,97,0.2);cursor:pointer" onclick="goTo('pareto')">
+      <div style="display:flex;align-items:center;justify-content:space-between">
         <div>
-          <div class="card-title" style="margin:0">⚙️ Scoring Rules</div>
-          <div id="scoring-quick-summary" style="font-size:12px;color:var(--muted);margin-top:4px">Configure decision maker titles, company size, industries and hiring signals</div>
+          <div class="card-title" style="margin-bottom:6px">Pareto Scoring Rules</div>
+          <div id="pareto-quick-preview" style="font-size:13px;color:var(--muted);line-height:1.8"></div>
         </div>
-        <div id="scoring-toggle-arrow" style="font-size:13px;font-weight:700;color:var(--g);padding:6px 12px;border-radius:7px;background:rgba(201,169,97,0.12);border:1px solid rgba(201,169,97,0.35);white-space:nowrap;flex-shrink:0;margin-left:12px">Configure &#9654;</div>
-      </button>
-      <div id="scoring-body" style="display:none;padding:0 20px 20px"></div>
+        <div style="font-size:15px;padding:8px 12px;border-radius:8px;background:rgba(201,169,97,0.12);border:1px solid rgba(201,169,97,0.35);color:#C9A961;margin-left:16px;font-weight:700;letter-spacing:.05em">Configure &#9654;</div>
+      </div>
     </div>
     <!-- Apollo Upgrade Banner -->
     <div id="apollo-banner" style="background:linear-gradient(135deg,rgba(13,20,33,0.95),rgba(17,24,39,0.95));border:1px solid rgba(201,169,97,0.25);border-radius:12px;padding:18px 20px;margin-bottom:18px">
@@ -535,50 +533,131 @@ table.ct .col-li{width:90px}
       <textarea id="kb-frameworks" rows="7" oninput="saveKB()" style="width:100%;box-sizing:border-box;resize:vertical"></textarea>
     </div>
 
-    <div class="card" id="kb-voice-card">
-      <div class="card-title">My Voice Archetype</div>
-      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Choose your communication archetype — applies to every outreach Claude generates.</div>
-      <div id="kb-archetype-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px"></div>
-      <div id="kb-sliders-block" style="display:none">
-        <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:18px">
-          <div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:11px;font-weight:700;color:var(--g);text-transform:uppercase;letter-spacing:.07em">Formality</span></div>
-            <div style="display:flex;align-items:center;gap:10px">
-              <span style="font-size:11px;color:var(--muted);width:52px;text-align:right;white-space:nowrap">Casual</span>
-              <input type="range" id="kb-slider-formality" min="0" max="100" value="50" oninput="kbSliderChange()" style="flex:1;accent-color:#C9A961;height:4px;cursor:pointer"/>
-              <span style="font-size:11px;color:var(--muted);width:44px;white-space:nowrap">Formal</span>
-              <span id="kb-val-formality" style="font-size:12px;font-weight:700;color:var(--g);width:28px;text-align:right">50</span>
-            </div>
-          </div>
-          <div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:11px;font-weight:700;color:var(--g);text-transform:uppercase;letter-spacing:.07em">Emotion</span></div>
-            <div style="display:flex;align-items:center;gap:10px">
-              <span style="font-size:11px;color:var(--muted);width:52px;text-align:right;white-space:nowrap">Logical</span>
-              <input type="range" id="kb-slider-emotion" min="0" max="100" value="50" oninput="kbSliderChange()" style="flex:1;accent-color:#C9A961;height:4px;cursor:pointer"/>
-              <span style="font-size:11px;color:var(--muted);width:44px;white-space:nowrap">Emotional</span>
-              <span id="kb-val-emotion" style="font-size:12px;font-weight:700;color:var(--g);width:28px;text-align:right">50</span>
-            </div>
-          </div>
-          <div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-size:11px;font-weight:700;color:var(--g);text-transform:uppercase;letter-spacing:.07em">Directness</span></div>
-            <div style="display:flex;align-items:center;gap:10px">
-              <span style="font-size:11px;color:var(--muted);width:52px;text-align:right;white-space:nowrap">Subtle</span>
-              <input type="range" id="kb-slider-directness" min="0" max="100" value="50" oninput="kbSliderChange()" style="flex:1;accent-color:#C9A961;height:4px;cursor:pointer"/>
-              <span style="font-size:11px;color:var(--muted);width:44px;white-space:nowrap">Blunt</span>
-              <span id="kb-val-directness" style="font-size:12px;font-weight:700;color:var(--g);width:28px;text-align:right">50</span>
-            </div>
-          </div>
-        </div>
-        <div style="background:rgba(201,169,97,0.05);border:1px solid rgba(201,169,97,0.15);border-radius:8px;padding:12px 14px;margin-bottom:14px">
-          <div style="font-size:10px;font-weight:700;color:var(--g);text-transform:uppercase;letter-spacing:.07em;margin-bottom:7px">Live Preview</div>
-          <div id="kb-voice-preview" style="font-size:13px;color:var(--text);line-height:1.65;font-style:italic;min-height:40px">Generating preview...</div>
-        </div>
-        <button onclick="kbSaveVoice()" style="padding:9px 22px;border-radius:8px;border:none;background:linear-gradient(135deg,#C9A961,#B8943A);color:#000;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer">💾 Save Voice Profile</button>
-        <span id="kb-voice-saved-msg" style="display:none;margin-left:12px;font-size:12px;color:#7ADBB8">✓ Saved</span>
-      </div>
+    <div class="card">
+      <div class="card-title">My Voice</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Communication style, signature phrases, and what to never say.</div>
+      <textarea id="kb-voice" rows="5" oninput="saveKB()" style="width:100%;box-sizing:border-box;resize:vertical"></textarea>
     </div>
   </div>
 
+  <!-- SCREEN 6: PARETO SCORING -->
+  <div class="screen" id="screen-pareto">
+    <div class="pg-title">Pareto Scoring Rules</div>
+    <div class="pg-sub">Set your ideal customer criteria. Each company is scored automatically — VIP companies get OSINT enriched first.</div>
+
+    <!-- THRESHOLDS -->
+    <div class="card">
+      <div class="card-title">Category Thresholds</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Minimum total score to reach each category. Max possible score: ~20 pts.</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div class="thresh-chip" data-cat="VIP" style="background:rgba(201,169,97,0.1);border:2px solid var(--g);border-radius:10px;padding:14px 20px;text-align:center;cursor:pointer;flex:1;min-width:100px">
+          <div style="font-size:18px;font-weight:700;color:var(--g)">★ VIP</div>
+          <div style="font-size:11px;color:var(--muted);margin:4px 0">min score</div>
+          <input type="number" id="th-vip" value="13" min="1" max="20" oninput="savePareto()" style="width:60px;text-align:center;font-size:18px;font-weight:700;color:var(--g);background:transparent;border:none;border-bottom:1px solid var(--g);padding:2px"/>
+        </div>
+        <div class="thresh-chip" style="background:rgba(122,184,232,0.08);border:2px solid #7AB8E8;border-radius:10px;padding:14px 20px;text-align:center;flex:1;min-width:100px">
+          <div style="font-size:18px;font-weight:700;color:#7AB8E8">A</div>
+          <div style="font-size:11px;color:var(--muted);margin:4px 0">min score</div>
+          <input type="number" id="th-a" value="9" min="1" max="20" oninput="savePareto()" style="width:60px;text-align:center;font-size:18px;font-weight:700;color:#7AB8E8;background:transparent;border:none;border-bottom:1px solid #7AB8E8;padding:2px"/>
+        </div>
+        <div class="thresh-chip" style="background:rgba(122,219,184,0.08);border:2px solid #7ADBB8;border-radius:10px;padding:14px 20px;text-align:center;flex:1;min-width:100px">
+          <div style="font-size:18px;font-weight:700;color:#7ADBB8">B</div>
+          <div style="font-size:11px;color:var(--muted);margin:4px 0">min score</div>
+          <input type="number" id="th-b" value="5" min="1" max="20" oninput="savePareto()" style="width:60px;text-align:center;font-size:18px;font-weight:700;color:#7ADBB8;background:transparent;border:none;border-bottom:1px solid #7ADBB8;padding:2px"/>
+        </div>
+        <div class="thresh-chip" style="background:rgba(138,138,154,0.06);border:2px solid var(--muted);border-radius:10px;padding:14px 20px;text-align:center;flex:1;min-width:100px">
+          <div style="font-size:18px;font-weight:700;color:var(--muted)">C</div>
+          <div style="font-size:11px;color:var(--muted);margin:4px 0">min score</div>
+          <input type="number" id="th-c" value="1" min="1" max="20" oninput="savePareto()" style="width:60px;text-align:center;font-size:18px;font-weight:700;color:var(--muted);background:transparent;border:none;border-bottom:1px solid var(--muted);padding:2px"/>
+        </div>
+      </div>
+    </div>
+
+    <!-- CRITERION 1: DECISION MAKING -->
+    <div class="card">
+      <div class="card-title">1 — Decision Making Process <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">Claude infers from size, title, industry — you can override per company</span></div>
+      <div class="crit-grid">
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(201,169,97,0.12);color:var(--g)">Single Decision Maker</span><div class="crit-desc">CEO/Owner decides alone. Fast cycle, direct conversation. Typical in SMEs.</div></div><input type="number" id="pdm-single" value="4" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,184,232,0.1);color:#7AB8E8">Small Committee</span><div class="crit-desc">2-3 stakeholders (CEO + HR or Sales Director). Common in mid-size companies.</div></div><input type="number" id="pdm-committee" value="3" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,219,184,0.1);color:#7ADBB8">Divisional Approval</span><div class="crit-desc">Department head approves, needs sign-off from above. Large local companies.</div></div><input type="number" id="pdm-division" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(138,138,154,0.08);color:var(--muted)">Corporate Procurement</span><div class="crit-desc">Formal tender process, multiple approvals. Global brands, banks, government.</div></div><input type="number" id="pdm-proc" value="1" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-top:12px;padding:10px;background:rgba(201,169,97,0.04);border-radius:7px;line-height:1.7">
+        <strong style="color:var(--g)">How Claude infers this:</strong> Small company + CEO contact = Single DM. 
+        100-500 emp + Sales Director = Small Committee. 
+        500+ emp or Bank/Government = Procurement. 
+        Global brand = Procurement (high brand, lower DM score).
+      </div>
+    </div>
+
+    <!-- CRITERION 2: COMPANY SIZE -->
+    <div class="card">
+      <div class="card-title">2 — Company Size <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">Number of employees (from Apollo)</span></div>
+      <div class="crit-grid">
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(201,169,97,0.12);color:var(--g)">500+ employees</span><div class="crit-desc">Large enterprise with dedicated training budgets</div></div><input type="number" id="pe-500" value="4" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,184,232,0.1);color:#7AB8E8">100–499 employees</span><div class="crit-desc">Mid-size company, structured HR and sales teams</div></div><input type="number" id="pe-100" value="3" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,219,184,0.1);color:#7ADBB8">50–99 employees</span><div class="crit-desc">Growing company, likely has sales team</div></div><input type="number" id="pe-50" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(138,138,154,0.08);color:var(--muted)">10–49 employees</span><div class="crit-desc">Small company, limited training budget</div></div><input type="number" id="pe-10" value="1" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(220,80,80,0.07);color:rgba(220,80,80,0.8)">Under 10</span><div class="crit-desc">Too small — auto disqualified</div></div><input value="0" disabled class="crit-input" style="opacity:.35"/></div>
+      </div>
+    </div>
+
+    <!-- CRITERION 3: TURNOVER -->
+    <div class="card">
+      <div class="card-title">3 — Annual Turnover <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">Entered manually or via OSINT enrichment</span></div>
+      <div class="crit-grid">
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(201,169,97,0.12);color:var(--g)">EUR 10M+</span><div class="crit-desc">Significant training budget available</div></div><input type="number" id="ptrn-10m" value="4" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,184,232,0.1);color:#7AB8E8">EUR 1M–10M</span><div class="crit-desc">Established revenue, some training budget</div></div><input type="number" id="ptrn-1m" value="3" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,219,184,0.1);color:#7ADBB8">EUR 200K–1M</span><div class="crit-desc">Minimum viable budget</div></div><input type="number" id="ptrn-200k" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(220,80,80,0.07);color:rgba(220,80,80,0.8)">Under EUR 200K</span><div class="crit-desc">Too small — auto disqualified</div></div><input value="0" disabled class="crit-input" style="opacity:.35"/></div>
+      </div>
+    </div>
+
+    <!-- CRITERION 4: SALES STRUCTURE -->
+    <div class="card">
+      <div class="card-title">4 — Sales Structure <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">Inferred from industry, title and OSINT</span></div>
+      <div class="crit-grid">
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(201,169,97,0.12);color:var(--g)">B2B Sales Team</span><div class="crit-desc">Dedicated B2B sales reps, account managers, key account team</div></div><input type="number" id="pt-b2b" value="4" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,184,232,0.1);color:#7AB8E8">B2C / Phone Center</span><div class="crit-desc">Retail sales team, call center, telesales</div></div><input type="number" id="pt-b2c" value="3" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,219,184,0.1);color:#7ADBB8">Customer Service</span><div class="crit-desc">Support team, e-commerce helpdesk, service center</div></div><input type="number" id="pt-cs" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(138,138,154,0.08);color:var(--muted)">Marketing / Biz Dev</span><div class="crit-desc">Marketing-led growth, no dedicated sales team</div></div><input type="number" id="pt-mkt" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(220,80,80,0.07);color:rgba(220,80,80,0.8)">No Sales Team</span><div class="crit-desc">Under 50 emp with no visible sales structure — low priority</div></div><input value="0" disabled class="crit-input" style="opacity:.35"/></div>
+      </div>
+    </div>
+
+    <!-- CRITERION 5: BRAND TYPE -->
+    <div class="card">
+      <div class="card-title">5 — Brand Type <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">Inferred from company name, size and industry</span></div>
+      <div class="crit-grid">
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(201,169,97,0.12);color:var(--g)">Global Brand</span><div class="crit-desc">International company with Baltic office (IKEA, Tele2, Swedbank, Samsung)</div></div><input type="number" id="pb-global" value="4" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,184,232,0.1);color:#7AB8E8">Regional Subsidiary</span><div class="crit-desc">Nordic/EU company branch in Latvia with local management</div></div><input type="number" id="pb-regional" value="3" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,219,184,0.1);color:#7ADBB8">Local Established</span><div class="crit-desc">Latvian-owned company, 50+ employees, known brand</div></div><input type="number" id="pb-local" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(138,138,154,0.08);color:var(--muted)">Small Local</span><div class="crit-desc">Latvian SME under 50 employees</div></div><input type="number" id="pb-small" value="1" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(220,80,80,0.07);color:rgba(220,80,80,0.8)">Startup</span><div class="crit-desc">Early stage, under 3 years, no established revenue</div></div><input type="number" id="pb-startup" value="0" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+      </div>
+    </div>
+
+    <!-- CRITERION 6: HIRING SIGNAL -->
+    <div class="card">
+      <div class="card-title">6 — Active Hiring Signal <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">Checked automatically during OSINT enrichment</span></div>
+      <div class="crit-grid">
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(201,169,97,0.12);color:var(--g)">Hiring Sales Roles Now</span><div class="crit-desc">Active job ads for Sales Manager, Account Executive, Sales Rep on LinkedIn/CV.lv</div></div><input type="number" id="ph-sales" value="3" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,184,232,0.1);color:#7AB8E8">Hiring Commercial Roles</span><div class="crit-desc">Business Development, Customer Success, Marketing Manager</div></div><input type="number" id="ph-commercial" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
+        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(138,138,154,0.08);color:var(--muted)">Not Hiring / Unknown</span><div class="crit-desc">No active sales job postings found</div></div><input value="0" disabled class="crit-input" style="opacity:.35"/></div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-top:12px;padding:10px;background:rgba(201,169,97,0.04);border-radius:7px;line-height:1.7">
+        <strong style="color:var(--g)">Logic:</strong> Company hiring sales people = has sales team + budget to invest in training. 
+        Claude checks LinkedIn Jobs and CV.lv during OSINT enrichment automatically.
+      </div>
+    </div>
+
+    <!-- PREVIEW -->
+    <div class="summary-box" style="margin-bottom:18px">
+      <div class="summary-label">Score Preview</div>
+      <div id="pareto-preview" style="font-size:13px;color:var(--muted);line-height:2.2"></div>
+    </div>
+    <button class="btn btn-gold btn-full" onclick="applyParetoToAll()">Save and Apply to All Results</button>
+  </div>
 
 </div>
 
@@ -657,13 +736,9 @@ function isPersonalEmail(email) {
 
 function cleanPhone(p) {
   if(!p || p === "DATA MISSING") return "";
-  var s = p.replace(/\s*\(?partial\)?/gi, "").trim(); // strip Apollo "(partial)" suffix
-  if(!s) return "";
-  if(/[Xx]{3,}/.test(s)) return "";   // masked number e.g. +371 2XXXXXX
-  if(/\(\s*xxx\s*\)/i.test(s)) return "";
-  if(/\*{3,}/.test(s)) return "";     // ***-masked numbers
-  if(s.replace(/\D/g,"").length < 7) return ""; // too short to be a real number
-  return s;
+  if(/[Xx]{2,}/.test(p)) return "";   // masked number e.g. +371 2XXXXXX
+  if(/\(\s*xxx\s*\)/i.test(p)) return "";
+  return p.trim();
 }
 
 function cleanContactName(n) {
@@ -690,31 +765,21 @@ const PAGE = 20;
 let filterCat = "ALL";
 let filterQ = "";
 let crmTab = "all";
-var _SCORING_DEFAULT = {
-  titles:[
-    {title:"CEO",pts:10},{title:"Owner",pts:10},{title:"Founder",pts:10},
-    {title:"HR Director",pts:8},{title:"Sales Director",pts:8},{title:"Commercial Director",pts:8},
-    {title:"Manager",pts:5}
-  ],
-  size:[
-    {cat:"VIP",min:500,max:"",pts:15},
-    {cat:"A",min:100,max:499,pts:10},
-    {cat:"B",min:50,max:99,pts:6},
-    {cat:"C",min:10,max:49,pts:3}
-  ],
-  industries:[
-    {name:"Finance",pts:9,on:true},{name:"Banking",pts:8,on:true},
-    {name:"Insurance",pts:8,on:true},{name:"Technology",pts:7,on:true},
-    {name:"Retail",pts:6,on:true},{name:"Manufacturing",pts:6,on:true},
-    {name:"Healthcare",pts:5,on:true},{name:"Real Estate",pts:5,on:false},
-    {name:"Logistics",pts:4,on:false},{name:"Construction",pts:3,on:false}
-  ],
-  hiring:{on:true,pts:15},
-  turnover:{vip:10000000,a:1000000,b:200000,c:0},
-  thresholds:{vip:28,a:18,b:10,c:1}
+var _PARETO_DEFAULT = {
+  th:{vip:12,a:8,b:5,c:1},
+  pdm:{single:4,committee:3,division:2,proc:1},
+  pe:{p500:4,p100:3,p50:2,p10:1},
+  trn:{m10:4,m1:3,k200:2},
+  pt:{b2b:4,b2c:3,cs:2,mkt:2},
+  pb:{global:4,regional:3,local:2,small:1,startup:0},
+  ph:{sales:3,commercial:2}
 };
-var _scoringSaved = JSON.parse(localStorage.getItem("li_scoring")||"null");
-var scoringRules = (_scoringSaved && _scoringSaved.titles && _scoringSaved.size) ? _scoringSaved : _SCORING_DEFAULT;
+// Load from localStorage but validate structure — clear stale data if keys missing
+var _saved = JSON.parse(localStorage.getItem("li_pareto")||"null");
+var paretoRules = (_saved && _saved.pdm && _saved.pb && _saved.ph) ? _saved : _PARETO_DEFAULT;
+if(!_saved || !_saved.pdm || !_saved.pb) {
+  localStorage.removeItem("li_pareto"); // clear old format
+}
 
 function saveLists(){localStorage.setItem("li_crm",JSON.stringify(crmList));localStorage.setItem("li_vip",JSON.stringify(vipList));}
 function ckKey(co,c){return co.name+"__"+c.name+"__"+(c.email||c.title||"");}
@@ -726,11 +791,11 @@ function updateNavCounts(){
   if(el) el.textContent = "CRM ("+(crmList.length)+")"+(vipList.length?" / VIP:"+vipList.length:"");
   const kbEl = document.getElementById("kb-label");
   if(kbEl){
-    var kbCount = [1,2,3,4,5,6,7,8,9,10].filter(function(i){
+    var kbCount = [1,2,3,4,5].filter(function(i){
       try{var b=JSON.parse(localStorage.getItem("li_book_"+i)||"{}");return b.on&&(b.title||b.content);}catch(e){return false;}
     }).length;
     var hasFrameworks = !!(localStorage.getItem("li_frameworks")||"").trim();
-    var hasVoice = !!(localStorage.getItem("li_voice_archetype")||localStorage.getItem("li_voice")||"").trim();
+    var hasVoice = !!(localStorage.getItem("li_voice")||"").trim();
     var total = kbCount + (hasFrameworks?1:0) + (hasVoice?1:0);
     kbEl.textContent = total > 0 ? "Knowledge ("+total+")" : "Knowledge";
   }
@@ -746,6 +811,7 @@ function goTo(screen){
   if(nav) nav.classList.add("active");
   window.scrollTo(0,0);
   if(screen==="crm") renderCRM();
+  if(screen==="pareto") loadParetoUI();
   if(screen==="kb") renderKB();
 }
 
@@ -765,6 +831,7 @@ function resetAll(){
   document.getElementById("p-company").value="";
   document.getElementById("p-website").value="";
   document.getElementById("p-about").value="";
+  var pt=document.getElementById("p-target"); if(pt) pt.value="";
   document.getElementById("free-search").value="";
   document.getElementById("summary-box").style.display="none";
   document.getElementById("conv-box").style.display="none";
@@ -884,7 +951,9 @@ async function generateCategories(){
     if(cn) return [cn,ind,sz].filter(Boolean).join(" | ");
     return Object.values(r).filter(v=>v&&String(v).length>1).join(" | ");
   }).filter(Boolean).join("\n"):"No customer data.";
-  const p="You are a B2B sales strategist. Generate 5-6 ideal target customer categories for this company.\nCOMPANY: "+(companySummary||company)+"\nWEBSITE: "+website+"\nCLIENTS:\n"+snip+"\n\nReturn ONLY a raw JSON array:\n[{\"id\":\"c1\",\"icon\":\"emoji\",\"name\":\"Name 3-5 words\",\"description\":\"2 sentences\",\"keywords\":[\"industry term\",\"sector\"],\"industry\":\"single industry\",\"active\":true}]\nKEYWORDS must be INDUSTRY SECTOR tags only (retail, manufacturing, software, logistics). NEVER use 'sales teams', 'salespeople'.";
+  const targetDesc=(localStorage.getItem("li_target_description")||"").trim();
+  const targetLine=targetDesc?"\nTARGET PROFILE: The user is specifically targeting: "+targetDesc+". Build search categories that match this exact buyer profile.":"";
+  const p="You are a B2B sales strategist. Generate 5-6 ideal target customer categories for this company.\nCOMPANY: "+(companySummary||company)+"\nWEBSITE: "+website+"\nCLIENTS:\n"+snip+targetLine+"\n\nReturn ONLY a raw JSON array:\n[{\"id\":\"c1\",\"icon\":\"emoji\",\"name\":\"Name 3-5 words\",\"description\":\"2 sentences\",\"keywords\":[\"industry term\",\"sector\"],\"industry\":\"single industry\",\"active\":true}]\nKEYWORDS must be INDUSTRY SECTOR tags only (retail, manufacturing, software, logistics). NEVER use 'sales teams', 'salespeople'.";
   const raw=await claude(p,2000);
   var c2=raw; var a1=raw.indexOf('['),a2=raw.lastIndexOf(']'); if(a1>-1&&a2>a1) c2=raw.slice(a1,a2+1); else c2=raw.replace(/```json|```/g,'').trim();
   categories=JSON.parse(c2);
@@ -1126,7 +1195,7 @@ async function firecrawlScrape(pageUrl) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(()=>controller.abort(), 12000);
-    const res = await fetch("https://apollo-proxy.edgars-7e7.workers.dev/firecrawl-scrape", {
+    const res = await fetch("http://localhost:3131/firecrawl-scrape", {
       method: "POST",
       headers: {"Content-Type":"application/json","X-Firecrawl-Key":FIRECRAWL_KEY},
       body: JSON.stringify({url: pageUrl, formats: ["markdown"]}),
@@ -1149,7 +1218,7 @@ async function firecrawlSearch(query) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(function(){controller.abort();}, 15000);
-    const res = await fetch("https://apollo-proxy.edgars-7e7.workers.dev/firecrawl-search", {
+    const res = await fetch("http://localhost:3131/firecrawl-search", {
       method: "POST",
       headers: {"Content-Type":"application/json","X-Firecrawl-Key":FIRECRAWL_KEY},
       body: JSON.stringify({query: query, limit: 5, scrapeOptions: {formats: ["markdown"]}}),
@@ -1173,7 +1242,7 @@ async function firecrawlScrapeRich(pageUrl) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(function(){controller.abort();}, 22000);
-    const res = await fetch("https://apollo-proxy.edgars-7e7.workers.dev/firecrawl-scrape", {
+    const res = await fetch("http://localhost:3131/firecrawl-scrape", {
       method: "POST",
       headers: {"Content-Type":"application/json","X-Firecrawl-Key":FIRECRAWL_KEY},
       body: JSON.stringify({
@@ -1221,7 +1290,7 @@ async function firecrawlMap(domain) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(function(){controller.abort();}, 12000);
-    const res = await fetch("https://apollo-proxy.edgars-7e7.workers.dev/firecrawl-map", {
+    const res = await fetch("http://localhost:3131/firecrawl-map", {
       method: "POST",
       headers: {"Content-Type":"application/json","X-Firecrawl-Key":FIRECRAWL_KEY},
       body: JSON.stringify({url:"https://"+domain, search:"contact team about leadership management people", limit:15}),
@@ -1486,7 +1555,7 @@ async function enrichCompany(coId) {
       var emails = (val.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g)||[])
         .filter(function(e){return !e.includes("example")&&!e.includes("test")&&!e.includes("sentry")&&!e.includes("noreply");});
       var phones = (val.match(/\+?\d[\d\s\-\(\)\.]{6,14}\d/g)||[]).map(function(p){return p.trim();}).filter(function(p){return p.replace(/\D/g,"").length>=7;});
-      var found = emails.slice(0,3).concat(phones.slice(0,2)).join(" · ");
+      var found = emails.slice(0,3).concat(phones.slice(0,2)).join(" · ").substring(0,60);
       if(found) co._sources[key].found = found;
     }
     updateResearchBar(co.id, co._sources[key].label, status);
@@ -1554,27 +1623,12 @@ async function enrichCompany(coId) {
 
     if(!hasPhone) {
       co._sources["fb-phone"] = {status:"scraping", label:"maps-phone"};
-      co._sources["gm-phone"] = {status:"scraping", label:"google-maps"};
       renderResultsPage();
       fbPromises.push(
         firecrawlSearch('"'+co.name+'" '+(co.country||'')+ ' phone').then(function(val){
           scraped["fb-phone"] = val||"";
           markSrc("fb-phone", val&&val.length>80?"found":"empty", val);
         }).catch(function(){ scraped["fb-phone"]=""; markSrc("fb-phone","empty"); })
-      );
-      fbPromises.push(
-        firecrawlSearch('"'+co.name+'" '+(co.country||'Latvia')+' kontakti telefons OR "phone number"').then(function(val){
-          scraped["gm-phone"] = val||"";
-          if(val && val.length > 30) {
-            var nums = (val.match(/\+?\d[\d\s\-\(\)\.]{6,14}\d/g)||[])
-              .map(function(p){ return cleanPhone(p.trim()); }).filter(Boolean);
-            if(nums.length) {
-              co.mapsPhone = nums[0];
-              if(!co.phone) co.phone = co.mapsPhone;
-            }
-          }
-          markSrc("gm-phone", co.mapsPhone?"found":"empty", val);
-        }).catch(function(){ scraped["gm-phone"]=""; markSrc("gm-phone","empty"); })
       );
     }
 
@@ -1588,7 +1642,7 @@ async function enrichCompany(coId) {
     return "["+s.label.toUpperCase()+"]\n"+scraped[s.key].substring(0,3500);
   }).filter(Boolean).join("\n\n---REGISTRY---\n\n");
   var webData = scraped["website"]||"";
-  var googleData = [scraped["g-emails"]||"", scraped["g-linkedin"]||"", scraped["fb-email"]||"", scraped["fb-phone"]||"", scraped["gm-phone"]||""].filter(Boolean).join("\n\n---GOOGLE---\n\n");
+  var googleData = [scraped["g-emails"]||"", scraped["g-linkedin"]||"", scraped["fb-email"]||"", scraped["fb-phone"]||""].filter(Boolean).join("\n\n---GOOGLE---\n\n");
 
   var firecrawlSection = (webData||regData||googleData) ?
     "\n\n━━━ PRE-SCRAPED REAL DATA — USE AS PRIMARY SOURCE ━━━\n" +
@@ -1746,7 +1800,6 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
   "emailPattern": "firstname.lastname@${coDomain} or DATA MISSING",
   "mxDomain": "${coDomain}",
   "companyPhone": "full phone number or DATA MISSING",
-  "companyPhone2": "second phone number if found, or DATA MISSING",
   "companyEmail": "info@${coDomain} or DATA MISSING",
   "companyAddress": "street, city or DATA MISSING",
   "contacts": [
@@ -1756,7 +1809,6 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
       "email": "work email@${coDomain} or DATA MISSING",
       "personalEmail": "gmail/personal email if found on LinkedIn profile or DATA MISSING",
       "phone": "full phone number or DATA MISSING",
-      "phone2": "second phone number if found, or DATA MISSING",
       "linkedin": "https://www.linkedin.com/in/exact-verified-slug or DATA MISSING",
       "confidence": "HIGH|MEDIUM|LOW",
       "source": "exact URL where found"
@@ -1785,7 +1837,6 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
 
     // Always save company-level intel regardless of contacts
     if(data.companyPhone&&data.companyPhone!=="DATA MISSING"&&!co.phone) co.phone=cleanPhone(data.companyPhone)||co.phone||"";
-    if(data.companyPhone2&&data.companyPhone2!=="DATA MISSING"&&!co.phone2) co.phone2=cleanPhone(data.companyPhone2)||"";
     if(data.companyEmail&&data.companyEmail!=="DATA MISSING"&&!co.email) co.email=data.companyEmail;
     if(data.companyAddress&&data.companyAddress!=="DATA MISSING") co.address=data.companyAddress;
     if(data.notes) co.osintNotes=data.notes;
@@ -1796,7 +1847,6 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
     // Build intelligence summary
     co._intel = {
       phone: (data.companyPhone&&data.companyPhone!=="DATA MISSING")?data.companyPhone:null,
-      phone2: (data.companyPhone2&&data.companyPhone2!=="DATA MISSING")?data.companyPhone2:null,
       email: (data.companyEmail&&data.companyEmail!=="DATA MISSING")?data.companyEmail:null,
       address: (data.companyAddress&&data.companyAddress!=="DATA MISSING")?data.companyAddress:null,
       emailPattern: (data.emailPattern&&data.emailPattern!=="DATA MISSING")?data.emailPattern:null,
@@ -1828,8 +1878,7 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
             else if(!existing.email) existing.email=ecEmail;
           }
           if(ec.personalEmail && ec.personalEmail!=="DATA MISSING" && !existing.personalEmail) existing.personalEmail=ec.personalEmail.trim();
-          if(ec.phone && ec.phone!=="DATA MISSING") { var epClean=cleanPhone(ec.phone); if(epClean&&!existing.phone) existing.phone=epClean; else if(epClean&&epClean!==existing.phone&&!existing.phone2) existing.phone2=epClean; }
-          if(ec.phone2 && ec.phone2!=="DATA MISSING") { var ep2Clean=cleanPhone(ec.phone2); if(ep2Clean&&!existing.phone2) existing.phone2=ep2Clean; }
+          if(ec.phone && ec.phone!=="DATA MISSING") { var epClean=cleanPhone(ec.phone); if(epClean&&!existing.phone) existing.phone=epClean; }
           if(ec.linkedin && ec.linkedin!=="DATA MISSING" && !existing.linkedin){
             var li=ec.linkedin.trim();
             if(li && !li.startsWith("http") && li.includes("linkedin")) li="https://"+li;
@@ -1845,7 +1894,6 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
           var newEmail2=(!rawEmail2||isPersonalEmail(rawEmail2))?"":rawEmail2;
           var newPersonal2=rawEmail2&&isPersonalEmail(rawEmail2)?rawEmail2:((!ec.personalEmail||ec.personalEmail==="DATA MISSING")?"":ec.personalEmail.trim());
           var newPhone2=(!ec.phone||ec.phone==="DATA MISSING")?"":cleanPhone(ec.phone);
-          var newPhone2b=(!ec.phone2||ec.phone2==="DATA MISSING")?"":cleanPhone(ec.phone2);
           co.contacts.push({
             name:cleanContactName(ec.name.trim()),
             title:(!ec.title||ec.title==="DATA MISSING")?"":ec.title,
@@ -1853,7 +1901,6 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
             email:newEmail2,
             personalEmail:newPersonal2,
             phone:newPhone2,
-            phone2:newPhone2b,
             linkedin:newLi2,
             confidence:ec.confidence||"MEDIUM",
             source:ec.source||"OSINT",
@@ -1915,7 +1962,7 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
       // Rescore with new intelligence
       if(co.contacts.length){
         var best2=co.contacts.reduce(function(b,c){var sm={c_suite:4,vp:4,director:3,manager:2,senior:1};return(sm[c.seniority]||1)>(sm[b.seniority]||1)?c:b;},co.contacts[0]);
-        var r2=scoreContact(co,best2);
+        var r2=scoreContact(co,best2,co._turnover);
         co.parCat=r2.cat;co.parScore=r2.score;co.parBd=r2.bd;co.dmType=r2.dmType;
       }
     }
@@ -2007,7 +2054,7 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
   co._enrichComplete = true;
   co._enrichStats = {
     emails: co.contacts.filter(function(c){return c.email;}).length,
-    phones: co.contacts.filter(function(c){return c.phone||c.phone2;}).length + (co.phone ? 1 : 0) + (co.phone2 ? 1 : 0)
+    phones: co.contacts.filter(function(c){return c.phone;}).length + (co.phone ? 1 : 0)
   };
   completeResearchBar(co.id, co._enrichStats.emails, co._enrichStats.phones);
   renderResultsPage();
@@ -2025,107 +2072,106 @@ async function enrichAll() {
   showAlert("OSINT enrichment complete for top "+topCos.length+" companies","info");
 }
 
-// SCORING
-function scoreContact(co,contact){
-  var r=scoringRules;
-  var bd={}, score=0;
-  var tit=(contact.title||"").toLowerCase();
-
-  // 1. Title match
-  var titles=(r.titles||[]).slice().sort(function(a,b){return (b.pts||0)-(a.pts||0);});
-  for(var i=0;i<titles.length;i++){
-    var t=titles[i];
-    if(t.title&&tit.indexOf(t.title.toLowerCase())!==-1){
-      var tp=parseInt(t.pts)||0;
-      if(tp){score+=tp;bd.title={label:t.title+" title",pts:tp};}
-      break;
-    }
-  }
-
-  // 2. Company size
+// PARETO SCORING
+function scoreContact(co,contact,turnover){
+  // Safety: ensure all rule groups exist
+  var r=paretoRules;
+  if(!r.pdm) r.pdm=_PARETO_DEFAULT.pdm;
+  if(!r.pb) r.pb=_PARETO_DEFAULT.pb;
+  if(!r.ph) r.ph=_PARETO_DEFAULT.ph;
+  if(!r.trn) r.trn=_PARETO_DEFAULT.trn;
+  if(!r.pt) r.pt=_PARETO_DEFAULT.pt;
+  if(!r.pe) r.pe=_PARETO_DEFAULT.pe;
+  if(!r.th) r.th=_PARETO_DEFAULT.th;
   var emp=parseInt(co.employees)||0;
-  var sizes=r.size||[];
-  var sizeMatched=false;
-  for(var i=0;i<sizes.length;i++){
-    var s=sizes[i];
-    var minOk=emp>=(parseInt(s.min)||0);
-    var maxOk=!s.max||emp<=parseInt(s.max);
-    if(minOk&&maxOk){
-      var sp=parseInt(s.pts)||0;
-      if(sp){score+=sp;bd.size={label:emp+" employees",pts:sp};}
-      sizeMatched=true;
-      break;
-    }
-  }
-  // Disqualify if known employee count is below lowest size tier
-  if(emp>0&&!sizeMatched) return {score:0,cat:"OUT",bd:{}};
-
-  // 3. Industry bonus
   var ind=(co.industry||"").toLowerCase();
-  var industries=r.industries||[];
-  for(var i=0;i<industries.length;i++){
-    var ig=industries[i];
-    if(!ig.on) continue;
-    if(ind.indexOf((ig.name||"").toLowerCase())!==-1){
-      var ip=parseInt(ig.pts)||0;
-      if(ip){score+=ip;bd.industry={label:ig.name+" industry",pts:ip};}
-      break;
+  var tit=(contact.title||"").toLowerCase();
+  var combo=ind+" "+tit;
+  var coName=(co.name||"").toLowerCase();
+
+  // ── 1. DECISION MAKING PROCESS (inferred) ──────────────────────────────────
+  // Use manual override if set, otherwise infer
+  var dmScore=0;
+  var dmType=co._dmOverride||"";
+  if(!dmType){
+    // Infer from size + title + industry
+    var isBank=/bank|apdrošin|insurance|financ|government|municipality|pasvaldib|ministrij/.test(combo+coName);
+    var isGlobal=co._brandType==="global"||/ikea|tele2|swedbank|luminor|seb|tet|maxima|rimi|lidl|bmw|toyota|samsung|apple|microsoft|google|amazon/.test(coName);
+    var sen=contact.seniority||"";
+    if(isGlobal||isBank||emp>=500) dmType="proc";
+    else if(emp>=200) dmType="division";
+    else if(emp>=50||(sen==="director"||sen==="vp")) dmType="committee";
+    else dmType="single";
+  }
+  var dmMap={single:3,committee:2,division:1,proc:0};
+  dmScore=dmMap[dmType]||1;
+
+  // ── 2. COMPANY SIZE ─────────────────────────────────────────────────────────
+  var empTier = emp>=500?"p500":emp>=100?"p100":emp>=50?"p50":emp>=10?"p10":emp>0?"out":"unknown";
+  var ep=0;
+  if(empTier==="out") return {score:0,cat:"OUT",bd:{dm:dmScore,emp:0}};
+  else if(empTier==="unknown") ep=1; // don't penalize unknown
+  else ep=1; // all known sizes = 1pt (qualifier only)
+
+  // ── 3. TURNOVER ─────────────────────────────────────────────────────────────
+  var trp=null;
+  if(turnover!==null&&turnover!==undefined){
+    var t=parseFloat(turnover);
+    if(!isNaN(t)){
+      if(t<200000) return {score:0,cat:"OUT",bd:{dm:dmScore,emp:ep,trn:0}};
+      trp=t>=10000000?r.trn.m10:t>=1000000?r.trn.m1:r.trn.k200;
     }
   }
 
-  // 4. Hiring signal
-  if(r.hiring&&r.hiring.on&&co._hiring&&co._hiring!=="none"){
-    var hp=parseInt(r.hiring.pts)||0;
-    if(hp){score+=hp;bd.hiring={label:"Hiring "+co._hiring,pts:hp};}
-  }
+  // ── 4. SALES STRUCTURE ──────────────────────────────────────────────────────
+  var tp=0;
+  if(/b2b|corporate.sales|enterprise|key.account|business.to.business/.test(combo)) tp=r.pt.b2b;
+  else if(/retail|b2c|consumer|phone.cent|call.cent|telesales/.test(combo)) tp=r.pt.b2c;
+  else if(/customer.serv|support|helpdesk|ecommerce|e.commerce/.test(combo)) tp=r.pt.cs;
+  else if(/sales|commercial|komerc|tirdzniec|pard/.test(combo)) tp=r.pt.b2b;
+  else if(/marketing|business.dev|partner|account/.test(combo)) tp=r.pt.mkt;
+  else tp=emp>=200?r.pt.cs:emp>=50?1:0;
+  if(tp===0&&emp<50) return {score:0,cat:"C",bd:{dm:dmScore,emp:ep,team:0}};
 
-  // 5. Turnover qualifier — cap category
-  var trnCap=null;
-  if(co._turnover!==null&&co._turnover!==undefined){
-    var tv=parseFloat(co._turnover);
-    var trn=r.turnover||{};
-    if(!isNaN(tv)&&tv>0){
-      if(tv<(parseInt(trn.b)||200000)) trnCap="C";
-      else if(tv<(parseInt(trn.a)||1000000)) trnCap="B";
-      else if(tv<(parseInt(trn.vip)||10000000)) trnCap="A";
-    }
+  // ── 5. BRAND TYPE ───────────────────────────────────────────────────────────
+  var bp=0;
+  var brand=co._brandType||"";
+  if(!brand){
+    // Infer brand type
+    if(/ikea|tele2|swedbank|luminor|seb|tet|maxima|rimi|lidl|bmw|toyota|samsung|apple|microsoft|lindex|h&m|nestle|philips/.test(coName)) brand="global";
+    else if(emp>=500&&ind&&!/startup/.test(ind)) brand="global";
+    else if(emp>=200) brand="regional";
+    else if(emp>=50) brand="local";
+    else if(emp>=10) brand="small";
+    else brand="small";
   }
+  var pbMap={global:r.pb.global,regional:r.pb.regional,local:r.pb.local,small:r.pb.small,startup:0};
+  bp=pbMap[brand]||r.pb.small;
 
-  // 6. Category from thresholds
-  var th=r.thresholds||{vip:28,a:18,b:10,c:1};
+  // ── 6. HIRING SIGNAL ────────────────────────────────────────────────────────
+  var hp=0;
+  if(co._hiring==="sales") hp=r.ph.sales;
+  else if(co._hiring==="commercial") hp=r.ph.commercial;
+
+  // ── TOTAL SCORE ─────────────────────────────────────────────────────────────
+  var score=dmScore+ep+(trp||0)+tp+bp+hp;
   var cat;
-  if(score>=(parseInt(th.vip)||28)) cat="VIP";
-  else if(score>=(parseInt(th.a)||18)) cat="A";
-  else if(score>=(parseInt(th.b)||10)) cat="B";
-  else cat="C";
+  if(score>=r.th.vip) cat="VIP";
+  else if(score>=r.th.a) cat="A";
+  else if(score>=r.th.b) cat="B";
+  else if(score>=r.th.c) cat="C";
+  else cat="OUT";
 
-  // Apply turnover cap
-  if(trnCap){
-    var order={VIP:0,A:1,B:2,C:3,OUT:4};
-    if((order[trnCap]||4)>(order[cat]||4)) cat=trnCap;
-  }
-
-  return {score:score,cat:cat,bd:bd};
-}
-
-function buildScoreTooltip(co){
-  if(!co||!co.parScore) return "";
-  var bd=co.parBd||{};
-  var parts=["Score: "+co.parScore+"pts"];
-  if(bd.title) parts.push(bd.title.label+" (+"+bd.title.pts+")");
-  if(bd.size) parts.push(bd.size.label+" (+"+bd.size.pts+")");
-  if(bd.hiring) parts.push(bd.hiring.label+" (+"+bd.hiring.pts+")");
-  if(bd.industry) parts.push(bd.industry.label+" (+"+bd.industry.pts+")");
-  return parts.join(" \xB7 ");
+  return {score:score,cat:cat,brand:brand,dmType:dmType,
+    bd:{dm:dmScore,emp:ep,trn:trp,team:tp,brand:bp,hire:hp}};
 }
 
 function catColor(c){return c==="VIP"?"#C9A961":c==="A"?"#7AB8E8":c==="B"?"#7ADBB8":c==="C"?"#8A8A9A":"rgba(220,80,80,0.75)";}
 function catBg(c){return c==="VIP"?"rgba(201,169,97,0.12)":c==="A"?"rgba(122,184,232,0.08)":c==="B"?"rgba(122,219,184,0.08)":c==="C"?"rgba(138,138,154,0.06)":"rgba(220,80,80,0.06)";}
-function catBadge(c,tooltip){
+function catBadge(c){
   if(!c) return "";
   var lbl=c==="VIP"?"★ VIP":c;
-  var tip=tooltip?' title="'+tooltip.replace(/"/g,"&quot;")+'"':'';
-  return '<span class="badge"'+tip+' style="cursor:help;background:'+catBg(c)+';color:'+catColor(c)+';border:1px solid '+catColor(c)+'40">'+lbl+'</span>';
+  return '<span class="badge" style="background:'+catBg(c)+';color:'+catColor(c)+';border:1px solid '+catColor(c)+'40">'+lbl+'</span>';
 }
 
 function scoreAllLeads(){
@@ -2135,7 +2181,7 @@ function scoreAllLeads(){
       const sm={c_suite:4,vp:4,director:3,manager:2,senior:1};
       return (sm[c.seniority]||1)>(sm[b.seniority]||1)?c:b;
     },co.contacts[0]);
-    const r=scoreContact(co,best);
+    const r=scoreContact(co,best,co._turnover||null);
     co.parCat=r.cat; co.parScore=r.score; co.parBd=r.bd;
   });
   leads.sort(function(a,b){
@@ -2233,15 +2279,7 @@ async function runSearch(){
         title:p.title||"",
         seniority:p.seniority||"",
         email:p.email||p.work_email||"",
-        phone:(function(){
-          var nums=(p.phone_numbers||[]).map(function(n){return cleanPhone(n.sanitized_number||n.raw_number||"");}).filter(Boolean);
-          return cleanPhone(p.phone||p.mobile_phone||nums[0]||"")||nums[0]||"";
-        })(),
-        phone2:(function(){
-          var nums=(p.phone_numbers||[]).map(function(n){return cleanPhone(n.sanitized_number||n.raw_number||"");}).filter(Boolean);
-          var first=cleanPhone(p.phone||p.mobile_phone||nums[0]||"")||nums[0]||"";
-          return nums.find(function(n){return n&&n!==first;})||"";
-        })(),
+        phone:cleanPhone(p.phone||p.mobile_phone||(p.phone_numbers&&p.phone_numbers.length?p.phone_numbers[0].sanitized_number||p.phone_numbers[0].raw_number:"")||"")||"",
         linkedin:(function(){var l=p.linkedin_url||p.linkedin||"";if(l&&!l.startsWith("http"))l="https://"+l;return l;})()
       });
     }
@@ -2470,8 +2508,6 @@ function editContact(coId, ci){
     '<input id="ec-email" value="'+(c.email||"")+'" style="width:100%;box-sizing:border-box"/></div>' +
     '<div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em">Phone</label>' +
     '<input id="ec-phone" value="'+(c.phone||"")+'" style="width:100%;box-sizing:border-box"/></div>' +
-    '<div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em">Phone 2</label>' +
-    '<input id="ec-phone2" value="'+(c.phone2||"")+'" style="width:100%;box-sizing:border-box"/></div>' +
     '<div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em">LinkedIn URL</label>' +
     '<input id="ec-linkedin" value="'+(c.linkedin||"")+'" placeholder="https://linkedin.com/in/..." style="width:100%;box-sizing:border-box"/></div>' +
     '</div>' +
@@ -2531,7 +2567,6 @@ function saveEditContact(coId, ci){
   c.title   = document.getElementById("ec-title").value.trim()   || c.title;
   c.email   = document.getElementById("ec-email").value.trim();
   c.phone   = document.getElementById("ec-phone").value.trim();
-  c.phone2  = document.getElementById("ec-phone2").value.trim();
   c.linkedin= document.getElementById("ec-linkedin").value.trim();
   c._edited = true;
   document.getElementById("edit-modal").style.display = "none";
@@ -2696,7 +2731,7 @@ function renderResultsPage(){
     // Firmas.lv search - opens search results for this company name
     const firmasUrl="https://www.firmas.lv/lv/uznemumi?q="+encodeURIComponent(co.name)+"&type=companies";
     const emailCt=co.contacts.filter(function(c){return c.email;}).length;
-    const phoneCt=co.contacts.filter(function(c){return c.phone||c.phone2;}).length + (co.phone2 ? 1 : 0);
+    const phoneCt=co.contacts.filter(function(c){return c.phone;}).length;
     var bd=co.parBd||{};
     var scoreInfo=""; // hidden from user
     var dmType=co.dmType||"";
@@ -2718,12 +2753,11 @@ function renderResultsPage(){
     const div=document.createElement("div");
     div.className="co-card";
 
-    let headsHtml='<div class="co-head"><div class="co-top"><div class="co-av" style="background:'+catBg(co.parCat)+';color:'+catColor(co.parCat)+';border-color:'+catColor(co.parCat)+'40">'+co.name.charAt(0)+'</div><div style="flex:1"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap"><a class="co-name-link" href="'+(ws||'https://www.google.com/search?q='+encodeURIComponent(co.name))+'" target="_blank">'+co.name+'</a>'+catBadge(co.parCat,buildScoreTooltip(co))+catBadge(co.category)+enrichedBadge+verifiedBadge+'</div><div class="co-meta">'+(co.industry?co.industry+' · ':'')+( co.country?co.country+' · ':'')+( co.employees?co.employees+' emp.':'')+(dmLabel?' · <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(201,169,97,0.08);color:var(--g)">'+dmLabel+'</span>':'')+'</div></div><div style="text-align:right;flex-shrink:0"><div style="font-size:28px;font-weight:800;color:'+(co.contacts.length>=7?'var(--g)':co.contacts.length>=4?'#7AB8E8':'var(--muted)')+';line-height:1">'+co.contacts.length+'</div><div style="font-size:10px;color:var(--muted);letter-spacing:.05em;margin-top:1px">CONTACTS'+(emailCt?' · '+emailCt+'✉':'')+(phoneCt?' · '+phoneCt+'📞':'')+'</div></div></div>';
+    let headsHtml='<div class="co-head"><div class="co-top"><div class="co-av" style="background:'+catBg(co.parCat)+';color:'+catColor(co.parCat)+';border-color:'+catColor(co.parCat)+'40">'+co.name.charAt(0)+'</div><div style="flex:1"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap"><a class="co-name-link" href="'+(ws||'https://www.google.com/search?q='+encodeURIComponent(co.name))+'" target="_blank">'+co.name+'</a>'+catBadge(co.parCat)+catBadge(co.category)+enrichedBadge+verifiedBadge+'</div><div class="co-meta">'+(co.industry?co.industry+' · ':'')+( co.country?co.country+' · ':'')+( co.employees?co.employees+' emp.':'')+(dmLabel?' · <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(201,169,97,0.08);color:var(--g)">'+dmLabel+'</span>':'')+'</div></div><div style="text-align:right;flex-shrink:0"><div style="font-size:28px;font-weight:800;color:'+(co.contacts.length>=7?'var(--g)':co.contacts.length>=4?'#7AB8E8':'var(--muted)')+';line-height:1">'+co.contacts.length+'</div><div style="font-size:10px;color:var(--muted);letter-spacing:.05em;margin-top:1px">CONTACTS'+(emailCt?' · '+emailCt+'✉':'')+(phoneCt?' · '+phoneCt+'📞':'')+'</div></div></div>';
     headsHtml+='<div class="co-links">';
     var cardDomain = ws ? ws.replace(/https?:\/\//,'').split('/')[0] : '';
     if(ws) headsHtml+='<a href="'+ws+'" target="_blank" style="color:var(--g);font-weight:600">🌐 '+cardDomain+'</a>';
-    if(co.phone) headsHtml+='<a href="tel:'+co.phone+'" style="color:#7ADBB8;text-decoration:none">📞 '+co.phone+'</a>';
-    if(co.phone2) headsHtml+='<a href="tel:'+co.phone2+'" style="color:#7ADBB8;text-decoration:none">📞 '+co.phone2+'</a>';
+    if(co.phone) headsHtml+='<span style="color:#7ADBB8">📞 '+co.phone+'</span>';
     if(co.email) headsHtml+='<a href="mailto:'+co.email+'" style="color:#7AB8E8">✉ '+co.email+'</a>';
     headsHtml+='<a href="'+firmasUrl+'" target="_blank" style="color:rgba(122,219,184,0.7);font-size:12px">Firmas.lv ↗</a>';
     if(isEnriched) headsHtml+='<button class="osint-btn" data-id="'+co.id+'" id="enrich-'+co.id+'" style="padding:3px 10px;border-radius:6px;border:1px solid rgba(201,169,97,0.35);background:rgba(201,169,97,0.08);color:var(--g);font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;transition:all .2s">🔄 Re-research</button>';
@@ -2753,16 +2787,12 @@ function renderResultsPage(){
     // General Contact card + Intelligence summary (shows after OSINT)
     var intelHtml = "";
     var gcPhone   = co.phone   || (co._intel && co._intel.phone)   || "";
-    var gcPhone2  = co.phone2  || (co._intel && co._intel.phone2)  || "";
-    var gcMapsPhone = (co.mapsPhone && co.mapsPhone!==gcPhone && co.mapsPhone!==gcPhone2) ? co.mapsPhone : "";
     var gcEmail   = co.email   || (co._intel && co._intel.email)   || "";
     var gcAddress = co.address || (co._intel && co._intel.address) || "";
     var gcPattern = co.emailPattern || (co._intel && co._intel.emailPattern) || "";
-    if(gcPhone || gcPhone2 || gcMapsPhone || gcEmail || gcAddress || gcPattern || co._intel) {
+    if(gcPhone || gcEmail || gcAddress || gcPattern || co._intel) {
       var gcItems = [];
       if(gcPhone)   gcItems.push('<div style="display:flex;align-items:center;gap:6px"><span style="color:#7ADBB8">📞</span><a href="tel:'+gcPhone+'" style="color:#7ADBB8;font-weight:700;font-size:13px;text-decoration:none;letter-spacing:.01em">'+gcPhone+'</a></div>');
-      if(gcPhone2)  gcItems.push('<div style="display:flex;align-items:center;gap:6px"><span style="color:#7ADBB8">📞</span><a href="tel:'+gcPhone2+'" style="color:#7ADBB8;font-weight:700;font-size:13px;text-decoration:none;letter-spacing:.01em">'+gcPhone2+'</a></div>');
-      if(gcMapsPhone) gcItems.push('<div style="display:flex;align-items:center;gap:6px"><span>📍</span><a href="tel:'+gcMapsPhone+'" style="color:#7ADBB8;font-weight:700;font-size:13px;text-decoration:none;letter-spacing:.01em">'+gcMapsPhone+'</a><span style="font-size:10px;color:var(--muted);margin-left:2px">Google Maps</span></div>');
       if(gcEmail)   gcItems.push('<div style="display:flex;align-items:center;gap:6px"><span style="color:#7AB8E8">✉</span><a href="mailto:'+gcEmail+'" style="color:#7AB8E8;font-size:12px;text-decoration:none">'+gcEmail+'</a></div>');
       if(gcAddress) gcItems.push('<div style="display:flex;align-items:center;gap:6px"><span>📍</span><span style="color:var(--muted);font-size:11px">'+gcAddress+'</span></div>');
       var intelMeta = [];
@@ -2787,18 +2817,18 @@ function renderResultsPage(){
     let tblHtml='<div class="co-contacts"><div class="contacts-hd">All Contacts ('+co.contacts.length+')</div><table class="ct"><thead><tr><th class="col-name">Name</th><th class="col-title">Title</th><th class="col-email">Email</th><th class="col-phone">Phone</th><th class="col-li">LinkedIn</th></tr></thead><tbody>';
     co.contacts.forEach(function(c,ci){
       var ck=ckKey(co,c);
-      var ic=inCRM(ck);
+      var iv=inVIP(ck),ic=inCRM(ck);
       var coId=co.id;
       // Name cell: cleaned name on top, action row below (single line)
       var dispName = cleanContactName(c.name) || "—";
       var nameCell=
         '<div class="td-name" title="'+dispName+'">'+dispName+'</div>'+
         '<div class="ct-actions">'+
+          '<button class="cta cta-vip'+(iv?" on":"")+'" data-coid="'+coId+'" data-ci="'+ci+'" onclick="vipBtn(this)" title="Save as VIP">'+(iv?"★ VIP":"⭐ VIP")+'</button>'+
           '<button class="cta cta-crm'+(ic?" on":"")+'" data-coid="'+coId+'" data-ci="'+ci+'" onclick="crmBtn(this)" title="Add to CRM">'+(ic?"✓ CRM":"+ CRM")+'</button>'+
           '<button class="cta cta-out" title="LinkedIn outreach" onclick="openOutreach(\''+coId+'\','+ci+',\'linkedin\')">💼</button>'+
           '<button class="cta cta-out" title="Email outreach" onclick="openOutreach(\''+coId+'\','+ci+',\'email\')">📧</button>'+
           '<button class="cta cta-out" title="Call script" onclick="openOutreach(\''+coId+'\','+ci+',\'call\')">📞</button>'+
-          '<button class="cta cta-wa" title="WhatsApp" onclick="waBtn(this,\''+coId+'\','+ci+')">💬</button>'+
           '<button class="cta edit-contact-btn" data-coid="'+coId+'" data-ci="'+ci+'" title="Edit contact">✏️</button>'+
         '</div>';
       tblHtml+='<tr><td class="col-name">'+nameCell+'</td>';
@@ -2812,10 +2842,7 @@ function renderResultsPage(){
         : '<span class="td-miss">—</span>';
       if(c.personalEmail) emailCell += '<div style="margin-top:3px"><a href="mailto:'+c.personalEmail+'" class="td-link" style="font-size:11px;color:rgba(138,138,154,0.7);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px" title="'+c.personalEmail+'">'+c.personalEmail+'</a><span style="font-size:9px;padding:1px 4px;border-radius:3px;background:rgba(138,138,154,0.08);color:rgba(138,138,154,0.5);border:1px solid rgba(138,138,154,0.15);vertical-align:middle">personal</span></div>';
       tblHtml+='<td class="col-email">'+emailCell+'</td>';
-      var phoneCell='';
-      if(c.phone) phoneCell+='<a href="tel:'+c.phone+'" class="td-link td-phone" style="white-space:nowrap;display:block">📞 '+c.phone+'</a>';
-      if(c.phone2) phoneCell+='<a href="tel:'+c.phone2+'" class="td-link td-phone" style="white-space:nowrap;display:block;margin-top:2px;font-size:11px;opacity:.8">📞 '+c.phone2+'</a>';
-      tblHtml+='<td class="col-phone">'+(phoneCell||'<span class="td-miss">—</span>')+'</td>';
+      tblHtml+='<td class="col-phone">'+(c.phone?'<a href="tel:'+c.phone+'" class="td-link td-phone" style="white-space:nowrap">'+c.phone+'</a>':'<span class="td-miss">—</span>')+'</td>';
       var liDisplay="—";
       if(c.linkedin && c._linkedinVerified) {
         liDisplay = '<a href="'+c.linkedin+'" target="_blank" class="td-link td-li" style="color:#7ADBB8" title="Verified LinkedIn profile">✓ LinkedIn</a>';
@@ -2870,7 +2897,7 @@ function updateTrn(coId,val){
   co._turnover=parseFloat(val)||null;
   if(!co.contacts.length) return;
   const best=co.contacts.reduce(function(b,c){var sm={c_suite:4,vp:4,director:3,manager:2,senior:1};return (sm[c.seniority]||1)>(sm[b.seniority]||1)?c:b;},co.contacts[0]);
-  const r=scoreContact(co,best);
+  const r=scoreContact(co,best,co._turnover);
   co.parCat=r.cat;co.parScore=r.score;co.parBd=r.bd;
   renderResultsPage();
 }
@@ -2883,7 +2910,7 @@ function vipBtn(btn){
   const c=co.contacts[ci];
   const key=ckKey(co,c);
   if(inVIP(key)){showAlert("Already in VIP list.","info");return;}
-  const res=scoreContact(co,c);
+  const res=scoreContact(co,c,co._turnover);
   vipList.push(Object.assign({},c,{_k:key,_company:co.name,_website:co.website,_industry:co.industry,_country:co.country,_employees:co.employees,_parCat:res.cat,_parScore:res.score,_status:"VIP",_added:new Date().toLocaleDateString()}));
   saveLists();updateNavCounts();
   btn.textContent="★ VIP";btn.classList.add("on");
@@ -2897,8 +2924,9 @@ function crmBtn(btn){
   const c=co.contacts[ci];
   const key=ckKey(co,c);
   if(inCRM(key)){showAlert("Already in CRM.","info");return;}
-  const res=scoreContact(co,c);
-  crmList.push(Object.assign({},c,{_k:key,_company:co.name,_website:co.website,_industry:co.industry,_country:co.country,_employees:co.employees,_parCat:res.cat,_parScore:res.score,_status:"Cold",_added:new Date().toLocaleDateString()}));
+  const res=scoreContact(co,c,co._turnover);
+  const status=res.cat==="VIP"?"VIP":res.cat==="A"?"Hot":"Cold";
+  crmList.push(Object.assign({},c,{_k:key,_company:co.name,_website:co.website,_industry:co.industry,_country:co.country,_employees:co.employees,_parCat:res.cat,_parScore:res.score,_status:status,_added:new Date().toLocaleDateString()}));
   saveLists();updateNavCounts();
   btn.textContent="✓ CRM";btn.classList.add("on");
 }
@@ -2909,8 +2937,9 @@ function saveAllToCRM(){
     co.contacts.forEach(function(c){
       const key=ckKey(co,c);
       if(!inCRM(key)){
-        const res=scoreContact(co,c);
-        crmList.push(Object.assign({},c,{_k:key,_company:co.name,_website:co.website,_industry:co.industry,_country:co.country,_employees:co.employees,_parCat:res.cat,_parScore:res.score,_status:"Cold",_added:new Date().toLocaleDateString()}));
+        const res=scoreContact(co,c,co._turnover);
+        const status=res.cat==="VIP"?"VIP":res.cat==="A"?"Hot":"Cold";
+        crmList.push(Object.assign({},c,{_k:key,_company:co.name,_website:co.website,_industry:co.industry,_country:co.country,_employees:co.employees,_parCat:res.cat,_parScore:res.score,_status:status,_added:new Date().toLocaleDateString()}));
         added++;
       }
     });
@@ -2947,15 +2976,12 @@ function renderCRM(){
     const ws=cons[0]._website?(cons[0]._website.startsWith("http")?cons[0]._website:"https://"+cons[0]._website):"";
     html+='<div class="co-card"><div class="co-head"><div class="co-top"><div class="co-av">'+comp.charAt(0)+'</div><div><div class="co-name">'+comp+'</div><div class="co-meta">'+(cons[0]._industry||"")+(cons[0]._country?" &middot; "+cons[0]._country:"")+'</div></div></div>';
     html+='<div class="co-links">'+(ws?'<a href="'+ws+'" target="_blank">Website</a>':"")+'</div></div>';
-    html+='<div class="co-contacts"><table class="ct"><thead><tr><th>Name</th><th>Title</th><th>Email</th><th>Phone</th><th>Status</th><th></th></tr></thead><tbody>';
+    html+='<div class="co-contacts"><table class="ct"><thead><tr><th>Name</th><th>Title</th><th>Category</th><th>Email</th><th>Phone</th><th>Status</th><th></th></tr></thead><tbody>';
     cons.forEach(function(c){
-      var catBadgeHtml=c._parCat?(' '+catBadge(c._parCat)):"";
-      html+='<tr><td class="td-name">'+(c.name||"—")+catBadgeHtml+'</td><td class="td-title">'+(c.title||"—")+'</td>';
+      html+='<tr><td class="td-name">'+(c.name||"—")+'</td><td class="td-title">'+(c.title||"—")+'</td>';
+      html+='<td>'+(c._parCat?catBadge(c._parCat):"—")+'</td>';
       html+='<td>'+(c.email?'<a href="mailto:'+c.email+'" class="td-link td-email">'+c.email+'</a>':'<span class="td-miss">—</span>')+'</td>';
-      var crmPhoneCell='';
-      if(c.phone) crmPhoneCell+='<a href="tel:'+c.phone+'" class="td-link td-phone" style="display:block">'+c.phone+'</a>';
-      if(c.phone2) crmPhoneCell+='<a href="tel:'+c.phone2+'" class="td-link td-phone" style="display:block;margin-top:2px;font-size:11px;opacity:.8">'+c.phone2+'</a>';
-      html+='<td>'+(crmPhoneCell||'<span class="td-miss">—</span>')+'</td>';
+      html+='<td>'+(c.phone?'<a href="tel:'+c.phone+'" class="td-link td-phone">'+c.phone+'</a>':'<span class="td-miss">—</span>')+'</td>';
       html+='<td><select onchange="updateStatus(\''+crmTab+'\',\''+c._k+'\',this.value)" style="background:var(--dark3);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;padding:2px 5px;font-family:var(--font)"><option>Cold</option><option>Hot</option><option>Meeting</option><option>Proposal</option><option>Client</option><option>Lost</option><option>VIP</option></select></td>';
       html+='<td><button onclick="removeContact(\''+crmTab+'\',\''+c._k+'\')" style="background:none;border:none;color:rgba(220,80,80,0.5);cursor:pointer;font-size:14px">X</button></td>';
       html+='</tr>';
@@ -2995,11 +3021,11 @@ function addManual(){
 }
 
 function exportCSV(){
-  var hdrs=["Company","Website","Industry","Country","Employees","Pareto","Score","Category","Name","Title","Seniority","Email","Phone","Phone2","LinkedIn"];
+  var hdrs=["Company","Website","Industry","Country","Employees","Pareto","Score","Category","Name","Title","Seniority","Email","Phone","LinkedIn"];
   var rows=[hdrs];
   leads.forEach(function(co){
     co.contacts.forEach(function(c){
-      rows.push([co.name,co.website,co.industry,co.country,co.employees,co.parCat||"",co.parScore||"",co.category||"",c.name,c.title,c.seniority,c.email,c.phone,c.phone2,c.linkedin]);
+      rows.push([co.name,co.website,co.industry,co.country,co.employees,co.parCat||"",co.parScore||"",co.category||"",c.name,c.title,c.seniority,c.email,c.phone,c.linkedin]);
     });
   });
   var csv=rows.map(function(r){return r.map(function(v){return'"'+(String(v||"")).replace(/"/g,'""')+'"';}).join(",");}).join("\n");
@@ -3019,7 +3045,9 @@ function exportCRM(){
   var a=document.createElement("a");a.href=url;a.download="my_crm.csv";a.click();
 }
 
-// SCORING SETTINGS UI
+// PARETO SETTINGS
+// ── PARETO PILL UI ───────────────────────────────────────────────────────────
+// Criteria definitions: id, label, points awarded, OUT flag
 var PARETO_CRITERIA = {
   emp: {
     label:"Company Size",
@@ -3087,213 +3115,180 @@ var pillSelections = {
   C:   {emp:["p10"],             trn:["k200"],            dm:["single","committee","division","proc"], sales:["b2b","b2c","cs","mkt","none"],brand:["local","small"], hire:["none"]}
 };
 
-// ── SCORING RULES UI ─────────────────────────────────────────────────────────
-function toggleScoringRules(){
-  var body=document.getElementById("scoring-body");
-  var arrow=document.getElementById("scoring-toggle-arrow");
-  if(!body) return;
-  if(body.style.display==="none"){
-    body.style.display="block";
-    arrow.textContent="Close ▲";
-    renderScoringRules();
-  } else {
-    body.style.display="none";
-    arrow.innerHTML="Configure &#9654;";
+var activeParetocat = null;
+var catColors = {VIP:"#C9A961",A:"#7AB8E8",B:"#7ADBB8",C:"#8A8A9A"};
+var catBgs    = {VIP:"rgba(201,169,97,0.12)",A:"rgba(122,184,232,0.08)",B:"rgba(122,219,184,0.08)",C:"rgba(138,138,154,0.06)"};
+
+function savePareto(){
+  // Convert pill selections to numeric points for scoreContact
+  function maxPts(crit, catId){
+    var sel = pillSelections[catId][crit]||[];
+    var cdef = PARETO_CRITERIA[crit];
+    if(!cdef) return 0;
+    var pts = 0;
+    cdef.pills.forEach(function(p){ if(sel.includes(p.id) && !p.out) pts = Math.max(pts, p.pts); });
+    return pts;
+  }
+  paretoRules = {
+    th: {
+      vip: parseInt((document.getElementById("th-vip")||{}).value)||13,
+      a:   parseInt((document.getElementById("th-a")||{}).value)||9,
+      b:   parseInt((document.getElementById("th-b")||{}).value)||5,
+      c:   parseInt((document.getElementById("th-c")||{}).value)||1
+    },
+    pdm: {single:4,committee:3,division:2,proc:1},
+    pe:  {p500:4,p100:3,p50:2,p10:1},
+    trn: {m10:4,m1:3,k200:2},
+    pt:  {b2b:4,b2c:3,cs:2,mkt:2},
+    pb:  {global:4,regional:3,local:2,small:1,startup:0},
+    ph:  {sales:3,commercial:2},
+    pills: pillSelections
+  };
+  localStorage.setItem("li_pareto", JSON.stringify(paretoRules));
+  updateCatSummaries();
+  updateParetoPreview();
+}
+
+function openPareto(cat){
+  if(activeParetocat === cat){ closePareto(); return; }
+  activeParetocat = cat;
+  // Update active state on cards
+  ["VIP","A","B","C"].forEach(function(c){
+    document.getElementById("pcat-"+c).classList.toggle("active", c===cat);
+  });
+  var col = catColors[cat];
+  var bg  = catBgs[cat];
+  document.documentElement.style.setProperty("--editor-color", col);
+  document.getElementById("editor-title").innerHTML =
+    '<span style="color:'+col+'">'+(cat==="VIP"?"★ VIP":cat)+'</span> &mdash; Define qualifying criteria';
+  document.getElementById("editor-title").style.color = col;
+  // Set threshold
+  var thMap={VIP:"pcat-thresh-VIP",A:"pcat-thresh-A",B:"pcat-thresh-B",C:"pcat-thresh-C"};
+  document.getElementById("editor-thresh").value = document.getElementById(thMap[cat]).textContent;
+  document.getElementById("editor-thresh").style.borderColor = col;
+  document.getElementById("editor-thresh").style.color = col;
+  // Render pill rows
+  Object.keys(PARETO_CRITERIA).forEach(function(critKey){
+    renderPills(critKey, cat, col, bg);
+  });
+  document.getElementById("pareto-editor").style.display = "block";
+  document.getElementById("pareto-editor").scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+
+function closePareto(){
+  activeParetocat = null;
+  ["VIP","A","B","C"].forEach(function(c){
+    document.getElementById("pcat-"+c).classList.remove("active");
+  });
+  document.getElementById("pareto-editor").style.display = "none";
+  savePareto();
+}
+
+function renderPills(critKey, cat, col, bg){
+  var cdef = PARETO_CRITERIA[critKey];
+  var container = document.getElementById("pills-"+critKey);
+  if(!container) return;
+  var selected = pillSelections[cat][critKey]||[];
+  container.innerHTML = "";
+  cdef.pills.forEach(function(p){
+    var btn = document.createElement("button");
+    btn.className = "pill" + (p.out?" out":"") + (selected.includes(p.id)?" sel":"");
+    btn.style.setProperty("--pill-color", col);
+    btn.style.setProperty("--pill-bg", bg);
+    var lbl = p.label;
+    if(p.pts > 0) lbl += ' <span style="font-size:10px;opacity:.6">+'+p.pts+'pt</span>';
+    if(p.desc) lbl += '<br/><span style="font-size:10px;font-weight:400;opacity:.55">'+p.desc+'</span>';
+    btn.innerHTML = lbl;
+    btn.onclick = function(){ togglePill(critKey, p.id, cat, col, bg); };
+    container.appendChild(btn);
+  });
+}
+
+function togglePill(critKey, pillId, cat, col, bg){
+  var sel = pillSelections[cat][critKey]||[];
+  var idx = sel.indexOf(pillId);
+  if(idx > -1) sel.splice(idx,1);
+  else sel.push(pillId);
+  pillSelections[cat][critKey] = sel;
+  renderPills(critKey, cat, col, bg);
+  updateCatSummary(cat);
+  updateParetoPreview();
+}
+
+function updateThresh(){
+  if(!activeParetocat) return;
+  var val = document.getElementById("editor-thresh").value;
+  var spanId = "pcat-thresh-"+activeParetocat;
+  document.getElementById(spanId).textContent = val;
+  updateParetoPreview();
+}
+
+function updateCatSummary(cat){
+  var el = document.getElementById("pcat-sum-"+cat);
+  if(!el) return;
+  var sel = pillSelections[cat];
+  var parts = [];
+  if(sel.dm&&sel.dm.length)   parts.push(sel.dm.join("/")+" DM");
+  if(sel.emp&&sel.emp.filter(function(x){return x!=="out";}).length) parts.push(sel.emp.filter(function(x){return x!=="out";}).join("/")+" emp");
+  if(sel.brand&&sel.brand.length) parts.push(sel.brand.join("/")+" brand");
+  el.textContent = parts.length ? parts.slice(0,2).join(" · ") : "Not configured";
+}
+
+function updateCatSummaries(){
+  ["VIP","A","B","C"].forEach(updateCatSummary);
+}
+
+function loadParetoUI(){
+  if(paretoRules.pills) pillSelections = paretoRules.pills;
+  var t = paretoRules.th||{vip:13,a:9,b:5,c:1};
+  var vipEl=document.getElementById("th-vip"), aEl=document.getElementById("th-a"),
+      bEl=document.getElementById("th-b"), cEl2=document.getElementById("th-c");
+  if(vipEl) vipEl.value=t.vip;
+  if(aEl) aEl.value=t.a;
+  if(bEl) bEl.value=t.b;
+  if(cEl2) cEl2.value=t.c;
+  updateCatSummaries();
+  updateParetoPreview();
+  // Update quick preview on Screen 1
+  var qp = document.getElementById("pareto-quick-preview");
+  if(qp){
+    qp.innerHTML =
+      '<span style="color:#C9A961;font-weight:700">★ VIP</span> Top Business Potential &nbsp;·&nbsp; '+
+      '<span style="color:#7AB8E8;font-weight:700">A</span> High Potential &nbsp;·&nbsp; '+
+      '<span style="color:#7ADBB8;font-weight:700">B</span> Medium Potential &nbsp;·&nbsp; '+
+      '<span style="color:#8A8A9A;font-weight:700">C</span> Low Potential'+
+      '<br/><span style="font-size:11px;opacity:.5">Click to configure criteria →</span>';
   }
 }
 
-function renderScoringRules(){
-  var body=document.getElementById("scoring-body");
-  if(!body) return;
-  var r=scoringRules;
-  var inp="padding:5px 8px;border-radius:5px;border:1px solid rgba(201,169,97,0.2);background:rgba(201,169,97,0.04);color:var(--text);font-family:var(--font);font-size:13px;width:60px;text-align:center;outline:none";
-  var inpW="padding:5px 8px;border-radius:5px;border:1px solid rgba(201,169,97,0.2);background:rgba(201,169,97,0.04);color:var(--text);font-family:var(--font);font-size:13px;flex:1;outline:none";
-  var sCard="border:1px solid rgba(201,169,97,0.13);border-radius:10px;padding:14px 16px;margin-top:14px;background:rgba(255,255,255,0.015)";
-  var sTitle="font-size:11px;font-weight:700;color:var(--g);letter-spacing:.07em;text-transform:uppercase;margin-bottom:10px";
+// loadParetoUI is defined above in pill section
 
-  var html="";
-
-  // ── DECISION MAKER TITLES ─────────────────────────────────────────────────
-  html+='<div style="'+sCard+'">';
-  html+='<div style="'+sTitle+'">Decision Maker Titles</div>';
-  html+='<table style="width:100%;border-collapse:collapse" id="sr-titles-table">';
-  html+='<thead><tr><th style="text-align:left;font-size:11px;color:var(--muted);font-weight:600;padding:0 8px 6px 0">Title</th><th style="font-size:11px;color:var(--muted);font-weight:600;width:80px;text-align:center;padding-bottom:6px">Points</th><th style="width:32px"></th></tr></thead>';
-  html+='<tbody id="sr-titles-body">';
-  (r.titles||[]).forEach(function(t,i){
-    html+=srTitleRow(i,t.title,t.pts);
-  });
-  html+='</tbody></table>';
-  html+='<button onclick="srAddTitle()" style="margin-top:8px;padding:5px 12px;border-radius:6px;border:1px solid rgba(201,169,97,0.3);background:none;color:var(--g);font-family:var(--font);font-size:12px;cursor:pointer">+ Add Title</button>';
-  html+='</div>';
-
-  // ── COMPANY SIZE ─────────────────────────────────────────────────────────
-  html+='<div style="'+sCard+'">';
-  html+='<div style="'+sTitle+'">Company Size</div>';
-  html+='<table style="width:100%;border-collapse:collapse">';
-  html+='<thead><tr><th style="text-align:left;font-size:11px;color:var(--muted);font-weight:600;padding:0 8px 6px 0;width:50px">Tier</th><th style="font-size:11px;color:var(--muted);font-weight:600;text-align:center;padding-bottom:6px">Min emp</th><th style="font-size:11px;color:var(--muted);font-weight:600;text-align:center;padding-bottom:6px">Max emp</th><th style="font-size:11px;color:var(--muted);font-weight:600;text-align:center;width:80px;padding-bottom:6px">Points</th></tr></thead>';
-  html+='<tbody>';
-  var sizeCols={VIP:"#C9A961",A:"#7AB8E8",B:"#7ADBB8",C:"#8A8A9A"};
-  (r.size||[]).forEach(function(s,i){
-    var col=sizeCols[s.cat]||"var(--muted)";
-    html+='<tr style="border-top:1px solid rgba(255,255,255,0.04)">';
-    html+='<td style="padding:5px 8px 5px 0"><span style="font-size:11px;font-weight:700;color:'+col+'">'+s.cat+'</span></td>';
-    html+='<td style="text-align:center;padding:4px 6px"><input type="number" value="'+escHtml(String(s.min||0))+'" oninput="srSizeChange('+i+',\'min\',this.value)" style="'+inp+'"/></td>';
-    html+='<td style="text-align:center;padding:4px 6px"><input type="number" value="'+escHtml(String(s.max||""))+'" placeholder="∞" oninput="srSizeChange('+i+',\'max\',this.value)" style="'+inp+'"/></td>';
-    html+='<td style="text-align:center;padding:4px 6px"><input type="number" value="'+escHtml(String(s.pts||0))+'" oninput="srSizeChange('+i+',\'pts\',this.value)" style="'+inp+'"/></td>';
-    html+='</tr>';
-  });
-  html+='</tbody></table></div>';
-
-  // ── INDUSTRY BONUS ────────────────────────────────────────────────────────
-  html+='<div style="'+sCard+'">';
-  html+='<div style="'+sTitle+'">Industry Bonus</div>';
-  html+='<div style="display:flex;flex-direction:column;gap:6px" id="sr-industries-list">';
-  (r.industries||[]).forEach(function(ig,i){
-    html+=srIndustryRow(i,ig.name,ig.pts,ig.on);
-  });
-  html+='</div>';
-  html+='<button onclick="srAddIndustry()" style="margin-top:8px;padding:5px 12px;border-radius:6px;border:1px solid rgba(201,169,97,0.3);background:none;color:var(--g);font-family:var(--font);font-size:12px;cursor:pointer">+ Add Industry</button>';
-  html+='</div>';
-
-  // ── HIRING SIGNAL ─────────────────────────────────────────────────────────
-  html+='<div style="'+sCard+'">';
-  html+='<div style="'+sTitle+'">Hiring Signal</div>';
-  var ho=r.hiring&&r.hiring.on!==false;
-  var hp=(r.hiring&&r.hiring.pts)||15;
-  html+='<div style="display:flex;align-items:center;gap:10px">';
-  html+='<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--text)">';
-  html+='<input type="checkbox" id="sr-hiring-on" '+(ho?"checked":"")+' onchange="srHiringChange()" style="accent-color:var(--g);width:15px;height:15px"/> Active hiring signal adds</label>';
-  html+='<input type="number" id="sr-hiring-pts" value="'+hp+'" oninput="srHiringChange()" style="'+inp+'"/> pts</div>';
-  html+='</div>';
-
-  // ── TURNOVER THRESHOLDS ───────────────────────────────────────────────────
-  html+='<div style="'+sCard+'">';
-  html+='<div style="'+sTitle+'">Turnover Thresholds (EUR — caps category if set)</div>';
-  html+='<table style="width:100%;border-collapse:collapse">';
-  html+='<thead><tr><th style="text-align:left;font-size:11px;color:var(--muted);font-weight:600;padding:0 8px 6px 0;width:50px">Tier</th><th style="font-size:11px;color:var(--muted);font-weight:600;text-align:left;padding-bottom:6px">Min Revenue EUR</th></tr></thead>';
-  html+='<tbody>';
-  var trn=r.turnover||{vip:10000000,a:1000000,b:200000,c:0};
-  [["VIP","vip","#C9A961"],["A","a","#7AB8E8"],["B","b","#7ADBB8"],["C","c","#8A8A9A"]].forEach(function(row){
-    html+='<tr style="border-top:1px solid rgba(255,255,255,0.04)">';
-    html+='<td style="padding:5px 8px 5px 0"><span style="font-size:11px;font-weight:700;color:'+row[2]+'">'+row[0]+'</span></td>';
-    html+='<td style="padding:4px 0"><input type="number" value="'+(trn[row[1]]||0)+'" oninput="srTrnChange(\''+row[1]+'\',this.value)" style="'+inp+';width:130px;text-align:left"/></td>';
-    html+='</tr>';
-  });
-  html+='</tbody></table></div>';
-
-  // ── SCORE THRESHOLDS ──────────────────────────────────────────────────────
-  html+='<div style="'+sCard+'">';
-  html+='<div style="'+sTitle+'">Category Thresholds (min total points)</div>';
-  html+='<div style="display:flex;gap:10px;flex-wrap:wrap">';
-  var th=r.thresholds||{vip:28,a:18,b:10,c:1};
-  [["★ VIP","vip","#C9A961"],["A","a","#7AB8E8"],["B","b","#7ADBB8"],["C","c","#8A8A9A"]].forEach(function(row){
-    html+='<div style="text-align:center;padding:10px 14px;border-radius:8px;border:1px solid '+row[2]+'40;background:'+row[2]+'0d">';
-    html+='<div style="font-size:13px;font-weight:700;color:'+row[2]+';margin-bottom:4px">'+row[0]+'</div>';
-    html+='<input type="number" value="'+(th[row[1]]||1)+'" oninput="srThChange(\''+row[1]+'\',this.value)" style="'+inp+';color:'+row[2]+';border-color:'+row[2]+'80"/> pts</div>';
-  });
-  html+='</div></div>';
-
-  // ── ACTIONS ───────────────────────────────────────────────────────────────
-  html+='<div style="display:flex;align-items:center;gap:14px;margin-top:18px">';
-  html+='<button onclick="saveScoringRules()" style="padding:10px 24px;border-radius:9px;border:none;background:linear-gradient(135deg,#C9A961,#B8943A);color:#000;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;transition:all .2s">💾 Save &amp; Rescore</button>';
-  html+='<a href="#" onclick="resetScoringDefaults();return false;" style="font-size:12px;color:var(--muted);text-decoration:underline">↺ Reset Defaults</a>';
-  html+='</div>';
-
-  body.innerHTML=html;
+function updateParetoPreview(){
+  var el=document.getElementById("pareto-preview");if(!el)return;
+  var t=paretoRules.th||{vip:13,a:9,b:5,c:1};
+  var tvip=parseInt((document.getElementById("th-vip")||{}).value)||t.vip;
+  var ta=parseInt((document.getElementById("th-a")||{}).value)||t.a;
+  var tb=parseInt((document.getElementById("th-b")||{}).value)||t.b;
+  var tc=parseInt((document.getElementById("th-c")||{}).value)||t.c;
+  var maxScore=3+1+4+4+4+3; // max possible: DM(3)+emp(1)+trn(4)+sales(4)+brand(4)+hire(3)
+  el.innerHTML=[
+    '<span style="color:#C9A961;font-weight:700">★ VIP &mdash; Top Business Potential</span> &mdash; Call personally this week',
+    '<span style="color:#7AB8E8;font-weight:700">A &mdash; High Potential</span> &mdash; Follow up within 7 days',
+    '<span style="color:#7ADBB8;font-weight:700">B &mdash; Medium Potential</span> &mdash; Nurture quarterly',
+    '<span style="color:#8A8A9A;font-weight:700">C &mdash; Low Potential</span> &mdash; Newsletter only',
+    '<span style="color:rgba(220,80,80,0.6);font-weight:600">OUT &mdash; Disqualified</span> &mdash; Too small, no sales team, or under EUR 200K turnover'
+  ].join("<br/>");
 }
 
-function srTitleRow(i,title,pts){
-  var inp="padding:5px 8px;border-radius:5px;border:1px solid rgba(201,169,97,0.2);background:rgba(201,169,97,0.04);color:var(--text);font-family:var(--font);font-size:13px;outline:none";
-  return '<tr id="sr-title-row-'+i+'" style="border-top:1px solid rgba(255,255,255,0.04)">'+
-    '<td style="padding:4px 8px 4px 0"><input value="'+escHtml(title||"")+'" oninput="srTitleChange('+i+',\'title\',this.value)" style="'+inp+';width:100%;box-sizing:border-box"/></td>'+
-    '<td style="text-align:center;padding:4px 6px"><input type="number" value="'+escHtml(String(pts||0))+'" oninput="srTitleChange('+i+',\'pts\',this.value)" style="'+inp+';width:60px;text-align:center"/></td>'+
-    '<td style="text-align:center;padding:4px 0"><button onclick="srRemoveTitle('+i+')" style="background:none;border:none;color:rgba(220,80,80,0.5);font-size:16px;cursor:pointer;line-height:1;padding:2px 6px" title="Remove">×</button></td>'+
-    '</tr>';
-}
-
-function srIndustryRow(i,name,pts,on){
-  var inp="padding:5px 8px;border-radius:5px;border:1px solid rgba(201,169,97,0.2);background:rgba(201,169,97,0.04);color:var(--text);font-family:var(--font);font-size:13px;outline:none";
-  return '<div id="sr-ind-row-'+i+'" style="display:flex;align-items:center;gap:8px">'+
-    '<input type="checkbox" '+(on?"checked":"")+' onchange="srIndChange('+i+',\'on\',this.checked)" style="accent-color:var(--g);width:15px;height:15px;flex-shrink:0"/>'+
-    '<input value="'+escHtml(name||"")+'" oninput="srIndChange('+i+',\'name\',this.value)" style="'+inp+';flex:1"/>'+
-    '<input type="number" value="'+escHtml(String(pts||0))+'" oninput="srIndChange('+i+',\'pts\',this.value)" style="'+inp+';width:60px;text-align:center"/> pts'+
-    '<button onclick="srRemoveIndustry('+i+')" style="background:none;border:none;color:rgba(220,80,80,0.5);font-size:16px;cursor:pointer;line-height:1;padding:2px 4px" title="Remove">×</button>'+
-    '</div>';
-}
-
-function srTitleChange(i,field,val){
-  if(!scoringRules.titles[i]) return;
-  if(field==="pts") scoringRules.titles[i].pts=parseInt(val)||0;
-  else scoringRules.titles[i][field]=val;
-}
-function srRemoveTitle(i){
-  scoringRules.titles.splice(i,1);
-  var tb=document.getElementById("sr-titles-body");
-  if(tb){ tb.innerHTML=""; scoringRules.titles.forEach(function(t,idx){tb.innerHTML+=srTitleRow(idx,t.title,t.pts);}); }
-}
-function srAddTitle(){
-  scoringRules.titles.push({title:"",pts:5});
-  var tb=document.getElementById("sr-titles-body");
-  if(tb){ tb.innerHTML=""; scoringRules.titles.forEach(function(t,idx){tb.innerHTML+=srTitleRow(idx,t.title,t.pts);}); }
-}
-function srSizeChange(i,field,val){
-  if(!scoringRules.size[i]) return;
-  if(field==="pts"||field==="min"||field==="max") scoringRules.size[i][field]=field==="max"&&!val?"":parseInt(val)||0;
-  else scoringRules.size[i][field]=val;
-}
-function srIndChange(i,field,val){
-  if(!scoringRules.industries[i]) return;
-  if(field==="pts") scoringRules.industries[i].pts=parseInt(val)||0;
-  else if(field==="on") scoringRules.industries[i].on=!!val;
-  else scoringRules.industries[i][field]=val;
-}
-function srRemoveIndustry(i){
-  scoringRules.industries.splice(i,1);
-  var il=document.getElementById("sr-industries-list");
-  if(il){ il.innerHTML=""; scoringRules.industries.forEach(function(ig,idx){il.innerHTML+=srIndustryRow(idx,ig.name,ig.pts,ig.on);}); }
-}
-function srAddIndustry(){
-  scoringRules.industries.push({name:"",pts:5,on:true});
-  var il=document.getElementById("sr-industries-list");
-  if(il){ il.innerHTML=""; scoringRules.industries.forEach(function(ig,idx){il.innerHTML+=srIndustryRow(idx,ig.name,ig.pts,ig.on);}); }
-}
-function srHiringChange(){
-  var onEl=document.getElementById("sr-hiring-on");
-  var ptsEl=document.getElementById("sr-hiring-pts");
-  if(!scoringRules.hiring) scoringRules.hiring={on:true,pts:15};
-  if(onEl) scoringRules.hiring.on=onEl.checked;
-  if(ptsEl) scoringRules.hiring.pts=parseInt(ptsEl.value)||0;
-}
-function srTrnChange(key,val){
-  if(!scoringRules.turnover) scoringRules.turnover={};
-  scoringRules.turnover[key]=parseInt(val)||0;
-}
-function srThChange(key,val){
-  if(!scoringRules.thresholds) scoringRules.thresholds={};
-  scoringRules.thresholds[key]=parseInt(val)||1;
-}
-function saveScoringRules(){
-  localStorage.setItem("li_scoring",JSON.stringify(scoringRules));
+function applyParetoToAll(){
+  savePareto();
   scoreAllLeads();
-  if(leads.length) renderResults();
   showAlert("Scoring rules saved and applied.","info");
-  var qs=document.getElementById("scoring-quick-summary");
-  if(qs) qs.textContent=scoringRules.titles.length+" titles · "+scoringRules.size.length+" size tiers · "+scoringRules.industries.filter(function(i){return i.on;}).length+" industries active";
-}
-function resetScoringDefaults(){
-  scoringRules=JSON.parse(JSON.stringify(_SCORING_DEFAULT));
-  renderScoringRules();
+  if(leads.length) renderResults();
 }
 
 // INIT
-// Update scoring quick summary on load
-(function(){
-  var qs=document.getElementById("scoring-quick-summary");
-  if(qs&&scoringRules.titles){
-    qs.textContent=scoringRules.titles.length+" titles · "+scoringRules.size.length+" size tiers · "+scoringRules.industries.filter(function(i){return i.on;}).length+" industries active";
-  }
-})();
-
+loadParetoUI();
 // Show/hide Apollo banner based on dismiss state
 if(localStorage.getItem("li_hide_apollo_banner")){
   var ab=document.getElementById("apollo-banner");
@@ -3323,6 +3318,8 @@ document.addEventListener("click", function(e){
   if(ck) ck.value=CLAUDE_KEY;
   if(ak) ak.value=APOLLO_KEY;
   if(fk) fk.value=FIRECRAWL_KEY;
+  var pt=document.getElementById("p-target");
+  if(pt) pt.value=localStorage.getItem("li_target_description")||"";
 renderCountryChips();
 updateNavCounts();
 
@@ -3362,10 +3359,7 @@ function initOutreachModal() {
           '<div class="om-contact-name" id="om-cname">—</div>',
           '<div class="om-contact-sub" id="om-csub">—</div>',
         '</div>',
-        '<div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">',
-          '<span id="om-kb-badge" style="display:none;font-size:11px;padding:3px 9px;border-radius:5px;background:rgba(122,219,184,0.1);color:#7ADBB8;border:1px solid rgba(122,219,184,0.28);font-weight:600">📚 KB Active</span>',
-          '<span id="om-archetype-badge" style="display:none;font-size:11px;padding:3px 9px;border-radius:5px;background:rgba(201,169,97,0.1);color:var(--g);border:1px solid rgba(201,169,97,0.3);font-weight:600"></span>',
-        '</div>',
+        '<span id="om-kb-badge" style="display:none;font-size:11px;padding:3px 9px;border-radius:5px;background:rgba(122,219,184,0.1);color:#7ADBB8;border:1px solid rgba(122,219,184,0.28);font-weight:600">📚 KB Active</span>',
       '</div>',
     '</div>',
     '<div class="om-mode-row">',
@@ -3390,14 +3384,7 @@ function initOutreachModal() {
         '<button class="om-copy-btn" id="om-copy-btn" onclick="copyOutreach()">📋 Copy</button>',
         '<button class="om-regen-btn" id="om-regen-btn" onclick="regenOutreach()">↺ Regenerate</button>',
         '<span class="om-charcount" id="om-charcount" style="display:none"></span>',
-        '<a id="om-back-scripts" href="javascript:void(0)" onclick="showScriptsPanel()" style="display:none;font-size:12px;color:var(--muted);text-decoration:none;padding:4px 0">← Scripts</a>',
-        '<div style="position:relative;margin-left:auto" id="om-send-wrap">',
-          '<button class="om-send-btn" id="om-send-btn" onclick="omSendClick()">📧 Send Email</button>',
-          '<div class="om-send-popup" id="om-send-popup" style="display:none">',
-            '<button onclick="sendViaGmail()">📧 Open in Gmail</button>',
-            '<button onclick="sendViaMail()">✉ Open in Mail App</button>',
-          '</div>',
-        '</div>',
+        '<a id="om-back-scripts" href="javascript:void(0)" onclick="showScriptsPanel()" style="display:none;font-size:12px;color:var(--muted);text-decoration:none;margin-left:auto;padding:4px 0">← Scripts</a>',
       '</div>',
     '</div>',
     '<div id="om-scripts-panel" style="display:none;padding:16px 26px 22px">',
@@ -3430,14 +3417,7 @@ function initOutreachModal() {
     '</div>',
     '</div>'
   ].join("");
-  m.addEventListener("click", function(e){
-    if(e.target===m){ closeOutreach(); return; }
-    var sp=document.getElementById("om-send-popup");
-    var sb=document.getElementById("om-send-btn");
-    if(sp&&sp.style.display!=="none"&&!sp.contains(e.target)&&e.target!==sb){
-      sp.style.display="none";
-    }
-  });
+  m.addEventListener("click", function(e){ if(e.target===m) closeOutreach(); });
   document.body.appendChild(m);
 }
 
@@ -3501,14 +3481,6 @@ function _syncOutreachUI() {
   var lv=document.getElementById("om-lang-lv"); if(lv) lv.classList.toggle("active",_ors.lang==="LV");
   var cc=document.getElementById("om-charcount");
   if(cc){ cc.style.display=(_ors.mode==="linkedin"&&_ors.tpl!=="scripts")?"inline":"none"; }
-  var sb=document.getElementById("om-send-btn");
-  var sp=document.getElementById("om-send-popup");
-  if(sp) sp.style.display="none";
-  if(sb){
-    if(_ors.mode==="email")    sb.textContent="📧 Send Email";
-    else if(_ors.mode==="linkedin") sb.textContent="🔗 Open LinkedIn";
-    else if(_ors.mode==="call")    sb.textContent="📞 Call Now";
-  }
 }
 
 function updateOutreachCharCount() {
@@ -3550,114 +3522,6 @@ function copyOutreach() {
     var btn = document.getElementById("om-copy-btn");
     if(btn){ var orig=btn.textContent; btn.textContent="✓ Copied!"; setTimeout(function(){btn.textContent=orig;},1800); }
   });
-}
-
-function showBtnTooltip(btn, msg) {
-  var old = document.getElementById("btn-tooltip");
-  if(old) old.remove();
-  var tip = document.createElement("div");
-  tip.id = "btn-tooltip";
-  tip.textContent = msg;
-  tip.style.cssText = "position:fixed;z-index:9999;background:#1a1a22;border:1px solid rgba(37,211,102,0.35);color:#7ADBB8;font-size:11px;padding:6px 12px;border-radius:7px;pointer-events:none;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.45)";
-  document.body.appendChild(tip);
-  var r = btn.getBoundingClientRect();
-  tip.style.left = Math.max(4, r.left + r.width/2 - tip.offsetWidth/2) + "px";
-  tip.style.top = (r.top - tip.offsetHeight - 6) + "px";
-  setTimeout(function(){ tip.remove(); }, 2500);
-}
-
-function waBtn(btn, coId, ci) {
-  var co = leads.find(function(l){ return l.id===coId; });
-  var c = co && co.contacts[ci];
-  if(!co||!c) return;
-  var phone = c.phone || c.phone2 || co.phone || co.mapsPhone || "";
-  if(!phone) {
-    showBtnTooltip(btn, "No phone number found — research this company first");
-    return;
-  }
-  // Normalise: drop spaces, dashes, brackets, replace leading + with digits
-  var cleaned = phone.replace(/[\s\-\(\)\.]/g, "").replace(/^\+/, "");
-  var firstName = (c.name||"").split(" ")[0] || "there";
-  var msg = "Hi " + firstName + ", ";
-  // Use cached Hero's Journey LinkedIn note for this contact if available
-  if(_ors.coId===coId && _ors.ci===ci && _ors.cache && _ors.cache["heros_linkedin_EN"]) {
-    var cached = _ors.cache["heros_linkedin_EN"];
-    var sentences = (cached.match(/[^.!?]+[.!?]+/g)||[]).map(function(s){return s.trim();}).filter(Boolean);
-    var preview = sentences.slice(0,2).join(" ").trim();
-    msg += preview || ("I came across " + co.name + " and wanted to connect briefly.");
-  } else {
-    msg += "I came across " + co.name + " and wanted to connect briefly.";
-  }
-  window.open("https://wa.me/" + cleaned + "?text=" + encodeURIComponent(msg), "_blank");
-}
-
-function omSendClick() {
-  if(_ors.mode==="email"){
-    var sp=document.getElementById("om-send-popup");
-    if(sp) sp.style.display=sp.style.display==="none"?"block":"none";
-  } else if(_ors.mode==="linkedin"){
-    var co=leads.find(function(l){return l.id===_ors.coId;});
-    var c=co&&co.contacts[_ors.ci];
-    if(!co||!c) return;
-    var url=c.linkedin||("https://www.linkedin.com/search/results/people/?keywords="+encodeURIComponent((c.name||"")+" "+(co.name||""))+"&origin=GLOBAL_SEARCH_HEADER");
-    window.open(url,"_blank");
-  } else if(_ors.mode==="call"){
-    var co=leads.find(function(l){return l.id===_ors.coId;});
-    var c=co&&co.contacts[_ors.ci];
-    if(!co||!c) return;
-    var phone=c.phone||co.phone||"";
-    if(phone){
-      window.location.href="tel:"+phone;
-    } else {
-      var ta=document.getElementById("om-textarea");
-      if(ta&&ta.value) navigator.clipboard.writeText(ta.value).then(function(){
-        showAlert("No phone stored — call script copied to clipboard for manual dialing.","info");
-      });
-      else showAlert("No phone number stored for this contact.","err");
-    }
-  }
-}
-
-function _extractSubjectAndBody() {
-  var ta=document.getElementById("om-textarea");
-  if(!ta) return {subject:"",body:""};
-  var lines=ta.value.split("\n");
-  var subject="", bodyStart=0;
-  for(var i=0;i<lines.length;i++){
-    if(/^SUBJECT:\s*/i.test(lines[i].trim())){
-      subject=lines[i].trim().replace(/^SUBJECT:\s*/i,"");
-      bodyStart=i+1;
-      while(bodyStart<lines.length&&lines[bodyStart].trim()==="") bodyStart++;
-      break;
-    }
-  }
-  var body=lines.slice(bodyStart).join("\n").trim();
-  return {subject:subject, body:body||ta.value.trim()};
-}
-
-function sendViaGmail() {
-  var co=leads.find(function(l){return l.id===_ors.coId;});
-  var c=co&&co.contacts[_ors.ci];
-  if(!co||!c) return;
-  var ex=_extractSubjectAndBody();
-  var url="https://mail.google.com/mail/?view=cm&fs=1"
-    +"&to="+encodeURIComponent(c.email||"")
-    +"&su="+encodeURIComponent(ex.subject)
-    +"&body="+encodeURIComponent(ex.body);
-  window.open(url,"_blank");
-  var sp=document.getElementById("om-send-popup"); if(sp) sp.style.display="none";
-}
-
-function sendViaMail() {
-  var co=leads.find(function(l){return l.id===_ors.coId;});
-  var c=co&&co.contacts[_ors.ci];
-  if(!co||!c) return;
-  var ex=_extractSubjectAndBody();
-  var url="mailto:"+encodeURIComponent(c.email||"")
-    +"?subject="+encodeURIComponent(ex.subject)
-    +"&body="+encodeURIComponent(ex.body);
-  window.open(url,"_self");
-  var sp=document.getElementById("om-send-popup"); if(sp) sp.style.display="none";
 }
 
 // ── MY SCRIPTS ─────────────────────────────────────────────────────────────
@@ -3778,447 +3642,75 @@ async function recreateScript() {
 
 var KB_FRAMEWORK_DEFAULT = "Hero's Journey for Sales: The prospect is always the Hero. You are the Mentor.\nStage 1: Their Ordinary World — understand their daily reality before the disruption.\nStage 2: The Challenge they face — name it precisely, don't soften it.\nStage 3: You appear with the insight — the mentor arrives at the right moment.\nStage 4: The transformation — paint the after picture vividly.\nStage 5: The invitation to act — low friction, high clarity.";
 
-function buildKBAnalysisPrompt(title, author, text) {
-  var maxChars = 90000;
-  var excerpt = text.length > maxChars ? text.substring(0, maxChars) + "\n\n[text truncated for length]" : text;
-  return "You are extracting a complete practical sales and influence toolkit from this book. The author is " + (author||"unknown") + ", title is " + (title||"this book") + ".\n\nExtract EVERYTHING usable directly in B2B sales communication TODAY:\n\n1. EXACT PHRASES & SENTENCES - word-for-word lines for emails, LinkedIn, calls\n2. SCRIPTS & DIALOGUES - complete conversation flows, objection handlers, cold call openers\n3. FORMULAS & FRAMEWORKS - named formulas with exact language for each step\n4. TEMPLATES - copy-paste ready email and message templates\n5. POWER WORDS & TRIGGERS - specific words that trigger buying decisions\n6. OBJECTION HANDLERS - exact word-for-word responses to common objections\n7. POWERFUL QUESTIONS - questions that uncover pain and advance the sale\n8. STORIES & ANALOGIES - metaphors that can be retold in sales conversations\n9. MILTON ERICKSON HYPNOTIC LANGUAGE PATTERNS - embedded commands, presuppositions, double binds, pacing and leading, cause and effect, future pacing. Give exact example phrases.\n10. NLP TECHNIQUES - anchoring, reframing, rapport-building, representational system language\n11. PSYCHOLOGICAL INFLUENCE - Cialdini principles with exact phrases, scarcity, social proof, authority, reciprocity language\n12. PATTERN INTERRUPTS - unexpected phrases that break autopilot thinking\n13. EMOTIONAL TRIGGERS - language that creates desire, urgency, trust, curiosity\n14. CLOSING TECHNIQUES - exact closing phrases and sequences\n\nFormat: numbered list, each item labeled with category, exact wording preserved. Minimum 60 items. This is a practical toolkit - give the exact words not descriptions.\n\nBOOK TEXT:\n\n" + excerpt;
-}
-
-var KB_VOICE_DEFAULT = ""; // legacy — replaced by archetype system
-
-var ARCHETYPES = [
-  {id:"challenger", icon:"🎯", name:"The Challenger", desc:"Provocative, insight-driven, challenges assumptions",   formality:30, emotion:50, directness:85},
-  {id:"mentor",     icon:"🧙", name:"The Mentor",     desc:"Story-driven, wise, positions you as the guide",       formality:50, emotion:80, directness:50},
-  {id:"disruptor",  icon:"⚡", name:"The Disruptor",  desc:"Bold, pattern interrupt, breaks autopilot",            formality:20, emotion:55, directness:95},
-  {id:"advisor",    icon:"🤝", name:"The Advisor",    desc:"Consultative, trusted, low pressure",                  formality:75, emotion:30, directness:25},
-  {id:"closer",     icon:"🔥", name:"The Closer",     desc:"Urgent, results-focused, direct CTA",                  formality:45, emotion:60, directness:90},
-  {id:"authority",  icon:"👑", name:"The Authority",  desc:"Credential-led, expert positioning, premium feel",     formality:85, emotion:25, directness:70}
-];
-
-function loadVoiceProfile(){
-  var saved = localStorage.getItem("li_voice_archetype") || "mentor";
-  var a = ARCHETYPES.find(function(x){return x.id===saved;}) || ARCHETYPES[1];
-  return {
-    archetype: saved,
-    formality:  parseInt(localStorage.getItem("li_voice_formality"))  || a.formality,
-    emotion:    parseInt(localStorage.getItem("li_voice_emotion"))    || a.emotion,
-    directness: parseInt(localStorage.getItem("li_voice_directness")) || a.directness
-  };
-}
+var KB_VOICE_DEFAULT = "Direct, confident, story-driven. Never corporate speak. Never 'I hope this email finds you well'. Never 'I wanted to reach out'. Always lead with a specific insight, provocation, or pattern interrupt. One idea per sentence. Short paragraphs. End with clarity, not desperation. Sign off: Edgars Untals — Sales is the Greatest Story Ever Told.";
 
 function loadKBData() {
   return {
-    books: [1,2,3,4,5,6,7,8,9,10].map(function(i){
+    books: [1,2,3,4,5].map(function(i){
       try { return JSON.parse(localStorage.getItem("li_book_"+i)||"{}"); } catch(e){ return {}; }
     }),
     frameworks: localStorage.getItem("li_frameworks") || KB_FRAMEWORK_DEFAULT,
-    voice: ""
+    voice: localStorage.getItem("li_voice") || KB_VOICE_DEFAULT
   };
 }
 
 function saveKB() {
   var fw = document.getElementById("kb-frameworks");
+  var vo = document.getElementById("kb-voice");
   if(fw) localStorage.setItem("li_frameworks", fw.value);
-  [1,2,3,4,5,6,7,8,9,10].forEach(function(i){ saveKBBook(i); });
+  if(vo) localStorage.setItem("li_voice", vo.value);
+  [1,2,3,4,5].forEach(function(i){ saveKBBook(i); });
   updateNavCounts();
   updateKBBadge();
 }
 
 function saveKBBook(i) {
   var ti = document.getElementById("kb-book-title-"+i);
+  var au = document.getElementById("kb-book-author-"+i);
   var ct = document.getElementById("kb-book-content-"+i);
   var on = document.getElementById("kb-book-on-"+i);
-  var existing = {};
-  try { existing = JSON.parse(localStorage.getItem("li_book_"+i)||"{}"); } catch(e){}
+  if(!ti) return;
   var data = {
-    title: ti ? ti.value : (existing.title||""),
-    author: existing.author||"",
-    content: ct ? ct.value : (existing.content||""),
-    on: on ? on.checked : (existing.on!==false)
+    title: ti.value, author: au?au.value:"",
+    content: ct?ct.value:"",
+    on: on?on.checked:true
   };
   localStorage.setItem("li_book_"+i, JSON.stringify(data));
 }
 
 function renderKB() {
   var kb = loadKBData();
+  // Books
   var container = document.getElementById("kb-books-list");
   if(container) {
     container.innerHTML = "";
-    container.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:10px";
-    [1,2,3,4,5,6,7,8,9,10].forEach(function(i){
+    [1,2,3,4,5].forEach(function(i){
       var b = kb.books[i-1]||{};
       var slot = document.createElement("div");
-      slot.id = "kb-slot-"+i;
-      slot.style.cssText = "border:1px solid rgba(201,169,97,0.13);border-radius:10px;padding:14px;background:rgba(255,255,255,0.02)";
-      var hasDone = !!(b.content||"").trim();
-      var titleDisplay = b.title ? escHtml(b.title) : ('<span style="color:var(--muted);font-style:italic">Book '+i+'</span>');
-      slot.innerHTML = [
-        // Header row: Book label + title + ON toggle + Remove
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">',
-          '<span style="font-size:10px;font-weight:700;color:var(--g);letter-spacing:.07em;text-transform:uppercase;white-space:nowrap">Book '+i+'</span>',
-          '<div id="kb-title-display-'+i+'" style="flex:1;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+titleDisplay+'</div>',
-          '<label style="display:flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap;flex-shrink:0">',
-            '<input type="checkbox" id="kb-book-on-'+i+'" '+(b.on!==false?'checked':'')+' onchange="saveKBBook('+i+');updateNavCounts();updateKBBadge()" style="accent-color:var(--g);width:14px;height:14px"/> <span style="font-size:12px;color:'+(b.on!==false?'var(--g)':'var(--muted)')+'">ON</span>',
-          '</label>',
-          '<button id="kb-remove-'+i+'" onclick="kbClearBook('+i+')" style="'+(hasDone?'':'display:none;')+'padding:3px 9px;border-radius:5px;border:1px solid rgba(220,80,80,0.3);background:none;color:rgba(220,80,80,0.6);cursor:pointer;font-family:var(--font);font-size:11px">🗑️</button>',
-        '</div>',
-        // Hidden storage
-        '<input type="text" id="kb-book-title-'+i+'" value="'+escHtml(b.title||"")+'" style="display:none"/>',
-        '<textarea id="kb-book-content-'+i+'" style="display:none">'+escHtml(b.content||"")+'</textarea>',
-        '<input type="file" id="kb-pdf-input-'+i+'" accept=".pdf" style="display:none" onchange="kbHandleFile('+i+',this)">',
-        // Upload area
-        '<div id="kb-upload-area-'+i+'">',
-          '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">',
-            '<button onclick="document.getElementById(\'kb-pdf-input-'+i+'\').click()" style="padding:7px 14px;border-radius:7px;border:1px solid rgba(201,169,97,0.4);background:rgba(201,169,97,0.08);color:var(--g);font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer">📤 Upload PDF</button>',
-            '<button onclick="kbShowPasteArea('+i+')" style="padding:7px 12px;border-radius:7px;border:1px solid rgba(138,138,154,0.2);background:none;color:var(--muted);font-family:var(--font);font-size:12px;cursor:pointer">✏️ Paste</button>',
-          '</div>',
-          '<div id="kb-paste-area-'+i+'" style="display:none;margin-top:8px">',
-            '<textarea id="kb-book-raw-'+i+'" rows="4" placeholder="Paste book content..." style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.02);border:1px solid rgba(201,169,97,0.1);border-radius:7px;color:var(--text);font-family:var(--font);font-size:12px;line-height:1.6;padding:8px 10px;resize:vertical;outline:none"></textarea>',
-            '<button onclick="kbAnalyzeManual('+i+')" style="margin-top:5px;padding:6px 14px;border-radius:6px;border:1px solid rgba(201,169,97,0.4);background:rgba(201,169,97,0.1);color:var(--g);font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer">🤖 Analyze</button>',
-          '</div>',
-        '</div>',
-        // Progress area
-        '<div id="kb-progress-area-'+i+'" style="display:none;padding:2px 0">',
-          '<div style="background:rgba(201,169,97,0.12);border-radius:5px;overflow:hidden;height:6px;margin-bottom:6px"><div id="kb-prog-bar-'+i+'" style="height:100%;background:var(--g);width:0%;transition:width .4s ease;border-radius:5px"></div></div>',
-          '<div id="kb-prog-txt-'+i+'" style="font-size:11px;color:var(--g)">Preparing...</div>',
-        '</div>',
-        // Done area
-        '<div id="kb-done-area-'+i+'" style="display:none">',
-          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">',
-            '<span id="kb-done-badge-'+i+'" style="font-size:11px;padding:3px 10px;border-radius:5px;background:rgba(122,219,184,0.1);color:#7ADBB8;border:1px solid rgba(122,219,184,0.3);font-weight:700">✓</span>',
-            '<button id="kb-prev-btn-'+i+'" onclick="kbTogglePreview('+i+')" style="padding:4px 10px;border-radius:5px;border:1px solid rgba(201,169,97,0.2);background:none;color:var(--muted);cursor:pointer;font-family:var(--font);font-size:11px">▼ Preview</button>',
-            '<button onclick="kbReanalyze('+i+')" style="padding:4px 10px;border-radius:5px;border:1px solid rgba(201,169,97,0.15);background:none;color:var(--muted);cursor:pointer;font-family:var(--font);font-size:11px">🔄</button>',
-          '</div>',
-          '<div id="kb-preview-'+i+'" style="display:none;margin-top:8px;max-height:200px;overflow-y:auto;border:1px solid rgba(201,169,97,0.1);border-radius:7px;padding:8px 10px;background:rgba(0,0,0,0.15)">',
-            '<pre id="kb-preview-content-'+i+'" style="margin:0;font-size:11px;color:var(--muted);white-space:pre-wrap;font-family:var(--font);line-height:1.55"></pre>',
-          '</div>',
-        '</div>',
-      ].join("");
+      slot.style.cssText = "border:1px solid rgba(201,169,97,0.13);border-radius:10px;padding:16px;margin-bottom:12px;background:rgba(255,255,255,0.02);transition:border-color .2s";
+      slot.innerHTML =
+        '<div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">'+
+          '<span style="font-size:10px;font-weight:700;color:var(--g);letter-spacing:.07em;text-transform:uppercase;white-space:nowrap;min-width:44px">Book '+i+'</span>'+
+          '<input id="kb-book-title-'+i+'" placeholder="Book title..." value="'+escHtml(b.title||"")+'" oninput="saveKBBook('+i+');updateNavCounts();updateKBBadge()" style="flex:1;padding:7px 10px;border-radius:6px;border:1px solid rgba(201,169,97,0.2);background:rgba(201,169,97,0.04);color:var(--text);font-family:var(--font);font-size:13px;outline:none"/>'+
+          '<input id="kb-book-author-'+i+'" placeholder="Author" value="'+escHtml(b.author||"")+'" oninput="saveKBBook('+i+')" style="width:160px;padding:7px 10px;border-radius:6px;border:1px solid rgba(201,169,97,0.15);background:transparent;color:var(--muted);font-family:var(--font);font-size:13px;outline:none"/>'+
+          '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;font-size:12px;color:var(--muted)">'+
+            '<input type="checkbox" id="kb-book-on-'+i+'" '+(b.on!==false?'checked':'')+' onchange="saveKBBook('+i+');updateNavCounts();updateKBBadge()" style="accent-color:var(--g);width:15px;height:15px"/>'+
+            '<span style="font-weight:600;color:'+(b.on!==false?'var(--g)':'var(--muted)')+'">Use</span>'+
+          '</label>'+
+        '</div>'+
+        '<textarea id="kb-book-content-'+i+'" rows="4" oninput="saveKBBook('+i+');updateKBBadge()" placeholder="Paste key principles, frameworks, quotes from this book..." style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.02);border:1px solid rgba(201,169,97,0.1);border-radius:8px;color:var(--text);font-family:var(--font);font-size:12px;line-height:1.65;padding:10px 12px;resize:vertical;outline:none">'+escHtml(b.content||"")+'</textarea>';
       container.appendChild(slot);
-      kbSetState(i, b.content ? "done" : "empty", b.content||"");
     });
   }
+  // Frameworks & Voice
   var fw = document.getElementById("kb-frameworks");
+  var vo = document.getElementById("kb-voice");
   if(fw) fw.value = kb.frameworks;
-  renderArchetypeGrid();
-  updateKBBadge();
-}
-
-// ── PDF.js lazy loader ──────────────────────────────────────────────────────
-function loadPDFjs(cb) {
-  if(window.pdfjsLib) { cb(); return; }
-  var s = document.createElement("script");
-  s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
-  s.onload = function() {
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-    cb();
-  };
-  s.onerror = function(){ showAlert("Failed to load PDF.js — check internet connection.","err"); };
-  document.head.appendChild(s);
-}
-
-// ── Slot state management ────────────────────────────────────────────────────
-function kbSetState(i, state, content) {
-  var upload   = document.getElementById("kb-upload-area-"+i);
-  var progress = document.getElementById("kb-progress-area-"+i);
-  var done     = document.getElementById("kb-done-area-"+i);
-  var removeBtn= document.getElementById("kb-remove-"+i);
-  if(upload)    upload.style.display    = state==="empty"    ? "block" : "none";
-  if(progress)  progress.style.display  = (state==="extracting"||state==="analyzing") ? "block" : "none";
-  if(done)      done.style.display      = state==="done"     ? "block" : "none";
-  if(removeBtn) removeBtn.style.display = state==="done"     ? "inline-block" : "none";
-
-  if(state==="extracting") {
-    kbSetProgress(i, 0, 100, "Extracting text");
-  } else if(state==="analyzing") {
-    var bar = document.getElementById("kb-prog-bar-"+i);
-    var txt = document.getElementById("kb-prog-txt-"+i);
-    if(bar) bar.style.width = "95%";
-    if(txt) txt.textContent = "🤖 Analyzing with AI...";
-  } else if(state==="done" && content) {
-    var lines = content.split("\n").filter(function(l){ return /^\d+\./.test(l.trim()); });
-    var count = lines.length || Math.max(1, Math.floor(content.split("\n").filter(function(l){return l.trim().length>30;}).length/2));
-    var badge = document.getElementById("kb-done-badge-"+i);
-    if(badge) badge.textContent = "✓ " + count + " items";
-    var prevEl = document.getElementById("kb-preview-content-"+i);
-    if(prevEl) prevEl.textContent = content.substring(0, 4000) + (content.length > 4000 ? "\n\n[… preview truncated — full content saved]" : "");
-    // Update title display
-    var ti = document.getElementById("kb-book-title-"+i);
-    var disp = document.getElementById("kb-title-display-"+i);
-    if(disp && ti && ti.value.trim()) disp.textContent = ti.value.trim();
-  }
-}
-
-function kbSetProgress(i, current, total, label) {
-  var bar = document.getElementById("kb-prog-bar-"+i);
-  var txt = document.getElementById("kb-prog-txt-"+i);
-  if(!bar||!txt) return;
-  var pct = total > 0 ? Math.round(current/total*100) : 0;
-  bar.style.width = pct + "%";
-  txt.textContent = label + "... page " + current + " of " + total;
-}
-
-// ── Slot actions ─────────────────────────────────────────────────────────────
-function kbTogglePreview(i) {
-  var prev = document.getElementById("kb-preview-"+i);
-  var btn  = document.getElementById("kb-prev-btn-"+i);
-  if(!prev) return;
-  var open = prev.style.display === "none";
-  prev.style.display = open ? "block" : "none";
-  if(btn) btn.textContent = open ? "▲ Hide" : "▼ Preview";
-}
-
-function kbShowPasteArea(i) {
-  var pa = document.getElementById("kb-paste-area-"+i);
-  if(pa) pa.style.display = "block";
-}
-
-function kbClearBook(i) {
-  if(!confirm("Remove book " + i + "? All extracted content will be deleted.")) return;
-  localStorage.removeItem("li_book_"+i);
-  renderKB();
-  updateKBBadge();
-  updateNavCounts();
-}
-
-function kbReanalyze(i) {
-  // Reset to upload area; keeps title/author
-  var ct = document.getElementById("kb-book-content-"+i);
-  if(ct) ct.value = "";
-  saveKBBook(i);
-  kbSetState(i, "empty");
-  updateKBBadge();
-}
-
-// ── File upload handler ───────────────────────────────────────────────────────
-function kbHandleFile(i, input) {
-  var file = input.files[0];
-  if(!file) return;
-  var titleEl = document.getElementById("kb-book-title-"+i);
-  if(titleEl && !titleEl.value.trim()) {
-    var autoTitle = file.name.replace(/\.pdf$/i,"").replace(/[-_]/g," ");
-    titleEl.value = autoTitle;
-    var disp = document.getElementById("kb-title-display-"+i);
-    if(disp) disp.textContent = autoTitle;
-    saveKBBook(i);
-  }
-  if(!CLAUDE_KEY) { showAlert("Add your Claude API key in Settings first.","err"); return; }
-  loadPDFjs(function(){ kbExtractAndAnalyze(i, file); });
-  input.value = "";
-}
-
-// ── PDF extraction + AI analysis pipeline ───────────────────────────────────
-async function kbExtractAndAnalyze(i, file) {
-  kbSetState(i, "extracting");
-  try {
-    var arrayBuffer = await new Promise(function(resolve, reject) {
-      var r = new FileReader();
-      r.onload = function(e){ resolve(e.target.result); };
-      r.onerror = reject;
-      r.readAsArrayBuffer(file);
-    });
-
-    var pdf = await pdfjsLib.getDocument({data: new Uint8Array(arrayBuffer)}).promise;
-    var numPages = pdf.numPages;
-
-    // Try to read PDF metadata for title/author
-    var meta = await pdf.getMetadata().catch(function(){ return null; });
-    if(meta && meta.info) {
-      var ti = document.getElementById("kb-book-title-"+i);
-      if(meta.info.Title && ti && !ti.value.trim()) {
-        ti.value = meta.info.Title;
-        var disp = document.getElementById("kb-title-display-"+i);
-        if(disp) disp.textContent = meta.info.Title;
-      }
-      // Store author in existing data
-      if(meta.info.Author) {
-        var existing = {};
-        try { existing = JSON.parse(localStorage.getItem("li_book_"+i)||"{}"); } catch(e){}
-        existing.author = meta.info.Author;
-        localStorage.setItem("li_book_"+i, JSON.stringify(existing));
-      }
-      saveKBBook(i);
-    }
-
-    if(numPages > 500) {
-      showAlert("PDF has " + numPages + " pages — processing first 300 pages only.", "info");
-    }
-    var maxPages = Math.min(numPages, 300);
-
-    var fullText = "";
-    for(var p = 1; p <= maxPages; p++) {
-      if(p === 1 || p % 5 === 0 || p === maxPages) kbSetProgress(i, p, maxPages, "Extracting text");
-      var page = await pdf.getPage(p);
-      var content = await page.getTextContent();
-      fullText += content.items.map(function(it){ return it.str; }).join(" ") + "\n";
-      if(p % 20 === 0) await new Promise(function(r){ setTimeout(r, 0); }); // yield to UI
-    }
-
-    kbSetState(i, "analyzing");
-
-    var ti = document.getElementById("kb-book-title-"+i);
-    var existingMeta = {}; try { existingMeta = JSON.parse(localStorage.getItem("li_book_"+i)||"{}"); } catch(e){}
-    var prompt = buildKBAnalysisPrompt(ti?ti.value.trim():"", existingMeta.author||"", fullText);
-    var result = await claudeChat(prompt, 8000);
-
-    if(result && !result.startsWith("(Error") && !result.startsWith("(No Claude")) {
-      var ct = document.getElementById("kb-book-content-"+i);
-      if(ct) ct.value = result;
-      saveKBBook(i);
-      updateKBBadge();
-      updateNavCounts();
-      kbSetState(i, "done", result);
-    } else {
-      kbSetState(i, "empty");
-      showAlert("Analysis failed — " + (result||"check your Claude API key"), "err");
-    }
-  } catch(err) {
-    console.error("PDF extraction error:", err);
-    kbSetState(i, "empty");
-    showAlert("PDF error: " + (err.message||err), "err");
-  }
-}
-
-// ── Manual paste → analyze ───────────────────────────────────────────────────
-async function kbAnalyzeManual(i) {
-  if(!CLAUDE_KEY){ showAlert("Add your Claude API key first.","err"); return; }
-  var raw = document.getElementById("kb-book-raw-"+i);
-  var text = raw ? raw.value.trim() : "";
-  if(!text){ showAlert("Paste some book content first.","err"); return; }
-  var ti = document.getElementById("kb-book-title-"+i);
-  var existingMeta2 = {}; try { existingMeta2 = JSON.parse(localStorage.getItem("li_book_"+i)||"{}"); } catch(e){}
-  kbSetState(i, "analyzing");
-  var prompt = buildKBAnalysisPrompt(ti?ti.value.trim():"", existingMeta2.author||"", text);
-  var result = await claudeChat(prompt, 8000);
-  if(result && !result.startsWith("(Error") && !result.startsWith("(No Claude")) {
-    var ct = document.getElementById("kb-book-content-"+i);
-    if(ct) ct.value = result;
-    saveKBBook(i);
-    updateKBBadge();
-    updateNavCounts();
-    kbSetState(i, "done", result);
-  } else {
-    kbSetState(i, "empty");
-    showAlert("Analysis failed — check your Claude API key.", "err");
-  }
-}
-
-// Keep old name as alias for any external references
-var analyzeKBBook = kbAnalyzeManual;
-
-// ── ARCHETYPE UI ──────────────────────────────────────────────────────────────
-var _voicePreviewTimer = null;
-
-function renderArchetypeGrid() {
-  var grid = document.getElementById("kb-archetype-grid");
-  if(!grid) return;
-  var vp = loadVoiceProfile();
-  var sel = vp.archetype || "mentor";
-  var html = "";
-  ARCHETYPES.forEach(function(a){
-    var isSelected = (a.id === sel);
-    html += '<div onclick="kbSelectArchetype(\''+a.id+'\')" style="cursor:pointer;border:2px solid '+(isSelected?"#C9A961":"rgba(201,169,97,0.18)")+';border-radius:10px;padding:12px 10px;background:'+(isSelected?"rgba(201,169,97,0.09)":"rgba(255,255,255,0.015)")+';transition:all .2s;box-shadow:'+(isSelected?"0 0 14px rgba(201,169,97,0.22)":"none")+'">';
-    html += '<div style="font-size:22px;margin-bottom:5px">'+a.icon+'</div>';
-    html += '<div style="font-size:12px;font-weight:700;color:'+(isSelected?"var(--g)":"var(--text)")+';margin-bottom:3px;line-height:1.2">'+a.name+'</div>';
-    html += '<div style="font-size:10px;color:var(--muted);line-height:1.4">'+a.desc+'</div>';
-    html += '</div>';
-  });
-  grid.innerHTML = html;
-
-  // Show/hide sliders
-  var slidersBlock = document.getElementById("kb-sliders-block");
-  if(slidersBlock) slidersBlock.style.display = "block";
-
-  // Set slider values
-  var formEl = document.getElementById("kb-slider-formality");
-  var emEl   = document.getElementById("kb-slider-emotion");
-  var dirEl  = document.getElementById("kb-slider-directness");
-  if(formEl) formEl.value = vp.formality;
-  if(emEl)   emEl.value   = vp.emotion;
-  if(dirEl)  dirEl.value  = vp.directness;
-  kbUpdateSliderLabels();
-  kbSchedulePreview();
-}
-
-function kbSelectArchetype(id) {
-  var a = ARCHETYPES.find(function(x){return x.id===id;});
-  if(!a) return;
-  // Save selected archetype
-  localStorage.setItem("li_voice_archetype", id);
-  // Set defaults for this archetype
-  localStorage.setItem("li_voice_formality",  a.formality);
-  localStorage.setItem("li_voice_emotion",    a.emotion);
-  localStorage.setItem("li_voice_directness", a.directness);
-  // Re-render grid + sliders
-  renderArchetypeGrid();
-}
-
-function kbUpdateSliderLabels() {
-  var formEl = document.getElementById("kb-slider-formality");
-  var emEl   = document.getElementById("kb-slider-emotion");
-  var dirEl  = document.getElementById("kb-slider-directness");
-  var fv = document.getElementById("kb-val-formality");
-  var ev = document.getElementById("kb-val-emotion");
-  var dv = document.getElementById("kb-val-directness");
-  if(formEl && fv) fv.textContent = formEl.value;
-  if(emEl   && ev) ev.textContent = emEl.value;
-  if(dirEl  && dv) dv.textContent = dirEl.value;
-}
-
-function kbSliderChange() {
-  kbUpdateSliderLabels();
-  kbSchedulePreview();
-}
-
-function kbSchedulePreview() {
-  if(_voicePreviewTimer) clearTimeout(_voicePreviewTimer);
-  _voicePreviewTimer = setTimeout(kbGeneratePreview, 900);
-}
-
-async function kbGeneratePreview() {
-  if(!CLAUDE_KEY) {
-    var prev = document.getElementById("kb-voice-preview");
-    if(prev) prev.textContent = "(Add your Claude API key to see live preview)";
-    return;
-  }
-  var vp = loadVoiceProfile();
-  var formEl = document.getElementById("kb-slider-formality");
-  var emEl   = document.getElementById("kb-slider-emotion");
-  var dirEl  = document.getElementById("kb-slider-directness");
-  var formality  = formEl  ? parseInt(formEl.value)  : vp.formality;
-  var emotion    = emEl    ? parseInt(emEl.value)    : vp.emotion;
-  var directness = dirEl   ? parseInt(dirEl.value)   : vp.directness;
-  var a = ARCHETYPES.find(function(x){return x.id===(localStorage.getItem("li_voice_archetype")||"mentor");}) || ARCHETYPES[1];
-  var prev = document.getElementById("kb-voice-preview");
-  if(prev) prev.textContent = "Generating...";
-  var prompt = "Generate exactly 2 sentences of a cold outreach opener to a CEO. Archetype: "+a.name+". Formality: "+formality+"/100. Emotion: "+emotion+"/100. Directness: "+directness+"/100. Be very different from other archetypes. Write only the 2 sentences, no preamble.";
-  var result = await claudeChat(prompt, 200);
-  if(prev) prev.textContent = (result && !result.startsWith("(Error")) ? result : "(Preview unavailable)";
-}
-
-function kbSaveVoice() {
-  var formEl = document.getElementById("kb-slider-formality");
-  var emEl   = document.getElementById("kb-slider-emotion");
-  var dirEl  = document.getElementById("kb-slider-directness");
-  if(formEl) localStorage.setItem("li_voice_formality",  formEl.value);
-  if(emEl)   localStorage.setItem("li_voice_emotion",    emEl.value);
-  if(dirEl)  localStorage.setItem("li_voice_directness", dirEl.value);
-  var archId = localStorage.getItem("li_voice_archetype") || "mentor";
-  localStorage.setItem("li_voice_archetype", archId);
-  var msg = document.getElementById("kb-voice-saved-msg");
-  if(msg){ msg.style.display="inline"; setTimeout(function(){msg.style.display="none";},2500); }
-  updateNavCounts();
+  if(vo) vo.value = kb.voice;
   updateKBBadge();
 }
 
 function escHtml(s){ return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
-
-function getVoiceBlock() {
-  var vp = loadVoiceProfile();
-  var a = ARCHETYPES.find(function(x){return x.id===vp.archetype;}) || ARCHETYPES[1];
-  return "\n\nVOICE PROFILE: Archetype="+a.name+". Formality="+vp.formality+"/100 (0=very casual, 100=very formal). Emotion="+vp.emotion+"/100 (0=pure logic/data, 100=highly emotional/story-driven). Directness="+vp.directness+"/100 (0=subtle/diplomatic, 100=blunt/straight to the point). Apply these settings strictly to tone, vocabulary, and structure.";
-}
 
 function getKBBlock() {
   var kb = loadKBData();
@@ -4230,27 +3722,16 @@ function getKBBlock() {
     }
   });
   if((kb.frameworks||"").trim()) parts.push("[Frameworks & Methodologies]\n"+kb.frameworks.trim());
+  if((kb.voice||"").trim()) parts.push("[Voice & Style Guidelines]\n"+kb.voice.trim());
   if(!parts.length) return "";
   return "\n\nKNOWLEDGE BASE — apply these principles and frameworks:\n\n"+parts.join("\n\n---\n\n");
 }
 
 function updateKBBadge() {
   var badge = document.getElementById("om-kb-badge");
-  var abadge = document.getElementById("om-archetype-badge");
-  var kb = loadKBData();
-  var activeBooks = kb.books.filter(function(b){ return b.on!==false && (b.content||"").trim(); });
-  var hasBooks = activeBooks.length > 0 || !!(kb.frameworks||"").trim();
-  if(badge) {
-    badge.style.display = hasBooks ? "inline" : "none";
-    if(hasBooks && activeBooks.length) badge.textContent = "📚 KB Active — " + activeBooks.length + " book" + (activeBooks.length===1?"":"s");
-    else if(hasBooks) badge.textContent = "📚 KB Active";
-  }
-  if(abadge) {
-    var vp = loadVoiceProfile();
-    var a = ARCHETYPES.find(function(x){return x.id===vp.archetype;}) || ARCHETYPES[1];
-    abadge.style.display = "inline";
-    abadge.textContent = "🎭 " + a.name.replace("The ","");
-  }
+  if(!badge) return;
+  var hasKB = !!getKBBlock();
+  badge.style.display = hasKB ? "inline" : "none";
 }
 
 function _buildOutreachPrompt(co, c) {
@@ -4329,12 +3810,10 @@ function _buildOutreachPrompt(co, c) {
       "\"Just send me some info\" → [response]"
   };
 
-  var vp = loadVoiceProfile();
-  var archetype = ARCHETYPES.find(function(x){return x.id===vp.archetype;}) || ARCHETYPES[1];
   return "You are Edgars Untals — NLP Trainer, Sales Coach, author of 'Sales Magician'. "+
     "15+ years, 15,000+ sales meetings. Corporate clients include Apple, Microsoft, Samsung, Toyota. "+
-    "Philosophy: Sales Is The Greatest Story Ever Told. Write in first person as Edgars.\n\n"+
-    getVoiceBlock().trim()+"\n\n"+
+    "Philosophy: Sales Is The Greatest Story Ever Told. "+
+    "Voice: direct, confident, story-driven, never corporate-speak. Write in first person as Edgars.\n\n"+
     tplInstructions[tpl]+"\n\n"+
     "CONTACT:\nName: "+(c.name||"—")+"\nTitle: "+(c.title||"—")+
     "\nCompany: "+co.name+"\nIndustry: "+(co.industry||"—")+
@@ -4344,6 +3823,7 @@ function _buildOutreachPrompt(co, c) {
     intelBlock+"\n\n"+
     modeFormat[mode]+"\n\n"+
     "LANGUAGE: "+langStr+"\n\n"+
+    (function(){var td=(localStorage.getItem("li_target_description")||"").trim();return td?"\nIDEAL TARGET PROFILE: "+td+". Tailor the message to speak directly to this person's role, industry pain points and buying motivations.\n":"";})()+
     "Write only the message(s). No preamble. No 'Here is your...' intro. Start directly with the content."+
     getKBBlock();
 }
