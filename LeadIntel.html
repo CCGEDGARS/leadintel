@@ -1547,7 +1547,7 @@ async function enrichCompany(coId) {
       var emails = (val.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g)||[])
         .filter(function(e){return !e.includes("example")&&!e.includes("test")&&!e.includes("sentry")&&!e.includes("noreply");});
       var phones = (val.match(/\+?\d[\d\s\-\(\)\.]{6,14}\d/g)||[]).map(function(p){return p.trim();}).filter(function(p){return p.replace(/\D/g,"").length>=7;});
-      var found = emails.slice(0,3).concat(phones.slice(0,2)).join(" · ").substring(0,60);
+      var found = emails.slice(0,3).concat(phones.slice(0,2)).join(" · ");
       if(found) co._sources[key].found = found;
     }
     updateResearchBar(co.id, co._sources[key].label, status);
@@ -1792,6 +1792,7 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
   "emailPattern": "firstname.lastname@${coDomain} or DATA MISSING",
   "mxDomain": "${coDomain}",
   "companyPhone": "full phone number or DATA MISSING",
+  "companyPhone2": "second phone number if found, or DATA MISSING",
   "companyEmail": "info@${coDomain} or DATA MISSING",
   "companyAddress": "street, city or DATA MISSING",
   "contacts": [
@@ -1801,6 +1802,7 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
       "email": "work email@${coDomain} or DATA MISSING",
       "personalEmail": "gmail/personal email if found on LinkedIn profile or DATA MISSING",
       "phone": "full phone number or DATA MISSING",
+      "phone2": "second phone number if found, or DATA MISSING",
       "linkedin": "https://www.linkedin.com/in/exact-verified-slug or DATA MISSING",
       "confidence": "HIGH|MEDIUM|LOW",
       "source": "exact URL where found"
@@ -1829,6 +1831,7 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
 
     // Always save company-level intel regardless of contacts
     if(data.companyPhone&&data.companyPhone!=="DATA MISSING"&&!co.phone) co.phone=cleanPhone(data.companyPhone)||co.phone||"";
+    if(data.companyPhone2&&data.companyPhone2!=="DATA MISSING"&&!co.phone2) co.phone2=cleanPhone(data.companyPhone2)||"";
     if(data.companyEmail&&data.companyEmail!=="DATA MISSING"&&!co.email) co.email=data.companyEmail;
     if(data.companyAddress&&data.companyAddress!=="DATA MISSING") co.address=data.companyAddress;
     if(data.notes) co.osintNotes=data.notes;
@@ -1839,6 +1842,7 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
     // Build intelligence summary
     co._intel = {
       phone: (data.companyPhone&&data.companyPhone!=="DATA MISSING")?data.companyPhone:null,
+      phone2: (data.companyPhone2&&data.companyPhone2!=="DATA MISSING")?data.companyPhone2:null,
       email: (data.companyEmail&&data.companyEmail!=="DATA MISSING")?data.companyEmail:null,
       address: (data.companyAddress&&data.companyAddress!=="DATA MISSING")?data.companyAddress:null,
       emailPattern: (data.emailPattern&&data.emailPattern!=="DATA MISSING")?data.emailPattern:null,
@@ -1870,7 +1874,8 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
             else if(!existing.email) existing.email=ecEmail;
           }
           if(ec.personalEmail && ec.personalEmail!=="DATA MISSING" && !existing.personalEmail) existing.personalEmail=ec.personalEmail.trim();
-          if(ec.phone && ec.phone!=="DATA MISSING") { var epClean=cleanPhone(ec.phone); if(epClean&&!existing.phone) existing.phone=epClean; }
+          if(ec.phone && ec.phone!=="DATA MISSING") { var epClean=cleanPhone(ec.phone); if(epClean&&!existing.phone) existing.phone=epClean; else if(epClean&&epClean!==existing.phone&&!existing.phone2) existing.phone2=epClean; }
+          if(ec.phone2 && ec.phone2!=="DATA MISSING") { var ep2Clean=cleanPhone(ec.phone2); if(ep2Clean&&!existing.phone2) existing.phone2=ep2Clean; }
           if(ec.linkedin && ec.linkedin!=="DATA MISSING" && !existing.linkedin){
             var li=ec.linkedin.trim();
             if(li && !li.startsWith("http") && li.includes("linkedin")) li="https://"+li;
@@ -1886,6 +1891,7 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
           var newEmail2=(!rawEmail2||isPersonalEmail(rawEmail2))?"":rawEmail2;
           var newPersonal2=rawEmail2&&isPersonalEmail(rawEmail2)?rawEmail2:((!ec.personalEmail||ec.personalEmail==="DATA MISSING")?"":ec.personalEmail.trim());
           var newPhone2=(!ec.phone||ec.phone==="DATA MISSING")?"":cleanPhone(ec.phone);
+          var newPhone2b=(!ec.phone2||ec.phone2==="DATA MISSING")?"":cleanPhone(ec.phone2);
           co.contacts.push({
             name:cleanContactName(ec.name.trim()),
             title:(!ec.title||ec.title==="DATA MISSING")?"":ec.title,
@@ -1893,6 +1899,7 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
             email:newEmail2,
             personalEmail:newPersonal2,
             phone:newPhone2,
+            phone2:newPhone2b,
             linkedin:newLi2,
             confidence:ec.confidence||"MEDIUM",
             source:ec.source||"OSINT",
@@ -2046,7 +2053,7 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
   co._enrichComplete = true;
   co._enrichStats = {
     emails: co.contacts.filter(function(c){return c.email;}).length,
-    phones: co.contacts.filter(function(c){return c.phone;}).length + (co.phone ? 1 : 0)
+    phones: co.contacts.filter(function(c){return c.phone||c.phone2;}).length + (co.phone ? 1 : 0) + (co.phone2 ? 1 : 0)
   };
   completeResearchBar(co.id, co._enrichStats.emails, co._enrichStats.phones);
   renderResultsPage();
@@ -2500,6 +2507,8 @@ function editContact(coId, ci){
     '<input id="ec-email" value="'+(c.email||"")+'" style="width:100%;box-sizing:border-box"/></div>' +
     '<div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em">Phone</label>' +
     '<input id="ec-phone" value="'+(c.phone||"")+'" style="width:100%;box-sizing:border-box"/></div>' +
+    '<div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em">Phone 2</label>' +
+    '<input id="ec-phone2" value="'+(c.phone2||"")+'" style="width:100%;box-sizing:border-box"/></div>' +
     '<div><label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.06em">LinkedIn URL</label>' +
     '<input id="ec-linkedin" value="'+(c.linkedin||"")+'" placeholder="https://linkedin.com/in/..." style="width:100%;box-sizing:border-box"/></div>' +
     '</div>' +
@@ -2559,6 +2568,7 @@ function saveEditContact(coId, ci){
   c.title   = document.getElementById("ec-title").value.trim()   || c.title;
   c.email   = document.getElementById("ec-email").value.trim();
   c.phone   = document.getElementById("ec-phone").value.trim();
+  c.phone2  = document.getElementById("ec-phone2").value.trim();
   c.linkedin= document.getElementById("ec-linkedin").value.trim();
   c._edited = true;
   document.getElementById("edit-modal").style.display = "none";
@@ -2723,7 +2733,7 @@ function renderResultsPage(){
     // Firmas.lv search - opens search results for this company name
     const firmasUrl="https://www.firmas.lv/lv/uznemumi?q="+encodeURIComponent(co.name)+"&type=companies";
     const emailCt=co.contacts.filter(function(c){return c.email;}).length;
-    const phoneCt=co.contacts.filter(function(c){return c.phone;}).length;
+    const phoneCt=co.contacts.filter(function(c){return c.phone||c.phone2;}).length + (co.phone2 ? 1 : 0);
     var bd=co.parBd||{};
     var scoreInfo=""; // hidden from user
     var dmType=co.dmType||"";
@@ -2749,7 +2759,8 @@ function renderResultsPage(){
     headsHtml+='<div class="co-links">';
     var cardDomain = ws ? ws.replace(/https?:\/\//,'').split('/')[0] : '';
     if(ws) headsHtml+='<a href="'+ws+'" target="_blank" style="color:var(--g);font-weight:600">🌐 '+cardDomain+'</a>';
-    if(co.phone) headsHtml+='<span style="color:#7ADBB8">📞 '+co.phone+'</span>';
+    if(co.phone) headsHtml+='<a href="tel:'+co.phone+'" style="color:#7ADBB8;text-decoration:none">📞 '+co.phone+'</a>';
+    if(co.phone2) headsHtml+='<a href="tel:'+co.phone2+'" style="color:#7ADBB8;text-decoration:none">📞 '+co.phone2+'</a>';
     if(co.email) headsHtml+='<a href="mailto:'+co.email+'" style="color:#7AB8E8">✉ '+co.email+'</a>';
     headsHtml+='<a href="'+firmasUrl+'" target="_blank" style="color:rgba(122,219,184,0.7);font-size:12px">Firmas.lv ↗</a>';
     if(isEnriched) headsHtml+='<button class="osint-btn" data-id="'+co.id+'" id="enrich-'+co.id+'" style="padding:3px 10px;border-radius:6px;border:1px solid rgba(201,169,97,0.35);background:rgba(201,169,97,0.08);color:var(--g);font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;transition:all .2s">🔄 Re-research</button>';
@@ -2779,12 +2790,14 @@ function renderResultsPage(){
     // General Contact card + Intelligence summary (shows after OSINT)
     var intelHtml = "";
     var gcPhone   = co.phone   || (co._intel && co._intel.phone)   || "";
+    var gcPhone2  = co.phone2  || (co._intel && co._intel.phone2)  || "";
     var gcEmail   = co.email   || (co._intel && co._intel.email)   || "";
     var gcAddress = co.address || (co._intel && co._intel.address) || "";
     var gcPattern = co.emailPattern || (co._intel && co._intel.emailPattern) || "";
-    if(gcPhone || gcEmail || gcAddress || gcPattern || co._intel) {
+    if(gcPhone || gcPhone2 || gcEmail || gcAddress || gcPattern || co._intel) {
       var gcItems = [];
       if(gcPhone)   gcItems.push('<div style="display:flex;align-items:center;gap:6px"><span style="color:#7ADBB8">📞</span><a href="tel:'+gcPhone+'" style="color:#7ADBB8;font-weight:700;font-size:13px;text-decoration:none;letter-spacing:.01em">'+gcPhone+'</a></div>');
+      if(gcPhone2)  gcItems.push('<div style="display:flex;align-items:center;gap:6px"><span style="color:#7ADBB8">📞</span><a href="tel:'+gcPhone2+'" style="color:#7ADBB8;font-weight:700;font-size:13px;text-decoration:none;letter-spacing:.01em">'+gcPhone2+'</a></div>');
       if(gcEmail)   gcItems.push('<div style="display:flex;align-items:center;gap:6px"><span style="color:#7AB8E8">✉</span><a href="mailto:'+gcEmail+'" style="color:#7AB8E8;font-size:12px;text-decoration:none">'+gcEmail+'</a></div>');
       if(gcAddress) gcItems.push('<div style="display:flex;align-items:center;gap:6px"><span>📍</span><span style="color:var(--muted);font-size:11px">'+gcAddress+'</span></div>');
       var intelMeta = [];
@@ -2834,7 +2847,10 @@ function renderResultsPage(){
         : '<span class="td-miss">—</span>';
       if(c.personalEmail) emailCell += '<div style="margin-top:3px"><a href="mailto:'+c.personalEmail+'" class="td-link" style="font-size:11px;color:rgba(138,138,154,0.7);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px" title="'+c.personalEmail+'">'+c.personalEmail+'</a><span style="font-size:9px;padding:1px 4px;border-radius:3px;background:rgba(138,138,154,0.08);color:rgba(138,138,154,0.5);border:1px solid rgba(138,138,154,0.15);vertical-align:middle">personal</span></div>';
       tblHtml+='<td class="col-email">'+emailCell+'</td>';
-      tblHtml+='<td class="col-phone">'+(c.phone?'<a href="tel:'+c.phone+'" class="td-link td-phone" style="white-space:nowrap">'+c.phone+'</a>':'<span class="td-miss">—</span>')+'</td>';
+      var phoneCell='';
+      if(c.phone) phoneCell+='<a href="tel:'+c.phone+'" class="td-link td-phone" style="white-space:nowrap;display:block">'+c.phone+'</a>';
+      if(c.phone2) phoneCell+='<a href="tel:'+c.phone2+'" class="td-link td-phone" style="white-space:nowrap;display:block;margin-top:2px;font-size:11px;opacity:.8">'+c.phone2+'</a>';
+      tblHtml+='<td class="col-phone">'+(phoneCell||'<span class="td-miss">—</span>')+'</td>';
       var liDisplay="—";
       if(c.linkedin && c._linkedinVerified) {
         liDisplay = '<a href="'+c.linkedin+'" target="_blank" class="td-link td-li" style="color:#7ADBB8" title="Verified LinkedIn profile">✓ LinkedIn</a>';
@@ -2973,7 +2989,10 @@ function renderCRM(){
       html+='<tr><td class="td-name">'+(c.name||"—")+'</td><td class="td-title">'+(c.title||"—")+'</td>';
       html+='<td>'+(c._parCat?catBadge(c._parCat):"—")+'</td>';
       html+='<td>'+(c.email?'<a href="mailto:'+c.email+'" class="td-link td-email">'+c.email+'</a>':'<span class="td-miss">—</span>')+'</td>';
-      html+='<td>'+(c.phone?'<a href="tel:'+c.phone+'" class="td-link td-phone">'+c.phone+'</a>':'<span class="td-miss">—</span>')+'</td>';
+      var crmPhoneCell='';
+      if(c.phone) crmPhoneCell+='<a href="tel:'+c.phone+'" class="td-link td-phone" style="display:block">'+c.phone+'</a>';
+      if(c.phone2) crmPhoneCell+='<a href="tel:'+c.phone2+'" class="td-link td-phone" style="display:block;margin-top:2px;font-size:11px;opacity:.8">'+c.phone2+'</a>';
+      html+='<td>'+(crmPhoneCell||'<span class="td-miss">—</span>')+'</td>';
       html+='<td><select onchange="updateStatus(\''+crmTab+'\',\''+c._k+'\',this.value)" style="background:var(--dark3);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;padding:2px 5px;font-family:var(--font)"><option>Cold</option><option>Hot</option><option>Meeting</option><option>Proposal</option><option>Client</option><option>Lost</option><option>VIP</option></select></td>';
       html+='<td><button onclick="removeContact(\''+crmTab+'\',\''+c._k+'\')" style="background:none;border:none;color:rgba(220,80,80,0.5);cursor:pointer;font-size:14px">X</button></td>';
       html+='</tr>';
@@ -3013,11 +3032,11 @@ function addManual(){
 }
 
 function exportCSV(){
-  var hdrs=["Company","Website","Industry","Country","Employees","Pareto","Score","Category","Name","Title","Seniority","Email","Phone","LinkedIn"];
+  var hdrs=["Company","Website","Industry","Country","Employees","Pareto","Score","Category","Name","Title","Seniority","Email","Phone","Phone2","LinkedIn"];
   var rows=[hdrs];
   leads.forEach(function(co){
     co.contacts.forEach(function(c){
-      rows.push([co.name,co.website,co.industry,co.country,co.employees,co.parCat||"",co.parScore||"",co.category||"",c.name,c.title,c.seniority,c.email,c.phone,c.linkedin]);
+      rows.push([co.name,co.website,co.industry,co.country,co.employees,co.parCat||"",co.parScore||"",co.category||"",c.name,c.title,c.seniority,c.email,c.phone,c.phone2,c.linkedin]);
     });
   });
   var csv=rows.map(function(r){return r.map(function(v){return'"'+(String(v||"")).replace(/"/g,'""')+'"';}).join(",");}).join("\n");
