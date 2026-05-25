@@ -253,7 +253,6 @@ table.ct .col-li{width:90px}
     <button class="step" id="nav-results" onclick="goTo('results')"><span class="step-num" id="sn-results">3</span>Results</button>
     <button class="step" id="nav-crm" onclick="goTo('crm')"><span class="step-num">★</span><span id="crm-label">CRM</span></button>
     <button class="step" id="nav-kb" onclick="goTo('kb')"><span class="step-num">📚</span><span id="kb-label">Knowledge</span></button>
-    <button class="step" id="nav-pareto" onclick="goTo('pareto')"><span class="step-num">⚙</span>Scoring</button>
   </div>
 </nav>
 
@@ -293,14 +292,15 @@ table.ct .col-li{width:90px}
       <div class="prog-bar"><div class="prog-fill" id="pp-fill" style="width:0%"></div></div>
       <div class="prog-status" id="pp-status">Analyzing...</div>
     </div>
-    <div class="card" style="background:rgba(201,169,97,0.04);border-color:rgba(201,169,97,0.2);cursor:pointer" onclick="goTo('pareto')">
-      <div style="display:flex;align-items:center;justify-content:space-between">
+    <div class="card" style="padding:0;overflow:hidden;border-color:rgba(201,169,97,0.2)">
+      <button onclick="toggleScoringRules()" id="scoring-toggle-btn" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:16px 20px;background:rgba(201,169,97,0.04);border:none;cursor:pointer;font-family:var(--font);text-align:left">
         <div>
-          <div class="card-title" style="margin-bottom:6px">Pareto Scoring Rules</div>
-          <div id="pareto-quick-preview" style="font-size:13px;color:var(--muted);line-height:1.8"></div>
+          <div class="card-title" style="margin:0">⚙️ Scoring Rules</div>
+          <div id="scoring-quick-summary" style="font-size:12px;color:var(--muted);margin-top:4px">Configure decision maker titles, company size, industries and hiring signals</div>
         </div>
-        <div style="font-size:15px;padding:8px 12px;border-radius:8px;background:rgba(201,169,97,0.12);border:1px solid rgba(201,169,97,0.35);color:#C9A961;margin-left:16px;font-weight:700;letter-spacing:.05em">Configure &#9654;</div>
-      </div>
+        <div id="scoring-toggle-arrow" style="font-size:13px;font-weight:700;color:var(--g);padding:6px 12px;border-radius:7px;background:rgba(201,169,97,0.12);border:1px solid rgba(201,169,97,0.35);white-space:nowrap;flex-shrink:0;margin-left:12px">Configure &#9654;</div>
+      </button>
+      <div id="scoring-body" style="display:none;padding:0 20px 20px"></div>
     </div>
     <!-- Apollo Upgrade Banner -->
     <div id="apollo-banner" style="background:linear-gradient(135deg,rgba(13,20,33,0.95),rgba(17,24,39,0.95));border:1px solid rgba(201,169,97,0.25);border-radius:12px;padding:18px 20px;margin-bottom:18px">
@@ -542,124 +542,6 @@ table.ct .col-li{width:90px}
     </div>
   </div>
 
-  <!-- SCREEN 6: PARETO SCORING -->
-  <div class="screen" id="screen-pareto">
-    <div class="pg-title">Pareto Scoring Rules</div>
-    <div class="pg-sub">Set your ideal customer criteria. Each company is scored automatically — VIP companies get OSINT enriched first.</div>
-
-    <!-- THRESHOLDS -->
-    <div class="card">
-      <div class="card-title">Category Thresholds</div>
-      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Minimum total score to reach each category. Max possible score: ~20 pts.</div>
-      <div style="display:flex;gap:12px;flex-wrap:wrap">
-        <div class="thresh-chip" data-cat="VIP" style="background:rgba(201,169,97,0.1);border:2px solid var(--g);border-radius:10px;padding:14px 20px;text-align:center;cursor:pointer;flex:1;min-width:100px">
-          <div style="font-size:18px;font-weight:700;color:var(--g)">★ VIP</div>
-          <div style="font-size:11px;color:var(--muted);margin:4px 0">min score</div>
-          <input type="number" id="th-vip" value="13" min="1" max="20" oninput="savePareto()" style="width:60px;text-align:center;font-size:18px;font-weight:700;color:var(--g);background:transparent;border:none;border-bottom:1px solid var(--g);padding:2px"/>
-        </div>
-        <div class="thresh-chip" style="background:rgba(122,184,232,0.08);border:2px solid #7AB8E8;border-radius:10px;padding:14px 20px;text-align:center;flex:1;min-width:100px">
-          <div style="font-size:18px;font-weight:700;color:#7AB8E8">A</div>
-          <div style="font-size:11px;color:var(--muted);margin:4px 0">min score</div>
-          <input type="number" id="th-a" value="9" min="1" max="20" oninput="savePareto()" style="width:60px;text-align:center;font-size:18px;font-weight:700;color:#7AB8E8;background:transparent;border:none;border-bottom:1px solid #7AB8E8;padding:2px"/>
-        </div>
-        <div class="thresh-chip" style="background:rgba(122,219,184,0.08);border:2px solid #7ADBB8;border-radius:10px;padding:14px 20px;text-align:center;flex:1;min-width:100px">
-          <div style="font-size:18px;font-weight:700;color:#7ADBB8">B</div>
-          <div style="font-size:11px;color:var(--muted);margin:4px 0">min score</div>
-          <input type="number" id="th-b" value="5" min="1" max="20" oninput="savePareto()" style="width:60px;text-align:center;font-size:18px;font-weight:700;color:#7ADBB8;background:transparent;border:none;border-bottom:1px solid #7ADBB8;padding:2px"/>
-        </div>
-        <div class="thresh-chip" style="background:rgba(138,138,154,0.06);border:2px solid var(--muted);border-radius:10px;padding:14px 20px;text-align:center;flex:1;min-width:100px">
-          <div style="font-size:18px;font-weight:700;color:var(--muted)">C</div>
-          <div style="font-size:11px;color:var(--muted);margin:4px 0">min score</div>
-          <input type="number" id="th-c" value="1" min="1" max="20" oninput="savePareto()" style="width:60px;text-align:center;font-size:18px;font-weight:700;color:var(--muted);background:transparent;border:none;border-bottom:1px solid var(--muted);padding:2px"/>
-        </div>
-      </div>
-    </div>
-
-    <!-- CRITERION 1: DECISION MAKING -->
-    <div class="card">
-      <div class="card-title">1 — Decision Making Process <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">Claude infers from size, title, industry — you can override per company</span></div>
-      <div class="crit-grid">
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(201,169,97,0.12);color:var(--g)">Single Decision Maker</span><div class="crit-desc">CEO/Owner decides alone. Fast cycle, direct conversation. Typical in SMEs.</div></div><input type="number" id="pdm-single" value="4" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,184,232,0.1);color:#7AB8E8">Small Committee</span><div class="crit-desc">2-3 stakeholders (CEO + HR or Sales Director). Common in mid-size companies.</div></div><input type="number" id="pdm-committee" value="3" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,219,184,0.1);color:#7ADBB8">Divisional Approval</span><div class="crit-desc">Department head approves, needs sign-off from above. Large local companies.</div></div><input type="number" id="pdm-division" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(138,138,154,0.08);color:var(--muted)">Corporate Procurement</span><div class="crit-desc">Formal tender process, multiple approvals. Global brands, banks, government.</div></div><input type="number" id="pdm-proc" value="1" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-      </div>
-      <div style="font-size:12px;color:var(--muted);margin-top:12px;padding:10px;background:rgba(201,169,97,0.04);border-radius:7px;line-height:1.7">
-        <strong style="color:var(--g)">How Claude infers this:</strong> Small company + CEO contact = Single DM. 
-        100-500 emp + Sales Director = Small Committee. 
-        500+ emp or Bank/Government = Procurement. 
-        Global brand = Procurement (high brand, lower DM score).
-      </div>
-    </div>
-
-    <!-- CRITERION 2: COMPANY SIZE -->
-    <div class="card">
-      <div class="card-title">2 — Company Size <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">Number of employees (from Apollo)</span></div>
-      <div class="crit-grid">
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(201,169,97,0.12);color:var(--g)">500+ employees</span><div class="crit-desc">Large enterprise with dedicated training budgets</div></div><input type="number" id="pe-500" value="4" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,184,232,0.1);color:#7AB8E8">100–499 employees</span><div class="crit-desc">Mid-size company, structured HR and sales teams</div></div><input type="number" id="pe-100" value="3" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,219,184,0.1);color:#7ADBB8">50–99 employees</span><div class="crit-desc">Growing company, likely has sales team</div></div><input type="number" id="pe-50" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(138,138,154,0.08);color:var(--muted)">10–49 employees</span><div class="crit-desc">Small company, limited training budget</div></div><input type="number" id="pe-10" value="1" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(220,80,80,0.07);color:rgba(220,80,80,0.8)">Under 10</span><div class="crit-desc">Too small — auto disqualified</div></div><input value="0" disabled class="crit-input" style="opacity:.35"/></div>
-      </div>
-    </div>
-
-    <!-- CRITERION 3: TURNOVER -->
-    <div class="card">
-      <div class="card-title">3 — Annual Turnover <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">Entered manually or via OSINT enrichment</span></div>
-      <div class="crit-grid">
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(201,169,97,0.12);color:var(--g)">EUR 10M+</span><div class="crit-desc">Significant training budget available</div></div><input type="number" id="ptrn-10m" value="4" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,184,232,0.1);color:#7AB8E8">EUR 1M–10M</span><div class="crit-desc">Established revenue, some training budget</div></div><input type="number" id="ptrn-1m" value="3" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,219,184,0.1);color:#7ADBB8">EUR 200K–1M</span><div class="crit-desc">Minimum viable budget</div></div><input type="number" id="ptrn-200k" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(220,80,80,0.07);color:rgba(220,80,80,0.8)">Under EUR 200K</span><div class="crit-desc">Too small — auto disqualified</div></div><input value="0" disabled class="crit-input" style="opacity:.35"/></div>
-      </div>
-    </div>
-
-    <!-- CRITERION 4: SALES STRUCTURE -->
-    <div class="card">
-      <div class="card-title">4 — Sales Structure <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">Inferred from industry, title and OSINT</span></div>
-      <div class="crit-grid">
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(201,169,97,0.12);color:var(--g)">B2B Sales Team</span><div class="crit-desc">Dedicated B2B sales reps, account managers, key account team</div></div><input type="number" id="pt-b2b" value="4" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,184,232,0.1);color:#7AB8E8">B2C / Phone Center</span><div class="crit-desc">Retail sales team, call center, telesales</div></div><input type="number" id="pt-b2c" value="3" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,219,184,0.1);color:#7ADBB8">Customer Service</span><div class="crit-desc">Support team, e-commerce helpdesk, service center</div></div><input type="number" id="pt-cs" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(138,138,154,0.08);color:var(--muted)">Marketing / Biz Dev</span><div class="crit-desc">Marketing-led growth, no dedicated sales team</div></div><input type="number" id="pt-mkt" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(220,80,80,0.07);color:rgba(220,80,80,0.8)">No Sales Team</span><div class="crit-desc">Under 50 emp with no visible sales structure — low priority</div></div><input value="0" disabled class="crit-input" style="opacity:.35"/></div>
-      </div>
-    </div>
-
-    <!-- CRITERION 5: BRAND TYPE -->
-    <div class="card">
-      <div class="card-title">5 — Brand Type <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">Inferred from company name, size and industry</span></div>
-      <div class="crit-grid">
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(201,169,97,0.12);color:var(--g)">Global Brand</span><div class="crit-desc">International company with Baltic office (IKEA, Tele2, Swedbank, Samsung)</div></div><input type="number" id="pb-global" value="4" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,184,232,0.1);color:#7AB8E8">Regional Subsidiary</span><div class="crit-desc">Nordic/EU company branch in Latvia with local management</div></div><input type="number" id="pb-regional" value="3" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,219,184,0.1);color:#7ADBB8">Local Established</span><div class="crit-desc">Latvian-owned company, 50+ employees, known brand</div></div><input type="number" id="pb-local" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(138,138,154,0.08);color:var(--muted)">Small Local</span><div class="crit-desc">Latvian SME under 50 employees</div></div><input type="number" id="pb-small" value="1" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(220,80,80,0.07);color:rgba(220,80,80,0.8)">Startup</span><div class="crit-desc">Early stage, under 3 years, no established revenue</div></div><input type="number" id="pb-startup" value="0" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-      </div>
-    </div>
-
-    <!-- CRITERION 6: HIRING SIGNAL -->
-    <div class="card">
-      <div class="card-title">6 — Active Hiring Signal <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">Checked automatically during OSINT enrichment</span></div>
-      <div class="crit-grid">
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(201,169,97,0.12);color:var(--g)">Hiring Sales Roles Now</span><div class="crit-desc">Active job ads for Sales Manager, Account Executive, Sales Rep on LinkedIn/CV.lv</div></div><input type="number" id="ph-sales" value="3" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(122,184,232,0.1);color:#7AB8E8">Hiring Commercial Roles</span><div class="crit-desc">Business Development, Customer Success, Marketing Manager</div></div><input type="number" id="ph-commercial" value="2" min="0" max="5" oninput="savePareto()" class="crit-input"/></div>
-        <div class="crit-row"><div class="crit-label"><span class="crit-badge" style="background:rgba(138,138,154,0.08);color:var(--muted)">Not Hiring / Unknown</span><div class="crit-desc">No active sales job postings found</div></div><input value="0" disabled class="crit-input" style="opacity:.35"/></div>
-      </div>
-      <div style="font-size:12px;color:var(--muted);margin-top:12px;padding:10px;background:rgba(201,169,97,0.04);border-radius:7px;line-height:1.7">
-        <strong style="color:var(--g)">Logic:</strong> Company hiring sales people = has sales team + budget to invest in training. 
-        Claude checks LinkedIn Jobs and CV.lv during OSINT enrichment automatically.
-      </div>
-    </div>
-
-    <!-- PREVIEW -->
-    <div class="summary-box" style="margin-bottom:18px">
-      <div class="summary-label">Score Preview</div>
-      <div id="pareto-preview" style="font-size:13px;color:var(--muted);line-height:2.2"></div>
-    </div>
-    <button class="btn btn-gold btn-full" onclick="applyParetoToAll()">Save and Apply to All Results</button>
-  </div>
 
 </div>
 
@@ -771,21 +653,31 @@ const PAGE = 20;
 let filterCat = "ALL";
 let filterQ = "";
 let crmTab = "all";
-var _PARETO_DEFAULT = {
-  th:{vip:12,a:8,b:5,c:1},
-  pdm:{single:4,committee:3,division:2,proc:1},
-  pe:{p500:4,p100:3,p50:2,p10:1},
-  trn:{m10:4,m1:3,k200:2},
-  pt:{b2b:4,b2c:3,cs:2,mkt:2},
-  pb:{global:4,regional:3,local:2,small:1,startup:0},
-  ph:{sales:3,commercial:2}
+var _SCORING_DEFAULT = {
+  titles:[
+    {title:"CEO",pts:10},{title:"Owner",pts:10},{title:"Founder",pts:10},
+    {title:"HR Director",pts:8},{title:"Sales Director",pts:8},{title:"Commercial Director",pts:8},
+    {title:"Manager",pts:5}
+  ],
+  size:[
+    {cat:"VIP",min:500,max:"",pts:15},
+    {cat:"A",min:100,max:499,pts:10},
+    {cat:"B",min:50,max:99,pts:6},
+    {cat:"C",min:10,max:49,pts:3}
+  ],
+  industries:[
+    {name:"Finance",pts:9,on:true},{name:"Banking",pts:8,on:true},
+    {name:"Insurance",pts:8,on:true},{name:"Technology",pts:7,on:true},
+    {name:"Retail",pts:6,on:true},{name:"Manufacturing",pts:6,on:true},
+    {name:"Healthcare",pts:5,on:true},{name:"Real Estate",pts:5,on:false},
+    {name:"Logistics",pts:4,on:false},{name:"Construction",pts:3,on:false}
+  ],
+  hiring:{on:true,pts:15},
+  turnover:{vip:10000000,a:1000000,b:200000,c:0},
+  thresholds:{vip:28,a:18,b:10,c:1}
 };
-// Load from localStorage but validate structure — clear stale data if keys missing
-var _saved = JSON.parse(localStorage.getItem("li_pareto")||"null");
-var paretoRules = (_saved && _saved.pdm && _saved.pb && _saved.ph) ? _saved : _PARETO_DEFAULT;
-if(!_saved || !_saved.pdm || !_saved.pb) {
-  localStorage.removeItem("li_pareto"); // clear old format
-}
+var _scoringSaved = JSON.parse(localStorage.getItem("li_scoring")||"null");
+var scoringRules = (_scoringSaved && _scoringSaved.titles && _scoringSaved.size) ? _scoringSaved : _SCORING_DEFAULT;
 
 function saveLists(){localStorage.setItem("li_crm",JSON.stringify(crmList));localStorage.setItem("li_vip",JSON.stringify(vipList));}
 function ckKey(co,c){return co.name+"__"+c.name+"__"+(c.email||c.title||"");}
@@ -817,7 +709,6 @@ function goTo(screen){
   if(nav) nav.classList.add("active");
   window.scrollTo(0,0);
   if(screen==="crm") renderCRM();
-  if(screen==="pareto") loadParetoUI();
   if(screen==="kb") renderKB();
 }
 
@@ -1987,7 +1878,7 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
       // Rescore with new intelligence
       if(co.contacts.length){
         var best2=co.contacts.reduce(function(b,c){var sm={c_suite:4,vp:4,director:3,manager:2,senior:1};return(sm[c.seniority]||1)>(sm[b.seniority]||1)?c:b;},co.contacts[0]);
-        var r2=scoreContact(co,best2,co._turnover);
+        var r2=scoreContact(co,best2);
         co.parCat=r2.cat;co.parScore=r2.score;co.parBd=r2.bd;co.dmType=r2.dmType;
       }
     }
@@ -2097,106 +1988,107 @@ async function enrichAll() {
   showAlert("OSINT enrichment complete for top "+topCos.length+" companies","info");
 }
 
-// PARETO SCORING
-function scoreContact(co,contact,turnover){
-  // Safety: ensure all rule groups exist
-  var r=paretoRules;
-  if(!r.pdm) r.pdm=_PARETO_DEFAULT.pdm;
-  if(!r.pb) r.pb=_PARETO_DEFAULT.pb;
-  if(!r.ph) r.ph=_PARETO_DEFAULT.ph;
-  if(!r.trn) r.trn=_PARETO_DEFAULT.trn;
-  if(!r.pt) r.pt=_PARETO_DEFAULT.pt;
-  if(!r.pe) r.pe=_PARETO_DEFAULT.pe;
-  if(!r.th) r.th=_PARETO_DEFAULT.th;
-  var emp=parseInt(co.employees)||0;
-  var ind=(co.industry||"").toLowerCase();
+// SCORING
+function scoreContact(co,contact){
+  var r=scoringRules;
+  var bd={}, score=0;
   var tit=(contact.title||"").toLowerCase();
-  var combo=ind+" "+tit;
-  var coName=(co.name||"").toLowerCase();
 
-  // ── 1. DECISION MAKING PROCESS (inferred) ──────────────────────────────────
-  // Use manual override if set, otherwise infer
-  var dmScore=0;
-  var dmType=co._dmOverride||"";
-  if(!dmType){
-    // Infer from size + title + industry
-    var isBank=/bank|apdrošin|insurance|financ|government|municipality|pasvaldib|ministrij/.test(combo+coName);
-    var isGlobal=co._brandType==="global"||/ikea|tele2|swedbank|luminor|seb|tet|maxima|rimi|lidl|bmw|toyota|samsung|apple|microsoft|google|amazon/.test(coName);
-    var sen=contact.seniority||"";
-    if(isGlobal||isBank||emp>=500) dmType="proc";
-    else if(emp>=200) dmType="division";
-    else if(emp>=50||(sen==="director"||sen==="vp")) dmType="committee";
-    else dmType="single";
-  }
-  var dmMap={single:3,committee:2,division:1,proc:0};
-  dmScore=dmMap[dmType]||1;
-
-  // ── 2. COMPANY SIZE ─────────────────────────────────────────────────────────
-  var empTier = emp>=500?"p500":emp>=100?"p100":emp>=50?"p50":emp>=10?"p10":emp>0?"out":"unknown";
-  var ep=0;
-  if(empTier==="out") return {score:0,cat:"OUT",bd:{dm:dmScore,emp:0}};
-  else if(empTier==="unknown") ep=1; // don't penalize unknown
-  else ep=1; // all known sizes = 1pt (qualifier only)
-
-  // ── 3. TURNOVER ─────────────────────────────────────────────────────────────
-  var trp=null;
-  if(turnover!==null&&turnover!==undefined){
-    var t=parseFloat(turnover);
-    if(!isNaN(t)){
-      if(t<200000) return {score:0,cat:"OUT",bd:{dm:dmScore,emp:ep,trn:0}};
-      trp=t>=10000000?r.trn.m10:t>=1000000?r.trn.m1:r.trn.k200;
+  // 1. Title match
+  var titles=(r.titles||[]).slice().sort(function(a,b){return (b.pts||0)-(a.pts||0);});
+  for(var i=0;i<titles.length;i++){
+    var t=titles[i];
+    if(t.title&&tit.indexOf(t.title.toLowerCase())!==-1){
+      var tp=parseInt(t.pts)||0;
+      if(tp){score+=tp;bd.title={label:t.title+" title",pts:tp};}
+      break;
     }
   }
 
-  // ── 4. SALES STRUCTURE ──────────────────────────────────────────────────────
-  var tp=0;
-  if(/b2b|corporate.sales|enterprise|key.account|business.to.business/.test(combo)) tp=r.pt.b2b;
-  else if(/retail|b2c|consumer|phone.cent|call.cent|telesales/.test(combo)) tp=r.pt.b2c;
-  else if(/customer.serv|support|helpdesk|ecommerce|e.commerce/.test(combo)) tp=r.pt.cs;
-  else if(/sales|commercial|komerc|tirdzniec|pard/.test(combo)) tp=r.pt.b2b;
-  else if(/marketing|business.dev|partner|account/.test(combo)) tp=r.pt.mkt;
-  else tp=emp>=200?r.pt.cs:emp>=50?1:0;
-  if(tp===0&&emp<50) return {score:0,cat:"C",bd:{dm:dmScore,emp:ep,team:0}};
-
-  // ── 5. BRAND TYPE ───────────────────────────────────────────────────────────
-  var bp=0;
-  var brand=co._brandType||"";
-  if(!brand){
-    // Infer brand type
-    if(/ikea|tele2|swedbank|luminor|seb|tet|maxima|rimi|lidl|bmw|toyota|samsung|apple|microsoft|lindex|h&m|nestle|philips/.test(coName)) brand="global";
-    else if(emp>=500&&ind&&!/startup/.test(ind)) brand="global";
-    else if(emp>=200) brand="regional";
-    else if(emp>=50) brand="local";
-    else if(emp>=10) brand="small";
-    else brand="small";
+  // 2. Company size
+  var emp=parseInt(co.employees)||0;
+  var sizes=r.size||[];
+  var sizeMatched=false;
+  for(var i=0;i<sizes.length;i++){
+    var s=sizes[i];
+    var minOk=emp>=(parseInt(s.min)||0);
+    var maxOk=!s.max||emp<=parseInt(s.max);
+    if(minOk&&maxOk){
+      var sp=parseInt(s.pts)||0;
+      if(sp){score+=sp;bd.size={label:emp+" employees",pts:sp};}
+      sizeMatched=true;
+      break;
+    }
   }
-  var pbMap={global:r.pb.global,regional:r.pb.regional,local:r.pb.local,small:r.pb.small,startup:0};
-  bp=pbMap[brand]||r.pb.small;
+  // Disqualify if known employee count is below lowest size tier
+  if(emp>0&&!sizeMatched) return {score:0,cat:"OUT",bd:{}};
 
-  // ── 6. HIRING SIGNAL ────────────────────────────────────────────────────────
-  var hp=0;
-  if(co._hiring==="sales") hp=r.ph.sales;
-  else if(co._hiring==="commercial") hp=r.ph.commercial;
+  // 3. Industry bonus
+  var ind=(co.industry||"").toLowerCase();
+  var industries=r.industries||[];
+  for(var i=0;i<industries.length;i++){
+    var ig=industries[i];
+    if(!ig.on) continue;
+    if(ind.indexOf((ig.name||"").toLowerCase())!==-1){
+      var ip=parseInt(ig.pts)||0;
+      if(ip){score+=ip;bd.industry={label:ig.name+" industry",pts:ip};}
+      break;
+    }
+  }
 
-  // ── TOTAL SCORE ─────────────────────────────────────────────────────────────
-  var score=dmScore+ep+(trp||0)+tp+bp+hp;
+  // 4. Hiring signal
+  if(r.hiring&&r.hiring.on&&co._hiring&&co._hiring!=="none"){
+    var hp=parseInt(r.hiring.pts)||0;
+    if(hp){score+=hp;bd.hiring={label:"Hiring "+co._hiring,pts:hp};}
+  }
+
+  // 5. Turnover qualifier — cap category
+  var trnCap=null;
+  if(co._turnover!==null&&co._turnover!==undefined){
+    var tv=parseFloat(co._turnover);
+    var trn=r.turnover||{};
+    if(!isNaN(tv)&&tv>0){
+      if(tv<(parseInt(trn.b)||200000)) trnCap="C";
+      else if(tv<(parseInt(trn.a)||1000000)) trnCap="B";
+      else if(tv<(parseInt(trn.vip)||10000000)) trnCap="A";
+    }
+  }
+
+  // 6. Category from thresholds
+  var th=r.thresholds||{vip:28,a:18,b:10,c:1};
   var cat;
-  if(score>=r.th.vip) cat="VIP";
-  else if(score>=r.th.a) cat="A";
-  else if(score>=r.th.b) cat="B";
-  else if(score>=r.th.c) cat="C";
-  else cat="OUT";
+  if(score>=(parseInt(th.vip)||28)) cat="VIP";
+  else if(score>=(parseInt(th.a)||18)) cat="A";
+  else if(score>=(parseInt(th.b)||10)) cat="B";
+  else cat="C";
 
-  return {score:score,cat:cat,brand:brand,dmType:dmType,
-    bd:{dm:dmScore,emp:ep,trn:trp,team:tp,brand:bp,hire:hp}};
+  // Apply turnover cap
+  if(trnCap){
+    var order={VIP:0,A:1,B:2,C:3,OUT:4};
+    if((order[trnCap]||4)>(order[cat]||4)) cat=trnCap;
+  }
+
+  return {score:score,cat:cat,bd:bd};
+}
+
+function buildScoreTooltip(co){
+  if(!co||!co.parScore) return "";
+  var bd=co.parBd||{};
+  var parts=["Score: "+co.parScore+"pts"];
+  if(bd.title) parts.push(bd.title.label+" (+"+bd.title.pts+")");
+  if(bd.size) parts.push(bd.size.label+" (+"+bd.size.pts+")");
+  if(bd.hiring) parts.push(bd.hiring.label+" (+"+bd.hiring.pts+")");
+  if(bd.industry) parts.push(bd.industry.label+" (+"+bd.industry.pts+")");
+  return parts.join(" \xB7 ");
 }
 
 function catColor(c){return c==="VIP"?"#C9A961":c==="A"?"#7AB8E8":c==="B"?"#7ADBB8":c==="C"?"#8A8A9A":"rgba(220,80,80,0.75)";}
 function catBg(c){return c==="VIP"?"rgba(201,169,97,0.12)":c==="A"?"rgba(122,184,232,0.08)":c==="B"?"rgba(122,219,184,0.08)":c==="C"?"rgba(138,138,154,0.06)":"rgba(220,80,80,0.06)";}
-function catBadge(c){
+function catBadge(c,tooltip){
   if(!c) return "";
   var lbl=c==="VIP"?"★ VIP":c;
-  return '<span class="badge" style="background:'+catBg(c)+';color:'+catColor(c)+';border:1px solid '+catColor(c)+'40">'+lbl+'</span>';
+  var tip=tooltip?' title="'+tooltip.replace(/"/g,"&quot;")+'"':'';
+  return '<span class="badge"'+tip+' style="cursor:help;background:'+catBg(c)+';color:'+catColor(c)+';border:1px solid '+catColor(c)+'40">'+lbl+'</span>';
 }
 
 function scoreAllLeads(){
@@ -2206,7 +2098,7 @@ function scoreAllLeads(){
       const sm={c_suite:4,vp:4,director:3,manager:2,senior:1};
       return (sm[c.seniority]||1)>(sm[b.seniority]||1)?c:b;
     },co.contacts[0]);
-    const r=scoreContact(co,best,co._turnover||null);
+    const r=scoreContact(co,best);
     co.parCat=r.cat; co.parScore=r.score; co.parBd=r.bd;
   });
   leads.sort(function(a,b){
@@ -2789,7 +2681,7 @@ function renderResultsPage(){
     const div=document.createElement("div");
     div.className="co-card";
 
-    let headsHtml='<div class="co-head"><div class="co-top"><div class="co-av" style="background:'+catBg(co.parCat)+';color:'+catColor(co.parCat)+';border-color:'+catColor(co.parCat)+'40">'+co.name.charAt(0)+'</div><div style="flex:1"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap"><a class="co-name-link" href="'+(ws||'https://www.google.com/search?q='+encodeURIComponent(co.name))+'" target="_blank">'+co.name+'</a>'+catBadge(co.parCat)+catBadge(co.category)+enrichedBadge+verifiedBadge+'</div><div class="co-meta">'+(co.industry?co.industry+' · ':'')+( co.country?co.country+' · ':'')+( co.employees?co.employees+' emp.':'')+(dmLabel?' · <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(201,169,97,0.08);color:var(--g)">'+dmLabel+'</span>':'')+'</div></div><div style="text-align:right;flex-shrink:0"><div style="font-size:28px;font-weight:800;color:'+(co.contacts.length>=7?'var(--g)':co.contacts.length>=4?'#7AB8E8':'var(--muted)')+';line-height:1">'+co.contacts.length+'</div><div style="font-size:10px;color:var(--muted);letter-spacing:.05em;margin-top:1px">CONTACTS'+(emailCt?' · '+emailCt+'✉':'')+(phoneCt?' · '+phoneCt+'📞':'')+'</div></div></div>';
+    let headsHtml='<div class="co-head"><div class="co-top"><div class="co-av" style="background:'+catBg(co.parCat)+';color:'+catColor(co.parCat)+';border-color:'+catColor(co.parCat)+'40">'+co.name.charAt(0)+'</div><div style="flex:1"><div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap"><a class="co-name-link" href="'+(ws||'https://www.google.com/search?q='+encodeURIComponent(co.name))+'" target="_blank">'+co.name+'</a>'+catBadge(co.parCat,buildScoreTooltip(co))+catBadge(co.category)+enrichedBadge+verifiedBadge+'</div><div class="co-meta">'+(co.industry?co.industry+' · ':'')+( co.country?co.country+' · ':'')+( co.employees?co.employees+' emp.':'')+(dmLabel?' · <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(201,169,97,0.08);color:var(--g)">'+dmLabel+'</span>':'')+'</div></div><div style="text-align:right;flex-shrink:0"><div style="font-size:28px;font-weight:800;color:'+(co.contacts.length>=7?'var(--g)':co.contacts.length>=4?'#7AB8E8':'var(--muted)')+';line-height:1">'+co.contacts.length+'</div><div style="font-size:10px;color:var(--muted);letter-spacing:.05em;margin-top:1px">CONTACTS'+(emailCt?' · '+emailCt+'✉':'')+(phoneCt?' · '+phoneCt+'📞':'')+'</div></div></div>';
     headsHtml+='<div class="co-links">';
     var cardDomain = ws ? ws.replace(/https?:\/\//,'').split('/')[0] : '';
     if(ws) headsHtml+='<a href="'+ws+'" target="_blank" style="color:var(--g);font-weight:600">🌐 '+cardDomain+'</a>';
@@ -2941,7 +2833,7 @@ function updateTrn(coId,val){
   co._turnover=parseFloat(val)||null;
   if(!co.contacts.length) return;
   const best=co.contacts.reduce(function(b,c){var sm={c_suite:4,vp:4,director:3,manager:2,senior:1};return (sm[c.seniority]||1)>(sm[b.seniority]||1)?c:b;},co.contacts[0]);
-  const r=scoreContact(co,best,co._turnover);
+  const r=scoreContact(co,best);
   co.parCat=r.cat;co.parScore=r.score;co.parBd=r.bd;
   renderResultsPage();
 }
@@ -2954,7 +2846,7 @@ function vipBtn(btn){
   const c=co.contacts[ci];
   const key=ckKey(co,c);
   if(inVIP(key)){showAlert("Already in VIP list.","info");return;}
-  const res=scoreContact(co,c,co._turnover);
+  const res=scoreContact(co,c);
   vipList.push(Object.assign({},c,{_k:key,_company:co.name,_website:co.website,_industry:co.industry,_country:co.country,_employees:co.employees,_parCat:res.cat,_parScore:res.score,_status:"VIP",_added:new Date().toLocaleDateString()}));
   saveLists();updateNavCounts();
   btn.textContent="★ VIP";btn.classList.add("on");
@@ -2968,7 +2860,7 @@ function crmBtn(btn){
   const c=co.contacts[ci];
   const key=ckKey(co,c);
   if(inCRM(key)){showAlert("Already in CRM.","info");return;}
-  const res=scoreContact(co,c,co._turnover);
+  const res=scoreContact(co,c);
   crmList.push(Object.assign({},c,{_k:key,_company:co.name,_website:co.website,_industry:co.industry,_country:co.country,_employees:co.employees,_parCat:res.cat,_parScore:res.score,_status:"Cold",_added:new Date().toLocaleDateString()}));
   saveLists();updateNavCounts();
   btn.textContent="✓ CRM";btn.classList.add("on");
@@ -2980,7 +2872,7 @@ function saveAllToCRM(){
     co.contacts.forEach(function(c){
       const key=ckKey(co,c);
       if(!inCRM(key)){
-        const res=scoreContact(co,c,co._turnover);
+        const res=scoreContact(co,c);
         crmList.push(Object.assign({},c,{_k:key,_company:co.name,_website:co.website,_industry:co.industry,_country:co.country,_employees:co.employees,_parCat:res.cat,_parScore:res.score,_status:"Cold",_added:new Date().toLocaleDateString()}));
         added++;
       }
@@ -3090,9 +2982,7 @@ function exportCRM(){
   var a=document.createElement("a");a.href=url;a.download="my_crm.csv";a.click();
 }
 
-// PARETO SETTINGS
-// ── PARETO PILL UI ───────────────────────────────────────────────────────────
-// Criteria definitions: id, label, points awarded, OUT flag
+// SCORING SETTINGS UI
 var PARETO_CRITERIA = {
   emp: {
     label:"Company Size",
@@ -3160,180 +3050,213 @@ var pillSelections = {
   C:   {emp:["p10"],             trn:["k200"],            dm:["single","committee","division","proc"], sales:["b2b","b2c","cs","mkt","none"],brand:["local","small"], hire:["none"]}
 };
 
-var activeParetocat = null;
-var catColors = {VIP:"#C9A961",A:"#7AB8E8",B:"#7ADBB8",C:"#8A8A9A"};
-var catBgs    = {VIP:"rgba(201,169,97,0.12)",A:"rgba(122,184,232,0.08)",B:"rgba(122,219,184,0.08)",C:"rgba(138,138,154,0.06)"};
-
-function savePareto(){
-  // Convert pill selections to numeric points for scoreContact
-  function maxPts(crit, catId){
-    var sel = pillSelections[catId][crit]||[];
-    var cdef = PARETO_CRITERIA[crit];
-    if(!cdef) return 0;
-    var pts = 0;
-    cdef.pills.forEach(function(p){ if(sel.includes(p.id) && !p.out) pts = Math.max(pts, p.pts); });
-    return pts;
-  }
-  paretoRules = {
-    th: {
-      vip: parseInt((document.getElementById("th-vip")||{}).value)||13,
-      a:   parseInt((document.getElementById("th-a")||{}).value)||9,
-      b:   parseInt((document.getElementById("th-b")||{}).value)||5,
-      c:   parseInt((document.getElementById("th-c")||{}).value)||1
-    },
-    pdm: {single:4,committee:3,division:2,proc:1},
-    pe:  {p500:4,p100:3,p50:2,p10:1},
-    trn: {m10:4,m1:3,k200:2},
-    pt:  {b2b:4,b2c:3,cs:2,mkt:2},
-    pb:  {global:4,regional:3,local:2,small:1,startup:0},
-    ph:  {sales:3,commercial:2},
-    pills: pillSelections
-  };
-  localStorage.setItem("li_pareto", JSON.stringify(paretoRules));
-  updateCatSummaries();
-  updateParetoPreview();
-}
-
-function openPareto(cat){
-  if(activeParetocat === cat){ closePareto(); return; }
-  activeParetocat = cat;
-  // Update active state on cards
-  ["VIP","A","B","C"].forEach(function(c){
-    document.getElementById("pcat-"+c).classList.toggle("active", c===cat);
-  });
-  var col = catColors[cat];
-  var bg  = catBgs[cat];
-  document.documentElement.style.setProperty("--editor-color", col);
-  document.getElementById("editor-title").innerHTML =
-    '<span style="color:'+col+'">'+(cat==="VIP"?"★ VIP":cat)+'</span> &mdash; Define qualifying criteria';
-  document.getElementById("editor-title").style.color = col;
-  // Set threshold
-  var thMap={VIP:"pcat-thresh-VIP",A:"pcat-thresh-A",B:"pcat-thresh-B",C:"pcat-thresh-C"};
-  document.getElementById("editor-thresh").value = document.getElementById(thMap[cat]).textContent;
-  document.getElementById("editor-thresh").style.borderColor = col;
-  document.getElementById("editor-thresh").style.color = col;
-  // Render pill rows
-  Object.keys(PARETO_CRITERIA).forEach(function(critKey){
-    renderPills(critKey, cat, col, bg);
-  });
-  document.getElementById("pareto-editor").style.display = "block";
-  document.getElementById("pareto-editor").scrollIntoView({behavior:"smooth",block:"nearest"});
-}
-
-function closePareto(){
-  activeParetocat = null;
-  ["VIP","A","B","C"].forEach(function(c){
-    document.getElementById("pcat-"+c).classList.remove("active");
-  });
-  document.getElementById("pareto-editor").style.display = "none";
-  savePareto();
-}
-
-function renderPills(critKey, cat, col, bg){
-  var cdef = PARETO_CRITERIA[critKey];
-  var container = document.getElementById("pills-"+critKey);
-  if(!container) return;
-  var selected = pillSelections[cat][critKey]||[];
-  container.innerHTML = "";
-  cdef.pills.forEach(function(p){
-    var btn = document.createElement("button");
-    btn.className = "pill" + (p.out?" out":"") + (selected.includes(p.id)?" sel":"");
-    btn.style.setProperty("--pill-color", col);
-    btn.style.setProperty("--pill-bg", bg);
-    var lbl = p.label;
-    if(p.pts > 0) lbl += ' <span style="font-size:10px;opacity:.6">+'+p.pts+'pt</span>';
-    if(p.desc) lbl += '<br/><span style="font-size:10px;font-weight:400;opacity:.55">'+p.desc+'</span>';
-    btn.innerHTML = lbl;
-    btn.onclick = function(){ togglePill(critKey, p.id, cat, col, bg); };
-    container.appendChild(btn);
-  });
-}
-
-function togglePill(critKey, pillId, cat, col, bg){
-  var sel = pillSelections[cat][critKey]||[];
-  var idx = sel.indexOf(pillId);
-  if(idx > -1) sel.splice(idx,1);
-  else sel.push(pillId);
-  pillSelections[cat][critKey] = sel;
-  renderPills(critKey, cat, col, bg);
-  updateCatSummary(cat);
-  updateParetoPreview();
-}
-
-function updateThresh(){
-  if(!activeParetocat) return;
-  var val = document.getElementById("editor-thresh").value;
-  var spanId = "pcat-thresh-"+activeParetocat;
-  document.getElementById(spanId).textContent = val;
-  updateParetoPreview();
-}
-
-function updateCatSummary(cat){
-  var el = document.getElementById("pcat-sum-"+cat);
-  if(!el) return;
-  var sel = pillSelections[cat];
-  var parts = [];
-  if(sel.dm&&sel.dm.length)   parts.push(sel.dm.join("/")+" DM");
-  if(sel.emp&&sel.emp.filter(function(x){return x!=="out";}).length) parts.push(sel.emp.filter(function(x){return x!=="out";}).join("/")+" emp");
-  if(sel.brand&&sel.brand.length) parts.push(sel.brand.join("/")+" brand");
-  el.textContent = parts.length ? parts.slice(0,2).join(" · ") : "Not configured";
-}
-
-function updateCatSummaries(){
-  ["VIP","A","B","C"].forEach(updateCatSummary);
-}
-
-function loadParetoUI(){
-  if(paretoRules.pills) pillSelections = paretoRules.pills;
-  var t = paretoRules.th||{vip:13,a:9,b:5,c:1};
-  var vipEl=document.getElementById("th-vip"), aEl=document.getElementById("th-a"),
-      bEl=document.getElementById("th-b"), cEl2=document.getElementById("th-c");
-  if(vipEl) vipEl.value=t.vip;
-  if(aEl) aEl.value=t.a;
-  if(bEl) bEl.value=t.b;
-  if(cEl2) cEl2.value=t.c;
-  updateCatSummaries();
-  updateParetoPreview();
-  // Update quick preview on Screen 1
-  var qp = document.getElementById("pareto-quick-preview");
-  if(qp){
-    qp.innerHTML =
-      '<span style="color:#C9A961;font-weight:700">★ VIP</span> Top Business Potential &nbsp;·&nbsp; '+
-      '<span style="color:#7AB8E8;font-weight:700">A</span> High Potential &nbsp;·&nbsp; '+
-      '<span style="color:#7ADBB8;font-weight:700">B</span> Medium Potential &nbsp;·&nbsp; '+
-      '<span style="color:#8A8A9A;font-weight:700">C</span> Low Potential'+
-      '<br/><span style="font-size:11px;opacity:.5">Click to configure criteria →</span>';
+// ── SCORING RULES UI ─────────────────────────────────────────────────────────
+function toggleScoringRules(){
+  var body=document.getElementById("scoring-body");
+  var arrow=document.getElementById("scoring-toggle-arrow");
+  if(!body) return;
+  if(body.style.display==="none"){
+    body.style.display="block";
+    arrow.textContent="Close ▲";
+    renderScoringRules();
+  } else {
+    body.style.display="none";
+    arrow.innerHTML="Configure &#9654;";
   }
 }
 
-// loadParetoUI is defined above in pill section
+function renderScoringRules(){
+  var body=document.getElementById("scoring-body");
+  if(!body) return;
+  var r=scoringRules;
+  var inp="padding:5px 8px;border-radius:5px;border:1px solid rgba(201,169,97,0.2);background:rgba(201,169,97,0.04);color:var(--text);font-family:var(--font);font-size:13px;width:60px;text-align:center;outline:none";
+  var inpW="padding:5px 8px;border-radius:5px;border:1px solid rgba(201,169,97,0.2);background:rgba(201,169,97,0.04);color:var(--text);font-family:var(--font);font-size:13px;flex:1;outline:none";
+  var sCard="border:1px solid rgba(201,169,97,0.13);border-radius:10px;padding:14px 16px;margin-top:14px;background:rgba(255,255,255,0.015)";
+  var sTitle="font-size:11px;font-weight:700;color:var(--g);letter-spacing:.07em;text-transform:uppercase;margin-bottom:10px";
 
-function updateParetoPreview(){
-  var el=document.getElementById("pareto-preview");if(!el)return;
-  var t=paretoRules.th||{vip:13,a:9,b:5,c:1};
-  var tvip=parseInt((document.getElementById("th-vip")||{}).value)||t.vip;
-  var ta=parseInt((document.getElementById("th-a")||{}).value)||t.a;
-  var tb=parseInt((document.getElementById("th-b")||{}).value)||t.b;
-  var tc=parseInt((document.getElementById("th-c")||{}).value)||t.c;
-  var maxScore=3+1+4+4+4+3; // max possible: DM(3)+emp(1)+trn(4)+sales(4)+brand(4)+hire(3)
-  el.innerHTML=[
-    '<span style="color:#C9A961;font-weight:700">★ VIP &mdash; Top Business Potential</span> &mdash; Call personally this week',
-    '<span style="color:#7AB8E8;font-weight:700">A &mdash; High Potential</span> &mdash; Follow up within 7 days',
-    '<span style="color:#7ADBB8;font-weight:700">B &mdash; Medium Potential</span> &mdash; Nurture quarterly',
-    '<span style="color:#8A8A9A;font-weight:700">C &mdash; Low Potential</span> &mdash; Newsletter only',
-    '<span style="color:rgba(220,80,80,0.6);font-weight:600">OUT &mdash; Disqualified</span> &mdash; Too small, no sales team, or under EUR 200K turnover'
-  ].join("<br/>");
+  var html="";
+
+  // ── DECISION MAKER TITLES ─────────────────────────────────────────────────
+  html+='<div style="'+sCard+'">';
+  html+='<div style="'+sTitle+'">Decision Maker Titles</div>';
+  html+='<table style="width:100%;border-collapse:collapse" id="sr-titles-table">';
+  html+='<thead><tr><th style="text-align:left;font-size:11px;color:var(--muted);font-weight:600;padding:0 8px 6px 0">Title</th><th style="font-size:11px;color:var(--muted);font-weight:600;width:80px;text-align:center;padding-bottom:6px">Points</th><th style="width:32px"></th></tr></thead>';
+  html+='<tbody id="sr-titles-body">';
+  (r.titles||[]).forEach(function(t,i){
+    html+=srTitleRow(i,t.title,t.pts);
+  });
+  html+='</tbody></table>';
+  html+='<button onclick="srAddTitle()" style="margin-top:8px;padding:5px 12px;border-radius:6px;border:1px solid rgba(201,169,97,0.3);background:none;color:var(--g);font-family:var(--font);font-size:12px;cursor:pointer">+ Add Title</button>';
+  html+='</div>';
+
+  // ── COMPANY SIZE ─────────────────────────────────────────────────────────
+  html+='<div style="'+sCard+'">';
+  html+='<div style="'+sTitle+'">Company Size</div>';
+  html+='<table style="width:100%;border-collapse:collapse">';
+  html+='<thead><tr><th style="text-align:left;font-size:11px;color:var(--muted);font-weight:600;padding:0 8px 6px 0;width:50px">Tier</th><th style="font-size:11px;color:var(--muted);font-weight:600;text-align:center;padding-bottom:6px">Min emp</th><th style="font-size:11px;color:var(--muted);font-weight:600;text-align:center;padding-bottom:6px">Max emp</th><th style="font-size:11px;color:var(--muted);font-weight:600;text-align:center;width:80px;padding-bottom:6px">Points</th></tr></thead>';
+  html+='<tbody>';
+  var sizeCols={VIP:"#C9A961",A:"#7AB8E8",B:"#7ADBB8",C:"#8A8A9A"};
+  (r.size||[]).forEach(function(s,i){
+    var col=sizeCols[s.cat]||"var(--muted)";
+    html+='<tr style="border-top:1px solid rgba(255,255,255,0.04)">';
+    html+='<td style="padding:5px 8px 5px 0"><span style="font-size:11px;font-weight:700;color:'+col+'">'+s.cat+'</span></td>';
+    html+='<td style="text-align:center;padding:4px 6px"><input type="number" value="'+escHtml(String(s.min||0))+'" oninput="srSizeChange('+i+',\'min\',this.value)" style="'+inp+'"/></td>';
+    html+='<td style="text-align:center;padding:4px 6px"><input type="number" value="'+escHtml(String(s.max||""))+'" placeholder="∞" oninput="srSizeChange('+i+',\'max\',this.value)" style="'+inp+'"/></td>';
+    html+='<td style="text-align:center;padding:4px 6px"><input type="number" value="'+escHtml(String(s.pts||0))+'" oninput="srSizeChange('+i+',\'pts\',this.value)" style="'+inp+'"/></td>';
+    html+='</tr>';
+  });
+  html+='</tbody></table></div>';
+
+  // ── INDUSTRY BONUS ────────────────────────────────────────────────────────
+  html+='<div style="'+sCard+'">';
+  html+='<div style="'+sTitle+'">Industry Bonus</div>';
+  html+='<div style="display:flex;flex-direction:column;gap:6px" id="sr-industries-list">';
+  (r.industries||[]).forEach(function(ig,i){
+    html+=srIndustryRow(i,ig.name,ig.pts,ig.on);
+  });
+  html+='</div>';
+  html+='<button onclick="srAddIndustry()" style="margin-top:8px;padding:5px 12px;border-radius:6px;border:1px solid rgba(201,169,97,0.3);background:none;color:var(--g);font-family:var(--font);font-size:12px;cursor:pointer">+ Add Industry</button>';
+  html+='</div>';
+
+  // ── HIRING SIGNAL ─────────────────────────────────────────────────────────
+  html+='<div style="'+sCard+'">';
+  html+='<div style="'+sTitle+'">Hiring Signal</div>';
+  var ho=r.hiring&&r.hiring.on!==false;
+  var hp=(r.hiring&&r.hiring.pts)||15;
+  html+='<div style="display:flex;align-items:center;gap:10px">';
+  html+='<label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--text)">';
+  html+='<input type="checkbox" id="sr-hiring-on" '+(ho?"checked":"")+' onchange="srHiringChange()" style="accent-color:var(--g);width:15px;height:15px"/> Active hiring signal adds</label>';
+  html+='<input type="number" id="sr-hiring-pts" value="'+hp+'" oninput="srHiringChange()" style="'+inp+'"/> pts</div>';
+  html+='</div>';
+
+  // ── TURNOVER THRESHOLDS ───────────────────────────────────────────────────
+  html+='<div style="'+sCard+'">';
+  html+='<div style="'+sTitle+'">Turnover Thresholds (EUR — caps category if set)</div>';
+  html+='<table style="width:100%;border-collapse:collapse">';
+  html+='<thead><tr><th style="text-align:left;font-size:11px;color:var(--muted);font-weight:600;padding:0 8px 6px 0;width:50px">Tier</th><th style="font-size:11px;color:var(--muted);font-weight:600;text-align:left;padding-bottom:6px">Min Revenue EUR</th></tr></thead>';
+  html+='<tbody>';
+  var trn=r.turnover||{vip:10000000,a:1000000,b:200000,c:0};
+  [["VIP","vip","#C9A961"],["A","a","#7AB8E8"],["B","b","#7ADBB8"],["C","c","#8A8A9A"]].forEach(function(row){
+    html+='<tr style="border-top:1px solid rgba(255,255,255,0.04)">';
+    html+='<td style="padding:5px 8px 5px 0"><span style="font-size:11px;font-weight:700;color:'+row[2]+'">'+row[0]+'</span></td>';
+    html+='<td style="padding:4px 0"><input type="number" value="'+(trn[row[1]]||0)+'" oninput="srTrnChange(\''+row[1]+'\',this.value)" style="'+inp+';width:130px;text-align:left"/></td>';
+    html+='</tr>';
+  });
+  html+='</tbody></table></div>';
+
+  // ── SCORE THRESHOLDS ──────────────────────────────────────────────────────
+  html+='<div style="'+sCard+'">';
+  html+='<div style="'+sTitle+'">Category Thresholds (min total points)</div>';
+  html+='<div style="display:flex;gap:10px;flex-wrap:wrap">';
+  var th=r.thresholds||{vip:28,a:18,b:10,c:1};
+  [["★ VIP","vip","#C9A961"],["A","a","#7AB8E8"],["B","b","#7ADBB8"],["C","c","#8A8A9A"]].forEach(function(row){
+    html+='<div style="text-align:center;padding:10px 14px;border-radius:8px;border:1px solid '+row[2]+'40;background:'+row[2]+'0d">';
+    html+='<div style="font-size:13px;font-weight:700;color:'+row[2]+';margin-bottom:4px">'+row[0]+'</div>';
+    html+='<input type="number" value="'+(th[row[1]]||1)+'" oninput="srThChange(\''+row[1]+'\',this.value)" style="'+inp+';color:'+row[2]+';border-color:'+row[2]+'80"/> pts</div>';
+  });
+  html+='</div></div>';
+
+  // ── ACTIONS ───────────────────────────────────────────────────────────────
+  html+='<div style="display:flex;align-items:center;gap:14px;margin-top:18px">';
+  html+='<button onclick="saveScoringRules()" style="padding:10px 24px;border-radius:9px;border:none;background:linear-gradient(135deg,#C9A961,#B8943A);color:#000;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;transition:all .2s">💾 Save &amp; Rescore</button>';
+  html+='<a href="#" onclick="resetScoringDefaults();return false;" style="font-size:12px;color:var(--muted);text-decoration:underline">↺ Reset Defaults</a>';
+  html+='</div>';
+
+  body.innerHTML=html;
 }
 
-function applyParetoToAll(){
-  savePareto();
+function srTitleRow(i,title,pts){
+  var inp="padding:5px 8px;border-radius:5px;border:1px solid rgba(201,169,97,0.2);background:rgba(201,169,97,0.04);color:var(--text);font-family:var(--font);font-size:13px;outline:none";
+  return '<tr id="sr-title-row-'+i+'" style="border-top:1px solid rgba(255,255,255,0.04)">'+
+    '<td style="padding:4px 8px 4px 0"><input value="'+escHtml(title||"")+'" oninput="srTitleChange('+i+',\'title\',this.value)" style="'+inp+';width:100%;box-sizing:border-box"/></td>'+
+    '<td style="text-align:center;padding:4px 6px"><input type="number" value="'+escHtml(String(pts||0))+'" oninput="srTitleChange('+i+',\'pts\',this.value)" style="'+inp+';width:60px;text-align:center"/></td>'+
+    '<td style="text-align:center;padding:4px 0"><button onclick="srRemoveTitle('+i+')" style="background:none;border:none;color:rgba(220,80,80,0.5);font-size:16px;cursor:pointer;line-height:1;padding:2px 6px" title="Remove">×</button></td>'+
+    '</tr>';
+}
+
+function srIndustryRow(i,name,pts,on){
+  var inp="padding:5px 8px;border-radius:5px;border:1px solid rgba(201,169,97,0.2);background:rgba(201,169,97,0.04);color:var(--text);font-family:var(--font);font-size:13px;outline:none";
+  return '<div id="sr-ind-row-'+i+'" style="display:flex;align-items:center;gap:8px">'+
+    '<input type="checkbox" '+(on?"checked":"")+' onchange="srIndChange('+i+',\'on\',this.checked)" style="accent-color:var(--g);width:15px;height:15px;flex-shrink:0"/>'+
+    '<input value="'+escHtml(name||"")+'" oninput="srIndChange('+i+',\'name\',this.value)" style="'+inp+';flex:1"/>'+
+    '<input type="number" value="'+escHtml(String(pts||0))+'" oninput="srIndChange('+i+',\'pts\',this.value)" style="'+inp+';width:60px;text-align:center"/> pts'+
+    '<button onclick="srRemoveIndustry('+i+')" style="background:none;border:none;color:rgba(220,80,80,0.5);font-size:16px;cursor:pointer;line-height:1;padding:2px 4px" title="Remove">×</button>'+
+    '</div>';
+}
+
+function srTitleChange(i,field,val){
+  if(!scoringRules.titles[i]) return;
+  if(field==="pts") scoringRules.titles[i].pts=parseInt(val)||0;
+  else scoringRules.titles[i][field]=val;
+}
+function srRemoveTitle(i){
+  scoringRules.titles.splice(i,1);
+  var tb=document.getElementById("sr-titles-body");
+  if(tb){ tb.innerHTML=""; scoringRules.titles.forEach(function(t,idx){tb.innerHTML+=srTitleRow(idx,t.title,t.pts);}); }
+}
+function srAddTitle(){
+  scoringRules.titles.push({title:"",pts:5});
+  var tb=document.getElementById("sr-titles-body");
+  if(tb){ tb.innerHTML=""; scoringRules.titles.forEach(function(t,idx){tb.innerHTML+=srTitleRow(idx,t.title,t.pts);}); }
+}
+function srSizeChange(i,field,val){
+  if(!scoringRules.size[i]) return;
+  if(field==="pts"||field==="min"||field==="max") scoringRules.size[i][field]=field==="max"&&!val?"":parseInt(val)||0;
+  else scoringRules.size[i][field]=val;
+}
+function srIndChange(i,field,val){
+  if(!scoringRules.industries[i]) return;
+  if(field==="pts") scoringRules.industries[i].pts=parseInt(val)||0;
+  else if(field==="on") scoringRules.industries[i].on=!!val;
+  else scoringRules.industries[i][field]=val;
+}
+function srRemoveIndustry(i){
+  scoringRules.industries.splice(i,1);
+  var il=document.getElementById("sr-industries-list");
+  if(il){ il.innerHTML=""; scoringRules.industries.forEach(function(ig,idx){il.innerHTML+=srIndustryRow(idx,ig.name,ig.pts,ig.on);}); }
+}
+function srAddIndustry(){
+  scoringRules.industries.push({name:"",pts:5,on:true});
+  var il=document.getElementById("sr-industries-list");
+  if(il){ il.innerHTML=""; scoringRules.industries.forEach(function(ig,idx){il.innerHTML+=srIndustryRow(idx,ig.name,ig.pts,ig.on);}); }
+}
+function srHiringChange(){
+  var onEl=document.getElementById("sr-hiring-on");
+  var ptsEl=document.getElementById("sr-hiring-pts");
+  if(!scoringRules.hiring) scoringRules.hiring={on:true,pts:15};
+  if(onEl) scoringRules.hiring.on=onEl.checked;
+  if(ptsEl) scoringRules.hiring.pts=parseInt(ptsEl.value)||0;
+}
+function srTrnChange(key,val){
+  if(!scoringRules.turnover) scoringRules.turnover={};
+  scoringRules.turnover[key]=parseInt(val)||0;
+}
+function srThChange(key,val){
+  if(!scoringRules.thresholds) scoringRules.thresholds={};
+  scoringRules.thresholds[key]=parseInt(val)||1;
+}
+function saveScoringRules(){
+  localStorage.setItem("li_scoring",JSON.stringify(scoringRules));
   scoreAllLeads();
-  showAlert("Scoring rules saved and applied.","info");
   if(leads.length) renderResults();
+  showAlert("Scoring rules saved and applied.","info");
+  var qs=document.getElementById("scoring-quick-summary");
+  if(qs) qs.textContent=scoringRules.titles.length+" titles · "+scoringRules.size.length+" size tiers · "+scoringRules.industries.filter(function(i){return i.on;}).length+" industries active";
+}
+function resetScoringDefaults(){
+  scoringRules=JSON.parse(JSON.stringify(_SCORING_DEFAULT));
+  renderScoringRules();
 }
 
 // INIT
-loadParetoUI();
+// Update scoring quick summary on load
+(function(){
+  var qs=document.getElementById("scoring-quick-summary");
+  if(qs&&scoringRules.titles){
+    qs.textContent=scoringRules.titles.length+" titles · "+scoringRules.size.length+" size tiers · "+scoringRules.industries.filter(function(i){return i.on;}).length+" industries active";
+  }
+})();
+
 // Show/hide Apollo banner based on dismiss state
 if(localStorage.getItem("li_hide_apollo_banner")){
   var ab=document.getElementById("apollo-banner");
