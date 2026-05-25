@@ -797,7 +797,7 @@ function updateNavCounts(){
   if(el) el.textContent = "CRM ("+(crmList.length)+")"+(vipList.length?" / VIP:"+vipList.length:"");
   const kbEl = document.getElementById("kb-label");
   if(kbEl){
-    var kbCount = [1,2,3,4,5].filter(function(i){
+    var kbCount = [1,2,3,4,5,6,7,8,9,10].filter(function(i){
       try{var b=JSON.parse(localStorage.getItem("li_book_"+i)||"{}");return b.on&&(b.title||b.content);}catch(e){return false;}
     }).length;
     var hasFrameworks = !!(localStorage.getItem("li_frameworks")||"").trim();
@@ -3825,7 +3825,7 @@ var KB_VOICE_DEFAULT = "Direct, confident, story-driven. Never corporate speak. 
 
 function loadKBData() {
   return {
-    books: [1,2,3,4,5].map(function(i){
+    books: [1,2,3,4,5,6,7,8,9,10].map(function(i){
       try { return JSON.parse(localStorage.getItem("li_book_"+i)||"{}"); } catch(e){ return {}; }
     }),
     frameworks: localStorage.getItem("li_frameworks") || KB_FRAMEWORK_DEFAULT,
@@ -3838,7 +3838,7 @@ function saveKB() {
   var vo = document.getElementById("kb-voice");
   if(fw) localStorage.setItem("li_frameworks", fw.value);
   if(vo) localStorage.setItem("li_voice", vo.value);
-  [1,2,3,4,5].forEach(function(i){ saveKBBook(i); });
+  [1,2,3,4,5,6,7,8,9,10].forEach(function(i){ saveKBBook(i); });
   updateNavCounts();
   updateKBBadge();
 }
@@ -3862,11 +3862,12 @@ function renderKB() {
   var container = document.getElementById("kb-books-list");
   if(container) {
     container.innerHTML = "";
-    [1,2,3,4,5].forEach(function(i){
+    container.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:12px";
+    [1,2,3,4,5,6,7,8,9,10].forEach(function(i){
       var b = kb.books[i-1]||{};
       var slot = document.createElement("div");
       slot.id = "kb-slot-"+i;
-      slot.style.cssText = "border:1px solid rgba(201,169,97,0.13);border-radius:10px;padding:16px;margin-bottom:12px;background:rgba(255,255,255,0.02)";
+      slot.style.cssText = "border:1px solid rgba(201,169,97,0.13);border-radius:10px;padding:16px;background:rgba(255,255,255,0.02)";
       slot.innerHTML = [
         '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">',
           '<span style="font-size:10px;font-weight:700;color:var(--g);letter-spacing:.07em;text-transform:uppercase;min-width:44px;white-space:nowrap">Book '+i+'</span>',
