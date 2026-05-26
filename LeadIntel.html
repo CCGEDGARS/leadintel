@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
 :root{--g:#C9A961;--gd:#A8893F;--dark:#070B12;--dark2:#0D1421;--dark3:#111827;--border:rgba(201,169,97,0.18);--text:#F0EDE8;--muted:#8A8A9A;--font:'DM Sans',sans-serif;--display:'Playfair Display',serif}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -630,6 +631,7 @@ table.ct .col-li{width:90px}
 </div>
 
 <script>
+if(typeof pdfjsLib !== "undefined") pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 var APOLLO_KEY = localStorage.getItem("li_apollo_key")||"";
 var FIRECRAWL_KEY = localStorage.getItem("li_firecrawl_key")||"";
 var CLAUDE_KEY = localStorage.getItem("li_claude_key")||"";
@@ -3464,23 +3466,59 @@ function saveKB() {
   var vo = document.getElementById("kb-voice");
   if(fw) localStorage.setItem("li_frameworks", fw.value);
   if(vo) localStorage.setItem("li_voice", vo.value);
-  [1,2,3,4,5].forEach(function(i){ saveKBBook(i); });
   updateNavCounts();
   updateKBBadge();
 }
 
 function saveKBBook(i) {
-  var ti = document.getElementById("kb-book-title-"+i);
-  var au = document.getElementById("kb-book-author-"+i);
-  var ct = document.getElementById("kb-book-content-"+i);
   var on = document.getElementById("kb-book-on-"+i);
-  if(!ti) return;
-  var data = {
-    title: ti.value, author: au?au.value:"",
-    content: ct?ct.value:"",
-    on: on?on.checked:true
-  };
+  if(!on) return;
+  var data = {};
+  try { data = JSON.parse(localStorage.getItem("li_book_"+i)||"{}"); } catch(e){}
+  data.on = on.checked;
   localStorage.setItem("li_book_"+i, JSON.stringify(data));
+}
+
+function toggleBook(i) {
+  saveKBBook(i);
+  updateNavCounts();
+  updateKBBadge();
+}
+
+function removeBook(i) {
+  localStorage.removeItem("li_book_"+i);
+  renderKB();
+  updateNavCounts();
+  updateKBBadge();
+}
+
+async function handleBookPDF(i, input) {
+  var f = input.files[0];
+  if(!f) return;
+  var btn = document.getElementById("kb-book-upload-btn-"+i);
+  if(btn) { btn.textContent = "Reading…"; btn.disabled = true; }
+  try {
+    var ab = await f.arrayBuffer();
+    var pdf = await pdfjsLib.getDocument({data: ab}).promise;
+    var text = "";
+    for(var p = 1; p <= pdf.numPages; p++) {
+      var page = await pdf.getPage(p);
+      var tc = await page.getTextContent();
+      text += tc.items.map(function(it){ return it.str; }).join(" ") + "\n";
+    }
+    var existing = {};
+    try { existing = JSON.parse(localStorage.getItem("li_book_"+i)||"{}"); } catch(e){}
+    existing.title = f.name.replace(/\.pdf$/i, "");
+    existing.content = text.trim();
+    if(existing.on === undefined) existing.on = true;
+    localStorage.setItem("li_book_"+i, JSON.stringify(existing));
+    renderKB();
+    updateNavCounts();
+    updateKBBadge();
+  } catch(e) {
+    alert("Could not read PDF: " + (e.message||e));
+    if(btn) { btn.textContent = "Upload PDF"; btn.disabled = false; }
+  }
 }
 
 function renderKB() {
@@ -3491,19 +3529,21 @@ function renderKB() {
     container.innerHTML = "";
     [1,2,3,4,5].forEach(function(i){
       var b = kb.books[i-1]||{};
+      var hasBook = !!(b.title || b.content);
       var slot = document.createElement("div");
-      slot.style.cssText = "border:1px solid rgba(201,169,97,0.13);border-radius:10px;padding:16px;margin-bottom:12px;background:rgba(255,255,255,0.02);transition:border-color .2s";
+      slot.style.cssText = "border:1px solid rgba(201,169,97,0.13);border-radius:10px;padding:12px 16px;margin-bottom:10px;background:rgba(255,255,255,0.02);display:flex;align-items:center;gap:12px;flex-wrap:wrap";
       slot.innerHTML =
-        '<div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">'+
-          '<span style="font-size:10px;font-weight:700;color:var(--g);letter-spacing:.07em;text-transform:uppercase;white-space:nowrap;min-width:44px">Book '+i+'</span>'+
-          '<input id="kb-book-title-'+i+'" placeholder="Book title..." value="'+escHtml(b.title||"")+'" oninput="saveKBBook('+i+');updateNavCounts();updateKBBadge()" style="flex:1;padding:7px 10px;border-radius:6px;border:1px solid rgba(201,169,97,0.2);background:rgba(201,169,97,0.04);color:var(--text);font-family:var(--font);font-size:13px;outline:none"/>'+
-          '<input id="kb-book-author-'+i+'" placeholder="Author" value="'+escHtml(b.author||"")+'" oninput="saveKBBook('+i+')" style="width:160px;padding:7px 10px;border-radius:6px;border:1px solid rgba(201,169,97,0.15);background:transparent;color:var(--muted);font-family:var(--font);font-size:13px;outline:none"/>'+
-          '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;font-size:12px;color:var(--muted)">'+
-            '<input type="checkbox" id="kb-book-on-'+i+'" '+(b.on!==false?'checked':'')+' onchange="saveKBBook('+i+');updateNavCounts();updateKBBadge()" style="accent-color:var(--g);width:15px;height:15px"/>'+
-            '<span style="font-weight:600;color:'+(b.on!==false?'var(--g)':'var(--muted)')+'">Use</span>'+
-          '</label>'+
-        '</div>'+
-        '<textarea id="kb-book-content-'+i+'" rows="4" oninput="saveKBBook('+i+');updateKBBadge()" placeholder="Paste key principles, frameworks, quotes from this book..." style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.02);border:1px solid rgba(201,169,97,0.1);border-radius:8px;color:var(--text);font-family:var(--font);font-size:12px;line-height:1.65;padding:10px 12px;resize:vertical;outline:none">'+escHtml(b.content||"")+'</textarea>';
+        '<span style="font-size:10px;font-weight:700;color:var(--g);letter-spacing:.07em;text-transform:uppercase;white-space:nowrap;min-width:44px">Book '+i+'</span>'+
+        '<span style="flex:1;font-size:13px;color:'+(hasBook?'var(--text)':'rgba(138,138,154,0.5)')+';min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+
+          (hasBook ? escHtml(b.title||'Untitled') : 'No book loaded')+
+        '</span>'+
+        '<input type="file" id="kb-book-pdf-'+i+'" accept=".pdf" style="display:none" onchange="handleBookPDF('+i+',this)"/>'+
+        '<button id="kb-book-upload-btn-'+i+'" class="btn btn-outline btn-sm" onclick="document.getElementById(\'kb-book-pdf-'+i+'\').click()" style="white-space:nowrap;font-size:12px">Upload PDF</button>'+
+        '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;font-size:12px;color:var(--muted)">'+
+          '<input type="checkbox" id="kb-book-on-'+i+'" '+(b.on!==false?'checked':'')+' onchange="toggleBook('+i+')" style="accent-color:var(--g);width:15px;height:15px"/>'+
+          '<span style="font-weight:600;color:'+(b.on!==false?'var(--g)':'var(--muted)')+'">Use</span>'+
+        '</label>'+
+        (hasBook ? '<button onclick="removeBook('+i+')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px" title="Remove">✕</button>' : '');
       container.appendChild(slot);
     });
   }
@@ -3522,7 +3562,7 @@ function getKBBlock() {
   var parts = [];
   kb.books.forEach(function(b, i){
     if(b.on!==false && (b.content||"").trim()) {
-      var hdr = [b.title, b.author].filter(Boolean).join(" by ");
+      var hdr = b.title||"";
       parts.push((hdr?"[Book: "+hdr+"]\n":"[Book "+(i+1)+"]\n")+b.content.trim());
     }
   });
