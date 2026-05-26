@@ -235,6 +235,7 @@ table.ct .col-li{width:90px}
 .om-charcount{font-size:12px;font-weight:700;margin-left:auto;transition:color .2s}
 .om-close{position:absolute;top:16px;right:18px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:22px;line-height:1;padding:4px 6px;transition:color .2s;z-index:1}
 .om-close:hover{color:var(--text)}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
@@ -369,7 +370,7 @@ table.ct .col-li{width:90px}
   <div class="screen" id="screen-targets">
     <div class="pg-title">Target Categories</div>
     <div class="pg-sub">Claude identified these customer segments. Toggle on/off — each drives the Apollo search automatically.</div>
-    <div id="targets-summary" style="display:none" class="summary-box" style="margin-bottom:20px">
+    <div id="targets-summary" style="display:none;margin-bottom:20px" class="summary-box">
       <div class="summary-label">Your Profile</div>
       <div class="summary-text" id="ts-text" style="font-size:13px"></div>
     </div>
@@ -466,7 +467,6 @@ table.ct .col-li{width:90px}
         <span id="osint-count" style="font-size:11px;color:var(--muted)">0 / 0 companies</span>
       </div>
     </div>
-    <style>@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style>
     <div id="ri-bar" style="display:none;position:sticky;top:0;z-index:20;background:linear-gradient(135deg,rgba(14,12,10,0.97),rgba(22,18,12,0.97));border-bottom:2px solid rgba(201,169,97,0.28);padding:11px 20px 12px;margin:-8px -8px 14px;backdrop-filter:blur(8px)">
       <div style="height:3px;background:rgba(201,169,97,0.12);border-radius:2px;overflow:hidden;margin-bottom:9px">
         <div id="ri-fill" style="height:100%;width:0%;border-radius:2px;background:linear-gradient(90deg,#A8893A,#E8C97A,#C9A961,#E8C97A,#A8893A);background-size:200% 100%;animation:shimmer 1.8s linear infinite;transition:width .6s ease"></div>
