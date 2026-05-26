@@ -237,6 +237,12 @@ table.ct .col-li{width:90px}
 .om-close{position:absolute;top:16px;right:18px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:22px;line-height:1;padding:4px 6px;transition:color .2s;z-index:1}
 .om-close:hover{color:var(--text)}
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+input[type=range]{padding:0;background:transparent;border:none;height:auto;accent-color:var(--g);cursor:pointer;vertical-align:middle;outline:none}
+input[type=range]:focus{border:none}
+.arch-card{background:rgba(255,255,255,0.02);border:1px solid rgba(201,169,97,0.13);border-radius:10px;padding:14px 8px;cursor:pointer;transition:border-color .2s,background .2s;text-align:center;user-select:none}
+.arch-card:hover{border-color:rgba(201,169,97,0.38);background:rgba(201,169,97,0.05)}
+.arch-card.arch-sel{border-color:var(--g);background:rgba(201,169,97,0.09);box-shadow:0 0 0 1px rgba(201,169,97,0.22)}
+.arch-preview{background:rgba(255,255,255,0.02);border:1px solid rgba(201,169,97,0.13);border-radius:8px;padding:14px;margin-top:14px;font-size:13px;line-height:1.65;min-height:56px}
 </style>
 </head>
 <body>
@@ -523,6 +529,72 @@ table.ct .col-li{width:90px}
     </div>
 
     <div class="card">
+      <div class="card-title">My Voice Archetype <span style="font-size:11px;font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">— applied to every outreach message</span></div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Select your communication style</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px">
+        <div class="arch-card" id="arch-challenger" onclick="selectArchetype('challenger')">
+          <div style="font-size:22px;margin-bottom:6px">🎯</div>
+          <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:4px">The Challenger</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.4">Provocative, insight-driven, challenges assumptions</div>
+        </div>
+        <div class="arch-card" id="arch-mentor" onclick="selectArchetype('mentor')">
+          <div style="font-size:22px;margin-bottom:6px">🧙</div>
+          <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:4px">The Mentor</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.4">Story-driven, wise, positions you as the guide</div>
+        </div>
+        <div class="arch-card" id="arch-disruptor" onclick="selectArchetype('disruptor')">
+          <div style="font-size:22px;margin-bottom:6px">⚡</div>
+          <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:4px">The Disruptor</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.4">Bold, pattern interrupt, breaks autopilot</div>
+        </div>
+        <div class="arch-card" id="arch-advisor" onclick="selectArchetype('advisor')">
+          <div style="font-size:22px;margin-bottom:6px">🤝</div>
+          <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:4px">The Advisor</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.4">Consultative, trusted, low pressure</div>
+        </div>
+        <div class="arch-card" id="arch-closer" onclick="selectArchetype('closer')">
+          <div style="font-size:22px;margin-bottom:6px">🔥</div>
+          <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:4px">The Closer</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.4">Urgent, results-focused, direct CTA</div>
+        </div>
+        <div class="arch-card" id="arch-authority" onclick="selectArchetype('authority')">
+          <div style="font-size:22px;margin-bottom:6px">👑</div>
+          <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:4px">The Authority</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.4">Credential-led, expert positioning, premium feel</div>
+        </div>
+      </div>
+      <div style="margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:11px;font-weight:700;color:var(--g);letter-spacing:.08em;text-transform:uppercase">Formality</span>
+          <span style="font-size:11px;color:var(--muted)">Casual <span id="arch-formality-val" style="color:var(--g);font-weight:700;margin:0 6px">50</span> Formal</span>
+        </div>
+        <input type="range" id="arch-formality" min="0" max="100" value="50" style="width:100%" oninput="document.getElementById('arch-formality-val').textContent=this.value;scheduleArchPreview()"/>
+      </div>
+      <div style="margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:11px;font-weight:700;color:var(--g);letter-spacing:.08em;text-transform:uppercase">Emotion</span>
+          <span style="font-size:11px;color:var(--muted)">Logical <span id="arch-emotion-val" style="color:var(--g);font-weight:700;margin:0 6px">50</span> Emotional</span>
+        </div>
+        <input type="range" id="arch-emotion" min="0" max="100" value="50" style="width:100%" oninput="document.getElementById('arch-emotion-val').textContent=this.value;scheduleArchPreview()"/>
+      </div>
+      <div style="margin-bottom:4px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:11px;font-weight:700;color:var(--g);letter-spacing:.08em;text-transform:uppercase">Directness</span>
+          <span style="font-size:11px;color:var(--muted)">Subtle <span id="arch-directness-val" style="color:var(--g);font-weight:700;margin:0 6px">50</span> Blunt</span>
+        </div>
+        <input type="range" id="arch-directness" min="0" max="100" value="50" style="width:100%" oninput="document.getElementById('arch-directness-val').textContent=this.value;scheduleArchPreview()"/>
+      </div>
+      <div class="arch-preview">
+        <div style="font-size:10px;font-weight:700;color:var(--g);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">Live Preview</div>
+        <div id="arch-preview-text" style="color:var(--muted)">Select an archetype to see a preview...</div>
+      </div>
+      <div style="margin-top:14px;display:flex;align-items:center;gap:12px">
+        <button class="btn btn-gold" onclick="saveVoiceProfile()" style="padding:9px 22px">Save Voice Profile</button>
+        <span id="arch-save-msg" style="display:none;font-size:12px;color:var(--g)">✓ Saved</span>
+      </div>
+    </div>
+
+    <div class="card">
       <div class="card-title">My Frameworks</div>
       <div style="font-size:13px;color:var(--muted);margin-bottom:10px">Proprietary methodologies, NLP patterns, and sales frameworks Claude should apply.</div>
       <textarea id="kb-frameworks" rows="7" oninput="saveKB()" style="width:100%;box-sizing:border-box;resize:vertical"></textarea>
@@ -755,7 +827,8 @@ function updateNavCounts(){
     }).length;
     var hasFrameworks = !!(localStorage.getItem("li_frameworks")||"").trim();
     var hasVoice = !!(localStorage.getItem("li_voice")||"").trim();
-    var total = kbCount + (hasFrameworks?1:0) + (hasVoice?1:0);
+    var hasArch = !!localStorage.getItem("li_voice_archetype");
+    var total = kbCount + (hasFrameworks?1:0) + (hasVoice?1:0) + (hasArch?1:0);
     kbEl.textContent = total > 0 ? "Knowledge ("+total+")" : "Knowledge";
   }
 }
@@ -3166,7 +3239,10 @@ function initOutreachModal() {
           '<div class="om-contact-name" id="om-cname">—</div>',
           '<div class="om-contact-sub" id="om-csub">—</div>',
         '</div>',
-        '<span id="om-kb-badge" style="display:none;font-size:11px;padding:3px 9px;border-radius:5px;background:rgba(122,219,184,0.1);color:#7ADBB8;border:1px solid rgba(122,219,184,0.28);font-weight:600">📚 KB Active</span>',
+        '<div style="display:flex;gap:6px;align-items:center">',
+          '<span id="om-kb-badge" style="display:none;font-size:11px;padding:3px 9px;border-radius:5px;background:rgba(122,219,184,0.1);color:#7ADBB8;border:1px solid rgba(122,219,184,0.28);font-weight:600">📚 KB Active</span>',
+          '<span id="om-arch-badge" style="display:none;font-size:11px;padding:3px 9px;border-radius:5px;background:rgba(201,169,97,0.1);color:var(--g);border:1px solid rgba(201,169,97,0.3);font-weight:600">🎭 Mentor</span>',
+        '</div>',
       '</div>',
     '</div>',
     '<div class="om-mode-row">',
@@ -3625,6 +3701,99 @@ async function activateBook(i) {
   }
 }
 
+// ── VOICE ARCHETYPE ───────────────────────────────────────────────────────
+var VA_ARCHETYPES = {
+  challenger:{name:'The Challenger',emoji:'🎯',desc:'Provocative, insight-driven, challenges assumptions',formality:30,emotion:50,directness:85},
+  mentor:    {name:'The Mentor',    emoji:'🧙',desc:'Story-driven, wise, positions you as the guide',   formality:50,emotion:80,directness:50},
+  disruptor: {name:'The Disruptor', emoji:'⚡',desc:'Bold, pattern interrupt, breaks autopilot',         formality:20,emotion:55,directness:95},
+  advisor:   {name:'The Advisor',   emoji:'🤝',desc:'Consultative, trusted, low pressure',               formality:75,emotion:30,directness:25},
+  closer:    {name:'The Closer',    emoji:'🔥',desc:'Urgent, results-focused, direct CTA',               formality:45,emotion:60,directness:90},
+  authority: {name:'The Authority', emoji:'👑',desc:'Credential-led, expert positioning, premium feel',  formality:85,emotion:25,directness:70}
+};
+var _archTimer = null;
+
+function initVoiceArchetype() {
+  var arch = localStorage.getItem('li_voice_archetype') || 'mentor';
+  var ad = VA_ARCHETYPES[arch] || VA_ARCHETYPES.mentor;
+  var f = parseInt(localStorage.getItem('li_voice_formality'))  || ad.formality;
+  var e = parseInt(localStorage.getItem('li_voice_emotion'))    || ad.emotion;
+  var d = parseInt(localStorage.getItem('li_voice_directness')) || ad.directness;
+  Object.keys(VA_ARCHETYPES).forEach(function(k){
+    var el=document.getElementById('arch-'+k); if(el) el.classList.toggle('arch-sel',k===arch);
+  });
+  var sf=document.getElementById('arch-formality'), se=document.getElementById('arch-emotion'), sd=document.getElementById('arch-directness');
+  var vf=document.getElementById('arch-formality-val'), ve=document.getElementById('arch-emotion-val'), vd=document.getElementById('arch-directness-val');
+  if(sf){sf.value=f;} if(vf) vf.textContent=f;
+  if(se){se.value=e;} if(ve) ve.textContent=e;
+  if(sd){sd.value=d;} if(vd) vd.textContent=d;
+  updateArchBadge();
+}
+
+function selectArchetype(key) {
+  var ad=VA_ARCHETYPES[key]; if(!ad) return;
+  localStorage.setItem('li_voice_archetype',key);
+  Object.keys(VA_ARCHETYPES).forEach(function(k){
+    var el=document.getElementById('arch-'+k); if(el) el.classList.toggle('arch-sel',k===key);
+  });
+  var sf=document.getElementById('arch-formality'), se=document.getElementById('arch-emotion'), sd=document.getElementById('arch-directness');
+  var vf=document.getElementById('arch-formality-val'), ve=document.getElementById('arch-emotion-val'), vd=document.getElementById('arch-directness-val');
+  if(sf){sf.value=ad.formality;} if(vf) vf.textContent=ad.formality;
+  if(se){se.value=ad.emotion;}   if(ve) ve.textContent=ad.emotion;
+  if(sd){sd.value=ad.directness;}if(vd) vd.textContent=ad.directness;
+  updateArchBadge();
+  scheduleArchPreview();
+}
+
+function saveVoiceProfile() {
+  var sf=document.getElementById('arch-formality'), se=document.getElementById('arch-emotion'), sd=document.getElementById('arch-directness');
+  if(sf) localStorage.setItem('li_voice_formality',  sf.value);
+  if(se) localStorage.setItem('li_voice_emotion',    se.value);
+  if(sd) localStorage.setItem('li_voice_directness', sd.value);
+  updateArchBadge(); updateNavCounts();
+  var msg=document.getElementById('arch-save-msg');
+  if(msg){msg.style.display='inline';setTimeout(function(){msg.style.display='none';},2000);}
+}
+
+function scheduleArchPreview() {
+  clearTimeout(_archTimer);
+  _archTimer = setTimeout(updateArchetypePreview, 900);
+}
+
+async function updateArchetypePreview() {
+  var arch=localStorage.getItem('li_voice_archetype')||'mentor';
+  var ad=VA_ARCHETYPES[arch]; if(!ad) return;
+  var el=document.getElementById('arch-preview-text'); if(!el) return;
+  var sf=document.getElementById('arch-formality'), se=document.getElementById('arch-emotion'), sd=document.getElementById('arch-directness');
+  var f=sf?parseInt(sf.value):ad.formality, e=se?parseInt(se.value):ad.emotion, d=sd?parseInt(sd.value):ad.directness;
+  el.style.color='var(--muted)'; el.textContent='Generating preview…';
+  var p="Write exactly 2 sentences as a B2B sales message opening demonstrating this voice archetype.\n"+
+    "Archetype: "+ad.name+" — "+ad.desc+"\n"+
+    "Formality: "+f+"/100 (0=very casual, 100=very formal)\n"+
+    "Emotion: "+e+"/100 (0=purely logical, 100=highly emotional)\n"+
+    "Directness: "+d+"/100 (0=subtle hint, 100=blunt direct statement)\n"+
+    "Output: exactly 2 sentences only, no labels, no quotes, no preamble.";
+  var result=await claudeChat(p,130);
+  if(el){el.textContent=result||'—';el.style.color='var(--text)';}
+}
+
+function updateArchBadge() {
+  var badge=document.getElementById('om-arch-badge'); if(!badge) return;
+  var arch=localStorage.getItem('li_voice_archetype');
+  var ad=arch?VA_ARCHETYPES[arch]:null;
+  badge.style.display=ad?'inline':'none';
+  if(ad) badge.textContent='🎭 '+ad.name;
+}
+
+function getVoiceProfileBlock() {
+  var arch=localStorage.getItem('li_voice_archetype');
+  var ad=arch?VA_ARCHETYPES[arch]:null; if(!ad) return '';
+  var f=localStorage.getItem('li_voice_formality')  ||String(ad.formality);
+  var e=localStorage.getItem('li_voice_emotion')    ||String(ad.emotion);
+  var d=localStorage.getItem('li_voice_directness') ||String(ad.directness);
+  return "\n\nVOICE PROFILE: Archetype="+ad.name+". Formality="+f+"/100. Emotion="+e+"/100. Directness="+d+"/100.";
+}
+// ─────────────────────────────────────────────────────────────────────────
+
 function renderKB() {
   var kb = loadKBData();
   // Books
@@ -3702,6 +3871,7 @@ function renderKB() {
   var vo = document.getElementById("kb-voice");
   if(fw) fw.value = kb.frameworks;
   if(vo) vo.value = kb.voice;
+  initVoiceArchetype();
   updateKBBadge();
 }
 
@@ -3724,9 +3894,8 @@ function getKBBlock() {
 
 function updateKBBadge() {
   var badge = document.getElementById("om-kb-badge");
-  if(!badge) return;
-  var hasKB = !!getKBBlock();
-  badge.style.display = hasKB ? "inline" : "none";
+  if(badge) badge.style.display = getKBBlock() ? "inline" : "none";
+  updateArchBadge();
 }
 
 function _buildOutreachPrompt(co, c) {
@@ -3820,7 +3989,8 @@ function _buildOutreachPrompt(co, c) {
     "LANGUAGE: "+langStr+"\n\n"+
     (function(){var td=(localStorage.getItem("li_target_description")||"").trim();return td?"\nIDEAL TARGET PROFILE: "+td+". Tailor the message to speak directly to this person's role, industry pain points and buying motivations.\n":"";})()+
     "Write only the message(s). No preamble. No 'Here is your...' intro. Start directly with the content."+
-    getKBBlock();
+    getKBBlock()+
+    getVoiceProfileBlock();
 }
 
 </script>
