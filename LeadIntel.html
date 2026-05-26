@@ -3560,14 +3560,15 @@ async function handleBookPDF(i, input) {
     renderKB();
     updateNavCounts();
     updateKBBadge();
-    var newBtn = document.getElementById("kb-book-upload-btn-"+i);
-    if(newBtn) {
-      newBtn.textContent = "✓ Book stored";
-      newBtn.style.color = "var(--g)"; newBtn.disabled = true;
+    // Flash "✓ Book stored" on the Activate button (slot has transitioned to uploaded state)
+    var actBtn = document.getElementById("kb-book-activate-btn-"+i);
+    if(actBtn) {
+      var origText = actBtn.textContent, origBg = actBtn.style.background;
+      actBtn.textContent = "✓ Stored"; actBtn.style.background = "rgba(74,222,128,0.85)"; actBtn.disabled = true;
       setTimeout(function(){
-        var b2 = document.getElementById("kb-book-upload-btn-"+i);
-        if(b2){ b2.textContent = "Upload PDF"; b2.style.color = ""; b2.disabled = false; }
-      }, 2500);
+        var b2 = document.getElementById("kb-book-activate-btn-"+i);
+        if(b2){ b2.textContent = origText; b2.style.background = origBg; b2.disabled = false; }
+      }, 2000);
     }
   } catch(e) {
     alert("Could not read PDF: " + (e.message||e));
@@ -3632,48 +3633,66 @@ function renderKB() {
     container.innerHTML = "";
     [1,2,3,4,5].forEach(function(i){
       var b = kb.books[i-1]||{};
-      var hasUpload = !!b.title;
+      var hasUpload  = !!b.title;
       var isActivated = !!(b.activated && b.principleCount);
+      var isOn = b.on !== false;
+
       var slot = document.createElement("div");
       slot.id = "kb-book-slot-"+i;
-      slot.style.cssText = "border:1px solid rgba(201,169,97,0.13);border-radius:10px;padding:12px 16px;margin-bottom:10px;background:rgba(255,255,255,0.02)";
+      slot.style.cssText = "border:1px solid rgba(201,169,97,0.13);border-radius:10px;padding:11px 16px;margin-bottom:10px;background:rgba(255,255,255,0.02)";
 
-      var row = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">';
+      // Fixed-width label column
+      var label = '<span style="font-size:10px;font-weight:700;color:var(--g);letter-spacing:.07em;text-transform:uppercase;white-space:nowrap;width:52px;flex-shrink:0">Book '+i+'</span>';
 
-      // Label
-      row += '<span style="font-size:10px;font-weight:700;color:var(--g);letter-spacing:.07em;text-transform:uppercase;white-space:nowrap;min-width:44px">Book '+i+'</span>';
+      var row;
 
       if(!hasUpload) {
-        // Empty — just upload button
-        row +=
-          '<span style="flex:1;font-size:13px;color:rgba(138,138,154,0.4)">No book loaded</span>'+
-          '<input type="file" id="kb-book-pdf-'+i+'" accept=".pdf" style="display:none" onchange="handleBookPDF('+i+',this)"/>'+
-          '<button id="kb-book-upload-btn-'+i+'" class="btn btn-outline btn-sm" onclick="document.getElementById(\'kb-book-pdf-'+i+'\').click()" style="font-size:12px">Upload PDF</button>';
+        // ── EMPTY ──────────────────────────────────────────────────────────
+        row =
+          '<div style="display:flex;align-items:center;gap:10px">'+
+            label+
+            '<span style="flex:1;font-size:13px;color:rgba(138,138,154,0.35)">No book loaded</span>'+
+            '<input type="file" id="kb-book-pdf-'+i+'" accept=".pdf" style="display:none" onchange="handleBookPDF('+i+',this)"/>'+
+            '<button id="kb-book-upload-btn-'+i+'" onclick="document.getElementById(\'kb-book-pdf-'+i+'\').click()" '+
+              'style="padding:5px 13px;border-radius:6px;border:1px solid rgba(255,255,255,0.35);background:transparent;color:var(--text);font-family:var(--font);font-size:12px;cursor:pointer;white-space:nowrap">Upload PDF</button>'+
+          '</div>';
+
       } else if(isActivated) {
-        // Activated — title + principles badge + USE + Remove
-        row +=
-          '<span style="flex:1;font-size:13px;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(b.title)+'</span>'+
-          '<span style="font-size:11px;font-weight:700;color:var(--g);background:rgba(201,169,97,0.1);border:1px solid rgba(201,169,97,0.25);border-radius:20px;padding:3px 10px;white-space:nowrap">✓ '+b.principleCount+' principles</span>'+
-          '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;font-size:12px">'+
-            '<input type="checkbox" id="kb-book-on-'+i+'" '+(b.on!==false?'checked':'')+' onchange="toggleBook('+i+')" style="accent-color:var(--g);width:15px;height:15px"/>'+
-            '<span style="font-weight:600;color:'+(b.on!==false?'var(--g)':'var(--muted)')+'">Use</span>'+
-          '</label>'+
-          '<button onclick="removeBook('+i+')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px" title="Remove">✕</button>';
+        // ── ACTIVATED ──────────────────────────────────────────────────────
+        row =
+          '<div style="display:flex;align-items:center;gap:10px">'+
+            label+
+            '<span style="flex:1;font-size:13px;font-weight:500;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(b.title)+'</span>'+
+            '<span style="font-size:11px;font-weight:700;color:#4ade80;background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);border-radius:20px;padding:3px 10px;white-space:nowrap;flex-shrink:0">✓ '+b.principleCount+' principles</span>'+
+            '<button id="kb-book-activate-btn-'+i+'" onclick="activateBook('+i+')" '+
+              'style="padding:5px 12px;border-radius:6px;border:none;background:var(--g);color:#000;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0">⚡ Re-extract</button>'+
+            '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;flex-shrink:0">'+
+              '<input type="checkbox" id="kb-book-on-'+i+'" '+(isOn?'checked':'')+' onchange="toggleBook('+i+')" '+
+                'style="accent-color:var(--g);width:16px;height:16px;cursor:pointer"/>'+
+              '<span style="font-size:12px;font-weight:600;color:'+(isOn?'var(--g)':'var(--muted)')+'">USE</span>'+
+            '</label>'+
+            '<button onclick="removeBook('+i+')" '+
+              'style="background:none;border:none;color:rgba(138,138,154,0.5);cursor:pointer;font-size:17px;line-height:1;padding:2px 2px;flex-shrink:0" title="Remove">✕</button>'+
+          '</div>';
+
       } else {
-        // Uploaded, not yet activated
-        row +=
-          '<span style="flex:1;font-size:13px;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(b.title)+'</span>'+
-          '<input type="file" id="kb-book-pdf-'+i+'" accept=".pdf" style="display:none" onchange="handleBookPDF('+i+',this)"/>'+
-          '<button id="kb-book-upload-btn-'+i+'" class="btn btn-ghost btn-sm" onclick="document.getElementById(\'kb-book-pdf-'+i+'\').click()" style="font-size:11px;color:var(--muted)">↺ Re-upload</button>'+
-          '<button id="kb-book-activate-btn-'+i+'" class="btn btn-gold btn-sm" onclick="activateBook('+i+')" style="font-size:12px">⚡ Activate</button>'+
-          '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;font-size:12px">'+
-            '<input type="checkbox" id="kb-book-on-'+i+'" '+(b.on!==false?'checked':'')+' onchange="toggleBook('+i+')" style="accent-color:var(--g);width:15px;height:15px"/>'+
-            '<span style="font-weight:600;color:'+(b.on!==false?'var(--g)':'var(--muted)')+'">Use</span>'+
-          '</label>'+
-          '<button onclick="removeBook('+i+')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:2px 4px" title="Remove">✕</button>';
+        // ── UPLOADED, NOT ACTIVATED ────────────────────────────────────────
+        row =
+          '<div style="display:flex;align-items:center;gap:10px">'+
+            label+
+            '<span style="flex:1;font-size:13px;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escHtml(b.title)+'</span>'+
+            '<button id="kb-book-activate-btn-'+i+'" onclick="activateBook('+i+')" '+
+              'style="padding:5px 13px;border-radius:6px;border:none;background:var(--g);color:#000;font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0">⚡ Activate</button>'+
+            '<label style="display:flex;align-items:center;gap:5px;cursor:not-allowed;white-space:nowrap;flex-shrink:0" title="Activate first">'+
+              '<input type="checkbox" id="kb-book-on-'+i+'" disabled '+
+                'style="accent-color:var(--muted);width:16px;height:16px;cursor:not-allowed;opacity:0.35"/>'+
+              '<span style="font-size:12px;font-weight:600;color:var(--muted);opacity:0.5">USE</span>'+
+            '</label>'+
+            '<button onclick="removeBook('+i+')" '+
+              'style="background:none;border:none;color:rgba(138,138,154,0.5);cursor:pointer;font-size:17px;line-height:1;padding:2px 2px;flex-shrink:0" title="Remove">✕</button>'+
+          '</div>';
       }
 
-      row += '</div>';
       slot.innerHTML = row;
       container.appendChild(slot);
     });
