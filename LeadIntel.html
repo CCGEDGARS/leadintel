@@ -79,8 +79,6 @@ select option{background:var(--dark3)}
 .c-chip.sel{background:rgba(201,169,97,0.12);border-color:var(--g);color:var(--g)}
 .add-row{display:flex;gap:8px;margin-top:10px}
 .add-row input{flex:1}
-.conv-box{background:rgba(201,169,97,0.05);border:1px solid rgba(201,169,97,0.2);border-radius:9px;padding:14px;margin-top:12px}
-.conv-label{font-size:11px;color:var(--g);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px}
 .kw-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:7px}
 .kw-chip{font-size:12px;padding:3px 9px;border-radius:5px;background:rgba(201,169,97,0.1);border:1px solid rgba(201,169,97,0.22);color:var(--g)}
 .res-bar{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;gap:12px;flex-wrap:wrap}
@@ -727,7 +725,6 @@ let leads = [];
 let categories = [];
 let selectedCountries = ["LV"];
 let customCountries = [];
-let convParams = null;
 let companySummary = "";
 let expandedIds = new Set();
 let currentPage = 1;
@@ -785,16 +782,14 @@ function showAlert(msg, type){
 }
 
 function resetAll(){
-  csvData=null; leads=[]; categories=[]; convParams=null; companySummary=""; enrichedUpTo=0; enriching=false;
+  csvData=null; leads=[]; categories=[]; companySummary=""; enrichedUpTo=0; enriching=false;
   selectedCountries=["LV"]; customCountries=[]; expandedIds=new Set();
   filterCat="ALL"; filterQ=""; currentPage=1;
   document.getElementById("p-company").value="";
   document.getElementById("p-website").value="";
   document.getElementById("p-about").value="";
   var pt=document.getElementById("p-target"); if(pt) pt.value="";
-  document.getElementById("free-search").value="";
   document.getElementById("summary-box").style.display="none";
-  document.getElementById("conv-box").style.display="none";
   document.getElementById("csv-zone").classList.remove("filled");
   document.getElementById("csv-name").style.display="none";
   document.getElementById("csv-meta").style.display="none";
@@ -1059,29 +1054,6 @@ function addCountry(){
     document.getElementById("custom-country").value="";
   }
 }
-
-// FREE SEARCH CONVERT
-async function convertFreeSearch(){
-  const text=document.getElementById("free-search").value.trim();
-  if(!text) return null;
-  const p="Convert this description to Apollo.io search parameters. Return ONLY JSON:\n{\"keywords\":[\"industry tag\"],\"seniorities\":[\"c_suite\"],\"explanation\":\"one sentence\"}\nRULES: keywords = INDUSTRY SECTOR tags only (retail, manufacturing, software). NEVER use 'sales teams'.\nDescription: "+text;
-  try{
-    const raw=await claude(p,500);
-    // Extract JSON array even if Claude adds preamble text
-    var catClean=raw;
-    var arrStart=raw.indexOf('['), arrEnd=raw.lastIndexOf(']');
-    if(arrStart>-1&&arrEnd>arrStart) catClean=raw.slice(arrStart,arrEnd+1);
-    else catClean=raw.replace(/```json|```/g,"").trim();
-    const parsed=JSON.parse(catClean);
-    convParams=parsed;
-    const box=document.getElementById("conv-box");
-    document.getElementById("conv-kws").innerHTML=(parsed.keywords||[]).map(function(k){return'<span class="kw-chip">'+k+'</span>';}).join("")+(parsed.seniorities||[]).map(function(s){return'<span class="kw-chip" style="color:#7AB8E8">'+s+'</span>';}).join("");
-    document.getElementById("conv-note").textContent=parsed.explanation||"";
-    box.style.display="block";
-    return parsed;
-  }catch(e){return null;}
-}
-function clearConv(){convParams=null;document.getElementById("conv-box").style.display="none";document.getElementById("free-search").value="";}
 
 // APOLLO
 function getLocs(code){return CLOCS[code.toUpperCase()]||[code];}
@@ -2237,14 +2209,6 @@ async function runSearch(){
   }
 
   var extraKws=[],extraSen=[];
-  const freeText=document.getElementById("free-search").value.trim();
-  if(freeText&&!convParams){
-    setProg(5,"Converting description to search parameters...");
-    const parsed=await convertFreeSearch();
-    if(parsed){extraKws=parsed.keywords||[];extraSen=parsed.seniorities||[];}
-  } else if(convParams){
-    extraKws=convParams.keywords||[];extraSen=convParams.seniorities||[];
-  }
 
   const activeCats=categories.filter(function(c){return c.active!==false;});
   const allPeople=[];
