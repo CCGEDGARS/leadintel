@@ -707,6 +707,7 @@ if(typeof pdfjsLib !== "undefined") pdfjsLib.GlobalWorkerOptions.workerSrc = "ht
 var APOLLO_KEY = localStorage.getItem("li_apollo_key")||"";
 var FIRECRAWL_KEY = localStorage.getItem("li_firecrawl_key")||"";
 var CLAUDE_KEY = localStorage.getItem("li_claude_key")||"";
+var API_PROXY_BASE = "https://apollo-proxy.edgars-7e7.workers.dev";
 
 const BALTIC = [
   {code:"LV",name:"Latvia"},
@@ -1136,7 +1137,7 @@ function getOrgLocs(code){return ORG_LOCS[code.toUpperCase()]||[code];}
 
 async function apolloSearch(countryCode,keywords,seniorities,industry){
   keywords=keywords||[];seniorities=seniorities||[];industry=industry||"";
-  const body={api_key:APOLLO_KEY,page:1,per_page:Math.min(100,searchLimit),
+  const body={page:1,per_page:Math.min(100,searchLimit),
     person_seniorities:seniorities.length?seniorities:["c_suite","vp","director","manager","senior"],
     person_locations:getLocs(countryCode),
     organization_locations:getOrgLocs(countryCode),
@@ -1156,7 +1157,7 @@ async function apolloSearch(countryCode,keywords,seniorities,industry){
   if(!APOLLO_KEY){showAlert("Please enter your Apollo API key on the Profile screen.","err");throw new Error("No Apollo key");}
   // Route Apollo through dedicated Cloudflare Worker proxy
   var apolloBody = JSON.stringify(body);
-  const res = await fetch("https://apollo-proxy.edgars-7e7.workers.dev/",{
+  const res = await fetch(API_PROXY_BASE+"/",{
     method:"POST",
     headers:{"Content-Type":"application/json","X-Api-Key":APOLLO_KEY},
     body:apolloBody
@@ -1201,7 +1202,7 @@ async function firecrawlScrape(pageUrl) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(()=>controller.abort(), 12000);
-    const res = await fetch("http://localhost:3131/firecrawl-scrape", {
+    const res = await fetch(API_PROXY_BASE+"/firecrawl-scrape", {
       method: "POST",
       headers: {"Content-Type":"application/json","X-Firecrawl-Key":FIRECRAWL_KEY},
       body: JSON.stringify({url: pageUrl, formats: ["markdown"]}),
@@ -1224,7 +1225,7 @@ async function firecrawlSearch(query) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(function(){controller.abort();}, 15000);
-    const res = await fetch("http://localhost:3131/firecrawl-search", {
+    const res = await fetch(API_PROXY_BASE+"/firecrawl-search", {
       method: "POST",
       headers: {"Content-Type":"application/json","X-Firecrawl-Key":FIRECRAWL_KEY},
       body: JSON.stringify({query: query, limit: 5, scrapeOptions: {formats: ["markdown"]}}),
@@ -1248,7 +1249,7 @@ async function firecrawlScrapeRich(pageUrl) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(function(){controller.abort();}, 22000);
-    const res = await fetch("http://localhost:3131/firecrawl-scrape", {
+    const res = await fetch(API_PROXY_BASE+"/firecrawl-scrape", {
       method: "POST",
       headers: {"Content-Type":"application/json","X-Firecrawl-Key":FIRECRAWL_KEY},
       body: JSON.stringify({
@@ -1296,7 +1297,7 @@ async function firecrawlMap(domain) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(function(){controller.abort();}, 12000);
-    const res = await fetch("http://localhost:3131/firecrawl-map", {
+    const res = await fetch(API_PROXY_BASE+"/firecrawl-map", {
       method: "POST",
       headers: {"Content-Type":"application/json","X-Firecrawl-Key":FIRECRAWL_KEY},
       body: JSON.stringify({url:"https://"+domain, search:"contact team about leadership management people", limit:15}),
@@ -1813,7 +1814,6 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
       "name": "Full Name",
       "title": "Current Title",
       "email": "work email@${coDomain} or DATA MISSING",
-      "personalEmail": "gmail/personal email if found on LinkedIn profile or DATA MISSING",
       "phone": "full phone number or DATA MISSING",
       "linkedin": "https://www.linkedin.com/in/exact-verified-slug or DATA MISSING",
       "confidence": "HIGH|MEDIUM|LOW",
@@ -1881,13 +1881,11 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
             existing.name=cleanContactName(ec.name);
           }
           if(ec.title && ec.title!=="DATA MISSING" && !existing.title) existing.title=ec.title;
-          // Handle email: detect if work or personal
+          // Accept business email only; discard personal mailbox providers.
           if(ec.email && ec.email!=="DATA MISSING") {
             var ecEmail=ec.email.trim();
-            if(isPersonalEmail(ecEmail)) { if(!existing.personalEmail) existing.personalEmail=ecEmail; }
-            else if(!existing.email) existing.email=ecEmail;
+            if(!isPersonalEmail(ecEmail) && !existing.email) existing.email=ecEmail;
           }
-          if(ec.personalEmail && ec.personalEmail!=="DATA MISSING" && !existing.personalEmail) existing.personalEmail=ec.personalEmail.trim();
           if(ec.phone && ec.phone!=="DATA MISSING") { var epClean=cleanPhone(ec.phone); if(epClean&&!existing.phone) existing.phone=epClean; }
           if(ec.linkedin && ec.linkedin!=="DATA MISSING" && !existing.linkedin){
             var li=ec.linkedin.trim();
@@ -1902,14 +1900,12 @@ Return ONLY the raw JSON object. No introduction, no explanation, no markdown fe
           if(newLi2 && !newLi2.startsWith("http")) newLi2="";
           var rawEmail2=(!ec.email||ec.email==="DATA MISSING")?"":ec.email.trim();
           var newEmail2=(!rawEmail2||isPersonalEmail(rawEmail2))?"":rawEmail2;
-          var newPersonal2=rawEmail2&&isPersonalEmail(rawEmail2)?rawEmail2:((!ec.personalEmail||ec.personalEmail==="DATA MISSING")?"":ec.personalEmail.trim());
           var newPhone2=(!ec.phone||ec.phone==="DATA MISSING")?"":cleanPhone(ec.phone);
           co.contacts.push({
             name:cleanContactName(ec.name.trim()),
             title:(!ec.title||ec.title==="DATA MISSING")?"":ec.title,
             seniority:"",
             email:newEmail2,
-            personalEmail:newPersonal2,
             phone:newPhone2,
             linkedin:newLi2,
             confidence:ec.confidence||"MEDIUM",
@@ -2922,7 +2918,6 @@ function renderResultsPage(){
       var emailCell = c.email
         ? '<a href="mailto:'+c.email+'" class="td-link td-email" title="'+c.email+'">'+c.email+'</a>'+emailConf
         : '<span class="td-miss">—</span>';
-      if(c.personalEmail) emailCell += '<div style="margin-top:3px"><a href="mailto:'+c.personalEmail+'" class="td-link" style="font-size:11px;color:rgba(138,138,154,0.7);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px" title="'+c.personalEmail+'">'+c.personalEmail+'</a><span style="font-size:9px;padding:1px 4px;border-radius:3px;background:rgba(138,138,154,0.08);color:rgba(138,138,154,0.5);border:1px solid rgba(138,138,154,0.15);vertical-align:middle">personal</span></div>';
       tblHtml+='<td class="col-email">'+emailCell+'</td>';
       tblHtml+='<td class="col-phone">'+(c.phone?'<a href="tel:'+c.phone+'" class="td-link td-phone" style="white-space:nowrap">'+c.phone+'</a>':'<span class="td-miss">—</span>')+'</td>';
       var liDisplay="—";
