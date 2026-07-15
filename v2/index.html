@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Lead Intel V2 — Latvia daily opportunity research and OSINT command centre">
+  <title>Lead Intel V2 — Opportunity Radar</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="../" aria-label="Lead Intel home">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span><strong>Lead Intel</strong><small>OPPORTUNITY RADAR</small></span>
+      </a>
+
+      <p class="nav-label">Workspace</p>
+
+      <nav class="nav" aria-label="Primary navigation">
+        <button class="nav-item active" data-view="map"><span>⌘</span>System map <b id="map-draft-count">0</b></button>
+        <button class="nav-item" data-view="today"><span>◉</span>Today <b id="today-count">5</b></button>
+        <button class="nav-item" data-view="signals"><span>⌁</span>Signals <b>24</b></button>
+        <button class="nav-item" data-view="companies"><span>▦</span>Companies</button>
+        <button class="nav-item" data-view="contacts"><span>◎</span>Contacts <b id="contact-count">5</b></button>
+        <button class="nav-item" data-view="sources"><span>◫</span>Sources</button>
+        <button class="nav-item" data-view="runs"><span>↻</span>Run history</button>
+      </nav>
+
+      <div class="sidebar-foot">
+        <div class="pilot-card"><span class="status-dot"></span><div><strong>Pilot workspace</strong><small>Human approval enforced</small></div></div>
+        <button class="nav-item" data-view="settings"><span>⚙</span>Settings</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-title">
+          <button class="icon-btn menu-btn" id="menu-btn" aria-label="Open menu">☰</button>
+          <div>
+            <p class="breadcrumb"><span>Lead Intel</span><i>/</i><span id="view-kicker">Research automation</span></p>
+            <h1 id="view-title">System Map</h1>
+          </div>
+        </div>
+        <div class="top-actions">
+          <span class="demo-pill"><i></i> Demo environment</span>
+          <button class="btn secondary" id="email-preview-btn">Email preview</button>
+          <button class="btn primary" id="run-btn"><span>▶</span> Run research</button>
+        </div>
+      </header>
+
+      <section class="view active" id="view-map">
+        <div class="map-page-head">
+          <div>
+            <p class="kicker">Automation architecture</p>
+            <h2>Daily opportunity engine</h2>
+            <p>Select any step to inspect its rules, test the output or save a configuration draft.</p>
+          </div>
+        </div>
+
+        <div class="map-workbench">
+          <div class="map-stage">
+            <div class="map-stage-head">
+              <div><strong>Workflow canvas</strong><span>Published configuration · Version <b id="map-version-label">1</b></span></div>
+              <div class="map-stage-tools">
+                <div class="map-legend"><span><i class="map-key healthy"></i>Healthy</span><span><i class="map-key review"></i>Review</span><span><i class="map-key planned"></i>Planned</span><span><i class="map-key draft"></i>Draft</span></div>
+                <div class="map-actions"><button class="btn secondary" id="discard-map-drafts">Discard drafts</button><button class="btn primary" id="publish-map">Publish changes</button></div>
+              </div>
+            </div>
+            <div class="run-panel" aria-label="Latest run conversion">
+              <div class="run-panel-head">
+                <div><span class="run-pulse"></span><div><strong>Latest research run</strong><small>15 July 2026 · 06:00–06:52 EEST</small></div></div>
+                <span class="run-complete">Completed</span>
+              </div>
+              <div class="run-funnel">
+                <div class="run-stat"><small>Findings</small><strong>142</strong><span>New evidence</span></div><i>→</i>
+                <div class="run-stat"><small>Signals</small><strong>24</strong><span>16.9% relevant</span></div><i>→</i>
+                <div class="run-stat"><small>Qualified</small><strong>9</strong><span>Score ≥ 7.0</span></div><i>→</i>
+                <div class="run-stat"><small>Saved in app</small><strong>5</strong><span>Full dossiers</span></div><i>→</i>
+                <div class="run-stat accented"><small>Morning email</small><strong>3</strong><span>One contact each</span></div>
+              </div>
+            </div>
+            <div class="map-canvas" id="map-canvas" aria-label="Lead Intel research workflow">
+              <svg class="map-connections" viewBox="0 0 1000 520" preserveAspectRatio="none" aria-hidden="true">
+                <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker></defs>
+                <g id="map-edges"></g>
+              </svg>
+              <div id="map-nodes"></div>
+            </div>
+          </div>
+          <aside class="map-inspector" id="map-inspector" aria-live="polite"></aside>
+        </div>
+
+        <div class="map-summary" id="map-summary"></div>
+
+        <div class="map-history panel">
+          <div><p class="kicker">Change control</p><h3>Published versions</h3><span>Every active rule change is recorded.</span></div>
+          <div id="map-history"></div>
+        </div>
+      </section>
+
+      <section class="view" id="view-today">
+        <div class="hero-strip">
+          <div><span class="live-dot"></span>Morning research completed at 06:52</div>
+          <p>142 findings → 24 signals → 9 qualified → <strong>5 saved</strong> · Top <strong>3 emailed</strong></p>
+        </div>
+
+        <div class="metrics" id="metrics"></div>
+
+        <div class="section-head">
+          <div><p class="kicker">Daily shortlist</p><h2>Best opportunities today</h2></div>
+          <div class="legend"><span><i class="verified-dot"></i> Verified business email</span><span>Score /10</span></div>
+        </div>
+        <div class="opportunity-list" id="opportunity-list"></div>
+      </section>
+
+      <section class="view" id="view-signals">
+        <div class="section-head"><div><p class="kicker">Evidence stream</p><h2>Market signals</h2></div><div class="filters" id="signal-filters"></div></div>
+        <div class="table-card"><table><thead><tr><th>Signal</th><th>Company</th><th>Type</th><th>Date</th><th>Confidence</th><th>Status</th></tr></thead><tbody id="signals-body"></tbody></table></div>
+      </section>
+
+      <section class="view" id="view-companies">
+        <div class="section-head"><div><p class="kicker">Opportunity memory</p><h2>Company dossiers</h2></div><input class="search" id="company-search" placeholder="Search companies…"></div>
+        <div class="company-grid" id="company-grid"></div>
+      </section>
+
+      <section class="view" id="view-contacts">
+        <div class="section-head"><div><p class="kicker">Business contacts</p><h2>Verified email list</h2></div><div class="filters" id="contact-filters"></div></div>
+        <div class="notice"><strong>Research ≠ campaign eligible.</strong> Contacts require evidence, manual eligibility review and suppression checks before campaign use.</div>
+        <div class="table-card"><table><thead><tr><th>Contact</th><th>Company</th><th>Role</th><th>Business email</th><th>Verification</th><th>List state</th><th></th></tr></thead><tbody id="contacts-body"></tbody></table></div>
+      </section>
+
+      <section class="view" id="view-sources">
+        <div class="section-head"><div><p class="kicker">Monitoring network</p><h2>Source health</h2></div><button class="btn secondary">Test all sources</button></div>
+        <div class="source-grid" id="source-grid"></div>
+      </section>
+
+      <section class="view" id="view-runs">
+        <div class="section-head"><div><p class="kicker">Automation audit</p><h2>Daily runs</h2></div></div>
+        <div class="table-card"><table><thead><tr><th>Run</th><th>Started</th><th>Findings</th><th>Qualified</th><th>Saved</th><th>Emailed</th><th>Errors</th><th>Status</th></tr></thead><tbody id="runs-body"></tbody></table></div>
+      </section>
+
+      <section class="view" id="view-settings">
+        <div class="section-head"><div><p class="kicker">Operating rules</p><h2>Research settings</h2></div><button class="btn primary" id="save-settings">Save settings</button></div>
+        <div class="settings-grid">
+          <div class="panel"><h3>Daily delivery</h3><label>Morning email opportunities<input id="setting-email" type="number" min="1" max="5" value="3"></label><label>App daily shortlist<input id="setting-app" type="number" min="3" max="10" value="5"></label><label>Delivery time<input type="time" value="07:00"></label></div>
+          <div class="panel"><h3>Qualification</h3><label>Minimum opportunity score<input id="setting-score" type="number" min="1" max="10" step=".1" value="7"></label><label>Maximum signal age<select><option>30 days</option><option>14 days</option><option>60 days</option></select></label><label>Evidence rule<select><option>1 primary or 2 independent sources</option></select></label></div>
+          <div class="panel"><h3>Outreach safety</h3><label class="toggle-row"><span>Human approval required<small>Messages cannot send without approval</small></span><input type="checkbox" checked disabled></label><label class="toggle-row"><span>Business email only<small>Personal mailbox providers are excluded</small></span><input type="checkbox" checked disabled></label><label class="toggle-row"><span>Predicted emails research-only<small>Verification required before campaign use</small></span><input type="checkbox" checked disabled></label></div>
+          <div class="panel"><h3>Connection status</h3><div class="connection"><span>Google Sheets</span><b class="pending">Planned</b></div><div class="connection"><span>Make automation</span><b class="pending">Planned</b></div><div class="connection"><span>Apollo enrichment</span><b>V1 connected</b></div><div class="connection"><span>Gmail delivery</span><b class="pending">Planned</b></div></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="drawer-backdrop" id="drawer-backdrop"></div>
+  <aside class="drawer" id="lead-drawer" aria-hidden="true">
+    <button class="drawer-close" id="drawer-close" aria-label="Close">×</button>
+    <div id="drawer-content"></div>
+  </aside>
+
+  <div class="modal-backdrop" id="modal-backdrop">
+    <div class="modal" role="dialog" aria-modal="true">
+      <button class="drawer-close" id="modal-close" aria-label="Close">×</button>
+      <div id="modal-content"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>
