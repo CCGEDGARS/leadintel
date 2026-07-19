@@ -554,6 +554,31 @@ table td { font-size: 14px; line-height: 1.5; }
 .editor-head h3, .panel-title-row h3 { font-size: 17px; }
 .script-box { font-size: 14px !important; line-height: 1.55; }
 
+/* Global readability sweep: secondary information must remain readable on desktop. */
+.hero-strip, .notice { font-size: 14px; line-height: 1.6; }
+.legend, .run-panel-head small, .run-stat small, .run-stat span { font-size: 12px; }
+.run-panel-head strong, .map-stage-head strong { font-size: 14px; }
+.metric span { font-size: 13px; }
+.metric small { font-size: 12px; }
+.tag { padding: 4px 9px; font-size: 11px; }
+.signal { font-size: 14px; line-height: 1.55; }
+.opp-meta, .contact-line, .score small, .confidence { font-size: 12px; }
+.filter { min-height: 36px; padding: 8px 12px; font-size: 12px; }
+.company-card p, .source-card p, .outreach-card p {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.panel-copy, .panel label, .outreach-meta { font-size: 13px; line-height: 1.55; }
+.empty-state p { font-size: 14px; }
+.crm-card p { font-size: 13px; line-height: 1.55; }
+.crm-card label { font-size: 12px; }
+.bar-row, .detail-section h3, .evidence { font-size: 12px; }
+.email-lead p, .toast { font-size: 13px; }
+.profile-document h4 { font-size: 16px; }
+.profile-document-head p, .profile-document-privacy { font-size: 13px; }
+.profile-document-file strong, .profile-document-empty strong { font-size: 14px; }
+.profile-document-file small, .profile-document-empty small { font-size: 12px; }
+
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 3px solid rgba(94, 143, 255, 0.48);
   outline-offset: 2px;
