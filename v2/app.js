@@ -14,6 +14,22 @@ const MARKET_PROFILES = [
   {id:"baltics",name:"Baltics",countries:["Latvia","Estonia","Lithuania"],countryCodes:["LV","EE","LT"],languages:["Latvian","Estonian","Lithuanian","English"],decisionTitles:["Sales Director","Commercial Director","Head of Sales","CEO"],sourceFocus:"Baltic business, procurement, recruitment and company sources"},
   {id:"custom",name:"Custom market",countries:["Finland"],countryCodes:["FI"],languages:["English"],decisionTitles:["Sales Director","Commercial Director","Head of Sales","CEO"],sourceFocus:"Approved public business, procurement, recruitment and company sources"}
 ];
+const COUNTRY_PRESETS=[
+  {name:"Latvia",code:"LV"},{name:"Estonia",code:"EE"},{name:"Lithuania",code:"LT"},{name:"Finland",code:"FI"},{name:"Sweden",code:"SE"},{name:"Norway",code:"NO"},{name:"Denmark",code:"DK"},{name:"Poland",code:"PL"},{name:"Germany",code:"DE"}
+];
+const LANGUAGE_PRESETS=["Latvian","Estonian","Lithuanian","English","Finnish","Swedish","Norwegian","Danish","Polish","German","Russian"];
+const SOURCE_PACKS={
+  LV:[{id:"lv-cv",name:"CV.lv",group:"Jobs",cadence:"Daily"},{id:"lv-firmas",name:"Firmas.lv",group:"Company activity",cadence:"Daily"},{id:"lv-lursoft",name:"Lursoft",group:"Company intelligence",cadence:"Daily"},{id:"lv-iub",name:"IUB Procurement",group:"Public procurement",cadence:"Daily"},{id:"lv-labs",name:"Labs of Latvia",group:"Startups and funding",cadence:"Daily"},{id:"lv-lsm",name:"LSM Business",group:"Business news",cadence:"Daily"}],
+  EE:[{id:"ee-cvkeskus",name:"CVKeskus",group:"Jobs",cadence:"Daily"},{id:"ee-register",name:"Estonian e-Business Register",group:"Company activity",cadence:"Daily"},{id:"ee-riigihanked",name:"Riigihanked",group:"Public procurement",cadence:"Daily"},{id:"ee-err",name:"ERR Business",group:"Business news",cadence:"Daily"},{id:"ee-startup",name:"Startup Estonia",group:"Startups and funding",cadence:"Daily"}],
+  LT:[{id:"lt-cvbankas",name:"CVbankas",group:"Jobs",cadence:"Daily"},{id:"lt-register",name:"Registrų centras",group:"Company activity",cadence:"Daily"},{id:"lt-cvonline",name:"CV-Online Lithuania",group:"Jobs",cadence:"Daily"},{id:"lt-cvpp",name:"CVPP Procurement",group:"Public procurement",cadence:"Daily"},{id:"lt-vz",name:"Verslo žinios",group:"Business news",cadence:"Daily"},{id:"lt-startup",name:"Startup Lithuania",group:"Startups and funding",cadence:"Daily"}],
+  FI:[{id:"fi-business",name:"Business Finland",group:"Investment and growth",cadence:"Daily"},{id:"fi-ytj",name:"YTJ",group:"Company activity",cadence:"Daily"},{id:"fi-hilma",name:"Hilma",group:"Public procurement",cadence:"Daily"},{id:"fi-duunitori",name:"Duunitori",group:"Jobs",cadence:"Daily"}],
+  SE:[{id:"se-bolagsverket",name:"Bolagsverket",group:"Company activity",cadence:"Daily"},{id:"se-jobs",name:"Arbetsförmedlingen",group:"Jobs",cadence:"Daily"},{id:"se-procurement",name:"Upphandlingsmyndigheten",group:"Public procurement",cadence:"Daily"},{id:"se-breakit",name:"Breakit",group:"Business news",cadence:"Daily"}],
+  NO:[{id:"no-register",name:"Brønnøysund Registers",group:"Company activity",cadence:"Daily"},{id:"no-nav",name:"NAV Jobs",group:"Jobs",cadence:"Daily"},{id:"no-doffin",name:"Doffin",group:"Public procurement",cadence:"Daily"}],
+  DK:[{id:"dk-cvr",name:"CVR",group:"Company activity",cadence:"Daily"},{id:"dk-jobindex",name:"Jobindex",group:"Jobs",cadence:"Daily"},{id:"dk-udbud",name:"Udbud.dk",group:"Public procurement",cadence:"Daily"}],
+  PL:[{id:"pl-krs",name:"KRS",group:"Company activity",cadence:"Daily"},{id:"pl-pracuj",name:"Pracuj.pl",group:"Jobs",cadence:"Daily"},{id:"pl-procurement",name:"e-Zamówienia",group:"Public procurement",cadence:"Daily"}],
+  DE:[{id:"de-register",name:"Handelsregister",group:"Company activity",cadence:"Daily"},{id:"de-jobs",name:"Bundesagentur für Arbeit",group:"Jobs",cadence:"Daily"},{id:"de-procurement",name:"Bund.de Procurement",group:"Public procurement",cadence:"Daily"}],
+  GLOBAL:[{id:"global-company",name:"Company websites",group:"Primary evidence",cadence:"On demand"},{id:"global-linkedin",name:"LinkedIn public signals",group:"People and hiring",cadence:"Daily"},{id:"global-apollo",name:"Apollo enrichment",group:"Decision-maker contacts",cadence:"Qualified only"}]
+};
 const CRM_STAGES=["Discovered","Qualified","Contact Found","Ready for Outreach","Contacted","Replied","Meeting","Proposal","Won","Lost"];
 const DEFAULT_BUSINESS_PROFILE={owner:"Edgars Untāls",company:"Coaching & Consulting Group",summary:"B2B sales development, practical sales systems and AI implementation for commercial teams.",website:"",email:"",document:null,documentNotes:""};
 const DEFAULT_OFFERS=[
@@ -168,6 +184,8 @@ const defaultState = {
 let state = loadState();
 let currentSignalFilter = "All";
 let currentContactFilter = "All";
+let crmSearch="";
+let crmStageFilter="All";
 let selectedMapNode = "sources";
 
 function isRecord(value){return Boolean(value)&&typeof value==="object"&&!Array.isArray(value);}
@@ -294,6 +312,14 @@ function formatBytes(bytes){
 }
 function saveState(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
 function activeMarket(){return state.marketProfiles.find(item=>item.id===state.activeMarketProfileId)||state.marketProfiles[0]||MARKET_PROFILES[0];}
+function sourcePackForMarket(market=activeMarket()){
+  const runtimeByName=new Map(sources.map(item=>[String(item.name||"").toLowerCase(),item]));
+  const seen=new Set();
+  return [...(market.countryCodes||[]),"GLOBAL"].flatMap(code=>(SOURCE_PACKS[code]||[]).map(item=>({...item,country:code}))).filter(item=>{
+    if(seen.has(item.id))return false;seen.add(item.id);return true;
+  }).map(item=>{const runtime=runtimeByName.get(item.name.toLowerCase());return {...item,health:runtime?.health||"Ready",findings:Number(runtime?.findings)||0};});
+}
+function sourceEnabled(market,id){return !Array.isArray(market.enabledSourceIds)||market.enabledSourceIds.includes(id);}
 function makeId(prefix,name=""){return `${prefix}-${String(name||Date.now()).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")}-${Date.now().toString(36).slice(-4)}`;}
 function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
 function initials(name){return name.split(/\s+/).map(p=>p[0]).slice(0,2).join("").toUpperCase();}
@@ -378,6 +404,7 @@ async function triggerResearch({test=false}={}){
     test,
     requested_at:new Date().toISOString(),
     market_profile:{id:market.id,name:market.name,countries:market.countries,country_codes:market.countryCodes,languages:market.languages,decision_maker_titles:market.decisionTitles,source_focus:market.sourceFocus},
+    enabled_sources:sourcePackForMarket(market).filter(item=>sourceEnabled(market,item.id)).map(({id,name,group,cadence,country})=>({id,name,group,cadence,country})),
     business_profile:state.businessProfile,
     offers:state.offers.filter(item=>item.active),
     signal_rules:state.signalRules.filter(item=>item.active),
@@ -590,7 +617,14 @@ function renderContacts(){
 }
 
 function renderSources(){
-  document.getElementById("source-grid").innerHTML=sources.map(s=>`<article class="source-card"><div class="opp-title-row"><h3>${esc(s.name)}</h3><span class="status ${statusClass(s.health)}">${esc(s.health)}</span></div><p>${esc(s.group)} · ${esc(s.cadence)}</p><div class="source-foot"><span>${s.findings} findings today</span><button class="btn small secondary">Inspect</button></div></article>`).join("");
+  const market=activeMarket();
+  const pack=sourcePackForMarket(market);
+  const enabled=pack.filter(item=>sourceEnabled(market,item.id));
+  document.getElementById("source-pack-summary").innerHTML=`<strong>${esc(market.name)} source pack:</strong> ${enabled.length} of ${pack.length} recommended sources enabled. Changing the active region updates this pack automatically; paused sources are excluded from the Make webhook payload.`;
+  document.getElementById("source-grid").innerHTML=pack.map(s=>{
+    const isEnabled=sourceEnabled(market,s.id);
+    return `<article class="source-card ${isEnabled?"":"source-paused"}"><div class="opp-title-row"><h3>${esc(s.name)}</h3><span class="status ${statusClass(isEnabled?s.health:"Paused")}">${esc(isEnabled?s.health:"Paused")}</span></div><p><span class="mini-badge">${esc(s.country==="GLOBAL"?"Global":s.country)}</span> ${esc(s.group)} · ${esc(s.cadence)}</p><div class="source-foot"><span>${s.findings} findings today</span><button class="btn small secondary" data-source-toggle="${esc(s.id)}">${isEnabled?"Pause":"Enable"}</button></div></article>`;
+  }).join("");
 }
 
 function renderRuns(){
@@ -613,17 +647,20 @@ function ensureCrmRecords(){
 
 function renderControlCentre(){
   const market=activeMarket();
+  const countryChoices=[...COUNTRY_PRESETS,...(market.countries||[]).map((name,index)=>({name,code:(market.countryCodes||[])[index]||""})).filter(item=>!COUNTRY_PRESETS.some(preset=>preset.name===item.name))];
+  const languageChoices=[...new Set([...LANGUAGE_PRESETS,...(market.languages||[])])];
+  const pack=sourcePackForMarket(market);
   document.getElementById("market-profile-grid").innerHTML=state.marketProfiles.map(item=>`<button class="market-profile-card ${item.id===market.id?"selected":""}" data-market-profile="${esc(item.id)}"><strong>${esc(item.name)}</strong><span>${esc((item.countries||[]).join(", "))}</span><small>${esc((item.languages||[]).join(" · "))}</small></button>`).join("");
   document.getElementById("market-profile-editor").innerHTML=`
     <div class="editor-card market-editor-card" data-market-editor="${esc(market.id)}">
       <div class="editor-head"><div><p class="kicker">Active research region</p><h3>${esc(market.name)}</h3></div>${market.id==="custom"?'<button class="btn small secondary" data-remove-market="custom">Reset custom</button>':""}</div>
       <div class="editor-grid">
         <label>Profile name<input id="market-name" value="${esc(market.name)}"></label>
-        <label>Countries <small>comma separated</small><input id="market-countries" value="${esc((market.countries||[]).join(", "))}"></label>
-        <label>Country codes <small>comma separated</small><input id="market-codes" value="${esc((market.countryCodes||[]).join(", "))}"></label>
-        <label>Languages <small>comma separated</small><input id="market-languages" value="${esc((market.languages||[]).join(", "))}"></label>
+        <label class="wide">Countries <small>Choose presets or add a market</small><div class="choice-grid" id="market-country-choices">${countryChoices.map(item=>`<button type="button" class="choice-chip ${(market.countries||[]).includes(item.name)?"selected":""}" data-market-country="${esc(item.name)}" data-country-code="${esc(item.code)}">${esc(item.name)} <small>${esc(item.code)}</small></button>`).join("")}</div><div class="inline-add"><input id="market-custom-country" placeholder="Add another country"><input id="market-custom-code" maxlength="2" placeholder="Code"><button type="button" class="btn secondary" id="add-market-country">Add</button></div><input type="hidden" id="market-countries" value="${esc((market.countries||[]).join(", "))}"><input type="hidden" id="market-codes" value="${esc((market.countryCodes||[]).join(", "))}"></label>
+        <label class="wide">Languages <small>Click to include or exclude</small><div class="choice-grid" id="market-language-choices">${languageChoices.map(language=>`<button type="button" class="choice-chip ${(market.languages||[]).includes(language)?"selected":""}" data-market-language="${esc(language)}">${esc(language)}</button>`).join("")}</div><div class="inline-add compact"><input id="market-custom-language" placeholder="Add another language"><button type="button" class="btn secondary" id="add-market-language">Add</button></div><input type="hidden" id="market-languages" value="${esc((market.languages||[]).join(", "))}"></label>
         <label class="wide">Decision-maker titles <small>comma separated</small><input id="market-titles" value="${esc((market.decisionTitles||[]).join(", "))}"></label>
         <label class="wide">Source focus<textarea id="market-source-focus">${esc(market.sourceFocus||"")}</textarea></label>
+        <div class="source-pack-preview wide"><strong>${pack.length} recommended sources for this region</strong><span>${esc(pack.slice(0,6).map(item=>item.name).join(" · "))}${pack.length>6?" · …":""}</span><button type="button" class="btn small secondary" data-view="sources">Review source pack</button></div>
       </div>
     </div>`;
   document.getElementById("profile-owner").value=state.businessProfile.owner||"";
@@ -670,11 +707,28 @@ function readControlCentre(){
   state.playbooks=[...document.querySelectorAll("[data-playbook-card]")].map(card=>({id:card.dataset.playbookCard,name:card.querySelector("[data-playbook-name]").value.trim(),offerId:card.querySelector("[data-playbook-offer]").value,signalId:card.querySelector("[data-playbook-signal]").value,role:card.querySelector("[data-playbook-role]").value.trim(),channel:card.querySelector("[data-playbook-channel]").value,language:card.querySelector("[data-playbook-language]").value.trim(),sendMode:card.querySelector("[data-playbook-send-mode]").value,subject:card.querySelector("[data-playbook-subject]").value.trim(),body:card.querySelector("[data-playbook-body]").value,active:card.querySelector("[data-playbook-active]").checked})).filter(item=>item.name);
 }
 
+function syncMarketChoiceFields(){
+  const countries=[...document.querySelectorAll("[data-market-country].selected")];
+  const languages=[...document.querySelectorAll("[data-market-language].selected")];
+  const countryField=document.getElementById("market-countries");
+  if(countryField)countryField.value=countries.map(item=>item.dataset.marketCountry).join(", ");
+  const codeField=document.getElementById("market-codes");
+  if(codeField)codeField.value=countries.map(item=>item.dataset.countryCode).filter(Boolean).join(", ");
+  const languageField=document.getElementById("market-languages");
+  if(languageField)languageField.value=languages.map(item=>item.dataset.marketLanguage).join(", ");
+}
+
 function renderCRM(){
   ensureCrmRecords();
-  const records=opportunities.map(o=>({o,record:state.crm.records[o.id]}));
-  document.getElementById("crm-count").textContent=records.length;
-  document.getElementById("crm-board").innerHTML=state.crm.stageOrder.map(stage=>{
+  const allRecords=opportunities.map(o=>({o,record:state.crm.records[o.id]}));
+  const query=crmSearch.trim().toLowerCase();
+  const records=allRecords.filter(({o,record})=>(crmStageFilter==="All"||record.stage===crmStageFilter)&&(!query||`${o.company} ${o.signal} ${o.primaryOffer} ${o.contact.name} ${record.notes||""}`.toLowerCase().includes(query)));
+  document.getElementById("crm-count").textContent=query||crmStageFilter!=="All"?`${records.length}/${allRecords.length}`:allRecords.length;
+  document.getElementById("crm-search").value=crmSearch;
+  document.getElementById("crm-stage-filter").innerHTML=`<option value="All">All stages</option>${state.crm.stageOrder.map(stage=>`<option value="${esc(stage)}">${esc(stage)}</option>`).join("")}`;
+  document.getElementById("crm-stage-filter").value=crmStageFilter;
+  const visibleStages=crmStageFilter==="All"?state.crm.stageOrder:[crmStageFilter];
+  document.getElementById("crm-board").innerHTML=visibleStages.map(stage=>{
     const list=records.filter(item=>item.record.stage===stage);
     return `<section class="crm-column"><header><strong>${esc(stage)}</strong><span>${list.length}</span></header><div class="crm-column-body">${list.map(({o,record})=>`<article class="crm-card"><div class="crm-card-score">${o.score.toFixed(1)}</div><h3>${esc(o.company)}</h3><p>${esc(o.signal)}</p><small>${esc(o.primaryOffer)}</small><label>Stage<select data-crm-stage="${esc(o.id)}">${state.crm.stageOrder.map(value=>`<option ${value===record.stage?"selected":""}>${esc(value)}</option>`).join("")}</select></label><label>Next action<input data-crm-next-action="${esc(o.id)}" value="${esc(record.nextAction||"")}" placeholder="Call, research, follow up…"></label><details><summary>Notes</summary><textarea data-crm-notes="${esc(o.id)}" placeholder="Private working notes">${esc(record.notes||"")}</textarea></details><div class="crm-card-actions"><button class="btn small secondary" data-open="${esc(o.id)}">Open dossier</button><button class="btn small secondary" data-message="${esc(o.id)}">Draft outreach</button></div></article>`).join("")||'<div class="crm-empty">No companies</div>'}</div></section>`;
   }).join("");
@@ -827,6 +881,14 @@ document.addEventListener("click",async event=>{
   const marketProfile=event.target.closest("[data-market-profile]");if(marketProfile){
     readControlCentre();state.activeMarketProfileId=marketProfile.dataset.marketProfile;state.workspace.market=activeMarket().name;saveState();renderAll();showToast(`Research market changed to ${activeMarket().name}`);return;
   }
+  const marketCountry=event.target.closest("[data-market-country]");if(marketCountry){marketCountry.classList.toggle("selected");syncMarketChoiceFields();return;}
+  const marketLanguage=event.target.closest("[data-market-language]");if(marketLanguage){marketLanguage.classList.toggle("selected");syncMarketChoiceFields();return;}
+  const sourceToggle=event.target.closest("[data-source-toggle]");if(sourceToggle){
+    const market=activeMarket();const pack=sourcePackForMarket(market);
+    if(!Array.isArray(market.enabledSourceIds))market.enabledSourceIds=pack.map(item=>item.id);
+    market.enabledSourceIds=market.enabledSourceIds.includes(sourceToggle.dataset.sourceToggle)?market.enabledSourceIds.filter(id=>id!==sourceToggle.dataset.sourceToggle):[...market.enabledSourceIds,sourceToggle.dataset.sourceToggle];
+    saveState();renderSources();renderControlCentre();showToast("Source pack updated");return;
+  }
   const removeMarket=event.target.closest("[data-remove-market]");if(removeMarket){
     const reset=structuredClone(MARKET_PROFILES.find(item=>item.id==="custom"));
     state.marketProfiles=state.marketProfiles.map(item=>item.id===removeMarket.dataset.removeMarket?reset:item);state.activeMarketProfileId="custom";state.workspace.market=reset.name;saveState();renderAll();showToast("Custom market reset");return;
@@ -879,7 +941,21 @@ document.addEventListener("click",async event=>{
     document.querySelectorAll("[data-control-section]").forEach(section=>{section.open=open;state.ui.controlSections[section.dataset.controlSection]=open;});
     saveState();showToast(open?"All control sections expanded":"All control sections collapsed");
   }
-  if(event.target.id==="save-control"){readControlCentre();ensureCrmRecords();saveState();renderAll();showToast("Control centre saved");}
+  if(event.target.id==="crm-clear-filters"){crmSearch="";crmStageFilter="All";renderCRM();return;}
+  if(event.target.id==="add-market-country"){
+    const name=document.getElementById("market-custom-country").value.trim();const code=document.getElementById("market-custom-code").value.trim().toUpperCase();
+    if(!name||code.length!==2){showToast("Enter a country and its two-letter code");return;}
+    readControlCentre();const market=activeMarket();if(!market.countries.includes(name)){market.countries.push(name);market.countryCodes.push(code);}saveState();renderAll();showToast(`${name} added to the research region`);return;
+  }
+  if(event.target.id==="add-market-language"){
+    const language=document.getElementById("market-custom-language").value.trim();if(!language){showToast("Enter a language");return;}
+    readControlCentre();const market=activeMarket();if(!market.languages.includes(language))market.languages.push(language);saveState();renderAll();showToast(`${language} added`);return;
+  }
+  if(event.target.id==="save-control"){
+    readControlCentre();
+    if(!activeMarket().countries.length||!activeMarket().languages.length){showToast("Select at least one country and one language");return;}
+    ensureCrmRecords();saveState();renderAll();showToast("Control centre saved");
+  }
   if(event.target.id==="add-market-profile"){
     readControlCentre();const id=makeId("market");state.marketProfiles.push({id,name:"New market",countries:[],countryCodes:[],languages:["English"],decisionTitles:["Sales Director","Commercial Director","Head of Sales","CEO"],sourceFocus:"Approved public business, procurement, recruitment and company sources"});state.activeMarketProfileId=id;state.workspace.market="New market";saveState();renderAll();showToast("New market profile added");
   }
@@ -921,6 +997,7 @@ document.addEventListener("change",async event=>{
     }catch(error){event.target.value="";showToast("This browser could not store the PDF");}
     return;
   }
+  if(event.target.id==="crm-stage-filter"){crmStageFilter=event.target.value;renderCRM();return;}
   const crmStage=event.target.closest("[data-crm-stage]");if(crmStage){
     const record=state.crm.records[crmStage.dataset.crmStage];if(!record)return;
     record.stage=crmStage.value;record.updatedAt=formatNow();saveState();renderCRM();renderOutreach();showToast(`CRM stage changed to ${crmStage.value}`);return;
@@ -956,6 +1033,7 @@ document.addEventListener("toggle",event=>{
 },true);
 
 document.getElementById("company-search").addEventListener("input",event=>renderCompanies(event.target.value));
+document.getElementById("crm-search").addEventListener("input",event=>{crmSearch=event.target.value;renderCRM();});
 document.getElementById("data-import").addEventListener("change",async event=>{
   const [file]=event.target.files;if(!file)return;
   try{applyRuntimePayload(JSON.parse(await file.text()),{mode:"imported"});showToast(`Imported ${opportunities.length} opportunities`);}catch(error){showToast(`Import failed: ${error.message}`);}finally{event.target.value="";}
