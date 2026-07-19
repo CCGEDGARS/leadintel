@@ -1,7 +1,11 @@
 "use strict";
 
 const STORAGE_KEY = "leadintel_v2_state";
-const STATE_SCHEMA_VERSION = 4;
+const STATE_SCHEMA_VERSION = 5;
+const DOCUMENT_DB_NAME = "leadintel_v2_documents";
+const DOCUMENT_STORE_NAME = "files";
+const BUSINESS_PROFILE_PDF_KEY = "business-profile-pdf";
+const MAX_PROFILE_PDF_BYTES = 15 * 1024 * 1024;
 
 const MARKET_PROFILES = [
   {id:"latvia",name:"Latvia",countries:["Latvia"],countryCodes:["LV"],languages:["Latvian","English"],decisionTitles:["Sales Director","Commercial Director","Head of Sales","CEO"],sourceFocus:"Latvian business, procurement, recruitment and company sources"},
@@ -11,7 +15,7 @@ const MARKET_PROFILES = [
   {id:"custom",name:"Custom market",countries:["Finland"],countryCodes:["FI"],languages:["English"],decisionTitles:["Sales Director","Commercial Director","Head of Sales","CEO"],sourceFocus:"Approved public business, procurement, recruitment and company sources"}
 ];
 const CRM_STAGES=["Discovered","Qualified","Contact Found","Ready for Outreach","Contacted","Replied","Meeting","Proposal","Won","Lost"];
-const DEFAULT_BUSINESS_PROFILE={owner:"Edgars Untāls",company:"Coaching & Consulting Group",summary:"B2B sales development, practical sales systems and AI implementation for commercial teams.",website:"",email:""};
+const DEFAULT_BUSINESS_PROFILE={owner:"Edgars Untāls",company:"Coaching & Consulting Group",summary:"B2B sales development, practical sales systems and AI implementation for commercial teams.",website:"",email:"",document:null,documentNotes:""};
 const DEFAULT_OFFERS=[
   {id:"digital-sales-book",name:"Digital Sales Book",description:"Practical sales process, playbook, messaging, objections, scripts, onboarding and execution system.",active:true},
   {id:"ai-sales-integration",name:"AI Sales Systems Integration",description:"AI implementation in CRM, lead management, sales workflows, follow-up, automation and sales intelligence.",active:true},
@@ -193,6 +197,7 @@ function loadState(){
     const integrations=isRecord(saved.integrations)?saved.integrations:{};
     const runtime=isRecord(saved.runtime)?saved.runtime:{};
     const crm=isRecord(saved.crm)?saved.crm:{};
+    const businessProfile=isRecord(saved.businessProfile)?saved.businessProfile:{};
     const mapHistory=Array.isArray(savedMap.history)?savedMap.history.filter(isRecord):defaultState.map.history;
     const emailCount=Number(settings.emailCount);
     const appCount=Number(settings.appCount);
@@ -214,7 +219,12 @@ function loadState(){
       },
       activeMarketProfileId:typeof saved.activeMarketProfileId==="string"?saved.activeMarketProfileId:defaultState.activeMarketProfileId,
       marketProfiles:normalizeArray(saved.marketProfiles,MARKET_PROFILES),
-      businessProfile:{...structuredClone(DEFAULT_BUSINESS_PROFILE),...(isRecord(saved.businessProfile)?saved.businessProfile:{})},
+      businessProfile:{
+        ...structuredClone(DEFAULT_BUSINESS_PROFILE),
+        ...businessProfile,
+        document:isRecord(businessProfile.document)?businessProfile.document:null,
+        documentNotes:typeof businessProfile.documentNotes==="string"?businessProfile.documentNotes:""
+      },
       offers:normalizeArray(saved.offers,DEFAULT_OFFERS),
       signalRules:normalizeArray(saved.signalRules,DEFAULT_SIGNAL_RULES),
       playbooks:normalizeArray(saved.playbooks,DEFAULT_PLAYBOOKS),
@@ -236,6 +246,47 @@ function loadState(){
     };
   }
   catch{return structuredClone(defaultState);}
+}
+
+function openDocumentDb(){
+  return new Promise((resolve,reject)=>{
+    if(!("indexedDB" in window)){reject(new Error("Browser document storage is unavailable"));return;}
+    const request=indexedDB.open(DOCUMENT_DB_NAME,1);
+    request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains(DOCUMENT_STORE_NAME))request.result.createObjectStore(DOCUMENT_STORE_NAME);};
+    request.onsuccess=()=>resolve(request.result);
+    request.onerror=()=>reject(request.error||new Error("Could not open document storage"));
+  });
+}
+async function getProfileDocument(){
+  const db=await openDocumentDb();
+  return new Promise((resolve,reject)=>{
+    const request=db.transaction(DOCUMENT_STORE_NAME,"readonly").objectStore(DOCUMENT_STORE_NAME).get(BUSINESS_PROFILE_PDF_KEY);
+    request.onsuccess=()=>{db.close();resolve(request.result||null);};
+    request.onerror=()=>{db.close();reject(request.error);};
+  });
+}
+async function putProfileDocument(file){
+  const db=await openDocumentDb();
+  return new Promise((resolve,reject)=>{
+    const transaction=db.transaction(DOCUMENT_STORE_NAME,"readwrite");
+    transaction.objectStore(DOCUMENT_STORE_NAME).put(file,BUSINESS_PROFILE_PDF_KEY);
+    transaction.oncomplete=()=>{db.close();resolve();};
+    transaction.onerror=()=>{db.close();reject(transaction.error);};
+  });
+}
+async function deleteProfileDocument(){
+  const db=await openDocumentDb();
+  return new Promise((resolve,reject)=>{
+    const transaction=db.transaction(DOCUMENT_STORE_NAME,"readwrite");
+    transaction.objectStore(DOCUMENT_STORE_NAME).delete(BUSINESS_PROFILE_PDF_KEY);
+    transaction.oncomplete=()=>{db.close();resolve();};
+    transaction.onerror=()=>{db.close();reject(transaction.error);};
+  });
+}
+function formatBytes(bytes){
+  if(!Number.isFinite(bytes)||bytes<=0)return "0 KB";
+  if(bytes<1024*1024)return `${Math.max(1,Math.round(bytes/1024))} KB`;
+  return `${(bytes/(1024*1024)).toFixed(1)} MB`;
 }
 function saveState(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
 function activeMarket(){return state.marketProfiles.find(item=>item.id===state.activeMarketProfileId)||state.marketProfiles[0]||MARKET_PROFILES[0];}
@@ -576,6 +627,8 @@ function renderControlCentre(){
   document.getElementById("profile-summary").value=state.businessProfile.summary||"";
   document.getElementById("profile-website").value=state.businessProfile.website||"";
   document.getElementById("profile-email").value=state.businessProfile.email||"";
+  document.getElementById("profile-document-notes").value=state.businessProfile.documentNotes||"";
+  renderBusinessDocument();
   document.getElementById("offers-editor").innerHTML=state.offers.map(item=>`<article class="editor-card" data-offer-card="${esc(item.id)}"><div class="editor-head"><label class="inline-check"><input type="checkbox" data-offer-active ${item.active?"checked":""}> Active</label><button class="icon-button" data-remove-offer="${esc(item.id)}" aria-label="Delete offer">×</button></div><div class="editor-grid"><label>Offer name<input data-offer-name value="${esc(item.name)}"></label><label class="wide">What it solves<textarea data-offer-description>${esc(item.description)}</textarea></label></div></article>`).join("");
   document.getElementById("signal-rules-editor").innerHTML=state.signalRules.map(item=>`<article class="editor-card" data-signal-card="${esc(item.id)}"><div class="editor-head"><label class="inline-check"><input type="checkbox" data-signal-active ${item.active?"checked":""}> Active</label><button class="icon-button" data-remove-signal="${esc(item.id)}" aria-label="Delete signal">×</button></div><div class="editor-grid"><label>Signal name<input data-signal-name value="${esc(item.name)}"></label><label>Priority weight /10<input data-signal-weight type="number" min="1" max="10" value="${Number(item.weight)||5}"></label><label class="wide">Keywords and phrases<textarea data-signal-keywords>${esc(item.keywords)}</textarea></label></div></article>`).join("");
   const offerOptions=state.offers.map(item=>`<option value="${esc(item.id)}">${esc(item.name)}</option>`).join("");
@@ -584,12 +637,23 @@ function renderControlCentre(){
   state.playbooks.forEach(item=>{const card=document.querySelector(`[data-playbook-card="${CSS.escape(item.id)}"]`);if(card){card.querySelector("[data-playbook-offer]").value=item.offerId;card.querySelector("[data-playbook-signal]").value=item.signalId;}});
 }
 
+function renderBusinessDocument(){
+  const metadata=state.businessProfile.document;
+  const status=document.getElementById("profile-pdf-status");
+  if(!status)return;
+  document.getElementById("profile-pdf-open").disabled=!metadata;
+  document.getElementById("profile-pdf-remove").disabled=!metadata;
+  status.innerHTML=metadata
+    ? `<div class="profile-document-file"><span aria-hidden="true">PDF</span><div><strong>${esc(metadata.name)}</strong><small>${esc(formatBytes(Number(metadata.size)))} · added ${esc(new Date(metadata.uploadedAt).toLocaleDateString())}</small></div></div>`
+    : '<div class="profile-document-empty"><strong>No reference PDF attached</strong><small>Add one document to strengthen the reusable business profile.</small></div>';
+}
+
 function csvValues(value){return String(value||"").split(",").map(item=>item.trim()).filter(Boolean);}
 function readControlCentre(){
   const market=activeMarket();
   Object.assign(market,{name:document.getElementById("market-name").value.trim()||market.name,countries:csvValues(document.getElementById("market-countries").value),countryCodes:csvValues(document.getElementById("market-codes").value).map(item=>item.toUpperCase()),languages:csvValues(document.getElementById("market-languages").value),decisionTitles:csvValues(document.getElementById("market-titles").value),sourceFocus:document.getElementById("market-source-focus").value.trim()});
   state.workspace.market=market.name;
-  state.businessProfile={owner:document.getElementById("profile-owner").value.trim(),company:document.getElementById("profile-company").value.trim(),summary:document.getElementById("profile-summary").value.trim(),website:document.getElementById("profile-website").value.trim(),email:document.getElementById("profile-email").value.trim()};
+  state.businessProfile={...state.businessProfile,owner:document.getElementById("profile-owner").value.trim(),company:document.getElementById("profile-company").value.trim(),summary:document.getElementById("profile-summary").value.trim(),website:document.getElementById("profile-website").value.trim(),email:document.getElementById("profile-email").value.trim(),documentNotes:document.getElementById("profile-document-notes").value.trim()};
   state.offers=[...document.querySelectorAll("[data-offer-card]")].map(card=>({id:card.dataset.offerCard,name:card.querySelector("[data-offer-name]").value.trim(),description:card.querySelector("[data-offer-description]").value.trim(),active:card.querySelector("[data-offer-active]").checked})).filter(item=>item.name);
   state.signalRules=[...document.querySelectorAll("[data-signal-card]")].map(card=>({id:card.dataset.signalCard,name:card.querySelector("[data-signal-name]").value.trim(),keywords:card.querySelector("[data-signal-keywords]").value.trim(),weight:Math.max(1,Math.min(10,Number(card.querySelector("[data-signal-weight]").value)||5)),active:card.querySelector("[data-signal-active]").checked})).filter(item=>item.name);
   state.playbooks=[...document.querySelectorAll("[data-playbook-card]")].map(card=>({id:card.dataset.playbookCard,name:card.querySelector("[data-playbook-name]").value.trim(),offerId:card.querySelector("[data-playbook-offer]").value,signalId:card.querySelector("[data-playbook-signal]").value,role:card.querySelector("[data-playbook-role]").value.trim(),channel:card.querySelector("[data-playbook-channel]").value,language:card.querySelector("[data-playbook-language]").value.trim(),sendMode:card.querySelector("[data-playbook-send-mode]").value,subject:card.querySelector("[data-playbook-subject]").value.trim(),body:card.querySelector("[data-playbook-body]").value,active:card.querySelector("[data-playbook-active]").checked})).filter(item=>item.name);
@@ -720,7 +784,19 @@ function renderAll(){
   document.getElementById("setting-score").value=state.settings.minScore;
 }
 
-document.addEventListener("click",event=>{
+document.addEventListener("click",async event=>{
+  if(event.target.id==="profile-pdf-open"){
+    try{
+      const file=await getProfileDocument();
+      if(!file)throw new Error("The PDF is no longer stored in this browser");
+      const url=URL.createObjectURL(file);window.open(url,"_blank");setTimeout(()=>URL.revokeObjectURL(url),60000);
+    }catch(error){showToast(error.message||"Could not open the PDF");}
+    return;
+  }
+  if(event.target.id==="profile-pdf-remove"){
+    try{await deleteProfileDocument();}catch(error){showToast("Could not remove the stored PDF");return;}
+    state.businessProfile.document=null;document.getElementById("profile-pdf-input").value="";saveState();renderBusinessDocument();showToast("Business reference PDF removed");return;
+  }
   const view=event.target.closest("[data-view]");if(view){
     if(view.dataset.view!=="map"&&document.getElementById("view-map").classList.contains("active")&&document.getElementById("map-node-form")&&!saveMapDraft(false))return;
     switchView(view.dataset.view);return;
@@ -816,7 +892,19 @@ document.addEventListener("click",event=>{
   }
 });
 
-document.addEventListener("change",event=>{
+document.addEventListener("change",async event=>{
+  if(event.target.id==="profile-pdf-input"){
+    const file=event.target.files?.[0];
+    if(!file)return;
+    if(file.type!=="application/pdf"&&!file.name.toLowerCase().endsWith(".pdf")){event.target.value="";showToast("Please choose a PDF file");return;}
+    if(file.size>MAX_PROFILE_PDF_BYTES){event.target.value="";showToast("The PDF must be 15 MB or smaller");return;}
+    try{
+      await putProfileDocument(file);
+      state.businessProfile.document={name:file.name,size:file.size,type:"application/pdf",lastModified:file.lastModified,uploadedAt:new Date().toISOString(),storage:"browser"};
+      saveState();renderBusinessDocument();showToast("Business reference PDF saved in this browser");
+    }catch(error){event.target.value="";showToast("This browser could not store the PDF");}
+    return;
+  }
   const crmStage=event.target.closest("[data-crm-stage]");if(crmStage){
     const record=state.crm.records[crmStage.dataset.crmStage];if(!record)return;
     record.stage=crmStage.value;record.updatedAt=formatNow();saveState();renderCRM();renderOutreach();showToast(`CRM stage changed to ${crmStage.value}`);return;
