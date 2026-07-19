@@ -9,8 +9,8 @@
   --paper-soft: #f7f9fc;
   --ink: #152033;
   --text: #eef3f8;
-  --muted: #8e9aaa;
-  --paper-muted: #687487;
+  --muted: #b4bfce;
+  --paper-muted: #556277;
   --line: rgba(255, 255, 255, 0.1);
   --paper-line: #e2e7ef;
   --blue: #3977f6;
@@ -32,7 +32,7 @@ body {
   background: var(--workspace);
   color: var(--text);
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 14px;
+  font-size: 16px;
   -webkit-font-smoothing: antialiased;
 }
 button, input, select, textarea { font: inherit; }
@@ -555,29 +555,39 @@ table td { font-size: 14px; line-height: 1.5; }
 .script-box { font-size: 14px !important; line-height: 1.55; }
 
 /* Global readability sweep: secondary information must remain readable on desktop. */
-.hero-strip, .notice { font-size: 14px; line-height: 1.6; }
-.legend, .run-panel-head small, .run-stat small, .run-stat span { font-size: 12px; }
-.run-panel-head strong, .map-stage-head strong { font-size: 14px; }
-.metric span { font-size: 13px; }
-.metric small { font-size: 12px; }
-.tag { padding: 4px 9px; font-size: 11px; }
-.signal { font-size: 14px; line-height: 1.55; }
-.opp-meta, .contact-line, .score small, .confidence { font-size: 12px; }
-.filter { min-height: 36px; padding: 8px 12px; font-size: 12px; }
+.hero-strip, .notice { font-size: 15px; line-height: 1.65; }
+.legend, .run-panel-head small, .run-stat small, .run-stat span { font-size: 14px; }
+.run-panel-head strong, .map-stage-head strong { font-size: 16px; }
+.metric span { font-size: 15px; }
+.metric small { font-size: 14px; }
+.tag { padding: 6px 11px; font-size: 13px; }
+.signal { font-size: 16px; line-height: 1.65; }
+.opp-meta, .contact-line, .score small, .confidence { font-size: 14px; }
+.filter { min-height: 42px; padding: 10px 14px; font-size: 14px; }
 .company-card p, .source-card p, .outreach-card p {
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 15px;
+  line-height: 1.65;
 }
-.panel-copy, .panel label, .outreach-meta { font-size: 13px; line-height: 1.55; }
-.empty-state p { font-size: 14px; }
-.crm-card p { font-size: 13px; line-height: 1.55; }
-.crm-card label { font-size: 12px; }
-.bar-row, .detail-section h3, .evidence { font-size: 12px; }
-.email-lead p, .toast { font-size: 13px; }
+.panel-copy, .panel label, .outreach-meta { font-size: 15px; line-height: 1.6; }
+.empty-state p { font-size: 16px; }
+.crm-card p { font-size: 15px; line-height: 1.65; }
+.crm-card label { font-size: 14px; }
+.bar-row, .detail-section h3, .evidence { font-size: 14px; }
+.email-lead p, .toast { font-size: 15px; }
 .profile-document h4 { font-size: 16px; }
-.profile-document-head p, .profile-document-privacy { font-size: 13px; }
+.profile-document-head p, .profile-document-privacy { font-size: 15px; }
 .profile-document-file strong, .profile-document-empty strong { font-size: 14px; }
-.profile-document-file small, .profile-document-empty small { font-size: 12px; }
+.profile-document-file small, .profile-document-empty small { font-size: 14px; }
+
+/* Accessibility floor: never use miniature UI text in the working application. */
+.nav-item, .btn { font-size: 14px; }
+.nav-label, .breadcrumb, .demo-pill, .brand small, .pilot-card small { font-size: 12px; }
+.pilot-card strong { font-size: 14px; }
+.section-head p, .run-banner, .run-banner small { font-size: 15px; line-height: 1.6; }
+.company-card, .source-card, .outreach-card, .crm-card { padding: 20px; }
+.company-card h3, .source-card h3, .outreach-card h3, .crm-card h3 { font-size: 18px; }
+.run-stat strong { font-size: 30px; }
+.btn { min-height: 42px; padding: 10px 15px; }
 
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 3px solid rgba(94, 143, 255, 0.48);
