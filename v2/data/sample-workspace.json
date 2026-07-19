@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-17T06:52:00+03:00",
+  "workspace": {
+    "id": "sample-latvia",
+    "name": "Sample Latvia Workspace",
+    "market": "Latvia"
+  },
+  "opportunities": [
+    {
+      "id": "SAMPLE-001",
+      "query_id": "Q-001",
+      "run_id": "SAMPLE-20260717-0600",
+      "company_name": "Example Latvia SIA",
+      "score_100": 82,
+      "score_10": 8.2,
+      "keep": true,
+      "confidence": "High",
+      "signal_type": "Sales hiring",
+      "signal_summary": "The company is recruiting a new commercial leader.",
+      "factual_evidence": "A dated public vacancy names the company and role.",
+      "pain_points": [
+        "Sales onboarding",
+        "Process consistency"
+      ],
+      "recommended_offer": "Digital Sales Book",
+      "commercial_reason": "A new leader creates a timely implementation window.",
+      "decision_maker_role": "Commercial Director",
+      "urgency": "High",
+      "source_title": "Public vacancy",
+      "source_url": "https://example.com/public-vacancy",
+      "status": "New"
+    }
+  ],
+  "signals": [],
+  "sources": [],
+  "runs": []
+}

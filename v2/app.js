@@ -1,9 +1,9 @@
 "use strict";
 
 const STORAGE_KEY = "leadintel_v2_state";
-const STATE_SCHEMA_VERSION = 2;
+const STATE_SCHEMA_VERSION = 3;
 
-const opportunities = [
+const demoOpportunities = [
   {
     id:"OPP-DEMO-001", company:"Nordic Flow Systems SIA", website:"https://example.com", industry:"B2B technology", location:"Riga",
     score:9.2, confidence:"High", emailed:true, status:"New", primaryOffer:"AI Sales Systems Integration",
@@ -61,14 +61,14 @@ const opportunities = [
   }
 ];
 
-const signals = [
-  ...opportunities.map(o=>({company:o.company,text:o.signal,type:o.signalType,date:o.signalDate,confidence:o.confidence,status:o.score>=7?"Qualified":"Monitor"})),
+const demoSignals = [
+  ...demoOpportunities.map(o=>({company:o.company,text:o.signal,type:o.signalType,date:o.signalDate,confidence:o.confidence,status:o.score>=7?"Qualified":"Monitor"})),
   {company:"Demo Retail Latvia SIA",text:"Recruiting a Learning and Development Manager.",type:"Training role",date:"2026-07-14",confidence:"Medium",status:"Triaged"},
   {company:"Demo Finance AS",text:"Announced a customer-service transformation programme.",type:"Transformation",date:"2026-07-13",confidence:"Low",status:"Research"},
   {company:"Demo Export SIA",text:"Received an export development grant.",type:"Funding",date:"2026-07-12",confidence:"High",status:"Triaged"}
 ];
 
-const sources = [
+const demoSources = [
   {name:"CV.lv",group:"Job market",cadence:"Daily",health:"Healthy",findings:18},
   {name:"WorkingDay Latvia",group:"Recruitment",cadence:"Daily",health:"Healthy",findings:7},
   {name:"Grafton Latvia",group:"Recruitment",cadence:"Daily",health:"Healthy",findings:5},
@@ -80,14 +80,19 @@ const sources = [
   {name:"Apollo",group:"Contact enrichment",cadence:"Qualified only",health:"Connected",findings:5}
 ];
 
-const runs = [
+const demoRuns = [
   {id:"LV-20260715-0600",started:"15 Jul · 06:00",findings:142,qualified:9,saved:5,emailed:3,errors:1,status:"Complete"},
   {id:"LV-20260714-0600",started:"14 Jul · 06:00",findings:127,qualified:7,saved:5,emailed:3,errors:0,status:"Complete"},
   {id:"LV-20260713-0600",started:"13 Jul · 06:00",findings:98,qualified:4,saved:4,emailed:3,errors:2,status:"Partial"}
 ];
 
+let opportunities=structuredClone(demoOpportunities);
+let signals=structuredClone(demoSignals);
+let sources=structuredClone(demoSources);
+let runs=structuredClone(demoRuns);
+
 const workflowNodes = [
-  {id:"sources",type:"Input",icon:"⌘",x:8.5,y:30,status:"Healthy",metric:"12 sources",lastRun:"06:00",controlLabel:"Source limit",unit:"monitored sources",config:{title:"Market sources",enabled:true,cadence:"Daily · 06:00",value:12,description:"Latvian business, procurement, recruitment and company sources.",instructions:"Monitor only approved public sources. Preserve the source URL, publication date and exact evidence for every finding."}},
+  {id:"sources",type:"Input",icon:"⌘",x:8.5,y:30,status:"Healthy",metric:"25 sources",lastRun:"06:00",controlLabel:"Source limit",unit:"monitored sources",config:{title:"Market sources",enabled:true,cadence:"Daily · 06:00",value:25,description:"Latvian business, procurement, recruitment and company sources.",instructions:"Monitor only approved public sources. Preserve the source URL, publication date and exact evidence for every finding."}},
   {id:"scan",type:"Collection",icon:"↻",x:25,y:30,status:"Healthy",metric:"142 findings",lastRun:"06:31",controlLabel:"Page limit",unit:"pages per source",config:{title:"Scan & collect",enabled:true,cadence:"Daily · 06:00",value:30,description:"Collect new pages, vacancies, announcements and market activity.",instructions:"Fetch only new or materially changed content. Remove duplicates and tag each finding by source, company and signal date."}},
   {id:"analysis",type:"AI reasoning",icon:"✦",x:41.5,y:30,status:"Healthy",metric:"24 signals",lastRun:"06:39",controlLabel:"Evidence minimum",unit:"independent sources",config:{title:"AI signal analysis",enabled:true,cadence:"After collection",value:1,description:"Turn raw findings into evidence-backed commercial signals.",instructions:"Separate verified facts from inference. Detect hiring, funding, expansion, leadership, CRM, AI, training and sales-process signals."}},
   {id:"score",type:"Decision",icon:"◆",x:58,y:30,status:"Review",metric:"9 qualified",lastRun:"06:44",controlLabel:"Minimum score",unit:"points out of 10",config:{title:"Opportunity scoring",enabled:true,cadence:"After analysis",value:7,description:"Rank each company against Edgars' offers and active buying signals.",instructions:"Score ICP fit, signal strength, urgency, recency, offer relevance, likely budget and decision-maker accessibility. Explain every score."}},
@@ -111,9 +116,13 @@ const defaultWorkflowConfigs = Object.fromEntries(workflowNodes.map(node=>[node.
 
 const defaultState = {
   schemaVersion:STATE_SCHEMA_VERSION,
-  statuses:Object.fromEntries(opportunities.map(o=>[o.id,o.status])),
-  listStates:Object.fromEntries(opportunities.map(o=>[o.id,o.contact.listState])),
+  statuses:Object.fromEntries(demoOpportunities.map(o=>[o.id,o.status])),
+  listStates:Object.fromEntries(demoOpportunities.map(o=>[o.id,o.contact.listState])),
   settings:{emailCount:3,appCount:5,minScore:7},
+  workspace:{id:"edgars-latvia",name:"Edgars · Latvia",market:"Latvia"},
+  integrations:{dataUrl:"",runUrl:""},
+  runtime:{mode:"demo",lastSync:"",lastRunRequest:"",error:""},
+  runtimeData:null,
   map:{publishedConfigs:structuredClone(defaultWorkflowConfigs),draftConfigs:structuredClone(defaultWorkflowConfigs),version:1,lastPublished:"15 Jul 2026 · system baseline",history:[{version:1,date:"15 Jul 2026 · system baseline",changes:0}],tests:{}}
 };
 
@@ -145,6 +154,9 @@ function loadState(){
     const saved=isRecord(parsed)?parsed:{};
     const savedMap=isRecord(saved.map)?saved.map:{};
     const settings=isRecord(saved.settings)?saved.settings:{};
+    const workspace=isRecord(saved.workspace)?saved.workspace:{};
+    const integrations=isRecord(saved.integrations)?saved.integrations:{};
+    const runtime=isRecord(saved.runtime)?saved.runtime:{};
     const mapHistory=Array.isArray(savedMap.history)?savedMap.history.filter(isRecord):defaultState.map.history;
     const emailCount=Number(settings.emailCount);
     const appCount=Number(settings.appCount);
@@ -159,6 +171,17 @@ function loadState(){
         appCount:Number.isInteger(appCount)&&appCount>=3&&appCount<=10?appCount:defaultState.settings.appCount,
         minScore:Number.isFinite(minScore)&&minScore>=1&&minScore<=10?minScore:defaultState.settings.minScore
       },
+      workspace:{
+        id:typeof workspace.id==="string"&&workspace.id.trim()?workspace.id.trim():defaultState.workspace.id,
+        name:typeof workspace.name==="string"&&workspace.name.trim()?workspace.name.trim():defaultState.workspace.name,
+        market:typeof workspace.market==="string"&&workspace.market.trim()?workspace.market.trim():defaultState.workspace.market
+      },
+      integrations:{
+        dataUrl:typeof integrations.dataUrl==="string"?integrations.dataUrl:"",
+        runUrl:typeof integrations.runUrl==="string"?integrations.runUrl:""
+      },
+      runtime:{...structuredClone(defaultState.runtime),...runtime},
+      runtimeData:isRecord(saved.runtimeData)?saved.runtimeData:null,
       map:{...structuredClone(defaultState.map),...savedMap,
         version:Number.isInteger(Number(savedMap.version))&&Number(savedMap.version)>0?Number(savedMap.version):defaultState.map.version,
         lastPublished:typeof savedMap.lastPublished==="string"?savedMap.lastPublished:defaultState.map.lastPublished,
@@ -175,6 +198,83 @@ function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;"
 function initials(name){return name.split(/\s+/).map(p=>p[0]).slice(0,2).join("").toUpperCase();}
 function showToast(message){const el=document.getElementById("toast");el.textContent=message;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),2200);}
 function statusClass(value){return /verified|eligible|healthy|complete|qualified|connected/i.test(value)?"good":/predicted|review|partial|monitor|triaged|planned/i.test(value)?"warn":"bad";}
+function firstValue(row,keys,fallback=""){for(const key of keys){if(row?.[key]!==undefined&&row[key]!==null&&String(row[key]).trim()!=="")return row[key];}return fallback;}
+function numberValue(value,fallback=0){const parsed=Number(value);return Number.isFinite(parsed)?parsed:fallback;}
+function listValue(value){if(Array.isArray(value))return value.filter(Boolean).map(String);if(typeof value!=="string"||!value.trim())return [];try{const parsed=JSON.parse(value);if(Array.isArray(parsed))return parsed.map(String);}catch{}return value.split(/\n|\s*;\s*/).filter(Boolean);}
+function safeUrl(value){try{const url=new URL(String(value));return ["https:","http:"].includes(url.protocol)?url.href:"";}catch{return "";}}
+function isPrivateEndpoint(value){if(!value)return true;try{const url=new URL(value);return url.protocol==="https:"||["localhost","127.0.0.1"].includes(url.hostname);}catch{return false;}}
+function formatNow(){return new Intl.DateTimeFormat("en-GB",{dateStyle:"medium",timeStyle:"short",timeZone:"Europe/Riga"}).format(new Date());}
+
+function normalizeOpportunity(row,index=0){
+  const company=String(firstValue(row,["company","company_name","Company Name","Company"],"Unknown company"));
+  const score10=Math.max(0,Math.min(10,numberValue(firstValue(row,["score","score_10","Score 10","Opportunity Score /10"],numberValue(firstValue(row,["score_100","Score 100","Total Score /100"],0))/10),0)));
+  const sourceUrl=safeUrl(firstValue(row,["source_url","Source URL","Source 1 URL","url"],""));
+  const contactRow=isRecord(row.contact)?row.contact:{};
+  const email=String(firstValue(contactRow,["email"],firstValue(row,["email","business_email","Public Business Email","Business Email"],"")));
+  const emailStatus=String(firstValue(contactRow,["emailStatus","email_status"],firstValue(row,["email_status","Email Status"],email?"Public business":"Not found")));
+  const contactName=String(firstValue(contactRow,["name"],firstValue(row,["decision_maker","Decision Maker","contact_name"],"Decision-maker not yet enriched")));
+  const role=String(firstValue(contactRow,["role"],firstValue(row,["decision_maker_role","Decision Maker Role","Role"],"Commercial decision-maker")));
+  const pains=listValue(firstValue(row,["pains","pain_points","inferred_pain_points","Pain Points"],[]));
+  const evidenceText=String(firstValue(row,["factual_evidence","Factual Evidence","evidence_summary","Evidence Summary"],"Evidence summary pending"));
+  const id=String(firstValue(row,["id","opportunity_id","lead_id","Lead ID","Query ID"],`LIVE-${Date.now()}-${index+1}`));
+  return {
+    id,company,website:safeUrl(firstValue(row,["website","Website"],sourceUrl)),industry:String(firstValue(row,["industry","Industry"],"Business")),location:String(firstValue(row,["location","Location"],state.workspace.market)),
+    score:score10,confidence:String(firstValue(row,["confidence","Confidence"],"Medium")),emailed:Boolean(firstValue(row,["emailed"],false)),status:String(firstValue(row,["status","Status"],score10>=state.settings.minScore?"New":"Monitor")),
+    primaryOffer:String(firstValue(row,["primary_offer","recommended_offer","Recommended Offer","Primary Solution","Lead Solution"],"Digital Sales Book")),
+    signal:String(firstValue(row,["signal","signal_summary","Signal Summary","Evidence Summary"],"Public market signal captured")),
+    signalType:String(firstValue(row,["signal_type","Signal Type","Signal"],"Market signal")),signalDate:String(firstValue(row,["signal_date","Signal Date","captured_at","Captured At","Date Found"],new Date().toISOString().slice(0,10))),
+    whyNow:String(firstValue(row,["why_now","commercial_reason","Commercial Reason","Suggested Commercial Angle"],"The current signal creates a timely reason for a focused commercial conversation.")),
+    facts:listValue(firstValue(row,["facts","factual_evidence","Factual Evidence","evidence_summary"],[evidenceText])).length?listValue(firstValue(row,["facts","factual_evidence","Factual Evidence","evidence_summary"],[evidenceText])):[evidenceText],
+    pains:pains.length?pains:["Validate the likely operational pain directly with the decision-maker."],
+    scores:isRecord(row.scores)?row.scores:{"ICP fit":Math.min(2,score10/5),"Signal strength":Math.min(2,score10/5),"Urgency":Math.min(1.5,score10*.15),"Recency":Math.min(1,score10*.1),"Offer relevance":Math.min(1.5,score10*.15),"Budget":Math.min(1,score10*.1),"Accessibility":Math.min(1,score10*.1)},
+    contact:{name:contactName,role,email,emailStatus,source:String(firstValue(contactRow,["source"],firstValue(row,["verification_provider","Verification Provider"],sourceUrl?"Public source":"Not enriched"))),linkedin:safeUrl(firstValue(contactRow,["linkedin"],firstValue(row,["linkedin_url","LinkedIn URL"],""))),listState:String(firstValue(contactRow,["listState","list_state"],firstValue(row,["list_state","List State"],"Research")))},
+    evidence:[{label:String(firstValue(row,["source_title","Source Title","Page Title"],"Source evidence")),url:sourceUrl||"#"}],
+    queryId:String(firstValue(row,["query_id","Query ID"],"")),runId:String(firstValue(row,["run_id","Run ID"],"")),keep:Boolean(firstValue(row,["keep","Keep"],score10>=state.settings.minScore))
+  };
+}
+
+function applyRuntimePayload(payload,{persist=true,mode="imported"}={}){
+  if(!isRecord(payload))throw new Error("Workspace payload must be a JSON object");
+  const rows=Array.isArray(payload.opportunities)?payload.opportunities:Array.isArray(payload.qualified_leads)?payload.qualified_leads:Array.isArray(payload.findings)?payload.findings:Array.isArray(payload.raw_findings)?payload.raw_findings:[];
+  const normalized=rows.map(normalizeOpportunity).filter(item=>item.company&&item.score>=0).sort((a,b)=>b.score-a.score);
+  if(!normalized.length)throw new Error("No opportunities or findings were found in the payload");
+  opportunities=normalized;
+  signals=Array.isArray(payload.signals)?payload.signals.map((item,index)=>({company:String(firstValue(item,["company","company_name"],normalized[index]?.company||"Unknown")),text:String(firstValue(item,["text","signal","signal_summary"],"Market signal")),type:String(firstValue(item,["type","signal_type"],"Market signal")),date:String(firstValue(item,["date","signal_date"],new Date().toISOString().slice(0,10))),confidence:String(firstValue(item,["confidence"],"Medium")),status:String(firstValue(item,["status"],"Qualified"))})):normalized.map(o=>({company:o.company,text:o.signal,type:o.signalType,date:o.signalDate,confidence:o.confidence,status:o.score>=state.settings.minScore?"Qualified":"Monitor"}));
+  sources=Array.isArray(payload.sources)&&payload.sources.length?payload.sources.map(item=>({name:String(firstValue(item,["name","source"],"Source")),group:String(firstValue(item,["group","type"],"Public web")),cadence:String(firstValue(item,["cadence","frequency"],"Daily")),health:String(firstValue(item,["health","status"],"Healthy")),findings:numberValue(firstValue(item,["findings","count"],0))})):structuredClone(demoSources);
+  runs=Array.isArray(payload.runs)&&payload.runs.length?payload.runs.map((item,index)=>({id:String(firstValue(item,["id","run_id"],`RUN-${index+1}`)),started:String(firstValue(item,["started","start_time"],"—")),findings:numberValue(firstValue(item,["findings","pages_found"],0)),qualified:numberValue(firstValue(item,["qualified","qualified_leads"],0)),saved:numberValue(firstValue(item,["saved"],normalized.length)),emailed:numberValue(firstValue(item,["emailed"],0)),errors:numberValue(firstValue(item,["errors"],0)),status:String(firstValue(item,["status"],"Complete"))})):structuredClone(demoRuns);
+  state.statuses={...Object.fromEntries(normalized.map(o=>[o.id,o.status])),...state.statuses};
+  state.listStates={...Object.fromEntries(normalized.map(o=>[o.id,o.contact.listState])),...state.listStates};
+  if(isRecord(payload.workspace))state.workspace={...state.workspace,...payload.workspace};
+  state.runtime={...state.runtime,mode,lastSync:formatNow(),error:""};
+  state.runtimeData={workspace:state.workspace,opportunities:normalized,signals,sources,runs,generated_at:new Date().toISOString()};
+  if(persist)saveState();
+  renderAll();
+}
+
+function restoreRuntimeData(){if(isRecord(state.runtimeData)){try{applyRuntimePayload(state.runtimeData,{persist:false,mode:state.runtime.mode||"imported"});}catch{state.runtimeData=null;state.runtime.mode="demo";}}}
+function exportJson(filename,value){const blob=new Blob([JSON.stringify(value,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=filename;link.click();setTimeout(()=>URL.revokeObjectURL(url),500);}
+function setBusy(id,busy,label){const button=document.getElementById(id);if(!button)return;if(busy){button.dataset.label=button.textContent;button.disabled=true;button.textContent=label;}else{button.disabled=false;button.textContent=button.dataset.label||button.textContent;}}
+
+async function syncData({silent=false}={}){
+  const url=state.integrations.dataUrl.trim();
+  if(!url){if(!silent)showToast("Add a private snapshot endpoint in Settings");return false;}
+  if(!isPrivateEndpoint(url)){showToast("Use an HTTPS endpoint");return false;}
+  setBusy("sync-btn",true,"Syncing…");
+  try{const response=await fetch(url,{headers:{Accept:"application/json"}});if(!response.ok)throw new Error(`Endpoint returned ${response.status}`);applyRuntimePayload(await response.json(),{mode:"live"});showToast(`Synced ${opportunities.length} opportunities`);return true;}
+  catch(error){state.runtime.error=error.message;saveState();renderRuntimeStatus();showToast(`Sync failed: ${error.message}`);return false;}
+  finally{setBusy("sync-btn",false,"Sync data");}
+}
+
+async function triggerResearch({test=false}={}){
+  const url=state.integrations.runUrl.trim();
+  if(!url){showToast("Add the private Make run webhook in Settings");switchView("settings");return false;}
+  if(!isPrivateEndpoint(url)){showToast("Use an HTTPS webhook");return false;}
+  if(!test)setBusy("run-btn",true,"Starting…");
+  const body={workspace_id:state.workspace.id,market:state.workspace.market,test,requested_at:new Date().toISOString(),settings:{email_count:state.settings.emailCount,app_count:state.settings.appCount,min_score:state.settings.minScore},workflow:state.map.publishedConfigs};
+  try{const response=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify(body)});if(!response.ok)throw new Error(`Webhook returned ${response.status}`);state.runtime.lastRunRequest=formatNow();state.runtime.error="";saveState();renderRuntimeStatus();showToast(test?"Make webhook test passed":"Research run accepted by Make");return true;}
+  catch(error){state.runtime.error=error.message;saveState();renderRuntimeStatus();showToast(`Run failed: ${error.message}`);return false;}
+  finally{if(!test)setBusy("run-btn",false,"Run research");}
+}
 
 function mapConfig(id,published=false){return (published?state.map.publishedConfigs:state.map.draftConfigs)[id];}
 function dirtyMapNodes(){return workflowNodes.filter(node=>JSON.stringify(mapConfig(node.id))!==JSON.stringify(mapConfig(node.id,true)));}
@@ -320,9 +420,10 @@ function testMapStep(id){
 function renderMetrics(){
   const verified=opportunities.filter(o=>o.contact.emailStatus==="Verified").length;
   const eligible=opportunities.filter(o=>state.listStates[o.id]==="Eligible").length;
+  const qualified=opportunities.filter(o=>o.score>=state.settings.minScore).length;
   const data=[
-    ["Findings scanned","142","+15 vs yesterday"],["Qualified signals","9","6.3% pass rate"],
-    ["Saved in V2",state.settings.appCount,"Daily maximum"],["Emailed",state.settings.emailCount,"One contact each"],
+    ["Opportunities loaded",opportunities.length,state.runtime.mode==="demo"?"Demo workspace":"Current workspace"],["Qualified signals",qualified,`Score ≥ ${state.settings.minScore}`],
+    ["Saved in V2",Math.min(state.settings.appCount,opportunities.length),"Daily maximum"],["Email shortlist",Math.min(state.settings.emailCount,qualified),"One contact each"],
     ["Verified / eligible",`${verified} / ${eligible}`,"Business contacts"]
   ];
   document.getElementById("metrics").innerHTML=data.map(([label,value,note])=>`<div class="metric"><span>${label}</span><strong>${value}</strong><small>${note}</small></div>`).join("");
@@ -382,6 +483,47 @@ function renderRuns(){
   document.getElementById("runs-body").innerHTML=runs.map(r=>`<tr><td><strong>${esc(r.id)}</strong></td><td>${esc(r.started)}</td><td>${r.findings}</td><td>${r.qualified}</td><td>${r.saved}</td><td>${r.emailed}</td><td>${r.errors}</td><td><span class="status ${statusClass(r.status)}">${esc(r.status)}</span></td></tr>`).join("");
 }
 
+function renderOutreach(){
+  const list=opportunities.filter(o=>["Draft ready","Approved"].includes(state.statuses[o.id])||state.listStates[o.id]==="Eligible");
+  document.getElementById("outreach-count").textContent=list.length;
+  document.getElementById("outreach-grid").innerHTML=list.length?list.map(o=>{
+    const eligible=state.listStates[o.id]==="Eligible"&&o.contact.emailStatus==="Verified";
+    return `<article class="outreach-card"><div><p class="kicker">${esc(state.statuses[o.id]||"Research")}</p><h3>${esc(o.company)}</h3><p>${esc(o.signal)}</p></div><div class="outreach-meta"><span>${esc(o.contact.name)}</span><span>${esc(o.contact.role)}</span><span class="status ${eligible?"good":"warn"}">${eligible?"Eligible contact":"Review required"}</span></div><div class="card-actions"><button class="btn secondary" data-message="${o.id}">Edit draft</button><button class="btn primary" data-status-action="Approved" data-id="${o.id}" ${eligible?"":"disabled"}>Approve</button></div></article>`;
+  }).join(""):'<div class="empty-state"><h3>No outreach drafts yet</h3><p>Open a qualified company and generate a message. The draft appears here only after you mark it ready or the verified contact becomes campaign eligible.</p></div>';
+}
+
+function renderRuntimeStatus(){
+  const pill=document.getElementById("runtime-pill");
+  const modes={demo:"Demo data",imported:"Imported data",live:"Live endpoint"};
+  pill.lastChild.textContent=` ${modes[state.runtime.mode]||"Local data"}`;
+  pill.classList.toggle("live",state.runtime.mode==="live");
+  document.getElementById("status-make").textContent=state.integrations.runUrl?"Configured":"Endpoint needed";
+  document.getElementById("status-make").classList.toggle("pending",!state.integrations.runUrl);
+  document.getElementById("status-sheets").textContent="Workbook ready";
+  document.getElementById("setting-workspace-id").value=state.workspace.id;
+  document.getElementById("setting-workspace-name").value=state.workspace.name;
+  document.getElementById("setting-market").value=state.workspace.market;
+  document.getElementById("setting-data-url").value=state.integrations.dataUrl;
+  document.getElementById("setting-run-url").value=state.integrations.runUrl;
+  const last=runs[0]||{};
+  const qualified=opportunities.filter(o=>o.score>=state.settings.minScore&&o.keep!==false).length;
+  const saved=Math.min(state.settings.appCount,qualified);
+  const emailed=Math.min(state.settings.emailCount,saved);
+  const findings=numberValue(last.findings,opportunities.length);
+  const signalCount=signals.length;
+  const runLabel=state.runtime.lastSync?`Last synced ${state.runtime.lastSync}`:state.runtime.mode==="demo"?"Demo snapshot · no live endpoint connected":`${modes[state.runtime.mode]||"Local data"} loaded`;
+  document.getElementById("latest-run-label").textContent=runLabel;
+  document.getElementById("latest-run-status").textContent=state.runtime.mode==="demo"?"Demo":state.runtime.error?"Review":"Ready";
+  document.getElementById("funnel-findings").textContent=findings;
+  document.getElementById("funnel-signals").textContent=signalCount;
+  document.getElementById("funnel-qualified").textContent=qualified;
+  document.getElementById("funnel-saved").textContent=saved;
+  document.getElementById("funnel-emailed").textContent=emailed;
+  document.getElementById("funnel-threshold").textContent=`Score ≥ ${state.settings.minScore.toFixed(1)}`;
+  document.getElementById("hero-run-label").textContent=runLabel;
+  document.getElementById("hero-funnel-label").innerHTML=`${findings} findings → ${signalCount} signals → ${qualified} qualified → <strong>${saved} saved</strong> · Top <strong>${emailed} emailed</strong>`;
+}
+
 function openDrawer(id){
   const o=opportunities.find(item=>item.id===id);if(!o)return;
   const scoreMax={"ICP fit":2,"Signal strength":2,"Urgency":1.5,"Recency":1,"Offer relevance":1.5,"Budget":1,"Accessibility":1};
@@ -403,7 +545,7 @@ function openDrawer(id){
 function closeDrawer(){document.getElementById("lead-drawer").classList.remove("open");document.getElementById("drawer-backdrop").classList.remove("open");document.getElementById("lead-drawer").setAttribute("aria-hidden","true");}
 
 function openEmailPreview(){
-  const top=opportunities.slice(0,state.settings.emailCount);
+  const top=opportunities.filter(o=>o.score>=state.settings.minScore&&o.keep!==false).slice(0,state.settings.emailCount);
   document.getElementById("modal-content").innerHTML=`<p class="kicker">Morning brief preview</p><h2>Latvia Opportunity Radar · ${top.length} leads</h2><p class="drawer-sub">Only leads meeting the score and evidence threshold appear.</p><div class="email-preview"><h4>Good morning, Edgars</h4><p>Today’s strongest evidence-backed business opportunities:</p>${top.map((o,i)=>`<div class="email-lead"><strong>${i+1}. ${esc(o.company)} — ${o.score.toFixed(1)}/10</strong><p>${esc(o.signal)}</p><p><b>Likely need:</b> ${esc(o.primaryOffer)}</p><p><b>Contact:</b> ${esc(o.contact.name)}, ${esc(o.contact.role)} · ${o.contact.emailStatus==="Predicted"?"email not verified":esc(o.contact.email)}</p></div>`).join("")}</div><button class="btn primary" id="close-preview-action">Close preview</button>`;
   openModal();
 }
@@ -422,13 +564,14 @@ function closeModal(){document.getElementById("modal-backdrop").classList.remove
 function switchView(name){
   document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id===`view-${name}`));
   document.querySelectorAll(".nav-item[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===name));
-  const labels={map:["Research automation","System Map"],today:["Wednesday · 15 July 2026","Good morning, Edgars"],signals:["Evidence stream","Market signals"],companies:["Opportunity memory","Company dossiers"],contacts:["Verified business data","Contact list"],sources:["Monitoring network","Source health"],runs:["Automation audit","Daily runs"],settings:["Operating rules","Research settings"]};
+  const today=new Intl.DateTimeFormat("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric",timeZone:"Europe/Riga"}).format(new Date());
+  const labels={map:["Research automation","System Map"],today:[today,`Good morning · ${state.workspace.name}`],signals:["Evidence stream","Market signals"],companies:["Opportunity memory","Company dossiers"],contacts:["Verified business data","Contact list"],outreach:["Human approval required","Outreach queue"],sources:["Monitoring network","Source health"],runs:["Automation audit","Daily runs"],settings:["Operating rules","Research settings"]};
   const [kicker,title]=labels[name]||labels.map;document.getElementById("view-kicker").textContent=kicker;document.getElementById("view-title").textContent=title;
   document.getElementById("sidebar").classList.remove("open");window.scrollTo(0,0);
 }
 
 function renderAll(){
-  renderSystemMap();renderMetrics();renderOpportunities();renderSignals();renderCompanies();renderContacts();renderSources();renderRuns();
+  renderSystemMap();renderMetrics();renderOpportunities();renderSignals();renderCompanies();renderContacts();renderOutreach();renderSources();renderRuns();renderRuntimeStatus();
   document.getElementById("setting-email").value=state.settings.emailCount;
   document.getElementById("setting-app").value=state.settings.appCount;
   document.getElementById("setting-score").value=state.settings.minScore;
@@ -466,16 +609,30 @@ document.addEventListener("click",event=>{
   if(event.target.id==="modal-close"||event.target.id==="modal-backdrop"||event.target.id==="close-preview-action")closeModal();
   if(event.target.id==="email-preview-btn")openEmailPreview();
   if(event.target.id==="menu-btn")document.getElementById("sidebar").classList.toggle("open");
-  if(event.target.id==="run-btn")showToast("Manual run will connect to Make in the automation phase");
+  if(event.target.id==="sync-btn")syncData();
+  if(event.target.id==="run-btn")triggerResearch();
+  if(event.target.id==="test-data-btn")syncData();
+  if(event.target.id==="test-run-btn")triggerResearch({test:true});
+  if(event.target.id==="import-data-btn")document.getElementById("data-import").click();
+  if(event.target.id==="export-data-btn")exportJson(`leadintel-${state.workspace.id}-${new Date().toISOString().slice(0,10)}.json`,state.runtimeData||{workspace:state.workspace,opportunities,signals,sources,runs});
+  if(event.target.id==="export-outreach-btn")exportJson(`leadintel-outreach-${new Date().toISOString().slice(0,10)}.json`,opportunities.filter(o=>state.statuses[o.id]==="Approved").map(o=>({opportunity_id:o.id,company:o.company,contact:o.contact,status:state.statuses[o.id],offer:o.primaryOffer,signal:o.signal})));
+  if(event.target.id==="reset-demo-btn"){opportunities=structuredClone(demoOpportunities);signals=structuredClone(demoSignals);sources=structuredClone(demoSources);runs=structuredClone(demoRuns);state.runtimeData=null;state.runtime={...structuredClone(defaultState.runtime)};state.statuses=Object.fromEntries(opportunities.map(o=>[o.id,o.status]));state.listStates=Object.fromEntries(opportunities.map(o=>[o.id,o.contact.listState]));saveState();renderAll();showToast("Demo data restored");}
   if(event.target.id==="save-map-draft")saveMapDraft();
   if(event.target.id==="publish-map")publishWorkflow();
   if(event.target.id==="discard-map-drafts"){state.map.draftConfigs=structuredClone(state.map.publishedConfigs);saveState();renderAll();showToast("All workflow drafts discarded");}
   if(event.target.id==="copy-message")navigator.clipboard.writeText(document.querySelector(".message-box").value).then(()=>showToast("Draft copied"));
   if(event.target.id==="save-settings"){
+    const workspaceId=document.getElementById("setting-workspace-id").value.trim().toLowerCase().replace(/[^a-z0-9-]+/g,"-").replace(/^-|-$/g,"");
+    const dataUrl=document.getElementById("setting-data-url").value.trim();
+    const runUrl=document.getElementById("setting-run-url").value.trim();
+    if(!workspaceId){showToast("Workspace ID is required");return;}
+    if(!isPrivateEndpoint(dataUrl)||!isPrivateEndpoint(runUrl)){showToast("Runtime endpoints must use HTTPS");return;}
+    state.workspace={id:workspaceId,name:document.getElementById("setting-workspace-name").value.trim()||workspaceId,market:document.getElementById("setting-market").value.trim()||"Latvia"};
+    state.integrations={dataUrl,runUrl};
     state.map.draftConfigs.email.value=Math.max(1,Math.min(5,Number(document.getElementById("setting-email").value)||3));
     state.map.draftConfigs.shortlist.value=Math.max(3,Math.min(10,Number(document.getElementById("setting-app").value)||5));
     state.map.draftConfigs.score.value=Math.max(1,Math.min(10,Number(document.getElementById("setting-score").value)||7));
-    saveState();renderSystemMap();showToast("Settings saved as a workflow draft");
+    saveState();renderAll();showToast("Workspace and workflow draft saved");
   }
 });
 
@@ -496,6 +653,11 @@ document.addEventListener("change",event=>{
 });
 
 document.getElementById("company-search").addEventListener("input",event=>renderCompanies(event.target.value));
+document.getElementById("data-import").addEventListener("change",async event=>{
+  const [file]=event.target.files;if(!file)return;
+  try{applyRuntimePayload(JSON.parse(await file.text()),{mode:"imported"});showToast(`Imported ${opportunities.length} opportunities`);}catch(error){showToast(`Import failed: ${error.message}`);}finally{event.target.value="";}
+});
 document.addEventListener("keydown",event=>{if(event.key==="Escape"){closeDrawer();closeModal();}});
 
+restoreRuntimeData();
 renderAll();
