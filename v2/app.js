@@ -1,7 +1,33 @@
 "use strict";
 
 const STORAGE_KEY = "leadintel_v2_state";
-const STATE_SCHEMA_VERSION = 3;
+const STATE_SCHEMA_VERSION = 4;
+
+const MARKET_PROFILES = [
+  {id:"latvia",name:"Latvia",countries:["Latvia"],countryCodes:["LV"],languages:["Latvian","English"],decisionTitles:["Sales Director","Commercial Director","Head of Sales","CEO"],sourceFocus:"Latvian business, procurement, recruitment and company sources"},
+  {id:"estonia",name:"Estonia",countries:["Estonia"],countryCodes:["EE"],languages:["Estonian","English"],decisionTitles:["Sales Director","Commercial Director","Head of Sales","CEO"],sourceFocus:"Estonian business, procurement, recruitment and company sources"},
+  {id:"lithuania",name:"Lithuania",countries:["Lithuania"],countryCodes:["LT"],languages:["Lithuanian","English"],decisionTitles:["Sales Director","Commercial Director","Head of Sales","CEO"],sourceFocus:"Lithuanian business, procurement, recruitment and company sources"},
+  {id:"baltics",name:"Baltics",countries:["Latvia","Estonia","Lithuania"],countryCodes:["LV","EE","LT"],languages:["Latvian","Estonian","Lithuanian","English"],decisionTitles:["Sales Director","Commercial Director","Head of Sales","CEO"],sourceFocus:"Baltic business, procurement, recruitment and company sources"},
+  {id:"custom",name:"Custom market",countries:["Finland"],countryCodes:["FI"],languages:["English"],decisionTitles:["Sales Director","Commercial Director","Head of Sales","CEO"],sourceFocus:"Approved public business, procurement, recruitment and company sources"}
+];
+const CRM_STAGES=["Discovered","Qualified","Contact Found","Ready for Outreach","Contacted","Replied","Meeting","Proposal","Won","Lost"];
+const DEFAULT_BUSINESS_PROFILE={owner:"Edgars Untāls",company:"Coaching & Consulting Group",summary:"B2B sales development, practical sales systems and AI implementation for commercial teams.",website:"",email:""};
+const DEFAULT_OFFERS=[
+  {id:"digital-sales-book",name:"Digital Sales Book",description:"Practical sales process, playbook, messaging, objections, scripts, onboarding and execution system.",active:true},
+  {id:"ai-sales-integration",name:"AI Sales Systems Integration",description:"AI implementation in CRM, lead management, sales workflows, follow-up, automation and sales intelligence.",active:true},
+  {id:"sales-team-development",name:"Sales Team Development",description:"Sales training, coaching, onboarding and sales leadership support.",active:true}
+];
+const DEFAULT_SIGNAL_RULES=[
+  {id:"sales-hiring",name:"Sales hiring",keywords:"sales manager, head of sales, account manager, business development",weight:9,active:true},
+  {id:"crm-ai",name:"CRM or AI implementation",keywords:"CRM, automation, AI, digital transformation, sales intelligence",weight:10,active:true},
+  {id:"growth",name:"Expansion, funding or major project",keywords:"expansion, export, investment, funding, tender, contract, new market",weight:8,active:true},
+  {id:"leadership",name:"Commercial leadership change",keywords:"appointed, promoted, new director, new manager, restructuring",weight:8,active:true},
+  {id:"training",name:"Training and capability request",keywords:"sales training, coaching, onboarding, learning and development",weight:8,active:true}
+];
+const DEFAULT_PLAYBOOKS=[
+  {id:"sales-hiring-book",name:"New sales leader · Digital Sales Book",offerId:"digital-sales-book",signalId:"sales-hiring",role:"Sales leader",channel:"Email",language:"English",sendMode:"Approval required",subject:"A practical sales system for {{company}}",body:"Hi {{first_name}},\n\nI noticed the recent {{signal_type}} at {{company}}. This kind of change often creates an immediate need for consistent messaging, onboarding and execution standards.\n\nI help commercial teams build a practical Digital Sales Book that managers and sellers can use every day. Would a short outline tailored to {{company}} be useful?\n\nBest,\nEdgars",active:true},
+  {id:"crm-ai-integration",name:"CRM/AI signal · Integration",offerId:"ai-sales-integration",signalId:"crm-ai",role:"Commercial or digital leader",channel:"Email",language:"English",sendMode:"Approval required",subject:"Turning {{company}}'s AI/CRM initiative into a working sales process",body:"Hi {{first_name}},\n\nI saw the recent {{signal_type}} at {{company}}. AI and CRM projects usually create value only when the sales process, data and follow-up routines are designed together.\n\nI help teams translate that goal into a practical implementation plan. Would a one-page diagnostic for {{company}} be useful?\n\nBest,\nEdgars",active:true}
+];
 
 const demoOpportunities = [
   {
@@ -120,6 +146,14 @@ const defaultState = {
   listStates:Object.fromEntries(demoOpportunities.map(o=>[o.id,o.contact.listState])),
   settings:{emailCount:3,appCount:5,minScore:7},
   workspace:{id:"edgars-latvia",name:"Edgars · Latvia",market:"Latvia"},
+  activeMarketProfileId:"latvia",
+  marketProfiles:structuredClone(MARKET_PROFILES),
+  businessProfile:structuredClone(DEFAULT_BUSINESS_PROFILE),
+  offers:structuredClone(DEFAULT_OFFERS),
+  signalRules:structuredClone(DEFAULT_SIGNAL_RULES),
+  playbooks:structuredClone(DEFAULT_PLAYBOOKS),
+  crm:{stageOrder:structuredClone(CRM_STAGES),records:{}},
+  outreachDrafts:{},
   integrations:{dataUrl:"",runUrl:""},
   runtime:{mode:"demo",lastSync:"",lastRunRequest:"",error:""},
   runtimeData:null,
@@ -148,6 +182,7 @@ function normalizeWorkflowCollection(saved){
   const source=isRecord(saved)?saved:{};
   return Object.fromEntries(workflowNodes.map(node=>[node.id,normalizeWorkflowConfig(node.config,source[node.id])]));
 }
+function normalizeArray(value,fallback){return Array.isArray(value)&&value.length?value.filter(isRecord):structuredClone(fallback);}
 function loadState(){
   try{
     const parsed=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");
@@ -157,6 +192,7 @@ function loadState(){
     const workspace=isRecord(saved.workspace)?saved.workspace:{};
     const integrations=isRecord(saved.integrations)?saved.integrations:{};
     const runtime=isRecord(saved.runtime)?saved.runtime:{};
+    const crm=isRecord(saved.crm)?saved.crm:{};
     const mapHistory=Array.isArray(savedMap.history)?savedMap.history.filter(isRecord):defaultState.map.history;
     const emailCount=Number(settings.emailCount);
     const appCount=Number(settings.appCount);
@@ -176,6 +212,14 @@ function loadState(){
         name:typeof workspace.name==="string"&&workspace.name.trim()?workspace.name.trim():defaultState.workspace.name,
         market:typeof workspace.market==="string"&&workspace.market.trim()?workspace.market.trim():defaultState.workspace.market
       },
+      activeMarketProfileId:typeof saved.activeMarketProfileId==="string"?saved.activeMarketProfileId:defaultState.activeMarketProfileId,
+      marketProfiles:normalizeArray(saved.marketProfiles,MARKET_PROFILES),
+      businessProfile:{...structuredClone(DEFAULT_BUSINESS_PROFILE),...(isRecord(saved.businessProfile)?saved.businessProfile:{})},
+      offers:normalizeArray(saved.offers,DEFAULT_OFFERS),
+      signalRules:normalizeArray(saved.signalRules,DEFAULT_SIGNAL_RULES),
+      playbooks:normalizeArray(saved.playbooks,DEFAULT_PLAYBOOKS),
+      crm:{stageOrder:Array.isArray(crm.stageOrder)?crm.stageOrder:structuredClone(CRM_STAGES),records:isRecord(crm.records)?crm.records:{}},
+      outreachDrafts:isRecord(saved.outreachDrafts)?saved.outreachDrafts:{},
       integrations:{
         dataUrl:typeof integrations.dataUrl==="string"?integrations.dataUrl:"",
         runUrl:typeof integrations.runUrl==="string"?integrations.runUrl:""
@@ -194,6 +238,8 @@ function loadState(){
   catch{return structuredClone(defaultState);}
 }
 function saveState(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
+function activeMarket(){return state.marketProfiles.find(item=>item.id===state.activeMarketProfileId)||state.marketProfiles[0]||MARKET_PROFILES[0];}
+function makeId(prefix,name=""){return `${prefix}-${String(name||Date.now()).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")}-${Date.now().toString(36).slice(-4)}`;}
 function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
 function initials(name){return name.split(/\s+/).map(p=>p[0]).slice(0,2).join("").toUpperCase();}
 function showToast(message){const el=document.getElementById("toast");el.textContent=message;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),2200);}
@@ -270,7 +316,20 @@ async function triggerResearch({test=false}={}){
   if(!url){showToast("Add the private Make run webhook in Settings");switchView("settings");return false;}
   if(!isPrivateEndpoint(url)){showToast("Use an HTTPS webhook");return false;}
   if(!test)setBusy("run-btn",true,"Starting…");
-  const body={workspace_id:state.workspace.id,market:state.workspace.market,test,requested_at:new Date().toISOString(),settings:{email_count:state.settings.emailCount,app_count:state.settings.appCount,min_score:state.settings.minScore},workflow:state.map.publishedConfigs};
+  const market=activeMarket();
+  const body={
+    workspace_id:state.workspace.id,
+    market:market.name,
+    test,
+    requested_at:new Date().toISOString(),
+    market_profile:{id:market.id,name:market.name,countries:market.countries,country_codes:market.countryCodes,languages:market.languages,decision_maker_titles:market.decisionTitles,source_focus:market.sourceFocus},
+    business_profile:state.businessProfile,
+    offers:state.offers.filter(item=>item.active),
+    signal_rules:state.signalRules.filter(item=>item.active),
+    playbooks:state.playbooks.filter(item=>item.active),
+    settings:{email_count:state.settings.emailCount,app_count:state.settings.appCount,min_score:state.settings.minScore},
+    workflow:state.map.publishedConfigs
+  };
   try{const response=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify(body)});if(!response.ok)throw new Error(`Webhook returned ${response.status}`);state.runtime.lastRunRequest=formatNow();state.runtime.error="";saveState();renderRuntimeStatus();showToast(test?"Make webhook test passed":"Research run accepted by Make");return true;}
   catch(error){state.runtime.error=error.message;saveState();renderRuntimeStatus();showToast(`Run failed: ${error.message}`);return false;}
   finally{if(!test)setBusy("run-btn",false,"Run research");}
@@ -483,12 +542,85 @@ function renderRuns(){
   document.getElementById("runs-body").innerHTML=runs.map(r=>`<tr><td><strong>${esc(r.id)}</strong></td><td>${esc(r.started)}</td><td>${r.findings}</td><td>${r.qualified}</td><td>${r.saved}</td><td>${r.emailed}</td><td>${r.errors}</td><td><span class="status ${statusClass(r.status)}">${esc(r.status)}</span></td></tr>`).join("");
 }
 
+function ensureCrmRecords(){
+  let changed=false;
+  opportunities.forEach(o=>{
+    if(state.crm.records[o.id])return;
+    let stage="Discovered";
+    if(o.score>=state.settings.minScore)stage="Qualified";
+    if(o.contact.emailStatus==="Verified")stage="Contact Found";
+    if(state.statuses[o.id]==="Approved")stage="Ready for Outreach";
+    state.crm.records[o.id]={opportunityId:o.id,company:o.company,stage,owner:state.businessProfile.owner||"Unassigned",nextAction:"Review evidence and decide the next step",notes:"",updatedAt:formatNow()};
+    changed=true;
+  });
+  if(changed)saveState();
+}
+
+function renderControlCentre(){
+  const market=activeMarket();
+  document.getElementById("market-profile-grid").innerHTML=state.marketProfiles.map(item=>`<button class="market-profile-card ${item.id===market.id?"selected":""}" data-market-profile="${esc(item.id)}"><strong>${esc(item.name)}</strong><span>${esc((item.countries||[]).join(", "))}</span><small>${esc((item.languages||[]).join(" · "))}</small></button>`).join("");
+  document.getElementById("market-profile-editor").innerHTML=`
+    <div class="editor-card market-editor-card" data-market-editor="${esc(market.id)}">
+      <div class="editor-head"><div><p class="kicker">Active research region</p><h3>${esc(market.name)}</h3></div>${market.id==="custom"?'<button class="btn small secondary" data-remove-market="custom">Reset custom</button>':""}</div>
+      <div class="editor-grid">
+        <label>Profile name<input id="market-name" value="${esc(market.name)}"></label>
+        <label>Countries <small>comma separated</small><input id="market-countries" value="${esc((market.countries||[]).join(", "))}"></label>
+        <label>Country codes <small>comma separated</small><input id="market-codes" value="${esc((market.countryCodes||[]).join(", "))}"></label>
+        <label>Languages <small>comma separated</small><input id="market-languages" value="${esc((market.languages||[]).join(", "))}"></label>
+        <label class="wide">Decision-maker titles <small>comma separated</small><input id="market-titles" value="${esc((market.decisionTitles||[]).join(", "))}"></label>
+        <label class="wide">Source focus<textarea id="market-source-focus">${esc(market.sourceFocus||"")}</textarea></label>
+      </div>
+    </div>`;
+  document.getElementById("profile-owner").value=state.businessProfile.owner||"";
+  document.getElementById("profile-company").value=state.businessProfile.company||"";
+  document.getElementById("profile-summary").value=state.businessProfile.summary||"";
+  document.getElementById("profile-website").value=state.businessProfile.website||"";
+  document.getElementById("profile-email").value=state.businessProfile.email||"";
+  document.getElementById("offers-editor").innerHTML=state.offers.map(item=>`<article class="editor-card" data-offer-card="${esc(item.id)}"><div class="editor-head"><label class="inline-check"><input type="checkbox" data-offer-active ${item.active?"checked":""}> Active</label><button class="icon-button" data-remove-offer="${esc(item.id)}" aria-label="Delete offer">×</button></div><div class="editor-grid"><label>Offer name<input data-offer-name value="${esc(item.name)}"></label><label class="wide">What it solves<textarea data-offer-description>${esc(item.description)}</textarea></label></div></article>`).join("");
+  document.getElementById("signal-rules-editor").innerHTML=state.signalRules.map(item=>`<article class="editor-card" data-signal-card="${esc(item.id)}"><div class="editor-head"><label class="inline-check"><input type="checkbox" data-signal-active ${item.active?"checked":""}> Active</label><button class="icon-button" data-remove-signal="${esc(item.id)}" aria-label="Delete signal">×</button></div><div class="editor-grid"><label>Signal name<input data-signal-name value="${esc(item.name)}"></label><label>Priority weight /10<input data-signal-weight type="number" min="1" max="10" value="${Number(item.weight)||5}"></label><label class="wide">Keywords and phrases<textarea data-signal-keywords>${esc(item.keywords)}</textarea></label></div></article>`).join("");
+  const offerOptions=state.offers.map(item=>`<option value="${esc(item.id)}">${esc(item.name)}</option>`).join("");
+  const signalOptions=state.signalRules.map(item=>`<option value="${esc(item.id)}">${esc(item.name)}</option>`).join("");
+  document.getElementById("playbooks-editor").innerHTML=state.playbooks.map(item=>`<article class="editor-card" data-playbook-card="${esc(item.id)}"><div class="editor-head"><label class="inline-check"><input type="checkbox" data-playbook-active ${item.active?"checked":""}> Active</label><button class="icon-button" data-remove-playbook="${esc(item.id)}" aria-label="Delete playbook">×</button></div><div class="editor-grid"><label>Playbook name<input data-playbook-name value="${esc(item.name)}"></label><label>Offer<select data-playbook-offer>${offerOptions}</select></label><label>Signal<select data-playbook-signal>${signalOptions}</select></label><label>Decision-maker role<input data-playbook-role value="${esc(item.role||"")}"></label><label>Channel<select data-playbook-channel>${["Email","LinkedIn","Phone","WhatsApp"].map(value=>`<option ${value===item.channel?"selected":""}>${value}</option>`).join("")}</select></label><label>Language<input data-playbook-language value="${esc(item.language||"English")}"></label><label>Send mode<select data-playbook-send-mode>${["Approval required","Draft only","Automatic after approval rule"].map(value=>`<option ${value===item.sendMode?"selected":""}>${value}</option>`).join("")}</select></label><label class="wide">Subject<input data-playbook-subject value="${esc(item.subject||"")}"></label><label class="wide">Message template<textarea class="script-box" data-playbook-body>${esc(item.body||"")}</textarea></label></div></article>`).join("");
+  state.playbooks.forEach(item=>{const card=document.querySelector(`[data-playbook-card="${CSS.escape(item.id)}"]`);if(card){card.querySelector("[data-playbook-offer]").value=item.offerId;card.querySelector("[data-playbook-signal]").value=item.signalId;}});
+}
+
+function csvValues(value){return String(value||"").split(",").map(item=>item.trim()).filter(Boolean);}
+function readControlCentre(){
+  const market=activeMarket();
+  Object.assign(market,{name:document.getElementById("market-name").value.trim()||market.name,countries:csvValues(document.getElementById("market-countries").value),countryCodes:csvValues(document.getElementById("market-codes").value).map(item=>item.toUpperCase()),languages:csvValues(document.getElementById("market-languages").value),decisionTitles:csvValues(document.getElementById("market-titles").value),sourceFocus:document.getElementById("market-source-focus").value.trim()});
+  state.workspace.market=market.name;
+  state.businessProfile={owner:document.getElementById("profile-owner").value.trim(),company:document.getElementById("profile-company").value.trim(),summary:document.getElementById("profile-summary").value.trim(),website:document.getElementById("profile-website").value.trim(),email:document.getElementById("profile-email").value.trim()};
+  state.offers=[...document.querySelectorAll("[data-offer-card]")].map(card=>({id:card.dataset.offerCard,name:card.querySelector("[data-offer-name]").value.trim(),description:card.querySelector("[data-offer-description]").value.trim(),active:card.querySelector("[data-offer-active]").checked})).filter(item=>item.name);
+  state.signalRules=[...document.querySelectorAll("[data-signal-card]")].map(card=>({id:card.dataset.signalCard,name:card.querySelector("[data-signal-name]").value.trim(),keywords:card.querySelector("[data-signal-keywords]").value.trim(),weight:Math.max(1,Math.min(10,Number(card.querySelector("[data-signal-weight]").value)||5)),active:card.querySelector("[data-signal-active]").checked})).filter(item=>item.name);
+  state.playbooks=[...document.querySelectorAll("[data-playbook-card]")].map(card=>({id:card.dataset.playbookCard,name:card.querySelector("[data-playbook-name]").value.trim(),offerId:card.querySelector("[data-playbook-offer]").value,signalId:card.querySelector("[data-playbook-signal]").value,role:card.querySelector("[data-playbook-role]").value.trim(),channel:card.querySelector("[data-playbook-channel]").value,language:card.querySelector("[data-playbook-language]").value.trim(),sendMode:card.querySelector("[data-playbook-send-mode]").value,subject:card.querySelector("[data-playbook-subject]").value.trim(),body:card.querySelector("[data-playbook-body]").value,active:card.querySelector("[data-playbook-active]").checked})).filter(item=>item.name);
+}
+
+function renderCRM(){
+  ensureCrmRecords();
+  const records=opportunities.map(o=>({o,record:state.crm.records[o.id]}));
+  document.getElementById("crm-count").textContent=records.length;
+  document.getElementById("crm-board").innerHTML=state.crm.stageOrder.map(stage=>{
+    const list=records.filter(item=>item.record.stage===stage);
+    return `<section class="crm-column"><header><strong>${esc(stage)}</strong><span>${list.length}</span></header><div class="crm-column-body">${list.map(({o,record})=>`<article class="crm-card"><div class="crm-card-score">${o.score.toFixed(1)}</div><h3>${esc(o.company)}</h3><p>${esc(o.signal)}</p><small>${esc(o.primaryOffer)}</small><label>Stage<select data-crm-stage="${esc(o.id)}">${state.crm.stageOrder.map(value=>`<option ${value===record.stage?"selected":""}>${esc(value)}</option>`).join("")}</select></label><label>Next action<input data-crm-next-action="${esc(o.id)}" value="${esc(record.nextAction||"")}" placeholder="Call, research, follow up…"></label><details><summary>Notes</summary><textarea data-crm-notes="${esc(o.id)}" placeholder="Private working notes">${esc(record.notes||"")}</textarea></details><div class="crm-card-actions"><button class="btn small secondary" data-open="${esc(o.id)}">Open dossier</button><button class="btn small secondary" data-message="${esc(o.id)}">Draft outreach</button></div></article>`).join("")||'<div class="crm-empty">No companies</div>'}</div></section>`;
+  }).join("");
+}
+
+function matchingPlaybook(o){
+  const offer=state.offers.find(item=>item.name===o.primaryOffer);
+  const text=`${o.signalType} ${o.signal}`.toLowerCase();
+  const signal=state.signalRules.find(item=>String(item.keywords||"").split(",").some(keyword=>keyword.trim()&&text.includes(keyword.trim().toLowerCase())));
+  return state.playbooks.find(item=>item.active&&item.offerId===offer?.id&&(!signal||item.signalId===signal.id))||state.playbooks.find(item=>item.active&&item.offerId===offer?.id)||state.playbooks.find(item=>item.active&&(!signal||item.signalId===signal.id))||state.playbooks.find(item=>item.active);
+}
+function fillTemplate(value,o){const first=o.contact.name.split(" ")[0]||"there";return String(value||"").replaceAll("{{company}}",o.company).replaceAll("{{first_name}}",first).replaceAll("{{signal_type}}",o.signalType).replaceAll("{{signal}}",o.signal).replaceAll("{{offer}}",o.primaryOffer);}
+
 function renderOutreach(){
   const list=opportunities.filter(o=>["Draft ready","Approved"].includes(state.statuses[o.id])||state.listStates[o.id]==="Eligible");
   document.getElementById("outreach-count").textContent=list.length;
   document.getElementById("outreach-grid").innerHTML=list.length?list.map(o=>{
     const eligible=state.listStates[o.id]==="Eligible"&&o.contact.emailStatus==="Verified";
-    return `<article class="outreach-card"><div><p class="kicker">${esc(state.statuses[o.id]||"Research")}</p><h3>${esc(o.company)}</h3><p>${esc(o.signal)}</p></div><div class="outreach-meta"><span>${esc(o.contact.name)}</span><span>${esc(o.contact.role)}</span><span class="status ${eligible?"good":"warn"}">${eligible?"Eligible contact":"Review required"}</span></div><div class="card-actions"><button class="btn secondary" data-message="${o.id}">Edit draft</button><button class="btn primary" data-status-action="Approved" data-id="${o.id}" ${eligible?"":"disabled"}>Approve</button></div></article>`;
+    const playbook=matchingPlaybook(o);
+    const stage=state.crm.records[o.id]?.stage||"Discovered";
+    return `<article class="outreach-card"><div><p class="kicker">${esc(state.statuses[o.id]||"Research")} · ${esc(stage)}</p><h3>${esc(o.company)}</h3><p>${esc(o.signal)}</p></div><div class="outreach-meta"><span>${esc(o.contact.name)}</span><span>${esc(o.contact.role)}</span><span>${esc(playbook?.name||"Default outreach")}</span><span class="status ${eligible?"good":"warn"}">${eligible?"Eligible contact":"Review required"}</span></div><div class="card-actions"><button class="btn secondary" data-message="${o.id}">Edit draft</button><button class="btn primary" data-status-action="Approved" data-id="${o.id}" ${eligible?"":"disabled"}>Approve</button></div></article>`;
   }).join(""):'<div class="empty-state"><h3>No outreach drafts yet</h3><p>Open a qualified company and generate a message. The draft appears here only after you mark it ready or the verified contact becomes campaign eligible.</p></div>';
 }
 
@@ -546,32 +678,43 @@ function closeDrawer(){document.getElementById("lead-drawer").classList.remove("
 
 function openEmailPreview(){
   const top=opportunities.filter(o=>o.score>=state.settings.minScore&&o.keep!==false).slice(0,state.settings.emailCount);
-  document.getElementById("modal-content").innerHTML=`<p class="kicker">Morning brief preview</p><h2>Latvia Opportunity Radar · ${top.length} leads</h2><p class="drawer-sub">Only leads meeting the score and evidence threshold appear.</p><div class="email-preview"><h4>Good morning, Edgars</h4><p>Today’s strongest evidence-backed business opportunities:</p>${top.map((o,i)=>`<div class="email-lead"><strong>${i+1}. ${esc(o.company)} — ${o.score.toFixed(1)}/10</strong><p>${esc(o.signal)}</p><p><b>Likely need:</b> ${esc(o.primaryOffer)}</p><p><b>Contact:</b> ${esc(o.contact.name)}, ${esc(o.contact.role)} · ${o.contact.emailStatus==="Predicted"?"email not verified":esc(o.contact.email)}</p></div>`).join("")}</div><button class="btn primary" id="close-preview-action">Close preview</button>`;
+  document.getElementById("modal-content").innerHTML=`<p class="kicker">Morning brief preview</p><h2>${esc(activeMarket().name)} Opportunity Radar · ${top.length} leads</h2><p class="drawer-sub">Only leads meeting the score and evidence threshold appear.</p><div class="email-preview"><h4>Good morning, ${esc((state.businessProfile.owner||"Edgars").split(" ")[0])}</h4><p>Today’s strongest evidence-backed business opportunities:</p>${top.map((o,i)=>`<div class="email-lead"><strong>${i+1}. ${esc(o.company)} — ${o.score.toFixed(1)}/10</strong><p>${esc(o.signal)}</p><p><b>Likely need:</b> ${esc(o.primaryOffer)}</p><p><b>Contact:</b> ${esc(o.contact.name)}, ${esc(o.contact.role)} · ${o.contact.emailStatus==="Predicted"?"email not verified":esc(o.contact.email)}</p></div>`).join("")}</div><button class="btn primary" id="close-preview-action">Close preview</button>`;
   openModal();
 }
 
 function openMessage(id){
   const o=opportunities.find(item=>item.id===id);if(!o)return;
-  const first=o.contact.name.split(" ")[0];
-  const message=`Subject: ${o.signalType.toLowerCase()} at ${o.company}\n\nHi ${first},\n\nI noticed ${o.company} is ${o.signal.toLowerCase()}\n\nChanges like this often create a short window where sales knowledge, CRM workflows and management expectations need to become much more consistent. I help Latvian teams turn that transition into a practical operating system rather than another document or disconnected tool.\n\nWould it be useful if I sent you a one-page outline of how I would approach this for ${o.company}?\n\nBest,\nEdgars`;
-  document.getElementById("modal-content").innerHTML=`<p class="kicker">Approval-required draft</p><h2>${esc(o.company)}</h2><p class="drawer-sub">Generated from verified evidence. Review every statement before sending.</p><textarea class="message-box">${esc(message)}</textarea><div class="card-actions" style="margin-top:12px"><button class="btn secondary" id="copy-message">Copy draft</button><button class="btn primary" data-status-action="Draft ready" data-id="${o.id}">Mark draft ready</button></div>`;
+  const playbook=matchingPlaybook(o);
+  const saved=state.outreachDrafts[o.id];
+  const subject=saved?.subject||fillTemplate(playbook?.subject||`${o.signalType} at {{company}}`,o);
+  const body=saved?.body||fillTemplate(playbook?.body||`Hi {{first_name}},\n\nI noticed {{signal}}\n\nWould it be useful if I sent a short outline of how {{offer}} could support {{company}}?\n\nBest,\n${state.businessProfile.owner||"Edgars"}`,o);
+  const message=`Subject: ${subject}\n\n${body}`;
+  document.getElementById("modal-content").innerHTML=`<p class="kicker">Approval-required draft · ${esc(playbook?.channel||"Email")}</p><h2>${esc(o.company)}</h2><p class="drawer-sub">${esc(playbook?.name||"Default playbook")} · ${esc(playbook?.language||"English")} · ${esc(playbook?.sendMode||"Approval required")}</p><textarea class="message-box" data-draft-id="${esc(o.id)}">${esc(message)}</textarea><div class="card-actions" style="margin-top:12px"><button class="btn secondary" id="copy-message">Copy draft</button><button class="btn primary" data-status-action="Draft ready" data-id="${o.id}">Mark draft ready</button></div>`;
   openModal();
 }
 
 function openModal(){document.getElementById("modal-backdrop").classList.add("open");}
-function closeModal(){document.getElementById("modal-backdrop").classList.remove("open");}
+function saveOpenDraft(){
+  const box=document.querySelector(".message-box[data-draft-id]");
+  if(!box)return false;
+  const [subjectLine,...bodyParts]=box.value.split(/\n\n/);
+  state.outreachDrafts[box.dataset.draftId]={subject:subjectLine.replace(/^Subject:\s*/i,"").trim(),body:bodyParts.join("\n\n").trim(),updatedAt:formatNow()};
+  saveState();
+  return true;
+}
+function closeModal(){saveOpenDraft();document.getElementById("modal-backdrop").classList.remove("open");}
 
 function switchView(name){
   document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id===`view-${name}`));
   document.querySelectorAll(".nav-item[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===name));
   const today=new Intl.DateTimeFormat("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric",timeZone:"Europe/Riga"}).format(new Date());
-  const labels={map:["Research automation","System Map"],today:[today,`Good morning · ${state.workspace.name}`],signals:["Evidence stream","Market signals"],companies:["Opportunity memory","Company dossiers"],contacts:["Verified business data","Contact list"],outreach:["Human approval required","Outreach queue"],sources:["Monitoring network","Source health"],runs:["Automation audit","Daily runs"],settings:["Operating rules","Research settings"]};
+  const labels={map:["Research automation","System Map"],control:["Editable operating context","Control Centre"],today:[today,`Good morning · ${state.workspace.name}`],signals:["Evidence stream","Market signals"],companies:["Opportunity memory","Company dossiers"],crm:["Commercial pipeline","Practical CRM"],contacts:["Verified business data","Contact list"],outreach:["Human approval required","Outreach queue"],sources:["Monitoring network","Source health"],runs:["Automation audit","Daily runs"],settings:["Operating rules","Research settings"]};
   const [kicker,title]=labels[name]||labels.map;document.getElementById("view-kicker").textContent=kicker;document.getElementById("view-title").textContent=title;
   document.getElementById("sidebar").classList.remove("open");window.scrollTo(0,0);
 }
 
 function renderAll(){
-  renderSystemMap();renderMetrics();renderOpportunities();renderSignals();renderCompanies();renderContacts();renderOutreach();renderSources();renderRuns();renderRuntimeStatus();
+  ensureCrmRecords();renderSystemMap();renderControlCentre();renderMetrics();renderOpportunities();renderSignals();renderCompanies();renderCRM();renderContacts();renderOutreach();renderSources();renderRuns();renderRuntimeStatus();
   document.getElementById("setting-email").value=state.settings.emailCount;
   document.getElementById("setting-app").value=state.settings.appCount;
   document.getElementById("setting-score").value=state.settings.minScore;
@@ -594,6 +737,22 @@ document.addEventListener("click",event=>{
   const message=event.target.closest("[data-message]");if(message){openMessage(message.dataset.message);return;}
   const signalFilter=event.target.closest("[data-signal-filter]");if(signalFilter){currentSignalFilter=signalFilter.dataset.signalFilter;renderSignals();return;}
   const contactFilter=event.target.closest("[data-contact-filter]");if(contactFilter){currentContactFilter=contactFilter.dataset.contactFilter;renderContacts();return;}
+  const marketProfile=event.target.closest("[data-market-profile]");if(marketProfile){
+    readControlCentre();state.activeMarketProfileId=marketProfile.dataset.marketProfile;state.workspace.market=activeMarket().name;saveState();renderAll();showToast(`Research market changed to ${activeMarket().name}`);return;
+  }
+  const removeMarket=event.target.closest("[data-remove-market]");if(removeMarket){
+    const reset=structuredClone(MARKET_PROFILES.find(item=>item.id==="custom"));
+    state.marketProfiles=state.marketProfiles.map(item=>item.id===removeMarket.dataset.removeMarket?reset:item);state.activeMarketProfileId="custom";state.workspace.market=reset.name;saveState();renderAll();showToast("Custom market reset");return;
+  }
+  const removeOffer=event.target.closest("[data-remove-offer]");if(removeOffer){
+    readControlCentre();if(state.offers.length<=1){showToast("Keep at least one offer");return;}state.offers=state.offers.filter(item=>item.id!==removeOffer.dataset.removeOffer);state.playbooks=state.playbooks.filter(item=>item.offerId!==removeOffer.dataset.removeOffer);saveState();renderControlCentre();showToast("Offer removed");return;
+  }
+  const removeSignal=event.target.closest("[data-remove-signal]");if(removeSignal){
+    readControlCentre();if(state.signalRules.length<=1){showToast("Keep at least one signal rule");return;}state.signalRules=state.signalRules.filter(item=>item.id!==removeSignal.dataset.removeSignal);state.playbooks=state.playbooks.filter(item=>item.signalId!==removeSignal.dataset.removeSignal);saveState();renderControlCentre();showToast("Signal rule removed");return;
+  }
+  const removePlaybook=event.target.closest("[data-remove-playbook]");if(removePlaybook){
+    readControlCentre();state.playbooks=state.playbooks.filter(item=>item.id!==removePlaybook.dataset.removePlaybook);saveState();renderControlCentre();showToast("Playbook removed");return;
+  }
   const action=event.target.closest("[data-status-action]");if(action){
     const opportunity=opportunities.find(item=>item.id===action.dataset.id);
     if(action.dataset.statusAction==="Approved"&&opportunity){
@@ -603,7 +762,15 @@ document.addEventListener("click",event=>{
       }
       if(["Suppressed","Unsubscribed"].includes(listState)){showToast("Suppressed contacts cannot be approved");return;}
     }
-    state.statuses[action.dataset.id]=action.dataset.statusAction;saveState();renderAll();closeModal();showToast(`Status changed to ${action.dataset.statusAction}`);return;
+    saveOpenDraft();
+    state.statuses[action.dataset.id]=action.dataset.statusAction;
+    const record=state.crm.records[action.dataset.id];
+    if(record){
+      if(action.dataset.statusAction==="Approved")record.stage="Ready for Outreach";
+      if(action.dataset.statusAction==="Draft ready"&&["Discovered","Qualified"].includes(record.stage))record.stage=opportunity?.contact.emailStatus==="Verified"?"Contact Found":"Qualified";
+      record.updatedAt=formatNow();
+    }
+    saveState();renderAll();closeModal();showToast(`Status changed to ${action.dataset.statusAction}`);return;
   }
   if(event.target.id==="drawer-close"||event.target.id==="drawer-backdrop")closeDrawer();
   if(event.target.id==="modal-close"||event.target.id==="modal-backdrop"||event.target.id==="close-preview-action")closeModal();
@@ -620,6 +787,19 @@ document.addEventListener("click",event=>{
   if(event.target.id==="save-map-draft")saveMapDraft();
   if(event.target.id==="publish-map")publishWorkflow();
   if(event.target.id==="discard-map-drafts"){state.map.draftConfigs=structuredClone(state.map.publishedConfigs);saveState();renderAll();showToast("All workflow drafts discarded");}
+  if(event.target.id==="save-control"){readControlCentre();ensureCrmRecords();saveState();renderAll();showToast("Control centre saved");}
+  if(event.target.id==="add-market-profile"){
+    readControlCentre();const id=makeId("market");state.marketProfiles.push({id,name:"New market",countries:[],countryCodes:[],languages:["English"],decisionTitles:["Sales Director","Commercial Director","Head of Sales","CEO"],sourceFocus:"Approved public business, procurement, recruitment and company sources"});state.activeMarketProfileId=id;state.workspace.market="New market";saveState();renderAll();showToast("New market profile added");
+  }
+  if(event.target.id==="add-offer"){
+    readControlCentre();state.offers.push({id:makeId("offer"),name:"New offer",description:"Describe the business problem this offer solves.",active:true});saveState();renderControlCentre();showToast("Offer added");
+  }
+  if(event.target.id==="add-signal"){
+    readControlCentre();state.signalRules.push({id:makeId("signal"),name:"New signal",keywords:"keyword, phrase",weight:5,active:true});saveState();renderControlCentre();showToast("Signal rule added");
+  }
+  if(event.target.id==="add-playbook"){
+    readControlCentre();state.playbooks.push({id:makeId("playbook"),name:"New outreach playbook",offerId:state.offers[0]?.id||"",signalId:state.signalRules[0]?.id||"",role:"Decision maker",channel:"Email",language:activeMarket().languages?.[0]||"English",sendMode:"Approval required",subject:"A practical idea for {{company}}",body:`Hi {{first_name}},\n\nI noticed {{signal}}\n\nWould a short outline of how {{offer}} could support {{company}} be useful?\n\nBest,\n${state.businessProfile.owner||"Edgars"}`,active:true});saveState();renderControlCentre();showToast("Playbook added");
+  }
   if(event.target.id==="copy-message")navigator.clipboard.writeText(document.querySelector(".message-box").value).then(()=>showToast("Draft copied"));
   if(event.target.id==="save-settings"){
     const workspaceId=document.getElementById("setting-workspace-id").value.trim().toLowerCase().replace(/[^a-z0-9-]+/g,"-").replace(/^-|-$/g,"");
@@ -627,7 +807,7 @@ document.addEventListener("click",event=>{
     const runUrl=document.getElementById("setting-run-url").value.trim();
     if(!workspaceId){showToast("Workspace ID is required");return;}
     if(!isPrivateEndpoint(dataUrl)||!isPrivateEndpoint(runUrl)){showToast("Runtime endpoints must use HTTPS");return;}
-    state.workspace={id:workspaceId,name:document.getElementById("setting-workspace-name").value.trim()||workspaceId,market:document.getElementById("setting-market").value.trim()||"Latvia"};
+    state.workspace={id:workspaceId,name:document.getElementById("setting-workspace-name").value.trim()||workspaceId,market:activeMarket().name};
     state.integrations={dataUrl,runUrl};
     state.map.draftConfigs.email.value=Math.max(1,Math.min(5,Number(document.getElementById("setting-email").value)||3));
     state.map.draftConfigs.shortlist.value=Math.max(3,Math.min(10,Number(document.getElementById("setting-app").value)||5));
@@ -637,6 +817,18 @@ document.addEventListener("click",event=>{
 });
 
 document.addEventListener("change",event=>{
+  const crmStage=event.target.closest("[data-crm-stage]");if(crmStage){
+    const record=state.crm.records[crmStage.dataset.crmStage];if(!record)return;
+    record.stage=crmStage.value;record.updatedAt=formatNow();saveState();renderCRM();renderOutreach();showToast(`CRM stage changed to ${crmStage.value}`);return;
+  }
+  const nextAction=event.target.closest("[data-crm-next-action]");if(nextAction){
+    const record=state.crm.records[nextAction.dataset.crmNextAction];if(!record)return;
+    record.nextAction=nextAction.value.trim();record.updatedAt=formatNow();saveState();showToast("Next action saved");return;
+  }
+  const notes=event.target.closest("[data-crm-notes]");if(notes){
+    const record=state.crm.records[notes.dataset.crmNotes];if(!record)return;
+    record.notes=notes.value.trim();record.updatedAt=formatNow();saveState();showToast("CRM notes saved");return;
+  }
   const select=event.target.closest("[data-list-state]");if(!select)return;
   const id=select.dataset.listState;
   const opp=opportunities.find(o=>o.id===id);
