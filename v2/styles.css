@@ -418,6 +418,43 @@ tr:last-child td { border-bottom: 0; }
 .toast { position: fixed; right: 24px; bottom: 24px; z-index: 100; padding: 11px 15px; border: 1px solid rgba(36,168,120,0.25); border-radius: 9px; background: #122b24; color: #6edab2; font-size: 10px; font-weight: 700; opacity: 0; pointer-events: none; transform: translateY(12px); transition: 180ms ease; }
 .toast.show { opacity: 1; transform: none; }
 
+/* Readability pass: keep dense research data compact without dropping below a practical text size. */
+body { font-size: 15px; line-height: 1.5; }
+.brand small, .pilot-card small, .run-panel-head small, .run-stat small, .run-stat span { font-size: 10px; }
+.nav-label, .breadcrumb, .demo-pill, .kicker { font-size: 10px; }
+.nav-item { min-height: 44px; font-size: 13px; }
+.nav-item b, .pilot-card strong { font-size: 10px; }
+.btn { min-height: 40px; padding: 9px 14px; font-size: 12px; }
+.btn.small { min-height: 34px; padding: 7px 10px; font-size: 11px; }
+.btn.danger { border-color: rgba(217,87,87,.35); background: rgba(217,87,87,.08); color: #ff9c9c; }
+.panel label, .editor-card label, .settings-card label, .map-form label, .crm-card label { font-size: 11.5px; }
+.panel label small, .editor-card label small { font-size: 10px; }
+input, select, textarea { font-size: 12.5px; }
+.form-grid input, .form-grid select, .form-grid textarea, .editor-grid input, .editor-grid select, .editor-grid textarea { min-height: 42px; }
+.panel-copy, .section-head p, .panel-title-row p, .settings-card p { font-size: 11.5px; line-height: 1.55; }
+table th { font-size: 10px; }
+table td { font-size: 12px; line-height: 1.45; }
+.status, .tag, .score-badge, .mini-badge { font-size: 9.5px; }
+.map-node p { font-size: 9.5px; line-height: 1.35; white-space: normal; }
+.map-node footer, .legend, .map-history { font-size: 9px; }
+.map-inspector p, .map-inspector label, .map-test-result { font-size: 11.5px; }
+.crm-card p, .crm-card small, .crm-card label, .script-box, .email-lead p, .toast { font-size: 11.5px; }
+
+.profile-document { padding: 16px; border: 1px solid rgba(94,143,255,.24); border-radius: 11px; background: rgba(57,119,246,.055); }
+.profile-document-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.profile-document h4 { margin: 0 0 4px; font-size: 14px; }
+.profile-document-head p, .profile-document-privacy { margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.55; }
+.profile-upload-btn { position: relative; flex: 0 0 auto; }
+.profile-document-status { margin: 14px 0 10px; }
+.profile-document-file, .profile-document-empty { display: flex; align-items: center; gap: 11px; min-height: 58px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: rgba(255,255,255,.035); }
+.profile-document-file > span { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 7px; background: rgba(217,87,87,.15); color: #ff9c9c; font-size: 10px; font-weight: 800; }
+.profile-document-file strong, .profile-document-file small, .profile-document-empty strong, .profile-document-empty small { display: block; }
+.profile-document-file strong, .profile-document-empty strong { font-size: 12px; }
+.profile-document-file small, .profile-document-empty small { margin-top: 3px; color: var(--muted); font-size: 10.5px; }
+.profile-document-actions { display: flex; gap: 8px; margin-bottom: 13px; }
+.profile-document-privacy { margin-top: 9px; }
+.visually-hidden { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; overflow: hidden !important; clip: rect(0,0,0,0) !important; white-space: nowrap !important; border: 0 !important; }
+
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 3px solid rgba(94, 143, 255, 0.48);
   outline-offset: 2px;
@@ -466,6 +503,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .form-grid, .editor-grid { grid-template-columns: 1fr; }
   .form-grid .wide, .editor-grid .wide { grid-column: auto; }
   .market-profile-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .profile-document-head { flex-direction: column; }
   .panel-title-row { align-items: flex-start; flex-direction: column; }
   .settings-wide { grid-column: auto; }
   .legend { display: none; }
