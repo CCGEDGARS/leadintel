@@ -1,7 +1,7 @@
 "use strict";
 
 const STORAGE_KEY = "leadintel_v2_state";
-const STATE_SCHEMA_VERSION = 5;
+const STATE_SCHEMA_VERSION = 6;
 const DOCUMENT_DB_NAME = "leadintel_v2_documents";
 const DOCUMENT_STORE_NAME = "files";
 const BUSINESS_PROFILE_PDF_KEY = "business-profile-pdf";
@@ -156,6 +156,7 @@ const defaultState = {
   offers:structuredClone(DEFAULT_OFFERS),
   signalRules:structuredClone(DEFAULT_SIGNAL_RULES),
   playbooks:structuredClone(DEFAULT_PLAYBOOKS),
+  ui:{controlSections:{markets:true,profile:true,offers:false,signals:false,playbooks:false}},
   crm:{stageOrder:structuredClone(CRM_STAGES),records:{}},
   outreachDrafts:{},
   integrations:{dataUrl:"",runUrl:""},
@@ -198,6 +199,8 @@ function loadState(){
     const runtime=isRecord(saved.runtime)?saved.runtime:{};
     const crm=isRecord(saved.crm)?saved.crm:{};
     const businessProfile=isRecord(saved.businessProfile)?saved.businessProfile:{};
+    const ui=isRecord(saved.ui)?saved.ui:{};
+    const controlSections=isRecord(ui.controlSections)?ui.controlSections:{};
     const mapHistory=Array.isArray(savedMap.history)?savedMap.history.filter(isRecord):defaultState.map.history;
     const emailCount=Number(settings.emailCount);
     const appCount=Number(settings.appCount);
@@ -228,6 +231,7 @@ function loadState(){
       offers:normalizeArray(saved.offers,DEFAULT_OFFERS),
       signalRules:normalizeArray(saved.signalRules,DEFAULT_SIGNAL_RULES),
       playbooks:normalizeArray(saved.playbooks,DEFAULT_PLAYBOOKS),
+      ui:{controlSections:{...defaultState.ui.controlSections,...controlSections}},
       crm:{stageOrder:Array.isArray(crm.stageOrder)?crm.stageOrder:structuredClone(CRM_STAGES),records:isRecord(crm.records)?crm.records:{}},
       outreachDrafts:isRecord(saved.outreachDrafts)?saved.outreachDrafts:{},
       integrations:{
@@ -635,6 +639,13 @@ function renderControlCentre(){
   const signalOptions=state.signalRules.map(item=>`<option value="${esc(item.id)}">${esc(item.name)}</option>`).join("");
   document.getElementById("playbooks-editor").innerHTML=state.playbooks.map(item=>`<article class="editor-card" data-playbook-card="${esc(item.id)}"><div class="editor-head"><label class="inline-check"><input type="checkbox" data-playbook-active ${item.active?"checked":""}> Active</label><button class="icon-button" data-remove-playbook="${esc(item.id)}" aria-label="Delete playbook">×</button></div><div class="editor-grid"><label>Playbook name<input data-playbook-name value="${esc(item.name)}"></label><label>Offer<select data-playbook-offer>${offerOptions}</select></label><label>Signal<select data-playbook-signal>${signalOptions}</select></label><label>Decision-maker role<input data-playbook-role value="${esc(item.role||"")}"></label><label>Channel<select data-playbook-channel>${["Email","LinkedIn","Phone","WhatsApp"].map(value=>`<option ${value===item.channel?"selected":""}>${value}</option>`).join("")}</select></label><label>Language<input data-playbook-language value="${esc(item.language||"English")}"></label><label>Send mode<select data-playbook-send-mode>${["Approval required","Draft only","Automatic after approval rule"].map(value=>`<option ${value===item.sendMode?"selected":""}>${value}</option>`).join("")}</select></label><label class="wide">Subject<input data-playbook-subject value="${esc(item.subject||"")}"></label><label class="wide">Message template<textarea class="script-box" data-playbook-body>${esc(item.body||"")}</textarea></label></div></article>`).join("");
   state.playbooks.forEach(item=>{const card=document.querySelector(`[data-playbook-card="${CSS.escape(item.id)}"]`);if(card){card.querySelector("[data-playbook-offer]").value=item.offerId;card.querySelector("[data-playbook-signal]").value=item.signalId;}});
+  const counts={offers:state.offers.filter(item=>item.active).length,signals:state.signalRules.filter(item=>item.active).length,playbooks:state.playbooks.filter(item=>item.active).length};
+  document.getElementById("control-markets-meta").textContent=`${market.name} · ${(market.countries||[]).length} ${(market.countries||[]).length===1?"country":"countries"}`;
+  document.getElementById("control-profile-meta").textContent=`${state.businessProfile.company||"Profile incomplete"} · ${state.businessProfile.document?"PDF attached":"No PDF"}`;
+  document.getElementById("control-offers-meta").textContent=`${counts.offers}/${state.offers.length} active`;
+  document.getElementById("control-signals-meta").textContent=`${counts.signals}/${state.signalRules.length} active`;
+  document.getElementById("control-playbooks-meta").textContent=`${counts.playbooks}/${state.playbooks.length} active · approval gated`;
+  document.querySelectorAll("[data-control-section]").forEach(section=>{section.open=state.ui.controlSections[section.dataset.controlSection]!==false;});
 }
 
 function renderBusinessDocument(){
@@ -863,6 +874,11 @@ document.addEventListener("click",async event=>{
   if(event.target.id==="save-map-draft")saveMapDraft();
   if(event.target.id==="publish-map")publishWorkflow();
   if(event.target.id==="discard-map-drafts"){state.map.draftConfigs=structuredClone(state.map.publishedConfigs);saveState();renderAll();showToast("All workflow drafts discarded");}
+  if(event.target.id==="control-expand-all"||event.target.id==="control-collapse-all"){
+    const open=event.target.id==="control-expand-all";
+    document.querySelectorAll("[data-control-section]").forEach(section=>{section.open=open;state.ui.controlSections[section.dataset.controlSection]=open;});
+    saveState();showToast(open?"All control sections expanded":"All control sections collapsed");
+  }
   if(event.target.id==="save-control"){readControlCentre();ensureCrmRecords();saveState();renderAll();showToast("Control centre saved");}
   if(event.target.id==="add-market-profile"){
     readControlCentre();const id=makeId("market");state.marketProfiles.push({id,name:"New market",countries:[],countryCodes:[],languages:["English"],decisionTitles:["Sales Director","Commercial Director","Head of Sales","CEO"],sourceFocus:"Approved public business, procurement, recruitment and company sources"});state.activeMarketProfileId=id;state.workspace.market="New market";saveState();renderAll();showToast("New market profile added");
@@ -931,6 +947,13 @@ document.addEventListener("change",async event=>{
   }
   state.listStates[id]=select.value;saveState();renderMetrics();showToast(`Contact moved to ${select.value}`);
 });
+
+document.addEventListener("toggle",event=>{
+  const section=event.target.closest?.("[data-control-section]");
+  if(!section)return;
+  state.ui.controlSections[section.dataset.controlSection]=section.open;
+  saveState();
+},true);
 
 document.getElementById("company-search").addEventListener("input",event=>renderCompanies(event.target.value));
 document.getElementById("data-import").addEventListener("change",async event=>{

@@ -109,11 +109,18 @@
       <section class="view" id="view-control">
         <div class="section-head"><div><p class="kicker">Editable operating context</p><h2>Control centre</h2></div><button class="btn primary" id="save-control">Save control centre</button></div>
         <div class="notice"><strong>One workspace, reusable profiles.</strong> Changing the active market updates the research request, languages, decision-maker titles, AI context and outreach rules without rebuilding the workflow.</div>
+        <div class="control-toolbar" aria-label="Control centre display controls">
+          <div><strong>Configuration overview</strong><span>Open only the area you want to edit.</span></div>
+          <div><button class="btn small secondary" id="control-expand-all" type="button">Expand all</button><button class="btn small secondary" id="control-collapse-all" type="button">Collapse all</button></div>
+        </div>
         <div class="control-stack">
-          <div class="panel"><div class="panel-title-row"><div><h3>Market profiles</h3><p class="panel-copy">Choose Latvia, Estonia, Lithuania, the Baltics, or create another market.</p></div><button class="btn small secondary" id="add-market-profile">Add market</button></div><div class="market-profile-grid" id="market-profile-grid"></div><div id="market-profile-editor"></div></div>
-          <div class="panel">
-            <div class="panel-title-row"><div><h3>Business profile</h3><p class="panel-copy">Give the research agent enough context to recognise relevant opportunities and recommend the right offer.</p></div></div>
-            <div class="form-grid">
+          <details class="control-section" data-control-section="markets" open>
+            <summary><span class="control-section-icon" aria-hidden="true">M</span><span class="control-section-copy"><strong>Market profiles</strong><small>Regions, languages and decision-maker titles</small></span><span class="control-section-meta" id="control-markets-meta"></span><span class="control-chevron" aria-hidden="true"></span></summary>
+            <div class="control-section-body"><div class="control-section-actions"><p>Choose Latvia, Estonia, Lithuania, the Baltics, or create another market.</p><button class="btn small secondary" id="add-market-profile" type="button">Add market</button></div><div class="market-profile-grid" id="market-profile-grid"></div><div id="market-profile-editor"></div></div>
+          </details>
+          <details class="control-section" data-control-section="profile" open>
+            <summary><span class="control-section-icon" aria-hidden="true">B</span><span class="control-section-copy"><strong>Business profile</strong><small>Company context and reference material</small></span><span class="control-section-meta" id="control-profile-meta"></span><span class="control-chevron" aria-hidden="true"></span></summary>
+            <div class="control-section-body"><p class="control-section-intro">Give the research agent enough context to recognise relevant opportunities and recommend the right offer.</p><div class="form-grid">
               <label>Owner<input id="profile-owner"></label><label>Company<input id="profile-company"></label>
               <label class="wide">What we do<textarea id="profile-summary"></textarea></label>
               <label>Website<input id="profile-website" type="url"></label><label>Reply-to email<input id="profile-email" type="email"></label>
@@ -130,11 +137,20 @@
                 <label>Notes for the research agent <small>Summarise the most important expertise, proof points, exclusions or offers in the PDF.</small><textarea id="profile-document-notes" placeholder="Example: Focus on our CRM implementation method, Baltic case studies and sales-leader onboarding offer."></textarea></label>
                 <p class="profile-document-privacy">Stored only in this browser. Research receives the filename, metadata and your notes; automatic PDF text extraction will be added with the secure backend.</p>
               </section>
-            </div>
-          </div>
-          <div class="panel"><div class="panel-title-row"><div><h3>Offers</h3><p class="panel-copy">The AI scores every signal against active offers.</p></div><button class="btn small secondary" id="add-offer">Add offer</button></div><div class="editor-list" id="offers-editor"></div></div>
-          <div class="panel"><div class="panel-title-row"><div><h3>Signal library</h3><p class="panel-copy">Initial patterns are editable; add sector or country-specific buying signals at any time.</p></div><button class="btn small secondary" id="add-signal">Add signal</button></div><div class="editor-list" id="signal-rules-editor"></div></div>
-          <div class="panel"><div class="panel-title-row"><div><h3>Outreach playbooks</h3><p class="panel-copy">Attach a script to an offer, signal, role, channel and language. Human approval remains the default.</p></div><button class="btn small secondary" id="add-playbook">Add playbook</button></div><div class="editor-list" id="playbooks-editor"></div></div>
+            </div></div>
+          </details>
+          <details class="control-section" data-control-section="offers">
+            <summary><span class="control-section-icon" aria-hidden="true">O</span><span class="control-section-copy"><strong>Offers</strong><small>Products and services used for opportunity fit</small></span><span class="control-section-meta" id="control-offers-meta"></span><span class="control-chevron" aria-hidden="true"></span></summary>
+            <div class="control-section-body"><div class="control-section-actions"><p>The AI scores every signal against active offers.</p><button class="btn small secondary" id="add-offer" type="button">Add offer</button></div><div class="editor-list" id="offers-editor"></div></div>
+          </details>
+          <details class="control-section" data-control-section="signals">
+            <summary><span class="control-section-icon" aria-hidden="true">S</span><span class="control-section-copy"><strong>Signal library</strong><small>Editable buying signals and scoring weights</small></span><span class="control-section-meta" id="control-signals-meta"></span><span class="control-chevron" aria-hidden="true"></span></summary>
+            <div class="control-section-body"><div class="control-section-actions"><p>Initial patterns are editable; add sector or country-specific buying signals at any time.</p><button class="btn small secondary" id="add-signal" type="button">Add signal</button></div><div class="editor-list" id="signal-rules-editor"></div></div>
+          </details>
+          <details class="control-section" data-control-section="playbooks">
+            <summary><span class="control-section-icon" aria-hidden="true">P</span><span class="control-section-copy"><strong>Outreach playbooks</strong><small>Scripts linked to offers, signals and channels</small></span><span class="control-section-meta" id="control-playbooks-meta"></span><span class="control-chevron" aria-hidden="true"></span></summary>
+            <div class="control-section-body"><div class="control-section-actions"><p>Attach a script to an offer, signal, role, channel and language. Human approval remains the default.</p><button class="btn small secondary" id="add-playbook" type="button">Add playbook</button></div><div class="editor-list" id="playbooks-editor"></div></div>
+          </details>
         </div>
       </section>
 
