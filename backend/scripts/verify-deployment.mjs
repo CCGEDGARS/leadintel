@@ -20,11 +20,15 @@ const orkla=snapshot.opportunities.find(item=>item.company_name==="Orkla Latvija
 if(!orkla||orkla.evidence_count!==2)throw new Error("Orkla evidence was not consolidated into one dossier");
 if(orkla.email_status!=="Verified"||orkla.business_email!=="gints.uzans@orkla.lv")throw new Error("Verified Orkla contact was not preserved");
 if(snapshot.opportunities.filter(item=>item.company_name==="Orkla Latvija").length!==1)throw new Error("Orkla still appears more than once");
+const originalStage=orkla.next_action==="Verify Step 3 workflow"?"Contact Found":orkla.pipeline_stage||"Contact Found";
+const originalNextAction=orkla.next_action==="Verify Step 3 workflow"?"Review evidence and decide the next step":orkla.next_action||"";
 const workflowResponse=await fetch(`${api}/api/opportunities/${encodeURIComponent(orkla.id)}?workspace_id=edgars-latvia`,{method:"PATCH",headers:{"Content-Type":"application/json",Origin:api,Cookie:cookie},body:JSON.stringify({pipeline_stage:"Qualified",next_action:"Verify Step 3 workflow"})});
 if(!workflowResponse.ok)throw new Error(`Workflow update failed (${workflowResponse.status})`);
 const refreshed=await fetch(`${api}/api/snapshot?workspace_id=edgars-latvia`,{headers:{Origin:api,Cookie:cookie}}).then(response=>response.json());
 const refreshedOrkla=refreshed.opportunities.find(item=>item.id===orkla.id);
 if(refreshedOrkla?.pipeline_stage!=="Qualified"||refreshedOrkla?.next_action!=="Verify Step 3 workflow")throw new Error("Workflow state was not persisted");
+const restoreResponse=await fetch(`${api}/api/opportunities/${encodeURIComponent(orkla.id)}?workspace_id=edgars-latvia`,{method:"PATCH",headers:{"Content-Type":"application/json",Origin:api,Cookie:cookie},body:JSON.stringify({pipeline_stage:originalStage,next_action:originalNextAction})});
+if(!restoreResponse.ok)throw new Error(`Workflow cleanup failed (${restoreResponse.status})`);
 const unauthorized=await fetch(`${api}/api/snapshot?workspace_id=edgars-latvia`,{headers:{Origin:api}});
 if(unauthorized.status!==401)throw new Error("Unauthenticated snapshot access was not blocked");
 console.log("Verified: Today workspace is current; canonical data is deduplicated; workflow state persists; unauthorized access remains blocked.");
