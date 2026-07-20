@@ -34,7 +34,7 @@
       </nav>
 
       <div class="sidebar-foot">
-        <div class="pilot-card"><span class="status-dot"></span><div><strong>Pilot workspace</strong><small>Human approval enforced</small></div></div>
+        <button class="pilot-card pilot-card-link" type="button" data-view="settings"><span class="status-dot"></span><span><strong>Pilot workspace</strong><small>Human approval enforced</small></span><i aria-hidden="true">→</i></button>
         <button class="nav-item" data-view="settings"><span>⚙</span>Settings</button>
       </div>
     </aside>
@@ -75,16 +75,16 @@
               </div>
             </div>
             <div class="run-panel" aria-label="Latest run conversion">
-              <div class="run-panel-head">
+              <button class="run-panel-head run-panel-link" type="button" data-view="runs" aria-label="Open latest research run history">
                 <div><span class="run-pulse"></span><div><strong>Latest research run</strong><small id="latest-run-label">Demo snapshot · no live endpoint connected</small></div></div>
-                <span class="run-complete" id="latest-run-status">Demo</span>
-              </div>
+                <span class="run-complete" id="latest-run-status">Demo</span><i aria-hidden="true">→</i>
+              </button>
               <div class="run-funnel">
-                <div class="run-stat"><small>Findings</small><strong id="funnel-findings">142</strong><span>New evidence</span></div><i>→</i>
-                <div class="run-stat"><small>Signals</small><strong id="funnel-signals">24</strong><span>AI-triaged</span></div><i>→</i>
-                <div class="run-stat"><small>Qualified</small><strong id="funnel-qualified">9</strong><span id="funnel-threshold">Score ≥ 7.0</span></div><i>→</i>
-                <div class="run-stat"><small>Saved in app</small><strong id="funnel-saved">5</strong><span>Full dossiers</span></div><i>→</i>
-                <div class="run-stat accented"><small>Morning email</small><strong id="funnel-emailed">3</strong><span>One contact each</span></div>
+                <button class="run-stat" type="button" data-view="runs"><small>Findings</small><strong id="funnel-findings">142</strong><span>New evidence</span></button><i>→</i>
+                <button class="run-stat" type="button" data-view="signals"><small>Signals</small><strong id="funnel-signals">24</strong><span>AI-triaged</span></button><i>→</i>
+                <button class="run-stat" type="button" data-view="companies"><small>Qualified</small><strong id="funnel-qualified">9</strong><span id="funnel-threshold">Score ≥ 7.0</span></button><i>→</i>
+                <button class="run-stat" type="button" data-view="companies"><small>Saved in app</small><strong id="funnel-saved">5</strong><span>Full dossiers</span></button><i>→</i>
+                <button class="run-stat accented" type="button" data-view="today"><small>Morning email</small><strong id="funnel-emailed">3</strong><span>One contact each</span></button>
               </div>
             </div>
             <div class="map-canvas" id="map-canvas" aria-label="Lead Intel research workflow">

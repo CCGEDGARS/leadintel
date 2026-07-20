@@ -158,6 +158,11 @@ const workflowEdges = [
   {from:"contacts",to:"outreach",d:"M 910 212 C 910 260, 940 267, 940 318",branch:true}
 ];
 
+const workflowDestinations = Object.freeze({
+  sources:"sources", scan:"runs", analysis:"signals", score:"signals",
+  shortlist:"companies", contacts:"contacts", email:"today", outreach:"outreach"
+});
+
 const defaultWorkflowConfigs = Object.fromEntries(workflowNodes.map(node=>[node.id,structuredClone(node.config)]));
 
 const defaultState = {
@@ -459,10 +464,10 @@ function renderSystemMap(){
   const enabled=workflowNodes.filter(node=>mapConfig(node.id,true).enabled).length;
   const healthy=workflowNodes.filter(node=>node.status==="Healthy").length;
   document.getElementById("map-summary").innerHTML=`
-    <div class="map-summary-card"><span>◇</span><div><strong>${enabled} / ${workflowNodes.length}</strong><small>Active workflow steps</small></div></div>
-    <div class="map-summary-card"><span>●</span><div><strong>${healthy} healthy</strong><small>2 steps need review</small></div></div>
-    <div class="map-summary-card"><span>⌁</span><div><strong>${dirty.length} drafts</strong><small>Not active until published</small></div></div>
-    <div class="map-summary-card"><span>V</span><div><strong>Version ${state.map.version}</strong><small>${esc(state.map.lastPublished)}</small></div></div>`;
+    <button class="map-summary-card" type="button" data-view="control"><span>◇</span><div><strong>${enabled} / ${workflowNodes.length}</strong><small>Active workflow steps</small></div><i>→</i></button>
+    <button class="map-summary-card" type="button" data-view="runs"><span>●</span><div><strong>${healthy} healthy</strong><small>2 steps need review</small></div><i>→</i></button>
+    <button class="map-summary-card" type="button" data-map-node="${dirty[0]?.id||selectedMapNode}"><span>⌁</span><div><strong>${dirty.length} drafts</strong><small>Not active until published</small></div><i>→</i></button>
+    <button class="map-summary-card" type="button" data-view="runs"><span>V</span><div><strong>Version ${state.map.version}</strong><small>${esc(state.map.lastPublished)}</small></div><i>→</i></button>`;
   document.getElementById("map-draft-count").textContent=dirty.length;
   document.getElementById("map-version-label").textContent=state.map.version;
   document.getElementById("publish-map").textContent=dirty.length?`Publish ${dirty.length} change${dirty.length===1?"":"s"}`:"Published";
@@ -472,12 +477,13 @@ function renderSystemMap(){
   document.getElementById("map-nodes").innerHTML=workflowNodes.map((node,index)=>{
     const config=mapConfig(node.id);
     const changed=dirty.some(item=>item.id===node.id);
-    return `<button class="map-node ${selectedMapNode===node.id?"selected":""} ${config.enabled?"":"disabled"}" style="--x:${node.x}%;--y:${node.y}%" data-map-node="${node.id}" aria-pressed="${selectedMapNode===node.id}">
+    const destination=workflowDestinations[node.id];
+    return `<div class="map-node ${selectedMapNode===node.id?"selected":""} ${config.enabled?"":"disabled"}" style="--x:${node.x}%;--y:${node.y}%" data-step-view="${destination}" role="link" tabindex="0" aria-label="Open ${esc(config.title)} in ${destination}">
       ${changed?'<i class="map-draft-mark" aria-label="Draft changed"></i>':''}
-      <span class="map-node-head"><span class="map-node-icon">${node.icon}</span><span class="map-node-index">0${index+1}</span><i class="map-node-status ${node.status.toLowerCase()}"></i></span>
+      <span class="map-node-head"><span class="map-node-icon">${node.icon}</span><span class="map-node-index">0${index+1}</span><i class="map-node-status ${node.status.toLowerCase()}"></i><button class="map-node-inspect" type="button" data-map-node="${node.id}" aria-label="Inspect ${esc(config.title)} configuration">⚙</button></span>
       <h3>${esc(config.title)}</h3><p>${esc(node.type)} · ${config.enabled?esc(config.cadence):"Disabled"}</p>
-      <span class="map-node-foot"><strong>${esc(mapMetric(node,config))}</strong><span>${esc(node.lastRun)}</span></span>
-    </button>`;
+      <span class="map-node-foot"><strong>${esc(mapMetric(node,config))}</strong><span>Open page →</span></span>
+    </div>`;
   }).join("");
   renderMapInspector();
   const history=(state.map.history||[]).slice(0,4);
@@ -869,6 +875,12 @@ function switchView(name){
   document.getElementById("sidebar").classList.remove("open");window.scrollTo(0,0);
 }
 
+document.addEventListener("keydown",event=>{
+  const step=event.target.closest?.("[data-step-view]");
+  if(!step||!["Enter"," "].includes(event.key))return;
+  event.preventDefault();switchView(step.dataset.stepView);
+});
+
 function renderAll(){
   ensureCrmRecords();renderSystemMap();renderControlCentre();renderMetrics();renderOpportunities();renderSignals();renderCompanies();renderCRM();renderContacts();renderOutreach();renderSources();renderRuns();renderRuntimeStatus();
   document.getElementById("setting-email").value=state.settings.emailCount;
@@ -889,15 +901,16 @@ document.addEventListener("click",async event=>{
     try{await deleteProfileDocument();}catch(error){showToast("Could not remove the stored PDF");return;}
     state.businessProfile.document=null;document.getElementById("profile-pdf-input").value="";saveState();renderBusinessDocument();showToast("Business reference PDF removed");return;
   }
-  const view=event.target.closest("[data-view]");if(view){
-    if(view.dataset.view!=="map"&&document.getElementById("view-map").classList.contains("active")&&document.getElementById("map-node-form")&&!saveMapDraft(false))return;
-    switchView(view.dataset.view);return;
-  }
   const mapNode=event.target.closest("[data-map-node]");if(mapNode){
     if(mapNode.dataset.mapNode!==selectedMapNode&&document.getElementById("map-node-form")&&!saveMapDraft(false))return;
     selectedMapNode=mapNode.dataset.mapNode;renderSystemMap();
-    if(window.matchMedia("(max-width: 800px)").matches)document.getElementById("map-inspector").scrollIntoView({behavior:"smooth",block:"start"});
+    document.getElementById("map-inspector").scrollIntoView({behavior:"smooth",block:"start"});
     return;
+  }
+  const stepView=event.target.closest("[data-step-view]");if(stepView){switchView(stepView.dataset.stepView);return;}
+  const view=event.target.closest("[data-view]");if(view){
+    if(view.dataset.view!=="map"&&document.getElementById("view-map").classList.contains("active")&&document.getElementById("map-node-form")&&!saveMapDraft(false))return;
+    switchView(view.dataset.view);return;
   }
   const testMap=event.target.closest("[data-test-map]");if(testMap){testMapStep(testMap.dataset.testMap);return;}
   const resetMap=event.target.closest("[data-reset-map]");if(resetMap){state.map.draftConfigs[resetMap.dataset.resetMap]=structuredClone(state.map.publishedConfigs[resetMap.dataset.resetMap]);saveState();renderAll();showToast("Step draft reset");return;}
