@@ -445,8 +445,10 @@ function mapConfig(id,published=false){return (published?state.map.publishedConf
 function dirtyMapNodes(){return workflowNodes.filter(node=>JSON.stringify(mapConfig(node.id))!==JSON.stringify(mapConfig(node.id,true)));}
 function mapMetric(node,config){
   if(node.id==="sources")return `${config.value} sources`;
+  if(state.runtime.mode!=="demo"&&node.id==="scan")return `${numberValue(runs[0]?.findings,opportunities.length)} findings`;
+  if(state.runtime.mode!=="demo"&&node.id==="analysis")return `${signals.length} signals`;
   if(node.id==="score")return `≥${config.value} score`;
-  if(node.id==="shortlist")return `${config.value} saved`;
+  if(node.id==="shortlist")return `${state.runtime.mode==="demo"?config.value:Math.min(config.value,opportunities.length)} saved`;
   if(node.id==="contacts")return `${config.value} / company`;
   if(node.id==="email")return `${config.value} emailed`;
   return node.metric;
@@ -613,6 +615,7 @@ function renderOpportunities(){
 }
 
 function renderSignals(){
+  document.getElementById("signal-count").textContent=signals.length;
   const types=["All",...new Set(signals.map(s=>s.type))];
   document.getElementById("signal-filters").innerHTML=types.map(t=>`<button class="filter ${t===currentSignalFilter?"active":""}" data-signal-filter="${esc(t)}">${esc(t)}</button>`).join("");
   const filtered=currentSignalFilter==="All"?signals:signals.filter(s=>s.type===currentSignalFilter);
