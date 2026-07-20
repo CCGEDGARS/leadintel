@@ -7,7 +7,7 @@
   <title>Lead Intel V2 — Opportunity Radar</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -21,9 +21,9 @@
       <p class="nav-label">Workspace</p>
 
       <nav class="nav" aria-label="Primary navigation">
-        <button class="nav-item active" data-view="map"><span>⌘</span>System map <b id="map-draft-count">0</b></button>
+        <button class="nav-item" data-view="map"><span>⌘</span>System map <b id="map-draft-count">0</b></button>
         <button class="nav-item" data-view="control"><span>◈</span>Control centre</button>
-        <button class="nav-item" data-view="today"><span>◉</span>Today <b id="today-count">5</b></button>
+        <button class="nav-item active" data-view="today"><span>◉</span>Today <b id="today-count">5</b></button>
         <button class="nav-item" data-view="signals"><span>⌁</span>Signals <b id="signal-count">24</b></button>
         <button class="nav-item" data-view="companies"><span>▦</span>Companies</button>
         <button class="nav-item" data-view="crm"><span>▤</span>CRM <b id="crm-count">0</b></button>
@@ -44,8 +44,8 @@
         <div class="topbar-title">
           <button class="icon-btn menu-btn" id="menu-btn" aria-label="Open menu">☰</button>
           <div>
-            <p class="breadcrumb"><span>Lead Intel</span><i>/</i><span id="view-kicker">Research automation</span></p>
-            <h1 id="view-title">System Map</h1>
+            <p class="breadcrumb"><span>Lead Intel</span><i>/</i><span id="view-kicker">Daily decision desk</span></p>
+            <h1 id="view-title">Today</h1>
           </div>
         </div>
         <div class="top-actions">
@@ -56,7 +56,7 @@
         </div>
       </header>
 
-      <section class="view active" id="view-map">
+      <section class="view" id="view-map">
         <div class="map-page-head">
           <div>
             <p class="kicker">Automation architecture</p>
@@ -154,19 +154,17 @@
         </div>
       </section>
 
-      <section class="view" id="view-today">
-        <div class="hero-strip">
-          <div><span class="live-dot"></span><span id="hero-run-label">Demo research snapshot</span></div>
-          <p id="hero-funnel-label">142 findings → 24 signals → 9 qualified → <strong>5 saved</strong> · Top <strong>3 emailed</strong></p>
+      <section class="view active" id="view-today">
+        <div class="today-command">
+          <div class="today-command-copy"><p class="kicker">Daily decision desk</p><h2>Turn evidence into the next best action.</h2><p>Review only the companies that deserve attention. Every recommendation keeps its evidence, contact status and human approval gate visible.</p></div>
+          <div class="today-command-status"><span class="live-dot"></span><div><strong id="hero-run-label">Secure workspace</strong><small id="hero-funnel-label">Loading today’s decision queue…</small></div></div>
         </div>
-
-        <div class="metrics" id="metrics"></div>
-
-        <div class="section-head">
-          <div><p class="kicker">Daily shortlist</p><h2>Best opportunities today</h2></div>
-          <div class="legend"><span><i class="verified-dot"></i> Verified business email</span><span>Score /10</span></div>
+        <div class="metrics decision-metrics" id="metrics"></div>
+        <div class="section-head today-section-head">
+          <div><p class="kicker">Prioritized work queue</p><h2>What needs your decision</h2></div>
+          <div class="legend"><span><i class="verified-dot"></i> Verified business email</span><span>Human approval enforced</span></div>
         </div>
-        <div class="opportunity-list" id="opportunity-list"></div>
+        <div class="opportunity-list decision-queue" id="opportunity-list"></div>
       </section>
 
       <section class="view" id="view-signals">

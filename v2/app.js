@@ -363,7 +363,8 @@ function normalizeOpportunity(row,index=0){
     scores:isRecord(row.scores)?row.scores:{"ICP fit":Math.min(2,score10/5),"Signal strength":Math.min(2,score10/5),"Urgency":Math.min(1.5,score10*.15),"Recency":Math.min(1,score10*.1),"Offer relevance":Math.min(1.5,score10*.15),"Budget":Math.min(1,score10*.1),"Accessibility":Math.min(1,score10*.1)},
     contact:{name:contactName,role,email,emailStatus,source:String(firstValue(contactRow,["source"],firstValue(row,["verification_provider","Verification Provider"],sourceUrl?"Public source":"Not enriched"))),linkedin:safeUrl(firstValue(contactRow,["linkedin"],firstValue(row,["linkedin_url","LinkedIn URL"],""))),listState:String(firstValue(contactRow,["listState","list_state"],firstValue(row,["list_state","List State"],"Research")))},
     evidence:[{label:String(firstValue(row,["source_title","Source Title","Page Title"],"Source evidence")),url:sourceUrl||"#"}],
-    queryId:String(firstValue(row,["query_id","Query ID"],"")),runId:String(firstValue(row,["run_id","Run ID"],"")),keep:Boolean(firstValue(row,["keep","Keep"],score10>=state.settings.minScore))
+    queryId:String(firstValue(row,["query_id","Query ID"],"")),runId:String(firstValue(row,["run_id","Run ID"],"")),keep:Boolean(firstValue(row,["keep","Keep"],score10>=state.settings.minScore)),
+    pipelineStage:String(firstValue(row,["pipeline_stage","pipelineStage"],"")),nextAction:String(firstValue(row,["next_action","nextAction"],"")),notes:String(firstValue(row,["notes"],""))
   };
 }
 
@@ -378,6 +379,12 @@ function applyRuntimePayload(payload,{persist=true,mode="imported"}={}){
   runs=Array.isArray(payload.runs)?payload.runs.map((item,index)=>({id:String(firstValue(item,["id","run_id"],`RUN-${index+1}`)),started:String(firstValue(item,["started","start_time"],"—")),findings:numberValue(firstValue(item,["findings","pages_found"],0)),qualified:numberValue(firstValue(item,["qualified","qualified_leads"],0)),saved:numberValue(firstValue(item,["saved"],normalized.length)),emailed:numberValue(firstValue(item,["emailed"],0)),errors:numberValue(firstValue(item,["errors"],0)),status:String(firstValue(item,["status"],"Complete"))})):structuredClone(demoRuns);
   state.statuses={...Object.fromEntries(normalized.map(o=>[o.id,o.status])),...state.statuses};
   state.listStates={...Object.fromEntries(normalized.map(o=>[o.id,o.contact.listState])),...state.listStates};
+  normalized.forEach(o=>{
+    const record=state.crm.records[o.id];if(!record)return;
+    if(o.pipelineStage)record.stage=o.pipelineStage;
+    if(o.nextAction)record.nextAction=o.nextAction;
+    if(o.notes)record.notes=o.notes;
+  });
   if(isRecord(payload.workspace))state.workspace={...state.workspace,...payload.workspace};
   state.runtime={...state.runtime,mode,lastSync:formatNow(),error:""};
   state.runtimeData={workspace:state.workspace,opportunities:normalized,signals,sources,runs,generated_at:new Date().toISOString()};
@@ -445,6 +452,17 @@ async function loginBackend(){
 async function logoutBackend(){
   try{await fetch(`${BACKEND_API_URL}/api/logout`,{method:"POST",credentials:"include",headers:{Accept:"application/json"}});}catch{}
   backendSession=null;renderBackendAccess();showToast("Signed out of the secure workspace");
+}
+
+async function persistOpportunityWorkflow(id){
+  if(!backendSession)return true;
+  const record=state.crm.records[id];if(!record)return false;
+  const response=await fetch(`${BACKEND_API_URL}/api/opportunities/${encodeURIComponent(id)}?workspace_id=${encodeURIComponent(state.workspace.id)}`,{
+    method:"PATCH",credentials:"include",headers:{"Content-Type":"application/json",Accept:"application/json"},
+    body:JSON.stringify({status:state.statuses[id]||"New",pipeline_stage:record.stage,next_action:record.nextAction||"",notes:record.notes||""})
+  });
+  if(!response.ok)throw new Error(response.status===401?"Sign in again to save workflow changes":`Secure save failed (${response.status})`);
+  return true;
 }
 
 function fetchJsonp(url){
@@ -635,30 +653,44 @@ function renderMetrics(){
   const verified=opportunities.filter(o=>o.contact.emailStatus==="Verified").length;
   const eligible=opportunities.filter(o=>state.listStates[o.id]==="Eligible").length;
   const qualified=opportunities.filter(o=>o.score>=state.settings.minScore).length;
+  const approved=opportunities.filter(o=>state.statuses[o.id]==="Approved").length;
+  const contactGaps=opportunities.filter(o=>o.score>=state.settings.minScore&&o.contact.emailStatus!=="Verified").length;
   const data=[
-    ["Opportunities loaded",opportunities.length,state.runtime.mode==="demo"?"Demo workspace":"Current workspace"],["Qualified signals",qualified,`Score ≥ ${state.settings.minScore}`],
-    ["Saved in V2",Math.min(state.settings.appCount,opportunities.length),"Daily maximum"],["Email shortlist",Math.min(state.settings.emailCount,qualified),"One contact each"],
-    ["Verified / eligible",`${verified} / ${eligible}`,"Business contacts"]
+    ["Review now",qualified,`Score ≥ ${state.settings.minScore}`,"companies"],["Contact gaps",contactGaps,"Research before outreach","contacts"],
+    ["Verified / eligible",`${verified} / ${eligible}`,"Business contacts","contacts"],["Approved",approved,"Human-approved actions","outreach"]
   ];
-  document.getElementById("metrics").innerHTML=data.map(([label,value,note])=>`<div class="metric"><span>${label}</span><strong>${value}</strong><small>${note}</small></div>`).join("");
+  document.getElementById("metrics").innerHTML=data.map(([label,value,note,view],index)=>`<button class="metric decision-metric" type="button" data-view="${view}"><span><i>0${index+1}</i>${label}</span><strong>${value}</strong><small>${note}</small><em>Open →</em></button>`).join("");
+}
+
+function todayRecommendation(o){
+  const stage=state.crm.records[o.id]?.stage||"Discovered";
+  const listState=state.listStates[o.id]||"Research";
+  const status=state.statuses[o.id]||"New";
+  if(o.contact.emailStatus!=="Verified")return {label:"Research decision-maker",kind:"open",reason:"No verified business email yet",tone:"research"};
+  if(listState!=="Eligible")return {label:"Review contact eligibility",kind:"contacts",reason:"Verified email · campaign review required",tone:"review"};
+  if(status==="Approved")return {label:"Continue in pipeline",kind:"crm",reason:`Approved · ${stage}`,tone:"approved"};
+  if(status==="Draft ready")return {label:"Review outreach draft",kind:"message",reason:"Draft prepared · approval pending",tone:"ready"};
+  return {label:"Prepare outreach draft",kind:"message",reason:"Verified and eligible · human approval next",tone:"ready"};
 }
 
 function renderOpportunities(){
-  const list=opportunities.slice(0,state.settings.appCount);
+  const list=opportunities.filter(o=>o.score>=state.settings.minScore).slice(0,state.settings.appCount);
   document.getElementById("today-count").textContent=list.length;
   document.getElementById("opportunity-list").innerHTML=list.map((o,index)=>{
     const listState=state.listStates[o.id]||"Research";
-    return `<article class="opp-card">
-      <div class="rank">${index+1}</div>
-      <div class="opp-main">
-        <div class="opp-title-row"><h3>${esc(o.company)}</h3>${o.emailed?'<span class="tag email">Morning email</span>':''}${o.contact.emailStatus==="Verified"?'<span class="tag verified">Verified email</span>':''}</div>
+    const action=todayRecommendation(o);const record=state.crm.records[o.id];
+    const actionButton=action.kind==="message"?`<button class="btn primary" data-message="${o.id}">${action.label}</button>`:action.kind==="open"?`<button class="btn primary" data-open="${o.id}">${action.label}</button>`:`<button class="btn primary" data-view="${action.kind}">${action.label}</button>`;
+    return `<article class="opp-card decision-card ${action.tone}">
+      <div class="decision-priority"><span>Priority</span><strong>${String(index+1).padStart(2,"0")}</strong><div class="score">${o.score.toFixed(1)}<small>/10</small></div></div>
+      <div class="opp-main decision-main">
+        <div class="opp-title-row"><div><p class="kicker">${esc(o.signalType)} · ${esc(o.signalDate)}</p><h3>${esc(o.company)}</h3></div>${o.contact.emailStatus==="Verified"?'<span class="tag verified">Verified email</span>':'<span class="tag">Contact gap</span>'}</div>
         <p class="signal">${esc(o.signal)}</p>
-        <div class="opp-meta"><span><strong>${esc(o.primaryOffer)}</strong></span><span>${esc(o.signalDate)}</span><span>Status: ${esc(state.statuses[o.id])}</span></div>
-        <div class="contact-line"><span class="avatar">${initials(o.contact.name)}</span><span><strong>${esc(o.contact.name)}</strong> · ${esc(o.contact.role)} · ${esc(o.contact.emailStatus)} · ${esc(listState)}</span></div>
+        <div class="decision-evidence"><span><b>Why now</b>${esc(o.whyNow)}</span><span><b>Best-fit offer</b>${esc(o.primaryOffer)}</span></div>
+        <div class="contact-line"><span class="avatar">${initials(o.contact.name||o.company)}</span><span><strong>${esc(o.contact.name||"Decision-maker not verified")}</strong><small>${esc(o.contact.role||"Role research required")} · ${esc(o.contact.emailStatus)} · ${esc(listState)}</small></span></div>
       </div>
-      <div class="opp-side"><div class="score">${o.score.toFixed(1)}<small>/10</small></div><div class="confidence">${esc(o.confidence)} evidence confidence</div><div class="card-actions"><button class="btn small secondary" data-message="${o.id}">Draft</button><button class="btn small primary" data-open="${o.id}">Open</button></div></div>
+      <aside class="decision-action"><span class="decision-state ${action.tone}">${esc(action.reason)}</span><label>Pipeline stage<select data-crm-stage="${esc(o.id)}">${state.crm.stageOrder.map(value=>`<option ${value===record.stage?"selected":""}>${esc(value)}</option>`).join("")}</select></label><label>Next action<input data-crm-next-action="${esc(o.id)}" value="${esc(record.nextAction||"")}" placeholder="Define the next commercial action"></label><div class="decision-buttons"><button class="btn secondary" data-open="${o.id}">Evidence dossier</button>${actionButton}</div></aside>
     </article>`;
-  }).join("");
+  }).join("")||'<div class="empty-state"><h3>No qualified decisions waiting</h3><p>The next research run will add companies here when they meet the score and evidence thresholds.</p></div>';
 }
 
 function renderSignals(){
@@ -713,7 +745,7 @@ function ensureCrmRecords(){
     if(o.score>=state.settings.minScore)stage="Qualified";
     if(o.contact.emailStatus==="Verified")stage="Contact Found";
     if(state.statuses[o.id]==="Approved")stage="Ready for Outreach";
-    state.crm.records[o.id]={opportunityId:o.id,company:o.company,stage,owner:state.businessProfile.owner||"Unassigned",nextAction:"Review evidence and decide the next step",notes:"",updatedAt:formatNow()};
+    state.crm.records[o.id]={opportunityId:o.id,company:o.company,stage:o.pipelineStage||stage,owner:state.businessProfile.owner||"Unassigned",nextAction:o.nextAction||"Review evidence and decide the next step",notes:o.notes||"",updatedAt:formatNow()};
     changed=true;
   });
   if(changed)saveState();
@@ -1003,7 +1035,9 @@ document.addEventListener("click",async event=>{
       if(action.dataset.statusAction==="Draft ready"&&["Discovered","Qualified"].includes(record.stage))record.stage=opportunity?.contact.emailStatus==="Verified"?"Contact Found":"Qualified";
       record.updatedAt=formatNow();
     }
-    saveState();renderAll();closeModal();showToast(`Status changed to ${action.dataset.statusAction}`);return;
+    saveState();
+    try{await persistOpportunityWorkflow(action.dataset.id);renderAll();closeModal();showToast(`Status changed to ${action.dataset.statusAction}`);}catch(error){showToast(error.message);}
+    return;
   }
   if(event.target.id==="drawer-close"||event.target.id==="drawer-backdrop")closeDrawer();
   if(event.target.id==="modal-close"||event.target.id==="modal-backdrop"||event.target.id==="close-preview-action")closeModal();
@@ -1084,15 +1118,21 @@ document.addEventListener("change",async event=>{
   if(event.target.id==="crm-stage-filter"){crmStageFilter=event.target.value;renderCRM();return;}
   const crmStage=event.target.closest("[data-crm-stage]");if(crmStage){
     const record=state.crm.records[crmStage.dataset.crmStage];if(!record)return;
-    record.stage=crmStage.value;record.updatedAt=formatNow();saveState();renderCRM();renderOutreach();showToast(`CRM stage changed to ${crmStage.value}`);return;
+    record.stage=crmStage.value;record.updatedAt=formatNow();saveState();
+    try{await persistOpportunityWorkflow(crmStage.dataset.crmStage);renderCRM();renderOutreach();showToast(`CRM stage changed to ${crmStage.value}`);}catch(error){showToast(error.message);}
+    return;
   }
   const nextAction=event.target.closest("[data-crm-next-action]");if(nextAction){
     const record=state.crm.records[nextAction.dataset.crmNextAction];if(!record)return;
-    record.nextAction=nextAction.value.trim();record.updatedAt=formatNow();saveState();showToast("Next action saved");return;
+    record.nextAction=nextAction.value.trim();record.updatedAt=formatNow();saveState();
+    try{await persistOpportunityWorkflow(nextAction.dataset.crmNextAction);showToast("Next action saved");}catch(error){showToast(error.message);}
+    return;
   }
   const notes=event.target.closest("[data-crm-notes]");if(notes){
     const record=state.crm.records[notes.dataset.crmNotes];if(!record)return;
-    record.notes=notes.value.trim();record.updatedAt=formatNow();saveState();showToast("CRM notes saved");return;
+    record.notes=notes.value.trim();record.updatedAt=formatNow();saveState();
+    try{await persistOpportunityWorkflow(notes.dataset.crmNotes);showToast("CRM notes saved");}catch(error){showToast(error.message);}
+    return;
   }
   const select=event.target.closest("[data-list-state]");if(!select)return;
   const id=select.dataset.listState;

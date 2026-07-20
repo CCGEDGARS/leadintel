@@ -74,6 +74,27 @@ async function router(request,env) {
     await audit(env,{workspaceId,userId:user.id,type:"snapshot.created",entityType:"snapshot",entityId:snapshotId,metadata:{opportunities:payload.opportunities.length,...canonical}});
     return json({id:snapshotId,opportunities:payload.opportunities.length,canonical},201,cors);
   }
+  const opportunityMatch=url.pathname.match(/^\/api\/opportunities\/([^/]+)$/);
+  if(opportunityMatch&&request.method==="PATCH") {
+    if(!["owner","researcher"].includes(membership.role))return error("Write access required",403,cors);
+    const opportunityId=decodeURIComponent(opportunityMatch[1]);
+    const body=await request.json().catch(()=>null);
+    if(!body||typeof body!=="object")return error("A workflow update is required",400,cors);
+    const allowedStages=["Discovered","Qualified","Contact Found","Ready for Outreach","Contacted","Replied","Meeting","Proposal","Won","Lost"];
+    const stage=String(body.pipeline_stage??"").trim();
+    const status=String(body.status??"").trim();
+    const nextAction=String(body.next_action??"").trim();
+    const notes=String(body.notes??"").trim();
+    if(stage&&!allowedStages.includes(stage))return error("Invalid pipeline stage",400,cors);
+    if(status.length>80||nextAction.length>500||notes.length>5000)return error("Workflow field is too long",400,cors);
+    const existing=await env.DB.prepare("SELECT id,status,pipeline_stage,next_action,notes FROM opportunities WHERE id=? AND workspace_id=?").bind(opportunityId,workspaceId).first();
+    if(!existing)return error("Opportunity not found",404,cors);
+    const updated={status:status||existing.status,pipeline_stage:stage||existing.pipeline_stage,next_action:body.next_action===undefined?existing.next_action:nextAction,notes:body.notes===undefined?existing.notes:notes};
+    await env.DB.prepare("UPDATE opportunities SET status=?,pipeline_stage=?,next_action=?,notes=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?")
+      .bind(updated.status,updated.pipeline_stage,updated.next_action,updated.notes,opportunityId,workspaceId).run();
+    await audit(env,{workspaceId,userId:user.id,type:"opportunity.workflow_updated",entityType:"opportunity",entityId:opportunityId,metadata:updated});
+    return json({id:opportunityId,...updated},200,cors);
+  }
   if(url.pathname==="/api/audit"&&request.method==="GET") {
     const {results}=await env.DB.prepare("SELECT id,event_type,entity_type,entity_id,metadata_json,created_at FROM audit_events WHERE workspace_id=? ORDER BY created_at DESC LIMIT 100").bind(workspaceId).all();
     return json({events:results.map(row=>({...row,metadata:JSON.parse(row.metadata_json)}))},200,cors);
