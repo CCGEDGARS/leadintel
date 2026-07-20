@@ -1,4 +1,5 @@
 import {allowedOrigin,corsHeaders,sha256,randomToken,constantTimeEqual,cookieValue,sessionCookie,clearSessionCookie} from "./security.js";
+import {canonicalSnapshot,ingestCanonicalSnapshot} from "./canonical.js";
 
 const json = (value,status=200,headers={}) => new Response(JSON.stringify(value),{status,headers:{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store",...headers}});
 const error = (message,status,headers) => json({error:message},status,headers);
@@ -58,6 +59,7 @@ async function router(request,env) {
   if(!membership)return error("Workspace access denied",403,cors);
 
   if(url.pathname==="/api/snapshot"&&request.method==="GET") {
+    const canonical=await canonicalSnapshot(env,workspaceId);if(canonical)return json(canonical,200,cors);
     const record=await env.DB.prepare("SELECT payload_json FROM snapshots WHERE workspace_id=? ORDER BY created_at DESC LIMIT 1").bind(workspaceId).first();
     return record?json(JSON.parse(record.payload_json),200,cors):error("No workspace snapshot",404,cors);
   }
@@ -68,8 +70,9 @@ async function router(request,env) {
     const snapshotId=uuid(); const generatedAt=String(payload.generated_at||new Date().toISOString());
     await env.DB.prepare("INSERT INTO snapshots(id,workspace_id,schema_version,payload_json,generated_at,created_by) VALUES(?,?,?,?,?,?)")
       .bind(snapshotId,workspaceId,Number(payload.schema_version)||1,JSON.stringify(payload),generatedAt,user.id).run();
-    await audit(env,{workspaceId,userId:user.id,type:"snapshot.created",entityType:"snapshot",entityId:snapshotId,metadata:{opportunities:payload.opportunities.length}});
-    return json({id:snapshotId,opportunities:payload.opportunities.length},201,cors);
+    const canonical=await ingestCanonicalSnapshot(env,workspaceId,payload);
+    await audit(env,{workspaceId,userId:user.id,type:"snapshot.created",entityType:"snapshot",entityId:snapshotId,metadata:{opportunities:payload.opportunities.length,...canonical}});
+    return json({id:snapshotId,opportunities:payload.opportunities.length,canonical},201,cors);
   }
   if(url.pathname==="/api/audit"&&request.method==="GET") {
     const {results}=await env.DB.prepare("SELECT id,event_type,entity_type,entity_id,metadata_json,created_at FROM audit_events WHERE workspace_id=? ORDER BY created_at DESC LIMIT 100").bind(workspaceId).all();
