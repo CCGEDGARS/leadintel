@@ -338,6 +338,14 @@ function listValue(value){if(Array.isArray(value))return value.filter(Boolean).m
 function safeUrl(value){try{const url=new URL(String(value));return ["https:","http:"].includes(url.protocol)?url.href:"";}catch{return "";}}
 function isPrivateEndpoint(value){if(!value)return true;try{const url=new URL(value);return url.protocol==="https:"||["localhost","127.0.0.1"].includes(url.hostname);}catch{return false;}}
 function formatNow(){return new Intl.DateTimeFormat("en-GB",{dateStyle:"medium",timeStyle:"short",timeZone:"Europe/Riga"}).format(new Date());}
+function dateAge(value){const date=new Date(value);if(Number.isNaN(date.getTime()))return null;return Math.max(0,Math.floor((Date.now()-date.getTime())/86400000));}
+function sourceProfile(value){
+  const url=safeUrl(value);if(!url)return {label:"No source link",tone:"weak",detail:"Cannot be independently opened"};
+  const host=new URL(url).hostname.replace(/^www\./,"");
+  if(/\.gov\.|gov\.lv$|iub\.gov\.lv$|ur\.gov\.lv$/.test(host))return {label:"Official source",tone:"strong",detail:host};
+  if(/linkedin\.com|reddit\.com|facebook\.com/.test(host))return {label:"Public platform",tone:"review",detail:host};
+  return {label:"Direct web source",tone:"good",detail:host};
+}
 
 function normalizeOpportunity(row,index=0){
   const company=String(firstValue(row,["company","company_name","Company Name","Company"],"Unknown company"));
@@ -351,6 +359,7 @@ function normalizeOpportunity(row,index=0){
   const pains=listValue(firstValue(row,["pains","pain_points","inferred_pain_points","Pain Points"],[]));
   const evidenceText=String(firstValue(row,["factual_evidence","Factual Evidence","evidence_summary","Evidence Summary"],"Evidence summary pending"));
   const id=String(firstValue(row,["id","opportunity_id","lead_id","Lead ID","Query ID"],`LIVE-${Date.now()}-${index+1}`));
+  const evidenceRows=Array.isArray(row.evidence_items)?row.evidence_items.map(item=>({claim:String(item.claim||item.claim_text||""),label:String(item.source_title||"Source evidence"),url:safeUrl(item.source_url||""),observedAt:String(item.observed_at||"")})).filter(item=>item.claim):[];
   return {
     id,company,website:safeUrl(firstValue(row,["website","Website"],sourceUrl)),industry:String(firstValue(row,["industry","Industry"],"Business")),location:String(firstValue(row,["location","Location"],state.workspace.market)),
     score:score10,confidence:String(firstValue(row,["confidence","Confidence"],"Medium")),emailed:Boolean(firstValue(row,["emailed"],false)),status:String(firstValue(row,["status","Status"],score10>=state.settings.minScore?"New":"Monitor")),
@@ -362,7 +371,7 @@ function normalizeOpportunity(row,index=0){
     pains:pains.length?pains:["Validate the likely operational pain directly with the decision-maker."],
     scores:isRecord(row.scores)?row.scores:{"ICP fit":Math.min(2,score10/5),"Signal strength":Math.min(2,score10/5),"Urgency":Math.min(1.5,score10*.15),"Recency":Math.min(1,score10*.1),"Offer relevance":Math.min(1.5,score10*.15),"Budget":Math.min(1,score10*.1),"Accessibility":Math.min(1,score10*.1)},
     contact:{name:contactName,role,email,emailStatus,source:String(firstValue(contactRow,["source"],firstValue(row,["verification_provider","Verification Provider"],sourceUrl?"Public source":"Not enriched"))),linkedin:safeUrl(firstValue(contactRow,["linkedin"],firstValue(row,["linkedin_url","LinkedIn URL"],""))),listState:String(firstValue(contactRow,["listState","list_state"],firstValue(row,["list_state","List State"],"Research")))},
-    evidence:[{label:String(firstValue(row,["source_title","Source Title","Page Title"],"Source evidence")),url:sourceUrl||"#"}],
+    evidence:evidenceRows.length?evidenceRows:[{claim:evidenceText,label:String(firstValue(row,["source_title","Source Title","Page Title"],"Source evidence")),url:sourceUrl,observedAt:String(firstValue(row,["captured_at","Captured At","signal_date"],""))}],
     queryId:String(firstValue(row,["query_id","Query ID"],"")),runId:String(firstValue(row,["run_id","Run ID"],"")),keep:Boolean(firstValue(row,["keep","Keep"],score10>=state.settings.minScore)),
     pipelineStage:String(firstValue(row,["pipeline_stage","pipelineStage"],"")),nextAction:String(firstValue(row,["next_action","nextAction"],"")),notes:String(firstValue(row,["notes"],""))
   };
@@ -891,19 +900,46 @@ function renderRuntimeStatus(){
   document.getElementById("hero-funnel-label").innerHTML=`${findings} findings → ${signalCount} signals → ${qualified} qualified → <strong>${saved} saved</strong> · Top <strong>${emailed} emailed</strong>`;
 }
 
+function scoreFactorExplanation(o,label,value,max){
+  const evidenceCount=o.evidence.filter(item=>item.claim).length;
+  const age=dateAge(o.signalDate);
+  const explanations={
+    "ICP fit":`${o.industry} matched against the active business profile and target market.`,
+    "Signal strength":`${evidenceCount} sourced ${evidenceCount===1?"claim":"claims"} support this opportunity.`,
+    "Urgency":o.whyNow||"Urgency requires commercial validation.",
+    "Recency":age===null?"The source date is unavailable; treat recency cautiously.":age===0?"Captured today.":`Captured ${age} ${age===1?"day":"days"} ago.`,
+    "Offer relevance":`${o.primaryOffer} is the model-selected best-fit offer.`,
+    "Budget":/fund|invest|procure|tender|budget/i.test(`${o.signal} ${o.whyNow}`)?"The public signal contains a budget, funding, investment, or procurement indicator.":"No direct budget evidence; this component is inferred.",
+    "Accessibility":o.contact.emailStatus==="Verified"?"A verified business email is available.":"No verified business email is available yet."
+  };
+  const factual=["Signal strength","Recency","Accessibility"].includes(label);
+  return {text:explanations[label]||"Model assessment based on the captured signal.",basis:factual?"Evidence-based":"AI assessment",ratio:Math.min(100,Math.max(0,(Number(value)||0)/(max||1)*100))};
+}
+
+function dossierQuality(o){
+  const sourced=o.evidence.filter(item=>item.url&&item.claim).length;
+  const fresh=o.evidence.filter(item=>{const age=dateAge(item.observedAt||o.signalDate);return age!==null&&age<=90;}).length;
+  const verified=o.contact.emailStatus==="Verified";
+  const complete=sourced>0&&fresh>0;
+  return {sourced,fresh,verified,label:complete&&verified?"Decision ready":complete?"Evidence ready":"Needs verification",tone:complete&&verified?"strong":complete?"good":"review"};
+}
+
 function openDrawer(id){
   const o=opportunities.find(item=>item.id===id);if(!o)return;
   const scoreMax={"ICP fit":2,"Signal strength":2,"Urgency":1.5,"Recency":1,"Offer relevance":1.5,"Budget":1,"Accessibility":1};
+  const quality=dossierQuality(o);
+  const factorTotal=Object.values(o.scores).reduce((sum,value)=>sum+(Number(value)||0),0);
+  const scoreAligned=Math.abs(factorTotal-o.score)<.11;
+  const canApprove=o.contact.emailStatus==="Verified"&&state.listStates[o.id]==="Eligible";
   document.getElementById("drawer-content").innerHTML=`
-    <p class="kicker">${esc(o.id)} · ${esc(o.signalType)}</p><h2>${esc(o.company)}</h2><p class="drawer-sub">${esc(o.industry)} · ${esc(o.location)} · Signal ${esc(o.signalDate)}</p>
-    <div class="detail-score"><strong>${o.score.toFixed(1)}</strong><div><b>Opportunity score /10</b><p class="drawer-sub">${esc(o.confidence)} evidence confidence · ${esc(o.primaryOffer)}</p></div></div>
-    <div class="score-bars">${Object.entries(o.scores).map(([label,value])=>`<div class="bar-row"><span>${esc(label)}</span><span class="bar"><i style="width:${Math.min(100,value/scoreMax[label]*100)}%"></i></span><b>${value.toFixed(1)}</b></div>`).join("")}</div>
-    <section class="detail-section"><h3>Why now</h3><p>${esc(o.whyNow)}</p></section>
-    <section class="detail-section"><h3>Verified facts</h3><ul>${o.facts.map(f=>`<li>${esc(f)}</li>`).join("")}</ul></section>
-    <section class="detail-section"><h3>Pain-point assessment</h3><ul>${o.pains.map(p=>`<li>${esc(p)}</li>`).join("")}</ul></section>
-    <section class="detail-section"><h3>Primary decision-maker</h3><p><strong>${esc(o.contact.name)}</strong><br>${esc(o.contact.role)}<br>${o.contact.emailStatus==="Predicted"?"Email requires verification":esc(o.contact.email)}<br><span class="status ${statusClass(o.contact.emailStatus)}">${esc(o.contact.emailStatus)}</span> · ${esc(o.contact.source)}</p></section>
-    <section class="detail-section"><h3>Evidence</h3>${o.evidence.map(e=>`<a class="evidence" href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.label)} ↗</a>`).join("")}</section>
-    <div class="drawer-actions"><button class="btn secondary" data-status-action="Monitor" data-id="${o.id}">Monitor</button><button class="btn secondary" data-message="${o.id}">Generate message</button><button class="btn primary" data-status-action="Approved" data-id="${o.id}">Approve outreach</button></div>`;
+    <div class="dossier-head"><div><p class="kicker">Decision dossier · ${esc(o.id)}</p><h2>${esc(o.company)}</h2><p class="drawer-sub">${esc(o.industry)} · ${esc(o.location)} · ${esc(o.signalType)}</p></div><span class="dossier-readiness ${quality.tone}"><i></i>${quality.label}</span></div>
+    <div class="dossier-summary"><div class="detail-score"><strong>${o.score.toFixed(1)}</strong><div><b>Opportunity score /10</b><p>${esc(o.confidence)} model confidence</p></div></div><dl><div><dt>Sourced claims</dt><dd>${quality.sourced}</dd></div><div><dt>Fresh ≤90 days</dt><dd>${quality.fresh}</dd></div><div><dt>Verified contact</dt><dd>${quality.verified?"Yes":"No"}</dd></div></dl></div>
+    <div class="dossier-notice ${scoreAligned?"":"score-warning"}"><strong>${scoreAligned?"How to read this dossier":"Score reconciliation needed"}</strong><span>${scoreAligned?'Green “evidence-based” labels point to checkable facts. Amber “AI assessment” labels are commercial interpretations and should be validated before outreach.':`The factor total is ${factorTotal.toFixed(1)}, while the stored score is ${o.score.toFixed(1)}. Review the scoring output before acting.`}</span></div>
+    <section class="detail-section score-explanation"><div class="section-title"><div><span>01</span><h3>Score explanation</h3></div><small>Transparent 10-point model</small></div><div class="score-factors">${Object.entries(o.scores).map(([label,rawValue])=>{const value=Number(rawValue)||0;const rationale=scoreFactorExplanation(o,label,value,scoreMax[label]);return `<article class="score-factor"><div class="factor-head"><strong>${esc(label)}</strong><b>${value.toFixed(1)}<small>/${scoreMax[label]}</small></b></div><span class="bar"><i style="width:${rationale.ratio}%"></i></span><p>${esc(rationale.text)}</p><em class="basis ${rationale.basis==="Evidence-based"?"evidence-based":"assessment"}">${rationale.basis}</em></article>`;}).join("")}</div></section>
+    <section class="detail-section"><div class="section-title"><div><span>02</span><h3>Sourced evidence</h3></div><small>${quality.sourced} independently openable</small></div><div class="evidence-ledger">${o.evidence.map((e,index)=>{const profile=sourceProfile(e.url);const age=dateAge(e.observedAt||o.signalDate);return `<article class="evidence-item"><div class="evidence-index">${String(index+1).padStart(2,"0")}</div><div><p>${esc(e.claim||"Evidence statement unavailable")}</p><div class="evidence-meta"><span class="source-quality ${profile.tone}">${profile.label}</span><span>${esc(profile.detail)}</span><span>${age===null?"Date unavailable":age===0?"Today":`${age}d old`}</span></div>${e.url?`<a href="${esc(e.url)}" target="_blank" rel="noopener">Open original source ↗</a>`:'<span class="missing-source">Source URL missing · verify before use</span>'}</div></article>`;}).join("")}</div></section>
+    <section class="detail-section assessment-section"><div class="section-title"><div><span>03</span><h3>Commercial assessment</h3></div><em class="basis assessment">AI assessment</em></div><h4>Why now</h4><p>${esc(o.whyNow)}</p><h4>Likely pain points to validate</h4><ul>${o.pains.map(p=>`<li>${esc(p)}</li>`).join("")}</ul><div class="assessment-warning">These pain points are hypotheses, not verified company statements.</div></section>
+    <section class="detail-section"><div class="section-title"><div><span>04</span><h3>Decision-maker verification</h3></div><span class="status ${statusClass(o.contact.emailStatus)}">${esc(o.contact.emailStatus)}</span></div><div class="contact-proof"><span class="avatar">${initials(o.contact.name||o.company)}</span><div><strong>${esc(o.contact.name)}</strong><p>${esc(o.contact.role)}</p><p>${o.contact.emailStatus==="Verified"?esc(o.contact.email):"No proven business email"}</p><small>Verification source: ${esc(o.contact.source||"Not recorded")}</small></div></div></section>
+    <div class="drawer-actions"><button class="btn secondary" data-status-action="Monitor" data-id="${o.id}">Monitor</button><button class="btn secondary" data-message="${o.id}">Generate message</button><button class="btn primary" data-status-action="Approved" data-id="${o.id}" ${canApprove?'':'disabled title="Requires a verified, eligible business contact"'}>Approve outreach</button></div>`;
   document.getElementById("lead-drawer").classList.add("open");
   document.getElementById("drawer-backdrop").classList.add("open");
   document.getElementById("lead-drawer").setAttribute("aria-hidden","false");

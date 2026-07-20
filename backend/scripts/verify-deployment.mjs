@@ -18,6 +18,7 @@ if(snapshot.schema_version!==2||snapshot.canonical!==true)throw new Error("Canon
 if(snapshot.opportunities?.length!==2)throw new Error("Duplicate companies were not consolidated");
 const orkla=snapshot.opportunities.find(item=>item.company_name==="Orkla Latvija");
 if(!orkla||orkla.evidence_count!==2)throw new Error("Orkla evidence was not consolidated into one dossier");
+if(!Array.isArray(orkla.evidence_items)||orkla.evidence_items.length!==2||!orkla.evidence_items.every(item=>item.claim&&item.source_url))throw new Error("Structured evidence ledger was not returned");
 if(orkla.email_status!=="Verified"||orkla.business_email!=="gints.uzans@orkla.lv")throw new Error("Verified Orkla contact was not preserved");
 if(snapshot.opportunities.filter(item=>item.company_name==="Orkla Latvija").length!==1)throw new Error("Orkla still appears more than once");
 const originalStage=orkla.next_action==="Verify Step 3 workflow"?"Contact Found":orkla.pipeline_stage||"Contact Found";
@@ -31,4 +32,4 @@ const restoreResponse=await fetch(`${api}/api/opportunities/${encodeURIComponent
 if(!restoreResponse.ok)throw new Error(`Workflow cleanup failed (${restoreResponse.status})`);
 const unauthorized=await fetch(`${api}/api/snapshot?workspace_id=edgars-latvia`,{headers:{Origin:api}});
 if(unauthorized.status!==401)throw new Error("Unauthenticated snapshot access was not blocked");
-console.log("Verified: Today workspace is current; canonical data is deduplicated; workflow state persists; unauthorized access remains blocked.");
+console.log("Verified: explainable dossier assets are current; structured evidence is sourced; canonical data is deduplicated; workflow state persists; unauthorized access remains blocked.");

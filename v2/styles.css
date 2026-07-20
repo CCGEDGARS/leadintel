@@ -508,7 +508,7 @@ tr:last-child td { border-bottom: 0; }
 
 .drawer-backdrop, .modal-backdrop { position: fixed; inset: 0; z-index: 60; opacity: 0; pointer-events: none; background: rgba(3,8,15,0.74); backdrop-filter: blur(3px); transition: 180ms ease; }
 .drawer-backdrop.open, .modal-backdrop.open { opacity: 1; pointer-events: auto; }
-.drawer { position: fixed; inset: 0 0 0 auto; z-index: 70; width: min(600px,100%); padding: 32px; overflow: auto; border-left: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); transform: translateX(100%); transition: 220ms ease; }
+.drawer { position: fixed; inset: 0 0 0 auto; z-index: 70; width: min(760px,100%); padding: 32px; overflow: auto; border-left: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); transform: translateX(100%); transition: 220ms ease; }
 .drawer.open { transform: none; }
 .drawer-close { position: absolute; top: 16px; right: 18px; display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; font-size: 18px; }
 .drawer h2, .modal h2 { margin: 6px 40px 4px 0; font-size: 24px; }
@@ -524,6 +524,56 @@ tr:last-child td { border-bottom: 0; }
 .detail-section ul { padding-left: 18px; color: var(--muted); line-height: 1.7; }
 .evidence { display: block; padding: 9px 0; border-bottom: 1px solid var(--line); color: #8eb0ff; font-size: 9px; text-decoration: none; }
 .drawer-actions { position: sticky; bottom: -32px; display: flex; gap: 8px; margin: 23px -32px -32px; padding: 15px 32px; border-top: 1px solid var(--line); background: rgba(19,30,45,0.96); }
+.dossier-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-right: 42px; }
+.dossier-head h2 { margin-right: 0; font-size: 30px; letter-spacing: -.03em; }
+.dossier-readiness { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font: 600 11px "IBM Plex Mono",monospace; text-transform: uppercase; }
+.dossier-readiness i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 12px currentColor; }
+.dossier-readiness.strong { border-color: rgba(42,191,143,.3); color: #55d8ac; }
+.dossier-readiness.good { border-color: rgba(94,143,255,.3); color: #8eb0ff; }
+.dossier-readiness.review { border-color: rgba(238,176,74,.3); color: #f1c46d; }
+.dossier-summary { display: grid; grid-template-columns: minmax(220px,.8fr) minmax(320px,1.2fr); gap: 12px; margin: 20px 0 12px; }
+.dossier-summary .detail-score { margin: 0; }
+.dossier-summary .detail-score p { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
+.dossier-summary dl { display: grid; grid-template-columns: repeat(3,1fr); margin: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); }
+.dossier-summary dl div { display: flex; flex-direction: column; justify-content: center; padding: 13px; border-left: 1px solid var(--line); }
+.dossier-summary dl div:first-child { border-left: 0; }
+.dossier-summary dt { color: var(--muted); font-size: 11px; line-height: 1.35; }
+.dossier-summary dd { margin: 5px 0 0; color: var(--text); font: 700 18px "IBM Plex Mono",monospace; }
+.dossier-notice { display: grid; grid-template-columns: 170px 1fr; gap: 14px; padding: 13px 15px; border: 1px solid rgba(94,143,255,.22); border-radius: 9px; background: rgba(57,119,246,.05); }
+.dossier-notice strong { color: #a9c1ff; font-size: 13px; }
+.dossier-notice span { color: var(--muted); font-size: 13px; line-height: 1.55; }
+.dossier-notice.score-warning { border-color: rgba(238,176,74,.3); background: rgba(238,176,74,.06); }
+.dossier-notice.score-warning strong { color: #f1c46d; }
+.section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
+.section-title > div { display: flex; align-items: center; gap: 9px; }
+.section-title > div > span { color: #627084; font: 600 11px "IBM Plex Mono",monospace; }
+.detail-section .section-title h3 { margin: 0; color: var(--text); font-size: 16px; letter-spacing: -.01em; text-transform: none; }
+.section-title > small { color: var(--muted); font-size: 12px; }
+.score-factors { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; }
+.score-factor { position: relative; padding: 13px; border: 1px solid var(--line); border-radius: 9px; background: rgba(255,255,255,.018); }
+.factor-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.factor-head strong { font-size: 13px; }
+.factor-head b { color: #9ab6f8; font: 700 15px "IBM Plex Mono",monospace; }
+.factor-head b small { color: var(--muted); font-size: 10px; }
+.score-factor .bar { display: block; height: 4px; margin: 9px 0; }
+.score-factor p { min-height: 42px; margin: 0 0 11px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.basis { display: inline-flex; padding: 4px 7px; border-radius: 4px; font: 600 10px "IBM Plex Mono",monospace; font-style: normal; text-transform: uppercase; }
+.basis.evidence-based { background: rgba(42,191,143,.1); color: #55d8ac; }
+.basis.assessment { background: rgba(238,176,74,.1); color: #f1c46d; }
+.evidence-ledger { display: flex; flex-direction: column; gap: 8px; }
+.evidence-item { display: grid; grid-template-columns: 34px 1fr; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-2); }
+.evidence-index { color: #627084; font: 600 11px "IBM Plex Mono",monospace; }
+.evidence-item p { margin: 0 0 9px; color: #d7e0eb; font-size: 14px; line-height: 1.55; }
+.evidence-item a { display: inline-block; margin-top: 10px; color: #8eb0ff; font-size: 12px; font-weight: 700; text-decoration: none; }
+.evidence-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 12px; color: var(--muted); font-size: 11px; }
+.source-quality { padding: 3px 6px; border-radius: 4px; background: rgba(255,255,255,.05); }
+.source-quality.strong { color: #55d8ac; }.source-quality.good { color: #8eb0ff; }.source-quality.review { color: #f1c46d; }.source-quality.weak { color: #ff9c9c; }
+.missing-source { display: inline-block; margin-top: 9px; color: #ff9c9c; font-size: 12px; }
+.assessment-section h4 { margin: 15px 0 5px; font-size: 13px; }
+.assessment-section > p, .assessment-section li { color: var(--muted); font-size: 14px; line-height: 1.6; }
+.assessment-warning { margin-top: 12px; padding: 10px 12px; border-left: 2px solid #d69a38; background: rgba(238,176,74,.06); color: #d7bb86; font-size: 12px; }
+.contact-proof { display: flex; align-items: flex-start; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-2); }
+.contact-proof p, .contact-proof small { margin: 2px 0; color: var(--muted); font-size: 13px; }
 .modal-backdrop { display: grid; place-items: center; padding: 20px; }
 .modal { position: relative; width: min(700px,100%); max-height: 88vh; padding: 27px; overflow: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); box-shadow: var(--shadow); }
 .email-preview { margin: 15px 0; padding: 14px; border: 1px solid #e0e5ec; border-radius: 9px; background: white; color: #172235; }
@@ -682,6 +732,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .market-profile-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }
   .crm-summary { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .crm-workbar { position: static; grid-template-columns: 1fr; }
+}
+@media (max-width: 680px) {
+  .dossier-head, .section-title { align-items: flex-start; flex-direction: column; }
+  .dossier-summary { grid-template-columns: 1fr; }
+  .dossier-summary dl { grid-template-columns: 1fr; }
+  .dossier-summary dl div { border-top: 1px solid var(--line); border-left: 0; }
+  .dossier-summary dl div:first-child { border-top: 0; }
+  .dossier-notice, .score-factors { grid-template-columns: 1fr; }
 }
 @media (max-width: 800px) {
   .sidebar { transform: translateX(-100%); transition: 180ms ease; }
