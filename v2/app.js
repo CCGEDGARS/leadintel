@@ -367,8 +367,8 @@ function applyRuntimePayload(payload,{persist=true,mode="imported"}={}){
   if(!normalized.length)throw new Error("No opportunities or findings were found in the payload");
   opportunities=normalized;
   signals=Array.isArray(payload.signals)?payload.signals.map((item,index)=>({company:String(firstValue(item,["company","company_name"],normalized[index]?.company||"Unknown")),text:String(firstValue(item,["text","signal","signal_summary"],"Market signal")),type:String(firstValue(item,["type","signal_type"],"Market signal")),date:String(firstValue(item,["date","signal_date"],new Date().toISOString().slice(0,10))),confidence:String(firstValue(item,["confidence"],"Medium")),status:String(firstValue(item,["status"],"Qualified"))})):normalized.map(o=>({company:o.company,text:o.signal,type:o.signalType,date:o.signalDate,confidence:o.confidence,status:o.score>=state.settings.minScore?"Qualified":"Monitor"}));
-  sources=Array.isArray(payload.sources)&&payload.sources.length?payload.sources.map(item=>({name:String(firstValue(item,["name","source"],"Source")),group:String(firstValue(item,["group","type"],"Public web")),cadence:String(firstValue(item,["cadence","frequency"],"Daily")),health:String(firstValue(item,["health","status"],"Healthy")),findings:numberValue(firstValue(item,["findings","count"],0))})):structuredClone(demoSources);
-  runs=Array.isArray(payload.runs)&&payload.runs.length?payload.runs.map((item,index)=>({id:String(firstValue(item,["id","run_id"],`RUN-${index+1}`)),started:String(firstValue(item,["started","start_time"],"—")),findings:numberValue(firstValue(item,["findings","pages_found"],0)),qualified:numberValue(firstValue(item,["qualified","qualified_leads"],0)),saved:numberValue(firstValue(item,["saved"],normalized.length)),emailed:numberValue(firstValue(item,["emailed"],0)),errors:numberValue(firstValue(item,["errors"],0)),status:String(firstValue(item,["status"],"Complete"))})):structuredClone(demoRuns);
+  sources=Array.isArray(payload.sources)?payload.sources.map(item=>({name:String(firstValue(item,["name","source"],"Source")),group:String(firstValue(item,["group","type"],"Public web")),cadence:String(firstValue(item,["cadence","frequency"],"Daily")),health:String(firstValue(item,["health","status"],"Healthy")),findings:numberValue(firstValue(item,["findings","count"],0))})):structuredClone(demoSources);
+  runs=Array.isArray(payload.runs)?payload.runs.map((item,index)=>({id:String(firstValue(item,["id","run_id"],`RUN-${index+1}`)),started:String(firstValue(item,["started","start_time"],"—")),findings:numberValue(firstValue(item,["findings","pages_found"],0)),qualified:numberValue(firstValue(item,["qualified","qualified_leads"],0)),saved:numberValue(firstValue(item,["saved"],normalized.length)),emailed:numberValue(firstValue(item,["emailed"],0)),errors:numberValue(firstValue(item,["errors"],0)),status:String(firstValue(item,["status"],"Complete"))})):structuredClone(demoRuns);
   state.statuses={...Object.fromEntries(normalized.map(o=>[o.id,o.status])),...state.statuses};
   state.listStates={...Object.fromEntries(normalized.map(o=>[o.id,o.contact.listState])),...state.listStates};
   if(isRecord(payload.workspace))state.workspace={...state.workspace,...payload.workspace};
@@ -387,9 +387,33 @@ async function syncData({silent=false}={}){
   if(!url){if(!silent)showToast("Add a private snapshot endpoint in Settings");return false;}
   if(!isPrivateEndpoint(url)){showToast("Use an HTTPS endpoint");return false;}
   setBusy("sync-btn",true,"Syncing…");
-  try{const response=await fetch(url,{headers:{Accept:"application/json"}});if(!response.ok)throw new Error(`Endpoint returned ${response.status}`);applyRuntimePayload(await response.json(),{mode:"live"});showToast(`Synced ${opportunities.length} opportunities`);return true;}
+  try{
+    const payload=/script\.google\.com$/.test(new URL(url).hostname)?await fetchJsonp(url):await fetchJson(url);
+    applyRuntimePayload(payload,{mode:"live"});showToast(`Synced ${opportunities.length} opportunities`);return true;
+  }
   catch(error){state.runtime.error=error.message;saveState();renderRuntimeStatus();showToast(`Sync failed: ${error.message}`);return false;}
   finally{setBusy("sync-btn",false,"Sync data");}
+}
+
+async function fetchJson(url){
+  const response=await fetch(url,{headers:{Accept:"application/json"}});
+  if(!response.ok)throw new Error(`Endpoint returned ${response.status}`);
+  return response.json();
+}
+
+function fetchJsonp(url){
+  return new Promise((resolve,reject)=>{
+    const callback=`leadintelSnapshot_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const script=document.createElement("script");
+    const timeout=setTimeout(()=>finish(new Error("Snapshot endpoint timed out")),15000);
+    function finish(error,value){
+      clearTimeout(timeout);delete window[callback];script.remove();error?reject(error):resolve(value);
+    }
+    window[callback]=value=>finish(null,value);
+    script.onerror=()=>finish(new Error("Snapshot endpoint could not be loaded"));
+    const endpoint=new URL(url);endpoint.searchParams.set("callback",callback);endpoint.searchParams.set("_",Date.now());
+    script.src=endpoint.href;document.head.appendChild(script);
+  });
 }
 
 async function triggerResearch({test=false}={}){
