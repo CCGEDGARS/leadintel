@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-20T18:00:00+03:00",
+  "workspace": {"id":"edgars-latvia","name":"Edgars · Latvia","market":"Latvia"},
+  "opportunities": [
+    {
+      "id":"resp_0b3dbc09da98e0e4006a5a555381cc81969c4bdfa7f5d3adae",
+      "query_id":"Q-001","company_name":"Orkla Latvija","score_100":74,"score_10":7.4,"keep":true,"confidence":"High",
+      "signal_type":"Sales hiring","signal_summary":"Orkla Latvija is advertising a HoReCa sales manager role in Riga, indicating an active sales hiring need and a potential opportunity to support onboarding, sales execution and team performance.",
+      "factual_evidence":"A dated LinkedIn vacancies page lists a HoReCa Sales Manager role at Orkla Latvija in Riga.",
+      "pain_points":["Sales onboarding and execution consistency","HoReCa messaging and objection handling","Sales leadership support"],
+      "recommended_offer":"Digital Sales Book","commercial_reason":"A practical sales playbook can support the new HoReCa role with a consistent process, messaging and onboarding structure.",
+      "decision_maker_role":"Commercial Director","decision_maker":"Gints Uzans","business_email":"gints.uzans@orkla.lv","email_status":"Verified","verification_provider":"Apollo","linkedin_url":"https://www.linkedin.com/in/gints-uzans-1ab94116",
+      "urgency":"Medium","source_title":"73 Sales Agent Jobs in Latvia","source_url":"https://lv.linkedin.com/jobs/sales-agent-jobs","captured_at":"2026-07-17T16:16:25.540Z","status":"New"
+    },
+    {
+      "id":"resp_013bed426aee8a8f006a59e3a316388196b1dd282b6ffe1742",
+      "query_id":"Q-001","company_name":"Orkla Latvija","score_100":74,"score_10":7.4,"keep":true,"confidence":"High",
+      "signal_type":"Sales hiring","signal_summary":"Orkla Latvija is currently advertising a HoReCa Sales Manager role in Riga, indicating an active need to strengthen B2B sales capacity.",
+      "factual_evidence":"The supplied LinkedIn listing names Orkla Latvija, Riga and a HoReCa Sales Manager position.",
+      "pain_points":["Defined sales process","Structured onboarding","Pipeline visibility"],
+      "recommended_offer":"Digital Sales Book","commercial_reason":"The recent B2B sales vacancy creates a relevant trigger for practical sales enablement.",
+      "decision_maker_role":"Commercial Director","decision_maker":"Gints Uzans","business_email":"gints.uzans@orkla.lv","email_status":"Verified","verification_provider":"Apollo","linkedin_url":"https://www.linkedin.com/in/gints-uzans-1ab94116",
+      "urgency":"Medium","source_title":"73 Sales Agent Jobs in Latvia","source_url":"https://lv.linkedin.com/jobs/sales-agent-jobs","captured_at":"2026-07-17T08:11:20.608Z","status":"New"
+    },
+    {
+      "id":"resp_037bf972d72cf2eb006a5e2f5ac4d081909ade4df663b8c483","query_id":"Q-001","company_name":"Evotym","score_100":70,"score_10":7,"keep":true,"confidence":"Medium",
+      "signal_type":"Sales leadership hiring","signal_summary":"Evotym is hiring a Sales Team Lead in Riga, indicating an active sales-team development need.",
+      "factual_evidence":"A dated public vacancy identifies Evotym, Riga and the Sales Team Lead role.",
+      "pain_points":["Sales leadership routines","Team coaching and onboarding","Standardized sales execution"],
+      "recommended_offer":"Sales Team Development","commercial_reason":"A new Sales Team Lead role creates a timely opening for leadership coaching and practical execution support.",
+      "decision_maker_role":"Sales Team Lead or hiring manager","decision_maker":"","business_email":"","email_status":"Not found","verification_provider":"","linkedin_url":"",
+      "urgency":"High","source_title":"112 New Business Sales jobs in Latvia","source_url":"https://lv.linkedin.com/jobs/new-business-sales-jobs","captured_at":"2026-07-20T14:23:28.178Z","status":"New"
+    }
+  ],
+  "signals": [],"sources": [],"runs": []
+}

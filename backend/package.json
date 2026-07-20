@@ -1,0 +1,15 @@
+{
+  "name": "leadintel-backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:local": "wrangler d1 migrations apply leadintel --local",
+    "db:remote": "wrangler d1 migrations apply leadintel --remote",
+    "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.26.0"
+  }
+}

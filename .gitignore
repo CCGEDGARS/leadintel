@@ -1,1 +1,4 @@
 .tools/
+.wrangler/
+backend/node_modules/
+backend/.dev.vars

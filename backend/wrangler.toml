@@ -1,0 +1,18 @@
+name = "leadintel-api"
+main = "src/index.js"
+compatibility_date = "2026-07-20"
+
+[vars]
+APP_ORIGIN = "https://leadintel-api.edgars-7e7.workers.dev"
+SESSION_TTL_HOURS = "168"
+
+[assets]
+directory = "../v2"
+binding = "ASSETS"
+run_worker_first = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "leadintel"
+database_id = "79f8c0fb-82f9-4ff8-9ab7-38bf5742fc50"
+migrations_dir = "migrations"

@@ -6,6 +6,8 @@ const DOCUMENT_DB_NAME = "leadintel_v2_documents";
 const DOCUMENT_STORE_NAME = "files";
 const BUSINESS_PROFILE_PDF_KEY = "business-profile-pdf";
 const MAX_PROFILE_PDF_BYTES = 15 * 1024 * 1024;
+const BACKEND_API_URL = "https://leadintel-api.edgars-7e7.workers.dev";
+let backendSession = null;
 
 const MARKET_PROFILES = [
   {id:"latvia",name:"Latvia",countries:["Latvia"],countryCodes:["LV"],languages:["Latvian","English"],decisionTitles:["Sales Director","Commercial Director","Head of Sales","CEO"],sourceFocus:"Latvian business, procurement, recruitment and company sources"},
@@ -401,9 +403,48 @@ async function syncData({silent=false}={}){
 }
 
 async function fetchJson(url){
-  const response=await fetch(url,{headers:{Accept:"application/json"}});
+  const response=await fetch(url,{credentials:"include",headers:{Accept:"application/json"}});
   if(!response.ok)throw new Error(`Endpoint returned ${response.status}`);
   return response.json();
+}
+
+async function refreshBackendSession(){
+  try{
+    const response=await fetch(`${BACKEND_API_URL}/api/session`,{credentials:"include",headers:{Accept:"application/json"}});
+    backendSession=response.ok?(await response.json()).user:null;
+  }catch{backendSession=null;}
+  renderBackendAccess();return backendSession;
+}
+
+function renderBackendAccess(){
+  const status=document.getElementById("backend-auth-status");if(!status)return;
+  const signedIn=Boolean(backendSession);
+  status.textContent=signedIn?`Signed in · ${backendSession.name}`:"Signed out";
+  status.className=`status ${signedIn?"good":"warn"}`;
+  document.getElementById("backend-login-fields").hidden=signedIn;
+  document.getElementById("backend-login-btn").hidden=signedIn;
+  document.getElementById("backend-logout-btn").hidden=!signedIn;
+}
+
+async function loginBackend(){
+  const email=document.getElementById("backend-login-email").value.trim();
+  const password=document.getElementById("backend-login-password").value;
+  if(!email||!password){showToast("Enter the owner email and password");return;}
+  setBusy("backend-login-btn",true,"Signing in…");
+  try{
+    const response=await fetch(`${BACKEND_API_URL}/api/login`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify({email,password})});
+    if(!response.ok)throw new Error(response.status===401?"Invalid owner credentials":`Backend returned ${response.status}`);
+    backendSession=(await response.json()).user;
+    state.integrations.dataUrl=`${BACKEND_API_URL}/api/snapshot?workspace_id=${encodeURIComponent(state.workspace.id)}`;
+    saveState();renderAll();document.getElementById("backend-login-password").value="";
+    await syncData();showToast("Secure workspace connected");
+  }catch(error){showToast(`Sign-in failed: ${error.message}`);}
+  finally{setBusy("backend-login-btn",false,"Sign in securely");renderBackendAccess();}
+}
+
+async function logoutBackend(){
+  try{await fetch(`${BACKEND_API_URL}/api/logout`,{method:"POST",credentials:"include",headers:{Accept:"application/json"}});}catch{}
+  backendSession=null;renderBackendAccess();showToast("Signed out of the secure workspace");
 }
 
 function fetchJsonp(url){
@@ -886,9 +927,12 @@ function renderAll(){
   document.getElementById("setting-email").value=state.settings.emailCount;
   document.getElementById("setting-app").value=state.settings.appCount;
   document.getElementById("setting-score").value=state.settings.minScore;
+  renderBackendAccess();
 }
 
 document.addEventListener("click",async event=>{
+  if(event.target.id==="backend-login-btn"){await loginBackend();return;}
+  if(event.target.id==="backend-logout-btn"){await logoutBackend();return;}
   if(event.target.id==="profile-pdf-open"){
     try{
       const file=await getProfileDocument();
@@ -1082,3 +1126,4 @@ document.addEventListener("keydown",event=>{if(event.key==="Escape"){closeDrawer
 
 restoreRuntimeData();
 renderAll();
+refreshBackendSession();
