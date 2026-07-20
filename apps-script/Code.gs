@@ -50,6 +50,11 @@ function buildSnapshot_() {
       recommended_offer: row['Recommended Offer'] || row['Lead Solution'] || '',
       commercial_reason: row['Commercial Reason'] || '',
       decision_maker_role: row['Decision Maker Role'] || '',
+      decision_maker: row['Decision Maker Name'] || '',
+      business_email: verifiedBusinessEmail_(row),
+      email_status: verifiedBusinessEmail_(row) ? 'Verified' : 'Not found',
+      verification_provider: verifiedBusinessEmail_(row) ? (row['Verification Provider'] || 'Apollo') : '',
+      linkedin_url: safePublicUrl_(row['LinkedIn URL']),
       urgency: row.Urgency || '',
       source_title: row['Source Title'] || '',
       source_url: safePublicUrl_(row['Source URL']),
@@ -109,4 +114,11 @@ function splitList_(value) {
 function safePublicUrl_(value) {
   const url = String(value || '').trim();
   return /^https?:\/\//i.test(url) ? url : '';
+}
+
+function verifiedBusinessEmail_(row) {
+  const email = String(row['Business Email'] || '').trim().toLowerCase();
+  const status = String(row['Email Status'] || '').trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return '';
+  return /^verified$/i.test(status) ? email : '';
 }
