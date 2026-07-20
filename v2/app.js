@@ -138,6 +138,7 @@ let opportunities=structuredClone(demoOpportunities);
 let signals=structuredClone(demoSignals);
 let sources=structuredClone(demoSources);
 let runs=structuredClone(demoRuns);
+let quality={recent_rejections:[]};
 
 const workflowNodes = [
   {id:"sources",type:"Input",icon:"⌘",x:8.5,y:30,status:"Healthy",metric:"25 sources",lastRun:"06:00",controlLabel:"Source limit",unit:"monitored sources",config:{title:"Market sources",enabled:true,cadence:"Daily · 06:00",value:25,description:"Latvian business, procurement, recruitment and company sources.",instructions:"Monitor only approved public sources. Preserve the source URL, publication date and exact evidence for every finding."}},
@@ -386,6 +387,7 @@ function applyRuntimePayload(payload,{persist=true,mode="imported"}={}){
   signals=Array.isArray(payload.signals)?payload.signals.map((item,index)=>({company:String(firstValue(item,["company","company_name"],normalized[index]?.company||"Unknown")),text:String(firstValue(item,["text","signal","signal_summary"],"Market signal")),type:String(firstValue(item,["type","signal_type"],"Market signal")),date:String(firstValue(item,["date","signal_date"],new Date().toISOString().slice(0,10))),confidence:String(firstValue(item,["confidence"],"Medium")),status:String(firstValue(item,["status"],"Qualified"))})):normalized.map(o=>({company:o.company,text:o.signal,type:o.signalType,date:o.signalDate,confidence:o.confidence,status:o.score>=state.settings.minScore?"Qualified":"Monitor"}));
   sources=Array.isArray(payload.sources)?payload.sources.map(item=>({name:String(firstValue(item,["name","source"],"Source")),group:String(firstValue(item,["group","type"],"Public web")),cadence:String(firstValue(item,["cadence","frequency"],"Daily")),health:String(firstValue(item,["health","status"],"Healthy")),findings:numberValue(firstValue(item,["findings","count"],0))})):structuredClone(demoSources);
   runs=Array.isArray(payload.runs)?payload.runs.map((item,index)=>({id:String(firstValue(item,["id","run_id"],`RUN-${index+1}`)),started:String(firstValue(item,["started","start_time"],"—")),findings:numberValue(firstValue(item,["findings","pages_found"],0)),qualified:numberValue(firstValue(item,["qualified","qualified_leads"],0)),saved:numberValue(firstValue(item,["saved"],normalized.length)),emailed:numberValue(firstValue(item,["emailed"],0)),errors:numberValue(firstValue(item,["errors"],0)),status:String(firstValue(item,["status"],"Complete"))})):structuredClone(demoRuns);
+  quality=isRecord(payload.quality)?payload.quality:{recent_rejections:[]};
   state.statuses={...Object.fromEntries(normalized.map(o=>[o.id,o.status])),...state.statuses};
   state.listStates={...Object.fromEntries(normalized.map(o=>[o.id,o.contact.listState])),...state.listStates};
   normalized.forEach(o=>{
@@ -396,7 +398,7 @@ function applyRuntimePayload(payload,{persist=true,mode="imported"}={}){
   });
   if(isRecord(payload.workspace))state.workspace={...state.workspace,...payload.workspace};
   state.runtime={...state.runtime,mode,lastSync:formatNow(),error:""};
-  state.runtimeData={workspace:state.workspace,opportunities:normalized,signals,sources,runs,generated_at:new Date().toISOString()};
+  state.runtimeData={workspace:state.workspace,opportunities:normalized,signals,sources,runs,quality,generated_at:new Date().toISOString()};
   if(persist)saveState();
   renderAll();
 }
@@ -743,6 +745,11 @@ function renderSources(){
 }
 
 function renderRuns(){
+  const rejected=Array.isArray(quality.recent_rejections)?quality.recent_rejections:[];
+  const reasonLabels={junk_or_reference_page:"Reference or dictionary page",commercial_signal_missing:"No commercial signal",company_not_mentioned_in_evidence:"Company absent from evidence",discussion_source_not_primary_evidence:"Discussion page",source_too_old:"Source too old",source_url_invalid:"Invalid source URL",source_not_https:"Insecure source URL",company_missing:"Company missing",evidence_missing:"Evidence missing"};
+  const reasonCounts={};rejected.forEach(item=>(item.reasons||[]).forEach(reason=>{reasonCounts[reason]=(reasonCounts[reason]||0)+1;}));
+  const topReason=Object.entries(reasonCounts).sort((a,b)=>b[1]-a[1])[0];
+  document.getElementById("quality-dashboard").innerHTML=`<div class="quality-summary"><article><span>Rejected before storage</span><strong>${rejected.length}</strong><small>Low-quality candidates blocked</small></article><article><span>Most common failure</span><strong>${esc(topReason?reasonLabels[topReason[0]]||topReason[0]:"None")}</strong><small>${topReason?`${topReason[1]} recent ${topReason[1]===1?"result":"results"}`:"All recent candidates passed"}</small></article><article><span>Quality policy</span><strong>Deterministic</strong><small>No OpenAI call required</small></article></div>${rejected.length?`<div class="rejection-ledger"><div class="rejection-head"><strong>Recent quality rejections</strong><span>These candidates never enter the opportunity database</span></div>${rejected.map(item=>`<article><div><strong>${esc(item.company_name||"Unknown candidate")}</strong><a href="${esc(item.source_url||"#")}" ${item.source_url?'target="_blank" rel="noopener"':""}>${esc(item.source_title||item.source_url||"Source unavailable")}</a></div><div>${(item.reasons||[]).map(reason=>`<span>${esc(reasonLabels[reason]||reason)}</span>`).join("")}</div><time>${esc(item.created_at||"")}</time></article>`).join("")}</div>`:'<div class="quality-clear"><span>✓</span><div><strong>No recent quality failures</strong><p>New candidates will be checked for company relevance, commercial intent, source type, HTTPS, and freshness.</p></div></div>'}`;
   document.getElementById("runs-body").innerHTML=runs.map(r=>`<tr><td><strong>${esc(r.id)}</strong></td><td>${esc(r.started)}</td><td>${r.findings}</td><td>${r.qualified}</td><td>${r.saved}</td><td>${r.emailed}</td><td>${r.errors}</td><td><span class="status ${statusClass(r.status)}">${esc(r.status)}</span></td></tr>`).join("");
 }
 
@@ -1086,7 +1093,7 @@ document.addEventListener("click",async event=>{
   if(event.target.id==="import-data-btn")document.getElementById("data-import").click();
   if(event.target.id==="export-data-btn")exportJson(`leadintel-${state.workspace.id}-${new Date().toISOString().slice(0,10)}.json`,state.runtimeData||{workspace:state.workspace,opportunities,signals,sources,runs});
   if(event.target.id==="export-outreach-btn")exportJson(`leadintel-outreach-${new Date().toISOString().slice(0,10)}.json`,opportunities.filter(o=>state.statuses[o.id]==="Approved").map(o=>({opportunity_id:o.id,company:o.company,contact:o.contact,status:state.statuses[o.id],offer:o.primaryOffer,signal:o.signal})));
-  if(event.target.id==="reset-demo-btn"){opportunities=structuredClone(demoOpportunities);signals=structuredClone(demoSignals);sources=structuredClone(demoSources);runs=structuredClone(demoRuns);state.runtimeData=null;state.runtime={...structuredClone(defaultState.runtime)};state.statuses=Object.fromEntries(opportunities.map(o=>[o.id,o.status]));state.listStates=Object.fromEntries(opportunities.map(o=>[o.id,o.contact.listState]));saveState();renderAll();showToast("Demo data restored");}
+  if(event.target.id==="reset-demo-btn"){opportunities=structuredClone(demoOpportunities);signals=structuredClone(demoSignals);sources=structuredClone(demoSources);runs=structuredClone(demoRuns);quality={recent_rejections:[]};state.runtimeData=null;state.runtime={...structuredClone(defaultState.runtime)};state.statuses=Object.fromEntries(opportunities.map(o=>[o.id,o.status]));state.listStates=Object.fromEntries(opportunities.map(o=>[o.id,o.contact.listState]));saveState();renderAll();showToast("Demo data restored");}
   if(event.target.id==="save-map-draft")saveMapDraft();
   if(event.target.id==="publish-map")publishWorkflow();
   if(event.target.id==="discard-map-drafts"){state.map.draftConfigs=structuredClone(state.map.publishedConfigs);saveState();renderAll();showToast("All workflow drafts discarded");}

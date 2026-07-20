@@ -1,4 +1,5 @@
 import {sha256} from "./security.js";
+import {assessCandidate} from "./quality.js";
 
 const text=value=>String(value??"").trim();
 const normalized=value=>text(value).toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/\b(sia|as|a\/s|llc|ltd|inc)\b/g,"").replace(/[^a-z0-9]+/g," ").trim();
@@ -8,9 +9,16 @@ const key=async(prefix,...parts)=>`${prefix}_${(await sha256(parts.map(normalize
 
 export async function ingestCanonicalSnapshot(env,workspaceId,payload) {
   const rows=Array.isArray(payload?.opportunities)?payload.opportunities:[];
-  const statements=[]; const companyIds=new Set(); const opportunityIds=new Set(); const signalIds=new Set();
+  const statements=[]; const companyIds=new Set(); const opportunityIds=new Set(); const signalIds=new Set(); const rejected=[];
   for(const row of rows) {
-    const companyName=text(row.company_name||row.company); if(!companyName)continue;
+    const companyName=text(row.company_name||row.company);
+    const quality=assessCandidate(row,{market:payload?.workspace?.market||"Latvia",country:"LV"});
+    if(!quality.passed){
+      rejected.push({company_name:companyName,query_id:text(row.query_id),source_title:text(row.source_title),source_url:safeUrl(row.source_url),reasons:quality.reasons,warnings:quality.warnings});
+      statements.push(env.DB.prepare("INSERT INTO quality_rejections(id,workspace_id,run_id,query_id,company_name,source_title,source_url,reasons_json,warnings_json) VALUES(?,?,?,?,?,?,?,?,?)")
+        .bind(crypto.randomUUID(),workspaceId,text(row.run_id),text(row.query_id),companyName,text(row.source_title),safeUrl(row.source_url),JSON.stringify(quality.reasons),JSON.stringify(quality.warnings)));
+      continue;
+    }
     const companyId=await key("co",workspaceId,companyName); const normalizedName=normalized(companyName);
     const opportunityId=await key("opp",workspaceId,companyName);
     const sourceUrl=safeUrl(row.source_url); const signalType=text(row.signal_type)||"Market signal";
@@ -49,7 +57,7 @@ export async function ingestCanonicalSnapshot(env,workspaceId,payload) {
     }
   }
   if(statements.length)await env.DB.batch(statements);
-  return {input_rows:rows.length,companies:companyIds.size,opportunities:opportunityIds.size,signals:signalIds.size,duplicates_removed:Math.max(0,rows.length-companyIds.size)};
+  return {input_rows:rows.length,accepted:rows.length-rejected.length,rejected:rejected.length,rejections:rejected,companies:companyIds.size,opportunities:opportunityIds.size,signals:signalIds.size,duplicates_removed:Math.max(0,rows.length-rejected.length-companyIds.size)};
 }
 
 export async function canonicalSnapshot(env,workspaceId) {
@@ -71,5 +79,6 @@ export async function canonicalSnapshot(env,workspaceId) {
     for(const item of companySignals)signals.push({id:item.id,company:record.canonical_name,text:item.summary,type:item.signal_type,date:item.captured_at,confidence:item.confidence,status:"Qualified",source_title:item.source_title,source_url:item.source_url});
   }
   const workspace=await env.DB.prepare("SELECT id,name,market FROM workspaces WHERE id=?").bind(workspaceId).first();
-  return {schema_version:2,generated_at:new Date().toISOString(),workspace,opportunities,signals,sources:[],runs:[],canonical:true};
+  const {results:rejections}=await env.DB.prepare("SELECT run_id,query_id,company_name,source_title,source_url,reasons_json,warnings_json,created_at FROM quality_rejections WHERE workspace_id=? ORDER BY created_at DESC LIMIT 25").bind(workspaceId).all();
+  return {schema_version:2,generated_at:new Date().toISOString(),workspace,opportunities,signals,sources:[],runs:[],quality:{recent_rejections:rejections.map(item=>({...item,reasons:JSON.parse(item.reasons_json),warnings:JSON.parse(item.warnings_json)}))},canonical:true};
 }

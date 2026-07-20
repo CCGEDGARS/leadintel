@@ -1,5 +1,6 @@
 import {allowedOrigin,corsHeaders,sha256,randomToken,constantTimeEqual,cookieValue,sessionCookie,clearSessionCookie} from "./security.js";
 import {canonicalSnapshot,ingestCanonicalSnapshot} from "./canonical.js";
+import {assessCandidate,compileQueries} from "./quality.js";
 
 const json = (value,status=200,headers={}) => new Response(JSON.stringify(value),{status,headers:{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store",...headers}});
 const error = (message,status,headers) => json({error:message},status,headers);
@@ -73,6 +74,14 @@ async function router(request,env) {
     const canonical=await ingestCanonicalSnapshot(env,workspaceId,payload);
     await audit(env,{workspaceId,userId:user.id,type:"snapshot.created",entityType:"snapshot",entityId:snapshotId,metadata:{opportunities:payload.opportunities.length,...canonical}});
     return json({id:snapshotId,opportunities:payload.opportunities.length,canonical},201,cors);
+  }
+  if(url.pathname==="/api/quality/compile"&&request.method==="POST") {
+    const body=await request.json().catch(()=>null);if(!body)return error("Query families are required",400,cors);
+    return json({queries:compileQueries(body)},200,cors);
+  }
+  if(url.pathname==="/api/quality/evaluate"&&request.method==="POST") {
+    const body=await request.json().catch(()=>null);if(!body?.candidate)return error("A candidate is required",400,cors);
+    return json(assessCandidate(body.candidate,body.context||{}),200,cors);
   }
   const opportunityMatch=url.pathname.match(/^\/api\/opportunities\/([^/]+)$/);
   if(opportunityMatch&&request.method==="PATCH") {

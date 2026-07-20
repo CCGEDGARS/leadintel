@@ -11,6 +11,12 @@ if(!html.includes("Daily decision desk"))throw new Error("Today decision workspa
 const login=await fetch(`${api}/api/login`,{method:"POST",headers:{"Content-Type":"application/json","Origin":api},body:JSON.stringify({email,password})});
 if(!login.ok)throw new Error(`Login failed (${login.status})`);
 const cookie=login.headers.get("set-cookie")?.split(";")[0];
+const compileResponse=await fetch(`${api}/api/quality/compile?workspace_id=edgars-latvia`,{method:"POST",headers:{"Content-Type":"application/json",Origin:api,Cookie:cookie},body:JSON.stringify({query_id:"VERIFY",latvian:"pārdošanas direktors OR vadītājs",english:"sales director OR head of sales",market:"Latvia",country:"LV"})});
+const compiled=await compileResponse.json();
+if(!compileResponse.ok||compiled.queries?.length!==2||compiled.queries.some(item=>/\) OR \(/.test(item.query)))throw new Error("Safe query compilation failed");
+const qualityResponse=await fetch(`${api}/api/quality/evaluate?workspace_id=edgars-latvia`,{method:"POST",headers:{"Content-Type":"application/json",Origin:api,Cookie:cookie},body:JSON.stringify({candidate:{company_name:"Unknown",source_title:"OR Definition & Meaning",source_url:"https://www.merriam-webster.com/dictionary/or",signal_summary:"The meaning of OR is a function word",captured_at:new Date().toISOString()}})});
+const qualityCheck=await qualityResponse.json();
+if(!qualityResponse.ok||qualityCheck.passed!==false||!qualityCheck.reasons?.includes("junk_or_reference_page"))throw new Error("Junk result was not rejected by the quality gate");
 const snapshotResponse=await fetch(`${api}/api/snapshot?workspace_id=edgars-latvia`,{headers:{Origin:api,Cookie:cookie}});
 if(!snapshotResponse.ok)throw new Error(`Snapshot read failed (${snapshotResponse.status})`);
 const snapshot=await snapshotResponse.json();
@@ -32,4 +38,4 @@ const restoreResponse=await fetch(`${api}/api/opportunities/${encodeURIComponent
 if(!restoreResponse.ok)throw new Error(`Workflow cleanup failed (${restoreResponse.status})`);
 const unauthorized=await fetch(`${api}/api/snapshot?workspace_id=edgars-latvia`,{headers:{Origin:api}});
 if(unauthorized.status!==401)throw new Error("Unauthenticated snapshot access was not blocked");
-console.log("Verified: explainable dossier assets are current; structured evidence is sourced; canonical data is deduplicated; workflow state persists; unauthorized access remains blocked.");
+console.log("Verified: bilingual queries compile separately; dictionary junk is rejected without AI; evidence is sourced; canonical data is deduplicated; workflow state persists; unauthorized access remains blocked.");
