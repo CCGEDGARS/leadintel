@@ -146,7 +146,7 @@ async function router(request,env) {
     const policy=await env.DB.prepare("SELECT provider,minimum_score,daily_credit_limit,monthly_credit_limit,retry_after_days,allow_personal_email,phone_lookup_mode FROM enrichment_policies WHERE workspace_id=?").bind(workspaceId).first();
     const daily=await env.DB.prepare("SELECT COALESCE(SUM(credits_reserved),0) value FROM enrichment_requests WHERE workspace_id=? AND created_at>=date('now') AND status!='cancelled'").bind(workspaceId).first();
     const monthly=await env.DB.prepare("SELECT COALESCE(SUM(credits_reserved),0) value FROM enrichment_requests WHERE workspace_id=? AND created_at>=date('now','start of month') AND status!='cancelled'").bind(workspaceId).first();
-    return json({policy,usage:{daily:Number(daily?.value)||0,monthly:Number(monthly?.value)||0},configured:Boolean(env.APOLLO_API_KEY),personal_email_fallback:Boolean(policy?.allow_personal_email),phone_numbers:false,phone_lookup_mode:policy?.phone_lookup_mode||"on_request"},200,cors);
+    return json({policy,usage:{daily:Number(daily?.value)||0,monthly:Number(monthly?.value)||0},configured:Boolean(env.APOLLO_API_KEY),personal_email_mode:policy?.allow_personal_email?"owner_approval":"disabled",personal_email_default:false,phone_numbers:false,phone_lookup_mode:policy?.phone_lookup_mode||"on_request"},200,cors);
   }
   const enrichmentMatch=url.pathname.match(/^\/api\/opportunities\/([^/]+)\/enrich$/);
   if(enrichmentMatch&&request.method==="POST") {
@@ -158,18 +158,21 @@ async function router(request,env) {
       FROM opportunities o JOIN companies c ON c.id=o.company_id WHERE o.id=? AND o.workspace_id=?`).bind(opportunityId,workspaceId).first();
     if(!record)return error("Opportunity not found",404,cors);
     const policy=await env.DB.prepare("SELECT * FROM enrichment_policies WHERE workspace_id=?").bind(workspaceId).first();
-    const recent=await env.DB.prepare("SELECT id,status,created_at FROM enrichment_requests WHERE opportunity_id=? AND created_at>=datetime('now',?) ORDER BY created_at DESC LIMIT 1")
+    const personalApproved=Boolean(body.allow_personal_email)&&membership.role==="owner"&&Boolean(policy.allow_personal_email);
+    if(body.allow_personal_email&&membership.role!=="owner")return error("Only the workspace owner can approve a personal-email exception",403,cors);
+    const recent=await env.DB.prepare("SELECT id,status,personal_email_requested,created_at FROM enrichment_requests WHERE opportunity_id=? AND created_at>=datetime('now',?) ORDER BY created_at DESC LIMIT 1")
       .bind(opportunityId,`-${Number(policy.retry_after_days)||30} days`).first();
     const daily=await env.DB.prepare("SELECT COALESCE(SUM(credits_reserved),0) value FROM enrichment_requests WHERE workspace_id=? AND created_at>=date('now') AND status!='cancelled'").bind(workspaceId).first();
     const monthly=await env.DB.prepare("SELECT COALESCE(SUM(credits_reserved),0) value FROM enrichment_requests WHERE workspace_id=? AND created_at>=date('now','start of month') AND status!='cancelled'").bind(workspaceId).first();
     const domain=normalizeDomain(record.domain||record.website_url);
-    const decision=enrichmentDecision({score:record.score_10,evidenceCount:record.evidence_count,verifiedContact:Number(record.verified_contacts)>0,domain,recentRequest:recent,dailyReserved:daily?.value,monthlyReserved:monthly?.value,policy});
-    if(body.validate)return json({decision,configured:Boolean(env.APOLLO_API_KEY),company:record.canonical_name,domain,role:record.decision_maker_role||"Commercial Director",personal_email_fallback:Boolean(policy.allow_personal_email),phone_numbers:false},200,cors);
+    const recentBlocks=recent&&!(personalApproved&&recent.status==="not_found"&&!recent.personal_email_requested);
+    const decision=enrichmentDecision({score:record.score_10,evidenceCount:record.evidence_count,verifiedContact:Number(record.verified_contacts)>0,domain,recentRequest:recentBlocks?recent:null,dailyReserved:daily?.value,monthlyReserved:monthly?.value,policy});
+    if(body.validate)return json({decision,configured:Boolean(env.APOLLO_API_KEY),company:record.canonical_name,domain,role:record.decision_maker_role||"Commercial Director",personal_email_requested:personalApproved,personal_email_mode:policy.allow_personal_email?"owner_approval":"disabled",phone_numbers:false},200,cors);
     if(!decision.allowed)return json({error:"Enrichment blocked by quality or credit controls",code:decision.reason},409,cors);
     if(!env.APOLLO_API_KEY)return json({error:"Apollo API connection is not configured",code:"apollo_not_configured"},503,cors);
     const requestId=`ENR-${uuid()}`;const role=record.decision_maker_role||"Commercial Director";
-    await env.DB.prepare(`INSERT INTO enrichment_requests(id,workspace_id,opportunity_id,company_id,status,role_requested,requested_by)
-      VALUES(?,?,?,?,?,?,?)`).bind(requestId,workspaceId,opportunityId,record.company_id,"processing",role,user.id).run();
+    await env.DB.prepare(`INSERT INTO enrichment_requests(id,workspace_id,opportunity_id,company_id,status,role_requested,requested_by,personal_email_requested)
+      VALUES(?,?,?,?,?,?,?,?)`).bind(requestId,workspaceId,opportunityId,record.company_id,"processing",role,user.id,personalApproved?1:0).run();
     try{
       const searchResponse=await fetch("https://api.apollo.io/api/v1/mixed_people/search",{method:"POST",headers:{"Content-Type":"application/json","Cache-Control":"no-cache","Accept":"application/json","X-Api-Key":env.APOLLO_API_KEY},body:JSON.stringify(apolloSearchBody({domain,role}))});
       if(!searchResponse.ok)throw Object.assign(new Error(`Apollo search returned ${searchResponse.status}`),{code:`apollo_search_${searchResponse.status}`});
@@ -179,10 +182,10 @@ async function router(request,env) {
           .bind(JSON.stringify({search_results:0}),requestId).run();
         return json({request:{id:requestId,status:"not_found",credits_used:0},contact:null},200,cors);
       }
-      const matchUrl=new URL("https://api.apollo.io/api/v1/people/match");matchUrl.searchParams.set("id",personId);matchUrl.searchParams.set("reveal_personal_emails",policy.allow_personal_email?"true":"false");matchUrl.searchParams.set("reveal_phone_number","false");matchUrl.searchParams.set("run_waterfall_email","false");matchUrl.searchParams.set("run_waterfall_phone","false");
+      const matchUrl=new URL("https://api.apollo.io/api/v1/people/match");matchUrl.searchParams.set("id",personId);matchUrl.searchParams.set("reveal_personal_emails",personalApproved?"true":"false");matchUrl.searchParams.set("reveal_phone_number","false");matchUrl.searchParams.set("run_waterfall_email","false");matchUrl.searchParams.set("run_waterfall_phone","false");
       const matchResponse=await fetch(matchUrl,{method:"POST",headers:{"Content-Type":"application/json","Cache-Control":"no-cache","Accept":"application/json","X-Api-Key":env.APOLLO_API_KEY}});
       if(!matchResponse.ok)throw Object.assign(new Error(`Apollo match returned ${matchResponse.status}`),{code:`apollo_match_${matchResponse.status}`});
-      const matched=await matchResponse.json();const person=matched.person||{};const businessEmail=provenBusinessEmail(person,domain);const personalEmail=policy.allow_personal_email?strongPersonalEmail(person,domain,role,personId):"";const selectedEmail=businessEmail||personalEmail;const emailType=businessEmail?"work":"personal";const emailStatus=businessEmail?"Verified":"Strong match";const summary=publicPersonSummary(person);
+      const matched=await matchResponse.json();const person=matched.person||{};const businessEmail=provenBusinessEmail(person,domain);const personalEmail=personalApproved?strongPersonalEmail(person,domain,role,personId):"";const selectedEmail=businessEmail||personalEmail;const emailType=businessEmail?"work":"personal";const emailStatus=businessEmail?"Verified":"Strong match";const summary=publicPersonSummary(person);
       if(!selectedEmail){
         await env.DB.prepare("UPDATE enrichment_requests SET status='not_found',credits_used=1,person_provider_id=?,completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP,response_summary_json=? WHERE id=?")
           .bind(personId,JSON.stringify(summary),requestId).run();
@@ -197,7 +200,7 @@ async function router(request,env) {
         env.DB.prepare("UPDATE enrichment_requests SET status='verified',credits_used=1,person_provider_id=?,contact_id=?,completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP,response_summary_json=? WHERE id=?")
           .bind(personId,contactId,JSON.stringify(summary),requestId)
       ]);
-      await audit(env,{workspaceId,userId:user.id,type:"contact.verified",entityType:"contact",entityId:contactId,metadata:{provider:"Apollo",opportunity_id:opportunityId,credits_used:1,email_type:emailType,match_confidence:businessEmail?"verified":"high",phone_numbers:false}});
+      await audit(env,{workspaceId,userId:user.id,type:"contact.verified",entityType:"contact",entityId:contactId,metadata:{provider:"Apollo",opportunity_id:opportunityId,credits_used:1,email_type:emailType,match_confidence:businessEmail?"verified":"high",personal_email_owner_approved:personalApproved,phone_numbers:false}});
       return json({request:{id:requestId,status:"verified",credits_used:1},contact:{id:contactId,name:fullName,role:String(person.title||role),email:selectedEmail,email_type:emailType,email_status:emailStatus,match_confidence:businessEmail?"verified":"high",provider:"Apollo",linkedin_url:String(person.linkedin_url||"")}},201,cors);
     }catch(cause){
       const code=String(cause?.code||"apollo_failed");const message=String(cause?.message||"Apollo enrichment failed");

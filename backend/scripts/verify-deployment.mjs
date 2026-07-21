@@ -33,7 +33,7 @@ if(orkla.email_status!=="Verified"||orkla.business_email!=="gints.uzans@orkla.lv
 if(snapshot.opportunities.filter(item=>item.company_name==="Orkla Latvija").length!==1)throw new Error("Orkla still appears more than once");
 const enrichmentPolicyResponse=await fetch(`${api}/api/enrichment-policy?workspace_id=edgars-latvia`,{headers:{Origin:api,Cookie:cookie}});
 const enrichmentPolicy=await enrichmentPolicyResponse.json();
-if(!enrichmentPolicyResponse.ok||enrichmentPolicy.policy?.daily_credit_limit!==3||enrichmentPolicy.policy?.monthly_credit_limit!==30||enrichmentPolicy.personal_email_fallback!==true||enrichmentPolicy.phone_numbers!==false||enrichmentPolicy.phone_lookup_mode!=="on_request")throw new Error("Controlled email-enrichment policy is not active");
+if(!enrichmentPolicyResponse.ok||enrichmentPolicy.policy?.daily_credit_limit!==3||enrichmentPolicy.policy?.monthly_credit_limit!==30||enrichmentPolicy.personal_email_mode!=="owner_approval"||enrichmentPolicy.personal_email_default!==false||enrichmentPolicy.phone_numbers!==false||enrichmentPolicy.phone_lookup_mode!=="on_request")throw new Error("Controlled email-enrichment policy is not active");
 const enrichmentValidationResponse=await fetch(`${api}/api/opportunities/${encodeURIComponent(orkla.id)}/enrich?workspace_id=edgars-latvia`,{method:"POST",headers:{"Content-Type":"application/json",Origin:api,Cookie:cookie},body:JSON.stringify({validate:true})});
 const enrichmentValidation=await enrichmentValidationResponse.json();
 if(!enrichmentValidationResponse.ok||enrichmentValidation.decision?.reason!=="verified_contact_exists")throw new Error("Enrichment deduplication did not protect the existing verified contact");
@@ -52,4 +52,4 @@ const unauthorizedRun=await fetch(`${api}/api/runs?workspace_id=edgars-latvia`,{
 if(unauthorizedRun.status!==401)throw new Error("Unauthenticated run access was not blocked");
 const unauthorizedEnrichment=await fetch(`${api}/api/opportunities/${encodeURIComponent(orkla.id)}/enrich?workspace_id=edgars-latvia`,{method:"POST",headers:{"Content-Type":"application/json",Origin:api},body:"{}"});
 if(unauthorizedEnrichment.status!==401)throw new Error("Unauthenticated enrichment access was not blocked");
-console.log("Verified: Apollo is gated to qualified evidence-backed leads; work email is preferred; personal email requires an exact person/company/role match; phone lookup is explicit-request only; credit caps and duplicate protection are active; run budgets, quality, canonical data, workflow persistence, and authentication remain healthy.");
+console.log("Verified: Apollo defaults to work-email-only lookup; personal email is a separate owner-approved exception requiring an exact person/company/role match; phone lookup is explicit-request only; credit caps and duplicate protection are active; run budgets, quality, canonical data, workflow persistence, and authentication remain healthy.");

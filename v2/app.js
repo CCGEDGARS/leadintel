@@ -455,8 +455,12 @@ async function loadEnrichmentPolicy(){
   }catch{enrichmentControl={policy:null,usage:{daily:0,monthly:0},configured:false};return null;}
 }
 
-async function enrichOpportunity(id){
+async function enrichOpportunity(id,{allowPersonal=false}={}){
   if(!backendSession){showToast("Sign in securely before using Apollo");switchView("settings");return false;}
+  if(allowPersonal){
+    const approved=window.confirm("Owner exception: continue only if you have documented consent, an existing relationship, or another reviewed lawful basis. A personal email may consume an Apollo credit and will not become campaign-eligible automatically. Continue?");
+    if(!approved)return false;
+  }
   let opportunity=opportunities.find(item=>item.id===id);
   if(!opportunity?.domain&&!opportunity?.website){
     const supplied=window.prompt(`Enter the verified company website or domain for ${opportunity?.company||"this company"}. Apollo will only accept an email on this domain.`)?.trim();
@@ -471,14 +475,14 @@ async function enrichOpportunity(id){
   }
   const button=document.querySelector(`[data-enrich="${CSS.escape(id)}"]`);if(button){button.disabled=true;button.textContent="Checking…";}
   try{
-    const response=await fetch(`${BACKEND_API_URL}/api/opportunities/${encodeURIComponent(id)}/enrich?workspace_id=${encodeURIComponent(state.workspace.id)}`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json",Accept:"application/json"},body:"{}"});
+    const response=await fetch(`${BACKEND_API_URL}/api/opportunities/${encodeURIComponent(id)}/enrich?workspace_id=${encodeURIComponent(state.workspace.id)}`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify({allow_personal_email:allowPersonal})});
     const result=await response.json().catch(()=>({}));
     const labels={verified_contact_exists:"A verified business email already exists",score_below_threshold:"Lead score is below the enrichment threshold",evidence_required:"Source evidence is required first",company_domain_required:"A verified company domain is required first",recent_lookup_exists:"This lead was already checked recently",daily_credit_limit:"Today’s Apollo credit limit is reached",monthly_credit_limit:"This month’s Apollo credit limit is reached",apollo_not_configured:"Apollo’s secure API key still needs to be connected"};
     if(!response.ok)throw new Error(labels[result.code]||result.error||`Enrichment returned ${response.status}`);
     await syncData({silent:true});await loadEnrichmentPolicy();
     showToast(result.contact?`${result.contact.email_type==="personal"?"Strong personal-email match":"Verified work email"} found for ${result.contact.name}`:`No strong email match found · ${result.request?.credits_used||0} credit used`);return true;
   }catch(error){showToast(error.message);return false;}
-  finally{if(button){button.disabled=false;button.textContent="Find best email · 1 lookup";}}
+  finally{if(button){button.disabled=false;button.textContent="Find work email · 1 lookup";}}
 }
 
 function renderBackendAccess(){
@@ -782,7 +786,7 @@ function renderCompanies(query=""){
 function renderContacts(){
   const filters=["All","Verified","Public business","Predicted","Eligible","Suppressed"];
   const policy=enrichmentControl.policy;const usage=enrichmentControl.usage||{};
-  document.getElementById("enrichment-safety").innerHTML=policy?`<article><span>Apollo connection</span><strong>${enrichmentControl.configured?"Ready":"Setup needed"}</strong><small>Secure backend key</small></article><article><span>Per company</span><strong>1 lookup</strong><small>One decision-maker only</small></article><article><span>Today</span><strong>${usage.daily||0} / ${policy.daily_credit_limit}</strong><small>Reserved credit cap</small></article><article><span>Email policy</span><strong>Work first</strong><small>Strong personal fallback · phones off</small></article>`:'<article><span>Email enrichment</span><strong>Sign in</strong><small>Controls load from the secure backend</small></article>';
+  document.getElementById("enrichment-safety").innerHTML=policy?`<article><span>Apollo connection</span><strong>${enrichmentControl.configured?"Ready":"Setup needed"}</strong><small>Secure backend key</small></article><article><span>Default lookup</span><strong>Work only</strong><small>One decision-maker · one lookup</small></article><article><span>Today</span><strong>${usage.daily||0} / ${policy.daily_credit_limit}</strong><small>Reserved credit cap</small></article><article><span>Personal email</span><strong>Owner exception</strong><small>Lawful basis required · phones off</small></article>`:'<article><span>Email enrichment</span><strong>Sign in</strong><small>Controls load from the secure backend</small></article>';
   document.getElementById("contact-filters").innerHTML=filters.map(f=>`<button class="filter ${f===currentContactFilter?"active":""}" data-contact-filter="${esc(f)}">${esc(f)}</button>`).join("");
   let list=opportunities;
   if(["Verified","Public business","Predicted"].includes(currentContactFilter)) list=list.filter(o=>o.contact.emailStatus===currentContactFilter);
@@ -793,7 +797,7 @@ function renderContacts(){
     <td>${o.contact.emailStatus==="Predicted"?'<span class="status warn">Hidden until verified</span>':`<a class="evidence" href="mailto:${esc(o.contact.email)}">${esc(o.contact.email)}</a>`}</td>
     <td><span class="status ${statusClass(o.contact.emailStatus)}">${esc(o.contact.emailStatus)}</span><br><small>${o.contact.emailType==="personal"?"Personal · exact person/company/role match":esc(o.contact.source)}</small></td>
     <td><select data-list-state="${o.id}"><option ${state.listStates[o.id]==="Research"?"selected":""}>Research</option><option ${state.listStates[o.id]==="Eligible"?"selected":""}>Eligible</option><option ${state.listStates[o.id]==="Suppressed"?"selected":""}>Suppressed</option><option ${state.listStates[o.id]==="Unsubscribed"?"selected":""}>Unsubscribed</option></select></td>
-    <td><div class="card-actions">${["Verified","Strong match"].includes(o.contact.emailStatus)?"":`<button class="btn small primary" data-enrich="${o.id}" ${o.contact.enrichmentStatus==="processing"?"disabled":""}>${o.contact.enrichmentStatus==="processing"?"Checking…":"Find best email · 1 lookup"}</button>`}<button class="btn small secondary" data-open="${o.id}">Dossier</button></div></td></tr>`).join("");
+    <td><div class="card-actions">${["Verified","Strong match"].includes(o.contact.emailStatus)?"":`<button class="btn small primary" data-enrich="${o.id}" ${o.contact.enrichmentStatus==="processing"?"disabled":""}>${o.contact.enrichmentStatus==="processing"?"Checking…":"Find work email · 1 lookup"}</button>${backendSession?.role==="owner"?`<button class="btn small secondary" data-enrich-personal="${o.id}">Personal exception</button>`:""}`}<button class="btn small secondary" data-open="${o.id}">Dossier</button></div></td></tr>`).join("");
 }
 
 function renderSources(){
@@ -1075,6 +1079,7 @@ document.addEventListener("click",async event=>{
   if(event.target.id==="backend-login-btn"){await loginBackend();return;}
   if(event.target.id==="backend-logout-btn"){await logoutBackend();return;}
   const enrich=event.target.closest("[data-enrich]");if(enrich){await enrichOpportunity(enrich.dataset.enrich);return;}
+  const enrichPersonal=event.target.closest("[data-enrich-personal]");if(enrichPersonal){await enrichOpportunity(enrichPersonal.dataset.enrichPersonal,{allowPersonal:true});return;}
   if(event.target.id==="profile-pdf-open"){
     try{
       const file=await getProfileDocument();
