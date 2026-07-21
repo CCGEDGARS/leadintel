@@ -1,12 +1,13 @@
 "use strict";
 
 const STORAGE_KEY = "leadintel_v2_state";
-const STATE_SCHEMA_VERSION = 6;
+const STATE_SCHEMA_VERSION = 9;
 const DOCUMENT_DB_NAME = "leadintel_v2_documents";
 const DOCUMENT_STORE_NAME = "files";
 const BUSINESS_PROFILE_PDF_KEY = "business-profile-pdf";
 const MAX_PROFILE_PDF_BYTES = 15 * 1024 * 1024;
 const BACKEND_API_URL = "https://leadintel-api.edgars-7e7.workers.dev";
+const MAP_WORLD = Object.freeze({width:1940,height:820,nodeWidth:142,nodeHeight:112});
 let backendSession = null;
 
 const MARKET_PROFILES = [
@@ -47,8 +48,8 @@ const DEFAULT_SIGNAL_RULES=[
   {id:"training",name:"Training and capability request",keywords:"sales training, coaching, onboarding, learning and development",weight:8,active:true}
 ];
 const DEFAULT_PLAYBOOKS=[
-  {id:"sales-hiring-book",name:"New sales leader · Digital Sales Book",offerId:"digital-sales-book",signalId:"sales-hiring",role:"Sales leader",channel:"Email",language:"English",sendMode:"Approval required",subject:"A practical sales system for {{company}}",body:"Hi {{first_name}},\n\nI noticed the recent {{signal_type}} at {{company}}. This kind of change often creates an immediate need for consistent messaging, onboarding and execution standards.\n\nI help commercial teams build a practical Digital Sales Book that managers and sellers can use every day. Would a short outline tailored to {{company}} be useful?\n\nBest,\nEdgars",active:true},
-  {id:"crm-ai-integration",name:"CRM/AI signal · Integration",offerId:"ai-sales-integration",signalId:"crm-ai",role:"Commercial or digital leader",channel:"Email",language:"English",sendMode:"Approval required",subject:"Turning {{company}}'s AI/CRM initiative into a working sales process",body:"Hi {{first_name}},\n\nI saw the recent {{signal_type}} at {{company}}. AI and CRM projects usually create value only when the sales process, data and follow-up routines are designed together.\n\nI help teams translate that goal into a practical implementation plan. Would a one-page diagnostic for {{company}} be useful?\n\nBest,\nEdgars",active:true}
+  {id:"sales-hiring-book",name:"New sales leader · Digital Sales Book",offerId:"digital-sales-book",signalId:"sales-hiring",role:"Sales leader",channel:"Email",language:"English",sendMode:"Approval required",ctaMode:"Include in initial email",minScore:8,dailyLimit:3,requireHighConfidence:true,autoApproved:false,subject:"A practical sales system for {{company}}",body:"Hi {{first_name}},\n\nI noticed the recent {{signal_type}} at {{company}}. This kind of change often creates an immediate need for consistent messaging, onboarding and execution standards.\n\nI help commercial teams build a practical Digital Sales Book that managers and sellers can use every day. Would a short outline tailored to {{company}} be useful?\n\nBest,\nEdgars",active:true},
+  {id:"crm-ai-integration",name:"CRM/AI signal · Integration",offerId:"ai-sales-integration",signalId:"crm-ai",role:"Commercial or digital leader",channel:"Email",language:"English",sendMode:"Approval required",ctaMode:"Include in initial email",minScore:8,dailyLimit:3,requireHighConfidence:true,autoApproved:false,subject:"Turning {{company}}'s AI/CRM initiative into a working sales process",body:"Hi {{first_name}},\n\nI saw the recent {{signal_type}} at {{company}}. AI and CRM projects usually create value only when the sales process, data and follow-up routines are designed together.\n\nI help teams translate that goal into a practical implementation plan. Would a one-page diagnostic for {{company}} be useful?\n\nBest,\nEdgars",active:true}
 ];
 
 const demoOpportunities = [
@@ -150,22 +151,31 @@ const workflowNodes = [
   {id:"shortlist",type:"Output",icon:"★",x:74.5,y:30,status:"Healthy",metric:"5 saved",lastRun:"06:47",controlLabel:"Daily shortlist",unit:"companies saved",config:{title:"Save top 5",enabled:true,cadence:"Daily",value:5,description:"Save the strongest opportunities and their complete dossiers in the app.",instructions:"Keep the five highest-scoring companies that pass the evidence rule. Prefer opportunities with a verified business contact."}},
   {id:"contacts",type:"Enrichment",icon:"◎",x:91,y:30,status:"Review",metric:"3 verified",lastRun:"06:49",controlLabel:"Contacts per lead",unit:"primary decision-makers",config:{title:"Contact enrichment",enabled:true,cadence:"Qualified only",value:1,description:"Find the most relevant decision-maker and verify business contact data.",instructions:"Use Apollo and public company evidence. Keep predicted emails hidden and research-only until independently verified."}},
   {id:"email",type:"Delivery",icon:"✉",x:82,y:72,status:"Healthy",metric:"3 emailed",lastRun:"06:52",controlLabel:"Morning brief",unit:"opportunities emailed",config:{title:"Email top 3",enabled:true,cadence:"Daily · 07:00",value:3,description:"Send Edgars a concise internal brief with the three strongest opportunities.",instructions:"Include one primary decision-maker per company, the opportunity score, why now, pain points, evidence and verified contact data when available."}},
-  {id:"outreach",type:"Approval",icon:"✓",x:94,y:72,status:"Planned",metric:"Human gate",lastRun:"Not connected",controlLabel:"Approval gate",unit:"required approval",config:{title:"Outreach approval",enabled:true,cadence:"On demand",value:1,description:"Generate a tailored message and require human approval before any send.",instructions:"Never send automatically during the pilot. Check eligibility, suppression and unsubscribe state immediately before approval."}}
+  {id:"match",type:"Routing",icon:"⇄",status:"Healthy",metric:"2 playbooks",lastRun:"Ready",controlLabel:"Matching threshold",unit:"minimum rule score",config:{title:"Match signal to playbook",enabled:true,cadence:"After enrichment",value:7,description:"Select an approved script using the signal, offer, role and language.",instructions:"Use only active playbooks. Prefer an exact signal and offer match; route unmatched opportunities to review."}},
+  {id:"message",type:"Content",icon:"✎",status:"Healthy",metric:"Personalized",lastRun:"Ready",controlLabel:"Daily generation cap",unit:"messages per day",config:{title:"Personalize message",enabled:true,cadence:"After enrichment",value:5,description:"Populate the approved subject and message template with verified opportunity data.",instructions:"Use controlled fields only. Never invent facts, budgets, relationships or pain points."}},
+  {id:"safety",type:"Compliance",icon:"◈",status:"Healthy",metric:"7 checks",lastRun:"Ready",controlLabel:"Safety checks",unit:"required checks",config:{title:"Eligibility & safety gate",enabled:true,cadence:"Before delivery",value:7,description:"Validate evidence, contact eligibility, suppression, frequency and daily limits.",instructions:"Block personal emails, predicted addresses, duplicates, unsubscribed contacts and messages above the daily cap."}},
+  {id:"outreach",type:"Approval",icon:"✓",status:"Planned",metric:"Conditional",lastRun:"On demand",controlLabel:"Approval route",unit:"manual-review route",config:{title:"Human review",enabled:true,cadence:"On demand",value:1,description:"Review messages from approval-required playbooks or failed automatic checks.",instructions:"Allow editing, approval, rejection or returning the lead to research."}},
+  {id:"delivery",type:"Delivery",icon:"➤",status:"Planned",metric:"Sender needed",lastRun:"Not connected",controlLabel:"Daily send cap",unit:"emails per day",config:{title:"Send or export",enabled:true,cadence:"After safety gate",value:5,description:"Deliver eligible messages automatically or export approved drafts when no sender is connected.",instructions:"Send at most five messages per day. Record provider response and never report delivery without confirmation."}},
+  {id:"tracking",type:"Audit",icon:"↗",status:"Planned",metric:"Audit trail",lastRun:"Not connected",controlLabel:"Follow-up delay",unit:"days before follow-up",config:{title:"Delivery & reply tracking",enabled:true,cadence:"After delivery",value:4,description:"Track queued, sent, delivered, replied, bounced, suppressed and unsubscribed outcomes.",instructions:"Stop follow-up after reply, bounce, suppression or unsubscribe. Preserve every transition in the audit log."}},
+  {id:"booking",type:"Scheduling",icon:"◷",status:"Healthy",metric:"30 min · Zoom",lastRun:"Link ready",controlLabel:"Meeting duration",unit:"minutes",config:{title:"Calendly Strategy Call",enabled:true,cadence:"On demand",value:30,description:"Let an interested prospect choose an available 30-minute Zoom slot.",instructions:"Use the configured Calendly event link. Calendly owns availability and creates the Zoom meeting after booking."}},
+  {id:"meeting",type:"Conversion",icon:"✓",status:"Planned",metric:"Webhook needed",lastRun:"Manual fallback",controlLabel:"CRM stage",unit:"meeting stage",config:{title:"Meeting booked",enabled:true,cadence:"After booking",value:1,description:"Record the confirmed appointment and move the opportunity to the Meeting stage.",instructions:"Use the Calendly booking webhook when connected. Until then, mark the meeting booked manually and preserve an audit event."}}
 ];
 
 const workflowEdges = [
-  {from:"sources",to:"scan",d:"M 156 156 L 179 156"},
-  {from:"scan",to:"analysis",d:"M 321 156 L 344 156"},
-  {from:"analysis",to:"score",d:"M 486 156 L 509 156"},
-  {from:"score",to:"shortlist",d:"M 651 156 L 674 156"},
-  {from:"shortlist",to:"contacts",d:"M 816 156 L 839 156"},
-  {from:"contacts",to:"email",d:"M 910 212 C 910 260, 820 267, 820 318",branch:true},
-  {from:"contacts",to:"outreach",d:"M 910 212 C 910 260, 940 267, 940 318",branch:true}
+  {from:"sources",to:"scan"},{from:"scan",to:"analysis"},{from:"analysis",to:"score"},
+  {from:"score",to:"shortlist"},{from:"shortlist",to:"contacts"},{from:"contacts",to:"email",branch:true},
+  {from:"contacts",to:"match",branch:true},{from:"match",to:"message"},{from:"message",to:"safety"},
+  {from:"safety",to:"outreach",branch:true},{from:"safety",to:"delivery",branch:true},{from:"outreach",to:"delivery"},{from:"delivery",to:"tracking"},{from:"tracking",to:"booking"},{from:"booking",to:"meeting"}
 ];
+
+const defaultWorkflowLayout = Object.freeze({
+  sources:{x:90,y:170},scan:{x:290,y:170},analysis:{x:490,y:170},score:{x:690,y:170},shortlist:{x:890,y:170},contacts:{x:1090,y:170},
+  email:{x:1030,y:420},match:{x:1250,y:300},message:{x:1450,y:300},safety:{x:1450,y:510},outreach:{x:1250,y:690},delivery:{x:1420,y:690},tracking:{x:1600,y:690},booking:{x:1770,y:510},meeting:{x:1770,y:690}
+});
 
 const workflowDestinations = Object.freeze({
   sources:"sources", scan:"runs", analysis:"signals", score:"signals",
-  shortlist:"companies", contacts:"contacts", email:"today", outreach:"outreach"
+  shortlist:"companies", contacts:"contacts", email:"today", match:"control", message:"outreach", safety:"outreach", outreach:"outreach", delivery:"outreach", tracking:"runs", booking:"settings", meeting:"crm"
 });
 
 const defaultWorkflowConfigs = Object.fromEntries(workflowNodes.map(node=>[node.id,structuredClone(node.config)]));
@@ -182,13 +192,16 @@ const defaultState = {
   offers:structuredClone(DEFAULT_OFFERS),
   signalRules:structuredClone(DEFAULT_SIGNAL_RULES),
   playbooks:structuredClone(DEFAULT_PLAYBOOKS),
+  customSources:[],
   ui:{controlSections:{markets:true,profile:true,offers:false,signals:false,playbooks:false}},
   crm:{stageOrder:structuredClone(CRM_STAGES),records:{}},
-  outreachDrafts:{},
+  outreachDrafts:{},outreachAudit:[],
+  outreachAutomation:{enabled:true,dailyLimit:5,senderConnected:false,requireVerifiedWorkEmail:true,suppressionDays:30},
+  scheduling:{bookingUrl:"https://calendly.com/edgars-7go/strategy-call",eventName:"Strategy Call",duration:30,platform:"Zoom",ctaCopy:"If this is relevant, choose a convenient time for a focused 30-minute Strategy Call: {{booking_link}}",bookingWebhookConnected:false},
   integrations:{dataUrl:"",runUrl:""},
   runtime:{mode:"demo",lastSync:"",lastRunRequest:"",error:""},
   runtimeData:null,
-  map:{publishedConfigs:structuredClone(defaultWorkflowConfigs),draftConfigs:structuredClone(defaultWorkflowConfigs),version:1,lastPublished:"15 Jul 2026 · system baseline",history:[{version:1,date:"15 Jul 2026 · system baseline",changes:0}],tests:{}}
+  map:{publishedConfigs:structuredClone(defaultWorkflowConfigs),draftConfigs:structuredClone(defaultWorkflowConfigs),publishedLayout:structuredClone(defaultWorkflowLayout),draftLayout:structuredClone(defaultWorkflowLayout),viewport:{zoom:0.82,panX:0,panY:22,initialized:false},version:1,lastPublished:"15 Jul 2026 · system baseline",history:[{version:1,date:"15 Jul 2026 · system baseline",changes:0}],tests:{}}
 };
 
 let state = loadState();
@@ -197,6 +210,10 @@ let currentContactFilter = "All";
 let crmSearch="";
 let crmStageFilter="All";
 let selectedMapNode = "sources";
+let mapArrangeMode=false;
+let mapPointerSession=null;
+let suppressMapClick=false;
+let mapViewportSaveTimer=null;
 
 function isRecord(value){return Boolean(value)&&typeof value==="object"&&!Array.isArray(value);}
 function normalizeWorkflowConfig(base,value){
@@ -214,6 +231,14 @@ function normalizeWorkflowConfig(base,value){
 function normalizeWorkflowCollection(saved){
   const source=isRecord(saved)?saved:{};
   return Object.fromEntries(workflowNodes.map(node=>[node.id,normalizeWorkflowConfig(node.config,source[node.id])]));
+}
+function normalizeWorkflowLayout(saved){
+  const source=isRecord(saved)?saved:{};
+  return Object.fromEntries(workflowNodes.map(node=>{
+    const fallback=defaultWorkflowLayout[node.id];const item=isRecord(source[node.id])?source[node.id]:{};
+    const x=Number(item.x),y=Number(item.y);
+    return [node.id,{x:Number.isFinite(x)?Math.max(72,Math.min(MAP_WORLD.width-72,x)):fallback.x,y:Number.isFinite(y)?Math.max(62,Math.min(MAP_WORLD.height-62,y)):fallback.y}];
+  }));
 }
 function normalizeArray(value,fallback){return Array.isArray(value)&&value.length?value.filter(isRecord):structuredClone(fallback);}
 function loadState(){
@@ -259,9 +284,20 @@ function loadState(){
       offers:normalizeArray(saved.offers,DEFAULT_OFFERS),
       signalRules:normalizeArray(saved.signalRules,DEFAULT_SIGNAL_RULES),
       playbooks:normalizeArray(saved.playbooks,DEFAULT_PLAYBOOKS),
+      customSources:Array.isArray(saved.customSources)?saved.customSources.filter(isRecord):[],
       ui:{controlSections:{...defaultState.ui.controlSections,...controlSections}},
       crm:{stageOrder:Array.isArray(crm.stageOrder)?crm.stageOrder:structuredClone(CRM_STAGES),records:isRecord(crm.records)?crm.records:{}},
       outreachDrafts:isRecord(saved.outreachDrafts)?saved.outreachDrafts:{},
+      outreachAudit:Array.isArray(saved.outreachAudit)?saved.outreachAudit.filter(isRecord):[],
+      outreachAutomation:{
+        ...structuredClone(defaultState.outreachAutomation),
+        ...(isRecord(saved.outreachAutomation)?saved.outreachAutomation:{}),
+        enabled:typeof saved.outreachAutomation?.enabled==="boolean"?saved.outreachAutomation.enabled:defaultState.outreachAutomation.enabled,
+        dailyLimit:Math.max(3,Math.min(5,Number(saved.outreachAutomation?.dailyLimit)||defaultState.outreachAutomation.dailyLimit)),
+        senderConnected:Boolean(saved.outreachAutomation?.senderConnected),
+        requireVerifiedWorkEmail:true
+      },
+      scheduling:{...structuredClone(defaultState.scheduling),...(isRecord(saved.scheduling)?saved.scheduling:{}),bookingUrl:typeof saved.scheduling?.bookingUrl==="string"?saved.scheduling.bookingUrl:defaultState.scheduling.bookingUrl,bookingWebhookConnected:Boolean(saved.scheduling?.bookingWebhookConnected)},
       integrations:{
         dataUrl:typeof integrations.dataUrl==="string"?integrations.dataUrl:"",
         runUrl:typeof integrations.runUrl==="string"?integrations.runUrl:""
@@ -273,6 +309,9 @@ function loadState(){
         lastPublished:typeof savedMap.lastPublished==="string"?savedMap.lastPublished:defaultState.map.lastPublished,
         publishedConfigs:normalizeWorkflowCollection(savedMap.publishedConfigs),
         draftConfigs:normalizeWorkflowCollection(savedMap.draftConfigs||savedMap.publishedConfigs),
+        publishedLayout:normalizeWorkflowLayout(savedMap.publishedLayout),
+        draftLayout:normalizeWorkflowLayout(savedMap.draftLayout||savedMap.publishedLayout),
+        viewport:{zoom:Math.max(.5,Math.min(1.5,Number(savedMap.viewport?.zoom)||defaultState.map.viewport.zoom)),panX:Number(savedMap.viewport?.panX)||0,panY:Number(savedMap.viewport?.panY)||0,initialized:Boolean(savedMap.viewport?.initialized)},
         history:mapHistory,
         tests:isRecord(savedMap.tests)?savedMap.tests:{}}
     };
@@ -325,7 +364,9 @@ function activeMarket(){return state.marketProfiles.find(item=>item.id===state.a
 function sourcePackForMarket(market=activeMarket()){
   const runtimeByName=new Map(sources.map(item=>[String(item.name||"").toLowerCase(),item]));
   const seen=new Set();
-  return [...(market.countryCodes||[]),"GLOBAL"].flatMap(code=>(SOURCE_PACKS[code]||[]).map(item=>({...item,country:code}))).filter(item=>{
+  const builtIn=[...(market.countryCodes||[]),"GLOBAL"].flatMap(code=>(SOURCE_PACKS[code]||[]).map(item=>({...item,country:code,custom:false})));
+  const custom=state.customSources.filter(item=>item.marketProfileId===market.id).map(item=>({...item,custom:true,country:item.country||market.countryCodes?.[0]||"GLOBAL"}));
+  return [...builtIn,...custom].filter(item=>{
     if(seen.has(item.id))return false;seen.add(item.id);return true;
   }).map(item=>{const runtime=runtimeByName.get(item.name.toLowerCase());return {...item,health:runtime?.health||"Ready",findings:Number(runtime?.findings)||0};});
 }
@@ -555,7 +596,7 @@ async function triggerResearch({test=false}={}){
     test,
     requested_at:new Date().toISOString(),
     market_profile:{id:market.id,name:market.name,countries:market.countries,country_codes:market.countryCodes,languages:market.languages,decision_maker_titles:market.decisionTitles,source_focus:market.sourceFocus},
-    enabled_sources:sourcePackForMarket(market).filter(item=>sourceEnabled(market,item.id)).map(({id,name,group,cadence,country})=>({id,name,group,cadence,country})),
+    enabled_sources:sourcePackForMarket(market).filter(item=>sourceEnabled(market,item.id)).map(({id,name,group,cadence,country,url,languages,keywords,custom})=>({id,name,group,cadence,country,url:url||"",languages:languages||[],keywords:keywords||"",custom:Boolean(custom)})),
     business_profile:state.businessProfile,
     offers:state.offers.filter(item=>item.active),
     signal_rules:state.signalRules.filter(item=>item.active),
@@ -583,6 +624,44 @@ async function triggerResearch({test=false}={}){
 
 function mapConfig(id,published=false){return (published?state.map.publishedConfigs:state.map.draftConfigs)[id];}
 function dirtyMapNodes(){return workflowNodes.filter(node=>JSON.stringify(mapConfig(node.id))!==JSON.stringify(mapConfig(node.id,true)));}
+function layoutIsDirty(){return JSON.stringify(state.map.draftLayout)!==JSON.stringify(state.map.publishedLayout);}
+function mapChangeCount(){return dirtyMapNodes().length+(layoutIsDirty()?1:0);}
+function mapPositionAvailable(id,x,y){return Object.entries(state.map.draftLayout).every(([otherId,position])=>otherId===id||Math.abs(position.x-x)>=MAP_WORLD.nodeWidth+18||Math.abs(position.y-y)>=MAP_WORLD.nodeHeight+18);}
+function mapEdgePath(edge,layout=state.map.draftLayout){
+  const from=layout[edge.from],to=layout[edge.to];if(!from||!to)return "";
+  const horizontal=to.x>=from.x+MAP_WORLD.nodeWidth;
+  const start=horizontal?{x:from.x+MAP_WORLD.nodeWidth/2,y:from.y}:{x:from.x,y:from.y+MAP_WORLD.nodeHeight/2};
+  const end=horizontal?{x:to.x-MAP_WORLD.nodeWidth/2-7,y:to.y}:{x:to.x,y:to.y-MAP_WORLD.nodeHeight/2-7};
+  if(horizontal){const bend=Math.max(45,(end.x-start.x)*.48);return `M ${start.x} ${start.y} C ${start.x+bend} ${start.y}, ${end.x-bend} ${end.y}, ${end.x} ${end.y}`;}
+  const bend=Math.max(50,Math.abs(end.y-start.y)*.45);return `M ${start.x} ${start.y} C ${start.x} ${start.y+bend}, ${end.x} ${end.y-bend}, ${end.x} ${end.y}`;
+}
+function renderMapEdges(){const target=document.getElementById("map-edges");if(target)target.innerHTML=workflowEdges.map(edge=>`<path class="connection ${edge.branch?"branch":""}" d="${mapEdgePath(edge)}"></path>`).join("");}
+function applyMapViewport(){
+  const world=document.getElementById("map-world");if(!world)return;
+  const {zoom,panX,panY}=state.map.viewport;world.style.transform=`translate(${panX}px, ${panY}px) scale(${zoom})`;
+  document.getElementById("map-canvas")?.style.setProperty("--map-zoom",zoom);
+}
+function fitMapViewport(persist=true){
+  const canvas=document.getElementById("map-canvas");if(!canvas)return;
+  const zoom=Math.max(.68,Math.min(1,(canvas.clientWidth-36)/MAP_WORLD.width));
+  state.map.viewport={zoom,panX:Math.max(18,(canvas.clientWidth-MAP_WORLD.width*zoom)/2),panY:24,initialized:true};
+  if(persist)saveState();applyMapViewport();
+}
+function setMapZoom(next,anchorX=null,anchorY=null){
+  const canvas=document.getElementById("map-canvas");if(!canvas)return;
+  const old=state.map.viewport.zoom;const zoom=Math.max(.5,Math.min(1.5,next));
+  const cx=anchorX??canvas.clientWidth/2,cy=anchorY??canvas.clientHeight/2;const ratio=zoom/old;
+  state.map.viewport.panX=cx-(cx-state.map.viewport.panX)*ratio;state.map.viewport.panY=cy-(cy-state.map.viewport.panY)*ratio;state.map.viewport.zoom=zoom;state.map.viewport.initialized=true;
+  saveState();applyMapViewport();
+}
+function panMapViewport(dx,dy,persist=true){
+  state.map.viewport.panX+=dx;state.map.viewport.panY+=dy;state.map.viewport.initialized=true;applyMapViewport();
+  if(persist){clearTimeout(mapViewportSaveTimer);mapViewportSaveTimer=setTimeout(saveState,140);}
+}
+function setArrangeMode(enabled){
+  mapArrangeMode=enabled;document.getElementById("map-canvas")?.classList.toggle("arranging",enabled);document.querySelector(".map-workbench")?.classList.toggle("arranging",enabled);
+  const button=document.getElementById("map-arrange");if(button){button.classList.toggle("active",enabled);button.setAttribute("aria-pressed",String(enabled));button.textContent=enabled?"Done arranging":"Arrange";}
+}
 function mapMetric(node,config){
   if(node.id==="sources")return `${config.value} sources`;
   if(state.runtime.mode!=="demo"&&node.id==="scan")return `${numberValue(runs[0]?.findings,opportunities.length)} findings`;
@@ -591,11 +670,20 @@ function mapMetric(node,config){
   if(node.id==="shortlist")return `${state.runtime.mode==="demo"?config.value:Math.min(config.value,opportunities.length)} saved`;
   if(node.id==="contacts")return `${config.value} / company`;
   if(node.id==="email")return `${config.value} emailed`;
+  if(node.id==="match")return `${state.playbooks.filter(item=>item.active).length} playbooks`;
+  if(node.id==="message")return `${Object.keys(state.outreachDrafts).length} drafts`;
+  if(node.id==="safety")return `${opportunities.filter(o=>automationDecision(o,matchingPlaybook(o)).eligible).length} eligible`;
+  if(node.id==="outreach")return `${opportunities.filter(o=>automationDecision(o,matchingPlaybook(o)).route==="Human review").length} to review`;
+  if(node.id==="delivery")return state.outreachAutomation.senderConnected?`${state.outreachAutomation.dailyLimit}/day`:`${state.outreachAutomation.dailyLimit}/day · sender needed`;
+  if(node.id==="tracking")return `${state.outreachAudit.length} events`;
+  if(node.id==="booking")return state.scheduling.bookingUrl?`${state.scheduling.duration} min · ${state.scheduling.platform}`:"Link needed";
+  if(node.id==="meeting")return state.scheduling.bookingWebhookConnected?"CRM automatic":"Manual fallback";
   return node.metric;
 }
 
 function renderSystemMap(){
   const dirty=dirtyMapNodes();
+  const changeCount=mapChangeCount();
   const enabled=workflowNodes.filter(node=>mapConfig(node.id,true).enabled).length;
   const healthy=workflowNodes.filter(node=>node.status==="Healthy").length;
   document.getElementById("map-summary").innerHTML=`
@@ -603,23 +691,26 @@ function renderSystemMap(){
     <button class="map-summary-card" type="button" data-view="runs"><span>●</span><div><strong>${healthy} healthy</strong><small>2 steps need review</small></div><i>→</i></button>
     <button class="map-summary-card" type="button" data-map-node="${dirty[0]?.id||selectedMapNode}"><span>⌁</span><div><strong>${dirty.length} drafts</strong><small>Not active until published</small></div><i>→</i></button>
     <button class="map-summary-card" type="button" data-view="runs"><span>V</span><div><strong>Version ${state.map.version}</strong><small>${esc(state.map.lastPublished)}</small></div><i>→</i></button>`;
-  document.getElementById("map-draft-count").textContent=dirty.length;
+  document.getElementById("map-draft-count").textContent=changeCount;
   document.getElementById("map-version-label").textContent=state.map.version;
-  document.getElementById("publish-map").textContent=dirty.length?`Publish ${dirty.length} change${dirty.length===1?"":"s"}`:"Published";
-  document.getElementById("publish-map").disabled=!dirty.length;
-  document.getElementById("discard-map-drafts").disabled=!dirty.length;
-  document.getElementById("map-edges").innerHTML=workflowEdges.map(edge=>`<path class="connection ${edge.branch?"branch":""}" d="${edge.d}"></path>`).join("");
+  document.getElementById("publish-map").textContent=changeCount?`Publish ${changeCount} change${changeCount===1?"":"s"}`:"Published";
+  document.getElementById("publish-map").disabled=!changeCount;
+  document.getElementById("discard-map-drafts").disabled=!changeCount;
+  renderMapEdges();
   document.getElementById("map-nodes").innerHTML=workflowNodes.map((node,index)=>{
     const config=mapConfig(node.id);
     const changed=dirty.some(item=>item.id===node.id);
     const destination=workflowDestinations[node.id];
-    return `<div class="map-node ${selectedMapNode===node.id?"selected":""} ${config.enabled?"":"disabled"}" style="--x:${node.x}%;--y:${node.y}%" data-step-view="${destination}" role="link" tabindex="0" aria-label="Open ${esc(config.title)} in ${destination}">
+    const position=state.map.draftLayout[node.id];
+    return `<div class="map-node ${selectedMapNode===node.id?"selected":""} ${config.enabled?"":"disabled"}" style="--x:${position.x}px;--y:${position.y}px" data-node-id="${node.id}" data-step-view="${destination}" role="link" tabindex="0" aria-label="Open ${esc(config.title)} in ${destination}">
       ${changed?'<i class="map-draft-mark" aria-label="Draft changed"></i>':''}
       <span class="map-node-head"><span class="map-node-icon">${node.icon}</span><span class="map-node-index">0${index+1}</span><i class="map-node-status ${node.status.toLowerCase()}"></i><button class="map-node-inspect" type="button" data-map-node="${node.id}" aria-label="Inspect ${esc(config.title)} configuration">⚙</button></span>
       <h3>${esc(config.title)}</h3><p>${esc(node.type)} · ${config.enabled?esc(config.cadence):"Disabled"}</p>
       <span class="map-node-foot"><strong>${esc(mapMetric(node,config))}</strong><span>Open page →</span></span>
     </div>`;
   }).join("");
+  applyMapViewport();setArrangeMode(mapArrangeMode);
+  if(!state.map.viewport.initialized)requestAnimationFrame(()=>fitMapViewport());
   renderMapInspector();
   const history=(state.map.history||[]).slice(0,4);
   document.getElementById("map-history").innerHTML=`<div class="map-history-list">${history.map(item=>`<span class="version-chip"><strong>V${item.version}</strong> · ${esc(item.date)} · ${item.changes} changes</span>`).join("")}</div>`;
@@ -671,7 +762,7 @@ function validateNodeConfig(id,config){
   else if(id==="shortlist"&&(!Number.isInteger(config.value)||config.value<3||config.value>10))errors.push("The app shortlist must contain 3–10 companies");
   else if(id==="score"&&(config.value<1||config.value>10))errors.push("Opportunity score threshold must be between 1 and 10");
   else if(!["email","shortlist","score"].includes(id)&&(config.value<1||config.value>100))errors.push("The step limit must be between 1 and 100");
-  if(id==="outreach"&&!config.enabled)errors.push("Human outreach approval must remain active during the pilot");
+  if(id==="outreach"&&!config.enabled)errors.push("Human review must remain active as the fallback route");
   return errors;
 }
 
@@ -694,7 +785,7 @@ function validateWorkflow(){
   });
   if(Number(configs.email.value)>Number(configs.shortlist.value))errors.push("Morning email cannot contain more companies than the saved shortlist");
   if(Number(configs.score.value)>10)errors.push("Opportunity score threshold cannot exceed 10");
-  if(!configs.outreach.enabled)errors.push("Human outreach approval must remain active during the pilot");
+  if(!configs.outreach.enabled)errors.push("Human review must remain active as the fallback route");
   return errors;
 }
 
@@ -705,9 +796,10 @@ function publishWorkflow(){
     document.getElementById("modal-content").innerHTML=`<p class="kicker">Publish blocked</p><h2>Fix ${errors.length} validation issue${errors.length===1?"":"s"}</h2><div class="notice"><strong>The active workflow was not changed.</strong></div><ul>${errors.map(error=>`<li>${esc(error)}</li>`).join("")}</ul><button class="btn primary" id="close-preview-action">Return to map</button>`;
     openModal();return;
   }
-  const changes=dirtyMapNodes().length;
+  const changes=mapChangeCount();
   if(!changes)return;
   state.map.publishedConfigs=structuredClone(state.map.draftConfigs);
+  state.map.publishedLayout=structuredClone(state.map.draftLayout);
   state.map.version+=1;
   state.map.lastPublished=new Intl.DateTimeFormat("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}).format(new Date());
   state.map.history=[{version:state.map.version,date:state.map.lastPublished,changes},...(state.map.history||[])].slice(0,8);
@@ -720,20 +812,21 @@ function publishWorkflow(){
 function testMapStep(id){
   selectedMapNode=id;
   if(!saveMapDraft(false))return;
-  const outputs={sources:"12 approved sources responded; evidence metadata is present.",scan:"Simulation processed 30 pages with duplicate detection enabled.",analysis:"Sample finding separated into verified facts and commercial hypotheses.",score:"Sample opportunity produced a complete seven-factor score explanation.",shortlist:"Five qualifying companies fit the current shortlist rule.",contacts:"Apollo/public-data gate returned three verified contacts and hid one prediction.",email:"Preview generated exactly three internal opportunities with one contact each.",outreach:"Safety rules passed; sender connection remains planned and human approval is enforced."};
-  state.map.tests[id]={status:id==="outreach"?"Review":"Passed",date:"Just now",output:outputs[id]};
-  saveState();renderSystemMap();showToast(id==="outreach"?"Rule test passed; connection still planned":"Step simulation passed");
+  const outputs={sources:"12 approved sources responded; evidence metadata is present.",scan:"Simulation processed 30 pages with duplicate detection enabled.",analysis:"Sample finding separated into verified facts and commercial hypotheses.",score:"Sample opportunity produced a complete seven-factor score explanation.",shortlist:"Five qualifying companies fit the current shortlist rule.",contacts:"Apollo/public-data gate returned three verified work contacts and routed one personal address to review.",email:"Preview generated exactly three internal opportunities with one contact each.",match:"Active signal and offer rules selected a predefined playbook.",message:"Approved template fields were populated without adding unsupported claims.",safety:"Verified work email, evidence, score, suppression and daily cap checks passed.",outreach:"Manual fallback is available for personal email, weak matches and unapproved scripts.",delivery:"Queue is valid; an email sender must be connected before delivery can be confirmed.",tracking:"Queue and approval transitions are preserved in the outreach audit.",booking:"The configured Calendly Strategy Call opens a 30-minute Zoom booking page.",meeting:"Manual CRM fallback is ready; connect the Calendly webhook for automatic Meeting-stage updates."};
+  const review=["outreach","delivery","meeting"].includes(id);
+  state.map.tests[id]={status:review?"Review":"Passed",date:"Just now",output:outputs[id]||"Step configuration passed."};
+  saveState();renderSystemMap();showToast(review?"Rule test passed; external delivery is not connected":"Step simulation passed");
 }
 
 function renderMetrics(){
-  const verified=opportunities.filter(o=>o.contact.emailStatus==="Verified").length;
+  const verified=opportunities.filter(isVerifiedWorkEmail).length;
   const eligible=opportunities.filter(o=>state.listStates[o.id]==="Eligible").length;
   const qualified=opportunities.filter(o=>o.score>=state.settings.minScore).length;
   const approved=opportunities.filter(o=>state.statuses[o.id]==="Approved").length;
-  const contactGaps=opportunities.filter(o=>o.score>=state.settings.minScore&&o.contact.emailStatus!=="Verified").length;
+  const contactGaps=opportunities.filter(o=>o.score>=state.settings.minScore&&!isVerifiedWorkEmail(o)).length;
   const data=[
     ["Review now",qualified,`Score ≥ ${state.settings.minScore}`,"companies"],["Contact gaps",contactGaps,"Research before outreach","contacts"],
-    ["Verified / eligible",`${verified} / ${eligible}`,"Business contacts","contacts"],["Approved",approved,"Human-approved actions","outreach"]
+    ["Verified / eligible",`${verified} / ${eligible}`,"Business contacts","contacts"],["Approved",approved,"Controlled outreach actions","outreach"]
   ];
   document.getElementById("metrics").innerHTML=data.map(([label,value,note,view],index)=>`<button class="metric decision-metric" type="button" data-view="${view}"><span><i>0${index+1}</i>${label}</span><strong>${value}</strong><small>${note}</small><em>Open →</em></button>`).join("");
 }
@@ -742,11 +835,13 @@ function todayRecommendation(o){
   const stage=state.crm.records[o.id]?.stage||"Discovered";
   const listState=state.listStates[o.id]||"Research";
   const status=state.statuses[o.id]||"New";
-  if(o.contact.emailStatus!=="Verified")return {label:"Research decision-maker",kind:"open",reason:"No verified business email yet",tone:"research"};
+  if(!isVerifiedWorkEmail(o))return {label:"Research decision-maker",kind:"open",reason:isPersonalEmail(o.contact)?"Personal email · approval route only":"No verified work email yet",tone:"research"};
   if(listState!=="Eligible")return {label:"Review contact eligibility",kind:"contacts",reason:"Verified email · campaign review required",tone:"review"};
   if(status==="Approved")return {label:"Continue in pipeline",kind:"crm",reason:`Approved · ${stage}`,tone:"approved"};
   if(status==="Draft ready")return {label:"Review outreach draft",kind:"message",reason:"Draft prepared · approval pending",tone:"ready"};
-  return {label:"Prepare outreach draft",kind:"message",reason:"Verified and eligible · human approval next",tone:"ready"};
+  const decision=automationDecision(o,matchingPlaybook(o));
+  if(decision.automatic)return {label:"Review automatic queue",kind:"outreach",reason:decision.route,tone:"approved"};
+  return {label:"Prepare outreach draft",kind:"message",reason:"Verified and eligible · controlled routing next",tone:"ready"};
 }
 
 function renderOpportunities(){
@@ -796,7 +891,7 @@ function renderContacts(){
     <td><strong>${esc(o.contact.name)}</strong></td><td>${esc(o.company)}</td><td>${esc(o.contact.role)}</td>
     <td>${o.contact.emailStatus==="Predicted"?'<span class="status warn">Hidden until verified</span>':`<a class="evidence" href="mailto:${esc(o.contact.email)}">${esc(o.contact.email)}</a>`}</td>
     <td><span class="status ${statusClass(o.contact.emailStatus)}">${esc(o.contact.emailStatus)}</span><br><small>${o.contact.emailType==="personal"?"Personal · exact person/company/role match":esc(o.contact.source)}</small></td>
-    <td><select data-list-state="${o.id}"><option ${state.listStates[o.id]==="Research"?"selected":""}>Research</option><option ${state.listStates[o.id]==="Eligible"?"selected":""}>Eligible</option><option ${state.listStates[o.id]==="Suppressed"?"selected":""}>Suppressed</option><option ${state.listStates[o.id]==="Unsubscribed"?"selected":""}>Unsubscribed</option></select></td>
+    <td><select data-list-state="${o.id}"><option ${state.listStates[o.id]==="Research"?"selected":""}>Research</option><option ${state.listStates[o.id]==="Eligible"?"selected":""}>Eligible</option><option ${state.listStates[o.id]==="Manual review"?"selected":""}>Manual review</option><option ${state.listStates[o.id]==="Suppressed"?"selected":""}>Suppressed</option><option ${state.listStates[o.id]==="Unsubscribed"?"selected":""}>Unsubscribed</option></select></td>
     <td><div class="card-actions">${["Verified","Strong match"].includes(o.contact.emailStatus)?"":`<button class="btn small primary" data-enrich="${o.id}" ${o.contact.enrichmentStatus==="processing"?"disabled":""}>${o.contact.enrichmentStatus==="processing"?"Checking…":"Find work email · 1 lookup"}</button>${backendSession?.role==="owner"?`<button class="btn small secondary" data-enrich-personal="${o.id}">Personal exception</button>`:""}`}<button class="btn small secondary" data-open="${o.id}">Dossier</button></div></td></tr>`).join("");
 }
 
@@ -804,11 +899,49 @@ function renderSources(){
   const market=activeMarket();
   const pack=sourcePackForMarket(market);
   const enabled=pack.filter(item=>sourceEnabled(market,item.id));
-  document.getElementById("source-pack-summary").innerHTML=`<strong>${esc(market.name)} source pack:</strong> ${enabled.length} of ${pack.length} recommended sources enabled. Changing the active region updates this pack automatically; paused sources are excluded from the Make webhook payload.`;
+  const customCount=pack.filter(item=>item.custom).length;
+  document.getElementById("source-pack-summary").innerHTML=`<strong>${esc(market.name)} source pack:</strong> ${enabled.length} of ${pack.length} sources enabled · ${customCount} custom. Recommended sources are protected; custom sources can be edited or deleted. Paused sources are excluded from the Make payload.`;
   document.getElementById("source-grid").innerHTML=pack.map(s=>{
     const isEnabled=sourceEnabled(market,s.id);
-    return `<article class="source-card ${isEnabled?"":"source-paused"}"><div class="opp-title-row"><h3>${esc(s.name)}</h3><span class="status ${statusClass(isEnabled?s.health:"Paused")}">${esc(isEnabled?s.health:"Paused")}</span></div><p><span class="mini-badge">${esc(s.country==="GLOBAL"?"Global":s.country)}</span> ${esc(s.group)} · ${esc(s.cadence)}</p><div class="source-foot"><span>${s.findings} findings today</span><button class="btn small secondary" data-source-toggle="${esc(s.id)}">${isEnabled?"Pause":"Enable"}</button></div></article>`;
+    const sourceUrl=safeUrl(s.url||"");
+    const host=sourceUrl?new URL(sourceUrl).hostname.replace(/^www\./,""):"Managed connector";
+    return `<article class="source-card ${s.custom?"custom-source":"recommended-source"} ${isEnabled?"":"source-paused"}"><div class="opp-title-row"><h3>${esc(s.name)}</h3><span class="status ${statusClass(isEnabled?s.health:"Paused")}">${esc(isEnabled?s.health:"Paused")}</span></div><p><span class="mini-badge">${esc(s.country==="GLOBAL"?"Global":s.country)}</span> ${esc(s.group)} · ${esc(s.cadence)} ${s.custom?'<span class="mini-badge custom-badge">Custom</span>':""}</p><p class="source-url">${sourceUrl?`<a href="${esc(sourceUrl)}" target="_blank" rel="noopener">${esc(host)} ↗</a>`:esc(host)}${s.languages?.length?` · ${esc(s.languages.join(", "))}`:""}</p>${s.keywords?`<p class="source-keywords">${esc(s.keywords)}</p>`:""}<div class="source-foot"><span>${s.findings} findings today</span><div class="source-card-actions">${s.custom?`<button class="btn small secondary" data-source-test="${esc(s.id)}">Test</button><button class="btn small secondary" data-source-edit="${esc(s.id)}">Edit</button><button class="btn small secondary danger" data-source-delete="${esc(s.id)}">Delete</button>`:""}<button class="btn small secondary" data-source-toggle="${esc(s.id)}">${isEnabled?"Pause":"Enable"}</button></div></div></article>`;
   }).join("");
+}
+
+function openSourceEditor(id=""){
+  const market=activeMarket();
+  const source=state.customSources.find(item=>item.id===id&&item.marketProfileId===market.id)||{name:"",url:"",group:"Business news",cadence:"Daily",country:market.countryCodes?.[0]||"GLOBAL",languages:market.languages||[],keywords:""};
+  const groups=["Jobs","Company activity","Company intelligence","Public procurement","Business news","Startups and funding","Primary evidence","People and hiring","Other"];
+  const countries=[...(market.countryCodes||[]),"GLOBAL"].filter((value,index,array)=>array.indexOf(value)===index);
+  document.getElementById("modal-content").innerHTML=`<p class="kicker">Monitoring network</p><h2>${id?"Edit":"Add"} custom source</h2><p class="drawer-sub">Add a public HTTPS page that strengthens your evidence coverage. Custom sources are sent to Make only when enabled.</p><div class="form-grid source-editor"><label>Source name<input id="source-editor-name" value="${esc(source.name)}" placeholder="Example: Latvian Exporters Association"></label><label>Public HTTPS URL<input id="source-editor-url" type="url" value="${esc(source.url)}" placeholder="https://example.lv/news"></label><label>Category<select id="source-editor-group">${groups.map(group=>`<option ${group===source.group?"selected":""}>${esc(group)}</option>`).join("")}</select></label><label>Frequency<select id="source-editor-cadence">${["Daily","Weekly","On demand"].map(value=>`<option ${value===source.cadence?"selected":""}>${value}</option>`).join("")}</select></label><label>Country<select id="source-editor-country">${countries.map(value=>`<option ${value===source.country?"selected":""}>${esc(value==="GLOBAL"?"Global":value)}</option>`).join("")}</select></label><label>Languages <small>comma separated</small><input id="source-editor-languages" value="${esc((source.languages||[]).join(", "))}" placeholder="Latvian, English"></label><label class="wide">Keywords or page paths <small>Optional guidance for collection</small><textarea id="source-editor-keywords" placeholder="funding, hiring, procurement, /news/">${esc(source.keywords||"")}</textarea></label></div><div class="notice source-editor-note"><strong>Quality rule:</strong> A source adds candidates, but evidence still has to pass the deterministic quality gate before any OpenAI spend.</div><div class="card-actions" style="margin-top:14px"><button class="btn secondary" id="close-preview-action">Cancel</button><button class="btn primary" id="save-custom-source" data-source-id="${esc(id)}">Save source</button></div>`;
+  openModal();
+}
+
+function saveCustomSource(id=""){
+  const market=activeMarket();
+  const name=document.getElementById("source-editor-name").value.trim();
+  const rawUrl=document.getElementById("source-editor-url").value.trim();
+  let parsedUrl;
+  try{parsedUrl=new URL(rawUrl);}catch{showToast("Enter a valid public HTTPS URL");return;}
+  if(parsedUrl.protocol!=="https:"){showToast("Custom sources must use HTTPS");return;}
+  if(!name){showToast("Add a source name");return;}
+  const duplicate=state.customSources.some(item=>item.marketProfileId===market.id&&item.id!==id&&String(item.url||"").replace(/\/$/,"")===parsedUrl.href.replace(/\/$/,""));
+  if(duplicate){showToast("This source URL is already in the market pack");return;}
+  const sourceId=id||makeId("source",name);
+  const value={id:sourceId,marketProfileId:market.id,name,url:parsedUrl.href,group:document.getElementById("source-editor-group").value,cadence:document.getElementById("source-editor-cadence").value,country:document.getElementById("source-editor-country").value,languages:csvValues(document.getElementById("source-editor-languages").value),keywords:document.getElementById("source-editor-keywords").value.trim(),custom:true};
+  const index=state.customSources.findIndex(item=>item.id===sourceId);
+  if(index>=0)state.customSources[index]=value;else state.customSources.push(value);
+  if(!Array.isArray(market.enabledSourceIds))market.enabledSourceIds=sourcePackForMarket(market).map(item=>item.id);
+  if(!market.enabledSourceIds.includes(sourceId))market.enabledSourceIds.push(sourceId);
+  saveState();closeModal();renderSources();renderControlCentre();showToast(id?"Custom source updated":"Custom source added and enabled");
+}
+
+function testSource(id){
+  const source=sourcePackForMarket(activeMarket()).find(item=>item.id===id);
+  if(!source)return;
+  if(source.custom){const url=safeUrl(source.url);if(!url||new URL(url).protocol!=="https:"){showToast(`${source.name}: invalid HTTPS URL`);return;}}
+  showToast(`${source.name}: configuration passed · live crawl runs through Make`);
 }
 
 function renderRuns(){
@@ -851,7 +984,7 @@ function renderControlCentre(){
         <label class="wide">Languages <small>Click to include or exclude</small><div class="choice-grid" id="market-language-choices">${languageChoices.map(language=>`<button type="button" class="choice-chip ${(market.languages||[]).includes(language)?"selected":""}" data-market-language="${esc(language)}">${esc(language)}</button>`).join("")}</div><div class="inline-add compact"><input id="market-custom-language" placeholder="Add another language"><button type="button" class="btn secondary" id="add-market-language">Add</button></div><input type="hidden" id="market-languages" value="${esc((market.languages||[]).join(", "))}"></label>
         <label class="wide">Decision-maker titles <small>comma separated</small><input id="market-titles" value="${esc((market.decisionTitles||[]).join(", "))}"></label>
         <label class="wide">Source focus<textarea id="market-source-focus">${esc(market.sourceFocus||"")}</textarea></label>
-        <div class="source-pack-preview wide"><strong>${pack.length} recommended sources for this region</strong><span>${esc(pack.slice(0,6).map(item=>item.name).join(" · "))}${pack.length>6?" · …":""}</span><button type="button" class="btn small secondary" data-view="sources">Review source pack</button></div>
+        <div class="source-pack-preview wide"><strong>${pack.filter(item=>!item.custom).length} recommended · ${pack.filter(item=>item.custom).length} custom sources</strong><span>${esc(pack.slice(0,6).map(item=>item.name).join(" · "))}${pack.length>6?" · …":""}</span><button type="button" class="btn small secondary" data-view="sources">Manage sources</button></div>
       </div>
     </div>`;
   document.getElementById("profile-owner").value=state.businessProfile.owner||"";
@@ -865,14 +998,15 @@ function renderControlCentre(){
   document.getElementById("signal-rules-editor").innerHTML=state.signalRules.map(item=>`<article class="editor-card" data-signal-card="${esc(item.id)}"><div class="editor-head"><label class="inline-check"><input type="checkbox" data-signal-active ${item.active?"checked":""}> Active</label><button class="icon-button" data-remove-signal="${esc(item.id)}" aria-label="Delete signal">×</button></div><div class="editor-grid"><label>Signal name<input data-signal-name value="${esc(item.name)}"></label><label>Priority weight /10<input data-signal-weight type="number" min="1" max="10" value="${Number(item.weight)||5}"></label><label class="wide">Keywords and phrases<textarea data-signal-keywords>${esc(item.keywords)}</textarea></label></div></article>`).join("");
   const offerOptions=state.offers.map(item=>`<option value="${esc(item.id)}">${esc(item.name)}</option>`).join("");
   const signalOptions=state.signalRules.map(item=>`<option value="${esc(item.id)}">${esc(item.name)}</option>`).join("");
-  document.getElementById("playbooks-editor").innerHTML=state.playbooks.map(item=>`<article class="editor-card" data-playbook-card="${esc(item.id)}"><div class="editor-head"><label class="inline-check"><input type="checkbox" data-playbook-active ${item.active?"checked":""}> Active</label><button class="icon-button" data-remove-playbook="${esc(item.id)}" aria-label="Delete playbook">×</button></div><div class="editor-grid"><label>Playbook name<input data-playbook-name value="${esc(item.name)}"></label><label>Offer<select data-playbook-offer>${offerOptions}</select></label><label>Signal<select data-playbook-signal>${signalOptions}</select></label><label>Decision-maker role<input data-playbook-role value="${esc(item.role||"")}"></label><label>Channel<select data-playbook-channel>${["Email","LinkedIn","Phone","WhatsApp"].map(value=>`<option ${value===item.channel?"selected":""}>${value}</option>`).join("")}</select></label><label>Language<input data-playbook-language value="${esc(item.language||"English")}"></label><label>Send mode<select data-playbook-send-mode>${["Approval required","Draft only","Automatic after approval rule"].map(value=>`<option ${value===item.sendMode?"selected":""}>${value}</option>`).join("")}</select></label><label class="wide">Subject<input data-playbook-subject value="${esc(item.subject||"")}"></label><label class="wide">Message template<textarea class="script-box" data-playbook-body>${esc(item.body||"")}</textarea></label></div></article>`).join("");
+  document.getElementById("playbooks-editor").innerHTML=state.playbooks.map(item=>{const mode=item.sendMode==="Automatic after approval rule"?"Automatic":item.sendMode||"Approval required";const ctaMode=item.ctaMode||"Include in initial email";return `<article class="editor-card playbook-card" data-playbook-card="${esc(item.id)}"><div class="editor-head"><label class="inline-check"><input type="checkbox" data-playbook-active ${item.active?"checked":""}> Active</label><span class="playbook-route ${mode==="Automatic"?"auto":"review"}">${esc(mode)}</span><button class="icon-button" data-remove-playbook="${esc(item.id)}" aria-label="Delete playbook">×</button></div><div class="editor-grid"><label>Playbook name<input data-playbook-name value="${esc(item.name)}"></label><label>Offer<select data-playbook-offer>${offerOptions}</select></label><label>Signal<select data-playbook-signal>${signalOptions}</select></label><label>Decision-maker role<input data-playbook-role value="${esc(item.role||"")}"></label><label>Channel<select data-playbook-channel>${["Email","LinkedIn"].map(value=>`<option ${value===item.channel?"selected":""}>${value}</option>`).join("")}</select></label><label>Language<input data-playbook-language value="${esc(item.language||"English")}"></label><label>Delivery mode<select data-playbook-send-mode>${["Approval required","Draft only","Automatic"].map(value=>`<option ${value===mode?"selected":""}>${value}</option>`).join("")}</select></label><label>Booking CTA<select data-playbook-cta-mode>${["Include in initial email","Include after positive reply","Never include"].map(value=>`<option ${value===ctaMode?"selected":""}>${value}</option>`).join("")}</select></label><label>Minimum score<input data-playbook-min-score type="number" min="1" max="10" step=".1" value="${Math.max(1,Math.min(10,Number(item.minScore)||8))}"></label><label>Playbook daily cap<input data-playbook-daily-limit type="number" min="1" max="5" value="${Math.max(1,Math.min(5,Number(item.dailyLimit)||3))}"></label><label class="toggle-row"><span>High confidence only<small>Required for automatic route</small></span><input type="checkbox" data-playbook-high-confidence ${item.requireHighConfidence!==false?"checked":""}></label><label class="toggle-row wide"><span>Script approved for automatic use<small>Still requires verified work email, evidence, eligibility and available daily capacity</small></span><input type="checkbox" data-playbook-auto-approved ${item.autoApproved?"checked":""}></label><label class="wide">Subject<input data-playbook-subject value="${esc(item.subject||"")}"></label><label class="wide">Predefined message template<textarea class="script-box" data-playbook-body>${esc(item.body||"")}</textarea><small>The booking invitation is added according to the CTA setting; you do not need to paste the URL into every script.</small></label></div></article>`}).join("");
   state.playbooks.forEach(item=>{const card=document.querySelector(`[data-playbook-card="${CSS.escape(item.id)}"]`);if(card){card.querySelector("[data-playbook-offer]").value=item.offerId;card.querySelector("[data-playbook-signal]").value=item.signalId;}});
   const counts={offers:state.offers.filter(item=>item.active).length,signals:state.signalRules.filter(item=>item.active).length,playbooks:state.playbooks.filter(item=>item.active).length};
   document.getElementById("control-markets-meta").textContent=`${market.name} · ${(market.countries||[]).length} ${(market.countries||[]).length===1?"country":"countries"}`;
   document.getElementById("control-profile-meta").textContent=`${state.businessProfile.company||"Profile incomplete"} · ${state.businessProfile.document?"PDF attached":"No PDF"}`;
   document.getElementById("control-offers-meta").textContent=`${counts.offers}/${state.offers.length} active`;
   document.getElementById("control-signals-meta").textContent=`${counts.signals}/${state.signalRules.length} active`;
-  document.getElementById("control-playbooks-meta").textContent=`${counts.playbooks}/${state.playbooks.length} active · approval gated`;
+  const automatic=state.playbooks.filter(item=>item.active&&(item.sendMode==="Automatic"||item.sendMode==="Automatic after approval rule")&&item.autoApproved).length;
+  document.getElementById("control-playbooks-meta").textContent=`${counts.playbooks}/${state.playbooks.length} active · ${automatic} automatic-approved`;
   document.querySelectorAll("[data-control-section]").forEach(section=>{section.open=state.ui.controlSections[section.dataset.controlSection]!==false;});
 }
 
@@ -895,7 +1029,7 @@ function readControlCentre(){
   state.businessProfile={...state.businessProfile,owner:document.getElementById("profile-owner").value.trim(),company:document.getElementById("profile-company").value.trim(),summary:document.getElementById("profile-summary").value.trim(),website:document.getElementById("profile-website").value.trim(),email:document.getElementById("profile-email").value.trim(),documentNotes:document.getElementById("profile-document-notes").value.trim()};
   state.offers=[...document.querySelectorAll("[data-offer-card]")].map(card=>({id:card.dataset.offerCard,name:card.querySelector("[data-offer-name]").value.trim(),description:card.querySelector("[data-offer-description]").value.trim(),active:card.querySelector("[data-offer-active]").checked})).filter(item=>item.name);
   state.signalRules=[...document.querySelectorAll("[data-signal-card]")].map(card=>({id:card.dataset.signalCard,name:card.querySelector("[data-signal-name]").value.trim(),keywords:card.querySelector("[data-signal-keywords]").value.trim(),weight:Math.max(1,Math.min(10,Number(card.querySelector("[data-signal-weight]").value)||5)),active:card.querySelector("[data-signal-active]").checked})).filter(item=>item.name);
-  state.playbooks=[...document.querySelectorAll("[data-playbook-card]")].map(card=>({id:card.dataset.playbookCard,name:card.querySelector("[data-playbook-name]").value.trim(),offerId:card.querySelector("[data-playbook-offer]").value,signalId:card.querySelector("[data-playbook-signal]").value,role:card.querySelector("[data-playbook-role]").value.trim(),channel:card.querySelector("[data-playbook-channel]").value,language:card.querySelector("[data-playbook-language]").value.trim(),sendMode:card.querySelector("[data-playbook-send-mode]").value,subject:card.querySelector("[data-playbook-subject]").value.trim(),body:card.querySelector("[data-playbook-body]").value,active:card.querySelector("[data-playbook-active]").checked})).filter(item=>item.name);
+  state.playbooks=[...document.querySelectorAll("[data-playbook-card]")].map(card=>({id:card.dataset.playbookCard,name:card.querySelector("[data-playbook-name]").value.trim(),offerId:card.querySelector("[data-playbook-offer]").value,signalId:card.querySelector("[data-playbook-signal]").value,role:card.querySelector("[data-playbook-role]").value.trim(),channel:card.querySelector("[data-playbook-channel]").value,language:card.querySelector("[data-playbook-language]").value.trim(),sendMode:card.querySelector("[data-playbook-send-mode]").value,ctaMode:card.querySelector("[data-playbook-cta-mode]").value,minScore:Math.max(1,Math.min(10,Number(card.querySelector("[data-playbook-min-score]").value)||8)),dailyLimit:Math.max(1,Math.min(5,Number(card.querySelector("[data-playbook-daily-limit]").value)||3)),requireHighConfidence:card.querySelector("[data-playbook-high-confidence]").checked,autoApproved:card.querySelector("[data-playbook-auto-approved]").checked,subject:card.querySelector("[data-playbook-subject]").value.trim(),body:card.querySelector("[data-playbook-body]").value,active:card.querySelector("[data-playbook-active]").checked})).filter(item=>item.name);
 }
 
 function syncMarketChoiceFields(){
@@ -921,7 +1055,7 @@ function renderCRM(){
   const visibleStages=crmStageFilter==="All"?state.crm.stageOrder:[crmStageFilter];
   document.getElementById("crm-board").innerHTML=visibleStages.map(stage=>{
     const list=records.filter(item=>item.record.stage===stage);
-    return `<section class="crm-column"><header><strong>${esc(stage)}</strong><span>${list.length}</span></header><div class="crm-column-body">${list.map(({o,record})=>`<article class="crm-card"><div class="crm-card-score">${o.score.toFixed(1)}</div><h3>${esc(o.company)}</h3><p>${esc(o.signal)}</p><small>${esc(o.primaryOffer)}</small><label>Stage<select data-crm-stage="${esc(o.id)}">${state.crm.stageOrder.map(value=>`<option ${value===record.stage?"selected":""}>${esc(value)}</option>`).join("")}</select></label><label>Next action<input data-crm-next-action="${esc(o.id)}" value="${esc(record.nextAction||"")}" placeholder="Call, research, follow up…"></label><details><summary>Notes</summary><textarea data-crm-notes="${esc(o.id)}" placeholder="Private working notes">${esc(record.notes||"")}</textarea></details><div class="crm-card-actions"><button class="btn small secondary" data-open="${esc(o.id)}">Open dossier</button><button class="btn small secondary" data-message="${esc(o.id)}">Draft outreach</button></div></article>`).join("")||'<div class="crm-empty">No companies</div>'}</div></section>`;
+    return `<section class="crm-column"><header><strong>${esc(stage)}</strong><span>${list.length}</span></header><div class="crm-column-body">${list.map(({o,record})=>`<article class="crm-card"><div class="crm-card-score">${o.score.toFixed(1)}</div><h3>${esc(o.company)}</h3><p>${esc(o.signal)}</p><small>${esc(o.primaryOffer)}</small><label>Stage<select data-crm-stage="${esc(o.id)}">${state.crm.stageOrder.map(value=>`<option ${value===record.stage?"selected":""}>${esc(value)}</option>`).join("")}</select></label><label>Next action<input data-crm-next-action="${esc(o.id)}" value="${esc(record.nextAction||"")}" placeholder="Call, research, follow up…"></label><details><summary>Notes</summary><textarea data-crm-notes="${esc(o.id)}" placeholder="Private working notes">${esc(record.notes||"")}</textarea></details><div class="crm-card-actions"><button class="btn small secondary" data-open="${esc(o.id)}">Open dossier</button><button class="btn small secondary" data-message="${esc(o.id)}">Draft outreach</button>${record.stage==="Meeting"?'<span class="status good">Meeting booked</span>':`<button class="btn small secondary" data-meeting-booked="${esc(o.id)}">Mark meeting booked</button>`}</div></article>`).join("")||'<div class="crm-empty">No companies</div>'}</div></section>`;
   }).join("");
 }
 
@@ -931,17 +1065,71 @@ function matchingPlaybook(o){
   const signal=state.signalRules.find(item=>String(item.keywords||"").split(",").some(keyword=>keyword.trim()&&text.includes(keyword.trim().toLowerCase())));
   return state.playbooks.find(item=>item.active&&item.offerId===offer?.id&&(!signal||item.signalId===signal.id))||state.playbooks.find(item=>item.active&&item.offerId===offer?.id)||state.playbooks.find(item=>item.active&&(!signal||item.signalId===signal.id))||state.playbooks.find(item=>item.active);
 }
-function fillTemplate(value,o){const first=o.contact.name.split(" ")[0]||"there";return String(value||"").replaceAll("{{company}}",o.company).replaceAll("{{first_name}}",first).replaceAll("{{signal_type}}",o.signalType).replaceAll("{{signal}}",o.signal).replaceAll("{{offer}}",o.primaryOffer);}
+function fillTemplate(value,o){const first=o.contact.name.split(" ")[0]||"there";return String(value||"").replaceAll("{{company}}",o.company).replaceAll("{{first_name}}",first).replaceAll("{{signal_type}}",o.signalType).replaceAll("{{signal}}",o.signal).replaceAll("{{offer}}",o.primaryOffer).replaceAll("{{booking_link}}",state.scheduling.bookingUrl);}
+function shouldIncludeBooking(o,playbook){
+  const mode=playbook?.ctaMode||"Include in initial email";if(mode==="Never include"||!state.scheduling.bookingUrl)return false;
+  if(mode==="Include in initial email")return true;
+  const stage=state.crm.records[o.id]?.stage||"Discovered";return state.crm.stageOrder.indexOf(stage)>=state.crm.stageOrder.indexOf("Replied");
+}
+function applyBookingInvitation(body,o,playbook){
+  if(!shouldIncludeBooking(o,playbook))return body;
+  if(body.includes(state.scheduling.bookingUrl))return body;
+  const cta=fillTemplate(state.scheduling.ctaCopy,o);const signoff=body.search(/\n\n(?:Best|Regards|Kind regards|Sincerely),/i);
+  return signoff>=0?`${body.slice(0,signoff).trim()}\n\n${cta}\n\n${body.slice(signoff).trim()}`:`${body.trim()}\n\n${cta}`;
+}
+
+function isPersonalEmail(contact={}){
+  const email=String(contact.email||"").toLowerCase();
+  return contact.emailType==="personal"||contact.emailStatus==="Strong match"||/@(gmail|outlook|hotmail|icloud|yahoo|protonmail|proton)\./.test(email);
+}
+function isVerifiedWorkEmail(o){return o.contact?.emailStatus==="Verified"&&!isPersonalEmail(o.contact);}
+function automationDecision(o,playbook,index=0){
+  const reasons=[];const listState=state.listStates[o.id]||"Research";const mode=playbook?.sendMode==="Automatic after approval rule"?"Automatic":playbook?.sendMode||"Approval required";
+  const minScore=Math.max(state.settings.minScore,Number(playbook?.minScore)||8);
+  if(!playbook?.active)reasons.push("No active playbook match");
+  if(!playbook?.subject?.trim()||!playbook?.body?.trim())reasons.push("Predefined script incomplete");
+  if(!o.evidence?.some(item=>item.url))reasons.push("Source evidence missing");
+  if(Number(o.score)<minScore)reasons.push(`Score below ${minScore}`);
+  if(playbook?.requireHighConfidence!==false&&o.confidence!=="High")reasons.push("High confidence required");
+  if(isPersonalEmail(o.contact))reasons.push("Personal email requires review");
+  else if(!isVerifiedWorkEmail(o))reasons.push("Verified work email required");
+  if(listState!=="Eligible")reasons.push(listState==="Suppressed"||listState==="Unsubscribed"?`Contact is ${listState.toLowerCase()}`:"Campaign eligibility not approved");
+  const cap=Math.min(state.outreachAutomation.dailyLimit,Math.max(1,Math.min(5,Number(playbook?.dailyLimit)||3)));
+  if(index>=cap)reasons.push(`Daily cap of ${cap} reached`);
+  const eligible=reasons.length===0;
+  let route="Human review";
+  if(mode==="Draft only")route="Draft only";
+  else if(state.statuses[o.id]==="Approved"&&isPersonalEmail(o.contact)&&listState==="Manual review")route="Approved export only";
+  else if(state.statuses[o.id]==="Approved"&&eligible)route=state.outreachAutomation.senderConnected?"Approved to send":"Ready for sender";
+  else if(mode==="Automatic"&&state.outreachAutomation.enabled&&playbook?.autoApproved&&eligible)route=state.outreachAutomation.senderConnected?"Automatic send ready":"Ready for sender";
+  else if(mode==="Automatic"&&!playbook?.autoApproved)reasons.unshift("Script not approved for automatic use");
+  return {mode,eligible,route,reasons,cap,automatic:route==="Automatic send ready"||route==="Ready for sender"&&mode==="Automatic"};
+}
+function outreachDecisions(){
+  const ordered=[...opportunities].sort((a,b)=>b.score-a.score);let automaticIndex=0;
+  return ordered.map(o=>{const playbook=matchingPlaybook(o);const preliminary=automationDecision(o,playbook,automaticIndex);if((playbook?.sendMode==="Automatic"||playbook?.sendMode==="Automatic after approval rule")&&preliminary.eligible)automaticIndex+=1;return {o,playbook,decision:preliminary};});
+}
+function addOutreachAudit(opportunityId,event,detail){
+  state.outreachAudit=[{id:makeId("audit"),opportunityId,event,detail,date:formatNow()},...state.outreachAudit].slice(0,100);
+}
 
 function renderOutreach(){
-  const list=opportunities.filter(o=>["Draft ready","Approved"].includes(state.statuses[o.id])||state.listStates[o.id]==="Eligible");
+  const decisions=outreachDecisions();
+  const list=decisions.filter(({o,decision})=>["Draft ready","Approved"].includes(state.statuses[o.id])||state.listStates[o.id]==="Eligible"||decision.route==="Human review");
   document.getElementById("outreach-count").textContent=list.length;
-  document.getElementById("outreach-grid").innerHTML=list.length?list.map(o=>{
-    const eligible=state.listStates[o.id]==="Eligible"&&o.contact.emailStatus==="Verified";
-    const playbook=matchingPlaybook(o);
+  const automatic=decisions.filter(item=>item.decision.automatic).length;const review=decisions.filter(item=>item.decision.route==="Human review").length;const ready=decisions.filter(item=>item.decision.route==="Ready for sender"||item.decision.route==="Approved to send").length;
+  const notice=document.getElementById("outreach-automation-notice");notice.innerHTML=state.outreachAutomation.enabled?`<strong>Safe automatic route is on.</strong> Only approved scripts with a verified work email, evidence, eligibility, score and daily capacity can bypass review. Personal emails always require approval. ${state.outreachAutomation.senderConnected?"The sender is connected.":"No sender is connected, so ready messages remain queued and nothing is reported as sent."}`:'<strong>Automatic routing is off.</strong> Every message stays in draft or human review.';
+  document.getElementById("outreach-summary").innerHTML=`<article><strong>${automatic}</strong><span>Automatic-ready</span></article><article><strong>${review}</strong><span>Human review</span></article><article><strong>${ready}</strong><span>Waiting for sender</span></article><article><strong>${state.outreachAutomation.dailyLimit}</strong><span>Daily maximum</span></article>`;
+  document.getElementById("outreach-grid").innerHTML=list.length?list.map(({o,playbook,decision})=>{
     const stage=state.crm.records[o.id]?.stage||"Discovered";
-    return `<article class="outreach-card"><div><p class="kicker">${esc(state.statuses[o.id]||"Research")} · ${esc(stage)}</p><h3>${esc(o.company)}</h3><p>${esc(o.signal)}</p></div><div class="outreach-meta"><span>${esc(o.contact.name)}</span><span>${esc(o.contact.role)}</span><span>${esc(playbook?.name||"Default outreach")}</span><span class="status ${eligible?"good":"warn"}">${eligible?"Eligible contact":"Review required"}</span></div><div class="card-actions"><button class="btn secondary" data-message="${o.id}">Edit draft</button><button class="btn primary" data-status-action="Approved" data-id="${o.id}" ${eligible?"":"disabled"}>Approve</button></div></article>`;
-  }).join(""):'<div class="empty-state"><h3>No outreach drafts yet</h3><p>Open a qualified company and generate a message. The draft appears here only after you mark it ready or the verified contact becomes campaign eligible.</p></div>';
+    const routeTone=decision.route.includes("Automatic")||decision.route.includes("sender")||decision.route.includes("send")?"good":decision.route==="Draft only"?"":"warn";
+    const canManualApprove=decision.eligible||(isPersonalEmail(o.contact)&&o.contact.emailStatus==="Strong match"&&state.listStates[o.id]==="Manual review");
+    const routeAction=decision.route==="Human review"?`<button class="btn primary" data-status-action="Approved" data-id="${o.id}" ${canManualApprove?"":"disabled"}>Approve</button>`:decision.route==="Approved export only"?'<button class="btn primary" disabled>Export ready</button>':`<button class="btn primary" disabled>${state.outreachAutomation.senderConnected?"Queued safely":"Connect sender"}</button>`;
+    return `<article class="outreach-card"><div class="outreach-card-head"><div><p class="kicker">${esc(state.statuses[o.id]||"Research")} · ${esc(stage)}</p><h3>${esc(o.company)}</h3></div><span class="status ${routeTone}">${esc(decision.route)}</span></div><p>${esc(o.signal)}</p><div class="outreach-meta"><span>${esc(o.contact.name||"Contact needed")}</span><span>${esc(o.contact.role||"Role needed")}</span><span>${esc(playbook?.name||"No playbook match")}</span><span>${esc(decision.mode)}</span></div><div class="safety-checks">${decision.reasons.length?decision.reasons.map(reason=>`<span class="failed">× ${esc(reason)}</span>`).join(""):'<span class="passed">✓ All delivery checks passed</span>'}</div><div class="card-actions"><button class="btn secondary" data-message="${o.id}">Edit script</button>${routeAction}</div></article>`;
+  }).join(""):'<div class="empty-state"><h3>No outreach candidates yet</h3><p>Qualified opportunities appear here after playbook matching and contact eligibility checks.</p></div>';
+  const current=decisions.slice(0,8).map(({o,playbook,decision})=>({opportunityId:o.id,event:decision.route,detail:`${o.company} · ${playbook?.name||"No playbook"}`}));
+  const audit=[...state.outreachAudit,...current].slice(0,12);
+  document.getElementById("outreach-audit").innerHTML=audit.length?`<div class="audit-list">${audit.map(item=>`<article><i></i><div><strong>${esc(item.event)}</strong><span>${esc(item.detail||item.opportunityId)}</span></div><small>${esc(item.date||"Current evaluation")}</small></article>`).join("")}</div>`:'<p class="panel-copy">No outreach decisions have been recorded.</p>';
 }
 
 function renderRuntimeStatus(){
@@ -952,6 +1140,10 @@ function renderRuntimeStatus(){
   document.getElementById("status-make").textContent=state.integrations.runUrl?"Configured":"Endpoint needed";
   document.getElementById("status-make").classList.toggle("pending",!state.integrations.runUrl);
   const apollo=document.getElementById("status-apollo");if(apollo){apollo.textContent=enrichmentControl.configured?"Securely connected":"Secure key needed";apollo.classList.toggle("pending",!enrichmentControl.configured);}
+  const sender=document.getElementById("status-sender");if(sender){sender.textContent=state.outreachAutomation.senderConnected?"Connected":"Not connected";sender.classList.toggle("pending",!state.outreachAutomation.senderConnected);}
+  const calendly=document.getElementById("status-calendly");if(calendly){calendly.textContent=state.scheduling.bookingUrl?"Configured":"Link needed";calendly.classList.toggle("pending",!state.scheduling.bookingUrl);}
+  const zoom=document.getElementById("status-zoom");if(zoom){zoom.textContent=state.scheduling.platform==="Zoom"?"Configured":"Review";zoom.classList.toggle("pending",state.scheduling.platform!=="Zoom");}
+  const bookingWebhook=document.getElementById("status-booking-webhook");if(bookingWebhook){bookingWebhook.textContent=state.scheduling.bookingWebhookConnected?"Connected":"Not connected";bookingWebhook.classList.toggle("pending",!state.scheduling.bookingWebhookConnected);}
   document.getElementById("status-sheets").textContent="Workbook ready";
   document.getElementById("setting-workspace-id").value=state.workspace.id;
   document.getElementById("setting-workspace-name").value=state.workspace.name;
@@ -1007,7 +1199,7 @@ function openDrawer(id){
   const quality=dossierQuality(o);
   const factorTotal=Object.values(o.scores).reduce((sum,value)=>sum+(Number(value)||0),0);
   const scoreAligned=Math.abs(factorTotal-o.score)<.11;
-  const canApprove=o.contact.emailStatus==="Verified"&&state.listStates[o.id]==="Eligible";
+  const canApprove=isVerifiedWorkEmail(o)&&state.listStates[o.id]==="Eligible"||isPersonalEmail(o.contact)&&o.contact.emailStatus==="Strong match"&&state.listStates[o.id]==="Manual review";
   document.getElementById("drawer-content").innerHTML=`
     <div class="dossier-head"><div><p class="kicker">Decision dossier · ${esc(o.id)}</p><h2>${esc(o.company)}</h2><p class="drawer-sub">${esc(o.industry)} · ${esc(o.location)} · ${esc(o.signalType)}</p></div><span class="dossier-readiness ${quality.tone}"><i></i>${quality.label}</span></div>
     <div class="dossier-summary"><div class="detail-score"><strong>${o.score.toFixed(1)}</strong><div><b>Opportunity score /10</b><p>${esc(o.confidence)} model confidence</p></div></div><dl><div><dt>Sourced claims</dt><dd>${quality.sourced}</dd></div><div><dt>Fresh ≤90 days</dt><dd>${quality.fresh}</dd></div><div><dt>Verified contact</dt><dd>${quality.verified?"Yes":"No"}</dd></div></dl></div>
@@ -1035,9 +1227,12 @@ function openMessage(id){
   const playbook=matchingPlaybook(o);
   const saved=state.outreachDrafts[o.id];
   const subject=saved?.subject||fillTemplate(playbook?.subject||`${o.signalType} at {{company}}`,o);
-  const body=saved?.body||fillTemplate(playbook?.body||`Hi {{first_name}},\n\nI noticed {{signal}}\n\nWould it be useful if I sent a short outline of how {{offer}} could support {{company}}?\n\nBest,\n${state.businessProfile.owner||"Edgars"}`,o);
+  const templateBody=fillTemplate(playbook?.body||`Hi {{first_name}},\n\nI noticed {{signal}}\n\nWould it be useful if I sent a short outline of how {{offer}} could support {{company}}?\n\nBest,\n${state.businessProfile.owner||"Edgars"}`,o);
+  const body=applyBookingInvitation(saved?.body||templateBody,o,playbook);
   const message=`Subject: ${subject}\n\n${body}`;
-  document.getElementById("modal-content").innerHTML=`<p class="kicker">Approval-required draft · ${esc(playbook?.channel||"Email")}</p><h2>${esc(o.company)}</h2><p class="drawer-sub">${esc(playbook?.name||"Default playbook")} · ${esc(playbook?.language||"English")} · ${esc(playbook?.sendMode||"Approval required")}</p><textarea class="message-box" data-draft-id="${esc(o.id)}">${esc(message)}</textarea><div class="card-actions" style="margin-top:12px"><button class="btn secondary" id="copy-message">Copy draft</button><button class="btn primary" data-status-action="Draft ready" data-id="${o.id}">Mark draft ready</button></div>`;
+  const decision=automationDecision(o,playbook);
+  const bookingState=shouldIncludeBooking(o,playbook)?`${state.scheduling.eventName} link included`:`Booking link: ${playbook?.ctaMode||"Include in initial email"}`;
+  document.getElementById("modal-content").innerHTML=`<p class="kicker">Predefined script · ${esc(playbook?.channel||"Email")}</p><h2>${esc(o.company)}</h2><p class="drawer-sub">${esc(playbook?.name||"Default playbook")} · ${esc(playbook?.language||"English")} · ${esc(decision.route)}</p><div class="message-route"><strong>${esc(decision.mode)}</strong><span>${decision.reasons.length?esc(decision.reasons.join(" · ")):"All current safety checks pass"}</span></div><div class="booking-state"><span>◷</span><div><strong>${esc(bookingState)}</strong><small>${esc(state.scheduling.duration)} minutes · ${esc(state.scheduling.platform)} · Calendly availability</small></div></div><textarea class="message-box" data-draft-id="${esc(o.id)}">${esc(message)}</textarea><div class="card-actions" style="margin-top:12px"><button class="btn secondary" id="copy-message">Copy draft</button><button class="btn primary" data-status-action="Draft ready" data-id="${o.id}">Save to outreach queue</button></div>`;
   openModal();
 }
 
@@ -1056,14 +1251,21 @@ function switchView(name){
   document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id===`view-${name}`));
   document.querySelectorAll(".nav-item[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===name));
   const today=new Intl.DateTimeFormat("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric",timeZone:"Europe/Riga"}).format(new Date());
-  const labels={map:["Research automation","System Map"],control:["Editable operating context","Control Centre"],today:[today,`Good morning · ${state.workspace.name}`],signals:["Evidence stream","Market signals"],companies:["Opportunity memory","Company dossiers"],crm:["Commercial pipeline","Practical CRM"],contacts:["Verified business data","Contact list"],outreach:["Human approval required","Outreach queue"],sources:["Monitoring network","Source health"],runs:["Automation audit","Daily runs"],settings:["Operating rules","Research settings"]};
+  const labels={map:["Research automation","System Map"],control:["Editable operating context","Control Centre"],today:[today,`Good morning · ${state.workspace.name}`],signals:["Evidence stream","Market signals"],companies:["Opportunity memory","Company dossiers"],crm:["Commercial pipeline","Practical CRM"],contacts:["Verified business data","Contact list"],outreach:["Controlled delivery","Outreach queue"],sources:["Monitoring network","Source health"],runs:["Automation audit","Daily runs"],settings:["Operating rules","Research settings"]};
   const [kicker,title]=labels[name]||labels.map;document.getElementById("view-kicker").textContent=kicker;document.getElementById("view-title").textContent=title;
   document.getElementById("sidebar").classList.remove("open");window.scrollTo(0,0);
 }
 
 document.addEventListener("keydown",event=>{
   const step=event.target.closest?.("[data-step-view]");
+  if(mapArrangeMode&&step&&["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(event.key)){
+    event.preventDefault();const id=step.dataset.nodeId;const current=state.map.draftLayout[id];const amount=event.shiftKey?50:10;
+    const candidate={x:Math.max(72,Math.min(MAP_WORLD.width-72,current.x+(event.key==="ArrowLeft"?-amount:event.key==="ArrowRight"?amount:0))),y:Math.max(62,Math.min(MAP_WORLD.height-62,current.y+(event.key==="ArrowUp"?-amount:event.key==="ArrowDown"?amount:0)))};
+    if(mapPositionAvailable(id,candidate.x,candidate.y)){state.map.draftLayout[id]=candidate;saveState();renderSystemMap();requestAnimationFrame(()=>document.querySelector(`[data-node-id="${id}"]`)?.focus());}
+    return;
+  }
   if(!step||!["Enter"," "].includes(event.key))return;
+  if(mapArrangeMode){event.preventDefault();return;}
   event.preventDefault();switchView(step.dataset.stepView);
 });
 
@@ -1072,10 +1274,16 @@ function renderAll(){
   document.getElementById("setting-email").value=state.settings.emailCount;
   document.getElementById("setting-app").value=state.settings.appCount;
   document.getElementById("setting-score").value=state.settings.minScore;
+  document.getElementById("setting-auto-outreach").checked=state.outreachAutomation.enabled;
+  document.getElementById("setting-outreach-limit").value=state.outreachAutomation.dailyLimit;
+  document.getElementById("setting-booking-url").value=state.scheduling.bookingUrl;
+  document.getElementById("setting-booking-name").value=state.scheduling.eventName;
+  document.getElementById("setting-booking-cta").value=state.scheduling.ctaCopy;
   renderBackendAccess();
 }
 
 document.addEventListener("click",async event=>{
+  if(suppressMapClick&&event.target.closest(".map-canvas")){suppressMapClick=false;event.preventDefault();return;}
   if(event.target.id==="backend-login-btn"){await loginBackend();return;}
   if(event.target.id==="backend-logout-btn"){await logoutBackend();return;}
   const enrich=event.target.closest("[data-enrich]");if(enrich){await enrichOpportunity(enrich.dataset.enrich);return;}
@@ -1098,6 +1306,7 @@ document.addEventListener("click",async event=>{
     document.getElementById("map-inspector").scrollIntoView({behavior:"smooth",block:"start"});
     return;
   }
+  const arrangedNode=event.target.closest(".map-node");if(mapArrangeMode&&arrangedNode){selectedMapNode=arrangedNode.dataset.nodeId;renderSystemMap();return;}
   const stepView=event.target.closest("[data-step-view]");if(stepView){switchView(stepView.dataset.stepView);return;}
   const view=event.target.closest("[data-view]");if(view){
     if(view.dataset.view!=="map"&&document.getElementById("view-map").classList.contains("active")&&document.getElementById("map-node-form")&&!saveMapDraft(false))return;
@@ -1107,6 +1316,11 @@ document.addEventListener("click",async event=>{
   const resetMap=event.target.closest("[data-reset-map]");if(resetMap){state.map.draftConfigs[resetMap.dataset.resetMap]=structuredClone(state.map.publishedConfigs[resetMap.dataset.resetMap]);saveState();renderAll();showToast("Step draft reset");return;}
   const open=event.target.closest("[data-open]");if(open){openDrawer(open.dataset.open);return;}
   const message=event.target.closest("[data-message]");if(message){openMessage(message.dataset.message);return;}
+  const meetingBooked=event.target.closest("[data-meeting-booked]");if(meetingBooked){
+    const record=state.crm.records[meetingBooked.dataset.meetingBooked];const opportunity=opportunities.find(item=>item.id===meetingBooked.dataset.meetingBooked);if(!record)return;
+    record.stage="Meeting";record.nextAction="Prepare for the 30-minute Strategy Call";record.updatedAt=formatNow();addOutreachAudit(meetingBooked.dataset.meetingBooked,"Meeting booked",`${opportunity?.company||meetingBooked.dataset.meetingBooked} · ${state.scheduling.eventName} · ${state.scheduling.platform}`);saveState();
+    try{await persistOpportunityWorkflow(meetingBooked.dataset.meetingBooked);renderAll();showToast("Meeting recorded in CRM");}catch(error){renderAll();showToast(`Meeting saved locally · ${error.message}`);}return;
+  }
   const signalFilter=event.target.closest("[data-signal-filter]");if(signalFilter){currentSignalFilter=signalFilter.dataset.signalFilter;renderSignals();return;}
   const contactFilter=event.target.closest("[data-contact-filter]");if(contactFilter){currentContactFilter=contactFilter.dataset.contactFilter;renderContacts();return;}
   const marketProfile=event.target.closest("[data-market-profile]");if(marketProfile){
@@ -1114,6 +1328,20 @@ document.addEventListener("click",async event=>{
   }
   const marketCountry=event.target.closest("[data-market-country]");if(marketCountry){marketCountry.classList.toggle("selected");syncMarketChoiceFields();return;}
   const marketLanguage=event.target.closest("[data-market-language]");if(marketLanguage){marketLanguage.classList.toggle("selected");syncMarketChoiceFields();return;}
+  if(event.target.id==="add-custom-source"){openSourceEditor();return;}
+  if(event.target.id==="test-all-sources"){
+    const pack=sourcePackForMarket(activeMarket()).filter(item=>sourceEnabled(activeMarket(),item.id));
+    const invalid=pack.filter(item=>item.custom&&(!safeUrl(item.url)||new URL(safeUrl(item.url)).protocol!=="https:"));
+    showToast(invalid.length?`${invalid.length} custom source URL${invalid.length===1?"":"s"} need attention`:`${pack.length} enabled sources configured · live crawl runs through Make`);return;
+  }
+  const sourceEdit=event.target.closest("[data-source-edit]");if(sourceEdit){openSourceEditor(sourceEdit.dataset.sourceEdit);return;}
+  const sourceTest=event.target.closest("[data-source-test]");if(sourceTest){testSource(sourceTest.dataset.sourceTest);return;}
+  const sourceDelete=event.target.closest("[data-source-delete]");if(sourceDelete){
+    const source=state.customSources.find(item=>item.id===sourceDelete.dataset.sourceDelete);if(!source)return;
+    if(!window.confirm(`Delete custom source “${source.name}”?`))return;
+    state.customSources=state.customSources.filter(item=>item.id!==source.id);state.marketProfiles.forEach(market=>{if(Array.isArray(market.enabledSourceIds))market.enabledSourceIds=market.enabledSourceIds.filter(id=>id!==source.id);});saveState();renderSources();renderControlCentre();showToast("Custom source deleted");return;
+  }
+  if(event.target.id==="save-custom-source"){saveCustomSource(event.target.dataset.sourceId||"");return;}
   const sourceToggle=event.target.closest("[data-source-toggle]");if(sourceToggle){
     const market=activeMarket();const pack=sourcePackForMarket(market);
     if(!Array.isArray(market.enabledSourceIds))market.enabledSourceIds=pack.map(item=>item.id);
@@ -1137,13 +1365,16 @@ document.addEventListener("click",async event=>{
     const opportunity=opportunities.find(item=>item.id===action.dataset.id);
     if(action.dataset.statusAction==="Approved"&&opportunity){
       const listState=state.listStates[opportunity.id];
-      if(opportunity.contact.emailStatus!=="Verified"||listState!=="Eligible"){
-        showToast("Approval requires a verified, campaign-eligible contact");return;
+      const verifiedAutomatic=isVerifiedWorkEmail(opportunity)&&listState==="Eligible";
+      const reviewedPersonal=isPersonalEmail(opportunity.contact)&&opportunity.contact.emailStatus==="Strong match"&&listState==="Manual review";
+      if(!verifiedAutomatic&&!reviewedPersonal){
+        showToast("Approval requires an eligible verified work email or an owner-reviewed strong-match personal email");return;
       }
       if(["Suppressed","Unsubscribed"].includes(listState)){showToast("Suppressed contacts cannot be approved");return;}
     }
     saveOpenDraft();
     state.statuses[action.dataset.id]=action.dataset.statusAction;
+    addOutreachAudit(action.dataset.id,action.dataset.statusAction,`${opportunity?.company||action.dataset.id} · ${matchingPlaybook(opportunity)?.name||"No playbook"}`);
     const record=state.crm.records[action.dataset.id];
     if(record){
       if(action.dataset.statusAction==="Approved")record.stage="Ready for Outreach";
@@ -1168,7 +1399,14 @@ document.addEventListener("click",async event=>{
   if(event.target.id==="reset-demo-btn"){opportunities=structuredClone(demoOpportunities);signals=structuredClone(demoSignals);sources=structuredClone(demoSources);runs=structuredClone(demoRuns);quality={recent_rejections:[]};state.runtimeData=null;state.runtime={...structuredClone(defaultState.runtime)};state.statuses=Object.fromEntries(opportunities.map(o=>[o.id,o.status]));state.listStates=Object.fromEntries(opportunities.map(o=>[o.id,o.contact.listState]));saveState();renderAll();showToast("Demo data restored");}
   if(event.target.id==="save-map-draft")saveMapDraft();
   if(event.target.id==="publish-map")publishWorkflow();
-  if(event.target.id==="discard-map-drafts"){state.map.draftConfigs=structuredClone(state.map.publishedConfigs);saveState();renderAll();showToast("All workflow drafts discarded");}
+  if(event.target.id==="discard-map-drafts"){state.map.draftConfigs=structuredClone(state.map.publishedConfigs);state.map.draftLayout=structuredClone(state.map.publishedLayout);saveState();renderAll();showToast("All workflow drafts discarded");}
+  if(event.target.id==="map-arrange"){setArrangeMode(!mapArrangeMode);requestAnimationFrame(()=>fitMapViewport());showToast(mapArrangeMode?"Arrange mode on — drag cards or empty space":"Layout draft saved in this browser");return;}
+  if(event.target.id==="map-auto-layout"){state.map.draftLayout=structuredClone(defaultWorkflowLayout);saveState();renderSystemMap();fitMapViewport();showToast("Workflow automatically arranged — publish to save this version");return;}
+  if(event.target.id==="map-reset-layout"){state.map.draftLayout=structuredClone(state.map.publishedLayout);saveState();renderSystemMap();fitMapViewport();showToast("Layout reset to the published version");return;}
+  if(event.target.id==="map-zoom-in"){setMapZoom(state.map.viewport.zoom+.1);return;}
+  if(event.target.id==="map-zoom-out"){setMapZoom(state.map.viewport.zoom-.1);return;}
+  if(event.target.id==="map-zoom-fit"){fitMapViewport();return;}
+  const mapPan=event.target.closest("[data-map-pan]");if(mapPan){const amount=180;const direction=mapPan.dataset.mapPan;panMapViewport(direction==="left"?amount:direction==="right"?-amount:0,direction==="up"?amount:direction==="down"?-amount:0);return;}
   if(event.target.id==="control-expand-all"||event.target.id==="control-collapse-all"){
     const open=event.target.id==="control-expand-all";
     document.querySelectorAll("[data-control-section]").forEach(section=>{section.open=open;state.ui.controlSections[section.dataset.controlSection]=open;});
@@ -1199,7 +1437,7 @@ document.addEventListener("click",async event=>{
     readControlCentre();state.signalRules.push({id:makeId("signal"),name:"New signal",keywords:"keyword, phrase",weight:5,active:true});saveState();renderControlCentre();showToast("Signal rule added");
   }
   if(event.target.id==="add-playbook"){
-    readControlCentre();state.playbooks.push({id:makeId("playbook"),name:"New outreach playbook",offerId:state.offers[0]?.id||"",signalId:state.signalRules[0]?.id||"",role:"Decision maker",channel:"Email",language:activeMarket().languages?.[0]||"English",sendMode:"Approval required",subject:"A practical idea for {{company}}",body:`Hi {{first_name}},\n\nI noticed {{signal}}\n\nWould a short outline of how {{offer}} could support {{company}} be useful?\n\nBest,\n${state.businessProfile.owner||"Edgars"}`,active:true});saveState();renderControlCentre();showToast("Playbook added");
+    readControlCentre();state.playbooks.push({id:makeId("playbook"),name:"New outreach playbook",offerId:state.offers[0]?.id||"",signalId:state.signalRules[0]?.id||"",role:"Decision maker",channel:"Email",language:activeMarket().languages?.[0]||"English",sendMode:"Approval required",ctaMode:"Include in initial email",minScore:8,dailyLimit:3,requireHighConfidence:true,autoApproved:false,subject:"A practical idea for {{company}}",body:`Hi {{first_name}},\n\nI noticed {{signal}}\n\nWould a short outline of how {{offer}} could support {{company}} be useful?\n\nBest,\n${state.businessProfile.owner||"Edgars"}`,active:true});saveState();renderControlCentre();showToast("Playbook added");
   }
   if(event.target.id==="copy-message")navigator.clipboard.writeText(document.querySelector(".message-box").value).then(()=>showToast("Draft copied"));
   if(event.target.id==="save-settings"){
@@ -1208,11 +1446,16 @@ document.addEventListener("click",async event=>{
     const runUrl=document.getElementById("setting-run-url").value.trim();
     if(!workspaceId){showToast("Workspace ID is required");return;}
     if(!isPrivateEndpoint(dataUrl)||!isPrivateEndpoint(runUrl)){showToast("Runtime endpoints must use HTTPS");return;}
+    const bookingUrl=document.getElementById("setting-booking-url").value.trim();
+    try{const parsedBooking=new URL(bookingUrl);if(parsedBooking.protocol!=="https:"||!(parsedBooking.hostname==="calendly.com"||parsedBooking.hostname.endsWith(".calendly.com")))throw new Error();}catch{showToast("Enter a valid HTTPS Calendly booking URL");return;}
     state.workspace={id:workspaceId,name:document.getElementById("setting-workspace-name").value.trim()||workspaceId,market:activeMarket().name};
     state.integrations={dataUrl,runUrl};
     state.map.draftConfigs.email.value=Math.max(1,Math.min(5,Number(document.getElementById("setting-email").value)||3));
     state.map.draftConfigs.shortlist.value=Math.max(3,Math.min(10,Number(document.getElementById("setting-app").value)||5));
     state.map.draftConfigs.score.value=Math.max(1,Math.min(10,Number(document.getElementById("setting-score").value)||7));
+    state.outreachAutomation.enabled=document.getElementById("setting-auto-outreach").checked;
+    state.outreachAutomation.dailyLimit=Math.max(3,Math.min(5,Number(document.getElementById("setting-outreach-limit").value)||5));
+    state.scheduling={...state.scheduling,bookingUrl,eventName:document.getElementById("setting-booking-name").value.trim()||"Strategy Call",ctaCopy:document.getElementById("setting-booking-cta").value.trim()||defaultState.scheduling.ctaCopy,duration:30,platform:"Zoom"};
     saveState();renderAll();showToast("Workspace and workflow draft saved");
   }
 });
@@ -1253,9 +1496,12 @@ document.addEventListener("change",async event=>{
   const id=select.dataset.listState;
   const opp=opportunities.find(o=>o.id===id);
   const previousState=state.listStates[id]||"Research";
-  if(select.value==="Eligible"&&opp.contact.emailStatus!=="Verified"){
+  if(select.value==="Eligible"&&!isVerifiedWorkEmail(opp)){
     select.value=state.listStates[id]||"Research";
-    showToast("Only verified emails can be marked eligible");return;
+    showToast("Only verified work emails can be marked eligible; personal emails require review");return;
+  }
+  if(select.value==="Manual review"&&!(isPersonalEmail(opp.contact)&&opp.contact.emailStatus==="Strong match")){
+    select.value=previousState;showToast("Manual review is reserved for owner-approved strong-match personal emails");return;
   }
   if(select.value==="Eligible"&&["Suppressed","Unsubscribed"].includes(previousState)){
     select.value=previousState;
@@ -1270,6 +1516,43 @@ document.addEventListener("toggle",event=>{
   state.ui.controlSections[section.dataset.controlSection]=section.open;
   saveState();
 },true);
+
+document.addEventListener("pointerdown",event=>{
+  if(event.button!==0)return;
+  const canvas=event.target.closest?.("#map-canvas");if(!canvas)return;
+  const node=event.target.closest(".map-node");if(node&&event.target.closest(".map-node-inspect"))return;
+  if(node&&!mapArrangeMode)return;
+  if(event.target.closest(".map-navigation"))return;
+  event.preventDefault();try{canvas.setPointerCapture?.(event.pointerId);}catch{}
+  mapPointerSession={pointerId:event.pointerId,type:node&&mapArrangeMode?"node":"pan",nodeId:node?.dataset.nodeId||"",startX:event.clientX,startY:event.clientY,moved:false,origin:node?{...state.map.draftLayout[node.dataset.nodeId]}:{x:state.map.viewport.panX,y:state.map.viewport.panY}};
+  node?.classList.add("dragging");canvas.classList.toggle("panning",!node);
+});
+
+document.addEventListener("pointermove",event=>{
+  const session=mapPointerSession;if(!session||session.pointerId!==event.pointerId)return;
+  const dx=event.clientX-session.startX,dy=event.clientY-session.startY;if(Math.hypot(dx,dy)>3)session.moved=true;
+  if(session.type==="pan"){state.map.viewport.panX=session.origin.x+dx;state.map.viewport.panY=session.origin.y+dy;applyMapViewport();return;}
+  const zoom=state.map.viewport.zoom;const snap=value=>Math.round(value/10)*10;
+  const x=Math.max(72,Math.min(MAP_WORLD.width-72,snap(session.origin.x+dx/zoom)));
+  const y=Math.max(62,Math.min(MAP_WORLD.height-62,snap(session.origin.y+dy/zoom)));
+  if(!mapPositionAvailable(session.nodeId,x,y))return;
+  state.map.draftLayout[session.nodeId]={x,y};
+  const node=document.querySelector(`.map-node[data-node-id="${session.nodeId}"]`);if(node){node.style.setProperty("--x",`${x}px`);node.style.setProperty("--y",`${y}px`);}renderMapEdges();
+});
+
+document.addEventListener("pointerup",event=>{
+  const session=mapPointerSession;if(!session||session.pointerId!==event.pointerId)return;
+  document.querySelector(".map-node.dragging")?.classList.remove("dragging");document.getElementById("map-canvas")?.classList.remove("panning");
+  suppressMapClick=session.moved;if(session.moved){saveState();if(session.type==="node")renderSystemMap();else applyMapViewport();}
+  mapPointerSession=null;
+});
+
+document.getElementById("map-canvas")?.addEventListener("wheel",event=>{
+  event.preventDefault();
+  if(event.ctrlKey||event.metaKey){const bounds=event.currentTarget.getBoundingClientRect();setMapZoom(state.map.viewport.zoom+(event.deltaY<0?.08:-.08),event.clientX-bounds.left,event.clientY-bounds.top);return;}
+  const horizontal=event.shiftKey&&Math.abs(event.deltaX)<1?event.deltaY:event.deltaX;
+  panMapViewport(-horizontal,-(event.shiftKey&&Math.abs(event.deltaX)<1?0:event.deltaY));
+},{passive:false});
 
 document.getElementById("company-search").addEventListener("input",event=>renderCompanies(event.target.value));
 document.getElementById("crm-search").addEventListener("input",event=>{crmSearch=event.target.value;renderCRM();});

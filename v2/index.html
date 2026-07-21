@@ -34,7 +34,7 @@
       </nav>
 
       <div class="sidebar-foot">
-        <button class="pilot-card pilot-card-link" type="button" data-view="settings"><span class="status-dot"></span><span><strong>Pilot workspace</strong><small>Human approval enforced</small></span><i aria-hidden="true">→</i></button>
+        <button class="pilot-card pilot-card-link" type="button" data-view="settings"><span class="status-dot"></span><span><strong>Controlled outreach</strong><small>Safe routing · sender disconnected</small></span><i aria-hidden="true">→</i></button>
         <button class="nav-item" data-view="settings"><span>⚙</span>Settings</button>
       </div>
     </aside>
@@ -71,6 +71,12 @@
               <div><strong>Workflow canvas</strong><span>Published configuration · Version <b id="map-version-label">1</b></span></div>
               <div class="map-stage-tools">
                 <div class="map-legend"><span><i class="map-key healthy"></i>Healthy</span><span><i class="map-key review"></i>Review</span><span><i class="map-key planned"></i>Planned</span><span><i class="map-key draft"></i>Draft</span></div>
+                <div class="map-layout-actions" aria-label="Canvas layout controls">
+                  <button class="map-tool" type="button" id="map-arrange" aria-pressed="false">Arrange</button>
+                  <button class="map-tool" type="button" id="map-auto-layout">Auto-arrange</button>
+                  <button class="map-tool" type="button" id="map-reset-layout">Reset</button>
+                  <span class="map-zoom-controls"><button class="map-tool icon" type="button" id="map-zoom-out" aria-label="Zoom out">−</button><button class="map-tool zoom-label" type="button" id="map-zoom-fit" aria-label="Fit workflow to canvas">Fit</button><button class="map-tool icon" type="button" id="map-zoom-in" aria-label="Zoom in">+</button></span>
+                </div>
                 <div class="map-actions"><button class="btn secondary" id="discard-map-drafts">Discard drafts</button><button class="btn primary" id="publish-map">Publish changes</button></div>
               </div>
             </div>
@@ -88,11 +94,16 @@
               </div>
             </div>
             <div class="map-canvas" id="map-canvas" aria-label="Lead Intel research workflow">
-              <svg class="map-connections" viewBox="0 0 1000 520" preserveAspectRatio="none" aria-hidden="true">
-                <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker></defs>
-                <g id="map-edges"></g>
-              </svg>
-              <div id="map-nodes"></div>
+              <div class="map-grid" aria-hidden="true"></div>
+              <div class="map-world" id="map-world">
+                <svg class="map-connections" viewBox="0 0 1940 820" aria-hidden="true">
+                  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker></defs>
+                  <g id="map-edges"></g>
+                </svg>
+                <div id="map-nodes"></div>
+              </div>
+              <div class="map-navigation" aria-label="Move workflow canvas"><button type="button" data-map-pan="up" aria-label="Move canvas up">↑</button><button type="button" data-map-pan="left" aria-label="Move canvas left">←</button><button type="button" data-map-pan="right" aria-label="Move canvas right">→</button><button type="button" data-map-pan="down" aria-label="Move canvas down">↓</button></div>
+              <div class="map-arrange-hint" id="map-arrange-hint">Drag empty space to move · wheel or trackpad to pan · ⌘/Ctrl + wheel to zoom</div>
             </div>
           </div>
           <aside class="map-inspector" id="map-inspector" aria-live="polite"></aside>
@@ -149,20 +160,20 @@
           </details>
           <details class="control-section" data-control-section="playbooks">
             <summary><span class="control-section-icon" aria-hidden="true">P</span><span class="control-section-copy"><strong>Outreach playbooks</strong><small>Scripts linked to offers, signals and channels</small></span><span class="control-section-meta" id="control-playbooks-meta"></span><span class="control-chevron" aria-hidden="true"></span></summary>
-            <div class="control-section-body"><div class="control-section-actions"><p>Attach a script to an offer, signal, role, channel and language. Human approval remains the default.</p><button class="btn small secondary" id="add-playbook" type="button">Add playbook</button></div><div class="editor-list" id="playbooks-editor"></div></div>
+            <div class="control-section-body"><div class="control-section-actions"><p>Attach a predefined script to an offer, signal, role, channel and language. Choose draft, review or automatic delivery per playbook; automatic delivery still requires every safety check.</p><button class="btn small secondary" id="add-playbook" type="button">Add playbook</button></div><div class="editor-list" id="playbooks-editor"></div></div>
           </details>
         </div>
       </section>
 
       <section class="view active" id="view-today">
         <div class="today-command">
-          <div class="today-command-copy"><p class="kicker">Daily decision desk</p><h2>Turn evidence into the next best action.</h2><p>Review only the companies that deserve attention. Every recommendation keeps its evidence, contact status and human approval gate visible.</p></div>
+          <div class="today-command-copy"><p class="kicker">Daily decision desk</p><h2>Turn evidence into the next best action.</h2><p>Review only the companies that deserve attention. Every recommendation keeps its evidence, contact status and controlled outreach route visible.</p></div>
           <div class="today-command-status"><span class="live-dot"></span><div><strong id="hero-run-label">Secure workspace</strong><small id="hero-funnel-label">Loading today’s decision queue…</small></div></div>
         </div>
         <div class="metrics decision-metrics" id="metrics"></div>
         <div class="section-head today-section-head">
           <div><p class="kicker">Prioritized work queue</p><h2>What needs your decision</h2></div>
-          <div class="legend"><span><i class="verified-dot"></i> Verified business email</span><span>Human approval enforced</span></div>
+          <div class="legend"><span><i class="verified-dot"></i> Verified business email</span><span>Automatic only when every safety gate passes</span></div>
         </div>
         <div class="opportunity-list decision-queue" id="opportunity-list"></div>
       </section>
@@ -192,13 +203,15 @@
       </section>
 
       <section class="view" id="view-outreach">
-        <div class="section-head"><div><p class="kicker">Approval workspace</p><h2>Outreach queue</h2></div><button class="btn secondary" id="export-outreach-btn">Export approved drafts</button></div>
-        <div class="notice"><strong>No automatic sending.</strong> A verified business address, campaign eligibility and explicit human approval are required before a draft can leave this workspace.</div>
+        <div class="section-head"><div><p class="kicker">Controlled delivery</p><h2>Outreach queue</h2></div><button class="btn secondary" id="export-outreach-btn">Export ready drafts</button></div>
+        <div class="notice" id="outreach-automation-notice"></div>
+        <div class="outreach-summary" id="outreach-summary"></div>
         <div class="outreach-grid" id="outreach-grid"></div>
+        <section class="panel outreach-audit-panel"><div class="panel-title-row"><div><p class="kicker">Decision log</p><h3>Outreach audit</h3></div><span class="status good">Local record</span></div><div id="outreach-audit"></div></section>
       </section>
 
       <section class="view" id="view-sources">
-        <div class="section-head"><div><p class="kicker">Monitoring network</p><h2>Source health</h2></div><button class="btn secondary">Test all sources</button></div>
+        <div class="section-head"><div><p class="kicker">Monitoring network</p><h2>Source health</h2></div><div class="card-actions source-manager-actions"><button class="btn secondary" id="test-all-sources">Test all sources</button><button class="btn primary" id="add-custom-source">Add custom source</button></div></div>
         <div class="notice" id="source-pack-summary"></div>
         <div class="source-grid" id="source-grid"></div>
       </section>
@@ -216,8 +229,9 @@
           <div class="panel"><h3>Workspace profile</h3><label>Workspace ID<input id="setting-workspace-id" value="edgars-latvia"></label><label>Workspace name<input id="setting-workspace-name" value="Edgars · Latvia"></label><label>Active market<input id="setting-market" value="Latvia" readonly></label><p class="panel-copy">Edit countries and languages in the Control centre.</p></div>
           <div class="panel"><h3>Daily delivery</h3><label>Morning email opportunities<input id="setting-email" type="number" min="1" max="5" value="3"></label><label>App daily shortlist<input id="setting-app" type="number" min="3" max="10" value="5"></label><label>Delivery time<input type="time" value="07:00"></label></div>
           <div class="panel"><h3>Qualification</h3><label>Minimum opportunity score<input id="setting-score" type="number" min="1" max="10" step=".1" value="7"></label><label>Maximum signal age<select><option>30 days</option><option>14 days</option><option>60 days</option></select></label><label>Evidence rule<select><option>1 primary or 2 independent sources</option></select></label></div>
-          <div class="panel"><h3>Outreach safety</h3><label class="toggle-row"><span>Human approval required<small>Messages cannot send without approval</small></span><input type="checkbox" checked disabled></label><label class="toggle-row"><span>Business email only<small>Personal mailbox providers are excluded</small></span><input type="checkbox" checked disabled></label><label class="toggle-row"><span>Predicted emails research-only<small>Verification required before campaign use</small></span><input type="checkbox" checked disabled></label></div>
-          <div class="panel"><h3>Connection status</h3><div class="connection"><span>Google Sheets</span><b id="status-sheets">Configured</b></div><div class="connection"><span>Make automation</span><b id="status-make" class="pending">Endpoint needed</b></div><div class="connection"><span>Apollo enrichment</span><b id="status-apollo" class="pending">Secure key needed</b></div><div class="connection"><span>Gmail delivery</span><b class="pending">Next phase</b></div></div>
+          <div class="panel"><h3>Outreach automation</h3><label class="toggle-row"><span>Safe automatic route<small>Only pre-approved scripts that pass every gate</small></span><input id="setting-auto-outreach" type="checkbox" checked></label><label>Maximum automatic emails per day<input id="setting-outreach-limit" type="number" min="3" max="5" value="5"></label><label class="toggle-row"><span>Verified work email only<small>Personal and predicted addresses always require review</small></span><input type="checkbox" checked disabled></label><label class="toggle-row"><span>Stop on suppression or unsubscribe<small>Applied before every delivery attempt</small></span><input type="checkbox" checked disabled></label></div>
+          <div class="panel"><h3>Scheduling & meetings</h3><label>Calendly booking URL<input id="setting-booking-url" type="url" value="https://calendly.com/edgars-7go/strategy-call"></label><label>Event name<input id="setting-booking-name" value="Strategy Call"></label><label>Booking invitation copy<textarea id="setting-booking-cta">If this is relevant, choose a convenient time for a focused 30-minute Strategy Call: {{booking_link}}</textarea></label><div class="connection"><span>Meeting format</span><b>30 min · Zoom</b></div><div class="connection"><span>Booking → CRM webhook</span><b id="status-booking-webhook" class="pending">Not connected</b></div></div>
+          <div class="panel"><h3>Connection status</h3><div class="connection"><span>Google Sheets</span><b id="status-sheets">Configured</b></div><div class="connection"><span>Make automation</span><b id="status-make" class="pending">Endpoint needed</b></div><div class="connection"><span>Apollo enrichment</span><b id="status-apollo" class="pending">Secure key needed</b></div><div class="connection"><span>Calendly event</span><b id="status-calendly">Configured</b></div><div class="connection"><span>Zoom in Calendly</span><b id="status-zoom">Configured</b></div><div class="connection"><span>Email sender</span><b id="status-sender" class="pending">Not connected</b></div></div>
           <div class="panel settings-wide" id="backend-access-panel"><div class="panel-title-row"><div><h3>Secure backend access</h3><p class="panel-copy">Owner authentication protects the persistent workspace and audit log. Credentials never enter the public application bundle.</p></div><span class="status warn" id="backend-auth-status">Signed out</span></div><div class="endpoint-grid" id="backend-login-fields"><label>Owner email<input id="backend-login-email" type="email" value="edgars@ccgroup.lv" autocomplete="username"></label><label>Password<input id="backend-login-password" type="password" autocomplete="current-password"></label></div><div class="card-actions"><button class="btn primary" type="button" id="backend-login-btn">Sign in securely</button><button class="btn secondary" type="button" id="backend-logout-btn" hidden>Sign out</button></div></div>
           <div class="panel settings-wide"><h3>Protected runtime endpoints</h3><p class="panel-copy">The Make execution URL stays in this browser. When signed in, the app sends it only to the authenticated backend, which validates the host, blocks duplicate or over-budget runs, and never exposes provider keys.</p><div class="endpoint-grid"><label>Snapshot/data endpoint<input id="setting-data-url" type="url" placeholder="https://leadintel-api…/api/snapshot"></label><label>Make execution webhook<input id="setting-run-url" type="url" placeholder="https://hook.eu2.make.com/…"></label></div><div class="card-actions"><button class="btn secondary" type="button" id="test-data-btn">Test data endpoint</button><button class="btn secondary" type="button" id="test-run-btn">Validate run endpoint · €0</button></div></div>
           <div class="panel settings-wide"><h3>Data portability</h3><p class="panel-copy">Use a JSON export from Make, Sheets or this app. Imported data stays in this browser until a private backend is connected.</p><div class="card-actions"><button class="btn secondary" type="button" id="import-data-btn">Import JSON</button><button class="btn secondary" type="button" id="export-data-btn">Export workspace</button><button class="btn secondary danger" type="button" id="reset-demo-btn">Reset to demo</button></div><input id="data-import" type="file" accept="application/json,.json" hidden></div>
