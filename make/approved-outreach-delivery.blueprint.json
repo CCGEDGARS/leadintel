@@ -1,0 +1,141 @@
+{
+  "name": "Lead Intel — Approved Outreach Delivery",
+  "flow": [
+    {
+      "id": 2,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": {
+        "hook": 4271320,
+        "maxResults": 1
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0
+        },
+        "restore": {
+          "parameters": {
+            "hook": {
+              "data": {
+                "editable": "true"
+              },
+              "label": "Lead Intel Approved Outreach"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "hook",
+            "type": "hook:gateway-webhook",
+            "label": "Webhook",
+            "required": true
+          },
+          {
+            "name": "maxResults",
+            "type": "number",
+            "label": "Maximum number of results"
+          }
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "module": "google-email:sendAnEmail",
+      "version": 4,
+      "parameters": {
+        "__IMTCONN__": 14152469
+      },
+      "filter": {
+        "name": "Approved and verified recipient only",
+        "conditions": [
+          [
+            {
+              "a": "{{2.event}}",
+              "b": "leadintel.outreach.approved",
+              "o": "text:equal"
+            },
+            {
+              "a": "{{2.approved}}",
+              "b": "true",
+              "o": "boolean:equal"
+            },
+            {
+              "a": "{{2.recipient_email}}",
+              "o": "exist"
+            },
+            {
+              "a": "{{2.email_status}}",
+              "b": "Verified",
+              "o": "text:equal:ci"
+            }
+          ],
+          [
+            {
+              "a": "{{2.event}}",
+              "b": "leadintel.outreach.approved",
+              "o": "text:equal"
+            },
+            {
+              "a": "{{2.approved}}",
+              "b": "true",
+              "o": "boolean:equal"
+            },
+            {
+              "a": "{{2.recipient_email}}",
+              "o": "exist"
+            },
+            {
+              "a": "{{2.email_status}}",
+              "b": "Strong match",
+              "o": "text:equal:ci"
+            },
+            {
+              "a": "{{2.email_type}}",
+              "b": "personal",
+              "o": "text:equal:ci"
+            }
+          ]
+        ]
+      },
+      "mapper": {
+        "to": [
+          {
+            "email": "{{2.recipient_email}}"
+          }
+        ],
+        "subject": "{{2.subject}}",
+        "content": "{{2.body}}",
+        "contentType": "text/plain"
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": true,
+      "slots": null,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": {
+      "orphans": []
+    },
+    "zone": "eu2.make.com",
+    "notes": []
+  }
+}

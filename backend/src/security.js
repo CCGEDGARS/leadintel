@@ -2,15 +2,19 @@ const encoder = new TextEncoder();
 
 export function allowedOrigin(request, configuredOrigin) {
   const origin = request.headers.get("Origin") || "";
-  return origin === configuredOrigin ? origin : "";
+  const allowed = String(configuredOrigin || "")
+    .split(",")
+    .map(value => value.trim())
+    .filter(Boolean);
+  return allowed.includes(origin) ? origin : "";
 }
 
 export function corsHeaders(origin) {
   return origin ? {
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Headers": "Content-Type, X-CSRF-Token",
-    "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, X-CSRF-Token, Idempotency-Key",
+    "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
     "Vary": "Origin"
   } : {};
 }

@@ -211,6 +211,9 @@ let crmSearch="";
 let crmStageFilter="All";
 let selectedMapNode = "sources";
 let mapArrangeMode=false;
+let selectedMapInspectorTab="configuration";
+let mapInspectorCollapsed=false;
+let mapFullscreenMode=false;
 let mapPointerSession=null;
 let suppressMapClick=false;
 let mapViewportSaveTimer=null;
@@ -662,6 +665,18 @@ function setArrangeMode(enabled){
   mapArrangeMode=enabled;document.getElementById("map-canvas")?.classList.toggle("arranging",enabled);document.querySelector(".map-workbench")?.classList.toggle("arranging",enabled);
   const button=document.getElementById("map-arrange");if(button){button.classList.toggle("active",enabled);button.setAttribute("aria-pressed",String(enabled));button.textContent=enabled?"Done arranging":"Arrange";}
 }
+function setMapInspectorCollapsed(collapsed,{refit=true}={}){
+  mapInspectorCollapsed=collapsed;
+  const workbench=document.querySelector(".map-workbench");workbench?.classList.toggle("inspector-collapsed",collapsed);
+  const button=document.getElementById("map-toggle-inspector");if(button){button.textContent=collapsed?"Show details":"Hide details";button.setAttribute("aria-pressed",String(collapsed));button.setAttribute("aria-label",collapsed?"Show workflow details":"Hide workflow details");}
+  if(refit)requestAnimationFrame(()=>fitMapViewport(false));
+}
+function setMapFullscreen(enabled,{refit=true}={}){
+  mapFullscreenMode=enabled;
+  const workbench=document.querySelector(".map-workbench");workbench?.classList.toggle("map-fullscreen",enabled);document.body.classList.toggle("map-fullscreen-open",enabled);
+  const button=document.getElementById("map-fullscreen");if(button){button.textContent=enabled?"Exit full canvas":"Full canvas";button.setAttribute("aria-pressed",String(enabled));button.setAttribute("aria-label",enabled?"Exit full canvas view":"Open full canvas view");}
+  if(refit)requestAnimationFrame(()=>fitMapViewport(false));
+}
 function mapMetric(node,config){
   if(node.id==="sources")return `${config.value} sources`;
   if(state.runtime.mode!=="demo"&&node.id==="scan")return `${numberValue(runs[0]?.findings,opportunities.length)} findings`;
@@ -702,14 +717,14 @@ function renderSystemMap(){
     const changed=dirty.some(item=>item.id===node.id);
     const destination=workflowDestinations[node.id];
     const position=state.map.draftLayout[node.id];
-    return `<div class="map-node ${selectedMapNode===node.id?"selected":""} ${config.enabled?"":"disabled"}" style="--x:${position.x}px;--y:${position.y}px" data-node-id="${node.id}" data-step-view="${destination}" role="link" tabindex="0" aria-label="Open ${esc(config.title)} in ${destination}">
+    return `<div class="map-node ${selectedMapNode===node.id?"selected":""} ${config.enabled?"":"disabled"}" style="--x:${position.x}px;--y:${position.y}px" data-node-id="${node.id}" data-map-node="${node.id}" role="button" tabindex="0" aria-label="Inspect ${esc(config.title)} configuration" aria-pressed="${selectedMapNode===node.id}">
       ${changed?'<i class="map-draft-mark" aria-label="Draft changed"></i>':''}
       <span class="map-node-head"><span class="map-node-icon">${node.icon}</span><span class="map-node-index">0${index+1}</span><i class="map-node-status ${node.status.toLowerCase()}"></i><button class="map-node-inspect" type="button" data-map-node="${node.id}" aria-label="Inspect ${esc(config.title)} configuration">⚙</button></span>
       <h3>${esc(config.title)}</h3><p>${esc(node.type)} · ${config.enabled?esc(config.cadence):"Disabled"}</p>
-      <span class="map-node-foot"><strong>${esc(mapMetric(node,config))}</strong><span>Open page →</span></span>
+      <span class="map-node-foot"><strong>${esc(mapMetric(node,config))}</strong><button type="button" class="map-node-open" data-step-view="${destination}" aria-label="Open ${esc(config.title)} page">Open page →</button></span>
     </div>`;
   }).join("");
-  applyMapViewport();setArrangeMode(mapArrangeMode);
+  applyMapViewport();setArrangeMode(mapArrangeMode);setMapInspectorCollapsed(mapInspectorCollapsed,{refit:false});setMapFullscreen(mapFullscreenMode,{refit:false});
   if(!state.map.viewport.initialized)requestAnimationFrame(()=>fitMapViewport());
   renderMapInspector();
   const history=(state.map.history||[]).slice(0,4);
@@ -725,12 +740,14 @@ function renderMapInspector(){
   document.getElementById("map-inspector").innerHTML=`
     <div class="map-inspector-shell">
       <div class="map-inspector-top">
-        <div class="map-inspector-head"><div class="map-inspector-title"><span class="inspector-icon">${node.icon}</span><div><p class="kicker">${esc(node.type)} step · ${String(workflowNodes.indexOf(node)+1).padStart(2,"0")}</p><h2>${esc(config.title)}</h2></div></div><span class="status ${statusClass(node.status)}">${esc(node.status)}</span></div>
+        <div class="map-inspector-head"><div class="map-inspector-title"><span class="inspector-icon">${node.icon}</span><div><p class="kicker">${esc(node.type)} step · ${String(workflowNodes.indexOf(node)+1).padStart(2,"0")}</p><h2>${esc(config.title)}</h2></div></div><div class="map-inspector-head-actions"><span class="status ${statusClass(node.status)}">${esc(node.status)}</span><button class="map-inspector-close" type="button" id="map-inspector-close" aria-label="Hide workflow details">×</button></div></div>
         <p class="map-inspector-description">${esc(config.description)}</p>
         <div class="map-inspector-meta"><span>Last run <strong>${esc(node.lastRun)}</strong></span><span>Output <strong>${esc(mapMetric(node,config))}</strong></span>${changed?'<span><strong>Draft changed</strong></span>':''}</div>
       </div>
-      <div class="inspector-tabs"><span class="inspector-tab">Configuration</span><span class="inspector-tab">Recent output</span><span class="inspector-tab">Evidence</span></div>
-      <form class="map-form" id="map-node-form">
+      <div class="inspector-tabs" role="tablist" aria-label="Step details">
+        ${[["configuration","Configuration"],["output","Recent output"],["evidence","Evidence"]].map(([id,label])=>`<button class="inspector-tab ${selectedMapInspectorTab===id?"active":""}" type="button" role="tab" aria-selected="${selectedMapInspectorTab===id}" data-inspector-tab="${id}">${label}</button>`).join("")}
+      </div>
+      <form class="map-form" id="map-node-form" ${selectedMapInspectorTab==="configuration"?"":"hidden"}>
       <label>Step name<input id="map-field-title" value="${esc(config.title)}" required></label>
       <label>Run cadence<select id="map-field-cadence">${cadenceOptions.map(option=>`<option ${option===config.cadence?"selected":""}>${esc(option)}</option>`).join("")}</select></label>
       <label class="wide">Purpose<textarea id="map-field-description" required>${esc(config.description)}</textarea></label>
@@ -740,7 +757,28 @@ function renderMapInspector(){
       <div class="map-inspector-actions"><button class="btn secondary" type="button" data-test-map="${node.id}">Test step</button><button class="btn secondary" type="button" data-reset-map="${node.id}" ${changed?"":"disabled"}>Reset</button><button class="btn primary" type="button" id="save-map-draft">Save draft</button></div>
       ${test?`<div class="map-test-result ${test.status==="Review"?"warn":""}"><strong>${esc(test.status)} · ${esc(test.date)}</strong><br>${esc(test.output)}</div>`:""}
       </form>
+      <section class="inspector-panel" ${selectedMapInspectorTab==="output"?"":"hidden"}>${renderInspectorOutput(node,config,test)}</section>
+      <section class="inspector-panel" ${selectedMapInspectorTab==="evidence"?"":"hidden"}>${renderInspectorEvidence(node)}</section>
     </div>`;
+}
+
+function renderInspectorOutput(node,config,test){
+  const items=[
+    ["Latest result",mapMetric(node,config)],
+    ["Last completed",node.lastRun||"Not run yet"],
+    ["Health",node.status],
+    ["Cadence",config.cadence]
+  ];
+  return `<div class="inspector-output-list">${items.map(([label,value])=>`<div class="inspector-output-item"><strong>${esc(label)}</strong><span>${esc(String(value))}</span></div>`).join("")}</div>${test?`<div class="map-test-result ${test.status==="Review"?"warn":""}"><strong>Latest test · ${esc(test.status)}</strong><br>${esc(test.output)}</div>`:'<p class="inspector-empty">No test output yet. Open Configuration and run “Test step” to validate this stage without publishing changes.</p>'}`;
+}
+
+function renderInspectorEvidence(node){
+  let evidence=[];
+  if(node.id==="sources")evidence=sources.slice(0,5).map(item=>`${item.name} · ${item.health} · ${item.findings} findings`);
+  else if(["scan","analysis","score","shortlist"].includes(node.id))evidence=opportunities.slice(0,5).map(item=>`${item.company} · ${item.signalType} · score ${item.score}`);
+  else if(node.id==="contacts")evidence=opportunities.slice(0,5).map(item=>`${item.company} · ${item.contact.emailStatus} · ${item.contact.source}`);
+  else if(["match","message","safety","outreach","delivery","tracking","booking","meeting","email"].includes(node.id))evidence=state.outreachAudit.slice(0,5).map(item=>`${item.date||"Recent"} · ${item.action||item.status||"Workflow event"}`);
+  return evidence.length?`<ul class="inspector-evidence-list">${evidence.map(item=>`<li>${esc(item)}</li>`).join("")}</ul>`:`<p class="inspector-empty">No evidence has been recorded for this step yet. Evidence will appear here after a live or test run reaches this stage.</p>`;
 }
 
 function readMapForm(){
@@ -1248,6 +1286,7 @@ function saveOpenDraft(){
 function closeModal(){saveOpenDraft();document.getElementById("modal-backdrop").classList.remove("open");}
 
 function switchView(name){
+  if(name!=="map"&&mapFullscreenMode)setMapFullscreen(false,{refit:false});
   document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id===`view-${name}`));
   document.querySelectorAll(".nav-item[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===name));
   const today=new Intl.DateTimeFormat("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric",timeZone:"Europe/Riga"}).format(new Date());
@@ -1257,16 +1296,19 @@ function switchView(name){
 }
 
 document.addEventListener("keydown",event=>{
-  const step=event.target.closest?.("[data-step-view]");
+  if(event.key==="Escape"&&mapFullscreenMode){setMapFullscreen(false);return;}
+  const step=event.target.closest?.(".map-node");
   if(mapArrangeMode&&step&&["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(event.key)){
     event.preventDefault();const id=step.dataset.nodeId;const current=state.map.draftLayout[id];const amount=event.shiftKey?50:10;
     const candidate={x:Math.max(72,Math.min(MAP_WORLD.width-72,current.x+(event.key==="ArrowLeft"?-amount:event.key==="ArrowRight"?amount:0))),y:Math.max(62,Math.min(MAP_WORLD.height-62,current.y+(event.key==="ArrowUp"?-amount:event.key==="ArrowDown"?amount:0)))};
     if(mapPositionAvailable(id,candidate.x,candidate.y)){state.map.draftLayout[id]=candidate;saveState();renderSystemMap();requestAnimationFrame(()=>document.querySelector(`[data-node-id="${id}"]`)?.focus());}
     return;
   }
-  if(!step||!["Enter"," "].includes(event.key))return;
+  if(!step||!["Enter"," "].includes(event.key)||event.target.closest(".map-node-open,.map-node-inspect"))return;
   if(mapArrangeMode){event.preventDefault();return;}
-  event.preventDefault();switchView(step.dataset.stepView);
+  event.preventDefault();
+  if(step.dataset.nodeId!==selectedMapNode&&document.getElementById("map-node-form")&&!saveMapDraft(false))return;
+  selectedMapNode=step.dataset.nodeId;selectedMapInspectorTab="configuration";renderSystemMap();
 });
 
 function renderAll(){
@@ -1300,14 +1342,15 @@ document.addEventListener("click",async event=>{
     try{await deleteProfileDocument();}catch(error){showToast("Could not remove the stored PDF");return;}
     state.businessProfile.document=null;document.getElementById("profile-pdf-input").value="";saveState();renderBusinessDocument();showToast("Business reference PDF removed");return;
   }
+  const stepView=event.target.closest("[data-step-view]");if(stepView){if(document.getElementById("map-node-form")&&!saveMapDraft(false))return;switchView(stepView.dataset.stepView);return;}
+  const inspectorTab=event.target.closest("[data-inspector-tab]");if(inspectorTab){if(selectedMapInspectorTab==="configuration"&&document.getElementById("map-node-form")&&!saveMapDraft(false))return;selectedMapInspectorTab=inspectorTab.dataset.inspectorTab;renderMapInspector();return;}
   const mapNode=event.target.closest("[data-map-node]");if(mapNode){
     if(mapNode.dataset.mapNode!==selectedMapNode&&document.getElementById("map-node-form")&&!saveMapDraft(false))return;
-    selectedMapNode=mapNode.dataset.mapNode;renderSystemMap();
-    document.getElementById("map-inspector").scrollIntoView({behavior:"smooth",block:"start"});
+    selectedMapNode=mapNode.dataset.mapNode;selectedMapInspectorTab="configuration";renderSystemMap();
+    if(!mapInspectorCollapsed&&window.innerWidth<1280)document.getElementById("map-inspector").scrollIntoView({behavior:"smooth",block:"start"});
     return;
   }
   const arrangedNode=event.target.closest(".map-node");if(mapArrangeMode&&arrangedNode){selectedMapNode=arrangedNode.dataset.nodeId;renderSystemMap();return;}
-  const stepView=event.target.closest("[data-step-view]");if(stepView){switchView(stepView.dataset.stepView);return;}
   const view=event.target.closest("[data-view]");if(view){
     if(view.dataset.view!=="map"&&document.getElementById("view-map").classList.contains("active")&&document.getElementById("map-node-form")&&!saveMapDraft(false))return;
     switchView(view.dataset.view);return;
@@ -1401,6 +1444,8 @@ document.addEventListener("click",async event=>{
   if(event.target.id==="publish-map")publishWorkflow();
   if(event.target.id==="discard-map-drafts"){state.map.draftConfigs=structuredClone(state.map.publishedConfigs);state.map.draftLayout=structuredClone(state.map.publishedLayout);saveState();renderAll();showToast("All workflow drafts discarded");}
   if(event.target.id==="map-arrange"){setArrangeMode(!mapArrangeMode);requestAnimationFrame(()=>fitMapViewport());showToast(mapArrangeMode?"Arrange mode on — drag cards or empty space":"Layout draft saved in this browser");return;}
+  if(event.target.id==="map-toggle-inspector"||event.target.id==="map-inspector-close"){setMapInspectorCollapsed(!mapInspectorCollapsed);showToast(mapInspectorCollapsed?"Details hidden — full canvas width available":"Step details restored");return;}
+  if(event.target.id==="map-fullscreen"){setMapFullscreen(!mapFullscreenMode);showToast(mapFullscreenMode?"Full canvas view — press Esc to exit":"Normal canvas view restored");return;}
   if(event.target.id==="map-auto-layout"){state.map.draftLayout=structuredClone(defaultWorkflowLayout);saveState();renderSystemMap();fitMapViewport();showToast("Workflow automatically arranged — publish to save this version");return;}
   if(event.target.id==="map-reset-layout"){state.map.draftLayout=structuredClone(state.map.publishedLayout);saveState();renderSystemMap();fitMapViewport();showToast("Layout reset to the published version");return;}
   if(event.target.id==="map-zoom-in"){setMapZoom(state.map.viewport.zoom+.1);return;}
