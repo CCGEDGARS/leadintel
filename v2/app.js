@@ -140,6 +140,7 @@ let sources=structuredClone(demoSources);
 let runs=structuredClone(demoRuns);
 let quality={recent_rejections:[]};
 let orchestration={policy:null,budget:null};
+let enrichmentControl={policy:null,usage:{daily:0,monthly:0},configured:false};
 
 const workflowNodes = [
   {id:"sources",type:"Input",icon:"⌘",x:8.5,y:30,status:"Healthy",metric:"25 sources",lastRun:"06:00",controlLabel:"Source limit",unit:"monitored sources",config:{title:"Market sources",enabled:true,cadence:"Daily · 06:00",value:25,description:"Latvian business, procurement, recruitment and company sources.",instructions:"Monitor only approved public sources. Preserve the source URL, publication date and exact evidence for every finding."}},
@@ -363,7 +364,7 @@ function normalizeOpportunity(row,index=0){
   const id=String(firstValue(row,["id","opportunity_id","lead_id","Lead ID","Query ID"],`LIVE-${Date.now()}-${index+1}`));
   const evidenceRows=Array.isArray(row.evidence_items)?row.evidence_items.map(item=>({claim:String(item.claim||item.claim_text||""),label:String(item.source_title||"Source evidence"),url:safeUrl(item.source_url||""),observedAt:String(item.observed_at||"")})).filter(item=>item.claim):[];
   return {
-    id,company,website:safeUrl(firstValue(row,["website","Website"],sourceUrl)),industry:String(firstValue(row,["industry","Industry"],"Business")),location:String(firstValue(row,["location","Location"],state.workspace.market)),
+    id,company,domain:String(firstValue(row,["domain","company_domain","Company Domain"],"")).trim().toLowerCase(),website:safeUrl(firstValue(row,["website","Website","company_website","Company Website"],"")),industry:String(firstValue(row,["industry","Industry"],"Business")),location:String(firstValue(row,["location","Location"],state.workspace.market)),
     score:score10,confidence:String(firstValue(row,["confidence","Confidence"],"Medium")),emailed:Boolean(firstValue(row,["emailed"],false)),status:String(firstValue(row,["status","Status"],score10>=state.settings.minScore?"New":"Monitor")),
     primaryOffer:String(firstValue(row,["primary_offer","recommended_offer","Recommended Offer","Primary Solution","Lead Solution"],"Digital Sales Book")),
     signal:String(firstValue(row,["signal","signal_summary","Signal Summary","Evidence Summary"],"Public market signal captured")),
@@ -372,7 +373,7 @@ function normalizeOpportunity(row,index=0){
     facts:listValue(firstValue(row,["facts","factual_evidence","Factual Evidence","evidence_summary"],[evidenceText])).length?listValue(firstValue(row,["facts","factual_evidence","Factual Evidence","evidence_summary"],[evidenceText])):[evidenceText],
     pains:pains.length?pains:["Validate the likely operational pain directly with the decision-maker."],
     scores:isRecord(row.scores)?row.scores:{"ICP fit":Math.min(2,score10/5),"Signal strength":Math.min(2,score10/5),"Urgency":Math.min(1.5,score10*.15),"Recency":Math.min(1,score10*.1),"Offer relevance":Math.min(1.5,score10*.15),"Budget":Math.min(1,score10*.1),"Accessibility":Math.min(1,score10*.1)},
-    contact:{name:contactName,role,email,emailStatus,source:String(firstValue(contactRow,["source"],firstValue(row,["verification_provider","Verification Provider"],sourceUrl?"Public source":"Not enriched"))),linkedin:safeUrl(firstValue(contactRow,["linkedin"],firstValue(row,["linkedin_url","LinkedIn URL"],""))),listState:String(firstValue(contactRow,["listState","list_state"],firstValue(row,["list_state","List State"],"Research")))},
+    contact:{name:contactName,role,email,emailStatus,emailType:String(firstValue(contactRow,["emailType","email_type"],firstValue(row,["email_type"],emailStatus==="Strong match"?"personal":"work"))),matchConfidence:String(firstValue(contactRow,["matchConfidence","match_confidence"],firstValue(row,["match_confidence"],""))),source:String(firstValue(contactRow,["source"],firstValue(row,["verification_provider","Verification Provider"],sourceUrl?"Public source":"Not enriched"))),linkedin:safeUrl(firstValue(contactRow,["linkedin"],firstValue(row,["linkedin_url","LinkedIn URL"],""))),listState:String(firstValue(contactRow,["listState","list_state"],firstValue(row,["list_state","List State"],"Research"))),enrichmentStatus:String(firstValue(row,["enrichment_status"],"not_requested"))},
     evidence:evidenceRows.length?evidenceRows:[{claim:evidenceText,label:String(firstValue(row,["source_title","Source Title","Page Title"],"Source evidence")),url:sourceUrl,observedAt:String(firstValue(row,["captured_at","Captured At","signal_date"],""))}],
     queryId:String(firstValue(row,["query_id","Query ID"],"")),runId:String(firstValue(row,["run_id","Run ID"],"")),keep:Boolean(firstValue(row,["keep","Keep"],score10>=state.settings.minScore)),
     pipelineStage:String(firstValue(row,["pipeline_stage","pipelineStage"],"")),nextAction:String(firstValue(row,["next_action","nextAction"],"")),notes:String(firstValue(row,["notes"],""))
@@ -432,7 +433,7 @@ async function refreshBackendSession(){
     const response=await fetch(`${BACKEND_API_URL}/api/session`,{credentials:"include",headers:{Accept:"application/json"}});
     backendSession=response.ok?(await response.json()).user:null;
   }catch{backendSession=null;}
-  if(backendSession)await loadRunPolicy();else orchestration={policy:null,budget:null};
+  if(backendSession)await Promise.all([loadRunPolicy(),loadEnrichmentPolicy()]);else {orchestration={policy:null,budget:null};enrichmentControl={policy:null,usage:{daily:0,monthly:0},configured:false};}
   renderBackendAccess();return backendSession;
 }
 
@@ -443,6 +444,41 @@ async function loadRunPolicy(){
     if(!response.ok)throw new Error(`Policy returned ${response.status}`);
     orchestration=await response.json();renderRuns();return orchestration;
   }catch{orchestration={policy:null,budget:null};return null;}
+}
+
+async function loadEnrichmentPolicy(){
+  if(!backendSession)return null;
+  try{
+    const response=await fetch(`${BACKEND_API_URL}/api/enrichment-policy?workspace_id=${encodeURIComponent(state.workspace.id)}`,{credentials:"include",headers:{Accept:"application/json"}});
+    if(!response.ok)throw new Error(`Enrichment policy returned ${response.status}`);
+    enrichmentControl=await response.json();renderContacts();renderRuntimeStatus();return enrichmentControl;
+  }catch{enrichmentControl={policy:null,usage:{daily:0,monthly:0},configured:false};return null;}
+}
+
+async function enrichOpportunity(id){
+  if(!backendSession){showToast("Sign in securely before using Apollo");switchView("settings");return false;}
+  let opportunity=opportunities.find(item=>item.id===id);
+  if(!opportunity?.domain&&!opportunity?.website){
+    const supplied=window.prompt(`Enter the verified company website or domain for ${opportunity?.company||"this company"}. Apollo will only accept an email on this domain.`)?.trim();
+    if(!supplied)return false;
+    try{
+      const response=await fetch(`${BACKEND_API_URL}/api/opportunities/${encodeURIComponent(id)}?workspace_id=${encodeURIComponent(state.workspace.id)}`,{method:"PATCH",credentials:"include",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify({company_domain:supplied})});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(result.error||"Enter a valid company domain");
+      await syncData({silent:true});opportunity=opportunities.find(item=>item.id===id);
+      showToast(`Company domain verified · ${result.company_domain}`);
+    }catch(error){showToast(error.message);return false;}
+  }
+  const button=document.querySelector(`[data-enrich="${CSS.escape(id)}"]`);if(button){button.disabled=true;button.textContent="Checking…";}
+  try{
+    const response=await fetch(`${BACKEND_API_URL}/api/opportunities/${encodeURIComponent(id)}/enrich?workspace_id=${encodeURIComponent(state.workspace.id)}`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json",Accept:"application/json"},body:"{}"});
+    const result=await response.json().catch(()=>({}));
+    const labels={verified_contact_exists:"A verified business email already exists",score_below_threshold:"Lead score is below the enrichment threshold",evidence_required:"Source evidence is required first",company_domain_required:"A verified company domain is required first",recent_lookup_exists:"This lead was already checked recently",daily_credit_limit:"Today’s Apollo credit limit is reached",monthly_credit_limit:"This month’s Apollo credit limit is reached",apollo_not_configured:"Apollo’s secure API key still needs to be connected"};
+    if(!response.ok)throw new Error(labels[result.code]||result.error||`Enrichment returned ${response.status}`);
+    await syncData({silent:true});await loadEnrichmentPolicy();
+    showToast(result.contact?`${result.contact.email_type==="personal"?"Strong personal-email match":"Verified work email"} found for ${result.contact.name}`:`No strong email match found · ${result.request?.credits_used||0} credit used`);return true;
+  }catch(error){showToast(error.message);return false;}
+  finally{if(button){button.disabled=false;button.textContent="Find best email · 1 lookup";}}
 }
 
 function renderBackendAccess(){
@@ -466,7 +502,7 @@ async function loginBackend(){
     backendSession=(await response.json()).user;
     state.integrations.dataUrl=`${BACKEND_API_URL}/api/snapshot?workspace_id=${encodeURIComponent(state.workspace.id)}`;
     saveState();renderAll();document.getElementById("backend-login-password").value="";
-    await syncData();showToast("Secure workspace connected");
+    await Promise.all([syncData(),loadRunPolicy(),loadEnrichmentPolicy()]);showToast("Secure workspace connected");
   }catch(error){showToast(`Sign-in failed: ${error.message}`);}
   finally{setBusy("backend-login-btn",false,"Sign in securely");renderBackendAccess();}
 }
@@ -745,6 +781,8 @@ function renderCompanies(query=""){
 
 function renderContacts(){
   const filters=["All","Verified","Public business","Predicted","Eligible","Suppressed"];
+  const policy=enrichmentControl.policy;const usage=enrichmentControl.usage||{};
+  document.getElementById("enrichment-safety").innerHTML=policy?`<article><span>Apollo connection</span><strong>${enrichmentControl.configured?"Ready":"Setup needed"}</strong><small>Secure backend key</small></article><article><span>Per company</span><strong>1 lookup</strong><small>One decision-maker only</small></article><article><span>Today</span><strong>${usage.daily||0} / ${policy.daily_credit_limit}</strong><small>Reserved credit cap</small></article><article><span>Email policy</span><strong>Work first</strong><small>Strong personal fallback · phones off</small></article>`:'<article><span>Email enrichment</span><strong>Sign in</strong><small>Controls load from the secure backend</small></article>';
   document.getElementById("contact-filters").innerHTML=filters.map(f=>`<button class="filter ${f===currentContactFilter?"active":""}" data-contact-filter="${esc(f)}">${esc(f)}</button>`).join("");
   let list=opportunities;
   if(["Verified","Public business","Predicted"].includes(currentContactFilter)) list=list.filter(o=>o.contact.emailStatus===currentContactFilter);
@@ -753,9 +791,9 @@ function renderContacts(){
   document.getElementById("contacts-body").innerHTML=list.map(o=>`<tr>
     <td><strong>${esc(o.contact.name)}</strong></td><td>${esc(o.company)}</td><td>${esc(o.contact.role)}</td>
     <td>${o.contact.emailStatus==="Predicted"?'<span class="status warn">Hidden until verified</span>':`<a class="evidence" href="mailto:${esc(o.contact.email)}">${esc(o.contact.email)}</a>`}</td>
-    <td><span class="status ${statusClass(o.contact.emailStatus)}">${esc(o.contact.emailStatus)}</span><br><small>${esc(o.contact.source)}</small></td>
+    <td><span class="status ${statusClass(o.contact.emailStatus)}">${esc(o.contact.emailStatus)}</span><br><small>${o.contact.emailType==="personal"?"Personal · exact person/company/role match":esc(o.contact.source)}</small></td>
     <td><select data-list-state="${o.id}"><option ${state.listStates[o.id]==="Research"?"selected":""}>Research</option><option ${state.listStates[o.id]==="Eligible"?"selected":""}>Eligible</option><option ${state.listStates[o.id]==="Suppressed"?"selected":""}>Suppressed</option><option ${state.listStates[o.id]==="Unsubscribed"?"selected":""}>Unsubscribed</option></select></td>
-    <td><button class="btn small secondary" data-open="${o.id}">Dossier</button></td></tr>`).join("");
+    <td><div class="card-actions">${["Verified","Strong match"].includes(o.contact.emailStatus)?"":`<button class="btn small primary" data-enrich="${o.id}" ${o.contact.enrichmentStatus==="processing"?"disabled":""}>${o.contact.enrichmentStatus==="processing"?"Checking…":"Find best email · 1 lookup"}</button>`}<button class="btn small secondary" data-open="${o.id}">Dossier</button></div></td></tr>`).join("");
 }
 
 function renderSources(){
@@ -909,6 +947,7 @@ function renderRuntimeStatus(){
   pill.classList.toggle("live",state.runtime.mode==="live");
   document.getElementById("status-make").textContent=state.integrations.runUrl?"Configured":"Endpoint needed";
   document.getElementById("status-make").classList.toggle("pending",!state.integrations.runUrl);
+  const apollo=document.getElementById("status-apollo");if(apollo){apollo.textContent=enrichmentControl.configured?"Securely connected":"Secure key needed";apollo.classList.toggle("pending",!enrichmentControl.configured);}
   document.getElementById("status-sheets").textContent="Workbook ready";
   document.getElementById("setting-workspace-id").value=state.workspace.id;
   document.getElementById("setting-workspace-name").value=state.workspace.name;
@@ -1035,6 +1074,7 @@ function renderAll(){
 document.addEventListener("click",async event=>{
   if(event.target.id==="backend-login-btn"){await loginBackend();return;}
   if(event.target.id==="backend-logout-btn"){await logoutBackend();return;}
+  const enrich=event.target.closest("[data-enrich]");if(enrich){await enrichOpportunity(enrich.dataset.enrich);return;}
   if(event.target.id==="profile-pdf-open"){
     try{
       const file=await getProfileDocument();

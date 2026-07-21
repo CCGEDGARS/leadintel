@@ -62,21 +62,22 @@ export async function ingestCanonicalSnapshot(env,workspaceId,payload) {
 }
 
 export async function canonicalSnapshot(env,workspaceId) {
-  const {results:records}=await env.DB.prepare(`SELECT o.*,c.canonical_name,c.website_url,c.industry,c.location
+  const {results:records}=await env.DB.prepare(`SELECT o.*,c.canonical_name,c.domain,c.website_url,c.industry,c.location
     FROM opportunities o JOIN companies c ON c.id=o.company_id WHERE o.workspace_id=? ORDER BY o.score_10 DESC,o.updated_at DESC`).bind(workspaceId).all();
   if(!records.length)return null;
   const opportunities=[]; const signals=[];
   for(const record of records) {
     const base=JSON.parse(record.payload_json||"{}");
-    const contact=await env.DB.prepare(`SELECT full_name,role,business_email,email_status,verification_provider,linkedin_url FROM contacts WHERE company_id=? AND email_status='Verified' ORDER BY verified_at DESC LIMIT 1`).bind(record.company_id).first();
+    const contact=await env.DB.prepare(`SELECT full_name,role,business_email,email_status,verification_provider,linkedin_url,email_type,match_confidence FROM contacts WHERE company_id=? AND email_status IN ('Verified','Strong match') ORDER BY CASE email_status WHEN 'Verified' THEN 0 ELSE 1 END,verified_at DESC LIMIT 1`).bind(record.company_id).first();
     const {results:companySignals}=await env.DB.prepare(`SELECT s.*,e.claim_text,e.observed_at FROM signals s LEFT JOIN evidence_items e ON e.signal_id=s.id WHERE s.company_id=? ORDER BY s.captured_at DESC,e.created_at DESC`).bind(record.company_id).all();
     const uniqueEvidence=[...new Set(companySignals.map(item=>item.claim_text).filter(Boolean))];
     const uniqueSignalSummaries=[...new Set(companySignals.map(item=>item.summary).filter(Boolean))];
     const evidenceItems=[...new Map(companySignals.filter(item=>item.claim_text).map(item=>[item.claim_text,{claim:item.claim_text,source_title:item.source_title||"Source evidence",source_url:item.source_url||"",observed_at:item.observed_at||item.captured_at||""}])).values()];
-    opportunities.push({...base,id:record.id,company_name:record.canonical_name,score_100:record.score_100,score_10:record.score_10,status:record.status,pipeline_stage:record.pipeline_stage,next_action:record.next_action,notes:record.notes,
+    const enrichment=await env.DB.prepare("SELECT status,credits_used,error_code,created_at FROM enrichment_requests WHERE opportunity_id=? ORDER BY created_at DESC LIMIT 1").bind(record.id).first();
+    opportunities.push({...base,id:record.id,company_name:record.canonical_name,domain:record.domain||base.domain||"",website:record.website_url||base.website||"",score_100:record.score_100,score_10:record.score_10,status:record.status,pipeline_stage:record.pipeline_stage,next_action:record.next_action,notes:record.notes,
       signal_summary:uniqueSignalSummaries[0]||base.signal_summary||"",factual_evidence:uniqueEvidence.join("\n"),signal_count:new Set(companySignals.map(item=>item.id)).size,evidence_count:uniqueEvidence.length,
       evidence_items:evidenceItems,
-      decision_maker:contact?.full_name||"",decision_maker_role:contact?.role||record.decision_maker_role||"",business_email:contact?.business_email||"",email_status:contact?.email_status||"Not found",verification_provider:contact?.verification_provider||"",linkedin_url:contact?.linkedin_url||""});
+      decision_maker:contact?.full_name||"",decision_maker_role:contact?.role||record.decision_maker_role||"",business_email:contact?.business_email||"",email_status:contact?.email_status||"Not found",email_type:contact?.email_type||"",match_confidence:contact?.match_confidence||"",verification_provider:contact?.verification_provider||"",linkedin_url:contact?.linkedin_url||"",enrichment_status:enrichment?.status||"not_requested",enrichment_credits_used:Number(enrichment?.credits_used)||0,enrichment_error:enrichment?.error_code||""});
     for(const item of companySignals)signals.push({id:item.id,company:record.canonical_name,text:item.summary,type:item.signal_type,date:item.captured_at,confidence:item.confidence,status:"Qualified",source_title:item.source_title,source_url:item.source_url});
   }
   const workspace=await env.DB.prepare("SELECT id,name,market FROM workspaces WHERE id=?").bind(workspaceId).first();

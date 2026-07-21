@@ -31,6 +31,12 @@ if(!orkla||orkla.evidence_count!==2)throw new Error("Orkla evidence was not cons
 if(!Array.isArray(orkla.evidence_items)||orkla.evidence_items.length!==2||!orkla.evidence_items.every(item=>item.claim&&item.source_url))throw new Error("Structured evidence ledger was not returned");
 if(orkla.email_status!=="Verified"||orkla.business_email!=="gints.uzans@orkla.lv")throw new Error("Verified Orkla contact was not preserved");
 if(snapshot.opportunities.filter(item=>item.company_name==="Orkla Latvija").length!==1)throw new Error("Orkla still appears more than once");
+const enrichmentPolicyResponse=await fetch(`${api}/api/enrichment-policy?workspace_id=edgars-latvia`,{headers:{Origin:api,Cookie:cookie}});
+const enrichmentPolicy=await enrichmentPolicyResponse.json();
+if(!enrichmentPolicyResponse.ok||enrichmentPolicy.policy?.daily_credit_limit!==3||enrichmentPolicy.policy?.monthly_credit_limit!==30||enrichmentPolicy.personal_email_fallback!==true||enrichmentPolicy.phone_numbers!==false||enrichmentPolicy.phone_lookup_mode!=="on_request")throw new Error("Controlled email-enrichment policy is not active");
+const enrichmentValidationResponse=await fetch(`${api}/api/opportunities/${encodeURIComponent(orkla.id)}/enrich?workspace_id=edgars-latvia`,{method:"POST",headers:{"Content-Type":"application/json",Origin:api,Cookie:cookie},body:JSON.stringify({validate:true})});
+const enrichmentValidation=await enrichmentValidationResponse.json();
+if(!enrichmentValidationResponse.ok||enrichmentValidation.decision?.reason!=="verified_contact_exists")throw new Error("Enrichment deduplication did not protect the existing verified contact");
 const originalStage=orkla.next_action==="Verify Step 3 workflow"?"Contact Found":orkla.pipeline_stage||"Contact Found";
 const originalNextAction=orkla.next_action==="Verify Step 3 workflow"?"Review evidence and decide the next step":orkla.next_action||"";
 const workflowResponse=await fetch(`${api}/api/opportunities/${encodeURIComponent(orkla.id)}?workspace_id=edgars-latvia`,{method:"PATCH",headers:{"Content-Type":"application/json",Origin:api,Cookie:cookie},body:JSON.stringify({pipeline_stage:"Qualified",next_action:"Verify Step 3 workflow"})});
@@ -44,4 +50,6 @@ const unauthorized=await fetch(`${api}/api/snapshot?workspace_id=edgars-latvia`,
 if(unauthorized.status!==401)throw new Error("Unauthenticated snapshot access was not blocked");
 const unauthorizedRun=await fetch(`${api}/api/runs?workspace_id=edgars-latvia`,{headers:{Origin:api}});
 if(unauthorizedRun.status!==401)throw new Error("Unauthenticated run access was not blocked");
-console.log("Verified: protected run budgets are active; bilingual queries compile separately; dictionary junk is rejected without AI; evidence is sourced; canonical data is deduplicated; workflow state persists; unauthorized access remains blocked.");
+const unauthorizedEnrichment=await fetch(`${api}/api/opportunities/${encodeURIComponent(orkla.id)}/enrich?workspace_id=edgars-latvia`,{method:"POST",headers:{"Content-Type":"application/json",Origin:api},body:"{}"});
+if(unauthorizedEnrichment.status!==401)throw new Error("Unauthenticated enrichment access was not blocked");
+console.log("Verified: Apollo is gated to qualified evidence-backed leads; work email is preferred; personal email requires an exact person/company/role match; phone lookup is explicit-request only; credit caps and duplicate protection are active; run budgets, quality, canonical data, workflow persistence, and authentication remain healthy.");

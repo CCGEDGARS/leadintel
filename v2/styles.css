@@ -574,6 +574,11 @@ tr:last-child td { border-bottom: 0; }
 .assessment-warning { margin-top: 12px; padding: 10px 12px; border-left: 2px solid #d69a38; background: rgba(238,176,74,.06); color: #d7bb86; font-size: 12px; }
 .contact-proof { display: flex; align-items: flex-start; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-2); }
 .contact-proof p, .contact-proof small { margin: 2px 0; color: var(--muted); font-size: 13px; }
+.enrichment-safety { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); overflow: hidden; margin-bottom: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.enrichment-safety article { min-height: 88px; padding: 15px; border-left: 1px solid var(--line); }
+.enrichment-safety article:first-child { border-left: 0; }
+.enrichment-safety span, .enrichment-safety small { display: block; color: var(--muted); font-size: 11px; }
+.enrichment-safety strong { display: block; margin: 7px 0 4px; color: var(--text); font-size: 18px; }
 .modal-backdrop { display: grid; place-items: center; padding: 20px; }
 .modal { position: relative; width: min(700px,100%); max-height: 88vh; padding: 27px; overflow: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); box-shadow: var(--shadow); }
 .email-preview { margin: 15px 0; padding: 14px; border: 1px solid #e0e5ec; border-radius: 9px; background: white; color: #172235; }
@@ -799,6 +804,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .opp-card { grid-template-columns: 42px 1fr; }
   .opp-side { grid-column: 2; align-items: start; text-align: left; }
   .company-grid, .source-grid, .settings-grid, .endpoint-grid, .outreach-grid { grid-template-columns: 1fr; }
+  .enrichment-safety { grid-template-columns: 1fr 1fr; }
   .form-grid, .editor-grid { grid-template-columns: 1fr; }
   .form-grid .wide, .editor-grid .wide { grid-column: auto; }
   .market-profile-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
