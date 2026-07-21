@@ -619,6 +619,12 @@ table td { font-size: 14px; line-height: 1.5; }
 .source-pack-preview .btn { grid-column: 2; grid-row: 1 / span 2; }
 .source-card.source-paused { opacity: .62; }
 .quality-dashboard { margin-bottom: 18px; }
+.run-safety-dashboard { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); overflow: hidden; margin-bottom: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.run-safety-dashboard article { min-height: 104px; padding: 17px; border-left: 1px solid var(--line); }
+.run-safety-dashboard article:first-child { border-left: 0; }
+.run-safety-dashboard span, .run-safety-dashboard small { display: block; color: var(--muted); font-size: 12px; }
+.run-safety-dashboard strong { display: block; margin: 9px 0 5px; color: var(--text); font-size: 20px; }
+.run-safety-dashboard .safe { color: var(--success); }
 .quality-summary { display: grid; grid-template-columns: .65fr 1.35fr 1fr; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
 .quality-summary article { min-height: 118px; padding: 18px; border-left: 1px solid var(--line); }
 .quality-summary article:first-child { border-left: 0; }
@@ -810,6 +816,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .crm-list-row { grid-template-columns: 1fr; }
   .crm-lead-main, .crm-list-actions { grid-column: auto; }
   .quality-summary { grid-template-columns: 1fr; }
+  .run-safety-dashboard { grid-template-columns: 1fr 1fr; }
+  .run-safety-dashboard article:nth-child(odd) { border-left: 0; }
   .quality-summary article { min-height: 0; border-top: 1px solid var(--line); border-left: 0; }
   .quality-summary article:first-child { border-top: 0; }
   .rejection-ledger article { grid-template-columns: 1fr; }

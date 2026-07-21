@@ -1,6 +1,7 @@
 import {allowedOrigin,corsHeaders,sha256,randomToken,constantTimeEqual,cookieValue,sessionCookie,clearSessionCookie} from "./security.js";
 import {canonicalSnapshot,ingestCanonicalSnapshot} from "./canonical.js";
 import {assessCandidate,compileQueries} from "./quality.js";
+import {listRuns,policyFor,recordRunEvent,runBudgetState,validDispatchUrl} from "./runs.js";
 
 const json = (value,status=200,headers={}) => new Response(JSON.stringify(value),{status,headers:{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store",...headers}});
 const error = (message,status,headers) => json({error:message},status,headers);
@@ -72,6 +73,15 @@ async function router(request,env) {
     await env.DB.prepare("INSERT INTO snapshots(id,workspace_id,schema_version,payload_json,generated_at,created_by) VALUES(?,?,?,?,?,?)")
       .bind(snapshotId,workspaceId,Number(payload.schema_version)||1,JSON.stringify(payload),generatedAt,user.id).run();
     const canonical=await ingestCanonicalSnapshot(env,workspaceId,payload);
+    const runId=String(payload.run_id||payload.opportunities.find(item=>item?.run_id)?.run_id||"").trim();
+    if(runId){
+      const matchingRun=await env.DB.prepare("SELECT id FROM research_runs WHERE id=? AND workspace_id=?").bind(runId,workspaceId).first();
+      if(matchingRun){
+        await env.DB.prepare("UPDATE research_runs SET status='completed',candidates_used=?,completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP,error_code=NULL,error_message=NULL WHERE id=?")
+          .bind(Math.max(0,Number(canonical.input_rows)||payload.opportunities.length),runId).run();
+        await recordRunEvent(env,runId,"run.completed",{opportunities:payload.opportunities.length,canonical});
+      }
+    }
     await audit(env,{workspaceId,userId:user.id,type:"snapshot.created",entityType:"snapshot",entityId:snapshotId,metadata:{opportunities:payload.opportunities.length,...canonical}});
     return json({id:snapshotId,opportunities:payload.opportunities.length,canonical},201,cors);
   }
@@ -82,6 +92,54 @@ async function router(request,env) {
   if(url.pathname==="/api/quality/evaluate"&&request.method==="POST") {
     const body=await request.json().catch(()=>null);if(!body?.candidate)return error("A candidate is required",400,cors);
     return json(assessCandidate(body.candidate,body.context||{}),200,cors);
+  }
+  if(url.pathname==="/api/run-policy"&&request.method==="GET") {
+    const policy=await policyFor(env,workspaceId);
+    const budget=await runBudgetState(env,workspaceId,policy,false);
+    return json({policy,budget},200,cors);
+  }
+  if(url.pathname==="/api/runs"&&request.method==="GET")return json({runs:await listRuns(env,workspaceId)},200,cors);
+  if(url.pathname==="/api/runs"&&request.method==="POST") {
+    if(!["owner","researcher"].includes(membership.role))return error("Write access required",403,cors);
+    const body=await request.json().catch(()=>null);
+    if(!body||!validDispatchUrl(body.dispatch_url))return error("A valid Make webhook URL is required",400,cors);
+    const idempotencyKey=String(request.headers.get("Idempotency-Key")||body.idempotency_key||"").trim();
+    if(idempotencyKey.length<16||idempotencyKey.length>128)return error("A valid idempotency key is required",400,cors);
+    const existing=await env.DB.prepare("SELECT id,status,created_at,accepted_at,error_code,error_message FROM research_runs WHERE workspace_id=? AND idempotency_key=?").bind(workspaceId,idempotencyKey).first();
+    if(existing)return json({run:existing,duplicate:true},200,cors);
+    const test=Boolean(body.test);const policy=await policyFor(env,workspaceId);const budget=await runBudgetState(env,workspaceId,policy,test);
+    if(!budget.allowed)return json({error:"Run blocked by cost controls",code:budget.reason,retry_after:budget.retryAfter||null,policy},429,{...cors,"Retry-After":String(budget.retryAfter||60)});
+    const runId=`RUN-${new Date().toISOString().replace(/[-:TZ.]/g,"").slice(0,14)}-${uuid().slice(0,8)}`;
+    const candidateBudget=test?0:budget.candidateBudget;
+    const payload={...(body.payload||{}),workspace_id:workspaceId,run_id:runId,test,cost_controls:{candidate_budget:candidateBudget,daily_run_limit:policy.daily_run_limit,monthly_candidate_limit:policy.monthly_candidate_limit}};
+    await env.DB.prepare(`INSERT INTO research_runs(id,workspace_id,idempotency_key,status,test,candidate_budget,request_json,requested_by,deadline_at)
+      VALUES(?,?,?,?,?,?,?,?,datetime('now','+20 minutes'))`).bind(runId,workspaceId,idempotencyKey,"dispatching",test?1:0,candidateBudget,JSON.stringify(payload),user.id).run();
+    await recordRunEvent(env,runId,"run.created",{candidate_budget:candidateBudget,test});
+    if(test){
+      const dispatchHost=new URL(body.dispatch_url).hostname;
+      await env.DB.prepare("UPDATE research_runs SET status='completed',completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP,response_json=? WHERE id=?")
+        .bind(JSON.stringify({validated:true,dispatch_url_host:dispatchHost}),runId).run();
+      await recordRunEvent(env,runId,"connection.validated",{dispatch_url_host:dispatchHost,cost:0});
+      await audit(env,{workspaceId,userId:user.id,type:"research_run.connection_validated",entityType:"research_run",entityId:runId,metadata:{cost:0}});
+      return json({run:{id:runId,status:"completed",candidate_budget:0,test:true},validated:true,cost:0,policy},200,cors);
+    }
+    let response;
+    try{
+      response=await fetch(body.dispatch_url,{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json","X-LeadIntel-Run-ID":runId},body:JSON.stringify(payload),signal:AbortSignal.timeout(policy.dispatch_timeout_ms)});
+      const responseText=await response.text();
+      if(!response.ok)throw Object.assign(new Error(`Make returned ${response.status}`),{code:`make_${response.status}`,safeToRetry:response.status===429||response.status>=500,responseText});
+      await env.DB.prepare("UPDATE research_runs SET status='accepted',attempts=1,response_json=?,accepted_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(JSON.stringify({status:response.status,body:responseText.slice(0,2000)}),runId).run();
+      await recordRunEvent(env,runId,"dispatch.accepted",{status:response.status});
+      await audit(env,{workspaceId,userId:user.id,type:"research_run.accepted",entityType:"research_run",entityId:runId,metadata:{candidate_budget:candidateBudget,test}});
+      return json({run:{id:runId,status:"accepted",candidate_budget:candidateBudget},duplicate:false,policy},202,cors);
+    }catch(cause){
+      const timedOut=cause?.name==="TimeoutError"||cause?.name==="AbortError";const code=timedOut?"dispatch_timeout":String(cause?.code||"dispatch_failed");
+      const status=timedOut?"timed_out":"failed";const message=timedOut?"Make did not confirm receipt before the safety timeout":String(cause?.message||"Make dispatch failed");
+      await env.DB.prepare("UPDATE research_runs SET status=?,attempts=1,error_code=?,error_message=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(status,code,message,runId).run();
+      await recordRunEvent(env,runId,`dispatch.${status}`,{code,message,automatic_retry:false});
+      await audit(env,{workspaceId,userId:user.id,type:`research_run.${status}`,entityType:"research_run",entityId:runId,metadata:{code,automatic_retry:false}});
+      return json({error:message,code,run:{id:runId,status},automatic_retry:false},timedOut?504:502,cors);
+    }
   }
   const opportunityMatch=url.pathname.match(/^\/api\/opportunities\/([^/]+)$/);
   if(opportunityMatch&&request.method==="PATCH") {

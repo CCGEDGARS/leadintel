@@ -139,6 +139,7 @@ let signals=structuredClone(demoSignals);
 let sources=structuredClone(demoSources);
 let runs=structuredClone(demoRuns);
 let quality={recent_rejections:[]};
+let orchestration={policy:null,budget:null};
 
 const workflowNodes = [
   {id:"sources",type:"Input",icon:"⌘",x:8.5,y:30,status:"Healthy",metric:"25 sources",lastRun:"06:00",controlLabel:"Source limit",unit:"monitored sources",config:{title:"Market sources",enabled:true,cadence:"Daily · 06:00",value:25,description:"Latvian business, procurement, recruitment and company sources.",instructions:"Monitor only approved public sources. Preserve the source URL, publication date and exact evidence for every finding."}},
@@ -386,7 +387,7 @@ function applyRuntimePayload(payload,{persist=true,mode="imported"}={}){
   opportunities=normalized;
   signals=Array.isArray(payload.signals)?payload.signals.map((item,index)=>({company:String(firstValue(item,["company","company_name"],normalized[index]?.company||"Unknown")),text:String(firstValue(item,["text","signal","signal_summary"],"Market signal")),type:String(firstValue(item,["type","signal_type"],"Market signal")),date:String(firstValue(item,["date","signal_date"],new Date().toISOString().slice(0,10))),confidence:String(firstValue(item,["confidence"],"Medium")),status:String(firstValue(item,["status"],"Qualified"))})):normalized.map(o=>({company:o.company,text:o.signal,type:o.signalType,date:o.signalDate,confidence:o.confidence,status:o.score>=state.settings.minScore?"Qualified":"Monitor"}));
   sources=Array.isArray(payload.sources)?payload.sources.map(item=>({name:String(firstValue(item,["name","source"],"Source")),group:String(firstValue(item,["group","type"],"Public web")),cadence:String(firstValue(item,["cadence","frequency"],"Daily")),health:String(firstValue(item,["health","status"],"Healthy")),findings:numberValue(firstValue(item,["findings","count"],0))})):structuredClone(demoSources);
-  runs=Array.isArray(payload.runs)?payload.runs.map((item,index)=>({id:String(firstValue(item,["id","run_id"],`RUN-${index+1}`)),started:String(firstValue(item,["started","start_time"],"—")),findings:numberValue(firstValue(item,["findings","pages_found"],0)),qualified:numberValue(firstValue(item,["qualified","qualified_leads"],0)),saved:numberValue(firstValue(item,["saved"],normalized.length)),emailed:numberValue(firstValue(item,["emailed"],0)),errors:numberValue(firstValue(item,["errors"],0)),status:String(firstValue(item,["status"],"Complete"))})):structuredClone(demoRuns);
+  runs=Array.isArray(payload.runs)?payload.runs.map((item,index)=>({id:String(firstValue(item,["id","run_id"],`RUN-${index+1}`)),started:String(firstValue(item,["started","start_time"],"—")),findings:numberValue(firstValue(item,["findings","pages_found","candidates_used"],0)),qualified:numberValue(firstValue(item,["qualified","qualified_leads"],0)),saved:numberValue(firstValue(item,["saved"],normalized.length)),emailed:numberValue(firstValue(item,["emailed"],0)),errors:numberValue(firstValue(item,["errors"],item.error_code?1:0)),status:String(firstValue(item,["status"],"Complete")),candidateBudget:numberValue(firstValue(item,["candidate_budget"],0)),attempts:numberValue(firstValue(item,["attempts"],0)),errorCode:String(firstValue(item,["error_code"],"")),errorMessage:String(firstValue(item,["error_message"],"")),test:Boolean(firstValue(item,["test"],false))})):structuredClone(demoRuns);
   quality=isRecord(payload.quality)?payload.quality:{recent_rejections:[]};
   state.statuses={...Object.fromEntries(normalized.map(o=>[o.id,o.status])),...state.statuses};
   state.listStates={...Object.fromEntries(normalized.map(o=>[o.id,o.contact.listState])),...state.listStates};
@@ -431,7 +432,17 @@ async function refreshBackendSession(){
     const response=await fetch(`${BACKEND_API_URL}/api/session`,{credentials:"include",headers:{Accept:"application/json"}});
     backendSession=response.ok?(await response.json()).user:null;
   }catch{backendSession=null;}
+  if(backendSession)await loadRunPolicy();else orchestration={policy:null,budget:null};
   renderBackendAccess();return backendSession;
+}
+
+async function loadRunPolicy(){
+  if(!backendSession)return null;
+  try{
+    const response=await fetch(`${BACKEND_API_URL}/api/run-policy?workspace_id=${encodeURIComponent(state.workspace.id)}`,{credentials:"include",headers:{Accept:"application/json"}});
+    if(!response.ok)throw new Error(`Policy returned ${response.status}`);
+    orchestration=await response.json();renderRuns();return orchestration;
+  }catch{orchestration={policy:null,budget:null};return null;}
 }
 
 function renderBackendAccess(){
@@ -495,6 +506,7 @@ async function triggerResearch({test=false}={}){
   const url=state.integrations.runUrl.trim();
   if(!url){showToast("Add the private Make run webhook in Settings");switchView("settings");return false;}
   if(!isPrivateEndpoint(url)){showToast("Use an HTTPS webhook");return false;}
+  if(!backendSession){showToast("Sign in securely before starting a protected run");switchView("settings");return false;}
   if(!test)setBusy("run-btn",true,"Starting…");
   const market=activeMarket();
   const body={
@@ -511,8 +523,21 @@ async function triggerResearch({test=false}={}){
     settings:{email_count:state.settings.emailCount,app_count:state.settings.appCount,min_score:state.settings.minScore},
     workflow:state.map.publishedConfigs
   };
-  try{const response=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify(body)});if(!response.ok)throw new Error(`Webhook returned ${response.status}`);state.runtime.lastRunRequest=formatNow();state.runtime.error="";saveState();renderRuntimeStatus();showToast(test?"Make webhook test passed":"Research run accepted by Make");return true;}
-  catch(error){state.runtime.error=error.message;saveState();renderRuntimeStatus();showToast(`Run failed: ${error.message}`);return false;}
+  const key=state.runtime.pendingRunKey||crypto.randomUUID();state.runtime.pendingRunKey=key;saveState();
+  try{
+    const response=await fetch(`${BACKEND_API_URL}/api/runs?workspace_id=${encodeURIComponent(state.workspace.id)}`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json",Accept:"application/json","Idempotency-Key":key},body:JSON.stringify({dispatch_url:url,test,payload:body})});
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok){
+      const labels={run_in_progress:"A research run is already active",daily_run_limit:"The daily run limit is reached",monthly_candidate_limit:"The monthly candidate budget is reached",cooldown:"Please wait before starting another run",dispatch_timeout:"Make did not confirm receipt; no automatic retry was made"};
+      const message=labels[result.code]||result.error||`Protected run returned ${response.status}`;
+      if(result.run||response.status<500)state.runtime.pendingRunKey="";
+      throw new Error(message);
+    }
+    state.runtime.pendingRunKey="";state.runtime.lastRunId=result.run?.id||"";state.runtime.lastRunRequest=formatNow();state.runtime.error="";saveState();
+    await syncData({silent:true});await loadRunPolicy();renderRuntimeStatus();
+    showToast(test?"Run endpoint validated · no Make or OpenAI credits used":`Protected run accepted · ${result.run?.id||"queued"}`);return true;
+  }
+  catch(error){state.runtime.error=error.message;saveState();renderRuntimeStatus();showToast(`Run blocked: ${error.message}`);return false;}
   finally{if(!test)setBusy("run-btn",false,"Run research");}
 }
 
@@ -749,8 +774,10 @@ function renderRuns(){
   const reasonLabels={junk_or_reference_page:"Reference or dictionary page",commercial_signal_missing:"No commercial signal",company_not_mentioned_in_evidence:"Company absent from evidence",discussion_source_not_primary_evidence:"Discussion page",source_too_old:"Source too old",source_url_invalid:"Invalid source URL",source_not_https:"Insecure source URL",company_missing:"Company missing",evidence_missing:"Evidence missing"};
   const reasonCounts={};rejected.forEach(item=>(item.reasons||[]).forEach(reason=>{reasonCounts[reason]=(reasonCounts[reason]||0)+1;}));
   const topReason=Object.entries(reasonCounts).sort((a,b)=>b[1]-a[1])[0];
+  const policy=orchestration.policy;const budget=orchestration.budget;
+  document.getElementById("run-safety-dashboard").innerHTML=policy?`<article><span>Daily run cap</span><strong>${policy.daily_run_limit}</strong><small>Hard backend limit</small></article><article><span>Per-run candidates</span><strong>${policy.per_run_candidate_limit}</strong><small>Maximum paid evaluations</small></article><article><span>Monthly candidate cap</span><strong>${policy.monthly_candidate_limit}</strong><small>Resets monthly</small></article><article><span>Dispatch protection</span><strong class="safe">${budget?.allowed?"Ready":"Protected"}</strong><small>${budget?.reason==="within_budget"?"Duplicate guard · no timeout retry":esc(String(budget?.reason||"Sign in to load limits").replaceAll("_"," "))}</small></article>`:'<article><span>Cost controls</span><strong>Sign in</strong><small>Protected runs require secure backend access</small></article>';
   document.getElementById("quality-dashboard").innerHTML=`<div class="quality-summary"><article><span>Rejected before storage</span><strong>${rejected.length}</strong><small>Low-quality candidates blocked</small></article><article><span>Most common failure</span><strong>${esc(topReason?reasonLabels[topReason[0]]||topReason[0]:"None")}</strong><small>${topReason?`${topReason[1]} recent ${topReason[1]===1?"result":"results"}`:"All recent candidates passed"}</small></article><article><span>Quality policy</span><strong>Deterministic</strong><small>No OpenAI call required</small></article></div>${rejected.length?`<div class="rejection-ledger"><div class="rejection-head"><strong>Recent quality rejections</strong><span>These candidates never enter the opportunity database</span></div>${rejected.map(item=>`<article><div><strong>${esc(item.company_name||"Unknown candidate")}</strong><a href="${esc(item.source_url||"#")}" ${item.source_url?'target="_blank" rel="noopener"':""}>${esc(item.source_title||item.source_url||"Source unavailable")}</a></div><div>${(item.reasons||[]).map(reason=>`<span>${esc(reasonLabels[reason]||reason)}</span>`).join("")}</div><time>${esc(item.created_at||"")}</time></article>`).join("")}</div>`:'<div class="quality-clear"><span>✓</span><div><strong>No recent quality failures</strong><p>New candidates will be checked for company relevance, commercial intent, source type, HTTPS, and freshness.</p></div></div>'}`;
-  document.getElementById("runs-body").innerHTML=runs.map(r=>`<tr><td><strong>${esc(r.id)}</strong></td><td>${esc(r.started)}</td><td>${r.findings}</td><td>${r.qualified}</td><td>${r.saved}</td><td>${r.emailed}</td><td>${r.errors}</td><td><span class="status ${statusClass(r.status)}">${esc(r.status)}</span></td></tr>`).join("");
+  document.getElementById("runs-body").innerHTML=runs.map(r=>`<tr title="${esc(r.errorMessage||"")}"><td><strong>${esc(r.id)}</strong>${r.test?"<br><small>€0 validation</small>":""}</td><td>${esc(r.started)}</td><td>${r.findings}${r.candidateBudget?`<br><small>cap ${r.candidateBudget}</small>`:""}</td><td>${r.qualified}</td><td>${r.saved}</td><td>${r.emailed}</td><td>${r.errors}${r.errorCode?`<br><small>${esc(r.errorCode)}</small>`:""}</td><td><span class="status ${statusClass(r.status)}">${esc(r.status)}</span></td></tr>`).join("");
 }
 
 function ensureCrmRecords(){

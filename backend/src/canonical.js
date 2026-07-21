@@ -1,5 +1,6 @@
 import {sha256} from "./security.js";
 import {assessCandidate} from "./quality.js";
+import {listRuns} from "./runs.js";
 
 const text=value=>String(value??"").trim();
 const normalized=value=>text(value).toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/\b(sia|as|a\/s|llc|ltd|inc)\b/g,"").replace(/[^a-z0-9]+/g," ").trim();
@@ -80,5 +81,6 @@ export async function canonicalSnapshot(env,workspaceId) {
   }
   const workspace=await env.DB.prepare("SELECT id,name,market FROM workspaces WHERE id=?").bind(workspaceId).first();
   const {results:rejections}=await env.DB.prepare("SELECT run_id,query_id,company_name,source_title,source_url,reasons_json,warnings_json,created_at FROM quality_rejections WHERE workspace_id=? ORDER BY created_at DESC LIMIT 25").bind(workspaceId).all();
-  return {schema_version:2,generated_at:new Date().toISOString(),workspace,opportunities,signals,sources:[],runs:[],quality:{recent_rejections:rejections.map(item=>({...item,reasons:JSON.parse(item.reasons_json),warnings:JSON.parse(item.warnings_json)}))},canonical:true};
+  const runs=await listRuns(env,workspaceId);
+  return {schema_version:2,generated_at:new Date().toISOString(),workspace,opportunities,signals,sources:[],runs,quality:{recent_rejections:rejections.map(item=>({...item,reasons:JSON.parse(item.reasons_json),warnings:JSON.parse(item.warnings_json)}))},canonical:true};
 }
