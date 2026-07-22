@@ -1495,7 +1495,9 @@ document.addEventListener("click",async event=>{
   const inspectorTab=event.target.closest("[data-inspector-tab]");if(inspectorTab){if(selectedMapInspectorTab==="configuration"&&document.getElementById("map-node-form")&&!saveMapDraft(false))return;selectedMapInspectorTab=inspectorTab.dataset.inspectorTab;renderMapInspector();return;}
   const mapNode=event.target.closest("[data-map-node]");if(mapNode){
     if(mapNode.dataset.mapNode!==selectedMapNode&&document.getElementById("map-node-form")&&!saveMapDraft(false))return;
-    selectedMapNode=mapNode.dataset.mapNode;selectedMapInspectorTab="configuration";renderSystemMap();
+    selectedMapNode=mapNode.dataset.mapNode;selectedMapInspectorTab="configuration";
+    if(mapInspectorCollapsed)setMapInspectorCollapsed(false,{refit:false});
+    renderSystemMap();
     if(!mapInspectorCollapsed&&window.innerWidth<1280)document.getElementById("map-inspector").scrollIntoView({behavior:"smooth",block:"start"});
     return;
   }
@@ -1607,7 +1609,7 @@ document.addEventListener("click",async event=>{
   if(event.target.id==="publish-map")publishWorkflow();
   if(event.target.id==="discard-map-drafts"){state.map.draftConfigs=structuredClone(state.map.publishedConfigs);state.map.draftLayout=structuredClone(state.map.publishedLayout);saveState();renderAll();showToast("All workflow drafts discarded");}
   if(event.target.id==="map-arrange"){setArrangeMode(!mapArrangeMode);requestAnimationFrame(()=>fitMapViewport());showToast(mapArrangeMode?"Arrange mode on — drag cards or empty space":"Layout draft saved in this browser");return;}
-  if(event.target.id==="map-toggle-inspector"||event.target.id==="map-inspector-close"){setMapInspectorCollapsed(!mapInspectorCollapsed);showToast(mapInspectorCollapsed?"Details hidden — full canvas width available":"Step details restored");return;}
+  if(event.target.id==="map-toggle-inspector"||event.target.id==="map-inspector-close"||event.target.id==="map-reopen-inspector"){setMapInspectorCollapsed(event.target.id==="map-reopen-inspector"?false:!mapInspectorCollapsed);showToast(mapInspectorCollapsed?"Details hidden — full canvas width available":"Step details restored");return;}
   if(event.target.id==="map-inspector-focus"){setMapInspectorFocused(!mapInspectorFocused);showToast(mapInspectorFocused?"Details focused — canvas hidden for a wider editing view":"Canvas restored — select any workflow step to inspect it");return;}
   if(event.target.id==="map-fullscreen"){setMapFullscreen(!mapFullscreenMode);showToast(mapFullscreenMode?"Full canvas view — press Esc to exit":"Normal canvas view restored");return;}
   if(event.target.id==="map-auto-layout"){state.map.draftLayout=structuredClone(defaultWorkflowLayout);saveState();renderSystemMap();fitMapViewport();showToast("Workflow automatically arranged — publish to save this version");return;}
