@@ -1195,13 +1195,31 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .principle-card p { margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .script-editor-form textarea { min-height: 160px; }
 .script-editor-form #script-local-body { min-height: 130px; }
-.writing-assistant-panel { margin: 16px 0 18px; }
+.writing-options-panel { margin: 16px 0 14px; }
+.writing-assistant-panel { margin: 14px 0 18px; }
 .assistant-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin-top: 16px;
 }
+.writing-context-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.writing-context-summary article {
+  min-height: 92px;
+  padding: 14px;
+  border: 1px solid rgba(57,119,246,.22);
+  border-radius: 14px;
+  background: rgba(57,119,246,.08);
+}
+.writing-context-summary strong,
+.writing-context-summary span { display: block; }
+.writing-context-summary strong { color: var(--text); font-size: 14px; }
+.writing-context-summary span { margin-top: 7px; color: var(--muted); font-size: 12px; line-height: 1.45; }
 .assistant-library {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1254,7 +1272,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .writing-empty { grid-column: 1 / -1; }
 
 @media (max-width: 1100px) {
-  .script-library-grid, .principle-grid, .assistant-grid, .assistant-library, .writing-variants { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .script-library-grid, .principle-grid, .assistant-grid, .writing-context-summary, .assistant-library, .writing-variants { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .script-command { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
@@ -1275,7 +1293,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .map-summary-card { padding: 11px; }
   .map-summary-card > span { display: none; }
   .opp-meta { flex-direction: column; gap: 5px; }
-  .script-command, .script-library-grid, .principle-grid, .assistant-grid, .assistant-library, .writing-variants { grid-template-columns: 1fr; }
+  .script-command, .script-library-grid, .principle-grid, .assistant-grid, .writing-context-summary, .assistant-library, .writing-variants { grid-template-columns: 1fr; }
   .drawer { padding: 25px 19px; }
   .drawer-actions { margin-right: -19px; margin-left: -19px; padding-right: 19px; padding-left: 19px; }
   .card-actions { flex-wrap: wrap; }

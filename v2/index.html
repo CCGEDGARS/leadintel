@@ -203,12 +203,12 @@
           <div class="card-actions"><button class="btn secondary" id="generate-script-examples" type="button">Seed approved examples</button><button class="btn primary" id="add-script-template" type="button">Add approved script</button></div>
         </div>
         <div class="notice"><strong>English master is mandatory.</strong> Use the assistant to create three local draft options, then approve one English master. Add a local-language version and mark it primary when the market requires it.</div>
-        <section class="panel writing-assistant-panel">
+        <section class="panel writing-options-panel">
           <div class="panel-title-row">
-            <div><p class="kicker">Message lab</p><h3>Draft 3 variants for a selected customer</h3></div>
-            <span class="status good">Local generator</span>
+            <div><p class="kicker">Options</p><h3>Choose the customer context first</h3></div>
+            <span class="status good">Connected to AI Writer</span>
           </div>
-          <p class="panel-copy">Choose the customer, product, format and writing logic. This creates safe draft examples locally first; no OpenAI credits are spent until you wire the approved script into Make.</p>
+          <p class="panel-copy">Select the contact, product and message settings here. The Message lab below uses this exact briefing to draft usable variants.</p>
           <div class="assistant-grid">
             <label>Customer / signal<select id="writing-opportunity" data-writing-control></select></label>
             <label>Product / offer<select id="writing-offer" data-writing-control></select></label>
@@ -217,6 +217,14 @@
             <label>Style<select id="writing-style" data-writing-control><option>Friendly</option><option>Formal</option><option>Persuasive</option><option>Storytelling</option><option>Executive/direct</option></select></label>
             <label>Language<select id="writing-language" data-writing-control><option>English</option><option>Latvian</option><option>Auto by market</option></select></label>
           </div>
+          <div class="writing-context-summary" id="writing-context-summary"></div>
+        </section>
+        <section class="panel writing-assistant-panel">
+          <div class="panel-title-row">
+            <div><p class="kicker">Message lab</p><h3>Draft 3 variants from the selected options</h3></div>
+            <span class="status good">Local generator</span>
+          </div>
+          <p class="panel-copy">Choose the writing logic, then generate draft examples locally first. No OpenAI credits are spent until you wire the approved script into Make.</p>
           <div class="assistant-library" id="writing-library"></div>
           <div class="card-actions writing-actions"><button class="btn primary" id="writing-generate" type="button">Generate 3 variants</button><button class="btn secondary" id="writing-clear" type="button">Clear drafts</button></div>
           <div class="writing-variants" id="writing-variants"></div>

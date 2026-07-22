@@ -1465,6 +1465,15 @@ function renderWritingAssistant(){
     offerSelect.innerHTML=state.offers.map(item=>`<option value="${esc(item.id)}" ${item.id===assistant.offerId?"selected":""}>${esc(item.name)}</option>`).join("");
     offerSelect.value=assistant.offerId;
   }
+  const selectedOpportunity=opportunities.find(item=>item.id===assistant.opportunityId)||opportunities[0];
+  const selectedOffer=state.offers.find(item=>item.id===assistant.offerId)||state.offers[0];
+  const contextSummary=document.getElementById("writing-context-summary");
+  if(contextSummary&&selectedOpportunity){
+    contextSummary.innerHTML=`
+      <article><strong>${esc(selectedOpportunity.contact?.name||"Decision maker")}</strong><span>${esc(selectedOpportunity.contact?.role||"Contact role")} · ${esc(selectedOpportunity.company)}</span></article>
+      <article><strong>${esc(selectedOpportunity.signalType||"Market signal")}</strong><span>${esc(selectedOpportunity.signal||"No signal selected")}</span></article>
+      <article><strong>${esc(selectedOffer?.name||"Selected offer")}</strong><span>${esc(writingAssistantLanguage(assistant))} · ${esc(assistant.style||"Friendly")} · ${esc(assistant.format||"Cold email")}</span></article>`;
+  }
   ["format","length","style","language"].forEach(key=>{
     const field=document.getElementById(`writing-${key}`);
     if(field)field.value=assistant[key]||field.value;
