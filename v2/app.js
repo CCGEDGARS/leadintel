@@ -221,6 +221,7 @@ const defaultState = {
   offers:structuredClone(DEFAULT_OFFERS),
   signalRules:structuredClone(DEFAULT_SIGNAL_RULES),
   playbooks:structuredClone(DEFAULT_PLAYBOOKS),
+  scriptLibrary:{scripts:[],principles:[]},
   customSources:[],
   sourceDrafts:{},
   ui:{controlSections:{markets:true,profile:true,offers:false,signals:false,playbooks:false},signalRulesExpanded:true},
@@ -275,6 +276,22 @@ function normalizeWorkflowLayout(saved){
   }));
 }
 function normalizeArray(value,fallback){return Array.isArray(value)&&value.length?value.filter(isRecord):structuredClone(fallback);}
+function defaultScriptPrinciples(){
+  return [
+    {id:"specific-trigger",name:"Specific observed trigger",source:"Internal communication principle",category:"Relevance",rule:"Start from one public, checkable event. Never open with a generic pitch.",active:true},
+    {id:"one-next-step",name:"One clear next step",source:"Friction-reduction principle",category:"CTA",rule:"Ask for one small action: reply, review a short outline, or book the Strategy Call.",active:true},
+    {id:"commercial-risk",name:"Commercial risk before solution",source:"Loss-aversion principle",category:"Pain",rule:"Name the likely business cost before introducing the offer.",active:true},
+    {id:"respectful-proof",name:"Proof without hype",source:"Trust-building principle",category:"Credibility",rule:"Use evidence and useful specificity instead of inflated claims.",active:true},
+    {id:"permission-cta",name:"Permission-based CTA",source:"Consultative selling principle",category:"Tone",rule:"Make it easy to say no. The message should feel useful even if they do not buy.",active:true}
+  ];
+}
+function normalizeScriptLibrary(value){
+  const source=isRecord(value)?value:{};
+  return {
+    scripts:Array.isArray(source.scripts)?source.scripts.filter(isRecord):[],
+    principles:Array.isArray(source.principles)&&source.principles.length?source.principles.filter(isRecord):defaultScriptPrinciples()
+  };
+}
 function loadState(){
   try{
     const parsed=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");
@@ -325,6 +342,7 @@ function loadState(){
       offers:normalizeArray(saved.offers,DEFAULT_OFFERS),
       signalRules:normalizeArray(saved.signalRules,DEFAULT_SIGNAL_RULES),
       playbooks:normalizeArray(saved.playbooks,DEFAULT_PLAYBOOKS),
+      scriptLibrary:normalizeScriptLibrary(saved.scriptLibrary),
       customSources:Array.isArray(saved.customSources)?saved.customSources.filter(isRecord):[],
       sourceDrafts:isRecord(saved.sourceDrafts)?saved.sourceDrafts:{},
       ui:{controlSections:{...defaultState.ui.controlSections,...controlSections},signalRulesExpanded:typeof ui.signalRulesExpanded==="boolean"?ui.signalRulesExpanded:defaultState.ui.signalRulesExpanded},
@@ -1389,6 +1407,88 @@ function syncMarketChoiceFields(){
   if(languageField)languageField.value=languages.map(item=>item.dataset.marketLanguage).join(", ");
 }
 
+function renderScripts(){
+  ensureScriptLibrary();
+  const scripts=state.scriptLibrary.scripts;
+  const active=scripts.filter(item=>item.active!==false);
+  const approved=active.filter(item=>item.status==="Approved"||item.status==="Active");
+  const missing=scripts.filter(item=>!scriptHasEnglish(item));
+  const count=document.getElementById("script-count");if(count)count.textContent=active.length;
+  const summary=document.getElementById("script-summary");
+  if(summary)summary.innerHTML=`
+    <article><strong>${active.length}</strong><span>active scripts</span></article>
+    <article><strong>${approved.length}</strong><span>approved / ready</span></article>
+    <article><strong>${missing.length}</strong><span>missing English master</span></article>
+    <article><strong>${state.scriptLibrary.principles.filter(item=>item.active!==false).length}</strong><span>writing principles</span></article>`;
+  const grid=document.getElementById("script-grid");
+  if(grid)grid.innerHTML=scripts.length?scripts.map(script=>{
+    const offer=scriptOffer(script);const signal=scriptSignal(script);const englishOk=scriptHasEnglish(script);
+    const localReady=Boolean(script.localBody?.trim());
+    return `<article class="script-card ${script.active===false?"paused":""} ${englishOk?"":"needs-master"}">
+      <div class="script-card-head"><div><span class="status ${englishOk?"good":"warn"}">${englishOk?"English master":"Needs master"}</span><h3>${esc(script.name||"Untitled script")}</h3></div><button class="btn small secondary" data-script-toggle="${esc(script.id)}">${script.active===false?"Resume":"Pause"}</button></div>
+      <div class="script-meta"><span>${esc(offer?.name||"Any offer")}</span><span>${esc(signal?.name||"Any signal")}</span><span>${esc(script.role||"Decision maker")}</span></div>
+      <div class="script-language-row"><button class="language-pill ${script.primaryLanguage==="English"?"primary":""}" data-script-primary="${esc(script.id)}" data-language="English">English master</button><button class="language-pill ${script.primaryLanguage==="Local"?"primary":""}" data-script-primary="${esc(script.id)}" data-language="Local" ${localReady?"":"disabled"}>${esc(script.localLanguage||"Local")} version</button></div>
+      <p>${esc((script.englishBody||"").split("\n").find(Boolean)||"Add an English master script before this can be used.")}</p>
+      <div class="script-actions"><button class="btn small secondary" data-script-test="${esc(script.id)}">Preview</button><button class="btn small secondary" data-script-edit="${esc(script.id)}">Edit</button><button class="btn small danger" data-script-remove="${esc(script.id)}">Delete</button></div>
+    </article>`;
+  }).join(""):`<div class="empty-state"><h3>No scripts yet</h3><p>Click “Generate examples” to create one script for each active offer and market signal.</p></div>`;
+  const principles=document.getElementById("principle-grid");
+  if(principles)principles.innerHTML=state.scriptLibrary.principles.map(item=>`<article class="principle-card ${item.active===false?"paused":""}"><strong>${esc(item.name)}</strong><span>${esc(item.category||"Principle")} · ${esc(item.source||"Internal note")}</span><p>${esc(item.rule||"")}</p></article>`).join("");
+}
+
+function openScriptEditor(id=""){
+  ensureScriptLibrary();
+  const script=state.scriptLibrary.scripts.find(item=>item.id===id)||buildScriptFromPair(state.offers.find(item=>item.active!==false),state.signalRules.find(item=>item.active!==false));
+  const offerOptions=state.offers.map(item=>`<option value="${esc(item.id)}" ${item.id===script.offerId?"selected":""}>${esc(item.name)}</option>`).join("");
+  const signalOptions=state.signalRules.map(item=>`<option value="${esc(item.id)}" ${item.id===script.signalId?"selected":""}>${esc(item.name)}</option>`).join("");
+  document.getElementById("modal-content").innerHTML=`<p class="kicker">Script library</p><h2>${id?"Edit script":"Add script"}</h2><p class="drawer-sub">The English master is the mandatory version. Local copy can be selected as primary after you review it.</p><div class="form-grid script-editor-form" data-script-editor="${esc(id||script.id)}" data-new-script="${id?"false":"true"}">
+    <label>Script name<input id="script-name" value="${esc(script.name||"")}"></label>
+    <label>Status<select id="script-status">${["Draft","Review","Approved","Active"].map(status=>`<option ${status===(script.status||"Review")?"selected":""}>${status}</option>`).join("")}</select></label>
+    <label>Offer<select id="script-offer">${offerOptions}</select></label>
+    <label>Signal<select id="script-signal">${signalOptions}</select></label>
+    <label>Role<input id="script-role" value="${esc(script.role||"Decision maker")}"></label>
+    <label>Primary language<select id="script-primary-language"><option value="English" ${script.primaryLanguage!=="Local"?"selected":""}>English master</option><option value="Local" ${script.primaryLanguage==="Local"?"selected":""}>Local version</option></select></label>
+    <label class="wide">English subject<input id="script-english-subject" value="${esc(script.englishSubject||"")}"></label>
+    <label class="wide">English master body<textarea id="script-english-body">${esc(script.englishBody||"")}</textarea></label>
+    <label>Local language<input id="script-local-language" value="${esc(script.localLanguage||localLanguageForScripts())}"></label>
+    <label class="wide">Local subject<input id="script-local-subject" value="${esc(script.localSubject||"")}"></label>
+    <label class="wide">Local body<textarea id="script-local-body">${esc(script.localBody||"")}</textarea></label>
+  </div><div class="message-route"><strong>Available placeholders</strong><span>{{company}}, {{first_name}}, {{signal}}, {{signal_type}}, {{offer}}, {{booking_link}}</span></div><div class="card-actions" style="margin-top:14px"><button class="btn secondary" id="cancel-script-editor">Cancel</button><button class="btn primary" id="save-script-template">Save script</button></div>`;
+  openModal();
+}
+
+function saveScriptFromEditor(){
+  const editor=document.querySelector("[data-script-editor]");if(!editor)return;
+  const id=editor.dataset.scriptEditor||makeId("script");const newScript=editor.dataset.newScript==="true";
+  const script=newScript?{id}:state.scriptLibrary.scripts.find(item=>item.id===id);
+  if(!script)return;
+  script.name=document.getElementById("script-name").value.trim()||"Untitled script";
+  script.status=document.getElementById("script-status").value;
+  script.offerId=document.getElementById("script-offer").value;
+  script.signalId=document.getElementById("script-signal").value;
+  script.role=document.getElementById("script-role").value.trim()||"Decision maker";
+  script.primaryLanguage=document.getElementById("script-primary-language").value;
+  script.englishSubject=document.getElementById("script-english-subject").value.trim();
+  script.englishBody=document.getElementById("script-english-body").value.trim();
+  script.localLanguage=document.getElementById("script-local-language").value.trim()||localLanguageForScripts();
+  script.localSubject=document.getElementById("script-local-subject").value.trim();
+  script.localBody=document.getElementById("script-local-body").value.trim();
+  script.active=script.active!==false;
+  script.updatedAt=formatNow();
+  if(!scriptHasEnglish(script)){script.status="Draft";script.primaryLanguage="English";showToast("English master required before approval");}
+  if(newScript)state.scriptLibrary.scripts.push(script);
+  saveState();closeModal();renderScripts();showToast("Script saved");
+}
+
+function previewScript(id){
+  const script=state.scriptLibrary.scripts.find(item=>item.id===id);if(!script)return;
+  const sample=opportunities.find(o=>o.primaryOffer===scriptOffer(script)?.name)||opportunities[0];
+  const subject=fillTemplate(selectedScriptSubject(script,sample,matchingPlaybook(sample)),sample);
+  const body=applyBookingInvitation(fillTemplate(selectedScriptBody(script,sample,matchingPlaybook(sample)),sample),sample,matchingPlaybook(sample));
+  document.getElementById("modal-content").innerHTML=`<p class="kicker">Script preview</p><h2>${esc(script.name)}</h2><p class="drawer-sub">Sample company: ${esc(sample.company)} · ${esc(selectedScriptLanguage(script,sample,matchingPlaybook(sample)))}</p><textarea class="message-box">Subject: ${esc(subject)}\n\n${esc(body)}</textarea><div class="card-actions" style="margin-top:12px"><button class="btn primary" id="copy-message">Copy preview</button></div>`;
+  openModal();
+}
+
 function renderCRM(){
   ensureCrmRecords();
   const allRecords=opportunities.map(o=>({o,record:state.crm.records[o.id]}));
@@ -1437,6 +1537,93 @@ function applyBookingInvitation(body,o,playbook){
   if(body.includes(state.scheduling.bookingUrl))return body;
   const cta=fillTemplate(state.scheduling.ctaCopy,o);const signoff=body.search(/\n\n(?:Best|Regards|Kind regards|Sincerely),/i);
   return signoff>=0?`${body.slice(0,signoff).trim()}\n\n${cta}\n\n${body.slice(signoff).trim()}`:`${body.trim()}\n\n${cta}`;
+}
+
+function ensureScriptLibrary(){
+  if(!isRecord(state.scriptLibrary))state.scriptLibrary={scripts:[],principles:defaultScriptPrinciples()};
+  if(!Array.isArray(state.scriptLibrary.scripts))state.scriptLibrary.scripts=[];
+  if(!Array.isArray(state.scriptLibrary.principles)||!state.scriptLibrary.principles.length)state.scriptLibrary.principles=defaultScriptPrinciples();
+}
+function localLanguageForScripts(){
+  return activeMarket().languages?.find(language=>language!=="English")||state.settings.internalLanguage||"Latvian";
+}
+function scriptKey(offerId,signalId){return `${offerId||"any"}:${signalId||"any"}`;}
+function scriptEnglishBody(offer,signal){
+  const owner=state.businessProfile.owner||"Edgars";
+  return `Hi {{first_name}},\n\nI noticed this public signal about {{company}}: {{signal}}\n\nThat usually points to a moment where ${offer?.name||"the right sales system"} can help, especially if the team needs to turn the change into a clear sales process, message or next action.\n\nWould it be useful if I sent a short outline, or should we compare notes in a focused 30-minute Strategy Call?\n\nBest,\n${owner}`;
+}
+function scriptLocalBody(offer,signal){
+  const owner=state.businessProfile.owner||"Edgars";
+  const language=localLanguageForScripts();
+  if(language==="Latvian")return `Sveiki, {{first_name}},\n\nPamanīju publisku signālu par {{company}}: {{signal}}\n\nŠādos brīžos bieži ir svarīgi ātri sakārtot pārdošanas procesu, vēstījumu vai nākamo praktisko soli. Tāpēc ${offer?.name||"šis risinājums"} varētu būt aktuāls.\n\nJa tas šobrīd ir svarīgi, varu atsūtīt īsu ideju vai arī varam to pārrunāt 30 minūšu Strategy Call.\n\nAr cieņu,\n${owner}`;
+  return "";
+}
+function buildScriptFromPair(offer,signal){
+  const local=localLanguageForScripts();
+  return {
+    id:makeId("script",`${offer?.name||"offer"}-${signal?.name||"signal"}`),
+    name:`${offer?.name||"Offer"} · ${signal?.name||"Signal"}`,
+    offerId:offer?.id||"",
+    signalId:signal?.id||"",
+    role:"Decision maker",
+    channel:"Email",
+    stage:"First outreach",
+    status:"Review",
+    active:true,
+    primaryLanguage:"English",
+    localLanguage:local,
+    englishSubject:`${signal?.name||"Relevant signal"} at {{company}}`,
+    englishBody:scriptEnglishBody(offer,signal),
+    localSubject:local==="Latvian"?`${signal?.name||"Aktuāls signāls"} · {{company}}`:"",
+    localBody:scriptLocalBody(offer,signal),
+    principles:["specific-trigger","one-next-step","permission-cta"],
+    updatedAt:formatNow()
+  };
+}
+function generateScriptExamples(){
+  ensureScriptLibrary();
+  const activeOffers=state.offers.filter(item=>item.active!==false);
+  const activeSignals=state.signalRules.filter(item=>item.active!==false);
+  const existing=new Set(state.scriptLibrary.scripts.map(script=>scriptKey(script.offerId,script.signalId)));
+  let added=0;
+  activeOffers.forEach(offer=>activeSignals.forEach(signal=>{
+    const key=scriptKey(offer.id,signal.id);
+    if(existing.has(key))return;
+    state.scriptLibrary.scripts.push(buildScriptFromPair(offer,signal));
+    existing.add(key);added+=1;
+  }));
+  saveState();renderScripts();showToast(added?`${added} script examples generated`:"All offer/signal scripts already exist");
+}
+function scriptOffer(script){return state.offers.find(item=>item.id===script.offerId);}
+function scriptSignal(script){return state.signalRules.find(item=>item.id===script.signalId);}
+function scriptHasEnglish(script){return Boolean(script.englishSubject?.trim()&&script.englishBody?.trim());}
+function scriptReady(script){return Boolean(script?.active!==false&&scriptHasEnglish(script)&&["Approved","Active"].includes(script.status));}
+function matchingScriptForOpportunity(o,playbook=null){
+  ensureScriptLibrary();
+  const offer=state.offers.find(item=>item.name===o.primaryOffer)||state.offers.find(item=>item.id===playbook?.offerId);
+  const text=`${o.signalType} ${o.signal}`.toLowerCase();
+  const signal=state.signalRules.find(item=>String(item.keywords||"").split(",").some(keyword=>keyword.trim()&&text.includes(keyword.trim().toLowerCase())))||state.signalRules.find(item=>item.id===playbook?.signalId);
+  return state.scriptLibrary.scripts.find(item=>scriptReady(item)&&item.offerId===offer?.id&&item.signalId===signal?.id)
+    ||state.scriptLibrary.scripts.find(item=>scriptReady(item)&&item.offerId===offer?.id)
+    ||state.scriptLibrary.scripts.find(item=>scriptReady(item)&&item.signalId===signal?.id)
+    ||null;
+}
+function selectedScriptLanguage(script,o={},playbook=null){
+  if(!script)return resolvedOutreachLanguage(o,playbook);
+  const route=resolvedOutreachLanguage(o,playbook);
+  if(script.primaryLanguage==="Local"&&script.localBody?.trim())return script.localLanguage||route;
+  if(route!=="English"&&script.localBody?.trim()&&script.primaryLanguage!=="English")return script.localLanguage||route;
+  return "English";
+}
+function selectedScriptSubject(script,o={},playbook=null){
+  if(!script)return "";
+  const lang=selectedScriptLanguage(script,o,playbook);
+  return lang==="English"?script.englishSubject:(script.localSubject||script.englishSubject);
+}
+function selectedScriptBody(script,o={},playbook=null){
+  if(!script)return "";
+  const lang=selectedScriptLanguage(script,o,playbook);
+  return lang==="English"?script.englishBody:(script.localBody||script.englishBody);
 }
 
 function isPersonalEmail(contact={}){
@@ -1621,15 +1808,16 @@ function openEmailPreview(){
 function openMessage(id){
   const o=opportunities.find(item=>item.id===id);if(!o)return;
   const playbook=matchingPlaybook(o);
+  const script=matchingScriptForOpportunity(o,playbook);
   const saved=state.outreachDrafts[o.id];
-  const subject=saved?.subject||fillTemplate(playbook?.subject||`${o.signalType} at {{company}}`,o);
-  const templateBody=fillTemplate(playbook?.body||`Hi {{first_name}},\n\nI noticed {{signal}}\n\nWould it be useful if I sent a short outline of how {{offer}} could support {{company}}?\n\nBest,\n${state.businessProfile.owner||"Edgars"}`,o);
+  const subject=saved?.subject||fillTemplate(script?selectedScriptSubject(script,o,playbook):(playbook?.subject||`${o.signalType} at {{company}}`),o);
+  const templateBody=fillTemplate(script?selectedScriptBody(script,o,playbook):(playbook?.body||`Hi {{first_name}},\n\nI noticed {{signal}}\n\nWould it be useful if I sent a short outline of how {{offer}} could support {{company}}?\n\nBest,\n${state.businessProfile.owner||"Edgars"}`),o);
   const body=applyBookingInvitation(saved?.body||templateBody,o,playbook);
   const message=`Subject: ${subject}\n\n${body}`;
   const decision=automationDecision(o,playbook);
   const language=resolvedOutreachLanguage(o,playbook);
   const bookingState=shouldIncludeBooking(o,playbook)?`${state.scheduling.eventName} link included`:`Booking link: ${playbook?.ctaMode||"Include in initial email"}`;
-  document.getElementById("modal-content").innerHTML=`<p class="kicker">Predefined script · ${esc(playbook?.channel||"Email")}</p><h2>${esc(o.company)}</h2><p class="drawer-sub">${esc(playbook?.name||"Default playbook")} · ${esc(languageModeLabel())}: ${esc(language)} · ${esc(decision.route)}</p><div class="message-route"><strong>${esc(decision.mode)}</strong><span>${decision.reasons.length?esc(decision.reasons.join(" · ")):"All current safety checks pass"}</span></div><div class="message-route"><strong>Language route</strong><span>${esc(languageModeLabel())} · Manual script language: ${esc(playbook?.language||"English")} · Output: ${esc(language)}</span></div><div class="booking-state"><span>◷</span><div><strong>${esc(bookingState)}</strong><small>${esc(state.scheduling.duration)} minutes · ${esc(state.scheduling.platform)} · Calendly availability</small></div></div><textarea class="message-box" data-draft-id="${esc(o.id)}">${esc(message)}</textarea><div class="card-actions" style="margin-top:12px"><button class="btn secondary" id="copy-message">Copy draft</button><button class="btn primary" data-status-action="Draft ready" data-id="${o.id}">Save to outreach queue</button></div>`;
+  document.getElementById("modal-content").innerHTML=`<p class="kicker">Predefined script · ${esc(playbook?.channel||"Email")}</p><h2>${esc(o.company)}</h2><p class="drawer-sub">${esc(script?.name||playbook?.name||"Default playbook")} · ${esc(languageModeLabel())}: ${esc(script?selectedScriptLanguage(script,o,playbook):language)} · ${esc(decision.route)}</p><div class="message-route"><strong>${script?"Script Library source":"Playbook fallback"}</strong><span>${script?"Approved workspace script used before Make delivery.":"No matching approved script yet; using the legacy playbook body."}</span></div><div class="message-route"><strong>${esc(decision.mode)}</strong><span>${decision.reasons.length?esc(decision.reasons.join(" · ")):"All current safety checks pass"}</span></div><div class="message-route"><strong>Language route</strong><span>${esc(languageModeLabel())} · Output: ${esc(script?selectedScriptLanguage(script,o,playbook):language)}</span></div><div class="booking-state"><span>◷</span><div><strong>${esc(bookingState)}</strong><small>${esc(state.scheduling.duration)} minutes · ${esc(state.scheduling.platform)} · Calendly availability</small></div></div><textarea class="message-box" data-draft-id="${esc(o.id)}">${esc(message)}</textarea><div class="card-actions" style="margin-top:12px"><button class="btn secondary" id="copy-message">Copy draft</button><button class="btn primary" data-status-action="Draft ready" data-id="${o.id}">Save to outreach queue</button></div>`;
   openModal();
 }
 
@@ -1649,7 +1837,7 @@ function switchView(name){
   document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id===`view-${name}`));
   document.querySelectorAll(".nav-item[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===name));
   const today=new Intl.DateTimeFormat("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric",timeZone:"Europe/Riga"}).format(new Date());
-  const labels={map:["Research automation","System Map"],control:["Editable operating context","Control Centre"],today:[today,`Good morning · ${state.workspace.name}`],signals:["Evidence stream","Market signals"],companies:["Opportunity memory","Company dossiers"],crm:["Commercial pipeline","Practical CRM"],contacts:["Verified business data","Contact list"],outreach:["Controlled delivery","Outreach queue"],sources:["Monitoring network","Source health"],runs:["Automation audit","Daily runs"],settings:["Operating rules","Research settings"]};
+  const labels={map:["Research automation","System Map"],control:["Editable operating context","Control Centre"],today:[today,`Good morning · ${state.workspace.name}`],signals:["Evidence stream","Market signals"],scripts:["Script intelligence","Approved scripts"],companies:["Opportunity memory","Company dossiers"],crm:["Commercial pipeline","Practical CRM"],contacts:["Verified business data","Contact list"],outreach:["Controlled delivery","Outreach queue"],sources:["Monitoring network","Source health"],runs:["Automation audit","Daily runs"],settings:["Operating rules","Research settings"]};
   const [kicker,title]=labels[name]||labels.map;document.getElementById("view-kicker").textContent=kicker;document.getElementById("view-title").textContent=title;
   document.getElementById("sidebar").classList.remove("open");window.scrollTo(0,0);
 }
@@ -1675,7 +1863,7 @@ document.addEventListener("keydown",event=>{
 });
 
 function renderAll(){
-  ensureCrmRecords();renderSystemMap();renderControlCentre();renderMetrics();renderOpportunities();renderSignals();renderCompanies();renderCRM();renderContacts();renderOutreach();renderSources();renderRuns();renderRuntimeStatus();
+  ensureCrmRecords();ensureScriptLibrary();renderSystemMap();renderControlCentre();renderMetrics();renderOpportunities();renderSignals();renderScripts();renderCompanies();renderCRM();renderContacts();renderOutreach();renderSources();renderRuns();renderRuntimeStatus();
   document.getElementById("setting-email").value=state.settings.emailCount;
   document.getElementById("setting-app").value=state.settings.appCount;
   document.getElementById("setting-score").value=state.settings.minScore;
@@ -1746,6 +1934,27 @@ document.addEventListener("click",async event=>{
     const rule=state.signalRules.find(item=>item.id===deleteSignalRule.dataset.deleteSignalRule);if(!rule)return;
     if(!window.confirm(`Delete signal rule “${rule.name}”?`))return;
     state.signalRules=state.signalRules.filter(item=>item.id!==rule.id);state.playbooks=state.playbooks.filter(item=>item.signalId!==rule.id);saveState();renderSignals();renderControlCentre();showToast("Signal rule deleted");return;
+  }
+  if(event.target.id==="generate-script-examples"){generateScriptExamples();return;}
+  if(event.target.id==="add-script-template"){openScriptEditor();return;}
+  if(event.target.id==="save-script-template"){saveScriptFromEditor();return;}
+  if(event.target.id==="cancel-script-editor"){closeModal();return;}
+  const editScript=event.target.closest("[data-script-edit]");if(editScript){openScriptEditor(editScript.dataset.scriptEdit);return;}
+  const testScript=event.target.closest("[data-script-test]");if(testScript){previewScript(testScript.dataset.scriptTest);return;}
+  const toggleScript=event.target.closest("[data-script-toggle]");if(toggleScript){
+    const script=state.scriptLibrary.scripts.find(item=>item.id===toggleScript.dataset.scriptToggle);if(!script)return;
+    script.active=script.active===false;script.updatedAt=formatNow();saveState();renderScripts();showToast(script.active?"Script resumed":"Script paused");return;
+  }
+  const removeScript=event.target.closest("[data-script-remove]");if(removeScript){
+    const script=state.scriptLibrary.scripts.find(item=>item.id===removeScript.dataset.scriptRemove);if(!script)return;
+    if(!window.confirm(`Delete script “${script.name||"Untitled script"}”?`))return;
+    state.scriptLibrary.scripts=state.scriptLibrary.scripts.filter(item=>item.id!==script.id);
+    saveState();renderScripts();showToast("Script deleted");return;
+  }
+  const primaryScript=event.target.closest("[data-script-primary]");if(primaryScript){
+    const script=state.scriptLibrary.scripts.find(item=>item.id===primaryScript.dataset.scriptPrimary);if(!script)return;
+    if(primaryScript.dataset.language==="Local"&&!script.localBody?.trim()){showToast("Add local copy before making it primary");return;}
+    script.primaryLanguage=primaryScript.dataset.language;script.updatedAt=formatNow();saveState();renderScripts();showToast(`${primaryScript.dataset.language==="Local"?script.localLanguage:"English"} set as primary`);return;
   }
   const contactFilter=event.target.closest("[data-contact-filter]");if(contactFilter){currentContactFilter=contactFilter.dataset.contactFilter;renderContacts();return;}
   const marketProfile=event.target.closest("[data-market-profile]");if(marketProfile){

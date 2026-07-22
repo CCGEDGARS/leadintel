@@ -25,6 +25,7 @@
         <button class="nav-item" data-view="control"><span>◈</span>Control centre</button>
         <button class="nav-item active" data-view="today"><span>◉</span>Today <b id="today-count">5</b></button>
         <button class="nav-item" data-view="signals"><span>⌁</span>Signals <b id="signal-count">24</b></button>
+        <button class="nav-item" data-view="scripts"><span>✍</span>Scripts <b id="script-count">0</b></button>
         <button class="nav-item" data-view="companies"><span>▦</span>Companies</button>
         <button class="nav-item" data-view="crm"><span>▤</span>CRM <b id="crm-count">0</b></button>
         <button class="nav-item" data-view="contacts"><span>◎</span>Contacts <b id="contact-count">5</b></button>
@@ -195,6 +196,21 @@
         <div class="table-card"><table><thead><tr><th>Signal</th><th>Company</th><th>Type</th><th>Date</th><th>Confidence</th><th>Status</th></tr></thead><tbody id="signals-body"></tbody></table></div>
       </section>
 
+      <section class="view" id="view-scripts">
+        <div class="section-head">
+          <div><p class="kicker">Script intelligence</p><h2>Approved message library</h2></div>
+          <div class="card-actions"><button class="btn secondary" id="generate-script-examples" type="button">Generate examples</button><button class="btn primary" id="add-script-template" type="button">Add script</button></div>
+        </div>
+        <div class="notice"><strong>English master is mandatory.</strong> Every outreach script needs an approved English version first. Add a local-language version and mark it primary when the market requires it.</div>
+        <div class="script-command" id="script-summary"></div>
+        <div class="script-library-grid" id="script-grid"></div>
+        <section class="panel script-principles-panel">
+          <div class="panel-title-row"><div><p class="kicker">Internal writing library</p><h3>Principles behind the scripts</h3></div><span class="status good">Local notes</span></div>
+          <p class="panel-copy">Use these as compact internal guidance cards. They are principles and short summaries, not copied book text.</p>
+          <div class="principle-grid" id="principle-grid"></div>
+        </section>
+      </section>
+
       <section class="view" id="view-companies">
         <div class="section-head"><div><p class="kicker">Opportunity memory</p><h2>Company dossiers</h2></div><input class="search" id="company-search" placeholder="Search companies…"></div>
         <div class="company-grid" id="company-grid"></div>
@@ -245,7 +261,7 @@
           <div class="panel"><h3>Workspace profile</h3><label>Workspace ID<input id="setting-workspace-id" value="edgars-latvia"></label><label>Workspace name<input id="setting-workspace-name" value="Edgars · Latvia"></label><label>Active market<select id="setting-market"></select></label><p class="panel-copy" id="setting-market-summary">Choose a market here. Edit exact countries, languages and source rules in the Control centre.</p></div>
           <div class="panel"><h3>Daily delivery</h3><label>Morning email opportunities<input id="setting-email" type="number" min="1" max="5" value="3"></label><label>App daily shortlist<input id="setting-app" type="number" min="3" max="10" value="5"></label><label>Delivery time<input type="time" value="07:00"></label></div>
           <div class="panel"><h3>Qualification</h3><label>Minimum opportunity score<input id="setting-score" type="number" min="1" max="10" step=".1" value="7"></label><label>Maximum signal age<select><option>30 days</option><option>14 days</option><option>60 days</option></select></label><label>Evidence rule<select><option>1 primary or 2 independent sources</option></select></label></div>
-          <div class="panel"><h3>Language & scripts</h3><label>Outreach language mode<select id="setting-language-mode"><option value="auto-market">Auto by market</option><option value="latvian-only">Latvian only</option><option value="english-only">English only</option><option value="bilingual-lv-en">Bilingual: Latvian first, English fallback</option></select></label><label>Internal notes language<select id="setting-internal-language"><option>English</option><option>Latvian</option></select></label><label>Fallback outreach language<select id="setting-fallback-language"><option>English</option><option>Latvian</option></select></label><p class="panel-copy">AI uses this policy to choose the language route. The actual scripts stay manually editable in Control centre → Outreach playbooks.</p></div>
+          <div class="panel"><h3>Language & scripts</h3><label>Outreach language mode<select id="setting-language-mode"><option value="auto-market">Auto by market</option><option value="latvian-only">Latvian only</option><option value="english-only">English only</option><option value="bilingual-lv-en">Bilingual: Latvian first, English fallback</option></select></label><label>Internal notes language<select id="setting-internal-language"><option>English</option><option>Latvian</option></select></label><label>Fallback outreach language<select id="setting-fallback-language"><option>English</option><option>Latvian</option></select></label><p class="panel-copy">AI uses this policy to choose the language route. Approved message copy lives in the Scripts workspace; routing rules stay in Control centre → Outreach playbooks.</p></div>
           <div class="panel"><h3>Outreach automation</h3><label class="toggle-row"><span>Safe automatic route<small>Only pre-approved scripts that pass every gate</small></span><input id="setting-auto-outreach" type="checkbox" checked></label><label>Maximum automatic emails per day<input id="setting-outreach-limit" type="number" min="3" max="5" value="5"></label><label class="toggle-row"><span>Verified work email only<small>Personal and predicted addresses always require review</small></span><input type="checkbox" checked disabled></label><label class="toggle-row"><span>Stop on suppression or unsubscribe<small>Applied before every delivery attempt</small></span><input type="checkbox" checked disabled></label></div>
           <div class="panel"><h3>Scheduling & meetings</h3><label>Calendly booking URL<input id="setting-booking-url" type="url" value="https://calendly.com/edgars-7go/strategy-call"></label><label>Event name<input id="setting-booking-name" value="Strategy Call"></label><label>Booking invitation copy<textarea id="setting-booking-cta">If this is relevant, choose a convenient time for a focused 30-minute Strategy Call: {{booking_link}}</textarea></label><div class="connection"><span>Meeting format</span><b>30 min · Zoom</b></div><div class="connection"><span>Booking → CRM webhook</span><b id="status-booking-webhook" class="pending">Not connected</b></div></div>
           <div class="panel"><h3>Connection status</h3><div class="connection"><span>Google Sheets</span><b id="status-sheets">Configured</b></div><div class="connection"><span>Make automation</span><b id="status-make" class="pending">Endpoint needed</b></div><div class="connection"><span>Apollo enrichment</span><b id="status-apollo" class="pending">Secure key needed</b></div><div class="connection"><span>Calendly event</span><b id="status-calendly">Configured</b></div><div class="connection"><span>Zoom in Calendly</span><b id="status-zoom">Configured</b></div><div class="connection"><span>Email sender</span><b id="status-sender" class="pending">Not connected</b></div></div>
@@ -272,6 +288,6 @@
   </div>
 
   <div class="toast" id="toast"></div>
-  <script src="app.js?v=company-source-policy-01"></script>
+  <script src="app.js?v=scripts-library-02"></script>
 </body>
 </html>
