@@ -81,6 +81,20 @@ const DEFAULT_PLAYBOOKS=[
   {id:"sales-hiring-book",name:"New sales leader · Digital Sales Book",offerId:"digital-sales-book",signalId:"sales-hiring",role:"Sales leader",channel:"Email",language:"English",sendMode:"Approval required",ctaMode:"Include in initial email",minScore:8,dailyLimit:3,requireHighConfidence:true,autoApproved:false,subject:"A practical sales system for {{company}}",body:"Hi {{first_name}},\n\nI noticed the recent {{signal_type}} at {{company}}. This kind of change often creates an immediate need for consistent messaging, onboarding and execution standards.\n\nI help commercial teams build a practical Digital Sales Book that managers and sellers can use every day. Would a short outline tailored to {{company}} be useful?\n\nBest,\nEdgars",active:true},
   {id:"crm-ai-integration",name:"CRM/AI signal · Integration",offerId:"ai-sales-integration",signalId:"crm-ai",role:"Commercial or digital leader",channel:"Email",language:"English",sendMode:"Approval required",ctaMode:"Include in initial email",minScore:8,dailyLimit:3,requireHighConfidence:true,autoApproved:false,subject:"Turning {{company}}'s AI/CRM initiative into a working sales process",body:"Hi {{first_name}},\n\nI saw the recent {{signal_type}} at {{company}}. AI and CRM projects usually create value only when the sales process, data and follow-up routines are designed together.\n\nI help teams translate that goal into a practical implementation plan. Would a one-page diagnostic for {{company}} be useful?\n\nBest,\nEdgars",active:true}
 ];
+const DEFAULT_WRITING_SOURCES=[
+  {id:"behavioral-risk",category:"Behavioural Psychology",title:"Risk reversal",active:true,principle:"People move faster when the perceived cost of inaction is concrete and the next step feels safe.",prompt:"Name the business risk gently, then offer a low-pressure next step."},
+  {id:"behavioral-ease",category:"Behavioural Psychology",title:"Cognitive ease",active:true,principle:"Clear, specific messages feel more trustworthy than clever or abstract messages.",prompt:"Use short sentences, one visible trigger and one clear decision."},
+  {id:"behavioral-commitment",category:"Behavioural Psychology",title:"Small commitment",active:true,principle:"A small yes is easier than a big meeting request when trust is still forming.",prompt:"Ask for permission, a short reply, or a focused Strategy Call only when the fit is obvious."},
+  {id:"copy-pas",category:"Sales Copy Writing",title:"Problem · Agitate · Solve",active:true,principle:"Move from observed problem to business consequence to practical solution.",prompt:"Connect the signal to a commercial pain, then position the offer as a working system."},
+  {id:"copy-aida",category:"Sales Copy Writing",title:"Attention · Interest · Desire · Action",active:true,principle:"Earn attention with relevance, build interest with specificity, end with one action.",prompt:"Lead with the public signal and finish with a single call-to-action."},
+  {id:"copy-value",category:"Sales Copy Writing",title:"Value proposition clarity",active:true,principle:"The buyer should understand who it helps, what changes and why now.",prompt:"Mention the team, the business change and the concrete outcome."},
+  {id:"influence-proof",category:"Influence and Persuasion",title:"Specific proof",active:true,principle:"Credibility comes from evidence and restraint, not big claims.",prompt:"Use one proof point from the signal and avoid unsupported promises."},
+  {id:"influence-authority",category:"Influence and Persuasion",title:"Useful authority",active:true,principle:"Authority works best when it is practical, relevant and not boastful.",prompt:"Frame Edgars as a practical operator helping sales teams execute better."},
+  {id:"influence-reciprocity",category:"Influence and Persuasion",title:"Give first",active:true,principle:"A useful diagnostic or outline creates goodwill before asking for time.",prompt:"Offer a short outline or observation before asking for a meeting."},
+  {id:"story-before-after",category:"Storytelling",title:"Before · after contrast",active:true,principle:"Stories clarify change: what is messy now, what becomes easier after the system exists.",prompt:"Show the before/after in one sentence without dramatizing."},
+  {id:"story-customer-mirror",category:"Storytelling",title:"Customer mirror",active:true,principle:"The buyer should see their real situation reflected back accurately.",prompt:"Use their company, role, signal and likely next pressure."},
+  {id:"story-moment",category:"Storytelling",title:"Concrete moment",active:true,principle:"A message is stronger when it points to a specific moment, not a generic need.",prompt:"Anchor the script in the detected signal date, role, hiring, procurement or growth event."}
+];
 
 const demoOpportunities = [
   {
@@ -222,7 +236,12 @@ const defaultState = {
   offers:structuredClone(DEFAULT_OFFERS),
   signalRules:structuredClone(DEFAULT_SIGNAL_RULES),
   playbooks:structuredClone(DEFAULT_PLAYBOOKS),
-  scriptLibrary:{scripts:[],principles:[]},
+  scriptLibrary:{
+    scripts:[],
+    principles:[],
+    sources:structuredClone(DEFAULT_WRITING_SOURCES),
+    assistant:{opportunityId:"",offerId:"",format:"Cold email",length:"Short",style:"Friendly",language:"English",variants:[]}
+  },
   customSources:[],
   sourceDrafts:{},
   ui:{controlSections:{markets:true,profile:true,offers:false,signals:false,playbooks:false},signalRulesExpanded:true},
@@ -288,9 +307,20 @@ function defaultScriptPrinciples(){
 }
 function normalizeScriptLibrary(value){
   const source=isRecord(value)?value:{};
+  const assistant=isRecord(source.assistant)?source.assistant:{};
   return {
     scripts:Array.isArray(source.scripts)?source.scripts.filter(isRecord):[],
-    principles:Array.isArray(source.principles)&&source.principles.length?source.principles.filter(isRecord):defaultScriptPrinciples()
+    principles:Array.isArray(source.principles)&&source.principles.length?source.principles.filter(isRecord):defaultScriptPrinciples(),
+    sources:Array.isArray(source.sources)&&source.sources.length?source.sources.filter(isRecord):structuredClone(DEFAULT_WRITING_SOURCES),
+    assistant:{
+      opportunityId:typeof assistant.opportunityId==="string"?assistant.opportunityId:"",
+      offerId:typeof assistant.offerId==="string"?assistant.offerId:"",
+      format:typeof assistant.format==="string"?assistant.format:"Cold email",
+      length:typeof assistant.length==="string"?assistant.length:"Short",
+      style:typeof assistant.style==="string"?assistant.style:"Friendly",
+      language:typeof assistant.language==="string"?assistant.language:"English",
+      variants:Array.isArray(assistant.variants)?assistant.variants.filter(isRecord):[]
+    }
   };
 }
 function loadState(){
@@ -1408,8 +1438,145 @@ function syncMarketChoiceFields(){
   if(languageField)languageField.value=languages.map(item=>item.dataset.marketLanguage).join(", ");
 }
 
+function writingAssistantSettings(){
+  ensureScriptLibrary();
+  return state.scriptLibrary.assistant;
+}
+function writingAssistantLanguage(settings){
+  if(settings.language==="Auto by market")return localLanguageForScripts();
+  return settings.language||"English";
+}
+function activeWritingSources(){
+  ensureScriptLibrary();
+  return state.scriptLibrary.sources.filter(item=>item.active!==false);
+}
+function renderWritingAssistant(){
+  ensureScriptLibrary();
+  const assistant=writingAssistantSettings();
+  if(!opportunities.some(item=>item.id===assistant.opportunityId))assistant.opportunityId=opportunities[0]?.id||"";
+  if(!state.offers.some(item=>item.id===assistant.offerId))assistant.offerId=state.offers.find(item=>item.active!==false)?.id||state.offers[0]?.id||"";
+  const opportunitySelect=document.getElementById("writing-opportunity");
+  if(opportunitySelect){
+    opportunitySelect.innerHTML=opportunities.map(item=>`<option value="${esc(item.id)}" ${item.id===assistant.opportunityId?"selected":""}>${esc(item.company)} · ${esc(item.signalType)}</option>`).join("");
+    opportunitySelect.value=assistant.opportunityId;
+  }
+  const offerSelect=document.getElementById("writing-offer");
+  if(offerSelect){
+    offerSelect.innerHTML=state.offers.map(item=>`<option value="${esc(item.id)}" ${item.id===assistant.offerId?"selected":""}>${esc(item.name)}</option>`).join("");
+    offerSelect.value=assistant.offerId;
+  }
+  ["format","length","style","language"].forEach(key=>{
+    const field=document.getElementById(`writing-${key}`);
+    if(field)field.value=assistant[key]||field.value;
+  });
+  const library=document.getElementById("writing-library");
+  if(library){
+    const grouped=state.scriptLibrary.sources.reduce((acc,item)=>{(acc[item.category] ||= []).push(item);return acc;},{});
+    library.innerHTML=Object.entries(grouped).map(([category,items])=>`
+      <article class="writing-source-group">
+        <h4>${esc(category)}</h4>
+        ${items.map(item=>`<label class="writing-source"><input type="checkbox" data-writing-source="${esc(item.id)}" ${item.active!==false?"checked":""}><span><strong>${esc(item.title)}</strong><small>${esc(item.principle)}</small></span></label>`).join("")}
+      </article>`).join("");
+  }
+  const variants=document.getElementById("writing-variants");
+  if(variants){
+    variants.innerHTML=assistant.variants.length?assistant.variants.map((variant,index)=>`
+      <article class="writing-variant-card">
+        <div class="script-card-head"><div><span class="status warn">Draft ${index+1}</span><h3>${esc(variant.subject)}</h3></div></div>
+        <p>${esc(variant.rationale||"")}</p>
+        <textarea class="message-box" readonly>${esc(variant.body||"")}</textarea>
+        <div class="script-actions"><button class="btn small secondary" data-writing-copy="${index}">Copy</button><button class="btn small primary" data-writing-save="${index}">Save as approved script</button></div>
+      </article>`).join(""):`<div class="empty-state writing-empty"><h3>No variants yet</h3><p>Choose the customer, product and writing sources, then generate three draft scripts.</p></div>`;
+  }
+}
+function readWritingAssistant(){
+  const assistant=writingAssistantSettings();
+  assistant.opportunityId=document.getElementById("writing-opportunity")?.value||assistant.opportunityId;
+  assistant.offerId=document.getElementById("writing-offer")?.value||assistant.offerId;
+  assistant.format=document.getElementById("writing-format")?.value||assistant.format;
+  assistant.length=document.getElementById("writing-length")?.value||assistant.length;
+  assistant.style=document.getElementById("writing-style")?.value||assistant.style;
+  assistant.language=document.getElementById("writing-language")?.value||assistant.language;
+  saveState();
+}
+function writingLengthLine(settings){
+  return settings.length==="Very short"?"Keep it to 2 short paragraphs.":settings.length==="Detailed"?"Use 4 compact paragraphs with evidence, reason, offer and next step.":settings.length==="Standard"?"Use 3 compact paragraphs.":"Use 2-3 compact paragraphs.";
+}
+function writingStyleLine(settings){
+  const map={Friendly:"Warm, useful and human.",Formal:"Precise, restrained and executive.",Persuasive:"Sharper commercial reason and stronger CTA.",Storytelling:"Use a before/after contrast around the detected signal.","Executive/direct":"Brief, direct and decision-oriented."};
+  return map[settings.style]||map.Friendly;
+}
+function writingSignalRuleForOpportunity(opportunity){
+  const text=`${opportunity.signalType} ${opportunity.signal}`.toLowerCase();
+  return state.signalRules.find(item=>String(item.keywords||"").split(",").some(keyword=>keyword.trim()&&text.includes(keyword.trim().toLowerCase())))||state.signalRules.find(item=>item.active!==false)||state.signalRules[0];
+}
+function variantTemplateSet(opportunity,offer,settings,sources){
+  const owner=state.businessProfile.owner||"Edgars";
+  const sourceLine=sources.slice(0,4).map(item=>item.title).join(" · ")||"Relevance · clarity";
+  const lengthLine=writingLengthLine(settings);
+  const styleLine=writingStyleLine(settings);
+  const language=writingAssistantLanguage(settings);
+  if(language==="Latvian"){
+    return [
+      {angle:"Diagnostic",subject:`${opportunity.signalType} pie {{company}}`,body:`Sveiki, {{first_name}},\n\nPamanīju šo publisko signālu par {{company}}: {{signal}}\n\nTas bieži nozīmē, ka komandai vajag ātri sakārtot pārdošanas procesu, vēstījumu un nākamos soļus. ${offer?.name||"Šis risinājums"} var palīdzēt pārvērst šo brīdi praktiskā darba sistēmā.\n\nJa tas ir aktuāli, varu atsūtīt īsu ideju vai pārrunāt to 30 minūšu Strategy Call.\n\nAr cieņu,\n${owner}`,rationale:`${settings.style} · ${settings.format} · ${sourceLine} · ${styleLine} ${lengthLine}`},
+      {angle:"Give-first",subject:`Īsa ideja par {{company}}`,body:`Sveiki, {{first_name}},\n\nRedzu signālu, kas var būt svarīgs {{company}}: {{signal}}\n\nMana hipotēze: šobrīd vērtīgākais būtu vienkāršs komandas process — kas jāsaka klientiem, kā kvalificēt iespējas un kā sekot līdzi izpildei. Varu sagatavot īsu 5 punktu skici, kā tas varētu izskatīties.\n\nVai tas būtu noderīgi?\n\nAr cieņu,\n${owner}`,rationale:`Give-first · ${settings.format} · ${sourceLine} · ${styleLine} ${lengthLine}`},
+      {angle:"Before-after",subject:`No signāla līdz pārdošanas sistēmai`,body:`Sveiki, {{first_name}},\n\nKad uzņēmumā parādās šāds signāls — {{signal}} — bieži rodas plaisa starp jaunu ambīciju un ikdienas pārdošanas izpildi.\n\nPirms: katrs dara pa savam. Pēc: komandai ir skaidrs process, ziņojums un nākamie soļi. Tieši šeit ${offer?.name||"praktiska pārdošanas sistēma"} var palīdzēt.\n\nJa vēlaties, varam to ātri pārbaudīt 30 minūšu Strategy Call.\n\nAr cieņu,\n${owner}`,rationale:`Storytelling · ${settings.format} · ${sourceLine} · ${styleLine} ${lengthLine}`}
+    ];
+  }
+  return [
+    {angle:"Diagnostic",subject:`${opportunity.signalType} at {{company}}`,body:`Hi {{first_name}},\n\nI noticed this public signal about {{company}}: {{signal}}\n\nThat often creates a short window where the commercial team needs clearer messaging, cleaner handovers and a practical execution rhythm. ${offer?.name||"This offer"} is designed for exactly that kind of moment.\n\nWould it be useful if I sent a short diagnostic outline, or should we compare notes in a focused 30-minute Strategy Call?\n\nBest,\n${owner}`,rationale:`${settings.style} · ${settings.format} · ${sourceLine} · ${styleLine} ${lengthLine}`},
+    {angle:"Give-first",subject:`A short idea for {{company}}`,body:`Hi {{first_name}},\n\nI saw the signal around {{company}}: {{signal}}\n\nMy working hypothesis is simple: the opportunity is not just the event itself, but how quickly the team turns it into a clear sales process, buyer message and follow-up routine. I can send a short 5-point outline for how I would approach it.\n\nWould that be useful?\n\nBest,\n${owner}`,rationale:`Give-first · ${settings.format} · ${sourceLine} · ${styleLine} ${lengthLine}`},
+    {angle:"Before-after",subject:`Turning the signal into execution`,body:`Hi {{first_name}},\n\nWhen a company shows a signal like this — {{signal}} — the risk is usually not a lack of ambition. It is the gap between the new priority and daily sales execution.\n\nBefore: different people explain the value in different ways. After: the team has one practical playbook, message and next-step rhythm. That is where ${offer?.name||"a practical sales system"} can help.\n\nIf relevant, we can explore it in a focused 30-minute Strategy Call.\n\nBest,\n${owner}`,rationale:`Storytelling · ${settings.format} · ${sourceLine} · ${styleLine} ${lengthLine}`}
+  ];
+}
+function generateWritingVariants(){
+  readWritingAssistant();
+  const assistant=writingAssistantSettings();
+  const opportunity=opportunities.find(item=>item.id===assistant.opportunityId)||opportunities[0];
+  const offer=state.offers.find(item=>item.id===assistant.offerId)||state.offers[0];
+  if(!opportunity||!offer){showToast("Choose a customer and product first");return;}
+  const sources=activeWritingSources();
+  const language=writingAssistantLanguage(assistant);
+  assistant.variants=variantTemplateSet(opportunity,offer,assistant,sources).map((variant,index)=>({
+    id:makeId("variant",`${opportunity.company}-${index}`),
+    angle:variant.angle,language,subject:fillTemplate(variant.subject,opportunity),
+    body:applyBookingInvitation(fillTemplate(variant.body,opportunity),opportunity,{ctaMode:"Include in initial email"}),
+    templateSubject:variant.subject,templateBody:variant.body,rationale:variant.rationale,sourceIds:sources.map(item=>item.id),createdAt:formatNow()
+  }));
+  saveState();renderWritingAssistant();showToast("Three script variants generated locally");
+}
+function copyWritingVariant(index){
+  const variant=writingAssistantSettings().variants[Number(index)];
+  if(!variant)return;
+  navigator.clipboard.writeText(`Subject: ${variant.subject}\n\n${variant.body}`).then(()=>showToast("Draft variant copied"));
+}
+function saveWritingVariant(index){
+  ensureScriptLibrary();
+  const assistant=writingAssistantSettings();
+  const variant=assistant.variants[Number(index)];
+  const opportunity=opportunities.find(item=>item.id===assistant.opportunityId)||opportunities[0];
+  const offer=state.offers.find(item=>item.id===assistant.offerId)||state.offers[0];
+  if(!variant||!opportunity||!offer)return;
+  const signal=writingSignalRuleForOpportunity(opportunity);
+  const language=variant.language||writingAssistantLanguage(assistant);
+  const isEnglish=language==="English";
+  const script={
+    id:makeId("script",`${offer.name}-${opportunity.company}-${variant.angle}`),
+    name:`${offer.name} · ${variant.angle}`,
+    offerId:offer.id,signalId:signal?.id||"",role:opportunity.contact?.role||"Decision maker",channel:assistant.format?.includes("LinkedIn")?"LinkedIn":"Email",stage:"First outreach",status:"Approved",active:true,primaryLanguage:isEnglish?"English":"Local",localLanguage:isEnglish?localLanguageForScripts():language,
+    englishSubject:isEnglish?variant.templateSubject:`${opportunity.signalType} at {{company}}`,
+    englishBody:isEnglish?variant.templateBody:scriptEnglishBody(offer,signal),
+    localSubject:isEnglish?"":variant.templateSubject,
+    localBody:isEnglish?"":variant.templateBody,
+    principles:variant.sourceIds||[],updatedAt:formatNow()
+  };
+  state.scriptLibrary.scripts.push(script);
+  saveState();renderScripts();showToast("Variant saved as an approved workflow script");
+}
+
 function renderScripts(){
   ensureScriptLibrary();
+  renderWritingAssistant();
   const scripts=state.scriptLibrary.scripts;
   const active=scripts.filter(item=>item.active!==false);
   const approved=active.filter(item=>item.status==="Approved"||item.status==="Active");
@@ -1420,7 +1587,7 @@ function renderScripts(){
     <article><strong>${active.length}</strong><span>active scripts</span></article>
     <article><strong>${approved.length}</strong><span>approved / ready</span></article>
     <article><strong>${missing.length}</strong><span>missing English master</span></article>
-    <article><strong>${state.scriptLibrary.principles.filter(item=>item.active!==false).length}</strong><span>writing principles</span></article>`;
+    <article><strong>${activeWritingSources().length}</strong><span>active writing sources</span></article>`;
   const grid=document.getElementById("script-grid");
   if(grid)grid.innerHTML=scripts.length?scripts.map(script=>{
     const offer=scriptOffer(script);const signal=scriptSignal(script);const englishOk=scriptHasEnglish(script);
@@ -1527,7 +1694,7 @@ function resolvedOutreachLanguage(o={},playbook=null){
   if(mode==="bilingual-lv-en")return looksLatvian&&!looksInternational?"Latvian":"English";
   return looksInternational?state.settings.outreachFallbackLanguage:localLanguage;
 }
-function fillTemplate(value,o){const first=o.contact.name.split(" ")[0]||"there";return String(value||"").replaceAll("{{company}}",o.company).replaceAll("{{first_name}}",first).replaceAll("{{signal_type}}",o.signalType).replaceAll("{{signal}}",o.signal).replaceAll("{{offer}}",o.primaryOffer).replaceAll("{{booking_link}}",state.scheduling.bookingUrl);}
+function fillTemplate(value,o){const first=(o.contact?.name||"there").split(" ")[0]||"there";return String(value||"").replaceAll("{{company}}",o.company||"the company").replaceAll("{{first_name}}",first).replaceAll("{{signal_type}}",o.signalType||"market signal").replaceAll("{{signal}}",o.signal||"the detected signal").replaceAll("{{offer}}",o.primaryOffer||"the relevant offer").replaceAll("{{booking_link}}",state.scheduling.bookingUrl);}
 function shouldIncludeBooking(o,playbook){
   const mode=playbook?.ctaMode||"Include in initial email";if(mode==="Never include"||!state.scheduling.bookingUrl)return false;
   if(mode==="Include in initial email")return true;
@@ -1541,9 +1708,19 @@ function applyBookingInvitation(body,o,playbook){
 }
 
 function ensureScriptLibrary(){
-  if(!isRecord(state.scriptLibrary))state.scriptLibrary={scripts:[],principles:defaultScriptPrinciples()};
+  if(!isRecord(state.scriptLibrary))state.scriptLibrary={scripts:[],principles:defaultScriptPrinciples(),sources:structuredClone(DEFAULT_WRITING_SOURCES),assistant:{}};
   if(!Array.isArray(state.scriptLibrary.scripts))state.scriptLibrary.scripts=[];
   if(!Array.isArray(state.scriptLibrary.principles)||!state.scriptLibrary.principles.length)state.scriptLibrary.principles=defaultScriptPrinciples();
+  if(!Array.isArray(state.scriptLibrary.sources)||!state.scriptLibrary.sources.length)state.scriptLibrary.sources=structuredClone(DEFAULT_WRITING_SOURCES);
+  if(!isRecord(state.scriptLibrary.assistant))state.scriptLibrary.assistant={};
+  const assistant=state.scriptLibrary.assistant;
+  assistant.opportunityId=assistant.opportunityId||opportunities[0]?.id||"";
+  assistant.offerId=assistant.offerId||state.offers.find(item=>item.active!==false)?.id||state.offers[0]?.id||"";
+  assistant.format=assistant.format||"Cold email";
+  assistant.length=assistant.length||"Short";
+  assistant.style=assistant.style||"Friendly";
+  assistant.language=assistant.language||"English";
+  if(!Array.isArray(assistant.variants))assistant.variants=[];
 }
 function localLanguageForScripts(){
   return activeMarket().languages?.find(language=>language!=="English")||state.settings.internalLanguage||"Latvian";
@@ -1949,7 +2126,7 @@ function supportAnswer(topic,question=""){
     ];
   }else if(topic==="find-feature"||problem.includes("find")||problem.includes("where")||problem.includes("lost")){
     steps=[
-      "Use the left navigation: System map shows workflow, Sources edits monitored sources, Signals edits market rules, Scripts edits message templates, Settings holds integrations and keys checklist.",
+      "Use the left navigation: System map shows workflow, Sources edits monitored sources, Signals edits market rules, Writing assistant creates draft scripts and stores approved message templates, Settings holds integrations and keys checklist.",
       "On System map, click any card to open its right-side details. Use Hide details or Full canvas if space is tight.",
       "If a right-side panel is closed, click another workflow card or use the restore/focus controls."
     ];
@@ -2157,6 +2334,10 @@ document.addEventListener("click",async event=>{
     if(!window.confirm(`Delete signal rule “${rule.name}”?`))return;
     state.signalRules=state.signalRules.filter(item=>item.id!==rule.id);state.playbooks=state.playbooks.filter(item=>item.signalId!==rule.id);saveState();renderSignals();renderControlCentre();showToast("Signal rule deleted");return;
   }
+  if(event.target.id==="writing-generate"){generateWritingVariants();return;}
+  if(event.target.id==="writing-clear"){const assistant=writingAssistantSettings();assistant.variants=[];saveState();renderWritingAssistant();showToast("Draft variants cleared");return;}
+  const copyWriting=event.target.closest("[data-writing-copy]");if(copyWriting){copyWritingVariant(copyWriting.dataset.writingCopy);return;}
+  const saveWriting=event.target.closest("[data-writing-save]");if(saveWriting){saveWritingVariant(saveWriting.dataset.writingSave);return;}
   if(event.target.id==="generate-script-examples"){generateScriptExamples();return;}
   if(event.target.id==="add-script-template"){openScriptEditor();return;}
   if(event.target.id==="save-script-template"){saveScriptFromEditor();return;}
@@ -2349,6 +2530,15 @@ document.addEventListener("change",async event=>{
     const market=state.marketProfiles.find(item=>item.id===event.target.value);
     const summary=document.getElementById("setting-market-summary");
     if(summary&&market)summary.textContent=`Selected pack: ${marketSummary(market)}. Click Save settings to apply it to the next research run.`;
+    return;
+  }
+  const writingControl=event.target.closest("[data-writing-control]");
+  if(writingControl){readWritingAssistant();renderWritingAssistant();return;}
+  const writingSource=event.target.closest("[data-writing-source]");
+  if(writingSource){
+    ensureScriptLibrary();
+    const source=state.scriptLibrary.sources.find(item=>item.id===writingSource.dataset.writingSource);
+    if(source){source.active=writingSource.checked;saveState();renderWritingAssistant();showToast(source.active?"Writing source enabled":"Writing source paused");}
     return;
   }
   const quickSignalCard=event.target.closest("[data-signal-rule]");
