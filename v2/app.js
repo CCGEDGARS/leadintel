@@ -1024,6 +1024,26 @@ function renderSources(){
   const customCount=pack.filter(item=>item.custom).length;
   const visibleSources=pack.filter(item=>item.custom||item.findings>0||!sourceEnabled(market,item.id));
   const standbySources=pack.filter(item=>!item.custom&&sourceEnabled(market,item.id)&&item.findings===0);
+  const companyWebsitePolicy=()=>({
+    companies:5,
+    pages:6,
+    depth:1,
+    trigger:"After qualification only",
+    purpose:"Primary evidence validation",
+    paths:["Homepage","About","Services","News/blog","Careers","Contact"]
+  });
+  const companyWebsitePolicyMarkup=()=>{
+    const policy=companyWebsitePolicy();
+    const checked=opportunities.filter(o=>o.score>=state.settings.minScore).slice(0,policy.companies);
+    return `<div class="company-source-policy" aria-label="Company website scan policy">
+      <div><strong>${policy.companies}</strong><span>top qualified companies</span></div>
+      <div><strong>${policy.pages}</strong><span>pages / company</span></div>
+      <div><strong>${policy.depth}</strong><span>click depth</span></div>
+      <div><strong>${esc(policy.trigger)}</strong><span>not discovery</span></div>
+      <p class="company-source-why"><b>Why:</b> ${esc(policy.purpose)}. Checks ${esc(policy.paths.join(", ").toLowerCase())}; avoids full-site crawls to protect Firecrawl/OpenAI spend.</p>
+      <p class="company-source-sample"><b>Next sample:</b> ${checked.length?checked.map(o=>esc(o.company)).join(" · "):"No qualified companies ready"}</p>
+    </div>`;
+  };
   const sourceCard=s=>{
     const isEnabled=sourceEnabled(market,s.id);
     const sourceUrl=safeUrl(s.url||"");
@@ -1033,13 +1053,29 @@ function renderSources(){
     const healthDetail=!isEnabled?"Excluded from the Make payload":state.runtime.mode==="demo"?"No recent live collector result":`Latest Make payload reports: ${reportedHealth}`;
     const role=s.sourceKind==="public-platform"?"Public platform · company-page signals only":"Source monitor";
     const linkLabel=sourceUrl?"Open source":"No public link";
-    return `<article class="source-card ${s.custom?"custom-source":"recommended-source"} ${isEnabled?"":"source-paused"}"><div class="opp-title-row"><h3>${esc(s.name)}</h3><span class="status ${statusClass(healthLabel)}">${esc(healthLabel)}</span></div><p><span class="mini-badge">${esc(s.country==="GLOBAL"?"Global":s.country)}</span> ${esc(s.group)} · ${esc(s.cadence)} ${s.custom?'<span class="mini-badge custom-badge">Custom</span>':""}</p><p class="source-role">${esc(role)}</p><p class="source-url">${sourceUrl?`<a href="${esc(sourceUrl)}" target="_blank" rel="noopener" aria-label="${esc(linkLabel)}: ${esc(s.name)}">${esc(linkLabel)} <span>${esc(host)} ↗</span></a>`:"<span class=\"source-link-unavailable\">No public source link — evidence comes from the qualified company URL</span>"}${s.languages?.length?` · ${esc(s.languages.join(", "))}`:""}</p><p class="source-health-note"><strong>Health:</strong> ${esc(healthDetail)}</p>${s.keywords?`<p class="source-keywords">${esc(s.keywords)}</p>`:""}<div class="source-foot"><span>${s.findings} findings today</span><div class="source-card-actions">${s.custom?`<button class="btn small secondary" data-source-test="${esc(s.id)}">Check setup</button><button class="btn small secondary" data-source-edit="${esc(s.id)}">Edit</button><button class="btn small secondary danger" data-source-delete="${esc(s.id)}">Delete</button>`:""}<button class="btn small secondary" data-source-toggle="${esc(s.id)}">${isEnabled?"Pause":"Enable"}</button></div></div></article>`;
+    const companyWebsite=s.id==="global-company";
+    return `<article class="source-card ${s.custom?"custom-source":"recommended-source"} ${companyWebsite?"company-website-source":""} ${isEnabled?"":"source-paused"}"><div class="opp-title-row"><h3>${esc(s.name)}</h3><span class="status ${statusClass(healthLabel)}">${esc(healthLabel)}</span></div><p><span class="mini-badge">${esc(s.country==="GLOBAL"?"Global":s.country)}</span> ${esc(s.group)} · ${esc(s.cadence)} ${s.custom?'<span class="mini-badge custom-badge">Custom</span>':""}</p><p class="source-role">${companyWebsite?"Proof source · qualified companies only":esc(role)}</p><p class="source-url">${sourceUrl?`<a href="${esc(sourceUrl)}" target="_blank" rel="noopener" aria-label="${esc(linkLabel)}: ${esc(s.name)}">${esc(linkLabel)} <span>${esc(host)} ↗</span></a>`:"<span class=\"source-link-unavailable\">No public source link — evidence comes from the qualified company URL</span>"}${s.languages?.length?` · ${esc(s.languages.join(", "))}`:""}</p><p class="source-health-note"><strong>Health:</strong> ${esc(healthDetail)}</p>${companyWebsite?companyWebsitePolicyMarkup():""}${s.keywords?`<p class="source-keywords">${esc(s.keywords)}</p>`:""}<div class="source-foot"><span>${s.findings} findings today</span><div class="source-card-actions">${companyWebsite?'<button class="btn small secondary" data-company-source-info>View policy</button><button class="btn small secondary" data-company-source-test>Test company URL</button>':""}${s.custom?`<button class="btn small secondary" data-source-test="${esc(s.id)}">Check setup</button><button class="btn small secondary" data-source-edit="${esc(s.id)}">Edit</button><button class="btn small secondary danger" data-source-delete="${esc(s.id)}">Delete</button>`:""}<button class="btn small secondary" data-source-toggle="${esc(s.id)}">${isEnabled?"Pause":"Enable"}</button></div></div></article>`;
   };
   document.getElementById("source-pack-summary").innerHTML=`<strong>${esc(market.name)} source network:</strong> ${enabled.length} of ${pack.length} discovery sources enabled · ${visibleSources.length} shown · ${standbySources.length} zero-result connector${standbySources.length===1?"":"s"} hidden below · ${customCount} custom. Apollo is handled in Settings as qualified-only enrichment, so it does not run as a market source. <strong>Health is reported configuration status:</strong> use an active source link to inspect the public page; a verified live check needs a successful Make/collector result with a timestamp.`;
   document.getElementById("source-grid").innerHTML=visibleSources.map(sourceCard).join("");
   document.getElementById("source-standby-count").textContent=`${standbySources.length} hidden`;
   document.getElementById("source-standby").hidden=standbySources.length===0;
   document.getElementById("source-standby-grid").innerHTML=standbySources.map(sourceCard).join("");
+}
+
+function openCompanyWebsitePolicy(){
+  const qualified=opportunities.filter(o=>o.score>=state.settings.minScore).slice(0,5);
+  document.getElementById("modal-content").innerHTML=`<p class="kicker">Primary evidence source</p><h2>Company websites scan policy</h2><p class="drawer-sub">This source is intentionally shallow and qualified-only. It should confirm business fit and evidence, not discover the whole internet.</p><div class="company-policy-modal"><article><strong>How many?</strong><span>Top 5 qualified companies per run.</span></article><article><strong>How deep?</strong><span>Depth 1, maximum 6 pages per company.</span></article><article><strong>Which pages?</strong><span>Homepage, About, Services, News/blog, Careers and Contact when available.</span></article><article><strong>Why these?</strong><span>They prove the company exists, what it sells, recent activity, fit and safe outreach context.</span></article><article><strong>Cost rule</strong><span>No full crawl. No personal email extraction. Company websites run after scoring so Firecrawl/OpenAI spend is protected.</span></article></div><div class="source-policy-list"><strong>Next companies to check</strong>${qualified.length?`<ul>${qualified.map(o=>`<li>${esc(o.company)}${o.website?` · <a href="${esc(o.website)}" target="_blank" rel="noopener">open website ↗</a>`:" · website needed"}</li>`).join("")}</ul>`:"<p>No qualified companies are ready yet.</p>"}</div><div class="card-actions" style="margin-top:14px"><button class="btn secondary" id="company-source-test-modal">Test company URL</button><button class="btn primary" id="close-preview-action">Got it</button></div>`;
+  openModal();
+}
+
+function testCompanyWebsiteSource(){
+  const sample=opportunities.find(o=>o.website)?.website||"";
+  const value=window.prompt("Paste one qualified company website URL to test the shallow scan policy:",sample)?.trim();
+  if(!value)return;
+  const url=safeUrl(value);
+  if(!url){showToast("Use a valid public HTTPS company URL");return;}
+  showToast(`Ready to scan ${new URL(url).hostname}: max 6 pages, depth 1, after qualification only`);
 }
 
 function openSourceEditor(id=""){
@@ -1542,6 +1578,8 @@ document.addEventListener("click",async event=>{
     const invalid=pack.filter(item=>item.custom&&(!safeUrl(item.url)||new URL(safeUrl(item.url)).protocol!=="https:"));
     showToast(invalid.length?`${invalid.length} custom source URL${invalid.length===1?"":"s"} need attention`:`${pack.length} enabled services configured · collector results verify live health`);return;
   }
+  if(event.target.closest("[data-company-source-info]")){openCompanyWebsitePolicy();return;}
+  if(event.target.closest("[data-company-source-test]")||event.target.id==="company-source-test-modal"){testCompanyWebsiteSource();return;}
   const sourceEdit=event.target.closest("[data-source-edit]");if(sourceEdit){openSourceEditor(sourceEdit.dataset.sourceEdit);return;}
   const sourceTest=event.target.closest("[data-source-test]");if(sourceTest){testSource(sourceTest.dataset.sourceTest);return;}
   const sourceDelete=event.target.closest("[data-source-delete]");if(sourceDelete){
