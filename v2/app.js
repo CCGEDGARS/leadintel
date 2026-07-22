@@ -1174,7 +1174,7 @@ function renderSources(){
     const role=s.sourceKind==="public-platform"?"Public platform · company-page signals only":(s.sourceRole||"Source monitor");
     const linkLabel=sourceUrl?"Open source":"No public link";
     const companyWebsite=s.id==="global-company";
-    return `<article class="source-card ${s.custom?"custom-source":"recommended-source"} ${companyWebsite?"company-website-source":""} ${isEnabled?"":"source-paused"}"><div class="opp-title-row"><h3>${esc(s.name)}</h3><span class="status ${statusClass(healthLabel)}">${esc(healthLabel)}</span></div><p><span class="mini-badge">${esc(s.country==="GLOBAL"?"Global":s.country)}</span> ${esc(s.group)} · ${esc(s.cadence)} ${s.custom?'<span class="mini-badge custom-badge">Custom</span>':""}</p><p class="source-role">${companyWebsite?"Proof source · qualified companies only":esc(role)}</p><p class="source-health-note"><strong>Layer:</strong> ${esc(s.sourceLayer||"Market")} · <strong>Cost guard:</strong> ${esc(s.costGuard||"Quality gate before paid steps")}</p><p class="source-url">${sourceUrl?`<a href="${esc(sourceUrl)}" target="_blank" rel="noopener" aria-label="${esc(linkLabel)}: ${esc(s.name)}">${esc(linkLabel)} <span>${esc(host)} ↗</span></a>`:"<span class=\"source-link-unavailable\">No public source link — evidence comes from the qualified company URL</span>"}${s.languages?.length?` · ${esc(s.languages.join(", "))}`:""}</p><p class="source-health-note"><strong>Health:</strong> ${esc(healthDetail)}</p>${companyWebsite?companyWebsitePolicyMarkup():""}${s.keywords?`<p class="source-keywords">${esc(s.keywords)}</p>`:""}<div class="source-foot"><span>${s.findings} findings today</span><div class="source-card-actions">${companyWebsite?'<button class="btn small secondary" data-company-source-info>View policy</button><button class="btn small secondary" data-company-source-test>Test company URL</button>':""}${s.custom?`<button class="btn small secondary" data-source-test="${esc(s.id)}">Check setup</button><button class="btn small secondary" data-source-edit="${esc(s.id)}">Edit</button><button class="btn small secondary danger" data-source-delete="${esc(s.id)}">Delete</button>`:""}<button class="btn small secondary" data-source-toggle="${esc(s.id)}">${isEnabled?"Pause":"Enable"}</button></div></div></article>`;
+    return `<article class="source-card ${s.custom?"custom-source":"recommended-source"} ${companyWebsite?"company-website-source":""} ${isEnabled?"":"source-paused"}" data-source-open="${esc(s.id)}" tabindex="0" role="button" aria-label="Inspect ${esc(s.name)} source details"><div class="opp-title-row"><h3>${esc(s.name)}</h3><span class="status ${statusClass(healthLabel)}">${esc(healthLabel)}</span></div><p><span class="mini-badge">${esc(s.country==="GLOBAL"?"Global":s.country)}</span> ${esc(s.group)} · ${esc(s.cadence)} ${s.custom?'<span class="mini-badge custom-badge">Custom</span>':""}</p><p class="source-role">${companyWebsite?"Proof source · qualified companies only":esc(role)}</p><p class="source-health-note"><strong>Layer:</strong> ${esc(s.sourceLayer||"Market")} · <strong>Cost guard:</strong> ${esc(s.costGuard||"Quality gate before paid steps")}</p><p class="source-url">${sourceUrl?`<a href="${esc(sourceUrl)}" target="_blank" rel="noopener" aria-label="${esc(linkLabel)}: ${esc(s.name)}">${esc(linkLabel)} <span>${esc(host)} ↗</span></a>`:"<span class=\"source-link-unavailable\">No public source link — evidence comes from the qualified company URL</span>"}${s.languages?.length?` · ${esc(s.languages.join(", "))}`:""}</p><p class="source-health-note"><strong>Health:</strong> ${esc(healthDetail)}</p>${companyWebsite?companyWebsitePolicyMarkup():""}${s.keywords?`<p class="source-keywords">${esc(s.keywords)}</p>`:""}<div class="source-foot"><span>${s.findings} findings today</span><div class="source-card-actions">${companyWebsite?'<button class="btn small secondary" data-company-source-info>View policy</button><button class="btn small secondary" data-company-source-test>Test company URL</button>':""}${s.custom?`<button class="btn small secondary" data-source-test="${esc(s.id)}">Check setup</button><button class="btn small secondary" data-source-edit="${esc(s.id)}">Edit</button><button class="btn small secondary danger" data-source-delete="${esc(s.id)}">Delete</button>`:""}<button class="btn small secondary" data-source-toggle="${esc(s.id)}">${isEnabled?"Pause":"Enable"}</button></div></div><span class="source-card-hint">Click card for details</span></article>`;
   };
   document.getElementById("source-pack-summary").innerHTML=`<strong>${esc(market.name)} source network:</strong> ${enabled.length} of ${pack.length} discovery sources enabled · ${visibleSources.length} shown · ${standbySources.length} zero-result connector${standbySources.length===1?"":"s"} hidden below · ${customCount} custom. Apollo is handled in Settings as qualified-only enrichment, so it does not run as a market source. <strong>Health is reported configuration status:</strong> use an active source link to inspect the public page; a verified live check needs a successful Make/collector result with a timestamp.`;
   document.getElementById("source-grid").innerHTML=visibleSources.map(sourceCard).join("");
@@ -1231,6 +1231,62 @@ function testSource(id){
   if(!source)return;
   if(source.custom){const url=safeUrl(source.url);if(!url||new URL(url).protocol!=="https:"){showToast(`${source.name}: invalid HTTPS URL`);return;}}
   showToast(`${source.name}: setup passed · a successful Make collector result is needed for live verification`);
+}
+
+function sourceDetailPolicy(source){
+  if(source.id==="global-company")return {
+    trigger:"After qualification only",
+    depth:"Depth 1",
+    volume:"Top 5 companies · 6 pages per company",
+    evidence:"Homepage, About, Services, News/blog, Careers and Contact",
+    cost:"No full-site crawl. Runs only after scoring to protect Firecrawl/OpenAI spend.",
+    why:"Confirms the company exists, what it sells, recent activity, fit and safe outreach context."
+  };
+  if(source.id==="global-apollo")return {
+    trigger:"After a company is qualified",
+    depth:"One enrichment lookup per company",
+    volume:"Only for the selected decision-maker shortlist",
+    evidence:"Verified business email, role, company match and LinkedIn/profile evidence when available",
+    cost:"Reserved for qualified opportunities. Not used for broad discovery.",
+    why:"Finds proven business contacts after the commercial signal is already good enough."
+  };
+  if(source.id==="global-linkedin")return {
+    trigger:"Manual verification support",
+    depth:"Open company/person profile only",
+    volume:"Three suggested decision-maker searches",
+    evidence:"Company page, public role/title match and visible profile signals",
+    cost:"Manual public review only. No automated scraping or outreach.",
+    why:"Helps you confirm the right person before sending anything."
+  };
+  return {
+    trigger:source.cadence||"Daily",
+    depth:source.custom?"Configured source page only":"Public source monitor",
+    volume:source.custom?"One approved custom source":"Recommended regional connector",
+    evidence:source.keywords||"Public business evidence related to the active signal rules",
+    cost:source.costGuard||"Quality gate before paid AI or enrichment steps",
+    why:`Supports ${source.group||"market"} signals for ${activeMarket().name}.`
+  };
+}
+
+function openSourceDetails(id){
+  const market=activeMarket();
+  const source=sourcePackForMarket(market).find(item=>item.id===id);
+  if(!source)return;
+  const isEnabled=sourceEnabled(market,source.id);
+  const url=safeUrl(source.url||"");
+  const host=url?new URL(url).hostname.replace(/^www\./,""):"No fixed public URL";
+  const role=source.id==="global-company"?"Mandatory proof":source.sourceKind==="public-platform"?"Manual verification":(source.sourceRole||sourceRoleForSource(source));
+  const layer=source.sourceLayer||source.group||"Market evidence";
+  const health=!isEnabled?"Paused":state.runtime.mode==="demo"?"Not live-tested":source.health||"Ready";
+  const policy=sourceDetailPolicy(source);
+  const actions=[
+    url?`<a class="btn secondary" href="${esc(url)}" target="_blank" rel="noopener">Open source ↗</a>`:"",
+    source.id==="global-company"?`<button class="btn secondary" data-company-source-info>View scan policy</button>`:"",
+    source.custom?`<button class="btn secondary" data-source-edit="${esc(source.id)}">Edit source</button>`:"",
+    `<button class="btn primary" data-source-toggle="${esc(source.id)}">${isEnabled?"Pause source":"Enable source"}</button>`
+  ].filter(Boolean).join("");
+  document.getElementById("modal-content").innerHTML=`<p class="kicker">Source details · ${esc(layer)}</p><h2>${esc(source.name)}</h2><p class="drawer-sub">${esc(source.group||"Public evidence")} · ${esc(source.cadence||"On demand")} · ${esc(source.country==="GLOBAL"?"Global":source.country||market.name)}</p><div class="source-detail-hero"><article><span>Status</span><strong>${esc(health)}</strong><small>${isEnabled?"Included in Make payload":"Excluded from Make payload"}</small></article><article><span>Role</span><strong>${esc(role)}</strong><small>${esc(source.activation||"Active when matching signal rules need it")}</small></article><article><span>Source link</span><strong>${esc(host)}</strong><small>${url?"Public page can be opened":"Uses qualified company URL or backend connector"}</small></article><article><span>Spend guard</span><strong>${esc(source.costGuard||"Quality gate")}</strong><small>Designed to avoid unnecessary paid lookups</small></article></div><div class="source-detail-grid"><article><strong>When does it run?</strong><p>${esc(policy.trigger)}</p></article><article><strong>How deep?</strong><p>${esc(policy.depth)}</p></article><article><strong>How many?</strong><p>${esc(policy.volume)}</p></article><article><strong>What evidence?</strong><p>${esc(policy.evidence)}</p></article><article><strong>Why this source?</strong><p>${esc(policy.why)}</p></article><article><strong>Cost rule</strong><p>${esc(policy.cost)}</p></article></div>${source.languages?.length?`<div class="notice source-detail-note"><strong>Languages:</strong> ${esc(source.languages.join(", "))}</div>`:""}${source.keywords?`<div class="notice source-detail-note"><strong>Keywords / paths:</strong> ${esc(source.keywords)}</div>`:""}<div class="card-actions source-detail-actions">${actions}<button class="btn secondary" id="close-preview-action">Close</button></div>`;
+  openModal();
 }
 
 function renderRuns(){
@@ -1600,6 +1656,10 @@ function switchView(name){
 
 document.addEventListener("keydown",event=>{
   if(event.key==="Escape"&&mapFullscreenMode){setMapFullscreen(false);return;}
+  const sourceCard=event.target.closest?.("[data-source-open]");
+  if(sourceCard&&["Enter"," "].includes(event.key)&&!event.target.closest("a,button,input,select,textarea")){
+    event.preventDefault();openSourceDetails(sourceCard.dataset.sourceOpen);return;
+  }
   const step=event.target.closest?.(".map-node");
   if(mapArrangeMode&&step&&["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(event.key)){
     event.preventDefault();const id=step.dataset.nodeId;const current=state.map.draftLayout[id];const amount=event.shiftKey?50:10;
@@ -1717,6 +1777,9 @@ document.addEventListener("click",async event=>{
     if(!Array.isArray(market.enabledSourceIds))market.enabledSourceIds=pack.map(item=>item.id);
     market.enabledSourceIds=market.enabledSourceIds.includes(sourceToggle.dataset.sourceToggle)?market.enabledSourceIds.filter(id=>id!==sourceToggle.dataset.sourceToggle):[...market.enabledSourceIds,sourceToggle.dataset.sourceToggle];
     saveState();renderSources();renderControlCentre();showToast("Source pack updated");return;
+  }
+  const sourceOpen=event.target.closest("[data-source-open]");if(sourceOpen&&!event.target.closest("a,button,input,select,textarea")){
+    openSourceDetails(sourceOpen.dataset.sourceOpen);return;
   }
   const removeMarket=event.target.closest("[data-remove-market]");if(removeMarket){
     const reset=structuredClone(MARKET_PROFILES.find(item=>item.id==="custom"));
