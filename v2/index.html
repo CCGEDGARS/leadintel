@@ -225,6 +225,10 @@
         <div class="section-head"><div><p class="kicker">Monitoring network</p><h2>Source health</h2></div><div class="card-actions source-manager-actions"><button class="btn secondary" id="test-all-sources">Check setup</button><button class="btn primary" id="add-custom-source">Add custom source</button></div></div>
         <div class="notice" id="source-pack-summary"></div>
         <div class="source-grid" id="source-grid"></div>
+        <details class="source-standby" id="source-standby">
+          <summary><span>Ready connectors with no findings</span><b id="source-standby-count">0 hidden</b></summary>
+          <div class="source-grid compact-source-grid" id="source-standby-grid"></div>
+        </details>
       </section>
 
       <section class="view" id="view-runs">

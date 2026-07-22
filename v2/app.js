@@ -31,7 +31,7 @@ const SOURCE_PACKS={
   DK:[{id:"dk-cvr",name:"CVR",url:"https://datacvr.virk.dk/",group:"Company activity",cadence:"Daily"},{id:"dk-jobindex",name:"Jobindex",url:"https://www.jobindex.dk/",group:"Jobs",cadence:"Daily"},{id:"dk-udbud",name:"Udbud.dk",url:"https://udbud.dk/",group:"Public procurement",cadence:"Daily"}],
   PL:[{id:"pl-krs",name:"KRS",url:"https://ekrs.ms.gov.pl/",group:"Company activity",cadence:"Daily"},{id:"pl-pracuj",name:"Pracuj.pl",url:"https://www.pracuj.pl/",group:"Jobs",cadence:"Daily"},{id:"pl-procurement",name:"e-Zamówienia",url:"https://ezamowienia.gov.pl/",group:"Public procurement",cadence:"Daily"}],
   DE:[{id:"de-register",name:"Handelsregister",url:"https://www.handelsregister.de/",group:"Company activity",cadence:"Daily"},{id:"de-jobs",name:"Bundesagentur für Arbeit",url:"https://www.arbeitsagentur.de/",group:"Jobs",cadence:"Daily"},{id:"de-procurement",name:"Bund.de Procurement",url:"https://www.service.bund.de/",group:"Public procurement",cadence:"Daily"}],
-  GLOBAL:[{id:"global-company",name:"Company websites",group:"Primary evidence",cadence:"On demand",sourceKind:"evidence"},{id:"global-linkedin",name:"LinkedIn public signals",url:"https://www.linkedin.com/",group:"People and hiring",cadence:"Daily",sourceKind:"public-platform"},{id:"global-apollo",name:"Apollo enrichment",url:"https://app.apollo.io/",group:"Decision-maker contacts",cadence:"Qualified only",sourceKind:"enrichment"}]
+  GLOBAL:[{id:"global-company",name:"Company websites",group:"Primary evidence",cadence:"On demand",sourceKind:"evidence"},{id:"global-linkedin",name:"LinkedIn public signals",url:"https://www.linkedin.com/",group:"People and hiring",cadence:"Daily",sourceKind:"public-platform"}]
 };
 const CRM_STAGES=["Discovered","Qualified","Contact Found","Ready for Outreach","Contacted","Replied","Meeting","Proposal","Won","Lost"];
 const DEFAULT_BUSINESS_PROFILE={owner:"Edgars Untāls",company:"Coaching & Consulting Group",summary:"B2B sales development, practical sales systems and AI implementation for commercial teams.",website:"",email:"",document:null,documentNotes:""};
@@ -967,19 +967,24 @@ function renderSources(){
   const pack=sourcePackForMarket(market);
   const enabled=pack.filter(item=>sourceEnabled(market,item.id));
   const customCount=pack.filter(item=>item.custom).length;
-  const enrichmentCount=pack.filter(item=>item.sourceKind==="enrichment").length;
-  document.getElementById("source-pack-summary").innerHTML=`<strong>${esc(market.name)} source network:</strong> ${enabled.length} of ${pack.length} services enabled · ${customCount} custom${enrichmentCount?` · ${enrichmentCount} qualified-only enrichment service`:""}. Recommended sources are protected; custom sources can be edited or deleted. <strong>Health is reported configuration status:</strong> use an active source link to inspect the public page; a verified live check needs a successful Make/collector result with a timestamp.`;
-  document.getElementById("source-grid").innerHTML=pack.map(s=>{
+  const visibleSources=pack.filter(item=>item.custom||item.findings>0||!sourceEnabled(market,item.id));
+  const standbySources=pack.filter(item=>!item.custom&&sourceEnabled(market,item.id)&&item.findings===0);
+  const sourceCard=s=>{
     const isEnabled=sourceEnabled(market,s.id);
     const sourceUrl=safeUrl(s.url||"");
     const host=sourceUrl?new URL(sourceUrl).hostname.replace(/^www\./,""):"Managed connector";
     const reportedHealth=isEnabled?s.health:"Paused";
     const healthLabel=!isEnabled?"Paused":state.runtime.mode==="demo"?"Not live-tested":reportedHealth==="Healthy"?"Reported healthy":reportedHealth;
     const healthDetail=!isEnabled?"Excluded from the Make payload":state.runtime.mode==="demo"?"No recent live collector result":`Latest Make payload reports: ${reportedHealth}`;
-    const role=s.sourceKind==="enrichment"?"Enrichment service · runs after qualification":s.sourceKind==="public-platform"?"Public platform · company-page signals only":"Source monitor";
-    const linkLabel=s.sourceKind==="enrichment"?"Open Apollo":sourceUrl?"Open source":"No public link";
+    const role=s.sourceKind==="public-platform"?"Public platform · company-page signals only":"Source monitor";
+    const linkLabel=sourceUrl?"Open source":"No public link";
     return `<article class="source-card ${s.custom?"custom-source":"recommended-source"} ${isEnabled?"":"source-paused"}"><div class="opp-title-row"><h3>${esc(s.name)}</h3><span class="status ${statusClass(healthLabel)}">${esc(healthLabel)}</span></div><p><span class="mini-badge">${esc(s.country==="GLOBAL"?"Global":s.country)}</span> ${esc(s.group)} · ${esc(s.cadence)} ${s.custom?'<span class="mini-badge custom-badge">Custom</span>':""}</p><p class="source-role">${esc(role)}</p><p class="source-url">${sourceUrl?`<a href="${esc(sourceUrl)}" target="_blank" rel="noopener" aria-label="${esc(linkLabel)}: ${esc(s.name)}">${esc(linkLabel)} <span>${esc(host)} ↗</span></a>`:"<span class=\"source-link-unavailable\">No public source link — evidence comes from the qualified company URL</span>"}${s.languages?.length?` · ${esc(s.languages.join(", "))}`:""}</p><p class="source-health-note"><strong>Health:</strong> ${esc(healthDetail)}</p>${s.keywords?`<p class="source-keywords">${esc(s.keywords)}</p>`:""}<div class="source-foot"><span>${s.findings} findings today</span><div class="source-card-actions">${s.custom?`<button class="btn small secondary" data-source-test="${esc(s.id)}">Check setup</button><button class="btn small secondary" data-source-edit="${esc(s.id)}">Edit</button><button class="btn small secondary danger" data-source-delete="${esc(s.id)}">Delete</button>`:""}<button class="btn small secondary" data-source-toggle="${esc(s.id)}">${isEnabled?"Pause":"Enable"}</button></div></div></article>`;
-  }).join("");
+  };
+  document.getElementById("source-pack-summary").innerHTML=`<strong>${esc(market.name)} source network:</strong> ${enabled.length} of ${pack.length} discovery sources enabled · ${visibleSources.length} shown · ${standbySources.length} zero-result connector${standbySources.length===1?"":"s"} hidden below · ${customCount} custom. Apollo is handled in Settings as qualified-only enrichment, so it does not run as a market source. <strong>Health is reported configuration status:</strong> use an active source link to inspect the public page; a verified live check needs a successful Make/collector result with a timestamp.`;
+  document.getElementById("source-grid").innerHTML=visibleSources.map(sourceCard).join("");
+  document.getElementById("source-standby-count").textContent=`${standbySources.length} hidden`;
+  document.getElementById("source-standby").hidden=standbySources.length===0;
+  document.getElementById("source-standby-grid").innerHTML=standbySources.map(sourceCard).join("");
 }
 
 function openSourceEditor(id=""){
