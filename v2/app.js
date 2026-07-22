@@ -213,6 +213,7 @@ let selectedMapNode = "sources";
 let mapArrangeMode=false;
 let selectedMapInspectorTab="configuration";
 let mapInspectorCollapsed=false;
+let mapInspectorFocused=false;
 let mapFullscreenMode=false;
 let mapPointerSession=null;
 let suppressMapClick=false;
@@ -666,9 +667,16 @@ function setArrangeMode(enabled){
   const button=document.getElementById("map-arrange");if(button){button.classList.toggle("active",enabled);button.setAttribute("aria-pressed",String(enabled));button.textContent=enabled?"Done arranging":"Arrange";}
 }
 function setMapInspectorCollapsed(collapsed,{refit=true}={}){
+  if(collapsed&&mapInspectorFocused)setMapInspectorFocused(false,{refit:false});
   mapInspectorCollapsed=collapsed;
   const workbench=document.querySelector(".map-workbench");workbench?.classList.toggle("inspector-collapsed",collapsed);
   const button=document.getElementById("map-toggle-inspector");if(button){button.textContent=collapsed?"Show details":"Hide details";button.setAttribute("aria-pressed",String(collapsed));button.setAttribute("aria-label",collapsed?"Show workflow details":"Hide workflow details");}
+  if(refit)requestAnimationFrame(()=>fitMapViewport(false));
+}
+function setMapInspectorFocused(focused,{refit=true}={}){
+  mapInspectorFocused=focused;
+  const workbench=document.querySelector(".map-workbench");workbench?.classList.toggle("inspector-focused",focused);
+  const button=document.getElementById("map-inspector-focus");if(button){button.textContent=focused?"Show canvas":"Focus details";button.setAttribute("aria-pressed",String(focused));button.setAttribute("aria-label",focused?"Show workflow canvas":"Focus workflow details");}
   if(refit)requestAnimationFrame(()=>fitMapViewport(false));
 }
 function setMapFullscreen(enabled,{refit=true}={}){
@@ -724,7 +732,7 @@ function renderSystemMap(){
       <span class="map-node-foot"><strong>${esc(mapMetric(node,config))}</strong><button type="button" class="map-node-open" data-step-view="${destination}" aria-label="Open ${esc(config.title)} page">Open page →</button></span>
     </div>`;
   }).join("");
-  applyMapViewport();setArrangeMode(mapArrangeMode);setMapInspectorCollapsed(mapInspectorCollapsed,{refit:false});setMapFullscreen(mapFullscreenMode,{refit:false});
+  applyMapViewport();setArrangeMode(mapArrangeMode);setMapInspectorCollapsed(mapInspectorCollapsed,{refit:false});setMapInspectorFocused(mapInspectorFocused,{refit:false});setMapFullscreen(mapFullscreenMode,{refit:false});
   if(!state.map.viewport.initialized)requestAnimationFrame(()=>fitMapViewport());
   renderMapInspector();
   const history=(state.map.history||[]).slice(0,4);
@@ -740,7 +748,7 @@ function renderMapInspector(){
   document.getElementById("map-inspector").innerHTML=`
     <div class="map-inspector-shell">
       <div class="map-inspector-top">
-        <div class="map-inspector-head"><div class="map-inspector-title"><span class="inspector-icon">${node.icon}</span><div><p class="kicker">${esc(node.type)} step · ${String(workflowNodes.indexOf(node)+1).padStart(2,"0")}</p><h2>${esc(config.title)}</h2></div></div><div class="map-inspector-head-actions"><span class="status ${statusClass(node.status)}">${esc(node.status)}</span><button class="map-inspector-close" type="button" id="map-inspector-close" aria-label="Hide workflow details">×</button></div></div>
+        <div class="map-inspector-head"><div class="map-inspector-title"><span class="inspector-icon">${node.icon}</span><div><p class="kicker">${esc(node.type)} step · ${String(workflowNodes.indexOf(node)+1).padStart(2,"0")}</p><h2>${esc(config.title)}</h2></div></div><div class="map-inspector-head-actions"><span class="status ${statusClass(node.status)}">${esc(node.status)}</span><button class="map-inspector-focus" type="button" id="map-inspector-focus" aria-pressed="${mapInspectorFocused}" aria-label="${mapInspectorFocused?"Show workflow canvas":"Focus workflow details"}">${mapInspectorFocused?"Show canvas":"Focus details"}</button><button class="map-inspector-close" type="button" id="map-inspector-close" aria-label="Hide workflow details">×</button></div></div>
         <p class="map-inspector-description">${esc(config.description)}</p>
         <div class="map-inspector-meta"><span>Last run <strong>${esc(node.lastRun)}</strong></span><span>Output <strong>${esc(mapMetric(node,config))}</strong></span>${changed?'<span><strong>Draft changed</strong></span>':''}</div>
       </div>
@@ -1445,6 +1453,7 @@ document.addEventListener("click",async event=>{
   if(event.target.id==="discard-map-drafts"){state.map.draftConfigs=structuredClone(state.map.publishedConfigs);state.map.draftLayout=structuredClone(state.map.publishedLayout);saveState();renderAll();showToast("All workflow drafts discarded");}
   if(event.target.id==="map-arrange"){setArrangeMode(!mapArrangeMode);requestAnimationFrame(()=>fitMapViewport());showToast(mapArrangeMode?"Arrange mode on — drag cards or empty space":"Layout draft saved in this browser");return;}
   if(event.target.id==="map-toggle-inspector"||event.target.id==="map-inspector-close"){setMapInspectorCollapsed(!mapInspectorCollapsed);showToast(mapInspectorCollapsed?"Details hidden — full canvas width available":"Step details restored");return;}
+  if(event.target.id==="map-inspector-focus"){setMapInspectorFocused(!mapInspectorFocused);showToast(mapInspectorFocused?"Details focused — canvas hidden for a wider editing view":"Canvas restored — select any workflow step to inspect it");return;}
   if(event.target.id==="map-fullscreen"){setMapFullscreen(!mapFullscreenMode);showToast(mapFullscreenMode?"Full canvas view — press Esc to exit":"Normal canvas view restored");return;}
   if(event.target.id==="map-auto-layout"){state.map.draftLayout=structuredClone(defaultWorkflowLayout);saveState();renderSystemMap();fitMapViewport();showToast("Workflow automatically arranged — publish to save this version");return;}
   if(event.target.id==="map-reset-layout"){state.map.draftLayout=structuredClone(state.map.publishedLayout);saveState();renderSystemMap();fitMapViewport();showToast("Layout reset to the published version");return;}
