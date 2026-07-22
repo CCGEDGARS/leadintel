@@ -81,20 +81,8 @@ const DEFAULT_PLAYBOOKS=[
   {id:"sales-hiring-book",name:"New sales leader · Digital Sales Book",offerId:"digital-sales-book",signalId:"sales-hiring",role:"Sales leader",channel:"Email",language:"English",sendMode:"Approval required",ctaMode:"Include in initial email",minScore:8,dailyLimit:3,requireHighConfidence:true,autoApproved:false,subject:"A practical sales system for {{company}}",body:"Hi {{first_name}},\n\nI noticed the recent {{signal_type}} at {{company}}. This kind of change often creates an immediate need for consistent messaging, onboarding and execution standards.\n\nI help commercial teams build a practical Digital Sales Book that managers and sellers can use every day. Would a short outline tailored to {{company}} be useful?\n\nBest,\nEdgars",active:true},
   {id:"crm-ai-integration",name:"CRM/AI signal · Integration",offerId:"ai-sales-integration",signalId:"crm-ai",role:"Commercial or digital leader",channel:"Email",language:"English",sendMode:"Approval required",ctaMode:"Include in initial email",minScore:8,dailyLimit:3,requireHighConfidence:true,autoApproved:false,subject:"Turning {{company}}'s AI/CRM initiative into a working sales process",body:"Hi {{first_name}},\n\nI saw the recent {{signal_type}} at {{company}}. AI and CRM projects usually create value only when the sales process, data and follow-up routines are designed together.\n\nI help teams translate that goal into a practical implementation plan. Would a one-page diagnostic for {{company}} be useful?\n\nBest,\nEdgars",active:true}
 ];
-const DEFAULT_WRITING_SOURCES=[
-  {id:"behavioral-risk",category:"Behavioural Psychology",title:"Risk reversal",active:true,principle:"People move faster when the perceived cost of inaction is concrete and the next step feels safe.",prompt:"Name the business risk gently, then offer a low-pressure next step."},
-  {id:"behavioral-ease",category:"Behavioural Psychology",title:"Cognitive ease",active:true,principle:"Clear, specific messages feel more trustworthy than clever or abstract messages.",prompt:"Use short sentences, one visible trigger and one clear decision."},
-  {id:"behavioral-commitment",category:"Behavioural Psychology",title:"Small commitment",active:true,principle:"A small yes is easier than a big meeting request when trust is still forming.",prompt:"Ask for permission, a short reply, or a focused Strategy Call only when the fit is obvious."},
-  {id:"copy-pas",category:"Sales Copy Writing",title:"Problem · Agitate · Solve",active:true,principle:"Move from observed problem to business consequence to practical solution.",prompt:"Connect the signal to a commercial pain, then position the offer as a working system."},
-  {id:"copy-aida",category:"Sales Copy Writing",title:"Attention · Interest · Desire · Action",active:true,principle:"Earn attention with relevance, build interest with specificity, end with one action.",prompt:"Lead with the public signal and finish with a single call-to-action."},
-  {id:"copy-value",category:"Sales Copy Writing",title:"Value proposition clarity",active:true,principle:"The buyer should understand who it helps, what changes and why now.",prompt:"Mention the team, the business change and the concrete outcome."},
-  {id:"influence-proof",category:"Influence and Persuasion",title:"Specific proof",active:true,principle:"Credibility comes from evidence and restraint, not big claims.",prompt:"Use one proof point from the signal and avoid unsupported promises."},
-  {id:"influence-authority",category:"Influence and Persuasion",title:"Useful authority",active:true,principle:"Authority works best when it is practical, relevant and not boastful.",prompt:"Frame Edgars as a practical operator helping sales teams execute better."},
-  {id:"influence-reciprocity",category:"Influence and Persuasion",title:"Give first",active:true,principle:"A useful diagnostic or outline creates goodwill before asking for time.",prompt:"Offer a short outline or observation before asking for a meeting."},
-  {id:"story-before-after",category:"Storytelling",title:"Before · after contrast",active:true,principle:"Stories clarify change: what is messy now, what becomes easier after the system exists.",prompt:"Show the before/after in one sentence without dramatizing."},
-  {id:"story-customer-mirror",category:"Storytelling",title:"Customer mirror",active:true,principle:"The buyer should see their real situation reflected back accurately.",prompt:"Use their company, role, signal and likely next pressure."},
-  {id:"story-moment",category:"Storytelling",title:"Concrete moment",active:true,principle:"A message is stronger when it points to a specific moment, not a generic need.",prompt:"Anchor the script in the detected signal date, role, hiring, procurement or growth event."}
-];
+const WRITING_SOURCE_CATEGORIES=["Behavioural Psychology","Sales Copy Writing","Influence and Persuasion","Storytelling"];
+const DEFAULT_WRITING_SOURCES=[];
 
 const demoOpportunities = [
   {
@@ -1183,7 +1171,7 @@ function renderContacts(){
     <td>${o.contact.emailStatus==="Predicted"?'<span class="status warn">Hidden until verified</span>':`<a class="evidence" href="mailto:${esc(o.contact.email)}">${esc(o.contact.email)}</a>`}</td>
     <td><span class="status ${statusClass(o.contact.emailStatus)}">${esc(o.contact.emailStatus)}</span><br><small>${o.contact.emailType==="personal"?"Personal · exact person/company/role match":esc(o.contact.source)}</small><br><small class="linkedin-note">LinkedIn is for role verification, not automated outreach.</small></td>
     <td><select data-list-state="${o.id}"><option ${state.listStates[o.id]==="Research"?"selected":""}>Research</option><option ${state.listStates[o.id]==="Eligible"?"selected":""}>Eligible</option><option ${state.listStates[o.id]==="Manual review"?"selected":""}>Manual review</option><option ${state.listStates[o.id]==="Suppressed"?"selected":""}>Suppressed</option><option ${state.listStates[o.id]==="Unsubscribed"?"selected":""}>Unsubscribed</option></select></td>
-    <td><div class="card-actions contact-actions">${["Verified","Strong match"].includes(o.contact.emailStatus)?"":`<button class="btn small primary" data-enrich="${o.id}" ${o.contact.enrichmentStatus==="processing"?"disabled":""}>${o.contact.enrichmentStatus==="processing"?"Checking…":"Find work email · 1 lookup"}</button>${backendSession?.role==="owner"?`<button class="btn small secondary" data-enrich-personal="${o.id}">Personal exception</button>`:""}`}<a class="btn small secondary linkedin-action" href="${esc(linkedInLookupUrl(o))}" target="_blank" rel="noopener">Known LI/profile ↗</a><button class="btn small secondary" data-open="${o.id}">Dossier</button><div class="linkedin-targets" aria-label="Suggested LinkedIn contact searches">${linkedinTargets.map(target=>`<a href="${esc(target.url)}" target="_blank" rel="noopener">${esc(target.role)} ↗</a>`).join("")}</div></div></td></tr>`;}).join("");
+    <td><div class="card-actions contact-actions">${["Verified","Strong match"].includes(o.contact.emailStatus)?"":`<button class="btn small primary" data-enrich="${o.id}" ${o.contact.enrichmentStatus==="processing"?"disabled":""}>${o.contact.enrichmentStatus==="processing"?"Checking…":"Find work email · 1 lookup"}</button>${backendSession?.role==="owner"?`<button class="btn small secondary" data-enrich-personal="${o.id}">Personal exception</button>`:""}`}<a class="btn small secondary linkedin-action" href="${esc(linkedInLookupUrl(o))}" target="_blank" rel="noopener">Known LI/profile ↗</a><button class="btn small primary" data-write-contact="${o.id}">Write</button><button class="btn small secondary" data-open="${o.id}">Dossier</button><div class="linkedin-targets" aria-label="Suggested LinkedIn contact searches">${linkedinTargets.map(target=>`<a href="${esc(target.url)}" target="_blank" rel="noopener">${esc(target.role)} ↗</a>`).join("")}</div></div></td></tr>`;}).join("");
 }
 
 function renderSources(){
@@ -1448,7 +1436,21 @@ function writingAssistantLanguage(settings){
 }
 function activeWritingSources(){
   ensureScriptLibrary();
+  state.scriptLibrary.sources=state.scriptLibrary.sources.filter(item=>item.custom||item.uploaded||item.userAdded);
   return state.scriptLibrary.sources.filter(item=>item.active!==false);
+}
+function cleanWritingSources(){
+  ensureScriptLibrary();
+  state.scriptLibrary.sources=state.scriptLibrary.sources.filter(item=>item.custom||item.uploaded||item.userAdded);
+}
+function writingSourceDetail(item){
+  if(item.uploaded){
+    const parts=["PDF source"];
+    if(item.fileName)parts.push(item.fileName);
+    if(Number(item.fileSize))parts.push(formatBytes(Number(item.fileSize)));
+    return parts.join(" · ");
+  }
+  return item.principle||"Source note";
 }
 function renderWritingAssistant(){
   ensureScriptLibrary();
@@ -1480,12 +1482,15 @@ function renderWritingAssistant(){
   });
   const library=document.getElementById("writing-library");
   if(library){
-    const grouped=state.scriptLibrary.sources.reduce((acc,item)=>{(acc[item.category] ||= []).push(item);return acc;},{});
-    library.innerHTML=Object.entries(grouped).map(([category,items])=>`
+    cleanWritingSources();
+    library.innerHTML=WRITING_SOURCE_CATEGORIES.map(category=>{
+      const items=state.scriptLibrary.sources.filter(item=>item.category===category);
+      return `
       <article class="writing-source-group">
         <h4>${esc(category)}</h4>
-        ${items.map(item=>`<label class="writing-source"><input type="checkbox" data-writing-source="${esc(item.id)}" ${item.active!==false?"checked":""}><span><strong>${esc(item.title)}</strong><small>${esc(item.principle)}</small></span></label>`).join("")}
-      </article>`).join("");
+        ${items.length?items.map(item=>`<label class="writing-source"><input type="checkbox" data-writing-source="${esc(item.id)}" ${item.active!==false?"checked":""}><span><strong>${esc(item.title)}</strong><small>${esc(writingSourceDetail(item))}</small></span></label>`).join(""):`<div class="writing-source-empty"><span class="empty-checkbox"></span><span><strong>No source uploaded</strong><small>Upload a PDF above, save it, then tick it here.</small></span></div>`}
+      </article>`;
+    }).join("");
   }
   const variants=document.getElementById("writing-variants");
   if(variants){
@@ -1507,6 +1512,27 @@ function readWritingAssistant(){
   assistant.style=document.getElementById("writing-style")?.value||assistant.style;
   assistant.language=document.getElementById("writing-language")?.value||assistant.language;
   saveState();
+}
+function saveWritingUploadedSource(){
+  ensureScriptLibrary();
+  const fileInput=document.getElementById("writing-source-file");
+  const titleInput=document.getElementById("writing-source-title");
+  const categoryInput=document.getElementById("writing-source-category");
+  const file=fileInput?.files?.[0];
+  if(!file){showToast("Choose a PDF source first");return;}
+  if(!/\.pdf$/i.test(file.name||"")&&!/pdf/i.test(file.type||"")){showToast("Upload a PDF file");return;}
+  const category=WRITING_SOURCE_CATEGORIES.includes(categoryInput?.value)?categoryInput.value:WRITING_SOURCE_CATEGORIES[0];
+  const title=(titleInput?.value||"").trim()||file.name.replace(/\.pdf$/i,"");
+  state.scriptLibrary.sources.push({
+    id:makeId("source",title),
+    category,title,active:true,custom:true,uploaded:true,userAdded:true,
+    fileName:file.name,fileSize:file.size,uploadedAt:new Date().toISOString(),
+    principle:"Uploaded PDF reference registered locally. Use this source as guidance when drafting; full text extraction can be connected later.",
+    prompt:`Use the uploaded ${category} source “${title}” as writing guidance.`
+  });
+  if(fileInput)fileInput.value="";
+  if(titleInput)titleInput.value="";
+  saveState();renderWritingAssistant();showToast("PDF source saved and activated");
 }
 function writingLengthLine(settings){
   return settings.length==="Very short"?"Keep it to 2 short paragraphs.":settings.length==="Detailed"?"Use 4 compact paragraphs with evidence, reason, offer and next step.":settings.length==="Standard"?"Use 3 compact paragraphs.":"Use 2-3 compact paragraphs.";
@@ -1721,6 +1747,7 @@ function ensureScriptLibrary(){
   if(!Array.isArray(state.scriptLibrary.scripts))state.scriptLibrary.scripts=[];
   if(!Array.isArray(state.scriptLibrary.principles)||!state.scriptLibrary.principles.length)state.scriptLibrary.principles=defaultScriptPrinciples();
   if(!Array.isArray(state.scriptLibrary.sources)||!state.scriptLibrary.sources.length)state.scriptLibrary.sources=structuredClone(DEFAULT_WRITING_SOURCES);
+  state.scriptLibrary.sources=state.scriptLibrary.sources.filter(item=>item.custom||item.uploaded||item.userAdded);
   if(!isRecord(state.scriptLibrary.assistant))state.scriptLibrary.assistant={};
   const assistant=state.scriptLibrary.assistant;
   assistant.opportunityId=assistant.opportunityId||opportunities[0]?.id||"";
@@ -2135,7 +2162,7 @@ function supportAnswer(topic,question=""){
     ];
   }else if(topic==="find-feature"||problem.includes("find")||problem.includes("where")||problem.includes("lost")){
     steps=[
-      "Use the left navigation: System map shows workflow, Sources edits monitored sources, Signals edits market rules, AI Writer creates draft scripts and stores approved message templates, Settings holds integrations and keys checklist.",
+      "Use the left navigation: System map shows workflow, Sources edits monitored sources, Signals edits market rules, AI Writing creates draft scripts and stores approved message templates, Settings holds integrations and keys checklist.",
       "On System map, click any card to open its right-side details. Use Hide details or Full canvas if space is tight.",
       "If a right-side panel is closed, click another workflow card or use the restore/focus controls."
     ];
@@ -2292,6 +2319,21 @@ document.addEventListener("click",async event=>{
   if(event.target.id==="backend-logout-btn"){await logoutBackend();return;}
   const enrich=event.target.closest("[data-enrich]");if(enrich){await enrichOpportunity(enrich.dataset.enrich);return;}
   const enrichPersonal=event.target.closest("[data-enrich-personal]");if(enrichPersonal){await enrichOpportunity(enrichPersonal.dataset.enrichPersonal,{allowPersonal:true});return;}
+  const writeContact=event.target.closest("[data-write-contact]");
+  if(writeContact){
+    ensureScriptLibrary();
+    const opportunity=opportunities.find(item=>item.id===writeContact.dataset.writeContact)||opportunities[0];
+    const assistant=writingAssistantSettings();
+    assistant.opportunityId=opportunity?.id||assistant.opportunityId||opportunities[0]?.id||"";
+    const matchingOffer=state.offers.find(item=>item.name===opportunity?.primaryOffer)||state.offers.find(item=>item.active!==false)||state.offers[0];
+    assistant.offerId=matchingOffer?.id||assistant.offerId;
+    assistant.variants=[];
+    saveState();
+    switchView("scripts");
+    renderWritingAssistant();
+    showToast(`${opportunity?.contact?.name||"Demo contact"} loaded in AI Writing`);
+    return;
+  }
   if(event.target.id==="profile-pdf-open"){
     try{
       const file=await getProfileDocument();
@@ -2343,6 +2385,7 @@ document.addEventListener("click",async event=>{
     if(!window.confirm(`Delete signal rule “${rule.name}”?`))return;
     state.signalRules=state.signalRules.filter(item=>item.id!==rule.id);state.playbooks=state.playbooks.filter(item=>item.signalId!==rule.id);saveState();renderSignals();renderControlCentre();showToast("Signal rule deleted");return;
   }
+  if(event.target.id==="writing-source-save"){saveWritingUploadedSource();return;}
   if(event.target.id==="writing-generate"){generateWritingVariants();return;}
   if(event.target.id==="writing-clear"){const assistant=writingAssistantSettings();assistant.variants=[];saveState();renderWritingAssistant();showToast("Draft variants cleared");return;}
   const copyWriting=event.target.closest("[data-writing-copy]");if(copyWriting){copyWritingVariant(copyWriting.dataset.writingCopy);return;}

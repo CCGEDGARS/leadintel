@@ -28,7 +28,7 @@
         <button class="nav-item" data-view="companies"><span>▦</span>Companies</button>
         <button class="nav-item" data-view="crm"><span>▤</span>CRM <b id="crm-count">0</b></button>
         <button class="nav-item" data-view="contacts"><span>◎</span>Contacts <b id="contact-count">5</b></button>
-        <button class="nav-item" data-view="scripts"><span>✍</span>AI Writer <b id="script-count">0</b></button>
+        <button class="nav-item" data-view="scripts"><span>✍</span>AI Writing <b id="script-count">0</b></button>
         <button class="nav-item" data-view="outreach"><span>✎</span>Outreach <b id="outreach-count">0</b></button>
         <button class="nav-item" data-view="sources"><span>◫</span>Sources</button>
         <button class="nav-item" data-view="runs"><span>↻</span>Run history</button>
@@ -199,16 +199,16 @@
 
       <section class="view" id="view-scripts">
         <div class="section-head">
-          <div><p class="kicker">AI Writer</p><h2>Generate customer scripts</h2></div>
+          <div><p class="kicker">AI Writing</p><h2>Generate customer scripts</h2></div>
           <div class="card-actions"><button class="btn secondary" id="generate-script-examples" type="button">Seed approved examples</button><button class="btn primary" id="add-script-template" type="button">Add approved script</button></div>
         </div>
         <div class="notice"><strong>English master is mandatory.</strong> Use the assistant to create three local draft options, then approve one English master. Add a local-language version and mark it primary when the market requires it.</div>
         <section class="panel writing-options-panel">
           <div class="panel-title-row">
             <div><p class="kicker">Options</p><h3>Choose the customer context first</h3></div>
-            <span class="status good">Connected to AI Writer</span>
+            <span class="status good">Connected to AI Writing</span>
           </div>
-          <p class="panel-copy">Select the contact, product and message settings here. The Message lab below uses this exact briefing to draft usable variants.</p>
+          <p class="panel-copy">Select the contact, product and message settings here. The Library below uses this exact briefing to draft usable variants.</p>
           <div class="assistant-grid">
             <label>Customer / signal<select id="writing-opportunity" data-writing-control></select></label>
             <label>Product / offer<select id="writing-offer" data-writing-control></select></label>
@@ -221,21 +221,27 @@
         </section>
         <section class="panel writing-assistant-panel">
           <div class="panel-title-row">
-            <div><p class="kicker">Message lab</p><h3>Draft 3 variants from the selected options</h3></div>
-            <span class="status good">Local generator</span>
+            <div><p class="kicker">Library</p><h3>Activate source notes for this message</h3></div>
+            <span class="status good">Local sources</span>
           </div>
-          <p class="panel-copy">Choose the writing logic, then generate draft examples locally first. No OpenAI credits are spent until you wire the approved script into Make.</p>
+          <p class="panel-copy">Upload PDF references into one of the four source categories, tick the sources you want to use, then generate three local draft examples before spending any AI credits in Make.</p>
+          <div class="writing-upload-row">
+            <label class="file-drop">Upload PDF source<input id="writing-source-file" type="file" accept="application/pdf,.pdf"></label>
+            <input id="writing-source-title" type="text" placeholder="Source title, e.g. Sales psychology notes">
+            <select id="writing-source-category">
+              <option>Behavioural Psychology</option>
+              <option>Sales Copy Writing</option>
+              <option>Influence and Persuasion</option>
+              <option>Storytelling</option>
+            </select>
+            <button class="btn secondary" id="writing-source-save" type="button">Save source</button>
+          </div>
           <div class="assistant-library" id="writing-library"></div>
           <div class="card-actions writing-actions"><button class="btn primary" id="writing-generate" type="button">Generate 3 variants</button><button class="btn secondary" id="writing-clear" type="button">Clear drafts</button></div>
           <div class="writing-variants" id="writing-variants"></div>
         </section>
         <div class="script-command" id="script-summary"></div>
         <div class="script-library-grid" id="script-grid"></div>
-        <section class="panel script-principles-panel">
-          <div class="panel-title-row"><div><p class="kicker">Internal writing library</p><h3>Principles behind the scripts</h3></div><span class="status good">Local notes</span></div>
-          <p class="panel-copy">Use these as compact internal guidance cards. They are principles and short summaries, not copied book text.</p>
-          <div class="principle-grid" id="principle-grid"></div>
-        </section>
       </section>
 
       <section class="view" id="view-companies">
