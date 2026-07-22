@@ -1681,6 +1681,78 @@ function renderOutreach(){
   document.getElementById("outreach-audit").innerHTML=audit.length?`<div class="audit-list">${audit.map(item=>`<article><i></i><div><strong>${esc(item.event)}</strong><span>${esc(item.detail||item.opportunityId)}</span></div><small>${esc(item.date||"Current evaluation")}</small></article>`).join("")}</div>`:'<p class="panel-copy">No outreach decisions have been recorded.</p>';
 }
 
+function integrationDirectory(){
+  const calendlyUrl=state.scheduling?.bookingUrl||"https://calendly.com/edgars-7go/strategy-call";
+  const makeReady=Boolean(state.integrations.runUrl);
+  return [
+    {id:"google",name:"Google Sheets / Drive",status:"Workbook ready",tone:"good",url:"https://drive.google.com/drive/my-drive",purpose:"Command centre workbook, source tables, raw findings and qualified leads.",setup:"Make Google Sheets connection must point to the production workbook.",credential:"Google OAuth connection inside Make; GOOGLE_SHEET_ID for rebuild notes."},
+    {id:"make",name:"Make automation",status:makeReady?"Configured":"Endpoint needed",tone:makeReady?"good":"bad",url:"https://eu2.make.com/",purpose:"Runs the workflow: webhook, sheet rows, Firecrawl search, OpenAI scoring, JSON parse and row writes.",setup:"Import the current blueprint, reconnect modules, then paste the protected run webhook in Settings.",credential:"Make connections for Google Sheets, HTTP API key, OpenAI and Gmail."},
+    {id:"firecrawl",name:"Firecrawl",status:makeReady?"Used by Make":"Make credential",tone:makeReady?"good":"warn",url:"https://www.firecrawl.dev/app",purpose:"Searches and scrapes public evidence only after source and quality rules limit the request.",setup:"Add the Firecrawl API key to the Make HTTP module or a private backend proxy.",credential:"FIRECRAWL_API_KEY stored privately; never in GitHub Pages."},
+    {id:"openai",name:"OpenAI",status:makeReady?"Used by Make":"Make credential",tone:makeReady?"good":"warn",url:"https://platform.openai.com/api-keys",purpose:"Classifies signals, scores opportunities and generates approved scripts from evidence.",setup:"Keep the fast model and 900-token cap unless quality requires more.",credential:"OPENAI_API_KEY stored in Make/OpenAI connection or backend secret."},
+    {id:"apollo",name:"Apollo",status:enrichmentControl.configured?"Securely connected":"Secure key needed",tone:enrichmentControl.configured?"good":"warn",url:"https://app.apollo.io/",purpose:"Finds and verifies decision-maker work emails after a company passes qualification.",setup:"Run only after the score gate; no phones by default; personal emails require owner review.",credential:"APOLLO_API_KEY stored in the backend or Make credential."},
+    {id:"gmail",name:"Gmail sender",status:state.outreachAutomation.senderConnected?"Connected":"Not connected",tone:state.outreachAutomation.senderConnected?"good":"warn",url:"https://mail.google.com/",purpose:"Sends only approved/eligible outreach or keeps drafts queued when disconnected.",setup:"Connect Gmail in Make only when you are ready for delivery controls.",credential:"Gmail OAuth connection inside Make; no password stored here."},
+    {id:"calendly",name:"Calendly Strategy Call",status:state.scheduling?.bookingUrl?"Configured":"Link needed",tone:state.scheduling?.bookingUrl?"good":"warn",url:calendlyUrl,purpose:"Booking CTA for a focused 30-minute Zoom strategy call.",setup:"Keep one public booking link in Settings and insert it into approved scripts.",credential:"CALENDLY_BOOKING_URL is public; Calendly login remains in Calendly."},
+    {id:"zoom",name:"Zoom",status:state.scheduling?.platform==="Zoom"?"Configured":"Review",tone:state.scheduling?.platform==="Zoom"?"good":"warn",url:"https://zoom.us/profile",purpose:"Meeting room provider connected through the Calendly event.",setup:"Confirm the Calendly event location stays set to Zoom.",credential:"Zoom account connected in Calendly; no API key needed for this MVP."},
+    {id:"github",name:"GitHub Pages",status:"Published",tone:"good",url:"https://github.com/CCGEDGARS/leadintel",purpose:"Hosts the public front-end for the operator app.",setup:"Push changes to the leadintel repository; GitHub Pages serves /leadintel/v2/.",credential:"GitHub repository access, not stored in this app."},
+    {id:"backend",name:"Secure backend / Cloudflare",status:backendSession?"Signed in":"Sign-in needed",tone:backendSession?"good":"warn",url:"https://dash.cloudflare.com/",purpose:"Protects private endpoints, audit logs, Apollo keys and run validation.",setup:"Use Worker secrets or backend env vars for all private keys.",credential:"Worker secrets and admin password hash; never raw secrets in the browser."},
+    {id:"linkedin",name:"LinkedIn / Sales Navigator",status:"Manual review",tone:"warn",url:"https://www.linkedin.com/sales/",purpose:"Manual profile confirmation and relationship research after Apollo identifies likely contacts.",setup:"Use buttons to open profiles; avoid scraping or automatic connection requests.",credential:"Owner account only; do not store LinkedIn credentials."}
+  ];
+}
+
+function integrationStatusLabel(tone){
+  return tone==="good"?"Ready":tone==="bad"?"Action needed":"Review";
+}
+
+function credentialChecklist(){
+  const hasBackend=Boolean(backendSession);
+  return [
+    {name:"OPENAI_API_KEY",required:"Required",place:"Make OpenAI connection or backend secret",purpose:"AI triage, scoring and script generation.",ok:Boolean(state.integrations.runUrl)},
+    {name:"FIRECRAWL_API_KEY",required:"Required",place:"Make HTTP API-key credential or backend secret",purpose:"Public search and shallow scrape requests.",ok:Boolean(state.integrations.runUrl)},
+    {name:"APOLLO_API_KEY",required:"Required for contacts",place:"Cloudflare Worker secret or Make credential",purpose:"Verified work-email enrichment after qualification.",ok:enrichmentControl.configured},
+    {name:"MAKE_RUN_WEBHOOK_URL",required:"Required",place:"This browser settings + private backend validation",purpose:"Starts the protected research scenario.",ok:Boolean(state.integrations.runUrl)},
+    {name:"LEADINTEL_SNAPSHOT_URL",required:"Recommended",place:"This browser settings or backend env",purpose:"Loads the latest live data snapshot.",ok:Boolean(state.integrations.dataUrl)},
+    {name:"GOOGLE_SHEET_ID",required:"Required",place:"Make module settings / rebuild notes",purpose:"Points Make to the command-centre workbook.",ok:true},
+    {name:"LEADINTEL_ADMIN_EMAIL",required:"Required for backend",place:"Cloudflare/backend auth config",purpose:"Owner sign-in identity.",ok:hasBackend},
+    {name:"LEADINTEL_ADMIN_PASSWORD_HASH",required:"Required for backend",place:"Cloudflare Worker secret",purpose:"Authentication without storing a raw password.",ok:hasBackend},
+    {name:"CALENDLY_BOOKING_URL",required:"Required for CTA",place:"Settings → Scheduling & meetings",purpose:"Adds the Strategy Call link to approved emails.",ok:Boolean(state.scheduling?.bookingUrl)},
+    {name:"GMAIL_SENDER_CONNECTION",required:"Before sending",place:"Make Gmail module connection",purpose:"Controlled delivery or draft creation.",ok:state.outreachAutomation.senderConnected},
+    {name:"CLOUDFLARE_WORKER_URL",required:"Recommended",place:"Backend deployment output",purpose:"Private API proxy, audit and budget controls.",ok:Boolean(BACKEND_API_URL)},
+    {name:"GITHUB_PAGES_REPO",required:"Required for publishing",place:"GitHub repo settings",purpose:"Hosts the app UI.",ok:true},
+    {name:"LINKEDIN_SALES_NAV_ACCOUNT",required:"Optional/manual",place:"Owner account, never app storage",purpose:"Manual contact profile review.",ok:false}
+  ];
+}
+
+function credentialEnvTemplate(){
+  return credentialChecklist().map(item=>`${item.name}=${item.name==="CALENDLY_BOOKING_URL"?(state.scheduling?.bookingUrl||""):""}`).join("\n");
+}
+
+function renderIntegrationSetup(){
+  const grid=document.getElementById("integration-grid");
+  const checklist=document.getElementById("credential-checklist");
+  if(grid){
+    const items=integrationDirectory();
+    const attention=items.filter(item=>item.tone!=="good").length;
+    const count=document.getElementById("integration-attention-count");
+    if(count){
+      count.textContent=attention?`${attention} to review`:"All core apps ready";
+      count.classList.toggle("good",!attention);
+      count.classList.toggle("warn",Boolean(attention));
+    }
+    grid.innerHTML=items.map(item=>`<article class="integration-card"><div class="integration-card-head"><h4>${esc(item.name)}</h4><span class="status ${esc(item.tone)}">${esc(item.status)}</span></div><p>${esc(item.purpose)}</p><div class="integration-meta"><span><strong>Setup:</strong> ${esc(item.setup)}</span><span><strong>Credential:</strong> ${esc(item.credential)}</span></div><div class="integration-actions"><a class="btn secondary" href="${esc(item.url)}" target="_blank" rel="noopener">Open app ↗</a><button class="btn secondary" type="button" data-integration-details="${esc(item.id)}">Details</button></div></article>`).join("");
+  }
+  if(checklist){
+    const rows=credentialChecklist();
+    checklist.innerHTML=`<div class="credential-row header"><span>Variable</span><span>Status</span><span>Private storage</span><span>Purpose</span><span>Action</span></div>${rows.map(item=>`<article class="credential-row"><strong class="credential-name">${esc(item.name)}</strong><span class="status ${item.ok?"good":"warn"}">${item.ok?"Ready":esc(item.required)}</span><span>${esc(item.place)}</span><p>${esc(item.purpose)}</p><button class="btn secondary" type="button" data-copy-secret="${esc(item.name)}">Copy name</button></article>`).join("")}`;
+  }
+}
+
+function openIntegrationDetails(id){
+  const item=integrationDirectory().find(entry=>entry.id===id);
+  if(!item)return;
+  document.getElementById("modal-content").innerHTML=`<p class="kicker">Integration setup</p><h2>${esc(item.name)}</h2><p class="drawer-sub">${esc(item.purpose)}</p><div class="integration-detail-list"><article><strong>Current status</strong><span>${esc(item.status)} · ${esc(integrationStatusLabel(item.tone))}</span></article><article><strong>What to configure</strong><span>${esc(item.setup)}</span></article><article><strong>Where credentials belong</strong><span>${esc(item.credential)}</span></article><article><strong>Safety rule</strong><span>Do not paste real API keys, passwords or OAuth tokens into the public GitHub Pages app. Use Make credentials, Cloudflare Worker secrets or another private backend.</span></article></div><div class="card-actions"><a class="btn secondary" href="${esc(item.url)}" target="_blank" rel="noopener">Open ${esc(item.name)} ↗</a><button class="btn primary" id="close-preview-action">Close</button></div>`;
+  openModal();
+}
+
 function renderRuntimeStatus(){
   const pill=document.getElementById("runtime-pill");
   const modes={demo:"Demo data",imported:"Imported data",live:"Live endpoint"};
@@ -1688,6 +1760,8 @@ function renderRuntimeStatus(){
   pill.classList.toggle("live",state.runtime.mode==="live");
   document.getElementById("status-make").textContent=state.integrations.runUrl?"Configured":"Endpoint needed";
   document.getElementById("status-make").classList.toggle("pending",!state.integrations.runUrl);
+  const firecrawl=document.getElementById("status-firecrawl");if(firecrawl){firecrawl.textContent=state.integrations.runUrl?"Used by Make":"Make credential";firecrawl.classList.toggle("pending",!state.integrations.runUrl);}
+  const openai=document.getElementById("status-openai");if(openai){openai.textContent=state.integrations.runUrl?"Used by Make":"Make credential";openai.classList.toggle("pending",!state.integrations.runUrl);}
   const apollo=document.getElementById("status-apollo");if(apollo){apollo.textContent=enrichmentControl.configured?"Securely connected":"Secure key needed";apollo.classList.toggle("pending",!enrichmentControl.configured);}
   const sender=document.getElementById("status-sender");if(sender){sender.textContent=state.outreachAutomation.senderConnected?"Connected":"Not connected";sender.classList.toggle("pending",!state.outreachAutomation.senderConnected);}
   const calendly=document.getElementById("status-calendly");if(calendly){calendly.textContent=state.scheduling.bookingUrl?"Configured":"Link needed";calendly.classList.toggle("pending",!state.scheduling.bookingUrl);}
@@ -1722,6 +1796,7 @@ function renderRuntimeStatus(){
   document.getElementById("funnel-threshold").textContent=`Score ≥ ${state.settings.minScore.toFixed(1)}`;
   document.getElementById("hero-run-label").textContent=runLabel;
   document.getElementById("hero-funnel-label").innerHTML=`${findings} findings → ${signalCount} signals → ${qualified} qualified → <strong>${saved} saved</strong> · Top <strong>${emailed} emailed</strong>`;
+  renderIntegrationSetup();
   renderOperationalReminders();
 }
 
@@ -2086,6 +2161,9 @@ document.addEventListener("click",async event=>{
   if(event.target.id==="add-playbook"){
     readControlCentre();state.playbooks.push({id:makeId("playbook"),name:"New outreach playbook",offerId:state.offers[0]?.id||"",signalId:state.signalRules[0]?.id||"",role:"Decision maker",channel:"Email",language:activeMarket().languages?.[0]||"English",sendMode:"Approval required",ctaMode:"Include in initial email",minScore:8,dailyLimit:3,requireHighConfidence:true,autoApproved:false,subject:"A practical idea for {{company}}",body:`Hi {{first_name}},\n\nI noticed {{signal}}\n\nWould a short outline of how {{offer}} could support {{company}} be useful?\n\nBest,\n${state.businessProfile.owner||"Edgars"}`,active:true});saveState();renderControlCentre();showToast("Playbook added");
   }
+  const integrationDetails=event.target.closest("[data-integration-details]");if(integrationDetails){openIntegrationDetails(integrationDetails.dataset.integrationDetails);return;}
+  const copySecret=event.target.closest("[data-copy-secret]");if(copySecret){navigator.clipboard.writeText(copySecret.dataset.copySecret).then(()=>showToast(`${copySecret.dataset.copySecret} copied`));return;}
+  if(event.target.id==="copy-env-template"){navigator.clipboard.writeText(credentialEnvTemplate()).then(()=>showToast("Credential template copied — paste into private backend notes only"));return;}
   if(event.target.id==="copy-message")navigator.clipboard.writeText(document.querySelector(".message-box").value).then(()=>showToast("Draft copied"));
   if(event.target.id==="save-settings"){
     const workspaceId=document.getElementById("setting-workspace-id").value.trim().toLowerCase().replace(/[^a-z0-9-]+/g,"-").replace(/^-|-$/g,"");
