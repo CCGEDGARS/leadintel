@@ -1,7 +1,7 @@
 "use strict";
 
 const STORAGE_KEY = "leadintel_v2_state";
-const STATE_SCHEMA_VERSION = 9;
+const STATE_SCHEMA_VERSION = 10;
 const DOCUMENT_DB_NAME = "leadintel_v2_documents";
 const DOCUMENT_STORE_NAME = "files";
 const BUSINESS_PROFILE_PDF_KEY = "business-profile-pdf";
@@ -22,16 +22,16 @@ const COUNTRY_PRESETS=[
 ];
 const LANGUAGE_PRESETS=["Latvian","Estonian","Lithuanian","English","Finnish","Swedish","Norwegian","Danish","Polish","German","Russian"];
 const SOURCE_PACKS={
-  LV:[{id:"lv-cv",name:"CV.lv",group:"Jobs",cadence:"Daily"},{id:"lv-firmas",name:"Firmas.lv",group:"Company activity",cadence:"Daily"},{id:"lv-lursoft",name:"Lursoft",group:"Company intelligence",cadence:"Daily"},{id:"lv-iub",name:"IUB Procurement",group:"Public procurement",cadence:"Daily"},{id:"lv-labs",name:"Labs of Latvia",group:"Startups and funding",cadence:"Daily"},{id:"lv-lsm",name:"LSM Business",group:"Business news",cadence:"Daily"}],
-  EE:[{id:"ee-cvkeskus",name:"CVKeskus",group:"Jobs",cadence:"Daily"},{id:"ee-register",name:"Estonian e-Business Register",group:"Company activity",cadence:"Daily"},{id:"ee-riigihanked",name:"Riigihanked",group:"Public procurement",cadence:"Daily"},{id:"ee-err",name:"ERR Business",group:"Business news",cadence:"Daily"},{id:"ee-startup",name:"Startup Estonia",group:"Startups and funding",cadence:"Daily"}],
-  LT:[{id:"lt-cvbankas",name:"CVbankas",group:"Jobs",cadence:"Daily"},{id:"lt-register",name:"Registrų centras",group:"Company activity",cadence:"Daily"},{id:"lt-cvonline",name:"CV-Online Lithuania",group:"Jobs",cadence:"Daily"},{id:"lt-cvpp",name:"CVPP Procurement",group:"Public procurement",cadence:"Daily"},{id:"lt-vz",name:"Verslo žinios",group:"Business news",cadence:"Daily"},{id:"lt-startup",name:"Startup Lithuania",group:"Startups and funding",cadence:"Daily"}],
-  FI:[{id:"fi-business",name:"Business Finland",group:"Investment and growth",cadence:"Daily"},{id:"fi-ytj",name:"YTJ",group:"Company activity",cadence:"Daily"},{id:"fi-hilma",name:"Hilma",group:"Public procurement",cadence:"Daily"},{id:"fi-duunitori",name:"Duunitori",group:"Jobs",cadence:"Daily"}],
-  SE:[{id:"se-bolagsverket",name:"Bolagsverket",group:"Company activity",cadence:"Daily"},{id:"se-jobs",name:"Arbetsförmedlingen",group:"Jobs",cadence:"Daily"},{id:"se-procurement",name:"Upphandlingsmyndigheten",group:"Public procurement",cadence:"Daily"},{id:"se-breakit",name:"Breakit",group:"Business news",cadence:"Daily"}],
-  NO:[{id:"no-register",name:"Brønnøysund Registers",group:"Company activity",cadence:"Daily"},{id:"no-nav",name:"NAV Jobs",group:"Jobs",cadence:"Daily"},{id:"no-doffin",name:"Doffin",group:"Public procurement",cadence:"Daily"}],
-  DK:[{id:"dk-cvr",name:"CVR",group:"Company activity",cadence:"Daily"},{id:"dk-jobindex",name:"Jobindex",group:"Jobs",cadence:"Daily"},{id:"dk-udbud",name:"Udbud.dk",group:"Public procurement",cadence:"Daily"}],
-  PL:[{id:"pl-krs",name:"KRS",group:"Company activity",cadence:"Daily"},{id:"pl-pracuj",name:"Pracuj.pl",group:"Jobs",cadence:"Daily"},{id:"pl-procurement",name:"e-Zamówienia",group:"Public procurement",cadence:"Daily"}],
-  DE:[{id:"de-register",name:"Handelsregister",group:"Company activity",cadence:"Daily"},{id:"de-jobs",name:"Bundesagentur für Arbeit",group:"Jobs",cadence:"Daily"},{id:"de-procurement",name:"Bund.de Procurement",group:"Public procurement",cadence:"Daily"}],
-  GLOBAL:[{id:"global-company",name:"Company websites",group:"Primary evidence",cadence:"On demand"},{id:"global-linkedin",name:"LinkedIn public signals",group:"People and hiring",cadence:"Daily"},{id:"global-apollo",name:"Apollo enrichment",group:"Decision-maker contacts",cadence:"Qualified only"}]
+  LV:[{id:"lv-cv",name:"CV.lv",url:"https://www.cv.lv/",group:"Jobs",cadence:"Daily"},{id:"lv-firmas",name:"Firmas.lv",url:"https://www.firmas.lv/",group:"Company activity",cadence:"Daily"},{id:"lv-lursoft",name:"Lursoft",url:"https://www.lursoft.lv/",group:"Company intelligence",cadence:"Daily"},{id:"lv-iub",name:"IUB Procurement",url:"https://www.eis.gov.lv/EKEIS/Supplier/Procurement",group:"Public procurement",cadence:"Daily"},{id:"lv-labs",name:"Labs of Latvia",url:"https://labsoflatvia.com/",group:"Startups and funding",cadence:"Daily"},{id:"lv-lsm",name:"LSM Business",url:"https://www.lsm.lv/",group:"Business news",cadence:"Daily"}],
+  EE:[{id:"ee-cvkeskus",name:"CVKeskus",url:"https://www.cvkeskus.ee/",group:"Jobs",cadence:"Daily"},{id:"ee-register",name:"Estonian e-Business Register",url:"https://ariregister.rik.ee/",group:"Company activity",cadence:"Daily"},{id:"ee-riigihanked",name:"Riigihanked",url:"https://riigihanked.riik.ee/",group:"Public procurement",cadence:"Daily"},{id:"ee-err",name:"ERR Business",url:"https://www.err.ee/",group:"Business news",cadence:"Daily"},{id:"ee-startup",name:"Startup Estonia",url:"https://startupestonia.ee/",group:"Startups and funding",cadence:"Daily"}],
+  LT:[{id:"lt-cvbankas",name:"CVbankas",url:"https://www.cvbankas.lt/",group:"Jobs",cadence:"Daily"},{id:"lt-register",name:"Registrų centras",url:"https://www.registrucentras.lt/",group:"Company activity",cadence:"Daily"},{id:"lt-cvonline",name:"CV-Online Lithuania",url:"https://www.cvonline.lt/",group:"Jobs",cadence:"Daily"},{id:"lt-cvpp",name:"CVPP Procurement",url:"https://cvpp.eviesiejipirkimai.lt/",group:"Public procurement",cadence:"Daily"},{id:"lt-vz",name:"Verslo žinios",url:"https://www.vz.lt/",group:"Business news",cadence:"Daily"},{id:"lt-startup",name:"Startup Lithuania",url:"https://www.startuplithuania.com/",group:"Startups and funding",cadence:"Daily"}],
+  FI:[{id:"fi-business",name:"Business Finland",url:"https://www.businessfinland.fi/",group:"Investment and growth",cadence:"Daily"},{id:"fi-ytj",name:"YTJ",url:"https://www.ytj.fi/",group:"Company activity",cadence:"Daily"},{id:"fi-hilma",name:"Hilma",url:"https://www.hankintailmoitukset.fi/",group:"Public procurement",cadence:"Daily"},{id:"fi-duunitori",name:"Duunitori",url:"https://duunitori.fi/",group:"Jobs",cadence:"Daily"}],
+  SE:[{id:"se-bolagsverket",name:"Bolagsverket",url:"https://www.bolagsverket.se/",group:"Company activity",cadence:"Daily"},{id:"se-jobs",name:"Arbetsförmedlingen",url:"https://arbetsformedlingen.se/",group:"Jobs",cadence:"Daily"},{id:"se-procurement",name:"Upphandlingsmyndigheten",url:"https://www.upphandlingsmyndigheten.se/",group:"Public procurement",cadence:"Daily"},{id:"se-breakit",name:"Breakit",url:"https://www.breakit.se/",group:"Business news",cadence:"Daily"}],
+  NO:[{id:"no-register",name:"Brønnøysund Registers",url:"https://www.brreg.no/",group:"Company activity",cadence:"Daily"},{id:"no-nav",name:"NAV Jobs",url:"https://www.nav.no/",group:"Jobs",cadence:"Daily"},{id:"no-doffin",name:"Doffin",url:"https://www.doffin.no/",group:"Public procurement",cadence:"Daily"}],
+  DK:[{id:"dk-cvr",name:"CVR",url:"https://datacvr.virk.dk/",group:"Company activity",cadence:"Daily"},{id:"dk-jobindex",name:"Jobindex",url:"https://www.jobindex.dk/",group:"Jobs",cadence:"Daily"},{id:"dk-udbud",name:"Udbud.dk",url:"https://udbud.dk/",group:"Public procurement",cadence:"Daily"}],
+  PL:[{id:"pl-krs",name:"KRS",url:"https://ekrs.ms.gov.pl/",group:"Company activity",cadence:"Daily"},{id:"pl-pracuj",name:"Pracuj.pl",url:"https://www.pracuj.pl/",group:"Jobs",cadence:"Daily"},{id:"pl-procurement",name:"e-Zamówienia",url:"https://ezamowienia.gov.pl/",group:"Public procurement",cadence:"Daily"}],
+  DE:[{id:"de-register",name:"Handelsregister",url:"https://www.handelsregister.de/",group:"Company activity",cadence:"Daily"},{id:"de-jobs",name:"Bundesagentur für Arbeit",url:"https://www.arbeitsagentur.de/",group:"Jobs",cadence:"Daily"},{id:"de-procurement",name:"Bund.de Procurement",url:"https://www.service.bund.de/",group:"Public procurement",cadence:"Daily"}],
+  GLOBAL:[{id:"global-company",name:"Company websites",group:"Primary evidence",cadence:"On demand",sourceKind:"evidence"},{id:"global-linkedin",name:"LinkedIn public signals",url:"https://www.linkedin.com/",group:"People and hiring",cadence:"Daily",sourceKind:"public-platform"},{id:"global-apollo",name:"Apollo enrichment",url:"https://app.apollo.io/",group:"Decision-maker contacts",cadence:"Qualified only",sourceKind:"enrichment"}]
 };
 const CRM_STAGES=["Discovered","Qualified","Contact Found","Ready for Outreach","Contacted","Replied","Meeting","Proposal","Won","Lost"];
 const DEFAULT_BUSINESS_PROFILE={owner:"Edgars Untāls",company:"Coaching & Consulting Group",summary:"B2B sales development, practical sales systems and AI implementation for commercial teams.",website:"",email:"",document:null,documentNotes:""};
@@ -379,7 +379,7 @@ function makeId(prefix,name=""){return `${prefix}-${String(name||Date.now()).toL
 function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
 function initials(name){return name.split(/\s+/).map(p=>p[0]).slice(0,2).join("").toUpperCase();}
 function showToast(message){const el=document.getElementById("toast");el.textContent=message;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),2200);}
-function statusClass(value){return /verified|eligible|healthy|complete|qualified|connected/i.test(value)?"good":/predicted|review|partial|monitor|triaged|planned/i.test(value)?"warn":"bad";}
+function statusClass(value){return /verified|eligible|healthy|complete|qualified|connected/i.test(value)?"good":/predicted|review|partial|monitor|triaged|planned|not live|ready|configured/i.test(value)?"warn":"bad";}
 function firstValue(row,keys,fallback=""){for(const key of keys){if(row?.[key]!==undefined&&row[key]!==null&&String(row[key]).trim()!=="")return row[key];}return fallback;}
 function numberValue(value,fallback=0){const parsed=Number(value);return Number.isFinite(parsed)?parsed:fallback;}
 function listValue(value){if(Array.isArray(value))return value.filter(Boolean).map(String);if(typeof value!=="string"||!value.trim())return [];try{const parsed=JSON.parse(value);if(Array.isArray(parsed))return parsed.map(String);}catch{}return value.split(/\n|\s*;\s*/).filter(Boolean);}
@@ -946,12 +946,18 @@ function renderSources(){
   const pack=sourcePackForMarket(market);
   const enabled=pack.filter(item=>sourceEnabled(market,item.id));
   const customCount=pack.filter(item=>item.custom).length;
-  document.getElementById("source-pack-summary").innerHTML=`<strong>${esc(market.name)} source pack:</strong> ${enabled.length} of ${pack.length} sources enabled · ${customCount} custom. Recommended sources are protected; custom sources can be edited or deleted. Paused sources are excluded from the Make payload.`;
+  const enrichmentCount=pack.filter(item=>item.sourceKind==="enrichment").length;
+  document.getElementById("source-pack-summary").innerHTML=`<strong>${esc(market.name)} source network:</strong> ${enabled.length} of ${pack.length} services enabled · ${customCount} custom${enrichmentCount?` · ${enrichmentCount} qualified-only enrichment service`:""}. Recommended sources are protected; custom sources can be edited or deleted. <strong>Health is reported configuration status:</strong> use an active source link to inspect the public page; a verified live check needs a successful Make/collector result with a timestamp.`;
   document.getElementById("source-grid").innerHTML=pack.map(s=>{
     const isEnabled=sourceEnabled(market,s.id);
     const sourceUrl=safeUrl(s.url||"");
     const host=sourceUrl?new URL(sourceUrl).hostname.replace(/^www\./,""):"Managed connector";
-    return `<article class="source-card ${s.custom?"custom-source":"recommended-source"} ${isEnabled?"":"source-paused"}"><div class="opp-title-row"><h3>${esc(s.name)}</h3><span class="status ${statusClass(isEnabled?s.health:"Paused")}">${esc(isEnabled?s.health:"Paused")}</span></div><p><span class="mini-badge">${esc(s.country==="GLOBAL"?"Global":s.country)}</span> ${esc(s.group)} · ${esc(s.cadence)} ${s.custom?'<span class="mini-badge custom-badge">Custom</span>':""}</p><p class="source-url">${sourceUrl?`<a href="${esc(sourceUrl)}" target="_blank" rel="noopener">${esc(host)} ↗</a>`:esc(host)}${s.languages?.length?` · ${esc(s.languages.join(", "))}`:""}</p>${s.keywords?`<p class="source-keywords">${esc(s.keywords)}</p>`:""}<div class="source-foot"><span>${s.findings} findings today</span><div class="source-card-actions">${s.custom?`<button class="btn small secondary" data-source-test="${esc(s.id)}">Test</button><button class="btn small secondary" data-source-edit="${esc(s.id)}">Edit</button><button class="btn small secondary danger" data-source-delete="${esc(s.id)}">Delete</button>`:""}<button class="btn small secondary" data-source-toggle="${esc(s.id)}">${isEnabled?"Pause":"Enable"}</button></div></div></article>`;
+    const reportedHealth=isEnabled?s.health:"Paused";
+    const healthLabel=!isEnabled?"Paused":state.runtime.mode==="demo"?"Not live-tested":reportedHealth==="Healthy"?"Reported healthy":reportedHealth;
+    const healthDetail=!isEnabled?"Excluded from the Make payload":state.runtime.mode==="demo"?"No recent live collector result":`Latest Make payload reports: ${reportedHealth}`;
+    const role=s.sourceKind==="enrichment"?"Enrichment service · runs after qualification":s.sourceKind==="public-platform"?"Public platform · company-page signals only":"Source monitor";
+    const linkLabel=s.sourceKind==="enrichment"?"Open Apollo":sourceUrl?"Open source":"No public link";
+    return `<article class="source-card ${s.custom?"custom-source":"recommended-source"} ${isEnabled?"":"source-paused"}"><div class="opp-title-row"><h3>${esc(s.name)}</h3><span class="status ${statusClass(healthLabel)}">${esc(healthLabel)}</span></div><p><span class="mini-badge">${esc(s.country==="GLOBAL"?"Global":s.country)}</span> ${esc(s.group)} · ${esc(s.cadence)} ${s.custom?'<span class="mini-badge custom-badge">Custom</span>':""}</p><p class="source-role">${esc(role)}</p><p class="source-url">${sourceUrl?`<a href="${esc(sourceUrl)}" target="_blank" rel="noopener" aria-label="${esc(linkLabel)}: ${esc(s.name)}">${esc(linkLabel)} <span>${esc(host)} ↗</span></a>`:"<span class=\"source-link-unavailable\">No public source link — evidence comes from the qualified company URL</span>"}${s.languages?.length?` · ${esc(s.languages.join(", "))}`:""}</p><p class="source-health-note"><strong>Health:</strong> ${esc(healthDetail)}</p>${s.keywords?`<p class="source-keywords">${esc(s.keywords)}</p>`:""}<div class="source-foot"><span>${s.findings} findings today</span><div class="source-card-actions">${s.custom?`<button class="btn small secondary" data-source-test="${esc(s.id)}">Check setup</button><button class="btn small secondary" data-source-edit="${esc(s.id)}">Edit</button><button class="btn small secondary danger" data-source-delete="${esc(s.id)}">Delete</button>`:""}<button class="btn small secondary" data-source-toggle="${esc(s.id)}">${isEnabled?"Pause":"Enable"}</button></div></div></article>`;
   }).join("");
 }
 
@@ -987,7 +993,7 @@ function testSource(id){
   const source=sourcePackForMarket(activeMarket()).find(item=>item.id===id);
   if(!source)return;
   if(source.custom){const url=safeUrl(source.url);if(!url||new URL(url).protocol!=="https:"){showToast(`${source.name}: invalid HTTPS URL`);return;}}
-  showToast(`${source.name}: configuration passed · live crawl runs through Make`);
+  showToast(`${source.name}: setup passed · a successful Make collector result is needed for live verification`);
 }
 
 function renderRuns(){
@@ -1383,7 +1389,7 @@ document.addEventListener("click",async event=>{
   if(event.target.id==="test-all-sources"){
     const pack=sourcePackForMarket(activeMarket()).filter(item=>sourceEnabled(activeMarket(),item.id));
     const invalid=pack.filter(item=>item.custom&&(!safeUrl(item.url)||new URL(safeUrl(item.url)).protocol!=="https:"));
-    showToast(invalid.length?`${invalid.length} custom source URL${invalid.length===1?"":"s"} need attention`:`${pack.length} enabled sources configured · live crawl runs through Make`);return;
+    showToast(invalid.length?`${invalid.length} custom source URL${invalid.length===1?"":"s"} need attention`:`${pack.length} enabled services configured · collector results verify live health`);return;
   }
   const sourceEdit=event.target.closest("[data-source-edit]");if(sourceEdit){openSourceEditor(sourceEdit.dataset.sourceEdit);return;}
   const sourceTest=event.target.closest("[data-source-test]");if(sourceTest){testSource(sourceTest.dataset.sourceTest);return;}

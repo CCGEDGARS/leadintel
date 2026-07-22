@@ -433,6 +433,14 @@ tr:last-child td { border-bottom: 0; }
 .company-card:hover { border-color: rgba(57,119,246,0.38); }
 .company-card h3, .source-card h3 { margin: 0 0 5px; }
 .company-card p, .source-card p { color: var(--muted); font-size: 9px; line-height: 1.55; }
+.source-card .source-role { margin: 9px 0 0; color: #9aa9bd; font-size: 12px; font-weight: 650; }
+.source-card .source-url { margin: 8px 0 0; }
+.source-card .source-url a { color: #78a5ff; font-weight: 750; text-decoration: none; }
+.source-card .source-url a:hover { color: #a8c5ff; text-decoration: underline; }
+.source-card .source-url a span { color: var(--muted); font-weight: 500; }
+.source-link-unavailable { color: #8a98aa; }
+.source-card .source-health-note { margin: 8px 0 0; color: #8998aa; font-size: 12px; }
+.source-card .source-health-note strong { color: #c2ccda; }
 .company-foot, .source-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; }
 .search { width: 240px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 8px; outline: none; background: var(--panel); color: var(--text); }
 .search:focus { border-color: #6e91e5; }
@@ -722,8 +730,7 @@ table td { font-size: 14px; line-height: 1.5; }
 .source-card.custom-source { border-color: rgba(59,130,246,.5); box-shadow: inset 0 3px 0 rgba(59,130,246,.75); }
 .source-manager-actions, .source-card-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
 .source-card-actions { justify-content: flex-end; }
-.source-card .source-url { margin: 10px 0 0; font-size: 12px; }
-.source-card .source-url a { color: var(--blue); font-weight: 700; text-decoration: none; }
+.source-card .source-url { margin: 8px 0 0; font-size: 12px; }
 .source-card .source-keywords { margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--soft); font-size: 11px; }
 .custom-badge { margin-left: 5px; color: var(--blue); border-color: rgba(59,130,246,.35); }
 .source-editor-note { margin-top: 14px; }
