@@ -39,6 +39,29 @@ const SOURCE_PACKS={
   DE:[{id:"de-register",name:"Handelsregister",url:"https://www.handelsregister.de/",group:"Company activity",cadence:"Daily"},{id:"de-jobs",name:"Bundesagentur für Arbeit",url:"https://www.arbeitsagentur.de/",group:"Jobs",cadence:"Daily"},{id:"de-procurement",name:"Bund.de Procurement",url:"https://www.service.bund.de/",group:"Public procurement",cadence:"Daily"}],
   GLOBAL:[{id:"global-company",name:"Company websites",group:"Primary evidence",cadence:"On demand",sourceKind:"evidence"},{id:"global-linkedin",name:"LinkedIn public signals",url:"https://www.linkedin.com/",group:"People and hiring",cadence:"Daily",sourceKind:"public-platform"}]
 };
+const SOURCE_ARCHETYPES=[
+  {id:"jobs",label:"Jobs and hiring",role:"Mandatory discovery",layer:"Signal",group:"Jobs",cadence:"Daily",activation:"Auto when live",costGuard:"Search/list pages only",keywords:"sales manager, head of sales, account manager, business development"},
+  {id:"procurement",label:"Public procurement",role:"Mandatory discovery",layer:"Signal + product",group:"Public procurement",cadence:"Daily",activation:"Auto when live",costGuard:"Tender list + detail only",keywords:"procurement, tender, contract, sales training, CRM, digital transformation"},
+  {id:"registry",label:"Company registry",role:"Mandatory verification",layer:"Company",group:"Company activity",cadence:"Daily",activation:"Auto when live",costGuard:"Company profile and recent changes only",keywords:"new company activity, directors, legal changes, filings"},
+  {id:"business-news",label:"Business news",role:"Mandatory support",layer:"Signal",group:"Business news",cadence:"Daily",activation:"Auto when live",costGuard:"Business section and search pages only",keywords:"expansion, launch, investment, restructuring, leadership"},
+  {id:"startup-funding",label:"Startup and funding",role:"Support discovery",layer:"Signal",group:"Startups and funding",cadence:"Daily",activation:"Review first",costGuard:"Funding/news pages only",keywords:"funding, investment, accelerator, startup, export"},
+  {id:"associations",label:"Industry associations",role:"Support discovery",layer:"Company + product",group:"Industry associations",cadence:"Weekly",activation:"Review first",costGuard:"Member/news pages only",keywords:"members, events, awards, export, industry news"},
+  {id:"company-websites",label:"Company websites",role:"Mandatory proof",layer:"Evidence",group:"Primary evidence",cadence:"On demand",activation:"After qualification only",costGuard:"Top 5 companies · 6 pages · depth 1",keywords:"homepage, about, services, news, careers, contact"},
+  {id:"linkedin",label:"LinkedIn public signals",role:"Manual verification",layer:"People",group:"People and hiring",cadence:"Daily",activation:"Open links only",costGuard:"No scraping or automated outreach",keywords:"company page, role verification, hiring context"},
+  {id:"apollo",label:"Apollo enrichment",role:"Enrichment only",layer:"Contacts",group:"Qualified contacts",cadence:"Qualified only",activation:"Settings only",costGuard:"Run after score gate; proven emails only",keywords:"verified work email, decision maker, LinkedIn URL"},
+  {id:"custom",label:"Custom source",role:"Optional support",layer:"Market-specific",group:"Other",cadence:"Daily",activation:"Review first",costGuard:"HTTPS only; deterministic quality gate",keywords:"local market source selected by owner"}
+];
+const SOURCE_LIBRARY_BY_COUNTRY={
+  LV:{jobs:"lv-cv",registry:"lv-firmas",companyIntel:"lv-lursoft",procurement:"lv-iub",businessNews:"lv-lsm",startup:"lv-labs"},
+  EE:{jobs:"ee-cvkeskus",registry:"ee-register",procurement:"ee-riigihanked",businessNews:"ee-err",startup:"ee-startup"},
+  LT:{jobs:"lt-cvbankas",registry:"lt-register",procurement:"lt-cvpp",businessNews:"lt-vz",startup:"lt-startup"},
+  FI:{jobs:"fi-duunitori",registry:"fi-ytj",procurement:"fi-hilma",businessNews:"fi-business",startup:"fi-business"},
+  SE:{jobs:"se-jobs",registry:"se-bolagsverket",procurement:"se-procurement",businessNews:"se-breakit"},
+  NO:{jobs:"no-nav",registry:"no-register",procurement:"no-doffin"},
+  DK:{jobs:"dk-jobindex",registry:"dk-cvr",procurement:"dk-udbud"},
+  PL:{jobs:"pl-pracuj",registry:"pl-krs",procurement:"pl-procurement"},
+  DE:{jobs:"de-jobs",registry:"de-register",procurement:"de-procurement"}
+};
 const CRM_STAGES=["Discovered","Qualified","Contact Found","Ready for Outreach","Contacted","Replied","Meeting","Proposal","Won","Lost"];
 const DEFAULT_BUSINESS_PROFILE={owner:"Edgars Untāls",company:"Coaching & Consulting Group",summary:"B2B sales development, practical sales systems and AI implementation for commercial teams.",website:"",email:"",document:null,documentNotes:""};
 const DEFAULT_OFFERS=[
@@ -199,6 +222,7 @@ const defaultState = {
   signalRules:structuredClone(DEFAULT_SIGNAL_RULES),
   playbooks:structuredClone(DEFAULT_PLAYBOOKS),
   customSources:[],
+  sourceDrafts:{},
   ui:{controlSections:{markets:true,profile:true,offers:false,signals:false,playbooks:false},signalRulesExpanded:true},
   crm:{stageOrder:structuredClone(CRM_STAGES),records:{}},
   outreachDrafts:{},outreachAudit:[],
@@ -302,6 +326,7 @@ function loadState(){
       signalRules:normalizeArray(saved.signalRules,DEFAULT_SIGNAL_RULES),
       playbooks:normalizeArray(saved.playbooks,DEFAULT_PLAYBOOKS),
       customSources:Array.isArray(saved.customSources)?saved.customSources.filter(isRecord):[],
+      sourceDrafts:isRecord(saved.sourceDrafts)?saved.sourceDrafts:{},
       ui:{controlSections:{...defaultState.ui.controlSections,...controlSections},signalRulesExpanded:typeof ui.signalRulesExpanded==="boolean"?ui.signalRulesExpanded:defaultState.ui.signalRulesExpanded},
       crm:{stageOrder:Array.isArray(crm.stageOrder)?crm.stageOrder:structuredClone(CRM_STAGES),records:isRecord(crm.records)?crm.records:{}},
       outreachDrafts:isRecord(saved.outreachDrafts)?saved.outreachDrafts:{},
@@ -385,9 +410,104 @@ function sourcePackForMarket(market=activeMarket()){
   const custom=state.customSources.filter(item=>item.marketProfileId===market.id).map(item=>({...item,custom:true,country:item.country||market.countryCodes?.[0]||"GLOBAL"}));
   return [...builtIn,...custom].filter(item=>{
     if(seen.has(item.id))return false;seen.add(item.id);return true;
-  }).map(item=>{const runtime=runtimeByName.get(item.name.toLowerCase());return {...item,health:runtime?.health||"Ready",findings:Number(runtime?.findings)||0};});
+  }).map(item=>{const runtime=runtimeByName.get(item.name.toLowerCase());const role=sourceRoleForSource(item);return {...item,sourceRole:role.role,sourceLayer:role.layer,costGuard:role.costGuard,health:runtime?.health||"Ready",findings:Number(runtime?.findings)||0};});
 }
 function sourceEnabled(market,id){return !Array.isArray(market.enabledSourceIds)||market.enabledSourceIds.includes(id);}
+function sourceRoleForSource(source){
+  const group=String(source?.group||"").toLowerCase();
+  const id=String(source?.id||"").toLowerCase();
+  if(id==="global-company"||source?.sourceKind==="evidence")return SOURCE_ARCHETYPES.find(item=>item.id==="company-websites");
+  if(id==="global-linkedin"||source?.sourceKind==="public-platform")return SOURCE_ARCHETYPES.find(item=>item.id==="linkedin");
+  if(group.includes("job")||group.includes("hiring"))return SOURCE_ARCHETYPES.find(item=>item.id==="jobs");
+  if(group.includes("procurement"))return SOURCE_ARCHETYPES.find(item=>item.id==="procurement");
+  if(group.includes("registry")||group.includes("company activity")||group.includes("company intelligence"))return SOURCE_ARCHETYPES.find(item=>item.id==="registry");
+  if(group.includes("startup")||group.includes("funding")||group.includes("investment"))return SOURCE_ARCHETYPES.find(item=>item.id==="startup-funding");
+  if(group.includes("business news"))return SOURCE_ARCHETYPES.find(item=>item.id==="business-news");
+  if(group.includes("association")||group.includes("member"))return SOURCE_ARCHETYPES.find(item=>item.id==="associations");
+  return SOURCE_ARCHETYPES.find(item=>item.id==="custom");
+}
+function draftSourceKey(market=activeMarket()){return market.id||market.name||"active";}
+function sourceByIdForMarket(market,id){return sourcePackForMarket(market).find(item=>item.id===id)||null;}
+function sourceDraftItem(market,archetypeId,options={}){
+  const archetype=SOURCE_ARCHETYPES.find(item=>item.id===archetypeId);
+  const existing=options.sourceId?sourceByIdForMarket(market,options.sourceId):null;
+  return {
+    id:archetype.id,
+    label:archetype.label,
+    role:archetype.role,
+    layer:archetype.layer,
+    group:archetype.group,
+    cadence:archetype.cadence,
+    activation:archetype.activation,
+    costGuard:archetype.costGuard,
+    keywords:options.keywords||archetype.keywords,
+    sourceId:existing?.id||"",
+    sourceName:existing?.name||options.name||`Add ${archetype.label} source`,
+    url:existing?.url||options.url||"",
+    country:options.country||market.countryCodes?.[0]||"GLOBAL",
+    action:existing?"enable":options.url?"add":"needs-url",
+    confidence:existing?"Known pack":options.url?"Candidate URL":"Needs URL"
+  };
+}
+function buildSourcePackDraft(market=activeMarket()){
+  const primaryCode=(market.countryCodes||[])[0]||"GLOBAL";
+  const library=SOURCE_LIBRARY_BY_COUNTRY[primaryCode]||{};
+  const items=[
+    sourceDraftItem(market,"jobs",{sourceId:library.jobs,country:primaryCode}),
+    sourceDraftItem(market,"procurement",{sourceId:library.procurement,country:primaryCode}),
+    sourceDraftItem(market,"registry",{sourceId:library.registry,country:primaryCode}),
+    sourceDraftItem(market,"business-news",{sourceId:library.businessNews,country:primaryCode}),
+    sourceDraftItem(market,"startup-funding",{sourceId:library.startup,country:primaryCode}),
+    sourceDraftItem(market,"associations",{country:primaryCode,name:`${market.name} industry association source`}),
+    sourceDraftItem(market,"company-websites",{sourceId:"global-company",country:"GLOBAL"}),
+    sourceDraftItem(market,"linkedin",{sourceId:"global-linkedin",country:"GLOBAL"}),
+    sourceDraftItem(market,"apollo",{name:"Apollo enrichment",url:"https://app.apollo.io/",country:"GLOBAL"}),
+    sourceDraftItem(market,"custom",{country:primaryCode,name:`${market.name} custom market monitor`})
+  ];
+  return {marketId:market.id,marketName:market.name,country:market.countries?.[0]||market.name,generatedAt:new Date().toISOString(),mode:"local-deterministic",items};
+}
+function currentSourceDraft(market=activeMarket()){return state.sourceDrafts?.[draftSourceKey(market)]||null;}
+function sourceDraftRoleClass(role=""){return /mandatory/i.test(role)?"mandatory":/enrichment/i.test(role)?"enrichment":/manual/i.test(role)?"manual":/support/i.test(role)?"support":"optional";}
+function renderSourcePackGenerator(market=activeMarket()){
+  const draft=currentSourceDraft(market);
+  if(!draft)return `<div class="source-generator-panel wide"><div><p class="kicker">Source architecture</p><h4>Generate a regional source pack</h4><span>Creates a review draft with mandatory discovery, support, proof, manual and enrichment roles. No paid AI call.</span></div><button type="button" class="btn primary" id="generate-source-pack-panel">Generate source pack</button></div>`;
+  return `<div class="source-generator-panel wide has-draft"><div class="source-generator-head"><div><p class="kicker">Generated source architecture</p><h4>${esc(draft.marketName)} source pack draft</h4><span>Local deterministic draft · generated ${esc(new Date(draft.generatedAt).toLocaleString())}. Apply only safe public sources; Apollo stays in Settings.</span></div><div class="source-pack-actions"><button type="button" class="btn secondary" id="discard-source-pack-draft">Discard draft</button><button type="button" class="btn primary" id="apply-source-pack-draft">Apply safe sources</button></div></div><div class="source-draft-grid">${draft.items.map(item=>`<article class="source-draft-card ${sourceDraftRoleClass(item.role)}"><div><strong>${esc(item.label)}</strong><span class="mini-badge">${esc(item.role)}</span></div><p>${esc(item.sourceName)}</p><small>${esc(item.layer)} · ${esc(item.cadence)} · ${esc(item.activation)}</small><em>${item.url?`<a href="${esc(item.url)}" target="_blank" rel="noopener">${esc(new URL(item.url).hostname.replace(/^www\./,""))} ↗</a>`:"Needs local URL before activation"}</em><b>${esc(item.costGuard)}</b></article>`).join("")}</div></div>`;
+}
+function generateSourcePackDraft(){
+  readControlCentre();
+  const market=activeMarket();
+  state.sourceDrafts={...(state.sourceDrafts||{}),[draftSourceKey(market)]:buildSourcePackDraft(market)};
+  saveState();renderControlCentre();showToast(`${market.name} source pack draft generated`);
+}
+function applySourcePackDraft(){
+  readControlCentre();
+  const market=activeMarket();
+  const draft=currentSourceDraft(market);
+  if(!draft){showToast("Generate a source pack draft first");return;}
+  const pack=sourcePackForMarket(market);
+  if(!Array.isArray(market.enabledSourceIds))market.enabledSourceIds=pack.map(item=>item.id);
+  let enabledCount=0,addedCount=0,reviewCount=0;
+  draft.items.forEach(item=>{
+    if(/enrichment|manual/i.test(item.role)){reviewCount++;return;}
+    if(item.sourceId){
+      if(!market.enabledSourceIds.includes(item.sourceId)){market.enabledSourceIds.push(item.sourceId);enabledCount++;}
+      return;
+    }
+    const url=safeUrl(item.url);
+    if(!url){reviewCount++;return;}
+    const exists=sourcePackForMarket(market).some(source=>String(source.url||"").replace(/\/$/,"")===url.replace(/\/$/,""));
+    if(exists){reviewCount++;return;}
+    const id=makeId("source",item.sourceName);
+    state.customSources.push({id,marketProfileId:market.id,name:item.sourceName,url,group:item.group,cadence:item.cadence,country:item.country,languages:market.languages||[],keywords:item.keywords,custom:true,sourceRole:item.role,sourceLayer:item.layer,costGuard:item.costGuard});
+    market.enabledSourceIds.push(id);addedCount++;
+  });
+  saveState();renderAll();showToast(`Source pack applied: ${addedCount} added, ${enabledCount} enabled, ${reviewCount} kept for review`);
+}
+function discardSourcePackDraft(){
+  const market=activeMarket();
+  if(state.sourceDrafts)delete state.sourceDrafts[draftSourceKey(market)];
+  saveState();renderControlCentre();showToast("Source pack draft discarded");
+}
 function makeId(prefix,name=""){return `${prefix}-${String(name||Date.now()).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")}-${Date.now().toString(36).slice(-4)}`;}
 function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
 function marketSummary(market=activeMarket()){
@@ -647,7 +767,7 @@ async function triggerResearch({test=false}={}){
     test,
     requested_at:new Date().toISOString(),
     market_profile:{id:market.id,name:market.name,countries:market.countries,country_codes:market.countryCodes,languages:market.languages,decision_maker_titles:market.decisionTitles,source_focus:market.sourceFocus},
-    enabled_sources:sourcePackForMarket(market).filter(item=>sourceEnabled(market,item.id)).map(({id,name,group,cadence,country,url,languages,keywords,custom})=>({id,name,group,cadence,country,url:url||"",languages:languages||[],keywords:keywords||"",custom:Boolean(custom)})),
+    enabled_sources:sourcePackForMarket(market).filter(item=>sourceEnabled(market,item.id)).map(({id,name,group,cadence,country,url,languages,keywords,custom,sourceKind,sourceRole,sourceLayer,costGuard})=>({id,name,group,cadence,country,url:url||"",languages:languages||[],keywords:keywords||"",custom:Boolean(custom),source_kind:sourceKind||"",source_role:sourceRole||"",source_layer:sourceLayer||"",cost_guard:costGuard||""})),
     business_profile:state.businessProfile,
     offers:state.offers.filter(item=>item.active),
     signal_rules:state.signalRules.filter(item=>item.active),
@@ -1051,10 +1171,10 @@ function renderSources(){
     const reportedHealth=isEnabled?s.health:"Paused";
     const healthLabel=!isEnabled?"Paused":state.runtime.mode==="demo"?"Not live-tested":reportedHealth==="Healthy"?"Reported healthy":reportedHealth;
     const healthDetail=!isEnabled?"Excluded from the Make payload":state.runtime.mode==="demo"?"No recent live collector result":`Latest Make payload reports: ${reportedHealth}`;
-    const role=s.sourceKind==="public-platform"?"Public platform · company-page signals only":"Source monitor";
+    const role=s.sourceKind==="public-platform"?"Public platform · company-page signals only":(s.sourceRole||"Source monitor");
     const linkLabel=sourceUrl?"Open source":"No public link";
     const companyWebsite=s.id==="global-company";
-    return `<article class="source-card ${s.custom?"custom-source":"recommended-source"} ${companyWebsite?"company-website-source":""} ${isEnabled?"":"source-paused"}"><div class="opp-title-row"><h3>${esc(s.name)}</h3><span class="status ${statusClass(healthLabel)}">${esc(healthLabel)}</span></div><p><span class="mini-badge">${esc(s.country==="GLOBAL"?"Global":s.country)}</span> ${esc(s.group)} · ${esc(s.cadence)} ${s.custom?'<span class="mini-badge custom-badge">Custom</span>':""}</p><p class="source-role">${companyWebsite?"Proof source · qualified companies only":esc(role)}</p><p class="source-url">${sourceUrl?`<a href="${esc(sourceUrl)}" target="_blank" rel="noopener" aria-label="${esc(linkLabel)}: ${esc(s.name)}">${esc(linkLabel)} <span>${esc(host)} ↗</span></a>`:"<span class=\"source-link-unavailable\">No public source link — evidence comes from the qualified company URL</span>"}${s.languages?.length?` · ${esc(s.languages.join(", "))}`:""}</p><p class="source-health-note"><strong>Health:</strong> ${esc(healthDetail)}</p>${companyWebsite?companyWebsitePolicyMarkup():""}${s.keywords?`<p class="source-keywords">${esc(s.keywords)}</p>`:""}<div class="source-foot"><span>${s.findings} findings today</span><div class="source-card-actions">${companyWebsite?'<button class="btn small secondary" data-company-source-info>View policy</button><button class="btn small secondary" data-company-source-test>Test company URL</button>':""}${s.custom?`<button class="btn small secondary" data-source-test="${esc(s.id)}">Check setup</button><button class="btn small secondary" data-source-edit="${esc(s.id)}">Edit</button><button class="btn small secondary danger" data-source-delete="${esc(s.id)}">Delete</button>`:""}<button class="btn small secondary" data-source-toggle="${esc(s.id)}">${isEnabled?"Pause":"Enable"}</button></div></div></article>`;
+    return `<article class="source-card ${s.custom?"custom-source":"recommended-source"} ${companyWebsite?"company-website-source":""} ${isEnabled?"":"source-paused"}"><div class="opp-title-row"><h3>${esc(s.name)}</h3><span class="status ${statusClass(healthLabel)}">${esc(healthLabel)}</span></div><p><span class="mini-badge">${esc(s.country==="GLOBAL"?"Global":s.country)}</span> ${esc(s.group)} · ${esc(s.cadence)} ${s.custom?'<span class="mini-badge custom-badge">Custom</span>':""}</p><p class="source-role">${companyWebsite?"Proof source · qualified companies only":esc(role)}</p><p class="source-health-note"><strong>Layer:</strong> ${esc(s.sourceLayer||"Market")} · <strong>Cost guard:</strong> ${esc(s.costGuard||"Quality gate before paid steps")}</p><p class="source-url">${sourceUrl?`<a href="${esc(sourceUrl)}" target="_blank" rel="noopener" aria-label="${esc(linkLabel)}: ${esc(s.name)}">${esc(linkLabel)} <span>${esc(host)} ↗</span></a>`:"<span class=\"source-link-unavailable\">No public source link — evidence comes from the qualified company URL</span>"}${s.languages?.length?` · ${esc(s.languages.join(", "))}`:""}</p><p class="source-health-note"><strong>Health:</strong> ${esc(healthDetail)}</p>${companyWebsite?companyWebsitePolicyMarkup():""}${s.keywords?`<p class="source-keywords">${esc(s.keywords)}</p>`:""}<div class="source-foot"><span>${s.findings} findings today</span><div class="source-card-actions">${companyWebsite?'<button class="btn small secondary" data-company-source-info>View policy</button><button class="btn small secondary" data-company-source-test>Test company URL</button>':""}${s.custom?`<button class="btn small secondary" data-source-test="${esc(s.id)}">Check setup</button><button class="btn small secondary" data-source-edit="${esc(s.id)}">Edit</button><button class="btn small secondary danger" data-source-delete="${esc(s.id)}">Delete</button>`:""}<button class="btn small secondary" data-source-toggle="${esc(s.id)}">${isEnabled?"Pause":"Enable"}</button></div></div></article>`;
   };
   document.getElementById("source-pack-summary").innerHTML=`<strong>${esc(market.name)} source network:</strong> ${enabled.length} of ${pack.length} discovery sources enabled · ${visibleSources.length} shown · ${standbySources.length} zero-result connector${standbySources.length===1?"":"s"} hidden below · ${customCount} custom. Apollo is handled in Settings as qualified-only enrichment, so it does not run as a market source. <strong>Health is reported configuration status:</strong> use an active source link to inspect the public page; a verified live check needs a successful Make/collector result with a timestamp.`;
   document.getElementById("source-grid").innerHTML=visibleSources.map(sourceCard).join("");
@@ -1153,7 +1273,8 @@ function renderControlCentre(){
         <label class="wide">Languages <small>Click to include or exclude</small><div class="choice-grid" id="market-language-choices">${languageChoices.map(language=>`<button type="button" class="choice-chip ${(market.languages||[]).includes(language)?"selected":""}" data-market-language="${esc(language)}">${esc(language)}</button>`).join("")}</div><div class="inline-add compact"><input id="market-custom-language" placeholder="Add another language"><button type="button" class="btn secondary" id="add-market-language">Add</button></div><input type="hidden" id="market-languages" value="${esc((market.languages||[]).join(", "))}"></label>
         <label class="wide">Decision-maker titles <small>comma separated</small><input id="market-titles" value="${esc((market.decisionTitles||[]).join(", "))}"></label>
         <label class="wide">Source focus<textarea id="market-source-focus">${esc(market.sourceFocus||"")}</textarea></label>
-        <div class="source-pack-preview wide"><strong>${pack.filter(item=>!item.custom).length} recommended · ${pack.filter(item=>item.custom).length} custom sources</strong><span>${esc(pack.slice(0,6).map(item=>item.name).join(" · "))}${pack.length>6?" · …":""}</span><button type="button" class="btn small secondary" data-view="sources">Manage sources</button></div>
+        <div class="source-pack-preview wide"><strong>${pack.filter(item=>!item.custom).length} recommended · ${pack.filter(item=>item.custom).length} custom sources</strong><span>${esc(pack.slice(0,6).map(item=>item.name).join(" · "))}${pack.length>6?" · …":""}</span><div class="source-pack-actions"><button type="button" class="btn small primary" id="generate-source-pack">Generate pack</button><button type="button" class="btn small secondary" data-view="sources">Manage sources</button></div></div>
+        ${renderSourcePackGenerator(market)}
       </div>
     </div>`;
   document.getElementById("profile-owner").value=state.businessProfile.owner||"";
@@ -1572,6 +1693,9 @@ document.addEventListener("click",async event=>{
   }
   const marketCountry=event.target.closest("[data-market-country]");if(marketCountry){marketCountry.classList.toggle("selected");syncMarketChoiceFields();return;}
   const marketLanguage=event.target.closest("[data-market-language]");if(marketLanguage){marketLanguage.classList.toggle("selected");syncMarketChoiceFields();return;}
+  if(event.target.id==="generate-source-pack"||event.target.id==="generate-source-pack-panel"){generateSourcePackDraft();return;}
+  if(event.target.id==="apply-source-pack-draft"){applySourcePackDraft();return;}
+  if(event.target.id==="discard-source-pack-draft"){discardSourcePackDraft();return;}
   if(event.target.id==="add-custom-source"){openSourceEditor();return;}
   if(event.target.id==="test-all-sources"){
     const pack=sourcePackForMarket(activeMarket()).filter(item=>sourceEnabled(activeMarket(),item.id));
