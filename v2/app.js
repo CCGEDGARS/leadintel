@@ -1466,7 +1466,6 @@ document.addEventListener("click",async event=>{
   if(event.target.id==="map-zoom-in"){setMapZoom(state.map.viewport.zoom+.1);return;}
   if(event.target.id==="map-zoom-out"){setMapZoom(state.map.viewport.zoom-.1);return;}
   if(event.target.id==="map-zoom-fit"){fitMapViewport();return;}
-  const mapPan=event.target.closest("[data-map-pan]");if(mapPan){const amount=180;const direction=mapPan.dataset.mapPan;panMapViewport(direction==="left"?amount:direction==="right"?-amount:0,direction==="up"?amount:direction==="down"?-amount:0);return;}
   if(event.target.id==="control-expand-all"||event.target.id==="control-collapse-all"){
     const open=event.target.id==="control-expand-all";
     document.querySelectorAll("[data-control-section]").forEach(section=>{section.open=open;state.ui.controlSections[section.dataset.controlSection]=open;});
