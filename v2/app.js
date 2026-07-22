@@ -2126,7 +2126,7 @@ function supportAnswer(topic,question=""){
     ];
   }else if(topic==="find-feature"||problem.includes("find")||problem.includes("where")||problem.includes("lost")){
     steps=[
-      "Use the left navigation: System map shows workflow, Sources edits monitored sources, Signals edits market rules, Writing assistant creates draft scripts and stores approved message templates, Settings holds integrations and keys checklist.",
+      "Use the left navigation: System map shows workflow, Sources edits monitored sources, Signals edits market rules, AI Writer creates draft scripts and stores approved message templates, Settings holds integrations and keys checklist.",
       "On System map, click any card to open its right-side details. Use Hide details or Full canvas if space is tight.",
       "If a right-side panel is closed, click another workflow card or use the restore/focus controls."
     ];
