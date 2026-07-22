@@ -578,7 +578,7 @@ function linkedInLookupUrl(opportunity){
       if(/(^|\.)linkedin\.com$/i.test(url.hostname)&&path&&path!=="/"&&!/^\/search\b/i.test(path))return direct;
     }catch{}
   }
-  return linkedInPeopleSearchUrl([opportunity?.contact?.name,opportunity?.company]);
+  return linkedInPeopleSearchUrl([opportunity?.contact?.name]);
 }
 function linkedInTargetRoles(opportunity){
   const signal=`${opportunity?.signalType||""} ${opportunity?.signal||""} ${opportunity?.primaryOffer||""}`.toLowerCase();
@@ -593,10 +593,15 @@ function linkedInTargetRoles(opportunity){
   return [...new Set([...selected,...(activeMarket().decisionTitles||[])])].slice(0,3);
 }
 function linkedInContactTargets(opportunity){
-  return linkedInTargetRoles(opportunity).map(role=>({
+  const targets=[];
+  if(opportunity?.contact?.name&&opportunity?.company){
+    targets.push({role:"Name + company",url:linkedInPeopleSearchUrl([opportunity.contact.name,opportunity.company])});
+  }
+  linkedInTargetRoles(opportunity).forEach(role=>targets.push({
     role,
     url:linkedInPeopleSearchUrl([role,opportunity?.company])
   }));
+  return targets.slice(0,4);
 }
 function isPrivateEndpoint(value){if(!value)return true;try{const url=new URL(value);return url.protocol==="https:"||["localhost","127.0.0.1"].includes(url.hostname);}catch{return false;}}
 function formatNow(){return new Intl.DateTimeFormat("en-GB",{dateStyle:"medium",timeStyle:"short",timeZone:"Europe/Riga"}).format(new Date());}
