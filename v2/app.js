@@ -9,6 +9,7 @@ const MAX_PROFILE_PDF_BYTES = 15 * 1024 * 1024;
 const BACKEND_API_URL = "https://leadintel-api.edgars-7e7.workers.dev";
 const MAP_WORLD = Object.freeze({width:1940,height:820,nodeWidth:142,nodeHeight:112});
 let backendSession = null;
+let supportScreenshot = null;
 
 const MARKET_PROFILES = [
   {id:"latvia",name:"Latvia",countries:["Latvia"],countryCodes:["LV"],languages:["Latvian","English"],decisionTitles:["Sales Director","Commercial Director","Head of Sales","CEO"],sourceFocus:"Latvian business, procurement, recruitment and company sources"},
@@ -1926,6 +1927,11 @@ function supportDiagnostics(){
     apollo:enrichmentControl.configured?"connected":"needs setup",
     sender:state.outreachAutomation?.senderConnected?"connected":"not connected",
     calendly:state.scheduling?.bookingUrl||"missing",
+    screenshot:supportScreenshot?{
+      name:supportScreenshot.name,
+      type:supportScreenshot.type,
+      sizeBytes:supportScreenshot.size
+    }:"not attached",
     reminders
   };
 }
@@ -1974,7 +1980,8 @@ function renderSupportAnswer(topic){
   const result=supportAnswer(topic,question);
   const answer=document.getElementById("ai-support-answer");
   if(!answer)return;
-  answer.innerHTML=`<strong>${esc(result.title)}</strong><ul>${result.steps.map(step=>`<li>${esc(step)}</li>`).join("")}</ul>`;
+  const attachmentNote=supportScreenshot?`<p><strong>Screenshot attached:</strong> ${esc(supportScreenshot.name)}. If you send this report to support, include that image together with copied diagnostics.</p>`:"";
+  answer.innerHTML=`<strong>${esc(result.title)}</strong><ul>${result.steps.map(step=>`<li>${esc(step)}</li>`).join("")}</ul>${attachmentNote}`;
 }
 
 function toggleAiSupport(open){
@@ -1996,6 +2003,44 @@ async function copySupportDiagnostics(){
     input.style.position="fixed";input.style.left="-9999px";
     document.body.appendChild(input);input.select();document.execCommand("copy");input.remove();
   }
+}
+
+function formatSupportFileSize(size=0){
+  if(size>=1024*1024)return `${(size/(1024*1024)).toFixed(1)} MB`;
+  if(size>=1024)return `${Math.round(size/1024)} KB`;
+  return `${size} B`;
+}
+
+function clearSupportScreenshot(){
+  if(supportScreenshot?.url)URL.revokeObjectURL(supportScreenshot.url);
+  supportScreenshot=null;
+  const input=document.getElementById("ai-support-screenshot");
+  if(input)input.value="";
+  const attachment=document.getElementById("support-attachment");
+  const empty=document.getElementById("support-upload-empty");
+  const preview=document.getElementById("support-attachment-preview");
+  if(attachment)attachment.hidden=true;
+  if(empty)empty.hidden=false;
+  if(preview)preview.removeAttribute("src");
+}
+
+function attachSupportScreenshot(file){
+  if(!file)return;
+  if(!file.type.startsWith("image/")){showToast("Please attach an image screenshot");return;}
+  if(file.size>8*1024*1024){showToast("Screenshot is too large. Use under 8 MB.");return;}
+  clearSupportScreenshot();
+  supportScreenshot={name:file.name,type:file.type,size:file.size,url:URL.createObjectURL(file)};
+  const attachment=document.getElementById("support-attachment");
+  const empty=document.getElementById("support-upload-empty");
+  const preview=document.getElementById("support-attachment-preview");
+  const name=document.getElementById("support-attachment-name");
+  const meta=document.getElementById("support-attachment-meta");
+  if(preview)preview.src=supportScreenshot.url;
+  if(name)name.textContent=file.name;
+  if(meta)meta.textContent=`${file.type.replace("image/","").toUpperCase()} · ${formatSupportFileSize(file.size)}`;
+  if(attachment)attachment.hidden=false;
+  if(empty)empty.hidden=true;
+  showToast("Screenshot attached");
 }
 
 function switchView(name){
@@ -2048,6 +2093,8 @@ document.addEventListener("click",async event=>{
   if(suppressMapClick&&event.target.closest(".map-canvas")){suppressMapClick=false;event.preventDefault();return;}
   if(event.target.id==="ai-support-nav"||event.target.id==="ai-support-fab"){toggleAiSupport(true);return;}
   if(event.target.id==="ai-support-close"){toggleAiSupport(false);return;}
+  if(event.target.id==="ai-support-upload"){document.getElementById("ai-support-screenshot")?.click();return;}
+  if(event.target.id==="ai-support-remove-screenshot"){clearSupportScreenshot();showToast("Screenshot removed");return;}
   const supportTopic=event.target.closest("[data-support-topic]");if(supportTopic){renderSupportAnswer(supportTopic.dataset.supportTopic);return;}
   if(event.target.id==="ai-support-send"){renderSupportAnswer("custom");return;}
   if(event.target.id==="ai-support-copy"){
@@ -2409,6 +2456,10 @@ document.getElementById("crm-search").addEventListener("input",event=>{crmSearch
 document.getElementById("data-import").addEventListener("change",async event=>{
   const [file]=event.target.files;if(!file)return;
   try{applyRuntimePayload(JSON.parse(await file.text()),{mode:"imported"});showToast(`Imported ${opportunities.length} opportunities`);}catch(error){showToast(`Import failed: ${error.message}`);}finally{event.target.value="";}
+});
+document.getElementById("ai-support-screenshot")?.addEventListener("change",event=>{
+  const [file]=event.target.files||[];
+  attachSupportScreenshot(file);
 });
 document.addEventListener("keydown",event=>{if(event.key==="Escape"){toggleAiSupport(false);closeDrawer();closeModal();}});
 

@@ -306,6 +306,19 @@
       <button type="button" data-support-topic="costs">Protect credits</button>
     </div>
     <textarea id="ai-support-question" placeholder="Example: I clicked Run research and nothing happened..."></textarea>
+    <div class="support-upload" id="support-upload">
+      <input id="ai-support-screenshot" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+      <button class="btn secondary support-upload-btn" type="button" id="ai-support-upload">Attach screenshot</button>
+      <div class="support-upload-empty" id="support-upload-empty">Optional: add a printscreen of the problem.</div>
+      <div class="support-attachment" id="support-attachment" hidden>
+        <img id="support-attachment-preview" alt="Attached problem screenshot preview">
+        <div>
+          <strong id="support-attachment-name">Screenshot attached</strong>
+          <span id="support-attachment-meta">Ready for diagnostics</span>
+        </div>
+        <button class="support-remove" type="button" id="ai-support-remove-screenshot" aria-label="Remove screenshot">×</button>
+      </div>
+    </div>
     <div class="card-actions">
       <button class="btn secondary" type="button" id="ai-support-copy">Copy diagnostics</button>
       <button class="btn primary" type="button" id="ai-support-send">Ask helper</button>
@@ -317,6 +330,6 @@
   </section>
 
   <div class="toast" id="toast"></div>
-  <script src="app.js?v=sidebar-ai-01"></script>
+  <script src="app.js?v=support-upload-01"></script>
 </body>
 </html>

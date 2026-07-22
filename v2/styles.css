@@ -777,6 +777,16 @@ tr:last-child td { border-bottom: 0; }
 .ai-support-prompts button { padding: 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-2); color: var(--text); font-weight: 700; cursor: pointer; text-align: left; }
 .ai-support-prompts button:hover { border-color: #6e91e5; }
 .ai-support-panel textarea { width: 100%; min-height: 92px; padding: 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-2); color: var(--text); resize: vertical; font: inherit; line-height: 1.5; }
+.support-upload { margin: 10px 0 12px; display: grid; gap: 8px; }
+.support-upload-btn { width: fit-content; }
+.support-upload-empty { padding: 10px 12px; border: 1px dashed rgba(142,176,255,.36); border-radius: 10px; color: var(--muted); background: rgba(65,113,246,.05); font-size: 12px; line-height: 1.4; }
+.support-attachment { display: grid; grid-template-columns: 58px minmax(0,1fr) 32px; gap: 10px; align-items: center; padding: 9px; border: 1px solid rgba(117,160,255,.28); border-radius: 12px; background: rgba(142,176,255,.09); }
+.support-attachment[hidden] { display: none; }
+.support-attachment img { width: 58px; height: 42px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(255,255,255,.14); background: var(--panel-2); }
+.support-attachment strong { display: block; overflow: hidden; color: var(--text); font-size: 12px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.support-attachment span { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+.support-remove { width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 9px; background: rgba(255,255,255,.03); color: var(--muted); font-size: 18px; cursor: pointer; }
+.support-remove:hover { border-color: rgba(255,106,106,.45); color: #ffaaa8; }
 .ai-support-answer { margin-top: 12px; padding: 13px; border: 1px solid rgba(117,160,255,.2); border-radius: 12px; background: rgba(65,113,246,.08); }
 .ai-support-answer strong { color: #a9c1ff; }
 .ai-support-answer p, .ai-support-answer li { color: var(--muted); line-height: 1.55; font-size: 13px; }
