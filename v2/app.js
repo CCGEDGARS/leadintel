@@ -390,6 +390,11 @@ function sourcePackForMarket(market=activeMarket()){
 function sourceEnabled(market,id){return !Array.isArray(market.enabledSourceIds)||market.enabledSourceIds.includes(id);}
 function makeId(prefix,name=""){return `${prefix}-${String(name||Date.now()).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")}-${Date.now().toString(36).slice(-4)}`;}
 function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
+function marketSummary(market=activeMarket()){
+  const countries=(market.countries||[]).join(", ")||"No countries selected";
+  const languages=(market.languages||[]).join(" · ")||"No languages selected";
+  return `${countries} · ${languages}`;
+}
 function initials(name){return name.split(/\s+/).map(p=>p[0]).slice(0,2).join("").toUpperCase();}
 function showToast(message){const el=document.getElementById("toast");el.textContent=message;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),2200);}
 function statusClass(value){return /verified|eligible|healthy|complete|qualified|connected/i.test(value)?"good":/predicted|review|partial|monitor|triaged|planned|not live|ready|configured/i.test(value)?"warn":"bad";}
@@ -1262,7 +1267,13 @@ function renderRuntimeStatus(){
   document.getElementById("status-sheets").textContent="Workbook ready";
   document.getElementById("setting-workspace-id").value=state.workspace.id;
   document.getElementById("setting-workspace-name").value=state.workspace.name;
-  document.getElementById("setting-market").value=state.workspace.market;
+  const marketSelect=document.getElementById("setting-market");
+  if(marketSelect){
+    marketSelect.innerHTML=state.marketProfiles.map(item=>`<option value="${esc(item.id)}">${esc(item.name)} · ${esc((item.countries||[]).join(", ")||"No countries")}</option>`).join("");
+    marketSelect.value=state.activeMarketProfileId;
+  }
+  const marketSummaryEl=document.getElementById("setting-market-summary");
+  if(marketSummaryEl)marketSummaryEl.textContent=`Current pack: ${marketSummary(activeMarket())}. Edit exact countries, languages and source rules in the Control centre.`;
   document.getElementById("setting-data-url").value=state.integrations.dataUrl;
   document.getElementById("setting-run-url").value=state.integrations.runUrl;
   const last=runs[0]||{};
@@ -1587,10 +1598,13 @@ document.addEventListener("click",async event=>{
     const workspaceId=document.getElementById("setting-workspace-id").value.trim().toLowerCase().replace(/[^a-z0-9-]+/g,"-").replace(/^-|-$/g,"");
     const dataUrl=document.getElementById("setting-data-url").value.trim();
     const runUrl=document.getElementById("setting-run-url").value.trim();
+    const selectedMarketId=document.getElementById("setting-market").value;
     if(!workspaceId){showToast("Workspace ID is required");return;}
+    if(!state.marketProfiles.some(item=>item.id===selectedMarketId)){showToast("Choose a valid market");return;}
     if(!isPrivateEndpoint(dataUrl)||!isPrivateEndpoint(runUrl)){showToast("Runtime endpoints must use HTTPS");return;}
     const bookingUrl=document.getElementById("setting-booking-url").value.trim();
     try{const parsedBooking=new URL(bookingUrl);if(parsedBooking.protocol!=="https:"||!(parsedBooking.hostname==="calendly.com"||parsedBooking.hostname.endsWith(".calendly.com")))throw new Error();}catch{showToast("Enter a valid HTTPS Calendly booking URL");return;}
+    state.activeMarketProfileId=selectedMarketId;
     state.workspace={id:workspaceId,name:document.getElementById("setting-workspace-name").value.trim()||workspaceId,market:activeMarket().name};
     state.integrations={dataUrl,runUrl};
     state.map.draftConfigs.email.value=Math.max(1,Math.min(5,Number(document.getElementById("setting-email").value)||3));
@@ -1613,6 +1627,12 @@ document.addEventListener("click",async event=>{
 });
 
 document.addEventListener("change",async event=>{
+  if(event.target.id==="setting-market"){
+    const market=state.marketProfiles.find(item=>item.id===event.target.value);
+    const summary=document.getElementById("setting-market-summary");
+    if(summary&&market)summary.textContent=`Selected pack: ${marketSummary(market)}. Click Save settings to apply it to the next research run.`;
+    return;
+  }
   const quickSignalCard=event.target.closest("[data-signal-rule]");
   if(quickSignalCard){
     const rule=state.signalRules.find(item=>item.id===quickSignalCard.dataset.signalRule);if(!rule)return;

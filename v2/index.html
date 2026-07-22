@@ -241,7 +241,7 @@
       <section class="view" id="view-settings">
         <div class="section-head"><div><p class="kicker">Operating rules</p><h2>Research settings</h2></div><button class="btn primary" id="save-settings">Save settings</button></div>
         <div class="settings-grid">
-          <div class="panel"><h3>Workspace profile</h3><label>Workspace ID<input id="setting-workspace-id" value="edgars-latvia"></label><label>Workspace name<input id="setting-workspace-name" value="Edgars · Latvia"></label><label>Active market<input id="setting-market" value="Latvia" readonly></label><p class="panel-copy">Edit countries and languages in the Control centre.</p></div>
+          <div class="panel"><h3>Workspace profile</h3><label>Workspace ID<input id="setting-workspace-id" value="edgars-latvia"></label><label>Workspace name<input id="setting-workspace-name" value="Edgars · Latvia"></label><label>Active market<select id="setting-market"></select></label><p class="panel-copy" id="setting-market-summary">Choose a market here. Edit exact countries, languages and source rules in the Control centre.</p></div>
           <div class="panel"><h3>Daily delivery</h3><label>Morning email opportunities<input id="setting-email" type="number" min="1" max="5" value="3"></label><label>App daily shortlist<input id="setting-app" type="number" min="3" max="10" value="5"></label><label>Delivery time<input type="time" value="07:00"></label></div>
           <div class="panel"><h3>Qualification</h3><label>Minimum opportunity score<input id="setting-score" type="number" min="1" max="10" step=".1" value="7"></label><label>Maximum signal age<select><option>30 days</option><option>14 days</option><option>60 days</option></select></label><label>Evidence rule<select><option>1 primary or 2 independent sources</option></select></label></div>
           <div class="panel"><h3>Language & scripts</h3><label>Outreach language mode<select id="setting-language-mode"><option value="auto-market">Auto by market</option><option value="latvian-only">Latvian only</option><option value="english-only">English only</option><option value="bilingual-lv-en">Bilingual: Latvian first, English fallback</option></select></label><label>Internal notes language<select id="setting-internal-language"><option>English</option><option>Latvian</option></select></label><label>Fallback outreach language<select id="setting-fallback-language"><option>English</option><option>Latvian</option></select></label><p class="panel-copy">AI uses this policy to choose the language route. The actual scripts stay manually editable in Control centre → Outreach playbooks.</p></div>
@@ -270,6 +270,6 @@
   </div>
 
   <div class="toast" id="toast"></div>
-  <script src="app.js?v=lang-policy-01"></script>
+  <script src="app.js?v=market-selector-01"></script>
 </body>
 </html>
