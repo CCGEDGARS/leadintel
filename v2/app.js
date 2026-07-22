@@ -413,6 +413,24 @@ function linkedInLookupUrl(opportunity){
   const terms=[opportunity?.contact?.name,opportunity?.contact?.role,opportunity?.company].filter(Boolean).join(" ");
   return `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(terms)}`;
 }
+function linkedInTargetRoles(opportunity){
+  const signal=`${opportunity?.signalType||""} ${opportunity?.signal||""} ${opportunity?.primaryOffer||""}`.toLowerCase();
+  const groups=[
+    [/crm|ai|automation|revops|sales intelligence/,["Revenue Operations","CRM Manager","Commercial Director"]],
+    [/sales hiring|head of sales|sales manager|account manager|business development/,["Head of Sales","Sales Director","Commercial Director"]],
+    [/training|coaching|onboarding|learning/,["Head of Sales","HR Director","Sales Enablement"]],
+    [/fund|investment|expansion|export|tender|contract|procurement/,["CEO","Commercial Director","Business Development Director"]],
+    [/leadership|ceo|board|director|manager|restructuring/,["CEO","Commercial Director","Head of Sales"]]
+  ];
+  const selected=groups.find(([pattern])=>pattern.test(signal))?.[1]||activeMarket().decisionTitles||["Sales Director","Commercial Director","CEO"];
+  return [...new Set([...selected,...(activeMarket().decisionTitles||[])])].slice(0,3);
+}
+function linkedInContactTargets(opportunity){
+  return linkedInTargetRoles(opportunity).map(role=>({
+    role,
+    url:`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(`${role} ${opportunity?.company||""}`)}`
+  }));
+}
 function isPrivateEndpoint(value){if(!value)return true;try{const url=new URL(value);return url.protocol==="https:"||["localhost","127.0.0.1"].includes(url.hostname);}catch{return false;}}
 function formatNow(){return new Intl.DateTimeFormat("en-GB",{dateStyle:"medium",timeStyle:"short",timeZone:"Europe/Riga"}).format(new Date());}
 function dateAge(value){const date=new Date(value);if(Number.isNaN(date.getTime()))return null;return Math.max(0,Math.floor((Date.now()-date.getTime())/86400000));}
@@ -991,12 +1009,12 @@ function renderContacts(){
   if(["Verified","Public business","Predicted"].includes(currentContactFilter)) list=list.filter(o=>o.contact.emailStatus===currentContactFilter);
   if(["Eligible","Suppressed"].includes(currentContactFilter)) list=list.filter(o=>state.listStates[o.id]===currentContactFilter);
   document.getElementById("contact-count").textContent=opportunities.length;
-  document.getElementById("contacts-body").innerHTML=list.map(o=>`<tr>
+  document.getElementById("contacts-body").innerHTML=list.map(o=>{const linkedinTargets=linkedInContactTargets(o);return `<tr>
     <td><strong>${esc(o.contact.name)}</strong></td><td>${esc(o.company)}</td><td>${esc(o.contact.role)}</td>
     <td>${o.contact.emailStatus==="Predicted"?'<span class="status warn">Hidden until verified</span>':`<a class="evidence" href="mailto:${esc(o.contact.email)}">${esc(o.contact.email)}</a>`}</td>
     <td><span class="status ${statusClass(o.contact.emailStatus)}">${esc(o.contact.emailStatus)}</span><br><small>${o.contact.emailType==="personal"?"Personal · exact person/company/role match":esc(o.contact.source)}</small><br><small class="linkedin-note">LinkedIn is for role verification, not automated outreach.</small></td>
     <td><select data-list-state="${o.id}"><option ${state.listStates[o.id]==="Research"?"selected":""}>Research</option><option ${state.listStates[o.id]==="Eligible"?"selected":""}>Eligible</option><option ${state.listStates[o.id]==="Manual review"?"selected":""}>Manual review</option><option ${state.listStates[o.id]==="Suppressed"?"selected":""}>Suppressed</option><option ${state.listStates[o.id]==="Unsubscribed"?"selected":""}>Unsubscribed</option></select></td>
-    <td><div class="card-actions contact-actions">${["Verified","Strong match"].includes(o.contact.emailStatus)?"":`<button class="btn small primary" data-enrich="${o.id}" ${o.contact.enrichmentStatus==="processing"?"disabled":""}>${o.contact.enrichmentStatus==="processing"?"Checking…":"Find work email · 1 lookup"}</button>${backendSession?.role==="owner"?`<button class="btn small secondary" data-enrich-personal="${o.id}">Personal exception</button>`:""}`}<a class="btn small secondary linkedin-action" href="${esc(linkedInLookupUrl(o))}" target="_blank" rel="noopener">Check LinkedIn ↗</a><button class="btn small secondary" data-open="${o.id}">Dossier</button></div></td></tr>`).join("");
+    <td><div class="card-actions contact-actions">${["Verified","Strong match"].includes(o.contact.emailStatus)?"":`<button class="btn small primary" data-enrich="${o.id}" ${o.contact.enrichmentStatus==="processing"?"disabled":""}>${o.contact.enrichmentStatus==="processing"?"Checking…":"Find work email · 1 lookup"}</button>${backendSession?.role==="owner"?`<button class="btn small secondary" data-enrich-personal="${o.id}">Personal exception</button>`:""}`}<a class="btn small secondary linkedin-action" href="${esc(linkedInLookupUrl(o))}" target="_blank" rel="noopener">Known LI/profile ↗</a><button class="btn small secondary" data-open="${o.id}">Dossier</button><div class="linkedin-targets" aria-label="Suggested LinkedIn contact searches">${linkedinTargets.map(target=>`<a href="${esc(target.url)}" target="_blank" rel="noopener">${esc(target.role)} ↗</a>`).join("")}</div></div></td></tr>`;}).join("");
 }
 
 function renderSources(){
@@ -1304,6 +1322,33 @@ function renderRuntimeStatus(){
   document.getElementById("funnel-threshold").textContent=`Score ≥ ${state.settings.minScore.toFixed(1)}`;
   document.getElementById("hero-run-label").textContent=runLabel;
   document.getElementById("hero-funnel-label").innerHTML=`${findings} findings → ${signalCount} signals → ${qualified} qualified → <strong>${saved} saved</strong> · Top <strong>${emailed} emailed</strong>`;
+  renderOperationalReminders();
+}
+
+function renderOperationalReminders(){
+  const policy=enrichmentControl.policy||{};
+  const usage=enrichmentControl.usage||{};
+  const dailyLimit=Number(policy.daily_credit_limit)||0;
+  const monthlyLimit=Number(policy.monthly_credit_limit)||0;
+  const usedRatio=(used,limit)=>limit?Number(used||0)/limit:0;
+  const reminders=[];
+  if(state.runtime.mode==="demo")reminders.push({tone:"warn",title:"Demo data is active",detail:"Connect or sync the live endpoint before trusting production counts.",action:"Sync data"});
+  if(state.runtime.error)reminders.push({tone:"bad",title:"Latest sync needs review",detail:state.runtime.error,action:"Open run history"});
+  if(!state.integrations.runUrl)reminders.push({tone:"bad",title:"Make run endpoint missing",detail:"Run research cannot trigger the production scenario yet.",action:"Add webhook"});
+  if(!enrichmentControl.configured)reminders.push({tone:"warn",title:"Apollo secure key needed",detail:"Contact lookup stays off until the backend key is connected.",action:"Connect Apollo"});
+  if(dailyLimit&&usedRatio(usage.daily,dailyLimit)>=.8)reminders.push({tone:"warn",title:"Apollo daily credits running low",detail:`${usage.daily||0} of ${dailyLimit} lookups used today.`,action:"Slow enrichment"});
+  if(monthlyLimit&&usedRatio(usage.monthly,monthlyLimit)>=.8)reminders.push({tone:"warn",title:"Apollo monthly credits running low",detail:`${usage.monthly||0} of ${monthlyLimit} lookups used this month.`,action:"Protect budget"});
+  if(!state.outreachAutomation.senderConnected)reminders.push({tone:"warn",title:"Email sender not connected",detail:"Drafts can be prepared, but delivery should stay manual until sender status is green.",action:"Connect sender"});
+  if(!state.scheduling?.bookingUrl)reminders.push({tone:"warn",title:"Calendly booking link missing",detail:"Meeting CTA will not be inserted into outreach drafts.",action:"Add booking URL"});
+  const good=reminders.length===0;
+  const count=document.getElementById("reminder-count");
+  const grid=document.getElementById("operational-reminders");
+  if(count){
+    count.textContent=good?"All clear":`${reminders.length} alert${reminders.length===1?"":"s"}`;
+    count.classList.toggle("good",good);
+    count.classList.toggle("warn",!good);
+  }
+  if(grid)grid.innerHTML=good?'<article class="reminder-card good"><strong>All critical systems look ready</strong><p>Credits, core endpoints and scheduling checks are not reporting problems.</p><span>Monitor after each live run</span></article>':reminders.map(item=>`<article class="reminder-card ${esc(item.tone)}"><strong>${esc(item.title)}</strong><p>${esc(item.detail)}</p><span>${esc(item.action)}</span></article>`).join("");
 }
 
 function scoreFactorExplanation(o,label,value,max){
@@ -1337,6 +1382,7 @@ function openDrawer(id){
   const factorTotal=Object.values(o.scores).reduce((sum,value)=>sum+(Number(value)||0),0);
   const scoreAligned=Math.abs(factorTotal-o.score)<.11;
   const canApprove=isVerifiedWorkEmail(o)&&state.listStates[o.id]==="Eligible"||isPersonalEmail(o.contact)&&o.contact.emailStatus==="Strong match"&&state.listStates[o.id]==="Manual review";
+  const linkedinTargets=linkedInContactTargets(o);
   document.getElementById("drawer-content").innerHTML=`
     <div class="dossier-head"><div><p class="kicker">Decision dossier · ${esc(o.id)}</p><h2>${esc(o.company)}</h2><p class="drawer-sub">${esc(o.industry)} · ${esc(o.location)} · ${esc(o.signalType)}</p></div><span class="dossier-readiness ${quality.tone}"><i></i>${quality.label}</span></div>
     <div class="dossier-summary"><div class="detail-score"><strong>${o.score.toFixed(1)}</strong><div><b>Opportunity score /10</b><p>${esc(o.confidence)} model confidence</p></div></div><dl><div><dt>Sourced claims</dt><dd>${quality.sourced}</dd></div><div><dt>Fresh ≤90 days</dt><dd>${quality.fresh}</dd></div><div><dt>Verified contact</dt><dd>${quality.verified?"Yes":"No"}</dd></div></dl></div>
@@ -1344,7 +1390,7 @@ function openDrawer(id){
     <section class="detail-section score-explanation"><div class="section-title"><div><span>01</span><h3>Score explanation</h3></div><small>Transparent 10-point model</small></div><div class="score-factors">${Object.entries(o.scores).map(([label,rawValue])=>{const value=Number(rawValue)||0;const rationale=scoreFactorExplanation(o,label,value,scoreMax[label]);return `<article class="score-factor"><div class="factor-head"><strong>${esc(label)}</strong><b>${value.toFixed(1)}<small>/${scoreMax[label]}</small></b></div><span class="bar"><i style="width:${rationale.ratio}%"></i></span><p>${esc(rationale.text)}</p><em class="basis ${rationale.basis==="Evidence-based"?"evidence-based":"assessment"}">${rationale.basis}</em></article>`;}).join("")}</div></section>
     <section class="detail-section"><div class="section-title"><div><span>02</span><h3>Sourced evidence</h3></div><small>${quality.sourced} independently openable</small></div><div class="evidence-ledger">${o.evidence.map((e,index)=>{const profile=sourceProfile(e.url);const age=dateAge(e.observedAt||o.signalDate);return `<article class="evidence-item"><div class="evidence-index">${String(index+1).padStart(2,"0")}</div><div><p>${esc(e.claim||"Evidence statement unavailable")}</p><div class="evidence-meta"><span class="source-quality ${profile.tone}">${profile.label}</span><span>${esc(profile.detail)}</span><span>${age===null?"Date unavailable":age===0?"Today":`${age}d old`}</span></div>${e.url?`<a href="${esc(e.url)}" target="_blank" rel="noopener">Open original source ↗</a>`:'<span class="missing-source">Source URL missing · verify before use</span>'}</div></article>`;}).join("")}</div></section>
     <section class="detail-section assessment-section"><div class="section-title"><div><span>03</span><h3>Commercial assessment</h3></div><em class="basis assessment">AI assessment</em></div><h4>Why now</h4><p>${esc(o.whyNow)}</p><h4>Likely pain points to validate</h4><ul>${o.pains.map(p=>`<li>${esc(p)}</li>`).join("")}</ul><div class="assessment-warning">These pain points are hypotheses, not verified company statements.</div></section>
-    <section class="detail-section"><div class="section-title"><div><span>04</span><h3>Decision-maker verification</h3></div><span class="status ${statusClass(o.contact.emailStatus)}">${esc(o.contact.emailStatus)}</span></div><div class="contact-proof"><span class="avatar">${initials(o.contact.name||o.company)}</span><div><strong>${esc(o.contact.name)}</strong><p>${esc(o.contact.role)}</p><p>${o.contact.emailStatus==="Verified"?esc(o.contact.email):"No proven business email"}</p><small>Verification source: ${esc(o.contact.source||"Not recorded")}</small></div></div></section>
+    <section class="detail-section"><div class="section-title"><div><span>04</span><h3>Decision-maker verification</h3></div><span class="status ${statusClass(o.contact.emailStatus)}">${esc(o.contact.emailStatus)}</span></div><div class="contact-proof"><span class="avatar">${initials(o.contact.name||o.company)}</span><div><strong>${esc(o.contact.name)}</strong><p>${esc(o.contact.role)}</p><p>${o.contact.emailStatus==="Verified"?esc(o.contact.email):"No proven business email"}</p><small>Verification source: ${esc(o.contact.source||"Not recorded")}</small></div></div><div class="linkedin-shortlist"><div><strong>LinkedIn contact shortlist</strong><small>Open three role searches for this exact company and choose manually.</small></div>${linkedinTargets.map(target=>`<a class="btn small secondary" href="${esc(target.url)}" target="_blank" rel="noopener">${esc(target.role)} ↗</a>`).join("")}</div></section>
     <div class="drawer-actions"><button class="btn secondary" data-status-action="Monitor" data-id="${o.id}">Monitor</button><button class="btn secondary" data-message="${o.id}">Generate message</button><button class="btn primary" data-status-action="Approved" data-id="${o.id}" ${canApprove?'':'disabled title="Requires a verified, eligible business contact"'}>Approve outreach</button></div>`;
   document.getElementById("lead-drawer").classList.add("open");
   document.getElementById("drawer-backdrop").classList.add("open");
