@@ -408,6 +408,18 @@ body.map-fullscreen-open { overflow: hidden; }
 .filters { display: flex; gap: 6px; flex-wrap: wrap; }
 .filter { padding: 6px 9px; border: 1px solid var(--line); border-radius: 14px; background: transparent; color: var(--muted); cursor: pointer; font-size: 9px; }
 .filter.active { border-color: #557fdd; background: rgba(57,119,246,0.1); color: #83a8ff; }
+.signal-rules-panel { margin: 0 0 14px; padding: 14px; border: 1px solid var(--line); border-radius: 11px; background: linear-gradient(145deg,var(--panel),rgba(24,37,54,.86)); }
+.signal-rules-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
+.signal-rules-head strong, .signal-rules-head span { display: block; }
+.signal-rules-head strong { font-size: 13px; }
+.signal-rules-head span { margin-top: 3px; color: var(--muted); font-size: 9px; }
+.signal-rule-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+.signal-rule-card { display: grid; gap: 9px; padding: 12px; border: 1px solid rgba(255,255,255,.09); border-radius: 9px; background: rgba(255,255,255,.025); }
+.signal-rule-card.paused { opacity: .68; }
+.signal-rule-card-head, .signal-rule-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.signal-rule-card label { display: grid; gap: 5px; color: #8594aa; font-size: 8px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.signal-rule-card input, .signal-rule-card textarea { width: 100%; min-height: 33px; padding: 8px 9px; border: 1px solid rgba(255,255,255,.09); border-radius: 7px; background: #0f1827; color: var(--text); font-size: 10px; letter-spacing: 0; text-transform: none; }
+.signal-rule-card textarea { min-height: 62px; resize: vertical; line-height: 1.45; }
 .table-card { overflow: auto; border: 1px solid var(--line); border-radius: 11px; background: var(--panel); }
 table { width: 100%; min-width: 850px; border-collapse: collapse; }
 th, td { padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.05); text-align: left; vertical-align: top; }

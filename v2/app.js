@@ -912,6 +912,20 @@ function renderOpportunities(){
 
 function renderSignals(){
   document.getElementById("signal-count").textContent=signals.length;
+  const activeRules=state.signalRules.filter(item=>item.active).length;
+  document.getElementById("signal-rules-summary").textContent=`${activeRules}/${state.signalRules.length} active · changes affect the next research run`;
+  document.getElementById("signal-rules-manager").innerHTML=state.signalRules.map(item=>`<article class="signal-rule-card ${item.active?"":"paused"}" data-signal-rule="${esc(item.id)}">
+    <div class="signal-rule-card-head">
+      <span class="status ${item.active?"good":"warn"}">${item.active?"Active":"Paused"}</span>
+      <div class="signal-rule-actions">
+        <button class="btn small secondary" type="button" data-toggle-signal-rule="${esc(item.id)}">${item.active?"Pause":"Resume"}</button>
+        <button class="icon-button" type="button" data-delete-signal-rule="${esc(item.id)}" aria-label="Delete signal rule">×</button>
+      </div>
+    </div>
+    <label>Rule name<input data-signal-rule-name value="${esc(item.name)}"></label>
+    <label>Keywords<textarea data-signal-rule-keywords>${esc(item.keywords)}</textarea></label>
+    <label>Priority weight<input data-signal-rule-weight type="number" min="1" max="10" value="${Number(item.weight)||5}"></label>
+  </article>`).join("");
   const types=["All",...new Set(signals.map(s=>s.type))];
   document.getElementById("signal-filters").innerHTML=types.map(t=>`<button class="filter ${t===currentSignalFilter?"active":""}" data-signal-filter="${esc(t)}">${esc(t)}</button>`).join("");
   const filtered=currentSignalFilter==="All"?signals:signals.filter(s=>s.type===currentSignalFilter);
@@ -1379,6 +1393,16 @@ document.addEventListener("click",async event=>{
     try{await persistOpportunityWorkflow(meetingBooked.dataset.meetingBooked);renderAll();showToast("Meeting recorded in CRM");}catch(error){renderAll();showToast(`Meeting saved locally · ${error.message}`);}return;
   }
   const signalFilter=event.target.closest("[data-signal-filter]");if(signalFilter){currentSignalFilter=signalFilter.dataset.signalFilter;renderSignals();return;}
+  const toggleSignalRule=event.target.closest("[data-toggle-signal-rule]");if(toggleSignalRule){
+    const rule=state.signalRules.find(item=>item.id===toggleSignalRule.dataset.toggleSignalRule);if(!rule)return;
+    rule.active=!rule.active;saveState();renderSignals();renderControlCentre();showToast(rule.active?"Signal rule resumed":"Signal rule paused");return;
+  }
+  const deleteSignalRule=event.target.closest("[data-delete-signal-rule]");if(deleteSignalRule){
+    if(state.signalRules.length<=1){showToast("Keep at least one signal rule");return;}
+    const rule=state.signalRules.find(item=>item.id===deleteSignalRule.dataset.deleteSignalRule);if(!rule)return;
+    if(!window.confirm(`Delete signal rule “${rule.name}”?`))return;
+    state.signalRules=state.signalRules.filter(item=>item.id!==rule.id);state.playbooks=state.playbooks.filter(item=>item.signalId!==rule.id);saveState();renderSignals();renderControlCentre();showToast("Signal rule deleted");return;
+  }
   const contactFilter=event.target.closest("[data-contact-filter]");if(contactFilter){currentContactFilter=contactFilter.dataset.contactFilter;renderContacts();return;}
   const marketProfile=event.target.closest("[data-market-profile]");if(marketProfile){
     readControlCentre();state.activeMarketProfileId=marketProfile.dataset.marketProfile;state.workspace.market=activeMarket().name;saveState();renderAll();showToast(`Research market changed to ${activeMarket().name}`);return;
@@ -1495,6 +1519,9 @@ document.addEventListener("click",async event=>{
   if(event.target.id==="add-signal"){
     readControlCentre();state.signalRules.push({id:makeId("signal"),name:"New signal",keywords:"keyword, phrase",weight:5,active:true});saveState();renderControlCentre();showToast("Signal rule added");
   }
+  if(event.target.id==="add-signal-rule-quick"){
+    state.signalRules.push({id:makeId("signal"),name:"New signal",keywords:"keyword, phrase",weight:5,active:true});saveState();renderSignals();renderControlCentre();showToast("Signal rule added");
+  }
   if(event.target.id==="add-playbook"){
     readControlCentre();state.playbooks.push({id:makeId("playbook"),name:"New outreach playbook",offerId:state.offers[0]?.id||"",signalId:state.signalRules[0]?.id||"",role:"Decision maker",channel:"Email",language:activeMarket().languages?.[0]||"English",sendMode:"Approval required",ctaMode:"Include in initial email",minScore:8,dailyLimit:3,requireHighConfidence:true,autoApproved:false,subject:"A practical idea for {{company}}",body:`Hi {{first_name}},\n\nI noticed {{signal}}\n\nWould a short outline of how {{offer}} could support {{company}} be useful?\n\nBest,\n${state.businessProfile.owner||"Edgars"}`,active:true});saveState();renderControlCentre();showToast("Playbook added");
   }
@@ -1520,6 +1547,14 @@ document.addEventListener("click",async event=>{
 });
 
 document.addEventListener("change",async event=>{
+  const quickSignalCard=event.target.closest("[data-signal-rule]");
+  if(quickSignalCard){
+    const rule=state.signalRules.find(item=>item.id===quickSignalCard.dataset.signalRule);if(!rule)return;
+    rule.name=quickSignalCard.querySelector("[data-signal-rule-name]").value.trim()||"Untitled signal";
+    rule.keywords=quickSignalCard.querySelector("[data-signal-rule-keywords]").value.trim();
+    rule.weight=Math.max(1,Math.min(10,Number(quickSignalCard.querySelector("[data-signal-rule-weight]").value)||5));
+    saveState();renderSignals();renderControlCentre();showToast("Signal rule updated");return;
+  }
   if(event.target.id==="profile-pdf-input"){
     const file=event.target.files?.[0];
     if(!file)return;
@@ -1581,7 +1616,6 @@ document.addEventListener("pointerdown",event=>{
   const canvas=event.target.closest?.("#map-canvas");if(!canvas)return;
   const node=event.target.closest(".map-node");if(node&&event.target.closest(".map-node-inspect"))return;
   if(node&&!mapArrangeMode)return;
-  if(event.target.closest(".map-navigation"))return;
   event.preventDefault();try{canvas.setPointerCapture?.(event.pointerId);}catch{}
   mapPointerSession={pointerId:event.pointerId,type:node&&mapArrangeMode?"node":"pan",nodeId:node?.dataset.nodeId||"",startX:event.clientX,startY:event.clientY,moved:false,origin:node?{...state.map.draftLayout[node.dataset.nodeId]}:{x:state.map.viewport.panX,y:state.map.viewport.panY}};
   node?.classList.add("dragging");canvas.classList.toggle("panning",!node);

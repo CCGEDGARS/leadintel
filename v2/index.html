@@ -181,6 +181,13 @@
 
       <section class="view" id="view-signals">
         <div class="section-head"><div><p class="kicker">Evidence stream</p><h2>Market signals</h2></div><div class="filters" id="signal-filters"></div></div>
+        <div class="signal-rules-panel">
+          <div class="signal-rules-head">
+            <div><strong>Signal rules</strong><span id="signal-rules-summary">Loading rules…</span></div>
+            <button class="btn secondary" id="add-signal-rule-quick" type="button">Add signal rule</button>
+          </div>
+          <div class="signal-rule-grid" id="signal-rules-manager"></div>
+        </div>
         <div class="table-card"><table><thead><tr><th>Signal</th><th>Company</th><th>Type</th><th>Date</th><th>Confidence</th><th>Status</th></tr></thead><tbody id="signals-body"></tbody></table></div>
       </section>
 
