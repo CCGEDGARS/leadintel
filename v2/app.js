@@ -21,6 +21,12 @@ const COUNTRY_PRESETS=[
   {name:"Latvia",code:"LV"},{name:"Estonia",code:"EE"},{name:"Lithuania",code:"LT"},{name:"Finland",code:"FI"},{name:"Sweden",code:"SE"},{name:"Norway",code:"NO"},{name:"Denmark",code:"DK"},{name:"Poland",code:"PL"},{name:"Germany",code:"DE"}
 ];
 const LANGUAGE_PRESETS=["Latvian","Estonian","Lithuanian","English","Finnish","Swedish","Norwegian","Danish","Polish","German","Russian"];
+const LANGUAGE_MODES=[
+  {id:"auto-market",label:"Auto by market",hint:"Use the local market language unless the company or source looks international."},
+  {id:"latvian-only",label:"Latvian only",hint:"Force Latvian outreach and customer-facing copy."},
+  {id:"english-only",label:"English only",hint:"Force English outreach and customer-facing copy."},
+  {id:"bilingual-lv-en",label:"Bilingual: Latvian first, English fallback",hint:"Prefer Latvian for local Latvian companies, otherwise use English."}
+];
 const SOURCE_PACKS={
   LV:[{id:"lv-cv",name:"CV.lv",url:"https://www.cv.lv/",group:"Jobs",cadence:"Daily"},{id:"lv-firmas",name:"Firmas.lv",url:"https://www.firmas.lv/",group:"Company activity",cadence:"Daily"},{id:"lv-lursoft",name:"Lursoft",url:"https://www.lursoft.lv/",group:"Company intelligence",cadence:"Daily"},{id:"lv-iub",name:"IUB Procurement",url:"https://www.eis.gov.lv/EKEIS/Supplier/Procurement",group:"Public procurement",cadence:"Daily"},{id:"lv-labs",name:"Labs of Latvia",url:"https://labsoflatvia.com/",group:"Startups and funding",cadence:"Daily"},{id:"lv-lsm",name:"LSM Business",url:"https://www.lsm.lv/",group:"Business news",cadence:"Daily"}],
   EE:[{id:"ee-cvkeskus",name:"CVKeskus",url:"https://www.cvkeskus.ee/",group:"Jobs",cadence:"Daily"},{id:"ee-register",name:"Estonian e-Business Register",url:"https://ariregister.rik.ee/",group:"Company activity",cadence:"Daily"},{id:"ee-riigihanked",name:"Riigihanked",url:"https://riigihanked.riik.ee/",group:"Public procurement",cadence:"Daily"},{id:"ee-err",name:"ERR Business",url:"https://www.err.ee/",group:"Business news",cadence:"Daily"},{id:"ee-startup",name:"Startup Estonia",url:"https://startupestonia.ee/",group:"Startups and funding",cadence:"Daily"}],
@@ -184,7 +190,7 @@ const defaultState = {
   schemaVersion:STATE_SCHEMA_VERSION,
   statuses:Object.fromEntries(demoOpportunities.map(o=>[o.id,o.status])),
   listStates:Object.fromEntries(demoOpportunities.map(o=>[o.id,o.contact.listState])),
-  settings:{emailCount:3,appCount:5,minScore:7},
+  settings:{emailCount:3,appCount:5,minScore:7,languageMode:"auto-market",internalLanguage:"English",outreachFallbackLanguage:"English"},
   workspace:{id:"edgars-latvia",name:"Edgars · Latvia",market:"Latvia"},
   activeMarketProfileId:"latvia",
   marketProfiles:structuredClone(MARKET_PROFILES),
@@ -262,6 +268,10 @@ function loadState(){
     const emailCount=Number(settings.emailCount);
     const appCount=Number(settings.appCount);
     const minScore=Number(settings.minScore);
+    const allowedLanguageModes=new Set(LANGUAGE_MODES.map(item=>item.id));
+    const languageMode=typeof settings.languageMode==="string"?settings.languageMode:defaultState.settings.languageMode;
+    const internalLanguage=typeof settings.internalLanguage==="string"&&settings.internalLanguage.trim()?settings.internalLanguage.trim():defaultState.settings.internalLanguage;
+    const outreachFallbackLanguage=typeof settings.outreachFallbackLanguage==="string"&&settings.outreachFallbackLanguage.trim()?settings.outreachFallbackLanguage.trim():defaultState.settings.outreachFallbackLanguage;
     return {
       ...structuredClone(defaultState),
       schemaVersion:STATE_SCHEMA_VERSION,
@@ -270,7 +280,10 @@ function loadState(){
       settings:{
         emailCount:Number.isInteger(emailCount)&&emailCount>=1&&emailCount<=5?emailCount:defaultState.settings.emailCount,
         appCount:Number.isInteger(appCount)&&appCount>=3&&appCount<=10?appCount:defaultState.settings.appCount,
-        minScore:Number.isFinite(minScore)&&minScore>=1&&minScore<=10?minScore:defaultState.settings.minScore
+        minScore:Number.isFinite(minScore)&&minScore>=1&&minScore<=10?minScore:defaultState.settings.minScore,
+        languageMode:allowedLanguageModes.has(languageMode)?languageMode:defaultState.settings.languageMode,
+        internalLanguage,
+        outreachFallbackLanguage
       },
       workspace:{
         id:typeof workspace.id==="string"&&workspace.id.trim()?workspace.id.trim():defaultState.workspace.id,
@@ -605,7 +618,15 @@ async function triggerResearch({test=false}={}){
     offers:state.offers.filter(item=>item.active),
     signal_rules:state.signalRules.filter(item=>item.active),
     playbooks:state.playbooks.filter(item=>item.active),
-    settings:{email_count:state.settings.emailCount,app_count:state.settings.appCount,min_score:state.settings.minScore},
+    language_policy:{
+      mode:state.settings.languageMode,
+      mode_label:languageModeLabel(),
+      internal_language:state.settings.internalLanguage,
+      outreach_fallback_language:state.settings.outreachFallbackLanguage,
+      market_languages:market.languages,
+      script_control:"Use the predefined playbooks. Adapt language according to the selected policy, but do not invent new outreach scripts when no matching playbook exists."
+    },
+    settings:{email_count:state.settings.emailCount,app_count:state.settings.appCount,min_score:state.settings.minScore,language_mode:state.settings.languageMode,internal_language:state.settings.internalLanguage,outreach_fallback_language:state.settings.outreachFallbackLanguage},
     workflow:state.map.publishedConfigs
   };
   const key=state.runtime.pendingRunKey||crypto.randomUUID();state.runtime.pendingRunKey=key;saveState();
@@ -1143,6 +1164,21 @@ function matchingPlaybook(o){
   const signal=state.signalRules.find(item=>String(item.keywords||"").split(",").some(keyword=>keyword.trim()&&text.includes(keyword.trim().toLowerCase())));
   return state.playbooks.find(item=>item.active&&item.offerId===offer?.id&&(!signal||item.signalId===signal.id))||state.playbooks.find(item=>item.active&&item.offerId===offer?.id)||state.playbooks.find(item=>item.active&&(!signal||item.signalId===signal.id))||state.playbooks.find(item=>item.active);
 }
+function languageModeLabel(mode=state.settings.languageMode){
+  return LANGUAGE_MODES.find(item=>item.id===mode)?.label||LANGUAGE_MODES[0].label;
+}
+function resolvedOutreachLanguage(o={},playbook=null){
+  const mode=state.settings.languageMode||"auto-market";
+  if(mode==="latvian-only")return "Latvian";
+  if(mode==="english-only")return "English";
+  const market=activeMarket();
+  const localLanguage=market.languages?.[0]||playbook?.language||"English";
+  const text=[o.company,o.location,o.signal,o.signalType,o.contact?.role,playbook?.language].filter(Boolean).join(" ").toLowerCase();
+  const looksLatvian=/latvia|riga|jelgava|mārupe|sia|as\b|latv/i.test(text);
+  const looksInternational=/english|global|international|export|baltic|nordic|cee|europe/i.test(text);
+  if(mode==="bilingual-lv-en")return looksLatvian&&!looksInternational?"Latvian":"English";
+  return looksInternational?state.settings.outreachFallbackLanguage:localLanguage;
+}
 function fillTemplate(value,o){const first=o.contact.name.split(" ")[0]||"there";return String(value||"").replaceAll("{{company}}",o.company).replaceAll("{{first_name}}",first).replaceAll("{{signal_type}}",o.signalType).replaceAll("{{signal}}",o.signal).replaceAll("{{offer}}",o.primaryOffer).replaceAll("{{booking_link}}",state.scheduling.bookingUrl);}
 function shouldIncludeBooking(o,playbook){
   const mode=playbook?.ctaMode||"Include in initial email";if(mode==="Never include"||!state.scheduling.bookingUrl)return false;
@@ -1200,10 +1236,11 @@ function renderOutreach(){
   document.getElementById("outreach-summary").innerHTML=`<article><strong>${automatic}</strong><span>Automatic-ready</span></article><article><strong>${review}</strong><span>Human review</span></article><article><strong>${ready}</strong><span>Waiting for sender</span></article><article><strong>${state.outreachAutomation.dailyLimit}</strong><span>Daily maximum</span></article>`;
   document.getElementById("outreach-grid").innerHTML=list.length?list.map(({o,playbook,decision})=>{
     const stage=state.crm.records[o.id]?.stage||"Discovered";
+    const language=resolvedOutreachLanguage(o,playbook);
     const routeTone=decision.route.includes("Automatic")||decision.route.includes("sender")||decision.route.includes("send")?"good":decision.route==="Draft only"?"":"warn";
     const canManualApprove=decision.eligible||(isPersonalEmail(o.contact)&&o.contact.emailStatus==="Strong match"&&state.listStates[o.id]==="Manual review");
     const routeAction=decision.route==="Human review"?`<button class="btn primary" data-status-action="Approved" data-id="${o.id}" ${canManualApprove?"":"disabled"}>Approve</button>`:decision.route==="Approved export only"?'<button class="btn primary" disabled>Export ready</button>':`<button class="btn primary" disabled>${state.outreachAutomation.senderConnected?"Queued safely":"Connect sender"}</button>`;
-    return `<article class="outreach-card"><div class="outreach-card-head"><div><p class="kicker">${esc(state.statuses[o.id]||"Research")} · ${esc(stage)}</p><h3>${esc(o.company)}</h3></div><span class="status ${routeTone}">${esc(decision.route)}</span></div><p>${esc(o.signal)}</p><div class="outreach-meta"><span>${esc(o.contact.name||"Contact needed")}</span><span>${esc(o.contact.role||"Role needed")}</span><span>${esc(playbook?.name||"No playbook match")}</span><span>${esc(decision.mode)}</span></div><div class="safety-checks">${decision.reasons.length?decision.reasons.map(reason=>`<span class="failed">× ${esc(reason)}</span>`).join(""):'<span class="passed">✓ All delivery checks passed</span>'}</div><div class="card-actions"><button class="btn secondary" data-message="${o.id}">Edit script</button>${routeAction}</div></article>`;
+    return `<article class="outreach-card"><div class="outreach-card-head"><div><p class="kicker">${esc(state.statuses[o.id]||"Research")} · ${esc(stage)}</p><h3>${esc(o.company)}</h3></div><span class="status ${routeTone}">${esc(decision.route)}</span></div><p>${esc(o.signal)}</p><div class="outreach-meta"><span>${esc(o.contact.name||"Contact needed")}</span><span>${esc(o.contact.role||"Role needed")}</span><span>${esc(playbook?.name||"No playbook match")}</span><span>${esc(languageModeLabel())}: ${esc(language)}</span><span>${esc(decision.mode)}</span></div><div class="safety-checks">${decision.reasons.length?decision.reasons.map(reason=>`<span class="failed">× ${esc(reason)}</span>`).join(""):'<span class="passed">✓ All delivery checks passed</span>'}</div><div class="card-actions"><button class="btn secondary" data-message="${o.id}">Edit script</button>${routeAction}</div></article>`;
   }).join(""):'<div class="empty-state"><h3>No outreach candidates yet</h3><p>Qualified opportunities appear here after playbook matching and contact eligibility checks.</p></div>';
   const current=decisions.slice(0,8).map(({o,playbook,decision})=>({opportunityId:o.id,event:decision.route,detail:`${o.company} · ${playbook?.name||"No playbook"}`}));
   const audit=[...state.outreachAudit,...current].slice(0,12);
@@ -1309,8 +1346,9 @@ function openMessage(id){
   const body=applyBookingInvitation(saved?.body||templateBody,o,playbook);
   const message=`Subject: ${subject}\n\n${body}`;
   const decision=automationDecision(o,playbook);
+  const language=resolvedOutreachLanguage(o,playbook);
   const bookingState=shouldIncludeBooking(o,playbook)?`${state.scheduling.eventName} link included`:`Booking link: ${playbook?.ctaMode||"Include in initial email"}`;
-  document.getElementById("modal-content").innerHTML=`<p class="kicker">Predefined script · ${esc(playbook?.channel||"Email")}</p><h2>${esc(o.company)}</h2><p class="drawer-sub">${esc(playbook?.name||"Default playbook")} · ${esc(playbook?.language||"English")} · ${esc(decision.route)}</p><div class="message-route"><strong>${esc(decision.mode)}</strong><span>${decision.reasons.length?esc(decision.reasons.join(" · ")):"All current safety checks pass"}</span></div><div class="booking-state"><span>◷</span><div><strong>${esc(bookingState)}</strong><small>${esc(state.scheduling.duration)} minutes · ${esc(state.scheduling.platform)} · Calendly availability</small></div></div><textarea class="message-box" data-draft-id="${esc(o.id)}">${esc(message)}</textarea><div class="card-actions" style="margin-top:12px"><button class="btn secondary" id="copy-message">Copy draft</button><button class="btn primary" data-status-action="Draft ready" data-id="${o.id}">Save to outreach queue</button></div>`;
+  document.getElementById("modal-content").innerHTML=`<p class="kicker">Predefined script · ${esc(playbook?.channel||"Email")}</p><h2>${esc(o.company)}</h2><p class="drawer-sub">${esc(playbook?.name||"Default playbook")} · ${esc(languageModeLabel())}: ${esc(language)} · ${esc(decision.route)}</p><div class="message-route"><strong>${esc(decision.mode)}</strong><span>${decision.reasons.length?esc(decision.reasons.join(" · ")):"All current safety checks pass"}</span></div><div class="message-route"><strong>Language route</strong><span>${esc(languageModeLabel())} · Manual script language: ${esc(playbook?.language||"English")} · Output: ${esc(language)}</span></div><div class="booking-state"><span>◷</span><div><strong>${esc(bookingState)}</strong><small>${esc(state.scheduling.duration)} minutes · ${esc(state.scheduling.platform)} · Calendly availability</small></div></div><textarea class="message-box" data-draft-id="${esc(o.id)}">${esc(message)}</textarea><div class="card-actions" style="margin-top:12px"><button class="btn secondary" id="copy-message">Copy draft</button><button class="btn primary" data-status-action="Draft ready" data-id="${o.id}">Save to outreach queue</button></div>`;
   openModal();
 }
 
@@ -1356,6 +1394,9 @@ function renderAll(){
   document.getElementById("setting-email").value=state.settings.emailCount;
   document.getElementById("setting-app").value=state.settings.appCount;
   document.getElementById("setting-score").value=state.settings.minScore;
+  document.getElementById("setting-language-mode").value=state.settings.languageMode;
+  document.getElementById("setting-internal-language").value=state.settings.internalLanguage;
+  document.getElementById("setting-fallback-language").value=state.settings.outreachFallbackLanguage;
   document.getElementById("setting-auto-outreach").checked=state.outreachAutomation.enabled;
   document.getElementById("setting-outreach-limit").value=state.outreachAutomation.dailyLimit;
   document.getElementById("setting-booking-url").value=state.scheduling.bookingUrl;
@@ -1555,6 +1596,15 @@ document.addEventListener("click",async event=>{
     state.map.draftConfigs.email.value=Math.max(1,Math.min(5,Number(document.getElementById("setting-email").value)||3));
     state.map.draftConfigs.shortlist.value=Math.max(3,Math.min(10,Number(document.getElementById("setting-app").value)||5));
     state.map.draftConfigs.score.value=Math.max(1,Math.min(10,Number(document.getElementById("setting-score").value)||7));
+    state.settings={
+      ...state.settings,
+      emailCount:state.map.draftConfigs.email.value,
+      appCount:state.map.draftConfigs.shortlist.value,
+      minScore:state.map.draftConfigs.score.value,
+      languageMode:document.getElementById("setting-language-mode").value,
+      internalLanguage:document.getElementById("setting-internal-language").value,
+      outreachFallbackLanguage:document.getElementById("setting-fallback-language").value
+    };
     state.outreachAutomation.enabled=document.getElementById("setting-auto-outreach").checked;
     state.outreachAutomation.dailyLimit=Math.max(3,Math.min(5,Number(document.getElementById("setting-outreach-limit").value)||5));
     state.scheduling={...state.scheduling,bookingUrl,eventName:document.getElementById("setting-booking-name").value.trim()||"Strategy Call",ctaCopy:document.getElementById("setting-booking-cta").value.trim()||defaultState.scheduling.ctaCopy,duration:30,platform:"Zoom"};
