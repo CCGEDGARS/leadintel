@@ -3,7 +3,7 @@ main = "src/index.js"
 compatibility_date = "2026-07-20"
 
 [vars]
-APP_ORIGIN = "https://ccgedgars.github.io,https://leadintel-api.edgars-7e7.workers.dev"
+APP_ORIGIN = "https://ccgedgars.github.io,https://leadintel.ccgroup.lv,https://leadintel-api.edgars-7e7.workers.dev"
 SESSION_TTL_HOURS = "168"
 
 [assets]

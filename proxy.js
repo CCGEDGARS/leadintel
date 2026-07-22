@@ -15,6 +15,7 @@
 
 const ALLOWED_ORIGINS = new Set([
   'https://ccgedgars.github.io',
+  'https://leadintel.ccgroup.lv',
 ]);
 
 function isAllowedOrigin(request) {

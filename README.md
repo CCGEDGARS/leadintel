@@ -6,9 +6,10 @@ human-approved outreach.
 
 ## Open the app
 
-- Version selector: <https://ccgedgars.github.io/leadintel/>
-- V2 control centre: <https://ccgedgars.github.io/leadintel/v2/>
-- Archived V1: <https://ccgedgars.github.io/leadintel/LeadIntel.html>
+- Production domain: <https://leadintel.ccgroup.lv/v2/>
+- Production root: <https://leadintel.ccgroup.lv/> redirects to V2.
+- GitHub Pages fallback: <https://ccgedgars.github.io/leadintel/v2/>
+- Archived V1 fallback: <https://ccgedgars.github.io/leadintel/LeadIntel.html>
 
 V2 is a static browser application. It is functional with demo data and JSON
 imports. Live automation requires private Make or backend endpoints; provider
@@ -44,4 +45,3 @@ Then open `http://localhost:8080/v2/`.
 - Suppression and eligibility checks are required before campaign use.
 - Outreach sending is disabled in the basic version; a human must approve it.
 - Credentials belong in Make/provider connections or a private backend.
-
