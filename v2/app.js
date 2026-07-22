@@ -402,6 +402,17 @@ function firstValue(row,keys,fallback=""){for(const key of keys){if(row?.[key]!=
 function numberValue(value,fallback=0){const parsed=Number(value);return Number.isFinite(parsed)?parsed:fallback;}
 function listValue(value){if(Array.isArray(value))return value.filter(Boolean).map(String);if(typeof value!=="string"||!value.trim())return [];try{const parsed=JSON.parse(value);if(Array.isArray(parsed))return parsed.map(String);}catch{}return value.split(/\n|\s*;\s*/).filter(Boolean);}
 function safeUrl(value){try{const url=new URL(String(value));return ["https:","http:"].includes(url.protocol)?url.href:"";}catch{return "";}}
+function linkedInLookupUrl(opportunity){
+  const direct=safeUrl(opportunity?.contact?.linkedin||"");
+  if(direct){
+    try{
+      const url=new URL(direct);
+      if(/(^|\.)linkedin\.com$/i.test(url.hostname)&&url.pathname.replace(/\/+$/,"")&&url.pathname!=="/")return direct;
+    }catch{}
+  }
+  const terms=[opportunity?.contact?.name,opportunity?.contact?.role,opportunity?.company].filter(Boolean).join(" ");
+  return `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(terms)}`;
+}
 function isPrivateEndpoint(value){if(!value)return true;try{const url=new URL(value);return url.protocol==="https:"||["localhost","127.0.0.1"].includes(url.hostname);}catch{return false;}}
 function formatNow(){return new Intl.DateTimeFormat("en-GB",{dateStyle:"medium",timeStyle:"short",timeZone:"Europe/Riga"}).format(new Date());}
 function dateAge(value){const date=new Date(value);if(Number.isNaN(date.getTime()))return null;return Math.max(0,Math.floor((Date.now()-date.getTime())/86400000));}
@@ -983,9 +994,9 @@ function renderContacts(){
   document.getElementById("contacts-body").innerHTML=list.map(o=>`<tr>
     <td><strong>${esc(o.contact.name)}</strong></td><td>${esc(o.company)}</td><td>${esc(o.contact.role)}</td>
     <td>${o.contact.emailStatus==="Predicted"?'<span class="status warn">Hidden until verified</span>':`<a class="evidence" href="mailto:${esc(o.contact.email)}">${esc(o.contact.email)}</a>`}</td>
-    <td><span class="status ${statusClass(o.contact.emailStatus)}">${esc(o.contact.emailStatus)}</span><br><small>${o.contact.emailType==="personal"?"Personal · exact person/company/role match":esc(o.contact.source)}</small></td>
+    <td><span class="status ${statusClass(o.contact.emailStatus)}">${esc(o.contact.emailStatus)}</span><br><small>${o.contact.emailType==="personal"?"Personal · exact person/company/role match":esc(o.contact.source)}</small><br><small class="linkedin-note">LinkedIn is for role verification, not automated outreach.</small></td>
     <td><select data-list-state="${o.id}"><option ${state.listStates[o.id]==="Research"?"selected":""}>Research</option><option ${state.listStates[o.id]==="Eligible"?"selected":""}>Eligible</option><option ${state.listStates[o.id]==="Manual review"?"selected":""}>Manual review</option><option ${state.listStates[o.id]==="Suppressed"?"selected":""}>Suppressed</option><option ${state.listStates[o.id]==="Unsubscribed"?"selected":""}>Unsubscribed</option></select></td>
-    <td><div class="card-actions">${["Verified","Strong match"].includes(o.contact.emailStatus)?"":`<button class="btn small primary" data-enrich="${o.id}" ${o.contact.enrichmentStatus==="processing"?"disabled":""}>${o.contact.enrichmentStatus==="processing"?"Checking…":"Find work email · 1 lookup"}</button>${backendSession?.role==="owner"?`<button class="btn small secondary" data-enrich-personal="${o.id}">Personal exception</button>`:""}`}<button class="btn small secondary" data-open="${o.id}">Dossier</button></div></td></tr>`).join("");
+    <td><div class="card-actions contact-actions">${["Verified","Strong match"].includes(o.contact.emailStatus)?"":`<button class="btn small primary" data-enrich="${o.id}" ${o.contact.enrichmentStatus==="processing"?"disabled":""}>${o.contact.enrichmentStatus==="processing"?"Checking…":"Find work email · 1 lookup"}</button>${backendSession?.role==="owner"?`<button class="btn small secondary" data-enrich-personal="${o.id}">Personal exception</button>`:""}`}<a class="btn small secondary linkedin-action" href="${esc(linkedInLookupUrl(o))}" target="_blank" rel="noopener">Check LinkedIn ↗</a><button class="btn small secondary" data-open="${o.id}">Dossier</button></div></td></tr>`).join("");
 }
 
 function renderSources(){
