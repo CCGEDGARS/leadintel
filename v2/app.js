@@ -1907,6 +1907,97 @@ function saveOpenDraft(){
 }
 function closeModal(){saveOpenDraft();document.getElementById("modal-backdrop").classList.remove("open");}
 
+function supportDiagnostics(){
+  const reminders=[];
+  if(state.runtime?.mode==="demo")reminders.push("Demo data is active");
+  if(state.runtime?.error)reminders.push(`Latest sync error: ${state.runtime.error}`);
+  if(!state.integrations?.runUrl)reminders.push("Make run webhook is missing");
+  if(!state.integrations?.dataUrl)reminders.push("Snapshot/data endpoint is not set");
+  if(!enrichmentControl.configured)reminders.push("Apollo secure key is not connected");
+  if(!state.outreachAutomation?.senderConnected)reminders.push("Email sender is not connected");
+  if(!state.scheduling?.bookingUrl)reminders.push("Calendly booking URL is missing");
+  const activeView=document.querySelector(".view.active")?.id?.replace("view-","")||"unknown";
+  return {
+    view:activeView,
+    market:activeMarket().name,
+    runtime:state.runtime?.mode||"unknown",
+    liveEndpoint:Boolean(state.integrations?.runUrl),
+    snapshotEndpoint:Boolean(state.integrations?.dataUrl),
+    apollo:enrichmentControl.configured?"connected":"needs setup",
+    sender:state.outreachAutomation?.senderConnected?"connected":"not connected",
+    calendly:state.scheduling?.bookingUrl||"missing",
+    reminders
+  };
+}
+
+function supportAnswer(topic,question=""){
+  const d=supportDiagnostics();
+  const problem=question.toLowerCase();
+  let title="Here is where I would look first";
+  let steps=[];
+  if(topic==="not-working"||problem.includes("run")||problem.includes("work")||problem.includes("broken")){
+    steps=[
+      d.liveEndpoint?"Make run endpoint is present. Use Settings → Protected runtime endpoints → Validate run endpoint before spending credits.":"Go to Settings → Protected runtime endpoints and add or validate the Make execution webhook.",
+      d.runtime==="demo"?"You are still in demo/local mode. Press Sync data after the snapshot endpoint is connected.":"Runtime is not demo, so next check Run history for the latest error.",
+      d.reminders.length?`Current alerts: ${d.reminders.join("; ")}.`:"No critical local alerts are visible."
+    ];
+  }else if(topic==="find-feature"||problem.includes("find")||problem.includes("where")||problem.includes("lost")){
+    steps=[
+      "Use the left navigation: System map shows workflow, Sources edits monitored sources, Signals edits market rules, Scripts edits message templates, Settings holds integrations and keys checklist.",
+      "On System map, click any card to open its right-side details. Use Hide details or Full canvas if space is tight.",
+      "If a right-side panel is closed, click another workflow card or use the restore/focus controls."
+    ];
+  }else if(topic==="connections"||problem.includes("connect")||problem.includes("api")||problem.includes("key")){
+    steps=[
+      "Open Settings → Connection status and Integrations & setup cockpit.",
+      `Make: ${d.liveEndpoint?"configured":"endpoint missing"}. Apollo: ${d.apollo}. Email sender: ${d.sender}. Calendly: ${d.calendly==="missing"?"missing":"configured"}.`,
+      "Real API keys belong in Make or Cloudflare secrets, not in this public page."
+    ];
+  }else if(topic==="costs"||problem.includes("credit")||problem.includes("cost")||problem.includes("money")){
+    steps=[
+      "Keep source limits low and run Company websites only after qualification.",
+      "Apollo runs only after the score gate, and phones are off by default.",
+      "Use Validate run endpoint and test buttons before live runs; keep OpenAI at the fast model and 900 tokens unless quality drops."
+    ];
+  }else{
+    steps=[
+      "Start from the current page and check the highlighted status badges.",
+      d.reminders.length?`Resolve these first: ${d.reminders.join("; ")}.`:"No obvious local blocker is visible.",
+      "If you need me to inspect deeper, copy diagnostics and send them here."
+    ];
+  }
+  return {title,steps,d};
+}
+
+function renderSupportAnswer(topic){
+  const question=document.getElementById("ai-support-question")?.value.trim()||"";
+  const result=supportAnswer(topic,question);
+  const answer=document.getElementById("ai-support-answer");
+  if(!answer)return;
+  answer.innerHTML=`<strong>${esc(result.title)}</strong><ul>${result.steps.map(step=>`<li>${esc(step)}</li>`).join("")}</ul>`;
+}
+
+function toggleAiSupport(open){
+  const panel=document.getElementById("ai-support-panel");
+  if(!panel)return;
+  const shouldOpen=open??!panel.classList.contains("open");
+  panel.classList.toggle("open",shouldOpen);
+  panel.setAttribute("aria-hidden",shouldOpen?"false":"true");
+  if(shouldOpen)document.getElementById("ai-support-question")?.focus();
+}
+
+async function copySupportDiagnostics(){
+  const text=JSON.stringify(supportDiagnostics(),null,2);
+  if(navigator.clipboard?.writeText){
+    await navigator.clipboard.writeText(text);
+  }else{
+    const input=document.createElement("textarea");
+    input.value=text;input.setAttribute("readonly","");
+    input.style.position="fixed";input.style.left="-9999px";
+    document.body.appendChild(input);input.select();document.execCommand("copy");input.remove();
+  }
+}
+
 function switchView(name){
   if(name!=="map"&&mapFullscreenMode)setMapFullscreen(false,{refit:false});
   document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id===`view-${name}`));
@@ -1955,6 +2046,15 @@ function renderAll(){
 
 document.addEventListener("click",async event=>{
   if(suppressMapClick&&event.target.closest(".map-canvas")){suppressMapClick=false;event.preventDefault();return;}
+  if(event.target.id==="ai-support-fab"){toggleAiSupport(true);return;}
+  if(event.target.id==="ai-support-close"){toggleAiSupport(false);return;}
+  const supportTopic=event.target.closest("[data-support-topic]");if(supportTopic){renderSupportAnswer(supportTopic.dataset.supportTopic);return;}
+  if(event.target.id==="ai-support-send"){renderSupportAnswer("custom");return;}
+  if(event.target.id==="ai-support-copy"){
+    try{await copySupportDiagnostics();showToast("Support diagnostics copied");}
+    catch(error){showToast("Could not copy diagnostics");}
+    return;
+  }
   if(event.target.id==="backend-login-btn"){await loginBackend();return;}
   if(event.target.id==="backend-logout-btn"){await logoutBackend();return;}
   const enrich=event.target.closest("[data-enrich]");if(enrich){await enrichOpportunity(enrich.dataset.enrich);return;}
@@ -2310,7 +2410,7 @@ document.getElementById("data-import").addEventListener("change",async event=>{
   const [file]=event.target.files;if(!file)return;
   try{applyRuntimePayload(JSON.parse(await file.text()),{mode:"imported"});showToast(`Imported ${opportunities.length} opportunities`);}catch(error){showToast(`Import failed: ${error.message}`);}finally{event.target.value="";}
 });
-document.addEventListener("keydown",event=>{if(event.key==="Escape"){closeDrawer();closeModal();}});
+document.addEventListener("keydown",event=>{if(event.key==="Escape"){toggleAiSupport(false);closeDrawer();closeModal();}});
 
 restoreRuntimeData();
 renderAll();

@@ -289,7 +289,34 @@
     </div>
   </div>
 
+  <button class="ai-support-fab" id="ai-support-fab" type="button" aria-label="Open AI support">AI</button>
+  <section class="ai-support-panel" id="ai-support-panel" aria-live="polite" aria-hidden="true">
+    <div class="ai-support-head">
+      <div>
+        <p class="kicker">In-app support</p>
+        <h3>AI support guide</h3>
+      </div>
+      <button class="drawer-close" id="ai-support-close" aria-label="Close AI support">×</button>
+    </div>
+    <p class="panel-copy">Tell me what feels broken. This helper checks the local app state first, so it does not spend OpenAI credits.</p>
+    <div class="ai-support-prompts">
+      <button type="button" data-support-topic="not-working">Something is not working</button>
+      <button type="button" data-support-topic="find-feature">I can’t find something</button>
+      <button type="button" data-support-topic="connections">Check connections</button>
+      <button type="button" data-support-topic="costs">Protect credits</button>
+    </div>
+    <textarea id="ai-support-question" placeholder="Example: I clicked Run research and nothing happened..."></textarea>
+    <div class="card-actions">
+      <button class="btn secondary" type="button" id="ai-support-copy">Copy diagnostics</button>
+      <button class="btn primary" type="button" id="ai-support-send">Ask helper</button>
+    </div>
+    <div class="ai-support-answer" id="ai-support-answer">
+      <strong>Ready when you are.</strong>
+      <p>Start with a quick button or write what you are trying to do.</p>
+    </div>
+  </section>
+
   <div class="toast" id="toast"></div>
-  <script src="app.js?v=integrations-setup-01"></script>
+  <script src="app.js?v=ai-support-01"></script>
 </body>
 </html>
