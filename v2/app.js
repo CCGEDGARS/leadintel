@@ -1166,12 +1166,12 @@ function renderContacts(){
   if(["Verified","Public business","Predicted"].includes(currentContactFilter)) list=list.filter(o=>o.contact.emailStatus===currentContactFilter);
   if(["Eligible","Suppressed"].includes(currentContactFilter)) list=list.filter(o=>state.listStates[o.id]===currentContactFilter);
   document.getElementById("contact-count").textContent=opportunities.length;
-  document.getElementById("contacts-body").innerHTML=list.map(o=>{const linkedinTargets=linkedInContactTargets(o);return `<tr>
+  document.getElementById("contacts-body").innerHTML=list.map(o=>{const linkedinTargets=linkedInContactTargets(o);const canWrite=isVerifiedWorkEmail(o);const needsLookup=!["Verified","Strong match"].includes(o.contact.emailStatus);return `<tr>
     <td><strong>${esc(o.contact.name)}</strong></td><td>${esc(o.company)}</td><td>${esc(o.contact.role)}</td>
     <td>${o.contact.emailStatus==="Predicted"?'<span class="status warn">Hidden until verified</span>':`<a class="evidence" href="mailto:${esc(o.contact.email)}">${esc(o.contact.email)}</a>`}</td>
-    <td><span class="status ${statusClass(o.contact.emailStatus)}">${esc(o.contact.emailStatus)}</span><br><small>${o.contact.emailType==="personal"?"Personal · exact person/company/role match":esc(o.contact.source)}</small><br><small class="linkedin-note">LinkedIn is for role verification, not automated outreach.</small></td>
+    <td><span class="status ${statusClass(o.contact.emailStatus)}">${esc(o.contact.emailStatus)}</span><br><small>${o.contact.emailType==="personal"?"Personal · exact person/company/role match":esc(o.contact.source)}</small><br><small class="linkedin-note">Write is available only for verified work emails. LinkedIn is for role verification, not automated outreach.</small></td>
     <td><select data-list-state="${o.id}"><option ${state.listStates[o.id]==="Research"?"selected":""}>Research</option><option ${state.listStates[o.id]==="Eligible"?"selected":""}>Eligible</option><option ${state.listStates[o.id]==="Manual review"?"selected":""}>Manual review</option><option ${state.listStates[o.id]==="Suppressed"?"selected":""}>Suppressed</option><option ${state.listStates[o.id]==="Unsubscribed"?"selected":""}>Unsubscribed</option></select></td>
-    <td><div class="card-actions contact-actions">${["Verified","Strong match"].includes(o.contact.emailStatus)?"":`<button class="btn small primary" data-enrich="${o.id}" ${o.contact.enrichmentStatus==="processing"?"disabled":""}>${o.contact.enrichmentStatus==="processing"?"Checking…":"Find work email · 1 lookup"}</button>${backendSession?.role==="owner"?`<button class="btn small secondary" data-enrich-personal="${o.id}">Personal exception</button>`:""}`}<a class="btn small secondary linkedin-action" href="${esc(linkedInLookupUrl(o))}" target="_blank" rel="noopener">Known LI/profile ↗</a><button class="btn small primary" data-write-contact="${o.id}">Write</button><button class="btn small secondary" data-open="${o.id}">Dossier</button><div class="linkedin-targets" aria-label="Suggested LinkedIn contact searches">${linkedinTargets.map(target=>`<a href="${esc(target.url)}" target="_blank" rel="noopener">${esc(target.role)} ↗</a>`).join("")}</div></div></td></tr>`;}).join("");
+    <td><div class="card-actions contact-actions">${needsLookup?`<button class="btn small primary" data-enrich="${o.id}" ${o.contact.enrichmentStatus==="processing"?"disabled":""}>${o.contact.enrichmentStatus==="processing"?"Checking…":"Find work email · 1 lookup"}</button>${backendSession?.role==="owner"?`<button class="btn small secondary" data-enrich-personal="${o.id}">Personal exception</button>`:""}`:""}<a class="btn small secondary linkedin-action" href="${esc(linkedInLookupUrl(o))}" target="_blank" rel="noopener" title="Open LinkedIn profile or people search in a new tab">Known LI/profile ↗</a><button class="btn small primary" data-write-contact="${o.id}" ${canWrite?"":'disabled title="Requires a verified work email before writing"'}>${canWrite?"Write":"Verify first"}</button><button class="btn small secondary" data-open="${o.id}">Dossier</button><div class="linkedin-targets" aria-label="Suggested LinkedIn contact searches">${linkedinTargets.map(target=>`<a href="${esc(target.url)}" target="_blank" rel="noopener">${esc(target.role)} ↗</a>`).join("")}</div></div></td></tr>`;}).join("");
 }
 
 function renderSources(){
@@ -2323,6 +2323,10 @@ document.addEventListener("click",async event=>{
   if(writeContact){
     ensureScriptLibrary();
     const opportunity=opportunities.find(item=>item.id===writeContact.dataset.writeContact)||opportunities[0];
+    if(!isVerifiedWorkEmail(opportunity)){
+      showToast("Write is locked until the contact has a verified work email");
+      return;
+    }
     const assistant=writingAssistantSettings();
     assistant.opportunityId=opportunity?.id||assistant.opportunityId||opportunities[0]?.id||"";
     const matchingOffer=state.offers.find(item=>item.name===opportunity?.primaryOffer)||state.offers.find(item=>item.active!==false)||state.offers[0];
