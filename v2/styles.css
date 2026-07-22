@@ -432,6 +432,8 @@ body.map-fullscreen-open { overflow: hidden; }
 .card-actions { display: flex; gap: 6px; }
 .contact-actions { align-items: center; flex-wrap: wrap; min-width: 260px; }
 .linkedin-action { text-decoration: none; white-space: nowrap; }
+.linkedin-action.confirmed { border-color: rgba(36,168,120,.42); background: rgba(36,168,120,.14); color: #76e0b8; }
+.linkedin-action.confirmed:hover { border-color: rgba(36,168,120,.72); background: rgba(36,168,120,.22); color: #b9f5dc; }
 .linkedin-note { display: inline-block; margin-top: 4px; color: #7f91ad; }
 .linkedin-targets { display: flex; flex-basis: 100%; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
 .linkedin-targets a { padding: 4px 7px; border: 1px solid rgba(94,143,255,.25); border-radius: 999px; background: rgba(57,119,246,.07); color: #91b1ff; font-size: 11px; font-weight: 700; text-decoration: none; }
