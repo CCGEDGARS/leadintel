@@ -2046,7 +2046,7 @@ function renderAll(){
 
 document.addEventListener("click",async event=>{
   if(suppressMapClick&&event.target.closest(".map-canvas")){suppressMapClick=false;event.preventDefault();return;}
-  if(event.target.id==="ai-support-fab"){toggleAiSupport(true);return;}
+  if(event.target.id==="ai-support-nav"||event.target.id==="ai-support-fab"){toggleAiSupport(true);return;}
   if(event.target.id==="ai-support-close"){toggleAiSupport(false);return;}
   const supportTopic=event.target.closest("[data-support-topic]");if(supportTopic){renderSupportAnswer(supportTopic.dataset.supportTopic);return;}
   if(event.target.id==="ai-support-send"){renderSupportAnswer("custom");return;}
