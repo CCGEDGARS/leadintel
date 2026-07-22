@@ -184,7 +184,10 @@
         <div class="signal-rules-panel">
           <div class="signal-rules-head">
             <div><strong>Signal rules</strong><span id="signal-rules-summary">Loading rules…</span></div>
-            <button class="btn secondary" id="add-signal-rule-quick" type="button">Add signal rule</button>
+            <div class="signal-rules-actions">
+              <button class="btn secondary" id="toggle-signal-rules" type="button" aria-controls="signal-rules-manager" aria-expanded="true">Hide rules</button>
+              <button class="btn secondary" id="add-signal-rule-quick" type="button">Add signal rule</button>
+            </div>
           </div>
           <div class="signal-rule-grid" id="signal-rules-manager"></div>
         </div>

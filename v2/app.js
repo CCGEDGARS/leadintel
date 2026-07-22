@@ -193,7 +193,7 @@ const defaultState = {
   signalRules:structuredClone(DEFAULT_SIGNAL_RULES),
   playbooks:structuredClone(DEFAULT_PLAYBOOKS),
   customSources:[],
-  ui:{controlSections:{markets:true,profile:true,offers:false,signals:false,playbooks:false}},
+  ui:{controlSections:{markets:true,profile:true,offers:false,signals:false,playbooks:false},signalRulesExpanded:true},
   crm:{stageOrder:structuredClone(CRM_STAGES),records:{}},
   outreachDrafts:{},outreachAudit:[],
   outreachAutomation:{enabled:true,dailyLimit:5,senderConnected:false,requireVerifiedWorkEmail:true,suppressionDays:30},
@@ -289,7 +289,7 @@ function loadState(){
       signalRules:normalizeArray(saved.signalRules,DEFAULT_SIGNAL_RULES),
       playbooks:normalizeArray(saved.playbooks,DEFAULT_PLAYBOOKS),
       customSources:Array.isArray(saved.customSources)?saved.customSources.filter(isRecord):[],
-      ui:{controlSections:{...defaultState.ui.controlSections,...controlSections}},
+      ui:{controlSections:{...defaultState.ui.controlSections,...controlSections},signalRulesExpanded:typeof ui.signalRulesExpanded==="boolean"?ui.signalRulesExpanded:defaultState.ui.signalRulesExpanded},
       crm:{stageOrder:Array.isArray(crm.stageOrder)?crm.stageOrder:structuredClone(CRM_STAGES),records:isRecord(crm.records)?crm.records:{}},
       outreachDrafts:isRecord(saved.outreachDrafts)?saved.outreachDrafts:{},
       outreachAudit:Array.isArray(saved.outreachAudit)?saved.outreachAudit.filter(isRecord):[],
@@ -913,8 +913,15 @@ function renderOpportunities(){
 function renderSignals(){
   document.getElementById("signal-count").textContent=signals.length;
   const activeRules=state.signalRules.filter(item=>item.active).length;
+  const rulesExpanded=state.ui.signalRulesExpanded!==false;
+  const rulesPanel=document.querySelector(".signal-rules-panel");
+  const rulesToggle=document.getElementById("toggle-signal-rules");
+  const rulesManager=document.getElementById("signal-rules-manager");
+  rulesPanel?.classList.toggle("collapsed",!rulesExpanded);
+  if(rulesToggle){rulesToggle.textContent=rulesExpanded?"Hide rules":"Expand rules";rulesToggle.setAttribute("aria-expanded",String(rulesExpanded));}
+  if(rulesManager)rulesManager.hidden=!rulesExpanded;
   document.getElementById("signal-rules-summary").textContent=`${activeRules}/${state.signalRules.length} active · changes affect the next research run`;
-  document.getElementById("signal-rules-manager").innerHTML=state.signalRules.map(item=>`<article class="signal-rule-card ${item.active?"":"paused"}" data-signal-rule="${esc(item.id)}">
+  rulesManager.innerHTML=state.signalRules.map(item=>`<article class="signal-rule-card ${item.active?"":"paused"}" data-signal-rule="${esc(item.id)}">
     <div class="signal-rule-card-head">
       <span class="status ${item.active?"good":"warn"}">${item.active?"Active":"Paused"}</span>
       <div class="signal-rule-actions">
@@ -1393,6 +1400,10 @@ document.addEventListener("click",async event=>{
     try{await persistOpportunityWorkflow(meetingBooked.dataset.meetingBooked);renderAll();showToast("Meeting recorded in CRM");}catch(error){renderAll();showToast(`Meeting saved locally · ${error.message}`);}return;
   }
   const signalFilter=event.target.closest("[data-signal-filter]");if(signalFilter){currentSignalFilter=signalFilter.dataset.signalFilter;renderSignals();return;}
+  if(event.target.id==="toggle-signal-rules"){
+    state.ui.signalRulesExpanded=state.ui.signalRulesExpanded===false;
+    saveState();renderSignals();showToast(state.ui.signalRulesExpanded?"Signal rules expanded":"Signal rules hidden");return;
+  }
   const toggleSignalRule=event.target.closest("[data-toggle-signal-rule]");if(toggleSignalRule){
     const rule=state.signalRules.find(item=>item.id===toggleSignalRule.dataset.toggleSignalRule);if(!rule)return;
     rule.active=!rule.active;saveState();renderSignals();renderControlCentre();showToast(rule.active?"Signal rule resumed":"Signal rule paused");return;
