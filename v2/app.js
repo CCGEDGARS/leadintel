@@ -1538,8 +1538,14 @@ function renderWritingAssistant(){
       const items=state.scriptLibrary.sources.filter(item=>item.category===category);
       return `
       <article class="writing-source-group">
-        <h4>${esc(category)}</h4>
-        ${items.length?items.map(item=>`<label class="writing-source"><input type="checkbox" data-writing-source="${esc(item.id)}" ${item.active!==false?"checked":""}><span><strong>${esc(item.title)}</strong><small>${esc(writingSourceDetail(item))}</small></span></label>`).join(""):`<div class="writing-source-empty"><span class="empty-checkbox"></span><span><strong>No source uploaded</strong><small>Upload a PDF above, save it, then tick it here.</small></span></div>`}
+        <div class="writing-source-heading"><span class="book-silhouette" aria-hidden="true">▥</span><h4>${esc(category)}</h4></div>
+        <div class="writing-source-items">
+          ${items.length?items.map(item=>`<label class="writing-source"><input type="checkbox" data-writing-source="${esc(item.id)}" ${item.active!==false?"checked":""}><span><strong>${esc(item.title)}</strong><small>${esc(writingSourceDetail(item))}</small></span></label>`).join(""):`<div class="writing-source-empty"><span><strong>No source uploaded</strong><small>Upload a PDF to add a source to this section.</small></span></div>`}
+        </div>
+        <div class="writing-source-controls">
+          <label class="file-drop source-upload-control">Upload PDF<input type="file" accept="application/pdf,.pdf" data-writing-upload="${esc(category)}"></label>
+          <label class="source-activate-control"><input type="checkbox" data-writing-category-active="${esc(category)}" ${items.length&&items.some(item=>item.active!==false)?"checked":""}> Activate</label>
+        </div>
       </article>`;
     }).join("");
   }
@@ -1611,26 +1617,22 @@ function generateSubjectOptions(){
   state.scriptLibrary.subjectSuggestions=angles[generation%angles.length];
   saveState();renderWritingAssistant();showToast("Five subject options generated");
 }
-function saveWritingUploadedSource(){
+function saveWritingUploadedSource(category,fileInput){
   ensureScriptLibrary();
-  const fileInput=document.getElementById("writing-source-file");
-  const titleInput=document.getElementById("writing-source-title");
-  const categoryInput=document.getElementById("writing-source-category");
   const file=fileInput?.files?.[0];
   if(!file){showToast("Choose a PDF source first");return;}
   if(!/\.pdf$/i.test(file.name||"")&&!/pdf/i.test(file.type||"")){showToast("Upload a PDF file");return;}
-  const category=WRITING_SOURCE_CATEGORIES.includes(categoryInput?.value)?categoryInput.value:WRITING_SOURCE_CATEGORIES[0];
-  const title=(titleInput?.value||"").trim()||file.name.replace(/\.pdf$/i,"");
+  const selectedCategory=WRITING_SOURCE_CATEGORIES.includes(category)?category:WRITING_SOURCE_CATEGORIES[0];
+  const title=file.name.replace(/\.pdf$/i,"");
   state.scriptLibrary.sources.push({
-    id:makeId("source",title),
-    category,title,active:true,custom:true,uploaded:true,userAdded:true,
+    id:makeId("source",`${selectedCategory}-${title}`),
+    category:selectedCategory,title,active:true,custom:true,uploaded:true,userAdded:true,
     fileName:file.name,fileSize:file.size,uploadedAt:new Date().toISOString(),
     principle:"Uploaded PDF reference registered locally. Use this source as guidance when drafting; full text extraction can be connected later.",
-    prompt:`Use the uploaded ${category} source “${title}” as writing guidance.`
+    prompt:`Use the uploaded ${selectedCategory} source “${title}” as writing guidance.`
   });
-  if(fileInput)fileInput.value="";
-  if(titleInput)titleInput.value="";
-  saveState();renderWritingAssistant();showToast("PDF source saved and activated");
+  fileInput.value="";
+  saveState();renderWritingAssistant();showToast(`${selectedCategory} source saved and activated`);
 }
 function writingLengthLine(settings){
   return settings.length==="Very short"?"Keep it to 2 short paragraphs.":settings.length==="Detailed"?"Use 4 compact paragraphs with evidence, reason, offer and next step.":settings.length==="Standard"?"Use 3 compact paragraphs.":"Use 2-3 compact paragraphs.";
@@ -2525,7 +2527,6 @@ document.addEventListener("click",async event=>{
     if(!window.confirm(`Delete signal rule “${rule.name}”?`))return;
     state.signalRules=state.signalRules.filter(item=>item.id!==rule.id);state.playbooks=state.playbooks.filter(item=>item.signalId!==rule.id);saveState();renderSignals();renderControlCentre();showToast("Signal rule deleted");return;
   }
-  if(event.target.id==="writing-source-save"){saveWritingUploadedSource();return;}
   if(event.target.id==="writing-library-toggle"){
     state.scriptLibrary.libraryVisible=state.scriptLibrary.libraryVisible===false;
     saveState();renderWritingAssistant();showToast(state.scriptLibrary.libraryVisible?"Writing library shown":"Writing library hidden");return;
@@ -2741,6 +2742,17 @@ document.addEventListener("change",async event=>{
   }
   const writingControl=event.target.closest("[data-writing-control]");
   if(writingControl){readWritingAssistant();renderWritingAssistant();return;}
+  const writingUpload=event.target.closest("[data-writing-upload]");
+  if(writingUpload){saveWritingUploadedSource(writingUpload.dataset.writingUpload,event.target);return;}
+  const categoryActive=event.target.closest("[data-writing-category-active]");
+  if(categoryActive){
+    ensureScriptLibrary();
+    const category=categoryActive.dataset.writingCategoryActive;
+    const items=state.scriptLibrary.sources.filter(item=>item.category===category);
+    if(!items.length){categoryActive.checked=false;showToast(`Upload a ${category} source first`);return;}
+    items.forEach(item=>{item.active=categoryActive.checked;});
+    saveState();renderWritingAssistant();showToast(categoryActive.checked?`${category} activated`:`${category} paused`);return;
+  }
   const writingSource=event.target.closest("[data-writing-source]");
   if(writingSource){
     ensureScriptLibrary();
