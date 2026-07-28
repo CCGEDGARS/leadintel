@@ -1768,7 +1768,21 @@ function resolvedOutreachLanguage(o={},playbook=null){
   if(mode==="bilingual-lv-en")return looksLatvian&&!looksInternational?"Latvian":"English";
   return looksInternational?state.settings.outreachFallbackLanguage:localLanguage;
 }
-function fillTemplate(value,o){const first=(o.contact?.name||"there").split(" ")[0]||"there";return String(value||"").replaceAll("{{company}}",o.company||"the company").replaceAll("{{first_name}}",first).replaceAll("{{signal_type}}",o.signalType||"market signal").replaceAll("{{signal}}",o.signal||"the detected signal").replaceAll("{{offer}}",o.primaryOffer||"the relevant offer").replaceAll("{{booking_link}}",state.scheduling.bookingUrl);}
+function localizedSignal(o){
+  let signal=String(o?.signal||"the detected signal").trim();
+  const company=String(o?.company||"").trim();
+  if(company&&signal.toLowerCase().startsWith(company.toLowerCase()))signal=signal.slice(company.length).trim();
+  const translations=[
+    [/^is currently advertising a (.+?) role in (.+?), indicating an active need to strengthen B2B sales capacity\.?$/i,(m,role,city)=>`šobrīd ${city} izsludina ${role} vakanci, kas liecina par aktīvu nepieciešamību stiprināt B2B pārdošanas kapacitāti.`],
+    [/^is currently advertising a (.+?) role, indicating an active need to strengthen B2B sales capacity\.?$/i,(m,role)=>`šobrīd izsludina ${role} vakanci, kas liecina par aktīvu nepieciešamību stiprināt B2B pārdošanas kapacitāti.`],
+    [/^is hiring (.+)$/i,(m,detail)=>`pieņem darbā ${detail}`],
+    [/^is expanding (.+)$/i,(m,detail)=>`paplašina ${detail}`],
+    [/^has announced (.+)$/i,(m,detail)=>`ir paziņojis par ${detail}`]
+  ];
+  for(const [pattern,replacer] of translations){const match=signal.match(pattern);if(match){signal=replacer(...match);break;}}
+  return signal;
+}
+function fillTemplate(value,o){const first=(o.contact?.name||"there").split(" ")[0]||"there";return String(value||"").replaceAll("{{company}}",o.company||"the company").replaceAll("{{first_name}}",first).replaceAll("{{signal_type}}",o.signalType||"market signal").replaceAll("{{signal}}",localizedSignal(o)).replaceAll("{{offer}}",o.primaryOffer||"the relevant offer").replaceAll("{{booking_link}}",state.scheduling.bookingUrl);}
 function shouldIncludeBooking(o,playbook){
   const mode=playbook?.ctaMode||"Include in initial email";if(mode==="Never include"||!state.scheduling.bookingUrl)return false;
   if(mode==="Include in initial email")return true;
