@@ -1246,7 +1246,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 46px;
+  min-height: 86px;
+  height: 100%;
+  box-sizing: border-box;
   padding: 0 14px;
   border: 1px dashed rgba(57,119,246,.48);
   border-radius: 12px;
