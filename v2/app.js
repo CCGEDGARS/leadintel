@@ -1658,7 +1658,7 @@ function renderScripts(){
     const offer=scriptOffer(script);const signal=scriptSignal(script);const englishOk=scriptHasEnglish(script);
     const localReady=Boolean(script.localBody?.trim());
     return `<article class="script-card ${script.active===false?"paused":""} ${englishOk?"":"needs-master"}">
-      <div class="script-card-head"><div><span class="status ${englishOk?"good":"warn"}">${englishOk?"English master":"Needs master"}</span><h3>${esc(script.name||"Untitled script")}</h3></div><button class="btn small secondary" data-script-toggle="${esc(script.id)}">${script.active===false?"Resume":"Pause"}</button></div>
+      <div class="script-card-head"><div><span class="status ${script.localBody?.trim()?"good":"warn"}">${script.localBody?.trim()?"Latvian primary":"Add Latvian version"}</span><h3>${esc(script.name||"Untitled script")}</h3></div><button class="btn small secondary" data-script-toggle="${esc(script.id)}">${script.active===false?"Resume":"Pause"}</button></div>
       <div class="script-meta"><span>${esc(offer?.name||"Any offer")}</span><span>${esc(signal?.name||"Any signal")}</span><span>${esc(script.role||"Decision maker")}</span></div>
       <div class="script-language-row"><button class="language-pill ${script.primaryLanguage==="English"?"primary":""}" data-script-primary="${esc(script.id)}" data-language="English">English master</button><button class="language-pill ${script.primaryLanguage==="Local"?"primary":""}" data-script-primary="${esc(script.id)}" data-language="Local" ${localReady?"":"disabled"}>${esc(script.localLanguage||"Local")} version</button></div>
       <p>${esc((script.englishBody||"").split("\n").find(Boolean)||"Add an English master script before this can be used.")}</p>
@@ -1674,7 +1674,7 @@ function openScriptEditor(id=""){
   const script=state.scriptLibrary.scripts.find(item=>item.id===id)||buildScriptFromPair(state.offers.find(item=>item.active!==false),state.signalRules.find(item=>item.active!==false));
   const offerOptions=state.offers.map(item=>`<option value="${esc(item.id)}" ${item.id===script.offerId?"selected":""}>${esc(item.name)}</option>`).join("");
   const signalOptions=state.signalRules.map(item=>`<option value="${esc(item.id)}" ${item.id===script.signalId?"selected":""}>${esc(item.name)}</option>`).join("");
-  document.getElementById("modal-content").innerHTML=`<p class="kicker">Script library</p><h2>${id?"Edit script":"Add script"}</h2><p class="drawer-sub">The English master is the mandatory version. Local copy can be selected as primary after you review it.</p><div class="form-grid script-editor-form" data-script-editor="${esc(id||script.id)}" data-new-script="${id?"false":"true"}">
+  document.getElementById("modal-content").innerHTML=`<p class="kicker">Script library</p><h2>${id?"Edit script":"Add script"}</h2><p class="drawer-sub">The Latvian version is the primary outreach copy. English is optional and can be added later. Use the approved Roberts template for the mandatory route.</p><div class="form-grid script-editor-form" data-script-editor="${esc(id||script.id)}" data-new-script="${id?"false":"true"}">
     <label>Script name<input id="script-name" value="${esc(script.name||"")}"></label>
     <label>Status<select id="script-status">${["Draft","Review","Approved","Active"].map(status=>`<option ${status===(script.status||"Review")?"selected":""}>${status}</option>`).join("")}</select></label>
     <label>Offer<select id="script-offer">${offerOptions}</select></label>
