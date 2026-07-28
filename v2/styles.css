@@ -1307,18 +1307,29 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid var(--line);
+  min-width: 0;
 }
 .source-upload-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+  min-width: 0;
   min-height: 34px;
   height: 34px;
-  padding: 6px 10px;
+  padding: 0 11px;
   font-size: 12px;
   border-radius: 0;
+  cursor: pointer;
+}
+.source-upload-control input {
+  display: none;
 }
 .source-activate-control {
   display: flex !important;
   align-items: center;
   gap: 6px;
+  flex: 0 0 auto;
   margin: 0 !important;
   color: var(--muted) !important;
   font-size: 12px !important;
