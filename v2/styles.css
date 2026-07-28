@@ -1271,9 +1271,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 .writing-source-heading {
   display: flex;
-  flex-direction: column;
   align-items: flex-start;
-  gap: 10px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--line);
 }
@@ -1294,6 +1292,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   color: rgba(142,176,255,.5);
   font-size: 18px;
   background: rgba(57,119,246,.06);
+}
+.book-silhouette-row {
+  display: flex;
+  align-items: center;
+  min-height: 46px;
+  padding: 10px 0 4px;
 }
 .writing-source-controls {
   display: flex;
