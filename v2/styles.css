@@ -1238,7 +1238,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .writing-upload-row {
   display: grid;
   grid-template-columns: 1.1fr 1.4fr 1.1fr auto;
-  gap: 12px;
+  gap: 10px;
   align-items: stretch;
   margin-top: 16px;
 }
@@ -1246,8 +1246,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 86px;
-  height: 100%;
+  min-height: 46px;
+  height: 46px;
   box-sizing: border-box;
   padding: 0 14px;
   border: 1px dashed rgba(57,119,246,.48);
@@ -1258,6 +1258,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   font-weight: 800;
   cursor: pointer;
 }
+.writing-upload-row > input,
+.writing-upload-row > select,
+.writing-upload-row > button { height: 46px; min-height: 46px; box-sizing: border-box; margin-top: 0; }
 .file-drop input { display: none; }
 .assistant-library {
   display: grid;
