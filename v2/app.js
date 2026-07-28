@@ -594,11 +594,11 @@ function linkedInLookupUrl(opportunity){
 function linkedInTargetRoles(opportunity){
   const signal=`${opportunity?.signalType||""} ${opportunity?.signal||""} ${opportunity?.primaryOffer||""}`.toLowerCase();
   const groups=[
-    [/crm|ai|automation|revops|sales intelligence/,["Revenue Operations","CRM Manager","Commercial Director"]],
-    [/sales hiring|head of sales|sales manager|account manager|business development/,["Head of Sales","Sales Director","Commercial Director"]],
-    [/training|coaching|onboarding|learning/,["Head of Sales","HR Director","Sales Enablement"]],
-    [/fund|investment|expansion|export|tender|contract|procurement/,["CEO","Commercial Director","Business Development Director"]],
-    [/leadership|ceo|board|director|manager|restructuring/,["CEO","Commercial Director","Head of Sales"]]
+    [/crm|ai|automation|revops|sales intelligence/,["Founder CEO","Revenue Operations","Commercial Director"]],
+    [/sales hiring|head of sales|sales manager|account manager|business development/,["Founder CEO","Head of Sales","Talent Acquisition"]],
+    [/training|coaching|onboarding|learning/,["Founder CEO","Head of Sales","HR Director"]],
+    [/fund|investment|expansion|export|tender|contract|procurement/,["Founder CEO","CEO","Commercial Director"]],
+    [/leadership|ceo|board|director|manager|restructuring/,["Founder CEO","CEO","Commercial Director"]]
   ];
   const selected=groups.find(([pattern])=>pattern.test(signal))?.[1]||activeMarket().decisionTitles||["Sales Director","Commercial Director","CEO"];
   return [...new Set([...selected,...(activeMarket().decisionTitles||[])])].slice(0,3);
