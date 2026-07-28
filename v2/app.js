@@ -1582,6 +1582,7 @@ function readWritingAssistant(){
 }
 function generateSubjectOptions(){
   ensureScriptLibrary();
+  readWritingAssistant();
   const assistant=writingAssistantSettings();
   const opportunity=opportunities.find(item=>item.id===assistant.opportunityId)||opportunities[0];
   const offer=state.offers.find(item=>item.id===assistant.offerId)||state.offers[0];
@@ -1591,10 +1592,20 @@ function generateSubjectOptions(){
   const offerName=offer?.name||"pārdošanas attīstību";
   const libraryHint=activeWritingSources()[0]?.title;
   const generation=state.scriptLibrary.subjectGeneration||0;
-  const angles=[
-    [`${signalType} uzņēmumā ${company}`,`Īsa ideja par ${company} nākamo soli`,`Kā ${company} pārvērst ${signalType.toLowerCase()} pārdošanas izaugsmē`,`${company}: ${offerName}`,libraryHint?`${company} · ideja no ${libraryHint}`:`Praktisks jautājums par ${company}`],
-    [`Ko ${signalType.toLowerCase()} nozīmē ${company} pārdošanai?`,`${company} · viens praktisks jautājums`,`Vai ${company} ir gatavs nākamajam izaugsmes solim?`,`Ideja ${company} pārdošanas komandai`,`${company} un jaunā laikmeta iespējas`],
-    [`${company}: signāls, ko vērts izmantot`,`Par ${company} un pārdošanas efektivitāti`,`Kā ātrāk izmantot ${company} izaugsmes brīdi`,`30 minūšu ideja uzņēmumam ${company}`,`Kas šobrīd palīdzētu ${company} komandai pārdot labāk?`]
+  const language=writingAssistantLanguage(assistant), format=assistant.format||"Cold email", style=assistant.style||"Friendly", length=assistant.length||"Short";
+  const local=language==="Latvian";
+  const direct=style==="Executive/direct"||style==="Persuasive";
+  const story=style==="Storytelling";
+  const short=length==="Very short";
+  const formatLabel=format.includes("LinkedIn")?(local?"LinkedIn ideja":"LinkedIn idea"):format.includes("Call")?(local?"saruna":"conversation"):format.includes("Meeting")?(local?"saruna":"meeting"):local?"e-pasts":"email";
+  const angles=local?[
+    [`${signalType} uzņēmumā ${company}`,`${company} · īsa ${formatLabel} ideja`,`${company}: ${offerName}`,direct?`Tiešs jautājums ${company} vadībai`:`Īsa ideja par ${company} nākamo soli`,libraryHint?`${company} · ideja no ${libraryHint}`:`Par ${company} un pārdošanas izaugsmi`],
+    [`Ko ${signalType.toLowerCase()} nozīmē ${company} pārdošanai?`,`${company} · viens praktisks jautājums`,`Vai ${company} ir gatavs nākamajam izaugsmes solim?`,`${company} ${formatLabel}: praktisks nākamais solis`,`${company} un jaunā laikmeta iespējas`],
+    [`${company}: signāls, ko vērts izmantot`,`Par ${company} un pārdošanas efektivitāti`,`Kā ātrāk izmantot ${company} izaugsmes brīdi`,story?`Stāsts par ${company} nākamo izaugsmes soli`:`30 minūšu ideja uzņēmumam ${company}`,short?`${company}: viens jautājums`:`Kas šobrīd palīdzētu ${company} komandai pārdot labāk?`]
+  ]:[
+    [`${signalType} at ${company}`,`${company} · a short ${formatLabel} idea`,`${company}: ${offerName}`,direct?`A direct question for ${company}`:`A practical next step for ${company}`,libraryHint?`${company} · an idea from ${libraryHint}`:`A practical idea for ${company}`],
+    [`What does ${signalType.toLowerCase()} mean for ${company}'s sales?`,`${company} · one practical question`,`Is ${company} ready for its next growth step?`,`${company} ${formatLabel}: a useful next step`,`New-era opportunities for ${company}`],
+    [`${company}: a signal worth using`,`A note on ${company} and sales efficiency`,`How ${company} can use this growth moment`,story?`The next chapter for ${company}`:`A 30-minute idea for ${company}`,short?`${company}: one question`:`What could help ${company}'s team sell better?`]
   ];
   state.scriptLibrary.subjectGeneration=generation+1;
   state.scriptLibrary.subjectSuggestions=angles[generation%angles.length];
