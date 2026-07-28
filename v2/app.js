@@ -1778,6 +1778,28 @@ function ensureScriptLibrary(){
   if(!Array.isArray(state.scriptLibrary.principles)||!state.scriptLibrary.principles.length)state.scriptLibrary.principles=defaultScriptPrinciples();
   if(!Array.isArray(state.scriptLibrary.sources)||!state.scriptLibrary.sources.length)state.scriptLibrary.sources=structuredClone(DEFAULT_WRITING_SOURCES);
   state.scriptLibrary.sources=state.scriptLibrary.sources.filter(item=>item.custom||item.uploaded||item.userAdded);
+  if(!state.scriptLibrary.scripts.some(item=>item.id==="mandatory-roberts-introduction")){
+    state.scriptLibrary.scripts.unshift({
+      id:"mandatory-roberts-introduction",
+      name:"Mandatory · Roberts introduction · LV",
+      offerId:"",
+      signalId:"",
+      role:"Decision maker",
+      channel:"Email",
+      stage:"First outreach",
+      status:"Approved",
+      active:true,
+      primaryLanguage:"Local",
+      localLanguage:"Latvian",
+      englishSubject:MANDATORY_EN_SUBJECT,
+      englishBody:MANDATORY_EN_BODY,
+      localSubject:MANDATORY_LV_SUBJECT,
+      localBody:MANDATORY_LV_BODY,
+      principles:["roberts-introduction","specific-company-trigger","approval-required"],
+      updatedAt:formatNow()
+    });
+    saveState();
+  }
   if(!isRecord(state.scriptLibrary.assistant))state.scriptLibrary.assistant={};
   const assistant=state.scriptLibrary.assistant;
   assistant.opportunityId=assistant.opportunityId||opportunities[0]?.id||"";
