@@ -1912,12 +1912,12 @@ function renderOutreach(){
 
 function integrationDirectory(){
   const calendlyUrl=state.scheduling?.bookingUrl||"https://calendly.com/edgars-7go/strategy-call";
-  const makeReady=Boolean(state.integrations.runUrl);
+  const makeReady=true;
   return [
     {id:"google",name:"Google Sheets / Drive",status:"Workbook ready",tone:"good",url:"https://drive.google.com/drive/my-drive",purpose:"Command centre workbook, source tables, raw findings and qualified leads.",setup:"Make Google Sheets connection must point to the production workbook.",credential:"Google OAuth connection inside Make; GOOGLE_SHEET_ID for rebuild notes."},
-    {id:"make",name:"Make automation",status:makeReady?"Configured":"Endpoint needed",tone:makeReady?"good":"bad",url:"https://eu2.make.com/",purpose:"Runs the workflow: webhook, sheet rows, Firecrawl search, OpenAI scoring, JSON parse and row writes.",setup:"Import the current blueprint, reconnect modules, then paste the protected run webhook in Settings.",credential:"Make connections for Google Sheets, HTTP API key, OpenAI and Gmail."},
-    {id:"firecrawl",name:"Firecrawl",status:makeReady?"Used by Make":"Make credential",tone:makeReady?"good":"warn",url:"https://www.firecrawl.dev/app",purpose:"Searches and scrapes public evidence only after source and quality rules limit the request.",setup:"Add the Firecrawl API key to the Make HTTP module or a private backend proxy.",credential:"FIRECRAWL_API_KEY stored privately; never in GitHub Pages."},
-    {id:"openai",name:"OpenAI",status:makeReady?"Used by Make":"Make credential",tone:makeReady?"good":"warn",url:"https://platform.openai.com/api-keys",purpose:"Classifies signals, scores opportunities and generates approved scripts from evidence.",setup:"Keep the fast model and 900-token cap unless quality requires more.",credential:"OPENAI_API_KEY stored in Make/OpenAI connection or backend secret."},
+    {id:"make",name:"Make automation",status:"Scheduled",tone:"good",url:"https://eu2.make.com/",purpose:"Runs the daily workflow: sheet queries, Firecrawl search, OpenAI scoring, JSON parse and row writes.",setup:"The active Make scenario runs once each morning. Email delivery remains disabled.",credential:"Make connections for Google Sheets, HTTP API key and OpenAI."},
+    {id:"firecrawl",name:"Firecrawl",status:"Used by Make",tone:"good",url:"https://www.firecrawl.dev/app",purpose:"Searches and scrapes public evidence only after source and quality rules limit the request.",setup:"Configured in the scheduled Make HTTP module.",credential:"FIRECRAWL_API_KEY stored privately in Make; never in GitHub Pages."},
+    {id:"openai",name:"OpenAI",status:"Used by Make",tone:"good",url:"https://platform.openai.com/api-keys",purpose:"Classifies signals and scores opportunities from the Firecrawl evidence.",setup:"Configured in the scheduled Make OpenAI module.",credential:"OpenAI credential stored privately in Make."},
     {id:"apollo",name:"Apollo",status:enrichmentControl.configured?"Securely connected":"Secure key needed",tone:enrichmentControl.configured?"good":"warn",url:"https://app.apollo.io/",purpose:"Finds and verifies decision-maker work emails after a company passes qualification.",setup:"Run only after the score gate; no phones by default; personal emails require owner review.",credential:"APOLLO_API_KEY stored in the backend or Make credential."},
     {id:"gmail",name:"Gmail sender",status:state.outreachAutomation.senderConnected?"Connected":"Not connected",tone:state.outreachAutomation.senderConnected?"good":"warn",url:"https://mail.google.com/",purpose:"Sends only approved/eligible outreach or keeps drafts queued when disconnected.",setup:"Connect Gmail in Make only when you are ready for delivery controls.",credential:"Gmail OAuth connection inside Make; no password stored here."},
     {id:"calendly",name:"Calendly Strategy Call",status:state.scheduling?.bookingUrl?"Configured":"Link needed",tone:state.scheduling?.bookingUrl?"good":"warn",url:calendlyUrl,purpose:"Booking CTA for a focused 30-minute Zoom strategy call.",setup:"Keep one public booking link in Settings and insert it into approved scripts.",credential:"CALENDLY_BOOKING_URL is public; Calendly login remains in Calendly."},
@@ -1935,10 +1935,10 @@ function integrationStatusLabel(tone){
 function credentialChecklist(){
   const hasBackend=Boolean(backendSession);
   return [
-    {name:"OPENAI_API_KEY",required:"Required",place:"Make OpenAI connection or backend secret",purpose:"AI triage, scoring and script generation.",ok:Boolean(state.integrations.runUrl)},
-    {name:"FIRECRAWL_API_KEY",required:"Required",place:"Make HTTP API-key credential or backend secret",purpose:"Public search and shallow scrape requests.",ok:Boolean(state.integrations.runUrl)},
+    {name:"OPENAI_API_KEY",required:"Required",place:"Make OpenAI connection or backend secret",purpose:"AI triage, scoring and script generation.",ok:true},
+    {name:"FIRECRAWL_API_KEY",required:"Required",place:"Make HTTP API-key credential or backend secret",purpose:"Public search and shallow scrape requests.",ok:true},
     {name:"APOLLO_API_KEY",required:"Required for contacts",place:"Cloudflare Worker secret or Make credential",purpose:"Verified work-email enrichment after qualification.",ok:enrichmentControl.configured},
-    {name:"MAKE_RUN_WEBHOOK_URL",required:"Required",place:"This browser settings + private backend validation",purpose:"Starts the protected research scenario.",ok:Boolean(state.integrations.runUrl)},
+    {name:"MAKE_SCHEDULE",required:"Active",place:"Make scenario schedule",purpose:"Runs the research workflow once each morning.",ok:true},
     {name:"LEADINTEL_SNAPSHOT_URL",required:"Recommended",place:"This browser settings or backend env",purpose:"Loads the latest live data snapshot.",ok:Boolean(state.integrations.dataUrl)},
     {name:"GOOGLE_SHEET_ID",required:"Required",place:"Make module settings / rebuild notes",purpose:"Points Make to the command-centre workbook.",ok:true},
     {name:"LEADINTEL_ADMIN_EMAIL",required:"Required for backend",place:"Cloudflare/backend auth config",purpose:"Owner sign-in identity.",ok:hasBackend},
@@ -1987,10 +1987,10 @@ function renderRuntimeStatus(){
   const modes={demo:"Demo data",imported:"Imported data",live:"Live endpoint"};
   pill.lastChild.textContent=` ${modes[state.runtime.mode]||"Local data"}`;
   pill.classList.toggle("live",state.runtime.mode==="live");
-  document.getElementById("status-make").textContent=state.integrations.runUrl?"Configured":"Endpoint needed";
-  document.getElementById("status-make").classList.toggle("pending",!state.integrations.runUrl);
-  const firecrawl=document.getElementById("status-firecrawl");if(firecrawl){firecrawl.textContent=state.integrations.runUrl?"Used by Make":"Make credential";firecrawl.classList.toggle("pending",!state.integrations.runUrl);}
-  const openai=document.getElementById("status-openai");if(openai){openai.textContent=state.integrations.runUrl?"Used by Make":"Make credential";openai.classList.toggle("pending",!state.integrations.runUrl);}
+  document.getElementById("status-make").textContent="Scheduled";
+  document.getElementById("status-make").classList.remove("pending");
+  const firecrawl=document.getElementById("status-firecrawl");if(firecrawl){firecrawl.textContent="Used by Make";firecrawl.classList.remove("pending");}
+  const openai=document.getElementById("status-openai");if(openai){openai.textContent="Used by Make";openai.classList.remove("pending");}
   const apollo=document.getElementById("status-apollo");if(apollo){apollo.textContent=enrichmentControl.configured?"Securely connected":"Secure key needed";apollo.classList.toggle("pending",!enrichmentControl.configured);}
   const sender=document.getElementById("status-sender");if(sender){sender.textContent=state.outreachAutomation.senderConnected?"Connected":"Not connected";sender.classList.toggle("pending",!state.outreachAutomation.senderConnected);}
   const calendly=document.getElementById("status-calendly");if(calendly){calendly.textContent=state.scheduling.bookingUrl?"Configured":"Link needed";calendly.classList.toggle("pending",!state.scheduling.bookingUrl);}
@@ -2038,7 +2038,6 @@ function renderOperationalReminders(){
   const reminders=[];
   if(state.runtime.mode==="demo")reminders.push({tone:"warn",title:"Demo data is active",detail:"Connect or sync the live endpoint before trusting production counts.",action:"Sync data"});
   if(state.runtime.error)reminders.push({tone:"bad",title:"Latest sync needs review",detail:state.runtime.error,action:"Open run history"});
-  if(!state.integrations.runUrl)reminders.push({tone:"bad",title:"Make run endpoint missing",detail:"Run research cannot trigger the production scenario yet.",action:"Add webhook"});
   if(!enrichmentControl.configured)reminders.push({tone:"warn",title:"Apollo secure key needed",detail:"Contact lookup stays off until the backend key is connected.",action:"Connect Apollo"});
   if(dailyLimit&&usedRatio(usage.daily,dailyLimit)>=.8)reminders.push({tone:"warn",title:"Apollo daily credits running low",detail:`${usage.daily||0} of ${dailyLimit} lookups used today.`,action:"Slow enrichment"});
   if(monthlyLimit&&usedRatio(usage.monthly,monthlyLimit)>=.8)reminders.push({tone:"warn",title:"Apollo monthly credits running low",detail:`${usage.monthly||0} of ${monthlyLimit} lookups used this month.`,action:"Protect budget"});
