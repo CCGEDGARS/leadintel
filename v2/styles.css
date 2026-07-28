@@ -1334,17 +1334,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .writing-source-group h4 { margin: 0; font-size: 15px; letter-spacing: .03em; color: #8eb0ff; }
 .writing-source {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 10px 0;
   border-top: 1px solid rgba(255,255,255,.07);
   color: var(--text);
 }
 .writing-source:first-of-type { border-top: 0; }
-.writing-source input { width: auto; margin-top: 3px; accent-color: var(--blue); }
+.writing-source-toggle { display: flex; align-items: flex-start; gap: 10px; min-width: 0; cursor: pointer; }
+.writing-source-toggle input { width: auto; margin-top: 3px; accent-color: var(--blue); flex: 0 0 auto; }
+.writing-source-toggle span { min-width: 0; }
 .writing-source strong, .writing-source small { display: block; }
 .writing-source strong { font-size: 12px; }
 .writing-source small { margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.writing-source-delete { flex: 0 0 auto; padding: 5px 8px; font-size: 11px; border-color: rgba(248,113,113,.45); color: #fca5a5; }
 .writing-source-empty {
   display: flex;
   align-items: flex-start;

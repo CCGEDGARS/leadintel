@@ -1541,10 +1541,10 @@ function renderWritingAssistant(){
         <div class="writing-source-heading"><h4>${esc(category)}</h4></div>
         <div class="book-silhouette-row"><span class="book-silhouette" aria-hidden="true">▥</span></div>
         <div class="writing-source-items">
-          ${items.length?items.map(item=>`<label class="writing-source"><input type="checkbox" data-writing-source="${esc(item.id)}" ${item.active!==false?"checked":""}><span><strong>${esc(item.title)}</strong><small>${esc(writingSourceDetail(item))}</small></span></label>`).join(""):`<div class="writing-source-empty"><span><strong>No source uploaded</strong><small>Upload a PDF to add a source to this section.</small></span></div>`}
+          ${items.length?items.map(item=>`<div class="writing-source"><label class="writing-source-toggle"><input type="checkbox" data-writing-source="${esc(item.id)}" ${item.active!==false?"checked":""}><span><strong>${esc(item.title)}</strong><small>${esc(writingSourceDetail(item))}</small></span></label><button class="btn small danger writing-source-delete" type="button" data-delete-writing-source="${esc(item.id)}" title="Remove this source from the local Library">Delete</button></div>`).join(""):`<div class="writing-source-empty"><span><strong>No source uploaded</strong><small>Upload a PDF to add a source to this section.</small></span></div>`}
         </div>
         <div class="writing-source-controls">
-          <label class="file-drop source-upload-control">Upload PDF<input type="file" accept="application/pdf,.pdf" data-writing-upload="${esc(category)}"></label>
+          <label class="btn small secondary source-upload-control">+ Upload PDF<input type="file" accept="application/pdf,.pdf" data-writing-upload="${esc(category)}"></label>
           <label class="source-activate-control"><input type="checkbox" data-writing-category-active="${esc(category)}" ${items.length&&items.some(item=>item.active!==false)?"checked":""}> Activate</label>
         </div>
       </article>`;
@@ -2531,6 +2531,13 @@ document.addEventListener("click",async event=>{
   if(event.target.id==="writing-library-toggle"){
     state.scriptLibrary.libraryVisible=state.scriptLibrary.libraryVisible===false;
     saveState();renderWritingAssistant();showToast(state.scriptLibrary.libraryVisible?"Writing library shown":"Writing library hidden");return;
+  }
+  const deleteWritingSource=event.target.closest("[data-delete-writing-source]");if(deleteWritingSource){
+    ensureScriptLibrary();
+    const source=state.scriptLibrary.sources.find(item=>item.id===deleteWritingSource.dataset.deleteWritingSource);if(!source)return;
+    if(!window.confirm(`Delete “${source.title||"this source"}” from the local Library?`))return;
+    state.scriptLibrary.sources=state.scriptLibrary.sources.filter(item=>item.id!==source.id);
+    saveState();renderWritingAssistant();showToast("Writing source deleted from the Library");return;
   }
   if(event.target.id==="writing-subject-save"){
     state.scriptLibrary.subjectOptions=(document.getElementById("writing-subject-options")?.value||"").split("\n").map(item=>item.trim()).filter(Boolean);
