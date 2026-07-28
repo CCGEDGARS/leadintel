@@ -304,6 +304,8 @@ function normalizeScriptLibrary(value){
     scripts:Array.isArray(source.scripts)?source.scripts.filter(isRecord):[],
     principles:Array.isArray(source.principles)&&source.principles.length?source.principles.filter(isRecord):defaultScriptPrinciples(),
     sources:Array.isArray(source.sources)&&source.sources.length?source.sources.filter(isRecord):structuredClone(DEFAULT_WRITING_SOURCES),
+    libraryVisible:source.libraryVisible!==false,
+    subjectOptions:Array.isArray(source.subjectOptions)?source.subjectOptions.filter(item=>typeof item==="string"):[],
     assistant:{
       opportunityId:typeof assistant.opportunityId==="string"?assistant.opportunityId:"",
       offerId:typeof assistant.offerId==="string"?assistant.offerId:"",
@@ -1494,6 +1496,10 @@ function writingSourceDetail(item){
 function renderWritingAssistant(){
   ensureScriptLibrary();
   const assistant=writingAssistantSettings();
+  const libraryPanel=document.querySelector(".writing-assistant-panel");
+  const libraryToggle=document.getElementById("writing-library-toggle");
+  if(libraryPanel)libraryPanel.hidden=state.scriptLibrary.libraryVisible===false;
+  if(libraryToggle)libraryToggle.textContent=state.scriptLibrary.libraryVisible===false?"Show library":"Hide library";
   if(!opportunities.some(item=>item.id===assistant.opportunityId))assistant.opportunityId=opportunities[0]?.id||"";
   if(!state.offers.some(item=>item.id===assistant.offerId))assistant.offerId=state.offers.find(item=>item.active!==false)?.id||state.offers[0]?.id||"";
   const opportunitySelect=document.getElementById("writing-opportunity");
@@ -1508,6 +1514,8 @@ function renderWritingAssistant(){
   }
   const selectedOpportunity=opportunities.find(item=>item.id===assistant.opportunityId)||opportunities[0];
   const selectedOffer=state.offers.find(item=>item.id===assistant.offerId)||state.offers[0];
+  const subjectOptions=document.getElementById("writing-subject-options");
+  if(subjectOptions)subjectOptions.value=state.scriptLibrary.subjectOptions.join("\n");
   const contextSummary=document.getElementById("writing-context-summary");
   if(contextSummary&&selectedOpportunity){
     contextSummary.innerHTML=`
@@ -1541,6 +1549,22 @@ function renderWritingAssistant(){
         <div class="script-actions"><button class="btn small secondary" data-writing-copy="${index}">Copy</button><button class="btn small primary" data-writing-save="${index}">Save as approved script</button></div>
       </article>`).join(""):`<div class="empty-state writing-empty"><h3>No variants yet</h3><p>Choose the customer, product and writing sources, then generate three draft scripts.</p></div>`;
   }
+}
+function scriptMetrics(script){
+  const raw=isRecord(script?.metrics)?script.metrics:{};
+  const sent=Math.max(0,Number(raw.sent)||0),opened=Math.max(0,Number(raw.opened)||0),closed=Math.max(0,Number(raw.closed)||0),signedUp=Math.max(0,Number(raw.signedUp)||0);
+  const openRate=sent?Math.min(100,opened/sent*100):null;
+  const closeRate=sent?Math.min(100,Math.min(sent,closed+signedUp)/sent*100):null;
+  const successRate=sent?Math.round((openRate*.4+closeRate*.6)*10)/10:null;
+  return {sent,opened,closed,signedUp,openRate,closeRate,successRate};
+}
+function renderSuccessRate(){
+  ensureScriptLibrary();
+  const grid=document.getElementById("script-success-grid"),count=document.getElementById("success-rate-count");
+  const scripts=state.scriptLibrary.scripts,measured=scripts.filter(item=>scriptMetrics(item).sent>0).length;
+  if(count)count.textContent=measured;
+  if(!grid)return;
+  grid.innerHTML=scripts.length?scripts.map(script=>{const m=scriptMetrics(script);return `<article class="success-rate-card"><div class="script-card-head"><div><span class="status ${m.sent?"good":"warn"}">${m.sent?"Measured":"Awaiting data"}</span><h3>${esc(script.name||"Untitled script")}</h3></div><strong class="success-rate-number">${m.successRate===null?"—":`${m.successRate}%`}</strong></div><div class="success-rate-metrics"><span><b>${m.openRate===null?"—":`${m.openRate.toFixed(1)}%`}</b> open rate</span><span><b>${m.closeRate===null?"—":`${m.closeRate.toFixed(1)}%`}</b> close / sign-up</span><span><b>${m.sent}</b> sent · <b>${m.opened}</b> opened</span></div><p>${m.sent?`${m.closed} closed · ${m.signedUp} signed up`:"No sender/webhook events recorded yet. Automatic delivery is currently disabled."}</p></article>`}).join(""):"<div class=\"empty-state\"><h3>No scripts yet</h3><p>Approved scripts will appear here with their measured rates.</p></div>";
 }
 function readWritingAssistant(){
   const assistant=writingAssistantSettings();
@@ -1651,6 +1675,7 @@ function saveWritingVariant(index){
 function renderScripts(){
   ensureScriptLibrary();
   renderWritingAssistant();
+  renderSuccessRate();
   const scripts=state.scriptLibrary.scripts;
   const active=scripts.filter(item=>item.active!==false);
   const approved=active.filter(item=>item.status==="Approved"||item.status==="Active");
@@ -1800,6 +1825,8 @@ function ensureScriptLibrary(){
   if(!Array.isArray(state.scriptLibrary.scripts))state.scriptLibrary.scripts=[];
   if(!Array.isArray(state.scriptLibrary.principles)||!state.scriptLibrary.principles.length)state.scriptLibrary.principles=defaultScriptPrinciples();
   if(!Array.isArray(state.scriptLibrary.sources)||!state.scriptLibrary.sources.length)state.scriptLibrary.sources=structuredClone(DEFAULT_WRITING_SOURCES);
+  if(typeof state.scriptLibrary.libraryVisible!=="boolean")state.scriptLibrary.libraryVisible=true;
+  if(!Array.isArray(state.scriptLibrary.subjectOptions))state.scriptLibrary.subjectOptions=[];
   state.scriptLibrary.sources=state.scriptLibrary.sources.filter(item=>item.custom||item.uploaded||item.userAdded);
   if(!state.scriptLibrary.scripts.some(item=>item.id==="mandatory-roberts-introduction")){
     state.scriptLibrary.scripts.unshift({
@@ -2335,7 +2362,7 @@ function switchView(name){
   document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id===`view-${name}`));
   document.querySelectorAll(".nav-item[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===name));
   const today=new Intl.DateTimeFormat("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric",timeZone:"Europe/Riga"}).format(new Date());
-  const labels={map:["Research automation","System Map"],control:["Editable operating context","Control Centre"],today:[today,`Good morning · ${state.workspace.name}`],signals:["Evidence stream","Market signals"],scripts:["Script intelligence","Approved scripts"],companies:["Opportunity memory","Company dossiers"],crm:["Commercial pipeline","Practical CRM"],contacts:["Verified business data","Contact list"],outreach:["Controlled delivery","Outreach queue"],sources:["Monitoring network","Source health"],runs:["Automation audit","Daily runs"],settings:["Operating rules","Research settings"]};
+  const labels={map:["Research automation","System Map"],control:["Editable operating context","Control Centre"],today:[today,`Good morning · ${state.workspace.name}`],signals:["Evidence stream","Market signals"],scripts:["Script intelligence","Approved scripts"],"success-rate":["AI Writing","Script success rate"],companies:["Opportunity memory","Company dossiers"],crm:["Commercial pipeline","Practical CRM"],contacts:["Verified business data","Contact list"],outreach:["Controlled delivery","Outreach queue"],sources:["Monitoring network","Source health"],runs:["Automation audit","Daily runs"],settings:["Operating rules","Research settings"]};
   const [kicker,title]=labels[name]||labels.map;document.getElementById("view-kicker").textContent=kicker;document.getElementById("view-title").textContent=title;
   document.getElementById("sidebar").classList.remove("open");window.scrollTo(0,0);
 }
@@ -2464,6 +2491,14 @@ document.addEventListener("click",async event=>{
     state.signalRules=state.signalRules.filter(item=>item.id!==rule.id);state.playbooks=state.playbooks.filter(item=>item.signalId!==rule.id);saveState();renderSignals();renderControlCentre();showToast("Signal rule deleted");return;
   }
   if(event.target.id==="writing-source-save"){saveWritingUploadedSource();return;}
+  if(event.target.id==="writing-library-toggle"){
+    state.scriptLibrary.libraryVisible=state.scriptLibrary.libraryVisible===false;
+    saveState();renderWritingAssistant();showToast(state.scriptLibrary.libraryVisible?"Writing library shown":"Writing library hidden");return;
+  }
+  if(event.target.id==="writing-subject-save"){
+    state.scriptLibrary.subjectOptions=(document.getElementById("writing-subject-options")?.value||"").split("\n").map(item=>item.trim()).filter(Boolean);
+    saveState();showToast(`${state.scriptLibrary.subjectOptions.length} subject options saved`);return;
+  }
   if(event.target.id==="writing-generate"){generateWritingVariants();return;}
   if(event.target.id==="writing-clear"){const assistant=writingAssistantSettings();assistant.variants=[];saveState();renderWritingAssistant();showToast("Draft variants cleared");return;}
   const copyWriting=event.target.closest("[data-writing-copy]");if(copyWriting){copyWritingVariant(copyWriting.dataset.writingCopy);return;}

@@ -29,6 +29,7 @@
         <button class="nav-item" data-view="crm"><span>▤</span>CRM <b id="crm-count">0</b></button>
         <button class="nav-item" data-view="contacts"><span>◎</span>Contacts <b id="contact-count">5</b></button>
         <button class="nav-item" data-view="scripts"><span>✍</span>AI Writing <b id="script-count">0</b></button>
+        <button class="nav-item" data-view="success-rate"><span>↗</span>Success Rate <b id="success-rate-count">0</b></button>
         <button class="nav-item" data-view="outreach"><span>✎</span>Outreach <b id="outreach-count">0</b></button>
         <button class="nav-item" data-view="sources"><span>◫</span>Sources</button>
         <button class="nav-item" data-view="runs"><span>↻</span>Run history</button>
@@ -200,12 +201,12 @@
       <section class="view" id="view-scripts">
         <div class="section-head">
           <div><p class="kicker">AI Writing</p><h2>Generate customer scripts</h2></div>
-          <div class="card-actions"><button class="btn secondary" id="generate-script-examples" type="button">Seed approved examples</button><button class="btn primary" id="add-script-template" type="button">Add approved script</button></div>
+          <div class="card-actions"><button class="btn secondary" id="generate-script-examples" type="button">Seed approved examples</button><button class="btn secondary" id="writing-library-toggle" type="button">Hide library</button><button class="btn primary" id="add-script-template" type="button">Add approved script</button></div>
         </div>
         <div class="notice"><strong>English master is mandatory.</strong> Use the assistant to create three local draft options, then approve one English master. Add a local-language version and mark it primary when the market requires it.</div>
         <section class="panel writing-options-panel">
           <div class="panel-title-row">
-            <div><p class="kicker">Options</p><h3>Choose the customer context first</h3></div>
+            <div><p class="kicker">Content Options</p><h3>Choose the customer context first</h3></div>
             <span class="status good">Connected to AI Writing</span>
           </div>
           <p class="panel-copy">Select the contact, product and message settings here. The Library below uses this exact briefing to draft usable variants.</p>
@@ -240,8 +241,20 @@
           <div class="card-actions writing-actions"><button class="btn primary" id="writing-generate" type="button">Generate 3 variants</button><button class="btn secondary" id="writing-clear" type="button">Clear drafts</button></div>
           <div class="writing-variants" id="writing-variants"></div>
         </section>
+        <section class="panel writing-options-panel">
+          <div class="panel-title-row"><div><p class="kicker">Subject Options</p><h3>Keep subject variants ready</h3></div><span class="status">One subject per line</span></div>
+          <p class="panel-copy">These subjects are stored with this workspace and can be reviewed before a route uses them.</p>
+          <textarea id="writing-subject-options" class="message-box" rows="4" placeholder="Subject option 1\nSubject option 2\nSubject option 3"></textarea>
+          <div class="card-actions"><button class="btn secondary" id="writing-subject-save" type="button">Save subject options</button></div>
+        </section>
         <div class="script-command" id="script-summary"></div>
         <div class="script-library-grid" id="script-grid"></div>
+      </section>
+
+      <section class="view" id="view-success-rate">
+        <div class="section-head"><div><p class="kicker">AI Writing</p><h2>Script success rate</h2></div><span class="demo-pill"><i></i> Delivery tracking</span></div>
+        <div class="notice"><strong>Success is measured from real events.</strong> Open rate uses sent and opened messages. Close / sign-up rate uses closed or signed-up outcomes. Rates stay blank until the sender or webhook records delivery events.</div>
+        <div class="script-success-grid" id="script-success-grid"></div>
       </section>
 
       <section class="view" id="view-companies">
