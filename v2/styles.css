@@ -1245,17 +1245,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .file-drop {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   min-height: 46px;
   height: 46px;
   box-sizing: border-box;
-  padding: 0 14px;
-  border: 1px dashed rgba(57,119,246,.48);
-  border-radius: 12px;
-  background: rgba(57,119,246,.08);
-  color: #a9c0ff;
-  font-size: 13px;
-  font-weight: 800;
+  padding: 8px 10px;
+  border: 1px solid rgba(57,119,246,.7);
+  border-radius: 7px;
+  background: var(--panel-2);
+  color: #8eb0ff;
+  font-size: inherit;
+  font-weight: 600;
   cursor: pointer;
 }
 .writing-upload-row > input,
