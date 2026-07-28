@@ -701,6 +701,29 @@ async function syncData({silent=false}={}){
   finally{setBusy("sync-btn",false,"Sync data");}
 }
 
+async function syncUntilFresh(previousGeneratedAt, {timeoutMs=120000, intervalMs=5000}={}){
+  const url=state.integrations.dataUrl.trim();
+  if(!url)return false;
+  const started=Date.now();
+  let lastPayload=null;
+  while(Date.now()-started<timeoutMs){
+    try{
+      const payload=/script\.google\.com$/.test(new URL(url).hostname)?await fetchJsonp(url):await fetchJson(url);
+      lastPayload=payload;
+      const generatedAt=payload?.generated_at||payload?.generatedAt||payload?.runtime?.generated_at||"";
+      if(!previousGeneratedAt||!generatedAt||generatedAt!==previousGeneratedAt){
+        applyRuntimePayload(payload,{mode:"live"});
+        return true;
+      }
+    }catch(error){
+      lastPayload=null;
+    }
+    await new Promise(resolve=>setTimeout(resolve,intervalMs));
+  }
+  if(lastPayload){applyRuntimePayload(lastPayload,{mode:"live"});}
+  return false;
+}
+
 function scheduleDailyDataSync(){
   const run=()=>{
     if(!state.integrations.dataUrl.trim())return;
@@ -839,6 +862,7 @@ async function triggerResearch({test=false}={}){
   if(!backendSession){showToast("Sign in securely before starting a protected run");switchView("settings");return false;}
   if(!test)setBusy("run-btn",true,"Starting…");
   const market=activeMarket();
+  const previousGeneratedAt=state.runtimeData?.generated_at||"";
   const body={
     workspace_id:state.workspace.id,
     market:market.name,
@@ -872,8 +896,19 @@ async function triggerResearch({test=false}={}){
       throw new Error(message);
     }
     state.runtime.pendingRunKey="";state.runtime.lastRunId=result.run?.id||"";state.runtime.lastRunRequest=formatNow();state.runtime.error="";saveState();
-    await syncData({silent:true});await loadRunPolicy();renderRuntimeStatus();
-    showToast(test?"Run endpoint validated · no Make or OpenAI credits used":`Protected run accepted · ${result.run?.id||"queued"}`);return true;
+    if(!test){
+      const fresh=await syncUntilFresh(previousGeneratedAt);
+      if(!fresh){
+        state.runtime.error="Make accepted the run, but the data snapshot did not refresh within 2 minutes.";
+        saveState();renderRuntimeStatus();
+        showToast("Make accepted the run, but fresh contacts are not available yet. Try Sync data again shortly.");
+      }
+    }
+    await loadRunPolicy();renderRuntimeStatus();
+    if(test){showToast("Run endpoint validated · no Make or OpenAI credits used");}
+    else if(state.runtime.error){showToast("Run accepted; waiting for fresh data");}
+    else{showToast(`Fresh research loaded · ${opportunities.length} opportunities`);}
+    return true;
   }
   catch(error){state.runtime.error=error.message;saveState();renderRuntimeStatus();showToast(`Run blocked: ${error.message}`);return false;}
   finally{if(!test)setBusy("run-btn",false,"Run research");}
