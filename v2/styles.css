@@ -1160,6 +1160,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .success-rate-metrics span { padding:8px 10px; border:1px solid var(--line); border-radius:8px; color:var(--muted); font-size:12px; }
 .success-rate-metrics b { color:var(--text); }
 .success-rate-card p { color:var(--muted); font-size:13px; margin:12px 0 0; }
+.subject-suggestions { display:grid; gap:7px; margin:12px 0; }
+.subject-suggestion-label { color:var(--muted); font-size:12px; }
+.subject-suggestion { display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:9px; background:rgba(29,47,70,.72); color:var(--text); text-align:left; cursor:pointer; }
+.subject-suggestion:hover { border-color:var(--accent); color:var(--accent); }
+.subject-suggestion span { color:var(--accent); font-size:18px; }
 @media (max-width:900px){.script-success-grid{grid-template-columns:1fr;}}
 .script-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .script-card h3 { margin: 8px 0 0; font-size: 18px; letter-spacing: -0.03em; }

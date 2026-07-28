@@ -306,6 +306,7 @@ function normalizeScriptLibrary(value){
     sources:Array.isArray(source.sources)&&source.sources.length?source.sources.filter(isRecord):structuredClone(DEFAULT_WRITING_SOURCES),
     libraryVisible:source.libraryVisible!==false,
     subjectOptions:Array.isArray(source.subjectOptions)?source.subjectOptions.filter(item=>typeof item==="string"):[],
+    subjectSuggestions:Array.isArray(source.subjectSuggestions)?source.subjectSuggestions.filter(item=>typeof item==="string"):[],
     assistant:{
       opportunityId:typeof assistant.opportunityId==="string"?assistant.opportunityId:"",
       offerId:typeof assistant.offerId==="string"?assistant.offerId:"",
@@ -1516,6 +1517,8 @@ function renderWritingAssistant(){
   const selectedOffer=state.offers.find(item=>item.id===assistant.offerId)||state.offers[0];
   const subjectOptions=document.getElementById("writing-subject-options");
   if(subjectOptions)subjectOptions.value=state.scriptLibrary.subjectOptions.join("\n");
+  const subjectSuggestions=document.getElementById("writing-subject-suggestions");
+  if(subjectSuggestions)subjectSuggestions.innerHTML=state.scriptLibrary.subjectSuggestions.length?`<small class="subject-suggestion-label">Choose a generated subject to add it:</small>${state.scriptLibrary.subjectSuggestions.map(item=>`<button class="subject-suggestion" type="button" data-subject-choice="${esc(item)}">${esc(item)}<span>+</span></button>`).join("")}`:"";
   const contextSummary=document.getElementById("writing-context-summary");
   if(contextSummary&&selectedOpportunity){
     contextSummary.innerHTML=`
@@ -1575,6 +1578,25 @@ function readWritingAssistant(){
   assistant.style=document.getElementById("writing-style")?.value||assistant.style;
   assistant.language=document.getElementById("writing-language")?.value||assistant.language;
   saveState();
+}
+function generateSubjectOptions(){
+  ensureScriptLibrary();
+  const assistant=writingAssistantSettings();
+  const opportunity=opportunities.find(item=>item.id===assistant.opportunityId)||opportunities[0];
+  const offer=state.offers.find(item=>item.id===assistant.offerId)||state.offers[0];
+  const company=opportunity?.company||"{{company}}";
+  const signal=localizedSignal(opportunity||{});
+  const signalType=opportunity?.signalType||"aktualitāti";
+  const offerName=offer?.name||"pārdošanas attīstību";
+  const libraryHint=activeWritingSources()[0]?.title;
+  state.scriptLibrary.subjectSuggestions=[
+    `${signalType} uzņēmumā ${company}`,
+    `Īsa ideja par ${company} nākamo soli`,
+    `Kā ${company} pārvērst ${signalType.toLowerCase()} pārdošanas izaugsmē`,
+    `${company}: ${offerName}`,
+    libraryHint?`${company} · ideja no ${libraryHint}`:`Praktisks jautājums par ${company}`
+  ];
+  saveState();renderWritingAssistant();showToast("Five subject options generated");
 }
 function saveWritingUploadedSource(){
   ensureScriptLibrary();
@@ -2498,6 +2520,13 @@ document.addEventListener("click",async event=>{
   if(event.target.id==="writing-subject-save"){
     state.scriptLibrary.subjectOptions=(document.getElementById("writing-subject-options")?.value||"").split("\n").map(item=>item.trim()).filter(Boolean);
     saveState();showToast(`${state.scriptLibrary.subjectOptions.length} subject options saved`);return;
+  }
+  if(event.target.id==="writing-subject-generate"){generateSubjectOptions();return;}
+  const subjectChoice=event.target.closest("[data-subject-choice]");
+  if(subjectChoice){
+    const field=document.getElementById("writing-subject-options");
+    if(field){const current=field.value.split("\n").map(item=>item.trim()).filter(Boolean);if(!current.includes(subjectChoice.dataset.subjectChoice))current.push(subjectChoice.dataset.subjectChoice);field.value=current.join("\n");}
+    showToast("Subject added to the list — save when ready");return;
   }
   if(event.target.id==="writing-generate"){generateWritingVariants();return;}
   if(event.target.id==="writing-clear"){const assistant=writingAssistantSettings();assistant.variants=[];saveState();renderWritingAssistant();showToast("Draft variants cleared");return;}
