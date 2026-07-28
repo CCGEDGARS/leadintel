@@ -682,8 +682,19 @@ async function syncData({silent=false}={}){
     const payload=/script\.google\.com$/.test(new URL(url).hostname)?await fetchJsonp(url):await fetchJson(url);
     applyRuntimePayload(payload,{mode:"live"});showToast(`Synced ${opportunities.length} opportunities`);return true;
   }
-  catch(error){state.runtime.error=error.message;saveState();renderRuntimeStatus();showToast(`Sync failed: ${error.message}`);return false;}
+  catch(error){state.runtime.error=error.message;saveState();renderRuntimeStatus();if(!silent)showToast(`Sync failed: ${error.message}`);return false;}
   finally{setBusy("sync-btn",false,"Sync data");}
+}
+
+function scheduleDailyDataSync(){
+  const run=()=>{
+    if(!state.integrations.dataUrl.trim())return;
+    const last=Number(localStorage.getItem("li_last_auto_sync")||0);
+    if(Date.now()-last<24*60*60*1000)return;
+    syncData({silent:true}).then(ok=>{if(ok)localStorage.setItem("li_last_auto_sync",String(Date.now()));});
+  };
+  setTimeout(run,1200);
+  setInterval(run,60*60*1000);
 }
 
 async function fetchJson(url){
@@ -2726,3 +2737,4 @@ document.addEventListener("keydown",event=>{if(event.key==="Escape"){toggleAiSup
 restoreRuntimeData();
 renderAll();
 refreshBackendSession();
+scheduleDailyDataSync();
