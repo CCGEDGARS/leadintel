@@ -1256,6 +1256,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   color: #8eb0ff;
   font-size: inherit;
   font-weight: 600;
+  margin: 0 !important;
   cursor: pointer;
 }
 .writing-upload-row > input,
