@@ -307,6 +307,7 @@ function normalizeScriptLibrary(value){
     libraryVisible:source.libraryVisible!==false,
     subjectOptions:Array.isArray(source.subjectOptions)?source.subjectOptions.filter(item=>typeof item==="string"):[],
     subjectSuggestions:Array.isArray(source.subjectSuggestions)?source.subjectSuggestions.filter(item=>typeof item==="string"):[],
+    subjectGeneration:Number.isFinite(Number(source.subjectGeneration))?Number(source.subjectGeneration):0,
     assistant:{
       opportunityId:typeof assistant.opportunityId==="string"?assistant.opportunityId:"",
       offerId:typeof assistant.offerId==="string"?assistant.offerId:"",
@@ -1589,13 +1590,14 @@ function generateSubjectOptions(){
   const signalType=opportunity?.signalType||"aktualitāti";
   const offerName=offer?.name||"pārdošanas attīstību";
   const libraryHint=activeWritingSources()[0]?.title;
-  state.scriptLibrary.subjectSuggestions=[
-    `${signalType} uzņēmumā ${company}`,
-    `Īsa ideja par ${company} nākamo soli`,
-    `Kā ${company} pārvērst ${signalType.toLowerCase()} pārdošanas izaugsmē`,
-    `${company}: ${offerName}`,
-    libraryHint?`${company} · ideja no ${libraryHint}`:`Praktisks jautājums par ${company}`
+  const generation=state.scriptLibrary.subjectGeneration||0;
+  const angles=[
+    [`${signalType} uzņēmumā ${company}`,`Īsa ideja par ${company} nākamo soli`,`Kā ${company} pārvērst ${signalType.toLowerCase()} pārdošanas izaugsmē`,`${company}: ${offerName}`,libraryHint?`${company} · ideja no ${libraryHint}`:`Praktisks jautājums par ${company}`],
+    [`Ko ${signalType.toLowerCase()} nozīmē ${company} pārdošanai?`,`${company} · viens praktisks jautājums`,`Vai ${company} ir gatavs nākamajam izaugsmes solim?`,`Ideja ${company} pārdošanas komandai`,`${company} un jaunā laikmeta iespējas`],
+    [`${company}: signāls, ko vērts izmantot`,`Par ${company} un pārdošanas efektivitāti`,`Kā ātrāk izmantot ${company} izaugsmes brīdi`,`30 minūšu ideja uzņēmumam ${company}`,`Kas šobrīd palīdzētu ${company} komandai pārdot labāk?`]
   ];
+  state.scriptLibrary.subjectGeneration=generation+1;
+  state.scriptLibrary.subjectSuggestions=angles[generation%angles.length];
   saveState();renderWritingAssistant();showToast("Five subject options generated");
 }
 function saveWritingUploadedSource(){
