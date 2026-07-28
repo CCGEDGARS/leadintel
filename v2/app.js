@@ -573,6 +573,10 @@ function linkedInPeopleSearchUrl(parts){
   const terms=parts.map(cleanLinkedInSearchPart).filter(Boolean).join(" ");
   return `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(terms||"commercial director")}`;
 }
+function usableContactName(name){
+  const value=String(name||"").trim();
+  return Boolean(value)&&!/^(decision-maker|contact|person|not yet enriched|unknown)/i.test(value);
+}
 function linkedInLookupUrl(opportunity){
   const direct=safeUrl(opportunity?.contact?.linkedin||"");
   if(direct){
@@ -582,7 +586,10 @@ function linkedInLookupUrl(opportunity){
       if(/(^|\.)linkedin\.com$/i.test(url.hostname)&&path&&path!=="/"&&!/^\/search\b/i.test(path))return direct;
     }catch{}
   }
-  return linkedInPeopleSearchUrl([opportunity?.contact?.name]);
+  const company=opportunity?.company||"";
+  const location=opportunity?.location||activeMarket().countries?.[0]||"Latvia";
+  if(usableContactName(opportunity?.contact?.name))return linkedInPeopleSearchUrl([opportunity.contact.name,company,location]);
+  return linkedInPeopleSearchUrl([linkedInTargetRoles(opportunity)[0]||"Commercial Director",company,location]);
 }
 function linkedInTargetRoles(opportunity){
   const signal=`${opportunity?.signalType||""} ${opportunity?.signal||""} ${opportunity?.primaryOffer||""}`.toLowerCase();
@@ -598,12 +605,12 @@ function linkedInTargetRoles(opportunity){
 }
 function linkedInContactTargets(opportunity){
   const targets=[];
-  if(opportunity?.contact?.name&&opportunity?.company){
-    targets.push({role:"Name + company",url:linkedInPeopleSearchUrl([opportunity.contact.name,opportunity.company])});
+  if(usableContactName(opportunity?.contact?.name)&&opportunity?.company){
+    targets.push({role:"Name + company",url:linkedInPeopleSearchUrl([opportunity.contact.name,opportunity.company,opportunity.location||activeMarket().countries?.[0]||"Latvia"])});
   }
   linkedInTargetRoles(opportunity).forEach(role=>targets.push({
     role,
-    url:linkedInPeopleSearchUrl([role,opportunity?.company])
+    url:linkedInPeopleSearchUrl([role,opportunity?.company,opportunity?.location||activeMarket().countries?.[0]||"Latvia"])
   }));
   return targets.slice(0,4);
 }
