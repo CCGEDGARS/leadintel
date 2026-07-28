@@ -1502,16 +1502,16 @@ function renderWritingAssistant(){
   const libraryToggle=document.getElementById("writing-library-toggle");
   if(libraryPanel)libraryPanel.hidden=state.scriptLibrary.libraryVisible===false;
   if(libraryToggle)libraryToggle.textContent=state.scriptLibrary.libraryVisible===false?"Show library":"Hide library";
-  if(!opportunities.some(item=>item.id===assistant.opportunityId))assistant.opportunityId=opportunities[0]?.id||"";
-  if(!state.offers.some(item=>item.id===assistant.offerId))assistant.offerId=state.offers.find(item=>item.active!==false)?.id||state.offers[0]?.id||"";
+  if(assistant.opportunityId && !opportunities.some(item=>item.id===assistant.opportunityId))assistant.opportunityId="";
+  if(assistant.offerId && !state.offers.some(item=>item.id===assistant.offerId))assistant.offerId="";
   const opportunitySelect=document.getElementById("writing-opportunity");
   if(opportunitySelect){
-    opportunitySelect.innerHTML=opportunities.map(item=>`<option value="${esc(item.id)}" ${item.id===assistant.opportunityId?"selected":""}>${esc(item.company)} · ${esc(item.signalType)}</option>`).join("");
+    opportunitySelect.innerHTML=`<option value="">No preference</option>`+opportunities.map(item=>`<option value="${esc(item.id)}" ${item.id===assistant.opportunityId?"selected":""}>${esc(item.company)} · ${esc(item.signalType)}</option>`).join("");
     opportunitySelect.value=assistant.opportunityId;
   }
   const offerSelect=document.getElementById("writing-offer");
   if(offerSelect){
-    offerSelect.innerHTML=state.offers.map(item=>`<option value="${esc(item.id)}" ${item.id===assistant.offerId?"selected":""}>${esc(item.name)}</option>`).join("");
+    offerSelect.innerHTML=`<option value="">No preference</option>`+state.offers.map(item=>`<option value="${esc(item.id)}" ${item.id===assistant.offerId?"selected":""}>${esc(item.name)}</option>`).join("");
     offerSelect.value=assistant.offerId;
   }
   const selectedOpportunity=opportunities.find(item=>item.id===assistant.opportunityId)||opportunities[0];
@@ -1639,7 +1639,7 @@ function writingLengthLine(settings){
   return settings.length==="Very short"?"Keep it to 2 short paragraphs.":settings.length==="Detailed"?"Use 4 compact paragraphs with evidence, reason, offer and next step.":settings.length==="Standard"?"Use 3 compact paragraphs.":"Use 2-3 compact paragraphs.";
 }
 function writingStyleLine(settings){
-  const map={Friendly:"Warm, useful and human.",Formal:"Precise, restrained and executive.",Persuasive:"Sharper commercial reason and stronger CTA.",Storytelling:"Use a before/after contrast around the detected signal.","Executive/direct":"Brief, direct and decision-oriented."};
+  const map={Friendly:"Warm, useful and human.",Formal:"Precise, restrained and executive.",Persuasive:"Sharper commercial reason and stronger CTA.",Storytelling:"Use a before/after contrast around the detected signal.","Executive/direct":"Brief, direct and decision-oriented.",NLP:"Use ethical NLP techniques: pattern interrupts, presuppositions, future pacing, calibrated questions and embedded calls to action. Keep them natural and never manipulative."};
   return map[settings.style]||map.Friendly;
 }
 function writingSignalRuleForOpportunity(opportunity){
