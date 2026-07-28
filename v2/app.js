@@ -1538,7 +1538,7 @@ function renderWritingAssistant(){
       const items=state.scriptLibrary.sources.filter(item=>item.category===category);
       return `
       <article class="writing-source-group">
-        <div class="writing-source-heading"><span class="book-silhouette" aria-hidden="true">▥</span><h4>${esc(category)}</h4></div>
+        <div class="writing-source-heading"><h4>${esc(category)}</h4><span class="book-silhouette" aria-hidden="true">▥</span></div>
         <div class="writing-source-items">
           ${items.length?items.map(item=>`<label class="writing-source"><input type="checkbox" data-writing-source="${esc(item.id)}" ${item.active!==false?"checked":""}><span><strong>${esc(item.title)}</strong><small>${esc(writingSourceDetail(item))}</small></span></label>`).join(""):`<div class="writing-source-empty"><span><strong>No source uploaded</strong><small>Upload a PDF to add a source to this section.</small></span></div>`}
         </div>
