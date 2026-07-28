@@ -2014,9 +2014,9 @@ function renderRuntimeStatus(){
   const emailed=Math.min(state.settings.emailCount,saved);
   const findings=numberValue(last.findings,opportunities.length);
   const signalCount=signals.length;
-  const runLabel=state.runtime.lastSync?`Last synced ${state.runtime.lastSync}`:state.runtime.mode==="demo"?"Demo snapshot · no live endpoint connected":`${modes[state.runtime.mode]||"Local data"} loaded`;
+  const runLabel=state.runtime.lastSync?`Last synced ${state.runtime.lastSync}`:state.runtime.mode==="demo"?"Demo preview · connect Google Sheets for live numbers":`${modes[state.runtime.mode]||"Local data"} loaded`;
   document.getElementById("latest-run-label").textContent=runLabel;
-  document.getElementById("latest-run-status").textContent=state.runtime.mode==="demo"?"Demo":state.runtime.error?"Review":"Ready";
+  document.getElementById("latest-run-status").textContent=state.runtime.mode==="demo"?"Demo preview":state.runtime.error?"Review":"Ready";
   document.getElementById("funnel-findings").textContent=findings;
   document.getElementById("funnel-signals").textContent=signalCount;
   document.getElementById("funnel-qualified").textContent=qualified;
