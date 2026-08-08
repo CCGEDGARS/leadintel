@@ -1,0 +1,35 @@
+name: Package Original LeadIntel V2
+
+on:
+  push:
+    paths:
+      - '.github/workflows/package-original-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout original V2 commit
+        uses: actions/checkout@v4
+        with:
+          ref: 6b2e8465da733368e464b67110bd28a8f42507c8
+
+      - name: Verify original V2 files
+        run: |
+          test -f v2/index.html
+          test -f v2/styles.css
+          test -f v2/app.js
+          grep -q 'map-workbench' v2/index.html
+          grep -q 'STATE_SCHEMA_VERSION = 10' v2/app.js
+
+      - name: Upload original V2 package
+        uses: actions/upload-artifact@v4
+        with:
+          name: leadintel-original-v2
+          path: v2/
+          if-no-files-found: error
+          retention-days: 1
