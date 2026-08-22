@@ -29,6 +29,7 @@ jobs:
           node-version: '22'
       - name: Run customer tests
         run: node --test customer/test/*.test.js
+      # Verify every customer-facing JavaScript module before integration.
       - name: Check JavaScript syntax
         run: |
           node --check customer/profile-engine.js
