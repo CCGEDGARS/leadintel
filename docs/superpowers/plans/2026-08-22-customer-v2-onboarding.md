@@ -45,4 +45,4 @@
 **Files:** Create `.github/workflows/customer-ci.yml`.
 - [x] Add push/PR verification for customer files.
 - [x] Run Node tests and JavaScript syntax checks in GitHub Actions.
-- [ ] Confirm the feature branch CI result before merge.
+- [x] Confirm the feature branch CI result before merge.
