@@ -23,3 +23,27 @@ test('profile screen includes review, edit and approval controls',()=>{
   assert.match(html,/id="approve-profile"/);
   assert.match(html,/id="edit-profile"/);
 });
+
+test('market strategy step includes ICP, signal designer, research and activation controls',()=>{
+  const html=read('index.html');
+  assert.match(html,/data-step-marker="4"/);
+  assert.match(html,/id="step-4"/);
+  assert.match(html,/id="icp-list"/);
+  assert.match(html,/id="signal-designer"/);
+  assert.match(html,/id="add-custom-signal"/);
+  assert.match(html,/id="run-market-research"/);
+  assert.match(html,/id="market-opportunities"/);
+  assert.match(html,/id="activate-market-strategy"/);
+});
+
+test('market opportunity UI exposes the five scoring dimensions',()=>{
+  const html=read('index.html');
+  for(const label of ['Fit','Intent','Timing','Value','Evidence'])assert.match(html,new RegExp(`>${label}<`));
+});
+
+test('customer app wires live Firecrawl market search with explicit cost guard',()=>{
+  const app=read('app.js');
+  assert.match(app,/firecrawl-search/);
+  assert.match(app,/MAX_MARKET_RESEARCH_QUERIES\s*=\s*4/);
+  assert.match(app,/LeadIntelMarket/);
+});
