@@ -3,7 +3,7 @@ name: Customer V2 CI
 on:
   push:
     branches:
-      - 'feature/customer-v2-onboarding'
+      - 'feature/customer-v2-*'
     paths:
       - 'customer/**'
       - '.github/workflows/customer-ci.yml'
@@ -28,8 +28,9 @@ jobs:
         with:
           node-version: '22'
       - name: Run customer tests
-        run: node --test customer/test/profile-engine.test.js customer/test/structure.test.js customer/test/deployment.test.js
+        run: node --test customer/test/*.test.js
       - name: Check JavaScript syntax
         run: |
           node --check customer/profile-engine.js
+          node --check customer/market-engine.js
           node --check customer/app.js
