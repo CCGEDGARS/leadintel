@@ -3,6 +3,7 @@ const FIRECRAWL_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
 const PDFJS_VERSION="6.2.108";
 const MAX_PDF_BYTES=15*1024*1024;
 const MAX_PDFS=5;
+const MAX_MARKET_RESEARCH_QUERIES=4;
 const profileFields=[
   ["companyOverview","Company overview",true],["priorityOffers","Priority offers",false],["idealCustomer","Ideal customer profile",false],
   ["lookalikeCustomers","Lookalike customers",false],["decisionMakers","Decision makers",false],["currentMarkets","Current market footprint",false],
@@ -14,12 +15,31 @@ let editMode=false;
 let pdfModule=null;
 const $=id=>document.getElementById(id);
 
-function defaultState(){return LeadIntelProfile.normalizeSavedState({step:1,website:"",additionalLinks:[],documents:[],answers:{},scrapedSources:[],profile:null,approved:false});}
-function loadState(){try{return LeadIntelProfile.normalizeSavedState(JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}"));}catch{return defaultState();}}
+function defaultState(){
+  const base=LeadIntelProfile.normalizeSavedState({step:1,website:"",additionalLinks:[],documents:[],answers:{},scrapedSources:[],profile:null,approved:false});
+  base.market=LeadIntelMarket.normalizeMarketState({});
+  return base;
+}
+function loadState(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");
+    const base=LeadIntelProfile.normalizeSavedState(raw);
+    base.step=[1,2,3,4].includes(Number(raw.step))?Number(raw.step):base.step;
+    base.market=LeadIntelMarket.normalizeMarketState(raw.market||{});
+    return base;
+  }catch{return defaultState();}
+}
 function saveState(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));updateCompleteness();}
 function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
-function showToast(message){const el=$("toast");el.textContent=message;el.classList.add("show");clearTimeout(showToast.t);showToast.t=setTimeout(()=>el.classList.remove("show"),2200);}
-function setStep(step){state.step=step;saveState();document.querySelectorAll(".step-view").forEach(el=>el.classList.toggle("active",Number(el.dataset.step)===step));document.querySelectorAll("[data-step-marker]").forEach(el=>{const n=Number(el.dataset.stepMarker);el.classList.toggle("active",n===step);el.classList.toggle("complete",n<step);});window.scrollTo({top:0,behavior:"smooth"});}
+function showToast(message){const el=$("toast");el.textContent=message;el.classList.add("show");clearTimeout(showToast.t);showToast.t=setTimeout(()=>el.classList.remove("show"),2400);}
+function setStep(step){
+  if(step===4&&(!state.approved||!state.profile)){showToast("Approve the Company Intelligence Profile first");step=3;}
+  state.step=step;saveState();
+  document.querySelectorAll(".step-view").forEach(el=>el.classList.toggle("active",Number(el.dataset.step)===step));
+  document.querySelectorAll("[data-step-marker]").forEach(el=>{const n=Number(el.dataset.stepMarker);el.classList.toggle("active",n===step);el.classList.toggle("complete",n<step);});
+  if(step===4)renderMarketStrategy();
+  window.scrollTo({top:0,behavior:"smooth"});
+}
 function updateCompleteness(){const score=LeadIntelProfile.calculateCompleteness(state);$("completeness-score").textContent=`${score}%`;$("progress-ring").style.setProperty("--p",score);$("completeness-caption").textContent=score<10?"Add your website to begin.":score<70?"More strategic context will improve targeting.":score<95?"Strong context. Complete remaining answers for best results.":"Ready for intelligence analysis.";}
 function syncInputsFromState(){$("company-website").value=state.website.replace(/^https?:\/\//,"").replace(/\/$/,"");$("additional-links").value=state.additionalLinks.join("\n");document.querySelectorAll("[data-question]").forEach(el=>el.value=state.answers[el.dataset.question]||"");renderDocuments();}
 function readSources(){state.website=LeadIntelProfile.normalizeUrl($("company-website").value);state.additionalLinks=$("additional-links").value.split(/\n/).map(LeadIntelProfile.normalizeUrl).filter(Boolean).slice(0,8);saveState();}
@@ -70,6 +90,7 @@ function analysisLog(label,status="done"){$("analysis-log").insertAdjacentHTML("
 async function analyzeCompany(){
   if(!validateStep2())return;
   setStep(3);$("profile-content").hidden=true;$("analysis-state").hidden=false;$("analysis-log").innerHTML="";state.scrapedSources=[];state.approved=false;
+  state.market=LeadIntelMarket.normalizeMarketState({});
   const sources=[{url:state.website,type:"website"},...state.additionalLinks.map(url=>({url,type:"link"}))];
   analysisStatus("Reading company sources…","Public source failures will not block the profile; they will be shown as intelligence gaps.");
   for(const [index,source] of sources.entries()){
@@ -78,10 +99,10 @@ async function analyzeCompany(){
   const usable=state.scrapedSources.filter(x=>x.text);
   analysisStatus("Synthesizing strategic context…","Your answers remain authoritative when they conflict with public website wording.");
   analysisLog(`${usable.length}/${sources.length} web sources readable`);analysisLog(`${state.documents.filter(d=>d.text).length} PDFs with extracted text`);
-  await new Promise(resolve=>setTimeout(resolve,450));
+  await new Promise(resolve=>setTimeout(resolve,350));
   state.profile=LeadIntelProfile.buildCompanyIntelligenceProfile({...state,scrapedSources:usable});
   saveState();analysisLog("Company Intelligence Profile built");
-  await new Promise(resolve=>setTimeout(resolve,350));
+  await new Promise(resolve=>setTimeout(resolve,250));
   $("analysis-state").hidden=true;$("profile-content").hidden=false;renderProfile();
 }
 function fieldValue(profile,key){const value=profile?.[key];return Array.isArray(value)?value.join("; "):String(value||"");}
@@ -104,18 +125,154 @@ function toggleEdit(){
   if(editMode){saveProfileEdits();editMode=false;$("edit-profile").textContent="Edit profile";showToast("Profile edits saved");}else{editMode=true;$("edit-profile").textContent="Save edits";}
   renderProfile();
 }
-function approveProfile(){saveProfileEdits();state.approved=true;state.profile.approvedAt=new Date().toISOString();saveState();editMode=false;renderProfile();showToast("Company Intelligence Profile approved");}
-function updateApprovalUI(){const approved=state.approved;$("profile-status").textContent=approved?"Approved":"Draft";$("profile-status").classList.toggle("approved",approved);$("approve-profile").textContent=approved?"Approved ✓":"Approve profile";$("approve-profile").disabled=approved;$("approve-profile-bottom").textContent=approved?"Approved · ready for Market Opportunity Engine":"Approve Company Intelligence Profile";$("approve-profile-bottom").disabled=approved;$("approval-card").classList.toggle("approved",approved);}
-function resetWorkspace(){if(!window.confirm("Start over? This clears this browser's LeadIntel customer onboarding workspace."))return;localStorage.removeItem(STORAGE_KEY);state=defaultState();editMode=false;syncInputsFromState();setStep(1);showToast("Customer workspace reset");}
+function seedMarketStrategy(){
+  state.market=LeadIntelMarket.normalizeMarketState({
+    icps:LeadIntelMarket.buildIcpCandidates(state.profile),
+    signals:LeadIntelMarket.normalizeSignals(state.profile.recommendedSignals,state.market?.signals||[]),
+    researchStatus:"idle",strategyApproved:false
+  });
+}
+function approveProfile(){
+  saveProfileEdits();state.approved=true;state.profile.approvedAt=new Date().toISOString();seedMarketStrategy();saveState();editMode=false;renderProfile();showToast("Company Intelligence Profile approved");
+}
+function updateApprovalUI(){
+  const approved=state.approved;$("profile-status").textContent=approved?"Approved":"Draft";$("profile-status").classList.toggle("approved",approved);
+  $("approve-profile").textContent=approved?"Approved ✓":"Approve profile";$("approve-profile").disabled=approved;
+  $("approve-profile-bottom").textContent=approved?"Continue to Market Strategy →":"Approve Company Intelligence Profile";$("approve-profile-bottom").disabled=false;
+  $("approval-card").classList.toggle("approved",approved);
+}
+function openMarketStrategy(){if(!state.approved||!state.profile){showToast("Approve the Company Intelligence Profile first");return;}ensureMarketStrategySeeded();setStep(4);}
+function ensureMarketStrategySeeded(){
+  if(!state.market)state.market=LeadIntelMarket.normalizeMarketState({});
+  if(!state.market.icps.length)state.market.icps=LeadIntelMarket.buildIcpCandidates(state.profile);
+  state.market.signals=LeadIntelMarket.normalizeSignals(state.profile.recommendedSignals,state.market.signals);
+  saveState();
+}
+
+function readMarketEdits(markDirty=true){
+  document.querySelectorAll("[data-icp-field]").forEach(el=>{const item=state.market.icps[Number(el.dataset.index)];if(!item)return;const field=el.dataset.icpField;item[field]=field==="active"?el.checked:el.value.trim();});
+  document.querySelectorAll("[data-signal-field]").forEach(el=>{const item=state.market.signals[Number(el.dataset.index)];if(!item)return;const field=el.dataset.signalField;if(field==="active")item.active=el.checked;else if(field==="weight")item.weight=Math.max(1,Math.min(10,Number(el.value)||1));else item[field]=el.value.trim();});
+  document.querySelectorAll("[data-opportunity-active]").forEach(el=>{const item=state.market.opportunities[Number(el.dataset.opportunityActive)];if(item)item.active=el.checked;});
+  if(markDirty){state.market.strategyApproved=false;state.market.strategyApprovedAt="";}
+  saveState();
+}
+function renderIcps(){
+  $("icp-list").innerHTML=state.market.icps.map((icp,index)=>`<article class="icp-card ${icp.active?"active":""}">
+    <div class="icp-card-head"><label class="market-toggle"><input type="checkbox" data-icp-field="active" data-index="${index}" ${icp.active?"checked":""}><span></span></label><div><span class="icp-type">${esc(icp.type)}</span><input class="market-inline-title" data-icp-field="name" data-index="${index}" value="${esc(icp.name)}"></div></div>
+    <label>Definition<textarea rows="2" data-icp-field="description" data-index="${index}">${esc(icp.description)}</textarea></label>
+    <div class="icp-fields"><label>Target markets<input data-icp-field="targetMarkets" data-index="${index}" value="${esc(icp.targetMarkets)}"></label><label>Buyer roles<input data-icp-field="buyerRoles" data-index="${index}" value="${esc(icp.buyerRoles)}"></label></div>
+    <div class="icp-fields"><label>Priority offers<input data-icp-field="offers" data-index="${index}" value="${esc(icp.offers)}"></label><label>Commercial value<input data-icp-field="value" data-index="${index}" value="${esc(icp.value)}"></label></div>
+    <label>Exclusions<input data-icp-field="exclusions" data-index="${index}" value="${esc(icp.exclusions)}"></label>
+    <p>${esc(icp.rationale)}</p>
+  </article>`).join("");
+}
+function renderSignalDesigner(){
+  $("signal-designer").innerHTML=state.market.signals.map((signal,index)=>`<div class="signal-config-row ${signal.active?"active":""}">
+    <label class="market-toggle"><input type="checkbox" data-signal-field="active" data-index="${index}" ${signal.active?"checked":""}><span></span></label>
+    <div class="signal-config-main"><input class="signal-name-input" data-signal-field="name" data-index="${index}" value="${esc(signal.name)}"><input class="signal-keywords-input" data-signal-field="keywords" data-index="${index}" value="${esc(signal.keywords)}" placeholder="keywords; phrases"></div>
+    <select data-signal-field="priority" data-index="${index}">${["High","Medium","Low"].map(p=>`<option ${p===signal.priority?"selected":""}>${p}</option>`).join("")}</select>
+    <label class="weight-field"><span>Weight</span><input type="number" min="1" max="10" data-signal-field="weight" data-index="${index}" value="${signal.weight}"></label>
+    <button class="signal-delete" type="button" data-remove-signal="${index}" aria-label="Remove ${esc(signal.name)}">×</button>
+  </div>`).join("");
+}
+function addCustomSignal(){
+  readMarketEdits();
+  const result=LeadIntelMarket.addCustomSignal(state.market.signals,{name:$("custom-signal-name").value,keywords:$("custom-signal-keywords").value,priority:$("custom-signal-priority").value,weight:$("custom-signal-weight").value});
+  if(!result.added){showToast(result.error||"Could not add signal");return;}
+  state.market.signals=result.signals;state.market.strategyApproved=false;saveState();$("custom-signal-name").value="";$("custom-signal-keywords").value="";renderMarketStrategy();showToast("Custom signal added");
+}
+function removeSignal(index){readMarketEdits();state.market.signals.splice(index,1);state.market.strategyApproved=false;saveState();renderMarketStrategy();showToast("Signal removed");}
+
+async function searchMarket(queryMeta){
+  const response=await fetch(`${FIRECRAWL_PROXY}/firecrawl-search`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:queryMeta.query,limit:5,scrapeOptions:{formats:["markdown"]}})});
+  const payload=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(payload.error||`Market search returned ${response.status}`);
+  return LeadIntelMarket.normalizeSearchResults(payload,queryMeta);
+}
+function researchProfile(){
+  const activeMarkets=state.market.icps.filter(item=>item.active).map(item=>item.targetMarkets).filter(Boolean).join("; ");
+  return {...state.profile,targetMarkets:activeMarkets||state.profile.targetMarkets};
+}
+async function runMarketResearch(){
+  if(!state.approved){showToast("Approve the Company Intelligence Profile first");return;}
+  readMarketEdits();
+  const profile=researchProfile();
+  const queries=LeadIntelMarket.buildResearchQueries(profile,state.market.signals,MAX_MARKET_RESEARCH_QUERIES);
+  if(!queries.length){showToast("Add at least one target market before research");return;}
+  state.market.researchQueries=queries;state.market.researchResults=[];state.market.opportunities=[];state.market.researchStatus="running";state.market.strategyApproved=false;saveState();renderMarketStrategy();
+  const button=$("run-market-research");button.disabled=true;button.textContent="Researching…";
+  let failures=0;
+  for(const query of queries){
+    try{state.market.researchResults.push(...await searchMarket(query));}
+    catch{failures++;}
+  }
+  state.market.researchResults=state.market.researchResults.slice(0,20);
+  state.market.opportunities=LeadIntelMarket.buildMarketOpportunities(profile,state.market.icps,state.market.signals,state.market.researchResults);
+  state.market.researchStatus=failures===0?"complete":state.market.researchResults.length?"partial":"error";
+  state.market.lastResearchAt=new Date().toISOString();saveState();renderMarketStrategy();
+  button.disabled=false;
+  showToast(failures?`Research complete with ${failures} unavailable quer${failures===1?"y":"ies"}`:`Market research complete · ${state.market.researchResults.length} evidence sources`);
+}
+function scoreCell(label,value){return `<div><span>${label}</span><strong>${value}/20</strong><i style="--score:${value}"></i></div>`;}
+function renderMarketOpportunities(){
+  const target=$("market-opportunities");
+  if(!state.market.opportunities.length){target.innerHTML=`<div class="market-empty">${state.market.researchStatus==="running"?"Researching approved markets…":"Run market research to create evidence-backed market hypotheses."}</div>`;return;}
+  target.innerHTML=state.market.opportunities.map((opp,index)=>`<article class="opportunity-card ${opp.active?"active":""}">
+    <div class="opportunity-top"><label class="market-toggle"><input type="checkbox" data-opportunity-active="${index}" ${opp.active?"checked":""}><span></span></label><div><span class="opportunity-market">${esc(opp.market)}</span><h4>${esc(opp.title)}</h4></div><div class="opportunity-total"><strong>${opp.score.total}</strong><span>/100</span></div></div>
+    <p class="opportunity-hypothesis">${esc(opp.hypothesis)}</p>
+    <div class="score-grid">${scoreCell("Fit",opp.score.fit)}${scoreCell("Intent",opp.score.intent)}${scoreCell("Timing",opp.score.timing)}${scoreCell("Value",opp.score.value)}${scoreCell("Evidence",opp.score.evidence)}</div>
+    <div class="opportunity-meta"><span class="confidence ${opp.confidence.toLowerCase()}">${opp.confidence} confidence</span><span>${opp.evidence.length} evidence source${opp.evidence.length===1?"":"s"}</span>${opp.profileOnly?"<span>Profile-only hypothesis</span>":""}</div>
+    <div class="evidence-links">${opp.evidence.length?opp.evidence.map(source=>`<a href="${esc(source.url)}" target="_blank" rel="noopener"><strong>${esc(source.title)}</strong><small>${esc(source.description||source.text).slice(0,180)}</small></a>`).join(""):`<div class="evidence-none">No live public evidence was returned. LeadIntel has kept this as a low-evidence hypothesis instead of inventing support.</div>`}</div>
+  </article>`).join("");
+}
+function renderResearchStatus(){
+  const status=state.market.researchStatus;const count=state.market.researchResults.length;const queries=state.market.researchQueries.length;
+  const map={idle:"No market research run yet.",running:`Running ${queries} market searches…`,complete:`Research complete · ${queries} queries · ${count} public evidence sources.`,partial:`Research partially complete · ${count} evidence sources; one or more searches were unavailable.`,error:"Public market search was unavailable. Profile-only hypotheses are shown with reduced Evidence scores."};
+  $("market-research-status").textContent=map[status]||map.idle;
+  $("run-market-research").textContent=state.market.lastResearchAt?"Rerun market research ↻":"Run market research ↻";
+  $("run-market-research").disabled=status==="running";
+}
+function renderMarketStrategy(){
+  if(!state.profile||!state.approved)return;
+  ensureMarketStrategySeeded();
+  $("strategy-company-name").textContent=state.profile.companyName||"Company";
+  const marketSummary=LeadIntelMarket.splitList(state.profile.targetMarkets).join(" · ")||"Not defined";
+  $("strategy-market-summary").textContent=marketSummary;
+  $("strategy-signal-count").textContent=String(state.market.signals.filter(item=>item.active).length);
+  $("strategy-status").textContent=state.market.strategyApproved?"Active":"Draft";$("strategy-status").classList.toggle("approved",state.market.strategyApproved);
+  $("strategy-activation-card").classList.toggle("approved",state.market.strategyApproved);
+  $("activate-market-strategy").textContent=state.market.strategyApproved?"Strategy Active ✓":"Activate Market Strategy";
+  $("activate-market-strategy").disabled=state.market.strategyApproved;
+  renderIcps();renderSignalDesigner();renderResearchStatus();renderMarketOpportunities();
+}
+function activateMarketStrategy(){
+  readMarketEdits();
+  if(!state.market.icps.some(item=>item.active)){showToast("Activate at least one ICP");return;}
+  if(!state.market.signals.some(item=>item.active)){showToast("Activate at least one buying signal");return;}
+  if(!state.market.lastResearchAt){showToast("Run market research before activating the strategy");return;}
+  if(!state.market.opportunities.some(item=>item.active)){showToast("Keep at least one market opportunity active");return;}
+  state.market.strategyApproved=true;state.market.strategyApprovedAt=new Date().toISOString();saveState();renderMarketStrategy();showToast("Market Strategy activated for Discovery");
+}
+function resetWorkspace(){if(!window.confirm("Start over? This clears this browser's LeadIntel customer workspace."))return;localStorage.removeItem(STORAGE_KEY);state=defaultState();editMode=false;syncInputsFromState();setStep(1);showToast("Customer workspace reset");}
 
 function bind(){
-  $("company-website").addEventListener("input",()=>{readSources();});$("additional-links").addEventListener("input",readSources);
+  $("company-website").addEventListener("input",readSources);$("additional-links").addEventListener("input",readSources);
   document.querySelectorAll("[data-question]").forEach(el=>el.addEventListener("input",readAnswers));
   $("to-questionnaire").addEventListener("click",()=>{if(validateStep1())setStep(2);});$("back-to-sources").addEventListener("click",()=>setStep(1));$("analyze-company").addEventListener("click",analyzeCompany);
   $("pdf-input").addEventListener("change",e=>handlePdfFiles(e.target.files));
   $("document-list").addEventListener("click",e=>{const btn=e.target.closest("[data-remove-doc]");if(!btn)return;state.documents.splice(Number(btn.dataset.removeDoc),1);saveState();renderDocuments();});
   const zone=$("upload-zone");["dragenter","dragover"].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault();zone.classList.add("dragging");}));["dragleave","drop"].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault();zone.classList.remove("dragging");}));zone.addEventListener("drop",e=>handlePdfFiles(e.dataTransfer.files));
-  $("edit-profile").addEventListener("click",toggleEdit);$("approve-profile").addEventListener("click",approveProfile);$("approve-profile-bottom").addEventListener("click",approveProfile);$("improve-profile").addEventListener("click",()=>setStep(1));$("reset-workspace").addEventListener("click",resetWorkspace);
+  $("edit-profile").addEventListener("click",toggleEdit);$("approve-profile").addEventListener("click",approveProfile);$("approve-profile-bottom").addEventListener("click",()=>state.approved?openMarketStrategy():approveProfile());$("improve-profile").addEventListener("click",()=>setStep(1));
+  $("back-to-profile").addEventListener("click",()=>setStep(3));
+  $("add-custom-signal").addEventListener("click",addCustomSignal);$("run-market-research").addEventListener("click",runMarketResearch);$("activate-market-strategy").addEventListener("click",activateMarketStrategy);
+  $("signal-designer").addEventListener("click",e=>{const btn=e.target.closest("[data-remove-signal]");if(btn)removeSignal(Number(btn.dataset.removeSignal));});
+  [$("icp-list"),$("signal-designer"),$("market-opportunities")].forEach(container=>{container.addEventListener("change",()=>readMarketEdits());});
+  $("reset-workspace").addEventListener("click",resetWorkspace);
 }
-function init(){syncInputsFromState();bind();updateCompleteness();setStep(state.step||1);if(state.step===3&&state.profile){$("analysis-state").hidden=true;$("profile-content").hidden=false;renderProfile();}}
+function init(){
+  syncInputsFromState();bind();updateCompleteness();
+  if(state.profile){$("analysis-state").hidden=true;$("profile-content").hidden=false;renderProfile();}
+  if(state.step===4&&!state.approved)state.step=3;
+  setStep(state.step||1);
+}
 init();
