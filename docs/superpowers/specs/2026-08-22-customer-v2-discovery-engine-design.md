@@ -64,7 +64,8 @@ Discovered → Qualified → Contact Found → Ready for Outreach → Contacted 
 Saving the same domain twice updates the existing pipeline record instead of creating a duplicate. Pipeline stores company, domain, website, market, score, confidence, matched signals, evidence and discovered people.
 
 ## State and privacy
-- Discovery state persists inside browser-local `state.discovery`.
+- Discovery uses a separate browser-local workspace key so Step 5 remains modular and cannot corrupt the existing onboarding/Market Strategy state.
+- A strategy fingerprint invalidates stale discovery candidates when the activated strategy changes while preserving the saved customer pipeline.
 - Maximum 20 raw search results, 12 company candidates, 50 pipeline items and 5 people per company.
 - No personal emails or phone numbers are stored by this milestone.
 - No outreach is sent.
