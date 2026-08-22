@@ -3,12 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="LeadIntel Customer Workspace — company intelligence onboarding">
-  <title>LeadIntel — Build Your Intelligence Profile</title>
+  <meta name="description" content="LeadIntel Customer Workspace — company intelligence onboarding and market strategy">
+  <title>LeadIntel — Build Your Commercial Intelligence Strategy</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="market.css">
 </head>
 <body>
   <div class="page-shell">
@@ -34,14 +35,15 @@
           <li data-step-marker="1" class="active"><span>01</span><div><strong>Company sources</strong><small>Website, links, documents</small></div></li>
           <li data-step-marker="2"><span>02</span><div><strong>Strategic intake</strong><small>10 core questions</small></div></li>
           <li data-step-marker="3"><span>03</span><div><strong>Intelligence profile</strong><small>Review, edit, approve</small></div></li>
+          <li data-step-marker="4"><span>04</span><div><strong>Market strategy</strong><small>ICPs, signals, opportunities</small></div></li>
         </ol>
         <div class="progress-metric">
           <div class="progress-ring" id="progress-ring"><span id="completeness-score">0%</span></div>
           <div><strong>Context completeness</strong><small id="completeness-caption">Add your website to begin.</small></div>
         </div>
         <div class="future-stack">
-          <span>Next modules</span>
-          <p>Market Opportunities</p><p>ICP Engine</p><p>Signal Designer</p><p>Discovery & CRM</p>
+          <span>Next module</span>
+          <p>Company Discovery & CRM</p><p>Decision Makers</p><p>Outreach & Learning Loop</p>
         </div>
       </aside>
 
@@ -127,7 +129,7 @@
             <div class="profile-grid" id="profile-editor"></div>
 
             <section class="panel signals-panel">
-              <div class="section-title"><div><span class="eyebrow">Recommended signal library</span><h3>What LeadIntel should watch for</h3><p>These are recommendations, not fixed rules. Activate, deactivate or edit them before the monitoring engine goes live.</p></div></div>
+              <div class="section-title"><div><span class="eyebrow">Recommended signal library</span><h3>What LeadIntel should watch for</h3><p>These are recommendations, not fixed rules. Activate or deactivate them now; Step 4 lets you edit weights, keywords and add your own.</p></div></div>
               <div class="signal-list" id="recommended-signals"></div>
             </section>
 
@@ -137,9 +139,54 @@
             </section>
 
             <div class="approval-card" id="approval-card">
-              <div><span class="eyebrow">Approval gate</span><h3>Approve before LeadIntel starts making market decisions.</h3><p>Approval freezes this profile as the current source of truth. Future market, signal and opportunity modules will reference this approved version.</p></div>
+              <div><span class="eyebrow">Approval gate</span><h3>Approve before LeadIntel starts making market decisions.</h3><p>Approval freezes this profile as the current source of truth. The Market Strategy Engine will reference this approved version.</p></div>
               <button class="primary-btn" id="approve-profile-bottom" type="button">Approve Company Intelligence Profile</button>
             </div>
+          </div>
+        </section>
+
+        <section class="step-view" id="step-4" data-step="4">
+          <div class="profile-header strategy-header">
+            <div><span class="eyebrow">Step 4 · Market Strategy</span><h1>Turn company context into market decisions.</h1><p>LeadIntel now converts the approved profile into ICPs, editable buying signals and evidence-backed market opportunity hypotheses.</p></div>
+            <div class="profile-header-actions"><span class="profile-status" id="strategy-status">Draft</span><button class="secondary-btn small" id="back-to-profile" type="button">← Profile</button></div>
+          </div>
+
+          <div class="strategy-banner">
+            <div><span>Approved company</span><strong id="strategy-company-name">Company</strong></div>
+            <div><span>Priority markets</span><strong id="strategy-market-summary">—</strong></div>
+            <div><span>Active signals</span><strong id="strategy-signal-count">0</strong></div>
+          </div>
+
+          <section class="panel strategy-panel">
+            <div class="section-title"><span class="eyebrow">ICP Engine</span><h3>Who LeadIntel should prioritize</h3><p>Generated from the approved profile. Activate the ICPs you want Discovery to use and adjust the details where needed.</p></div>
+            <div class="icp-list" id="icp-list"></div>
+          </section>
+
+          <section class="panel strategy-panel">
+            <div class="section-title"><span class="eyebrow">Signal Designer</span><h3>What LeadIntel should watch for</h3><p>Weight 10 means the signal is commercially decisive. Keywords guide market research and later company monitoring.</p></div>
+            <div class="signal-designer" id="signal-designer"></div>
+            <div class="custom-signal-form">
+              <input id="custom-signal-name" type="text" placeholder="New signal name">
+              <input id="custom-signal-keywords" type="text" placeholder="Keywords: distributor; reseller; partner search">
+              <select id="custom-signal-priority"><option>High</option><option selected>Medium</option><option>Low</option></select>
+              <input id="custom-signal-weight" type="number" min="1" max="10" value="7" aria-label="Signal weight">
+              <button class="secondary-btn" id="add-custom-signal" type="button">+ Add signal</button>
+            </div>
+          </section>
+
+          <section class="panel strategy-panel research-panel">
+            <div class="market-research-head">
+              <div class="section-title"><span class="eyebrow">Market Opportunity Engine</span><h3>Research the market for evidence</h3><p>One manual run uses a maximum of four Firecrawl searches and five results per query. Failed public searches reduce Evidence score but do not fabricate replacements.</p></div>
+              <button class="primary-btn" id="run-market-research" type="button">Run market research <span>↻</span></button>
+            </div>
+            <div class="score-legend" aria-label="Opportunity scoring model"><strong>Opportunity score</strong><span>Fit</span><span>Intent</span><span>Timing</span><span>Value</span><span>Evidence</span></div>
+            <div class="research-status" id="market-research-status">No market research run yet.</div>
+            <div class="market-opportunities" id="market-opportunities"><div class="market-empty">Run market research to create evidence-backed market hypotheses.</div></div>
+          </section>
+
+          <div class="approval-card strategy-activation" id="strategy-activation-card">
+            <div><span class="eyebrow">Strategy activation</span><h3>Make this the operating strategy for Discovery.</h3><p>Activation saves the active ICPs, signal weights and selected market opportunities as the configuration the next LeadIntel module will consume.</p></div>
+            <button class="primary-btn" id="activate-market-strategy" type="button">Activate Market Strategy</button>
           </div>
         </section>
       </main>
@@ -147,6 +194,7 @@
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="profile-engine.js"></script>
+  <script src="market-engine.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>
