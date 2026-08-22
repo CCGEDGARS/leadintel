@@ -35,3 +35,4 @@ jobs:
           node --check customer/market-engine.js
           node --check customer/discovery-engine.js
           node --check customer/app.js
+          node --check customer/discovery-ui.js
