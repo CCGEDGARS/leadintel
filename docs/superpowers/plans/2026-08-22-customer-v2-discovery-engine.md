@@ -65,5 +65,5 @@
 
 - [x] Confirm PR contains no `v2/**` changes.
 - [x] Confirm CI tests and syntax checks pass.
-- [ ] Merge to `main` only after PR is mergeable and CI is successful.
-- [ ] Confirm `main/customer/discovery-engine.js`, discovery UI modules and existing `/v2/` remain present after merge.
+- [x] Merge to `main` only after PR is mergeable and CI is successful.
+- [x] Confirm `main/customer/discovery-engine.js`, discovery UI modules and existing `/v2/` remain present after merge.
