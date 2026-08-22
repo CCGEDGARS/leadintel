@@ -56,19 +56,19 @@ test('customer page loads discovery engine and modular discovery UI',()=>{
 
 test('discovery UI injects Step 5, company discovery, decision makers and pipeline controls',()=>{
   const ui=read('discovery-ui.js');
-  assert.match(ui,/data-step-marker=\\"5\\"/);
-  assert.match(ui,/id=\\"step-5\\"/);
-  assert.match(ui,/id=\\"run-company-discovery\\"/);
-  assert.match(ui,/id=\\"company-candidates\\"/);
-  assert.match(ui,/data-action=\\"find-decision-makers\\"/);
-  assert.match(ui,/data-action=\\"save-pipeline\\"/);
-  assert.match(ui,/id=\\"customer-pipeline\\"/);
+  assert.match(ui,/data-step-marker="5"/);
+  assert.match(ui,/id="step-5"/);
+  assert.match(ui,/id="run-company-discovery"/);
+  assert.match(ui,/id="company-candidates"/);
+  assert.match(ui,/data-action="find-decision-makers"/);
+  assert.match(ui,/data-action="save-pipeline"/);
+  assert.match(ui,/id="customer-pipeline"/);
   assert.match(ui,/data-pipeline-stage/);
 });
 
 test('company discovery UI exposes the five company score dimensions',()=>{
   const ui=read('discovery-ui.js');
-  for(const label of ['Fit','Signal','Evidence','Timing','Value'])assert.match(ui,new RegExp(`\\"${label}\\"`));
+  for(const label of ['Fit','Signal','Evidence','Timing','Value'])assert.match(ui,new RegExp(`"${label}"`));
 });
 
 test('discovery UI wires Firecrawl and Apollo people search with hard caps',()=>{
