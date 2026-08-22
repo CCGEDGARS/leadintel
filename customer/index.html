@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="LeadIntel Customer Workspace — company intelligence onboarding">
+  <title>LeadIntel — Build Your Intelligence Profile</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="topbar">
+      <a class="brand" href="../" aria-label="LeadIntel home">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span><strong>LeadIntel</strong><small>COMMERCIAL INTELLIGENCE OS</small></span>
+      </a>
+      <div class="top-actions">
+        <span class="autosave"><i></i>Autosaved locally</span>
+        <button class="ghost-btn" type="button" id="reset-workspace">Start over</button>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <aside class="progress-panel" aria-label="Onboarding progress">
+        <div class="progress-head">
+          <span class="eyebrow">Customer workspace</span>
+          <h2>Build your intelligence profile</h2>
+          <p>Give LeadIntel the context it needs to find real commercial opportunities—not generic leads.</p>
+        </div>
+        <ol class="steps">
+          <li data-step-marker="1" class="active"><span>01</span><div><strong>Company sources</strong><small>Website, links, documents</small></div></li>
+          <li data-step-marker="2"><span>02</span><div><strong>Strategic intake</strong><small>10 core questions</small></div></li>
+          <li data-step-marker="3"><span>03</span><div><strong>Intelligence profile</strong><small>Review, edit, approve</small></div></li>
+        </ol>
+        <div class="progress-metric">
+          <div class="progress-ring" id="progress-ring"><span id="completeness-score">0%</span></div>
+          <div><strong>Context completeness</strong><small id="completeness-caption">Add your website to begin.</small></div>
+        </div>
+        <div class="future-stack">
+          <span>Next modules</span>
+          <p>Market Opportunities</p><p>ICP Engine</p><p>Signal Designer</p><p>Discovery & CRM</p>
+        </div>
+      </aside>
+
+      <main class="content">
+        <section class="step-view active" id="step-1" data-step="1">
+          <div class="hero-copy">
+            <span class="eyebrow">Step 1 · Company sources</span>
+            <h1>Tell LeadIntel about your business.</h1>
+            <p>Start with your main website. Add supporting pages and company PDFs so the system can build a grounded commercial picture before it searches the market.</p>
+          </div>
+
+          <div class="panel source-panel">
+            <div class="panel-head"><div><span class="panel-number">01</span><div><h3>Main company website</h3><p>Required · used as the primary public source.</p></div></div><span class="required-pill">Required</span></div>
+            <label class="field-label" for="company-website">Website URL</label>
+            <div class="url-row"><span>https://</span><input id="company-website" type="text" inputmode="url" autocomplete="url" placeholder="yourcompany.com"></div>
+            <p class="field-help">LeadIntel will scan the public page and use it as evidence—not as the final truth.</p>
+          </div>
+
+          <div class="panel source-panel">
+            <div class="panel-head"><div><span class="panel-number">02</span><div><h3>Additional links</h3><p>Optional · product pages, case studies, LinkedIn company page, market pages or catalog pages.</p></div></div><span class="optional-pill">Optional</span></div>
+            <label class="field-label" for="additional-links">One URL per line · up to 8</label>
+            <textarea id="additional-links" rows="5" placeholder="https://yourcompany.com/products&#10;https://yourcompany.com/case-studies"></textarea>
+          </div>
+
+          <div class="panel source-panel">
+            <div class="panel-head"><div><span class="panel-number">03</span><div><h3>Company materials</h3><p>Optional · brochures, product catalogues, presentations, technical sheets or case studies.</p></div></div><span class="optional-pill">PDF</span></div>
+            <label class="upload-zone" for="pdf-input" id="upload-zone">
+              <span class="upload-icon">↥</span>
+              <strong>Drop PDFs here or choose files</strong>
+              <small>Up to 5 PDFs · 15 MB each · text is extracted in your browser</small>
+              <input id="pdf-input" type="file" accept="application/pdf,.pdf" multiple hidden>
+            </label>
+            <div class="document-list" id="document-list"></div>
+            <p class="privacy-note">PDF text is extracted locally in the browser and saved in this browser for the current workspace. Original file bytes are not uploaded by this onboarding screen.</p>
+          </div>
+
+          <div class="step-actions"><span id="step1-error" class="inline-error" role="alert"></span><button class="primary-btn" type="button" id="to-questionnaire">Continue to strategic questions <span>→</span></button></div>
+        </section>
+
+        <section class="step-view" id="step-2" data-step="2">
+          <div class="hero-copy compact">
+            <span class="eyebrow">Step 2 · Strategic intake</span>
+            <h1>Give LeadIntel the context your website cannot.</h1>
+            <p>These ten answers control what the system prioritizes, what it ignores, and which commercial signals matter most.</p>
+          </div>
+
+          <div class="question-grid">
+            <article class="question-card"><span>01</span><label>What products or services are your highest commercial priority right now?<small>Select or describe up to three. LeadIntel will optimize opportunity discovery around these—not everything on your website.</small></label><textarea data-question="priority_offers" rows="4" placeholder="Example: custom steel structures; industrial installation; engineering services"></textarea></article>
+            <article class="question-card"><span>02</span><label>Describe your ideal customer.<small>Industries, company types, size, geography, maturity, or other characteristics that make a customer commercially attractive.</small></label><textarea data-question="ideal_customer" rows="4" placeholder="Example: manufacturers with 50–500 employees in Northern Europe"></textarea></article>
+            <article class="question-card"><span>03</span><label>Name 3–5 existing customers you would like to find more companies similar to.<small>Optional if confidential. These become lookalike anchors, not automatic outreach targets.</small></label><textarea data-question="lookalike_customers" rows="3" placeholder="Company A; Company B; Company C"></textarea></article>
+            <article class="question-card"><span>04</span><label>Who normally makes or strongly influences the buying decision?<small>Roles are more useful than names: CEO, Procurement Director, Production Director, HR Director, Architect, Distributor, etc.</small></label><textarea data-question="buyer_roles" rows="3" placeholder="Procurement Director; Production Director; CEO"></textarea></article>
+            <article class="question-card"><span>05</span><label>Which countries, regions, industries or segments do you want to grow in?<small>These are strategic target markets. LeadIntel will keep them separate from your current market footprint.</small></label><textarea data-question="growth_markets" rows="3" placeholder="Sweden; Finland; German industrial manufacturing"></textarea></article>
+            <article class="question-card"><span>06</span><label>Why do customers choose you instead of competitors?<small>Think speed, quality, specialization, technology, customization, certifications, service, price, reliability or access.</small></label><textarea data-question="differentiation" rows="4" placeholder="Example: fast engineering, custom production and reliable delivery"></textarea></article>
+            <article class="question-card signal-question"><span>07</span><label>What usually happens before a customer needs what you sell?<small>This seeds the Signal Designer. Describe real-world events: new factory, expansion, funding, hiring, tender, equipment replacement, regulation change, new distributor search, etc.</small></label><textarea data-question="buying_triggers" rows="4" placeholder="New facility; capacity expansion; equipment modernization; tender"></textarea></article>
+            <article class="question-card"><span>08</span><label>What makes a prospect unattractive or impossible to serve?<small>Minimum deal size, geography, consumer vs B2B, certifications, logistics, industries, capacity or other exclusion rules.</small></label><textarea data-question="exclusions" rows="4" placeholder="Example: projects below €20,000; private consumers; markets outside Europe"></textarea></article>
+            <article class="question-card"><span>09</span><label>What is the approximate commercial value of a good opportunity?<small>Typical order, project, annual contract or customer lifetime value. A range is enough.</small></label><textarea data-question="opportunity_value" rows="3" placeholder="€50,000–€250,000 per project"></textarea></article>
+            <article class="question-card"><span>10</span><label>What result would make LeadIntel successful for you in the next 6–12 months?<small>Be concrete: market entry, distributors, pipeline value, qualified opportunities, new logos, capacity utilization or revenue.</small></label><textarea data-question="success_outcome" rows="4" placeholder="Build a €2M qualified pipeline in Sweden and Finland within 12 months"></textarea></article>
+          </div>
+
+          <div class="step-actions split"><button class="secondary-btn" type="button" id="back-to-sources">← Back</button><span id="step2-error" class="inline-error" role="alert"></span><button class="primary-btn" type="button" id="analyze-company">Analyze my business <span>✦</span></button></div>
+        </section>
+
+        <section class="step-view" id="step-3" data-step="3">
+          <div class="analysis-state" id="analysis-state" hidden>
+            <div class="loader-orbit"><i></i><i></i><i></i></div>
+            <span class="eyebrow">Building intelligence profile</span>
+            <h2 id="analysis-title">Reading company sources…</h2>
+            <p id="analysis-caption">LeadIntel is separating public evidence from your strategic input.</p>
+            <div class="analysis-log" id="analysis-log"></div>
+          </div>
+
+          <div id="profile-content" hidden>
+            <div class="profile-header">
+              <div><span class="eyebrow">Step 3 · Company Intelligence Profile</span><h1 id="profile-company-name">Company</h1><p>This is the operating context LeadIntel will use for market research, ICP generation, signal design and opportunity scoring.</p></div>
+              <div class="profile-header-actions"><span class="profile-status" id="profile-status">Draft</span><button class="secondary-btn small" type="button" id="edit-profile">Edit profile</button><button class="primary-btn small" type="button" id="approve-profile">Approve profile</button></div>
+            </div>
+
+            <div class="intelligence-banner">
+              <div><span>LeadIntel Mission</span><strong id="profile-mission"></strong></div>
+              <div class="score-block"><small>Context completeness</small><strong id="profile-completeness">0%</strong></div>
+            </div>
+
+            <div class="profile-grid" id="profile-editor"></div>
+
+            <section class="panel signals-panel">
+              <div class="section-title"><div><span class="eyebrow">Recommended signal library</span><h3>What LeadIntel should watch for</h3><p>These are recommendations, not fixed rules. Activate, deactivate or edit them before the monitoring engine goes live.</p></div></div>
+              <div class="signal-list" id="recommended-signals"></div>
+            </section>
+
+            <section class="profile-lower-grid">
+              <div class="panel"><div class="section-title"><span class="eyebrow">Evidence & sources</span><h3>What this profile is based on</h3></div><div id="source-summary" class="source-summary"></div><p id="evidence-digest" class="evidence-digest"></p></div>
+              <div class="panel"><div class="section-title"><span class="eyebrow">Intelligence gaps</span><h3>What LeadIntel still does not know</h3></div><div id="information-gaps" class="gap-list"></div><button class="text-btn" id="improve-profile" type="button">Improve source data or answers →</button></div>
+            </section>
+
+            <div class="approval-card" id="approval-card">
+              <div><span class="eyebrow">Approval gate</span><h3>Approve before LeadIntel starts making market decisions.</h3><p>Approval freezes this profile as the current source of truth. Future market, signal and opportunity modules will reference this approved version.</p></div>
+              <button class="primary-btn" id="approve-profile-bottom" type="button">Approve Company Intelligence Profile</button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="profile-engine.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

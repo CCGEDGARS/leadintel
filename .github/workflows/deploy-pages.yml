@@ -9,6 +9,7 @@ on:
       - 'CNAME'
       - '.nojekyll'
       - 'v2/**'
+      - 'customer/**'
       - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
 
@@ -41,12 +42,13 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf .pages
-          mkdir -p .pages/v2
+          mkdir -p .pages/v2 .pages/customer
           cp index.html .pages/index.html
           cp LeadIntel.html .pages/LeadIntel.html
           cp CNAME .pages/CNAME
           cp .nojekyll .pages/.nojekyll
           cp -R v2/. .pages/v2/
+          cp -R customer/. .pages/customer/
 
       - name: Upload LeadIntel site
         uses: actions/upload-pages-artifact@v4

@@ -1,0 +1,35 @@
+name: Customer V2 CI
+
+on:
+  push:
+    branches:
+      - 'feature/customer-v2-onboarding'
+    paths:
+      - 'customer/**'
+      - '.github/workflows/customer-ci.yml'
+      - '.github/workflows/deploy-pages.yml'
+  pull_request:
+    paths:
+      - 'customer/**'
+      - '.github/workflows/customer-ci.yml'
+      - '.github/workflows/deploy-pages.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run customer tests
+        run: node --test customer/test/profile-engine.test.js customer/test/structure.test.js customer/test/deployment.test.js
+      - name: Check JavaScript syntax
+        run: |
+          node --check customer/profile-engine.js
+          node --check customer/app.js
