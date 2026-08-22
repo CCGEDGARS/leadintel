@@ -106,7 +106,7 @@ function renderCandidates(){
 async function findDecisionMakers(index){
   const candidate=discovery.candidates[index];if(!candidate)return;
   const main=mainState();const payload=LeadIntelDiscovery.buildApolloPeopleSearchPayload(candidate,main.profile||{});
-  if(!payload.q_organization_domains_list.length){showToast("A verified company domain is required");return;}
+  if(!payload.q_organization_domains_list.length){showToast("A verified company domain is required");return false;}
   candidate.peopleStatus="loading";saveDiscovery();renderCandidates();
   try{
     const response=await fetch(`${INTELLIGENCE_PROXY}/`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
@@ -114,8 +114,8 @@ async function findDecisionMakers(index){
     if(!response.ok)throw new Error(data.error||`Apollo returned ${response.status}`);
     candidate.people=LeadIntelDiscovery.normalizeApolloPeople(data);candidate.peopleStatus=candidate.people.length?"complete":"empty";
     if(candidate.saved)discovery.pipeline=LeadIntelDiscovery.upsertPipelineItem(discovery.pipeline,candidate);
-    saveDiscovery();renderAll();showToast(candidate.people.length?`${candidate.people.length} decision-maker${candidate.people.length===1?"":"s"} found`:'No matching decision-makers returned');
-  }catch(error){candidate.peopleStatus="error";saveDiscovery();renderAll();showToast(error.message||"Apollo people search unavailable");}
+    saveDiscovery();renderAll();showToast(candidate.people.length?`${candidate.people.length} decision-maker${candidate.people.length===1?"":"s"} found`:'No matching decision-makers returned');return true;
+  }catch(error){candidate.peopleStatus="error";saveDiscovery();renderAll();showToast(error.message||"Apollo people search unavailable");return false;}
 }
 function saveCandidate(index){
   const candidate=discovery.candidates[index];if(!candidate)return;
@@ -149,9 +149,15 @@ function bindDiscovery(){
   $("customer-pipeline")?.addEventListener("change",e=>{const select=e.target.closest("[data-pipeline-stage]");if(!select)return;const item=discovery.pipeline[Number(select.dataset.pipelineStage)];if(!item)return;item.stage=LeadIntelDiscovery.CRM_STAGES.includes(select.value)?select.value:"Discovered";item.updatedAt=new Date().toISOString();saveDiscovery();renderPipeline();showToast(`${item.company} moved to ${item.stage}`);});
   $("reset-workspace")?.addEventListener("click",()=>setTimeout(()=>{if(!localStorage.getItem(MAIN_STORAGE_KEY)){localStorage.removeItem(DISCOVERY_STORAGE_KEY);localStorage.removeItem(`${DISCOVERY_STORAGE_KEY}_meta`);discovery=LeadIntelDiscovery.normalizeDiscoveryState({});}},0));
 }
-
+function loadOutreachModules(){
+  if(document.querySelector('script[data-outreach-engine]'))return;
+  const engine=document.createElement("script");engine.src="outreach-engine.js";engine.dataset.outreachEngine="true";
+  engine.addEventListener("load",()=>{if(document.querySelector('script[data-outreach-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src="outreach-ui.js";ui.dataset.outreachUi="true";document.body.appendChild(ui);});
+  document.body.appendChild(engine);
+}
 function initDiscovery(){
   injectDiscoveryUI();bindDiscovery();syncStrategyFingerprint();renderAll();
   if(loadMeta().visibleStep===5&&strategyReady())showDiscoveryStep();
+  loadOutreachModules();
 }
 initDiscovery();
