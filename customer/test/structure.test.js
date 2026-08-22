@@ -80,3 +80,27 @@ test('discovery UI wires Firecrawl and Apollo people search with hard caps',()=>
   assert.match(ui,/LeadIntelDiscovery/);
   assert.match(engine,/q_organization_domains_list/);
 });
+
+test('customer page loads outreach engine and modular outreach UI',()=>{
+  const html=read('index.html');
+  assert.match(html,/src="outreach-engine\.js"/);
+  assert.match(html,/src="outreach-ui\.js"/);
+});
+
+test('outreach UI injects Step 6 opportunity dossier and human approval controls',()=>{
+  const ui=read('outreach-ui.js');
+  for(const pattern of [
+    /data-step-marker="6"/,/id="step-6"/,/id="outreach-company-select"/,/id="build-opportunity-dossier"/,
+    /id="dossier-why-now"/,/id="dossier-evidence"/,/id="dossier-hypotheses"/,/id="outreach-email-subject"/,
+    /id="outreach-email-body"/,/id="outreach-linkedin"/,/id="approve-outreach"/,/id="mark-contacted"/
+  ]) assert.match(ui,pattern);
+});
+
+test('outreach UI uses one official scrape and two-search hard cap without auto-send',()=>{
+  const ui=read('outreach-ui.js');
+  assert.match(ui,/MAX_DOSSIER_SEARCH_QUERIES\s*=\s*2/);
+  assert.match(ui,/firecrawl-scrape/);
+  assert.match(ui,/firecrawl-search/);
+  assert.match(ui,/LeadIntelOutreach/);
+  assert.doesNotMatch(ui,/gmail|sendEmail|send-message|linkedin.*post/i);
+});
