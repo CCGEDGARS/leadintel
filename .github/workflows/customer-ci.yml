@@ -33,4 +33,5 @@ jobs:
         run: |
           node --check customer/profile-engine.js
           node --check customer/market-engine.js
+          node --check customer/discovery-engine.js
           node --check customer/app.js
