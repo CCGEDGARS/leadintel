@@ -48,28 +48,35 @@ test('customer app wires live Firecrawl market search with explicit cost guard',
   assert.match(app,/LeadIntelMarket/);
 });
 
-test('discovery step includes company discovery, decision makers and pipeline controls',()=>{
+test('customer page loads discovery engine and modular discovery UI',()=>{
   const html=read('index.html');
-  assert.match(html,/data-step-marker="5"/);
-  assert.match(html,/id="step-5"/);
-  assert.match(html,/id="run-company-discovery"/);
-  assert.match(html,/id="company-candidates"/);
-  assert.match(html,/data-action="find-decision-makers"/);
-  assert.match(html,/data-action="save-pipeline"/);
-  assert.match(html,/id="customer-pipeline"/);
-  assert.match(html,/data-pipeline-stage/);
+  assert.match(html,/src="discovery-engine\.js"/);
+  assert.match(html,/src="discovery-ui\.js"/);
+});
+
+test('discovery UI injects Step 5, company discovery, decision makers and pipeline controls',()=>{
+  const ui=read('discovery-ui.js');
+  assert.match(ui,/data-step-marker=\\"5\\"/);
+  assert.match(ui,/id=\\"step-5\\"/);
+  assert.match(ui,/id=\\"run-company-discovery\\"/);
+  assert.match(ui,/id=\\"company-candidates\\"/);
+  assert.match(ui,/data-action=\\"find-decision-makers\\"/);
+  assert.match(ui,/data-action=\\"save-pipeline\\"/);
+  assert.match(ui,/id=\\"customer-pipeline\\"/);
+  assert.match(ui,/data-pipeline-stage/);
 });
 
 test('company discovery UI exposes the five company score dimensions',()=>{
-  const html=read('index.html');
-  for(const label of ['Fit','Signal','Evidence','Timing','Value'])assert.match(html,new RegExp(`>${label}<`));
+  const ui=read('discovery-ui.js');
+  for(const label of ['Fit','Signal','Evidence','Timing','Value'])assert.match(ui,new RegExp(`\\"${label}\\"`));
 });
 
-test('customer app wires company Firecrawl discovery and Apollo people search with hard caps',()=>{
-  const app=read('app.js');
-  assert.match(app,/MAX_DISCOVERY_QUERIES\s*=\s*4/);
-  assert.match(app,/MAX_DISCOVERY_RESULTS_PER_QUERY\s*=\s*5/);
-  assert.match(app,/firecrawl-search/);
-  assert.match(app,/LeadIntelDiscovery/);
-  assert.match(app,/q_organization_domains_list/);
+test('discovery UI wires Firecrawl and Apollo people search with hard caps',()=>{
+  const ui=read('discovery-ui.js');
+  const engine=read('discovery-engine.js');
+  assert.match(ui,/MAX_DISCOVERY_QUERIES\s*=\s*4/);
+  assert.match(ui,/MAX_DISCOVERY_RESULTS_PER_QUERY\s*=\s*5/);
+  assert.match(ui,/firecrawl-search/);
+  assert.match(ui,/LeadIntelDiscovery/);
+  assert.match(engine,/q_organization_domains_list/);
 });
