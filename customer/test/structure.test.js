@@ -81,10 +81,11 @@ test('discovery UI wires Firecrawl and Apollo people search with hard caps',()=>
   assert.match(engine,/q_organization_domains_list/);
 });
 
-test('customer page loads outreach engine and modular outreach UI',()=>{
-  const html=read('index.html');
-  assert.match(html,/src="outreach-engine\.js"/);
-  assert.match(html,/src="outreach-ui\.js"/);
+test('discovery module loads outreach engine and modular outreach UI',()=>{
+  const ui=read('discovery-ui.js');
+  assert.match(ui,/outreach-engine\.js/);
+  assert.match(ui,/outreach-ui\.js/);
+  assert.match(ui,/loadOutreachModules/);
 });
 
 test('outreach UI injects Step 6 opportunity dossier and human approval controls',()=>{
