@@ -1,0 +1,42 @@
+name: Backend CI
+
+on:
+  push:
+    branches:
+      - 'feature/customer-v2-*'
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install backend dependencies
+        run: npm ci
+      - name: Run backend tests
+        run: npm test
+      - name: Check backend JavaScript syntax
+        run: |
+          node --check src/index.js
+          node --check src/security.js
+          node --check src/canonical.js
+          node --check src/enrichment.js
+          node --check src/quality.js
+          node --check src/runs.js
