@@ -18,6 +18,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     defaults:
       run:
         working-directory: backend
@@ -30,6 +31,8 @@ jobs:
           node-version: '22'
       - name: Install backend dependencies
         run: npm ci
+      - name: Audit high-severity dependencies
+        run: npm audit --audit-level=high
       - name: Run backend tests
         run: npm test
       - name: Check backend JavaScript syntax
