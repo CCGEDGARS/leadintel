@@ -43,11 +43,11 @@ CREATE TABLE IF NOT EXISTS gmail_messages (
   domain TEXT NOT NULL,
   recipient TEXT NOT NULL COLLATE NOCASE,
   subject TEXT NOT NULL,
-  gmail_message_id TEXT NOT NULL,
-  gmail_thread_id TEXT NOT NULL,
+  gmail_message_id TEXT,
+  gmail_thread_id TEXT,
   sent_by TEXT REFERENCES users(id) ON DELETE SET NULL,
-  sent_at TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'sent' CHECK (status IN ('sending','sent','failed')),
+  sent_at TEXT,
+  status TEXT NOT NULL DEFAULT 'sending' CHECK (status IN ('sending','sent','failed')),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (workspace_id, idempotency_key)
 );
