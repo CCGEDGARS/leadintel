@@ -99,5 +99,11 @@ function renderDossier(){const item=currentItem();const workspace=q("dossier-wor
 }
 function renderAll(){ensureSelection();renderSelector();renderDossier();}
 function bindOutreach(){q("continue-to-outreach")?.addEventListener("click",showOutreachStep);q("back-to-discovery")?.addEventListener("click",backToDiscovery);q("outreach-company-select")?.addEventListener("change",e=>{outreach.selectedDomain=e.target.value;saveOutreach();renderDossier();});q("build-opportunity-dossier")?.addEventListener("click",buildDossier);q("regenerate-outreach")?.addEventListener("click",regenerateDrafts);q("approve-outreach")?.addEventListener("click",approveOutreach);q("mark-contacted")?.addEventListener("click",markContacted);q("dossier-workspace")?.addEventListener("click",e=>{const btn=e.target.closest("[data-copy-field]");if(btn)copyField(btn.dataset.copyField);});q("reset-workspace")?.addEventListener("click",()=>setTimeout(()=>{if(!localStorage.getItem(MAIN_STORAGE_KEY))localStorage.removeItem(OUTREACH_STORAGE_KEY);},0));}
-function initOutreach(){injectOutreachUI();bindOutreach();renderAll();}
+function loadDeliveryModules(){
+  if(document.querySelector('script[data-delivery-engine]'))return;
+  const engine=document.createElement("script");engine.src="delivery-engine.js";engine.dataset.deliveryEngine="true";
+  engine.addEventListener("load",()=>{if(document.querySelector('script[data-delivery-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src="delivery-ui.js";ui.dataset.deliveryUi="true";document.body.appendChild(ui);});
+  document.body.appendChild(engine);
+}
+function initOutreach(){injectOutreachUI();bindOutreach();renderAll();loadDeliveryModules();}
 initOutreach();
