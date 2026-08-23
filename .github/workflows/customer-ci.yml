@@ -40,3 +40,5 @@ jobs:
           node --check customer/discovery-ui.js
           node --check customer/outreach-ui.js
           node --check customer/delivery-ui.js
+          node --check customer/server-bridge.js
+          node --check customer/production-gmail-ui.js
