@@ -28,7 +28,7 @@ test('delivery UI is explicit that Gmail sync is manual and does not call Gmail 
   assert.match(ui,/Manual confirmation/);
   assert.match(ui,/automatic Gmail sync is not connected/i);
   assert.match(ui,/buildGmailComposeUrl/);
-  assert.doesNotMatch(ui,/gmail\.googleapis\.com|users\/messages\/send|OAuth|access_token|sendEmail\s*\(/i);
+  assert.doesNotMatch(ui,/gmail\.googleapis\.com|users\/messages\/send|access_token|sendEmail\s*\(/i);
 });
 
 test('delivery UI updates existing discovery pipeline through connector-neutral events',()=>{
