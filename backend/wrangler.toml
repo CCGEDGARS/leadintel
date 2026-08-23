@@ -1,10 +1,18 @@
 name = "leadintel-api"
-main = "src/index.js"
+main = "src/app.js"
 compatibility_date = "2026-07-20"
 
 [vars]
 APP_ORIGIN = "https://ccgedgars.github.io,https://leadintel.ccgroup.lv,https://leadintel-api.edgars-7e7.workers.dev"
 SESSION_TTL_HOURS = "168"
+CUSTOMER_APP_URL = "https://leadintel.ccgroup.lv/customer/"
+GOOGLE_OAUTH_REDIRECT_URI = "https://leadintel-api.edgars-7e7.workers.dev/api/auth/google/callback"
+GMAIL_OAUTH_REDIRECT_URI = "https://leadintel-api.edgars-7e7.workers.dev/api/integrations/gmail/callback"
+
+# Secrets are configured with `wrangler secret put` and are never committed:
+# GOOGLE_OAUTH_CLIENT_ID
+# GOOGLE_OAUTH_CLIENT_SECRET
+# OAUTH_TOKEN_ENCRYPTION_KEY (base64-encoded 32-byte AES key)
 
 [assets]
 directory = "../v2"
