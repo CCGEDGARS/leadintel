@@ -20,6 +20,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -40,3 +41,5 @@ jobs:
           node --check customer/discovery-ui.js
           node --check customer/outreach-ui.js
           node --check customer/delivery-ui.js
+          node --check customer/server-bridge.js
+          node --check customer/production-gmail-ui.js

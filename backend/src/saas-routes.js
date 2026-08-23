@@ -1,0 +1,105 @@
+import {corsHeaders,allowedOrigin,sha256,randomToken,cookieValue,sessionCookie} from './security.js';
+import {safeReturnUrl,buildGoogleAuthorizationUrl,exchangeGoogleCode,fetchGoogleIdentity,importAesKey,encryptSecret,decryptSecret,createOAuthState,consumeOAuthState} from './oauth.js';
+import {getCustomerState,putCustomerState} from './customer-state.js';
+import {normalizeEmail,buildMimeMessage,refreshGoogleAccessToken,sendGmailMessage,fetchGmailThread,normalizeInboundReplies} from './gmail.js';
+
+const uuid=()=>crypto.randomUUID();
+const json=(value,status=200,headers={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...headers}});
+const error=(message,status,headers,extra={})=>json({error:message,...extra},status,headers);
+const redirect=(location,headers={})=>new Response(null,{status:302,headers:{Location:location,'Cache-Control':'no-store',...headers}});
+const GOOGLE_LOGIN_SCOPES=['openid','email','profile'];
+const GMAIL_SCOPES=['openid','email','https://www.googleapis.com/auth/gmail.send','https://www.googleapis.com/auth/gmail.readonly'];
+
+async function sessionUser(request,env){
+  const token=cookieValue(request,'leadintel_session');if(!token)return null;const tokenHash=await sha256(token);
+  return env.DB.prepare(`SELECT users.id,users.email,users.display_name,users.role,sessions.expires_at FROM sessions JOIN users ON users.id=sessions.user_id WHERE sessions.token_hash=? AND sessions.expires_at>datetime('now')`).bind(tokenHash).first();
+}
+async function membership(env,workspaceId,userId){return env.DB.prepare('SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?').bind(workspaceId,userId).first();}
+async function audit(env,{workspaceId=null,userId=null,type,entityType=null,entityId=null,metadata={}}){
+  await env.DB.prepare(`INSERT INTO audit_events(id,workspace_id,user_id,event_type,entity_type,entity_id,metadata_json) VALUES(?,?,?,?,?,?,?)`).bind(uuid(),workspaceId,userId,type,entityType,entityId,JSON.stringify(metadata)).run();
+}
+function configReady(env,names){return names.every(name=>String(env[name]||'').trim());}
+function configuredCustomerReturn(env,requestUrl){return safeReturnUrl(requestUrl,env.CUSTOMER_APP_URL)||safeReturnUrl(env.CUSTOMER_APP_URL,env.CUSTOMER_APP_URL);}
+function withResult(url,params){const out=new URL(url);for(const [key,value] of Object.entries(params))if(value!==undefined&&value!==null)out.searchParams.set(key,String(value));return out.toString();}
+function normalizeDomain(value){return String(value||'').trim().toLowerCase().replace(/^https?:\/\//,'').replace(/^www\./,'').split(/[/?#]/)[0].slice(0,253);}
+function validIdempotency(value){return /^[A-Za-z0-9._:-]{16,128}$/.test(String(value||''));}
+function googleConfig(env,kind){return {clientId:env.GOOGLE_OAUTH_CLIENT_ID,clientSecret:env.GOOGLE_OAUTH_CLIENT_SECRET,redirectUri:kind==='gmail'?env.GMAIL_OAUTH_REDIRECT_URI:env.GOOGLE_OAUTH_REDIRECT_URI};}
+async function createSession(env,userId){const token=randomToken(32);const hash=await sha256(token);const hours=Math.max(1,Number(env.SESSION_TTL_HOURS)||168);await env.DB.batch([env.DB.prepare("DELETE FROM sessions WHERE expires_at<=datetime('now')"),env.DB.prepare("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,?,datetime('now',?))").bind(hash,userId,`+${hours} hours`)]);return {token,hours};}
+async function ensureDefaultWorkspace(env,user){
+  const existing=await env.DB.prepare(`SELECT w.id,w.name,w.market,wm.role FROM workspace_members wm JOIN workspaces w ON w.id=wm.workspace_id WHERE wm.user_id=? ORDER BY w.created_at ASC LIMIT 1`).bind(user.id).first();if(existing)return existing;
+  const suffix=(await sha256(user.email)).slice(0,16);const workspaceId=`workspace-${suffix}`;const name=`${String(user.display_name||user.email.split('@')[0]).slice(0,80)} Workspace`;
+  await env.DB.batch([env.DB.prepare(`INSERT OR IGNORE INTO workspaces(id,name,market,owner_user_id) VALUES(?,?,?,?)`).bind(workspaceId,name,'Global',user.id),env.DB.prepare(`INSERT OR IGNORE INTO workspace_members(workspace_id,user_id,role) VALUES(?,?,?)`).bind(workspaceId,user.id,'owner')]);
+  return {id:workspaceId,name,market:'Global',role:'owner'};
+}
+async function requireMember(request,env,workspaceId,roles=[]){const user=await sessionUser(request,env);if(!user)return {error:'Authentication required',status:401};const member=await membership(env,workspaceId,user.id);if(!member)return {error:'Workspace access denied',status:403};if(roles.length&&!roles.includes(member.role))return {error:'Workspace role is not permitted',status:403};return {user,member};}
+async function connectedGmail(env,workspaceId){return env.DB.prepare(`SELECT workspace_id,user_id,google_email,encrypted_refresh_token,scopes,status,history_id,connected_at,updated_at FROM gmail_connections WHERE workspace_id=? AND status='connected'`).bind(workspaceId).first();}
+async function gmailAccess(env,connection){if(!configReady(env,['GOOGLE_OAUTH_CLIENT_ID','GOOGLE_OAUTH_CLIENT_SECRET','OAUTH_TOKEN_ENCRYPTION_KEY']))throw new Error('Gmail integration is not configured');const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const refreshToken=await decryptSecret(connection.encrypted_refresh_token,key);return refreshGoogleAccessToken(refreshToken,googleConfig(env,'gmail'));}
+
+export async function handleSaasRoute(request,env,corsOverride){
+  const url=new URL(request.url);const cors=corsOverride??corsHeaders(allowedOrigin(request,env.APP_ORIGIN));const path=url.pathname;
+  const known=path.startsWith('/api/auth/google/')||path==='/api/workspaces'||path==='/api/customer/state'||path.startsWith('/api/integrations/gmail/');if(!known)return null;
+
+  if(path==='/api/auth/google/start'&&request.method==='GET'){
+    if(!configReady(env,['GOOGLE_OAUTH_CLIENT_ID','GOOGLE_OAUTH_CLIENT_SECRET','GOOGLE_OAUTH_REDIRECT_URI','CUSTOMER_APP_URL']))return error('Google sign-in is not configured',503,cors);
+    const returnTo=configuredCustomerReturn(env,url.searchParams.get('return_to'));if(!returnTo)return error('Invalid return URL',400,cors);
+    const state=await createOAuthState(env,{purpose:'login',returnTo});const location=buildGoogleAuthorizationUrl({...googleConfig(env,'login'),state,scopes:GOOGLE_LOGIN_SCOPES,prompt:'select_account'});return redirect(location,cors);
+  }
+  if(path==='/api/auth/google/callback'&&request.method==='GET'){
+    const state=await consumeOAuthState(env,{rawState:url.searchParams.get('state'),purpose:'login'});if(!state)return error('Google sign-in state is invalid or expired',400,cors);
+    try{
+      const token=await exchangeGoogleCode(url.searchParams.get('code'),googleConfig(env,'login'));const identity=await fetchGoogleIdentity(token.accessToken);let user=await env.DB.prepare('SELECT * FROM users WHERE email=? COLLATE NOCASE').bind(identity.email).first();
+      if(!user){const id=`user-${(await sha256(identity.email)).slice(0,24)}`;await env.DB.prepare(`INSERT INTO users(id,email,display_name,role,last_login_at) VALUES(?,?,?,?,CURRENT_TIMESTAMP)`).bind(id,identity.email,identity.name,'owner').run();user={id,email:identity.email,display_name:identity.name,role:'owner'};}
+      else{await env.DB.prepare('UPDATE users SET display_name=?,last_login_at=CURRENT_TIMESTAMP WHERE id=?').bind(identity.name||user.display_name,user.id).run();user={...user,display_name:identity.name||user.display_name};}
+      const workspace=await ensureDefaultWorkspace(env,user);const session=await createSession(env,user.id);await audit(env,{workspaceId:workspace.id,userId:user.id,type:'auth.google_login_succeeded',entityType:'user',entityId:user.id,metadata:{workspace_id:workspace.id}});
+      return redirect(withResult(state.return_to,{auth:'success',workspace_id:workspace.id}),{...cors,'Set-Cookie':sessionCookie(session.token,session.hours*3600)});
+    }catch(cause){return redirect(withResult(state.return_to,{auth:'error',reason:String(cause?.message||'Google sign-in failed').slice(0,160)}),cors);}
+  }
+
+  if(path==='/api/workspaces'&&request.method==='GET'){
+    const user=await sessionUser(request,env);if(!user)return error('Authentication required',401,cors);const {results=[]}=await env.DB.prepare(`SELECT w.id,w.name,w.market,wm.role,w.updated_at FROM workspace_members wm JOIN workspaces w ON w.id=wm.workspace_id WHERE wm.user_id=? ORDER BY w.created_at ASC`).bind(user.id).all();return json({workspaces:results},200,cors);
+  }
+
+  if(path==='/api/customer/state'){
+    const workspaceId=url.searchParams.get('workspace_id')||'';const access=await requireMember(request,env,workspaceId,request.method==='PUT'?['owner','researcher','sales']:[]);if(access.error)return error(access.error,access.status,cors);
+    if(request.method==='GET')return json(await getCustomerState(env,workspaceId),200,cors);
+    if(request.method==='PUT'){
+      const contentLength=Number(request.headers.get('Content-Length')||0);if(contentLength>1150000)return error('Customer state request is too large',413,cors);const body=await request.json().catch(()=>null);if(!body)return error('Customer state payload is required',400,cors);
+      try{const result=await putCustomerState(env,{workspaceId,userId:access.user.id,expectedVersion:body.version,schemaVersion:body.schema_version,payload:body.payload});if(result.conflict)return json({error:'Customer state version conflict',current:result.current},409,cors);await audit(env,{workspaceId,userId:access.user.id,type:'customer_state.saved',entityType:'customer_workspace_state',entityId:workspaceId,metadata:{version:result.state.version,schema_version:result.state.schema_version}});return json(result.state,200,cors);}catch(cause){return error(String(cause?.message||'Invalid customer state'),400,cors);}
+    }
+    return error('Method not allowed',405,cors);
+  }
+
+  if(path==='/api/integrations/gmail/status'&&request.method==='GET'){
+    const workspaceId=url.searchParams.get('workspace_id')||'';const access=await requireMember(request,env,workspaceId);if(access.error)return error(access.error,access.status,cors);const connection=await env.DB.prepare(`SELECT google_email,scopes,status,connected_at,updated_at FROM gmail_connections WHERE workspace_id=?`).bind(workspaceId).first();return json({configured:configReady(env,['GOOGLE_OAUTH_CLIENT_ID','GOOGLE_OAUTH_CLIENT_SECRET','GMAIL_OAUTH_REDIRECT_URI','OAUTH_TOKEN_ENCRYPTION_KEY']),connected:connection?.status==='connected',email:connection?.status==='connected'?connection.google_email:'',scopes:connection?.status==='connected'?connection.scopes:'',connected_at:connection?.connected_at||null,role:access.member.role},200,cors);
+  }
+  if(path==='/api/integrations/gmail/start'&&request.method==='GET'){
+    const workspaceId=url.searchParams.get('workspace_id')||'';const access=await requireMember(request,env,workspaceId,['owner']);if(access.error)return error(access.error,access.status,cors);if(!configReady(env,['GOOGLE_OAUTH_CLIENT_ID','GOOGLE_OAUTH_CLIENT_SECRET','GMAIL_OAUTH_REDIRECT_URI','OAUTH_TOKEN_ENCRYPTION_KEY','CUSTOMER_APP_URL']))return error('Gmail integration is not configured',503,cors);
+    const returnTo=configuredCustomerReturn(env,url.searchParams.get('return_to'));if(!returnTo)return error('Invalid return URL',400,cors);const state=await createOAuthState(env,{purpose:'gmail',userId:access.user.id,workspaceId,returnTo});const location=buildGoogleAuthorizationUrl({...googleConfig(env,'gmail'),state,scopes:GMAIL_SCOPES,accessType:'offline',prompt:'consent',loginHint:access.user.email});return redirect(location,cors);
+  }
+  if(path==='/api/integrations/gmail/callback'&&request.method==='GET'){
+    const state=await consumeOAuthState(env,{rawState:url.searchParams.get('state'),purpose:'gmail'});if(!state)return error('Gmail connection state is invalid or expired',400,cors);try{
+      const member=await membership(env,state.workspace_id,state.user_id);if(member?.role!=='owner')throw new Error('Workspace owner permission is required');const token=await exchangeGoogleCode(url.searchParams.get('code'),googleConfig(env,'gmail'));if(!token.refreshToken)throw new Error('Google did not return an offline refresh token');const identity=await fetchGoogleIdentity(token.accessToken);const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const encrypted=await encryptSecret(token.refreshToken,key);
+      await env.DB.prepare(`INSERT INTO gmail_connections(workspace_id,user_id,google_email,encrypted_refresh_token,scopes,status,connected_at,updated_at,disconnected_at) VALUES(?,?,?,?,?,'connected',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,NULL) ON CONFLICT(workspace_id) DO UPDATE SET user_id=excluded.user_id,google_email=excluded.google_email,encrypted_refresh_token=excluded.encrypted_refresh_token,scopes=excluded.scopes,status='connected',connected_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP,disconnected_at=NULL`).bind(state.workspace_id,state.user_id,identity.email,encrypted,token.scope||GMAIL_SCOPES.join(' ')).run();await audit(env,{workspaceId:state.workspace_id,userId:state.user_id,type:'gmail.connected',entityType:'gmail_connection',entityId:state.workspace_id,metadata:{google_email:identity.email}});return redirect(withResult(state.return_to,{gmail:'connected'}),cors);
+    }catch(cause){return redirect(withResult(state.return_to,{gmail:'error',reason:String(cause?.message||'Gmail connection failed').slice(0,160)}),cors);}
+  }
+  if(path==='/api/integrations/gmail/send'&&request.method==='POST'){
+    const workspaceId=url.searchParams.get('workspace_id')||'';const access=await requireMember(request,env,workspaceId,['owner','sales']);if(access.error)return error(access.error,access.status,cors);const body=await request.json().catch(()=>null);if(!body)return error('Send payload is required',400,cors);const key=String(request.headers.get('Idempotency-Key')||body.idempotency_key||'').trim();if(!validIdempotency(key))return error('A valid idempotency key is required',400,cors);
+    const existing=await env.DB.prepare(`SELECT id,status,domain,recipient,subject,gmail_message_id,gmail_thread_id,sent_at FROM gmail_messages WHERE workspace_id=? AND idempotency_key=?`).bind(workspaceId,key).first();if(existing)return json({message:existing,duplicate:true},200,cors);const connection=await connectedGmail(env,workspaceId);if(!connection)return error('Gmail is not connected for this workspace',409,cors);const recipient=normalizeEmail(body.recipient);const domain=normalizeDomain(body.domain);if(!recipient||!domain)return error('Valid target domain and recipient are required',400,cors);let mime;try{mime=buildMimeMessage({from:connection.google_email,to:recipient,subject:body.subject,body:body.body});}catch(cause){return error(cause.message,400,cors);}
+    const messageId=uuid();let reserve;try{reserve=await env.DB.prepare(`INSERT OR IGNORE INTO gmail_messages(id,workspace_id,idempotency_key,domain,recipient,subject,sent_by,status) VALUES(?,?,?,?,?,?,?,'sending')`).bind(messageId,workspaceId,key,domain,recipient,String(body.subject||'').slice(0,500),access.user.id).run();}catch(cause){return error('Unable to reserve Gmail send',500,cors);}
+    if(Number(reserve?.meta?.changes||0)<1){const duplicate=await env.DB.prepare(`SELECT id,status,domain,recipient,subject,gmail_message_id,gmail_thread_id,sent_at FROM gmail_messages WHERE workspace_id=? AND idempotency_key=?`).bind(workspaceId,key).first();return json({message:duplicate,duplicate:true},200,cors);}
+    try{const accessToken=await gmailAccess(env,connection);const sent=await sendGmailMessage(accessToken.accessToken,mime);const sentAt=new Date().toISOString();await env.DB.prepare(`UPDATE gmail_messages SET gmail_message_id=?,gmail_thread_id=?,sent_at=?,status='sent' WHERE id=?`).bind(sent.id,sent.threadId,sentAt,messageId).run();await audit(env,{workspaceId,userId:access.user.id,type:'gmail.message_sent',entityType:'gmail_message',entityId:messageId,metadata:{domain,recipient,gmail_message_id:sent.id,gmail_thread_id:sent.threadId}});return json({message:{id:messageId,status:'sent',domain,recipient,subject:String(body.subject||'').slice(0,500),gmail_message_id:sent.id,gmail_thread_id:sent.threadId,sent_at:sentAt},duplicate:false},201,cors);}catch(cause){await env.DB.prepare(`UPDATE gmail_messages SET status='failed' WHERE id=?`).bind(messageId).run();await audit(env,{workspaceId,userId:access.user.id,type:'gmail.message_failed',entityType:'gmail_message',entityId:messageId,metadata:{domain,recipient,error:String(cause?.message||'send failed').slice(0,160)}});return error(String(cause?.message||'Gmail send failed'),502,cors,{message_id:messageId});}
+  }
+  if(path==='/api/integrations/gmail/sync'&&request.method==='POST'){
+    const workspaceId=url.searchParams.get('workspace_id')||'';const access=await requireMember(request,env,workspaceId,['owner','sales','researcher']);if(access.error)return error(access.error,access.status,cors);const connection=await connectedGmail(env,workspaceId);if(!connection)return error('Gmail is not connected for this workspace',409,cors);try{
+      const token=await gmailAccess(env,connection);const {results=[]}=await env.DB.prepare(`SELECT id,domain,gmail_message_id,gmail_thread_id,sent_at FROM gmail_messages WHERE workspace_id=? AND status='sent' AND gmail_thread_id IS NOT NULL AND sent_at IS NOT NULL ORDER BY sent_at DESC LIMIT 50`).bind(workspaceId).all();const threadCache=new Map();const added=[];
+      for(const sent of results){if(!threadCache.has(sent.gmail_thread_id))threadCache.set(sent.gmail_thread_id,await fetchGmailThread(token.accessToken,sent.gmail_thread_id));const replies=normalizeInboundReplies(threadCache.get(sent.gmail_thread_id),{sentMessageId:sent.gmail_message_id,sentAt:sent.sent_at,connectedEmail:connection.google_email});for(const reply of replies){const id=uuid();const inserted=await env.DB.prepare(`INSERT OR IGNORE INTO gmail_replies(id,workspace_id,domain,gmail_message_id,gmail_thread_id,sender_email,received_at,body_text,category) VALUES(?,?,?,?,?,?,?,?,?)`).bind(id,workspaceId,sent.domain,reply.gmailMessageId,reply.gmailThreadId,reply.senderEmail,reply.receivedAt,reply.bodyText.slice(0,20000),reply.category).run();if(Number(inserted?.meta?.changes||0)>0)added.push({id,domain:sent.domain,...reply});}}
+      await env.DB.prepare(`UPDATE gmail_connections SET updated_at=CURRENT_TIMESTAMP WHERE workspace_id=?`).bind(workspaceId).run();if(added.length)await audit(env,{workspaceId,userId:access.user.id,type:'gmail.replies_synced',entityType:'gmail_connection',entityId:workspaceId,metadata:{new_replies:added.length}});return json({replies:added,synced_threads:threadCache.size},200,cors);
+    }catch(cause){return error(String(cause?.message||'Gmail sync failed'),502,cors);}
+  }
+  if(path==='/api/integrations/gmail/disconnect'&&request.method==='POST'){
+    const workspaceId=url.searchParams.get('workspace_id')||'';const access=await requireMember(request,env,workspaceId,['owner']);if(access.error)return error(access.error,access.status,cors);const connection=await connectedGmail(env,workspaceId);if(connection?.encrypted_refresh_token&&env.OAUTH_TOKEN_ENCRYPTION_KEY){try{const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const refresh=await decryptSecret(connection.encrypted_refresh_token,key);await fetch('https://oauth2.googleapis.com/revoke',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({token:refresh})});}catch{}}
+    await env.DB.prepare(`UPDATE gmail_connections SET encrypted_refresh_token=NULL,status='disconnected',updated_at=CURRENT_TIMESTAMP,disconnected_at=CURRENT_TIMESTAMP WHERE workspace_id=?`).bind(workspaceId).run();await audit(env,{workspaceId,userId:access.user.id,type:'gmail.disconnected',entityType:'gmail_connection',entityId:workspaceId});return json({ok:true,connected:false},200,cors);
+  }
+
+  return error('Not found',404,cors);
+}

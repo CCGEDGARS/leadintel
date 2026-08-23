@@ -1,2 +1,7 @@
-ADMIN_EMAIL=edgars@ccgroup.lv
-ADMIN_PASSWORD=replace-with-a-long-unique-password
+# Copy to .dev.vars for local Wrangler development. Never commit real values.
+ADMIN_EMAIL=
+ADMIN_PASSWORD=
+APOLLO_API_KEY=
+GOOGLE_OAUTH_CLIENT_ID=
+GOOGLE_OAUTH_CLIENT_SECRET=
+OAUTH_TOKEN_ENCRYPTION_KEY=
