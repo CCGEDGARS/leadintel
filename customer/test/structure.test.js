@@ -86,8 +86,8 @@ test('customer app wires live Firecrawl market search with explicit cost guard',
 
 test('customer page loads discovery engine and modular discovery UI',()=>{
   const html=read('index.html');
-  assert.match(html,/src="discovery-engine\.js"/);
-  assert.match(html,/src="discovery-ui\.js"/);
+  assert.match(html,/src="discovery-engine\.js(?:\?[^\"]*)?"/);
+  assert.match(html,/src="discovery-ui\.js(?:\?[^\"]*)?"/);
 });
 
 test('discovery UI injects Step 5, company discovery, decision makers and pipeline controls',()=>{
