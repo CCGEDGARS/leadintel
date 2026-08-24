@@ -17,6 +17,20 @@ test('customer onboarding contains all ten strategic questions',()=>{
   ids.forEach(id=>assert.match(html,new RegExp(`data-question="${id}"`)));
 });
 
+test('website-only onboarding unlocks sidebar modules and keeps enrichment optional',()=>{
+  const app=read('app.js');
+  const discovery=read('discovery-ui.js');
+  const outreach=read('outreach-ui.js');
+  const delivery=read('delivery-ui.js');
+  assert.match(app,/LeadIntelProfile\.canAccessModule/);
+  assert.match(app,/function openModule/);
+  assert.match(app,/querySelector\("\.steps"\).*addEventListener/s);
+  assert.doesNotMatch(app,/Complete \$\{missing\.length\} required question/);
+  assert.doesNotMatch(discovery,/Activate Market Strategy before Discovery/);
+  assert.doesNotMatch(outreach,/Save at least one company to Pipeline first/);
+  assert.doesNotMatch(delivery,/Approve at least one outreach package first/);
+});
+
 test('profile screen includes review, edit and approval controls',()=>{
   const html=read('index.html');
   assert.match(html,/id="profile-editor"/);
