@@ -37,6 +37,10 @@ test('website alone unlocks every customer module after Step 1', () => {
   for(let step=2; step<=7; step++) assert.equal(engine.canAccessModule(empty, step), false);
 });
 
+test('saved state preserves an unlocked module position through Step 7', () => {
+  assert.equal(engine.normalizeSavedState({step:7,website:'example.com'}).step, 7);
+});
+
 test('calculates a high completeness score when strategic intake is complete', () => {
   const score = engine.calculateCompleteness({ website: 'https://example.com', additionalLinks: ['https://example.com/cases'], documents: [{name:'catalog.pdf', text:'catalog'}], answers });
   assert.equal(score, 100);
