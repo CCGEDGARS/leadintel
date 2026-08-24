@@ -3,6 +3,8 @@ const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
 const INTELLIGENCE_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
 const MAX_DISCOVERY_QUERIES=4;
 const MAX_DISCOVERY_RESULTS_PER_QUERY=5;
+const ASSET_VERSION="20260824-premium";
+const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const $=id=>document.getElementById(id);
 let discovery=loadDiscovery();
 
@@ -37,11 +39,9 @@ function syncStrategyFingerprint(){
 }
 
 function injectDiscoveryUI(){
-  if(!document.querySelector('link[href="discovery.css"]')){const link=document.createElement("link");link.rel="stylesheet";link.href="discovery.css";document.head.appendChild(link);}
+  if(!document.querySelector('link[data-leadintel-asset="discovery-css"]')){const link=document.createElement("link");link.rel="stylesheet";link.href=asset("discovery.css");link.dataset.leadintelAsset="discovery-css";document.head.appendChild(link);}
   const steps=document.querySelector(".steps");
   if(steps&&!steps.querySelector('[data-step-marker="5"]'))steps.insertAdjacentHTML("beforeend",'<li data-step-marker="5"><span>05</span><div><strong>Company discovery</strong><small>Companies, people, pipeline</small></div></li>');
-  const future=document.querySelector(".future-stack");
-  if(future)future.innerHTML='<span>Next module</span><p>Outreach & Messaging</p><p>Email / CRM Sync</p><p>Continuous Intelligence</p>';
   const activation=$("strategy-activation-card");
   if(activation&&!$("continue-to-discovery"))activation.insertAdjacentHTML("beforeend",'<button class="secondary-btn discovery-continue" id="continue-to-discovery" type="button">Continue to Discovery →</button>');
   const content=document.querySelector("main.content");
@@ -49,9 +49,9 @@ function injectDiscoveryUI(){
     <div class="profile-header discovery-header"><div><span class="eyebrow">Step 5 · Company Discovery</span><h1>Find companies worth approaching now.</h1><p>LeadIntel searches with the context currently available, removes obvious non-company sources, deduplicates domains and ranks each company using evidence—not a generic lead list. A formally activated strategy improves precision but is not required to explore.</p></div><div class="profile-header-actions"><span class="profile-status" id="discovery-status">Ready</span><button class="secondary-btn small" id="back-to-strategy" type="button">← Strategy</button></div></div>
     <div class="strategy-banner discovery-banner"><div><span>Company</span><strong id="discovery-company">—</strong></div><div><span>Market context</span><strong id="discovery-markets">—</strong></div><div><span>Saved pipeline</span><strong id="discovery-pipeline-count">0</strong></div></div>
     <section class="panel strategy-panel discovery-panel"><div class="market-research-head"><div class="section-title"><span class="eyebrow">Discovery Engine</span><h3>Search for real company domains</h3><p>One run uses at most four Firecrawl searches × five results. Social/news hosts are filtered and no missing companies are invented.</p></div><button class="primary-btn" id="run-company-discovery" type="button">Run company discovery <span>↻</span></button></div>
-      <div class="score-legend company-score-legend"><strong>Company Opportunity Score</strong><span>Fit</span><span>Signal</span><span>Evidence</span><span>Timing</span><span>Value</span></div>
+      <div class="score-legend company-score-legend"><strong>Opportunity score</strong><span>Fit</span><span>Signal</span><span>Evidence</span><span>Timing</span><span>Value</span></div>
       <div class="research-status" id="company-discovery-status">Website-only provisional discovery is ready. Optional market context improves precision.</div><div class="company-candidates" id="company-candidates"></div></section>
-    <section class="panel strategy-panel pipeline-panel"><div class="section-title"><span class="eyebrow">Customer Pipeline</span><h3>Saved commercial opportunities</h3><p>Saving the same company twice updates it instead of creating a duplicate. Advance stages manually until CRM sync is connected.</p></div><div class="customer-pipeline" id="customer-pipeline"></div></section>
+    <section class="panel strategy-panel pipeline-panel"><div class="section-title"><span class="eyebrow">Customer Pipeline</span><h3>Saved commercial opportunities</h3><p>Save only candidates worth active follow-up. Strong opportunities continue to the Content & Outreach Studio for research and script creation.</p></div><div class="customer-pipeline" id="customer-pipeline"></div></section>
   </section>`);
 }
 function showDiscoveryStep(){
@@ -97,7 +97,7 @@ function peopleHtml(candidate){
 }
 function renderCandidates(){
   const target=$("company-candidates");if(!target)return;
-  if(!discovery.candidates.length){target.innerHTML=`<div class="market-empty">${discovery.status==="running"?"Searching with the available company context…":"Run company discovery to create a ranked shortlist of direct company domains."}</div>`;return;}
+  if(!discovery.candidates.length){target.innerHTML=`<div class="market-empty">${discovery.status==="running"?"Searching with the available company context…":"Run discovery to create a ranked shortlist of direct company domains."}</div>`;return;}
   target.innerHTML=discovery.candidates.map((c,index)=>`<article class="company-card ${c.saved?"saved":""}" data-company-index="${index}">
     <div class="company-card-top"><div><span class="opportunity-market">${esc(c.market||"Target market")}</span><h4>${esc(c.company)}</h4><a href="${esc(c.website)}" target="_blank" rel="noopener">${esc(c.domain)} ↗</a></div><div class="company-total"><strong>${c.score.total}</strong><span>/100</span></div></div>
     <div class="company-score-grid">${scoreCell("Fit",c.score.fit,30)}${scoreCell("Signal",c.score.signal,25)}${scoreCell("Evidence",c.score.evidence,20)}${scoreCell("Timing",c.score.timing,15)}${scoreCell("Value",c.score.value,10)}</div>
@@ -130,7 +130,7 @@ function saveCandidate(index){
 function renderPipeline(){
   const target=$("customer-pipeline");if(!target)return;
   $("discovery-pipeline-count").textContent=String(discovery.pipeline.length);
-  if(!discovery.pipeline.length){target.innerHTML='<div class="market-empty">No companies saved yet. Discovery remains accessible; save a ranked candidate when it deserves active follow-up.</div>';return;}
+  if(!discovery.pipeline.length){target.innerHTML='<div class="market-empty">No saved opportunities yet. Save a ranked company when it deserves active follow-up.</div>';return;}
   const stages=LeadIntelDiscovery.CRM_STAGES;
   target.innerHTML=`<div class="pipeline-table"><div class="pipeline-row header"><span>Company</span><span>Score</span><span>People</span><span>Stage</span></div>${discovery.pipeline.map((item,index)=>`<div class="pipeline-row"><div><strong>${esc(item.company)}</strong><a href="${esc(item.website)}" target="_blank" rel="noopener">${esc(item.domain)}</a></div><span class="pipeline-score">${item.score?.total||0}</span><span>${item.people?.length||0}</span><select data-pipeline-stage="${index}">${stages.map(stage=>`<option ${stage===item.stage?"selected":""}>${esc(stage)}</option>`).join("")}</select></div>`).join("")}</div>`;
 }
@@ -143,9 +143,9 @@ function renderStatus(){
   $("discovery-company").textContent=main.profile?.companyName||"Company";
   const markets=(main.market?.opportunities||[]).filter(x=>x.active!==false).map(x=>x.market).filter(Boolean);
   $("discovery-markets").textContent=[...new Set(markets)].join(" · ")||main.profile?.targetMarkets||main.profile?.currentMarkets?.join?.(" · ")||"Provisional";
-  const text={idle:formal?"Run discovery using the active Market Strategy.":"Website-only provisional discovery is ready. Add optional market, ICP or signal context to improve precision.",running:`Running ${discovery.queries.length} company searches…`,complete:`Discovery complete · ${discovery.candidates.length} ranked companies from ${discovery.rawResults.length} direct search results.`,partial:`Discovery partially complete · ${discovery.candidates.length} candidates; one or more searches were unavailable.`,error:"Company search returned no usable direct company candidates. No substitute companies were invented."};
+  const text={idle:formal?"Ready to discover companies using the active Market Strategy.":"Website-only discovery is ready. Add optional market, ICP or signal context to improve precision.",running:`Running ${discovery.queries.length} company searches…`,complete:`Discovery complete · ${discovery.candidates.length} ranked companies from ${discovery.rawResults.length} direct search results.`,partial:`Discovery partially complete · ${discovery.candidates.length} candidates; one or more searches were unavailable.`,error:"Company search returned no usable direct company candidates. No substitute companies were invented."};
   $("company-discovery-status").textContent=ready?(text[discovery.status]||text.idle):"Add your company website to enable Discovery.";
-  const run=$("run-company-discovery");run.disabled=!ready||discovery.status==="running";run.textContent=discovery.lastRunAt?"Rerun company discovery ↻":"Run company discovery ↻";
+  const run=$("run-company-discovery");run.disabled=!ready||discovery.status==="running";run.textContent=discovery.lastRunAt?"Rerun discovery ↻":"Run company discovery ↻";
 }
 function renderAll(){renderStatus();renderCandidates();renderPipeline();}
 function bindDiscovery(){
@@ -158,8 +158,8 @@ function bindDiscovery(){
 }
 function loadOutreachModules(){
   if(document.querySelector('script[data-outreach-engine]'))return;
-  const engine=document.createElement("script");engine.src="outreach-engine.js";engine.dataset.outreachEngine="true";
-  engine.addEventListener("load",()=>{if(document.querySelector('script[data-outreach-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src="outreach-ui.js";ui.dataset.outreachUi="true";document.body.appendChild(ui);});
+  const engine=document.createElement("script");engine.src=asset("outreach-engine.js");engine.dataset.outreachEngine="true";
+  engine.addEventListener("load",()=>{if(document.querySelector('script[data-outreach-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src=asset("outreach-ui.js");ui.dataset.outreachUi="true";document.body.appendChild(ui);});
   document.body.appendChild(engine);
 }
 function initDiscovery(){
