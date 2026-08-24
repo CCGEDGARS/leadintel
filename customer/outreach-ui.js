@@ -11,6 +11,11 @@ let outreach=loadOutreach();
 function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
 function readJson(key){try{return JSON.parse(localStorage.getItem(key)||"{}");}catch{return {};}}
 function mainState(){return readJson(MAIN_STORAGE_KEY);}
+function persistMainStep(step){
+  const marker=document.querySelector(`[data-step-marker="${step}"]`);
+  if(marker&&!marker.classList.contains("active")){marker.dispatchEvent(new MouseEvent("click",{bubbles:true}));return;}
+  const main=mainState();main.step=step;localStorage.setItem(MAIN_STORAGE_KEY,JSON.stringify(main));
+}
 function discoveryState(){return LeadIntelDiscovery.normalizeDiscoveryState(readJson(DISCOVERY_STORAGE_KEY));}
 function saveDiscovery(value){localStorage.setItem(DISCOVERY_STORAGE_KEY,JSON.stringify(LeadIntelDiscovery.normalizeDiscoveryState(value)));}
 function loadOutreach(){return LeadIntelOutreach.normalizeOutreachState(readJson(OUTREACH_STORAGE_KEY));}
@@ -50,9 +55,9 @@ function injectOutreachUI(){
     </div>
   </section>`);
 }
-function showStep(step){document.querySelectorAll(".step-view").forEach(el=>el.classList.toggle("active",Number(el.dataset.step)===step));document.querySelectorAll("[data-step-marker]").forEach(el=>{const n=Number(el.dataset.stepMarker);el.classList.toggle("active",n===step);el.classList.toggle("complete",n<step);});window.scrollTo({top:0,behavior:"smooth"});}
+function showStep(step){persistMainStep(step);document.querySelectorAll(".step-view").forEach(el=>el.classList.toggle("active",Number(el.dataset.step)===step));document.querySelectorAll("[data-step-marker]").forEach(el=>{const n=Number(el.dataset.stepMarker);el.classList.toggle("active",n===step);el.classList.toggle("complete",n<step);});window.scrollTo({top:0,behavior:"smooth"});}
 function showOutreachStep(){ensureSelection();renderAll();showStep(6);}
-function backToDiscovery(){try{const meta=readJson(DISCOVERY_META_KEY);localStorage.setItem(DISCOVERY_META_KEY,JSON.stringify({...meta,visibleStep:5}));}catch{}location.reload();}
+function backToDiscovery(){try{const meta=readJson(DISCOVERY_META_KEY);localStorage.setItem(DISCOVERY_META_KEY,JSON.stringify({...meta,visibleStep:5}));}catch{}showStep(5);}
 function ensureSelection(){const list=pipeline();if(!list.length){outreach.selectedDomain="";saveOutreach();return;}if(!list.some(x=>x.domain===outreach.selectedDomain))outreach.selectedDomain=list[0].domain;saveOutreach();}
 
 async function officialScrape(candidate){
@@ -108,5 +113,5 @@ function loadDeliveryModules(){
   engine.addEventListener("load",()=>{if(document.querySelector('script[data-delivery-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src="delivery-ui.js";ui.dataset.deliveryUi="true";document.body.appendChild(ui);});
   document.body.appendChild(engine);
 }
-function initOutreach(){injectOutreachUI();bindOutreach();renderAll();loadDeliveryModules();}
+function initOutreach(){injectOutreachUI();bindOutreach();renderAll();if(mainState().step===6)showOutreachStep();loadDeliveryModules();}
 initOutreach();
