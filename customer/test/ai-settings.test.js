@@ -43,7 +43,8 @@ test('raw provider API keys are transient browser values and never persisted',()
 });
 
 test('AI settings CSS is cache-busted and controls have individual borders and focus treatment',()=>{
-  assert.match(js,/ai-settings\.css\?v=20260824-ai-providers/);
+  assert.match(js,/SETTINGS_VERSION='20260824-ai-providers'/);
+  assert.match(js,/link\.href=`ai-settings\.css\?v=\$\{SETTINGS_VERSION\}`/);
   assert.equal(fs.existsSync(cssPath),true,'ai-settings.css must exist');
   assert.match(css,/\.ai-settings-btn[\s\S]*border:\s*1px solid/i);
   assert.match(css,/:focus-visible/);
