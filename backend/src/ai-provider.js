@@ -94,6 +94,6 @@ export async function generateText({provider,apiKey,model,system='',prompt,maxOu
 }
 
 export async function verifyProviderCredential({provider,apiKey,model,fetchImpl=fetch}){
-  const result=await generateText({provider,apiKey,model,prompt:'Reply with exactly OK.',maxOutputTokens:8,fetchImpl});
+  const result=await generateText({provider,apiKey,model,prompt:'Reply with exactly OK.',maxOutputTokens:64,fetchImpl});
   return {ok:Boolean(result.text),provider:result.provider,model:result.model};
 }
