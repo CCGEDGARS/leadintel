@@ -9,7 +9,7 @@ Allow every LeadIntel customer workspace to supply, pay for and control its own 
 LeadIntel supports exactly three first-class AI choices in Customer V2:
 
 1. **OpenAI** — default model `gpt-5.6`.
-2. **Anthropic** — default model `claude-sonnet-4-20250514`.
+2. **Anthropic** — default model `claude-sonnet-4-6`.
 3. **Google Gemini** — default model `gemini-3.7-flash`.
 
 The model field remains editable so a customer can use another model available to their own account without a LeadIntel release.
@@ -71,7 +71,7 @@ Provider implementations:
 - Anthropic: `POST https://api.anthropic.com/v1/messages`, `x-api-key`, `anthropic-version: 2023-06-01`.
 - Gemini: `POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`, `x-goog-api-key`.
 
-Connection validation uses a tiny prompt requesting exactly `OK`; any successful non-empty text response verifies the credential/model.
+Connection validation uses a small prompt requesting exactly `OK`; any successful non-empty text response verifies the credential/model.
 
 ## API routes
 
