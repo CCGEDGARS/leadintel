@@ -44,6 +44,8 @@ jobs:
           node --check src/customer-state.js
           node --check src/gmail.js
           node --check src/saas-routes.js
+          node --check src/ai-provider.js
+          node --check src/ai-routes.js
           node --check src/canonical.js
           node --check src/enrichment.js
           node --check src/quality.js

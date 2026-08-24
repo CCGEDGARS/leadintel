@@ -1,5 +1,6 @@
 import core from './index.js';
 import {allowedOrigin,corsHeaders} from './security.js';
+import {handleAiRoute} from './ai-routes.js';
 import {handleSaasRoute} from './saas-routes.js';
 
 export default {
@@ -8,6 +9,7 @@ export default {
     if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
     if(request.headers.get('Origin')&&!origin)return new Response(JSON.stringify({error:'Origin not allowed'}),{status:403,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...cors}});
     try{
+      const ai=await handleAiRoute(request,env,cors);if(ai)return ai;
       const saas=await handleSaasRoute(request,env,cors);if(saas)return saas;
       return core.fetch(request,env);
     }catch(cause){
