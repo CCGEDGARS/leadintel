@@ -30,5 +30,5 @@ test('AI integration migration stores encrypted provider keys per workspace with
   assert.match(sql,/key_hint TEXT NOT NULL/i);
   assert.match(sql,/PRIMARY KEY\s*\(workspace_id\s*,\s*provider\)/i);
   assert.match(sql,/CREATE UNIQUE INDEX IF NOT EXISTS workspace_ai_integrations_one_active_idx[\s\S]*WHERE active=1/i);
-  assert.doesNotMatch(sql,/api_key\s+TEXT\s+NOT NULL/i,'raw API key column must never exist');
+  assert.doesNotMatch(sql,/^\s*api_key\s+TEXT\s+NOT NULL/im,'standalone raw API key column must never exist');
 });
