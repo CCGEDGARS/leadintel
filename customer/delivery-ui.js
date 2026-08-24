@@ -7,6 +7,7 @@ let delivery=loadDelivery();
 
 function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
 function readJson(key){try{return JSON.parse(localStorage.getItem(key)||"{}");}catch{return {};}}
+function persistMainStep(step){const main=readJson(MAIN_STORAGE_KEY);main.step=Number(step)||1;localStorage.setItem(MAIN_STORAGE_KEY,JSON.stringify(main));}
 function loadDelivery(){return LeadIntelDelivery.normalizeDeliveryState(readJson(DELIVERY_STORAGE_KEY));}
 function saveDelivery(){delivery=LeadIntelDelivery.normalizeDeliveryState(delivery);localStorage.setItem(DELIVERY_STORAGE_KEY,JSON.stringify(delivery));}
 function outreachState(){return LeadIntelOutreach.normalizeOutreachState(readJson(OUTREACH_STORAGE_KEY));}
@@ -55,8 +56,8 @@ function injectDeliveryUI(){
 }
 function showStep(step){document.querySelectorAll(".step-view").forEach(el=>el.classList.toggle("active",Number(el.dataset.step)===step));document.querySelectorAll("[data-step-marker]").forEach(el=>{const n=Number(el.dataset.stepMarker);el.classList.toggle("active",n===step);el.classList.toggle("complete",n<step);});window.scrollTo({top:0,behavior:"smooth"});}
 function ensureSelection(){const list=approvedPackages();if(!list.length){delivery.selectedDomain="";saveDelivery();return;}if(!list.some(item=>item.domain===delivery.selectedDomain))delivery.selectedDomain=list[0].domain;saveDelivery();}
-function showDeliveryStep(){ensureSelection();renderAll();showStep(7);}
-function showOutreachStep(){showStep(6);}
+function showDeliveryStep(){persistMainStep(7);ensureSelection();renderAll();showStep(7);}
+function showOutreachStep(){persistMainStep(6);showStep(6);}
 
 function openGmailDraft(){const pkg=currentPackage();if(!pkg){toast("Select an approved opportunity");return;}const url=LeadIntelDelivery.buildGmailComposeUrl(pkg,q("delivery-recipient").value);if(!url){toast("Enter a valid recipient email first");return;}window.open(url,"_blank","noopener,noreferrer");toast("Gmail draft opened · send it there, then confirm here");}
 function confirmSent(){const pkg=currentPackage();if(!pkg){toast("Select an approved opportunity");return;}const result=LeadIntelDelivery.confirmSend(delivery,pkg,q("delivery-recipient").value,new Date().toISOString());if(result.error){toast(result.error);return;}delivery=result.state;saveDelivery();updatePipelineStage(pkg.domain,"Contacted");markOutreachContacted(pkg.domain,result.record.sentAt);renderAll();toast("Send confirmed · Pipeline moved to Contacted");}
@@ -76,7 +77,7 @@ function renderLearning(){const summary=LeadIntelDelivery.buildLearningSummary(d
 function renderAll(){ensureSelection();renderSelector();renderState();renderActivity();renderLearning();}
 function bindDelivery(){
   q("continue-to-delivery")?.addEventListener("click",showDeliveryStep);q("back-to-outreach")?.addEventListener("click",showOutreachStep);q("delivery-company-select")?.addEventListener("change",e=>{delivery.selectedDomain=e.target.value;saveDelivery();renderAll();});q("open-gmail-draft")?.addEventListener("click",openGmailDraft);q("confirm-delivery-sent")?.addEventListener("click",confirmSent);q("reply-text")?.addEventListener("input",previewReply);q("record-reply")?.addEventListener("click",recordReply);q("step-7")?.addEventListener("click",e=>{const btn=e.target.closest("[data-outcome-stage]");if(btn)recordOutcome(btn.dataset.outcomeStage);});q("export-learning-data")?.addEventListener("click",exportLearningData);q("reset-workspace")?.addEventListener("click",()=>setTimeout(()=>{if(!localStorage.getItem(MAIN_STORAGE_KEY))localStorage.removeItem(DELIVERY_STORAGE_KEY);},0));
-  window.addEventListener("leadintel:module-opened",event=>{if(Number(event.detail?.step)!==7)return;ensureSelection();renderAll();});
+  window.addEventListener("leadintel:module-opened",event=>{if(Number(event.detail?.step)!==7)return;persistMainStep(7);ensureSelection();renderAll();});
 }
 function loadProductionSaas(){
   if(document.querySelector('script[data-server-bridge]'))return;
@@ -84,5 +85,5 @@ function loadProductionSaas(){
   bridge.addEventListener('load',()=>{if(document.querySelector('script[data-production-gmail-ui]'))return;const ui=document.createElement('script');ui.src='production-gmail-ui.js';ui.dataset.productionGmailUi='true';document.body.appendChild(ui);});
   document.body.appendChild(bridge);
 }
-function initDelivery(){injectDeliveryUI();bindDelivery();renderAll();loadProductionSaas();}
+function initDelivery(){injectDeliveryUI();bindDelivery();renderAll();if(readJson(MAIN_STORAGE_KEY).step===7)showDeliveryStep();loadProductionSaas();}
 initDelivery();
