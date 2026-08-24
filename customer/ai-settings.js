@@ -2,7 +2,7 @@ const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
 const SETTINGS_VERSION='20260824-ai-providers';
 const PROVIDERS=Object.freeze([
   {provider:'openai',name:'OpenAI',model:'gpt-5.6',placeholder:'sk-…',hint:'Responses API'},
-  {provider:'anthropic',name:'Anthropic',model:'claude-sonnet-4-20250514',placeholder:'sk-ant-…',hint:'Messages API'},
+  {provider:'anthropic',name:'Anthropic',model:'claude-sonnet-4-6',placeholder:'sk-ant-…',hint:'Messages API'},
   {provider:'gemini',name:'Google Gemini',model:'gemini-3.7-flash',placeholder:'AIza…',hint:'GenerateContent API'}
 ]);
 let status={role:'',providers:[]};
