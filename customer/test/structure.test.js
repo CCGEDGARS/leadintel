@@ -17,6 +17,14 @@ test('customer onboarding contains all ten strategic questions',()=>{
   ids.forEach(id=>assert.match(html,new RegExp(`data-question="${id}"`)));
 });
 
+test('strategic intake is clearly optional enrichment',()=>{
+  const html=read('index.html');
+  assert.match(html,/Optional enrichment/);
+  assert.match(html,/skip these questions/i);
+  assert.doesNotMatch(html,/These ten answers control what the system prioritizes/);
+  assert.doesNotMatch(html,/Approval gate/);
+});
+
 test('website-only onboarding unlocks sidebar modules and keeps enrichment optional',()=>{
   const app=read('app.js');
   const discovery=read('discovery-ui.js');
@@ -25,6 +33,7 @@ test('website-only onboarding unlocks sidebar modules and keeps enrichment optio
   assert.match(app,/LeadIntelProfile\.canAccessModule/);
   assert.match(app,/function openModule/);
   assert.match(app,/querySelector\("\.steps"\).*addEventListener/s);
+  assert.match(app,/MutationObserver/,'dynamic Steps 5–7 must inherit visible unlocked state after injection');
   assert.doesNotMatch(app,/Complete \$\{missing\.length\} required question/);
   assert.doesNotMatch(discovery,/Activate Market Strategy before Discovery/);
   assert.doesNotMatch(outreach,/Save at least one company to Pipeline first/);
