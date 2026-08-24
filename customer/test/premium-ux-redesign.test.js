@@ -52,6 +52,10 @@ test('dynamic Customer V2 modules use the same versioned asset contract',()=>{
     assert.match(source,/20260824-premium/);
     assert.match(source,/\?v=/);
   }
+  const bridge=read('server-bridge.js');
+  assert.match(bridge,/20260824-premium/);
+  assert.match(bridge,/server\.css/);
+  assert.match(bridge,/\?v=/);
 });
 
 test('Step 6 terminology is consistently Content and Scripts across the current UI',()=>{
