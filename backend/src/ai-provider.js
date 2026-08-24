@@ -41,7 +41,15 @@ function textFromGemini(payload){
   const candidate=Array.isArray(payload?.candidates)?payload.candidates[0]:null;
   return (Array.isArray(candidate?.content?.parts)?candidate.content.parts:[]).map(part=>clean(part?.text)).filter(Boolean).join('\n').trim();
 }
-function sanitizedUpstreamError(provider,status){return new Error(`${PROVIDER_LABELS[provider]||'AI provider'} request failed (${Number(status)||502})`);}
+function safeDiagnosticToken(value){
+  const token=clean(value);if(!token||token.length>80||!/^[A-Za-z0-9_.:/-]+$/.test(token))return '';return token;
+}
+function sanitizedUpstreamError(provider,status,payload={}){
+  const detail=payload?.error&&typeof payload.error==='object'?payload.error:{};
+  const code=safeDiagnosticToken(detail.code||detail.type),param=safeDiagnosticToken(detail.param);
+  const suffix=[code?`code: ${code}`:'',param?`param: ${param}`:''].filter(Boolean).join(' · ');
+  return new Error(`${PROVIDER_LABELS[provider]||'AI provider'} request failed (${Number(status)||502})${suffix?` · ${suffix}`:''}`);
+}
 
 async function parseJson(response){try{return await response.json();}catch{return {};}}
 
@@ -51,9 +59,20 @@ async function openAiRequest(options,fetchImpl){
     headers:{'Content-Type':'application/json','Accept':'application/json',Authorization:`Bearer ${options.apiKey}`},
     body:JSON.stringify({model:options.model,instructions:options.system||undefined,input:options.prompt,max_output_tokens:options.maxOutputTokens,store:false})
   });
-  const payload=await parseJson(response);if(!response.ok)throw sanitizedUpstreamError('openai',response.status);
+  const payload=await parseJson(response);if(!response.ok)throw sanitizedUpstreamError('openai',response.status,payload);
   const text=textFromOpenAi(payload);if(!text)throw new Error('OpenAI returned no text');
   return {provider:'openai',model:options.model,text,usage:usage(payload?.usage?.input_tokens,payload?.usage?.output_tokens)};
+}
+
+async function verifyOpenAiCredential(options,fetchImpl){
+  const response=await fetchImpl('https://api.openai.com/v1/responses',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Accept':'application/json',Authorization:`Bearer ${options.apiKey}`},
+    body:JSON.stringify({model:options.model,input:'Reply with exactly OK.'})
+  });
+  const payload=await parseJson(response);if(!response.ok)throw sanitizedUpstreamError('openai',response.status,payload);
+  const text=textFromOpenAi(payload);if(!text)throw new Error('OpenAI returned no text');
+  return {provider:'openai',model:options.model,text};
 }
 
 async function anthropicRequest(options,fetchImpl){
@@ -63,7 +82,7 @@ async function anthropicRequest(options,fetchImpl){
     headers:{'Content-Type':'application/json','Accept':'application/json','x-api-key':options.apiKey,'anthropic-version':'2023-06-01'},
     body:JSON.stringify(body)
   });
-  const payload=await parseJson(response);if(!response.ok)throw sanitizedUpstreamError('anthropic',response.status);
+  const payload=await parseJson(response);if(!response.ok)throw sanitizedUpstreamError('anthropic',response.status,payload);
   const text=textFromAnthropic(payload);if(!text)throw new Error('Anthropic returned no text');
   return {provider:'anthropic',model:options.model,text,usage:usage(payload?.usage?.input_tokens,payload?.usage?.output_tokens)};
 }
@@ -76,7 +95,7 @@ async function geminiRequest(options,fetchImpl){
     headers:{'Content-Type':'application/json','Accept':'application/json','x-goog-api-key':options.apiKey},
     body:JSON.stringify(body)
   });
-  const payload=await parseJson(response);if(!response.ok)throw sanitizedUpstreamError('gemini',response.status);
+  const payload=await parseJson(response);if(!response.ok)throw sanitizedUpstreamError('gemini',response.status,payload);
   const text=textFromGemini(payload);if(!text)throw new Error('Gemini returned no text');
   return {provider:'gemini',model:options.model,text,usage:usage(payload?.usageMetadata?.promptTokenCount,payload?.usageMetadata?.candidatesTokenCount)};
 }
@@ -88,12 +107,17 @@ export async function generateText({provider,apiKey,model,system='',prompt,maxOu
     if(options.provider==='anthropic')return await anthropicRequest(options,fetchImpl);
     return await geminiRequest(options,fetchImpl);
   }catch(error){
-    if(/request failed \(\d+\)$/.test(String(error?.message||''))||/returned no text$/.test(String(error?.message||''))||/^(Unsupported AI provider|AI provider API key is required|AI provider model is invalid|AI prompt is required)$/.test(String(error?.message||'')))throw error;
+    if(/request failed \(\d+\)/.test(String(error?.message||''))||/returned no text$/.test(String(error?.message||''))||/^(Unsupported AI provider|AI provider API key is required|AI provider model is invalid|AI prompt is required)$/.test(String(error?.message||'')))throw error;
     throw new Error(`${PROVIDER_LABELS[options.provider]} request failed (502)`);
   }
 }
 
 export async function verifyProviderCredential({provider,apiKey,model,fetchImpl=fetch}){
-  const result=await generateText({provider,apiKey,model,prompt:'Reply with exactly OK.',maxOutputTokens:64,fetchImpl});
+  const options=validatedOptions({provider,apiKey,model,prompt:'Reply with exactly OK.',maxOutputTokens:64});
+  if(options.provider==='openai'){
+    const result=await verifyOpenAiCredential(options,fetchImpl);
+    return {ok:Boolean(result.text),provider:result.provider,model:result.model};
+  }
+  const result=await generateText({provider:options.provider,apiKey:options.apiKey,model:options.model,prompt:'Reply with exactly OK.',maxOutputTokens:64,fetchImpl});
   return {ok:Boolean(result.text),provider:result.provider,model:result.model};
 }

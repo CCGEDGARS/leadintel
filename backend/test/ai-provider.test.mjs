@@ -57,22 +57,25 @@ test('Gemini adapter uses generateContent with x-goog-api-key and extracts text'
   assert.deepEqual(result.usage,{input_tokens:7,output_tokens:5});
 });
 
-test('provider errors are sanitized and never echo upstream bodies or keys',async()=>{
-  const fetchImpl=async()=>new Response(JSON.stringify({error:{message:'Account owner secret details sk-live-do-not-leak'}}),{status:401,headers:{'Content-Type':'application/json'}});
+test('provider errors expose only safe upstream code and parameter diagnostics',async()=>{
+  const fetchImpl=async()=>new Response(JSON.stringify({error:{message:'Account owner secret details sk-live-do-not-leak',type:'invalid_request_error',code:'invalid_parameter',param:'max_output_tokens'}}),{status:400,headers:{'Content-Type':'application/json'}});
   await assert.rejects(()=>generateText({provider:'openai',apiKey:'sk-live-do-not-leak',prompt:'x',fetchImpl}),error=>{
-    assert.match(error.message,/OpenAI request failed \(401\)/);
+    assert.match(error.message,/OpenAI request failed \(400\)/);
+    assert.match(error.message,/invalid_parameter/);
+    assert.match(error.message,/max_output_tokens/);
     assert.doesNotMatch(error.message,/sk-live-do-not-leak/);
     assert.doesNotMatch(error.message,/Account owner secret details/);
     return true;
   });
 });
 
-test('credential verification performs a small real generation request with enough output budget for reasoning models',async()=>{
-  let body;
-  const fetchImpl=async(_url,options)=>{body=JSON.parse(options.body);return new Response(JSON.stringify({output:[{type:'message',content:[{type:'output_text',text:'OK'}]}]}),{status:200,headers:{'Content-Type':'application/json'}});};
+test('OpenAI credential verification matches the official minimal Responses request',async()=>{
+  let request;
+  const fetchImpl=async(url,options)=>{request={url,options,body:JSON.parse(options.body)};return new Response(JSON.stringify({output:[{type:'message',content:[{type:'output_text',text:'OK'}]}]}),{status:200,headers:{'Content-Type':'application/json'}});};
   const result=await verifyProviderCredential({provider:'openai',apiKey:'sk-test',model:'gpt-5.6',fetchImpl});
   assert.equal(result.ok,true);
   assert.equal(result.provider,'openai');
   assert.equal(result.model,'gpt-5.6');
-  assert.ok(Number(body.max_output_tokens)>=32&&Number(body.max_output_tokens)<=128);
+  assert.equal(request.url,'https://api.openai.com/v1/responses');
+  assert.deepEqual(request.body,{model:'gpt-5.6',input:'Reply with exactly OK.'});
 });
