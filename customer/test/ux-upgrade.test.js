@@ -13,7 +13,7 @@ test('customer workspace exposes a clickable seven-stage commercial process map'
   assert.match(html,/Website/);
   assert.match(html,/Content & Scripts/);
   assert.match(html,/Delivery & Learning/);
-  assert.match(html,/src="process-map\.js"/);
+  assert.match(html,/src="process-map\.js(?:\?[^\"]*)?"/);
   assert.match(processMap,/data-process-step/);
   assert.match(processMap,/data-step-marker/);
   assert.match(processMap,/dispatchEvent/);

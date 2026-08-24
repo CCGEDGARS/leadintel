@@ -2,6 +2,8 @@ const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
 const DELIVERY_STORAGE_KEY="leadintel_customer_v2_delivery";
+const ASSET_VERSION="20260824-premium";
+const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const q=id=>document.getElementById(id);
 let delivery=loadDelivery();
 
@@ -31,7 +33,7 @@ function markOutreachContacted(domain,at){
 }
 
 function injectDeliveryUI(){
-  if(!document.querySelector('link[href="delivery.css"]')){const link=document.createElement("link");link.rel="stylesheet";link.href="delivery.css";document.head.appendChild(link);}
+  if(!document.querySelector('link[data-leadintel-asset="delivery-css"]')){const link=document.createElement("link");link.rel="stylesheet";link.href=asset("delivery.css");link.dataset.leadintelAsset="delivery-css";document.head.appendChild(link);}
   const steps=document.querySelector(".steps");
   if(steps&&!steps.querySelector('[data-step-marker="7"]'))steps.insertAdjacentHTML("beforeend",'<li data-step-marker="7"><span>07</span><div><strong>Delivery & learning</strong><small>Send, replies, outcomes</small></div></li>');
   const draftPanel=document.querySelector("#step-6 .outreach-drafts");
@@ -81,8 +83,8 @@ function bindDelivery(){
 }
 function loadProductionSaas(){
   if(document.querySelector('script[data-server-bridge]'))return;
-  const bridge=document.createElement('script');bridge.src='server-bridge.js';bridge.dataset.serverBridge='true';
-  bridge.addEventListener('load',()=>{if(document.querySelector('script[data-production-gmail-ui]'))return;const ui=document.createElement('script');ui.src='production-gmail-ui.js';ui.dataset.productionGmailUi='true';document.body.appendChild(ui);});
+  const bridge=document.createElement('script');bridge.src=asset('server-bridge.js');bridge.dataset.serverBridge='true';
+  bridge.addEventListener('load',()=>{if(document.querySelector('script[data-production-gmail-ui]'))return;const ui=document.createElement('script');ui.src=asset('production-gmail-ui.js');ui.dataset.productionGmailUi='true';document.body.appendChild(ui);});
   document.body.appendChild(bridge);
 }
 function initDelivery(){injectDeliveryUI();bindDelivery();renderAll();if(readJson(MAIN_STORAGE_KEY).step===7)showDeliveryStep();loadProductionSaas();}

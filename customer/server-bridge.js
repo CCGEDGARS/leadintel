@@ -1,6 +1,8 @@
 (function(root){
   'use strict';
   const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
+  const ASSET_VERSION='20260824-premium';
+  const asset=path=>`${path}?v=${ASSET_VERSION}`;
   const KEYS={main:'leadintel_customer_v2_state',discovery:'leadintel_customer_v2_discovery',outreach:'leadintel_customer_v2_outreach',delivery:'leadintel_customer_v2_delivery',meta:'leadintel_customer_v2_discovery_meta'};
   const WORKSPACE_KEY='leadintel_customer_v2_workspace';
   const HYDRATION_KEY='leadintel_customer_v2_server_hydration';
@@ -18,7 +20,7 @@
   function returnTo(){const url=new URL(location.href);url.searchParams.delete('auth');url.searchParams.delete('gmail');url.searchParams.delete('reason');url.searchParams.delete('workspace_id');return url.toString();}
   function setStatus(text,kind=''){bridge.status=kind||text;const existing=document.querySelector('.autosave');if(existing){existing.innerHTML=`<i></i>${text}`;existing.dataset.serverStatus=kind||'';}const status=document.getElementById('server-sync-status');if(status){status.textContent=text;status.dataset.state=kind||'';}}
   function showToast(message){const el=document.getElementById('toast');if(!el)return;el.textContent=message;el.classList.add('show');clearTimeout(showToast.t);showToast.t=setTimeout(()=>el.classList.remove('show'),3000);}
-  function injectCss(){if(document.querySelector('link[href="server.css"]'))return;const link=document.createElement('link');link.rel='stylesheet';link.href='server.css';document.head.appendChild(link);}
+  function injectCss(){if(document.querySelector('link[data-leadintel-asset="server-css"]'))return;const link=document.createElement('link');link.rel='stylesheet';link.href=asset('server.css');link.dataset.leadintelAsset='server-css';document.head.appendChild(link);}
   function injectAccountUi(){
     const actions=document.querySelector('.top-actions');if(!actions||document.getElementById('server-account'))return;
     actions.insertAdjacentHTML('afterbegin','<div class="server-account" id="server-account"><button class="ghost-btn server-signin" id="server-google-signin" type="button">Sign in with Google</button><select id="server-workspace-select" aria-label="LeadIntel workspace" hidden></select><span id="server-account-label" hidden></span><span class="server-sync" id="server-sync-status">Local workspace</span><button class="server-signout" id="server-signout" type="button" hidden>Sign out</button></div>');
