@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const outreachEngine = require('../outreach-engine.js');
 function read(name){return fs.readFileSync(path.join(__dirname,'..',name),'utf8');}
 
 test('customer workspace exposes a clickable seven-stage commercial process map',()=>{
@@ -33,6 +34,17 @@ test('Content and Scripts includes five practical script formats with edit copy 
   assert.match(ui,/data-copy-field="objection"/);
   assert.match(ui,/id="regenerate-outreach"/);
   assert.match(ui,/id="approve-outreach"/);
+});
+
+test('outreach engine generates and persists practical sales scripts',()=>{
+  const drafts=outreachEngine.buildOutreachDrafts({company:'Acme',recommendedOffer:'AI automation',matchedSignals:[{name:'expansion'}],evidence:[]},{firstName:'Anna'},{companyName:'LeadIntel'},'consultative');
+  assert.ok(drafts.callOpener);
+  assert.ok(drafts.followUp);
+  assert.ok(drafts.objectionReply);
+  const normalized=outreachEngine.normalizeOutreachState({selectedDomain:'acme.com',items:[{domain:'acme.com',drafts}]});
+  assert.equal(normalized.items[0].drafts.callOpener,drafts.callOpener);
+  assert.equal(normalized.items[0].drafts.followUp,drafts.followUp);
+  assert.equal(normalized.items[0].drafts.objectionReply,drafts.objectionReply);
 });
 
 test('workspace typography and dense commercial cards use readable responsive layout rules',()=>{
