@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const Discovery = require('../discovery-engine.js');
 
 const profile={
-  companyName:'Acme Industrial',priorityOffers:'industrial automation; custom machinery',
+  companyName:'Acme Industrial',website:'https://acme.example/',priorityOffers:'industrial automation; custom machinery',
   idealCustomer:'manufacturers with 50–500 employees',decisionMakers:'COO; Procurement Director; Plant Manager',
   targetMarkets:'Sweden; Finland',buyingTriggers:'new facility; capacity expansion; equipment modernization; tender',
   opportunityValue:'€50,000–€250,000 per project',exclusions:'projects below €20,000',completeness:96
@@ -22,14 +22,16 @@ const market={
   ]
 };
 
-test('buildDiscoveryQueries requires active strategy and respects four-query guard',()=>{
-  assert.deepEqual(Discovery.buildDiscoveryQueries(profile,{...market,strategyApproved:false},4),[]);
+test('buildDiscoveryQueries supports provisional website-only strategy and respects four-query guard',()=>{
+  const provisional=Discovery.buildDiscoveryQueries(profile,{...market,strategyApproved:false},4);
+  assert.ok(provisional.length>0&&provisional.length<=4);
   const queries=Discovery.buildDiscoveryQueries(profile,market,4);
   assert.ok(queries.length>0&&queries.length<=4);
   assert.equal(new Set(queries.map(x=>x.id)).size,queries.length);
   assert.ok(queries.some(x=>/Sweden/i.test(x.query)));
   assert.ok(queries.some(x=>/industrial automation/i.test(x.query)));
   assert.ok(queries.every(x=>x.market&&x.query));
+  assert.deepEqual(Discovery.buildDiscoveryQueries({}, {}, 4),[],'discovery still needs a company website or profile context');
 });
 
 test('normalizeCompanySearchResults rejects obvious non-company hosts and keeps direct company domains',()=>{

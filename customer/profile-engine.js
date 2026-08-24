@@ -34,6 +34,12 @@
       return url.href;
     }catch{return "";}
   }
+  function canBuildProfile(input={}){return Boolean(normalizeUrl(input.website));}
+  function canAccessModule(input={},step=1){
+    const moduleNumber=Number(step)||1;
+    if(moduleNumber===1)return true;
+    return moduleNumber>=2&&moduleNumber<=7&&canBuildProfile(input);
+  }
   function unique(list){return [...new Set((list||[]).map(clean).filter(Boolean))];}
   function splitList(value){return unique(clean(value).split(/\n|;|,|\||•/).map(clean));}
   function truncate(value,max=1200){const text=clean(value);return text.length>max?`${text.slice(0,max-1)}…`:text;}
@@ -137,7 +143,7 @@
     const answers={}; QUESTION_IDS.forEach(id=>{answers[id]=clean(value.answers?.[id]);});
     const docs=Array.isArray(value.documents)?value.documents.slice(0,5).map(d=>({name:clean(d?.name).slice(0,180),size:Number(d?.size)||0,text:String(d?.text||"").slice(0,25000),status:clean(d?.status)||"ready"})).filter(d=>d.name):[];
     return {
-      step:[1,2,3].includes(Number(value.step))?Number(value.step):1,
+      step:[1,2,3,4,5,6,7].includes(Number(value.step))?Number(value.step):1,
       website:normalizeUrl(value.website),
       additionalLinks:unique((value.additionalLinks||[]).map(normalizeUrl).filter(Boolean)).slice(0,8),
       documents:docs,
@@ -148,5 +154,5 @@
     };
   }
 
-  return {QUESTION_IDS,SIGNAL_LIBRARY,normalizeUrl,calculateCompleteness,buildCompanyIntelligenceProfile,normalizeSavedState,splitList};
+  return {QUESTION_IDS,SIGNAL_LIBRARY,normalizeUrl,canBuildProfile,canAccessModule,calculateCompleteness,buildCompanyIntelligenceProfile,normalizeSavedState,splitList};
 });

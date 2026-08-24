@@ -50,10 +50,11 @@
   }
 
   function buildDiscoveryQueries(profile={},marketState={},maxQueries=4){
-    if(!marketState?.strategyApproved)return [];
+    const hasCompanyContext=Boolean(clean(profile.website)||clean(profile.companyName)||clean(profile.priorityOffers)||clean(profile.idealCustomer));
+    if(!hasCompanyContext)return [];
     const limit=Math.max(1,Math.min(4,Number(maxQueries)||4));
     const activeOpps=(marketState.opportunities||[]).filter(item=>item.active!==false);
-    const markets=activeOpps.length?activeOpps.map(item=>clean(item.market)).filter(Boolean):splitList(profile.targetMarkets);
+    const markets=activeOpps.length?activeOpps.map(item=>clean(item.market)).filter(Boolean):splitList(profile.targetMarkets).length?splitList(profile.targetMarkets):splitList(profile.currentMarkets);
     const activeIcps=(marketState.icps||[]).filter(item=>item.active!==false);
     const icpText=activeIcps.map(item=>clean(item.description)).filter(Boolean).join(" ")||clean(profile.idealCustomer);
     const offer=splitList(profile.priorityOffers)[0]||"commercial solution";

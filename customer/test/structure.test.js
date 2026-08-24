@@ -17,6 +17,42 @@ test('customer onboarding contains all ten strategic questions',()=>{
   ids.forEach(id=>assert.match(html,new RegExp(`data-question="${id}"`)));
 });
 
+test('strategic intake is clearly optional enrichment',()=>{
+  const html=read('index.html');
+  assert.match(html,/Optional enrichment/);
+  assert.match(html,/skip these questions/i);
+  assert.doesNotMatch(html,/These ten answers control what the system prioritizes/);
+  assert.doesNotMatch(html,/Approval gate/);
+});
+
+test('website-only onboarding unlocks sidebar modules and keeps enrichment optional',()=>{
+  const app=read('app.js');
+  const discovery=read('discovery-ui.js');
+  const outreach=read('outreach-ui.js');
+  const delivery=read('delivery-ui.js');
+  assert.match(app,/LeadIntelProfile\.canAccessModule/);
+  assert.match(app,/function openModule/);
+  assert.match(app,/querySelector\("\.steps"\).*addEventListener/s);
+  assert.match(app,/MutationObserver/,'dynamic Steps 5–7 must inherit visible unlocked state after injection');
+  assert.match(app,/\[1,2,3,4,5,6,7\]\.includes\(Number\(raw\.step\)\)/,'app reload must preserve Steps 5–7');
+  assert.doesNotMatch(app,/Complete \$\{missing\.length\} required question/);
+  assert.doesNotMatch(discovery,/Activate Market Strategy before Discovery/);
+  assert.doesNotMatch(outreach,/Save at least one company to Pipeline first/);
+  assert.doesNotMatch(delivery,/Approve at least one outreach package first/);
+});
+
+test('dynamic Steps 5–7 persist navigation and reopen themselves after reload',()=>{
+  const discovery=read('discovery-ui.js');
+  const outreach=read('outreach-ui.js');
+  const delivery=read('delivery-ui.js');
+  assert.match(discovery,/persistMainStep/);
+  assert.match(discovery,/mainState\(\)\.step===5/);
+  assert.match(outreach,/persistMainStep/);
+  assert.match(outreach,/mainState\(\)\.step===6/);
+  assert.match(delivery,/persistMainStep/);
+  assert.match(delivery,/readJson\(MAIN_STORAGE_KEY\)\.step===7/);
+});
+
 test('profile screen includes review, edit and approval controls',()=>{
   const html=read('index.html');
   assert.match(html,/id="profile-editor"/);
