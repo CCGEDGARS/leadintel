@@ -13,7 +13,7 @@ test('supports exactly the three customer AI providers',()=>{
 
 test('provides editable production defaults for all three providers',()=>{
   assert.equal(defaultAiModel('openai'),'gpt-5.6');
-  assert.equal(defaultAiModel('anthropic'),'claude-sonnet-4-20250514');
+  assert.equal(defaultAiModel('anthropic'),'claude-sonnet-4-6');
   assert.equal(defaultAiModel('gemini'),'gemini-3.7-flash');
 });
 
@@ -34,11 +34,11 @@ test('OpenAI adapter uses Responses API without server-side response storage',as
 test('Anthropic adapter uses Messages API and extracts text',async()=>{
   let request;
   const fetchImpl=async(url,options)=>{request={url,options,body:JSON.parse(options.body)};return new Response(JSON.stringify({content:[{type:'text',text:'Claude reply'}],usage:{input_tokens:9,output_tokens:4}}),{status:200,headers:{'Content-Type':'application/json'}});};
-  const result=await generateText({provider:'anthropic',apiKey:'sk-ant-test',model:'claude-sonnet-4-20250514',system:'System',prompt:'Prompt',maxOutputTokens:50,fetchImpl});
+  const result=await generateText({provider:'anthropic',apiKey:'sk-ant-test',model:'claude-sonnet-4-6',system:'System',prompt:'Prompt',maxOutputTokens:50,fetchImpl});
   assert.equal(request.url,'https://api.anthropic.com/v1/messages');
   assert.equal(request.options.headers['x-api-key'],'sk-ant-test');
   assert.equal(request.options.headers['anthropic-version'],'2023-06-01');
-  assert.equal(request.body.model,'claude-sonnet-4-20250514');
+  assert.equal(request.body.model,'claude-sonnet-4-6');
   assert.equal(request.body.system,'System');
   assert.deepEqual(request.body.messages,[{role:'user',content:'Prompt'}]);
   assert.equal(result.text,'Claude reply');
