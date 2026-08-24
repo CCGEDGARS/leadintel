@@ -38,15 +38,15 @@ test('Discovery empty state is compact and the primary action dominates',()=>{
 
 test('production assets are versioned so deployments cannot mix stale CSS and JS',()=>{
   const html=read('index.html');
-  assert.match(html,/styles\.css\?v=20260824-premium/);
-  assert.match(html,/market\.css\?v=20260824-premium/);
-  assert.match(html,/premium\.css\?v=20260824-premium/);
-  assert.match(html,/app\.js\?v=20260824-premium/);
-  assert.match(html,/process-map\.js\?v=20260824-premium/);
-  assert.match(html,/discovery-ui\.js\?v=20260824-premium/);
+  assert.match(html,/styles\.css\?v=20260824-typography-v2/);
+  assert.match(html,/market\.css\?v=20260824-typography-v2/);
+  assert.match(html,/premium\.css\?v=20260824-typography-v2/);
+  assert.match(html,/app\.js\?v=20260824-typography-v2/);
+  assert.match(html,/process-map\.js\?v=20260824-typography-v2/);
+  assert.match(html,/discovery-ui\.js\?v=20260824-typography-v2/);
 });
 
-test('dynamic Customer V2 modules use the same versioned asset contract',()=>{
+test('dynamic Customer V2 modules keep their own stable cache contract',()=>{
   for(const file of ['discovery-ui.js','outreach-ui.js','delivery-ui.js']){
     const source=read(file);
     assert.match(source,/20260824-premium/);

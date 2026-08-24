@@ -44,3 +44,6 @@ body.ai-settings-opened{overflow:hidden}
 .ai-security-note{display:grid;gap:5px;margin-top:22px;padding:15px 16px;border:1px solid #e0e4e1;border-radius:12px;background:var(--ai-soft);font-size:12px;line-height:1.5}
 .ai-security-note strong{font-size:12px}
 @media(max-width:680px){.ai-settings-drawer{width:100vw;padding:22px 18px}.ai-provider-actions{grid-template-columns:1fr}.ai-settings-head h2{font-size:24px}}
+
+/* Typography v2 */
+.ai-settings-head p,.ai-section-title p{font-size:var(--type-body-sm);line-height:1.6}.ai-engine-summary span{font:600 var(--type-micro)/1.25 'IBM Plex Mono',monospace}.ai-engine-summary small{font-size:var(--type-meta)}.ai-provider-head small{font-size:var(--type-meta);line-height:1.45}.ai-provider-status{font:600 var(--type-micro)/1.2 'IBM Plex Mono',monospace}.ai-settings-field{font-size:var(--type-secondary)}.ai-settings-field input{font:500 var(--type-control)/1.35 'DM Sans',sans-serif}.ai-key-meta{font-size:var(--type-meta)}.ai-provider-error{font-size:var(--type-meta)}.ai-settings-btn{font:700 var(--type-secondary)/1.2 'DM Sans',sans-serif;min-height:40px}.ai-security-note{font-size:var(--type-secondary)}.ai-security-note strong{font-size:var(--type-secondary)}
