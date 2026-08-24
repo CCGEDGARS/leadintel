@@ -67,12 +67,12 @@ test('provider errors are sanitized and never echo upstream bodies or keys',asyn
   });
 });
 
-test('credential verification performs a tiny real generation request',async()=>{
+test('credential verification performs a small real generation request with enough output budget for reasoning models',async()=>{
   let body;
   const fetchImpl=async(_url,options)=>{body=JSON.parse(options.body);return new Response(JSON.stringify({output:[{type:'message',content:[{type:'output_text',text:'OK'}]}]}),{status:200,headers:{'Content-Type':'application/json'}});};
   const result=await verifyProviderCredential({provider:'openai',apiKey:'sk-test',model:'gpt-5.6',fetchImpl});
   assert.equal(result.ok,true);
   assert.equal(result.provider,'openai');
   assert.equal(result.model,'gpt-5.6');
-  assert.ok(Number(body.max_output_tokens)<=16);
+  assert.ok(Number(body.max_output_tokens)>=32&&Number(body.max_output_tokens)<=128);
 });
