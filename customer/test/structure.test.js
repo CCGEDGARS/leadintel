@@ -41,6 +41,18 @@ test('website-only onboarding unlocks sidebar modules and keeps enrichment optio
   assert.doesNotMatch(delivery,/Approve at least one outreach package first/);
 });
 
+test('dynamic Steps 5–7 persist navigation and reopen themselves after reload',()=>{
+  const discovery=read('discovery-ui.js');
+  const outreach=read('outreach-ui.js');
+  const delivery=read('delivery-ui.js');
+  assert.match(discovery,/persistMainStep/);
+  assert.match(discovery,/mainState\(\)\.step===5/);
+  assert.match(outreach,/persistMainStep/);
+  assert.match(outreach,/mainState\(\)\.step===6/);
+  assert.match(delivery,/persistMainStep/);
+  assert.match(delivery,/readJson\(MAIN_STORAGE_KEY\)\.step===7/);
+});
+
 test('profile screen includes review, edit and approval controls',()=>{
   const html=read('index.html');
   assert.match(html,/id="profile-editor"/);
