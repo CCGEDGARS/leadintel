@@ -45,13 +45,13 @@ test('Anthropic adapter uses Messages API and extracts text',async()=>{
   assert.deepEqual(result.usage,{input_tokens:9,output_tokens:4});
 });
 
-test('Gemini adapter uses generateContent with x-goog-api-key and extracts text',async()=>{
+test('Gemini adapter uses current GenerateContent fields and extracts text',async()=>{
   let request;
   const fetchImpl=async(url,options)=>{request={url,options,body:JSON.parse(options.body)};return new Response(JSON.stringify({candidates:[{content:{parts:[{text:'Gemini reply'}]}}],usageMetadata:{promptTokenCount:7,candidatesTokenCount:5}}),{status:200,headers:{'Content-Type':'application/json'}});};
   const result=await generateText({provider:'gemini',apiKey:'gem-test',model:'gemini-3.7-flash',system:'System',prompt:'Prompt',maxOutputTokens:50,fetchImpl});
   assert.equal(request.url,'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent');
   assert.equal(request.options.headers['x-goog-api-key'],'gem-test');
-  assert.equal(request.body.system_instruction.parts[0].text,'System');
+  assert.equal(request.body.systemInstruction.parts[0].text,'System');
   assert.equal(request.body.contents[0].parts[0].text,'Prompt');
   assert.equal(result.text,'Gemini reply');
   assert.deepEqual(result.usage,{input_tokens:7,output_tokens:5});
@@ -69,6 +69,17 @@ test('provider errors expose only safe upstream code and parameter diagnostics',
   });
 });
 
+test('Gemini diagnostics expose safe status instead of provider message text',async()=>{
+  const fetchImpl=async()=>new Response(JSON.stringify({error:{code:400,status:'INVALID_ARGUMENT',message:'Secret Gemini details AIza-do-not-leak'}}),{status:400,headers:{'Content-Type':'application/json'}});
+  await assert.rejects(()=>generateText({provider:'gemini',apiKey:'AIza-do-not-leak',prompt:'x',fetchImpl}),error=>{
+    assert.match(error.message,/Gemini request failed \(400\)/);
+    assert.match(error.message,/INVALID_ARGUMENT/);
+    assert.doesNotMatch(error.message,/AIza-do-not-leak/);
+    assert.doesNotMatch(error.message,/Secret Gemini details/);
+    return true;
+  });
+});
+
 test('OpenAI credential verification matches the official minimal Responses request',async()=>{
   let request;
   const fetchImpl=async(url,options)=>{request={url,options,body:JSON.parse(options.body)};return new Response(JSON.stringify({output:[{type:'message',content:[{type:'output_text',text:'OK'}]}]}),{status:200,headers:{'Content-Type':'application/json'}});};
@@ -78,4 +89,25 @@ test('OpenAI credential verification matches the official minimal Responses requ
   assert.equal(result.model,'gpt-5.6');
   assert.equal(request.url,'https://api.openai.com/v1/responses');
   assert.deepEqual(request.body,{model:'gpt-5.6',input:'Reply with exactly OK.'});
+});
+
+test('Anthropic credential verification matches the current Messages contract',async()=>{
+  let request;
+  const fetchImpl=async(url,options)=>{request={url,options,body:JSON.parse(options.body)};return new Response(JSON.stringify({content:[{type:'text',text:'OK'}]}),{status:200,headers:{'Content-Type':'application/json'}});};
+  const result=await verifyProviderCredential({provider:'anthropic',apiKey:'sk-ant-test',model:'claude-sonnet-4-6',fetchImpl});
+  assert.equal(result.ok,true);
+  assert.equal(request.url,'https://api.anthropic.com/v1/messages');
+  assert.equal(request.options.headers['x-api-key'],'sk-ant-test');
+  assert.equal(request.options.headers['anthropic-version'],'2023-06-01');
+  assert.deepEqual(request.body,{model:'claude-sonnet-4-6',max_tokens:64,messages:[{role:'user',content:'Reply with exactly OK.'}]});
+});
+
+test('Gemini credential verification uses a minimal GenerateContent request without an output cap',async()=>{
+  let request;
+  const fetchImpl=async(url,options)=>{request={url,options,body:JSON.parse(options.body)};return new Response(JSON.stringify({candidates:[{content:{parts:[{text:'OK'}]}}]}),{status:200,headers:{'Content-Type':'application/json'}});};
+  const result=await verifyProviderCredential({provider:'gemini',apiKey:'AIza-test',model:'gemini-3.7-flash',fetchImpl});
+  assert.equal(result.ok,true);
+  assert.equal(request.url,'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent');
+  assert.equal(request.options.headers['x-goog-api-key'],'AIza-test');
+  assert.deepEqual(request.body,{contents:[{role:'user',parts:[{text:'Reply with exactly OK.'}]}]});
 });
