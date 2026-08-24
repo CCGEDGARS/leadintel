@@ -5,6 +5,8 @@ const DISCOVERY_META_KEY="leadintel_customer_v2_discovery_meta";
 const INTELLIGENCE_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
 const MAX_DOSSIER_SEARCH_QUERIES=2;
 const MAX_DOSSIER_RESULTS_PER_QUERY=5;
+const ASSET_VERSION="20260824-premium";
+const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const q=id=>document.getElementById(id);
 let outreach=loadOutreach();
 
@@ -33,11 +35,11 @@ function updatePipelineStage(domain,targetStage){
 }
 
 function injectOutreachUI(){
-  if(!document.querySelector('link[href="outreach.css"]')){const link=document.createElement("link");link.rel="stylesheet";link.href="outreach.css";document.head.appendChild(link);}
+  if(!document.querySelector('link[data-leadintel-asset="outreach-css"]')){const link=document.createElement("link");link.rel="stylesheet";link.href=asset("outreach.css");link.dataset.leadintelAsset="outreach-css";document.head.appendChild(link);}
   const steps=document.querySelector(".steps");
-  if(steps&&!steps.querySelector('[data-step-marker="6"]'))steps.insertAdjacentHTML("beforeend",'<li data-step-marker="6"><span>06</span><div><strong>Content & Outreach Studio</strong><small>Research, content, scripts</small></div></li>');
+  if(steps&&!steps.querySelector('[data-step-marker="6"]'))steps.insertAdjacentHTML("beforeend",'<li data-step-marker="6"><span>06</span><div><strong>Content & Scripts</strong><small>Research, content, scripts</small></div></li>');
   const pipelinePanel=document.querySelector("#step-5 .pipeline-panel");
-  if(pipelinePanel&&!q("continue-to-outreach"))pipelinePanel.insertAdjacentHTML("afterend",'<div class="outreach-entry"><div><span class="eyebrow">Next step</span><strong>Turn saved opportunities into evidence-backed conversations.</strong></div><button class="primary-btn" id="continue-to-outreach" type="button">Open Content & Outreach Studio →</button></div>');
+  if(pipelinePanel&&!q("continue-to-outreach"))pipelinePanel.insertAdjacentHTML("afterend",'<div class="outreach-entry"><div><span class="eyebrow">Next step</span><strong>Turn a saved opportunity into an evidence-backed conversation.</strong></div><button class="primary-btn" id="continue-to-outreach" type="button">Open Content & Scripts →</button></div>');
   const content=document.querySelector("main.content");
   if(content&&!q("step-6"))content.insertAdjacentHTML("beforeend",`<section class="step-view" id="step-6" data-step="6">
     <div class="profile-header outreach-header"><div><span class="eyebrow">Step 6 · Content & Scripts</span><h1>Turn intelligence into conversations that earn replies.</h1><p>The Content & Outreach Studio combines company research with practical sales execution. Build the evidence dossier, choose the buyer, then create and edit the email, LinkedIn message, call opener, follow-up and objection response. Nothing is sent automatically.</p></div><div class="profile-header-actions"><span class="profile-status" id="outreach-status">Ready</span><button class="secondary-btn small" id="back-to-discovery" type="button">← Discovery</button></div></div>
@@ -99,8 +101,8 @@ async function copyField(type){
   try{await navigator.clipboard.writeText(values[type]||"");toast(`${labels[type]||"Script"} copied`);}catch{toast("Copy was blocked by the browser");}
 }
 
-function renderSelector(){const list=pipeline();const select=q("outreach-company-select");if(!select)return;select.innerHTML=list.length?list.map(item=>`<option value="${esc(item.domain)}" ${item.domain===outreach.selectedDomain?"selected":""}>${esc(item.company)} · ${esc(item.stage)} · ${item.score?.total||0}/100</option>`).join(""):'<option value="">No saved companies yet</option>';const gate=q("continue-to-outreach");if(gate){gate.disabled=false;gate.textContent="Open Content & Outreach Studio →";}q("build-opportunity-dossier").disabled=!list.length;}
-function renderDossier(){const item=currentItem();const workspace=q("dossier-workspace");if(!workspace)return;if(!item?.dossier){workspace.hidden=true;q("dossier-research-status").textContent=item?.researchStatus==="running"?"Researching official and public sources…":pipeline().length?"Choose a saved company and build its dossier.":"No saved company yet. This module is available; use Discovery to create a pipeline opportunity when ready.";q("outreach-status").textContent=pipeline().length?"Ready":"Waiting for opportunity";return;}workspace.hidden=false;const d=item.dossier;q("dossier-research-status").textContent=item.researchStatus==="partial"?`Dossier built · ${d.evidence.length} sources · some research unavailable`:item.researchStatus==="error"?"Dossier built conservatively from existing evidence; deep research was unavailable.":`Dossier ready · ${d.evidence.length} evidence sources`;
+function renderSelector(){const list=pipeline();const select=q("outreach-company-select");if(!select)return;select.innerHTML=list.length?list.map(item=>`<option value="${esc(item.domain)}" ${item.domain===outreach.selectedDomain?"selected":""}>${esc(item.company)} · ${esc(item.stage)} · ${item.score?.total||0}/100</option>`).join(""):'<option value="">No saved companies yet</option>';const gate=q("continue-to-outreach");if(gate){gate.disabled=!list.length;gate.textContent=list.length?"Open Content & Scripts →":"Save an opportunity first";}q("build-opportunity-dossier").disabled=!list.length;}
+function renderDossier(){const item=currentItem();const workspace=q("dossier-workspace");if(!workspace)return;if(!item?.dossier){workspace.hidden=true;q("dossier-research-status").textContent=item?.researchStatus==="running"?"Researching official and public sources…":pipeline().length?"Choose a saved company and build its dossier.":"No saved company yet. Use Discovery to create a pipeline opportunity when ready.";q("outreach-status").textContent=pipeline().length?"Ready":"Waiting for opportunity";return;}workspace.hidden=false;const d=item.dossier;q("dossier-research-status").textContent=item.researchStatus==="partial"?`Dossier built · ${d.evidence.length} sources · some research unavailable`:item.researchStatus==="error"?"Dossier built conservatively from existing evidence; deep research was unavailable.":`Dossier ready · ${d.evidence.length} evidence sources`;
   q("dossier-why-now").textContent=d.whyNow;q("dossier-offer").textContent=d.recommendedOffer||"Not yet defined";q("dossier-confidence").textContent=`Discovery confidence: ${d.confidence||"Low"}`;
   q("dossier-buyers").innerHTML=d.buyerRoles?.length?d.buyerRoles.map(role=>`<span>${esc(role)}</span>`).join(""):'<span>Not yet defined</span>';
   q("dossier-evidence").innerHTML=d.evidence?.length?d.evidence.map(e=>`<a href="${esc(e.url)}" target="_blank" rel="noopener"><span class="evidence-type ${esc(e.sourceType).toLowerCase()}">${esc(e.sourceType)}</span><strong>${esc(e.title||e.url)}</strong><small>${esc(e.description||e.text).slice(0,230)}</small>${e.date?`<em>${esc(e.date)}</em>`:""}</a>`).join(""):'<div class="market-empty">No additional evidence was available. LeadIntel did not invent replacement facts.</div>';
@@ -118,8 +120,8 @@ function bindOutreach(){
 }
 function loadDeliveryModules(){
   if(document.querySelector('script[data-delivery-engine]'))return;
-  const engine=document.createElement("script");engine.src="delivery-engine.js";engine.dataset.deliveryEngine="true";
-  engine.addEventListener("load",()=>{if(document.querySelector('script[data-delivery-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src="delivery-ui.js";ui.dataset.deliveryUi="true";document.body.appendChild(ui);});
+  const engine=document.createElement("script");engine.src=asset("delivery-engine.js");engine.dataset.deliveryEngine="true";
+  engine.addEventListener("load",()=>{if(document.querySelector('script[data-delivery-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src=asset("delivery-ui.js");ui.dataset.deliveryUi="true";document.body.appendChild(ui);});
   document.body.appendChild(engine);
 }
 function initOutreach(){injectOutreachUI();bindOutreach();renderAll();if(mainState().step===6)showOutreachStep();loadDeliveryModules();}
