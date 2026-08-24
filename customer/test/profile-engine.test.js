@@ -28,6 +28,15 @@ test('normalizes URLs and adds https when missing', () => {
   assert.equal(engine.normalizeUrl('javascript:alert(1)'), '');
 });
 
+test('website alone unlocks every customer module after Step 1', () => {
+  const websiteOnly = {website: 'example.com', answers: {}};
+  assert.equal(engine.canBuildProfile(websiteOnly), true);
+  for(let step=1; step<=7; step++) assert.equal(engine.canAccessModule(websiteOnly, step), true);
+  const empty = {website: '', answers: {}};
+  assert.equal(engine.canAccessModule(empty, 1), true);
+  for(let step=2; step<=7; step++) assert.equal(engine.canAccessModule(empty, step), false);
+});
+
 test('calculates a high completeness score when strategic intake is complete', () => {
   const score = engine.calculateCompleteness({ website: 'https://example.com', additionalLinks: ['https://example.com/cases'], documents: [{name:'catalog.pdf', text:'catalog'}], answers });
   assert.equal(score, 100);
