@@ -1,3 +1,5 @@
+import './ai-settings.js?v=20260824-ai-providers';
+
 const PROCESS_STORAGE_KEY="leadintel_customer_v2_state";
 const processMap=document.getElementById("commercial-process-map");
 
