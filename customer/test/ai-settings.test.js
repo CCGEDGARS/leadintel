@@ -50,3 +50,16 @@ test('AI settings CSS is cache-busted and controls have individual borders and f
   assert.match(css,/:focus-visible/);
   assert.match(css,/\.ai-settings-btn:disabled/);
 });
+
+test('provider save failures stay visible inside the provider card and do not clear the transient key',()=>{
+  assert.match(js,/providerErrors/,'provider-specific errors must be tracked in transient memory');
+  assert.match(js,/ai-provider-error/,'provider cards must render an inline error area');
+  assert.match(js,/providerErrors\[provider\]=error\.message/,'save failures must populate the inline provider error');
+  const saveStart=js.indexOf('async function saveProvider(provider)');
+  const activateStart=js.indexOf('async function activateProvider(provider)');
+  assert.ok(saveStart>=0&&activateStart>saveStart,'saveProvider function must be present before activateProvider');
+  const saveFlow=js.slice(saveStart,activateStart);
+  assert.doesNotMatch(saveFlow,/busy=provider;render\(\)/,'saving must not re-render the card before the request finishes');
+  assert.match(saveFlow,/api\('\/api\/integrations\/ai\/provider'/,'save flow must call the provider endpoint');
+  assert.match(css,/\.ai-provider-error[\s\S]*color:\s*var\(--ai-danger\)/i,'inline provider errors must be visibly styled');
+});

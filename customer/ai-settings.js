@@ -7,6 +7,7 @@ const PROVIDERS=Object.freeze([
 ]);
 let status={role:'',providers:[]};
 let busy='';
+const providerErrors=Object.create(null);
 
 function bridge(){return window.LeadIntelServerBridge||null;}
 function workspace(){return bridge()?.workspace||null;}
@@ -62,12 +63,13 @@ function render(){
 function providerCard(config,current){
   const configured=Boolean(current?.configured);const active=Boolean(current?.active);const owner=isOwner();const disabled=!signedIn()||!owner;
   const stateLabel=active?'Active':configured?'Verified':'Not connected';
-  const model=current?.model||config.model;
+  const model=current?.model||config.model;const providerError=providerErrors[config.provider]||'';
   return `<article class="ai-provider-card ${active?'active':''}" data-provider-card="${config.provider}">
     <div class="ai-provider-head"><div><span class="ai-provider-name">${esc(config.name)}</span><small>${esc(config.hint)} · Your API key · billed by provider</small></div><span class="ai-provider-status ${active?'active':configured?'verified':''}">${stateLabel}</span></div>
     <label class="ai-settings-field">API key<input data-ai-key="${config.provider}" type="password" autocomplete="off" spellcheck="false" placeholder="${esc(config.placeholder)}" ${disabled?'disabled':''}></label>
     <label class="ai-settings-field">Model<input data-ai-model="${config.provider}" type="text" value="${esc(model)}" autocomplete="off" ${disabled?'disabled':''}></label>
     <div class="ai-key-meta">${configured?`Saved key ${esc(current.key_hint||'')} · verified ${esc(formatDate(current.verified_at))}`:'No credential stored yet.'}</div>
+    <div class="ai-provider-error" data-ai-error="${config.provider}" role="alert" ${providerError?'':'hidden'}>${esc(providerError)}</div>
     <div class="ai-provider-actions">
       <button class="ai-settings-btn primary" data-ai-action="save" data-provider="${config.provider}" type="button" ${disabled||busy===config.provider?'disabled':''}>${busy===config.provider?'Testing…':'Test & save'}</button>
       <button class="ai-settings-btn" data-ai-action="activate" data-provider="${config.provider}" type="button" ${disabled||!configured||active||busy===config.provider?'disabled':''}>${active?'Active ✓':'Use this provider'}</button>
@@ -77,6 +79,13 @@ function providerCard(config,current){
 }
 function formatDate(value){
   if(!value)return '—';const date=new Date(value);if(Number.isNaN(date.getTime()))return '—';return new Intl.DateTimeFormat(undefined,{dateStyle:'medium'}).format(date);
+}
+function setProviderSaveBusy(provider,isBusy){
+  const button=document.querySelector(`[data-ai-action="save"][data-provider="${provider}"]`);if(!button)return;
+  button.disabled=isBusy;button.textContent=isBusy?'Testing…':'Test & save';
+}
+function clearProviderError(provider){
+  providerErrors[provider]='';const node=document.querySelector(`[data-ai-error="${provider}"]`);if(node){node.textContent='';node.hidden=true;}
 }
 function openDrawer(){
   injectUi();const drawer=document.getElementById('ai-settings-drawer'),backdrop=document.getElementById('ai-settings-backdrop');
@@ -101,14 +110,18 @@ async function handleProviderAction(event){
 async function saveProvider(provider){
   const input=document.querySelector(`[data-ai-key="${provider}"]`);const modelInput=document.querySelector(`[data-ai-model="${provider}"]`);
   const apiKey=String(input?.value||'').trim();const model=String(modelInput?.value||'').trim();if(!apiKey){toast('Enter your provider API key first');input?.focus();return;}
-  busy=provider;render();
+  clearProviderError(provider);busy=provider;setProviderSaveBusy(provider,true);
   try{
     const {response,payload}=await api('/api/integrations/ai/provider',{method:'PUT',body:JSON.stringify({provider,api_key:apiKey,model,make_active:true})});
     if(!response.ok)throw new Error(payload.error||'Provider verification failed');
-    const refreshedInput=document.querySelector(`[data-ai-key="${provider}"]`);if(refreshedInput)refreshedInput.value='';
+    input.value='';providerErrors[provider]='';busy='';
     toast(`${payload.provider==='gemini'?'Google Gemini':payload.provider==='anthropic'?'Anthropic':'OpenAI'} verified and active`);
     await refreshStatus();window.dispatchEvent(new CustomEvent('leadintel:ai-provider-changed',{detail:{provider:payload.provider,model:payload.model}}));
-  }catch(error){toast(error.message);}finally{busy='';render();}
+  }catch(error){
+    providerErrors[provider]=error.message;
+    const errorNode=document.querySelector(`[data-ai-error="${provider}"]`);if(errorNode){errorNode.textContent=error.message;errorNode.hidden=false;}
+    toast(error.message);
+  }finally{if(busy===provider)busy='';setProviderSaveBusy(provider,false);}
 }
 async function activateProvider(provider){
   busy=provider;render();try{

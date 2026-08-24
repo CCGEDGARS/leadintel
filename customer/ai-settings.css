@@ -29,6 +29,8 @@ body.ai-settings-opened{overflow:hidden}
 .ai-settings-field input:focus{border-color:#70a797;box-shadow:0 0 0 3px rgba(12,106,86,.08)}
 .ai-settings-field input:disabled{background:#f3f5f2;color:#98a19d}
 .ai-key-meta{font-size:11px;margin-top:9px}
+.ai-provider-error{margin-top:10px;padding:10px 12px;border:1px solid #e2c1bd;border-radius:9px;background:#fff5f3;color:var(--ai-danger);font-size:11px;line-height:1.45;font-weight:600}
+.ai-provider-error[hidden]{display:none!important}
 .ai-provider-actions{display:grid;grid-template-columns:1.25fr 1.25fr .9fr;gap:8px;margin-top:15px}
 .ai-settings-btn{appearance:none;min-height:38px;padding:8px 11px;border:1px solid #bfc9c4;border-radius:9px;background:#fff;color:#263b33;font:700 11px/1.15 'DM Sans',sans-serif;cursor:pointer;transition:border-color .15s ease,background .15s ease,box-shadow .15s ease,transform .15s ease}
 .ai-settings-btn:hover:not(:disabled){border-color:#779b8f;background:#f4f8f5;transform:translateY(-1px)}
