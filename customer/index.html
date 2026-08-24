@@ -42,12 +42,25 @@
           <div><strong>Context completeness</strong><small id="completeness-caption">Add your website to begin.</small></div>
         </div>
         <div class="future-stack">
-          <span>Next module</span>
-          <p>Company Discovery & CRM</p><p>Decision Makers</p><p>Outreach & Learning Loop</p>
+          <span>Commercial outcome</span>
+          <p>Discover companies</p><p>Create relevant conversations</p><p>Send, learn and improve</p>
         </div>
       </aside>
 
       <main class="content">
+        <nav class="process-map" id="commercial-process-map" aria-label="LeadIntel commercial process">
+          <div class="process-map-head"><span class="eyebrow">Commercial journey</span><strong>From website to revenue learning</strong><small>Click any available stage.</small></div>
+          <div class="process-track">
+            <button class="process-stage active" type="button" data-process-step="1"><span>01</span><strong>Website</strong><small>Source</small></button>
+            <button class="process-stage" type="button" data-process-step="2"><span>02</span><strong>Context</strong><small>Optional</small></button>
+            <button class="process-stage" type="button" data-process-step="3"><span>03</span><strong>Intelligence</strong><small>Profile</small></button>
+            <button class="process-stage" type="button" data-process-step="4"><span>04</span><strong>Strategy</strong><small>ICP + signals</small></button>
+            <button class="process-stage" type="button" data-process-step="5"><span>05</span><strong>Discovery</strong><small>Companies</small></button>
+            <button class="process-stage" type="button" data-process-step="6"><span>06</span><strong>Content & Scripts</strong><small>Outreach</small></button>
+            <button class="process-stage" type="button" data-process-step="7"><span>07</span><strong>Delivery & Learning</strong><small>Revenue loop</small></button>
+          </div>
+        </nav>
+
         <section class="step-view active" id="step-1" data-step="1">
           <div class="hero-copy">
             <span class="eyebrow">Step 1 · Company sources</span>
@@ -197,6 +210,7 @@
   <script src="market-engine.js"></script>
   <script src="discovery-engine.js"></script>
   <script type="module" src="app.js"></script>
+  <script type="module" src="process-map.js"></script>
   <script type="module" src="discovery-ui.js"></script>
 </body>
 </html>
