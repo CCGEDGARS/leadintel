@@ -2,7 +2,7 @@ export const AI_PROVIDERS=Object.freeze(['openai','anthropic','gemini']);
 
 const DEFAULT_MODELS=Object.freeze({
   openai:'gpt-5.6',
-  anthropic:'claude-sonnet-4-20250514',
+  anthropic:'claude-sonnet-4-6',
   gemini:'gemini-3.7-flash'
 });
 const PROVIDER_LABELS=Object.freeze({openai:'OpenAI',anthropic:'Anthropic',gemini:'Gemini'});
