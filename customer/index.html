@@ -29,12 +29,12 @@
         <div class="progress-head">
           <span class="eyebrow">Customer workspace</span>
           <h2>Build your intelligence profile</h2>
-          <p>Give LeadIntel the context it needs to find real commercial opportunities—not generic leads.</p>
+          <p>Your website is enough to start. Add context only where it improves the commercial picture.</p>
         </div>
         <ol class="steps">
           <li data-step-marker="1" class="active"><span>01</span><div><strong>Company sources</strong><small>Website, links, documents</small></div></li>
-          <li data-step-marker="2"><span>02</span><div><strong>Strategic intake</strong><small>10 core questions</small></div></li>
-          <li data-step-marker="3"><span>03</span><div><strong>Intelligence profile</strong><small>Review, edit, approve</small></div></li>
+          <li data-step-marker="2"><span>02</span><div><strong>Strategic intake</strong><small>Optional enrichment</small></div></li>
+          <li data-step-marker="3"><span>03</span><div><strong>Intelligence profile</strong><small>Review, edit, optional approval</small></div></li>
           <li data-step-marker="4"><span>04</span><div><strong>Market strategy</strong><small>ICPs, signals, opportunities</small></div></li>
         </ol>
         <div class="progress-metric">
@@ -52,7 +52,7 @@
           <div class="hero-copy">
             <span class="eyebrow">Step 1 · Company sources</span>
             <h1>Tell LeadIntel about your business.</h1>
-            <p>Start with your main website. Add supporting pages and company PDFs so the system can build a grounded commercial picture before it searches the market.</p>
+            <p>Your main website is the only required input. Supporting pages and PDFs are optional evidence that can improve precision.</p>
           </div>
 
           <div class="panel source-panel">
@@ -80,14 +80,14 @@
             <p class="privacy-note">PDF text is extracted locally in the browser and saved in this browser for the current workspace. Original file bytes are not uploaded by this onboarding screen.</p>
           </div>
 
-          <div class="step-actions"><span id="step1-error" class="inline-error" role="alert"></span><button class="primary-btn" type="button" id="to-questionnaire">Continue to strategic questions <span>→</span></button></div>
+          <div class="step-actions"><span id="step1-error" class="inline-error" role="alert"></span><button class="primary-btn" type="button" id="to-questionnaire">Continue to optional context <span>→</span></button></div>
         </section>
 
         <section class="step-view" id="step-2" data-step="2">
           <div class="hero-copy compact">
-            <span class="eyebrow">Step 2 · Strategic intake</span>
-            <h1>Give LeadIntel the context your website cannot.</h1>
-            <p>These ten answers control what the system prioritizes, what it ignores, and which commercial signals matter most.</p>
+            <span class="eyebrow">Step 2 · Optional enrichment</span>
+            <h1>Give LeadIntel context your website cannot.</h1>
+            <p>These ten questions are optional. LeadIntel can work from your website alone; answer any that improve targeting, or skip these questions and open any module from the sidebar.</p>
           </div>
 
           <div class="question-grid">
@@ -103,7 +103,7 @@
             <article class="question-card"><span>10</span><label>What result would make LeadIntel successful for you in the next 6–12 months?<small>Be concrete: market entry, distributors, pipeline value, qualified opportunities, new logos, capacity utilization or revenue.</small></label><textarea data-question="success_outcome" rows="4" placeholder="Build a €2M qualified pipeline in Sweden and Finland within 12 months"></textarea></article>
           </div>
 
-          <div class="step-actions split"><button class="secondary-btn" type="button" id="back-to-sources">← Back</button><span id="step2-error" class="inline-error" role="alert"></span><button class="primary-btn" type="button" id="analyze-company">Analyze my business <span>✦</span></button></div>
+          <div class="step-actions split"><button class="secondary-btn" type="button" id="back-to-sources">← Back</button><span id="step2-error" class="inline-error" role="alert"></span><button class="primary-btn" type="button" id="analyze-company">Build / refresh intelligence profile <span>✦</span></button></div>
         </section>
 
         <section class="step-view" id="step-3" data-step="3">
@@ -139,7 +139,7 @@
             </section>
 
             <div class="approval-card" id="approval-card">
-              <div><span class="eyebrow">Approval gate</span><h3>Approve before LeadIntel starts making market decisions.</h3><p>Approval freezes this profile as the current source of truth. The Market Strategy Engine will reference this approved version.</p></div>
+              <div><span class="eyebrow">Optional review</span><h3>Approve this profile when you want to lock the current interpretation.</h3><p>Approval marks this version as your reviewed source of truth. You can continue to Market Strategy without approving it first.</p></div>
               <button class="primary-btn" id="approve-profile-bottom" type="button">Approve Company Intelligence Profile</button>
             </div>
           </div>
@@ -147,18 +147,18 @@
 
         <section class="step-view" id="step-4" data-step="4">
           <div class="profile-header strategy-header">
-            <div><span class="eyebrow">Step 4 · Market Strategy</span><h1>Turn company context into market decisions.</h1><p>LeadIntel now converts the approved profile into ICPs, editable buying signals and evidence-backed market opportunity hypotheses.</p></div>
+            <div><span class="eyebrow">Step 4 · Market Strategy</span><h1>Turn company context into market decisions.</h1><p>LeadIntel converts the current intelligence profile into ICPs, editable buying signals and evidence-backed market opportunity hypotheses.</p></div>
             <div class="profile-header-actions"><span class="profile-status" id="strategy-status">Draft</span><button class="secondary-btn small" id="back-to-profile" type="button">← Profile</button></div>
           </div>
 
           <div class="strategy-banner">
-            <div><span>Approved company</span><strong id="strategy-company-name">Company</strong></div>
+            <div><span>Company context</span><strong id="strategy-company-name">Company</strong></div>
             <div><span>Priority markets</span><strong id="strategy-market-summary">—</strong></div>
             <div><span>Active signals</span><strong id="strategy-signal-count">0</strong></div>
           </div>
 
           <section class="panel strategy-panel">
-            <div class="section-title"><span class="eyebrow">ICP Engine</span><h3>Who LeadIntel should prioritize</h3><p>Generated from the approved profile. Activate the ICPs you want Discovery to use and adjust the details where needed.</p></div>
+            <div class="section-title"><span class="eyebrow">ICP Engine</span><h3>Who LeadIntel should prioritize</h3><p>Generated from the current profile. Activate the ICPs you want Discovery to use and adjust the details where needed.</p></div>
             <div class="icp-list" id="icp-list"></div>
           </section>
 
@@ -185,7 +185,7 @@
           </section>
 
           <div class="approval-card strategy-activation" id="strategy-activation-card">
-            <div><span class="eyebrow">Strategy activation</span><h3>Make this the operating strategy for Discovery.</h3><p>Activation saves the active ICPs, signal weights and selected market opportunities as the configuration the next LeadIntel module will consume.</p></div>
+            <div><span class="eyebrow">Strategy activation</span><h3>Make this the operating strategy for Discovery.</h3><p>Activation saves the active ICPs, signal weights and selected market opportunities as the configuration Discovery should prioritize. You can still open Discovery before activation.</p></div>
             <button class="primary-btn" id="activate-market-strategy" type="button">Activate Market Strategy</button>
           </div>
         </section>
