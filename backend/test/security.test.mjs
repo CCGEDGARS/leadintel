@@ -14,6 +14,7 @@ test("allows only the configured application origin",()=>{
   assert.equal(headers["Access-Control-Allow-Credentials"],"true");
   assert.match(headers["Access-Control-Allow-Headers"],/Idempotency-Key/);
   assert.match(headers["Access-Control-Allow-Methods"],/PATCH/);
+  assert.match(headers["Access-Control-Allow-Methods"],/PUT/);
 });
 
 test("constant-time comparison returns the correct result",()=>{
