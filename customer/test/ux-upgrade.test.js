@@ -7,14 +7,17 @@ function read(name){return fs.readFileSync(path.join(__dirname,'..',name),'utf8'
 
 test('customer workspace exposes a clickable seven-stage commercial process map',()=>{
   const html=read('index.html');
-  const app=read('app.js');
+  const processMap=read('process-map.js');
   assert.match(html,/id="commercial-process-map"/);
   for(let step=1;step<=7;step++)assert.match(html,new RegExp(`data-process-step="${step}"`));
   assert.match(html,/Website/);
   assert.match(html,/Content & Scripts/);
   assert.match(html,/Delivery & Learning/);
-  assert.match(app,/data-process-step/);
-  assert.match(app,/openModule/);
+  assert.match(html,/src="process-map\.js"/);
+  assert.match(processMap,/data-process-step/);
+  assert.match(processMap,/data-step-marker/);
+  assert.match(processMap,/dispatchEvent/);
+  assert.match(processMap,/leadintel:module-opened/);
 });
 
 test('Step 6 is visibly positioned as the Content and Outreach Studio',()=>{
