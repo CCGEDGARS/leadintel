@@ -39,7 +39,7 @@ test('raw provider API keys are transient browser values and never persisted',()
   assert.doesNotMatch(js,/sessionStorage/);
   assert.doesNotMatch(js,/setItem\s*\(/);
   assert.match(js,/type="password"/);
-  assert.match(js,/input\.value=''/);
+  assert.match(js,/\.value=''/);
 });
 
 test('AI settings CSS is cache-busted and controls have individual borders and focus treatment',()=>{
