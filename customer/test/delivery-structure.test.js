@@ -22,12 +22,13 @@ test('delivery UI injects Step 7 controlled Gmail compose and CRM learning contr
   ]) assert.match(ui,pattern);
 });
 
-test('delivery UI is explicit that Gmail sync is manual and does not call Gmail APIs or auto-send',()=>{
+test('delivery UI keeps sending explicit while production Gmail status is loaded by the server bridge',()=>{
   const ui=read('delivery-ui.js');
   assert.match(ui,/Gmail Compose/);
   assert.match(ui,/Manual confirmation/);
-  assert.match(ui,/automatic Gmail sync is not connected/i);
+  assert.match(ui,/Production Gmail status loads here/i);
   assert.match(ui,/buildGmailComposeUrl/);
+  assert.match(ui,/never auto-sends/i);
   assert.doesNotMatch(ui,/gmail\.googleapis\.com|users\/messages\/send|access_token|sendEmail\s*\(/i);
 });
 
