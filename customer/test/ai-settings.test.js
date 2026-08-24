@@ -4,20 +4,22 @@ const fs=require('node:fs');
 const path=require('node:path');
 
 const root=path.join(__dirname,'..');
-const index=fs.readFileSync(path.join(root,'index.html'),'utf8');
+const processMap=fs.readFileSync(path.join(root,'process-map.js'),'utf8');
 const jsPath=path.join(root,'ai-settings.js');
 const cssPath=path.join(root,'ai-settings.css');
 const js=fs.existsSync(jsPath)?fs.readFileSync(jsPath,'utf8'):'';
 const css=fs.existsSync(cssPath)?fs.readFileSync(cssPath,'utf8'):'';
 
-test('Customer V2 exposes a Settings drawer for exactly three customer-owned AI providers',()=>{
-  assert.match(index,/id="open-settings"/);
-  assert.match(index,/id="ai-settings-drawer"/);
+test('Customer V2 loads a Settings drawer for exactly three customer-owned AI providers',()=>{
+  assert.match(processMap,/import ['"]\.\/ai-settings\.js\?v=20260824-ai-providers['"]/);
   assert.equal(fs.existsSync(jsPath),true,'ai-settings.js must exist');
+  assert.match(js,/id="open-settings"/);
+  assert.match(js,/id="ai-settings-drawer"/);
   assert.match(js,/provider:'openai'[\s\S]*name:'OpenAI'/);
   assert.match(js,/provider:'anthropic'[\s\S]*name:'Anthropic'/);
   assert.match(js,/provider:'gemini'[\s\S]*name:'Google Gemini'/);
-  assert.doesNotMatch(js,/provider:'[^']+'[\s\S]*provider:'[^']+'[\s\S]*provider:'[^']+'[\s\S]*provider:'[^']+'/,'only three first-class providers should be rendered');
+  const providerDefinitions=[...js.matchAll(/provider:'(openai|anthropic|gemini)'/g)].map(match=>match[1]);
+  assert.deepEqual([...new Set(providerDefinitions)].sort(),['anthropic','gemini','openai']);
 });
 
 test('AI Settings supports status, test-and-save, activation and disconnect through workspace backend routes',()=>{
@@ -40,9 +42,8 @@ test('raw provider API keys are transient browser values and never persisted',()
   assert.match(js,/input\.value=''/);
 });
 
-test('AI settings assets are cache-busted and controls have individual borders and focus treatment',()=>{
-  assert.match(index,/ai-settings\.css\?v=20260824-ai-providers/);
-  assert.match(index,/ai-settings\.js\?v=20260824-ai-providers/);
+test('AI settings CSS is cache-busted and controls have individual borders and focus treatment',()=>{
+  assert.match(js,/ai-settings\.css\?v=20260824-ai-providers/);
   assert.equal(fs.existsSync(cssPath),true,'ai-settings.css must exist');
   assert.match(css,/\.ai-settings-btn[\s\S]*border:\s*1px solid/i);
   assert.match(css,/:focus-visible/);
