@@ -38,3 +38,10 @@ test('Market, scripts, delivery and settings share the same readable scale',()=>
   assert.match(settings,/\.ai-settings-field\{[^}]*font-size:var\(--type-secondary\)/s);
   assert.match(settings,/\.ai-settings-btn\{[^}]*font:[^;}]*var\(--type-secondary\)/s);
 });
+
+test('typography v2 assets are cache-busted across static and dynamic customer modules',()=>{
+  const version='20260824-typography-v2';
+  const html=read('index.html');
+  for(const asset of ['styles.css','market.css','premium.css','app.js','process-map.js','discovery-ui.js']) assert.match(html,new RegExp(`${asset.replace('.','\\.')}\\?v=${version}`));
+  for(const file of ['discovery-ui.js','outreach-ui.js','delivery-ui.js','server-bridge.js','ai-settings.js']) assert.match(read(file),new RegExp(version));
+});
