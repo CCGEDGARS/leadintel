@@ -34,6 +34,12 @@
       return url.href;
     }catch{return "";}
   }
+  function canBuildProfile(input={}){return Boolean(normalizeUrl(input.website));}
+  function canAccessModule(input={},step=1){
+    const moduleNumber=Number(step)||1;
+    if(moduleNumber===1)return true;
+    return moduleNumber>=2&&moduleNumber<=7&&canBuildProfile(input);
+  }
   function unique(list){return [...new Set((list||[]).map(clean).filter(Boolean))];}
   function splitList(value){return unique(clean(value).split(/\n|;|,|\||•/).map(clean));}
   function truncate(value,max=1200){const text=clean(value);return text.length>max?`${text.slice(0,max-1)}…`:text;}
@@ -148,5 +154,5 @@
     };
   }
 
-  return {QUESTION_IDS,SIGNAL_LIBRARY,normalizeUrl,calculateCompleteness,buildCompanyIntelligenceProfile,normalizeSavedState,splitList};
+  return {QUESTION_IDS,SIGNAL_LIBRARY,normalizeUrl,canBuildProfile,canAccessModule,calculateCompleteness,buildCompanyIntelligenceProfile,normalizeSavedState,splitList};
 });
