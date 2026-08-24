@@ -24,7 +24,7 @@ function loadState(){
   try{
     const raw=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");
     const base=LeadIntelProfile.normalizeSavedState(raw);
-    base.step=[1,2,3,4].includes(Number(raw.step))?Number(raw.step):base.step;
+    base.step=[1,2,3,4,5,6,7].includes(Number(raw.step))?Number(raw.step):base.step;
     base.market=LeadIntelMarket.normalizeMarketState(raw.market||{});
     return base;
   }catch{return defaultState();}
@@ -37,6 +37,11 @@ function updateNavigationAvailability(){
     const step=Number(el.dataset.stepMarker);const available=LeadIntelProfile.canAccessModule(state,step);
     el.classList.toggle("available",available);el.setAttribute("aria-disabled",available?"false":"true");
   });
+}
+function observeNavigation(){
+  const steps=document.querySelector(".steps");if(!steps||typeof MutationObserver==="undefined")return;
+  const observer=new MutationObserver(()=>updateNavigationAvailability());
+  observer.observe(steps,{childList:true});
 }
 function setStep(step){
   state.step=step;saveState();
@@ -295,7 +300,7 @@ function bind(){
   $("reset-workspace").addEventListener("click",resetWorkspace);
 }
 function init(){
-  syncInputsFromState();bind();updateCompleteness();updateNavigationAvailability();
+  syncInputsFromState();bind();updateCompleteness();updateNavigationAvailability();observeNavigation();
   if(state.profile){$("analysis-state").hidden=true;$("profile-content").hidden=false;renderProfile();ensureMarketStrategySeeded();}
   setStep(state.step||1);
 }
