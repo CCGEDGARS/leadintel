@@ -8,6 +8,11 @@ let discovery=loadDiscovery();
 
 function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
 function mainState(){try{return JSON.parse(localStorage.getItem(MAIN_STORAGE_KEY)||"{}");}catch{return {};}}
+function persistMainStep(step){
+  const marker=document.querySelector(`[data-step-marker="${step}"]`);
+  if(marker&&!marker.classList.contains("active")){marker.dispatchEvent(new MouseEvent("click",{bubbles:true}));return;}
+  const main=mainState();main.step=step;localStorage.setItem(MAIN_STORAGE_KEY,JSON.stringify(main));
+}
 function loadDiscovery(){try{return LeadIntelDiscovery.normalizeDiscoveryState(JSON.parse(localStorage.getItem(DISCOVERY_STORAGE_KEY)||"{}"));}catch{return LeadIntelDiscovery.normalizeDiscoveryState({});}}
 function saveDiscovery(){localStorage.setItem(DISCOVERY_STORAGE_KEY,JSON.stringify(discovery));}
 function moduleReady(){const main=mainState();return Boolean(main?.profile?.website||main?.website);}
@@ -51,12 +56,13 @@ function injectDiscoveryUI(){
 }
 function showDiscoveryStep(){
   if(!moduleReady()){showToast("Add your company website first");return;}
-  syncStrategyFingerprint();
+  persistMainStep(5);syncStrategyFingerprint();
   document.querySelectorAll(".step-view").forEach(el=>el.classList.toggle("active",Number(el.dataset.step)===5));
   document.querySelectorAll("[data-step-marker]").forEach(el=>{const n=Number(el.dataset.stepMarker);el.classList.toggle("active",n===5);el.classList.toggle("complete",n<5);});
   saveMeta({...loadMeta(),visibleStep:5});renderAll();window.scrollTo({top:0,behavior:"smooth"});
 }
 function showStrategyStep(){
+  persistMainStep(4);
   document.querySelectorAll(".step-view").forEach(el=>el.classList.toggle("active",Number(el.dataset.step)===4));
   document.querySelectorAll("[data-step-marker]").forEach(el=>{const n=Number(el.dataset.stepMarker);el.classList.toggle("active",n===4);el.classList.toggle("complete",n<4);});
   saveMeta({...loadMeta(),visibleStep:4});window.scrollTo({top:0,behavior:"smooth"});
@@ -158,7 +164,7 @@ function loadOutreachModules(){
 }
 function initDiscovery(){
   injectDiscoveryUI();bindDiscovery();syncStrategyFingerprint();renderAll();
-  if(loadMeta().visibleStep===5&&moduleReady())showDiscoveryStep();
+  if(mainState().step===5&&moduleReady())showDiscoveryStep();else if(loadMeta().visibleStep===5&&moduleReady())showDiscoveryStep();
   loadOutreachModules();
 }
 initDiscovery();
