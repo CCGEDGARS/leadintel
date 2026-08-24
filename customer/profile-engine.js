@@ -143,7 +143,7 @@
     const answers={}; QUESTION_IDS.forEach(id=>{answers[id]=clean(value.answers?.[id]);});
     const docs=Array.isArray(value.documents)?value.documents.slice(0,5).map(d=>({name:clean(d?.name).slice(0,180),size:Number(d?.size)||0,text:String(d?.text||"").slice(0,25000),status:clean(d?.status)||"ready"})).filter(d=>d.name):[];
     return {
-      step:[1,2,3].includes(Number(value.step))?Number(value.step):1,
+      step:[1,2,3,4,5,6,7].includes(Number(value.step))?Number(value.step):1,
       website:normalizeUrl(value.website),
       additionalLinks:unique((value.additionalLinks||[]).map(normalizeUrl).filter(Boolean)).slice(0,8),
       documents:docs,
