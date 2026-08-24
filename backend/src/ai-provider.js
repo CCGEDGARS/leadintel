@@ -46,7 +46,7 @@ function safeDiagnosticToken(value){
 }
 function sanitizedUpstreamError(provider,status,payload={}){
   const detail=payload?.error&&typeof payload.error==='object'?payload.error:{};
-  const code=safeDiagnosticToken(detail.code||detail.type),param=safeDiagnosticToken(detail.param);
+  const code=safeDiagnosticToken(detail.status||detail.code||detail.type),param=safeDiagnosticToken(detail.param);
   const suffix=[code?`code: ${code}`:'',param?`param: ${param}`:''].filter(Boolean).join(' · ');
   return new Error(`${PROVIDER_LABELS[provider]||'AI provider'} request failed (${Number(status)||502})${suffix?` · ${suffix}`:''}`);
 }
@@ -87,9 +87,20 @@ async function anthropicRequest(options,fetchImpl){
   return {provider:'anthropic',model:options.model,text,usage:usage(payload?.usage?.input_tokens,payload?.usage?.output_tokens)};
 }
 
+async function verifyAnthropicCredential(options,fetchImpl){
+  const response=await fetchImpl('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Accept':'application/json','x-api-key':options.apiKey,'anthropic-version':'2023-06-01'},
+    body:JSON.stringify({model:options.model,max_tokens:64,messages:[{role:'user',content:'Reply with exactly OK.'}]})
+  });
+  const payload=await parseJson(response);if(!response.ok)throw sanitizedUpstreamError('anthropic',response.status,payload);
+  const text=textFromAnthropic(payload);if(!text)throw new Error('Anthropic returned no text');
+  return {provider:'anthropic',model:options.model,text};
+}
+
 async function geminiRequest(options,fetchImpl){
   const body={contents:[{role:'user',parts:[{text:options.prompt}]}],generationConfig:{maxOutputTokens:options.maxOutputTokens}};
-  if(options.system)body.system_instruction={parts:[{text:options.system}]};
+  if(options.system)body.systemInstruction={parts:[{text:options.system}]};
   const response=await fetchImpl(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(options.model)}:generateContent`,{
     method:'POST',
     headers:{'Content-Type':'application/json','Accept':'application/json','x-goog-api-key':options.apiKey},
@@ -98,6 +109,17 @@ async function geminiRequest(options,fetchImpl){
   const payload=await parseJson(response);if(!response.ok)throw sanitizedUpstreamError('gemini',response.status,payload);
   const text=textFromGemini(payload);if(!text)throw new Error('Gemini returned no text');
   return {provider:'gemini',model:options.model,text,usage:usage(payload?.usageMetadata?.promptTokenCount,payload?.usageMetadata?.candidatesTokenCount)};
+}
+
+async function verifyGeminiCredential(options,fetchImpl){
+  const response=await fetchImpl(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(options.model)}:generateContent`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Accept':'application/json','x-goog-api-key':options.apiKey},
+    body:JSON.stringify({contents:[{role:'user',parts:[{text:'Reply with exactly OK.'}]}]})
+  });
+  const payload=await parseJson(response);if(!response.ok)throw sanitizedUpstreamError('gemini',response.status,payload);
+  const text=textFromGemini(payload);if(!text)throw new Error('Gemini returned no text');
+  return {provider:'gemini',model:options.model,text};
 }
 
 export async function generateText({provider,apiKey,model,system='',prompt,maxOutputTokens=1200,fetchImpl=fetch}){
@@ -114,10 +136,9 @@ export async function generateText({provider,apiKey,model,system='',prompt,maxOu
 
 export async function verifyProviderCredential({provider,apiKey,model,fetchImpl=fetch}){
   const options=validatedOptions({provider,apiKey,model,prompt:'Reply with exactly OK.',maxOutputTokens:64});
-  if(options.provider==='openai'){
-    const result=await verifyOpenAiCredential(options,fetchImpl);
-    return {ok:Boolean(result.text),provider:result.provider,model:result.model};
-  }
-  const result=await generateText({provider:options.provider,apiKey:options.apiKey,model:options.model,prompt:'Reply with exactly OK.',maxOutputTokens:64,fetchImpl});
+  let result;
+  if(options.provider==='openai')result=await verifyOpenAiCredential(options,fetchImpl);
+  else if(options.provider==='anthropic')result=await verifyAnthropicCredential(options,fetchImpl);
+  else result=await verifyGeminiCredential(options,fetchImpl);
   return {ok:Boolean(result.text),provider:result.provider,model:result.model};
 }
