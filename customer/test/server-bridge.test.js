@@ -21,3 +21,41 @@ test('server bridge exposes Gmail server actions without browser token storage',
   for(const pathPart of ['gmail/status','gmail/start','gmail/disconnect','gmail/send','gmail/sync'])assert.match(bridge,new RegExp(pathPart.replace('/','\\/')));
   assert.doesNotMatch(bridge,/access_token\s*=|refresh_token\s*=|localStorage\.setItem\([^\n]*token/i);
 });
+
+test('dirty local state survives reload and is retried before reporting synced',()=>{
+  assert.match(bridge,/DIRTY_KEY/);
+  assert.match(bridge,/localStorage\.setItem\(DIRTY_KEY/);
+  assert.match(bridge,/localStorage\.removeItem\(DIRTY_KEY/);
+  assert.match(bridge,/hasDirtyLocalState\(\)/);
+  assert.match(bridge,/if\(hasDirtyLocalState\(\)\).*scheduleSave\(\)/s);
+});
+
+test('workspace switching is blocked while the active workspace has unsynced local state',()=>{
+  assert.match(bridge,/async function selectWorkspace\(id\).*hasDirtyLocalState\(\)/s);
+  assert.match(bridge,/Finish syncing before switching workspaces/);
+});
+
+test('version conflicts expose explicit keep-local and use-server recovery actions',()=>{
+  assert.match(bridge,/resolveConflictKeepLocal/);
+  assert.match(bridge,/resolveConflictUseServer/);
+  assert.match(bridge,/Use server version/);
+  assert.match(bridge,/Keep my local changes/);
+  assert.match(bridge,/conflictState/);
+});
+
+test('signed-out edits retain workspace and server-version provenance for safe reconciliation after sign-in',()=>{
+  assert.match(bridge,/VERSION_KEY/);
+  assert.match(bridge,/rememberServerVersion/);
+  assert.match(bridge,/readRememberedVersion/);
+  assert.doesNotMatch(bridge,/function markDirtyLocalState\(\)\{if\(!bridge\.workspace\)return/);
+  assert.match(bridge,/localStorage\.getItem\(WORKSPACE_KEY\)/);
+});
+
+test('server account escaping uses a complete HTML quote entity',()=>{
+  assert.match(bridge,/&quot;/);
+});
+
+test('workspace switching clears the shared customer cache before loading another workspace',()=>{
+  assert.match(bridge,/clearCustomerCache/);
+  assert.match(bridge,/async function selectWorkspace\(id\).*clearCustomerCache\(\).*localStorage\.setItem\(WORKSPACE_KEY,id\)/s);
+});
