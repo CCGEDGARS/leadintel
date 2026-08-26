@@ -50,3 +50,7 @@ test('signed-out edits retain workspace and server-version provenance for safe r
   assert.doesNotMatch(bridge,/function markDirtyLocalState\(\)\{if\(!bridge\.workspace\)return/);
   assert.match(bridge,/localStorage\.getItem\(WORKSPACE_KEY\)/);
 });
+
+test('server account escaping uses a complete HTML quote entity',()=>{
+  assert.match(bridge,/&quot;/);
+});
