@@ -1,4 +1,4 @@
-import './company-research-engine.js?v=20260826-intelligence-autofill-v1';
+import './company-research-engine.js?v=20260826-intelligence-autofill-v2';
 
 const MAIN_STORAGE_KEY='leadintel_customer_v2_state';
 const RESEARCH_META_KEY='leadintel_customer_v2_research_meta_v1';
@@ -6,7 +6,7 @@ const FIRECRAWL_PROXY='https://apollo-proxy.edgars-7e7.workers.dev';
 const LEADINTEL_API='https://leadintel-api.edgars-7e7.workers.dev';
 const MAX_COMPANY_RESEARCH_QUERIES=3;
 const MAX_RESULTS_PER_QUERY=4;
-const RELEASE='20260826-intelligence-autofill-v1';
+const RELEASE='20260826-intelligence-autofill-v2';
 let running=false;
 
 const engine=()=>window.LeadIntelCompanyResearch;
@@ -75,11 +75,13 @@ function renderResearchReview(){
     if(value&&row.origin==='research'){origin=meta.mode==='ai'?'AI draft':'Evidence draft';originClass='';}
     else if(value){origin='Your input';originClass='user';}
     const confidence=value&&row.confidence?`<span class="research-confidence ${esc(row.confidence)}">${esc(row.confidence)} confidence</span>`:'';
-    const reviewed=row.reviewed?'<span class="research-reviewed">Reviewed ✓</span>':'';
+    const reviewed=row.reviewed&&row.origin!=='research'?'<span class="research-reviewed">Saved ✓</span>':'';
     const sourceIds=Array.isArray(row.sourceIds)?row.sourceIds:[];const sources=sourceIds.map(id=>map.get(id)).filter(Boolean).slice(0,3);
     const links=sources.length?`<div class="research-source-links">${sources.map(source=>source.type==='document'?`<span class="research-source-doc">${esc(source.title)}</span>`:`<a href="${esc(source.url)}" target="_blank" rel="noopener">${esc(source.title||source.url)}</a>`).join('')}</div>`:'';
     const rationale=row.rationale?`<div class="research-rationale">${esc(row.rationale)}</div>`:'';
-    const actions=value?`<div class="research-field-actions"><button type="button" data-research-accept="${esc(id)}">Accept</button><button type="button" data-research-clear="${esc(id)}">Clear</button></div>`:'';
+    const reviewAction=engine()?.reviewActionState?.(row)||{visible:row.origin==='research',label:row.reviewed?'Accepted ✓':'Accept',disabled:Boolean(row.reviewed)};
+    const acceptAction=reviewAction.visible?`<button type="button" data-research-accept="${esc(id)}" ${reviewAction.disabled?'disabled':''}>${esc(reviewAction.label)}</button>`:'';
+    const actions=value?`<div class="research-field-actions">${acceptAction}<button type="button" data-research-clear="${esc(id)}">Clear</button></div>`:'';
     target.innerHTML=`<div class="research-meta-top"><span class="research-origin ${originClass}">${origin}</span>${confidence}${reviewed}</div>${rationale}${links}${actions}`;
   });
 }

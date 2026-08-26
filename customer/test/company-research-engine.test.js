@@ -58,6 +58,12 @@ test('draft merge fills blanks but never overwrites a non-empty customer answer'
   assert.equal(merged.meta.ideal_customer.origin,'research');
 });
 
+test('review actions are meaningful for research drafts and never show a dead Accept control for preserved user input',()=>{
+  assert.deepEqual(engine.reviewActionState({origin:'user',reviewed:true}),{visible:false,label:'',disabled:true});
+  assert.deepEqual(engine.reviewActionState({origin:'research',reviewed:false}),{visible:true,label:'Accept',disabled:false});
+  assert.deepEqual(engine.reviewActionState({origin:'research',reviewed:true}),{visible:true,label:'Accepted ✓',disabled:true});
+});
+
 test('deterministic fallback is conservative and leaves unsupported commercial claims blank',()=>{
   const sources=[
     {id:'S1',type:'website',url:'https://acme-industrial.com/',title:'Acme Industrial | Industrial flooring and concrete repair',text:'Industrial flooring systems and concrete repair for factories, warehouses and food production facilities. Custom solutions and certified installation.'},
