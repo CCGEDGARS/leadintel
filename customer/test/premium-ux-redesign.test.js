@@ -36,19 +36,21 @@ test('Discovery empty state is compact and the primary action dominates',()=>{
   assert.match(discovery,/\.company-score-legend\{[^}]*background:transparent/s);
 });
 
-test('production assets are versioned so deployments cannot mix stale CSS and JS',()=>{
+test('target market release assets are versioned together so browsers cannot mix onboarding generations',()=>{
   const html=read('index.html');
-  assert.match(html,/styles\.css\?v=20260824-typography-v2/);
-  assert.match(html,/market\.css\?v=20260824-typography-v2/);
-  assert.match(html,/premium\.css\?v=20260824-typography-v2/);
-  assert.match(html,/app\.js\?v=20260824-typography-v2/);
-  assert.match(html,/process-map\.js\?v=20260824-typography-v2/);
-  assert.match(html,/discovery-ui\.js\?v=20260824-typography-v2/);
+  const version='20260826-target-market-v1';
+  for(const asset of ['styles.css','market.css','premium.css','market-selector.css','profile-engine.js','market-engine.js','discovery-engine.js','app.js','process-map.js','discovery-ui.js']){
+    assert.match(html,new RegExp(asset.replace('.','\\.')+`\\?v=${version}`));
+  }
 });
 
-test('mission migration gets a new profile-engine cache key for existing browsers',()=>{
+test('target market selector has a dedicated responsive styling layer',()=>{
   const html=read('index.html');
-  assert.match(html,/profile-engine\.js\?v=20260826-mission-migration/);
+  const selector=read('market-selector.css');
+  assert.match(html,/market-selector\.css\?v=20260826-target-market-v1/);
+  assert.match(selector,/\.market-chip\.selected/);
+  assert.match(selector,/\.selected-market-chip/);
+  assert.match(selector,/@media\(max-width:720px\)/);
 });
 
 test('dynamic Customer V2 modules keep their own stable cache contract',()=>{
