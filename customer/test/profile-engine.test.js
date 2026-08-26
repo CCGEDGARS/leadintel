@@ -50,8 +50,11 @@ test('keeps strategic user answers authoritative over website inference', () => 
   const profile = engine.buildCompanyIntelligenceProfile({ website: 'https://example.com', additionalLinks: [], documents: [], answers, scrapedSources: websiteSources });
   assert.equal(profile.priorityOffers, answers.priority_offers);
   assert.equal(profile.targetMarkets, answers.growth_markets);
-  assert.match(profile.mission, /Sweden/);
-  assert.match(profile.mission, /EUR 2M qualified pipeline/i);
+});
+
+test('uses the approved LeadIntel commercial mission copy', () => {
+  const profile = engine.buildCompanyIntelligenceProfile({ website: 'https://example.com', additionalLinks: [], documents: [], answers, scrapedSources: websiteSources });
+  assert.equal(profile.mission, 'Find qualified B2B opportunities, connect with decision-makers, and close more deals through evidence-backed commercial intelligence.');
 });
 
 test('infers current market footprint from source text without overriding target markets', () => {
