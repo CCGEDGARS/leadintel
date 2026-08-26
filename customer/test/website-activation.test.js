@@ -5,6 +5,8 @@ const path=require('node:path');
 
 const root=path.join(__dirname,'..');
 const processMapSource=fs.readFileSync(path.join(root,'process-map.js'),'utf8');
+const appSource=fs.readFileSync(path.join(root,'app.js'),'utf8');
+const discoveryUiSource=fs.readFileSync(path.join(root,'discovery-ui.js'),'utf8');
 const activationPath=path.join(root,'website-activation.js');
 const activation=fs.existsSync(activationPath)?require(activationPath):null;
 
@@ -30,9 +32,10 @@ test('website activation is valid only for the matching URL with readable eviden
   assert.equal(activation.isWebsiteActive({...state,scrapedSources:[]},'www.ccgroup.lv'),false);
 });
 
-test('successful activation preserves customer inputs while resetting stale strategic outputs',()=>{
+test('successful activation preserves customer inputs while resetting stale strategic outputs and navigation',()=>{
   assert.ok(activation,'website-activation.js must exist');
   const state={
+    step:5,
     website:'https://old.example.com/',
     targetMarkets:['Sweden'],
     answers:{ideal_customer:'Manufacturers'},
@@ -48,6 +51,7 @@ test('successful activation preserves customer inputs while resetting stale stra
   assert.equal(next.websiteActivation.status,'active');
   assert.equal(next.websiteActivation.title,'CCGROUP');
   assert.equal(next.websiteActivation.contentChars,22);
+  assert.equal(next.step,1,'website activation must return the journey to Step 1 instead of preserving a stale later step');
   assert.deepEqual(next.targetMarkets,['Sweden']);
   assert.deepEqual(next.answers,{ideal_customer:'Manufacturers'});
   assert.deepEqual(next.documents,[{name:'catalog.pdf',text:'catalog'}]);
@@ -75,4 +79,10 @@ test('activation registry survives ordinary workspace saves and still proves the
 test('process readiness requires an activated website instead of a merely visible URL',()=>{
   assert.match(processMapSource,/LeadIntelWebsiteActivation/);
   assert.match(processMapSource,/isCurrentWebsiteActive\(/);
+});
+
+test('website activation resynchronizes the app and stale discovery metadata cannot reopen Step 5',()=>{
+  assert.match(appSource,/leadintel:website-activated/,'app.js must resynchronize its in-memory state after website activation');
+  assert.match(appSource,/state\s*=\s*loadState\(\)/,'app.js must reload the canonical local state after activation');
+  assert.doesNotMatch(discoveryUiSource,/else if\(loadMeta\(\)\.visibleStep===5&&moduleReady\(\)\)showDiscoveryStep\(\)/,'discovery-ui.js must not override the canonical main step with stale visibleStep metadata');
 });
