@@ -5,9 +5,8 @@ const path=require('node:path');
 
 const root=path.join(__dirname,'..');
 const processMapSource=fs.readFileSync(path.join(root,'process-map.js'),'utf8');
-const appSource=fs.readFileSync(path.join(root,'app.js'),'utf8');
-const discoveryUiSource=fs.readFileSync(path.join(root,'discovery-ui.js'),'utf8');
 const activationPath=path.join(root,'website-activation.js');
+const activationSource=fs.readFileSync(activationPath,'utf8');
 const activation=fs.existsSync(activationPath)?require(activationPath):null;
 
 test('Step 1 activation markup exposes an explicit button and live status',()=>{
@@ -81,10 +80,8 @@ test('process readiness requires an activated website instead of a merely visibl
   assert.match(processMapSource,/isCurrentWebsiteActive\(/);
 });
 
-test('website activation resynchronizes the app and stale discovery metadata cannot reopen Step 5',()=>{
-  assert.match(appSource,/leadintel:website-activated/,'app.js must resynchronize its in-memory state after website activation');
-  assert.match(appSource,/state\s*=\s*loadState\(\)/,'app.js must reload the canonical local state after activation');
-  assert.doesNotMatch(discoveryUiSource,/else if\(loadMeta\(\)\.visibleStep===5&&moduleReady\(\)\)showDiscoveryStep\(\)/,'discovery-ui.js must not override the canonical main step with stale visibleStep metadata');
+test('successful activation clears stale Discovery navigation and returns the visible UI to Step 1',()=>{
+  assert.match(activationSource,/DISCOVERY_META_KEY/);
+  assert.match(activationSource,/removeItem\(DISCOVERY_META_KEY\)/);
+  assert.match(activationSource,/returnToWebsiteStep\(\)/);
 });
-
-// Regression: a successful website activation must never restore a stale later journey step.
