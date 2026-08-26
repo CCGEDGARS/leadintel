@@ -28,6 +28,16 @@ test('workspace uses executive typography and constrained readable content width
   assert.match(styles,/\.panel\{[^}]*border-radius:18px/s);
 });
 
+test('optional source inputs stay compact instead of dominating onboarding',()=>{
+  const html=read('index.html');
+  const styles=read('premium.css');
+  assert.match(html,/id="additional-links" rows="3"/);
+  assert.match(styles,/#additional-links\{[^}]*height:108px[^}]*min-height:108px[^}]*max-height:180px/s);
+  assert.match(styles,/\.upload-zone\{[^}]*min-height:118px/s);
+  assert.match(styles,/@media\(max-width:680px\)[\s\S]*#additional-links\{[^}]*height:96px[^}]*min-height:96px/s);
+  assert.match(styles,/@media\(max-width:680px\)[\s\S]*\.upload-zone\{[^}]*min-height:104px/s);
+});
+
 test('Discovery empty state is compact and the primary action dominates',()=>{
   const discovery=read('discovery.css');
   assert.match(discovery,/\.discovery-panel \.market-empty[^}]*padding:18px/s);
