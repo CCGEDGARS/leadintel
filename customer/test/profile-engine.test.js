@@ -2,6 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const engine = require('../profile-engine.js');
 
+const APPROVED_MISSION = 'Find qualified B2B opportunities, connect with decision-makers, and close more deals through evidence-backed commercial intelligence.';
+
 const answers = {
   priority_offers: 'Industrial steel structures; custom fabrication',
   ideal_customer: 'Manufacturers with 50-500 employees in Northern Europe',
@@ -54,7 +56,23 @@ test('keeps strategic user answers authoritative over website inference', () => 
 
 test('uses the approved LeadIntel commercial mission copy', () => {
   const profile = engine.buildCompanyIntelligenceProfile({ website: 'https://example.com', additionalLinks: [], documents: [], answers, scrapedSources: websiteSources });
-  assert.equal(profile.mission, 'Find qualified B2B opportunities, connect with decision-makers, and close more deals through evidence-backed commercial intelligence.');
+  assert.equal(profile.mission, APPROVED_MISSION);
+});
+
+test('migrates a saved legacy profile to the approved LeadIntel mission without deleting profile data', () => {
+  const state = engine.normalizeSavedState({
+    website: 'https://example.com',
+    approved: true,
+    profile: {
+      companyName: 'Example Industrial',
+      mission: 'Find and prioritize manufacturers in Sweden that have evidence-backed reasons to buy.',
+      priorityOffers: 'Industrial steel structures'
+    }
+  });
+  assert.equal(state.profile.mission, APPROVED_MISSION);
+  assert.equal(state.profile.companyName, 'Example Industrial');
+  assert.equal(state.profile.priorityOffers, 'Industrial steel structures');
+  assert.equal(state.approved, true);
 });
 
 test('infers current market footprint from source text without overriding target markets', () => {
