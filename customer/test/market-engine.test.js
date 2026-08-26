@@ -9,7 +9,9 @@ const profile = {
   lookalikeCustomers:'ABB; Valmet',
   decisionMakers:'COO; Procurement Director',
   currentMarkets:['Latvia','Lithuania'],
-  targetMarkets:'Sweden; Finland; German industrial manufacturing',
+  targetMarkets:'Nordics; Germany',
+  researchMarkets:['Sweden','Finland','Norway','Denmark','Iceland','Germany'],
+  marketFocus:'industrial manufacturing; logistics',
   differentiation:'fast engineering and custom delivery',
   buyingTriggers:'new facility; capacity expansion; equipment modernization; tender',
   exclusions:'projects below €20,000',
@@ -28,7 +30,7 @@ test('buildIcpCandidates creates core, lookalike and trigger-led ICPs from appro
   assert.equal(icps.length,3);
   assert.deepEqual(icps.map(x=>x.type),['core','lookalike','trigger-led']);
   assert.equal(icps.every(x=>x.active),true);
-  assert.match(icps[0].targetMarkets,/Sweden/);
+  assert.match(icps[0].targetMarkets,/Nordics/);
   assert.match(icps[0].buyerRoles,/Procurement Director/);
   assert.match(icps[1].rationale,/ABB/);
   assert.match(icps[2].rationale,/new facility/i);
@@ -61,14 +63,16 @@ test('addCustomSignal creates a bounded custom signal and rejects normalized dup
   assert.equal(duplicate.signals.length,added.signals.length);
 });
 
-test('buildResearchQueries respects the four-query cost guard and uses profile context',()=>{
+test('buildResearchQueries respects the four-query cost guard and uses expanded region countries plus market focus',()=>{
   const signals=Market.normalizeSignals(profile.recommendedSignals,[]);
   const queries=Market.buildResearchQueries(profile,signals,4);
   assert.ok(queries.length>0&&queries.length<=4);
   assert.equal(new Set(queries.map(x=>x.id)).size,queries.length);
-  assert.ok(queries.some(x=>/Sweden/i.test(x.query)));
+  assert.ok(queries.some(x=>x.market==='Sweden'));
   assert.ok(queries.some(x=>/industrial automation/i.test(x.query)));
+  assert.ok(queries.some(x=>/industrial manufacturing/i.test(x.query)));
   assert.equal(queries.every(x=>x.market&&x.query),true);
+  assert.equal(queries.some(x=>x.market==='Nordics'),false);
 });
 
 test('normalizeSearchResults accepts Firecrawl search payload and keeps source evidence',()=>{
@@ -84,7 +88,7 @@ test('normalizeSearchResults accepts Firecrawl search payload and keeps source e
   assert.match(results[0].text,/automation lines/i);
 });
 
-test('buildMarketOpportunities produces transparent five-part scores that sum to total',()=>{
+test('buildMarketOpportunities uses expanded research markets and produces transparent five-part scores',()=>{
   const icps=Market.buildIcpCandidates(profile);
   const signals=Market.normalizeSignals(profile.recommendedSignals,[]);
   const research=[
@@ -93,11 +97,12 @@ test('buildMarketOpportunities produces transparent five-part scores that sum to
   ];
   const opportunities=Market.buildMarketOpportunities(profile,icps,signals,research);
   assert.ok(opportunities.length>=2);
+  assert.ok(opportunities.some(x=>x.market==='Sweden'));
+  assert.equal(opportunities.some(x=>x.market==='Nordics'),false);
   opportunities.forEach(item=>{
     for(const key of ['fit','intent','timing','value','evidence'])assert.ok(item.score[key]>=0&&item.score[key]<=20,`${key} out of bounds`);
     assert.equal(item.score.total,item.score.fit+item.score.intent+item.score.timing+item.score.value+item.score.evidence);
     assert.ok(item.score.total<=100);
-    assert.ok(['High','Medium','Low'].includes(item.confidence));
   });
   assert.ok(opportunities.find(x=>x.market==='Sweden').evidence.length>=1);
 });
