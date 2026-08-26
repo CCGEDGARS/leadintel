@@ -1,3 +1,4 @@
+import './state-budget.js?v=20260826-state-budget-500kb';
 import './server-bridge.js?v=20260826-intelligence-autofill-v1';
 import './ai-settings.js?v=20260824-ai-providers';
 import './company-research-security.js?v=20260826-intelligence-autofill-v1';
