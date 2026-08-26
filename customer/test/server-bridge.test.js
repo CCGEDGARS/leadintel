@@ -34,3 +34,11 @@ test('workspace switching is blocked while the active workspace has unsynced loc
   assert.match(bridge,/async function selectWorkspace\(id\).*hasDirtyLocalState\(\)/s);
   assert.match(bridge,/Finish syncing before switching workspaces/);
 });
+
+test('version conflicts expose explicit keep-local and use-server recovery actions',()=>{
+  assert.match(bridge,/resolveConflictKeepLocal/);
+  assert.match(bridge,/resolveConflictUseServer/);
+  assert.match(bridge,/Use server version/);
+  assert.match(bridge,/Keep my local changes/);
+  assert.match(bridge,/conflictState/);
+});
