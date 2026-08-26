@@ -1,5 +1,6 @@
 import './server-bridge.js?v=20260826-intelligence-autofill-v1';
 import './ai-settings.js?v=20260824-ai-providers';
+import './company-research-security.js?v=20260826-intelligence-autofill-v1';
 import './company-research-ui.js?v=20260826-intelligence-autofill-v1';
 import './company-profile-handoff.js?v=20260826-intelligence-autofill-v1';
 
