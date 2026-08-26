@@ -63,6 +63,24 @@ test('successful activation preserves customer inputs while resetting stale stra
   assert.equal(next.scrapedSources[0].text,'Fresh company evidence');
 });
 
+test('returnToWebsiteStep rewrites stale canonical navigation and activates Step 1 in the live UI',()=>{
+  assert.equal(typeof activation.returnToWebsiteStep,'function');
+  const previous={localStorage:global.localStorage,document:global.document,MouseEvent:global.MouseEvent};
+  let stored=JSON.stringify({step:5,website:'https://www.ccgroup.lv/'});let clicks=0;
+  global.localStorage={getItem:key=>key===activation.STORAGE_KEY?stored:null,setItem:(key,value)=>{if(key===activation.STORAGE_KEY)stored=value;}};
+  global.MouseEvent=class MouseEvent{constructor(type,options={}){this.type=type;Object.assign(this,options);}};
+  global.document={querySelector:selector=>selector==='[data-step-marker="1"]'?{dispatchEvent:()=>{clicks+=1;}}:null,querySelectorAll:()=>[]};
+  try{
+    assert.equal(activation.returnToWebsiteStep(),true);
+    assert.equal(JSON.parse(stored).step,1);
+    assert.equal(clicks,1);
+  }finally{
+    if(previous.localStorage===undefined)delete global.localStorage;else global.localStorage=previous.localStorage;
+    if(previous.document===undefined)delete global.document;else global.document=previous.document;
+    if(previous.MouseEvent===undefined)delete global.MouseEvent;else global.MouseEvent=previous.MouseEvent;
+  }
+});
+
 test('activation registry survives ordinary workspace saves and still proves the same website is active',()=>{
   assert.ok(activation,'website-activation.js must exist');
   assert.equal(typeof activation.buildActivationRecord,'function');
