@@ -4,17 +4,27 @@ const fs = require('node:fs');
 const path = require('node:path');
 function read(name){return fs.readFileSync(path.join(__dirname,'..',name),'utf8');}
 
-test('customer onboarding exposes main website, extra links and PDF input',()=>{
+test('customer onboarding exposes mandatory website and hybrid target market selector plus optional sources',()=>{
   const html=read('index.html');
   assert.match(html,/id="company-website"/);
+  assert.match(html,/id="target-market-selector"/);
+  assert.match(html,/data-target-market="Sweden"/);
+  assert.match(html,/data-target-market="Germany"/);
+  assert.match(html,/data-target-market="Nordics"/);
+  assert.match(html,/data-target-market="DACH"/);
+  assert.match(html,/id="custom-target-market"/);
+  assert.match(html,/id="add-target-market"/);
+  assert.match(html,/id="clear-target-markets"/);
+  assert.match(html,/id="selected-target-markets"/);
   assert.match(html,/id="additional-links"/);
   assert.match(html,/id="pdf-input"/);
 });
 
-test('customer onboarding contains all ten strategic questions',()=>{
+test('customer onboarding contains all ten strategic questions with target-market question reframed as optional focus',()=>{
   const html=read('index.html');
   const ids=['priority_offers','ideal_customer','lookalike_customers','buyer_roles','growth_markets','differentiation','buying_triggers','exclusions','opportunity_value','success_outcome'];
   ids.forEach(id=>assert.match(html,new RegExp(`data-question="${id}"`)));
+  assert.match(html,/Within your selected markets/i);
 });
 
 test('strategic intake is clearly optional enrichment',()=>{
@@ -25,13 +35,16 @@ test('strategic intake is clearly optional enrichment',()=>{
   assert.doesNotMatch(html,/Approval gate/);
 });
 
-test('website-only onboarding unlocks sidebar modules and keeps enrichment optional',()=>{
+test('website plus target market unlocks sidebar modules while enrichment remains optional',()=>{
   const app=read('app.js');
   const discovery=read('discovery-ui.js');
   const outreach=read('outreach-ui.js');
   const delivery=read('delivery-ui.js');
   assert.match(app,/LeadIntelProfile\.canAccessModule/);
   assert.match(app,/function openModule/);
+  assert.match(app,/targetMarkets/);
+  assert.match(app,/data-target-market/);
+  assert.match(app,/Choose at least one target market/);
   assert.match(app,/querySelector\("\.steps"\).*addEventListener/s);
   assert.match(app,/MutationObserver/,'dynamic Steps 5–7 must inherit visible unlocked state after injection');
   assert.match(app,/\[1,2,3,4,5,6,7\]\.includes\(Number\(raw\.step\)\)/,'app reload must preserve Steps 5–7');
