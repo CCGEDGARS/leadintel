@@ -40,7 +40,7 @@ test('Market, scripts, delivery and settings share the same readable scale',()=>
 });
 
 test('current static shell assets are cache-busted together',()=>{
-  const version='20260826-website-sync-v1';
+  const version='20260826-target-market-v1';
   const html=read('index.html');
   for(const asset of ['styles.css','market.css','premium.css','market-selector.css','profile-engine.js','market-engine.js','discovery-engine.js','app.js','process-map.js','discovery-ui.js']) assert.match(html,new RegExp(`${asset.replace('.','\\.')}\\?v=${version}`));
 });
