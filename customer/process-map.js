@@ -1,4 +1,5 @@
 import './state-budget.js?v=20260826-state-budget-500kb';
+import './website-input-sync.js?v=20260826-website-sync-v1';
 import './server-bridge.js?v=20260826-intelligence-autofill-v1';
 import './ai-settings.js?v=20260824-ai-providers';
 import './company-research-security.js?v=20260826-intelligence-autofill-v1';
@@ -12,7 +13,7 @@ function readProcessState(){try{return JSON.parse(localStorage.getItem(PROCESS_S
 function contextReady(){
   const state=readProcessState();
   const input=document.getElementById("company-website");
-  const candidate=String(state.website||input?.value||"").trim();
+  const candidate=String(input?.value||state.website||"").trim();
   const websiteReady=Boolean(candidate&&candidate.replace(/^https?:\/\//,"").replace(/^www\./,"").includes("."));
   const markets=Array.isArray(state.targetMarkets)?state.targetMarkets.filter(Boolean):[];
   return websiteReady&&markets.length>0;
@@ -40,6 +41,7 @@ if(processMap){
   const steps=document.querySelector(".steps");if(steps&&typeof MutationObserver!=="undefined")new MutationObserver(syncProcessMap).observe(steps,{childList:true,subtree:true,attributes:true,attributeFilter:["class"]});
   document.getElementById("company-website")?.addEventListener("input",()=>setTimeout(syncProcessMap,0));
   document.getElementById("target-market-selector")?.addEventListener("click",()=>setTimeout(syncProcessMap,0));
+  window.addEventListener("leadintel:website-synced",syncProcessMap);
   window.addEventListener("leadintel:module-opened",syncProcessMap);
   window.addEventListener("storage",event=>{if(event.key===PROCESS_STORAGE_KEY)syncProcessMap();});
   syncProcessMap();
