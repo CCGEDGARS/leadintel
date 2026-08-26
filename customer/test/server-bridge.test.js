@@ -42,3 +42,11 @@ test('version conflicts expose explicit keep-local and use-server recovery actio
   assert.match(bridge,/Keep my local changes/);
   assert.match(bridge,/conflictState/);
 });
+
+test('signed-out edits retain workspace and server-version provenance for safe reconciliation after sign-in',()=>{
+  assert.match(bridge,/VERSION_KEY/);
+  assert.match(bridge,/rememberServerVersion/);
+  assert.match(bridge,/readRememberedVersion/);
+  assert.doesNotMatch(bridge,/function markDirtyLocalState\(\)\{if\(!bridge\.workspace\)return/);
+  assert.match(bridge,/localStorage\.getItem\(WORKSPACE_KEY\)/);
+});
