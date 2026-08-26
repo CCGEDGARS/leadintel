@@ -171,6 +171,12 @@
     return {answers,meta};
   }
 
+  function reviewActionState(row={}){
+    if(clean(row.origin).toLowerCase()!=="research")return {visible:false,label:"",disabled:true};
+    if(Boolean(row.reviewed))return {visible:true,label:"Accepted ✓",disabled:true};
+    return {visible:true,label:"Accept",disabled:false};
+  }
+
   function deriveCompanyName(sources=[],website=""){
     const official=(sources||[]).find(source=>source.type==="website")||(sources||[])[0];
     const title=clean(official?.title);if(title){const first=clean(title.split(/\s[|–—]\s|\s-\s/)[0]);if(first&&first.length<=100)return first;}
@@ -187,5 +193,5 @@
     return {system,prompt};
   }
 
-  return {QUESTION_IDS,MAX_PUBLIC_QUERIES,MAX_SOURCES,safeUrl,buildResearchQueries,normalizeSearchResults,mergeSources,parseAiDraft,buildEvidenceDraft,mergeDraft,deriveCompanyName,buildAiPrompt};
+  return {QUESTION_IDS,MAX_PUBLIC_QUERIES,MAX_SOURCES,safeUrl,buildResearchQueries,normalizeSearchResults,mergeSources,parseAiDraft,buildEvidenceDraft,mergeDraft,reviewActionState,deriveCompanyName,buildAiPrompt};
 });
