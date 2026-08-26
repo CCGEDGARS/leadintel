@@ -7,10 +7,12 @@ const read=name=>fs.existsSync(path.join(root,name))?fs.readFileSync(path.join(r
 
 const processMap=read('process-map.js');
 const ui=read('company-research-ui.js');
+const handoff=read('company-profile-handoff.js');
 const css=read('company-research.css');
 
 test('Customer V2 loads the automatic company research module from the existing process shell',()=>{
   assert.match(processMap,/company-research-ui\.js\?v=20260826-intelligence-autofill-v1/);
+  assert.match(processMap,/company-profile-handoff\.js\?v=20260826-intelligence-autofill-v1/);
   assert.match(ui,/company-research-engine\.js\?v=20260826-intelligence-autofill-v1/);
 });
 
@@ -58,9 +60,10 @@ test('research reruns preserve non-empty answers through the research engine mer
 });
 
 test('profile build consumes the collected public evidence instead of running the legacy source-only analyzer',()=>{
-  assert.match(ui,/analyze-company/);
-  assert.match(ui,/buildProfileFromResearch/);
-  assert.match(ui,/LeadIntelProfile\.buildCompanyIntelligenceProfile/);
-  assert.match(ui,/scrapedSources/);
-  assert.match(ui,/data-step-marker/);
+  assert.match(handoff,/analyze-company/);
+  assert.match(handoff,/buildProfileFromResearch/);
+  assert.match(handoff,/LeadIntelProfile\.buildCompanyIntelligenceProfile/);
+  assert.match(handoff,/scrapedSources/);
+  assert.match(handoff,/data-step-marker/);
+  assert.match(handoff,/capture:\s*true/);
 });
