@@ -6,11 +6,13 @@ on:
       - 'feature/customer-v2-*'
     paths:
       - 'customer/**'
+      - 'backend/src/customer-state.js'
       - '.github/workflows/customer-ci.yml'
       - '.github/workflows/deploy-pages.yml'
   pull_request:
     paths:
       - 'customer/**'
+      - 'backend/src/customer-state.js'
       - '.github/workflows/customer-ci.yml'
       - '.github/workflows/deploy-pages.yml'
 
@@ -32,6 +34,7 @@ jobs:
         run: node --test customer/test/*.test.js
       - name: Check JavaScript syntax
         run: |
+          node --check backend/src/customer-state.js
           node --check customer/profile-engine.js
           node --check customer/market-engine.js
           node --check customer/discovery-engine.js
@@ -41,6 +44,7 @@ jobs:
           node --check customer/company-research-security.js
           node --check customer/company-research-ui.js
           node --check customer/company-profile-handoff.js
+          node --check customer/state-budget.js
           node --check customer/app.js
           node --check customer/process-map.js
           node --check customer/ai-settings.js
