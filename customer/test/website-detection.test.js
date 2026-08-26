@@ -3,17 +3,27 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 
-const profile=require('../profile-engine.js');
-const appSource=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
+const processMapSource=fs.readFileSync(path.join(__dirname,'..','process-map.js'),'utf8');
+const helperPath=path.join(__dirname,'..','website-input-sync.js');
 
-test('visible browser-restored website takes precedence over stale empty state',()=>{
-  assert.equal(typeof profile.resolveWebsite,'function');
-  assert.equal(profile.resolveWebsite('', 'www.ccgroup.lv'),'https://www.ccgroup.lv/');
-  assert.equal(profile.resolveWebsite('https://old.example.com/','www.ccgroup.lv'),'https://www.ccgroup.lv/');
+test('process shell installs a restored/autofilled website state synchronizer',()=>{
+  assert.match(processMapSource,/website-input-sync\.js/);
+  assert.equal(fs.existsSync(helperPath),true);
 });
 
-test('navigation and completeness use the currently visible website value',()=>{
-  assert.match(appSource,/function currentWebsite\(\)/);
-  assert.match(appSource,/calculateCompleteness\([^)]*website:currentWebsite\(\)/);
-  assert.match(appSource,/canAccessModule\([^)]*website:currentWebsite\(\)/);
+test('visible browser-restored website takes precedence over stale saved state',()=>{
+  assert.equal(fs.existsSync(helperPath),true);
+  const helper=require(helperPath);
+  assert.equal(helper.resolveWebsite('', 'www.ccgroup.lv'),'https://www.ccgroup.lv/');
+  assert.equal(helper.resolveWebsite('https://old.example.com/','www.ccgroup.lv'),'https://www.ccgroup.lv/');
+  assert.equal(helper.resolveWebsite('https://saved.example.com/',''),'https://saved.example.com/');
+});
+
+test('website synchronizer can update saved state from the visible input without deleting other state',()=>{
+  assert.equal(fs.existsSync(helperPath),true);
+  const helper=require(helperPath);
+  const next=helper.mergeVisibleWebsite({targetMarkets:['Latvia'],answers:{priority_offers:'Training'}},'www.ccgroup.lv');
+  assert.equal(next.website,'https://www.ccgroup.lv/');
+  assert.deepEqual(next.targetMarkets,['Latvia']);
+  assert.equal(next.answers.priority_offers,'Training');
 });
