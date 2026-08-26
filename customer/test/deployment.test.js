@@ -2,17 +2,30 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const workflow = fs.readFileSync(path.join(__dirname, '../../.github/workflows/deploy-pages.yml'), 'utf8');
-const rootIndex = fs.readFileSync(path.join(__dirname, '../../index.html'), 'utf8');
-const legacyV2Index = fs.readFileSync(path.join(__dirname, '../../v2/index.html'), 'utf8');
 
-test('GitHub Pages artifact publishes customer workspace', () => {
-  assert.match(workflow, /mkdir -p \.pages\/v2 \.pages\/customer/);
-  assert.match(workflow, /cp -R customer\/\. \.pages\/customer\//);
+const root = path.join(__dirname, '../..');
+const vercelConfigPath = path.join(root, 'vercel.json');
+const buildScriptPath = path.join(root, 'scripts/build-vercel-static.sh');
+const pagesWorkflowPath = path.join(root, '.github/workflows/deploy-pages.yml');
+const rootIndex = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const legacyV2Index = fs.readFileSync(path.join(root, 'v2/index.html'), 'utf8');
+
+test('Vercel builds a safe static artifact instead of exposing the repository root', () => {
+  assert.equal(fs.existsSync(vercelConfigPath), true);
+  assert.equal(fs.existsSync(buildScriptPath), true);
+  const config = JSON.parse(fs.readFileSync(vercelConfigPath, 'utf8'));
+  const buildScript = fs.readFileSync(buildScriptPath, 'utf8');
+
+  assert.equal(config.buildCommand, 'bash scripts/build-vercel-static.sh');
+  assert.equal(config.outputDirectory, '.vercel-static');
+  assert.match(buildScript, /mkdir -p \.vercel-static\/v2 \.vercel-static\/customer/);
+  assert.match(buildScript, /cp -R customer\/\. \.vercel-static\/customer\//);
+  assert.match(buildScript, /cp -R v2\/\. \.vercel-static\/v2\//);
+  assert.doesNotMatch(buildScript, /cp -R backend|cp backend/);
 });
 
-test('legacy v2 deployment remains preserved', () => {
-  assert.match(workflow, /cp -R v2\/\. \.pages\/v2\//);
+test('obsolete GitHub Pages deployment workflow is removed', () => {
+  assert.equal(fs.existsSync(pagesWorkflowPath), false);
 });
 
 test('production entry points route to the active customer workspace', () => {
