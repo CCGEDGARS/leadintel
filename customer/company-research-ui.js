@@ -11,7 +11,7 @@ let running=false;
 
 const engine=()=>window.LeadIntelCompanyResearch;
 const $=id=>document.getElementById(id);
-function esc(value){return String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[char]));}
+function esc(value){return String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));}
 function readJson(key,fallback={}){try{const value=JSON.parse(localStorage.getItem(key)||'null');return value&&typeof value==='object'?value:fallback;}catch{return fallback;}}
 function readState(){return readJson(MAIN_STORAGE_KEY,{});}
 function writeState(value){localStorage.setItem(MAIN_STORAGE_KEY,JSON.stringify(value));}
