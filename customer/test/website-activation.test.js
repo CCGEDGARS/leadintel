@@ -4,17 +4,17 @@ const fs=require('node:fs');
 const path=require('node:path');
 
 const root=path.join(__dirname,'..');
-const indexSource=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const processMapSource=fs.readFileSync(path.join(root,'process-map.js'),'utf8');
-const researchUiSource=fs.readFileSync(path.join(root,'company-research-ui.js'),'utf8');
-const profile=require('../profile-engine.js');
 const activationPath=path.join(root,'website-activation.js');
 const activation=fs.existsSync(activationPath)?require(activationPath):null;
 
-test('Step 1 exposes an explicit website activation control and live status',()=>{
-  assert.match(indexSource,/id="activate-website"/);
-  assert.match(indexSource,/ACTIVATE WEBSITE/);
-  assert.match(indexSource,/id="website-activation-status"/);
+test('Step 1 activation markup exposes an explicit button and live status',()=>{
+  assert.ok(activation,'website-activation.js must exist');
+  assert.equal(typeof activation.activationMarkup,'function');
+  const markup=activation.activationMarkup();
+  assert.match(markup,/id="activate-website"/);
+  assert.match(markup,/ACTIVATE WEBSITE/);
+  assert.match(markup,/id="website-activation-status"/);
   assert.match(processMapSource,/website-activation\.js\?v=/);
 });
 
@@ -60,21 +60,19 @@ test('successful activation preserves customer inputs while resetting stale stra
   assert.equal(next.scrapedSources[0].text,'Fresh company evidence');
 });
 
-test('normalized customer state keeps activation metadata across reloads',()=>{
-  const normalized=profile.normalizeSavedState({
-    website:'www.ccgroup.lv',
-    targetMarkets:['Sweden'],
-    websiteActivation:{status:'active',url:'www.ccgroup.lv',title:'CCGROUP',description:'Sales training and AI',activatedAt:'2026-08-26T11:00:00.000Z',contentChars:1234},
-    scrapedSources:[{type:'website',url:'www.ccgroup.lv',title:'CCGROUP',text:'Readable evidence',status:'ready'}]
-  });
-  assert.deepEqual(normalized.websiteActivation,{
-    status:'active',url:'https://www.ccgroup.lv/',title:'CCGROUP',description:'Sales training and AI',activatedAt:'2026-08-26T11:00:00.000Z',contentChars:1234
-  });
+test('activation registry survives ordinary workspace saves and still proves the same website is active',()=>{
+  assert.ok(activation,'website-activation.js must exist');
+  assert.equal(typeof activation.buildActivationRecord,'function');
+  assert.equal(typeof activation.isActivationRecordActive,'function');
+  const record=activation.buildActivationRecord({url:'www.ccgroup.lv',title:'CCGROUP',description:'Sales training',text:'Readable evidence'},'2026-08-26T11:00:00.000Z');
+  assert.equal(record.status,'active');
+  assert.equal(record.url,'https://www.ccgroup.lv/');
+  assert.equal(record.source.text,'Readable evidence');
+  assert.equal(activation.isActivationRecordActive(record,'www.ccgroup.lv'),true);
+  assert.equal(activation.isActivationRecordActive(record,'example.com'),false);
 });
 
-test('company research requires activation and reuses the activated website evidence',()=>{
-  assert.match(researchUiSource,/LeadIntelWebsiteActivation/);
-  assert.match(researchUiSource,/isWebsiteActive\(/);
-  assert.match(researchUiSource,/getActivatedSource\(/);
-  assert.match(researchUiSource,/Activate your website first/);
+test('process readiness requires an activated website instead of a merely visible URL',()=>{
+  assert.match(processMapSource,/LeadIntelWebsiteActivation/);
+  assert.match(processMapSource,/isCurrentWebsiteActive\(/);
 });
