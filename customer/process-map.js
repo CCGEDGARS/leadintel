@@ -1,6 +1,7 @@
 import './server-bridge.js?v=20260826-intelligence-autofill-v1';
 import './ai-settings.js?v=20260824-ai-providers';
 import './company-research-ui.js?v=20260826-intelligence-autofill-v1';
+import './company-profile-handoff.js?v=20260826-intelligence-autofill-v1';
 
 const PROCESS_STORAGE_KEY="leadintel_customer_v2_state";
 const processMap=document.getElementById("commercial-process-map");
