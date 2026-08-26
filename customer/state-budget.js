@@ -1,12 +1,13 @@
 (function(root,factory){
-  const api=factory();
+  const api=factory(root);
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
   if(root)root.LeadIntelStateBudget=api;
-})(typeof globalThis!=="undefined"?globalThis:this,function(){
+})(typeof globalThis!=="undefined"?globalThis:this,function(root){
   "use strict";
 
   const MAX_SYNC_BYTES=500*1024;
   const TARGET_SYNC_BYTES=450*1024;
+  const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
   const encoder=typeof TextEncoder!=="undefined"?new TextEncoder():null;
 
   function clone(value){return JSON.parse(JSON.stringify(value&&typeof value==="object"?value:{}));}
@@ -27,9 +28,22 @@
   }
   function prepareForSync(input={}){
     const result=compactBundle(input);
-    if(result.bytes>MAX_SYNC_BYTES)throw new Error(`Workspace state is ${Math.ceil(result.bytes/1024)} KB after evidence compaction; the 500 KB sync limit was not exceeded or overwritten. Reduce unusually large pipeline/history data before retrying.`);
+    if(result.bytes>MAX_SYNC_BYTES)throw new Error(`Workspace state is ${Math.ceil(result.bytes/1024)} KB after evidence compaction and cannot be synced because the hard limit is 500 KB. Reduce unusually large pipeline/history data before retrying.`);
     return result;
   }
+  function compactMainStorageValue(value){
+    try{const parsed=JSON.parse(String(value||"{}"));return JSON.stringify(compactBundle({main:parsed}).payload.main);}catch{return value;}
+  }
+  function installStorageGuard(){
+    if(!root||typeof root.Storage==="undefined"||!root.localStorage||root.Storage.prototype.__leadintelStateBudgetPatched)return;
+    const originalSet=root.Storage.prototype.setItem;
+    root.Storage.prototype.setItem=function(key,value){
+      const next=this===root.localStorage&&key===MAIN_STORAGE_KEY?compactMainStorageValue(value):value;
+      return originalSet.call(this,key,next);
+    };
+    root.Storage.prototype.__leadintelStateBudgetPatched=true;
+  }
 
-  return {MAX_SYNC_BYTES,TARGET_SYNC_BYTES,bytes,compactBundle,prepareForSync};
+  installStorageGuard();
+  return {MAX_SYNC_BYTES,TARGET_SYNC_BYTES,bytes,compactBundle,prepareForSync,compactMainStorageValue,installStorageGuard};
 });
