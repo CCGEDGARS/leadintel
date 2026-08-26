@@ -1,6 +1,6 @@
 import './state-budget.js?v=20260826-state-budget-500kb';
 import './website-input-sync.js?v=20260826-website-sync-v1';
-import './website-activation.js?v=20260826-website-activation-v1';
+import './website-activation.js?v=20260826-website-activation-v2';
 import './server-bridge.js?v=20260826-intelligence-autofill-v1';
 import './ai-settings.js?v=20260824-ai-providers';
 import './company-research-security.js?v=20260826-intelligence-autofill-v1';
