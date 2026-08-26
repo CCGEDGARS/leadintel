@@ -89,12 +89,8 @@
     return truncate([...web,...docs].join(" "),1100);
   }
   function sourceText(scrapedSources,documents){return [...(scrapedSources||[]).map(s=>s.text||""),...(documents||[]).map(d=>d.text||"")].join(" ");}
-  function buildMission(answers){
-    const offer=splitList(answers.priority_offers)[0]||"priority offer";
-    const customer=truncate(answers.ideal_customer||"high-fit companies",100);
-    const markets=truncate(answers.growth_markets||"selected markets",90);
-    const outcome=truncate(answers.success_outcome||"create qualified commercial opportunities",130);
-    return `Find and prioritize ${customer} in ${markets} that have evidence-backed reasons to buy ${offer}, with the commercial goal to ${outcome.replace(/^to\s+/i,"")}.`;
+  function buildMission(){
+    return "Find qualified B2B opportunities, connect with decision-makers, and close more deals through evidence-backed commercial intelligence.";
   }
   function informationGaps(answers,scrapedSources,documents){
     const gaps=[];
@@ -131,7 +127,7 @@
       exclusions:answers.exclusions,
       opportunityValue:answers.opportunity_value,
       commercialObjective:answers.success_outcome,
-      mission:buildMission(answers),
+      mission:buildMission(),
       recommendedSignals:recommendSignals(answers.buying_triggers,combined),
       informationGaps:informationGaps(answers,scraped,documents),
       completeness:calculateCompleteness(input),
