@@ -138,6 +138,7 @@
   function normalizeSavedState(value={}){
     const answers={}; QUESTION_IDS.forEach(id=>{answers[id]=clean(value.answers?.[id]);});
     const docs=Array.isArray(value.documents)?value.documents.slice(0,5).map(d=>({name:clean(d?.name).slice(0,180),size:Number(d?.size)||0,text:String(d?.text||"").slice(0,25000),status:clean(d?.status)||"ready"})).filter(d=>d.name):[];
+    const profile=value.profile&&typeof value.profile==="object"?{...value.profile,mission:buildMission()}:null;
     return {
       step:[1,2,3,4,5,6,7].includes(Number(value.step))?Number(value.step):1,
       website:normalizeUrl(value.website),
@@ -145,7 +146,7 @@
       documents:docs,
       answers,
       scrapedSources:Array.isArray(value.scrapedSources)?value.scrapedSources.slice(0,12).map(s=>({type:s?.type==="link"?"link":"website",url:normalizeUrl(s?.url),title:clean(s?.title).slice(0,180),text:String(s?.text||"").slice(0,30000),status:clean(s?.status)||"ready"})).filter(s=>s.url):[],
-      profile:value.profile&&typeof value.profile==="object"?value.profile:null,
+      profile,
       approved:Boolean(value.approved)
     };
   }
