@@ -46,6 +46,11 @@ test('production assets are versioned so deployments cannot mix stale CSS and JS
   assert.match(html,/discovery-ui\.js\?v=20260824-typography-v2/);
 });
 
+test('mission migration gets a new profile-engine cache key for existing browsers',()=>{
+  const html=read('index.html');
+  assert.match(html,/profile-engine\.js\?v=20260826-mission-migration/);
+});
+
 test('dynamic Customer V2 modules keep their own stable cache contract',()=>{
   for(const file of ['discovery-ui.js','outreach-ui.js','delivery-ui.js']){
     const source=read(file);
