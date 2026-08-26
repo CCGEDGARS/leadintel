@@ -30,7 +30,8 @@ test('workspace uses executive typography and constrained readable content width
 
 test('optional source inputs stay compact instead of dominating onboarding',()=>{
   const html=read('index.html');
-  const styles=read('premium.css');
+  const styles=read('compact-sources.css');
+  assert.match(html,/compact-sources\.css\?v=20260826-compact-sources-v1/);
   assert.match(html,/id="additional-links" rows="3"/);
   assert.match(styles,/#additional-links\{[^}]*height:108px[^}]*min-height:108px[^}]*max-height:180px/s);
   assert.match(styles,/\.upload-zone\{[^}]*min-height:118px/s);
