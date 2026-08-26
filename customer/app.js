@@ -7,7 +7,7 @@ const MAX_MARKET_RESEARCH_QUERIES=4;
 const profileFields=[
   ["companyOverview","Company overview",true],["priorityOffers","Priority offers",false],["idealCustomer","Ideal customer profile",false],
   ["lookalikeCustomers","Lookalike customers",false],["decisionMakers","Decision makers",false],["currentMarkets","Current market footprint",false],
-  ["targetMarkets","Priority growth markets",false],["differentiation","Competitive advantages",false],["buyingTriggers","Buying situations / triggers",true],
+  ["targetMarkets","Priority growth markets",false],["marketFocus","Priority market focus",false],["differentiation","Competitive advantages",false],["buyingTriggers","Buying situations / triggers",true],
   ["exclusions","Negative ICP / exclusions",false],["opportunityValue","Commercial value",false],["commercialObjective","6–12 month commercial objective",true]
 ];
 let state=loadState();
@@ -16,7 +16,7 @@ let pdfModule=null;
 const $=id=>document.getElementById(id);
 
 function defaultState(){
-  const base=LeadIntelProfile.normalizeSavedState({step:1,website:"",additionalLinks:[],documents:[],answers:{},scrapedSources:[],profile:null,approved:false});
+  const base=LeadIntelProfile.normalizeSavedState({step:1,website:"",targetMarkets:[],additionalLinks:[],documents:[],answers:{},scrapedSources:[],profile:null,approved:false});
   base.market=LeadIntelMarket.normalizeMarketState({});
   return base;
 }
@@ -32,6 +32,10 @@ function loadState(){
 function saveState(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));updateCompleteness();updateNavigationAvailability();}
 function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
 function showToast(message){const el=$("toast");if(!el)return;el.textContent=message;el.classList.add("show");clearTimeout(showToast.t);showToast.t=setTimeout(()=>el.classList.remove("show"),2400);}
+function invalidateStrategicOutputs(clearSources=false){
+  state.profile=null;state.approved=false;state.market=LeadIntelMarket.normalizeMarketState({});
+  if(clearSources)state.scrapedSources=[];
+}
 function updateNavigationAvailability(){
   document.querySelectorAll("[data-step-marker]").forEach(el=>{
     const step=Number(el.dataset.stepMarker);const available=LeadIntelProfile.canAccessModule(state,step);
@@ -54,17 +58,49 @@ function setStep(step){
 function updateCompleteness(){
   const score=LeadIntelProfile.calculateCompleteness(state);const scoreEl=$("completeness-score"),ring=$("progress-ring"),caption=$("completeness-caption");if(!scoreEl||!ring||!caption)return;
   scoreEl.textContent=`${score}%`;ring.style.setProperty("--p",score);
-  caption.textContent=!state.website?"Add your website to begin.":score<70?"Website ready. Optional context improves precision.":score<95?"Strong context. Add more only where useful.":"Ready for intelligence analysis.";
+  caption.textContent=!state.website?"Add your website to begin.":!state.targetMarkets.length?"Choose at least one target market.":score<70?"Core context ready. Optional enrichment improves precision.":score<95?"Strong context. Add more only where useful.":"Ready for intelligence analysis.";
 }
-function syncInputsFromState(){$("company-website").value=state.website.replace(/^https?:\/\//,"").replace(/\/$/,"");$("additional-links").value=state.additionalLinks.join("\n");document.querySelectorAll("[data-question]").forEach(el=>el.value=state.answers[el.dataset.question]||"");renderDocuments();}
+function renderTargetMarkets(){
+  const selected=LeadIntelProfile.normalizeTargetMarkets(state.targetMarkets);state.targetMarkets=selected;
+  const keys=new Set(selected.map(item=>item.toLowerCase()));
+  document.querySelectorAll("[data-target-market]").forEach(button=>{const active=keys.has(String(button.dataset.targetMarket||"").toLowerCase());button.classList.toggle("selected",active);button.setAttribute("aria-pressed",active?"true":"false");});
+  const target=$("selected-target-markets");
+  if(target)target.innerHTML=selected.length?selected.map(item=>`<button class="selected-market-chip" type="button" data-remove-target-market="${esc(item)}" aria-label="Remove ${esc(item)}"><span>${esc(item)}</span><b aria-hidden="true">×</b></button>`).join(""):`<span class="market-empty-selection">Choose at least one market to continue.</span>`;
+  if($("selected-market-count"))$("selected-market-count").textContent=`${selected.length} selected`;
+  if($("clear-target-markets"))$("clear-target-markets").disabled=!selected.length;
+}
+function setTargetMarkets(markets){
+  const next=LeadIntelProfile.normalizeTargetMarkets(markets);
+  if(JSON.stringify(next)===JSON.stringify(state.targetMarkets)){renderTargetMarkets();return;}
+  state.targetMarkets=next;invalidateStrategicOutputs(false);saveState();renderTargetMarkets();
+}
+function toggleTargetMarket(value){
+  const market=LeadIntelProfile.normalizeTargetMarkets([value])[0];if(!market)return;
+  const exists=state.targetMarkets.some(item=>item.toLowerCase()===market.toLowerCase());
+  setTargetMarkets(exists?state.targetMarkets.filter(item=>item.toLowerCase()!==market.toLowerCase()):[...state.targetMarkets,market]);
+}
+function addCustomTargetMarket(){
+  const input=$("custom-target-market");const additions=LeadIntelProfile.normalizeTargetMarkets(input?.value||"");
+  if(!additions.length){showToast("Type a country, region, industry or market");return;}
+  setTargetMarkets([...state.targetMarkets,...additions]);input.value="";showToast(`${additions.length===1?additions[0]:`${additions.length} markets`} added`);
+}
+function syncInputsFromState(){
+  $("company-website").value=state.website.replace(/^https?:\/\//,"").replace(/\/$/,"");$("additional-links").value=state.additionalLinks.join("\n");
+  document.querySelectorAll("[data-question]").forEach(el=>el.value=state.answers[el.dataset.question]||"");renderTargetMarkets();renderDocuments();
+}
 function readSources(){
   const previousWebsite=state.website;state.website=LeadIntelProfile.normalizeUrl($("company-website").value);state.additionalLinks=$("additional-links").value.split(/\n/).map(LeadIntelProfile.normalizeUrl).filter(Boolean).slice(0,8);
-  if(previousWebsite&&state.website!==previousWebsite){state.profile=null;state.approved=false;state.scrapedSources=[];state.market=LeadIntelMarket.normalizeMarketState({});}
+  if(previousWebsite&&state.website!==previousWebsite)invalidateStrategicOutputs(true);
   saveState();
 }
 function readAnswers(){document.querySelectorAll("[data-question]").forEach(el=>{state.answers[el.dataset.question]=el.value.trim();});saveState();}
-function validateStep1(){readSources();if(!state.website){$("step1-error").textContent="Enter a valid company website.";return false;}$("step1-error").textContent="";return true;}
-function validateStep2(){readAnswers();if(!LeadIntelProfile.canBuildProfile(state)){$("step2-error").textContent="Add a valid company website in Step 1 first.";return false;}$("step2-error").textContent="";return true;}
+function validateStep1(){
+  readSources();
+  if(!state.website){$("step1-error").textContent="Enter a valid company website.";return false;}
+  if(!state.targetMarkets.length){$("step1-error").textContent="Choose at least one target market.";return false;}
+  $("step1-error").textContent="";return true;
+}
+function validateStep2(){readAnswers();if(!LeadIntelProfile.canBuildProfile(state)){$("step2-error").textContent="Add a valid company website and target market in Step 1 first.";return false;}$("step2-error").textContent="";return true;}
 
 async function getPdfModule(){
   if(pdfModule)return pdfModule;
@@ -112,6 +148,7 @@ async function analyzeCompany(targetStep=3){
   state.market=LeadIntelMarket.normalizeMarketState({});
   const sources=[{url:state.website,type:"website"},...state.additionalLinks.map(url=>({url,type:"link"}))];
   analysisStatus("Reading company sources…","Public source failures will not block the profile; they will be shown as intelligence gaps.");
+  analysisLog(`Target markets: ${state.targetMarkets.join(" · ")}`);
   for(const [index,source] of sources.entries()){
     try{const result=await scrapeSource(source.url,source.type);state.scrapedSources.push(result);analysisLog(index===0?"Main website":`Additional source ${index}`);}catch(error){analysisLog(index===0?"Main website unavailable":`Source ${index} unavailable`,"warn");state.scrapedSources.push({type:source.type,url:source.url,title:"",text:"",status:`error: ${error.message}`});}
   }
@@ -138,6 +175,7 @@ function renderProfile(){
 }
 function saveProfileEdits(){
   document.querySelectorAll("[data-profile-field]").forEach(el=>{const key=el.dataset.profileField;state.profile[key]=key==="currentMarkets"?el.value.split(/;|,/).map(x=>x.trim()).filter(Boolean):el.value.trim();});
+  state.profile.researchMarkets=LeadIntelProfile.expandTargetMarkets(state.profile.targetMarkets);
   document.querySelectorAll("[data-signal-index]").forEach(el=>{if(state.profile.recommendedSignals[Number(el.dataset.signalIndex)])state.profile.recommendedSignals[Number(el.dataset.signalIndex)].active=el.checked;});
   state.approved=false;saveState();
 }
@@ -172,7 +210,7 @@ function ensureMarketStrategySeeded(){
 }
 async function openModule(step){
   const target=Number(step)||1;readSources();
-  if(!LeadIntelProfile.canAccessModule(state,target)){showToast("Add your company website first");setStep(1);return false;}
+  if(!LeadIntelProfile.canAccessModule(state,target)){showToast("Add your company website and target market first");setStep(1);return false;}
   if(target<=2){setStep(target);return true;}
   if(!state.profile)return analyzeCompany(target);
   ensureMarketStrategySeeded();setStep(target);return true;
@@ -220,10 +258,11 @@ async function searchMarket(queryMeta){
 }
 function researchProfile(){
   const activeMarkets=state.market.icps.filter(item=>item.active).map(item=>item.targetMarkets).filter(Boolean).join("; ");
-  return {...state.profile,targetMarkets:activeMarkets||state.profile.targetMarkets};
+  const targetMarkets=activeMarkets||state.profile.targetMarkets;
+  return {...state.profile,targetMarkets,researchMarkets:LeadIntelProfile.expandTargetMarkets(targetMarkets)};
 }
 async function runMarketResearch(){
-  if(!state.profile){showToast("Add your website so LeadIntel can build a profile first");return;}
+  if(!state.profile){showToast("Add your website and target market so LeadIntel can build a profile first");return;}
   ensureMarketStrategySeeded();readMarketEdits();
   const profile=researchProfile();
   const queries=LeadIntelMarket.buildResearchQueries(profile,state.market.signals,MAX_MARKET_RESEARCH_QUERIES);
@@ -245,7 +284,7 @@ async function runMarketResearch(){
 function scoreCell(label,value){return `<div><span>${label}</span><strong>${value}/20</strong><i style="--score:${value}"></i></div>`;}
 function renderMarketOpportunities(){
   const target=$("market-opportunities");
-  if(!state.market.opportunities.length){target.innerHTML=`<div class="market-empty">${state.market.researchStatus==="running"?"Researching markets…":"Website-only mode is ready. Add optional target-market context or run market research to improve precision."}</div>`;return;}
+  if(!state.market.opportunities.length){target.innerHTML=`<div class="market-empty">${state.market.researchStatus==="running"?"Researching markets…":"Target market strategy is ready. Run market research to add live evidence and improve confidence."}</div>`;return;}
   target.innerHTML=state.market.opportunities.map((opp,index)=>`<article class="opportunity-card ${opp.active?"active":""}">
     <div class="opportunity-top"><label class="market-toggle"><input type="checkbox" data-opportunity-active="${index}" ${opp.active?"checked":""}><span></span></label><div><span class="opportunity-market">${esc(opp.market)}</span><h4>${esc(opp.title)}</h4></div><div class="opportunity-total"><strong>${opp.score.total}</strong><span>/100</span></div></div>
     <p class="opportunity-hypothesis">${esc(opp.hypothesis)}</p>
@@ -256,7 +295,7 @@ function renderMarketOpportunities(){
 }
 function renderResearchStatus(){
   const status=state.market.researchStatus;const count=state.market.researchResults.length;const queries=state.market.researchQueries.length;
-  const map={idle:"Website-only provisional strategy · optional market research can increase confidence.",running:`Running ${queries} market searches…`,complete:`Research complete · ${queries} queries · ${count} public evidence sources.`,partial:`Research partially complete · ${count} evidence sources; one or more searches were unavailable.`,error:"Public market search was unavailable. Profile-only hypotheses are shown with reduced Evidence scores."};
+  const map={idle:"Target market selected · live market research can increase confidence.",running:`Running ${queries} market searches…`,complete:`Research complete · ${queries} queries · ${count} public evidence sources.`,partial:`Research partially complete · ${count} evidence sources; one or more searches were unavailable.`,error:"Public market search was unavailable. Profile-only hypotheses are shown with reduced Evidence scores."};
   $("market-research-status").textContent=map[status]||map.idle;
   $("run-market-research").textContent=state.market.lastResearchAt?"Rerun market research ↻":"Run market research ↻";
   $("run-market-research").disabled=status==="running";
@@ -286,6 +325,13 @@ function resetWorkspace(){if(!window.confirm("Start over? This clears this brows
 
 function bind(){
   $("company-website").addEventListener("input",readSources);$("additional-links").addEventListener("input",readSources);
+  $("target-market-selector").addEventListener("click",e=>{
+    const chip=e.target.closest("[data-target-market]");if(chip){toggleTargetMarket(chip.dataset.targetMarket);return;}
+    const remove=e.target.closest("[data-remove-target-market]");if(remove){toggleTargetMarket(remove.dataset.removeTargetMarket);}
+  });
+  $("add-target-market").addEventListener("click",addCustomTargetMarket);
+  $("custom-target-market").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();addCustomTargetMarket();}});
+  $("clear-target-markets").addEventListener("click",()=>setTargetMarkets([]));
   document.querySelectorAll("[data-question]").forEach(el=>el.addEventListener("input",readAnswers));
   document.querySelector(".steps")?.addEventListener("click",e=>{const marker=e.target.closest("[data-step-marker]");if(marker)openModule(Number(marker.dataset.stepMarker));});
   $("to-questionnaire").addEventListener("click",()=>openModule(2));$("back-to-sources").addEventListener("click",()=>openModule(1));$("analyze-company").addEventListener("click",()=>analyzeCompany(3));
