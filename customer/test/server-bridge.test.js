@@ -21,3 +21,11 @@ test('server bridge exposes Gmail server actions without browser token storage',
   for(const pathPart of ['gmail/status','gmail/start','gmail/disconnect','gmail/send','gmail/sync'])assert.match(bridge,new RegExp(pathPart.replace('/','\\/')));
   assert.doesNotMatch(bridge,/access_token\s*=|refresh_token\s*=|localStorage\.setItem\([^\n]*token/i);
 });
+
+test('dirty local state survives reload and is retried before reporting synced',()=>{
+  assert.match(bridge,/DIRTY_KEY/);
+  assert.match(bridge,/localStorage\.setItem\(DIRTY_KEY/);
+  assert.match(bridge,/localStorage\.removeItem\(DIRTY_KEY/);
+  assert.match(bridge,/hasDirtyLocalState\(\)/);
+  assert.match(bridge,/if\(hasDirtyLocalState\(\)\).*scheduleSave\(\)/s);
+});
