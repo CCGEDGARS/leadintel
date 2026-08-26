@@ -29,3 +29,8 @@ test('dirty local state survives reload and is retried before reporting synced',
   assert.match(bridge,/hasDirtyLocalState\(\)/);
   assert.match(bridge,/if\(hasDirtyLocalState\(\)\).*scheduleSave\(\)/s);
 });
+
+test('workspace switching is blocked while the active workspace has unsynced local state',()=>{
+  assert.match(bridge,/async function selectWorkspace\(id\).*hasDirtyLocalState\(\)/s);
+  assert.match(bridge,/Finish syncing before switching workspaces/);
+});
