@@ -54,3 +54,8 @@ test('signed-out edits retain workspace and server-version provenance for safe r
 test('server account escaping uses a complete HTML quote entity',()=>{
   assert.match(bridge,/&quot;/);
 });
+
+test('workspace switching clears the shared customer cache before loading another workspace',()=>{
+  assert.match(bridge,/clearCustomerCache/);
+  assert.match(bridge,/async function selectWorkspace\(id\).*clearCustomerCache\(\).*localStorage\.setItem\(WORKSPACE_KEY,id\)/s);
+});
