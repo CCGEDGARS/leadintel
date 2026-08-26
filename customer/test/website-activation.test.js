@@ -86,3 +86,5 @@ test('website activation resynchronizes the app and stale discovery metadata can
   assert.match(appSource,/state\s*=\s*loadState\(\)/,'app.js must reload the canonical local state after activation');
   assert.doesNotMatch(discoveryUiSource,/else if\(loadMeta\(\)\.visibleStep===5&&moduleReady\(\)\)showDiscoveryStep\(\)/,'discovery-ui.js must not override the canonical main step with stale visibleStep metadata');
 });
+
+// Regression: a successful website activation must never restore a stale later journey step.
