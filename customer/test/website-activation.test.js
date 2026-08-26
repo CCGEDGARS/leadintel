@@ -7,6 +7,7 @@ const root=path.join(__dirname,'..');
 const indexSource=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const processMapSource=fs.readFileSync(path.join(root,'process-map.js'),'utf8');
 const researchUiSource=fs.readFileSync(path.join(root,'company-research-ui.js'),'utf8');
+const profile=require('../profile-engine.js');
 const activationPath=path.join(root,'website-activation.js');
 const activation=fs.existsSync(activationPath)?require(activationPath):null;
 
@@ -57,6 +58,18 @@ test('successful activation preserves customer inputs while resetting stale stra
   assert.equal(next.scrapedSources[0].type,'website');
   assert.equal(next.scrapedSources[0].url,'https://www.ccgroup.lv/');
   assert.equal(next.scrapedSources[0].text,'Fresh company evidence');
+});
+
+test('normalized customer state keeps activation metadata across reloads',()=>{
+  const normalized=profile.normalizeSavedState({
+    website:'www.ccgroup.lv',
+    targetMarkets:['Sweden'],
+    websiteActivation:{status:'active',url:'www.ccgroup.lv',title:'CCGROUP',description:'Sales training and AI',activatedAt:'2026-08-26T11:00:00.000Z',contentChars:1234},
+    scrapedSources:[{type:'website',url:'www.ccgroup.lv',title:'CCGROUP',text:'Readable evidence',status:'ready'}]
+  });
+  assert.deepEqual(normalized.websiteActivation,{
+    status:'active',url:'https://www.ccgroup.lv/',title:'CCGROUP',description:'Sales training and AI',activatedAt:'2026-08-26T11:00:00.000Z',contentChars:1234
+  });
 });
 
 test('company research requires activation and reuses the activated website evidence',()=>{
