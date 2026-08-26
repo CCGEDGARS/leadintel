@@ -53,6 +53,6 @@ test('fresh research persists answers and evidence into the existing main Custom
 });
 
 test('research reruns preserve non-empty answers through the research engine merge contract',()=>{
-  assert.match(ui,/LeadIntelCompanyResearch\.mergeDraft/);
+  assert.match(ui,/\.mergeDraft\(state\.answers\|\|\{\},draft\)/);
   assert.match(ui,/Rerun company research/);
 });
