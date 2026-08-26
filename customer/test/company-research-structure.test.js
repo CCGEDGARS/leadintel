@@ -56,3 +56,11 @@ test('research reruns preserve non-empty answers through the research engine mer
   assert.match(ui,/\.mergeDraft\(state\.answers\|\|\{\},draft\)/);
   assert.match(ui,/Rerun company research/);
 });
+
+test('profile build consumes the collected public evidence instead of running the legacy source-only analyzer',()=>{
+  assert.match(ui,/analyze-company/);
+  assert.match(ui,/buildProfileFromResearch/);
+  assert.match(ui,/LeadIntelProfile\.buildCompanyIntelligenceProfile/);
+  assert.match(ui,/scrapedSources/);
+  assert.match(ui,/data-step-marker/);
+});
