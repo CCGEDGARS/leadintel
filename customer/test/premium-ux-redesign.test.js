@@ -28,6 +28,17 @@ test('workspace uses executive typography and constrained readable content width
   assert.match(styles,/\.panel\{[^}]*border-radius:18px/s);
 });
 
+test('optional source inputs stay compact instead of dominating onboarding',()=>{
+  const html=read('index.html');
+  const styles=read('compact-sources.css');
+  assert.match(html,/compact-sources\.css\?v=20260826-compact-sources-v1/);
+  assert.match(html,/id="additional-links" rows="3"/);
+  assert.match(styles,/#additional-links\{[^}]*height:108px[^}]*min-height:108px[^}]*max-height:180px/s);
+  assert.match(styles,/\.upload-zone\{[^}]*min-height:118px/s);
+  assert.match(styles,/@media\(max-width:680px\)[\s\S]*#additional-links\{[^}]*height:96px[^}]*min-height:96px/s);
+  assert.match(styles,/@media\(max-width:680px\)[\s\S]*\.upload-zone\{[^}]*min-height:104px/s);
+});
+
 test('Discovery empty state is compact and the primary action dominates',()=>{
   const discovery=read('discovery.css');
   assert.match(discovery,/\.discovery-panel \.market-empty[^}]*padding:18px/s);
@@ -36,14 +47,21 @@ test('Discovery empty state is compact and the primary action dominates',()=>{
   assert.match(discovery,/\.company-score-legend\{[^}]*background:transparent/s);
 });
 
-test('production assets are versioned so deployments cannot mix stale CSS and JS',()=>{
+test('target market release assets are versioned together so browsers cannot mix onboarding generations',()=>{
   const html=read('index.html');
-  assert.match(html,/styles\.css\?v=20260824-typography-v2/);
-  assert.match(html,/market\.css\?v=20260824-typography-v2/);
-  assert.match(html,/premium\.css\?v=20260824-typography-v2/);
-  assert.match(html,/app\.js\?v=20260824-typography-v2/);
-  assert.match(html,/process-map\.js\?v=20260824-typography-v2/);
-  assert.match(html,/discovery-ui\.js\?v=20260824-typography-v2/);
+  const version='20260826-target-market-v1';
+  for(const asset of ['styles.css','market.css','premium.css','market-selector.css','profile-engine.js','market-engine.js','discovery-engine.js','app.js','process-map.js','discovery-ui.js']){
+    assert.match(html,new RegExp(asset.replace('.','\\.')+`\\?v=${version}`));
+  }
+});
+
+test('target market selector has a dedicated responsive styling layer',()=>{
+  const html=read('index.html');
+  const selector=read('market-selector.css');
+  assert.match(html,/market-selector\.css\?v=20260826-target-market-v1/);
+  assert.match(selector,/\.market-chip\.selected/);
+  assert.match(selector,/\.selected-market-chip/);
+  assert.match(selector,/@media\(max-width:720px\)/);
 });
 
 test('dynamic Customer V2 modules keep their own stable cache contract',()=>{

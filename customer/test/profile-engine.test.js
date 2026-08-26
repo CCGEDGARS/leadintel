@@ -2,18 +2,22 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const engine = require('../profile-engine.js');
 
+const APPROVED_MISSION = 'Find qualified B2B opportunities, connect with decision-makers, and close more deals through evidence-backed commercial intelligence.';
+
 const answers = {
   priority_offers: 'Industrial steel structures; custom fabrication',
   ideal_customer: 'Manufacturers with 50-500 employees in Northern Europe',
   lookalike_customers: 'ABB; Valmet',
   buyer_roles: 'Procurement Director; Production Director; CEO',
-  growth_markets: 'Sweden; Finland; Germany',
+  growth_markets: 'Industrial manufacturing; logistics centres',
   differentiation: 'Fast engineering, custom production, reliable delivery',
   buying_triggers: 'New factory; capacity expansion; equipment modernization',
   exclusions: 'Projects below EUR 20,000; private consumers',
   opportunity_value: 'EUR 50,000-250,000',
   success_outcome: 'Build a EUR 2M qualified pipeline in 12 months'
 };
+
+const targetMarkets = ['Nordics', 'Germany'];
 
 const websiteSources = [{
   type: 'website',
@@ -28,43 +32,77 @@ test('normalizes URLs and adds https when missing', () => {
   assert.equal(engine.normalizeUrl('javascript:alert(1)'), '');
 });
 
-test('website alone unlocks every customer module after Step 1', () => {
-  const websiteOnly = {website: 'example.com', answers: {}};
-  assert.equal(engine.canBuildProfile(websiteOnly), true);
-  for(let step=1; step<=7; step++) assert.equal(engine.canAccessModule(websiteOnly, step), true);
-  const empty = {website: '', answers: {}};
+test('website and at least one target market are required before customer modules unlock', () => {
+  const ready = {website: 'example.com', targetMarkets:['Sweden'], answers: {}};
+  assert.equal(engine.canBuildProfile(ready), true);
+  for(let step=1; step<=7; step++) assert.equal(engine.canAccessModule(ready, step), true);
+  assert.equal(engine.canBuildProfile({website:'example.com',targetMarkets:[]}), false);
+  assert.equal(engine.canBuildProfile({website:'',targetMarkets:['Sweden']}), false);
+  const empty = {website: '', targetMarkets:[], answers: {}};
   assert.equal(engine.canAccessModule(empty, 1), true);
   for(let step=2; step<=7; step++) assert.equal(engine.canAccessModule(empty, step), false);
 });
 
-test('saved state preserves an unlocked module position through Step 7', () => {
-  assert.equal(engine.normalizeSavedState({step:7,website:'example.com'}).step, 7);
+test('normalizes manual target markets and expands supported region presets for research', () => {
+  assert.deepEqual(engine.normalizeTargetMarkets([' Sweden ', 'Nordics', 'sweden', 'DACH', '']), ['Sweden','Nordics','DACH']);
+  assert.deepEqual(engine.expandTargetMarkets(['Nordics','DACH']), ['Sweden','Finland','Norway','Denmark','Iceland','Germany','Austria','Switzerland']);
 });
 
-test('calculates a high completeness score when strategic intake is complete', () => {
-  const score = engine.calculateCompleteness({ website: 'https://example.com', additionalLinks: ['https://example.com/cases'], documents: [{name:'catalog.pdf', text:'catalog'}], answers });
+test('saved state preserves an unlocked module position through Step 7', () => {
+  const state=engine.normalizeSavedState({step:7,website:'example.com',targetMarkets:['Sweden']});
+  assert.equal(state.step, 7);
+  assert.deepEqual(state.targetMarkets,['Sweden']);
+});
+
+test('legacy saved geography is migrated into the new mandatory target market state', () => {
+  const state=engine.normalizeSavedState({website:'example.com',answers:{growth_markets:'Sweden; Finland'}});
+  assert.deepEqual(state.targetMarkets,['Sweden','Finland']);
+  assert.equal(engine.canBuildProfile(state),true);
+});
+
+test('calculates a high completeness score when mandatory context and strategic intake are complete', () => {
+  const score = engine.calculateCompleteness({ website: 'https://example.com', targetMarkets, additionalLinks: ['https://example.com/cases'], documents: [{name:'catalog.pdf', text:'catalog'}], answers });
   assert.equal(score, 100);
 });
 
-test('keeps strategic user answers authoritative over website inference', () => {
-  const profile = engine.buildCompanyIntelligenceProfile({ website: 'https://example.com', additionalLinks: [], documents: [], answers, scrapedSources: websiteSources });
+test('keeps mandatory target markets authoritative while preserving optional segment focus', () => {
+  const profile = engine.buildCompanyIntelligenceProfile({ website: 'https://example.com', targetMarkets, additionalLinks: [], documents: [], answers, scrapedSources: websiteSources });
   assert.equal(profile.priorityOffers, answers.priority_offers);
-  assert.equal(profile.targetMarkets, answers.growth_markets);
+  assert.equal(profile.targetMarkets, 'Nordics; Germany');
+  assert.equal(profile.marketFocus, answers.growth_markets);
+  assert.deepEqual(profile.researchMarkets,['Sweden','Finland','Norway','Denmark','Iceland','Germany']);
 });
 
 test('uses the approved LeadIntel commercial mission copy', () => {
-  const profile = engine.buildCompanyIntelligenceProfile({ website: 'https://example.com', additionalLinks: [], documents: [], answers, scrapedSources: websiteSources });
-  assert.equal(profile.mission, 'Find qualified B2B opportunities, connect with decision-makers, and close more deals through evidence-backed commercial intelligence.');
+  const profile = engine.buildCompanyIntelligenceProfile({ website: 'https://example.com', targetMarkets, additionalLinks: [], documents: [], answers, scrapedSources: websiteSources });
+  assert.equal(profile.mission, APPROVED_MISSION);
 });
 
-test('infers current market footprint from source text without overriding target markets', () => {
-  const profile = engine.buildCompanyIntelligenceProfile({ website: 'https://example.com', additionalLinks: [], documents: [], answers, scrapedSources: websiteSources });
+test('migrates a saved legacy profile to the approved LeadIntel mission without deleting profile data', () => {
+  const state = engine.normalizeSavedState({
+    website: 'https://example.com',
+    targetMarkets:['Sweden'],
+    approved: true,
+    profile: {
+      companyName: 'Example Industrial',
+      mission: 'Find and prioritize manufacturers in Sweden that have evidence-backed reasons to buy.',
+      priorityOffers: 'Industrial steel structures'
+    }
+  });
+  assert.equal(state.profile.mission, APPROVED_MISSION);
+  assert.equal(state.profile.companyName, 'Example Industrial');
+  assert.equal(state.profile.priorityOffers, 'Industrial steel structures');
+  assert.equal(state.approved, true);
+});
+
+test('infers current market footprint without confusing it with selected target markets', () => {
+  const profile = engine.buildCompanyIntelligenceProfile({ website: 'https://example.com', targetMarkets, additionalLinks: [], documents: [], answers, scrapedSources: websiteSources });
   assert.deepEqual(profile.currentMarkets, ['Latvia', 'Estonia', 'Lithuania']);
-  assert.equal(profile.targetMarkets, 'Sweden; Finland; Germany');
+  assert.equal(profile.targetMarkets, 'Nordics; Germany');
 });
 
 test('recommends signals from declared buying triggers', () => {
-  const profile = engine.buildCompanyIntelligenceProfile({ website: 'https://example.com', additionalLinks: [], documents: [], answers, scrapedSources: websiteSources });
+  const profile = engine.buildCompanyIntelligenceProfile({ website: 'https://example.com', targetMarkets, additionalLinks: [], documents: [], answers, scrapedSources: websiteSources });
   const names = profile.recommendedSignals.map(item => item.name);
   assert.ok(names.includes('Facility expansion or new site'));
   assert.ok(names.includes('Capital investment or modernization'));
@@ -73,7 +111,7 @@ test('recommends signals from declared buying triggers', () => {
 
 test('includes extracted document text as evidence', () => {
   const profile = engine.buildCompanyIntelligenceProfile({
-    website: 'https://example.com', additionalLinks: [], answers,
+    website: 'https://example.com', targetMarkets, additionalLinks: [], answers,
     documents: [{name:'catalog.pdf', text:'Specialized robotic welding and CE-certified production for offshore structures.'}],
     scrapedSources: websiteSources
   });
@@ -83,14 +121,15 @@ test('includes extracted document text as evidence', () => {
 
 test('reports material information gaps instead of inventing answers', () => {
   const partial = {...answers, opportunity_value: '', buyer_roles: ''};
-  const profile = engine.buildCompanyIntelligenceProfile({ website:'https://example.com', additionalLinks:[], documents:[], answers:partial, scrapedSources: websiteSources });
+  const profile = engine.buildCompanyIntelligenceProfile({ website:'https://example.com', targetMarkets, additionalLinks:[], documents:[], answers:partial, scrapedSources: websiteSources });
   assert.ok(profile.informationGaps.some(x => /commercial value/i.test(x)));
   assert.ok(profile.informationGaps.some(x => /decision-maker/i.test(x)));
 });
 
 test('saved state normalization removes unknown fields and unsafe URLs', () => {
-  const state = engine.normalizeSavedState({website:'javascript:evil()', additionalLinks:['example.com','javascript:x'], answers:{priority_offers:'A'}, rogue:'x'});
+  const state = engine.normalizeSavedState({website:'javascript:evil()', targetMarkets:[' Sweden ','SWEDEN','Nordics'], additionalLinks:['example.com','javascript:x'], answers:{priority_offers:'A'}, rogue:'x'});
   assert.equal(state.website, '');
+  assert.deepEqual(state.targetMarkets,['Sweden','Nordics']);
   assert.deepEqual(state.additionalLinks, ['https://example.com/']);
   assert.equal(state.answers.priority_offers, 'A');
   assert.equal(state.rogue, undefined);

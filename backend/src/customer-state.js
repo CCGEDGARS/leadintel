@@ -1,4 +1,4 @@
-export const MAX_CUSTOMER_STATE_BYTES=1024*1024;
+export const MAX_CUSTOMER_STATE_BYTES=500*1024;
 const ALLOWED_KEYS=new Set(['main','discovery','outreach','delivery','meta']);
 const encoder=new TextEncoder();
 
@@ -11,7 +11,7 @@ export function normalizeCustomerPayload(payload){
 export function customerStateSize(payload){return encoder.encode(JSON.stringify(payload)).byteLength;}
 export function emptyCustomerState(workspaceId){return {workspace_id:String(workspaceId||''),schema_version:1,version:0,payload:{},updated_at:null};}
 export function validateCustomerStateWrite(current,{expectedVersion,schemaVersion,payload}){
-  const normalized=normalizeCustomerPayload(payload);const size=customerStateSize(normalized);if(size>MAX_CUSTOMER_STATE_BYTES)throw new Error('Customer state exceeds 1 MB limit');
+  const normalized=normalizeCustomerPayload(payload);const size=customerStateSize(normalized);if(size>MAX_CUSTOMER_STATE_BYTES)throw new Error('Customer state exceeds 500 KB limit');
   const actual=Number(current?.version)||0;const expected=Number(expectedVersion)||0;if(actual!==expected)return {conflict:true,current};
   return {conflict:false,next:{schema_version:Math.max(1,Number(schemaVersion)||1),version:actual+1,payload:normalized}};
 }

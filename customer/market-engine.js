@@ -23,6 +23,12 @@
     const name=clean(signal?.name).replace(/\bor\b/gi,";").replace(/\band\b/gi,";");
     return [...new Set(name.split(/;|,/).map(clean).filter(Boolean))].join("; ");
   }
+  function effectiveResearchMarkets(profile={}){
+    const expanded=splitList(profile.researchMarkets);
+    if(expanded.length)return expanded;
+    const selected=splitList(profile.targetMarkets);
+    return selected.length?selected:splitList(profile.currentMarkets);
+  }
 
   function buildIcpCandidates(profile={}){
     const targetMarkets=clean(profile.targetMarkets)||splitList(profile.currentMarkets).join("; ")||"Priority markets not yet defined";
@@ -90,15 +96,16 @@
 
   function buildResearchQueries(profile={},signals=[],maxQueries=4){
     const limit=Math.max(1,Math.min(4,Number(maxQueries)||4));
-    const markets=splitList(profile.targetMarkets).length?splitList(profile.targetMarkets):splitList(profile.currentMarkets);
+    const markets=effectiveResearchMarkets(profile);
     const offers=splitList(profile.priorityOffers).length?splitList(profile.priorityOffers):["commercial opportunity"];
     const active=(signals||[]).filter(item=>item.active!==false).sort((a,b)=>Number(b.weight)-Number(a.weight));
     const signalTerms=active.slice(0,3).map(item=>splitList(String(item.keywords||"").replace(/,/g,";"))[0]||item.name).filter(Boolean).join(" ");
+    const marketFocus=clean(profile.marketFocus);
     const results=[];
     for(const market of (markets.length?markets:["priority market"])){
       for(const offer of offers){
         if(results.length>=limit)break;
-        const query=[market,offer,clean(profile.idealCustomer),signalTerms,"investment expansion tender 2026"].filter(Boolean).join(" ");
+        const query=[market,offer,marketFocus,clean(profile.idealCustomer),signalTerms,"investment expansion tender 2026"].filter(Boolean).join(" ");
         results.push({id:`q-${slug(market)}-${results.length+1}`,market,offer,query});
       }
       if(results.length>=limit)break;
@@ -151,7 +158,7 @@
   }
 
   function buildMarketOpportunities(profile={},icps=[],signals=[],researchResults=[]){
-    const markets=splitList(profile.targetMarkets).length?splitList(profile.targetMarkets):splitList(profile.currentMarkets);
+    const markets=effectiveResearchMarkets(profile);
     const offer=splitList(profile.priorityOffers)[0]||"priority offer";
     return (markets.length?markets:["Priority market"]).slice(0,6).map(market=>{
       const evidence=(researchResults||[]).filter(item=>clean(item.market).toLowerCase()===clean(market).toLowerCase()).slice(0,5);
@@ -193,5 +200,5 @@
     };
   }
 
-  return {DEFAULT_MARKET_STATE,buildIcpCandidates,normalizeSignals,addCustomSignal,buildResearchQueries,normalizeSearchResults,buildMarketOpportunities,normalizeMarketState,splitList};
+  return {DEFAULT_MARKET_STATE,effectiveResearchMarkets,buildIcpCandidates,normalizeSignals,addCustomSignal,buildResearchQueries,normalizeSearchResults,buildMarketOpportunities,normalizeMarketState,splitList};
 });

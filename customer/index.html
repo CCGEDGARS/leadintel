@@ -8,9 +8,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260824-typography-v2">
-  <link rel="stylesheet" href="market.css?v=20260824-typography-v2">
-  <link rel="stylesheet" href="premium.css?v=20260824-typography-v2">
+  <link rel="stylesheet" href="styles.css?v=20260826-target-market-v1">
+  <link rel="stylesheet" href="market.css?v=20260826-target-market-v1">
+  <link rel="stylesheet" href="premium.css?v=20260826-target-market-v1">
+  <link rel="stylesheet" href="market-selector.css?v=20260826-target-market-v1">
+  <link rel="stylesheet" href="compact-sources.css?v=20260826-compact-sources-v1">
 </head>
 <body>
   <div class="page-shell">
@@ -30,10 +32,10 @@
         <div class="progress-head">
           <span class="eyebrow">Customer workspace</span>
           <h2>Commercial intelligence</h2>
-          <p>Your website is enough to start. Add context only where it improves targeting and opportunity quality.</p>
+          <p>Start with your company website and the market where you want LeadIntel to find opportunities.</p>
         </div>
         <ol class="steps">
-          <li data-step-marker="1" class="active"><span>01</span><div><strong>Company sources</strong><small>Website, links, documents</small></div></li>
+          <li data-step-marker="1" class="active"><span>01</span><div><strong>Company & market</strong><small>Website, target markets, sources</small></div></li>
           <li data-step-marker="2"><span>02</span><div><strong>Strategic intake</strong><small>Optional enrichment</small></div></li>
           <li data-step-marker="3"><span>03</span><div><strong>Intelligence profile</strong><small>Review, edit, optional approval</small></div></li>
           <li data-step-marker="4"><span>04</span><div><strong>Market strategy</strong><small>ICPs, signals, opportunities</small></div></li>
@@ -48,7 +50,7 @@
         <nav class="process-map" id="commercial-process-map" aria-label="LeadIntel commercial process">
           <div class="process-map-head"><span class="eyebrow">Commercial journey</span><strong>Website → revenue learning</strong><small>7 connected stages</small></div>
           <div class="process-track">
-            <button class="process-stage active" type="button" data-process-step="1"><span>01</span><strong>Website</strong><small>Source</small></button>
+            <button class="process-stage active" type="button" data-process-step="1"><span>01</span><strong>Website</strong><small>Source + market</small></button>
             <button class="process-stage" type="button" data-process-step="2"><span>02</span><strong>Context</strong><small>Optional</small></button>
             <button class="process-stage" type="button" data-process-step="3"><span>03</span><strong>Intelligence</strong><small>Profile</small></button>
             <button class="process-stage" type="button" data-process-step="4"><span>04</span><strong>Strategy</strong><small>ICP + signals</small></button>
@@ -60,26 +62,64 @@
 
         <section class="step-view active" id="step-1" data-step="1">
           <div class="hero-copy">
-            <span class="eyebrow">Step 1 · Company sources</span>
-            <h1>Tell LeadIntel about your business.</h1>
-            <p>Your main website is the only required input. Supporting pages and PDFs are optional evidence that can improve precision.</p>
+            <span class="eyebrow">Step 1 · Company & target market</span>
+            <h1>Tell LeadIntel who you are and where you want to grow.</h1>
+            <p>Your company website and at least one target market are required. Supporting pages and PDFs are optional evidence that can improve precision.</p>
           </div>
 
           <div class="panel source-panel">
             <div class="panel-head"><div><span class="panel-number">01</span><div><h3>Main company website</h3><p>Required · used as the primary public source.</p></div></div><span class="required-pill">Required</span></div>
             <label class="field-label" for="company-website">Website URL</label>
             <div class="url-row"><span>https://</span><input id="company-website" type="text" inputmode="url" autocomplete="url" placeholder="yourcompany.com"></div>
-            <p class="field-help">LeadIntel will scan the public page and use it as evidence—not as the final truth.</p>
+            <p class="field-help">LeadIntel will scan the public website and use it as evidence—not as the final truth.</p>
+          </div>
+
+          <div class="panel source-panel target-market-panel" id="target-market-selector">
+            <div class="panel-head"><div><span class="panel-number">02</span><div><h3>Where should LeadIntel find opportunities?</h3><p>Required · select one or more countries, regions or define a market manually.</p></div></div><span class="required-pill">Required</span></div>
+            <div class="market-selector-block">
+              <div class="market-selector-label"><strong>Popular countries</strong><small>Click to activate or deactivate.</small></div>
+              <div class="market-chip-grid" aria-label="Popular target countries">
+                <button class="market-chip" type="button" data-target-market="Latvia" aria-pressed="false">Latvia</button>
+                <button class="market-chip" type="button" data-target-market="Lithuania" aria-pressed="false">Lithuania</button>
+                <button class="market-chip" type="button" data-target-market="Estonia" aria-pressed="false">Estonia</button>
+                <button class="market-chip" type="button" data-target-market="Finland" aria-pressed="false">Finland</button>
+                <button class="market-chip" type="button" data-target-market="Sweden" aria-pressed="false">Sweden</button>
+                <button class="market-chip" type="button" data-target-market="Norway" aria-pressed="false">Norway</button>
+                <button class="market-chip" type="button" data-target-market="Denmark" aria-pressed="false">Denmark</button>
+                <button class="market-chip" type="button" data-target-market="Poland" aria-pressed="false">Poland</button>
+                <button class="market-chip" type="button" data-target-market="Germany" aria-pressed="false">Germany</button>
+                <button class="market-chip" type="button" data-target-market="Netherlands" aria-pressed="false">Netherlands</button>
+                <button class="market-chip" type="button" data-target-market="France" aria-pressed="false">France</button>
+                <button class="market-chip" type="button" data-target-market="United Kingdom" aria-pressed="false">United Kingdom</button>
+              </div>
+            </div>
+            <div class="market-selector-block">
+              <div class="market-selector-label"><strong>Regions</strong><small>Regional selections expand into countries when LeadIntel performs research.</small></div>
+              <div class="market-chip-grid region-chips" aria-label="Target market regions">
+                <button class="market-chip region" type="button" data-target-market="Baltics" aria-pressed="false">Baltics</button>
+                <button class="market-chip region" type="button" data-target-market="Nordics" aria-pressed="false">Nordics</button>
+                <button class="market-chip region" type="button" data-target-market="Scandinavia" aria-pressed="false">Scandinavia</button>
+                <button class="market-chip region" type="button" data-target-market="DACH" aria-pressed="false">DACH</button>
+                <button class="market-chip region" type="button" data-target-market="Benelux" aria-pressed="false">Benelux</button>
+              </div>
+            </div>
+            <div class="market-selector-block custom-market-block">
+              <label class="field-label" for="custom-target-market">Add another country, region, industry or commercial market</label>
+              <div class="custom-market-row"><input id="custom-target-market" type="text" autocomplete="off" placeholder="Example: Swedish construction sector or EU distributors"><button class="secondary-btn" id="add-target-market" type="button">+ Add market</button></div>
+            </div>
+            <div class="selected-market-head"><div><strong>Selected markets</strong><small id="selected-market-count">0 selected</small></div><button class="text-btn" id="clear-target-markets" type="button">Clear selection</button></div>
+            <div class="selected-target-markets" id="selected-target-markets" aria-live="polite"><span class="market-empty-selection">Choose at least one market to continue.</span></div>
+            <p class="field-help">You can combine presets and custom definitions. Example: Nordics + Germany + “food production companies”.</p>
           </div>
 
           <div class="panel source-panel">
-            <div class="panel-head"><div><span class="panel-number">02</span><div><h3>Additional links</h3><p>Optional · product pages, case studies, LinkedIn company page, market pages or catalog pages.</p></div></div><span class="optional-pill">Optional</span></div>
+            <div class="panel-head"><div><span class="panel-number">03</span><div><h3>Additional links</h3><p>Optional · product pages, case studies, LinkedIn company page, market pages or catalog pages.</p></div></div><span class="optional-pill">Optional</span></div>
             <label class="field-label" for="additional-links">One URL per line · up to 8</label>
-            <textarea id="additional-links" rows="5" placeholder="https://yourcompany.com/products&#10;https://yourcompany.com/case-studies"></textarea>
+            <textarea id="additional-links" rows="3" placeholder="https://yourcompany.com/products&#10;https://yourcompany.com/case-studies"></textarea>
           </div>
 
           <div class="panel source-panel">
-            <div class="panel-head"><div><span class="panel-number">03</span><div><h3>Company materials</h3><p>Optional · brochures, product catalogues, presentations, technical sheets or case studies.</p></div></div><span class="optional-pill">PDF</span></div>
+            <div class="panel-head"><div><span class="panel-number">04</span><div><h3>Company materials</h3><p>Optional · brochures, product catalogues, presentations, technical sheets or case studies.</p></div></div><span class="optional-pill">PDF</span></div>
             <label class="upload-zone" for="pdf-input" id="upload-zone">
               <span class="upload-icon">↥</span>
               <strong>Drop PDFs here or choose files</strong>
@@ -96,21 +136,21 @@
         <section class="step-view" id="step-2" data-step="2">
           <div class="hero-copy compact">
             <span class="eyebrow">Step 2 · Optional enrichment</span>
-            <h1>Give LeadIntel context your website cannot.</h1>
-            <p>These ten questions are optional. LeadIntel can work from your website alone; answer any that improve targeting, or skip these questions and open any module from the sidebar.</p>
+            <h1>Review context your website cannot fully explain.</h1>
+            <p>LeadIntel already has your website and selected target market. These ten questions are optional; answer any that improve targeting, or skip these questions and open another module.</p>
           </div>
 
           <div class="question-grid">
             <article class="question-card"><span>01</span><label>What products or services are your highest commercial priority right now?<small>Select or describe up to three. LeadIntel will optimize opportunity discovery around these—not everything on your website.</small></label><textarea data-question="priority_offers" rows="4" placeholder="Example: custom steel structures; industrial installation; engineering services"></textarea></article>
-            <article class="question-card"><span>02</span><label>Describe your ideal customer.<small>Industries, company types, size, geography, maturity, or other characteristics that make a customer commercially attractive.</small></label><textarea data-question="ideal_customer" rows="4" placeholder="Example: manufacturers with 50–500 employees in Northern Europe"></textarea></article>
+            <article class="question-card"><span>02</span><label>Describe your ideal customer.<small>Industries, company types, size, geography, maturity, or other characteristics that make a customer commercially attractive.</small></label><textarea data-question="ideal_customer" rows="4" placeholder="Example: manufacturers with 50–500 employees"></textarea></article>
             <article class="question-card"><span>03</span><label>Name 3–5 existing customers you would like to find more companies similar to.<small>Optional if confidential. These become lookalike anchors, not automatic outreach targets.</small></label><textarea data-question="lookalike_customers" rows="3" placeholder="Company A; Company B; Company C"></textarea></article>
             <article class="question-card"><span>04</span><label>Who normally makes or strongly influences the buying decision?<small>Roles are more useful than names: CEO, Procurement Director, Production Director, HR Director, Architect, Distributor, etc.</small></label><textarea data-question="buyer_roles" rows="3" placeholder="Procurement Director; Production Director; CEO"></textarea></article>
-            <article class="question-card"><span>05</span><label>Which countries, regions, industries or segments do you want to grow in?<small>These are strategic target markets. LeadIntel will keep them separate from your current market footprint.</small></label><textarea data-question="growth_markets" rows="3" placeholder="Sweden; Finland; German industrial manufacturing"></textarea></article>
+            <article class="question-card"><span>05</span><label>Within your selected markets, which industries, segments or customer groups should LeadIntel prioritize?<small>Your geography is already selected in Step 1. Use this only to narrow the commercial focus inside those markets.</small></label><textarea data-question="growth_markets" rows="3" placeholder="Example: industrial manufacturers; logistics centres; food production companies"></textarea></article>
             <article class="question-card"><span>06</span><label>Why do customers choose you instead of competitors?<small>Think speed, quality, specialization, technology, customization, certifications, service, price, reliability or access.</small></label><textarea data-question="differentiation" rows="4" placeholder="Example: fast engineering, custom production and reliable delivery"></textarea></article>
             <article class="question-card signal-question"><span>07</span><label>What usually happens before a customer needs what you sell?<small>This seeds the Signal Designer. Describe real-world events: new factory, expansion, funding, hiring, tender, equipment replacement, regulation change, new distributor search, etc.</small></label><textarea data-question="buying_triggers" rows="4" placeholder="New facility; capacity expansion; equipment modernization; tender"></textarea></article>
             <article class="question-card"><span>08</span><label>What makes a prospect unattractive or impossible to serve?<small>Minimum deal size, geography, consumer vs B2B, certifications, logistics, industries, capacity or other exclusion rules.</small></label><textarea data-question="exclusions" rows="4" placeholder="Example: projects below €20,000; private consumers; markets outside Europe"></textarea></article>
             <article class="question-card"><span>09</span><label>What is the approximate commercial value of a good opportunity?<small>Typical order, project, annual contract or customer lifetime value. A range is enough.</small></label><textarea data-question="opportunity_value" rows="3" placeholder="€50,000–€250,000 per project"></textarea></article>
-            <article class="question-card"><span>10</span><label>What result would make LeadIntel successful for you in the next 6–12 months?<small>Be concrete: market entry, distributors, pipeline value, qualified opportunities, new logos, capacity utilization or revenue.</small></label><textarea data-question="success_outcome" rows="4" placeholder="Build a €2M qualified pipeline in Sweden and Finland within 12 months"></textarea></article>
+            <article class="question-card"><span>10</span><label>What result would make LeadIntel successful for you in the next 6–12 months?<small>Be concrete: market entry, distributors, pipeline value, qualified opportunities, new logos, capacity utilization or revenue.</small></label><textarea data-question="success_outcome" rows="4" placeholder="Build a €2M qualified pipeline within 12 months"></textarea></article>
           </div>
 
           <div class="step-actions split"><button class="secondary-btn" type="button" id="back-to-sources">← Back</button><span id="step2-error" class="inline-error" role="alert"></span><button class="primary-btn" type="button" id="analyze-company">Build / refresh intelligence profile <span>✦</span></button></div>
@@ -186,7 +226,7 @@
 
           <section class="panel strategy-panel research-panel">
             <div class="market-research-head">
-              <div class="section-title"><span class="eyebrow">Market Opportunity Engine</span><h3>Research the market for evidence</h3><p>One manual run uses a maximum of four Firecrawl searches and five results per query. Failed public searches reduce Evidence score but do not fabricate replacements.</p></div>
+              <div class="section-title"><span class="eyebrow">Market Opportunity Engine</span><h3>Research the market for evidence</h3><p>One manual run uses a maximum of four Firecrawl searches and five results per query. Regional selections are expanded into their countries before research.</p></div>
               <button class="primary-btn" id="run-market-research" type="button">Run market research <span>↻</span></button>
             </div>
             <div class="score-legend" aria-label="Opportunity scoring model"><strong>Opportunity score</strong><span>Fit</span><span>Intent</span><span>Timing</span><span>Value</span><span>Evidence</span></div>
@@ -203,11 +243,11 @@
     </div>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="profile-engine.js?v=20260824-typography-v2"></script>
-  <script src="market-engine.js?v=20260824-typography-v2"></script>
-  <script src="discovery-engine.js?v=20260824-typography-v2"></script>
-  <script type="module" src="app.js?v=20260824-typography-v2"></script>
-  <script type="module" src="process-map.js?v=20260824-typography-v2"></script>
-  <script type="module" src="discovery-ui.js?v=20260824-typography-v2"></script>
+  <script src="profile-engine.js?v=20260826-target-market-v1"></script>
+  <script src="market-engine.js?v=20260826-target-market-v1"></script>
+  <script src="discovery-engine.js?v=20260826-target-market-v1"></script>
+  <script type="module" src="app.js?v=20260826-target-market-v1"></script>
+  <script type="module" src="process-map.js?v=20260826-target-market-v1"></script>
+  <script type="module" src="discovery-ui.js?v=20260826-target-market-v1"></script>
 </body>
 </html>

@@ -1,0 +1,12 @@
+/* LeadIntel Customer V2 — compact optional source inputs */
+#additional-links{height:108px;min-height:108px;max-height:180px;resize:vertical}
+.upload-zone{min-height:118px;padding:18px 24px}
+.upload-icon{font-size:22px;line-height:1}
+.upload-zone strong{margin-top:4px}
+.upload-zone small{margin-top:3px}
+
+@media(max-width:680px){
+  #additional-links{height:96px;min-height:96px;max-height:160px}
+  .upload-zone{min-height:104px;padding:15px 16px}
+  .upload-icon{font-size:20px}
+}

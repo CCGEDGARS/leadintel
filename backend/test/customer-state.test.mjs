@@ -19,8 +19,9 @@ test('version mismatch returns conflict without inventing a merge',()=>{
   assert.equal(result.conflict,true);assert.equal(result.current,current);
 });
 
-test('customer state enforces one megabyte cap',()=>{
+test('customer state enforces the 500 KB cap',()=>{
+  assert.equal(MAX_CUSTOMER_STATE_BYTES,500*1024);
   const payload={main:{text:'x'.repeat(MAX_CUSTOMER_STATE_BYTES+100)}};
   assert.ok(customerStateSize(payload)>MAX_CUSTOMER_STATE_BYTES);
-  assert.throws(()=>validateCustomerStateWrite(emptyCustomerState('ws'),{expectedVersion:0,schemaVersion:1,payload}),/1 MB/);
+  assert.throws(()=>validateCustomerStateWrite(emptyCustomerState('ws'),{expectedVersion:0,schemaVersion:1,payload}),/500 KB/);
 });
