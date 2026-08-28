@@ -1,7 +1,9 @@
 import './state-budget.js?v=20260826-state-budget-500kb';
 import './website-input-sync.js?v=20260826-website-sync-v1';
 import './website-activation.js?v=20260826-website-activation-v2';
-import './server-bridge.js?v=20260826-intelligence-autofill-v1';
+import './crm-engine.js?v=20260828-master-crm-v1';
+import './server-bridge.js?v=20260828-master-crm-v1';
+import './crm-ui.js?v=20260828-master-crm-v1';
 import './ai-settings.js?v=20260824-ai-providers';
 import './company-research-security.js?v=20260826-intelligence-autofill-v1';
 import './company-research-ui.js?v=20260826-intelligence-autofill-v2';

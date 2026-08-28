@@ -5,7 +5,7 @@ const DISCOVERY_META_KEY="leadintel_customer_v2_discovery_meta";
 const INTELLIGENCE_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
 const MAX_DOSSIER_SEARCH_QUERIES=2;
 const MAX_DOSSIER_RESULTS_PER_QUERY=5;
-const ASSET_VERSION="20260824-premium";
+const ASSET_VERSION="20260828-master-crm-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const q=id=>document.getElementById(id);
 let outreach=loadOutreach();
@@ -32,6 +32,23 @@ function updatePipelineStage(domain,targetStage){
   const discovery=discoveryState();const item=discovery.pipeline.find(x=>x.domain===domain);if(!item)return false;
   if(!stageAtLeast(item.stage,targetStage))item.stage=targetStage;
   item.updatedAt=new Date().toISOString();saveDiscovery(discovery);return true;
+}
+function crmBridge(){return window.LeadIntelServerBridge||null;}
+function crmAuthenticated(){const b=crmBridge();return Boolean(b?.session?.authenticated&&b?.workspace);}
+function crmDomain(value){return window.LeadIntelCrm?.canonicalDomain(value)||String(value||"").replace(/^https?:\/\//,"").replace(/^www\./,"").split(/[/?#]/)[0].toLowerCase();}
+function crmActivityId(kind,domain,stamp){return `${kind}-${crmDomain(domain)}-${String(stamp||"")}`.replace(/[^A-Za-z0-9._:-]/g,"-").slice(0,128);}
+async function durableCompany(candidate){
+  if(!candidate||!crmAuthenticated())return {ok:true,localOnly:true,company:null};
+  const b=crmBridge(),domain=crmDomain(candidate.domain||candidate.website);const listed=await b.listCrmCompanies({q:domain,limit:20});if(!listed.ok)return listed;
+  let company=(listed.companies||[]).find(row=>crmDomain(row.normalized_domain||row.website)===domain)||null;
+  if(!company){const payload=window.LeadIntelCrm?.mapLocalPipelineItemToCrm(candidate);if(!payload)return {ok:false,error:"CRM mapper unavailable"};const saved=await b.saveCrmCompany(payload);if(!saved.ok)return saved;company=saved.company;}
+  return {ok:true,company};
+}
+async function syncCrmActivity(candidate,{activity=null,stage=""}={}){
+  const resolved=await durableCompany(candidate);if(!resolved.ok||resolved.localOnly)return resolved;const b=crmBridge(),company=resolved.company;
+  if(activity){const recorded=await b.recordCrmActivity(company.id,activity);if(!recorded.ok)return recorded;}
+  let latest=company;if(stage){const moved=await b.addCrmToPipeline(company.id,stage);if(!moved.ok)return moved;latest=moved.company||company;}
+  window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company:latest}}));return {ok:true,company:latest};
 }
 
 function injectOutreachUI(){
@@ -80,20 +97,18 @@ async function buildDossier(){
   const candidate=selectedCandidate();if(!candidate){toast("Choose a saved pipeline company");return;}
   const main=mainState();let item=currentItem()||{domain:candidate.domain,company:candidate.company,drafts:{tone:"consultative",emailSubject:"",emailBody:"",linkedinMessage:"",callOpener:"",followUp:"",objectionReply:""},approved:false};
   item={...item,company:candidate.company,researchStatus:"running",approved:false,approvedAt:"",contactedAt:""};upsertItem(item);renderAll();
-  const research=[];let failures=0;
-  try{research.push(...await officialScrape(candidate));}catch{failures++;}
-  const queries=LeadIntelOutreach.buildDossierSearchQueries(candidate,main.profile||{},main.market||{},MAX_DOSSIER_SEARCH_QUERIES);
-  for(const meta of queries){try{research.push(...await dossierSearch(meta));}catch{failures++;}}
-  const dossier=LeadIntelOutreach.buildOpportunityDossier(candidate,main.profile||{},main.market||{},research);
-  const contact=candidate.people?.[0]||null;const tone=item.drafts?.tone||"consultative";
-  item={...item,dossier,researchStatus:research.length?(failures?"partial":"complete"):"error",researchAt:new Date().toISOString(),selectedPersonId:contact?.id||"",drafts:LeadIntelOutreach.buildOutreachDrafts(dossier,contact,main.profile||{},tone),approved:false,approvedAt:""};
-  upsertItem(item);renderAll();toast(research.length?`Dossier built from ${dossier.evidence.length} evidence source${dossier.evidence.length===1?"":"s"}${failures?" · some research unavailable":""}`:"Dossier kept conservative because public research was unavailable");
+  const research=[];let failures=0;try{research.push(...await officialScrape(candidate));}catch{failures++;}
+  const queries=LeadIntelOutreach.buildDossierSearchQueries(candidate,main.profile||{},main.market||{},MAX_DOSSIER_SEARCH_QUERIES);for(const meta of queries){try{research.push(...await dossierSearch(meta));}catch{failures++;}}
+  const dossier=LeadIntelOutreach.buildOpportunityDossier(candidate,main.profile||{},main.market||{},research);const contact=candidate.people?.[0]||null;const tone=item.drafts?.tone||"consultative";
+  item={...item,dossier,researchStatus:research.length?(failures?"partial":"complete"):"error",researchAt:new Date().toISOString(),selectedPersonId:contact?.id||"",drafts:LeadIntelOutreach.buildOutreachDrafts(dossier,contact,main.profile||{},tone),approved:false,approvedAt:""};upsertItem(item);
+  const crm=await syncCrmActivity(candidate,{activity:{id:crmActivityId("dossier-built",candidate.domain,item.researchAt),type:"dossier.built",summary:"Opportunity dossier built",occurred_at:item.researchAt,metadata:{evidence_count:dossier.evidence?.length||0,research_status:item.researchStatus}}});renderAll();
+  const baseMessage=research.length?`Dossier built from ${dossier.evidence.length} evidence source${dossier.evidence.length===1?"":"s"}${failures?" · some research unavailable":""}`:"Dossier kept conservative because public research was unavailable";toast(!crm.ok?`${baseMessage} · CRM sync unavailable`:baseMessage);
 }
 function selectedContact(item){if(!item?.dossier?.people?.length)return null;return item.dossier.people.find(p=>p.id===item.selectedPersonId)||item.dossier.people[0];}
 function regenerateDrafts(){const item=currentItem();if(!item?.dossier)return;if(item.approved){toast("Approved package is locked. Rebuild the dossier to create a new draft.");return;}item.selectedPersonId=q("outreach-contact-select").value;item.drafts=LeadIntelOutreach.buildOutreachDrafts(item.dossier,selectedContact(item),mainState().profile||{},q("outreach-tone").value);upsertItem(item);renderDossier();}
 function readDraftEdits(){const item=currentItem();if(!item)return null;item.drafts={tone:q("outreach-tone").value,emailSubject:q("outreach-email-subject").value.trim(),emailBody:q("outreach-email-body").value,linkedinMessage:q("outreach-linkedin").value,callOpener:q("outreach-call-opener").value,followUp:q("outreach-follow-up").value,objectionReply:q("outreach-objection-reply").value};upsertItem(item);return item;}
-function approveOutreach(){let item=readDraftEdits();if(!item?.dossier){toast("Build the dossier first");return;}item=LeadIntelOutreach.approveOutreachItem(item,item.drafts,new Date().toISOString());upsertItem(item);if(!item.approved){toast(item.error);renderDossier();return;}updatePipelineStage(item.domain,"Ready for Outreach");renderDossier();toast("Content package approved · Pipeline is Ready for Outreach");}
-function markContacted(){const item=currentItem();if(!item?.approved){toast("Approve the content package first");return;}updatePipelineStage(item.domain,"Contacted");item.contactedAt=new Date().toISOString();upsertItem(item);renderDossier();toast("Opportunity marked Contacted");}
+async function approveOutreach(){let item=readDraftEdits();if(!item?.dossier){toast("Build the dossier first");return;}item=LeadIntelOutreach.approveOutreachItem(item,item.drafts,new Date().toISOString());upsertItem(item);if(!item.approved){toast(item.error);renderDossier();return;}updatePipelineStage(item.domain,"Ready for Outreach");const candidate=selectedCandidate()||{domain:item.domain,company:item.company,stage:"Ready for Outreach"};const crm=await syncCrmActivity(candidate,{activity:{id:crmActivityId("content-approved",item.domain,item.approvedAt),type:"content.approved",summary:"Outreach content package approved",occurred_at:item.approvedAt,metadata:{tone:item.drafts?.tone||"",selected_person_id:item.selectedPersonId||""}},stage:"Ready for Outreach"});renderDossier();toast(crm.ok?"Content package approved · Pipeline is Ready for Outreach":"Content approved locally · CRM sync unavailable");}
+async function markContacted(){const item=currentItem();if(!item?.approved){toast("Approve the content package first");return;}updatePipelineStage(item.domain,"Contacted");item.contactedAt=new Date().toISOString();upsertItem(item);const candidate=selectedCandidate()||{domain:item.domain,company:item.company,stage:"Contacted"};const crm=await syncCrmActivity(candidate,{stage:"Contacted"});renderDossier();toast(crm.ok?"Opportunity marked Contacted":"Contacted locally · CRM sync unavailable");}
 async function copyField(type){
   const item=readDraftEdits();if(!item)return;
   const values={email:`${item.drafts.emailSubject}\n\n${item.drafts.emailBody}`,linkedin:item.drafts.linkedinMessage,call:item.drafts.callOpener,followup:item.drafts.followUp,objection:item.drafts.objectionReply};

@@ -57,7 +57,7 @@ rather than hard-coded only for Coaching & Consulting Group.
 ## Security and privacy requirements
 
 - Never expose API keys, credentials, or private contacts in the public
-  GitHub Pages frontend.
+  browser frontend.
 - Store credentials in secure provider connections or a backend secret vault.
 - Keep each client's settings, leads, contacts, and permissions separated.
 - Require human approval before sending outreach.

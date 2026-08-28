@@ -110,7 +110,8 @@ test('discovery UI injects Step 5, company discovery, decision makers and pipeli
   assert.match(ui,/id="run-company-discovery"/);
   assert.match(ui,/id="company-candidates"/);
   assert.match(ui,/data-action="find-decision-makers"/);
-  assert.match(ui,/data-action="save-pipeline"/);
+  assert.match(ui,/data-action="save-crm"/);
+  assert.match(ui,/data-action="add-pipeline"/);
   assert.match(ui,/id="customer-pipeline"/);
   assert.match(ui,/data-pipeline-stage/);
 });
