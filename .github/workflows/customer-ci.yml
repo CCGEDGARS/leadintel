@@ -1,6 +1,7 @@
 name: Customer V2 CI
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
