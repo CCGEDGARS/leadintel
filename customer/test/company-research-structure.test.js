@@ -11,9 +11,9 @@ const handoff=read('company-profile-handoff.js');
 const css=read('company-research.css');
 
 test('Customer V2 loads the automatic company research module from the existing process shell',()=>{
-  assert.match(processMap,/company-research-ui\.js\?v=20260826-intelligence-autofill-v1/);
+  assert.match(processMap,/company-research-ui\.js\?v=20260826-intelligence-autofill-v2/);
   assert.match(processMap,/company-profile-handoff\.js\?v=20260826-intelligence-autofill-v1/);
-  assert.match(ui,/company-research-engine\.js\?v=20260826-intelligence-autofill-v1/);
+  assert.match(ui,/company-research-engine\.js\?v=20260826-intelligence-autofill-v2/);
 });
 
 test('Step 1 becomes research-first and intercepts legacy questionnaire navigation safely',()=>{
