@@ -1,47 +1,74 @@
-# Lead Intel
+# LeadIntel
 
-Lead Intel is a Latvia-focused opportunity-research workspace for daily public
-market monitoring, AI qualification, decision-maker enrichment, and
-human-approved outreach.
+LeadIntel is a commercial-intelligence workspace for researching markets, identifying evidence-backed B2B opportunities, finding relevant decision-makers, preparing human-approved outreach, and learning from real sales outcomes.
 
-## Open the app
+## Production architecture
 
-- Production domain: <https://leadintel.ccgroup.lv/v2/>
-- Production root: <https://leadintel.ccgroup.lv/> redirects to V2.
-- GitHub Pages fallback: <https://ccgedgars.github.io/leadintel/v2/>
-- Archived V1 fallback: <https://ccgedgars.github.io/leadintel/LeadIntel.html>
+- Active workspace: <https://leadintel.ccgroup.lv/customer/>
+- Production root: <https://leadintel.ccgroup.lv/> redirects to the active customer workspace.
+- Frontend deployment: **Vercel**.
+- Backend: **Cloudflare Worker + D1** at `leadintel-api.edgars-7e7.workers.dev`.
+- Master CRM: workspace-scoped D1 companies, contacts, intelligence and activity history.
+- Repository: GitHub is the source-control and CI system; GitHub Pages is retired.
 
-V2 is a static browser application. It is functional with demo data and JSON
-imports. Live automation requires private Make or backend endpoints; provider
-API keys must never be placed in this public repository or in browser settings.
+The legacy `/v2/` entry point remains only as a compatibility redirect to `/customer/`. `LeadIntel.html` is the archived V1 application and is not the production workspace.
 
-## Basic-version workflow
+## Active commercial workflow
 
-1. Google Sheets supplies active research queries.
-2. Make calls Firecrawl search for each query.
-3. OpenAI analyses and scores each public signal.
-4. Make parses the JSON and appends it to `Make Raw Findings`.
-5. A private snapshot endpoint exposes safe lead data to V2.
-6. V2 displays the daily shortlist, dossiers, contacts, runs, and approval queue.
-7. The internal email contains the top three qualified opportunities.
+1. Website / Company & market
+2. Context / Strategic intake
+3. Intelligence profile
+4. Market Strategy / ICP + Signals
+5. Discovery
+6. Content & Scripts
+7. Delivery & Learning
 
-The required endpoint payloads and Sheet mapping are documented in
-[`docs/MVP_RUNTIME_CONTRACT.md`](docs/MVP_RUNTIME_CONTRACT.md).
+Master CRM is a persistent layer across the workflow rather than an eighth step. Removing a company from the active pipeline preserves the CRM company, contacts, intelligence and activity history.
+
+## Data and integration architecture
+
+The browser keeps compact working state for onboarding and active UI flows. Growing CRM data is stored separately in D1 and is deliberately excluded from the synchronized 500 KB customer-state budget.
+
+Public web research is performed through the configured intelligence proxies. Gmail OAuth credentials and refresh tokens stay in the private Worker integration layer and are never stored in the browser or Master CRM. Sending remains human-approved.
 
 ## Local preview
 
-From this directory:
+From the repository root:
 
 ```sh
 python3 -m http.server 8080
 ```
 
-Then open `http://localhost:8080/v2/`.
+Then open `http://localhost:8080/customer/`.
 
-## Safety
+## Verification
 
-- Public business data only.
-- Predicted email addresses remain research-only until verified.
-- Suppression and eligibility checks are required before campaign use.
-- Outreach sending is disabled in the basic version; a human must approve it.
-- Credentials belong in Make/provider connections or a private backend.
+Backend:
+
+```sh
+cd backend
+npm ci
+npm test
+```
+
+Customer workspace:
+
+```sh
+node --test customer/test/*.test.js
+```
+
+Vercel static artifact:
+
+```sh
+bash scripts/build-vercel-static.sh
+```
+
+The public artifact must not contain backend source, repository metadata, CI files, test files, scripts, docs, or private credentials.
+
+## Safety rules
+
+- Public business research data only unless the workspace user explicitly supplies authorized business context.
+- Do not invent evidence, contacts or email addresses.
+- Suppressed companies remain stored for history but are blocked from normal pipeline reactivation and outbound activity.
+- Credentials belong in private provider/Worker connections, never in public source or browser state.
+- Production changes require green backend/customer tests and verified deployment artifacts.

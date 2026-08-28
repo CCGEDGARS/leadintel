@@ -29,3 +29,12 @@ test('Gmail connect and disconnect require owner while send requires owner or sa
   assert.match(routes,/gmail\/send[\s\S]*requireMember\(request,env,workspaceId,\['owner','sales'\]\)/);
   assert.match(routes,/gmail\/disconnect[\s\S]*requireMember\(request,env,workspaceId,\['owner'\]\)/);
 });
+
+test('Gmail send and reply sync integrate with durable CRM and suppression',()=>{
+  assert.match(routes,/findCrmCompanyByDomain/);
+  assert.match(routes,/CRM_COMPANY_SUPPRESSED/);
+  assert.match(routes,/email\.sent/);
+  assert.match(routes,/email\.reply_received/);
+  assert.match(routes,/setCrmPipelineStage/);
+  assert.match(routes,/gmail-send-\$\{key\}/,'CRM send activity must share the Gmail idempotency key with the browser confirmation path');
+});

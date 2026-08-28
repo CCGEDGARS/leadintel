@@ -3,7 +3,8 @@ name: Backend CI
 on:
   push:
     branches:
-      - 'feature/customer-v2-*'
+      - main
+      - 'feature/**'
     paths:
       - 'backend/**'
       - '.github/workflows/backend-ci.yml'
@@ -44,6 +45,8 @@ jobs:
           node --check src/customer-state.js
           node --check src/gmail.js
           node --check src/saas-routes.js
+          node --check src/crm.js
+          node --check src/crm-routes.js
           node --check src/ai-provider.js
           node --check src/ai-routes.js
           node --check src/canonical.js

@@ -3,18 +3,33 @@ name: Customer V2 CI
 on:
   push:
     branches:
-      - 'feature/customer-v2-*'
+      - main
+      - 'feature/**'
     paths:
       - 'customer/**'
       - 'backend/src/customer-state.js'
+      - 'backend/src/crm.js'
+      - 'backend/src/crm-routes.js'
+      - 'backend/migrations/0011_master_crm.sql'
+      - 'scripts/build-vercel-static.sh'
+      - 'vercel.json'
+      - 'index.html'
+      - 'v2/index.html'
+      - 'README.md'
       - '.github/workflows/customer-ci.yml'
-      - '.github/workflows/deploy-pages.yml'
   pull_request:
     paths:
       - 'customer/**'
       - 'backend/src/customer-state.js'
+      - 'backend/src/crm.js'
+      - 'backend/src/crm-routes.js'
+      - 'backend/migrations/0011_master_crm.sql'
+      - 'scripts/build-vercel-static.sh'
+      - 'vercel.json'
+      - 'index.html'
+      - 'v2/index.html'
+      - 'README.md'
       - '.github/workflows/customer-ci.yml'
-      - '.github/workflows/deploy-pages.yml'
 
 permissions:
   contents: read
@@ -35,6 +50,8 @@ jobs:
       - name: Check JavaScript syntax
         run: |
           node --check backend/src/customer-state.js
+          node --check backend/src/crm.js
+          node --check backend/src/crm-routes.js
           node --check customer/profile-engine.js
           node --check customer/market-engine.js
           node --check customer/discovery-engine.js
@@ -47,6 +64,8 @@ jobs:
           node --check customer/state-budget.js
           node --check customer/website-input-sync.js
           node --check customer/website-activation.js
+          node --check customer/crm-engine.js
+          node --check customer/crm-ui.js
           node --check customer/app.js
           node --check customer/process-map.js
           node --check customer/ai-settings.js
