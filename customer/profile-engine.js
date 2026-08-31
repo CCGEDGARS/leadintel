@@ -135,9 +135,13 @@
     if(!(documents||[]).some(d=>clean(d.text)))gaps.push("No document text is available for supporting evidence.");
     return gaps;
   }
+  function sourceMatchesWebsite(source,website){
+    const target=normalizeUrl(website);const candidate=normalizeUrl(source?.url);if(!target||!candidate)return false;
+    try{return new URL(target).hostname.replace(/^www\\./i,"").toLowerCase()===new URL(candidate).hostname.replace(/^www\\./i,"").toLowerCase();}catch{return false;}
+  }
   function buildCompanyIntelligenceProfile(input={}){
-    const answers=Object.fromEntries(QUESTION_IDS.map(id=>[id,clean(input.answers?.[id])]));
-    const scraped=(input.scrapedSources||[]).filter(x=>x&&clean(x.text));
+    const answers=Object.fromEntries(QUESTION_IDS.map(id=>[id,clean(input.answers?.[id])])); 
+    const scraped=(input.scrapedSources||[]).filter(x=>x&&clean(x.text)&&sourceMatchesWebsite(x,input.website));
     const documents=(input.documents||[]).filter(x=>x&&clean(x.name));
     const combined=sourceText(scraped,documents);
     const selectedTargetMarkets=normalizeTargetMarkets(input.targetMarkets).length?normalizeTargetMarkets(input.targetMarkets):normalizeTargetMarkets(answers.growth_markets);
