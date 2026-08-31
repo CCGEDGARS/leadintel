@@ -141,7 +141,7 @@ async function runCompanyResearch({rerun=false}={}){
     setProgress('Searching related public sources…',`Running ${queries.length} bounded company searches for evidence, news, partners and market context.`);
     const publicRows=[];
     for(const query of queries){try{publicRows.push(...await searchPublic(query));}catch{failures++;}}
-    const rawSources=researchEngine.mergeSources(official,publicRows,12);
+    const rawSources=researchEngine.mergeSources(official,publicRows,researchEngine.RESEARCH_LIMITS.standard.maxPages);
     const research=researchEngine.filterResearchSources(rawSources,website,{depth:'standard'});
     const sources=[...research.primary,...research.supporting];
     const quality=researchEngine.evaluateResearchQuality({website,primary:research.primary,supporting:research.supporting,failures});
