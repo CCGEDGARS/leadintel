@@ -67,3 +67,11 @@ test('profile build consumes the collected public evidence instead of running th
   assert.match(handoff,/data-step-marker/);
   assert.match(handoff,/capture:\s*true/);
 });
+
+test('labels reset as a complete workspace reset and protects CRM records',()=>{
+  const html=read('index.html');
+  assert.match(html,/id="reset-workspace"[^>]*>Reset all workspace data</);
+  assert.match(ui,/Reset all workspace data/);
+  assert.match(ui,/CRM records will not be deleted/);
+  assert.match(ui,/leadintel_customer_v2_discovery/);
+});
