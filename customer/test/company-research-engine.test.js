@@ -87,3 +87,43 @@ test('source merge keeps official evidence first and caps persisted research saf
   assert.equal(merged[0].type,'website');
   assert.deepEqual(merged.map(row=>row.id),merged.map((_,i)=>`S${i+1}`));
 });
+
+
+test('filters research to the verified company domain and excludes assets or unrelated domains from primary evidence',()=>{
+  const result=engine.filterResearchSources([
+    {type:'website',url:'https://www.acme-industrial.com/',title:'Acme home',text:'Official company evidence'},
+    {type:'link',url:'https://www.acme-industrial.com/services',title:'Services',text:'Official services'},
+    {type:'public',url:'https://www.klozers.com/case-studies',title:'Unrelated result',text:'Wrong company evidence'},
+    {type:'public',url:'https://images.example-cdn.com/logo.png',title:'Image',text:'Wrong asset'}
+  ],'https://www.acme-industrial.com/');
+  assert.deepEqual(result.primary.map(row=>row.url),[
+    'https://www.acme-industrial.com/',
+    'https://www.acme-industrial.com/services'
+  ]);
+  assert.deepEqual(result.supporting.map(row=>row.url),['https://www.klozers.com/case-studies']);
+  assert.ok(result.excluded.some(row=>/asset/i.test(row.reason)));
+});
+
+test('research quality gate blocks publication when primary evidence is missing or foreign-domain evidence is present',()=>{
+  const quality=engine.evaluateResearchQuality({
+    website:'https://www.acme-industrial.com/',
+    primary:[
+      {type:'website',url:'https://www.acme-industrial.com/',title:'Acme',text:'Official company evidence'}
+    ],
+    supporting:[
+      {type:'public',url:'https://www.klozers.com/about',title:'Other company',text:'Unrelated'}
+    ],
+    failures:0
+  });
+  assert.equal(quality.publishable,true);
+  assert.equal(quality.checks.primaryDomainMatch,true);
+  assert.equal(quality.checks.noForeignPrimaryEvidence,true);
+  const blocked=engine.evaluateResearchQuality({
+    website:'https://www.acme-industrial.com/',
+    primary:[],
+    supporting:[],
+    failures:1
+  });
+  assert.equal(blocked.publishable,false);
+  assert.ok(blocked.issues.some(issue=>/primary website evidence/i.test(issue)));
+});
