@@ -135,9 +135,13 @@
     if(!(documents||[]).some(d=>clean(d.text)))gaps.push("No document text is available for supporting evidence.");
     return gaps;
   }
+  function sourceMatchesWebsite(source,website){
+    const target=normalizeUrl(website);const candidate=normalizeUrl(source?.url);if(!target||!candidate)return false;
+    try{return new URL(target).hostname.replace(/^www\./i,"").toLowerCase()===new URL(candidate).hostname.replace(/^www\./i,"").toLowerCase();}catch{return false;}
+  }
   function buildCompanyIntelligenceProfile(input={}){
     const answers=Object.fromEntries(QUESTION_IDS.map(id=>[id,clean(input.answers?.[id])]));
-    const scraped=(input.scrapedSources||[]).filter(x=>x&&clean(x.text));
+    const scraped=(input.scrapedSources||[]).filter(x=>x&&clean(x.text)&&sourceMatchesWebsite(x,input.website));
     const documents=(input.documents||[]).filter(x=>x&&clean(x.name));
     const combined=sourceText(scraped,documents);
     const selectedTargetMarkets=normalizeTargetMarkets(input.targetMarkets).length?normalizeTargetMarkets(input.targetMarkets):normalizeTargetMarkets(answers.growth_markets);
@@ -191,7 +195,7 @@
       additionalLinks:unique((value.additionalLinks||[]).map(normalizeUrl).filter(Boolean)).slice(0,8),
       documents:docs,
       answers,
-      scrapedSources:Array.isArray(value.scrapedSources)?value.scrapedSources.slice(0,12).map(s=>({type:s?.type==="link"?"link":"website",url:normalizeUrl(s?.url),title:clean(s?.title).slice(0,180),text:String(s?.text||"").slice(0,30000),status:clean(s?.status)||"ready"})).filter(s=>s.url):[],
+      scrapedSources:Array.isArray(value.scrapedSources)?value.scrapedSources.slice(0,25).map(s=>({type:s?.type==="link"?"link":"website",url:normalizeUrl(s?.url),title:clean(s?.title).slice(0,180),text:String(s?.text||"").slice(0,30000),status:clean(s?.status)||"ready"})).filter(s=>s.url):[],
       profile,
       approved:Boolean(value.approved)
     };

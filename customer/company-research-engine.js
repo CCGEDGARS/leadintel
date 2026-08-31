@@ -8,7 +8,7 @@
   const QUESTION_IDS=["priority_offers","ideal_customer","lookalike_customers","buyer_roles","growth_markets","differentiation","buying_triggers","exclusions","opportunity_value","success_outcome"];
   const CONFIDENCE=new Set(["high","medium","low"]);
   const MAX_PUBLIC_QUERIES=3;
-  const MAX_SOURCES=12;
+  const MAX_SOURCES=25;
 
   function clean(value){return String(value??"").replace(/\s+/g," ").trim();}
   function truncate(value,max=1200){const text=clean(value);return text.length>max?`${text.slice(0,max-1)}…`:text;}
@@ -78,6 +78,45 @@
     (official||[]).forEach(row=>add(row,row?.type||"website"));
     (publicRows||[]).forEach(row=>add(row,"public"));
     return assignIds(rows.slice(0,Math.max(1,Math.min(MAX_SOURCES,Number(limit)||MAX_SOURCES))));
+  }
+
+  const RESEARCH_LIMITS=Object.freeze({standard:{maxPages:25,maxChars:100000,maxPdfs:5},deep:{maxPages:50,maxChars:200000,maxPdfs:10}});
+  const ASSET_EXTENSION=/\.(?:png|jpe?g|gif|webp|svg|ico|avif|bmp|css|js|map|woff2?|ttf|eot|pdf)$/i;
+  function sameDomain(left,right){const a=hostname(left),b=hostname(right);return Boolean(a&&b&&a===b);}
+  function filterResearchSources(sources=[],website,options={}){
+    const limits=RESEARCH_LIMITS[options.depth]||RESEARCH_LIMITS.standard;
+    const primary=[],supporting=[],excluded=[],seen=new Set();let chars=0;
+    for(const source of Array.isArray(sources)?sources:[]){
+      const item=normalizeSource(source,source?.type||"public",source?.query||"");if(!item)continue;
+      const key=canonicalUrl(item.url);if(seen.has(key))continue;seen.add(key);
+      const parsed=new URL(item.url);const asset=ASSET_EXTENSION.test(parsed.pathname)||/^image\//i.test(item.mimeType||"");
+      if(asset){excluded.push({...item,reason:"Asset or non-content URL excluded."});continue;}
+      if(!item.text.trim()){excluded.push({...item,reason:"No readable text returned."});continue;}
+      if(chars+item.text.length>limits.maxChars){excluded.push({...item,reason:`Research character limit reached (${limits.maxChars}).`});continue;}
+      chars+=item.text.length;
+      if(sameDomain(item.url,website)&&primary.length<limits.maxPages)primary.push({...item,role:"primary"});
+      else if(!sameDomain(item.url,website))supporting.push({...item,role:"supporting"});
+      else excluded.push({...item,reason:`Research page limit reached (${limits.maxPages}).`});
+    }
+    const primaryWithIds=assignIds(primary);const supportingWithIds=assignIds(supporting.slice(0,MAX_SOURCES)).map((row,index)=>({...row,id:`S${primaryWithIds.length+index+1}`}));return {primary:primaryWithIds,supporting:supportingWithIds,excluded,limits,characters:chars};
+  }
+  function evaluateResearchQuality(input={}){
+    const website=canonicalUrl(input.website);const primary=Array.isArray(input.primary)?input.primary:[];const supporting=Array.isArray(input.supporting)?input.supporting:[];
+    const primaryWebsite=primary.filter(source=>sameDomain(source?.url,website)&&source?.type==="website"&&clean(source?.text));
+    const foreignPrimary=primary.filter(source=>!sameDomain(source?.url,website));
+    const checks={
+      websiteProvided:Boolean(website),
+      primaryDomainMatch:primaryWebsite.length>0,
+      readablePrimaryEvidence:primary.some(source=>clean(source?.text)),
+      noForeignPrimaryEvidence:foreignPrimary.length===0,
+      supportingSeparated:supporting.every(source=>!sameDomain(source?.url,website)||source?.role!=="primary"),
+      failures:Number(input.failures)||0
+    };
+    const issues=[];if(!checks.websiteProvided)issues.push("Company website is missing.");
+    if(!checks.primaryDomainMatch)issues.push("Primary website evidence is missing.");
+    if(!checks.readablePrimaryEvidence)issues.push("No readable primary evidence was collected.");
+    if(!checks.noForeignPrimaryEvidence)issues.push("Foreign-domain evidence entered the primary evidence set.");
+    return {publishable:Boolean(checks.websiteProvided&&checks.primaryDomainMatch&&checks.readablePrimaryEvidence&&checks.noForeignPrimaryEvidence),checks,issues};
   }
 
   function stripFence(text){return String(text||"").trim().replace(/^```(?:json)?\s*/i,"").replace(/\s*```$/," ").trim();}
@@ -193,5 +232,5 @@
     return {system,prompt};
   }
 
-  return {QUESTION_IDS,MAX_PUBLIC_QUERIES,MAX_SOURCES,safeUrl,buildResearchQueries,normalizeSearchResults,mergeSources,parseAiDraft,buildEvidenceDraft,mergeDraft,reviewActionState,deriveCompanyName,buildAiPrompt};
+  return {QUESTION_IDS,MAX_PUBLIC_QUERIES,MAX_SOURCES,RESEARCH_LIMITS,safeUrl,buildResearchQueries,normalizeSearchResults,mergeSources,filterResearchSources,evaluateResearchQuality,parseAiDraft,buildEvidenceDraft,mergeDraft,reviewActionState,deriveCompanyName,buildAiPrompt};
 });

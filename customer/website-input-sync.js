@@ -21,6 +21,11 @@
     }catch{return "";}
   }
 
+  function toVisibleWebsite(value){
+    const normalized=normalizeUrl(value);
+    return normalized?normalized.replace(/^https?:\/\//i,"").replace(/\/$/,""):"";
+  }
+
   function resolveWebsite(savedWebsite,visibleWebsite){
     return normalizeUrl(visibleWebsite)||normalizeUrl(savedWebsite);
   }
@@ -43,10 +48,18 @@
     if(!input)return false;
     const visible=normalizeUrl(input.value);
     if(!visible)return false;
+
+    // The field already has a fixed visual "https://" prefix. Browser autofill/page
+    // restore can reinsert the complete URL after app hydration, so normalize the
+    // visible value every time—even when the canonical saved URL is unchanged.
+    const display=toVisibleWebsite(visible);
+    const displayChanged=input.value!==display;
+    if(displayChanged)input.value=display;
+
     const state=readState();
     const saved=normalizeUrl(state.website);
-    if(saved===visible)return false;
-    const next=mergeVisibleWebsite(state,input.value);
+    if(saved===visible)return displayChanged;
+    const next=mergeVisibleWebsite(state,visible);
     root.localStorage.setItem(STORAGE_KEY,JSON.stringify(next));
     input.dispatchEvent(new Event("input",{bubbles:true}));
     try{root.dispatchEvent(new CustomEvent("leadintel:website-synced",{detail:{website:visible}}));}catch{}
@@ -69,5 +82,5 @@
     root.document.getElementById("target-market-selector")?.addEventListener("pointerdown",syncVisibleWebsite,{capture:true});
   }
 
-  return {STORAGE_KEY,normalizeUrl,resolveWebsite,mergeVisibleWebsite,syncVisibleWebsite,install};
+  return {STORAGE_KEY,normalizeUrl,toVisibleWebsite,resolveWebsite,mergeVisibleWebsite,syncVisibleWebsite,install};
 });

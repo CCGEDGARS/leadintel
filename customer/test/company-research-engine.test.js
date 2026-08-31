@@ -87,3 +87,59 @@ test('source merge keeps official evidence first and caps persisted research saf
   assert.equal(merged[0].type,'website');
   assert.deepEqual(merged.map(row=>row.id),merged.map((_,i)=>`S${i+1}`));
 });
+
+
+test('filters research to the verified company domain and excludes assets or unrelated domains from primary evidence',()=>{
+  const result=engine.filterResearchSources([
+    {type:'website',url:'https://www.acme-industrial.com/',title:'Acme home',text:'Official company evidence'},
+    {type:'link',url:'https://www.acme-industrial.com/services',title:'Services',text:'Official services'},
+    {type:'public',url:'https://www.klozers.com/case-studies',title:'Unrelated result',text:'Wrong company evidence'},
+    {type:'public',url:'https://images.example-cdn.com/logo.png',title:'Image',text:'Wrong asset'}
+  ],'https://www.acme-industrial.com/');
+  assert.deepEqual(result.primary.map(row=>row.url),[
+    'https://www.acme-industrial.com/',
+    'https://www.acme-industrial.com/services'
+  ]);
+  assert.deepEqual(result.supporting.map(row=>row.url),['https://www.klozers.com/case-studies']);
+  assert.ok(result.excluded.some(row=>/asset/i.test(row.reason)));
+});
+
+test('research quality gate blocks publication when primary evidence is missing or foreign-domain evidence is present',()=>{
+  const quality=engine.evaluateResearchQuality({
+    website:'https://www.acme-industrial.com/',
+    primary:[
+      {type:'website',url:'https://www.acme-industrial.com/',title:'Acme',text:'Official company evidence'}
+    ],
+    supporting:[
+      {type:'public',url:'https://www.klozers.com/about',title:'Other company',text:'Unrelated'}
+    ],
+    failures:0
+  });
+  assert.equal(quality.publishable,true);
+  assert.equal(quality.checks.primaryDomainMatch,true);
+  assert.equal(quality.checks.noForeignPrimaryEvidence,true);
+  const blocked=engine.evaluateResearchQuality({
+    website:'https://www.acme-industrial.com/',
+    primary:[],
+    supporting:[],
+    failures:1
+  });
+  assert.equal(blocked.publishable,false);
+  assert.ok(blocked.issues.some(issue=>/primary website evidence/i.test(issue)));
+});
+
+test('standard research envelope can carry up to 25 unique sources before quality filtering',()=>{
+  const rows=Array.from({length:25},(_,i)=>({type:i===0?'website':'link',url:`https://acme-industrial.com/page-${i}`,title:`Page ${i}`,text:`Evidence ${i}`}));
+  const merged=engine.mergeSources(rows,[],25);
+  assert.equal(engine.RESEARCH_LIMITS.standard.maxPages,25);
+  assert.equal(merged.length,25);
+});
+
+test('research limit messages expose the actual numeric budget instead of an unexpanded template token',()=>{
+  const rows=Array.from({length:8},(_,i)=>({type:i===0?'website':'public',url:i===0?'https://acme-industrial.com/':`https://news.example/${i}`,title:`Source ${i}`,text:'x'.repeat(16000)}));
+  const result=engine.filterResearchSources(rows,'https://acme-industrial.com/');
+  const limited=result.excluded.find(row=>/character limit/i.test(row.reason));
+  assert.ok(limited);
+  assert.match(limited.reason,/100000/);
+  assert.doesNotMatch(limited.reason,/\$\{/);
+});

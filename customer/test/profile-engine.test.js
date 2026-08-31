@@ -134,3 +134,21 @@ test('saved state normalization removes unknown fields and unsafe URLs', () => {
   assert.equal(state.answers.priority_offers, 'A');
   assert.equal(state.rogue, undefined);
 });
+
+test('company evidence treats www and apex hostnames as the same verified website', () => {
+  const profile=engine.buildCompanyIntelligenceProfile({
+    website:'https://www.example.com/',
+    targetMarkets:['Sweden'],
+    answers,
+    documents:[],
+    scrapedSources:[{type:'website',url:'https://example.com/',title:'Example Industrial',text:'Verified apex-domain company evidence for Swedish manufacturers.'}]
+  });
+  assert.equal(profile.sourceSummary.website,1);
+  assert.match(profile.evidenceDigest,/Verified apex-domain company evidence/i);
+});
+
+test('saved state preserves the standard 25-page research envelope', () => {
+  const scrapedSources=Array.from({length:20},(_,i)=>({type:'link',url:`https://example.com/page-${i}`,title:`Page ${i}`,text:`Evidence ${i}`,status:'ready'}));
+  const state=engine.normalizeSavedState({website:'https://example.com/',targetMarkets:['Sweden'],scrapedSources});
+  assert.equal(state.scrapedSources.length,20);
+});
