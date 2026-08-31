@@ -8,6 +8,7 @@ const integritySkillPath=path.join(root,'.agents/skills/release-integrity/SKILL.
 const verificationSkillPath=path.join(root,'.agents/skills/release-verification/SKILL.md');
 const templatePath=path.join(root,'docs/release-integrity-template.md');
 const provenancePath=path.join(root,'docs/superpowers/specs/2026-08-31-release-provenance.md');
+const agentsPath=path.join(root,'AGENTS.md');
 
 test('release integrity skill enforces exact proof and fixed status vocabulary',()=>{
   assert.equal(fs.existsSync(integritySkillPath),true,'release-integrity skill must exist');
@@ -24,6 +25,15 @@ test('general release verification delegates current/proven claims to release in
   const skill=fs.readFileSync(verificationSkillPath,'utf8');
   assert.match(skill,/release-integrity/i);
   assert.match(skill,/release-proof\.json/i);
+});
+
+test('repository-wide agent instructions make release integrity mandatory',()=>{
+  assert.equal(fs.existsSync(agentsPath),true,'AGENTS.md must make the release rule persistent for repo agents');
+  const agents=fs.readFileSync(agentsPath,'utf8');
+  assert.match(agents,/release-integrity/i);
+  assert.match(agents,/release-proof\.json/i);
+  assert.match(agents,/PROVEN PRODUCTION/);
+  assert.match(agents,/never.*older|no silent fallback/i);
 });
 
 test('reusable CCGROUP template documents the portable release integrity package',()=>{
