@@ -12,4 +12,7 @@ For user-facing work use `browser-ui-verification` and confirm desktop/mobile, c
 Production promotion requires explicit authorization unless already granted in the current request. State exact target before promotion.
 
 After deployment: open the exact URL, confirm health/readiness, execute critical path, verify expected version/change, and inspect immediate errors when available.
+
+For any claim that a build is latest, current, live, deployed, fixed in production, production ready, or proven, invoke `release-integrity` and require a matching `release-proof.json` verdict for the exact SHA/environment. General release verification does not override the fail-closed release-integrity gate.
+
 Only say complete/fixed/deployed/working when evidence supports that exact claim. State anything unverified, why, risk, and deterministic next verification action.

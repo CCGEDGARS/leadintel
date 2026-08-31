@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "application": "LeadIntel",
+  "service": "leadintel-customer",
+  "productionUrl": "https://leadintel.ccgroup.lv",
+  "manifestPath": "/release.json",
+  "expectedRef": "main",
+  "backendHealth": {
+    "url": "https://leadintel-api.edgars-7e7.workers.dev/api/health",
+    "status": 200,
+    "json": {
+      "status": "ok",
+      "service": "leadintel-api"
+    }
+  },
+  "smokeChecks": [
+    {
+      "id": "customer-shell",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "LeadIntel — Build Your Commercial Intelligence Strategy",
+        "id=\"company-website\""
+      ]
+    },
+    {
+      "id": "website-input-normalization",
+      "type": "text",
+      "url": "/customer/website-input-sync.js",
+      "status": 200,
+      "contains": [
+        "toVisibleWebsite",
+        "syncVisibleWebsite",
+        "displayChanged"
+      ]
+    },
+    {
+      "id": "production-entry",
+      "type": "text",
+      "url": "/",
+      "status": 200,
+      "contains": [
+        "location.replace('/customer/')"
+      ],
+      "notContains": [
+        "location.replace('/v2/')"
+      ]
+    }
+  ],
+  "retry": {
+    "attempts": 12,
+    "delayMs": 10000,
+    "timeoutMs": 15000
+  }
+}

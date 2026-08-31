@@ -13,11 +13,20 @@ on:
       - 'backend/src/crm-routes.js'
       - 'backend/migrations/0011_master_crm.sql'
       - 'scripts/build-vercel-static.sh'
+      - 'scripts/release-integrity-core.mjs'
+      - 'scripts/verify-release-integrity.mjs'
+      - 'release-integrity.config.json'
       - 'vercel.json'
       - 'index.html'
       - 'v2/index.html'
       - 'README.md'
+      - 'AGENTS.md'
+      - '.agents/skills/release-integrity/**'
+      - '.agents/skills/release-verification/SKILL.md'
+      - 'docs/release-integrity-template.md'
+      - 'docs/superpowers/specs/2026-08-31-release-provenance.md'
       - '.github/workflows/customer-ci.yml'
+      - '.github/workflows/release-integrity.yml'
   pull_request:
     paths:
       - 'customer/**'
@@ -26,11 +35,20 @@ on:
       - 'backend/src/crm-routes.js'
       - 'backend/migrations/0011_master_crm.sql'
       - 'scripts/build-vercel-static.sh'
+      - 'scripts/release-integrity-core.mjs'
+      - 'scripts/verify-release-integrity.mjs'
+      - 'release-integrity.config.json'
       - 'vercel.json'
       - 'index.html'
       - 'v2/index.html'
       - 'README.md'
+      - 'AGENTS.md'
+      - '.agents/skills/release-integrity/**'
+      - '.agents/skills/release-verification/SKILL.md'
+      - 'docs/release-integrity-template.md'
+      - 'docs/superpowers/specs/2026-08-31-release-provenance.md'
       - '.github/workflows/customer-ci.yml'
+      - '.github/workflows/release-integrity.yml'
 
 permissions:
   contents: read
@@ -75,3 +93,5 @@ jobs:
           node --check customer/delivery-ui.js
           node --check customer/server-bridge.js
           node --check customer/production-gmail-ui.js
+          node --check scripts/release-integrity-core.mjs
+          node --check scripts/verify-release-integrity.mjs
