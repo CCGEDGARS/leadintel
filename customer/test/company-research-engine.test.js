@@ -127,3 +127,19 @@ test('research quality gate blocks publication when primary evidence is missing 
   assert.equal(blocked.publishable,false);
   assert.ok(blocked.issues.some(issue=>/primary website evidence/i.test(issue)));
 });
+
+test('standard research envelope can carry up to 25 unique sources before quality filtering',()=>{
+  const rows=Array.from({length:25},(_,i)=>({type:i===0?'website':'link',url:`https://acme-industrial.com/page-${i}`,title:`Page ${i}`,text:`Evidence ${i}`}));
+  const merged=engine.mergeSources(rows,[],25);
+  assert.equal(engine.RESEARCH_LIMITS.standard.maxPages,25);
+  assert.equal(merged.length,25);
+});
+
+test('research limit messages expose the actual numeric budget instead of an unexpanded template token',()=>{
+  const rows=Array.from({length:8},(_,i)=>({type:i===0?'website':'public',url:i===0?'https://acme-industrial.com/':`https://news.example/${i}`,title:`Source ${i}`,text:'x'.repeat(16000)}));
+  const result=engine.filterResearchSources(rows,'https://acme-industrial.com/');
+  const limited=result.excluded.find(row=>/character limit/i.test(row.reason));
+  assert.ok(limited);
+  assert.match(limited.reason,/100000/);
+  assert.doesNotMatch(limited.reason,/\$\{/);
+});
