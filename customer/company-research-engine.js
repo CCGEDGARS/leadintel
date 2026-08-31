@@ -98,7 +98,7 @@
       else if(!sameDomain(item.url,website))supporting.push({...item,role:"supporting"});
       else excluded.push({...item,reason:`Research page limit reached (\${limits.maxPages}).`});
     }
-    return {primary:assignIds(primary),supporting:assignIds(supporting.slice(0,MAX_SOURCES)),excluded,limits,characters:chars};
+    const primaryWithIds=assignIds(primary);const supportingWithIds=assignIds(supporting.slice(0,MAX_SOURCES)).map((row,index)=>({...row,id:`S${primaryWithIds.length+index+1}`}));return {primary:primaryWithIds,supporting:supportingWithIds,excluded,limits,characters:chars};
   }
   function evaluateResearchQuality(input={}){
     const website=canonicalUrl(input.website);const primary=Array.isArray(input.primary)?input.primary:[];const supporting=Array.isArray(input.supporting)?input.supporting:[];
