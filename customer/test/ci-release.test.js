@@ -49,6 +49,16 @@ test('automatic release proof verifies the exact CI head SHA and conclusion',()=
   assert.doesNotMatch(workflow,/--expected-sha[^\n]*github\.sha/);
 });
 
+test('manual re-verification converts invalid CI evidence into a blocked proof instead of dying before proof generation',()=>{
+  assert.equal(fs.existsSync(releaseWorkflowPath),true,'release-integrity workflow must exist');
+  const workflow=fs.readFileSync(releaseWorkflowPath,'utf8');
+  assert.match(workflow,/id:\s*manual_ci/);
+  assert.match(workflow,/conclusion=failure/);
+  assert.match(workflow,/GITHUB_OUTPUT/);
+  assert.match(workflow,/steps\.manual_ci\.outputs\.conclusion/);
+  assert.match(workflow,/--ci-conclusion[\s\S]{0,180}steps\.manual_ci\.outputs\.conclusion/);
+});
+
 test('release proof artifact is retained even when verifier blocks the release',()=>{
   assert.equal(fs.existsSync(releaseWorkflowPath),true,'release-integrity workflow must exist');
   const workflow=fs.readFileSync(releaseWorkflowPath,'utf8');
