@@ -1,0 +1,82 @@
+name: Release Integrity
+
+on:
+  workflow_run:
+    workflows: ["Customer V2 CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact main commit SHA to re-verify
+        required: true
+        type: string
+      ci_run_id:
+        description: Successful Customer V2 CI run ID for the same SHA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  prove-production:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.expected_sha }}
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate manual CI evidence
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          CI_RUN_ID: ${{ inputs.ci_run_id }}
+        run: |
+          set -euo pipefail
+          actual_sha="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CI_RUN_ID}" --jq '.head_sha')"
+          actual_conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CI_RUN_ID}" --jq '.conclusion')"
+          actual_name="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CI_RUN_ID}" --jq '.name')"
+          test "${actual_sha}" = "${EXPECTED_SHA}"
+          test "${actual_conclusion}" = "success"
+          test "${actual_name}" = "Customer V2 CI"
+
+      - name: Verify production from automatic CI completion
+        if: github.event_name == 'workflow_run'
+        run: |
+          node scripts/verify-release-integrity.mjs \
+            --expected-sha "${{ github.event.workflow_run.head_sha }}" \
+            --ci-conclusion "${{ github.event.workflow_run.conclusion }}" \
+            --ci-run-id "${{ github.event.workflow_run.id }}" \
+            --environment production \
+            --config release-integrity.config.json \
+            --proof release-proof.json
+
+      - name: Re-verify production with validated CI evidence
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          node scripts/verify-release-integrity.mjs \
+            --expected-sha "${{ inputs.expected_sha }}" \
+            --ci-conclusion success \
+            --ci-run-id "${{ inputs.ci_run_id }}" \
+            --environment production \
+            --config release-integrity.config.json \
+            --proof release-proof.json
+
+      - name: Upload release proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-proof-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.expected_sha }}
+          path: release-proof.json
+          if-no-files-found: warn
+          retention-days: 30
