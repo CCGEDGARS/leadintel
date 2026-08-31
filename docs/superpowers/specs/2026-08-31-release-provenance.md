@@ -31,6 +31,7 @@ Before presenting a LeadIntel link as current or proven:
 
 3. **Require deployment identity/readiness when provider metadata is available**
    - Match deployment metadata to the exact candidate SHA and require provider readiness.
+   - LeadIntel currently deploys through Vercel: provider evidence must match the exact candidate SHA and Vercel must report `READY` before a **PROVEN PRODUCTION** claim.
    - Provider readiness is additional evidence; it never replaces live artifact verification.
 
 4. **Verify the deployed artifact itself**
