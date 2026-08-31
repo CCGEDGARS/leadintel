@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       ci_run_id:
-        description: Successful Customer V2 CI run ID for the same SHA
+        description: Customer V2 CI run ID for the same SHA
         required: true
         type: string
 
@@ -35,20 +35,23 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Validate manual CI evidence
+      - name: Resolve manual CI evidence
+        id: manual_ci
         if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
           EXPECTED_SHA: ${{ inputs.expected_sha }}
           CI_RUN_ID: ${{ inputs.ci_run_id }}
         run: |
-          set -euo pipefail
-          actual_sha="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CI_RUN_ID}" --jq '.head_sha')"
-          actual_conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CI_RUN_ID}" --jq '.conclusion')"
-          actual_name="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CI_RUN_ID}" --jq '.name')"
-          test "${actual_sha}" = "${EXPECTED_SHA}"
-          test "${actual_conclusion}" = "success"
-          test "${actual_name}" = "Customer V2 CI"
+          set +e
+          conclusion=failure
+          actual_sha="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CI_RUN_ID}" --jq '.head_sha' 2>/dev/null)"
+          actual_conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CI_RUN_ID}" --jq '.conclusion' 2>/dev/null)"
+          actual_name="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CI_RUN_ID}" --jq '.name' 2>/dev/null)"
+          if [ "${actual_sha}" = "${EXPECTED_SHA}" ] && [ "${actual_conclusion}" = "success" ] && [ "${actual_name}" = "Customer V2 CI" ]; then
+            conclusion=success
+          fi
+          echo "conclusion=${conclusion}" >> "${GITHUB_OUTPUT}"
 
       - name: Verify production from automatic CI completion
         if: github.event_name == 'workflow_run'
@@ -61,12 +64,12 @@ jobs:
             --config release-integrity.config.json \
             --proof release-proof.json
 
-      - name: Re-verify production with validated CI evidence
+      - name: Re-verify production with resolved CI evidence
         if: github.event_name == 'workflow_dispatch'
         run: |
           node scripts/verify-release-integrity.mjs \
             --expected-sha "${{ inputs.expected_sha }}" \
-            --ci-conclusion success \
+            --ci-conclusion "${{ steps.manual_ci.outputs.conclusion }}" \
             --ci-run-id "${{ inputs.ci_run_id }}" \
             --environment production \
             --config release-integrity.config.json \
