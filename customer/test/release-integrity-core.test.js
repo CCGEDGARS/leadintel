@@ -124,6 +124,16 @@ test('manifest fetch URL is cache-busted and deterministic when nonce is supplie
   assert.equal(url,'https://leadintel.ccgroup.lv/release.json?verify=abc123');
 });
 
+test('individual verification requests are bounded even if fetch never settles',async()=>{
+  const {fetchWithTimeout}=await loadCore();
+  const started=Date.now();
+  await assert.rejects(
+    fetchWithTimeout(async()=>new Promise(()=>{}),'https://example.com',{headers:{}},20),
+    /timeout/i
+  );
+  assert.ok(Date.now()-started<500,'request timeout must fail quickly instead of hanging the release job');
+});
+
 test('configuration and expected SHA are validated fail-closed',async()=>{
   const {validateConfig}=await loadCore();
   assert.throws(()=>validateConfig({...baseConfig(),productionUrl:''}),/productionUrl/i);
