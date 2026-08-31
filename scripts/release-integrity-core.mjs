@@ -8,6 +8,7 @@ export const VERDICTS=Object.freeze({
 });
 
 const SHA_RE=/^[0-9a-f]{40}$/i;
+const DEFAULT_REQUEST_TIMEOUT_MS=15000;
 
 function required(value,name){
   if(value===undefined||value===null||value==='')throw new Error(`Missing required ${name}`);
@@ -41,6 +42,7 @@ export function validateConfig(config){
     required(check.url,`smoke check url for ${check.id}`);
     if(!Number.isInteger(Number(check.status)))throw new Error(`Invalid smoke check status for ${check.id}`);
   }
+  if(config.retry?.timeoutMs!==undefined&&(!Number.isFinite(Number(config.retry.timeoutMs))||Number(config.retry.timeoutMs)<=0))throw new Error('Invalid retry.timeoutMs');
   return config;
 }
 
@@ -62,17 +64,39 @@ export function matchesExpectedJson(actual,expected){
 
 function joinUrl(base,path){return new URL(path,base).href;}
 function sleep(ms){return ms>0?new Promise(resolve=>setTimeout(resolve,ms)):Promise.resolve();}
+function requestTimeout(config){return Math.max(1,Number(config?.retry?.timeoutMs)||DEFAULT_REQUEST_TIMEOUT_MS);}
 
-async function fetchJson(fetchImpl,url){
-  const response=await fetchImpl(url,{headers:{'cache-control':'no-store','pragma':'no-cache'}});
+export async function fetchWithTimeout(fetchImpl,url,options={},timeoutMs=DEFAULT_REQUEST_TIMEOUT_MS){
+  if(typeof fetchImpl!=='function')throw new Error('No fetch implementation available');
+  const ms=Math.max(1,Number(timeoutMs)||DEFAULT_REQUEST_TIMEOUT_MS);
+  const controller=new AbortController();
+  let timer;
+  const timeout=new Promise((_,reject)=>{
+    timer=setTimeout(()=>{
+      controller.abort();
+      reject(new Error(`Request timeout after ${ms}ms`));
+    },ms);
+  });
+  try{
+    return await Promise.race([
+      Promise.resolve().then(()=>fetchImpl(url,{...options,signal:controller.signal})),
+      timeout
+    ]);
+  }finally{
+    if(timer)clearTimeout(timer);
+  }
+}
+
+async function fetchJson(fetchImpl,url,timeoutMs){
+  const response=await fetchWithTimeout(fetchImpl,url,{headers:{'cache-control':'no-store','pragma':'no-cache'}},timeoutMs);
   if(!response||typeof response.status!=='number')throw new Error('Invalid fetch response');
   if(!response.ok)return {response,data:null,error:`HTTP ${response.status}`};
   try{return {response,data:await response.json(),error:null};}
   catch(error){return {response,data:null,error:`Invalid JSON: ${error.message||error}`};}
 }
 
-async function fetchText(fetchImpl,url){
-  const response=await fetchImpl(url,{headers:{'cache-control':'no-store','pragma':'no-cache'}});
+async function fetchText(fetchImpl,url,timeoutMs){
+  const response=await fetchWithTimeout(fetchImpl,url,{headers:{'cache-control':'no-store','pragma':'no-cache'}},timeoutMs);
   if(!response||typeof response.status!=='number')throw new Error('Invalid fetch response');
   const body=await response.text();
   return {response,body};
@@ -106,12 +130,13 @@ async function verifyManifest({config,expectedSha,fetchImpl,nonce,proof}){
   const retry=config.retry||{};
   const attempts=Math.max(1,Number(retry.attempts)||1);
   const delayMs=Math.max(0,Number(retry.delayMs)||0);
+  const timeoutMs=requestTimeout(config);
   let last={kind:'incomplete',message:'Manifest verification did not run'};
   for(let attempt=1;attempt<=attempts;attempt++){
     const url=cacheBustedUrl(manifestBase,attempt===1?nonce:`${nonce}-${attempt}`);
     proof.manifest.url=url;
     try{
-      const {response,data,error}=await fetchJson(fetchImpl,url);
+      const {response,data,error}=await fetchJson(fetchImpl,url,timeoutMs);
       proof.manifest.status=response.status;
       if(error||!data){
         last={kind:'incomplete',message:`Live release manifest unavailable: ${error||'empty response'}`};
@@ -138,7 +163,7 @@ async function verifyManifest({config,expectedSha,fetchImpl,nonce,proof}){
 
 async function verifyBackend({config,fetchImpl,proof}){
   try{
-    const {response,data,error}=await fetchJson(fetchImpl,config.backendHealth.url);
+    const {response,data,error}=await fetchJson(fetchImpl,config.backendHealth.url,requestTimeout(config));
     proof.backend.status=response.status;
     if(error)return `Backend health failed: ${error}`;
     if(response.status!==Number(config.backendHealth.status))return `Backend health status ${response.status} does not match expected ${config.backendHealth.status}`;
@@ -150,10 +175,11 @@ async function verifyBackend({config,fetchImpl,proof}){
 
 async function verifySmokeChecks({config,fetchImpl,proof}){
   const failures=[];
+  const timeoutMs=requestTimeout(config);
   for(const check of config.smokeChecks){
     const result={id:check.id,url:joinUrl(config.productionUrl,check.url),status:null,passed:false,failures:[]};
     try{
-      const {response,body}=await fetchText(fetchImpl,result.url);
+      const {response,body}=await fetchText(fetchImpl,result.url,timeoutMs);
       result.status=response.status;
       if(response.status!==Number(check.status))result.failures.push(`status ${response.status} != ${check.status}`);
       for(const token of check.contains||[])if(!body.includes(token))result.failures.push(`missing required text: ${token}`);
