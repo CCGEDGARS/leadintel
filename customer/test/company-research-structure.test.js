@@ -74,5 +74,5 @@ test('labels reset as a complete workspace reset and protects CRM records',()=>{
   assert.match(html,/id="reset-workspace"[^>]*>Reset all workspace data</);
   assert.match(app,/Reset all workspace data/);
   assert.match(app,/CRM records will not be deleted/);
-  assert.match(ui,/leadintel_customer_v2_discovery/);
+  assert.match(app,/leadintel_customer_v2_discovery/);
 });
