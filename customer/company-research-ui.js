@@ -141,14 +141,18 @@ async function runCompanyResearch({rerun=false}={}){
     setProgress('Searching related public sources…',`Running ${queries.length} bounded company searches for evidence, news, partners and market context.`);
     const publicRows=[];
     for(const query of queries){try{publicRows.push(...await searchPublic(query));}catch{failures++;}}
-    const sources=researchEngine.mergeSources(official,publicRows,12);
-    setProgress('Building evidence-backed context…',`${sources.length} unique web source${sources.length===1?'':'s'} collected. Checking workspace AI enrichment.`);
-    const fallback=researchEngine.buildEvidenceDraft({sources,targetMarkets:markets});const ai=await aiDraftFor({website,targetMarkets:markets,sources,documents:state.documents||[]});const draft=combineDrafts(fallback,ai.draft);const merged=researchEngine.mergeDraft(state.answers||{},draft);
+    const rawSources=researchEngine.mergeSources(official,publicRows,12);
+    const research=researchEngine.filterResearchSources(rawSources,website,{depth:'standard'});
+    const sources=[...research.primary,...research.supporting];
+    const quality=researchEngine.evaluateResearchQuality({website,primary:research.primary,supporting:research.supporting,failures});
+    if(!quality.publishable)throw new Error(`Research quality check failed: ${quality.issues.join(' ')}`);
+    setProgress('Building evidence-backed context…',`${research.primary.length} primary and ${research.supporting.length} supporting sources passed the quality check.`);
+    const fallback=researchEngine.buildEvidenceDraft({sources:research.primary,targetMarkets:markets});const ai=await aiDraftFor({website,targetMarkets:markets,sources:research.primary,documents:state.documents||[]});const draft=combineDrafts(fallback,ai.draft);const merged=researchEngine.mergeDraft(state.answers||{},draft);
     const next={...state};next.website=website;next.targetMarkets=markets;next.additionalLinks=additionalLinks;next.answers=merged.answers;
-    next.scrapedSources=sources.map(source=>({type:source.type==='public'?'link':source.type,url:source.url,title:source.title,text:source.text,status:'ready'}));
+    next.scrapedSources=sources.map(source=>({type:source.type==='public'?'link':source.type,url:source.url,title:source.title,text:source.text,status:'ready',role:source.role||'supporting'}));
     next.profile=null;next.approved=false;next.market={};next.step=2;writeState(next);
     const fields={};for(const id of researchEngine.QUESTION_IDS){const row=merged.meta[id]||{};fields[id]={...row,reviewed:row.origin==='user',draftMode:ai.mode};}
-    writeMeta({website,generatedAt:new Date().toISOString(),mode:ai.mode,provider:ai.provider||'',model:ai.model||'',sourceCount:sources.length,failures,reason:ai.reason||'',fields});
+    writeMeta({website,generatedAt:new Date().toISOString(),mode:ai.mode,provider:ai.provider||'',model:ai.model||'',sourceCount:sources.length,primarySourceCount:research.primary.length,supportingSourceCount:research.supporting.length,excludedSourceCount:research.excluded.length,characters:research.characters,limits:research.limits,quality,failures,reason:ai.reason||'',fields});
     setProgress('Research complete','Opening your evidence-backed draft for review.',{done:true});
     await window.LeadIntelServerBridge?.saveNow?.().catch(()=>null);
     setTimeout(()=>location.reload(),180);
