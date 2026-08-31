@@ -8,7 +8,7 @@
   const QUESTION_IDS=["priority_offers","ideal_customer","lookalike_customers","buyer_roles","growth_markets","differentiation","buying_triggers","exclusions","opportunity_value","success_outcome"];
   const CONFIDENCE=new Set(["high","medium","low"]);
   const MAX_PUBLIC_QUERIES=3;
-  const MAX_SOURCES=12;
+  const MAX_SOURCES=25;
 
   function clean(value){return String(value??"").replace(/\s+/g," ").trim();}
   function truncate(value,max=1200){const text=clean(value);return text.length>max?`${text.slice(0,max-1)}…`:text;}
@@ -92,11 +92,11 @@
       const parsed=new URL(item.url);const asset=ASSET_EXTENSION.test(parsed.pathname)||/^image\//i.test(item.mimeType||"");
       if(asset){excluded.push({...item,reason:"Asset or non-content URL excluded."});continue;}
       if(!item.text.trim()){excluded.push({...item,reason:"No readable text returned."});continue;}
-      if(chars+item.text.length>limits.maxChars){excluded.push({...item,reason:`Research character limit reached (\${limits.maxChars}).`});continue;}
+      if(chars+item.text.length>limits.maxChars){excluded.push({...item,reason:`Research character limit reached (${limits.maxChars}).`});continue;}
       chars+=item.text.length;
       if(sameDomain(item.url,website)&&primary.length<limits.maxPages)primary.push({...item,role:"primary"});
       else if(!sameDomain(item.url,website))supporting.push({...item,role:"supporting"});
-      else excluded.push({...item,reason:`Research page limit reached (\${limits.maxPages}).`});
+      else excluded.push({...item,reason:`Research page limit reached (${limits.maxPages}).`});
     }
     const primaryWithIds=assignIds(primary);const supportingWithIds=assignIds(supporting.slice(0,MAX_SOURCES)).map((row,index)=>({...row,id:`S${primaryWithIds.length+index+1}`}));return {primary:primaryWithIds,supporting:supportingWithIds,excluded,limits,characters:chars};
   }
