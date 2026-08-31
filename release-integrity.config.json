@@ -51,6 +51,6 @@
   "retry": {
     "attempts": 12,
     "delayMs": 10000,
-    "timeoutMs": 180000
+    "timeoutMs": 15000
   }
 }
