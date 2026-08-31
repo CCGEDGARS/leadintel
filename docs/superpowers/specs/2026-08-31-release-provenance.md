@@ -29,10 +29,10 @@ Before presenting a LeadIntel link as current or proven:
    - Required LeadIntel CI must report `success` for that exact SHA.
    - Pending, skipped-required, cancelled, stale, historical-for-another-SHA, or failed results do not pass.
 
-3. **Require deployment identity/readiness when provider metadata is available**
-   - Match deployment metadata to the exact candidate SHA and require provider readiness.
-   - LeadIntel currently deploys through Vercel: provider evidence must match the exact candidate SHA and Vercel must report `READY` before a **PROVEN PRODUCTION** claim.
-   - Provider readiness is additional evidence; it never replaces live artifact verification.
+3. **Check deployment identity/readiness when provider metadata is available**
+   - Match deployment metadata to the exact candidate SHA and require provider readiness when that metadata can be queried.
+   - LeadIntel currently deploys through Vercel; when Vercel provider evidence is available, it must match the exact candidate SHA and Vercel must report `READY`.
+   - Provider readiness is supplemental evidence; it never replaces the authoritative live-artifact verification below.
 
 4. **Verify the deployed artifact itself**
    - Fetch `/release.json?verify=<unique nonce>` from the exact URL being presented.
@@ -64,9 +64,9 @@ A URL alone is never proof of freshness. The authoritative chain is:
 
 `exact Git SHA → required CI success for same SHA → live release.json same SHA → backend health → required smoke checks → release-proof.json verdict PROVEN`
 
-Deployment-provider identity/readiness is checked as an additional gate whenever authenticated metadata is available.
+Deployment-provider identity/readiness is checked as supplemental evidence whenever authenticated metadata is available.
 
-Any break in the chain means the build is not proven current.
+Any break in the authoritative chain means the build is not proven current.
 
 ## Required operational behavior
 
