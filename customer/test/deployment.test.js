@@ -6,6 +6,7 @@ const path = require('node:path');
 const root = path.join(__dirname, '../..');
 const vercelConfigPath = path.join(root, 'vercel.json');
 const buildScriptPath = path.join(root, 'scripts/build-vercel-static.sh');
+const customerRootBuildScriptPath = path.join(root, 'customer/scripts/build-vercel-static.sh');
 const pagesWorkflowPath = path.join(root, '.github/workflows/deploy-pages.yml');
 const rootIndex = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const legacyV2Index = fs.readFileSync(path.join(root, 'v2/index.html'), 'utf8');
@@ -22,6 +23,18 @@ test('Vercel builds a safe static artifact instead of exposing the repository ro
   assert.match(buildScript, /cp -R customer\/\. \.vercel-static\/customer\//);
   assert.match(buildScript, /cp -R v2\/\. \.vercel-static\/v2\//);
   assert.doesNotMatch(buildScript, /cp -R backend|cp backend/);
+});
+
+test('Vercel build remains deployable if project Root Directory is customer', () => {
+  assert.equal(
+    fs.existsSync(customerRootBuildScriptPath),
+    true,
+    'customer-root compatibility wrapper must exist so the configured build command cannot fail with scripts/build-vercel-static.sh: No such file or directory'
+  );
+  const wrapper = fs.readFileSync(customerRootBuildScriptPath, 'utf8');
+  assert.match(wrapper, /git rev-parse --show-toplevel/);
+  assert.match(wrapper, /bash scripts\/build-vercel-static\.sh/);
+  assert.match(wrapper, /customer\/\.vercel-static/);
 });
 
 test('obsolete GitHub Pages deployment workflow is removed', () => {
