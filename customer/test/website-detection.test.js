@@ -27,3 +27,12 @@ test('website synchronizer can update saved state from the visible input without
   assert.deepEqual(next.targetMarkets,['Latvia']);
   assert.equal(next.answers.priority_offers,'Training');
 });
+
+test('browser-restored full URLs are converted to a protocol-free field value so the fixed https prefix can never duplicate',()=>{
+  assert.equal(fs.existsSync(helperPath),true);
+  const helper=require(helperPath);
+  const source=fs.readFileSync(helperPath,'utf8');
+  assert.equal(helper.toVisibleWebsite('https://www.ccgroup.lv/'),'www.ccgroup.lv');
+  assert.equal(helper.toVisibleWebsite('http://example.com/path/'),'example.com/path');
+  assert.match(source,/input\.value\s*=\s*display/);
+});
