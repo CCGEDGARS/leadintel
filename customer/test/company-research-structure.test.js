@@ -7,6 +7,7 @@ const read=name=>fs.existsSync(path.join(root,name))?fs.readFileSync(path.join(r
 
 const processMap=read('process-map.js');
 const ui=read('company-research-ui.js');
+const app=read('app.js');
 const handoff=read('company-profile-handoff.js');
 const css=read('company-research.css');
 
@@ -71,7 +72,7 @@ test('profile build consumes the collected public evidence instead of running th
 test('labels reset as a complete workspace reset and protects CRM records',()=>{
   const html=read('index.html');
   assert.match(html,/id="reset-workspace"[^>]*>Reset all workspace data</);
-  assert.match(ui,/Reset all workspace data/);
-  assert.match(ui,/CRM records will not be deleted/);
+  assert.match(app,/Reset all workspace data/);
+  assert.match(app,/CRM records will not be deleted/);
   assert.match(ui,/leadintel_customer_v2_discovery/);
 });
