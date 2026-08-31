@@ -321,7 +321,7 @@ function activateMarketStrategy(){
   if(!state.market.opportunities.some(item=>item.active)){showToast("Keep at least one market opportunity active");return;}
   state.market.strategyApproved=true;state.market.strategyApprovedAt=new Date().toISOString();saveState();renderMarketStrategy();showToast("Market Strategy activated for Discovery");
 }
-function resetWorkspace(){if(!window.confirm("Start over? This clears this browser's LeadIntel customer workspace."))return;localStorage.removeItem(STORAGE_KEY);state=defaultState();editMode=false;syncInputsFromState();setStep(1);showToast("Customer workspace reset");}
+async function resetWorkspace(){if(!window.confirm("Start over? This clears this browser and saved LeadIntel workspace."))return;state=defaultState();editMode=false;saveState();for(const key of ["leadintel_customer_v2_discovery","leadintel_customer_v2_outreach","leadintel_customer_v2_delivery","leadintel_customer_v2_discovery_meta"])localStorage.removeItem(key);syncInputsFromState();setStep(1);const bridge=window.LeadIntelServerBridge;if(bridge?.session?.authenticated&&bridge.workspace){try{const result=await bridge.saveNow();if(!result.saved)throw new Error("Server reset was not saved");}catch(error){showToast("Reset failed to sync: "+error.message);return;}}sessionStorage.removeItem("leadintel_customer_v2_server_hydration");showToast("Workspace completely reset");}
 
 function bind(){
   $("company-website").addEventListener("input",readSources);$("additional-links").addEventListener("input",readSources);
