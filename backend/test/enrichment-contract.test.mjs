@@ -16,6 +16,12 @@ test("legacy enrichment compatibility route cannot call Apollo's retired people 
   assert.match(source,/APOLLO_PEOPLE_SEARCH_URL/);
 });
 
+test("Apollo phone callback cannot fall back to a different person",()=>{
+  const source=fs.readFileSync(new URL("../src/apollo-crm-webhook.js",import.meta.url),"utf8");
+  assert.doesNotMatch(source,/\|\|people\[0\]/);
+  assert.match(source,/people\.find\([\s\S]*personId/);
+});
+
 test("Apollo people search is domain scoped and accepts up to four requested roles",()=>{
   const body=Enrichment.apolloSearchBody({
     domain:"https://www.acme.com/about?source=leadintel",
