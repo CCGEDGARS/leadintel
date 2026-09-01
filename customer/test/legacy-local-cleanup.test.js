@@ -4,25 +4,25 @@ const fs=require('node:fs');
 const path=require('node:path');
 
 const root=path.join(__dirname,'..');
-const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
-const index=fs.readFileSync(path.join(root,'index.html'),'utf8');
+const hygiene=fs.readFileSync(path.join(root,'workspace-reset-hygiene.js'),'utf8');
+const processMap=fs.readFileSync(path.join(root,'process-map.js'),'utf8');
 
-test('legacy browser autosave is cleared exactly once before app state is loaded',()=>{
-  assert.match(app,/LEGACY_LOCAL_CLEANUP_KEY/);
-  assert.match(app,/function clearLegacyLocalAutosaveOnce\s*\(/);
-  const cleanupCall=app.indexOf('clearLegacyLocalAutosaveOnce();');
-  const stateLoad=app.indexOf('let state=loadState();');
-  assert.ok(cleanupCall>=0&&stateLoad>cleanupCall,'legacy cleanup must run before loadState');
-  assert.match(app,/leadintel_customer_v2_state/);
-  assert.match(app,/leadintel_customer_v2_discovery/);
-  assert.match(app,/leadintel_customer_v2_outreach/);
-  assert.match(app,/leadintel_customer_v2_delivery/);
-  assert.match(app,/leadintel_customer_v2_website_activation_v1/);
-  assert.match(app,/leadintel_customer_v2_research_meta_v1/);
-  assert.match(app,/leadintel_customer_v2_server_dirty/);
-  assert.doesNotMatch(app,/disconnectProvider\s*\(|\/api\/integrations\/ai\/provider[^\n]*(DELETE|disconnect)/i,'cleanup must not delete saved AI provider credentials');
+test('legacy browser autosave is cleared exactly once by the hygiene migration',()=>{
+  assert.match(hygiene,/LEGACY_LOCAL_CLEANUP_KEY/);
+  assert.match(hygiene,/function clearLegacyLocalAutosaveOnce\s*\(/);
+  assert.match(hygiene,/leadintel_customer_v2_state/);
+  assert.match(hygiene,/leadintel_customer_v2_discovery/);
+  assert.match(hygiene,/leadintel_customer_v2_outreach/);
+  assert.match(hygiene,/leadintel_customer_v2_delivery/);
+  assert.match(hygiene,/leadintel_customer_v2_website_activation_v1/);
+  assert.match(hygiene,/leadintel_customer_v2_research_meta_v1/);
+  assert.match(hygiene,/leadintel_customer_v2_server_dirty/);
+  assert.match(hygiene,/localStorage\.getItem\(LEGACY_LOCAL_CLEANUP_KEY\)/);
+  assert.match(hygiene,/localStorage\.setItem\(LEGACY_LOCAL_CLEANUP_KEY,["']done["']\)/);
+  assert.match(hygiene,/location\.reload\s*\(\)/,'first migrated load must reload after clearing stale local state');
+  assert.doesNotMatch(hygiene,/disconnectProvider\s*\(|\/api\/integrations\/ai\/provider[^\n]*(DELETE|disconnect)/i,'cleanup must not delete saved AI provider credentials');
 });
 
-test('customer page cache-busts the cleanup release so existing tabs receive it',()=>{
-  assert.match(index,/app\.js\?v=20260901-legacy-local-cleanup-v1/);
+test('process shell cache-busts the legacy cleanup release',()=>{
+  assert.match(processMap,/workspace-reset-hygiene\.js\?v=20260901-legacy-local-cleanup-v1/);
 });
