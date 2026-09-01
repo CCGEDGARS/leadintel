@@ -15,8 +15,8 @@ test('custom target market rejects browser-autofilled website/domain values',()=
   const helper=helperSource();
   assert.match(helper,/custom-target-market/);
   assert.match(helper,/looksLikeUrlOrDomain/);
-  assert.match(helper,/https?:\\\/\\\//i);
-  assert.match(helper,/www\\\./i);
+  assert.ok(helper.includes('^https?:\\/\\/'),'guard must recognize protocol URLs');
+  assert.ok(helper.includes('^www\\.'),'guard must recognize www domains');
   assert.match(helper,/input\.value\s*=\s*["']{2}/);
   assert.match(helper,/addEventListener\(["']input["']/);
 });
