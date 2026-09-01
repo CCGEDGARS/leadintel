@@ -1,6 +1,6 @@
 import {sha256,cookieValue} from './security.js';
 import {importAesKey,encryptSecret,decryptSecret} from './oauth.js';
-import {AI_PROVIDERS,normalizeAiProvider,defaultAiModel,generateText,verifyProviderCredential} from './ai-provider.js';
+import {AI_PROVIDERS,normalizeAiProvider,defaultAiModel,generateText,verifyProviderCredential,searchWeb} from './ai-provider.js';
 
 const uuid=()=>crypto.randomUUID();
 const json=(value,status=200,headers={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...headers}});
@@ -39,10 +39,11 @@ function providerStatus(rows,role){
 }
 async function integrationRows(env,workspaceId){const {results=[]}=await env.DB.prepare(`SELECT provider,key_hint,model,active,verified_at,last_used_at FROM workspace_ai_integrations WHERE workspace_id=? ORDER BY provider`).bind(workspaceId).all();return results;}
 async function activeIntegration(env,workspaceId){return env.DB.prepare(`SELECT provider,encrypted_api_key,model,active,verified_at,last_used_at FROM workspace_ai_integrations WHERE workspace_id=? AND active=1 LIMIT 1`).bind(workspaceId).first();}
+async function openAiIntegration(env,workspaceId){return env.DB.prepare(`SELECT provider,encrypted_api_key,model,active,verified_at,last_used_at FROM workspace_ai_integrations WHERE workspace_id=? AND provider='openai' LIMIT 1`).bind(workspaceId).first();}
 
 export async function handleAiRoute(request,env,cors={}){
   const url=new URL(request.url);const path=url.pathname;
-  const known=path.startsWith('/api/integrations/ai/')||path==='/api/ai/generate';if(!known)return null;
+  const known=path.startsWith('/api/integrations/ai/')||path==='/api/ai/generate'||path==='/api/ai/web-search';if(!known)return null;
   const workspaceId=String(url.searchParams.get('workspace_id')||'').trim();if(!workspaceId)return error('workspace_id is required',400,cors);
 
   if(path==='/api/integrations/ai/status'&&request.method==='GET'){
@@ -79,6 +80,22 @@ export async function handleAiRoute(request,env,cors={}){
     const body=await request.json().catch(()=>null);const provider=normalizeAiProvider(body?.provider);if(!provider)return error('Unsupported AI provider',400,cors);
     const result=await env.DB.prepare(`DELETE FROM workspace_ai_integrations WHERE workspace_id=? AND provider=?`).bind(workspaceId,provider).run();
     await audit(env,{workspaceId,userId:access.user.id,type:'ai.provider_disconnected',provider});return json({disconnected:Number(result?.meta?.changes||0)>0,provider},200,cors);
+  }
+
+  if(path==='/api/ai/web-search'&&request.method==='POST'){
+    const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
+    if(!encryptionConfigured(env))return error('AI credential encryption is not configured',503,cors);
+    const body=await request.json().catch(()=>null);if(!body)return error('Web search payload is required',400,cors);
+    const query=String(body.query||'').trim();if(!query||query.length>4000)return error('Web search query is invalid or too large',400,cors);
+    const maxResults=Math.max(1,Math.min(8,Math.floor(Number(body.max_results)||5)));
+    const integration=await openAiIntegration(env,workspaceId);if(!integration)return error('OpenAI integration is required for web search',409,cors);
+    try{
+      const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const apiKey=await decryptSecret(integration.encrypted_api_key,key);
+      const result=await searchWeb({apiKey,model:integration.model,query,maxResults});
+      await env.DB.prepare(`UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(workspaceId,'openai').run();
+      await audit(env,{workspaceId,userId:access.user.id,type:'ai.web_search_completed',provider:'openai',metadata:{model:integration.model,input_tokens:result.usage.input_tokens,output_tokens:result.usage.output_tokens,result_count:result.results.length}});
+      return json(result,200,cors);
+    }catch(cause){return error(String(cause?.message||'OpenAI web search failed').slice(0,180),502,cors);}
   }
 
   if(path==='/api/ai/generate'&&request.method==='POST'){
