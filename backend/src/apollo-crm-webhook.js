@@ -7,6 +7,10 @@ const clean=(value,max=1000)=>String(value??'').replace(/\s+/g,' ').trim().slice
 const json=(value,status=200,headers={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...headers}});
 const error=(message,status,headers,code)=>json({error:message,...(code?{code}:{})},status,headers);
 
+export function apolloWebhookSigningSecret(env={}){
+  return clean(env.APOLLO_WEBHOOK_SECRET,500)||clean(env.APOLLO_API_KEY,500);
+}
+
 async function hmacHex(value,secret){
   const key=await crypto.subtle.importKey('raw',encoder.encode(String(secret||'')),{name:'HMAC',hash:'SHA-256'},false,['sign']);
   const signature=await crypto.subtle.sign('HMAC',key,encoder.encode(String(value||'')));
@@ -38,11 +42,12 @@ export async function handleApolloCrmWebhook(request,env,corsOverride={}){
   const cors=corsOverride||{};const url=new URL(request.url);
   if(url.pathname!=='/api/webhooks/apollo/crm-contact')return null;
   if(request.method!=='POST')return error('Method not allowed',405,cors,'CRM_APOLLO_WEBHOOK_METHOD');
-  if(!clean(env.APOLLO_WEBHOOK_SECRET,500))return error('Apollo webhook signing is not configured',503,cors,'CRM_APOLLO_WEBHOOK_NOT_CONFIGURED');
+  const signingSecret=apolloWebhookSigningSecret(env);
+  if(!signingSecret)return error('Apollo webhook signing is not configured',503,cors,'CRM_APOLLO_WEBHOOK_NOT_CONFIGURED');
 
   const requestId=clean(url.searchParams.get('request_id'),180);const supplied=clean(url.searchParams.get('sig'),256);
   if(!requestId||!supplied)return error('Invalid Apollo webhook signature',403,cors,'CRM_APOLLO_WEBHOOK_INVALID');
-  const expected=await hmacHex(requestId,env.APOLLO_WEBHOOK_SECRET);
+  const expected=await hmacHex(requestId,signingSecret);
   if(!constantTimeEqual(supplied,expected))return error('Invalid Apollo webhook signature',403,cors,'CRM_APOLLO_WEBHOOK_INVALID');
 
   const row=await env.DB.prepare(`SELECT * FROM crm_enrichment_requests WHERE id=? AND provider='apollo'`).bind(requestId).first();
