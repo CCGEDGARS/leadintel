@@ -32,6 +32,7 @@ test('customer gets an explicit Save workspace action that snapshots and persist
   assert.match(persistence,/captureWorkspaceSnapshot\(\)/);
   assert.match(persistence,/markExplicitlySaved\(\)/);
   assert.match(persistence,/LeadIntelServerBridge\?\.saveNow\?\.\(\)/);
+  assert.match(persistence,/leadintel_customer_v2_explicit_save_intent_v1/);
 });
 
 test('workspace reset removes explicit persistence but does not touch API provider configuration or CRM',()=>{
@@ -45,7 +46,7 @@ test('runtime server autosave is disabled so drafts cannot become persistent wit
   assert.match(persistence,/Storage\.prototype\.__leadintelServerPatched\s*=\s*true/);
   assert.match(persistence,/function installFetchBoundary\(\)/);
   assert.match(persistence,/\/api\/customer\/state/);
-  assert.match(persistence,/if\(method===["']PUT["']&&!isExplicitlySaved\(\)&&!forceReset\)/);
+  assert.match(persistence,/if\(method===["']PUT["']&&!saveIntent&&!forceReset\)/);
 });
 
 test('legacy server state is not rehydrated, while explicitly saved server state is allowed and snapshotted',()=>{
