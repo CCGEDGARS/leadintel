@@ -2,6 +2,8 @@
   "use strict";
 
   const LEGACY_LOCAL_CLEANUP_KEY="leadintel_customer_v2_legacy_local_cleanup_20260901_v2";
+  const RESET_PENDING_KEY="leadintel_customer_v2_reset_pending_v1";
+  const WORKSPACE_KEY="leadintel_customer_v2_workspace";
   const LEGACY_LOCAL_WORKSPACE_KEYS=Object.freeze([
     "leadintel_customer_v2_state",
     "leadintel_customer_v2_discovery",
@@ -34,18 +36,26 @@
     return true;
   }
 
+  function recordResetIntent(){
+    if(!root?.localStorage)return false;
+    const workspaceId=String(root.localStorage.getItem(WORKSPACE_KEY)||"");
+    root.localStorage.setItem(RESET_PENDING_KEY,JSON.stringify({workspace_id:workspaceId,requested_at:Date.now()}));
+    return true;
+  }
+
   function refreshResetUi(){
     try{root.LeadIntelWebsiteInputSync?.restoreSavedWebsite?.();}catch{}
     try{root.LeadIntelWebsiteActivation?.render?.();}catch{}
   }
 
   // The existing reset button uses a two-click armed state. Capture the second
-  // click before app.js performs the reset so derived browser-only company caches
-  // are cleared with the workspace. Provider/API credentials live server-side and
-  // are intentionally outside this reset boundary.
+  // click before app.js performs the reset. The durable reset intent lets the
+  // authenticated bridge clear the saved workspace after a later sign-in. CRM
+  // records and provider/API credentials live outside this workspace-state reset.
   function handleResetClick(event){
     const button=event?.target?.closest?.("#reset-workspace");
     if(!button||button.dataset.resetArmed!=="true")return false;
+    recordResetIntent();
     clearBrowserWorkspaceResidue();
     root.setTimeout?.(refreshResetUi,0);
     return true;
@@ -58,7 +68,7 @@
     root.document.addEventListener("click",handleResetClick,true);
   }
 
-  const api={LEGACY_LOCAL_CLEANUP_KEY,LEGACY_LOCAL_WORKSPACE_KEYS,RESET_RESIDUE_KEYS,clearLegacyLocalAutosaveOnce,clearBrowserWorkspaceResidue,refreshResetUi,handleResetClick,install};
+  const api={LEGACY_LOCAL_CLEANUP_KEY,RESET_PENDING_KEY,WORKSPACE_KEY,LEGACY_LOCAL_WORKSPACE_KEYS,RESET_RESIDUE_KEYS,clearLegacyLocalAutosaveOnce,clearBrowserWorkspaceResidue,recordResetIntent,refreshResetUi,handleResetClick,install};
   root.LeadIntelWorkspaceResetHygiene=api;
   install();
 })(typeof globalThis!=="undefined"?globalThis:this);
