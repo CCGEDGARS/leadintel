@@ -1,11 +1,14 @@
 import {sha256,cookieValue} from './security.js';
 import {buildApolloMatchUrl,provenBusinessEmail,publicPersonSummary,strongPersonalEmail} from './enrichment.js';
+import {buildApolloCrmWebhookUrl,handleApolloCrmWebhook} from './apollo-crm-webhook.js';
 import {
   listCrmCompanies,getCrmCompany,upsertCrmCompany,updateCrmCompany,
   setCrmPipelineStage,removeCrmFromPipeline,archiveCrmCompany,restoreCrmCompany,
   suppressCrmCompany,markCrmCustomer,deleteCrmCompany,upsertCrmContacts,
   patchCrmContact,archiveCrmContact,appendCrmActivity
 } from './crm.js';
+
+export {handleApolloCrmWebhook};
 
 const json=(value,status=200,headers={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...headers}});
 const error=(message,status,headers,code)=>json({error:message,...(code?{code}:{})},status,headers);
@@ -42,6 +45,7 @@ async function enrichCrmContact(request,env,cors,access,companyId){
   const phoneRequested=Boolean(body.phone_lookup||body.phoneLookup);
   if(phoneRequested&&String(policy.phone_lookup_mode||'on_request')==='disabled')return error('Phone enrichment is disabled by workspace policy',409,cors,'CRM_PHONE_LOOKUP_DISABLED');
   if(phoneRequested&&!isHttpsUrl(env.APOLLO_WEBHOOK_URL))return error('Apollo phone enrichment requires a configured HTTPS webhook',409,cors,'CRM_APOLLO_WEBHOOK_REQUIRED');
+  if(phoneRequested&&!clean(env.APOLLO_WEBHOOK_SECRET,500))return error('Apollo phone enrichment requires a webhook signing secret',409,cors,'CRM_APOLLO_WEBHOOK_SECRET_REQUIRED');
 
   const existing=await env.DB.prepare(`SELECT * FROM crm_contacts WHERE workspace_id=? AND company_id=? AND source='apollo' AND external_person_id=? AND archived_at IS NULL AND normalized_email IS NOT NULL`).bind(access.context.workspaceId,companyId,personId).first();
   if(existing&&!phoneRequested)return json({request:{status:'already_verified',credits_used:0},contact:existing,duplicate:true},200,cors);
@@ -53,10 +57,11 @@ async function enrichCrmContact(request,env,cors,access,companyId){
   await env.DB.prepare(`INSERT INTO crm_enrichment_requests(id,workspace_id,company_id,contact_id,provider,person_provider_id,role_requested,status,personal_email_requested,phone_requested,credits_reserved,credits_used,response_summary_json,requested_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(requestId,access.context.workspaceId,companyId,null,'apollo',personId,role,'processing',personalApproved?1:0,phoneRequested?1:0,reserved,0,'{}',access.context.userId,created,created).run();
 
   try{
-    const matchUrl=buildApolloMatchUrl({personId,personalEmail:personalApproved,phoneLookup:phoneRequested,webhookUrl:phoneRequested?env.APOLLO_WEBHOOK_URL:''});
+    const webhookUrl=phoneRequested?await buildApolloCrmWebhookUrl(env.APOLLO_WEBHOOK_URL,requestId,env.APOLLO_WEBHOOK_SECRET):'';
+    const matchUrl=buildApolloMatchUrl({personId,personalEmail:personalApproved,phoneLookup:phoneRequested,webhookUrl});
     const response=await fetch(matchUrl,{method:'POST',headers:{'Content-Type':'application/json','Cache-Control':'no-cache','Accept':'application/json','X-Api-Key':env.APOLLO_API_KEY}});
     if(!response.ok)throw Object.assign(new Error(`Apollo match returned ${response.status}`),{code:`apollo_match_${response.status}`});
-    const matched=await response.json().catch(()=>({}));const person=matched.person||{};const summary=publicPersonSummary(person);const creditsUsed=immediateApolloCredits(person);
+    const matched=await response.json().catch(()=>({}));const person=matched.person||{};const summary=publicPersonSummary(person);const creditsUsed=immediateApolloCredits(person);const providerRequestId=clean(matched.request_id||matched.requestId,180)||null;
     const businessEmail=provenBusinessEmail(person,domain);const personalEmail=personalApproved?strongPersonalEmail(person,domain,role,personId):'';const selectedEmail=businessEmail||personalEmail;
     const emailType=businessEmail?'work':personalEmail?'personal':null;const emailStatus=businessEmail?'Verified':personalEmail?'Strong match':null;const confidence=businessEmail?'verified':personalEmail?'high':null;
     const personName=clean(person.name||[person.first_name,person.last_name].filter(Boolean).join(' ')||body.name,180)||'Decision maker';const personTitle=clean(person.title||body.title||body.role,180)||null;
@@ -69,9 +74,9 @@ async function enrichCrmContact(request,env,cors,access,companyId){
     }
 
     const status=phoneRequested?'pending_phone':selectedEmail?'verified':'not_found';const completed=status==='pending_phone'?null:stamp();
-    await env.DB.prepare(`UPDATE crm_enrichment_requests SET status=?,contact_id=?,credits_used=?,response_summary_json=?,completed_at=?,updated_at=? WHERE id=?`).bind(status,contact?.id||null,creditsUsed,JSON.stringify(summary),completed,stamp(),requestId).run();
-    await appendCrmActivity(env.DB,access.context,{companyId,contactId:contact?.id||null,type:'contact.enriched',summary:selectedEmail?`${personName} contact verified`:phoneRequested?`${personName} phone enrichment requested`:`${personName} had no verified company email`,metadata:{provider:'Apollo',request_id:requestId,person_provider_id:personId,email_status:emailStatus,phone_status:phoneRequested?'pending':null,credits_used:creditsUsed,credits_reserved:reserved}});
-    return json({request:{id:requestId,status,credits_used:creditsUsed,credits_reserved:reserved},contact,reason:selectedEmail?null:phoneRequested?'phone_pending':'verified_company_email_not_returned'},selectedEmail?201:200,cors);
+    await env.DB.prepare(`UPDATE crm_enrichment_requests SET status=?,contact_id=?,provider_request_id=?,credits_used=?,response_summary_json=?,completed_at=?,updated_at=? WHERE id=?`).bind(status,contact?.id||null,providerRequestId,creditsUsed,JSON.stringify(summary),completed,stamp(),requestId).run();
+    await appendCrmActivity(env.DB,access.context,{companyId,contactId:contact?.id||null,type:'contact.enriched',summary:selectedEmail?`${personName} contact verified`:phoneRequested?`${personName} phone enrichment requested`:`${personName} had no verified company email`,metadata:{provider:'Apollo',request_id:requestId,provider_request_id:providerRequestId,person_provider_id:personId,email_status:emailStatus,phone_status:phoneRequested?'pending':null,credits_used:creditsUsed,credits_reserved:reserved}});
+    return json({request:{id:requestId,status,provider_request_id:providerRequestId,credits_used:creditsUsed,credits_reserved:reserved},contact,reason:selectedEmail?null:phoneRequested?'phone_pending':'verified_company_email_not_returned'},selectedEmail?201:200,cors);
   }catch(cause){
     const code=clean(cause?.code,120)||'apollo_failed';const message=clean(cause?.message,500)||'Apollo enrichment failed';
     await env.DB.prepare(`UPDATE crm_enrichment_requests SET status='failed',credits_reserved=0,error_code=?,error_message=?,completed_at=?,updated_at=? WHERE id=?`).bind(code,message,stamp(),stamp(),requestId).run();
