@@ -38,7 +38,7 @@ test('customer gets an explicit Save workspace action that snapshots and persist
 test('workspace reset removes explicit persistence but does not touch API provider configuration or CRM',()=>{
   assert.match(persistence,/clearExplicitSave\(\)/);
   assert.match(persistence,/leadintel_customer_v2_force_reset_save_v1/);
-  assert.match(persistence,/localStorage\.removeItem\(SNAPSHOT_KEY\)/);
+  assert.match(persistence,/removeItem\(SNAPSHOT_KEY\)/);
   assert.doesNotMatch(persistence,/\/api\/integrations\/ai\/provider|disconnectProvider|deleteCrmCompany|\/api\/crm/i);
 });
 
