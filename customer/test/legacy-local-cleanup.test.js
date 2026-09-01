@@ -24,6 +24,6 @@ test('legacy browser autosave is cleared exactly once by the hygiene migration',
   assert.doesNotMatch(hygiene,/disconnectProvider\s*\(|\/api\/integrations\/ai\/provider[^\n]*(DELETE|disconnect)/i,'cleanup must not delete saved AI provider credentials');
 });
 
-test('process shell cache-busts the legacy cleanup release',()=>{
-  assert.match(processMap,/workspace-reset-hygiene\.js\?v=20260901-legacy-local-cleanup-v2/);
+test('process shell cache-busts the reset-intent hygiene release',()=>{
+  assert.match(processMap,/workspace-reset-hygiene\.js\?v=20260901-reset-intent-sync-v3/);
 });
