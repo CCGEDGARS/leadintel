@@ -43,3 +43,14 @@ test('pasted or typed full URLs are normalized on the live input event before th
   assert.equal(helper.toVisibleWebsite('https://www.ajprodukti.lv/'),'www.ajprodukti.lv');
   assert.match(source,/input\.addEventListener\(["']input["'],\s*syncVisibleWebsite\)/);
 });
+
+test('passive browser restore never promotes autofilled website text into saved workspace state',()=>{
+  const source=fs.readFileSync(helperPath,'utf8');
+  const syncStart=source.indexOf('function syncVisibleWebsite');
+  const installStart=source.indexOf('function install');
+  assert.ok(syncStart>=0&&installStart>syncStart,'syncVisibleWebsite must exist before install');
+  const syncFlow=source.slice(syncStart,installStart);
+  assert.doesNotMatch(syncFlow,/localStorage\.setItem\s*\(/,'website display normalization must not write restored browser text into saved state');
+  assert.match(source,/function restoreSavedWebsite/,'passive page restore must restore the field from saved workspace state');
+  assert.match(source,/CHECK_DELAYS\.forEach\([^\n]*restoreSavedWebsite/,'startup restore checks must use saved workspace state as the source of truth');
+});
