@@ -255,7 +255,7 @@ function addCustomSignal(){
 function removeSignal(index){readMarketEdits();state.market.signals.splice(index,1);state.market.strategyApproved=false;saveState();renderMarketStrategy();showToast("Signal removed");}
 
 async function waitForMarketServerBridge(timeout=1800){
-  if(window.LeadIntelServerBridge?.session!==null)return window.LeadIntelServerBridge;
+  if(window.LeadIntelServerBridge&&window.LeadIntelServerBridge.session!==null)return window.LeadIntelServerBridge;
   return new Promise(resolve=>{let settled=false;const finish=()=>{if(settled)return;settled=true;window.removeEventListener("leadintel:server-ready",finish);resolve(window.LeadIntelServerBridge||null);};window.addEventListener("leadintel:server-ready",finish,{once:true});setTimeout(finish,timeout);});
 }
 async function searchOpenAiWeb(queryMeta){
