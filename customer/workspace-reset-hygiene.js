@@ -18,6 +18,7 @@
     "leadintel_customer_v2_website_activation_v1",
     "leadintel_customer_v2_research_meta_v1"
   ]);
+  let finalizingReset=false;
 
   function clearLegacyLocalAutosaveOnce(){
     if(!root?.localStorage)return false;
@@ -43,21 +44,55 @@
     return true;
   }
 
+  function readResetIntent(){
+    try{
+      const value=JSON.parse(root.localStorage?.getItem(RESET_PENDING_KEY)||"null");
+      return value&&typeof value==="object"?value:null;
+    }catch{return null;}
+  }
+
+  function resetIntentMatchesWorkspace(intent,bridge){
+    if(!intent||!bridge?.workspace)return false;
+    const intended=String(intent.workspace_id||"");
+    if(intended)return intended===bridge.workspace.id;
+    return Array.isArray(bridge.workspaces)&&bridge.workspaces.length===1;
+  }
+
+  async function finalizePendingReset(){
+    if(finalizingReset)return false;
+    const intent=readResetIntent();
+    const bridge=root.LeadIntelServerBridge;
+    if(!intent||!bridge?.session?.authenticated||!bridge.workspace||!resetIntentMatchesWorkspace(intent,bridge))return false;
+    finalizingReset=true;
+    try{
+      let result=null;
+      if(bridge.conflict&&typeof bridge.resolveConflictKeepLocal==="function")result=await bridge.resolveConflictKeepLocal();
+      else if(typeof bridge.saveNow==="function")result=await bridge.saveNow();
+      const completed=Boolean(result?.saved||result?.resolved);
+      if(completed)root.localStorage.removeItem(RESET_PENDING_KEY);
+      return completed;
+    }catch{return false;}
+    finally{finalizingReset=false;}
+  }
+
   function refreshResetUi(){
     try{root.LeadIntelWebsiteInputSync?.restoreSavedWebsite?.();}catch{}
     try{root.LeadIntelWebsiteActivation?.render?.();}catch{}
   }
 
   // The existing reset button uses a two-click armed state. Capture the second
-  // click before app.js performs the reset. The durable reset intent lets the
-  // authenticated bridge clear the saved workspace after a later sign-in. CRM
-  // records and provider/API credentials live outside this workspace-state reset.
+  // click before app.js performs the reset. A normal authenticated reset is
+  // already saved by app.js. Only signed-out resets (or a reset during an active
+  // conflict) need a durable intent that resumes through the safe sync path.
   function handleResetClick(event){
     const button=event?.target?.closest?.("#reset-workspace");
     if(!button||button.dataset.resetArmed!=="true")return false;
-    recordResetIntent();
+    const bridge=root.LeadIntelServerBridge;
+    const deferred=!bridge?.session?.authenticated||Boolean(bridge.conflict);
+    if(deferred)recordResetIntent();else root.localStorage?.removeItem(RESET_PENDING_KEY);
     clearBrowserWorkspaceResidue();
     root.setTimeout?.(refreshResetUi,0);
+    if(bridge?.session?.authenticated&&bridge.conflict)root.setTimeout?.(()=>finalizePendingReset(),0);
     return true;
   }
 
@@ -66,9 +101,10 @@
     root.__leadintelWorkspaceResetHygieneInstalled=true;
     if(clearLegacyLocalAutosaveOnce())return;
     root.document.addEventListener("click",handleResetClick,true);
+    root.addEventListener?.("leadintel:server-ready",()=>finalizePendingReset());
   }
 
-  const api={LEGACY_LOCAL_CLEANUP_KEY,RESET_PENDING_KEY,WORKSPACE_KEY,LEGACY_LOCAL_WORKSPACE_KEYS,RESET_RESIDUE_KEYS,clearLegacyLocalAutosaveOnce,clearBrowserWorkspaceResidue,recordResetIntent,refreshResetUi,handleResetClick,install};
+  const api={LEGACY_LOCAL_CLEANUP_KEY,RESET_PENDING_KEY,WORKSPACE_KEY,LEGACY_LOCAL_WORKSPACE_KEYS,RESET_RESIDUE_KEYS,clearLegacyLocalAutosaveOnce,clearBrowserWorkspaceResidue,recordResetIntent,readResetIntent,resetIntentMatchesWorkspace,finalizePendingReset,refreshResetUi,handleResetClick,install};
   root.LeadIntelWorkspaceResetHygiene=api;
   install();
 })(typeof globalThis!=="undefined"?globalThis:this);
