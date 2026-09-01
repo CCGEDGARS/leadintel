@@ -29,29 +29,39 @@ test('README names current Vercel customer workspace and Cloudflare D1 backend',
   assert.doesNotMatch(readme,/Production root:[^\n]*redirects to V2/i);
 });
 
-test('release integrity runs only after Customer V2 CI completes for main',()=>{
+test('automatic release integrity runs only after Backend Deploy completes for main',()=>{
   assert.equal(fs.existsSync(releaseWorkflowPath),true,'release-integrity workflow must exist');
   const workflow=fs.readFileSync(releaseWorkflowPath,'utf8');
   assert.match(workflow,/workflow_run:/);
-  assert.match(workflow,/Customer V2 CI/);
+  assert.match(workflow,/workflows:\s*\[?["']?Backend Deploy["']?/);
+  assert.doesNotMatch(workflow,/workflows:\s*\[?["']?Customer V2 CI["']?/);
   assert.match(workflow,/types:\s*\[?\s*completed/i);
   assert.match(workflow,/branches:\s*\[?\s*main/i);
   assert.match(workflow,/workflow_dispatch:/);
 });
 
-test('automatic release proof verifies the exact CI head SHA and conclusion',()=>{
+test('automatic release proof requires successful Backend Deploy and Customer V2 CI for the exact same SHA',()=>{
   assert.equal(fs.existsSync(releaseWorkflowPath),true,'release-integrity workflow must exist');
   const workflow=fs.readFileSync(releaseWorkflowPath,'utf8');
   assert.match(workflow,/github\.event\.workflow_run\.head_sha/);
   assert.match(workflow,/github\.event\.workflow_run\.conclusion/);
-  assert.match(workflow,/--expected-sha[\s\S]{0,120}workflow_run\.head_sha/);
-  assert.match(workflow,/--ci-conclusion[\s\S]{0,120}workflow_run\.conclusion/);
+  assert.match(workflow,/github\.event\.workflow_run\.conclusion\s*==\s*'success'/);
+  assert.match(workflow,/id:\s*automatic_ci/);
+  assert.match(workflow,/Customer V2 CI/);
+  assert.match(workflow,/actual_sha/);
+  assert.match(workflow,/actual_conclusion/);
+  assert.match(workflow,/steps\.automatic_ci\.outputs\.conclusion/);
+  assert.match(workflow,/--expected-sha[\s\S]{0,180}workflow_run\.head_sha/);
+  assert.match(workflow,/--ci-conclusion[\s\S]{0,180}steps\.automatic_ci\.outputs\.conclusion/);
   assert.doesNotMatch(workflow,/--expected-sha[^\n]*github\.sha/);
 });
 
-test('manual re-verification converts invalid CI evidence into a blocked proof instead of dying before proof generation',()=>{
+test('manual re-verification requires both Customer V2 CI and Backend Deploy evidence and blocks invalid evidence safely',()=>{
   assert.equal(fs.existsSync(releaseWorkflowPath),true,'release-integrity workflow must exist');
   const workflow=fs.readFileSync(releaseWorkflowPath,'utf8');
+  assert.match(workflow,/deploy_run_id:/);
+  assert.match(workflow,/DEPLOY_RUN_ID/);
+  assert.match(workflow,/Backend Deploy/);
   assert.match(workflow,/id:\s*manual_ci/);
   assert.match(workflow,/conclusion=failure/);
   assert.match(workflow,/GITHUB_OUTPUT/);
