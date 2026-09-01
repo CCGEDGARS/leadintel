@@ -13,6 +13,8 @@
   ];
   const DEFAULT_DISCOVERY_STATE=Object.freeze({status:"idle",queries:[],rawResults:[],candidates:[],pipeline:[],lastRunAt:""});
   const STOPWORDS=new Set(["with","from","that","this","your","their","into","over","under","company","companies","business","businesses","priority","market","markets","customer","customers","service","services","product","products","industrial"]);
+  const ROLE_GENERIC_WORDS=new Set(["chief","officer","director","manager","managing","head","vice","president","vp","senior","lead","leader","executive","global","regional","group"]);
+  const SENIORITY_SCORE={owner:45,founder:45,c_suite:40,partner:35,vp:32,head:30,director:25,manager:15,senior:8};
 
   function clean(value){return String(value??"").replace(/\s+/g," ").trim();}
   function clamp(value,min,max,fallback=min){const n=Number(value);return Number.isFinite(n)?Math.max(min,Math.min(max,n)):fallback;}
@@ -169,14 +171,14 @@
       q_organization_domains_list:domain?[domain]:[],
       person_titles:titles,
       include_similar_titles:true,
-      person_seniorities:["c_suite","vp","head","director","manager"],
-      page:1,per_page:5
+      person_seniorities:["owner","founder","c_suite","partner","vp","head","director","manager"],
+      page:1,per_page:10
     };
   }
 
   function normalizeApolloPeople(payload={}){
     const raw=Array.isArray(payload?.people)?payload.people:Array.isArray(payload?.contacts)?payload.contacts:Array.isArray(payload?.data?.people)?payload.data.people:[];
-    return raw.slice(0,5).map(person=>{
+    return raw.slice(0,10).map(person=>{
       const name=clean(person?.name)||clean(`${person?.first_name||""} ${person?.last_name||""}`);
       return {
         id:clean(person?.id)||`person-${slug(name)}-${Math.random().toString(36).slice(2,7)}`,
@@ -186,10 +188,38 @@
     }).filter(item=>item.name!=="Unknown person"||item.title!=="Role not provided");
   }
 
+  function roleAliasMatch(title,role){
+    const t=clean(title).toLowerCase();const r=clean(role).toLowerCase().replace(/[^a-z]/g,"");
+    const aliases={coo:["coo","chief operating officer"],ceo:["ceo","chief executive officer"],cfo:["cfo","chief financial officer"],cto:["cto","chief technology officer"],cmo:["cmo","chief marketing officer"],cro:["cro","chief revenue officer"]};
+    return Boolean(aliases[r]?.some(alias=>t===alias||t.includes(alias)));
+  }
+  function roleSpecificTokens(value){
+    return clean(value).toLowerCase().replace(/[^a-z0-9āčēģīķļņšūžäöåüß\s-]/g," ").split(/\s+/).filter(token=>token.length>=3&&!ROLE_GENERIC_WORDS.has(token));
+  }
+  function roleRelevance(person,roles){
+    const title=clean(person?.title).toLowerCase();if(!title)return null;
+    let best=null;
+    roles.forEach((role,index)=>{
+      const normalizedRole=clean(role).toLowerCase();const exact=title===normalizedRole||title.includes(normalizedRole)||roleAliasMatch(title,role);
+      const wanted=new Set(roleSpecificTokens(role));const actual=new Set(roleSpecificTokens(title));
+      const overlap=[...wanted].filter(token=>actual.has(token)).length;
+      if(!exact&&!overlap)return;
+      const base=exact?100-index*10:80-index*10;
+      const score=base+Math.min(10,overlap*4)+(SENIORITY_SCORE[clean(person?.seniority).toLowerCase()]||0);
+      if(!best||score>best.score)best={score,role,index,exact};
+    });
+    return best;
+  }
+  function selectDecisionMakers(people=[],profile={},limit=4){
+    const roles=splitList(profile.decisionMakers).slice(0,10);if(!roles.length)return [];
+    const cap=Math.max(1,Math.min(4,Number(limit)||4));
+    return (Array.isArray(people)?people:[]).map((person,index)=>({person,relevance:roleRelevance(person,roles),index})).filter(item=>item.relevance).sort((a,b)=>b.relevance.score-a.relevance.score||a.index-b.index).slice(0,cap).map(item=>item.person);
+  }
+
   function safeCandidate(candidate={}){
     const domain=canonicalDomain(candidate.domain||candidate.website);
     const website=normalizeUrl(candidate.website)|| (domain?`https://${domain}/`:"");
-    const people=(Array.isArray(candidate.people)?candidate.people:[]).slice(0,5).map(p=>({id:clean(p?.id),name:clean(p?.name),title:clean(p?.title),seniority:clean(p?.seniority),organization:clean(p?.organization),city:clean(p?.city),country:clean(p?.country)}));
+    const people=(Array.isArray(candidate.people)?candidate.people:[]).slice(0,4).map(p=>({id:clean(p?.id),name:clean(p?.name),title:clean(p?.title),seniority:clean(p?.seniority),organization:clean(p?.organization),city:clean(p?.city),country:clean(p?.country)}));
     return {
       id:clean(candidate.id)||`company-${slug(domain||candidate.company)}`,company:clean(candidate.company)||displayFromDomain(domain),domain,website,
       market:clean(candidate.market),score:candidate.score&&typeof candidate.score==="object"?candidate.score:{total:0},confidence:["High","Medium","Low"].includes(candidate.confidence)?candidate.confidence:"Low",
@@ -234,5 +264,5 @@
     };
   }
 
-  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,buildDiscoveryQueries,normalizeCompanySearchResults,mergeCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,upsertPipelineItem,normalizeDiscoveryState,canonicalDomain,isBlockedDomain};
+  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,buildDiscoveryQueries,normalizeCompanySearchResults,mergeCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,canonicalDomain,isBlockedDomain};
 });

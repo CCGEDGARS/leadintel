@@ -2,7 +2,7 @@ import {allowedOrigin,corsHeaders,sha256,randomToken,constantTimeEqual,cookieVal
 import {canonicalSnapshot,ingestCanonicalSnapshot} from "./canonical.js";
 import {assessCandidate,compileQueries} from "./quality.js";
 import {listRuns,policyFor,recordRunEvent,runBudgetState,validDispatchUrl} from "./runs.js";
-import {apolloSearchBody,enrichmentDecision,normalizeDomain,provenBusinessEmail,publicPersonSummary,strongPersonalEmail} from "./enrichment.js";
+import {APOLLO_PEOPLE_SEARCH_URL,apolloSearchBody,enrichmentDecision,normalizeDomain,provenBusinessEmail,publicPersonSummary,strongPersonalEmail} from "./enrichment.js";
 
 const json = (value,status=200,headers={}) => new Response(JSON.stringify(value),{status,headers:{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store",...headers}});
 const error = (message,status,headers) => json({error:message},status,headers);
@@ -174,7 +174,7 @@ async function router(request,env) {
     await env.DB.prepare(`INSERT INTO enrichment_requests(id,workspace_id,opportunity_id,company_id,status,role_requested,requested_by,personal_email_requested)
       VALUES(?,?,?,?,?,?,?,?)`).bind(requestId,workspaceId,opportunityId,record.company_id,"processing",role,user.id,personalApproved?1:0).run();
     try{
-      const searchResponse=await fetch("https://api.apollo.io/api/v1/mixed_people/search",{method:"POST",headers:{"Content-Type":"application/json","Cache-Control":"no-cache","Accept":"application/json","X-Api-Key":env.APOLLO_API_KEY},body:JSON.stringify(apolloSearchBody({domain,role}))});
+      const searchResponse=await fetch(APOLLO_PEOPLE_SEARCH_URL,{method:"POST",headers:{"Content-Type":"application/json","Cache-Control":"no-cache","Accept":"application/json","X-Api-Key":env.APOLLO_API_KEY},body:JSON.stringify(apolloSearchBody({domain,role}))});
       if(!searchResponse.ok)throw Object.assign(new Error(`Apollo search returned ${searchResponse.status}`),{code:`apollo_search_${searchResponse.status}`});
       const search=await searchResponse.json();const candidate=search.people?.[0];const personId=String(candidate?.id||candidate?.person_id||"");
       if(!personId){

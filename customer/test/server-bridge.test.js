@@ -22,6 +22,15 @@ test('server bridge exposes Gmail server actions without browser token storage',
   assert.doesNotMatch(bridge,/access_token\s*=|refresh_token\s*=|localStorage\.setItem\([^\n]*token/i);
 });
 
+test('server bridge exposes CRM-native Apollo enrichment without exposing Apollo credentials',()=>{
+  assert.match(bridge,/enrichCrmContact/);
+  assert.match(bridge,/\/enrich-contact/);
+  assert.match(bridge,/person_id/);
+  assert.match(bridge,/phone_lookup/);
+  assert.match(bridge,/allow_personal_email/);
+  assert.doesNotMatch(bridge,/APOLLO_API_KEY|X-Api-Key/);
+});
+
 test('dirty local state survives reload and is retried before reporting synced',()=>{
   assert.match(bridge,/DIRTY_KEY/);
   assert.match(bridge,/localStorage\.setItem\(DIRTY_KEY/);

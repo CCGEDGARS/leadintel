@@ -27,6 +27,12 @@ test('CRM workspace includes search, lifecycle views, pipeline view and company 
   assert.match(ui,/Intelligence/);
 });
 
+test('CRM contact detail renders durable verified email and phone fields',()=>{
+  assert.match(ui,/work_email/);
+  assert.match(ui,/phone_number/);
+  assert.match(ui,/Verified phone|No verified phone/i);
+});
+
 test('CRM company actions preserve lifecycle semantics and expose destructive delete only as a separate action',()=>{
   for(const value of ['add-pipeline','remove-pipeline','mark-customer','archive','suppress','restore','delete-permanently'])assert.match(ui,new RegExp(`data-crm-action="${value}"`));
   assert.match(ui,/confirm\(/);

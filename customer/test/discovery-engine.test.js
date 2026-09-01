@@ -70,13 +70,13 @@ test('signal score only uses evidence text, not query metadata',()=>{
   assert.equal(candidate.matchedSignals.length,0);
 });
 
-test('buildApolloPeopleSearchPayload uses exact domain and approved roles with safe cap',()=>{
+test('buildApolloPeopleSearchPayload uses exact domain and approved roles with safe discovery depth',()=>{
   const payload=Discovery.buildApolloPeopleSearchPayload({domain:'nordicmachines.se'},profile);
   assert.deepEqual(payload.q_organization_domains_list,['nordicmachines.se']);
   assert.ok(payload.person_titles.includes('COO'));
   assert.equal(payload.include_similar_titles,true);
-  assert.deepEqual(payload.person_seniorities,['c_suite','vp','head','director','manager']);
-  assert.equal(payload.per_page,5);
+  assert.deepEqual(payload.person_seniorities,['owner','founder','c_suite','partner','vp','head','director','manager']);
+  assert.equal(payload.per_page,10);
   assert.equal(payload.page,1);
 });
 
@@ -92,6 +92,34 @@ test('normalizeApolloPeople returns names and titles but strips emails and phone
   assert.equal('phone' in people[0],false);
 });
 
+test('selectDecisionMakers returns no more than four role-relevant people in priority order',()=>{
+  assert.equal(typeof Discovery.selectDecisionMakers,'function');
+  if(typeof Discovery.selectDecisionMakers!=='function')return;
+  const people=[
+    {id:'p1',name:'A',title:'Procurement Director',seniority:'director'},
+    {id:'p2',name:'B',title:'Chief Operating Officer',seniority:'c_suite'},
+    {id:'p3',name:'C',title:'Plant Manager',seniority:'manager'},
+    {id:'p4',name:'D',title:'Head of Procurement',seniority:'head'},
+    {id:'p5',name:'E',title:'Procurement Specialist',seniority:'senior'},
+    {id:'p6',name:'F',title:'Marketing Director',seniority:'director'},
+    {id:'p7',name:'G',title:'Intern',seniority:'intern'}
+  ];
+  const selected=Discovery.selectDecisionMakers(people,profile,4);
+  assert.equal(selected.length,4);
+  assert.deepEqual(selected.map(person=>person.id),['p2','p1','p4','p3']);
+  assert.ok(selected.every(person=>!['p6','p7'].includes(person.id)));
+});
+
+test('selectDecisionMakers reports a real shortage by returning fewer people instead of filling with unrelated roles',()=>{
+  assert.equal(typeof Discovery.selectDecisionMakers,'function');
+  if(typeof Discovery.selectDecisionMakers!=='function')return;
+  const selected=Discovery.selectDecisionMakers([
+    {id:'p1',name:'A',title:'COO',seniority:'c_suite'},
+    {id:'p2',name:'B',title:'Marketing Director',seniority:'director'}
+  ],profile,4);
+  assert.deepEqual(selected.map(person=>person.id),['p1']);
+});
+
 test('upsertPipelineItem deduplicates by domain and preserves later stage',()=>{
   const candidate={id:'c1',company:'Nordic Machines',domain:'nordicmachines.se',website:'https://nordicmachines.se/',market:'Sweden',score:{total:88},confidence:'High',matchedSignals:[],evidence:[],people:[]};
   const first=Discovery.upsertPipelineItem([],candidate);
@@ -101,7 +129,7 @@ test('upsertPipelineItem deduplicates by domain and preserves later stage',()=>{
   assert.equal(updated.length,1);assert.equal(updated[0].stage,'Qualified');assert.equal(updated[0].score.total,92);assert.equal(updated[0].people.length,1);
 });
 
-test('normalizeDiscoveryState caps candidates, pipeline and people and validates stages',()=>{
+test('normalizeDiscoveryState caps candidates, pipeline and selected decision-makers and validates stages',()=>{
   const state=Discovery.normalizeDiscoveryState({
     status:'complete',
     rawResults:Array.from({length:40},(_,i)=>({url:`https://c${i}.com`,domain:`c${i}.com`})),
@@ -112,6 +140,6 @@ test('normalizeDiscoveryState caps candidates, pipeline and people and validates
   assert.ok(state.rawResults.length<=20);
   assert.ok(state.candidates.length<=12);
   assert.ok(state.pipeline.length<=50);
-  assert.ok(state.candidates.every(x=>x.people.length<=5));
+  assert.ok(state.candidates.every(x=>x.people.length<=4));
   assert.equal(state.pipeline[0].stage,'Discovered');
 });

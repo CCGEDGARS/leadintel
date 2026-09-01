@@ -11,7 +11,7 @@
   const VERSION_KEY='leadintel_customer_v2_server_versions';
   const CRM_MIGRATION_KEY='leadintel_customer_v2_crm_migrations';
   let saveTimer=null;let suppress=false;let initialized=false;
-  const bridge={session:null,workspaces:[],workspace:null,stateVersion:0,gmail:{configured:false,connected:false,email:'',role:''},status:'local',conflict:false,conflictState:null,saveNow,refreshGmailStatus,syncReplies,sendGmail,connectGmail,disconnectGmail,signIn,signOut,selectWorkspace,resolveConflictKeepLocal,resolveConflictUseServer,listCrmCompanies,getCrmCompany,saveCrmCompany,addCrmToPipeline,removeCrmFromPipeline,archiveCrmCompany,restoreCrmCompany,suppressCrmCompany,markCrmCustomer,saveCrmContacts,recordCrmActivity,deleteCrmCompany,migrateLocalPipeline};
+  const bridge={session:null,workspaces:[],workspace:null,stateVersion:0,gmail:{configured:false,connected:false,email:'',role:''},status:'local',conflict:false,conflictState:null,saveNow,refreshGmailStatus,syncReplies,sendGmail,connectGmail,disconnectGmail,signIn,signOut,selectWorkspace,resolveConflictKeepLocal,resolveConflictUseServer,listCrmCompanies,getCrmCompany,saveCrmCompany,addCrmToPipeline,removeCrmFromPipeline,archiveCrmCompany,restoreCrmCompany,suppressCrmCompany,markCrmCustomer,saveCrmContacts,enrichCrmContact,recordCrmActivity,deleteCrmCompany,migrateLocalPipeline};
   root.LeadIntelServerBridge=bridge;
 
   function parse(key){try{return JSON.parse(localStorage.getItem(key)||'{}');}catch{return {};}}
@@ -78,6 +78,7 @@
   async function suppressCrmCompany(id){return crmRequest(`/companies/${encodeURIComponent(id)}/suppress`,{method:'POST'});}
   async function markCrmCustomer(id){return crmRequest(`/companies/${encodeURIComponent(id)}/mark-customer`,{method:'POST'});}
   async function saveCrmContacts(companyId,contacts){return crmRequest(`/companies/${encodeURIComponent(companyId)}/contacts`,{method:'POST',body:JSON.stringify({contacts:Array.isArray(contacts)?contacts:[]})});}
+  async function enrichCrmContact(companyId,person,options={}){const selected=person&&typeof person==='object'?person:{};return crmRequest(`/companies/${encodeURIComponent(companyId)}/enrich-contact`,{method:'POST',body:JSON.stringify({person_id:String(selected.id||''),name:String(selected.name||''),title:String(selected.title||''),phone_lookup:Boolean(options.phoneLookup),allow_personal_email:Boolean(options.allowPersonalEmail)})});}
   async function recordCrmActivity(companyId,activity){return crmRequest(`/companies/${encodeURIComponent(companyId)}/activities`,{method:'POST',body:JSON.stringify(activity||{})});}
   async function deleteCrmCompany(id){return crmRequest(`/companies/${encodeURIComponent(id)}`,{method:'DELETE'});}
   function crmMigrationMap(){try{const value=JSON.parse(localStorage.getItem(CRM_MIGRATION_KEY)||'{}');return value&&typeof value==='object'&&!Array.isArray(value)?value:{};}catch{return {};}}
