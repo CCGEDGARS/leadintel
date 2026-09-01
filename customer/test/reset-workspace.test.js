@@ -31,3 +31,12 @@ test('workspace reset clears browser-only company residue but preserves saved AP
   assert.match(hygiene,/localStorage\.removeItem\(key\)/,'reset hygiene must remove derived browser workspace keys');
   assert.doesNotMatch(hygiene,/\/api\/integrations\/ai\/provider|disconnectProvider|ai-settings/i,'workspace reset must not disconnect or delete saved AI provider credentials');
 });
+
+test('confirmed workspace reset records durable reset intent for the next authenticated sync',()=>{
+  assert.match(hygiene,/leadintel_customer_v2_reset_pending_v1/,'reset must have a durable pending-reset marker');
+  assert.match(hygiene,/RESET_PENDING_KEY/);
+  assert.match(hygiene,/function recordResetIntent/);
+  assert.match(hygiene,/workspace_id/,'reset intent must retain workspace provenance when known');
+  assert.match(hygiene,/localStorage\.setItem\(RESET_PENDING_KEY/,'reset intent must survive reload and sign-in');
+  assert.match(hygiene,/handleResetClick[\s\S]*recordResetIntent\(\)/,'the marker must be written only on the confirmed reset click');
+});
