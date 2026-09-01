@@ -31,7 +31,8 @@ test('production Worker declares its public Apollo callback URL and never stores
   assert.doesNotMatch(wrangler,/APOLLO_WEBHOOK_SECRET\s*=/);
 });
 
-test('Backend CI syntax-checks the signed Apollo webhook module',()=>{
+test('Backend CI syntax-checks the signed Apollo webhook module and protects deployment workflow changes',()=>{
   const ci=fs.readFileSync(backendCiPath,'utf8');
   assert.match(ci,/node --check src\/apollo-crm-webhook\.js/);
+  assert.match(ci,/\.github\/workflows\/backend-deploy\.yml/);
 });
