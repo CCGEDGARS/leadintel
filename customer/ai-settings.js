@@ -1,5 +1,5 @@
 const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
-const SETTINGS_VERSION='20260824-ai-providers';
+const SETTINGS_VERSION='20260901-ai-settings-auth-v1';
 const PROVIDERS=Object.freeze([
   {provider:'openai',name:'OpenAI',model:'gpt-5.6',placeholder:'sk-…',hint:'Responses API'},
   {provider:'anthropic',name:'Anthropic',model:'claude-sonnet-4-6',placeholder:'sk-ant-…',hint:'Messages API'},
@@ -49,12 +49,19 @@ function injectUi(){
 }
 function providerState(id){return status.providers.find(item=>item.provider===id)||null;}
 function isOwner(){return status.role==='owner'||workspace()?.role==='owner';}
+function signInFromSettings(){
+  const url=new URL(window.location.href);url.searchParams.set('settings','ai');window.history.replaceState(null,'',url);
+  bridge()?.signIn?.();
+}
 function render(){
   const grid=document.getElementById('ai-provider-grid');if(!grid)return;
   const active=status.providers.find(item=>item.active);
   const summary=document.getElementById('ai-engine-summary');
   if(summary){
-    if(!signedIn())summary.innerHTML='<span>AI engine</span><strong>Sign in to configure workspace AI</strong><small>Your keys belong to an authenticated LeadIntel workspace.</small>';
+    if(!signedIn()){
+      summary.innerHTML='<span>AI engine</span><strong>Sign in to configure workspace AI</strong><small>Your keys belong to an authenticated LeadIntel workspace.</small><button class="ai-settings-btn primary ai-settings-signin" id="ai-settings-signin" type="button">Sign in with Google</button>';
+      document.getElementById('ai-settings-signin')?.addEventListener('click',signInFromSettings);
+    }
     else if(active)summary.innerHTML=`<span>AI engine</span><strong>${esc(active.name)} · ${esc(active.model)}</strong><small>Verified ${active.verified_at?esc(formatDate(active.verified_at)):'provider connection'}.</small>`;
     else summary.innerHTML='<span>AI engine</span><strong>No active provider</strong><small>Test and save a provider below to activate AI generation.</small>';
   }
