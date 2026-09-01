@@ -5,6 +5,9 @@ const path=require('node:path');
 
 const root=path.join(__dirname,'..');
 const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
+const processMap=fs.readFileSync(path.join(root,'process-map.js'),'utf8');
+const hygienePath=path.join(root,'workspace-reset-hygiene.js');
+const hygiene=fs.existsSync(hygienePath)?fs.readFileSync(hygienePath,'utf8'):'';
 
 test('workspace reset does not use a native browser confirmation dialog',()=>{
   assert.doesNotMatch(app,/window\.confirm\s*\(/);
@@ -20,13 +23,11 @@ test('workspace reset uses a five-second inline confirm state on the existing bu
 });
 
 test('workspace reset clears browser-only company residue but preserves saved API provider configuration',()=>{
-  const resetStart=app.indexOf('async function resetWorkspace()');
-  const bindStart=app.indexOf('function bind()',resetStart);
-  assert.ok(resetStart>=0&&bindStart>resetStart,'resetWorkspace must exist before bind');
-  const resetFlow=app.slice(resetStart,bindStart);
-  assert.match(app,/leadintel_customer_v2_website_activation_v1/,'website activation cache must be identified as resettable workspace residue');
-  assert.match(app,/leadintel_customer_v2_research_meta_v1/,'research cache must be identified as resettable workspace residue');
-  assert.match(resetFlow,/localStorage\.removeItem\([^\n]*website_activation/i,'reset must clear saved browser website activation residue');
-  assert.match(resetFlow,/localStorage\.removeItem\([^\n]*research_meta/i,'reset must clear saved browser research residue');
-  assert.doesNotMatch(resetFlow,/\/api\/integrations\/ai\/provider|disconnectProvider|ai-settings/i,'workspace reset must not disconnect or delete saved AI provider credentials');
+  assert.match(processMap,/workspace-reset-hygiene\.js/,'customer shell must install reset hygiene');
+  assert.equal(fs.existsSync(hygienePath),true,'workspace-reset-hygiene.js must exist');
+  assert.match(hygiene,/leadintel_customer_v2_website_activation_v1/,'website activation cache must be resettable workspace residue');
+  assert.match(hygiene,/leadintel_customer_v2_research_meta_v1/,'research cache must be resettable workspace residue');
+  assert.match(hygiene,/dataset\.resetArmed!==["']true["']/,'derived caches must clear only on the confirmed second reset click');
+  assert.match(hygiene,/localStorage\.removeItem\(key\)/,'reset hygiene must remove derived browser workspace keys');
+  assert.doesNotMatch(hygiene,/\/api\/integrations\/ai\/provider|disconnectProvider|ai-settings/i,'workspace reset must not disconnect or delete saved AI provider credentials');
 });
