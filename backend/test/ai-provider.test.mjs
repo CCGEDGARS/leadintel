@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {AI_PROVIDERS,normalizeAiProvider,defaultAiModel,generateText,verifyProviderCredential} from '../src/ai-provider.js';
+import {AI_PROVIDERS,normalizeAiProvider,defaultAiModel,generateText,verifyProviderCredential,searchWeb} from '../src/ai-provider.js';
 
 test('supports exactly the three customer AI providers',()=>{
   assert.deepEqual(AI_PROVIDERS,['openai','anthropic','gemini']);
@@ -29,6 +29,53 @@ test('OpenAI adapter uses Responses API without server-side response storage',as
   assert.equal(request.body.input,'Prompt');
   assert.equal(result.text,'Hello');
   assert.deepEqual(result.usage,{input_tokens:12,output_tokens:3});
+});
+
+test('OpenAI web search uses hosted search, source inclusion and strict structured output',async()=>{
+  let request;
+  const payload={
+    output:[
+      {type:'web_search_call',status:'completed',action:{sources:[
+        {type:'url',url:'https://example.com/news/office-move',title:'Office move'},
+        {type:'url',url:'https://example.com/news/office-move/',title:'Duplicate canonical URL'},
+        {type:'url',url:'https://linkedin.com/posts/acme-new-office',title:'LinkedIn post'}
+      ]}},
+      {type:'message',content:[{type:'output_text',text:JSON.stringify({results:[
+        {title:'Acme opens a new office',url:'https://example.com/news/office-move',description:'Acme is moving into larger premises.',date:'2026-08-29'},
+        {title:'Duplicate',url:'https://example.com/news/office-move/',description:'Duplicate source.',date:'2026-08-29'},
+        {title:'LinkedIn announcement',url:'https://linkedin.com/posts/acme-new-office',description:'The company announced its new office.',date:'2026-08-30'},
+        {title:'Invented source',url:'https://not-in-search.example/fake',description:'Must not be trusted.',date:'2026-08-31'}
+      ]})}]}],
+    usage:{input_tokens:110,output_tokens:42}
+  };
+  const fetchImpl=async(url,options)=>{request={url,options,body:JSON.parse(options.body)};return new Response(JSON.stringify(payload),{status:200,headers:{'Content-Type':'application/json'}});};
+  const result=await searchWeb({apiKey:'sk-test',model:'gpt-5.6',query:'Latvia companies moving to new offices',maxResults:5,fetchImpl});
+  assert.equal(request.url,'https://api.openai.com/v1/responses');
+  assert.equal(request.options.headers.Authorization,'Bearer sk-test');
+  assert.equal(request.body.store,false);
+  assert.deepEqual(request.body.tools,[{type:'web_search'}]);
+  assert.equal(request.body.tool_choice,'required');
+  assert.deepEqual(request.body.include,['web_search_call.action.sources']);
+  assert.equal(request.body.text.format.type,'json_schema');
+  assert.equal(request.body.text.format.strict,true);
+  assert.equal(request.body.text.format.schema.properties.results.maxItems,5);
+  assert.equal(result.provider,'openai');
+  assert.equal(result.model,'gpt-5.6');
+  assert.deepEqual(result.usage,{input_tokens:110,output_tokens:42});
+  assert.equal(result.results.length,2);
+  assert.deepEqual(result.results.map(row=>row.url),['https://example.com/news/office-move','https://linkedin.com/posts/acme-new-office']);
+  assert.equal(result.results.some(row=>row.url.includes('not-in-search')),false);
+});
+
+test('OpenAI web search sanitizes upstream errors and never leaks provider secrets',async()=>{
+  const fetchImpl=async()=>new Response(JSON.stringify({error:{message:'secret details sk-live-do-not-leak',type:'invalid_request_error',code:'invalid_tool'}}),{status:400,headers:{'Content-Type':'application/json'}});
+  await assert.rejects(()=>searchWeb({apiKey:'sk-live-do-not-leak',model:'gpt-5.6',query:'office expansion Latvia',fetchImpl}),error=>{
+    assert.match(error.message,/OpenAI request failed \(400\)/);
+    assert.match(error.message,/invalid_tool/);
+    assert.doesNotMatch(error.message,/sk-live-do-not-leak/);
+    assert.doesNotMatch(error.message,/secret details/);
+    return true;
+  });
 });
 
 test('Anthropic adapter uses Messages API and extracts text',async()=>{
