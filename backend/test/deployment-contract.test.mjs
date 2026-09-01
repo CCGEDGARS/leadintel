@@ -9,6 +9,7 @@ const root=path.join(__dirname,'..','..');
 const workflowPath=path.join(root,'.github','workflows','backend-deploy.yml');
 const wranglerPath=path.join(__dirname,'..','wrangler.toml');
 const backendCiPath=path.join(root,'.github','workflows','backend-ci.yml');
+const customerCiPath=path.join(root,'.github','workflows','customer-ci.yml');
 
 test('production backend deploy runs only after successful Backend CI on main and applies D1 migrations before Worker deploy',()=>{
   assert.equal(fs.existsSync(workflowPath),true,'backend-deploy.yml missing');
@@ -31,7 +32,15 @@ test('production Worker declares its public Apollo callback URL and never stores
   assert.doesNotMatch(wrangler,/APOLLO_WEBHOOK_SECRET\s*=/);
 });
 
-test('Backend CI syntax-checks the signed Apollo webhook module',()=>{
+test('Backend CI syntax-checks the signed Apollo webhook module and protects deployment workflow changes',()=>{
   const ci=fs.readFileSync(backendCiPath,'utf8');
   assert.match(ci,/node --check src\/apollo-crm-webhook\.js/);
+  assert.match(ci,/\.github\/workflows\/backend-deploy\.yml/);
+});
+
+test('Customer V2 CI runs for deployable backend changes so integrated release proof can use the exact same SHA',()=>{
+  const ci=fs.readFileSync(customerCiPath,'utf8');
+  assert.match(ci,/- 'backend\/\*\*'/);
+  assert.match(ci,/\.github\/workflows\/backend-ci\.yml/);
+  assert.match(ci,/\.github\/workflows\/backend-deploy\.yml/);
 });

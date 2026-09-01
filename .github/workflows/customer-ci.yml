@@ -8,10 +8,7 @@ on:
       - 'feature/**'
     paths:
       - 'customer/**'
-      - 'backend/src/customer-state.js'
-      - 'backend/src/crm.js'
-      - 'backend/src/crm-routes.js'
-      - 'backend/migrations/0011_master_crm.sql'
+      - 'backend/**'
       - 'scripts/build-vercel-static.sh'
       - 'scripts/release-integrity-core.mjs'
       - 'scripts/verify-release-integrity.mjs'
@@ -26,14 +23,13 @@ on:
       - 'docs/release-integrity-template.md'
       - 'docs/superpowers/specs/2026-08-31-release-provenance.md'
       - '.github/workflows/customer-ci.yml'
+      - '.github/workflows/backend-ci.yml'
+      - '.github/workflows/backend-deploy.yml'
       - '.github/workflows/release-integrity.yml'
   pull_request:
     paths:
       - 'customer/**'
-      - 'backend/src/customer-state.js'
-      - 'backend/src/crm.js'
-      - 'backend/src/crm-routes.js'
-      - 'backend/migrations/0011_master_crm.sql'
+      - 'backend/**'
       - 'scripts/build-vercel-static.sh'
       - 'scripts/release-integrity-core.mjs'
       - 'scripts/verify-release-integrity.mjs'
@@ -48,6 +44,8 @@ on:
       - 'docs/release-integrity-template.md'
       - 'docs/superpowers/specs/2026-08-31-release-provenance.md'
       - '.github/workflows/customer-ci.yml'
+      - '.github/workflows/backend-ci.yml'
+      - '.github/workflows/backend-deploy.yml'
       - '.github/workflows/release-integrity.yml'
 
 permissions:
