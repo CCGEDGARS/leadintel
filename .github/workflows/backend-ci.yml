@@ -9,10 +9,12 @@ on:
     paths:
       - 'backend/**'
       - '.github/workflows/backend-ci.yml'
+      - '.github/workflows/backend-deploy.yml'
   pull_request:
     paths:
       - 'backend/**'
       - '.github/workflows/backend-ci.yml'
+      - '.github/workflows/backend-deploy.yml'
 
 permissions:
   contents: read
