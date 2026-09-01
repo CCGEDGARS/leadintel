@@ -9,6 +9,7 @@ const processMap=fs.readFileSync(path.join(root,'process-map.js'),'utf8');
 
 test('legacy browser autosave is cleared exactly once by the hygiene migration',()=>{
   assert.match(hygiene,/LEGACY_LOCAL_CLEANUP_KEY/);
+  assert.match(hygiene,/leadintel_customer_v2_legacy_local_cleanup_20260901_v2/,'v2 migration must rerun even if v1 already completed');
   assert.match(hygiene,/function clearLegacyLocalAutosaveOnce\s*\(/);
   assert.match(hygiene,/leadintel_customer_v2_state/);
   assert.match(hygiene,/leadintel_customer_v2_discovery/);
@@ -24,5 +25,5 @@ test('legacy browser autosave is cleared exactly once by the hygiene migration',
 });
 
 test('process shell cache-busts the legacy cleanup release',()=>{
-  assert.match(processMap,/workspace-reset-hygiene\.js\?v=20260901-legacy-local-cleanup-v1/);
+  assert.match(processMap,/workspace-reset-hygiene\.js\?v=20260901-legacy-local-cleanup-v2/);
 });
