@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import * as Enrichment from "../src/enrichment.js";
 
 test("Apollo people search uses the current zero-credit API Search endpoint",()=>{
@@ -7,6 +8,12 @@ test("Apollo people search uses the current zero-credit API Search endpoint",()=
     Enrichment.APOLLO_PEOPLE_SEARCH_URL,
     "https://api.apollo.io/api/v1/mixed_people/api_search"
   );
+});
+
+test("legacy enrichment compatibility route cannot call Apollo's retired people search endpoint",()=>{
+  const source=fs.readFileSync(new URL("../src/index.js",import.meta.url),"utf8");
+  assert.doesNotMatch(source,/api\/v1\/mixed_people\/search/);
+  assert.match(source,/APOLLO_PEOPLE_SEARCH_URL/);
 });
 
 test("Apollo people search is domain scoped and accepts up to four requested roles",()=>{
