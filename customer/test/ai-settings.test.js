@@ -63,3 +63,9 @@ test('provider save failures stay visible inside the provider card and do not cl
   assert.match(saveFlow,/api\('\/api\/integrations\/ai\/provider'/,'save flow must call the provider endpoint');
   assert.match(css,/\.ai-provider-error[\s\S]*color:\s*var\(--ai-danger\)/i,'inline provider errors must be visibly styled');
 });
+
+test('AI Settings supports a direct ?settings=ai deep link that opens the drawer automatically',()=>{
+  assert.match(js,/URLSearchParams\(window\.location\.search\)/,'settings module must inspect the page query string');
+  assert.match(js,/\.get\(['"]settings['"]\)===['"]ai['"]/,'settings=ai must be the explicit deep-link contract');
+  assert.match(js,/openDrawer\(\)/,'direct settings link must open the existing secure settings drawer');
+});
