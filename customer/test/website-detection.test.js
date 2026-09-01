@@ -36,3 +36,10 @@ test('browser-restored full URLs are converted to a protocol-free field value so
   assert.equal(helper.toVisibleWebsite('http://example.com/path/'),'example.com/path');
   assert.match(source,/input\.value\s*=\s*display/);
 });
+
+test('pasted or typed full URLs are normalized on the live input event before the fixed https prefix can duplicate',()=>{
+  const helper=require(helperPath);
+  const source=fs.readFileSync(helperPath,'utf8');
+  assert.equal(helper.toVisibleWebsite('https://www.ajprodukti.lv/'),'www.ajprodukti.lv');
+  assert.match(source,/input\.addEventListener\(["']input["'],\s*syncVisibleWebsite\)/);
+});
