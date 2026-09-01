@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS crm_enrichment_requests (
   contact_id TEXT,
   provider TEXT NOT NULL DEFAULT 'apollo',
   person_provider_id TEXT NOT NULL,
+  provider_request_id TEXT,
   role_requested TEXT,
   status TEXT NOT NULL
     CHECK (status IN ('processing','verified','not_found','pending_phone','failed','cancelled')),
@@ -25,6 +26,7 @@ CREATE TABLE IF NOT EXISTS crm_enrichment_requests (
   error_message TEXT,
   response_summary_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(response_summary_json)),
   requested_by TEXT,
+  webhook_received_at TEXT,
   completed_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
@@ -38,3 +40,6 @@ CREATE INDEX IF NOT EXISTS idx_crm_enrichment_company_created
   ON crm_enrichment_requests(company_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_crm_enrichment_person
   ON crm_enrichment_requests(workspace_id, company_id, person_provider_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_crm_enrichment_provider_request
+  ON crm_enrichment_requests(provider, provider_request_id)
+  WHERE provider_request_id IS NOT NULL;
