@@ -68,3 +68,13 @@ test('workspace switching clears the shared customer cache before loading anothe
   assert.match(bridge,/clearCustomerCache/);
   assert.match(bridge,/async function selectWorkspace\(id\).*clearCustomerCache\(\).*localStorage\.setItem\(WORKSPACE_KEY,id\)/s);
 });
+
+test('pending explicit reset clears saved workspace before normal hydration without touching CRM or AI credentials',()=>{
+  assert.match(bridge,/leadintel_customer_v2_reset_pending_v1/,'server bridge must recognize reset intent written before sign-in');
+  assert.match(bridge,/async function completePendingReset/);
+  assert.match(bridge,/emptyWorkspacePayload/);
+  assert.match(bridge,/completePendingReset[\s\S]*\/api\/customer\/state[\s\S]*method:["']PUT["'][\s\S]*version:state\.version/,'reset must overwrite the latest saved workspace version explicitly');
+  assert.match(bridge,/await completePendingReset\(\)[\s\S]*hydrateAuthenticated\(\)/,'reset intent must be handled before ordinary conflict/hydration logic');
+  assert.doesNotMatch(bridge,/completePendingReset[\s\S]*\/api\/integrations\/ai\/provider/,'workspace reset must not touch saved AI provider credentials');
+  assert.doesNotMatch(bridge,/completePendingReset[\s\S]*deleteCrmCompany/,'workspace reset must not delete CRM records');
+});
