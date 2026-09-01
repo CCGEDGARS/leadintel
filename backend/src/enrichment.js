@@ -1,6 +1,9 @@
 const personalDomains=new Set(["gmail.com","googlemail.com","yahoo.com","hotmail.com","outlook.com","live.com","icloud.com","me.com","proton.me","protonmail.com","inbox.lv"]);
 const emailPattern=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+export const APOLLO_PEOPLE_SEARCH_URL="https://api.apollo.io/api/v1/mixed_people/api_search";
+export const APOLLO_PEOPLE_MATCH_URL="https://api.apollo.io/api/v1/people/match";
+
 export function normalizeDomain(value){
   const raw=String(value||"").trim().toLowerCase();
   if(!raw)return "";
@@ -49,8 +52,37 @@ export function enrichmentDecision({score,evidenceCount,verifiedContact,domain,r
   return {allowed:true,reason:"eligible",creditsReserved:1};
 }
 
-export function apolloSearchBody({domain,role}){
-  return {q_organization_domains_list:[normalizeDomain(domain)],person_titles:[String(role||"Commercial Director").trim()],page:1,per_page:1};
+function cleanRoles(values){
+  const source=Array.isArray(values)?values:[];const seen=new Set();const roles=[];
+  for(const value of source){const role=String(value||"").replace(/\s+/g," ").trim();const key=role.toLowerCase();if(!role||seen.has(key))continue;seen.add(key);roles.push(role);if(roles.length===4)break;}
+  return roles;
+}
+
+export function apolloSearchBody({domain,role,roles}={}){
+  const normalized=normalizeDomain(domain);
+  const requested=cleanRoles(roles);
+  if(requested.length){
+    return {q_organization_domains_list:normalized?[normalized]:[],person_titles:requested,include_similar_titles:true,person_seniorities:["owner","founder","c_suite","partner","vp","head","director","manager"],page:1,per_page:10};
+  }
+  return {q_organization_domains_list:normalized?[normalized]:[],person_titles:[String(role||"Commercial Director").trim()],page:1,per_page:1};
+}
+
+function safeWebhook(value){
+  try{const url=new URL(String(value||""));return url.protocol==="https:"?url.toString():"";}catch{return "";}
+}
+
+export function buildApolloMatchUrl({personId,personalEmail=false,phoneLookup=false,waterfallEmail=false,waterfallPhone=false,webhookUrl=""}={}){
+  const id=String(personId||"").trim();if(!id)throw new Error("Apollo person ID is required");
+  const asyncRequested=Boolean(phoneLookup||waterfallEmail||waterfallPhone);const webhook=safeWebhook(webhookUrl);
+  if(asyncRequested&&!webhook)throw new Error("A valid HTTPS webhook URL is required for Apollo phone or waterfall enrichment");
+  const url=new URL(APOLLO_PEOPLE_MATCH_URL);
+  url.searchParams.set("id",id);
+  url.searchParams.set("reveal_personal_emails",personalEmail?"true":"false");
+  url.searchParams.set("reveal_phone_number",phoneLookup?"true":"false");
+  url.searchParams.set("run_waterfall_email",waterfallEmail?"true":"false");
+  url.searchParams.set("run_waterfall_phone",waterfallPhone?"true":"false");
+  if(asyncRequested)url.searchParams.set("webhook_url",webhook);
+  return url.toString();
 }
 
 export function publicPersonSummary(person={}){
