@@ -1,10 +1,32 @@
 (function(root){
   "use strict";
 
+  const LEGACY_LOCAL_CLEANUP_KEY="leadintel_customer_v2_legacy_local_cleanup_20260901_v1";
+  const LEGACY_LOCAL_WORKSPACE_KEYS=Object.freeze([
+    "leadintel_customer_v2_state",
+    "leadintel_customer_v2_discovery",
+    "leadintel_customer_v2_outreach",
+    "leadintel_customer_v2_delivery",
+    "leadintel_customer_v2_discovery_meta",
+    "leadintel_customer_v2_website_activation_v1",
+    "leadintel_customer_v2_research_meta_v1",
+    "leadintel_customer_v2_server_dirty"
+  ]);
   const RESET_RESIDUE_KEYS=Object.freeze([
     "leadintel_customer_v2_website_activation_v1",
     "leadintel_customer_v2_research_meta_v1"
   ]);
+
+  function clearLegacyLocalAutosaveOnce(){
+    if(!root?.localStorage)return false;
+    if(root.localStorage.getItem(LEGACY_LOCAL_CLEANUP_KEY)==="done")return false;
+    for(const key of LEGACY_LOCAL_WORKSPACE_KEYS)root.localStorage.removeItem(key);
+    try{root.sessionStorage?.removeItem("leadintel_customer_v2_server_hydration");}catch{}
+    try{root.sessionStorage?.removeItem("leadintel_customer_v2_server_conflict");}catch{}
+    root.localStorage.setItem(LEGACY_LOCAL_CLEANUP_KEY,"done");
+    root.location.reload();
+    return true;
+  }
 
   function clearBrowserWorkspaceResidue(){
     if(!root?.localStorage)return false;
@@ -32,10 +54,11 @@
   function install(){
     if(!root?.document||root.__leadintelWorkspaceResetHygieneInstalled)return;
     root.__leadintelWorkspaceResetHygieneInstalled=true;
+    if(clearLegacyLocalAutosaveOnce())return;
     root.document.addEventListener("click",handleResetClick,true);
   }
 
-  const api={RESET_RESIDUE_KEYS,clearBrowserWorkspaceResidue,refreshResetUi,handleResetClick,install};
+  const api={LEGACY_LOCAL_CLEANUP_KEY,LEGACY_LOCAL_WORKSPACE_KEYS,RESET_RESIDUE_KEYS,clearLegacyLocalAutosaveOnce,clearBrowserWorkspaceResidue,refreshResetUi,handleResetClick,install};
   root.LeadIntelWorkspaceResetHygiene=api;
   install();
 })(typeof globalThis!=="undefined"?globalThis:this);
