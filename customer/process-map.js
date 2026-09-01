@@ -1,6 +1,7 @@
 import './state-budget.js?v=20260826-state-budget-500kb';
 import './website-input-sync.js?v=20260901-saved-state-v2';
 import './workspace-reset-hygiene.js?v=20260901-legacy-local-cleanup-v2';
+import './custom-market-input-hygiene.js?v=20260901-custom-market-autofill-v1';
 import './website-activation.js?v=20260826-website-activation-v2';
 import './crm-engine.js?v=20260828-master-crm-v1';
 import './server-bridge.js?v=20260828-master-crm-v1';
