@@ -1,7 +1,7 @@
 (function(root){
   "use strict";
 
-  const LEGACY_LOCAL_CLEANUP_KEY="leadintel_customer_v2_legacy_local_cleanup_20260901_v1";
+  const LEGACY_LOCAL_CLEANUP_KEY="leadintel_customer_v2_legacy_local_cleanup_20260901_v2";
   const LEGACY_LOCAL_WORKSPACE_KEYS=Object.freeze([
     "leadintel_customer_v2_state",
     "leadintel_customer_v2_discovery",
