@@ -40,3 +40,13 @@ test('confirmed workspace reset records durable reset intent for the next authen
   assert.match(hygiene,/localStorage\.setItem\(RESET_PENDING_KEY/,'reset intent must survive reload and sign-in');
   assert.match(hygiene,/handleResetClick[\s\S]*recordResetIntent\(\)/,'the marker must be written only on the confirmed reset click');
 });
+
+test('pending reset auto-finishes through the existing version-safe sync path after authentication',()=>{
+  assert.match(hygiene,/async function finalizePendingReset/);
+  assert.match(hygiene,/LeadIntelServerBridge/);
+  assert.match(hygiene,/resolveConflictKeepLocal/,'a reset that reconnects into a version conflict must reuse the safe keep-local resolver');
+  assert.match(hygiene,/saveNow/,'a reset with no conflict must still save the blank workspace explicitly');
+  assert.match(hygiene,/leadintel:server-ready/,'signed-out reset must resume automatically after Google sign-in');
+  assert.match(hygiene,/localStorage\.removeItem\(RESET_PENDING_KEY\)/,'pending reset marker must clear after successful server save');
+  assert.doesNotMatch(hygiene,/deleteCrmCompany|\/api\/crm|\/api\/integrations\/ai\/provider|disconnectProvider/,'reset completion must not touch CRM or AI-provider credentials');
+});
