@@ -4,16 +4,17 @@ const fs=require('node:fs');
 const path=require('node:path');
 
 const root=path.join(__dirname,'..');
-const index=fs.readFileSync(path.join(root,'index.html'),'utf8');
+const processMap=fs.readFileSync(path.join(root,'process-map.js'),'utf8');
 const persistencePath=path.join(root,'workspace-persistence.js');
 const persistence=fs.existsSync(persistencePath)?fs.readFileSync(persistencePath,'utf8'):'';
 
-test('workspace persistence helper loads before app state initializes',()=>{
+test('workspace persistence helper loads before the server bridge',()=>{
   assert.equal(fs.existsSync(persistencePath),true,'workspace-persistence.js must exist');
-  const helperPos=index.indexOf('workspace-persistence.js');
-  const appPos=index.indexOf('app.js');
-  assert.ok(helperPos>=0&&appPos>helperPos,'persistence helper must load before app.js');
+  const helperPos=processMap.indexOf('workspace-persistence.js');
+  const bridgePos=processMap.indexOf('server-bridge.js');
+  assert.ok(helperPos>=0&&bridgePos>helperPos,'persistence helper must load before server-bridge.js');
   assert.match(persistence,/prepareForLoad\(\)/);
+  assert.match(persistence,/leadintel_customer_v2_persistence_reload_v1/);
 });
 
 test('legacy autosaved workspace data is ignored unless it has an explicit saved snapshot',()=>{
