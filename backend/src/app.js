@@ -2,7 +2,8 @@ import core from './index.js';
 import {allowedOrigin,corsHeaders} from './security.js';
 import {handleAiRoute} from './ai-routes.js';
 import {handleSaasRoute} from './saas-routes.js';
-import {handleCrmRoute,handleApolloCrmWebhook} from './crm-routes.js';
+import {handleCrmRoute} from './crm-routes.js';
+import {handleApolloCrmWebhook} from './crm-routes.js';
 
 export default {
   async fetch(request,env){
