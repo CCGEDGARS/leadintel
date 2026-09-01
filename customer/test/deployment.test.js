@@ -41,8 +41,9 @@ test('obsolete GitHub Pages deployment workflow is removed', () => {
   assert.equal(fs.existsSync(pagesWorkflowPath), false);
 });
 
-test('production entry points route to the active customer workspace', () => {
-  assert.match(rootIndex, /location\.replace\(['"]\/customer\/['"]\)/);
+test('production root is the LeadIntel entry page while active workspace remains available at /customer/', () => {
+  assert.doesNotMatch(rootIndex, /location\.replace\(['"]\/customer\/['"]\)/);
   assert.doesNotMatch(rootIndex, /location\.replace\(['"]\/v2\/['"]\)/);
+  assert.match(rootIndex, /href=["']customer\/["']/);
   assert.match(legacyV2Index, /location\.replace\(['"]\/customer\/['"]\)/);
 });
