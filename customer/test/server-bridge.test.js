@@ -75,6 +75,8 @@ test('pending explicit reset clears saved workspace before normal hydration with
   assert.match(bridge,/emptyWorkspacePayload/);
   assert.match(bridge,/completePendingReset[\s\S]*\/api\/customer\/state[\s\S]*method:["']PUT["'][\s\S]*version:state\.version/,'reset must overwrite the latest saved workspace version explicitly');
   assert.match(bridge,/await completePendingReset\(\)[\s\S]*hydrateAuthenticated\(\)/,'reset intent must be handled before ordinary conflict/hydration logic');
-  assert.doesNotMatch(bridge,/completePendingReset[\s\S]*\/api\/integrations\/ai\/provider/,'workspace reset must not touch saved AI provider credentials');
-  assert.doesNotMatch(bridge,/completePendingReset[\s\S]*deleteCrmCompany/,'workspace reset must not delete CRM records');
+  const resetFunction=(bridge.match(/async function completePendingReset\(\)\{[\s\S]*?\n  \}/)||[])[0]||'';
+  assert.ok(resetFunction,'reset routine must be inspectable');
+  assert.doesNotMatch(resetFunction,/\/api\/integrations\/ai\/provider|disconnectProvider/,'workspace reset must not touch saved AI provider credentials');
+  assert.doesNotMatch(resetFunction,/deleteCrmCompany|\/api\/crm/,'workspace reset must not delete CRM records');
 });
