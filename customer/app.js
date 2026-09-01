@@ -4,6 +4,7 @@ const PDFJS_VERSION="6.2.108";
 const MAX_PDF_BYTES=15*1024*1024;
 const MAX_PDFS=5;
 const MAX_MARKET_RESEARCH_QUERIES=4;
+const RESET_CONFIRM_WINDOW_MS=5000;
 const profileFields=[
   ["companyOverview","Company overview",true],["priorityOffers","Priority offers",false],["idealCustomer","Ideal customer profile",false],
   ["lookalikeCustomers","Lookalike customers",false],["decisionMakers","Decision makers",false],["currentMarkets","Current market footprint",false],
@@ -13,6 +14,7 @@ const profileFields=[
 let state=loadState();
 let editMode=false;
 let pdfModule=null;
+let resetConfirmTimer=null;
 const $=id=>document.getElementById(id);
 
 function defaultState(){
@@ -321,7 +323,38 @@ function activateMarketStrategy(){
   if(!state.market.opportunities.some(item=>item.active)){showToast("Keep at least one market opportunity active");return;}
   state.market.strategyApproved=true;state.market.strategyApprovedAt=new Date().toISOString();saveState();renderMarketStrategy();showToast("Market Strategy activated for Discovery");
 }
-async function resetWorkspace(){if(!window.confirm("Reset all workspace data? This clears this browser and the saved LeadIntel workspace. CRM records will not be deleted."))return;state=defaultState();editMode=false;saveState();for(const key of ["leadintel_customer_v2_discovery","leadintel_customer_v2_outreach","leadintel_customer_v2_delivery","leadintel_customer_v2_discovery_meta"])localStorage.removeItem(key);syncInputsFromState();setStep(1);const bridge=window.LeadIntelServerBridge;if(bridge?.session?.authenticated&&bridge.workspace){try{const result=await bridge.saveNow();if(!result.saved)throw new Error("Server reset was not saved");}catch(error){showToast("Reset failed to sync: "+error.message);return;}}sessionStorage.removeItem("leadintel_customer_v2_server_hydration");showToast("All workspace data reset");}
+function disarmWorkspaceReset(){
+  const button=$("reset-workspace");
+  if(resetConfirmTimer){clearTimeout(resetConfirmTimer);resetConfirmTimer=null;}
+  if(!button)return;
+  button.dataset.resetArmed="false";
+  button.classList.remove("reset-armed");
+  button.textContent="Reset all workspace data";
+  button.setAttribute("aria-label","Reset all workspace data");
+  button.style.removeProperty("color");
+  button.style.removeProperty("background");
+  button.style.removeProperty("border-radius");
+}
+function armWorkspaceReset(){
+  const button=$("reset-workspace");if(!button)return false;
+  button.dataset.resetArmed="true";
+  button.classList.add("reset-armed");
+  button.textContent="Confirm reset";
+  button.setAttribute("aria-label","Confirm reset of workspace data");
+  button.style.setProperty("color","var(--danger)");
+  button.style.setProperty("background","rgba(165,71,62,.10)");
+  button.style.setProperty("border-radius","9px");
+  if(resetConfirmTimer)clearTimeout(resetConfirmTimer);
+  resetConfirmTimer=setTimeout(disarmWorkspaceReset,RESET_CONFIRM_WINDOW_MS);
+  showToast("Click Confirm reset within 5 seconds");
+  return true;
+}
+async function resetWorkspace(){
+  const button=$("reset-workspace");
+  if(button?.dataset.resetArmed!=="true"){armWorkspaceReset();return;}
+  disarmWorkspaceReset();
+  state=defaultState();editMode=false;saveState();for(const key of ["leadintel_customer_v2_discovery","leadintel_customer_v2_outreach","leadintel_customer_v2_delivery","leadintel_customer_v2_discovery_meta"])localStorage.removeItem(key);syncInputsFromState();setStep(1);const bridge=window.LeadIntelServerBridge;if(bridge?.session?.authenticated&&bridge.workspace){try{const result=await bridge.saveNow();if(!result.saved)throw new Error("Server reset was not saved");}catch(error){showToast("Reset failed to sync: "+error.message);return;}}sessionStorage.removeItem("leadintel_customer_v2_server_hydration");showToast("All workspace data reset");
+}
 
 function bind(){
   $("company-website").addEventListener("input",readSources);$("additional-links").addEventListener("input",readSources);
