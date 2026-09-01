@@ -20,6 +20,10 @@ test('Market Strategy uses authenticated OpenAI Web Search and keeps Firecrawl v
   assert.match(app,/async function searchOpenAiWeb\(/);
 });
 
+test('OpenAI search waits for an actual server bridge instead of treating undefined as ready',()=>{
+  assert.match(app,/if\(window\.LeadIntelServerBridge&&window\.LeadIntelServerBridge\.session!==null\)return window\.LeadIntelServerBridge/);
+});
+
 test('each market query attempts OpenAI discovery and Firecrawl verification without invoking Apollo',()=>{
   const block=runMarketResearchBlock();
   assert.match(block,/searchOpenAiWeb\(query/);
