@@ -24,7 +24,7 @@ export async function buildApolloCrmWebhookUrl(baseUrl,requestId,secret){
 
 function validPhoneFromCallback(body,personId){
   const people=Array.isArray(body?.people)?body.people:[];
-  const person=people.find(item=>clean(item?.id||item?.person_id,180)===clean(personId,180))||people[0]||null;
+  const person=people.find(item=>clean(item?.id||item?.person_id,180)===clean(personId,180))||null;
   const phones=Array.isArray(person?.phone_numbers)?person.phone_numbers:[];
   const valid=phones.filter(item=>String(item?.status_cd||item?.status||'').toLowerCase()==='valid_number'&&clean(item?.sanitized_number||item?.raw_number,80));
   valid.sort((left,right)=>{
