@@ -22,5 +22,5 @@ test('custom target market rejects browser-autofilled website/domain values',()=
 });
 
 test('process shell loads the custom market autofill guard',()=>{
-  assert.match(processMap,/custom-market-input-hygiene\.js\?v=20260901-custom-market-autofill-v1/);
+  assert.match(processMap,/custom-market-input-hygiene\.js\?v=20260901-custom-market-autofill-v2/);
 });
