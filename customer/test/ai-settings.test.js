@@ -69,3 +69,9 @@ test('AI Settings supports a direct ?settings=ai deep link that opens the drawer
   assert.match(js,/\.get\(['"]settings['"]\)===['"]ai['"]/,'settings=ai must be the explicit deep-link contract');
   assert.match(js,/openDrawer\(\)/,'direct settings link must open the existing secure settings drawer');
 });
+
+test('signed-out AI Settings exposes a direct Google sign-in action instead of only disabled fields',()=>{
+  assert.match(js,/id="ai-settings-signin"/,'signed-out summary must render a direct sign-in button');
+  assert.match(js,/Sign in with Google/,'the action must clearly state the authentication method');
+  assert.match(js,/bridge\(\)\?\.signIn\?\.\(\)/,'AI Settings sign-in must reuse the existing authenticated server bridge');
+});
