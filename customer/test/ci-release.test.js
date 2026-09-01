@@ -56,9 +56,12 @@ test('automatic release proof requires successful Backend Deploy and Customer V2
   assert.doesNotMatch(workflow,/--expected-sha[^\n]*github\.sha/);
 });
 
-test('manual re-verification converts invalid CI evidence into a blocked proof instead of dying before proof generation',()=>{
+test('manual re-verification requires both Customer V2 CI and Backend Deploy evidence and blocks invalid evidence safely',()=>{
   assert.equal(fs.existsSync(releaseWorkflowPath),true,'release-integrity workflow must exist');
   const workflow=fs.readFileSync(releaseWorkflowPath,'utf8');
+  assert.match(workflow,/deploy_run_id:/);
+  assert.match(workflow,/DEPLOY_RUN_ID/);
+  assert.match(workflow,/Backend Deploy/);
   assert.match(workflow,/id:\s*manual_ci/);
   assert.match(workflow,/conclusion=failure/);
   assert.match(workflow,/GITHUB_OUTPUT/);
