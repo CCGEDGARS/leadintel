@@ -9,6 +9,7 @@ const PROVIDER_LABELS=Object.freeze({openai:'OpenAI',anthropic:'Anthropic',gemin
 
 function clean(value){return String(value??'').trim();}
 function clampTokens(value){const n=Number(value);return Number.isFinite(n)?Math.max(1,Math.min(8192,Math.floor(n))):1200;}
+function clampResults(value){const n=Number(value);return Number.isFinite(n)?Math.max(1,Math.min(8,Math.floor(n))):5;}
 function usage(input=0,output=0){return {input_tokens:Math.max(0,Number(input)||0),output_tokens:Math.max(0,Number(output)||0)};}
 
 export function normalizeAiProvider(value){
@@ -52,6 +53,55 @@ function sanitizedUpstreamError(provider,status,payload={}){
 }
 
 async function parseJson(response){try{return await response.json();}catch{return {};}}
+function canonicalHttpUrl(value){
+  try{
+    const url=new URL(clean(value));if(!['http:','https:'].includes(url.protocol))return '';
+    url.hash='';url.hostname=url.hostname.toLowerCase();url.pathname=url.pathname.replace(/\/+$/,'')||'/';
+    return url.pathname==='/'&&!url.search?url.origin:url.href;
+  }catch{return '';}
+}
+function openAiSearchSources(payload={}){
+  const sources=[];
+  for(const item of Array.isArray(payload?.output)?payload.output:[]){
+    if(item?.type==='web_search_call'){
+      for(const source of Array.isArray(item?.action?.sources)?item.action.sources:[]){
+        const url=canonicalHttpUrl(source?.url);if(url)sources.push({url,title:clean(source?.title)});
+      }
+    }
+    for(const content of Array.isArray(item?.content)?item.content:[]){
+      for(const annotation of Array.isArray(content?.annotations)?content.annotations:[]){
+        const candidate=annotation?.url||annotation?.url_citation?.url;const url=canonicalHttpUrl(candidate);
+        if(url)sources.push({url,title:clean(annotation?.title||annotation?.url_citation?.title)});
+      }
+    }
+  }
+  const unique=new Map();for(const source of sources)if(!unique.has(source.url))unique.set(source.url,source);return [...unique.values()];
+}
+function webSearchSchema(maxResults){
+  return {
+    type:'object',additionalProperties:false,required:['results'],properties:{
+      results:{type:'array',maxItems:maxResults,items:{
+        type:'object',additionalProperties:false,required:['title','url','description','date'],properties:{
+          title:{type:'string'},url:{type:'string'},description:{type:'string'},date:{type:'string'}
+        }
+      }}
+    }
+  };
+}
+function parseStructuredWebResults(payload,sources,maxResults){
+  const text=textFromOpenAi(payload);if(!text)throw new Error('OpenAI returned no text');
+  let parsed;try{parsed=JSON.parse(text);}catch{throw new Error('OpenAI returned invalid structured web search output');}
+  const allowed=new Map(sources.map(source=>[source.url,source]));const unique=new Map();
+  for(const row of Array.isArray(parsed?.results)?parsed.results:[]){
+    const url=canonicalHttpUrl(row?.url);if(!url||!allowed.has(url)||unique.has(url))continue;
+    const source=allowed.get(url);unique.set(url,{
+      url,title:clean(row?.title)||source.title||new URL(url).hostname,
+      description:clean(row?.description).slice(0,4000),date:clean(row?.date).slice(0,120)
+    });
+    if(unique.size>=maxResults)break;
+  }
+  return [...unique.values()];
+}
 
 async function openAiRequest(options,fetchImpl){
   const response=await fetchImpl('https://api.openai.com/v1/responses',{
@@ -62,6 +112,31 @@ async function openAiRequest(options,fetchImpl){
   const payload=await parseJson(response);if(!response.ok)throw sanitizedUpstreamError('openai',response.status,payload);
   const text=textFromOpenAi(payload);if(!text)throw new Error('OpenAI returned no text');
   return {provider:'openai',model:options.model,text,usage:usage(payload?.usage?.input_tokens,payload?.usage?.output_tokens)};
+}
+
+export async function searchWeb({apiKey,model,query,maxResults=5,fetchImpl=fetch}){
+  const limit=clampResults(maxResults);const options=validatedOptions({provider:'openai',apiKey,model,prompt:query,maxOutputTokens:2400});
+  try{
+    const response=await fetchImpl('https://api.openai.com/v1/responses',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Accept':'application/json',Authorization:`Bearer ${options.apiKey}`},
+      body:JSON.stringify({
+        model:options.model,
+        instructions:'Search the public web for current, source-backed commercial signals relevant to the query. Return only results supported by sources you actually found. Use each source URL exactly. Prefer recent, company-specific evidence and do not invent URLs.',
+        input:options.prompt,
+        tools:[{type:'web_search'}],tool_choice:'required',include:['web_search_call.action.sources'],
+        text:{format:{type:'json_schema',name:'leadintel_web_signal_results',strict:true,schema:webSearchSchema(limit)}},
+        store:false
+      })
+    });
+    const payload=await parseJson(response);if(!response.ok)throw sanitizedUpstreamError('openai',response.status,payload);
+    const sources=openAiSearchSources(payload);const results=parseStructuredWebResults(payload,sources,limit);
+    return {provider:'openai',model:options.model,results,sources,usage:usage(payload?.usage?.input_tokens,payload?.usage?.output_tokens)};
+  }catch(error){
+    const message=String(error?.message||'');
+    if(/request failed \(\d+\)/.test(message)||/^(AI provider API key is required|AI provider model is invalid|AI prompt is required)$/.test(message))throw error;
+    throw new Error('OpenAI request failed (502)');
+  }
 }
 
 async function verifyOpenAiCredential(options,fetchImpl){

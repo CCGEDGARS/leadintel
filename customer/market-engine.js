@@ -7,7 +7,7 @@
 
   const DEFAULT_MARKET_STATE=Object.freeze({
     icps:[],signals:[],researchQueries:[],researchResults:[],opportunities:[],
-    researchStatus:"idle",lastResearchAt:"",strategyApproved:false,strategyApprovedAt:""
+    researchStatus:"idle",researchSourceStatus:{openai:"idle",firecrawl:"idle"},lastResearchAt:"",strategyApproved:false,strategyApprovedAt:""
   });
 
   function clean(value){return String(value??"").replace(/\s+/g," ").trim();}
@@ -18,6 +18,19 @@
     return [...new Set(String(value??"").split(/\n|;|\|/).map(clean).filter(Boolean))];
   }
   function normalizeUrl(value){try{const url=new URL(clean(value));return ["http:","https:"].includes(url.protocol)?url.href:"";}catch{return "";}}
+  function canonicalUrl(value){
+    try{
+      const url=new URL(clean(value));if(!["http:","https:"].includes(url.protocol))return "";
+      url.hash="";url.hostname=url.hostname.toLowerCase();url.pathname=url.pathname.replace(/\/+$/,"")||"/";
+      return url.pathname==="/"&&!url.search?url.origin:url.href;
+    }catch{return "";}
+  }
+  function normalizeProviders(value){
+    const allowed=new Set(["openai","firecrawl"]),seen=new Set();
+    const input=Array.isArray(value)?value:[value];
+    input.map(item=>clean(item).toLowerCase()).filter(item=>allowed.has(item)).forEach(item=>seen.add(item));
+    return ["openai","firecrawl"].filter(item=>seen.has(item));
+  }
   function priorityWeight(priority){return /^high$/i.test(clean(priority))?9:/^medium$/i.test(clean(priority))?7:/^low$/i.test(clean(priority))?5:6;}
   function defaultKeywords(signal){
     const name=clean(signal?.name).replace(/\bor\b/gi,";").replace(/\band\b/gi,";");
@@ -113,19 +126,38 @@
     return results;
   }
 
-  function normalizeSearchResults(payload={},queryMeta={}){
+  function normalizeSearchResults(payload={},queryMeta={},sourceProvider=""){
     const raw=Array.isArray(payload?.data)?payload.data:Array.isArray(payload?.data?.web)?payload.data.web:Array.isArray(payload?.web)?payload.web:Array.isArray(payload?.results)?payload.results:[];
-    return raw.slice(0,5).map(item=>{
-      const url=normalizeUrl(item?.url||item?.link||"");
+    return raw.slice(0,8).map(item=>{
+      const url=canonicalUrl(item?.url||item?.link||"");
       if(!url)return null;
       const description=clean(item?.description||item?.snippet||"");
       const body=clean(item?.markdown||item?.content||item?.text||description);
       return {
         queryId:clean(queryMeta.id),market:clean(queryMeta.market),query:clean(queryMeta.query),
         url,title:clean(item?.title)||new URL(url).hostname,description,
-        text:body.slice(0,5000),date:clean(item?.publishedDate||item?.date||item?.published_at||item?.metadata?.publishedDate)
+        text:body.slice(0,5000),date:clean(item?.publishedDate||item?.date||item?.published_at||item?.metadata?.publishedDate),
+        sourceProviders:normalizeProviders([...(Array.isArray(item?.sourceProviders)?item.sourceProviders:[]),sourceProvider])
       };
     }).filter(Boolean);
+  }
+
+  function mergeResearchResults(...groups){
+    const merged=new Map();
+    for(const item of groups.flatMap(group=>Array.isArray(group)?group:[])){
+      const url=canonicalUrl(item?.url);if(!url)continue;
+      const next={
+        queryId:clean(item?.queryId),market:clean(item?.market),query:clean(item?.query),url,
+        title:clean(item?.title),description:clean(item?.description),text:String(item?.text||"").slice(0,5000),date:clean(item?.date),
+        sourceProviders:normalizeProviders(item?.sourceProviders)
+      };
+      const current=merged.get(url);
+      if(!current){merged.set(url,next);continue;}
+      current.queryId=current.queryId||next.queryId;current.market=current.market||next.market;current.query=current.query||next.query;
+      current.title=current.title||next.title;current.description=current.description||next.description;current.text=current.text||next.text;current.date=current.date||next.date;
+      current.sourceProviders=normalizeProviders([...(current.sourceProviders||[]),...(next.sourceProviders||[])]);
+    }
+    return [...merged.values()];
   }
 
   function recentScore(evidence){
@@ -189,16 +221,18 @@
     }));
     const researchQueries=(Array.isArray(input.researchQueries)?input.researchQueries:[]).slice(0,4).map(item=>({id:clean(item?.id),market:clean(item?.market),offer:clean(item?.offer),query:clean(item?.query)})).filter(item=>item.id&&item.query);
     const researchResults=(Array.isArray(input.researchResults)?input.researchResults:[]).slice(0,20).map(item=>({
-      queryId:clean(item?.queryId),market:clean(item?.market),query:clean(item?.query),url:normalizeUrl(item?.url),title:clean(item?.title),description:clean(item?.description),text:String(item?.text||"").slice(0,5000),date:clean(item?.date)
+      queryId:clean(item?.queryId),market:clean(item?.market),query:clean(item?.query),url:canonicalUrl(item?.url),title:clean(item?.title),description:clean(item?.description),text:String(item?.text||"").slice(0,5000),date:clean(item?.date),sourceProviders:normalizeProviders(item?.sourceProviders)
     })).filter(item=>item.url);
     const opportunities=(Array.isArray(input.opportunities)?input.opportunities:[]).slice(0,12).map(item=>({...item,id:clean(item?.id),market:clean(item?.market),title:clean(item?.title),active:item?.active!==false})).filter(item=>item.id);
-    const allowed=new Set(["idle","running","complete","partial","error"]);
+    const allowed=new Set(["idle","running","complete","partial","error"]),sourceAllowed=new Set(["idle","running","complete","partial","error","unavailable"]);
+    const rawSourceStatus=input.researchSourceStatus&&typeof input.researchSourceStatus==="object"?input.researchSourceStatus:{};
+    const researchSourceStatus={openai:sourceAllowed.has(rawSourceStatus.openai)?rawSourceStatus.openai:"idle",firecrawl:sourceAllowed.has(rawSourceStatus.firecrawl)?rawSourceStatus.firecrawl:"idle"};
     return {
-      ...DEFAULT_MARKET_STATE,icps,signals,researchQueries,researchResults,opportunities,
+      ...DEFAULT_MARKET_STATE,icps,signals,researchQueries,researchResults,opportunities,researchSourceStatus,
       researchStatus:allowed.has(input.researchStatus)?input.researchStatus:"idle",
       lastResearchAt:clean(input.lastResearchAt),strategyApproved:Boolean(input.strategyApproved),strategyApprovedAt:clean(input.strategyApprovedAt)
     };
   }
 
-  return {DEFAULT_MARKET_STATE,effectiveResearchMarkets,buildIcpCandidates,normalizeSignals,addCustomSignal,buildResearchQueries,normalizeSearchResults,buildMarketOpportunities,normalizeMarketState,splitList};
+  return {DEFAULT_MARKET_STATE,effectiveResearchMarkets,buildIcpCandidates,normalizeSignals,addCustomSignal,buildResearchQueries,normalizeSearchResults,mergeResearchResults,buildMarketOpportunities,normalizeMarketState,splitList};
 });
