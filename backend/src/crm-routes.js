@@ -1,6 +1,6 @@
 import {sha256,cookieValue} from './security.js';
 import {buildApolloMatchUrl,provenBusinessEmail,publicPersonSummary,strongPersonalEmail} from './enrichment.js';
-import {buildApolloCrmWebhookUrl,handleApolloCrmWebhook} from './apollo-crm-webhook.js';
+import {apolloWebhookSigningSecret,buildApolloCrmWebhookUrl,handleApolloCrmWebhook} from './apollo-crm-webhook.js';
 import {
   listCrmCompanies,getCrmCompany,upsertCrmCompany,updateCrmCompany,
   setCrmPipelineStage,removeCrmFromPipeline,archiveCrmCompany,restoreCrmCompany,
@@ -45,7 +45,8 @@ async function enrichCrmContact(request,env,cors,access,companyId){
   const phoneRequested=Boolean(body.phone_lookup||body.phoneLookup);
   if(phoneRequested&&String(policy.phone_lookup_mode||'on_request')==='disabled')return error('Phone enrichment is disabled by workspace policy',409,cors,'CRM_PHONE_LOOKUP_DISABLED');
   if(phoneRequested&&!isHttpsUrl(env.APOLLO_WEBHOOK_URL))return error('Apollo phone enrichment requires a configured HTTPS webhook',409,cors,'CRM_APOLLO_WEBHOOK_REQUIRED');
-  if(phoneRequested&&!clean(env.APOLLO_WEBHOOK_SECRET,500))return error('Apollo phone enrichment requires a webhook signing secret',409,cors,'CRM_APOLLO_WEBHOOK_SECRET_REQUIRED');
+  const webhookSecret=apolloWebhookSigningSecret(env);
+  if(phoneRequested&&!webhookSecret)return error('Apollo phone enrichment requires server signing material',409,cors,'CRM_APOLLO_WEBHOOK_SECRET_REQUIRED');
 
   const existing=await env.DB.prepare(`SELECT * FROM crm_contacts WHERE workspace_id=? AND company_id=? AND source='apollo' AND external_person_id=? AND archived_at IS NULL AND normalized_email IS NOT NULL`).bind(access.context.workspaceId,companyId,personId).first();
   if(existing&&!phoneRequested)return json({request:{status:'already_verified',credits_used:0},contact:existing,duplicate:true},200,cors);
@@ -57,7 +58,7 @@ async function enrichCrmContact(request,env,cors,access,companyId){
   await env.DB.prepare(`INSERT INTO crm_enrichment_requests(id,workspace_id,company_id,contact_id,provider,person_provider_id,role_requested,status,personal_email_requested,phone_requested,credits_reserved,credits_used,response_summary_json,requested_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(requestId,access.context.workspaceId,companyId,null,'apollo',personId,role,'processing',personalApproved?1:0,phoneRequested?1:0,reserved,0,'{}',access.context.userId,created,created).run();
 
   try{
-    const webhookUrl=phoneRequested?await buildApolloCrmWebhookUrl(env.APOLLO_WEBHOOK_URL,requestId,env.APOLLO_WEBHOOK_SECRET):'';
+    const webhookUrl=phoneRequested?await buildApolloCrmWebhookUrl(env.APOLLO_WEBHOOK_URL,requestId,webhookSecret):'';
     const matchUrl=buildApolloMatchUrl({personId,personalEmail:personalApproved,phoneLookup:phoneRequested,webhookUrl});
     const response=await fetch(matchUrl,{method:'POST',headers:{'Content-Type':'application/json','Cache-Control':'no-cache','Accept':'application/json','X-Api-Key':env.APOLLO_API_KEY}});
     if(!response.ok)throw Object.assign(new Error(`Apollo match returned ${response.status}`),{code:`apollo_match_${response.status}`});
