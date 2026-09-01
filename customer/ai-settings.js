@@ -93,6 +93,7 @@ function openDrawer(){
   refreshStatus();setTimeout(()=>document.getElementById('close-settings')?.focus(),0);
 }
 function closeDrawer(){const drawer=document.getElementById('ai-settings-drawer'),backdrop=document.getElementById('ai-settings-backdrop');if(drawer)drawer.hidden=true;if(backdrop)backdrop.hidden=true;document.body.classList.remove('ai-settings-opened');}
+function shouldOpenSettingsFromUrl(){return new URLSearchParams(window.location.search).get('settings')==='ai';}
 async function refreshStatus(){
   if(!signedIn()){status={role:'',providers:[]};render();return status;}
   try{
@@ -139,4 +140,5 @@ async function disconnectProvider(provider){
 injectUi();
 window.addEventListener('leadintel:server-ready',()=>refreshStatus());
 window.addEventListener('leadintel:workspace-changed',()=>refreshStatus());
-if(signedIn())refreshStatus();
+if(shouldOpenSettingsFromUrl())openDrawer();
+else if(signedIn())refreshStatus();
