@@ -33,3 +33,19 @@ test('Discovery requires durable CRM identity before paid enrichment',()=>{
   assert.match(ui,/saveCrmCompany/);
   assert.match(ui,/Sign in.*enrich/i);
 });
+
+test('phone lookup is a separate explicit paid action and never runs silently with email enrichment',()=>{
+  assert.match(ui,/Find phone[^<\n]*paid/i);
+  assert.match(ui,/data-action="find-phone"/);
+  assert.match(ui,/phoneLookup\s*:\s*true/);
+  assert.match(ui,/phoneLookup\s*:\s*false/);
+  assert.match(ui,/Verified phone/i);
+  assert.match(ui,/Phone lookup.*pending/i);
+});
+
+test('pending Apollo phone lookup can be refreshed from durable CRM without buying another lookup',()=>{
+  assert.match(ui,/data-action="refresh-phone"/);
+  assert.match(ui,/getCrmCompany/);
+  assert.match(ui,/external_person_id/);
+  assert.match(ui,/phone_number/);
+});
