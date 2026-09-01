@@ -4,6 +4,7 @@ import './workspace-reset-hygiene.js?v=20260901-legacy-local-cleanup-v2';
 import './custom-market-input-hygiene.js?v=20260901-custom-market-autofill-v1';
 import './website-activation.js?v=20260826-website-activation-v2';
 import './crm-engine.js?v=20260828-master-crm-v1';
+import './sync-conflict-hygiene.js?v=20260901-stale-blank-conflict-v1';
 import './server-bridge.js?v=20260828-master-crm-v1';
 import './crm-ui.js?v=20260828-master-crm-v1';
 import './ai-settings.js?v=20260901-ai-settings-auth-v1';
