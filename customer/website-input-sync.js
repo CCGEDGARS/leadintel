@@ -50,7 +50,7 @@
     if(!visible)return false;
 
     // The field already has a fixed visual "https://" prefix. Browser autofill/page
-    // restore can reinsert the complete URL after app hydration, so normalize the
+    // restore, paste, or typing can reinsert the complete URL, so normalize the
     // visible value every time—even when the canonical saved URL is unchanged.
     const display=toVisibleWebsite(visible);
     const displayChanged=input.value!==display;
@@ -72,6 +72,7 @@
     const bindInput=()=>{
       const input=root.document.getElementById(INPUT_ID);
       if(!input)return;
+      input.addEventListener("input",syncVisibleWebsite);
       input.addEventListener("change",syncVisibleWebsite);
       input.addEventListener("blur",syncVisibleWebsite);
       input.addEventListener("focus",syncVisibleWebsite);
