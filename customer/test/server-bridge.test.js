@@ -39,6 +39,13 @@ test('dirty local state survives reload and is retried before reporting synced',
   assert.match(bridge,/if\(hasDirtyLocalState\(\)\).*scheduleSave\(\)/s);
 });
 
+test('blank default workspace never becomes a false sync conflict after sign in',()=>{
+  assert.match(bridge,/function hasMeaningfulLocalData/);
+  assert.match(bridge,/hasDirtyLocalState\(\)&&!hasMeaningfulLocalData\(\)/);
+  assert.match(bridge,/clearDirtyLocalState\(\).*sessionStorage\.removeItem\(CONFLICT_KEY\)/s);
+  assert.match(bridge,/hasMeaningfulLocalData\(\).*hasDirtyLocalState\(\).*enterConflict/s);
+});
+
 test('workspace switching is blocked while the active workspace has unsynced local state',()=>{
   assert.match(bridge,/async function selectWorkspace\(id\).*hasDirtyLocalState\(\)/s);
   assert.match(bridge,/Finish syncing before switching workspaces/);
