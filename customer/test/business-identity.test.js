@@ -6,6 +6,8 @@ const path = require('node:path');
 const profile = require('../profile-engine.js');
 const step2 = require('../step2-readiness-engine.js');
 step2.patchProfileEngine(profile, null);
+const identity = require('../business-identity.js');
+identity.patchProfileEngine(profile, null);
 
 const answers = {
   priority_offers:'Corporate sales training; leadership coaching; practical AI sales solutions',
@@ -71,11 +73,13 @@ test('saved profiles missing the new business identity fields are upgraded witho
 });
 
 test('Step 3 UI separates Business Identity, Commercial Positioning and Sales Message', () => {
-  const app = fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
-  assert.match(app,/Business identity/i);
-  assert.match(app,/Commercial positioning/i);
-  assert.match(app,/Sales message/i);
-  assert.match(app,/Business summary/i);
-  assert.match(app,/USP \/ value proposition/i);
-  assert.match(app,/Elevator pitch/i);
+  const ui = fs.readFileSync(path.join(__dirname,'..','business-identity.js'),'utf8');
+  const processMap = fs.readFileSync(path.join(__dirname,'..','process-map.js'),'utf8');
+  assert.match(processMap,/business-identity\.js/);
+  assert.match(ui,/Business identity/i);
+  assert.match(ui,/Commercial positioning/i);
+  assert.match(ui,/Sales message/i);
+  assert.match(ui,/Business summary/i);
+  assert.match(ui,/USP \/ value proposition/i);
+  assert.match(ui,/Elevator pitch/i);
 });
