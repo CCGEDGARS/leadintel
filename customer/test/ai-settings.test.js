@@ -11,7 +11,7 @@ const js=fs.existsSync(jsPath)?fs.readFileSync(jsPath,'utf8'):'';
 const css=fs.existsSync(cssPath)?fs.readFileSync(cssPath,'utf8'):'';
 
 test('Customer V2 loads a Settings drawer for exactly three customer-owned AI providers',()=>{
-  assert.match(processMap,/import ['"]\.\/ai-settings\.js\?v=20260901-ai-settings-auth-v1['"]/);
+  assert.match(processMap,/import ['"]\.\/ai-settings\.js\?v=20260902-integration-control-centre-v1['"]/);
   assert.equal(fs.existsSync(jsPath),true,'ai-settings.js must exist');
   assert.match(js,/id="open-settings"/);
   assert.match(js,/id="ai-settings-drawer"/);
@@ -43,7 +43,7 @@ test('raw provider API keys are transient browser values and never persisted',()
 });
 
 test('AI settings CSS is cache-busted and controls have individual borders and focus treatment',()=>{
-  assert.match(js,/SETTINGS_VERSION='20260901-ai-settings-auth-v1'/);
+  assert.match(js,/SETTINGS_VERSION='20260902-integration-control-centre-v1'/);
   assert.match(js,/link\.href=`ai-settings\.css\?v=\$\{SETTINGS_VERSION\}`/);
   assert.equal(fs.existsSync(cssPath),true,'ai-settings.css must exist');
   assert.match(css,/\.ai-settings-btn[\s\S]*border:\s*1px solid/i);
