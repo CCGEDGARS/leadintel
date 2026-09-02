@@ -61,6 +61,7 @@ export async function resolveWorkspaceServiceCredential(env,workspaceId,provider
 export async function withWorkspaceServiceCredentials(request,env){
   try{
     const url=new URL(request.url);const workspaceId=clean(url.searchParams.get('workspace_id')||'',120);if(!workspaceId)return env;
+    const access=await requireMember(request,env,workspaceId);if(access.error)return env;
     const apolloCredential=await resolveWorkspaceServiceCredential(env,workspaceId,'apollo');
     if(apolloCredential.source!=='customer'||!apolloCredential.apiKey)return env;
     const runtime=Object.create(env);
@@ -101,7 +102,7 @@ async function forwardFirecrawl(request,env,cors,workspaceId,kind){
     payload={url:url.href,formats:['markdown'],onlyMainContent:body.onlyMainContent!==false,timeout:Math.max(5000,Math.min(60000,Number(body.timeout)||30000))};
     target=credential.source==='customer'?'https://api.firecrawl.dev/v2/scrape':`${clean(env.FIRECRAWL_PROXY_URL||FIRECRAWL_PROXY_URL,500)}/firecrawl-scrape`;
   }else{
-    const query=clean(body.query,600);if(!query||query.length>600)return error('Firecrawl search query is invalid',400,cors);
+    const rawQuery=String(body.query||'').trim();if(!rawQuery||rawQuery.length>600)return error('Firecrawl search query is invalid',400,cors);const query=clean(rawQuery,600);
     const limit=Math.max(1,Math.min(10,Math.floor(Number(body.limit)||4)));
     payload={query,limit,scrapeOptions:{formats:['markdown']}};
     target=credential.source==='customer'?'https://api.firecrawl.dev/v2/search':`${clean(env.FIRECRAWL_PROXY_URL||FIRECRAWL_PROXY_URL,500)}/firecrawl-search`;
