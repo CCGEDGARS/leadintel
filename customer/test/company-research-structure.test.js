@@ -7,12 +7,15 @@ const read=name=>fs.existsSync(path.join(root,name))?fs.readFileSync(path.join(r
 
 const processMap=read('process-map.js');
 const ui=read('company-research-ui.js');
+const router=read('firecrawl-workspace-router.js');
 const app=read('app.js');
 const handoff=read('company-profile-handoff.js');
 const css=read('company-research.css');
 
-test('Customer V2 loads the automatic company research module from the existing process shell',()=>{
-  assert.match(processMap,/company-research-ui\.js\?v=20260902-customer-owned-integrations-v2/);
+test('Customer V2 loads the automatic company research module with Firecrawl workspace routing before research',()=>{
+  assert.match(processMap,/firecrawl-workspace-router\.js\?v=20260902-customer-owned-integrations-v2/);
+  assert.match(processMap,/company-research-ui\.js\?v=20260826-intelligence-autofill-v2/);
+  assert.ok(processMap.indexOf('firecrawl-workspace-router.js')<processMap.indexOf('company-research-ui.js'),'Firecrawl router must load before company research');
   assert.match(processMap,/company-profile-handoff\.js\?v=20260826-intelligence-autofill-v1/);
   assert.match(ui,/company-research-engine\.js\?v=20260826-intelligence-autofill-v2/);
 });
@@ -26,15 +29,25 @@ test('Step 1 becomes research-first and intercepts legacy questionnaire navigati
   assert.match(ui,/MAX_RESULTS_PER_QUERY\s*=\s*4/);
 });
 
-test('automatic research uses authenticated workspace Firecrawl routes with local managed-proxy fallback and workspace AI generation',()=>{
-  assert.match(ui,/\/api\/integrations\/services\/firecrawl\/scrape/);
-  assert.match(ui,/\/api\/integrations\/services\/firecrawl\/search/);
-  assert.match(ui,/FIRECRAWL_PROXY/,'unsigned/local mode must keep the existing managed proxy fallback');
-  assert.match(ui,/bridge\?\.session\?\.authenticated/);
-  assert.match(ui,/workspace\?\.id/);
+test('signed-in research transparently routes legacy Firecrawl calls through authenticated workspace endpoints',()=>{
+  assert.match(router,/MANAGED_FIRECRAWL_ORIGIN='https:\/\/apollo-proxy\.edgars-7e7\.workers\.dev'/);
+  assert.match(router,/\/api\/integrations\/services\/firecrawl\/\$\{kind\}/);
+  assert.match(router,/bridge\?\.session\?\.authenticated/);
+  assert.match(router,/workspace\?\.id/);
+  assert.match(router,/credentials:'include'/);
+  assert.match(router,/window\.fetch=routedFetch/);
+  assert.match(ui,/FIRECRAWL_PROXY/,'unsigned/local research keeps the existing managed proxy fallback');
+  assert.match(ui,/firecrawl-scrape/);
+  assert.match(ui,/firecrawl-search/);
   assert.match(ui,/\/api\/ai\/generate/);
   assert.match(ui,/credentials:\s*['"]include['"]/);
-  assert.doesNotMatch(ui,/APOLLO_API_KEY|FIRECRAWL_API_KEY|access_token|refresh_token/);
+  assert.doesNotMatch(`${router}\n${ui}`,/APOLLO_API_KEY|FIRECRAWL_API_KEY|access_token|refresh_token/);
+});
+
+test('Firecrawl router leaves unrelated fetches and local unsigned research untouched',()=>{
+  assert.match(router,/if\(url\.origin!==MANAGED_FIRECRAWL_ORIGIN\)return null/);
+  assert.match(router,/if\(!authenticated\)return null/);
+  assert.match(router,/if\(!target\)return originalFetch\(input,options\)/);
 });
 
 test('Step 2 renders research summary, provenance, confidence and needs-input states',()=>{
