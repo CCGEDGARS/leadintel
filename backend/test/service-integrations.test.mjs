@@ -7,6 +7,7 @@ const root=process.cwd();
 const migrationPath=path.join(root,'migrations','0013_workspace_service_integrations.sql');
 const routePath=path.join(root,'src','service-integrations.js');
 const appSource=fs.readFileSync(path.join(root,'src','app.js'),'utf8');
+const coreSource=fs.readFileSync(path.join(root,'src','index.js'),'utf8');
 const crmSource=fs.readFileSync(path.join(root,'src','crm-routes.js'),'utf8');
 const migration=fs.existsSync(migrationPath)?fs.readFileSync(migrationPath,'utf8'):'';
 const source=fs.existsSync(routePath)?fs.readFileSync(routePath,'utf8'):'';
@@ -23,9 +24,9 @@ test('workspace service integration migration stores only encrypted Apollo and F
   assert.doesNotMatch(migration,/plain_api_key|raw_api_key/i);
 });
 
-test('production entrypoint delegates workspace service integration routes before CRM and SaaS routes',()=>{
-  assert.match(appSource,/import \{handleServiceIntegrationRoute\} from '\.\/service-integrations\.js'/);
-  assert.match(appSource,/handleServiceIntegrationRoute\(request,env,cors\)[\s\S]*handleCrmRoute[\s\S]*handleSaasRoute/);
+test('production entrypoint delegates service routes then injects workspace credentials before CRM and core routers',()=>{
+  assert.match(appSource,/import \{handleServiceIntegrationRoute,withWorkspaceServiceCredentials\} from '\.\/service-integrations\.js'/);
+  assert.match(appSource,/handleServiceIntegrationRoute\(request,env,cors\)[\s\S]*withWorkspaceServiceCredentials\(request,env\)[\s\S]*handleCrmRoute\(request,runtimeEnv,cors\)[\s\S]*core\.fetch\(request,runtimeEnv\)/);
 });
 
 test('service integration router exposes owner-only status save delete and Firecrawl research proxy routes',()=>{
@@ -36,7 +37,7 @@ test('service integration router exposes owner-only status save delete and Firec
     '/api/integrations/services/firecrawl/scrape',
     '/api/integrations/services/firecrawl/search'
   ])assert.match(source,new RegExp(route.replaceAll('/','\\/')));
-  assert.match(source,/\/api\/integrations\/services\/provider[\s\S]{0,2400}requireMember\(request,env,workspaceId,\['owner'\]\)/);
+  assert.match(source,/\/api\/integrations\/services\/provider[\s\S]{0,2600}requireMember\(request,env,workspaceId,\['owner'\]\)/);
   assert.match(source,/encryptSecret\(apiKey,key\)/);
   assert.match(source,/decryptSecret\(row\.encrypted_api_key,key\)/);
   assert.match(source,/key_hint/);
@@ -60,12 +61,13 @@ test('service status distinguishes customer-owned credentials from LeadIntel man
   assert.doesNotMatch(source,/api_key\s*:/i);
 });
 
-test('CRM Apollo enrichment resolves workspace credential first and keeps platform API key only as fallback',()=>{
-  assert.match(crmSource,/resolveWorkspaceServiceCredential/);
-  assert.match(crmSource,/resolveWorkspaceServiceCredential\(env,access\.context\.workspaceId,['"]apollo['"]\)/);
-  assert.match(crmSource,/apolloCredential\.apiKey/);
-  assert.match(crmSource,/env\.APOLLO_API_KEY/,'platform Apollo key must remain as migration fallback');
-  assert.match(crmSource,/['"]X-Api-Key['"]\s*:\s*apolloApiKey/);
+test('request-scoped Apollo override makes both CRM and legacy enrichment customer-owned without rewriting either engine',()=>{
+  assert.match(source,/withWorkspaceServiceCredentials/);
+  assert.match(source,/resolveWorkspaceServiceCredential\(env,workspaceId,'apollo'\)/);
+  assert.match(source,/runtime\.APOLLO_API_KEY=apolloCredential\.apiKey/);
+  assert.match(source,/runtime\.APOLLO_WEBHOOK_SECRET=env\.APOLLO_WEBHOOK_SECRET\|\|env\.APOLLO_API_KEY/);
+  assert.match(crmSource,/env\.APOLLO_API_KEY/,'Master CRM must continue reading the request-scoped Apollo credential');
+  assert.match(coreSource,/env\.APOLLO_API_KEY/,'legacy opportunity enrichment must continue reading the request-scoped Apollo credential');
 });
 
 test('Firecrawl workspace proxy bounds customer requests and supports managed fallback',()=>{
