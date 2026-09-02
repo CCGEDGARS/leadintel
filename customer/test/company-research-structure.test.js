@@ -12,7 +12,7 @@ const handoff=read('company-profile-handoff.js');
 const css=read('company-research.css');
 
 test('Customer V2 loads the automatic company research module from the existing process shell',()=>{
-  assert.match(processMap,/company-research-ui\.js\?v=20260826-intelligence-autofill-v2/);
+  assert.match(processMap,/company-research-ui\.js\?v=20260902-customer-owned-integrations-v2/);
   assert.match(processMap,/company-profile-handoff\.js\?v=20260826-intelligence-autofill-v1/);
   assert.match(ui,/company-research-engine\.js\?v=20260826-intelligence-autofill-v2/);
 });
@@ -26,12 +26,15 @@ test('Step 1 becomes research-first and intercepts legacy questionnaire navigati
   assert.match(ui,/MAX_RESULTS_PER_QUERY\s*=\s*4/);
 });
 
-test('automatic research reuses Firecrawl scrape/search and authenticated workspace AI generation',()=>{
-  assert.match(ui,/firecrawl-scrape/);
-  assert.match(ui,/firecrawl-search/);
+test('automatic research uses authenticated workspace Firecrawl routes with local managed-proxy fallback and workspace AI generation',()=>{
+  assert.match(ui,/\/api\/integrations\/services\/firecrawl\/scrape/);
+  assert.match(ui,/\/api\/integrations\/services\/firecrawl\/search/);
+  assert.match(ui,/FIRECRAWL_PROXY/,'unsigned/local mode must keep the existing managed proxy fallback');
+  assert.match(ui,/bridge\?\.session\?\.authenticated/);
+  assert.match(ui,/workspace\?\.id/);
   assert.match(ui,/\/api\/ai\/generate/);
   assert.match(ui,/credentials:\s*['"]include['"]/);
-  assert.doesNotMatch(ui,/api_key|access_token|refresh_token/i);
+  assert.doesNotMatch(ui,/APOLLO_API_KEY|FIRECRAWL_API_KEY|access_token|refresh_token/);
 });
 
 test('Step 2 renders research summary, provenance, confidence and needs-input states',()=>{
