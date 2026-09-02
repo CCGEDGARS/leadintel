@@ -41,9 +41,13 @@
       "url": "/",
       "status": 200,
       "contains": [
-        "location.replace('/customer/')"
+        "Commercial Intelligence",
+        "Contact Intelligence",
+        "href=\"customer/\"",
+        "href=\"LeadIntel.html\""
       ],
       "notContains": [
+        "location.replace('/customer/')",
         "location.replace('/v2/')"
       ]
     }
