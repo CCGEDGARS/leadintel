@@ -23,6 +23,7 @@ async function api(path,options={}){
 function providerState(provider){return serviceStatus.providers.find(row=>row.provider===provider)||null;}
 function sourceLabel(row){return row?.source==='customer'?'Customer key':row?.source==='managed'?'LeadIntel managed fallback':'Not connected';}
 function statusLabel(row){if(row?.state==='bad')return row.label||'Connection error';if(row?.source==='customer')return 'Connected';if(row?.source==='managed')return 'Fallback active';return 'Not connected';}
+function shortDate(value){if(!value)return '';const date=new Date(value);return Number.isNaN(date.getTime())?'':new Intl.DateTimeFormat(undefined,{dateStyle:'medium'}).format(date);}
 function injectCss(){
   if(document.querySelector('link[data-leadintel-asset="service-settings-css"]'))return;
   const link=document.createElement('link');link.rel='stylesheet';link.href=`service-settings-extension.css?v=${SETTINGS_VERSION}`;link.dataset.leadintelAsset='service-settings-css';document.head.appendChild(link);
@@ -40,27 +41,52 @@ function serviceControls(config,row){
     </div>
   </div>`;
 }
+function serviceDetail(config,row,current){
+  if(row?.source!=='customer')return current;
+  if(config.provider==='firecrawl'&&Number.isFinite(Number(row?.metadata?.remaining_credits)))return `Customer-owned credential · ${Number(row.metadata.remaining_credits)} Firecrawl credits remaining${row.last_used_at?` · last used ${shortDate(row.last_used_at)}`:''}`;
+  return `Customer-owned credential${row.verified_at?` · verified ${shortDate(row.verified_at)}`:''}${row.last_used_at?` · last used ${shortDate(row.last_used_at)}`:''}`;
+}
+function connectGoogle(){
+  const url=new URL(window.location.href);url.searchParams.set('settings','ai');window.history.replaceState(null,'',url);bridge()?.signIn?.();
+}
 function needsDecoration(){
   const grid=document.getElementById('integration-platform-grid');if(!grid)return false;
   for(const config of SERVICE_PROVIDERS){const card=grid.querySelector(`[data-integration="${config.provider}"]`);if(card&&!card.querySelector('[data-service-extension="1"]'))return true;}
   const health=document.getElementById('integration-health-summary');if(health&&!health.querySelector('.service-readiness-note'))return true;
   const signin=document.getElementById('ai-settings-signin');if(signin&&signin.textContent!=='Connect with Google')return true;
+  const google=document.querySelector('#integration-communication-grid [data-integration="google"]');if(!signedIn()&&google&&!google.querySelector('[data-service-action="google-signin"]'))return true;
   return false;
+}
+function decorateReadiness(){
+  const health=document.getElementById('integration-health-summary');if(!health)return;
+  if(!health.querySelector('.service-readiness-note'))health.insertAdjacentHTML('beforeend','<div class="service-readiness-note"><strong>LeadIntel readiness</strong><span>Google identity + customer-owned provider controls</span></div>');
+  const summary=health.querySelector('.integration-summary-copy strong');if(!summary)return;
+  if(!signedIn()){summary.textContent='Connect with Google to configure LeadIntel';return;}
+  const aiReady=Boolean(document.querySelector('.ai-provider-card.active'));
+  const gmailReady=Boolean(document.querySelector('#integration-communication-grid [data-integration="gmail"] .integration-status.good'));
+  const serviceReady=SERVICE_PROVIDERS.filter(config=>providerState(config.provider)?.state==='good').length;
+  summary.textContent=`LeadIntel readiness: ${Number(aiReady)+1+Number(gmailReady)+serviceReady}/5 connected`;
+}
+function decorateGoogleCard(){
+  const card=document.querySelector('#integration-communication-grid [data-integration="google"]');if(!card)return;
+  card.querySelector('[data-google-connect-extension="1"]')?.remove();
+  if(signedIn())return;
+  card.insertAdjacentHTML('beforeend','<div class="google-connect-panel" data-google-connect-extension="1"><button class="ai-settings-btn primary" data-service-action="google-signin" type="button">Connect with Google</button><small>Creates or opens your private LeadIntel workspace.</small></div>');
 }
 function decorateCards(){
   const grid=document.getElementById('integration-platform-grid');if(!grid)return;
+  const section=document.getElementById('platform-integration-heading')?.closest('.ai-settings-section');
+  if(section){const heading=section.querySelector('#platform-integration-heading');if(heading)heading.textContent='Data & intelligence integrations';const intro=section.querySelector('.ai-section-title p');if(intro)intro.textContent='Add your own Apollo and Firecrawl API keys, or use LeadIntel managed fallback where available. Your saved secrets stay encrypted on the backend.';}
   for(const config of SERVICE_PROVIDERS){
     const card=grid.querySelector(`[data-integration="${config.provider}"]`);if(!card)continue;
     const row=providerState(config.provider);
     card.classList.add('customer-service-card');
     const purpose=card.querySelector('.integration-purpose');if(purpose)purpose.textContent=`${config.purpose}. Add your own key or use the managed fallback.`;
     const badge=card.querySelector('.integration-status');if(badge){badge.textContent=statusLabel(row);badge.className=`integration-status ${row?.state==='bad'?'bad':row?.source?'good':'neutral'}`;}
-    const existing=card.querySelector('[data-service-extension="1"]');
-    const html=serviceControls(config,row);
-    if(existing)existing.outerHTML=html;else card.insertAdjacentHTML('beforeend',html);
+    const meta=card.querySelector('.integration-meta');if(meta)meta.textContent=serviceDetail(config,row,meta.textContent);
+    const existing=card.querySelector('[data-service-extension="1"]');const html=serviceControls(config,row);if(existing)existing.outerHTML=html;else card.insertAdjacentHTML('beforeend',html);
   }
-  const health=document.getElementById('integration-health-summary');
-  if(health&&!health.querySelector('.service-readiness-note'))health.insertAdjacentHTML('beforeend','<div class="service-readiness-note"><strong>LeadIntel readiness</strong><span>Google identity + customer-owned provider controls</span></div>');
+  decorateGoogleCard();decorateReadiness();
   const signin=document.getElementById('ai-settings-signin');if(signin){signin.textContent='Connect with Google';signin.title='Google is your LeadIntel workspace identity. Gmail permissions are connected separately.';}
 }
 function queueDecorate(force=false){if(!force&&!needsDecoration())return;if(renderQueued)return;renderQueued=true;queueMicrotask(()=>{renderQueued=false;decorateCards();});}
@@ -87,6 +113,7 @@ async function disconnectService(provider){
 }
 function handleClick(event){
   const button=event.target.closest('[data-service-action]');if(!button)return;
+  if(button.dataset.serviceAction==='google-signin'){connectGoogle();return;}
   const provider=button.dataset.provider;if(!SERVICE_PROVIDERS.some(row=>row.provider===provider))return;
   if(button.dataset.serviceAction==='save')saveService(provider,button);else if(button.dataset.serviceAction==='disconnect')disconnectService(provider);
 }
@@ -99,4 +126,4 @@ function bind(){
 }
 
 bind();
-export {SERVICE_PROVIDERS,refreshServiceStatus,needsDecoration};
+export {SERVICE_PROVIDERS,refreshServiceStatus,needsDecoration,connectGoogle};
