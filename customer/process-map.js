@@ -10,7 +10,7 @@ import './crm-ui.js?v=20260828-master-crm-v1';
 import './ai-settings.js?v=20260902-integration-control-centre-v1';
 import './step2-readiness-engine.js?v=20260902-step2-readiness-v1';
 import './company-research-security.js?v=20260826-intelligence-autofill-v1';
-import './company-research-ui.js?v=20260902-step2-readiness-v1';
+import './company-research-ui.js?v=20260826-intelligence-autofill-v2';
 import './company-profile-handoff.js?v=20260826-intelligence-autofill-v1';
 
 const PROCESS_STORAGE_KEY="leadintel_customer_v2_state";
