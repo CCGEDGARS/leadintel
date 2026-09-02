@@ -114,3 +114,35 @@ test('readiness layer loads after server protection but before company research 
   const researchUi=processMap.indexOf("company-research-ui.js");
   assert.ok(server>=0&&readinessPos>server&&researchUi>readinessPos);
 });
+
+test('question-specific sufficiency distinguishes useful answers from placeholders or vague fragments',()=>{
+  assert.equal(readiness.evaluateAnswer('buying_outcomes','sales').enough,false);
+  assert.equal(readiness.evaluateAnswer('buying_outcomes','Improve sales conversion and help managers coach the team more effectively.').enough,true);
+  assert.equal(readiness.evaluateAnswer('buyer_roles','CEO').enough,true);
+  assert.equal(readiness.evaluateAnswer('buying_triggers','new office').enough,true);
+  assert.equal(readiness.evaluateAnswer('success_outcome','more sales').enough,false);
+});
+
+test('confirmed but insufficient answers do not inflate profile readiness',()=>{
+  const weak={...answers,buying_outcomes:'sales',success_outcome:'more sales'};
+  const summary=readiness.getReadinessSummary({website:'https://example.com/',targetMarkets:['Latvia'],answers:weak,answerStatus:confirmed,scrapedSources:evidence});
+  assert.equal(summary.coreConfirmed,7);
+  assert.equal(summary.needsMore,2);
+  assert.equal(summary.score,86);
+});
+
+test('Step 2 tells the user both whether an answer is enough and whether it has synced',()=>{
+  assert.match(layer,/Enough to continue/);
+  assert.match(layer,/Needs more detail/);
+  assert.match(layer,/Saved to LeadIntel/);
+  assert.match(layer,/Saved in this browser/);
+  assert.match(layer,/Saving…/);
+  assert.match(layer,/server-sync-status/);
+});
+
+test('each question exposes concise answer guidance so users know how much to write',()=>{
+  for(const id of readiness.QUESTION_IDS){
+    assert.ok(readiness.QUESTION_COPY[id].guidance,`${id} should explain what enough means`);
+  }
+  assert.match(readiness.QUESTION_COPY.buying_outcomes.guidance,/1–3|one to three|one clear sentence/i);
+});
