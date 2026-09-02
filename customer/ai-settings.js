@@ -114,14 +114,15 @@ function renderIntegrationMonitoring(){
   const platform=document.getElementById('integration-platform-grid');const communication=document.getElementById('integration-communication-grid');const health=document.getElementById('integration-health-summary');
   if(!platform||!communication||!health)return;
   const apollo=integrationState(integrationStatus.apollo),firecrawl=integrationState(integrationStatus.firecrawl),google=integrationState(integrationStatus.google,signedIn()?'Connected':'Not connected'),gmail=integrationState(integrationStatus.gmail);
-  platform.innerHTML=`<article class="integration-card" data-integration="apollo"><div class="integration-card-head"><div><strong>Apollo.io</strong><small>Decision-maker and contact enrichment</small></div><span class="integration-status ${esc(apollo.state)}">${esc(apollo.label)}</span></div><p class="integration-purpose">Platform managed · LeadIntel never exposes the platform credential.</p><div class="integration-meta">${esc(apollo.detail)}</div></article>
-    <article class="integration-card" data-integration="firecrawl"><div class="integration-card-head"><div><strong>Firecrawl</strong><small>Website research and evidence verification</small></div><span class="integration-status ${esc(firecrawl.state)}">${esc(firecrawl.label)}</span></div><p class="integration-purpose">Platform managed · secure research proxy.</p><div class="integration-meta">${esc(firecrawl.detail)}</div></article>`;
-  communication.innerHTML=`<article class="integration-card" data-integration="google"><div class="integration-card-head"><div><strong>Google Account</strong><small>Workspace authentication</small></div><span class="integration-status ${esc(google.state)}">${esc(google.label)}</span></div><p class="integration-purpose">Secure Google sign-in for this LeadIntel workspace.</p><div class="integration-meta">${esc(google.detail)}</div></article>
-    <article class="integration-card" data-integration="gmail"><div class="integration-card-head"><div><strong>Gmail</strong><small>Outbound delivery and reply synchronization</small></div><span class="integration-status ${esc(gmail.state)}">${esc(gmail.label)}</span></div><p class="integration-purpose">OAuth connection · no Gmail token is stored in browser workspace data.</p><div class="integration-meta">${esc(gmail.detail)}</div></article>`;
+  const checkedSuffix=integrationStatus.checkedAt?` · checked ${formatDateTime(integrationStatus.checkedAt)}`:'';
+  platform.innerHTML=`<article class="integration-card" data-integration="apollo"><div class="integration-card-head"><div><strong>Apollo.io</strong><small>Decision-maker and contact enrichment</small></div><span class="integration-status ${esc(apollo.state)}">${esc(apollo.label)}</span></div><p class="integration-purpose">Platform managed · LeadIntel never exposes the platform credential.</p><div class="integration-meta">${esc(apollo.detail+checkedSuffix)}</div></article>
+    <article class="integration-card" data-integration="firecrawl"><div class="integration-card-head"><div><strong>Firecrawl</strong><small>Website research and evidence verification</small></div><span class="integration-status ${esc(firecrawl.state)}">${esc(firecrawl.label)}</span></div><p class="integration-purpose">Platform managed · secure research proxy.</p><div class="integration-meta">${esc(firecrawl.detail+checkedSuffix)}</div></article>`;
+  communication.innerHTML=`<article class="integration-card" data-integration="google"><div class="integration-card-head"><div><strong>Google Account</strong><small>Workspace authentication</small></div><span class="integration-status ${esc(google.state)}">${esc(google.label)}</span></div><p class="integration-purpose">Secure Google sign-in for this LeadIntel workspace.</p><div class="integration-meta">${esc(google.detail+checkedSuffix)}</div></article>
+    <article class="integration-card" data-integration="gmail"><div class="integration-card-head"><div><strong>Gmail</strong><small>Outbound delivery and reply synchronization</small></div><span class="integration-status ${esc(gmail.state)}">${esc(gmail.label)}</span></div><p class="integration-purpose">OAuth connection · no Gmail token is stored in browser workspace data.</p><div class="integration-meta">${esc(gmail.detail+checkedSuffix)}</div></article>`;
   const activeAi=Boolean(status.providers.find(item=>item.active&&item.configured));
   const critical=[activeAi,google.state==='good',gmail.state==='good',apollo.state==='good',firecrawl.state==='good'];const healthy=critical.filter(Boolean).length;
   const checked=integrationStatus.checkedAt?`Last checked ${formatDateTime(integrationStatus.checkedAt)}`:'Run diagnostics to check all critical integrations.';
-  health.querySelector('.integration-summary-copy').innerHTML=`<span>System health</span><strong>${signedIn()?`${healthy}/5 critical systems operational`:'Sign in to run workspace diagnostics'}</strong><small>${esc(checked)}</small>`;
+  health.querySelector('.integration-summary-copy').innerHTML=`<span>System health</span><strong>${signedIn()?`${healthy}/5 critical checks passing`:'Sign in to run workspace diagnostics'}</strong><small>${esc(checked)}</small>`;
   const button=document.getElementById('test-all-integrations');if(button){button.disabled=!signedIn()||integrationStatus.checking;button.textContent=integrationStatus.checking?'Testing…':'Test all integrations';}
 }
 function setProviderSaveBusy(provider,isBusy){
@@ -156,7 +157,7 @@ async function checkApolloStatus(){
 async function checkFirecrawlStatus(){
   try{
     const response=await fetch(FIRECRAWL_PROXY,{method:'OPTIONS',mode:'cors',cache:'no-store'});
-    return response.ok?{state:'good',label:'Reachable',detail:'Platform managed · secure proxy reachable. Credential itself is never exposed to the browser.'}:{state:'bad',label:'Unavailable',detail:`Research proxy returned status ${response.status}.`};
+    return response.ok?{state:'good',label:'Reachable',detail:'Platform managed · secure proxy reachable. This no-cost check does not claim that the hidden provider credential was exercised.'}:{state:'bad',label:'Unavailable',detail:`Research proxy returned status ${response.status}.`};
   }catch(error){return {state:'bad',label:'Unavailable',detail:`Research proxy reachability failed · ${String(error.message||error).slice(0,120)}`};}
 }
 async function checkGmailStatus(){
@@ -187,7 +188,7 @@ async function testAllIntegrations(){
   integrationStatus.checking=true;renderIntegrationMonitoring();
   await refreshAllStatus();
   const activeAi=Boolean(status.providers.find(item=>item.active&&item.configured));const checks=[activeAi,integrationStatus.apollo?.state==='good',integrationStatus.firecrawl?.state==='good',integrationStatus.google?.state==='good',integrationStatus.gmail?.state==='good'];
-  toast(`${checks.filter(Boolean).length}/5 critical integrations operational`);
+  toast(`${checks.filter(Boolean).length}/5 critical checks passing`);
 }
 async function handleProviderAction(event){
   const button=event.target.closest('[data-ai-action]');if(!button||button.disabled)return;
