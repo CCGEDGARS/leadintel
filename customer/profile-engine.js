@@ -89,6 +89,10 @@
       .replace(/\s+/g," ")
       .trim();
   }
+  function hasAssetNoise(value){
+    const text=String(value??"");
+    return /!\[[^\]]*\]\(|(?:images\.)?squarespace-cdn\.com|https?:\/\/[^\s)\]]+\.(?:png|jpe?g|gif|webp|svg)(?:[?#][^\s)\]]*)?|\b\S+\.(?:png|jpe?g|gif|webp|svg)(?:[?#]\S*)?/i.test(text);
+  }
   function normalizeEvidenceSentence(value){
     return clean(value).replace(/^(?:(?:[A-Z][A-Z0-9&/+.-]{1,})\s+){1,5}(?=[A-Z][a-z])/,'').trim();
   }
@@ -208,6 +212,7 @@
     const explicitTargets=normalizeTargetMarkets(value.targetMarkets);
     const targetMarkets=explicitTargets.length?explicitTargets:normalizeTargetMarkets(answers.growth_markets);
     const docs=Array.isArray(value.documents)?value.documents.slice(0,5).map(d=>({name:clean(d?.name).slice(0,180),size:Number(d?.size)||0,text:String(d?.text||"").slice(0,25000),status:clean(d?.status)||"ready"})).filter(d=>d.name):[];
+    const scrapedSources=Array.isArray(value.scrapedSources)?value.scrapedSources.slice(0,25).map(s=>({type:s?.type==="link"?"link":"website",url:normalizeUrl(s?.url),title:clean(s?.title).slice(0,180),text:String(s?.text||"").slice(0,30000),status:clean(s?.status)||"ready"})).filter(s=>s.url):[];
     const profile=value.profile&&typeof value.profile==="object"?{
       ...value.profile,
       mission:buildMission(),
@@ -215,6 +220,13 @@
       researchMarkets:Array.isArray(value.profile.researchMarkets)&&value.profile.researchMarkets.length?expandTargetMarkets(value.profile.researchMarkets):expandTargetMarkets(targetMarkets),
       marketFocus:clean(value.profile.marketFocus)||answers.growth_markets
     }:null;
+    if(profile){
+      const regeneratedOverview=deriveCompanyOverview(scrapedSources,docs);
+      const regeneratedDigest=deriveEvidenceDigest(scrapedSources,docs);
+      const companyName=clean(profile.companyName)||inferCompanyName(scrapedSources,value.website);
+      if(hasAssetNoise(profile.companyOverview))profile.companyOverview=regeneratedOverview||regeneratedDigest||`LeadIntel has limited public evidence for ${companyName}. Strategic answers are used as the primary context until more evidence is added.`;
+      if(hasAssetNoise(profile.evidenceDigest))profile.evidenceDigest=regeneratedDigest;
+    }
     return {
       step:[1,2,3,4,5,6,7].includes(Number(value.step))?Number(value.step):1,
       website:normalizeUrl(value.website),
@@ -222,7 +234,7 @@
       additionalLinks:unique((value.additionalLinks||[]).map(normalizeUrl).filter(Boolean)).slice(0,8),
       documents:docs,
       answers,
-      scrapedSources:Array.isArray(value.scrapedSources)?value.scrapedSources.slice(0,25).map(s=>({type:s?.type==="link"?"link":"website",url:normalizeUrl(s?.url),title:clean(s?.title).slice(0,180),text:String(s?.text||"").slice(0,30000),status:clean(s?.status)||"ready"})).filter(s=>s.url):[],
+      scrapedSources,
       profile,
       approved:Boolean(value.approved)
     };
