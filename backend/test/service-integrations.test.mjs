@@ -61,11 +61,14 @@ test('service status distinguishes customer-owned credentials from LeadIntel man
   assert.doesNotMatch(source,/api_key\s*:/i);
 });
 
-test('request-scoped Apollo override makes both CRM and legacy enrichment customer-owned without rewriting either engine',()=>{
-  assert.match(source,/withWorkspaceServiceCredentials/);
-  assert.match(source,/resolveWorkspaceServiceCredential\(env,workspaceId,'apollo'\)/);
-  assert.match(source,/runtime\.APOLLO_API_KEY=apolloCredential\.apiKey/);
-  assert.match(source,/runtime\.APOLLO_WEBHOOK_SECRET=env\.APOLLO_WEBHOOK_SECRET\|\|env\.APOLLO_API_KEY/);
+test('request-scoped Apollo override authenticates workspace membership before decrypting the customer key',()=>{
+  const start=source.indexOf('export async function withWorkspaceServiceCredentials');
+  const end=source.indexOf('async function providerStatus',start);
+  const block=source.slice(start,end);
+  assert.match(block,/requireMember\(request,env,workspaceId\)/);
+  assert.ok(block.indexOf('requireMember(request,env,workspaceId)')<block.indexOf("resolveWorkspaceServiceCredential(env,workspaceId,'apollo')"),'membership must be checked before Apollo credential resolution');
+  assert.match(block,/runtime\.APOLLO_API_KEY=apolloCredential\.apiKey/);
+  assert.match(block,/runtime\.APOLLO_WEBHOOK_SECRET=env\.APOLLO_WEBHOOK_SECRET\|\|env\.APOLLO_API_KEY/);
   assert.match(crmSource,/env\.APOLLO_API_KEY/,'Master CRM must continue reading the request-scoped Apollo credential');
   assert.match(coreSource,/env\.APOLLO_API_KEY/,'legacy opportunity enrichment must continue reading the request-scoped Apollo credential');
 });
@@ -75,6 +78,6 @@ test('Firecrawl workspace proxy bounds customer requests and supports managed fa
   assert.match(source,/api\.firecrawl\.dev\/v2\/search/);
   assert.match(source,/FIRECRAWL_PROXY_URL/);
   assert.match(source,/Math\.min\(10/);
-  assert.match(source,/query\.length/);
+  assert.match(source,/rawQuery\.length>600/);
   assert.match(source,/last_used_at=CURRENT_TIMESTAMP/);
 });
