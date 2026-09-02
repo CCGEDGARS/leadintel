@@ -140,7 +140,6 @@
     const head=root.document.createElement("div");head.className="profile-identity-head";head.innerHTML=`<div><span>${esc(title)}</span><strong>${esc(title)}</strong></div><p>${esc(subtitle)}</p>`;
     const grid=root.document.createElement("div");grid.className="profile-identity-grid";node.append(head,grid);return {node,grid};
   }
-  function fieldNode(editor,key){return editor.querySelector(`[data-profile-field="${key}"]`)?.closest(".profile-field")||null;}
   function needsLayout(editor){
     if(!editor)return false;
     if(editor.querySelector(":scope > .profile-field"))return true;
@@ -153,21 +152,22 @@
   }
   function layoutProfile(root){
     const editor=root.document.getElementById("profile-editor");if(!editor||!needsLayout(editor))return;
-    const state=readState(root);const profile=state.profile||{};if(!profile)return;
+    const state=readState(root);const profile=state.profile;if(!profile||typeof profile!=="object")return;
+    const derived=root.LeadIntelProfile?.deriveBusinessIdentity?.(profile,state)||deriveIdentity(profile,state);
     const sample=editor.querySelector("textarea[data-profile-field]");const readOnly=sample?sample.readOnly:true;
     const existing=[...editor.querySelectorAll(".profile-field")];
     const byKey=new Map(existing.map(node=>[node.querySelector("[data-profile-field]")?.dataset.profileField,node]).filter(([key])=>key));
     const take=key=>byKey.get(key)||null;
     byKey.get("companyOverview")?.remove();byKey.delete("companyOverview");
 
-    let summary=take("businessSummary");if(!summary)summary=createField(root,"businessSummary","Business summary",profile.businessSummary,readOnly,true);
-    let usp=take("uniqueSellingProposition");if(!usp)usp=createField(root,"uniqueSellingProposition","USP / value proposition",profile.uniqueSellingProposition,readOnly,true);
-    let pitch=take("elevatorPitch");if(!pitch)pitch=createField(root,"elevatorPitch","Elevator pitch",profile.elevatorPitch,readOnly,true);
+    let summary=take("businessSummary");if(!summary)summary=createField(root,"businessSummary","Business summary",profile.businessSummary||derived.businessSummary,readOnly,true);
+    let usp=take("uniqueSellingProposition");if(!usp)usp=createField(root,"uniqueSellingProposition","USP / value proposition",profile.uniqueSellingProposition||derived.uniqueSellingProposition,readOnly,true);
+    let pitch=take("elevatorPitch");if(!pitch)pitch=createField(root,"elevatorPitch","Elevator pitch",profile.elevatorPitch||derived.elevatorPitch,readOnly,true);
 
     const business=section(root,"Business identity","A concise factual view of what the company does, what it sells and who it serves.",true);business.grid.append(summary);
     const positioning=section(root,"Commercial positioning","Why the ideal customer should choose this company instead of a credible alternative.");positioning.grid.append(usp);
     const diff=take("differentiation");if(diff)positioning.grid.append(diff);
-    const meta=root.document.createElement("div");meta.className="identity-meta identity-wide";meta.innerHTML=`<span>${esc(profile.uspStatus||"Proposed · confirmation recommended")}</span><span>${esc(profile.positioningConfidence||"Needs confirmation")} confidence</span>`;positioning.grid.append(meta);
+    const meta=root.document.createElement("div");meta.className="identity-meta identity-wide";meta.innerHTML=`<span>${esc(profile.uspStatus||derived.uspStatus||"Proposed · confirmation recommended")}</span><span>${esc(profile.positioningConfidence||derived.positioningConfidence||"Needs confirmation")} confidence</span>`;positioning.grid.append(meta);
     const sales=section(root,"Sales message","A short persuasive explanation that can be used in conversation and adapted for outreach.");sales.grid.append(pitch);
     const context=section(root,"Commercial context","The confirmed inputs LeadIntel uses for targeting, qualification and signal discovery.");
     const contextOrder=["priorityOffers","idealCustomer","buyingOutcomes","lookalikeCustomers","decisionMakers","currentMarkets","targetMarkets","marketFocus","buyingTriggers","exclusions","opportunityValue","commercialObjective"];
