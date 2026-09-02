@@ -11,7 +11,7 @@ const js=fs.existsSync(jsPath)?fs.readFileSync(jsPath,'utf8'):'';
 const css=fs.existsSync(cssPath)?fs.readFileSync(cssPath,'utf8'):'';
 
 test('Customer V2 loads a Settings drawer for exactly three customer-owned AI providers',()=>{
-  assert.match(processMap,/import ['"]\.\/ai-settings\.js\?v=20260901-ai-settings-auth-v1['"]/);
+  assert.match(processMap,/import ['"]\.\/ai-settings\.js\?v=20260902-integration-control-centre-v1['"]/);
   assert.equal(fs.existsSync(jsPath),true,'ai-settings.js must exist');
   assert.match(js,/id="open-settings"/);
   assert.match(js,/id="ai-settings-drawer"/);
@@ -43,7 +43,7 @@ test('raw provider API keys are transient browser values and never persisted',()
 });
 
 test('AI settings CSS is cache-busted and controls have individual borders and focus treatment',()=>{
-  assert.match(js,/SETTINGS_VERSION='20260901-ai-settings-auth-v1'/);
+  assert.match(js,/SETTINGS_VERSION='20260902-integration-control-centre-v1'/);
   assert.match(js,/link\.href=`ai-settings\.css\?v=\$\{SETTINGS_VERSION\}`/);
   assert.equal(fs.existsSync(cssPath),true,'ai-settings.css must exist');
   assert.match(css,/\.ai-settings-btn[\s\S]*border:\s*1px solid/i);
@@ -75,4 +75,37 @@ test('signed-out AI Settings exposes a direct Google sign-in action instead of o
   assert.match(js,/Sign in with Google/,'the action must clearly state the authentication method');
   assert.match(js,/searchParams\.set\(['"]settings['"],['"]ai['"]\)/,'sign-in must preserve a return path back to the AI settings drawer');
   assert.match(js,/bridge\(\)\?\.signIn\?\.\(\)/,'AI Settings sign-in must reuse the existing authenticated server bridge');
+});
+
+test('Settings becomes an integration control centre with a health summary and grouped monitoring cards',()=>{
+  assert.match(js,/id="integration-health-summary"/,'settings must expose a top-level integration health summary');
+  assert.match(js,/id="test-all-integrations"/,'settings must provide one diagnostic action');
+  assert.match(js,/Test all integrations/);
+  assert.match(js,/id="integration-platform-grid"/);
+  assert.match(js,/id="integration-communication-grid"/);
+  for(const name of ['Apollo.io','Firecrawl','Google Account','Gmail'])assert.match(js,new RegExp(name.replace('.','\\.')));
+  for(const id of ['apollo','firecrawl','google','gmail'])assert.match(js,new RegExp(`data-integration="${id}"`));
+});
+
+test('platform integration monitoring is secret-safe and does not turn Apollo or Firecrawl into browser API-key fields',()=>{
+  assert.match(js,/Platform managed/,'platform-owned credentials must be identified as platform managed');
+  assert.doesNotMatch(js,/data-ai-key="apollo"|data-ai-key="firecrawl"/,'platform integrations must not expose editable credential inputs');
+  assert.doesNotMatch(js,/APOLLO_API_KEY|FIRECRAWL_API_KEY|X-Firecrawl-Key|X-Api-Key/,'platform secret names and headers must not be exposed in customer settings code');
+});
+
+test('integration diagnostics reuse no-cost status surfaces instead of consuming paid AI or enrichment requests',()=>{
+  assert.match(js,/\/api\/enrichment-policy/,'Apollo configuration and usage should come from the existing policy endpoint');
+  assert.match(js,/\/api\/integrations\/gmail\/status/,'Gmail health should use its existing status endpoint');
+  assert.match(js,/FIRECRAWL_PROXY/,'Firecrawl monitoring should check the existing managed proxy');
+  assert.match(js,/method:'OPTIONS'/,'Firecrawl check must be a no-cost proxy reachability probe');
+  assert.doesNotMatch(js,/\/api\/ai\/(generate|web-search)/,'the settings diagnostic must not spend AI usage');
+  assert.doesNotMatch(js,/firecrawl-(search|scrape|crawl|map)/,'the settings diagnostic must not trigger paid Firecrawl research');
+});
+
+test('integration control centre has dedicated readable status-card styling',()=>{
+  assert.match(css,/\.integration-health-summary/);
+  assert.match(css,/\.integration-card/);
+  assert.match(css,/\.integration-status/);
+  assert.match(css,/\.integration-grid/);
+  assert.match(css,/@media\s*\(max-width:/);
 });
