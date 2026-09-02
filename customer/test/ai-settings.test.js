@@ -104,13 +104,23 @@ test('AI Settings supports a direct ?settings=ai deep link that opens the drawer
   assert.match(js,/openDrawer\(\)/,'direct settings link must open the existing secure settings drawer');
 });
 
-test('signed-out Settings exposes Google-first onboarding and preserves the secure OAuth flow',()=>{
+test('signed-out Settings exposes Google-first onboarding in both summary and Google Account card',()=>{
   assert.match(js,/id="ai-settings-signin"/,'signed-out summary must render a direct sign-in button');
   assert.match(js,/Sign in with Google/);
+  assert.match(extension,/function connectGoogle\(\)/);
+  assert.match(extension,/data-service-action="google-signin"/);
   assert.match(extension,/Connect with Google/);
-  assert.match(extension,/Google is your LeadIntel workspace identity/);
-  assert.match(js,/searchParams\.set\(['"]settings['"],['"]ai['"]\)/,'sign-in must preserve a return path back to settings');
-  assert.match(js,/bridge\(\)\?\.signIn\?\.\(\)/,'Settings sign-in must reuse the existing authenticated server bridge');
+  assert.match(extension,/Creates or opens your private LeadIntel workspace/);
+  assert.match(extension,/searchParams\.set\('settings','ai'\)/,'Google connection must preserve return to Settings');
+  assert.match(extension,/bridge\(\)\?\.signIn\?\.\(\)/,'Google connection must reuse the secure server bridge OAuth flow');
+});
+
+test('Settings clearly changes data integrations from platform-only to customer-owned with managed fallback',()=>{
+  assert.match(extension,/Data & intelligence integrations/);
+  assert.match(extension,/Add your own Apollo and Firecrawl API keys/);
+  assert.match(extension,/Customer-owned credential/);
+  assert.match(extension,/serviceDetail/);
+  assert.match(extension,/meta\.textContent=serviceDetail/,'customer-owned status must replace stale Platform managed metadata');
 });
 
 test('Settings retains the integration control centre and adds LeadIntel readiness for customer-owned services',()=>{
@@ -121,7 +131,7 @@ test('Settings retains the integration control centre and adds LeadIntel readine
   assert.match(js,/id="integration-communication-grid"/);
   for(const name of ['Apollo.io','Firecrawl','Google Account','Gmail'])assert.match(js,new RegExp(name.replace('.','\\.')));
   assert.match(extension,/LeadIntel readiness/);
-  assert.match(extension,/Google identity \+ customer-owned provider controls/);
+  assert.match(extension,/LeadIntel readiness: \$\{Number\(aiReady\)\+1\+Number\(gmailReady\)\+serviceReady\}\/5 connected/);
 });
 
 test('service diagnostics use verification status and never run research or enrichment just to test settings',()=>{
@@ -138,7 +148,7 @@ test('service settings observer only re-decorates when the host UI removed custo
   assert.match(extension,/if\(!force&&!needsDecoration\(\)\)return/);
 });
 
-test('integration control centre has dedicated readable service-card styling',()=>{
+test('integration control centre has dedicated readable service-card and Google connection styling',()=>{
   assert.match(css,/\.integration-health-summary/);
   assert.match(css,/\.integration-card/);
   assert.match(css,/\.integration-status/);
@@ -146,5 +156,6 @@ test('integration control centre has dedicated readable service-card styling',()
   assert.match(extensionCss,/\.service-provider-card/);
   assert.match(extensionCss,/\.service-source/);
   assert.match(extensionCss,/\.service-readiness-note/);
+  assert.match(extensionCss,/\.google-connect-panel/);
   assert.match(extensionCss,/@media\s*\(max-width:/);
 });
