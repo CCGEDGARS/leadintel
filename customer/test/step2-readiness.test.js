@@ -4,12 +4,13 @@ const fs=require('node:fs');
 const path=require('node:path');
 const profile=require('../profile-engine.js');
 const research=require('../company-research-engine.js');
+const readiness=require('../step2-readiness-engine.js');
+readiness.patchProfileEngine(profile);
+readiness.patchResearchEngine(research);
 
 const read=name=>fs.readFileSync(path.join(__dirname,'..',name),'utf8');
-const index=read('index.html');
-const app=read('app.js');
-const researchUi=read('company-research-ui.js');
-const bridge=read('server-bridge.js');
+const layer=read('step2-readiness-engine.js');
+const processMap=read('process-map.js');
 
 const answers={
   priority_offers:'Sales training; AI sales coaching',
@@ -27,22 +28,21 @@ const confirmed=Object.fromEntries(Object.keys(answers).map(id=>[id,'user']));
 const evidence=[{type:'website',url:'https://example.com/',title:'Example',text:'Readable official company evidence.'}];
 
 test('Step 2 uses the ten commercial decisions LeadIntel needs downstream',()=>{
-  assert.deepEqual(profile.QUESTION_IDS,[
+  assert.deepEqual(readiness.QUESTION_IDS,[
     'priority_offers','ideal_customer','lookalike_customers','buyer_roles','buying_outcomes',
     'differentiation','buying_triggers','exclusions','opportunity_value','success_outcome'
   ]);
-  assert.deepEqual(research.QUESTION_IDS,profile.QUESTION_IDS);
-  assert.match(index,/data-question="buying_outcomes"/);
-  assert.doesNotMatch(index,/data-question="growth_markets"/);
-  assert.match(index,/business problem or desired outcome/i);
-  assert.match(index,/observable events/i);
-  assert.match(index,/What makes an opportunity commercially worthwhile\?/i);
+  assert.deepEqual(profile.QUESTION_IDS,readiness.QUESTION_IDS);
+  assert.deepEqual(research.QUESTION_IDS,readiness.QUESTION_IDS);
+  assert.match(layer,/business problem or desired outcome/i);
+  assert.match(layer,/observable events/i);
+  assert.match(layer,/What makes an opportunity commercially worthwhile\?/i);
+  assert.match(layer,/delete state\.answers\.growth_markets/);
 });
 
 test('profile readiness counts only confirmed strategic answers and has transparent weights',()=>{
-  assert.equal(typeof profile.getReadinessSummary,'function');
   const answerStatus={...confirmed,buying_triggers:'draft',success_outcome:'draft'};
-  const summary=profile.getReadinessSummary({website:'https://example.com/',targetMarkets:['Latvia'],answers,answerStatus,scrapedSources:evidence});
+  const summary=readiness.getReadinessSummary({website:'https://example.com/',targetMarkets:['Latvia'],answers,answerStatus,scrapedSources:evidence});
   assert.equal(summary.score,86);
   assert.equal(summary.coreConfirmed,7);
   assert.equal(summary.coreTotal,9);
@@ -53,7 +53,7 @@ test('profile readiness counts only confirmed strategic answers and has transpar
 test('missing core inputs reduce readiness even when unaccepted AI text is visible',()=>{
   const partial={...answers,exclusions:'',opportunity_value:''};
   const answerStatus={...confirmed,buying_triggers:'draft',success_outcome:'draft',exclusions:'missing',opportunity_value:'missing'};
-  const summary=profile.getReadinessSummary({website:'https://example.com/',targetMarkets:['Latvia'],answers:partial,answerStatus,scrapedSources:evidence});
+  const summary=readiness.getReadinessSummary({website:'https://example.com/',targetMarkets:['Latvia'],answers:partial,answerStatus,scrapedSources:evidence});
   assert.equal(summary.score,72);
   assert.equal(summary.coreConfirmed,5);
   assert.equal(summary.drafts,2);
@@ -74,20 +74,23 @@ test('saved workspace state keeps answer confirmation status so browser changes 
   assert.equal(normalized.answerStatus.buying_triggers,'draft');
   assert.equal(normalized.answerStatus.success_outcome,'accepted');
   assert.equal(normalized.answerStatus.priority_offers,'user');
+  assert.equal(normalized.answers.buying_outcomes,answers.buying_outcomes);
+  assert.equal(normalized.answers.growth_markets,undefined);
 });
 
 test('research review persists draft, accepted and user-edited states into the synced main workspace',()=>{
-  assert.match(researchUi,/next\.answerStatus/);
-  assert.match(researchUi,/answerStatus\[id\]\s*=\s*['"]accepted['"]/);
-  assert.match(researchUi,/answerStatus\[id\]\s*=\s*hasValue\s*\?\s*['"]user['"]\s*:\s*['"]missing['"]/);
-  assert.match(researchUi,/syncAnswerStatusFromMeta/);
+  assert.match(layer,/function syncAnswerStatusFromMeta/);
+  assert.match(layer,/function updateAnswerStatus/);
+  assert.match(layer,/accept\?"accepted":"missing"/);
+  assert.match(layer,/clean\(textarea\.value\)\?"user":"missing"/);
+  assert.match(layer,/answerStatus/);
 });
 
 test('readiness UI explains confirmed core inputs instead of presenting a vague completeness percentage',()=>{
-  assert.match(app,/getReadinessSummary/);
-  assert.match(app,/core inputs confirmed/i);
-  assert.match(index,/Profile readiness/i);
-  assert.match(index,/Build intelligence profile/i);
+  assert.match(layer,/Profile readiness/);
+  assert.match(layer,/core inputs confirmed/i);
+  assert.match(layer,/Build intelligence profile/);
+  assert.match(layer,/draft\$\{summary\.drafts===1\?"":"s"\} to review/);
 });
 
 test('AI prompt asks for observable trigger events and customer problems instead of duplicated market segmentation',()=>{
@@ -97,8 +100,17 @@ test('AI prompt asks for observable trigger events and customer problems instead
   assert.doesNotMatch(prompt.prompt,/growth_markets should describe industries\/segments/i);
 });
 
-test('sync conflict UX de-duplicates the banner and ignores dirty metadata when payloads are already identical',()=>{
-  assert.match(bridge,/function payloadsEquivalent/);
-  assert.match(bridge,/payloadsEquivalent\(bundle\(\),state\.payload\)/);
-  assert.match(bridge,/document\.querySelector\(['"]\.autosave['"]\).*hidden\s*=\s*true/s);
+test('sync conflict UX de-duplicates the banner and resolves only byte-equivalent business payloads',()=>{
+  assert.equal(readiness.payloadsEquivalent({a:1,b:{c:2}},{b:{c:2},a:1}),true);
+  assert.equal(readiness.payloadsEquivalent({a:1},{a:2}),false);
+  assert.match(layer,/function resolveEquivalentConflict/);
+  assert.match(layer,/function hideDuplicateSyncStatus/);
+  assert.match(layer,/querySelector\("\.autosave"\)/);
+});
+
+test('readiness layer loads after server protection but before company research review',()=>{
+  const server=processMap.indexOf("server-bridge.js");
+  const readinessPos=processMap.indexOf("step2-readiness-engine.js");
+  const researchUi=processMap.indexOf("company-research-ui.js");
+  assert.ok(server>=0&&readinessPos>server&&researchUi>readinessPos);
 });
