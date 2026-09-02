@@ -29,6 +29,7 @@
     {id:"supplier-change",name:"Supplier or partner change",priority:"Medium",patterns:[/supplier/i,/vendor/i,/partner/i,/sourcing/i,/shortage/i]},
     {id:"product-launch",name:"Product or service launch",priority:"Medium",patterns:[/launch/i,/new product/i,/new service/i,/portfolio/i]}
   ];
+  const BUSINESS_DESCRIPTION_RE=/\b(?:provid(?:e|es|ed|ing)|offer(?:s|ed|ing)?|speciali[sz](?:e|es|ed|ing)|design(?:s|ed|ing)?|manufactur(?:e|es|ed|ing)|develop(?:s|ed|ing)?|deliver(?:s|ed|ing)?|help(?:s|ed|ing)?|serv(?:e|es|ed|ing)|build(?:s|ing)?|creat(?:e|es|ed|ing)|suppl(?:y|ies|ied|ying)|produc(?:e|es|ed|ing)|support(?:s|ed|ing)?|train(?:s|ed|ing)?|consult(?:s|ed|ing)?|operat(?:e|es|ed|ing)|focus(?:es|ed|ing)|work(?:s|ed|ing)? with)\b/i;
 
   function clean(value){return String(value??"").replace(/\s+/g," ").trim();}
   function normalizeUrl(value){
@@ -77,11 +78,32 @@
     return moduleNumber>=2&&moduleNumber<=7&&canBuildProfile(input);
   }
   function truncate(value,max=1200){const text=clean(value);return text.length>max?`${text.slice(0,max-1)}…`:text;}
+  function cleanEvidenceText(text){
+    return String(text??"")
+      .replace(/!\[[^\]]*\]\((?:https?:\/\/|data:)[^)]+\)/gi," ")
+      .replace(/\[([^\]]+)\]\((?:https?:\/\/)[^)]+\)/gi," $1 ")
+      .replace(/\((?:https?:\/\/)[^)]+\)/gi," ")
+      .replace(/https?:\/\/[^\s)\]]+/gi," ")
+      .replace(/\b\S+\.(?:png|jpe?g|gif|webp|svg)(?:\?\S*)?\b/gi," ")
+      .replace(/[#*_`>|]/g," ")
+      .replace(/\s+/g," ")
+      .trim();
+  }
+  function hasAssetNoise(value){
+    const text=String(value??"");
+    return /!\[[^\]]*\]\(|(?:images\.)?squarespace-cdn\.com|https?:\/\/[^\s)\]]+\.(?:png|jpe?g|gif|webp|svg)(?:[?#][^\s)\]]*)?|\b\S+\.(?:png|jpe?g|gif|webp|svg)(?:[?#]\S*)?/i.test(text);
+  }
+  function normalizeEvidenceSentence(value){
+    return clean(value).replace(/^(?:(?:[A-Z][A-Z0-9&/+.-]{1,})\s+){1,5}(?=[A-Z][a-z])/,'').trim();
+  }
+  function evidenceSentences(text){
+    const cleaned=cleanEvidenceText(text);if(!cleaned)return [];
+    return cleaned.split(/(?<=[.!?])\s+/).map(normalizeEvidenceSentence).filter(sentence=>sentence.length>45).slice(0,24);
+  }
   function firstSentence(text){
-    const cleaned=clean(text).replace(/[#*_`>\[\]]/g," ").replace(/\s+/g," ");
-    if(!cleaned)return "";
-    const parts=cleaned.split(/(?<=[.!?])\s+/).filter(s=>s.length>45);
-    return truncate(parts[0]||cleaned,360);
+    const cleaned=cleanEvidenceText(text);if(!cleaned)return "";
+    const parts=evidenceSentences(cleaned);const descriptive=parts.find(sentence=>BUSINESS_DESCRIPTION_RE.test(sentence));
+    return truncate(descriptive||parts[0]||cleaned,360);
   }
   function detectCountries(text){
     const hay=` ${clean(text).toLowerCase()} `;
@@ -118,10 +140,18 @@
     if(title)return title.slice(0,90);
     try{return new URL(normalizeUrl(website)).hostname.replace(/^www\./,"");}catch{return "Company";}
   }
+  function deriveCompanyOverview(scrapedSources,documents){
+    const candidates=[...(scrapedSources||[]).map(source=>source?.text||""),...(documents||[]).map(doc=>doc?.text||"")]
+      .flatMap(evidenceSentences)
+      .filter(Boolean);
+    const descriptive=unique(candidates.filter(sentence=>BUSINESS_DESCRIPTION_RE.test(sentence)));
+    const fallback=unique(candidates);
+    return truncate((descriptive.length?descriptive:fallback).slice(0,2).join(" "),650);
+  }
   function deriveEvidenceDigest(scrapedSources,documents){
     const web=(scrapedSources||[]).map(s=>firstSentence(s.text)).filter(Boolean).slice(0,3);
     const docs=(documents||[]).map(d=>firstSentence(d.text)).filter(Boolean).slice(0,2);
-    return truncate([...web,...docs].join(" "),1100);
+    return truncate(unique([...web,...docs]).join(" "),1100);
   }
   function sourceText(scrapedSources,documents){return [...(scrapedSources||[]).map(s=>s.text||""),...(documents||[]).map(d=>d.text||"")].join(" ");}
   function buildMission(){return "Find qualified B2B opportunities, connect with decision-makers, and close more deals through evidence-backed commercial intelligence.";}
@@ -149,12 +179,13 @@
     const currentMarkets=detectCountries(combined).filter(country=>!researchMarkets.some(target=>target.toLowerCase()===country.toLowerCase()));
     const evidenceDigest=deriveEvidenceDigest(scraped,documents);
     const companyName=inferCompanyName(scraped,input.website);
+    const companyOverview=deriveCompanyOverview(scraped,documents);
     return {
       version:2,
       generatedAt:new Date().toISOString(),
       companyName,
       website:normalizeUrl(input.website),
-      companyOverview:evidenceDigest||`LeadIntel has limited public evidence for ${companyName}. Strategic answers are used as the primary context until more evidence is added.`,
+      companyOverview:companyOverview||evidenceDigest||`LeadIntel has limited public evidence for ${companyName}. Strategic answers are used as the primary context until more evidence is added.`,
       priorityOffers:answers.priority_offers,
       idealCustomer:answers.ideal_customer,
       lookalikeCustomers:answers.lookalike_customers,
@@ -181,6 +212,7 @@
     const explicitTargets=normalizeTargetMarkets(value.targetMarkets);
     const targetMarkets=explicitTargets.length?explicitTargets:normalizeTargetMarkets(answers.growth_markets);
     const docs=Array.isArray(value.documents)?value.documents.slice(0,5).map(d=>({name:clean(d?.name).slice(0,180),size:Number(d?.size)||0,text:String(d?.text||"").slice(0,25000),status:clean(d?.status)||"ready"})).filter(d=>d.name):[];
+    const scrapedSources=Array.isArray(value.scrapedSources)?value.scrapedSources.slice(0,25).map(s=>({type:s?.type==="link"?"link":"website",url:normalizeUrl(s?.url),title:clean(s?.title).slice(0,180),text:String(s?.text||"").slice(0,30000),status:clean(s?.status)||"ready"})).filter(s=>s.url):[];
     const profile=value.profile&&typeof value.profile==="object"?{
       ...value.profile,
       mission:buildMission(),
@@ -188,6 +220,13 @@
       researchMarkets:Array.isArray(value.profile.researchMarkets)&&value.profile.researchMarkets.length?expandTargetMarkets(value.profile.researchMarkets):expandTargetMarkets(targetMarkets),
       marketFocus:clean(value.profile.marketFocus)||answers.growth_markets
     }:null;
+    if(profile){
+      const regeneratedOverview=deriveCompanyOverview(scrapedSources,docs);
+      const regeneratedDigest=deriveEvidenceDigest(scrapedSources,docs);
+      const companyName=clean(profile.companyName)||inferCompanyName(scrapedSources,value.website);
+      if(hasAssetNoise(profile.companyOverview))profile.companyOverview=regeneratedOverview||regeneratedDigest||`LeadIntel has limited public evidence for ${companyName}. Strategic answers are used as the primary context until more evidence is added.`;
+      if(hasAssetNoise(profile.evidenceDigest))profile.evidenceDigest=regeneratedDigest;
+    }
     return {
       step:[1,2,3,4,5,6,7].includes(Number(value.step))?Number(value.step):1,
       website:normalizeUrl(value.website),
@@ -195,7 +234,7 @@
       additionalLinks:unique((value.additionalLinks||[]).map(normalizeUrl).filter(Boolean)).slice(0,8),
       documents:docs,
       answers,
-      scrapedSources:Array.isArray(value.scrapedSources)?value.scrapedSources.slice(0,25).map(s=>({type:s?.type==="link"?"link":"website",url:normalizeUrl(s?.url),title:clean(s?.title).slice(0,180),text:String(s?.text||"").slice(0,30000),status:clean(s?.status)||"ready"})).filter(s=>s.url):[],
+      scrapedSources,
       profile,
       approved:Boolean(value.approved)
     };

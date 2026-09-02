@@ -152,3 +152,16 @@ test('saved state preserves the standard 25-page research envelope', () => {
   const state=engine.normalizeSavedState({website:'https://example.com/',targetMarkets:['Sweden'],scrapedSources});
   assert.equal(state.scrapedSources.length,20);
 });
+
+test('company overview strips Squarespace image/CDN debris and prefers real business evidence', () => {
+  const noisySource=[{
+    type:'website',
+    url:'https://example.com/',
+    title:'Example Advisory — Sales Training',
+    text:'![Adobe Express file](https://images.squarespace-cdn.com/content/v1/example/Adobe+Express+-+file.png) (https://images.squarespace-cdn.com/content/v1/example/Screenshot+2025-01-11.png) TOOLS AND STRATEGIES Unlock Your Sales Potential! YOUR DAILY Example Advisory provides advanced B2B sales training, coaching and AI assistants for sales teams. Its programs help companies improve sales conversion and manager effectiveness.'
+  }];
+  const profile=engine.buildCompanyIntelligenceProfile({website:'https://example.com/',targetMarkets:['Latvia'],answers,documents:[],scrapedSources:noisySource});
+  assert.doesNotMatch(profile.companyOverview,/https?:\/\/|squarespace-cdn|\.png/i);
+  assert.doesNotMatch(profile.evidenceDigest,/https?:\/\/|squarespace-cdn|\.png/i);
+  assert.match(profile.companyOverview,/provides advanced B2B sales training, coaching and AI assistants/i);
+});
