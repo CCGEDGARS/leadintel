@@ -40,6 +40,13 @@ function serviceControls(config,row){
     </div>
   </div>`;
 }
+function needsDecoration(){
+  const grid=document.getElementById('integration-platform-grid');if(!grid)return false;
+  for(const config of SERVICE_PROVIDERS){const card=grid.querySelector(`[data-integration="${config.provider}"]`);if(card&&!card.querySelector('[data-service-extension="1"]'))return true;}
+  const health=document.getElementById('integration-health-summary');if(health&&!health.querySelector('.service-readiness-note'))return true;
+  const signin=document.getElementById('ai-settings-signin');if(signin&&signin.textContent!=='Connect with Google')return true;
+  return false;
+}
 function decorateCards(){
   const grid=document.getElementById('integration-platform-grid');if(!grid)return;
   for(const config of SERVICE_PROVIDERS){
@@ -48,36 +55,35 @@ function decorateCards(){
     card.classList.add('customer-service-card');
     const purpose=card.querySelector('.integration-purpose');if(purpose)purpose.textContent=`${config.purpose}. Add your own key or use the managed fallback.`;
     const badge=card.querySelector('.integration-status');if(badge){badge.textContent=statusLabel(row);badge.className=`integration-status ${row?.state==='bad'?'bad':row?.source?'good':'neutral'}`;}
-    card.querySelector('[data-service-extension="1"]')?.remove();
-    card.insertAdjacentHTML('beforeend',serviceControls(config,row));
+    const existing=card.querySelector('[data-service-extension="1"]');
+    const html=serviceControls(config,row);
+    if(existing)existing.outerHTML=html;else card.insertAdjacentHTML('beforeend',html);
   }
   const health=document.getElementById('integration-health-summary');
-  if(health&&!health.querySelector('.service-readiness-note')){
-    health.insertAdjacentHTML('beforeend','<div class="service-readiness-note"><strong>LeadIntel readiness</strong><span>Google identity + customer-owned provider controls</span></div>');
-  }
+  if(health&&!health.querySelector('.service-readiness-note'))health.insertAdjacentHTML('beforeend','<div class="service-readiness-note"><strong>LeadIntel readiness</strong><span>Google identity + customer-owned provider controls</span></div>');
   const signin=document.getElementById('ai-settings-signin');if(signin){signin.textContent='Connect with Google';signin.title='Google is your LeadIntel workspace identity. Gmail permissions are connected separately.';}
 }
-function queueDecorate(){if(renderQueued)return;renderQueued=true;queueMicrotask(()=>{renderQueued=false;decorateCards();});}
+function queueDecorate(force=false){if(!force&&!needsDecoration())return;if(renderQueued)return;renderQueued=true;queueMicrotask(()=>{renderQueued=false;decorateCards();});}
 async function refreshServiceStatus(verify=false){
-  if(!signedIn()){serviceStatus={role:'',providers:[],checked_at:null};queueDecorate();return serviceStatus;}
+  if(!signedIn()){serviceStatus={role:'',providers:[],checked_at:null};queueDecorate(true);return serviceStatus;}
   try{
     const {response,payload}=await api(`/api/integrations/services/status${verify?'?verify=1':''}`);
-    if(!response.ok)throw new Error(payload.error||'Unable to load service integrations');serviceStatus=payload;queueDecorate();return payload;
-  }catch(cause){console.warn('LeadIntel service integrations:',cause);queueDecorate();return serviceStatus;}
+    if(!response.ok)throw new Error(payload.error||'Unable to load service integrations');serviceStatus=payload;queueDecorate(true);return payload;
+  }catch(cause){console.warn('LeadIntel service integrations:',cause);queueDecorate(true);return serviceStatus;}
 }
 async function saveService(provider,button){
-  const input=document.querySelector(`[data-service-key="${provider}"]`);const apiKey=String(input?.value||'').trim();if(!apiKey){errors[provider]='Enter an API key first.';queueDecorate();return;}
+  const input=document.querySelector(`[data-service-key="${provider}"]`);const apiKey=String(input?.value||'').trim();if(!apiKey){errors[provider]='Enter an API key first.';queueDecorate(true);return;}
   busy=provider;errors[provider]='';if(button){button.disabled=true;button.textContent='Testing…';}
   try{
     const {response,payload}=await api('/api/integrations/services/provider',{method:'PUT',body:JSON.stringify({provider,api_key:apiKey})});
     if(!response.ok)throw new Error(payload.error||'Provider verification failed');if(input)input.value='';await refreshServiceStatus(false);
   }catch(cause){errors[provider]=String(cause?.message||cause);busy='';if(button){button.disabled=false;button.textContent=providerState(provider)?.configured?'Replace key':'Test & save';}const node=document.querySelector(`[data-service-error="${provider}"]`);if(node){node.hidden=false;node.textContent=errors[provider];}return;}
-  busy='';queueDecorate();
+  busy='';queueDecorate(true);
 }
 async function disconnectService(provider){
   if(!window.confirm(`Disconnect your ${SERVICE_PROVIDERS.find(row=>row.provider===provider)?.name||provider} key? LeadIntel will return to the managed fallback when available.`))return;
-  busy=provider;queueDecorate();
-  try{const {response,payload}=await api('/api/integrations/services/provider',{method:'DELETE',body:JSON.stringify({provider})});if(!response.ok)throw new Error(payload.error||'Unable to disconnect provider');errors[provider]='';await refreshServiceStatus(false);}catch(cause){errors[provider]=String(cause?.message||cause);}finally{busy='';queueDecorate();}
+  busy=provider;queueDecorate(true);
+  try{const {response,payload}=await api('/api/integrations/services/provider',{method:'DELETE',body:JSON.stringify({provider})});if(!response.ok)throw new Error(payload.error||'Unable to disconnect provider');errors[provider]='';await refreshServiceStatus(false);}catch(cause){errors[provider]=String(cause?.message||cause);}finally{busy='';queueDecorate(true);}
 }
 function handleClick(event){
   const button=event.target.closest('[data-service-action]');if(!button)return;
@@ -86,11 +92,11 @@ function handleClick(event){
 }
 function bind(){
   if(installed)return;installed=true;injectCss();document.addEventListener('click',handleClick);
-  const observer=new MutationObserver(()=>queueDecorate());observer.observe(document.body,{childList:true,subtree:true});
+  const observer=new MutationObserver(()=>{if(needsDecoration())queueDecorate();});observer.observe(document.body,{childList:true,subtree:true});
   window.addEventListener('leadintel:server-ready',()=>refreshServiceStatus(false));
   document.addEventListener('click',event=>{if(event.target.closest('#open-settings'))setTimeout(()=>refreshServiceStatus(false),0);if(event.target.closest('#test-all-integrations'))setTimeout(()=>refreshServiceStatus(true),0);});
-  if(signedIn())refreshServiceStatus(false);else queueDecorate();
+  if(signedIn())refreshServiceStatus(false);else queueDecorate(true);
 }
 
 bind();
-export {SERVICE_PROVIDERS,refreshServiceStatus};
+export {SERVICE_PROVIDERS,refreshServiceStatus,needsDecoration};
