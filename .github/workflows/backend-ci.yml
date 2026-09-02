@@ -8,11 +8,17 @@ on:
       - 'feature/**'
     paths:
       - 'backend/**'
+      - 'release-integrity.config.json'
+      - 'scripts/verify-release-integrity.mjs'
+      - '.github/workflows/release-integrity.yml'
       - '.github/workflows/backend-ci.yml'
       - '.github/workflows/backend-deploy.yml'
   pull_request:
     paths:
       - 'backend/**'
+      - 'release-integrity.config.json'
+      - 'scripts/verify-release-integrity.mjs'
+      - '.github/workflows/release-integrity.yml'
       - '.github/workflows/backend-ci.yml'
       - '.github/workflows/backend-deploy.yml'
 

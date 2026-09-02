@@ -6,8 +6,10 @@ const path=require('node:path');
 const repoRoot=path.join(__dirname,'..','..');
 const config=JSON.parse(fs.readFileSync(path.join(repoRoot,'release-integrity.config.json'),'utf8'));
 const rootHtml=fs.readFileSync(path.join(repoRoot,'index.html'),'utf8');
+const backendCi=fs.readFileSync(path.join(repoRoot,'.github','workflows','backend-ci.yml'),'utf8');
 
 function smoke(id){return config.smokeChecks.find(item=>item.id===id);}
+function escaped(value){return String(value).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
 
 test('release integrity validates the production root chooser instead of the retired forced redirect',()=>{
   const entry=smoke('production-entry');
@@ -20,6 +22,14 @@ test('release integrity validates the production root chooser instead of the ret
   assert.ok(entry.contains.includes('href="LeadIntel.html"'),'root proof must require the legacy workspace link');
   assert.ok(entry.notContains.includes("location.replace('/customer/')"),'root proof must reject the retired forced customer redirect');
   assert.ok(entry.notContains.includes("location.replace('/v2/')"),'root proof must continue rejecting the retired v2 redirect');
-  for(const marker of entry.contains)assert.match(rootHtml,new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
-  for(const marker of entry.notContains)assert.doesNotMatch(rootHtml,new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
+  for(const marker of entry.contains)assert.match(rootHtml,new RegExp(escaped(marker)));
+  for(const marker of entry.notContains)assert.doesNotMatch(rootHtml,new RegExp(escaped(marker)));
+});
+
+test('release policy changes trigger backend verification so automatic proof always has an exact-SHA deployment',()=>{
+  for(const tracked of [
+    'release-integrity.config.json',
+    '.github/workflows/release-integrity.yml',
+    'scripts/verify-release-integrity.mjs'
+  ])assert.match(backendCi,new RegExp(escaped(tracked)),`${tracked} must trigger Backend CI`);
 });
