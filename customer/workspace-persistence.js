@@ -38,6 +38,26 @@
     for(const key of WORKSPACE_DATA_KEYS){const value=root.localStorage?.getItem(key);if(value!==null&&value!==undefined)data[key]=value;}
     return data;
   }
+  function hasText(value){return Boolean(String(value??"").trim());}
+  function hasItems(value){return Array.isArray(value)&&value.length>0;}
+  function hasAnswers(value){return isObject(value)&&Object.values(value).some(hasText);}
+  function hasMarketData(value){
+    if(!isObject(value))return false;
+    return hasItems(value.icps)||hasItems(value.signals)||hasItems(value.researchQueries)||hasItems(value.researchResults)||hasItems(value.opportunities)||hasText(value.lastResearchAt)||value.strategyApproved===true||hasText(value.strategyApprovedAt);
+  }
+  function hasMainData(main){
+    if(!isObject(main))return false;
+    return hasText(main.website)||hasItems(main.targetMarkets)||hasItems(main.additionalLinks)||hasItems(main.documents)||hasItems(main.scrapedSources)||hasAnswers(main.answers)||Boolean(main.profile)||main.approved===true||Number(main.step)>1||hasMarketData(main.market);
+  }
+  function hasMeaningfulWorkspaceData(){
+    const data=currentWorkspaceData();
+    const main=safeJson(data["leadintel_customer_v2_state"]||"{}",{});
+    if(hasMainData(main))return true;
+    for(const key of ["leadintel_customer_v2_discovery","leadintel_customer_v2_outreach","leadintel_customer_v2_delivery"]){
+      const value=safeJson(data[key]||"{}",{});if(isObject(value)&&Object.keys(value).length)return true;
+    }
+    return ["leadintel_customer_v2_discovery_meta","leadintel_customer_v2_website_activation_v1","leadintel_customer_v2_research_meta_v1"].some(key=>hasText(data[key]));
+  }
   function captureWorkspaceSnapshot(){const snapshot={schema_version:1,saved_at:new Date().toISOString(),data:currentWorkspaceData()};root.localStorage?.setItem(SNAPSHOT_KEY,JSON.stringify(snapshot));return snapshot;}
   function sameWorkspaceData(a,b){const left=isObject(a)?a:{};const right=isObject(b)?b:{};const keys=[...new Set([...Object.keys(left),...Object.keys(right)])].sort();return keys.every(key=>String(left[key]??"")===String(right[key]??""));}
   function restoreSavedSnapshot(){
@@ -155,8 +175,11 @@
   }
 
   disableServerAutosave();installFetchBoundary();
-  const changed=prepareForLoad();if(changed&&root.location?.reload){root.location.reload();return;}
+  const explicitlySaved=isExplicitlySaved();
+  const hadMeaningfulUnsavedData=!explicitlySaved&&hasMeaningfulWorkspaceData();
+  const changed=prepareForLoad();
+  if(changed&&(explicitlySaved||hadMeaningfulUnsavedData)&&root.location?.reload){root.location.reload();return;}
   if(root.document?.readyState==="loading")root.document.addEventListener("DOMContentLoaded",installUi,{once:true});else installUi();
 
-  root.LeadIntelWorkspacePersistence={EXPLICIT_SAVE_KEY,SNAPSHOT_KEY,SAVE_INTENT_KEY,FORCE_RESET_KEY,RESET_PENDING_KEY,WORKSPACE_DATA_KEYS,isExplicitlySaved,markExplicitlySaved,clearExplicitSave,currentWorkspaceData,captureWorkspaceSnapshot,restoreSavedSnapshot,clearWorkspaceData,prepareForLoad,snapshotFromServerPayload,saveWorkspace,renderPersistenceStatus,handleResetClick};
+  root.LeadIntelWorkspacePersistence={EXPLICIT_SAVE_KEY,SNAPSHOT_KEY,SAVE_INTENT_KEY,FORCE_RESET_KEY,RESET_PENDING_KEY,WORKSPACE_DATA_KEYS,isExplicitlySaved,markExplicitlySaved,clearExplicitSave,currentWorkspaceData,hasMeaningfulWorkspaceData,captureWorkspaceSnapshot,restoreSavedSnapshot,clearWorkspaceData,prepareForLoad,snapshotFromServerPayload,saveWorkspace,renderPersistenceStatus,handleResetClick};
 })(typeof globalThis!=="undefined"?globalThis:this);
