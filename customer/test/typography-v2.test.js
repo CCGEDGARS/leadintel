@@ -31,7 +31,7 @@ test('Market, scripts, delivery and settings share the same readable scale',()=>
   const market=read('market.css'),outreach=read('outreach.css'),delivery=read('delivery.css'),settings=read('ai-settings.css');
   assert.match(market,/\.strategy-banner span\{[^}]*font:[^;}]*var\(--type-micro\)/s);
   assert.match(market,/\.evidence-links a small\{[^}]*font-size:var\(--type-meta\)/s);
-  assert.match(outreach,/\.dossier-card small\{[^}]*font-size:var\(--type-meta\)/s);
+  assert.match(outreach,/\.dossier-card small\{[^}]*font-size:var\(--type-secondary\)/s);
   assert.match(outreach,/\.draft-label\{[^}]*font-size:var\(--type-secondary\)/s);
   assert.match(delivery,/\.delivery-control-grid label\{[^}]*font-size:var\(--type-secondary\)/s);
   assert.match(delivery,/\.activity-row small\{[^}]*font-size:var\(--type-meta\)/s);
@@ -39,8 +39,10 @@ test('Market, scripts, delivery and settings share the same readable scale',()=>
   assert.match(settings,/\.ai-settings-btn\{[^}]*font:[^;}]*var\(--type-secondary\)/s);
 });
 
-test('current static shell assets are cache-busted together',()=>{
-  const version='20260826-target-market-v1';
+test('current static shell keeps stable cache versions and bumps research-mode assets together',()=>{
+  const stable='20260826-target-market-v1';
+  const research='20260903-research-modes-v1';
   const html=read('index.html');
-  for(const asset of ['styles.css','market.css','premium.css','market-selector.css','profile-engine.js','market-engine.js','discovery-engine.js','app.js','process-map.js','discovery-ui.js']) assert.match(html,new RegExp(`${asset.replace('.','\\.')}\\?v=${version}`));
+  for(const asset of ['styles.css','premium.css','market-selector.css','profile-engine.js','discovery-engine.js','process-map.js','discovery-ui.js']) assert.match(html,new RegExp(`${asset.replace('.','\\.')}\\?v=${stable}`));
+  for(const asset of ['market.css','market-engine.js','app.js']) assert.match(html,new RegExp(`${asset.replace('.','\\.')}\\?v=${research}`));
 });
