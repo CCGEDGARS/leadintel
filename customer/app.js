@@ -133,7 +133,7 @@ async function handlePdfFiles(files){
     state.documents=state.documents.slice(0,MAX_PDFS);saveState();renderDocuments();
   }
 }
-function renderDocuments(){const list=$("document-list");if(!state.documents.length){list.innerHTML="";return;}list.innerHTML=state.documents.map((doc,index)=>`<div class="doc-item"><div><span>PDF</span><div><strong>${esc(doc.name)}</strong><small>${formatBytes(doc.size)} · ${doc.text?`${Math.round(doc.text.length/100)/10}k chars extracted`:statusLabel(doc.status)}</small></div></div><div><span class="doc-status">${doc.status==="ready"?"READY":doc.status==="extracting"?"READING…":"REVIEW"}</span><button class="doc-remove" type="button" data-remove-doc="${index}" aria-label="Remove ${esc(doc.name)}">×</button></div></div>`).join("");}
+function renderDocuments(){const list=$("document-list");if(!state.documents.length){list.innerHTML="";return;}list.innerHTML=state.documents.map((doc,index)=>`<div class="doc-item"><div><span>PDF</span><div><strong>${esc(doc.name)}</strong><small>${doc.text?`${Math.round(doc.text.length/100)/10}k chars extracted`:statusLabel(doc.status)}</small></div></div><div><span class="doc-status">${doc.status==="ready"?"READY":doc.status==="extracting"?"READING…":"REVIEW"}</span><button class="doc-remove" type="button" data-remove-doc="${index}" aria-label="Remove ${esc(doc.name)}">×</button></div></div>`).join("");}
 function formatBytes(bytes){return bytes<1024*1024?`${Math.max(1,Math.round(bytes/1024))} KB`:`${(bytes/1024/1024).toFixed(1)} MB`;}
 function statusLabel(status){return {"too-large":"over 15 MB","no-text":"no extractable text","error":"text extraction failed","extracting":"extracting text"}[status]||"pending";}
 
@@ -286,8 +286,10 @@ async function runMarketResearch(){
   const profile=researchProfile();
   const queries=LeadIntelMarket.buildResearchQueries(profile,state.market.signals,MAX_MARKET_RESEARCH_QUERIES);
   if(!queries.length){showToast("Add a target market to improve research precision");return;}
+  state.market.researchMode="quick";state.market.researchRunId="";state.market.researchProgress={pass:1,maxPasses:1,stage:"searching",message:"OpenAI discovery + Firecrawl verification"};state.market.researchStats={themes:0,queries:queries.length,pagesExamined:0,usableSources:0,primarySources:0,corroboratedSources:0,elapsedMs:0};state.market.researchStopReason="";
   state.market.researchQueries=queries;state.market.researchResults=[];state.market.opportunities=[];state.market.researchStatus="running";state.market.researchSourceStatus={openai:"running",firecrawl:"running"};state.market.strategyApproved=false;saveState();renderMarketStrategy();
-  const button=$("run-market-research");button.disabled=true;button.textContent="Researching…";
+  const button=$("run-market-research-quick");button.disabled=true;button.textContent="Researching…";
+  const startedAt=Date.now();
   let openAiAvailable=true,openAiSuccesses=0,openAiFailures=0,firecrawlSuccesses=0,firecrawlFailures=0;
   for(const query of queries){
     let openAiResults=[],firecrawlResults=[];
@@ -306,34 +308,40 @@ async function runMarketResearch(){
   const operationalFailures=openAiFailures+firecrawlFailures;
   state.market.opportunities=LeadIntelMarket.buildMarketOpportunities(profile,state.market.icps,state.market.signals,state.market.researchResults);
   state.market.researchStatus=operationalFailures===0?"complete":state.market.researchResults.length?"partial":"error";
-  state.market.lastResearchAt=new Date().toISOString();saveState();renderMarketStrategy();
+  state.market.researchProgress={pass:1,maxPasses:1,stage:"complete",message:"Quick Research complete"};
+  state.market.researchStats={...state.market.researchStats,pagesExamined:state.market.researchResults.length,usableSources:state.market.researchResults.length,elapsedMs:Date.now()-startedAt};
+  state.market.researchStopReason="quick_complete";state.market.lastResearchAt=new Date().toISOString();saveState();renderMarketStrategy();
   button.disabled=false;
   const sourceNote=state.market.researchSourceStatus.openai==="unavailable"?" · OpenAI unavailable; Firecrawl verification used":" · OpenAI discovery + Firecrawl verification";
   showToast(`${state.market.researchStatus==="complete"?"Market research complete":"Market research partially complete"}${sourceNote} · ${state.market.researchResults.length} evidence sources`);
 }
+async function runQuickMarketResearch(){return runMarketResearch();}
+async function runDeepMarketResearch(){showToast("Deep Research is being prepared");}
 function scoreCell(label,value){return `<div><span>${label}</span><strong>${value}/20</strong><i style="--score:${value}"></i></div>`;}
 function renderMarketOpportunities(){
   const target=$("market-opportunities");
-  if(!state.market.opportunities.length){target.innerHTML=`<div class="market-empty">${state.market.researchStatus==="running"?"Researching markets…":"Target market strategy is ready. Run market research to add live evidence and improve confidence."}</div>`;return;}
+  if(!state.market.opportunities.length){target.innerHTML=`<div class="market-empty">${state.market.researchStatus==="running"?"Researching markets…":"Target market strategy is ready. Choose Quick Research or Deep Research to add live evidence."}</div>`;return;}
+  const noEvidenceCopy=state.market.researchStatus==="idle"?"Profile hypothesis — research not run yet.":"No live public evidence was returned. LeadIntel has kept this as a low-evidence hypothesis instead of inventing support.";
   target.innerHTML=state.market.opportunities.map((opp,index)=>`<article class="opportunity-card ${opp.active?"active":""}">
     <div class="opportunity-top"><label class="market-toggle"><input type="checkbox" data-opportunity-active="${index}" ${opp.active?"checked":""}><span></span></label><div><span class="opportunity-market">${esc(opp.market)}</span><h4>${esc(opp.title)}</h4></div><div class="opportunity-total"><strong>${opp.score.total}</strong><span>/100</span></div></div>
     <p class="opportunity-hypothesis">${esc(opp.hypothesis)}</p>
     <div class="score-grid">${scoreCell("Fit",opp.score.fit)}${scoreCell("Intent",opp.score.intent)}${scoreCell("Timing",opp.score.timing)}${scoreCell("Value",opp.score.value)}${scoreCell("Evidence",opp.score.evidence)}</div>
-    <div class="opportunity-meta"><span class="confidence ${opp.confidence.toLowerCase()}">${opp.confidence} confidence</span><span>${opp.evidence.length} evidence source${opp.evidence.length===1?"":"s"}</span>${opp.profileOnly?"<span>Profile-only hypothesis</span>":""}</div>
-    <div class="evidence-links">${opp.evidence.length?opp.evidence.map(source=>`<a href="${esc(source.url)}" target="_blank" rel="noopener"><strong>${esc(source.title)}</strong><small>${esc(source.description||source.text).slice(0,180)}</small></a>`).join(""):`<div class="evidence-none">No live public evidence was returned. LeadIntel has kept this as a low-evidence hypothesis instead of inventing support.</div>`}</div>
+    <div class="opportunity-meta"><span class="confidence ${opp.confidence.toLowerCase()}">${opp.confidence} confidence</span><span>${opp.evidence.length} evidence source${opp.evidence.length===1?"":"s"}</span>${opp.profileOnly?`<span>${state.market.researchStatus==="idle"?"Research not run yet":"Profile-only hypothesis"}</span>`:""}</div>
+    <div class="evidence-links">${opp.evidence.length?opp.evidence.map(source=>`<a href="${esc(source.url)}" target="_blank" rel="noopener"><strong>${esc(source.title)}</strong><small>${esc(source.description||source.text).slice(0,180)}</small></a>`).join(""):`<div class="evidence-none">${noEvidenceCopy}</div>`}</div>
   </article>`).join("");
 }
 function renderResearchStatus(){
   const status=state.market.researchStatus;const count=state.market.researchResults.length;const queries=state.market.researchQueries.length;const sources=state.market.researchSourceStatus||{openai:"idle",firecrawl:"idle"};
-  let message="Target market selected · live market research can increase confidence.";
-  if(status==="running")message=`Running ${queries} searches · OpenAI signal discovery + Firecrawl verification…`;
+  let message="Target market selected · research has not run yet.";
+  if(status==="running")message=state.market.researchMode==="deep"?"Deep Research is running…":`Running ${queries} searches · OpenAI signal discovery + Firecrawl verification…`;
   else if(status==="complete"&&sources.openai==="unavailable")message=`Research complete · Firecrawl verification · ${count} public evidence sources. OpenAI integration is required for web search; connect OpenAI in Settings for broader signal discovery.`;
   else if(status==="complete")message=`Research complete · OpenAI signal discovery + Firecrawl verification · ${queries} queries · ${count} public evidence sources.`;
   else if(status==="partial")message=`Research partially complete · ${count} evidence sources · OpenAI signal discovery / Firecrawl verification had one or more unavailable requests.`;
   else if(status==="error")message="Public market research was unavailable. Profile-only hypotheses are shown with reduced Evidence scores.";
   $("market-research-status").textContent=message;
-  $("run-market-research").textContent=state.market.lastResearchAt?"Rerun market research ↻":"Run market research ↻";
-  $("run-market-research").disabled=status==="running";
+  const quick=$("run-market-research-quick"),deep=$("run-market-research-deep");
+  if(quick){quick.innerHTML=state.market.lastResearchAt?"<strong>Quick Research</strong><span>Rerun · OpenAI Web Search + Firecrawl</span>":"<strong>Quick Research</strong><span>OpenAI Web Search + Firecrawl · fast</span>";quick.disabled=status==="running";}
+  if(deep)deep.disabled=status==="running";
 }
 function renderMarketStrategy(){
   if(!state.profile)return;
@@ -406,7 +414,7 @@ function bind(){
   const zone=$("upload-zone");["dragenter","dragover"].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault();zone.classList.add("dragging");}));["dragleave","drop"].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault();zone.classList.remove("dragging");}));zone.addEventListener("drop",e=>handlePdfFiles(e.dataTransfer.files));
   $("edit-profile").addEventListener("click",toggleEdit);$("approve-profile").addEventListener("click",approveProfile);$("approve-profile-bottom").addEventListener("click",()=>state.approved?openMarketStrategy():approveProfile());$("improve-profile").addEventListener("click",()=>openModule(1));
   $("back-to-profile").addEventListener("click",()=>openModule(3));
-  $("add-custom-signal").addEventListener("click",addCustomSignal);$("run-market-research").addEventListener("click",runMarketResearch);$("activate-market-strategy").addEventListener("click",activateMarketStrategy);
+  $("add-custom-signal").addEventListener("click",addCustomSignal);$("run-market-research-quick").addEventListener("click",runQuickMarketResearch);$("run-market-research-deep").addEventListener("click",runDeepMarketResearch);$("activate-market-strategy").addEventListener("click",activateMarketStrategy);
   $("signal-designer").addEventListener("click",e=>{const btn=e.target.closest("[data-remove-signal]");if(btn)removeSignal(Number(btn.dataset.removeSignal));});
   [$("icp-list"),$("signal-designer"),$("market-opportunities")].forEach(container=>{container.addEventListener("change",()=>readMarketEdits());});
   $("reset-workspace").addEventListener("click",resetWorkspace);
