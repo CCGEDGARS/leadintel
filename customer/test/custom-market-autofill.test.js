@@ -21,6 +21,23 @@ test('custom target market rejects browser-autofilled website/domain values',()=
   assert.match(helper,/addEventListener\(["']input["']/);
 });
 
-test('process shell loads the custom market autofill guard',()=>{
-  assert.match(processMap,/custom-market-input-hygiene\.js\?v=20260901-custom-market-autofill-v2/);
+test('autofill guard gives the custom market field non-URL search semantics at runtime',()=>{
+  const helper=helperSource();
+  assert.match(helper,/setAttribute\("type","search"\)/,'custom market must be reclassified away from a generic text field');
+  assert.match(helper,/setAttribute\("name","leadintel-market-definition"\)/,'custom market must use a unique non-URL form name');
+  assert.match(helper,/setAttribute\("autocomplete","off"\)/);
+  assert.match(helper,/setAttribute\("inputmode","text"\)/);
+});
+
+test('add market has a capture-phase final safety gate for URL/domain autofill',()=>{
+  const helper=helperSource();
+  assert.match(helper,/add-target-market/);
+  assert.match(helper,/preventDefault\(\)/);
+  assert.match(helper,/stopImmediatePropagation\(\)/);
+  assert.match(helper,/Use the Main company website field above/);
+  assert.match(helper,/root\.document\.addEventListener\("click",[\s\S]+?\},true\);/,'safety gate must run before the app click handler');
+});
+
+test('process shell loads the v3 custom market autofill guard',()=>{
+  assert.match(processMap,/custom-market-input-hygiene\.js\?v=20260903-custom-market-autofill-v3/);
 });
