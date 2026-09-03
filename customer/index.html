@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=20260826-target-market-v1">
-  <link rel="stylesheet" href="market.css?v=20260826-target-market-v1">
+  <link rel="stylesheet" href="market.css?v=20260903-research-modes-v1">
   <link rel="stylesheet" href="premium.css?v=20260826-target-market-v1">
   <link rel="stylesheet" href="market-selector.css?v=20260826-target-market-v1">
   <link rel="stylesheet" href="compact-sources.css?v=20260826-compact-sources-v1">
@@ -226,12 +226,15 @@
 
           <section class="panel strategy-panel research-panel">
             <div class="market-research-head">
-              <div class="section-title"><span class="eyebrow">Market Opportunity Engine</span><h3>Research the market for evidence</h3><p>One manual run uses a maximum of four Firecrawl searches and five results per query. Regional selections are expanded into their countries before research.</p></div>
-              <button class="primary-btn" id="run-market-research" type="button">Run market research <span>↻</span></button>
+              <div class="section-title"><span class="eyebrow">Market Opportunity Engine</span><h3>Research the market for evidence</h3><p>Quick Research validates the strategy with OpenAI Web Search and Firecrawl. Deep Research expands into iterative multi-source evidence collection and deeper page verification.</p></div>
+              <div class="market-research-actions" aria-label="Market research modes">
+                <button class="secondary-btn research-mode-btn" id="run-market-research-quick" type="button"><strong>Quick Research</strong><span>OpenAI Web Search + Firecrawl · fast</span></button>
+                <button class="primary-btn research-mode-btn deep-research-action" id="run-market-research-deep" type="button"><strong>✦ Deep Research</strong><span>Multi-source · iterative · maximum evidence</span></button>
+              </div>
             </div>
             <div class="score-legend" aria-label="Opportunity scoring model"><strong>Opportunity score</strong><span>Fit</span><span>Intent</span><span>Timing</span><span>Value</span><span>Evidence</span></div>
-            <div class="research-status" id="market-research-status">No market research run yet.</div>
-            <div class="market-opportunities" id="market-opportunities"><div class="market-empty">Run market research to create evidence-backed market hypotheses.</div></div>
+            <div class="research-status" id="market-research-status">Target market selected · research has not run yet.</div>
+            <div class="market-opportunities" id="market-opportunities"><div class="market-empty">Choose Quick Research or Deep Research to create evidence-backed market hypotheses.</div></div>
           </section>
 
           <div class="approval-card strategy-activation" id="strategy-activation-card">
@@ -244,9 +247,9 @@
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="profile-engine.js?v=20260826-target-market-v1"></script>
-  <script src="market-engine.js?v=20260826-target-market-v1"></script>
+  <script src="market-engine.js?v=20260903-research-modes-v1"></script>
   <script src="discovery-engine.js?v=20260826-target-market-v1"></script>
-  <script type="module" src="app.js?v=20260826-target-market-v1"></script>
+  <script type="module" src="app.js?v=20260903-research-modes-v1"></script>
   <script type="module" src="process-map.js?v=20260826-target-market-v1"></script>
   <script type="module" src="discovery-ui.js?v=20260826-target-market-v1"></script>
 </body>
