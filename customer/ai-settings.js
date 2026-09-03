@@ -1,6 +1,6 @@
 const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
 const FIRECRAWL_PROXY='https://apollo-proxy.edgars-7e7.workers.dev';
-const SETTINGS_VERSION='20260902-integration-control-centre-v1';
+const SETTINGS_VERSION='20260903-provider-status-clarity-v1';
 const PROVIDERS=Object.freeze([
   {provider:'openai',name:'OpenAI',model:'gpt-5.6',placeholder:'sk-…',hint:'Responses API'},
   {provider:'anthropic',name:'Anthropic',model:'claude-sonnet-4-6',placeholder:'sk-ant-…',hint:'Messages API'},
@@ -41,7 +41,7 @@ function injectUi(){
       </div>
       <div class="ai-engine-summary" id="ai-engine-summary"><span>AI engine</span><strong>No provider configured</strong><small>Connect one of the three supported providers below.</small></div>
       <section class="ai-settings-section" aria-labelledby="ai-provider-heading">
-        <div class="ai-section-title"><div><span class="eyebrow">AI providers</span><h3 id="ai-provider-heading">Customer-owned intelligence engines</h3><p>Add your own API key, choose the model and control which provider is active. Saved keys are shown only as a masked hint.</p></div></div>
+        <div class="ai-section-title"><div><span class="eyebrow">AI providers</span><h3 id="ai-provider-heading">Customer-owned intelligence engines</h3><p>Add your own API key and choose the model. Connected means the API key is verified. Active means LeadIntel is currently using that provider for normal AI generation.</p></div></div>
         <div class="ai-provider-grid" id="ai-provider-grid"></div>
       </section>
       <section class="ai-settings-section" aria-labelledby="platform-integration-heading">
@@ -70,33 +70,33 @@ function signInFromSettings(){
 }
 function render(){
   const grid=document.getElementById('ai-provider-grid');if(!grid)return;
-  const active=status.providers.find(item=>item.active);
+  const active=status.providers.find(item=>item.active);const connectedCount=status.providers.filter(item=>item.configured).length;
   const summary=document.getElementById('ai-engine-summary');
   if(summary){
     if(!signedIn()){
       summary.innerHTML='<span>AI engine</span><strong>Sign in to configure workspace AI</strong><small>Your keys belong to an authenticated LeadIntel workspace.</small><button class="ai-settings-btn primary ai-settings-signin" id="ai-settings-signin" type="button">Sign in with Google</button>';
       document.getElementById('ai-settings-signin')?.addEventListener('click',signInFromSettings);
     }
-    else if(active)summary.innerHTML=`<span>AI engine</span><strong>${esc(active.name)} · ${esc(active.model)}</strong><small>Verified ${active.verified_at?esc(formatDate(active.verified_at)):'provider connection'}${active.last_used_at?` · last used ${esc(formatDateTime(active.last_used_at))}`:''}.</small>`;
-    else summary.innerHTML='<span>AI engine</span><strong>No active provider</strong><small>Test and save a provider below to activate AI generation.</small>';
+    else if(active)summary.innerHTML=`<span>AI engine</span><strong>Active provider · ${esc(active.name)} · ${esc(active.model)}</strong><small>${connectedCount} provider${connectedCount===1?'':'s'} connected · API key verified ${active.verified_at?esc(formatDate(active.verified_at)):'successfully'}${active.last_used_at?` · last used ${esc(formatDateTime(active.last_used_at))}`:''}.</small>`;
+    else summary.innerHTML=`<span>AI engine</span><strong>No active provider</strong><small>${connectedCount?`${connectedCount} provider${connectedCount===1?' is':'s are'} connected. Set one as active to use AI generation.`:'Test and save a provider below to activate AI generation.'}</small>`;
   }
   grid.innerHTML=PROVIDERS.map(config=>providerCard(config,providerState(config.provider))).join('');
   renderIntegrationMonitoring();
 }
 function providerCard(config,current){
   const configured=Boolean(current?.configured);const active=Boolean(current?.active);const owner=isOwner();const disabled=!signedIn()||!owner;
-  const stateLabel=active?'Active':configured?'Verified':'Not connected';
+  const stateLabel=active?'Active':configured?'Connected':'Not connected';
   const model=current?.model||config.model;const providerError=providerErrors[config.provider]||'';
   const usageMeta=current?.last_used_at?` · last used ${esc(formatDateTime(current.last_used_at))}`:'';
   return `<article class="ai-provider-card ${active?'active':''}" data-provider-card="${config.provider}">
-    <div class="ai-provider-head"><div><span class="ai-provider-name">${esc(config.name)}</span><small>${esc(config.hint)} · Your API key · billed by provider</small></div><span class="ai-provider-status ${active?'active':configured?'verified':''}">${stateLabel}</span></div>
+    <div class="ai-provider-head"><div><span class="ai-provider-name">${esc(config.name)}</span><small>${esc(config.hint)} · Your API key · billed by provider</small></div><span class="ai-provider-status ${active?'active':configured?'connected':''}">${stateLabel}</span></div>
     <label class="ai-settings-field">API key<input data-ai-key="${config.provider}" type="password" autocomplete="off" spellcheck="false" placeholder="${esc(config.placeholder)}" ${disabled?'disabled':''}></label>
     <label class="ai-settings-field">Model<input data-ai-model="${config.provider}" type="text" value="${esc(model)}" autocomplete="off" ${disabled?'disabled':''}></label>
-    <div class="ai-key-meta">${configured?`Saved key ${esc(current.key_hint||'')} · verified ${esc(formatDate(current.verified_at))}${usageMeta}`:'No credential stored yet.'}</div>
+    <div class="ai-key-meta">${configured?`Saved key ${esc(current.key_hint||'')} · API key verified ${esc(formatDate(current.verified_at))}${usageMeta}`:'No credential stored yet.'}</div>
     <div class="ai-provider-error" data-ai-error="${config.provider}" role="alert" ${providerError?'':'hidden'}>${esc(providerError)}</div>
     <div class="ai-provider-actions">
       <button class="ai-settings-btn primary" data-ai-action="save" data-provider="${config.provider}" type="button" ${disabled||busy===config.provider?'disabled':''}>${busy===config.provider?'Testing…':'Test & save'}</button>
-      <button class="ai-settings-btn" data-ai-action="activate" data-provider="${config.provider}" type="button" ${disabled||!configured||active||busy===config.provider?'disabled':''}>${active?'Active ✓':'Use this provider'}</button>
+      <button class="ai-settings-btn" data-ai-action="activate" data-provider="${config.provider}" type="button" ${disabled||!configured||active||busy===config.provider?'disabled':''}>${active?'Active provider ✓':'Set as active'}</button>
       <button class="ai-settings-btn danger" data-ai-action="disconnect" data-provider="${config.provider}" type="button" ${disabled||!configured||busy===config.provider?'disabled':''}>Disconnect</button>
     </div>
   </article>`;
