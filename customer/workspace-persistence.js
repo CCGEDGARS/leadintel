@@ -165,7 +165,7 @@
   function ensureSaveButton(){const actions=root.document?.querySelector?.(".top-actions");if(!actions||root.document.getElementById("save-workspace"))return false;const button=root.document.createElement("button");button.className="ghost-btn";button.type="button";button.id="save-workspace";button.textContent="Save workspace";const reset=root.document.getElementById("reset-workspace");actions.insertBefore(button,reset||null);button.addEventListener("click",saveWorkspace);renderPersistenceStatus();return true;}
   function noteWorkspaceEdit(event){const target=event?.target;if(target?.closest&& !target.closest(".workspace"))return;if(target?.closest?.("#save-workspace,#reset-workspace,#ai-settings-drawer"))return;dirtySinceSave=true;renderPersistenceStatus();}
   function handleResetClick(event){
-    const button=root.document?.getElementById?.("reset-workspace");if(!button||button.dataset.resetArmed!=="true")return false;
+    const button=event?.target?.closest?.("#reset-workspace");if(!button||button.dataset.resetArmed!=="true")return false;
     root.sessionStorage?.setItem(FORCE_RESET_KEY,"1");recordResetIntent();clearExplicitSave();root.setTimeout?.(()=>root.sessionStorage?.removeItem(FORCE_RESET_KEY),5000);root.setTimeout?.(renderPersistenceStatus,0);return true;
   }
   function installUi(){
