@@ -1,3 +1,5 @@
+import './workspace-persistence.js?v=20260903-step1-startup-order-v1';
+
 const STORAGE_KEY="leadintel_customer_v2_state";
 const FIRECRAWL_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
 const LEADINTEL_API="https://leadintel-api.edgars-7e7.workers.dev";

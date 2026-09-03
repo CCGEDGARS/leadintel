@@ -1,4 +1,4 @@
-import './workspace-persistence.js?v=20260903-explicit-persistence-hotfix-v1';
+import './workspace-persistence.js?v=20260903-step1-startup-order-v1';
 import './state-budget.js?v=20260826-state-budget-500kb';
 import './website-input-sync.js?v=20260901-saved-state-v2';
 import './workspace-reset-hygiene.js?v=20260901-reset-intent-sync-v3';
