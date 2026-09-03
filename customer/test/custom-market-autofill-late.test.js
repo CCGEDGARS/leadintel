@@ -13,5 +13,5 @@ test('custom market guard keeps watching for delayed browser autofill beyond sta
 });
 
 test('process shell cache-busts the delayed-autofill guard release',()=>{
-  assert.match(processMap,/custom-market-input-hygiene\.js\?v=20260903-custom-market-autofill-v3/);
+  assert.match(processMap,/custom-market-input-hygiene\.js\?v=20260903-custom-market-node-reset-v4/);
 });
