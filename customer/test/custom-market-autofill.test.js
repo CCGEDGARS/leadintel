@@ -29,6 +29,22 @@ test('autofill guard gives the custom market field non-URL search semantics at r
   assert.match(helper,/setAttribute\("inputmode","text"\)/);
 });
 
+test('persistent browser restoration is severed by replacing the original custom-market control',()=>{
+  const helper=helperSource();
+  assert.match(helper,/replaceAutofilledControl/,'guard must have an explicit control replacement path');
+  assert.match(helper,/replaceWith\(/,'restored browser state must be detached from the original DOM node');
+  assert.match(helper,/replacement\.value\s*=\s*["']{2}/,'fresh replacement must always start empty');
+  assert.match(helper,/createElement\(["']input["']\)/,'replacement must be newly created rather than cloning browser autofill state');
+});
+
+test('replacement control preserves Enter-to-add behavior through delegated key handling',()=>{
+  const helper=helperSource();
+  assert.match(helper,/keydown/);
+  assert.match(helper,/event\.key\s*===\s*["']Enter["']/);
+  assert.match(helper,/add-target-market/);
+  assert.match(helper,/\.click\(\)/,'Enter on the replacement should invoke the existing add-market button path');
+});
+
 test('add market has a capture-phase final safety gate for URL/domain autofill',()=>{
   const helper=helperSource();
   assert.match(helper,/add-target-market/);
@@ -38,6 +54,6 @@ test('add market has a capture-phase final safety gate for URL/domain autofill',
   assert.match(helper,/root\.document\.addEventListener\("click",[\s\S]+?\},true\);/,'safety gate must run before the app click handler');
 });
 
-test('process shell loads the v3 custom market autofill guard',()=>{
-  assert.match(processMap,/custom-market-input-hygiene\.js\?v=20260903-custom-market-autofill-v3/);
+test('process shell loads the v4 custom market node-reset guard',()=>{
+  assert.match(processMap,/custom-market-input-hygiene\.js\?v=20260903-custom-market-node-reset-v4/);
 });
