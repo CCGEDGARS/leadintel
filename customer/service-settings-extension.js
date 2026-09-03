@@ -1,5 +1,5 @@
 const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
-const SETTINGS_VERSION='20260902-customer-owned-integrations-v2';
+const SETTINGS_VERSION='20260903-password-manager-isolation-v1';
 const SERVICE_PROVIDERS=Object.freeze([
   {provider:'apollo',name:'Apollo.io',placeholder:'Apollo API key',purpose:'Company, decision-maker, email and phone enrichment'},
   {provider:'firecrawl',name:'Firecrawl',placeholder:'fc-…',purpose:'Website scraping, public research and evidence collection'}
@@ -13,6 +13,7 @@ const errors=Object.create(null);
 function bridge(){return window.LeadIntelServerBridge||null;}
 function workspace(){return bridge()?.workspace||null;}
 function signedIn(){return Boolean(bridge()?.session?.authenticated&&workspace()?.id);}
+function settingsDrawerOpen(){const drawer=document.getElementById('ai-settings-drawer');return Boolean(drawer&&!drawer.hidden);}
 function isOwner(){return serviceStatus.role==='owner'||workspace()?.role==='owner';}
 function esc(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function apiUrl(path){const join=path.includes('?')?'&':'?';return `${API_BASE}${path}${join}workspace_id=${encodeURIComponent(workspace()?.id||'')}`;}
@@ -33,7 +34,7 @@ function serviceControls(config,row){
   const meta=configured?`Saved key ${esc(row.key_hint||'')} · ${sourceLabel(row)}`:sourceLabel(row);
   return `<div class="service-provider-controls service-provider-card" data-service-extension="1" data-service-provider="${config.provider}">
     <div class="service-source-row"><span class="service-source ${row?.source==='customer'?'customer':'managed'}">${esc(sourceLabel(row))}</span><span>${esc(meta)}</span></div>
-    <label class="ai-settings-field">API key<input data-service-key="${config.provider}" type="password" autocomplete="off" spellcheck="false" placeholder="${esc(config.placeholder)}" ${disabled?'disabled':''}></label>
+    <label class="ai-settings-field">API key<input data-service-key="${config.provider}" type="password" autocomplete="new-password" spellcheck="false" data-form-type="other" data-lpignore="true" data-1p-ignore="true" autocapitalize="none" placeholder="${esc(config.placeholder)}" ${disabled?'disabled':''}></label>
     <div class="ai-provider-error" data-service-error="${config.provider}" role="alert" ${error?'':'hidden'}>${esc(error)}</div>
     <div class="ai-provider-actions">
       <button class="ai-settings-btn primary" data-service-action="save" data-provider="${config.provider}" type="button" ${disabled||busy===config.provider?'disabled':''}>${busy===config.provider?'Testing…':configured?'Replace key':'Test & save'}</button>
@@ -50,6 +51,7 @@ function connectGoogle(){
   const url=new URL(window.location.href);url.searchParams.set('settings','ai');window.history.replaceState(null,'',url);bridge()?.signIn?.();
 }
 function needsDecoration(){
+  if(!settingsDrawerOpen())return false;
   const grid=document.getElementById('integration-platform-grid');if(!grid)return false;
   for(const config of SERVICE_PROVIDERS){const card=grid.querySelector(`[data-integration="${config.provider}"]`);if(card&&!card.querySelector('[data-service-extension="1"]'))return true;}
   const health=document.getElementById('integration-health-summary');if(health&&!health.querySelector('.service-readiness-note'))return true;
@@ -74,6 +76,7 @@ function decorateGoogleCard(){
   card.insertAdjacentHTML('beforeend','<div class="google-connect-panel" data-google-connect-extension="1"><button class="ai-settings-btn primary" data-service-action="google-signin" type="button">Connect with Google</button><small>Creates or opens your private LeadIntel workspace.</small></div>');
 }
 function decorateCards(){
+  if(!settingsDrawerOpen())return;
   const grid=document.getElementById('integration-platform-grid');if(!grid)return;
   const section=document.getElementById('platform-integration-heading')?.closest('.ai-settings-section');
   if(section){const heading=section.querySelector('#platform-integration-heading');if(heading)heading.textContent='Data & intelligence integrations';const intro=section.querySelector('.ai-section-title p');if(intro)intro.textContent='Add your own Apollo and Firecrawl API keys, or use LeadIntel managed fallback where available. Your saved secrets stay encrypted on the backend.';}
@@ -89,7 +92,7 @@ function decorateCards(){
   decorateGoogleCard();decorateReadiness();
   const signin=document.getElementById('ai-settings-signin');if(signin){signin.textContent='Connect with Google';signin.title='Google is your LeadIntel workspace identity. Gmail permissions are connected separately.';}
 }
-function queueDecorate(force=false){if(!force&&!needsDecoration())return;if(renderQueued)return;renderQueued=true;queueMicrotask(()=>{renderQueued=false;decorateCards();});}
+function queueDecorate(force=false){if(!settingsDrawerOpen())return;if(!force&&!needsDecoration())return;if(renderQueued)return;renderQueued=true;queueMicrotask(()=>{renderQueued=false;decorateCards();});}
 async function refreshServiceStatus(verify=false){
   if(!signedIn()){serviceStatus={role:'',providers:[],checked_at:null};queueDecorate(true);return serviceStatus;}
   try{
