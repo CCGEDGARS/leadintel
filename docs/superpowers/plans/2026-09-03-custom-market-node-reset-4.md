@@ -1,0 +1,1 @@
+RED gate target: node replacement, fresh empty control, delegated Enter behavior, and v4 cache-bust.
