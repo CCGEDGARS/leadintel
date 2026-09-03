@@ -5,9 +5,12 @@
 })(typeof globalThis!=="undefined"?globalThis:this,function(){
   "use strict";
 
+  const DEFAULT_RESEARCH_PROGRESS=Object.freeze({pass:0,maxPasses:0,stage:"idle",message:""});
+  const DEFAULT_RESEARCH_STATS=Object.freeze({themes:0,queries:0,pagesExamined:0,usableSources:0,primarySources:0,corroboratedSources:0,elapsedMs:0});
   const DEFAULT_MARKET_STATE=Object.freeze({
     icps:[],signals:[],researchQueries:[],researchResults:[],opportunities:[],
-    researchStatus:"idle",researchSourceStatus:{openai:"idle",firecrawl:"idle"},lastResearchAt:"",strategyApproved:false,strategyApprovedAt:""
+    researchStatus:"idle",researchSourceStatus:{openai:"idle",firecrawl:"idle"},lastResearchAt:"",strategyApproved:false,strategyApprovedAt:"",
+    researchMode:"quick",researchRunId:"",researchProgress:DEFAULT_RESEARCH_PROGRESS,researchStats:DEFAULT_RESEARCH_STATS,researchStopReason:""
   });
 
   function clean(value){return String(value??"").replace(/\s+/g," ").trim();}
@@ -26,10 +29,19 @@
     }catch{return "";}
   }
   function normalizeProviders(value){
-    const allowed=new Set(["openai","firecrawl"]),seen=new Set();
+    const allowed=new Set(["openai","firecrawl","scrapling"]),seen=new Set();
     const input=Array.isArray(value)?value:[value];
     input.map(item=>clean(item).toLowerCase()).filter(item=>allowed.has(item)).forEach(item=>seen.add(item));
-    return ["openai","firecrawl"].filter(item=>seen.has(item));
+    return ["openai","firecrawl","scrapling"].filter(item=>seen.has(item));
+  }
+  function normalizeEvidenceItem(item={},fallback={}){
+    const url=canonicalUrl(item?.url||fallback?.url);if(!url)return null;
+    return {
+      queryId:clean(item?.queryId||fallback?.queryId),market:clean(item?.market||fallback?.market),query:clean(item?.query||fallback?.query),url,
+      title:clean(item?.title)||new URL(url).hostname,description:clean(item?.description),text:String(item?.text||"").slice(0,5000),date:clean(item?.date),
+      sourceProviders:normalizeProviders(item?.sourceProviders),sourceType:clean(item?.sourceType),sourceQuality:clamp(item?.sourceQuality,1,4,2),
+      corroborationCount:clamp(item?.corroborationCount,1,20,1),retrievedAt:clean(item?.retrievedAt)
+    };
   }
   function priorityWeight(priority){return /^high$/i.test(clean(priority))?9:/^medium$/i.test(clean(priority))?7:/^low$/i.test(clean(priority))?5:6;}
   function defaultKeywords(signal){
@@ -133,29 +145,29 @@
       if(!url)return null;
       const description=clean(item?.description||item?.snippet||"");
       const body=clean(item?.markdown||item?.content||item?.text||description);
-      return {
+      return normalizeEvidenceItem({
         queryId:clean(queryMeta.id),market:clean(queryMeta.market),query:clean(queryMeta.query),
         url,title:clean(item?.title)||new URL(url).hostname,description,
         text:body.slice(0,5000),date:clean(item?.publishedDate||item?.date||item?.published_at||item?.metadata?.publishedDate),
-        sourceProviders:normalizeProviders([...(Array.isArray(item?.sourceProviders)?item.sourceProviders:[]),sourceProvider])
-      };
+        sourceProviders:normalizeProviders([...(Array.isArray(item?.sourceProviders)?item.sourceProviders:[]),sourceProvider]),
+        sourceType:item?.sourceType,sourceQuality:item?.sourceQuality,corroborationCount:item?.corroborationCount,retrievedAt:item?.retrievedAt
+      });
     }).filter(Boolean);
   }
 
   function mergeResearchResults(...groups){
     const merged=new Map();
     for(const item of groups.flatMap(group=>Array.isArray(group)?group:[])){
-      const url=canonicalUrl(item?.url);if(!url)continue;
-      const next={
-        queryId:clean(item?.queryId),market:clean(item?.market),query:clean(item?.query),url,
-        title:clean(item?.title),description:clean(item?.description),text:String(item?.text||"").slice(0,5000),date:clean(item?.date),
-        sourceProviders:normalizeProviders(item?.sourceProviders)
-      };
-      const current=merged.get(url);
-      if(!current){merged.set(url,next);continue;}
+      const next=normalizeEvidenceItem(item);if(!next)continue;
+      const current=merged.get(next.url);
+      if(!current){merged.set(next.url,next);continue;}
       current.queryId=current.queryId||next.queryId;current.market=current.market||next.market;current.query=current.query||next.query;
       current.title=current.title||next.title;current.description=current.description||next.description;current.text=current.text||next.text;current.date=current.date||next.date;
       current.sourceProviders=normalizeProviders([...(current.sourceProviders||[]),...(next.sourceProviders||[])]);
+      current.sourceType=current.sourceType||next.sourceType;
+      current.sourceQuality=Math.max(Number(current.sourceQuality)||1,Number(next.sourceQuality)||1);
+      current.corroborationCount=Math.max(Number(current.corroborationCount)||1,Number(next.corroborationCount)||1);
+      current.retrievedAt=current.retrievedAt||next.retrievedAt;
     }
     return [...merged.values()];
   }
@@ -188,6 +200,18 @@
     const completeness=clamp(profile?.completeness,0,100,60);
     return Math.min(20,Math.round(completeness/6)+Math.min(4,active));
   }
+  function scoreEvidenceQuality(evidence=[]){
+    if(!Array.isArray(evidence)||!evidence.length)return 3;
+    const now=Date.now();let score=4;
+    score+=Math.min(5,evidence.length*2);
+    const quality=evidence.reduce((sum,item)=>sum+clamp(item?.sourceQuality,1,4,2),0)/evidence.length;
+    score+=Math.round(quality*1.5);
+    const corroborated=evidence.filter(item=>Number(item?.corroborationCount)>=2).length;
+    score+=Math.min(3,corroborated);
+    const recent=evidence.some(item=>{const ts=Date.parse(item?.date);return Number.isFinite(ts)&&(now-ts)<=365*86400000;});
+    if(recent)score+=2;
+    return Math.max(3,Math.min(20,score));
+  }
 
   function buildMarketOpportunities(profile={},icps=[],signals=[],researchResults=[]){
     const markets=effectiveResearchMarkets(profile);
@@ -199,7 +223,7 @@
         intent:intentScore(signals,evidence),
         timing:recentScore(evidence),
         value:valueScore(profile.opportunityValue),
-        evidence:evidence.length?Math.min(20,6+evidence.length*4):3
+        evidence:scoreEvidenceQuality(evidence)
       };
       score.total=score.fit+score.intent+score.timing+score.value+score.evidence;
       const confidence=evidence.length>=2&&score.total>=75?"High":evidence.length>=1||score.total>=55?"Medium":"Low";
@@ -220,19 +244,25 @@
       description:clean(item?.description),targetMarkets:clean(item?.targetMarkets),buyerRoles:clean(item?.buyerRoles),value:clean(item?.value),exclusions:clean(item?.exclusions),offers:clean(item?.offers),rationale:clean(item?.rationale)
     }));
     const researchQueries=(Array.isArray(input.researchQueries)?input.researchQueries:[]).slice(0,4).map(item=>({id:clean(item?.id),market:clean(item?.market),offer:clean(item?.offer),query:clean(item?.query)})).filter(item=>item.id&&item.query);
-    const researchResults=(Array.isArray(input.researchResults)?input.researchResults:[]).slice(0,20).map(item=>({
-      queryId:clean(item?.queryId),market:clean(item?.market),query:clean(item?.query),url:canonicalUrl(item?.url),title:clean(item?.title),description:clean(item?.description),text:String(item?.text||"").slice(0,5000),date:clean(item?.date),sourceProviders:normalizeProviders(item?.sourceProviders)
-    })).filter(item=>item.url);
+    const researchResults=(Array.isArray(input.researchResults)?input.researchResults:[]).slice(0,20).map(item=>normalizeEvidenceItem(item)).filter(Boolean);
     const opportunities=(Array.isArray(input.opportunities)?input.opportunities:[]).slice(0,12).map(item=>({...item,id:clean(item?.id),market:clean(item?.market),title:clean(item?.title),active:item?.active!==false})).filter(item=>item.id);
     const allowed=new Set(["idle","running","complete","partial","error"]),sourceAllowed=new Set(["idle","running","complete","partial","error","unavailable"]);
     const rawSourceStatus=input.researchSourceStatus&&typeof input.researchSourceStatus==="object"?input.researchSourceStatus:{};
     const researchSourceStatus={openai:sourceAllowed.has(rawSourceStatus.openai)?rawSourceStatus.openai:"idle",firecrawl:sourceAllowed.has(rawSourceStatus.firecrawl)?rawSourceStatus.firecrawl:"idle"};
+    const rawProgress=input.researchProgress&&typeof input.researchProgress==="object"?input.researchProgress:{};
+    const researchProgress={pass:clamp(rawProgress.pass,0,3,0),maxPasses:clamp(rawProgress.maxPasses,0,3,0),stage:clean(rawProgress.stage)||"idle",message:clean(rawProgress.message)};
+    const rawStats=input.researchStats&&typeof input.researchStats==="object"?input.researchStats:{};
+    const researchStats={
+      themes:clamp(rawStats.themes,0,100,0),queries:clamp(rawStats.queries,0,100,0),pagesExamined:clamp(rawStats.pagesExamined,0,1000,0),usableSources:clamp(rawStats.usableSources,0,1000,0),
+      primarySources:clamp(rawStats.primarySources,0,1000,0),corroboratedSources:clamp(rawStats.corroboratedSources,0,1000,0),elapsedMs:clamp(rawStats.elapsedMs,0,3600000,0)
+    };
     return {
       ...DEFAULT_MARKET_STATE,icps,signals,researchQueries,researchResults,opportunities,researchSourceStatus,
       researchStatus:allowed.has(input.researchStatus)?input.researchStatus:"idle",
+      researchMode:input.researchMode==="deep"?"deep":"quick",researchRunId:clean(input.researchRunId),researchProgress,researchStats,researchStopReason:clean(input.researchStopReason),
       lastResearchAt:clean(input.lastResearchAt),strategyApproved:Boolean(input.strategyApproved),strategyApprovedAt:clean(input.strategyApprovedAt)
     };
   }
 
-  return {DEFAULT_MARKET_STATE,effectiveResearchMarkets,buildIcpCandidates,normalizeSignals,addCustomSignal,buildResearchQueries,normalizeSearchResults,mergeResearchResults,buildMarketOpportunities,normalizeMarketState,splitList};
+  return {DEFAULT_MARKET_STATE,effectiveResearchMarkets,buildIcpCandidates,normalizeSignals,addCustomSignal,buildResearchQueries,normalizeSearchResults,mergeResearchResults,scoreEvidenceQuality,buildMarketOpportunities,normalizeMarketState,splitList};
 });
