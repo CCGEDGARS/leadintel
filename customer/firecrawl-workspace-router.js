@@ -14,11 +14,18 @@ function rewriteTarget(input){
   const {authenticated,workspace}=workspaceContext();if(!authenticated)return null;
   return `${API_BASE}/api/integrations/services/firecrawl/${kind}?workspace_id=${encodeURIComponent(workspace.id)}`;
 }
+function retryableStatus(status){return status===408||status===429||status>=500;}
 async function routedFetch(input,options={}){
   const target=rewriteTarget(input);if(!target)return originalFetch(input,options);
-  return originalFetch(target,{...options,credentials:'include',headers:{Accept:'application/json',...(options.headers||{})}});
+  try{
+    const response=await originalFetch(target,{...options,credentials:'include',headers:{Accept:'application/json',...(options.headers||{})}});
+    if(retryableStatus(response.status))return originalFetch(input,options);
+    return response;
+  }catch(error){
+    return originalFetch(input,options);
+  }
 }
 if(!window.__leadintelFirecrawlWorkspaceRouterInstalled){window.__leadintelFirecrawlWorkspaceRouterInstalled=true;window.fetch=routedFetch;}
-window.LeadIntelFirecrawlRouter={rewriteTarget,workspaceContext};
+window.LeadIntelFirecrawlRouter={rewriteTarget,workspaceContext,retryableStatus};
 
-export {rewriteTarget,workspaceContext};
+export {rewriteTarget,workspaceContext,retryableStatus};
