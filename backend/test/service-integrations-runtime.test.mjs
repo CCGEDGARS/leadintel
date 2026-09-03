@@ -98,3 +98,30 @@ sqliteTest('Firecrawl research falls back to managed proxy when customer key is 
     assert.equal(response.status,200);assert.equal(calls.length,1);assert.equal(calls[0].url,'https://managed.example.test/firecrawl-search');assert.equal(Boolean(calls[0].options.headers.Authorization),false);
   }finally{globalThis.fetch=originalFetch;}
 });
+
+sqliteTest('website scrape survives a dead managed Firecrawl route by using a bounded direct public-page fallback',async()=>{
+  const {env,token}=await fixture('owner');const originalFetch=globalThis.fetch;const calls=[];
+  globalThis.fetch=async (url,options={})=>{
+    const target=String(url);calls.push({url:target,options});
+    if(target==='https://managed.example.test/firecrawl-scrape')return new Response(JSON.stringify({error:'Route not found'}),{status:404,headers:{'Content-Type':'application/json'}});
+    if(target==='https://www.ajprodukti.lv/')return new Response('<!doctype html><html><head><title>AJ Produkti</title><meta name="description" content="Workplace equipment"></head><body><h1>AJ Produkti</h1><p>Biroja mēbeles un darba vides aprīkojums.</p></body></html>',{status:200,headers:{'Content-Type':'text/html; charset=utf-8','Content-Length':'208'}});
+    throw new Error(`Unexpected fetch ${target}`);
+  };
+  try{
+    const response=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/scrape?workspace_id=w1',{method:'POST',token,body:{url:'https://www.ajprodukti.lv',formats:['markdown'],onlyMainContent:true}}),env,{});
+    assert.equal(response.status,200);const result=await payload(response);
+    assert.equal(result.success,true);assert.match(result.data.markdown,/AJ Produkti/);assert.match(result.data.markdown,/Biroja mēbeles/);
+    assert.equal(result.data.metadata.title,'AJ Produkti');assert.equal(result.data.metadata.source,'direct-fallback');
+    assert.deepEqual(calls.map(row=>row.url),['https://managed.example.test/firecrawl-scrape','https://www.ajprodukti.lv/']);
+  }finally{globalThis.fetch=originalFetch;}
+});
+
+sqliteTest('direct website fallback refuses local or private-network targets',async()=>{
+  const {env,token}=await fixture('owner');const originalFetch=globalThis.fetch;const calls=[];
+  globalThis.fetch=async (url,options={})=>{calls.push({url:String(url),options});return new Response(JSON.stringify({error:'Route not found'}),{status:404,headers:{'Content-Type':'application/json'}});};
+  try{
+    const response=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/scrape?workspace_id=w1',{method:'POST',token,body:{url:'http://127.0.0.1/admin',formats:['markdown']}}),env,{});
+    assert.equal(response.status,400);const result=await payload(response);assert.match(result.error,/public research URL/i);
+    assert.equal(calls.length,0,'private-network URL must be rejected before any outbound request');
+  }finally{globalThis.fetch=originalFetch;}
+});

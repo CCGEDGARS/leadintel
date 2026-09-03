@@ -15,7 +15,7 @@ const extension=fs.existsSync(extensionPath)?fs.readFileSync(extensionPath,'utf8
 const extensionCss=fs.existsSync(extensionCssPath)?fs.readFileSync(extensionCssPath,'utf8'):'';
 
 test('Customer V2 loads the proven AI Settings plus the customer-owned Apollo and Firecrawl extension',()=>{
-  assert.match(processMap,/import ['"]\.\/ai-settings\.js\?v=20260902-integration-control-centre-v1['"]/);
+  assert.match(processMap,/import ['"]\.\/ai-settings\.js\?v=20260903-provider-status-clarity-v1['"]/);
   assert.match(processMap,/import ['"]\.\/service-settings-extension\.js\?v=20260902-customer-owned-integrations-v2['"]/);
   assert.equal(fs.existsSync(jsPath),true,'ai-settings.js must exist');
   assert.equal(fs.existsSync(extensionPath),true,'service-settings-extension.js must exist');
@@ -33,8 +33,18 @@ test('AI Settings supports status, test-and-save, activation and disconnect thro
   assert.match(js,/method:'POST'/);
   assert.match(js,/method:'DELETE'/);
   assert.match(js,/Test & save/);
-  assert.match(js,/Use this provider/);
+  assert.match(js,/Set as active/);
   assert.match(js,/Disconnect/);
+});
+
+test('AI provider status clearly separates a connected credential from the active provider',()=>{
+  assert.match(js,/Connected means the API key is verified/i,'settings copy must define connected');
+  assert.match(js,/Active means LeadIntel is currently using that provider/i,'settings copy must define active');
+  assert.match(js,/configured\?'Connected':'Not connected'/,'configured non-active providers must be labelled Connected, not Verified');
+  assert.match(js,/Set as active/,'activation control must describe the state change explicitly');
+  assert.match(js,/Active provider/,'summary or button must name the active-provider concept explicitly');
+  assert.doesNotMatch(js,/configured\?'Verified':'Not connected'/,'Verified must not be used as the card state for a merely connected provider');
+  assert.match(css,/\.ai-provider-status\.connected/,'connected providers must have a distinct badge treatment');
 });
 
 test('Apollo and Firecrawl use owner-controlled workspace service routes and editable customer-key fields',()=>{
@@ -63,7 +73,7 @@ test('raw API keys are transient browser values and never persisted by either se
 });
 
 test('settings assets are cache-busted and controls have individual borders and focus treatment',()=>{
-  assert.match(js,/SETTINGS_VERSION='20260902-integration-control-centre-v1'/);
+  assert.match(js,/SETTINGS_VERSION='20260903-provider-status-clarity-v1'/);
   assert.match(extension,/SETTINGS_VERSION='20260902-customer-owned-integrations-v2'/);
   assert.match(js,/link\.href=`ai-settings\.css\?v=\$\{SETTINGS_VERSION\}`/);
   assert.match(extension,/link\.href=`service-settings-extension\.css\?v=\$\{SETTINGS_VERSION\}`/);
