@@ -35,7 +35,7 @@ test('add market has a capture-phase final safety gate for URL/domain autofill',
   assert.match(helper,/preventDefault\(\)/);
   assert.match(helper,/stopImmediatePropagation\(\)/);
   assert.match(helper,/Use the Main company website field above/);
-  assert.match(helper,/addEventListener\("click",[^\n]+true\)/,'safety gate must run before the app click handler');
+  assert.match(helper,/root\.document\.addEventListener\("click",[\s\S]+?\},true\);/,'safety gate must run before the app click handler');
 });
 
 test('process shell loads the v3 custom market autofill guard',()=>{
