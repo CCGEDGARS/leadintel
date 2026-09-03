@@ -11,9 +11,10 @@
   const RESEARCH_META_KEY="leadintel_customer_v2_research_meta_v1";
   const DISCOVERY_META_KEY="leadintel_customer_v2_discovery_meta";
   const FIRECRAWL_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
-  const RELEASE="20260826-website-activation-v2";
+  const RELEASE="20260903-activation-error-v1";
   const MAX_SOURCE_CHARS=30000;
   let running=false;
+  let activationError="";
 
   function clean(value){return String(value??"").replace(/\s+/g," ").trim();}
   function normalizeUrl(value){
@@ -43,16 +44,7 @@
     const base=state&&typeof state==="object"&&!Array.isArray(state)?state:{};const websiteSource=normalizedSource(source);
     if(!websiteSource)return {...base};
     const {url,title,description,text}=websiteSource;
-    return {
-      ...base,
-      step:1,
-      website:url,
-      websiteActivation:{status:"active",url,title,description,activatedAt:clean(activatedAt),contentChars:text.length},
-      scrapedSources:[{type:"website",url,title,text,status:"ready"}],
-      profile:null,
-      approved:false,
-      market:{}
-    };
+    return {...base,step:1,website:url,websiteActivation:{status:"active",url,title,description,activatedAt:clean(activatedAt),contentChars:text.length},scrapedSources:[{type:"website",url,title,text,status:"ready"}],profile:null,approved:false,market:{}};
   }
   function buildActivationRecord(source={},activatedAt=new Date().toISOString()){
     const websiteSource=normalizedSource(source);if(!websiteSource)return {status:"inactive",url:"",source:null};
@@ -84,6 +76,7 @@
     const button=root.document.getElementById("activate-website"),website=visibleWebsite(),record=readActivationRecord();
     if(button&&!running){button.disabled=!website;button.textContent=isActivationRecordActive(record,website)?"RE-ACTIVATE":"ACTIVATE WEBSITE";}
     if(running)return;
+    if(activationError){setStatus("error",activationError);return;}
     if(!website){setStatus("idle","Enter your company website, then activate it.");return;}
     if(isActivationRecordActive(record,website)){const label=record.title?` · ${record.title}`:"";setStatus("active",`✓ Website active${label} · ${formatChars(record.contentChars)} loaded`);return;}
     setStatus("idle",record?.status==="active"?"Website changed — activate this URL to replace the current source.":"Not activated yet — connect the website to load company evidence.");
@@ -111,16 +104,16 @@
   }
   async function activateWebsite(){
     if(running)return false;const url=visibleWebsite(),button=root?.document?.getElementById("activate-website");
-    if(!url){setStatus("error","Enter a valid website URL first.");return false;}
-    running=true;if(button){button.disabled=true;button.textContent="ACTIVATING…";}setStatus("loading","Connecting to the website and loading public company evidence…");
+    if(!url){activationError="Enter a valid website URL first.";setStatus("error",activationError);return false;}
+    activationError="";running=true;if(button){button.disabled=true;button.textContent="ACTIVATING…";}setStatus("loading","Connecting to the website and loading public company evidence…");
     try{
       const source=await scrapeWebsite(url),at=new Date().toISOString(),record=buildActivationRecord(source,at),next=buildActivatedState(readState(),source,at);
       writeActivationRecord(record);writeState(next);root.localStorage.removeItem(RESEARCH_META_KEY);root.localStorage.removeItem(DISCOVERY_META_KEY);
       try{root.dispatchEvent(new CustomEvent("leadintel:website-activated",{detail:{website:record.url,activation:record}}));}catch{}
       returnToWebsiteStep();
       try{await root.LeadIntelServerBridge?.saveNow?.();}catch{}
-      setStatus("active",`✓ Website active · ${record.title||new URL(record.url).hostname} · ${formatChars(record.contentChars)} loaded`);return true;
-    }catch(error){setStatus("error",`Activation failed · ${clean(error?.message)||"Website could not be read"}`);return false;}
+      activationError="";setStatus("active",`✓ Website active · ${record.title||new URL(record.url).hostname} · ${formatChars(record.contentChars)} loaded`);return true;
+    }catch(error){activationError=`Activation failed · ${clean(error?.message)||"Website could not be read"}`;setStatus("error",activationError);return false;}
     finally{running=false;render();}
   }
   function guardProtectedNavigation(event){
@@ -129,11 +122,12 @@
     if(!isCurrentWebsiteActive()){event.preventDefault();event.stopImmediatePropagation();setStatus("error","Activate your website first. LeadIntel must successfully read it before continuing.");return;}
     if(target.id==="to-questionnaire")syncActivationIntoWorkspace();
   }
+  function clearErrorAndRender(){activationError="";render();}
   function install(){
     if(root.__leadintelWebsiteActivationInstalled)return;root.__leadintelWebsiteActivationInstalled=true;
-    const bind=()=>{ensureActivationUi();const button=root.document.getElementById("activate-website"),input=root.document.getElementById("company-website");button?.addEventListener("click",activateWebsite);input?.addEventListener("input",render);input?.addEventListener("change",render);root.document.addEventListener("click",guardProtectedNavigation,true);render();};
+    const bind=()=>{ensureActivationUi();const button=root.document.getElementById("activate-website"),input=root.document.getElementById("company-website");button?.addEventListener("click",activateWebsite);input?.addEventListener("input",clearErrorAndRender);input?.addEventListener("change",clearErrorAndRender);root.document.addEventListener("click",guardProtectedNavigation,true);render();};
     if(root.document.readyState==="loading")root.document.addEventListener("DOMContentLoaded",bind,{once:true});else bind();
-    root.addEventListener("pageshow",render);root.addEventListener("leadintel:website-synced",render);root.addEventListener("leadintel:website-activated",render);
+    root.addEventListener("pageshow",render);root.addEventListener("leadintel:website-synced",clearErrorAndRender);root.addEventListener("leadintel:website-activated",render);
   }
 
   return {STORAGE_KEY,ACTIVATION_KEY,RESEARCH_META_KEY,DISCOVERY_META_KEY,normalizeUrl,getActivatedSource,isWebsiteActive,buildActivatedState,buildActivationRecord,isActivationRecordActive,activationMarkup,readActivationRecord,isCurrentWebsiteActive,ensureActivationUi,syncActivationIntoWorkspace,returnToWebsiteStep,scrapeWebsite,activateWebsite,render,install};
