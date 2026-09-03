@@ -4,6 +4,9 @@ import {importAesKey,encryptSecret,decryptSecret} from './oauth.js';
 const PROVIDERS=Object.freeze(['apollo','firecrawl']);
 const PROVIDER_NAMES=Object.freeze({apollo:'Apollo.io',firecrawl:'Firecrawl'});
 const FIRECRAWL_PROXY_URL='https://apollo-proxy.edgars-7e7.workers.dev';
+const MAX_DIRECT_PAGE_BYTES=2_000_000;
+const MAX_DIRECT_PAGE_CHARS=60_000;
+const MAX_DIRECT_REDIRECTS=4;
 const json=(value,status=200,headers={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...headers}});
 const error=(message,status,headers)=>json({error:message},status,headers);
 const uuid=()=>crypto.randomUUID();
@@ -47,6 +50,65 @@ async function verifyManagedFirecrawl(env){
   const base=clean(env.FIRECRAWL_PROXY_URL||FIRECRAWL_PROXY_URL,500);
   try{const response=await fetch(base,{method:'OPTIONS'});return {ok:response.ok,status:response.status};}catch{return {ok:false,status:0};}
 }
+
+function privateIpv4(hostname){
+  const parts=hostname.split('.');if(parts.length!==4||parts.some(part=>!/^\d+$/.test(part)||Number(part)>255))return false;
+  const [a,b]=parts.map(Number);
+  return a===0||a===10||a===127||(a===100&&b>=64&&b<=127)||(a===169&&b===254)||(a===172&&b>=16&&b<=31)||(a===192&&b===168)||(a===198&&(b===18||b===19))||a>=224;
+}
+function privateIpv6(hostname){
+  const host=hostname.replace(/^\[|\]$/g,'').toLowerCase();
+  if(!host.includes(':'))return false;
+  if(host==='::'||host==='::1')return true;
+  if(/^f[cd]/.test(host)||/^fe[89ab]/.test(host))return true;
+  const mapped=host.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/);return Boolean(mapped&&privateIpv4(mapped[1]));
+}
+function publicResearchUrl(value,base){
+  let url;try{url=base?new URL(String(value||''),base):new URL(String(value||''));}catch{return null;}
+  if(!['http:','https:'].includes(url.protocol)||url.username||url.password)return null;
+  if(url.port&&!['80','443'].includes(url.port))return null;
+  const hostname=url.hostname.replace(/^\[|\]$/g,'').replace(/\.$/,'').toLowerCase();
+  if(!hostname||hostname==='localhost'||hostname.endsWith('.localhost')||hostname.endsWith('.local')||hostname.endsWith('.internal')||hostname.endsWith('.lan')||privateIpv4(hostname)||privateIpv6(hostname))return null;
+  return url;
+}
+function decodeHtmlEntities(value){
+  return String(value||'').replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'").replace(/&lt;/gi,'<').replace(/&gt;/gi,'>').replace(/&#(\d+);/g,(_,n)=>String.fromCodePoint(Math.min(1114111,Number(n)||32))).replace(/&#x([0-9a-f]+);/gi,(_,n)=>String.fromCodePoint(Math.min(1114111,parseInt(n,16)||32)));
+}
+function htmlText(html){
+  const withoutNoise=String(html||'').replace(/<!--[\s\S]*?-->/g,' ').replace(/<(script|style|noscript|svg|template)\b[^>]*>[\s\S]*?<\/\1>/gi,' ');
+  return decodeHtmlEntities(withoutNoise.replace(/<(br|hr)\b[^>]*>/gi,'\n').replace(/<\/(p|div|section|article|main|header|footer|nav|li|h[1-6]|tr)>/gi,'\n').replace(/<[^>]+>/g,' ')).replace(/[ \t]+/g,' ').replace(/\s*\n\s*/g,'\n').replace(/\n{3,}/g,'\n\n').trim().slice(0,MAX_DIRECT_PAGE_CHARS);
+}
+function htmlMeta(html,name){
+  const source=String(html||'');
+  if(name==='title'){const match=source.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);return clean(decodeHtmlEntities(match?.[1]||''),180);}
+  const tags=source.match(/<meta\b[^>]*>/gi)||[];
+  for(const tag of tags){
+    if(!new RegExp(`(?:name|property)\\s*=\\s*["'](?:${name}|og:${name})["']`,'i').test(tag))continue;
+    const content=tag.match(/content\s*=\s*["']([^"']*)["']/i);if(content)return clean(decodeHtmlEntities(content[1]),500);
+  }
+  return '';
+}
+async function fetchDirectPublicPage(value){
+  let current=publicResearchUrl(value);if(!current)throw new Error('A valid public research URL is required');
+  for(let redirects=0;redirects<=MAX_DIRECT_REDIRECTS;redirects++){
+    const response=await fetch(current.href,{method:'GET',headers:{Accept:'text/html,application/xhtml+xml,text/plain;q=0.8,*/*;q=0.1','User-Agent':'LeadIntel/1.0 (+https://leadintel.ccgroup.lv)'},redirect:'manual'});
+    if(response.status>=300&&response.status<400){
+      const location=response.headers.get('location');if(!location)throw new Error(`Website redirect failed (${response.status})`);
+      const next=publicResearchUrl(location,current.href);if(!next)throw new Error('Website redirected to a non-public URL');
+      current=next;continue;
+    }
+    if(!response.ok)throw new Error(`Website returned ${response.status}`);
+    const contentType=(response.headers.get('content-type')||'').toLowerCase();
+    if(contentType&&!contentType.includes('text/html')&&!contentType.includes('application/xhtml+xml')&&!contentType.includes('text/plain'))throw new Error('Website did not return readable text');
+    const declared=Number(response.headers.get('content-length')||0);if(declared>MAX_DIRECT_PAGE_BYTES)throw new Error('Website page is too large to read safely');
+    const raw=await response.text();if(new TextEncoder().encode(raw).byteLength>MAX_DIRECT_PAGE_BYTES)throw new Error('Website page is too large to read safely');
+    const text=contentType.includes('text/plain')?clean(raw,MAX_DIRECT_PAGE_CHARS):htmlText(raw);if(!text)throw new Error('No readable website content was returned');
+    const title=contentType.includes('text/plain')?'':htmlMeta(raw,'title');const description=contentType.includes('text/plain')?'':htmlMeta(raw,'description');
+    return {success:true,data:{markdown:text,metadata:{title:title||current.hostname,description,sourceURL:current.href,url:current.href,statusCode:response.status,source:'direct-fallback'}}};
+  }
+  throw new Error('Website redirected too many times');
+}
+function retryableFirecrawlStatus(status,{managed=false}={}){return status===408||status===429||status>=500||(managed&&status===404);}
 
 export async function resolveWorkspaceServiceCredential(env,workspaceId,provider){
   const normalized=normalizeProvider(provider);if(!normalized||!workspaceId)return {provider:normalized,apiKey:'',source:'none',configured:false,row:null};
@@ -96,10 +158,10 @@ async function forwardFirecrawl(request,env,cors,workspaceId,kind){
   const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
   const body=await request.json().catch(()=>null);if(!body||typeof body!=='object')return error('Firecrawl request payload is required',400,cors);
   const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'firecrawl');
-  let target='',payload={};
+  let target='',payload={},researchUrl=null;
   if(kind==='scrape'){
-    let url;try{url=new URL(String(body.url||''));}catch{return error('A valid research URL is required',400,cors);}if(!['http:','https:'].includes(url.protocol))return error('A valid research URL is required',400,cors);
-    payload={url:url.href,formats:['markdown'],onlyMainContent:body.onlyMainContent!==false,timeout:Math.max(5000,Math.min(60000,Number(body.timeout)||30000))};
+    researchUrl=publicResearchUrl(body.url);if(!researchUrl)return error('A valid public research URL is required',400,cors);
+    payload={url:researchUrl.href,formats:['markdown'],onlyMainContent:body.onlyMainContent!==false,timeout:Math.max(5000,Math.min(60000,Number(body.timeout)||30000))};
     target=credential.source==='customer'?'https://api.firecrawl.dev/v2/scrape':`${clean(env.FIRECRAWL_PROXY_URL||FIRECRAWL_PROXY_URL,500)}/firecrawl-scrape`;
   }else{
     const rawQuery=String(body.query||'').trim();if(!rawQuery||rawQuery.length>600)return error('Firecrawl search query is invalid',400,cors);const query=clean(rawQuery,600);
@@ -108,8 +170,20 @@ async function forwardFirecrawl(request,env,cors,workspaceId,kind){
     target=credential.source==='customer'?'https://api.firecrawl.dev/v2/search':`${clean(env.FIRECRAWL_PROXY_URL||FIRECRAWL_PROXY_URL,500)}/firecrawl-search`;
   }
   const headers={'Content-Type':'application/json',Accept:'application/json'};if(credential.source==='customer')headers.Authorization=`Bearer ${credential.apiKey}`;
-  const response=await fetch(target,{method:'POST',headers,body:JSON.stringify(payload)});const upstream=await response.json().catch(()=>({}));
-  if(!response.ok)return error(upstream.error||`Firecrawl ${kind} failed (${response.status})`,response.status>=400&&response.status<600?response.status:502,cors);
+  let response;try{response=await fetch(target,{method:'POST',headers,body:JSON.stringify(payload)});}catch(cause){
+    if(kind==='scrape'&&researchUrl){
+      try{const direct=await fetchDirectPublicPage(researchUrl.href);await audit(env,{workspaceId,userId:access.user.id,type:'service.firecrawl_scrape',provider:'firecrawl',metadata:{source:'direct-fallback',upstream_source:credential.source,upstream_status:0}});return json(direct,200,cors);}catch{}
+    }
+    return error(`Firecrawl ${kind} is temporarily unavailable`,502,cors);
+  }
+  const upstream=await response.json().catch(()=>({}));
+  if(!response.ok){
+    const canFallback=kind==='scrape'&&researchUrl&&retryableFirecrawlStatus(response.status,{managed:credential.source==='managed'});
+    if(canFallback){
+      try{const direct=await fetchDirectPublicPage(researchUrl.href);await audit(env,{workspaceId,userId:access.user.id,type:'service.firecrawl_scrape',provider:'firecrawl',metadata:{source:'direct-fallback',upstream_source:credential.source,upstream_status:response.status}});return json(direct,200,cors);}catch{}
+    }
+    return error(upstream.error||`Firecrawl ${kind} failed (${response.status})`,response.status>=400&&response.status<600?response.status:502,cors);
+  }
   if(credential.source==='customer')await env.DB.prepare(`UPDATE workspace_service_integrations SET last_used_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider='firecrawl'`).bind(workspaceId).run();
   await audit(env,{workspaceId,userId:access.user.id,type:`service.firecrawl_${kind}`,provider:'firecrawl',metadata:{source:credential.source}});
   if(kind==='search'&&credential.source==='customer'&&Array.isArray(upstream?.data?.web))return json({success:true,data:upstream.data.web},200,cors);
