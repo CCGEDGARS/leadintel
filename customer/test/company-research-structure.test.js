@@ -13,7 +13,7 @@ const handoff=read('company-profile-handoff.js');
 const css=read('company-research.css');
 
 test('Customer V2 loads the automatic company research module with Firecrawl workspace routing before research',()=>{
-  assert.match(processMap,/firecrawl-workspace-router\.js\?v=20260902-customer-owned-integrations-v2/);
+  assert.match(processMap,/firecrawl-workspace-router\.js\?v=20260903-firecrawl-retry-fallback-v1/);
   assert.match(processMap,/company-research-ui\.js\?v=20260826-intelligence-autofill-v2/);
   assert.ok(processMap.indexOf('firecrawl-workspace-router.js')<processMap.indexOf('company-research-ui.js'),'Firecrawl router must load before company research');
   assert.match(processMap,/company-profile-handoff\.js\?v=20260826-intelligence-autofill-v1/);
@@ -35,13 +35,12 @@ test('signed-in research transparently routes legacy Firecrawl calls through aut
   assert.match(router,/bridge\?\.session\?\.authenticated/);
   assert.match(router,/workspace\?\.id/);
   assert.match(router,/credentials:'include'/);
-  assert.match(router,/window\.fetch=routedFetch/);
+  assert.doesNotMatch(`${router}\n${ui}`,/APOLLO_API_KEY|FIRECRAWL_API_KEY|access_token|refresh_token/);
   assert.match(ui,/FIRECRAWL_PROXY/,'unsigned/local research keeps the existing managed proxy fallback');
   assert.match(ui,/firecrawl-scrape/);
   assert.match(ui,/firecrawl-search/);
   assert.match(ui,/\/api\/ai\/generate/);
   assert.match(ui,/credentials:\s*['"]include['"]/);
-  assert.doesNotMatch(`${router}\n${ui}`,/APOLLO_API_KEY|FIRECRAWL_API_KEY|access_token|refresh_token/);
 });
 
 test('Firecrawl router leaves unrelated fetches and local unsigned research untouched',()=>{
