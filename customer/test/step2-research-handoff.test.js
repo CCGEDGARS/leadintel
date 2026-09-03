@@ -5,12 +5,14 @@ const path=require('node:path');
 
 const root=path.join(__dirname,'..');
 const read=name=>fs.readFileSync(path.join(root,name),'utf8');
-const app=read('app.js');
+const persistence=read('workspace-persistence.js');
 const researchUi=read('company-research-ui.js');
+const profileHandoff=read('company-profile-handoff.js');
 
-test('company research hands Step 2 into the live app without reload or implicit server save',()=>{
-  assert.doesNotMatch(researchUi,/LeadIntelServerBridge\?\.saveNow\?\.\(/,'research must not auto-save the workspace behind the explicit Save workspace boundary');
-  assert.doesNotMatch(researchUi,/location\.reload\s*\(/,'research completion must never reload and destroy an unsaved Step 2 draft');
-  assert.match(researchUi,/dispatchEvent\(new CustomEvent\(['"]leadintel:company-research-complete['"]/,'research must publish an in-page completion event');
-  assert.match(app,/addEventListener\(['"]leadintel:company-research-complete['"][\s\S]*state\s*=\s*loadState\(\)[\s\S]*syncInputsFromState\(\)[\s\S]*setStep\(2\)/,'the main app must reload the newly researched local state into memory before opening Step 2');
+test('internal Step 2 and Step 3 reloads preserve the current local draft instead of restoring or clearing older state',()=>{
+  assert.match(researchUi,/next\.step=2;writeState\(next\)/,'company research writes the Step 2 draft before its internal reload');
+  assert.match(profileHandoff,/state\.step=\[3,4\][\s\S]*writeState\(state\)/,'profile handoff writes the researched profile before its internal reload');
+  assert.match(persistence,/function\s+prepareForLoad\s*\(\)\{\s*if\(!isExplicitlySaved\(\)\)return false;\s*if\(hasMeaningfulWorkspaceData\(\)\)return false;\s*return restoreSavedSnapshot\(\);\s*\}/,'ordinary reload must preserve meaningful local draft data; a saved snapshot is only a recovery fallback when current workspace data is missing');
+  const prepare=persistence.match(/function\s+prepareForLoad\s*\(\)\{[\s\S]*?\n\s*\}/)?.[0]||'';
+  assert.doesNotMatch(prepare,/clearWorkspaceData\(/,'startup must never erase a current draft merely because Save workspace was not pressed');
 });
