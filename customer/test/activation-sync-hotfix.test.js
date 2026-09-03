@@ -20,6 +20,15 @@ test('workspace persistence boundary loads before server bridge and prevents leg
   assert.match(persistence,/if\(!isExplicitlySaved\(\)\)[\s\S]*clearWorkspaceData\(\)/);
 });
 
+test('explicit persistence boundary allows a confirmed workspace reset to clear server state',()=>{
+  assert.match(persistence,/function\s+handleResetClick\s*\(/);
+  assert.match(persistence,/button\.dataset\.resetArmed!==['"]true['"]/);
+  assert.match(persistence,/sessionStorage\?\.setItem\(FORCE_RESET_KEY,['"]1['"]\)/);
+  assert.match(persistence,/clearExplicitSave\(\)/);
+  assert.match(persistence,/addEventListener\?\.\(['"]click['"],handleResetClick,true\)/);
+  assert.match(persistence,/forceReset[\s\S]*meta\.persistence=\{explicit_saved:false\}/);
+});
+
 test('website activation keeps a real failure visible after the request finishes',()=>{
   assert.match(activation,/let\s+activationError\s*=\s*['"]['"]/);
   assert.match(activation,/activationError\s*=\s*`Activation failed/);
