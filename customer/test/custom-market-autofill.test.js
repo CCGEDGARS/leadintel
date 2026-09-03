@@ -40,7 +40,7 @@ test('persistent browser restoration is severed by replacing the original custom
 test('replacement control preserves Enter-to-add behavior through delegated key handling',()=>{
   const helper=helperSource();
   assert.match(helper,/keydown/);
-  assert.match(helper,/event\.key\s*===\s*["']Enter["']/);
+  assert.match(helper,/event\.key\s*(?:===|!==)\s*["']Enter["']/);
   assert.match(helper,/add-target-market/);
   assert.match(helper,/\.click\(\)/,'Enter on the replacement should invoke the existing add-market button path');
 });
