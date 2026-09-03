@@ -47,11 +47,15 @@ test('Discovery empty state is compact and the primary action dominates',()=>{
   assert.match(discovery,/\.company-score-legend\{[^}]*background:transparent/s);
 });
 
-test('target market release assets are versioned together so browsers cannot mix onboarding generations',()=>{
+test('target market shell preserves stable assets while research assets use the new cache generation',()=>{
   const html=read('index.html');
-  const version='20260826-target-market-v1';
-  for(const asset of ['styles.css','market.css','premium.css','market-selector.css','profile-engine.js','market-engine.js','discovery-engine.js','app.js','process-map.js','discovery-ui.js']){
-    assert.match(html,new RegExp(asset.replace('.','\\.')+`\\?v=${version}`));
+  const stable='20260826-target-market-v1';
+  const research='20260903-research-modes-v1';
+  for(const asset of ['styles.css','premium.css','market-selector.css','profile-engine.js','discovery-engine.js','process-map.js','discovery-ui.js']){
+    assert.match(html,new RegExp(asset.replace('.','\\.')+`\\?v=${stable}`));
+  }
+  for(const asset of ['market.css','market-engine.js','app.js']){
+    assert.match(html,new RegExp(asset.replace('.','\\.')+`\\?v=${research}`));
   }
 });
 
