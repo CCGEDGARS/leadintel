@@ -54,6 +54,6 @@ test('add market has a capture-phase final safety gate for URL/domain autofill',
   assert.match(helper,/root\.document\.addEventListener\("click",[\s\S]+?\},true\);/,'safety gate must run before the app click handler');
 });
 
-test('process shell loads the v4 custom market node-reset guard',()=>{
-  assert.match(processMap,/custom-market-input-hygiene\.js\?v=20260903-custom-market-node-reset-v4/);
+test('process shell loads the v5 password-manager-isolated custom market guard',()=>{
+  assert.match(processMap,/custom-market-input-hygiene\.js\?v=20260903-password-manager-isolation-v5/);
 });
