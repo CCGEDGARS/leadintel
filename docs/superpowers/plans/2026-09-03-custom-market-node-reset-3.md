@@ -1,1 +1,0 @@
-The v4 hotfix tests replacing the original custom-market DOM control to sever Chrome's restored/autofill rendering state.
