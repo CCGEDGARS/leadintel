@@ -31,7 +31,7 @@ test('Market, scripts, delivery and settings share the same readable scale',()=>
   const market=read('market.css'),outreach=read('outreach.css'),delivery=read('delivery.css'),settings=read('ai-settings.css');
   assert.match(market,/\.strategy-banner span\{[^}]*font:[^;}]*var\(--type-micro\)/s);
   assert.match(market,/\.evidence-links a small\{[^}]*font-size:var\(--type-meta\)/s);
-  assert.match(outreach,/\.dossier-card small\{[^}]*font-size:var\(--type-secondary\)/s);
+  assert.match(outreach,/\.dossier-card small\{[^}]*font-size:var\(--type-meta\)/s);
   assert.match(outreach,/\.draft-label\{[^}]*font-size:var\(--type-secondary\)/s);
   assert.match(delivery,/\.delivery-control-grid label\{[^}]*font-size:var\(--type-secondary\)/s);
   assert.match(delivery,/\.activity-row small\{[^}]*font-size:var\(--type-meta\)/s);
