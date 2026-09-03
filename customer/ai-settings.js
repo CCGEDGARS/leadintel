@@ -1,6 +1,6 @@
 const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
 const FIRECRAWL_PROXY='https://apollo-proxy.edgars-7e7.workers.dev';
-const SETTINGS_VERSION='20260903-provider-status-clarity-v1';
+const SETTINGS_VERSION='20260903-password-manager-isolation-v1';
 const PROVIDERS=Object.freeze([
   {provider:'openai',name:'OpenAI',model:'gpt-5.6',placeholder:'sk-…',hint:'Responses API'},
   {provider:'anthropic',name:'Anthropic',model:'claude-sonnet-4-6',placeholder:'sk-ant-…',hint:'Messages API'},
@@ -14,6 +14,11 @@ const providerErrors=Object.create(null);
 function bridge(){return window.LeadIntelServerBridge||null;}
 function workspace(){return bridge()?.workspace||null;}
 function signedIn(){return Boolean(bridge()?.session?.authenticated&&workspace()?.id);}
+function settingsDrawerOpen(){const drawer=document.getElementById('ai-settings-drawer');return Boolean(drawer&&!drawer.hidden);}
+function unmountCredentialControls(){
+  document.getElementById('ai-provider-grid')?.replaceChildren();
+  document.querySelectorAll('[data-service-extension="1"]').forEach(node=>node.remove());
+}
 function esc(value){return String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));}
 function apiUrl(path){const ws=workspace();const join=path.includes('?')?'&':'?';return `${API_BASE}${path}${join}workspace_id=${encodeURIComponent(ws?.id||'')}`;}
 async function api(path,options={}){
@@ -70,6 +75,7 @@ function signInFromSettings(){
 }
 function render(){
   const grid=document.getElementById('ai-provider-grid');if(!grid)return;
+  if(!settingsDrawerOpen()){unmountCredentialControls();return;}
   const active=status.providers.find(item=>item.active);const connectedCount=status.providers.filter(item=>item.configured).length;
   const summary=document.getElementById('ai-engine-summary');
   if(summary){
@@ -90,7 +96,7 @@ function providerCard(config,current){
   const usageMeta=current?.last_used_at?` · last used ${esc(formatDateTime(current.last_used_at))}`:'';
   return `<article class="ai-provider-card ${active?'active':''}" data-provider-card="${config.provider}">
     <div class="ai-provider-head"><div><span class="ai-provider-name">${esc(config.name)}</span><small>${esc(config.hint)} · Your API key · billed by provider</small></div><span class="ai-provider-status ${active?'active':configured?'connected':''}">${stateLabel}</span></div>
-    <label class="ai-settings-field">API key<input data-ai-key="${config.provider}" type="password" autocomplete="off" spellcheck="false" placeholder="${esc(config.placeholder)}" ${disabled?'disabled':''}></label>
+    <label class="ai-settings-field">API key<input data-ai-key="${config.provider}" type="password" autocomplete="new-password" spellcheck="false" data-form-type="other" data-lpignore="true" data-1p-ignore="true" autocapitalize="none" placeholder="${esc(config.placeholder)}" ${disabled?'disabled':''}></label>
     <label class="ai-settings-field">Model<input data-ai-model="${config.provider}" type="text" value="${esc(model)}" autocomplete="off" ${disabled?'disabled':''}></label>
     <div class="ai-key-meta">${configured?`Saved key ${esc(current.key_hint||'')} · API key verified ${esc(formatDate(current.verified_at))}${usageMeta}`:'No credential stored yet.'}</div>
     <div class="ai-provider-error" data-ai-error="${config.provider}" role="alert" ${providerError?'':'hidden'}>${esc(providerError)}</div>
@@ -135,9 +141,9 @@ function clearProviderError(provider){
 function openDrawer(){
   injectUi();const drawer=document.getElementById('ai-settings-drawer'),backdrop=document.getElementById('ai-settings-backdrop');
   if(drawer)drawer.hidden=false;if(backdrop)backdrop.hidden=false;document.body.classList.add('ai-settings-opened');
-  refreshAllStatus();setTimeout(()=>document.getElementById('close-settings')?.focus(),0);
+  render();refreshAllStatus();setTimeout(()=>document.getElementById('close-settings')?.focus(),0);
 }
-function closeDrawer(){const drawer=document.getElementById('ai-settings-drawer'),backdrop=document.getElementById('ai-settings-backdrop');if(drawer)drawer.hidden=true;if(backdrop)backdrop.hidden=true;document.body.classList.remove('ai-settings-opened');}
+function closeDrawer(){const drawer=document.getElementById('ai-settings-drawer'),backdrop=document.getElementById('ai-settings-backdrop');if(drawer)drawer.hidden=true;if(backdrop)backdrop.hidden=true;unmountCredentialControls();document.body.classList.remove('ai-settings-opened');}
 function shouldOpenSettingsFromUrl(){return new URLSearchParams(window.location.search).get('settings')==='ai';}
 async function refreshStatus(){
   if(!signedIn()){status={role:'',providers:[]};render();return status;}
