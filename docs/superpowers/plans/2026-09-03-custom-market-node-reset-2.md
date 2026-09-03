@@ -1,1 +1,0 @@
-Temporary verification note for the custom market browser-restoration hotfix.
