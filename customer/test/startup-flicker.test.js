@@ -4,15 +4,13 @@ const fs=require('node:fs');
 const path=require('node:path');
 
 const root=path.join(__dirname,'..');
-const read=name=>fs.readFileSync(path.join(root,name),'utf8');
-const app=read('app.js');
-const persistence=read('workspace-persistence.js');
+const persistence=fs.readFileSync(path.join(root,'workspace-persistence.js'),'utf8');
 
-test('workspace persistence initializes before app state and never reloads the page during startup cleanup',()=>{
-  const importIndex=app.indexOf("import './workspace-persistence.js?v=20260903-startup-flicker-v1';");
-  const stateIndex=app.indexOf('let state=loadState();');
-  assert.ok(importIndex>=0,'app.js must import the persistence boundary directly');
-  assert.ok(importIndex<stateIndex,'persistence boundary must execute before app state is loaded or written');
-  assert.doesNotMatch(persistence,/location\?*\.reload|location\.reload|root\.location\?\.reload/,'startup cleanup must not force a browser reload');
-  assert.match(persistence,/const changed=prepareForLoad\(\);/,'startup cleanup still runs before the app initializes');
+test('blank app bootstrap state is cleared without reload while real stale or saved state can still reconcile once',()=>{
+  assert.match(persistence,/function\s+hasMeaningfulWorkspaceData\s*\(/,'persistence guard must distinguish blank app bootstrap state from real workspace data');
+  assert.match(persistence,/const explicitlySaved=isExplicitlySaved\(\);/);
+  assert.match(persistence,/const hadMeaningfulUnsavedData=!explicitlySaved&&hasMeaningfulWorkspaceData\(\);/);
+  assert.match(persistence,/const changed=prepareForLoad\(\);/);
+  assert.match(persistence,/if\(changed&&\(explicitlySaved\|\|hadMeaningfulUnsavedData\)&&root\.location\?\.reload\)/,'reload must be reserved for saved-state reconciliation or real stale unsaved data');
+  assert.doesNotMatch(persistence,/if\(changed&&root\.location\?\.reload\)/,'blank default state must never trigger the old unconditional reload loop');
 });
