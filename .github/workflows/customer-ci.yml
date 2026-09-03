@@ -79,8 +79,10 @@ jobs:
           node --check customer/company-research-ui.js
           node --check customer/company-profile-handoff.js
           node --check customer/state-budget.js
+          node --check customer/workspace-persistence.js
           node --check customer/website-input-sync.js
           node --check customer/website-activation.js
+          node --check customer/firecrawl-workspace-router.js
           node --check customer/crm-engine.js
           node --check customer/crm-ui.js
           node --check customer/app.js
