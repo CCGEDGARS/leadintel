@@ -23,8 +23,9 @@ test('workspace persistence boundary loads before server bridge and prevents leg
 test('website activation keeps a real failure visible after the request finishes',()=>{
   assert.match(activation,/let\s+activationError\s*=\s*['"]['"]/);
   assert.match(activation,/activationError\s*=\s*`Activation failed/);
-  assert.match(activation,/if\(activationError\)[\s\S]*setStatus\(['"]error['"]/);
-  assert.doesNotMatch(activation,/catch\(error\)[\s\S]{0,350}setStatus\(['"]error['"][\s\S]{0,350}finally\{running=false;render\(\);\}/);
+  assert.match(activation,/if\(activationError\)\{setStatus\(['"]error['"],activationError\);return;\}/);
+  assert.match(activation,/finally\{running=false;render\(\);\}/,'request cleanup may render only because render preserves activationError');
+  assert.match(activation,/function\s+clearErrorAndRender\(\)\{activationError=['"]['"];render\(\);\}/,'a new website edit explicitly clears the previous failure');
 });
 
 test('signed-in Firecrawl routing retries managed fallback only for retryable backend failures',()=>{
