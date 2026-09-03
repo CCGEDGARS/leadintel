@@ -29,7 +29,7 @@ body.ai-settings-opened{overflow:hidden}
 .ai-provider-name{font-size:17px;font-weight:700;letter-spacing:-.015em}
 .ai-provider-head small{font-size:11px;line-height:1.4}
 .ai-provider-status{flex:0 0 auto;padding:5px 9px;border:1px solid #d4dad6;border-radius:999px;font:600 9px/1.2 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.08em;color:#7b8782;background:#fafbf9}
-.ai-provider-status.verified{color:var(--ai-warn);border-color:#e4d6ad;background:#faf5e9}
+.ai-provider-status.connected{color:var(--ai-warn);border-color:#e4d6ad;background:#faf5e9}
 .ai-provider-status.active{color:var(--ai-green);border-color:#afd0c5;background:#eef7f3}
 .ai-settings-field{display:grid;gap:6px;margin-top:11px;font-size:12px;font-weight:700;color:#42534d}
 .ai-settings-field input{width:100%;min-height:44px;padding:10px 12px;border:1px solid #ccd5d0;border-radius:10px;background:#fcfdfb;color:var(--ai-ink);font:500 13px/1.3 'DM Sans',sans-serif;outline:none}
