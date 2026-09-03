@@ -5,8 +5,6 @@ const path=require('node:path');
 
 const root=path.join(__dirname,'..');
 const processMap=fs.readFileSync(path.join(root,'process-map.js'),'utf8');
-const index=fs.readFileSync(path.join(root,'index.html'),'utf8');
-const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
 
 function helperSource(){
   const helperPath=path.join(root,'custom-market-input-hygiene.js');
@@ -23,16 +21,21 @@ test('custom target market rejects browser-autofilled website/domain values',()=
   assert.match(helper,/addEventListener\(["']input["']/);
 });
 
-test('custom market field uses search semantics so browser URL autofill does not target it',()=>{
-  assert.match(index,/id="custom-target-market"[^>]*type="search"/,'custom market must not be a generic text field');
-  assert.match(index,/id="custom-target-market"[^>]*name="leadintel-market-definition"/,'custom market must have a unique non-URL field name');
-  assert.match(index,/id="custom-target-market"[^>]*autocomplete="off"/);
-  assert.match(index,/id="custom-target-market"[^>]*inputmode="text"/);
+test('autofill guard gives the custom market field non-URL search semantics at runtime',()=>{
+  const helper=helperSource();
+  assert.match(helper,/setAttribute\("type","search"\)/,'custom market must be reclassified away from a generic text field');
+  assert.match(helper,/setAttribute\("name","leadintel-market-definition"\)/,'custom market must use a unique non-URL form name');
+  assert.match(helper,/setAttribute\("autocomplete","off"\)/);
+  assert.match(helper,/setAttribute\("inputmode","text"\)/);
 });
 
-test('app has a final URL/domain rejection gate before adding a custom market',()=>{
-  assert.match(app,/looksLikeCustomMarketWebsite/,'app must independently detect website-like custom-market values');
-  assert.match(app,/Use the Main company website field above/,'user must be told where the website belongs');
+test('add market has a capture-phase final safety gate for URL/domain autofill',()=>{
+  const helper=helperSource();
+  assert.match(helper,/add-target-market/);
+  assert.match(helper,/preventDefault\(\)/);
+  assert.match(helper,/stopImmediatePropagation\(\)/);
+  assert.match(helper,/Use the Main company website field above/);
+  assert.match(helper,/addEventListener\("click",[^\n]+true\)/,'safety gate must run before the app click handler');
 });
 
 test('process shell loads the v3 custom market autofill guard',()=>{
