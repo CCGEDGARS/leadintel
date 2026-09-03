@@ -73,14 +73,15 @@ test('profile screen includes review, edit and approval controls',()=>{
   assert.match(html,/id="edit-profile"/);
 });
 
-test('market strategy step includes ICP, signal designer, research and activation controls',()=>{
+test('market strategy step includes ICP, signal designer, quick/deep research and activation controls',()=>{
   const html=read('index.html');
   assert.match(html,/data-step-marker="4"/);
   assert.match(html,/id="step-4"/);
   assert.match(html,/id="icp-list"/);
   assert.match(html,/id="signal-designer"/);
   assert.match(html,/id="add-custom-signal"/);
-  assert.match(html,/id="run-market-research"/);
+  assert.match(html,/id="run-market-research-quick"/);
+  assert.match(html,/id="run-market-research-deep"/);
   assert.match(html,/id="market-opportunities"/);
   assert.match(html,/id="activate-market-strategy"/);
 });
