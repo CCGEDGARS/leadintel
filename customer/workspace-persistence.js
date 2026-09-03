@@ -73,7 +73,8 @@
     root.localStorage?.removeItem(DIRTY_KEY);root.sessionStorage?.removeItem(HYDRATION_KEY);root.sessionStorage?.removeItem(CONFLICT_KEY);return changed;
   }
   function prepareForLoad(){
-    if(!isExplicitlySaved()){const changed=clearWorkspaceData();root.localStorage?.removeItem(SNAPSHOT_KEY);return changed;}
+    if(!isExplicitlySaved())return false;
+    if(hasMeaningfulWorkspaceData())return false;
     return restoreSavedSnapshot();
   }
 

@@ -10,14 +10,15 @@ const activation=read('website-activation.js');
 const router=read('firecrawl-workspace-router.js');
 const persistence=read('workspace-persistence.js');
 
-test('workspace persistence boundary loads before server bridge and prevents legacy draft rehydration',()=>{
+test('workspace persistence boundary loads before server bridge and preserves a meaningful local draft across internal reloads',()=>{
   assert.ok(persistence,'workspace-persistence.js must exist');
   assert.match(processMap,/workspace-persistence\.js\?v=/);
   assert.ok(processMap.indexOf('workspace-persistence.js')<processMap.indexOf('server-bridge.js'),'persistence boundary must load before server bridge');
   assert.match(persistence,/prepareForLoad\(\)/);
   assert.match(persistence,/leadintel_customer_v2_workspace_saved_snapshot_v1/);
   assert.match(persistence,/leadintel_customer_v2_workspace_explicit_save_v1/);
-  assert.match(persistence,/if\(!isExplicitlySaved\(\)\)[\s\S]*clearWorkspaceData\(\)/);
+  assert.match(persistence,/if\(!isExplicitlySaved\(\)\)return false;/,'an unsaved local draft must survive ordinary/internal reloads');
+  assert.match(persistence,/if\(hasMeaningfulWorkspaceData\(\)\)return false;/,'current meaningful local data must win over an older saved snapshot');
 });
 
 test('explicit persistence boundary allows a confirmed workspace reset to clear server state',()=>{
