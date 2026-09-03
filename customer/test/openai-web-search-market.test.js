@@ -9,7 +9,7 @@ const marketSource=fs.readFileSync(path.join(root,'market-engine.js'),'utf8');
 const LeadIntelMarket=require('../market-engine.js');
 
 function runMarketResearchBlock(){
-  return app.match(/async function runMarketResearch\(\)\{[\s\S]*?\n\}\nfunction scoreCell/)?.[0]||'';
+  return app.match(/async function runMarketResearch\(\)\{[\s\S]*?\n\}\nasync function runQuickMarketResearch/)?.[0]||'';
 }
 
 test('Market Strategy uses authenticated OpenAI Web Search and keeps Firecrawl verification',()=>{
