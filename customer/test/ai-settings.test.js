@@ -37,6 +37,15 @@ test('AI Settings supports status, test-and-save, activation and disconnect thro
   assert.match(js,/Disconnect/);
 });
 
+test('AI provider status clearly separates a connected credential from the active provider',()=>{
+  assert.match(js,/Connected means the API key is verified/i,'settings copy must define connected');
+  assert.match(js,/Active means LeadIntel is currently using that provider/i,'settings copy must define active');
+  assert.match(js,/configured\?'Connected':'Not connected'/,'configured non-active providers must be labelled Connected, not Verified');
+  assert.match(js,/Set as active/,'activation control must describe the state change explicitly');
+  assert.match(js,/Active provider/,'summary or button must name the active-provider concept explicitly');
+  assert.doesNotMatch(js,/configured\?'Verified':'Not connected'/,'Verified must not be used as the card state for a merely connected provider');
+});
+
 test('Apollo and Firecrawl use owner-controlled workspace service routes and editable customer-key fields',()=>{
   assert.match(extension,/\/api\/integrations\/services\/status/);
   assert.match(extension,/\/api\/integrations\/services\/provider/);
