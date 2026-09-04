@@ -12,6 +12,14 @@
   let layoutQueued=false;
 
   function clean(value){return String(value??"").replace(/\s+/g," ").trim();}
+  const NAVIGATION_LABELS=[/\\bUZZIN\\u0100T\\s+VAIR\\u0100K\\b/gi,/\\b(?:LEARN|READ|VIEW)\\s+MORE\\b/gi,/\\bGET\\s+IN\\s+TOUCH\\b/gi,/\\bCONTACT\\s+US\\b/gi];
+  function stripNavigationNoise(value){
+    return String(value??"").replace(new RegExp(NAVIGATION_LABELS.map(pattern=>pattern.source).join("|"),"gi")," ").replace(/\\s+/g," ").trim();
+  }
+  function hasNavigationNoise(value){
+    const text=String(value??"");
+    return NAVIGATION_LABELS.some(pattern=>{pattern.lastIndex=0;return pattern.test(text);});
+  }
   function stripNoise(value){
     return clean(String(value??"")
       .replace(/!\[[^\]]*\]\([^)]+\)/gi," ")
@@ -19,7 +27,8 @@
       .replace(/https?:\/\/\S+/gi," ")
       .replace(/\b\S+\.(?:png|jpe?g|gif|webp|svg)(?:\?\S*)?\b/gi," ")
       .replace(/<[^>]+>/g," ")
-      .replace(/[#*_`>|]/g," "));
+      .replace(/[#*_`>|]/g," "))
+      .replace(new RegExp(NAVIGATION_LABELS.map(pattern=>pattern.source).join("|"),"gi")," ");
   }
   function neutral(value){
     return stripNoise(value)
@@ -36,14 +45,18 @@
   function limitWords(value,max){const list=words(value);return list.length<=max?clean(value):`${list.slice(0,max).join(" ").replace(/[,:;.-]+$/,"")}…`;}
   function readStatus(input,id){return clean(input?.answerStatus?.[id]).toLowerCase();}
   function hasEvidence(input={}){return (input.scrapedSources||[]).some(item=>clean(item?.text))||(input.documents||[]).some(item=>clean(item?.text));}
-  function splitOffers(value){return neutral(value).replace(/\s*;\s*/g,", ");}
+  function identityValue(value){
+    const text=neutral(value);
+    return hasNavigationNoise(value)?"":text;
+  }
+  function splitOffers(value){return identityValue(value).replace(/\s*;\s*/g,", ");}
 
   function deriveIdentity(profile={},input={}){
     const company=neutral(profile.companyName)||"The company";
     const offers=splitOffers(profile.priorityOffers);
-    const customer=neutral(profile.idealCustomer);
-    const outcomes=neutral(profile.buyingOutcomes);
-    const differentiation=neutral(profile.differentiation);
+    const customer=identityValue(profile.idealCustomer);
+    const outcomes=identityValue(profile.buyingOutcomes);
+    const differentiation=identityValue(profile.differentiation);
     const diffStatus=readStatus(input,"differentiation");
     const diffConfirmed=Boolean(differentiation)&&diffStatus!=="draft"&&diffStatus!=="missing";
 
@@ -95,9 +108,12 @@
     engine.normalizeSavedState=function(value={}){
       const normalized=originals.normalizeSavedState(value);
       if(!normalized.profile||typeof normalized.profile!=="object")return normalized;
+      for(const key of ["priorityOffers","idealCustomer","buyingOutcomes","differentiation"]){
+        if(hasNavigationNoise(normalized.profile[key]))normalized.profile[key]="";
+      }
       const identity=deriveIdentity(normalized.profile,normalized);
       for(const key of ["businessSummary","uniqueSellingProposition","elevatorPitch"]){
-        if(!clean(normalized.profile[key]))normalized.profile[key]=identity[key];
+        if(!clean(normalized.profile[key])||hasNavigationNoise(normalized.profile[key]))normalized.profile[key]=identity[key];
       }
       if(!clean(normalized.profile.uspStatus))normalized.profile.uspStatus=identity.uspStatus;
       if(!clean(normalized.profile.positioningConfidence))normalized.profile.positioningConfidence=identity.positioningConfidence;
@@ -190,5 +206,5 @@
     root.document.getElementById("edit-profile")?.addEventListener("click",()=>setTimeout(()=>queueLayout(root),0));
   }
 
-  return {deriveIdentity,patchProfileEngine,layoutProfile,install};
+  return {deriveIdentity,patchProfileEngine,layoutProfile,install,hasNavigationNoise,stripNavigationNoise};
 });
