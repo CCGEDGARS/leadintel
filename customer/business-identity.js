@@ -12,9 +12,9 @@
   let layoutQueued=false;
 
   function clean(value){return String(value??"").replace(/\s+/g," ").trim();}
-  const NAVIGATION_LABELS=[/\\bUZZIN\\u0100T\\s+VAIR\\u0100K\\b/gi,/\\b(?:LEARN|READ|VIEW)\\s+MORE\\b/gi,/\\bGET\\s+IN\\s+TOUCH\\b/gi,/\\bCONTACT\\s+US\\b/gi];
+  const NAVIGATION_LABELS=[/\bUZZIN\\u0100T\s+VAIR\\u0100K\b/gi,/\b(?:LEARN|READ|VIEW)\s+MORE\b/gi,/\bGET\s+IN\s+TOUCH\b/gi,/\bCONTACT\s+US\b/gi];
   function stripNavigationNoise(value){
-    return String(value??"").replace(new RegExp(NAVIGATION_LABELS.map(pattern=>pattern.source).join("|"),"gi")," ").replace(/\\s+/g," ").trim();
+    return String(value??"").replace(new RegExp(NAVIGATION_LABELS.map(pattern=>pattern.source).join("|"),"gi")," ").replace(/\s+/g," ").trim();
   }
   function hasNavigationNoise(value){
     const text=String(value??"");
