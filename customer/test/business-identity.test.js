@@ -83,3 +83,25 @@ test('Step 3 UI separates Business Identity, Commercial Positioning and Sales Me
   assert.match(ui,/USP \/ value proposition/i);
   assert.match(ui,/Elevator pitch/i);
 });
+
+
+test('Step 3 removes scraped navigation labels and repairs contaminated saved identity fields', () => {
+  const contaminated = JSON.parse(JSON.stringify(input));
+  contaminated.answers.priority_offers = 'UZZINĀT VAIRĀK Noliktavu optimizācija – mēs palīdzēsim aprīkot noliktavu un ražotni UZZINĀT VAIRĀK Realizētie projekti – iedvesma tavai darba videi UZZINĀT VAIRĀK Uzņēmumi, kas izvēlas mūsu risinājumus';
+  contaminated.answerStatus.priority_offers = 'user';
+  const generated = profile.buildCompanyIntelligenceProfile(contaminated);
+  assert.doesNotMatch(generated.businessSummary, /UZZINĀT VAIRĀK|LEARN MORE/i);
+  assert.doesNotMatch(generated.uniqueSellingProposition, /UZZINĀT VAIRĀK|LEARN MORE/i);
+
+  const built = profile.buildCompanyIntelligenceProfile(input);
+  const saved = profile.normalizeSavedState({...input, profile:{...built,
+    priorityOffers: contaminated.answers.priority_offers,
+    businessSummary: contaminated.answers.priority_offers,
+    uniqueSellingProposition: contaminated.answers.priority_offers,
+    elevatorPitch: contaminated.answers.priority_offers
+  }});
+  assert.doesNotMatch(saved.profile.businessSummary, /UZZINĀT VAIRĀK|LEARN MORE/i);
+  assert.doesNotMatch(saved.profile.uniqueSellingProposition, /UZZINĀT VAIRĀK|LEARN MORE/i);
+  assert.doesNotMatch(saved.profile.elevatorPitch, /UZZINĀT VAIRĀK|LEARN MORE/i);
+  assert.equal(saved.profile.priorityOffers, '');
+});
