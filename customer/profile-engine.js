@@ -78,6 +78,7 @@
     return moduleNumber>=2&&moduleNumber<=7&&canBuildProfile(input);
   }
   function truncate(value,max=1200){const text=clean(value);return text.length>max?`${text.slice(0,max-1)}…`:text;}
+  const NAVIGATION_LABEL_RE=/\\bUZZIN\\u0100T\\s+VAIR\\u0100K\\b|\\b(?:LEARN|READ|VIEW)\\s+MORE\\b|\\bGET\\s+IN\\s+TOUCH\\b|\\bCONTACT\\s+US\\b/gi;
   function cleanEvidenceText(text){
     return String(text??"")
       .replace(/!\[[^\]]*\]\((?:https?:\/\/|data:)[^)]+\)/gi," ")
@@ -86,6 +87,7 @@
       .replace(/https?:\/\/[^\s)\]]+/gi," ")
       .replace(/\b\S+\.(?:png|jpe?g|gif|webp|svg)(?:\?\S*)?\b/gi," ")
       .replace(/[#*_`>|]/g," ")
+      .replace(NAVIGATION_LABEL_RE," ")
       .replace(/\s+/g," ")
       .trim();
   }
