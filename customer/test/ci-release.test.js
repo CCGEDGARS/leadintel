@@ -29,27 +29,29 @@ test('README names current Vercel customer workspace and Cloudflare D1 backend',
   assert.doesNotMatch(readme,/Production root:[^\n]*redirects to V2/i);
 });
 
-test('automatic release integrity runs only after Backend Deploy completes for main',()=>{
+test('automatic release integrity runs after the relevant verified workflow completes for main',()=>{
   assert.equal(fs.existsSync(releaseWorkflowPath),true,'release-integrity workflow must exist');
   const workflow=fs.readFileSync(releaseWorkflowPath,'utf8');
   assert.match(workflow,/workflow_run:/);
-  assert.match(workflow,/workflows:\s*\[?["']?Backend Deploy["']?/);
-  assert.doesNotMatch(workflow,/workflows:\s*\[?["']?Customer V2 CI["']?/);
+  assert.match(workflow,/workflows:\s*\[[\s\S]*Backend Deploy/);
+  assert.match(workflow,/workflows:\s*\[[\s\S]*Customer V2 CI/);
   assert.match(workflow,/types:\s*\[?\s*completed/i);
   assert.match(workflow,/branches:\s*\[?\s*main/i);
-  assert.match(workflow,/workflow_dispatch:/);
+  assert.match(workflow,/EVENT_WORKFLOW/);
 });
 
-test('automatic release proof requires successful Backend Deploy and Customer V2 CI for the exact same SHA',()=>{
+test('automatic release proof requires exact Customer V2 CI and backend evidence when backend changes are present',()=>{
   assert.equal(fs.existsSync(releaseWorkflowPath),true,'release-integrity workflow must exist');
   const workflow=fs.readFileSync(releaseWorkflowPath,'utf8');
   assert.match(workflow,/github\.event\.workflow_run\.head_sha/);
   assert.match(workflow,/github\.event\.workflow_run\.conclusion/);
-  assert.match(workflow,/github\.event\.workflow_run\.conclusion\s*==\s*'success'/);
   assert.match(workflow,/id:\s*automatic_ci/);
   assert.match(workflow,/Customer V2 CI/);
-  assert.match(workflow,/actual_sha/);
-  assert.match(workflow,/actual_conclusion/);
+  assert.match(workflow,/Backend Deploy/);
+  assert.match(workflow,/changed_backend/);
+  assert.match(workflow,/backend_required/);
+  assert.match(workflow,/actions\/workflows\/backend-deploy\.yml\/runs/);
+  assert.match(workflow,/ci_conclusion=failure/);
   assert.match(workflow,/steps\.automatic_ci\.outputs\.conclusion/);
   assert.match(workflow,/--expected-sha[\s\S]{0,180}workflow_run\.head_sha/);
   assert.match(workflow,/--ci-conclusion[\s\S]{0,180}steps\.automatic_ci\.outputs\.conclusion/);
