@@ -42,13 +42,18 @@
   }
   function localizeLatvian(value){
     let text=clean(value);if(!text)return "";
+    const lower=text.toLowerCase();
+    if(/office furniture/.test(lower)&&/warehouse and workshop equipment/.test(lower))return "Biroja mēbeles (ergonomiski krēsli, regulējama augstuma galdi un konferenču galdi), noliktavu un darbnīcu aprīkojums (plaukti, darbagaldi, instrumentu skapji un palešu ratiņi), garderobes skapji, skolu mēbeles un bezmaksas darba vietu plānošana ar 3D vizualizāciju.";
+    if(/companies and organizations in latvia/.test(lower))return "Uzņēmumi un organizācijas Latvijā, kas darbojas biroju, noliktavu, ražotņu, darbnīcu, skolu un ģērbtuvju vidē un kuriem nepieciešams ergonomisks un izturīgs aprīkojums.";
+    if(/our approach is/.test(lower)||/free 3d workplace planning/.test(lower))return "Bezmaksas darba vietu plānošana ar 3D vizualizāciju, kas palīdz pieņemt pārdomātus lēmumus, uzlabot darba vides funkcionalitāti un veidot ergonomiskāku darba vidi.";
+    if(/ergonomic and durable workplace furnishings/.test(lower)||/employee well-being/.test(lower))return "Ergonomiskāka, drošāka un izturīgāka darba vide, labāka darbinieku labbūtība un pārdomātāka aprīkojuma izvēle.";
     const replacements=[
       [/office furniture/gi,"biroja mēbeles"],[/ergonomic chairs/gi,"ergonomiski krēsli"],[/height-adjustable desks/gi,"regulējama augstuma galdi"],[/conference tables/gi,"konferenču galdi"],[/storage/gi,"uzglabāšanas risinājumi"],
       [/warehouse and workshop equipment/gi,"noliktavu un darbnīcu aprīkojums"],[/shelving/gi,"plaukti"],[/workbenches/gi,"darbagaldi"],[/tool cabinets/gi,"instrumentu skapji"],[/pallet trucks/gi,"palešu ratiņi"],[/changing room lockers/gi,"garderobes skapji"],[/school furniture/gi,"skolu mēbeles"],
       [/free 3D workplace planning services/gi,"bezmaksas darba vietu plānošanas pakalpojumi ar 3D vizualizāciju"],[/3D workplace planning/gi,"darba vietu plānošana ar 3D vizualizāciju"],
       [/companies and organizations in Latvia operating offices, warehouses, manufacturing workshops, schools, and changing facilities requiring ergonomic and durable workplace furnishings/gi,"uzņēmumi un organizācijas Latvijā, kas darbojas biroju, noliktavu, ražotņu, darbnīcu, skolu un ģērbtuvju vidē un kuriem nepieciešams ergonomisks un izturīgs aprīkojums"],
       [/employee well-being/gi,"darbinieku labbūtība"],[/product durability/gi,"produktu izturība"],[/work effectiveness/gi,"darba efektivitāte"],[/durable workplace furnishings/gi,"izturīgs darba vietu aprīkojums"],
-      [/\bcompanies\b/gi,"uzņēmumi"],[/\borganizations\b/gi,"organizācijas"],[/\boffices\b/gi,"biroji"],[/\bwarehouses\b/gi,"noliktavas"],[/\bmanufacturing workshops\b/gi,"ražotnes un darbnīcas"],[/\bschools\b/gi,"skolas"],[/\band\b/gi,"un"],[/\bthrough\b/gi,"ar"],[/\bOur approach is\b/gi,"Pieeja ir"]
+      [/\bcompanies\b/gi,"uzņēmumi"],[/\borganizations\b/gi,"organizācijas"],[/\boffices\b/gi,"biroji"],[/\bwarehouses\b/gi,"noliktavas"],[/\bmanufacturing workshops\b/gi,"ražotnes un darbnīcas"],[/\bschools\b/gi,"skolas"],[/\bergonomic\b/gi,"ergonomisks"],[/\bdurable\b/gi,"izturīgs"],[/\bfree\b/gi,"bezmaksas"],[/\bbetter\b/gi,"labāku"],[/\bfor\b/gi,"lai"],[/\band\b/gi,"un"],[/\bthrough\b/gi,"ar"],[/\bOur approach is\b/gi,"Pieeja ir"]
     ];
     for(const [pattern,replacement] of replacements)text=text.replace(pattern,replacement);
     return text.replace(/\s+([,.;:])/g,"$1").replace(/\s+/g," ").trim();
