@@ -123,3 +123,18 @@ test('repairs scraped card headings that remain concatenated after CTA removal',
   assert.doesNotMatch(migrated.profile.businessSummary, /Realizētie projekti|Uzņēmumi, kas izvēlas mūsu risinājumus/i);
   assert.match(migrated.profile.businessSummary, /Noliktavu optimizācija|Instrumentu skapis SUPPLY/i);
 });
+
+
+test('Step 3 exposes analytical diagnostics and commercial frameworks', () => {
+  const result = profile.buildCompanyIntelligenceProfile(input);
+  assert.ok(result.analysis);
+  assert.ok(result.analysis.scores);
+  assert.ok(Number.isInteger(result.analysis.scores.commercialClarity));
+  assert.ok(result.analysis.scores.commercialClarity >= 0 && result.analysis.scores.commercialClarity <= 100);
+  assert.ok(result.analysis.frameworks);
+  assert.ok(result.analysis.frameworks.goldenCircle);
+  assert.ok(result.analysis.frameworks.valueProposition);
+  assert.ok(result.analysis.frameworks.fab);
+  assert.ok(result.analysis.positioningStatement);
+  assert.match(result.analysis.status, /proposed|confirmed/i);
+});

@@ -51,6 +51,35 @@
     return hasNavigationNoise(value)?"":text;
   }
   function splitOffers(value){return identityValue(value).replace(/\s*;\s*/g,", ");}
+  function scorePercent(values){return Math.round(values.filter(Boolean).length/values.length*100);}
+  function deriveAnalysis(profile={},input={},context={}){
+    const company=context.company||identityValue(profile.companyName)||"The company";
+    const offers=context.offers||splitOffers(profile.priorityOffers);
+    const customer=context.customer||identityValue(profile.idealCustomer);
+    const outcomes=context.outcomes||identityValue(profile.buyingOutcomes);
+    const differentiation=context.differentiation||identityValue(profile.differentiation);
+    const buyers=identityValue(profile.decisionMakers);
+    const evidence=hasEvidence(input);
+    const status=readStatus(input,"differentiation")==="user"||readStatus(input,"differentiation")==="accepted"?"Confirmed":"Proposed · confirmation recommended";
+    const positioningStatement=customer&&offers&&outcomes
+      ? `For ${lowerFirst(customer)}, ${company} provides ${lowerFirst(offers)} to ${lowerFirst(outcomes)}.`
+      : `The positioning hypothesis for ${company} requires confirmation of the ideal customer, offer and commercial outcome.`;
+    const frameworks={
+      goldenCircle:{why:outcomes||"Clarify the customer outcome this company creates.",how:differentiation||"Clarify the approach or proof that makes the company preferable.",what:offers||"Clarify the priority product or service."},
+      valueProposition:positioningStatement,
+      fab:{features:offers||"Priority offer not confirmed.",advantages:differentiation||"Competitive advantage not confirmed.",benefits:outcomes||"Customer benefit not confirmed."}
+    };
+    const scores={
+      commercialClarity:scorePercent([offers,customer,outcomes,differentiation]),
+      icpSpecificity:scorePercent([customer,buyers,outcomes]),
+      positioningStrength:scorePercent([offers,outcomes,differentiation]),
+      evidenceConfidence:scorePercent([evidence,Boolean(input.scrapedSources?.length),Boolean(input.documents?.length)])
+    };
+    const diagnosis= scores.commercialClarity>=75
+      ? "The commercial story is sufficiently defined for targeting and message development."
+      : "The commercial story is still a working hypothesis. Confirm the missing inputs before treating the positioning as final.";
+    return {status,positioningStatement,diagnosis,scores,frameworks};
+  }
 
   function deriveIdentity(profile={},input={}){
     const company=neutral(profile.companyName)||"The company";
@@ -96,7 +125,9 @@
 
     const positioningInputs=[offers,customer,outcomes,diffConfirmed?differentiation:""] .filter(Boolean).length;
     const positioningConfidence=positioningInputs===4&&hasEvidence(input)?"High":positioningInputs>=3?"Medium":"Needs confirmation";
-    return {businessSummary,uniqueSellingProposition,elevatorPitch,uspStatus,positioningConfidence};
+    const analysis=deriveAnalysis(profile,input,{company,offers,customer,outcomes,differentiation});
+    if(!uniqueSellingProposition)uniqueSellingProposition=analysis.frameworks.valueProposition;
+    return {businessSummary,uniqueSellingProposition,elevatorPitch,uspStatus,positioningConfidence,analysis};
   }
 
   function patchProfileEngine(engine,root=null){
@@ -141,10 +172,25 @@
       .profile-identity-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
       .profile-identity-grid .profile-field.wide,.profile-identity-grid .identity-wide{grid-column:1/-1}
       .profile-identity-section .profile-field{margin:0}
+      .profile-analysis-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+      .profile-analysis-card{padding:16px;border:1px solid var(--line,#d8e0dc);border-radius:14px;background:#fff;min-height:110px}
+      .profile-analysis-card strong{display:block;color:var(--ink,#10231d);font-size:14px;margin-bottom:8px}
+      .profile-analysis-card span{display:block;color:var(--muted,#6f7d77);font-size:13px;line-height:1.45}
+      .profile-analysis-card .analysis-score{font:700 26px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--accent,#0f6b58);margin-bottom:8px}
+      @media(max-width:1020px){.profile-analysis-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+      @media(max-width:620px){.profile-analysis-grid{grid-template-columns:1fr}}
       .identity-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
       .identity-meta span{display:inline-flex;align-items:center;padding:6px 9px;border:1px solid var(--line,#d8e0dc);border-radius:999px;font:600 11px/1 'IBM Plex Mono',monospace;color:var(--muted,#6f7d77);background:#fff}
       @media(max-width:820px){.profile-identity-grid{grid-template-columns:1fr}.profile-identity-head{display:grid}.profile-identity-grid .profile-field.wide,.profile-identity-grid .identity-wide{grid-column:auto}}
     `;root.document.head.appendChild(style);
+  }
+  function createInsightCard(root,title,value,score){
+    const node=root.document.createElement("div");node.className="profile-analysis-card";
+    const heading=root.document.createElement("strong");heading.textContent=title;
+    const text=root.document.createElement("span");text.textContent=clean(value)||"Needs confirmation.";
+    node.append(heading);
+    if(score!==undefined){const scoreNode=root.document.createElement("div");scoreNode.className="analysis-score";scoreNode.textContent=`${score}%`;node.append(scoreNode);}
+    node.append(text);return node;
   }
   function createField(root,key,label,value,readOnly,wide=true){
     const wrap=root.document.createElement("div");wrap.className=`profile-field ${wide?"wide":""} identity-${key}`;
@@ -182,6 +228,27 @@
     let pitch=take("elevatorPitch");if(!pitch)pitch=createField(root,"elevatorPitch","Elevator pitch",profile.elevatorPitch||derived.elevatorPitch,readOnly,true);
 
     const business=section(root,"Business identity","A concise factual view of what the company does, what it sells and who it serves.",true);business.grid.append(summary);
+    const analysis=section(root,"Commercial analysis","What LeadIntel currently understands, how strong the evidence is, and what still requires confirmation.");
+    const analysisData=derived.analysis||deriveAnalysis(profile,state);
+    analysis.grid.classList.add("profile-analysis-grid");
+    analysis.grid.append(
+      createInsightCard(root,"Commercial clarity",analysisData.diagnosis,analysisData.scores?.commercialClarity),
+      createInsightCard(root,"ICP specificity","How clearly the ideal customer, buyer and outcome are defined.",analysisData.scores?.icpSpecificity),
+      createInsightCard(root,"Positioning strength","How clearly the offer, outcome and differentiation connect.",analysisData.scores?.positioningStrength),
+      createInsightCard(root,"Evidence confidence","Coverage of website, documents and supporting evidence.",analysisData.scores?.evidenceConfidence),
+      createInsightCard(root,"Positioning statement",analysisData.positioningStatement)
+    );
+    const frameworks=section(root,"Commercial frameworks","Structured models that turn the evidence into usable sales and marketing language.");
+    frameworks.grid.classList.add("profile-analysis-grid");
+    frameworks.grid.append(
+      createInsightCard(root,"Golden Circle · Why",analysisData.frameworks?.goldenCircle?.why),
+      createInsightCard(root,"Golden Circle · How",analysisData.frameworks?.goldenCircle?.how),
+      createInsightCard(root,"Golden Circle · What",analysisData.frameworks?.goldenCircle?.what),
+      createInsightCard(root,"Value proposition",analysisData.frameworks?.valueProposition),
+      createInsightCard(root,"FAB · Features",analysisData.frameworks?.fab?.features),
+      createInsightCard(root,"FAB · Advantages",analysisData.frameworks?.fab?.advantages),
+      createInsightCard(root,"FAB · Benefits",analysisData.frameworks?.fab?.benefits)
+    );
     const positioning=section(root,"Commercial positioning","Why the ideal customer should choose this company instead of a credible alternative.");positioning.grid.append(usp);
     const diff=take("differentiation");if(diff)positioning.grid.append(diff);
     const meta=root.document.createElement("div");meta.className="identity-meta identity-wide";meta.innerHTML=`<span>${esc(profile.uspStatus||derived.uspStatus||"Proposed · confirmation recommended")}</span><span>${esc(profile.positioningConfidence||derived.positioningConfidence||"Needs confirmation")} confidence</span>`;positioning.grid.append(meta);
@@ -192,7 +259,7 @@
     for(const key of contextOrder){const node=take(key);if(node){context.grid.append(node);used.add(key);}}
     for(const [key,node] of byKey){if(!used.has(key))context.grid.append(node);}
 
-    editor.replaceChildren(business.node,positioning.node,sales.node,context.node);editor.classList.add("profile-identity-layout");
+    editor.replaceChildren(business.node,analysis.node,frameworks.node,positioning.node,sales.node,context.node);editor.classList.add("profile-identity-layout");
   }
   function queueLayout(root){if(layoutQueued)return;layoutQueued=true;setTimeout(()=>{layoutQueued=false;layoutProfile(root);},0);}
   function watchProfile(root){
