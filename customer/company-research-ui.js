@@ -147,7 +147,7 @@ async function runCompanyResearch({rerun=false}={}){
     const quality=researchEngine.evaluateResearchQuality({website,primary:research.primary,supporting:research.supporting,failures});
     if(!quality.publishable)throw new Error(`Research quality check failed: ${quality.issues.join(' ')}`);
     setProgress('Building evidence-backed context…',`${research.primary.length} primary and ${research.supporting.length} supporting sources passed the quality check.`);
-    const fallback=researchEngine.buildEvidenceDraft({sources:research.primary,targetMarkets:markets});const ai=await aiDraftFor({website,targetMarkets:markets,sources:research.primary,documents:state.documents||[],uiLanguage:state.uiLanguage||"lv"});const draft=combineDrafts(fallback,ai.draft);const merged=researchEngine.mergeDraft(state.answers||{},draft);
+    const fallback=researchEngine.buildEvidenceDraft({sources:research.primary,targetMarkets:markets});const selectedContentLanguage=String(state.uiLanguage||"lv").toLowerCase()==="en"?"en":"lv";const ai=await aiDraftFor({website,targetMarkets:markets,sources:research.primary,documents:state.documents||[],uiLanguage:selectedContentLanguage});const draft=combineDrafts(fallback,ai.draft);const merged=researchEngine.mergeDraft(state.answers||{},draft);
     const next={...state};next.website=website;next.targetMarkets=markets;next.additionalLinks=additionalLinks;next.answers=merged.answers;
     next.scrapedSources=sources.map(source=>({type:source.type==='public'?'link':source.type,url:source.url,title:source.title,text:source.text,status:'ready',role:source.role||'supporting'}));
     next.profile=null;next.approved=false;next.market={};next.step=2;writeState(next);
