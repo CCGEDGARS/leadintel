@@ -1,4 +1,4 @@
-import './company-research-engine.js?v=20260905-scrape-first-research-v1';
+import './company-research-engine.js?v=20260905-latvian-framework-synthesis-v1';
 
 const MAIN_STORAGE_KEY='leadintel_customer_v2_state';
 const RESEARCH_META_KEY='leadintel_customer_v2_research_meta_v1';
@@ -6,7 +6,7 @@ const FIRECRAWL_PROXY='https://apollo-proxy.edgars-7e7.workers.dev';
 const LEADINTEL_API='https://leadintel-api.edgars-7e7.workers.dev';
 const MAX_COMPANY_RESEARCH_QUERIES=3;
 const MAX_RESULTS_PER_QUERY=4;
-const RELEASE='20260905-scrape-first-research-v1';
+const RELEASE='20260905-latvian-framework-synthesis-v1';
 let running=false;
 
 const engine=()=>window.LeadIntelCompanyResearch;
@@ -110,9 +110,9 @@ async function waitForServerBridge(timeout=1800){
   if(window.LeadIntelServerBridge?.session!==null)return window.LeadIntelServerBridge;
   return new Promise(resolve=>{let settled=false;const finish=()=>{if(settled)return;settled=true;window.removeEventListener('leadintel:server-ready',finish);resolve(window.LeadIntelServerBridge||null);};window.addEventListener('leadintel:server-ready',finish,{once:true});setTimeout(finish,timeout);});
 }
-async function aiDraftFor({website,targetMarkets,sources,documents}){
+async function aiDraftFor({website,targetMarkets,sources,documents,uiLanguage}){
   const bridge=await waitForServerBridge();const workspace=bridge?.workspace;if(!bridge?.session?.authenticated||!workspace?.id)return {draft:null,mode:'evidence',reason:'Sign in to use workspace AI enrichment.'};
-  const prompt=engine().buildAiPrompt({website,targetMarkets,sources,documents});
+  const prompt=engine().buildAiPrompt({website,targetMarkets,sources,documents,uiLanguage});
   try{
     const response=await fetch(`${LEADINTEL_API}/api/ai/generate?workspace_id=${encodeURIComponent(workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({system:prompt.system,prompt:prompt.prompt,max_output_tokens:3200})});
     const payload=await response.json().catch(()=>({}));
@@ -147,7 +147,7 @@ async function runCompanyResearch({rerun=false}={}){
     const quality=researchEngine.evaluateResearchQuality({website,primary:research.primary,supporting:research.supporting,failures});
     if(!quality.publishable)throw new Error(`Research quality check failed: ${quality.issues.join(' ')}`);
     setProgress('Building evidence-backed context…',`${research.primary.length} primary and ${research.supporting.length} supporting sources passed the quality check.`);
-    const fallback=researchEngine.buildEvidenceDraft({sources:research.primary,targetMarkets:markets});const ai=await aiDraftFor({website,targetMarkets:markets,sources:research.primary,documents:state.documents||[]});const draft=combineDrafts(fallback,ai.draft);const merged=researchEngine.mergeDraft(state.answers||{},draft);
+    const fallback=researchEngine.buildEvidenceDraft({sources:research.primary,targetMarkets:markets});const ai=await aiDraftFor({website,targetMarkets:markets,sources:research.primary,documents:state.documents||[],uiLanguage:state.uiLanguage||"lv"});const draft=combineDrafts(fallback,ai.draft);const merged=researchEngine.mergeDraft(state.answers||{},draft);
     const next={...state};next.website=website;next.targetMarkets=markets;next.additionalLinks=additionalLinks;next.answers=merged.answers;
     next.scrapedSources=sources.map(source=>({type:source.type==='public'?'link':source.type,url:source.url,title:source.title,text:source.text,status:'ready',role:source.role||'supporting'}));
     next.profile=null;next.approved=false;next.market={};next.step=2;writeState(next);

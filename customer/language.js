@@ -3,7 +3,7 @@
   const SELECTOR_ID="language-select";
   function readState(){try{return JSON.parse(root.localStorage?.getItem(STORAGE_KEY)||"{}");}catch{return {};}}
   function language(){
-    const state=readState();const stored=String(state.uiLanguage||root.localStorage?.getItem("leadintel_customer_v2_language")||"auto").toLowerCase();
+    const state=readState();const stored=String(state.uiLanguage||root.localStorage?.getItem("leadintel_customer_v2_language")||"lv").toLowerCase();
     return ["auto","en","lv"].includes(stored)?stored:"auto";
   }
   function apply(value){

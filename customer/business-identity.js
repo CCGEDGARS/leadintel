@@ -63,6 +63,27 @@
     const words={en:{hypothesis:"The positioning hypothesis for {company} requires confirmation of the ideal customer, offer and commercial outcome.",why:"Clarify the customer outcome this company creates.",how:"Clarify the approach or proof that makes the company preferable.",what:"Clarify the priority product or service.",benefitFallback:"Customer benefits are not yet evidenced; confirm the operational and commercial result.",diagnosisStrong:"The commercial story is sufficiently defined for targeting and message development.",diagnosisWeak:"The commercial story is still a working hypothesis. Confirm the missing inputs before treating the positioning as final.",proposed:"Proposed · confirmation recommended",customerConfirmed:"Customer-confirmed",evidenceAccepted:"Evidence-backed · accepted",confirmed:"Confirmed"},lv:{hypothesis:"Pozicionēšanas hipotēzei par {company} nepieciešams apstiprināt ideālo klientu, piedāvājumu un komerciālo rezultātu.",why:"Jāprecizē klienta rezultāts, ko uzņēmums rada.",how:"Jāprecizē pieeja vai pierādījums, kas padara uzņēmumu par labāku izvēli.",what:"Jāprecizē prioritārais produkts vai pakalpojums.",benefitFallback:"Klienta ieguvumi vēl nav pietiekami pamatoti; jāapstiprina praktiskais un komerciālais rezultāts.",diagnosisStrong:"Komerciālais stāsts ir pietiekami skaidrs mērķēšanai un vēstījuma izstrādei.",diagnosisWeak:"Komerciālais stāsts joprojām ir darba hipotēze. Pirms pozicionējuma apstiprināšanas jāprecizē trūkstošā informācija.",proposed:"Piedāvāts · nepieciešams apstiprinājums",customerConfirmed:"Klienta apstiprināts",evidenceAccepted:"Ar pierādījumiem pamatots · pieņemts",confirmed:"Apstiprināts"}};
     return (words[language]||words.en)[key];
   }
+  function uiText(language,key){
+    const words={
+      en:{businessIdentity:"Business identity",businessIdentitySub:"A concise factual view of what the company does, what it sells and who it serves.",businessSummary:"Business summary",commercialAnalysis:"Commercial analysis",commercialAnalysisSub:"What LeadIntel currently understands, how strong the evidence is, and what still requires confirmation.",commercialFrameworks:"Commercial frameworks",commercialFrameworksSub:"Structured models that turn the evidence into usable sales and marketing language.",commercialPositioning:"Commercial positioning",commercialPositioningSub:"Why the ideal customer should choose this company instead of a credible alternative.",salesMessage:"Sales message",salesMessageSub:"A short persuasive explanation that can be used in conversation and adapted for outreach.",commercialContext:"Commercial context",commercialContextSub:"The confirmed inputs LeadIntel uses for targeting, qualification and signal discovery.",businessSummaryField:"Business summary",uspField:"USP / value proposition",pitchField:"Elevator pitch",why:"Golden Circle · Why",how:"Golden Circle · How",what:"Golden Circle · What",valueProposition:"Value proposition",features:"FAB · Features",advantages:"FAB · Advantages",benefits:"FAB · Benefits",evidenceBacked:"Evidence-backed",proposedReview:"Proposed · review recommended",needsReview:"Needs review"},
+      lv:{businessIdentity:"Uzņēmuma identitāte",businessIdentitySub:"Koncentrēts faktu kopsavilkums par uzņēmuma darbību, piedāvājumu un klientiem.",businessSummary:"Uzņēmuma kopsavilkums",commercialAnalysis:"Komerciālā analīze",commercialAnalysisSub:"Ko LeadIntel pašlaik ir noskaidrojis, cik pamatoti ir secinājumi un kas vēl jāapstiprina.",commercialFrameworks:"Komerciālie ietvari",commercialFrameworksSub:"Strukturēti modeļi, kas pierādījumus pārvērš praktiskā pārdošanas un mārketinga valodā.",commercialPositioning:"Komerciālais pozicionējums",commercialPositioningSub:"Kāpēc ideālajam klientam būtu jāizvēlas šis uzņēmums, nevis līdzvērtīga alternatīva.",salesMessage:"Pārdošanas vēstījums",salesMessageSub:"Īss pārliecinošs skaidrojums sarunām un uzrunām.",commercialContext:"Komerciālais konteksts",commercialContextSub:"Apstiprinātie dati, ko LeadIntel izmanto mērķēšanai, kvalificēšanai un signālu noteikšanai.",businessSummaryField:"Uzņēmuma kopsavilkums",uspField:"USP / vērtības piedāvājums",pitchField:"Īsais pārdošanas vēstījums",why:"Zelta aplis · Kāpēc",how:"Zelta aplis · Kā",what:"Zelta aplis · Ko",valueProposition:"Vērtības piedāvājums",features:"FAB · Iespējas",advantages:"FAB · Priekšrocības",benefits:"FAB · Ieguvumi",evidenceBacked:"Pamatots ar pierādījumiem",proposedReview:"Piedāvāts · nepieciešama pārskatīšana",needsReview:"Nepieciešama pārskatīšana"}
+    };
+    return (words[language]||words.en)[key]||key;
+  }
+  function reviewLabel(language,status){
+    if(status==="Evidence-backed")return uiText(language,"evidenceBacked");
+    if(status==="Proposed · review recommended")return uiText(language,"proposedReview");
+    if(status==="Needs review")return uiText(language,"needsReview");
+    return status||"";
+  }
+  function fieldText(language,key){
+    const lv={companyOverview:"Uzņēmuma pārskats",priorityOffers:"Prioritārie piedāvājumi",idealCustomer:"Ideālais klients",lookalikeCustomers:"Līdzīgie klienti",decisionMakers:"Lēmuma pieņēmēji",currentMarkets:"Pašreizējie tirgi",targetMarkets:"Prioritārie izaugsmes tirgi",marketFocus:"Prioritārā tirgus fokuss",differentiation:"Konkurences priekšrocības",buyingTriggers:"Pirkuma situācijas un signāli",exclusions:"Izslēdzamie klienti",opportunityValue:"Komerciālā vērtība",commercialObjective:"Komerciālais mērķis"};
+    const en={companyOverview:"Company overview",priorityOffers:"Priority offers",idealCustomer:"Ideal customer profile",lookalikeCustomers:"Lookalike customers",decisionMakers:"Decision makers",currentMarkets:"Current market footprint",targetMarkets:"Priority growth markets",marketFocus:"Priority market focus",differentiation:"Competitive advantages",buyingTriggers:"Buying situations / triggers",exclusions:"Negative ICP / exclusions",opportunityValue:"Commercial value",commercialObjective:"Commercial objective"};
+    return (language==="lv"?lv:en)[key]||key;
+  }
+  function analysisText(language,key){
+    const text={en:{clarity:"Commercial clarity",clarityDesc:"The commercial story is still a working hypothesis. Confirm the missing inputs before treating the positioning as final.",icp:"ICP specificity",icpDesc:"How clearly the ideal customer, buyer and outcome are defined.",strength:"Positioning strength",strengthDesc:"How clearly the offer, outcome and differentiation connect.",evidence:"Evidence confidence",evidenceDesc:"Coverage of website, documents and supporting evidence.",statement:"Positioning statement"},lv:{clarity:"Komerciālā skaidrība",clarityDesc:"Komerciālais stāsts joprojām ir darba hipotēze. Pirms pozicionējuma apstiprināšanas jāprecizē trūkstošā informācija.",icp:"Ideālā klienta precizitāte",icpDesc:"Cik skaidri ir definēts ideālais klients, pircējs un sasniedzamais rezultāts.",strength:"Pozicionējuma spēks",strengthDesc:"Cik skaidri savienojas piedāvājums, klienta rezultāts un atšķirība no alternatīvām.",evidence:"Pierādījumu pārliecība",evidenceDesc:"Tīmekļa vietnes, dokumentu un citu avotu sniegtā pamatojuma kvalitāte.",statement:"Pozicionēšanas formulējums"}};return (text[language]||text.en)[key]||key;
+  }
   function inferBenefits(offers,input={},profile={},language="en"){
     const text=clean([offers,profile.companyOverview,profile.differentiation,...(input.scrapedSources||[]).map(source=>source?.text),...(input.documents||[]).map(doc=>doc?.text)].join(" "));
     const benefits=[];const add=value=>{if(value&&!benefits.includes(value))benefits.push(value);};
@@ -72,6 +93,15 @@
     if(/3d|vizualiz|visuali[sz]/i.test(text))add(language==="lv"?"iespēju vizualizēt risinājumu pirms iegādes un samazināt nepareizu lēmumu risku":"the ability to visualise the solution before purchase and reduce decision risk");
     return benefits.length?benefits.join("; "):copy(language,"benefitFallback");
   }
+  function inferAdvantages(offers,input={},profile={},language="en"){
+    const text=clean([offers,profile.companyOverview,...(input.scrapedSources||[]).map(source=>source?.text),...(input.documents||[]).map(doc=>doc?.text)].join(" "));
+    const advantages=[];const add=value=>{if(value&&!advantages.includes(value))advantages.push(value);};
+    if(/3d|vizualiz|visuali[sz]/i.test(text))add(language==="lv"?"3D vizualizācija un darba vietu plānošana palīdz klientam pieņemt pārdomātus lēmumus pirms iegādes":"3D visualisation and workplace planning help customers make informed decisions before purchase");
+    if(/ergonom|regulējam|height.adjust|office|biroj/i.test(text))add(language==="lv"?"Ergonomiski un pielāgojami risinājumi dažādām darba vidēm":"ergonomic and adaptable solutions for different work environments");
+    if(/noliktav|warehouse|darbnīc|workshop|instrument|plaukt|shelf|storage|uzglab/i.test(text))add(language==="lv"?"Plašs aprīkojuma klāsts birojiem, noliktavām un darbnīcām vienuviet":"a broad equipment range for offices, warehouses and workshops in one place");
+    if(/school|skol|izglīt|education|bērn|kindergarten|dārziņ/i.test(text))add(language==="lv"?"Risinājumi arī skolām un izglītības iestādēm":"solutions for schools and educational institutions as well");
+    return advantages.length?advantages.join(language==="lv"?"; ":"; "):(language==="lv"?"Priekšrocība izsecināta no piedāvājuma, taču nepieciešama klienta apstiprināšana":"The advantage is inferred from the offer and requires customer confirmation");
+  }
   function deriveAnalysis(profile={},input={},context={}){
     const language=detectLanguage(profile,input,context);
     const company=context.company||identityValue(profile.companyName)||(language==="lv"?"Uzņēmums":"The company");
@@ -80,6 +110,7 @@
     const outcomes=context.outcomes||identityValue(profile.buyingOutcomes);
     const benefits=outcomes||inferBenefits(offers,input,profile,language);
     const differentiation=context.differentiation||identityValue(profile.differentiation);
+    const advantage=differentiation||inferAdvantages(offers,input,profile,language);
     const buyers=identityValue(profile.decisionMakers);
     const evidence=hasEvidence(input);
     const status=readStatus(input,"differentiation")==="user"||readStatus(input,"differentiation")==="accepted"?(language==="lv"?copy(language,"confirmed"):"Confirmed"):(language==="lv"?copy(language,"proposed"):"Proposed · confirmation recommended");
@@ -87,9 +118,9 @@
       ? language==="lv"?`Uzņēmums piedāvā ${lowerFirst(offers)}, lai ${lowerFirst(customer)} varētu ${lowerFirst(outcomes)}.`:`For ${lowerFirst(customer)}, ${company} provides ${lowerFirst(offers)} to ${lowerFirst(outcomes)}.`
       : copy(language,"hypothesis").replace("{company}",company);
     const frameworks={
-      goldenCircle:{why:outcomes||copy(language,"why"),how:differentiation||copy(language,"how"),what:offers||copy(language,"what")},
+      goldenCircle:{why:benefits,how:advantage,what:offers||copy(language,"what")},
       valueProposition:positioningStatement,
-      fab:{features:offers||(language==="lv"?"Prioritārais piedāvājums nav apstiprināts.":"Priority offer not confirmed."),advantages:differentiation||(language==="lv"?"Konkurences priekšrocība nav apstiprināta.":"Competitive advantage not confirmed."),benefits}
+      fab:{features:offers||(language==="lv"?"Prioritārais piedāvājums nav apstiprināts.":"Priority offer not confirmed."),advantages:advantage,benefits}
     };
     const scores={
       commercialClarity:scorePercent([offers,customer,outcomes,differentiation]),
@@ -100,7 +131,8 @@
     const diagnosis= scores.commercialClarity>=75
       ? copy(language,"diagnosisStrong")
       : copy(language,"diagnosisWeak");
-    return {status,positioningStatement,diagnosis,scores,frameworks,language};
+    const review={goldenCircle:{why:outcomes?"Evidence-backed":"Proposed · review recommended",how:differentiation?"Evidence-backed":"Proposed · review recommended",what:offers?"Evidence-backed":"Needs review"},valueProposition:customer&&offers&&outcomes?"Evidence-backed":"Needs review",fab:{features:offers?"Evidence-backed":"Needs review",advantages:differentiation?"Evidence-backed":"Proposed · review recommended",benefits:outcomes?"Evidence-backed":"Proposed · review recommended"}};
+    return {status,positioningStatement,diagnosis,scores,frameworks,review,language};
   }
 
   function deriveIdentity(profile={},input={}){
@@ -200,6 +232,7 @@
       .profile-analysis-card strong{display:block;color:var(--ink,#10231d);font-size:14px;margin-bottom:8px}
       .profile-analysis-card span{display:block;color:var(--muted,#6f7d77);font-size:13px;line-height:1.45}
       .profile-analysis-card .analysis-score{font:700 26px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--accent,#0f6b58);margin-bottom:8px}
+      .profile-analysis-card .analysis-status{display:inline-flex;padding:5px 8px;border-radius:999px;background:#f4eee0;color:#876920;font:600 10px/1.2 "IBM Plex Mono",monospace;margin-bottom:9px}.profile-analysis-card .analysis-status.evidence{background:#e7f2ea;color:#337247}.profile-analysis-card .analysis-status.review{background:#f4eee0;color:#876920}
       @media(max-width:1020px){.profile-analysis-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
       @media(max-width:620px){.profile-analysis-grid{grid-template-columns:1fr}}
       .identity-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
@@ -207,12 +240,13 @@
       @media(max-width:820px){.profile-identity-grid{grid-template-columns:1fr}.profile-identity-head{display:grid}.profile-identity-grid .profile-field.wide,.profile-identity-grid .identity-wide{grid-column:auto}}
     `;root.document.head.appendChild(style);
   }
-  function createInsightCard(root,title,value,score){
+  function createInsightCard(root,title,value,score,status,language="en"){
     const node=root.document.createElement("div");node.className="profile-analysis-card";
     const heading=root.document.createElement("strong");heading.textContent=title;
-    const text=root.document.createElement("span");text.textContent=clean(value)||"Needs confirmation.";
+    const text=root.document.createElement("span");text.textContent=clean(value)||uiText(language,"needsReview");
     node.append(heading);
     if(score!==undefined){const scoreNode=root.document.createElement("div");scoreNode.className="analysis-score";scoreNode.textContent=`${score}%`;node.append(scoreNode);}
+    if(status){const statusNode=root.document.createElement("small");statusNode.className=`analysis-status ${status==="Evidence-backed"?"evidence":"review"}`;statusNode.textContent=reviewLabel(language,status);node.append(statusNode);}
     node.append(text);return node;
   }
   function createField(root,key,label,value,readOnly,wide=true){
@@ -240,6 +274,8 @@
     const editor=root.document.getElementById("profile-editor");if(!editor||(!force&&!needsLayout(editor)))return;
     const state=readState(root);const profile=state.profile;if(!profile||typeof profile!=="object")return;
     const derived=root.LeadIntelProfile?.deriveBusinessIdentity?.(profile,state)||deriveIdentity(profile,state);
+    const analysisData=derived.analysis||deriveAnalysis(profile,state);
+    const language=analysisData.language||derived.identityLanguage||"lv";
     const generatedLanguageChanged=Boolean(derived.identityLanguage&&derived.identityLanguage!==profile.identityLanguage);
     const sample=editor.querySelector("textarea[data-profile-field]");const readOnly=sample?sample.readOnly:true;
     const existing=[...editor.querySelectorAll(".profile-field")];
@@ -247,41 +283,41 @@
     const take=key=>byKey.get(key)||null;
     byKey.get("companyOverview")?.remove();byKey.delete("companyOverview");
 
-    let summary=take("businessSummary");if(!summary)summary=createField(root,"businessSummary","Business summary",generatedLanguageChanged?derived.businessSummary:(profile.businessSummary||derived.businessSummary),readOnly,true);
-    let usp=take("uniqueSellingProposition");if(!usp)usp=createField(root,"uniqueSellingProposition","USP / value proposition",generatedLanguageChanged?derived.uniqueSellingProposition:(profile.uniqueSellingProposition||derived.uniqueSellingProposition),readOnly,true);
-    let pitch=take("elevatorPitch");if(!pitch)pitch=createField(root,"elevatorPitch","Elevator pitch",generatedLanguageChanged?derived.elevatorPitch:(profile.elevatorPitch||derived.elevatorPitch),readOnly,true);
+    let summary=take("businessSummary");if(!summary)summary=createField(root,"businessSummary",uiText(language,"businessSummaryField"),generatedLanguageChanged?derived.businessSummary:(profile.businessSummary||derived.businessSummary),readOnly,true);
+    let usp=take("uniqueSellingProposition");if(!usp)usp=createField(root,"uniqueSellingProposition",uiText(language,"uspField"),generatedLanguageChanged?derived.uniqueSellingProposition:(profile.uniqueSellingProposition||derived.uniqueSellingProposition),readOnly,true);
+    let pitch=take("elevatorPitch");if(!pitch)pitch=createField(root,"elevatorPitch",uiText(language,"pitchField"),generatedLanguageChanged?derived.elevatorPitch:(profile.elevatorPitch||derived.elevatorPitch),readOnly,true);
 
-    const business=section(root,"Business identity","A concise factual view of what the company does, what it sells and who it serves.",true);business.grid.append(summary);
-    const analysis=section(root,"Commercial analysis","What LeadIntel currently understands, how strong the evidence is, and what still requires confirmation.");
-    const analysisData=derived.analysis||deriveAnalysis(profile,state);
+    const business=section(root,uiText(language,"businessIdentity"),uiText(language,"businessIdentitySub"),true);business.grid.append(summary);
+    const analysis=section(root,uiText(language,"commercialAnalysis"),uiText(language,"commercialAnalysisSub"));
     analysis.grid.classList.add("profile-analysis-grid");
     analysis.grid.append(
-      createInsightCard(root,"Commercial clarity",analysisData.diagnosis,analysisData.scores?.commercialClarity),
-      createInsightCard(root,"ICP specificity","How clearly the ideal customer, buyer and outcome are defined.",analysisData.scores?.icpSpecificity),
-      createInsightCard(root,"Positioning strength","How clearly the offer, outcome and differentiation connect.",analysisData.scores?.positioningStrength),
-      createInsightCard(root,"Evidence confidence","Coverage of website, documents and supporting evidence.",analysisData.scores?.evidenceConfidence),
-      createInsightCard(root,"Positioning statement",analysisData.positioningStatement)
+      createInsightCard(root,analysisText(language,"clarity"),analysisData.diagnosis,analysisData.scores?.commercialClarity,undefined,language),
+      createInsightCard(root,analysisText(language,"icp"),analysisText(language,"icpDesc"),analysisData.scores?.icpSpecificity,undefined,language),
+      createInsightCard(root,analysisText(language,"strength"),analysisText(language,"strengthDesc"),analysisData.scores?.positioningStrength,undefined,language),
+      createInsightCard(root,analysisText(language,"evidence"),analysisText(language,"evidenceDesc"),analysisData.scores?.evidenceConfidence,undefined,language),
+      createInsightCard(root,analysisText(language,"statement"),analysisData.positioningStatement,undefined,analysisData.review?.valueProposition,language)
     );
-    const frameworks=section(root,"Commercial frameworks","Structured models that turn the evidence into usable sales and marketing language.");
+    const frameworks=section(root,uiText(language,"commercialFrameworks"),uiText(language,"commercialFrameworksSub"));
     frameworks.grid.classList.add("profile-analysis-grid");
     frameworks.grid.append(
-      createInsightCard(root,"Golden Circle · Why",analysisData.frameworks?.goldenCircle?.why),
-      createInsightCard(root,"Golden Circle · How",analysisData.frameworks?.goldenCircle?.how),
-      createInsightCard(root,"Golden Circle · What",analysisData.frameworks?.goldenCircle?.what),
-      createInsightCard(root,"Value proposition",analysisData.frameworks?.valueProposition),
-      createInsightCard(root,"FAB · Features",analysisData.frameworks?.fab?.features),
-      createInsightCard(root,"FAB · Advantages",analysisData.frameworks?.fab?.advantages),
-      createInsightCard(root,"FAB · Benefits",analysisData.frameworks?.fab?.benefits)
+      createInsightCard(root,uiText(language,"why"),analysisData.frameworks?.goldenCircle?.why,undefined,analysisData.review?.goldenCircle?.why,language),
+      createInsightCard(root,uiText(language,"how"),analysisData.frameworks?.goldenCircle?.how,undefined,analysisData.review?.goldenCircle?.how,language),
+      createInsightCard(root,uiText(language,"what"),analysisData.frameworks?.goldenCircle?.what,undefined,analysisData.review?.goldenCircle?.what,language),
+      createInsightCard(root,uiText(language,"valueProposition"),analysisData.frameworks?.valueProposition,undefined,analysisData.review?.valueProposition,language),
+      createInsightCard(root,uiText(language,"features"),analysisData.frameworks?.fab?.features,undefined,analysisData.review?.fab?.features,language),
+      createInsightCard(root,uiText(language,"advantages"),analysisData.frameworks?.fab?.advantages,undefined,analysisData.review?.fab?.advantages,language),
+      createInsightCard(root,uiText(language,"benefits"),analysisData.frameworks?.fab?.benefits,undefined,analysisData.review?.fab?.benefits,language)
     );
-    const positioning=section(root,"Commercial positioning","Why the ideal customer should choose this company instead of a credible alternative.");positioning.grid.append(usp);
+    const positioning=section(root,uiText(language,"commercialPositioning"),uiText(language,"commercialPositioningSub"));positioning.grid.append(usp);
     const diff=take("differentiation");if(diff)positioning.grid.append(diff);
     const meta=root.document.createElement("div");meta.className="identity-meta identity-wide";meta.innerHTML=`<span>${esc(profile.uspStatus||derived.uspStatus||"Proposed · confirmation recommended")}</span><span>${esc(profile.positioningConfidence||derived.positioningConfidence||"Needs confirmation")} confidence</span>`;positioning.grid.append(meta);
-    const sales=section(root,"Sales message","A short persuasive explanation that can be used in conversation and adapted for outreach.");sales.grid.append(pitch);
-    const context=section(root,"Commercial context","The confirmed inputs LeadIntel uses for targeting, qualification and signal discovery.");
+    const sales=section(root,uiText(language,"salesMessage"),uiText(language,"salesMessageSub"));sales.grid.append(pitch);
+    const context=section(root,uiText(language,"commercialContext"),uiText(language,"commercialContextSub"));
     const contextOrder=["priorityOffers","idealCustomer","buyingOutcomes","lookalikeCustomers","decisionMakers","currentMarkets","targetMarkets","marketFocus","buyingTriggers","exclusions","opportunityValue","commercialObjective"];
     const used=new Set(["companyOverview","businessSummary","uniqueSellingProposition","elevatorPitch","differentiation"]);
     for(const key of contextOrder){const node=take(key);if(node){context.grid.append(node);used.add(key);}}
     for(const [key,node] of byKey){if(!used.has(key))context.grid.append(node);}
+    editor.querySelectorAll("[data-profile-field]").forEach(field=>{const label=field.closest(".profile-field")?.querySelector("label");if(label)label.textContent=fieldText(language,field.dataset.profileField);});
 
     editor.replaceChildren(business.node,analysis.node,frameworks.node,positioning.node,sales.node,context.node);editor.classList.add("profile-identity-layout");
   }
