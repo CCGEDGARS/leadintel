@@ -10,7 +10,7 @@ const ui=fs.existsSync(uiPath)?fs.readFileSync(uiPath,'utf8'):'';
 const css=fs.existsSync(cssPath)?fs.readFileSync(cssPath,'utf8'):'';
 
 test('Master CRM is a persistent top-level workspace, not Step 8',()=>{
-  assert.match(processMap,/crm-ui\.js\?v=20260828-master-crm-v1/);
+  assert.match(processMap,/crm-ui\.js\?v=[a-zA-Z0-9-]+/);
   assert.equal(fs.existsSync(uiPath),true);
   assert.match(ui,/id="open-crm"/);
   assert.match(ui,/id="crm-workspace"/);
@@ -42,7 +42,7 @@ test('CRM company actions preserve lifecycle semantics and expose destructive de
 
 test('CRM uses its own responsive stylesheet',()=>{
   assert.equal(fs.existsSync(cssPath),true);
-  assert.match(ui,/VERSION='20260828-master-crm-v1'/);
+  assert.match(ui,/VERSION='[a-zA-Z0-9-]+'/);
   assert.match(ui,/crm\.css\?v=\$\{VERSION\}/);
   assert.match(css,/\.crm-workspace/);
   assert.match(css,/@media/);

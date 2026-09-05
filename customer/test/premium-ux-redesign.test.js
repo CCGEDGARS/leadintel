@@ -67,7 +67,7 @@ test('target market selector has a dedicated responsive styling layer',()=>{
 test('dynamic Customer V2 modules keep their own stable cache contract',()=>{
   for(const file of ['discovery-ui.js','outreach-ui.js','delivery-ui.js']){
     const source=read(file);
-    assert.match(source,/20260828-master-crm-v1/);
+    assert.match(source,/ASSET_VERSION="[a-zA-Z0-9-]+"/);
     assert.match(source,/\?v=/);
   }
   const bridge=read('server-bridge.js');

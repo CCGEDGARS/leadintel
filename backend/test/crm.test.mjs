@@ -31,6 +31,16 @@ const ctx=(workspaceId='w1',role='owner')=>({workspaceId,userId:'u1',role});
 const sqliteTest=(name,fn)=>test(name,{skip:DatabaseSync?false:'requires Node 22+ node:sqlite'},fn);
 const candidate=(domain='example.com')=>({company:{company_name:'Example Manufacturing',domain,website:`https://${domain}/`,country:'LV',industry:'Manufacturing',opportunity_score:81,confidence:'High',source:'discovery'},intelligence:{matched_signals:[{name:'Expansion'}],evidence:[{url:`https://${domain}/news`,title:'Expansion'}],opportunity_hypothesis:'Expansion creates an opportunity',score_breakdown:{fit:25}},contacts:[{id:'apollo-1',name:'Anna Buyer',title:'Procurement Director',work_email:'ANNA@EXAMPLE.COM',source:'apollo'}]});
 
+sqliteTest('suppression cannot be cleared by archive or customer actions, even by owner',async()=>{
+  for(const role of ['owner','sales'])for(const action of [archiveCrmCompany,markCrmCustomer]){
+    const db=new D1Db();
+    const saved=await upsertCrmCompany(db,ctx(),candidate());
+    await suppressCrmCompany(db,ctx(),saved.company.id);
+    await assert.rejects(action(db,ctx('w1',role),saved.company.id),e=>e.code==='CRM_COMPANY_SUPPRESSED');
+    assert.equal((await getCrmCompany(db,ctx(),saved.company.id)).company.lifecycle_status,'suppressed');
+  }
+});
+
 test('normalization creates stable CRM identities and maps the legacy pipeline stage',()=>{
   assert.equal(normalizeDomain('https://WWW.Example.com/products?a=1'),'example.com');
   assert.equal(normalizeDomain('not a domain'),'');
