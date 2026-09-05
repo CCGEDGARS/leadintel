@@ -1,4 +1,4 @@
-import './company-research-engine.js?v=20260826-intelligence-autofill-v2';
+import './company-research-engine.js?v=20260905-audit-v1';
 
 const engine=window.LeadIntelCompanyResearch;
 const MAX_AI_WEB_CHARS=3200;

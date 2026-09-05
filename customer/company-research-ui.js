@@ -1,4 +1,4 @@
-import './company-research-engine.js?v=20260905-content-language-layout-v1';
+import './company-research-engine.js?v=20260905-audit-v1';
 
 const MAIN_STORAGE_KEY='leadintel_customer_v2_state';
 const RESEARCH_META_KEY='leadintel_customer_v2_research_meta_v1';
@@ -6,7 +6,7 @@ const FIRECRAWL_PROXY='https://apollo-proxy.edgars-7e7.workers.dev';
 const LEADINTEL_API='https://leadintel-api.edgars-7e7.workers.dev';
 const MAX_COMPANY_RESEARCH_QUERIES=3;
 const MAX_RESULTS_PER_QUERY=4;
-const RELEASE='20260905-content-language-layout-v1';
+const RELEASE='20260905-audit-v1';
 let running=false;
 
 const engine=()=>window.LeadIntelCompanyResearch;
@@ -107,7 +107,7 @@ async function searchPublic(queryMeta){
   const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`Search returned ${response.status}`);return engine().normalizeSearchResults(payload,queryMeta);
 }
 async function waitForServerBridge(timeout=1800){
-  if(window.LeadIntelServerBridge?.session!==null)return window.LeadIntelServerBridge;
+  if(window.LeadIntelServerBridge&&window.LeadIntelServerBridge.session!==null)return window.LeadIntelServerBridge;
   return new Promise(resolve=>{let settled=false;const finish=()=>{if(settled)return;settled=true;window.removeEventListener('leadintel:server-ready',finish);resolve(window.LeadIntelServerBridge||null);};window.addEventListener('leadintel:server-ready',finish,{once:true});setTimeout(finish,timeout);});
 }
 async function aiDraftFor({website,targetMarkets,sources,documents,uiLanguage}){
@@ -147,11 +147,13 @@ async function runCompanyResearch({rerun=false}={}){
     const quality=researchEngine.evaluateResearchQuality({website,primary:research.primary,supporting:research.supporting,failures});
     if(!quality.publishable)throw new Error(`Research quality check failed: ${quality.issues.join(' ')}`);
     setProgress('Building evidence-backed context…',`${research.primary.length} primary and ${research.supporting.length} supporting sources passed the quality check.`);
-    const fallback=researchEngine.buildEvidenceDraft({sources:research.primary,targetMarkets:markets});const selectedContentLanguage=String(state.uiLanguage||"lv").toLowerCase()==="en"?"en":"lv";const ai=await aiDraftFor({website,targetMarkets:markets,sources:research.primary,documents:state.documents||[],uiLanguage:selectedContentLanguage});const draft=combineDrafts(fallback,ai.draft);const merged=researchEngine.mergeDraft(state.answers||{},draft);
+    const fallback=researchEngine.buildEvidenceDraft({sources:research.primary,targetMarkets:markets});const selectedContentLanguage=String(state.uiLanguage||"lv").toLowerCase()==="en"?"en":"lv";const ai=await aiDraftFor({website,targetMarkets:markets,sources:research.primary,documents:state.documents||[],uiLanguage:selectedContentLanguage});const draft=combineDrafts(fallback,ai.draft);const merged=researchEngine.mergeDraft(state.answers||{},draft,readMeta().fields||{});
+    const latest=readState();if(JSON.stringify(latest.answers||{})!==JSON.stringify(state.answers||{})||latest.website!==state.website)throw new Error('Workspace changed during research. Your edits were preserved; rerun when ready.');
     const next={...state};next.website=website;next.targetMarkets=markets;next.additionalLinks=additionalLinks;next.answers=merged.answers;
     next.scrapedSources=sources.map(source=>({type:source.type==='public'?'link':source.type,url:source.url,title:source.title,text:source.text,status:'ready',role:source.role||'supporting'}));
+    next.answerStatus={...(state.answerStatus||{})};for(const [id,row] of Object.entries(merged.meta)){next.answerStatus[id]=row.origin==='user'?'user':row.reviewed?'accepted':merged.answers[id]?'draft':'missing';}
     next.profile=null;next.approved=false;next.market={};next.step=2;writeState(next);
-    const fields={};for(const id of researchEngine.QUESTION_IDS){const row=merged.meta[id]||{};fields[id]={...row,reviewed:row.origin==='user',draftMode:ai.mode};}
+    const fields={};for(const id of researchEngine.QUESTION_IDS){const row=merged.meta[id]||{};fields[id]={...row,reviewed:Boolean(row.reviewed||row.origin==='user'),draftMode:ai.mode};}
     writeMeta({website,generatedAt:new Date().toISOString(),mode:ai.mode,provider:ai.provider||'',model:ai.model||'',sourceCount:sources.length,primarySourceCount:research.primary.length,supportingSourceCount:research.supporting.length,excludedSourceCount:research.excluded.length,characters:research.characters,limits:research.limits,quality,failures,reason:ai.reason||'',fields});
     setProgress('Research complete','Opening your evidence-backed draft for review.',{done:true});
     await window.LeadIntelServerBridge?.saveNow?.().catch(()=>null);

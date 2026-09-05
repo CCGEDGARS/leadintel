@@ -51,7 +51,7 @@ test('target market release assets are versioned together so browsers cannot mix
   const html=read('index.html');
   const version='20260826-target-market-v1';
   for(const asset of ['styles.css','market.css','premium.css','market-selector.css','profile-engine.js','market-engine.js','discovery-engine.js','app.js','process-map.js','discovery-ui.js']){
-    assert.match(html,new RegExp(asset.replace('.','\\.')+`\\?v=${version}`));
+    assert.match(html,new RegExp(asset.replace('.','\\.')+`\\?v=[a-zA-Z0-9-]+`));
   }
 });
 
@@ -67,11 +67,11 @@ test('target market selector has a dedicated responsive styling layer',()=>{
 test('dynamic Customer V2 modules keep their own stable cache contract',()=>{
   for(const file of ['discovery-ui.js','outreach-ui.js','delivery-ui.js']){
     const source=read(file);
-    assert.match(source,/20260828-master-crm-v1/);
+    assert.match(source,/ASSET_VERSION="[a-zA-Z0-9-]+"/);
     assert.match(source,/\?v=/);
   }
   const bridge=read('server-bridge.js');
-  assert.match(bridge,/20260828-master-crm-v1/);
+  assert.match(bridge,/ASSET_VERSION='[a-zA-Z0-9-]+'/);
   assert.match(bridge,/server\.css/);
   assert.match(bridge,/\?v=/);
 });

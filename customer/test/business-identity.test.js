@@ -24,6 +24,7 @@ const answers = {
 };
 const answerStatus = Object.fromEntries(Object.keys(answers).map(key=>[key,'user']));
 const input = {
+  uiLanguage:'en',
   website:'https://ccgroup.lv/',
   targetMarkets:['Latvia'],
   answers,
@@ -122,7 +123,7 @@ test('repairs scraped card headings that remain concatenated after CTA removal',
   const contaminatedOverview = 'Noliktavu optimizācija – mēs palīdzēsim aprīkot noliktavu un ražotni Realizētie projekti – iedvesma tavai darba videi Uzņēmumi, kas izvēlas mūsu risinājumus Instrumentu skapis SUPPLY Izturīgs metāla skapis efektīvai instrumentu un detaļu uzglabāšanai.';
   const migrated = profile.normalizeSavedState({...input, profile:{...built, companyOverview:contaminatedOverview, businessSummary:contaminatedOverview}});
   assert.doesNotMatch(migrated.profile.businessSummary, /Realizētie projekti|Uzņēmumi, kas izvēlas mūsu risinājumus/i);
-  assert.match(migrated.profile.businessSummary, /Noliktavu optimizācija|Instrumentu skapis SUPPLY/i);
+  assert.match(migrated.profile.businessSummary, /corporate sales training/i, 'confirmed offer must take precedence over an unrelated scraped product card');
 });
 
 
