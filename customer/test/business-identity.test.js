@@ -151,3 +151,20 @@ test('Step 1 runs evidence-first company research before the questionnaire', () 
   assert.match(researchEngine, /buildEvidenceDraft/);
   assert.match(researchEngine, /mergeDraft/);
 });
+
+
+test('Business Identity exposes a language selector and keeps generated Latvian copy consistent', () => {
+  const index = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  assert.match(index, /language-select/);
+
+  const lvInput = JSON.parse(JSON.stringify(input));
+  lvInput.uiLanguage = 'lv';
+  lvInput.answers.priority_offers = 'Biroja mēbeles, ergonomiski krēsli, regulējami galdi, noliktavu un darbnīcu aprīkojums, 3D vizualizācijas';
+  lvInput.answers.ideal_customer = 'Biroji, ražotnes, noliktavas, darbnīcas un izglītības iestādes';
+  lvInput.answers.buying_outcomes = '';
+  lvInput.scrapedSources = [{type:'website', url:'https://example.lv', text:'Piedāvājam biroja mēbeles, ergonomiskus krēslus, noliktavu aprīkojumu un darba vietu plānošanu ar 3D vizualizācijām.'}];
+  const result = profile.buildCompanyIntelligenceProfile(lvInput);
+  assert.equal(result.analysis.language, 'lv');
+  assert.match(result.analysis.frameworks.fab.benefits, /ergonom|sakārtot|vizualizēt/i);
+  assert.doesNotMatch(result.elevatorPitch, /We help|through|Our approach/i);
+});
