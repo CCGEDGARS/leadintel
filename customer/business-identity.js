@@ -104,7 +104,8 @@
   }
 
   function deriveIdentity(profile={},input={}){
-    const company=neutral(profile.companyName)||"The company";
+    const language=detectLanguage(profile,input);
+    const company=neutral(profile.companyName)||(language==="lv"?"Uzņēmums":"The company");
     const offers=splitOffers(profile.priorityOffers);
     const customer=identityValue(profile.idealCustomer);
     const outcomes=identityValue(profile.buyingOutcomes);
@@ -113,43 +114,43 @@
     const diffConfirmed=Boolean(differentiation)&&diffStatus!=="draft"&&diffStatus!=="missing";
 
     const summary=[];
-    if(offers)summary.push(`${company} is a business focused on ${lowerFirst(offers)}`);
+    if(offers)summary.push(language==="lv"?`Uzņēmums ${company} nodrošina ${lowerFirst(offers)}`:`${company} is a business focused on ${lowerFirst(offers)}`);
     else if(profile.companyOverview)summary.push(neutral(profile.companyOverview));
-    if(customer)summary.push(`It primarily serves ${lowerFirst(customer)}`);
-    if(outcomes)summary.push(`Customers engage ${company} to ${lowerFirst(outcomes)}`);
-    if(diffConfirmed)summary.push(`Its positioning is differentiated by ${lowerFirst(differentiation)}`);
+    if(customer)summary.push(language==="lv"?`Tas galvenokārt apkalpo ${lowerFirst(customer)}`:`It primarily serves ${lowerFirst(customer)}`);
+    if(outcomes)summary.push(language==="lv"?`Klienti izvēlas ${company}, lai ${lowerFirst(outcomes)}`:`Customers engage ${company} to ${lowerFirst(outcomes)}`);
+    if(diffConfirmed)summary.push(language==="lv"?`Pozicionējumu atšķir ${lowerFirst(differentiation)}`:`Its positioning is differentiated by ${lowerFirst(differentiation)}`);
     const businessSummary=limitWords(summary.map(sentence).join(" "),130);
 
     let uniqueSellingProposition="";
-    let uspStatus="Proposed · confirmation recommended";
+    let uspStatus=language==="lv"?copy(language,"proposed"):"Proposed · confirmation recommended";
     if(customer&&outcomes&&offers){
-      uniqueSellingProposition=`${company} helps ${lowerFirst(customer)} ${lowerFirst(outcomes)} through ${lowerFirst(offers)}`;
-      if(diffConfirmed)uniqueSellingProposition+=`, differentiated by ${lowerFirst(differentiation)}`;
+      uniqueSellingProposition=language==="lv"?`${company} palīdz ${lowerFirst(customer)} ${lowerFirst(outcomes)}, nodrošinot ${lowerFirst(offers)}`:`${company} helps ${lowerFirst(customer)} ${lowerFirst(outcomes)} through ${lowerFirst(offers)}`;
+      if(diffConfirmed)uniqueSellingProposition+=language==="lv"?`, ko atšķir ${lowerFirst(differentiation)}`:`, differentiated by ${lowerFirst(differentiation)}`;
       uniqueSellingProposition=sentence(uniqueSellingProposition);
     }else if(customer&&offers){
-      uniqueSellingProposition=sentence(`${company} serves ${lowerFirst(customer)} through ${lowerFirst(offers)}`);
+      uniqueSellingProposition=sentence(language==="lv"?`${company} apkalpo ${lowerFirst(customer)}, nodrošinot ${lowerFirst(offers)}`:`${company} serves ${lowerFirst(customer)} through ${lowerFirst(offers)}`);
     }else if(offers){
-      uniqueSellingProposition=sentence(`${company} provides ${lowerFirst(offers)}`);
+      uniqueSellingProposition=sentence(language==="lv"?`${company} piedāvā ${lowerFirst(offers)}`:`${company} provides ${lowerFirst(offers)}`);
     }
     if(diffConfirmed){
-      if(diffStatus==="user")uspStatus="Customer-confirmed";
-      else if(diffStatus==="accepted")uspStatus="Evidence-backed · accepted";
-      else uspStatus="Confirmed";
+      if(diffStatus==="user")uspStatus=language==="lv"?copy(language,"customerConfirmed"):"Customer-confirmed";
+      else if(diffStatus==="accepted")uspStatus=language==="lv"?copy(language,"evidenceAccepted"):"Evidence-backed · accepted";
+      else uspStatus=language==="lv"?copy(language,"confirmed"):"Confirmed";
     }
 
     const pitch=[];
-    if(customer&&outcomes)pitch.push(`We help ${lowerFirst(customer)} ${lowerFirst(outcomes)}`);
-    else if(customer&&offers)pitch.push(`We help ${lowerFirst(customer)} through ${lowerFirst(offers)}`);
-    else if(offers)pitch.push(`We provide ${lowerFirst(offers)}`);
-    if(offers&&customer&&outcomes)pitch.push(`${company} provides ${lowerFirst(offers)}`);
-    if(diffConfirmed)pitch.push(`Our approach is differentiated by ${lowerFirst(differentiation)}`);
+    if(customer&&outcomes)pitch.push(language==="lv"?`Mēs palīdzam ${lowerFirst(customer)} ${lowerFirst(outcomes)}`:`We help ${lowerFirst(customer)} ${lowerFirst(outcomes)}`);
+    else if(customer&&offers)pitch.push(language==="lv"?`Mēs palīdzam ${lowerFirst(customer)} ar ${lowerFirst(offers)}`:`We help ${lowerFirst(customer)} through ${lowerFirst(offers)}`);
+    else if(offers)pitch.push(language==="lv"?`${company} piedāvā ${lowerFirst(offers)}`:`${company} provides ${lowerFirst(offers)}`);
+    if(offers&&customer&&outcomes)pitch.push(language==="lv"?`${company} nodrošina ${lowerFirst(offers)}`:`${company} provides ${lowerFirst(offers)}`);
+    if(diffConfirmed)pitch.push(language==="lv"?`Mūsu pieeju atšķir ${lowerFirst(differentiation)}`:`Our approach is differentiated by ${lowerFirst(differentiation)}`);
     const elevatorPitch=limitWords(pitch.map(sentence).join(" "),90);
 
     const positioningInputs=[offers,customer,outcomes,diffConfirmed?differentiation:""] .filter(Boolean).length;
-    const positioningConfidence=positioningInputs===4&&hasEvidence(input)?"High":positioningInputs>=3?"Medium":"Needs confirmation";
+    const positioningConfidence=positioningInputs===4&&hasEvidence(input)?(language==="lv"?"Augsta":"High"):positioningInputs>=3?(language==="lv"?"Vidēja":"Medium"):(language==="lv"?"Nepieciešams apstiprinājums":"Needs confirmation");
     const analysis=deriveAnalysis(profile,input,{company,offers,customer,outcomes,differentiation});
     if(!uniqueSellingProposition)uniqueSellingProposition=analysis.frameworks.valueProposition;
-    return {businessSummary,uniqueSellingProposition,elevatorPitch,uspStatus,positioningConfidence,analysis};
+    return {businessSummary,uniqueSellingProposition,elevatorPitch,uspStatus,positioningConfidence,analysis,identityLanguage:language};
   }
 
   function patchProfileEngine(engine,root=null){
