@@ -76,6 +76,9 @@
     if(status==="Needs review")return uiText(language,"needsReview");
     return status||"";
   }
+  function analysisText(language,key){
+    const text={en:{clarity:"Commercial clarity",clarityDesc:"The commercial story is still a working hypothesis. Confirm the missing inputs before treating the positioning as final.",icp:"ICP specificity",icpDesc:"How clearly the ideal customer, buyer and outcome are defined.",strength:"Positioning strength",strengthDesc:"How clearly the offer, outcome and differentiation connect.",evidence:"Evidence confidence",evidenceDesc:"Coverage of website, documents and supporting evidence.",statement:"Positioning statement"},lv:{clarity:"Komerciālā skaidrība",clarityDesc:"Komerciālais stāsts joprojām ir darba hipotēze. Pirms pozicionējuma apstiprināšanas jāprecizē trūkstošā informācija.",icp:"Ideālā klienta precizitāte",icpDesc:"Cik skaidri ir definēts ideālais klients, pircējs un sasniedzamais rezultāts.",strength:"Pozicionējuma spēks",strengthDesc:"Cik skaidri savienojas piedāvājums, klienta rezultāts un atšķirība no alternatīvām.",evidence:"Pierādījumu pārliecība",evidenceDesc:"Tīmekļa vietnes, dokumentu un citu avotu sniegtā pamatojuma kvalitāte.",statement:"Pozicionēšanas formulējums"}};return (text[language]||text.en)[key]||key;
+  }
   function inferBenefits(offers,input={},profile={},language="en"){
     const text=clean([offers,profile.companyOverview,profile.differentiation,...(input.scrapedSources||[]).map(source=>source?.text),...(input.documents||[]).map(doc=>doc?.text)].join(" "));
     const benefits=[];const add=value=>{if(value&&!benefits.includes(value))benefits.push(value);};
@@ -282,11 +285,11 @@
     const analysis=section(root,uiText(language,"commercialAnalysis"),uiText(language,"commercialAnalysisSub"));
     analysis.grid.classList.add("profile-analysis-grid");
     analysis.grid.append(
-      createInsightCard(root,"Commercial clarity",analysisData.diagnosis,analysisData.scores?.commercialClarity,undefined,language),
-      createInsightCard(root,"ICP specificity","How clearly the ideal customer, buyer and outcome are defined.",analysisData.scores?.icpSpecificity,undefined,language),
-      createInsightCard(root,"Positioning strength","How clearly the offer, outcome and differentiation connect.",analysisData.scores?.positioningStrength,undefined,language),
-      createInsightCard(root,"Evidence confidence","Coverage of website, documents and supporting evidence.",analysisData.scores?.evidenceConfidence,undefined,language),
-      createInsightCard(root,"Positioning statement",analysisData.positioningStatement,undefined,analysisData.review?.valueProposition,language)
+      createInsightCard(root,analysisText(language,"clarity"),analysisData.diagnosis,analysisData.scores?.commercialClarity,undefined,language),
+      createInsightCard(root,analysisText(language,"icp"),analysisText(language,"icpDesc"),analysisData.scores?.icpSpecificity,undefined,language),
+      createInsightCard(root,analysisText(language,"strength"),analysisText(language,"strengthDesc"),analysisData.scores?.positioningStrength,undefined,language),
+      createInsightCard(root,analysisText(language,"evidence"),analysisText(language,"evidenceDesc"),analysisData.scores?.evidenceConfidence,undefined,language),
+      createInsightCard(root,analysisText(language,"statement"),analysisData.positioningStatement,undefined,analysisData.review?.valueProposition,language)
     );
     const frameworks=section(root,uiText(language,"commercialFrameworks"),uiText(language,"commercialFrameworksSub"));
     frameworks.grid.classList.add("profile-analysis-grid");
