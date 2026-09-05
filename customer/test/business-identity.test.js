@@ -114,3 +114,12 @@ test('Business Identity patches profile normalization before app state is loaded
   assert.ok(identityImport >= 0, 'app must load Business Identity before state initialization');
   assert.ok(identityImport < stateLoad, 'Business Identity import must precede loadState');
 });
+
+
+test('repairs scraped card headings that remain concatenated after CTA removal', () => {
+  const built = profile.buildCompanyIntelligenceProfile(input);
+  const contaminatedOverview = 'Noliktavu optimizācija – mēs palīdzēsim aprīkot noliktavu un ražotni Realizētie projekti – iedvesma tavai darba videi Uzņēmumi, kas izvēlas mūsu risinājumus Instrumentu skapis SUPPLY Izturīgs metāla skapis efektīvai instrumentu un detaļu uzglabāšanai.';
+  const migrated = profile.normalizeSavedState({...input, profile:{...built, companyOverview:contaminatedOverview, businessSummary:contaminatedOverview}});
+  assert.doesNotMatch(migrated.profile.businessSummary, /Realizētie projekti|Uzņēmumi, kas izvēlas mūsu risinājumus/i);
+  assert.match(migrated.profile.businessSummary, /Noliktavu optimizācija|Instrumentu skapis SUPPLY/i);
+});

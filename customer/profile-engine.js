@@ -79,6 +79,7 @@
   }
   function truncate(value,max=1200){const text=clean(value);return text.length>max?`${text.slice(0,max-1)}…`:text;}
   const NAVIGATION_LABEL_RE=/\bUZZINĀT\s+VAIRĀK\b|\b(?:LEARN|READ|VIEW)\s+MORE\b|\bGET\s+IN\s+TOUCH\b|\bCONTACT\s+US\b/gi;
+  const NAVIGATION_FRAGMENT_RE=/\bRealizētie\s+projekti\b|\bUzņēmumi,?\s+kas\s+izvēlas(?:\s+mūsu)?\s+risinājumus\b|\bCase\s+studies\b|\bCompanies\s+that\s+choose\s+us\b/i;
   function cleanEvidenceText(text){
     return String(text??"")
       .replace(/!\[[^\]]*\]\((?:https?:\/\/|data:)[^)]+\)/gi," ")
@@ -87,10 +88,15 @@
       .replace(/https?:\/\/[^\s)\]]+/gi," ")
       .replace(/\b\S+\.(?:png|jpe?g|gif|webp|svg)(?:\?\S*)?\b/gi," ")
       .replace(/[#*_`>|]/g," ")
-      .replace(NAVIGATION_LABEL_RE," ")
+      .replace(NAVIGATION_LABEL_RE,". ")
+      .replace(/\bRealizētie\s+projekti\s*[–—-]\s*iedvesma\s+tavai\s+darba\s+videi\b/gi,". ")
+      .replace(/\bUzņēmumi,?\s+kas\s+izvēlas(?:\s+mūsu)?\s+risinājumus\b/gi,". ")
+      .replace(/\bCase\s+studies\s*[–—-][^.!?]*/gi,". ")
+      .replace(/\bCompanies\s+that\s+choose\s+us\b/gi,". ")
       .replace(/\s+/g," ")
       .trim();
   }
+  function hasEvidenceNavigationNoise(value){return NAVIGATION_FRAGMENT_RE.test(String(value??""));}
   function hasAssetNoise(value){
     const text=String(value??"");
     return /!\[[^\]]*\]\(|(?:images\.)?squarespace-cdn\.com|https?:\/\/[^\s)\]]+\.(?:png|jpe?g|gif|webp|svg)(?:[?#][^\s)\]]*)?|\b\S+\.(?:png|jpe?g|gif|webp|svg)(?:[?#]\S*)?/i.test(text);
@@ -226,7 +232,7 @@
       const regeneratedOverview=deriveCompanyOverview(scrapedSources,docs);
       const regeneratedDigest=deriveEvidenceDigest(scrapedSources,docs);
       const companyName=clean(profile.companyName)||inferCompanyName(scrapedSources,value.website);
-      if(hasAssetNoise(profile.companyOverview))profile.companyOverview=regeneratedOverview||regeneratedDigest||`LeadIntel has limited public evidence for ${companyName}. Strategic answers are used as the primary context until more evidence is added.`;
+      if(hasAssetNoise(profile.companyOverview)||hasEvidenceNavigationNoise(profile.companyOverview))profile.companyOverview=regeneratedOverview||regeneratedDigest||`LeadIntel has limited public evidence for ${companyName}. Strategic answers are used as the primary context until more evidence is added.`;
       if(hasAssetNoise(profile.evidenceDigest))profile.evidenceDigest=regeneratedDigest;
     }
     return {
