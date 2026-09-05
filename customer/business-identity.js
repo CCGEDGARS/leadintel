@@ -189,7 +189,7 @@
     const heading=root.document.createElement("strong");heading.textContent=title;
     const text=root.document.createElement("span");text.textContent=clean(value)||"Needs confirmation.";
     node.append(heading);
-    if(score!==undefined){const scoreNode=root.document.createElement("div");scoreNode.className="analysis-score";scoreNode.textContent=\`${score}%\`;node.append(scoreNode);}
+    if(score!==undefined){const scoreNode=root.document.createElement("div");scoreNode.className="analysis-score";scoreNode.textContent=`${score}%`;node.append(scoreNode);}
     node.append(text);return node;
   }
   function createField(root,key,label,value,readOnly,wide=true){
