@@ -4,10 +4,10 @@
   function readState(){try{return JSON.parse(root.localStorage?.getItem(STORAGE_KEY)||"{}");}catch{return {};}}
   function language(){
     const state=readState();const stored=String(state.uiLanguage||root.localStorage?.getItem("leadintel_customer_v2_language")||"lv").toLowerCase();
-    return ["auto","en","lv"].includes(stored)?stored:"auto";
+    return ["auto","en","lv"].includes(stored)?stored:"lv";
   }
   function apply(value){
-    const selected=["auto","en","lv"].includes(value)?value:"auto";
+    const selected=["auto","en","lv"].includes(value)?value:"lv";
     const state=readState();state.uiLanguage=selected;
     try{root.localStorage.setItem(STORAGE_KEY,JSON.stringify(state));root.localStorage.setItem("leadintel_customer_v2_language",selected);}catch{}
     root.document.documentElement.lang=selected==="lv"?"lv":"en";
