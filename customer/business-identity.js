@@ -13,12 +13,13 @@
 
   function clean(value){return String(value??"").replace(/\s+/g," ").trim();}
   const NAVIGATION_LABELS=[/\bUZZINĀT\s+VAIRĀK\b/gi,/\b(?:LEARN|READ|VIEW)\s+MORE\b/gi,/\bGET\s+IN\s+TOUCH\b/gi,/\bCONTACT\s+US\b/gi];
+  const NAVIGATION_FRAGMENTS=[/\bRealizētie\s+projekti\b/i,/\bUzņēmumi,?\s+kas\s+izvēlas(?:\s+mūsu)?\s+risinājumus\b/i,/\bCase\s+studies\b/i,/\bCompanies\s+that\s+choose\s+us\b/i];
   function stripNavigationNoise(value){
     return String(value??"").replace(new RegExp(NAVIGATION_LABELS.map(pattern=>pattern.source).join("|"),"gi")," ").replace(/\s+/g," ").trim();
   }
   function hasNavigationNoise(value){
     const text=String(value??"");
-    return NAVIGATION_LABELS.some(pattern=>{pattern.lastIndex=0;return pattern.test(text);});
+    return NAVIGATION_LABELS.some(pattern=>{pattern.lastIndex=0;return pattern.test(text);})||NAVIGATION_FRAGMENTS.some(pattern=>pattern.test(text));
   }
   function stripNoise(value){
     return clean(String(value??"")
