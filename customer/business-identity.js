@@ -46,6 +46,7 @@
   function lowerFirst(value){const text=clean(value);return text?text.charAt(0).toLowerCase()+text.slice(1):"";}
   function words(value){return clean(value).split(/\s+/).filter(Boolean);}
   function limitWords(value,max){const list=words(value);return list.length<=max?clean(value):`${list.slice(0,max).join(" ").replace(/[,:;.-]+$/,"")}…`;}
+  function startsWithOffer(value,offers){const text=clean(value).toLowerCase();const offer=clean(offers).toLowerCase();return Boolean(text&&offer&&text.startsWith(offer));}
   function readStatus(input,id){return clean(input?.answerStatus?.[id]).toLowerCase();}
   function hasEvidence(input={}){return (input.scrapedSources||[]).some(item=>clean(item?.text))||(input.documents||[]).some(item=>clean(item?.text));}
   function identityValue(value){
@@ -204,7 +205,7 @@
       }
       const identity=deriveIdentity(normalized.profile,normalized);
       for(const key of ["businessSummary","uniqueSellingProposition","elevatorPitch"]){
-        if(!clean(normalized.profile[key])||hasNavigationNoise(normalized.profile[key]))normalized.profile[key]=identity[key];
+        if(!clean(normalized.profile[key])||hasNavigationNoise(normalized.profile[key])||(key==="businessSummary"&&startsWithOffer(normalized.profile[key],normalized.profile.priorityOffers)))normalized.profile[key]=identity[key];
       }
       if(!clean(normalized.profile.uspStatus))normalized.profile.uspStatus=identity.uspStatus;
       if(!clean(normalized.profile.positioningConfidence))normalized.profile.positioningConfidence=identity.positioningConfidence;
