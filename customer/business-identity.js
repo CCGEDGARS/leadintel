@@ -236,8 +236,8 @@
     if(outcomes&&!outcomes.closest('[data-profile-identity-section="commercial-context"]'))return true;
     return false;
   }
-  function layoutProfile(root){
-    const editor=root.document.getElementById("profile-editor");if(!editor||!needsLayout(editor))return;
+  function layoutProfile(root,force=false){
+    const editor=root.document.getElementById("profile-editor");if(!editor||(!force&&!needsLayout(editor)))return;
     const state=readState(root);const profile=state.profile;if(!profile||typeof profile!=="object")return;
     const derived=root.LeadIntelProfile?.deriveBusinessIdentity?.(profile,state)||deriveIdentity(profile,state);
     const generatedLanguageChanged=Boolean(derived.identityLanguage&&derived.identityLanguage!==profile.identityLanguage);
@@ -285,7 +285,7 @@
 
     editor.replaceChildren(business.node,analysis.node,frameworks.node,positioning.node,sales.node,context.node);editor.classList.add("profile-identity-layout");
   }
-  function queueLayout(root){if(layoutQueued)return;layoutQueued=true;setTimeout(()=>{layoutQueued=false;layoutProfile(root);},0);}
+  function queueLayout(root,force=false){if(layoutQueued)return;layoutQueued=true;setTimeout(()=>{layoutQueued=false;layoutProfile(root,force);},0);}
   function watchProfile(root){
     const editor=root.document.getElementById("profile-editor");if(!editor||typeof MutationObserver==="undefined")return;
     if(layoutObserver)layoutObserver.disconnect();layoutObserver=new MutationObserver(()=>queueLayout(root));layoutObserver.observe(editor,{childList:true,subtree:true});
@@ -295,7 +295,7 @@
     root.addEventListener("leadintel:module-opened",event=>{if(Number(event.detail?.step)===3){setTimeout(()=>queueLayout(root),0);setTimeout(()=>queueLayout(root),80);}});
     root.addEventListener("leadintel:workspace-changed",()=>queueLayout(root));
     root.addEventListener("leadintel:server-ready",()=>queueLayout(root));
-    root.addEventListener("leadintel:language-changed",()=>queueLayout(root));
+    root.addEventListener("leadintel:language-changed",()=>queueLayout(root,true));
     root.document.getElementById("edit-profile")?.addEventListener("click",()=>setTimeout(()=>queueLayout(root),0));
   }
 
