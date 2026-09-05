@@ -7,6 +7,7 @@ const profile = require('../profile-engine.js');
 const step2 = require('../step2-readiness-engine.js');
 step2.patchProfileEngine(profile, null);
 const identity = require('../business-identity.js');
+const research = require('../company-research-engine.js');
 identity.patchProfileEngine(profile, null);
 
 const answers = {
@@ -167,4 +168,28 @@ test('Business Identity exposes a language selector and keeps generated Latvian 
   assert.equal(result.analysis.language, 'lv');
   assert.match(result.analysis.frameworks.fab.benefits, /ergonom|sakārtot|vizualizēt/i);
   assert.doesNotMatch(result.elevatorPitch, /We help|through|Our approach/i);
+});
+
+
+test('Latvian default produces complete evidence-backed framework conclusions', () => {
+  const lvInput = JSON.parse(JSON.stringify(input));
+  lvInput.uiLanguage = 'lv';
+  lvInput.answers.priority_offers = 'Biroja mēbeles, ergonomiski krēsli, regulējami galdi, noliktavu un darbnīcu aprīkojums, 3D vizualizācijas';
+  lvInput.answers.ideal_customer = 'Biroji, ražotnes, noliktavas, darbnīcas un izglītības iestādes';
+  lvInput.answers.buying_outcomes = '';
+  lvInput.answers.differentiation = '';
+  lvInput.scrapedSources = [{type:'website',url:'https://example.lv',text:'Piedāvājam biroja mēbeles, ergonomiskus krēslus, noliktavu aprīkojumu un darba vietu plānošanu ar 3D vizualizācijām.'}];
+  const result = profile.buildCompanyIntelligenceProfile(lvInput);
+  assert.equal(result.analysis.language, 'lv');
+  assert.doesNotMatch(result.analysis.frameworks.goldenCircle.why, /Jāprecizē klienta rezultāts/i);
+  assert.doesNotMatch(result.analysis.frameworks.fab.advantages, /nav apstiprināta/i);
+  assert.match(result.analysis.frameworks.fab.advantages, /plāno|ergonom|vizualiz|efektīv/i);
+  assert.match(result.analysis.frameworks.fab.benefits, /ergonom|sakārtot|vizualizēt/i);
+  assert.doesNotMatch(result.elevatorPitch, /We help|through|Our approach/i);
+});
+
+test('Research synthesis prompt requires fully Latvian ready-to-use output', () => {
+  const prompt = research.buildAiPrompt({website:'https://example.lv',targetMarkets:['Latvia'],uiLanguage:'lv',sources:[],documents:[]});
+  assert.match(prompt.prompt, /Latvian|latviešu/i);
+  assert.match(prompt.prompt, /same language|one language|ready-to-use/i);
 });
