@@ -51,6 +51,15 @@
     return clamp(opp?.score?.total,0,100,50);
   }
 
+  function buildCandidateNarrative(candidate={},language='en'){
+    const company=clean(candidate.company)||clean(candidate.domain)||'Company';
+    const total=clamp(candidate?.score?.total,0,100,0);
+    const sources=Array.isArray(candidate.evidence)?candidate.evidence.length:0;
+    const signal=clean(candidate?.matchedSignals?.[0]?.name);
+    if(String(language).toLowerCase()==='lv')return `${company} novērtējums ir ${total}/100, balstoties uz ${sources} publiski pieejam${sources===1?'u avotu':'iem avotiem'}${signal?` un konstatēto signālu “${signal}”`:''}. Vērtējums norāda uz izpētes prioritāti, nevis apstiprinātu pirkšanas nodomu.`;
+    return `${company} is ranked ${total}/100 using ${sources} public evidence source${sources===1?'':'s'}${signal?` and the matched signal “${signal}”`:''}. The score indicates research priority, not confirmed buying intent.`;
+  }
+
   function buildDiscoveryQueries(profile={},marketState={},maxQueries=4){
     const hasCompanyContext=Boolean(clean(profile.website)||clean(profile.companyName)||clean(profile.priorityOffers)||clean(profile.idealCustomer));
     if(!hasCompanyContext)return [];
@@ -264,5 +273,5 @@
     };
   }
 
-  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,buildDiscoveryQueries,normalizeCompanySearchResults,mergeCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,canonicalDomain,isBlockedDomain};
+  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,buildDiscoveryQueries,buildCandidateNarrative,normalizeCompanySearchResults,mergeCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,canonicalDomain,isBlockedDomain};
 });

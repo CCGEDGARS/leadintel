@@ -6,9 +6,11 @@ const INTELLIGENCE_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
 const MAX_DOSSIER_SEARCH_QUERIES=2;
 const MAX_DOSSIER_RESULTS_PER_QUERY=5;
 const ASSET_VERSION="20260828-master-crm-v1";
+const LANGUAGE_ASSET_VERSION="20260905-step1-language-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const q=id=>document.getElementById(id);
 let outreach=loadOutreach();
+function contentLanguage(){const main=mainState();return LeadIntelContentLanguage.resolveLanguage(window.LeadIntelLanguage?.get?.()||main.uiLanguage||'lv',navigator.languages||[]);}
 
 function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
 function readJson(key){try{return JSON.parse(localStorage.getItem(key)||"{}");}catch{return {};}}
@@ -99,13 +101,13 @@ async function buildDossier(){
   item={...item,company:candidate.company,researchStatus:"running",approved:false,approvedAt:"",contactedAt:""};upsertItem(item);renderAll();
   const research=[];let failures=0;try{research.push(...await officialScrape(candidate));}catch{failures++;}
   const queries=LeadIntelOutreach.buildDossierSearchQueries(candidate,main.profile||{},main.market||{},MAX_DOSSIER_SEARCH_QUERIES);for(const meta of queries){try{research.push(...await dossierSearch(meta));}catch{failures++;}}
-  const dossier=LeadIntelOutreach.buildOpportunityDossier(candidate,main.profile||{},main.market||{},research);const contact=candidate.people?.[0]||null;const tone=item.drafts?.tone||"consultative";
-  item={...item,dossier,researchStatus:research.length?(failures?"partial":"complete"):"error",researchAt:new Date().toISOString(),selectedPersonId:contact?.id||"",drafts:LeadIntelOutreach.buildOutreachDrafts(dossier,contact,main.profile||{},tone),approved:false,approvedAt:""};upsertItem(item);
+  const language=contentLanguage();const dossier=LeadIntelOutreach.buildOpportunityDossier(candidate,main.profile||{},main.market||{},research,language);const contact=candidate.people?.[0]||null;const tone=item.drafts?.tone||"consultative";
+  item={...item,dossier,researchStatus:research.length?(failures?"partial":"complete"):"error",researchAt:new Date().toISOString(),selectedPersonId:contact?.id||"",drafts:LeadIntelOutreach.buildOutreachDrafts(dossier,contact,main.profile||{},tone,language),contentLanguage:language,approved:false,approvedAt:""};upsertItem(item);
   const crm=await syncCrmActivity(candidate,{activity:{id:crmActivityId("dossier-built",candidate.domain,item.researchAt),type:"dossier.built",summary:"Opportunity dossier built",occurred_at:item.researchAt,metadata:{evidence_count:dossier.evidence?.length||0,research_status:item.researchStatus}}});renderAll();
   const baseMessage=research.length?`Dossier built from ${dossier.evidence.length} evidence source${dossier.evidence.length===1?"":"s"}${failures?" · some research unavailable":""}`:"Dossier kept conservative because public research was unavailable";toast(!crm.ok?`${baseMessage} · CRM sync unavailable`:baseMessage);
 }
 function selectedContact(item){if(!item?.dossier?.people?.length)return null;return item.dossier.people.find(p=>p.id===item.selectedPersonId)||item.dossier.people[0];}
-function regenerateDrafts(){const item=currentItem();if(!item?.dossier)return;if(item.approved){toast("Approved package is locked. Rebuild the dossier to create a new draft.");return;}item.selectedPersonId=q("outreach-contact-select").value;item.drafts=LeadIntelOutreach.buildOutreachDrafts(item.dossier,selectedContact(item),mainState().profile||{},q("outreach-tone").value);upsertItem(item);renderDossier();}
+function regenerateDrafts(){const item=currentItem();if(!item?.dossier)return;if(item.approved){toast("Approved package is locked. Rebuild the dossier to create a new draft.");return;}item.selectedPersonId=q("outreach-contact-select").value;item.drafts=LeadIntelOutreach.buildOutreachDrafts(item.dossier,selectedContact(item),mainState().profile||{},q("outreach-tone").value,contentLanguage());item.contentLanguage=contentLanguage();upsertItem(item);renderDossier();}
 function readDraftEdits(){const item=currentItem();if(!item)return null;item.drafts={tone:q("outreach-tone").value,emailSubject:q("outreach-email-subject").value.trim(),emailBody:q("outreach-email-body").value,linkedinMessage:q("outreach-linkedin").value,callOpener:q("outreach-call-opener").value,followUp:q("outreach-follow-up").value,objectionReply:q("outreach-objection-reply").value};upsertItem(item);return item;}
 async function approveOutreach(){let item=readDraftEdits();if(!item?.dossier){toast("Build the dossier first");return;}item=LeadIntelOutreach.approveOutreachItem(item,item.drafts,new Date().toISOString());upsertItem(item);if(!item.approved){toast(item.error);renderDossier();return;}updatePipelineStage(item.domain,"Ready for Outreach");const candidate=selectedCandidate()||{domain:item.domain,company:item.company,stage:"Ready for Outreach"};const crm=await syncCrmActivity(candidate,{activity:{id:crmActivityId("content-approved",item.domain,item.approvedAt),type:"content.approved",summary:"Outreach content package approved",occurred_at:item.approvedAt,metadata:{tone:item.drafts?.tone||"",selected_person_id:item.selectedPersonId||""}},stage:"Ready for Outreach"});renderDossier();toast(crm.ok?"Content package approved · Pipeline is Ready for Outreach":"Content approved locally · CRM sync unavailable");}
 async function markContacted(){const item=currentItem();if(!item?.approved){toast("Approve the content package first");return;}updatePipelineStage(item.domain,"Contacted");item.contactedAt=new Date().toISOString();upsertItem(item);const candidate=selectedCandidate()||{domain:item.domain,company:item.company,stage:"Contacted"};const crm=await syncCrmActivity(candidate,{stage:"Contacted"});renderDossier();toast(crm.ok?"Opportunity marked Contacted":"Contacted locally · CRM sync unavailable");}
@@ -128,15 +130,17 @@ function renderDossier(){const item=currentItem();const workspace=q("dossier-wor
   q("approve-outreach").disabled=Boolean(item.approved);q("approve-outreach").textContent=item.approved?"Approved ✓":"Approve content package";q("mark-contacted").disabled=!item.approved||Boolean(item.contactedAt);q("mark-contacted").textContent=item.contactedAt?"Contacted ✓":"Mark contacted";
   q("outreach-approval-label").textContent=item.contactedAt?`Contacted · ${new Date(item.contactedAt).toLocaleString()}`:item.approved?`Approved · ${new Date(item.approvedAt).toLocaleString()}`:"Draft not approved";q("outreach-status").textContent=item.contactedAt?"Contacted":item.approved?"Approved":"Draft";q("outreach-status").classList.toggle("approved",Boolean(item.approved));
 }
-function renderAll(){ensureSelection();renderSelector();renderDossier();}
+function localizeVisibleItem(){const item=currentItem();if(!item||item.approved)return;const main=mainState();const localized=LeadIntelOutreach.localizeGeneratedItem(item,selectedCandidate()||item.dossier,main.profile||{},main.market||{},contentLanguage());if(localized!==item)upsertItem(localized);}
+function renderAll(){ensureSelection();localizeVisibleItem();renderSelector();renderDossier();}
 function bindOutreach(){
   q("continue-to-outreach")?.addEventListener("click",showOutreachStep);q("back-to-discovery")?.addEventListener("click",backToDiscovery);q("outreach-company-select")?.addEventListener("change",e=>{outreach.selectedDomain=e.target.value;saveOutreach();renderDossier();});q("build-opportunity-dossier")?.addEventListener("click",buildDossier);q("regenerate-outreach")?.addEventListener("click",regenerateDrafts);q("approve-outreach")?.addEventListener("click",approveOutreach);q("mark-contacted")?.addEventListener("click",markContacted);q("dossier-workspace")?.addEventListener("click",e=>{const btn=e.target.closest("[data-copy-field]");if(btn)copyField(btn.dataset.copyField);});q("reset-workspace")?.addEventListener("click",()=>setTimeout(()=>{if(!localStorage.getItem(MAIN_STORAGE_KEY))localStorage.removeItem(OUTREACH_STORAGE_KEY);},0));
   window.addEventListener("leadintel:module-opened",event=>{if(Number(event.detail?.step)!==6)return;ensureSelection();renderAll();});
+  window.addEventListener("leadintel:language-changed",renderAll);
 }
 function loadDeliveryModules(){
   if(document.querySelector('script[data-delivery-engine]'))return;
-  const engine=document.createElement("script");engine.src=asset("delivery-engine.js");engine.dataset.deliveryEngine="true";
-  engine.addEventListener("load",()=>{if(document.querySelector('script[data-delivery-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src=asset("delivery-ui.js");ui.dataset.deliveryUi="true";document.body.appendChild(ui);});
+  const engine=document.createElement("script");engine.src=`delivery-engine.js?v=${LANGUAGE_ASSET_VERSION}`;engine.dataset.deliveryEngine="true";
+  engine.addEventListener("load",()=>{if(document.querySelector('script[data-delivery-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src=`delivery-ui.js?v=${LANGUAGE_ASSET_VERSION}`;ui.dataset.deliveryUi="true";document.body.appendChild(ui);});
   document.body.appendChild(engine);
 }
 function initOutreach(){injectOutreachUI();bindOutreach();renderAll();if(mainState().step===6)showOutreachStep();loadDeliveryModules();}

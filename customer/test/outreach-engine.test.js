@@ -92,3 +92,29 @@ test('normalizeOutreachState caps items and sanitizes research state',()=>{
   assert.equal(state.items[0].researchStatus,'idle');
   assert.equal(state.selectedDomain,'company1.example');
 });
+
+test('dossier conclusions and outreach package are generated in selected Latvian',()=>{
+  const lvProfile={...profile,priorityOffers:'rūpnieciskā automatizācija',differentiation:'ātra projektēšana un pielāgota piegāde'};
+  const lvMarket={...market,signals:[{id:'modernization',name:'Iekārtu modernizācija',active:true,weight:9,keywords:'modernizācija'}]};
+  const lvCandidate={...candidate,matchedSignals:[{id:'modernization',name:'Iekārtu modernizācija',weight:9,matchedTerms:['modernizācija']}]};
+  const dossier=Outreach.buildOpportunityDossier(lvCandidate,lvProfile,lvMarket,[],'lv');
+  assert.match(dossier.whyNow,/Publiski pieejamā informācija/);
+  assert.ok(dossier.hypotheses.every(text=>text.startsWith('Hipotēze:')));
+  const drafts=Outreach.buildOutreachDrafts(dossier,candidate.people[0],lvProfile,'consultative','lv');
+  assert.match(drafts.emailBody,/Labdien, Anna/);
+  assert.match(drafts.emailBody,/Ar cieņu/);
+  assert.match(drafts.linkedinMessage,/Nordic Factory AB/);
+  assert.match(drafts.objectionReply,/saprotu/i);
+  assert.doesNotMatch(Object.values(drafts).join(' '),/\b(?:Hello|I noticed|Best|Would that be reasonable|That makes sense)\b/i);
+});
+
+test('localizeGeneratedItem switches generated dossier and drafts but preserves customer-edited copy',()=>{
+  const dossier=Outreach.buildOpportunityDossier(candidate,profile,market,[],'en');
+  const drafts=Outreach.buildOutreachDrafts(dossier,candidate.people[0],profile,'consultative','en');
+  drafts.linkedinMessage='Customer-edited LinkedIn text';
+  const localized=Outreach.localizeGeneratedItem({domain:candidate.domain,company:candidate.company,dossier,selectedPersonId:'p1',drafts},candidate,profile,market,'lv');
+  assert.match(localized.dossier.whyNow,/Publiski pieejamā informācija/);
+  assert.match(localized.drafts.emailBody,/Labdien, Anna/);
+  assert.equal(localized.drafts.linkedinMessage,'Customer-edited LinkedIn text');
+  assert.equal(localized.contentLanguage,'lv');
+});

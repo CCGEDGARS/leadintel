@@ -4,6 +4,7 @@ const INTELLIGENCE_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
 const MAX_DISCOVERY_QUERIES=4;
 const MAX_DISCOVERY_RESULTS_PER_QUERY=5;
 const ASSET_VERSION="20260828-master-crm-v1";
+const LANGUAGE_ASSET_VERSION="20260905-step1-language-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const $=id=>document.getElementById(id);
 let discovery=loadDiscovery();
@@ -13,6 +14,7 @@ let crmAvailable=false;
 let crmRefreshing=false;
 const enrichmentResults=new Map();
 const enrichmentPending=new Set();
+function contentLanguage(){const main=mainState();return LeadIntelContentLanguage.resolveLanguage(window.LeadIntelLanguage?.get?.()||main.uiLanguage||'lv',navigator.languages||[]);}
 
 function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
 function mainState(){try{return JSON.parse(localStorage.getItem(MAIN_STORAGE_KEY)||"{}");}catch{return {};}}
@@ -61,6 +63,7 @@ function renderCandidates(){const target=$("company-candidates");if(!target)retu
     <div class="company-score-grid">${scoreCell("Fit",c.score.fit,30)}${scoreCell("Signal",c.score.signal,25)}${scoreCell("Evidence",c.score.evidence,20)}${scoreCell("Timing",c.score.timing,15)}${scoreCell("Value",c.score.value,10)}</div>
     <div class="candidate-meta"><span class="confidence ${String(c.confidence).toLowerCase()}">${esc(c.confidence)} confidence</span><span>${c.evidence.length} source${c.evidence.length===1?"":"s"}</span><span>${c.matchedSignals.length} matched signal${c.matchedSignals.length===1?"":"s"}</span>${crm.company?`<span>${esc(crmLabel)}</span>`:""}</div>
     <div class="matched-signals">${c.matchedSignals.length?c.matchedSignals.map(s=>`<span><strong>${esc(s.name)}</strong> · ${esc(s.matchedTerms.join(", "))}</span>`).join(""):'<span class="muted-signal">No active signal term found in the returned company evidence.</span>'}</div>
+    <p class="candidate-narrative" lang="${contentLanguage()}">${esc(LeadIntelDiscovery.buildCandidateNarrative(c,contentLanguage()))}</p>
     <div class="candidate-evidence">${c.evidence.map(e=>`<a href="${esc(e.url)}" target="_blank" rel="noopener"><strong>${esc(e.title||c.domain)}</strong><small>${esc(e.description||e.text).slice(0,190)}</small></a>`).join("")}</div>
     <div class="decision-makers"><div class="decision-head"><strong>Decision makers</strong><button class="secondary-btn small" type="button" data-action="find-decision-makers" data-company-index="${index}" ${c.peopleStatus==="loading"?"disabled":""}>${c.people?.length?"Refresh people":"Find decision-makers"}</button></div>${peopleHtml(c,index)}</div>
     <div class="candidate-actions"><button class="secondary-btn small" type="button" data-action="save-crm" data-company-index="${index}" ${crmDisabled?"disabled":""}>${crmAuthenticated()?crmLabel:"Sign in for CRM"}</button><button class="primary-btn small" type="button" data-action="add-pipeline" data-company-index="${index}" ${pipelineDisabled?"disabled":""}>${pipelineLabel}</button></div>
@@ -88,7 +91,8 @@ function bindDiscovery(){
   window.addEventListener("leadintel:server-ready",()=>refreshCrmState());
   window.addEventListener("leadintel:crm-migrated",()=>refreshCrmState());
   window.addEventListener("leadintel:crm-changed",()=>refreshCrmState());
+  window.addEventListener("leadintel:language-changed",renderAll);
 }
-function loadOutreachModules(){if(document.querySelector('script[data-outreach-engine]'))return;const engine=document.createElement("script");engine.src=asset("outreach-engine.js");engine.dataset.outreachEngine="true";engine.addEventListener("load",()=>{if(document.querySelector('script[data-outreach-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src=asset("outreach-ui.js");ui.dataset.outreachUi="true";document.body.appendChild(ui);});document.body.appendChild(engine);}
+function loadOutreachModules(){if(document.querySelector('script[data-outreach-engine]'))return;const engine=document.createElement("script");engine.src=`outreach-engine.js?v=${LANGUAGE_ASSET_VERSION}`;engine.dataset.outreachEngine="true";engine.addEventListener("load",()=>{if(document.querySelector('script[data-outreach-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src=`outreach-ui.js?v=${LANGUAGE_ASSET_VERSION}`;ui.dataset.outreachUi="true";document.body.appendChild(ui);});document.body.appendChild(engine);}
 function initDiscovery(){injectDiscoveryUI();bindDiscovery();syncStrategyFingerprint();renderAll();if(mainState().step===5&&moduleReady())showDiscoveryStep();else if(loadMeta().visibleStep===5&&moduleReady())showDiscoveryStep();if(crmAuthenticated())refreshCrmState();loadOutreachModules();}
 initDiscovery();

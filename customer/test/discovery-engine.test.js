@@ -2,6 +2,14 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const Discovery = require('../discovery-engine.js');
 
+test('candidate explanation is generated in selected Latvian without changing identity or scores',()=>{
+  const narrative=Discovery.buildCandidateNarrative({company:'Nordic Factory AB',score:{total:82},confidence:'High',matchedSignals:[{name:'Ražošanas modernizācija'}],evidence:[{url:'https://nordic.example/news'}]},'lv');
+  assert.match(narrative,/Nordic Factory AB/);
+  assert.match(narrative,/82\/100/);
+  assert.match(narrative,/Ražošanas modernizācija/);
+  assert.doesNotMatch(narrative,/\b(?:ranked|evidence|signal)\b/i);
+});
+
 const profile={
   companyName:'Acme Industrial',website:'https://acme.example/',priorityOffers:'industrial automation; custom machinery',
   idealCustomer:'manufacturers with 50–500 employees',decisionMakers:'COO; Procurement Director; Plant Manager',

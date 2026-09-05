@@ -151,7 +151,8 @@
     const pipe=(pipeline||[]).find(item=>normalizeDomain(item?.domain)===record.domain)||{};
     return {...record,tone:record.tone||clean(pkg?.drafts?.tone).toLowerCase(),market:record.market||clean(pkg?.dossier?.market)||clean(pipe?.market),offer:record.offer||clean(pkg?.dossier?.recommendedOffer),signals:record.signals?.length?record.signals:splitSignals(pkg?.dossier?.matchedSignals||pipe?.matchedSignals)};
   }
-  function buildLearningSummary(state,outreachItems=[],pipeline=[],minSample=3){
+  function buildLearningSummary(state,outreachItems=[],pipeline=[],minSample=3,language='en'){
+    const lv=String(language||'en').toLowerCase()==='lv';
     const normalized=normalizeDeliveryState(state);const sample=Math.max(1,Number(minSample)||3);
     const records=normalized.opportunities.filter(item=>item.sentAt).map(item=>contextFor(item,outreachItems,pipeline));
     const replied=records.filter(item=>item.replies?.length).length;
@@ -164,8 +165,14 @@
       const eligible=segments.filter(item=>item.sent>=sample);if(!eligible.length)return;
       const field=metric==="meeting"?"meetingRate":"replyRate";const top=[...eligible].sort((a,b)=>b[field]-a[field]||b.sent-a.sent)[0];
       if(top[field]<=0)return;
-      const noun=label==="tone"?`${titleCase(top.key)} tone`:`${top.key} ${label}`;
-      recommendations.push(`${noun} has ${top.sent} sends and a ${top[field]}% ${metric==="meeting"?"meeting":"reply"} rate. Keep prioritizing it cautiously while the sample grows.`);
+      if(lv){
+        const labels={tone:'tonis',market:'tirgus',offer:'piedāvājums',signal:'signāls'};
+        const toneNames={consultative:'konsultatīvs',direct:'tiešs',brief:'īss'};const key=label==='tone'?(toneNames[top.key]||top.key):top.key;
+        recommendations.push(`“${key}” ${labels[label]||label}: ${top.sent} nosūtījumi un ${top[field]}% ${metric==="meeting"?'tikšanos':'atbilžu'} rādītājs. Turpiniet šo virzienu prioritizēt piesardzīgi, kamēr izlase pieaug.`);
+      }else{
+        const noun=label==="tone"?`${titleCase(top.key)} tone`:`${top.key} ${label}`;
+        recommendations.push(`${noun} has ${top.sent} sends and a ${top[field]}% ${metric==="meeting"?"meeting":"reply"} rate. Keep prioritizing it cautiously while the sample grows.`);
+      }
     };
     addTop(byTone,"tone","reply");addTop(byMarket,"market","reply");addTop(byOffer,"offer","reply");addTop(bySignal,"signal","meeting");
     return {metrics:{sent:records.length,replied,replyRate:percent(replied,records.length),meetings,meetingRate:percent(meetings,records.length),proposals,won,lost,winRate:percent(won,won+lost)},byTone,byMarket,byOffer,bySignal,recommendations:recommendations.slice(0,6),minimumSample:sample};

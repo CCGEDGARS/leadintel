@@ -43,7 +43,10 @@
     return selected.length?selected:splitList(profile.currentMarkets);
   }
 
-  function buildIcpCandidates(profile={}){
+  function isLv(language){return String(language||'en').toLowerCase()==='lv';}
+
+  function buildIcpCandidates(profile={},language='en'){
+    const lv=isLv(language);
     const targetMarkets=clean(profile.targetMarkets)||splitList(profile.currentMarkets).join("; ")||"Priority markets not yet defined";
     const common={
       targetMarkets,
@@ -54,19 +57,19 @@
       active:true
     };
     const result=[{
-      id:"icp-core",type:"core",name:"Core ICP",...common,
-      description:clean(profile.idealCustomer)||"Companies matching the approved ideal-customer definition.",
-      rationale:`Directly reflects the approved ideal customer, buying roles, priority offers and commercial value for ${targetMarkets}.`
+      id:"icp-core",type:"core",name:lv?"Pamata ideālā klienta profils":"Core ICP",...common,
+      description:clean(profile.idealCustomer)||(lv?"Uzņēmumi, kas atbilst apstiprinātajai ideālā klienta definīcijai.":"Companies matching the approved ideal-customer definition."),
+      rationale:lv?`Tieši atspoguļo apstiprināto ideālā klienta profilu, pircēju lomas, prioritāros piedāvājumus un komerciālo vērtību tirgos: ${targetMarkets}.`:`Directly reflects the approved ideal customer, buying roles, priority offers and commercial value for ${targetMarkets}.`
     }];
     if(clean(profile.lookalikeCustomers))result.push({
-      id:"icp-lookalike",type:"lookalike",name:"Lookalike ICP",...common,
-      description:`Companies with business characteristics similar to ${clean(profile.lookalikeCustomers)}.`,
-      rationale:`Use ${clean(profile.lookalikeCustomers)} as commercial anchors, then look for similar organizations in ${targetMarkets}.`
+      id:"icp-lookalike",type:"lookalike",name:lv?"Līdzīgo uzņēmumu profils":"Lookalike ICP",...common,
+      description:lv?`Uzņēmumi ar līdzīgām darbības pazīmēm kā ${clean(profile.lookalikeCustomers)}.`:`Companies with business characteristics similar to ${clean(profile.lookalikeCustomers)}.`,
+      rationale:lv?`Izmantot ${clean(profile.lookalikeCustomers)} kā komerciālos atskaites punktus un meklēt līdzīgas organizācijas tirgos: ${targetMarkets}.`:`Use ${clean(profile.lookalikeCustomers)} as commercial anchors, then look for similar organizations in ${targetMarkets}.`
     });
     result.push({
-      id:"icp-trigger-led",type:"trigger-led",name:"Trigger-led ICP",...common,
-      description:`Companies that fit the core profile and are currently showing relevant buying signals.`,
-      rationale:`Prioritize organizations where ${clean(profile.buyingTriggers)||"a relevant buying trigger"} is visible now.`
+      id:"icp-trigger-led",type:"trigger-led",name:lv?"Pirkšanas signālos balstīts profils":"Trigger-led ICP",...common,
+      description:lv?"Uzņēmumi, kas atbilst pamata profilam un pašlaik uzrāda atbilstošus pirkšanas signālus.":`Companies that fit the core profile and are currently showing relevant buying signals.`,
+      rationale:lv?`Prioritizēt organizācijas, kurās pašlaik ir novērojams: ${clean(profile.buyingTriggers)||"atbilstošs pirkšanas signāls"}.`:`Prioritize organizations where ${clean(profile.buyingTriggers)||"a relevant buying trigger"} is visible now.`
     });
     return result;
   }
@@ -189,7 +192,8 @@
     return Math.min(20,Math.round(completeness/6)+Math.min(4,active));
   }
 
-  function buildMarketOpportunities(profile={},icps=[],signals=[],researchResults=[]){
+  function buildMarketOpportunities(profile={},icps=[],signals=[],researchResults=[],language='en'){
+    const lv=isLv(language);
     const markets=effectiveResearchMarkets(profile);
     const offer=splitList(profile.priorityOffers)[0]||"priority offer";
     return (markets.length?markets:["Priority market"]).slice(0,6).map(market=>{
@@ -205,11 +209,35 @@
       const confidence=evidence.length>=2&&score.total>=75?"High":evidence.length>=1||score.total>=55?"Medium":"Low";
       return {
         id:`opp-${slug(market)}`,market,title:`${market}: ${offer}`,
-        hypothesis:`Prioritize ${clean(profile.idealCustomer)||"high-fit companies"} in ${market} where ${clean(profile.buyingTriggers)||"a relevant buying signal"} creates a timely reason to evaluate ${offer}.`,
-        rationale:`Fit is based on the approved ICP and exclusions. Intent and timing rise only when live evidence matches active signals.`,
+        hypothesis:lv?`Prioritizēt ${clean(profile.idealCustomer)||"augstas atbilstības uzņēmumus"} tirgū ${market}, kuros ${clean(profile.buyingTriggers)||"atbilstošs pirkšanas signāls"} rada savlaicīgu pamatu izvērtēt piedāvājumu: ${offer}.`:`Prioritize ${clean(profile.idealCustomer)||"high-fit companies"} in ${market} where ${clean(profile.buyingTriggers)||"a relevant buying signal"} creates a timely reason to evaluate ${offer}.`,
+        rationale:lv?`Atbilstība ir balstīta apstiprinātajā ideālā klienta profilā un izslēgšanas kritērijos. Nodoma un laika novērtējums pieaug tikai tad, ja aktuālie pierādījumi atbilst aktīvajiem signāliem.`:`Fit is based on the approved ICP and exclusions. Intent and timing rise only when live evidence matches active signals.`,
         score,confidence,evidence,profileOnly:evidence.length===0,active:true
       };
     }).sort((a,b)=>b.score.total-a.score.total);
+  }
+
+  function localizeGeneratedState(market={},profile={},language='en'){
+    const next=normalizeMarketState(market);const target=isLv(language)?'lv':'en';
+    const generatedIcps={en:buildIcpCandidates(profile,'en'),lv:buildIcpCandidates(profile,'lv')};
+    const byLanguage=locale=>new Map(generatedIcps[locale].map(item=>[item.id,item]));
+    const enIcps=byLanguage('en'),lvIcps=byLanguage('lv'),targetIcps=byLanguage(target);
+    next.icps=next.icps.map(item=>{
+      const wanted=targetIcps.get(item.id),en=enIcps.get(item.id),lv=lvIcps.get(item.id);if(!wanted||!en||!lv)return item;
+      const updated={...item};
+      for(const field of ['name','description','rationale'])if(item[field]===en[field]||item[field]===lv[field])updated[field]=wanted[field];
+      return updated;
+    });
+    const variants={
+      en:new Map(buildMarketOpportunities(profile,next.icps,next.signals,next.researchResults,'en').map(item=>[item.id,item])),
+      lv:new Map(buildMarketOpportunities(profile,next.icps,next.signals,next.researchResults,'lv').map(item=>[item.id,item]))
+    };
+    next.opportunities=next.opportunities.map(item=>{
+      const wanted=variants[target].get(item.id),en=variants.en.get(item.id),lv=variants.lv.get(item.id);if(!wanted||!en||!lv)return item;
+      const updated={...item};
+      for(const field of ['title','hypothesis','rationale'])if(item[field]===en[field]||item[field]===lv[field])updated[field]=wanted[field];
+      return updated;
+    });
+    next.contentLanguage=target;return next;
   }
 
   function normalizeMarketState(value={}){
@@ -230,9 +258,9 @@
     return {
       ...DEFAULT_MARKET_STATE,icps,signals,researchQueries,researchResults,opportunities,researchSourceStatus,
       researchStatus:allowed.has(input.researchStatus)?input.researchStatus:"idle",
-      lastResearchAt:clean(input.lastResearchAt),strategyApproved:Boolean(input.strategyApproved),strategyApprovedAt:clean(input.strategyApprovedAt)
+      lastResearchAt:clean(input.lastResearchAt),strategyApproved:Boolean(input.strategyApproved),strategyApprovedAt:clean(input.strategyApprovedAt),contentLanguage:['en','lv'].includes(input.contentLanguage)?input.contentLanguage:''
     };
   }
 
-  return {DEFAULT_MARKET_STATE,effectiveResearchMarkets,buildIcpCandidates,normalizeSignals,addCustomSignal,buildResearchQueries,normalizeSearchResults,mergeResearchResults,buildMarketOpportunities,normalizeMarketState,splitList};
+  return {DEFAULT_MARKET_STATE,effectiveResearchMarkets,buildIcpCandidates,normalizeSignals,addCustomSignal,buildResearchQueries,normalizeSearchResults,mergeResearchResults,buildMarketOpportunities,localizeGeneratedState,normalizeMarketState,splitList};
 });

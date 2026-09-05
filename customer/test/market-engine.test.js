@@ -122,3 +122,25 @@ test('normalizeMarketState sanitizes persisted strategy state',()=>{
   assert.ok(state.researchResults.length<=20);
   assert.equal(state.strategyApproved,true);
 });
+
+test('strategy narratives are generated in selected Latvian',()=>{
+  const icps=Market.buildIcpCandidates(profile,'lv');
+  assert.equal(icps[0].name,'Pamata ideālā klienta profils');
+  assert.match(icps[0].rationale,/apstiprināto ideālā klienta profilu/i);
+  assert.match(icps[1].rationale,/ABB/);
+  const opportunities=Market.buildMarketOpportunities(profile,icps,Market.normalizeSignals(profile.recommendedSignals,[]),[],'lv');
+  assert.match(opportunities[0].hypothesis,/Prioritizēt/);
+  assert.match(opportunities[0].rationale,/Atbilstība ir balstīta/);
+  assert.doesNotMatch(`${opportunities[0].hypothesis} ${opportunities[0].rationale}`,/\b(?:Prioritize|Fit is based|Intent and timing)\b/i);
+});
+
+test('localizeGeneratedState updates only generated strategy prose and preserves customer edits and evidence',()=>{
+  const english=Market.normalizeMarketState({icps:Market.buildIcpCandidates(profile,'en')});
+  english.icps[0].description='Customer-edited definition';
+  english.opportunities=Market.buildMarketOpportunities(profile,english.icps,Market.normalizeSignals(profile.recommendedSignals,[]),[{market:'Sweden',url:'https://example.com/a',title:'Evidence'}],'en');
+  const localized=Market.localizeGeneratedState(english,profile,'lv');
+  assert.equal(localized.icps[0].description,'Customer-edited definition');
+  assert.equal(localized.icps[0].name,'Pamata ideālā klienta profils');
+  assert.match(localized.opportunities[0].hypothesis,/Prioritizēt/);
+  assert.equal(localized.opportunities[0].evidence[0].url,'https://example.com/a');
+});
