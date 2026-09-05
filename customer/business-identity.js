@@ -52,22 +52,44 @@
   }
   function splitOffers(value){return identityValue(value).replace(/\s*;\s*/g,", ");}
   function scorePercent(values){return Math.round(values.filter(Boolean).length/values.length*100);}
+  function detectLanguage(profile={},input={},context={}){
+    const requested=clean(input.uiLanguage||context.language||profile.uiLanguage).toLowerCase();
+    if(requested.startsWith("lv"))return "lv";
+    if(requested.startsWith("en"))return "en";
+    const text=clean([profile.companyOverview,profile.priorityOffers,profile.idealCustomer,profile.buyingOutcomes,profile.differentiation,...(input.scrapedSources||[]).map(source=>source?.text)].join(" "));
+    return /[āčēģīķļņšūž]/i.test(text)||/\b(mēs|un|kas|darba|uzņēm|noliktav|biroj)\b/i.test(text)?"lv":"en";
+  }
+  function copy(language,key){
+    const words={en:{hypothesis:"The positioning hypothesis for {company} requires confirmation of the ideal customer, offer and commercial outcome.",why:"Clarify the customer outcome this company creates.",how:"Clarify the approach or proof that makes the company preferable.",what:"Clarify the priority product or service.",benefitFallback:"Customer benefits are not yet evidenced; confirm the operational and commercial result.",diagnosisStrong:"The commercial story is sufficiently defined for targeting and message development.",diagnosisWeak:"The commercial story is still a working hypothesis. Confirm the missing inputs before treating the positioning as final.",proposed:"Proposed · confirmation recommended",customerConfirmed:"Customer-confirmed",evidenceAccepted:"Evidence-backed · accepted",confirmed:"Confirmed"},lv:{hypothesis:"Pozicionēšanas hipotēzei par {company} nepieciešams apstiprināt ideālo klientu, piedāvājumu un komerciālo rezultātu.",why:"Jāprecizē klienta rezultāts, ko uzņēmums rada.",how:"Jāprecizē pieeja vai pierādījums, kas padara uzņēmumu par labāku izvēli.",what:"Jāprecizē prioritārais produkts vai pakalpojums.",benefitFallback:"Klienta ieguvumi vēl nav pietiekami pamatoti; jāapstiprina praktiskais un komerciālais rezultāts.",diagnosisStrong:"Komerciālais stāsts ir pietiekami skaidrs mērķēšanai un vēstījuma izstrādei.",diagnosisWeak:"Komerciālais stāsts joprojām ir darba hipotēze. Pirms pozicionējuma apstiprināšanas jāprecizē trūkstošā informācija.",proposed:"Piedāvāts · nepieciešams apstiprinājums",customerConfirmed:"Klienta apstiprināts",evidenceAccepted:"Ar pierādījumiem pamatots · pieņemts",confirmed:"Apstiprināts"}};
+    return (words[language]||words.en)[key];
+  }
+  function inferBenefits(offers,input={},profile={},language="en"){
+    const text=clean([offers,profile.companyOverview,profile.differentiation,...(input.scrapedSources||[]).map(source=>source?.text),...(input.documents||[]).map(doc=>doc?.text)].join(" "));
+    const benefits=[];const add=value=>{if(value&&!benefits.includes(value))benefits.push(value);};
+    if(/biroj|office|ergonom|darba viet|workplace/i.test(text))add(language==="lv"?"ergonomiskāku, ērtāku un profesionālāku darba vidi":"a more ergonomic, comfortable and professional workplace");
+    if(/noliktav|warehouse|darbnīc|workshop|instrument|plaukt|shelf|storage|uzglab/i.test(text))add(language==="lv"?"sakārtotāku un efektīvāku noliktavas vai darbnīcas darbu":"more organised and efficient warehouse or workshop operations");
+    if(/skol|school|izglīt|education|bērn|kindergarten|dārziņ/i.test(text))add(language==="lv"?"drošāku un funkcionālāku mācību vidi":"a safer and more functional learning environment");
+    if(/3d|vizualiz|visuali[sz]/i.test(text))add(language==="lv"?"iespēju vizualizēt risinājumu pirms iegādes un samazināt nepareizu lēmumu risku":"the ability to visualise the solution before purchase and reduce decision risk");
+    return benefits.length?benefits.join("; "):copy(language,"benefitFallback");
+  }
   function deriveAnalysis(profile={},input={},context={}){
-    const company=context.company||identityValue(profile.companyName)||"The company";
+    const language=detectLanguage(profile,input,context);
+    const company=context.company||identityValue(profile.companyName)||(language==="lv"?"Uzņēmums":"The company");
     const offers=context.offers||splitOffers(profile.priorityOffers);
     const customer=context.customer||identityValue(profile.idealCustomer);
     const outcomes=context.outcomes||identityValue(profile.buyingOutcomes);
+    const benefits=outcomes||inferBenefits(offers,input,profile,language);
     const differentiation=context.differentiation||identityValue(profile.differentiation);
     const buyers=identityValue(profile.decisionMakers);
     const evidence=hasEvidence(input);
-    const status=readStatus(input,"differentiation")==="user"||readStatus(input,"differentiation")==="accepted"?"Confirmed":"Proposed · confirmation recommended";
+    const status=readStatus(input,"differentiation")==="user"||readStatus(input,"differentiation")==="accepted"?(language==="lv"?copy(language,"confirmed"):"Confirmed"):(language==="lv"?copy(language,"proposed"):"Proposed · confirmation recommended");
     const positioningStatement=customer&&offers&&outcomes
-      ? `For ${lowerFirst(customer)}, ${company} provides ${lowerFirst(offers)} to ${lowerFirst(outcomes)}.`
-      : `The positioning hypothesis for ${company} requires confirmation of the ideal customer, offer and commercial outcome.`;
+      ? language==="lv"?`Uzņēmums piedāvā ${lowerFirst(offers)}, lai ${lowerFirst(customer)} varētu ${lowerFirst(outcomes)}.`:`For ${lowerFirst(customer)}, ${company} provides ${lowerFirst(offers)} to ${lowerFirst(outcomes)}.`
+      : copy(language,"hypothesis").replace("{company}",company);
     const frameworks={
-      goldenCircle:{why:outcomes||"Clarify the customer outcome this company creates.",how:differentiation||"Clarify the approach or proof that makes the company preferable.",what:offers||"Clarify the priority product or service."},
+      goldenCircle:{why:outcomes||copy(language,"why"),how:differentiation||copy(language,"how"),what:offers||copy(language,"what")},
       valueProposition:positioningStatement,
-      fab:{features:offers||"Priority offer not confirmed.",advantages:differentiation||"Competitive advantage not confirmed.",benefits:outcomes||"Customer benefit not confirmed."}
+      fab:{features:offers||(language==="lv"?"Prioritārais piedāvājums nav apstiprināts.":"Priority offer not confirmed."),advantages:differentiation||(language==="lv"?"Konkurences priekšrocība nav apstiprināta.":"Competitive advantage not confirmed."),benefits}
     };
     const scores={
       commercialClarity:scorePercent([offers,customer,outcomes,differentiation]),
@@ -76,9 +98,9 @@
       evidenceConfidence:scorePercent([evidence,Boolean(input.scrapedSources?.length),Boolean(input.documents?.length)])
     };
     const diagnosis= scores.commercialClarity>=75
-      ? "The commercial story is sufficiently defined for targeting and message development."
-      : "The commercial story is still a working hypothesis. Confirm the missing inputs before treating the positioning as final.";
-    return {status,positioningStatement,diagnosis,scores,frameworks};
+      ? copy(language,"diagnosisStrong")
+      : copy(language,"diagnosisWeak");
+    return {status,positioningStatement,diagnosis,scores,frameworks,language};
   }
 
   function deriveIdentity(profile={},input={}){
