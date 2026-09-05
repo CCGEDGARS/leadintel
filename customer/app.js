@@ -1,4 +1,4 @@
-import './business-identity.js?v=20260905-business-identity-startup-order-v1';
+import './business-identity.js?v=20260905-business-identity-concatenated-evidence-v1';
 import './workspace-persistence.js?v=20260903-step1-startup-order-v1';
 
 const STORAGE_KEY="leadintel_customer_v2_state";
