@@ -40,6 +40,25 @@
       .replace(/\s+/g," ")
       .trim();
   }
+  function localizeLatvian(value){
+    let text=clean(value);if(!text)return "";
+    const replacements=[
+      [/office furniture/gi,"biroja mēbeles"],[/ergonomic chairs/gi,"ergonomiski krēsli"],[/height-adjustable desks/gi,"regulējama augstuma galdi"],[/conference tables/gi,"konferenču galdi"],[/storage/gi,"uzglabāšanas risinājumi"],
+      [/warehouse and workshop equipment/gi,"noliktavu un darbnīcu aprīkojums"],[/shelving/gi,"plaukti"],[/workbenches/gi,"darbagaldi"],[/tool cabinets/gi,"instrumentu skapji"],[/pallet trucks/gi,"palešu ratiņi"],[/changing room lockers/gi,"garderobes skapji"],[/school furniture/gi,"skolu mēbeles"],
+      [/free 3D workplace planning services/gi,"bezmaksas darba vietu plānošanas pakalpojumi ar 3D vizualizāciju"],[/3D workplace planning/gi,"darba vietu plānošana ar 3D vizualizāciju"],
+      [/companies and organizations in Latvia operating offices, warehouses, manufacturing workshops, schools, and changing facilities requiring ergonomic and durable workplace furnishings/gi,"uzņēmumi un organizācijas Latvijā, kas darbojas biroju, noliktavu, ražotņu, darbnīcu, skolu un ģērbtuvju vidē un kuriem nepieciešams ergonomisks un izturīgs aprīkojums"],
+      [/employee well-being/gi,"darbinieku labbūtība"],[/product durability/gi,"produktu izturība"],[/work effectiveness/gi,"darba efektivitāte"],[/durable workplace furnishings/gi,"izturīgs darba vietu aprīkojums"],
+      [/\bcompanies\b/gi,"uzņēmumi"],[/\borganizations\b/gi,"organizācijas"],[/\boffices\b/gi,"biroji"],[/\bwarehouses\b/gi,"noliktavas"],[/\bmanufacturing workshops\b/gi,"ražotnes un darbnīcas"],[/\bschools\b/gi,"skolas"],[/\band\b/gi,"un"],[/\bthrough\b/gi,"ar"],[/\bOur approach is\b/gi,"Pieeja ir"]
+    ];
+    for(const [pattern,replacement] of replacements)text=text.replace(pattern,replacement);
+    return text.replace(/\s+([,.;:])/g,"$1").replace(/\s+/g," ").trim();
+  }
+  function localizeProfile(profile={},language="en"){
+    if(language!=="lv")return profile;
+    const localized={...profile};
+    for(const key of ["companyOverview","priorityOffers","idealCustomer","lookalikeCustomers","decisionMakers","currentMarkets","targetMarkets","marketFocus","differentiation","buyingTriggers","exclusions","opportunityValue","commercialObjective","buyingOutcomes"])localized[key]=localizeLatvian(profile[key]);
+    return localized;
+  }
   function sentence(value){const text=clean(value);return text&&!/[.!?]$/.test(text)?`${text}.`:text;}
   function lowerFirst(value){const text=clean(value);return text?text.charAt(0).toLowerCase()+text.slice(1):"";}
   function words(value){return clean(value).split(/\s+/).filter(Boolean);}
@@ -104,6 +123,7 @@
   }
   function deriveAnalysis(profile={},input={},context={}){
     const language=detectLanguage(profile,input,context);
+    profile=localizeProfile(profile,language);
     const company=context.company||identityValue(profile.companyName)||(language==="lv"?"Uzņēmums":"The company");
     const offers=context.offers||splitOffers(profile.priorityOffers);
     const customer=context.customer||identityValue(profile.idealCustomer);
@@ -137,6 +157,7 @@
 
   function deriveIdentity(profile={},input={}){
     const language=detectLanguage(profile,input);
+    profile=localizeProfile(profile,language);
     const company=neutral(profile.companyName)||(language==="lv"?"Uzņēmums":"The company");
     const offers=splitOffers(profile.priorityOffers);
     const customer=identityValue(profile.idealCustomer);
@@ -233,6 +254,7 @@
       .profile-analysis-card span{display:block;color:var(--muted,#6f7d77);font-size:13px;line-height:1.45}
       .profile-analysis-card .analysis-score{font:700 26px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--accent,#0f6b58);margin-bottom:8px}
       .profile-analysis-card .analysis-status{display:inline-flex;padding:5px 8px;border-radius:999px;background:#f4eee0;color:#876920;font:600 10px/1.2 "IBM Plex Mono",monospace;margin-bottom:9px}.profile-analysis-card .analysis-status.evidence{background:#e7f2ea;color:#337247}.profile-analysis-card .analysis-status.review{background:#f4eee0;color:#876920}
+      .profile-analysis-card.positioning-statement-card{grid-column:1/-1}
       @media(max-width:1020px){.profile-analysis-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
       @media(max-width:620px){.profile-analysis-grid{grid-template-columns:1fr}}
       .identity-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
@@ -276,6 +298,7 @@
     const derived=root.LeadIntelProfile?.deriveBusinessIdentity?.(profile,state)||deriveIdentity(profile,state);
     const analysisData=derived.analysis||deriveAnalysis(profile,state);
     const language=analysisData.language||derived.identityLanguage||"lv";
+    const chromeLanguage="en";
     const generatedLanguageChanged=Boolean(derived.identityLanguage&&derived.identityLanguage!==profile.identityLanguage);
     const sample=editor.querySelector("textarea[data-profile-field]");const readOnly=sample?sample.readOnly:true;
     const existing=[...editor.querySelectorAll(".profile-field")];
@@ -283,41 +306,44 @@
     const take=key=>byKey.get(key)||null;
     byKey.get("companyOverview")?.remove();byKey.delete("companyOverview");
 
-    let summary=take("businessSummary");if(!summary)summary=createField(root,"businessSummary",uiText(language,"businessSummaryField"),generatedLanguageChanged?derived.businessSummary:(profile.businessSummary||derived.businessSummary),readOnly,true);
-    let usp=take("uniqueSellingProposition");if(!usp)usp=createField(root,"uniqueSellingProposition",uiText(language,"uspField"),generatedLanguageChanged?derived.uniqueSellingProposition:(profile.uniqueSellingProposition||derived.uniqueSellingProposition),readOnly,true);
-    let pitch=take("elevatorPitch");if(!pitch)pitch=createField(root,"elevatorPitch",uiText(language,"pitchField"),generatedLanguageChanged?derived.elevatorPitch:(profile.elevatorPitch||derived.elevatorPitch),readOnly,true);
+    let summary=take("businessSummary");if(!summary)summary=createField(root,"businessSummary",uiText(chromeLanguage,"businessSummaryField"),generatedLanguageChanged?derived.businessSummary:(profile.businessSummary||derived.businessSummary),readOnly,true);
+    let usp=take("uniqueSellingProposition");if(!usp)usp=createField(root,"uniqueSellingProposition",uiText(chromeLanguage,"uspField"),generatedLanguageChanged?derived.uniqueSellingProposition:(profile.uniqueSellingProposition||derived.uniqueSellingProposition),readOnly,true);
+    let pitch=take("elevatorPitch");if(!pitch)pitch=createField(root,"elevatorPitch",uiText(chromeLanguage,"pitchField"),generatedLanguageChanged?derived.elevatorPitch:(profile.elevatorPitch||derived.elevatorPitch),readOnly,true);
 
-    const business=section(root,uiText(language,"businessIdentity"),uiText(language,"businessIdentitySub"),true);business.grid.append(summary);
-    const analysis=section(root,uiText(language,"commercialAnalysis"),uiText(language,"commercialAnalysisSub"));
+    const business=section(root,uiText(chromeLanguage,"businessIdentity"),uiText(chromeLanguage,"businessIdentitySub"),true);business.grid.append(summary);
+    const analysis=section(root,uiText(chromeLanguage,"commercialAnalysis"),uiText(chromeLanguage,"commercialAnalysisSub"));
     analysis.grid.classList.add("profile-analysis-grid");
     analysis.grid.append(
-      createInsightCard(root,analysisText(language,"clarity"),analysisData.diagnosis,analysisData.scores?.commercialClarity,undefined,language),
-      createInsightCard(root,analysisText(language,"icp"),analysisText(language,"icpDesc"),analysisData.scores?.icpSpecificity,undefined,language),
-      createInsightCard(root,analysisText(language,"strength"),analysisText(language,"strengthDesc"),analysisData.scores?.positioningStrength,undefined,language),
-      createInsightCard(root,analysisText(language,"evidence"),analysisText(language,"evidenceDesc"),analysisData.scores?.evidenceConfidence,undefined,language),
-      createInsightCard(root,analysisText(language,"statement"),analysisData.positioningStatement,undefined,analysisData.review?.valueProposition,language)
+      createInsightCard(root,analysisText(chromeLanguage,"clarity"),analysisData.diagnosis,analysisData.scores?.commercialClarity,undefined,language),
+      createInsightCard(root,analysisText(chromeLanguage,"icp"),analysisText(chromeLanguage,"icpDesc"),analysisData.scores?.icpSpecificity,undefined,language),
+      createInsightCard(root,analysisText(chromeLanguage,"strength"),analysisText(chromeLanguage,"strengthDesc"),analysisData.scores?.positioningStrength,undefined,language),
+      createInsightCard(root,analysisText(chromeLanguage,"evidence"),analysisText(chromeLanguage,"evidenceDesc"),analysisData.scores?.evidenceConfidence,undefined,language),
+      (()=>{const card=createInsightCard(root,analysisText(chromeLanguage,"statement"),analysisData.positioningStatement,undefined,analysisData.review?.valueProposition,chromeLanguage);card.classList.add("positioning-statement-card");return card;})()
     );
-    const frameworks=section(root,uiText(language,"commercialFrameworks"),uiText(language,"commercialFrameworksSub"));
+    const frameworks=section(root,uiText(chromeLanguage,"commercialFrameworks"),uiText(chromeLanguage,"commercialFrameworksSub"));
     frameworks.grid.classList.add("profile-analysis-grid");
     frameworks.grid.append(
-      createInsightCard(root,uiText(language,"why"),analysisData.frameworks?.goldenCircle?.why,undefined,analysisData.review?.goldenCircle?.why,language),
-      createInsightCard(root,uiText(language,"how"),analysisData.frameworks?.goldenCircle?.how,undefined,analysisData.review?.goldenCircle?.how,language),
-      createInsightCard(root,uiText(language,"what"),analysisData.frameworks?.goldenCircle?.what,undefined,analysisData.review?.goldenCircle?.what,language),
-      createInsightCard(root,uiText(language,"valueProposition"),analysisData.frameworks?.valueProposition,undefined,analysisData.review?.valueProposition,language),
-      createInsightCard(root,uiText(language,"features"),analysisData.frameworks?.fab?.features,undefined,analysisData.review?.fab?.features,language),
-      createInsightCard(root,uiText(language,"advantages"),analysisData.frameworks?.fab?.advantages,undefined,analysisData.review?.fab?.advantages,language),
-      createInsightCard(root,uiText(language,"benefits"),analysisData.frameworks?.fab?.benefits,undefined,analysisData.review?.fab?.benefits,language)
+      createInsightCard(root,uiText(chromeLanguage,"why"),analysisData.frameworks?.goldenCircle?.why,undefined,analysisData.review?.goldenCircle?.why,language),
+      createInsightCard(root,uiText(chromeLanguage,"how"),analysisData.frameworks?.goldenCircle?.how,undefined,analysisData.review?.goldenCircle?.how,language),
+      createInsightCard(root,uiText(chromeLanguage,"what"),analysisData.frameworks?.goldenCircle?.what,undefined,analysisData.review?.goldenCircle?.what,language),
+      createInsightCard(root,uiText(chromeLanguage,"valueProposition"),analysisData.frameworks?.valueProposition,undefined,analysisData.review?.valueProposition,language),
+      createInsightCard(root,uiText(chromeLanguage,"features"),analysisData.frameworks?.fab?.features,undefined,analysisData.review?.fab?.features,language),
+      createInsightCard(root,uiText(chromeLanguage,"advantages"),analysisData.frameworks?.fab?.advantages,undefined,analysisData.review?.fab?.advantages,language),
+      createInsightCard(root,uiText(chromeLanguage,"benefits"),analysisData.frameworks?.fab?.benefits,undefined,analysisData.review?.fab?.benefits,language)
     );
-    const positioning=section(root,uiText(language,"commercialPositioning"),uiText(language,"commercialPositioningSub"));positioning.grid.append(usp);
+    const positioning=section(root,uiText(chromeLanguage,"commercialPositioning"),uiText(chromeLanguage,"commercialPositioningSub"));positioning.grid.append(usp);
     const diff=take("differentiation");if(diff)positioning.grid.append(diff);
     const meta=root.document.createElement("div");meta.className="identity-meta identity-wide";meta.innerHTML=`<span>${esc(profile.uspStatus||derived.uspStatus||"Proposed · confirmation recommended")}</span><span>${esc(profile.positioningConfidence||derived.positioningConfidence||"Needs confirmation")} confidence</span>`;positioning.grid.append(meta);
-    const sales=section(root,uiText(language,"salesMessage"),uiText(language,"salesMessageSub"));sales.grid.append(pitch);
-    const context=section(root,uiText(language,"commercialContext"),uiText(language,"commercialContextSub"));
+    const sales=section(root,uiText(chromeLanguage,"salesMessage"),uiText(chromeLanguage,"salesMessageSub"));sales.grid.append(pitch);
+    const context=section(root,uiText(chromeLanguage,"commercialContext"),uiText(chromeLanguage,"commercialContextSub"));
     const contextOrder=["priorityOffers","idealCustomer","buyingOutcomes","lookalikeCustomers","decisionMakers","currentMarkets","targetMarkets","marketFocus","buyingTriggers","exclusions","opportunityValue","commercialObjective"];
     const used=new Set(["companyOverview","businessSummary","uniqueSellingProposition","elevatorPitch","differentiation"]);
     for(const key of contextOrder){const node=take(key);if(node){context.grid.append(node);used.add(key);}}
     for(const [key,node] of byKey){if(!used.has(key))context.grid.append(node);}
-    editor.querySelectorAll("[data-profile-field]").forEach(field=>{const label=field.closest(".profile-field")?.querySelector("label");if(label)label.textContent=fieldText(language,field.dataset.profileField);});
+    editor.querySelectorAll("[data-profile-field]").forEach(field=>{
+      const label=field.closest(".profile-field")?.querySelector("label");if(label)label.textContent=fieldText(chromeLanguage,field.dataset.profileField);
+      if(field.dataset.profileField&&language==="lv"&&"value" in field)field.value=localizeLatvian(field.value);
+    });
 
     editor.replaceChildren(business.node,analysis.node,frameworks.node,positioning.node,sales.node,context.node);editor.classList.add("profile-identity-layout");
   }
