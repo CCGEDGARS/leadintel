@@ -224,7 +224,8 @@
 
   function buildAiPrompt(input={}){
     const sources=(input.sources||[]).slice(0,MAX_SOURCES);const docs=(input.documents||[]).filter(doc=>clean(doc?.text)).slice(0,5);
-    const outputLanguage=clean(input.uiLanguage).toLowerCase().startsWith("lv")?"Latvian":"English";
+    const requestedLanguage=clean(input.uiLanguage).toLowerCase();
+    const outputLanguage=requestedLanguage==="en"||requestedLanguage.startsWith("en")?"English":"Latvian";
     const sourceLines=sources.map(source=>`[${source.id}] ${source.title||source.url}\nURL: ${source.url}\n${String(source.text||"").slice(0,5000)}`).join("\n\n");
     const docLines=docs.map((doc,index)=>`[D${index+1}] PDF ${clean(doc.name)}\n${String(doc.text||"").slice(0,4000)}`).join("\n\n");
     const system="You are the LeadIntel evidence analyst. Use only supplied evidence. Never invent customers, prices, deal values, certifications, buyer roles, markets, exclusions or objectives. Return strict JSON only. If evidence is insufficient for a field, use an empty value. Every returned value must be written entirely in "+outputLanguage+"; do not mix languages or leave English business terminology inside Latvian output.";
