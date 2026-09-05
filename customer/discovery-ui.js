@@ -96,3 +96,4 @@ function bindDiscovery(){
 function loadOutreachModules(){if(document.querySelector('script[data-outreach-engine]'))return;const engine=document.createElement("script");engine.src=`outreach-engine.js?v=${LANGUAGE_ASSET_VERSION}`;engine.dataset.outreachEngine="true";engine.addEventListener("load",()=>{if(document.querySelector('script[data-outreach-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src=`outreach-ui.js?v=${LANGUAGE_ASSET_VERSION}`;ui.dataset.outreachUi="true";document.body.appendChild(ui);});document.body.appendChild(engine);}
 function initDiscovery(){injectDiscoveryUI();bindDiscovery();syncStrategyFingerprint();renderAll();if(mainState().step===5&&moduleReady())showDiscoveryStep();else if(loadMeta().visibleStep===5&&moduleReady())showDiscoveryStep();if(crmAuthenticated())refreshCrmState();loadOutreachModules();}
 initDiscovery();
+import './content-variants.js?v=20260905-step1-language-v1';

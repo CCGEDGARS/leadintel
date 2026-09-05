@@ -117,4 +117,5 @@ test('localizeGeneratedItem switches generated dossier and drafts but preserves 
   assert.match(localized.drafts.emailBody,/Labdien, Anna/);
   assert.equal(localized.drafts.linkedinMessage,'Customer-edited LinkedIn text');
   assert.equal(localized.contentLanguage,'lv');
+  assert.equal(localized.contentVariants.drafts.lv.emailBody,localized.drafts.emailBody);
 });
