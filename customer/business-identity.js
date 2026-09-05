@@ -65,9 +65,16 @@
     return localized;
   }
   function audienceDative(value){
-    return clean(value).replace(/^Uzņēmumi\b/i,"uzņēmumiem").replace(/^organizācijas\b/i,"organizācijām").replace(/^Biroji\b/i,"birojiem").replace(/^ražotnes\b/i,"ražotnēm").replace(/^noliktavas\b/i,"noliktavām").replace(/^darbnīcas\b/i,"darbnīcām").replace(/^skolas\b/i,"skolām").replace(/^izglītības iestādes\b/i,"izglītības iestādēm");
+    return clean(value).replace(/^Uzņēmumi\b/i,"uzņēmumiem").replace(/^uzņēmumiem un organizācijas\b/i,"uzņēmumiem un organizācijām").replace(/^organizācijas\b/i,"organizācijām").replace(/^Biroji\b/i,"birojiem").replace(/^ražotnes\b/i,"ražotnēm").replace(/^noliktavas\b/i,"noliktavām").replace(/^darbnīcas\b/i,"darbnīcām").replace(/^skolas\b/i,"skolām").replace(/^izglītības iestādes\b/i,"izglītības iestādēm");
   }
   function subjectCompany(value){return clean(value).toLowerCase()==="uzņēmums"?"Uzņēmums":clean(value);}
+  function phrase(value){return clean(value).replace(/[.!?]+$/,"");}
+  function offerObject(value){return phrase(value).replace(/noliktavu un darbnīcu aprīkojums/gi,"noliktavu un darbnīcu aprīkojumu").replace(/garderobes skapji/gi,"garderobes skapjus");}
+  function outcomeObject(value){
+    const text=phrase(value);
+    if(/^Ergonomiskāka, drošāka un izturīgāka darba vide/i.test(text))return "ergonomiskāku, drošāku un izturīgāku darba vidi, labāku darbinieku labbūtību un pārdomātāku aprīkojuma izvēli";
+    return text?text.charAt(0).toLowerCase()+text.slice(1):"";
+  }
   function sentence(value){const text=clean(value);return text&&!/[.!?]$/.test(text)?`${text}.`:text;}
   function lowerFirst(value){const text=clean(value);return text?text.charAt(0).toLowerCase()+text.slice(1):"";}
   function words(value){return clean(value).split(/\s+/).filter(Boolean);}
@@ -134,9 +141,9 @@
     const language=detectLanguage(profile,input,context);
     profile=localizeProfile(profile,language);
     const company=context.company||identityValue(profile.companyName)||(language==="lv"?"Uzņēmums":"The company");
-    const offers=context.offers||splitOffers(profile.priorityOffers);
-    const customer=context.customer||identityValue(profile.idealCustomer);
-    const outcomes=context.outcomes||identityValue(profile.buyingOutcomes);
+    const offers=phrase(context.offers||splitOffers(profile.priorityOffers));
+    const customer=phrase(context.customer||identityValue(profile.idealCustomer));
+    const outcomes=phrase(context.outcomes||identityValue(profile.buyingOutcomes));
     const benefits=outcomes||inferBenefits(offers,input,profile,language);
     const differentiation=context.differentiation||identityValue(profile.differentiation);
     const advantage=differentiation||inferAdvantages(offers,input,profile,language);
@@ -144,7 +151,7 @@
     const evidence=hasEvidence(input);
     const status=readStatus(input,"differentiation")==="user"||readStatus(input,"differentiation")==="accepted"?(language==="lv"?copy(language,"confirmed"):"Confirmed"):(language==="lv"?copy(language,"proposed"):"Proposed · confirmation recommended");
     const positioningStatement=customer&&offers&&outcomes
-      ? language==="lv"?`${subjectCompany(company)} nodrošina ${lowerFirst(offers)} uzņēmumiem un organizācijām Latvijā, palīdzot izveidot ${lowerFirst(outcomes)}.`:`For ${lowerFirst(customer)}, ${company} provides ${lowerFirst(offers)} to ${lowerFirst(outcomes)}.`
+      ? language==="lv"?`${subjectCompany(company)} nodrošina ${lowerFirst(language==="lv"?offerObject(offers):offers)} uzņēmumiem un organizācijām Latvijā, palīdzot izveidot ${lowerFirst(language==="lv"?outcomeObject(outcomes):outcomes)}.`:`For ${lowerFirst(customer)}, ${company} provides ${lowerFirst(language==="lv"?offerObject(offers):offers)} to ${lowerFirst(language==="lv"?outcomeObject(outcomes):outcomes)}.`
       : copy(language,"hypothesis").replace("{company}",company);
     const frameworks={
       goldenCircle:{why:benefits,how:advantage,what:offers||copy(language,"what")},
@@ -168,32 +175,32 @@
     const language=detectLanguage(profile,input);
     profile=localizeProfile(profile,language);
     const company=neutral(profile.companyName)||(language==="lv"?"Uzņēmums":"The company");
-    const offers=splitOffers(profile.priorityOffers);
-    const customer=identityValue(profile.idealCustomer);
-    const outcomes=identityValue(profile.buyingOutcomes);
+    const offers=phrase(splitOffers(profile.priorityOffers));
+    const customer=phrase(identityValue(profile.idealCustomer));
+    const outcomes=phrase(identityValue(profile.buyingOutcomes));
     const differentiation=identityValue(profile.differentiation);
     const diffStatus=readStatus(input,"differentiation");
     const diffConfirmed=Boolean(differentiation)&&diffStatus!=="draft"&&diffStatus!=="missing";
 
     const summary=[];
     const companySubject=subjectCompany(company);
-    if(offers)summary.push(language==="lv"?`${companySubject} nodrošina ${lowerFirst(offers)}`:`${company} is a business focused on ${lowerFirst(offers)}`);
+    if(offers)summary.push(language==="lv"?`${companySubject} nodrošina ${lowerFirst(language==="lv"?offerObject(offers):offers)}`:`${company} is a business focused on ${lowerFirst(language==="lv"?offerObject(offers):offers)}`);
     else if(profile.companyOverview)summary.push(neutral(profile.companyOverview));
     if(customer)summary.push(language==="lv"?`Piedāvājums paredzēts ${lowerFirst(audienceDative(customer))}`:`It primarily serves ${lowerFirst(customer)}`);
-    if(outcomes)summary.push(language==="lv"?`Risinājumi palīdz iegūt ${lowerFirst(outcomes)}`:`Customers engage ${company} to ${lowerFirst(outcomes)}`);
+    if(outcomes)summary.push(language==="lv"?`Risinājumi palīdz iegūt ${lowerFirst(language==="lv"?outcomeObject(outcomes):outcomes)}`:`Customers engage ${company} to ${lowerFirst(language==="lv"?outcomeObject(outcomes):outcomes)}`);
     if(diffConfirmed)summary.push(language==="lv"?`Atšķirīgā priekšrocība ir ${lowerFirst(differentiation)}`:`Its positioning is differentiated by ${lowerFirst(differentiation)}`);
     const businessSummary=limitWords(summary.map(sentence).join(" "),130);
 
     let uniqueSellingProposition="";
     let uspStatus=language==="lv"?copy(language,"proposed"):"Proposed · confirmation recommended";
     if(customer&&outcomes&&offers){
-      uniqueSellingProposition=language==="lv"?`${subjectCompany(company)} palīdz ${lowerFirst(audienceDative(customer))} iegūt ${lowerFirst(outcomes)}, nodrošinot ${lowerFirst(offers)}`:`${company} helps ${lowerFirst(customer)} ${lowerFirst(outcomes)} through ${lowerFirst(offers)}`;
+      uniqueSellingProposition=language==="lv"?`${subjectCompany(company)} palīdz ${lowerFirst(audienceDative(customer))} iegūt ${lowerFirst(language==="lv"?outcomeObject(outcomes):outcomes)}, nodrošinot ${lowerFirst(language==="lv"?offerObject(offers):offers)}`:`${company} helps ${lowerFirst(customer)} ${lowerFirst(language==="lv"?outcomeObject(outcomes):outcomes)} through ${lowerFirst(language==="lv"?offerObject(offers):offers)}`;
       if(diffConfirmed)uniqueSellingProposition+=language==="lv"?`, ko atšķir ${lowerFirst(differentiation)}`:`, differentiated by ${lowerFirst(differentiation)}`;
       uniqueSellingProposition=sentence(uniqueSellingProposition);
     }else if(customer&&offers){
-      uniqueSellingProposition=sentence(language==="lv"?`${company} apkalpo ${lowerFirst(customer)}, nodrošinot ${lowerFirst(offers)}`:`${company} serves ${lowerFirst(customer)} through ${lowerFirst(offers)}`);
+      uniqueSellingProposition=sentence(language==="lv"?`${company} apkalpo ${lowerFirst(customer)}, nodrošinot ${lowerFirst(language==="lv"?offerObject(offers):offers)}`:`${company} serves ${lowerFirst(customer)} through ${lowerFirst(language==="lv"?offerObject(offers):offers)}`);
     }else if(offers){
-      uniqueSellingProposition=sentence(language==="lv"?`${company} piedāvā ${lowerFirst(offers)}`:`${company} provides ${lowerFirst(offers)}`);
+      uniqueSellingProposition=sentence(language==="lv"?`${company} piedāvā ${lowerFirst(language==="lv"?offerObject(offers):offers)}`:`${company} provides ${lowerFirst(language==="lv"?offerObject(offers):offers)}`);
     }
     if(diffConfirmed){
       if(diffStatus==="user")uspStatus=language==="lv"?copy(language,"customerConfirmed"):"Customer-confirmed";
@@ -202,10 +209,10 @@
     }
 
     const pitch=[];
-    if(customer&&outcomes)pitch.push(language==="lv"?`${subjectCompany(company)} palīdz ${lowerFirst(audienceDative(customer))} iegūt ${lowerFirst(outcomes)}`:`We help ${lowerFirst(customer)} ${lowerFirst(outcomes)}`);
-    else if(customer&&offers)pitch.push(language==="lv"?`${subjectCompany(company)} palīdz ${lowerFirst(audienceDative(customer))} ar ${lowerFirst(offers)}`:`We help ${lowerFirst(customer)} through ${lowerFirst(offers)}`);
-    else if(offers)pitch.push(language==="lv"?`${subjectCompany(company)} piedāvā ${lowerFirst(offers)}`:`${company} provides ${lowerFirst(offers)}`);
-    if(offers&&customer&&outcomes)pitch.push(language==="lv"?`${subjectCompany(company)} nodrošina ${lowerFirst(offers)}`:`${company} provides ${lowerFirst(offers)}`);
+    if(customer&&outcomes)pitch.push(language==="lv"?`${subjectCompany(company)} palīdz ${lowerFirst(audienceDative(customer))} iegūt ${lowerFirst(language==="lv"?outcomeObject(outcomes):outcomes)}`:`We help ${lowerFirst(customer)} ${lowerFirst(language==="lv"?outcomeObject(outcomes):outcomes)}`);
+    else if(customer&&offers)pitch.push(language==="lv"?`${subjectCompany(company)} palīdz ${lowerFirst(audienceDative(customer))} ar ${lowerFirst(language==="lv"?offerObject(offers):offers)}`:`We help ${lowerFirst(customer)} through ${lowerFirst(language==="lv"?offerObject(offers):offers)}`);
+    else if(offers)pitch.push(language==="lv"?`${subjectCompany(company)} piedāvā ${lowerFirst(language==="lv"?offerObject(offers):offers)}`:`${company} provides ${lowerFirst(language==="lv"?offerObject(offers):offers)}`);
+    if(offers&&customer&&outcomes)pitch.push(language==="lv"?`${subjectCompany(company)} nodrošina ${lowerFirst(language==="lv"?offerObject(offers):offers)}`:`${company} provides ${lowerFirst(language==="lv"?offerObject(offers):offers)}`);
     if(diffConfirmed)pitch.push(language==="lv"?`Mūsu pieeju atšķir ${lowerFirst(differentiation)}`:`Our approach is differentiated by ${lowerFirst(differentiation)}`);
     const elevatorPitch=limitWords(pitch.map(sentence).join(" "),90);
 
