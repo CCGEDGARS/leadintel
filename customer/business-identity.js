@@ -64,6 +64,10 @@
     for(const key of ["companyOverview","priorityOffers","idealCustomer","lookalikeCustomers","decisionMakers","currentMarkets","targetMarkets","marketFocus","differentiation","buyingTriggers","exclusions","opportunityValue","commercialObjective","buyingOutcomes"])localized[key]=localizeLatvian(profile[key]);
     return localized;
   }
+  function audienceDative(value){
+    return clean(value).replace(/^Uzņēmumi\b/i,"uzņēmumiem").replace(/^organizācijas\b/i,"organizācijām").replace(/^Biroji\b/i,"birojiem").replace(/^ražotnes\b/i,"ražotnēm").replace(/^noliktavas\b/i,"noliktavām").replace(/^darbnīcas\b/i,"darbnīcām").replace(/^skolas\b/i,"skolām").replace(/^izglītības iestādes\b/i,"izglītības iestādēm");
+  }
+  function subjectCompany(value){return clean(value).toLowerCase()==="uzņēmums"?"Uzņēmums":clean(value);}
   function sentence(value){const text=clean(value);return text&&!/[.!?]$/.test(text)?`${text}.`:text;}
   function lowerFirst(value){const text=clean(value);return text?text.charAt(0).toLowerCase()+text.slice(1):"";}
   function words(value){return clean(value).split(/\s+/).filter(Boolean);}
@@ -140,7 +144,7 @@
     const evidence=hasEvidence(input);
     const status=readStatus(input,"differentiation")==="user"||readStatus(input,"differentiation")==="accepted"?(language==="lv"?copy(language,"confirmed"):"Confirmed"):(language==="lv"?copy(language,"proposed"):"Proposed · confirmation recommended");
     const positioningStatement=customer&&offers&&outcomes
-      ? language==="lv"?`Uzņēmums piedāvā ${lowerFirst(offers)}, lai ${lowerFirst(customer)} varētu ${lowerFirst(outcomes)}.`:`For ${lowerFirst(customer)}, ${company} provides ${lowerFirst(offers)} to ${lowerFirst(outcomes)}.`
+      ? language==="lv"?`${subjectCompany(company)} nodrošina ${lowerFirst(offers)} uzņēmumiem un organizācijām Latvijā, palīdzot izveidot ${lowerFirst(outcomes)}.`:`For ${lowerFirst(customer)}, ${company} provides ${lowerFirst(offers)} to ${lowerFirst(outcomes)}.`
       : copy(language,"hypothesis").replace("{company}",company);
     const frameworks={
       goldenCircle:{why:benefits,how:advantage,what:offers||copy(language,"what")},
@@ -172,17 +176,18 @@
     const diffConfirmed=Boolean(differentiation)&&diffStatus!=="draft"&&diffStatus!=="missing";
 
     const summary=[];
-    if(offers)summary.push(language==="lv"?`Uzņēmums ${company} nodrošina ${lowerFirst(offers)}`:`${company} is a business focused on ${lowerFirst(offers)}`);
+    const companySubject=subjectCompany(company);
+    if(offers)summary.push(language==="lv"?`${companySubject} nodrošina ${lowerFirst(offers)}`:`${company} is a business focused on ${lowerFirst(offers)}`);
     else if(profile.companyOverview)summary.push(neutral(profile.companyOverview));
-    if(customer)summary.push(language==="lv"?`Tas galvenokārt apkalpo ${lowerFirst(customer)}`:`It primarily serves ${lowerFirst(customer)}`);
-    if(outcomes)summary.push(language==="lv"?`Klienti izvēlas ${company}, lai ${lowerFirst(outcomes)}`:`Customers engage ${company} to ${lowerFirst(outcomes)}`);
-    if(diffConfirmed)summary.push(language==="lv"?`Pozicionējumu atšķir ${lowerFirst(differentiation)}`:`Its positioning is differentiated by ${lowerFirst(differentiation)}`);
+    if(customer)summary.push(language==="lv"?`Piedāvājums paredzēts ${lowerFirst(audienceDative(customer))}`:`It primarily serves ${lowerFirst(customer)}`);
+    if(outcomes)summary.push(language==="lv"?`Risinājumi palīdz iegūt ${lowerFirst(outcomes)}`:`Customers engage ${company} to ${lowerFirst(outcomes)}`);
+    if(diffConfirmed)summary.push(language==="lv"?`Atšķirīgā priekšrocība ir ${lowerFirst(differentiation)}`:`Its positioning is differentiated by ${lowerFirst(differentiation)}`);
     const businessSummary=limitWords(summary.map(sentence).join(" "),130);
 
     let uniqueSellingProposition="";
     let uspStatus=language==="lv"?copy(language,"proposed"):"Proposed · confirmation recommended";
     if(customer&&outcomes&&offers){
-      uniqueSellingProposition=language==="lv"?`${company} palīdz ${lowerFirst(customer)} ${lowerFirst(outcomes)}, nodrošinot ${lowerFirst(offers)}`:`${company} helps ${lowerFirst(customer)} ${lowerFirst(outcomes)} through ${lowerFirst(offers)}`;
+      uniqueSellingProposition=language==="lv"?`${subjectCompany(company)} palīdz ${lowerFirst(audienceDative(customer))} iegūt ${lowerFirst(outcomes)}, nodrošinot ${lowerFirst(offers)}`:`${company} helps ${lowerFirst(customer)} ${lowerFirst(outcomes)} through ${lowerFirst(offers)}`;
       if(diffConfirmed)uniqueSellingProposition+=language==="lv"?`, ko atšķir ${lowerFirst(differentiation)}`:`, differentiated by ${lowerFirst(differentiation)}`;
       uniqueSellingProposition=sentence(uniqueSellingProposition);
     }else if(customer&&offers){
@@ -197,10 +202,10 @@
     }
 
     const pitch=[];
-    if(customer&&outcomes)pitch.push(language==="lv"?`Mēs palīdzam ${lowerFirst(customer)} ${lowerFirst(outcomes)}`:`We help ${lowerFirst(customer)} ${lowerFirst(outcomes)}`);
-    else if(customer&&offers)pitch.push(language==="lv"?`Mēs palīdzam ${lowerFirst(customer)} ar ${lowerFirst(offers)}`:`We help ${lowerFirst(customer)} through ${lowerFirst(offers)}`);
-    else if(offers)pitch.push(language==="lv"?`${company} piedāvā ${lowerFirst(offers)}`:`${company} provides ${lowerFirst(offers)}`);
-    if(offers&&customer&&outcomes)pitch.push(language==="lv"?`${company} nodrošina ${lowerFirst(offers)}`:`${company} provides ${lowerFirst(offers)}`);
+    if(customer&&outcomes)pitch.push(language==="lv"?`${subjectCompany(company)} palīdz ${lowerFirst(audienceDative(customer))} iegūt ${lowerFirst(outcomes)}`:`We help ${lowerFirst(customer)} ${lowerFirst(outcomes)}`);
+    else if(customer&&offers)pitch.push(language==="lv"?`${subjectCompany(company)} palīdz ${lowerFirst(audienceDative(customer))} ar ${lowerFirst(offers)}`:`We help ${lowerFirst(customer)} through ${lowerFirst(offers)}`);
+    else if(offers)pitch.push(language==="lv"?`${subjectCompany(company)} piedāvā ${lowerFirst(offers)}`:`${company} provides ${lowerFirst(offers)}`);
+    if(offers&&customer&&outcomes)pitch.push(language==="lv"?`${subjectCompany(company)} nodrošina ${lowerFirst(offers)}`:`${company} provides ${lowerFirst(offers)}`);
     if(diffConfirmed)pitch.push(language==="lv"?`Mūsu pieeju atšķir ${lowerFirst(differentiation)}`:`Our approach is differentiated by ${lowerFirst(differentiation)}`);
     const elevatorPitch=limitWords(pitch.map(sentence).join(" "),90);
 
