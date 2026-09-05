@@ -221,10 +221,12 @@
     const generatedIcps={en:buildIcpCandidates(profile,'en'),lv:buildIcpCandidates(profile,'lv')};
     const byLanguage=locale=>new Map(generatedIcps[locale].map(item=>[item.id,item]));
     const enIcps=byLanguage('en'),lvIcps=byLanguage('lv'),targetIcps=byLanguage(target);
+    const stored=next.contentVariants&&typeof next.contentVariants==='object'?next.contentVariants:{};
     next.icps=next.icps.map(item=>{
       const wanted=targetIcps.get(item.id),en=enIcps.get(item.id),lv=lvIcps.get(item.id);if(!wanted||!en||!lv)return item;
       const updated={...item};
-      for(const field of ['name','description','rationale'])if(item[field]===en[field]||item[field]===lv[field])updated[field]=wanted[field];
+      const currentVariant=stored.icps?.[item.id]?.[next.contentLanguage||'en']||{};
+      for(const field of ['name','description','rationale'])if(item[field]===en[field]||item[field]===lv[field]||item[field]===currentVariant[field])updated[field]=wanted[field];
       return updated;
     });
     const variants={
@@ -234,9 +236,13 @@
     next.opportunities=next.opportunities.map(item=>{
       const wanted=variants[target].get(item.id),en=variants.en.get(item.id),lv=variants.lv.get(item.id);if(!wanted||!en||!lv)return item;
       const updated={...item};
-      for(const field of ['title','hypothesis','rationale'])if(item[field]===en[field]||item[field]===lv[field])updated[field]=wanted[field];
+      const currentVariant=stored.opportunities?.[item.id]?.[next.contentLanguage||'en']||{};
+      for(const field of ['title','hypothesis','rationale'])if(item[field]===en[field]||item[field]===lv[field]||item[field]===currentVariant[field])updated[field]=wanted[field];
       return updated;
     });
+    next.contentVariants={icps:{},opportunities:{}};
+    for(const item of variants.en.values())next.contentVariants.opportunities[item.id]={en:{title:item.title,hypothesis:item.hypothesis,rationale:item.rationale},lv:{title:variants.lv.get(item.id)?.title||'',hypothesis:variants.lv.get(item.id)?.hypothesis||'',rationale:variants.lv.get(item.id)?.rationale||''}};
+    for(const item of enIcps.values())next.contentVariants.icps[item.id]={en:{name:item.name,description:item.description,rationale:item.rationale},lv:{name:lvIcps.get(item.id)?.name||'',description:lvIcps.get(item.id)?.description||'',rationale:lvIcps.get(item.id)?.rationale||''}};
     next.contentLanguage=target;return next;
   }
 
@@ -258,7 +264,7 @@
     return {
       ...DEFAULT_MARKET_STATE,icps,signals,researchQueries,researchResults,opportunities,researchSourceStatus,
       researchStatus:allowed.has(input.researchStatus)?input.researchStatus:"idle",
-      lastResearchAt:clean(input.lastResearchAt),strategyApproved:Boolean(input.strategyApproved),strategyApprovedAt:clean(input.strategyApprovedAt),contentLanguage:['en','lv'].includes(input.contentLanguage)?input.contentLanguage:''
+      lastResearchAt:clean(input.lastResearchAt),strategyApproved:Boolean(input.strategyApproved),strategyApprovedAt:clean(input.strategyApprovedAt),contentLanguage:['en','lv'].includes(input.contentLanguage)?input.contentLanguage:'',contentVariants:input.contentVariants&&typeof input.contentVariants==='object'?input.contentVariants:{}
     };
   }
 

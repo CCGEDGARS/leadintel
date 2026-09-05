@@ -150,25 +150,27 @@
   function localizeGeneratedItem(item={},candidate={},profile={},market={},language='en'){
     if(!item?.dossier||item.approved)return item;
     const target=isLv(language)?'lv':'en';const sourceCandidate={...candidate,company:candidate.company||item.company,domain:candidate.domain||item.domain,people:candidate.people?.length?candidate.people:item.dossier.people,evidence:candidate.evidence?.length?candidate.evidence:[]};
-    if(item.contentLanguage===target)return item;
     const research=item.dossier.evidence||[];
     const dossiers={en:buildOpportunityDossier(sourceCandidate,profile,market,research,'en'),lv:buildOpportunityDossier(sourceCandidate,profile,market,research,'lv')};
     const currentDossier={...item.dossier};
-    for(const field of ['whyNow'])if(currentDossier[field]===dossiers.en[field]||currentDossier[field]===dossiers.lv[field])currentDossier[field]=dossiers[target][field];
+    const stored=item.contentVariants&&typeof item.contentVariants==='object'?item.contentVariants:{};
+    const currentDossierVariant=stored.dossier?.[item.contentLanguage||'en']||{};
+    for(const field of ['whyNow'])if(currentDossier[field]===dossiers.en[field]||currentDossier[field]===dossiers.lv[field]||currentDossier[field]===currentDossierVariant[field])currentDossier[field]=dossiers[target][field];
     const currentHypotheses=JSON.stringify(currentDossier.hypotheses||[]);
-    if(currentHypotheses===JSON.stringify(dossiers.en.hypotheses)||currentHypotheses===JSON.stringify(dossiers.lv.hypotheses))currentDossier.hypotheses=dossiers[target].hypotheses;
+    if(currentHypotheses===JSON.stringify(dossiers.en.hypotheses)||currentHypotheses===JSON.stringify(dossiers.lv.hypotheses)||currentHypotheses===JSON.stringify(currentDossierVariant.hypotheses))currentDossier.hypotheses=dossiers[target].hypotheses;
     const people=currentDossier.people||[];const contact=people.find(person=>clean(person.id)===clean(item.selectedPersonId))||people[0]||{};
     const tone=item.drafts?.tone||'consultative';const variants={en:buildOutreachDrafts(dossiers.en,contact,profile,tone,'en'),lv:buildOutreachDrafts(dossiers.lv,contact,profile,tone,'lv')};
     const drafts={...item.drafts};
-    for(const field of ['emailSubject','emailBody','linkedinMessage','callOpener','followUp','objectionReply'])if(drafts[field]===variants.en[field]||drafts[field]===variants.lv[field])drafts[field]=variants[target][field];
-    return {...item,dossier:currentDossier,drafts,contentLanguage:target};
+    const currentDraftVariant=stored.drafts?.[item.contentLanguage||'en']||{};
+    for(const field of ['emailSubject','emailBody','linkedinMessage','callOpener','followUp','objectionReply'])if(drafts[field]===variants.en[field]||drafts[field]===variants.lv[field]||drafts[field]===currentDraftVariant[field])drafts[field]=variants[target][field];
+    return {...item,dossier:currentDossier,drafts,contentLanguage:target,contentVariants:{dossier:{en:{whyNow:dossiers.en.whyNow,hypotheses:dossiers.en.hypotheses},lv:{whyNow:dossiers.lv.whyNow,hypotheses:dossiers.lv.hypotheses}},drafts:{en:{emailSubject:variants.en.emailSubject,emailBody:variants.en.emailBody,linkedinMessage:variants.en.linkedinMessage,callOpener:variants.en.callOpener,followUp:variants.en.followUp,objectionReply:variants.en.objectionReply},lv:{emailSubject:variants.lv.emailSubject,emailBody:variants.lv.emailBody,linkedinMessage:variants.lv.linkedinMessage,callOpener:variants.lv.callOpener,followUp:variants.lv.followUp,objectionReply:variants.lv.objectionReply}}}};
   }
 
   function normalizeEvidence(item={}){const url=normalizeUrl(item.url);if(!url)return null;return {url,title:clean(item.title),description:clean(item.description),text:String(item.text||"").slice(0,6000),date:clean(item.date),sourceType:["Official","Public","Discovery"].includes(clean(item.sourceType))?clean(item.sourceType):"Public"};}
   function normalizeItem(item={}){
     const domain=clean(item.domain).toLowerCase().replace(/^www\./,"");const researchStatus=RESEARCH_STATUSES.has(item.researchStatus)?item.researchStatus:"idle";
     const dossier=item.dossier&&typeof item.dossier==="object"?{...item.dossier,company:clean(item.dossier.company),domain:clean(item.dossier.domain)||domain,website:normalizeUrl(item.dossier.website),market:clean(item.dossier.market),recommendedOffer:clean(item.dossier.recommendedOffer),buyerRoles:splitList(item.dossier.buyerRoles),whyNow:clean(item.dossier.whyNow),evidence:(item.dossier.evidence||[]).map(normalizeEvidence).filter(Boolean).slice(0,15),hypotheses:(item.dossier.hypotheses||[]).map(clean).filter(Boolean).slice(0,8),people:(item.dossier.people||[]).slice(0,5)}:null;
-    return {domain,company:clean(item.company||dossier?.company),researchStatus,researchAt:clean(item.researchAt),dossier,selectedPersonId:clean(item.selectedPersonId),drafts:{tone:clean(item.drafts?.tone)||"consultative",emailSubject:clean(item.drafts?.emailSubject),emailBody:String(item.drafts?.emailBody||"").slice(0,12000),linkedinMessage:String(item.drafts?.linkedinMessage||"").slice(0,3000),callOpener:String(item.drafts?.callOpener||"").slice(0,6000),followUp:String(item.drafts?.followUp||"").slice(0,6000),objectionReply:String(item.drafts?.objectionReply||"").slice(0,6000)},approved:Boolean(item.approved),approvedAt:clean(item.approvedAt),contactedAt:clean(item.contactedAt),contentLanguage:['en','lv'].includes(item.contentLanguage)?item.contentLanguage:''};
+    return {domain,company:clean(item.company||dossier?.company),researchStatus,researchAt:clean(item.researchAt),dossier,selectedPersonId:clean(item.selectedPersonId),drafts:{tone:clean(item.drafts?.tone)||"consultative",emailSubject:clean(item.drafts?.emailSubject),emailBody:String(item.drafts?.emailBody||"").slice(0,12000),linkedinMessage:String(item.drafts?.linkedinMessage||"").slice(0,3000),callOpener:String(item.drafts?.callOpener||"").slice(0,6000),followUp:String(item.drafts?.followUp||"").slice(0,6000),objectionReply:String(item.drafts?.objectionReply||"").slice(0,6000)},approved:Boolean(item.approved),approvedAt:clean(item.approvedAt),contactedAt:clean(item.contactedAt),contentLanguage:['en','lv'].includes(item.contentLanguage)?item.contentLanguage:'',contentVariants:item.contentVariants&&typeof item.contentVariants==='object'?item.contentVariants:{}};
   }
   function normalizeOutreachState(value={}){const input=value&&typeof value==="object"?value:{};return {selectedDomain:clean(input.selectedDomain).toLowerCase().replace(/^www\./,""),items:(Array.isArray(input.items)?input.items:[]).slice(0,50).map(normalizeItem).filter(x=>x.domain)};}
 

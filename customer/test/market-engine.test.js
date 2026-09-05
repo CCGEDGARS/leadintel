@@ -143,4 +143,5 @@ test('localizeGeneratedState updates only generated strategy prose and preserves
   assert.equal(localized.icps[0].name,'Pamata ideālā klienta profils');
   assert.match(localized.opportunities[0].hypothesis,/Prioritizēt/);
   assert.equal(localized.opportunities[0].evidence[0].url,'https://example.com/a');
+  assert.equal(localized.contentVariants.opportunities[localized.opportunities[0].id].lv.title,localized.opportunities[0].title);
 });
