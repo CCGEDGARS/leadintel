@@ -1,7 +1,8 @@
 (function(root){
   'use strict';
+  if(root.LeadIntelServerBridge)return;
   const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
-  const ASSET_VERSION='20260828-master-crm-v1';
+  const ASSET_VERSION='20260905-app-audit-v2';
   const asset=path=>`${path}?v=${ASSET_VERSION}`;
   const KEYS={main:'leadintel_customer_v2_state',discovery:'leadintel_customer_v2_discovery',outreach:'leadintel_customer_v2_outreach',delivery:'leadintel_customer_v2_delivery',meta:'leadintel_customer_v2_discovery_meta'};
   const WORKSPACE_KEY='leadintel_customer_v2_workspace';

@@ -71,7 +71,7 @@ test('dynamic Customer V2 modules keep their own stable cache contract',()=>{
     assert.match(source,/\?v=/);
   }
   const bridge=read('server-bridge.js');
-  assert.match(bridge,/20260828-master-crm-v1/);
+  assert.match(bridge,/ASSET_VERSION='[a-zA-Z0-9-]+'/);
   assert.match(bridge,/server\.css/);
   assert.match(bridge,/\?v=/);
 });
