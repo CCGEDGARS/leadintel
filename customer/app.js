@@ -1,4 +1,4 @@
-import './business-identity.js?v=20260905-latvian-framework-synthesis-v1';
+import './business-identity.js?v=20260905-content-language-layout-v1';
 import './workspace-persistence.js?v=20260903-step1-startup-order-v1';
 
 const STORAGE_KEY="leadintel_customer_v2_state";
