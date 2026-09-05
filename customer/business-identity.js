@@ -227,6 +227,7 @@
       .profile-analysis-card strong{display:block;color:var(--ink,#10231d);font-size:14px;margin-bottom:8px}
       .profile-analysis-card span{display:block;color:var(--muted,#6f7d77);font-size:13px;line-height:1.45}
       .profile-analysis-card .analysis-score{font:700 26px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--accent,#0f6b58);margin-bottom:8px}
+      .profile-analysis-card .analysis-status{display:inline-flex;padding:5px 8px;border-radius:999px;background:#f4eee0;color:#876920;font:600 10px/1.2 "IBM Plex Mono",monospace;margin-bottom:9px}.profile-analysis-card .analysis-status.evidence{background:#e7f2ea;color:#337247}.profile-analysis-card .analysis-status.review{background:#f4eee0;color:#876920}
       @media(max-width:1020px){.profile-analysis-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
       @media(max-width:620px){.profile-analysis-grid{grid-template-columns:1fr}}
       .identity-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
