@@ -1,4 +1,4 @@
-import './company-research-engine.js?v=20260905-scrape-first-research-v1';
+import './company-research-engine.js?v=20260905-latvian-framework-synthesis-v1';
 
 const MAIN_STORAGE_KEY='leadintel_customer_v2_state';
 const RESEARCH_META_KEY='leadintel_customer_v2_research_meta_v1';
@@ -6,7 +6,7 @@ const FIRECRAWL_PROXY='https://apollo-proxy.edgars-7e7.workers.dev';
 const LEADINTEL_API='https://leadintel-api.edgars-7e7.workers.dev';
 const MAX_COMPANY_RESEARCH_QUERIES=3;
 const MAX_RESULTS_PER_QUERY=4;
-const RELEASE='20260905-scrape-first-research-v1';
+const RELEASE='20260905-latvian-framework-synthesis-v1';
 let running=false;
 
 const engine=()=>window.LeadIntelCompanyResearch;
