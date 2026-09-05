@@ -231,12 +231,13 @@
       @media(max-width:820px){.profile-identity-grid{grid-template-columns:1fr}.profile-identity-head{display:grid}.profile-identity-grid .profile-field.wide,.profile-identity-grid .identity-wide{grid-column:auto}}
     `;root.document.head.appendChild(style);
   }
-  function createInsightCard(root,title,value,score){
+  function createInsightCard(root,title,value,score,status,language="en"){
     const node=root.document.createElement("div");node.className="profile-analysis-card";
     const heading=root.document.createElement("strong");heading.textContent=title;
-    const text=root.document.createElement("span");text.textContent=clean(value)||"Needs confirmation.";
+    const text=root.document.createElement("span");text.textContent=clean(value)||uiText(language,"needsReview");
     node.append(heading);
     if(score!==undefined){const scoreNode=root.document.createElement("div");scoreNode.className="analysis-score";scoreNode.textContent=`${score}%`;node.append(scoreNode);}
+    if(status){const statusNode=root.document.createElement("small");statusNode.className=`analysis-status ${status==="Evidence-backed"?"evidence":"review"}`;statusNode.textContent=reviewLabel(language,status);node.append(statusNode);}
     node.append(text);return node;
   }
   function createField(root,key,label,value,readOnly,wide=true){
@@ -264,6 +265,8 @@
     const editor=root.document.getElementById("profile-editor");if(!editor||(!force&&!needsLayout(editor)))return;
     const state=readState(root);const profile=state.profile;if(!profile||typeof profile!=="object")return;
     const derived=root.LeadIntelProfile?.deriveBusinessIdentity?.(profile,state)||deriveIdentity(profile,state);
+    const analysisData=derived.analysis||deriveAnalysis(profile,state);
+    const language=analysisData.language||derived.identityLanguage||"lv";
     const generatedLanguageChanged=Boolean(derived.identityLanguage&&derived.identityLanguage!==profile.identityLanguage);
     const sample=editor.querySelector("textarea[data-profile-field]");const readOnly=sample?sample.readOnly:true;
     const existing=[...editor.querySelectorAll(".profile-field")];
