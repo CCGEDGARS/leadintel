@@ -73,7 +73,7 @@
   function scorePercent(values){return Math.round(values.filter(Boolean).length/values.length*100);}
   function detectLanguage(profile={},input={},context={}){
     const requested=clean(input.uiLanguage||context.language||profile.uiLanguage).toLowerCase();
-    if(requested.startsWith("lv"))return "lv";
+    if(requested.startsWith("lv")||requested==="auto"||!requested)return "lv";
     if(requested.startsWith("en"))return "en";
     const text=clean([profile.companyOverview,profile.priorityOffers,profile.idealCustomer,profile.buyingOutcomes,profile.differentiation,...(input.scrapedSources||[]).map(source=>source?.text)].join(" "));
     return /[āčēģīķļņšūž]/i.test(text)||/\b(mēs|un|kas|darba|uzņēm|noliktav|biroj)\b/i.test(text)?"lv":"en";
