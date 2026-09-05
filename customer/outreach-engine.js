@@ -17,6 +17,7 @@
   function domainOf(value){try{return new URL(normalizeUrl(value)).hostname.toLowerCase().replace(/^www\./,"");}catch{return "";}}
   function tokenize(value){return clean(value).toLowerCase().split(/[^a-z0-9āčēģīķļņšūž]+/i).filter(x=>x.length>=3);}
   function unique(items){return [...new Set(items.filter(Boolean))];}
+  function isLv(language){return String(language||'en').toLowerCase()==='lv';}
   function sourceTypeFor(url,targetDomain,hint){
     if(clean(hint).toLowerCase()==="official")return "Official";
     return domainOf(url)===clean(targetDomain).toLowerCase().replace(/^www\./,"")?"Official":"Public";
@@ -82,18 +83,42 @@
     return (market.signals||[]).filter(s=>s.active!==false).map(s=>{const terms=String(s.keywords||s.name||"").split(/;|,|\|/).map(clean).filter(Boolean);return terms.some(t=>corpus.includes(t.toLowerCase()))?{name:clean(s.name),weight:Number(s.weight)||0}:null;}).filter(Boolean).sort((a,b)=>b.weight-a.weight);
   }
 
-  function buildOpportunityDossier(candidate={},profile={},market={},research=[]){
+  function buildOpportunityDossier(candidate={},profile={},market={},research=[],language='en'){
+    const lv=isLv(language);
     const evidence=dedupeEvidence([...evidenceFromCandidate(candidate),...(research||[]).filter(x=>x?.url).map(x=>({...x,url:normalizeUrl(x.url)}))]);
     const observed=activeObservedSignals(candidate,market,evidence);const recommendedOffer=recommendOffer(candidate,profile,research);const primarySignal=observed[0]?.name||"relevant commercial activity";const sourceCount=evidence.length;
-    const whyNow=sourceCount?`Public evidence for ${clean(candidate.company)||clean(candidate.domain)} currently includes material connected to ${primarySignal}. LeadIntel found ${sourceCount} source${sourceCount===1?"":"s"} in the dossier. This is a reason to test relevance now; it does not confirm buying intent.`:`No additional public evidence was available for ${clean(candidate.company)||clean(candidate.domain)}. Keep this opportunity in research rather than assuming active buying intent.`;
-    const hypotheses=[];if(recommendedOffer)hypotheses.push(`Hypothesis: if the observed ${primarySignal} affects the approved buying context, ${recommendedOffer} may be worth discussing.`);if(clean(profile.differentiation))hypotheses.push(`Hypothesis: the seller's approved differentiation (${clean(profile.differentiation)}) may be relevant if it addresses the prospect's actual priorities; validate this in conversation.`);
+    const company=clean(candidate.company)||clean(candidate.domain);
+    const whyNow=sourceCount?(lv?`Publiski pieejamā informācija par ${company} pašlaik ietver materiālus, kas saistīti ar signālu “${primarySignal}”. LeadIntel dosjē atrada ${sourceCount} ${sourceCount===1?'avotu':'avotus'}. Tas ir pamats pārbaudīt piedāvājuma atbilstību tagad, bet neapstiprina pirkšanas nodomu.`:`Public evidence for ${company} currently includes material connected to ${primarySignal}. LeadIntel found ${sourceCount} source${sourceCount===1?"":"s"} in the dossier. This is a reason to test relevance now; it does not confirm buying intent.`):(lv?`Papildu publiski pieejami pierādījumi par ${company} netika atrasti. Turpiniet izpēti, nevis pieņemiet, ka pastāv aktīvs pirkšanas nodoms.`:`No additional public evidence was available for ${company}. Keep this opportunity in research rather than assuming active buying intent.`);
+    const hypotheses=[];if(recommendedOffer)hypotheses.push(lv?`Hipotēze: ja novērotais signāls “${primarySignal}” ietekmē apstiprināto pirkšanas situāciju, ir vērts apspriest piedāvājumu “${recommendedOffer}”.`:`Hypothesis: if the observed ${primarySignal} affects the approved buying context, ${recommendedOffer} may be worth discussing.`);if(clean(profile.differentiation))hypotheses.push(lv?`Hipotēze: pārdevēja apstiprinātā atšķirība (${clean(profile.differentiation)}) var būt nozīmīga, ja tā risina potenciālā klienta faktiskās prioritātes; tas jāpārbauda sarunā.`:`Hypothesis: the seller's approved differentiation (${clean(profile.differentiation)}) may be relevant if it addresses the prospect's actual priorities; validate this in conversation.`);
     return {company:clean(candidate.company),domain:clean(candidate.domain)||domainOf(candidate.website),website:normalizeUrl(candidate.website),market:clean(candidate.market),score:candidate.score||{},confidence:clean(candidate.confidence)||"Low",matchedSignals:observed,recommendedOffer,buyerRoles:splitList(profile.decisionMakers),people:(candidate.people||[]).slice(0,5),whyNow,evidence,hypotheses,researchStatus:sourceCount?"complete":"error",researchAt:new Date().toISOString()};
   }
 
   function firstName(contact){return clean(contact?.firstName)||clean(contact?.name).split(" ")[0]||"";}
-  function evidenceHook(dossier){const signal=dossier.matchedSignals?.[0]?.name;if(signal)return `public information connected to ${signal}`;const item=dossier.evidence?.[0];return item?.title?`the public information around ${item.title}`:"your company's recent public activity";}
-  function buildOutreachDrafts(dossier={},contact={},profile={},tone="consultative"){
-    const company=clean(dossier.company)||clean(dossier.domain)||"your company";const offer=clean(dossier.recommendedOffer)||splitList(profile.priorityOffers)[0]||"our work";const name=firstName(contact);const hello=name?`Hi ${name},`:"Hello,";const hook=evidenceHook(dossier);const sender=clean(profile.companyName)||"our team";let emailBody,linkedinMessage,callOpener,followUp,objectionReply;
+  function evidenceHook(dossier,language='en'){const lv=isLv(language);const signal=dossier.matchedSignals?.[0]?.name;if(signal)return lv?`publiski pieejamā informācija, kas saistīta ar signālu “${signal}”`:`public information connected to ${signal}`;const item=dossier.evidence?.[0];return item?.title?(lv?`publiski pieejamā informācija par “${item.title}”`:`the public information around ${item.title}`):(lv?'uzņēmuma nesenā publiskā aktivitāte':"your company's recent public activity");}
+  function buildOutreachDrafts(dossier={},contact={},profile={},tone="consultative",language='en'){
+    const lv=isLv(language);const company=clean(dossier.company)||clean(dossier.domain)||(lv?'jūsu uzņēmums':"your company");const offer=clean(dossier.recommendedOffer)||splitList(profile.priorityOffers)[0]||(lv?'mūsu risinājums':"our work");const name=firstName(contact);const hello=lv?(name?`Labdien, ${name}!`:'Labdien!'):(name?`Hi ${name},`:"Hello,");const hook=evidenceHook(dossier,language);const sender=clean(profile.companyName)||(lv?'mūsu komanda':"our team");let emailBody,linkedinMessage,callOpener,followUp,objectionReply;
+    if(lv){
+      if(tone==='direct'){
+        emailBody=`${hello}\n\nPamanīju ${hook} uzņēmumā ${company}. Iespējams, būtu lietderīgi salīdzināt jūsu pašreizējo pieeju ar iespējām, ko sniedz ${offer}.\n\nMēs palīdzam uzņēmumiem šajā jomā, taču nevēlos pieņemt, ka risinājums jums noteikti ir vajadzīgs. Vai nākamnedēļ būtu noderīga īsa 20 minūšu saruna?\n\nAr cieņu,\n[Jūsu vārds]\n${sender}`;
+        linkedinMessage=`${name?`Labdien, ${name}!`:'Labdien!'} Pamanīju ${hook} uzņēmumā ${company}. Mēs strādājam ar ${offer}. Iespējams, ir vērts īsi salīdzināt pieejas. Vai varam sazināties?`;
+        callOpener=`${hello} Runāšu īsi. Pamanīju ${hook} uzņēmumā ${company}. Mēs palīdzam uzņēmumiem ar ${offer}. Es nepieņemu, ka jums kaut kas ir nepieciešams — vēlos noskaidrot, vai tā pašlaik ir prioritāte un vai īss salīdzinājums būtu noderīgs.`;
+        followUp=`${hello}\n\nVienu reizi atgādinu par iepriekšējo ziņu saistībā ar ${hook} uzņēmumā ${company}. Ja ${offer} atbilst jūsu pašreizējām prioritātēm, labprāt īsi salīdzināšu pieejas. Ja ne, viss kārtībā — saraksti neturpināšu.\n\nAr cieņu,\n[Jūsu vārds]`;
+        objectionReply=`Saprotu un nevēlos radīt mākslīgu steidzamību. Lai varu korekti noslēgt sarunu: vai ${offer} pašlaik vienkārši nav prioritāte, vai arī pati pieeja nav aktuāla uzņēmumam ${company}?`;
+      }else if(tone==='brief'){
+        emailBody=`${hello}\n\nPamanīju ${hook} uzņēmumā ${company}. Mēs palīdzam uzņēmumiem ar ${offer}. Ja tas atbilst jūsu pašreizējām prioritātēm, vai būtu noderīga īsa saruna?\n\nAr cieņu,\n[Jūsu vārds]\n${sender}`;
+        linkedinMessage=`${name?`Labdien, ${name}!`:'Labdien!'} Pamanīju ${hook} uzņēmumā ${company}. Strādājam ar ${offer}. Ja tas ir aktuāli, labprāt īsi salīdzināšu pieredzi.`;
+        callOpener=`${hello} Īsi par zvana iemeslu: pamanīju ${hook} uzņēmumā ${company}. Mēs strādājam ar ${offer}. Vai tas ir pietiekami aktuāli, lai veltītu sarunai divas minūtes?`;
+        followUp=`${hello}\n\nĪss atgādinājums par ${offer}. Vai tas ir aktuāli tagad, vēlāk vai nemaz? Jebkura atbilde palīdzēs korekti noslēgt saraksti.\n\nAr cieņu,\n[Jūsu vārds]`;
+        objectionReply=`Paldies, saprotu. Vai tas nozīmē “ne tagad” vai “nav aktuāli”? Rīkošos atbilstoši jūsu atbildei.`;
+      }else{
+        emailBody=`${hello}\n\nIzpētot uzņēmumu ${company}, pamanīju ${hook}. Nevēlos pieņemt, ka tas nozīmē aktīvu iepirkuma vajadzību, tomēr informācija sasaucas ar mūsu darbu saistībā ar ${offer}.\n\nJa šis jautājums ir jūsu darba kārtībā, 20 minūšu sarunā varētu salīdzināt pieejas un noskaidrot, vai pastāv praktiska atbilstība. Vai tas būtu pieņemami?\n\nAr cieņu,\n[Jūsu vārds]\n${sender}`;
+        linkedinMessage=`${name?`Labdien, ${name}!`:'Labdien!'} Izpētot uzņēmumu ${company}, pamanīju ${hook}. Nevēlos pieņemt, ka pastāv konkrēta vajadzība, tomēr tas sasaucas ar mūsu darbu saistībā ar ${offer}. Ja noderīgi, labprāt īsi salīdzināšu pieejas.`;
+        callOpener=`${hello} Zvanu, jo, izpētot uzņēmumu ${company}, pamanīju ${hook}. Nevēlos pieņemt, ka tas rada konkrētu vajadzību, tomēr tas sasaucas ar mūsu darbu saistībā ar ${offer}. Vai drīkstu uzdot vienu jautājumu, lai noskaidrotu iespējamo atbilstību?`;
+        followUp=`${hello}\n\nVēlos noslēgt saraksti par manu iepriekšējo ziņu saistībā ar ${hook}. Iespējams, esmu kļūdījies par aktualitāti. Ja ${offer} ir jūsu darba kārtībā, labprāt salīdzināšu pieejas; ja nav, dodiet ziņu, un turpmāk nerakstīšu.\n\nAr cieņu,\n[Jūsu vārds]`;
+        objectionReply=`Saprotu un nevēlos turpināt pēc pamatota atteikuma. Lai pareizi izprastu situāciju: kam būtu jāmainās, lai ${offer} kļūtu aktuāls — laikam, prioritātei, pieejai vai kam citam?`;
+      }
+      return {tone:['consultative','direct','brief'].includes(tone)?tone:'consultative',emailSubject:`${company} — ${offer}`,emailBody,linkedinMessage:linkedinMessage.slice(0,899),callOpener,followUp,objectionReply};
+    }
     if(tone==="direct"){
       emailBody=`${hello}\n\nI noticed ${hook} at ${company}. It may be relevant to compare how you are approaching this with ${offer}.\n\nWe help companies with ${offer}, and I would rather test fit than assume there is one. Would a short 20-minute conversation next week be useful?\n\nBest,\n[Your name]\n${sender}`;
       linkedinMessage=`${name?`Hi ${name}`:"Hello"} — I noticed ${hook} at ${company}. We work on ${offer}. There may or may not be a fit, but it could be worth a short comparison. Open to connecting?`;
@@ -122,13 +147,30 @@
     return {...item,drafts,approved:true,approvedAt:clean(approvedAt),error:""};
   }
 
+  function localizeGeneratedItem(item={},candidate={},profile={},market={},language='en'){
+    if(!item?.dossier||item.approved)return item;
+    const target=isLv(language)?'lv':'en';const sourceCandidate={...candidate,company:candidate.company||item.company,domain:candidate.domain||item.domain,people:candidate.people?.length?candidate.people:item.dossier.people,evidence:candidate.evidence?.length?candidate.evidence:[]};
+    if(item.contentLanguage===target)return item;
+    const research=item.dossier.evidence||[];
+    const dossiers={en:buildOpportunityDossier(sourceCandidate,profile,market,research,'en'),lv:buildOpportunityDossier(sourceCandidate,profile,market,research,'lv')};
+    const currentDossier={...item.dossier};
+    for(const field of ['whyNow'])if(currentDossier[field]===dossiers.en[field]||currentDossier[field]===dossiers.lv[field])currentDossier[field]=dossiers[target][field];
+    const currentHypotheses=JSON.stringify(currentDossier.hypotheses||[]);
+    if(currentHypotheses===JSON.stringify(dossiers.en.hypotheses)||currentHypotheses===JSON.stringify(dossiers.lv.hypotheses))currentDossier.hypotheses=dossiers[target].hypotheses;
+    const people=currentDossier.people||[];const contact=people.find(person=>clean(person.id)===clean(item.selectedPersonId))||people[0]||{};
+    const tone=item.drafts?.tone||'consultative';const variants={en:buildOutreachDrafts(dossiers.en,contact,profile,tone,'en'),lv:buildOutreachDrafts(dossiers.lv,contact,profile,tone,'lv')};
+    const drafts={...item.drafts};
+    for(const field of ['emailSubject','emailBody','linkedinMessage','callOpener','followUp','objectionReply'])if(drafts[field]===variants.en[field]||drafts[field]===variants.lv[field])drafts[field]=variants[target][field];
+    return {...item,dossier:currentDossier,drafts,contentLanguage:target};
+  }
+
   function normalizeEvidence(item={}){const url=normalizeUrl(item.url);if(!url)return null;return {url,title:clean(item.title),description:clean(item.description),text:String(item.text||"").slice(0,6000),date:clean(item.date),sourceType:["Official","Public","Discovery"].includes(clean(item.sourceType))?clean(item.sourceType):"Public"};}
   function normalizeItem(item={}){
     const domain=clean(item.domain).toLowerCase().replace(/^www\./,"");const researchStatus=RESEARCH_STATUSES.has(item.researchStatus)?item.researchStatus:"idle";
     const dossier=item.dossier&&typeof item.dossier==="object"?{...item.dossier,company:clean(item.dossier.company),domain:clean(item.dossier.domain)||domain,website:normalizeUrl(item.dossier.website),market:clean(item.dossier.market),recommendedOffer:clean(item.dossier.recommendedOffer),buyerRoles:splitList(item.dossier.buyerRoles),whyNow:clean(item.dossier.whyNow),evidence:(item.dossier.evidence||[]).map(normalizeEvidence).filter(Boolean).slice(0,15),hypotheses:(item.dossier.hypotheses||[]).map(clean).filter(Boolean).slice(0,8),people:(item.dossier.people||[]).slice(0,5)}:null;
-    return {domain,company:clean(item.company||dossier?.company),researchStatus,researchAt:clean(item.researchAt),dossier,selectedPersonId:clean(item.selectedPersonId),drafts:{tone:clean(item.drafts?.tone)||"consultative",emailSubject:clean(item.drafts?.emailSubject),emailBody:String(item.drafts?.emailBody||"").slice(0,12000),linkedinMessage:String(item.drafts?.linkedinMessage||"").slice(0,3000),callOpener:String(item.drafts?.callOpener||"").slice(0,6000),followUp:String(item.drafts?.followUp||"").slice(0,6000),objectionReply:String(item.drafts?.objectionReply||"").slice(0,6000)},approved:Boolean(item.approved),approvedAt:clean(item.approvedAt),contactedAt:clean(item.contactedAt)};
+    return {domain,company:clean(item.company||dossier?.company),researchStatus,researchAt:clean(item.researchAt),dossier,selectedPersonId:clean(item.selectedPersonId),drafts:{tone:clean(item.drafts?.tone)||"consultative",emailSubject:clean(item.drafts?.emailSubject),emailBody:String(item.drafts?.emailBody||"").slice(0,12000),linkedinMessage:String(item.drafts?.linkedinMessage||"").slice(0,3000),callOpener:String(item.drafts?.callOpener||"").slice(0,6000),followUp:String(item.drafts?.followUp||"").slice(0,6000),objectionReply:String(item.drafts?.objectionReply||"").slice(0,6000)},approved:Boolean(item.approved),approvedAt:clean(item.approvedAt),contactedAt:clean(item.contactedAt),contentLanguage:['en','lv'].includes(item.contentLanguage)?item.contentLanguage:''};
   }
   function normalizeOutreachState(value={}){const input=value&&typeof value==="object"?value:{};return {selectedDomain:clean(input.selectedDomain).toLowerCase().replace(/^www\./,""),items:(Array.isArray(input.items)?input.items:[]).slice(0,50).map(normalizeItem).filter(x=>x.domain)};}
 
-  return {DEFAULT_OUTREACH_STATE,buildDossierSearchQueries,normalizeDossierResearchResults,recommendOffer,buildOpportunityDossier,buildOutreachDrafts,approveOutreachItem,normalizeOutreachState,splitList};
+  return {DEFAULT_OUTREACH_STATE,buildDossierSearchQueries,normalizeDossierResearchResults,recommendOffer,buildOpportunityDossier,buildOutreachDrafts,localizeGeneratedItem,approveOutreachItem,normalizeOutreachState,splitList};
 });

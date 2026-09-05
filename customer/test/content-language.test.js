@@ -1,6 +1,12 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const language=require('../content-language.js');
+test('auto language resolves from browser preference and explicit choice wins',()=>{
+  assert.equal(language.resolveLanguage('auto',['lv-LV','en-US']),'lv');
+  assert.equal(language.resolveLanguage('auto',['de-DE','en-US']),'en');
+  assert.equal(language.resolveLanguage('en',['lv-LV']),'en');
+  assert.equal(language.resolveLanguage('lv',['en-US']),'lv');
+});
 test('translation validates all fields and rejects missing or extra output',()=>{
   const source={f0:'Laboratory testing',f1:'24 months'};
   assert.throws(()=>language.validate(source,{f0:'Laboratorijas pārbaudes'}));

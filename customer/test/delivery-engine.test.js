@@ -109,3 +109,18 @@ test('buildLearningSummary calculates funnel metrics and waits for minimum sampl
   const tooSmall=buildLearningSummary(normalizeDeliveryState({opportunities:state.opportunities.slice(0,2),activity:state.activity}),outreach.slice(0,2),pipeline.slice(0,2),3);
   assert.equal(tooSmall.recommendations.length,0);
 });
+
+test('learning recommendations are generated in selected Latvian',()=>{
+  let state=emptyState();const outreach=[];const pipeline=[];
+  for(let i=0;i<3;i++){
+    const pkg={...approvedPackage,domain:`lv${i}.com`,company:`LV ${i}`,drafts:{...approvedPackage.drafts,tone:'consultative'},dossier:{...approvedPackage.dossier,market:'Latvija',recommendedOffer:'Darba vietu aprīkojums',matchedSignals:[{name:'Paplašināšanās'}]}};
+    state=confirmSend(state,pkg,`buyer${i}@lv${i}.com`,`2026-08-23T0${i}:00:00.000Z`).state;
+    state=recordReply(state,pkg.domain,'Can we schedule a call?',`2026-08-24T0${i}:00:00.000Z`).state;
+    outreach.push(pkg);pipeline.push({domain:pkg.domain,market:'Latvija',matchedSignals:[{name:'Paplašināšanās'}]});
+  }
+  const summary=buildLearningSummary(state,outreach,pipeline,3,'lv');
+  assert.ok(summary.recommendations.length>0);
+  assert.match(summary.recommendations[0],/nosūtījumi/);
+  assert.match(summary.recommendations[0],/atbilžu rādītājs/);
+  assert.doesNotMatch(summary.recommendations[0],/\b(?:sends|reply rate|Keep prioritizing)\b/i);
+});
