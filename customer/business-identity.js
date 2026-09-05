@@ -282,22 +282,22 @@
     const analysis=section(root,uiText(language,"commercialAnalysis"),uiText(language,"commercialAnalysisSub"));
     analysis.grid.classList.add("profile-analysis-grid");
     analysis.grid.append(
-      createInsightCard(root,"Commercial clarity",analysisData.diagnosis,analysisData.scores?.commercialClarity),
-      createInsightCard(root,"ICP specificity","How clearly the ideal customer, buyer and outcome are defined.",analysisData.scores?.icpSpecificity),
-      createInsightCard(root,"Positioning strength","How clearly the offer, outcome and differentiation connect.",analysisData.scores?.positioningStrength),
-      createInsightCard(root,"Evidence confidence","Coverage of website, documents and supporting evidence.",analysisData.scores?.evidenceConfidence),
-      createInsightCard(root,"Positioning statement",analysisData.positioningStatement)
+      createInsightCard(root,"Commercial clarity",analysisData.diagnosis,analysisData.scores?.commercialClarity,undefined,language),
+      createInsightCard(root,"ICP specificity","How clearly the ideal customer, buyer and outcome are defined.",analysisData.scores?.icpSpecificity,undefined,language),
+      createInsightCard(root,"Positioning strength","How clearly the offer, outcome and differentiation connect.",analysisData.scores?.positioningStrength,undefined,language),
+      createInsightCard(root,"Evidence confidence","Coverage of website, documents and supporting evidence.",analysisData.scores?.evidenceConfidence,undefined,language),
+      createInsightCard(root,"Positioning statement",analysisData.positioningStatement,undefined,analysisData.review?.valueProposition,language)
     );
     const frameworks=section(root,uiText(language,"commercialFrameworks"),uiText(language,"commercialFrameworksSub"));
     frameworks.grid.classList.add("profile-analysis-grid");
     frameworks.grid.append(
-      createInsightCard(root,"Golden Circle · Why",analysisData.frameworks?.goldenCircle?.why),
-      createInsightCard(root,"Golden Circle · How",analysisData.frameworks?.goldenCircle?.how),
-      createInsightCard(root,"Golden Circle · What",analysisData.frameworks?.goldenCircle?.what),
-      createInsightCard(root,"Value proposition",analysisData.frameworks?.valueProposition),
-      createInsightCard(root,"FAB · Features",analysisData.frameworks?.fab?.features),
-      createInsightCard(root,"FAB · Advantages",analysisData.frameworks?.fab?.advantages),
-      createInsightCard(root,"FAB · Benefits",analysisData.frameworks?.fab?.benefits)
+      createInsightCard(root,uiText(language,"why"),analysisData.frameworks?.goldenCircle?.why,undefined,analysisData.review?.goldenCircle?.why,language),
+      createInsightCard(root,uiText(language,"how"),analysisData.frameworks?.goldenCircle?.how,undefined,analysisData.review?.goldenCircle?.how,language),
+      createInsightCard(root,uiText(language,"what"),analysisData.frameworks?.goldenCircle?.what,undefined,analysisData.review?.goldenCircle?.what,language),
+      createInsightCard(root,uiText(language,"valueProposition"),analysisData.frameworks?.valueProposition,undefined,analysisData.review?.valueProposition,language),
+      createInsightCard(root,uiText(language,"features"),analysisData.frameworks?.fab?.features,undefined,analysisData.review?.fab?.features,language),
+      createInsightCard(root,uiText(language,"advantages"),analysisData.frameworks?.fab?.advantages,undefined,analysisData.review?.fab?.advantages,language),
+      createInsightCard(root,uiText(language,"benefits"),analysisData.frameworks?.fab?.benefits,undefined,analysisData.review?.fab?.benefits,language)
     );
     const positioning=section(root,uiText(language,"commercialPositioning"),uiText(language,"commercialPositioningSub"));positioning.grid.append(usp);
     const diff=take("differentiation");if(diff)positioning.grid.append(diff);
