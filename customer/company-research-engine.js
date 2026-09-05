@@ -199,11 +199,13 @@
     return draft;
   }
 
-  function mergeDraft(currentAnswers={},draft={}){
+  function mergeDraft(currentAnswers={},draft={},previousMeta={}){
     const answers={};const meta={};
     for(const id of QUESTION_IDS){
       const current=clean(currentAnswers?.[id]);const row=draft?.[id]||emptyDraftItem();
-      if(current){answers[id]=current;meta[id]={origin:"user",confidence:"",sourceIds:[],rationale:"Existing answer preserved."};continue;}
+      const previous=previousMeta[id];
+      const replaceDraft=previous?.origin==="research"&&!previous.reviewed;
+      if(current&&!replaceDraft){answers[id]=current;meta[id]=previous?{...previous}:{origin:"user",confidence:"",sourceIds:[],rationale:"Existing answer preserved."};continue;}
       const value=truncate(row.value,1500);answers[id]=value;
       meta[id]=value?{origin:"research",confidence:CONFIDENCE.has(row.confidence)?row.confidence:"low",sourceIds:unique(row.sourceIds||row.source_ids||[]).slice(0,6),rationale:truncate(row.rationale,500)}:{origin:"needs-input",confidence:"",sourceIds:[],rationale:"Insufficient evidence; customer input recommended."};
     }

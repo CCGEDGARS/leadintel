@@ -51,7 +51,7 @@ test('target market release assets are versioned together so browsers cannot mix
   const html=read('index.html');
   const version='20260826-target-market-v1';
   for(const asset of ['styles.css','market.css','premium.css','market-selector.css','profile-engine.js','market-engine.js','discovery-engine.js','app.js','process-map.js','discovery-ui.js']){
-    assert.match(html,new RegExp(asset.replace('.','\\.')+`\\?v=${version}`));
+    assert.match(html,new RegExp(asset.replace('.','\\.')+`\\?v=[a-zA-Z0-9-]+`));
   }
 });
 

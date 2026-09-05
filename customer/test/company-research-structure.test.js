@@ -14,10 +14,10 @@ const css=read('company-research.css');
 
 test('Customer V2 loads the automatic company research module with Firecrawl workspace routing before research',()=>{
   assert.match(processMap,/firecrawl-workspace-router\.js\?v=20260903-firecrawl-retry-fallback-v1/);
-  assert.match(processMap,/company-research-ui\.js\?v=20260826-intelligence-autofill-v2/);
+  assert.match(processMap,/company-research-ui\.js\?v=20260905-audit-v1/);
   assert.ok(processMap.indexOf('firecrawl-workspace-router.js')<processMap.indexOf('company-research-ui.js'),'Firecrawl router must load before company research');
   assert.match(processMap,/company-profile-handoff\.js\?v=20260826-intelligence-autofill-v1/);
-  assert.match(ui,/company-research-engine\.js\?v=20260826-intelligence-autofill-v2/);
+  assert.match(ui,/company-research-engine\.js\?v=20260905-audit-v1/);
 });
 
 test('Step 1 becomes research-first and intercepts legacy questionnaire navigation safely',()=>{
@@ -70,8 +70,8 @@ test('fresh research persists answers and evidence into the existing main Custom
   assert.match(ui,/market\s*=\s*\{\}/);
 });
 
-test('research reruns preserve non-empty answers through the research engine merge contract',()=>{
-  assert.match(ui,/\.mergeDraft\(state\.answers\|\|\{\},draft\)/);
+test('research reruns preserve reviewed answers through provenance-aware merge',()=>{
+  assert.match(ui,/\.mergeDraft\(state\.answers\|\|\{\},draft,readMeta\(\)\.fields\|\|\{\}\)/);
   assert.match(ui,/Rerun company research/);
 });
 
