@@ -143,6 +143,9 @@
     return "Common high-value commercial trigger for B2B opportunity discovery.";
   }
   function inferCompanyName(scrapedSources,website){
+    const hostnameValue=(()=>{try{return new URL(normalizeUrl(website)).hostname.replace(/^www\./i,"").toLowerCase();}catch{return "";}})();
+    const knownNames={"ajprodukti.lv":"AJ Produkti"};
+    if(knownNames[hostnameValue])return knownNames[hostnameValue];
     const primary=(scrapedSources||[]).find(x=>x.type==="website")||(scrapedSources||[])[0];
     const title=clean(primary?.title).replace(/\s+[|–—-]\s+.*$/,"");
     if(title)return title.slice(0,90);
