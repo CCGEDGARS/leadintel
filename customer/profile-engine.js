@@ -142,10 +142,12 @@
     if(signal.id==="market-entry")return "Relevant for identifying companies entering or expanding in target markets.";
     return "Common high-value commercial trigger for B2B opportunity discovery.";
   }
-  function inferCompanyName(scrapedSources,website){
+  function knownCompanyName(website){
     const hostnameValue=(()=>{try{return new URL(normalizeUrl(website)).hostname.replace(/^www\./i,"").toLowerCase();}catch{return "";}})();
-    const knownNames={"ajprodukti.lv":"AJ Produkti"};
-    if(knownNames[hostnameValue])return knownNames[hostnameValue];
+    return {"ajprodukti.lv":"AJ Produkti"}[hostnameValue]||"";
+  }
+  function inferCompanyName(scrapedSources,website){
+    const known=knownCompanyName(website);if(known)return known;
     const primary=(scrapedSources||[]).find(x=>x.type==="website")||(scrapedSources||[])[0];
     const title=clean(primary?.title).replace(/\s+[|–—-]\s+.*$/,"");
     if(title)return title.slice(0,90);
@@ -234,7 +236,8 @@
     if(profile){
       const regeneratedOverview=deriveCompanyOverview(scrapedSources,docs);
       const regeneratedDigest=deriveEvidenceDigest(scrapedSources,docs);
-      const companyName=clean(profile.companyName)||inferCompanyName(scrapedSources,value.website);
+      const companyName=knownCompanyName(value.website)||clean(profile.companyName)||inferCompanyName(scrapedSources,value.website);
+      if(knownCompanyName(value.website))profile.companyName=companyName;
       if(hasAssetNoise(profile.companyOverview)||hasEvidenceNavigationNoise(profile.companyOverview))profile.companyOverview=regeneratedOverview||regeneratedDigest||`LeadIntel has limited public evidence for ${companyName}. Strategic answers are used as the primary context until more evidence is added.`;
       if(hasAssetNoise(profile.evidenceDigest))profile.evidenceDigest=regeneratedDigest;
     }

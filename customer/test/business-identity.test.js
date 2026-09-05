@@ -208,6 +208,17 @@ test('AJ Produkti identity starts the Latvian business summary with the company 
   assert.doesNotMatch(result.businessSummary, /^Biroja mēbeles/i);
 });
 
+test('existing AJ Produkti saved profiles repair a category mistaken for the company name', () => {
+  const ajInput = JSON.parse(JSON.stringify(input));
+  ajInput.website = 'https://www.ajprodukti.lv/';
+  ajInput.uiLanguage = 'lv';
+  ajInput.answers.priority_offers = 'Biroja mēbeles un darba vides aprīkojums';
+  ajInput.scrapedSources = [{type:'website',url:'https://www.ajprodukti.lv/',title:'Biroja mēbeles un darba vides aprīkojums',text:'AJ Produkti piedāvā biroja mēbeles un darba vides aprīkojumu.'}];
+  const saved = profile.normalizeSavedState({...ajInput, profile:{companyName:'Biroja mēbeles un darba vides aprīkojums', priorityOffers:ajInput.answers.priority_offers, businessSummary:'Biroja mēbeles un darba vides aprīkojums nodrošina biroja mēbeles.'}});
+  assert.equal(saved.profile.companyName, 'AJ Produkti');
+  assert.match(saved.profile.businessSummary, /^AJ Produkti\s/);
+});
+
 test('Research synthesis prompt requires fully Latvian ready-to-use output', () => {
   const prompt = research.buildAiPrompt({website:'https://example.lv',targetMarkets:['Latvia'],uiLanguage:'lv',sources:[],documents:[]});
   assert.match(prompt.prompt, /Latvian|latviešu/i);
