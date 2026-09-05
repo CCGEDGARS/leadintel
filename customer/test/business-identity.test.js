@@ -105,3 +105,12 @@ test('Step 3 removes scraped navigation labels and repairs contaminated saved id
   assert.doesNotMatch(saved.profile.elevatorPitch, /UZZINĀT VAIRĀK|LEARN MORE/i);
   assert.equal(saved.profile.priorityOffers, '');
 });
+
+
+test('Business Identity patches profile normalization before app state is loaded', () => {
+  const app = fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
+  const identityImport = app.indexOf('business-identity.js');
+  const stateLoad = app.indexOf('let state=loadState();');
+  assert.ok(identityImport >= 0, 'app must load Business Identity before state initialization');
+  assert.ok(identityImport < stateLoad, 'Business Identity import must precede loadState');
+});
