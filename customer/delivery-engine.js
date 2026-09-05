@@ -167,7 +167,8 @@
       if(top[field]<=0)return;
       if(lv){
         const labels={tone:'tonis',market:'tirgus',offer:'piedāvājums',signal:'signāls'};
-        recommendations.push(`“${top.key}” ${labels[label]||label}: ${top.sent} nosūtījumi un ${top[field]}% ${metric==="meeting"?'tikšanos':'atbilžu'} rādītājs. Turpiniet šo virzienu prioritizēt piesardzīgi, kamēr izlase pieaug.`);
+        const toneNames={consultative:'konsultatīvs',direct:'tiešs',brief:'īss'};const key=label==='tone'?(toneNames[top.key]||top.key):top.key;
+        recommendations.push(`“${key}” ${labels[label]||label}: ${top.sent} nosūtījumi un ${top[field]}% ${metric==="meeting"?'tikšanos':'atbilžu'} rādītājs. Turpiniet šo virzienu prioritizēt piesardzīgi, kamēr izlase pieaug.`);
       }else{
         const noun=label==="tone"?`${titleCase(top.key)} tone`:`${top.key} ${label}`;
         recommendations.push(`${noun} has ${top.sent} sends and a ${top[field]}% ${metric==="meeting"?"meeting":"reply"} rate. Keep prioritizing it cautiously while the sample grows.`);

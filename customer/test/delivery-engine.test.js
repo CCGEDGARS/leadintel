@@ -122,5 +122,7 @@ test('learning recommendations are generated in selected Latvian',()=>{
   assert.ok(summary.recommendations.length>0);
   assert.match(summary.recommendations[0],/nosūtījumi/);
   assert.match(summary.recommendations[0],/atbilžu rādītājs/);
+  assert.match(summary.recommendations[0],/konsultatīvs/i);
+  assert.doesNotMatch(summary.recommendations[0],/consultative/i);
   assert.doesNotMatch(summary.recommendations[0],/\b(?:sends|reply rate|Keep prioritizing)\b/i);
 });
