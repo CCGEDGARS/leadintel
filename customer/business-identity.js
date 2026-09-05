@@ -109,8 +109,8 @@
     const customer=context.customer||identityValue(profile.idealCustomer);
     const outcomes=context.outcomes||identityValue(profile.buyingOutcomes);
     const benefits=outcomes||inferBenefits(offers,input,profile,language);
-    const advantage=differentiation||inferAdvantages(offers,input,profile,language);
     const differentiation=context.differentiation||identityValue(profile.differentiation);
+    const advantage=differentiation||inferAdvantages(offers,input,profile,language);
     const buyers=identityValue(profile.decisionMakers);
     const evidence=hasEvidence(input);
     const status=readStatus(input,"differentiation")==="user"||readStatus(input,"differentiation")==="accepted"?(language==="lv"?copy(language,"confirmed"):"Confirmed"):(language==="lv"?copy(language,"proposed"):"Proposed · confirmation recommended");
