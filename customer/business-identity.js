@@ -69,7 +69,7 @@
   }
   function subjectCompany(value){return clean(value).toLowerCase()==="uzņēmums"?"Uzņēmums":clean(value);}
   function phrase(value){return clean(value).replace(/[.!?]+$/,"");}
-  function offerObject(value){return phrase(value).replace(/noliktavu un darbnīcu aprīkojums/gi,"noliktavu un darbnīcu aprīkojumu").replace(/garderobes skapji/gi,"garderobes skapjus");}
+  function offerObject(value){return phrase(value).replace(/noliktavu un darbnīcu aprīkojums/gi,"noliktavu un darbnīcu aprīkojumu").replace(/garderobes skapji/gi,"garderobes skapjus").replace(/darba vietu plānošana/gi,"darba vietu plānošanu");}
   function outcomeObject(value){
     const text=phrase(value);
     if(/^Ergonomiskāka, drošāka un izturīgāka darba vide/i.test(text))return "ergonomiskāku, drošāku un izturīgāku darba vidi, labāku darbinieku labbūtību un pārdomātāku aprīkojuma izvēli";
