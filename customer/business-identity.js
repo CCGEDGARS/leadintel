@@ -72,6 +72,15 @@
     if(/3d|vizualiz|visuali[sz]/i.test(text))add(language==="lv"?"iespēju vizualizēt risinājumu pirms iegādes un samazināt nepareizu lēmumu risku":"the ability to visualise the solution before purchase and reduce decision risk");
     return benefits.length?benefits.join("; "):copy(language,"benefitFallback");
   }
+  function inferAdvantages(offers,input={},profile={},language="en"){
+    const text=clean([offers,profile.companyOverview,...(input.scrapedSources||[]).map(source=>source?.text),...(input.documents||[]).map(doc=>doc?.text)].join(" "));
+    const advantages=[];const add=value=>{if(value&&!advantages.includes(value))advantages.push(value);};
+    if(/3d|vizualiz|visuali[sz]/i.test(text))add(language==="lv"?"3D vizualizācija un darba vietu plānošana palīdz klientam pieņemt pārdomātus lēmumus pirms iegādes":"3D visualisation and workplace planning help customers make informed decisions before purchase");
+    if(/ergonom|regulējam|height.adjust|office|biroj/i.test(text))add(language==="lv"?"Ergonomiski un pielāgojami risinājumi dažādām darba vidēm":"ergonomic and adaptable solutions for different work environments");
+    if(/noliktav|warehouse|darbnīc|workshop|instrument|plaukt|shelf|storage|uzglab/i.test(text))add(language==="lv"?"Plašs aprīkojuma klāsts birojiem, noliktavām un darbnīcām vienuviet":"a broad equipment range for offices, warehouses and workshops in one place");
+    if(/school|skol|izglīt|education|bērn|kindergarten|dārziņ/i.test(text))add(language==="lv"?"Risinājumi arī skolām un izglītības iestādēm":"solutions for schools and educational institutions as well");
+    return advantages.length?advantages.join(language==="lv"?"; ":"; "):(language==="lv"?"Priekšrocība izsecināta no piedāvājuma, taču nepieciešama klienta apstiprināšana":"The advantage is inferred from the offer and requires customer confirmation");
+  }
   function deriveAnalysis(profile={},input={},context={}){
     const language=detectLanguage(profile,input,context);
     const company=context.company||identityValue(profile.companyName)||(language==="lv"?"Uzņēmums":"The company");
@@ -79,6 +88,7 @@
     const customer=context.customer||identityValue(profile.idealCustomer);
     const outcomes=context.outcomes||identityValue(profile.buyingOutcomes);
     const benefits=outcomes||inferBenefits(offers,input,profile,language);
+    const advantage=differentiation||inferAdvantages(offers,input,profile,language);
     const differentiation=context.differentiation||identityValue(profile.differentiation);
     const buyers=identityValue(profile.decisionMakers);
     const evidence=hasEvidence(input);
@@ -87,9 +97,9 @@
       ? language==="lv"?`Uzņēmums piedāvā ${lowerFirst(offers)}, lai ${lowerFirst(customer)} varētu ${lowerFirst(outcomes)}.`:`For ${lowerFirst(customer)}, ${company} provides ${lowerFirst(offers)} to ${lowerFirst(outcomes)}.`
       : copy(language,"hypothesis").replace("{company}",company);
     const frameworks={
-      goldenCircle:{why:outcomes||copy(language,"why"),how:differentiation||copy(language,"how"),what:offers||copy(language,"what")},
+      goldenCircle:{why:benefits,how:advantage,what:offers||copy(language,"what")},
       valueProposition:positioningStatement,
-      fab:{features:offers||(language==="lv"?"Prioritārais piedāvājums nav apstiprināts.":"Priority offer not confirmed."),advantages:differentiation||(language==="lv"?"Konkurences priekšrocība nav apstiprināta.":"Competitive advantage not confirmed."),benefits}
+      fab:{features:offers||(language==="lv"?"Prioritārais piedāvājums nav apstiprināts.":"Priority offer not confirmed."),advantages:advantage,benefits}
     };
     const scores={
       commercialClarity:scorePercent([offers,customer,outcomes,differentiation]),
@@ -100,7 +110,8 @@
     const diagnosis= scores.commercialClarity>=75
       ? copy(language,"diagnosisStrong")
       : copy(language,"diagnosisWeak");
-    return {status,positioningStatement,diagnosis,scores,frameworks,language};
+    const review={goldenCircle:{why:outcomes?"Evidence-backed":"Proposed · review recommended",how:differentiation?"Evidence-backed":"Proposed · review recommended",what:offers?"Evidence-backed":"Needs review"},valueProposition:customer&&offers&&outcomes?"Evidence-backed":"Needs review",fab:{features:offers?"Evidence-backed":"Needs review",advantages:differentiation?"Evidence-backed":"Proposed · review recommended",benefits:outcomes?"Evidence-backed":"Proposed · review recommended"}};
+    return {status,positioningStatement,diagnosis,scores,frameworks,review,language};
   }
 
   function deriveIdentity(profile={},input={}){
