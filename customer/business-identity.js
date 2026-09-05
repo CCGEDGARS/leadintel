@@ -274,13 +274,12 @@
     const take=key=>byKey.get(key)||null;
     byKey.get("companyOverview")?.remove();byKey.delete("companyOverview");
 
-    let summary=take("businessSummary");if(!summary)summary=createField(root,"businessSummary","Business summary",generatedLanguageChanged?derived.businessSummary:(profile.businessSummary||derived.businessSummary),readOnly,true);
-    let usp=take("uniqueSellingProposition");if(!usp)usp=createField(root,"uniqueSellingProposition","USP / value proposition",generatedLanguageChanged?derived.uniqueSellingProposition:(profile.uniqueSellingProposition||derived.uniqueSellingProposition),readOnly,true);
-    let pitch=take("elevatorPitch");if(!pitch)pitch=createField(root,"elevatorPitch","Elevator pitch",generatedLanguageChanged?derived.elevatorPitch:(profile.elevatorPitch||derived.elevatorPitch),readOnly,true);
+    let summary=take("businessSummary");if(!summary)summary=createField(root,"businessSummary",uiText(language,"businessSummaryField"),generatedLanguageChanged?derived.businessSummary:(profile.businessSummary||derived.businessSummary),readOnly,true);
+    let usp=take("uniqueSellingProposition");if(!usp)usp=createField(root,"uniqueSellingProposition",uiText(language,"uspField"),generatedLanguageChanged?derived.uniqueSellingProposition:(profile.uniqueSellingProposition||derived.uniqueSellingProposition),readOnly,true);
+    let pitch=take("elevatorPitch");if(!pitch)pitch=createField(root,"elevatorPitch",uiText(language,"pitchField"),generatedLanguageChanged?derived.elevatorPitch:(profile.elevatorPitch||derived.elevatorPitch),readOnly,true);
 
-    const business=section(root,"Business identity","A concise factual view of what the company does, what it sells and who it serves.",true);business.grid.append(summary);
-    const analysis=section(root,"Commercial analysis","What LeadIntel currently understands, how strong the evidence is, and what still requires confirmation.");
-    const analysisData=derived.analysis||deriveAnalysis(profile,state);
+    const business=section(root,uiText(language,"businessIdentity"),uiText(language,"businessIdentitySub"),true);business.grid.append(summary);
+    const analysis=section(root,uiText(language,"commercialAnalysis"),uiText(language,"commercialAnalysisSub"));
     analysis.grid.classList.add("profile-analysis-grid");
     analysis.grid.append(
       createInsightCard(root,"Commercial clarity",analysisData.diagnosis,analysisData.scores?.commercialClarity),
@@ -289,7 +288,7 @@
       createInsightCard(root,"Evidence confidence","Coverage of website, documents and supporting evidence.",analysisData.scores?.evidenceConfidence),
       createInsightCard(root,"Positioning statement",analysisData.positioningStatement)
     );
-    const frameworks=section(root,"Commercial frameworks","Structured models that turn the evidence into usable sales and marketing language.");
+    const frameworks=section(root,uiText(language,"commercialFrameworks"),uiText(language,"commercialFrameworksSub"));
     frameworks.grid.classList.add("profile-analysis-grid");
     frameworks.grid.append(
       createInsightCard(root,"Golden Circle · Why",analysisData.frameworks?.goldenCircle?.why),
@@ -300,11 +299,11 @@
       createInsightCard(root,"FAB · Advantages",analysisData.frameworks?.fab?.advantages),
       createInsightCard(root,"FAB · Benefits",analysisData.frameworks?.fab?.benefits)
     );
-    const positioning=section(root,"Commercial positioning","Why the ideal customer should choose this company instead of a credible alternative.");positioning.grid.append(usp);
+    const positioning=section(root,uiText(language,"commercialPositioning"),uiText(language,"commercialPositioningSub"));positioning.grid.append(usp);
     const diff=take("differentiation");if(diff)positioning.grid.append(diff);
     const meta=root.document.createElement("div");meta.className="identity-meta identity-wide";meta.innerHTML=`<span>${esc(profile.uspStatus||derived.uspStatus||"Proposed · confirmation recommended")}</span><span>${esc(profile.positioningConfidence||derived.positioningConfidence||"Needs confirmation")} confidence</span>`;positioning.grid.append(meta);
-    const sales=section(root,"Sales message","A short persuasive explanation that can be used in conversation and adapted for outreach.");sales.grid.append(pitch);
-    const context=section(root,"Commercial context","The confirmed inputs LeadIntel uses for targeting, qualification and signal discovery.");
+    const sales=section(root,uiText(language,"salesMessage"),uiText(language,"salesMessageSub"));sales.grid.append(pitch);
+    const context=section(root,uiText(language,"commercialContext"),uiText(language,"commercialContextSub"));
     const contextOrder=["priorityOffers","idealCustomer","buyingOutcomes","lookalikeCustomers","decisionMakers","currentMarkets","targetMarkets","marketFocus","buyingTriggers","exclusions","opportunityValue","commercialObjective"];
     const used=new Set(["companyOverview","businessSummary","uniqueSellingProposition","elevatorPitch","differentiation"]);
     for(const key of contextOrder){const node=take(key);if(node){context.grid.append(node);used.add(key);}}
