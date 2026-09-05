@@ -189,6 +189,25 @@ test('Latvian default produces complete evidence-backed framework conclusions', 
   assert.doesNotMatch(result.elevatorPitch, /We help|through|Our approach/i);
 });
 
+test('AJ Produkti identity starts the Latvian business summary with the company name', () => {
+  const ajInput = JSON.parse(JSON.stringify(input));
+  ajInput.website = 'https://www.ajprodukti.lv/';
+  ajInput.uiLanguage = 'lv';
+  ajInput.answers.priority_offers = 'Biroja mēbeles un darba vides aprīkojums';
+  ajInput.answers.ideal_customer = 'Latvijas uzņēmumi, biroji, noliktavas un darbnīcas';
+  ajInput.answers.buying_outcomes = 'ergonomiskāka un efektīvāka darba vide';
+  ajInput.scrapedSources = [{
+    type: 'website',
+    url: 'https://www.ajprodukti.lv/',
+    title: 'Biroja mēbeles un darba vides aprīkojums',
+    text: 'AJ Produkti piedāvā biroja mēbeles un darba vides aprīkojumu Latvijas uzņēmumiem.'
+  }];
+  const result = profile.buildCompanyIntelligenceProfile(ajInput);
+  assert.equal(result.companyName, 'AJ Produkti');
+  assert.match(result.businessSummary, /^AJ Produkti\s/);
+  assert.doesNotMatch(result.businessSummary, /^Biroja mēbeles/i);
+});
+
 test('Research synthesis prompt requires fully Latvian ready-to-use output', () => {
   const prompt = research.buildAiPrompt({website:'https://example.lv',targetMarkets:['Latvia'],uiLanguage:'lv',sources:[],documents:[]});
   assert.match(prompt.prompt, /Latvian|latviešu/i);
