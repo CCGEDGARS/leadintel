@@ -76,6 +76,11 @@
     if(status==="Needs review")return uiText(language,"needsReview");
     return status||"";
   }
+  function fieldText(language,key){
+    const lv={companyOverview:"Uzņēmuma pārskats",priorityOffers:"Prioritārie piedāvājumi",idealCustomer:"Ideālais klients",lookalikeCustomers:"Līdzīgie klienti",decisionMakers:"Lēmuma pieņēmēji",currentMarkets:"Pašreizējie tirgi",targetMarkets:"Prioritārie izaugsmes tirgi",marketFocus:"Prioritārā tirgus fokuss",differentiation:"Konkurences priekšrocības",buyingTriggers:"Pirkuma situācijas un signāli",exclusions:"Izslēdzamie klienti",opportunityValue:"Komerciālā vērtība",commercialObjective:"Komerciālais mērķis"};
+    const en={companyOverview:"Company overview",priorityOffers:"Priority offers",idealCustomer:"Ideal customer profile",lookalikeCustomers:"Lookalike customers",decisionMakers:"Decision makers",currentMarkets:"Current market footprint",targetMarkets:"Priority growth markets",marketFocus:"Priority market focus",differentiation:"Competitive advantages",buyingTriggers:"Buying situations / triggers",exclusions:"Negative ICP / exclusions",opportunityValue:"Commercial value",commercialObjective:"Commercial objective"};
+    return (language==="lv"?lv:en)[key]||key;
+  }
   function analysisText(language,key){
     const text={en:{clarity:"Commercial clarity",clarityDesc:"The commercial story is still a working hypothesis. Confirm the missing inputs before treating the positioning as final.",icp:"ICP specificity",icpDesc:"How clearly the ideal customer, buyer and outcome are defined.",strength:"Positioning strength",strengthDesc:"How clearly the offer, outcome and differentiation connect.",evidence:"Evidence confidence",evidenceDesc:"Coverage of website, documents and supporting evidence.",statement:"Positioning statement"},lv:{clarity:"Komerciālā skaidrība",clarityDesc:"Komerciālais stāsts joprojām ir darba hipotēze. Pirms pozicionējuma apstiprināšanas jāprecizē trūkstošā informācija.",icp:"Ideālā klienta precizitāte",icpDesc:"Cik skaidri ir definēts ideālais klients, pircējs un sasniedzamais rezultāts.",strength:"Pozicionējuma spēks",strengthDesc:"Cik skaidri savienojas piedāvājums, klienta rezultāts un atšķirība no alternatīvām.",evidence:"Pierādījumu pārliecība",evidenceDesc:"Tīmekļa vietnes, dokumentu un citu avotu sniegtā pamatojuma kvalitāte.",statement:"Pozicionēšanas formulējums"}};return (text[language]||text.en)[key]||key;
   }
@@ -312,6 +317,7 @@
     const used=new Set(["companyOverview","businessSummary","uniqueSellingProposition","elevatorPitch","differentiation"]);
     for(const key of contextOrder){const node=take(key);if(node){context.grid.append(node);used.add(key);}}
     for(const [key,node] of byKey){if(!used.has(key))context.grid.append(node);}
+    editor.querySelectorAll("[data-profile-field]").forEach(field=>{const label=field.closest(".profile-field")?.querySelector("label");if(label)label.textContent=fieldText(language,field.dataset.profileField);});
 
     editor.replaceChildren(business.node,analysis.node,frameworks.node,positioning.node,sales.node,context.node);editor.classList.add("profile-identity-layout");
   }
