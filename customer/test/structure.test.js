@@ -90,6 +90,12 @@ test('market opportunity UI exposes the five scoring dimensions',()=>{
   for(const label of ['Fit','Intent','Timing','Value','Evidence'])assert.match(html,new RegExp(`>${label}<`));
 });
 
+test('unresearched opportunity card renders only its selected-market title and zero total',()=>{
+  const app=read('app.js');
+  assert.match(app,/opp\.profileOnly\?`<article class="opportunity-card[^`]+opp\.score\.total[^`]+<\/article>`:/s);
+  assert.doesNotMatch(app,/opp\.profileOnly\?[\s\S]{0,800}opportunity-hypothesis/);
+});
+
 test('customer app wires live Firecrawl market search with explicit per-mode cost guards',()=>{
   const app=read('app.js'),engine=read('market-engine.js');
   assert.match(app,/firecrawl-search/);
