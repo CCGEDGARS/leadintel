@@ -165,3 +165,31 @@ test('company overview strips Squarespace image/CDN debris and prefers real busi
   assert.doesNotMatch(profile.evidenceDigest,/https?:\/\/|squarespace-cdn|\.png/i);
   assert.match(profile.companyOverview,/provides advanced B2B sales training, coaching and AI assistants/i);
 });
+
+test('a single AJ Produkti product snippet is labelled narrow product evidence, not company-wide evidence', () => {
+  const productText='Instrumentu skapis SUPPLY. Izturīgs metāla skapis efektīvai instrumentu un detaļu uzglabāšanai.';
+  const profile=engine.buildCompanyIntelligenceProfile({
+    website:'https://www.ajprodukti.lv/',
+    targetMarkets:['Latvia'],
+    answers:{...answers,priority_offers:'Biroja mēbeles un darba vides aprīkojums'},
+    documents:[],
+    scrapedSources:[{type:'website',url:'https://www.ajprodukti.lv/',title:'Instrumentu skapis SUPPLY',text:productText,status:'ready'}]
+  });
+  assert.equal(profile.evidenceSources.length,1);
+  assert.equal(profile.evidenceSources[0].scope,'product');
+  assert.equal(profile.evidenceSources[0].scopeLabel,'Limited product evidence');
+  assert.deepEqual(profile.evidenceSources[0].supports,['Priority offer']);
+  assert.equal(profile.evidenceCoverage.level,'limited');
+  assert.match(profile.evidenceCoverage.message,/does not support the complete company profile/i);
+});
+
+test('saved profiles receive structured evidence records during normalization', () => {
+  const state=engine.normalizeSavedState({
+    website:'https://www.ajprodukti.lv/',
+    targetMarkets:['Latvia'],
+    scrapedSources:[{type:'website',url:'https://www.ajprodukti.lv/',title:'Instrumentu skapis SUPPLY',text:'Instrumentu skapis SUPPLY. Izturīgs metāla skapis efektīvai instrumentu un detaļu uzglabāšanai.',status:'ready'}],
+    profile:{companyName:'AJ Produkti',evidenceDigest:'Instrumentu skapis SUPPLY Izturīgs metāla skapis efektīvai instrumentu un detaļu uzglabāšanai.'}
+  });
+  assert.equal(state.profile.evidenceSources[0].scope,'product');
+  assert.equal(state.profile.evidenceCoverage.level,'limited');
+});

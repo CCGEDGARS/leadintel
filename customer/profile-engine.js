@@ -182,6 +182,52 @@
     const target=normalizeUrl(website);const candidate=normalizeUrl(source?.url);if(!target||!candidate)return false;
     try{return new URL(target).hostname.replace(/^www\./i,"").toLowerCase()===new URL(candidate).hostname.replace(/^www\./i,"").toLowerCase();}catch{return false;}
   }
+  const COMPANY_DESCRIPTION_RE=/\b(?:piedāvā|nodrošina|specializējas|apkalpo|ražo|izstrādā|piegādā|provid(?:e|es|ed|ing)|offer(?:s|ed|ing)?|speciali[sz](?:e|es|ed|ing)|manufactur(?:e|es|ed|ing)|deliver(?:s|ed|ing)?|serv(?:e|es|ed|ing))\b/i;
+  const PRODUCT_DETAIL_RE=/\b(?:instrumentu\s+skapis|skapis|galds|krēsls|plaukts|ratiņi|modelis|artikuls|supply|tool\s+cabinet|cabinet|chair|desk|shelf|product)\b/i;
+  function evidenceScope(source={}){
+    if(source.type==="document")return "document";
+    const text=clean(`${source.title||""} ${source.text||""}`);
+    if(COMPANY_DESCRIPTION_RE.test(text))return "company";
+    if(PRODUCT_DETAIL_RE.test(text))return "product";
+    return "supporting";
+  }
+  function evidenceSourceRecord(source,index){
+    const scope=evidenceScope(source);
+    const labels={company:"Company-level evidence",product:"Limited product evidence",document:"Supporting document",supporting:"Supporting page evidence"};
+    const supports={company:["Company identity","Offer portfolio"],product:["Priority offer"],document:["Supporting context"],supporting:["Supporting context"]};
+    const url=normalizeUrl(source.url);
+    let host="";try{host=new URL(url).hostname.replace(/^www\./i,"");}catch{}
+    return {
+      id:`E${index+1}`,
+      type:scope==="document"?"PDF":source.type==="website"?"Official website":"Official page",
+      title:clean(source.title||source.name)||host||`Evidence source ${index+1}`,
+      url,
+      scope,
+      scopeLabel:labels[scope],
+      confidence:scope==="product"?"High source confidence · narrow scope":scope==="company"?"High source confidence":"Supporting evidence",
+      excerpt:truncate(firstSentence(source.text)||clean(source.text),360),
+      supports:supports[scope]
+    };
+  }
+  function buildEvidenceSources(scrapedSources=[],documents=[]){
+    const sources=[...(scrapedSources||[]).filter(source=>clean(source?.text)),...(documents||[]).filter(doc=>clean(doc?.text)).map(doc=>({type:"document",name:doc.name,title:doc.name,text:doc.text,url:""}))];
+    return sources.map(evidenceSourceRecord);
+  }
+  function evidenceCoverage(records=[]){
+    if(!records.length)return {level:"none",label:"No evidence collected",message:"No readable public or document evidence was collected."};
+    const companyWide=records.filter(record=>record.scope==="company").length;
+    const narrow=records.filter(record=>record.scope==="product").length;
+    if(records.length===1&&narrow===1)return {level:"limited",label:"Limited coverage",message:"Only one narrow product claim was collected. It supports a priority offer but does not support the complete company profile."};
+    if(!companyWide)return {level:"limited",label:"Limited coverage",message:"The collected sources provide supporting or product-level facts, but no company-wide description has been verified."};
+    if(companyWide===1&&records.length===1)return {level:"partial",label:"Partial coverage",message:"One company-level source was collected. Add product, case-study or document evidence to strengthen the profile."};
+    return {level:"supported",label:"Supported coverage",message:`${records.length} sources provide company-level and supporting evidence for this profile.`};
+  }
+  function sourceSummary(scrapedSources=[],documents=[]){
+    const website=scrapedSources.filter(x=>x.type==="website"&&clean(x.text)).length;
+    const additionalLinks=scrapedSources.filter(x=>x.type==="link"&&clean(x.text)).length;
+    const documentCount=documents.filter(x=>clean(x.text)).length;
+    return {website,additionalLinks,documents:documentCount,total:website+additionalLinks+documentCount};
+  }
   function buildCompanyIntelligenceProfile(input={}){
     const answers=Object.fromEntries(QUESTION_IDS.map(id=>[id,clean(input.answers?.[id])]));
     const scraped=(input.scrapedSources||[]).filter(x=>x&&clean(x.text)&&sourceMatchesWebsite(x,input.website));
@@ -191,6 +237,7 @@
     const researchMarkets=expandTargetMarkets(selectedTargetMarkets);
     const currentMarkets=detectCountries(combined).filter(country=>!researchMarkets.some(target=>target.toLowerCase()===country.toLowerCase()));
     const evidenceDigest=deriveEvidenceDigest(scraped,documents);
+    const evidenceSources=buildEvidenceSources(scraped,documents);
     const companyName=inferCompanyName(scraped,input.website);
     const companyOverview=deriveCompanyOverview(scraped,documents);
     return {
@@ -217,7 +264,9 @@
       informationGaps:informationGaps(answers,scraped,documents),
       completeness:calculateCompleteness({...input,targetMarkets:selectedTargetMarkets}),
       evidenceDigest,
-      sourceSummary:{website:scraped.filter(x=>x.type==="website").length,additionalLinks:scraped.filter(x=>x.type==="link").length,documents:documents.filter(x=>clean(x.text)).length,total:scraped.length+documents.filter(x=>clean(x.text)).length}
+      evidenceSources,
+      evidenceCoverage:evidenceCoverage(evidenceSources),
+      sourceSummary:sourceSummary(scraped,documents)
     };
   }
   function normalizeSavedState(value={}){
@@ -240,6 +289,9 @@
       if(knownCompanyName(value.website))profile.companyName=companyName;
       if(hasAssetNoise(profile.companyOverview)||hasEvidenceNavigationNoise(profile.companyOverview))profile.companyOverview=regeneratedOverview||regeneratedDigest||`LeadIntel has limited public evidence for ${companyName}. Strategic answers are used as the primary context until more evidence is added.`;
       if(hasAssetNoise(profile.evidenceDigest))profile.evidenceDigest=regeneratedDigest;
+      profile.evidenceSources=buildEvidenceSources(scrapedSources,docs);
+      profile.evidenceCoverage=evidenceCoverage(profile.evidenceSources);
+      profile.sourceSummary=sourceSummary(scrapedSources,docs);
     }
     return {
       step:[1,2,3,4,5,6,7].includes(Number(value.step))?Number(value.step):1,
@@ -254,5 +306,5 @@
     };
   }
 
-  return {QUESTION_IDS,COUNTRIES,MARKET_REGIONS,SIGNAL_LIBRARY,normalizeUrl,normalizeTargetMarkets,expandTargetMarkets,canBuildProfile,canAccessModule,calculateCompleteness,buildCompanyIntelligenceProfile,normalizeSavedState,splitList};
+  return {QUESTION_IDS,COUNTRIES,MARKET_REGIONS,SIGNAL_LIBRARY,normalizeUrl,normalizeTargetMarkets,expandTargetMarkets,canBuildProfile,canAccessModule,calculateCompleteness,buildEvidenceSources,evidenceCoverage,buildCompanyIntelligenceProfile,normalizeSavedState,splitList};
 });
