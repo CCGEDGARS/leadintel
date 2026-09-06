@@ -1,4 +1,4 @@
-import './company-research-engine.js?v=20260906-authoritative-depth-v1';
+import './company-research-engine.js?v=20260906-selector-language-v2';
 
 const MAIN_STORAGE_KEY='leadintel_customer_v2_state';
 const RESEARCH_META_KEY='leadintel_customer_v2_research_meta_v1';
@@ -130,7 +130,7 @@ function combineDrafts(fallback,ai){
 
 async function runCompanyResearch({rerun=false}={}){
   if(running)return;const researchEngine=engine();if(!researchEngine){toast('Research engine is still loading. Try again.');return;}
-  const state=readState();const website=normalizeUrl($('company-website')?.value||state.website);const markets=selectedMarkets(state);const additionalLinks=String($('additional-links')?.value||'').split(/\n/).map(normalizeUrl).filter(Boolean).slice(0,8);
+  const state=readState();const selectedLanguage=String($('language-select')?.value||window.LeadIntelLanguage?.get?.()||state.uiLanguage||'lv').toLowerCase();const selectedContentLanguage=researchEngine.resolveResearchLanguage({selectorValue:selectedLanguage,storedValue:state.uiLanguage,navigatorLanguages:navigator.languages||[]});const website=normalizeUrl($('company-website')?.value||state.website);const markets=selectedMarkets(state);const additionalLinks=String($('additional-links')?.value||'').split(/\n/).map(normalizeUrl).filter(Boolean).slice(0,8);
   const error=$('step1-error');if(!website){if(error)error.textContent='Enter a valid company website.';return;}if(!markets.length){if(error)error.textContent='Choose at least one target market.';return;}if(error)error.textContent='';
   running=true;setResearchButtonBusy(true);const rerunButton=$('rerun-company-research');if(rerunButton)rerunButton.disabled=true;
   let failures=0;
@@ -156,9 +156,9 @@ async function runCompanyResearch({rerun=false}={}){
     const quality=researchEngine.evaluateResearchQuality({website,primary:research.primary,supporting:research.supporting,failures});
     if(!quality.publishable)throw new Error(`Research quality check failed: ${quality.issues.join(' ')}`);
     setProgress('Building evidence-backed context…',`${research.primary.length} primary and ${research.supporting.length} supporting sources passed the quality check.`);
-    const selectedContentLanguage=String(state.uiLanguage||"lv").toLowerCase()==="en"?"en":"lv";const fallback=researchEngine.buildEvidenceDraft({sources:research.primary,targetMarkets:markets,uiLanguage:selectedContentLanguage});const ai=await aiDraftFor({website,targetMarkets:markets,sources:research.primary,documents:state.documents||[],uiLanguage:selectedContentLanguage});const draft=researchEngine.capDraftConfidence(combineDrafts(fallback,ai.draft),quality.coverage);const merged=researchEngine.mergeDraft(state.answers||{},draft,readMeta().fields||{});
+    const fallback=researchEngine.buildEvidenceDraft({sources:research.primary,targetMarkets:markets,uiLanguage:selectedContentLanguage});const ai=await aiDraftFor({website,targetMarkets:markets,sources:research.primary,documents:state.documents||[],uiLanguage:selectedContentLanguage});const draft=researchEngine.capDraftConfidence(combineDrafts(fallback,ai.draft),quality.coverage);const merged=researchEngine.mergeDraft(state.answers||{},draft,readMeta().fields||{});
     const latest=readState();if(JSON.stringify(latest.answers||{})!==JSON.stringify(state.answers||{})||latest.website!==state.website)throw new Error('Workspace changed during research. Your edits were preserved; rerun when ready.');
-    const next={...state};next.website=website;next.targetMarkets=markets;next.additionalLinks=additionalLinks;next.answers=merged.answers;
+    const next={...state};next.uiLanguage=selectedLanguage;next.website=website;next.targetMarkets=markets;next.additionalLinks=additionalLinks;next.answers=merged.answers;
     next.scrapedSources=sources.map(source=>({type:source.type==='public'?'link':source.type,url:source.url,title:source.title,text:source.text,status:'ready',role:source.role||'supporting',pageCategory:source.pageCategory||researchEngine.classifyPageCategory(source,website)}));
     next.answerStatus={...(state.answerStatus||{})};for(const [id,row] of Object.entries(merged.meta)){next.answerStatus[id]=row.origin==='user'?'user':row.reviewed?'accepted':merged.answers[id]?'draft':'missing';}
     next.profile=null;next.approved=false;next.market={};next.step=2;writeState(next);

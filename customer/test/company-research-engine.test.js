@@ -207,3 +207,9 @@ test('research limit messages expose the actual numeric budget instead of an une
   assert.match(limited.reason,/100000/);
   assert.doesNotMatch(limited.reason,/\$\{/);
 });
+
+test('visible Latvian selection overrides stale English workspace state for research',()=>{
+  assert.equal(engine.resolveResearchLanguage({selectorValue:'lv',storedValue:'en',navigatorLanguages:['en-US']}),'lv');
+  assert.equal(engine.resolveResearchLanguage({selectorValue:'en',storedValue:'lv',navigatorLanguages:['lv-LV']}),'en');
+  assert.equal(engine.resolveResearchLanguage({selectorValue:'auto',storedValue:'en',navigatorLanguages:['lv-LV','en-US']}),'lv');
+});
