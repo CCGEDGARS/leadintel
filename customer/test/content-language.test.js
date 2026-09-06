@@ -60,3 +60,21 @@ test('language changes synchronize the live workspace state before it is saved',
   assert.equal(workspace.uiLanguage,'lv');
   assert.equal(JSON.parse(JSON.stringify(workspace)).uiLanguage,'lv');
 });
+
+test('Step 2 research answers are translated when the selected content language changes',async()=>{
+  const node={value:'Office furniture and warehouse equipment',readOnly:false,lang:''};
+  const editor={
+    querySelectorAll(selector){return selector.includes('[data-question]')?[node]:[];},
+    contains(candidate){return candidate===node;},
+    before(){}
+  };
+  const notice={textContent:'',append(){}};
+  const root={
+    document:{getElementById(){return notice;},createElement(){return notice;}},
+    LeadIntelServerBridge:{session:{authenticated:true},workspace:{id:'workspace-step2'}},
+    fetch:async()=>({ok:true,status:200,json:async()=>({text:JSON.stringify({f0:'Biroja mēbeles un noliktavu aprīkojums'})})})
+  };
+  await language.translateEditor(root,editor,'lv');
+  assert.equal(node.value,'Biroja mēbeles un noliktavu aprīkojums');
+  assert.equal(node.lang,'lv');
+});

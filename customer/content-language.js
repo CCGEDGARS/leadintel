@@ -61,7 +61,7 @@
   }
   async function translateEditor(root,editor,language){
     const generation=(generations.get(editor)||0)+1;generations.set(editor,generation);
-    const nodes=[...editor.querySelectorAll('textarea[data-profile-field],.profile-analysis-card > span')];
+    const nodes=[...editor.querySelectorAll('textarea[data-profile-field],textarea[data-question],.profile-analysis-card > span')];
     const source={},targets=[];
     for(const node of nodes){
       const value='value' in node?node.value:node.textContent;

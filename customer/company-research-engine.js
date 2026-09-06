@@ -176,7 +176,13 @@
   }
 
   function stripFence(text){return String(text||"").trim().replace(/^```(?:json)?\s*/i,"").replace(/\s*```$/," ").trim();}
-  function parseAiDraft(text,validSourceIds=[]){
+  function hasEnglishProse(value){
+    const text=clean(value).toLowerCase();if(!text)return false;
+    if(/\b(?:we help|our approach|the company|for companies|for customers|supported by|according to|provides?|offers?|customers?|businesses|institutions|warehouses?|workshops?|furniture|equipment|services?)\b/i.test(text))return true;
+    const words=text.match(/[a-z]+/g)||[];const common=new Set(["and","the","for","with","that","this","from","into","their","which","are","is","to","of","in"]);
+    return words.filter(word=>common.has(word)).length>=2;
+  }
+  function parseAiDraft(text,validSourceIds=[],language="en"){
     let parsed;try{parsed=JSON.parse(stripFence(text));}catch{return {};}
     const fields=parsed&&typeof parsed==="object"?(parsed.fields&&typeof parsed.fields==="object"?parsed.fields:parsed):{};
     const valid=new Set((validSourceIds||[]).map(String));const output={};
@@ -184,8 +190,10 @@
       const row=fields[id];if(!row||typeof row!=="object")continue;
       const confidence=clean(row.confidence).toLowerCase();if(!CONFIDENCE.has(confidence))continue;
       const value=truncate(row.value,1500);
+      const rationale=truncate(row.rationale,500);
+      if(clean(language).toLowerCase().startsWith("lv")&&(hasEnglishProse(value)||hasEnglishProse(rationale)))return {};
       const sourceIds=unique(Array.isArray(row.source_ids)?row.source_ids:row.sourceIds||[]).map(String).filter(sourceId=>valid.has(sourceId)).slice(0,6);
-      output[id]={value,confidence,sourceIds,rationale:truncate(row.rationale,500)};
+      output[id]={value,confidence,sourceIds,rationale};
     }
     return output;
   }

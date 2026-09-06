@@ -1,4 +1,4 @@
-import './content-language.js?v=20260906-language-state-v2';
+import './content-language.js?v=20260906-step2-language-v1';
 import './content-variants.js?v=20260905-step1-language-v1';
 import './business-identity.js?v=20260906-competitive-wide-v1';
 import './evidence-view.js?v=20260906-evidence-v1';
