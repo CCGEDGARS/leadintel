@@ -205,3 +205,11 @@ test('activated strategy reveals automatic monitoring',()=>{
   assert.equal(view.showActivation,true);
   assert.equal(view.showMonitoring,true);
 });
+
+test('failed research does not unlock strategy activation',()=>{
+  const view=Market.getMarketJourneyState({researchStatus:'error',lastResearchAt:'2026-09-06T12:00:00.000Z',strategyApproved:false});
+  assert.equal(view.stage,'research');
+  assert.equal(view.researched,false);
+  assert.equal(view.showActivation,false);
+  assert.equal(view.showMonitoring,false);
+});

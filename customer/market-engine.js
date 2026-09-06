@@ -161,7 +161,7 @@
   }
 
   function getMarketJourneyState(value={}){
-    const researched=Boolean(clean(value.lastResearchAt))&&value.researchStatus!=="running";
+    const researched=Boolean(clean(value.lastResearchAt))&&["complete","partial"].includes(value.researchStatus);
     const active=researched&&Boolean(value.strategyApproved);
     return {
       stage:active?"active":researched?"review":"research",
