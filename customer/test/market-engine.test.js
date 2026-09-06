@@ -176,3 +176,32 @@ test('localizeGeneratedState updates only generated strategy prose and preserves
   assert.equal(localized.opportunities[0].evidence[0].url,'https://example.com/a');
   assert.equal(localized.contentVariants.opportunities[localized.opportunities[0].id].lv.title,localized.opportunities[0].title);
 });
+
+test('first-time market journey exposes research only',()=>{
+  const view=Market.getMarketJourneyState({researchStatus:'idle',lastResearchAt:'',strategyApproved:false});
+  assert.deepEqual(view,{
+    stage:'research',
+    researched:false,
+    showScore:false,
+    showActivation:false,
+    showMonitoring:false,
+    researchLabel:'Run quick research'
+  });
+});
+
+test('completed research reveals review and activation but keeps monitoring hidden',()=>{
+  const view=Market.getMarketJourneyState({researchStatus:'complete',lastResearchAt:'2026-09-06T12:00:00.000Z',strategyApproved:false});
+  assert.equal(view.stage,'review');
+  assert.equal(view.showScore,true);
+  assert.equal(view.showActivation,true);
+  assert.equal(view.showMonitoring,false);
+  assert.equal(view.researchLabel,'Rerun market research');
+});
+
+test('activated strategy reveals automatic monitoring',()=>{
+  const view=Market.getMarketJourneyState({researchStatus:'complete',lastResearchAt:'2026-09-06T12:00:00.000Z',strategyApproved:true});
+  assert.equal(view.stage,'active');
+  assert.equal(view.showScore,true);
+  assert.equal(view.showActivation,true);
+  assert.equal(view.showMonitoring,true);
+});
