@@ -14,7 +14,8 @@ const profile={
   companyName:'Acme Industrial',website:'https://acme.example/',priorityOffers:'industrial automation; custom machinery',
   idealCustomer:'manufacturers with 50–500 employees',decisionMakers:'COO; Procurement Director; Plant Manager',
   targetMarkets:'Sweden; Finland',buyingTriggers:'new facility; capacity expansion; equipment modernization; tender',
-  opportunityValue:'€50,000–€250,000 per project',exclusions:'projects below €20,000',completeness:96
+  opportunityValue:'€50,000–€250,000 per project',exclusions:'projects below €20,000',completeness:96,
+  customerPainPoints:'Poor production flow creates downtime. How it can make work easier: simplify production planning.'
 };
 const market={
   strategyApproved:true,
@@ -38,6 +39,7 @@ test('buildDiscoveryQueries supports provisional website-only strategy and respe
   assert.equal(new Set(queries.map(x=>x.id)).size,queries.length);
   assert.ok(queries.some(x=>/Sweden/i.test(x.query)));
   assert.ok(queries.some(x=>/industrial automation/i.test(x.query)));
+  assert.ok(queries.some(x=>/downtime/i.test(x.query)),'pain-point terms must inform discovery research');
   assert.ok(queries.every(x=>x.market&&x.query));
   assert.deepEqual(Discovery.buildDiscoveryQueries({}, {}, 4),[],'discovery still needs a company website or profile context');
 });
