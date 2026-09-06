@@ -18,6 +18,7 @@
   function tokenize(value){return clean(value).toLowerCase().split(/[^a-z0-9āčēģīķļņšūž]+/i).filter(x=>x.length>=3);}
   function unique(items){return [...new Set(items.filter(Boolean))];}
   function isLv(language){return String(language||'en').toLowerCase()==='lv';}
+  function languageCompatible(value,language){const text=clean(value);if(!text)return false;const latvian=/[āčēģīķļņšūž]/i.test(text)||/\b(?:kā|var|palīdzēt|izmaksas|darba|klienta|risks)\b/i.test(text);return isLv(language)?latvian:!latvian;}
   function sourceTypeFor(url,targetDomain,hint){
     if(clean(hint).toLowerCase()==="official")return "Official";
     return domainOf(url)===clean(targetDomain).toLowerCase().replace(/^www\./,"")?"Official":"Public";
@@ -32,8 +33,9 @@
     const offer=offers[0]||"commercial services";
     const signalTerms=(market.signals||[]).filter(x=>x.active!==false).sort((a,b)=>(Number(b.weight)||0)-(Number(a.weight)||0)).slice(0,3).flatMap(x=>splitList(String(x.keywords||x.name||"").replace(/,/g,";"))).slice(0,4);
     const marketName=clean(candidate.market)||splitList(profile.targetMarkets)[0]||"";
+    const painContext=clean(profile.customerPainPoints).split(/[.!?]/)[0];
     const queries=[
-      {id:"dossier-context",domain,query:[`\"${company}\"`,`\"${offer}\"`,marketName,...signalTerms.slice(0,2),"2026"].filter(Boolean).join(" ")},
+      {id:"dossier-context",domain,query:[`\"${company}\"`,`\"${offer}\"`,marketName,painContext,...signalTerms.slice(0,2),"2026"].filter(Boolean).join(" ")},
       {id:"dossier-official",domain,query:[`site:${domain}`,offer,...signalTerms,"news investment project tender expansion modernization 2026"].filter(Boolean).join(" ")}
     ];
     return queries.slice(0,limit);
@@ -89,7 +91,7 @@
     const observed=activeObservedSignals(candidate,market,evidence);const recommendedOffer=recommendOffer(candidate,profile,research);const primarySignal=observed[0]?.name||"relevant commercial activity";const sourceCount=evidence.length;
     const company=clean(candidate.company)||clean(candidate.domain);
     const whyNow=sourceCount?(lv?`Publiski pieejamā informācija par ${company} pašlaik ietver materiālus, kas saistīti ar signālu “${primarySignal}”. LeadIntel dosjē atrada ${sourceCount} ${sourceCount===1?'avotu':'avotus'}. Tas ir pamats pārbaudīt piedāvājuma atbilstību tagad, bet neapstiprina pirkšanas nodomu.`:`Public evidence for ${company} currently includes material connected to ${primarySignal}. LeadIntel found ${sourceCount} source${sourceCount===1?"":"s"} in the dossier. This is a reason to test relevance now; it does not confirm buying intent.`):(lv?`Papildu publiski pieejami pierādījumi par ${company} netika atrasti. Turpiniet izpēti, nevis pieņemiet, ka pastāv aktīvs pirkšanas nodoms.`:`No additional public evidence was available for ${company}. Keep this opportunity in research rather than assuming active buying intent.`);
-    const hypotheses=[];if(recommendedOffer)hypotheses.push(lv?`Hipotēze: ja novērotais signāls “${primarySignal}” ietekmē apstiprināto pirkšanas situāciju, ir vērts apspriest piedāvājumu “${recommendedOffer}”.`:`Hypothesis: if the observed ${primarySignal} affects the approved buying context, ${recommendedOffer} may be worth discussing.`);if(clean(profile.differentiation))hypotheses.push(lv?`Hipotēze: pārdevēja apstiprinātā atšķirība (${clean(profile.differentiation)}) var būt nozīmīga, ja tā risina potenciālā klienta faktiskās prioritātes; tas jāpārbauda sarunā.`:`Hypothesis: the seller's approved differentiation (${clean(profile.differentiation)}) may be relevant if it addresses the prospect's actual priorities; validate this in conversation.`);
+    const hypotheses=[];if(recommendedOffer)hypotheses.push(lv?`Hipotēze: ja novērotais signāls “${primarySignal}” ietekmē apstiprināto pirkšanas situāciju, ir vērts apspriest piedāvājumu “${recommendedOffer}”.`:`Hypothesis: if the observed ${primarySignal} affects the approved buying context, ${recommendedOffer} may be worth discussing.`);if(clean(profile.differentiation))hypotheses.push(lv?`Hipotēze: pārdevēja apstiprinātā atšķirība (${clean(profile.differentiation)}) var būt nozīmīga, ja tā risina potenciālā klienta faktiskās prioritātes; tas jāpārbauda sarunā.`:`Hypothesis: the seller's approved differentiation (${clean(profile.differentiation)}) may be relevant if it addresses the prospect's actual priorities; validate this in conversation.`);const pain=languageCompatible(profile.customerPainPoints,language)?clean(profile.customerPainPoints).split(/Kā var palīdzēt|How it can/i)[0].split(/[.!?]/)[0]:"";if(pain)hypotheses.push(lv?`Hipotēze: uzņēmumam var būt aktuāla problēma “${pain}”. Pirms piedāvājuma izmantošanas tā jāapstiprina sarunā.`:`Hypothesis: the company may be experiencing this problem: “${pain}”. Validate it in conversation before using it in outreach.`);
     return {company:clean(candidate.company),domain:clean(candidate.domain)||domainOf(candidate.website),website:normalizeUrl(candidate.website),market:clean(candidate.market),score:candidate.score||{},confidence:clean(candidate.confidence)||"Low",matchedSignals:observed,recommendedOffer,buyerRoles:splitList(profile.decisionMakers),people:(candidate.people||[]).slice(0,5),whyNow,evidence,hypotheses,researchStatus:sourceCount?"complete":"error",researchAt:new Date().toISOString()};
   }
 

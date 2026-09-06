@@ -91,8 +91,8 @@ test('Competitive Advantages spans the complete Commercial Positioning grid', ()
   const processMap = fs.readFileSync(path.join(__dirname,'..','process-map.js'),'utf8');
   const shell = fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
   assert.match(ui,/diff\.classList\.add\("wide","identity-wide"\)/);
-  assert.match(processMap,/business-identity\.js\?v=20260906-competitive-wide-v1/);
-  assert.match(shell,/process-map\.js\?v=20260906-competitive-wide-v1/);
+  assert.match(processMap,/business-identity\.js\?v=20260906-customer-pains-v1/);
+  assert.match(shell,/process-map\.js\?v=20260906-customer-pains-v1/);
 });
 
 
@@ -232,4 +232,49 @@ test('Research synthesis prompt requires fully Latvian ready-to-use output', () 
   const prompt = research.buildAiPrompt({website:'https://example.lv',targetMarkets:['Latvia'],uiLanguage:'lv',sources:[],documents:[]});
   assert.match(prompt.prompt, /Latvian|latviešu/i);
   assert.match(prompt.prompt, /same language|one language|ready-to-use/i);
+});
+
+test('Commercial Context generates full-width Customer Pain Points with three commercial value angles', () => {
+  const ajInput = JSON.parse(JSON.stringify(input));
+  ajInput.website = 'https://www.ajprodukti.lv/';
+  ajInput.uiLanguage = 'lv';
+  ajInput.answers.priority_offers = 'Ergonomiski biroja krēsli un augstumā regulējami galdi; noliktavu plaukti un instrumentu skapji; darba vietu plānošana ar 3D vizualizācijām';
+  ajInput.answers.ideal_customer = 'Latvijas uzņēmumi ar birojiem, noliktavām un darbnīcām';
+  ajInput.scrapedSources = [{type:'website',url:'https://www.ajprodukti.lv/',title:'AJ Produkti',text:'AJ Produkti piedāvā ergonomiskas biroja mēbeles, noliktavu aprīkojumu un darba vietu plānošanu ar 3D vizualizācijām.'}];
+  const result = profile.buildCompanyIntelligenceProfile(ajInput);
+  assert.match(result.customerPainPoints,/neergonom|nogurum|diskomfort/i);
+  assert.match(result.customerPainPoints,/Kā var palīdzēt nopelnīt vairāk:/);
+  assert.match(result.customerPainPoints,/Kā var palīdzēt samazināt izmaksas:/);
+  assert.match(result.customerPainPoints,/Kā var palīdzēt vienkāršot darbu:/);
+  assert.doesNotMatch(result.customerPainPoints,/How it can|guarantee|guaranteed/i);
+  assert.equal(result.customerPainPointsStatus,'AI-inferred · review recommended');
+});
+
+test('Customer Pain Points follows English content language without mixing Latvian', () => {
+  const enInput = JSON.parse(JSON.stringify(input));
+  enInput.uiLanguage = 'en';
+  enInput.answers.priority_offers = 'Ergonomic office furniture; warehouse storage; 3D workplace planning';
+  const result = profile.buildCompanyIntelligenceProfile(enInput);
+  assert.match(result.customerPainPoints,/How it can help earn more:/);
+  assert.match(result.customerPainPoints,/How it can help reduce costs:/);
+  assert.match(result.customerPainPoints,/How it can make work easier:/);
+  assert.doesNotMatch(result.customerPainPoints,/Kā var palīdzēt|izmaksas|vienkāršot/i);
+});
+
+test('saved profiles receive Customer Pain Points without overwriting a customer edit', () => {
+  const built = profile.buildCompanyIntelligenceProfile(input);
+  const migrated = profile.normalizeSavedState({...input,profile:{...built,customerPainPoints:''}});
+  assert.ok(migrated.profile.customerPainPoints);
+  const edited = 'Customer-confirmed pain: fragmented purchasing creates avoidable administration.';
+  const preserved = profile.normalizeSavedState({...input,profile:{...built,customerPainPoints:edited,customerPainPointsStatus:'Customer-confirmed'}});
+  assert.equal(preserved.profile.customerPainPoints,edited);
+  assert.equal(preserved.profile.customerPainPointsStatus,'Customer-confirmed');
+});
+
+test('Customer Pain Points is positioned after the ideal customer and spans the Commercial Context grid', () => {
+  const ui = fs.readFileSync(path.join(__dirname,'..','business-identity.js'),'utf8');
+  const app = fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
+  assert.match(app,/\["customerPainPoints","Customer Pain Points",true\]/);
+  assert.match(ui,/"priorityOffers","idealCustomer","customerPainPoints","buyingOutcomes"/);
+  assert.match(ui,/identity-customerPainPoints/);
 });

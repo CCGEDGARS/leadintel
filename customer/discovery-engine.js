@@ -68,13 +68,14 @@
     const markets=activeOpps.length?activeOpps.map(item=>clean(item.market)).filter(Boolean):splitList(profile.targetMarkets).length?splitList(profile.targetMarkets):splitList(profile.currentMarkets);
     const activeIcps=(marketState.icps||[]).filter(item=>item.active!==false);
     const icpText=activeIcps.map(item=>clean(item.description)).filter(Boolean).join(" ")||clean(profile.idealCustomer);
+    const painTerms=keywords(profile.customerPainPoints).slice(0,6).join(" ");
     const offer=splitList(profile.priorityOffers)[0]||"commercial solution";
     const topSignals=(marketState.signals||[]).filter(item=>item.active!==false).sort((a,b)=>(Number(b.weight)||0)-(Number(a.weight)||0)).slice(0,3);
     const signalTerms=topSignals.map(item=>splitList(item.keywords)[0]||clean(item.name)).filter(Boolean).join(" ");
     const results=[];
     for(const market of [...new Set(markets.length?markets:["priority market"])]){
       if(results.length>=limit)break;
-      const query=[market,icpText,offer,signalTerms,"manufacturer company official site"].filter(Boolean).join(" ");
+      const query=[market,icpText,offer,painTerms,signalTerms,"manufacturer company official site"].filter(Boolean).join(" ");
       results.push({id:`discover-${slug(market)}-${results.length+1}`,market,query,offer});
     }
     if(results.length<limit&&markets[0]){
@@ -119,7 +120,7 @@
   }
   function fitScore(candidate,profile,marketState){
     const hay=candidate.evidence.map(evidenceText).join(" ");
-    const source=[profile.idealCustomer,profile.priorityOffers,...(marketState.icps||[]).filter(x=>x.active!==false).map(x=>`${x.description} ${x.offers}`)].join(" ");
+    const source=[profile.idealCustomer,profile.priorityOffers,profile.customerPainPoints,...(marketState.icps||[]).filter(x=>x.active!==false).map(x=>`${x.description} ${x.offers}`)].join(" ");
     const terms=keywords(source).slice(0,30);
     const matches=terms.filter(term=>hay.includes(term)).length;
     const marketMatch=clean(candidate.market)&&hay.includes(clean(candidate.market).toLowerCase());

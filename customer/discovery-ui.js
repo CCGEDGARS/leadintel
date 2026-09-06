@@ -4,7 +4,7 @@ const INTELLIGENCE_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
 const MAX_DISCOVERY_QUERIES=4;
 const MAX_DISCOVERY_RESULTS_PER_QUERY=5;
 const ASSET_VERSION="20260828-master-crm-v1";
-const LANGUAGE_ASSET_VERSION="20260905-step1-language-v1";
+const LANGUAGE_ASSET_VERSION="20260906-customer-pains-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const $=id=>document.getElementById(id);
 let discovery=loadDiscovery();

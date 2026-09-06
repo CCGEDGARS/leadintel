@@ -1,6 +1,6 @@
 import './content-language.js?v=20260906-step2-language-v1';
 import './content-variants.js?v=20260905-step1-language-v1';
-import './business-identity.js?v=20260906-competitive-wide-v1';
+import './business-identity.js?v=20260906-customer-pains-v1';
 import './evidence-view.js?v=20260906-evidence-v1';
 import './workspace-persistence.js?v=20260903-step1-startup-order-v1';
 
@@ -12,7 +12,7 @@ const MAX_PDF_BYTES=15*1024*1024;
 const MAX_PDFS=5;
 const RESET_CONFIRM_WINDOW_MS=5000;
 const profileFields=[
-  ["companyOverview","Company overview",true],["priorityOffers","Priority offers",false],["idealCustomer","Ideal customer profile",false],
+  ["companyOverview","Company overview",true],["priorityOffers","Priority offers",false],["idealCustomer","Ideal customer profile",false],["customerPainPoints","Customer Pain Points",true],
   ["lookalikeCustomers","Lookalike customers",false],["decisionMakers","Decision makers",false],["currentMarkets","Current market footprint",false],
   ["targetMarkets","Priority growth markets",false],["marketFocus","Priority market focus",false],["differentiation","Competitive advantages",false],["buyingTriggers","Buying situations / triggers",true],
   ["exclusions","Negative ICP / exclusions",false],["opportunityValue","Commercial value",false],["commercialObjective","6–12 month commercial objective",true]
@@ -187,7 +187,7 @@ function renderProfile(){
   updateApprovalUI();
 }
 function saveProfileEdits(){
-  document.querySelectorAll("[data-profile-field]").forEach(el=>{const key=el.dataset.profileField;state.profile[key]=key==="currentMarkets"?el.value.split(/;|,/).map(x=>x.trim()).filter(Boolean):el.value.trim();});
+  document.querySelectorAll("[data-profile-field]").forEach(el=>{const key=el.dataset.profileField;const previous=fieldValue(state.profile,key);const next=key==="currentMarkets"?el.value.split(/;|,/).map(x=>x.trim()).filter(Boolean):el.value.trim();state.profile[key]=next;if(key==="customerPainPoints"&&String(next)!==String(previous))state.profile.customerPainPointsStatus="Customer-confirmed";});
   state.profile.researchMarkets=LeadIntelProfile.expandTargetMarkets(state.profile.targetMarkets);
   document.querySelectorAll("[data-signal-index]").forEach(el=>{if(state.profile.recommendedSignals[Number(el.dataset.signalIndex)])state.profile.recommendedSignals[Number(el.dataset.signalIndex)].active=el.checked;});
   state.approved=false;saveState();

@@ -10,6 +10,7 @@ const profile={
   targetMarkets:'Sweden; Finland',
   differentiation:'fast engineering and custom delivery',
   buyingTriggers:'new facility; modernization; tender',
+  customerPainPoints:'Production bottlenecks create downtime. How it can reduce costs: reduce avoidable stoppages.',
   commercialObjective:'Build a €2M qualified pipeline'
 };
 const market={
@@ -60,6 +61,7 @@ test('buildOpportunityDossier separates evidence from hypotheses and grounds why
   assert.match(dossier.whyNow,/modernization/i);
   assert.ok(Array.isArray(dossier.hypotheses));
   assert.ok(dossier.hypotheses.every(h=>/^Hypothesis:/i.test(h)));
+  assert.ok(dossier.hypotheses.some(h=>/bottlenecks|downtime/i.test(h)),'approved pain-point context must become a validation hypothesis');
   assert.ok(!/confirmed budget|guaranteed purchase/i.test(dossier.whyNow));
 });
 

@@ -81,7 +81,7 @@
   }
   function fieldText(language,key){
     const lv={companyOverview:"Uzņēmuma pārskats",priorityOffers:"Prioritārie piedāvājumi",idealCustomer:"Ideālais klients",lookalikeCustomers:"Līdzīgie klienti",decisionMakers:"Lēmuma pieņēmēji",currentMarkets:"Pašreizējie tirgi",targetMarkets:"Prioritārie izaugsmes tirgi",marketFocus:"Prioritārā tirgus fokuss",differentiation:"Konkurences priekšrocības",buyingTriggers:"Pirkuma situācijas un signāli",exclusions:"Izslēdzamie klienti",opportunityValue:"Komerciālā vērtība",commercialObjective:"Komerciālais mērķis"};
-    const en={companyOverview:"Company overview",priorityOffers:"Priority offers",idealCustomer:"Ideal customer profile",lookalikeCustomers:"Lookalike customers",decisionMakers:"Decision makers",currentMarkets:"Current market footprint",targetMarkets:"Priority growth markets",marketFocus:"Priority market focus",differentiation:"Competitive advantages",buyingTriggers:"Buying situations / triggers",exclusions:"Negative ICP / exclusions",opportunityValue:"Commercial value",commercialObjective:"Commercial objective"};
+    const en={companyOverview:"Company overview",priorityOffers:"Priority offers",idealCustomer:"Ideal customer profile",customerPainPoints:"Customer Pain Points",lookalikeCustomers:"Lookalike customers",decisionMakers:"Decision makers",currentMarkets:"Current market footprint",targetMarkets:"Priority growth markets",marketFocus:"Priority market focus",differentiation:"Competitive advantages",buyingTriggers:"Buying situations / triggers",exclusions:"Negative ICP / exclusions",opportunityValue:"Commercial value",commercialObjective:"Commercial objective"};
     return (language==="lv"?lv:en)[key]||({businessSummary:"Business summary",uniqueSellingProposition:"USP / value proposition",elevatorPitch:"Elevator pitch",buyingOutcomes:"Customer outcomes"})[key]||key;
   }
   function analysisText(language,key){
@@ -104,6 +104,21 @@
     if(/noliktav|warehouse|darbnīc|workshop|instrument|plaukt|shelf|storage|uzglab/i.test(text))add(language==="lv"?"Plašs aprīkojuma klāsts birojiem, noliktavām un darbnīcām vienuviet":"a broad equipment range for offices, warehouses and workshops in one place");
     if(/school|skol|izglīt|education|bērn|kindergarten|dārziņ/i.test(text))add(language==="lv"?"Risinājumi arī skolām un izglītības iestādēm":"solutions for schools and educational institutions as well");
     return advantages.length?advantages.join(language==="lv"?"; ":"; "):(language==="lv"?"Priekšrocība izsecināta no piedāvājuma, taču nepieciešama klienta apstiprināšana":"The advantage is inferred from the offer and requires customer confirmation");
+  }
+  function deriveCustomerPainPoints(profile={},input={},language="en"){
+    const source=clean([profile.priorityOffers,profile.companyOverview,profile.idealCustomer,profile.buyingOutcomes,...(input.scrapedSources||[]).map(item=>item?.text),...(input.documents||[]).map(item=>item?.text)].join(" "));
+    const pains=[];const add=value=>{if(value&&!pains.includes(value))pains.push(value);};const lv=language==="lv";
+    if(/biroj|office|ergonom|darba viet|workplace|regulējam|chair|desk/i.test(source))add(lv?"Neergonomiskas vai nepielāgotas darba vietas var veicināt diskomfortu un nogurumu, mazinot darbinieku apmierinātību un darba efektivitāti.":"Non-ergonomic or poorly adapted workstations can contribute to discomfort and fatigue, reducing employee satisfaction and work efficiency.");
+    if(/noliktav|warehouse|darbnīc|workshop|instrument|plaukt|shelf|storage|uzglab/i.test(source))add(lv?"Nesakārtota instrumentu, materiālu un preču uzglabāšana var aizņemt lieku platību, paildzināt meklēšanu un palielināt kļūdu vai darba drošības risku.":"Disorganised storage of tools, materials and goods can waste space, extend retrieval time and increase the risk of mistakes or safety problems.");
+    if(/3d|vizualiz|visuali[sz]|plānošan|planning/i.test(source))add(lv?"Darba vides plānošana bez vizuāla priekšstata var palielināt nepiemērota aprīkojuma iegādes un vēlāku pārkārtojumu risku.":"Planning a workplace without a clear visual preview can increase the risk of unsuitable purchases and later rework.");
+    if(/sales|pārdošan|training|apmācīb|coaching|koučing|leadership|vadītāj/i.test(source))add(lv?"Nevienmērīgas pārdošanas, vadības vai komunikācijas prasmes var kavēt rezultātu sasniegšanu un radīt nekonsekventu klientu pieredzi.":"Inconsistent sales, leadership or communication skills can slow performance and create an uneven customer experience.");
+    if(/automation|automatiz|software|programmat|artificial intelligence|mākslīg.*intelekt|\bAI\b/i.test(source))add(lv?"Manuāli un sadrumstaloti darba procesi var patērēt lieku laiku, palielināt kļūdu risku un ierobežot izaugsmi.":"Manual and fragmented processes can consume unnecessary time, increase error risk and constrain growth.");
+    if(!pains.length)add(lv?"Neatrisinātas klienta vajadzības var radīt neefektīvus procesus, liekas izmaksas un neizmantotas izaugsmes iespējas; konkrētā problēma jāapstiprina ar klientu.":"Unresolved customer needs can create inefficient processes, avoidable costs and missed growth opportunities; the specific problem must be validated with the customer.");
+    const outcomes=identityValue(profile.buyingOutcomes);
+    const earn=lv?`Kā var palīdzēt nopelnīt vairāk: piemērotāks risinājums var palīdzēt paaugstināt darba ražīgumu, klientu apkalpošanas kvalitāti un izaugsmes kapacitāti${outcomes?`, veicinot ${lowerFirst(outcomes)}`:""}.`:`How it can help earn more: a better-fitting solution can support productivity, customer experience and capacity for growth${outcomes?`, contributing to ${lowerFirst(outcomes)}`:""}.`;
+    const save=lv?"Kā var palīdzēt samazināt izmaksas: piemērots un kvalitatīvs risinājums var palīdzēt mazināt kļūdainu pirkumu, dīkstāves, atkārtota darba un darbinieku mainības risku.":"How it can help reduce costs: an appropriate, durable solution can help reduce the risk of unsuitable purchases, downtime, rework and employee turnover.";
+    const easy=lv?"Kā var palīdzēt vienkāršot darbu: vienots un pārdomāts risinājums var atvieglot izvēli, ieviešanu un ikdienas darba organizēšanu.":"How it can make work easier: a coherent, well-planned solution can simplify selection, implementation and day-to-day operations.";
+    return [...pains.slice(0,4),earn,save,easy].join("\n\n");
   }
   function deriveAnalysis(profile={},input={},context={}){
     const language=detectLanguage(profile,input,context);
@@ -187,7 +202,8 @@
     const positioningConfidence=positioningInputs===4&&hasEvidence(input)?(language==="lv"?"Augsta":"High"):positioningInputs>=3?(language==="lv"?"Vidēja":"Medium"):(language==="lv"?"Nepieciešams apstiprinājums":"Needs confirmation");
     const analysis=deriveAnalysis(profile,input,{company,offers,customer,outcomes,differentiation});
     if(!uniqueSellingProposition)uniqueSellingProposition=analysis.frameworks.valueProposition;
-    return {businessSummary,uniqueSellingProposition,elevatorPitch,uspStatus,positioningConfidence,analysis,identityLanguage:language};
+    const customerPainPoints=deriveCustomerPainPoints(profile,input,language);
+    return {businessSummary,uniqueSellingProposition,elevatorPitch,uspStatus,positioningConfidence,analysis,identityLanguage:language,customerPainPoints,customerPainPointsStatus:"AI-inferred · review recommended",customerPainPointsLanguage:language};
   }
 
   function patchProfileEngine(engine,root=null){
@@ -209,6 +225,13 @@
       }
       if(!clean(normalized.profile.uspStatus))normalized.profile.uspStatus=identity.uspStatus;
       if(!clean(normalized.profile.positioningConfidence))normalized.profile.positioningConfidence=identity.positioningConfidence;
+      const painStatus=clean(normalized.profile.customerPainPointsStatus);
+      const generatedPain=!painStatus||painStatus==="AI-inferred · review recommended";
+      if(!clean(normalized.profile.customerPainPoints)||(generatedPain&&clean(normalized.profile.customerPainPointsLanguage)!==identity.identityLanguage)){
+        normalized.profile.customerPainPoints=identity.customerPainPoints;
+        normalized.profile.customerPainPointsStatus=identity.customerPainPointsStatus;
+        normalized.profile.customerPainPointsLanguage=identity.customerPainPointsLanguage;
+      }
       return normalized;
     };
     engine.deriveBusinessIdentity=deriveIdentity;
@@ -232,6 +255,8 @@
       .profile-identity-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
       .profile-identity-grid .profile-field.wide,.profile-identity-grid .identity-wide{grid-column:1/-1}
       .profile-identity-section .profile-field{margin:0}
+      .profile-identity-grid .identity-customerPainPoints{grid-column:1/-1}
+      .pain-points-note{display:inline-flex;margin-top:8px;padding:5px 8px;border-radius:999px;background:#f4eee0;color:#876920;font:600 10px/1.2 'IBM Plex Mono',monospace}
       .profile-analysis-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
       .profile-analysis-card{padding:16px;border:1px solid var(--line,#d8e0dc);border-radius:14px;background:#fff;min-height:110px}
       .profile-analysis-card strong{display:block;color:var(--ink,#10231d);font-size:14px;margin-bottom:8px}
@@ -293,6 +318,8 @@
     let summary=take("businessSummary");if(!summary)summary=createField(root,"businessSummary",uiText(chromeLanguage,"businessSummaryField"),generatedLanguageChanged?derived.businessSummary:(profile.businessSummary||derived.businessSummary),readOnly,true);
     let usp=take("uniqueSellingProposition");if(!usp)usp=createField(root,"uniqueSellingProposition",uiText(chromeLanguage,"uspField"),generatedLanguageChanged?derived.uniqueSellingProposition:(profile.uniqueSellingProposition||derived.uniqueSellingProposition),readOnly,true);
     let pitch=take("elevatorPitch");if(!pitch)pitch=createField(root,"elevatorPitch",uiText(chromeLanguage,"pitchField"),generatedLanguageChanged?derived.elevatorPitch:(profile.elevatorPitch||derived.elevatorPitch),readOnly,true);
+    const painNode=take("customerPainPoints");const generatedPain=!clean(profile.customerPainPointsStatus)||profile.customerPainPointsStatus==="AI-inferred · review recommended";
+    if(painNode&&generatedPain&&profile.customerPainPointsLanguage!==language){const field=painNode.querySelector('[data-profile-field="customerPainPoints"]');if(field)field.value=derived.customerPainPoints;}
 
     const business=section(root,uiText(chromeLanguage,"businessIdentity"),uiText(chromeLanguage,"businessIdentitySub"),true);business.grid.append(summary);
     const analysis=section(root,uiText(chromeLanguage,"commercialAnalysis"),uiText(chromeLanguage,"commercialAnalysisSub"));
@@ -320,9 +347,11 @@
     const meta=root.document.createElement("div");meta.className="identity-meta identity-wide";meta.innerHTML=`<span>${esc(profile.uspStatus||derived.uspStatus||"Proposed · confirmation recommended")}</span><span>${esc(profile.positioningConfidence||derived.positioningConfidence||"Needs confirmation")} confidence</span>`;positioning.grid.append(meta);
     const sales=section(root,uiText(chromeLanguage,"salesMessage"),uiText(chromeLanguage,"salesMessageSub"));sales.grid.append(pitch);
     const context=section(root,uiText(chromeLanguage,"commercialContext"),uiText(chromeLanguage,"commercialContextSub"));
-    const contextOrder=["priorityOffers","idealCustomer","buyingOutcomes","lookalikeCustomers","decisionMakers","currentMarkets","targetMarkets","marketFocus","buyingTriggers","exclusions","opportunityValue","commercialObjective"];
+    const contextOrder=["priorityOffers","idealCustomer","customerPainPoints","buyingOutcomes","lookalikeCustomers","decisionMakers","currentMarkets","targetMarkets","marketFocus","buyingTriggers","exclusions","opportunityValue","commercialObjective"];
     const used=new Set(["companyOverview","businessSummary","uniqueSellingProposition","elevatorPitch","differentiation"]);
     for(const key of contextOrder){const node=take(key);if(node){context.grid.append(node);used.add(key);}}
+    const painField=context.grid.querySelector('[data-profile-field="customerPainPoints"]')?.closest('.profile-field');
+    if(painField){painField.classList.add('wide','identity-customerPainPoints');if(!painField.querySelector('.pain-points-note')){const note=root.document.createElement('small');note.className='pain-points-note';note.textContent=profile.customerPainPointsStatus||'AI-inferred · review recommended';painField.append(note);}}
     for(const [key,node] of byKey){if(!used.has(key))context.grid.append(node);}
     editor.replaceChildren(business.node,analysis.node,frameworks.node,positioning.node,sales.node,context.node);editor.classList.add("profile-identity-layout");
     editor.querySelectorAll("[data-profile-field]").forEach(field=>{
@@ -346,5 +375,5 @@
     root.document.getElementById("edit-profile")?.addEventListener("click",()=>setTimeout(()=>queueLayout(root),0));
   }
 
-  return {deriveIdentity,patchProfileEngine,layoutProfile,install,hasNavigationNoise,stripNavigationNoise};
+  return {deriveIdentity,deriveCustomerPainPoints,patchProfileEngine,layoutProfile,install,hasNavigationNoise,stripNavigationNoise};
 });
