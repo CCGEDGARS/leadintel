@@ -144,6 +144,16 @@ test('normalizeMarketState sanitizes persisted strategy state',()=>{
   assert.equal(state.strategyApproved,true);
 });
 
+test('normalizeMarketState preserves translated market and evidence display fields across reloads',()=>{
+  const state=Market.normalizeMarketState({
+    researchResults:[{url:'https://example.com/a',market:'Latvia',title:'Factory expansion',description:'New site',displayTitle:'Ražotnes paplašināšana',displayDescription:'Jauns objekts'}],
+    opportunities:[{id:'opp-latvia',market:'Latvia',marketLabel:'Latvija',title:'Latvija: biroja mēbeles',evidence:[{url:'https://example.com/a',title:'Factory expansion',description:'New site',displayTitle:'Ražotnes paplašināšana',displayDescription:'Jauns objekts'}],score:{total:20}}]
+  });
+  assert.equal(state.opportunities[0].marketLabel,'Latvija');
+  assert.equal(state.opportunities[0].evidence[0].displayTitle,'Ražotnes paplašināšana');
+  assert.equal(state.opportunities[0].evidence[0].displayDescription,'Jauns objekts');
+});
+
 test('strategy narratives are generated in selected Latvian',()=>{
   const icps=Market.buildIcpCandidates(profile,'lv');
   assert.equal(icps[0].name,'Pamata ideālā klienta profils');
