@@ -240,6 +240,11 @@
     "Facility expansion or new site":"Telpu paplašināšana vai jauna objekta izveide","Capital investment or modernization":"Kapitālieguldījumi vai modernizācija","Tender or procurement activity":"Iepirkums vai konkurss","Funding or investment":"Finansējums vai investīcijas","Strategic hiring":"Stratēģiska darbinieku piesaiste","New market or export expansion":"Jauna tirgus vai eksporta paplašināšana","Regulatory or compliance change":"Normatīvo vai atbilstības prasību izmaiņas","Supplier or partner change":"Piegādātāja vai partnera maiņa","Product or service launch":"Produkta vai pakalpojuma ieviešana"
   });
   function isLatvian(input={}){const language=clean(input.uiLanguage).toLowerCase();return language==='lv'||language.startsWith('lv-');}
+  function resolveResearchLanguage(input={}){
+    const selected=clean(input.selectorValue||input.storedValue||'lv').toLowerCase();
+    if(selected==='en'||selected==='lv')return selected;
+    return (Array.isArray(input.navigatorLanguages)?input.navigatorLanguages:[]).some(value=>clean(value).toLowerCase().startsWith('lv'))?'lv':'en';
+  }
   function lvSourceText(value){const text=clean(value);return /[āčēģīķļņšūž]/i.test(text)||/\b(?:un|vai|ar|darba|biroja|mēbeles|noliktavu|ražotn|piegād|risinājum)\w*\b/i.test(text);}
   function taxonomyDraft(sources,library,lv=false){
     const labels=[];const ids=[];
@@ -300,5 +305,5 @@
     return {system,prompt};
   }
 
-  return {QUESTION_IDS,MAX_PUBLIC_QUERIES,MAX_SOURCES,RESEARCH_LIMITS,AUTHORITATIVE_CATEGORIES,safeUrl,buildResearchQueries,buildAuthoritativePageQueries,classifyPageCategory,selectAuthoritativePageCandidates,normalizeSearchResults,mergeSources,filterResearchSources,evaluateResearchQuality,capDraftConfidence,parseAiDraft,buildEvidenceDraft,mergeDraft,reviewActionState,deriveCompanyName,buildAiPrompt};
+  return {QUESTION_IDS,MAX_PUBLIC_QUERIES,MAX_SOURCES,RESEARCH_LIMITS,AUTHORITATIVE_CATEGORIES,safeUrl,resolveResearchLanguage,buildResearchQueries,buildAuthoritativePageQueries,classifyPageCategory,selectAuthoritativePageCandidates,normalizeSearchResults,mergeSources,filterResearchSources,evaluateResearchQuality,capDraftConfidence,parseAiDraft,buildEvidenceDraft,mergeDraft,reviewActionState,deriveCompanyName,buildAiPrompt};
 });
