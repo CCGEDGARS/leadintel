@@ -90,10 +90,11 @@ test('market opportunity UI exposes the five scoring dimensions',()=>{
   for(const label of ['Fit','Intent','Timing','Value','Evidence'])assert.match(html,new RegExp(`>${label}<`));
 });
 
-test('customer app wires live Firecrawl market search with explicit cost guard',()=>{
-  const app=read('app.js');
+test('customer app wires live Firecrawl market search with explicit per-mode cost guards',()=>{
+  const app=read('app.js'),engine=read('market-engine.js');
   assert.match(app,/firecrawl-search/);
-  assert.match(app,/MAX_MARKET_RESEARCH_QUERIES\s*=\s*4/);
+  assert.match(engine,/quick:Object\.freeze\(\{maxQueries:4,resultsPerQuery:5,maxStoredResults:20\}\)/);
+  assert.match(engine,/deep:Object\.freeze\(\{maxQueries:12,resultsPerQuery:8,maxStoredResults:80\}\)/);
   assert.match(app,/LeadIntelMarket/);
 });
 
