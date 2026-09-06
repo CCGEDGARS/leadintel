@@ -107,6 +107,15 @@ test('buildMarketOpportunities uses expanded research markets and produces trans
   assert.ok(opportunities.find(x=>x.market==='Sweden').evidence.length>=1);
 });
 
+test('unresearched market hypotheses start at zero instead of receiving inferred scores',()=>{
+  const icps=Market.buildIcpCandidates(profile);
+  const signals=Market.normalizeSignals(profile.recommendedSignals,[]);
+  const opportunity=Market.buildMarketOpportunities(profile,icps,signals,[]).find(item=>item.market==='Sweden');
+  assert.ok(opportunity);
+  assert.equal(opportunity.profileOnly,true);
+  assert.deepEqual(opportunity.score,{fit:0,intent:0,timing:0,value:0,evidence:0,total:0});
+});
+
 test('normalizeMarketState sanitizes persisted strategy state',()=>{
   const state=Market.normalizeMarketState({
     signals:[{id:'x',name:'X',weight:99,active:true,keywords:'x'}],

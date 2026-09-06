@@ -229,13 +229,13 @@
     const offer=splitList(profile.priorityOffers)[0]||"priority offer";
     return (markets.length?markets:["Priority market"]).slice(0,6).map(market=>{
       const evidence=(researchResults||[]).filter(item=>clean(item.market).toLowerCase()===clean(market).toLowerCase()).slice(0,5);
-      const score={
+      const score=evidence.length?{
         fit:fitScore(profile,icps),
         intent:intentScore(signals,evidence),
         timing:recentScore(evidence),
         value:valueScore(profile.opportunityValue),
-        evidence:evidence.length?Math.min(20,6+evidence.length*4):3
-      };
+        evidence:Math.min(20,6+evidence.length*4)
+      }:{fit:0,intent:0,timing:0,value:0,evidence:0};
       score.total=score.fit+score.intent+score.timing+score.value+score.evidence;
       const confidence=evidence.length>=2&&score.total>=75?"High":evidence.length>=1||score.total>=55?"Medium":"Low";
       return {
