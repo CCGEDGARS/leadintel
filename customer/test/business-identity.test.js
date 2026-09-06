@@ -91,8 +91,8 @@ test('Competitive Advantages spans the complete Commercial Positioning grid', ()
   const processMap = fs.readFileSync(path.join(__dirname,'..','process-map.js'),'utf8');
   const shell = fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
   assert.match(ui,/diff\.classList\.add\("wide","identity-wide"\)/);
-  assert.match(processMap,/business-identity\.js\?v=20260906-customer-pains-v1/);
-  assert.match(shell,/process-map\.js\?v=20260906-customer-pains-v1/);
+  assert.match(processMap,/business-identity\.js\?v=20260906-pain-headings-v1/);
+  assert.match(shell,/process-map\.js\?v=20260906-pain-headings-v1/);
 });
 
 
@@ -259,6 +259,20 @@ test('Customer Pain Points follows English content language without mixing Latvi
   assert.match(result.customerPainPoints,/How it can help reduce costs:/);
   assert.match(result.customerPainPoints,/How it can make work easier:/);
   assert.doesNotMatch(result.customerPainPoints,/Kā var palīdzēt|izmaksas|vienkāršot/i);
+});
+
+test('Customer Pain Points renders the three commercial angle headings as highlighted bold text', () => {
+  const html = identity.renderCustomerPainPoints([
+    'Acīmredzamā problēma.',
+    'Kā var palīdzēt nopelnīt vairāk: lielāka darba efektivitāte.',
+    'Kā var palīdzēt samazināt izmaksas: mazāk kļūdainu pirkumu.',
+    'Kā var palīdzēt vienkāršot darbu: ērtāka ieviešana.'
+  ].join('\n\n'));
+  assert.match(html,/<strong class="pain-angle-heading">Kā var palīdzēt nopelnīt vairāk<\/strong>:/);
+  assert.match(html,/<strong class="pain-angle-heading">Kā var palīdzēt samazināt izmaksas<\/strong>:/);
+  assert.match(html,/<strong class="pain-angle-heading">Kā var palīdzēt vienkāršot darbu<\/strong>:/);
+  assert.match(html,/class="pain-angle-highlight"/);
+  assert.doesNotMatch(identity.renderCustomerPainPoints('<script>alert(1)<\/script>'),/<script>/);
 });
 
 test('saved profiles receive Customer Pain Points without overwriting a customer edit', () => {

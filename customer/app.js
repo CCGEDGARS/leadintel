@@ -1,6 +1,6 @@
 import './content-language.js?v=20260906-step2-language-v1';
 import './content-variants.js?v=20260905-step1-language-v1';
-import './business-identity.js?v=20260906-customer-pains-v1';
+import './business-identity.js?v=20260906-pain-headings-v1';
 import './evidence-view.js?v=20260906-evidence-v1';
 import './workspace-persistence.js?v=20260903-step1-startup-order-v1';
 

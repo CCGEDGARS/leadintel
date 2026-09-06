@@ -120,6 +120,14 @@
     const easy=lv?"Kā var palīdzēt vienkāršot darbu: vienots un pārdomāts risinājums var atvieglot izvēli, ieviešanu un ikdienas darba organizēšanu.":"How it can make work easier: a coherent, well-planned solution can simplify selection, implementation and day-to-day operations.";
     return [...pains.slice(0,4),earn,save,easy].join("\n\n");
   }
+  function renderCustomerPainPoints(value){
+    const angle=/^(Kā var palīdzēt nopelnīt vairāk|Kā var palīdzēt samazināt izmaksas|Kā var palīdzēt vienkāršot darbu|How it can help earn more|How it can help reduce costs|How it can make work easier)\s*:\s*(.*)$/i;
+    return String(value??"").split(/\n\s*\n/).map(part=>clean(part)).filter(Boolean).map(part=>{
+      const match=part.match(angle);
+      if(!match)return `<p>${esc(part)}</p>`;
+      return `<p class="pain-angle-highlight"><strong class="pain-angle-heading">${esc(match[1])}</strong>: ${esc(match[2])}</p>`;
+    }).join("");
+  }
   function deriveAnalysis(profile={},input={},context={}){
     const language=detectLanguage(profile,input,context);
     const company=context.company||identityValue(profile.companyName)||(language==="lv"?"Uzņēmums":"The company");
@@ -256,6 +264,10 @@
       .profile-identity-grid .profile-field.wide,.profile-identity-grid .identity-wide{grid-column:1/-1}
       .profile-identity-section .profile-field{margin:0}
       .profile-identity-grid .identity-customerPainPoints{grid-column:1/-1}
+      .identity-customerPainPoints .pain-points-rendered{display:grid;gap:10px;padding:14px 16px;border:1px solid var(--line,#d8e0dc);border-radius:12px;background:#fff;color:var(--ink,#10231d);font-size:15px;line-height:1.55}
+      .identity-customerPainPoints .pain-points-rendered p{margin:0}
+      .identity-customerPainPoints .pain-angle-highlight{padding:10px 12px;border-left:4px solid #bc8f2a;border-radius:6px;background:#fbf6e9}
+      .identity-customerPainPoints .pain-angle-heading{font-weight:800;color:var(--ink,#10231d)}
       .pain-points-note{display:inline-flex;margin-top:8px;padding:5px 8px;border-radius:999px;background:#f4eee0;color:#876920;font:600 10px/1.2 'IBM Plex Mono',monospace}
       .profile-analysis-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
       .profile-analysis-card{padding:16px;border:1px solid var(--line,#d8e0dc);border-radius:14px;background:#fff;min-height:110px}
@@ -351,7 +363,18 @@
     const used=new Set(["companyOverview","businessSummary","uniqueSellingProposition","elevatorPitch","differentiation"]);
     for(const key of contextOrder){const node=take(key);if(node){context.grid.append(node);used.add(key);}}
     const painField=context.grid.querySelector('[data-profile-field="customerPainPoints"]')?.closest('.profile-field');
-    if(painField){painField.classList.add('wide','identity-customerPainPoints');if(!painField.querySelector('.pain-points-note')){const note=root.document.createElement('small');note.className='pain-points-note';note.textContent=profile.customerPainPointsStatus||'AI-inferred · review recommended';painField.append(note);}}
+    if(painField){
+      painField.classList.add('wide','identity-customerPainPoints');
+      const field=painField.querySelector('[data-profile-field="customerPainPoints"]');
+      painField.querySelector('.pain-points-rendered')?.remove();
+      if(field){
+        field.hidden=false;
+        if(field.readOnly){
+          const rendered=root.document.createElement('div');rendered.className='pain-points-rendered';rendered.innerHTML=renderCustomerPainPoints(field.value);field.hidden=true;field.after(rendered);
+        }
+      }
+      if(!painField.querySelector('.pain-points-note')){const note=root.document.createElement('small');note.className='pain-points-note';note.textContent=profile.customerPainPointsStatus||'AI-inferred · review recommended';painField.append(note);}
+    }
     for(const [key,node] of byKey){if(!used.has(key))context.grid.append(node);}
     editor.replaceChildren(business.node,analysis.node,frameworks.node,positioning.node,sales.node,context.node);editor.classList.add("profile-identity-layout");
     editor.querySelectorAll("[data-profile-field]").forEach(field=>{
@@ -375,5 +398,5 @@
     root.document.getElementById("edit-profile")?.addEventListener("click",()=>setTimeout(()=>queueLayout(root),0));
   }
 
-  return {deriveIdentity,deriveCustomerPainPoints,patchProfileEngine,layoutProfile,install,hasNavigationNoise,stripNavigationNoise};
+  return {deriveIdentity,deriveCustomerPainPoints,renderCustomerPainPoints,patchProfileEngine,layoutProfile,install,hasNavigationNoise,stripNavigationNoise};
 });
