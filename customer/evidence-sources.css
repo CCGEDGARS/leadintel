@@ -1,0 +1,24 @@
+.evidence-digest{display:grid;gap:12px;margin-top:14px}
+.evidence-coverage{border:1px solid var(--line);border-left-width:4px;border-radius:12px;padding:13px 14px;background:#f8faf8}
+.evidence-coverage strong{display:block;font-size:13px;color:var(--ink)}
+.evidence-coverage p{margin:5px 0 0;font-size:12.5px;line-height:1.55;color:var(--muted)}
+.evidence-coverage-limited,.evidence-coverage-none{border-left-color:#c79832;background:#fffaf0}
+.evidence-coverage-partial{border-left-color:#7d9a8f}
+.evidence-coverage-supported{border-left-color:#4f9565;background:#f2f8f3}
+.evidence-source-list{display:grid;gap:10px}
+.evidence-source-card{border:1px solid var(--line);border-radius:12px;padding:14px;background:#fff;min-width:0}
+.evidence-source-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.evidence-source-head>div{min-width:0}
+.evidence-source-head a,.evidence-source-head strong{display:flex;align-items:center;gap:6px;color:var(--ink);font-size:13px;font-weight:700;text-decoration:none;overflow-wrap:anywhere}
+.evidence-source-head a:hover{color:var(--accent2);text-decoration:underline}
+.evidence-source-head small{display:block;margin-top:4px;color:var(--muted);font:500 9px "IBM Plex Mono",monospace;text-transform:uppercase;letter-spacing:.05em}
+.evidence-scope{flex:0 0 auto;border-radius:999px;padding:5px 8px;background:var(--soft);color:#53645d;font:600 9px "IBM Plex Mono",monospace}
+.evidence-scope-product .evidence-scope{background:#f6ecd3;color:#7d611d}
+.evidence-source-card>p{margin:12px 0 10px;color:var(--muted);font-size:12.5px;line-height:1.55}
+.evidence-source-meta{display:flex;gap:6px;flex-wrap:wrap}
+.evidence-source-meta>span{font:500 9px "IBM Plex Mono",monospace;color:#64736d}
+.evidence-supports{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:11px;padding-top:10px;border-top:1px solid #edf0ed}
+.evidence-supports small{font:600 9px "IBM Plex Mono",monospace;text-transform:uppercase;color:var(--muted);margin-right:2px}
+.evidence-supports span{padding:4px 7px;border-radius:7px;background:#edf5f1;color:var(--accent2);font-size:10px;font-weight:600}
+.evidence-empty{border:1px dashed var(--line);border-radius:10px;padding:14px;color:var(--muted);font-size:12.5px;line-height:1.5}
+@media(max-width:620px){.evidence-source-head{display:grid}.evidence-scope{justify-self:start}.evidence-source-card{padding:12px}}

@@ -1,6 +1,7 @@
 import './content-language.js?v=20260905-step1-language-v1';
 import './content-variants.js?v=20260905-step1-language-v1';
 import './business-identity.js?v=20260905-audit-v1';
+import './evidence-view.js?v=20260906-evidence-v1';
 import './workspace-persistence.js?v=20260903-step1-startup-order-v1';
 
 const STORAGE_KEY="leadintel_customer_v2_state";
@@ -178,8 +179,9 @@ function renderProfile(){
   $("profile-company-name").textContent=p.companyName||"Company";$("profile-mission").textContent=p.mission;$("profile-completeness").textContent=`${p.completeness}%`;
   $("profile-editor").innerHTML=profileFields.map(([key,label,wide])=>`<div class="profile-field ${wide?"wide":""}"><label for="profile-${key}">${esc(label)}</label><textarea id="profile-${key}" data-profile-field="${key}" rows="${wide?3:2}" ${editMode?"":"readonly"}>${esc(fieldValue(p,key))}</textarea></div>`).join("");
   $("recommended-signals").innerHTML=(p.recommendedSignals||[]).map((signal,index)=>`<label class="signal-item"><input type="checkbox" data-signal-index="${index}" ${signal.active===false?"":"checked"}><div><strong>${esc(signal.name)}</strong><small>${esc(signal.reason)}</small></div><span class="priority">${esc(signal.priority)}</span></label>`).join("");
-  $("source-summary").innerHTML=`<span class="source-chip">Website ${p.sourceSummary.website}</span><span class="source-chip">Additional links ${p.sourceSummary.additionalLinks}</span><span class="source-chip">PDFs ${p.sourceSummary.documents}</span><span class="source-chip">Total evidence sources ${p.sourceSummary.total}</span>`;
-  $("evidence-digest").textContent=p.evidenceDigest||"No readable public/document evidence was collected. Add optional context if you want to improve precision.";
+  const sourceSummary=p.sourceSummary||{website:0,additionalLinks:0,documents:0,total:0};
+  $("source-summary").innerHTML=`<span class="source-chip">Website ${sourceSummary.website}</span><span class="source-chip">Additional links ${sourceSummary.additionalLinks}</span><span class="source-chip">PDFs ${sourceSummary.documents}</span><span class="source-chip">Total evidence sources ${sourceSummary.total}</span>`;
+  $("evidence-digest").innerHTML=globalThis.LeadIntelEvidenceView?.renderEvidence(p)||`<div class="evidence-empty">${esc(p.evidenceDigest||"No readable public/document evidence was collected.")}</div>`;
   const gaps=p.informationGaps||[];$("information-gaps").innerHTML=gaps.length?gaps.map(x=>`<div class="gap-item">${esc(x)}</div>`).join(""):`<div class="gap-item good">No critical context gaps detected for this onboarding stage.</div>`;
   updateApprovalUI();
 }
