@@ -116,6 +116,18 @@ test('unresearched market hypotheses start at zero instead of receiving inferred
   assert.deepEqual(opportunity.score,{fit:0,intent:0,timing:0,value:0,evidence:0,total:0});
 });
 
+test('saved legacy opportunities with no evidence migrate from inferred scores to zero',()=>{
+  const state=Market.normalizeMarketState({
+    opportunities:[{
+      id:'opp-latvia',market:'Latvia',title:'Latvia: Existing offer',active:true,
+      score:{fit:15,intent:6,timing:6,value:8,evidence:3,total:38},
+      confidence:'Low',evidence:[],profileOnly:true
+    }]
+  });
+  assert.deepEqual(state.opportunities[0].score,{fit:0,intent:0,timing:0,value:0,evidence:0,total:0});
+  assert.equal(state.opportunities[0].profileOnly,true);
+});
+
 test('normalizeMarketState sanitizes persisted strategy state',()=>{
   const state=Market.normalizeMarketState({
     signals:[{id:'x',name:'X',weight:99,active:true,keywords:'x'}],

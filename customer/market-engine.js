@@ -289,7 +289,10 @@
     const researchResults=(Array.isArray(input.researchResults)?input.researchResults:[]).slice(0,RESEARCH_MODES[researchMode].maxStoredResults).map(item=>({
       queryId:clean(item?.queryId),market:clean(item?.market),query:clean(item?.query),url:canonicalUrl(item?.url),title:clean(item?.title),description:clean(item?.description),text:String(item?.text||"").slice(0,5000),date:clean(item?.date),sourceProviders:normalizeProviders(item?.sourceProviders)
     })).filter(item=>item.url);
-    const opportunities=(Array.isArray(input.opportunities)?input.opportunities:[]).slice(0,12).map(item=>({...item,id:clean(item?.id),market:clean(item?.market),title:clean(item?.title),active:item?.active!==false})).filter(item=>item.id);
+    const opportunities=(Array.isArray(input.opportunities)?input.opportunities:[]).slice(0,12).map(item=>{
+      const hasEvidence=Array.isArray(item?.evidence)&&item.evidence.length>0;
+      return {...item,id:clean(item?.id),market:clean(item?.market),title:clean(item?.title),active:item?.active!==false,profileOnly:!hasEvidence,score:hasEvidence?item.score:{fit:0,intent:0,timing:0,value:0,evidence:0,total:0}};
+    }).filter(item=>item.id);
     const allowed=new Set(["idle","running","complete","partial","error"]),sourceAllowed=new Set(["idle","running","complete","partial","error","unavailable"]);
     const rawSourceStatus=input.researchSourceStatus&&typeof input.researchSourceStatus==="object"?input.researchSourceStatus:{};
     const researchSourceStatus={openai:sourceAllowed.has(rawSourceStatus.openai)?rawSourceStatus.openai:"idle",firecrawl:sourceAllowed.has(rawSourceStatus.firecrawl)?rawSourceStatus.firecrawl:"idle"};
