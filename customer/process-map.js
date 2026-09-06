@@ -15,8 +15,8 @@ import './content-language.js?v=20260905-step1-language-v1';
 import './content-variants.js?v=20260905-step1-language-v1';
 import './business-identity.js?v=20260905-audit-v1';
 import './firecrawl-workspace-router.js?v=20260903-firecrawl-retry-fallback-v1';
-import './company-research-security.js?v=20260826-intelligence-autofill-v1';
-import './company-research-ui.js?v=20260905-audit-v1';
+import './company-research-security.js?v=20260906-authoritative-depth-v1';
+import './company-research-ui.js?v=20260906-authoritative-depth-v1';
 import './company-profile-handoff.js?v=20260826-intelligence-autofill-v1';
 
 const PROCESS_STORAGE_KEY="leadintel_customer_v2_state";

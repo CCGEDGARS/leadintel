@@ -14,10 +14,14 @@ const css=read('company-research.css');
 
 test('Customer V2 loads the automatic company research module with Firecrawl workspace routing before research',()=>{
   assert.match(processMap,/firecrawl-workspace-router\.js\?v=20260903-firecrawl-retry-fallback-v1/);
-  assert.match(processMap,/company-research-ui\.js\?v=20260905-audit-v1/);
+  assert.match(processMap,/company-research-security\.js\?v=20260906-authoritative-depth-v1/);
+  assert.match(processMap,/company-research-ui\.js\?v=20260906-authoritative-depth-v1/);
   assert.ok(processMap.indexOf('firecrawl-workspace-router.js')<processMap.indexOf('company-research-ui.js'),'Firecrawl router must load before company research');
   assert.match(processMap,/company-profile-handoff\.js\?v=20260826-intelligence-autofill-v1/);
-  assert.match(ui,/company-research-engine\.js\?v=20260905-audit-v1/);
+  assert.match(ui,/company-research-engine\.js\?v=20260906-authoritative-depth-v1/);
+  assert.match(read('index.html'),/profile-engine\.js\?v=20260906-authoritative-depth-v1/);
+  assert.match(read('index.html'),/process-map\.js\?v=20260906-authoritative-depth-v1/);
+  assert.match(read('index.html'),/company-research-ui\.js\?v=20260906-authoritative-depth-v1/);
 });
 
 test('Step 1 becomes research-first and intercepts legacy questionnaire navigation safely',()=>{
@@ -27,6 +31,20 @@ test('Step 1 becomes research-first and intercepts legacy questionnaire navigati
   assert.match(ui,/stopImmediatePropagation\(\)/);
   assert.match(ui,/MAX_COMPANY_RESEARCH_QUERIES\s*=\s*3/);
   assert.match(ui,/MAX_RESULTS_PER_QUERY\s*=\s*4/);
+});
+
+test('company research discovers and scrapes authoritative internal pages before synthesis',()=>{
+  assert.match(ui,/buildAuthoritativePageQueries/);
+  assert.match(ui,/selectAuthoritativePageCandidates/);
+  assert.match(ui,/authoritativeCandidates\.map/);
+  assert.match(ui,/pageCategory/);
+  assert.match(ui,/capDraftConfidence/);
+});
+
+test('research summary exposes authoritative coverage instead of relying on source count alone',()=>{
+  assert.match(ui,/quality\?\.coverage/);
+  assert.match(ui,/authoritative areas/);
+  assert.match(ui,/Coverage incomplete/);
 });
 
 test('signed-in research transparently routes legacy Firecrawl calls through authenticated workspace endpoints',()=>{

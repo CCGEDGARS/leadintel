@@ -7,8 +7,8 @@ const read=name=>fs.readFileSync(path.join(root,name),'utf8');
 
 test('research shell loads AI evidence security wrapper before research UI',()=>{
   const shell=read('process-map.js');
-  const securityIndex=shell.indexOf('company-research-security.js?v=20260826-intelligence-autofill-v1');
-  const uiIndex=shell.indexOf('company-research-ui.js?v=20260905-audit-v1');
+  const securityIndex=shell.indexOf('company-research-security.js?v=20260906-authoritative-depth-v1');
+  const uiIndex=shell.indexOf('company-research-ui.js?v=20260906-authoritative-depth-v1');
   assert.ok(securityIndex>=0&&uiIndex>securityIndex);
 });
 

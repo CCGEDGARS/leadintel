@@ -203,6 +203,7 @@
       title:clean(source.title||source.name)||host||`Evidence source ${index+1}`,
       url,
       scope,
+      pageCategory:["company","offers","proof","delivery","contact"].includes(source.pageCategory)?source.pageCategory:"",
       scopeLabel:labels[scope],
       confidence:scope==="product"?"High source confidence · narrow scope":scope==="company"?"High source confidence":"Supporting evidence",
       excerpt:truncate(firstSentence(source.text)||clean(source.text),360),
@@ -217,10 +218,13 @@
     if(!records.length)return {level:"none",label:"No evidence collected",message:"No readable public or document evidence was collected."};
     const companyWide=records.filter(record=>record.scope==="company").length;
     const narrow=records.filter(record=>record.scope==="product").length;
+    const categories=unique(records.map(record=>record.pageCategory).filter(Boolean));
+    const minimumMet=categories.includes("company")&&categories.includes("offers")&&(categories.includes("proof")||categories.includes("delivery"));
     if(records.length===1&&narrow===1)return {level:"limited",label:"Limited coverage",message:"Only one narrow product claim was collected. It supports a priority offer but does not support the complete company profile."};
     if(!companyWide)return {level:"limited",label:"Limited coverage",message:"The collected sources provide supporting or product-level facts, but no company-wide description has been verified."};
-    if(companyWide===1&&records.length===1)return {level:"partial",label:"Partial coverage",message:"One company-level source was collected. Add product, case-study or document evidence to strengthen the profile."};
-    return {level:"supported",label:"Supported coverage",message:`${records.length} sources provide company-level and supporting evidence for this profile.`};
+    if(categories.length&&!minimumMet)return {level:"partial",label:"Partial coverage",message:`${categories.length}/5 authoritative company areas were verified. Add offer and project/reference or delivery evidence before treating the complete profile as strongly supported.`,categories,minimumMet};
+    if(companyWide===1&&records.length===1)return {level:"partial",label:"Partial coverage",message:"One company-level source was collected. Add product, case-study or document evidence to strengthen the profile.",categories,minimumMet};
+    return {level:"supported",label:"Supported coverage",message:`${records.length} sources provide company-level and supporting evidence for this profile.`,categories,minimumMet:categories.length?minimumMet:true};
   }
   function sourceSummary(scrapedSources=[],documents=[]){
     const website=scrapedSources.filter(x=>x.type==="website"&&clean(x.text)).length;
@@ -274,7 +278,7 @@
     const explicitTargets=normalizeTargetMarkets(value.targetMarkets);
     const targetMarkets=explicitTargets.length?explicitTargets:normalizeTargetMarkets(answers.growth_markets);
     const docs=Array.isArray(value.documents)?value.documents.slice(0,5).map(d=>({name:clean(d?.name).slice(0,180),size:Number(d?.size)||0,text:String(d?.text||"").slice(0,25000),status:clean(d?.status)||"ready"})).filter(d=>d.name):[];
-    const scrapedSources=Array.isArray(value.scrapedSources)?value.scrapedSources.slice(0,25).map(s=>({type:s?.type==="link"?"link":"website",url:normalizeUrl(s?.url),title:clean(s?.title).slice(0,180),text:String(s?.text||"").slice(0,30000),status:clean(s?.status)||"ready"})).filter(s=>s.url):[];
+    const scrapedSources=Array.isArray(value.scrapedSources)?value.scrapedSources.slice(0,25).map(s=>({type:s?.type==="link"?"link":"website",url:normalizeUrl(s?.url),title:clean(s?.title).slice(0,180),text:String(s?.text||"").slice(0,30000),status:clean(s?.status)||"ready",pageCategory:["company","offers","proof","delivery","contact"].includes(s?.pageCategory)?s.pageCategory:""})).filter(s=>s.url):[];
     const profile=value.profile&&typeof value.profile==="object"?{
       ...value.profile,
       mission:buildMission(),
