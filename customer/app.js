@@ -1,4 +1,4 @@
-import './content-language.js?v=20260906-language-consistency-v1';
+import './content-language.js?v=20260906-language-state-v2';
 import './content-variants.js?v=20260905-step1-language-v1';
 import './business-identity.js?v=20260906-competitive-wide-v1';
 import './evidence-view.js?v=20260906-evidence-v1';
@@ -458,7 +458,14 @@ function bind(){
   $("signal-designer").addEventListener("click",e=>{const btn=e.target.closest("[data-remove-signal]");if(btn)removeSignal(Number(btn.dataset.removeSignal));});
   [$("icp-list"),$("signal-designer"),$("market-opportunities")].forEach(container=>{container.addEventListener("change",()=>readMarketEdits());});
   $("reset-workspace").addEventListener("click",resetWorkspace);
-  window.addEventListener("leadintel:language-changed",()=>{if(!state.profile)return;marketTranslationGeneration++;state.market=LeadIntelMarket.localizeGeneratedState(state.market,state.profile,contentLanguage());saveState();if(state.step===4)renderMarketStrategy();void localizeMarketGeneratedContent();});
+  window.addEventListener("leadintel:language-changed",event=>{
+    LeadIntelContentLanguage.applyLanguageSelection(state,event.detail?.language);
+    marketTranslationGeneration++;
+    if(state.profile)state.market=LeadIntelMarket.localizeGeneratedState(state.market,state.profile,contentLanguage());
+    saveState();
+    if(state.profile&&state.step===4)renderMarketStrategy();
+    if(state.profile)void localizeMarketGeneratedContent();
+  });
 }
 function init(){
   syncInputsFromState();bind();updateCompleteness();updateNavigationAvailability();observeNavigation();

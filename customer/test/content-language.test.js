@@ -52,3 +52,11 @@ test('market content translation updates generated fields and evidence display t
   assert.equal(next.opportunities[0].evidence[0].text,'Original source text');
   assert.equal(next.contentLanguage,'lv');
 });
+
+test('language changes synchronize the live workspace state before it is saved',()=>{
+  const workspace={uiLanguage:'en',profile:{companyName:'AJ Produkti'}};
+  const result=language.applyLanguageSelection(workspace,'lv');
+  assert.equal(result,workspace);
+  assert.equal(workspace.uiLanguage,'lv');
+  assert.equal(JSON.parse(JSON.stringify(workspace)).uiLanguage,'lv');
+});
