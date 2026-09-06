@@ -1,6 +1,6 @@
 import './content-language.js?v=20260905-step1-language-v1';
 import './content-variants.js?v=20260905-step1-language-v1';
-import './business-identity.js?v=20260905-audit-v1';
+import './business-identity.js?v=20260906-competitive-wide-v1';
 import './evidence-view.js?v=20260906-evidence-v1';
 import './workspace-persistence.js?v=20260903-step1-startup-order-v1';
 

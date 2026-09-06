@@ -316,7 +316,7 @@
       createInsightCard(root,uiText(chromeLanguage,"benefits"),analysisData.frameworks?.fab?.benefits,undefined,analysisData.review?.fab?.benefits,language)
     );
     const positioning=section(root,uiText(chromeLanguage,"commercialPositioning"),uiText(chromeLanguage,"commercialPositioningSub"));positioning.grid.append(usp);
-    const diff=take("differentiation");if(diff)positioning.grid.append(diff);
+    const diff=take("differentiation");if(diff){diff.classList.add("wide","identity-wide");positioning.grid.append(diff);}
     const meta=root.document.createElement("div");meta.className="identity-meta identity-wide";meta.innerHTML=`<span>${esc(profile.uspStatus||derived.uspStatus||"Proposed · confirmation recommended")}</span><span>${esc(profile.positioningConfidence||derived.positioningConfidence||"Needs confirmation")} confidence</span>`;positioning.grid.append(meta);
     const sales=section(root,uiText(chromeLanguage,"salesMessage"),uiText(chromeLanguage,"salesMessageSub"));sales.grid.append(pitch);
     const context=section(root,uiText(chromeLanguage,"commercialContext"),uiText(chromeLanguage,"commercialContextSub"));
