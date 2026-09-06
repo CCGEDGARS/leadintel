@@ -228,11 +228,16 @@
 
           <section class="panel strategy-panel research-panel">
             <div class="market-research-head">
-              <div class="section-title"><span class="eyebrow">Market Opportunity Engine</span><h3>Research the market for evidence</h3><p>One manual run uses a maximum of four Firecrawl searches and five results per query. Regional selections are expanded into their countries before research.</p></div>
+              <div class="section-title"><span class="eyebrow">Market Opportunity Engine</span><h3>Research the market for evidence</h3><p>Choose a fast validation or a broader strategic assessment. Every run is preserved in research history.</p></div>
               <button class="primary-btn" id="run-market-research" type="button">Run market research <span>↻</span></button>
+            </div>
+            <div class="research-controls">
+              <label><span>Research depth</span><select id="research-mode"><option value="quick">Quick Research · 4 queries × 5 results</option><option value="deep">Deep Research · 12 queries × 8 results</option></select></label>
+              <fieldset id="research-source-types"><legend>Source categories</legend><label><input type="checkbox" value="news" checked> News</label><label><input type="checkbox" value="tenders" checked> Tenders</label><label><input type="checkbox" value="jobs" checked> Jobs</label><label><input type="checkbox" value="investments" checked> Investments</label><label><input type="checkbox" value="company" checked> Company sites</label><label><input type="checkbox" value="registries"> Registries</label></fieldset>
             </div>
             <div class="score-legend" aria-label="Opportunity scoring model"><strong>Opportunity score</strong><span>Fit</span><span>Intent</span><span>Timing</span><span>Value</span><span>Evidence</span></div>
             <div class="research-status" id="market-research-status">No market research run yet.</div>
+            <div class="research-history" id="research-history"></div>
             <div class="market-opportunities" id="market-opportunities"><div class="market-empty">Run market research to create evidence-backed market hypotheses.</div></div>
           </section>
 
@@ -240,6 +245,19 @@
             <div><span class="eyebrow">Strategy activation</span><h3>Make this the operating strategy for Discovery.</h3><p>Activation saves the active ICPs, signal weights and selected market opportunities as the configuration Discovery should prioritize. You can still open Discovery before activation.</p></div>
             <button class="primary-btn" id="activate-market-strategy" type="button">Activate Market Strategy</button>
           </div>
+
+          <section class="panel strategy-panel monitoring-panel" id="monitoring-panel">
+            <div class="market-research-head"><div class="section-title"><span class="eyebrow">Continuous Monitoring</span><h3>Watch for new market opportunities automatically</h3><p>LeadIntel reruns selected signals and source categories, saves only new evidence, automatically rescores it and creates alerts above your threshold.</p></div><label class="monitoring-master"><input id="monitoring-enabled" type="checkbox"><span>Enable monitoring</span></label></div>
+            <div class="monitoring-grid">
+              <label><span>Frequency</span><select id="monitoring-frequency"><option value="daily">Daily</option><option value="weekly" selected>Weekly</option><option value="monthly">Monthly</option></select></label>
+              <label><span>Research depth</span><select id="monitoring-depth"><option value="quick">Quick</option><option value="deep" selected>Deep</option></select></label>
+              <label><span>Minimum alert score</span><input id="monitoring-minimum-score" type="number" min="1" max="100" value="70"></label>
+              <label class="monitoring-custom"><span>Custom public sources · one URL per line</span><textarea id="monitoring-custom-sources" rows="2" placeholder="https://example.com/news"></textarea></label>
+            </div>
+            <div class="monitoring-selection"><div><strong>Signals to monitor</strong><div id="monitoring-signals" class="monitoring-chips"></div></div><div><strong>Source categories</strong><div id="monitoring-sources" class="monitoring-chips"></div></div></div>
+            <div class="monitoring-actions"><button class="primary-btn" id="save-monitoring" type="button">Save monitoring settings</button><button class="secondary-btn" id="run-monitoring-now" type="button">Run monitoring now</button><span id="monitoring-status" class="research-status">Activate the market strategy before enabling monitoring.</span></div>
+            <div class="monitoring-results"><div><h4>New opportunity alerts</h4><div id="monitoring-alerts" class="monitoring-list"><div class="market-empty">No monitoring alerts yet.</div></div></div><div><h4>Monitoring history</h4><div id="monitoring-history" class="monitoring-list"><div class="market-empty">No automatic runs yet.</div></div></div></div>
+          </section>
         </section>
       </main>
     </div>
@@ -247,9 +265,9 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="content-variants.js?v=20260905-step1-language-v1"></script>
   <script src="profile-engine.js?v=20260906-authoritative-depth-v1"></script>
-  <script src="market-engine.js?v=20260905-step1-language-v1"></script>
+  <script src="market-engine.js?v=20260906-monitoring-v1"></script>
   <script src="discovery-engine.js?v=20260905-step1-language-v1"></script>
-  <script type="module" src="app.js?v=20260906-competitive-wide-v1"></script>
+  <script type="module" src="app.js?v=20260906-monitoring-v1"></script>
   <script src="language.js?v=20260905-audit-v1"></script>
   <script type="module" src="process-map.js?v=20260906-competitive-wide-v1"></script>
   <script type="module" src="discovery-ui.js?v=20260905-step1-language-v1"></script>

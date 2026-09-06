@@ -5,6 +5,7 @@ import {handleServiceIntegrationRoute,withWorkspaceServiceCredentials} from './s
 import {handleSaasRoute} from './saas-routes.js';
 import {handleCrmRoute} from './crm-routes.js';
 import {handleApolloCrmWebhook} from './crm-routes.js';
+import {handleMarketMonitoringRoute,runDueMarketMonitoring} from './market-monitoring.js';
 
 export default {
   async fetch(request,env){
@@ -18,6 +19,7 @@ export default {
     try{
       const ai=await handleAiRoute(request,env,cors);if(ai)return ai;
       const service=await handleServiceIntegrationRoute(request,env,cors);if(service)return service;
+      const monitoring=await handleMarketMonitoringRoute(request,env,cors);if(monitoring)return monitoring;
       const runtimeEnv=await withWorkspaceServiceCredentials(request,env);
       const crm=await handleCrmRoute(request,runtimeEnv,cors);if(crm)return crm;
       const saas=await handleSaasRoute(request,runtimeEnv,cors);if(saas)return saas;
@@ -25,5 +27,6 @@ export default {
     }catch(cause){
       console.error(cause);return new Response(JSON.stringify({error:'Internal server error'}),{status:500,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...cors}});
     }
-  }
+  },
+  async scheduled(controller,env,ctx){ctx.waitUntil(runDueMarketMonitoring(env,new Date(controller.scheduledTime||Date.now())));}
 };

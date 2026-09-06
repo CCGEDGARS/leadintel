@@ -31,6 +31,8 @@ The browser keeps compact working state for onboarding and active UI flows. Grow
 
 Public web research is performed through the configured intelligence proxies. Gmail OAuth credentials and refresh tokens stay in the private Worker integration layer and are never stored in the browser or Master CRM. Sending remains human-approved.
 
+Market Strategy supports bounded Quick Research, broader Deep Research and durable Continuous Monitoring. Monitoring configurations, run history, deduplicated evidence and opportunity alerts are stored in D1; the hourly Worker schedule executes only due daily, weekly or monthly configurations. See `docs/market-research-and-monitoring.md`.
+
 ## Local preview
 
 From the repository root:
