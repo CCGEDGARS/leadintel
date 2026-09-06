@@ -160,6 +160,19 @@
     return [item,...(Array.isArray(history)?history:[]).filter(existing=>clean(existing?.id)!==item.id)].slice(0,20);
   }
 
+  function getMarketJourneyState(value={}){
+    const researched=Boolean(clean(value.lastResearchAt))&&["complete","partial"].includes(value.researchStatus);
+    const active=researched&&Boolean(value.strategyApproved);
+    return {
+      stage:active?"active":researched?"review":"research",
+      researched,
+      showScore:researched,
+      showActivation:researched,
+      showMonitoring:active,
+      researchLabel:researched?"Rerun market research":"Run quick research"
+    };
+  }
+
   function normalizeSearchResults(payload={},queryMeta={},sourceProvider=""){
     const raw=Array.isArray(payload?.data)?payload.data:Array.isArray(payload?.data?.web)?payload.data.web:Array.isArray(payload?.web)?payload.web:Array.isArray(payload?.results)?payload.results:[];
     return raw.slice(0,8).map(item=>{
@@ -304,5 +317,5 @@
     };
   }
 
-  return {DEFAULT_MARKET_STATE,RESEARCH_MODES,SOURCE_TYPES,effectiveResearchMarkets,buildIcpCandidates,normalizeSignals,addCustomSignal,buildResearchQueries,normalizeSearchResults,mergeResearchResults,buildMarketOpportunities,localizeGeneratedState,normalizeMarketState,normalizeMonitoring,appendResearchHistory,splitList};
+  return {DEFAULT_MARKET_STATE,RESEARCH_MODES,SOURCE_TYPES,effectiveResearchMarkets,buildIcpCandidates,normalizeSignals,addCustomSignal,buildResearchQueries,normalizeSearchResults,mergeResearchResults,buildMarketOpportunities,localizeGeneratedState,normalizeMarketState,normalizeMonitoring,appendResearchHistory,getMarketJourneyState,splitList};
 });

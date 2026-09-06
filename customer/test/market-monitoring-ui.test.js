@@ -6,6 +6,7 @@ const root=path.join(__dirname,'..');
 const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
 const css=fs.readFileSync(path.join(root,'market.css'),'utf8');
+const discovery=fs.readFileSync(path.join(root,'discovery-ui.js'),'utf8');
 
 test('market strategy exposes Quick and Deep research with transparent limits',()=>{
   assert.match(html,/id="research-mode"/);
@@ -29,4 +30,28 @@ test('monitoring source and signal controls are generated from active strategy',
   assert.match(app,/data-monitor-source/);
   assert.match(app,/data-monitor-signal/);
   assert.match(app,/state\.market\.signals\.filter/);
+});
+
+test('market strategy progressively reveals research results, activation and monitoring',()=>{
+  assert.match(html,/id="research-settings"/);
+  assert.match(html,/Customize research settings/);
+  assert.match(html,/id="research-results-details"/);
+  assert.match(html,/id="strategy-activation-card"[^>]*hidden/);
+  assert.match(html,/id="monitoring-panel"[^>]*hidden/);
+  assert.match(app,/getMarketJourneyState/);
+  assert.match(app,/research-results-details/);
+  assert.match(app,/view\.showActivation/);
+  assert.match(app,/view\.showMonitoring/);
+});
+
+test('monitoring keeps advanced sources, signals and history behind disclosure',()=>{
+  assert.match(html,/id="monitoring-advanced"/);
+  assert.match(html,/Advanced monitoring settings/);
+  assert.match(html,/id="monitoring-custom-sources"/);
+  assert.match(html,/id="monitoring-alerts"/);
+});
+
+test('company discovery becomes the clear next action only after strategy activation',()=>{
+  assert.match(discovery,/gate\.hidden=!formal/);
+  assert.match(discovery,/Find matching companies/);
 });

@@ -342,13 +342,15 @@ function renderMarketOpportunities(){
   const target=$("market-opportunities");
   if(!state.market.opportunities.length){target.innerHTML=`<div class="market-empty">${state.market.researchStatus==="running"?"Researching markets…":"Target market strategy is ready. Run market research to add live evidence and improve confidence."}</div>`;return;}
   target.innerHTML=state.market.opportunities.map((opp,index)=>opp.profileOnly?`<article class="opportunity-card unresearched ${opp.active?"active":""}">
-    <div class="opportunity-top"><label class="market-toggle"><input type="checkbox" data-opportunity-active="${index}" ${opp.active?"checked":""}><span></span></label><div><h4 lang="${contentLanguage()}">${esc(opp.title)}</h4></div><div class="opportunity-total"><strong>${opp.score.total}</strong><span>/100</span></div></div>
+    <div class="opportunity-top"><label class="market-toggle"><input type="checkbox" data-opportunity-active="${index}" ${opp.active?"checked":""}><span></span></label><div><span class="opportunity-market">Selected market</span><h4 lang="${contentLanguage()}">${esc(opp.title)}</h4><span class="not-researched-label">Not researched yet</span></div><div class="opportunity-total"><strong>${opp.score.total}</strong><span>/100</span></div></div>
   </article>`:`<article class="opportunity-card ${opp.active?"active":""}">
     <div class="opportunity-top"><label class="market-toggle"><input type="checkbox" data-opportunity-active="${index}" ${opp.active?"checked":""}><span></span></label><div><span class="opportunity-market">${esc(opp.marketLabel||opp.market)}</span><h4 lang="${contentLanguage()}">${esc(opp.title)}</h4></div><div class="opportunity-total"><strong>${opp.score.total}</strong><span>/100</span></div></div>
-    <p class="opportunity-hypothesis" lang="${contentLanguage()}">${esc(opp.hypothesis)}</p>
-    <div class="score-grid">${scoreCell("Fit",opp.score.fit)}${scoreCell("Intent",opp.score.intent)}${scoreCell("Timing",opp.score.timing)}${scoreCell("Value",opp.score.value)}${scoreCell("Evidence",opp.score.evidence)}</div>
-    <div class="opportunity-meta"><span class="confidence ${opp.confidence.toLowerCase()}">${opp.confidence} confidence</span><span>${opp.evidence.length} evidence source${opp.evidence.length===1?"":"s"}</span>${opp.profileOnly?"<span>Profile-only hypothesis</span>":""}</div>
-    <div class="evidence-links" lang="${contentLanguage()}">${opp.evidence.length?opp.evidence.map(source=>`<a href="${esc(source.url)}" target="_blank" rel="noopener"><strong>${esc(source.displayTitle||source.title)}</strong><small>${esc(source.displayDescription||source.description||source.title).slice(0,180)}</small></a>`).join(""):`<div class="evidence-none">No live public evidence was returned. LeadIntel has kept this as a low-evidence hypothesis instead of inventing support.</div>`}</div>
+    <div class="opportunity-meta"><span class="confidence ${opp.confidence.toLowerCase()}">${opp.confidence} confidence</span><span>${opp.evidence.length} evidence source${opp.evidence.length===1?"":"s"}</span></div>
+    <details class="opportunity-analysis"><summary>View detailed analysis</summary>
+      <p class="opportunity-hypothesis" lang="${contentLanguage()}">${esc(opp.hypothesis)}</p>
+      <div class="score-grid">${scoreCell("Fit",opp.score.fit)}${scoreCell("Intent",opp.score.intent)}${scoreCell("Timing",opp.score.timing)}${scoreCell("Value",opp.score.value)}${scoreCell("Evidence",opp.score.evidence)}</div>
+      <div class="evidence-links" lang="${contentLanguage()}">${opp.evidence.length?opp.evidence.map(source=>`<a href="${esc(source.url)}" target="_blank" rel="noopener"><strong>${esc(source.displayTitle||source.title)}</strong><small>${esc(source.displayDescription||source.description||source.title).slice(0,180)}</small></a>`).join(""):`<div class="evidence-none">No live public evidence was returned. LeadIntel has kept this as a low-evidence hypothesis instead of inventing support.</div>`}</div>
+    </details>
   </article>`).join("");
 }
 function renderResearchStatus(){
@@ -360,8 +362,32 @@ function renderResearchStatus(){
   else if(status==="partial")message=`Research partially complete · ${count} evidence sources · OpenAI signal discovery / Firecrawl verification had one or more unavailable requests.`;
   else if(status==="error")message="Public market research was unavailable. Profile-only hypotheses are shown with reduced Evidence scores.";
   $("market-research-status").textContent=message;
-  $("run-market-research").textContent=state.market.lastResearchAt?"Rerun market research ↻":"Run market research ↻";
+  $("run-market-research").textContent=LeadIntelMarket.getMarketJourneyState(state.market).researchLabel;
   $("run-market-research").disabled=status==="running";
+}
+
+function renderMarketJourney(){
+  const view=LeadIntelMarket.getMarketJourneyState(state.market);
+  const researchPanel=document.querySelector('.research-panel');
+  if(researchPanel)researchPanel.dataset.marketStage=view.stage;
+  $("research-results-details").hidden=!view.showScore;
+  $("strategy-activation-card").hidden=!view.showActivation;
+  $("monitoring-panel").hidden=!view.showMonitoring;
+  const activationButton=$("activate-market-strategy");
+  const title=$("strategy-activation-title");
+  const description=$("strategy-activation-description");
+  const step=$("strategy-activation-step");
+  if(view.stage==="active"){
+    step.textContent="Strategy active";
+    title.textContent="LeadIntel is ready to find matching companies";
+    description.textContent="Your approved customers, buying signals and market evidence now guide Discovery.";
+    activationButton.hidden=true;
+  }else{
+    step.textContent="Step 2 · Strategy activation";
+    title.textContent="Use these results as your market strategy";
+    description.textContent="This tells LeadIntel which customers, signals and opportunities to prioritize in Discovery.";
+    activationButton.hidden=false;
+  }
 }
 function renderResearchControls(){
   $("research-mode").value=state.market.researchMode||"quick";const deep=state.market.researchMode==="deep";document.querySelectorAll('#research-source-types input').forEach(input=>{input.disabled=!deep;if(!deep)input.checked=["news","tenders"].includes(input.value);});
@@ -393,7 +419,7 @@ function renderMarketStrategy(){
   $("strategy-activation-card").classList.toggle("approved",state.market.strategyApproved);
   $("activate-market-strategy").textContent=state.market.strategyApproved?"Strategy Active ✓":"Activate Market Strategy";
   $("activate-market-strategy").disabled=state.market.strategyApproved;
-  renderIcps();renderSignalDesigner();renderResearchControls();renderResearchStatus();renderResearchHistory();renderMarketOpportunities();renderMonitoringControls();loadMonitoringServerState();
+  renderIcps();renderSignalDesigner();renderResearchControls();renderResearchStatus();renderResearchHistory();renderMarketOpportunities();renderMonitoringControls();renderMarketJourney();loadMonitoringServerState();
 }
 function activateMarketStrategy(){
   readMarketEdits();
