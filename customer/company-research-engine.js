@@ -233,25 +233,33 @@
     ["Regulatory or compliance change",/regulation|compliance change|new standard|directive/i],["Supplier or partner change",/supplier change|new supplier|vendor change|partner search/i],
     ["Product or service launch",/new product|product launch|new service|service launch/i]
   ];
-  function taxonomyDraft(sources,library){
+  const LV_TAXONOMY=Object.freeze({
+    "Factories":"Ražotnes","Manufacturing":"Ražošanas uzņēmumi","Warehouses":"Noliktavas","Food production":"Pārtikas ražošana","Logistics":"Loģistika","Construction":"Būvniecība","Automotive":"Autobūve","Energy":"Enerģētika","Pharmaceutical":"Farmācija","Healthcare":"Veselības aprūpe","Retail":"Mazumtirdzniecība","Real estate":"Nekustamais īpašums","Hospitality":"Viesmīlība","Agriculture":"Lauksaimniecība",
+    "CEO":"Uzņēmumu vadītāji","Procurement Director":"Iepirkumu direktori","Procurement Manager":"Iepirkumu vadītāji","Production Director":"Ražošanas direktori","Production Manager":"Ražošanas vadītāji","Facility Manager":"Ēku un saimniecības vadītāji","Technical Director":"Tehniskie direktori","Operations Director":"Darbības direktori","Operations Manager":"Darbības vadītāji","Purchasing Manager":"Sagādes vadītāji","HR Director":"Personāla direktori","Managing Director":"Rīkotājdirektori",
+    "Custom solutions":"Pielāgoti risinājumi","Certified":"Sertificēts piedāvājums","ISO certified":"ISO sertifikācija","Fast delivery":"Ātra piegāde","Reliable delivery":"Uzticama piegāde","In-house capability":"Pašu uzņēmuma kompetence","Turnkey delivery":"Pilna cikla piegāde","Patented technology":"Patentēta tehnoloģija","Specialist expertise":"Specializēta kompetence",
+    "Facility expansion or new site":"Telpu paplašināšana vai jauna objekta izveide","Capital investment or modernization":"Kapitālieguldījumi vai modernizācija","Tender or procurement activity":"Iepirkums vai konkurss","Funding or investment":"Finansējums vai investīcijas","Strategic hiring":"Stratēģiska darbinieku piesaiste","New market or export expansion":"Jauna tirgus vai eksporta paplašināšana","Regulatory or compliance change":"Normatīvo vai atbilstības prasību izmaiņas","Supplier or partner change":"Piegādātāja vai partnera maiņa","Product or service launch":"Produkta vai pakalpojuma ieviešana"
+  });
+  function isLatvian(input={}){const language=clean(input.uiLanguage).toLowerCase();return language==='lv'||language.startsWith('lv-');}
+  function lvSourceText(value){const text=clean(value);return /[āčēģīķļņšūž]/i.test(text)||/\b(?:un|vai|ar|darba|biroja|mēbeles|noliktavu|ražotn|piegād|risinājum)\w*\b/i.test(text);}
+  function taxonomyDraft(sources,library,lv=false){
     const labels=[];const ids=[];
-    for(const [label,pattern] of library){const matched=matchingSourceIds(sources,[pattern]);if(matched.length){labels.push(label);ids.push(...matched);}}
+    for(const [label,pattern] of library){const matched=matchingSourceIds(sources,[pattern]);if(matched.length){labels.push(lv?(LV_TAXONOMY[label]||label):label);ids.push(...matched);}}
     return {value:unique(labels).slice(0,5).join("; "),ids:unique(ids).slice(0,6)};
   }
   function buildEvidenceDraft(input={}){
-    const sources=(input.sources||[]).filter(Boolean);const draft=Object.fromEntries(QUESTION_IDS.map(id=>[id,emptyDraftItem()]));
+    const sources=(input.sources||[]).filter(Boolean);const lv=isLatvian(input);const draft=Object.fromEntries(QUESTION_IDS.map(id=>[id,emptyDraftItem()]));
     const offers=offerFromTitles(sources);
-    if(offers.value)draft.priority_offers=item(offers.value,offers.ids,"Derived from official product/service page titles.",true);
+    if(offers.value&&(!lv||lvSourceText(offers.value)))draft.priority_offers=item(offers.value,offers.ids,lv?"Atvasināts no oficiālo produktu vai pakalpojumu lapu nosaukumiem.":"Derived from official product/service page titles.",true);
     else {
       const text=evidenceText(sources);const match=text.match(/(?:we (?:provide|offer|manufacture|design|deliver)|speciali[sz]e in)\s+([^.!?]{8,150})/i);
-      if(match){const ids=matchingSourceIds(sources,[new RegExp(match[1].slice(0,30).replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),"i")]);draft.priority_offers=item(match[1],ids,"Extracted from an explicit company offer statement.");}
+      if(match&&(!lv||lvSourceText(match[1]))){const ids=matchingSourceIds(sources,[new RegExp(match[1].slice(0,30).replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),"i")]);draft.priority_offers=item(match[1],ids,lv?"Iegūts no skaidri formulēta uzņēmuma piedāvājuma apraksta.":"Extracted from an explicit company offer statement.");}
     }
-    const industries=taxonomyDraft(sources,INDUSTRIES);
-    draft.ideal_customer=item(industries.value,industries.ids,"Industries/customer environments explicitly mentioned in collected evidence.");
-    draft.growth_markets=item(industries.value,industries.ids,"Segments explicitly mentioned in collected evidence; selected geography remains controlled in Step 1.");
-    const roles=taxonomyDraft(sources,ROLES);draft.buyer_roles=item(roles.value,roles.ids,"Buyer/job roles explicitly present in collected evidence.");
-    const differentiators=taxonomyDraft(sources,DIFFERENTIATORS);draft.differentiation=item(differentiators.value,differentiators.ids,"Explicit capability, certification or delivery claims found in evidence.");
-    const triggers=taxonomyDraft(sources,TRIGGERS);draft.buying_triggers=item(triggers.value,triggers.ids,"Commercial trigger language observed in collected evidence.");
+    const industries=taxonomyDraft(sources,INDUSTRIES,lv);
+    draft.ideal_customer=item(industries.value,industries.ids,lv?"Savāktajos pierādījumos tieši minētās nozares vai klientu darbības vide.":"Industries/customer environments explicitly mentioned in collected evidence.");
+    draft.growth_markets=item(industries.value,industries.ids,lv?"Pierādījumos tieši minētie segmenti; mērķa ģeogrāfiju lietotājs nosaka 1. solī.":"Segments explicitly mentioned in collected evidence; selected geography remains controlled in Step 1.");
+    const roles=taxonomyDraft(sources,ROLES,lv);draft.buyer_roles=item(roles.value,roles.ids,lv?"Pierādījumos tieši minētās pircēju vai amata lomas.":"Buyer/job roles explicitly present in collected evidence.");
+    const differentiators=taxonomyDraft(sources,DIFFERENTIATORS,lv);draft.differentiation=item(differentiators.value,differentiators.ids,lv?"Pierādījumos atrastie skaidri formulētie kompetences, sertifikācijas vai piegādes apgalvojumi.":"Explicit capability, certification or delivery claims found in evidence.");
+    const triggers=taxonomyDraft(sources,TRIGGERS,lv);draft.buying_triggers=item(triggers.value,triggers.ids,lv?"Savāktajos pierādījumos konstatētās komerciālo pirkšanas signālu pazīmes.":"Commercial trigger language observed in collected evidence.");
     return draft;
   }
 

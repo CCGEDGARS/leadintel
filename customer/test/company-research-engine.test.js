@@ -130,6 +130,19 @@ test('deterministic fallback is conservative and leaves unsupported commercial c
   assert.ok(draft.priority_offers.sourceIds.length>0);
 });
 
+test('Latvian deterministic fallback never inserts English taxonomy or offer prose',()=>{
+  const sources=[
+    {id:'S1',type:'website',url:'https://example.lv/',title:'Example | Office furniture and warehouse equipment',text:'Office furniture for factories and warehouses. Custom solutions, fast delivery and certified installation. Procurement managers usually lead the purchase.'}
+  ];
+  const draft=engine.buildEvidenceDraft({sources,targetMarkets:['Latvia'],uiLanguage:'lv'});
+  const visible=Object.values(draft).map(row=>row.value).filter(Boolean).join(' ');
+  assert.match(draft.ideal_customer.value,/Ražotnes|Noliktavas/);
+  assert.match(draft.buyer_roles.value,/Iepirkumu vadītāji/);
+  assert.match(draft.differentiation.value,/Pielāgoti risinājumi|Ātra piegāde/);
+  assert.equal(draft.priority_offers.value,'','an English page title must not leak into Latvian output');
+  assert.doesNotMatch(visible,/\b(?:Factories|Warehouses|Procurement Manager|Custom solutions|Fast delivery|Office furniture)\b/i);
+});
+
 test('source merge keeps official evidence first and caps persisted research safely',()=>{
   const official=[{type:'website',url:'https://acme-industrial.com/',title:'Home',text:'Official'}];
   const publicRows=Array.from({length:20},(_,i)=>({type:'public',url:`https://news.example/${i}`,title:`News ${i}`,text:`Evidence ${i}`}));

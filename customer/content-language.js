@@ -95,5 +95,40 @@
       if(generations.get(editor)===generation)targets.forEach(({node,readOnly})=>{if('readOnly' in node){node.readOnly=readOnly;locks.delete(node);}});
     }
   }
-  return {resolveLanguage,cacheKey,promptFor,validate,request,translateEditor};
+  const MARKET_FIELDS={icp:['name','description','targetMarkets','buyerRoles','offers','value','exclusions','rationale'],signal:['name','keywords','reason'],opportunity:['title','hypothesis','rationale']};
+  function marketContentSource(market={}){
+    const source={};
+    const add=(key,value)=>{const text=String(value||'').trim();if(text)source[key]=text;};
+    (market.icps||[]).forEach((item,index)=>MARKET_FIELDS.icp.forEach(field=>add(`icp.${index}.${field}`,item?.[field])));
+    (market.signals||[]).forEach((item,index)=>MARKET_FIELDS.signal.forEach(field=>add(`signal.${index}.${field}`,item?.[field])));
+    (market.opportunities||[]).forEach((item,index)=>{
+      MARKET_FIELDS.opportunity.forEach(field=>add(`opportunity.${index}.${field}`,item?.[field]));
+      add(`opportunity.${index}.marketLabel`,item?.marketLabel||item?.market);
+      (item?.evidence||[]).forEach((evidence,evidenceIndex)=>{
+        add(`opportunity.${index}.evidence.${evidenceIndex}.displayTitle`,evidence?.displayTitle||evidence?.title);
+        add(`opportunity.${index}.evidence.${evidenceIndex}.displayDescription`,evidence?.displayDescription||evidence?.description||evidence?.title);
+      });
+    });
+    return source;
+  }
+  function applyMarketContent(market={},translated={},language='en'){
+    const next=JSON.parse(JSON.stringify(market||{}));
+    const apply=(key,target,field)=>{if(typeof translated[key]==='string'&&translated[key].trim())target[field]=translated[key].trim();};
+    (next.icps||[]).forEach((item,index)=>MARKET_FIELDS.icp.forEach(field=>apply(`icp.${index}.${field}`,item,field)));
+    (next.signals||[]).forEach((item,index)=>MARKET_FIELDS.signal.forEach(field=>apply(`signal.${index}.${field}`,item,field)));
+    (next.opportunities||[]).forEach((item,index)=>{
+      MARKET_FIELDS.opportunity.forEach(field=>apply(`opportunity.${index}.${field}`,item,field));
+      apply(`opportunity.${index}.marketLabel`,item,'marketLabel');
+      (item.evidence||[]).forEach((evidence,evidenceIndex)=>{
+        apply(`opportunity.${index}.evidence.${evidenceIndex}.displayTitle`,evidence,'displayTitle');
+        apply(`opportunity.${index}.evidence.${evidenceIndex}.displayDescription`,evidence,'displayDescription');
+      });
+    });
+    next.contentLanguage=resolveLanguage(language);return next;
+  }
+  async function translateMarketState(root,workspace,market,language){
+    const source=marketContentSource(market);if(!Object.keys(source).length)return applyMarketContent(market,{},language);
+    return applyMarketContent(market,await request(root,workspace,resolveLanguage(language),source),language);
+  }
+  return {resolveLanguage,cacheKey,promptFor,validate,request,translateEditor,marketContentSource,applyMarketContent,translateMarketState};
 });
