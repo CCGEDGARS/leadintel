@@ -9,6 +9,7 @@
   const CONFIDENCE=new Set(["high","medium","low"]);
   const MAX_PUBLIC_QUERIES=3;
   const MAX_SOURCES=25;
+  const AUTHORITATIVE_CATEGORIES=Object.freeze(["company","offers","proof","delivery","contact"]);
 
   function clean(value){return String(value??"").replace(/\s+/g," ").trim();}
   function truncate(value,max=1200){const text=clean(value);return text.length>max?`${text.slice(0,max-1)}…`:text;}
@@ -43,6 +44,45 @@
     return candidates.slice(0,limit);
   }
 
+  function buildAuthoritativePageQueries(input={}){
+    const domain=hostname(input.website);if(!domain)return [];
+    const company=clean(input.companyName).slice(0,100);const identity=company?`"${company}" `:"";
+    return [
+      {id:"official-company",categories:["company","contact"],query:`site:${domain} ${identity}about company contact`},
+      {id:"official-offer",categories:["offers","delivery"],query:`site:${domain} ${identity}products services solutions delivery installation warranty`},
+      {id:"official-proof",categories:["proof"],query:`site:${domain} ${identity}projects references case studies customers`}
+    ];
+  }
+
+  const PAGE_CATEGORY_PATTERNS=Object.freeze({
+    contact:/\b(contact|contacts|kontakt|kontakti|sazin(?:āties|ieties)|rekvizīti|locations?|offices?)\b/i,
+    proof:/\b(case[- ]?stud(?:y|ies)|projects?|references?|customers?|clients?|projekti|realizētie|atsauksmes|klienti)\b/i,
+    delivery:/\b(delivery|installation|service|support|warranty|shipping|piegāde|uzstādīšana|serviss|garantija|apkalpošana)\b/i,
+    offers:/\b(products?|services?|solutions?|catalog|shop|produkti|pakalpojumi|risinājumi|katalogs|preces)\b/i,
+    company:/\b(about(?:[- ]us)?|company|history|mission|team|par[- ]?mums|uzņēmums|vēsture|komanda|misija)\b/i
+  });
+  function classifyPageCategory(source={},website=""){
+    if(AUTHORITATIVE_CATEGORIES.includes(source.pageCategory))return source.pageCategory;
+    const url=canonicalUrl(source.url);if(url&&url===canonicalUrl(website))return "company";
+    let path="";try{path=decodeURIComponent(new URL(url).pathname).replace(/[\/_-]+/g," ");}catch{}
+    const signal=clean(`${path} ${source.title||""}`);
+    for(const category of ["contact","proof","delivery","offers","company"]){if(PAGE_CATEGORY_PATTERNS[category].test(signal))return category;}
+    return "other";
+  }
+  function selectAuthoritativePageCandidates(rows=[],website="",requestedLimit=8){
+    const limit=Math.max(1,Math.min(10,Number(requestedLimit)||8));const selected=[];const seenUrls=new Set();const seenCategories=new Set();
+    for(const raw of rows||[]){
+      const item=normalizeSource(raw,"link",raw?.query||"");if(!item||!sameDomain(item.url,website))continue;
+      let pathname="";try{pathname=new URL(item.url).pathname;}catch{}
+      if(/\.(?:png|jpe?g|gif|webp|svg|ico|avif|bmp|css|js|map|woff2?|ttf|eot|pdf)$/i.test(pathname))continue;
+      const category=classifyPageCategory(item,website);if(category==="other"||seenCategories.has(category))continue;
+      const key=canonicalUrl(item.url);if(seenUrls.has(key))continue;
+      seenUrls.add(key);seenCategories.add(category);selected.push({...item,type:"link",pageCategory:category});
+      if(selected.length>=limit)break;
+    }
+    return selected;
+  }
+
   function rawResults(payload){
     if(Array.isArray(payload))return payload;
     if(Array.isArray(payload?.data))return payload.data;
@@ -57,7 +97,7 @@
     const rawText=row.markdown||row.content||row.description||row.snippet||row.text||"";
     const max=type==="public"?16000:30000;
     const text=String(rawText||"").replace(/\u0000/g,"").trim().slice(0,max);
-    return {type:["website","link","public"].includes(type)?type:"public",url,title,text,query:truncate(query,500),status:"ready"};
+    return {type:["website","link","public"].includes(type)?type:"public",url,title,text,query:truncate(query,500),status:"ready",pageCategory:AUTHORITATIVE_CATEGORIES.includes(row.pageCategory)?row.pageCategory:""};
   }
   function assignIds(rows){return rows.map((row,index)=>({...row,id:`S${index+1}`}));}
   function normalizeSearchResults(payload,queryMeta={}){
@@ -112,11 +152,27 @@
       supportingSeparated:supporting.every(source=>!sameDomain(source?.url,website)||source?.role!=="primary"),
       failures:Number(input.failures)||0
     };
-    const issues=[];if(!checks.websiteProvided)issues.push("Company website is missing.");
+    const categories=unique(primary.map(source=>classifyPageCategory(source,website)).filter(category=>AUTHORITATIVE_CATEGORIES.includes(category)));
+    const missing=AUTHORITATIVE_CATEGORIES.filter(category=>!categories.includes(category));
+    const minimumMet=categories.includes("company")&&categories.includes("offers")&&(categories.includes("proof")||categories.includes("delivery"));
+    const coverage={categories,missing,score:Math.round(categories.length/AUTHORITATIVE_CATEGORIES.length*100),minimumMet,total:AUTHORITATIVE_CATEGORIES.length};
+    const issues=[];const warnings=[];if(!checks.websiteProvided)issues.push("Company website is missing.");
     if(!checks.primaryDomainMatch)issues.push("Primary website evidence is missing.");
     if(!checks.readablePrimaryEvidence)issues.push("No readable primary evidence was collected.");
     if(!checks.noForeignPrimaryEvidence)issues.push("Foreign-domain evidence entered the primary evidence set.");
-    return {publishable:Boolean(checks.websiteProvided&&checks.primaryDomainMatch&&checks.readablePrimaryEvidence&&checks.noForeignPrimaryEvidence),checks,issues};
+    if(!categories.includes("offers"))warnings.push("Offer or service evidence is missing; commercial claims require review.");
+    if(!categories.includes("company"))warnings.push("Company-level identity evidence is missing.");
+    if(!categories.includes("proof")&&!categories.includes("delivery"))warnings.push("Project/reference or delivery evidence is missing; high confidence is not permitted.");
+    return {publishable:Boolean(checks.websiteProvided&&checks.primaryDomainMatch&&checks.readablePrimaryEvidence&&checks.noForeignPrimaryEvidence),checks,coverage,issues,warnings};
+  }
+
+  function capDraftConfidence(draft={},coverage={}){
+    if(coverage?.minimumMet)return draft;
+    const output={};for(const [id,row] of Object.entries(draft||{})){
+      if(!row||typeof row!=="object"){output[id]=row;continue;}
+      output[id]={...row,confidence:row.confidence==="high"?"medium":row.confidence,rationale:row.confidence==="high"?truncate(`${row.rationale||"Evidence found."} Authoritative company coverage incomplete; confidence capped.`,500):row.rationale};
+    }
+    return output;
   }
 
   function stripFence(text){return String(text||"").trim().replace(/^```(?:json)?\s*/i,"").replace(/\s*```$/," ").trim();}
@@ -236,5 +292,5 @@
     return {system,prompt};
   }
 
-  return {QUESTION_IDS,MAX_PUBLIC_QUERIES,MAX_SOURCES,RESEARCH_LIMITS,safeUrl,buildResearchQueries,normalizeSearchResults,mergeSources,filterResearchSources,evaluateResearchQuality,parseAiDraft,buildEvidenceDraft,mergeDraft,reviewActionState,deriveCompanyName,buildAiPrompt};
+  return {QUESTION_IDS,MAX_PUBLIC_QUERIES,MAX_SOURCES,RESEARCH_LIMITS,AUTHORITATIVE_CATEGORIES,safeUrl,buildResearchQueries,buildAuthoritativePageQueries,classifyPageCategory,selectAuthoritativePageCandidates,normalizeSearchResults,mergeSources,filterResearchSources,evaluateResearchQuality,capDraftConfidence,parseAiDraft,buildEvidenceDraft,mergeDraft,reviewActionState,deriveCompanyName,buildAiPrompt};
 });

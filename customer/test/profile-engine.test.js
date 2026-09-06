@@ -193,3 +193,22 @@ test('saved profiles receive structured evidence records during normalization', 
   assert.equal(state.profile.evidenceSources[0].scope,'product');
   assert.equal(state.profile.evidenceCoverage.level,'limited');
 });
+
+test('profile evidence coverage reports authoritative page categories and requires commercial breadth', () => {
+  const base={website:'https://acme.example/',targetMarkets:['Latvia'],answers:{...answers,priority_offers:'Industrial equipment'},documents:[]};
+  const broad=engine.buildCompanyIntelligenceProfile({...base,scrapedSources:[
+    {type:'website',url:'https://acme.example/',title:'Acme',text:'Acme provides industrial equipment.',pageCategory:'company'},
+    {type:'link',url:'https://acme.example/products',title:'Products',text:'Equipment and solutions.',pageCategory:'offers'},
+    {type:'link',url:'https://acme.example/projects',title:'Projects',text:'Completed customer projects.',pageCategory:'proof'}
+  ]});
+  assert.equal(broad.evidenceCoverage.level,'supported');
+  assert.deepEqual([...broad.evidenceCoverage.categories].sort(),['company','offers','proof']);
+  const narrow=engine.buildCompanyIntelligenceProfile({...base,scrapedSources:[
+    {type:'website',url:'https://acme.example/',title:'Acme',text:'Acme provides industrial equipment.',pageCategory:'company'}
+  ]});
+  assert.notEqual(narrow.evidenceCoverage.level,'supported');
+  const normalized=engine.normalizeSavedState({...base,profile:broad,scrapedSources:[
+    {type:'link',url:'https://acme.example/products',title:'Products',text:'Equipment and solutions.',pageCategory:'offers'}
+  ]});
+  assert.equal(normalized.scrapedSources[0].pageCategory,'offers');
+});

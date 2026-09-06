@@ -12,6 +12,57 @@ test('company research queries are domain-grounded and capped at three',()=>{
   assert.deepEqual(queries.map(item=>item.id),[...new Set(queries.map(item=>item.id))]);
 });
 
+test('authoritative page discovery covers the five company evidence areas with bounded domain queries',()=>{
+  const queries=engine.buildAuthoritativePageQueries({website:'https://www.acme-industrial.com/',companyName:'Acme Industrial'});
+  assert.equal(queries.length,3);
+  assert.ok(queries.every(item=>item.query.includes('site:acme-industrial.com')));
+  assert.deepEqual([...new Set(queries.flatMap(item=>item.categories))].sort(),['company','contact','delivery','offers','proof']);
+});
+
+test('authoritative page candidates stay on the verified domain and retain one best page per evidence area',()=>{
+  const rows=[
+    {url:'https://acme-industrial.com/about-us',title:'About Acme',text:'Our company and history'},
+    {url:'https://acme-industrial.com/products',title:'Products and solutions',text:'Industrial flooring products'},
+    {url:'https://acme-industrial.com/case-studies',title:'Customer projects',text:'Completed factory projects'},
+    {url:'https://acme-industrial.com/delivery',title:'Delivery and installation',text:'Installation and warranty service'},
+    {url:'https://acme-industrial.com/contact',title:'Contacts',text:'Contact our team'},
+    {url:'https://other.example/about',title:'Wrong company',text:'Foreign result'},
+    {url:'https://acme-industrial.com/logo.png',title:'Logo',text:'Asset'}
+  ];
+  const selected=engine.selectAuthoritativePageCandidates(rows,'https://acme-industrial.com/',8);
+  assert.deepEqual(selected.map(row=>row.pageCategory),['company','offers','proof','delivery','contact']);
+  assert.ok(selected.every(row=>new URL(row.url).hostname==='acme-industrial.com'));
+});
+
+test('commercial confidence requires company, offer and proof-or-delivery evidence',()=>{
+  const quality=engine.evaluateResearchQuality({
+    website:'https://acme-industrial.com/',
+    primary:[
+      {type:'website',url:'https://acme-industrial.com/',title:'Acme',text:'Official company evidence',pageCategory:'company'},
+      {type:'link',url:'https://acme-industrial.com/products',title:'Products',text:'Official products',pageCategory:'offers'},
+      {type:'link',url:'https://acme-industrial.com/projects',title:'Projects',text:'Customer projects',pageCategory:'proof'}
+    ]
+  });
+  assert.equal(quality.publishable,true);
+  assert.equal(quality.coverage.minimumMet,true);
+  assert.equal(quality.coverage.score,60);
+  const weak=engine.evaluateResearchQuality({
+    website:'https://acme-industrial.com/',
+    primary:[{type:'website',url:'https://acme-industrial.com/',title:'Acme',text:'Official company evidence',pageCategory:'company'}]
+  });
+  assert.equal(weak.publishable,true,'research remains reviewable even when commercial coverage is incomplete');
+  assert.equal(weak.coverage.minimumMet,false);
+  assert.ok(weak.warnings.some(item=>/offer/i.test(item)));
+});
+
+test('high AI confidence is capped while authoritative company coverage is incomplete',()=>{
+  const draft={priority_offers:{value:'Industrial flooring',confidence:'high',sourceIds:['S1'],rationale:'Official source'}};
+  const capped=engine.capDraftConfidence(draft,{minimumMet:false});
+  assert.equal(capped.priority_offers.confidence,'medium');
+  assert.match(capped.priority_offers.rationale,/coverage incomplete/i);
+  assert.equal(engine.capDraftConfidence(draft,{minimumMet:true}).priority_offers.confidence,'high');
+});
+
 test('public Firecrawl results are normalized, deduplicated and assigned valid source ids',()=>{
   const payload={data:[
     {url:'https://acme-industrial.com/cases',title:'Cases',markdown:'Factory flooring case studies'},
