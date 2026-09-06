@@ -228,8 +228,12 @@
 
           <section class="panel strategy-panel research-panel">
             <div class="market-research-head">
-              <div class="section-title"><span class="eyebrow">Step 1 · Market research</span><h3>Research your selected market</h3><p>LeadIntel checks public sources for buying signals and evidence. Start with the recommended quick research.</p></div>
-              <button class="primary-btn research-primary-action" id="run-market-research" type="button">Run quick research</button>
+              <div class="section-title"><span class="eyebrow">Step 1 · Market research</span><h3>Research your selected market</h3><p>LeadIntel checks public sources for buying signals and evidence. Choose a quick validation or a broader strategic assessment.</p></div>
+              <div class="research-actions">
+                <button class="primary-btn research-primary-action" id="run-market-research" type="button">Run quick research</button>
+                <button class="secondary-btn research-secondary-action" id="run-detailed-research" type="button">Run detailed research</button>
+                <small class="research-mode-hint">Quick is faster for validation. Detailed checks more queries and sources for strategic decisions.</small>
+              </div>
             </div>
             <div class="research-status" id="market-research-status">No market research run yet.</div>
             <details class="progressive-disclosure research-settings" id="research-settings">
@@ -276,7 +280,7 @@
   <script src="profile-engine.js?v=20260906-authoritative-depth-v1"></script>
   <script src="market-engine.js?v=20260906-progressive-market-v1"></script>
   <script src="discovery-engine.js?v=20260906-customer-pains-v1"></script>
-  <script type="module" src="app.js?v=20260906-pain-headings-v1"></script>
+  <script type="module" src="app.js?v=20260906-research-actions-v1"></script>
   <script src="language.js?v=20260905-audit-v1"></script>
   <script type="module" src="process-map.js?v=20260906-pain-headings-v1"></script>
   <script type="module" src="discovery-ui.js?v=20260906-customer-pains-v1"></script>

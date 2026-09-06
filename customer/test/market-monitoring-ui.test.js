@@ -12,8 +12,13 @@ test('market strategy exposes Quick and Deep research with transparent limits',(
   assert.match(html,/id="research-mode"/);
   assert.match(html,/value="quick"[\s\S]*Quick Research/);
   assert.match(html,/value="deep"[\s\S]*Deep Research/);
+  assert.match(html,/id="run-market-research"[^>]*>Run quick research</);
+  assert.match(html,/id="run-detailed-research"[^>]*>Run detailed research</);
+  assert.match(html,/class="research-mode-hint"/);
   assert.match(html,/id="research-source-types"/);
   assert.match(app,/RESEARCH_MODES\[state\.market\.researchMode\]/);
+  assert.match(app,/runMarketResearch\("quick"\)/);
+  assert.match(app,/runMarketResearch\("deep"\)/);
   assert.match(app,/appendResearchHistory/);
 });
 
