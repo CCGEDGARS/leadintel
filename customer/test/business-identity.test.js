@@ -86,6 +86,15 @@ test('Step 3 UI separates Business Identity, Commercial Positioning and Sales Me
   assert.match(ui,/Elevator pitch/i);
 });
 
+test('Competitive Advantages spans the complete Commercial Positioning grid', () => {
+  const ui = fs.readFileSync(path.join(__dirname,'..','business-identity.js'),'utf8');
+  const processMap = fs.readFileSync(path.join(__dirname,'..','process-map.js'),'utf8');
+  const shell = fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
+  assert.match(ui,/diff\.classList\.add\("wide","identity-wide"\)/);
+  assert.match(processMap,/business-identity\.js\?v=20260906-competitive-wide-v1/);
+  assert.match(shell,/process-map\.js\?v=20260906-competitive-wide-v1/);
+});
+
 
 test('Step 3 removes scraped navigation labels and repairs contaminated saved identity fields', () => {
   const contaminated = JSON.parse(JSON.stringify(input));
