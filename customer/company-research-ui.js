@@ -1,4 +1,5 @@
 import './company-research-engine.js?v=20260906-selector-language-v2';
+import './content-language.js?v=20260906-step2-language-v1';
 
 const MAIN_STORAGE_KEY='leadintel_customer_v2_state';
 const RESEARCH_META_KEY='leadintel_customer_v2_research_meta_v1';
@@ -19,6 +20,14 @@ function readMeta(){return readJson(RESEARCH_META_KEY,{});}
 function writeMeta(value){localStorage.setItem(RESEARCH_META_KEY,JSON.stringify(value));}
 function normalizeUrl(value){return engine()?.safeUrl(value)||'';}
 function selectedMarkets(state){return Array.isArray(state?.targetMarkets)?state.targetMarkets.map(value=>String(value||'').trim()).filter(Boolean):[];}
+function selectedContentLanguage(state=readState()){
+  const selected=String($('language-select')?.value||window.LeadIntelLanguage?.get?.()||state.uiLanguage||'lv').toLowerCase();
+  return engine().resolveResearchLanguage({selectorValue:selected,storedValue:state.uiLanguage,navigatorLanguages:navigator.languages||[]});
+}
+function translateResearchAnswers(){
+  const editor=$('step-2');if(!editor||!window.LeadIntelContentLanguage)return Promise.resolve(false);
+  return window.LeadIntelContentLanguage.translateEditor(window,editor,selectedContentLanguage()).then(()=>true);
+}
 function injectCss(){if(document.querySelector('link[data-leadintel-asset="company-research-css"]'))return;const link=document.createElement('link');link.rel='stylesheet';link.href=`company-research.css?v=${RELEASE}`;link.dataset.leadintelAsset='company-research-css';document.head.appendChild(link);}
 function toast(message){const node=$('toast');if(!node)return;node.textContent=message;node.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>node.classList.remove('show'),3000);}
 
@@ -119,7 +128,7 @@ async function aiDraftFor({website,targetMarkets,sources,documents,uiLanguage}){
     const response=await fetch(`${LEADINTEL_API}/api/ai/generate?workspace_id=${encodeURIComponent(workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({system:prompt.system,prompt:prompt.prompt,max_output_tokens:3200})});
     const payload=await response.json().catch(()=>({}));
     if(!response.ok)return {draft:null,mode:'evidence',reason:response.status===409?'No active AI provider configured.':payload.error||`AI unavailable (${response.status})`};
-    const docIds=(documents||[]).filter(doc=>String(doc?.text||'').trim()).slice(0,5).map((_,index)=>`D${index+1}`);const validIds=[...sources.map(source=>source.id),...docIds];const draft=engine().parseAiDraft(payload.text,validIds);
+    const docIds=(documents||[]).filter(doc=>String(doc?.text||'').trim()).slice(0,5).map((_,index)=>`D${index+1}`);const validIds=[...sources.map(source=>source.id),...docIds];const draft=engine().parseAiDraft(payload.text,validIds,uiLanguage);
     if(!Object.values(draft).some(row=>String(row?.value||'').trim()))return {draft:null,mode:'evidence',reason:'AI returned no additional evidence-backed fields.'};
     return {draft,mode:'ai',provider:payload.provider==='gemini'?'Google Gemini':payload.provider==='anthropic'?'Anthropic':'OpenAI',model:payload.model||''};
   }catch(error){return {draft:null,mode:'evidence',reason:error.message||'AI enrichment unavailable.'};}
@@ -130,7 +139,7 @@ function combineDrafts(fallback,ai){
 
 async function runCompanyResearch({rerun=false}={}){
   if(running)return;const researchEngine=engine();if(!researchEngine){toast('Research engine is still loading. Try again.');return;}
-  const state=readState();const selectedLanguage=String($('language-select')?.value||window.LeadIntelLanguage?.get?.()||state.uiLanguage||'lv').toLowerCase();const selectedContentLanguage=researchEngine.resolveResearchLanguage({selectorValue:selectedLanguage,storedValue:state.uiLanguage,navigatorLanguages:navigator.languages||[]});const website=normalizeUrl($('company-website')?.value||state.website);const markets=selectedMarkets(state);const additionalLinks=String($('additional-links')?.value||'').split(/\n/).map(normalizeUrl).filter(Boolean).slice(0,8);
+  const state=readState();const selectedLanguage=String($('language-select')?.value||window.LeadIntelLanguage?.get?.()||state.uiLanguage||'lv').toLowerCase();const researchLanguage=selectedContentLanguage(state);const website=normalizeUrl($('company-website')?.value||state.website);const markets=selectedMarkets(state);const additionalLinks=String($('additional-links')?.value||'').split(/\n/).map(normalizeUrl).filter(Boolean).slice(0,8);
   const error=$('step1-error');if(!website){if(error)error.textContent='Enter a valid company website.';return;}if(!markets.length){if(error)error.textContent='Choose at least one target market.';return;}if(error)error.textContent='';
   running=true;setResearchButtonBusy(true);const rerunButton=$('rerun-company-research');if(rerunButton)rerunButton.disabled=true;
   let failures=0;
@@ -156,7 +165,7 @@ async function runCompanyResearch({rerun=false}={}){
     const quality=researchEngine.evaluateResearchQuality({website,primary:research.primary,supporting:research.supporting,failures});
     if(!quality.publishable)throw new Error(`Research quality check failed: ${quality.issues.join(' ')}`);
     setProgress('Building evidence-backed context…',`${research.primary.length} primary and ${research.supporting.length} supporting sources passed the quality check.`);
-    const fallback=researchEngine.buildEvidenceDraft({sources:research.primary,targetMarkets:markets,uiLanguage:selectedContentLanguage});const ai=await aiDraftFor({website,targetMarkets:markets,sources:research.primary,documents:state.documents||[],uiLanguage:selectedContentLanguage});const draft=researchEngine.capDraftConfidence(combineDrafts(fallback,ai.draft),quality.coverage);const merged=researchEngine.mergeDraft(state.answers||{},draft,readMeta().fields||{});
+    const fallback=researchEngine.buildEvidenceDraft({sources:research.primary,targetMarkets:markets,uiLanguage:researchLanguage});const ai=await aiDraftFor({website,targetMarkets:markets,sources:research.primary,documents:state.documents||[],uiLanguage:researchLanguage});const draft=researchEngine.capDraftConfidence(combineDrafts(fallback,ai.draft),quality.coverage);const merged=researchEngine.mergeDraft(state.answers||{},draft,readMeta().fields||{});
     const latest=readState();if(JSON.stringify(latest.answers||{})!==JSON.stringify(state.answers||{})||latest.website!==state.website)throw new Error('Workspace changed during research. Your edits were preserved; rerun when ready.');
     const next={...state};next.uiLanguage=selectedLanguage;next.website=website;next.targetMarkets=markets;next.additionalLinks=additionalLinks;next.answers=merged.answers;
     next.scrapedSources=sources.map(source=>({type:source.type==='public'?'link':source.type,url:source.url,title:source.title,text:source.text,status:'ready',role:source.role||'supporting',pageCategory:source.pageCategory||researchEngine.classifyPageCategory(source,website)}));
@@ -176,8 +185,10 @@ function bind(){
   ensureResearchUi();
   $('to-questionnaire')?.addEventListener('click',interceptStepOne,{capture:true});
   document.getElementById('step-2')?.addEventListener('click',handleReviewAction);
-  window.addEventListener('leadintel:server-ready',renderResearchReview);
-  window.addEventListener('leadintel:workspace-changed',renderResearchReview);
+  window.addEventListener('leadintel:server-ready',()=>{renderResearchReview();void translateResearchAnswers();});
+  window.addEventListener('leadintel:workspace-changed',()=>{renderResearchReview();void translateResearchAnswers();});
+  window.addEventListener('leadintel:language-changed',()=>void translateResearchAnswers());
+  void translateResearchAnswers();
 }
 
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bind,{once:true});else bind();

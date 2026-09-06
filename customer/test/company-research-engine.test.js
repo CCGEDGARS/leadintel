@@ -2,6 +2,12 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const engine=require('../company-research-engine.js');
 
+test('Latvian company research rejects English AI field content',()=>{
+  const payload=JSON.stringify({fields:{priority_offers:{value:'Office furniture and warehouse equipment for companies in Latvia.',confidence:'high',source_ids:['S1'],rationale:'Supported by the official company website.'}}});
+  const parsed=engine.parseAiDraft(payload,['S1'],'lv');
+  assert.deepEqual(parsed,{});
+});
+
 const QUESTION_IDS=['priority_offers','ideal_customer','lookalike_customers','buyer_roles','growth_markets','differentiation','buying_triggers','exclusions','opportunity_value','success_outcome'];
 
 test('company research queries are domain-grounded and capped at three',()=>{
