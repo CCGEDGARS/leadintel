@@ -236,6 +236,13 @@ test('an abandoned persisted research run is recovered instead of remaining stuc
   assert.deepEqual(recovered.researchProgress,{completed:0,total:0});
 });
 
+test('research failures are normalized, bounded and preserved for an actionable error state',()=>{
+  const errors=Array.from({length:20},(_,index)=>({provider:index%2?'firecrawl':'openai',query:`Query ${index}`,message:index===0?'Request timed out':'Provider unavailable'}));
+  const state=Market.normalizeMarketState({researchStatus:'error',researchErrors:errors});
+  assert.equal(state.researchErrors.length,12);
+  assert.deepEqual(state.researchErrors[0],{provider:'openai',query:'Query 0',message:'Request timed out'});
+});
+
 test('timed research operations abort and reject instead of hanging forever',async()=>{
   let capturedSignal;
   await assert.rejects(
