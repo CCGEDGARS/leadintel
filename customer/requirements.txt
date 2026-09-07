@@ -1,4 +1,0 @@
-fastapi==0.117.1
-scrapling==0.4.15
-curl_cffi==0.16.3
-browserforge==1.2.4
