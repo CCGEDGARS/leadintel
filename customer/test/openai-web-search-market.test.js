@@ -24,6 +24,26 @@ test('OpenAI search waits for an actual server bridge instead of treating undefi
   assert.match(app,/if\(window\.LeadIntelServerBridge&&window\.LeadIntelServerBridge\.session!==null\)return window\.LeadIntelServerBridge/);
 });
 
+test('Market Research signs into the workspace before starting a degraded run and preserves the selected mode for resume',()=>{
+  const block=runMarketResearchBlock();
+  assert.match(app,/MARKET_RESEARCH_RESUME_KEY/);
+  assert.match(app,/async function ensureMarketResearchWorkspace\(/);
+  assert.match(app,/sessionStorage\.setItem\(MARKET_RESEARCH_RESUME_KEY/);
+  assert.match(app,/bridge\?\.signIn\?\.\(\)/);
+  assert.match(block,/await ensureMarketResearchWorkspace\(state\.market\.researchMode\)/);
+  assert.ok(block.indexOf('await ensureMarketResearchWorkspace(state.market.researchMode)')<block.indexOf('researchStatus="running"'),'authentication must be checked before the research run is marked running');
+});
+
+test('pending Market Research resumes only after an authenticated workspace is ready',()=>{
+  assert.match(app,/function resumePendingMarketResearchAfterAuth\(/);
+  assert.match(app,/sessionStorage\.getItem\(MARKET_RESEARCH_RESUME_KEY\)/);
+  assert.match(app,/bridge\?\.session\?\.authenticated/);
+  assert.match(app,/bridge\?\.workspace\?\.id/);
+  assert.match(app,/sessionStorage\.removeItem\(MARKET_RESEARCH_RESUME_KEY\)/);
+  assert.match(app,/runMarketResearch\(mode\)/);
+  assert.match(app,/leadintel:server-ready/);
+});
+
 test('each market query attempts OpenAI discovery and Firecrawl verification without invoking Apollo',()=>{
   const block=runMarketResearchBlock();
   assert.match(block,/searchOpenAiWeb\(query/);
