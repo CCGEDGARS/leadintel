@@ -13,6 +13,7 @@ const MAX_PDFS=5;
 const RESET_CONFIRM_WINDOW_MS=5000;
 const RESEARCH_REQUEST_TIMEOUT_MS=30000;
 const RESEARCH_CONCURRENCY=3;
+const MARKET_RESEARCH_RESUME_KEY="leadintel_customer_v2_market_research_resume";
 const profileFields=[
   ["companyOverview","Company overview",true],["priorityOffers","Priority offers",false],["idealCustomer","Ideal customer profile",false],["customerPainPoints","Customer Pain Points",true],
   ["lookalikeCustomers","Lookalike customers",false],["decisionMakers","Decision makers",false],["currentMarkets","Current market footprint",false],
@@ -278,6 +279,30 @@ async function waitForMarketServerBridge(timeout=1800){
   if(window.LeadIntelServerBridge&&window.LeadIntelServerBridge.session!==null)return window.LeadIntelServerBridge;
   return new Promise(resolve=>{let settled=false;const finish=()=>{if(settled)return;settled=true;window.removeEventListener("leadintel:server-ready",finish);resolve(window.LeadIntelServerBridge||null);};window.addEventListener("leadintel:server-ready",finish,{once:true});setTimeout(finish,timeout);});
 }
+async function ensureMarketResearchWorkspace(mode){
+  const selectedMode=normalizeResearchMode(mode);
+  const bridge=await waitForMarketServerBridge();
+  if(bridge?.session?.authenticated&&bridge?.workspace?.id){sessionStorage.removeItem(MARKET_RESEARCH_RESUME_KEY);return true;}
+  sessionStorage.setItem(MARKET_RESEARCH_RESUME_KEY,selectedMode);
+  showToast(`Sign in with Google to start ${researchModeUi(selectedMode).label}`);
+  try{
+    await bridge?.signIn?.();
+  }catch(error){
+    sessionStorage.removeItem(MARKET_RESEARCH_RESUME_KEY);
+    showToast(`Sign-in could not start · ${error.message}`);
+    return false;
+  }
+  void resumePendingMarketResearchAfterAuth();
+  return false;
+}
+async function resumePendingMarketResearchAfterAuth(){
+  const mode=sessionStorage.getItem(MARKET_RESEARCH_RESUME_KEY);if(!mode)return false;
+  const bridge=await waitForMarketServerBridge();
+  if(!bridge?.session?.authenticated||!bridge?.workspace?.id)return false;
+  sessionStorage.removeItem(MARKET_RESEARCH_RESUME_KEY);
+  void runMarketResearch(mode);
+  return true;
+}
 async function localizeMarketGeneratedContent({render=true}={}){
   if(!state.market?.opportunities?.length)return false;
   const language=contentLanguage();const bridge=await waitForMarketServerBridge();
@@ -379,10 +404,11 @@ function addSuggestedSources(){
 async function runMarketResearch(modeOverride=""){
   if(!state.profile){showToast("Add your website and target market so LeadIntel can build a profile first");return;}
   ensureMarketStrategySeeded();readMarketEdits();readResearchSettings();
-  const profile=researchProfile();
-  const selectedSources=state.market.researchSourceTypes;
   state.market.researchMode=normalizeResearchMode(modeOverride||$("research-mode").value);
   $("research-mode").value=state.market.researchMode;
+  if(!await ensureMarketResearchWorkspace(state.market.researchMode))return;
+  const profile=researchProfile();
+  const selectedSources=state.market.researchSourceTypes;
   const limits=LeadIntelMarket.RESEARCH_MODES[state.market.researchMode];
   const queries=LeadIntelMarket.buildResearchQueries(profile,state.market.signals,{mode:state.market.researchMode,sourceTypes:selectedSources,instructions:state.market.researchInstructions,language:contentLanguage()});
   if(!queries.length){showToast("Add a target market to improve research precision");return;}
@@ -588,6 +614,7 @@ function bind(){
   [$("icp-list"),$("market-opportunities")].forEach(container=>{container.addEventListener("change",()=>readMarketEdits());});
   $("signal-designer").addEventListener("change",()=>{readMarketEdits();renderResearchControls();renderMonitoringControls();});
   $("reset-workspace").addEventListener("click",resetWorkspace);
+  window.addEventListener("leadintel:server-ready",()=>{void resumePendingMarketResearchAfterAuth();});
   window.addEventListener("leadintel:language-changed",event=>{
     LeadIntelContentLanguage.applyLanguageSelection(state,event.detail?.language);
     marketTranslationGeneration++;
@@ -601,5 +628,6 @@ function init(){
   syncInputsFromState();bind();updateCompleteness();updateNavigationAvailability();observeNavigation();
   if(state.profile){$("analysis-state").hidden=true;$("profile-content").hidden=false;renderProfile();ensureMarketStrategySeeded();}
   setStep(state.step||1);
+  void resumePendingMarketResearchAfterAuth();
 }
 init();
