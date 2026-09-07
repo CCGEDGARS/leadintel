@@ -101,6 +101,7 @@ test('customer app wires live Firecrawl market search with explicit per-mode cos
   assert.match(app,/firecrawl-search/);
   assert.match(engine,/quick:Object\.freeze\(\{maxQueries:4,resultsPerQuery:5,maxStoredResults:20\}\)/);
   assert.match(engine,/deep:Object\.freeze\(\{maxQueries:12,resultsPerQuery:8,maxStoredResults:80\}\)/);
+  assert.match(engine,/intelligence:Object\.freeze\(\{maxQueries:24,resultsPerQuery:10,maxStoredResults:200\}\)/);
   assert.match(app,/LeadIntelMarket/);
 });
 
