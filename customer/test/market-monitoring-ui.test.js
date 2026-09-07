@@ -12,8 +12,8 @@ test('market strategy exposes Quick and Deep research with transparent limits',(
   assert.match(html,/id="research-mode"/);
   assert.match(html,/value="quick"[\s\S]*Quick Research/);
   assert.match(html,/value="deep"[\s\S]*Deep Research/);
-  assert.match(html,/id="run-market-research"[^>]*>Run quick research</);
-  assert.match(html,/id="run-detailed-research"[^>]*>Run detailed research</);
+  assert.match(html,/id="run-market-research"[^>]*>Review quick research</);
+  assert.match(html,/id="run-detailed-research"[^>]*>Review detailed research</);
   assert.match(html,/class="research-mode-hint"/);
   assert.match(html,/id="research-source-types"/);
   assert.match(html,/id="research-recommendations"/);
@@ -22,8 +22,8 @@ test('market strategy exposes Quick and Deep research with transparent limits',(
   assert.match(app,/RESEARCH_MODES\[state\.market\.researchMode\]/);
   assert.match(app,/buildResearchRecommendations/);
   assert.match(app,/researchCustomSources/);
-  assert.match(app,/runMarketResearch\("quick"\)/);
-  assert.match(app,/runMarketResearch\("deep"\)/);
+  assert.match(app,/openResearchPreview\("quick"\)/);
+  assert.match(app,/openResearchPreview\("deep"\)/);
   assert.match(app,/appendResearchHistory/);
 });
 
@@ -33,6 +33,25 @@ test('research settings explain source choices and accept user guidance before a
   assert.match(app,/function readResearchSettings/);
   assert.match(app,/researchInstructions/);
   assert.match(app,/searchCustomSource/);
+});
+
+test('research mode buttons open a review step before any network research starts',()=>{
+  for(const id of ['research-run-preview','research-preview-title','research-preview-scope','research-preview-sources','research-preview-queries','confirm-market-research','cancel-market-research','edit-research-settings'])assert.match(html,new RegExp(`id="${id}"`));
+  assert.match(app,/function openResearchPreview/);
+  assert.match(app,/function closeResearchPreview/);
+  assert.match(app,/openResearchPreview\("quick"\)/);
+  assert.match(app,/openResearchPreview\("deep"\)/);
+  assert.match(app,/runMarketResearch\(pendingResearchMode\)/);
+  assert.doesNotMatch(app,/\$\("run-market-research"\)\.addEventListener\("click",\(\)=>runMarketResearch/);
+});
+
+test('failed research keeps actionable diagnostics and clearly labels retry actions',()=>{
+  assert.match(html,/id="research-run-feedback"/);
+  assert.match(app,/researchErrors/);
+  assert.match(app,/Research run failed/);
+  assert.match(app,/Retry quick research/);
+  assert.match(app,/Retry detailed research/);
+  assert.match(app,/No public evidence was saved/);
 });
 
 test('market research cannot remain indefinitely busy and exposes live progress',()=>{
