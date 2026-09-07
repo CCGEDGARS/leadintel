@@ -1,7 +1,7 @@
 (function(root,factory){
   const api=factory();
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
-  if(root)root.LeadIntelCompanyBrain=api;
+  if(root){root.LeadIntelCompanyBrain=api;api.install(root);}
 })(typeof globalThis!=="undefined"?globalThis:this,function(){
   "use strict";
 
@@ -72,7 +72,7 @@
         "Commercial teams can lose time and opportunities when AI is not integrated into prospecting, analysis, content and sales workflows.",
         "Komercdarba komandas var zaudēt laiku un iespējas, ja AI nav integrēts prospektēšanā, analīzē, satura veidošanā un pārdošanas procesos."
       );
-      if(/process|system|methodolog|workflow|process|sistēm|metod|proces/i.test(text))add(
+      if(/process|system|methodolog|workflow|sistēm|metod|proces/i.test(text))add(
         "Sales and business processes can remain fragmented when teams lack one practical methodology and a repeatable implementation system.",
         "Pārdošanas un biznesa procesi var palikt sadrumstaloti, ja komandai nav vienotas praktiskas metodoloģijas un atkārtojamas ieviešanas sistēmas."
       );
@@ -89,6 +89,30 @@
       "Konkrētā klienta problēma vēl nav pietiekami pamatota; LeadIntel jāprasa apstiprinājums, pirms to uzskatīt par faktu."
     );
     return pains.slice(0,5);
+  }
+
+  function deriveFrameworks(profile={},input={},language="en",baseAnalysis={}){
+    const classification=profile.companyClassification||input.companyClassification||classifyCompany({...input,profile});
+    const lv=String(language).toLowerCase().startsWith("lv");
+    const offers=clean(profile.priorityOffers);
+    const customer=clean(profile.idealCustomer);
+    const differentiation=clean(profile.differentiation);
+    const explicitOutcome=clean(profile.buyingOutcomes);
+    let inferredOutcome="";
+    if(classification.businessType==="professional-services"){
+      const parts=[];
+      if(classification.offerCategories.includes("sales-training"))parts.push(lv?"augstāku pārdošanas efektivitāti, konsekventāku klientu pieredzi un labāku konversiju":"higher sales effectiveness, more consistent customer experience and stronger conversion");
+      if(classification.offerCategories.includes("coaching")||classification.offerCategories.includes("leadership-development"))parts.push(lv?"spēcīgāku vadītāju spēju attīstīt cilvēkus un sniegumu":"stronger manager capability to develop people and performance");
+      if(classification.offerCategories.includes("ai-consulting"))parts.push(lv?"ātrākus un efektīvākus AI atbalstītus komercdarba procesus":"faster and more effective AI-supported commercial workflows");
+      inferredOutcome=parts.join(lv?"; ":"; ");
+    }
+    const why=explicitOutcome||inferredOutcome||(lv?"Klienta vēlamais biznesa rezultāts vēl jāapstiprina.":"The customer's desired business outcome still needs confirmation.");
+    const how=differentiation||baseAnalysis?.frameworks?.goldenCircle?.how||(lv?"Metodoloģija un pierādījumi vēl jāprecizē.":"The methodology and proof still need clarification.");
+    const what=offers||baseAnalysis?.frameworks?.goldenCircle?.what||(lv?"Prioritārais piedāvājums vēl jāapstiprina.":"The priority offer still needs confirmation.");
+    const valueProposition=customer&&offers
+      ? (lv?`${profile.companyName||"Uzņēmums"} palīdz ${customer} sasniegt ${why}, nodrošinot ${offers}.`:`${profile.companyName||"The company"} helps ${customer} achieve ${why} through ${offers}.`)
+      : (lv?"Vērtības piedāvājumam nepieciešams apstiprināt ideālo klientu, piedāvājumu un vēlamo rezultātu.":"The value proposition requires confirmation of the ideal customer, offer and desired outcome.");
+    return {goldenCircle:{why,how,what},valueProposition,fab:{features:what,advantages:how,benefits:why}};
   }
 
   const SIGNALS={
@@ -133,5 +157,56 @@
     return "Recommended because the event matches the company's classified business model and supplied buying-trigger context.";
   }
 
-  return {claim,classifyCompany,derivePainPoints,recommendSignals};
+  function claimsForProfile(profile={},input={}){
+    const evidenceIds=(input.scrapedSources||[]).filter(item=>clean(item?.text)).slice(0,5).map((item,index)=>clean(item.id)||`E${index+1}`);
+    const confirmed=(value,answerKey)=>claim(value,clean(input?.answers?.[answerKey])?"confirmed":"inferred",clean(input?.answers?.[answerKey])?"high":"medium",evidenceIds);
+    return {
+      offers:confirmed(profile.priorityOffers,"priority_offers"),
+      idealCustomer:confirmed(profile.idealCustomer,"ideal_customer"),
+      differentiation:confirmed(profile.differentiation,"differentiation"),
+      buyingTriggers:confirmed(profile.buyingTriggers,"buying_triggers")
+    };
+  }
+
+  function install(root){
+    const engine=root?.LeadIntelProfile;if(!engine||engine.__companyBrainPatched)return engine;
+    const originalBuild=engine.buildCompanyIntelligenceProfile;
+    const originalNormalize=engine.normalizeSavedState;
+    const originalDerive=engine.deriveBusinessIdentity;
+    if(typeof originalBuild==="function")engine.buildCompanyIntelligenceProfile=function(input={}){
+      const profile=originalBuild(input);
+      const companyClassification=classifyCompany({...input,profile});
+      const companyClaims=claimsForProfile(profile,input);
+      const recommendedSignals=recommendSignals({...input,profile:{...profile,companyClassification},companyClassification});
+      const language=/^lv/i.test(input.uiLanguage||profile.identityLanguage||"")?"lv":(/[āčēģīķļņšūž]/i.test(allText({...input,profile}))?"lv":"en");
+      const customerPainPoints=derivePainPoints({...profile,companyClassification},{...input,companyClassification},language).join("\n\n");
+      const identity=typeof engine.deriveBusinessIdentity==="function"?engine.deriveBusinessIdentity({...profile,companyClassification,customerPainPoints},{...input,companyClassification}):null;
+      return {...profile,...(identity||{}),companyClassification,companyClaims,recommendedSignals,customerPainPoints,customerPainPointsStatus:"AI-inferred · review recommended",customerPainPointsLanguage:language};
+    };
+    if(typeof originalDerive==="function")engine.deriveBusinessIdentity=function(profile={},input={}){
+      const derived=originalDerive(profile,input);
+      const companyClassification=profile.companyClassification||classifyCompany({...input,profile});
+      const language=derived.identityLanguage||derived.analysis?.language||(/[āčēģīķļņšūž]/i.test(allText({...input,profile}))?"lv":"en");
+      const customerPainPoints=derivePainPoints({...profile,companyClassification},{...input,companyClassification},language).join("\n\n");
+      const frameworks=deriveFrameworks({...profile,companyClassification},{...input,companyClassification},language,derived.analysis||{});
+      return {...derived,customerPainPoints,customerPainPointsStatus:"AI-inferred · review recommended",customerPainPointsLanguage:language,analysis:{...(derived.analysis||{}),frameworks}};
+    };
+    if(typeof originalNormalize==="function")engine.normalizeSavedState=function(value={}){
+      const normalized=originalNormalize(value);
+      if(normalized.profile&&typeof normalized.profile==="object"){
+        const companyClassification=normalized.profile.companyClassification||classifyCompany({...normalized,profile:normalized.profile});
+        normalized.profile.companyClassification=companyClassification;
+        normalized.profile.companyClaims=normalized.profile.companyClaims||claimsForProfile(normalized.profile,normalized);
+        normalized.profile.recommendedSignals=recommendSignals({...normalized,profile:normalized.profile,companyClassification});
+        const language=normalized.profile.customerPainPointsLanguage||normalized.profile.identityLanguage||(/[āčēģīķļņšūž]/i.test(allText({...normalized,profile:normalized.profile}))?"lv":"en");
+        const generated=!normalized.profile.customerPainPointsStatus||normalized.profile.customerPainPointsStatus==="AI-inferred · review recommended";
+        if(generated){normalized.profile.customerPainPoints=derivePainPoints(normalized.profile,{...normalized,companyClassification},language).join("\n\n");normalized.profile.customerPainPointsStatus="AI-inferred · review recommended";normalized.profile.customerPainPointsLanguage=language;}
+      }
+      return normalized;
+    };
+    engine.__companyBrainPatched=true;
+    return engine;
+  }
+
+  return {claim,classifyCompany,derivePainPoints,deriveFrameworks,recommendSignals,install};
 });
