@@ -2,6 +2,7 @@ if(typeof window!=="undefined")void import('./company-brain.js?v=20260907-compan
 if(typeof window!=="undefined")void import('./market-research-ux.js?v=20260907-source-discovery-ux-v1');
 if(typeof window!=="undefined")void import('./market-research-guard.js?v=20260907-running-state-v2');
 if(typeof window!=="undefined")void import('./market-research-review-ux.js?v=20260907-review-ux-v1');
+if(typeof window!=="undefined")void import('./market-research-provider-resilience.js?v=20260907-provider-resilience-v1');
 if(typeof window!=="undefined")void import('./commercial-context-layout.js?v=20260907-card-system-v2');
 
 (function(root,factory){
