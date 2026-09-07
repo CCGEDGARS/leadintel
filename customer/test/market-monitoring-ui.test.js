@@ -16,10 +16,23 @@ test('market strategy exposes Quick and Deep research with transparent limits',(
   assert.match(html,/id="run-detailed-research"[^>]*>Run detailed research</);
   assert.match(html,/class="research-mode-hint"/);
   assert.match(html,/id="research-source-types"/);
+  assert.match(html,/id="research-recommendations"/);
+  assert.match(html,/id="research-instructions"/);
+  assert.match(html,/id="research-custom-sources"/);
   assert.match(app,/RESEARCH_MODES\[state\.market\.researchMode\]/);
+  assert.match(app,/buildResearchRecommendations/);
+  assert.match(app,/researchCustomSources/);
   assert.match(app,/runMarketResearch\("quick"\)/);
   assert.match(app,/runMarketResearch\("deep"\)/);
   assert.match(app,/appendResearchHistory/);
+});
+
+test('research settings explain source choices and accept user guidance before a run',()=>{
+  assert.match(html,/Why LeadIntel recommends these searches/);
+  assert.match(html,/Specific public URLs/);
+  assert.match(app,/function readResearchSettings/);
+  assert.match(app,/researchInstructions/);
+  assert.match(app,/searchCustomSource/);
 });
 
 test('activation exposes automatic monitoring configuration and alerts',()=>{
