@@ -6,7 +6,6 @@ from urllib.parse import urlparse
 
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
-from scrapling.fetchers import Fetcher
 
 app = FastAPI()
 MAX_TEXT_CHARS = 60000
@@ -14,6 +13,11 @@ MAX_TEXT_CHARS = 60000
 
 class ScrapeRequest(BaseModel):
     url: str
+
+
+def _fetcher():
+    from scrapling.fetchers import Fetcher
+    return Fetcher
 
 
 def _authorized(authorization: str | None) -> bool:
@@ -70,6 +74,7 @@ def scrape(payload: ScrapeRequest, authorization: str | None = Header(default=No
         raise HTTPException(status_code=401, detail="Unauthorized")
     url = _public_url(payload.url)
     try:
+        Fetcher = _fetcher()
         page = Fetcher.get(url, stealthy_headers=True, impersonate="chrome", timeout=30000)
         text = str(page.get_all_text(separator="\n", strip=True) or "").strip()
         if not text:

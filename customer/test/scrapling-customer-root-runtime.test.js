@@ -25,13 +25,15 @@ test('configured Vercel customer root owns the Scrapling function deployment',()
   assert.doesNotMatch(requirements,/scrapling\[fetchers\]|playwright|patchright/i,'serverless runtime must not install browser automation dependencies');
 });
 
-test('customer-root Scrapling runtime exposes GET health proof and protected POST extraction',()=>{
+test('customer-root Scrapling runtime exposes independent health proof and protected POST extraction',()=>{
   const runtime=fs.readFileSync(runtimePath,'utf8');
   assert.match(runtime,/@app\.get\(["']\/api\/scrapling["']\)/);
   assert.match(runtime,/@app\.post\(["']\/api\/scrapling["']\)/);
   assert.match(runtime,/scrapling-fallback/);
   assert.match(runtime,/SCRAPLING_SERVICE_TOKEN/);
   assert.match(runtime,/not ip\.is_global/);
+  assert.doesNotMatch(runtime,/^from scrapling\.fetchers import Fetcher$/m,'health route must not crash merely because the optional Fetcher stack cannot initialize');
+  assert.match(runtime,/def _fetcher\(\):[\s\S]*from scrapling\.fetchers import Fetcher/,'Fetcher must load lazily only for extraction');
 });
 
 test('private Scrapling runtime files are removed from the public static artifact',()=>{
