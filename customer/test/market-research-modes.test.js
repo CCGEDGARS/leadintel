@@ -1,6 +1,7 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const market=require('../market-engine.js');
+const ux=require('../market-research-ux.js');
 
 const profile={
   targetMarkets:'Latvia',
@@ -61,13 +62,14 @@ test('excluding the tender source also excludes tender signal terms from other c
   assert.ok(queries.every(item=>! /tender|procurement/i.test(item.query)));
 });
 
-test('Latvia source suggestions are specific, relevant and exclude disabled categories',()=>{
-  const suggestions=market.buildSuggestedSources(profile,signals,['news','jobs','investments'],'lv');
-  assert.ok(suggestions.length>=5);
-  assert.ok(suggestions.every(item=>/^https:\/\//.test(item.url)));
-  assert.ok(suggestions.every(item=>item.type!=='tenders'));
-  assert.ok(suggestions.some(item=>/liaa\.gov\.lv/.test(item.url)));
-  assert.ok(suggestions.some(item=>/cv\.lv/.test(item.url)));
+test('specific-site recommendations are owned by live source discovery rather than static country defaults',()=>{
+  assert.deepEqual(ux.sourceDiscoveryPolicy('quick'),{mode:'automatic',maxSites:0,grouped:false});
+  assert.deepEqual(ux.sourceDiscoveryPolicy('deep'),{mode:'discover-before-run',maxSites:8,grouped:false});
+  assert.deepEqual(ux.sourceDiscoveryPolicy('intelligence'),{mode:'discover-before-run',maxSites:15,grouped:true});
+  assert.deepEqual(ux.buildSourceDiscoveryQueries(profile,{signals},'quick'),[]);
+  const liveQueries=ux.buildSourceDiscoveryQueries(profile,{signals},'deep');
+  assert.equal(liveQueries.length,3);
+  assert.ok(liveQueries.every(query=>/Latvia/i.test(query)));
 });
 
 test('Latvian planned searches do not inject English source terminology',()=>{
