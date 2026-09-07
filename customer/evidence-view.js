@@ -1,3 +1,5 @@
+import './company-brain.js?v=20260907-company-brain-v1';
+
 (function(root,factory){
   const api=factory();
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
