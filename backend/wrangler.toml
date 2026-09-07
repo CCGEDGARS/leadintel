@@ -9,6 +9,7 @@ CUSTOMER_APP_URL = "https://leadintel.ccgroup.lv/customer/"
 GOOGLE_OAUTH_REDIRECT_URI = "https://leadintel-api.edgars-7e7.workers.dev/api/auth/google/callback"
 GMAIL_OAUTH_REDIRECT_URI = "https://leadintel-api.edgars-7e7.workers.dev/api/integrations/gmail/callback"
 APOLLO_WEBHOOK_URL = "https://leadintel-api.edgars-7e7.workers.dev/api/webhooks/apollo/crm-contact"
+SCRAPLING_SERVICE_URL = "https://leadintel-scrapling.onrender.com/api/scrapling"
 
 # Secrets are configured with `wrangler secret put` and are never committed:
 # GOOGLE_OAUTH_CLIENT_ID
@@ -16,6 +17,7 @@ APOLLO_WEBHOOK_URL = "https://leadintel-api.edgars-7e7.workers.dev/api/webhooks/
 # OAUTH_TOKEN_ENCRYPTION_KEY (base64-encoded 32-byte AES key)
 # APOLLO_API_KEY
 # APOLLO_WEBHOOK_SECRET (optional dedicated callback-signing key; Apollo API key can be used as the server-side fallback)
+# SCRAPLING_SERVICE_TOKEN (must match the protected Render service token)
 
 [assets]
 directory = "../v2"
