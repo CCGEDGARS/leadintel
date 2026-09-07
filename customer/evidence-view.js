@@ -1,4 +1,3 @@
-import './opportunity-led-icp.js?v=20260907-opportunity-led-v1';
 if(typeof window!=="undefined")void import('./company-brain.js?v=20260907-company-brain-v1');
 if(typeof window!=="undefined")void import('./market-research-ux.js?v=20260907-source-discovery-ux-v1');
 if(typeof window!=="undefined")void import('./market-research-guard.js?v=20260907-running-state-v2');
