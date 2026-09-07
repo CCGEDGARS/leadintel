@@ -14,6 +14,18 @@ test('translation validates all fields and rejects missing or extra output',()=>
   assert.throws(()=>language.validate(source,{f0:'Laboratorijas pārbaudes',f1:'12 mēneši'}));
   assert.deepEqual(language.validate(source,{f0:'Laboratorijas pārbaudes',f1:'24 mēneši'}),{f0:'Laboratorijas pārbaudes',f1:'24 mēneši'});
 });
+test('translation accepts locale-only thousands separator changes but still rejects changed numeric facts',()=>{
+  assert.deepEqual(
+    language.validate({f0:'15,000+ sales visits'},{f0:'15 000+ pārdošanas vizīšu'},'lv'),
+    {f0:'15 000+ pārdošanas vizīšu'}
+  );
+  assert.deepEqual(
+    language.validate({f0:'Revenue €1,250,000 and 24 months'},{f0:'Ieņēmumi €1 250 000 un 24 mēneši'},'lv'),
+    {f0:'Ieņēmumi €1 250 000 un 24 mēneši'}
+  );
+  assert.throws(()=>language.validate({f0:'15,000+ sales visits'},{f0:'15 500+ pārdošanas vizīšu'},'lv'),/numeric facts/);
+  assert.throws(()=>language.validate({f0:'24 months'},{f0:'25 mēneši'},'lv'),/numeric facts/);
+});
 test('workspace and language isolate translation cache entries',()=>{
   assert.notEqual(language.cacheKey('one','lv',{f0:'Testing'}),language.cacheKey('two','lv',{f0:'Testing'}));
   assert.notEqual(language.cacheKey('one','en',{f0:'Testing'}),language.cacheKey('one','lv',{f0:'Testing'}));
