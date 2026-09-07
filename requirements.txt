@@ -1,0 +1,2 @@
+fastapi==0.117.1
+scrapling[fetchers]==0.4.15
