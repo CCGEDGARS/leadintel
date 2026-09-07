@@ -1,5 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "bash scripts/build-vercel-static.sh",
-  "outputDirectory": ".vercel-static"
+  "outputDirectory": ".vercel-static",
+  "functions": {
+    "api/**/*.py": {
+      "maxDuration": 60
+    }
+  }
 }
