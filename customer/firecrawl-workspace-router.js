@@ -14,7 +14,7 @@ function rewriteTarget(input){
   const {authenticated,workspace}=workspaceContext();if(!authenticated)return null;
   return `${API_BASE}/api/integrations/services/firecrawl/${kind}?workspace_id=${encodeURIComponent(workspace.id)}`;
 }
-function retryableStatus(status){return status===408||status===429||status>=500;}
+function retryableStatus(status){return status===404||status===408||status===429||status>=500;}
 function scraplingTarget(kind){
   if(kind!=='scrape')return '';
   const {authenticated,workspace}=workspaceContext();if(!authenticated)return '';
