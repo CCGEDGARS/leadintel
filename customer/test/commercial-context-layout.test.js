@@ -5,22 +5,41 @@ const path=require('node:path');
 
 const read=name=>fs.readFileSync(path.join(__dirname,'..',name),'utf8');
 
-test('commercial context uses two balanced columns for market focus, pains, buying situations and objective',()=>{
-  const ui=read('business-identity.js');
-  const app=read('app.js');
+test('commercial context layout defines two balanced paired rows',()=>{
+  const layout=require('../commercial-context-layout.js');
+  assert.deepEqual(layout.COMMERCIAL_CONTEXT_PAIRS,[
+    ['marketFocus','customerPainPoints'],
+    ['buyingTriggers','commercialObjective']
+  ]);
+});
 
-  assert.match(ui,/"currentMarkets","targetMarkets","marketFocus","customerPainPoints","buyingTriggers","commercialObjective"/,
-    'Market Focus must pair with Customer Pain Points, followed by Buying Situations paired with Commercial Objective');
-  assert.doesNotMatch(ui,/identity-customerPainPoints\{grid-column:1\/-1\}/,
-    'Customer Pain Points must no longer span both columns');
-  assert.match(ui,/painField\.classList\.remove\(['"]wide['"],['"]identity-wide['"]\)/,
-    'Customer Pain Points must explicitly drop inherited full-width classes');
-  assert.match(ui,/buyingTriggersField\?\.classList\.remove\(['"]wide['"],['"]identity-wide['"]\)/,
-    'Buying Situations must be half width');
-  assert.match(ui,/commercialObjectiveField\?\.classList\.remove\(['"]wide['"],['"]identity-wide['"]\)/,
-    'Commercial Objective must be half width');
+test('commercial context runtime removes full-width classes and moves paired fields together',()=>{
+  const layout=require('../commercial-context-layout.js');
+  const calls=[];
+  const makeNode=key=>({
+    key,
+    classList:{remove:(...names)=>calls.push(['remove',key,...names]),add:(...names)=>calls.push(['add',key,...names])},
+    after:node=>calls.push(['after',key,node.key])
+  });
+  const nodes=Object.fromEntries(['marketFocus','customerPainPoints','buyingTriggers','commercialObjective'].map(key=>[key,makeNode(key)]));
+  const root={document:{querySelector:selector=>{
+    const match=selector.match(/data-profile-field="([^"]+)"/);
+    const node=match?nodes[match[1]]:null;
+    return node?{closest:()=>node}:null;
+  }}};
 
-  assert.match(app,/\["customerPainPoints","Customer Pain Points",false\]/);
-  assert.match(app,/\["buyingTriggers","Buying situations \/ triggers",false\]/);
-  assert.match(app,/\["commercialObjective","6–12 month commercial objective",false\]/);
+  assert.equal(layout.applyLayout(root),true);
+  assert.deepEqual(calls.filter(row=>row[0]==='after'),[
+    ['after','marketFocus','customerPainPoints'],
+    ['after','buyingTriggers','commercialObjective']
+  ]);
+  for(const key of ['marketFocus','customerPainPoints','buyingTriggers','commercialObjective']){
+    assert.ok(calls.some(row=>row[0]==='remove'&&row[1]===key&&row.includes('wide')&&row.includes('identity-wide')));
+    assert.ok(calls.some(row=>row[0]==='add'&&row[1]===key&&row.includes('commercial-context-half')));
+  }
+});
+
+test('commercial context layout is loaded by the customer shell',()=>{
+  const evidenceView=read('evidence-view.js');
+  assert.match(evidenceView,/commercial-context-layout\.js/);
 });
