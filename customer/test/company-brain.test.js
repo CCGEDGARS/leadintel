@@ -54,3 +54,27 @@ test('claims preserve status confidence and evidence references',()=>{
     value:'Corporate sales training',status:'confirmed',confidence:'high',evidenceIds:['E1']
   });
 });
+
+test('runtime patch upgrades Step 3 profile without warehouse contamination or generic B2B signals',()=>{
+  const LeadIntelProfile={
+    buildCompanyIntelligenceProfile(input){return {...input.profile,buyingTriggers:input.answers?.buying_triggers||''};},
+    normalizeSavedState(value){return value;},
+    deriveBusinessIdentity(profile){return {
+      identityLanguage:'en',
+      customerPainPoints:'legacy generated pain',
+      analysis:{language:'en',frameworks:{goldenCircle:{why:'legacy',how:profile.differentiation,what:profile.priorityOffers},fab:{features:profile.priorityOffers,advantages:profile.differentiation,benefits:'legacy'},valueProposition:'legacy'}}
+    };}
+  };
+  Brain.install({LeadIntelProfile});
+  const profile=LeadIntelProfile.buildCompanyIntelligenceProfile(ccgroupInput);
+  assert.equal(profile.companyClassification.businessType,'professional-services');
+  assert.doesNotMatch(profile.customerPainPoints.toLowerCase(),/warehouse|workshop|storage|retrieval/);
+  const ids=profile.recommendedSignals.map(signal=>signal.id);
+  assert.ok(ids.includes('sales-leadership-change'));
+  assert.ok(!ids.includes('facility-expansion'));
+  assert.ok(!ids.includes('capital-investment'));
+  assert.ok(!ids.includes('tender'));
+  const identity=LeadIntelProfile.deriveBusinessIdentity(profile,ccgroupInput);
+  assert.doesNotMatch(identity.analysis.frameworks.goldenCircle.why.toLowerCase(),/warehouse|workshop|storage/);
+  assert.match(identity.analysis.frameworks.goldenCircle.why.toLowerCase(),/sales|manager|commercial|ai/);
+});
