@@ -16,9 +16,12 @@ test('Vercel builds a safe static artifact instead of exposing the repository ro
   assert.equal(fs.existsSync(buildScriptPath), true);
   const config = JSON.parse(fs.readFileSync(vercelConfigPath, 'utf8'));
   const buildScript = fs.readFileSync(buildScriptPath, 'utf8');
+  const staticBuild = Array.isArray(config.builds)
+    ? config.builds.find(item => item.src === 'package.json' && item.use === '@vercel/static-build')
+    : null;
 
-  assert.equal(config.buildCommand, 'bash scripts/build-vercel-static.sh');
-  assert.equal(config.outputDirectory, '.vercel-static');
+  assert.ok(staticBuild, 'Vercel must explicitly allowlist the static build');
+  assert.equal(staticBuild.config?.distDir, '.vercel-static');
   assert.match(buildScript, /mkdir -p \.vercel-static\/v2 \.vercel-static\/customer/);
   assert.match(buildScript, /cp -R customer\/\. \.vercel-static\/customer\//);
   assert.match(buildScript, /cp -R v2\/\. \.vercel-static\/v2\//);
@@ -29,7 +32,7 @@ test('Vercel build remains deployable if project Root Directory is customer', ()
   assert.equal(
     fs.existsSync(customerRootBuildScriptPath),
     true,
-    'customer-root compatibility wrapper must exist so the configured build command cannot fail with scripts/build-vercel-static.sh: No such file or directory'
+    'customer-root compatibility wrapper must exist so the static build remains recoverable if Root Directory is customer'
   );
   const wrapper = fs.readFileSync(customerRootBuildScriptPath, 'utf8');
   assert.match(wrapper, /git rev-parse --show-toplevel/);
