@@ -46,13 +46,13 @@
 
   function marketContext(profile={}){
     const markets=splitList(profile.targetMarkets||profile.researchMarkets||profile.currentMarkets).join(" ")||"priority market";
-    const focus=clean(profile.marketFocus)||splitList(profile.priorityOffers).slice(0,3).join("; ")||"commercial opportunities";
+    const focus=splitList(profile.priorityOffers).slice(0,3).join("; ")||clean(profile.marketFocus)||"commercial opportunities";
     const customer=clean(profile.idealCustomer)||"best-fit B2B customers";
     return {markets,focus,customer};
   }
 
   function activeSignalTerms(market={}){
-    return (market.signals||[]).filter(item=>item&&item.active!==false&&!/tender|procurement|iepirkum/i.test(`${clean(item.name)} ${clean(item.keywords)}`))
+    return (market.signals||[]).filter(item=>item&&item.active!==false)
       .sort((a,b)=>Number(b.weight||0)-Number(a.weight||0))
       .slice(0,5)
       .map(item=>clean(item.keywords)||clean(item.name))
@@ -118,7 +118,7 @@
   function marketCardView(opportunity={},profile={}){
     return {
       market:clean(opportunity.marketLabel||opportunity.market)||splitList(profile.targetMarkets||profile.currentMarkets)[0]||"Selected market",
-      commercialFocus:clean(profile.marketFocus)||splitList(profile.priorityOffers).slice(0,3).join("; "),
+      commercialFocus:splitList(profile.priorityOffers).slice(0,3).join("; ")||clean(profile.marketFocus),
       targetCustomers:clean(profile.idealCustomer),
       status:opportunity.profileOnly?"Not researched yet":"Researched",
       showScore:!opportunity.profileOnly
@@ -126,7 +126,7 @@
   }
 
   function renderSourceCard(item={}){
-    return `<label class="source-discovery-card"><input type="checkbox" data-suggested-source value="${esc(item.url)}"><span><strong>${esc(item.name||item.hostname||item.url)}</strong><small>${esc(item.reason||"Relevant live-discovered source.")}</small><code>${esc(item.url)}</code></span></label>`;
+    return `<label class="source-discovery-card"><input type="checkbox" data-suggested-source="true" value="${esc(item.url)}"><span><strong>${esc(item.name||item.hostname||item.url)}</strong><small>${esc(item.reason||"Relevant live-discovered source.")}</small><code>${esc(item.url)}</code></span></label>`;
   }
 
   function renderDiscoveredSources(items=[],mode="deep"){
@@ -168,6 +168,15 @@
     root.document.head.appendChild(style);
   }
 
+  function suppressLegacySuggestions(root){
+    try{
+      if(root.LeadIntelMarket?.buildSuggestedSources&&!root.LeadIntelMarket.__liveSourceDiscoveryOwned){
+        root.LeadIntelMarket.buildSuggestedSources=()=>[];
+        root.LeadIntelMarket.__liveSourceDiscoveryOwned=true;
+      }
+    }catch{}
+  }
+
   function ensureModeChoices(root){
     const parent=root.document.querySelector(".research-actions");if(!parent)return;
     for(const [mode,id] of Object.entries(BUTTONS)){
@@ -175,9 +184,10 @@
       let wrapper=button.closest(".research-mode-choice");
       if(!wrapper){wrapper=root.document.createElement("div");wrapper.className="research-mode-choice";button.before(wrapper);wrapper.appendChild(button);}
       let desc=wrapper.querySelector(".research-mode-description");if(!desc){desc=root.document.createElement("div");desc.className="research-mode-description";wrapper.appendChild(desc);}
-      desc.textContent=MODE_COPY[mode].description;
-      if(!/^Researching…$/i.test(clean(button.textContent)))button.textContent=MODE_COPY[mode].label;
-      button.setAttribute("aria-describedby",`${id}-description`);desc.id=`${id}-description`;
+      if(desc.textContent!==MODE_COPY[mode].description)desc.textContent=MODE_COPY[mode].description;
+      if(!/^Researching…$/i.test(clean(button.textContent))&&button.textContent!==MODE_COPY[mode].label)button.textContent=MODE_COPY[mode].label;
+      if(button.getAttribute("aria-describedby")!==`${id}-description`)button.setAttribute("aria-describedby",`${id}-description`);
+      if(desc.id!==`${id}-description`)desc.id=`${id}-description`;
     }
   }
 
@@ -188,17 +198,29 @@
       card.querySelector(".opportunity-total")?.remove();
       const title=card.querySelector("h4");
       const view=marketCardView({market:markets[index]||markets[0]||"Selected market",profileOnly:true},profile);
-      if(title)title.textContent=view.market;
+      if(title&&title.textContent!==view.market)title.textContent=view.market;
       let context=card.querySelector(".pre-research-context");if(!context){context=root.document.createElement("div");context.className="pre-research-context";(title?.parentElement||card).appendChild(context);}
       const focus=view.commercialFocus||"Commercial focus not yet defined";const customer=view.targetCustomers||"Target customers not yet defined";
-      context.innerHTML=`<div><small>Commercial focus</small><span>${esc(focus)}</span></div><div><small>Target customers</small><span>${esc(customer)}</span></div>`;
+      const html=`<div><small>Commercial focus</small><span>${esc(focus)}</span></div><div><small>Target customers</small><span>${esc(customer)}</span></div>`;
+      if(context.innerHTML!==html)context.innerHTML=html;
     });
   }
 
+  async function waitForBridge(root,timeoutMs=3000){
+    const started=Date.now();
+    while(Date.now()-started<timeoutMs){
+      if(root.LeadIntelServerBridge)return root.LeadIntelServerBridge;
+      await new Promise(resolve=>root.setTimeout(resolve,50));
+    }
+    return root.LeadIntelServerBridge||null;
+  }
+
   async function discoverSources(root,mode){
-    const state=readState(root),profile=state.profile||{},market=state.market||{};const queries=buildSourceDiscoveryQueries(profile,market,mode);
+    const state=readState(root),profile={...(state.profile||{})},market=state.market||{};
+    if(!profile.targetMarkets&&state.targetMarkets)profile.targetMarkets=state.targetMarkets;
+    const queries=buildSourceDiscoveryQueries(profile,market,mode);
     if(!queries.length)return {items:[],unavailable:false};
-    const bridge=root.LeadIntelServerBridge;
+    const bridge=await waitForBridge(root);
     if(!bridge?.session?.authenticated||!bridge?.workspace?.id)return {items:[],unavailable:true,reason:"Sign in to discover specific market sources."};
     const payloads=[];
     for(const query of queries){
@@ -235,13 +257,16 @@
   function install(root){
     if(!root?.document)return false;if(root.__LeadIntelMarketResearchUxInstalled)return true;root.__LeadIntelMarketResearchUxInstalled=true;
     injectCss(root);
-    const refresh=()=>{ensureModeChoices(root);cleanPreResearchCards(root);};
-    const start=()=>{refresh();const docObserver=new root.MutationObserver(mutations=>{
-      let previewChanged=false;
-      for(const mutation of mutations){if(mutation.target?.id==="research-run-preview"||mutation.target?.closest?.("#research-run-preview"))previewChanged=true;}
-      refresh();if(previewChanged||!root.document.getElementById("research-run-preview")?.hidden)void updatePreviewSources(root);
-    });docObserver.observe(root.document.body,{childList:true,subtree:true,attributes:true,attributeFilter:["hidden"]});
-    root.document.addEventListener("click",event=>{if(event.target?.closest?.("#run-market-research,#run-detailed-research,#run-market-intelligence"))root.setTimeout(()=>void updatePreviewSources(root),0);});
+    const refresh=()=>{suppressLegacySuggestions(root);ensureModeChoices(root);cleanPreResearchCards(root);};
+    const start=()=>{
+      refresh();
+      const docObserver=new root.MutationObserver(mutations=>{
+        const preview=root.document.getElementById("research-run-preview");
+        const opened=mutations.some(mutation=>mutation.type==="attributes"&&mutation.attributeName==="hidden"&&mutation.target===preview&&!preview?.hidden);
+        refresh();if(opened)void updatePreviewSources(root);
+      });
+      docObserver.observe(root.document.body,{childList:true,subtree:true,attributes:true,attributeFilter:["hidden"]});
+      root.document.addEventListener("click",event=>{if(event.target?.closest?.("#run-market-research,#run-detailed-research,#run-market-intelligence"))root.setTimeout(()=>void updatePreviewSources(root),0);});
     };
     if(root.document.readyState==="loading")root.document.addEventListener("DOMContentLoaded",start,{once:true});else start();
     return true;
