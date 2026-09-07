@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=20260826-target-market-v1">
-  <link rel="stylesheet" href="market.css?v=20260906-progressive-market-v1">
+  <link rel="stylesheet" href="market.css?v=20260907-research-brief-v1">
   <link rel="stylesheet" href="premium.css?v=20260826-target-market-v1">
   <link rel="stylesheet" href="market-selector.css?v=20260826-target-market-v1">
   <link rel="stylesheet" href="compact-sources.css?v=20260826-compact-sources-v1">
@@ -238,6 +238,11 @@
             <div class="research-status" id="market-research-status">No market research run yet.</div>
             <details class="progressive-disclosure research-settings" id="research-settings">
               <summary>Customize research settings</summary>
+              <div class="research-brief">
+                <div class="research-recommendation-card"><strong>Why LeadIntel recommends these searches</strong><p>AI-generated guidance explains why each selected source category is relevant to your profile, offers and buying signals.</p><div id="research-recommendations" class="research-recommendations"></div></div>
+                <label class="research-guidance"><span>Research recommendations or questions</span><textarea id="research-instructions" rows="3" maxlength="1200" placeholder="Example: Focus on Latvian public-sector tenders and companies opening new production facilities."></textarea><small>Add context that should influence the search. It will be included in the research brief.</small></label>
+                <label class="research-guidance"><span>Specific public URLs to check · one URL per line</span><textarea id="research-custom-sources" rows="3" placeholder="https://example.com/news&#10;https://example.com/tenders"></textarea><small>These pages are scraped directly and shown as evidence alongside search results.</small></label>
+              </div>
               <div class="research-controls">
                 <label><span>Research depth</span><select id="research-mode"><option value="quick">Quick Research · 4 queries × 5 results</option><option value="deep">Deep Research · 12 queries × 8 results</option></select></label>
                 <fieldset id="research-source-types"><legend>Source categories</legend><label><input type="checkbox" value="news" checked> News</label><label><input type="checkbox" value="tenders" checked> Tenders</label><label><input type="checkbox" value="jobs" checked> Jobs</label><label><input type="checkbox" value="investments" checked> Investments</label><label><input type="checkbox" value="company" checked> Company sites</label><label><input type="checkbox" value="registries"> Registries</label></fieldset>
@@ -280,7 +285,7 @@
   <script src="profile-engine.js?v=20260906-authoritative-depth-v1"></script>
   <script src="market-engine.js?v=20260906-progressive-market-v1"></script>
   <script src="discovery-engine.js?v=20260906-customer-pains-v1"></script>
-  <script type="module" src="app.js?v=20260906-research-actions-v1"></script>
+  <script type="module" src="app.js?v=20260907-research-brief-v1"></script>
   <script src="language.js?v=20260905-audit-v1"></script>
   <script type="module" src="process-map.js?v=20260906-pain-headings-v1"></script>
   <script type="module" src="discovery-ui.js?v=20260906-customer-pains-v1"></script>
