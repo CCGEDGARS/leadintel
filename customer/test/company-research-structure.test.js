@@ -13,7 +13,7 @@ const handoff=read('company-profile-handoff.js');
 const css=read('company-research.css');
 
 test('Customer V2 loads the automatic company research module with Firecrawl workspace routing before research',()=>{
-  assert.match(processMap,/firecrawl-workspace-router\.js\?v=20260903-firecrawl-retry-fallback-v1/);
+  assert.match(processMap,/firecrawl-workspace-router\.js\?v=20260907-scrapling-fallback-v1/);
   assert.match(processMap,/company-research-security\.js\?v=20260906-authoritative-depth-v1/);
   assert.match(processMap,/company-research-ui\.js\?v=20260906-selector-language-v2/);
   assert.ok(processMap.indexOf('firecrawl-workspace-router.js')<processMap.indexOf('company-research-ui.js'),'Firecrawl router must load before company research');
