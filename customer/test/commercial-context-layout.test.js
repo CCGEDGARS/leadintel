@@ -13,6 +13,15 @@ test('commercial context layout defines two balanced paired rows',()=>{
   ]);
 });
 
+test('commercial context defines compact, medium and deep card groups',()=>{
+  const layout=require('../commercial-context-layout.js');
+  assert.deepEqual(layout.CARD_GROUPS,{
+    medium:['priorityOffers','idealCustomer'],
+    compact:['lookalikeCustomers','decisionMakers','currentMarkets','targetMarkets'],
+    deep:['marketFocus','customerPainPoints','buyingTriggers','commercialObjective']
+  });
+});
+
 test('commercial context runtime removes full-width classes and moves paired fields together',()=>{
   const layout=require('../commercial-context-layout.js');
   const calls=[];
@@ -21,7 +30,8 @@ test('commercial context runtime removes full-width classes and moves paired fie
     classList:{remove:(...names)=>calls.push(['remove',key,...names]),add:(...names)=>calls.push(['add',key,...names])},
     after:node=>calls.push(['after',key,node.key])
   });
-  const nodes=Object.fromEntries(['marketFocus','customerPainPoints','buyingTriggers','commercialObjective'].map(key=>[key,makeNode(key)]));
+  const keys=['priorityOffers','idealCustomer','lookalikeCustomers','decisionMakers','currentMarkets','targetMarkets','marketFocus','customerPainPoints','buyingTriggers','commercialObjective'];
+  const nodes=Object.fromEntries(keys.map(key=>[key,makeNode(key)]));
   const root={document:{querySelector:selector=>{
     const match=selector.match(/data-profile-field="([^"]+)"/);
     const node=match?nodes[match[1]]:null;
@@ -36,7 +46,23 @@ test('commercial context runtime removes full-width classes and moves paired fie
   for(const key of ['marketFocus','customerPainPoints','buyingTriggers','commercialObjective']){
     assert.ok(calls.some(row=>row[0]==='remove'&&row[1]===key&&row.includes('wide')&&row.includes('identity-wide')));
     assert.ok(calls.some(row=>row[0]==='add'&&row[1]===key&&row.includes('commercial-context-half')));
+    assert.ok(calls.some(row=>row[0]==='add'&&row[1]===key&&row.includes('commercial-context-deep')));
   }
+  for(const key of ['priorityOffers','idealCustomer'])assert.ok(calls.some(row=>row[0]==='add'&&row[1]===key&&row.includes('commercial-context-medium')));
+  for(const key of ['lookalikeCustomers','decisionMakers','currentMarkets','targetMarkets'])assert.ok(calls.some(row=>row[0]==='add'&&row[1]===key&&row.includes('commercial-context-compact')));
+});
+
+test('commercial context view mode standardizes internal viewport and scrollbar treatment',()=>{
+  const source=read('commercial-context-layout.js');
+  assert.match(source,/resize:none/);
+  assert.match(source,/overflow-y:auto/);
+  assert.match(source,/scrollbar-width:thin/);
+  assert.match(source,/commercial-context-medium/);
+  assert.match(source,/commercial-context-compact/);
+  assert.match(source,/commercial-context-deep/);
+  assert.match(source,/textarea\[readonly\]/);
+  assert.match(source,/pain-points-rendered/);
+  assert.match(source,/min-height:0/);
 });
 
 test('commercial context layout is loaded by the customer shell',()=>{
