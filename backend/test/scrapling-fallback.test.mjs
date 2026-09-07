@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {fetchWithScrapling,scraplingConfigured} from '../src/scrapling.js';
 import {handleScraplingRoute} from '../src/scrapling-routes.js';
+import {handleServiceIntegrationRoute} from '../src/service-integrations.js';
 
 test('Scrapling is unavailable without a configured service URL',()=>{
   assert.equal(scraplingConfigured({}),false);
@@ -31,6 +32,11 @@ test('Scrapling rejects malformed or falsely labelled runtime responses',async()
   try{
     await assert.rejects(()=>fetchWithScrapling({SCRAPLING_SERVICE_URL:'https://scrape.example/api/scrapling'},'https://example.com'),/invalid Scrapling response/i);
   }finally{globalThis.fetch=original;}
+});
+
+test('generic service integration router does not intercept Scrapling-owned routes',async()=>{
+  const response=await handleServiceIntegrationRoute(new Request('https://leadintel-api.example/api/integrations/services/scrapling/health'),{},{});
+  assert.equal(response,null);
 });
 
 test('public Scrapling fallback probe performs one fixed real extraction without workspace access',async()=>{
