@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=20260826-target-market-v1">
-  <link rel="stylesheet" href="market.css?v=20260907-source-control-v1">
+  <link rel="stylesheet" href="market.css?v=20260907-three-modes-v1">
   <link rel="stylesheet" href="premium.css?v=20260826-target-market-v1">
   <link rel="stylesheet" href="market-selector.css?v=20260826-target-market-v1">
   <link rel="stylesheet" href="compact-sources.css?v=20260826-compact-sources-v1">
@@ -228,16 +228,17 @@
 
           <section class="panel strategy-panel research-panel">
             <div class="market-research-head">
-              <div class="section-title"><span class="eyebrow">Step 1 · Market research</span><h3>Research your selected market</h3><p>LeadIntel checks public sources for buying signals and evidence. Choose a quick validation or a broader strategic assessment.</p></div>
+              <div class="section-title"><span class="eyebrow">Step 1 · Market research</span><h3>Research your selected market</h3><p>Choose the depth that matches your decision. You can review every planned search before anything starts.</p></div>
               <div class="research-actions">
-                <button class="primary-btn research-primary-action" id="run-market-research" type="button">Review quick research</button>
-                <button class="secondary-btn research-secondary-action" id="run-detailed-research" type="button">Review detailed research</button>
-                <small class="research-mode-hint">Quick is faster for validation. Detailed checks more queries and sources for strategic decisions.</small>
+                <button class="primary-btn research-primary-action" id="run-market-research" type="button">Review Market Scan</button>
+                <button class="secondary-btn research-secondary-action" id="run-detailed-research" type="button">Review Market Research</button>
+                <button class="secondary-btn research-secondary-action" id="run-market-intelligence" type="button">Review Market Intelligence</button>
+                <small class="research-mode-hint">Market Scan validates quickly. Market Research broadens the evidence. Market Intelligence performs the widest investigation.</small>
               </div>
             </div>
             <div class="research-status" id="market-research-status">No market research run yet.</div>
             <section class="research-run-preview" id="research-run-preview" hidden aria-labelledby="research-preview-title">
-              <div class="research-preview-head"><div><span class="eyebrow">Review before starting</span><h4 id="research-preview-title">Quick research</h4><p>No search starts until you confirm below.</p></div><button class="text-btn" id="cancel-market-research" type="button" aria-label="Close research preview">Close</button></div>
+              <div class="research-preview-head"><div><span class="eyebrow">Review before starting</span><h4 id="research-preview-title">Market Scan</h4><p>No search starts until you confirm below.</p></div><button class="text-btn" id="cancel-market-research" type="button" aria-label="Close research preview">Close</button></div>
               <div class="research-preview-grid">
                 <div><span>Scope</span><strong id="research-preview-scope"></strong></div>
                 <div><span>Sources</span><strong id="research-preview-sources"></strong></div>
@@ -245,7 +246,7 @@
               <div class="research-preview-method"><span>How it works</span><p id="research-preview-method"></p></div>
               <div class="research-suggested-block"><div><span>Recommended sites for this market</span><small>Select any sites you want LeadIntel to check directly and keep ready for monitoring.</small></div><div id="research-suggested-sources" class="research-suggested-sources"></div><button class="secondary-btn" id="add-suggested-sources" type="button">Add selected sites</button></div>
               <div class="research-preview-queries"><span>Planned searches</span><ol id="research-preview-queries"></ol></div>
-              <div class="research-preview-actions"><button class="secondary-btn" id="edit-research-settings" type="button">Edit sources &amp; instructions</button><button class="primary-btn" id="confirm-market-research" type="button">Start quick research</button></div>
+              <div class="research-preview-actions"><button class="secondary-btn" id="edit-research-settings" type="button">Edit sources &amp; instructions</button><button class="primary-btn" id="confirm-market-research" type="button">Start Market Scan</button></div>
             </section>
             <section class="research-run-feedback" id="research-run-feedback" hidden aria-live="polite"></section>
             <details class="progressive-disclosure research-settings" id="research-settings">
@@ -256,7 +257,7 @@
                 <label class="research-guidance"><span>Specific public URLs to check · one URL per line</span><textarea id="research-custom-sources" rows="3" placeholder="https://example.com/news&#10;https://example.com/tenders"></textarea><small>These pages are scraped directly and shown as evidence alongside search results.</small></label>
               </div>
               <div class="research-controls">
-                <label><span>Research depth</span><select id="research-mode"><option value="quick">Quick Research · 4 queries × 5 results</option><option value="deep">Deep Research · 12 queries × 8 results</option></select></label>
+                <label><span>Research depth</span><select id="research-mode"><option value="quick">Market Scan · 4 searches × 5 results</option><option value="deep">Market Research · 12 searches × 8 results</option><option value="intelligence">Market Intelligence · 24 searches × 10 results</option></select></label>
                 <fieldset id="research-source-types"><legend>Source categories</legend><label><input type="checkbox" value="news" checked> News</label><label><input type="checkbox" value="tenders"> Tenders</label><label><input type="checkbox" value="jobs" checked> Jobs</label><label><input type="checkbox" value="investments" checked> Investments</label><label><input type="checkbox" value="company" checked> Company sites</label><label><input type="checkbox" value="registries"> Registries</label><small id="tender-source-note">Tender research is available only when the tender signal is active.</small></fieldset>
               </div>
             </details>
@@ -295,9 +296,9 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="content-variants.js?v=20260905-step1-language-v1"></script>
   <script src="profile-engine.js?v=20260906-authoritative-depth-v1"></script>
-  <script src="market-engine.js?v=20260907-source-control-v1"></script>
+  <script src="market-engine.js?v=20260907-three-modes-v1"></script>
   <script src="discovery-engine.js?v=20260906-customer-pains-v1"></script>
-  <script type="module" src="app.js?v=20260907-source-control-v1"></script>
+  <script type="module" src="app.js?v=20260907-three-modes-v1"></script>
   <script src="language.js?v=20260905-audit-v1"></script>
   <script type="module" src="process-map.js?v=20260906-pain-headings-v1"></script>
   <script type="module" src="discovery-ui.js?v=20260906-customer-pains-v1"></script>

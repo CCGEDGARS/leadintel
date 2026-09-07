@@ -12,7 +12,8 @@
 
   const RESEARCH_MODES=Object.freeze({
     quick:Object.freeze({maxQueries:4,resultsPerQuery:5,maxStoredResults:20}),
-    deep:Object.freeze({maxQueries:12,resultsPerQuery:8,maxStoredResults:80})
+    deep:Object.freeze({maxQueries:12,resultsPerQuery:8,maxStoredResults:80}),
+    intelligence:Object.freeze({maxQueries:24,resultsPerQuery:10,maxStoredResults:200})
   });
   const SOURCE_TYPES=Object.freeze({
     news:"news announcement expansion relocation modernisation",
@@ -142,7 +143,7 @@
 
   function researchOptions(input){
     if(typeof input==="number")return {mode:"quick",maxQueries:Math.max(1,Math.min(4,input)),sourceTypes:["news"]};
-    const mode=input?.mode==="deep"?"deep":"quick";const rules=RESEARCH_MODES[mode];
+    const mode=RESEARCH_MODES[input?.mode]?input.mode:"quick";const rules=RESEARCH_MODES[mode];
     return {mode,maxQueries:rules.maxQueries,sourceTypes:splitList(input?.sourceTypes).filter(type=>SOURCE_TYPES[type]).slice(0,6)};
   }
   function buildResearchQueries(profile={},signals=[],input={mode:"quick"}){
@@ -151,9 +152,10 @@
     const offers=splitList(profile.priorityOffers).length?splitList(profile.priorityOffers):["commercial opportunity"];
     const allowTenderSignals=options.sourceTypes.includes("tenders");
     const active=(signals||[]).filter(item=>item.active!==false&&(allowTenderSignals||!isTenderSignal(item))).sort((a,b)=>Number(b.weight)-Number(a.weight));
-    const signalTerms=active.slice(0,options.mode==="deep"?8:3).flatMap(item=>splitList(String(item.keywords||"").replace(/,/g,";")).slice(0,2)).filter(Boolean);
+    const signalLimit=options.mode==="intelligence"?12:options.mode==="deep"?8:3;
+    const signalTerms=active.slice(0,signalLimit).flatMap(item=>splitList(String(item.keywords||"").replace(/,/g,";")).slice(0,2)).filter(Boolean);
     const marketFocus=clean(profile.marketFocus);
-    const results=[];const requested=options.sourceTypes.length?options.sourceTypes:(options.mode==="deep"?["news","jobs","investments","company","registries"]:["news"]);const categories=filterResearchSourceTypes(requested,signals);
+    const results=[];const requested=options.sourceTypes.length?options.sourceTypes:(options.mode==="quick"?["news"]:["news","jobs","investments","company","registries"]);const categories=filterResearchSourceTypes(requested,signals);
     if(!categories.length)return results;
     const combinations=[];
     for(const market of (markets.length?markets:["priority market"]))for(const offer of offers)for(const sourceType of categories)combinations.push({market,offer,sourceType});
@@ -219,7 +221,7 @@
     return {enabled:Boolean(value.enabled),frequency,researchDepth:value.researchDepth==="quick"?"quick":"deep",minimumScore:clamp(value.minimumScore,1,100,70),sourceTypes:sourceTypes.length?sourceTypes:["news","jobs","investments","company"],signalIds:splitList(value.signalIds).slice(0,20),customSources:splitList(value.customSources).map(normalizeUrl).filter(Boolean).slice(0,20),lastRunAt:clean(value.lastRunAt),nextRunAt:clean(value.nextRunAt)};
   }
   function appendResearchHistory(history=[],run={}){
-    const item={id:clean(run.id)||`research-${Date.now()}`,mode:run.mode==="deep"?"deep":"quick",status:["complete","partial","error"].includes(run.status)?run.status:"error",sourceCount:Math.max(0,Number(run.sourceCount)||0),queryCount:Math.max(0,Number(run.queryCount)||0),completedAt:clean(run.completedAt)||new Date().toISOString()};
+    const item={id:clean(run.id)||`research-${Date.now()}`,mode:RESEARCH_MODES[run.mode]?run.mode:"quick",status:["complete","partial","error"].includes(run.status)?run.status:"error",sourceCount:Math.max(0,Number(run.sourceCount)||0),queryCount:Math.max(0,Number(run.queryCount)||0),completedAt:clean(run.completedAt)||new Date().toISOString()};
     return [item,...(Array.isArray(history)?history:[]).filter(existing=>clean(existing?.id)!==item.id)].slice(0,20);
   }
 
@@ -360,8 +362,8 @@
       id:clean(item?.id)||`icp-${slug(item?.name)}`,type:clean(item?.type)||"custom",name:clean(item?.name)||"ICP",active:item?.active!==false,
       description:clean(item?.description),targetMarkets:clean(item?.targetMarkets),buyerRoles:clean(item?.buyerRoles),value:clean(item?.value),exclusions:clean(item?.exclusions),offers:clean(item?.offers),rationale:clean(item?.rationale)
     }));
-    const researchMode=input.researchMode==="deep"?"deep":"quick";
-    const defaultResearchSources=researchMode==="deep"?["news","jobs","investments","company","registries"]:["news"];
+    const researchMode=RESEARCH_MODES[input.researchMode]?input.researchMode:"quick";
+    const defaultResearchSources=researchMode==="quick"?["news"]:["news","jobs","investments","company","registries"];
     const researchSourceTypes=splitList(input.researchSourceTypes).filter(type=>SOURCE_TYPES[type]).slice(0,6);
     const researchCustomSources=splitList(input.researchCustomSources).map(normalizeUrl).filter(Boolean).slice(0,20);
     const researchInstructions=clean(input.researchInstructions).slice(0,1200);
@@ -382,7 +384,7 @@
     return {
       ...DEFAULT_MARKET_STATE,icps,signals,researchQueries,researchResults,opportunities,researchSourceStatus,researchProgress,researchErrors,
       researchStatus:allowed.has(input.researchStatus)?input.researchStatus:"idle",researchMode,researchSourceTypes:researchSourceTypes.length?researchSourceTypes:defaultResearchSources,researchCustomSources,researchInstructions,
-      researchHistory:(Array.isArray(input.researchHistory)?input.researchHistory:[]).slice(0,20).map(item=>({id:clean(item?.id),mode:item?.mode==="deep"?"deep":"quick",status:clean(item?.status),sourceCount:Math.max(0,Number(item?.sourceCount)||0),queryCount:Math.max(0,Number(item?.queryCount)||0),completedAt:clean(item?.completedAt)})).filter(item=>item.id),monitoring:normalizeMonitoring(input.monitoring),
+      researchHistory:(Array.isArray(input.researchHistory)?input.researchHistory:[]).slice(0,20).map(item=>({id:clean(item?.id),mode:RESEARCH_MODES[item?.mode]?item.mode:"quick",status:clean(item?.status),sourceCount:Math.max(0,Number(item?.sourceCount)||0),queryCount:Math.max(0,Number(item?.queryCount)||0),completedAt:clean(item?.completedAt)})).filter(item=>item.id),monitoring:normalizeMonitoring(input.monitoring),
       lastResearchAt:clean(input.lastResearchAt),strategyApproved:Boolean(input.strategyApproved),strategyApprovedAt:clean(input.strategyApprovedAt),contentLanguage:['en','lv'].includes(input.contentLanguage)?input.contentLanguage:'',contentVariants:input.contentVariants&&typeof input.contentVariants==='object'?input.contentVariants:{}
     };
   }

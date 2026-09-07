@@ -8,12 +8,14 @@ const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
 const css=fs.readFileSync(path.join(root,'market.css'),'utf8');
 const discovery=fs.readFileSync(path.join(root,'discovery-ui.js'),'utf8');
 
-test('market strategy exposes Quick and Deep research with transparent limits',()=>{
+test('market strategy exposes Market Scan, Market Research and Market Intelligence with transparent limits',()=>{
   assert.match(html,/id="research-mode"/);
-  assert.match(html,/value="quick"[\s\S]*Quick Research/);
-  assert.match(html,/value="deep"[\s\S]*Deep Research/);
-  assert.match(html,/id="run-market-research"[^>]*>Review quick research</);
-  assert.match(html,/id="run-detailed-research"[^>]*>Review detailed research</);
+  assert.match(html,/value="quick"[\s\S]*Market Scan/);
+  assert.match(html,/value="deep"[\s\S]*Market Research/);
+  assert.match(html,/value="intelligence"[\s\S]*Market Intelligence/);
+  assert.match(html,/id="run-market-research"[^>]*>Review Market Scan</);
+  assert.match(html,/id="run-detailed-research"[^>]*>Review Market Research</);
+  assert.match(html,/id="run-market-intelligence"[^>]*>Review Market Intelligence</);
   assert.match(html,/class="research-mode-hint"/);
   assert.match(html,/id="research-source-types"/);
   assert.match(html,/id="research-recommendations"/);
@@ -24,6 +26,7 @@ test('market strategy exposes Quick and Deep research with transparent limits',(
   assert.match(app,/researchCustomSources/);
   assert.match(app,/openResearchPreview\("quick"\)/);
   assert.match(app,/openResearchPreview\("deep"\)/);
+  assert.match(app,/openResearchPreview\("intelligence"\)/);
   assert.match(app,/appendResearchHistory/);
 });
 
@@ -45,6 +48,7 @@ test('research mode buttons open a review step before any network research start
   assert.match(app,/function closeResearchPreview/);
   assert.match(app,/openResearchPreview\("quick"\)/);
   assert.match(app,/openResearchPreview\("deep"\)/);
+  assert.match(app,/openResearchPreview\("intelligence"\)/);
   assert.match(app,/runMarketResearch\(pendingResearchMode\)/);
   assert.doesNotMatch(app,/\$\("run-market-research"\)\.addEventListener\("click",\(\)=>runMarketResearch/);
 });
@@ -53,9 +57,16 @@ test('failed research keeps actionable diagnostics and clearly labels retry acti
   assert.match(html,/id="research-run-feedback"/);
   assert.match(app,/researchErrors/);
   assert.match(app,/Research run failed/);
-  assert.match(app,/Retry quick research/);
-  assert.match(app,/Retry detailed research/);
+  assert.match(app,/Retry Market Scan/);
+  assert.match(app,/Retry Market Research/);
+  assert.match(app,/Retry Market Intelligence/);
   assert.match(app,/No public evidence was saved/);
+});
+
+test('research status copy does not repeat the word research',()=>{
+  assert.doesNotMatch(app,/\$\{modeLabel(?:\.toLowerCase\(\))?\} research/);
+  assert.match(app,/\$\{modeLabel\} is running/);
+  assert.match(app,/\$\{modeLabel\} complete/);
 });
 
 test('market research cannot remain indefinitely busy and exposes live progress',()=>{
