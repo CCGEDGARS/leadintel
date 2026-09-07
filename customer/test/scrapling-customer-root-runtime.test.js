@@ -4,6 +4,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 
 const customerRoot=path.join(__dirname,'..');
+const repoRoot=path.join(customerRoot,'..');
 const configPath=path.join(customerRoot,'vercel.json');
 const runtimePath=path.join(customerRoot,'api/scrapling.py');
 const requirementsPath=path.join(customerRoot,'requirements.txt');
@@ -28,4 +29,11 @@ test('customer-root Scrapling runtime exposes GET health proof and protected POS
   assert.match(runtime,/scrapling-fallback/);
   assert.match(runtime,/SCRAPLING_SERVICE_TOKEN/);
   assert.match(runtime,/not ip\.is_global/);
+});
+
+test('private Scrapling runtime files are removed from the public static artifact',()=>{
+  const buildScript=fs.readFileSync(path.join(repoRoot,'scripts/build-vercel-static.sh'),'utf8');
+  assert.match(buildScript,/\.vercel-static\/customer\/api/);
+  assert.match(buildScript,/\.vercel-static\/customer\/requirements\.txt/);
+  assert.match(buildScript,/\.vercel-static\/customer\/vercel\.json/);
 });
