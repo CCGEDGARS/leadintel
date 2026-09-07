@@ -38,10 +38,11 @@ test('website activation keeps a real failure visible after the request finishes
   assert.match(activation,/function\s+clearErrorAndRender\(\)\{activationError=['"]['"];render\(\);\}/,'a new website edit explicitly clears the previous failure');
 });
 
-test('signed-in Firecrawl routing retries managed fallback only for retryable backend failures',()=>{
+test('signed-in Firecrawl routing retries enhanced fallbacks only for retryable backend failures',()=>{
   assert.match(router,/function\s+retryableStatus\s*\(/);
   assert.match(router,/status===429\|\|status>=500/);
   assert.match(router,/catch\s*\([^)]*\)[\s\S]*originalFetch\(input,options\)/);
-  assert.match(router,/if\(retryableStatus\(response\.status\)\)[\s\S]*originalFetch\(input,options\)/);
+  assert.match(router,/if\(!retryableStatus\(response\.status\)\)return response;[\s\S]*scraplingTarget\(kind\)[\s\S]*originalFetch\(input,options\)/);
+  assert.match(router,/if\(fallback\.ok\)return fallback/);
   assert.doesNotMatch(router,/status===400\|\|status===401\|\|status===403[\s\S]{0,200}originalFetch\(input,options\)/);
 });

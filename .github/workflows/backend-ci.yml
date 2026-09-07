@@ -8,6 +8,8 @@ on:
       - 'feature/**'
     paths:
       - 'backend/**'
+      - 'api/**'
+      - 'requirements.txt'
       - 'release-integrity.config.json'
       - 'scripts/verify-release-integrity.mjs'
       - '.github/workflows/release-integrity.yml'
@@ -16,6 +18,8 @@ on:
   pull_request:
     paths:
       - 'backend/**'
+      - 'api/**'
+      - 'requirements.txt'
       - 'release-integrity.config.json'
       - 'scripts/verify-release-integrity.mjs'
       - '.github/workflows/release-integrity.yml'
@@ -45,6 +49,8 @@ jobs:
         run: npm audit --audit-level=high
       - name: Run backend tests
         run: npm test
+      - name: Check Scrapling Python syntax
+        run: python -m py_compile ../api/scrapling.py
       - name: Check backend JavaScript syntax
         run: |
           node --check src/app.js
@@ -63,3 +69,5 @@ jobs:
           node --check src/enrichment.js
           node --check src/quality.js
           node --check src/runs.js
+          node --check src/scrapling.js
+          node --check src/scrapling-routes.js

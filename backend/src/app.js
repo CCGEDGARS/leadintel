@@ -2,6 +2,7 @@ import core from './index.js';
 import {allowedOrigin,corsHeaders} from './security.js';
 import {handleAiRoute} from './ai-routes.js';
 import {handleServiceIntegrationRoute,withWorkspaceServiceCredentials} from './service-integrations.js';
+import {handleScraplingRoute} from './scrapling-routes.js';
 import {handleSaasRoute} from './saas-routes.js';
 import {handleCrmRoute} from './crm-routes.js';
 import {handleApolloCrmWebhook} from './crm-routes.js';
@@ -19,6 +20,7 @@ export default {
     try{
       const ai=await handleAiRoute(request,env,cors);if(ai)return ai;
       const service=await handleServiceIntegrationRoute(request,env,cors);if(service)return service;
+      const scrapling=await handleScraplingRoute(request,env,cors);if(scrapling)return scrapling;
       const monitoring=await handleMarketMonitoringRoute(request,env,cors);if(monitoring)return monitoring;
       const runtimeEnv=await withWorkspaceServiceCredentials(request,env);
       const crm=await handleCrmRoute(request,runtimeEnv,cors);if(crm)return crm;
