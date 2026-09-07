@@ -45,6 +45,12 @@ test('disabled tender signal excludes tender sources and tender queries',()=>{
   assert.ok(deep.every(item=>! /tender|procurement/i.test(item.query)));
 });
 
+test('excluding the tender source also excludes tender signal terms from other categories',()=>{
+  const queries=market.buildResearchQueries(profile,signals,{mode:'deep',sourceTypes:['news','jobs'],language:'en'});
+  assert.ok(queries.length>0);
+  assert.ok(queries.every(item=>! /tender|procurement/i.test(item.query)));
+});
+
 test('Latvia source suggestions are specific, relevant and exclude disabled categories',()=>{
   const suggestions=market.buildSuggestedSources(profile,signals,['news','jobs','investments'],'lv');
   assert.ok(suggestions.length>=5);
