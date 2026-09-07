@@ -5,6 +5,7 @@ import fs from 'node:fs';
 const runtime=fs.readFileSync(new URL('../../api/scrapling.py',import.meta.url),'utf8');
 const requirements=fs.readFileSync(new URL('../../requirements.txt',import.meta.url),'utf8');
 const blueprint=fs.readFileSync(new URL('../../render.yaml',import.meta.url),'utf8');
+const wrangler=fs.readFileSync(new URL('../wrangler.toml',import.meta.url),'utf8');
 
 test('Scrapling standalone runtime exposes a health endpoint',()=>{
   assert.match(runtime,/@app\.get\(["']\/health["']\)/);
@@ -22,4 +23,9 @@ test('Render blueprint deploys only the Scrapling runtime and generates a privat
   assert.match(blueprint,/healthCheckPath:\s*\/health/);
   assert.match(blueprint,/key:\s*SCRAPLING_SERVICE_TOKEN/);
   assert.match(blueprint,/generateValue:\s*true/);
+});
+
+test('Cloudflare Worker points Scrapling fallback at the live Render extraction endpoint',()=>{
+  assert.match(wrangler,/SCRAPLING_SERVICE_URL\s*=\s*"https:\/\/leadintel-scrapling\.onrender\.com\/api\/scrapling"/);
+  assert.match(wrangler,/SCRAPLING_SERVICE_TOKEN/,'deployment config must document the matching Worker secret');
 });
