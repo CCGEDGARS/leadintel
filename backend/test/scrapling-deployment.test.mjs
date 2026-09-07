@@ -6,6 +6,8 @@ const runtime=fs.readFileSync(new URL('../../api/scrapling.py',import.meta.url),
 const requirements=fs.readFileSync(new URL('../../requirements.txt',import.meta.url),'utf8');
 const blueprint=fs.readFileSync(new URL('../../render.yaml',import.meta.url),'utf8');
 const wrangler=fs.readFileSync(new URL('../wrangler.toml',import.meta.url),'utf8');
+const deployWorkflow=fs.readFileSync(new URL('../../.github/workflows/backend-deploy.yml',import.meta.url),'utf8');
+const scraplingRoutes=fs.readFileSync(new URL('../src/scrapling-routes.js',import.meta.url),'utf8');
 
 test('Scrapling standalone runtime exposes a health endpoint',()=>{
   assert.match(runtime,/@app\.get\(["']\/health["']\)/);
@@ -28,4 +30,12 @@ test('Render blueprint deploys only the Scrapling runtime and generates a privat
 test('Cloudflare Worker points Scrapling fallback at the live Render extraction endpoint',()=>{
   assert.match(wrangler,/SCRAPLING_SERVICE_URL\s*=\s*"https:\/\/leadintel-scrapling\.onrender\.com\/api\/scrapling"/);
   assert.match(wrangler,/SCRAPLING_SERVICE_TOKEN/,'deployment config must document the matching Worker secret');
+});
+
+test('permanent backend deployment preserves the synchronized Scrapling secret instead of rotating it',()=>{
+  assert.doesNotMatch(deployWorkflow,/Bootstrap protected Scrapling service token|SCRAPLING_TOKEN_CIPHERTEXT|openssl rand/);
+});
+
+test('temporary public Scrapling extraction probe is removed after production verification',()=>{
+  assert.doesNotMatch(scraplingRoutes,/scrapling\/health|SCRAPLING_PROBE_TARGET/);
 });
