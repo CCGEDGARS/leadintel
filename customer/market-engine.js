@@ -149,7 +149,8 @@
     const options=researchOptions(input);const limit=options.maxQueries;
     const markets=effectiveResearchMarkets(profile);
     const offers=splitList(profile.priorityOffers).length?splitList(profile.priorityOffers):["commercial opportunity"];
-    const active=(signals||[]).filter(item=>item.active!==false).sort((a,b)=>Number(b.weight)-Number(a.weight));
+    const allowTenderSignals=options.sourceTypes.includes("tenders");
+    const active=(signals||[]).filter(item=>item.active!==false&&(allowTenderSignals||!isTenderSignal(item))).sort((a,b)=>Number(b.weight)-Number(a.weight));
     const signalTerms=active.slice(0,options.mode==="deep"?8:3).flatMap(item=>splitList(String(item.keywords||"").replace(/,/g,";")).slice(0,2)).filter(Boolean);
     const marketFocus=clean(profile.marketFocus);
     const results=[];const requested=options.sourceTypes.length?options.sourceTypes:(options.mode==="deep"?["news","jobs","investments","company","registries"]:["news"]);const categories=filterResearchSourceTypes(requested,signals);
