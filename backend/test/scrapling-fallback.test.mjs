@@ -19,7 +19,7 @@ test('Scrapling forwards bearer token and normalizes successful provenance',asyn
     assert.equal(seen.url,'https://scrape.example/api/scrapling');
     assert.equal(seen.options.headers.Authorization,'Bearer secret');
     assert.equal(result.data.metadata.source,'scrapling-fallback');
-    assert.equal(result.data.metadata.sourceURL,'https://example.com');
+    assert.equal(result.data.metadata.sourceURL,'https://example.com/');
     assert.equal(result.data.markdown,'Evidence text');
   }finally{globalThis.fetch=original;}
 });
