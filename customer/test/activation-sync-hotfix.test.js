@@ -46,3 +46,7 @@ test('signed-in Firecrawl routing retries enhanced fallbacks only for retryable 
   assert.match(router,/if\(fallback\.ok\)return fallback/);
   assert.doesNotMatch(router,/status===400\|\|status===401\|\|status===403[\s\S]{0,200}originalFetch\(input,options\)/);
 });
+
+test('process bootstrap busts the Firecrawl router cache for Scrapling-capable routing',()=>{
+  assert.match(processMap,/firecrawl-workspace-router\.js\?v=20260907-scrapling-fallback-v1/);
+});
