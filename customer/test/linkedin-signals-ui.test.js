@@ -1,6 +1,6 @@
-const test=require('node:test');
-const assert=require('node:assert/strict');
-const fs=require('node:fs');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
 
 test('LinkedIn public signal extension is loaded and clearly labelled',()=>{
   const processMap=fs.readFileSync(new URL('../process-map.js',import.meta.url),'utf8');
