@@ -23,7 +23,7 @@ test('evidence source cards use a balanced two-column desktop grid and collapse 
 });
 
 test('intelligence gaps become a compact two-column summary block',()=>{
-  assert.match(layout,/\.profile-gaps-panel \.gap-list\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/,'desktop gaps should use two columns');
+  assert.match(layout,/\.profile-gaps-panel \.gap-list\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/,'desktop gaps should use two columns');
   assert.match(layout,/@media\(max-width:760px\)[\s\S]*\.profile-gaps-panel \.gap-list\{grid-template-columns:1fr!important\}/,'gap list should collapse on small screens');
 });
 
