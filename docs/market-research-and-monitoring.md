@@ -37,6 +37,7 @@ Pre-research UI must never present an opportunity score, company finding or spec
 - Maximum 8 results per query.
 - Maximum 80 unique stored evidence sources.
 - Searches selected source categories such as news, jobs, investments, official company sources and registries.
+- Can include **LinkedIn public signals** as a bounded public-index source category for leadership changes, hiring, company activity and role verification.
 - Before the full run, LeadIntel performs a lightweight authenticated live **source discovery** pass.
 - Live discovery can show up to 8 unique, deduplicated source sites.
 - Specific-site recommendations must come from returned web-search evidence, not a static country catalog.
@@ -54,6 +55,7 @@ Pre-research UI must never present an opportunity score, company finding or spec
 - Maximum 24 queries.
 - Maximum 10 results per query.
 - Maximum 200 unique stored evidence sources.
+- Can include a wider LinkedIn public-index query family covering leadership, hiring, company activity, role identity and company growth.
 - Before the full run, LeadIntel performs wider live source discovery.
 - Up to 15 unique source sites can be displayed in a **Source Intelligence Map**.
 - Source groups include:
@@ -67,6 +69,16 @@ Pre-research UI must never present an opportunity score, company finding or spec
   - Other relevant sources
 - Users can select individual discovered sites for direct checking and later monitoring.
 - If discovery is unavailable, LeadIntel shows an unavailable state instead of falling back to invented or static recommendations.
+
+## LinkedIn evidence provenance
+
+LeadIntel distinguishes three LinkedIn-related evidence states and must never conflate them:
+
+- **`linkedin-public-index`** — a public LinkedIn URL discovered through the normal public web-search index. LeadIntel does not bypass LinkedIn authentication to obtain it. A public-index snippet or URL is lower-confidence evidence until corroborated or successfully extracted from a publicly accessible page.
+- **`apollo-linkedin-url`** — a LinkedIn profile/company URL returned by Apollo for a matched decision maker or organization identity. This is an enrichment/identity link, not by itself a buying signal.
+- **`linkedin-api`** — reserved for a future sanctioned LinkedIn API or authorized LinkedIn-backed data provider. LeadIntel must never emit this provenance unless such a provider actually ran and returned the evidence.
+
+LinkedIn public signals are disabled for the fastest Market Scan by default and are available for Market Research and Market Intelligence. Restricted/logged-in pages are not scraped or bypassed.
 
 ## Pre-research market presentation
 
