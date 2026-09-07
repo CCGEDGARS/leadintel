@@ -7,7 +7,7 @@
 
   const DEFAULT_MARKET_STATE=Object.freeze({
     icps:[],signals:[],researchQueries:[],researchResults:[],opportunities:[],
-    researchStatus:"idle",researchSourceStatus:{openai:"idle",firecrawl:"idle"},researchProgress:{completed:0,total:0},researchErrors:[],lastResearchAt:"",researchMode:"quick",researchSourceTypes:["news","tenders"],researchCustomSources:[],researchInstructions:"",researchHistory:[],monitoring:{enabled:false,frequency:"weekly",researchDepth:"deep",minimumScore:70,sourceTypes:["news","tenders","jobs","investments","company"],signalIds:[],customSources:[]},strategyApproved:false,strategyApprovedAt:""
+    researchStatus:"idle",researchSourceStatus:{openai:"idle",firecrawl:"idle"},researchProgress:{completed:0,total:0},researchErrors:[],lastResearchAt:"",researchMode:"quick",researchSourceTypes:["news"],researchCustomSources:[],researchInstructions:"",researchHistory:[],monitoring:{enabled:false,frequency:"weekly",researchDepth:"deep",minimumScore:70,sourceTypes:["news","jobs","investments","company"],signalIds:[],customSources:[]},strategyApproved:false,strategyApprovedAt:""
   });
 
   const RESEARCH_MODES=Object.freeze({
@@ -21,6 +21,14 @@
     investments:"investment expansion funding construction development",
     company:"official company website project reference case study",
     registries:"business registry annual report financial results"
+  });
+  const SOURCE_TYPES_LV=Object.freeze({
+    news:"ziņas paziņojums paplašināšana pārcelšanās modernizācija",
+    tenders:"iepirkums publiskais iepirkums līgums",
+    jobs:"vakances darbinieku piesaiste komandas izaugsme",
+    investments:"investīcijas paplašināšana finansējums būvniecība attīstība",
+    company:"uzņēmuma oficiālā vietne projekts atsauksme pieredze",
+    registries:"uzņēmumu reģistrs gada pārskats finanšu rezultāti"
   });
 
   function clean(value){return String(value??"").replace(/\s+/g," ").trim();}
@@ -111,6 +119,15 @@
     return result.slice(0,20);
   }
 
+  function isTenderSignal(signal={}){
+    return /tender|procurement|iepirkum/i.test(`${clean(signal.name)} ${clean(signal.keywords)}`);
+  }
+  function hasActiveTenderSignal(signals=[]){return (signals||[]).some(signal=>signal.active!==false&&isTenderSignal(signal));}
+  function filterResearchSourceTypes(sourceTypes=[],signals=[]){
+    const selected=splitList(sourceTypes).filter(type=>SOURCE_TYPES[type]).slice(0,6);
+    return hasActiveTenderSignal(signals)?selected:selected.filter(type=>type!=="tenders");
+  }
+
   function addCustomSignal(signals=[],input={}){
     const name=clean(input.name);
     if(!name)return {signals:[...signals],added:false,error:"Signal name is required"};
@@ -135,12 +152,14 @@
     const active=(signals||[]).filter(item=>item.active!==false).sort((a,b)=>Number(b.weight)-Number(a.weight));
     const signalTerms=active.slice(0,options.mode==="deep"?8:3).flatMap(item=>splitList(String(item.keywords||"").replace(/,/g,";")).slice(0,2)).filter(Boolean);
     const marketFocus=clean(profile.marketFocus);
-    const results=[];const categories=options.sourceTypes.length?options.sourceTypes:(options.mode==="deep"?["news","tenders","jobs","investments","company","registries"]:["news","tenders"]);
+    const results=[];const requested=options.sourceTypes.length?options.sourceTypes:(options.mode==="deep"?["news","jobs","investments","company","registries"]:["news"]);const categories=filterResearchSourceTypes(requested,signals);
+    if(!categories.length)return results;
     const combinations=[];
     for(const market of (markets.length?markets:["priority market"]))for(const offer of offers)for(const sourceType of categories)combinations.push({market,offer,sourceType});
     for(let index=0;results.length<limit;index++){
       const base=combinations[index%combinations.length];const cycle=Math.floor(index/combinations.length);const signal=signalTerms[(index+cycle)%Math.max(1,signalTerms.length)]||clean(profile.buyingTriggers)||"business opportunity";
-      const query=[base.market,base.offer,marketFocus,clean(profile.idealCustomer),signal,SOURCE_TYPES[base.sourceType],clean(input.instructions),new Date().getUTCFullYear()].filter(Boolean).join(" ");
+      const sourceTerms=isLv(input.language)?SOURCE_TYPES_LV[base.sourceType]:SOURCE_TYPES[base.sourceType];
+      const query=[base.market,base.offer,marketFocus,clean(profile.idealCustomer),signal,sourceTerms,clean(input.instructions),new Date().getUTCFullYear()].filter(Boolean).join(" ");
       if(results.some(item=>item.query===query)){
         if(index>limit*4)break;
         continue;
@@ -148,6 +167,34 @@
       results.push({id:`q-${slug(base.market)}-${results.length+1}`,market:base.market,offer:base.offer,sourceType:base.sourceType,query});
     }
     return results;
+  }
+
+  function buildSuggestedSources(profile={},signals=[],sourceTypes=[],language="en"){
+    const lv=isLv(language);const markets=effectiveResearchMarkets(profile).join(" ").toLowerCase();
+    if(!/latvia|latvija|baltic|baltija/.test(markets))return [];
+    const catalog={
+      news:[
+        {url:"https://www.lsm.lv/",name:"LSM",reason:lv?"Latvijas sabiedrisko mediju ziņas par uzņēmumiem, attīstības projektiem un reģioniem.":"Latvian public-media reporting on companies, development projects and regions."},
+        {url:"https://www.db.lv/",name:"Dienas Bizness",reason:lv?"Uzņēmējdarbības ziņas par paplašināšanos, investīcijām un vadības izmaiņām.":"Business news covering expansion, investment and leadership changes."}
+      ],
+      jobs:[
+        {url:"https://www.cv.lv/",name:"CV.lv",reason:lv?"Vakances var atklāt komandu pieaugumu, jaunas struktūrvienības un telpu vajadzības.":"Vacancies can reveal team growth, new units and workplace needs."},
+        {url:"https://www.visidarbi.lv/",name:"VisiDarbi",reason:lv?"Plašāks Latvijas vakanču pārklājums izaugsmes signālu pārbaudei.":"Broader Latvian vacancy coverage for validating growth signals."}
+      ],
+      investments:[
+        {url:"https://www.liaa.gov.lv/",name:"LIAA",reason:lv?"Investīciju, eksporta, ražošanas attīstības un biznesa projektu informācija.":"Information on investment, exports, manufacturing growth and business projects."},
+        {url:"https://www.altum.lv/",name:"ALTUM",reason:lv?"Finansējuma programmas un projektu ziņas var norādīt uz gaidāmiem ieguldījumiem.":"Funding programmes and project news can signal upcoming investment."}
+      ],
+      company:[
+        {url:"https://www.firmas.lv/",name:"Firmas.lv",reason:lv?"Uzņēmumu profili palīdz pārbaudīt darbības nozari, mērogu un saistīto informāciju.":"Company profiles help validate sector, scale and related information."}
+      ],
+      registries:[
+        {url:"https://info.ur.gov.lv/",name:"Latvijas Uzņēmumu reģistrs",reason:lv?"Oficiāla juridiskā un reģistrācijas informācija uzņēmumu pārbaudei.":"Official legal and registration information for company validation."},
+        {url:"https://data.gov.lv/",name:"Latvijas Atvērto datu portāls",reason:lv?"Publiskas datu kopas tirgus un uzņēmumu faktu papildināšanai.":"Public datasets for enriching market and company facts."}
+      ],
+      tenders:[]
+    };
+    return filterResearchSourceTypes(sourceTypes,signals).flatMap(type=>(catalog[type]||[]).map(item=>({...item,type}))).slice(0,10);
   }
 
   function buildResearchRecommendations(profile={},signals=[],sourceTypes=[],language="en"){
@@ -168,7 +215,7 @@
   function normalizeMonitoring(value={}){
     const frequency=["daily","weekly","monthly"].includes(value.frequency)?value.frequency:"weekly";
     const sourceTypes=splitList(value.sourceTypes).filter(type=>SOURCE_TYPES[type]).slice(0,6);
-    return {enabled:Boolean(value.enabled),frequency,researchDepth:value.researchDepth==="quick"?"quick":"deep",minimumScore:clamp(value.minimumScore,1,100,70),sourceTypes:sourceTypes.length?sourceTypes:["news","tenders","jobs","investments","company"],signalIds:splitList(value.signalIds).slice(0,20),customSources:splitList(value.customSources).map(normalizeUrl).filter(Boolean).slice(0,20),lastRunAt:clean(value.lastRunAt),nextRunAt:clean(value.nextRunAt)};
+    return {enabled:Boolean(value.enabled),frequency,researchDepth:value.researchDepth==="quick"?"quick":"deep",minimumScore:clamp(value.minimumScore,1,100,70),sourceTypes:sourceTypes.length?sourceTypes:["news","jobs","investments","company"],signalIds:splitList(value.signalIds).slice(0,20),customSources:splitList(value.customSources).map(normalizeUrl).filter(Boolean).slice(0,20),lastRunAt:clean(value.lastRunAt),nextRunAt:clean(value.nextRunAt)};
   }
   function appendResearchHistory(history=[],run={}){
     const item={id:clean(run.id)||`research-${Date.now()}`,mode:run.mode==="deep"?"deep":"quick",status:["complete","partial","error"].includes(run.status)?run.status:"error",sourceCount:Math.max(0,Number(run.sourceCount)||0),queryCount:Math.max(0,Number(run.queryCount)||0),completedAt:clean(run.completedAt)||new Date().toISOString()};
@@ -313,7 +360,7 @@
       description:clean(item?.description),targetMarkets:clean(item?.targetMarkets),buyerRoles:clean(item?.buyerRoles),value:clean(item?.value),exclusions:clean(item?.exclusions),offers:clean(item?.offers),rationale:clean(item?.rationale)
     }));
     const researchMode=input.researchMode==="deep"?"deep":"quick";
-    const defaultResearchSources=researchMode==="deep"?["news","tenders","jobs","investments","company","registries"]:["news","tenders"];
+    const defaultResearchSources=researchMode==="deep"?["news","jobs","investments","company","registries"]:["news"];
     const researchSourceTypes=splitList(input.researchSourceTypes).filter(type=>SOURCE_TYPES[type]).slice(0,6);
     const researchCustomSources=splitList(input.researchCustomSources).map(normalizeUrl).filter(Boolean).slice(0,20);
     const researchInstructions=clean(input.researchInstructions).slice(0,1200);
@@ -376,5 +423,5 @@
     return results;
   }
 
-  return {DEFAULT_MARKET_STATE,RESEARCH_MODES,SOURCE_TYPES,effectiveResearchMarkets,buildIcpCandidates,normalizeSignals,addCustomSignal,buildResearchQueries,buildResearchRecommendations,normalizeSearchResults,mergeResearchResults,buildMarketOpportunities,localizeGeneratedState,normalizeMarketState,recoverInterruptedResearch,withTimeout,mapWithConcurrency,normalizeMonitoring,appendResearchHistory,getMarketJourneyState,splitList};
+  return {DEFAULT_MARKET_STATE,RESEARCH_MODES,SOURCE_TYPES,effectiveResearchMarkets,buildIcpCandidates,normalizeSignals,addCustomSignal,filterResearchSourceTypes,buildResearchQueries,buildResearchRecommendations,buildSuggestedSources,normalizeSearchResults,mergeResearchResults,buildMarketOpportunities,localizeGeneratedState,normalizeMarketState,recoverInterruptedResearch,withTimeout,mapWithConcurrency,normalizeMonitoring,appendResearchHistory,getMarketJourneyState,splitList};
 });

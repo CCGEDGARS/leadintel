@@ -33,6 +33,10 @@ test('research settings explain source choices and accept user guidance before a
   assert.match(app,/function readResearchSettings/);
   assert.match(app,/researchInstructions/);
   assert.match(app,/searchCustomSource/);
+  assert.match(html,/id="research-suggested-sources"/);
+  assert.match(html,/id="add-suggested-sources"/);
+  assert.match(app,/buildSuggestedSources/);
+  assert.match(app,/addSuggestedSources/);
 });
 
 test('research mode buttons open a review step before any network research starts',()=>{
