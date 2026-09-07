@@ -75,6 +75,17 @@ test('buildResearchQueries respects the four-query cost guard and uses expanded 
   assert.equal(queries.some(x=>x.market==='Nordics'),false);
 });
 
+test('research recommendations explain selected source categories and preserve custom research inputs',()=>{
+  const signals=Market.normalizeSignals(profile.recommendedSignals,[]);
+  const recommendations=Market.buildResearchRecommendations(profile,signals,['news','tenders'],'en');
+  assert.ok(recommendations.length>=2);
+  assert.match(recommendations[0].reason,/profile|signal|market/i);
+  const normalized=Market.normalizeMarketState({researchSourceTypes:['news','jobs'],researchCustomSources:['https://example.com/news','not-a-url'],researchInstructions:'Focus on Latvian tenders'});
+  assert.deepEqual(normalized.researchSourceTypes,['news','jobs']);
+  assert.deepEqual(normalized.researchCustomSources,['https://example.com/news']);
+  assert.equal(normalized.researchInstructions,'Focus on Latvian tenders');
+});
+
 test('normalizeSearchResults accepts Firecrawl search payload and keeps source evidence',()=>{
   const meta={id:'q-1',market:'Sweden',query:'Sweden automation investment'};
   const results=Market.normalizeSearchResults({data:[

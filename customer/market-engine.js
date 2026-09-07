@@ -7,7 +7,7 @@
 
   const DEFAULT_MARKET_STATE=Object.freeze({
     icps:[],signals:[],researchQueries:[],researchResults:[],opportunities:[],
-    researchStatus:"idle",researchSourceStatus:{openai:"idle",firecrawl:"idle"},lastResearchAt:"",researchMode:"quick",researchHistory:[],monitoring:{enabled:false,frequency:"weekly",researchDepth:"deep",minimumScore:70,sourceTypes:["news","tenders","jobs","investments","company"],signalIds:[],customSources:[]},strategyApproved:false,strategyApprovedAt:""
+    researchStatus:"idle",researchSourceStatus:{openai:"idle",firecrawl:"idle"},lastResearchAt:"",researchMode:"quick",researchSourceTypes:["news","tenders"],researchCustomSources:[],researchInstructions:"",researchHistory:[],monitoring:{enabled:false,frequency:"weekly",researchDepth:"deep",minimumScore:70,sourceTypes:["news","tenders","jobs","investments","company"],signalIds:[],customSources:[]},strategyApproved:false,strategyApprovedAt:""
   });
 
   const RESEARCH_MODES=Object.freeze({
@@ -140,7 +140,7 @@
     for(const market of (markets.length?markets:["priority market"]))for(const offer of offers)for(const sourceType of categories)combinations.push({market,offer,sourceType});
     for(let index=0;results.length<limit;index++){
       const base=combinations[index%combinations.length];const cycle=Math.floor(index/combinations.length);const signal=signalTerms[(index+cycle)%Math.max(1,signalTerms.length)]||clean(profile.buyingTriggers)||"business opportunity";
-      const query=[base.market,base.offer,marketFocus,clean(profile.idealCustomer),signal,SOURCE_TYPES[base.sourceType],new Date().getUTCFullYear()].filter(Boolean).join(" ");
+      const query=[base.market,base.offer,marketFocus,clean(profile.idealCustomer),signal,SOURCE_TYPES[base.sourceType],clean(input.instructions),new Date().getUTCFullYear()].filter(Boolean).join(" ");
       if(results.some(item=>item.query===query)){
         if(index>limit*4)break;
         continue;
@@ -148,6 +148,21 @@
       results.push({id:`q-${slug(base.market)}-${results.length+1}`,market:base.market,offer:base.offer,sourceType:base.sourceType,query});
     }
     return results;
+  }
+
+  function buildResearchRecommendations(profile={},signals=[],sourceTypes=[],language="en"){
+    const lv=isLv(language);const markets=effectiveResearchMarkets(profile);const market=markets[0]|| (lv?"izvēlētajā tirgū":"the selected market");
+    const active=(signals||[]).filter(item=>item.active!==false).sort((a,b)=>Number(b.weight)-Number(a.weight));const signal=clean(active[0]?.name||profile.buyingTriggers)||(lv?"pirkšanas signālus":"buying signals");
+    const offers=clean(profile.priorityOffers)||(lv?"prioritāro piedāvājumu":"priority offer");
+    const reasons={
+      news:lv?`Meklēt ziņas par ${market}, jo šis tirgus var atklāt paplašināšanos, pārcelšanos vai citus notikumus, kuros var būt vajadzīgs ${offers}.`:`Search news about ${market} because this market can reveal expansion, relocation and other events that may create demand for the ${offers}.`,
+      tenders:lv?`Pārbaudīt iepirkumus ${market}, jo tie var norādīt uz konkrētu un laika ziņā aktuālu iegādes vajadzību.`:`Check tenders in ${market} because they can reveal a concrete, time-bound buying need.`,
+      jobs:lv?`Meklēt darbā pieņemšanu ${market}, jo jaunas komandas vai vadības lomas bieži norāda uz izaugsmi un jaunu telpu vajadzībām.`:`Search hiring activity in ${market} because new teams or leadership roles can indicate growth and workplace needs.`,
+      investments:lv?`Pārbaudīt ieguldījumus ${market}, jo finansējums, būvniecība un modernizācija var radīt lielākas komerciālas iespējas.`:`Check investments in ${market} because funding, construction and modernization can create larger commercial opportunities.`,
+      company:lv?`Pārbaudīt uzņēmumu vietnes, lai salīdzinātu oficiālus paziņojumus, projektus un piedāvājuma atbilstību.`:`Check company websites to compare official announcements, projects and offer fit.`,
+      registries:lv?`Pārbaudīt reģistrus un gada pārskatus, lai novērtētu uzņēmuma esamību, mērogu un darbības stabilitāti.`:`Check registries and annual reports to validate company existence, scale and operating stability.`
+    };
+    return (splitList(sourceTypes).filter(type=>reasons[type]).slice(0,6)).map(type=>({type,label:type[0].toUpperCase()+type.slice(1),reason:reasons[type],signal}));
   }
 
   function normalizeMonitoring(value={}){
@@ -298,6 +313,10 @@
       description:clean(item?.description),targetMarkets:clean(item?.targetMarkets),buyerRoles:clean(item?.buyerRoles),value:clean(item?.value),exclusions:clean(item?.exclusions),offers:clean(item?.offers),rationale:clean(item?.rationale)
     }));
     const researchMode=input.researchMode==="deep"?"deep":"quick";
+    const defaultResearchSources=researchMode==="deep"?["news","tenders","jobs","investments","company","registries"]:["news","tenders"];
+    const researchSourceTypes=splitList(input.researchSourceTypes).filter(type=>SOURCE_TYPES[type]).slice(0,6);
+    const researchCustomSources=splitList(input.researchCustomSources).map(normalizeUrl).filter(Boolean).slice(0,20);
+    const researchInstructions=clean(input.researchInstructions).slice(0,1200);
     const researchQueries=(Array.isArray(input.researchQueries)?input.researchQueries:[]).slice(0,RESEARCH_MODES[researchMode].maxQueries).map(item=>({id:clean(item?.id),market:clean(item?.market),offer:clean(item?.offer),sourceType:clean(item?.sourceType),query:clean(item?.query)})).filter(item=>item.id&&item.query);
     const researchResults=(Array.isArray(input.researchResults)?input.researchResults:[]).slice(0,RESEARCH_MODES[researchMode].maxStoredResults).map(item=>({
       queryId:clean(item?.queryId),market:clean(item?.market),query:clean(item?.query),url:canonicalUrl(item?.url),title:clean(item?.title),description:clean(item?.description),text:String(item?.text||"").slice(0,5000),date:clean(item?.date),sourceProviders:normalizeProviders(item?.sourceProviders)
@@ -311,11 +330,11 @@
     const researchSourceStatus={openai:sourceAllowed.has(rawSourceStatus.openai)?rawSourceStatus.openai:"idle",firecrawl:sourceAllowed.has(rawSourceStatus.firecrawl)?rawSourceStatus.firecrawl:"idle"};
     return {
       ...DEFAULT_MARKET_STATE,icps,signals,researchQueries,researchResults,opportunities,researchSourceStatus,
-      researchStatus:allowed.has(input.researchStatus)?input.researchStatus:"idle",researchMode,
+      researchStatus:allowed.has(input.researchStatus)?input.researchStatus:"idle",researchMode,researchSourceTypes:researchSourceTypes.length?researchSourceTypes:defaultResearchSources,researchCustomSources,researchInstructions,
       researchHistory:(Array.isArray(input.researchHistory)?input.researchHistory:[]).slice(0,20).map(item=>({id:clean(item?.id),mode:item?.mode==="deep"?"deep":"quick",status:clean(item?.status),sourceCount:Math.max(0,Number(item?.sourceCount)||0),queryCount:Math.max(0,Number(item?.queryCount)||0),completedAt:clean(item?.completedAt)})).filter(item=>item.id),monitoring:normalizeMonitoring(input.monitoring),
       lastResearchAt:clean(input.lastResearchAt),strategyApproved:Boolean(input.strategyApproved),strategyApprovedAt:clean(input.strategyApprovedAt),contentLanguage:['en','lv'].includes(input.contentLanguage)?input.contentLanguage:'',contentVariants:input.contentVariants&&typeof input.contentVariants==='object'?input.contentVariants:{}
     };
   }
 
-  return {DEFAULT_MARKET_STATE,RESEARCH_MODES,SOURCE_TYPES,effectiveResearchMarkets,buildIcpCandidates,normalizeSignals,addCustomSignal,buildResearchQueries,normalizeSearchResults,mergeResearchResults,buildMarketOpportunities,localizeGeneratedState,normalizeMarketState,normalizeMonitoring,appendResearchHistory,getMarketJourneyState,splitList};
+  return {DEFAULT_MARKET_STATE,RESEARCH_MODES,SOURCE_TYPES,effectiveResearchMarkets,buildIcpCandidates,normalizeSignals,addCustomSignal,buildResearchQueries,buildResearchRecommendations,normalizeSearchResults,mergeResearchResults,buildMarketOpportunities,localizeGeneratedState,normalizeMarketState,normalizeMonitoring,appendResearchHistory,getMarketJourneyState,splitList};
 });
