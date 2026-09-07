@@ -16,9 +16,19 @@ const signals=[
   {id:'s4',name:'Hiring growth',active:true,weight:7,keywords:'hiring; vacancies'}
 ];
 
-test('quick and deep research modes have explicit, bounded cost controls',()=>{
+test('three market research modes have explicit, progressively bounded cost controls',()=>{
   assert.deepEqual(market.RESEARCH_MODES.quick,{maxQueries:4,resultsPerQuery:5,maxStoredResults:20});
   assert.deepEqual(market.RESEARCH_MODES.deep,{maxQueries:12,resultsPerQuery:8,maxStoredResults:80});
+  assert.deepEqual(market.RESEARCH_MODES.intelligence,{maxQueries:24,resultsPerQuery:10,maxStoredResults:200});
+});
+
+test('market intelligence creates a wider set of unique searches than market research',()=>{
+  const research=market.buildResearchQueries(profile,signals,{mode:'deep',sourceTypes:['news','jobs','investments','company','registries'],language:'en'});
+  const intelligence=market.buildResearchQueries(profile,signals,{mode:'intelligence',sourceTypes:['news','jobs','investments','company','registries'],language:'en'});
+  assert.equal(research.length,12);
+  assert.equal(intelligence.length,24);
+  assert.equal(new Set(intelligence.map(item=>item.query)).size,24);
+  assert.ok(new Set(intelligence.map(item=>item.sourceType)).size>=4);
 });
 
 test('deep research creates source-category queries beyond the quick snapshot',()=>{
@@ -79,6 +89,14 @@ test('market state preserves research history and monitoring preferences',()=>{
   assert.equal(state.researchHistory.length,1);
   assert.deepEqual(state.monitoring.sourceTypes,['news','tenders']);
   assert.equal(state.monitoring.minimumScore,70);
+});
+
+test('market state preserves the intelligence mode and migrates existing modes safely',()=>{
+  assert.equal(market.normalizeMarketState({researchMode:'intelligence'}).researchMode,'intelligence');
+  assert.equal(market.normalizeMarketState({researchMode:'deep'}).researchMode,'deep');
+  assert.equal(market.normalizeMarketState({researchMode:'quick'}).researchMode,'quick');
+  const history=market.normalizeMarketState({researchHistory:[{id:'run-i',mode:'intelligence',status:'complete',sourceCount:42}]}).researchHistory;
+  assert.equal(history[0].mode,'intelligence');
 });
 
 test('new research and monitoring configurations do not include tenders by default',()=>{
