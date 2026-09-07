@@ -31,7 +31,14 @@ def _public_url(value: str) -> str:
     if host in {"localhost"} or host.endswith((".localhost", ".local", ".internal", ".lan")):
         raise HTTPException(status_code=400, detail="Private or local URLs are not allowed")
     try:
-        addresses = {row[4][0] for row in socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)}
+        addresses = {
+            row[4][0]
+            for row in socket.getaddrinfo(
+                host,
+                parsed.port or (443 if parsed.scheme == "https" else 80),
+                type=socket.SOCK_STREAM,
+            )
+        }
     except socket.gaierror as exc:
         raise HTTPException(status_code=422, detail="Unable to resolve target host") from exc
     for raw in addresses:
@@ -50,6 +57,11 @@ def _title(page) -> str:
         return str(value or "").strip()[:180]
     except Exception:
         return ""
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "service": "leadintel-scrapling"}
 
 
 @app.post("/api/scrapling")

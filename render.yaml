@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: leadintel-scrapling
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api.scrapling:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: SCRAPLING_SERVICE_TOKEN
+        generateValue: true
