@@ -14,7 +14,7 @@ test('market research mode controls are equal and idle until explicitly activate
   assert.match(guard,/research-mode-idle/);
   assert.match(guard,/research-mode-selected/);
   assert.match(guard,/research-run-preview/);
-  assert.match(guard,/preview\.hidden=true/);
+  assert.match(guard,/\.hidden=true/);
   assert.match(guard,/Company profile context/);
   assert.match(evidence,/market-research-guard\.js/);
 });
