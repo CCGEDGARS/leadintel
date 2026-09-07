@@ -19,7 +19,10 @@ test('configured Vercel customer root owns the Scrapling function deployment',()
   assert.equal(config.functions?.['api/**/*.py']?.maxDuration,60);
   const requirements=fs.readFileSync(requirementsPath,'utf8');
   assert.match(requirements,/^fastapi==/m);
-  assert.match(requirements,/^scrapling\[fetchers\]==0\.4\.15$/m);
+  assert.match(requirements,/^scrapling==0\.4\.15$/m);
+  assert.match(requirements,/^curl_cffi==/m,'static Fetcher needs curl_cffi');
+  assert.match(requirements,/^browserforge==/m,'static Fetcher header generation needs browserforge');
+  assert.doesNotMatch(requirements,/scrapling\[fetchers\]|playwright|patchright/i,'serverless runtime must not install browser automation dependencies');
 });
 
 test('customer-root Scrapling runtime exposes GET health proof and protected POST extraction',()=>{
