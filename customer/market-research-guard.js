@@ -5,7 +5,13 @@
 })(typeof globalThis!=="undefined"?globalThis:this,function(){
   "use strict";
 
+  const STORAGE_KEY="leadintel_customer_v2_state";
   const BUTTON_IDS=Object.freeze(["run-market-research","run-detailed-research","run-market-intelligence"]);
+  const BUTTON_META=Object.freeze({
+    "run-market-research":Object.freeze({mode:"quick",label:"Market Scan"}),
+    "run-detailed-research":Object.freeze({mode:"deep",label:"Market Research"}),
+    "run-market-intelligence":Object.freeze({mode:"intelligence",label:"Market Intelligence"})
+  });
   let activated=false;
   let observer=null;
   let queued=false;
@@ -29,6 +35,11 @@
 
   function actions(root){return root?.document?.querySelector?.(".research-actions")||null;}
   function preview(root){return root?.document?.getElementById?.("research-run-preview")||null;}
+  function readState(root){try{return JSON.parse(root?.localStorage?.getItem?.(STORAGE_KEY)||"{}");}catch{return {};}}
+  function runningButtonId(root){
+    const market=readState(root)?.market||{};if(market.researchStatus!=="running")return "";
+    return BUTTON_IDS.find(id=>BUTTON_META[id].mode===market.researchMode)||"run-market-research";
+  }
 
   function setIdle(root){
     activated=false;
@@ -41,6 +52,18 @@
     activated=true;
     const group=actions(root);if(group){group.classList.remove("research-mode-idle");group.classList.add("research-mode-activated");}
     for(const buttonId of BUTTON_IDS){const button=root.document.getElementById(buttonId);const selected=buttonId===id;button?.closest?.(".research-mode-choice")?.classList?.toggle?.("research-mode-selected",selected);button?.setAttribute?.("aria-pressed",selected?"true":"false");}
+  }
+
+  function syncRunningState(root){
+    const activeId=runningButtonId(root);if(!activeId)return false;
+    setActivated(root,activeId);
+    for(const id of BUTTON_IDS){
+      const button=root.document.getElementById(id);if(!button)continue;
+      button.disabled=true;
+      const label=id===activeId?"Researching…":BUTTON_META[id].label;
+      if(button.textContent!==label)button.textContent=label;
+    }
+    return true;
   }
 
   function protectPreview(root){
@@ -58,7 +81,7 @@
     });
   }
 
-  function refresh(root){protectPreview(root);labelProfileContext(root);}
+  function refresh(root){syncRunningState(root);protectPreview(root);labelProfileContext(root);}
   function schedule(root){if(queued)return;queued=true;const run=()=>{queued=false;refresh(root);};if(typeof root.requestAnimationFrame==="function")root.requestAnimationFrame(run);else root.setTimeout?.(run,0);}
 
   function install(root){
@@ -75,9 +98,9 @@
       observer=new root.MutationObserver(()=>schedule(root));
       observer.observe(root.document.body,{childList:true,subtree:true,attributes:true,attributeFilter:["hidden","class"]});
     }
-    root.addEventListener?.("leadintel:module-opened",()=>{setIdle(root);schedule(root);});
+    root.addEventListener?.("leadintel:module-opened",()=>{if(!syncRunningState(root))setIdle(root);schedule(root);});
     return true;
   }
 
-  return {BUTTON_IDS,install,setIdle,setActivated,protectPreview};
+  return {STORAGE_KEY,BUTTON_IDS,BUTTON_META,install,setIdle,setActivated,runningButtonId,syncRunningState,protectPreview};
 });
