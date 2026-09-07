@@ -73,6 +73,7 @@ jobs:
           node --check backend/src/crm-routes.js
           node --check customer/profile-engine.js
           node --check customer/market-engine.js
+          node --check customer/linkedin-signals.js
           node --check customer/discovery-engine.js
           node --check customer/outreach-engine.js
           node --check customer/delivery-engine.js
