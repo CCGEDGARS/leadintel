@@ -19,8 +19,8 @@ export default {
     if(request.headers.get('Origin')&&!origin)return new Response(JSON.stringify({error:'Origin not allowed'}),{status:403,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...cors}});
     try{
       const ai=await handleAiRoute(request,env,cors);if(ai)return ai;
-      const service=await handleServiceIntegrationRoute(request,env,cors);if(service)return service;
       const scrapling=await handleScraplingRoute(request,env,cors);if(scrapling)return scrapling;
+      const service=await handleServiceIntegrationRoute(request,env,cors);if(service)return service;
       const monitoring=await handleMarketMonitoringRoute(request,env,cors);if(monitoring)return monitoring;
       const runtimeEnv=await withWorkspaceServiceCredentials(request,env);
       const crm=await handleCrmRoute(request,runtimeEnv,cors);if(crm)return crm;

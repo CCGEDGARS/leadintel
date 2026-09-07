@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {fetchWithScrapling,scraplingConfigured} from '../src/scrapling.js';
 import {handleScraplingRoute} from '../src/scrapling-routes.js';
+import app from '../src/app.js';
 
 test('Scrapling is unavailable without a configured service URL',()=>{
   assert.equal(scraplingConfigured({}),false);
@@ -30,6 +31,17 @@ test('Scrapling rejects malformed or falsely labelled runtime responses',async()
   globalThis.fetch=async()=>new Response(JSON.stringify({success:true,data:{markdown:'x',metadata:{source:'direct-fallback'}}}),{status:200,headers:{'content-type':'application/json'}});
   try{
     await assert.rejects(()=>fetchWithScrapling({SCRAPLING_SERVICE_URL:'https://scrape.example/api/scrapling'},'https://example.com'),/invalid Scrapling response/i);
+  }finally{globalThis.fetch=original;}
+});
+
+test('production app router sends Scrapling-owned routes to the dedicated handler before generic service integrations',async()=>{
+  const original=globalThis.fetch;
+  globalThis.fetch=async()=>new Response(JSON.stringify({success:true,data:{markdown:'Example Domain',metadata:{title:'Example Domain',sourceURL:'https://example.com/',statusCode:200,source:'scrapling-fallback'}}}),{status:200,headers:{'content-type':'application/json'}});
+  try{
+    const response=await app.fetch(new Request('https://leadintel-api.example/api/integrations/services/scrapling/health'),{SCRAPLING_SERVICE_URL:'https://scrape.example/api/scrapling',SCRAPLING_SERVICE_TOKEN:'secret'});
+    assert.equal(response.status,200);
+    const payload=await response.json();
+    assert.equal(payload.source,'scrapling-fallback');
   }finally{globalThis.fetch=original;}
 });
 
