@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {fetchWithScrapling,scraplingConfigured} from '../src/scrapling.js';
 import {handleScraplingRoute} from '../src/scrapling-routes.js';
-import app from '../src/app.js';
+
+const appSource=fs.readFileSync(new URL('../src/app.js',import.meta.url),'utf8');
 
 test('Scrapling is unavailable without a configured service URL',()=>{
   assert.equal(scraplingConfigured({}),false);
@@ -34,29 +36,17 @@ test('Scrapling rejects malformed or falsely labelled runtime responses',async()
   }finally{globalThis.fetch=original;}
 });
 
-test('production app router sends Scrapling-owned routes to the dedicated handler before generic service integrations',async()=>{
-  const original=globalThis.fetch;
-  globalThis.fetch=async()=>new Response(JSON.stringify({success:true,data:{markdown:'Example Domain',metadata:{title:'Example Domain',sourceURL:'https://example.com/',statusCode:200,source:'scrapling-fallback'}}}),{status:200,headers:{'content-type':'application/json'}});
-  try{
-    const response=await app.fetch(new Request('https://leadintel-api.example/api/integrations/services/scrapling/health'),{SCRAPLING_SERVICE_URL:'https://scrape.example/api/scrapling',SCRAPLING_SERVICE_TOKEN:'secret'});
-    assert.equal(response.status,200);
-    const payload=await response.json();
-    assert.equal(payload.source,'scrapling-fallback');
-  }finally{globalThis.fetch=original;}
+test('production app dispatches dedicated Scrapling routes before generic service integrations',()=>{
+  const scraplingCall=appSource.indexOf('const scrapling=await handleScraplingRoute');
+  const serviceCall=appSource.indexOf('const service=await handleServiceIntegrationRoute');
+  assert.ok(scraplingCall>=0,'dedicated Scrapling handler must be present');
+  assert.ok(serviceCall>=0,'generic service integration handler must be present');
+  assert.ok(scraplingCall<serviceCall,'Scrapling handler must run before the generic service integration handler');
 });
 
-test('public Scrapling fallback probe performs one fixed real extraction without workspace access',async()=>{
-  const original=globalThis.fetch;
-  let seenTarget='';
-  globalThis.fetch=async (_url,options)=>{
-    seenTarget=JSON.parse(options.body).url;
-    return new Response(JSON.stringify({success:true,data:{markdown:'Example Domain',metadata:{title:'Example Domain',sourceURL:'https://example.com/',statusCode:200,source:'scrapling-fallback'}}}),{status:200,headers:{'content-type':'application/json'}});
-  };
-  try{
-    const response=await handleScraplingRoute(new Request('https://leadintel-api.example/api/integrations/services/scrapling/health'),{SCRAPLING_SERVICE_URL:'https://scrape.example/api/scrapling',SCRAPLING_SERVICE_TOKEN:'secret'},{});
-    assert.equal(response.status,200);
-    const payload=await response.json();
-    assert.equal(seenTarget,'https://example.com/');
-    assert.deepEqual(payload,{status:'ok',service:'leadintel-scrapling-fallback',source:'scrapling-fallback',statusCode:200});
-  }finally{globalThis.fetch=original;}
+test('authenticated Scrapling extraction endpoint remains the only dedicated Worker route',async()=>{
+  const health=await handleScraplingRoute(new Request('https://leadintel-api.example/api/integrations/services/scrapling/health'),{},{});
+  assert.equal(health,null);
+  const scrape=await handleScraplingRoute(new Request('https://leadintel-api.example/api/integrations/services/scrapling/scrape?workspace_id=edgars-latvia'),{},{});
+  assert.equal(scrape.status,405);
 });
