@@ -224,3 +224,36 @@ test('failed research does not unlock strategy activation',()=>{
   assert.equal(view.showActivation,false);
   assert.equal(view.showMonitoring,false);
 });
+
+test('an abandoned persisted research run is recovered instead of remaining stuck',()=>{
+  const recovered=Market.recoverInterruptedResearch({
+    researchStatus:'running',
+    researchSourceStatus:{openai:'running',firecrawl:'running'},
+    researchProgress:{completed:3,total:12}
+  });
+  assert.equal(recovered.researchStatus,'error');
+  assert.deepEqual(recovered.researchSourceStatus,{openai:'error',firecrawl:'error'});
+  assert.deepEqual(recovered.researchProgress,{completed:0,total:0});
+});
+
+test('timed research operations abort and reject instead of hanging forever',async()=>{
+  let capturedSignal;
+  await assert.rejects(
+    Market.withTimeout(signal=>{capturedSignal=signal;return new Promise(()=>{});},20,'Test search'),
+    /Test search timed out/
+  );
+  assert.equal(capturedSignal.aborted,true);
+});
+
+test('research work runs with bounded concurrency and reports progress',async()=>{
+  let active=0,maxActive=0;
+  const progress=[];
+  const results=await Market.mapWithConcurrency([1,2,3,4,5],async value=>{
+    active++;maxActive=Math.max(maxActive,active);
+    await new Promise(resolve=>setTimeout(resolve,5));
+    active--;return value*2;
+  },{concurrency:2,onProgress:update=>progress.push(update)});
+  assert.deepEqual(results,[2,4,6,8,10]);
+  assert.equal(maxActive,2);
+  assert.deepEqual(progress.at(-1),{completed:5,total:5});
+});

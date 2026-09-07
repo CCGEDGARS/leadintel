@@ -6,7 +6,7 @@ const path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
 
 test('market research translates generated content into the selected language before final display',()=>{
-  assert.match(source,/await localizeMarketGeneratedContent\(\{render:false\}\)/);
+  assert.match(source,/await LeadIntelMarket\.withTimeout\([^\n]*localizeMarketGeneratedContent\(\{render:false\}\)/);
   assert.match(source,/LeadIntelContentLanguage\.translateMarketState/);
   assert.match(source,/opp\.marketLabel\|\|opp\.market/);
   assert.match(source,/source\.displayTitle\|\|source\.title/);

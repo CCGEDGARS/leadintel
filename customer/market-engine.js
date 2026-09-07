@@ -7,7 +7,7 @@
 
   const DEFAULT_MARKET_STATE=Object.freeze({
     icps:[],signals:[],researchQueries:[],researchResults:[],opportunities:[],
-    researchStatus:"idle",researchSourceStatus:{openai:"idle",firecrawl:"idle"},lastResearchAt:"",researchMode:"quick",researchSourceTypes:["news","tenders"],researchCustomSources:[],researchInstructions:"",researchHistory:[],monitoring:{enabled:false,frequency:"weekly",researchDepth:"deep",minimumScore:70,sourceTypes:["news","tenders","jobs","investments","company"],signalIds:[],customSources:[]},strategyApproved:false,strategyApprovedAt:""
+    researchStatus:"idle",researchSourceStatus:{openai:"idle",firecrawl:"idle"},researchProgress:{completed:0,total:0},lastResearchAt:"",researchMode:"quick",researchSourceTypes:["news","tenders"],researchCustomSources:[],researchInstructions:"",researchHistory:[],monitoring:{enabled:false,frequency:"weekly",researchDepth:"deep",minimumScore:70,sourceTypes:["news","tenders","jobs","investments","company"],signalIds:[],customSources:[]},strategyApproved:false,strategyApprovedAt:""
   });
 
   const RESEARCH_MODES=Object.freeze({
@@ -328,13 +328,51 @@
     const allowed=new Set(["idle","running","complete","partial","error"]),sourceAllowed=new Set(["idle","running","complete","partial","error","unavailable"]);
     const rawSourceStatus=input.researchSourceStatus&&typeof input.researchSourceStatus==="object"?input.researchSourceStatus:{};
     const researchSourceStatus={openai:sourceAllowed.has(rawSourceStatus.openai)?rawSourceStatus.openai:"idle",firecrawl:sourceAllowed.has(rawSourceStatus.firecrawl)?rawSourceStatus.firecrawl:"idle"};
+    const rawProgress=input.researchProgress&&typeof input.researchProgress==="object"?input.researchProgress:{};
+    const researchProgress={completed:Math.max(0,Number(rawProgress.completed)||0),total:Math.max(0,Number(rawProgress.total)||0)};
     return {
-      ...DEFAULT_MARKET_STATE,icps,signals,researchQueries,researchResults,opportunities,researchSourceStatus,
+      ...DEFAULT_MARKET_STATE,icps,signals,researchQueries,researchResults,opportunities,researchSourceStatus,researchProgress,
       researchStatus:allowed.has(input.researchStatus)?input.researchStatus:"idle",researchMode,researchSourceTypes:researchSourceTypes.length?researchSourceTypes:defaultResearchSources,researchCustomSources,researchInstructions,
       researchHistory:(Array.isArray(input.researchHistory)?input.researchHistory:[]).slice(0,20).map(item=>({id:clean(item?.id),mode:item?.mode==="deep"?"deep":"quick",status:clean(item?.status),sourceCount:Math.max(0,Number(item?.sourceCount)||0),queryCount:Math.max(0,Number(item?.queryCount)||0),completedAt:clean(item?.completedAt)})).filter(item=>item.id),monitoring:normalizeMonitoring(input.monitoring),
       lastResearchAt:clean(input.lastResearchAt),strategyApproved:Boolean(input.strategyApproved),strategyApprovedAt:clean(input.strategyApprovedAt),contentLanguage:['en','lv'].includes(input.contentLanguage)?input.contentLanguage:'',contentVariants:input.contentVariants&&typeof input.contentVariants==='object'?input.contentVariants:{}
     };
   }
 
-  return {DEFAULT_MARKET_STATE,RESEARCH_MODES,SOURCE_TYPES,effectiveResearchMarkets,buildIcpCandidates,normalizeSignals,addCustomSignal,buildResearchQueries,buildResearchRecommendations,normalizeSearchResults,mergeResearchResults,buildMarketOpportunities,localizeGeneratedState,normalizeMarketState,normalizeMonitoring,appendResearchHistory,getMarketJourneyState,splitList};
+  function recoverInterruptedResearch(value={}){
+    const next=normalizeMarketState(value);
+    if(next.researchStatus!=="running")return next;
+    next.researchStatus="error";
+    next.researchSourceStatus={
+      openai:next.researchSourceStatus.openai==="running"?"error":next.researchSourceStatus.openai,
+      firecrawl:next.researchSourceStatus.firecrawl==="running"?"error":next.researchSourceStatus.firecrawl
+    };
+    next.researchProgress={completed:0,total:0};
+    return next;
+  }
+
+  function withTimeout(operation,timeoutMs=30000,label="Research request"){
+    const controller=new AbortController();
+    return new Promise((resolve,reject)=>{
+      let settled=false;
+      const finish=(callback,value)=>{if(settled)return;settled=true;clearTimeout(timer);callback(value);};
+      const timer=setTimeout(()=>{controller.abort();finish(reject,new Error(`${label} timed out`));},Math.max(1,Number(timeoutMs)||30000));
+      Promise.resolve().then(()=>operation(controller.signal)).then(value=>finish(resolve,value),error=>finish(reject,error));
+    });
+  }
+
+  async function mapWithConcurrency(items,worker,{concurrency=3,onProgress=()=>{}}={}){
+    const list=Array.from(items||[]),results=new Array(list.length);
+    let cursor=0,completed=0;
+    async function runWorker(){
+      while(cursor<list.length){
+        const index=cursor++;
+        results[index]=await worker(list[index],index);
+        completed++;onProgress({completed,total:list.length});
+      }
+    }
+    await Promise.all(Array.from({length:Math.min(Math.max(1,Number(concurrency)||1),list.length)},runWorker));
+    return results;
+  }
+
+  return {DEFAULT_MARKET_STATE,RESEARCH_MODES,SOURCE_TYPES,effectiveResearchMarkets,buildIcpCandidates,normalizeSignals,addCustomSignal,buildResearchQueries,buildResearchRecommendations,normalizeSearchResults,mergeResearchResults,buildMarketOpportunities,localizeGeneratedState,normalizeMarketState,recoverInterruptedResearch,withTimeout,mapWithConcurrency,normalizeMonitoring,appendResearchHistory,getMarketJourneyState,splitList};
 });

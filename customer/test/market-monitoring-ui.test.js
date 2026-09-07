@@ -35,6 +35,14 @@ test('research settings explain source choices and accept user guidance before a
   assert.match(app,/searchCustomSource/);
 });
 
+test('market research cannot remain indefinitely busy and exposes live progress',()=>{
+  assert.match(app,/recoverInterruptedResearch/);
+  assert.match(app,/withTimeout/);
+  assert.match(app,/mapWithConcurrency/);
+  assert.match(app,/researchProgress/);
+  assert.match(app,/finally\s*\{/);
+});
+
 test('activation exposes automatic monitoring configuration and alerts',()=>{
   for(const id of ['monitoring-enabled','monitoring-frequency','monitoring-minimum-score','save-monitoring','run-monitoring-now','monitoring-alerts','monitoring-history'])assert.match(html,new RegExp(`id="${id}"`));
   assert.match(app,/\/api\/market-monitoring\/config/);
