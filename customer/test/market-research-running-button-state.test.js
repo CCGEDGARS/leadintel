@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const guard=fs.readFileSync(new URL('../market-research-guard.js',import.meta.url),'utf8');
+const evidenceView=fs.readFileSync(new URL('../evidence-view.js',import.meta.url),'utf8');
 
 test('running research keeps only the selected mode labelled Researching',()=>{
   assert.match(guard,/"run-market-research":Object\.freeze\(\{mode:"quick",label:"Market Scan"\}\)/);
@@ -12,4 +13,8 @@ test('running research keeps only the selected mode labelled Researching',()=>{
   assert.match(guard,/const label=id===activeId\?"Researching…":BUTTON_META\[id\]\.label/);
   assert.match(guard,/button\.disabled=true/);
   assert.match(guard,/setActivated\(root,activeId\)/);
+});
+
+test('browser loads the running-state guard through a fresh cache version',()=>{
+  assert.match(evidenceView,/market-research-guard\.js\?v=20260907-running-state-v2/);
 });
