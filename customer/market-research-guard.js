@@ -41,11 +41,17 @@
     return BUTTON_IDS.find(id=>BUTTON_META[id].mode===market.researchMode)||"run-market-research";
   }
 
+  function hidePreview(panel){
+    if(!panel)return;
+    if(!panel.hidden)panel.hidden=true;
+    panel.setAttribute?.("aria-hidden","true");
+  }
+
   function setIdle(root){
     activated=false;
     const group=actions(root);if(group){group.classList.add("research-mode-idle");group.classList.remove("research-mode-activated");}
     for(const id of BUTTON_IDS){const button=root.document.getElementById(id);button?.closest?.(".research-mode-choice")?.classList?.remove?.("research-mode-selected");button?.setAttribute?.("aria-pressed","false");}
-    const panel=preview(root);if(panel){panel.hidden=true;panel.setAttribute?.("aria-hidden","true");}
+    hidePreview(preview(root));
   }
 
   function setActivated(root,id){
@@ -68,7 +74,7 @@
 
   function protectPreview(root){
     const panel=preview(root);if(!panel)return;
-    if(!activated){panel.hidden=true;panel.setAttribute?.("aria-hidden","true");}
+    if(!activated)hidePreview(panel);
     else if(!panel.hidden)panel.removeAttribute?.("aria-hidden");
   }
 
