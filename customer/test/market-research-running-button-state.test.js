@@ -15,6 +15,6 @@ test('running research keeps only the selected mode labelled Researching',()=>{
   assert.match(guard,/setActivated\(root,activeId\)/);
 });
 
-test('browser loads the running-state guard through a fresh cache version',()=>{
-  assert.match(evidenceView,/market-research-guard\.js\?v=20260907-running-state-v2/);
+test('browser loads the running-state guard through the current render-loop-safe cache version',()=>{
+  assert.match(evidenceView,/market-research-guard\.js\?v=20260908-render-loop-v1/);
 });
