@@ -39,27 +39,27 @@ function extractScrapeUrl(options={}){
 async function routedFetch(input,options={}){
   const target=rewriteTarget(input);if(!target)return originalFetch(input,options);
   const kind=target.includes('/firecrawl/scrape')?'scrape':'search';
-  const routedOptions=kind==='search'?sanitizeSearchRequestOptions(options):options;
+  if(kind==='search')options=sanitizeSearchRequestOptions(options);
   try{
-    const response=await originalFetch(target,{...routedOptions,credentials:'include',headers:{Accept:'application/json',...(routedOptions.headers||{})}});
+    const response=await originalFetch(target,{...options,credentials:'include',headers:{Accept:'application/json',...(options.headers||{})}});
     if(!retryableStatus(response.status))return response;
-    const scrapling=scraplingTarget(kind);const url=extractScrapeUrl(routedOptions);
+    const scrapling=scraplingTarget(kind);const url=extractScrapeUrl(options);
     if(scrapling&&url){
       try{
         const fallback=await originalFetch(scrapling,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({url})});
         if(fallback.ok)return fallback;
       }catch{}
     }
-    return originalFetch(input,routedOptions);
+    return originalFetch(input,options);
   }catch(error){
-    const scrapling=scraplingTarget(kind);const url=extractScrapeUrl(routedOptions);
+    const scrapling=scraplingTarget(kind);const url=extractScrapeUrl(options);
     if(scrapling&&url){
       try{
         const fallback=await originalFetch(scrapling,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({url})});
         if(fallback.ok)return fallback;
       }catch{}
     }
-    return originalFetch(input,routedOptions);
+    return originalFetch(input,options);
   }
 }
 if(!window.__leadintelFirecrawlWorkspaceRouterInstalled){window.__leadintelFirecrawlWorkspaceRouterInstalled=true;window.fetch=routedFetch;}
