@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {sha256} from '../src/security.js';
-import {handleSaasRoute} from '../src/saas-routes.js';
+import {handleOutreachAutomationRoute} from '../src/outreach-automation-routes.js';
 
 let DatabaseSync=null;try{({DatabaseSync}=await import('node:sqlite'));}catch{}
 const sqliteTest=(name,fn)=>test(name,{skip:DatabaseSync?false:'requires Node sqlite'},fn);
@@ -35,11 +35,11 @@ function request(path,{method='GET',token,body}={}){return new Request(`https://
 
 sqliteTest('policy GET is fail-safe default, sales can read, and only owner can mutate',async()=>{
   const owner=await fixture('owner');
-  let response=await handleSaasRoute(request('/api/outreach-automation/policy?workspace_id=w1',{token:owner.token}),owner.env,{});let result=await response.json();
+  let response=await handleOutreachAutomationRoute(request('/api/outreach-automation/policy?workspace_id=w1',{token:owner.token}),owner.env,{});let result=await response.json();
   assert.equal(response.status,200);assert.equal(result.policy.mode,'manual');assert.equal(result.policy.enabled,false);assert.equal(result.policy.workspaceDailyLimit,20);
-  const sales=await fixture('sales');response=await handleSaasRoute(request('/api/outreach-automation/policy?workspace_id=w1',{token:sales.token}),sales.env,{});assert.equal(response.status,200);
-  response=await handleSaasRoute(request('/api/outreach-automation/policy?workspace_id=w1',{method:'PUT',token:sales.token,body:{mode:'automatic',enabled:true}}),sales.env,{});assert.equal(response.status,403);
-  response=await handleSaasRoute(request('/api/outreach-automation/policy?workspace_id=w1',{method:'PUT',token:owner.token,body:{mode:'automatic',enabled:true,workspaceDailyLimit:30,mailboxDailyLimit:20,workingDays:[1,2,3,4,5],timezone:'Europe/Riga',sendWindowStart:'09:00',sendWindowEnd:'16:30',minDelayMinutes:8,maxDelayMinutes:18,maxFollowups:2,followupDelaysDays:[3,7],replyPollIntervalMinutes:60}}),owner.env,{});result=await response.json();
+  const sales=await fixture('sales');response=await handleOutreachAutomationRoute(request('/api/outreach-automation/policy?workspace_id=w1',{token:sales.token}),sales.env,{});assert.equal(response.status,200);
+  response=await handleOutreachAutomationRoute(request('/api/outreach-automation/policy?workspace_id=w1',{method:'PUT',token:sales.token,body:{mode:'automatic',enabled:true}}),sales.env,{});assert.equal(response.status,403);
+  response=await handleOutreachAutomationRoute(request('/api/outreach-automation/policy?workspace_id=w1',{method:'PUT',token:owner.token,body:{mode:'automatic',enabled:true,workspaceDailyLimit:30,mailboxDailyLimit:20,workingDays:[1,2,3,4,5],timezone:'Europe/Riga',sendWindowStart:'09:00',sendWindowEnd:'16:30',minDelayMinutes:8,maxDelayMinutes:18,maxFollowups:2,followupDelaysDays:[3,7],replyPollIntervalMinutes:60}}),owner.env,{});result=await response.json();
   assert.equal(response.status,200);assert.equal(result.policy.mode,'automatic');assert.equal(result.policy.enabled,true);assert.equal(result.policy.workspaceDailyLimit,30);
   const audit=owner.db.raw.prepare(`SELECT event_type,metadata_json FROM audit_events WHERE event_type='outreach_automation.policy_updated'`).get();assert.ok(audit);assert.match(audit.metadata_json,/automatic/);
 });
@@ -52,18 +52,18 @@ sqliteTest('invalid policy fields are rejected with 400',async()=>{
     {mode:'automatic',enabled:true,sendWindowStart:'18:00',sendWindowEnd:'09:00'},
     {mode:'automatic',enabled:true,minDelayMinutes:20,maxDelayMinutes:5}
   ]){
-    const response=await handleSaasRoute(request('/api/outreach-automation/policy?workspace_id=w1',{method:'PUT',token,body}),env,{});assert.equal(response.status,400);
+    const response=await handleOutreachAutomationRoute(request('/api/outreach-automation/policy?workspace_id=w1',{method:'PUT',token,body}),env,{});assert.equal(response.status,400);
   }
 });
 
 sqliteTest('status counts confirmed sends in the configured timezone-local day and exposes queue state',async()=>{
   const {env,token,db}=await fixture();
-  let response=await handleSaasRoute(request('/api/outreach-automation/policy?workspace_id=w1',{method:'PUT',token,body:{mode:'automatic',enabled:true,workspaceDailyLimit:20,mailboxDailyLimit:20,workingDays:[1,2,3,4,5],timezone:'Europe/Riga',sendWindowStart:'09:00',sendWindowEnd:'16:30',minDelayMinutes:8,maxDelayMinutes:18,maxFollowups:2,followupDelaysDays:[3,7],replyPollIntervalMinutes:60}}),env,{});assert.equal(response.status,200);
+  let response=await handleOutreachAutomationRoute(request('/api/outreach-automation/policy?workspace_id=w1',{method:'PUT',token,body:{mode:'automatic',enabled:true,workspaceDailyLimit:20,mailboxDailyLimit:20,workingDays:[1,2,3,4,5],timezone:'Europe/Riga',sendWindowStart:'09:00',sendWindowEnd:'16:30',minDelayMinutes:8,maxDelayMinutes:18,maxFollowups:2,followupDelaysDays:[3,7],replyPollIntervalMinutes:60}}),env,{});assert.equal(response.status,200);
   db.raw.prepare(`INSERT INTO gmail_messages(id,workspace_id,idempotency_key,domain,recipient,subject,sent_at,status) VALUES(?,?,?,?,?,?,?,?)`).run('m1','w1','k1','a.lv','a@a.lv','A','2026-09-08T00:30:00.000Z','sent');
   db.raw.prepare(`INSERT INTO gmail_messages(id,workspace_id,idempotency_key,domain,recipient,subject,sent_at,status) VALUES(?,?,?,?,?,?,?,?)`).run('m2','w1','k2','b.lv','b@b.lv','B','2026-09-07T20:30:00.000Z','sent');
   db.raw.prepare(`INSERT INTO outreach_automation_sequences(id,workspace_id,gmail_connection_workspace_id,source_package_key,domain,recipient,approved_at,initial_subject,initial_body,status) VALUES('s1','w1','w1','pkg1','a.lv','a@a.lv','2026-09-08T07:00:00Z','S','B','active')`).run();
   db.raw.prepare(`INSERT INTO outreach_automation_queue(id,workspace_id,sequence_id,gmail_connection_workspace_id,step_index,recipient,subject,body,status,earliest_send_at,scheduled_send_at,idempotency_key) VALUES('q1','w1','s1','w1',0,'a@a.lv','S','B','queued','2026-09-08T08:00:00Z','2026-09-08T08:00:00Z','qk1')`).run();
   db.raw.prepare(`INSERT INTO outreach_automation_queue(id,workspace_id,sequence_id,gmail_connection_workspace_id,step_index,recipient,subject,body,status,earliest_send_at,scheduled_send_at,idempotency_key) VALUES('q2','w1','s1','w1',1,'a@a.lv','S','B','blocked_limit','2026-09-08T09:00:00Z','2026-09-08T09:00:00Z','qk2')`).run();
-  response=await handleSaasRoute(request('/api/outreach-automation/status?workspace_id=w1',{token}),env,{});const result=await response.json();
+  response=await handleOutreachAutomationRoute(request('/api/outreach-automation/status?workspace_id=w1',{token}),env,{});const result=await response.json();
   assert.equal(response.status,200);assert.equal(result.usage.workspaceSentToday,1);assert.equal(result.usage.mailboxSentToday,1);assert.equal(result.usage.workspaceLimit,20);assert.equal(result.queue.queued,1);assert.equal(result.queue.blockedByLimit,1);assert.match(result.queue.nextEligibleSendAt,/^2026-09-08T08:00/);
 });
