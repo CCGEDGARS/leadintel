@@ -96,5 +96,9 @@ jobs:
           node --check customer/delivery-ui.js
           node --check customer/server-bridge.js
           node --check customer/production-gmail-ui.js
+          node --check customer/copilot-loader.js
+          node --check customer/copilot-api.js
+          node --check customer/copilot-context.js
+          node --check customer/copilot-ui.js
           node --check scripts/release-integrity-core.mjs
           node --check scripts/verify-release-integrity.mjs
