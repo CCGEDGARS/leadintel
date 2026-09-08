@@ -29,7 +29,7 @@ async function fixture(role='owner'){
   db.raw.prepare(`INSERT INTO sessions VALUES(?,?,datetime('now','+1 day'))`).run(hash,'u1');
   db.raw.prepare('INSERT INTO workspace_members VALUES(?,?,?)').run('w1','u1',role);
   db.raw.prepare(`INSERT INTO gmail_connections(workspace_id,user_id,google_email,encrypted_refresh_token,scopes,status,connected_at,updated_at) VALUES('w1','u1','sender@example.com','x','','connected',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`).run();
-  return {env:{DB:db,CUSTOMER_APP_URL:'https://leadintel.ccgroup.lv/customer/'},token,db};
+  return {env:{DB:db,CUSTOMER_APP_URL:'https://leadintel.ccgroup.lv/customer/',OUTREACH_AUTOMATION_TEST_NOW:'2026-09-08T12:00:00.000Z'},token,db};
 }
 function request(path,{method='GET',token,body}={}){return new Request(`https://api.example.test${path}`,{method,headers:{Cookie:`leadintel_session=${token}`,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});}
 
@@ -64,6 +64,6 @@ sqliteTest('status counts confirmed sends in the configured timezone-local day a
   db.raw.prepare(`INSERT INTO outreach_automation_sequences(id,workspace_id,gmail_connection_workspace_id,source_package_key,domain,recipient,approved_at,initial_subject,initial_body,status) VALUES('s1','w1','w1','pkg1','a.lv','a@a.lv','2026-09-08T07:00:00Z','S','B','active')`).run();
   db.raw.prepare(`INSERT INTO outreach_automation_queue(id,workspace_id,sequence_id,gmail_connection_workspace_id,step_index,recipient,subject,body,status,earliest_send_at,scheduled_send_at,idempotency_key) VALUES('q1','w1','s1','w1',0,'a@a.lv','S','B','queued','2026-09-08T08:00:00Z','2026-09-08T08:00:00Z','qk1')`).run();
   db.raw.prepare(`INSERT INTO outreach_automation_queue(id,workspace_id,sequence_id,gmail_connection_workspace_id,step_index,recipient,subject,body,status,earliest_send_at,scheduled_send_at,idempotency_key) VALUES('q2','w1','s1','w1',1,'a@a.lv','S','B','blocked_limit','2026-09-08T09:00:00Z','2026-09-08T09:00:00Z','qk2')`).run();
-  response=await handleSaasRoute(request('/api/outreach-automation/status?workspace_id=w1&now=2026-09-08T12:00:00.000Z',{token}),env,{});const result=await response.json();
+  response=await handleSaasRoute(request('/api/outreach-automation/status?workspace_id=w1',{token}),env,{});const result=await response.json();
   assert.equal(response.status,200);assert.equal(result.usage.workspaceSentToday,1);assert.equal(result.usage.mailboxSentToday,1);assert.equal(result.usage.workspaceLimit,20);assert.equal(result.queue.queued,1);assert.equal(result.queue.blockedByLimit,1);assert.match(result.queue.nextEligibleSendAt,/^2026-09-08T08:00/);
 });
