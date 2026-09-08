@@ -71,3 +71,12 @@ jobs:
           node --check src/runs.js
           node --check src/scrapling.js
           node --check src/scrapling-routes.js
+          node --check src/copilot-security.js
+          node --check src/copilot-context.js
+          node --check src/copilot-knowledge.js
+          node --check src/copilot-skills.js
+          node --check src/copilot-diagnostics.js
+          node --check src/copilot-memory.js
+          node --check src/copilot-actions.js
+          node --check src/copilot-service.js
+          node --check src/copilot-routes.js
