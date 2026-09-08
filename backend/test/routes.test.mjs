@@ -18,10 +18,12 @@ test('production entrypoint delegates outreach automation before legacy SaaS rou
   assert.match(automationRoutes,/\/api\/outreach-automation\/status/);
 });
 
-test('hourly scheduled handler runs market monitoring and outreach automation independently',()=>{
+test('hourly scheduled handler runs market monitoring, outreach sending, and reply polling independently',()=>{
   assert.match(app,/import \{runOutreachAutomation\} from '\.\/outreach-automation-runner\.js'/);
+  assert.match(app,/import \{pollOutreachReplies\} from '\.\/outreach-automation-replies\.js'/);
   assert.match(app,/runDueMarketMonitoring/);
   assert.match(app,/runOutreachAutomation\(env,\{now/);
+  assert.match(app,/pollOutreachReplies\(env,\{now/);
   assert.match(app,/Promise\.allSettled/);
 });
 
