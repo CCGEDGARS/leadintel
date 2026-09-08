@@ -18,6 +18,13 @@ test('production entrypoint delegates outreach automation before legacy SaaS rou
   assert.match(automationRoutes,/\/api\/outreach-automation\/status/);
 });
 
+test('hourly scheduled handler runs market monitoring and outreach automation independently',()=>{
+  assert.match(app,/import \{runOutreachAutomation\} from '\.\/outreach-automation-runner\.js'/);
+  assert.match(app,/runDueMarketMonitoring/);
+  assert.match(app,/runOutreachAutomation\(env,\{now/);
+  assert.match(app,/Promise\.allSettled/);
+});
+
 test('Google identity and workspace routes are present',()=>{
   for(const value of ['/api/auth/google/start','/api/auth/google/callback','/api/workspaces'])assert.match(routes,new RegExp(value.replaceAll('/','\\/')));
   assert.match(routes,/sessionCookie/);assert.match(routes,/ensureDefaultWorkspace/);
