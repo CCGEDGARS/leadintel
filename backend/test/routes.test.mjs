@@ -4,10 +4,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const routes=fs.readFileSync(path.join(process.cwd(),'src','saas-routes.js'),'utf8');
+const automationRoutes=fs.readFileSync(path.join(process.cwd(),'src','outreach-automation-routes.js'),'utf8');
 const app=fs.readFileSync(path.join(process.cwd(),'src','app.js'),'utf8');
 
 test('production entrypoint delegates new SaaS routes before core router',()=>{
   assert.match(app,/handleSaasRoute/);assert.match(app,/core\.fetch/);
+});
+
+test('production entrypoint delegates outreach automation before legacy SaaS router',()=>{
+  assert.match(app,/import \{handleOutreachAutomationRoute\} from '\.\/outreach-automation-routes\.js'/);
+  assert.match(app,/handleOutreachAutomationRoute\(request,runtimeEnv,cors\)[\s\S]*handleSaasRoute\(request,runtimeEnv,cors\)/);
+  assert.match(automationRoutes,/\/api\/outreach-automation\/policy/);
+  assert.match(automationRoutes,/\/api\/outreach-automation\/status/);
 });
 
 test('Google identity and workspace routes are present',()=>{
