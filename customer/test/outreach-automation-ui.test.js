@@ -20,8 +20,9 @@ test('Outreach Automation panel exposes all safety controls and live status labe
 
 test('owner mutation and non-owner read-only behavior are explicit',()=>{
   const ui=read('outreach-automation-ui.js');
-  assert.match(ui,/role\s*===\s*['"]owner['"]/);
-  assert.match(ui,/disabled\s*=\s*!isOwner/);
+  assert.match(ui,/function isOwner\(\)/);
+  assert.match(ui,/===['"]owner['"]/);
+  assert.match(ui,/node\.disabled\s*=\s*true/);
   assert.match(ui,/saveOutreachAutomationPolicy/);
   assert.match(ui,/getOutreachAutomationPolicy/);
   assert.match(ui,/getOutreachAutomationStatus/);
@@ -31,8 +32,9 @@ test('approved contact queue action is explicit and gated by automatic mode and 
   const ui=read('outreach-automation-ui.js');
   assert.match(ui,/Add approved contact to automatic queue/i);
   assert.match(ui,/enqueueOutreachAutomation/);
-  assert.match(ui,/policy\.mode\s*===\s*['"]automatic['"]/);
-  assert.match(ui,/policy\.enabled/);
+  assert.match(ui,/serverPolicy\(\)/);
+  assert.match(ui,/\.mode===['"]automatic['"]/);
+  assert.match(ui,/\.enabled/);
   assert.match(ui,/gmail/i);
   assert.match(ui,/leadintel:approved-outreach-package/);
 });
