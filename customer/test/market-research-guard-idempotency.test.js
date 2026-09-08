@@ -44,6 +44,12 @@ test('setIdle does not rewrite hidden when preview is already hidden',()=>{
   assert.equal(writes(),0,'idle synchronization must not retrigger the hidden-attribute observer');
 });
 
+test('profile context labeling is idempotent and does not rewrite identical text',()=>{
+  const guardSource=fs.readFileSync(modulePath,'utf8');
+  assert.match(guardSource,/if\(note\.textContent!==PROFILE_CONTEXT_LABEL\)note\.textContent=PROFILE_CONTEXT_LABEL/,
+    'profile context text must only be written when it actually changes');
+});
+
 test('evidence bootstrap cache-busts the fixed market research guard',()=>{
   const evidence=fs.readFileSync(path.join(rootDir,'evidence-view.js'),'utf8');
   assert.match(evidence,/market-research-guard\.js\?v=20260908-render-loop-v1/);
