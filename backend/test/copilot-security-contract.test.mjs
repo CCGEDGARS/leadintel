@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {redactProtectedData,sanitizeExternalResearchQuery,assertModelSafe} from '../src/copilot-security.js';
 import {normalizeActionProposal} from '../src/copilot-actions.js';
 import {normalizeMemoryCandidate} from '../src/copilot-memory.js';
@@ -28,4 +29,9 @@ test('external research minimization strips CRM emails private notes and secret-
 
 test('model-safety assertion rejects protected nested fields instead of trusting model provenance',()=>{
   assert.throws(()=>assertModelSafe({answer:'ok',nested:{client_secret:'sentinel'}}),/protected|safe/i);
+});
+
+test('Backend CI syntax-checks every Copilot backend module',()=>{
+  const workflow=fs.readFileSync(new URL('../../.github/workflows/backend-ci.yml',import.meta.url),'utf8');
+  for(const file of ['copilot-security.js','copilot-context.js','copilot-knowledge.js','copilot-skills.js','copilot-diagnostics.js','copilot-memory.js','copilot-actions.js','copilot-service.js','copilot-routes.js'])assert.match(workflow,new RegExp(`node --check src/${file.replace('.','\\.')}`));
 });
