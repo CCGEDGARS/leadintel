@@ -4,6 +4,7 @@ import {handleAiRoute} from './ai-routes.js';
 import {handleServiceIntegrationRoute,withWorkspaceServiceCredentials} from './service-integrations.js';
 import {handleScraplingRoute} from './scrapling-routes.js';
 import {handleSaasRoute} from './saas-routes.js';
+import {handleOutreachAutomationRoute} from './outreach-automation-routes.js';
 import {handleCrmRoute} from './crm-routes.js';
 import {handleApolloCrmWebhook} from './crm-routes.js';
 import {handleMarketMonitoringRoute,runDueMarketMonitoring} from './market-monitoring.js';
@@ -24,6 +25,7 @@ export default {
       const monitoring=await handleMarketMonitoringRoute(request,env,cors);if(monitoring)return monitoring;
       const runtimeEnv=await withWorkspaceServiceCredentials(request,env);
       const crm=await handleCrmRoute(request,runtimeEnv,cors);if(crm)return crm;
+      const automation=await handleOutreachAutomationRoute(request,runtimeEnv,cors);if(automation)return automation;
       const saas=await handleSaasRoute(request,runtimeEnv,cors);if(saas)return saas;
       return core.fetch(request,runtimeEnv);
     }catch(cause){
