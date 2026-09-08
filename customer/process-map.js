@@ -19,6 +19,7 @@ import './linkedin-signals.js?v=20260907-public-index-v1';
 import './company-research-security.js?v=20260906-authoritative-depth-v1';
 import './company-research-ui.js?v=20260906-selector-language-v2';
 import './company-profile-handoff.js?v=20260826-intelligence-autofill-v1';
+import './outreach-automation-loader.js?v=20260908-boot-isolation-v1';
 
 const PROCESS_STORAGE_KEY="leadintel_customer_v2_state";
 const processMap=document.getElementById("commercial-process-map");

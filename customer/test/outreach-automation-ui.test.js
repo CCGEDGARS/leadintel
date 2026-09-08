@@ -39,9 +39,12 @@ test('approved contact queue action is explicit and gated by automatic mode and 
   assert.match(ui,/leadintel:approved-outreach-package/);
 });
 
-test('automation UI is loaded through the lightweight customer extension loader',()=>{
-  const loader=read('content-variants.js');
+test('automation UI is loaded through the Delivery-only lazy loader',()=>{
+  const processMap=read('process-map.js');
+  const loader=read('outreach-automation-loader.js');
+  assert.match(processMap,/outreach-automation-loader\.js/);
   assert.match(loader,/outreach-automation-ui\.js/);
+  assert.match(loader,/Number\(event\.detail\?\.step\)===7/);
 });
 
 test('automation stylesheet exists and names the panel',()=>{

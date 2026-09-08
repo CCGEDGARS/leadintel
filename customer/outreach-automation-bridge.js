@@ -10,8 +10,12 @@
   async function call(root,bridge,path,options={}){
     if(!ready(bridge))return {ok:false,status:401,error:'Sign in and select a workspace to use outreach automation'};
     const join=path.includes('?')?'&':'?';const url=`${API_BASE}${path}${join}workspace_id=${encodeURIComponent(workspaceId(bridge))}`;
-    const response=await root.fetch(url,{credentials:'include',headers:{Accept:'application/json',...(options.body?{'Content-Type':'application/json'}:{}),...(options.headers||{})},...options});
-    const payload=await response.json().catch(()=>({}));return response.ok?{ok:true,status:response.status,...payload}:{ok:false,status:response.status,...payload};
+    const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),10000);
+    try{
+      const response=await root.fetch(url,{credentials:'include',headers:{Accept:'application/json',...(options.body?{'Content-Type':'application/json'}:{}),...(options.headers||{})},...options,signal:controller.signal});
+      const payload=await response.json().catch(()=>({}));return response.ok?{ok:true,status:response.status,...payload}:{ok:false,status:response.status,...payload};
+    }catch(error){return {ok:false,status:0,error:error?.name==='AbortError'?'Outreach automation request timed out':String(error?.message||'Outreach automation request failed')};}
+    finally{clearTimeout(timer);}
   }
   function attach(root){
     const bridge=root?.LeadIntelServerBridge;if(!bridge)return false;
