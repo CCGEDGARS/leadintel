@@ -17,9 +17,13 @@ export function bulkConfirmationMessage(count,type='email'){
   return `${safeCount} contacts selected. ${action} may use up to ${credits} Apollo credits. Only the selected contacts will be processed. Proceed?`;
 }
 
-function targetKey(companyIndex,personIndex){return `${companyIndex}:${personIndex}`;}
+export function contactSelectionKey(companyIndex,personIndex,identity=''){
+  const safeIdentity=encodeURIComponent(String(identity||'').replace(/\s+/g,' ').trim().toLowerCase()).slice(0,120);
+  return `${companyIndex}:${personIndex}:${safeIdentity}`;
+}
 function parseKey(key){const [companyIndex,personIndex]=String(key).split(':').map(Number);return {companyIndex,personIndex};}
 function esc(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function rowIdentity(row){return [row.querySelector('strong')?.textContent,row.querySelector('span')?.textContent,row.querySelector('small')?.textContent].map(value=>String(value||'').trim()).filter(Boolean).join('|');}
 
 function style(){
   if(typeof document==='undefined'||document.getElementById('apollo-bulk-enrichment-style'))return;
@@ -57,12 +61,12 @@ function decoratePersonRow(row){
   const source=emailButton||phoneButton;if(!source)return;
   const companyIndex=source.dataset.companyIndex;const personIndex=source.dataset.personIndex;
   if(companyIndex==null||personIndex==null)return;
-  const key=targetKey(companyIndex,personIndex);
+  const key=contactSelectionKey(companyIndex,personIndex,rowIdentity(row));
   const actions=row.querySelector('.person-actions');
   if(actions&&!actions.querySelector('[data-apollo-select]')){
     actions.insertAdjacentHTML('afterbegin',`<label class="apollo-select-wrap" title="Select this contact for an Apollo bulk action"><input type="checkbox" data-apollo-select="${esc(key)}" ${selected.has(key)?'checked':''}> Select</label>`);
   }
-  const checkbox=actions?.querySelector('[data-apollo-select]');if(checkbox)checkbox.checked=selected.has(key);
+  const checkbox=actions?.querySelector('[data-apollo-select]');if(checkbox){checkbox.dataset.apolloSelect=key;checkbox.checked=selected.has(key);}
   if(emailButton&&!/Working|verified/i.test(emailButton.textContent||''))emailButton.textContent=emailButton.disabled?'Sign in to verify email':'Verify email with Apollo · 1 credit';
   if(phoneButton&&phoneButton.dataset.action==='find-phone'&&!/verified/i.test(phoneButton.textContent||''))phoneButton.textContent=phoneButton.disabled?'Sign in to find phone':'Find phone with Apollo · up to 9 credits';
 }
@@ -74,9 +78,14 @@ function decorateDecisionSection(section){
   section.querySelectorAll('.person-row').forEach(decoratePersonRow);
 }
 
+function pruneStaleSelections(){
+  const live=new Set([...document.querySelectorAll('[data-apollo-select]')].map(input=>input.dataset.apolloSelect));
+  for(const key of selected)if(!live.has(key))selected.delete(key);
+}
+
 function decorate(){
   if(typeof document==='undefined'||decorating)return;decorating=true;
-  try{style();ensureToolbar();document.querySelectorAll('.decision-makers').forEach(decorateDecisionSection);updateToolbar();}finally{decorating=false;}
+  try{style();ensureToolbar();document.querySelectorAll('.decision-makers').forEach(decorateDecisionSection);pruneStaleSelections();updateToolbar();}finally{decorating=false;}
 }
 
 function actionSelector(key,type){
@@ -113,7 +122,7 @@ async function runBulk(type){
       started++;button.click();await waitForCompletion(key,type);
     }
   }finally{
-    bulkRunning=false;updateToolbar();decorate();
+    bulkRunning=false;decorate();
     const toast=document.getElementById('toast');if(toast){toast.textContent=`Apollo ${type==='phone'?'phone':'email'} action started for ${started} selected contact${started===1?'':'s'}.`;toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),3000);}
   }
 }
