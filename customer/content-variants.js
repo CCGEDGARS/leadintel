@@ -20,4 +20,9 @@
   return {LANGUAGES,language,normalize,set,get,has,same};
 });
 
-if(typeof document!=="undefined")import('./apollo-bulk-enrichment.js?v=20260908-apollo-bulk-v1');
+if(typeof document!=="undefined"){
+  import('./outreach-automation-bridge.js?v=20260908-outreach-auto-v1');
+  import('./outreach-automation-ui.js?v=20260908-outreach-auto-ui-v1');
+  import('./outreach-automation-delivery-handoff.js?v=20260908-outreach-auto-handoff-v1');
+  import('./apollo-bulk-enrichment.js?v=20260908-apollo-bulk-v1');
+}
