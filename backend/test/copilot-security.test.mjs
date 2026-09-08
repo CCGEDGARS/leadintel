@@ -33,6 +33,16 @@ test('recursive redaction removes protected keys and sentinel secret values at e
   assert.match(serialized,/Safe Co/);assert.match(serialized,/keep me/);assert.match(serialized,/apollo/);
 });
 
+test('recursive redaction also removes credential-like values hidden inside benign text fields',()=>{
+  const input={
+    notes:'Call the buyer. sk-proj-abcdefghijklmnopqrstuvwxyz0123456789 and Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.super-long-token.signature must never reach the model.',
+    description:'password=hunter2 api_key=apollo-secret-value keep commercial context'
+  };
+  const serialized=JSON.stringify(redactProtectedData(input));
+  assert.doesNotMatch(serialized,/sk-proj-|Bearer\s+|hunter2|apollo-secret-value/i);
+  assert.match(serialized,/Call the buyer/);assert.match(serialized,/keep commercial context/);
+});
+
 test('screen context accepts only bounded navigation metadata and cannot smuggle workspace state',()=>{
   const result=sanitizeClientScreenContext({
     step:4,label:'Market Strategy',entityType:'company',entityId:'crm-123',
