@@ -6,6 +6,7 @@ import {handleScraplingRoute} from './scrapling-routes.js';
 import {handleSaasRoute} from './saas-routes.js';
 import {handleOutreachAutomationRoute} from './outreach-automation-routes.js';
 import {runOutreachAutomation} from './outreach-automation-runner.js';
+import {pollOutreachReplies} from './outreach-automation-replies.js';
 import {handleCrmRoute} from './crm-routes.js';
 import {handleApolloCrmWebhook} from './crm-routes.js';
 import {handleMarketMonitoringRoute,runDueMarketMonitoring} from './market-monitoring.js';
@@ -37,7 +38,8 @@ export default {
     const now=new Date(controller.scheduledTime||Date.now());
     ctx.waitUntil(Promise.allSettled([
       runDueMarketMonitoring(env,now),
-      runOutreachAutomation(env,{now})
+      runOutreachAutomation(env,{now}),
+      pollOutreachReplies(env,{now})
     ]));
   }
 };
