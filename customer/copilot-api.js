@@ -3,7 +3,7 @@ const DEFAULT_TIMEOUT_MS=12000;
 const CHAT_TIMEOUT_MS=35000;
 
 function bridgeState(){return window.LeadIntelServerBridge||null;}
-function activeWorkspace(){const bridge=bridgeState();if(!bridge?.session?.authenticated)return '';return String(bridge?.workspace?.id||'').trim();}
+function activeWorkspace(){const bridge=bridgeState();if(!bridge?.session?.authenticated||!bridge.workspace)return '';return String(bridge.workspace.id||'').trim();}
 function withWorkspace(path,workspaceId){const url=new URL(path,API_BASE);url.searchParams.set('workspace_id',workspaceId);return url.toString();}
 
 export async function requestCopilot(path,options={}){
