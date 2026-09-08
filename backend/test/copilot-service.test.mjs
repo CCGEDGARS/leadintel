@@ -36,7 +36,7 @@ test('freshness-dependent help uses minimized research and returns only safe htt
 });
 
 test('web research failure degrades to internal guidance with freshness caveat',async()=>{
-  const env={COPILOT_TEST_CONTEXT:context,COPILOT_TEST_MEMORIES:[],COPILOT_TEST_PROVIDER:{async search(){throw new Error('search unavailable');},async generate(){return {provider:'openai',model:'gpt-test',text:JSON.stringify({answer:'Use the LeadIntel integration settings.',action_proposals:[],memory_candidates:[]}),usage:{input_tokens:1,output_tokens:2}};}};
+  const env={COPILOT_TEST_CONTEXT:context,COPILOT_TEST_MEMORIES:[],COPILOT_TEST_PROVIDER:{async search(){throw new Error('search unavailable');},async generate(){return {provider:'openai',model:'gpt-test',text:JSON.stringify({answer:'Use the LeadIntel integration settings.',action_proposals:[],memory_candidates:[]}),usage:{input_tokens:1,output_tokens:2}};}}};
   const result=await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',conversation:[],question:'What are the latest Apollo API limits?',currentScreen:{step:1,label:'Company & Market'}});
   assert.equal(result.research_used,false);assert.match(result.answer,/verify|current|fresh|unavailable/i);
 });
