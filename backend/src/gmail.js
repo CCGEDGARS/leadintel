@@ -56,7 +56,7 @@ export function classifyReply(text){
   if(/not now|later this year|next quarter|next year|circle back|come back|reach out again|too early/.test(value))return 'not_now';
   if(/calendar|schedule|meeting|call|teams|zoom|available|availability|book a time|let's talk|lets talk/.test(value)&&/(yes|sure|happy|can|could|let's|lets|available|schedule|meeting|call)/.test(value))return 'meeting_request';
   if(/not interested|already have|existing supplier|too expensive|no budget|not relevant|doesn't fit|does not fit|why would|concern/.test(value))return 'objection';
-  if(/interested|sounds good|tell me more|send more|please share|worth exploring|happy to discuss|makes sense/.test(value))return 'positive';
+  if(/interested|sounds good|sounds interesting|tell me more|send more|please share|worth exploring|happy to discuss|makes sense/.test(value))return 'positive';
   return 'neutral';
 }
 export function normalizeInboundReplies(thread,{sentMessageId,sentAt,connectedEmail}){
