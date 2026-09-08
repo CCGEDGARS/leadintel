@@ -10,6 +10,7 @@ import {pollOutreachReplies} from './outreach-automation-replies.js';
 import {handleCrmRoute} from './crm-routes.js';
 import {handleApolloCrmWebhook} from './crm-routes.js';
 import {handleMarketMonitoringRoute,runDueMarketMonitoring} from './market-monitoring.js';
+import {handleCopilotRoute} from './copilot-routes.js';
 
 export default {
   async fetch(request,env){
@@ -22,6 +23,7 @@ export default {
     if(request.headers.get('Origin')&&!origin)return new Response(JSON.stringify({error:'Origin not allowed'}),{status:403,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...cors}});
     try{
       const ai=await handleAiRoute(request,env,cors);if(ai)return ai;
+      const copilot=await handleCopilotRoute(request,env,cors);if(copilot)return copilot;
       const scrapling=await handleScraplingRoute(request,env,cors);if(scrapling)return scrapling;
       const service=await handleServiceIntegrationRoute(request,env,cors);if(service)return service;
       const monitoring=await handleMarketMonitoringRoute(request,env,cors);if(monitoring)return monitoring;
