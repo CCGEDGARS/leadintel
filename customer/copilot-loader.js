@@ -1,4 +1,3 @@
-const ASSET_VERSION='20260908-copilot-v1';
 let loading=null;
 
 function ensureEntry(){
@@ -10,7 +9,7 @@ function setStatus(message){const entry=ensureEntry();const badge=entry?.querySe
 export async function loadCopilot(){
   if(loading)return loading;const entry=ensureEntry();if(entry)entry.disabled=true;
   loading=(async()=>{try{
-    const [api,context,ui]=await Promise.all([import(`./copilot-api.js?v=${ASSET_VERSION}`),import(`./copilot-context.js?v=${ASSET_VERSION}`),import(`./copilot-ui.js?v=${ASSET_VERSION}`)]);setStatus('');await ui.openCopilot?.({api,context});return {api,context,ui};
+    const [api,context,ui]=await Promise.all([import('./copilot-api.js?v=20260908-copilot-v1'),import('./copilot-context.js?v=20260908-copilot-v1'),import('./copilot-ui.js?v=20260908-copilot-v1')]);setStatus('');await ui.openCopilot?.({api,context});return {api,context,ui};
   }catch(cause){console.warn('Ask LeadIntel unavailable:',cause);setStatus('Copilot unavailable');loading=null;return null;}finally{if(entry)entry.disabled=false;}})();return loading;
 }
 function bind(){const entry=ensureEntry();if(!entry||entry.dataset.copilotBound==='1')return;entry.dataset.copilotBound='1';entry.addEventListener('click',()=>{void loadCopilot();});}
