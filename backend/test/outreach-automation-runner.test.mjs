@@ -34,7 +34,7 @@ sqliteTest('pause and emergency stop fail closed without claiming or sending',as
 });
 
 sqliteTest('outside-window rows are rescheduled and suppressed companies are skipped',async()=>{
-  let env=fixture();let calls=0;await runOutreachAutomation(env,{now:new Date('2026-09-08T04:00:00Z'),sendMessage:async()=>{calls++;return {id:'x',threadId:'x'};},onSent:noCrm});assert.equal(calls,0);let row=env.DB.raw.prepare(`SELECT status,scheduled_send_at FROM outreach_automation_queue WHERE id='q1'`).get();assert.equal(row.status,'waiting_window');assert.ok(row.scheduled_send_at>'2026-09-08T04:00:00Z');
+  let env=fixture({sequence:{scheduled:'2026-09-08T03:00:00.000Z'}});let calls=0;await runOutreachAutomation(env,{now:new Date('2026-09-08T04:00:00Z'),sendMessage:async()=>{calls++;return {id:'x',threadId:'x'};},onSent:noCrm});assert.equal(calls,0);let row=env.DB.raw.prepare(`SELECT status,scheduled_send_at FROM outreach_automation_queue WHERE id='q1'`).get();assert.equal(row.status,'waiting_window');assert.ok(row.scheduled_send_at>'2026-09-08T04:00:00Z');
   env=fixture();env.DB.raw.prepare(`UPDATE crm_companies SET lifecycle_status='suppressed' WHERE normalized_domain='example.com'`).run();await runOutreachAutomation(env,{now,sendMessage:async()=>{calls++;return {id:'x',threadId:'x'};},onSent:noCrm});row=env.DB.raw.prepare(`SELECT status FROM outreach_automation_queue WHERE id='q1'`).get();assert.equal(row.status,'skipped');
 });
 
