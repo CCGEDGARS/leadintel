@@ -25,6 +25,11 @@ sqliteTest('runner sends only due eligible rows, records confirmed send, and cre
   const localDates=followups.map(x=>x.scheduled_send_at.slice(0,10));assert.deepEqual(localDates,['2026-09-11','2026-09-17']);
 });
 
+sqliteTest('runner preserves randomized spacing for other rows already selected in the same due batch',async()=>{
+  const env=fixture();seedSequence(env.DB,{id:'s2',domain:'second.com',recipient:'two@second.com',queueId:'q2',source:'pkg2'});const sent=[];const result=await runOutreachAutomation(env,{now,random:()=>0.999999,sendMessage:async({queue})=>{sent.push(queue.id);return {id:`gm-${queue.id}`,threadId:`th-${queue.id}`};},onSent:noCrm});
+  assert.equal(result.sent,1);assert.deepEqual(sent,['q1']);const second=env.DB.raw.prepare(`SELECT status,scheduled_send_at FROM outreach_automation_queue WHERE id='q2'`).get();assert.equal(second.status,'queued');assert.ok(second.scheduled_send_at>='2026-09-08T08:48:00.000Z');
+});
+
 sqliteTest('runner enforces workspace/mailbox limits before Gmail',async()=>{
   for(const field of ['workspace_daily_limit','mailbox_daily_limit']){const env=fixture({policy:{[field]:1}});env.DB.raw.prepare(`INSERT INTO gmail_messages(id,workspace_id,idempotency_key,domain,recipient,subject,sent_at,status) VALUES('old','w1','old-key','old.com','x@old.com','Old','2026-09-08T07:00:00.000Z','sent')`).run();let calls=0;const result=await runOutreachAutomation(env,{now,sendMessage:async()=>{calls++;return {id:'x',threadId:'x'};},onSent:noCrm});assert.equal(calls,0);assert.equal(result.sent,0);assert.equal(env.DB.raw.prepare(`SELECT status FROM outreach_automation_queue WHERE id='q1'`).get().status,'blocked_limit');}
 });
