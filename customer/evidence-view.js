@@ -1,7 +1,7 @@
 if(typeof window!=="undefined")void import('./opportunity-led-icp.js?v=20260907-opportunity-led-v1');
 if(typeof window!=="undefined")void import('./company-brain.js?v=20260907-company-brain-v1');
 if(typeof window!=="undefined")void import('./market-research-ux.js?v=20260907-source-discovery-ux-v1');
-if(typeof window!=="undefined")void import('./market-research-guard.js?v=20260907-running-state-v2');
+if(typeof window!=="undefined")void import('./market-research-guard.js?v=20260908-render-loop-v1');
 if(typeof window!=="undefined")void import('./market-research-review-ux.js?v=20260907-review-ux-v1');
 if(typeof window!=="undefined")void import('./market-research-provider-resilience.js?v=20260907-provider-resilience-v1');
 if(typeof window!=="undefined")void import('./market-query-safety.js?v=20260908-firecrawl-query-v1');
