@@ -4,6 +4,7 @@ import fs from 'node:fs';
 
 const source=fs.readFileSync(new URL('../copilot-ui.js',import.meta.url),'utf8');
 const css=fs.readFileSync(new URL('../copilot.css',import.meta.url),'utf8');
+const loader=fs.readFileSync(new URL('../copilot-loader.js',import.meta.url),'utf8');
 
 test('copilot renders as a non-blocking right-side drawer with close and escape handling',()=>{
   assert.match(source,/leadintel-copilot-drawer/);
@@ -25,11 +26,33 @@ test('model-controlled content is rendered as text and evidence links are harden
   assert.match(source,/_blank/);
 });
 
-test('chat uses safe screen context and contextual prompt suggestions',()=>{
+test('chat uses safe screen context without preset prompt chips',()=>{
   assert.match(source,/currentCopilotScreenContext/);
-  assert.match(source,/contextualPromptSuggestions/);
   assert.match(source,/sendCopilotMessage/);
+  assert.doesNotMatch(source,/contextualPromptSuggestions|copilot-prompts|copilot-prompt/);
   assert.doesNotMatch(source,/localStorage|sessionStorage/);
+});
+
+test('copilot introduces itself before workspace checks',()=>{
+  assert.match(source,/Your AI commercial copilot\./);
+  assert.match(source,/understands your LeadIntel workspace/i);
+  assert.match(source,/nothing is changed without your confirmation/i);
+  const introIndex=source.indexOf('copilot-intro');
+  const diagnosticsIndex=source.indexOf('copilot-diagnostics');
+  assert.ok(introIndex>=0&&diagnosticsIndex>=0&&introIndex<diagnosticsIndex,'intro must be created before diagnostics');
+});
+
+test('composer is a full-width vertical layout with send below the textarea',()=>{
+  assert.match(css,/\.copilot-composer\{[^}]*grid-template-columns\s*:\s*1fr[^}]*\}/s);
+  assert.match(css,/\.copilot-composer textarea\{[^}]*min-height\s*:\s*(1[12][0-9]|1[3-9][0-9]|[2-9][0-9]{2})px/s);
+  assert.match(css,/\.copilot-send\{[^}]*justify-self\s*:\s*end/s);
+});
+
+test('sidebar entry is a premium branded copilot control',()=>{
+  assert.match(loader,/AI Commercial Copilot/);
+  assert.match(css,/\.leadintel-copilot-entry\{[^}]*border-radius\s*:\s*(1[4-9]|[2-9][0-9])px/s);
+  assert.match(css,/\.leadintel-copilot-entry\{[^}]*background\s*:\s*(linear-gradient|radial-gradient)/s);
+  assert.match(css,/\.leadintel-copilot-entry\{[^}]*box-shadow/s);
 });
 
 test('action proposals require explicit confirm or reject and use a fresh idempotency key',()=>{
