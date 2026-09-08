@@ -6,6 +6,7 @@
   "use strict";
 
   const STORAGE_KEY="leadintel_customer_v2_state";
+  const PROFILE_CONTEXT_LABEL="Company profile context · not a market research result";
   const BUTTON_IDS=Object.freeze(["run-market-research","run-detailed-research","run-market-intelligence"]);
   const BUTTON_META=Object.freeze({
     "run-market-research":Object.freeze({mode:"quick",label:"Market Scan"}),
@@ -83,7 +84,7 @@
       const context=card.querySelector?.(".pre-research-context");if(!context)return;
       let note=card.querySelector?.(".profile-context-note");
       if(!note){note=root.document.createElement("div");note.className="profile-context-note";context.before?.(note);}
-      note.textContent="Company profile context · not a market research result";
+      if(note.textContent!==PROFILE_CONTEXT_LABEL)note.textContent=PROFILE_CONTEXT_LABEL;
     });
   }
 
