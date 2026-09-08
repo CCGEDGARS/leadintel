@@ -36,10 +36,10 @@ export default {
   },
   async scheduled(controller,env,ctx){
     const now=new Date(controller.scheduledTime||Date.now());
+    const outreachCycle=pollOutreachReplies(env,{now}).then(()=>runOutreachAutomation(env,{now}));
     ctx.waitUntil(Promise.allSettled([
       runDueMarketMonitoring(env,now),
-      runOutreachAutomation(env,{now}),
-      pollOutreachReplies(env,{now})
+      outreachCycle
     ]));
   }
 };
