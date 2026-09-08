@@ -19,3 +19,5 @@
   function same(a,b){return JSON.stringify(a)===JSON.stringify(b);}
   return {LANGUAGES,language,normalize,set,get,has,same};
 });
+
+import './apollo-bulk-enrichment.js?v=20260908-apollo-bulk-v1';
