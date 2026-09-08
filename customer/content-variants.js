@@ -21,5 +21,5 @@
 });
 
 if(typeof document!=="undefined"){
-  import('./apollo-bulk-enrichment.js?v=20260908-apollo-bulk-v1');
+  import('./apollo-bulk-enrichment.js?v=20260908-apollo-observer-v1');
 }

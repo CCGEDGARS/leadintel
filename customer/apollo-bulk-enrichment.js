@@ -40,8 +40,8 @@ function updateToolbar(){
   if(typeof document==='undefined')return;
   const toolbar=document.getElementById('apollo-bulk-toolbar');if(!toolbar)return;
   const count=selected.size;
-  const countNode=toolbar.querySelector('[data-apollo-selected-count]');if(countNode)countNode.textContent=String(count);
-  toolbar.querySelectorAll('button').forEach(button=>button.disabled=bulkRunning||count===0);
+  const countNode=toolbar.querySelector('[data-apollo-selected-count]');if(countNode&&countNode.textContent!==String(count))countNode.textContent=String(count);
+  toolbar.querySelectorAll('button').forEach(button=>{const disabled=bulkRunning||count===0;if(button.disabled!==disabled)button.disabled=disabled;});
 }
 
 function ensureToolbar(){
@@ -67,8 +67,14 @@ function decoratePersonRow(row){
     actions.insertAdjacentHTML('afterbegin',`<label class="apollo-select-wrap" title="Select this contact for an Apollo bulk action"><input type="checkbox" data-apollo-select="${esc(key)}" ${selected.has(key)?'checked':''}> Select</label>`);
   }
   const checkbox=actions?.querySelector('[data-apollo-select]');if(checkbox){checkbox.dataset.apolloSelect=key;checkbox.checked=selected.has(key);}
-  if(emailButton&&!/Working|verified/i.test(emailButton.textContent||''))emailButton.textContent=emailButton.disabled?'Sign in to verify email':'Verify email with Apollo · 1 credit';
-  if(phoneButton&&phoneButton.dataset.action==='find-phone'&&!/verified/i.test(phoneButton.textContent||''))phoneButton.textContent=phoneButton.disabled?'Sign in to find phone':'Find phone with Apollo · up to 9 credits';
+  if(emailButton&&!/Working|verified/i.test(emailButton.textContent||'')){
+    const emailLabel=emailButton.disabled?'Sign in to verify email':'Verify email with Apollo · 1 credit';
+    if(emailButton.textContent!==emailLabel)emailButton.textContent=emailLabel;
+  }
+  if(phoneButton&&phoneButton.dataset.action==='find-phone'&&!/verified/i.test(phoneButton.textContent||'')){
+    const phoneLabel=phoneButton.disabled?'Sign in to find phone':'Find phone with Apollo · up to 9 credits';
+    if(phoneButton.textContent!==phoneLabel)phoneButton.textContent=phoneLabel;
+  }
 }
 
 function decorateDecisionSection(section){
