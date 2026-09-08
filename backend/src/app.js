@@ -5,6 +5,7 @@ import {handleServiceIntegrationRoute,withWorkspaceServiceCredentials} from './s
 import {handleScraplingRoute} from './scrapling-routes.js';
 import {handleSaasRoute} from './saas-routes.js';
 import {handleOutreachAutomationRoute} from './outreach-automation-routes.js';
+import {runOutreachAutomation} from './outreach-automation-runner.js';
 import {handleCrmRoute} from './crm-routes.js';
 import {handleApolloCrmWebhook} from './crm-routes.js';
 import {handleMarketMonitoringRoute,runDueMarketMonitoring} from './market-monitoring.js';
@@ -32,5 +33,11 @@ export default {
       console.error(cause);return new Response(JSON.stringify({error:'Internal server error'}),{status:500,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...cors}});
     }
   },
-  async scheduled(controller,env,ctx){ctx.waitUntil(runDueMarketMonitoring(env,new Date(controller.scheduledTime||Date.now())));}
+  async scheduled(controller,env,ctx){
+    const now=new Date(controller.scheduledTime||Date.now());
+    ctx.waitUntil(Promise.allSettled([
+      runDueMarketMonitoring(env,now),
+      runOutreachAutomation(env,{now})
+    ]));
+  }
 };
