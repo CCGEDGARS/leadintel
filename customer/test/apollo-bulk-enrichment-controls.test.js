@@ -22,6 +22,14 @@ test('bulk confirmation copy makes the selected scope and Apollo cost explicit',
   assert.match(mod.bulkConfirmationMessage(12,'phone'),/108 Apollo credits/i);
 });
 
+test('selection identity changes when the rendered contact changes at the same row index', async()=>{
+  const mod=await import(`${pathToFileURL(modulePath).href}?t=${Date.now()+2}`);
+  const first=mod.contactSelectionKey(2,1,'Alice Smith|Sales Director');
+  const second=mod.contactSelectionKey(2,1,'Bob Jones|Sales Director');
+  assert.notEqual(first,second);
+  assert.match(first,/^2:1:/);
+});
+
 test('discovery labels distinguish free people search from credit-consuming enrichment',()=>{
   const source=fs.readFileSync(path.join(root,'discovery-ui.js'),'utf8');
   assert.match(source,/Apollo People Search does not reveal email addresses/i);
