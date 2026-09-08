@@ -29,3 +29,8 @@ test('model text is never treated as trusted HTML and unsafe protocols are rejec
   assert.match(ui,/\^https\?:\$/);
   assert.doesNotMatch(ui,/javascript:|data:text\/html/i);
 });
+
+test('Customer V2 CI syntax-checks every Copilot browser module',()=>{
+  const workflow=fs.readFileSync(new URL('../../.github/workflows/customer-ci.yml',import.meta.url),'utf8');
+  for(const file of ['copilot-loader.js','copilot-api.js','copilot-context.js','copilot-ui.js'])assert.match(workflow,new RegExp(`node --check customer/${file.replace('.','\\.')}`));
+});
