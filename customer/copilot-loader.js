@@ -1,7 +1,8 @@
 let loading=null;
 
+function ensureEntryCss(){if(document.querySelector('link[data-leadintel-asset="copilot-css"]'))return;const link=document.createElement('link');link.rel='stylesheet';link.href='./copilot.css?v=20260908-copilot-polish-v1';link.dataset.leadintelAsset='copilot-css';document.head.appendChild(link);}
 function ensureEntry(){
-  let entry=document.getElementById('leadintel-copilot-entry');if(entry)return entry;const metric=document.querySelector('.progress-metric');if(!metric)return null;
+  ensureEntryCss();let entry=document.getElementById('leadintel-copilot-entry');if(entry)return entry;const metric=document.querySelector('.progress-metric');if(!metric)return null;
   entry=document.createElement('button');entry.type='button';entry.id='leadintel-copilot-entry';entry.className='leadintel-copilot-entry';entry.setAttribute('aria-haspopup','dialog');entry.innerHTML='<span class="copilot-entry-copy"><strong class="copilot-entry-title">Ask LeadIntel ✦</strong><small class="copilot-entry-subtitle">AI Commercial Copilot</small></span><span class="copilot-entry-badge" data-copilot-badge aria-live="polite"></span>';metric.after(entry);return entry;
 }
 function setStatus(message){const entry=ensureEntry();const badge=entry?.querySelector('[data-copilot-badge]');if(badge){badge.textContent=String(message||'').slice(0,80);badge.hidden=!badge.textContent;}}
