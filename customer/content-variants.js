@@ -20,4 +20,4 @@
   return {LANGUAGES,language,normalize,set,get,has,same};
 });
 
-import './apollo-bulk-enrichment.js?v=20260908-apollo-bulk-v1';
+if(typeof document!=="undefined")import('./apollo-bulk-enrichment.js?v=20260908-apollo-bulk-v1');
