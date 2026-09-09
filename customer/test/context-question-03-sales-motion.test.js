@@ -11,9 +11,9 @@ test('Context Question 03 is sales motion, not legacy lookalike input', () => {
 });
 
 test('legacy lookalike storage is isolated from the visible Context field', () => {
-  assert.match(source, /data-legacy-sales-motion/);
-  assert.match(source, /answers\.lookalike_customers/);
-  assert.match(source, /answers\.sales_motion/);
+  assert.match(source, /legacySalesMotion/);
+  assert.match(source, /answers\?\.lookalike_customers/);
+  assert.match(source, /answers\?\.sales_motion/);
 });
 
 test('Reference Customer Intelligence remains a separate optional tool', () => {
