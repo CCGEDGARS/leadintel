@@ -21,10 +21,11 @@ test('Step 2 keeps Question 03 visible and connects it to Reference Customer Int
   assert.ok(referencePos>=0&&readinessPos>referencePos,'Question 03 runtime must load before readiness binds Step 2 fields');
 });
 
-test('Question 03 runtime repairs late DOM mutations after research rendering',()=>{
+test('Question 03 runtime repairs late DOM replacement without observing attributes it also mutates',()=>{
   const runtime=read('step2-reference-question-runtime.js');
   assert.match(runtime,/MutationObserver/);
   assert.match(runtime,/questionGrid\(\)/);
-  assert.match(runtime,/childList:true/);
-  assert.match(runtime,/subtree:true/);
+  assert.match(runtime,/observer\.observe\(grid,\{childList:true,subtree:true\}\)/);
+  assert.doesNotMatch(runtime,/attributeFilter/);
+  assert.doesNotMatch(runtime,/attributes:true/);
 });
