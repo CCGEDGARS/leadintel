@@ -34,6 +34,34 @@ const PROCESS_STORAGE_KEY="leadintel_customer_v2_state";
 const processMap=document.getElementById("commercial-process-map");
 
 function readProcessState(){try{return JSON.parse(localStorage.getItem(PROCESS_STORAGE_KEY)||"{}");}catch{return {};}}
+function writeQuestion03(value){
+  const state=readProcessState();
+  state.answers={...(state.answers||{}),lookalike_customers:String(value||"").trim()};
+  state.answerStatus={...(state.answerStatus||{}),lookalike_customers:String(value||"").trim()?"user":"missing"};
+  localStorage.setItem(PROCESS_STORAGE_KEY,JSON.stringify(state));
+  window.dispatchEvent(new CustomEvent("leadintel:workspace-changed"));
+}
+function ensureContextQuestion03(){
+  const grid=document.querySelector("#step-2 .question-grid");if(!grid)return null;
+  let textarea=grid.querySelector('[data-question="lookalike_customers"]');
+  let card=textarea?.closest(".question-card")||null;
+  if(!card){
+    card=document.createElement("article");
+    card.className="question-card";
+    card.dataset.contextQuestion="03";
+    card.innerHTML='<span>03</span><label>Which 3–5 existing customers would you most like to replicate?<small>Optional if confidential. These become lookalike anchors for finding similar companies, not automatic outreach targets.</small></label><textarea data-question="lookalike_customers" rows="3" placeholder="Example: Customer A; Customer B; Customer C"></textarea><button class="text-btn" type="button" data-reference-customers-manage>Open Reference Customer Intelligence →</button>';
+    textarea=card.querySelector('[data-question="lookalike_customers"]');
+    textarea.value=String(readProcessState().answers?.lookalike_customers||"");
+    textarea.addEventListener("input",()=>writeQuestion03(textarea.value));
+  }
+  card.hidden=false;card.removeAttribute("aria-hidden");card.style.removeProperty("display");
+  if(!card.querySelector("[data-reference-customers-manage]")){
+    const action=document.createElement("button");action.className="text-btn";action.type="button";action.dataset.referenceCustomersManage="";action.textContent="Open Reference Customer Intelligence →";card.appendChild(action);
+  }
+  const question04=grid.querySelector('[data-question="buyer_roles"]')?.closest(".question-card");
+  if(question04&&card.nextElementSibling!==question04)grid.insertBefore(card,question04);
+  return card;
+}
 function contextReady(){
   const state=readProcessState();
   const input=document.getElementById("company-website");
@@ -57,8 +85,9 @@ function syncProcessMap(){
 function openProcessStep(step,attempt=0){
   const target=Number(step)||1;
   if(target>1&&!contextReady()){document.querySelector('[data-step-marker="1"]')?.dispatchEvent(new MouseEvent("click",{bubbles:true}));syncProcessMap();return;}
+  if(target===2)ensureContextQuestion03();
   const marker=document.querySelector(`[data-step-marker="${target}"]`);
-  if(marker){marker.dispatchEvent(new MouseEvent("click",{bubbles:true}));setTimeout(syncProcessMap,0);return;}
+  if(marker){marker.dispatchEvent(new MouseEvent("click",{bubbles:true}));if(target===2)setTimeout(ensureContextQuestion03,0);setTimeout(syncProcessMap,0);return;}
   if(attempt<20)setTimeout(()=>openProcessStep(target,attempt+1),100);
 }
 if(processMap){
@@ -68,7 +97,7 @@ if(processMap){
   document.getElementById("target-market-selector")?.addEventListener("click",()=>setTimeout(syncProcessMap,0));
   window.addEventListener("leadintel:website-synced",syncProcessMap);
   window.addEventListener("leadintel:website-activated",syncProcessMap);
-  window.addEventListener("leadintel:module-opened",syncProcessMap);
+  window.addEventListener("leadintel:module-opened",event=>{if(Number(event.detail?.step)===2)ensureContextQuestion03();syncProcessMap();});
   window.addEventListener("storage",event=>{if(event.key===PROCESS_STORAGE_KEY)syncProcessMap();});
-  syncProcessMap();
+  ensureContextQuestion03();syncProcessMap();
 }
