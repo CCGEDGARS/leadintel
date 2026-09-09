@@ -43,11 +43,12 @@ test('ambiguous search results are not auto-accepted',()=>{
   assert.equal(Enrichment.selectOfficialWebsite({companyName:'Example Company'},candidates),null);
 });
 
-test('Reference Customer UI explains Company Name is required and Website can be found by LeadIntel',()=>{
-  const ui=fs.readFileSync(path.join(__dirname,'..','reference-customer-ui.js'),'utf8');
-  assert.match(ui,/Company Name is required/i);
-  assert.match(ui,/Website is recommended/i);
-  assert.match(ui,/Find missing websites/i);
+test('website enrichment runtime adds the approved guidance and action to the existing modal',()=>{
+  const runtime=fs.readFileSync(path.join(__dirname,'..','reference-customer-website-enrichment.js'),'utf8');
+  assert.match(runtime,/Company Name is required/i);
+  assert.match(runtime,/Website is recommended/i);
+  assert.match(runtime,/Find missing websites/i);
+  assert.match(runtime,/reference-find-websites/);
 });
 
 test('process map loads the website enrichment runtime',()=>{
