@@ -4,9 +4,10 @@ const fs=require('node:fs');
 const path=require('node:path');
 const profile=require('../profile-engine.js');
 const research=require('../company-research-engine.js');
+const brain=require('../company-brain.js');
 const readiness=require('../step2-readiness-engine.js');
 readiness.patchProfileEngine(profile);
-readiness.patchResearchEngine(research);
+readiness.patchResearchEngine(research,{LeadIntelCompanyBrain:brain});
 
 const read=name=>fs.readFileSync(path.join(__dirname,'..',name),'utf8');
 const layer=read('step2-readiness-engine.js');
@@ -98,6 +99,27 @@ test('AI prompt asks for observable trigger events and customer problems instead
   assert.match(prompt.prompt,/buying_outcomes/i);
   assert.match(prompt.prompt,/observable/i);
   assert.doesNotMatch(prompt.prompt,/growth_markets should describe industries\/segments/i);
+});
+
+test('first-party website intelligence creates reviewable Step 2 drafts instead of blanking useful fields',()=>{
+  const source={
+    id:'S1',type:'website',url:'https://ccgroup.lv/',title:'Sales training and AI for business',
+    text:'Advanced sales training, sales coaching, leadership development and AI tools for business. We help B2B sales teams improve sales performance, conversion, manager coaching and commercial execution.'
+  };
+  const draft=research.buildEvidenceDraft({sources:[source],targetMarkets:['Latvia'],uiLanguage:'en'});
+  assert.match(draft.priority_offers.value,/sales training/i);
+  assert.match(draft.ideal_customer.value,/B2B|sales team/i);
+  assert.match(draft.buying_outcomes.value,/sales|conversion|performance|coaching/i);
+  assert.equal(draft.buying_outcomes.sourceIds.includes('S1'),true);
+  assert.match(draft.buying_outcomes.rationale,/first-party|inferred|website/i);
+});
+
+test('first-party inference does not invent value, exclusions or LeadIntel success targets',()=>{
+  const source={id:'S1',type:'website',url:'https://ccgroup.lv/',title:'Sales training',text:'Sales training and leadership coaching for B2B sales teams.'};
+  const draft=research.buildEvidenceDraft({sources:[source],targetMarkets:['Latvia'],uiLanguage:'en'});
+  assert.equal(draft.opportunity_value.value,'');
+  assert.equal(draft.exclusions.value,'');
+  assert.equal(draft.success_outcome.value,'');
 });
 
 test('sync conflict UX de-duplicates the banner and resolves only byte-equivalent business payloads',()=>{
