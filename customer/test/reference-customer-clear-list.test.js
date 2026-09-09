@@ -36,10 +36,14 @@ test('clearing reference customers preserves the rest of the workspace',()=>{
   assert.equal(cleared.referenceCustomers.dna,null);
 });
 
-test('Reference Customer Intelligence exposes a clear-list action with confirmation',()=>{
+test('Reference Customer Intelligence uses an in-app clear confirmation, never browser confirm',()=>{
   const runtime=fs.readFileSync(path.join(__dirname,'..','reference-customer-clear-list.js'),'utf8');
   assert.match(runtime,/button\.id=['"]reference-clear-list['"]/);
   assert.match(runtime,/Clear customer list/);
   assert.match(runtime,/Remove all reference customers and reset Lookalike Intelligence\?/);
+  assert.match(runtime,/data-reference-clear-confirm/);
+  assert.match(runtime,/data-reference-clear-confirm-yes/);
+  assert.match(runtime,/data-reference-clear-confirm-no/);
+  assert.doesNotMatch(runtime,/root\.confirm\s*\(/);
   assert.match(runtime,/leadintel:reference-customers-updated/);
 });
