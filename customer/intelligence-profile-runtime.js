@@ -14,7 +14,7 @@ const INTELLIGENCE_PROFILE_ASSET_VERSION='20260909-canonical-profile-v1';
     const editor=document.getElementById('profile-editor');if(!editor)return;
     const state=readState(),profile=state.profile;if(!profile?.canonical?.fields)return;
     const signature=JSON.stringify([profile.canonical.generatedAt,profile.canonical.diagnostics,profile.canonical.contradictions,state.referenceCustomers?.fingerprint,state.referenceCustomers?.analyzedAt,profileIsEditing(editor)]);
-    if(editor.dataset.canonicalSignature===signature)return;
+    if(editor.dataset.canonicalSignature===signature&&editor.querySelector('.intel-profile-shell'))return;
     const edit=profileIsEditing(editor);editor.className='intel-profile-mount';editor.innerHTML=UI.render(profile,{edit,referenceCustomers:state.referenceCustomers||{},targetMarkets:state.targetMarkets||[]});editor.dataset.canonicalSignature=signature;
     upgradeStatus(state);compactSignals(profile);compactEvidence(profile,state);retireLegacyLookalike();
   }
