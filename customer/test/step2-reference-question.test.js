@@ -20,3 +20,8 @@ test('Step 2 keeps Question 03 visible and connects it to Reference Customer Int
   const readinessPos=processMap.indexOf('step2-readiness-engine.js');
   assert.ok(referencePos>=0&&readinessPos>referencePos,'Question 03 runtime must load before readiness binds Step 2 fields');
 });
+
+test('customer entrypoint cache-busts process-map after the Question 03 runtime change',()=>{
+  const html=read('index.html');
+  assert.match(html,/process-map\.js\?v=20260909-question03-v2/);
+});
