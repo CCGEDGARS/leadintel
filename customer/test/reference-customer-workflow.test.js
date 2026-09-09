@@ -6,15 +6,15 @@ const path=require('node:path');
 const ui=fs.readFileSync(path.join(__dirname,'..','reference-customer-ui.js'),'utf8');
 const profile=fs.readFileSync(path.join(__dirname,'..','intelligence-profile-ui.js'),'utf8');
 const css=fs.readFileSync(path.join(__dirname,'..','reference-customers.css'),'utf8');
-const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
+const boot=fs.readFileSync(path.join(__dirname,'..','process-map.js'),'utf8');
 
-test('customer page loads reference customer engine and UI before profile runtime',()=>{
-  const engine=html.indexOf('reference-customers.js');
-  const manager=html.indexOf('reference-customer-ui.js');
-  const runtime=html.indexOf('intelligence-profile-runtime.js');
+test('customer boot loads reference customer engine, UI and lookalike integration in dependency order',()=>{
+  const engine=boot.indexOf('reference-customers.js');
+  const manager=boot.indexOf('reference-customer-ui.js');
+  const lookalike=boot.indexOf('lookalike-discovery.js');
   assert.ok(engine>=0,'reference-customers.js must be loaded');
   assert.ok(manager>engine,'reference-customer-ui.js must load after the engine');
-  assert.ok(runtime>manager,'profile runtime must load after reference customer UI');
+  assert.ok(lookalike>manager,'lookalike integration must load after the reference customer UI');
 });
 
 test('reference customer card is prominent and uses a large upload-and-analyze CTA',()=>{
