@@ -8,6 +8,8 @@
   const STORAGE_KEY='leadintel_customer_v2_state';
   const FIRECRAWL_PROXY='https://apollo-proxy.edgars-7e7.workers.dev';
   const MAX_ENRICH=25;
+  const FIND_INFO_LABEL='Find missing info';
+  const ANALYZE_LABEL='Analyze customer list';
   const clean=value=>String(value??'').replace(/\s+/g,' ').trim();
   const norm=value=>clean(value).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
   const STOPWORDS=new Set(['company','co','corporation','corp','inc','incorporated','limited','ltd','llc','group','holding','holdings','sia','as','ab','oy','ou','uab','gmbh','sarl','bv','plc','the']);
@@ -52,6 +54,13 @@
     const Ref=()=>root.LeadIntelReferenceCustomers;
     function readState(){try{return JSON.parse(root.localStorage.getItem(STORAGE_KEY)||'{}');}catch{return {};}}
     async function writeState(state){root.localStorage.setItem(STORAGE_KEY,JSON.stringify(state));await root.LeadIntelServerBridge?.saveNow?.().catch(()=>null);root.dispatchEvent(new root.CustomEvent('leadintel:reference-customers-updated'));root.LeadIntelReferenceCustomerUI?.render?.();}
+    function setTwoLineLabel(button,label,firstLine,secondLine){
+      if(!button)return;
+      button.setAttribute('aria-label',label);
+      button.innerHTML=`<span>${firstLine}<br>${secondLine}</span>`;
+    }
+    function setFindIdleLabel(button){setTwoLineLabel(button,FIND_INFO_LABEL,'Find missing','info');}
+    function setAnalyzeIdleLabel(button){setTwoLineLabel(button,ANALYZE_LABEL,'Analyze customer','list');}
     function ensureActionStatus(){
       const actions=document.querySelector('#reference-customer-modal .reference-analysis-actions');if(!actions)return null;
       let node=document.getElementById('reference-action-status');
@@ -68,9 +77,11 @@
       const manualWebsite=modal.querySelector('#reference-manual-website');if(manualWebsite)manualWebsite.placeholder='Website (optional)';
       const empty=modal.querySelector('.reference-empty');if(empty)empty.textContent='Upload a customer list. Company Name is required; Website can be found by LeadIntel.';
       const actions=modal.querySelector('.reference-analysis-actions');
-      if(actions&&!actions.querySelector('#reference-find-websites')){
-        const button=document.createElement('button');button.type='button';button.id='reference-find-websites';button.className='secondary-btn';button.textContent='Find missing websites';
-        actions.insertBefore(button,actions.firstChild);
+      if(actions){
+        let button=actions.querySelector('#reference-find-websites');
+        if(!button){button=document.createElement('button');button.type='button';button.id='reference-find-websites';button.className='secondary-btn';actions.insertBefore(button,actions.firstChild);}
+        if(!button.disabled)setFindIdleLabel(button);
+        const analyze=actions.querySelector('#reference-analyze');if(analyze&&!analyze.disabled)setAnalyzeIdleLabel(analyze);
       }
       ensureActionStatus();
     }
@@ -79,7 +90,7 @@
       let state=readState();state.referenceCustomers=ref.normalizeReferenceState(state.referenceCustomers||{});
       const missing=state.referenceCustomers.rows.filter(needsWebsite).slice(0,MAX_ENRICH);
       if(!missing.length){setStatus('All reference customers already have websites.');return;}
-      const originalLabel=button.textContent;button.disabled=true;button.textContent='Finding websites…';let found=0,checked=0,failed=0;let firstError='';
+      button.disabled=true;button.textContent='Finding websites…';let found=0,checked=0,failed=0;let firstError='';
       try{
         for(const row of missing){
           setStatus(`Finding missing websites… ${checked}/${missing.length} checked · ${found} found`);
@@ -92,11 +103,11 @@
         await writeState(state);
         if(!found&&firstError)setStatus(`Unable to search websites: ${firstError}`);
         else setStatus(`${found} official website${found===1?'':'s'} found and verified · ${failed} still need review.${missing.length===MAX_ENRICH?' Run again to continue with the remaining companies.':''}`);
-      }finally{button.disabled=false;button.textContent=originalLabel;ensureUx();}
+      }finally{button.disabled=false;setFindIdleLabel(button);ensureUx();}
     }
     document.addEventListener('click',event=>{
       if(event.target?.closest?.('[data-reference-customers-manage]'))[0,50,200].forEach(delay=>root.setTimeout(ensureUx,delay));
-      const button=event.target?.closest?.('#reference-find-websites');if(!button)return;event.preventDefault();event.stopPropagation();enrich(button).catch(error=>{button.disabled=false;button.textContent='Find missing websites';setStatus(clean(error?.message)||'Unable to find missing websites');});
+      const button=event.target?.closest?.('#reference-find-websites');if(!button)return;event.preventDefault();event.stopPropagation();enrich(button).catch(error=>{button.disabled=false;setFindIdleLabel(button);setStatus(clean(error?.message)||'Unable to find missing websites');});
     });
     root.addEventListener('leadintel:reference-customers-updated',()=>root.setTimeout(ensureUx,0));
     if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>root.setTimeout(ensureUx,0),{once:true});else root.setTimeout(ensureUx,0);
