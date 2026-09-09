@@ -1,5 +1,5 @@
 const STEP2_REFERENCE_STORAGE_KEY='leadintel_customer_v2_state';
-const STEP2_REFERENCE_VERSION='20260909-question03-v1';
+const STEP2_REFERENCE_VERSION='20260909-question03-v2';
 
 (function installStep2ReferenceQuestionRuntime(root){
   'use strict';
@@ -9,6 +9,8 @@ const STEP2_REFERENCE_VERSION='20260909-question03-v1';
   const QUESTION='Which 3–5 existing customers would you most like to replicate?';
   const HELP='Optional if confidential. Add customer names here for quick context, or open Reference Customer Intelligence to upload company names + websites for AI analysis and lookalike modelling.';
   const PLACEHOLDER='Example: Customer A; Customer B; Customer C';
+  let observer=null;
+  let queued=false;
 
   function readState(){
     try{return JSON.parse(localStorage.getItem(STEP2_REFERENCE_STORAGE_KEY)||'{}');}
@@ -43,9 +45,7 @@ const STEP2_REFERENCE_VERSION='20260909-question03-v1';
     if(!card)return null;
     card.hidden=false;
     card.removeAttribute('aria-hidden');
-    if(card.style.display==='none')card.style.removeProperty('display');
-    const computed=typeof root.getComputedStyle==='function'?root.getComputedStyle(card):null;
-    if(computed?.display==='none')card.style.setProperty('display','block','important');
+    card.style.removeProperty('display');
     card.dataset.referenceQuestionCard='true';
 
     const number=card.firstElementChild;
@@ -85,13 +85,24 @@ const STEP2_REFERENCE_VERSION='20260909-question03-v1';
     document.head.appendChild(style);
   }
 
-  function sync(){injectCss();ensureReferenceQuestion();}
+  function sync(){queued=false;injectCss();ensureReferenceQuestion();}
+  function scheduleSync(){if(queued)return;queued=true;queueMicrotask(sync);}
 
-  root.addEventListener('leadintel:module-opened',event=>{if(Number(event?.detail?.step)===2)setTimeout(sync,0);});
-  root.addEventListener('leadintel:workspace-changed',()=>setTimeout(sync,0));
-  root.addEventListener('leadintel:reference-customers-updated',()=>setTimeout(sync,0));
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',sync,{once:true});else sync();
-  setTimeout(sync,250);
+  function observeQuestionGrid(){
+    const grid=questionGrid();
+    if(!grid||observer||typeof MutationObserver==='undefined')return;
+    observer=new MutationObserver(scheduleSync);
+    observer.observe(grid,{childList:true,subtree:true,attributes:true,attributeFilter:['hidden','style','class','aria-hidden']});
+  }
+
+  function start(){sync();observeQuestionGrid();}
+
+  root.addEventListener('leadintel:module-opened',event=>{if(Number(event?.detail?.step)===2)setTimeout(start,0);});
+  root.addEventListener('leadintel:workspace-changed',()=>setTimeout(start,0));
+  root.addEventListener('leadintel:reference-customers-updated',()=>setTimeout(start,0));
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
+  setTimeout(start,250);
+  setTimeout(start,1200);
 
   root.LeadIntelStep2ReferenceQuestion={version:STEP2_REFERENCE_VERSION,ensureReferenceQuestion};
 })(globalThis);
