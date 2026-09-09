@@ -27,3 +27,10 @@ test('Question 03 recovery is bootstrapped by the classic language entrypoint',(
   assert.match(language,/document\.createElement\(["']script["']\)/);
   assert.doesNotMatch(processMap,/step2-reference-question-runtime\.js/);
 });
+
+test('app enforces Question 03 whenever Step 2 opens',()=>{
+  const app=read('app.js');
+  assert.match(app,/function ensureStep2Question03\(/);
+  assert.match(app,/if\(step===2\)ensureStep2Question03\(\)/);
+  assert.match(app,/data-question="lookalike_customers"/);
+});
