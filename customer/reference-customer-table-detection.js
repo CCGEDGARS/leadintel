@@ -2,7 +2,10 @@
   const base=(typeof module!=="undefined"&&module.exports)?require('./reference-customers.js'):root.LeadIntelReferenceCustomers;
   const api=factory(base||{});
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
-  if(root&&root.LeadIntelReferenceCustomers)Object.assign(root.LeadIntelReferenceCustomers,api);
+  if(root){
+    root.LeadIntelReferenceCustomerTableDetection=api;
+    if(root.LeadIntelReferenceCustomers)Object.assign(root.LeadIntelReferenceCustomers,api);
+  }
 })(typeof globalThis!=="undefined"?globalThis:this,function(Ref){
   'use strict';
   const clean=v=>String(v??'').replace(/\s+/g,' ').trim();
