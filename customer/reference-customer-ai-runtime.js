@@ -1,0 +1,69 @@
+const REFERENCE_AI_STATE_KEY='leadintel_customer_v2_state';
+const REFERENCE_AI_FIRECRAWL='https://apollo-proxy.edgars-7e7.workers.dev';
+const REFERENCE_AI_MAX=24;
+const REFERENCE_AI_CONCURRENCY=4;
+
+(function installReferenceCustomerAiRuntime(root){
+  'use strict';
+  if(typeof document==='undefined')return;
+  const Ref=root.LeadIntelReferenceCustomers;
+  const AI=root.LeadIntelReferenceCustomerAI;
+  if(!Ref||!AI)return;
+  const clean=value=>String(value??'').replace(/\s+/g,' ').trim();
+  function readState(){try{return JSON.parse(localStorage.getItem(REFERENCE_AI_STATE_KEY)||'{}');}catch{return {};}}
+  async function writeState(state){
+    localStorage.setItem(REFERENCE_AI_STATE_KEY,JSON.stringify(state));
+    await root.LeadIntelServerBridge?.saveNow?.().catch(()=>null);
+    root.dispatchEvent(new CustomEvent('leadintel:reference-customers-updated'));
+    root.LeadIntelReferenceCustomerUI?.render?.();
+  }
+  function workspaceId(){
+    const bridge=root.LeadIntelServerBridge;
+    return bridge?.session?.authenticated&&bridge?.workspace?.id?clean(bridge.workspace.id):'';
+  }
+  function status(message){const node=document.getElementById('reference-import-status');if(node)node.textContent=message;}
+  async function scrapeRow(row){
+    const response=await fetch(`${REFERENCE_AI_FIRECRAWL}/firecrawl-scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:row.website,formats:['markdown'],onlyMainContent:true,timeout:25000})});
+    const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(clean(payload?.error)||`Website returned ${response.status}`);
+    const data=payload.data||payload;const text=String(data.markdown||data.content||'').replace(/\s+/g,' ').trim().slice(0,5000);if(!text)throw new Error('No readable website content');
+    return {id:row.id,companyName:row.companyName,website:row.website,text};
+  }
+  async function mapLimit(rows,worker){
+    const results=new Array(rows.length);let cursor=0;
+    async function run(){while(cursor<rows.length){const index=cursor++;try{results[index]={ok:true,value:await worker(rows[index])};}catch(error){results[index]={ok:false,error};}}}
+    await Promise.all(Array.from({length:Math.min(REFERENCE_AI_CONCURRENCY,rows.length)},run));return results;
+  }
+  async function runAiAnalysis(button){
+    let state=readState();state.referenceCustomers=Ref.normalizeReferenceState(state.referenceCustomers||{});
+    const ready=state.referenceCustomers.rows.filter(row=>row.status==='ready'&&row.website).slice(0,REFERENCE_AI_MAX);
+    if(!ready.length)throw new Error('Upload companies with valid websites first');
+    const workspace=workspaceId();if(!workspace)throw new Error('AI analysis requires a signed-in LeadIntel workspace');
+    button.disabled=true;status(`Scraping reference customer websites… 0/${ready.length}`);
+    let completed=0;
+    const scraped=await mapLimit(ready,async row=>{const result=await scrapeRow(row);completed++;status(`Scraping reference customer websites… ${completed}/${ready.length}`);return result;});
+    const evidence=scraped.filter(item=>item.ok).map(item=>item.value);const failures=scraped.length-evidence.length;
+    if(!evidence.length)throw new Error('No reference customer websites could be read');
+    status(`Running AI analysis on ${evidence.length} reference customers…`);
+    const result=await AI.requestReferenceCustomerAnalysis({workspaceId:workspace,rows:evidence});
+    if(!Object.keys(result.analyses||{}).length)throw new Error('AI analysis returned no supported company classifications');
+    state=readState();state.referenceCustomers=Ref.normalizeReferenceState(state.referenceCustomers||{});
+    state.referenceCustomers.analyses=result.analyses;
+    state.referenceCustomers.segments=result.segments;
+    state.referenceCustomers.segmentationMeaningful=Boolean(result.segmentationMeaningful);
+    state.referenceCustomers.activeSegmentIds=[];
+    state.referenceCustomers.activeIds=[];
+    state.referenceCustomers.activated=false;
+    state.referenceCustomers.dna=null;
+    state.referenceCustomers.analyzedAt=new Date().toISOString();
+    state.referenceCustomers=Ref.normalizeReferenceState(state.referenceCustomers);
+    await writeState(state);
+    status(`AI analysis complete · ${Object.keys(result.analyses).length} companies classified${failures?` · ${failures} websites need review`:''}. Review the Customer segments before activation.`);
+  }
+  document.addEventListener('click',async event=>{
+    const button=event.target?.closest?.('#reference-analyze');if(!button)return;
+    event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
+    try{await runAiAnalysis(button);}catch(error){status(clean(error?.message)||'AI analysis failed');}
+    finally{button.disabled=false;}
+  },true);
+  root.LeadIntelReferenceCustomerAIRuntime={runAiAnalysis};
+})(globalThis);
