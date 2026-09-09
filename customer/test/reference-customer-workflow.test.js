@@ -7,16 +7,19 @@ const ui=fs.readFileSync(path.join(__dirname,'..','reference-customer-ui.js'),'u
 const profile=fs.readFileSync(path.join(__dirname,'..','intelligence-profile-ui.js'),'utf8');
 const css=fs.readFileSync(path.join(__dirname,'..','reference-customers.css'),'utf8');
 const boot=fs.readFileSync(path.join(__dirname,'..','process-map.js'),'utf8');
+const aiRuntimePath=path.join(__dirname,'..','reference-customer-ai-runtime.js');
 
-test('customer boot loads reference engine, AI classifier, UI and lookalike integration in dependency order',()=>{
+test('customer boot loads reference engine, AI client, UI, AI runtime and lookalike integration in dependency order',()=>{
   const engine=boot.indexOf('reference-customers.js');
   const ai=boot.indexOf('reference-customer-ai.js');
   const manager=boot.indexOf('reference-customer-ui.js');
+  const runtime=boot.indexOf('reference-customer-ai-runtime.js');
   const lookalike=boot.indexOf('lookalike-discovery.js');
   assert.ok(engine>=0,'reference-customers.js must be loaded');
   assert.ok(ai>engine,'reference-customer-ai.js must load after the reference engine');
-  assert.ok(manager>ai,'reference-customer-ui.js must load after the AI classifier');
-  assert.ok(lookalike>manager,'lookalike integration must load after the reference customer UI');
+  assert.ok(manager>ai,'reference-customer-ui.js must load after the AI client');
+  assert.ok(runtime>manager,'AI runtime must load after the reference customer UI');
+  assert.ok(lookalike>runtime,'lookalike integration must load after AI analysis runtime');
 });
 
 test('reference customer card is prominent and uses a large upload-and-analyze CTA',()=>{
@@ -34,10 +37,13 @@ test('manager explains the minimal two-column file format and offers a CSV templ
   assert.match(ui,/Only company name and website are required/i);
 });
 
-test('manager uses configured AI after scraping and before activation',()=>{
-  assert.match(ui,/LeadIntelReferenceCustomerAI/);
-  assert.match(ui,/requestReferenceCustomerAnalysis/);
-  assert.match(ui,/AI analysis/i);
+test('AI runtime uses configured AI after scraping and before activation',()=>{
+  assert.equal(fs.existsSync(aiRuntimePath),true,'AI runtime must exist');
+  const runtime=fs.readFileSync(aiRuntimePath,'utf8');
+  assert.match(runtime,/LeadIntelReferenceCustomerAI/);
+  assert.match(runtime,/requestReferenceCustomerAnalysis/);
+  assert.match(runtime,/AI analysis/i);
+  assert.match(runtime,/firecrawl-scrape/);
 });
 
 test('manager analyzes before activation and shows segment review controls',()=>{
