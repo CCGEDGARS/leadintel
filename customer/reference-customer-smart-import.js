@@ -26,12 +26,14 @@ const SMART_XLSX_VERSION='0.18.5';
   }
   async function importExcel(file){
     const Ref=root.LeadIntelReferenceCustomers;
-    if(!Ref?.detectCustomerTable||!Ref?.normalizeImportedRows)throw new Error('Customer table detector is not ready. Reload and try again.');
+    const detector=root.LeadIntelReferenceCustomerTableDetection?.detectCustomerTable||Ref?.detectCustomerTable;
+    if(!Ref?.normalizeImportedRows)throw new Error('Reference customer importer is not ready. Reload and try again.');
+    if(typeof detector!=='function')throw new Error('Customer table detector failed to load. Reload and try again.');
     setStatus('Reading workbook and finding the customer table…');
     const XLSX=await import(`https://cdn.jsdelivr.net/npm/xlsx@${SMART_XLSX_VERSION}/+esm`);
     const workbook=XLSX.read(await file.arrayBuffer(),{type:'array'});
     const sheets=workbook.SheetNames.map(name=>({name,rows:XLSX.utils.sheet_to_json(workbook.Sheets[name],{header:1,defval:'',raw:false})}));
-    const detected=Ref.detectCustomerTable(sheets);
+    const detected=detector(sheets);
     if(!detected.rows.length)throw new Error('I could not identify a customer table in this workbook.');
     const rows=Ref.normalizeImportedRows(detected.rows,{sourceType:'xlsx'});
     if(!rows.length)throw new Error(`I found the “${detected.sheetName}” table but could not identify company rows.`);
