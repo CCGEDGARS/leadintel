@@ -12,6 +12,10 @@ test('Step 3 runtime delegates the profile grid to the canonical intelligence re
   assert.match(source,/canonical/);
 });
 
+test('canonical renderer reruns when legacy app replaces its DOM while state signature stays unchanged',()=>{
+  assert.match(source,/canonicalSignature===signature\s*&&\s*editor\.querySelector\(['"]\.intel-profile-shell['"]\)/);
+});
+
 test('Step 3 replaces full signal library with compact summary and preserves Step 4 Signal Designer link',()=>{
   assert.match(source,/active signal themes/i);
   assert.match(source,/Open Signal Designer/i);
