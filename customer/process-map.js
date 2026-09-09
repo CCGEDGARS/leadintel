@@ -26,7 +26,7 @@ import './reference-customer-ai.js?v=20260909-ai-segmentation-v1';
 import './reference-customer-ui.js?v=20260909-segmentation-v1';
 import './reference-customer-ai-runtime.js?v=20260909-ai-segmentation-v1';
 import './lookalike-discovery.js?v=20260909-segmentation-v1';
-import './profile-action-runtime.js?v=20260909-profile-actions-v1';
+import './profile-action-runtime.js?v=20260909-profile-actions-v2';
 import './outreach-automation-loader.js?v=20260908-boot-isolation-v1';
 import './copilot-loader.js?v=20260908-copilot-polish-v1';
 
