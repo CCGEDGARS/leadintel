@@ -29,10 +29,10 @@ test('background lifecycle refreshes cannot replace unsaved profile fields while
   assert.match(runtime,/if\(editing\)return;[\s\S]*editor\.querySelector\('\.profile-field'\)/,'legacy Step 3 restoration must not replace an active edit session');
 });
 
-test('Edit profile keeps the approved cards mounted and edits them in place',()=>{
-  assert.match(runtime,/contentEditable=['\"]true['\"]/,'edit mode must make approved profile values editable without rebuilding the profile grid');
-  assert.match(runtime,/dataProfileField|dataset\.profileField/,'editable approved fields must retain their canonical field identity');
-  assert.match(runtime,/field\.value\s*\?\?\s*field\.textContent|field\.value\|\|field\.textContent/,'save must read both textarea and in-place editable values');
-  const enterEdit=(runtime.match(/function enterEditMode\(\)\{([^}]*)\}/)||[])[1]||'';
-  assert.doesNotMatch(enterEdit,/replaceProfileGrid\(true\)/,'entering edit mode must not replace #profile-editor children because Business Identity observes those mutations');
+test('approved profile is shielded from Business Identity layout when Edit profile rerenders fields',()=>{
+  assert.match(runtime,/data-canonical-compat|canonicalCompat/,'canonical profile must install compatibility markers before legacy Business Identity observes the edit render');
+  assert.match(runtime,/businessSummary/);
+  assert.match(runtime,/uniqueSellingProposition/);
+  assert.match(runtime,/elevatorPitch/);
+  assert.match(runtime,/:not\(\[data-canonical-compat\]\)/,'compatibility markers must be excluded from profile saves');
 });
