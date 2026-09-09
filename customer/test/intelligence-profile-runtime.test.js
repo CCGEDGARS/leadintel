@@ -25,6 +25,11 @@ test('Step 3 canonical profile owns edit and save so button and textareas cannot
   assert.match(source,/stopImmediatePropagation/);
 });
 
+test('canonical edit mode is controlled only by runtime state, never stale editable DOM',()=>{
+  assert.match(source,/function profileIsEditing\([^)]*\)\{return Boolean\(editing\);\}/);
+  assert.doesNotMatch(source,/textarea:not\(\[readonly\]\)/);
+});
+
 test('Step 3 replaces full signal library with compact summary and preserves Step 4 Signal Designer link',()=>{
   assert.match(source,/active signal themes/i);
   assert.match(source,/Open Signal Designer/i);
