@@ -12,6 +12,25 @@ test('CSV import normalizes common customer-list headers and deduplicates compan
   assert.equal(normalized[1].country,'Germany');
 });
 
+test('CSV import accepts tab-separated files and Latvian/common header variants',()=>{
+  const csv='Uzņēmuma nosaukums\tMājas lapa\nAcme SIA\thttps://acme.lv\nBeta SIA\tbeta.lv';
+  const rows=Ref.parseCsv(csv);
+  const normalized=Ref.normalizeImportedRows(rows,{sourceType:'csv'});
+  assert.equal(normalized.length,2);
+  assert.equal(normalized[0].companyName,'Acme SIA');
+  assert.equal(normalized[0].domain,'acme.lv');
+  assert.equal(normalized[1].domain,'beta.lv');
+});
+
+test('reference import falls back to first populated column plus URL-like value when headers are unfamiliar',()=>{
+  const rows=[{'Klienta uzņēmums':'Acme SIA','Interneta adrese':'https://acme.lv'},{'Klienta uzņēmums':'Beta SIA','Interneta adrese':'beta.lv'}];
+  const normalized=Ref.normalizeImportedRows(rows,{sourceType:'csv'});
+  assert.equal(normalized.length,2);
+  assert.equal(normalized[0].companyName,'Acme SIA');
+  assert.equal(normalized[0].domain,'acme.lv');
+  assert.equal(normalized[1].companyName,'Beta SIA');
+});
+
 test('unsafe or missing websites remain unresolved instead of being guessed',()=>{
   const rows=Ref.normalizeImportedRows([{Company:'Gamma',Website:'javascript:alert(1)',Country:'Sweden'},{Company:'Delta',Country:'Sweden'}],{sourceType:'csv'});
   assert.equal(rows[0].website,'');
