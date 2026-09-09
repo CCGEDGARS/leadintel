@@ -6,6 +6,7 @@ const path=require('node:path');
 const root=path.join(__dirname,'..');
 const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
 const processMap=fs.readFileSync(path.join(root,'process-map.js'),'utf8');
+const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const hygienePath=path.join(root,'workspace-reset-hygiene.js');
 const hygiene=fs.existsSync(hygienePath)?fs.readFileSync(hygienePath,'utf8'):'';
 
@@ -49,4 +50,14 @@ test('pending reset auto-finishes through the existing version-safe sync path af
   assert.match(hygiene,/leadintel:server-ready/,'signed-out reset must resume automatically after Google sign-in');
   assert.match(hygiene,/localStorage\.removeItem\(RESET_PENDING_KEY\)/,'pending reset marker must clear after successful server save');
   assert.doesNotMatch(hygiene,/deleteCrmCompany|\/api\/crm|\/api\/integrations\/ai\/provider|disconnectProvider/,'reset completion must not touch CRM or AI-provider credentials');
+});
+
+test('a pre-boot reset URL can recover a workspace even when normal app JavaScript is stuck',()=>{
+  const head=html.split('</head>')[0];
+  assert.match(head,/URLSearchParams/);
+  assert.match(head,/get\(['"]reset['"]\)\s*===\s*['"]1['"]/);
+  assert.match(head,/leadintel_customer_v2_state/,'pre-boot recovery must clear the core workspace state');
+  assert.match(head,/leadintel_customer_v2_server_hydration/,'pre-boot recovery must clear stale session hydration');
+  assert.match(head,/location\.replace\(['"]\.\/['"]\)/,'recovery must return to the clean customer workspace without reusing the reset query');
+  assert.doesNotMatch(head,/localStorage\.clear\(\)/,'recovery must not wipe unrelated origin storage or saved provider settings');
 });
