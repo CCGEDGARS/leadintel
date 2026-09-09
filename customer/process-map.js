@@ -39,8 +39,8 @@ function writeProcessState(state){localStorage.setItem(PROCESS_STORAGE_KEY,JSON.
 function syncSalesMotionValue(visible){
   const value=String(visible?.value||"").trim();
   const state=readProcessState();
-  state.answers={...(state.answers||{}),sales_motion:value,lookalike_customers:value};
-  state.answerStatus={...(state.answerStatus||{}),sales_motion:value?"user":"missing",lookalike_customers:value?"user":"missing"};
+  state.answers={...(state.answers||{}),sales_motion:value};
+  state.answerStatus={...(state.answerStatus||{}),sales_motion:value?"user":"missing"};
   state.profile=null;state.approved=false;
   writeProcessState(state);
   renderSalesMotionFeedback(visible);
