@@ -28,6 +28,11 @@ test('legacy lookalike textarea is retired from visible Step 2 intake',()=>{
   assert.match(source,/remove\(\)|hidden\s*=\s*true/);
 });
 
+test('legacy lower Profile Quality duplicate is removed and evidence becomes the only lower panel',()=>{
+  assert.match(source,/intel-lower-compact/);
+  assert.match(source,/second\.remove\(\)/);
+});
+
 test('legacy commercial context and evidence layout sidecars are not runtime dependencies anymore',()=>{
   assert.doesNotMatch(evidence,/commercial-context-layout\.js/);
   assert.doesNotMatch(evidence,/profile-evidence-layout\.js/);
