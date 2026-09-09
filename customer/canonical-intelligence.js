@@ -36,9 +36,7 @@
   }
 
   function reconcileField(fieldKey,candidates=[]){
-    const usable=(candidates||[]).map((item,index)=>({
-      ...item,value:clean(item?.value),provenance:PRECEDENCE[item?.provenance]!==undefined?item.provenance:'unknown',_index:index
-    })).filter(item=>item.value);
+    const usable=(candidates||[]).map((item,index)=>({...item,value:clean(item?.value),provenance:PRECEDENCE[item?.provenance]!==undefined?item.provenance:'unknown',_index:index})).filter(item=>item.value);
     if(!usable.length)return fieldRecord('',{status:'unknown',provenance:'unknown',confidence:'low'});
     usable.sort((a,b)=>(PRECEDENCE[b.provenance]-PRECEDENCE[a.provenance])||(confidenceRank(b.confidence)-confidenceRank(a.confidence))||(a._index-b._index));
     const winner=usable[0];
@@ -47,18 +45,26 @@
   function confidenceRank(value){return ({high:3,medium:2,low:1})[String(value||'').toLowerCase()]||0;}
   function defaultStatus(provenance){return provenance==='user'?'user_confirmed':provenance==='document'||provenance==='website'?'first_party_evidence':provenance==='ai_inference'?'ai_inferred_first_party':'unknown';}
   function defaultConfidence(provenance){return provenance==='user'||provenance==='document'?'high':provenance==='website'?'medium':'low';}
+  function researchProvenance(meta={}){
+    const ids=uniq(meta.sourceIds||meta.source_ids||[]);
+    if(ids.some(id=>/^D\d+$/i.test(id)))return 'document';
+    if(ids.some(id=>/^S\d+$/i.test(id)))return 'website';
+    return 'ai_inference';
+  }
   function answerCandidate(input,fieldKey){
     const answerKey=FIELD_MAP[fieldKey];if(!answerKey)return null;
     const value=clean(input?.answers?.[answerKey]);if(!value)return null;
-    const marker=clean(input?.answerStatus?.[answerKey]||input?.researchMeta?.fields?.[answerKey]?.origin).toLowerCase();
-    const inferred=['draft','research','ai','inferred'].includes(marker);
-    return {value,provenance:inferred?'ai_inference':'user',status:inferred?'ai_inferred_first_party':'user_confirmed',confidence:inferred?'medium':'high',sourceIds:[inferred?`AI:${answerKey}`:`U:${answerKey}`]};
+    const meta=input?.researchMeta?.fields?.[answerKey]||{};
+    const marker=clean(input?.answerStatus?.[answerKey]||meta.origin).toLowerCase();
+    if(marker==='user')return {value,provenance:'user',status:'user_confirmed',confidence:'high',sourceIds:[`U:${answerKey}`]};
+    if(['accepted','draft','research','ai','inferred'].includes(marker)||clean(meta.origin).toLowerCase()==='research'){
+      const provenance=researchProvenance(meta);const reviewed=Boolean(meta.reviewed||marker==='accepted');const sourceIds=uniq(meta.sourceIds||meta.source_ids||[]);
+      return {value,provenance,status:reviewed&&provenance!=='ai_inference'?'first_party_evidence':'needs_confirmation',confidence:confidence(meta.confidence,provenance==='document'?'high':'medium'),sourceIds:sourceIds.length?sourceIds:[`AI:${answerKey}`]};
+    }
+    return {value,provenance:'user',status:'user_confirmed',confidence:'high',sourceIds:[`U:${answerKey}`]};
   }
   function docCandidates(input,fieldKey){
-    return (input?.documents||[]).flatMap((doc,index)=>{
-      const value=clean(doc?.claims?.[fieldKey]||doc?.fields?.[fieldKey]);
-      return value?[{value,provenance:'document',status:'first_party_evidence',confidence:'high',sourceIds:[clean(doc.id)||`D${index+1}`]}]:[];
-    });
+    return (input?.documents||[]).flatMap((doc,index)=>{const value=clean(doc?.claims?.[fieldKey]||doc?.fields?.[fieldKey]);return value?[{value,provenance:'document',status:'first_party_evidence',confidence:'high',sourceIds:[clean(doc.id)||`D${index+1}`]}]:[];});
   }
   function websiteCandidate(input,fieldKey,derived){
     const value=clean(derived?.websiteFields?.[fieldKey]||input?.baseProfile?.[fieldKey]);if(!value)return null;
@@ -73,65 +79,27 @@
   function buildCanonicalProfile(input={},derived={}){
     const fields={};
     for(const fieldKey of [...DIAGNOSTIC_FIELDS,'exclusions','opportunityValue','marketFocus']){
-      const candidates=[];
-      const answer=answerCandidate(input,fieldKey);if(answer)candidates.push(answer);
-      candidates.push(...docCandidates(input,fieldKey));
-      if(fieldKey==='targetMarkets'){
-        const value=Array.isArray(input.targetMarkets)?input.targetMarkets.map(clean).filter(Boolean).join('; '):clean(input.targetMarkets);
-        if(value)candidates.push({value,provenance:'user',status:'user_confirmed',confidence:'high',sourceIds:['U:targetMarkets']});
-      }
-      const website=websiteCandidate(input,fieldKey,derived);if(website)candidates.push(website);
-      const inferred=derivedCandidate(derived,fieldKey);if(inferred)candidates.push(inferred);
-      fields[fieldKey]=reconcileField(fieldKey,candidates);
+      const candidates=[];const answer=answerCandidate(input,fieldKey);if(answer)candidates.push(answer);candidates.push(...docCandidates(input,fieldKey));
+      if(fieldKey==='targetMarkets'){const value=Array.isArray(input.targetMarkets)?input.targetMarkets.map(clean).filter(Boolean).join('; '):clean(input.targetMarkets);if(value)candidates.push({value,provenance:'user',status:'user_confirmed',confidence:'high',sourceIds:['U:targetMarkets']});}
+      const website=websiteCandidate(input,fieldKey,derived);if(website)candidates.push(website);const inferred=derivedCandidate(derived,fieldKey);if(inferred)candidates.push(inferred);fields[fieldKey]=reconcileField(fieldKey,candidates);
     }
-    const profile={canonical:{version:VERSION,fields,diagnostics:[],contradictions:[],generatedAt:new Date().toISOString()}};
-    for(const [key,record] of Object.entries(fields))profile[key]=record.value;
-    profile.canonical.diagnostics=diagnoseCanonicalProfile(profile);
-    return profile;
+    const profile={canonical:{version:VERSION,fields,diagnostics:[],contradictions:[],generatedAt:new Date().toISOString()}};for(const [key,record] of Object.entries(fields))profile[key]=record.value;profile.canonical.diagnostics=diagnoseCanonicalProfile(profile);return profile;
   }
 
   function diagnoseCanonicalProfile(profile={}){
     const fields=profile?.canonical?.fields||{};
-    return DIAGNOSTIC_FIELDS.map(field=>{
-      const record=fields[field]||fieldRecord('',{});
-      let state='missing';
-      if(record.value){
-        state=['user_confirmed','first_party_evidence','external_validated'].includes(record.status)?'known':'needs_confirmation';
-      }
-      return {field,state,status:record.status,confidence:record.confidence,sourceIds:record.sourceIds||[]};
-    });
+    return DIAGNOSTIC_FIELDS.map(field=>{const record=fields[field]||fieldRecord('',{});let state='missing';if(record.value)state=['user_confirmed','first_party_evidence','external_validated'].includes(record.status)?'known':'needs_confirmation';return {field,state,status:record.status,confidence:record.confidence,sourceIds:record.sourceIds||[]};});
   }
 
   function comparable(value){return clean(value).toLowerCase().replace(/[^a-z0-9āčēģīķļņšūž]+/gi,' ').replace(/\s+/g,' ').trim();}
   function compareExternalEvidence(profile={},externalSources=[]){
     const fields=profile?.canonical?.fields||{};const contradictions=[];
-    for(const source of externalSources||[]){
-      if(classifySource(source,profile.website).firstParty)continue;
-      const claims=source?.claims||{};
-      for(const [field,claimValue] of Object.entries(claims)){
-        const canonical=fields[field];const external=clean(claimValue);if(!canonical?.value||!external)continue;
-        const a=comparable(canonical.value),b=comparable(external);
-        if(a===b||a.includes(b)||b.includes(a))continue;
-        contradictions.push({field,canonicalClaim:canonical.value,canonicalSourceIds:canonical.sourceIds||[],conflictingClaim:external,externalSourceIds:[clean(source.id)||safeUrl(source.url)].filter(Boolean),confidence:confidence(source.confidence,'medium'),resolution:'Primary retained · review recommended'});
-      }
-    }
+    for(const source of externalSources||[]){if(classifySource(source,profile.website).firstParty)continue;const claims=source?.claims||{};for(const [field,claimValue] of Object.entries(claims)){const canonical=fields[field];const external=clean(claimValue);if(!canonical?.value||!external)continue;const a=comparable(canonical.value),b=comparable(external);if(a===b||a.includes(b)||b.includes(a))continue;contradictions.push({field,canonicalClaim:canonical.value,canonicalSourceIds:canonical.sourceIds||[],conflictingClaim:external,externalSourceIds:[clean(source.id)||safeUrl(source.url)].filter(Boolean),confidence:confidence(source.confidence,'medium'),resolution:'Primary retained · review recommended'});}}
     return contradictions;
   }
 
-  function normalizeCanonicalProfile(profile={},input={},derived={}){
-    const baseProfile=profile&&typeof profile==='object'?profile:{};
-    const rebuilt=buildCanonicalProfile({...input,baseProfile},derived);
-    const out={...baseProfile,...rebuilt};
-    out.canonical.contradictions=compareExternalEvidence(out,(input.scrapedSources||[]).filter(source=>!classifySource(source,input.website).firstParty));
-    out.canonical.diagnostics=diagnoseCanonicalProfile(out);
-    return out;
-  }
-
-  function activeFirstPartySources(input={}){
-    const web=(input.scrapedSources||[]).filter(source=>classifySource(source,input.website).firstParty&&clean(source.text));
-    const docs=(input.documents||[]).filter(doc=>clean(doc?.text)||clean(doc?.name)).map((doc,index)=>({...doc,id:clean(doc.id)||`D${index+1}`,type:'document'}));
-    return [...web,...docs];
-  }
+  function normalizeCanonicalProfile(profile={},input={},derived={}){const baseProfile=profile&&typeof profile==='object'?profile:{};const rebuilt=buildCanonicalProfile({...input,baseProfile},derived);const out={...baseProfile,...rebuilt};out.canonical.contradictions=compareExternalEvidence(out,(input.scrapedSources||[]).filter(source=>!classifySource(source,input.website).firstParty));out.canonical.diagnostics=diagnoseCanonicalProfile(out);return out;}
+  function activeFirstPartySources(input={}){const web=(input.scrapedSources||[]).filter(source=>classifySource(source,input.website).firstParty&&clean(source.text));const docs=(input.documents||[]).filter(doc=>clean(doc?.text)||clean(doc?.name)).map((doc,index)=>({...doc,id:clean(doc.id)||`D${index+1}`,type:'document'}));return [...web,...docs];}
 
   return {VERSION,DIAGNOSTIC_FIELDS,classifySource,reconcileField,buildCanonicalProfile,diagnoseCanonicalProfile,compareExternalEvidence,normalizeCanonicalProfile,activeFirstPartySources,fieldRecord};
 });
