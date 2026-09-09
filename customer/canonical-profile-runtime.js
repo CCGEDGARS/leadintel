@@ -34,7 +34,6 @@ const CANONICAL_MIGRATION_KEY='leadintel_canonical_profile_v1_migrated';
     const enrichedInput={...input,researchMeta:readResearchMeta(input)};const derived=derive(enrichedInput,base);
     const canonical=Canonical.normalizeCanonicalProfile(base,{...enrichedInput,baseProfile:base},derived);
     const merged={...base,...canonical,website:base.website||input.website||'',recommendedSignals:derived.recommendedSignals||base.recommendedSignals||[],interpretation:derived.interpretation||base.interpretation||{}};
-    merged.externalValidationSources=[];
     merged.informationGaps=gapsFromDiagnostics(merged.canonical?.diagnostics||[]);
     return merged;
   }
