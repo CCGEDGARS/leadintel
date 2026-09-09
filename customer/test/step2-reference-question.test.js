@@ -21,7 +21,10 @@ test('Step 2 keeps Question 03 visible and connects it to Reference Customer Int
   assert.ok(referencePos>=0&&readinessPos>referencePos,'Question 03 runtime must load before readiness binds Step 2 fields');
 });
 
-test('customer entrypoint cache-busts process-map after the Question 03 runtime change',()=>{
-  const html=read('index.html');
-  assert.match(html,/process-map\.js\?v=20260909-question03-v2/);
+test('Question 03 runtime repairs late DOM mutations after research rendering',()=>{
+  const runtime=read('step2-reference-question-runtime.js');
+  assert.match(runtime,/MutationObserver/);
+  assert.match(runtime,/questionGrid\(\)/);
+  assert.match(runtime,/childList:true/);
+  assert.match(runtime,/subtree:true/);
 });
