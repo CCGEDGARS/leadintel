@@ -7,7 +7,8 @@ const source = fs.readFileSync(new URL('../profile-action-runtime.js', import.me
 test('profile approval uses one clear stateful control', () => {
   assert.match(source, /approved\?'✓ Profile Approved':'Approve Profile'/);
   assert.match(source, /button\.disabled=approved/);
-  assert.match(source, /card\.hidden=true/);
+  assert.match(source, /if\(card&&!card\.hidden\)card\.hidden=true/);
+  assert.doesNotMatch(source, /if\(card\)card\.hidden=true/);
 });
 
 test('profile approval runtime is loaded by the process map', () => {
