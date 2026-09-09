@@ -1,7 +1,7 @@
+import './workspace-reset-hygiene.js?v=20260909-emergency-reset-v1';
 import './workspace-persistence.js?v=20260903-step1-startup-order-v1';
 import './state-budget.js?v=20260826-state-budget-500kb';
 import './website-input-sync.js?v=20260901-saved-state-v2';
-import './workspace-reset-hygiene.js?v=20260901-reset-intent-sync-v3';
 import './custom-market-input-hygiene.js?v=20260903-password-manager-isolation-v5';
 import './website-activation.js?v=20260903-activation-error-v1';
 import './crm-engine.js?v=20260828-master-crm-v1';
