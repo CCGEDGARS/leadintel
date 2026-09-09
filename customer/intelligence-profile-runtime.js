@@ -1,4 +1,4 @@
-const INTELLIGENCE_PROFILE_ASSET_VERSION='20260909-canonical-profile-v4';
+const INTELLIGENCE_PROFILE_ASSET_VERSION='20260909-canonical-profile-v5';
 (function installIntelligenceProfileRuntime(root){
   if(typeof document==='undefined')return;
   const UI=root.LeadIntelIntelligenceProfileUI;
@@ -71,8 +71,10 @@ const INTELLIGENCE_PROFILE_ASSET_VERSION='20260909-canonical-profile-v4';
     if(editButton){event.preventDefault();event.stopImmediatePropagation();if(profileIsEditing())saveCanonicalEdits();else enterEditMode();return;}
     if(event.target.closest('[data-open-signal-designer]')){event.preventDefault();document.querySelector('[data-step-marker="4"]')?.click();setTimeout(()=>document.getElementById('signal-designer')?.scrollIntoView({behavior:'smooth',block:'start'}),80);}
   },true);
-  window.addEventListener('leadintel:reference-customers-updated',()=>setTimeout(apply,0));
-  const observer=new MutationObserver(()=>queueMicrotask(apply));observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['readonly','hidden','class']});
+  root.addEventListener('leadintel:reference-customers-updated',()=>setTimeout(apply,0));
+  root.addEventListener('leadintel:workspace-changed',()=>setTimeout(apply,0));
+  root.addEventListener('leadintel:module-opened',event=>{if(Number(event.detail?.step)===3)setTimeout(apply,0);});
+  root.addEventListener('leadintel:server-ready',()=>setTimeout(apply,0));
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',apply,{once:true});else apply();
   root.LeadIntelIntelligenceProfileRuntime={apply,enterEditMode,saveCanonicalEdits};
 })(globalThis);
