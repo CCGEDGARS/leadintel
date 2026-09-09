@@ -23,8 +23,8 @@ test('clear-list action uses branded inline confirmation rather than native brow
 test('website and analysis actions remain explicitly bound',()=>{
   const enrichment=read('reference-customer-website-enrichment.js');
   const analysis=read('reference-customer-ai-runtime.js');
-  assert.match(enrichment,/#reference-find-websites/);
+  assert.match(enrichment,/getElementById\(["']reference-find-websites["']\)/);
   assert.match(enrichment,/Finding websites…/);
-  assert.match(analysis,/#reference-analyze/);
+  assert.match(analysis,/closest\?\.\(["']#reference-analyze["']\)|getElementById\(["']reference-analyze["']\)/);
   assert.match(analysis,/runAiAnalysis/);
 });
