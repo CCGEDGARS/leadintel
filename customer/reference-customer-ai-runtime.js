@@ -1,3 +1,6 @@
+import './reference-customer-library.js?v=20260909-reference-library-v1';
+import './reference-customer-library-ui.js?v=20260909-reference-library-v1';
+
 const REFERENCE_AI_STATE_KEY='leadintel_customer_v2_state';
 const REFERENCE_AI_FIRECRAWL='https://apollo-proxy.edgars-7e7.workers.dev';
 const REFERENCE_AI_MAX=24;
@@ -51,15 +54,13 @@ const REFERENCE_AI_CONCURRENCY=4;
     const result=await AI.requestReferenceCustomerAnalysis({workspaceId:workspace,rows:evidence});
     if(!Object.keys(result.analyses||{}).length)throw new Error('AI analysis returned no supported company classifications');
     state=readState();state.referenceCustomers=Ref.normalizeReferenceState(state.referenceCustomers||{});
-    state.referenceCustomers.analyses=result.analyses;
-    state.referenceCustomers.segments=result.segments;
-    state.referenceCustomers.segmentationMeaningful=Boolean(result.segmentationMeaningful);
-    state.referenceCustomers.activeSegmentIds=[];
-    state.referenceCustomers.activeIds=[];
-    state.referenceCustomers.activated=false;
-    state.referenceCustomers.dna=null;
-    state.referenceCustomers.analyzedAt=new Date().toISOString();
-    state.referenceCustomers=Ref.normalizeReferenceState(state.referenceCustomers);
+    state.referenceCustomers=Ref.markReferenceDraftChanged({
+      ...state.referenceCustomers,
+      analyses:result.analyses,
+      segments:result.segments,
+      segmentationMeaningful:Boolean(result.segmentationMeaningful),
+      analyzedAt:new Date().toISOString()
+    });
     await writeState(state);
     status(`AI analysis complete · ${Object.keys(result.analyses).length} companies classified${failures?` · ${failures} websites need review`:''}. Review the Customer segments before activation.`);
   }
