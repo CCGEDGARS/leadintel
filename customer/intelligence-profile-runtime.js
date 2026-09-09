@@ -1,4 +1,4 @@
-const INTELLIGENCE_PROFILE_ASSET_VERSION='20260909-canonical-profile-v5';
+const INTELLIGENCE_PROFILE_ASSET_VERSION='20260909-canonical-profile-v6';
 (function installIntelligenceProfileRuntime(root){
   if(typeof document==='undefined')return;
   const UI=root.LeadIntelIntelligenceProfileUI;
@@ -65,11 +65,12 @@ const INTELLIGENCE_PROFILE_ASSET_VERSION='20260909-canonical-profile-v5';
   }
   function retireLegacyLookalike(){const node=document.querySelector('[data-question="lookalike_customers"]');const card=node?.closest('.question-card');if(card)card.remove();}
   function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-  function apply(){if(applying)return;applying=true;try{replaceProfileGrid();retireLegacyLookalike();}finally{applying=false;}}
+  function apply(){if(editing)return;if(applying)return;applying=true;try{replaceProfileGrid();retireLegacyLookalike();}finally{applying=false;}}
   function installApprovedProfileRestore(){
     const editor=document.getElementById('profile-editor');
     if(!editor||typeof MutationObserver==='undefined')return;
     const observer=new MutationObserver(()=>{
+      if(editing)return;
       if(applying)return;
       if(editor.querySelector('.profile-field')&&!editor.querySelector('.intel-profile-shell'))queueMicrotask(apply);
     });
