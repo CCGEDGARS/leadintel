@@ -29,9 +29,10 @@ test('contradictions remain hidden when none exist and render review message whe
   assert.match(html,/Primary retained/i);
 });
 
-test('reference customer summary uses Step 1 markets and does not create a country selector',()=>{
+test('reference customer summary uses Step 1 markets and a styled manage action',()=>{
   const html=UI.renderReferenceCustomerSummary({activated:true,activeIds:['a','b'],dna:{confidence:'high'}},['Germany']);
   assert.match(html,/2 active/);
   assert.match(html,/Germany/);
   assert.doesNotMatch(html,/<select|country-selector/i);
+  assert.match(html,/class="[^"]*secondary-btn[^"]*reference-customer-manage[^"]*"/i);
 });
