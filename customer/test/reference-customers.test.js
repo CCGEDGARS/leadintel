@@ -1,0 +1,56 @@
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const Ref=require('../reference-customers.js');
+
+test('CSV import normalizes common customer-list headers and deduplicates companies',()=>{
+  const csv='Company,Website,Country,Product,Value,Why good\n"Acme, SIA",https://acme.lv,Latvia,Training,12000,Strong fit\nAcme duplicate,https://www.acme.lv,Latvia,Training,12000,Duplicate\nBeta,beta.eu,Germany,AI,25000,Growth';
+  const rows=Ref.parseCsv(csv);
+  const normalized=Ref.normalizeImportedRows(rows,{sourceType:'csv'});
+  assert.equal(normalized.length,2);
+  assert.equal(normalized[0].companyName,'Acme, SIA');
+  assert.equal(normalized[0].domain,'acme.lv');
+  assert.equal(normalized[1].country,'Germany');
+});
+
+test('unsafe or missing websites remain unresolved instead of being guessed',()=>{
+  const rows=Ref.normalizeImportedRows([{Company:'Gamma',Website:'javascript:alert(1)',Country:'Sweden'},{Company:'Delta',Country:'Sweden'}],{sourceType:'csv'});
+  assert.equal(rows[0].website,'');
+  assert.equal(rows[0].status,'unresolved');
+  assert.equal(rows[1].status,'unresolved');
+});
+
+test('PDF-derived rows require review before activation',()=>{
+  const rows=Ref.normalizeImportedRows([{Company:'PDF Company',Website:'https://pdfco.com'}],{sourceType:'pdf'});
+  assert.equal(rows[0].status,'needs_review');
+  const state=Ref.normalizeReferenceState({rows,activeIds:[rows[0].id],activated:true});
+  assert.deepEqual(state.activeIds,[]);
+});
+
+test('imported reference list is inert until explicitly activated',()=>{
+  const rows=Ref.normalizeImportedRows([{Company:'Acme',Website:'https://acme.com'},{Company:'Beta',Website:'https://beta.com'}],{sourceType:'csv'});
+  const state=Ref.normalizeReferenceState({rows});
+  assert.equal(Ref.getActiveReferenceModel(state),null);
+  const active=Ref.activateReferenceCustomers(state,rows.map(r=>r.id));
+  assert.equal(active.activated,true);
+  assert.equal(Ref.getActiveReferenceModel(active).activeRows.length,2);
+});
+
+test('active reference model is bounded and carries a stable fingerprint',()=>{
+  const rows=Ref.normalizeImportedRows(Array.from({length:60},(_,i)=>({Company:`Company ${i}`,Website:`https://c${i}.example`})),{sourceType:'csv'});
+  const active=Ref.activateReferenceCustomers({rows},rows.map(r=>r.id));
+  assert.ok(active.activeIds.length<=50);
+  assert.match(active.fingerprint,/^[a-z0-9-]+$/);
+});
+
+test('DNA builder summarizes only evidenced active customer traits',()=>{
+  const rows=Ref.normalizeImportedRows([{Company:'A',Website:'https://a.example'},{Company:'B',Website:'https://b.example'}],{sourceType:'csv'});
+  const active=Ref.activateReferenceCustomers({rows},rows.map(r=>r.id));
+  const analyses={
+    [rows[0].id]:{industry:'industrial manufacturing',sizeBand:'100-500',businessModel:'B2B',buyerRoles:['COO'],confidence:'high'},
+    [rows[1].id]:{industry:'industrial manufacturing',sizeBand:'100-500',businessModel:'B2B',buyerRoles:['Plant Manager'],confidence:'medium'}
+  };
+  const dna=Ref.buildReferenceDna(active,analyses);
+  assert.equal(dna.activeCount,2);
+  assert.ok(dna.dimensions.some(d=>d.key==='industry'&&d.values.includes('industrial manufacturing')));
+  assert.ok(['high','medium','low'].includes(dna.confidence));
+});

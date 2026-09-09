@@ -65,13 +65,33 @@ jobs:
         with:
           node-version: '22'
       - name: Run customer tests
-        run: node --test customer/test/*.test.js
+        shell: bash
+        run: |
+          set +e
+          node --test customer/test/*.test.js 2>&1 | tee customer-test-output.txt
+          status=${PIPESTATUS[0]}
+          exit $status
+      - name: Upload customer test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: customer-test-diagnostics-${{ github.sha }}
+          path: customer-test-output.txt
+          retention-days: 3
       - name: Check JavaScript syntax
         run: |
           node --check backend/src/customer-state.js
           node --check backend/src/crm.js
           node --check backend/src/crm-routes.js
           node --check customer/profile-engine.js
+          node --check customer/canonical-intelligence.js
+          node --check customer/canonical-profile-runtime.js
+          node --check customer/intelligence-profile-ui.js
+          node --check customer/intelligence-profile-runtime.js
+          node --check customer/reference-customers.js
+          node --check customer/reference-customer-ui.js
+          node --check customer/lookalike-discovery.js
+          node --check customer/evidence-view.js
           node --check customer/market-engine.js
           node --check customer/linkedin-signals.js
           node --check customer/discovery-engine.js
