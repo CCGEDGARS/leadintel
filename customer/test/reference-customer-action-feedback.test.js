@@ -13,6 +13,17 @@ test('website enrichment reports progress beside the action buttons and exposes 
   assert.match(source,/Unable to search|Website search failed/i);
 });
 
+test('reference customer actions use the requested two-line labels and equal-size layout',()=>{
+  const runtime=read('reference-customer-website-enrichment.js');
+  const css=read('reference-customers.css');
+  assert.match(runtime,/Find missing info/);
+  assert.match(css,/\.reference-analysis-actions\s*>\s*button/);
+  assert.match(css,/min-width\s*:\s*190px/);
+  assert.match(css,/min-height\s*:\s*72px/);
+  assert.match(css,/white-space\s*:\s*normal/);
+  assert.match(css,/line-height\s*:\s*1\.2/);
+});
+
 test('AI analysis reports progress and sign-in errors beside the action buttons',()=>{
   const source=read('reference-customer-ai-runtime.js');
   assert.match(source,/reference-action-status/);
