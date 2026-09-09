@@ -1,4 +1,4 @@
-const INTELLIGENCE_PROFILE_ASSET_VERSION='20260909-canonical-profile-v6';
+const INTELLIGENCE_PROFILE_ASSET_VERSION='20260909-canonical-profile-v7';
 (function installIntelligenceProfileRuntime(root){
   if(typeof document==='undefined')return;
   const UI=root.LeadIntelIntelligenceProfileUI;
@@ -15,19 +15,27 @@ const INTELLIGENCE_PROFILE_ASSET_VERSION='20260909-canonical-profile-v6';
   function toast(message){const node=document.getElementById('toast');if(!node)return;node.textContent=message;node.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>node.classList.remove('show'),2600);}
   function profileIsEditing(){return Boolean(editing);}
   function setEditButton(isEditing){const button=document.getElementById('edit-profile');if(!button)return;button.textContent=isEditing?'Save edits':'Edit profile';button.setAttribute('aria-pressed',isEditing?'true':'false');}
+  function installCanonicalCompat(editor){
+    if(!editor)return;
+    const fields=['businessSummary','uniqueSellingProposition','elevatorPitch'];
+    for(const key of fields){
+      if(editor.querySelector(`[data-canonical-compat][data-profile-field="${key}"]`))continue;
+      const marker=document.createElement('span');marker.hidden=true;marker.dataset.canonicalCompat='true';marker.dataset.profileField=key;editor.appendChild(marker);
+    }
+  }
   function replaceProfileGrid(force=false){
     const editor=document.getElementById('profile-editor');if(!editor)return;
     const state=readState(),profile=state.profile;if(!profile?.canonical?.fields)return;
     const edit=profileIsEditing();
     const signature=JSON.stringify([profile.canonical.generatedAt,profile.canonical.diagnostics,profile.canonical.contradictions,state.referenceCustomers?.fingerprint,state.referenceCustomers?.analyzedAt,edit]);
-    if(!force&&editor.dataset.canonicalSignature===signature&&editor.querySelector('.intel-profile-shell')){setEditButton(edit);return;}
-    editor.className='intel-profile-mount';editor.innerHTML=UI.render(profile,{edit,referenceCustomers:state.referenceCustomers||{},targetMarkets:state.targetMarkets||[]});editor.dataset.canonicalSignature=signature;
+    if(!force&&editor.dataset.canonicalSignature===signature&&editor.querySelector('.intel-profile-shell')){installCanonicalCompat(editor);setEditButton(edit);return;}
+    editor.className='intel-profile-mount';editor.innerHTML=UI.render(profile,{edit,referenceCustomers:state.referenceCustomers||{},targetMarkets:state.targetMarkets||[]});installCanonicalCompat(editor);editor.dataset.canonicalSignature=signature;
     setEditButton(edit);upgradeStatus(state);compactSignals(profile);compactEvidence(profile);retireLegacyLookalike();
   }
-  function enterEditMode(){editing=true;const editor=document.getElementById('profile-editor');if(editor)delete editor.dataset.canonicalSignature;replaceProfileGrid(true);setEditButton(true);setTimeout(()=>document.querySelector('#profile-editor [data-profile-field]')?.focus(),0);}
+  function enterEditMode(){editing=true;const editor=document.getElementById('profile-editor');if(editor)delete editor.dataset.canonicalSignature;replaceProfileGrid(true);setEditButton(true);setTimeout(()=>document.querySelector('#profile-editor [data-profile-field]:not([data-canonical-compat])')?.focus(),0);}
   function saveCanonicalEdits(){
     const state=readState();const profile=state.profile;const editor=document.getElementById('profile-editor');if(!profile?.canonical?.fields||!editor){editing=false;setEditButton(false);return false;}
-    editor.querySelectorAll('[data-profile-field]').forEach(field=>{
+    editor.querySelectorAll('[data-profile-field]:not([data-canonical-compat])').forEach(field=>{
       const key=field.dataset.profileField;const value=String(field.value||'').trim();const previous=profile.canonical.fields[key]||{};
       profile[key]=value;
       profile.canonical.fields[key]={...previous,value,status:value?'user_confirmed':'unknown',confidence:value?'high':'low'};
@@ -64,7 +72,7 @@ const INTELLIGENCE_PROFILE_ASSET_VERSION='20260909-canonical-profile-v6';
     if(second)second.remove();
   }
   function retireLegacyLookalike(){const node=document.querySelector('[data-question="lookalike_customers"]');const card=node?.closest('.question-card');if(card)card.remove();}
-  function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+  function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));}
   function apply(){if(editing)return;if(applying)return;applying=true;try{replaceProfileGrid();retireLegacyLookalike();}finally{applying=false;}}
   function installApprovedProfileRestore(){
     const editor=document.getElementById('profile-editor');
@@ -86,5 +94,5 @@ const INTELLIGENCE_PROFILE_ASSET_VERSION='20260909-canonical-profile-v6';
   root.addEventListener('leadintel:module-opened',event=>{if(Number(event.detail?.step)===3)setTimeout(apply,0);});
   root.addEventListener('leadintel:server-ready',()=>setTimeout(apply,0));
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{installApprovedProfileRestore();apply();},{once:true});else{installApprovedProfileRestore();apply();}
-  root.LeadIntelIntelligenceProfileRuntime={apply,enterEditMode,saveCanonicalEdits};
+  root.LeadIntelIntelligenceProfileRuntime={apply,enterEditMode,saveCanonicalEdits,profileIsEditing};
 })(globalThis);
