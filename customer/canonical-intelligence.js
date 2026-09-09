@@ -34,6 +34,29 @@
     if(url)return {class:'external_validation',authority:0,firstParty:false};
     return {class:'unknown',authority:-1,firstParty:false};
   }
+  function partitionSources(sources=[],companyWebsite=''){
+    const firstParty=[],external=[],unknown=[];
+    for(const source of sources||[]){
+      const classification=classifySource(source,companyWebsite);
+      if(classification.firstParty)firstParty.push(source);
+      else if(classification.class==='external_validation')external.push(source);
+      else unknown.push(source);
+    }
+    return {firstParty,external,unknown};
+  }
+  function externalValidationRecord(source,index){
+    return {
+      id:clean(source?.id)||`X${index+1}`,
+      url:safeUrl(source?.url),
+      title:clean(source?.title)||host(source?.url)||'External source',
+      type:clean(source?.type)||'external',
+      role:'external_validation',
+      pageCategory:clean(source?.pageCategory),
+      confidence:confidence(source?.confidence,'medium'),
+      claims:source?.claims&&typeof source.claims==='object'?{...source.claims}:{},
+      excerpt:clean(source?.excerpt||source?.description||source?.text).slice(0,420)
+    };
+  }
 
   function reconcileField(fieldKey,candidates=[]){
     const usable=(candidates||[]).map((item,index)=>({...item,value:clean(item?.value),provenance:PRECEDENCE[item?.provenance]!==undefined?item.provenance:'unknown',_index:index})).filter(item=>item.value);
@@ -68,7 +91,7 @@
   }
   function websiteCandidate(input,fieldKey,derived){
     const value=clean(derived?.websiteFields?.[fieldKey]||input?.baseProfile?.[fieldKey]);if(!value)return null;
-    const ids=(input?.scrapedSources||[]).filter(s=>classifySource(s,input.website).firstParty&&clean(s.text)).slice(0,5).map((s,index)=>clean(s.id)||`W${index+1}`);
+    const ids=partitionSources(input?.scrapedSources||[],input.website).firstParty.filter(s=>clean(s.text)).slice(0,5).map((s,index)=>clean(s.id)||`W${index+1}`);
     return {value,provenance:'website',status:'first_party_evidence',confidence:ids.length?'medium':'low',sourceIds:ids};
   }
   function derivedCandidate(derived,fieldKey){
@@ -98,8 +121,15 @@
     return contradictions;
   }
 
-  function normalizeCanonicalProfile(profile={},input={},derived={}){const baseProfile=profile&&typeof profile==='object'?profile:{};const rebuilt=buildCanonicalProfile({...input,baseProfile},derived);const out={...baseProfile,...rebuilt};out.canonical.contradictions=compareExternalEvidence(out,(input.scrapedSources||[]).filter(source=>!classifySource(source,input.website).firstParty));out.canonical.diagnostics=diagnoseCanonicalProfile(out);return out;}
-  function activeFirstPartySources(input={}){const web=(input.scrapedSources||[]).filter(source=>classifySource(source,input.website).firstParty&&clean(source.text));const docs=(input.documents||[]).filter(doc=>clean(doc?.text)||clean(doc?.name)).map((doc,index)=>({...doc,id:clean(doc.id)||`D${index+1}`,type:'document'}));return [...web,...docs];}
+  function normalizeCanonicalProfile(profile={},input={},derived={}){
+    const baseProfile=profile&&typeof profile==='object'?profile:{};const rebuilt=buildCanonicalProfile({...input,baseProfile},derived);const out={...baseProfile,...rebuilt};
+    const partition=partitionSources(input.scrapedSources||[],input.website);
+    out.externalValidationSources=partition.external.map(externalValidationRecord);
+    out.canonical.contradictions=compareExternalEvidence(out,partition.external);
+    out.canonical.diagnostics=diagnoseCanonicalProfile(out);
+    return out;
+  }
+  function activeFirstPartySources(input={}){const web=partitionSources(input.scrapedSources||[],input.website).firstParty.filter(source=>clean(source.text));const docs=(input.documents||[]).filter(doc=>clean(doc?.text)||clean(doc?.name)).map((doc,index)=>({...doc,id:clean(doc.id)||`D${index+1}`,type:'document'}));return [...web,...docs];}
 
-  return {VERSION,DIAGNOSTIC_FIELDS,classifySource,reconcileField,buildCanonicalProfile,diagnoseCanonicalProfile,compareExternalEvidence,normalizeCanonicalProfile,activeFirstPartySources,fieldRecord};
+  return {VERSION,DIAGNOSTIC_FIELDS,classifySource,partitionSources,reconcileField,buildCanonicalProfile,diagnoseCanonicalProfile,compareExternalEvidence,normalizeCanonicalProfile,activeFirstPartySources,fieldRecord};
 });
