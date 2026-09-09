@@ -54,24 +54,25 @@ test('external evidence cannot overwrite first-party canonical value and contrad
   assert.match(result[0].resolution,/primary retained/i);
 });
 
-test('canonical normalization removes stale external sources from first-party evidence cards',()=>{
+test('canonical normalization removes stale external sources from first-party evidence cards while preserving uploaded PDFs',()=>{
   const base={
     website:'https://ccgroup.lv/',
     evidenceSources:[
       {id:'W1',url:'https://ccgroup.lv/services',title:'Services'},
+      {id:'D1',type:'PDF',scope:'document',title:'Company brochure'},
       {id:'X1',url:'https://www.klozers.com/case-studies',title:'Klozers'},
       {id:'X2',url:'https://challengerinc.com/success-stories',title:'Challenger'}
     ]
   };
   const normalized=Canonical.normalizeCanonicalProfile(base,{
-    website:'https://ccgroup.lv/',targetMarkets:['Latvia'],answers:{},documents:[],
+    website:'https://ccgroup.lv/',targetMarkets:['Latvia'],answers:{},documents:[{name:'Company brochure.pdf',text:'Internal company material'}],
     scrapedSources:[
       {id:'W1',url:'https://ccgroup.lv/services',title:'Services',text:'Official services'},
       {id:'X1',url:'https://www.klozers.com/case-studies',title:'Klozers',text:'External research'},
       {id:'X2',url:'https://challengerinc.com/success-stories',title:'Challenger',text:'External research'}
     ]
   },{});
-  assert.deepEqual(normalized.evidenceSources.map(x=>x.id),['W1']);
+  assert.deepEqual(normalized.evidenceSources.map(x=>x.id),['W1','D1']);
   assert.deepEqual(normalized.externalValidationSources.map(x=>x.id),['X1','X2']);
 });
 
