@@ -16,7 +16,7 @@
 
 For each company infer, only when supported: industry, sizeBand, businessModel, growthStage, operatingComplexity, customerOutcome, buyerRoles, buyingTriggers, and a one-sentence summary. Use confidence high/medium/low. Leave unsupported fields empty. Do not invent facts.
 
-Then decide whether the list contains genuinely meaningful commercial segments. Segment only when at least two groups have materially different, repeated characteristics. Do not create segments merely to make the output look complete. If there is no meaningful segmentation, set meaningful=false and return one coherent segment containing all analyzed company IDs.
+Then decide whether the list contains genuinely meaningful commercial segments. Segment only when at least two groups have materially different, repeated characteristics and each meaningful group contains at least two analyzed companies. Do not create segments merely to make the output look complete. If there is no meaningful segmentation, set meaningful=false and return one coherent segment containing all analyzed company IDs.
 
 Return JSON ONLY with this exact shape:
 {"companies":[{"id":"row-id","industry":"","sizeBand":"","businessModel":"","growthStage":"","operatingComplexity":"","customerOutcome":"","buyerRoles":[],"buyingTriggers":[],"confidence":"low|medium|high","summary":""}],"segmentation":{"meaningful":true,"segments":[{"name":"","rowIds":["row-id"],"confidence":"low|medium|high","summary":"","traits":[]}]}}
@@ -51,10 +51,13 @@ ${JSON.stringify(items)}`;
       const segment=sourceSegments[index]||{};const rowIds=unique(segment.rowIds).filter(id=>allowed.has(id)&&analyses[id]);if(!rowIds.length)continue;
       segments.push({id:`ai-segment-${index+1}`,name:clean(segment.name)||`Customer segment ${index+1}`,rowIds,count:rowIds.length,confidence:safeConfidence(segment.confidence),summary:clean(segment.summary),traits:unique(Array.isArray(segment.traits)?segment.traits:[]).slice(0,8)});
     }
-    const meaningful=Boolean(raw?.segmentation?.meaningful&&segments.length>=2);
     const analyzedIds=Object.keys(analyses);
+    const covered=new Set(segments.flatMap(segment=>segment.rowIds));
+    const repeatedGroups=segments.length>=2&&segments.every(segment=>segment.rowIds.length>=2);
+    const sufficientCoverage=analyzedIds.length?covered.size>=Math.max(4,Math.ceil(analyzedIds.length*.6)):false;
+    const meaningful=Boolean(raw?.segmentation?.meaningful&&repeatedGroups&&sufficientCoverage);
     if(!meaningful&&analyzedIds.length){
-      const existing=segments[0];segments.splice(0,segments.length,{id:'ai-segment-coherent',name:clean(existing?.name)||'Reference customer group',rowIds:analyzedIds,count:analyzedIds.length,confidence:safeConfidence(existing?.confidence||'medium'),summary:clean(existing?.summary)||'No meaningful sub-segments detected.',traits:unique(existing?.traits||[]).slice(0,8)});
+      const existing=segments[0];segments.splice(0,segments.length,{id:'ai-segment-coherent',name:'Reference customer group',rowIds:analyzedIds,count:analyzedIds.length,confidence:safeConfidence(existing?.confidence||'medium'),summary:'No meaningful sub-segments detected.',traits:[]});
     }
     return {analyses,segments,segmentationMeaningful:meaningful};
   }
