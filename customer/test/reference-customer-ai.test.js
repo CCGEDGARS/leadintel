@@ -16,21 +16,39 @@ test('AI prompt asks for per-company commercial analysis and conservative segmen
   assert.match(prompt,/no meaningful/i);
 });
 
-test('AI response parser accepts fenced JSON and preserves segment membership by row id',()=>{
+test('AI response parser accepts fenced JSON and preserves meaningful repeated segment membership',()=>{
   const parsed=AI.parseReferenceCustomerAnalysis('```json\n'+JSON.stringify({
     companies:[
-      {id:'a',industry:'industrial manufacturing',sizeBand:'100-500',businessModel:'B2B',confidence:'high',summary:'Export manufacturer'},
-      {id:'b',industry:'software / technology',sizeBand:'50-100',businessModel:'B2B',confidence:'medium',summary:'B2B SaaS'}
+      {id:'a',industry:'industrial manufacturing',sizeBand:'100-500',businessModel:'B2B',confidence:'high'},
+      {id:'b',industry:'industrial manufacturing',sizeBand:'100-500',businessModel:'B2B',confidence:'high'},
+      {id:'c',industry:'software / technology',sizeBand:'50-100',businessModel:'B2B',confidence:'medium'},
+      {id:'d',industry:'software / technology',sizeBand:'50-100',businessModel:'B2B',confidence:'medium'}
     ],
     segmentation:{meaningful:true,segments:[
-      {name:'Industrial manufacturers',rowIds:['a'],confidence:'high',summary:'Manufacturing accounts'},
-      {name:'B2B software',rowIds:['b'],confidence:'medium',summary:'Software accounts'}
+      {name:'Industrial manufacturers',rowIds:['a','b'],confidence:'high',summary:'Manufacturing accounts'},
+      {name:'B2B software',rowIds:['c','d'],confidence:'medium',summary:'Software accounts'}
     ]}
-  })+'\n```',['a','b']);
+  })+'\n```',['a','b','c','d']);
   assert.equal(parsed.segmentationMeaningful,true);
   assert.equal(parsed.segments.length,2);
   assert.equal(parsed.analyses.a.industry,'industrial manufacturing');
-  assert.deepEqual(parsed.segments[1].rowIds,['b']);
+  assert.deepEqual(parsed.segments[1].rowIds,['c','d']);
+});
+
+test('AI response parser rejects weak singleton segmentation and falls back to one coherent group',()=>{
+  const parsed=AI.parseReferenceCustomerAnalysis(JSON.stringify({
+    companies:[
+      {id:'a',industry:'manufacturing',confidence:'high'},
+      {id:'b',industry:'software',confidence:'high'}
+    ],
+    segmentation:{meaningful:true,segments:[
+      {name:'Manufacturing',rowIds:['a'],confidence:'high'},
+      {name:'Software',rowIds:['b'],confidence:'high'}
+    ]}
+  }),['a','b']);
+  assert.equal(parsed.segmentationMeaningful,false);
+  assert.equal(parsed.segments.length,1);
+  assert.deepEqual(new Set(parsed.segments[0].rowIds),new Set(['a','b']));
 });
 
 test('AI response parser rejects segment row ids that were not supplied',()=>{
