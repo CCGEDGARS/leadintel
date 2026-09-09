@@ -124,6 +124,7 @@
   function normalizeCanonicalProfile(profile={},input={},derived={}){
     const baseProfile=profile&&typeof profile==='object'?profile:{};const rebuilt=buildCanonicalProfile({...input,baseProfile},derived);const out={...baseProfile,...rebuilt};
     const partition=partitionSources(input.scrapedSources||[],input.website);
+    out.evidenceSources=(baseProfile.evidenceSources||[]).filter(source=>classifySource(source,input.website).firstParty);
     out.externalValidationSources=partition.external.map(externalValidationRecord);
     out.canonical.contradictions=compareExternalEvidence(out,partition.external);
     out.canonical.diagnostics=diagnoseCanonicalProfile(out);
