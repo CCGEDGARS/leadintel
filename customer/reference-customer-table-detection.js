@@ -46,12 +46,12 @@
       const recognizedWebsite=normalized.some(value=>websiteAliases.has(value));
       const websiteHits=websiteCol>=0?websiteCounts[websiteCol]||0:0;
       const companyHits=companyCol>=0?textCounts[companyCol]||0:0;
-      let score=(recognizedCompany?12:0)+(recognizedWebsite?16:0)+Math.min(websiteHits,10)*2+Math.min(companyHits,10);
-      if(recognizedCompany&&recognizedWebsite)score+=12;
+      let score=(recognizedCompany?16:0)+(recognizedWebsite?8:0)+Math.min(websiteHits,10)*2+Math.min(companyHits,10);
+      if(recognizedCompany&&recognizedWebsite)score+=8;
       if(headerRowIndex<=3)score+=3;
       if(/compan|customer|client|uznem/i.test(clean(sheet.name)))score+=4;
       if(/contact/i.test(clean(sheet.name)))score-=5;
-      if(websiteCol<0||companyCol<0)score-=20;
+      if(companyCol<0)score-=25;
       if(!best||score>best.score)best={score,headerRowIndex,header,companyCol,websiteCol,data};
     }
     if(!best||best.score<8||best.companyCol<0)return null;
