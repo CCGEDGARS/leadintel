@@ -14,6 +14,7 @@ import './step2-readiness-engine.js?v=20260902-step2-readiness-v2';
 import './content-language.js?v=20260906-step2-language-v1';
 import './content-variants.js?v=20260905-step1-language-v1';
 import './business-identity.js?v=20260906-pain-headings-v1';
+import './company-brain.js?v=20260909-step2-first-party-v1';
 import './step2-first-party-intelligence.js?v=20260909-first-party-step2-v1';
 import './firecrawl-workspace-router.js?v=20260907-provider-resilience-v2';
 import './linkedin-signals.js?v=20260907-public-index-v1';
