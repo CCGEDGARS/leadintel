@@ -20,6 +20,21 @@
   ]);
   let finalizingReset=false;
 
+  function emergencyResetRequested(){
+    try{return new URLSearchParams(root.location?.search||"").get("reset")==="1";}
+    catch{return false;}
+  }
+
+  function runEmergencyBrowserReset(){
+    if(!emergencyResetRequested()||!root?.localStorage)return false;
+    for(const key of LEGACY_LOCAL_WORKSPACE_KEYS)root.localStorage.removeItem(key);
+    root.localStorage.removeItem(RESET_PENDING_KEY);
+    try{root.sessionStorage?.removeItem("leadintel_customer_v2_server_hydration");}catch{}
+    try{root.sessionStorage?.removeItem("leadintel_customer_v2_server_conflict");}catch{}
+    root.location.replace("./");
+    return true;
+  }
+
   function clearLegacyLocalAutosaveOnce(){
     if(!root?.localStorage)return false;
     if(root.localStorage.getItem(LEGACY_LOCAL_CLEANUP_KEY)==="done")return false;
@@ -99,12 +114,13 @@
   function install(){
     if(!root?.document||root.__leadintelWorkspaceResetHygieneInstalled)return;
     root.__leadintelWorkspaceResetHygieneInstalled=true;
+    if(runEmergencyBrowserReset())return;
     if(clearLegacyLocalAutosaveOnce())return;
     root.document.addEventListener("click",handleResetClick,true);
     root.addEventListener?.("leadintel:server-ready",()=>finalizePendingReset());
   }
 
-  const api={LEGACY_LOCAL_CLEANUP_KEY,RESET_PENDING_KEY,WORKSPACE_KEY,LEGACY_LOCAL_WORKSPACE_KEYS,RESET_RESIDUE_KEYS,clearLegacyLocalAutosaveOnce,clearBrowserWorkspaceResidue,recordResetIntent,readResetIntent,resetIntentMatchesWorkspace,finalizePendingReset,refreshResetUi,handleResetClick,install};
+  const api={LEGACY_LOCAL_CLEANUP_KEY,RESET_PENDING_KEY,WORKSPACE_KEY,LEGACY_LOCAL_WORKSPACE_KEYS,RESET_RESIDUE_KEYS,emergencyResetRequested,runEmergencyBrowserReset,clearLegacyLocalAutosaveOnce,clearBrowserWorkspaceResidue,recordResetIntent,readResetIntent,resetIntentMatchesWorkspace,finalizePendingReset,refreshResetUi,handleResetClick,install};
   root.LeadIntelWorkspaceResetHygiene=api;
   install();
 })(typeof globalThis!=="undefined"?globalThis:this);
