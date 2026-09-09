@@ -66,6 +66,15 @@ const INTELLIGENCE_PROFILE_ASSET_VERSION='20260909-canonical-profile-v5';
   function retireLegacyLookalike(){const node=document.querySelector('[data-question="lookalike_customers"]');const card=node?.closest('.question-card');if(card)card.remove();}
   function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
   function apply(){if(applying)return;applying=true;try{replaceProfileGrid();retireLegacyLookalike();}finally{applying=false;}}
+  function installApprovedProfileRestore(){
+    const editor=document.getElementById('profile-editor');
+    if(!editor||typeof MutationObserver==='undefined')return;
+    const observer=new MutationObserver(()=>{
+      if(applying)return;
+      if(editor.querySelector('.profile-field')&&!editor.querySelector('.intel-profile-shell'))queueMicrotask(apply);
+    });
+    observer.observe(editor,{childList:true});
+  }
   document.addEventListener('click',event=>{
     const editButton=event.target.closest('#edit-profile');
     if(editButton){event.preventDefault();event.stopImmediatePropagation();if(profileIsEditing())saveCanonicalEdits();else enterEditMode();return;}
@@ -75,6 +84,6 @@ const INTELLIGENCE_PROFILE_ASSET_VERSION='20260909-canonical-profile-v5';
   root.addEventListener('leadintel:workspace-changed',()=>setTimeout(apply,0));
   root.addEventListener('leadintel:module-opened',event=>{if(Number(event.detail?.step)===3)setTimeout(apply,0);});
   root.addEventListener('leadintel:server-ready',()=>setTimeout(apply,0));
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',apply,{once:true});else apply();
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{installApprovedProfileRestore();apply();},{once:true});else{installApprovedProfileRestore();apply();}
   root.LeadIntelIntelligenceProfileRuntime={apply,enterEditMode,saveCanonicalEdits};
 })(globalThis);
