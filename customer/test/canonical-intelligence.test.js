@@ -10,6 +10,16 @@ test('source authority classifies same-domain pages as first-party and unrelated
   assert.equal(Canonical.classifySource({url:'https://www.klozers.com/case-studies'},'https://ccgroup.lv/').class,'external_validation');
 });
 
+test('source partition keeps first-party company evidence separate from external validation',()=>{
+  const partition=Canonical.partitionSources([
+    {id:'W1',url:'https://ccgroup.lv/services',text:'official'},
+    {id:'X1',url:'https://www.klozers.com/article',text:'external'},
+    {id:'D1',type:'document',name:'catalog.pdf',text:'internal'}
+  ],'https://www.ccgroup.lv/');
+  assert.deepEqual(partition.firstParty.map(x=>x.id),['W1','D1']);
+  assert.deepEqual(partition.external.map(x=>x.id),['X1']);
+});
+
 test('canonical precedence is user then document then website then AI inference',()=>{
   const result=Canonical.reconcileField('idealCustomer',[
     candidate('AI guess','ai_inference','ai_inferred_first_party','low',['AI1']),
