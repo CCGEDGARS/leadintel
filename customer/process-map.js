@@ -36,15 +36,13 @@ const processMap=document.getElementById("commercial-process-map");
 function readProcessState(){try{return JSON.parse(localStorage.getItem(PROCESS_STORAGE_KEY)||"{}");}catch{return {};}}
 function writeProcessState(state){localStorage.setItem(PROCESS_STORAGE_KEY,JSON.stringify(state));}
 
-function syncSalesMotionValue(visible,legacy){
+function syncSalesMotionValue(visible){
   const value=String(visible?.value||"").trim();
-  if(legacy)legacy.value=value;
   const state=readProcessState();
   state.answers={...(state.answers||{}),sales_motion:value,lookalike_customers:value};
   state.answerStatus={...(state.answerStatus||{}),sales_motion:value?"user":"missing",lookalike_customers:value?"user":"missing"};
   state.profile=null;state.approved=false;
   writeProcessState(state);
-  if(legacy)legacy.dispatchEvent(new Event("input",{bubbles:true}));
   renderSalesMotionFeedback(visible);
 }
 function renderSalesMotionFeedback(textarea){
@@ -61,30 +59,26 @@ function configureSalesMotionQuestion03(){
   const grid=document.querySelector("#step-2 .question-grid");if(!grid)return null;
   let visible=grid.querySelector('[data-question="sales_motion"]');
   let card=visible?.closest(".question-card")||null;
-  let legacy=grid.querySelector('[data-question="lookalike_customers"]');
-  if(!card&&legacy){card=legacy.closest(".question-card");visible=legacy;}
+  const legacy=grid.querySelector('[data-question="lookalike_customers"]');
+  if(!card&&legacy){card=legacy.closest(".question-card");visible=legacy;visible.dataset.question="sales_motion";}
   if(!card){
     card=document.createElement("article");card.className="question-card";card.dataset.contextQuestion="03";
-    card.innerHTML='<span>03</span><label></label><textarea rows="3"></textarea>';
+    card.innerHTML='<span>03</span><label></label><textarea data-question="sales_motion" rows="3"></textarea>';
     visible=card.querySelector("textarea");
     const question04=grid.querySelector('[data-question="buyer_roles"]')?.closest(".question-card");
     if(question04)grid.insertBefore(card,question04);else grid.appendChild(card);
   }
-  if(visible===legacy){
-    const oldFeedback=card.querySelector('[data-answer-feedback="lookalike_customers"]');if(oldFeedback)oldFeedback.remove();
-    visible.dataset.question="sales_motion";
-    legacy=document.createElement("textarea");legacy.hidden=true;legacy.dataset.question="lookalike_customers";legacy.dataset.legacySalesMotion="true";legacy.setAttribute("aria-hidden","true");legacy.tabIndex=-1;card.appendChild(legacy);
-  }
-  card.dataset.contextQuestion="03";card.hidden=false;card.removeAttribute("aria-hidden");card.style.removeProperty("display");
+  card.querySelectorAll('[data-answer-feedback="lookalike_customers"],.step2-reference-action').forEach(node=>node.remove());
+  card.dataset.contextQuestion="03";card.hidden=false;card.removeAttribute("aria-hidden");card.style.removeProperty("display");card.style.removeProperty("visibility");card.style.removeProperty("opacity");
   const number=card.querySelector(":scope > span");if(number)number.textContent="03";
   let label=card.querySelector("label");if(!label){label=document.createElement("label");card.insertBefore(label,visible);}
   label.innerHTML='How do customers typically buy from you?<small>Describe your normal sales motion: direct sales, inbound leads, outbound prospecting, partners, distributors, referrals, online sales, account management, or another route.</small>';
+  visible.dataset.question="sales_motion";
   visible.placeholder="Mostly direct B2B sales through outbound prospecting and referrals, followed by a consultation and tailored proposal.";
   visible.rows=3;
   const state=readProcessState();const saved=String(state.answers?.sales_motion||state.answers?.lookalike_customers||"");
   if(!visible.value&&saved)visible.value=saved;
-  legacy.value=visible.value;
-  if(!visible.dataset.salesMotionBound){visible.dataset.salesMotionBound="true";visible.addEventListener("input",()=>syncSalesMotionValue(visible,legacy));}
+  if(!visible.dataset.salesMotionBound){visible.dataset.salesMotionBound="true";visible.addEventListener("input",()=>syncSalesMotionValue(visible));}
   const question04=grid.querySelector('[data-question="buyer_roles"]')?.closest(".question-card");if(question04&&card.nextElementSibling!==question04)grid.insertBefore(card,question04);
   renderSalesMotionFeedback(visible);
   return card;
