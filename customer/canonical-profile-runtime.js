@@ -1,0 +1,88 @@
+const STORAGE_KEY='leadintel_customer_v2_state';
+
+(function installCanonicalRuntime(root){
+  const Profile=root.LeadIntelProfile,Canonical=root.LeadIntelCanonicalIntelligence,Brain=root.LeadIntelCompanyBrain,Refs=root.LeadIntelReferenceCustomers;
+  if(!Profile||!Canonical||Profile.__canonicalRuntimeInstalled)return;
+  const originalBuild=Profile.buildCompanyIntelligenceProfile.bind(Profile);
+  const originalNormalize=Profile.normalizeSavedState.bind(Profile);
+  const labelFor=field=>({priorityOffers:'Priority Offer',idealCustomer:'Ideal Customer / ICP',targetMarkets:'Target Market',customerPainPoints:'Customer Problems',buyingTriggers:'Buying Triggers',decisionMakers:'Decision Makers',differentiation:'Differentiation',commercialObjective:'Commercial Objective'}[field]||field);
+
+  function derive(input,base){
+    const brain=Brain?.deriveCanonicalContext?.(input,input.uiLanguage)||null;
+    return {
+      ...(brain||{}),
+      customerPainPoints:brain?.customerPainPoints||base?.customerPainPoints||'',
+      customerPainPointsConfidence:base?.customerPainPointsStatus&&/confirm/i.test(base.customerPainPointsStatus)?'high':'medium',
+      recommendedSignals:brain?.recommendedSignals||base?.recommendedSignals||[],
+      interpretation:brain?.interpretation||base?.analysis?.interpretation||{},
+      websiteFields:{
+        priorityOffers:base?.priorityOffers||'',idealCustomer:base?.idealCustomer||'',buyingTriggers:base?.buyingTriggers||'',
+        decisionMakers:base?.decisionMakers||'',differentiation:base?.differentiation||'',commercialObjective:base?.commercialObjective||'',
+        exclusions:base?.exclusions||'',opportunityValue:base?.opportunityValue||'',marketFocus:base?.marketFocus||''
+      }
+    };
+  }
+  function gapsFromDiagnostics(diagnostics=[]){
+    return diagnostics.filter(row=>row.state!=='known').map(row=>row.state==='needs_confirmation'?`${labelFor(row.field)} is inferred and needs confirmation.`:`${labelFor(row.field)} is missing.`);
+  }
+  function applyCanonical(base,input){
+    const derived=derive(input,base);
+    const canonical=Canonical.normalizeCanonicalProfile(base,{...input,baseProfile:base},derived);
+    const merged={...base,...canonical,website:base.website||input.website||'',recommendedSignals:derived.recommendedSignals||base.recommendedSignals||[],interpretation:derived.interpretation||base.interpretation||{}};
+    merged.informationGaps=gapsFromDiagnostics(merged.canonical?.diagnostics||[]);
+    return merged;
+  }
+  function patchedBuild(input={}){return applyCanonical(originalBuild(input),input);}
+  function preserveConfirmedFields(current,rebuilt){
+    const fields=current?.canonical?.fields||{};
+    for(const [key,record] of Object.entries(fields)){
+      if(record?.status!=='user_confirmed'||!String(record.value||'').trim())continue;
+      rebuilt.canonical.fields[key]={...record,updatedAt:record.updatedAt||new Date().toISOString()};
+      rebuilt[key]=record.value;
+    }
+    rebuilt.canonical.diagnostics=Canonical.diagnoseCanonicalProfile(rebuilt);
+    rebuilt.informationGaps=gapsFromDiagnostics(rebuilt.canonical.diagnostics);
+    return rebuilt;
+  }
+  function patchedNormalize(value={}){
+    const normalized=originalNormalize(value);
+    normalized.answerStatus=value.answerStatus&&typeof value.answerStatus==='object'?{...value.answerStatus}:{};
+    if(Refs){
+      let referenceState=value.referenceCustomers||{};
+      if(!referenceState.rows?.length&&value.answers?.lookalike_customers){referenceState={rows:Refs.migrateLegacyLookalikes(value.answers.lookalike_customers)};}
+      normalized.referenceCustomers=Refs.normalizeReferenceState(referenceState);
+    }
+    if(normalized.profile&&normalized.website){
+      const rebuilt=patchedBuild({...normalized,answerStatus:normalized.answerStatus});
+      normalized.profile=preserveConfirmedFields(value.profile,{...normalized.profile,...rebuilt});
+    }
+    return normalized;
+  }
+  Profile.buildCompanyIntelligenceProfile=patchedBuild;
+  Profile.normalizeSavedState=patchedNormalize;
+  Profile.__canonicalRuntimeInstalled=true;
+
+  function readState(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');}catch{return {};}}
+  function writeState(state){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
+  function promoteEdits(){
+    const state=readState();if(!state.profile?.canonical?.fields)return;
+    let changed=false;
+    for(const field of Canonical.DIAGNOSTIC_FIELDS){
+      const value=Array.isArray(state.profile[field])?state.profile[field].join('; '):String(state.profile[field]||'').trim();
+      const record=state.profile.canonical.fields[field]||{};
+      if(value&&value!==String(record.value||'').trim()){
+        state.profile.canonical.fields[field]=Canonical.fieldRecord(value,{status:'user_confirmed',provenance:'user',sourceIds:[`U:${field}`],confidence:'high'});
+        changed=true;
+      }
+    }
+    if(!changed)return;
+    state.profile.canonical.diagnostics=Canonical.diagnoseCanonicalProfile(state.profile);
+    state.profile.informationGaps=gapsFromDiagnostics(state.profile.canonical.diagnostics);
+    state.approved=false;writeState(state);root.LeadIntelServerBridge?.saveNow?.().catch(()=>null);
+  }
+  if(typeof document!=='undefined'){
+    document.addEventListener('click',event=>{
+      if(event.target.closest('#edit-profile,#approve-profile,#approve-profile-bottom'))queueMicrotask(promoteEdits);
+    });
+  }
+})(globalThis);
