@@ -7,13 +7,15 @@
   const MAX_ROWS=200,MAX_ACTIVE=50;
   const clean=v=>String(v??'').replace(/\s+/g,' ').trim();
   const normName=v=>clean(v).toLowerCase().replace(/[^a-z0-9āčēģīķļņšūž]+/gi,' ').trim();
+  const normKey=v=>clean(v).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[_./\\-]+/g,' ').replace(/\s+/g,' ').trim();
   function normalizeUrl(value){const raw=clean(value);if(!raw)return '';try{const u=new URL(/^https?:\/\//i.test(raw)?raw:`https://${raw}`);return ['http:','https:'].includes(u.protocol)?u.href:'';}catch{return '';}}
   function domain(value){try{return new URL(normalizeUrl(value)).hostname.replace(/^www\./i,'').toLowerCase();}catch{return '';}}
+  function looksLikeWebsite(value){const v=clean(value);return /^(?:https?:\/\/|www\.)/i.test(v)||/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(?:[\/:?#]|$)/i.test(v);}
   function stableId(value){let h=2166136261;for(const ch of String(value||'')){h^=ch.charCodeAt(0);h=Math.imul(h,16777619);}return (h>>>0).toString(36);}
   function fingerprint(ids){return `rc-${stableId([...ids].sort().join('|'))}`;}
   function parseCsv(text){
-    const input=String(text||'').replace(/^\uFEFF/,'');const rows=[];let row=[],field='',quoted=false;
-    const delimiter=(()=>{const first=(input.split(/\r?\n/)[0]||'');return (first.match(/;/g)||[]).length>(first.match(/,/g)||[]).length?';':',';})();
+    const input=String(text||'').replace(/^\uFEFF/,'').replace(/^\u0000+/,'');const rows=[];let row=[],field='',quoted=false;
+    const delimiter=(()=>{const first=(input.split(/\r?\n/)[0]||'');const candidates=[',',';','\t','|'];let best=',',count=-1;for(const candidate of candidates){const hits=first.split(candidate).length-1;if(hits>count){best=candidate;count=hits;}}return best;})();
     for(let i=0;i<=input.length;i++){
       const ch=input[i]??'\n';
       if(ch==='"'){
@@ -23,22 +25,29 @@
       else field+=ch;
     }
     if(!rows.length)return [];
-    const headers=rows.shift().map(h=>clean(h));
-    return rows.map(values=>Object.fromEntries(headers.map((h,i)=>[h,clean(values[i])])));
+    const first=rows.shift().map(h=>clean(h));
+    const headerSignals=['company','company name','customer','customer name','client','client name','uznemums','uznemuma nosaukums','klients','klienta uznemums','name','website','web','web site','url','domain','homepage','majaslapa','majas lapa','interneta adrese'];
+    const hasRecognizedHeader=first.some(h=>headerSignals.includes(normKey(h)));
+    const firstLooksLikeData=!hasRecognizedHeader&&first.some(looksLikeWebsite);
+    const headers=firstLooksLikeData?first.map((_,i)=>`Column ${i+1}`):first;
+    const dataRows=firstLooksLikeData?[first,...rows]:rows;
+    return dataRows.map(values=>Object.fromEntries(headers.map((h,i)=>[h,clean(values[i])])));
   }
   const ALIASES={
-    companyName:['company','company name','customer','customer name','client','client name','uzņēmums','klients','name'],
-    website:['website','web','url','domain','homepage','mājaslapa'],country:['country','market','valsts'],
+    companyName:['company','company name','customer','customer name','client','client name','uzņēmums','uznemums','uzņēmuma nosaukums','uznemuma nosaukums','klients','klienta uzņēmums','klienta uznemums','name'],
+    website:['website','web','web site','site','url','domain','homepage','mājaslapa','majaslapa','mājas lapa','majas lapa','interneta adrese'],country:['country','market','valsts'],
     productService:['product','service','product/service','offer','bought','purchased','produkts','pakalpojums'],
     approximateValue:['value','deal value','revenue','amount','commercial value','vērtība'],
     reason:['why good','reason','why','fit','reason good customer','iemesls'],notes:['notes','note','comments','comment','piezīmes']
   };
-  function valueFor(row,key){const entries=Object.entries(row||{});for(const alias of ALIASES[key]){const hit=entries.find(([k])=>clean(k).toLowerCase()===alias);if(hit&&clean(hit[1]))return clean(hit[1]);}return '';}
+  function valueFor(row,key){const entries=Object.entries(row||{});const aliases=ALIASES[key].map(normKey);for(const [k,v] of entries){if(aliases.includes(normKey(k))&&clean(v))return clean(v);}return '';}
+  function fallbackCompanyName(row){const values=Object.values(row||{}).map(clean).filter(Boolean);return values.find(value=>!looksLikeWebsite(value))||'';}
+  function fallbackWebsite(row){const values=Object.values(row||{}).map(clean).filter(Boolean);return values.find(looksLikeWebsite)||'';}
   function normalizeImportedRows(rows=[],options={}){
     const sourceType=clean(options.sourceType||'manual').toLowerCase();const seen=new Set(),out=[];
     for(const raw of rows||[]){
-      const companyName=valueFor(raw,'companyName')||clean(raw.companyName);if(!companyName)continue;
-      const website=normalizeUrl(valueFor(raw,'website')||raw.website),dom=domain(website),country=valueFor(raw,'country')||clean(raw.country);
+      const companyName=valueFor(raw,'companyName')||clean(raw.companyName)||fallbackCompanyName(raw);if(!companyName)continue;
+      const website=normalizeUrl(valueFor(raw,'website')||raw.website||fallbackWebsite(raw)),dom=domain(website),country=valueFor(raw,'country')||clean(raw.country);
       const dedupe=dom?`d:${dom}`:`n:${normName(companyName)}|${normName(country)}`;if(seen.has(dedupe))continue;seen.add(dedupe);
       const status=sourceType==='pdf'?'needs_review':dom?'ready':'unresolved';
       out.push({id:`ref-${stableId(dedupe)}`,companyName,website,domain:dom,country,productService:valueFor(raw,'productService')||clean(raw.productService),approximateValue:valueFor(raw,'approximateValue')||clean(raw.approximateValue),reason:valueFor(raw,'reason')||clean(raw.reason),notes:valueFor(raw,'notes')||clean(raw.notes),status,active:false,reviewed:sourceType!=='pdf'});
