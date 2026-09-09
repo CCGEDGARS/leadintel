@@ -13,23 +13,17 @@ test('Step 2 keeps Question 03 in static HTML',()=>{
 
 test('Question 03 has a finite non-observer recovery runtime',()=>{
   const runtime=read('step2-reference-question-runtime.js');
+  assert.match(runtime,/STEP2_REFERENCE_VERSION='20260909-question03-v5'/);
   assert.match(runtime,/ensureReferenceQuestion/);
   assert.match(runtime,/data-reference-customers-manage/);
   assert.match(runtime,/scheduleRepairs/);
   assert.doesNotMatch(runtime,/MutationObserver/);
 });
 
-test('Question 03 recovery loads directly from HTML and does not depend on process-map module evaluation',()=>{
-  const html=read('index.html');
+test('Question 03 recovery is bootstrapped by the classic language entrypoint',()=>{
+  const language=read('language.js');
   const processMap=read('process-map.js');
-  assert.match(html,/<script defer src="step2-reference-question-runtime\.js\?v=20260909-question03-v5"><\/script>/);
+  assert.match(language,/step2-reference-question-runtime\.js\?v=20260909-question03-v5/);
+  assert.match(language,/document\.createElement\(["']script["']\)/);
   assert.doesNotMatch(processMap,/step2-reference-question-runtime\.js/);
-});
-
-test('Question 03 direct recovery loads before app and process-map modules',()=>{
-  const html=read('index.html');
-  const recoveryPos=html.indexOf('step2-reference-question-runtime.js?v=20260909-question03-v5');
-  const appPos=html.indexOf('app.js?v=');
-  const processPos=html.indexOf('process-map.js?v=');
-  assert.ok(recoveryPos>=0&&appPos>recoveryPos&&processPos>recoveryPos,'Question 03 recovery must boot independently before application modules');
 });
