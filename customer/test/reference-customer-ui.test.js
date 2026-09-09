@@ -16,13 +16,13 @@ test('manager supports CSV XLSX PDF and manual reference customer inputs',()=>{
 
 test('PDF-derived rows require explicit review before activation',()=>{
   assert.match(source,/needs_review/);
-  assert.match(source,/Confirm row/i);
+  assert.match(source,/>Confirm</i);
   assert.match(source,/Activate selected/i);
 });
 
 test('reference customer manager reuses Step 1 markets and has no country selector',()=>{
   assert.match(source,/targetMarkets/);
-  assert.match(source,/Target market/i);
+  assert.match(source,/Search market|Target market/i);
   assert.doesNotMatch(source,/country-selector|lookalike-country|target-country/i);
 });
 
