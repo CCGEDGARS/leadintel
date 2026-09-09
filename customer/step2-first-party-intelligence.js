@@ -63,15 +63,11 @@
       ?brain.derivePainPoints({}, {...input,companyClassification:classification}, lv?"lv":"en").filter(value=>!isUnsupportedPain(value)).slice(0,3)
       :[];
     const roles=unique(classification.likelyBuyerFunctions||[]).slice(0,4).join("; ");
-    const signals=typeof brain.recommendSignals==="function"
-      ?brain.recommendSignals({...input,companyClassification:classification}).slice(0,4).map(item=>item.name).filter(Boolean).join("; ")
-      :"";
     return {
       priority_offers:inferred(offers,sourceIds,classification.confidence==="high"?"medium":"low"),
       ideal_customer:inferred(ideal,sourceIds,"medium"),
       buyer_roles:inferred(roles,sourceIds,"medium"),
-      buying_outcomes:inferred(pains.join(" "),sourceIds,"medium"),
-      buying_triggers:inferred(signals,sourceIds,"medium")
+      buying_outcomes:inferred(pains.join(" "),sourceIds,"medium")
     };
   }
 
@@ -89,7 +85,7 @@
         ideal_customer:choose(base.ideal_customer,inferredDraft.ideal_customer),
         buyer_roles:choose(base.buyer_roles,inferredDraft.buyer_roles),
         buying_outcomes:choose(base.buying_outcomes,inferredDraft.buying_outcomes),
-        buying_triggers:choose(base.buying_triggers,inferredDraft.buying_triggers),
+        buying_triggers:base.buying_triggers||blank(),
         exclusions:base.exclusions||blank(),
         opportunity_value:base.opportunity_value||blank(),
         success_outcome:base.success_outcome||blank()
