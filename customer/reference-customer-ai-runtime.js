@@ -21,7 +21,11 @@ const REFERENCE_AI_CONCURRENCY=4;
     const bridge=root.LeadIntelServerBridge;
     return bridge?.session?.authenticated&&bridge?.workspace?.id?clean(bridge.workspace.id):'';
   }
-  function status(message){const node=document.getElementById('reference-import-status');if(node)node.textContent=message;}
+  function status(message){
+    const text=clean(message);
+    const top=document.getElementById('reference-import-status');if(top)top.textContent=text;
+    const local=document.getElementById('reference-action-status');if(local)local.textContent=text;
+  }
   async function scrapeRow(row){
     const response=await fetch(`${REFERENCE_AI_FIRECRAWL}/firecrawl-scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:row.website,formats:['markdown'],onlyMainContent:true,timeout:25000})});
     const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(clean(payload?.error)||`Website returned ${response.status}`);
