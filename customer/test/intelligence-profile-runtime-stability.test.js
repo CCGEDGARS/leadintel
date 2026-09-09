@@ -23,3 +23,8 @@ test('approved Intelligence Profile is restored when the legacy Step 3 editor re
   assert.doesNotMatch(runtime,/subtree\s*:\s*true/,'scoped restoration must not watch the whole Step 3 subtree');
   assert.doesNotMatch(runtime,/attributes\s*:\s*true/,'scoped restoration must not watch attributes');
 });
+
+test('background lifecycle refreshes cannot replace unsaved profile fields while editing',()=>{
+  assert.match(runtime,/function apply\(\)\{if\(editing\)return;/,'approved profile runtime must ignore background rerenders while an edit session is active');
+  assert.match(runtime,/if\(editing\)return;[\s\S]*editor\.querySelector\('\.profile-field'\)/,'legacy Step 3 restoration must not replace an active edit session');
+});
