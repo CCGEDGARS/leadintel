@@ -20,7 +20,7 @@ test('Customer V2 loads the automatic company research module with Firecrawl wor
   assert.match(processMap,/company-profile-handoff\.js\?v=20260826-intelligence-autofill-v1/);
   assert.match(ui,/company-research-engine\.js\?v=20260906-selector-language-v2/);
   assert.match(read('index.html'),/profile-engine\.js\?v=20260906-authoritative-depth-v1/);
-  assert.match(read('index.html'),/process-map\.js\?v=20260909-question03-v4/);
+  assert.match(read('index.html'),/process-map\.js\?v=20260909-reference-actions-v2/);
   assert.match(read('index.html'),/company-research-ui\.js\?v=20260906-selector-language-v2/);
 });
 
