@@ -6,8 +6,10 @@ const profile=require('../profile-engine.js');
 const research=require('../company-research-engine.js');
 const brain=require('../company-brain.js');
 const readiness=require('../step2-readiness-engine.js');
+const firstParty=require('../step2-first-party-intelligence.js');
 readiness.patchProfileEngine(profile);
 readiness.patchResearchEngine(research,{LeadIntelCompanyBrain:brain});
+firstParty.patchResearchEngine(research,{LeadIntelCompanyBrain:brain});
 
 const read=name=>fs.readFileSync(path.join(__dirname,'..',name),'utf8');
 const layer=read('step2-readiness-engine.js');
@@ -120,6 +122,13 @@ test('first-party inference does not invent value, exclusions or LeadIntel succe
   assert.equal(draft.opportunity_value.value,'');
   assert.equal(draft.exclusions.value,'');
   assert.equal(draft.success_outcome.value,'');
+});
+
+test('first-party inference layer is loaded before company research UI',()=>{
+  const readinessPos=processMap.indexOf('step2-readiness-engine.js');
+  const inferencePos=processMap.indexOf('step2-first-party-intelligence.js');
+  const researchUi=processMap.indexOf('company-research-ui.js');
+  assert.ok(readinessPos>=0&&inferencePos>readinessPos&&researchUi>inferencePos);
 });
 
 test('sync conflict UX de-duplicates the banner and resolves only byte-equivalent business payloads',()=>{
