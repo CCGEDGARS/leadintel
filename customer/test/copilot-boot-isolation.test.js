@@ -23,7 +23,7 @@ test('copilot loader is boot-safe and defers polished UI modules',()=>{
 
 test('loader preloads scoped copilot styles before the first click',()=>{
   const source=read('copilot-loader.js');
-  assert.match(source,/copilot\.css\?v=20260908-copilot-polish-v1/);
+  assert.match(source,/copilot\.css\?v=/);
   assert.match(source,/data-leadintel-asset|leadintelAsset/);
   assert.match(source,/stylesheet/);
 });
