@@ -3,10 +3,25 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const Enrichment=require('../reference-customer-website-enrichment.js');
+const Detection=require('../reference-customer-table-detection.js');
 
 test('company name is sufficient to keep a reference customer eligible for website enrichment',()=>{
   const row={id:'ref-1',companyName:'Example Company',website:'',domain:'',country:'Latvia',status:'unresolved'};
   assert.equal(Enrichment.needsWebsite(row),true);
+});
+
+test('name-only spreadsheets are valid reference-customer tables',()=>{
+  const detected=Detection.detectCustomerTable([{name:'Companies',rows:[
+    ['Customer list'],
+    ['Company Name'],
+    ['Alpha SIA'],
+    ['Beta SIA'],
+    ['Gamma SIA']
+  ]}]);
+  assert.equal(detected.sheetName,'Companies');
+  assert.equal(detected.headerRowIndex,1);
+  assert.equal(detected.rows.length,3);
+  assert.equal(detected.rows[0]['Company Name'],'Alpha SIA');
 });
 
 test('official website selection prefers a matching company domain and rejects directories/social networks',()=>{
