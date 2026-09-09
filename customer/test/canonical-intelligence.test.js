@@ -21,6 +21,20 @@ test('canonical precedence is user then document then website then AI inference'
   assert.equal(result.provenance,'user');
 });
 
+test('accepted research answer backed by an uploaded document keeps document authority',()=>{
+  const profile=Canonical.buildCanonicalProfile({
+    website:'https://acme.example/',targetMarkets:['Germany'],
+    answers:{differentiation:'ISO-certified engineering and installation'},answerStatus:{differentiation:'accepted'},
+    researchMeta:{fields:{differentiation:{origin:'research',reviewed:true,confidence:'high',sourceIds:['D1']}}},
+    documents:[{name:'catalog.pdf',text:'ISO-certified engineering and installation'}],scrapedSources:[]
+  },{});
+  const field=profile.canonical.fields.differentiation;
+  assert.equal(field.provenance,'document');
+  assert.equal(field.status,'first_party_evidence');
+  assert.equal(field.confidence,'high');
+  assert.deepEqual(field.sourceIds,['D1']);
+});
+
 test('external evidence cannot overwrite first-party canonical value and contradiction is retained',()=>{
   const profile={canonical:{fields:{idealCustomer:candidate('Enterprise customers','user','user_confirmed','high',['U1'])}}};
   const result=Canonical.compareExternalEvidence(profile,[{id:'X1',url:'https://directory.example/acme',claims:{idealCustomer:'SME customers'}}]);
