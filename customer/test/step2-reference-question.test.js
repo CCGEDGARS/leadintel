@@ -25,3 +25,8 @@ test('Question 03 has a finite non-observer recovery runtime',()=>{
   const readinessPos=processMap.indexOf('step2-readiness-engine.js');
   assert.ok(referencePos>=0&&readinessPos>referencePos,'Question 03 recovery must load before readiness binds Step 2 fields');
 });
+
+test('customer HTML cache-busts the process map after Question 03 recovery changes',()=>{
+  const html=read('index.html');
+  assert.match(html,/process-map\.js\?v=20260909-question03-v4/);
+});
