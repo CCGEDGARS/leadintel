@@ -22,7 +22,7 @@ test('AI analysis reports progress and sign-in errors beside the action buttons'
 
 test('process map loads refreshed reference-customer action runtimes',()=>{
   const source=read('process-map.js');
-  assert.match(source,/reference-customer-clear-list\.js\?v=20260909-action-repair-v1/);
-  assert.match(source,/reference-customer-website-enrichment\.js\?v=20260909-action-repair-v1/);
-  assert.match(source,/reference-customer-ai-runtime\.js\?v=20260909-action-repair-v1/);
+  assert.match(source,/reference-customer-clear-list\.js\?v=20260909-reference-actions-v2/);
+  assert.match(source,/reference-customer-website-enrichment\.js\?v=20260909-reference-actions-v2/);
+  assert.match(source,/reference-customer-ai-runtime\.js\?v=20260909-reference-actions-v2/);
 });
