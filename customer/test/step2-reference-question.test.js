@@ -5,27 +5,16 @@ const path=require('node:path');
 
 const read=name=>fs.readFileSync(path.join(__dirname,'..',name),'utf8');
 
-test('Step 2 keeps Question 03 visible and connects it to Reference Customer Intelligence',()=>{
-  const runtime=read('step2-reference-question-runtime.js');
+test('Step 2 keeps Question 03 in static HTML and connects it to Reference Customer Intelligence',()=>{
+  const html=read('index.html');
   const processMap=read('process-map.js');
 
-  assert.match(runtime,/lookalike_customers/);
-  assert.match(runtime,/Which 3–5 existing customers would you most like to replicate\?/);
-  assert.match(runtime,/data-reference-customers-manage/);
-  assert.match(runtime,/03/);
-  assert.match(runtime,/ensureReferenceQuestion/);
-  assert.match(processMap,/step2-reference-question-runtime\.js\?v=20260909-question03-v3/);
-
-  const referencePos=processMap.indexOf('step2-reference-question-runtime.js');
-  const readinessPos=processMap.indexOf('step2-readiness-engine.js');
-  assert.ok(referencePos>=0&&readinessPos>referencePos,'Question 03 runtime must load before readiness binds Step 2 fields');
+  assert.match(html,/<span>03<\/span>[\s\S]*data-question="lookalike_customers"/);
+  assert.match(html,/data-question="lookalike_customers"[\s\S]*data-reference-customers-manage/);
+  assert.doesNotMatch(processMap,/step2-reference-question-runtime\.js/,'Question 03 must not require an observer runtime during boot');
 });
 
-test('Question 03 runtime repairs late DOM replacement without observing attributes it also mutates',()=>{
-  const runtime=read('step2-reference-question-runtime.js');
-  assert.match(runtime,/MutationObserver/);
-  assert.match(runtime,/questionGrid\(\)/);
-  assert.match(runtime,/observer\.observe\(grid,\{childList:true,subtree:true\}\)/);
-  assert.doesNotMatch(runtime,/attributeFilter/);
-  assert.doesNotMatch(runtime,/attributes:true/);
+test('Question 03 does not depend on a MutationObserver repair loop',()=>{
+  const processMap=read('process-map.js');
+  assert.doesNotMatch(processMap,/step2-reference-question-runtime\.js/);
 });
