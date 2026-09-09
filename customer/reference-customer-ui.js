@@ -21,7 +21,7 @@ let pdfModule=null;
       <div class="reference-workflow"><span class="active">1 · Upload</span><span>2 · Analyze</span><span>3 · Review</span><span>4 · Activate</span></div>
       <div id="reference-market-summary" class="reference-market-summary"></div>
       <section class="reference-format-guide"><div><strong>Keep the list simple</strong><p><b>Only Company Name and Website are required.</b> One company per row. CSV or Excel is recommended.</p><div class="reference-format-example"><span>Company Name</span><span>Website</span><span>Example Company</span><span>https://example.com</span></div></div><button class="secondary-btn" type="button" id="reference-template-download">Download example CSV</button></section>
-      <div class="reference-import-actions"><label class="primary-btn reference-upload">Upload customer list<input type="file" id="reference-file-input" accept=".csv,.xlsx,.xls,text/csv" hidden></label><button class="secondary-btn" type="button" id="reference-add-manual">Add manually</button><details class="reference-pdf-fallback"><summary>Have only a PDF?</summary><label class="text-btn reference-upload-pdf">Upload PDF for review<input type="file" id="reference-pdf-input" accept=".pdf,application/pdf" hidden></label></details></div>
+      <div class="reference-import-actions"><button class="primary-btn reference-upload" type="button" id="reference-upload-button">Upload customer list</button><input type="file" id="reference-file-input" accept=".csv,.xlsx,.xls,text/csv" hidden><button class="secondary-btn" type="button" id="reference-add-manual">Add manually</button><details class="reference-pdf-fallback"><summary>Have only a PDF?</summary><button class="text-btn reference-upload-pdf" type="button" id="reference-pdf-upload-button">Upload PDF for review</button><input type="file" id="reference-pdf-input" accept=".pdf,application/pdf" hidden></details></div>
       <div id="reference-manual-form" class="reference-manual-form" hidden><input id="reference-manual-company" placeholder="Company Name"><input id="reference-manual-website" placeholder="Website"><button class="primary-btn small" type="button" id="reference-save-manual">Add company</button></div>
       <div id="reference-import-status" class="reference-import-status" aria-live="polite"></div>
       <div class="reference-table-wrap"><table class="reference-table"><thead><tr><th>Company</th><th>Website</th><th>Analysis</th><th></th></tr></thead><tbody id="reference-table-body"></tbody></table></div>
@@ -39,8 +39,12 @@ let pdfModule=null;
       const remove=event.target.closest('[data-remove-reference]');if(remove)removeRow(remove.dataset.removeReference);
       const segment=event.target.closest('[data-reference-segment]');if(segment)setTimeout(updateActivateButton,0);
     });
-    modal.querySelector('#reference-file-input')?.addEventListener('change',event=>handleFile(event.target.files?.[0]));
-    modal.querySelector('#reference-pdf-input')?.addEventListener('change',event=>handleFile(event.target.files?.[0]));
+    const fileInput=modal.querySelector('#reference-file-input');
+    modal.querySelector('#reference-upload-button')?.addEventListener('click',()=>{if(!fileInput)return;fileInput.value='';fileInput.click();});
+    fileInput?.addEventListener('change',async event=>{try{await handleFile(event.target.files?.[0]);}finally{event.target.value='';}});
+    const pdfInput=modal.querySelector('#reference-pdf-input');
+    modal.querySelector('#reference-pdf-upload-button')?.addEventListener('click',()=>{if(!pdfInput)return;pdfInput.value='';pdfInput.click();});
+    pdfInput?.addEventListener('change',async event=>{try{await handleFile(event.target.files?.[0]);}finally{event.target.value='';}});
     modal.querySelector('#reference-template-download')?.addEventListener('click',downloadTemplate);
     modal.querySelector('#reference-add-manual')?.addEventListener('click',()=>{modal.querySelector('#reference-manual-form').hidden=false;});
     modal.querySelector('#reference-save-manual')?.addEventListener('click',addManual);
