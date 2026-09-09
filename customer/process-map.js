@@ -10,7 +10,7 @@ import './server-bridge.js?v=20260905-app-audit-v2';
 import './crm-ui.js?v=20260905-app-audit-v2';
 import './ai-settings.js?v=20260903-password-manager-isolation-v1';
 import './service-settings-extension.js?v=20260903-password-manager-isolation-v1';
-import './step2-readiness-engine.js?v=20260902-step2-readiness-v2';
+import './step2-readiness-engine.js?v=20260909-step2-readiness-v3';
 import './content-language.js?v=20260906-step2-language-v1';
 import './content-variants.js?v=20260905-step1-language-v1';
 import './business-identity.js?v=20260906-pain-headings-v1';
@@ -54,13 +54,19 @@ function ensureContextQuestion03(){
     textarea.value=String(readProcessState().answers?.lookalike_customers||"");
     textarea.addEventListener("input",()=>writeQuestion03(textarea.value));
   }
-  card.hidden=false;card.removeAttribute("aria-hidden");card.style.removeProperty("display");
+  if(card.hidden)card.hidden=false;
+  if(card.hasAttribute("aria-hidden"))card.removeAttribute("aria-hidden");
+  if(card.style.display)card.style.removeProperty("display");
   if(!card.querySelector("[data-reference-customers-manage]")){
     const action=document.createElement("button");action.className="text-btn";action.type="button";action.dataset.referenceCustomersManage="";action.textContent="Open Reference Customer Intelligence →";card.appendChild(action);
   }
   const question04=grid.querySelector('[data-question="buyer_roles"]')?.closest(".question-card");
   if(question04&&card.nextElementSibling!==question04)grid.insertBefore(card,question04);
   return card;
+}
+function restoreContextQuestion03Soon(){
+  ensureContextQuestion03();
+  for(const delay of [0,120,400,1000])setTimeout(ensureContextQuestion03,delay);
 }
 function contextReady(){
   const state=readProcessState();
@@ -85,9 +91,9 @@ function syncProcessMap(){
 function openProcessStep(step,attempt=0){
   const target=Number(step)||1;
   if(target>1&&!contextReady()){document.querySelector('[data-step-marker="1"]')?.dispatchEvent(new MouseEvent("click",{bubbles:true}));syncProcessMap();return;}
-  if(target===2)ensureContextQuestion03();
+  if(target===2)restoreContextQuestion03Soon();
   const marker=document.querySelector(`[data-step-marker="${target}"]`);
-  if(marker){marker.dispatchEvent(new MouseEvent("click",{bubbles:true}));if(target===2)setTimeout(ensureContextQuestion03,0);setTimeout(syncProcessMap,0);return;}
+  if(marker){marker.dispatchEvent(new MouseEvent("click",{bubbles:true}));if(target===2)restoreContextQuestion03Soon();setTimeout(syncProcessMap,0);return;}
   if(attempt<20)setTimeout(()=>openProcessStep(target,attempt+1),100);
 }
 if(processMap){
@@ -97,7 +103,9 @@ if(processMap){
   document.getElementById("target-market-selector")?.addEventListener("click",()=>setTimeout(syncProcessMap,0));
   window.addEventListener("leadintel:website-synced",syncProcessMap);
   window.addEventListener("leadintel:website-activated",syncProcessMap);
-  window.addEventListener("leadintel:module-opened",event=>{if(Number(event.detail?.step)===2)ensureContextQuestion03();syncProcessMap();});
+  window.addEventListener("leadintel:server-ready",()=>{restoreContextQuestion03Soon();syncProcessMap();});
+  window.addEventListener("leadintel:workspace-changed",()=>{restoreContextQuestion03Soon();syncProcessMap();});
+  window.addEventListener("leadintel:module-opened",event=>{if(Number(event.detail?.step)===2)restoreContextQuestion03Soon();syncProcessMap();});
   window.addEventListener("storage",event=>{if(event.key===PROCESS_STORAGE_KEY)syncProcessMap();});
-  ensureContextQuestion03();syncProcessMap();
+  restoreContextQuestion03Soon();syncProcessMap();
 }
