@@ -1,0 +1,39 @@
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const Discovery=require('../discovery-engine.js');
+
+test('inactive reference model does not affect discovery scoring',()=>{
+  const candidate={company:'Nordic Machines',domain:'nordic.example',market:'Germany',industry:'industrial manufacturing',sizeBand:'100-500',businessModel:'B2B'};
+  const without=Discovery.scoreLookalikeMatch(candidate,null);
+  assert.deepEqual(without,{active:false,total:0,dimensions:[],reasons:[]});
+});
+
+test('active Reference Customer DNA produces explainable lookalike score',()=>{
+  const dna={active:true,dimensions:[
+    {key:'industry',values:['industrial manufacturing'],weight:1,confidence:'high'},
+    {key:'sizeBand',values:['100-500'],weight:1,confidence:'medium'},
+    {key:'businessModel',values:['B2B'],weight:1,confidence:'high'}
+  ]};
+  const candidate={company:'Nordic Machines',market:'Germany',industry:'industrial manufacturing',sizeBand:'100-500',businessModel:'B2B'};
+  const score=Discovery.scoreLookalikeMatch(candidate,dna);
+  assert.equal(score.active,true);
+  assert.ok(score.total>=80);
+  assert.ok(score.dimensions.length>=3);
+  assert.ok(score.reasons.some(x=>/industry/i.test(x)));
+});
+
+test('Step 1 target markets constrain lookalike queries country by country',()=>{
+  const profile={website:'https://seller.example',targetMarkets:'Germany; Poland',priorityOffers:'Industrial automation',idealCustomer:'manufacturers'};
+  const dna={active:true,dimensions:[{key:'industry',values:['industrial manufacturing'],weight:1,confidence:'high'}]};
+  const queries=Discovery.buildLookalikeDiscoveryQueries(profile,dna,6);
+  assert.ok(queries.length>=2);
+  assert.ok(queries.some(q=>q.market==='Germany'));
+  assert.ok(queries.some(q=>q.market==='Poland'));
+  assert.equal(queries.some(q=>q.market==='Sweden'),false);
+});
+
+test('hard exclusion blocks candidate even with strong lookalike similarity',()=>{
+  const profile={exclusions:'private consumers; Russia'};
+  const candidate={company:'Perfect Match',market:'Russia',description:'industrial manufacturing B2B company'};
+  assert.equal(Discovery.isHardExcluded(candidate,profile),true);
+});
