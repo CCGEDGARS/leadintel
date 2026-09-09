@@ -14,7 +14,7 @@ test('Step 2 keeps Question 03 visible and connects it to Reference Customer Int
   assert.match(runtime,/data-reference-customers-manage/);
   assert.match(runtime,/03/);
   assert.match(runtime,/ensureReferenceQuestion/);
-  assert.match(processMap,/step2-reference-question-runtime\.js/);
+  assert.match(processMap,/step2-reference-question-runtime\.js\?v=20260909-question03-v3/);
 
   const referencePos=processMap.indexOf('step2-reference-question-runtime.js');
   const readinessPos=processMap.indexOf('step2-readiness-engine.js');
