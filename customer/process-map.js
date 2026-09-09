@@ -26,6 +26,7 @@ import './reference-customer-table-detection.js?v=20260909-smart-workbook-v2';
 import './reference-customer-smart-import.js?v=20260909-smart-workbook-v2';
 import './reference-customer-ai.js?v=20260909-ai-segmentation-v1';
 import './reference-customer-ui.js?v=20260909-file-upload-v1';
+import './reference-customer-clear-list.js?v=20260909-clear-list-v1';
 import './reference-customer-ai-runtime.js?v=20260909-ai-segmentation-v1';
 import './lookalike-discovery.js?v=20260909-segmentation-v1';
 import './profile-action-runtime.js?v=20260909-profile-actions-v3';
