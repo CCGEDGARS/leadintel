@@ -1,6 +1,7 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const Discovery=require('../discovery-engine.js');
+require('../lookalike-discovery.js').install(Discovery);
 
 test('inactive reference model does not affect discovery scoring',()=>{
   const candidate={company:'Nordic Machines',domain:'nordic.example',market:'Germany',industry:'industrial manufacturing',sizeBand:'100-500',businessModel:'B2B'};
