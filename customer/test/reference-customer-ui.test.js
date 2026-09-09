@@ -14,6 +14,13 @@ test('manager supports CSV XLSX PDF and manual reference customer inputs',()=>{
   assert.match(source,/PDFJS_VERSION\s*=\s*['"]6\.2\.108['"]/);
 });
 
+test('reference customer upload uses an explicit button-driven file picker',()=>{
+  assert.match(source,/id=["']reference-upload-button["']/,'upload must expose a real button instead of relying on label-to-hidden-input activation');
+  assert.match(source,/reference-upload-button[^\n]*addEventListener|querySelector\(['"]#reference-upload-button['"]\)\?\.addEventListener/,'upload button must have an explicit click handler');
+  assert.match(source,/reference-file-input[^\n]*\.click\(\)|fileInput\.click\(\)/,'upload button must explicitly open the hidden file input');
+  assert.match(source,/event\.target\.value\s*=\s*['"]["']/,'file input must reset after handling so the same file can be selected again');
+});
+
 test('PDF-derived rows require explicit review before activation',()=>{
   assert.match(source,/needs_review/);
   assert.match(source,/>Confirm</i);
