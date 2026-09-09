@@ -1,5 +1,5 @@
 const PROFILE_ACTION_STATE_KEY='leadintel_customer_v2_state';
-const PROFILE_ACTION_VERSION='20260909-profile-actions-v2';
+const PROFILE_ACTION_VERSION='20260909-profile-actions-v3';
 
 (function installProfileActionRuntime(root){
   'use strict';
@@ -15,11 +15,12 @@ const PROFILE_ACTION_VERSION='20260909-profile-actions-v2';
       const label=approved?'✓ Profile Approved':'Approve Profile';
       if(button.textContent!==label)button.textContent=label;
       if(button.disabled!==approved)button.disabled=approved;
-      button.setAttribute('aria-disabled',approved?'true':'false');
-      button.classList.toggle('approved',approved);
+      const ariaDisabled=approved?'true':'false';
+      if(button.getAttribute('aria-disabled')!==ariaDisabled)button.setAttribute('aria-disabled',ariaDisabled);
+      if(button.classList.contains('approved')!==approved)button.classList.toggle('approved',approved);
     }
     const card=document.getElementById('approval-card');
-    if(card)card.hidden=true;
+    if(card&&!card.hidden)card.hidden=true;
   }
 
   async function openReferenceCustomers(){
