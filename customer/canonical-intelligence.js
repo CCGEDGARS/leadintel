@@ -28,7 +28,7 @@
 
   function classifySource(source={},companyWebsite=''){
     if(source.type==='user')return {class:'user_confirmed',authority:40,firstParty:true};
-    if(source.type==='document'||source.kind==='document'||source.name&&!source.url)return {class:'first_party_document',authority:30,firstParty:true};
+    if(source.type==='document'||source.kind==='document'||source.scope==='document'||String(source.type||'').toLowerCase()==='pdf'||source.name&&!source.url)return {class:'first_party_document',authority:30,firstParty:true};
     const url=safeUrl(source.url),companyHost=host(companyWebsite),sourceHost=host(url);
     if(url&&companyHost&&sourceHost===companyHost)return {class:'first_party_website',authority:20,firstParty:true};
     if(url)return {class:'external_validation',authority:0,firstParty:false};
