@@ -12,8 +12,8 @@ test('canonical profile action runtime owns the Reference Customer CTA click and
   assert.match(runtime,/openReferenceCustomers/);
 });
 
-test('approved profile changes the main approval button to Profile approved and disables it',()=>{
-  assert.match(runtime,/Profile approved ✓/);
+test('approved profile changes the main approval button to Profile Approved and disables it',()=>{
+  assert.match(runtime,/✓ Profile Approved/);
   assert.match(runtime,/button\.disabled!==approved/);
 });
 
