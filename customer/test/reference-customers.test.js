@@ -1,6 +1,7 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const Ref=require('../reference-customers.js');
+Object.assign(Ref,require('../reference-customer-table-detection.js'));
 
 test('CSV import normalizes common customer-list headers and deduplicates companies',()=>{
   const csv='Company,Website,Country,Product,Value,Why good\n"Acme, SIA",https://acme.lv,Latvia,Training,12000,Strong fit\nAcme duplicate,https://www.acme.lv,Latvia,Training,12000,Duplicate\nBeta,beta.eu,Germany,AI,25000,Growth';
