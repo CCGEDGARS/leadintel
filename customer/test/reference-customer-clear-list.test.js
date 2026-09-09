@@ -2,7 +2,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
-const Ref=require('../reference-customers.js');
+const Clear=require('../reference-customer-clear-list.js');
 
 test('clearing reference customers preserves the rest of the workspace',()=>{
   const workspace={
@@ -21,7 +21,7 @@ test('clearing reference customers preserves the rest of the workspace',()=>{
     }
   };
 
-  const cleared=Ref.clearReferenceCustomersFromWorkspace(workspace);
+  const cleared=Clear.clearReferenceCustomersFromWorkspace(workspace);
 
   assert.equal(cleared.website,'https://example.com');
   assert.deepEqual(cleared.targetMarkets,['Latvia']);
@@ -36,10 +36,10 @@ test('clearing reference customers preserves the rest of the workspace',()=>{
   assert.equal(cleared.referenceCustomers.dna,null);
 });
 
-test('Reference Customer Intelligence UI exposes a clear-list action with confirmation',()=>{
-  const ui=fs.readFileSync(path.join(__dirname,'..','reference-customer-ui.js'),'utf8');
-  assert.match(ui,/id="reference-clear-list"/);
-  assert.match(ui,/Clear customer list/);
-  assert.match(ui,/Remove all reference customers and reset Lookalike Intelligence\?/);
-  assert.match(ui,/clearReferenceCustomersFromWorkspace/);
+test('Reference Customer Intelligence exposes a clear-list action with confirmation',()=>{
+  const runtime=fs.readFileSync(path.join(__dirname,'..','reference-customer-clear-list.js'),'utf8');
+  assert.match(runtime,/id="reference-clear-list"/);
+  assert.match(runtime,/Clear customer list/);
+  assert.match(runtime,/Remove all reference customers and reset Lookalike Intelligence\?/);
+  assert.match(runtime,/leadintel:reference-customers-updated/);
 });
