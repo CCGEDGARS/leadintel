@@ -1,4 +1,4 @@
-const INTELLIGENCE_PROFILE_ASSET_VERSION='20260909-canonical-profile-v3';
+const INTELLIGENCE_PROFILE_ASSET_VERSION='20260909-canonical-profile-v4';
 (function installIntelligenceProfileRuntime(root){
   if(typeof document==='undefined')return;
   const UI=root.LeadIntelIntelligenceProfileUI;
@@ -13,12 +13,12 @@ const INTELLIGENCE_PROFILE_ASSET_VERSION='20260909-canonical-profile-v3';
   function readState(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');}catch{return {};}}
   function writeState(state){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
   function toast(message){const node=document.getElementById('toast');if(!node)return;node.textContent=message;node.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>node.classList.remove('show'),2600);}
-  function profileIsEditing(editor){return Boolean(editing||editor?.querySelector('textarea:not([readonly])'));}
+  function profileIsEditing(){return Boolean(editing);}
   function setEditButton(isEditing){const button=document.getElementById('edit-profile');if(!button)return;button.textContent=isEditing?'Save edits':'Edit profile';button.setAttribute('aria-pressed',isEditing?'true':'false');}
   function replaceProfileGrid(force=false){
     const editor=document.getElementById('profile-editor');if(!editor)return;
     const state=readState(),profile=state.profile;if(!profile?.canonical?.fields)return;
-    const edit=profileIsEditing(editor);
+    const edit=profileIsEditing();
     const signature=JSON.stringify([profile.canonical.generatedAt,profile.canonical.diagnostics,profile.canonical.contradictions,state.referenceCustomers?.fingerprint,state.referenceCustomers?.analyzedAt,edit]);
     if(!force&&editor.dataset.canonicalSignature===signature&&editor.querySelector('.intel-profile-shell')){setEditButton(edit);return;}
     editor.className='intel-profile-mount';editor.innerHTML=UI.render(profile,{edit,referenceCustomers:state.referenceCustomers||{},targetMarkets:state.targetMarkets||[]});editor.dataset.canonicalSignature=signature;
@@ -68,7 +68,7 @@ const INTELLIGENCE_PROFILE_ASSET_VERSION='20260909-canonical-profile-v3';
   function apply(){if(applying)return;applying=true;try{replaceProfileGrid();retireLegacyLookalike();}finally{applying=false;}}
   document.addEventListener('click',event=>{
     const editButton=event.target.closest('#edit-profile');
-    if(editButton){event.preventDefault();event.stopImmediatePropagation();if(editing||profileIsEditing(document.getElementById('profile-editor')))saveCanonicalEdits();else enterEditMode();return;}
+    if(editButton){event.preventDefault();event.stopImmediatePropagation();if(profileIsEditing())saveCanonicalEdits();else enterEditMode();return;}
     if(event.target.closest('[data-open-signal-designer]')){event.preventDefault();document.querySelector('[data-step-marker="4"]')?.click();setTimeout(()=>document.getElementById('signal-designer')?.scrollIntoView({behavior:'smooth',block:'start'}),80);}
   },true);
   window.addEventListener('leadintel:reference-customers-updated',()=>setTimeout(apply,0));
