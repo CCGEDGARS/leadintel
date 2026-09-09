@@ -8,12 +8,14 @@ const profile=fs.readFileSync(path.join(__dirname,'..','intelligence-profile-ui.
 const css=fs.readFileSync(path.join(__dirname,'..','reference-customers.css'),'utf8');
 const boot=fs.readFileSync(path.join(__dirname,'..','process-map.js'),'utf8');
 
-test('customer boot loads reference customer engine, UI and lookalike integration in dependency order',()=>{
+test('customer boot loads reference engine, AI classifier, UI and lookalike integration in dependency order',()=>{
   const engine=boot.indexOf('reference-customers.js');
+  const ai=boot.indexOf('reference-customer-ai.js');
   const manager=boot.indexOf('reference-customer-ui.js');
   const lookalike=boot.indexOf('lookalike-discovery.js');
   assert.ok(engine>=0,'reference-customers.js must be loaded');
-  assert.ok(manager>engine,'reference-customer-ui.js must load after the engine');
+  assert.ok(ai>engine,'reference-customer-ai.js must load after the reference engine');
+  assert.ok(manager>ai,'reference-customer-ui.js must load after the AI classifier');
   assert.ok(lookalike>manager,'lookalike integration must load after the reference customer UI');
 });
 
@@ -30,6 +32,12 @@ test('manager explains the minimal two-column file format and offers a CSV templ
   assert.match(ui,/Website/i);
   assert.match(ui,/Download example CSV/i);
   assert.match(ui,/Only company name and website are required/i);
+});
+
+test('manager uses configured AI after scraping and before activation',()=>{
+  assert.match(ui,/LeadIntelReferenceCustomerAI/);
+  assert.match(ui,/requestReferenceCustomerAnalysis/);
+  assert.match(ui,/AI analysis/i);
 });
 
 test('manager analyzes before activation and shows segment review controls',()=>{
