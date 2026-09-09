@@ -1,4 +1,5 @@
 const STORAGE_KEY='leadintel_customer_v2_state';
+const CANONICAL_MIGRATION_KEY='leadintel_canonical_profile_v1_migrated';
 
 (function installCanonicalRuntime(root){
   const Profile=root.LeadIntelProfile,Canonical=root.LeadIntelCanonicalIntelligence,Brain=root.LeadIntelCompanyBrain,Refs=root.LeadIntelReferenceCustomers;
@@ -22,13 +23,12 @@ const STORAGE_KEY='leadintel_customer_v2_state';
       }
     };
   }
-  function gapsFromDiagnostics(diagnostics=[]){
-    return diagnostics.filter(row=>row.state!=='known').map(row=>row.state==='needs_confirmation'?`${labelFor(row.field)} is inferred and needs confirmation.`:`${labelFor(row.field)} is missing.`);
-  }
+  function gapsFromDiagnostics(diagnostics=[]){return diagnostics.filter(row=>row.state!=='known').map(row=>row.state==='needs_confirmation'?`${labelFor(row.field)} is inferred and needs confirmation.`:`${labelFor(row.field)} is missing.`);}
   function applyCanonical(base,input){
     const derived=derive(input,base);
     const canonical=Canonical.normalizeCanonicalProfile(base,{...input,baseProfile:base},derived);
     const merged={...base,...canonical,website:base.website||input.website||'',recommendedSignals:derived.recommendedSignals||base.recommendedSignals||[],interpretation:derived.interpretation||base.interpretation||{}};
+    merged.externalValidationSources=[];
     merged.informationGaps=gapsFromDiagnostics(merged.canonical?.diagnostics||[]);
     return merged;
   }
@@ -64,6 +64,16 @@ const STORAGE_KEY='leadintel_customer_v2_state';
 
   function readState(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');}catch{return {};}}
   function writeState(state){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
+  function migrateCurrentWorkspace(){
+    if(typeof localStorage==='undefined')return false;
+    const raw=readState();if(!raw.website)return false;
+    const needsProfileMigration=raw.profile&&Number(raw.profile?.canonical?.version)!==Canonical.VERSION;
+    const needsReferenceMigration=Refs&&raw.answers?.lookalike_customers&&!raw.referenceCustomers?.rows?.length;
+    if(!needsProfileMigration&&!needsReferenceMigration)return false;
+    const normalized=patchedNormalize(raw);
+    const merged={...raw,profile:normalized.profile,referenceCustomers:normalized.referenceCustomers||raw.referenceCustomers,answerStatus:normalized.answerStatus||raw.answerStatus,scrapedSources:normalized.scrapedSources||raw.scrapedSources,documents:normalized.documents||raw.documents,targetMarkets:normalized.targetMarkets||raw.targetMarkets,additionalLinks:normalized.additionalLinks||raw.additionalLinks};
+    writeState(merged);return true;
+  }
   function promoteEdits(){
     const state=readState();if(!state.profile?.canonical?.fields)return;
     let changed=false;
@@ -71,18 +81,15 @@ const STORAGE_KEY='leadintel_customer_v2_state';
       const value=Array.isArray(state.profile[field])?state.profile[field].join('; '):String(state.profile[field]||'').trim();
       const record=state.profile.canonical.fields[field]||{};
       if(value&&value!==String(record.value||'').trim()){
-        state.profile.canonical.fields[field]=Canonical.fieldRecord(value,{status:'user_confirmed',provenance:'user',sourceIds:[`U:${field}`],confidence:'high'});
-        changed=true;
+        state.profile.canonical.fields[field]=Canonical.fieldRecord(value,{status:'user_confirmed',provenance:'user',sourceIds:[`U:${field}`],confidence:'high'});changed=true;
       }
     }
     if(!changed)return;
-    state.profile.canonical.diagnostics=Canonical.diagnoseCanonicalProfile(state.profile);
-    state.profile.informationGaps=gapsFromDiagnostics(state.profile.canonical.diagnostics);
-    state.approved=false;writeState(state);root.LeadIntelServerBridge?.saveNow?.().catch(()=>null);
+    state.profile.canonical.diagnostics=Canonical.diagnoseCanonicalProfile(state.profile);state.profile.informationGaps=gapsFromDiagnostics(state.profile.canonical.diagnostics);state.approved=false;writeState(state);root.LeadIntelServerBridge?.saveNow?.().catch(()=>null);
   }
   if(typeof document!=='undefined'){
-    document.addEventListener('click',event=>{
-      if(event.target.closest('#edit-profile,#approve-profile,#approve-profile-bottom'))queueMicrotask(promoteEdits);
-    });
+    const migrated=migrateCurrentWorkspace();
+    if(migrated&&typeof sessionStorage!=='undefined'&&!sessionStorage.getItem(CANONICAL_MIGRATION_KEY)){sessionStorage.setItem(CANONICAL_MIGRATION_KEY,'1');setTimeout(()=>location.reload(),30);return;}
+    document.addEventListener('click',event=>{if(event.target.closest('#edit-profile,#approve-profile,#approve-profile-bottom'))queueMicrotask(promoteEdits);});
   }
 })(globalThis);
