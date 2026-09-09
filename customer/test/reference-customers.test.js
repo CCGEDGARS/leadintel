@@ -31,6 +31,22 @@ test('reference import falls back to first populated column plus URL-like value 
   assert.equal(normalized[1].companyName,'Beta SIA');
 });
 
+test('Excel table detection skips title rows and chooses the sheet with customer data',()=>{
+  const sheets=[
+    {name:'Contacts',rows:[['LEAD INTEL — Contacts Database'],['Company ID','Company Name','First Name','Last Name'],['CO001','IKEA','Ilze','Vītiņa']]},
+    {name:'Companies',rows:[['LEAD INTEL — Company Master List'],['ID','Company Name','Industry','Size','Country','Website','Company LinkedIn'],['CO001','IKEA','Retail','Large','Latvia','https://www.ikea.com/lv','https://linkedin.com/company/ikea'],['CO002','Coca-Cola','FMCG','Large','Latvia','https://www.coca-cola.com','']]},
+    {name:'ICP Guide',rows:[['LEAD INTEL — ICP & Usage Guide'],[],['Primary Industries','Finance · IT · Logistics']]}
+  ];
+  const detected=Ref.detectCustomerTable(sheets);
+  assert.equal(detected.sheetName,'Companies');
+  assert.equal(detected.headerRowIndex,1);
+  assert.equal(detected.rows.length,2);
+  const normalized=Ref.normalizeImportedRows(detected.rows,{sourceType:'xlsx'});
+  assert.equal(normalized[0].companyName,'IKEA');
+  assert.equal(normalized[0].domain,'ikea.com');
+  assert.equal(normalized[1].companyName,'Coca-Cola');
+});
+
 test('unsafe or missing websites remain unresolved instead of being guessed',()=>{
   const rows=Ref.normalizeImportedRows([{Company:'Gamma',Website:'javascript:alert(1)',Country:'Sweden'},{Company:'Delta',Country:'Sweden'}],{sourceType:'csv'});
   assert.equal(rows[0].website,'');
