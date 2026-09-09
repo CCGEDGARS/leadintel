@@ -54,6 +54,27 @@ test('external evidence cannot overwrite first-party canonical value and contrad
   assert.match(result[0].resolution,/primary retained/i);
 });
 
+test('canonical normalization removes stale external sources from first-party evidence cards',()=>{
+  const base={
+    website:'https://ccgroup.lv/',
+    evidenceSources:[
+      {id:'W1',url:'https://ccgroup.lv/services',title:'Services'},
+      {id:'X1',url:'https://www.klozers.com/case-studies',title:'Klozers'},
+      {id:'X2',url:'https://challengerinc.com/success-stories',title:'Challenger'}
+    ]
+  };
+  const normalized=Canonical.normalizeCanonicalProfile(base,{
+    website:'https://ccgroup.lv/',targetMarkets:['Latvia'],answers:{},documents:[],
+    scrapedSources:[
+      {id:'W1',url:'https://ccgroup.lv/services',title:'Services',text:'Official services'},
+      {id:'X1',url:'https://www.klozers.com/case-studies',title:'Klozers',text:'External research'},
+      {id:'X2',url:'https://challengerinc.com/success-stories',title:'Challenger',text:'External research'}
+    ]
+  },{});
+  assert.deepEqual(normalized.evidenceSources.map(x=>x.id),['W1']);
+  assert.deepEqual(normalized.externalValidationSources.map(x=>x.id),['X1','X2']);
+});
+
 test('diagnostics use canonical field state rather than raw questionnaire completion',()=>{
   const inferred={canonical:{fields:{customerPainPoints:candidate('Managers lack a consistent coaching system','ai_inference','ai_inferred_first_party','medium',['W1'])}}};
   const inferredDiag=Canonical.diagnoseCanonicalProfile(inferred).find(x=>x.field==='customerPainPoints');
