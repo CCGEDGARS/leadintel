@@ -1,7 +1,7 @@
 import './reference-customer-library.js?v=20260910-reference-portfolio-v1';
 import './reference-customer-portfolio.js?v=20260910-reference-portfolio-v1';
 import './reference-customer-library-ui.js?v=20260910-reference-simple-flow-v2';
-import './reference-customer-upload-mode.js?v=20260910-reference-upload-mode-v1';
+import './reference-customer-upload-mode.js?v=20260910-reference-upload-mode-v2';
 
 const REFERENCE_AI_STATE_KEY='leadintel_customer_v2_state';
 const REFERENCE_AI_FIRECRAWL='https://apollo-proxy.edgars-7e7.workers.dev';
