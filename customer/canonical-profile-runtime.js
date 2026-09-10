@@ -63,13 +63,16 @@ const CANONICAL_MIGRATION_KEY='leadintel_canonical_profile_v1_migrated';
     const normalized=patchedNormalize({...raw,researchMeta:readResearchMeta(raw)});
     const merged={...raw,profile:normalized.profile,referenceCustomers:normalized.referenceCustomers||raw.referenceCustomers,answerStatus:normalized.answerStatus||raw.answerStatus,scrapedSources:normalized.scrapedSources||raw.scrapedSources,documents:normalized.documents||raw.documents,targetMarkets:normalized.targetMarkets||raw.targetMarkets,additionalLinks:normalized.additionalLinks||raw.additionalLinks};writeState(merged);return true;
   }
-  function promoteEdits(){
+  function promoteEdits(preserveApproval=false){
     const state=readState();if(!state.profile?.canonical?.fields)return;let changed=false;
     for(const field of Canonical.DIAGNOSTIC_FIELDS){const value=Array.isArray(state.profile[field])?state.profile[field].join('; '):String(state.profile[field]||'').trim();const record=state.profile.canonical.fields[field]||{};if(value&&value!==String(record.value||'').trim()){state.profile.canonical.fields[field]=Canonical.fieldRecord(value,{status:'user_confirmed',provenance:'user',sourceIds:[`U:${field}`],confidence:'high'});changed=true;}}
-    if(!changed)return;state.profile.canonical.diagnostics=Canonical.diagnoseCanonicalProfile(state.profile);state.profile.informationGaps=gapsFromDiagnostics(state.profile.canonical.diagnostics);state.approved=false;writeState(state);root.LeadIntelServerBridge?.saveNow?.().catch(()=>null);
+    if(!changed)return;state.profile.canonical.diagnostics=Canonical.diagnoseCanonicalProfile(state.profile);state.profile.informationGaps=gapsFromDiagnostics(state.profile.canonical.diagnostics);if(!preserveApproval)state.approved=false;writeState(state);root.LeadIntelServerBridge?.saveNow?.().catch(()=>null);
   }
   if(typeof document!=='undefined'){
     const migrated=migrateCurrentWorkspace();if(migrated&&typeof sessionStorage!=='undefined'&&!sessionStorage.getItem(CANONICAL_MIGRATION_KEY)){sessionStorage.setItem(CANONICAL_MIGRATION_KEY,'1');setTimeout(()=>location.reload(),30);return;}
-    document.addEventListener('click',event=>{if(event.target.closest('#edit-profile,#approve-profile,#approve-profile-bottom'))queueMicrotask(promoteEdits);});
+    document.addEventListener('click',event=>{
+      if(event.target.closest('#approve-profile')||event.target.closest('#approve-profile-bottom'))queueMicrotask(()=>promoteEdits(true));
+      else if(event.target.closest('#edit-profile'))queueMicrotask(()=>promoteEdits(false));
+    });
   }
 })(globalThis);
