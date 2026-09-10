@@ -19,6 +19,16 @@ sqliteTest('owner can register and update a workspace source without raw credent
   result=await response.json();assert.equal(result.source.monitoringEnabled,true);assert.equal(result.source.mandatory,false,'not-tested sources cannot become mandatory');
 });
 
+sqliteTest('authenticated access cannot be promoted by frontend input without a sanctioned connector',async()=>{
+  const {env,token}=await fixture();
+  let response=await handleIntelligenceSourceRoute(req('/api/intelligence-sources?workspace_id=w1',{method:'POST',token,body:{name:'Firmas',url:'https://firmas.lv/',auth_mode:'google'}}),env,{});
+  let result=await response.json();
+  assert.equal(result.source.authenticatedAccessStatus,'not_connected');
+  response=await handleIntelligenceSourceRoute(req(`/api/intelligence-sources/${result.source.id}?workspace_id=w1`,{method:'PATCH',token,body:{authenticated_access_status:'full'}}),env,{});
+  result=await response.json();
+  assert.equal(result.source.authenticatedAccessStatus,'not_connected','client input must never claim authenticated access');
+});
+
 sqliteTest('researcher can write, viewer cannot write, and reads are workspace scoped',async()=>{
   const researcher=await fixture('researcher');let response=await handleIntelligenceSourceRoute(req('/api/intelligence-sources?workspace_id=w1',{method:'POST',token:researcher.token,body:{url:'https://example.com'}}),researcher.env,{});assert.equal(response.status,201);
   const viewer=await fixture('viewer');response=await handleIntelligenceSourceRoute(req('/api/intelligence-sources?workspace_id=w1',{method:'POST',token:viewer.token,body:{url:'https://example.com'}}),viewer.env,{});assert.equal(response.status,403);
