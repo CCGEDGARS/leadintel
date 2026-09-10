@@ -93,13 +93,13 @@ test('uploading a customer file from an open saved list starts a separate draft,
   assert.match(aiRuntime,/reference-customer-upload-mode\.js\?v=20260910-reference-upload-mode-v2/);
 });
 
-test('base file handler applies new-vs-append mode atomically in the same state transaction as row import',()=>{
+test('Excel smart import consumes new-vs-append mode itself before stopping propagation',()=>{
   const uploadMode=fs.readFileSync(path.join(__dirname,'..','reference-customer-upload-mode.js'),'utf8');
-  const baseUi=fs.readFileSync(path.join(__dirname,'..','reference-customer-ui.js'),'utf8');
+  const smartImport=fs.readFileSync(path.join(__dirname,'..','reference-customer-smart-import.js'),'utf8');
   assert.match(uploadMode,/consumeImportMode/);
-  assert.doesNotMatch(uploadMode,/addEventListener\('change',[\s\S]*prepareFileImport/);
-  assert.match(baseUi,/LeadIntelReferenceCustomerUploadMode\?\.consumeImportMode/);
-  assert.match(baseUi,/LeadIntelReferenceCustomerPortfolio\?\.newList/);
-  assert.match(baseUi,/mode==='append'/);
-  assert.match(baseUi,/mergeRows\(state,rows/);
+  assert.match(uploadMode,/if\(ext==='xlsx'\|\|ext==='xls'\)return/);
+  assert.match(smartImport,/LeadIntelReferenceCustomerUploadMode\?\.consumeImportMode/);
+  assert.match(smartImport,/LeadIntelReferenceCustomerPortfolio\?\.newList/);
+  assert.match(smartImport,/mode==='append'/);
+  assert.match(smartImport,/event\.stopImmediatePropagation\(\)/);
 });
