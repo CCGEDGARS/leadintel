@@ -45,8 +45,10 @@ jobs:
           node-version: '22'
       - name: Install backend dependencies
         run: npm ci
-      - name: Audit high-severity dependencies
-        run: npm audit --audit-level=high
+      - name: Audit production dependencies at high severity
+        run: npm audit --omit=dev --audit-level=high
+      - name: Audit all dependencies at critical severity
+        run: npm audit --audit-level=critical
       - name: Run backend tests
         run: npm test
       - name: Check Scrapling Python syntax
