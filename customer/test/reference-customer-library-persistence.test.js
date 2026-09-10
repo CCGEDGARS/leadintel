@@ -90,19 +90,20 @@ test('uploading a customer file from an open saved list starts a separate draft,
   assert.match(uploadMode,/startNewListUpload/);
   assert.match(uploadMode,/addToCurrentList/);
   assert.match(uploadMode,/reference-file-input/);
-  assert.match(uploadMode,/Portfolio\.newList/);
-  assert.match(aiRuntime,/reference-customer-upload-mode\.js\?v=20260910-reference-upload-mode-v2/);
+  assert.match(aiRuntime,/reference-customer-upload-mode\.js\?v=20260910-reference-upload-mode-v3/);
 });
 
-test('file import boundary preserves saved lists before the base file handler merges uploaded rows',()=>{
+test('Excel smart import consumes new-vs-append mode itself before stopping propagation',()=>{
   const uploadMode=fs.readFileSync(path.join(__dirname,'..','reference-customer-upload-mode.js'),'utf8');
-  assert.match(uploadMode,/nextImportMode/);
-  assert.match(uploadMode,/prepareFileImport/);
-  assert.match(uploadMode,/reference-file-input/);
-  assert.match(uploadMode,/reference-pdf-input/);
-  assert.match(uploadMode,/Portfolio\.newList/);
-  assert.match(uploadMode,/localStorage\.setItem\(REFERENCE_UPLOAD_STATE_KEY/);
-  assert.match(uploadMode,/addEventListener\('change',[\s\S]*true\)/);
-  assert.match(uploadMode,/openFilePicker\('append'\)/);
-  assert.match(uploadMode,/if\(mode==='append'\)return/);
+  const smartImport=fs.readFileSync(path.join(__dirname,'..','reference-customer-smart-import.js'),'utf8');
+  const processMap=fs.readFileSync(path.join(__dirname,'..','process-map.js'),'utf8');
+  assert.match(uploadMode,/consumeImportMode/);
+  assert.match(uploadMode,/if\(ext==='xlsx'\|\|ext==='xls'\)return/);
+  assert.match(smartImport,/LeadIntelReferenceCustomerUploadMode\?\.consumeImportMode/);
+  assert.match(smartImport,/LeadIntelReferenceCustomerPortfolio/);
+  assert.match(smartImport,/Portfolio\?\.newList/);
+  assert.match(smartImport,/Portfolio\.newList\(state\)/);
+  assert.match(smartImport,/mode!=='append'/);
+  assert.match(smartImport,/event\.stopImmediatePropagation\(\)/);
+  assert.match(processMap,/reference-customer-smart-import\.js\?v=20260910-reference-smart-import-v3/);
 });
