@@ -30,7 +30,7 @@ import './reference-customer-clear-list.js?v=20260909-reference-actions-v2';
 import './reference-customer-website-enrichment.js?v=20260909-reference-actions-v2';
 import './reference-customer-ai-runtime.js?v=20260909-reference-library-v1';
 import './lookalike-discovery.js?v=20260909-segmentation-v1';
-import './profile-action-runtime.js?v=20260909-profile-actions-v3';
+import './profile-action-runtime.js?v=20260910-profile-next-step-v2';
 import './outreach-automation-loader.js?v=20260908-boot-isolation-v1';
 import './copilot-loader.js?v=20260908-copilot-polish-v1';
 
