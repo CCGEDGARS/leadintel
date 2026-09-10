@@ -90,6 +90,19 @@ test('uploading a customer file from an open saved list starts a separate draft,
   assert.match(uploadMode,/startNewListUpload/);
   assert.match(uploadMode,/addToCurrentList/);
   assert.match(uploadMode,/reference-file-input/);
-  assert.match(uploadMode,/createNewList/);
-  assert.match(aiRuntime,/reference-customer-upload-mode\.js\?v=20260910-reference-upload-mode-v1/);
+  assert.match(uploadMode,/Portfolio\.newList/);
+  assert.match(aiRuntime,/reference-customer-upload-mode\.js\?v=20260910-reference-upload-mode-v2/);
+});
+
+test('file import boundary preserves saved lists before the base file handler merges uploaded rows',()=>{
+  const uploadMode=fs.readFileSync(path.join(__dirname,'..','reference-customer-upload-mode.js'),'utf8');
+  assert.match(uploadMode,/nextImportMode/);
+  assert.match(uploadMode,/prepareFileImport/);
+  assert.match(uploadMode,/reference-file-input/);
+  assert.match(uploadMode,/reference-pdf-input/);
+  assert.match(uploadMode,/Portfolio\.newList/);
+  assert.match(uploadMode,/localStorage\.setItem\(REFERENCE_UPLOAD_STATE_KEY/);
+  assert.match(uploadMode,/addEventListener\('change',[\s\S]*true\)/);
+  assert.match(uploadMode,/openFilePicker\('append'\)/);
+  assert.match(uploadMode,/if\(mode==='append'\)return/);
 });
