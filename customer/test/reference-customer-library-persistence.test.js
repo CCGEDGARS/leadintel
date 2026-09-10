@@ -103,5 +103,6 @@ test('file import boundary preserves saved lists before the base file handler me
   assert.match(uploadMode,/Portfolio\.newList/);
   assert.match(uploadMode,/localStorage\.setItem\(REFERENCE_UPLOAD_STATE_KEY/);
   assert.match(uploadMode,/addEventListener\('change',[\s\S]*true\)/);
-  assert.match(uploadMode,/nextImportMode='append'/);
+  assert.match(uploadMode,/openFilePicker\('append'\)/);
+  assert.match(uploadMode,/if\(mode==='append'\)return/);
 });
