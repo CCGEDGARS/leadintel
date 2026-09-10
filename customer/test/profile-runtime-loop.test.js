@@ -4,6 +4,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 
 const runtime=fs.readFileSync(path.join(__dirname,'..','profile-action-runtime.js'),'utf8');
+const processMap=fs.readFileSync(path.join(__dirname,'..','process-map.js'),'utf8');
 
 test('profile synchronization is idempotent and does not retrigger its MutationObserver forever',()=>{
   assert.match(runtime,/function setText\(/);
@@ -15,4 +16,8 @@ test('profile synchronization is idempotent and does not retrigger its MutationO
   assert.doesNotMatch(runtime,/if\(eyebrow\)eyebrow\.textContent=/);
   assert.doesNotMatch(runtime,/if\(heading\)heading\.textContent=/);
   assert.doesNotMatch(runtime,/if\(copy\)copy\.textContent=/);
+});
+
+test('process map cache-busts the fixed profile runtime',()=>{
+  assert.match(processMap,/profile-action-runtime\.js\?v=20260910-profile-next-step-v2/);
 });
