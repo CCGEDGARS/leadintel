@@ -4,11 +4,12 @@ import fs from 'node:fs';
 
 const source = fs.readFileSync(new URL('../profile-action-runtime.js', import.meta.url), 'utf8');
 
-test('profile approval uses one clear stateful control', () => {
+test('profile approval keeps one clear optional stateful control while footer advances', () => {
   assert.match(source, /approved\?'✓ Profile Approved':'Approve Profile'/);
   assert.match(source, /button\.disabled=approved/);
-  assert.match(source, /if\(card&&!card\.hidden\)card\.hidden=true/);
-  assert.doesNotMatch(source, /if\(card\)card\.hidden=true/);
+  assert.match(source, /Next:\s*Market Strategy/);
+  assert.match(source, /openMarketStrategy/);
+  assert.doesNotMatch(source, /if\(card&&!card\.hidden\)card\.hidden=true/);
 });
 
 test('profile approval runtime is loaded by the process map', () => {
