@@ -60,9 +60,9 @@ test('Reference Customer library UI exposes persistent active-model and pending-
   const ui=fs.readFileSync(path.join(__dirname,'..','reference-customer-library-ui.js'),'utf8');
   const runtime=fs.readFileSync(path.join(__dirname,'..','reference-customer-library.js'),'utf8');
   assert.match(ui,/Reference Customer Library/);
-  assert.match(ui,/Pending model update/);
-  assert.match(ui,/New version ready/);
-  assert.match(ui,/Update active model/);
+  assert.match(ui,/model changes waiting to be saved or activated|candidateReady/);
+  assert.match(ui,/Save & Activate Model/);
+  assert.match(ui,/Update Active Model/);
   assert.match(runtime,/markReferenceDraftChanged/);
   assert.match(runtime,/publishedModel/);
 });
