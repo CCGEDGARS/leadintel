@@ -17,9 +17,13 @@ test('approved profile changes the main approval button to Profile Approved and 
   assert.match(runtime,/button\.disabled!==approved/);
 });
 
-test('redundant bottom profile approval reminder is hidden from the profile',()=>{
+test('bottom profile card is a direct Market Strategy next step rather than duplicate approval',()=>{
   assert.match(runtime,/approval-card/);
-  assert.match(runtime,/card\.hidden=true/);
+  assert.match(runtime,/Continue to Market Strategy/);
+  assert.match(runtime,/Next:\s*Market Strategy/);
+  assert.match(runtime,/closest\?\.\(['"]#approve-profile-bottom['"]\)/);
+  assert.match(runtime,/openMarketStrategy/);
+  assert.doesNotMatch(runtime,/card\.hidden=true/);
 });
 
 test('profile action runtime boots after reference customer UI',()=>{
