@@ -66,3 +66,18 @@ test('Reference Customer library UI exposes persistent active-model and pending-
   assert.match(runtime,/markReferenceDraftChanged/);
   assert.match(runtime,/publishedModel/);
 });
+
+test('Reference Customer library presents a simple list-first workflow and hides advanced metadata by default',()=>{
+  const ui=fs.readFileSync(path.join(__dirname,'..','reference-customer-library-ui.js'),'utf8');
+  assert.match(ui,/Customer List/);
+  assert.match(ui,/1\s*·\s*List/);
+  assert.match(ui,/2\s*·\s*Analyze/);
+  assert.match(ui,/3\s*·\s*Review/);
+  assert.match(ui,/4\s*·\s*Activate/);
+  assert.match(ui,/This list is not saved yet/);
+  assert.match(ui,/Advanced list settings/);
+  assert.match(ui,/Save List/);
+  assert.match(ui,/Analyze List/);
+  assert.match(ui,/Activate Model/);
+  assert.match(ui,/Saved Lists/);
+});
