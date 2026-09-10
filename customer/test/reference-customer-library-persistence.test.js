@@ -81,3 +81,15 @@ test('Reference Customer library presents a simple list-first workflow and hides
   assert.match(ui,/Activate Model/);
   assert.match(ui,/Saved Lists/);
 });
+
+test('uploading a customer file from an open saved list starts a separate draft, while adding to current list is explicit',()=>{
+  const uploadMode=fs.readFileSync(path.join(__dirname,'..','reference-customer-upload-mode.js'),'utf8');
+  const aiRuntime=fs.readFileSync(path.join(__dirname,'..','reference-customer-ai-runtime.js'),'utf8');
+  assert.match(uploadMode,/Upload New Customer List/);
+  assert.match(uploadMode,/Add Customers to This List/);
+  assert.match(uploadMode,/startNewListUpload/);
+  assert.match(uploadMode,/addToCurrentList/);
+  assert.match(uploadMode,/reference-file-input/);
+  assert.match(uploadMode,/createNewList/);
+  assert.match(aiRuntime,/reference-customer-upload-mode\.js\?v=20260910-reference-upload-mode-v1/);
+});
