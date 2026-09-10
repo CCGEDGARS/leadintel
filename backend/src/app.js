@@ -10,6 +10,7 @@ import {pollOutreachReplies} from './outreach-automation-replies.js';
 import {handleCrmRoute} from './crm-routes.js';
 import {handleApolloCrmWebhook} from './crm-routes.js';
 import {handleMarketMonitoringRoute,runDueMarketMonitoring} from './market-monitoring.js';
+import {handleIntelligenceSourceRoute,runDueSourceHealthChecks} from './intelligence-sources.js';
 import {handleCopilotRoute} from './copilot-routes.js';
 
 export default {
@@ -26,6 +27,7 @@ export default {
       const copilot=await handleCopilotRoute(request,env,cors);if(copilot)return copilot;
       const scrapling=await handleScraplingRoute(request,env,cors);if(scrapling)return scrapling;
       const service=await handleServiceIntegrationRoute(request,env,cors);if(service)return service;
+      const sources=await handleIntelligenceSourceRoute(request,env,cors);if(sources)return sources;
       const monitoring=await handleMarketMonitoringRoute(request,env,cors);if(monitoring)return monitoring;
       const runtimeEnv=await withWorkspaceServiceCredentials(request,env);
       const crm=await handleCrmRoute(request,runtimeEnv,cors);if(crm)return crm;
@@ -41,6 +43,7 @@ export default {
     const outreachCycle=pollOutreachReplies(env,{now}).then(()=>runOutreachAutomation(env,{now}));
     ctx.waitUntil(Promise.allSettled([
       runDueMarketMonitoring(env,now),
+      runDueSourceHealthChecks(env,now),
       outreachCycle
     ]));
   }
