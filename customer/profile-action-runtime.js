@@ -1,5 +1,5 @@
 const PROFILE_ACTION_STATE_KEY='leadintel_customer_v2_state';
-const PROFILE_ACTION_VERSION='20260910-profile-next-step-v1';
+const PROFILE_ACTION_VERSION='20260910-profile-next-step-v2';
 
 (function installProfileActionRuntime(root){
   'use strict';
@@ -7,6 +7,7 @@ const PROFILE_ACTION_VERSION='20260910-profile-next-step-v1';
 
   function readState(){try{return JSON.parse(localStorage.getItem(PROFILE_ACTION_STATE_KEY)||'{}');}catch{return {};}}
   function toast(message){const node=document.getElementById('toast');if(!node)return;node.textContent=message;node.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>node.classList.remove('show'),2600);}
+  function setText(node,text){if(node&&node.textContent!==text)node.textContent=text;}
 
   function openMarketStrategy(){
     const processButton=document.querySelector('[data-process-step="4"]');
@@ -22,7 +23,7 @@ const PROFILE_ACTION_VERSION='20260910-profile-next-step-v1';
     const button=document.getElementById('approve-profile');
     if(button){
       const label=approved?'✓ Profile Approved':'Approve Profile';
-      if(button.textContent!==label)button.textContent=label;
+      setText(button,label);
       if(button.disabled!==approved)button.disabled=approved;
       const ariaDisabled=approved?'true':'false';
       if(button.getAttribute('aria-disabled')!==ariaDisabled)button.setAttribute('aria-disabled',ariaDisabled);
@@ -31,18 +32,18 @@ const PROFILE_ACTION_VERSION='20260910-profile-next-step-v1';
 
     const card=document.getElementById('approval-card');
     if(card){
-      card.hidden=false;
+      if(card.hidden)card.hidden=false;
       const eyebrow=card.querySelector('.eyebrow');
       const heading=card.querySelector('h3');
       const copy=card.querySelector('p');
       const nextButton=document.getElementById('approve-profile-bottom');
-      if(eyebrow)eyebrow.textContent='Next step';
-      if(heading)heading.textContent='Continue to Market Strategy.';
-      if(copy)copy.textContent='Approval is optional. You can approve the profile above now or continue and return later.';
+      setText(eyebrow,'Next step');
+      setText(heading,'Continue to Market Strategy.');
+      setText(copy,'Approval is optional. You can approve the profile above now or continue and return later.');
       if(nextButton){
-        nextButton.textContent='Next: Market Strategy →';
-        nextButton.disabled=false;
-        nextButton.removeAttribute('aria-disabled');
+        setText(nextButton,'Next: Market Strategy →');
+        if(nextButton.disabled)nextButton.disabled=false;
+        if(nextButton.hasAttribute('aria-disabled'))nextButton.removeAttribute('aria-disabled');
       }
     }
   }
