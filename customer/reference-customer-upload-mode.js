@@ -20,12 +20,14 @@ const REFERENCE_UPLOAD_STATE_KEY='leadintel_customer_v2_state';
     return Array.isArray(state.referenceCustomers?.rows)?state.referenceCustomers.rows:[];
   }
 
+  function setText(node,text){if(node&&node.textContent!==text)node.textContent=text;}
+
   function syncLabels(){
     const modal=document.getElementById('reference-customer-modal');
     if(!modal)return;
     const upload=modal.querySelector('#reference-upload-button');
     if(upload){
-      upload.textContent='Upload New Customer List';
+      setText(upload,'Upload New Customer List');
       upload.title='Start a separate customer list from a CSV or Excel file.';
     }
     const selected=selectedSavedList();
@@ -39,7 +41,7 @@ const REFERENCE_UPLOAD_STATE_KEY='leadintel_customer_v2_state';
         add.dataset.addCustomersCurrent='true';
         actions.insertBefore(add,actions.firstChild);
       }
-      add.textContent='Add Customers to This List';
+      setText(add,'Add Customers to This List');
       add.title=`Add more companies to ${selected.name||'the currently open list'}. Save Changes afterwards.`;
       add.hidden=false;
     }else if(add){
@@ -72,7 +74,7 @@ const REFERENCE_UPLOAD_STATE_KEY='leadintel_customer_v2_state';
 
   function showError(error){
     const status=document.getElementById('reference-import-status');
-    if(status)status.textContent=clean(error?.message)||'Unable to open customer list upload';
+    if(status)setText(status,clean(error?.message)||'Unable to open customer list upload');
   }
 
   document.addEventListener('click',event=>{
@@ -93,7 +95,9 @@ const REFERENCE_UPLOAD_STATE_KEY='leadintel_customer_v2_state';
   root.addEventListener('leadintel:reference-customers-updated',()=>setTimeout(syncLabels,0));
   root.addEventListener('leadintel:server-ready',()=>setTimeout(syncLabels,0));
   if(document.body&&typeof MutationObserver!=='undefined'){
-    new MutationObserver(()=>syncLabels()).observe(document.body,{childList:true,subtree:true});
+    new MutationObserver(records=>{
+      if(records.some(record=>[...record.addedNodes].some(node=>node?.id==='reference-customer-modal'||node?.querySelector?.('#reference-customer-modal'))))setTimeout(syncLabels,0);
+    }).observe(document.body,{childList:true,subtree:true});
   }
   setTimeout(syncLabels,0);
 
