@@ -47,6 +47,22 @@
     try{root.dispatchEvent(new CustomEvent("leadintel:website-synced",{detail:{website,source}}));}catch{}
   }
 
+  function simplifyStepOne(){
+    const document=root?.document;
+    if(!document)return false;
+    document.getElementById("additional-links")?.closest(".panel.source-panel")?.remove();
+    const step=document.getElementById("step-1");
+    if(!step)return false;
+    const companyMaterials=[...step.querySelectorAll(".panel.source-panel")].find(panel=>panel.querySelector("h3")?.textContent.trim()==="Company materials");
+    const materialsNumber=companyMaterials?.querySelector(".panel-number");
+    if(materialsNumber)materialsNumber.textContent="03";
+    const hero=step.querySelector(".hero-copy > p");
+    if(hero)hero.textContent="Your company website and at least one target market are required. PDFs are optional evidence that can improve precision.";
+    const progressSmall=document.querySelector('[data-step-marker="1"] small');
+    if(progressSmall)progressSmall.textContent="Website, target markets";
+    return true;
+  }
+
   // Passive browser restore/autofill is never a source of truth. On page lifecycle
   // checks, the visible field is rebuilt from the saved LeadIntel workspace only.
   function restoreSavedWebsite(){
@@ -88,6 +104,7 @@
   function install(){
     if(!root?.document||!root?.localStorage||root.__leadintelWebsiteInputSyncInstalled)return;
     root.__leadintelWebsiteInputSyncInstalled=true;
+    simplifyStepOne();
     const bindInput=()=>{
       const input=root.document.getElementById(INPUT_ID);
       if(!input)return;
@@ -98,10 +115,10 @@
       input.addEventListener("focus",restoreSavedWebsite);
     };
     bindInput();
-    CHECK_DELAYS.forEach(delay=>root.setTimeout(restoreSavedWebsite,delay));
-    root.addEventListener("pageshow",()=>root.setTimeout(restoreSavedWebsite,0));
+    CHECK_DELAYS.forEach(delay=>root.setTimeout(()=>{simplifyStepOne();restoreSavedWebsite();},delay));
+    root.addEventListener("pageshow",()=>root.setTimeout(()=>{simplifyStepOne();restoreSavedWebsite();},0));
     root.document.getElementById("target-market-selector")?.addEventListener("pointerdown",restoreSavedWebsite,{capture:true});
   }
 
-  return {STORAGE_KEY,normalizeUrl,toVisibleWebsite,resolveWebsite,mergeVisibleWebsite,readState,restoreSavedWebsite,syncVisibleWebsite,guardPassiveRestore,install};
+  return {STORAGE_KEY,normalizeUrl,toVisibleWebsite,resolveWebsite,mergeVisibleWebsite,readState,simplifyStepOne,restoreSavedWebsite,syncVisibleWebsite,guardPassiveRestore,install};
 });
