@@ -3,6 +3,7 @@
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
   if(root?.LeadIntelMarket)api.installMarketStrategy(root.LeadIntelMarket);
   if(root?.LeadIntelDiscovery)api.install(root.LeadIntelDiscovery);
+  if(root?.document){api.refreshCurrentStep4();root.addEventListener('leadintel:reference-customers-updated',api.refreshCurrentStep4);}
 })(typeof globalThis!=="undefined"?globalThis:this,function(root){
   "use strict";
   const clean=v=>String(v??'').replace(/\s+/g,' ').trim();
@@ -127,6 +128,15 @@
     Market.__referenceLookalikeStrategyInstalled=true;
     return Market;
   }
+  function refreshCurrentStep4(){
+    if(typeof document==='undefined')return;
+    setTimeout(()=>{
+      const context=workspaceContext();if(Number(context.state?.step)!==4)return;
+      const processButton=document.querySelector('[data-process-step="4"]');
+      if(processButton){processButton.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));return;}
+      document.querySelector('[data-step-marker="4"]')?.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));
+    },0);
+  }
   function install(Discovery){
     if(!Discovery||Discovery.__lookalikeInstalled)return Discovery;
     const originalQueries=Discovery.buildDiscoveryQueries?.bind(Discovery);const originalMerge=Discovery.mergeCompanyCandidates?.bind(Discovery);
@@ -141,5 +151,5 @@
     };
     Discovery.__lookalikeInstalled=true;return Discovery;
   }
-  return {install,installMarketStrategy,syncReferenceLookalikeIcp,isLookalikeStrategyEnabled,scoreLookalikeMatch,buildLookalikeDiscoveryQueries,isHardExcluded,rankCandidates};
+  return {install,installMarketStrategy,refreshCurrentStep4,syncReferenceLookalikeIcp,isLookalikeStrategyEnabled,scoreLookalikeMatch,buildLookalikeDiscoveryQueries,isHardExcluded,rankCandidates};
 });
