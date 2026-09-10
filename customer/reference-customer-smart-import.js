@@ -24,7 +24,7 @@ const SMART_XLSX_VERSION='0.18.5';
     }),segments:[],activeSegmentIds:[],activeIds:[],activated:false,dna:null});
     return state;
   }
-  async function importExcel(file){
+  async function importExcel(file,mode='new'){
     const Ref=root.LeadIntelReferenceCustomers;
     const detector=root.LeadIntelReferenceCustomerTableDetection?.detectCustomerTable||Ref?.detectCustomerTable;
     if(!Ref?.normalizeImportedRows)throw new Error('Reference customer importer is not ready. Reload and try again.');
@@ -37,7 +37,12 @@ const SMART_XLSX_VERSION='0.18.5';
     if(!detected.rows.length)throw new Error('I could not identify a customer table in this workbook.');
     const rows=Ref.normalizeImportedRows(detected.rows,{sourceType:'xlsx'});
     if(!rows.length)throw new Error(`I found the “${detected.sheetName}” table but could not identify company rows.`);
-    const state=readState();
+    let state=readState();
+    if(mode!=='append'){
+      const Portfolio=root.LeadIntelReferenceCustomerPortfolio;
+      if(!Portfolio?.newList)throw new Error('Reference Customer portfolio is unavailable');
+      state=Portfolio.newList(state);
+    }
     mergeRows(Ref,state,rows,{type:'xlsx',name:file.name||'Customer workbook',sheet:detected.sheetName,headerRow:detected.headerRowIndex+1});
     await writeState(state);
     const ready=rows.filter(row=>row.status==='ready').length;
@@ -52,7 +57,8 @@ const SMART_XLSX_VERSION='0.18.5';
     if(!file)return;
     const ext=(file.name.split('.').pop()||'').toLowerCase();
     if(ext!=='xlsx'&&ext!=='xls')return;
+    const mode=root.LeadIntelReferenceCustomerUploadMode?.consumeImportMode?.()||'new';
     event.stopImmediatePropagation();
-    importExcel(file).catch(error=>setStatus(error?.message||'Unable to import customer workbook')).finally(()=>{input.value='';});
+    importExcel(file,mode).catch(error=>setStatus(error?.message||'Unable to import customer workbook')).finally(()=>{input.value='';});
   },true);
 })(globalThis);
