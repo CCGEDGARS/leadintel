@@ -36,7 +36,7 @@ test('source UI uses workspace API and distinguishes public from authenticated a
 
 test('mandatory source controls are gated by useful audited access and use active strategy signals',()=>{
   assert.match(ui,/\['full','partial'\]\.includes/);
-  assert.match(ui,/state\?\.market\?\.signals/);
+  assert.match(ui,/state\(\)\?\.market\?\.signals/);
   assert.match(ui,/triggerIds/);
   assert.match(ui,/frequency/);
 });
