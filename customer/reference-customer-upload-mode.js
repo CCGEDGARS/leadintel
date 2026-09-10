@@ -65,11 +65,22 @@ const REFERENCE_UPLOAD_STATE_KEY='leadintel_customer_v2_state';
     openFilePicker('append');
   }
 
+  function consumeImportMode(){
+    const mode=nextImportMode==='append'?'append':'new';
+    nextImportMode='new';
+    return mode;
+  }
+
   function prepareFileImport(event){
     const input=event?.target;
     if(input?.id!=='reference-file-input'&&input?.id!=='reference-pdf-input')return;
-    const mode=nextImportMode;
-    nextImportMode='new';
+    const file=input.files?.[0];
+    const ext=clean(file?.name).split('.').pop()?.toLowerCase()||'';
+    // Excel is intercepted by reference-customer-smart-import.js. That runtime must
+    // consume the mode itself before stopImmediatePropagation so list creation and
+    // row import happen atomically in the same transaction.
+    if(ext==='xlsx'||ext==='xls')return;
+    const mode=consumeImportMode();
     if(mode==='append')return;
     const state=readState();
     if(!Portfolio?.newList)throw new Error('Reference Customer portfolio is unavailable');
@@ -109,5 +120,5 @@ const REFERENCE_UPLOAD_STATE_KEY='leadintel_customer_v2_state';
   }
   setTimeout(syncLabels,0);
 
-  root.LeadIntelReferenceCustomerUploadMode={startNewListUpload,addToCurrentList,prepareFileImport,syncLabels};
+  root.LeadIntelReferenceCustomerUploadMode={startNewListUpload,addToCurrentList,consumeImportMode,prepareFileImport,syncLabels};
 })(globalThis);
