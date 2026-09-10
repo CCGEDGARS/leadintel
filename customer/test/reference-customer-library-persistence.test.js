@@ -91,7 +91,7 @@ test('uploading a customer file from an open saved list starts a separate draft,
   assert.match(uploadMode,/addToCurrentList/);
   assert.match(uploadMode,/reference-file-input/);
   assert.match(uploadMode,/Portfolio\.newList/);
-  assert.match(aiRuntime,/reference-customer-upload-mode\.js\?v=20260910-reference-upload-mode-v1/);
+  assert.match(aiRuntime,/reference-customer-upload-mode\.js\?v=20260910-reference-upload-mode-v2/);
 });
 
 test('file import boundary preserves saved lists before the base file handler merges uploaded rows',()=>{
