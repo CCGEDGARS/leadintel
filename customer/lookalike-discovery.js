@@ -1,13 +1,16 @@
 (function(root,factory){
   const api=factory(root);
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
+  if(root?.LeadIntelMarket)api.installMarketStrategy(root.LeadIntelMarket);
   if(root?.LeadIntelDiscovery)api.install(root.LeadIntelDiscovery);
+  if(root?.document){api.refreshCurrentStep4();root.addEventListener('leadintel:reference-customers-updated',api.refreshCurrentStep4);}
 })(typeof globalThis!=="undefined"?globalThis:this,function(root){
   "use strict";
   const clean=v=>String(v??'').replace(/\s+/g,' ').trim();
   const split=v=>Array.isArray(v)?v.map(clean).filter(Boolean):String(v||'').split(/\n|;|,|\|/).map(clean).filter(Boolean);
   const slug=v=>clean(v).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'market';
   const STOP=new Set(['company','companies','business','businesses','customer','customers','industrial','market','markets','with','from','that','this']);
+  const REFERENCE_ICP_ID='icp-reference-lookalike';
   function words(v){return clean(v).toLowerCase().replace(/[^a-z0-9āčēģīķļņšūžäöåüß\s-]/g,' ').split(/\s+/).filter(x=>x.length>=3&&!STOP.has(x));}
   function haystack(candidate={}){return clean([candidate.company,candidate.domain,candidate.market,candidate.industry,candidate.sizeBand,candidate.businessModel,candidate.growthStage,candidate.operatingComplexity,candidate.description,...(candidate.evidence||[]).flatMap(e=>[e.title,e.description,e.text])].join(' ')).toLowerCase();}
   function scoreLookalikeMatch(candidate={},dna=null){
@@ -56,12 +59,83 @@
       return {...candidate,lookalikeMatch,priorityScore};
     }).sort((a,b)=>b.priorityScore-a.priorityScore||Number(b.score?.total||0)-Number(a.score?.total||0));
   }
-  function activeModelFromBrowser(){
+  function isLv(language){return String(language||'en').toLowerCase()==='lv';}
+  function referenceCount(model={}){return Math.max(0,Number(model?.dna?.activeCount)||Number(model?.activeRows?.length)||0);}
+  function syncReferenceLookalikeIcp(icps=[],profile={},model=null,language='en',options={}){
+    const list=Array.isArray(icps)?icps:[];
+    const existing=list.find(item=>item?.id===REFERENCE_ICP_ID)||null;
+    const base=list.filter(item=>item?.id!==REFERENCE_ICP_ID);
+    const available=Boolean(model?.active&&model?.dna?.active);
+    const fingerprint=available?clean(model.fingerprint||model.dna?.fingerprint):'';
+    const count=available?referenceCount(model):0;
+    const confidence=available?(clean(model?.dna?.confidence||model?.confidence)||'low'):'none';
+    const sameModel=Boolean(existing&&fingerprint&&clean(existing.referenceFingerprint)===fingerprint);
+    const active=available?(sameModel?existing.active!==false:true):false;
+    const targetMarkets=clean(profile.targetMarkets)||split(profile.currentMarkets).join('; ')||'Priority markets not yet defined';
+    const common={targetMarkets,buyerRoles:clean(profile.decisionMakers),value:clean(profile.opportunityValue),exclusions:clean(profile.exclusions),offers:clean(profile.priorityOffers)};
+    const lv=isLv(language);
+    const status=available
+      ?(lv?`Aktīvs modelis · ${count} atsauces klienti · ${confidence} pārliecība.`:`Active model · ${count} reference customers · ${confidence} confidence.`)
+      :(lv?'Nav aktīva Reference Customer modeļa. Vispirms aktivizējiet to Reference Customer Intelligence.':'No active Reference Customer model. Set it up in Reference Customer Intelligence first.');
+    const pending=available&&options?.draftDirty
+      ?(lv?' Klientu bibliotēkā ir izmaiņas, kas gaida modeļa atjaunināšanu.':' Customer library changes are waiting for a model update.')
+      :'';
+    const lens={
+      id:REFERENCE_ICP_ID,
+      type:'lookalike-led',
+      name:lv?'Atsauces klientu līdzinieki':'Reference Customer Lookalike',
+      ...common,
+      active,
+      description:lv?'Uzņēmumi, kas pēc komerciālajām pazīmēm līdzinās jūsu pierādīti labākajiem klientiem, balstoties uz aktīvo Reference Customer modeli.':'Companies that resemble your proven customers based on the active Reference Customer model and its commercial DNA.',
+      rationale:`${status}${pending}`,
+      referenceModelAvailable:available,
+      referenceFingerprint:fingerprint,
+      referenceCount:count,
+      referenceConfidence:confidence,
+      referenceUpdatedAt:available?clean(model.updatedAt||model.activatedAt||model.dna?.builtAt):'',
+      referenceDraftDirty:Boolean(available&&options?.draftDirty)
+    };
+    return [...base,lens];
+  }
+  function isLookalikeStrategyEnabled(marketState={}){
+    const lens=(marketState?.icps||[]).find(item=>item?.id===REFERENCE_ICP_ID);
+    return lens?lens.active!==false:true;
+  }
+  function workspaceContext(){
     try{
-      if(typeof localStorage==='undefined'||!root?.LeadIntelReferenceCustomers)return null;
+      if(typeof localStorage==='undefined'||!root?.LeadIntelReferenceCustomers)return {state:null,model:null,draftDirty:false};
       const state=JSON.parse(localStorage.getItem('leadintel_customer_v2_state')||'{}');
-      return root.LeadIntelReferenceCustomers.getActiveReferenceModel(state.referenceCustomers||{});
-    }catch{return null;}
+      const reference=state.referenceCustomers||{};
+      const model=root.LeadIntelReferenceCustomers.getActiveReferenceModel(reference);
+      return {state,model,draftDirty:Boolean(reference.draftDirty)};
+    }catch{return {state:null,model:null,draftDirty:false};}
+  }
+  function activeModelFromBrowser(){
+    const context=workspaceContext();
+    if(!context.model)return null;
+    if(context.state?.market&&!isLookalikeStrategyEnabled(context.state.market))return null;
+    return context.model;
+  }
+  function installMarketStrategy(Market){
+    if(!Market||Market.__referenceLookalikeStrategyInstalled)return Market;
+    Market.syncReferenceLookalikeIcp=syncReferenceLookalikeIcp;
+    const originalLocalize=typeof Market.localizeGeneratedState==='function'?Market.localizeGeneratedState.bind(Market):null;
+    if(originalLocalize)Market.localizeGeneratedState=function(marketState={},profile={},language='en'){
+      const localized=originalLocalize(marketState,profile,language);
+      const context=workspaceContext();
+      return {...localized,icps:syncReferenceLookalikeIcp(localized.icps,profile,context.model,language,{draftDirty:context.draftDirty})};
+    };
+    Market.__referenceLookalikeStrategyInstalled=true;
+    return Market;
+  }
+  function refreshCurrentStep4(){
+    if(typeof document==='undefined')return;
+    setTimeout(()=>{
+      const context=workspaceContext();if(Number(context.state?.step)!==4)return;
+      const processButton=document.querySelector('[data-process-step="4"]');
+      if(processButton){processButton.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));return;}
+      document.querySelector('[data-step-marker="4"]')?.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));
+    },0);
   }
   function install(Discovery){
     if(!Discovery||Discovery.__lookalikeInstalled)return Discovery;
@@ -77,5 +151,5 @@
     };
     Discovery.__lookalikeInstalled=true;return Discovery;
   }
-  return {install,scoreLookalikeMatch,buildLookalikeDiscoveryQueries,isHardExcluded,rankCandidates};
+  return {install,installMarketStrategy,refreshCurrentStep4,syncReferenceLookalikeIcp,isLookalikeStrategyEnabled,scoreLookalikeMatch,buildLookalikeDiscoveryQueries,isHardExcluded,rankCandidates};
 });
