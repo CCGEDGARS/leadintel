@@ -65,7 +65,12 @@ function configureSalesMotionQuestion03(){
   let visible=grid.querySelector('[data-question="sales_motion"]');
   let card=visible?.closest(".question-card")||null;
   const legacy=grid.querySelector('[data-question="lookalike_customers"]');
-  if(!card&&legacy){card=legacy.closest(".question-card");visible=legacy;visible.dataset.question="sales_motion";}
+  if(!card&&legacy){
+    card=legacy.closest(".question-card");
+    visible=legacy;
+    visible.value="";
+    legacy.dataset.question="sales_motion";
+  }
   if(!card){
     card=document.createElement("article");card.className="question-card";card.dataset.contextQuestion="03";
     card.innerHTML='<span>03</span><label></label><textarea data-question="sales_motion" rows="3"></textarea>';
@@ -81,7 +86,7 @@ function configureSalesMotionQuestion03(){
   visible.dataset.question="sales_motion";
   visible.placeholder="Mostly direct B2B sales through outbound prospecting and referrals, followed by a consultation and tailored proposal.";
   visible.rows=3;
-  const state=readProcessState();const saved=String(state.answers?.sales_motion||state.answers?.lookalike_customers||"");
+  const state=readProcessState();const saved=String(state.answers?.sales_motion||"");
   if(!visible.value&&saved)visible.value=saved;
   if(!visible.dataset.salesMotionBound){visible.dataset.salesMotionBound="true";visible.addEventListener("input",()=>syncSalesMotionValue(visible));}
   const question04=grid.querySelector('[data-question="buyer_roles"]')?.closest(".question-card");if(question04&&card.nextElementSibling!==question04)grid.insertBefore(card,question04);
