@@ -1,4 +1,4 @@
-const REFERENCE_CUSTOMER_LAUNCH_VERSION='20260911-reference-single-owner-v1';
+const REFERENCE_CUSTOMER_LAUNCH_VERSION='20260911-reference-open-v2';
 
 (function installReferenceCustomerLauncher(root){
   'use strict';
@@ -18,17 +18,28 @@ const REFERENCE_CUSTOMER_LAUNCH_VERSION='20260911-reference-single-owner-v1';
   async function ensureReferenceCustomerRuntime(){
     await import(`./reference-customers.js?v=${REFERENCE_CUSTOMER_LAUNCH_VERSION}`);
     await import(`./reference-customer-ui.js?v=${REFERENCE_CUSTOMER_LAUNCH_VERSION}`);
-    await import(`./reference-customer-upload-mode.js?v=${REFERENCE_CUSTOMER_LAUNCH_VERSION}`);
     return root.LeadIntelReferenceCustomerUI||null;
   }
 
+  function warmUploadRuntime(){
+    void import(`./reference-customer-upload-mode.js?v=${REFERENCE_CUSTOMER_LAUNCH_VERSION}`).catch(error=>{
+      console.error('Reference Customer upload runtime failed to warm',error);
+    });
+  }
+
   async function open(){
+    if(root.LeadIntelReferenceCustomerUI?.open){
+      root.LeadIntelReferenceCustomerUI.open();
+      warmUploadRuntime();
+      return true;
+    }
     if(opening)return opening;
     opening=(async()=>{
       try{
         await ensureReferenceCustomerRuntime();
         if(root.LeadIntelReferenceCustomerUI?.open){
           root.LeadIntelReferenceCustomerUI.open();
+          warmUploadRuntime();
           return true;
         }
       }catch(error){
@@ -47,5 +58,5 @@ const REFERENCE_CUSTOMER_LAUNCH_VERSION='20260911-reference-single-owner-v1';
     void open();
   });
 
-  root.LeadIntelReferenceCustomerLauncher={open,ensureReferenceCustomerRuntime};
+  root.LeadIntelReferenceCustomerLauncher={open,ensureReferenceCustomerRuntime,warmUploadRuntime};
 })(globalThis);
