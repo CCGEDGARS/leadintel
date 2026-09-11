@@ -1,6 +1,6 @@
 import './reference-customer-library.js?v=20260910-reference-portfolio-v1';
 import './reference-customer-portfolio.js?v=20260911-reference-delete-v1';
-import './reference-customer-library-ui.js?v=20260910-reference-simple-flow-v2';
+import './reference-customer-library-ui.js?v=20260911-reference-row-actions-v1';
 import './reference-customer-delete-ui.js?v=20260911-reference-delete-v1';
 import './reference-customer-upload-mode.js?v=20260911-reference-single-owner-v1';
 
