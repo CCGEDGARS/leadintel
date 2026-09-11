@@ -32,3 +32,8 @@ migrations_dir = "migrations"
 
 [triggers]
 crons = ["0 * * * *"]
+
+[[r2_buckets]]
+binding = "COPILOT_FILES"
+bucket_name = "leadintel-copilot-files"
+preview_bucket_name = "leadintel-copilot-files-preview"
