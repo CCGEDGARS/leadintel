@@ -28,6 +28,10 @@ const REFERENCE_DELETE_STATE_KEY='leadintel_customer_v2_state';
     for(const strong of modal.querySelectorAll('strong,h3'))if(strong.textContent.trim()==='Clear customer list?')strong.textContent='Clear current draft?';
     for(const node of modal.querySelectorAll('p'))if(node.textContent.includes('Remove all reference customers and reset Lookalike Intelligence'))node.textContent='Clear the current working customer rows. Saved Lists are not deleted.';
   }
+  function renameListActions(modal){
+    const create=modal.querySelector('[data-new-reference-list]');if(create)create.textContent='Create New List';
+    const upload=modal.querySelector('#reference-upload-button');if(upload)upload.textContent='Import Customer List';
+  }
   function buildDeleteControls(row,id){
     const buttons=row.querySelector('.reference-saved-buttons');if(!buttons)return;
     for(const node of buttons.querySelectorAll('[data-delete-reference-list],[data-confirm-delete-list],[data-cancel-delete-list],[data-delete-warning]'))node.remove();
@@ -42,6 +46,7 @@ const REFERENCE_DELETE_STATE_KEY='leadintel_customer_v2_state';
   function decorate(){
     const modal=document.getElementById('reference-customer-modal');if(!modal)return;
     renameClearControls(modal);
+    renameListActions(modal);
     for(const row of modal.querySelectorAll('[data-reference-list-row]')){
       const id=row.dataset.referenceListRow;if(!id)continue;
       const isPending=pendingDeleteId===id;
