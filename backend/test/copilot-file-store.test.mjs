@@ -46,7 +46,7 @@ class FakeD1 {
     else if(/INSERT INTO copilot_file_extractions/.test(sql)){const [file_id,blocks_json,evidence_index_json,character_count,cell_count,extractor_version]=args;this.extractions.push({file_id,blocks_json,evidence_index_json,character_count,cell_count,extractor_version});}
     else if(/INSERT INTO copilot_file_analyses/.test(sql)){const [id,file_id,workspace_id,created_by,request,canonical_result_json,provider,model,usage_json,status,retained]=args;this.analyses.push({id,file_id,workspace_id,created_by,request,canonical_result_json,provider,model,usage_json,status,retained,created_at:new Date().toISOString()});}
     else if(/UPDATE copilot_file_analyses SET retained=1/.test(sql)){const row=this.analyses.find(row=>row.id===args[0]);if(row)row.retained=1;}
-    else if(/DELETE FROM copilot_file_analyses/.test(sql)){const ids=new Set(this.analyses.filter(row=>row.file_id===args[0]&&row.workspace_id===args[1]).map(row=>row.id));this.messages=this.messages.filter(row=>!ids.has(row.analysis_id));this.analyses=this.analyses.filter(row=>!ids.has(row.analysis_id));}
+    else if(/DELETE FROM copilot_file_analyses/.test(sql)){const ids=new Set(this.analyses.filter(row=>row.file_id===args[0]&&row.workspace_id===args[1]).map(row=>row.id));this.messages=this.messages.filter(row=>!ids.has(row.analysis_id));this.analyses=this.analyses.filter(row=>!ids.has(row.id));}
     else if(/DELETE FROM copilot_file_extractions/.test(sql)){this.extractions=this.extractions.filter(row=>row.file_id!==args[0]);}
     else if(/DELETE FROM copilot_files/.test(sql)){this.files=this.files.filter(row=>!(row.id===args[0]&&row.workspace_id===args[1]));}
     return {meta:{changes:1}};
