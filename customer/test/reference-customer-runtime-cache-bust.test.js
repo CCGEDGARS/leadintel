@@ -15,8 +15,9 @@ test('Reference Customer action modules use a fresh cache key end to end',()=>{
   assert.match(processMap,/lookalike-discovery\.js\?v=20260910-reference-portfolio-v1/);
   const analysis=read('reference-customer-ai-runtime.js');
   assert.match(analysis,/reference-customer-library\.js\?v=20260910-reference-portfolio-v1/);
-  assert.match(analysis,/reference-customer-portfolio\.js\?v=20260910-reference-portfolio-v1/);
+  assert.match(analysis,/reference-customer-portfolio\.js\?v=20260911-reference-delete-v1/);
   assert.match(analysis,/reference-customer-library-ui\.js\?v=20260910-reference-simple-flow-v2/);
+  assert.match(analysis,/reference-customer-delete-ui\.js\?v=20260911-reference-delete-v1/);
 });
 
 test('clear-list action uses branded inline confirmation rather than native browser confirm',()=>{
