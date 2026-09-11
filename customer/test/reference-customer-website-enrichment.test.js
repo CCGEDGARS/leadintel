@@ -43,11 +43,11 @@ test('ambiguous search results are not auto-accepted',()=>{
   assert.equal(Enrichment.selectOfficialWebsite({companyName:'Example Company'},candidates),null);
 });
 
-test('website enrichment runtime adds the approved guidance and action to the existing modal',()=>{
+test('missing-info runtime adds the approved guidance and action to the existing modal',()=>{
   const runtime=fs.readFileSync(path.join(__dirname,'..','reference-customer-website-enrichment.js'),'utf8');
-  assert.match(runtime,/Company Name is required/i);
-  assert.match(runtime,/Website is recommended/i);
-  assert.match(runtime,/Find missing websites/i);
+  assert.match(runtime,/Company Name or Website is required/i);
+  assert.match(runtime,/missing official website or identify a missing company name/i);
+  assert.match(runtime,/Find Missing Info/i);
   assert.match(runtime,/reference-find-websites/);
 });
 
