@@ -57,15 +57,15 @@ test('reports exactly one omitted spreadsheet cell beyond 50,000 without losing 
   assert.equal(result.counts.nonEmptyCells, 50_000);
   assert.equal(result.blocks.reduce((n, b) => n + (b.table || []).flat().filter(Boolean).length, 0), 50_000);
   assert.equal(result.coverage.complete, false);
-  assert.ok(result.coverage.omitted.some(value => /1 non-empty cell/.test(value) && /A50001/.test(value)));
+  assert.ok(result.coverage.omitted.some(value => /1 non-empty cell/.test(value) && /A33335/.test(value)));
   assert.ok(result.warnings.some(value => /50,000/.test(value)));
 });
-test('retains 20,000 CSV data rows after the header and reports the next row', async () => {
+test('retains 20,000 representative CSV data rows after the header and reports the omitted row', async () => {
   const result = await extractCopilotFile(file('limit.csv', 'Name\n' + 'x\n'.repeat(20_001)), dependencies);
   assert.equal(result.counts.csvRows, 20_000);
   assert.equal(result.blocks.reduce((n, b) => n + (b.table?.length || 0), 0), 20_000);
   assert.equal(result.coverage.complete, false);
-  assert.ok(result.coverage.omitted.some(value => /1 data row/.test(value) && /20002/.test(value)));
+  assert.ok(result.coverage.omitted.some(value => /1 data row/.test(value) && /13336/.test(value)));
   assert.ok(result.warnings.some(value => /20,000/.test(value)));
 });
 function chars(result) {
@@ -123,6 +123,12 @@ test('never leaks text inside a DOCX embedded object subtree', async () => {
   assert.match(result.blocks[0].text, /Safe text/);
   assert.equal(result.coverage.complete, false);
 });
+test('excludes embedded-object paragraphs nested inside DOCX table cells', async () => {
+  const body = '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Safe table</w:t></w:r></w:p><w:object><w:p><w:r><w:t>TABLE_OBJECT_SECRET</w:t></w:r></w:p></w:object></w:tc></w:tr></w:tbl>';
+  const result = await extractCopilotFile(file('table-object.docx', await docx(body)), dependencies);
+  assert.doesNotMatch(JSON.stringify(result), /TABLE_OBJECT_SECRET/);
+  assert.deepEqual(result.blocks[0].table, [['Safe table']]);
+});
 test('accepts BOM-marked UTF-16BE CSV through the same validation contract', async () => {
   const utf16le = Buffer.from('Name\tValue\nÉlodie\t12\n', 'utf16le');
   const bytes = Buffer.concat([Buffer.from([254, 255]), utf16le.swap16()]);
@@ -154,7 +160,8 @@ test('reports omitted DOCX blocks after the 1,000-block ceiling', async () => {
   const result = await extractCopilotFile(file('many.docx', await docx(body)), dependencies);
   assert.equal(result.blocks.length, 1000);
   assert.equal(result.coverage.complete, false);
-  assert.ok(result.coverage.omitted.some(value => /1 source block/.test(value) && /Section 1000/.test(value)));
+  assert.ok(result.coverage.omitted.some(value => /1 source block/.test(value) && /Section 667/.test(value)));
+  assert.ok(result.blocks.some(block => block.locator === 'section:Section 1000'));
 });
 test('refuses encrypted and excessive-size ZIP entries before invoking a parser', async () => {
   const good = await docx();
@@ -173,4 +180,98 @@ test('extracts PowerPoint tables as rows under their owning slide locator', asyn
   zip.file('ppt/slides/slide1.xml', originalSlide.replace('</p:spTree>', '<p:graphicFrame><a:graphic><a:graphicData><a:tbl><a:tr><a:tc><a:txBody><a:p><a:r><a:t>Region</a:t></a:r></a:p></a:txBody></a:tc><a:tc><a:txBody><a:p><a:r><a:t>North</a:t></a:r></a:p></a:txBody></a:tc></a:tr></a:tbl></a:graphicData></a:graphic></p:graphicFrame></p:spTree>'));
   const result = await extractCopilotFile(file('table.pptx', await zip.generateAsync({ type: 'uint8array' })), dependencies);
   assert.deepEqual(result.blocks.find(block => block.locator === 'slide:2').table, [['Region', 'North']]);
+});
+
+test('retains early, middle and late spreadsheet evidence when the cell cap is exceeded', async () => {
+  const rows = Array.from({ length: 60_000 }, (_, i) => [`cell-${i + 1}`]);
+  const result = await extractCopilotFile(file('representative.xlsx', workbook('xlsx', rows)), dependencies);
+  const text = JSON.stringify(result.blocks);
+  assert.match(text, /cell-1\"/);
+  assert.match(text, /cell-30000\"/);
+  assert.match(text, /cell-60000\"/);
+  assert.equal(result.coverage.complete, false);
+});
+test('retains early, middle and late CSV rows rather than only the file prefix', async () => {
+  const rows = Array.from({ length: 30_000 }, (_, i) => `row-${i + 1}`);
+  const result = await extractCopilotFile(file('representative.csv', 'Name\n' + rows.join('\n')), dependencies);
+  const text = JSON.stringify(result.blocks);
+  assert.match(text, /row-1\"/);
+  assert.match(text, /row-15000\"/);
+  assert.match(text, /row-30000\"/);
+  assert.equal(result.counts.csvRows <= 20_000, true);
+});
+test('preserves late summaries and populated tables when an early DOCX section exceeds the character cap', async () => {
+  const body = `<w:p><w:r><w:t>${'Early background. '.repeat(17000)}</w:t></w:r></w:p><w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Executive summary</w:t></w:r></w:p><w:p><w:r><w:t>LATE_SUMMARY</w:t></w:r></w:p><w:tbl><w:tr><w:tc><w:p><w:r><w:t>LATE_TABLE</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`;
+  const result = await extractCopilotFile(file('priorities.docx', await docx(body)), dependencies);
+  assert.match(JSON.stringify(result.blocks), /LATE_SUMMARY/);
+  assert.match(JSON.stringify(result.blocks), /LATE_TABLE/);
+  assert.ok(chars(result) <= 250_000);
+});
+test('prioritizes a summary outside the representative DOCX windows and retains its source heading', async () => {
+  const paragraph = text => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+  const heading = text => `<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+  const body = paragraph('Background').repeat(2000) + heading('Executive summary') + paragraph('PRIORITY_MARKER') + heading('Details') + paragraph('Detail').repeat(4000);
+  const result = await extractCopilotFile(file('sampled.docx', await docx(body)), dependencies);
+  assert.ok(result.blocks.some(block => block.locator.startsWith('section:Executive summary') && block.text.includes('PRIORITY_MARKER')));
+  assert.equal(result.coverage.complete, false);
+});
+test('caps PDF parsing while sampling early, middle and late page locators', async () => {
+  let reads = 0;
+  const pdfjs = { getDocument() { return { promise: Promise.resolve({ numPages: 1000, async getPage(n) { if (++reads > 120) throw new Error('unbounded parser reads'); return { async getTextContent() { return { items: [{ str: `PAGE_${n}` }] }; }, cleanup() {} }; } }), async destroy() {} }; } };
+  const result = await extractCopilotFile(file('bounded.pdf', pdf()), { ...dependencies, pdfjs });
+  assert.match(JSON.stringify(result.blocks), /PAGE_1\"/);
+  assert.match(JSON.stringify(result.blocks), /PAGE_500\"/);
+  assert.match(JSON.stringify(result.blocks), /PAGE_1000\"/);
+  assert.ok(reads <= 120);
+  assert.equal(result.coverage.complete, false);
+  assert.ok(result.coverage.omitted.some(value => /page:41-480/.test(value)));
+});
+test('prioritizes PDF outline summaries outside the representative page windows', async () => {
+  const pdfjs = { getDocument() { return { promise: Promise.resolve({ numPages: 1000,
+    async getOutline() { return [{ title: 'Executive summary', dest: [699], items: [] }]; },
+    async getPage(n) { return { async getTextContent() { return { items: [{ str: `PAGE_${n}` }] }; }, cleanup() {} }; }
+  }), async destroy() {} }; } };
+  const result = await extractCopilotFile(file('outline.pdf', pdf()), { ...dependencies, pdfjs });
+  assert.ok(result.blocks.some(block => block.locator === 'page:700'));
+  assert.ok(result.blocks.length <= 120);
+});
+test('rejects XML nesting and node-count resource abuse before recursive extraction', async () => {
+  for (const body of ['<w:p>'.repeat(200) + '<w:t>deep</w:t>' + '</w:p>'.repeat(200), '<w:p/>'.repeat(260001)]) {
+    await assert.rejects(extractCopilotFile(file('resource.docx', await docx(body)), dependencies), /resource|nesting|node|limit/i);
+  }
+});
+test('rejects ZIP64 records explicitly rather than decompressing unbounded entries', async () => {
+  const bytes = (await docx()).slice();
+  const end = bytes.length - 22;
+  const view = new DataView(bytes.buffer);
+  view.setUint16(end + 10, 0xffff, true);
+  await assert.rejects(extractCopilotFile(file('zip64.docx', bytes), dependencies), /ZIP64/i);
+});
+test('enforces actual expanded XML size when archive metadata understates it', async () => {
+  const bytes = await docx(`<w:p><w:r><w:t>${'x'.repeat(4_100_000)}</w:t></w:r></w:p>`);
+  const view = new DataView(bytes.buffer);
+  for (let offset = 0; offset + 46 < bytes.length; offset++) {
+    if (view.getUint32(offset, true) !== 0x02014b50) continue;
+    const length = view.getUint16(offset + 28, true);
+    if (new TextDecoder().decode(bytes.subarray(offset + 46, offset + 46 + length)) === 'word/document.xml') view.setUint32(offset + 24, 1000, true);
+  }
+  await assert.rejects(extractCopilotFile(file('understated.docx', bytes), dependencies), /resource.*limit/i);
+});
+test('terminates a parser worker that fails to finish within the bounded deadline', async () => {
+  let terminated = false;
+  const workerFactory = () => ({ postMessage() {}, terminate() { terminated = true; } });
+  await assert.rejects(extractCopilotFile(await fixtureFile('fixture.pdf'), { workerFactory, workerTimeoutMs: 5 }), /deadline|time limit/i);
+  assert.equal(terminated, true);
+});
+test('terminates the parser worker after a visible parse failure', async () => {
+  let terminated = false;
+  const workerFactory = () => ({ postMessage() { queueMicrotask(() => this.onmessage({ data: { ok: false, error: 'Malformed file.' } })); }, terminate() { terminated = true; } });
+  await assert.rejects(extractCopilotFile(await fixtureFile('fixture.pdf'), { workerFactory }), /Malformed/);
+  assert.equal(terminated, true);
+});
+test('fails safely instead of parsing on the UI thread when browser workers are unavailable', async () => {
+  const previousDocument = globalThis.document;
+  globalThis.document = {};
+  try { await assert.rejects(extractCopilotFile(await fixtureFile('fixture.csv')), /worker support/i); }
+  finally { if (previousDocument === undefined) delete globalThis.document; else globalThis.document = previousDocument; }
 });
