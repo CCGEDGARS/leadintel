@@ -8,6 +8,7 @@ const REFERENCE_DELETE_STATE_KEY='leadintel_customer_v2_state';
   let pendingDeleteId='';
 
   function readState(){try{return JSON.parse(localStorage.getItem(REFERENCE_DELETE_STATE_KEY)||'{}');}catch{return {};}}
+  function setText(node,text){if(node&&node.textContent!==text)node.textContent=text;}
   async function writeState(state){
     localStorage.setItem(REFERENCE_DELETE_STATE_KEY,JSON.stringify(state));
     await root.LeadIntelServerBridge?.saveNow?.().catch(()=>null);
@@ -24,13 +25,13 @@ const REFERENCE_DELETE_STATE_KEY='leadintel_customer_v2_state';
     if(status)status.textContent=`${name} deleted from Saved Lists.`;
   }
   function renameClearControls(modal){
-    for(const button of modal.querySelectorAll('button'))if(button.textContent.trim()==='Clear customer list')button.textContent='Clear current draft';
-    for(const strong of modal.querySelectorAll('strong,h3'))if(strong.textContent.trim()==='Clear customer list?')strong.textContent='Clear current draft?';
-    for(const node of modal.querySelectorAll('p'))if(node.textContent.includes('Remove all reference customers and reset Lookalike Intelligence'))node.textContent='Clear the current working customer rows. Saved Lists are not deleted.';
+    for(const button of modal.querySelectorAll('button'))if(button.textContent.trim()==='Clear customer list')setText(button,'Clear current draft');
+    for(const strong of modal.querySelectorAll('strong,h3'))if(strong.textContent.trim()==='Clear customer list?')setText(strong,'Clear current draft?');
+    for(const node of modal.querySelectorAll('p'))if(node.textContent.includes('Remove all reference customers and reset Lookalike Intelligence'))setText(node,'Clear the current working customer rows. Saved Lists are not deleted.');
   }
   function renameListActions(modal){
-    const create=modal.querySelector('[data-new-reference-list]');if(create)create.textContent='Create New List';
-    const upload=modal.querySelector('#reference-upload-button');if(upload)upload.textContent='Import Customer List';
+    const create=modal.querySelector('[data-new-reference-list]');setText(create,'Create New List');
+    const upload=modal.querySelector('#reference-upload-button');setText(upload,'Import Customer List');
   }
   function buildDeleteControls(row,id){
     const buttons=row.querySelector('.reference-saved-buttons');if(!buttons)return;
