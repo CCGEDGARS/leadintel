@@ -11,6 +11,7 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
   const LEGACY_LABELS=['Save & Activate Model','Update Active Model'];
   let migrationSaved=false;
   let editorOpen=false;
+  let analyzingListId='';
 
   function readState(){try{return JSON.parse(localStorage.getItem(REFERENCE_LIBRARY_STATE_KEY)||'{}');}catch{return {};}}
   async function writeState(state){
@@ -76,7 +77,9 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
       const ref=list.reference||{},rows=ref.rows?.length||0,analyzed=Object.keys(ref.analyses||{}).length,model=ref.publishedModel;
       const stateLabel=list.active?'Active':model?'Ready':'Saved';
       const canActivate=Boolean(list.active||model||(analyzed&&(ref.segments||[]).length));
-      return `<div class="reference-saved-row ${list.active?'active':''} ${list.id===selectedId?'selected':''}" data-reference-list-row="${esc(list.id)}"><div class="reference-saved-info"><strong>${esc(list.name)}<span class="reference-list-state ${list.active?'active':''}">${stateLabel}</span></strong><small>${rows} customers · ${analyzed} analyzed${model?` · ${esc(model.confidence||'low')} confidence`:''}${list.markets?.length?` · ${esc(list.markets.join(' · '))}`:''}</small></div><div class="reference-saved-buttons"><button class="primary-btn" type="button" data-analyze-reference-list="${esc(list.id)}">Analyze</button><button class="${list.active?'secondary-btn':'primary-btn'}" type="button" data-activate-reference-list="${esc(list.id)}" ${canActivate?'':'disabled'}>${list.active?'Deactivate':'Activate'}</button><button class="secondary-btn" type="button" data-edit-reference-list="${esc(list.id)}">Edit</button><button class="secondary-btn" type="button" data-delete-reference-list="${esc(list.id)}">Delete</button></div></div>${list.id===selectedId?editorHtml:''}`;
+      const isSelected=list.id===selectedId;
+      const isAnalyzing=list.id===analyzingListId;
+      return `<div class="reference-saved-row ${list.active?'active':''} ${list.id===selectedId?'selected':''}" data-reference-list-row="${esc(list.id)}"><div class="reference-saved-info"><strong>${esc(list.name)}<span class="reference-list-state ${list.active?'active':''}">${stateLabel}</span></strong><small>${rows} customers · ${analyzed} analyzed${model?` · ${esc(model.confidence||'low')} confidence`:''}${list.markets?.length?` · ${esc(list.markets.join(' · '))}`:''}</small></div><div class="reference-saved-buttons"><button class="${isSelected?'primary-btn':'secondary-btn'}" type="button" data-analyze-reference-list="${esc(list.id)}" ${isAnalyzing?'disabled':''}>${isAnalyzing?'Analyzing…':'Analyze'}</button><button class="${list.active?'secondary-btn':'primary-btn'}" type="button" data-activate-reference-list="${esc(list.id)}" ${canActivate?'':'disabled'}>${list.active?'Deactivate':'Activate'}</button><button class="secondary-btn" type="button" data-edit-reference-list="${esc(list.id)}">Edit</button><button class="secondary-btn" type="button" data-delete-reference-list="${esc(list.id)}">Delete</button></div></div>${list.id===selectedId?editorHtml:''}`;
     }).join('')}</div>`;
   }
   function currentMessage({saved,analyzed,segments,selected}){
@@ -127,10 +130,12 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
   async function openList(id){let state=snapshot();state=Portfolio.selectList(state,id);await writeState(state);syncLibraryUi();}
   async function analyzeList(id){
     editorOpen=false;
+    analyzingListId=id;
     let state=snapshot();state=Portfolio.selectList(state,id);await writeState(state);syncLibraryUi();
     const button=document.getElementById('reference-analyze');if(!button)throw new Error('Analysis control is unavailable');
     button.click();
   }
+  function finishAnalysis(){analyzingListId='';syncLibraryUi();}
   async function activateList(id){
     editorOpen=false;
     let state=snapshot();state=Portfolio.selectList(state,id);
@@ -198,5 +203,5 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
   root.addEventListener('leadintel:reference-customers-updated',()=>setTimeout(syncLibraryUi,0));
   root.addEventListener('leadintel:server-ready',()=>setTimeout(syncLibraryUi,0));
   if(document.body&&typeof MutationObserver!=='undefined')new MutationObserver(records=>{if(records.some(record=>[...record.addedNodes].some(node=>node?.id==='reference-customer-modal'||node?.querySelector?.('#reference-customer-modal'))))setTimeout(syncLibraryUi,0);}).observe(document.body,{childList:true,subtree:true});
-  root.LeadIntelReferenceCustomerLibraryUI={sync:syncLibraryUi,publishSelected,saveList,openList,analyzeList,activateList,editList,createNewList,toggleList,activateCurrent,legacyLabels:LEGACY_LABELS};
+  root.LeadIntelReferenceCustomerLibraryUI={sync:syncLibraryUi,publishSelected,saveList,openList,analyzeList,finishAnalysis,activateList,editList,createNewList,toggleList,activateCurrent,legacyLabels:LEGACY_LABELS};
 })(globalThis);
