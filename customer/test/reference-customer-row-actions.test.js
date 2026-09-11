@@ -48,3 +48,9 @@ test('saving or starting a row action closes the conditional editor',()=>{
   assert.match(ui,/async function analyzeList\(id\)[\s\S]*editorOpen=false/);
   assert.match(ui,/async function activateList\List\(id\)[\s\S]*editorOpen=false/);
 });
+
+test('the conditional editor is rendered beneath the selected saved-list row',()=>{
+  assert.match(ui,/function renderSavedLists\(state,editorHtml=''/);
+  assert.match(ui,/list\.id===selectedId\?editorHtml:''/);
+  assert.match(ui,/renderSavedLists\(state,editorHtml\)/);
+});
