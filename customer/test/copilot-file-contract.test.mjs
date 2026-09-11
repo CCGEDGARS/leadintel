@@ -28,7 +28,7 @@ test('accepts every supported format only with its matching MIME type and signat
     ['brief.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '504b0304', 'docx'],
     ['pipeline.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '504b0304', 'xlsx'],
     ['legacy.xls', 'application/vnd.ms-excel', 'd0cf11e0', 'xls'],
-    ['leads.csv', 'text/csv', 'text', 'csv'],
+    ['leads.csv', 'text/csv', '6c6561642c636f6d70616e790d0a', 'csv'],
     ['review.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', '504b0304', 'pptx']
   ];
 
@@ -78,6 +78,7 @@ test('normalizes extraction to bounded locator-aware blocks', () => {
     evidenceIndex: { 'page:1': 'Revenue overview', ignored: 'drop me' },
     warnings: ['Partial table extraction'],
     coverage: { complete: false, omitted: ['page:3'] },
+    counts: { characters: 16, nonEmptyCells: 2, csvRows: 0 },
     unexpected: '<script>alert(1)</script>'
   });
 
@@ -90,7 +91,8 @@ test('normalizes extraction to bounded locator-aware blocks', () => {
     ],
     evidenceIndex: { 'page:1': 'Revenue overview' },
     warnings: ['Partial table extraction'],
-    coverage: { complete: false, omitted: ['page:3'] }
+    coverage: { complete: false, omitted: ['page:3'] },
+    counts: { characters: 16, nonEmptyCells: 2, csvRows: 0 }
   });
 });
 
@@ -146,4 +148,108 @@ test('bounds normalized extraction and result strings at contract limits', () =>
 
   assert.equal(extraction.title.length, FILE_LIMITS.maxExtractionChars);
   assert.equal(result.title.length, FILE_LIMITS.maxResultChars);
+});
+
+
+test('accepts CSV byte prefixes that contain text, an optional UTF-8 BOM and no NUL bytes', () => {
+  for (const signature of [
+    '6c6561642c636f6d70616e790d0a',
+    'efbbbf6c6561642c636f6d70616e790a',
+    '4e616d652c436974790d0a416e6472e92c4d6f6e7472e9616c0d0a'
+  ]) {
+    assert.equal(validateCopilotFile({
+      name: 'leads.csv',
+      size: 20,
+      type: 'text/csv',
+      signature
+    }).ok, true, signature);
+  }
+
+  assert.equal(validateCopilotFile({
+    name: 'unsafe.csv',
+    size: 20,
+    type: 'text/csv',
+    signature: '6c656164002c636f6d70616e79'
+  }).ok, false);
+});
+
+function extractionCharacterCount(value) {
+  let total = value.title.length;
+  for (const block of value.blocks) {
+    total += block.text?.length ?? 0;
+    for (const row of block.table ?? []) {
+      for (const cell of row) total += cell.length;
+    }
+  }
+  for (const label of Object.values(value.evidenceIndex)) total += label.length;
+  for (const warning of value.warnings) total += warning.length;
+  for (const omission of value.coverage.omitted) total += omission.length;
+  return total;
+}
+
+function resultCharacterCount(value) {
+  if (typeof value === 'string') return value.length;
+  if (!value || typeof value !== 'object') return 0;
+  return Object.values(value).reduce((total, item) => total + resultCharacterCount(item), 0);
+}
+
+test('enforces aggregate extraction character and spreadsheet cell limits', () => {
+  const value = normalizeExtraction({
+    format: 'xlsx',
+    title: 't'.repeat(20_000),
+    blocks: [
+      { locator: 'sheet:One!A1', text: 'a'.repeat(150_000) },
+      {
+        locator: 'sheet:Two!A1:A50001',
+        table: Array.from({ length: 50_001 }, () => ['x'])
+      },
+      { locator: 'sheet:Three!A1', text: 'b'.repeat(150_000) }
+    ],
+    evidenceIndex: {},
+    warnings: [],
+    coverage: {},
+    counts: { characters: 320_001, nonEmptyCells: 50_001, csvRows: 0 }
+  });
+
+  assert.ok(extractionCharacterCount(value) <= FILE_LIMITS.maxExtractionChars);
+  assert.ok(value.counts.characters <= FILE_LIMITS.maxExtractionChars);
+  assert.ok(value.counts.nonEmptyCells <= FILE_LIMITS.maxSpreadsheetCells);
+  assert.equal(value.coverage.complete, false);
+  assert.ok(value.warnings.length > 0);
+});
+
+test('enforces aggregate CSV row limit', () => {
+  const value = normalizeExtraction({
+    format: 'csv',
+    title: 'CSV',
+    blocks: [{
+      locator: 'row:1-20001',
+      table: Array.from({ length: 20_001 }, () => ['lead'])
+    }],
+    evidenceIndex: {},
+    warnings: [],
+    coverage: {},
+    counts: { characters: 80_004, nonEmptyCells: 20_001, csvRows: 20_001 }
+  });
+
+  const rows = value.blocks.reduce((total, block) => total + (block.table?.length ?? 0), 0);
+  assert.ok(rows <= FILE_LIMITS.maxCsvRows);
+  assert.ok(value.counts.csvRows <= FILE_LIMITS.maxCsvRows);
+  assert.equal(value.coverage.complete, false);
+});
+
+test('enforces the aggregate canonical result character limit', () => {
+  const value = normalizeAnalysisResult({
+    title: 't'.repeat(20_000),
+    executive_summary: 's'.repeat(20_000),
+    sections: [],
+    findings: ['f'.repeat(10_000)],
+    recommendations: [],
+    risks: [],
+    assumptions: [],
+    data_gaps: [],
+    warnings: []
+  });
+
+  assert.ok(resultCharacterCount(value) <= FILE_LIMITS.maxResultChars);
 });
