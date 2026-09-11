@@ -71,3 +71,21 @@ test('AI analysis posts through the authenticated LeadIntel AI generate route',a
   assert.equal(calls[0].options.credentials,'include');
   assert.equal(result.analyses.a.industry,'manufacturing');
 });
+
+test('AI response parser extracts valid JSON surrounded by model commentary',()=>{
+  const parsed=AI.parseReferenceCustomerAnalysis('Here is the analysis:\n'+JSON.stringify({companies:[{id:'a',industry:'manufacturing',confidence:'high'}],segmentation:{meaningful:false,segments:[]}})+'\nAnalysis complete.',['a']);
+  assert.equal(parsed.analyses.a.industry,'manufacturing');
+});
+
+test('AI analysis retries once with a compact recovery prompt after malformed output',async()=>{
+  const calls=[];
+  const responses=['{"companies":[',JSON.stringify({companies:[{id:'a',industry:'manufacturing',confidence:'high'}],segmentation:{meaningful:false,segments:[]}})];
+  const result=await AI.requestReferenceCustomerAnalysis({
+    workspaceId:'ws-123',rows:[{id:'a',companyName:'Acme',website:'https://acme.example',text:'B2B manufacturer'}],
+    fetchImpl:async(url,options)=>{calls.push(JSON.parse(options.body));return {ok:true,json:async()=>({text:responses.shift()})};}
+  });
+  assert.equal(calls.length,2);
+  assert.match(calls[1].prompt,/recovery attempt/i);
+  assert.equal(calls[1].max_output_tokens,8192);
+  assert.equal(result.analyses.a.industry,'manufacturing');
+});
