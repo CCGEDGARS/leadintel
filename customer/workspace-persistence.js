@@ -151,7 +151,8 @@
   }
 
   function disableServerAutosave(){if(typeof Storage!=="undefined"&&Storage.prototype)Storage.prototype.__leadintelServerPatched=true;}
-  function hasUnsavedChanges(){return !isExplicitlySaved()||dirtySinceSave;}\n  function persistenceLabel(){if(!isExplicitlySaved())return "Unsaved draft · not saved";return dirtySinceSave?"Unsaved changes · click Save workspace":"Workspace saved";}
+  function hasUnsavedChanges(){return !isExplicitlySaved()||dirtySinceSave;}
+  function persistenceLabel(){if(!isExplicitlySaved())return "Unsaved draft · not saved";return dirtySinceSave?"Unsaved changes · click Save workspace":"Workspace saved";}
   function renderPersistenceStatus(){const status=root.document?.querySelector?.(".autosave");if(status)status.innerHTML=`<i></i>${persistenceLabel()}`;const button=root.document?.getElementById?.("save-workspace");if(button){button.textContent=isExplicitlySaved()?(dirtySinceSave?"Save changes":"Saved ✓"):"Save workspace";button.disabled=saveBusy;}}
   function toast(message){const el=root.document?.getElementById?.("toast");if(!el)return;el.textContent=message;el.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove("show"),2400);}
   function waitForBridge(timeout=1800){if(root.LeadIntelServerBridge?.session!==null&&root.LeadIntelServerBridge?.session!==undefined)return Promise.resolve(root.LeadIntelServerBridge);return new Promise(resolve=>{let done=false;const finish=()=>{if(done)return;done=true;root.removeEventListener?.("leadintel:server-ready",finish);resolve(root.LeadIntelServerBridge||null);};root.addEventListener?.("leadintel:server-ready",finish,{once:true});root.setTimeout?.(finish,timeout);});}
