@@ -26,7 +26,7 @@ assert.deepEqual(switched.additionalLinks,[],"old company links must not cross d
 assert.deepEqual(switched.targetMarkets,["Sweden"],"target market selection may be reused");
 
 const reactivated=activation.buildActivatedState(
-  {...previous,website:"https://ccgroup.lv/"},
+  {...previous,website:"https://ccgroup.lv/",companyContextWebsite:"https://ccgroup.lv/"},
   {url:"https://www.ccgroup.lv/",title:"CCGROUP",text:"Fresh CCGROUP evidence"},
   "2026-09-11T00:00:00.000Z"
 );
