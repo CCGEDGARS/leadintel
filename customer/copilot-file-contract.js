@@ -130,7 +130,7 @@ export function validateCopilotFile(fileMeta = {}) {
 
   return {
     ok: errors.length === 0,
-    format: format && errors.every((error) => error !== 'This file type is not supported.') ? format : null,
+    format: errors.length === 0 ? format : null,
     errors
   };
 }
