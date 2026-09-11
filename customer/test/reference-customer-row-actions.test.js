@@ -11,7 +11,7 @@ test('every saved customer list exposes Analyze Activate Edit and Delete row act
   assert.match(ui,/data-activate-reference-list/);
   assert.match(ui,/data-edit-reference-list/);
   assert.match(ui,/data-delete-reference-list/);
-  assert.match(ui,/>Analyze<\/button>/);
+  assert.match(ui,/['"]Analyze['"]/);
   assert.match(ui,/\?\s*'Deactivate'\s*:\s*'Activate'/);
   assert.match(ui,/>Edit<\/button>/);
   assert.match(ui,/>Delete<\/button>/);
