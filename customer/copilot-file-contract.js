@@ -228,13 +228,54 @@ export function validateCopilotFile(fileMeta = {}) {
   };
 }
 
+function trimStringCandidates(candidates, count) {
+  let remaining = count;
+  for (const candidate of candidates) {
+    if (!remaining) break;
+    const current = candidate.get();
+    const removed = Math.min(current.length, remaining);
+    candidate.set(current.slice(0, current.length - removed));
+    remaining -= removed;
+  }
+  return remaining === 0;
+}
+
+function freeExtractionWarningSpace(value, count) {
+  const candidates = [];
+  for (let index = value.coverage.omitted.length - 1; index >= 0; index -= 1) {
+    candidates.push({ get: () => value.coverage.omitted[index], set: (next) => { value.coverage.omitted[index] = next; } });
+  }
+  for (let index = value.warnings.length - 1; index >= 0; index -= 1) {
+    candidates.push({ get: () => value.warnings[index], set: (next) => { value.warnings[index] = next; } });
+  }
+  for (const locator of Object.keys(value.evidenceIndex).reverse()) {
+    candidates.push({ get: () => value.evidenceIndex[locator], set: (next) => { value.evidenceIndex[locator] = next; } });
+  }
+  for (let blockIndex = value.blocks.length - 1; blockIndex >= 0; blockIndex -= 1) {
+    const block = value.blocks[blockIndex];
+    for (let rowIndex = (block.table?.length ?? 0) - 1; rowIndex >= 0; rowIndex -= 1) {
+      for (let cellIndex = block.table[rowIndex].length - 1; cellIndex >= 0; cellIndex -= 1) {
+        candidates.push({
+          get: () => block.table[rowIndex][cellIndex],
+          set: (next) => { block.table[rowIndex][cellIndex] = next; }
+        });
+      }
+    }
+    if (typeof block.text === 'string') {
+      candidates.push({ get: () => block.text, set: (next) => { block.text = next; } });
+    }
+  }
+  return trimStringCandidates(candidates, count);
+}
+
 export function normalizeExtraction(input = {}) {
   const format = typeof input.format === 'string' && SUPPORTED_FILE_FORMATS[input.format]
     ? input.format
     : '';
-  const budget = createTextBudget(FILE_LIMITS.maxExtractionChars - EXTRACTION_TRUNCATION_WARNING.length);
+  const budget = createTextBudget(FILE_LIMITS.maxExtractionChars);
   const state = { nonEmptyCells: 0, csvRows: 0 };
   const context = { format, budget, state };
+  const title = budget.take(input.title, FILE_LIMITS.maxExtractionChars);
   const blocks = Array.isArray(input.blocks)
     ? input.blocks.slice(0, MAX_COLLECTION_ITEMS).map((block) => normalizeBlock(block, context)).filter(Boolean)
     : [];
@@ -252,22 +293,28 @@ export function normalizeExtraction(input = {}) {
   const coverageInput = input.coverage && typeof input.coverage === 'object' && !Array.isArray(input.coverage)
     ? input.coverage
     : {};
-  const warnings = boundedStringArray(input.warnings, FILE_LIMITS.maxExtractionChars, budget);
-  const omitted = boundedStringArray(coverageInput.omitted, FILE_LIMITS.maxExtractionChars, budget);
-
-  if (budget.truncated) warnings.push(EXTRACTION_TRUNCATION_WARNING);
-  return {
+  const value = {
     format,
-    title: budget.take(input.title, FILE_LIMITS.maxExtractionChars),
+    title,
     blocks,
     evidenceIndex,
-    warnings,
+    warnings: boundedStringArray(input.warnings, FILE_LIMITS.maxExtractionChars, budget),
     coverage: {
-      complete: budget.truncated ? false : coverageInput.complete === true,
-      omitted
+      complete: coverageInput.complete === true,
+      omitted: boundedStringArray(coverageInput.omitted, FILE_LIMITS.maxExtractionChars, budget)
     },
     counts: normalizeCounts(input.counts)
   };
+
+  if (budget.truncated) {
+    value.coverage.complete = false;
+    if (budget.remaining >= EXTRACTION_TRUNCATION_WARNING.length) {
+      value.warnings.push(EXTRACTION_TRUNCATION_WARNING);
+    } else if (freeExtractionWarningSpace(value, EXTRACTION_TRUNCATION_WARNING.length)) {
+      value.warnings.push(EXTRACTION_TRUNCATION_WARNING);
+    }
+  }
+  return value;
 }
 
 function normalizeEvidence(value, budget) {
@@ -302,8 +349,43 @@ function normalizeResultItems(value, budget) {
   return boundedStringArray(value, FILE_LIMITS.maxResultChars, budget);
 }
 
+function freeResultWarningSpace(value, count) {
+  const candidates = [];
+  for (let index = value.warnings.length - 1; index >= 0; index -= 1) {
+    candidates.push({ get: () => value.warnings[index], set: (next) => { value.warnings[index] = next; } });
+  }
+  for (const field of ['data_gaps', 'assumptions', 'risks', 'recommendations', 'findings']) {
+    for (let index = value[field].length - 1; index >= 0; index -= 1) {
+      candidates.push({ get: () => value[field][index], set: (next) => { value[field][index] = next; } });
+    }
+  }
+  for (let sectionIndex = value.sections.length - 1; sectionIndex >= 0; sectionIndex -= 1) {
+    const section = value.sections[sectionIndex];
+    for (let evidenceIndex = section.evidence.length - 1; evidenceIndex >= 0; evidenceIndex -= 1) {
+      candidates.push({
+        get: () => section.evidence[evidenceIndex].label,
+        set: (next) => { section.evidence[evidenceIndex].label = next; }
+      });
+    }
+    for (let tableIndex = section.tables.length - 1; tableIndex >= 0; tableIndex -= 1) {
+      for (let rowIndex = section.tables[tableIndex].length - 1; rowIndex >= 0; rowIndex -= 1) {
+        for (let cellIndex = section.tables[tableIndex][rowIndex].length - 1; cellIndex >= 0; cellIndex -= 1) {
+          candidates.push({
+            get: () => section.tables[tableIndex][rowIndex][cellIndex],
+            set: (next) => { section.tables[tableIndex][rowIndex][cellIndex] = next; }
+          });
+        }
+      }
+    }
+    candidates.push({ get: () => section.content, set: (next) => { section.content = next; } });
+    candidates.push({ get: () => section.heading, set: (next) => { section.heading = next; } });
+  }
+  candidates.push({ get: () => value.executive_summary, set: (next) => { value.executive_summary = next; } });
+  return trimStringCandidates(candidates, count);
+}
+
 export function normalizeAnalysisResult(input = {}) {
-  const budget = createTextBudget(FILE_LIMITS.maxResultChars - RESULT_TRUNCATION_WARNING.length);
+  const budget = createTextBudget(FILE_LIMITS.maxResultChars);
   const result = {
     title: budget.take(input.title, FILE_LIMITS.maxResultChars),
     executive_summary: budget.take(input.executive_summary, FILE_LIMITS.maxResultChars),
@@ -317,6 +399,12 @@ export function normalizeAnalysisResult(input = {}) {
     data_gaps: normalizeResultItems(input.data_gaps, budget),
     warnings: normalizeResultItems(input.warnings, budget)
   };
-  if (budget.truncated) result.warnings.push(RESULT_TRUNCATION_WARNING);
+  if (budget.truncated) {
+    if (budget.remaining >= RESULT_TRUNCATION_WARNING.length) {
+      result.warnings.push(RESULT_TRUNCATION_WARNING);
+    } else if (freeResultWarningSpace(result, RESULT_TRUNCATION_WARNING.length)) {
+      result.warnings.push(RESULT_TRUNCATION_WARNING);
+    }
+  }
   return result;
 }
