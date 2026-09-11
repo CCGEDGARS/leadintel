@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -42,7 +43,7 @@ class FakeD1 {
     return [];
   }
   run(sql,args){
-    if(/INSERT INTO copilot_files/.test(sql)){const [id,workspace_id,created_by,original_name,extension,mime_type,byte_size,sha256,r2_key,status,coverage_json,warnings_json]=args;this.files.push({id,workspace_id,created_by,original_name,extension,mime_type,byte_size,sha256,r2_key,status,coverage_json,warnings_json,created_at:new Date().toISOString(),retained:0});}
+    if(/INSERT INTO copilot_files/.test(sql)){const [id,workspace_id,created_by,original_name,extension,mime_type,byte_size,sha256,r2_key,coverage_json,warnings_json]=args;this.files.push({id,workspace_id,created_by,original_name,extension,mime_type,byte_size,sha256,r2_key,status:'pending',coverage_json,warnings_json,created_at:new Date().toISOString(),retained:0});}
     else if(/INSERT INTO copilot_file_extractions/.test(sql)){const [file_id,blocks_json,evidence_index_json,character_count,cell_count,extractor_version]=args;this.extractions.push({file_id,blocks_json,evidence_index_json,character_count,cell_count,extractor_version});}
     else if(/INSERT INTO copilot_file_analyses/.test(sql)){const [id,file_id,workspace_id,created_by,request,canonical_result_json,provider,model,usage_json,status,retained]=args;this.analyses.push({id,file_id,workspace_id,created_by,request,canonical_result_json,provider,model,usage_json,status,retained,created_at:new Date().toISOString()});}
     else if(/UPDATE copilot_file_analyses SET retained=1/.test(sql)){const row=this.analyses.find(row=>row.id===args[0]);if(row)row.retained=1;}
@@ -57,17 +58,18 @@ class FakeD1 {
 class FakeR2 {
   constructor(){this.objects=new Map();this.putCalls=0;}
   async head(key){return this.objects.get(key)||null;}
-  async put(key,bytes,options){this.putCalls+=1;this.objects.set(key,{key,bytes,options});}
+  async put(key,bytes,options){this.putCalls+=1;if(options.onlyIf?.get('If-None-Match')==='*'&&this.objects.has(key))return null;const object={key,bytes,options};this.objects.set(key,object);return object;}
   async delete(key){if(this.failDeletes)throw new Error('R2 delete failed');this.objects.delete(key);}
 }
 
 function env(){return {DB:new FakeD1(),COPILOT_FILES:new FakeR2()};}
-const fileInput={workspaceId:'w1',userId:'u1',originalName:'budget.xlsx',extension:'xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',byteSize:5,sha256:'a'.repeat(64),coverage:{complete:true},warnings:[]};
+const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
+const fileInput={workspaceId:'w1',userId:'u1',originalName:'budget.xlsx',extension:'xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',byteSize:5,sha256:digest(new Uint8Array([1])),coverage:{complete:true},warnings:[]};
 
 test('migration creates workspace-scoped file, extraction, analysis and message tables with cascades',()=>{
   for(const table of ['copilot_files','copilot_file_extractions','copilot_file_analyses','copilot_file_analysis_messages'])assert.match(migration,new RegExp(`CREATE TABLE IF NOT EXISTS ${table}`));
   assert.match(migration,/workspace_id TEXT NOT NULL REFERENCES workspaces\(id\) ON DELETE CASCADE/);
-  assert.match(migration,/file_id TEXT NOT NULL REFERENCES copilot_files\(id\) ON DELETE CASCADE/);
+  assert.match(migration,/FOREIGN KEY\(file_id,workspace_id\) REFERENCES copilot_files\(id,workspace_id\) ON DELETE CASCADE/);
   assert.match(migration,/analysis_id TEXT NOT NULL REFERENCES copilot_file_analyses\(id\) ON DELETE CASCADE/);
 });
 
@@ -83,12 +85,12 @@ test('file records use a non-guessable workspace key and never include the origi
 });
 
 test('original objects are immutable and preserve digest metadata',async()=>{
-  const runtime=env();const record=await createFileRecord(runtime,fileInput);const bytes=new Uint8Array([1,2,3]);
-  await putImmutableOriginal(runtime,{workspaceId:'w1',fileId:record.id,bytes,sha256:fileInput.sha256,contentType:fileInput.mimeType});
-  await assert.rejects(()=>putImmutableOriginal(runtime,{workspaceId:'w1',fileId:record.id,bytes,sha256:fileInput.sha256,contentType:fileInput.mimeType}),/immutable/i);
+  const runtime=env();const bytes=new Uint8Array([1,2,3]);const record=await createFileRecord(runtime,{...fileInput,sha256:digest(bytes)});
+  await putImmutableOriginal(runtime,{workspaceId:'w1',fileId:record.id,bytes,sha256:digest(bytes),contentType:fileInput.mimeType});
+  await assert.rejects(()=>putImmutableOriginal(runtime,{workspaceId:'w1',fileId:record.id,bytes,sha256:digest(bytes),contentType:fileInput.mimeType}),/immutable/i);
   const object=await runtime.COPILOT_FILES.head(record.r2Key);
   assert.equal(object.options.httpMetadata.contentType,fileInput.mimeType);
-  assert.equal(object.options.customMetadata.sha256,fileInput.sha256);
+  assert.equal(object.options.customMetadata.sha256,digest(bytes));
 });
 
 test('metadata reads and analysis operations are workspace scoped',async()=>{
