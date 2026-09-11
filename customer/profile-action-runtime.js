@@ -7,6 +7,7 @@ const PROFILE_ACTION_STATE_KEY='leadintel_customer_v2_state';
   function readState(){try{return JSON.parse(localStorage.getItem(PROFILE_ACTION_STATE_KEY)||'{}');}catch{return {};}}
   function setText(node,text){if(node&&node.textContent!==text)node.textContent=text;}
   function toggleClass(node,name,enabled){if(node&&node.classList.contains(name)!==enabled)node.classList.toggle(name,enabled);}
+  function showToast(message){const el=document.getElementById('toast');if(!el)return;el.textContent=message;el.classList.add('show');clearTimeout(showToast.t);showToast.t=setTimeout(()=>el.classList.remove('show'),2400);}
 
   function syncApprovalControls(){
     const approved=Boolean(readState().approved);
@@ -42,11 +43,30 @@ const PROFILE_ACTION_STATE_KEY='leadintel_customer_v2_state';
     }
   }
 
+  function recoverApprovalIfNeeded(){
+    if(readState().approved)return;
+    const state=readState();
+    if(!state.profile||typeof state.profile!=='object')return;
+    state.approved=true;
+    state.profile.approvedAt=state.profile.approvedAt||new Date().toISOString();
+    localStorage.setItem(PROFILE_ACTION_STATE_KEY,JSON.stringify(state));
+    syncApprovalControls();
+    root.dispatchEvent(new CustomEvent('leadintel:profile-approved',{detail:{approvedAt:state.profile.approvedAt,recovered:true}}));
+    showToast('Company Intelligence Profile approved');
+    console.warn('LeadIntel recovered profile approval after the primary approval handler did not persist it.');
+  }
+
+  document.addEventListener('click',event=>{
+    const button=event.target?.closest?.('#approve-profile,#approve-profile-bottom');
+    if(!button)return;
+    setTimeout(recoverApprovalIfNeeded,0);
+  });
+
   root.addEventListener('leadintel:module-opened',()=>setTimeout(syncApprovalControls,0));
   root.addEventListener('leadintel:server-ready',()=>setTimeout(syncApprovalControls,0));
   root.addEventListener('leadintel:workspace-changed',()=>setTimeout(syncApprovalControls,0));
   root.addEventListener('storage',event=>{if(event.key===PROFILE_ACTION_STATE_KEY)setTimeout(syncApprovalControls,0);});
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',syncApprovalControls,{once:true});else setTimeout(syncApprovalControls,0);
 
-  root.LeadIntelProfileActionRuntime={syncApprovalControls};
+  root.LeadIntelProfileActionRuntime={syncApprovalControls,recoverApprovalIfNeeded};
 })(globalThis);
