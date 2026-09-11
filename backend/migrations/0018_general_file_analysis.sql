@@ -15,12 +15,13 @@ CREATE TABLE IF NOT EXISTS copilot_files (
   warnings_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(warnings_json)),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  deleted_at TEXT
+  deleted_at TEXT,
+  UNIQUE(id,workspace_id)
 );
 CREATE INDEX IF NOT EXISTS copilot_files_workspace_created_idx
   ON copilot_files(workspace_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS copilot_files_expiry_idx
-  ON copilot_files(created_at) WHERE deleted_at IS NULL;
+  ON copilot_files(created_at,id,workspace_id) WHERE deleted_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS copilot_file_extractions (
   file_id TEXT PRIMARY KEY REFERENCES copilot_files(id) ON DELETE CASCADE,
@@ -35,7 +36,7 @@ CREATE TABLE IF NOT EXISTS copilot_file_extractions (
 
 CREATE TABLE IF NOT EXISTS copilot_file_analyses (
   id TEXT PRIMARY KEY,
-  file_id TEXT NOT NULL REFERENCES copilot_files(id) ON DELETE CASCADE,
+  file_id TEXT NOT NULL,
   workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
   request TEXT NOT NULL,
@@ -48,12 +49,15 @@ CREATE TABLE IF NOT EXISTS copilot_file_analyses (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   retained_at TEXT,
-  deleted_at TEXT
+  deleted_at TEXT,
+  FOREIGN KEY(file_id,workspace_id) REFERENCES copilot_files(id,workspace_id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS copilot_file_analyses_workspace_retained_idx
   ON copilot_file_analyses(workspace_id,retained,updated_at DESC);
 CREATE INDEX IF NOT EXISTS copilot_file_analyses_file_idx
   ON copilot_file_analyses(file_id,created_at DESC);
+CREATE INDEX IF NOT EXISTS copilot_file_analyses_cleanup_idx
+  ON copilot_file_analyses(file_id,retained) WHERE deleted_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS copilot_file_analysis_messages (
   id TEXT PRIMARY KEY,
