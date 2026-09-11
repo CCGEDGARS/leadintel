@@ -55,3 +55,24 @@ test('process map loads the website enrichment runtime',()=>{
   const processMap=fs.readFileSync(path.join(__dirname,'..','process-map.js'),'utf8');
   assert.match(processMap,/reference-customer-website-enrichment\.js\?v=/);
 });
+
+
+test('missing-info detection works in both directions',()=>{
+  assert.equal(Enrichment.needsInfo({companyName:'Example',website:''}),true);
+  assert.equal(Enrichment.needsInfo({companyName:'',website:'https://example.lv'}),true);
+  assert.equal(Enrichment.needsInfo({companyName:'Example',website:'https://example.lv'}),false);
+});
+
+test('company identity can be extracted conservatively from website metadata',()=>{
+  assert.equal(Enrichment.companyNameFromPayload({data:{metadata:{title:'Example SIA | Official website'}}}),'Example SIA');
+  assert.equal(Enrichment.companyNameFromPayload({data:{metadata:{title:''}}}),'');
+});
+
+test('Find Missing Info is placed after Clear current draft',()=>{
+  const runtime=fs.readFileSync(path.join(__dirname,'..','reference-customer-website-enrichment.js'),'utf8');
+  assert.match(runtime,/FIND_INFO_LABEL='Find Missing Info'/);
+  assert.match(runtime,/reference-import-actions/);
+  assert.match(runtime,/reference-clear-list/);
+  assert.match(runtime,/insertAdjacentElement\('afterend',button\)/);
+  assert.match(runtime,/Find Missing Info \(\$\{missingCount\}\)/);
+});
