@@ -20,6 +20,11 @@ test('working-list clear action is distinguished from saved-list deletion',()=>{
   assert.match(runtime,/Saved Lists are not deleted/);
 });
 
+test('reference customer actions use unambiguous list labels',()=>{
+  assert.match(runtime,/Create New List/);
+  assert.match(runtime,/Import Customer List/);
+});
+
 test('reference customer runtime loads deletion controls',()=>{
   assert.match(loader,/reference-customer-delete-ui\.js\?v=20260911-reference-delete-v1/);
   assert.match(loader,/reference-customer-portfolio\.js\?v=20260911-reference-delete-v1/);
