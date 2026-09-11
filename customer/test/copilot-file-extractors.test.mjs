@@ -117,6 +117,18 @@ test('reports DOCX embedded objects that cannot be represented as text', async (
   assert.ok(result.coverage.omitted.some(value => /embedded object/.test(value)));
   assert.doesNotMatch(JSON.stringify(result.blocks), /OLEObject/);
 });
+test('never leaks text inside a DOCX embedded object subtree', async () => {
+  const result = await extractCopilotFile(file('object.docx', await docx('<w:p><w:r><w:t>Safe text</w:t><w:object><w:p><w:r><w:t>OBJECT_SECRET</w:t></w:r></w:p></w:object></w:r></w:p>')), dependencies);
+  assert.doesNotMatch(JSON.stringify(result), /OBJECT_SECRET/);
+  assert.match(result.blocks[0].text, /Safe text/);
+  assert.equal(result.coverage.complete, false);
+});
+test('accepts BOM-marked UTF-16BE CSV through the same validation contract', async () => {
+  const utf16le = Buffer.from('Name\tValue\nÉlodie\t12\n', 'utf16le');
+  const bytes = Buffer.concat([Buffer.from([254, 255]), utf16le.swap16()]);
+  const result = await extractCopilotFile(file('utf16be.csv', bytes), dependencies);
+  assert.deepEqual(result.blocks[1].table, [['Élodie', '12']]);
+});
 test('rejects embedded OLE objects in legacy XLS files', async () => {
   const { CFB } = dependencies.XLSX;
   const cfb = CFB.read(new Uint8Array(workbook('xls')), { type: 'array' });

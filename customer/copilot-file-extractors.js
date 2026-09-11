@@ -15,7 +15,11 @@ const children = (node, name) => (node?.elements || []).filter(item => item.type
 const descendants = (node, name) => children(node).flatMap(item => [...(localName(item) === name ? [item] : []), ...descendants(item, name)]);
 const attribute = (node, name) => Object.entries(node?.attributes || {}).find(([key]) => key.split(':').pop() === name)?.[1];
 const nodeText = node => (node?.elements || []).map(item => item.type === 'text' ? item.text : nodeText(item)).join('');
-const runText = node => descendants(node, 't').map(nodeText).join('');
+const runText = node => {
+  if (['object', 'oleObject', 'OLEObject', 'instrText'].includes(localName(node))) return '';
+  if (localName(node) === 't') return nodeText(node);
+  return children(node).map(runText).join('');
+};
 
 async function dependency(name, dependencies) {
   if (dependencies[name]) return dependencies[name];
@@ -368,11 +372,7 @@ export async function extractCopilotFile(file, dependencies = {}) {
   if (!file || Array.isArray(file) || typeof file.arrayBuffer !== 'function') throw new Error('Select one supported file.');
   if (file.size > FILE_LIMITS.maxFileBytes) throw new Error('The file exceeds the 15 MB limit.');
   const bytes = new Uint8Array(await file.arrayBuffer());
-  let prefix = bytes.subarray(0, 32);
-  // CSV signature validation uses decoded text for BOM-marked UTF-16 files.
-  if (/\.csv$/i.test(file.name) && ((bytes[0] === 0xff && bytes[1] === 0xfe) || (bytes[0] === 0xfe && bytes[1] === 0xff))) {
-    prefix = new TextEncoder().encode(new TextDecoder(bytes[0] === 0xff ? 'utf-16le' : 'utf-16be').decode(bytes.subarray(0, 32)));
-  }
+  const prefix = bytes.subarray(0, 32);
   const signature = Array.from(prefix, value => value.toString(16).padStart(2, '0')).join('');
   const validation = validateCopilotFile({ name: file.name, size: bytes.length, type: file.type, signature });
   if (!validation.ok) throw new Error(validation.errors.join(' '));

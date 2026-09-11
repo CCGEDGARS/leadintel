@@ -172,6 +172,14 @@ test('accepts CSV byte prefixes that contain text, an optional UTF-8 BOM and no 
     signature: '6c656164002c636f6d70616e79'
   }).ok, false);
 });
+test('accepts textual UTF-16LE and UTF-16BE CSV prefixes only with an explicit BOM', () => {
+  for (const signature of ['fffe4e0061006d0065000a00', 'feff004e0061006d0065000a']) {
+    assert.equal(validateCopilotFile({ name: 'text.csv', type: 'text/csv', size: 32, signature }).ok, true, signature);
+  }
+  for (const signature of ['4e0061006d006500', '004e0061006d0065', 'fffe0000', 'feff0000', 'fffe', 'feff', 'fffe4e']) {
+    assert.equal(validateCopilotFile({ name: 'binary.csv', type: 'text/csv', size: 32, signature }).ok, false, signature);
+  }
+});
 
 function extractionCharacterCount(value) {
   let total = value.title.length;

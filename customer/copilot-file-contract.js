@@ -41,7 +41,7 @@ export const SUPPORTED_FILE_FORMATS = Object.freeze({
   csv: Object.freeze({
     extensions: Object.freeze(['csv']),
     mimeTypes: Object.freeze(['text/csv']),
-    signaturePolicy: 'hex text bytes, optional UTF-8 BOM, no NUL bytes'
+    signaturePolicy: 'hex text bytes; optional UTF-8 BOM or explicit UTF-16LE/BE BOM; no NUL code points'
   }),
   pptx: Object.freeze({
     extensions: Object.freeze(['pptx']),
@@ -75,6 +75,18 @@ function isCsvTextSignature(signature) {
   const bytes = [];
   for (let index = 0; index < signature.length; index += 2) {
     bytes.push(Number.parseInt(signature.slice(index, index + 2), 16));
+  }
+
+  const littleEndian = bytes[0] === 0xff && bytes[1] === 0xfe;
+  const bigEndian = bytes[0] === 0xfe && bytes[1] === 0xff;
+  if (littleEndian || bigEndian) {
+    if (bytes.length <= 2 || bytes.length % 2 !== 0) return false;
+    for (let index = 2; index < bytes.length; index += 2) {
+      const code = littleEndian ? bytes[index] | bytes[index + 1] << 8 : bytes[index] << 8 | bytes[index + 1];
+      if (code === 9 || code === 10 || code === 13 || code >= 0x20) continue;
+      return false;
+    }
+    return true;
   }
 
   let index = bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf ? 3 : 0;
