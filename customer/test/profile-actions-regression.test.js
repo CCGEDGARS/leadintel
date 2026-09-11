@@ -4,12 +4,14 @@ const fs=require('node:fs');
 const path=require('node:path');
 
 const runtime=fs.readFileSync(path.join(__dirname,'..','profile-action-runtime.js'),'utf8');
+const launcher=fs.readFileSync(path.join(__dirname,'..','reference-customer-launcher.js'),'utf8');
 const boot=fs.readFileSync(path.join(__dirname,'..','process-map.js'),'utf8');
 
-test('canonical profile action runtime owns the Reference Customer CTA click and opens the manager',()=>{
-  assert.match(runtime,/data-reference-customers-manage/);
-  assert.match(runtime,/LeadIntelReferenceCustomerUI\?\.open/);
-  assert.match(runtime,/openReferenceCustomers/);
+test('Reference Customer CTA is isolated from profile actions and owned by the dedicated launcher',()=>{
+  assert.doesNotMatch(runtime,/data-reference-customers-manage/);
+  assert.match(launcher,/data-reference-customers-manage/);
+  assert.match(launcher,/LeadIntelReferenceCustomerUI\?\.open/);
+  assert.match(launcher,/reference-customer-upload-mode\.js/);
 });
 
 test('approved profile changes the main approval button to Profile Approved and disables it',()=>{
@@ -26,9 +28,11 @@ test('bottom profile card is a direct Market Strategy next step rather than dupl
   assert.doesNotMatch(runtime,/card\.hidden=true/);
 });
 
-test('profile action runtime boots after reference customer UI',()=>{
+test('dedicated Reference Customer launcher boots after the base Reference Customer UI and independently of profile actions',()=>{
   const ui=boot.indexOf('reference-customer-ui.js');
+  const launcherIndex=boot.indexOf('reference-customer-launcher.js');
   const actions=boot.indexOf('profile-action-runtime.js');
   assert.ok(ui>=0);
-  assert.ok(actions>ui);
+  assert.ok(launcherIndex>ui);
+  assert.ok(actions>launcherIndex);
 });
