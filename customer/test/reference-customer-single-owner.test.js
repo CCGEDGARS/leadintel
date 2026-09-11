@@ -8,6 +8,8 @@ const launcher=fs.readFileSync(new URL('../reference-customer-launcher.js',impor
 const aiRuntime=fs.readFileSync(new URL('../reference-customer-ai-runtime.js',import.meta.url),'utf8');
 const processMap=fs.readFileSync(new URL('../process-map.js',import.meta.url),'utf8');
 
+const VERSION='20260911-reference-single-owner-v1';
+
 test('Reference Customer base UI is the sole owner of the import button click',()=>{
   assert.match(baseUi,/querySelector\('#reference-upload-button'\)\?\.addEventListener\('click'/);
   assert.match(baseUi,/fileInput\.click\(\)/);
@@ -32,8 +34,10 @@ test('upload mode exposes import-state helpers without intercepting document cli
   assert.doesNotMatch(uploadMode,/document\.addEventListener\('click'/);
 });
 
-test('single-owner upload runtime is cache-busted everywhere so the old interceptor cannot survive a deploy',()=>{
-  assert.match(aiRuntime,/reference-customer-upload-mode\.js\?v=20260911-reference-single-owner-v1/);
-  assert.match(processMap,/reference-customer-launcher\.js\?v=20260911-reference-single-owner-v1/);
-  assert.match(launcher,/REFERENCE_CUSTOMER_LAUNCH_VERSION='20260911-reference-single-owner-v1'/);
+test('single-owner Reference Customer runtime is cache-busted at every changed module boundary',()=>{
+  assert.match(processMap,new RegExp(`reference-customer-ui\\.js\\?v=${VERSION}`));
+  assert.match(processMap,new RegExp(`reference-customer-ai-runtime\\.js\\?v=${VERSION}`));
+  assert.match(processMap,new RegExp(`reference-customer-launcher\\.js\\?v=${VERSION}`));
+  assert.match(aiRuntime,new RegExp(`reference-customer-upload-mode\\.js\\?v=${VERSION}`));
+  assert.match(launcher,new RegExp(`REFERENCE_CUSTOMER_LAUNCH_VERSION='${VERSION}'`));
 });
