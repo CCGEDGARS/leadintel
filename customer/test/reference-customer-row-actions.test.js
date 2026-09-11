@@ -74,3 +74,9 @@ test('dark Analyze styling is scoped to the selected saved-list row',()=>{
   assert.doesNotMatch(ui,/\.reference-saved-buttons \[data-analyze-reference-list\]\{background/);
   assert.match(ui,/\.reference-saved-row\.selected \[data-analyze-reference-list\]\{background/);
 });
+
+
+test('unsaved draft editor renders when saved lists already exist',()=>{
+  assert.match(ui,/const unselectedEditor=!selectedId\?editorHtml:''/);
+  assert.match(ui,/reference-saved-head[\\s\\S]*\$\{unselectedEditor\}\$\{portfolio\.lists\.map/);
+});
