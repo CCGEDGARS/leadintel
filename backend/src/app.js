@@ -11,6 +11,7 @@ import {handleCrmRoute} from './crm-routes.js';
 import {handleApolloCrmWebhook} from './crm-routes.js';
 import {handleMarketMonitoringRoute,runDueMarketMonitoring} from './market-monitoring.js';
 import {handleIntelligenceSourceRoute,runDueSourceHealthChecks} from './intelligence-sources.js';
+import {handleCopilotFileRoute} from './copilot-file-routes.js';
 import {handleCopilotRoute} from './copilot-routes.js';
 
 export default {
@@ -24,6 +25,7 @@ export default {
     if(request.headers.get('Origin')&&!origin)return new Response(JSON.stringify({error:'Origin not allowed'}),{status:403,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...cors}});
     try{
       const ai=await handleAiRoute(request,env,cors);if(ai)return ai;
+      const copilotFile=await handleCopilotFileRoute(request,env,cors);if(copilotFile)return copilotFile;
       const copilot=await handleCopilotRoute(request,env,cors);if(copilot)return copilot;
       const scrapling=await handleScraplingRoute(request,env,cors);if(scrapling)return scrapling;
       const service=await handleServiceIntegrationRoute(request,env,cors);if(service)return service;
