@@ -14,7 +14,8 @@ const REFERENCE_AI_CONCURRENCY=4;
   if(typeof document==='undefined')return;
   const Ref=root.LeadIntelReferenceCustomers;
   const AI=root.LeadIntelReferenceCustomerAI;
-  if(!Ref||!AI)return;
+  const Portfolio=root.LeadIntelReferenceCustomerPortfolio;
+  if(!Ref||!AI||!Portfolio)return;
   const clean=value=>String(value??'').replace(/\s+/g,' ').trim();
   function readState(){try{return JSON.parse(localStorage.getItem(REFERENCE_AI_STATE_KEY)||'{}');}catch{return {};}}
   async function writeState(state){
@@ -64,6 +65,7 @@ const REFERENCE_AI_CONCURRENCY=4;
       segmentationMeaningful:Boolean(result.segmentationMeaningful),
       analyzedAt:new Date().toISOString()
     });
+    state=Portfolio.syncCurrentList(state);
     await writeState(state);
     status(`AI analysis complete · ${Object.keys(result.analyses).length} companies classified${failures?` · ${failures} websites need review`:''}. Review the Customer segments before activation.`);
   }
