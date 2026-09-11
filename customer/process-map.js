@@ -1,5 +1,5 @@
 import './workspace-reset-hygiene.js?v=20260909-emergency-reset-v1';
-import './workspace-persistence.js?v=20260903-step1-startup-order-v1';
+import './workspace-persistence.js?v=20260911-copilot-freshness-v1';
 import './state-budget.js?v=20260826-state-budget-500kb';
 import './website-input-sync.js?v=20260901-saved-state-v2';
 import './custom-market-input-hygiene.js?v=20260903-password-manager-isolation-v5';
@@ -34,7 +34,7 @@ import './lookalike-discovery.js?v=20260910-reference-portfolio-v1';
 import './intelligence-sources-ui.js?v=20260910-intelligence-sources-v1';
 import './profile-action-runtime.js?v=20260911-profile-single-owner-v1';
 import './outreach-automation-loader.js?v=20260908-boot-isolation-v1';
-import './copilot-loader.js?v=20260908-copilot-polish-v1';
+import './copilot-loader.js?v=20260911-copilot-freshness-v1';
 
 const PROCESS_STORAGE_KEY="leadintel_customer_v2_state";
 const processMap=document.getElementById("commercial-process-map");

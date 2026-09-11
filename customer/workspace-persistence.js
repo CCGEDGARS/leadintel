@@ -151,6 +151,7 @@
   }
 
   function disableServerAutosave(){if(typeof Storage!=="undefined"&&Storage.prototype)Storage.prototype.__leadintelServerPatched=true;}
+  function hasUnsavedChanges(){return !isExplicitlySaved()||dirtySinceSave;}
   function persistenceLabel(){if(!isExplicitlySaved())return "Unsaved draft · not saved";return dirtySinceSave?"Unsaved changes · click Save workspace":"Workspace saved";}
   function renderPersistenceStatus(){const status=root.document?.querySelector?.(".autosave");if(status)status.innerHTML=`<i></i>${persistenceLabel()}`;const button=root.document?.getElementById?.("save-workspace");if(button){button.textContent=isExplicitlySaved()?(dirtySinceSave?"Save changes":"Saved ✓"):"Save workspace";button.disabled=saveBusy;}}
   function toast(message){const el=root.document?.getElementById?.("toast");if(!el)return;el.textContent=message;el.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove("show"),2400);}
@@ -182,5 +183,5 @@
   if(changed&&(explicitlySaved||hadMeaningfulUnsavedData)&&root.location?.reload){root.location.reload();return;}
   if(root.document?.readyState==="loading")root.document.addEventListener("DOMContentLoaded",installUi,{once:true});else installUi();
 
-  root.LeadIntelWorkspacePersistence={EXPLICIT_SAVE_KEY,SNAPSHOT_KEY,SAVE_INTENT_KEY,FORCE_RESET_KEY,RESET_PENDING_KEY,WORKSPACE_DATA_KEYS,isExplicitlySaved,markExplicitlySaved,clearExplicitSave,currentWorkspaceData,hasMeaningfulWorkspaceData,captureWorkspaceSnapshot,restoreSavedSnapshot,clearWorkspaceData,prepareForLoad,snapshotFromServerPayload,saveWorkspace,renderPersistenceStatus,handleResetClick};
+  root.LeadIntelWorkspacePersistence={EXPLICIT_SAVE_KEY,SNAPSHOT_KEY,SAVE_INTENT_KEY,FORCE_RESET_KEY,RESET_PENDING_KEY,WORKSPACE_DATA_KEYS,isExplicitlySaved,hasUnsavedChanges,markExplicitlySaved,clearExplicitSave,currentWorkspaceData,hasMeaningfulWorkspaceData,captureWorkspaceSnapshot,restoreSavedSnapshot,clearWorkspaceData,prepareForLoad,snapshotFromServerPayload,saveWorkspace,renderPersistenceStatus,handleResetClick};
 })(typeof globalThis!=="undefined"?globalThis:this);
