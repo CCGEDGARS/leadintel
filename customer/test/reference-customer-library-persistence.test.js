@@ -93,7 +93,7 @@ test('importing a customer file starts a separate draft without intercepting the
   assert.doesNotMatch(uploadMode,/document\.addEventListener\('click'/);
   assert.doesNotMatch(uploadMode,/stopImmediatePropagation\s*\(/);
   assert.match(baseUi,/fileInput\.click\(\)/,'base UI must own the native file picker click');
-  assert.match(aiRuntime,/reference-customer-upload-mode\.js\?v=20260910-reference-upload-mode-v3/);
+  assert.match(aiRuntime,/reference-customer-upload-mode\.js\?v=20260911-reference-single-owner-v1/);
 });
 
 test('Excel smart import consumes new-vs-append mode itself before stopping propagation',()=>{
