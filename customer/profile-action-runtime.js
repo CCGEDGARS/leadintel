@@ -43,7 +43,8 @@ const PROFILE_ACTION_VERSION='20260911-profile-approval-v3';
       const nextButton=document.getElementById('approve-profile-bottom');
       setText(eyebrow,'Next step');
       setText(heading,'Continue to Market Strategy.');
-      setText(copy,approved?'This profile is approved and is now the operating context for Market Strategy and Discovery.':'Approval is optional. You can approve the profile above now or continue and return later.');
+      if(approved)setText(copy,'This profile is approved and is now the operating context for Market Strategy and Discovery.');
+      else setText(copy,'Approval is optional. You can approve the profile above now or continue and return later.');
       if(nextButton){
         setText(nextButton,'Next: Market Strategy →');
         if(nextButton.disabled)nextButton.disabled=false;
