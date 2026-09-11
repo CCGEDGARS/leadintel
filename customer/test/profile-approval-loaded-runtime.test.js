@@ -3,16 +3,19 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 
-const source=fs.readFileSync(path.join(__dirname,'..','profile-action-runtime.js'),'utf8');
+const runtime=fs.readFileSync(path.join(__dirname,'..','profile-action-runtime.js'),'utf8');
+const app=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
 
-test('loaded profile action runtime guarantees top approve action persists approved state',()=>{
-  assert.match(source,/\#approve-profile/);
-  assert.match(source,/approved=true/);
-  assert.match(source,/approvedAt/);
-  assert.match(source,/captureWorkspaceSnapshot/);
+test('app runtime owns approval persistence',()=>{
+  assert.match(app,/function approveProfile\(\)/);
+  assert.match(app,/state\.approved=true/);
+  assert.match(app,/approvedAt/);
+  assert.match(app,/\$\("approve-profile"\)\.addEventListener\("click",approveProfile\)/);
 });
 
-test('approval fallback re-syncs controls from persisted state',()=>{
-  assert.match(source,/syncApprovalControls\(\)/);
-  assert.match(source,/profile-approved/);
+test('loaded profile presentation runtime does not duplicate approval state writes',()=>{
+  assert.match(runtime,/syncApprovalControls\(\)/);
+  assert.doesNotMatch(runtime,/approved=true/);
+  assert.doesNotMatch(runtime,/captureWorkspaceSnapshot/);
+  assert.doesNotMatch(runtime,/document\.addEventListener\(['"]click['"]/);
 });
