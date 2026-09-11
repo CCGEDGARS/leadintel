@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 
 const Portfolio=require('../reference-customer-portfolio.js');
 
-function ref(name){return {rows:[{id:name,name}],analyses:{},segments:[],activeSegmentIds:[],activeIds:[],activated:false,fingerprint:'',dna:null,publishedModel:null,draftDirty:false};}
+function ref(name){return {rows:[{id:name,companyName:name,website:'https://example.com',status:'ready'}],analyses:{},segments:[],activeSegmentIds:[],activeIds:[],activated:false,fingerprint:'',dna:null,publishedModel:null,draftDirty:false};}
 
 test('deleteList removes only the requested saved list and opens another saved list',()=>{
   const state={
@@ -16,7 +16,7 @@ test('deleteList removes only the requested saved list and opens another saved l
   const next=Portfolio.deleteList(state,'one');
   assert.deepEqual(next.referenceCustomerPortfolio.lists.map(x=>x.id),['two']);
   assert.equal(next.referenceCustomerPortfolio.selectedListId,'two');
-  assert.equal(next.referenceCustomers.rows[0].name,'two');
+  assert.equal(next.referenceCustomers.rows[0].companyName,'two');
 });
 
 test('deleteList clears the working reference state when the final saved list is deleted',()=>{
