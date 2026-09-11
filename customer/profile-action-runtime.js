@@ -1,5 +1,4 @@
 const PROFILE_ACTION_STATE_KEY='leadintel_customer_v2_state';
-const PROFILE_ACTION_VERSION='20260911-reference-upload-cta-v3';
 
 (function installProfileActionRuntime(root){
   'use strict';
@@ -68,18 +67,6 @@ const PROFILE_ACTION_VERSION='20260911-reference-upload-cta-v3';
     return !wasApproved;
   }
 
-  async function openReferenceCustomers(){
-    try{
-      if(root.LeadIntelReferenceCustomerUI?.open){root.LeadIntelReferenceCustomerUI.open();return true;}
-      await import(`./reference-customers.js?v=${PROFILE_ACTION_VERSION}-fallback`);
-      await import(`./reference-customer-ui.js?v=${PROFILE_ACTION_VERSION}-fallback`);
-      await import(`./reference-customer-upload-mode.js?v=${PROFILE_ACTION_VERSION}-fallback`);
-      if(root.LeadIntelReferenceCustomerUI?.open){root.LeadIntelReferenceCustomerUI.open();return true;}
-    }catch(error){console.error('Reference Customer Intelligence failed to open',error);}
-    toast('Reference Customer Intelligence could not open. Reload the workspace and try again.');
-    return false;
-  }
-
   document.addEventListener('click',event=>{
     const approve=event.target?.closest?.('#approve-profile');
     if(approve){
@@ -97,13 +84,7 @@ const PROFILE_ACTION_VERSION='20260911-reference-upload-cta-v3';
       event.stopPropagation();
       event.stopImmediatePropagation();
       openMarketStrategy();
-      return;
     }
-
-    const button=event.target?.closest?.('[data-reference-customers-manage]');
-    if(!button)return;
-    event.preventDefault();
-    void openReferenceCustomers();
   },true);
 
   root.addEventListener('leadintel:module-opened',()=>setTimeout(syncApprovalControls,0));
@@ -111,5 +92,5 @@ const PROFILE_ACTION_VERSION='20260911-reference-upload-cta-v3';
   root.addEventListener('storage',event=>{if(event.key===PROFILE_ACTION_STATE_KEY)setTimeout(syncApprovalControls,0);});
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',syncApprovalControls,{once:true});else setTimeout(syncApprovalControls,0);
 
-  root.LeadIntelProfileActionRuntime={syncApprovalControls,persistApprovedState,openReferenceCustomers,openMarketStrategy};
+  root.LeadIntelProfileActionRuntime={syncApprovalControls,persistApprovedState,openMarketStrategy};
 })(globalThis);
