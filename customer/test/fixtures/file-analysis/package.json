@@ -6,5 +6,8 @@
     "pdfjs-dist": "4.8.69",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "xml-js": "1.6.11"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.12"
   }
 }

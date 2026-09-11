@@ -2,10 +2,10 @@ import { FILE_LIMITS, normalizeExtraction, validateCopilotFile } from './copilot
 
 // Dependencies are loaded only for the selected format, and are replaceable without network access.
 const LIBRARIES = Object.freeze({
-  JSZip: 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm',
-  XLSX: 'https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs',
-  xml: 'https://cdn.jsdelivr.net/npm/xml-js@1.6.11/+esm',
-  pdfjs: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.8.69/build/pdf.mjs'
+  JSZip: './vendor/file-analysis/jszip-3.10.1.mjs',
+  XLSX: './vendor/file-analysis/xlsx-0.20.3.mjs',
+  xml: './vendor/file-analysis/xml-js-1.6.11.mjs',
+  pdfjs: './vendor/file-analysis/pdf-4.8.69.mjs'
 });
 const MAX_BLOCKS = 1_000;
 const MAX_COLUMNS = 1_000;
@@ -25,8 +25,8 @@ async function dependency(name, dependencies) {
   if (dependencies[name]) return dependencies[name];
   const module = await import(LIBRARIES[name]);
   const value = module.default || module;
-  if (name === 'XLSX') value.set_cptable(await import('https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/cpexcel.full.mjs'));
-  if (name === 'pdfjs') value.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.8.69/build/pdf.worker.mjs';
+  if (name === 'XLSX') value.set_cptable(await import('./vendor/file-analysis/cpexcel-0.20.3.mjs'));
+  if (name === 'pdfjs') value.GlobalWorkerOptions.workerSrc = new URL('./vendor/file-analysis/pdf.worker-4.8.69.mjs', import.meta.url).href;
   return value;
 }
 

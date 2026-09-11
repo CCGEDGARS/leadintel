@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; connect-src 'self'; worker-src 'self'; style-src 'self'">
+<title>General file parser browser smoke test</title>
+<h1>Repository-hosted parser smoke test</h1>
+<p>This page uses the actual default extractor and parser assets. The content security policy permits only same-origin resources.</p>
+<button type="button" id="run">Run all six formats</button>
+<pre id="results" role="status" aria-live="polite">Not run</pre>
+<script type="module" src="./copilot-file-browser-smoke.mjs"></script>
+</html>
