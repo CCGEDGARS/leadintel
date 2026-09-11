@@ -26,6 +26,10 @@
     }catch{return "";}
   }
   function sameUrl(a,b){return Boolean(normalizeUrl(a)&&normalizeUrl(a)===normalizeUrl(b));}
+  function sameCompanyWebsite(a,b){
+    const left=normalizeUrl(a),right=normalizeUrl(b);if(!left||!right)return false;
+    try{return new URL(left).hostname.replace(/^www\./i,"").toLowerCase()===new URL(right).hostname.replace(/^www\./i,"").toLowerCase();}catch{return false;}
+  }
   function normalizedSource(source={}){
     const url=normalizeUrl(source.url);const text=String(source.text||"").replace(/\u0000/g,"").trim().slice(0,MAX_SOURCE_CHARS);
     if(!url||!text)return null;
@@ -44,7 +48,10 @@
     const base=state&&typeof state==="object"&&!Array.isArray(state)?state:{};const websiteSource=normalizedSource(source);
     if(!websiteSource)return {...base};
     const {url,title,description,text}=websiteSource;
-    return {...base,step:1,website:url,websiteActivation:{status:"active",url,title,description,activatedAt:clean(activatedAt),contentChars:text.length},scrapedSources:[{type:"website",url,title,text,status:"ready"}],profile:null,approved:false,market:{}};
+    const boundWebsite=normalizeUrl(base.companyContextWebsite);
+    const companyChanged=!boundWebsite||!sameCompanyWebsite(boundWebsite,url);
+    const companyContext=companyChanged?{answers:{},answerStatus:{},documents:[],additionalLinks:[]}:{};
+    return {...base,...companyContext,step:1,website:url,companyContextWebsite:url,websiteActivation:{status:"active",url,title,description,activatedAt:clean(activatedAt),contentChars:text.length},scrapedSources:[{type:"website",url,title,text,status:"ready"}],profile:null,approved:false,market:{}};
   }
   function buildActivationRecord(source={},activatedAt=new Date().toISOString()){
     const websiteSource=normalizedSource(source);if(!websiteSource)return {status:"inactive",url:"",source:null};
