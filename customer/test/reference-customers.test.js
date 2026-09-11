@@ -90,3 +90,16 @@ test('DNA builder summarizes only evidenced active customer traits',()=>{
   assert.ok(dna.dimensions.some(d=>d.key==='industry'&&d.values.includes('industrial manufacturing')));
   assert.ok(['high','medium','low'].includes(dna.confidence));
 });
+
+
+test('website-only rows are preserved for company-name enrichment',()=>{
+  const rows=Ref.normalizeImportedRows([{Website:'https://example.lv'}],{sourceType:'csv'});
+  assert.equal(rows.length,1);
+  assert.equal(rows[0].companyName,'');
+  assert.equal(rows[0].domain,'example.lv');
+  assert.equal(rows[0].status,'unresolved');
+});
+
+test('rows with neither company name nor website are rejected',()=>{
+  assert.deepEqual(Ref.normalizeImportedRows([{Company:'',Website:''}],{sourceType:'csv'}),[]);
+});
