@@ -1,4 +1,4 @@
-const REFERENCE_CUSTOMER_LAUNCH_VERSION='20260911-reference-launch-sync-v2';
+const REFERENCE_CUSTOMER_LAUNCH_VERSION='20260911-reference-single-owner-v1';
 
 (function installReferenceCustomerLauncher(root){
   'use strict';
