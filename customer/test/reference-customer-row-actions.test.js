@@ -11,7 +11,7 @@ test('every saved customer list exposes Analyze Activate Edit and Delete row act
   assert.match(ui,/data-activate-reference-list/);
   assert.match(ui,/data-edit-reference-list/);
   assert.match(ui,/data-delete-reference-list/);
-  assert.match(ui,/>Analyze<\/button>/);
+  assert.match(ui,/['"]Analyze['"]/);
   assert.match(ui,/\?\s*'Deactivate'\s*:\s*'Activate'/);
   assert.match(ui,/>Edit<\/button>/);
   assert.match(ui,/>Delete<\/button>/);
@@ -78,7 +78,7 @@ test('dark Analyze styling is scoped to the selected saved-list row',()=>{
 
 test('unsaved draft editor renders when saved lists already exist',()=>{
   assert.match(ui,/const unselectedEditor=!selectedId\?editorHtml:''/);
-  assert.match(ui,/reference-saved-head[\\s\\S]*\$\{unselectedEditor\}\$\{portfolio\.lists\.map/);
+  assert.match(ui,/reference-saved-head[\s\S]*\$\{unselectedEditor\}\$\{portfolio\.lists\.map/);
 });
 
 
@@ -96,4 +96,14 @@ test('View Results selects the requested list and scrolls to its segment review'
   assert.match(ui,/reference-segment-review/);
   assert.match(ui,/scrollIntoView/);
   assert.match(ui,/dataset\.viewReferenceResults/);
+});
+
+
+test('completed enrichment exposes update and copy save modes',()=>{
+  assert.match(ui,/Save Updated List/);
+  assert.match(ui,/data-save-reference-list-as-new/);
+  assert.match(ui,/>Save as New List<\/button>/);
+  assert.match(ui,/async function saveAsNewList\(\)/);
+  assert.match(ui,/selectedListId=''/);
+  assert.match(ui,/function openEditor\(\)/);
 });

@@ -43,7 +43,7 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     const style=document.createElement('style');style.id='reference-library-styles';style.textContent=`
       .reference-library-summary{margin:14px 0 18px;padding:18px;border:1px solid #d9e6e1;border-radius:16px;background:#f8fbfa;display:flex;flex-direction:column;gap:16px}
       .reference-library-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.reference-library-main{display:flex;flex-direction:column;gap:5px;min-width:0}.reference-library-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.reference-library-head strong{font-size:18px;color:#10251f}.reference-library-badge{display:inline-flex;align-items:center;border-radius:999px;padding:5px 9px;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;background:#dff4ec;color:#0d684f}.reference-library-badge.inactive{background:#edf0ef;color:#64716d}.reference-library-badge.pending{background:#fff0cf;color:#75510b}.reference-library-status{font-size:13px;color:#607083;line-height:1.45}.reference-library-status strong{color:#1f3b32}
-      .reference-current-card{padding:16px;border:1px solid #dfe8e4;border-radius:14px;background:#fff;display:flex;flex-direction:column;gap:12px}.reference-current-message{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.reference-current-message strong{font-size:15px;color:#173029}.reference-current-message span{font-size:12px;color:#677872}.reference-current-name{display:grid;grid-template-columns:minmax(240px,1fr) auto;gap:10px;align-items:end}.reference-current-name label{display:flex;flex-direction:column;gap:5px;font-size:11px;font-weight:800;color:#62706c;text-transform:uppercase;letter-spacing:.04em}.reference-current-name input,.reference-advanced-grid input{min-height:44px;border:1px solid #d3ddda;border-radius:10px;padding:9px 11px;background:white;color:#173029;font-size:14px}.reference-simple-actions{display:flex;gap:9px;flex-wrap:wrap}.reference-simple-actions button{min-height:42px}.reference-simple-actions .primary-action{background:#10251f;color:#fff}.reference-simple-actions button[disabled]{opacity:.42;cursor:not-allowed}
+      .reference-current-card{padding:16px;border:1px solid #dfe8e4;border-radius:14px;background:#fff;display:flex;flex-direction:column;gap:12px}.reference-current-message{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.reference-current-message strong{font-size:15px;color:#173029}.reference-current-message span{font-size:12px;color:#677872}.reference-current-name{display:grid;grid-template-columns:minmax(240px,1fr) auto;gap:10px;align-items:end}.reference-save-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.reference-current-name label{display:flex;flex-direction:column;gap:5px;font-size:11px;font-weight:800;color:#62706c;text-transform:uppercase;letter-spacing:.04em}.reference-current-name input,.reference-advanced-grid input{min-height:44px;border:1px solid #d3ddda;border-radius:10px;padding:9px 11px;background:white;color:#173029;font-size:14px}.reference-simple-actions{display:flex;gap:9px;flex-wrap:wrap}.reference-simple-actions button{min-height:42px}.reference-simple-actions .primary-action{background:#10251f;color:#fff}.reference-simple-actions button[disabled]{opacity:.42;cursor:not-allowed}
       .reference-advanced{border-top:1px solid #e4ebe8;padding-top:10px}.reference-advanced summary{cursor:pointer;font-size:12px;font-weight:750;color:#53655f;list-style:none}.reference-advanced summary::-webkit-details-marker{display:none}.reference-advanced summary:before{content:'▸ ';color:#71827c}.reference-advanced[open] summary:before{content:'▾ '}.reference-advanced-grid{display:grid;grid-template-columns:1fr 1.4fr auto;gap:10px;align-items:end;margin-top:10px}.reference-advanced-grid label{display:flex;flex-direction:column;gap:5px;font-size:11px;font-weight:700;color:#62706c}
       .reference-saved-lists{display:flex;flex-direction:column;gap:8px;border-top:1px solid #e1e9e6;padding-top:14px}.reference-saved-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.reference-saved-head strong{font-size:13px;color:#29453c}.reference-saved-head span{font-size:11px;color:#71807b}.reference-saved-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:11px 12px;border:1px solid #dfe7e4;border-radius:11px;background:#fff}.reference-saved-info{min-width:0}.reference-saved-info strong{display:block;font-size:13px;color:#173029}.reference-saved-info small{display:block;margin-top:3px;font-size:11px;color:#73817c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.reference-saved-row.active{border-color:#9fcdbf;background:#f4fbf8}.reference-saved-row.selected{box-shadow:inset 3px 0 0 #0d684f}.reference-saved-buttons{display:flex;gap:7px;align-items:center}.reference-saved-buttons button{font-size:11px;padding:7px 10px;border-radius:8px}.reference-saved-row.selected [data-analyze-reference-list]{background:#0d1b2e;border-color:#0d1b2e;color:#fff}.reference-saved-row.selected [data-analyze-reference-list]:hover{background:#162a43;border-color:#162a43}.reference-saved-row.selected [data-view-reference-results]{background:#0d1b2e;border-color:#0d1b2e;color:#fff}.reference-saved-row.selected [data-view-reference-results]:hover{background:#162a43;border-color:#162a43}.reference-list-state{display:inline-flex;margin-left:7px;border-radius:999px;padding:3px 7px;font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;background:#edf0ef;color:#65736e}.reference-list-state.active{background:#dff4ec;color:#0d684f}
       #reference-customer-modal .reference-format-guide{display:none!important}#reference-customer-modal .reference-analysis-actions{display:none!important}#reference-customer-modal footer #reference-activate{display:none!important}
@@ -105,10 +105,10 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     const canActivate=Boolean(selected&&(hasPublished||candidateReady));
     const statusLabel=selected?(selected.active?'Active Model':'Saved List'):(saved?'Unsaved':'New List');
     const statusClass=selected?.active?'':selected?'inactive':saved?'pending':'inactive';
-    const saveLabel=selected?'Save Changes':'Save List';
+    const saveLabel=selected?'Save Updated List':'Save List';
     const showEditor=Boolean(editorOpen||!portfolio.lists.length||(saved&&!selected));
     const activateLabel=selected?.active?(reference.draftDirty?'Update Model':'Model Active'):'Activate Model';
-    const editorHtml=showEditor?`<div class="reference-current-card"><div class="reference-current-message">${currentMessage({saved,analyzed,segments,selected})}</div><div class="reference-current-name"><label>List name<input id="reference-list-name" value="${esc(meta.name||'')}" placeholder="e.g. Latvia Sales Training"></label><button class="primary-btn" type="button" data-save-reference-list ${saved?'':'disabled'}>${saveLabel}</button></div>
+    const editorHtml=showEditor?`<div class="reference-current-card"><div class="reference-current-message">${currentMessage({saved,analyzed,segments,selected})}</div><div class="reference-current-name"><label>List name<input id="reference-list-name" value="${esc(meta.name||'')}" placeholder="e.g. Latvia Sales Training"></label><div class="reference-save-actions"><button class="primary-btn" type="button" data-save-reference-list ${saved?'':'disabled'}>${saveLabel}</button>${selected?`<button class="secondary-btn" type="button" data-save-reference-list-as-new ${saved?'':'disabled'}>Save as New List</button>`:''}</div></div>
       <details class="reference-advanced"><summary>Advanced list settings</summary><div class="reference-advanced-grid"><label>Markets<input id="reference-list-markets" value="${esc((meta.markets||[]).join('; '))}" placeholder="Latvia; Baltics"></label><label>Purpose<input id="reference-list-purpose" value="${esc(meta.purpose||'')}" placeholder="What should this list help discover?"></label><button class="secondary-btn" type="button" data-download-reference-template>Download example CSV</button></div></details></div>`:'';
     panel.innerHTML=`<div class="reference-library-top"><div class="reference-library-main"><div class="reference-library-head"><strong>Customer List</strong><span class="reference-library-badge ${statusClass}">${esc(statusLabel)}</span></div><div class="reference-library-status">${portfolio.lists.length} saved list${portfolio.lists.length===1?'':'s'} · ${activeModels} active model${activeModels===1?'':'s'}. Upload → Save → Analyze → Review → Activate.</div></div><button class="secondary-btn" type="button" data-new-reference-list>+ New List</button></div>
       ${renderSavedLists(state,editorHtml)}`;
@@ -130,6 +130,19 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     syncLibraryUi();
     return state.referenceCustomerPortfolio.selectedListId;
   }
+  async function saveAsNewList(){
+    let state=snapshot();
+    if(!state.referenceCustomers?.rows?.length)throw new Error('Add at least one customer before saving the list');
+    const meta=metadataFromUi(state);
+    state.referenceCustomerPortfolio.selectedListId='';
+    state=Portfolio.saveCurrentList(state,meta);
+    editorOpen=false;
+    await writeState(state);
+    const status=document.getElementById('reference-import-status');if(status)status.textContent='Saved as a new customer list.';
+    syncLibraryUi();
+    return state.referenceCustomerPortfolio.selectedListId;
+  }
+  function openEditor(){editorOpen=true;syncLibraryUi();document.querySelector('.reference-current-card')?.scrollIntoView?.({behavior:'smooth',block:'nearest'});}
   async function openList(id){let state=snapshot();state=Portfolio.selectList(state,id);await writeState(state);syncLibraryUi();}
   async function viewResults(id){
     editorOpen=false;
@@ -164,7 +177,8 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
   }
   async function editList(id){
     editorOpen=true;
-    await openList(id);
+    const state=snapshot();
+    if(state.referenceCustomerPortfolio.selectedListId===id)syncLibraryUi();else await openList(id);
     document.getElementById('reference-list-name')?.focus();
     document.querySelector('.reference-current-card')?.scrollIntoView?.({behavior:'smooth',block:'nearest'});
   }
@@ -200,6 +214,7 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     const activate=event.target?.closest?.('#reference-activate');
     if(activate){event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();void publishSelected(activate).catch(error=>{activate.disabled=false;const status=document.getElementById('reference-action-status')||document.getElementById('reference-import-status');if(status)status.textContent=clean(error?.message)||'Unable to activate model';});return;}
     const save=event.target?.closest?.('[data-save-reference-list]');if(save){event.preventDefault();void saveList().catch(error=>{const status=document.getElementById('reference-import-status');if(status)status.textContent=clean(error?.message)||'Unable to save list';});return;}
+    const saveAsNew=event.target?.closest?.('[data-save-reference-list-as-new]');if(saveAsNew){event.preventDefault();void saveAsNewList().catch(error=>{const status=document.getElementById('reference-import-status');if(status)status.textContent=clean(error?.message)||'Unable to save a new list';});return;}
     const analyze=event.target?.closest?.('[data-analyze-current]');if(analyze){event.preventDefault();document.getElementById('reference-analyze')?.click();return;}
     const activateCurrentButton=event.target?.closest?.('[data-activate-current]');if(activateCurrentButton){event.preventDefault();void activateCurrent().catch(error=>{const status=document.getElementById('reference-import-status');if(status)status.textContent=clean(error?.message)||'Unable to activate model';});return;}
     const download=event.target?.closest?.('[data-download-reference-template]');if(download){event.preventDefault();document.getElementById('reference-template-download')?.click();return;}
@@ -213,5 +228,5 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
   root.addEventListener('leadintel:reference-customers-updated',()=>setTimeout(syncLibraryUi,0));
   root.addEventListener('leadintel:server-ready',()=>setTimeout(syncLibraryUi,0));
   if(document.body&&typeof MutationObserver!=='undefined')new MutationObserver(records=>{if(records.some(record=>[...record.addedNodes].some(node=>node?.id==='reference-customer-modal'||node?.querySelector?.('#reference-customer-modal'))))setTimeout(syncLibraryUi,0);}).observe(document.body,{childList:true,subtree:true});
-  root.LeadIntelReferenceCustomerLibraryUI={sync:syncLibraryUi,publishSelected,saveList,openList,viewResults,analyzeList,finishAnalysis,activateList,editList,createNewList,toggleList,activateCurrent,legacyLabels:LEGACY_LABELS};
+  root.LeadIntelReferenceCustomerLibraryUI={sync:syncLibraryUi,publishSelected,saveList,saveAsNewList,openEditor,openList,viewResults,analyzeList,finishAnalysis,activateList,editList,createNewList,toggleList,activateCurrent,legacyLabels:LEGACY_LABELS};
 })(globalThis);
