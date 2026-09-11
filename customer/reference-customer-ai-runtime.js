@@ -1,6 +1,6 @@
 import './reference-customer-library.js?v=20260910-reference-portfolio-v1';
 import './reference-customer-portfolio.js?v=20260911-reference-delete-v1';
-import './reference-customer-library-ui.js?v=20260911-reference-conditional-editor-v1';
+import './reference-customer-library-ui.js?v=20260911-reference-analysis-state-v1';
 import './reference-customer-delete-ui.js?v=20260911-reference-delete-v1';
 import './reference-customer-upload-mode.js?v=20260911-reference-single-owner-v1';
 
@@ -73,7 +73,7 @@ const REFERENCE_AI_CONCURRENCY=4;
     const button=event.target?.closest?.('#reference-analyze');if(!button)return;
     event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
     try{await runAiAnalysis(button);}catch(error){status(clean(error?.message)||'AI analysis failed');}
-    finally{button.disabled=false;}
+    finally{button.disabled=false;root.LeadIntelReferenceCustomerLibraryUI?.finishAnalysis?.();}
   },true);
   root.LeadIntelReferenceCustomerAIRuntime={runAiAnalysis};
 })(globalThis);
