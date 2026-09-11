@@ -82,15 +82,18 @@ test('Reference Customer library presents a simple list-first workflow and hides
   assert.match(ui,/Saved Lists/);
 });
 
-test('uploading a customer file from an open saved list starts a separate draft, while adding to current list is explicit',()=>{
+test('importing a customer file starts a separate draft without intercepting the native upload click',()=>{
   const uploadMode=fs.readFileSync(path.join(__dirname,'..','reference-customer-upload-mode.js'),'utf8');
+  const baseUi=fs.readFileSync(path.join(__dirname,'..','reference-customer-ui.js'),'utf8');
   const aiRuntime=fs.readFileSync(path.join(__dirname,'..','reference-customer-ai-runtime.js'),'utf8');
-  assert.match(uploadMode,/Upload New Customer List/);
-  assert.match(uploadMode,/Add Customers to This List/);
-  assert.match(uploadMode,/startNewListUpload/);
-  assert.match(uploadMode,/addToCurrentList/);
+  assert.match(uploadMode,/Import Customer List/);
+  assert.match(uploadMode,/Portfolio\.newList\(state\)/);
   assert.match(uploadMode,/reference-file-input/);
-  assert.match(aiRuntime,/reference-customer-upload-mode\.js\?v=20260910-reference-upload-mode-v3/);
+  assert.match(uploadMode,/consumeImportMode/);
+  assert.doesNotMatch(uploadMode,/document\.addEventListener\('click'/);
+  assert.doesNotMatch(uploadMode,/stopImmediatePropagation\s*\(/);
+  assert.match(baseUi,/fileInput\.click\(\)/,'base UI must own the native file picker click');
+  assert.match(aiRuntime,/reference-customer-upload-mode\.js\?v=20260911-reference-single-owner-v1/);
 });
 
 test('Excel smart import consumes new-vs-append mode itself before stopping propagation',()=>{
