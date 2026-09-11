@@ -1,5 +1,5 @@
 const PROFILE_ACTION_STATE_KEY='leadintel_customer_v2_state';
-const PROFILE_ACTION_VERSION='20260911-reference-upload-cta-v1';
+const PROFILE_ACTION_VERSION='20260911-reference-upload-cta-v3';
 
 (function installProfileActionRuntime(root){
   'use strict';
@@ -9,6 +9,7 @@ const PROFILE_ACTION_VERSION='20260911-reference-upload-cta-v1';
   function writeState(state){localStorage.setItem(PROFILE_ACTION_STATE_KEY,JSON.stringify(state));}
   function toast(message){const node=document.getElementById('toast');if(!node)return;node.textContent=message;node.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>node.classList.remove('show'),2600);}
   function setText(node,text){if(node&&node.textContent!==text)node.textContent=text;}
+  function toggleClass(node,name,enabled){if(node&&node.classList.contains(name)!==enabled)node.classList.toggle(name,enabled);}
 
   function openMarketStrategy(){
     const processButton=document.querySelector('[data-process-step="4"]');
@@ -28,11 +29,11 @@ const PROFILE_ACTION_VERSION='20260911-reference-upload-cta-v1';
       if(button.disabled!==approved)button.disabled=approved;
       const ariaDisabled=approved?'true':'false';
       if(button.getAttribute('aria-disabled')!==ariaDisabled)button.setAttribute('aria-disabled',ariaDisabled);
-      if(button.classList.contains('approved')!==approved)button.classList.toggle('approved',approved);
+      toggleClass(button,'approved',approved);
     }
 
     const status=document.getElementById('profile-status');
-    if(status){setText(status,approved?'Approved':'Provisional');status.classList.toggle('approved',approved);}
+    if(status){setText(status,approved?'Approved':'Provisional');toggleClass(status,'approved',approved);}
 
     const card=document.getElementById('approval-card');
     if(card){
@@ -50,7 +51,7 @@ const PROFILE_ACTION_VERSION='20260911-reference-upload-cta-v1';
         if(nextButton.disabled)nextButton.disabled=false;
         if(nextButton.hasAttribute('aria-disabled'))nextButton.removeAttribute('aria-disabled');
       }
-      card.classList.toggle('approved',approved);
+      toggleClass(card,'approved',approved);
     }
   }
 
@@ -85,10 +86,7 @@ const PROFILE_ACTION_VERSION='20260911-reference-upload-cta-v1';
       queueMicrotask(()=>{
         const primarySucceeded=Boolean(readState().approved);
         const repaired=persistApprovedState();
-        if(repaired&&!primarySucceeded){
-          toast('Profile approved');
-          setTimeout(()=>root.location?.reload?.(),60);
-        }
+        if(repaired&&!primarySucceeded)toast('Profile approved');
       });
       return;
     }
@@ -111,9 +109,7 @@ const PROFILE_ACTION_VERSION='20260911-reference-upload-cta-v1';
   root.addEventListener('leadintel:module-opened',()=>setTimeout(syncApprovalControls,0));
   root.addEventListener('leadintel:profile-approved',()=>setTimeout(syncApprovalControls,0));
   root.addEventListener('storage',event=>{if(event.key===PROFILE_ACTION_STATE_KEY)setTimeout(syncApprovalControls,0);});
-  const observer=new MutationObserver(()=>queueMicrotask(syncApprovalControls));
-  observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['hidden','disabled','class']});
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',syncApprovalControls,{once:true});else syncApprovalControls();
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',syncApprovalControls,{once:true});else setTimeout(syncApprovalControls,0);
 
   root.LeadIntelProfileActionRuntime={syncApprovalControls,persistApprovedState,openReferenceCustomers,openMarketStrategy};
 })(globalThis);
