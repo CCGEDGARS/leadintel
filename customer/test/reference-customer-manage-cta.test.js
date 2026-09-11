@@ -15,13 +15,15 @@ test('Reference Customer manage CTA is handled by the dedicated launcher without
   assert.doesNotMatch(profileRuntime, /data-reference-customers-manage/, 'profile approval runtime must not own Reference Customer launch clicks');
 });
 
-test('Reference Customer launcher restores the upload runtime before opening the manager', () => {
+test('Reference Customer manager opens before optional upload runtime loading', () => {
+  assert.match(launcher, /if\(root\.LeadIntelReferenceCustomerUI\?\.open\)\{\s*root\.LeadIntelReferenceCustomerUI\.open\(\)/, 'already-loaded manager must open synchronously');
   const start = launcher.indexOf('async function ensureReferenceCustomerRuntime()');
   assert.notEqual(start, -1, 'ensureReferenceCustomerRuntime must exist');
-  const end = launcher.indexOf('\n  async function open()', start);
-  const fn = launcher.slice(start, end);
-  assert.match(fn, /reference-customers\.js/, 'launcher must load the base Reference Customer runtime');
-  assert.match(fn, /reference-customer-ui\.js/, 'launcher must load the manager UI');
-  assert.match(fn, /reference-customer-upload-mode\.js/, 'launcher must restore the upload-mode runtime');
-  assert.match(launcher, /LeadIntelReferenceCustomerUI\?\.open/, 'launcher must open the Reference Customer manager');
+  const end = launcher.indexOf('\n  async function', start + 1);
+  const ensureFn = launcher.slice(start, end);
+  assert.match(ensureFn, /reference-customers\.js/, 'launcher must load the base Reference Customer runtime when missing');
+  assert.match(ensureFn, /reference-customer-ui\.js/, 'launcher must load the manager UI when missing');
+  assert.doesNotMatch(ensureFn, /reference-customer-upload-mode\.js/, 'opening must not wait for optional upload mode');
+  assert.match(launcher, /function warmUploadRuntime\(\)/, 'upload mode must warm separately');
+  assert.match(launcher, /reference-customer-upload-mode\.js/, 'optional upload mode must still be loaded');
 });
