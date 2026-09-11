@@ -15,13 +15,10 @@ test('Reference Customer manage CTA is handled by the dedicated launcher without
   assert.doesNotMatch(profileRuntime, /data-reference-customers-manage/, 'profile approval runtime must not own Reference Customer launch clicks');
 });
 
-test('Reference Customer launcher restores the upload runtime before opening the manager', () => {
-  const start = launcher.indexOf('async function ensureReferenceCustomerRuntime()');
-  assert.notEqual(start, -1, 'ensureReferenceCustomerRuntime must exist');
-  const end = launcher.indexOf('\n  async function open()', start);
-  const fn = launcher.slice(start, end);
-  assert.match(fn, /reference-customers\.js/, 'launcher must load the base Reference Customer runtime');
-  assert.match(fn, /reference-customer-ui\.js/, 'launcher must load the manager UI');
-  assert.match(fn, /reference-customer-upload-mode\.js/, 'launcher must restore the upload-mode runtime');
-  assert.match(launcher, /LeadIntelReferenceCustomerUI\?\.open/, 'launcher must open the Reference Customer manager');
+test('Reference Customer launcher opens the already-loaded UI synchronously', () => {
+  assert.doesNotMatch(launcher, /await\s+import\s*\(/, 'launcher click path must not wait on dynamic imports');
+  assert.doesNotMatch(launcher, /let\s+opening\s*=|opening=\(/, 'launcher must not maintain a pending async opening state');
+  assert.match(launcher, /LeadIntelReferenceCustomerUI\?\.open/);
+  assert.match(launcher, /function\s+open\s*\(\)/);
+  assert.match(launcher, /return\s+true/);
 });
