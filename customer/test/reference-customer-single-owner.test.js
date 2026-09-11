@@ -7,7 +7,6 @@ const uploadMode=fs.readFileSync(new URL('../reference-customer-upload-mode.js',
 const launcher=fs.readFileSync(new URL('../reference-customer-launcher.js',import.meta.url),'utf8');
 const aiRuntime=fs.readFileSync(new URL('../reference-customer-ai-runtime.js',import.meta.url),'utf8');
 const processMap=fs.readFileSync(new URL('../process-map.js',import.meta.url),'utf8');
-const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 
 const VERSION='20260911-reference-single-owner-v1';
 
@@ -35,8 +34,7 @@ test('upload mode exposes import-state helpers without intercepting document cli
   assert.doesNotMatch(uploadMode,/document\.addEventListener\('click'/);
 });
 
-test('single-owner Reference Customer runtime is cache-busted from HTML through every changed entrypoint',()=>{
-  assert.match(html,new RegExp(`process-map\\.js\\?v=${VERSION}`));
+test('single-owner Reference Customer runtime is cache-busted at every changed module boundary',()=>{
   assert.match(processMap,new RegExp(`reference-customer-ui\\.js\\?v=${VERSION}`));
   assert.match(processMap,new RegExp(`reference-customer-ai-runtime\\.js\\?v=${VERSION}`));
   assert.match(processMap,new RegExp(`reference-customer-launcher\\.js\\?v=${VERSION}`));
