@@ -15,6 +15,12 @@ test('Reference Customer base UI is the sole owner of the import button click',(
   assert.doesNotMatch(uploadMode,/stopImmediatePropagation\s*\(/);
 });
 
+test('launcher is the sole owner of the outer Reference Customer manage CTA',()=>{
+  assert.match(launcher,/data-reference-customers-manage/);
+  assert.match(launcher,/LeadIntelReferenceCustomerUI\?\.open/);
+  assert.doesNotMatch(baseUi,/data-reference-customers-manage/);
+});
+
 test('launcher only opens the Reference Customer UI and does not own file import behavior',()=>{
   assert.match(launcher,/LeadIntelReferenceCustomerUI\?\.open/);
   assert.doesNotMatch(launcher,/reference-file-input|\.click\(\).*reference-file|startNewListUpload/);
