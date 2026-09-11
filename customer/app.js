@@ -101,11 +101,11 @@ function addCustomTargetMarket(){
   setTargetMarkets([...state.targetMarkets,...additions]);input.value="";showToast(`${additions.length===1?additions[0]:`${additions.length} markets`} added`);
 }
 function syncInputsFromState(){
-  $("company-website").value=state.website.replace(/^https?:\/\//,"").replace(/\/$/,"");$("additional-links").value=state.additionalLinks.join("\n");
+  $("company-website").value=state.website.replace(/^https?:\/\//,"").replace(/\/$/,"");const additionalLinks=$("additional-links");if(additionalLinks)additionalLinks.value=state.additionalLinks.join("\n");
   document.querySelectorAll("[data-question]").forEach(el=>el.value=state.answers[el.dataset.question]||"");renderTargetMarkets();renderDocuments();
 }
 function readSources(){
-  const previousWebsite=state.website;state.website=LeadIntelProfile.normalizeUrl($("company-website").value);state.additionalLinks=$("additional-links").value.split(/\n/).map(LeadIntelProfile.normalizeUrl).filter(Boolean).slice(0,8);
+  const previousWebsite=state.website;state.website=LeadIntelProfile.normalizeUrl($("company-website").value);const additionalLinks=$("additional-links");state.additionalLinks=(additionalLinks?.value||"").split(/\n/).map(LeadIntelProfile.normalizeUrl).filter(Boolean).slice(0,8);
   if(previousWebsite&&state.website!==previousWebsite)invalidateStrategicOutputs(true);
   saveState();
 }
