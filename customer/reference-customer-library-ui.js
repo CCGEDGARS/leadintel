@@ -73,7 +73,8 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
   function renderSavedLists(state,editorHtml=''){ 
     const portfolio=state.referenceCustomerPortfolio,selectedId=portfolio.selectedListId;
     if(!portfolio.lists.length)return `<div class="reference-saved-lists"><div class="reference-saved-head"><strong>Saved Lists</strong><span>No saved lists yet</span></div>${editorHtml}</div>`;
-    return `<div class="reference-saved-lists"><div class="reference-saved-head"><strong>Saved Lists</strong><span>${portfolio.lists.length} saved · ${portfolio.lists.filter(x=>x.active).length} active</span></div>${portfolio.lists.map(list=>{
+    const unselectedEditor=!selectedId?editorHtml:'';
+    return `<div class="reference-saved-lists"><div class="reference-saved-head"><strong>Saved Lists</strong><span>${portfolio.lists.length} saved · ${portfolio.lists.filter(x=>x.active).length} active</span></div>${unselectedEditor}${portfolio.lists.map(list=>{
       const ref=list.reference||{},rows=ref.rows?.length||0,analyzed=Object.keys(ref.analyses||{}).length,model=ref.publishedModel;
       const stateLabel=list.active?'Active':model?'Ready':'Saved';
       const canActivate=Boolean(list.active||model||(analyzed&&(ref.segments||[]).length));
