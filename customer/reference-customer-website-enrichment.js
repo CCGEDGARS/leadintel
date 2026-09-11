@@ -8,7 +8,7 @@
   const STORAGE_KEY='leadintel_customer_v2_state';
   const FIRECRAWL_PROXY='https://apollo-proxy.edgars-7e7.workers.dev';
   const MAX_ENRICH=25;
-  const FIND_INFO_LABEL='Find missing info';
+  const FIND_INFO_LABEL='Find Missing Info';
   const ANALYZE_LABEL='Analyze customer list';
   const clean=value=>String(value??'').replace(/\s+/g,' ').trim();
   const norm=value=>clean(value).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
@@ -16,6 +16,8 @@
   const BLOCKED_HOSTS=['linkedin.com','facebook.com','instagram.com','twitter.com','x.com','wikipedia.org','crunchbase.com','zoominfo.com','bloomberg.com','opencorporates.com','yelp.com','tripadvisor.com','glassdoor.com','dnb.com','kompass.com','saraksts.lv'];
 
   function needsWebsite(row={}){return Boolean(clean(row.companyName)&&!clean(row.website));}
+  function needsCompanyName(row={}){return Boolean(!clean(row.companyName)&&clean(row.website));}
+  function needsInfo(row={}){return needsWebsite(row)||needsCompanyName(row);}
   function rootUrl(value){try{const url=new URL(/^https?:\/\//i.test(clean(value))?clean(value):`https://${clean(value)}`);return `${url.protocol}//${url.hostname.replace(/^www\./i,'')}/`;}catch{return '';}}
   function hostname(value){try{return new URL(rootUrl(value)).hostname.replace(/^www\./i,'').toLowerCase();}catch{return '';}}
   function blocked(host){return BLOCKED_HOSTS.some(item=>host===item||host.endsWith(`.${item}`));}
@@ -38,6 +40,14 @@
     const top=ranked[0],second=ranked[1];if(second&&top.score-second.score<2&&top.score<9)return null;
     return {url:top.url,confidence:'high',score:top.score};
   }
+  function companyNameFromPayload(payload={}){
+    const data=payload?.data||payload;
+    const title=clean(data?.metadata?.title||data?.title||payload?.metadata?.title);
+    if(!title)return '';
+    const candidate=clean(title.split(/\s+(?:\||–|—|::)\s+|\s+-\s+/)[0]).replace(/\s+(?:official website|homepage)$/i,'').trim();
+    if(candidate.length<2||candidate.length>120||/^(home|welcome|official website)$/i.test(candidate))return '';
+    return candidate;
+  }
   function extractCandidates(payload={}){
     const pools=[payload?.data,payload?.data?.web,payload?.web,payload?.results,payload?.items];const items=[];
     for(const pool of pools){if(Array.isArray(pool))items.push(...pool);}
@@ -49,6 +59,11 @@
     const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(clean(payload?.error)||`Website search returned ${response.status}`);
     return selectOfficialWebsite(row,extractCandidates(payload));
   }
+  async function identifyCompanyName(root,row){
+    const response=await root.fetch(`${FIRECRAWL_PROXY}/firecrawl-scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:row.website,formats:['markdown'],onlyMainContent:true,timeout:25000})});
+    const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(clean(payload?.error)||`Website lookup returned ${response.status}`);
+    return companyNameFromPayload(payload);
+  }
   function install(root){
     const document=root.document;if(!document)return;
     const Ref=()=>root.LeadIntelReferenceCustomers;
@@ -59,7 +74,14 @@
       button.setAttribute('aria-label',label);
       button.innerHTML=`<span>${firstLine}<br>${secondLine}</span>`;
     }
-    function setFindIdleLabel(button){setTwoLineLabel(button,FIND_INFO_LABEL,'Find missing','info');}
+    function setFindIdleLabel(button){
+      if(!button)return;
+      const state=readState(),rows=Array.isArray(state.referenceCustomers?.rows)?state.referenceCustomers.rows:[];
+      const missingCount=rows.filter(needsInfo).length;
+      button.setAttribute('aria-label',missingCount?`${FIND_INFO_LABEL}: ${missingCount} records`:FIND_INFO_LABEL);
+      button.textContent=missingCount?`Find Missing Info (${missingCount})`:FIND_INFO_LABEL;
+      button.disabled=!missingCount;
+    }
     function setAnalyzeIdleLabel(button){setTwoLineLabel(button,ANALYZE_LABEL,'Analyze customer','list');}
     function ensureActionStatus(){
       const actions=document.querySelector('#reference-customer-modal .reference-analysis-actions');if(!actions)return null;
@@ -73,36 +95,44 @@
     }
     function ensureUx(){
       const modal=document.getElementById('reference-customer-modal');if(!modal)return;
-      const guide=modal.querySelector('.reference-format-guide p');if(guide)guide.innerHTML='<b>Company Name is required.</b> Website is recommended. If it is missing, LeadIntel can find the official website before analysis.';
+      const guide=modal.querySelector('.reference-format-guide p');if(guide)guide.innerHTML='<b>Company Name or Website is required.</b> LeadIntel can find a missing official website or identify a missing company name before analysis.';
       const manualWebsite=modal.querySelector('#reference-manual-website');if(manualWebsite)manualWebsite.placeholder='Website (optional)';
-      const empty=modal.querySelector('.reference-empty');if(empty)empty.textContent='Upload a customer list. Company Name is required; Website can be found by LeadIntel.';
-      const actions=modal.querySelector('.reference-analysis-actions');
-      if(actions){
-        let button=actions.querySelector('#reference-find-websites');
-        if(!button){button=document.createElement('button');button.type='button';button.id='reference-find-websites';button.className='secondary-btn';actions.insertBefore(button,actions.firstChild);}
-        if(!button.disabled)setFindIdleLabel(button);
-        const analyze=actions.querySelector('#reference-analyze');if(analyze&&!analyze.disabled)setAnalyzeIdleLabel(analyze);
+      const empty=modal.querySelector('.reference-empty');if(empty)empty.textContent='Upload a customer list with a Company Name, Website, or both. LeadIntel can find missing information.';
+      const importActions=modal.querySelector('.reference-import-actions');
+      if(importActions){
+        let button=importActions.querySelector('#reference-find-websites')||modal.querySelector('#reference-find-websites');
+        if(!button){button=document.createElement('button');button.type='button';button.id='reference-find-websites';button.className='secondary-btn';}
+        const clear=importActions.querySelector('#reference-clear-list');
+        if(clear)clear.insertAdjacentElement('afterend',button);else{const pdf=importActions.querySelector('.reference-pdf-fallback');if(pdf)importActions.insertBefore(button,pdf);else importActions.appendChild(button);}
+        setFindIdleLabel(button);
       }
+      const analyze=modal.querySelector('#reference-analyze');if(analyze&&!analyze.disabled)setAnalyzeIdleLabel(analyze);
       ensureActionStatus();
     }
     async function enrich(button){
       const ref=Ref();if(!ref?.normalizeReferenceState)throw new Error('Reference Customer Intelligence is not ready. Reload and try again.');
       let state=readState();state.referenceCustomers=ref.normalizeReferenceState(state.referenceCustomers||{});
-      const missing=state.referenceCustomers.rows.filter(needsWebsite).slice(0,MAX_ENRICH);
-      if(!missing.length){setStatus('All reference customers already have websites.');return;}
-      button.disabled=true;button.textContent='Finding websites…';let found=0,checked=0,failed=0;let firstError='';
+      const missing=state.referenceCustomers.rows.filter(needsInfo).slice(0,MAX_ENRICH);
+      if(!missing.length){setStatus('All reference customers have company names and websites.');return;}
+      button.disabled=true;button.textContent='Finding missing info…';let websitesFound=0,namesFound=0,checked=0,failed=0;let firstError='';
       try{
         for(const row of missing){
-          setStatus(`Finding missing websites… ${checked}/${missing.length} checked · ${found} found`);
+          setStatus(`Finding missing info… ${checked}/${missing.length} checked · ${websitesFound+namesFound} found`);
           try{
-            const match=await searchOfficialWebsite(root,row);checked++;
-            if(match){row.website=match.url;row.domain=hostname(match.url);row.status='ready';row.reviewed=true;found++;}else failed++;
-          }catch(error){checked++;failed++;if(!firstError)firstError=clean(error?.message)||'Website search failed';}
+            if(needsWebsite(row)){
+              const match=await searchOfficialWebsite(root,row);checked++;
+              if(match){row.website=match.url;row.domain=hostname(match.url);row.status='ready';row.reviewed=true;websitesFound++;}else failed++;
+            }else{
+              const companyName=await identifyCompanyName(root,row);checked++;
+              if(companyName){row.companyName=companyName;row.status='needs_review';row.reviewed=false;namesFound++;}else failed++;
+            }
+          }catch(error){checked++;failed++;if(!firstError)firstError=clean(error?.message)||'Information search failed';}
         }
         state.referenceCustomers=ref.normalizeReferenceState({...state.referenceCustomers,rows:state.referenceCustomers.rows,segments:[],activeSegmentIds:[],activeIds:[],activated:false,dna:null});
         await writeState(state);
-        if(!found&&firstError)setStatus(`Unable to search websites: ${firstError}`);
-        else setStatus(`${found} official website${found===1?'':'s'} found and verified · ${failed} still need review.${missing.length===MAX_ENRICH?' Run again to continue with the remaining companies.':''}`);
+        if(!websitesFound&&!namesFound&&firstError)setStatus(`Unable to find missing information: ${firstError}`);
+        else setStatus(`Find Missing Info complete · ${websitesFound} website${websitesFound===1?'':'s'} found · ${namesFound} company name${namesFound===1?'':'s'} identified · ${failed} need review.${missing.length===MAX_ENRICH?' Run again to continue with the remaining records.':''}`);
+        root.LeadIntelReferenceCustomerLibraryUI?.openEditor?.();
       }finally{button.disabled=false;setFindIdleLabel(button);ensureUx();}
     }
     document.addEventListener('click',event=>{
@@ -112,5 +142,5 @@
     root.addEventListener('leadintel:reference-customers-updated',()=>root.setTimeout(ensureUx,0));
     if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>root.setTimeout(ensureUx,0),{once:true});else root.setTimeout(ensureUx,0);
   }
-  return {needsWebsite,selectOfficialWebsite,extractCandidates,install};
+  return {needsWebsite,needsCompanyName,needsInfo,companyNameFromPayload,selectOfficialWebsite,extractCandidates,install};
 });
