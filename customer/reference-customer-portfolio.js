@@ -57,6 +57,19 @@
     next.referenceCustomerPortfolio.selectedListId=id;next.referenceCustomers=clone(list.reference);return next;
   }
   function newList(state={}){const next=ensurePortfolio(state);next.referenceCustomerPortfolio.selectedListId='';next.referenceCustomers=emptyReference();return next;}
+  function deleteList(state={},listId=''){
+    const next=ensurePortfolio(state),id=clean(listId),portfolio=next.referenceCustomerPortfolio;
+    const index=portfolio.lists.findIndex(x=>x.id===id);if(index<0)return next;
+    const wasSelected=portfolio.selectedListId===id;
+    portfolio.lists.splice(index,1);
+    if(wasSelected){
+      const fallback=portfolio.lists[index]||portfolio.lists[index-1]||portfolio.lists[0]||null;
+      portfolio.selectedListId=fallback?.id||'';
+      next.referenceCustomers=fallback?clone(fallback.reference):emptyReference();
+    }
+    next.referenceCustomerPortfolio=normalizePortfolio(portfolio);
+    return next;
+  }
   function setListActive(state={},listId='',active=true){
     const next=ensurePortfolio(state),list=next.referenceCustomerPortfolio.lists.find(x=>x.id===clean(listId));if(!list)return next;
     list.active=Boolean(active&&list.reference?.publishedModel?.active);list.updatedAt=new Date().toISOString();
@@ -98,5 +111,5 @@
     next=saveCurrentList(next,{name:'Reference Customers',markets:next.targetMarkets||[],purpose:'Legacy reference customer model'});
     const id=next.referenceCustomerPortfolio.selectedListId;if(reference?.publishedModel?.active)next=setListActive(next,id,true);return next;
   }
-  return {normalizePortfolio,ensurePortfolio,saveCurrentList,selectList,newList,setListActive,syncCurrentList,getActiveModels,getCombinedActiveModel,migrateLegacy};
+  return {normalizePortfolio,ensurePortfolio,saveCurrentList,selectList,newList,deleteList,setListActive,syncCurrentList,getActiveModels,getCombinedActiveModel,migrateLegacy};
 });
