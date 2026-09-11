@@ -1,5 +1,5 @@
 const PROFILE_ACTION_STATE_KEY='leadintel_customer_v2_state';
-const PROFILE_ACTION_VERSION='20260911-profile-approval-v3';
+const PROFILE_ACTION_VERSION='20260911-reference-upload-cta-v1';
 
 (function installProfileActionRuntime(root){
   'use strict';
@@ -68,10 +68,11 @@ const PROFILE_ACTION_VERSION='20260911-profile-approval-v3';
   }
 
   async function openReferenceCustomers(){
-    if(root.LeadIntelReferenceCustomerUI?.open){root.LeadIntelReferenceCustomerUI.open();return true;}
     try{
+      if(root.LeadIntelReferenceCustomerUI?.open){root.LeadIntelReferenceCustomerUI.open();return true;}
       await import(`./reference-customers.js?v=${PROFILE_ACTION_VERSION}-fallback`);
       await import(`./reference-customer-ui.js?v=${PROFILE_ACTION_VERSION}-fallback`);
+      await import(`./reference-customer-upload-mode.js?v=${PROFILE_ACTION_VERSION}-fallback`);
       if(root.LeadIntelReferenceCustomerUI?.open){root.LeadIntelReferenceCustomerUI.open();return true;}
     }catch(error){console.error('Reference Customer Intelligence failed to open',error);}
     toast('Reference Customer Intelligence could not open. Reload the workspace and try again.');
@@ -104,7 +105,6 @@ const PROFILE_ACTION_VERSION='20260911-profile-approval-v3';
     const button=event.target?.closest?.('[data-reference-customers-manage]');
     if(!button)return;
     event.preventDefault();
-    event.stopPropagation();
     void openReferenceCustomers();
   },true);
 
