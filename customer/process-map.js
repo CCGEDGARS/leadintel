@@ -31,7 +31,7 @@ import './reference-customer-website-enrichment.js?v=20260909-reference-actions-
 import './reference-customer-ai-runtime.js?v=20260910-reference-portfolio-v1';
 import './lookalike-discovery.js?v=20260910-reference-portfolio-v1';
 import './intelligence-sources-ui.js?v=20260910-intelligence-sources-v1';
-import './profile-action-runtime.js?v=20260910-profile-next-step-v2';
+import './profile-action-runtime.js?v=20260911-emergency-stable-v1';
 import './outreach-automation-loader.js?v=20260908-boot-isolation-v1';
 import './copilot-loader.js?v=20260908-copilot-polish-v1';
 
