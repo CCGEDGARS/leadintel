@@ -46,7 +46,7 @@ test('the duplicate current-list card is hidden until New List or Edit opens the
 test('saving or starting a row action closes the conditional editor',()=>{
   assert.match(ui,/async function saveList\(\)[\s\S]*editorOpen=false/);
   assert.match(ui,/async function analyzeList\(id\)[\s\S]*editorOpen=false/);
-  assert.match(ui,/async function activateList\List\(id\)[\s\S]*editorOpen=false/);
+  assert.match(ui,/async function activateList\(id\)[\s\S]*editorOpen=false/);
 });
 
 test('the conditional editor is rendered beneath the selected saved-list row',()=>{
