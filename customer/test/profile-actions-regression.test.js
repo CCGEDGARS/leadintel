@@ -6,6 +6,7 @@ const path=require('node:path');
 const runtime=fs.readFileSync(path.join(__dirname,'..','profile-action-runtime.js'),'utf8');
 const launcher=fs.readFileSync(path.join(__dirname,'..','reference-customer-launcher.js'),'utf8');
 const boot=fs.readFileSync(path.join(__dirname,'..','process-map.js'),'utf8');
+const app=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
 
 test('Reference Customer CTA is isolated from profile actions and owned by the dedicated launcher',()=>{
   assert.doesNotMatch(runtime,/data-reference-customers-manage/);
@@ -14,21 +15,24 @@ test('Reference Customer CTA is isolated from profile actions and owned by the d
   assert.match(launcher,/reference-customer-upload-mode\.js/);
 });
 
-test('approved profile changes the main approval button to Profile Approved and disables it',()=>{
+test('approved profile presentation mirrors app state without duplicating the click handler',()=>{
   assert.match(runtime,/✓ Profile Approved/);
   assert.match(runtime,/button\.disabled!==approved/);
+  assert.match(app,/\$\("approve-profile"\)\.addEventListener\("click",approveProfile\)/);
+  assert.doesNotMatch(runtime,/document\.addEventListener\(['"]click['"]/);
 });
 
-test('bottom profile card is a direct Market Strategy next step rather than duplicate approval',()=>{
+test('bottom profile card semantics are owned by app.js',()=>{
   assert.match(runtime,/approval-card/);
   assert.match(runtime,/Continue to Market Strategy/);
-  assert.match(runtime,/Next:\s*Market Strategy/);
-  assert.match(runtime,/closest\?\.\(['"]#approve-profile-bottom['"]\)/);
-  assert.match(runtime,/openMarketStrategy/);
+  assert.match(runtime,/Approve profile \(optional\)/);
+  assert.match(app,/\$\("approve-profile-bottom"\)\.addEventListener\("click",\(\)=>state\.approved\?openMarketStrategy\(\):approveProfile\(\)\)/);
+  assert.doesNotMatch(runtime,/closest\?\.\(['"]#approve-profile-bottom['"]\)/);
+  assert.doesNotMatch(runtime,/openMarketStrategy/);
   assert.doesNotMatch(runtime,/card\.hidden=true/);
 });
 
-test('dedicated Reference Customer launcher boots after the base Reference Customer UI and independently of profile actions',()=>{
+test('dedicated Reference Customer launcher boots after the base Reference Customer UI and independently of profile presentation',()=>{
   const ui=boot.indexOf('reference-customer-ui.js');
   const launcherIndex=boot.indexOf('reference-customer-launcher.js');
   const actions=boot.indexOf('profile-action-runtime.js');
