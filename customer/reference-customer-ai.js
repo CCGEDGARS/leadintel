@@ -30,7 +30,23 @@ Rules:
 REFERENCE CUSTOMERS:
 ${JSON.stringify(items)}`;
   }
-  function stripFence(text){return String(text||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();}
+  function stripFence(text){
+    let value=String(text||'').trim();
+    if(value.startsWith('```'))value=value.replace(/^```(?:json)?\s*/i,'');
+    if(value.endsWith('```'))value=value.slice(0,-3);
+    return value.trim();
+  }
+  function extractJsonObject(text){
+    const source=String(text||'');let start=-1,depth=0,inString=false,escaped=false;
+    for(let index=0;index<source.length;index++){
+      const char=source[index];
+      if(inString){if(escaped)escaped=false;else if(char.charCodeAt(0)===92)escaped=true;else if(char==='"')inString=false;continue;}
+      if(char==='"'){inString=true;continue;}
+      if(char==='{'){if(start<0)start=index;depth++;}
+      else if(char==='}'&&start>=0){depth--;if(depth===0)return source.slice(start,index+1);}
+    }
+    return '';
+  }
   function safeConfidence(value){const v=clean(value).toLowerCase();return ['high','medium','low'].includes(v)?v:'low';}
   function normalizeAnalysis(company={}){
     const out={};
@@ -42,7 +58,7 @@ ${JSON.stringify(items)}`;
   }
   function parseReferenceCustomerAnalysis(text,allowedIds=[]){
     const allowed=new Set((allowedIds||[]).map(clean).filter(Boolean));
-    let raw;try{raw=JSON.parse(stripFence(text));}catch{throw new Error('AI returned invalid reference customer analysis');}
+    const candidate=stripFence(text);let raw;try{raw=JSON.parse(candidate);}catch{try{raw=JSON.parse(extractJsonObject(candidate));}catch{throw new Error('AI returned invalid reference customer analysis');}}
     const analyses={};
     for(const company of Array.isArray(raw?.companies)?raw.companies:[]){const id=clean(company?.id);if(!id||!allowed.has(id))continue;analyses[id]=normalizeAnalysis(company);}
     const sourceSegments=Array.isArray(raw?.segmentation?.segments)?raw.segmentation.segments:[];
@@ -66,12 +82,23 @@ ${JSON.stringify(items)}`;
     const usable=(rows||[]).filter(row=>clean(row?.id)&&clean(row?.text));if(!usable.length)throw new Error('No website evidence is available for AI analysis');
     const fetcher=fetchImpl||globalThis.fetch;if(typeof fetcher!=='function')throw new Error('AI analysis is unavailable');
     const url=new URL('/api/ai/generate',API_BASE);url.searchParams.set('workspace_id',id);
-    const response=await fetcher(url.toString(),{method:'POST',credentials:'include',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify({
-      system:'You are LeadIntel Reference Customer Intelligence. Classify B2B companies conservatively from supplied first-party website evidence. Return valid JSON only. Never invent unsupported facts or force segmentation.',
-      prompt:buildReferenceCustomerPrompt(usable),max_output_tokens:7000
-    })});
-    const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(clean(payload?.error)||`AI analysis failed (${response.status})`);
-    const text=payload?.text??payload?.output_text??payload?.content??'';return parseReferenceCustomerAnalysis(text,usable.map(row=>row.id));
+    const generate=async(prompt,maxOutputTokens)=>{
+      const response=await fetcher(url.toString(),{method:'POST',credentials:'include',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify({
+        system:'You are LeadIntel Reference Customer Intelligence. Classify B2B companies conservatively from supplied first-party website evidence. Return valid JSON only. Never invent unsupported facts or force segmentation.',
+        prompt,max_output_tokens:maxOutputTokens
+      })});
+      const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(clean(payload?.error)||`AI analysis failed (${response.status})`);
+      return payload?.text??payload?.output_text??payload?.content??'';
+    };
+    const prompt=buildReferenceCustomerPrompt(usable);
+    const first=await generate(prompt,7000);
+    try{return parseReferenceCustomerAnalysis(first,usable.map(row=>row.id));}
+    catch(error){
+      if(clean(error?.message)!=='AI returned invalid reference customer analysis')throw error;
+      const recovery=`${prompt}\n\nRECOVERY ATTEMPT: The previous response was malformed or incomplete. Return one complete JSON object only. Keep every string concise, include no markdown or commentary, and finish the JSON within the token limit.`;
+      const second=await generate(recovery,8192);
+      return parseReferenceCustomerAnalysis(second,usable.map(row=>row.id));
+    }
   }
   return {buildReferenceCustomerPrompt,parseReferenceCustomerAnalysis,requestReferenceCustomerAnalysis};
 });
