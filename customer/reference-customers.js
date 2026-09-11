@@ -46,10 +46,10 @@
   function normalizeImportedRows(rows=[],options={}){
     const sourceType=clean(options.sourceType||'manual').toLowerCase();const seen=new Set(),out=[];
     for(const raw of rows||[]){
-      const companyName=valueFor(raw,'companyName')||clean(raw.companyName)||fallbackCompanyName(raw);if(!companyName)continue;
-      const website=normalizeUrl(valueFor(raw,'website')||raw.website||fallbackWebsite(raw)),dom=domain(website),country=valueFor(raw,'country')||clean(raw.country);
+      const companyName=valueFor(raw,'companyName')||clean(raw.companyName)||fallbackCompanyName(raw);
+      const website=normalizeUrl(valueFor(raw,'website')||raw.website||fallbackWebsite(raw)),dom=domain(website),country=valueFor(raw,'country')||clean(raw.country);if(!companyName&&!website)continue;
       const dedupe=dom?`d:${dom}`:`n:${normName(companyName)}|${normName(country)}`;if(seen.has(dedupe))continue;seen.add(dedupe);
-      const status=sourceType==='pdf'?'needs_review':dom?'ready':'unresolved';
+      const status=sourceType==='pdf'?'needs_review':dom&&companyName?'ready':'unresolved';
       out.push({id:`ref-${stableId(dedupe)}`,companyName,website,domain:dom,country,productService:valueFor(raw,'productService')||clean(raw.productService),approximateValue:valueFor(raw,'approximateValue')||clean(raw.approximateValue),reason:valueFor(raw,'reason')||clean(raw.reason),notes:valueFor(raw,'notes')||clean(raw.notes),status,active:false,reviewed:sourceType!=='pdf'});
       if(out.length>=MAX_ROWS)break;
     }
