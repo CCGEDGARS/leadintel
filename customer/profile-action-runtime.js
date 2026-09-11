@@ -1,5 +1,5 @@
 const PROFILE_ACTION_STATE_KEY='leadintel_customer_v2_state';
-const PROFILE_ACTION_VERSION='20260911-reference-upload-cta-v1';
+const PROFILE_ACTION_VERSION='20260911-reference-upload-cta-v2';
 
 (function installProfileActionRuntime(root){
   'use strict';
@@ -85,10 +85,7 @@ const PROFILE_ACTION_VERSION='20260911-reference-upload-cta-v1';
       queueMicrotask(()=>{
         const primarySucceeded=Boolean(readState().approved);
         const repaired=persistApprovedState();
-        if(repaired&&!primarySucceeded){
-          toast('Profile approved');
-          setTimeout(()=>root.location?.reload?.(),60);
-        }
+        if(repaired&&!primarySucceeded)toast('Profile approved');
       });
       return;
     }
