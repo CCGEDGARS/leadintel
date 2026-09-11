@@ -54,3 +54,18 @@ test('the conditional editor is rendered beneath the selected saved-list row',()
   assert.match(ui,/list\.id===selectedId\?editorHtml:''/);
   assert.match(ui,/renderSavedLists\(state,editorHtml\)/);
 });
+
+test('only the selected list has a dark Analyze action and running analysis is explicit',()=>{
+  assert.match(ui,/const isSelected=list\.id===selectedId/);
+  assert.match(ui,/const isAnalyzing=list\.id===analyzingListId/);
+  assert.match(ui,/class="\$\{isSelected\?'primary-btn':'secondary-btn'\}"[^>]*data-analyze-reference-list/);
+  assert.match(ui,/\$\{isAnalyzing\?'Analyzing…':'Analyze'\}/);
+  assert.match(ui,/\$\{isAnalyzing\?'disabled':''\}/);
+});
+
+test('analysis lifecycle marks one list running and clears it when the runtime finishes',()=>{
+  assert.match(ui,/let analyzingListId=''/);
+  assert.match(ui,/async function analyzeList\(id\)[\s\S]*analyzingListId=id/);
+  assert.match(ui,/function finishAnalysis\(\)[\s\S]*analyzingListId=''/);
+  assert.match(aiRuntime,/finally\{[\s\S]*finishAnalysis/);
+});
