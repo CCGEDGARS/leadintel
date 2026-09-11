@@ -10,6 +10,7 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
   const clean=value=>String(value??'').replace(/\s+/g,' ').trim();
   const LEGACY_LABELS=['Save & Activate Model','Update Active Model'];
   let migrationSaved=false;
+  let editorOpen=false;
 
   function readState(){try{return JSON.parse(localStorage.getItem(REFERENCE_LIBRARY_STATE_KEY)||'{}');}catch{return {};}}
   async function writeState(state){
@@ -68,14 +69,14 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     const selected=portfolio.lists.find(list=>list.id===portfolio.selectedListId)||null;
     return selected||{name:'',markets:state.targetMarkets||[],purpose:''};
   }
-  function renderSavedLists(state){
+  function renderSavedLists(state,editorHtml=''){ 
     const portfolio=state.referenceCustomerPortfolio,selectedId=portfolio.selectedListId;
-    if(!portfolio.lists.length)return '<div class="reference-saved-lists"><div class="reference-saved-head"><strong>Saved Lists</strong><span>No saved lists yet</span></div></div>';
+    if(!portfolio.lists.length)return `<div class="reference-saved-lists"><div class="reference-saved-head"><strong>Saved Lists</strong><span>No saved lists yet</span></div>${editorHtml}</div>`;
     return `<div class="reference-saved-lists"><div class="reference-saved-head"><strong>Saved Lists</strong><span>${portfolio.lists.length} saved · ${portfolio.lists.filter(x=>x.active).length} active</span></div>${portfolio.lists.map(list=>{
       const ref=list.reference||{},rows=ref.rows?.length||0,analyzed=Object.keys(ref.analyses||{}).length,model=ref.publishedModel;
       const stateLabel=list.active?'Active':model?'Ready':'Saved';
       const canActivate=Boolean(list.active||model||(analyzed&&(ref.segments||[]).length));
-      return `<div class="reference-saved-row ${list.active?'active':''} ${list.id===selectedId?'selected':''}" data-reference-list-row="${esc(list.id)}"><div class="reference-saved-info"><strong>${esc(list.name)}<span class="reference-list-state ${list.active?'active':''}">${stateLabel}</span></strong><small>${rows} customers · ${analyzed} analyzed${model?` · ${esc(model.confidence||'low')} confidence`:''}${list.markets?.length?` · ${esc(list.markets.join(' · '))}`:''}</small></div><div class="reference-saved-buttons"><button class="primary-btn" type="button" data-analyze-reference-list="${esc(list.id)}">Analyze</button><button class="${list.active?'secondary-btn':'primary-btn'}" type="button" data-activate-reference-list="${esc(list.id)}" ${canActivate?'':'disabled'}>${list.active?'Deactivate':'Activate'}</button><button class="secondary-btn" type="button" data-edit-reference-list="${esc(list.id)}">Edit</button><button class="secondary-btn" type="button" data-delete-reference-list="${esc(list.id)}">Delete</button></div></div>`;
+      return `<div class="reference-saved-row ${list.active?'active':''} ${list.id===selectedId?'selected':''}" data-reference-list-row="${esc(list.id)}"><div class="reference-saved-info"><strong>${esc(list.name)}<span class="reference-list-state ${list.active?'active':''}">${stateLabel}</span></strong><small>${rows} customers · ${analyzed} analyzed${model?` · ${esc(model.confidence||'low')} confidence`:''}${list.markets?.length?` · ${esc(list.markets.join(' · '))}`:''}</small></div><div class="reference-saved-buttons"><button class="primary-btn" type="button" data-analyze-reference-list="${esc(list.id)}">Analyze</button><button class="${list.active?'secondary-btn':'primary-btn'}" type="button" data-activate-reference-list="${esc(list.id)}" ${canActivate?'':'disabled'}>${list.active?'Deactivate':'Activate'}</button><button class="secondary-btn" type="button" data-edit-reference-list="${esc(list.id)}">Edit</button><button class="secondary-btn" type="button" data-delete-reference-list="${esc(list.id)}">Delete</button></div></div>${list.id===selectedId?editorHtml:''}`;
     }).join('')}</div>`;
   }
   function currentMessage({saved,analyzed,segments,selected}){
@@ -99,12 +100,12 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     const statusLabel=selected?(selected.active?'Active Model':'Saved List'):(saved?'Unsaved':'New List');
     const statusClass=selected?.active?'':selected?'inactive':saved?'pending':'inactive';
     const saveLabel=selected?'Save Changes':'Save List';
+    const showEditor=Boolean(editorOpen||!portfolio.lists.length||(saved&&!selected));
     const activateLabel=selected?.active?(reference.draftDirty?'Update Model':'Model Active'):'Activate Model';
+    const editorHtml=showEditor?`<div class="reference-current-card"><div class="reference-current-message">${currentMessage({saved,analyzed,segments,selected})}</div><div class="reference-current-name"><label>List name<input id="reference-list-name" value="${esc(meta.name||'')}" placeholder="e.g. Latvia Sales Training"></label><button class="primary-btn" type="button" data-save-reference-list ${saved?'':'disabled'}>${saveLabel}</button></div>
+      <details class="reference-advanced"><summary>Advanced list settings</summary><div class="reference-advanced-grid"><label>Markets<input id="reference-list-markets" value="${esc((meta.markets||[]).join('; '))}" placeholder="Latvia; Baltics"></label><label>Purpose<input id="reference-list-purpose" value="${esc(meta.purpose||'')}" placeholder="What should this list help discover?"></label><button class="secondary-btn" type="button" data-download-reference-template>Download example CSV</button></div></details></div>`:'';
     panel.innerHTML=`<div class="reference-library-top"><div class="reference-library-main"><div class="reference-library-head"><strong>Customer List</strong><span class="reference-library-badge ${statusClass}">${esc(statusLabel)}</span></div><div class="reference-library-status">${portfolio.lists.length} saved list${portfolio.lists.length===1?'':'s'} · ${activeModels} active model${activeModels===1?'':'s'}. Upload → Save → Analyze → Review → Activate.</div></div><button class="secondary-btn" type="button" data-new-reference-list>+ New List</button></div>
-      <div class="reference-current-card"><div class="reference-current-message">${currentMessage({saved,analyzed,segments,selected})}</div><div class="reference-current-name"><label>List name<input id="reference-list-name" value="${esc(meta.name||'')}" placeholder="e.g. Latvia Sales Training"></label><button class="primary-btn" type="button" data-save-reference-list ${saved?'':'disabled'}>${saveLabel}</button></div>
-      <div class="reference-simple-actions"><button class="secondary-btn" type="button" data-analyze-current ${canAnalyze?'':'disabled'}>Analyze List</button><button class="primary-btn primary-action" type="button" data-activate-current ${canActivate&&!selected?.active||reference.draftDirty?'':'disabled'}>${activateLabel}</button></div>
-      <details class="reference-advanced"><summary>Advanced list settings</summary><div class="reference-advanced-grid"><label>Markets<input id="reference-list-markets" value="${esc((meta.markets||[]).join('; '))}" placeholder="Latvia; Baltics"></label><label>Purpose<input id="reference-list-purpose" value="${esc(meta.purpose||'')}" placeholder="What should this list help discover?"></label><button class="secondary-btn" type="button" data-download-reference-template>Download example CSV</button></div></details></div>
-      ${renderSavedLists(state)}`;
+      ${renderSavedLists(state,editorHtml)}`;
     void persistLegacyMigration(state);
   }
   function metadataFromUi(state){
@@ -117,6 +118,7 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     let state=snapshot();
     if(!state.referenceCustomers?.rows?.length)throw new Error('Add at least one customer before saving the list');
     state=Portfolio.saveCurrentList(state,metadataFromUi(state));
+    editorOpen=false;
     await writeState(state);
     const status=document.getElementById('reference-import-status');if(status)status.textContent='List saved. You can analyze it now or return to it later.';
     syncLibraryUi();
@@ -124,11 +126,13 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
   }
   async function openList(id){let state=snapshot();state=Portfolio.selectList(state,id);await writeState(state);syncLibraryUi();}
   async function analyzeList(id){
+    editorOpen=false;
     let state=snapshot();state=Portfolio.selectList(state,id);await writeState(state);syncLibraryUi();
     const button=document.getElementById('reference-analyze');if(!button)throw new Error('Analysis control is unavailable');
     button.click();
   }
   async function activateList(id){
+    editorOpen=false;
     let state=snapshot();state=Portfolio.selectList(state,id);
     const list=state.referenceCustomerPortfolio.lists.find(item=>item.id===id);if(!list)throw new Error('Customer list is unavailable');
     if(list.active){state=Portfolio.setListActive(state,id,false);await writeState(state);syncLibraryUi();return;}
@@ -145,11 +149,12 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     state=Portfolio.setListActive(state,id,true);await writeState(state);syncLibraryUi();
   }
   async function editList(id){
+    editorOpen=true;
     await openList(id);
     document.getElementById('reference-list-name')?.focus();
     document.querySelector('.reference-current-card')?.scrollIntoView?.({behavior:'smooth',block:'nearest'});
   }
-  async function createNewList(){let state=snapshot();state=Portfolio.newList(state);await writeState(state);syncLibraryUi();}
+  async function createNewList(){editorOpen=true;let state=snapshot();state=Portfolio.newList(state);await writeState(state);syncLibraryUi();}
   async function toggleList(id,active){let state=snapshot();state=Portfolio.setListActive(state,id,active);await writeState(state);syncLibraryUi();}
   async function activateCurrent(){
     let state=snapshot();const selected=state.referenceCustomerPortfolio.lists.find(list=>list.id===state.referenceCustomerPortfolio.selectedListId)||null;
