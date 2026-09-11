@@ -51,12 +51,12 @@
       if(headerRowIndex<=3)score+=3;
       if(/compan|customer|client|uznem/i.test(clean(sheet.name)))score+=4;
       if(/contact/i.test(clean(sheet.name)))score-=5;
-      if(companyCol<0)score-=25;
+      if(companyCol<0&&websiteCol<0)score-=25;
       if(!best||score>best.score)best={score,headerRowIndex,header,companyCol,websiteCol,data};
     }
-    if(!best||best.score<8||best.companyCol<0)return null;
+    if(!best||best.score<8||(best.companyCol<0&&best.websiteCol<0))return null;
     const headers=best.header.map((value,index)=>value||`Column ${index+1}`);
-    if(!companyAliases.has(norm(headers[best.companyCol])))headers[best.companyCol]='Company Name';
+    if(best.companyCol>=0&&!companyAliases.has(norm(headers[best.companyCol])))headers[best.companyCol]='Company Name';
     if(best.websiteCol>=0&&!websiteAliases.has(norm(headers[best.websiteCol])))headers[best.websiteCol]='Website';
     const objects=best.data.map(row=>rowToObject(headers,row)).filter(row=>Object.values(row).some(Boolean));
     return {sheetName:clean(sheet.name)||'Sheet',headerRowIndex:best.headerRowIndex,rows:objects,score:best.score};
