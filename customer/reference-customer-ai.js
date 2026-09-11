@@ -30,12 +30,17 @@ Rules:
 REFERENCE CUSTOMERS:
 ${JSON.stringify(items)}`;
   }
-  function stripFence(text){return String(text||'').trim().replace(/^\`\`\`(?:json)?\\s*/i,'').replace(/\\s*\`\`\`$/,'').trim();}
+  function stripFence(text){
+    let value=String(text||'').trim();
+    if(value.startsWith('```'))value=value.replace(/^```(?:json)?\s*/i,'');
+    if(value.endsWith('```'))value=value.slice(0,-3);
+    return value.trim();
+  }
   function extractJsonObject(text){
     const source=String(text||'');let start=-1,depth=0,inString=false,escaped=false;
     for(let index=0;index<source.length;index++){
       const char=source[index];
-      if(inString){if(escaped)escaped=false;else if(char==='\\\\')escaped=true;else if(char==='"')inString=false;continue;}
+      if(inString){if(escaped)escaped=false;else if(char.charCodeAt(0)===92)escaped=true;else if(char==='"')inString=false;continue;}
       if(char==='"'){inString=true;continue;}
       if(char==='{'){if(start<0)start=index;depth++;}
       else if(char==='}'&&start>=0){depth--;if(depth===0)return source.slice(start,index+1);}
