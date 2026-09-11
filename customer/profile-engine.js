@@ -298,6 +298,7 @@
       profile.sourceSummary=sourceSummary(scrapedSources,docs);
     }
     return {
+      ...value,
       step:[1,2,3,4,5,6,7].includes(Number(value.step))?Number(value.step):1,
       website:normalizeUrl(value.website),
       targetMarkets,
