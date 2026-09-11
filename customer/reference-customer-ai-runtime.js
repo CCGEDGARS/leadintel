@@ -1,6 +1,6 @@
 import './reference-customer-library.js?v=20260910-reference-portfolio-v1';
 import './reference-customer-portfolio.js?v=20260911-reference-delete-v1';
-import './reference-customer-library-ui.js?v=20260910-reference-simple-flow-v2';
+import './reference-customer-library-ui.js?v=20260911-reference-row-actions-v1';
 import './reference-customer-delete-ui.js?v=20260911-reference-delete-v1';
 import './reference-customer-upload-mode.js?v=20260911-reference-single-owner-v1';
 
@@ -14,7 +14,8 @@ const REFERENCE_AI_CONCURRENCY=4;
   if(typeof document==='undefined')return;
   const Ref=root.LeadIntelReferenceCustomers;
   const AI=root.LeadIntelReferenceCustomerAI;
-  if(!Ref||!AI)return;
+  const Portfolio=root.LeadIntelReferenceCustomerPortfolio;
+  if(!Ref||!AI||!Portfolio)return;
   const clean=value=>String(value??'').replace(/\s+/g,' ').trim();
   function readState(){try{return JSON.parse(localStorage.getItem(REFERENCE_AI_STATE_KEY)||'{}');}catch{return {};}}
   async function writeState(state){
@@ -64,6 +65,7 @@ const REFERENCE_AI_CONCURRENCY=4;
       segmentationMeaningful:Boolean(result.segmentationMeaningful),
       analyzedAt:new Date().toISOString()
     });
+    state=Portfolio.syncCurrentList(state);
     await writeState(state);
     status(`AI analysis complete · ${Object.keys(result.analyses).length} companies classified${failures?` · ${failures} websites need review`:''}. Review the Customer segments before activation.`);
   }
