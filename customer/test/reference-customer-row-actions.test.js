@@ -69,3 +69,8 @@ test('analysis lifecycle marks one list running and clears it when the runtime f
   assert.match(ui,/function finishAnalysis\(\)[\s\S]*analyzingListId=''/);
   assert.match(aiRuntime,/finally\{[\s\S]*finishAnalysis/);
 });
+
+test('dark Analyze styling is scoped to the selected saved-list row',()=>{
+  assert.doesNotMatch(ui,/\.reference-saved-buttons \[data-analyze-reference-list\]\{background/);
+  assert.match(ui,/\.reference-saved-row\.selected \[data-analyze-reference-list\]\{background/);
+});
