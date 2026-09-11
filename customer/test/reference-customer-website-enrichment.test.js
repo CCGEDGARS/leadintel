@@ -76,3 +76,15 @@ test('Find Missing Info is placed after Clear current draft',()=>{
   assert.match(runtime,/insertAdjacentElement\('afterend',button\)/);
   assert.match(runtime,/Find Missing Info \(\$\{missingCount\}\)/);
 });
+
+
+test('website-only spreadsheets are valid for company-name enrichment',()=>{
+  const detected=Detection.detectCustomerTable([{name:'Websites',rows:[
+    ['Website'],
+    ['https://alpha.lv'],
+    ['https://beta.lv'],
+    ['https://gamma.lv']
+  ]}]);
+  assert.equal(detected.rows.length,3);
+  assert.equal(detected.rows[0].Website,'https://alpha.lv');
+});
