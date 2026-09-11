@@ -34,3 +34,17 @@ test('row activation supports analyzed candidates and active-model deactivation'
   assert.match(ui,/publishReferenceModel/);
   assert.match(ui,/setListActive/);
 });
+
+test('the duplicate current-list card is hidden until New List or Edit opens the editor',()=>{
+  assert.match(ui,/let editorOpen=false/);
+  assert.match(ui,/const showEditor=Boolean\(editorOpen\|\|!portfolio\.lists\.length\|\|\(saved&&!selected\)\)/);
+  assert.match(ui,/showEditor\?`<div class="reference-current-card"/);
+  assert.match(ui,/async function editList\(id\)[\s\S]*editorOpen=true/);
+  assert.match(ui,/async function createNewList\(\)[\s\S]*editorOpen=true/);
+});
+
+test('saving or starting a row action closes the conditional editor',()=>{
+  assert.match(ui,/async function saveList\(\)[\s\S]*editorOpen=false/);
+  assert.match(ui,/async function analyzeList\(id\)[\s\S]*editorOpen=false/);
+  assert.match(ui,/async function activateList\List\(id\)[\s\S]*editorOpen=false/);
+});
