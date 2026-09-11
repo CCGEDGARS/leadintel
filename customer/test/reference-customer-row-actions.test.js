@@ -80,3 +80,20 @@ test('unsaved draft editor renders when saved lists already exist',()=>{
   assert.match(ui,/const unselectedEditor=!selectedId\?editorHtml:''/);
   assert.match(ui,/reference-saved-head[\\s\\S]*\$\{unselectedEditor\}\$\{portfolio\.lists\.map/);
 });
+
+
+test('analyzed lists expose an explicit review state and View Results action',()=>{
+  assert.match(ui,/const segments=\(ref\.segments\|\|\[\]\)\.length/);
+  assert.match(ui,/const canReview=Boolean\(analyzed&&segments\)/);
+  assert.match(ui,/Ready for review/);
+  assert.match(ui,/data-view-reference-results/);
+  assert.match(ui,/>View Results<\/button>/);
+});
+
+test('View Results selects the requested list and scrolls to its segment review',()=>{
+  assert.match(ui,/async function viewResults\(id\)/);
+  assert.match(ui,/await openList\(id\)/);
+  assert.match(ui,/reference-segment-review/);
+  assert.match(ui,/scrollIntoView/);
+  assert.match(ui,/dataset\.viewReferenceResults/);
+});
