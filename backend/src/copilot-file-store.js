@@ -56,7 +56,14 @@ export async function retainAnalysis(env,{workspaceId,id}){
 
 export async function deleteAnalysisTree(env,{workspaceId,analysisId}){
   const analysis=await analysisForWorkspace(env,workspaceId,analysisId);if(!analysis)return {deleted:false};
-  const file=await fileForWorkspace(env,workspaceId,analysis.file_id);if(file)await env.COPILOT_FILES.delete(file.r2_key);
+  const file=await fileForWorkspace(env,workspaceId,analysis.file_id);
+  if(file){
+    try{await env.COPILOT_FILES.delete(file.r2_key);}
+    catch(error){
+      await env.DB.prepare(`UPDATE copilot_files SET extraction_status='deleting',updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?`).bind(file.id,workspaceId).run();
+      throw error;
+    }
+  }
   await env.DB.batch([
     env.DB.prepare(`DELETE FROM copilot_file_analyses WHERE file_id=? AND workspace_id=?`).bind(analysis.file_id,workspaceId),
     env.DB.prepare(`DELETE FROM copilot_file_extractions WHERE file_id=?`).bind(analysis.file_id),
