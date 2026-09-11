@@ -46,6 +46,7 @@ class FakeD1 {
     else if(/INSERT INTO copilot_file_extractions/.test(sql)){const [file_id,blocks_json,evidence_index_json,character_count,cell_count,extractor_version]=args;this.extractions.push({file_id,blocks_json,evidence_index_json,character_count,cell_count,extractor_version});}
     else if(/INSERT INTO copilot_file_analyses/.test(sql)){const [id,file_id,workspace_id,created_by,request,canonical_result_json,provider,model,usage_json,status,retained]=args;this.analyses.push({id,file_id,workspace_id,created_by,request,canonical_result_json,provider,model,usage_json,status,retained,created_at:new Date().toISOString()});}
     else if(/UPDATE copilot_file_analyses SET retained=1/.test(sql)){const row=this.analyses.find(row=>row.id===args[0]);if(row)row.retained=1;}
+    else if(/UPDATE copilot_files SET extraction_status='deleting'/.test(sql)){const row=this.files.find(row=>row.id===args[0]&&row.workspace_id===args[1]);if(row)row.status='deleting';}
     else if(/DELETE FROM copilot_file_analyses/.test(sql)){const ids=new Set(this.analyses.filter(row=>row.file_id===args[0]&&row.workspace_id===args[1]).map(row=>row.id));this.messages=this.messages.filter(row=>!ids.has(row.analysis_id));this.analyses=this.analyses.filter(row=>!ids.has(row.id));}
     else if(/DELETE FROM copilot_file_extractions/.test(sql)){this.extractions=this.extractions.filter(row=>row.file_id!==args[0]);}
     else if(/DELETE FROM copilot_files/.test(sql)){this.files=this.files.filter(row=>!(row.id===args[0]&&row.workspace_id===args[1]));}
@@ -57,7 +58,7 @@ class FakeR2 {
   constructor(){this.objects=new Map();this.putCalls=0;}
   async head(key){return this.objects.get(key)||null;}
   async put(key,bytes,options){this.putCalls+=1;this.objects.set(key,{key,bytes,options});}
-  async delete(key){this.objects.delete(key);}
+  async delete(key){if(this.failDeletes)throw new Error('R2 delete failed');this.objects.delete(key);}
 }
 
 function env(){return {DB:new FakeD1(),COPILOT_FILES:new FakeR2()};}
@@ -114,4 +115,13 @@ test('deleting an analysis tree deletes child metadata and immutable original id
   assert.deepEqual(await deleteAnalysisTree(runtime,{workspaceId:'w1',analysisId:analysis.id}),{deleted:true});
   assert.equal(runtime.DB.files.length,0);assert.equal(runtime.DB.extractions.length,0);assert.equal(runtime.DB.analyses.length,0);assert.equal(runtime.COPILOT_FILES.objects.size,0);
   assert.deepEqual(await deleteAnalysisTree(runtime,{workspaceId:'w1',analysisId:analysis.id}),{deleted:false});
+});
+
+test('marks a failed R2 deletion as deleting and allows an idempotent retry',async()=>{
+  const runtime=env();const record=await createFileRecord(runtime,fileInput);await putImmutableOriginal(runtime,{workspaceId:'w1',fileId:record.id,bytes:new Uint8Array([1]),sha256:fileInput.sha256,contentType:fileInput.mimeType});const analysis=await createAnalysis(runtime,{workspaceId:'w1',fileId:record.id,userId:'u1',request:'summarize',result:{},provider:'openai',model:'gpt',usage:{}});
+  runtime.COPILOT_FILES.failDeletes=true;
+  await assert.rejects(()=>deleteAnalysisTree(runtime,{workspaceId:'w1',analysisId:analysis.id}),/R2 delete failed/);
+  assert.equal(runtime.DB.files[0].status,'deleting');
+  runtime.COPILOT_FILES.failDeletes=false;
+  assert.deepEqual(await deleteAnalysisTree(runtime,{workspaceId:'w1',analysisId:analysis.id}),{deleted:true});
 });
