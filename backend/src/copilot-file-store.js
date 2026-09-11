@@ -4,6 +4,18 @@ function clean(value,max=8000){return String(value??'').replace(/[\u0000-\u001f\
 function json(value,fallback){try{return JSON.stringify(value??fallback);}catch{throw new Error('Copilot file data must be JSON serializable');}}
 function keyFor(workspaceId,fileId){return `workspaces/${workspaceId}/copilot-files/${fileId}/original`;}
 function required(value,name){if(!value)throw new Error(`${name} is required`);return value;}
+function sha256(value){const normalized=clean(required(value,'sha256'),64).toLowerCase();if(!/^[0-9a-f]{64}$/.test(normalized))throw new Error('sha256 must be a 64-character hexadecimal digest');return normalized;}
+function bytesForDigest(bytes){
+  if(bytes instanceof ArrayBuffer)return bytes;
+  if(ArrayBuffer.isView(bytes))return bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength);
+  throw new Error('Copilot file bytes must be an ArrayBuffer or typed array');
+}
+async function matchesDigest(bytes,expected){
+  const digest=await crypto.subtle.digest('SHA-256',bytesForDigest(bytes));
+  const actual=Array.from(new Uint8Array(digest),value=>value.toString(16).padStart(2,'0')).join('');
+  return actual===expected;
+}
+function digestBytes(value){const bytes=new Uint8Array(32);for(let index=0;index<bytes.length;index++)bytes[index]=Number.parseInt(value.slice(index*2,index*2+2),16);return bytes.buffer;}
 
 async function fileForWorkspace(env,workspaceId,fileId){
   return env.DB.prepare(`SELECT id,workspace_id,r2_key,sha256,mime_type,byte_size,created_at FROM copilot_files WHERE id=? AND workspace_id=? AND deleted_at IS NULL`).bind(fileId,workspaceId).first();
@@ -15,7 +27,7 @@ async function analysisForWorkspace(env,workspaceId,id){
 
 export async function createFileRecord(env,input){
   const workspaceId=clean(required(input?.workspaceId,'workspaceId'),180);const id=uuid();const r2Key=keyFor(workspaceId,id);
-  const record={id,workspaceId,r2Key,sha256:clean(required(input?.sha256,'sha256'),128),originalName:clean(required(input?.originalName,'originalName'),1024),extension:clean(required(input?.extension,'extension'),24).toLowerCase(),mimeType:clean(required(input?.mimeType,'mimeType'),256),byteSize:Number(input?.byteSize)};
+  const record={id,workspaceId,r2Key,sha256:sha256(input?.sha256),originalName:clean(required(input?.originalName,'originalName'),1024),extension:clean(required(input?.extension,'extension'),24).toLowerCase(),mimeType:clean(required(input?.mimeType,'mimeType'),256),byteSize:Number(input?.byteSize)};
   if(!Number.isSafeInteger(record.byteSize)||record.byteSize<0)throw new Error('byteSize must be a non-negative integer');
   await env.DB.prepare(`INSERT INTO copilot_files(id,workspace_id,created_by,original_name,extension,mime_type,byte_size,sha256,r2_key,extraction_status,coverage_json,warnings_json) VALUES(?,?,?,?,?,?,?,?,?,'pending',?,?)`)
     .bind(record.id,record.workspaceId,clean(input?.userId,180)||null,record.originalName,record.extension,record.mimeType,record.byteSize,record.sha256,record.r2Key,json(input?.coverage,{}),json(input?.warnings,[])).run();
@@ -24,9 +36,10 @@ export async function createFileRecord(env,input){
 
 export async function putImmutableOriginal(env,{workspaceId,fileId,bytes,sha256,contentType}){
   const file=await fileForWorkspace(env,workspaceId,fileId);if(!file)throw new Error('Copilot file not found');
-  if(clean(sha256,128)!==file.sha256)throw new Error('Copilot file digest does not match its metadata');
-  if(await env.COPILOT_FILES.head(file.r2_key))throw new Error('Copilot file original is immutable and already exists');
-  await env.COPILOT_FILES.put(file.r2_key,bytes,{httpMetadata:{contentType:clean(contentType||file.mime_type,256)},customMetadata:{sha256:file.sha256}});
+  if(sha256?.toLowerCase()!==file.sha256||!await matchesDigest(bytes,file.sha256))throw new Error('Copilot file digest does not match its metadata');
+  const onlyIf=new Headers({'If-None-Match':'*'});
+  const object=await env.COPILOT_FILES.put(file.r2_key,bytes,{onlyIf,httpMetadata:{contentType:clean(contentType||file.mime_type,256)},customMetadata:{sha256:file.sha256},sha256:digestBytes(file.sha256)});
+  if(!object)throw new Error('Copilot file original is immutable and already exists');
   return {key:file.r2_key,sha256:file.sha256};
 }
 
@@ -54,31 +67,30 @@ export async function retainAnalysis(env,{workspaceId,id}){
   return {id,retained:true};
 }
 
+async function markDeleting(env,file){
+  await env.DB.prepare(`UPDATE copilot_files SET extraction_status='deleting',updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?`).bind(file.id,file.workspace_id).run();
+}
+
+async function deleteFileTree(env,file){
+  await markDeleting(env,file);
+  await env.COPILOT_FILES.delete(file.r2_key);
+  await env.DB.batch([
+    env.DB.prepare(`DELETE FROM copilot_file_analyses WHERE file_id=? AND workspace_id=?`).bind(file.id,file.workspace_id),
+    env.DB.prepare(`DELETE FROM copilot_file_extractions WHERE file_id=?`).bind(file.id),
+    env.DB.prepare(`DELETE FROM copilot_files WHERE id=? AND workspace_id=?`).bind(file.id,file.workspace_id)
+  ]);
+}
+
 export async function deleteAnalysisTree(env,{workspaceId,analysisId}){
   const analysis=await analysisForWorkspace(env,workspaceId,analysisId);if(!analysis)return {deleted:false};
-  const file=await fileForWorkspace(env,workspaceId,analysis.file_id);
-  if(file){
-    try{await env.COPILOT_FILES.delete(file.r2_key);}
-    catch(error){
-      await env.DB.prepare(`UPDATE copilot_files SET extraction_status='deleting',updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?`).bind(file.id,workspaceId).run();
-      throw error;
-    }
-  }
-  await env.DB.batch([
-    env.DB.prepare(`DELETE FROM copilot_file_analyses WHERE file_id=? AND workspace_id=?`).bind(analysis.file_id,workspaceId),
-    env.DB.prepare(`DELETE FROM copilot_file_extractions WHERE file_id=?`).bind(analysis.file_id),
-    env.DB.prepare(`DELETE FROM copilot_files WHERE id=? AND workspace_id=?`).bind(analysis.file_id,workspaceId)
-  ]);
+  const file=await fileForWorkspace(env,workspaceId,analysis.file_id);if(file)await deleteFileTree(env,file);
   return {deleted:true};
 }
 
 export async function purgeExpiredUnretainedFiles(env,now=new Date()){
   const cutoff=new Date(Number(now)-24*60*60*1000).toISOString();
   const {results=[]}=await env.DB.prepare(`SELECT f.id,f.workspace_id,f.r2_key FROM copilot_files f WHERE f.deleted_at IS NULL AND f.created_at<? AND NOT EXISTS (SELECT 1 FROM copilot_file_analyses a WHERE a.file_id=f.id AND a.retained=1 AND a.deleted_at IS NULL)`).bind(cutoff).all();
-  let deleted=0;for(const file of results){await env.COPILOT_FILES.delete(file.r2_key);await env.DB.batch([
-    env.DB.prepare(`DELETE FROM copilot_file_analyses WHERE file_id=? AND workspace_id=?`).bind(file.id,file.workspace_id),
-    env.DB.prepare(`DELETE FROM copilot_file_extractions WHERE file_id=?`).bind(file.id),
-    env.DB.prepare(`DELETE FROM copilot_files WHERE id=? AND workspace_id=?`).bind(file.id,file.workspace_id)
-  ]);deleted+=1;}
-  return {deleted};
+  let deleted=0,failed=0;
+  for(const file of results){try{await deleteFileTree(env,file);deleted+=1;}catch{failed+=1;}}
+  return {deleted,failed};
 }
