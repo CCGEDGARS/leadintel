@@ -6,10 +6,13 @@ const path=require('node:path');
 const runtime=fs.readFileSync(path.join(__dirname,'..','reference-customer-delete-ui.js'),'utf8');
 const loader=fs.readFileSync(path.join(__dirname,'..','reference-customer-ai-runtime.js'),'utf8');
 
-test('saved list UI exposes explicit delete with confirmation',()=>{
+test('saved list UI exposes explicit branded inline delete confirmation',()=>{
   assert.match(runtime,/data-delete-reference-list/);
-  assert.match(runtime,/This cannot be undone/);
+  assert.match(runtime,/data-confirm-delete-list/);
+  assert.match(runtime,/Confirm delete/);
+  assert.match(runtime,/data-cancel-delete-list/);
   assert.match(runtime,/Portfolio\.deleteList/);
+  assert.doesNotMatch(runtime,/\bconfirm\s*\(/);
 });
 
 test('working-list clear action is distinguished from saved-list deletion',()=>{
