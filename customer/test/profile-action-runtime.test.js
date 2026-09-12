@@ -17,3 +17,10 @@ test('profile approval runtime is loaded by the process map with the single-owne
   const processMap = fs.readFileSync(new URL('../process-map.js', import.meta.url), 'utf8');
   assert.match(processMap, /profile-action-runtime\.js\?v=20260912-bottom-profile-actions-v1/);
 });
+
+
+test('profile approval reads only editable textarea fields', () => {
+  const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+  assert.match(app, /querySelectorAll\(["']textarea\\[data-profile-field\\]["']\)/);
+  assert.doesNotMatch(app, /querySelectorAll\(["']\\[data-profile-field\\]["']\)/);
+});
