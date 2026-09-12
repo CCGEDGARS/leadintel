@@ -71,7 +71,7 @@ const CANONICAL_MIGRATION_KEY='leadintel_canonical_profile_v1_migrated';
   if(typeof document!=='undefined'){
     const migrated=migrateCurrentWorkspace();if(migrated&&typeof sessionStorage!=='undefined'&&!sessionStorage.getItem(CANONICAL_MIGRATION_KEY)){sessionStorage.setItem(CANONICAL_MIGRATION_KEY,'1');setTimeout(()=>location.reload(),30);return;}
     document.addEventListener('click',event=>{
-      if(event.target.closest('#approve-profile')||event.target.closest('#approve-profile-bottom'))queueMicrotask(()=>promoteEdits(true));
+      if(event.target.closest('#approve-profile'))queueMicrotask(()=>promoteEdits(true));
       else if(event.target.closest('#edit-profile'))queueMicrotask(()=>promoteEdits(false));
     });
   }

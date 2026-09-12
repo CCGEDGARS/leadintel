@@ -26,8 +26,9 @@ test('bottom profile card semantics are owned by app.js',()=>{
   assert.match(runtime,/approval-card/);
   assert.match(runtime,/Continue to Market Strategy/);
   assert.match(runtime,/Approve Profile/);
-  assert.match(app,/\$\("approve-profile-bottom"\)\.addEventListener\("click",\(\)=>state\.approved\?openMarketStrategy\(\):approveProfile\(\)\)/);
-  assert.doesNotMatch(runtime,/closest\?\.\(['"]#approve-profile-bottom['"]\)/);
+  assert.match(app,/\$\("approve-profile"\)\.addEventListener\("click",\(\)=>state\.approved\?openMarketStrategy\(\):approveProfile\(\)\)/);
+  assert.doesNotMatch(app,/approve-profile-bottom/);
+  assert.doesNotMatch(runtime,/approve-profile-bottom/);
   assert.doesNotMatch(runtime,/openMarketStrategy/);
   assert.doesNotMatch(runtime,/card\.hidden=true/);
 });

@@ -7,7 +7,7 @@ const runtime=fs.readFileSync(new URL('../profile-action-runtime.js',import.meta
 
 test('app.js is the sole owner of profile approval and profile-next-step clicks',()=>{
   assert.match(app,/\$\("approve-profile"\)\.addEventListener\("click",\(\)=>state\.approved\?openMarketStrategy\(\):approveProfile\(\)\)/);
-  assert.match(app,/\$\("approve-profile-bottom"\)\.addEventListener\("click",\(\)=>state\.approved\?openMarketStrategy\(\):approveProfile\(\)\)/);
+  assert.doesNotMatch(app,/approve-profile-bottom/);
   assert.doesNotMatch(runtime,/document\.addEventListener\(['"]click['"]/,'presentation runtime must not intercept profile clicks');
   assert.doesNotMatch(runtime,/persistApprovedState/,'presentation runtime must not write approval state');
   assert.doesNotMatch(runtime,/stopImmediatePropagation/,'profile runtime must never suppress app click handlers');

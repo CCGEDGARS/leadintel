@@ -21,5 +21,5 @@ test('profile synchronization is idempotent and does not depend on mutation-loop
 });
 
 test('process map cache-busts the emergency-stable profile runtime',()=>{
-  assert.match(processMap,/profile-action-runtime\.js\?v=20260912-profile-approval-gate-v1/);
+  assert.match(processMap,/profile-action-runtime\.js\?v=20260912-bottom-profile-actions-v1/);
 });

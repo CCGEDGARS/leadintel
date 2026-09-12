@@ -15,5 +15,5 @@ test('profile action runtime mirrors approval presentation without owning action
 
 test('profile approval runtime is loaded by the process map with the single-owner cache key', () => {
   const processMap = fs.readFileSync(new URL('../process-map.js', import.meta.url), 'utf8');
-  assert.match(processMap, /profile-action-runtime\.js\?v=20260912-profile-approval-gate-v1/);
+  assert.match(processMap, /profile-action-runtime\.js\?v=20260912-bottom-profile-actions-v1/);
 });
