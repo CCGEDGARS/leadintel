@@ -19,27 +19,41 @@ async function requireMember(request,env,workspaceId){
 }
 function extractionError(extraction,format){
   if(!exactKeys(extraction,new Set(['format','title','blocks','evidenceIndex','warnings','coverage','counts']))||extraction.format!==format||!Array.isArray(extraction.blocks)||!Array.isArray(extraction.warnings)||!exactKeys(extraction.evidenceIndex,new Set(Object.keys(extraction.evidenceIndex||{})))||!exactKeys(extraction.coverage,new Set(['complete','omitted']))||!exactKeys(extraction.counts,new Set(['characters','nonEmptyCells','csvRows'])))return 'Extraction has an unsupported shape';
-  const locators=new Set();let characters=clean(extraction.title,10000).length,cells=0,csvRows=0;
+  if(extraction.title!==undefined&&typeof extraction.title!=='string'||typeof extraction.coverage.complete!=='boolean'||extraction.coverage.omitted!==undefined&&!Array.isArray(extraction.coverage.omitted))return 'Extraction has invalid metadata';
+  if(extraction.blocks.length>1000||extraction.warnings.length>1000||(extraction.coverage.omitted||[]).length>1000)return 'Extraction exceeds structural limits';
+  const locators=new Set();let characters=0,cells=0,csvRows=0,allCells=0,allRows=0;
   for(const block of extraction.blocks){
-    if(!exactKeys(block,new Set(['locator','text','table']))||typeof block.locator!=='string'||!clean(block.locator,500)||locators.has(block.locator))return 'Extraction has invalid blocks';
+    if(!exactKeys(block,new Set(['locator','text','table']))||typeof block.locator!=='string'||!clean(block.locator,500)||block.locator.length>500||locators.has(block.locator))return 'Extraction has invalid blocks';
     locators.add(block.locator);if(block.text!==undefined&&typeof block.text!=='string')return 'Extraction has invalid blocks';characters+=String(block.text||'').length;
-    if(block.table!==undefined){if(!Array.isArray(block.table))return 'Extraction has invalid blocks';for(const row of block.table){if(!Array.isArray(row))return 'Extraction has invalid blocks';if(format==='csv')csvRows+=1;for(const cell of row){if(typeof cell!=='string')return 'Extraction has invalid blocks';characters+=cell.length;if((format==='xlsx'||format==='xls')&&cell.trim())cells+=1;}}}
+    if(block.table!==undefined){if(!Array.isArray(block.table))return 'Extraction has invalid blocks';allRows+=block.table.length;if(allRows>20000)return 'Extraction exceeds structural limits';for(const row of block.table){if(!Array.isArray(row))return 'Extraction has invalid blocks';allCells+=row.length;if(row.length>1000||allCells>100000)return 'Extraction exceeds structural limits';if(format==='csv')csvRows+=1;for(const cell of row){if(typeof cell!=='string')return 'Extraction has invalid blocks';characters+=cell.length;if((format==='xlsx'||format==='xls')&&cell.trim())cells+=1;}}}
   }
-  if(extraction.warnings.some(value=>typeof value!=='string')||Object.keys(extraction.evidenceIndex).some(locator=>!locators.has(locator))||Object.values(extraction.evidenceIndex).some(value=>typeof value!=='string'))return 'Extraction has invalid evidence';
-  if(characters>COPILOT_FILE_LIMITS.maxExtractionChars||cells>COPILOT_FILE_LIMITS.maxCells||csvRows>COPILOT_FILE_LIMITS.maxCsvRows)return 'Extraction exceeds a supported limit';
+  if(extraction.warnings.some(value=>typeof value!=='string')||(extraction.coverage.omitted||[]).some(value=>typeof value!=='string')||Object.keys(extraction.evidenceIndex).length!==locators.size||Object.keys(extraction.evidenceIndex).some(locator=>!locators.has(locator))||Object.values(extraction.evidenceIndex).some(value=>typeof value!=='string'))return 'Extraction has invalid evidence';
+  // Source counts exclude metadata, but the aggregate budget includes all normalized text.
+  const aggregate=characters+(extraction.title||'').length+[...extraction.warnings,...(extraction.coverage.omitted||[]),...Object.values(extraction.evidenceIndex)].reduce((sum,value)=>sum+value.length,0);
+  if(aggregate>COPILOT_FILE_LIMITS.maxExtractionChars||cells>COPILOT_FILE_LIMITS.maxCells||csvRows>COPILOT_FILE_LIMITS.maxCsvRows)return 'Extraction exceeds a supported limit';
   if(!Number.isSafeInteger(extraction.counts.characters)||!Number.isSafeInteger(extraction.counts.nonEmptyCells)||!Number.isSafeInteger(extraction.counts.csvRows)||extraction.counts.characters!==characters||extraction.counts.nonEmptyCells!==cells||extraction.counts.csvRows!==csvRows)return 'Extraction counts do not match content';
   return null;
 }
 function multipartField(form,name){const values=form.getAll(name);return values.length===1?values[0]:null;}
+const MAX_MULTIPART_BYTES=18*1024*1024,MAX_EXTRACTION_BYTES=2*1024*1024;
+async function boundedForm(request){
+  if(Number(request.headers.get('content-length'))>MAX_MULTIPART_BYTES)return {status:413};
+  if(!request.body)return {status:400};
+  const reader=request.body.getReader(),chunks=[];let size=0;
+  try{for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>MAX_MULTIPART_BYTES){await reader.cancel();return {status:413};}chunks.push(value);}
+    const body=new Blob(chunks);return {form:await new Response(body,{headers:{'Content-Type':request.headers.get('content-type')||''}}).formData()};
+  }catch{return {status:400};}
+}
 
 export async function handleCopilotFileRoute(request,env,cors={}){
   const url=new URL(request.url);if(!url.pathname.startsWith('/api/copilot/files'))return null;
   const workspaceId=clean(url.searchParams.get('workspace_id'),180);const access=await requireMember(request,env,workspaceId);if(access.error)return error(access.error,access.status,cors);
   if(url.pathname!=='/api/copilot/files'||request.method!=='POST')return error('Method not allowed',405,cors);
-  const form=await request.formData().catch(()=>null);if(!form)return error('Multipart upload is required',400,cors);
+  const parsed=await boundedForm(request);if(!parsed.form)return error(parsed.status===413?'Multipart upload is too large':'Multipart upload is required',parsed.status,cors);const form=parsed.form;
   const allowed=new Set(['file','extraction_json','sha256','extractor_version']);if([...form.keys()].some(key=>!allowed.has(key)))return error('Multipart upload contains unsupported fields',400,cors);
   const file=multipartField(form,'file'),extractionJson=multipartField(form,'extraction_json'),submittedDigest=clean(multipartField(form,'sha256'),64).toLowerCase(),extractorVersion=clean(multipartField(form,'extractor_version'),180);
   if(!file||typeof file.arrayBuffer!=='function'||typeof extractionJson!=='string'||!extractorVersion||!/^[0-9a-f]{64}$/.test(submittedDigest))return error('Required multipart fields are missing',400,cors);
+  if(new TextEncoder().encode(extractionJson).byteLength>MAX_EXTRACTION_BYTES)return error('Extraction JSON is too large',413,cors);
   const bytes=new Uint8Array(await file.arrayBuffer());const validation=await validateUploadedFile({headers:new Headers({'content-type':file.type}),bytes,name:file.name});
   if(!validation.ok)return error(validation.error,validation.status,cors);
   if(validation.sha256!==submittedDigest)return error('File digest does not match uploaded content',422,cors);
