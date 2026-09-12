@@ -20,6 +20,10 @@ test('idle market research labels contain no Review prefix and each has distinct
   assert.match(ux.MODE_COPY.deep.description,/Deeper research/i);
   assert.match(ux.MODE_COPY.intelligence.description,/Comprehensive investigation/i);
   assert.ok(Object.values(ux.MODE_COPY).every(item=>!/^Review\b/i.test(item.label)));
+  assert.equal(ux.MODE_COPY.deep.badge,'Recommended');
+  assert.equal(ux.MODE_COPY.quick.action,'Select Market Scan →');
+  assert.equal(ux.MODE_COPY.deep.action,'Select Market Research →');
+  assert.equal(ux.MODE_COPY.intelligence.action,'Select Market Intelligence →');
 });
 
 test('source discovery policy differs by research depth',()=>{
