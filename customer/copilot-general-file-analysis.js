@@ -17,7 +17,7 @@ export function installGeneralFileAnalysis({api,extractFile=extractCopilotFile,c
   if(installations.has(host))return installations.get(host);
   const root=node('section',undefined,'copilot-general-file-analysis');root.setAttribute('aria-label','General file analysis');host.append(root);
   let state='empty',generation=0,owner=workspace(),file=null,extraction=null,digest='',fileId='',analysis=null,retryAction=null,destroyed=false,historyGeneration=0;
-  let operation=new AbortController();const buffers=new Set();const urls=new Set();
+  let operation=new AbortController();const buffers=new Map();const urls=new Set();
   const input=node('input');input.type='file';input.accept=ACCEPT;input.hidden=true;input.setAttribute('aria-label','Choose one file to analyze');
   const choose=button('Analyze Any File',()=>{if(!syncWorkspace())return;input.value='';input.click();});
   const fileLabel=node('p','No file selected.');
@@ -43,7 +43,9 @@ export function installGeneralFileAnalysis({api,extractFile=extractCopilotFile,c
   history.append(node('h3','File Analyses'),button('Refresh file analyses',()=>void loadHistory()),historyStatus,historyList);
   root.append(choose,input,node('p',FORMATS),fileLabel,status,warnings,request,confirmation,actions,resultHost,conversation,followup,ask,resultActions,deleteConfirmation,node('p','Unretained files expire after 24 hours. Saved analyses remain until deleted.'),history);
 
-  function release(){for(const bytes of buffers){try{bytes.fill(0);}catch{/* A transferred buffer is already detached. */}}buffers.clear();for(const url of urls)URL.revokeObjectURL(url);urls.clear();}
+  function trackBuffer(token,bytes){if(!buffers.has(token))buffers.set(token,new Set());buffers.get(token).add(bytes);}
+  function releaseBuffers(token){const owned=buffers.get(token);if(!owned)return;for(const bytes of owned){try{bytes.fill(0);}catch{/* A transferred buffer is already detached. */}}buffers.delete(token);}
+  function release(){for(const token of [...buffers.keys()])releaseBuffers(token);for(const url of urls)URL.revokeObjectURL(url);urls.clear();}
   function clearFile(){release();file=null;extraction=null;digest='';input.value='';}
   function transition(next,text){state=next;root.dataset.state=next;status.textContent=text;renderControls();}
   function renderControls(){
@@ -89,23 +91,23 @@ export function installGeneralFileAnalysis({api,extractFile=extractCopilotFile,c
     if(!SUPPORTED_FILE_FORMATS[extension]||file.size>FILE_LIMITS.maxFileBytes||file.size<=0){clearFile();transition('rejected',FORMATS);return;}
     const token=generation;fileLabel.textContent=file.name;transition('selected','File selected. Validating…');
     try{
-      const bytes=new Uint8Array(await file.arrayBuffer());buffers.add(bytes);
-      if(!current(token)){release();return;}
+      const bytes=new Uint8Array(await file.arrayBuffer());trackBuffer(token,bytes);
+      if(!current(token)){releaseBuffers(token);return;}
       const signature=Array.from(bytes.subarray(0,32),value=>value.toString(16).padStart(2,'0')).join('');
       const valid=validateCopilotFile({name:file.name,type:file.type,size:bytes.length,signature});
       if(!valid.ok){clearFile();transition('rejected',valid.errors.join(' ')+' '+FORMATS);return;}
-      digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),value=>value.toString(16).padStart(2,'0')).join('');release();
-      if(!current(token))return;
+      const nextDigest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),value=>value.toString(16).padStart(2,'0')).join('');releaseBuffers(token);
+      if(!current(token))return;digest=nextDigest;
       transition('extracting','Extracting source content…');const extracted=await extractFile(file);
       if(!current(token))return;
       if(!extracted?.blocks?.some(block=>block.text?.trim()||block.table?.some(row=>row.some(cell=>String(cell).trim()))))throw new Error('No usable content was extracted. Choose a readable file.');
       extraction=extracted;renderExtraction();await upload(token);
-    }catch(error){release();if(current(token)){clearFile();fail(error,null);}}
+    }catch(error){releaseBuffers(token);if(current(token)){clearFile();fail(error,null);}}
   }
   async function upload(token=generation){
     if(!current(token)||!file||!extraction)return;retryAction=null;transition('uploading','Uploading unchanged original…');
-    try{const value=response(await api.uploadCopilotFile({file,extraction,sha256:digest,extractorVersion:'web-1'},{signal:operation.signal}));if(!current(token))return;if(!value.file_id)throw new Error('Upload did not return a file identifier.');fileId=value.file_id;file=null;digest='';release();input.value='';transition(extraction.coverage?.complete===false?'confirmation-required':'extracted',extraction.coverage?.complete===false?'Extracted partially. Confirm the coverage warning before analysis.':'Extracted. Enter your request and select Analyze File.');request.focus();}
-    catch(error){release();if(current(token))fail(error,()=>upload());}
+    try{const value=response(await api.uploadCopilotFile({file,extraction,sha256:digest,extractorVersion:'web-1'},{signal:operation.signal}));if(!current(token))return;if(!value.file_id)throw new Error('Upload did not return a file identifier.');fileId=value.file_id;file=null;digest='';releaseBuffers(token);input.value='';transition(extraction.coverage?.complete===false?'confirmation-required':'extracted',extraction.coverage?.complete===false?'Extracted partially. Confirm the coverage warning before analysis.':'Extracted. Enter your request and select Analyze File.');request.focus();}
+    catch(error){releaseBuffers(token);if(current(token))fail(error,()=>upload());}
   }
   async function runAnalysis(){
     if(!syncWorkspace()||!fileId||analysis||!['extracted','confirmation-required','error'].includes(state))return;
@@ -119,7 +121,7 @@ export function installGeneralFileAnalysis({api,extractFile=extractCopilotFile,c
     if(!syncWorkspace()||!analysis||!['ready','error'].includes(state))return;const text=followup.value.trim();if(!text||text.length>FILE_LIMITS.maxRequestChars){status.textContent='Enter a question of 1–8,000 characters.';followup.focus();return;}
     const token=generation;retryAction=null;transition('analyzing','Analyzing your follow-up. Previous result remains below.');
     try{const value=await api.continueCopilotFileAnalysis(analysis.id,text,{signal:operation.signal});if(current(token)){const messages=[...(analysis.messages||[]),{role:'user',content:text},{role:'assistant',content:value?.analysis?.result?.executive_summary||''}].slice(-12);acceptAnalysis(value);analysis.messages=messages;renderResult();followup.value='';followup.focus();}}
-    catch(error){if(current(token)){if(error.status===409)fail(new Error('This analysis changed in another session. Reload analysis before sending your question again.'),null,'stale');else fail(error,()=>continueAnalysis());}}
+    catch(error){if(current(token)){if(error.status===409)fail(new Error('This analysis changed in another session. Reload analysis before sending your question again.'),null,'stale');else{retryAction=()=>continueAnalysis();transition('ready',`Follow-up failed. ${message(error)} Your previous result remains available.`);}}}
   }
   async function saveAnalysis(){
     if(!syncWorkspace()||!analysis||state!=='ready')return;const token=generation;transition('saving','Saving analysis…');

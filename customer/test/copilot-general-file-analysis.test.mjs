@@ -14,13 +14,13 @@ const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{reso
 let dom,controller;
 const originalFetch=globalThis.fetch;
 afterEach(()=>{controller?.destroy();dom?.window.close();delete globalThis.window;delete globalThis.document;delete globalThis.Event;delete globalThis.CustomEvent;globalThis.fetch=originalFetch;});
-function setup(overrides={},extractFile=async()=>structuredClone(extraction)){
+function setup(overrides={},extractFile=async()=>structuredClone(extraction),crypto=webcrypto){
   dom=new JSDOM('<!doctype html><aside id="leadintel-copilot-drawer"><section data-copilot-general-file-host></section><form class="copilot-composer"><button type="button">Attach Excel / CSV</button></form></aside>',{url:'https://leadintel.test'});
   globalThis.window=dom.window;globalThis.document=dom.window.document;globalThis.Event=dom.window.Event;globalThis.CustomEvent=dom.window.CustomEvent;
   window.LeadIntelServerBridge={session:{authenticated:true},workspace:{id:'w1'}};
   const calls=[];
   const api={uploadCopilotFile:async(payload)=>{calls.push(['upload',payload]);return {file_id:'f1'};},analyzeCopilotFile:async(payload)=>{calls.push(['analyze',payload]);return {analysis:structuredClone(analysis)};},continueCopilotFileAnalysis:async()=>({analysis:structuredClone(analysis)}),listCopilotFileAnalyses:async()=>({analyses:[{id:'a1',title:'Saved review',retained:true}]}),getCopilotFileAnalysis:async()=>({analysis:{...structuredClone(analysis),retained:true,messages:[{role:'user',content:'Earlier question'}]}}),saveCopilotFileAnalysis:async()=>({retained:true}),deleteCopilotFileAnalysis:async()=>({deleted:true}),...overrides};
-  controller=installGeneralFileAnalysis({api,extractFile,crypto:webcrypto});
+  controller=installGeneralFileAnalysis({api,extractFile,crypto});
   return {calls,api,root:controller.root};
 }
 const button=name=>[...document.querySelectorAll('button')].find(el=>el.textContent===name);
@@ -113,6 +113,19 @@ test('multipart and JSON API requests enforce credentials, workspace, endpoint p
   globalThis.fetch=async()=>new Response(JSON.stringify({error:'stale'}),{status:409});await assert.rejects(transport.continueCopilotFileAnalysis('a1','Q'),error=>error.status===409);
 });
 
+test('file analysis requests outlive two provider deadlines while ordinary chat keeps its existing timeout',async()=>{
+  setup();const nativeSetTimeout=globalThis.setTimeout,nativeClearTimeout=globalThis.clearTimeout,timers=[];
+  globalThis.setTimeout=(callback,delay)=>{const timer={callback,delay,active:true};timers.push(timer);return timer;};
+  globalThis.clearTimeout=timer=>{if(timer)timer.active=false;};
+  globalThis.fetch=async(_url,{signal})=>new Promise((_resolve,reject)=>signal.addEventListener('abort',()=>reject(Object.assign(new Error('aborted'),{name:'AbortError'})),{once:true}));
+  try{
+    const chat=transport.sendCopilotMessage({message:'Hello'});await Promise.resolve();const chatTimer=timers.at(-1);assert.equal(chatTimer.delay,35000);chatTimer.callback();await assert.rejects(chat,error=>error.name==='AbortError');
+    for(const operation of [()=>transport.analyzeCopilotFile({file_id:'f1',request:'Review'}),()=>transport.continueCopilotFileAnalysis('a1','Continue')]){
+      const pending=operation();await Promise.resolve();const timer=timers.at(-1);assert.ok(timer.delay>=65000,`file analysis deadline was only ${timer.delay}ms`);assert.equal(timer.active,true);timer.callback();await assert.rejects(pending,error=>error.name==='AbortError');
+    }
+  }finally{globalThis.setTimeout=nativeSetTimeout;globalThis.clearTimeout=nativeClearTimeout;}
+});
+
 test('drawer mounts a separate analyzer host, and Escape cancels pending extraction and restores entry focus',async()=>{
   setup();controller.destroy();document.querySelector('aside').remove();const entry=document.createElement('button');entry.id='leadintel-copilot-entry';document.body.append(entry);
   const ui=await import(`../copilot-ui.js?dom=${Date.now()}`);await ui.openCopilot({api:{},context:{}});
@@ -132,6 +145,14 @@ test('successful follow-up appends the question and answer without losing earlie
   assert.match(controller.root.querySelector('[aria-label="File discussion"]').textContent,/You: Why\?/);assert.match(controller.root.querySelector('[aria-label="File discussion"]').textContent,/LeadIntel: Summary/);
 });
 
+test('failed follow-up keeps the prior result ready for editing, save, delete and retry',async()=>{
+  let attempts=0;setup({continueCopilotFileAnalysis:async()=>{if(++attempts===1)throw Error('Provider unavailable');return {analysis:structuredClone(analysis)};}});await ready();
+  field('Question about this file').value='Why?';button('Ask about file').click();await settle();
+  assert.equal(controller.root.dataset.state,'ready');assert.match(status(),/Follow-up failed.*Provider unavailable/i);assert.match(controller.root.querySelector('[data-file-result]').textContent,/Summary/);
+  assert.equal(field('Question about this file').disabled,false);assert.equal(button('Ask about file').disabled,false);assert.equal(button('Save to workspace').disabled,false);assert.equal(button('Delete analysis').disabled,false);assert.equal(button('Retry').hidden,false);
+  field('Question about this file').value='Try again';button('Ask about file').click();await settle();assert.equal(attempts,2);assert.equal(controller.root.dataset.state,'ready');
+});
+
 test('reloaded follow-up history renders the canonical assistant summary instead of raw JSON',async()=>{
   setup({getCopilotFileAnalysis:async()=>({analysis:{...structuredClone(analysis),retained:true,messages:[{role:'user',content:'Summarize it'},{role:'assistant',content:JSON.stringify(result)}]}})});
   await settle();button('Saved review').click();await settle();const discussion=controller.root.querySelector('[aria-label="File discussion"]').textContent;
@@ -141,6 +162,30 @@ test('reloaded follow-up history renders the canonical assistant summary instead
 test('cancellation clears read buffers and ignores late AI results',async()=>{
   const ai=deferred();const {root}=setup({analyzeCopilotFile:()=>ai.promise});const bytes=new TextEncoder().encode('Revenue,12');const source={name:'source.csv',type:'text/csv',size:bytes.length,arrayBuffer:async()=>bytes.buffer};
   await choose([source]);assert.ok(bytes.every(value=>value===0));field('File analysis request').value='Review';button('Analyze File').click();await settle();button('Start new analysis').click();ai.resolve({analysis});await settle();assert.equal(root.dataset.state,'empty');assert.equal(root.querySelector('[data-file-result]').textContent,'');
+});
+
+test('a stale file digest cannot replace the active file digest before upload',async()=>{
+  const firstDigest=deferred(),secondDigest=deferred(),secondExtraction=deferred();let digestCall=0;
+  const crypto={subtle:{digest:()=>++digestCall===1?firstDigest.promise:secondDigest.promise}};
+  const first=new File(['First,1'],'first.csv',{type:'text/csv'}),second=new File(['Second,2'],'second.csv',{type:'text/csv'});
+  const {calls}=setup({},selected=>selected.name==='second.csv'?secondExtraction.promise:structuredClone(extraction),crypto);
+  await choose([first]);await choose([second]);secondDigest.resolve(new Uint8Array(32).fill(0xbb).buffer);await settle();firstDigest.resolve(new Uint8Array(32).fill(0xaa).buffer);await settle();secondExtraction.resolve(structuredClone(extraction));await settle();
+  const upload=calls.find(call=>call[0]==='upload');assert.equal(upload[1].file.name,'second.csv');assert.equal(upload[1].sha256,'bb'.repeat(32));
+});
+
+test('stale digest cleanup cannot clear the active file operation buffer',async()=>{
+  const firstDigest=deferred(),secondDigest=deferred();let digestCall=0;const firstBytes=new TextEncoder().encode('First,1'),secondBytes=new TextEncoder().encode('Second,2');
+  const crypto={subtle:{digest:()=>++digestCall===1?firstDigest.promise:secondDigest.promise}};
+  const first={name:'first.csv',type:'text/csv',size:firstBytes.length,arrayBuffer:async()=>firstBytes.buffer},second={name:'second.csv',type:'text/csv',size:secondBytes.length,arrayBuffer:async()=>secondBytes.buffer};
+  setup({},async()=>structuredClone(extraction),crypto);
+  await choose([first]);await choose([second]);firstDigest.resolve(new Uint8Array(32).fill(0xaa).buffer);await settle();assert.equal(new TextDecoder().decode(secondBytes),'Second,2');secondDigest.resolve(new Uint8Array(32).fill(0xbb).buffer);await settle();
+});
+
+test('stale file reads cannot clear the active file operation buffer',async()=>{
+  const firstRead=deferred(),secondDigest=deferred(),firstBytes=new TextEncoder().encode('First,1'),secondBytes=new TextEncoder().encode('Second,2');
+  const crypto={subtle:{digest:()=>secondDigest.promise}};
+  const first={name:'first.csv',type:'text/csv',size:firstBytes.length,arrayBuffer:()=>firstRead.promise},second={name:'second.csv',type:'text/csv',size:secondBytes.length,arrayBuffer:async()=>secondBytes.buffer};
+  setup({},async()=>structuredClone(extraction),crypto);await choose([first]);await choose([second]);firstRead.resolve(firstBytes.buffer);await settle();assert.equal(new TextDecoder().decode(secondBytes),'Second,2');secondDigest.resolve(new Uint8Array(32).fill(0xbb).buffer);await settle();
 });
 
 test('file bytes and extracted content are never written to browser storage',async()=>{
