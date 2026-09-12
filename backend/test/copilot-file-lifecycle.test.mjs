@@ -32,4 +32,4 @@ test('partially failed deletion stays retryable and is not offered in history',a
   const list=await handleCopilotFileRoute(apiRequest('file-analyses'),env);assert.deepEqual(await list.json(),{analyses:[]});
   env.COPILOT_FILES.failDelete=false;assert.equal((await handleCopilotFileRoute(apiRequest(`file-analyses/${id}`,{method:'DELETE'}),env)).status,200);
 });
-test('unrelated prefixes and Task5 analysis/message POST remain unclaimed',async()=>{const env=runtime();for(const [path,method] of [['files-other','GET'],['file-analyses','POST'],['file-analyses/id/messages','POST']])assert.equal(await handleCopilotFileRoute(apiRequest(path,{method}),env),null);});
+test('unrelated prefixes remain unclaimed',async()=>{const env=runtime();assert.equal(await handleCopilotFileRoute(apiRequest('files-other'),env),null);});

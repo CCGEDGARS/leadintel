@@ -1,5 +1,6 @@
 import {createFileRecord,putImmutableOriginal,saveExtraction,retainAnalysis,deleteAnalysisTree} from './copilot-file-store.js';
 import {COPILOT_FILE_LIMITS,validateUploadedFile} from './copilot-file-security.js';
+import {runFileAnalysis,continueFileAnalysis} from './copilot-file-analysis-service.js';
 
 const OPERATING_ROLES=new Set(['owner','researcher','sales']);
 const clean=(value,max=8000)=>String(value??'').replace(/[\u0000-\u001f\u007f]+/g,' ').trim().slice(0,max);
@@ -80,21 +81,59 @@ async function lifecycle(request,env,workspaceId,match,cors){
       if(!row)return error('File analysis not found',404,cors);
       if(row.status!=='completed'||!['complete','partial'].includes(row.extraction_status))return error('File analysis is not ready',409,cors);
       if(save)return json(await retainAnalysis(env,{workspaceId,id}),200,cors);
-      const {results:messages=[]}=await env.DB.prepare(`SELECT role,content,evidence_json,created_at FROM copilot_file_analysis_messages WHERE analysis_id=? ORDER BY created_at DESC,id DESC LIMIT 50`).bind(id).all();
+      const {results:messages=[]}=await env.DB.prepare(`SELECT role,content,evidence_json,created_at FROM copilot_file_analysis_messages WHERE analysis_id=? ORDER BY created_at DESC,rowid DESC LIMIT 50`).bind(id).all();
       return json({analysis:{...publicAnalysis(row),messages:messages.reverse().map(row=>({role:row.role,content:row.content,evidence:JSON.parse(row.evidence_json),created_at:row.created_at}))}},200,cors);
     }
     return error('Method not allowed',405,cors);
   }catch{return error('Unable to access file analysis; retry shortly',503,{...cors,'Retry-After':'5'});}
 }
 
+async function boundedAnalysisBody(request){
+  const maxBytes=65536;
+  if(Number(request.headers.get('content-length'))>maxBytes)return {status:413};
+  if(!request.body||!/^application\/json(?:;|$)/i.test(request.headers.get('content-type')||''))return {status:400};
+  const reader=request.body.getReader(),chunks=[];let size=0;
+  try{
+    for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>maxBytes){await reader.cancel();return {status:413};}chunks.push(value);}
+    return {body:JSON.parse(await new Blob(chunks).text())};
+  }catch{return {status:400};}
+}
+function validPreferences(value){return value===undefined||exactKeys(value,new Set(['formats']))&&(value.formats===undefined||Array.isArray(value.formats)&&value.formats.length<=5&&value.formats.every(format=>['pdf','docx','pptx','xlsx','csv'].includes(format)));}
+async function analysisPost(request,env,workspaceId,userId,match,cors){
+  const parsed=await boundedAnalysisBody(request);if(parsed.status)return error(parsed.status===413?'Analysis request is too large':'A valid JSON analysis request is required',parsed.status,cors);
+  const body=parsed.body,followup=match[2]==='/messages';
+  const allowed=new Set(followup?['message']:['file_id','request','output_preferences','partial_confirmed']);
+  if(!exactKeys(body,allowed))return error('Analysis request contains unsupported fields',400,cors);
+  const text=followup?body.message:body.request;
+  if(typeof text!=='string'||!text.trim()||text.length>8000)return error('A request of 1–8000 characters is required',400,cors);
+  if(!followup&&(typeof body.file_id!=='string'||!body.file_id.trim()||body.file_id.length>180||!validPreferences(body.output_preferences)||body.partial_confirmed!==undefined&&typeof body.partial_confirmed!=='boolean'))return error('Invalid analysis request',400,cors);
+  try{
+    if(followup)return json({analysis:await continueFileAnalysis(env,{workspaceId,userId,analysisId:match[1],message:text})},200,cors);
+    const file=await env.DB.prepare('SELECT * FROM copilot_files WHERE id=? AND workspace_id=? AND deleted_at IS NULL').bind(body.file_id,workspaceId).first();
+    if(!file)return error('File not found',404,cors);
+    if(!['complete','partial'].includes(file.extraction_status))return error('File extraction is not ready',409,cors);
+    if(file.extraction_status==='partial'&&body.partial_confirmed!==true)return error('Confirm partial extraction coverage before analysis',409,cors);
+    const stored=await env.DB.prepare('SELECT blocks_json,evidence_index_json FROM copilot_file_extractions WHERE file_id=?').bind(file.id).first();
+    if(!stored)return error('File extraction is not ready',409,cors);
+    const extraction={blocks:JSON.parse(stored.blocks_json),evidenceIndex:JSON.parse(stored.evidence_index_json),warnings:JSON.parse(file.warnings_json),coverage:JSON.parse(file.coverage_json)};
+    return json({analysis:await runFileAnalysis(env,{workspaceId,userId,file,extraction,request:text,outputPreferences:body.output_preferences})},201,cors);
+  }catch(cause){
+    const status=[400,403,404,409,422,502,503,504].includes(cause.status)?cause.status:503;
+    return error(cause.status===status?cause.message:'Unable to analyze file; retry shortly',status,cors);
+  }
+}
+
 export async function handleCopilotFileRoute(request,env,cors={}){
-  const url=new URL(request.url),analysisMatch=url.pathname.match(/^\/api\/copilot\/file-analyses(?:\/([^/]+)(\/save)?)?$/);
-  // Task 5 owns analysis and message POST; do not swallow unrelated Copilot paths.
-  if(url.pathname!=='/api/copilot/files'&&!analysisMatch||analysisMatch&&!analysisMatch[1]&&request.method==='POST')return null;
+  const url=new URL(request.url),analysisMatch=url.pathname.match(/^\/api\/copilot\/file-analyses(?:\/([^/]+)(\/(?:save|messages))?)?$/);
+  if(url.pathname!=='/api/copilot/files'&&!analysisMatch)return null;
   const workspaceId=clean(url.searchParams.get('workspace_id'),180);const access=await requireMember(request,env,workspaceId);if(access.error)return error(access.error,access.status,cors);
   try{if(!await rateLimit(env,access.user.id,workspaceId,request.method==='GET'))return error('File request rate limit exceeded; retry shortly',429,{...cors,'Retry-After':'60'});}
   catch{return error('File request service is temporarily unavailable',503,{...cors,'Retry-After':'60'});}
-  if(analysisMatch)return lifecycle(request,env,workspaceId,analysisMatch,cors);
+  if(analysisMatch){
+    if(request.method==='POST'&&(!analysisMatch[1]||analysisMatch[2]==='/messages'))return analysisPost(request,env,workspaceId,access.user.id,analysisMatch,cors);
+    if(analysisMatch[2]==='/messages')return error('Method not allowed',405,cors);
+    return lifecycle(request,env,workspaceId,analysisMatch,cors);
+  }
   if(url.pathname!=='/api/copilot/files'||request.method!=='POST')return error('Method not allowed',405,cors);
   const parsed=await boundedForm(request);if(!parsed.form)return error(parsed.status===413?'Multipart upload is too large':'Multipart upload is required',parsed.status,cors);const form=parsed.form;
   const allowed=new Set(['file','extraction_json','sha256','extractor_version']);if([...form.keys()].some(key=>!allowed.has(key)))return error('Multipart upload contains unsupported fields',400,cors);
