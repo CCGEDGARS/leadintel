@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {shouldUseExternalResearch,buildExternalResearchQuery,runCopilotTurn} from '../src/copilot-service.js';
+import {shouldUseExternalResearch,externalResearchPurpose,buildExternalResearchQuery,runCopilotTurn} from '../src/copilot-service.js';
 
 const context={company:{name:'Acme',website:'https://acme.example'},markets:['Latvia'],crmSummary:{topCompanies:[{name:'Private CRM Co'}]},profile:{private_notes:'Do not send this'},screen:{step:4,label:'Market Strategy'}};
 
@@ -8,6 +8,25 @@ test('external research policy is internal-first and freshness-aware',()=>{
   assert.equal(shouldUseExternalResearch({question:'What does this button do?',skillIds:['product_help'],knowledge:{freshness:'stable'}}),false);
   assert.equal(shouldUseExternalResearch({question:'Where is the current OpenAI API key control?',skillIds:['technical_setup'],knowledge:{freshness:'verify'}}),true);
   assert.equal(shouldUseExternalResearch({question:'What are the latest provider limits?',skillIds:['technical_setup'],knowledge:{freshness:'stable'}}),true);
+});
+
+test('website access and analytics questions always trigger a source-access audit',()=>{
+  const question='Find if we can access www.lursoft.lv and how deep is the analytics';
+  assert.equal(shouldUseExternalResearch({question,skillIds:['product_help'],knowledge:{freshness:'stable'}}),true);
+  assert.equal(externalResearchPurpose(question),'source_access_audit');
+  assert.equal(externalResearchPurpose('Find recent Latvian expansion signals'),'general');
+});
+
+test('source-access audit requests wider research and gives the model an explicit evidence checklist',async()=>{
+  let searchOptions;let generatedPrompt='';
+  const env={COPILOT_TEST_CONTEXT:context,COPILOT_TEST_MEMORIES:[],COPILOT_TEST_PROVIDER:{
+    async search(options){searchOptions=options;return {results:[{title:'Provider API',url:'https://www.lursoft.lv/lv/api-iespejas',description:'Official API information',date:'2026-09-12'}],usage:{input_tokens:1,output_tokens:1}};},
+    async generate(options){generatedPrompt=options.prompt;return {provider:'openai',model:'gpt-test',text:JSON.stringify({answer:'Public pages are visible; database access is not proven. Use the authorised API subject to agreement.',action_proposals:[],memory_candidates:[]}),usage:{input_tokens:1,output_tokens:1}};}
+  }};
+  const result=await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',question:'Can LeadIntel access https://www.lursoft.lv and how deep is the analytics?',currentScreen:{step:4,label:'Market Strategy'}});
+  assert.equal(searchOptions.purpose,'source_access_audit');assert.equal(searchOptions.maxResults,8);
+  assert.match(generatedPrompt,/official API and available fields/);assert.match(generatedPrompt,/automation and legal restrictions/);
+  assert.equal(result.research_used,true);
 });
 
 test('external research query is minimized and excludes CRM/private context',()=>{
