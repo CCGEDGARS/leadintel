@@ -93,6 +93,18 @@ test('D1-style batch failure rolls back extraction metadata and leaves the file 
   assert.equal(scalar(env.DB,`SELECT extraction_status AS value FROM copilot_files WHERE id=?`,record.id),'pending');
 });
 
+test('analysis store preserves separate nullable coverage JSON and the real schema rejects malformed coverage',async()=>{
+  const env=runtime(),record=await file(env);
+  const coverage={warnings:['Unreadable page 2'],coverage:{complete:false,omitted:['page:2']}};
+  const saved=await createAnalysis(env,{workspaceId:'w1',userId:'u1',fileId:record.id,request:'Summarize',result:{title:'Review'},sourceCoverage:coverage,usage:{input_tokens:10,output_tokens:20}});
+  const row=env.DB.sqlite.prepare('SELECT * FROM copilot_file_analyses WHERE id=?').get(saved.id);
+  assert.deepEqual(row.source_coverage_json===undefined?undefined:JSON.parse(row.source_coverage_json),coverage);
+  assert.deepEqual(JSON.parse(row.usage_json),{input_tokens:10,output_tokens:20});
+  assert.throws(()=>env.DB.sqlite.prepare('UPDATE copilot_file_analyses SET source_coverage_json=? WHERE id=?').run('{invalid',saved.id),/CHECK/);
+  const legacy=await analysis(env,record);
+  assert.equal(env.DB.sqlite.prepare('SELECT source_coverage_json FROM copilot_file_analyses WHERE id=?').get(legacy.id).source_coverage_json,null);
+});
+
 test('conditional R2 writes admit only one concurrent original and reject a different payload by digest',async()=>{
   const env=runtime();const good=new Uint8Array([1,2,3]);const bad=new Uint8Array([4,5,6]);const record=await file(env,'w1',good);
   env.COPILOT_FILES.race=deferred();

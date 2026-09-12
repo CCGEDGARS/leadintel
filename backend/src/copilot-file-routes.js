@@ -58,7 +58,7 @@ async function reserveUpload(env,input){
   const claimed=await env.DB.prepare(`UPDATE copilot_files SET upload_token=?,extraction_status='pending',updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND deleted_at IS NULL AND upload_token IS ? AND extraction_status=? AND (extraction_status!='pending' OR updated_at<datetime('now','-5 minutes'))`).bind(uploadToken,file.id,input.workspaceId,file.upload_token,file.extraction_status).run();
   return claimed.meta?.changes?{...file,uploadToken}:{busy:true};
 }
-const analysisColumns='a.id,a.file_id,a.workspace_id,a.request,a.canonical_result_json,a.status,a.retained,a.created_at,a.updated_at';
+const analysisColumns='a.id,a.file_id,a.workspace_id,a.request,a.canonical_result_json,a.source_coverage_json,a.status,a.retained,a.created_at,a.updated_at';
 async function rateLimit(env,userId,workspaceId,read){
   const operation=read?'read':'write';
   for(const [key,limit] of [[`user:${userId}:${operation}`,read?120:20],[`workspace:${workspaceId}:${operation}`,read?600:60]]){
@@ -67,7 +67,7 @@ async function rateLimit(env,userId,workspaceId,read){
   }
   return true;
 }
-function publicAnalysis(row){return {id:row.id,file_id:row.file_id,workspace_id:row.workspace_id,request:row.request,result:JSON.parse(row.canonical_result_json),status:row.status,retained:Boolean(row.retained),created_at:row.created_at,updated_at:row.updated_at};}
+function publicAnalysis(row){return {id:row.id,file_id:row.file_id,workspace_id:row.workspace_id,request:row.request,result:JSON.parse(row.canonical_result_json),source_coverage:row.source_coverage_json?JSON.parse(row.source_coverage_json):null,status:row.status,retained:Boolean(row.retained),created_at:row.created_at,updated_at:row.updated_at};}
 async function lifecycle(request,env,workspaceId,match,cors){
   const id=match[1],save=match[2];
   try{

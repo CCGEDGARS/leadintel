@@ -52,3 +52,9 @@ test('incomplete coverage with no detailed omission list still carries a warning
   const selected=context.selectRelevantFileBlocks({request:'Summarize',extraction,maxChars:1000});
   assert.equal(selected.coverage.complete,false);assert.ok(selected.warnings.some(value=>/incomplete/i.test(value)));
 });
+
+test('prior cited locators take precedence over lexical matches without admitting nonexistent locators',()=>{
+  const extraction={blocks:[{locator:'page:1',text:'make that shorter'},{locator:'page:2',text:'ZEBRA evidence'}],evidenceIndex:{'page:1':'Revision','page:2':'ZEBRA'},warnings:[],coverage:{complete:true,omitted:[]}};
+  const selected=context.selectRelevantFileBlocks({request:'make that shorter',preferredLocators:['page:999','page:2'],extraction,maxChars:65});
+  assert.equal(selected.blocks[0].locator,'page:2');assert.equal(Object.hasOwn(selected.evidenceIndex,'page:999'),false);
+});

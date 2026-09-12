@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS copilot_file_analyses (
   created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
   request TEXT NOT NULL,
   canonical_result_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(canonical_result_json)),
+  source_coverage_json TEXT CHECK (source_coverage_json IS NULL OR json_valid(source_coverage_json)),
   provider TEXT NOT NULL DEFAULT '',
   model TEXT NOT NULL DEFAULT '',
   usage_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(usage_json)),

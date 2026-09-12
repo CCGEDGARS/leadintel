@@ -66,8 +66,8 @@ export async function saveExtraction(env,input){
 export async function createAnalysis(env,input){
   const workspaceId=clean(required(input?.workspaceId,'workspaceId'),180);const fileId=clean(required(input?.fileId,'fileId'),180);if(!await fileForWorkspace(env,workspaceId,fileId))throw new Error('Copilot file not found');
   const id=uuid();const status=clean(input?.status||'completed',32);if(!['pending','running','completed','failed'].includes(status))throw new Error('Copilot analysis status is invalid');
-  await env.DB.prepare(`INSERT INTO copilot_file_analyses(id,file_id,workspace_id,created_by,request,canonical_result_json,provider,model,usage_json,status,retained) VALUES(?,?,?,?,?,?,?,?,?,?,?)`)
-    .bind(id,fileId,workspaceId,clean(input?.userId,180)||null,clean(required(input?.request,'request'),8000),json(input?.result,{}),clean(input?.provider,120),clean(input?.model,240),json(input?.usage,{}),status,input?.retained?1:0).run();
+  await env.DB.prepare(`INSERT INTO copilot_file_analyses(id,file_id,workspace_id,created_by,request,canonical_result_json,provider,model,usage_json,status,retained,source_coverage_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`)
+    .bind(id,fileId,workspaceId,clean(input?.userId,180)||null,clean(required(input?.request,'request'),8000),json(input?.result,{}),clean(input?.provider,120),clean(input?.model,240),json(input?.usage,{}),status,input?.retained?1:0,input?.sourceCoverage==null?null:json(input.sourceCoverage,{})).run();
   return {id,fileId,workspaceId,status,retained:Boolean(input?.retained)};
 }
 
