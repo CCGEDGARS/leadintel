@@ -10,15 +10,21 @@
   const MODE_COPY=Object.freeze({
     quick:Object.freeze({
       label:"Market Scan",
-      description:"Fast validation of the strongest buying signals and opportunities in your selected market."
+      description:"Fast validation of the strongest buying signals and opportunities in your selected market.",
+      action:"Select Market Scan →",
+      badge:""
     }),
     deep:Object.freeze({
       label:"Market Research",
-      description:"Deeper research across companies, market activity, news, hiring, expansion and other relevant sources."
+      description:"Deeper research across companies, market activity, news, hiring, expansion and other relevant sources.",
+      action:"Select Market Research →",
+      badge:"Recommended"
     }),
     intelligence:Object.freeze({
       label:"Market Intelligence",
-      description:"Comprehensive investigation across multiple source types to uncover opportunities, patterns, competitors and hidden signals."
+      description:"Comprehensive investigation across multiple source types to uncover opportunities, patterns, competitors and hidden signals.",
+      action:"Select Market Intelligence →",
+      badge:""
     })
   });
   const BUTTONS=Object.freeze({quick:"run-market-research",deep:"run-detailed-research",intelligence:"run-market-intelligence"});
@@ -143,10 +149,21 @@
     if(root.document.getElementById("market-research-source-discovery-css"))return;
     const style=root.document.createElement("style");style.id="market-research-source-discovery-css";
     style.textContent=`
-      .research-actions{align-items:stretch!important}
-      .research-mode-choice{display:flex;flex:1;min-width:0;flex-direction:column;gap:8px}
-      .research-mode-choice>button{width:100%;height:100%;min-height:64px}
-      .research-mode-description{font-size:14px;line-height:1.45;color:#65716e;padding:0 6px;max-width:36ch}
+      .research-actions{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px!important;align-items:stretch!important}
+      .research-mode-choice{display:flex;min-width:0;flex-direction:column;gap:12px;position:relative;border-radius:16px;transition:transform .18s ease,box-shadow .18s ease}
+      .research-mode-choice>button{width:100%;height:100%;min-height:148px;padding:24px 20px!important;border:2px solid #1b3029!important;border-radius:15px!important;background:#fff!important;color:#14231e!important;display:flex!important;flex-direction:column;align-items:center;justify-content:center;gap:13px;box-shadow:0 5px 16px rgba(15,35,29,.06);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease,background .18s ease}
+      .research-mode-choice>button:hover{transform:translateY(-3px);box-shadow:0 13px 28px rgba(15,35,29,.15);border-color:#0b5f4f!important}
+      .research-mode-choice>button:focus-visible{outline:3px solid rgba(188,143,42,.42);outline-offset:3px}
+      .research-mode-title{font-size:20px;font-weight:800;line-height:1.2;text-align:center}
+      .research-mode-action{font:700 11px 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.035em;color:#0b6755}
+      .research-mode-badge{position:absolute;top:12px;right:12px;padding:5px 8px;border-radius:999px;background:#d7af55;color:#12231d;font:700 9px 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.05em}
+      .research-mode-choice[data-research-mode="deep"]>button{background:#10261f!important;color:#fff!important;border-color:#10261f!important;box-shadow:0 10px 24px rgba(12,37,29,.2)}
+      .research-mode-choice[data-research-mode="deep"] .research-mode-action{color:#efcf85}
+      .research-mode-choice[data-research-mode="deep"]>button:hover{background:#16362c!important;border-color:#16362c!important}
+      .research-mode-choice[data-research-mode="intelligence"]>button{border-color:#8a681e!important;box-shadow:inset 0 4px 0 #d7af55,0 5px 16px rgba(15,35,29,.06)}
+      .research-mode-choice.is-selected>button{outline:3px solid #d7af55;outline-offset:3px}
+      .research-mode-choice.is-selected .research-mode-title::after{content:' ✓';color:#d7af55}
+      .research-mode-description{font-size:14px;line-height:1.5;color:#596762;padding:0 8px;max-width:38ch}
       .research-mode-hint{display:none!important}
       .opportunity-card.unresearched .opportunity-total{display:none!important}
       .pre-research-context{display:grid;gap:8px;margin-top:14px;grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -163,7 +180,7 @@
       .source-discovery-card code{font-size:11px;color:#006957;overflow-wrap:anywhere}
       .source-map-group{margin-top:14px}.source-map-group h5{margin:0;font:600 12px 'IBM Plex Mono',monospace;letter-spacing:.05em;text-transform:uppercase;color:#006957}
       .source-discovery-empty{padding:12px;color:#697571;font-size:14px}
-      @media(max-width:900px){.research-actions{display:grid!important;grid-template-columns:1fr!important}.research-mode-choice{width:100%}.research-mode-description{max-width:none}.source-discovery-list,.pre-research-context{grid-template-columns:1fr}}
+      @media(max-width:900px){.research-actions{grid-template-columns:1fr!important}.research-mode-choice{width:100%}.research-mode-choice>button{min-height:118px}.research-mode-description{max-width:none}.source-discovery-list,.pre-research-context{grid-template-columns:1fr}}
     `;
     root.document.head.appendChild(style);
   }
@@ -179,13 +196,21 @@
 
   function ensureModeChoices(root){
     const parent=root.document.querySelector(".research-actions");if(!parent)return;
+    const selected=normalizeMode(readState(root)?.market?.researchMode);
     for(const [mode,id] of Object.entries(BUTTONS)){
       const button=root.document.getElementById(id);if(!button)continue;
+      const view=MODE_COPY[mode];
       let wrapper=button.closest(".research-mode-choice");
       if(!wrapper){wrapper=root.document.createElement("div");wrapper.className="research-mode-choice";button.before(wrapper);wrapper.appendChild(button);}
+      wrapper.dataset.researchMode=mode;wrapper.classList.toggle("is-selected",mode===selected);
       let desc=wrapper.querySelector(".research-mode-description");if(!desc){desc=root.document.createElement("div");desc.className="research-mode-description";wrapper.appendChild(desc);}
-      if(desc.textContent!==MODE_COPY[mode].description)desc.textContent=MODE_COPY[mode].description;
-      if(!/^Researching…$/i.test(clean(button.textContent))&&button.textContent!==MODE_COPY[mode].label)button.textContent=MODE_COPY[mode].label;
+      if(desc.textContent!==view.description)desc.textContent=view.description;
+      if(!/^Researching…$/i.test(clean(button.textContent))){
+        const badge=view.badge?`<span class="research-mode-badge">${esc(view.badge)}</span>`:"";
+        const markup=`${badge}<span class="research-mode-title">${esc(view.label)}</span><span class="research-mode-action">${esc(view.action)}</span>`;
+        if(button.innerHTML!==markup)button.innerHTML=markup;
+      }
+      button.setAttribute("aria-pressed",mode===selected?"true":"false");
       if(button.getAttribute("aria-describedby")!==`${id}-description`)button.setAttribute("aria-describedby",`${id}-description`);
       if(desc.id!==`${id}-description`)desc.id=`${id}-description`;
     }
