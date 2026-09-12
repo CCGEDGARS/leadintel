@@ -191,7 +191,7 @@ function renderProfile(){
   updateApprovalUI();
 }
 function saveProfileEdits(){
-  document.querySelectorAll("[data-profile-field]").forEach(el=>{const key=el.dataset.profileField;const previous=fieldValue(state.profile,key);const next=key==="currentMarkets"?el.value.split(/;|,/).map(x=>x.trim()).filter(Boolean):el.value.trim();state.profile[key]=next;if(key==="customerPainPoints"&&String(next)!==String(previous))state.profile.customerPainPointsStatus="Customer-confirmed";});
+  document.querySelectorAll("textarea[data-profile-field]").forEach(el=>{const key=el.dataset.profileField;const previous=fieldValue(state.profile,key);const next=key==="currentMarkets"?el.value.split(/;|,/).map(x=>x.trim()).filter(Boolean):el.value.trim();state.profile[key]=next;if(key==="customerPainPoints"&&String(next)!==String(previous))state.profile.customerPainPointsStatus="Customer-confirmed";});
   state.profile.researchMarkets=LeadIntelProfile.expandTargetMarkets(state.profile.targetMarkets);
   document.querySelectorAll("[data-signal-index]").forEach(el=>{if(state.profile.recommendedSignals[Number(el.dataset.signalIndex)])state.profile.recommendedSignals[Number(el.dataset.signalIndex)].active=el.checked;});
   state.approved=false;saveState();
