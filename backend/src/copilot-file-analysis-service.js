@@ -59,7 +59,7 @@ async function generate(env,provider,options){
 async function analyze(env,{workspaceId,file,extraction,request,conversation=[],priorResult=null,outputPreferences={},originalRequest=''}){
   const selectionRequest=[request,originalRequest.slice(0,8000),...conversation.slice(-12).map(item=>item.content.slice(0,2000))].join('\n');
   const preferredLocators=(priorResult?.sections||[]).flatMap(section=>(section.evidence||[]).map(evidence=>evidence.locator));
-  const context=selectRelevantFileBlocks({request:selectionRequest,extraction,preferredLocators});
+  const context=selectRelevantFileBlocks({request:selectionRequest,currentRequest:request,extraction,preferredLocators});
   if(!context.blocks.length)throw fail('The file has no usable content to analyze',422);
   const provider=await credential(env,workspaceId);
   const payload={user_request:request,original_request:originalRequest.slice(0,8000),output_preferences:outputPreferences,file:{id:file.id,original_name:file.original_name,extension:file.extension,mime_type:file.mime_type,byte_size:file.byte_size,sha256:file.sha256},untrusted_document_data:context,canonical_result_schema:SCHEMA,conversation,prior_result:priorResult};

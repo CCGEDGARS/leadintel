@@ -62,3 +62,20 @@ test('a same-result concurrent follow-up still advances the revision and fences 
   releaseSlow();assert.equal((await slow).status,409);
   const loaded=(await (await reload(env,analysis.id)).json()).analysis;assert.equal(loaded.result.title,'Review');assert.equal(loaded.messages.length,2);
 });
+
+for(const zebraLength of [32,65000])test(`explicit new-topic follow-up retains ZEBRA evidence (${zebraLength} chars) despite an oversized historical ALPHA citation`,async()=>{
+  const blocks=[{locator:'page:1',text:'ALPHA '+ 'a'.repeat(64994)},{locator:'page:2',text:'ZEBRA revenue '+ 'z'.repeat(zebraLength-14)}];
+  const document={format:'pdf',title:'Report',blocks,evidenceIndex:{'page:1':'ALPHA','page:2':'ZEBRA revenue'},warnings:[],coverage:{complete:true,omitted:[]},counts:{characters:blocks.reduce((sum,block)=>sum+block.text.length,0),nonEmptyCells:0,csvRows:0}};
+  const {env,file,calls}=await fixture({document,outputs:[resultFor('ALPHA report','page:1'),resultFor('ZEBRA report','page:2')]});
+  assert.ok(file,'fixture upload must satisfy the real upload contract');
+  const initial=await handleCopilotFileRoute(analysisRequest('file-analyses',{body:{file_id:file.id,request:'Analyze ALPHA'}}),env);assert.equal(initial.status,201);const {analysis}=await initial.json();
+  const response=await handleCopilotFileRoute(analysisRequest(`file-analyses/${analysis.id}/messages`,{body:{message:'Now analyze ZEBRA revenue on page 2'}}),env);
+  assert.equal(response.status,200);assert.equal(calls.length,2);
+  const selected=JSON.parse(calls[1].body.input).untrusted_document_data;
+  assert.match(selected.blocks.find(block=>block.locator==='page:2')?.text||'',/^ZEBRA revenue/);
+  assert.match(selected.blocks.find(block=>block.locator==='page:1')?.text||'',/^ALPHA/);
+  assert.ok(JSON.stringify(selected.blocks).length<=60000);
+  const followup=(await response.json()).analysis;assert.equal(followup.result.sections[0].evidence[0].locator,'page:2');
+  assert.ok(followup.source_coverage.coverage.omitted.some(value=>value.includes('page:1')));
+  if(zebraLength===65000)assert.ok(followup.source_coverage.coverage.omitted.some(value=>value.includes('page:2')));
+});

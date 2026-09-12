@@ -25,20 +25,26 @@ function boundedBlock(block,limit){
 }
 
 // This returns data only. Callers must keep every source field out of system instructions.
-export function selectRelevantFileBlocks({request,extraction,maxChars=60000,preferredLocators=[]}){
+export function selectRelevantFileBlocks({request,extraction,maxChars=60000,preferredLocators=[],currentRequest=''}){
   const budget=Math.max(2,Math.min(MAX_CONTEXT_CHARS,Number.isFinite(maxChars)?Math.floor(maxChars):60000));
   const terms=[...new Set(String(request||'').toLowerCase().match(/[\p{L}\p{N}]+/gu)||[])];
+  const currentTerms=[...new Set(String(currentRequest).toLowerCase().match(/[\p{L}\p{N}]+/gu)||[])];
   const warnings=[...(extraction.warnings||[])],omitted=[...(extraction.coverage?.omitted||[])];
   const preferred=new Set(preferredLocators.slice(0,1000));
   const candidates=extraction.blocks.map((block,index)=>{
     const searchable=[block.locator,extraction.evidenceIndex[block.locator],block.text,...(block.table||[]).flat()].join(' ').toLowerCase();
-    return {block,index,preferred:preferred.has(block.locator),score:terms.reduce((score,term)=>score+(searchable.includes(term)?1:0),0)};
-  }).sort((a,b)=>Number(b.preferred)-Number(a.preferred)||b.score-a.score||a.index-b.index);
+    return {block,index,preferred:preferred.has(block.locator),currentScore:currentTerms.reduce((score,term)=>score+(searchable.includes(term)?1:0),0),score:terms.reduce((score,term)=>score+(searchable.includes(term)?1:0),0)};
+  }).sort((a,b)=>Number(b.preferred)-Number(a.preferred)||b.currentScore-a.currentScore||b.score-a.score||a.index-b.index);
+  // Historical citations retain priority, but cannot consume the budget needed
+  // for the current question. Reserve actual current-source cost up to half the
+  // total budget, leaving both topics usable even when both blocks are oversized.
+  const currentCost=candidates.filter(item=>!item.preferred&&item.currentScore>0&&Object.hasOwn(extraction.evidenceIndex,item.block.locator)&&hasContent(item.block)).reduce((sum,item)=>sum+size(item.block)+1,0);
+  let currentReserve=Math.min(Math.floor((budget-2)/2),currentCost);
   const blocks=[],evidenceIndex={};let remaining=budget-2;
-  for(const {block} of candidates){
+  for(const {block,preferred:historical,currentScore} of candidates){
     if(!Object.hasOwn(extraction.evidenceIndex,block.locator)||!hasContent(block))continue;
-    const selected=boundedBlock(block,remaining-(blocks.length?1:0));
-    if(selected){remaining-=size(selected)+(blocks.length?1:0);blocks.push(selected);Object.defineProperty(evidenceIndex,block.locator,{value:extraction.evidenceIndex[block.locator],enumerable:true});}
+    const selected=boundedBlock(block,remaining-(historical?currentReserve:0)-(blocks.length?1:0));
+    if(selected){const used=size(selected)+(blocks.length?1:0);remaining-=used;if(!historical&&currentScore>0)currentReserve=Math.max(0,currentReserve-used);blocks.push(selected);Object.defineProperty(evidenceIndex,block.locator,{value:extraction.evidenceIndex[block.locator],enumerable:true});}
     if(!selected||size(selected)<size(block))omitted.push(`${block.locator}: ${selected?'partially included':'omitted'} from model context (context limit).`);
   }
   if(omitted.length>(extraction.coverage?.omitted||[]).length)warnings.push('Some source content was omitted from model context; consult the coverage report.');
