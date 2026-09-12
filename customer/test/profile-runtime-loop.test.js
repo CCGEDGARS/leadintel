@@ -10,10 +10,10 @@ test('profile synchronization is idempotent and does not depend on mutation-loop
   assert.match(runtime,/function setText\(/);
   assert.match(runtime,/function toggleClass\(/);
   assert.match(runtime,/if\(card\.hidden\)card\.hidden=false/);
-  assert.match(runtime,/setText\(eyebrow,'Next step'\)/);
-  assert.match(runtime,/setText\(heading,'Continue to Market Strategy\.'\)/);
-  assert.match(runtime,/setText\(copy,'Approval is optional\./);
-  assert.match(runtime,/setText\(nextButton,approved\?'Continue to Market Strategy →':'Approve profile \(optional\)'\)/);
+  assert.match(runtime,/setText\(eyebrow,approved\?'Profile approved':'Profile approval'\)/);
+  assert.match(runtime,/Approve this profile before building Market Strategy\./);
+  assert.match(runtime,/Approval saves it as the current source of truth\./);
+  assert.match(runtime,/setText\(nextButton,approved\?'Continue to Market Strategy →':'Approve Profile'\)/);
   assert.doesNotMatch(runtime,/if\(eyebrow\)eyebrow\.textContent=/);
   assert.doesNotMatch(runtime,/if\(heading\)heading\.textContent=/);
   assert.doesNotMatch(runtime,/if\(copy\)copy\.textContent=/);
@@ -21,5 +21,5 @@ test('profile synchronization is idempotent and does not depend on mutation-loop
 });
 
 test('process map cache-busts the emergency-stable profile runtime',()=>{
-  assert.match(processMap,/profile-action-runtime\.js\?v=20260911-profile-single-owner-v1/);
+  assert.match(processMap,/profile-action-runtime\.js\?v=20260912-profile-approval-gate-v1/);
 });

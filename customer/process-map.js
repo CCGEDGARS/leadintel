@@ -32,7 +32,7 @@ import './reference-customer-ai-runtime.js?v=20260911-reference-missing-info-v1'
 import './reference-customer-launcher.js?v=20260911-reference-open-v2';
 import './lookalike-discovery.js?v=20260910-reference-portfolio-v1';
 import './intelligence-sources-ui.js?v=20260910-intelligence-sources-v1';
-import './profile-action-runtime.js?v=20260911-profile-single-owner-v1';
+import './profile-action-runtime.js?v=20260912-profile-approval-gate-v1';
 import './outreach-automation-loader.js?v=20260908-boot-isolation-v1';
 import './copilot-loader.js?v=20260911-copilot-freshness-v1';
 

@@ -8,7 +8,8 @@ const read=name=>fs.readFileSync(path.join(__dirname,'..',name),'utf8');
 test('bottom profile CTA presentation mirrors the app-owned next-step action',()=>{
   const runtime=read('profile-action-runtime.js');
   assert.match(runtime,/Continue to Market Strategy/);
-  assert.match(runtime,/Approve profile \(optional\)/);
+  assert.match(runtime,/Approve Profile/);
+  assert.match(runtime,/Approve this profile before building Market Strategy/);
   assert.doesNotMatch(runtime,/openMarketStrategy/);
   assert.doesNotMatch(runtime,/document\.addEventListener\(['"]click['"]/);
   assert.doesNotMatch(runtime,/card\.hidden\s*=\s*true/);
