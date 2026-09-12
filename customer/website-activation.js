@@ -48,10 +48,7 @@
     const base=state&&typeof state==="object"&&!Array.isArray(state)?state:{};const websiteSource=normalizedSource(source);
     if(!websiteSource)return {...base};
     const {url,title,description,text}=websiteSource;
-    const boundWebsite=normalizeUrl(base.companyContextWebsite);
-    const companyChanged=!boundWebsite||!sameCompanyWebsite(boundWebsite,url);
-    const companyContext=companyChanged?{answers:{},answerStatus:{},documents:[],additionalLinks:[]}:{};
-    return {...base,...companyContext,step:1,website:url,companyContextWebsite:url,websiteActivation:{status:"active",url,title,description,activatedAt:clean(activatedAt),contentChars:text.length},scrapedSources:[{type:"website",url,title,text,status:"ready"}],profile:null,approved:false,market:{}};
+    return {...base,step:1,website:url,companyContextWebsite:url,websiteActivation:{status:"active",url,title,description,activatedAt:clean(activatedAt),contentChars:text.length},scrapedSources:[{type:"website",url,title,text,status:"ready"}],profile:null,approved:false,market:{}};
   }
   function buildActivationRecord(source={},activatedAt=new Date().toISOString()){
     const websiteSource=normalizedSource(source);if(!websiteSource)return {status:"inactive",url:"",source:null};

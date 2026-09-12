@@ -34,7 +34,7 @@ test('manager explains the minimal two-column file format and offers a CSV templ
   assert.match(ui,/Company Name/i);
   assert.match(ui,/Website/i);
   assert.match(ui,/Download example CSV/i);
-  assert.match(ui,/Only company name and website are required/i);
+  assert.match(ui,/Include a Company Name, Website, or both/i);
 });
 
 test('AI runtime uses configured AI after scraping and before activation',()=>{

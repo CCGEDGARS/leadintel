@@ -18,6 +18,6 @@ test('Reference Customer upload runtime remains loaded before the profile CTA ru
 test('approving the profile must not reload the page and destroy the Reference Customer upload interaction',()=>{
   const profileRuntime=read('profile-action-runtime.js');
   assert.doesNotMatch(profileRuntime,/location\?\.reload|location\.reload/);
-  assert.match(profileRuntime,/persistApprovedState\(\)/);
   assert.match(profileRuntime,/syncApprovalControls\(\)/);
+  assert.doesNotMatch(profileRuntime,/document\.addEventListener\(['"]click['"]/);
 });

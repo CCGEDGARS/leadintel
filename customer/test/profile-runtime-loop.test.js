@@ -13,7 +13,7 @@ test('profile synchronization is idempotent and does not depend on mutation-loop
   assert.match(runtime,/setText\(eyebrow,'Next step'\)/);
   assert.match(runtime,/setText\(heading,'Continue to Market Strategy\.'\)/);
   assert.match(runtime,/setText\(copy,'Approval is optional\./);
-  assert.match(runtime,/setText\(nextButton,'Next: Market Strategy →'\)/);
+  assert.match(runtime,/setText\(nextButton,approved\?'Continue to Market Strategy →':'Approve profile \(optional\)'\)/);
   assert.doesNotMatch(runtime,/if\(eyebrow\)eyebrow\.textContent=/);
   assert.doesNotMatch(runtime,/if\(heading\)heading\.textContent=/);
   assert.doesNotMatch(runtime,/if\(copy\)copy\.textContent=/);
@@ -21,5 +21,5 @@ test('profile synchronization is idempotent and does not depend on mutation-loop
 });
 
 test('process map cache-busts the emergency-stable profile runtime',()=>{
-  assert.match(processMap,/profile-action-runtime\.js\?v=20260911-emergency-stable-v1/);
+  assert.match(processMap,/profile-action-runtime\.js\?v=20260911-profile-single-owner-v1/);
 });

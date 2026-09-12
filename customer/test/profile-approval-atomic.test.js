@@ -3,18 +3,18 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const runtime=fs.readFileSync(new URL('../profile-action-runtime.js',import.meta.url),'utf8');
+const app=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
 
-test('Approve Profile has a non-intercepting recovery path if the primary app handler aborts',()=>{
-  assert.match(runtime,/closest\?\.\(['"]#approve-profile,#approve-profile-bottom['"]\)/);
-  assert.match(runtime,/if\(readState\(\)\.approved\)return/);
-  assert.match(runtime,/state\.approved=true/);
-  assert.match(runtime,/state\.profile\.approvedAt/);
-  assert.match(runtime,/localStorage\.setItem\(PROFILE_ACTION_STATE_KEY,JSON\.stringify\(state\)\)/);
-  assert.doesNotMatch(runtime,/stopPropagation\(|stopImmediatePropagation\(/);
+test('Approve Profile has one authoritative persistence path in app.js',()=>{
+  assert.match(app,/function approveProfile\(\)/);
+  assert.match(app,/state\.approved=true/);
+  assert.match(app,/state\.profile\.approvedAt/);
+  assert.match(app,/\$\("approve-profile"\)\.addEventListener\("click",approveProfile\)/);
+  assert.doesNotMatch(runtime,/document\.addEventListener\(['"]click['"]/);
 });
 
-test('approval recovery updates the UI and emits the standard approval event',()=>{
+test('presentation runtime only mirrors authoritative approval state',()=>{
   assert.match(runtime,/syncApprovalControls\(\)/);
-  assert.match(runtime,/leadintel:profile-approved/);
-  assert.match(runtime,/Company Intelligence Profile approved/);
+  assert.doesNotMatch(runtime,/state\.approved=true/);
+  assert.doesNotMatch(runtime,/localStorage\.setItem/);
 });

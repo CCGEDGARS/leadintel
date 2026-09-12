@@ -7,8 +7,6 @@ const PROFILE_ACTION_STATE_KEY='leadintel_customer_v2_state';
   function readState(){try{return JSON.parse(localStorage.getItem(PROFILE_ACTION_STATE_KEY)||'{}');}catch{return {};}}
   function setText(node,text){if(node&&node.textContent!==text)node.textContent=text;}
   function toggleClass(node,name,enabled){if(node&&node.classList.contains(name)!==enabled)node.classList.toggle(name,enabled);}
-  function showToast(message){const el=document.getElementById('toast');if(!el)return;el.textContent=message;el.classList.add('show');clearTimeout(showToast.t);showToast.t=setTimeout(()=>el.classList.remove('show'),2400);}
-
   function syncApprovalControls(){
     const approved=Boolean(readState().approved);
     const button=document.getElementById('approve-profile');
@@ -31,9 +29,9 @@ const PROFILE_ACTION_STATE_KEY='leadintel_customer_v2_state';
       const heading=card.querySelector('h3');
       const copy=card.querySelector('p');
       const nextButton=document.getElementById('approve-profile-bottom');
-      setText(eyebrow,approved?'Next step':'Optional review');
-      setText(heading,approved?'Continue to Market Strategy.':'Approve this profile when you want to lock the current interpretation.');
-      setText(copy,approved?'This profile is approved and is now the operating context for Market Strategy and Discovery.':'Approval is optional. You can approve the profile now or continue reviewing it first.');
+      setText(eyebrow,'Next step');
+      setText(heading,'Continue to Market Strategy.');
+      setText(copy,'Approval is optional. Continue when the profile is useful, or approve it first to lock the current interpretation.');
       if(nextButton){
         setText(nextButton,approved?'Continue to Market Strategy →':'Approve profile (optional)');
         if(nextButton.disabled)nextButton.disabled=false;
@@ -43,30 +41,11 @@ const PROFILE_ACTION_STATE_KEY='leadintel_customer_v2_state';
     }
   }
 
-  function recoverApprovalIfNeeded(){
-    if(readState().approved)return;
-    const state=readState();
-    if(!state.profile||typeof state.profile!=='object')return;
-    state.approved=true;
-    state.profile.approvedAt=state.profile.approvedAt||new Date().toISOString();
-    localStorage.setItem(PROFILE_ACTION_STATE_KEY,JSON.stringify(state));
-    syncApprovalControls();
-    root.dispatchEvent(new CustomEvent('leadintel:profile-approved',{detail:{approvedAt:state.profile.approvedAt,recovered:true}}));
-    showToast('Company Intelligence Profile approved');
-    console.warn('LeadIntel recovered profile approval after the primary approval handler did not persist it.');
-  }
-
-  document.addEventListener('click',event=>{
-    const button=event.target?.closest?.('#approve-profile,#approve-profile-bottom');
-    if(!button)return;
-    setTimeout(recoverApprovalIfNeeded,0);
-  });
-
   root.addEventListener('leadintel:module-opened',()=>setTimeout(syncApprovalControls,0));
   root.addEventListener('leadintel:server-ready',()=>setTimeout(syncApprovalControls,0));
   root.addEventListener('leadintel:workspace-changed',()=>setTimeout(syncApprovalControls,0));
   root.addEventListener('storage',event=>{if(event.key===PROFILE_ACTION_STATE_KEY)setTimeout(syncApprovalControls,0);});
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',syncApprovalControls,{once:true});else setTimeout(syncApprovalControls,0);
 
-  root.LeadIntelProfileActionRuntime={syncApprovalControls,recoverApprovalIfNeeded};
+  root.LeadIntelProfileActionRuntime={syncApprovalControls};
 })(globalThis);

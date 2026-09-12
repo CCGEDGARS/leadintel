@@ -19,7 +19,7 @@ test('Reference Customer manager opens before optional upload runtime loading', 
   assert.match(launcher, /if\(root\.LeadIntelReferenceCustomerUI\?\.open\)\{\s*root\.LeadIntelReferenceCustomerUI\.open\(\)/, 'already-loaded manager must open synchronously');
   const start = launcher.indexOf('async function ensureReferenceCustomerRuntime()');
   assert.notEqual(start, -1, 'ensureReferenceCustomerRuntime must exist');
-  const end = launcher.indexOf('\n  async function', start + 1);
+  const end = launcher.indexOf('\n  function warmUploadRuntime', start + 1);
   const ensureFn = launcher.slice(start, end);
   assert.match(ensureFn, /reference-customers\.js/, 'launcher must load the base Reference Customer runtime when missing');
   assert.match(ensureFn, /reference-customer-ui\.js/, 'launcher must load the manager UI when missing');
