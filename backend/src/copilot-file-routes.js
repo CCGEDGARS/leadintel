@@ -1,4 +1,4 @@
-import {createFileRecord,putImmutableOriginal,saveExtraction} from './copilot-file-store.js';
+import {createFileRecord,putImmutableOriginal,saveExtraction,retainAnalysis,deleteAnalysisTree} from './copilot-file-store.js';
 import {COPILOT_FILE_LIMITS,validateUploadedFile} from './copilot-file-security.js';
 
 const OPERATING_ROLES=new Set(['owner','researcher','sales']);
@@ -57,10 +57,44 @@ async function reserveUpload(env,input){
   const claimed=await env.DB.prepare(`UPDATE copilot_files SET upload_token=?,extraction_status='pending',updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND deleted_at IS NULL AND upload_token IS ? AND extraction_status=? AND (extraction_status!='pending' OR updated_at<datetime('now','-5 minutes'))`).bind(uploadToken,file.id,input.workspaceId,file.upload_token,file.extraction_status).run();
   return claimed.meta?.changes?{...file,uploadToken}:{busy:true};
 }
+const analysisColumns='a.id,a.file_id,a.workspace_id,a.request,a.canonical_result_json,a.status,a.retained,a.created_at,a.updated_at';
+async function rateLimit(env,userId,workspaceId,read){
+  const operation=read?'read':'write';
+  for(const [key,limit] of [[`user:${userId}:${operation}`,read?120:20],[`workspace:${workspaceId}:${operation}`,read?600:60]]){
+    const row=await env.DB.prepare(`INSERT INTO copilot_file_rate_limits(scope_key,window_start,count) VALUES(?,unixepoch()/60,1) ON CONFLICT(scope_key) DO UPDATE SET window_start=excluded.window_start,count=CASE WHEN window_start=excluded.window_start THEN MIN(count+1,?) ELSE 1 END RETURNING count`).bind(key,limit+1).first();
+    if(!row||row.count>limit)return false;
+  }
+  return true;
+}
+function publicAnalysis(row){return {id:row.id,file_id:row.file_id,workspace_id:row.workspace_id,request:row.request,result:JSON.parse(row.canonical_result_json),status:row.status,retained:Boolean(row.retained),created_at:row.created_at,updated_at:row.updated_at};}
+async function lifecycle(request,env,workspaceId,match,cors){
+  const id=match[1],save=match[2];
+  try{
+    if(!id&&request.method==='GET'){
+      const {results=[]}=await env.DB.prepare(`SELECT ${analysisColumns} FROM copilot_file_analyses a JOIN copilot_files f ON f.id=a.file_id AND f.workspace_id=a.workspace_id WHERE a.workspace_id=? AND a.retained=1 AND a.status='completed' AND a.deleted_at IS NULL AND f.deleted_at IS NULL AND f.extraction_status IN ('complete','partial') ORDER BY a.updated_at DESC,a.id DESC LIMIT 100`).bind(workspaceId).all();
+      return json({analyses:results.map(row=>({id:row.id,file_id:row.file_id,title:JSON.parse(row.canonical_result_json).title||'',status:row.status,retained:true,created_at:row.created_at,updated_at:row.updated_at}))},200,cors);
+    }
+    if(id&&!save&&request.method==='DELETE')return json(await deleteAnalysisTree(env,{workspaceId,analysisId:id}),200,cors);
+    if(id&&(!save&&request.method==='GET'||save&&request.method==='POST')){
+      const row=await env.DB.prepare(`SELECT ${analysisColumns},f.extraction_status FROM copilot_file_analyses a JOIN copilot_files f ON f.id=a.file_id AND f.workspace_id=a.workspace_id WHERE a.id=? AND a.workspace_id=? AND a.deleted_at IS NULL AND f.deleted_at IS NULL`).bind(id,workspaceId).first();
+      if(!row)return error('File analysis not found',404,cors);
+      if(row.status!=='completed'||!['complete','partial'].includes(row.extraction_status))return error('File analysis is not ready',409,cors);
+      if(save)return json(await retainAnalysis(env,{workspaceId,id}),200,cors);
+      const {results:messages=[]}=await env.DB.prepare(`SELECT role,content,evidence_json,created_at FROM copilot_file_analysis_messages WHERE analysis_id=? ORDER BY created_at DESC,id DESC LIMIT 50`).bind(id).all();
+      return json({analysis:{...publicAnalysis(row),messages:messages.reverse().map(row=>({role:row.role,content:row.content,evidence:JSON.parse(row.evidence_json),created_at:row.created_at}))}},200,cors);
+    }
+    return error('Method not allowed',405,cors);
+  }catch{return error('Unable to access file analysis; retry shortly',503,{...cors,'Retry-After':'5'});}
+}
 
 export async function handleCopilotFileRoute(request,env,cors={}){
-  const url=new URL(request.url);if(!url.pathname.startsWith('/api/copilot/files'))return null;
+  const url=new URL(request.url),analysisMatch=url.pathname.match(/^\/api\/copilot\/file-analyses(?:\/([^/]+)(\/save)?)?$/);
+  // Task 5 owns analysis and message POST; do not swallow unrelated Copilot paths.
+  if(url.pathname!=='/api/copilot/files'&&!analysisMatch||analysisMatch&&!analysisMatch[1]&&request.method==='POST')return null;
   const workspaceId=clean(url.searchParams.get('workspace_id'),180);const access=await requireMember(request,env,workspaceId);if(access.error)return error(access.error,access.status,cors);
+  try{if(!await rateLimit(env,access.user.id,workspaceId,request.method==='GET'))return error('File request rate limit exceeded; retry shortly',429,{...cors,'Retry-After':'60'});}
+  catch{return error('File request service is temporarily unavailable',503,{...cors,'Retry-After':'60'});}
+  if(analysisMatch)return lifecycle(request,env,workspaceId,analysisMatch,cors);
   if(url.pathname!=='/api/copilot/files'||request.method!=='POST')return error('Method not allowed',405,cors);
   const parsed=await boundedForm(request);if(!parsed.form)return error(parsed.status===413?'Multipart upload is too large':'Multipart upload is required',parsed.status,cors);const form=parsed.form;
   const allowed=new Set(['file','extraction_json','sha256','extractor_version']);if([...form.keys()].some(key=>!allowed.has(key)))return error('Multipart upload contains unsupported fields',400,cors);

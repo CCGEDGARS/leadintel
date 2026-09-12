@@ -72,3 +72,10 @@ CREATE TABLE IF NOT EXISTS copilot_file_analysis_messages (
 );
 CREATE INDEX IF NOT EXISTS copilot_file_analysis_messages_analysis_idx
   ON copilot_file_analysis_messages(analysis_id,created_at);
+
+-- One bounded row per authenticated scope and operation; windows reset in-place.
+CREATE TABLE IF NOT EXISTS copilot_file_rate_limits (
+  scope_key TEXT PRIMARY KEY,
+  window_start INTEGER NOT NULL,
+  count INTEGER NOT NULL CHECK(count >= 0)
+);
