@@ -221,7 +221,7 @@ function updateApprovalUI(){
   if(approvalTitle)approvalTitle.textContent=approved?"Your approved profile is ready for Market Strategy.":"Approve this profile before building Market Strategy.";
   if(approvalCopy)approvalCopy.textContent=approved?"LeadIntel will use this reviewed version to generate ICPs, buying signals and market opportunities.":"Review the interpretation above. Approval saves it as the current source of truth.";
 }
-function openMarketStrategy(){if(!state.profile){openModule(4);return;}ensureMarketStrategySeeded();setStep(4);}
+function openMarketStrategy(){if(!state.profile){openModule(4);return;}if(!state.approved){setStep(3);showToast("Approve the profile before continuing to Market Strategy");return;}ensureMarketStrategySeeded();setStep(4);}
 function ensureMarketStrategySeeded(){
   if(!state.profile)return;
   const language=contentLanguage();
@@ -236,7 +236,8 @@ async function openModule(step){
   const target=Number(step)||1;readSources();
   if(!LeadIntelProfile.canAccessModule(state,target)){showToast("Add your company website and target market first");setStep(1);return false;}
   if(target<=2){setStep(target);return true;}
-  if(!state.profile)return analyzeCompany(target);
+  if(!state.profile)return analyzeCompany(Math.min(target,3));
+  if(target>=4&&!state.approved){setStep(3);showToast("Approve the profile before continuing to Market Strategy");return false;}
   ensureMarketStrategySeeded();setStep(target);return true;
 }
 
