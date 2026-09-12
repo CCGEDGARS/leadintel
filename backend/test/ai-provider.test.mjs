@@ -67,6 +67,14 @@ test('OpenAI web search uses hosted search, source inclusion and strict structur
   assert.equal(result.results.some(row=>row.url.includes('not-in-search')),false);
 });
 
+test('source-access audit uses provider, API, terms and automation research instructions',async()=>{
+  let request;const sourceUrl='https://provider.example/api';
+  const payload={output:[{type:'web_search_call',action:{sources:[{url:sourceUrl,title:'API'}]}},{type:'message',content:[{type:'output_text',text:JSON.stringify({results:[{title:'API',url:sourceUrl,description:'Official API',date:'2026-09-12'}]})}]}]};
+  const fetchImpl=async(url,options)=>{request=JSON.parse(options.body);return new Response(JSON.stringify(payload),{status:200,headers:{'Content-Type':'application/json'}});};
+  await searchWeb({apiKey:'sk-test',model:'gpt-5.6',query:'Can we access provider.example?',purpose:'source_access_audit',fetchImpl});
+  assert.match(request.instructions,/official service\/API pages/i);assert.match(request.instructions,/terms of use/i);assert.match(request.instructions,/public webpage visibility/i);assert.match(request.instructions,/authorised API access/i);
+});
+
 test('OpenAI web search sanitizes upstream errors and never leaks provider secrets',async()=>{
   const fetchImpl=async()=>new Response(JSON.stringify({error:{message:'secret details sk-live-do-not-leak',type:'invalid_request_error',code:'invalid_tool'}}),{status:400,headers:{'Content-Type':'application/json'}});
   await assert.rejects(()=>searchWeb({apiKey:'sk-live-do-not-leak',model:'gpt-5.6',query:'office expansion Latvia',fetchImpl}),error=>{
