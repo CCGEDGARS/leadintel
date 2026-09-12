@@ -93,5 +93,5 @@ test('new source discovery module contains no hardcoded LSM or Dienas Bizness re
 
 test('evidence-view bootstrap loads the market research UX module',()=>{
   const source=fs.readFileSync(path.join(__dirname,'..','evidence-view.js'),'utf8');
-  assert.match(source,/market-research-ux\.js/);
+  assert.match(source,/market-research-ux\\.js\\?v=20260912-choice-hierarchy-v1/);
 });
