@@ -114,15 +114,18 @@ async function openAiRequest(options,fetchImpl){
   return {provider:'openai',model:options.model,text,usage:usage(payload?.usage?.input_tokens,payload?.usage?.output_tokens)};
 }
 
-export async function searchWeb({apiKey,model,query,maxResults=5,fetchImpl=fetch}){
+export async function searchWeb({apiKey,model,query,maxResults=5,purpose='general',fetchImpl=fetch}){
   const limit=clampResults(maxResults);const options=validatedOptions({provider:'openai',apiKey,model,prompt:query,maxOutputTokens:2400});
+  const sourceAccessAudit=purpose==='source_access_audit';
   try{
     const response=await fetchImpl('https://api.openai.com/v1/responses',{
       method:'POST',
       headers:{'Content-Type':'application/json','Accept':'application/json',Authorization:`Bearer ${options.apiKey}`},
       body:JSON.stringify({
         model:options.model,
-        instructions:'Search the public web for current, source-backed commercial signals relevant to the query. Return only results supported by sources you actually found. Use each source URL exactly. Prefer recent, company-specific evidence and do not invent URLs.',
+        instructions:sourceAccessAudit
+          ?'Audit the named website or data provider using current primary sources. Find the official service/API pages, data-field documentation, pricing or account requirements when published, terms of use, robots or automation restrictions, privacy/copyright limits, and contact or commercial-access instructions. Distinguish public webpage visibility from authenticated database access and authorised API access. Return only sources actually found, use each source URL exactly, prefer the provider own pages, and do not invent capabilities, access, prices, or URLs.'
+          :'Search the public web for current, source-backed commercial signals relevant to the query. Return only results supported by sources you actually found. Use each source URL exactly. Prefer recent, company-specific evidence and do not invent URLs.',
         input:options.prompt,
         tools:[{type:'web_search'}],tool_choice:'required',include:['web_search_call.action.sources'],
         text:{format:{type:'json_schema',name:'leadintel_web_signal_results',strict:true,schema:webSearchSchema(limit)}},
