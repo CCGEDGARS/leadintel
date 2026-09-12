@@ -95,3 +95,12 @@ test('evidence-view bootstrap loads the market research UX module',()=>{
   const source=fs.readFileSync(path.join(__dirname,'..','evidence-view.js'),'utf8');
   assert.match(source,/market-research-ux\.js\?v=20260912-choice-hierarchy-v1/);
 });
+
+test('research choice hierarchy is shipped through the CSP-approved static stylesheet',()=>{
+  const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
+  const css=fs.readFileSync(path.join(__dirname,'..','market.css'),'utf8');
+  assert.match(html,/market\.css\?v=20260912-choice-hierarchy-v1/);
+  assert.match(css,/\.research-mode-choice\[data-research-mode="deep"\]>button/);
+  assert.match(css,/\.research-mode-choice\.is-selected>button/);
+  assert.match(css,/\.research-mode-action/);
+});
