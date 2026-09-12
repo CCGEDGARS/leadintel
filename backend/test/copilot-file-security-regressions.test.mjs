@@ -21,7 +21,7 @@ test('rejects wrong OOXML format parts',async()=>assert.equal((await upload(zip(
 test('rejects a valid high-expansion compressed archive',async()=>assert.equal((await upload(zip(docxEntries('x'.repeat(4_000_000)),{compression:8}))).ok,false));
 for(const [name,bytes] of [
   ['MZ executable',Buffer.from([0x4d,0x5a,0,1,2])],['binary controls',Buffer.from([97,44,1,2,3])],
-  ['invalid UTF-8',Buffer.from([97,44,0xc0,0xaf])],['odd UTF-16',Buffer.from([255,254,65])],
+  ['undefined Windows-1252 control',Buffer.from([97,44,0x81])],['odd UTF-16',Buffer.from([255,254,65])],
   ['UTF-16 isolated surrogate',Buffer.from([255,254,0,0xd8])],['UTF-16 NUL',Buffer.from([255,254,0,0])],
   ['malformed quoting',Buffer.from('name,"unclosed\n')]
 ])test(`rejects CSV ${name}`,async()=>assert.equal((await upload(bytes,'csv')).ok,false));

@@ -2,7 +2,12 @@ const CONTROL=/[\u0000-\u001f\u007f]/;
 const extensionOf=name=>String(name||'').trim().toLowerCase().match(/\.([a-z0-9]+)$/)?.[1]||'';
 const starts=(bytes,prefix)=>bytes.length>=prefix.length&&prefix.every((value,index)=>bytes[index]===value);
 const isZip=bytes=>starts(bytes,[0x50,0x4b,0x03,0x04]);
-const csvEncoding=bytes=>starts(bytes,[0xff,0xfe])?'utf-16le':starts(bytes,[0xfe,0xff])?'utf-16be':'utf-8';
+function csvEncoding(bytes){
+  if(starts(bytes,[0xff,0xfe]))return 'utf-16le';
+  if(starts(bytes,[0xfe,0xff]))return 'utf-16be';
+  try{new TextDecoder('utf-8',{fatal:true}).decode(bytes);return 'utf-8';}
+  catch{return 'windows-1252';}
+}
 function isCsv(bytes){
   try{
     const text=new TextDecoder(csvEncoding(bytes),{fatal:true}).decode(bytes);

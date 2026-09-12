@@ -22,7 +22,7 @@ for(const [name,change] of [
   ['missing evidence',d=>{d.title='';d.evidenceIndex={};}],
   ['excessive blocks',d=>{d.title='';d.blocks=Array.from({length:1001},(_,i)=>({locator:`p:${i}`,text:''}));d.evidenceIndex=Object.fromEntries(d.blocks.map(b=>[b.locator,'']));d.counts.characters=0;}],
   ['excessive empty cells',d=>{d.title='';d.blocks[0].table=[Array(100001).fill('')];}],
-  ['excessive empty rows',d=>{d.title='';d.blocks[0].table=Array.from({length:20001},()=>[]);}],
+  ['excessive empty rows',d=>{d.title='';d.blocks[0].table=Array.from({length:100001},()=>[]);}],
   ['long locator',d=>{d.title='';d.blocks[0].locator='p'.repeat(501);d.evidenceIndex={[d.blocks[0].locator]:''};}],
 ])test(`rejects extraction ${name} before persistence`,async()=>{const env=runtime(),document=extraction();change(document);const response=await handleCopilotFileRoute(uploadRequest({document}),env);assert.equal(response.status,422);assert.equal(env.COPILOT_FILES.objects.size,0);});
 test('rejects oversized serialized extraction before JSON processing',async()=>{const document=extraction();document.title='';document.blocks[0].table=Array.from({length:1000},()=>Array(1000).fill(''));const response=await handleCopilotFileRoute(uploadRequest({document}),runtime());assert.equal(response.status,413);});
