@@ -48,6 +48,26 @@ async function unpack(bytes,size,method){
   catch(error){await reader.cancel().catch(()=>{});throw error;}
   if(length!==size)throw new Error();const result=new Uint8Array(length);let offset=0;for(const chunk of chunks){result.set(chunk,offset);offset+=chunk.length;}return result;
 }
+function xmlAttribute(value){
+  return value.replace(/&([^;]+);/g,(_,entity)=>{
+    if(entity[0]==='#'){const hex=entity[1]?.toLowerCase()==='x',digits=entity.slice(hex?2:1);if(!(hex?/^[0-9a-f]+$/i:/^[0-9]+$/).test(digits))throw new Error();const point=Number.parseInt(digits,hex?16:10);if(!point||point>0x10ffff||point>=0xd800&&point<=0xdfff)throw new Error();return String.fromCodePoint(point);}
+    const named={amp:'&',quot:'"',apos:"'",lt:'<',gt:'>'};if(!Object.hasOwn(named,entity))throw new Error();return named[entity];
+  });
+}
+function activeXml(text,names){
+  // Only declarations and relationship attributes are executable metadata. A writer
+  // may advertise unused default types; ordinary source prose is not a type.
+  const tags=text.replace(/<!--[\s\S]*?-->/g,'').matchAll(/<(?:[\w.-]+:)?(Override|Default|Relationship)\b((?:"[^"]*"|'[^']*'|[^'">])*)>/g);
+  for(const [,tag,source] of tags){
+    const attrs={};let remainder=source.replace(/([\w:.-]+)\s*=\s*(["'])(.*?)\2/gs,(_,key,quote,value)=>{key=key.split(':').at(-1);if(Object.hasOwn(attrs,key))throw new Error();attrs[key]=xmlAttribute(value);return '';});if(!/^\s*\/?\s*$/.test(remainder))throw new Error();
+    if(tag==='Relationship'){
+      if(/oleObject|vbaProject|activeX|attachedTemplate/i.test(attrs.Type||'')||/\.(exe|dll|com|bat|cmd|ps1|vbs|js|scr|hta)(?:[?#]|$)/i.test(attrs.Target||''))return true;
+    }else if(/macroEnabled|vbaProject|activeX|macrosheet/i.test(attrs.ContentType||'')){
+      if(tag==='Override'||[...names].some(name=>name.endsWith(`.${String(attrs.Extension||'').toLowerCase()}`)))return true;
+    }
+  }
+  return false;
+}
 async function archiveProblem(bytes,format){
   try{
     const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength),u16=offset=>view.getUint16(offset,true),u32=offset=>view.getUint32(offset,true);
@@ -80,7 +100,7 @@ async function archiveProblem(bytes,format){
     if(offset!==end)throw new Error();
     let next=0;for(const entry of entries.toSorted((a,b)=>a.local-b.local)){if(entry.local!==next)throw new Error();next=entry.last;}if(next!==directory)throw new Error();
     const required={docx:'word/document.xml',xlsx:'xl/workbook.xml',pptx:'ppt/presentation.xml'};
-    if(!names.has('[content_types].xml')||!names.has(required[format]))return 'archive is missing required OOXML parts';
+    if(!names.has('[content_types].xml')||!names.has('_rels/.rels')||!names.has(required[format]))return 'archive is missing required OOXML parts';
     for(const entry of entries){
       const payload=await unpack(bytes.subarray(entry.data,entry.data+entry.packed),entry.size,entry.method);
       if(crc32(payload)!==entry.crc)throw new Error();
@@ -88,7 +108,7 @@ async function archiveProblem(bytes,format){
       if(starts(payload,[0x4d,0x5a])||starts(payload,[0x7f,0x45,0x4c,0x46])||starts(payload,[0xd0,0xcf,0x11,0xe0]))return 'archive contains executable or embedded content';
       if(entry.name.endsWith('.xml')||entry.name.endsWith('.rels')){
         const text=new TextDecoder(starts(payload,[255,254])?'utf-16le':starts(payload,[254,255])?'utf-16be':'utf-8',{fatal:true}).decode(payload);
-        if(!text.trimStart().startsWith('<')||/<!DOCTYPE|<!ENTITY|macroEnabled|vbaProject|activeX|macrosheet/i.test(text))return 'archive contains unsafe XML content';
+        if(!text.trimStart().startsWith('<')||/<!DOCTYPE|<!ENTITY/i.test(text)||activeXml(text,names))return 'archive contains unsafe XML content';
       }
     }
     return null;

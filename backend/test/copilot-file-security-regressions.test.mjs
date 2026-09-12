@@ -26,3 +26,11 @@ for(const [name,bytes] of [
   ['malformed quoting',Buffer.from('name,"unclosed\n')]
 ])test(`rejects CSV ${name}`,async()=>assert.equal((await upload(bytes,'csv')).ok,false));
 test('accepts UTF-8 and both UTF-16 byte orders with quoted multiline CSV',async()=>{const text='name,note\r\nMZ Logistics,"one\ntwo"\r\n';const le=Buffer.from(text,'utf16le'),be=Buffer.from(le).swap16();for(const bytes of [Buffer.from(text),Buffer.concat([Buffer.from([255,254]),le]),Buffer.concat([Buffer.from([254,255]),be])])assert.equal((await upload(bytes,'csv')).ok,true);});
+test('accepts unused macro-enabled content-type defaults emitted by safe spreadsheet writers',async()=>{
+  const entries=docxEntries();entries[0][1]='<Types><Default Extension="bin" ContentType="application/vnd.ms-excel.sheet.binary.macroEnabled.main"/></Types>';
+  assert.equal((await upload(zip(entries))).ok,true);
+});
+test('accepts discussion of macroEnabled as ordinary document text',async()=>assert.equal((await upload(zip(docxEntries('The macroEnabled setting is disabled.')))).ok,true));
+test('rejects macro-enabled default when an actual part uses that extension',async()=>{const entries=docxEntries();entries[0][1]='<Types><Default Extension="bin" ContentType="application/vnd.ms-excel.sheet.binary.macroEnabled.main"/></Types>';entries.push(['word/other.bin','payload']);assert.equal((await upload(zip(entries))).ok,false);});
+test('rejects missing required package relationships',async()=>assert.equal((await upload(zip(docxEntries().filter(([name])=>name!=='_rels/.rels')))).ok,false));
+test('rejects executable external relationships, including character references',async()=>{const entries=docxEntries();entries[1][1]='<Relationships><Relationship Target="https://example.test/a.&#x65;xe" TargetMode="External"/></Relationships>';assert.equal((await upload(zip(entries))).ok,false);});
