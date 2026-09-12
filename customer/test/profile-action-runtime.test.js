@@ -23,4 +23,6 @@ test('profile approval reads only editable textarea fields', () => {
   const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
   assert.match(app, /querySelectorAll\(["']textarea\\[data-profile-field\\]["']\)/);
   assert.doesNotMatch(app, /querySelectorAll\(["']\\[data-profile-field\\]["']\)/);
+  const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(html, /app\\.js\\?v=20260912-profile-approval-v2/);
 });
