@@ -29,8 +29,8 @@ export async function createFileRecord(env,input){
   const workspaceId=clean(required(input?.workspaceId,'workspaceId'),180);const id=uuid();const r2Key=keyFor(workspaceId,id);
   const record={id,workspaceId,r2Key,sha256:sha256(input?.sha256),originalName:clean(required(input?.originalName,'originalName'),1024),extension:clean(required(input?.extension,'extension'),24).toLowerCase(),mimeType:clean(required(input?.mimeType,'mimeType'),256),byteSize:Number(input?.byteSize)};
   if(!Number.isSafeInteger(record.byteSize)||record.byteSize<0)throw new Error('byteSize must be a non-negative integer');
-  await env.DB.prepare(`INSERT INTO copilot_files(id,workspace_id,created_by,original_name,extension,mime_type,byte_size,sha256,r2_key,extraction_status,coverage_json,warnings_json) VALUES(?,?,?,?,?,?,?,?,?,'pending',?,?)`)
-    .bind(record.id,record.workspaceId,clean(input?.userId,180)||null,record.originalName,record.extension,record.mimeType,record.byteSize,record.sha256,record.r2Key,json(input?.coverage,{}),json(input?.warnings,[])).run();
+  await env.DB.prepare(`INSERT INTO copilot_files(id,workspace_id,created_by,original_name,extension,mime_type,byte_size,sha256,r2_key,extraction_status,coverage_json,warnings_json,upload_token) VALUES(?,?,?,?,?,?,?,?,?,'pending',?,?,?)`)
+    .bind(record.id,record.workspaceId,clean(input?.userId,180)||null,record.originalName,record.extension,record.mimeType,record.byteSize,record.sha256,record.r2Key,json(input?.coverage,{}),json(input?.warnings,[]),input?.uploadToken||null).run();
   return record;
 }
 
@@ -46,6 +46,16 @@ export async function putImmutableOriginal(env,{workspaceId,fileId,bytes,sha256,
 export async function saveExtraction(env,input){
   const workspaceId=clean(required(input?.workspaceId,'workspaceId'),180);const fileId=clean(required(input?.fileId,'fileId'),180);if(!await fileForWorkspace(env,workspaceId,fileId))throw new Error('Copilot file not found');
   const characterCount=Number(input?.characterCount??0),cellCount=Number(input?.cellCount??0);if(!Number.isSafeInteger(characterCount)||characterCount<0||!Number.isSafeInteger(cellCount)||cellCount<0)throw new Error('Extraction counts must be non-negative integers');
+  if(input.uploadToken){
+    // Both writes are fenced in the same transaction: a timed-out uploader cannot
+    // overwrite extraction committed by the process that recovered its lease.
+    const result=await env.DB.batch([
+      env.DB.prepare(`INSERT INTO copilot_file_extractions(file_id,blocks_json,evidence_index_json,character_count,cell_count,extractor_version) SELECT id,?,?,?,?,? FROM copilot_files WHERE id=? AND workspace_id=? AND upload_token=? AND extraction_status='pending' AND deleted_at IS NULL ON CONFLICT(file_id) DO UPDATE SET blocks_json=excluded.blocks_json,evidence_index_json=excluded.evidence_index_json,character_count=excluded.character_count,cell_count=excluded.cell_count,extractor_version=excluded.extractor_version,updated_at=CURRENT_TIMESTAMP`).bind(json(input.blocks,[]),json(input.evidenceIndex,{}),characterCount,cellCount,clean(required(input.extractorVersion,'extractorVersion'),180),fileId,workspaceId,input.uploadToken),
+      env.DB.prepare(`UPDATE copilot_files SET extraction_status=?,coverage_json=?,warnings_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND upload_token=? AND extraction_status='pending' AND deleted_at IS NULL`).bind(input.partial?'partial':'complete',json(input.coverage,{}),json(input.warnings,[]),fileId,workspaceId,input.uploadToken)
+    ]);
+    if(!result[1]?.meta?.changes)throw new Error('Upload lease is no longer owned');
+    return {fileId,characterCount,cellCount};
+  }
   await env.DB.batch([
     env.DB.prepare(`INSERT INTO copilot_file_extractions(file_id,blocks_json,evidence_index_json,character_count,cell_count,extractor_version) VALUES(?,?,?,?,?,?) ON CONFLICT(file_id) DO UPDATE SET blocks_json=excluded.blocks_json,evidence_index_json=excluded.evidence_index_json,character_count=excluded.character_count,cell_count=excluded.cell_count,extractor_version=excluded.extractor_version,updated_at=CURRENT_TIMESTAMP`).bind(fileId,json(input?.blocks,[]),json(input?.evidenceIndex,{}),characterCount,cellCount,clean(required(input?.extractorVersion,'extractorVersion'),180)),
     env.DB.prepare(`UPDATE copilot_files SET extraction_status=?,coverage_json=?,warnings_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?`).bind(input?.partial?'partial':'complete',json(input?.coverage,{}),json(input?.warnings,[]),fileId,workspaceId)

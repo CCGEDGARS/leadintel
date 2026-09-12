@@ -44,6 +44,19 @@ async function boundedForm(request){
     const body=new Blob(chunks);return {form:await new Response(body,{headers:{'Content-Type':request.headers.get('content-type')||''}}).formData()};
   }catch{return {status:400};}
 }
+async function digestFile(env,workspaceId,digest){return env.DB.prepare(`SELECT f.*,EXISTS(SELECT 1 FROM copilot_file_extractions e WHERE e.file_id=f.id) AS has_extraction FROM copilot_files f WHERE sha256=? AND workspace_id=? AND deleted_at IS NULL LIMIT 1`).bind(digest,workspaceId).first();}
+async function originalExists(env,file){const object=await env.COPILOT_FILES.head(file.r2_key);return object&&object.size===file.byte_size&&object.customMetadata?.sha256===file.sha256;}
+async function reserveUpload(env,input){
+  let file=await digestFile(env,input.workspaceId,input.sha256);const uploadToken=crypto.randomUUID();
+  if(!file){
+    try{const record=await createFileRecord(env,{...input,uploadToken});return {id:record.id,r2_key:record.r2Key,sha256:input.sha256,byte_size:input.byteSize,uploadToken};}
+    catch(cause){file=await digestFile(env,input.workspaceId,input.sha256);if(!file)throw cause;}
+  }
+  if(['complete','partial'].includes(file.extraction_status)&&file.has_extraction&&await originalExists(env,file))return {id:file.id,reused:true};
+  if(file.extraction_status==='deleting')return {busy:true};
+  const claimed=await env.DB.prepare(`UPDATE copilot_files SET upload_token=?,extraction_status='pending',updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND deleted_at IS NULL AND upload_token IS ? AND extraction_status=? AND (extraction_status!='pending' OR updated_at<datetime('now','-5 minutes'))`).bind(uploadToken,file.id,input.workspaceId,file.upload_token,file.extraction_status).run();
+  return claimed.meta?.changes?{...file,uploadToken}:{busy:true};
+}
 
 export async function handleCopilotFileRoute(request,env,cors={}){
   const url=new URL(request.url);if(!url.pathname.startsWith('/api/copilot/files'))return null;
@@ -59,12 +72,17 @@ export async function handleCopilotFileRoute(request,env,cors={}){
   if(validation.sha256!==submittedDigest)return error('File digest does not match uploaded content',422,cors);
   let extraction;try{extraction=JSON.parse(extractionJson);}catch{return error('Extraction JSON is invalid',422,cors);}
   const invalidExtraction=extractionError(extraction,validation.format);if(invalidExtraction)return error(invalidExtraction,422,cors);
-  const existing=await env.DB.prepare(`SELECT id,workspace_id FROM copilot_files WHERE sha256=? AND workspace_id=? AND deleted_at IS NULL LIMIT 1`).bind(validation.sha256,workspaceId).first();
-  if(existing)return json({file_id:existing.id,reused:true},200,cors);
-  const record=await createFileRecord(env,{workspaceId,userId:access.user.id,originalName:validation.originalName,extension:validation.extension,mimeType:validation.mimeType,byteSize:validation.byteSize,sha256:validation.sha256,coverage:extraction.coverage,warnings:extraction.warnings});
+  let record;
   try{
-    await putImmutableOriginal(env,{workspaceId,fileId:record.id,bytes,sha256:validation.sha256,contentType:validation.mimeType});
-    await saveExtraction(env,{workspaceId,fileId:record.id,blocks:extraction.blocks,evidenceIndex:extraction.evidenceIndex,characterCount:extraction.counts.characters,cellCount:extraction.counts.nonEmptyCells,extractorVersion,coverage:extraction.coverage,warnings:extraction.warnings,partial:extraction.coverage.complete===false});
-  }catch(cause){return error('Unable to persist uploaded file',500,cors);}
+    record=await reserveUpload(env,{workspaceId,userId:access.user.id,originalName:validation.originalName,extension:validation.extension,mimeType:validation.mimeType,byteSize:validation.byteSize,sha256:validation.sha256,coverage:extraction.coverage,warnings:extraction.warnings});
+    if(record.reused)return json({file_id:record.id,reused:true},200,cors);
+    if(record.busy)return error('Upload is in progress; retry shortly',409,{...cors,'Retry-After':'5'});
+    if(!await originalExists(env,record))await putImmutableOriginal(env,{workspaceId,fileId:record.id,bytes,sha256:validation.sha256,contentType:validation.mimeType});
+    await saveExtraction(env,{workspaceId,fileId:record.id,uploadToken:record.uploadToken,blocks:extraction.blocks,evidenceIndex:extraction.evidenceIndex,characterCount:extraction.counts.characters,cellCount:extraction.counts.nonEmptyCells,extractorVersion,coverage:extraction.coverage,warnings:extraction.warnings,partial:extraction.coverage.complete===false});
+  }catch(cause){
+    // Keep the immutable original for a bounded retry; never advertise failed state as reusable.
+    if(record?.uploadToken)await env.DB.prepare(`UPDATE copilot_files SET extraction_status='failed',updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND upload_token=? AND extraction_status='pending'`).bind(record.id,workspaceId,record.uploadToken).run().catch(()=>{});
+    return error('Unable to persist uploaded file',500,cors);
+  }
   return json({file_id:record.id,reused:false},201,cors);
 }

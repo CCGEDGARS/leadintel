@@ -16,8 +16,11 @@ CREATE TABLE IF NOT EXISTS copilot_files (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   deleted_at TEXT,
+  upload_token TEXT,
   UNIQUE(id,workspace_id)
 );
+CREATE UNIQUE INDEX IF NOT EXISTS copilot_files_workspace_digest_idx
+  ON copilot_files(workspace_id,sha256) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS copilot_files_workspace_created_idx
   ON copilot_files(workspace_id,created_at DESC);
 CREATE INDEX IF NOT EXISTS copilot_files_expiry_idx
