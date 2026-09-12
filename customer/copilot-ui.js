@@ -5,7 +5,7 @@ let conversationId='';
 function ensureCss(){if(document.querySelector('link[data-leadintel-asset="copilot-css"]'))return;const link=document.createElement('link');link.rel='stylesheet';link.href='./copilot.css?v=20260908-copilot-polish-v1';link.dataset.leadintelAsset='copilot-css';document.head.appendChild(link);}
 function node(tag,className,text){const el=document.createElement(tag);if(className)el.className=className;if(text!==undefined)el.textContent=String(text);return el;}
 function safeUrl(value){try{const url=new URL(String(value||''));return /^https?:$/.test(url.protocol)?url.toString():'';}catch{return '';}}
-function closeCopilot(){if(!drawer)return;drawer.hidden=true;document.getElementById('leadintel-copilot-entry')?.focus();}
+function closeCopilot(){if(!drawer)return;drawer.dispatchEvent(new Event('leadintel:copilot-closed'));drawer.hidden=true;document.getElementById('leadintel-copilot-entry')?.focus();}
 function onKeydown(event){if(event.key==='Escape'&&drawer&&!drawer.hidden)closeCopilot();}
 export function copilotWorkspaceSaveState(persistence=window.LeadIntelWorkspacePersistence){const saved=Boolean(persistence?.isExplicitlySaved?.());if(!saved)return {current:false,reason:'not-saved'};if(Boolean(persistence?.hasUnsavedChanges?.()))return {current:false,reason:'unsaved-changes'};return {current:true,reason:''};}
 function badge(count){const target=document.querySelector('#leadintel-copilot-entry [data-copilot-badge]');if(!target)return;const n=Math.max(0,Number(count)||0);target.textContent=n?String(n):'';target.hidden=!n;}
@@ -21,7 +21,8 @@ function ensureDrawer(){
   const diagnostics=node('section','copilot-diagnostics');diagnostics.dataset.copilotDiagnostics='';const messages=node('section','copilot-messages');messages.dataset.copilotMessages='';const proposals=node('section','copilot-proposals');proposals.dataset.copilotProposals='';
   const form=node('form','copilot-composer');const input=document.createElement('textarea');input.rows=5;input.maxLength=8000;input.placeholder='Ask about this step, your strategy, leads, signals or setup…';input.setAttribute('aria-label','Message Ask LeadIntel');const send=node('button','copilot-send','Send');send.type='submit';form.append(input,send);
   const status=node('div','copilot-status');status.dataset.copilotStatus='';status.setAttribute('aria-live','polite');form.addEventListener('submit',async event=>{event.preventDefault();const message=input.value.trim();if(!message)return;input.value='';await sendMessage(message);});
-  drawer.append(header,intro,diagnostics,messages,proposals,status,form);document.documentElement.appendChild(drawer);document.addEventListener('keydown',onKeydown);return drawer;
+  const fileHost=node('section');fileHost.dataset.copilotGeneralFileHost='';
+  drawer.append(header,intro,diagnostics,messages,proposals,status,fileHost,form);document.documentElement.appendChild(drawer);document.addEventListener('keydown',onKeydown);return drawer;
 }
 
 function renderDiagnostics(items=[],unreadImportant=0){const host=drawer.querySelector('[data-copilot-diagnostics]');clear(host);badge(unreadImportant);if(!items.length)return;const heading=node('h3','','Workspace checks');host.appendChild(heading);for(const item of items.slice(0,5)){const card=node('article',`copilot-diagnostic is-${String(item.severity||'info').toLowerCase()}`);card.append(node('span','copilot-severity',severityLabel(item.severity)),node('strong','',item.title||item.message||'Workspace guidance'));if(item.message&&item.message!==item.title)card.append(node('p','',item.message));host.appendChild(card);}}

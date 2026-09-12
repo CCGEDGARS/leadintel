@@ -10,7 +10,8 @@ function setStatus(message){const entry=ensureEntry();const badge=entry?.querySe
 export async function loadCopilot(){
   if(loading)return loading;const entry=ensureEntry();if(entry)entry.disabled=true;
   loading=(async()=>{try{
-    const [api,context,ui,fileIntelligence]=await Promise.all([import('./copilot-api.js?v=20260908-copilot-polish-v1'),import('./copilot-context.js?v=20260908-copilot-polish-v1'),import('./copilot-ui.js?v=20260911-copilot-freshness-v1'),import('./copilot-file-intelligence.js?v=20260909-customer-file-intelligence-v1')]);setStatus('');await ui.openCopilot?.({api,context});fileIntelligence.installCopilotFileIntelligence?.();return {api,context,ui,fileIntelligence};
+    const [api,context,ui,fileIntelligence]=await Promise.all([import('./copilot-api.js?v=20260908-copilot-polish-v1'),import('./copilot-context.js?v=20260908-copilot-polish-v1'),import('./copilot-ui.js?v=20260911-copilot-freshness-v1'),import('./copilot-file-intelligence.js?v=20260909-customer-file-intelligence-v1')]);setStatus('');await ui.openCopilot?.({api,context});fileIntelligence.installCopilotFileIntelligence?.();
+    const generalFileAnalysis=await import('./copilot-general-file-analysis.js?v=20260911-general-file-analysis-v1');generalFileAnalysis.installGeneralFileAnalysis({api});return {api,context,ui,fileIntelligence,generalFileAnalysis};
   }catch(cause){console.warn('Ask LeadIntel unavailable:',cause);setStatus('Copilot unavailable');loading=null;return null;}finally{if(entry)entry.disabled=false;}})();return loading;
 }
 function bind(){const entry=ensureEntry();if(!entry||entry.dataset.copilotBound==='1')return;entry.dataset.copilotBound='1';entry.addEventListener('click',()=>{void loadCopilot();});}

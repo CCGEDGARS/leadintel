@@ -2,6 +2,9 @@
   "name": "leadintel-vercel-build",
   "private": true,
   "version": "1.0.0",
+  "devDependencies": {
+    "jsdom": "30.0.1"
+  },
   "scripts": {
     "build": "bash scripts/build-vercel-static.sh"
   }
