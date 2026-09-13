@@ -64,3 +64,4 @@
 .source-intel-panel{margin-top:28px!important;margin-bottom:28px!important}
 @media(max-width:900px){.strategy-flow{grid-template-columns:1fr 1fr}}
 @media(max-width:560px){.strategy-flow{grid-template-columns:1fr}.strategy-flow-step small{font-size:13px}}
+.research-run-feedback[data-status="partial"]{border-color:#c9d8d0;background:#f7faf7}.research-run-feedback[data-status="partial"] li strong{color:#0d6453}

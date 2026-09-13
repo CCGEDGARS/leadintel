@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {AI_PROVIDERS,normalizeAiProvider,defaultAiModel,generateText,verifyProviderCredential,searchWeb} from '../src/ai-provider.js';
 
 test('supports exactly the three customer AI providers',()=>{
@@ -84,6 +85,22 @@ test('OpenAI web search sanitizes upstream errors and never leaks provider secre
     assert.doesNotMatch(error.message,/secret details/);
     return true;
   });
+});
+
+test('OpenAI web search forwards the caller abort signal to the upstream request',async()=>{
+  const controller=new AbortController();let requestSignal;
+  const fetchImpl=async(url,options)=>{
+    requestSignal=options.signal;
+    const payload={output:[{type:'web_search_call',action:{sources:[]}},{type:'message',content:[{type:'output_text',text:JSON.stringify({results:[]})}]}]};
+    return new Response(JSON.stringify(payload),{status:200,headers:{'Content-Type':'application/json'}});
+  };
+  await searchWeb({apiKey:'sk-test',model:'gpt-5.6',query:'Latvia market',signal:controller.signal,fetchImpl});
+  assert.equal(requestSignal,controller.signal);
+});
+
+test('web-search route forwards the incoming request abort signal',()=>{
+  const routes=fs.readFileSync(new URL('../src/ai-routes.js',import.meta.url),'utf8');
+  assert.match(routes,/searchWeb\(\{apiKey,model:integration\.model,query,maxResults,signal:request\.signal\}\)/);
 });
 
 test('Anthropic adapter uses Messages API and extracts text',async()=>{

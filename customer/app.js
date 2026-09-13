@@ -3,6 +3,7 @@ import './content-variants.js?v=20260905-step1-language-v1';
 import './business-identity.js?v=20260906-pain-headings-v1';
 import './evidence-view.js?v=20260913-strategy-flow-v1';
 import './workspace-persistence.js?v=20260903-step1-startup-order-v1';
+import {withOpenAiRetry,describePartialCoverage} from './market-research-provider-resilience.js?v=20260913-openai-retry-v2';
 
 const STORAGE_KEY="leadintel_customer_v2_state";
 const FIRECRAWL_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
@@ -427,7 +428,7 @@ async function runMarketResearch(modeOverride=""){
   const updateProgress=completed=>{state.market.researchProgress={completed,total:totalJobs};saveState();renderResearchStatus();};
   try{
     const queryResults=await LeadIntelMarket.mapWithConcurrency(queries,async query=>{
-      const openAiJob=openAiAvailable?LeadIntelMarket.withTimeout(signal=>searchOpenAiWeb(query,limits.resultsPerQuery,signal),RESEARCH_REQUEST_TIMEOUT_MS,"OpenAI search").then(found=>({found}),error=>({error})):Promise.resolve({skipped:true});
+      const openAiJob=openAiAvailable?withOpenAiRetry(()=>LeadIntelMarket.withTimeout(signal=>searchOpenAiWeb(query,limits.resultsPerQuery,signal),RESEARCH_REQUEST_TIMEOUT_MS,"OpenAI search")).then(found=>({found}),error=>({error})):Promise.resolve({skipped:true});
       const firecrawlJob=LeadIntelMarket.withTimeout(signal=>searchMarket(query,limits.resultsPerQuery,signal),RESEARCH_REQUEST_TIMEOUT_MS,"Firecrawl search").then(results=>({results}),error=>({error}));
       const [openAi,firecrawl]=await Promise.all([openAiJob,firecrawlJob]);
       let openAiResults=[],firecrawlResults=[];
@@ -481,10 +482,12 @@ function renderMarketOpportunities(){
 function renderResearchStatus(){
   const status=state.market.researchStatus;const count=state.market.researchResults.length;const queries=state.market.researchQueries.length;const sources=state.market.researchSourceStatus||{openai:"idle",firecrawl:"idle"};
   const modeLabel=researchModeUi(state.market.researchMode).label;
+  const partialCoverage=status==="partial"?describePartialCoverage({modeLabel,count,openAiStatus:sources.openai,firecrawlStatus:sources.firecrawl}):null;
   let message="Target market selected · live market research can increase confidence.";
   if(status==="running"){const progress=state.market.researchProgress||{completed:0,total:queries};message=`${modeLabel} is running · ${progress.completed}/${progress.total||queries} searches checked · OpenAI signal discovery + Firecrawl verification…`;}
   else if(status==="complete"&&sources.openai==="unavailable")message=`${modeLabel} complete · Firecrawl verification · ${count} public evidence sources. OpenAI integration is required for web search; connect OpenAI in Settings for broader signal discovery.`;
   else if(status==="complete")message=`${modeLabel} complete · OpenAI signal discovery + Firecrawl verification · ${queries} queries · ${count} public evidence sources.`;
+  else if(status==="partial"&&partialCoverage)message=partialCoverage.status;
   else if(status==="partial")message=`${modeLabel} partially complete · ${count} evidence sources · OpenAI signal discovery / Firecrawl verification had one or more unavailable requests.`;
   else if(status==="error")message="Research run failed · no public evidence was saved. Review the failure details below, adjust the scope if needed, and retry.";
   $("market-research-status").textContent=message;
@@ -492,7 +495,8 @@ function renderResearchStatus(){
   if(feedback){
     const errors=state.market.researchErrors||[];const show=status==="error"||status==="partial";
     feedback.hidden=!show;
-    if(show){const title=status==="error"?"Research run failed":"Research completed with gaps";const intro=status==="error"?"No public evidence was saved. The buttons below are active so you can review the scope and retry.":`${count} public evidence source${count===1?" was":"s were"} saved, but some checks failed.`;feedback.innerHTML=`<div><span class="eyebrow">Run report</span><h4>${title}</h4><p>${intro}</p></div>${errors.length?`<ul>${errors.slice(0,6).map(item=>`<li><strong>${esc(item.provider||"Source")}</strong><span>${esc(item.message||"Request failed")}</span><small>${esc(item.query)}</small></li>`).join("")}</ul>`:`<p class="research-feedback-empty">The public research providers returned no usable results. Open the review step to change sources, add specific URLs or retry.</p>`}`;}
+    feedback.dataset.status=status;
+    if(show){const title=status==="error"?"Research run failed":partialCoverage?.title||"Research completed with gaps";const intro=status==="error"?"No public evidence was saved. The buttons below are active so you can review the scope and retry.":partialCoverage?.intro||`${count} public evidence source${count===1?" was":"s were"} saved, but some checks failed.`;feedback.innerHTML=`<div><span class="eyebrow">Run report</span><h4>${title}</h4><p>${intro}</p></div>${errors.length?`<ul>${errors.slice(0,6).map(item=>`<li><strong>${esc(item.provider||"Source")}</strong><span>${esc(item.message||"Request failed")}</span><small>${esc(item.query)}</small></li>`).join("")}</ul>`:`<p class="research-feedback-empty">The public research providers returned no usable results. Open the review step to change sources, add specific URLs or retry.</p>`}`;}
   }
   const actions=[["run-market-research","Market Scan","Retry Market Scan"],["run-detailed-research","Market Research","Retry Market Research"],["run-market-intelligence","Market Intelligence","Retry Market Intelligence"]];
   actions.forEach(([id,label,retryLabel])=>{const button=$(id);if(!button)return;button.textContent=status==="running"?"Researching…":status==="error"?retryLabel:`Review ${label}`;button.disabled=status==="running";});

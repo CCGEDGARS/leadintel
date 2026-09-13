@@ -91,7 +91,7 @@ export async function handleAiRoute(request,env,cors={}){
     const integration=await openAiIntegration(env,workspaceId);if(!integration)return error('OpenAI integration is required for web search',409,cors);
     try{
       const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const apiKey=await decryptSecret(integration.encrypted_api_key,key);
-      const result=await searchWeb({apiKey,model:integration.model,query,maxResults});
+      const result=await searchWeb({apiKey,model:integration.model,query,maxResults,signal:request.signal});
       await env.DB.prepare(`UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(workspaceId,'openai').run();
       await audit(env,{workspaceId,userId:access.user.id,type:'ai.web_search_completed',provider:'openai',metadata:{model:integration.model,input_tokens:result.usage.input_tokens,output_tokens:result.usage.output_tokens,result_count:result.results.length}});
       return json(result,200,cors);

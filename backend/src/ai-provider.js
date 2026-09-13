@@ -114,12 +114,13 @@ async function openAiRequest(options,fetchImpl){
   return {provider:'openai',model:options.model,text,usage:usage(payload?.usage?.input_tokens,payload?.usage?.output_tokens)};
 }
 
-export async function searchWeb({apiKey,model,query,maxResults=5,purpose='general',fetchImpl=fetch}){
+export async function searchWeb({apiKey,model,query,maxResults=5,purpose='general',signal,fetchImpl=fetch}){
   const limit=clampResults(maxResults);const options=validatedOptions({provider:'openai',apiKey,model,prompt:query,maxOutputTokens:2400});
   const sourceAccessAudit=purpose==='source_access_audit';
   try{
     const response=await fetchImpl('https://api.openai.com/v1/responses',{
       method:'POST',
+      signal,
       headers:{'Content-Type':'application/json','Accept':'application/json',Authorization:`Bearer ${options.apiKey}`},
       body:JSON.stringify({
         model:options.model,
