@@ -9,7 +9,7 @@ if(typeof window!=="undefined"){
     .then(()=>import('./intelligence-profile-runtime.js?v=20260909-canonical-profile-v5'))
     .catch(error=>console.error('LeadIntel intelligence runtime failed to load',error));
   void import('./opportunity-led-icp.js?v=20260907-opportunity-led-v1');
-  void import('./market-research-ux.js?v=20260912-choice-hierarchy-v1');
+  void import('./market-research-ux.js?v=20260913-simplified-cards-v1');
   void import('./market-research-guard.js?v=20260908-render-loop-v1');
   void import('./market-research-review-ux.js?v=20260907-review-ux-v1');
   void import('./market-research-provider-resilience.js?v=20260907-provider-resilience-v1');
