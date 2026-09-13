@@ -503,6 +503,7 @@ function renderMarketJourney(){
   const researchPanel=document.querySelector('.research-panel');
   if(researchPanel)researchPanel.dataset.marketStage=view.stage;
   $("research-results-details").hidden=!view.showScore;
+  const resultsIntro=$("research-results-intro");if(resultsIntro)resultsIntro.hidden=!view.researched;
   $("strategy-activation-card").hidden=!view.showActivation;
   $("monitoring-panel").hidden=!view.showMonitoring;
   const activationButton=$("activate-market-strategy");
@@ -515,7 +516,7 @@ function renderMarketJourney(){
     description.textContent="Your approved customers, buying signals and market evidence now guide Discovery.";
     activationButton.hidden=true;
   }else{
-    step.textContent="Step 2 · Strategy activation";
+    step.textContent="Step 3 · Activate strategy";
     title.textContent="Use these results as your market strategy";
     description.textContent="This tells LeadIntel which customers, signals and opportunities to prioritize in Discovery.";
     activationButton.hidden=false;
