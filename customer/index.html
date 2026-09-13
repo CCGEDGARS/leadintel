@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=20260826-target-market-v1">
-  <link rel="stylesheet" href="market.css?v=20260913-simplified-cards-v1">
+  <link rel="stylesheet" href="market.css?v=20260913-strategy-flow-v1">
   <link rel="stylesheet" href="premium.css?v=20260826-target-market-v1">
   <link rel="stylesheet" href="market-selector.css?v=20260826-target-market-v1">
   <link rel="stylesheet" href="compact-sources.css?v=20260826-compact-sources-v1">
@@ -203,6 +203,13 @@
             <div class="profile-header-actions"><span class="profile-status" id="strategy-status">Draft</span><button class="secondary-btn small" id="back-to-profile" type="button">← Profile</button></div>
           </div>
 
+          <nav class="strategy-flow" id="strategy-flow" aria-label="Market Strategy steps">
+            <div class="strategy-flow-step is-active" data-strategy-flow-step="1"><span>1</span><div><strong>Choose research depth</strong><small>Select how deeply LeadIntel should investigate.</small></div></div>
+            <div class="strategy-flow-step" data-strategy-flow-step="2"><span>2</span><div><strong>Review findings</strong><small>Check opportunities, signals and evidence.</small></div></div>
+            <div class="strategy-flow-step" data-strategy-flow-step="3"><span>3</span><div><strong>Activate strategy</strong><small>Confirm what LeadIntel should prioritize.</small></div></div>
+            <div class="strategy-flow-step" data-strategy-flow-step="4"><span>4</span><div><strong>Discover companies</strong><small>Find matching companies and decision-makers.</small></div></div>
+          </nav>
+
           <div class="strategy-banner">
             <div><span>Company context</span><strong id="strategy-company-name">Company</strong></div>
             <div><span>Priority markets</span><strong id="strategy-market-summary">—</strong></div>
@@ -228,7 +235,7 @@
 
           <section class="panel strategy-panel research-panel">
             <div class="market-research-head">
-              <div class="section-title"><span class="eyebrow">Step 1 · Market research</span><h3>Research your selected market</h3><p>Choose the depth that matches your decision. You can review every planned search before anything starts.</p></div>
+              <div class="section-title"><span class="eyebrow">Step 1 · Choose research depth</span><h3>How deeply should LeadIntel research this market?</h3><p>Select one option to review the research plan before starting.</p></div>
               <div class="research-actions">
                 <button class="primary-btn research-primary-action" id="run-market-research" type="button">Review Market Scan</button>
                 <button class="secondary-btn research-secondary-action" id="run-detailed-research" type="button">Review Market Research</button>
@@ -261,6 +268,7 @@
                 <fieldset id="research-source-types"><legend>Source categories</legend><label><input type="checkbox" value="news" checked> News</label><label><input type="checkbox" value="tenders"> Tenders</label><label><input type="checkbox" value="jobs" checked> Jobs</label><label><input type="checkbox" value="investments" checked> Investments</label><label><input type="checkbox" value="company" checked> Company sites</label><label><input type="checkbox" value="registries"> Registries</label><small id="tender-source-note">Tender research is available only when the tender signal is active.</small></fieldset>
               </div>
             </details>
+            <div class="research-results-intro" id="research-results-intro" hidden><span class="eyebrow">Step 2 · Review findings</span><h3>Review what LeadIntel found</h3><p>Check the opportunities, buying signals and supporting evidence before activating the strategy.</p></div>
             <div class="market-opportunities" id="market-opportunities"><div class="market-empty">Run market research to create evidence-backed market hypotheses.</div></div>
             <details class="progressive-disclosure research-analysis" id="research-results-details" hidden>
               <summary>View research details and scoring model</summary>
@@ -298,7 +306,7 @@
   <script src="profile-engine.js?v=20260906-authoritative-depth-v1"></script>
   <script src="market-engine.js?v=20260907-three-modes-v1"></script>
   <script src="discovery-engine.js?v=20260906-customer-pains-v1"></script>
-  <script type="module" src="app.js?v=20260912-profile-approval-v3"></script>
+  <script type="module" src="app.js?v=20260913-strategy-flow-v1"></script>
   <script src="language.js?v=20260905-audit-v1"></script>
   <script type="module" src="process-map.js?v=20260911-copilot-freshness-v1"></script>
   <script type="module" src="discovery-ui.js?v=20260906-customer-pains-v1"></script>
