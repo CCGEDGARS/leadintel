@@ -284,7 +284,10 @@
       mission:buildMission(),
       targetMarkets:clean(value.profile.targetMarkets)||targetMarkets.join("; "),
       researchMarkets:Array.isArray(value.profile.researchMarkets)&&value.profile.researchMarkets.length?expandTargetMarkets(value.profile.researchMarkets):expandTargetMarkets(targetMarkets),
-      marketFocus:clean(value.profile.marketFocus)||answers.growth_markets
+      marketFocus:clean(value.profile.marketFocus)||answers.growth_markets,
+      recommendedSignals:Array.isArray(value.profile.recommendedSignals)&&value.profile.recommendedSignals.length
+        ?value.profile.recommendedSignals
+        :recommendSignals(clean(answers.buying_triggers)||clean(value.profile.buyingTriggers),sourceText(scrapedSources,docs))
     }:null;
     if(profile){
       const regeneratedOverview=deriveCompanyOverview(scrapedSources,docs);
