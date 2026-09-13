@@ -10,6 +10,7 @@ import {assertModelSafe,redactProtectedData,sanitizeExternalResearchQuery} from 
 
 const REASONING_TIMEOUT_MS=30000;
 const SEARCH_TIMEOUT_MS=25000;
+// Keep model JSON parsing tolerant of fenced responses from hosted providers.
 function clean(value,max=8000){return String(value??'').replace(/[\u0000-\u001f\u007f]+/g,' ').replace(/\s+/g,' ').trim().slice(0,max);}
 function array(value,limit=50){return Array.isArray(value)?value.slice(0,limit):[];}
 function safeUrl(value){try{const url=new URL(String(value||''));return ['http:','https:'].includes(url.protocol)?url.href:'';}catch{return '';}}
