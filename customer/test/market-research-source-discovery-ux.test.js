@@ -21,9 +21,9 @@ test('idle market research labels contain no Review prefix and each has distinct
   assert.match(ux.MODE_COPY.intelligence.description,/Comprehensive investigation/i);
   assert.ok(Object.values(ux.MODE_COPY).every(item=>!/^Review\b/i.test(item.label)));
   assert.equal(ux.MODE_COPY.deep.badge,'Recommended');
-  assert.equal(ux.MODE_COPY.quick.action,'Select Market Scan →');
-  assert.equal(ux.MODE_COPY.deep.action,'Select Market Research →');
-  assert.equal(ux.MODE_COPY.intelligence.action,'Select Market Intelligence →');
+  assert.equal(ux.MODE_COPY.quick.action,undefined);
+  assert.equal(ux.MODE_COPY.deep.action,undefined);
+  assert.equal(ux.MODE_COPY.intelligence.action,undefined);
 });
 
 test('source discovery policy differs by research depth',()=>{
@@ -93,15 +93,17 @@ test('new source discovery module contains no hardcoded LSM or Dienas Bizness re
 
 test('evidence-view bootstrap loads the market research UX module',()=>{
   const source=fs.readFileSync(path.join(__dirname,'..','evidence-view.js'),'utf8');
-  assert.match(source,/market-research-ux\.js\?v=20260912-choice-hierarchy-v1/);
+  assert.match(source,/market-research-ux\.js\?v=20260913-simplified-cards-v2/);
 });
 
 test('research choice hierarchy is shipped through the CSP-approved static stylesheet',()=>{
   const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
   const css=fs.readFileSync(path.join(__dirname,'..','market.css'),'utf8');
-  assert.match(html,/market\.css\?v=20260912-choice-hierarchy-v3/);
+  assert.match(html,/market\.css\?v=20260913-simplified-cards-v1/);
   assert.match(css,/\.research-actions \.research-mode-choice\[data-research-mode="deep"\]>button/);
   assert.match(css,/\.research-mode-choice\.is-selected>button/);
   assert.match(css,/\.research-mode-action/);
   assert.match(css,/#run-detailed-research/);
+  assert.match(css,/\.research-mode-action\{display:none!important\}/);
+  assert.match(css,/Simplified research choices: no gold/);
 });
