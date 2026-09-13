@@ -65,3 +65,13 @@ test('provider failure returns bounded safe response without upstream secret mat
   const result=await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',conversation:[],question:'Improve my ICP',currentScreen:{step:4,label:'Market Strategy'}});
   assert.match(result.answer,/temporarily|unable|available|try again/i);assert.doesNotMatch(JSON.stringify(result),/sk-proj|hunter2|SECRET123/i);assert.ok(result.answer.length<500);
 });
+
+test('copilot unwraps fenced JSON responses before rendering the answer',async()=>{
+  const env={COPILOT_TEST_CONTEXT:context,COPILOT_TEST_MEMORIES:[],COPILOT_TEST_PROVIDER:{
+    async generate(){return {provider:'openai',model:'gpt-test',text:'```json\n{"answer":"Public pages are accessible; paid database access is not proven.","action_proposals":[],"memory_candidates":[]}\n```',usage:{input_tokens:1,output_tokens:2}};},
+    async search(){throw new Error('unused');}
+  }};
+  const result=await runCopilotTurn(env,{workspaceId:'w1',userId:'u1',role:'owner',conversation:[],question:'What does this button do?',currentScreen:{step:4,label:'Market Strategy'}});
+  assert.equal(result.answer,'Public pages are accessible; paid database access is not proven.');
+  assert.doesNotMatch(result.answer,/```|\{"answer"/);
+});

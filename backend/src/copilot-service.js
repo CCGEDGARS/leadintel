@@ -53,7 +53,12 @@ async function productionProvider(env,workspaceId){
 function selectedKnowledge(question,screen){return technicalGuidanceFor(question)||productKnowledgeFor({step:screen?.step||1,topic:question});}
 function safeSources(result){return array(result?.results,8).map(item=>({title:clean(item?.title,300),url:safeUrl(item?.url),date:clean(item?.date,120),description:clean(item?.description,1600)})).filter(item=>item.url);}
 function parseModelResult(text){
-  const raw=String(text||'').trim();if(!raw)return {answer:''};try{const parsed=JSON.parse(raw);if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))return parsed;}catch{}
+  const raw=String(text||'').trim();if(!raw)return {answer:''};
+  const candidates=[raw,raw.replace(/^```(?:json)?\s*/i,'').replace(/\s*```\s*$/,'')];
+  for(const candidate of candidates){try{const parsed=JSON.parse(candidate);if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))return parsed;}catch{}
+    const start=candidate.indexOf('{'),end=candidate.lastIndexOf('}');
+    if(start>=0&&end>start){try{const parsed=JSON.parse(candidate.slice(start,end+1));if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))return parsed;}catch{}}
+  }
   return {answer:raw};
 }
 function pseudoState(context){return {main:{market:{signals:array(context?.signals,20),icps:array(context?.icps,10)}}};}
