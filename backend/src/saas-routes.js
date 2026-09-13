@@ -1,5 +1,5 @@
 import {corsHeaders,allowedOrigin,sha256,randomToken,cookieValue,sessionCookie} from './security.js';
-import {safeReturnUrl,buildGoogleAuthorizationUrl,exchangeGoogleCode,fetchGoogleIdentity,importAesKey,encryptSecret,decryptSecret,createOAuthState,consumeOAuthState} from './oauth.js';
+import {safeReturnUrl,buildGoogleAuthorizationUrl,exchangeGoogleCode,fetchGoogleIdentity,buildMicrosoftAuthorizationUrl,exchangeMicrosoftCode,fetchMicrosoftIdentity,importAesKey,encryptSecret,decryptSecret,createOAuthState,consumeOAuthState} from './oauth.js';
 import {getCustomerState,putCustomerState} from './customer-state.js';
 import {normalizeEmail,buildMimeMessage,refreshGoogleAccessToken,sendGmailMessage,fetchGmailThread,normalizeInboundReplies} from './gmail.js';
 import {findCrmCompanyByDomain,appendCrmActivity,setCrmPipelineStage} from './crm.js';
@@ -24,7 +24,7 @@ function configuredCustomerReturn(env,requestUrl){return safeReturnUrl(requestUr
 function withResult(url,params){const out=new URL(url);for(const [key,value] of Object.entries(params))if(value!==undefined&&value!==null)out.searchParams.set(key,String(value));return out.toString();}
 function normalizeDomain(value){return String(value||'').trim().toLowerCase().replace(/^https?:\/\//,'').replace(/^www\./,'').split(/[/?#]/)[0].slice(0,253);}
 function validIdempotency(value){return /^[A-Za-z0-9._:-]{16,128}$/.test(String(value||''));}
-function googleConfig(env,kind){return {clientId:env.GOOGLE_OAUTH_CLIENT_ID,clientSecret:env.GOOGLE_OAUTH_CLIENT_SECRET,redirectUri:kind==='gmail'?env.GMAIL_OAUTH_REDIRECT_URI:env.GOOGLE_OAUTH_REDIRECT_URI};}
+function googleConfig(env,kind){return {clientId:env.GOOGLE_OAUTH_CLIENT_ID,clientSecret:env.GOOGLE_OAUTH_CLIENT_SECRET,redirectUri:kind==='gmail'?env.GMAIL_OAUTH_REDIRECT_URI:env.GOOGLE_OAUTH_REDIRECT_URI};}function microsoftConfig(env){return {clientId:env.MICROSOFT_OAUTH_CLIENT_ID,clientSecret:env.MICROSOFT_OAUTH_CLIENT_SECRET,redirectUri:env.MICROSOFT_OAUTH_REDIRECT_URI};}
 async function createSession(env,userId){const token=randomToken(32);const hash=await sha256(token);const hours=Math.max(1,Number(env.SESSION_TTL_HOURS)||168);await env.DB.batch([env.DB.prepare("DELETE FROM sessions WHERE expires_at<=datetime('now')"),env.DB.prepare("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,?,datetime('now',?))").bind(hash,userId,`+${hours} hours`)]);return {token,hours};}
 async function ensureDefaultWorkspace(env,user){
   const existing=await env.DB.prepare(`SELECT w.id,w.name,w.market,wm.role FROM workspace_members wm JOIN workspaces w ON w.id=wm.workspace_id WHERE wm.user_id=? ORDER BY w.created_at ASC LIMIT 1`).bind(user.id).first();if(existing)return existing;
@@ -40,7 +40,7 @@ async function projectAccess(env,workspaceId,projectId){return env.DB.prepare(`S
 
 export async function handleSaasRoute(request,env,corsOverride){
   const url=new URL(request.url);const cors=corsOverride??corsHeaders(allowedOrigin(request,env.APP_ORIGIN));const path=url.pathname;
-  const known=path.startsWith('/api/auth/google/')||path==='/api/workspaces'||path==='/api/customer/state'||path.startsWith('/api/customer/projects')||path==='/api/customer/activity'||path.startsWith('/api/integrations/gmail/');if(!known)return null;
+  const known=path.startsWith('/api/auth/google/')||path.startsWith('/api/auth/microsoft/')||path==='/api/workspaces'||path==='/api/customer/state'||path.startsWith('/api/customer/projects')||path==='/api/customer/activity'||path.startsWith('/api/integrations/gmail/');if(!known)return null;
 
   if(path==='/api/auth/google/start'&&request.method==='GET'){
     if(!configReady(env,['GOOGLE_OAUTH_CLIENT_ID','GOOGLE_OAUTH_CLIENT_SECRET','GOOGLE_OAUTH_REDIRECT_URI','CUSTOMER_APP_URL']))return error('Google sign-in is not configured',503,cors);
@@ -56,6 +56,13 @@ export async function handleSaasRoute(request,env,corsOverride){
       await env.DB.prepare(`INSERT INTO user_identities(id,provider,provider_subject,user_id,email,updated_at) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(provider,provider_subject) DO UPDATE SET user_id=excluded.user_id,email=excluded.email,updated_at=CURRENT_TIMESTAMP`).bind(uuid(),'google',identity.sub,user.id,identity.email).run();const workspace=await ensureDefaultWorkspace(env,user);const session=await createSession(env,user.id);await audit(env,{workspaceId:workspace.id,userId:user.id,type:'auth.google_login_succeeded',entityType:'user',entityId:user.id,metadata:{workspace_id:workspace.id}});
       return redirect(withResult(state.return_to,{auth:'success',workspace_id:workspace.id}),{...cors,'Set-Cookie':sessionCookie(session.token,session.hours*3600)});
     }catch(cause){return redirect(withResult(state.return_to,{auth:'error',reason:String(cause?.message||'Google sign-in failed').slice(0,160)}),cors);}
+  }
+
+  if(path==='/api/auth/microsoft/start'&&request.method==='GET'){
+    if(!configReady(env,['MICROSOFT_OAUTH_CLIENT_ID','MICROSOFT_OAUTH_CLIENT_SECRET','MICROSOFT_OAUTH_REDIRECT_URI','CUSTOMER_APP_URL']))return error('Microsoft sign-in is not configured',503,cors);const returnTo=configuredCustomerReturn(env,url.searchParams.get('return_to'));if(!returnTo)return error('Invalid return URL',400,cors);const state=await createOAuthState(env,{purpose:'login',returnTo});const location=buildMicrosoftAuthorizationUrl({...microsoftConfig(env),state,scopes:['openid','profile','email','offline_access']});return redirect(location,cors);
+  }
+  if(path==='/api/auth/microsoft/callback'&&request.method==='GET'){
+    const state=await consumeOAuthState(env,{rawState:url.searchParams.get('state'),purpose:'login'});if(!state)return error('Microsoft sign-in state is invalid or expired',400,cors);try{const token=await exchangeMicrosoftCode(url.searchParams.get('code'),microsoftConfig(env));const identity=await fetchMicrosoftIdentity(token.accessToken);let user=await env.DB.prepare('SELECT users.* FROM user_identities JOIN users ON users.id=user_identities.user_id WHERE user_identities.provider=? AND user_identities.provider_subject=?').bind('microsoft',identity.sub).first();if(!user)user=await env.DB.prepare('SELECT * FROM users WHERE email=? COLLATE NOCASE').bind(identity.email).first();if(!user){const id=`user-${(await sha256(identity.email)).slice(0,24)}`;await env.DB.prepare(`INSERT INTO users(id,email,display_name,role,last_login_at) VALUES(?,?,?,?,CURRENT_TIMESTAMP)`).bind(id,identity.email,identity.name,'owner').run();user={id,email:identity.email,display_name:identity.name,role:'owner'};}else{await env.DB.prepare('UPDATE users SET display_name=?,last_login_at=CURRENT_TIMESTAMP WHERE id=?').bind(identity.name||user.display_name,user.id).run();user={...user,display_name:identity.name||user.display_name};}await env.DB.prepare(`INSERT INTO user_identities(id,provider,provider_subject,user_id,email,updated_at) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(provider,provider_subject) DO UPDATE SET user_id=excluded.user_id,email=excluded.email,updated_at=CURRENT_TIMESTAMP`).bind(uuid(),'microsoft',identity.sub,user.id,identity.email).run();const workspace=await ensureDefaultWorkspace(env,user);const session=await createSession(env,user.id);await audit(env,{workspaceId:workspace.id,userId:user.id,type:'auth.microsoft_login_succeeded',entityType:'user',entityId:user.id,metadata:{workspace_id:workspace.id}});return redirect(withResult(state.return_to,{auth:'success',workspace_id:workspace.id}),{...cors,'Set-Cookie':sessionCookie(session.token,session.hours*3600)});}catch(cause){return redirect(withResult(state.return_to,{auth:'error',reason:String(cause?.message||'Microsoft sign-in failed').slice(0,160)}),cors);}
   }
 
   if(path==='/api/workspaces'&&request.method==='GET'){
