@@ -42,5 +42,12 @@ test('mandatory source controls are gated by useful audited access and use activ
 });
 
 test('process map loads Intelligence Sources with a versioned runtime',()=>{
-  assert.match(processMap,/intelligence-sources-ui\.js\?v=20260910-intelligence-sources-v1/);
+  assert.match(processMap,/intelligence-sources-ui\.js\?v=20260913-optional-last-v1/);
+});
+
+test('Intelligence Sources is labelled optional and appended at the end of Step 4',()=>{
+  assert.match(ui,/Optional tools/);
+  assert.match(ui,/Manage trusted intelligence sources/);
+  assert.match(ui,/step\.appendChild\(panel\)/);
+  assert.doesNotMatch(ui,/insertBefore\(panel,monitoring\)/);
 });
