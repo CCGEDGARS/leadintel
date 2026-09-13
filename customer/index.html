@@ -223,14 +223,14 @@
           </section>
 
           <section class="panel strategy-panel">
-            <div class="section-title"><span class="eyebrow">Signal Designer</span><h3>What LeadIntel should watch for</h3><p>Weight 10 means the signal is commercially decisive. Keywords guide market research and later company monitoring.</p></div>
+            <div class="section-title"><span class="eyebrow">Recommended buying signals</span><h3>What LeadIntel should watch for</h3><p>LeadIntel generated these recommendations from your profile and research context. Activate the signals Discovery should use, then edit or add your own if needed.</p></div>
             <div class="signal-designer" id="signal-designer"></div>
             <div class="custom-signal-form">
               <input id="custom-signal-name" type="text" placeholder="New signal name">
               <input id="custom-signal-keywords" type="text" placeholder="Keywords: distributor; reseller; partner search">
               <select id="custom-signal-priority"><option>High</option><option selected>Medium</option><option>Low</option></select>
               <input id="custom-signal-weight" type="number" min="1" max="10" value="7" aria-label="Signal weight">
-              <button class="secondary-btn" id="add-custom-signal" type="button">+ Add signal</button>
+              <button class="secondary-btn" id="add-custom-signal" type="button">+ Add your own signal</button>
             </div>
           </section>
 
@@ -304,7 +304,7 @@
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="content-variants.js?v=20260905-step1-language-v1"></script>
-  <script src="profile-engine.js?v=20260906-authoritative-depth-v1"></script>
+  <script src="profile-engine.js?v=20260913-recommended-signals-v1"></script>
   <script src="market-engine.js?v=20260907-three-modes-v1"></script>
   <script src="discovery-engine.js?v=20260906-customer-pains-v1"></script>
   <script type="module" src="app.js?v=20260913-activation-discovery-handoff-v2"></script>
