@@ -568,22 +568,31 @@ function renderMarketStrategy(){
   renderIcps();renderSignalDesigner();renderResearchControls();renderResearchStatus();renderResearchHistory();renderMarketOpportunities();renderMonitoringControls();renderMarketJourney();loadMonitoringServerState();
 }
 async function activateMarketStrategy(){
+  const button=$("activate-market-strategy");
   if(state.market.strategyApproved){
     document.querySelector('[data-process-step="5"]')?.click();
     return;
   }
-  readMarketEdits(false);
-  const fail=message=>{showToast(message);$("strategy-activation-card")?.scrollIntoView({behavior:"smooth",block:"center"});};
-  if(!state.market.icps.some(item=>item.active)){fail("Activate at least one ICP before continuing");return;}
-  if(!state.market.signals.some(item=>item.active)){fail("Activate at least one buying signal before continuing");return;}
-  if(!state.market.lastResearchAt){fail("Run market research before activating the strategy");return;}
-  if(!state.market.opportunities.some(item=>item.active)){fail("Keep at least one market opportunity active before continuing");return;}
-  state.market.strategyApproved=true;
-  state.market.strategyApprovedAt=new Date().toISOString();
-  saveState();
-  renderMarketStrategy();
-  const persisted=await window.LeadIntelWorkspacePersistence?.saveWorkspace?.().catch?.(()=>false);
-  showToast(persisted===false?"Strategy activated locally · cloud save will retry":"Market Strategy activated · continue to Company Discovery");
+  if(button){button.disabled=true;button.textContent="Activating…";}
+  try{
+    readMarketEdits(false);
+    const fail=message=>{showToast(message);renderMarketStrategy();$("strategy-activation-card")?.scrollIntoView({behavior:"smooth",block:"center"});};
+    if(!state.market.icps.some(item=>item.active)){fail("Activate at least one ICP before continuing");return;}
+    if(!state.market.signals.some(item=>item.active)){fail("Activate at least one buying signal before continuing");return;}
+    if(!state.market.lastResearchAt){fail("Run market research before activating the strategy");return;}
+    if(!state.market.opportunities.some(item=>item.active)){fail("Keep at least one market opportunity active before continuing");return;}
+    state.market.strategyApproved=true;
+    state.market.strategyApprovedAt=new Date().toISOString();
+    saveState();
+    renderMarketStrategy();
+    let persisted;
+    try{persisted=await window.LeadIntelWorkspacePersistence?.saveWorkspace?.();}catch(error){persisted=false;console.warn("Market strategy cloud save deferred",error);}
+    showToast(persisted===false?"Strategy activated locally · cloud save will retry":"Market Strategy activated · continue to Company Discovery");
+  }catch(error){
+    console.error("Market strategy activation failed",error);
+    if(button){button.disabled=false;button.textContent="Activate Market Strategy";}
+    showToast(`Activation failed · ${error?.message||"Please try again"}`);
+  }
 }
 function disarmWorkspaceReset(){
   const button=$("reset-workspace");
