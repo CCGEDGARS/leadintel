@@ -42,12 +42,12 @@ test('mandatory source controls are gated by useful audited access and use activ
 });
 
 test('process map loads Intelligence Sources with a versioned runtime',()=>{
-  assert.match(processMap,/intelligence-sources-ui\.js\?v=20260913-optional-last-v1/);
+  assert.match(processMap,/intelligence-sources-ui\.js\?v=20260913-sources-before-research-v1/);
 });
 
-test('Intelligence Sources is labelled optional and appended at the end of Step 4',()=>{
+test('Intelligence Sources is labelled optional and placed immediately before Step 1 research',()=>{
   assert.match(ui,/Optional tools/);
   assert.match(ui,/Manage trusted intelligence sources/);
-  assert.match(ui,/step\.appendChild\(panel\)/);
-  assert.doesNotMatch(ui,/insertBefore\(panel,monitoring\)/);
+  assert.match(ui,/step\.insertBefore\(panel,researchPanel\)/);
+  assert.match(ui,/const researchPanel=step\.querySelector\('\.research-panel'\)/);
 });
