@@ -11,19 +11,16 @@
     quick:Object.freeze({
       label:"Market Scan",
       description:"Fast validation of the strongest buying signals and opportunities in your selected market.",
-      action:"Select Market Scan →",
       badge:""
     }),
     deep:Object.freeze({
       label:"Market Research",
       description:"Deeper research across companies, market activity, news, hiring, expansion and other relevant sources.",
-      action:"Select Market Research →",
       badge:"Recommended"
     }),
     intelligence:Object.freeze({
       label:"Market Intelligence",
       description:"Comprehensive investigation across multiple source types to uncover opportunities, patterns, competitors and hidden signals.",
-      action:"Select Market Intelligence →",
       badge:""
     })
   });
@@ -207,7 +204,7 @@
       if(desc.textContent!==view.description)desc.textContent=view.description;
       if(!/^Researching…$/i.test(clean(button.textContent))){
         const badge=view.badge?`<span class="research-mode-badge">${esc(view.badge)}</span>`:"";
-        const markup=`${badge}<span class="research-mode-title">${esc(view.label)}</span><span class="research-mode-action">${esc(view.action)}</span>`;
+        const markup=`<span class="research-mode-title">${esc(view.label)}</span>${badge}`;
         if(button.innerHTML!==markup)button.innerHTML=markup;
       }
       button.setAttribute("aria-pressed",mode===selected?"true":"false");
