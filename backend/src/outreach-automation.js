@@ -22,8 +22,8 @@ export function normalizeAutomationPolicy(input={},current=defaultAutomationPoli
   const timezone=String(source.timezone||'').trim();if(!validTimeZone(timezone))throw new Error('Timezone is invalid');
   const sendWindowStart=String(source.sendWindowStart||'').trim(),sendWindowEnd=String(source.sendWindowEnd||'').trim();
   const start=minutes(sendWindowStart),end=minutes(sendWindowEnd);if(!Number.isFinite(start)||!Number.isFinite(end)||start>=end)throw new Error('Send window is invalid');
-  const workspaceDailyLimit=int(source.workspaceDailyLimit,'Workspace daily limit',1,500);
-  const mailboxDailyLimit=int(source.mailboxDailyLimit,'Mailbox daily limit',1,500);
+  const workspaceDailyLimit=int(source.workspaceDailyLimit,'Workspace daily limit',1,20);
+  const mailboxDailyLimit=int(source.mailboxDailyLimit,'Mailbox daily limit',1,20);
   const minDelayMinutes=int(source.minDelayMinutes,'Minimum delay',1,1440);
   const maxDelayMinutes=int(source.maxDelayMinutes,'Maximum delay',1,1440);if(maxDelayMinutes<minDelayMinutes)throw new Error('Maximum delay must be greater than or equal to minimum delay');
   const maxFollowups=int(source.maxFollowups,'Maximum follow-ups',0,10);
