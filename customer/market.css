@@ -65,3 +65,9 @@
 @media(max-width:900px){.strategy-flow{grid-template-columns:1fr 1fr}}
 @media(max-width:560px){.strategy-flow{grid-template-columns:1fr}.strategy-flow-step small{font-size:13px}}
 .research-run-feedback[data-status="partial"]{border-color:#c9d8d0;background:#f7faf7}.research-run-feedback[data-status="partial"] li strong{color:#0d6453}
+
+/* Activation handoff feedback */
+.strategy-activation-feedback{margin:10px 0 0;color:#0d6453;font-size:13px;line-height:1.45}
+.strategy-activation-feedback[data-state="running"]{color:#66736f}
+.strategy-activation-feedback[data-state="error"]{color:#a5473e}
+.strategy-activation-feedback[data-state="success"]{color:#0d6453}
