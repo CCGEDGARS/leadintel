@@ -93,17 +93,24 @@ test('new source discovery module contains no hardcoded LSM or Dienas Bizness re
 
 test('evidence-view bootstrap loads the market research UX module',()=>{
   const source=fs.readFileSync(path.join(__dirname,'..','evidence-view.js'),'utf8');
-  assert.match(source,/market-research-ux\.js\?v=20260913-simplified-cards-v2/);
+  assert.match(source,/market-research-ux\.js\?v=20260913-strategy-flow-v1/);
 });
 
 test('research choice hierarchy is shipped through the CSP-approved static stylesheet',()=>{
   const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
   const css=fs.readFileSync(path.join(__dirname,'..','market.css'),'utf8');
-  assert.match(html,/market\.css\?v=20260913-simplified-cards-v1/);
+  assert.match(html,/market\.css\?v=20260913-strategy-flow-v1/);
   assert.match(css,/\.research-actions \.research-mode-choice\[data-research-mode="deep"\]>button/);
   assert.match(css,/\.research-mode-choice\.is-selected>button/);
   assert.match(css,/\.research-mode-action/);
   assert.match(css,/#run-detailed-research/);
   assert.match(css,/\.research-mode-action\{display:none!important\}/);
   assert.match(css,/Simplified research choices: no gold/);
+});
+
+test('strategy flow runtime derives the active page step from saved research state',()=>{
+  const source=fs.readFileSync(path.join(__dirname,'..','market-research-ux.js'),'utf8');
+  assert.match(source,/function updateStrategyFlow/);
+  assert.match(source,/data-strategy-flow-step/);
+  assert.match(source,/market\.strategyApproved/);
 });
