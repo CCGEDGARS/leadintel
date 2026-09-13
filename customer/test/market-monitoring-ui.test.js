@@ -115,3 +115,11 @@ test('company discovery becomes the clear next action only after strategy activa
   assert.match(discovery,/gate\.hidden=!formal/);
   assert.match(discovery,/Find matching companies/);
 });
+
+test('Market Strategy explains its four-step page journey before research',()=>{
+  for(const step of ['Choose research depth','Review findings','Activate strategy','Discover companies'])assert.match(html,new RegExp(step));
+  assert.match(html,/id="strategy-flow"/);
+  assert.match(html,/Step 1 · Choose research depth/);
+  assert.match(html,/id="research-results-intro" hidden/);
+  assert.match(app,/Step 3 · Activate strategy/);
+});
