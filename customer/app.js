@@ -518,12 +518,18 @@ function renderMarketJourney(){
     step.textContent="Strategy active";
     title.textContent="LeadIntel is ready to find matching companies";
     description.textContent="Your approved customers, buying signals and market evidence now guide Discovery.";
-    activationButton.hidden=true;
+    activationButton.hidden=false;
+    activationButton.disabled=false;
+    activationButton.textContent="Continue to Company Discovery →";
+    activationButton.dataset.activationContinue="true";
   }else{
     step.textContent="Step 3 · Activate strategy";
     title.textContent="Use these results as your market strategy";
     description.textContent="This tells LeadIntel which customers, signals and opportunities to prioritize in Discovery.";
     activationButton.hidden=false;
+    activationButton.disabled=false;
+    activationButton.textContent="Activate Market Strategy";
+    activationButton.dataset.activationContinue="false";
   }
 }
 function renderResearchControls(){
@@ -561,13 +567,23 @@ function renderMarketStrategy(){
   $("activate-market-strategy").disabled=state.market.strategyApproved;
   renderIcps();renderSignalDesigner();renderResearchControls();renderResearchStatus();renderResearchHistory();renderMarketOpportunities();renderMonitoringControls();renderMarketJourney();loadMonitoringServerState();
 }
-function activateMarketStrategy(){
-  readMarketEdits();
-  if(!state.market.icps.some(item=>item.active)){showToast("Activate at least one ICP");return;}
-  if(!state.market.signals.some(item=>item.active)){showToast("Activate at least one buying signal");return;}
-  if(!state.market.lastResearchAt){showToast("Run market research before formally activating the strategy");return;}
-  if(!state.market.opportunities.some(item=>item.active)){showToast("Keep at least one market opportunity active");return;}
-  state.market.strategyApproved=true;state.market.strategyApprovedAt=new Date().toISOString();saveState();renderMarketStrategy();showToast("Market Strategy activated for Discovery · configure monitoring below");
+async function activateMarketStrategy(){
+  if(state.market.strategyApproved){
+    document.querySelector('[data-process-step="5"]')?.click();
+    return;
+  }
+  readMarketEdits(false);
+  const fail=message=>{showToast(message);$("strategy-activation-card")?.scrollIntoView({behavior:"smooth",block:"center"});};
+  if(!state.market.icps.some(item=>item.active)){fail("Activate at least one ICP before continuing");return;}
+  if(!state.market.signals.some(item=>item.active)){fail("Activate at least one buying signal before continuing");return;}
+  if(!state.market.lastResearchAt){fail("Run market research before activating the strategy");return;}
+  if(!state.market.opportunities.some(item=>item.active)){fail("Keep at least one market opportunity active before continuing");return;}
+  state.market.strategyApproved=true;
+  state.market.strategyApprovedAt=new Date().toISOString();
+  saveState();
+  renderMarketStrategy();
+  const persisted=await window.LeadIntelWorkspacePersistence?.saveWorkspace?.().catch?.(()=>false);
+  showToast(persisted===false?"Strategy activated locally · cloud save will retry":"Market Strategy activated · continue to Company Discovery");
 }
 function disarmWorkspaceReset(){
   const button=$("reset-workspace");
@@ -619,7 +635,7 @@ function bind(){
   const zone=$("upload-zone");["dragenter","dragover"].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault();zone.classList.add("dragging");}));["dragleave","drop"].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault();zone.classList.remove("dragging");}));zone.addEventListener("drop",e=>handlePdfFiles(e.dataTransfer.files));
   $("edit-profile").addEventListener("click",toggleEdit);$("approve-profile").addEventListener("click",()=>state.approved?openMarketStrategy():approveProfile());$("recommended-signals").addEventListener("change",()=>{saveProfileEdits();seedMarketStrategy();saveState();updateApprovalUI();showToast("Profile changed · approve it again before continuing");});$("improve-profile").addEventListener("click",()=>openModule(1));
   $("back-to-profile").addEventListener("click",()=>openModule(3));
-  $("add-custom-signal").addEventListener("click",addCustomSignal);$("run-market-research").addEventListener("click",()=>openResearchPreview("quick"));$("run-detailed-research").addEventListener("click",()=>openResearchPreview("deep"));$("run-market-intelligence").addEventListener("click",()=>openResearchPreview("intelligence"));$("confirm-market-research").addEventListener("click",()=>{if(pendingResearchMode)void runMarketResearch(pendingResearchMode);});$("cancel-market-research").addEventListener("click",closeResearchPreview);$("add-suggested-sources").addEventListener("click",addSuggestedSources);$("edit-research-settings").addEventListener("click",()=>{const settings=$("research-settings");settings.open=true;closeResearchPreview();settings.scrollIntoView({behavior:"smooth",block:"start"});});$("activate-market-strategy").addEventListener("click",activateMarketStrategy);$("save-monitoring").addEventListener("click",saveMonitoringConfig);$("run-monitoring-now").addEventListener("click",runMonitoringNow);$("research-mode").addEventListener("change",()=>{state.market.researchMode=normalizeResearchMode($("research-mode").value);saveState();renderResearchControls();});$("research-source-types").addEventListener("change",readResearchSettings);$("research-custom-sources").addEventListener("change",readResearchSettings);$("research-instructions").addEventListener("change",readResearchSettings);
+  $("add-custom-signal").addEventListener("click",addCustomSignal);$("run-market-research").addEventListener("click",()=>openResearchPreview("quick"));$("run-detailed-research").addEventListener("click",()=>openResearchPreview("deep"));$("run-market-intelligence").addEventListener("click",()=>openResearchPreview("intelligence"));$("confirm-market-research").addEventListener("click",()=>{if(pendingResearchMode)void runMarketResearch(pendingResearchMode);});$("cancel-market-research").addEventListener("click",closeResearchPreview);$("add-suggested-sources").addEventListener("click",addSuggestedSources);$("edit-research-settings").addEventListener("click",()=>{const settings=$("research-settings");settings.open=true;closeResearchPreview();settings.scrollIntoView({behavior:"smooth",block:"start"});});$("activate-market-strategy").addEventListener("click",()=>void activateMarketStrategy());$("save-monitoring").addEventListener("click",saveMonitoringConfig);$("run-monitoring-now").addEventListener("click",runMonitoringNow);$("research-mode").addEventListener("change",()=>{state.market.researchMode=normalizeResearchMode($("research-mode").value);saveState();renderResearchControls();});$("research-source-types").addEventListener("change",readResearchSettings);$("research-custom-sources").addEventListener("change",readResearchSettings);$("research-instructions").addEventListener("change",readResearchSettings);
   $("monitoring-alerts").addEventListener("click",event=>{const button=event.target.closest('[data-monitor-alert-read]');if(button)markMonitoringAlertRead(button.dataset.monitorAlertRead);});
   $("signal-designer").addEventListener("click",e=>{const btn=e.target.closest("[data-remove-signal]");if(btn)removeSignal(Number(btn.dataset.removeSignal));});
   [$("icp-list"),$("market-opportunities")].forEach(container=>{container.addEventListener("change",()=>readMarketEdits());});
