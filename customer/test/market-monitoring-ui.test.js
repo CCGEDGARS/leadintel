@@ -116,6 +116,13 @@ test('company discovery becomes the clear next action only after strategy activa
   assert.match(discovery,/Find matching companies/);
 });
 
+test('research settings stay collapsed until the user opens the disclosure',()=>{
+  assert.match(html,/details class="progressive-disclosure research-settings" id="research-settings">/);
+  assert.doesNotMatch(html,/details class="progressive-disclosure research-settings" id="research-settings" open/);
+  assert.match(html,/summary aria-controls="research-settings-fields">Customize research settings/);
+  assert.match(html,/class="research-brief" id="research-settings-fields"/);
+});
+
 test('Market Strategy explains its four-step page journey before research',()=>{
   for(const step of ['Choose research depth','Review findings','Activate strategy','Discover companies'])assert.match(html,new RegExp(step));
   assert.match(html,/id="strategy-flow"/);
