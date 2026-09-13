@@ -258,8 +258,8 @@
             </section>
             <section class="research-run-feedback" id="research-run-feedback" hidden aria-live="polite"></section>
             <details class="progressive-disclosure research-settings" id="research-settings">
-              <summary>Customize research settings</summary>
-              <div class="research-brief">
+              <summary aria-controls="research-settings-fields">Customize research settings</summary>
+              <div class="research-brief" id="research-settings-fields">
                 <div class="research-recommendation-card"><strong>Why LeadIntel recommends these searches</strong><p>AI-generated guidance explains why each selected source category is relevant to your profile, offers and buying signals.</p><div id="research-recommendations" class="research-recommendations"></div></div>
                 <label class="research-guidance"><span>Research recommendations or questions</span><textarea id="research-instructions" rows="3" maxlength="1200" placeholder="Example: Focus on Latvian public-sector tenders and companies opening new production facilities."></textarea><small>Add context that should influence the search. It will be included in the research brief.</small></label>
                 <label class="research-guidance"><span>Specific public URLs to check · one URL per line</span><textarea id="research-custom-sources" rows="3" placeholder="https://example.com/news&#10;https://example.com/tenders"></textarea><small>These pages are scraped directly and shown as evidence alongside search results.</small></label>
