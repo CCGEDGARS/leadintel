@@ -212,6 +212,19 @@
     }
   }
 
+  function updateStrategyFlow(root){
+    const market=readState(root)?.market||{};
+    const researched=Boolean(clean(market.lastResearchAt))&&["complete","partial"].includes(market.researchStatus);
+    const approved=researched&&Boolean(market.strategyApproved);
+    const activeStep=approved?4:researched?2:1;
+    root.document.querySelectorAll("[data-strategy-flow-step]").forEach(node=>{
+      const step=Number(node.dataset.strategyFlowStep);
+      node.classList.toggle("is-active",step===activeStep);
+      node.classList.toggle("is-complete",step<activeStep);
+      node.setAttribute("aria-current",step===activeStep?"step":"false");
+    });
+  }
+
   function cleanPreResearchCards(root){
     const state=readState(root),profile=state.profile||{};
     const markets=splitList(profile.targetMarkets||profile.currentMarkets||state.targetMarkets);
@@ -278,7 +291,7 @@
   function install(root){
     if(!root?.document)return false;if(root.__LeadIntelMarketResearchUxInstalled)return true;root.__LeadIntelMarketResearchUxInstalled=true;
     injectCss(root);
-    const refresh=()=>{suppressLegacySuggestions(root);ensureModeChoices(root);cleanPreResearchCards(root);};
+    const refresh=()=>{suppressLegacySuggestions(root);ensureModeChoices(root);updateStrategyFlow(root);cleanPreResearchCards(root);};
     const start=()=>{
       refresh();
       const docObserver=new root.MutationObserver(mutations=>{
