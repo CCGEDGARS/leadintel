@@ -122,7 +122,7 @@ function peopleHtml(candidate,candidateIndex){
   if(candidate.peopleStatus==="loading")return '<div class="people-note">Searching Apollo for matching roles…</div>';
   if(candidate.peopleStatus==="error")return '<div class="people-note warning">Apollo search was unavailable. Company evidence remains intact.</div>';
   if(candidate.peopleStatus==="empty")return '<div class="people-note">No relevant decision-makers returned for the available role context.</div>';
-  if(!candidate.people?.length)return '<div class="people-note">People search is optional. Apollo identifies likely roles, but contact details stay hidden until you verify a work email.</div>';
+  if(!candidate.people?.length)return '<div class="people-note">People search is optional. Apollo People Search does not reveal email addresses; it identifies likely roles. Contact details stay hidden until you verify a work email.</div>';
   const shortage=candidate.people.length<3?`<div class="people-note warning">Only ${candidate.people.length} relevant decision-maker${candidate.people.length===1?"":"s"} found. LeadIntel did not fill the shortlist with unrelated roles.</div>`:"";
   return `${shortage}<div class="people-list">${candidate.people.map((person,personIndex)=>{
     const key=personKey(candidate,person);
