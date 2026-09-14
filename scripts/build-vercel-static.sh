@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+node scripts/verify-discovery-deploy.mjs
+
 rm -rf .vercel-static
 mkdir -p .vercel-static/v2 .vercel-static/customer
 
