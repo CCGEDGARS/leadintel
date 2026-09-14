@@ -55,5 +55,5 @@ test('pending Apollo phone lookup can be refreshed from durable CRM without buyi
 test('Discovery exposes Apollo LinkedIn identity links without implying role verification',()=>{
   assert.match(ui,/View public LinkedIn profile/);
   assert.match(ui,/confirm the current role before outreach/);
-  assert.match(ui,/Verify work email · 1 credit/);
+  assert.match(ui,/Verify email with Apollo · 1 credit/);
 });
