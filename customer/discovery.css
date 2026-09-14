@@ -18,3 +18,96 @@
 .discovery-run-btn>span{font-size:18px;line-height:1}
 @media(max-width:900px){.discovery-target-control{min-width:220px}.discovery-run-btn{min-width:220px}}
 @media(max-width:760px){.discovery-run-btn{width:100%;min-width:0}.discovery-target-control input.discovery-target-custom{margin-bottom:0}}
+
+/* Discovery target controls v3 */
+.discovery-panel .discovery-controls{
+  display:block;
+  width:min(100%,680px);
+  min-width:0;
+  flex:0 0 auto;
+}
+.discovery-panel .discovery-target-control{
+  display:grid;
+  gap:6px;
+  min-width:0;
+  margin:0;
+}
+.discovery-panel .discovery-target-label{
+  font:600 10px "IBM Plex Mono",monospace;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:var(--muted);
+}
+.discovery-panel .discovery-control-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:12px;
+  align-items:stretch;
+}
+.discovery-panel .discovery-target-control select,
+.discovery-panel .discovery-target-control input.discovery-target-custom{
+  width:100%;
+  min-width:0;
+  height:52px;
+  border:1px solid #cfd6d1;
+  background:#fff;
+  border-radius:9px;
+  padding:0 12px;
+  font:500 14px "DM Sans",sans-serif;
+  color:var(--ink);
+  box-sizing:border-box;
+}
+.discovery-panel .discovery-target-control input.discovery-target-custom:not([hidden]){
+  display:block;
+}
+.discovery-panel .discovery-target-control small{
+  max-width:none;
+  font-size:10px;
+  line-height:1.35;
+}
+.discovery-panel .discovery-run-btn{
+  width:100%;
+  min-width:0;
+  height:52px;
+  min-height:52px;
+  margin-top:0!important;
+  padding:0 20px!important;
+  border:2px solid var(--accent2)!important;
+  background:var(--accent2)!important;
+  font-size:15px!important;
+  font-weight:700!important;
+  box-shadow:0 10px 24px rgba(13,93,79,.20)!important;
+}
+.discovery-panel .discovery-run-btn:hover,
+.discovery-panel .discovery-run-btn:focus-visible{
+  background:#08483d!important;
+  border-color:#08483d!important;
+  box-shadow:0 12px 28px rgba(13,93,79,.28)!important;
+  transform:translateY(-1px);
+}
+.discovery-panel .discovery-run-btn:focus-visible{
+  outline:3px solid rgba(188,143,42,.38);
+  outline-offset:3px;
+}
+.discovery-panel .discovery-run-btn:disabled{
+  opacity:.5!important;
+  box-shadow:none!important;
+}
+.discovery-panel .discovery-run-btn>span{
+  font-size:18px;
+  line-height:1;
+}
+@media(max-width:900px){
+  .discovery-panel .discovery-controls{
+    width:100%;
+    margin-top:16px;
+  }
+}
+@media(max-width:760px){
+  .discovery-panel .discovery-control-row{
+    grid-template-columns:1fr;
+  }
+  .discovery-panel .discovery-run-btn{
+    width:100%;
+  }
+}
