@@ -92,7 +92,7 @@ test('buildApolloPeopleSearchPayload uses exact domain and approved roles with s
 
 test('normalizeApolloPeople returns names and titles but strips emails and phones',()=>{
   const people=Discovery.normalizeApolloPeople({people:[
-    {id:'p1',first_name:'Anna',last_name:'Andersson',title:'Procurement Director',email:'anna@example.com',phone_numbers:[{sanitized_number:'+123'}],organization:{name:'Nordic Machines'}},
+    {id:'p1',first_name:'Anna',last_name:'Andersson',title:'Procurement Director',email:'anna@example.com',phone_numbers:[{sanitized_number:'+123'}],organization:{name:'Nordic Machines'},linkedin_url:'https://www.linkedin.com/in/anna-andersson/?trk=profile'},
     {id:'p2',name:'Erik Svensson',title:'COO'}
   ]});
   assert.equal(people.length,2);
