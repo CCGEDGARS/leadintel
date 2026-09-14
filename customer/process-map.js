@@ -1,5 +1,5 @@
 import './workspace-reset-hygiene.js?v=20260909-emergency-reset-v1';
-import './workspace-persistence.js?v=20260911-copilot-freshness-v1';
+import './workspace-persistence.js?v=20260914-spinner-hard-stop-v1';
 import './state-budget.js?v=20260826-state-budget-500kb';
 import './website-input-sync.js?v=20260901-saved-state-v2';
 import './custom-market-input-hygiene.js?v=20260903-password-manager-isolation-v5';
@@ -16,7 +16,7 @@ import './content-variants.js?v=20260905-step1-language-v1';
 import './business-identity.js?v=20260906-pain-headings-v1';
 import './company-brain.js?v=20260909-step2-first-party-v1';
 import './step2-first-party-intelligence.js?v=20260909-first-party-step2-v1';
-import './firecrawl-workspace-router.js?v=20260907-provider-resilience-v2';
+import './firecrawl-workspace-router.js?v=20260914-spinner-hard-stop-v1';
 import './linkedin-signals.js?v=20260907-public-index-v1';
 import './company-research-security.js?v=20260906-authoritative-depth-v1';
 import './company-research-ui.js?v=20260906-selector-language-v2';
