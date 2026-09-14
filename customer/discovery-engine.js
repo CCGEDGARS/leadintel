@@ -236,7 +236,7 @@
       score.total=score.fit+score.signal+score.evidence+score.timing+score.value;
       const confidence=score.total>=75&&candidate.matchedSignals.length&&candidate.evidence.length>=1?"High":score.total>=50?"Medium":"Low";
       return {...candidate,id:`company-${slug(candidate.domain)}`,score,confidence,people:[],peopleStatus:"idle",saved:false};
-    }).sort((a,b)=>{
+    }).filter(candidate=>!signals.length||candidate.matchedSignals.length).sort((a,b)=>{
       const signalDelta=(b.matchedSignals?.length||0)-(a.matchedSignals?.length||0);
       return signalDelta||b.score.total-a.score.total;
     }).slice(0,candidateLimit);
