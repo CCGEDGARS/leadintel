@@ -7,7 +7,7 @@ const Discovery = require('../discovery-engine.js');
 
 test('Discovery waits for its engine instead of failing before it can create the screen', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'discovery-ui.js'), 'utf8')
-    .replace(/\nimport\s+['"][^'\"]+['"];?\s*$/, '\nglobalThis.__discoveryUiState = () => discovery;\n');
+    .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ninitDiscoveryWhenReady();\nglobalThis.__discoveryUiState = () => discovery;\n');
   const timers = [];
   const context = {
     console,
