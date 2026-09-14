@@ -6,7 +6,7 @@ function discoveryScriptTags(html) {
   return String(html || '').match(/<script\b[^>]*\bsrc=(["'])[^"']*discovery-ui\.js[^"']*\1[^>]*><\/script>/gi) || [];
 }
 
-export function discoveryDeploymentFailures({ html = '', runtime = '' } = {}) {
+export function discoveryDeploymentFailures({ html = '', runtime = '', appRuntime = '' } = {}) {
   const failures = [];
   const tags = discoveryScriptTags(html);
   if (tags.length !== 1) {
@@ -34,16 +34,30 @@ export function discoveryDeploymentFailures({ html = '', runtime = '' } = {}) {
       failures.push(`Discovery UI runtime is missing: ${marker}`);
     }
   }
+  const initBody = String(runtime).match(/function initDiscovery\(\)\{([^}]*)\}/)?.[1] || '';
+  if (!String(runtime).includes('function ensureDiscoveryMounted()')) {
+    failures.push('Discovery UI runtime must keep hidden stages stage-isolated from Step 1');
+  }
+  if (/\b(?:loadDiscovery|renderAll|loadOutreachModules|refreshCrmState)\s*\(/.test(initBody)) {
+    failures.push('Discovery UI startup must not load or render hidden stages on Step 1');
+  }
+  if (appRuntime) {
+    const appStartup = String(appRuntime).slice(String(appRuntime).lastIndexOf('function init()'));
+    if (/if\(state\.profile\)\{[^}]*renderProfile\(\)/.test(appStartup)) {
+      failures.push('Customer startup must not render the hidden Profile on Step 1');
+    }
+  }
   return failures;
 }
 
 export async function verifyDiscoveryDeployment(root = process.cwd()) {
   const customerRoot = path.join(path.resolve(root), 'customer');
-  const [html, runtime] = await Promise.all([
+  const [html, runtime, appRuntime] = await Promise.all([
     fs.readFile(path.join(customerRoot, 'index.html'), 'utf8'),
-    fs.readFile(path.join(customerRoot, 'discovery-ui.js'), 'utf8')
+    fs.readFile(path.join(customerRoot, 'discovery-ui.js'), 'utf8'),
+    fs.readFile(path.join(customerRoot, 'app.js'), 'utf8')
   ]);
-  return discoveryDeploymentFailures({ html, runtime });
+  return discoveryDeploymentFailures({ html, runtime, appRuntime });
 }
 
 export async function main(argv = process.argv.slice(2)) {
@@ -54,7 +68,7 @@ export async function main(argv = process.argv.slice(2)) {
     for (const failure of failures) console.error(`[discovery-deploy] ${failure}`);
     return 1;
   }
-  console.log('[discovery-deploy] PASS standalone bootstrap and bounded runtime');
+  console.log('[discovery-deploy] PASS standalone bootstrap, bounded runtime, and stage-isolated startup');
   return 0;
 }
 

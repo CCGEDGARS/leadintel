@@ -74,6 +74,7 @@ function setStep(step){
   state.step=step;saveState();
   document.querySelectorAll(".step-view").forEach(el=>el.classList.toggle("active",Number(el.dataset.step)===step));
   document.querySelectorAll("[data-step-marker]").forEach(el=>{const n=Number(el.dataset.stepMarker);el.classList.toggle("active",n===step);el.classList.toggle("complete",n<step);});
+  if(step===3&&state.profile){$("analysis-state").hidden=true;$("profile-content").hidden=false;renderProfile();ensureMarketStrategySeeded();}
   if(step===4){renderMarketStrategy();void localizeMarketGeneratedContent();}
   window.dispatchEvent(new CustomEvent("leadintel:module-opened",{detail:{step}}));
   window.scrollTo({top:0,behavior:"smooth"});
@@ -756,7 +757,6 @@ function bind(){
 }
 function init(){
   syncInputsFromState();bind();updateCompleteness();updateNavigationAvailability();observeNavigation();
-  if(state.profile){$("analysis-state").hidden=true;$("profile-content").hidden=false;renderProfile();ensureMarketStrategySeeded();}
   setStep(state.step||1);
   void resumePendingMarketResearchAfterAuth();
 }
