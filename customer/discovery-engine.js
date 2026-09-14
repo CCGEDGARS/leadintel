@@ -31,9 +31,9 @@
     const url=normalizeUrl(value);if(!url)return "";
     try{
       const parsed=new URL(url);
-      if(!/(^|\\.)linkedin\\.com$/i.test(parsed.hostname)||!/^\\/(?:in|pub)\\//i.test(parsed.pathname))return "";
+      if(!/(^|\.)linkedin\.com$/i.test(parsed.hostname)||!/^\/(?:in|pub)\//i.test(parsed.pathname))return "";
       parsed.search="";parsed.hash="";
-      return parsed.href.replace(/\\/$/,"");
+      return parsed.href.replace(/\/$/,"");
     }catch{return "";}
   }
   function canonicalDomain(value){
