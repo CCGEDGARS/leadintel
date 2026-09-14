@@ -6,12 +6,12 @@ const DISCOVERY_META_KEY="leadintel_customer_v2_discovery_meta";
 const INTELLIGENCE_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
 const MAX_DISCOVERY_QUERIES=10;
 const MAX_DISCOVERY_RESULTS_PER_QUERY=5;
-const ASSET_VERSION="20260914-discovery-recovery-v1";
+const ASSET_VERSION="20260914-discovery-bootstrap-v1";
 const LANGUAGE_ASSET_VERSION="20260914-workspace-isolation-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const $=id=>document.getElementById(id);
 let recoveredInterruptedRun=false;
-let discovery=loadDiscovery();
+let discovery=null;
 let crmCompanies=[];
 let crmPipeline=[];
 let crmAvailable=false;
@@ -236,6 +236,8 @@ function bindDiscovery(){
   window.addEventListener("leadintel:language-changed",renderAll);
 }
 function loadOutreachModules(){if(document.querySelector('script[data-outreach-engine]'))return;const engine=document.createElement("script");engine.src=`outreach-engine.js?v=${LANGUAGE_ASSET_VERSION}`;engine.dataset.outreachEngine="true";engine.addEventListener("load",()=>{if(document.querySelector('script[data-outreach-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src=`outreach-ui.js?v=${LANGUAGE_ASSET_VERSION}`;ui.dataset.outreachUi="true";document.body.appendChild(ui);});document.body.appendChild(engine);}
-function initDiscovery(){injectDiscoveryUI();bindDiscovery();syncStrategyFingerprint();renderAll();if(recoveredInterruptedRun){saveDiscovery();setTimeout(()=>showToast("Previous company search was interrupted. You can run it again."),0);}if(mainState().step===5&&moduleReady())showDiscoveryStep();else if(loadMeta().visibleStep===5&&moduleReady())showDiscoveryStep();if(crmAuthenticated())refreshCrmState();loadOutreachModules();}
-initDiscovery();
+function openDiscoveryFromHandoff(){if(!moduleReady())return false;showDiscoveryStep();return Boolean($("step-5")?.classList.contains("active"));}
+function initDiscovery(){if(discovery)return;discovery=loadDiscovery();injectDiscoveryUI();bindDiscovery();window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};syncStrategyFingerprint();renderAll();if(recoveredInterruptedRun){saveDiscovery();setTimeout(()=>showToast("Previous company search was interrupted. You can run it again."),0);}if(window.__leadIntelPendingDiscoveryOpen&&openDiscoveryFromHandoff())window.__leadIntelPendingDiscoveryOpen=false;else if(mainState().step===5&&moduleReady())showDiscoveryStep();else if(loadMeta().visibleStep===5&&moduleReady())showDiscoveryStep();if(crmAuthenticated())refreshCrmState();loadOutreachModules();}
+function initDiscoveryWhenReady(attempt=0){if(!window.LeadIntelDiscovery){if(attempt<400)setTimeout(()=>initDiscoveryWhenReady(attempt+1),25);return;}initDiscovery();}
+initDiscoveryWhenReady();
 import './content-variants.js?v=20260905-step1-language-v1';
