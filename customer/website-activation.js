@@ -54,8 +54,8 @@
       documents:[],
       answers:{},
       answerStatus:{},
-      referenceCustomers:[],
-      referenceCustomerPortfolio:[]
+      referenceCustomers:{},
+      referenceCustomerPortfolio:{}
     };
     return {
       ...base,
