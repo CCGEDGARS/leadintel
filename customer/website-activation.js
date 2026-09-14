@@ -11,7 +11,7 @@
   const RESEARCH_META_KEY="leadintel_customer_v2_research_meta_v1";
   const DISCOVERY_META_KEY="leadintel_customer_v2_discovery_meta";
   const FIRECRAWL_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
-  const RELEASE="20260903-activation-error-v1";
+  const RELEASE="20260914-workspace-isolation-v1";
   const MAX_SOURCE_CHARS=30000;
   let running=false;
   let activationError="";
@@ -48,7 +48,27 @@
     const base=state&&typeof state==="object"&&!Array.isArray(state)?state:{};const websiteSource=normalizedSource(source);
     if(!websiteSource)return {...base};
     const {url,title,description,text}=websiteSource;
-    return {...base,step:1,website:url,companyContextWebsite:url,websiteActivation:{status:"active",url,title,description,activatedAt:clean(activatedAt),contentChars:text.length},scrapedSources:[{type:"website",url,title,text,status:"ready"}],profile:null,approved:false,market:{}};
+    const sameCompany=sameCompanyWebsite(base.website||base.companyContextWebsite||base.profile?.website||"",url);
+    const isolatedContext=sameCompany?{}:{
+      additionalLinks:[],
+      documents:[],
+      answers:{},
+      answerStatus:{},
+      referenceCustomers:[],
+      referenceCustomerPortfolio:[]
+    };
+    return {
+      ...base,
+      ...isolatedContext,
+      step:1,
+      website:url,
+      companyContextWebsite:url,
+      websiteActivation:{status:"active",url,title,description,activatedAt:clean(activatedAt),contentChars:text.length},
+      scrapedSources:[{type:"website",url,title,text,status:"ready"}],
+      profile:null,
+      approved:false,
+      market:{}
+    };
   }
   function buildActivationRecord(source={},activatedAt=new Date().toISOString()){
     const websiteSource=normalizedSource(source);if(!websiteSource)return {status:"inactive",url:"",source:null};
@@ -98,6 +118,14 @@
     return {...base,website:record.url,websiteActivation:{status:"active",url:record.url,title:record.title||"",description:record.description||"",activatedAt:record.activatedAt||"",contentChars:Number(record.contentChars)||clean(record.source?.text).length},scrapedSources:[record.source,...other].slice(0,12)};
   }
   function syncActivationIntoWorkspace(){const record=readActivationRecord();const next=mergeRecordIntoState(readState(),record);writeState(next);return next;}
+  function clearDerivedWorkspaceData(){
+    const helper=root?.LeadIntelWorkspaceIsolation;
+    if(helper?.clearDerivedWorkspaceData)return helper.clearDerivedWorkspaceData(root.localStorage);
+    const keys=[DISCOVERY_META_KEY,"leadintel_customer_v2_discovery","leadintel_customer_v2_outreach","leadintel_customer_v2_delivery",RESEARCH_META_KEY,"leadintel_customer_v2_market_research_resume","leadintel_customer_v2_server_dirty"];
+    let removed=0;
+    for(const key of keys){if(root.localStorage.getItem(key)!==null){root.localStorage.removeItem(key);removed++;}}
+    return removed;
+  }
   function returnToWebsiteStep(){
     const current=readState();if(Number(current.step)!==1)writeState({...current,step:1});
     const marker=root?.document?.querySelector?.('[data-step-marker="1"]');
@@ -112,7 +140,8 @@
     activationError="";running=true;if(button){button.disabled=true;button.textContent="ACTIVATING…";}setStatus("loading","Connecting to the website and loading public company evidence…");
     try{
       const source=await scrapeWebsite(url),at=new Date().toISOString(),record=buildActivationRecord(source,at),next=buildActivatedState(readState(),source,at);
-      writeActivationRecord(record);writeState(next);root.localStorage.removeItem(RESEARCH_META_KEY);root.localStorage.removeItem(DISCOVERY_META_KEY);
+      clearDerivedWorkspaceData();
+      writeActivationRecord(record);writeState(next);
       try{root.dispatchEvent(new CustomEvent("leadintel:website-activated",{detail:{website:record.url,activation:record}}));}catch{}
       returnToWebsiteStep();
       try{await root.LeadIntelServerBridge?.saveNow?.();}catch{}
@@ -134,5 +163,5 @@
     root.addEventListener("pageshow",render);root.addEventListener("leadintel:website-synced",clearErrorAndRender);root.addEventListener("leadintel:website-activated",render);
   }
 
-  return {STORAGE_KEY,ACTIVATION_KEY,RESEARCH_META_KEY,DISCOVERY_META_KEY,normalizeUrl,getActivatedSource,isWebsiteActive,buildActivatedState,buildActivationRecord,isActivationRecordActive,activationMarkup,readActivationRecord,isCurrentWebsiteActive,ensureActivationUi,syncActivationIntoWorkspace,returnToWebsiteStep,scrapeWebsite,activateWebsite,render,install};
+  return {STORAGE_KEY,ACTIVATION_KEY,RESEARCH_META_KEY,DISCOVERY_META_KEY,normalizeUrl,getActivatedSource,isWebsiteActive,buildActivatedState,buildActivationRecord,isActivationRecordActive,activationMarkup,readActivationRecord,isCurrentWebsiteActive,ensureActivationUi,syncActivationIntoWorkspace,clearDerivedWorkspaceData,returnToWebsiteStep,scrapeWebsite,activateWebsite,render,install};
 });
