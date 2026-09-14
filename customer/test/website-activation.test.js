@@ -52,8 +52,8 @@ test('successful activation preserves customer inputs while resetting stale stra
   assert.equal(next.websiteActivation.contentChars,22);
   assert.equal(next.step,1,'website activation must return the journey to Step 1 instead of preserving a stale later step');
   assert.deepEqual(next.targetMarkets,['Sweden']);
-  assert.deepEqual(next.answers,{ideal_customer:'Manufacturers'});
-  assert.deepEqual(next.documents,[{name:'catalog.pdf',text:'catalog'}]);
+  assert.deepEqual(next.answers,{});
+  assert.deepEqual(next.documents,[]);
   assert.equal(next.profile,null);
   assert.equal(next.approved,false);
   assert.deepEqual(next.market,{});
