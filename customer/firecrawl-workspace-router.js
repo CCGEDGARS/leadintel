@@ -42,16 +42,17 @@ async function routedFetch(input,options={}){
   if(kind==='search')options=sanitizeSearchRequestOptions(options);
   try{
     const response=await originalFetch(target,{...options,credentials:'include',headers:{Accept:'application/json',...(options.headers||{})}});
-    if(!retryableStatus(response.status))return response;
+    if(!retryableStatus(response.status)||options?.signal?.aborted)return response;
     const scrapling=scraplingTarget(kind);const url=extractScrapeUrl(options);
     if(scrapling&&url){
       try{
-        const fallback=await originalFetch(scrapling,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({url})});
+        const fallback=await originalFetch(scrapling,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({url}),signal:options?.signal});
         if(fallback.ok)return fallback;
       }catch{}
     }
     return originalFetch(input,options);
   }catch(error){
+    if(error?.name==="AbortError"||options?.signal?.aborted)throw error;
     const scrapling=scraplingTarget(kind);const url=extractScrapeUrl(options);
     if(scrapling&&url){
       try{
