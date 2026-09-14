@@ -7,12 +7,12 @@ const processMap=fs.readFileSync(path.join(__dirname,"process-map.js"),"utf8");
 
 assert.match(
   index,
-  /process-map\.js\?v=20260911-company-context-isolation-v1/,
+  /process-map\.js\?v=20260914-workspace-isolation-v1/,
   "the HTML entry point must refresh the parent module that imports website activation"
 );
 assert.match(
   processMap,
-  /website-activation\.js\?v=20260911-company-context-isolation-v1/,
+  /website-activation\.js\?v=20260914-workspace-isolation-v2/,
   "the refreshed parent module must import the company-isolation runtime"
 );
 
