@@ -98,8 +98,17 @@ test('normalizeApolloPeople returns names and titles but strips emails and phone
   assert.equal(people.length,2);
   assert.equal(people[0].name,'Anna Andersson');
   assert.equal(people[0].title,'Procurement Director');
+  assert.equal(people[0].linkedin_url,'https://www.linkedin.com/in/anna-andersson');
   assert.equal('email' in people[0],false);
   assert.equal('phone' in people[0],false);
+});
+test('normalizeApolloPeople keeps only public LinkedIn profile identity links',()=>{
+  const people=Discovery.normalizeApolloPeople({people:[
+    {id:'p1',first_name:'Anna',last_name:'Andersson',title:'Procurement Director',linkedin_url:'https://www.linkedin.com/in/anna-andersson/?trk=profile'},
+    {id:'p2',first_name:'Ben',last_name:'Blocked',title:'Sales Director',linkedin_url:'https://www.linkedin.com/search/results/people/?keywords=ben'}
+  ]});
+  assert.equal(people[0].linkedin_url,'https://www.linkedin.com/in/anna-andersson');
+  assert.equal(people[1].linkedin_url,'');
 });
 
 test('selectDecisionMakers returns no more than four role-relevant people in priority order',()=>{
