@@ -99,6 +99,16 @@ sqliteTest('Firecrawl research falls back to managed proxy when customer key is 
   }finally{globalThis.fetch=originalFetch;}
 });
 
+sqliteTest('signed-in Company Discovery keeps its first search pass metadata-only',async()=>{
+  const {env,token}=await fixture('owner');const originalFetch=globalThis.fetch;const calls=[];
+  globalThis.fetch=async (url,options={})=>{calls.push({url:String(url),options});return new Response(JSON.stringify({success:true,data:[{url:'https://fallback.example',title:'Fallback company',description:'Company description'}]}),{status:200,headers:{'Content-Type':'application/json'}});};
+  try{
+    const response=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/search?workspace_id=w1',{method:'POST',token,body:{query:'Latvian companies expanding offices',limit:4}}),env,{});
+    assert.equal(response.status,200);assert.equal(calls.length,1);
+    assert.deepEqual(JSON.parse(calls[0].options.body),{query:'Latvian companies expanding offices',limit:4});
+  }finally{globalThis.fetch=originalFetch;}
+});
+
 sqliteTest('website scrape survives a dead managed Firecrawl route by using a bounded direct public-page fallback',async()=>{
   const {env,token}=await fixture('owner');const originalFetch=globalThis.fetch;const calls=[];
   globalThis.fetch=async (url,options={})=>{
