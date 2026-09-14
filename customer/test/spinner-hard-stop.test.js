@@ -30,13 +30,13 @@ test('cloud save has a hard timeout so activation cannot remain busy',()=>{
 });
 
 test('Discovery runtime cache key changes whenever spinner recovery changes',()=>{
-  assert.ok(discovery.includes('const ASSET_VERSION="20260914-discovery-bootstrap-v3";'));
+  assert.ok(discovery.includes('const ASSET_VERSION="20260914-stage-isolated-v1";'));
 });
 
 test('customer page loads the spinner-safe bundles with fresh cache keys',()=>{
   for(const marker of [
-    'app.js?v=20260914-spinner-hard-stop-v2',
+    'app.js?v=20260914-stage-isolated-v1',
     'process-map.js?v=20260914-spinner-hard-stop-v1',
-    'discovery-ui.js?v=20260914-discovery-bootstrap-v3'
+    'discovery-ui.js?v=20260914-stage-isolated-v1'
   ])assert.ok(html.includes(marker),marker);
 });
