@@ -1,6 +1,6 @@
 import {allowedOrigin,corsHeaders,sha256,cookieValue} from './security.js';
 import {normalizeEmail} from './gmail.js';
-import {defaultAutomationPolicy,normalizeAutomationPolicy,localClockParts,nextEnabledWindow} from './outreach-automation.js';
+import {defaultAutomationPolicy,normalizeAutomationPolicy,localClockParts,nextEnabledWindow,automaticGmailDeliveryEnabled} from './outreach-automation.js';
 
 const uuid=()=>crypto.randomUUID();
 const json=(value,status=200,headers={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...headers}});
@@ -21,6 +21,7 @@ function rowToPolicy(row){if(!row)return defaultAutomationPolicy();return normal
 },defaultAutomationPolicy());}
 async function policyRow(env,workspaceId){return env.DB.prepare(`SELECT * FROM outreach_automation_policies WHERE workspace_id=?`).bind(workspaceId).first();}
 async function policyFor(env,workspaceId){return rowToPolicy(await policyRow(env,workspaceId));}
+function exposedPolicy(env,policy){const manualOnly=!automaticGmailDeliveryEnabled(env);return {...policy,mode:manualOnly?'manual':policy.mode,enabled:manualOnly?false:policy.enabled,automaticDelivery:manualOnly?'manual_only':'enabled'};}
 function safeNow(env){const injected=String(env.OUTREACH_AUTOMATION_TEST_NOW||'').trim();const date=injected?new Date(injected):new Date();return Number.isFinite(date.getTime())?date:new Date();}
 function zonedLocalToUtc({year,month,day,hour=0,minute=0},timeZone){const target=Date.UTC(year,month-1,day,hour,minute);let guess=target;for(let i=0;i<4;i++){const observed=localClockParts(new Date(guess),timeZone);const observedUtc=Date.UTC(observed.year,observed.month-1,observed.day,observed.hour,observed.minute);const diff=target-observedUtc;if(!diff)break;guess+=diff;}return new Date(guess);}
 function localDayBounds(now,timeZone){const local=localClockParts(now,timeZone);const start=zonedLocalToUtc({year:local.year,month:local.month,day:local.day},timeZone);const nextCalendar=new Date(Date.UTC(local.year,local.month-1,local.day+1));const end=zonedLocalToUtc({year:nextCalendar.getUTCFullYear(),month:nextCalendar.getUTCMonth()+1,day:nextCalendar.getUTCDate()},timeZone);return {start:start.toISOString(),end:end.toISOString()};}
@@ -33,7 +34,7 @@ async function savePolicy(env,workspaceId,userId,policy){await env.DB.prepare(`I
 async function enqueueSequence(request,env,cors,workspaceId){
   const access=await requireMember(request,env,workspaceId,['owner']);if(access.error)return error(access.error,access.status,cors);
   const body=await request.json().catch(()=>null);if(!body)return error('Approved outreach snapshot is required',400,cors);
-  const policy=await policyFor(env,workspaceId);if(policy.mode!=='automatic'||!policy.enabled)return error('Automatic outreach is not enabled for this workspace',409,cors,{code:'AUTOMATION_DISABLED'});
+  const policy=await policyFor(env,workspaceId);if(!automaticGmailDeliveryEnabled(env))return error('Automatic Gmail delivery is disabled. Use the explicit Send with Gmail action instead.',409,cors,{code:'AUTOMATIC_GMAIL_DISABLED'});if(policy.mode!=='automatic'||!policy.enabled)return error('Automatic outreach is not enabled for this workspace',409,cors,{code:'AUTOMATION_DISABLED'});
   if(policy.paused)return error('Automatic outreach is paused',409,cors,{code:'AUTOMATION_PAUSED'});
   if(policy.emergencyStop)return error('Automatic outreach emergency stop is active',409,cors,{code:'AUTOMATION_EMERGENCY_STOP'});
   if(body.approved!==true)return error('Explicitly approved outreach is required',400,cors,{code:'OUTREACH_NOT_APPROVED'});
@@ -61,19 +62,19 @@ export async function handleOutreachAutomationRoute(request,env,corsOverride){
   const cors=corsOverride??corsHeaders(allowedOrigin(request,env.APP_ORIGIN));const workspaceId=url.searchParams.get('workspace_id')||'';
   if(path==='/api/outreach-automation/policy'&&request.method==='GET'){
     const access=await requireMember(request,env,workspaceId);if(access.error)return error(access.error,access.status,cors);
-    const row=await policyRow(env,workspaceId);return json({policy:rowToPolicy(row),role:access.member.role,updatedAt:row?.updated_at||null},200,cors);
+    const row=await policyRow(env,workspaceId);return json({policy:exposedPolicy(env,rowToPolicy(row)),role:access.member.role,updatedAt:row?.updated_at||null},200,cors);
   }
   if(path==='/api/outreach-automation/policy'&&request.method==='PUT'){
-    const access=await requireMember(request,env,workspaceId,['owner']);if(access.error)return error(access.error,access.status,cors);const body=await request.json().catch(()=>null);if(!body)return error('Automation policy payload is required',400,cors);
+    const access=await requireMember(request,env,workspaceId,['owner']);if(access.error)return error(access.error,access.status,cors);const body=await request.json().catch(()=>null);if(!body)return error('Automation policy payload is required',400,cors);if(!automaticGmailDeliveryEnabled(env)&&(body.mode==='automatic'||body.enabled===true))return error('Automatic Gmail delivery is disabled. Use the explicit Send with Gmail action instead.',409,cors);
     const before=await policyFor(env,workspaceId);let after;try{after=normalizeAutomationPolicy(body,before);}catch(cause){return error(String(cause?.message||'Invalid automation policy'),400,cors);}
-    await savePolicy(env,workspaceId,access.user.id,after);await audit(env,{workspaceId,userId:access.user.id,type:'outreach_automation.policy_updated',metadata:{before,after}});return json({policy:after,role:access.member.role},200,cors);
+    await savePolicy(env,workspaceId,access.user.id,after);await audit(env,{workspaceId,userId:access.user.id,type:'outreach_automation.policy_updated',metadata:{before,after}});return json({policy:exposedPolicy(env,after),role:access.member.role},200,cors);
   }
   if(path==='/api/outreach-automation/status'&&request.method==='GET'){
     const access=await requireMember(request,env,workspaceId);if(access.error)return error(access.error,access.status,cors);const policy=await policyFor(env,workspaceId);const now=safeNow(env);const bounds=localDayBounds(now,policy.timezone);
     const sent=await env.DB.prepare(`SELECT COUNT(*) count FROM gmail_messages WHERE workspace_id=? AND status='sent' AND sent_at>=? AND sent_at<?`).bind(workspaceId,bounds.start,bounds.end).first();
     const connection=await env.DB.prepare(`SELECT google_email FROM gmail_connections WHERE workspace_id=? AND status='connected'`).bind(workspaceId).first();
     const queue=await env.DB.prepare(`SELECT SUM(CASE WHEN status IN ('queued','waiting_window') THEN 1 ELSE 0 END) queued,SUM(CASE WHEN status='blocked_limit' THEN 1 ELSE 0 END) blocked,MIN(CASE WHEN status IN ('queued','waiting_window','blocked_limit') THEN scheduled_send_at END) next_send FROM outreach_automation_queue WHERE workspace_id=?`).bind(workspaceId).first();
-    const count=Number(sent?.count)||0;return json({policy,role:access.member.role,usage:{workspaceSentToday:count,workspaceLimit:policy.workspaceDailyLimit,mailboxSentToday:count,mailboxLimit:policy.mailboxDailyLimit,mailboxEmail:connection?.google_email||''},queue:{queued:Number(queue?.queued)||0,blockedByLimit:Number(queue?.blocked)||0,nextEligibleSendAt:queue?.next_send||null},day:{start:bounds.start,end:bounds.end,timezone:policy.timezone}},200,cors);
+    const count=Number(sent?.count)||0;return json({policy:exposedPolicy(env,policy),role:access.member.role,usage:{workspaceSentToday:count,workspaceLimit:policy.workspaceDailyLimit,mailboxSentToday:count,mailboxLimit:policy.mailboxDailyLimit,mailboxEmail:connection?.google_email||''},queue:{queued:Number(queue?.queued)||0,blockedByLimit:Number(queue?.blocked)||0,nextEligibleSendAt:queue?.next_send||null},day:{start:bounds.start,end:bounds.end,timezone:policy.timezone}},200,cors);
   }
   if(path==='/api/outreach-automation/sequences'&&request.method==='POST')return enqueueSequence(request,env,cors,workspaceId);
   return error('Not found',404,cors);

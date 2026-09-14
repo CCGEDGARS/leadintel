@@ -1,7 +1,7 @@
 import {importAesKey,decryptSecret} from './oauth.js';
 import {buildMimeMessage,refreshGoogleAccessToken,sendGmailMessage} from './gmail.js';
 import {findCrmCompanyByDomain,appendCrmActivity,setCrmPipelineStage} from './crm.js';
-import {defaultAutomationPolicy,normalizeAutomationPolicy,localClockParts,nextEnabledWindow,boundedDelayMinutes,evaluateAutomaticSend} from './outreach-automation.js';
+import {defaultAutomationPolicy,normalizeAutomationPolicy,localClockParts,nextEnabledWindow,boundedDelayMinutes,evaluateAutomaticSend,automaticGmailDeliveryEnabled} from './outreach-automation.js';
 
 const uuid=()=>crypto.randomUUID();
 const RETRY_LIMIT=3;
@@ -27,6 +27,15 @@ async function pushWorkspaceSpacing(env,workspaceId,policy,now,random){const min
 
 export async function runOutreachAutomation(env,{now=new Date(),random=Math.random,limit=25,sendMessage=productionSend,onSent=defaultOnSent}={}){
   const clock=safeDate(now)||new Date();const max=Math.max(1,Math.min(100,Number(limit)||25));const summary={considered:0,sent:0,failed:0,blocked:0,rescheduled:0,skipped:0};
+  if(!automaticGmailDeliveryEnabled(env)){
+    const {results:pending=[]}=await env.DB.prepare(`SELECT q.id,q.sequence_id FROM outreach_automation_queue q JOIN outreach_automation_sequences s ON s.id=q.sequence_id AND s.workspace_id=q.workspace_id WHERE s.status='active' AND q.status IN ('queued','waiting_window','blocked_limit','failed')`).all();
+    if(pending.length){
+      await env.DB.batch(pending.map(item=>env.DB.prepare(`UPDATE outreach_automation_queue SET status='skipped',last_error_code='automatic_gmail_disabled',last_error_message='Automatic Gmail delivery is disabled; use manual Send with Gmail',updated_at=CURRENT_TIMESTAMP WHERE id=? AND status IN ('queued','waiting_window','blocked_limit','failed')`).bind(item.id)));
+      const sequenceIds=[...new Set(pending.map(item=>item.sequence_id).filter(Boolean))];
+      if(sequenceIds.length)await env.DB.batch(sequenceIds.map(id=>env.DB.prepare(`UPDATE outreach_automation_sequences SET status='cancelled',stop_reason='automatic_gmail_disabled',updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='active'`).bind(id)));
+    }
+    return {...summary,skipped:pending.length,automaticDisabled:true};
+  }
   const {results:due=[]}=await env.DB.prepare(`SELECT q.*,s.domain,s.followup_body,s.status sequence_status,s.created_by FROM outreach_automation_queue q JOIN outreach_automation_sequences s ON s.id=q.sequence_id AND s.workspace_id=q.workspace_id WHERE s.status='active' AND q.scheduled_send_at<=? AND (q.status IN ('queued','waiting_window','blocked_limit') OR (q.status='failed' AND q.last_error_code='transient' AND q.attempt_count<?)) ORDER BY q.scheduled_send_at,q.created_at LIMIT ?`).bind(clock.toISOString(),RETRY_LIMIT,max).all();
   for(const queued of due){summary.considered++;let queue=queued;try{
     const fresh=await env.DB.prepare(`SELECT * FROM outreach_automation_queue WHERE id=?`).bind(queued.id).first();if(!fresh){summary.skipped++;continue;}if(!runnableQueue(fresh)){summary.skipped++;continue;}const persistedSchedule=safeDate(fresh.scheduled_send_at);if(!persistedSchedule||persistedSchedule>clock){summary.rescheduled++;continue;}queue={...queued,...fresh};

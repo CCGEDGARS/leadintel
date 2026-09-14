@@ -9,6 +9,8 @@ const EMAIL=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const HHMM=/^(?:[01]\d|2[0-3]):[0-5]\d$/;
 
 export function defaultAutomationPolicy(){return {...DEFAULT_POLICY,workingDays:[...DEFAULT_POLICY.workingDays],followupDelaysDays:[...DEFAULT_POLICY.followupDelaysDays]};}
+export function automaticGmailDeliveryMode(env={}){return String(env?.AUTOMATIC_GMAIL_DELIVERY_MODE||'enabled').trim().toLowerCase()==='manual_only'?'manual_only':'enabled';}
+export function automaticGmailDeliveryEnabled(env={}){return automaticGmailDeliveryMode(env)!=='manual_only';}
 function int(value,label,min,max){const n=Number(value);if(!Number.isInteger(n)||n<min||n>max)throw new Error(`${label} is invalid`);return n;}
 function validTimeZone(value){try{new Intl.DateTimeFormat('en-US',{timeZone:value}).format(new Date());return true;}catch{return false;}}
 function minutes(value){if(!HHMM.test(String(value||'')))return NaN;const [h,m]=String(value).split(':').map(Number);return h*60+m;}

@@ -8,12 +8,17 @@ function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 function css(){if(document.querySelector('link[data-outreach-automation-css]'))return;const l=document.createElement('link');l.rel='stylesheet';l.href='./outreach-automation.css?v=20260908-v1';l.dataset.outreachAutomationCss='1';document.head.appendChild(l);}
 function anchor(){return document.querySelector('.step-view[data-step="7"]')||document.querySelector('.step-view[data-step="6"]')||document.querySelector('#delivery')||document.querySelector('#outreach')||document.querySelector('main')||document.body;}
 function isOwner(){return String(status?.role||policy?.role||'')==='owner';}
-function serverPolicy(){return policy?.policy||policy||{};}
+function serverPolicy(){return policy?.policy||policy||{automaticDelivery:'manual_only'};}
 function serverStatus(){return status||{};}
 function selectedDays(p){const set=new Set((p.workingDays||[1,2,3,4,5]).map(String));return days.map(([n,label])=>`<label class="oa-day"><input type="checkbox" data-oa-day="${n}" ${set.has(n)?'checked':''}>${label}</label>`).join('');}
 function queueEligibility(){const p=serverPolicy(),b=bridge();return Boolean(isOwner()&&p.mode==='automatic'&&p.enabled&&b?.gmail?.connected&&approvedPackage&&!busy);}
 function render(){
-  const p=serverPolicy();const s=serverStatus();let el=document.getElementById(ID);if(!el){el=document.createElement('section');el.id=ID;el.className='outreach-automation-panel';anchor().appendChild(el);}const owner=isOwner();const usage=s.usage||{},q=s.queue||{};
+  const p=serverPolicy();const s=serverStatus();let el=document.getElementById(ID);if(!el){el=document.createElement('section');el.id=ID;el.className='outreach-automation-panel';anchor().appendChild(el);}
+  if(p.automaticDelivery==='manual_only'){
+    el.innerHTML=`<div class="oa-head"><div><span class="oa-kicker">Gmail delivery</span><h3>Manual delivery only</h3><p>Automatic Gmail delivery is disabled. Review each approved message and use the explicit Send with Gmail action in Delivery &amp; Learning.</p></div><span class="oa-role">Manual only</span></div>`;
+    return;
+  }
+  const owner=isOwner();const usage=s.usage||{},q=s.queue||{};
   const custom=!['10','20','30','50'].includes(String(p.workspaceDailyLimit||20));
   el.innerHTML=`
   <div class="oa-head"><div><span class="oa-kicker">Outreach Automation</span><h3>Safe automatic Gmail outreach</h3><p>Manual stays available. Automatic sends only approved contacts under server-enforced limits.</p></div><span class="oa-role">${owner?'Owner controls':'Read only'}</span></div>
