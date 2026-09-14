@@ -48,5 +48,5 @@ test('signed-in Firecrawl routing retries enhanced fallbacks only for retryable 
 });
 
 test('process bootstrap busts the Firecrawl router cache for provider-resilient routing',()=>{
-  assert.match(processMap,/firecrawl-workspace-router\.js\?v=20260907-provider-resilience-v2/);
+  assert.match(processMap,/firecrawl-workspace-router\.js\?v=20260914-spinner-hard-stop-v1/);
 });
