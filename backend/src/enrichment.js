@@ -58,6 +58,20 @@ function cleanRoles(values){
   return roles;
 }
 
+export function rankApolloPeople(people=[],expectedRole=""){
+  const expected=roleTokens(expectedRole);
+  return (Array.isArray(people)?people:[]).map((person,index)=>{
+    const title=String(person?.title||"").trim().toLowerCase();
+    const actual=roleTokens(title);
+    const overlap=[...expected].filter(token=>actual.has(token)).length;
+    const exact=Boolean(title&&String(expectedRole||"").trim()&&title.includes(String(expectedRole).trim().toLowerCase()));
+    const verified=Boolean(person?.email&&/^verified$/i.test(String(person?.email_status||"")));
+    const linkedin=Boolean(String(person?.linkedin_url||"").trim());
+    const score=(exact?100:0)+(overlap*20)+(linkedin?10:0)+(verified?5:0);
+    return {person,index,score};
+  }).sort((a,b)=>b.score-a.score||a.index-b.index).map(item=>item.person);
+}
+
 export function apolloSearchBody({domain,role,roles}={}){
   const normalized=normalizeDomain(domain);
   const requested=cleanRoles(roles);
