@@ -220,7 +220,7 @@ function ensureToolbar() {
     '<div class="apollo-toolbar-status">Email verification uses 1 Apollo credit per selected contact. Phone lookup can use up to 9 credits.</div>',
     '<div class="apollo-batch-controls" data-apollo-batch-controls hidden><div class="apollo-toolbar-actions"><strong><span data-apollo-selected-count>0</span> selected</strong>',
     '<button class="secondary-btn small" type="button" data-apollo-bulk="email">Verify selected emails with Apollo</button>',
-    '<button class="secondary-btn small" type="button" data-apollo-bulk="phone">Find selected phones</button></div>',
+    '<button class="secondary-btn small" type="button" data-apollo-bulk="phone">Find selected phones with Apollo</button></div>',
     '<small>Batch mode processes selected contacts sequentially after one credit estimate and confirmation.</small></div>',
     '<div class="apollo-auto-controls" data-apollo-auto-controls hidden><label><input type="checkbox" data-apollo-auto-enabled> Enable automatic email verification</label>',
     '<label for="apollo-auto-limit"><span>Daily limit</span><select id="apollo-auto-limit" data-apollo-auto-limit aria-label="Automatic Apollo daily contact limit"><option value="10">10 contacts</option><option value="20">20 contacts</option></select></label>',
