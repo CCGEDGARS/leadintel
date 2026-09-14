@@ -104,6 +104,15 @@
     ));
     return hasOutreach?7:6;
   }
+  function filterPipelineForWorkspace(crmPipeline=[],localPipeline=[]){
+    const currentDomains=new Set((Array.isArray(localPipeline)?localPipeline:[])
+      .map(item=>canonicalDomain(item?.domain||item?.website))
+      .filter(Boolean));
+    if(!currentDomains.size)return [];
+    return (Array.isArray(crmPipeline)?crmPipeline:[]).filter(company=>
+      currentDomains.has(canonicalDomain(company?.normalized_domain||company?.domain||company?.website))
+    );
+  }
   return {
     MAIN_KEY,DISCOVERY_KEY,OUTREACH_KEY,DELIVERY_KEY,DISCOVERY_META_KEY,
     RESEARCH_META_KEY,MARKET_RESEARCH_RESUME_KEY,DIRTY_KEY,DERIVED_KEYS,
