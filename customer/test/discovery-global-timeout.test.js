@@ -9,7 +9,7 @@ function loadDiscoveryRunner({ renderFails = false, fetchImpl = () => new Promis
   const source = fs.readFileSync(path.join(__dirname, '..', 'discovery-ui.js'), 'utf8')
     .replace('const DISCOVERY_REQUEST_TIMEOUT_MS=25000;', 'const DISCOVERY_REQUEST_TIMEOUT_MS=1;')
     .replace('const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS+1000;', 'const DISCOVERY_RUN_TIMEOUT_MS=8;')
-    .replace(/\ninitDiscoveryWhenReady\(\);\nimport\s+['"][^'\"]+['"];?\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\n')
+    .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\n')
     .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;');
   const mainState = {
     website: 'https://acme.example/',
