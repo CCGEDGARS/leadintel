@@ -36,7 +36,7 @@ test('automatic Apollo verification requires identity evidence and excludes comp
   assert.match(ui, /runAutomatic/);
 });
 
-test('customer discovery page loads the Apollo mode module', () => {
-  const index = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-  assert.match(index, /apollo-bulk-enrichment\.js\?v=20260914-apollo-modes-v1/);
+test('customer discovery bootstrap loads the Apollo mode module once', () => {
+  const variants = fs.readFileSync(path.join(root, 'content-variants.js'), 'utf8');
+  assert.match(variants, /apollo-bulk-enrichment\\.js\\?v=20260908-apollo-observer-v1/);
 });
