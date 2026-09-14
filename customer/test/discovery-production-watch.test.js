@@ -52,6 +52,7 @@ const shell = 'LeadIntel — Build Your Commercial Intelligence Strategy id="com
 const boundedDiscoveryRuntime = [
   'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
   'const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS+1000;',
+  'function ensureDiscoveryMounted(){}',
   'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};',
   'initDiscoveryWhenReady();'
 ].join('\n');
@@ -86,6 +87,29 @@ test('production proof blocks a Discovery runtime without a hard stop', async ()
       discoveryUi: 'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};\ninitDiscoveryWhenReady();'
     }),
     nonce: 'timeout-regression'
+  });
+
+  assert.equal(proof.verdict, VERDICTS.BLOCKED_SMOKE_CHECK);
+  assert.match(proof.failures.join(' '), /discovery-runtime/i);
+});
+
+test('production proof blocks a Discovery runtime that performs hidden-stage startup work', async () => {
+  const { verifyRelease, VERDICTS } = await loadCore();
+  const proof = await verifyRelease({
+    config,
+    expectedSha: SHA,
+    ciConclusion: 'success',
+    ciRunId: '202',
+    fetchImpl: productionFetch({
+      customerHtml: `${shell}<script defer src="discovery-ui.js?v=current"></script>`,
+      discoveryUi: [
+        'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
+        'const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS+1000;',
+        'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};',
+        'initDiscoveryWhenReady();'
+      ].join('\n')
+    }),
+    nonce: 'stage-isolation-regression'
   });
 
   assert.equal(proof.verdict, VERDICTS.BLOCKED_SMOKE_CHECK);
