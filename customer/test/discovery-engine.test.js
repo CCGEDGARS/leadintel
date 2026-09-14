@@ -64,20 +64,27 @@ test('mergeCompanyCandidates deduplicates domains and builds transparent five-pa
     {queryId:'q3',market:'Finland',url:'https://finnfab.fi/',domain:'finnfab.fi',company:'FinnFab',title:'FinnFab manufacturing',description:'production systems',text:'manufacturing equipment',date:''}
   ];
   const candidates=Discovery.mergeCompanyCandidates(raw,profile,market);
-  assert.equal(candidates.length,1);
+  assert.equal(candidates.length,2);
   const nordic=candidates.find(x=>x.domain==='nordicmachines.se');
+  const finnFab=candidates.find(x=>x.domain==='finnfab.fi');
   assert.equal(nordic.evidence.length,2);
   assert.ok(nordic.matchedSignals.some(x=>x.id==='facility-expansion'));
   for(const key of ['fit','signal','evidence','timing','value'])assert.ok(nordic.score[key]>=0,`${key} missing`);
   assert.equal(nordic.score.total,nordic.score.fit+nordic.score.signal+nordic.score.evidence+nordic.score.timing+nordic.score.value);
   assert.ok(nordic.score.total<=100);
   assert.ok(['High','Medium','Low'].includes(nordic.confidence));
+  assert.equal(finnFab.matchedSignals.length,0);
+  assert.equal(finnFab.score.signal,0);
+  assert.equal(finnFab.confidence,'Low');
 });
 
 test('signal score only uses evidence text, not query metadata',()=>{
   const raw=[{queryId:'q1',market:'Sweden',query:'new facility capacity expansion',url:'https://plainco.se/',domain:'plainco.se',company:'PlainCo',title:'PlainCo',description:'manufacturer',text:'manufacturer serving industrial clients',date:''}];
   const candidates=Discovery.mergeCompanyCandidates(raw,profile,market);
-  assert.deepEqual(candidates,[]);
+  assert.equal(candidates.length,1);
+  assert.deepEqual(candidates[0].matchedSignals,[]);
+  assert.equal(candidates[0].score.signal,0);
+  assert.equal(candidates[0].confidence,'Low');
 });
 
 test('buildApolloPeopleSearchPayload uses exact domain and approved roles with safe discovery depth',()=>{
