@@ -93,7 +93,7 @@ test('production proof blocks a Discovery runtime without a hard stop', async ()
 });
 
 test('release integrity re-verifies production automatically every fifteen minutes', () => {
-  assert.match(workflow, /schedule:\s*\n\s*- cron:\s*['"]\\\/15 \* \* \* \*['"]/);
+  assert.match(workflow, /schedule:\s*\n\s*- cron:\s*['"]\*\/15 \* \* \* \*['"]/);
   assert.match(workflow, /id:\s*scheduled_ci/);
   assert.match(workflow, /github\.event_name == 'schedule'/);
   assert.match(workflow, /actions\/workflows\/customer-ci\.yml\/runs/);
