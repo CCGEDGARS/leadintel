@@ -236,7 +236,7 @@
       score.total=score.fit+score.signal+score.evidence+score.timing+score.value;
       const confidence=score.total>=75&&candidate.matchedSignals.length&&candidate.evidence.length>=1?"High":score.total>=50?"Medium":"Low";
       return {...candidate,id:`company-${slug(candidate.domain)}`,score,confidence,people:[],peopleStatus:"idle",saved:false};
-    }).sort((a,b)=>b.score.total-a.score.total).slice(0,candidateLimit);
+    }).filter(candidate=>candidate.matchedSignals.length).sort((a,b)=>b.score.total-a.score.total).slice(0,candidateLimit);
   }
 
   function buildApolloPeopleSearchPayload(candidate={},profile={}){
@@ -334,7 +334,7 @@
       status:allowedStatus.has(input.status)?input.status:"idle",
       queries:(Array.isArray(input.queries)?input.queries:[]).slice(0,10).map(q=>({id:clean(q.id),market:clean(q.market),query:clean(q.query),offer:clean(q.offer)})).filter(q=>q.id&&q.query),
       rawResults:(Array.isArray(input.rawResults)?input.rawResults:[]).slice(0,20).map(normalizeRaw).filter(item=>item.url&&item.domain),
-      candidates:(Array.isArray(input.candidates)?input.candidates:[]).slice(0,50).map(safeCandidate).filter(item=>item.domain),
+      candidates:(Array.isArray(input.candidates)?input.candidates:[]).slice(0,12).map(safeCandidate).filter(item=>item.domain),
       pipeline:(Array.isArray(input.pipeline)?input.pipeline:[]).slice(0,50).map(normalizePipelineItem).filter(item=>item.domain),
       lastRunAt:clean(input.lastRunAt)
     };
