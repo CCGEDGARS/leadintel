@@ -144,7 +144,11 @@
       writeActivationRecord(record);writeState(next);
       try{root.dispatchEvent(new CustomEvent("leadintel:website-activated",{detail:{website:record.url,activation:record}}));}catch{}
       returnToWebsiteStep();
-      try{await root.LeadIntelServerBridge?.saveNow?.();}catch{}
+      try{
+        const persistence=root.LeadIntelWorkspacePersistence;
+        if(persistence?.saveWorkspace)await persistence.saveWorkspace();
+        else await root.LeadIntelServerBridge?.saveNow?.();
+      }catch{}
       activationError="";setStatus("active",`✓ Website active · ${record.title||new URL(record.url).hostname} · ${formatChars(record.contentChars)} loaded`);return true;
     }catch(error){activationError=`Activation failed · ${clean(error?.message)||"Website could not be read"}`;setStatus("error",activationError);return false;}
     finally{running=false;render();}
