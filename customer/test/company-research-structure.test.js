@@ -24,11 +24,12 @@ test('Customer V2 loads the automatic company research module with Firecrawl wor
   assert.match(read('index.html'),/company-research-ui\.js\?v=20260914-spinner-hard-stop-v2/);
 });
 
-test('Step 1 becomes research-first and intercepts legacy questionnaire navigation safely',()=>{
-  assert.match(ui,/Research company & pre-fill context/);
-  assert.match(ui,/to-questionnaire/);
-  assert.match(ui,/capture:\s*true/);
-  assert.match(ui,/stopImmediatePropagation\(\)/);
+test('Step 1 navigation opens immediately and keeps company research optional',()=>{
+  assert.match(ui,/Continue to optional context/);
+  assert.match(ui,/rerun-company-research/);
+  assert.doesNotMatch(ui,/function interceptStepOne/);
+  assert.doesNotMatch(ui,/to-questionnaire'\)\?\.addEventListener/);
+  assert.doesNotMatch(ui,/stopImmediatePropagation\(\)/);
   assert.match(ui,/MAX_COMPANY_RESEARCH_QUERIES\s*=\s*3/);
   assert.match(ui,/MAX_RESULTS_PER_QUERY\s*=\s*4/);
   assert.match(ui,/COMPANY_RESEARCH_REQUEST_TIMEOUT_MS\s*=\s*25000/);
