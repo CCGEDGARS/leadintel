@@ -10,6 +10,7 @@ on:
       - 'customer/**'
       - 'backend/**'
       - 'scripts/build-vercel-static.sh'
+      - 'scripts/verify-discovery-deploy.mjs'
       - 'scripts/release-integrity-core.mjs'
       - 'scripts/verify-release-integrity.mjs'
       - 'release-integrity.config.json'
@@ -32,6 +33,7 @@ on:
       - 'customer/**'
       - 'backend/**'
       - 'scripts/build-vercel-static.sh'
+      - 'scripts/verify-discovery-deploy.mjs'
       - 'scripts/release-integrity-core.mjs'
       - 'scripts/verify-release-integrity.mjs'
       - 'release-integrity.config.json'
@@ -121,4 +123,5 @@ jobs:
           node --check customer/copilot-context.js
           node --check customer/copilot-ui.js
           node --check scripts/release-integrity-core.mjs
+          node --check scripts/verify-discovery-deploy.mjs
           node --check scripts/verify-release-integrity.mjs
