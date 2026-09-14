@@ -11,7 +11,7 @@ test('Discovery waits for its engine instead of failing before it can create the
   const timers = [];
   const context = {
     console,
-    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    localStorage: { getItem: key => key === 'leadintel_customer_v2_state' ? JSON.stringify({ website: 'https://example.com/' }) : null, setItem() {}, removeItem() {} },
     document: {
       getElementById: () => null,
       querySelector: () => null,
@@ -35,6 +35,8 @@ test('Discovery waits for its engine instead of failing before it can create the
 
   context.LeadIntelDiscovery = Discovery;
   assert.doesNotThrow(() => timers.shift()());
+  assert.equal(context.__discoveryUiState(), null);
+  assert.doesNotThrow(() => context.LeadIntelDiscoveryUI.open());
   assert.equal(context.__discoveryUiState().status, 'idle');
   assert.equal(typeof context.LeadIntelDiscoveryUI.open, 'function');
 });
