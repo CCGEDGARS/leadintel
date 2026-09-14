@@ -188,11 +188,10 @@ function updateToolbar() {
   const autoLimit = toolbar.querySelector('[data-apollo-auto-limit]');
   if (autoLimit) autoLimit.value = String(settings.dailyLimit);
   const autoStatus = toolbar.querySelector('[data-apollo-auto-status]');
-  if (autoStatus) {
-    autoStatus.textContent = settings.automaticEnabled
-      ? 'Enabled: up to ' + settings.dailyLimit + ' qualified contacts per day while this workspace is open (' + settings.processedKeys.length + ' used today).'
-      : 'Automatic mode is paused. Enable it only after reviewing the daily credit cap.';
-  }
+  const autoStatusText = settings.automaticEnabled
+    ? 'Enabled: up to ' + settings.dailyLimit + ' qualified contacts per day while this workspace is open (' + settings.processedKeys.length + ' used today).'
+    : 'Automatic mode is paused. Enable it only after reviewing the daily credit cap.';
+  if (autoStatus && autoStatus.textContent !== autoStatusText) autoStatus.textContent = autoStatusText;
   toolbar.querySelectorAll('[data-apollo-bulk]').forEach((button) => {
     button.disabled = bulkRunning || count === 0;
   });
@@ -449,9 +448,10 @@ function bind() {
     const button = event.target.closest?.('[data-apollo-bulk]');
     if (button) runBulk(button.dataset.apolloBulk);
   });
-  if (typeof MutationObserver !== 'undefined' && document.body) {
+  const candidates = document.getElementById('company-candidates');
+  if (typeof MutationObserver !== 'undefined' && candidates) {
     observer = new MutationObserver(() => decorate());
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(candidates, { childList: true, subtree: true });
   }
   decorate();
 }
