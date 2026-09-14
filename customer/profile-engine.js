@@ -132,7 +132,7 @@
   function recommendSignals(answerText,sourceText){
     const combined=`${clean(answerText)} ${clean(sourceText)}`;
     const matched=SIGNAL_LIBRARY.filter(signal=>signal.patterns.some(pattern=>pattern.test(combined)));
-    const defaults=["facility-expansion","capital-investment","tender","market-entry"].map(id=>SIGNAL_LIBRARY.find(x=>x.id===id));
+    const defaults=["facility-expansion","capital-investment","hiring","market-entry"].map(id=>SIGNAL_LIBRARY.find(x=>x.id===id));
     return uniqueObjects([...matched,...defaults],"id").slice(0,8).map(item=>({...item,reason:signalReason(item,combined)}));
   }
   function uniqueObjects(items,key){const seen=new Set();return items.filter(item=>item&&!seen.has(item[key])&&seen.add(item[key]));}
@@ -315,5 +315,10 @@
     };
   }
 
-  return {QUESTION_IDS,COUNTRIES,MARKET_REGIONS,SIGNAL_LIBRARY,normalizeUrl,normalizeTargetMarkets,expandTargetMarkets,canBuildProfile,canAccessModule,calculateCompleteness,buildEvidenceSources,evidenceCoverage,buildCompanyIntelligenceProfile,normalizeSavedState,splitList};
+  function recommendedSignalsForProfile(profile={}){
+    const answers=[profile.buyingTriggers,profile.priorityOffers,profile.idealCustomer].filter(clean).join(" ");
+    const evidence=[profile.companyOverview,profile.differentiation].filter(clean).join(" ");
+    return recommendSignals(answers,evidence);
+  }
+  return {recommendedSignalsForProfile,QUESTION_IDS,COUNTRIES,MARKET_REGIONS,SIGNAL_LIBRARY,normalizeUrl,normalizeTargetMarkets,expandTargetMarkets,canBuildProfile,canAccessModule,calculateCompleteness,buildEvidenceSources,evidenceCoverage,buildCompanyIntelligenceProfile,normalizeSavedState,splitList};
 });

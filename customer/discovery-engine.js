@@ -11,6 +11,7 @@
     "reuters.com","bloomberg.com","forbes.com","businessinsider.com","yahoo.com","google.com","bing.com","duckduckgo.com",
     "glassdoor.com","indeed.com","tiktok.com","reddit.com"
   ];
+  const TENDER_HOSTS=["eis.gov.lv","iub.gov.lv","procurement.gov.lv"];
   const DEFAULT_DISCOVERY_STATE=Object.freeze({status:"idle",queries:[],rawResults:[],candidates:[],pipeline:[],lastRunAt:""});
   const STOPWORDS=new Set(["with","from","that","this","your","their","into","over","under","company","companies","business","businesses","priority","market","markets","customer","customers","service","services","product","products","industrial"]);
   const ROLE_GENERIC_WORDS=new Set(["chief","officer","director","manager","managing","head","vice","president","vp","senior","lead","leader","executive","global","regional","group"]);
@@ -32,6 +33,36 @@
   function isBlockedDomain(domain){
     const d=clean(domain).toLowerCase();
     return BLOCKED_HOSTS.some(host=>d===host||d.endsWith(`.${host}`));
+  }
+  function hasActiveSignals(marketState={}){return (marketState.signals||[]).some(signal=>signal&&signal.active!==false);}
+  function isTenderSignal(signal={}){return /tender|procurement|iepirk/i.test([clean(signal.name),clean(signal.keywords)].join(" "));}
+  function allowTenderDiscovery(marketState={}){return splitList(marketState.researchSourceTypes).some(type=>type.toLowerCase()==="tenders");}
+  function isTenderSource(item={}){
+    const domain=clean(item.domain)||canonicalDomain(item.url);
+    const url=clean(item.url).toLowerCase();
+    const text=[clean(item.title),clean(item.description),clean(item.text)].join(" ").toLowerCase();
+    return TENDER_HOSTS.includes(domain)
+      || (/\\.gov\\.[a-z]{2}$/.test(domain)&&/tender|procurement|iepirk|supplier|contract/.test(text))
+      || /tender|procurement|iepirk|viewprocurem/.test(url)
+      || /public procurement|procurement notice|iepirkuma/.test(text);
+  }
+  function isExcludedDiscoverySource(item={},profile={},marketState={}){
+    const domain=clean(item.domain)||canonicalDomain(item.url);
+    const own=canonicalDomain(profile.website||profile.companyWebsite||"");
+    if(own&&(domain===own||domain.endsWith("."+own)))return true;
+    const tendersAllowed=allowTenderDiscovery(marketState);
+    if(!tendersAllowed&&isTenderSource(item))return true;
+    if(/tender|procurement|iepirk/i.test(clean(profile.exclusions))&&isTenderSource(item))return true;
+    return false;
+  }
+  function cleanEvidenceText(value){
+    return clean(value)
+      .replace(/!\\[[^\\]]*\\]\\([^)]*\\)/g," ")
+      .replace(/\\[[^\\]]+\\]\\((?:https?:\\/\\/)[^)]+\\)/g," ")
+      .replace(/https?:\\/\\/\\S+\\.(?:png|jpe?g|gif|webp|svg)(?:\\?\\S*)?/gi," ")
+      .replace(/[#*_`>|]/g," ")
+      .replace(/\\s+/g," ")
+      .trim();
   }
   function displayFromDomain(domain){
     const base=clean(domain).split(".")[0].replace(/[-_]+/g," ");
@@ -70,12 +101,13 @@
     const icpText=activeIcps.map(item=>clean(item.description)).filter(Boolean).join(" ")||clean(profile.idealCustomer);
     const painTerms=keywords(profile.customerPainPoints).slice(0,6).join(" ");
     const offer=splitList(profile.priorityOffers)[0]||"commercial solution";
-    const topSignals=(marketState.signals||[]).filter(item=>item.active!==false).sort((a,b)=>(Number(b.weight)||0)-(Number(a.weight)||0)).slice(0,3);
+    const tendersAllowed=allowTenderDiscovery(marketState);
+    const topSignals=(marketState.signals||[]).filter(item=>item.active!==false&&(tendersAllowed||!isTenderSignal(item))).sort((a,b)=>(Number(b.weight)||0)-(Number(a.weight)||0)).slice(0,3);
     const signalTerms=topSignals.map(item=>splitList(item.keywords)[0]||clean(item.name)).filter(Boolean).join(" ");
     const results=[];
     for(const market of [...new Set(markets.length?markets:["priority market"])]){
       if(results.length>=limit)break;
-      const query=[market,icpText,offer,painTerms,signalTerms,"manufacturer company official site"].filter(Boolean).join(" ");
+      const query=[market,icpText,offer,painTerms,signalTerms,"buyer organization customer official website"].filter(Boolean).join(" ");
       results.push({id:`discover-${slug(market)}-${results.length+1}`,market,query,offer});
     }
     if(results.length<limit&&markets[0]){
@@ -100,7 +132,7 @@
       const domain=canonicalDomain(url);
       if(!domain||isBlockedDomain(domain))return null;
       const description=clean(item?.description||item?.snippet||"");
-      const text=clean(item?.markdown||item?.content||item?.text||description).slice(0,7000);
+      const text=cleanEvidenceText(item?.markdown||item?.content||item?.text||description).slice(0,7000);
       return {
         queryId:clean(queryMeta.id),market:clean(queryMeta.market),query:clean(queryMeta.query),url,domain,
         company:companyFromTitle(item?.title,domain),title:clean(item?.title)||displayFromDomain(domain),description,text,
@@ -151,10 +183,11 @@
     for(const item of results||[]){
       const domain=clean(item?.domain)||canonicalDomain(item?.url);
       if(!domain||isBlockedDomain(domain)||!normalizeUrl(item?.url))continue;
+      if(isExcludedDiscoverySource(item,profile,marketState))continue;
       const current=grouped.get(domain)||{domain,company:clean(item.company)||displayFromDomain(domain),market:clean(item.market),website:`https://${domain}/`,evidence:[]};
       if(!current.market&&item.market)current.market=clean(item.market);
       if(current.company===displayFromDomain(domain)&&clean(item.company))current.company=clean(item.company);
-      if(!current.evidence.some(e=>e.url===item.url))current.evidence.push({url:item.url,title:clean(item.title),description:clean(item.description),text:String(item.text||"").slice(0,7000),date:clean(item.date)});
+      if(!current.evidence.some(e=>e.url===item.url))current.evidence.push({url:item.url,title:cleanEvidenceText(item.title),description:cleanEvidenceText(item.description),text:cleanEvidenceText(item.text).slice(0,7000),date:clean(item.date)});
       grouped.set(domain,current);
     }
     const signals=activeSignals(marketState);
@@ -171,7 +204,7 @@
       score.total=score.fit+score.signal+score.evidence+score.timing+score.value;
       const confidence=score.total>=75&&candidate.matchedSignals.length&&candidate.evidence.length>=1?"High":score.total>=50?"Medium":"Low";
       return {...candidate,id:`company-${slug(candidate.domain)}`,score,confidence,people:[],peopleStatus:"idle",saved:false};
-    }).sort((a,b)=>b.score.total-a.score.total).slice(0,12);
+    }).filter(candidate=>candidate.matchedSignals.length).sort((a,b)=>b.score.total-a.score.total).slice(0,12);
   }
 
   function buildApolloPeopleSearchPayload(candidate={},profile={}){
@@ -274,5 +307,5 @@
     };
   }
 
-  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,buildDiscoveryQueries,buildCandidateNarrative,normalizeCompanySearchResults,mergeCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,canonicalDomain,isBlockedDomain};
+  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,buildDiscoveryQueries,buildCandidateNarrative,normalizeCompanySearchResults,mergeCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,canonicalDomain,isBlockedDomain,hasActiveSignals};
 });

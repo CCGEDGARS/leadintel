@@ -238,7 +238,14 @@ function ensureMarketStrategySeeded(){
   const language=contentLanguage();
   if(!state.market)state.market=LeadIntelMarket.normalizeMarketState({});
   if(!state.market.icps.length)state.market.icps=LeadIntelMarket.buildIcpCandidates(state.profile,language);
-  state.market.signals=LeadIntelMarket.normalizeSignals(state.profile.recommendedSignals,state.market.signals);
+  const generatedSignals=state.profile.recommendedSignals?.length
+    ?state.profile.recommendedSignals
+    :(LeadIntelProfile.recommendedSignalsForProfile?.(state.profile)||[]);
+  if(!state.profile.recommendedSignals?.length&&generatedSignals.length)state.profile.recommendedSignals=generatedSignals;
+  const tendersAllowed=(state.market.researchSourceTypes||[]).includes("tenders");
+  state.market.signals=LeadIntelMarket.normalizeSignals(generatedSignals,state.market.signals)
+    .map(signal=>!tendersAllowed&&/tender|procurement|iepirk/i.test([signal.name,signal.keywords].join(" "))
+      ?{...signal,active:false}:signal);
   if(!state.market.opportunities.length)state.market.opportunities=LeadIntelMarket.buildMarketOpportunities(state.profile,state.market.icps,state.market.signals,state.market.researchResults||[],language);
   state.market=LeadIntelMarket.localizeGeneratedState(state.market,state.profile,language);
   saveState();
