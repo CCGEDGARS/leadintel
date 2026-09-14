@@ -47,7 +47,7 @@ test('website plus target market unlocks sidebar modules while enrichment remain
   assert.match(app,/Choose at least one target market/);
   assert.match(app,/querySelector\("\.steps"\).*addEventListener/s);
   assert.match(app,/MutationObserver/,'dynamic Steps 5–7 must inherit visible unlocked state after injection');
-  assert.match(app,/\\[1,2,3,4,5,6,7\\]\\.includes\\(Number\\(source\\.step\\)\\)/,'app reload must preserve Steps 5–7');
+  assert.match(app,/\[1,2,3,4,5,6,7\]\.includes\(Number\(source\.step\)\)/,'app reload must preserve Steps 5–7');
   assert.doesNotMatch(app,/Complete \$\{missing\.length\} required question/);
   assert.doesNotMatch(discovery,/Activate Market Strategy before Discovery/);
   assert.doesNotMatch(outreach,/Save at least one company to Pipeline first/);
@@ -132,7 +132,7 @@ test('company discovery UI exposes the five company score dimensions',()=>{
 test('discovery UI wires Firecrawl and Apollo people search with hard caps',()=>{
   const ui=read('discovery-ui.js');
   const engine=read('discovery-engine.js');
-  assert.match(ui,/MAX_DISCOVERY_QUERIES\s*=\s*4/);
+  assert.match(ui,/MAX_DISCOVERY_QUERIES\s*=\s*10/);
   assert.match(ui,/MAX_DISCOVERY_RESULTS_PER_QUERY\s*=\s*5/);
   assert.match(ui,/firecrawl-search/);
   assert.match(ui,/LeadIntelDiscovery/);
