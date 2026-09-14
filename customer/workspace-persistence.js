@@ -11,6 +11,7 @@
   const DIRTY_KEY="leadintel_customer_v2_server_dirty";
   const CONFLICT_KEY="leadintel_customer_v2_server_conflict";
   const API_BASE="https://leadintel-api.edgars-7e7.workers.dev";
+  const SAVE_REQUEST_TIMEOUT_MS=10000;
 
   const WORKSPACE_DATA_KEYS=Object.freeze([
     "leadintel_customer_v2_state",
@@ -157,9 +158,19 @@
   function toast(message){const el=root.document?.getElementById?.("toast");if(!el)return;el.textContent=message;el.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove("show"),2400);}
   function waitForBridge(timeout=1800){if(root.LeadIntelServerBridge?.session!==null&&root.LeadIntelServerBridge?.session!==undefined)return Promise.resolve(root.LeadIntelServerBridge);return new Promise(resolve=>{let done=false;const finish=()=>{if(done)return;done=true;root.removeEventListener?.("leadintel:server-ready",finish);resolve(root.LeadIntelServerBridge||null);};root.addEventListener?.("leadintel:server-ready",finish,{once:true});root.setTimeout?.(finish,timeout);});}
 
+  function withTimeout(operation,timeoutMs=SAVE_REQUEST_TIMEOUT_MS,label="Workspace save"){
+    const schedule=root.setTimeout||setTimeout;const cancel=root.clearTimeout||clearTimeout;
+    return new Promise((resolve,reject)=>{
+      let settled=false;
+      const finish=(callback,value)=>{if(settled)return;settled=true;cancel(timer);callback(value);};
+      const timer=schedule(()=>finish(reject,new Error(label+" timed out")),Math.max(1,Number(timeoutMs)||SAVE_REQUEST_TIMEOUT_MS));
+      Promise.resolve().then(operation).then(value=>finish(resolve,value),error=>finish(reject,error));
+    });
+  }
+
   async function saveWorkspace(){
     if(saveBusy)return false;saveBusy=true;renderPersistenceStatus();captureWorkspaceSnapshot();markExplicitlySaved();dirtySinceSave=false;root.sessionStorage?.setItem(SAVE_INTENT_KEY,"1");
-    try{const bridge=await waitForBridge();if(bridge?.session?.authenticated&&bridge?.workspace){const result=await root.LeadIntelServerBridge?.saveNow?.();if(!result?.saved)throw new Error("Workspace could not be saved to LeadIntel");toast("Workspace saved");}else toast("Workspace saved in this browser");return true;}
+    try{const bridge=await waitForBridge();if(bridge?.session?.authenticated&&bridge?.workspace){const result=await withTimeout(()=>root.LeadIntelServerBridge?.saveNow?.(),SAVE_REQUEST_TIMEOUT_MS);if(!result?.saved)throw new Error("Workspace could not be saved to LeadIntel");toast("Workspace saved");}else toast("Workspace saved in this browser");return true;}
     catch(error){toast(`Save failed · ${String(error?.message||"Unknown error")}`);return false;}
     finally{root.sessionStorage?.removeItem(SAVE_INTENT_KEY);saveBusy=false;renderPersistenceStatus();}
   }
