@@ -7,7 +7,10 @@ const FIRECRAWL_PROXY='https://apollo-proxy.edgars-7e7.workers.dev';
 const LEADINTEL_API='https://leadintel-api.edgars-7e7.workers.dev';
 const MAX_COMPANY_RESEARCH_QUERIES=3;
 const MAX_RESULTS_PER_QUERY=4;
-const RELEASE='20260906-authoritative-depth-v1';
+const COMPANY_RESEARCH_REQUEST_TIMEOUT_MS=25000;
+const COMPANY_RESEARCH_RUN_TIMEOUT_MS=60000;
+const COMPANY_RESEARCH_SAVE_TIMEOUT_MS=10000;
+const RELEASE='20260914-spinner-hard-stop-v2';
 let running=false;
 
 const engine=()=>window.LeadIntelCompanyResearch;
@@ -107,25 +110,49 @@ function handleReviewAction(event){
   if(clear&&textarea){textarea.value='';textarea.dispatchEvent(new Event('input',{bubbles:true}));meta.fields[id]={origin:'needs-input',confidence:'',sourceIds:[],rationale:'Cleared by customer; add input or rerun research.',reviewed:true};writeMeta(meta);renderResearchReview();}
 }
 
-async function scrapeSource(url,type,pageCategory=''){
-  const response=await fetch(`${FIRECRAWL_PROXY}/firecrawl-scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,formats:['markdown'],onlyMainContent:true,timeout:30000})});
-  const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`Source returned ${response.status}`);
-  const data=payload.data||payload;const text=String(data.markdown||data.content||'').slice(0,30000);if(!text.trim())throw new Error('No readable page content returned');
-  return {type,url,title:data.metadata?.title||data.title||new URL(url).hostname,text,status:'ready',pageCategory};
+function requestSignal(parentSignal,timeoutMs=COMPANY_RESEARCH_REQUEST_TIMEOUT_MS){
+  const controller=new AbortController();
+  const abort=()=>controller.abort();
+  const timer=setTimeout(abort,Math.max(1,Number(timeoutMs)||COMPANY_RESEARCH_REQUEST_TIMEOUT_MS));
+  if(parentSignal){if(parentSignal.aborted)controller.abort();else parentSignal.addEventListener('abort',abort,{once:true});}
+  return {signal:controller.signal,dispose(){clearTimeout(timer);parentSignal?.removeEventListener('abort',abort);}};
 }
-async function searchPublic(queryMeta){
-  const response=await fetch(`${FIRECRAWL_PROXY}/firecrawl-search`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:queryMeta.query,limit:MAX_RESULTS_PER_QUERY,scrapeOptions:{formats:['markdown']}})});
-  const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`Search returned ${response.status}`);return engine().normalizeSearchResults(payload,queryMeta);
+function requestError(error,label){return error?.name==='AbortError'?new Error(label+' timed out'):error;}
+async function scrapeSource(url,type,pageCategory='',parentSignal=null){
+  const request=requestSignal(parentSignal);
+  try{
+    const response=await fetch(`${FIRECRAWL_PROXY}/firecrawl-scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,formats:['markdown'],onlyMainContent:true,timeout:30000}),signal:request.signal});
+    const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`Source returned ${response.status}`);
+    const data=payload.data||payload;const text=String(data.markdown||data.content||'').slice(0,30000);if(!text.trim())throw new Error('No readable page content returned');
+    return {type,url,title:data.metadata?.title||data.title||new URL(url).hostname,text,status:'ready',pageCategory};
+  }catch(error){throw requestError(error,'Company source request');}
+  finally{request.dispose();}
+}
+async function searchPublic(queryMeta,parentSignal=null){
+  const request=requestSignal(parentSignal);
+  try{
+    const response=await fetch(`${FIRECRAWL_PROXY}/firecrawl-search`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:queryMeta.query,limit:MAX_RESULTS_PER_QUERY,scrapeOptions:{formats:['markdown']}}),signal:request.signal});
+    const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`Search returned ${response.status}`);return engine().normalizeSearchResults(payload,queryMeta);
+  }catch(error){throw requestError(error,'Company search request');}
+  finally{request.dispose();}
+}
+async function saveWorkspaceBestEffort(){
+  const save=window.LeadIntelServerBridge?.saveNow;
+  if(typeof save!=='function')return;
+  let timer;
+  try{await Promise.race([Promise.resolve().then(()=>save.call(window.LeadIntelServerBridge)),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Workspace save timed out')),COMPANY_RESEARCH_SAVE_TIMEOUT_MS);})]);}
+  catch{}
+  finally{clearTimeout(timer);}
 }
 async function waitForServerBridge(timeout=1800){
   if(window.LeadIntelServerBridge&&window.LeadIntelServerBridge.session!==null)return window.LeadIntelServerBridge;
   return new Promise(resolve=>{let settled=false;const finish=()=>{if(settled)return;settled=true;window.removeEventListener('leadintel:server-ready',finish);resolve(window.LeadIntelServerBridge||null);};window.addEventListener('leadintel:server-ready',finish,{once:true});setTimeout(finish,timeout);});
 }
-async function aiDraftFor({website,targetMarkets,sources,documents,uiLanguage}){
+async function aiDraftFor({website,targetMarkets,sources,documents,uiLanguage},parentSignal=null){
   const bridge=await waitForServerBridge();const workspace=bridge?.workspace;if(!bridge?.session?.authenticated||!workspace?.id)return {draft:null,mode:'evidence',reason:'Sign in to use workspace AI enrichment.'};
   const prompt=engine().buildAiPrompt({website,targetMarkets,sources,documents,uiLanguage});
   try{
-    const response=await fetch(`${LEADINTEL_API}/api/ai/generate?workspace_id=${encodeURIComponent(workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({system:prompt.system,prompt:prompt.prompt,max_output_tokens:3200})});
+    const response=await fetch(`${LEADINTEL_API}/api/ai/generate?workspace_id=${encodeURIComponent(workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({system:prompt.system,prompt:prompt.prompt,max_output_tokens:3200}),signal:parentSignal});
     const payload=await response.json().catch(()=>({}));
     if(!response.ok)return {draft:null,mode:'evidence',reason:response.status===409?'No active AI provider configured.':payload.error||`AI unavailable (${response.status})`};
     const docIds=(documents||[]).filter(doc=>String(doc?.text||'').trim()).slice(0,5).map((_,index)=>`D${index+1}`);const validIds=[...sources.map(source=>source.id),...docIds];const draft=engine().parseAiDraft(payload.text,validIds,uiLanguage);
@@ -142,30 +169,33 @@ async function runCompanyResearch({rerun=false}={}){
   const state=readState();const selectedLanguage=String($('language-select')?.value||window.LeadIntelLanguage?.get?.()||state.uiLanguage||'lv').toLowerCase();const researchLanguage=selectedContentLanguage(state);const website=normalizeUrl($('company-website')?.value||state.website);const markets=selectedMarkets(state);const additionalLinks=String($('additional-links')?.value||'').split(/\n/).map(normalizeUrl).filter(Boolean).slice(0,8);
   const error=$('step1-error');if(!website){if(error)error.textContent='Enter a valid company website.';return;}if(!markets.length){if(error)error.textContent='Choose at least one target market.';return;}if(error)error.textContent='';
   running=true;setResearchButtonBusy(true);const rerunButton=$('rerun-company-research');if(rerunButton)rerunButton.disabled=true;
+  const runController=new AbortController();const runTimer=setTimeout(()=>runController.abort(),COMPANY_RESEARCH_RUN_TIMEOUT_MS);
   let failures=0;
   try{
     setProgress('Scanning company sources…','Reading the main website and any optional links you supplied.');
     const sourceRequests=[{url:website,type:'website',pageCategory:'company'},...additionalLinks.map(url=>({url,type:'link',pageCategory:''}))];const official=[];
-    const settled=await Promise.allSettled(sourceRequests.map(source=>scrapeSource(source.url,source.type,source.pageCategory)));
+    const settled=await Promise.allSettled(sourceRequests.map(source=>scrapeSource(source.url,source.type,source.pageCategory,runController.signal)));
     settled.forEach(result=>{if(result.status==='fulfilled')official.push(result.value);else failures++;});
     const companyName=researchEngine.deriveCompanyName(official,website);
     setProgress('Discovering authoritative company pages…','Finding company, offer, project, delivery and contact pages on the verified domain.');
     const authoritativeRows=[];const authoritativeQueries=researchEngine.buildAuthoritativePageQueries({website,companyName});
-    for(const query of authoritativeQueries){try{authoritativeRows.push(...await searchPublic(query));}catch{failures++;}}
+    const authoritativeSettled=await Promise.allSettled(authoritativeQueries.map(query=>searchPublic(query,runController.signal)));
+    authoritativeSettled.forEach(result=>{if(result.status==='fulfilled')authoritativeRows.push(...result.value);else failures++;});
     const existingUrls=new Set(official.map(source=>researchEngine.safeUrl(source.url)));const authoritativeCandidates=researchEngine.selectAuthoritativePageCandidates(authoritativeRows,website,8).filter(source=>!existingUrls.has(researchEngine.safeUrl(source.url)));
-    const authoritativeSettled=await Promise.allSettled(authoritativeCandidates.map(source=>scrapeSource(source.url,'link',source.pageCategory)));
+    const authoritativeSettled=await Promise.allSettled(authoritativeCandidates.map(source=>scrapeSource(source.url,'link',source.pageCategory,runController.signal)));
     authoritativeSettled.forEach(result=>{if(result.status==='fulfilled')official.push(result.value);else failures++;});
     const queries=researchEngine.buildResearchQueries({website,companyName,targetMarkets:markets},MAX_COMPANY_RESEARCH_QUERIES);
     setProgress('Searching related public sources…',`Running ${queries.length} bounded company searches for evidence, news, partners and market context.`);
     const publicRows=[];
-    for(const query of queries){try{publicRows.push(...await searchPublic(query));}catch{failures++;}}
+    const publicSettled=await Promise.allSettled(queries.map(query=>searchPublic(query,runController.signal)));
+    publicSettled.forEach(result=>{if(result.status==='fulfilled')publicRows.push(...result.value);else failures++;});
     const rawSources=researchEngine.mergeSources(official,publicRows,researchEngine.RESEARCH_LIMITS.standard.maxPages);
     const research=researchEngine.filterResearchSources(rawSources,website,{depth:'standard'});
     const sources=[...research.primary,...research.supporting];
     const quality=researchEngine.evaluateResearchQuality({website,primary:research.primary,supporting:research.supporting,failures});
     if(!quality.publishable)throw new Error(`Research quality check failed: ${quality.issues.join(' ')}`);
     setProgress('Building evidence-backed context…',`${research.primary.length} primary and ${research.supporting.length} supporting sources passed the quality check.`);
-    const fallback=researchEngine.buildEvidenceDraft({sources:research.primary,targetMarkets:markets,uiLanguage:researchLanguage});const ai=await aiDraftFor({website,targetMarkets:markets,sources:research.primary,documents:state.documents||[],uiLanguage:researchLanguage});const draft=researchEngine.capDraftConfidence(combineDrafts(fallback,ai.draft),quality.coverage);const merged=researchEngine.mergeDraft(state.answers||{},draft,readMeta().fields||{});
+    const fallback=researchEngine.buildEvidenceDraft({sources:research.primary,targetMarkets:markets,uiLanguage:researchLanguage});const ai=await aiDraftFor({website,targetMarkets:markets,sources:research.primary,documents:state.documents||[],uiLanguage:researchLanguage},runController.signal);const draft=researchEngine.capDraftConfidence(combineDrafts(fallback,ai.draft),quality.coverage);const merged=researchEngine.mergeDraft(state.answers||{},draft,readMeta().fields||{});
     const latest=readState();if(JSON.stringify(latest.answers||{})!==JSON.stringify(state.answers||{})||latest.website!==state.website)throw new Error('Workspace changed during research. Your edits were preserved; rerun when ready.');
     const next={...state};next.uiLanguage=selectedLanguage;next.website=website;next.targetMarkets=markets;next.additionalLinks=additionalLinks;next.answers=merged.answers;
     next.scrapedSources=sources.map(source=>({type:source.type==='public'?'link':source.type,url:source.url,title:source.title,text:source.text,status:'ready',role:source.role||'supporting',pageCategory:source.pageCategory||researchEngine.classifyPageCategory(source,website)}));
@@ -174,10 +204,15 @@ async function runCompanyResearch({rerun=false}={}){
     const fields={};for(const id of researchEngine.QUESTION_IDS){const row=merged.meta[id]||{};fields[id]={...row,reviewed:Boolean(row.reviewed||row.origin==='user'),draftMode:ai.mode};}
     writeMeta({website,generatedAt:new Date().toISOString(),mode:ai.mode,provider:ai.provider||'',model:ai.model||'',sourceCount:sources.length,primarySourceCount:research.primary.length,supportingSourceCount:research.supporting.length,excludedSourceCount:research.excluded.length,characters:research.characters,limits:research.limits,quality,failures,reason:ai.reason||'',fields});
     setProgress('Research complete','Opening your evidence-backed draft for review.',{done:true});
-    await window.LeadIntelServerBridge?.saveNow?.().catch(()=>null);
+    await saveWorkspaceBestEffort();
     setTimeout(()=>location.reload(),180);
-  }catch(error){setProgress('Research could not complete',error.message||'Public research is temporarily unavailable.');toast('Company research could not complete. Your existing workspace data is safe.');}
-  finally{running=false;setResearchButtonBusy(false);if(rerunButton)rerunButton.disabled=false;}
+  }catch(error){
+    const message=runController.signal.aborted?'Company research stopped after 60 seconds.':(error.message||'Public research is temporarily unavailable.');
+    setProgress('Research could not complete',message);toast('Company research stopped safely. Your existing workspace data is safe.');
+    const latest=readState();
+    if(normalizeUrl(latest.website||'')===website){latest.website=website;latest.targetMarkets=markets;latest.additionalLinks=additionalLinks;latest.step=2;writeState(latest);setTimeout(()=>location.reload(),180);}
+  }
+  finally{clearTimeout(runTimer);running=false;setResearchButtonBusy(false);if(rerunButton)rerunButton.disabled=false;}
 }
 
 function interceptStepOne(event){event.preventDefault();event.stopImmediatePropagation();runCompanyResearch();}
