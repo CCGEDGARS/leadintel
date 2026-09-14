@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {apolloSearchBody,enrichmentDecision,normalizeDomain,provenBusinessEmail,strongPersonalEmail} from "../src/enrichment.js";
+import {apolloSearchBody,enrichmentDecision,normalizeDomain,provenBusinessEmail,rankApolloPeople,strongPersonalEmail} from "../src/enrichment.js";
 
 test("accepts only verified email on the company domain",()=>{
   assert.equal(provenBusinessEmail({email:"Leader@Example.com",email_status:"verified"},"https://www.example.com"),"leader@example.com");
@@ -29,4 +29,12 @@ test("accepts a personal email only for an exact person, company, and role match
 test("Apollo search requests one verified role match",()=>{
   assert.deepEqual(apolloSearchBody({domain:"https://www.example.com/about",role:"Sales Director"}),{q_organization_domains_list:["example.com"],person_titles:["Sales Director"],page:1,per_page:1});
   assert.equal(normalizeDomain("www.example.com"),"example.com");
+});
+
+test("Apollo contact ranking prefers the requested role and keeps identity evidence",()=>{
+  const ranked=rankApolloPeople([
+    {id:"p1",title:"Marketing Manager"},
+    {id:"p2",title:"Commercial Director",linkedin_url:"https://www.linkedin.com/in/example"}
+  ],"Commercial Director");
+  assert.equal(ranked[0].id,"p2");
 });
