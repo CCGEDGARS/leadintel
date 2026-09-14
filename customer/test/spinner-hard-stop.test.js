@@ -8,6 +8,7 @@ const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
 const router=fs.readFileSync(path.join(root,'firecrawl-workspace-router.js'),'utf8');
 const persistence=fs.readFileSync(path.join(root,'workspace-persistence.js'),'utf8');
 const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+const discovery=fs.readFileSync(path.join(root,'discovery-ui.js'),'utf8');
 
 test('company source analysis aborts stalled scrapes and preserves a usable completion path',()=>{
   assert.ok(app.includes('const ANALYSIS_SOURCE_TIMEOUT_MS=25000;'));
@@ -28,10 +29,14 @@ test('cloud save has a hard timeout so activation cannot remain busy',()=>{
   assert.ok(persistence.includes('withTimeout(()=>root.LeadIntelServerBridge?.saveNow?.(),SAVE_REQUEST_TIMEOUT_MS)'));
 });
 
+test('Discovery runtime cache key changes whenever spinner recovery changes',()=>{
+  assert.ok(discovery.includes('const ASSET_VERSION="20260914-spinner-hard-stop-v2";'));
+});
+
 test('customer page loads the spinner-safe bundles with fresh cache keys',()=>{
   for(const marker of [
-    'app.js?v=20260914-spinner-hard-stop-v1',
+    'app.js?v=20260914-spinner-hard-stop-v2',
     'process-map.js?v=20260914-spinner-hard-stop-v1',
-    'discovery-ui.js?v=20260914-spinner-hard-stop-v1'
+    'discovery-ui.js?v=20260914-spinner-hard-stop-v2'
   ])assert.ok(html.includes(marker),marker);
 });
