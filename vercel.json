@@ -14,17 +14,6 @@
       "use": "@vercel/python"
     }
   ],
-  "headers": [
-    {
-      "source": "/customer/:path*",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=300, stale-while-revalidate=86400"
-        }
-      ]
-    }
-  ],
   "routes": [
     {
       "src": "/api/scrapling",
