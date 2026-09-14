@@ -3,7 +3,7 @@ import './workspace-persistence.js?v=20260911-copilot-freshness-v1';
 import './state-budget.js?v=20260826-state-budget-500kb';
 import './website-input-sync.js?v=20260901-saved-state-v2';
 import './custom-market-input-hygiene.js?v=20260903-password-manager-isolation-v5';
-import './website-activation.js?v=20260911-company-context-isolation-v1';
+import './website-activation.js?v=20260914-workspace-isolation-v2';
 import './crm-engine.js?v=20260828-master-crm-v1';
 import './sync-conflict-hygiene.js?v=20260901-stale-blank-conflict-v1';
 import './server-bridge.js?v=20260905-app-audit-v2';
@@ -121,12 +121,57 @@ function contextReady(){
   const markets=Array.isArray(state.targetMarkets)?state.targetMarkets.filter(Boolean):[];
   return activated&&markets.length>0;
 }
-function currentProcessStep(){return Number(readProcessState().step)||1;}
+function readStageJson(key){
+  try{
+    const value=JSON.parse(localStorage.getItem(key)||"{}");
+    return value&&typeof value==="object"&&!Array.isArray(value)?value:{};
+  }catch{return {};}
+}
+function hasPipelineOpportunity(){
+  const discovery=readStageJson("leadintel_customer_v2_discovery");
+  return Array.isArray(discovery.pipeline)&&discovery.pipeline.length>0;
+}
+function hasOutreachContent(){
+  const outreach=readStageJson("leadintel_customer_v2_outreach");
+  return Array.isArray(outreach.items)&&outreach.items.some(item=>item&&(
+    item.approved||item.dossier||item.email||item.linkedin||item.callOpener||item.followUp
+  ));
+}
+function stageAvailability(){
+  const state=readProcessState();
+  window.LeadIntelWorkspaceIsolation?.reconcileLocalWorkspace?.(localStorage,state);
+  const current=readProcessState();
+  const ready=contextReady();
+  const profile=Boolean(current.profile);
+  const approved=Boolean(current.approved);
+  const strategy=Boolean(current.market?.strategyApproved);
+  const pipeline=hasPipelineOpportunity();
+  const content=hasOutreachContent();
+  return {
+    1:true,
+    2:ready,
+    3:ready,
+    4:ready&&profile&&approved,
+    5:ready&&profile&&approved&&strategy,
+    6:ready&&profile&&approved&&strategy&&pipeline,
+    7:ready&&profile&&approved&&strategy&&pipeline&&content
+  };
+}
+function currentProcessStep(){
+  const state=readProcessState();
+  return window.LeadIntelWorkspaceIsolation?.safeStep?.(localStorage,state,state.step)||Number(state.step)||1;
+}
+function processToast(message){
+  const toast=document.getElementById("toast");
+  if(!toast)return;
+  toast.textContent=message;toast.classList.add("show");
+  clearTimeout(processToast.timer);processToast.timer=setTimeout(()=>toast.classList.remove("show"),2600);
+}
 function syncProcessMap(){
   if(!processMap)return;
-  const current=currentProcessStep();const unlocked=contextReady();
+  const availability=stageAvailability();const current=currentProcessStep();
   processMap.querySelectorAll("[data-process-step]").forEach(button=>{
-    const step=Number(button.dataset.processStep);const available=step===1||unlocked;
+    const step=Number(button.dataset.processStep);const available=Boolean(availability[step]);
     button.classList.toggle("available",available);button.classList.toggle("active",step===current);button.classList.toggle("complete",available&&step<current);
     button.setAttribute("aria-disabled",available?"false":"true");
     if(step===current)button.setAttribute("aria-current","step");else button.removeAttribute("aria-current");
@@ -134,7 +179,14 @@ function syncProcessMap(){
 }
 function openProcessStep(step,attempt=0){
   const target=Number(step)||1;
-  if(target>1&&!contextReady()){document.querySelector('[data-step-marker="1"]')?.dispatchEvent(new MouseEvent("click",{bubbles:true}));syncProcessMap();return;}
+  const availability=stageAvailability();
+  if(!availability[target]){
+    const fallback=[...Array(Math.max(0,target-1)).keys()].map(value=>value+1).reverse().find(value=>availability[value])||1;
+    const marker=document.querySelector(`[data-step-marker="${fallback}"]`);
+    if(marker)marker.dispatchEvent(new MouseEvent("click",{bubbles:true}));
+    const message=target===5?"Activate Market Strategy before opening Discovery.":target===6?"Save a company to Pipeline in Discovery before opening Content & Scripts.":target===7?"Build and approve outreach content before opening Delivery & Learning.":"Complete the previous stage before continuing.";
+    processToast(message);syncProcessMap();return;
+  }
   if(target===2)syncContextArchitecture();
   const marker=document.querySelector(`[data-step-marker="${target}"]`);
   if(marker){marker.dispatchEvent(new MouseEvent("click",{bubbles:true}));if(target===2)setTimeout(syncContextArchitecture,0);if(target===3)setTimeout(relabelSalesMotionProfile,0);setTimeout(syncProcessMap,0);return;}
