@@ -47,7 +47,7 @@ test('website plus target market unlocks sidebar modules while enrichment remain
   assert.match(app,/Choose at least one target market/);
   assert.match(app,/querySelector\("\.steps"\).*addEventListener/s);
   assert.match(app,/MutationObserver/,'dynamic Steps 5–7 must inherit visible unlocked state after injection');
-  assert.match(app,/\[1,2,3,4,5,6,7\]\.includes\(Number\(raw\.step\)\)/,'app reload must preserve Steps 5–7');
+  assert.match(app,/\\[1,2,3,4,5,6,7\\]\\.includes\\(Number\\(source\\.step\\)\\)/,'app reload must preserve Steps 5–7');
   assert.doesNotMatch(app,/Complete \$\{missing\.length\} required question/);
   assert.doesNotMatch(discovery,/Activate Market Strategy before Discovery/);
   assert.doesNotMatch(outreach,/Save at least one company to Pipeline first/);
