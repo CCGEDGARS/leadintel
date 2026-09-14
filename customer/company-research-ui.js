@@ -10,7 +10,7 @@ const MAX_RESULTS_PER_QUERY=4;
 const COMPANY_RESEARCH_REQUEST_TIMEOUT_MS=25000;
 const COMPANY_RESEARCH_RUN_TIMEOUT_MS=60000;
 const COMPANY_RESEARCH_SAVE_TIMEOUT_MS=10000;
-const RELEASE='20260914-spinner-hard-stop-v2';
+const RELEASE='20260914-spinner-hard-stop-v3';
 let running=false;
 
 const engine=()=>window.LeadIntelCompanyResearch;
@@ -36,7 +36,7 @@ function toast(message){const node=$('toast');if(!node)return;node.textContent=m
 
 function ensureResearchUi(){
   injectCss();
-  const button=$('to-questionnaire');if(button){button.innerHTML='Research company & pre-fill context <span>→</span>';}
+  const button=$('to-questionnaire');if(button){button.innerHTML='Continue to optional context <span>→</span>';}
   const step1=document.getElementById('step-1');
   if(step1&&!document.getElementById('company-research-progress')){
     const actions=step1.querySelector('.step-actions');
@@ -62,7 +62,7 @@ function setProgress(title,detail,{done=false}={}){
   if($('company-research-title'))$('company-research-title').textContent=title;
   if($('company-research-detail'))$('company-research-detail').textContent=detail;
 }
-function setResearchButtonBusy(busy){const button=$('to-questionnaire');if(!button)return;button.disabled=busy;button.innerHTML=busy?'Researching company…':'Research company & pre-fill context <span>→</span>';}
+function setResearchButtonBusy(busy){const button=$('rerun-company-research');if(!button)return;button.disabled=busy;button.textContent=busy?'Researching company…':'Rerun company research';}
 function sourceMap(state){
   const map=new Map();(state.scrapedSources||[]).forEach((source,index)=>map.set(`S${index+1}`,{...source,id:`S${index+1}`}));
   (state.documents||[]).filter(doc=>String(doc?.text||'').trim()).forEach((doc,index)=>map.set(`D${index+1}`,{id:`D${index+1}`,type:'document',title:doc.name||`Document ${index+1}`}));
@@ -215,10 +215,8 @@ async function runCompanyResearch({rerun=false}={}){
   finally{clearTimeout(runTimer);running=false;setResearchButtonBusy(false);if(rerunButton)rerunButton.disabled=false;}
 }
 
-function interceptStepOne(event){event.preventDefault();event.stopImmediatePropagation();runCompanyResearch();}
 function bind(){
   ensureResearchUi();
-  $('to-questionnaire')?.addEventListener('click',interceptStepOne,{capture:true});
   document.getElementById('step-2')?.addEventListener('click',handleReviewAction);
   window.addEventListener('leadintel:server-ready',()=>{renderResearchReview();void translateResearchAnswers();});
   window.addEventListener('leadintel:workspace-changed',()=>{renderResearchReview();void translateResearchAnswers();});
