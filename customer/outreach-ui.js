@@ -1,12 +1,13 @@
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
+const DELIVERY_STORAGE_KEY="leadintel_customer_v2_delivery";
 const DISCOVERY_META_KEY="leadintel_customer_v2_discovery_meta";
 const INTELLIGENCE_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
 const MAX_DOSSIER_SEARCH_QUERIES=2;
 const MAX_DOSSIER_RESULTS_PER_QUERY=5;
 const ASSET_VERSION="20260828-master-crm-v1";
-const LANGUAGE_ASSET_VERSION="20260905-step1-language-v1";
+const LANGUAGE_ASSET_VERSION="20260914-workspace-isolation-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const q=id=>document.getElementById(id);
 let outreach=loadOutreach();
@@ -135,6 +136,12 @@ function renderAll(){ensureSelection();localizeVisibleItem();renderSelector();re
 function bindOutreach(){
   q("continue-to-outreach")?.addEventListener("click",showOutreachStep);q("back-to-discovery")?.addEventListener("click",backToDiscovery);q("outreach-company-select")?.addEventListener("change",e=>{outreach.selectedDomain=e.target.value;saveOutreach();renderDossier();});q("build-opportunity-dossier")?.addEventListener("click",buildDossier);q("regenerate-outreach")?.addEventListener("click",regenerateDrafts);q("approve-outreach")?.addEventListener("click",approveOutreach);q("mark-contacted")?.addEventListener("click",markContacted);q("dossier-workspace")?.addEventListener("click",e=>{const btn=e.target.closest("[data-copy-field]");if(btn)copyField(btn.dataset.copyField);});q("reset-workspace")?.addEventListener("click",()=>setTimeout(()=>{if(!localStorage.getItem(MAIN_STORAGE_KEY))localStorage.removeItem(OUTREACH_STORAGE_KEY);},0));
   window.addEventListener("leadintel:module-opened",event=>{if(Number(event.detail?.step)!==6)return;ensureSelection();renderAll();});
+  window.addEventListener("leadintel:website-activated",()=>{
+    outreach=LeadIntelOutreach.normalizeOutreachState({});
+    localStorage.removeItem(OUTREACH_STORAGE_KEY);
+    localStorage.removeItem(DELIVERY_STORAGE_KEY);
+    renderAll();
+  });
   window.addEventListener("leadintel:language-changed",renderAll);
 }
 function loadDeliveryModules(){
