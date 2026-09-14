@@ -176,7 +176,7 @@ function updateToolbar() {
   const settings = readSettings();
   const count = selected.size;
   const countNode = toolbar.querySelector('[data-apollo-selected-count]');
-  if (countNode) countNode.textContent = String(count);
+  if(countNode&&countNode.textContent!==String(count))countNode.textContent=String(count);
   const modeSelect = toolbar.querySelector('[data-apollo-mode]');
   if (modeSelect && modeSelect.value !== settings.mode) modeSelect.value = settings.mode;
   const batchControls = toolbar.querySelector('[data-apollo-batch-controls]');
@@ -219,7 +219,7 @@ function ensureToolbar() {
     '</select></label></div>',
     '<div class="apollo-toolbar-status">Email verification uses 1 Apollo credit per selected contact. Phone lookup can use up to 9 credits.</div>',
     '<div class="apollo-batch-controls" data-apollo-batch-controls hidden><div class="apollo-toolbar-actions"><strong><span data-apollo-selected-count>0</span> selected</strong>',
-    '<button class="secondary-btn small" type="button" data-apollo-bulk="email">Verify selected emails</button>',
+    '<button class="secondary-btn small" type="button" data-apollo-bulk="email">Verify selected emails with Apollo</button>',
     '<button class="secondary-btn small" type="button" data-apollo-bulk="phone">Find selected phones</button></div>',
     '<small>Batch mode processes selected contacts sequentially after one credit estimate and confirmation.</small></div>',
     '<div class="apollo-auto-controls" data-apollo-auto-controls hidden><label><input type="checkbox" data-apollo-auto-enabled> Enable automatic email verification</label>',
@@ -251,12 +251,12 @@ function decoratePersonRow(row) {
     checkbox.checked = selected.has(key);
   }
   if (emailButton && !/Working|verified/i.test(emailButton.textContent || '')) {
-    const label = emailButton.disabled ? 'Sign in to verify email' : 'Verify email with Apollo · 1 credit';
-    if (emailButton.textContent !== label) emailButton.textContent = label;
+    const emailLabel = emailButton.disabled ? 'Sign in to verify email' : 'Verify email with Apollo · 1 credit';
+    if(emailButton.textContent!==emailLabel) emailButton.textContent=emailLabel;
   }
   if (phoneButton && phoneButton.dataset.action === 'find-phone' && !/verified/i.test(phoneButton.textContent || '')) {
-    const label = phoneButton.disabled ? 'Sign in to find phone' : 'Find phone with Apollo · up to 9 credits';
-    if (phoneButton.textContent !== label) phoneButton.textContent = label;
+    const phoneLabel = phoneButton.disabled ? 'Sign in to find phone' : 'Find phone with Apollo · up to 9 credits';
+    if(phoneButton.textContent!==phoneLabel) phoneButton.textContent=phoneLabel;
   }
 }
 
