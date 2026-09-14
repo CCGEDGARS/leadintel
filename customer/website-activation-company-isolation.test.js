@@ -34,3 +34,19 @@ assert.deepEqual(JSON.parse(JSON.stringify(reactivated.answers)),previous.answer
 assert.deepEqual(JSON.parse(JSON.stringify(reactivated.documents)),previous.documents,"same-domain reactivation preserves uploaded material");
 
 console.log("website activation company-context isolation: PASS");
+
+(async()=>{
+  const originalFetch=global.fetch;
+  const originalAbortController=global.AbortController;
+  let signalSeen=false;
+  global.AbortController=class{constructor(){this.signal={};}abort(){}};
+  global.fetch=async(_url,options)=>{
+    signalSeen=Boolean(options?.signal);
+    const error=new Error("simulated abort");error.name="AbortError";throw error;
+  };
+  await assert.rejects(()=>activation.scrapeWebsite("https://example.com"),/Website activation timed out after 25 seconds/);
+  assert.equal(signalSeen,true,"website activation must pass an abort signal to the scraper");
+  global.fetch=originalFetch;
+  global.AbortController=originalAbortController;
+  console.log("website activation timeout recovery: PASS");
+})();
