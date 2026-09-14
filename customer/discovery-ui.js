@@ -50,7 +50,9 @@ function syncStrategyFingerprint(){
   const hasPipeline=Array.isArray(discovery.pipeline)&&discovery.pipeline.length>0;
   const websiteChanged=Boolean(currentWebsite&&metaWebsite&&currentWebsite!==metaWebsite);
   const legacyPipeline=Boolean(hasPipeline&&!metaWebsite);
-  if(websiteChanged||legacyPipeline){
+  const pipelineScopeNeedsReset=window.LeadIntelWorkspaceIsolation?.pipelineScopeNeedsReset?.(currentWebsite,meta,hasPipeline)
+    ?? Boolean(hasPipeline&&currentWebsite&&(!canonicalDomain(meta.pipelineWebsite)||canonicalDomain(meta.pipelineWebsite)!==currentWebsite));
+  if(websiteChanged||legacyPipeline||pipelineScopeNeedsReset){
     resetLocalDownstreamState();
     saveDiscovery();
     showToast("New customer workspace · previous discovery results were cleared");
@@ -59,7 +61,7 @@ function syncStrategyFingerprint(){
     enrichmentResults.clear();enrichmentPending.clear();saveDiscovery();
     showToast("Market Strategy changed · discovery candidates were refreshed");
   }
-  saveMeta({...loadMeta(),fingerprint:current,website:currentWebsite});
+  saveMeta({...loadMeta(),fingerprint:current,website:currentWebsite,pipelineWebsite:currentWebsite});
 }
 function canonicalDomain(value){return window.LeadIntelCrm?.canonicalDomain(value)||LeadIntelDiscovery.canonicalDomain(value);}
 function crmCompanyByDomain(value){const domain=canonicalDomain(value);return crmCompanies.find(company=>canonicalDomain(company.normalized_domain||company.website)===domain)||null;}

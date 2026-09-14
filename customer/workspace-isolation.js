@@ -58,7 +58,7 @@
       [outreach,"items"],[outreach,"activities"],[delivery,"items"],[delivery,"events"]
     ].some(([value,key])=>hasArray(value,key)))return true;
     if(clean(outreach.selectedDomain))return true;
-    if(Object.keys(meta).some(key=>!['fingerprint','visibleStep','website','sourceWebsite'].includes(key)))return true;
+    if(Object.keys(meta).some(key=>!['fingerprint','visibleStep','website','sourceWebsite','pipelineWebsite'].includes(key)))return true;
     if(Object.keys(research).length>0)return true;
     return false;
   }
@@ -113,10 +113,16 @@
       currentDomains.has(canonicalDomain(company?.normalized_domain||company?.domain||company?.website))
     );
   }
+  function pipelineScopeNeedsReset(currentWebsite,meta={},hasPipeline=false){
+    const current=canonicalDomain(currentWebsite);
+    const scope=canonicalDomain(meta?.pipelineWebsite||"");
+    return Boolean(hasPipeline&&current&&(!scope||scope!==current));
+  }
   return {
     MAIN_KEY,DISCOVERY_KEY,OUTREACH_KEY,DELIVERY_KEY,DISCOVERY_META_KEY,
     RESEARCH_META_KEY,MARKET_RESEARCH_RESUME_KEY,DIRTY_KEY,DERIVED_KEYS,
     clean,normalizeUrl,canonicalDomain,websiteFromMain,websiteFromMeta,
-    hasMeaningfulDerivedData,clearDerivedWorkspaceData,reconcileLocalWorkspace,safeStep
+    hasMeaningfulDerivedData,clearDerivedWorkspaceData,reconcileLocalWorkspace,safeStep,
+    filterPipelineForWorkspace,pipelineScopeNeedsReset
   };
 });
