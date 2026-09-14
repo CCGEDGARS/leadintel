@@ -151,13 +151,15 @@ test('Step 3 exposes analytical diagnostics and commercial frameworks', () => {
 });
 
 
-test('Step 1 runs evidence-first company research before the questionnaire', () => {
+test('Step 1 opens the questionnaire immediately and keeps evidence-first research optional', () => {
   const index = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   const researchUi = fs.readFileSync(path.join(__dirname, '..', 'company-research-ui.js'), 'utf8');
   const researchEngine = fs.readFileSync(path.join(__dirname, '..', 'company-research-engine.js'), 'utf8');
   assert.match(index, /company-research-ui\.js/);
   assert.match(researchUi, /runCompanyResearch/);
-  assert.match(researchUi, /Research company & pre-fill context/);
+  assert.match(researchUi, /Continue to optional context/);
+  assert.match(researchUi, /rerun-company-research/);
+  assert.doesNotMatch(researchUi, /function interceptStepOne/);
   assert.match(researchUi, /Evidence draft/);
   assert.match(researchEngine, /buildEvidenceDraft/);
   assert.match(researchEngine, /mergeDraft/);
