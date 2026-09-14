@@ -119,6 +119,7 @@
   }
   function syncActivationIntoWorkspace(){const record=readActivationRecord();const next=mergeRecordIntoState(readState(),record);writeState(next);return next;}
   function clearDerivedWorkspaceData(){
+    if(root?.localStorage?.removeItem)root.localStorage.removeItem(DISCOVERY_META_KEY);
     const helper=root?.LeadIntelWorkspaceIsolation;
     if(helper?.clearDerivedWorkspaceData)return helper.clearDerivedWorkspaceData(root.localStorage);
     const keys=[DISCOVERY_META_KEY,"leadintel_customer_v2_discovery","leadintel_customer_v2_outreach","leadintel_customer_v2_delivery",RESEARCH_META_KEY,"leadintel_customer_v2_market_research_resume","leadintel_customer_v2_server_dirty"];
