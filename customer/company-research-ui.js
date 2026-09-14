@@ -179,8 +179,8 @@ async function runCompanyResearch({rerun=false}={}){
     const companyName=researchEngine.deriveCompanyName(official,website);
     setProgress('Discovering authoritative company pages…','Finding company, offer, project, delivery and contact pages on the verified domain.');
     const authoritativeRows=[];const authoritativeQueries=researchEngine.buildAuthoritativePageQueries({website,companyName});
-    const authoritativeSettled=await Promise.allSettled(authoritativeQueries.map(query=>searchPublic(query,runController.signal)));
-    authoritativeSettled.forEach(result=>{if(result.status==='fulfilled')authoritativeRows.push(...result.value);else failures++;});
+    const authoritativeSearchSettled=await Promise.allSettled(authoritativeQueries.map(query=>searchPublic(query,runController.signal)));
+    authoritativeSearchSettled.forEach(result=>{if(result.status==='fulfilled')authoritativeRows.push(...result.value);else failures++;});
     const existingUrls=new Set(official.map(source=>researchEngine.safeUrl(source.url)));const authoritativeCandidates=researchEngine.selectAuthoritativePageCandidates(authoritativeRows,website,8).filter(source=>!existingUrls.has(researchEngine.safeUrl(source.url)));
     const authoritativeSettled=await Promise.allSettled(authoritativeCandidates.map(source=>scrapeSource(source.url,'link',source.pageCategory,runController.signal)));
     authoritativeSettled.forEach(result=>{if(result.status==='fulfilled')official.push(result.value);else failures++;});
