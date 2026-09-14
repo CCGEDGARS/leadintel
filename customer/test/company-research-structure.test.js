@@ -31,6 +31,11 @@ test('Step 1 becomes research-first and intercepts legacy questionnaire navigati
   assert.match(ui,/stopImmediatePropagation\(\)/);
   assert.match(ui,/MAX_COMPANY_RESEARCH_QUERIES\s*=\s*3/);
   assert.match(ui,/MAX_RESULTS_PER_QUERY\s*=\s*4/);
+  assert.match(ui,/COMPANY_RESEARCH_REQUEST_TIMEOUT_MS\s*=\s*25000/);
+  assert.match(ui,/COMPANY_RESEARCH_RUN_TIMEOUT_MS\s*=\s*60000/);
+  assert.match(ui,/new AbortController\(\)/);
+  assert.match(ui,/Promise\.allSettled/);
+  assert.match(ui,/Research stopped safely/);
 });
 
 test('company research discovers and scrapes authoritative internal pages before synthesis',()=>{
