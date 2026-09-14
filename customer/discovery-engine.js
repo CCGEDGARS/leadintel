@@ -12,6 +12,8 @@
     "glassdoor.com","indeed.com","tiktok.com","reddit.com"
   ];
   const TENDER_HOSTS=["eis.gov.lv","iub.gov.lv","procurement.gov.lv"];
+  const DEFAULT_DISCOVERY_TARGET=10;
+  const MAX_DISCOVERY_TARGET=50;
   const DEFAULT_DISCOVERY_STATE=Object.freeze({status:"idle",queries:[],rawResults:[],candidates:[],pipeline:[],lastRunAt:""});
   const STOPWORDS=new Set(["with","from","that","this","your","their","into","over","under","company","companies","business","businesses","priority","market","markets","customer","customers","service","services","product","products","industrial"]);
   const ROLE_GENERIC_WORDS=new Set(["chief","officer","director","manager","managing","head","vice","president","vp","senior","lead","leader","executive","global","regional","group"]);
@@ -91,12 +93,11 @@
     return `${company} is ranked ${total}/100 using ${sources} public evidence source${sources===1?'':'s'}${signal?` and the matched signal “${signal}”`:''}. The score indicates research priority, not confirmed buying intent.`;
   }
 
-  function discoveryLimits(targetCount=0){
-    const target=Number(targetCount);
-    if(target===10)return {targetCount:10,queryCount:4,resultsPerQuery:5};
-    if(target===25)return {targetCount:25,queryCount:8,resultsPerQuery:5};
-    if(target===50)return {targetCount:50,queryCount:10,resultsPerQuery:5};
-    return {targetCount:12,queryCount:4,resultsPerQuery:5};
+  function discoveryLimits(targetCount=DEFAULT_DISCOVERY_TARGET){
+    const raw=Number(targetCount);
+    const target=Number.isFinite(raw)&&raw>0?Math.max(1,Math.min(MAX_DISCOVERY_TARGET,Math.round(raw))):DEFAULT_DISCOVERY_TARGET;
+    const queryCount=target<=10?4:target<=25?8:10;
+    return {targetCount:target,queryCount,resultsPerQuery:5};
   }
 
   function buildDiscoveryQueries(profile={},marketState={},maxQueries=4){
@@ -321,9 +322,9 @@
     return {
       ...DEFAULT_DISCOVERY_STATE,
       status:allowedStatus.has(input.status)?input.status:"idle",
-      queries:(Array.isArray(input.queries)?input.queries:[]).slice(0,4).map(q=>({id:clean(q.id),market:clean(q.market),query:clean(q.query),offer:clean(q.offer)})).filter(q=>q.id&&q.query),
-      rawResults:(Array.isArray(input.rawResults)?input.rawResults:[]).slice(0,20).map(normalizeRaw).filter(item=>item.url&&item.domain),
-      candidates:(Array.isArray(input.candidates)?input.candidates:[]).slice(0,12).map(safeCandidate).filter(item=>item.domain),
+      queries:(Array.isArray(input.queries)?input.queries:[]).slice(0,10).map(q=>({id:clean(q.id),market:clean(q.market),query:clean(q.query),offer:clean(q.offer)})).filter(q=>q.id&&q.query),
+      rawResults:(Array.isArray(input.rawResults)?input.rawResults:[]).slice(0,50).map(normalizeRaw).filter(item=>item.url&&item.domain),
+      candidates:(Array.isArray(input.candidates)?input.candidates:[]).slice(0,50).map(safeCandidate).filter(item=>item.domain),
       pipeline:(Array.isArray(input.pipeline)?input.pipeline:[]).slice(0,50).map(normalizePipelineItem).filter(item=>item.domain),
       lastRunAt:clean(input.lastRunAt)
     };

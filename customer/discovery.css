@@ -6,3 +6,15 @@
 
 /* Typography v2 */
 .company-card-top a{font-size:var(--type-meta)}.company-total span{font:500 var(--type-micro) "IBM Plex Mono",monospace}.company-score-grid span{font:600 var(--type-micro) "IBM Plex Mono",monospace}.company-score-grid strong{font-size:var(--type-secondary)}.candidate-meta>span{font:500 var(--type-micro) "IBM Plex Mono",monospace}.matched-signals span{font-size:11.5px}.candidate-evidence strong{font-size:12.5px;line-height:1.45}.candidate-evidence small{font-size:var(--type-meta);line-height:1.5}.decision-head>strong{font-size:var(--type-secondary)}.people-note{font-size:var(--type-meta)}.people-list strong{font-size:var(--type-secondary)}.people-list span,.people-list small{font-size:var(--type-meta);line-height:1.4}.pipeline-row{font-size:var(--type-secondary);padding:13px 14px}.pipeline-row.header{font:600 var(--type-micro) "IBM Plex Mono",monospace}.pipeline-row strong{font-size:var(--type-secondary)}.pipeline-row a{font-size:11.5px}.pipeline-score{font-size:15px}.pipeline-row select{font:500 var(--type-secondary) "DM Sans",sans-serif}.company-score-legend strong{font-size:12.5px}.research-status{font-size:var(--type-meta)}.discovery-panel .market-empty,.pipeline-panel .market-empty{font-size:var(--type-secondary);line-height:1.6}
+
+/* Discovery target control v2 */
+.discovery-target-control select,.discovery-target-control input.discovery-target-custom{width:100%;border:1px solid #cfd6d1;background:#fff;border-radius:9px;padding:11px 12px;font:500 12px "DM Sans",sans-serif;color:var(--ink)}
+.discovery-target-control input.discovery-target-custom:not([hidden]){display:block}
+.discovery-target-control small{max-width:260px}
+.discovery-run-btn{min-width:250px;min-height:52px;padding:15px 22px!important;border:2px solid var(--accent2)!important;background:var(--accent2)!important;font-size:15px!important;font-weight:700!important;box-shadow:0 10px 24px rgba(13,93,79,.20)!important}
+.discovery-run-btn:hover,.discovery-run-btn:focus-visible{background:#08483d!important;border-color:#08483d!important;box-shadow:0 12px 28px rgba(13,93,79,.28)!important;transform:translateY(-1px)}
+.discovery-run-btn:focus-visible{outline:3px solid rgba(188,143,42,.38);outline-offset:3px}
+.discovery-run-btn:disabled{opacity:.5!important;box-shadow:none!important}
+.discovery-run-btn>span{font-size:18px;line-height:1}
+@media(max-width:900px){.discovery-target-control{min-width:220px}.discovery-run-btn{min-width:220px}}
+@media(max-width:760px){.discovery-run-btn{width:100%;min-width:0}.discovery-target-control input.discovery-target-custom{margin-bottom:0}}

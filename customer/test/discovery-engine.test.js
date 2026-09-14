@@ -153,3 +153,12 @@ test('normalizeDiscoveryState caps candidates, pipeline and selected decision-ma
   assert.ok(state.candidates.every(x=>x.people.length<=4));
   assert.equal(state.pipeline[0].stage,'Discovered');
 });
+
+
+test('discovery limits start at ten and support bounded custom targets',()=>{
+  assert.deepEqual(Discovery.discoveryLimits(),{targetCount:10,queryCount:4,resultsPerQuery:5});
+  assert.deepEqual(Discovery.discoveryLimits(25),{targetCount:25,queryCount:8,resultsPerQuery:5});
+  assert.deepEqual(Discovery.discoveryLimits(37),{targetCount:37,queryCount:10,resultsPerQuery:5});
+  assert.equal(Discovery.discoveryLimits(0).targetCount,10);
+  assert.equal(Discovery.discoveryLimits(500).targetCount,50);
+});
