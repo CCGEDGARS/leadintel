@@ -1,10 +1,13 @@
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
+const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
+const DELIVERY_STORAGE_KEY="leadintel_customer_v2_delivery";
+const DISCOVERY_META_KEY="leadintel_customer_v2_discovery_meta";
 const INTELLIGENCE_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
 const MAX_DISCOVERY_QUERIES=4;
 const MAX_DISCOVERY_RESULTS_PER_QUERY=5;
 const ASSET_VERSION="20260828-master-crm-v1";
-const LANGUAGE_ASSET_VERSION="20260906-customer-pains-v1";
+const LANGUAGE_ASSET_VERSION="20260914-workspace-isolation-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const $=id=>document.getElementById(id);
 let discovery=loadDiscovery();
@@ -28,7 +31,36 @@ function showToast(message){const toast=$("toast");if(!toast)return;toast.textCo
 function fingerprint(){const main=mainState();const market=main.market||{};return JSON.stringify({company:main.profile?.companyName||"",website:main.profile?.website||main.website||"",approved:market.strategyApprovedAt||"",icps:(market.icps||[]).filter(x=>x.active!==false).map(x=>[x.id,x.description,x.targetMarkets]),signals:(market.signals||[]).filter(x=>x.active!==false).map(x=>[x.id,x.weight,x.keywords]),opps:(market.opportunities||[]).filter(x=>x.active!==false).map(x=>[x.id,x.market,x.score?.total])});}
 function loadMeta(){try{return JSON.parse(localStorage.getItem(`${DISCOVERY_STORAGE_KEY}_meta`)||"{}" );}catch{return {};}}
 function saveMeta(meta){localStorage.setItem(`${DISCOVERY_STORAGE_KEY}_meta`,JSON.stringify(meta));}
-function syncStrategyFingerprint(){const meta=loadMeta();const current=fingerprint();if(meta.fingerprint&&meta.fingerprint!==current){discovery=LeadIntelDiscovery.normalizeDiscoveryState({pipeline:discovery.pipeline});enrichmentResults.clear();enrichmentPending.clear();saveDiscovery();showToast("Market Strategy changed · discovery candidates were refreshed");}saveMeta({...meta,fingerprint:current});}
+function resetLocalDownstreamState(){
+  discovery=LeadIntelDiscovery.normalizeDiscoveryState({});
+  enrichmentResults.clear();enrichmentPending.clear();
+  localStorage.removeItem(DISCOVERY_STORAGE_KEY);
+  localStorage.removeItem(OUTREACH_STORAGE_KEY);
+  localStorage.removeItem(DELIVERY_STORAGE_KEY);
+  localStorage.removeItem(DISCOVERY_META_KEY);
+}
+function syncStrategyFingerprint(){
+  const main=mainState();
+  const reconciliation=window.LeadIntelWorkspaceIsolation?.reconcileLocalWorkspace?.(localStorage,main);
+  if(reconciliation?.cleared)resetLocalDownstreamState();
+  const meta=loadMeta();
+  const current=fingerprint();
+  const currentWebsite=window.LeadIntelWorkspaceIsolation?.websiteFromMain?.(main)||canonicalDomain(main.website||main.profile?.website||"");
+  const metaWebsite=window.LeadIntelWorkspaceIsolation?.websiteFromMeta?.(meta)||canonicalDomain(meta.website||"");
+  const hasPipeline=Array.isArray(discovery.pipeline)&&discovery.pipeline.length>0;
+  const websiteChanged=Boolean(currentWebsite&&metaWebsite&&currentWebsite!==metaWebsite);
+  const legacyPipeline=Boolean(hasPipeline&&!metaWebsite);
+  if(websiteChanged||legacyPipeline){
+    resetLocalDownstreamState();
+    saveDiscovery();
+    showToast("New customer workspace · previous discovery results were cleared");
+  }else if(meta.fingerprint&&meta.fingerprint!==current){
+    discovery=LeadIntelDiscovery.normalizeDiscoveryState({pipeline:discovery.pipeline});
+    enrichmentResults.clear();enrichmentPending.clear();saveDiscovery();
+    showToast("Market Strategy changed · discovery candidates were refreshed");
+  }
+  saveMeta({...loadMeta(),fingerprint:current,website:currentWebsite});
+}
 function canonicalDomain(value){return window.LeadIntelCrm?.canonicalDomain(value)||LeadIntelDiscovery.canonicalDomain(value);}
 function crmCompanyByDomain(value){const domain=canonicalDomain(value);return crmCompanies.find(company=>canonicalDomain(company.normalized_domain||company.website)===domain)||null;}
 function personKey(candidate,person){return `${canonicalDomain(candidate?.domain||candidate?.website)}|${String(person?.id||"")}`;}
@@ -88,6 +120,11 @@ function bindDiscovery(){
   $("customer-pipeline")?.addEventListener("click",event=>{const remove=event.target.closest("[data-pipeline-remove]");if(remove){removePipelineCompany(remove.dataset.pipelineRemove,remove.dataset.domain);return;}const open=event.target.closest("[data-open-crm-company]");if(open)document.getElementById("open-crm")?.click();});
   $("reset-workspace")?.addEventListener("click",()=>setTimeout(()=>{if(!localStorage.getItem(MAIN_STORAGE_KEY)){localStorage.removeItem(DISCOVERY_STORAGE_KEY);localStorage.removeItem(`${DISCOVERY_STORAGE_KEY}_meta`);discovery=LeadIntelDiscovery.normalizeDiscoveryState({});crmCompanies=[];crmPipeline=[];crmAvailable=false;enrichmentResults.clear();enrichmentPending.clear();}},0));
   window.addEventListener("leadintel:module-opened",event=>{if(Number(event.detail?.step)!==5)return;syncStrategyFingerprint();saveMeta({...loadMeta(),visibleStep:5});renderAll();if(crmAuthenticated())refreshCrmState();});
+  window.addEventListener("leadintel:website-activated",()=>{
+    resetLocalDownstreamState();
+    syncStrategyFingerprint();
+    renderAll();
+  });
   window.addEventListener("leadintel:server-ready",()=>refreshCrmState());
   window.addEventListener("leadintel:crm-migrated",()=>refreshCrmState());
   window.addEventListener("leadintel:crm-changed",()=>refreshCrmState());
