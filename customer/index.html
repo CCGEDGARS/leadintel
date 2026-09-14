@@ -309,20 +309,10 @@
   <script defer src="discovery-engine.js?v=20260914-discovery-controls-v2"></script>
   <script defer src="workspace-isolation.js?v=20260914-workspace-isolation-v1"></script>
   <script defer src="language.js?v=20260905-audit-v1"></script>
-  <script type="module">
-    (async()=>{
-      const ready = document.readyState === "loading"
-        ? new Promise(resolve => document.addEventListener("DOMContentLoaded", resolve, {once:true}))
-        : Promise.resolve();
-      await ready;
-      await import("./app.js?v=20260914-discovery-signal-seeding-v2");
-      await import("./process-map.js?v=20260914-workspace-isolation-v1");
-      await import("./discovery-ui.js?v=20260914-discovery-controls-v2");
-      await import("./company-research-ui.js?v=20260906-selector-language-v2");
-    })().catch(error=>{
-      console.error("LeadIntel customer runtime failed", error);
-      document.body.dataset.runtimeError = "true";
-    });
-  </script>
+  <script type="module" src="app.js?v=20260914-discovery-signal-seeding-v2"></script>
+  <script defer src="language.js?v=20260905-audit-v1"></script>
+  <script type="module" src="process-map.js?v=20260914-workspace-isolation-v1"></script>
+  <script type="module" src="discovery-ui.js?v=20260914-discovery-controls-v2"></script>
+  <script type="module" src="company-research-ui.js?v=20260906-selector-language-v2"></script>
 </body>
 </html>
