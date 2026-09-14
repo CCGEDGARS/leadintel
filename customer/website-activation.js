@@ -13,6 +13,8 @@
   const FIRECRAWL_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
   const RELEASE="20260914-workspace-isolation-v1";
   const MAX_SOURCE_CHARS=30000;
+  const ACTIVATION_REQUEST_TIMEOUT_MS=25000;
+  const PERSISTENCE_TIMEOUT_MS=10000;
   let running=false;
   let activationError="";
 
@@ -106,11 +108,34 @@
     setStatus("idle",record?.status==="active"?"Website changed — activate this URL to replace the current source.":"Not activated yet — connect the website to load company evidence.");
   }
   async function scrapeWebsite(url){
-    const response=await root.fetch(`${FIRECRAWL_PROXY}/firecrawl-scrape`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url,formats:["markdown"],onlyMainContent:true,timeout:30000})});
-    const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`Website returned ${response.status}`);
-    const data=payload.data||payload;const text=String(data.markdown||data.content||"").replace(/\u0000/g,"").trim().slice(0,MAX_SOURCE_CHARS);
-    if(!text)throw new Error("No readable website content was returned");
-    return {url,title:data.metadata?.title||data.title||new URL(url).hostname,description:data.metadata?.description||"",text};
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),ACTIVATION_REQUEST_TIMEOUT_MS);
+    try{
+      const response=await root.fetch(`${FIRECRAWL_PROXY}/firecrawl-scrape`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url,formats:["markdown"],onlyMainContent:true,timeout:30000}),signal:controller.signal});
+      const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`Website returned ${response.status}`);
+      const data=payload.data||payload;const text=String(data.markdown||data.content||"").replace(/\u0000/g,"").trim().slice(0,MAX_SOURCE_CHARS);
+      if(!text)throw new Error("No readable website content was returned");
+      return {url,title:data.metadata?.title||data.title||new URL(url).hostname,description:data.metadata?.description||"",text};
+    }catch(error){
+      if(error?.name==="AbortError")throw new Error("Website activation timed out after 25 seconds");
+      throw error;
+    }finally{
+      clearTimeout(timeout);
+    }
+  }
+  async function savePersistenceWithTimeout(){
+    const persistence=root.LeadIntelWorkspacePersistence;
+    const save=()=>persistence?.saveWorkspace?persistence.saveWorkspace():root.LeadIntelServerBridge?.saveNow?.();
+    if(typeof save!=="function")return;
+    let timer;
+    try{
+      await Promise.race([
+        Promise.resolve().then(save),
+        new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error("Workspace save timed out")),PERSISTENCE_TIMEOUT_MS);})
+      ]);
+    }finally{
+      clearTimeout(timer);
+    }
   }
   function mergeRecordIntoState(state,record){
     if(!isActivationRecordActive(record,record?.url))return state;
@@ -145,11 +170,7 @@
       writeActivationRecord(record);writeState(next);
       try{root.dispatchEvent(new CustomEvent("leadintel:website-activated",{detail:{website:record.url,activation:record}}));}catch{}
       returnToWebsiteStep();
-      try{
-        const persistence=root.LeadIntelWorkspacePersistence;
-        if(persistence?.saveWorkspace)await persistence.saveWorkspace();
-        else await root.LeadIntelServerBridge?.saveNow?.();
-      }catch{}
+      try{await savePersistenceWithTimeout();}catch{}
       activationError="";setStatus("active",`✓ Website active · ${record.title||new URL(record.url).hostname} · ${formatChars(record.contentChars)} loaded`);return true;
     }catch(error){activationError=`Activation failed · ${clean(error?.message)||"Website could not be read"}`;setStatus("error",activationError);return false;}
     finally{running=false;render();}
