@@ -166,7 +166,8 @@ async function forwardFirecrawl(request,env,cors,workspaceId,kind){
   }else{
     const rawQuery=String(body.query||'').trim();if(!rawQuery||rawQuery.length>600)return error('Firecrawl search query is invalid',400,cors);const query=clean(rawQuery,600);
     const limit=Math.max(1,Math.min(10,Math.floor(Number(body.limit)||4)));
-    payload={query,limit,scrapeOptions:{formats:['markdown']}};
+    const wantsMarkdown=Array.isArray(body.scrapeOptions?.formats)&&body.scrapeOptions.formats.includes('markdown');
+    payload={query,limit,...(wantsMarkdown?{scrapeOptions:{formats:['markdown']}}:{})};
     target=credential.source==='customer'?'https://api.firecrawl.dev/v2/search':`${clean(env.FIRECRAWL_PROXY_URL||FIRECRAWL_PROXY_URL,500)}/firecrawl-search`;
   }
   const headers={'Content-Type':'application/json',Accept:'application/json'};if(credential.source==='customer')headers.Authorization=`Bearer ${credential.apiKey}`;
