@@ -42,7 +42,8 @@ async function routedFetch(input,options={}){
   if(kind==='search')options=sanitizeSearchRequestOptions(options);
   try{
     const response=await originalFetch(target,{...options,credentials:'include',headers:{Accept:'application/json',...(options.headers||{})}});
-    if(!retryableStatus(response.status)||options?.signal?.aborted)return response;
+    if(!retryableStatus(response.status))return response;
+    if(options?.signal?.aborted)return response;
     const scrapling=scraplingTarget(kind);const url=extractScrapeUrl(options);
     if(scrapling&&url){
       try{
