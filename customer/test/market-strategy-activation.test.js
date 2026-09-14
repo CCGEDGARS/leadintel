@@ -11,5 +11,5 @@ test("market strategy activation has a visible handoff to Company Discovery", ()
   assert.match(app, /event\.target\?\.closest\?\.\("#activate-market-strategy"\)/);
   assert.match(app, /event\.stopImmediatePropagation\(\)/);
   assert.match(index, /id="strategy-activation-feedback"/);
-  assert.match(index, /app\.js\?v=20260914-discovery-signal-seeding-v2/);
+  assert.match(index, /app\.js\?v=20260914-discovery-bootstrap-v1/);
 });

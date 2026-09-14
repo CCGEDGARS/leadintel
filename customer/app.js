@@ -598,20 +598,27 @@ function setActivationFeedback(message,tone){
   target.hidden=!message;
 }
 function openDiscoveryAfterActivation(){
+  window.__leadIntelPendingDiscoveryOpen=true;
+  const opened=()=>document.getElementById("step-5")?.classList.contains("active")||false;
+  const complete=()=>{const active=opened();if(active)window.__leadIntelPendingDiscoveryOpen=false;return active;};
   const attempt=()=>{
+    if(window.LeadIntelDiscoveryUI?.open){
+      window.LeadIntelDiscoveryUI.open();
+      if(complete())return true;
+    }
     window.dispatchEvent(new CustomEvent("leadintel:open-discovery"));
-    if(document.getElementById("step-5")?.classList.contains("active"))return true;
+    if(complete())return true;
     const continueButton=$("continue-to-discovery");
-    if(continueButton){continueButton.click();if(document.getElementById("step-5")?.classList.contains("active"))return true;}
+    if(continueButton){continueButton.click();if(complete())return true;}
     const processButton=document.querySelector('[data-process-step="5"]');
-    if(processButton){processButton.click();if(document.getElementById("step-5")?.classList.contains("active"))return true;}
+    if(processButton){processButton.click();if(complete())return true;}
     const marker=document.querySelector('[data-step-marker="5"]');
-    if(marker){marker.dispatchEvent(new MouseEvent("click",{bubbles:true}));return document.getElementById("step-5")?.classList.contains("active")||false;}
+    if(marker){marker.dispatchEvent(new MouseEvent("click",{bubbles:true}));return complete();}
     return false;
   };
-  const opened=attempt();
-  if(!opened)[100,300,700,1200].forEach(delay=>setTimeout(()=>{if(!document.getElementById("step-5")?.classList.contains("active"))attempt();},delay));
-  return opened;
+  const activated=attempt();
+  if(!activated)[100,300,700,1200].forEach(delay=>setTimeout(()=>{if(!opened())attempt();},delay));
+  return activated;
 }
 async function activateMarketStrategy(){
   const button=$("activate-market-strategy");

@@ -25,7 +25,10 @@ test("discovery requires at least one active buying signal",()=>{
   assert.equal(discovery.hasActiveSignals({signals:[{name:"Expansion",active:true}]}),true);
 });
 
-test("discovery does not present a company as qualified without signal evidence",()=>{
+test("discovery does not classify a company as qualified without signal evidence",()=>{
   const results=discovery.mergeCompanyCandidates([{url:"https://generic.lv",domain:"generic.lv",title:"Generic office furniture",text:"Office furniture company in Latvia"}],{website:"https://ajprodukti.lv",priorityOffers:"Office furniture",idealCustomer:"Companies"},{researchSourceTypes:["news"],signals:[{name:"Facility expansion",active:true,weight:9,keywords:"new factory; expansion"}]});
-  assert.deepEqual(results,[]);
+  assert.equal(results.length,1);
+  assert.equal(results[0].matchedSignals.length,0);
+  assert.equal(results[0].score.signal,0);
+  assert.equal(results[0].confidence,"Low");
 });

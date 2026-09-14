@@ -343,5 +343,11 @@
     };
   }
 
-  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,discoveryLimits,buildDiscoveryQueries,buildCandidateNarrative,normalizeCompanySearchResults,mergeCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,hasActiveSignals};
+  function recoverInterruptedDiscoveryState(value={}){
+    const state=normalizeDiscoveryState(value);
+    if(state.status!=="running")return state;
+    return {...state,status:state.candidates.length||state.rawResults.length?"partial":"error"};
+  }
+
+  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,discoveryLimits,buildDiscoveryQueries,buildCandidateNarrative,normalizeCompanySearchResults,mergeCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,recoverInterruptedDiscoveryState,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,hasActiveSignals};
 });
