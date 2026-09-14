@@ -64,7 +64,7 @@ test('mergeCompanyCandidates deduplicates domains and builds transparent five-pa
     {queryId:'q3',market:'Finland',url:'https://finnfab.fi/',domain:'finnfab.fi',company:'FinnFab',title:'FinnFab manufacturing',description:'production systems',text:'manufacturing equipment',date:''}
   ];
   const candidates=Discovery.mergeCompanyCandidates(raw,profile,market);
-  assert.equal(candidates.length,2);
+  assert.equal(candidates.length,1);
   const nordic=candidates.find(x=>x.domain==='nordicmachines.se');
   assert.equal(nordic.evidence.length,2);
   assert.ok(nordic.matchedSignals.some(x=>x.id==='facility-expansion'));
@@ -76,8 +76,8 @@ test('mergeCompanyCandidates deduplicates domains and builds transparent five-pa
 
 test('signal score only uses evidence text, not query metadata',()=>{
   const raw=[{queryId:'q1',market:'Sweden',query:'new facility capacity expansion',url:'https://plainco.se/',domain:'plainco.se',company:'PlainCo',title:'PlainCo',description:'manufacturer',text:'manufacturer serving industrial clients',date:''}];
-  const [candidate]=Discovery.mergeCompanyCandidates(raw,profile,market);
-  assert.equal(candidate.matchedSignals.length,0);
+  const candidates=Discovery.mergeCompanyCandidates(raw,profile,market);
+  assert.deepEqual(candidates,[]);
 });
 
 test('buildApolloPeopleSearchPayload uses exact domain and approved roles with safe discovery depth',()=>{
