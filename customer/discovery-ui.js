@@ -6,7 +6,7 @@ const DISCOVERY_META_KEY="leadintel_customer_v2_discovery_meta";
 const INTELLIGENCE_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
 const MAX_DISCOVERY_QUERIES=10;
 const MAX_DISCOVERY_RESULTS_PER_QUERY=5;
-const ASSET_VERSION="20260914-discovery-hard-stop-v1";
+const ASSET_VERSION="20260914-discovery-search-only-v1";
 const LANGUAGE_ASSET_VERSION="20260914-workspace-isolation-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const $=id=>document.getElementById(id);
@@ -104,7 +104,7 @@ async function firecrawlCompanySearch(queryMeta){
   const controller=new AbortController();
   const timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS);
   try{
-    const response=await fetch(`${INTELLIGENCE_PROXY}/firecrawl-search`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:queryMeta.query,limit:MAX_DISCOVERY_RESULTS_PER_QUERY,scrapeOptions:{formats:["markdown"]}}),signal:controller.signal});
+    const response=await fetch(`${INTELLIGENCE_PROXY}/firecrawl-search`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:queryMeta.query,limit:MAX_DISCOVERY_RESULTS_PER_QUERY}),signal:controller.signal});
     const payload=await response.json().catch(()=>({}));
     if(!response.ok)throw new Error(payload.error||`Company search returned ${response.status}`);
     return LeadIntelDiscovery.normalizeCompanySearchResults(payload,queryMeta);
