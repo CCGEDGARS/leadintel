@@ -15,20 +15,21 @@ const css=read('company-research.css');
 test('Customer V2 loads the automatic company research module with Firecrawl workspace routing before research',()=>{
   assert.match(processMap,/firecrawl-workspace-router\.js\?v=20260914-spinner-hard-stop-v1/);
   assert.match(processMap,/company-research-security\.js\?v=20260906-authoritative-depth-v1/);
-  assert.match(processMap,/company-research-ui\.js\?v=20260914-spinner-hard-stop-v2/);
+  assert.match(processMap,/company-research-ui\.js\?v=20260914-spinner-hard-stop-v3/);
   assert.ok(processMap.indexOf('firecrawl-workspace-router.js')<processMap.indexOf('company-research-ui.js'),'Firecrawl router must load before company research');
   assert.match(processMap,/company-profile-handoff\.js\?v=20260826-intelligence-autofill-v1/);
   assert.match(ui,/company-research-engine\.js\?v=20260906-selector-language-v2/);
   assert.match(read('index.html'),/profile-engine\.js\?v=20260914-recommended-signals-v2/);
   assert.match(read('index.html'),/process-map\.js\?v=20260914-spinner-hard-stop-v1/);
-  assert.match(read('index.html'),/company-research-ui\.js\?v=20260914-spinner-hard-stop-v2/);
+  assert.match(read('index.html'),/company-research-ui\.js\?v=20260914-spinner-hard-stop-v3/);
 });
 
-test('Step 1 becomes research-first and intercepts legacy questionnaire navigation safely',()=>{
-  assert.match(ui,/Research company & pre-fill context/);
-  assert.match(ui,/to-questionnaire/);
-  assert.match(ui,/capture:\s*true/);
-  assert.match(ui,/stopImmediatePropagation\(\)/);
+test('Step 1 navigation opens immediately and keeps company research optional',()=>{
+  assert.match(ui,/Continue to optional context/);
+  assert.match(ui,/rerun-company-research/);
+  assert.doesNotMatch(ui,/function interceptStepOne/);
+  assert.doesNotMatch(ui,/to-questionnaire'\)\?\.addEventListener/);
+  assert.doesNotMatch(ui,/stopImmediatePropagation\(\)/);
   assert.match(ui,/MAX_COMPANY_RESEARCH_QUERIES\s*=\s*3/);
   assert.match(ui,/MAX_RESULTS_PER_QUERY\s*=\s*4/);
   assert.match(ui,/COMPANY_RESEARCH_REQUEST_TIMEOUT_MS\s*=\s*25000/);
