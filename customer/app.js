@@ -13,6 +13,7 @@ const MAX_PDF_BYTES=15*1024*1024;
 const MAX_PDFS=5;
 const RESET_CONFIRM_WINDOW_MS=5000;
 const RESEARCH_REQUEST_TIMEOUT_MS=30000;
+const ANALYSIS_SOURCE_TIMEOUT_MS=25000;
 const RESEARCH_CONCURRENCY=3;
 const MARKET_RESEARCH_RESUME_KEY="leadintel_customer_v2_market_research_resume";
 const profileFields=[
@@ -158,13 +159,22 @@ function formatBytes(bytes){return bytes<1024*1024?`${Math.max(1,Math.round(byte
 function statusLabel(status){return {"too-large":"over 15 MB","no-text":"no extractable text","error":"text extraction failed","extracting":"extracting text"}[status]||"pending";}
 
 async function scrapeSource(url,type){
-  const response=await fetch(`${FIRECRAWL_PROXY}/firecrawl-scrape`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url,formats:["markdown"],onlyMainContent:true,timeout:30000})});
-  const payload=await response.json().catch(()=>({}));
-  if(!response.ok)throw new Error(payload.error||`Source returned ${response.status}`);
-  const data=payload.data||payload;
-  const text=String(data.markdown||data.content||"").slice(0,30000);
-  if(!text.trim())throw new Error("No readable page content returned");
-  return {type,url,title:data.metadata?.title||data.title||new URL(url).hostname,text,status:"ready"};
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),ANALYSIS_SOURCE_TIMEOUT_MS);
+  try{
+    const response=await fetch(`${FIRECRAWL_PROXY}/firecrawl-scrape`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url,formats:["markdown"],onlyMainContent:true,timeout:30000}),signal:controller.signal});
+    const payload=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(payload.error||`Source returned ${response.status}`);
+    const data=payload.data||payload;
+    const text=String(data.markdown||data.content||"").slice(0,30000);
+    if(!text.trim())throw new Error("No readable page content returned");
+    return {type,url,title:data.metadata?.title||data.title||new URL(url).hostname,text,status:"ready"};
+  }catch(error){
+    if(error?.name==="AbortError")throw new Error(`Source scrape timed out after ${Math.round(ANALYSIS_SOURCE_TIMEOUT_MS/1000)} seconds`);
+    throw error;
+  }finally{
+    clearTimeout(timeout);
+  }
 }
 function analysisStatus(title,caption){$("analysis-title").textContent=title;$("analysis-caption").textContent=caption;}
 function analysisLog(label,status="done"){$("analysis-log").insertAdjacentHTML("beforeend",`<span>${status==="done"?"✓":"!"} ${esc(label)}</span>`);}
@@ -175,8 +185,13 @@ async function analyzeCompany(targetStep=3){
   const sources=[{url:state.website,type:"website"},...state.additionalLinks.map(url=>({url,type:"link"}))];
   analysisStatus("Reading company sources…","Public source failures will not block the profile; they will be shown as intelligence gaps.");
   analysisLog(`Target markets: ${state.targetMarkets.join(" · ")}`);
-  for(const [index,source] of sources.entries()){
-    try{const result=await scrapeSource(source.url,source.type);state.scrapedSources.push(result);analysisLog(index===0?"Main website":`Additional source ${index}`);}catch(error){analysisLog(index===0?"Main website unavailable":`Source ${index} unavailable`,"warn");state.scrapedSources.push({type:source.type,url:source.url,title:"",text:"",status:`error: ${error.message}`});}
+  const sourceResults=await Promise.all(sources.map(async(source,index)=>{
+    try{return {index,source,result:await scrapeSource(source.url,source.type),error:null};}
+    catch(error){return {index,source,result:null,error};}
+  }));
+  for(const {index,source,result,error} of sourceResults){
+    if(result){state.scrapedSources.push(result);analysisLog(index===0?"Main website":`Additional source ${index}`);}
+    else{analysisLog(index===0?"Main website unavailable":`Source ${index} unavailable`,"warn");state.scrapedSources.push({type:source.type,url:source.url,title:"",text:"",status:`error: ${error?.message||"Source unavailable"}`});}
   }
   const usable=state.scrapedSources.filter(x=>x.text);
   analysisStatus("Synthesizing strategic context…","Optional answers enrich the website evidence; missing answers remain explicit intelligence gaps.");
