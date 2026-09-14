@@ -7,14 +7,16 @@ const Discovery = require('../discovery-engine.js');
 
 function loadUiWithStoredDiscovery(value) {
   const source = fs.readFileSync(path.join(__dirname, '..', 'discovery-ui.js'), 'utf8')
-    .replace(/\ninitDiscovery\(\);\nimport\s+['"][^'\"]+['"];?\s*$/, '\nglobalThis.__discoveryUiState = () => discovery;\n');
+    .replace(/\ninitDiscoveryWhenReady\(\);\nimport\s+['"][^'\"]+['"];?\s*$/, '\ninitDiscovery();\nglobalThis.__discoveryUiState = () => discovery;\n');
   const storage = new Map([["leadintel_customer_v2_discovery", JSON.stringify(value)]]);
   const context = {
     console,
     LeadIntelDiscovery: Discovery,
     localStorage: { getItem: key => storage.get(key) || null, setItem: (key, item) => storage.set(key, String(item)), removeItem: key => storage.delete(key) },
-    document: { getElementById: () => null, querySelector: () => null, querySelectorAll: () => [], createElement: () => ({}), head: { appendChild() {} } },
+    document: { getElementById: () => null, querySelector: () => null, querySelectorAll: () => [], createElement: () => ({ dataset: {}, addEventListener() {} }), head: { appendChild() {} }, body: { appendChild() {} } },
     navigator: { languages: [] },
+    addEventListener() {},
+    scrollTo() {},
     setTimeout,
     clearTimeout,
     CustomEvent: class CustomEvent {}
