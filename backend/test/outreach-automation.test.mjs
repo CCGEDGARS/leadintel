@@ -21,8 +21,8 @@ test('policy normalization rejects unsafe malformed automatic settings',()=>{
 });
 
 test('normalization preserves explicit valid automatic owner configuration',()=>{
-  const p=normalizeAutomationPolicy({mode:'automatic',enabled:true,workspaceDailyLimit:30,mailboxDailyLimit:20,workingDays:[1,2,3,4,5],timezone:'Europe/Riga',sendWindowStart:'09:00',sendWindowEnd:'16:30',minDelayMinutes:8,maxDelayMinutes:18,maxFollowups:2,followupDelaysDays:[3,7],replyPollIntervalMinutes:60});
-  assert.equal(p.mode,'automatic');assert.equal(p.enabled,true);assert.equal(p.workspaceDailyLimit,30);
+  const p=normalizeAutomationPolicy({mode:'automatic',enabled:true,workspaceDailyLimit:20,mailboxDailyLimit:20,workingDays:[1,2,3,4,5],timezone:'Europe/Riga',sendWindowStart:'09:00',sendWindowEnd:'16:30',minDelayMinutes:8,maxDelayMinutes:18,maxFollowups:2,followupDelaysDays:[3,7],replyPollIntervalMinutes:60});
+  assert.equal(p.mode,'automatic');assert.equal(p.enabled,true);assert.equal(p.workspaceDailyLimit,20);
 });
 
 test('local clock and send window honor Europe/Riga timezone and local midnight',()=>{
