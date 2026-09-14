@@ -1,6 +1,8 @@
 name: Release Integrity
 
 on:
+  schedule:
+    - cron: '*/15 * * * *'
   workflow_run:
     workflows: ["Backend Deploy", "Customer V2 CI"]
     types: [completed]
@@ -32,7 +34,7 @@ jobs:
       - name: Checkout exact revision
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.expected_sha }}
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.event_name == 'workflow_dispatch' && inputs.expected_sha || github.sha }}
 
       - name: Use Node.js
         uses: actions/setup-node@v4
@@ -91,6 +93,90 @@ jobs:
           echo "backend_required=${backend_required}" >> "${GITHUB_OUTPUT}"
           echo "backend_run_id=${backend_run_id}" >> "${GITHUB_OUTPUT}"
           echo "backend_conclusion=${backend_conclusion}" >> "${GITHUB_OUTPUT}"
+
+
+      - name: Resolve scheduled CI evidence
+        id: scheduled_ci
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set +e
+          ci_run_id=""
+          conclusion=failure
+          row="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/customer-ci.yml/runs?branch=main&event=push&per_page=100" 2>/dev/null | jq -r --arg sha "${EXPECTED_SHA}" '.workflow_runs[] | select(.head_sha == $sha and .status == "completed") | [.id,.head_sha,.conclusion] | @tsv' | head -n 1)"
+          if [ -n "${row}" ]; then
+            IFS=        id: manual_ci
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          CI_RUN_ID: ${{ inputs.ci_run_id }}
+          DEPLOY_RUN_ID: ${{ inputs.deploy_run_id }}
+        run: |
+          set +e
+          conclusion=failure
+          actual_sha="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CI_RUN_ID}" --jq '.head_sha' 2>/dev/null)"
+          actual_conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CI_RUN_ID}" --jq '.conclusion' 2>/dev/null)"
+          actual_name="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CI_RUN_ID}" --jq '.name' 2>/dev/null)"
+          deploy_sha="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEPLOY_RUN_ID}" --jq '.head_sha' 2>/dev/null)"
+          deploy_conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEPLOY_RUN_ID}" --jq '.conclusion' 2>/dev/null)"
+          deploy_name="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEPLOY_RUN_ID}" --jq '.name' 2>/dev/null)"
+          if [ "${actual_sha}" = "${EXPECTED_SHA}" ] && [ "${actual_conclusion}" = "success" ] && [ "${actual_name}" = "Customer V2 CI" ] && [ "${deploy_sha}" = "${EXPECTED_SHA}" ] && [ "${deploy_conclusion}" = "success" ] && [ "${deploy_name}" = "Backend Deploy" ]; then
+            conclusion=success
+          fi
+          echo "conclusion=${conclusion}" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify production after automatic verified workflow completion
+        if: github.event_name == 'workflow_run'
+        run: |
+          node scripts/verify-release-integrity.mjs \
+            --expected-sha "${{ github.event.workflow_run.head_sha }}" \
+            --ci-conclusion "${{ steps.automatic_ci.outputs.conclusion }}" \
+            --ci-run-id "${{ steps.automatic_ci.outputs.run_id }}" \
+            --environment production \
+            --config release-integrity.config.json \
+            --proof release-proof.json
+
+
+      - name: Re-verify production on schedule
+        if: github.event_name == 'schedule'
+        run: |
+          node scripts/verify-release-integrity.mjs \
+            --expected-sha "${{ github.sha }}" \
+            --ci-conclusion "${{ steps.scheduled_ci.outputs.conclusion }}" \
+            --ci-run-id "${{ steps.scheduled_ci.outputs.run_id }}" \
+            --environment production \
+            --config release-integrity.config.json \
+            --proof release-proof.json
+
+      - name: Re-verify production with resolved CI and deployment evidence
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          node scripts/verify-release-integrity.mjs \
+            --expected-sha "${{ inputs.expected_sha }}" \
+            --ci-conclusion "${{ steps.manual_ci.outputs.conclusion }}" \
+            --ci-run-id "${{ inputs.ci_run_id }}" \
+            --environment production \
+            --config release-integrity.config.json \
+            --proof release-proof.json
+
+      - name: Upload release proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-proof-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.event_name == 'workflow_dispatch' && inputs.expected_sha || github.sha }}
+          path: release-proof.json
+          if-no-files-found: warn
+          retention-days: 30
+\t' read -r ci_run_id ci_sha ci_conclusion <<< "${row}"
+            if [ "${ci_sha}" = "${EXPECTED_SHA}" ] && [ "${ci_conclusion}" = "success" ]; then
+              conclusion=success
+            fi
+          fi
+          echo "run_id=${ci_run_id}" >> "${GITHUB_OUTPUT}"
+          echo "conclusion=${conclusion}" >> "${GITHUB_OUTPUT}"
 
       - name: Resolve manual CI and backend deployment evidence
         id: manual_ci
