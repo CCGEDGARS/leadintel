@@ -7,7 +7,7 @@ const { spawnSync } = require('node:child_process');
 
 const root = path.join(__dirname, '../..');
 
-test('the production build refuses the former module-graph Discovery bootstrap', () => {
+function runProductionBuild({ customerHtml, discoveryUi }) {
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'leadintel-discovery-build-'));
   try {
     fs.mkdirSync(path.join(fixture, 'scripts'), { recursive: true });
@@ -24,31 +24,53 @@ test('the production build refuses the former module-graph Discovery bootstrap',
     fs.writeFileSync(path.join(fixture, 'index.html'), '<a href="customer/">Customer</a>');
     fs.writeFileSync(path.join(fixture, 'LeadIntel.html'), '<main>Legacy</main>');
     fs.writeFileSync(path.join(fixture, 'v2/index.html'), '<main>V2</main>');
-    fs.writeFileSync(
-      path.join(fixture, 'customer/index.html'),
-      '<script type="module" src="discovery-ui.js?v=regressed"></script>'
-    );
-    fs.writeFileSync(
-      path.join(fixture, 'customer/discovery-ui.js'),
-      [
-        'import "./content-variants.js";',
-        'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
-        'const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS+1000;',
-        'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};',
-        'initDiscoveryWhenReady();'
-      ].join('\n')
-    );
+    fs.writeFileSync(path.join(fixture, 'customer/index.html'), customerHtml);
+    fs.writeFileSync(path.join(fixture, 'customer/discovery-ui.js'), discoveryUi);
 
     const result = spawnSync('bash', ['scripts/build-vercel-static.sh'], {
       cwd: fixture,
       encoding: 'utf8',
       env: { ...process.env, GITHUB_SHA: '0123456789abcdef0123456789abcdef01234567', GITHUB_REF_NAME: 'main' }
     });
-
-    assert.notEqual(result.status, 0, 'a regressed Discovery bootstrap must fail before Vercel can publish it');
-    assert.match(result.stderr, /Discovery deployment guard failed/i);
-    assert.equal(fs.existsSync(path.join(fixture, '.vercel-static')), false);
+    return {
+      status: result.status,
+      stderr: result.stderr,
+      artifactExists: fs.existsSync(path.join(fixture, '.vercel-static'))
+    };
   } finally {
     fs.rmSync(fixture, { recursive: true, force: true });
   }
+}
+
+function assertBuildRejected(result) {
+  assert.notEqual(result.status, 0, 'a regressed Discovery bootstrap must fail before Vercel can publish it');
+  assert.match(result.stderr, /Discovery deployment guard failed/i);
+  assert.equal(result.artifactExists, false);
+}
+
+test('the production build refuses the former module-graph Discovery bootstrap', () => {
+  const result = runProductionBuild({
+    customerHtml: '<script type="module" src="discovery-ui.js?v=regressed"></script>',
+    discoveryUi: [
+      'import "./content-variants.js";',
+      'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
+      'const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS+1000;',
+      'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};',
+      'initDiscoveryWhenReady();'
+    ].join('\n')
+  });
+
+  assertBuildRejected(result);
+});
+
+test('the production build refuses a Discovery runtime without a hard stop', () => {
+  const result = runProductionBuild({
+    customerHtml: '<script defer src="discovery-ui.js?v=regressed"></script>',
+    discoveryUi: [
+      'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};',
+      'initDiscoveryWhenReady();'
+    ].join('\n')
+  });
+
+  assertBuildRejected(result);
 });
