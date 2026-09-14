@@ -42,7 +42,7 @@
     const url=clean(item.url).toLowerCase();
     const text=[clean(item.title),clean(item.description),clean(item.text)].join(" ").toLowerCase();
     return TENDER_HOSTS.includes(domain)
-      || (/\\.gov\\.[a-z]{2}$/.test(domain)&&/tender|procurement|iepirk|supplier|contract/.test(text))
+      || (/\.gov\.[a-z]{2}$/.test(domain)&&/tender|procurement|iepirk|supplier|contract/.test(text))
       || /tender|procurement|iepirk|viewprocurem/.test(url)
       || /public procurement|procurement notice|iepirkuma/.test(text);
   }
@@ -57,11 +57,11 @@
   }
   function cleanEvidenceText(value){
     return clean(value)
-      .replace(/!\\[[^\\]]*\\]\\([^)]*\\)/g," ")
-      .replace(/\\[[^\\]]+\\]\\((?:https?:\\/\\/)[^)]+\\)/g," ")
-      .replace(/https?:\\/\\/\\S+\\.(?:png|jpe?g|gif|webp|svg)(?:\\?\\S*)?/gi," ")
+      .replace(/!\[[^\]]*\]\([^)]*\)/g," ")
+      .replace(/\[[^\]]+\]\((?:https?:\/\/)[^)]+\)/g," ")
+      .replace(/https?:\/\/\S+\.(?:png|jpe?g|gif|webp|svg)(?:\?\S*)?/gi," ")
       .replace(/[#*_`>|]/g," ")
-      .replace(/\\s+/g," ")
+      .replace(/\s+/g," ")
       .trim();
   }
   function displayFromDomain(domain){
