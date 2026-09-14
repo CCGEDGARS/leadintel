@@ -12,4 +12,10 @@ test('Discovery requests and strategy handoff cannot remain silently stuck',()=>
   assert.ok(ui.includes('Finding companies'));
   assert.ok(ui.includes('leadintel:open-discovery'));
   assert.ok(app.includes('leadintel:open-discovery'));
+  assert.ok(ui.includes('let fatalError=null'));
+  assert.ok(ui.includes('Discovery stopped safely'));
+  assert.ok(ui.includes('void refreshCrmState({render:false})'));
+  assert.ok(app.includes('const attempt=()=>'));
+  assert.ok(app.includes('[100,300,700,1200]'));
+
 });

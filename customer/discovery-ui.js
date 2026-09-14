@@ -6,7 +6,7 @@ const DISCOVERY_META_KEY="leadintel_customer_v2_discovery_meta";
 const INTELLIGENCE_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
 const MAX_DISCOVERY_QUERIES=10;
 const MAX_DISCOVERY_RESULTS_PER_QUERY=5;
-const ASSET_VERSION="20260914-discovery-handoff-timeout-v1";
+const ASSET_VERSION="20260914-discovery-resilience-v2";
 const LANGUAGE_ASSET_VERSION="20260914-workspace-isolation-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const $=id=>document.getElementById(id);
@@ -124,18 +124,33 @@ async function runCompanyDiscovery(){
   const queries=LeadIntelDiscovery.buildDiscoveryQueries(main.profile||{website:main.website},market,limits.queryCount);
   if(!queries.length){showToast("Add optional market or offer context to make discovery more precise");return;}
   discovery.queries=queries;discovery.rawResults=[];discovery.candidates=[];enrichmentResults.clear();enrichmentPending.clear();discovery.status="running";saveDiscovery();renderAll();
-  const searches=await Promise.all(queries.map(async query=>{
-    try{return {results:await firecrawlCompanySearch(query),error:null};}
-    catch(error){return {results:[],error};}
-  }));
-  const failures=searches.filter(item=>item.error).length;
-  discovery.rawResults=searches.flatMap(item=>item.results).slice(0,limits.queryCount*limits.resultsPerQuery);
-  discovery.candidates=LeadIntelDiscovery.mergeCompanyCandidates(discovery.rawResults,main.profile||{website:main.website},main.market||{},limits.targetCount);
-  discovery.status=failures===0?"complete":discovery.candidates.length?"partial":"error";
+  let failures=0;
+  let fatalError=null;
+  try{
+    const searches=await Promise.all(queries.map(async query=>{
+      try{return {results:await firecrawlCompanySearch(query),error:null};}
+      catch(error){return {results:[],error};}
+    }));
+    failures=searches.filter(item=>item.error).length;
+    discovery.rawResults=searches.flatMap(item=>item.results).slice(0,limits.queryCount*limits.resultsPerQuery);
+    discovery.candidates=LeadIntelDiscovery.mergeCompanyCandidates(discovery.rawResults,main.profile||{website:main.website},main.market||{},limits.targetCount);
+    discovery.status=failures===0?"complete":discovery.candidates.length?"partial":"error";
+  }catch(error){
+    fatalError=error instanceof Error?error:new Error(String(error||"Company discovery failed"));
+    discovery.status=discovery.candidates.length?"partial":"error";
+  }
   discovery.lastRunAt=new Date().toISOString();
   saveDiscovery();
-  if(crmAuthenticated())await refreshCrmState({render:false});
   renderAll();
+  if(crmAuthenticated()){
+    void refreshCrmState({render:false}).then(()=>renderAll()).catch(error=>{
+      showToast("CRM refresh unavailable · "+(error?.message||"results remain available"));
+    });
+  }
+  if(fatalError){
+    showToast("Discovery stopped safely · "+fatalError.message);
+    return;
+  }
   const targetNote=targetCount?" · target up to "+targetCount:"";
   const issueNote=failures?" · "+failures+" search issue"+(failures===1?"":"s"):"";
   showToast(discovery.candidates.length?discovery.candidates.length+" company candidates ranked"+targetNote+issueNote:"No direct company candidates passed the evidence filter");

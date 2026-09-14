@@ -598,15 +598,20 @@ function setActivationFeedback(message,tone){
   target.hidden=!message;
 }
 function openDiscoveryAfterActivation(){
-  window.dispatchEvent(new CustomEvent("leadintel:open-discovery"));
-  if(document.getElementById("step-5")?.classList.contains("active"))return true;
-  const continueButton=$("continue-to-discovery");
-  if(continueButton){continueButton.click();if(document.getElementById("step-5")?.classList.contains("active"))return true;}
-  const processButton=document.querySelector('[data-process-step="5"]');
-  if(processButton){processButton.click();if(document.getElementById("step-5")?.classList.contains("active"))return true;}
-  const marker=document.querySelector('[data-step-marker="5"]');
-  if(marker){marker.dispatchEvent(new MouseEvent("click",{bubbles:true}));return document.getElementById("step-5")?.classList.contains("active")||false;}
-  return false;
+  const attempt=()=>{
+    window.dispatchEvent(new CustomEvent("leadintel:open-discovery"));
+    if(document.getElementById("step-5")?.classList.contains("active"))return true;
+    const continueButton=$("continue-to-discovery");
+    if(continueButton){continueButton.click();if(document.getElementById("step-5")?.classList.contains("active"))return true;}
+    const processButton=document.querySelector('[data-process-step="5"]');
+    if(processButton){processButton.click();if(document.getElementById("step-5")?.classList.contains("active"))return true;}
+    const marker=document.querySelector('[data-step-marker="5"]');
+    if(marker){marker.dispatchEvent(new MouseEvent("click",{bubbles:true}));return document.getElementById("step-5")?.classList.contains("active")||false;}
+    return false;
+  };
+  const opened=attempt();
+  if(!opened)[100,300,700,1200].forEach(delay=>setTimeout(()=>{if(!document.getElementById("step-5")?.classList.contains("active"))attempt();},delay));
+  return opened;
 }
 async function activateMarketStrategy(){
   const button=$("activate-market-strategy");
