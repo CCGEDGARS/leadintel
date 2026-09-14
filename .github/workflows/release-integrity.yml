@@ -151,9 +151,11 @@ jobs:
 
       - name: Re-verify production on schedule
         if: github.event_name == 'schedule'
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
         run: |
           node scripts/verify-release-integrity.mjs \
-            --expected-sha "${{ github.sha }}" \
+            --expected-sha "${EXPECTED_SHA}" \
             --ci-conclusion "${{ steps.scheduled_ci.outputs.conclusion }}" \
             --ci-run-id "${{ steps.scheduled_ci.outputs.run_id }}" \
             --environment production \
