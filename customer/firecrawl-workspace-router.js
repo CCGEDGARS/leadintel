@@ -56,7 +56,7 @@ async function routedFetch(input,options={}){
     const scrapling=scraplingTarget(kind);const url=extractScrapeUrl(options);
     if(scrapling&&url){
       try{
-        const fallback=await originalFetch(scrapling,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({url})});
+        const fallback=await originalFetch(scrapling,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({url}),signal:options?.signal});
         if(fallback.ok)return fallback;
       }catch{}
     }
