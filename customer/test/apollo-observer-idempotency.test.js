@@ -29,5 +29,5 @@ test('Apollo contact decoration does not rewrite identical action labels',()=>{
 
 test('content bootstrap cache-busts the fixed Apollo observer module',()=>{
   const bootstrap=fs.readFileSync(path.join(rootDir,'content-variants.js'),'utf8');
-  assert.match(bootstrap,/apollo-bulk-enrichment\.js\?v=20260908-apollo-observer-v1/);
+  assert.match(bootstrap,/apollo-bulk-enrichment\\.js\\?v=20260914-stage5-scoped-v1/);
 });
