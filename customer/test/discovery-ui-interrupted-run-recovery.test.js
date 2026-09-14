@@ -8,7 +8,7 @@ const Discovery = require('../discovery-engine.js');
 function loadUiWithStoredDiscovery(value) {
   const source = fs.readFileSync(path.join(__dirname, '..', 'discovery-ui.js'), 'utf8')
     .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ninitDiscovery();\nglobalThis.__discoveryUiState = () => discovery;\n');
-  const storage = new Map([["leadintel_customer_v2_discovery", JSON.stringify(value)]]);
+  const storage = new Map([\n    ["leadintel_customer_v2_state", JSON.stringify({ website: "https://example.com/" })],\n    ["leadintel_customer_v2_discovery", JSON.stringify(value)]\n  ]);
   const context = {
     console,
     LeadIntelDiscovery: Discovery,
@@ -23,6 +23,7 @@ function loadUiWithStoredDiscovery(value) {
   };
   context.window = context;
   vm.runInNewContext(source, context, { filename: 'discovery-ui.js' });
+  context.LeadIntelDiscoveryUI.open();
   return context.__discoveryUiState();
 }
 
