@@ -12,7 +12,7 @@ const indexSource = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'u
 const processMapSource = fs.readFileSync(path.join(__dirname, '..', 'process-map.js'), 'utf8');
 const API = 'https://leadintel-api.edgars-7e7.workers.dev';
 const WORKSPACE_ID = 'workspace-1';
-const CACHE_VERSION = '20260916-brand-assets-v6';
+const CACHE_VERSION = '20260916-brand-assets-v7';
 const CLEANUP_KEY = 'leadintel_customer_v2_brand_asset_cleanup_v1';
 
 function storage(initial = {}) {
@@ -564,6 +564,53 @@ test('reset invalidates an in-flight upload before it can recreate brand identit
   assert.deepEqual(deletedAssetIds.sort(), [oldAsset.id, uploadedAsset.id].sort());
   assert.equal(localStorage.getItem(sandbox.LeadIntelWorkspaceResetHygiene.ASSET_RESET_CLEANUP_KEY), null);
   assert.equal(localStorage.getItem(CLEANUP_KEY), null);
+});
+
+test('reset generation cancels an in-flight import after empty reset cleanup has completed', async () => {
+  const importedAsset = asset('F'.repeat(43));
+  const importStarted = deferred();
+  const releaseImport = deferred();
+  const statePayloads = [];
+  const deletedAssetIds = [];
+  const {bridge, localStorage, sandbox} = loadProductionComposition(async (url, options = {}) => {
+    const value = String(url);
+    if (value.includes('/brand-assets/import')) {
+      importStarted.resolve();
+      await releaseImport.promise;
+      return new Response(JSON.stringify({asset: importedAsset}), {status: 201});
+    }
+    if (value.includes('/customer/state')) {
+      statePayloads.push(JSON.parse(options.body));
+      return new Response(JSON.stringify({version: statePayloads.length, saved: true}), {status: 200});
+    }
+    if (value.includes('/brand-assets/')) {
+      deletedAssetIds.push(value.split('/brand-assets/')[1].split('?')[0]);
+      return new Response(JSON.stringify({ok: true}), {status: 200});
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  }, {
+    leadintel_customer_v2_workspace: WORKSPACE_ID,
+    leadintel_customer_v2_state: JSON.stringify({brandIdentity: {status: 'ready', senderName: 'Before reset', assets: {logo: null}}})
+  });
+  const button = {dataset: {resetArmed: 'true'}};
+  const event = {target: {closest(selector) { return selector === '#reset-workspace' ? button : null; }}};
+
+  const importing = bridge.importBrandAsset('logo', 'https://example.com/logo.png', {returnTransaction: true});
+  await importStarted.promise;
+  sandbox.LeadIntelWorkspaceResetHygiene.handleResetClick(event);
+  sandbox.LeadIntelWorkspacePersistence.handleResetClick(event);
+  assert.equal((await bridge.saveNow()).saved, true);
+  await sandbox.LeadIntelWorkspaceResetHygiene.afterWorkspaceSaved(WORKSPACE_ID);
+  assert.equal(localStorage.getItem(sandbox.LeadIntelWorkspaceResetHygiene.ASSET_RESET_CLEANUP_KEY), null);
+
+  releaseImport.resolve();
+  const result = await importing;
+
+  assert.equal(result.cancelled, true);
+  assert.equal(result.reset, true);
+  assert.equal(statePayloads.length, 1);
+  assert.equal(JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).brandIdentity ?? null, null);
+  assert.deepEqual(deletedAssetIds, [importedAsset.id]);
 });
 
 test('overlapping asset and explicit saves retain per-operation intent and send the latest edit in a second PUT', async () => {
