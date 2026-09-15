@@ -4,6 +4,9 @@
   const LEGACY_LOCAL_CLEANUP_KEY="leadintel_customer_v2_legacy_local_cleanup_20260901_v2";
   const RESET_PENDING_KEY="leadintel_customer_v2_reset_pending_v1";
   const WORKSPACE_KEY="leadintel_customer_v2_workspace";
+  const MAIN_STATE_KEY="leadintel_customer_v2_state";
+  const BRAND_ASSET_ID=/^[A-Za-z0-9_-]{43}$/;
+  const BRAND_ASSET_KINDS=Object.freeze(["logo","headshot","banner"]);
   const LEGACY_LOCAL_WORKSPACE_KEYS=Object.freeze([
     "leadintel_customer_v2_state",
     "leadintel_customer_v2_discovery",
@@ -19,6 +22,7 @@
     "leadintel_customer_v2_research_meta_v1"
   ]);
   let finalizingReset=false;
+  let assetCleanupPromise=null;
 
   function emergencyResetRequested(){
     try{return new URLSearchParams(root.location?.search||"").get("reset")==="1";}
@@ -52,10 +56,35 @@
     return true;
   }
 
-  function recordResetIntent(){
+  function referencedBrandAssets(){
+    try{
+      const state=JSON.parse(root.localStorage?.getItem(MAIN_STATE_KEY)||"{}");
+      const assets=state?.brandIdentity?.assets;
+      if(!assets||typeof assets!=="object"||Array.isArray(assets))return [];
+      return BRAND_ASSET_KINDS.flatMap(kind=>{
+        const id=String(assets[kind]?.id||"");
+        return BRAND_ASSET_ID.test(id)?[{kind,id}]:[];
+      });
+    }catch{return [];}
+  }
+
+  function clearLocalBrandIdentity(){
+    if(!root?.localStorage)return false;
+    try{
+      const state=JSON.parse(root.localStorage.getItem(MAIN_STATE_KEY)||"{}");
+      if(!state||typeof state!=="object"||Array.isArray(state))return false;
+      if(Object.prototype.hasOwnProperty.call(state,"brandIdentity")){
+        delete state.brandIdentity;
+        root.localStorage.setItem(MAIN_STATE_KEY,JSON.stringify(state));
+      }
+      return true;
+    }catch{return false;}
+  }
+
+  function recordResetIntent(assets=referencedBrandAssets()){
     if(!root?.localStorage)return false;
     const workspaceId=String(root.localStorage.getItem(WORKSPACE_KEY)||"");
-    root.localStorage.setItem(RESET_PENDING_KEY,JSON.stringify({workspace_id:workspaceId,requested_at:Date.now()}));
+    root.localStorage.setItem(RESET_PENDING_KEY,JSON.stringify({workspace_id:workspaceId,requested_at:Date.now(),assets:Array.isArray(assets)?assets:[]}));
     return true;
   }
 
@@ -73,6 +102,42 @@
     return Array.isArray(bridge.workspaces)&&bridge.workspaces.length===1;
   }
 
+  function emitAssetCleanup(detail){
+    try{root.dispatchEvent?.(new root.CustomEvent("leadintel:brand-assets-reset-cleanup",{detail}));}catch{}
+  }
+
+  async function cleanupResetAssets(intent,bridge){
+    const assets=Array.isArray(intent?.assets)?intent.assets.filter(item=>BRAND_ASSET_KINDS.includes(item?.kind)&&BRAND_ASSET_ID.test(String(item?.id||""))):[];
+    const failed=[];
+    let deleted=0;
+    for(const asset of assets){
+      try{
+        await bridge.deleteBrandAsset(asset.kind,{id:asset.id});
+        deleted++;
+      }catch(error){
+        if(Number(error?.status)===404)deleted++;
+        else failed.push(asset);
+      }
+    }
+    const detail={attempted:assets.length,deleted,failed:failed.length};
+    if(failed.length){
+      root.localStorage.setItem(RESET_PENDING_KEY,JSON.stringify({...intent,assets:failed,last_cleanup_at:Date.now(),cleanup_failures:failed.length}));
+      console.warn("LeadIntel brand asset reset cleanup incomplete",detail);
+    }else root.localStorage.removeItem(RESET_PENDING_KEY);
+    emitAssetCleanup(detail);
+    return detail;
+  }
+
+  function afterWorkspaceSaved(workspaceId){
+    if(assetCleanupPromise)return assetCleanupPromise;
+    const intent=readResetIntent();
+    const bridge=root.LeadIntelServerBridge;
+    if(!intent||!bridge?.session?.authenticated||!bridge.workspace||String(workspaceId||"")!==bridge.workspace.id||!resetIntentMatchesWorkspace(intent,bridge))return Promise.resolve({attempted:0,deleted:0,failed:0});
+    if(typeof bridge.deleteBrandAsset!=="function")return Promise.resolve({attempted:0,deleted:0,failed:Array.isArray(intent.assets)?intent.assets.length:0});
+    assetCleanupPromise=cleanupResetAssets(intent,bridge).finally(()=>{assetCleanupPromise=null;});
+    return assetCleanupPromise;
+  }
+
   async function finalizePendingReset(){
     if(finalizingReset)return false;
     const intent=readResetIntent();
@@ -84,7 +149,7 @@
       if(bridge.conflict&&typeof bridge.resolveConflictKeepLocal==="function")result=await bridge.resolveConflictKeepLocal();
       else if(typeof bridge.saveNow==="function")result=await bridge.saveNow();
       const completed=Boolean(result?.saved||result?.resolved);
-      if(completed)root.localStorage.removeItem(RESET_PENDING_KEY);
+      if(completed)await afterWorkspaceSaved(bridge.workspace.id);
       return completed;
     }catch{return false;}
     finally{finalizingReset=false;}
@@ -96,15 +161,14 @@
   }
 
   // The existing reset button uses a two-click armed state. Capture the second
-  // click before app.js performs the reset. A normal authenticated reset is
-  // already saved by app.js. Only signed-out resets (or a reset during an active
-  // conflict) need a durable intent that resumes through the safe sync path.
+  // click before app.js performs the reset so managed asset references can be
+  // retained for audited cleanup after the cleared workspace state is saved.
   function handleResetClick(event){
     const button=event?.target?.closest?.("#reset-workspace");
     if(!button||button.dataset.resetArmed!=="true")return false;
     const bridge=root.LeadIntelServerBridge;
-    const deferred=!bridge?.session?.authenticated||Boolean(bridge.conflict);
-    if(deferred)recordResetIntent();else root.localStorage?.removeItem(RESET_PENDING_KEY);
+    recordResetIntent(referencedBrandAssets());
+    clearLocalBrandIdentity();
     clearBrowserWorkspaceResidue();
     root.setTimeout?.(refreshResetUi,0);
     if(bridge?.session?.authenticated&&bridge.conflict)root.setTimeout?.(()=>finalizePendingReset(),0);
@@ -120,7 +184,7 @@
     root.addEventListener?.("leadintel:server-ready",()=>finalizePendingReset());
   }
 
-  const api={LEGACY_LOCAL_CLEANUP_KEY,RESET_PENDING_KEY,WORKSPACE_KEY,LEGACY_LOCAL_WORKSPACE_KEYS,RESET_RESIDUE_KEYS,emergencyResetRequested,runEmergencyBrowserReset,clearLegacyLocalAutosaveOnce,clearBrowserWorkspaceResidue,recordResetIntent,readResetIntent,resetIntentMatchesWorkspace,finalizePendingReset,refreshResetUi,handleResetClick,install};
+  const api={LEGACY_LOCAL_CLEANUP_KEY,RESET_PENDING_KEY,WORKSPACE_KEY,MAIN_STATE_KEY,LEGACY_LOCAL_WORKSPACE_KEYS,RESET_RESIDUE_KEYS,emergencyResetRequested,runEmergencyBrowserReset,clearLegacyLocalAutosaveOnce,clearBrowserWorkspaceResidue,referencedBrandAssets,clearLocalBrandIdentity,recordResetIntent,readResetIntent,resetIntentMatchesWorkspace,cleanupResetAssets,afterWorkspaceSaved,finalizePendingReset,refreshResetUi,handleResetClick,install};
   root.LeadIntelWorkspaceResetHygiene=api;
   install();
 })(typeof globalThis!=="undefined"?globalThis:this);
