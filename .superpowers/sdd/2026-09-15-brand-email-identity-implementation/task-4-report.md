@@ -3,7 +3,7 @@
 Status: COMPLETE.
 
 Starting branch head: `0b9c26988b4e7ef5d4267501ae1ca762040023fe`
-Implementation head before this report commit: `52f9793c94d9b4e37466570cb886989502c4e794`
+Implementation head before this report commit: `be01c4972970e40a6798869a09260b42b327e309`
 
 ## Remote commits
 
@@ -27,6 +27,15 @@ Implementation head before this report commit: `52f9793c94d9b4e37466570cb8869895
 18. `4264f785c37657a988dfeea4f34c67ef17522e15` — final Task 4 state-coordination regression contracts
 19. `047e353ffb23906cdf57d0a21190b56aa88d39ac` — Brand Identity bundle regression update
 20. `52f9793c94d9b4e37466570cb886989502c4e794` — process-map bundle regression update
+21. `c0df679f8dcad4f6d179ce39342ef65ee0e0a6d0` — RED production-composition tests for persistence-wrapper, rollback, and reset lifecycle findings
+22. `f81056e66f86e68da7859678ce45b5e24201c930` — asset save intent, explicit `saved:false` failure, and mutation-only rollback
+23. `87d4c43caae7adf7ce13b472c817fdb26e94fb91` — explicit server-reset marker naming
+24. `5ed27410fa71901fed383601ff91d37f94a0eab5` — independent reset asset-cleanup record and cleanup-only deletion
+25. `340bb0aab34458ec47cbb746421f8e7b9e5991be` — production persistence bundle cache update
+26. `6c23b0e44c2a8a34d543f5c38003750cc52b3dbf` — page entry cache update
+27. `fe10b2bd36c18641f78b15340d16408449474036` — production-composition regression contracts
+28. `3155709d9d19ca4950c7208d16b815b2ca0bb964` — process bundle regression contract
+29. `be01c4972970e40a6798869a09260b42b327e309` — corrected mutation-only rollback assertions
 
 ## Implemented
 
@@ -34,7 +43,9 @@ Implementation head before this report commit: `52f9793c94d9b4e37466570cb8869895
 - authenticated requests with selected `workspace_id`
 - multipart upload without forcing a JSON Content-Type
 - transactional upload/import plus identity persistence
-- failed persistence restores the exact previous local metadata and deletes the new object best-effort
+- failed persistence restores only the failed asset mutation against the latest identity and deletes the new object best-effort
+- concurrent identity edits survive failed replacement and failed removal rollbacks
+- a pre-mutation local write failure preserves the original Ready identity byte-for-byte
 - failed cleanup is recorded in an observable retry queue and retried during bridge initialization
 - successful replacement deletes the previous object best-effort and queues observable retry on failure
 - explicit upload/import failures cannot mutate previously saved metadata
@@ -45,7 +56,7 @@ Implementation head before this report commit: `52f9793c94d9b4e37466570cb8869895
 - reset captures managed asset references, clears local identity, retries cleanup, and emits an observable result
 - failed reset deletions remain pending for retry; unavailable deletion also emits a consistent cleanup event
 - upload, import, and delete encode reserved characters in workspace identifiers
-- `server-bridge.js`, `workspace-reset-hygiene.js`, `brand-identity-ui.js`, `process-map.js`, the page entry point, and cache regression tests use `20260916-brand-assets-v3`
+- `server-bridge.js`, `workspace-reset-hygiene.js`, `workspace-persistence.js`, `process-map.js`, the page entry point, and cache regression tests use `20260916-brand-assets-v4`
 
 ## Transaction re-review
 
@@ -59,7 +70,12 @@ Implementation head before this report commit: `52f9793c94d9b4e37466570cb8869895
 - cleanup retry-storage failure after a committed save is non-fatal: the committed identity is returned and adopted, and a warning event/result is emitted
 - removal persists an asset-less Draft identity before deleting the old managed object; failed persistence leaves the old metadata and object intact
 - reset reports deleted, queued, and failed cleanup outcomes separately
-- Task 4 browser cache references now use `20260916-brand-assets-v3`
+- asset state saves set the production persistence save intent and produce exactly one backend workspace PUT
+- an HTTP 200 response containing `saved:false` remains unsaved and cannot retire the old managed asset
+- rollback changes only the matching asset field; current Draft status and newer identity fields remain intact
+- server-reset state and asset-cleanup work use separate records, each cleared only after its own operation completes
+- reset performs one workspace PUT followed by direct workspace-scoped asset deletion
+- Task 4 browser cache references now use `20260916-brand-assets-v4`
 
 ## Test evidence
 
@@ -73,12 +89,14 @@ Latest review RED verification: 16/20 passed and 4/20 failed for exactly the fou
 
 Focused bridge and UI verification after implementation: 45 passed, 0 failed.
 
-Final related regression verification: 76 passed, 0 failed, 0 skipped, 0 cancelled.
+Final focused Task 4 verification: 24 passed, 0 failed, 0 skipped, 0 cancelled.
+
+Final related regression verification: 80 passed, 0 failed, 0 skipped, 0 cancelled.
 
 JavaScript syntax checks passed for the bridge, reset hygiene, Brand Identity UI, app integration, process map, and every modified regression test.
 
 The two VM cross-realm comparisons now verify every expected field and the exact result key set individually. No behavioral assertion was removed or relaxed.
 
-No remaining Task 4 test failures or implementation blockers are known. The expected warning in the reset-cleanup test is the observable simulated partial-delete failure under test, not a failing assertion.
+No remaining Task 4 test failures or implementation blockers are known. An additional company-research structure suite is outside Task 4 and reports missing-fixture failures in this partial checkout; none overlap the files or behavior changed here. The expected warning in the reset-cleanup test is the observable simulated partial-delete failure under test, not a failing assertion.
 
 No Task 5+ files were changed. `main` was not changed.
