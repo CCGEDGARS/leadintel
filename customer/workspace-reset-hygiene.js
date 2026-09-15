@@ -133,7 +133,12 @@
     const intent=readResetIntent();
     const bridge=root.LeadIntelServerBridge;
     if(!intent||!bridge?.session?.authenticated||!bridge.workspace||String(workspaceId||"")!==bridge.workspace.id||!resetIntentMatchesWorkspace(intent,bridge))return Promise.resolve({attempted:0,deleted:0,failed:0});
-    if(typeof bridge.deleteBrandAsset!=="function")return Promise.resolve({attempted:0,deleted:0,failed:Array.isArray(intent.assets)?intent.assets.length:0});
+    if(typeof bridge.deleteBrandAsset!=="function"){
+      const attempted=Array.isArray(intent.assets)?intent.assets.length:0;
+      const detail={attempted,deleted:0,failed:attempted,unavailable:true};
+      emitAssetCleanup(detail);
+      return Promise.resolve(detail);
+    }
     assetCleanupPromise=cleanupResetAssets(intent,bridge).finally(()=>{assetCleanupPromise=null;});
     return assetCleanupPromise;
   }
