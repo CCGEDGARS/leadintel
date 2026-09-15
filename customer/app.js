@@ -30,12 +30,14 @@ let monitoringLoaded=false;
 let monitoringBusy=false;
 let marketTranslationGeneration=0;
 let pendingResearchMode="";
+let brandIdentityUI=null;
 const $=id=>document.getElementById(id);
 function contentLanguage(){return LeadIntelContentLanguage.resolveLanguage(window.LeadIntelLanguage?.get?.()||state.uiLanguage||'lv',navigator.languages||[]);}
 
 function defaultState(){
   const base=LeadIntelProfile.normalizeSavedState({step:1,website:"",targetMarkets:[],additionalLinks:[],documents:[],answers:{},scrapedSources:[],profile:null,approved:false});
   base.market=LeadIntelMarket.normalizeMarketState({});
+  base.brandIdentity=globalThis.LeadIntelBrandIdentity?.normalize?.({})||null;
   return base;
 }
 function loadState(){
@@ -46,6 +48,7 @@ function loadState(){
     const source=saved&&typeof saved==="object"&&!Array.isArray(saved)?saved:raw;
     const base=LeadIntelProfile.normalizeSavedState(source);
     base.market=LeadIntelMarket.recoverInterruptedResearch(source.market||{});
+    base.brandIdentity=globalThis.LeadIntelBrandIdentity?.normalize?.(source.brandIdentity||{})||null;
     base.step=window.LeadIntelWorkspaceIsolation?.safeStep
       ?window.LeadIntelWorkspaceIsolation.safeStep(localStorage,base,source.step)
       :([1,2,3,4,5,6,7].includes(Number(source.step))?Number(source.step):base.step);
@@ -110,7 +113,20 @@ function addCustomTargetMarket(){
 }
 function syncInputsFromState(){
   $("company-website").value=state.website.replace(/^https?:\/\//,"").replace(/\/$/,"");const additionalLinks=$("additional-links");if(additionalLinks)additionalLinks.value=state.additionalLinks.join("\n");
-  document.querySelectorAll("[data-question]").forEach(el=>el.value=state.answers[el.dataset.question]||"");renderTargetMarkets();renderDocuments();
+  document.querySelectorAll("[data-question]").forEach(el=>el.value=state.answers[el.dataset.question]||"");renderTargetMarkets();renderDocuments();brandIdentityUI?.sync?.(state.brandIdentity);
+}
+
+function initBrandIdentity(){
+  const ui=globalThis.LeadIntelBrandIdentityUI;
+  if(!ui?.mount)return;
+  brandIdentityUI=ui.mount({
+    getIdentity:()=>state.brandIdentity,
+    getWebsite:()=>state.website,
+    setIdentity:identity=>{
+      state.brandIdentity=globalThis.LeadIntelBrandIdentity.normalize(identity);
+      saveState();
+    }
+  });
 }
 function readSources(){
   const previousWebsite=state.website;state.website=LeadIntelProfile.normalizeUrl($("company-website").value);const additionalLinks=$("additional-links");state.additionalLinks=(additionalLinks?.value||"").split(/\n/).map(LeadIntelProfile.normalizeUrl).filter(Boolean).slice(0,8);
@@ -749,7 +765,7 @@ function bind(){
   });
 }
 function init(){
-  syncInputsFromState();bind();updateCompleteness();updateNavigationAvailability();observeNavigation();
+  syncInputsFromState();bind();initBrandIdentity();updateCompleteness();updateNavigationAvailability();observeNavigation();
   setStep(state.step||1);
   void resumePendingMarketResearchAfterAuth();
 }
