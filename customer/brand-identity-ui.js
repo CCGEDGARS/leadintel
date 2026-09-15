@@ -261,7 +261,9 @@
     const links = [profile.linkedinUrl, ...(Array.isArray(source.additionalLinks) ? source.additionalLinks : [])];
     const linkedin = links.find(link => safeLinkedInUrl(link));
     if (linkedin) suggestions.linkedinUrl = linkedin;
-    if (/^#[0-9a-f]{6}$/i.test(String(profile.primaryColor || '').trim())) suggestions.primaryColor = profile.primaryColor.trim();
+    const primaryColor = [profile.primaryColor, ...publicSources.map(item => item.primaryColor)]
+      .find(candidate => /^#[0-9a-f]{6}$/i.test(String(candidate || '').trim()));
+    if (primaryColor) suggestions.primaryColor = String(primaryColor).trim().toLowerCase();
 
     const logoCandidates = [
       profile.logoUrl,
