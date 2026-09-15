@@ -10,7 +10,7 @@ const discoveryUi = fs.readFileSync(path.join(root, 'discovery-ui.js'), 'utf8');
 test('Company Discovery bootstrap is not blocked by a module dependency graph', () => {
   assert.match(
     html,
-    /<script defer src="discovery-ui\.js\?v=20260915-multilingual-discovery-v1"><\/script>/,
+    /<script defer src="discovery-ui\.js\?v=20260915-entity-resolution-v1"><\/script>/,
     'Discovery must load as an independent deferred script'
   );
   assert.doesNotMatch(
