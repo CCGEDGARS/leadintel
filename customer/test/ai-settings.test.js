@@ -15,8 +15,8 @@ const extension=fs.existsSync(extensionPath)?fs.readFileSync(extensionPath,'utf8
 const extensionCss=fs.existsSync(extensionCssPath)?fs.readFileSync(extensionCssPath,'utf8'):'';
 
 test('Customer V2 loads the proven AI Settings plus the customer-owned Apollo and Firecrawl extension',()=>{
-  assert.match(processMap,/import ['"]\.\/ai-settings\.js\?v=20260903-password-manager-isolation-v1['"]/);
-  assert.match(processMap,/import ['"]\.\/service-settings-extension\.js\?v=20260903-password-manager-isolation-v1['"]/);
+  assert.match(processMap,/import ['"]\.\/ai-settings\.js\?v=20260915-microsoft-settings-v1['"]/);
+  assert.match(processMap,/import ['"]\.\/service-settings-extension\.js\?v=20260915-microsoft-settings-v1['"]/);
   assert.equal(fs.existsSync(jsPath),true,'ai-settings.js must exist');
   assert.equal(fs.existsSync(extensionPath),true,'service-settings-extension.js must exist');
   assert.match(js,/id="open-settings"/);
@@ -73,8 +73,8 @@ test('raw API keys are transient browser values and never persisted by either se
 });
 
 test('settings assets are cache-busted and controls have individual borders and focus treatment',()=>{
-  assert.match(js,/SETTINGS_VERSION='20260903-password-manager-isolation-v1'/);
-  assert.match(extension,/SETTINGS_VERSION='20260903-password-manager-isolation-v1'/);
+  assert.match(js,/SETTINGS_VERSION='20260915-microsoft-settings-v1'/);
+  assert.match(extension,/SETTINGS_VERSION='20260915-microsoft-settings-v1'/);
   assert.match(js,/link\.href=`ai-settings\.css\?v=\$\{SETTINGS_VERSION\}`/);
   assert.match(extension,/link\.href=`service-settings-extension\.css\?v=\$\{SETTINGS_VERSION\}`/);
   assert.equal(fs.existsSync(cssPath),true,'ai-settings.css must exist');
@@ -114,9 +114,10 @@ test('AI Settings supports a direct ?settings=ai deep link that opens the drawer
   assert.match(js,/openDrawer\(\)/,'direct settings link must open the existing secure settings drawer');
 });
 
-test('signed-out Settings exposes Google-first onboarding in both summary and Google Account card',()=>{
-  assert.match(js,/id="ai-settings-signin"/,'signed-out summary must render a direct sign-in button');
-  assert.match(js,/Sign in with Google/);
+test('signed-out Settings exposes Google and Microsoft onboarding while retaining the Google Account card',()=>{
+  assert.match(js,/id="ai-settings-signin"/,'signed-out summary must render direct sign-in choices');
+  assert.match(js,/Continue with Google/);
+  assert.match(js,/Continue with Microsoft/);
   assert.match(extension,/function connectGoogle\(\)/);
   assert.match(extension,/data-service-action="google-signin"/);
   assert.match(extension,/Connect with Google/);
@@ -141,7 +142,7 @@ test('Settings retains the integration control centre and adds LeadIntel readine
   assert.match(js,/id="integration-communication-grid"/);
   for(const name of ['Apollo.io','Firecrawl','Google Account','Gmail'])assert.match(js,new RegExp(name.replace('.','\\.')));
   assert.match(extension,/LeadIntel readiness/);
-  assert.match(extension,/LeadIntel readiness: \$\{Number\(aiReady\)\+1\+Number\(gmailReady\)\+serviceReady\}\/5 connected/);
+  assert.match(extension,/LeadIntel readiness: \$\{Number\(aiReady\)\+1\+Number\(deliveryReady\)\+serviceReady\}\/5 connected/);
 });
 
 test('service diagnostics use verification status and never run research or enrichment just to test settings',()=>{
@@ -168,4 +169,17 @@ test('integration control centre has dedicated readable service-card and Google 
   assert.match(extensionCss,/\.service-readiness-note/);
   assert.match(extensionCss,/\.google-connect-panel/);
   assert.match(extensionCss,/@media\s*\(max-width:/);
+});
+
+test('Integration Control Centre offers Microsoft workspace access and Microsoft 365 mail controls',()=>{
+  assert.match(js,/data-settings-signin="google"/,'Google must remain an explicit workspace sign-in choice');
+  assert.match(js,/data-settings-signin="microsoft"/,'Microsoft must be an explicit workspace sign-in choice');
+  assert.match(js,/bridge\(\)\?\.signIn\?\.\(provider\)/,'the selected identity provider must be passed to the server bridge');
+  assert.match(js,/data-integration="microsoft-account"/,'communication status must include Microsoft workspace identity');
+  assert.match(js,/data-integration="microsoft-mail"/,'communication status must include Microsoft 365 mail');
+  assert.match(js,/data-microsoft-mail-action="connect"/,'Microsoft mail must be connectable from Settings');
+  assert.match(js,/data-microsoft-mail-action="disconnect"/,'Microsoft mail must be disconnectable from Settings');
+  assert.match(js,/send-only/i,'Settings must explain that Microsoft cannot read the inbox');
+  assert.match(css,/\.workspace-signin-options/,'the two sign-in choices must have responsive layout styling');
+  assert.match(css,/\.microsoft-mail-actions/,'Microsoft mail controls must have dedicated layout styling');
 });
