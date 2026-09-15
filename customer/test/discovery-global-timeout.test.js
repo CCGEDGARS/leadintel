@@ -54,7 +54,9 @@ test('a permanently pending provider cannot leave Company Discovery running', as
 
 test('the overall guard caps the complete Discovery run at 25 seconds and cancels active work', () => {
   const source=fs.readFileSync(path.join(__dirname,'..','discovery-ui.js'),'utf8');
-  assert.match(source,/DISCOVERY_RUN_TIMEOUT_MS=25000/);\n  assert.match(source,/runController\.abort/);\n  assert.match(source,/runDiscoverySearchBatch\(queries,"searching",runController\.signal\)/);
+  assert.match(source,/DISCOVERY_RUN_TIMEOUT_MS=25000/);
+  assert.match(source,/runController\.abort/);
+  assert.match(source,/runDiscoverySearchBatch\(queries,"searching",runController\.signal\)/);
 });
 
 test('a rendering failure cannot leave Company Discovery running', async () => {
