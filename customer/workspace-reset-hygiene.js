@@ -109,17 +109,19 @@
   async function cleanupResetAssets(intent,bridge){
     const assets=Array.isArray(intent?.assets)?intent.assets.filter(item=>BRAND_ASSET_KINDS.includes(item?.kind)&&BRAND_ASSET_ID.test(String(item?.id||""))):[];
     const failed=[];
-    let deleted=0;
+    let deleted=0,queued=0;
     for(const asset of assets){
       try{
-        await bridge.deleteBrandAsset(asset.kind,{id:asset.id});
-        deleted++;
+        const result=await bridge.deleteBrandAsset(asset.kind,{id:asset.id});
+        if(result?.ok||Number(result?.status)===404)deleted++;
+        else if(result?.queued)queued++;
+        else failed.push(asset);
       }catch(error){
         if(Number(error?.status)===404)deleted++;
         else failed.push(asset);
       }
     }
-    const detail={attempted:assets.length,deleted,failed:failed.length};
+    const detail={attempted:assets.length,deleted,queued,failed:failed.length};
     if(failed.length){
       root.localStorage.setItem(RESET_PENDING_KEY,JSON.stringify({...intent,assets:failed,last_cleanup_at:Date.now(),cleanup_failures:failed.length}));
       console.warn("LeadIntel brand asset reset cleanup incomplete",detail);
@@ -132,10 +134,10 @@
     if(assetCleanupPromise)return assetCleanupPromise;
     const intent=readResetIntent();
     const bridge=root.LeadIntelServerBridge;
-    if(!intent||!bridge?.session?.authenticated||!bridge.workspace||String(workspaceId||"")!==bridge.workspace.id||!resetIntentMatchesWorkspace(intent,bridge))return Promise.resolve({attempted:0,deleted:0,failed:0});
+    if(!intent||!bridge?.session?.authenticated||!bridge.workspace||String(workspaceId||"")!==bridge.workspace.id||!resetIntentMatchesWorkspace(intent,bridge))return Promise.resolve({attempted:0,deleted:0,queued:0,failed:0});
     if(typeof bridge.deleteBrandAsset!=="function"){
       const attempted=Array.isArray(intent.assets)?intent.assets.length:0;
-      const detail={attempted,deleted:0,failed:attempted,unavailable:true};
+      const detail={attempted,deleted:0,queued:0,failed:attempted,unavailable:true};
       emitAssetCleanup(detail);
       return Promise.resolve(detail);
     }
