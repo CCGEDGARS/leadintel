@@ -10,7 +10,9 @@ const KIND_LIMITS={
   banner:5*1024*1024
 };
 const MAX_DIMENSION=6000;
+const MAX_DECODED_PIXELS=4_000_000;
 const MAX_STORED_BYTES=5*1024*1024;
+const ASSET_VALIDATION='decoded-v1';
 const MAX_REDIRECTS=3;
 const IMPORT_TIMEOUT_MS=5000;
 const ASSET_ID=/^[A-Za-z0-9_-]{43}$/;
@@ -396,6 +398,9 @@ export async function validateBrandAsset(file,kind){
   if(info.width>MAX_DIMENSION||info.height>MAX_DIMENSION){
     throw new BrandAssetError('Brand asset dimensions must be between 1 and 6000 pixels');
   }
+  if(info.width*info.height>MAX_DECODED_PIXELS){
+    throw new BrandAssetError('Brand asset exceeds the 4,000,000 decoded pixels limit');
+  }
   const decodedInfo=await fullyDecodedInfo(bytes,info);
   if(!decodedInfo){
     throw new BrandAssetError('Brand asset could not be fully decoded');
@@ -511,7 +516,14 @@ async function createAsset(env,{workspaceId,validated,kind,altText,eventType,use
   });
   await bucket.put(key,validated.bytes,{
     httpMetadata:{contentType:validated.mimeType},
-    customMetadata:{workspaceId:String(workspaceId)}
+    customMetadata:{
+      workspaceId:String(workspaceId),
+      validation:ASSET_VALIDATION,
+      validatedMimeType:validated.mimeType,
+      validatedSize:String(validated.size),
+      validatedWidth:String(validated.width),
+      validatedHeight:String(validated.height)
+    }
   });
   return asset;
 }
@@ -741,6 +753,39 @@ async function storedObjectBytes(object){
   return new Uint8Array(await new Response(object.body).arrayBuffer());
 }
 
+function positiveInteger(value){
+  const text=String(value||'');
+  if(!/^[1-9]\d*$/.test(text)){
+    return null;
+  }
+  const number=Number(text);
+  return Number.isSafeInteger(number)?number:null;
+}
+
+function storedValidation(object){
+  const metadata=object.customMetadata;
+  if(!metadata||metadata.validation!==ASSET_VALIDATION||typeof metadata.workspaceId!=='string'||!metadata.workspaceId.trim()){
+    return null;
+  }
+  const mimeType=metadata.validatedMimeType;
+  const size=positiveInteger(metadata.validatedSize);
+  const width=positiveInteger(metadata.validatedWidth);
+  const height=positiveInteger(metadata.validatedHeight);
+  if(!IMAGE_TYPES.has(mimeType)||!size||size>MAX_STORED_BYTES||!width||!height){
+    return null;
+  }
+  if(width>MAX_DIMENSION||height>MAX_DIMENSION||width*height>MAX_DECODED_PIXELS){
+    return null;
+  }
+  if(normalizeMime(object.httpMetadata?.contentType)!==mimeType){
+    return null;
+  }
+  if(object.size!==undefined&&Number(object.size)!==size){
+    return null;
+  }
+  return {mimeType,size};
+}
+
 async function serveAsset(assetId,env,cors){
   const id=parsedAssetId(assetId);
   if(!id){
@@ -751,24 +796,19 @@ async function serveAsset(assetId,env,cors){
     return error('Brand asset not found',404,cors);
   }
 
+  const validation=storedValidation(object);
+  if(!validation){
+    return error('Brand asset not found',404,cors);
+  }
   const bytes=await storedObjectBytes(object);
-  if(bytes.byteLength>MAX_STORED_BYTES){
-    return error('Brand asset not found',404,cors);
-  }
-  const containerInfo=imageInfo(bytes);
-  const storedType=normalizeMime(object.httpMetadata?.contentType);
-  if(!containerInfo||!IMAGE_TYPES.has(containerInfo.mimeType)||(storedType&&storedType!==containerInfo.mimeType)||containerInfo.width>MAX_DIMENSION||containerInfo.height>MAX_DIMENSION){
-    return error('Brand asset not found',404,cors);
-  }
-  const info=await fullyDecodedInfo(bytes,containerInfo);
-  if(!info){
+  if(bytes.byteLength!==validation.size){
     return error('Brand asset not found',404,cors);
   }
   return new Response(bytes,{
     status:200,
     headers:{
       ...cors,
-      'Content-Type':info.mimeType,
+      'Content-Type':validation.mimeType,
       'Content-Length':String(bytes.byteLength),
       'X-Content-Type-Options':'nosniff',
       'Cache-Control':'public, max-age=31536000, immutable'
