@@ -1,11 +1,13 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
 const Outreach=require('../outreach-engine.js');
 
 const readyIdentity={
   schemaVersion:1,
   status:'ready',
-  revision:'brand-rev-7',
+  revision:7,
   companyDisplayName:'SellerCo',
   senderName:'Anna Seller',
   senderTitle:'Commercial Director',
@@ -47,7 +49,7 @@ test('approval freezes the valid ready identity revision and resolved managed as
   const source=structuredClone(readyIdentity);
   const approved=Outreach.approveOutreachItem(item(),item().drafts,'2026-09-15T21:00:00.000Z',{brandIdentity:source});
   assert.equal(approved.approved,true);
-  assert.equal(approved.brandSnapshot.revision,'brand-rev-7');
+  assert.equal(approved.brandSnapshot.revision,7);
   assert.equal(approved.brandSnapshot.assets.logo.id,'logo_7');
   assert.ok(Object.isFrozen(approved.brandSnapshot));
   assert.ok(Object.isFrozen(approved.brandSnapshot.assets));
@@ -74,7 +76,7 @@ test('approved preview and manual-send payload are exactly the same frozen rende
 
   const later=structuredClone(readyIdentity);
   later.senderName='Different Step 1 Sender';
-  later.revision='brand-rev-8';
+  later.revision=8;
   assert.deepEqual(Outreach.renderApprovedEmail(approved),preview,'later Step 1 changes must not affect the approved rendering');
 });
 
@@ -119,4 +121,13 @@ test('normalization restores a branded approved package from source plus snapsho
   assert.equal(restored.approved,true);
   assert.doesNotMatch(restored.approvedEmail.htmlBody,/<script/i);
   assert.deepEqual(Outreach.renderApprovedEmail(restored),restored.approvedEmail);
+});
+
+test('outreach UI snapshots Step 1 identity, preserves edit detection and invalidates approval on regeneration',()=>{
+  const source=fs.readFileSync(path.join(__dirname,'..','outreach-ui.js'),'utf8');
+  assert.match(source,/approveOutreachItem\(source,edited\.drafts,[\s\S]*brandIdentity:mainState\(\)\.brandIdentity/);
+  assert.match(source,/regenerateDrafts\(\)[\s\S]*invalidateOutreachApproval\(current\)/);
+  assert.match(source,/renderApprovedEmail\(item\)/);
+  assert.match(source,/buildApprovedSendPayload\(item\)/);
+  assert.doesNotMatch(source,/\.sendGmail\(|\.sendMicrosoftMail\(/,'Task 5 must not create an automatic delivery path');
 });
