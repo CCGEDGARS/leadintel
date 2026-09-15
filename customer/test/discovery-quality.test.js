@@ -148,3 +148,52 @@ test("only fully qualified candidates are actionable",()=>{
   assert.equal(discovery.isActionableCandidate(base),false);
   assert.equal(discovery.isActionableCandidate({...base,qualified:true,marketVerified:true,buyerVerified:true}),true);
 });
+
+test("market evidence is converted into named company resolution queries instead of treating the publisher as the lead",()=>{
+  const evidence=[{
+    url:"https://www.ri.se/en/unique-bio-based-industry-is-established-kopmanholmen",
+    domain:"ri.se",market:"Zviedrija",title:"Unique bio-based industry is established",
+    description:"Cinis Fertilizer intends to establish a new facility in Sweden and invest SEK 550 million.",
+    text:"Cinis Fertilizer intends to establish a new facility at the dockyard in Köpmanholmen."
+  }];
+  const mentions=discovery.extractCompanyMentions(evidence,10);
+  assert.deepEqual(mentions.map(item=>item.company),["Cinis Fertilizer"]);
+  const [resolution]=discovery.buildCompanyResolutionQueries(mentions,{},10);
+  assert.equal(resolution.kind,"resolution");
+  assert.equal(resolution.company,"Cinis Fertilizer");
+  assert.match(resolution.query,/"Cinis Fertilizer"/);
+  assert.match(resolution.query,/Sweden|Sverige/);
+  assert.doesNotMatch(resolution.query,/site:ri\.se/);
+});
+
+test("AI company extraction accepts only companies tied to supplied evidence URLs",()=>{
+  const evidence=[{
+    url:"https://industry-news.se/cinis-expansion",domain:"industry-news.se",market:"Zviedrija",
+    title:"Cinis expands",description:"Cinis Fertilizer plans a new facility.",text:""
+  }];
+  const parsed=discovery.parseCompanyExtraction(JSON.stringify({companies:[
+    {company:"Cinis Fertilizer",market:"Zviedrija",sourceUrl:"https://industry-news.se/cinis-expansion"},
+    {company:"Fabricated Industries",market:"Zviedrija",sourceUrl:"https://industry-news.se/cinis-expansion"},
+    {company:"Invented AB",market:"Zviedrija",sourceUrl:"https://unknown.example/fake"}
+  ]}),evidence,10);
+  assert.deepEqual(parsed.map(item=>item.company),["Cinis Fertilizer"]);
+});
+
+test("resolved official domains keep the extracted company identity for exact-domain verification",()=>{
+  const [resolved]=discovery.normalizeCompanySearchResults({data:[{
+    url:"https://cinis-fertilizer.com/",title:"Cinis Fertilizer",description:"Official company website"
+  }]},{id:"resolve-cinis",kind:"resolution",company:"Cinis Fertilizer",market:"Zviedrija",query:'"Cinis Fertilizer" official website'});
+  assert.equal(resolved.company,"Cinis Fertilizer");
+  const [verification]=discovery.buildCandidateVerificationQueries([resolved],{website:"https://ercon.lv"},{
+    signals:[{id:"expansion",name:"Ražošanas paplašināšana",active:true,weight:9,keywords:"jauna ražotne; jaudas palielināšana"}]
+  },10);
+  assert.equal(verification.domain,"cinis-fertilizer.com");
+  assert.match(verification.query,/site:cinis-fertilizer\.com/);
+});
+
+test("company resolution rejects publisher domains even when their article names the company",()=>{
+  const resolved=discovery.normalizeCompanySearchResults({data:[{
+    url:"https://www.ri.se/en/cinis-expansion",title:"Cinis Fertilizer plans a new facility",description:"Expansion news"
+  }]},{id:"resolve-cinis",kind:"resolution",company:"Cinis Fertilizer",market:"Zviedrija",query:'"Cinis Fertilizer" official website'});
+  assert.deepEqual(resolved,[]);
+});
