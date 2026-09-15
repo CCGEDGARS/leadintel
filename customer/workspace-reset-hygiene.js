@@ -94,8 +94,8 @@
     try{
       const current=root.localStorage?.getItem(ASSET_RESET_CLEANUP_KEY);
       const legacy=current?null:root.localStorage?.getItem(LEGACY_RESET_PENDING_KEY);
-      const value=JSON.parse(current||legacy||"null");
-      if(!current&&legacy&&Array.isArray(value?.assets))root.localStorage?.setItem(ASSET_RESET_CLEANUP_KEY,JSON.stringify(value));
+      const legacyValue=legacy?JSON.parse(legacy):null;const value=current?JSON.parse(current):(Array.isArray(legacyValue?.assets)?legacyValue:null);
+      if(!current&&Array.isArray(legacyValue?.assets))root.localStorage?.setItem(ASSET_RESET_CLEANUP_KEY,JSON.stringify(legacyValue));
       return value&&typeof value==="object"?value:null;
     }catch{return null;}
   }
@@ -157,9 +157,11 @@
     if(!intent||!bridge?.session?.authenticated||!bridge.workspace||!resetIntentMatchesWorkspace(intent,bridge))return false;
     finalizingReset=true;
     try{
+      const serverResetPending=Boolean(root.localStorage?.getItem(LEGACY_RESET_PENDING_KEY));
+      if(!serverResetPending){await afterWorkspaceSaved(bridge.workspace.id);return true;}
       let result=null;
       if(bridge.conflict&&typeof bridge.resolveConflictKeepLocal==="function")result=await bridge.resolveConflictKeepLocal();
-      else if(typeof bridge.saveNow==="function")result=await bridge.saveNow();
+      else if(typeof bridge.saveNow==="function")result=await bridge.saveNow({saveIntent:true});
       const completed=Boolean(result?.saved||result?.resolved);
       if(completed)await afterWorkspaceSaved(bridge.workspace.id);
       return completed;
