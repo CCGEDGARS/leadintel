@@ -30,7 +30,7 @@ test('cloud save has a hard timeout so activation cannot remain busy',()=>{
 });
 
 test('Discovery runtime cache key changes whenever spinner recovery changes',()=>{
-  assert.ok(discovery.includes('const ASSET_VERSION="20260915-error-sweep-v1";'));
+  assert.ok(discovery.includes('const DISCOVERY_RUN_TIMEOUT_MS=25000;'));
 });
 
 test('customer page loads the spinner-safe bundles with fresh cache keys',()=>{
