@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=20260826-target-market-v1">
-  <link rel="stylesheet" href="market.css?v=20260913-openai-retry-v3">
+  <link rel="stylesheet" href="market.css?v=20260915-custom-signal-ux-v1">
   <link rel="stylesheet" href="premium.css?v=20260826-target-market-v1">
   <link rel="stylesheet" href="market-selector.css?v=20260826-target-market-v1">
   <link rel="stylesheet" href="compact-sources.css?v=20260826-compact-sources-v1">
@@ -223,14 +223,21 @@
           </section>
 
           <section class="panel strategy-panel">
-            <div class="section-title"><span class="eyebrow">Recommended buying signals</span><h3>What LeadIntel should watch for</h3><p>LeadIntel generated these recommendations from your profile and research context. Activate the signals Discovery should use, then edit or add your own if needed.</p></div>
+            <div class="section-title"><span class="eyebrow">Recommended buying signals</span><h3>What LeadIntel should watch for</h3><p>LeadIntel suggests these from your company profile and research context. Active signals are used in research and Discovery. Edit the keywords or switch signals off when they are not relevant.</p></div>
             <div class="signal-designer" id="signal-designer"></div>
-            <div class="custom-signal-form">
-              <input id="custom-signal-name" type="text" placeholder="New signal name">
-              <input id="custom-signal-keywords" type="text" placeholder="Keywords: distributor; reseller; partner search">
-              <select id="custom-signal-priority"><option>High</option><option selected>Medium</option><option>Low</option></select>
-              <input id="custom-signal-weight" type="number" min="1" max="10" value="7" aria-label="Signal weight">
-              <button class="secondary-btn" id="add-custom-signal" type="button">+ Add your own signal</button>
+            <div class="custom-signal-form" role="group" aria-labelledby="custom-signal-title">
+              <div class="custom-signal-intro">
+                <span class="eyebrow">Customer-defined signal</span>
+                <h4 id="custom-signal-title">Add your own buying signal</h4>
+                <p>Tell LeadIntel which company event should trigger attention. Add a clear event and a few words it may appear with; the signal will be active immediately.</p>
+              </div>
+              <div class="custom-signal-fields">
+                <label>Signal name<input id="custom-signal-name" type="text" placeholder="e.g. New office opening"></label>
+                <label>Keywords<input id="custom-signal-keywords" type="text" placeholder="e.g. office; expansion; new location"></label>
+                <label>Priority<select id="custom-signal-priority"><option>High</option><option selected>Medium</option><option>Low</option></select></label>
+                <label>Weight<input id="custom-signal-weight" type="number" min="1" max="10" value="7"></label>
+              </div>
+              <button class="primary-btn custom-signal-submit" id="add-custom-signal" type="button">+ Add buying signal</button>
             </div>
           </section>
 
@@ -310,7 +317,7 @@
   <script defer src="workspace-isolation.js?v=20260914-workspace-isolation-v1"></script>
   <script defer src="language.js?v=20260905-audit-v1"></script>
   <script defer src="server-bridge.js?v=20260915-mail-choice-v2" data-server-bridge="true"></script>
-  <script type="module" src="app.js?v=20260914-stage-isolated-v1"></script>
+  <script type="module" src="app.js?v=20260915-custom-signal-ux-v1"></script>
   <script type="module" src="process-map.js?v=20260915-model-choice-v1"></script>
   <script defer src="discovery-ui.js?v=20260914-stage-isolated-v1"></script>
   <script type="module" src="company-research-ui.js?v=20260915-step2-research-state-v1"></script>
