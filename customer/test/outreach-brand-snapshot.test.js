@@ -3,6 +3,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const Outreach=require('../outreach-engine.js');
+const Delivery=require('../delivery-engine.js');
 
 const readyIdentity={
   schemaVersion:1,
@@ -70,6 +71,9 @@ test('approved preview and manual-send payload are exactly the same frozen rende
     preview
   );
   assert.equal(send.body,preview.textBody,'legacy body must carry the exact rendered text fallback');
+  assert.equal(approved.drafts.emailBody,preview.textBody,'existing explicit manual-send paths must receive the frozen text rendering');
+  const compose=new URL(Delivery.buildGmailComposeUrl(approved,'buyer@example.com'));
+  assert.equal(compose.searchParams.get('body'),preview.textBody);
   assert.match(preview.htmlBody,/SellerCo logo/);
   assert.match(preview.textBody,/Anna Seller/);
   assert.doesNotMatch(preview.textBody,/\[Your name\]/);
