@@ -32,6 +32,22 @@ test('Microsoft Graph sendMail submits a tailored plain-text message and treats 
   assert.deepEqual(result,{accepted:true,status:202});
 });
 
+test('Microsoft Graph sends validated branded HTML and keeps the rendered text as fallback input',async()=>{
+  let request;const assetId='A'.repeat(43);
+  const html=`<div>Hello ✓</div><img src="https://leadintel-api.edgars-7e7.workers.dev/api/customer/brand-assets/${assetId}" alt="Logo">`;
+  const fetchImpl=async(url,init)=>{request={url,init};return new Response(null,{status:202})};
+  await microsoftMail.sendMicrosoftMessage('access-token',{to:'buyer@example.com',subject:'Branded',body:'Canonical',textBody:'Rendered text',htmlBody:html},fetchImpl);
+  const payload=JSON.parse(request.init.body);
+  assert.deepEqual(payload.message.body,{contentType:'HTML',content:html});
+});
+
+test('Microsoft Graph rejects unsafe branded HTML and subject newlines before calling Graph',async()=>{
+  let calls=0;const fetchImpl=async()=>{calls++;return new Response(null,{status:202})};
+  await assert.rejects(()=>microsoftMail.sendMicrosoftMessage('access-token',{to:'buyer@example.com',subject:'Subject',body:'Body',htmlBody:'<img src="https://tracker.example/pixel" alt="">'},fetchImpl),/unsafe email HTML/i);
+  await assert.rejects(()=>microsoftMail.sendMicrosoftMessage('access-token',{to:'buyer@example.com',subject:'Subject\r\nBcc: victim@example.com',body:'Body'},fetchImpl),/header/i);
+  assert.equal(calls,0);
+});
+
 test('Microsoft Graph sendMail rejects invalid recipients before calling Graph',async()=>{
   assert.equal(typeof microsoftMail.sendMicrosoftMessage,'function','Microsoft send transport must exist');
   let called=false;
