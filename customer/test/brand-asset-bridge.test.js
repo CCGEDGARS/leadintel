@@ -586,32 +586,52 @@ test('post-upload local write failure restores prior metadata and cleans up the 
     /Quota exceeded/
   );
 
-  const rolledBack = JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).brandIdentity;
-  assert.equal(rolledBack.status, 'draft');
-  assert.equal(rolledBack.assets.logo.id, oldAsset.id);
+  assert.equal(localStorage.getItem('leadintel_customer_v2_state'), main);
+  const preserved = JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).brandIdentity;
+  assert.equal(preserved.status, 'ready');
+  assert.equal(preserved.assets.logo.id, oldAsset.id);
   assert.equal(deleted.length, 1);
   assert.match(deleted[0], new RegExp(nextAsset.id));
 });
 
-test('asset removal persists an asset-less Draft identity before deleting and preserves the old asset when persistence fails', async () => {
+test('failed asset removal restores only the asset while preserving concurrent fields and Draft status', async () => {
   const oldAsset = asset('u'.repeat(43));
-  const main = JSON.stringify({brandIdentity: {status: 'ready', assets: {logo: oldAsset}}});
+  const main = JSON.stringify({brandIdentity: {status: 'ready', senderName: 'Before removal', legalFooter: 'Original footer', assets: {logo: oldAsset}}});
+  const putStarted = deferred();
+  const releasePut = deferred();
   const calls = [];
   const {bridge, localStorage} = loadBridge(async (url, options) => {
     calls.push({url, options});
-    if (url.includes('/customer/state')) return new Response(JSON.stringify({error: 'save unavailable'}), {status: 503});
+    if (url.includes('/customer/state')) {
+      putStarted.resolve();
+      await releasePut.promise;
+      return new Response(JSON.stringify({error: 'save unavailable'}), {status: 503});
+    }
     if (url.includes('/brand-assets/')) return new Response(JSON.stringify({ok: true}), {status: 200});
     throw new Error(`Unexpected request: ${url}`);
   }, {leadintel_customer_v2_state: main});
 
-  await assert.rejects(() => bridge.deleteBrandAsset('logo', oldAsset), /save unavailable/i);
+  const removing = bridge.deleteBrandAsset('logo', oldAsset);
+  await putStarted.promise;
+  const concurrent = JSON.parse(localStorage.getItem('leadintel_customer_v2_state'));
+  assert.equal(concurrent.brandIdentity.status, 'draft');
+  assert.equal(concurrent.brandIdentity.assets.logo, null);
+  concurrent.brandIdentity.senderName = 'Edited during removal';
+  concurrent.brandIdentity.legalFooter = 'Newer footer';
+  localStorage.setItem('leadintel_customer_v2_state', JSON.stringify(concurrent));
+  releasePut.resolve();
+  await assert.rejects(() => removing, /save unavailable/i);
 
   assert.equal(calls.length, 1);
   assert.match(calls[0].url, /\/api\/customer\/state\?/);
   const persisted = JSON.parse(calls[0].options.body).payload.main.brandIdentity;
   assert.equal(persisted.status, 'draft');
   assert.equal(persisted.assets.logo, null);
-  assert.equal(localStorage.getItem('leadintel_customer_v2_state'), main);
+  const rolledBack = JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).brandIdentity;
+  assert.equal(rolledBack.status, 'draft');
+  assert.equal(rolledBack.assets.logo.id, oldAsset.id);
+  assert.equal(rolledBack.senderName, 'Edited during removal');
+  assert.equal(rolledBack.legalFooter, 'Newer footer');
 });
 
 test('mail senders map optional HTML and text bodies without changing legacy body', async () => {
