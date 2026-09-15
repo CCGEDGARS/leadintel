@@ -1,6 +1,6 @@
 const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
 const FIRECRAWL_PROXY='https://apollo-proxy.edgars-7e7.workers.dev';
-const SETTINGS_VERSION='20260915-mail-choice-v2';
+const SETTINGS_VERSION='20260915-active-provider-v1';
 const PROVIDERS=Object.freeze([
   {provider:'openai',name:'OpenAI',model:'gpt-5.6',placeholder:'sk-…',hint:'Responses API'},
   {provider:'anthropic',name:'Anthropic',model:'claude-sonnet-4-6',placeholder:'sk-ant-…',hint:'Messages API'},
@@ -109,7 +109,7 @@ function render(){
     if(!signedIn()){
       summary.innerHTML='<span>Workspace access</span><strong>Sign in to configure LeadIntel</strong><small>Use your existing Google or Microsoft account. Mailbox permissions are connected separately.</small><div class="workspace-signin-options" id="ai-settings-signin"><button class="ai-settings-btn primary" data-settings-signin="google" type="button">Continue with Google</button><button class="ai-settings-btn microsoft" data-settings-signin="microsoft" type="button">Continue with Microsoft</button></div>';
     }
-    else if(active)summary.innerHTML=`<span>AI engine</span><strong>Active provider · ${esc(active.name)} · ${esc(active.model)}</strong><small>${connectedCount} provider${connectedCount===1?'':'s'} connected · API key verified ${active.verified_at?esc(formatDate(active.verified_at)):'successfully'}${active.last_used_at?` · last used ${esc(formatDateTime(active.last_used_at))}`:''}.</small>${workspaceAccessControls()}`;
+    else if(active)summary.innerHTML=`<span>AI engine</span><strong class="ai-engine-active-line"><span>Active provider · ${esc(active.name)} · ${esc(active.model)}</span><span class="ai-active-badge" role="status">ACTIVE</span></strong><small>${connectedCount} provider${connectedCount===1?'':'s'} connected · API key verified ${active.verified_at?esc(formatDate(active.verified_at)):'successfully'}${active.last_used_at?` · last used ${esc(formatDateTime(active.last_used_at))}`:''}.</small>${workspaceAccessControls()}`;
     else summary.innerHTML=`<span>AI engine</span><strong>No active provider</strong><small>${connectedCount?`${connectedCount} provider${connectedCount===1?' is':'s are'} connected. Set one as active to use AI generation.`:'Test and save a provider below to activate AI generation.'}</small>${workspaceAccessControls()}`;
   }
   grid.innerHTML=PROVIDERS.map(config=>providerCard(config,providerState(config.provider))).join('');
