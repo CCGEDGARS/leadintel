@@ -199,6 +199,32 @@
     return results.slice(0,limit);
   }
 
+  function buildCandidateVerificationQueries(results=[],profile={},marketState={},maxCandidates=10){
+    const limit=Math.max(1,Math.min(20,Number(maxCandidates)||10));
+    const signals=activeSignals(marketState).filter(signal=>allowTenderDiscovery(marketState)||!isTenderSignal(signal)).sort((a,b)=>(Number(b.weight)||0)-(Number(a.weight)||0));
+    const signalTerms=[...new Set(signals.flatMap(signal=>splitList(signal.keywords||signal.name)).map(clean).filter(Boolean))].slice(0,6);
+    if(!signalTerms.length)return [];
+    const own=canonicalDomain(profile.website||profile.companyWebsite||"");
+    const seen=new Set();
+    const checks=[];
+    for(const item of results||[]){
+      const domain=clean(item?.domain)||canonicalDomain(item?.url);
+      if(!domain||seen.has(domain)||isBlockedDomain(domain)||isExcludedDiscoverySource(item,profile,marketState))continue;
+      seen.add(domain);
+      if(own&&(domain===own||domain.endsWith(`.${own}`)))continue;
+      const requested=marketRule(item.market);
+      const actual=domainCountryRule(domain);
+      if(requested&&actual&&requested.code!==actual.code)continue;
+      const quotedSignals=signalTerms.map(term=>`"${term.replace(/"/g,"")}"`).join(" OR ");
+      checks.push({
+        id:`verify-${slug(domain)}`,domain,market:clean(item.market),offer:"",kind:"verification",
+        query:`site:${domain} (${quotedSignals}) company news expansion investment hiring facility contract`
+      });
+      if(checks.length>=limit)break;
+    }
+    return checks;
+  }
+
   function rawSearchArray(payload={}){
     if(Array.isArray(payload?.data))return payload.data;
     if(Array.isArray(payload?.data?.web))return payload.data.web;
@@ -410,5 +436,5 @@
     return {...state,status:state.candidates.length||state.rawResults.length?"partial":"error"};
   }
 
-  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,discoveryLimits,buildDiscoveryQueries,buildCandidateNarrative,normalizeCompanySearchResults,mergeCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,recoverInterruptedDiscoveryState,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,hasActiveSignals,isActionableCandidate};
+  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,discoveryLimits,buildDiscoveryQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,mergeCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,recoverInterruptedDiscoveryState,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,hasActiveSignals,isActionableCandidate};
 });
