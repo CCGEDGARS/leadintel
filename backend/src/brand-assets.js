@@ -1,4 +1,4 @@
-import {cookieValue,randomToken,sha256} from './security.js';
+import {constantTimeEqual,cookieValue,randomToken,sha256} from './security.js';
 import {decodeImage} from './image-decoders.js';
 
 const PUBLIC_ASSET_ORIGIN='https://leadintel-api.edgars-7e7.workers.dev';
@@ -13,6 +13,8 @@ const MAX_DIMENSION=6000;
 const MAX_DECODED_PIXELS=4_000_000;
 const MAX_STORED_BYTES=5*1024*1024;
 const ASSET_VALIDATION='decoded-v1';
+const CONTENT_SHA256_METADATA='content-sha256';
+const CONTENT_SHA256=/^[a-f0-9]{64}$/;
 const MAX_REDIRECTS=3;
 const IMPORT_TIMEOUT_MS=5000;
 const ASSET_ID=/^[A-Za-z0-9_-]{43}$/;
@@ -345,6 +347,11 @@ function imageInfo(bytes){
   return pngInfo(bytes)||jpegInfo(bytes)||webpInfo(bytes);
 }
 
+async function contentSha256(bytes){
+  const digest=await crypto.subtle.digest('SHA-256',bytes);
+  return [...new Uint8Array(digest)].map(byte=>byte.toString(16).padStart(2,'0')).join('');
+}
+
 async function fullyDecodedInfo(bytes,containerInfo){
   let decoded;
   try{
@@ -514,6 +521,7 @@ async function createAsset(env,{workspaceId,validated,kind,altText,eventType,use
       height:validated.height
     }
   });
+  const digest=await contentSha256(validated.bytes);
   await bucket.put(key,validated.bytes,{
     httpMetadata:{contentType:validated.mimeType},
     customMetadata:{
@@ -522,7 +530,8 @@ async function createAsset(env,{workspaceId,validated,kind,altText,eventType,use
       validatedMimeType:validated.mimeType,
       validatedSize:String(validated.size),
       validatedWidth:String(validated.width),
-      validatedHeight:String(validated.height)
+      validatedHeight:String(validated.height),
+      [CONTENT_SHA256_METADATA]:digest
     }
   });
   return asset;
@@ -746,11 +755,46 @@ async function fetchImportedFile(rawUrl,kind,configuredHosts){
   }
 }
 
-async function storedObjectBytes(object){
-  if(typeof object.arrayBuffer==='function'){
-    return new Uint8Array(await object.arrayBuffer());
+async function storedObjectBytes(object,limit){
+  if(!Number.isSafeInteger(limit)||limit<1||Number(object.size)>limit){
+    return null;
   }
-  return new Uint8Array(await new Response(object.body).arrayBuffer());
+  if(!object.body){
+    return null;
+  }
+
+  const body=typeof object.body.getReader==='function'?object.body:new Response(object.body).body;
+  if(!body){
+    return null;
+  }
+  const reader=body.getReader();
+  const chunks=[];
+  let size=0;
+  try{
+    while(true){
+      const {done,value}=await reader.read();
+      if(done){
+        break;
+      }
+      size+=value.byteLength;
+      if(size>limit){
+        await reader.cancel().catch(()=>{});
+        return null;
+      }
+      chunks.push(value);
+    }
+  }catch{
+    await reader.cancel().catch(()=>{});
+    return null;
+  }
+
+  const bytes=new Uint8Array(size);
+  let offset=0;
+  for(const chunk of chunks){
+    bytes.set(chunk,offset);
+    offset+=chunk.byteLength;
+  }
+  return bytes;
 }
 
 function positiveInteger(value){
@@ -771,7 +815,8 @@ function storedValidation(object){
   const size=positiveInteger(metadata.validatedSize);
   const width=positiveInteger(metadata.validatedWidth);
   const height=positiveInteger(metadata.validatedHeight);
-  if(!IMAGE_TYPES.has(mimeType)||!size||size>MAX_STORED_BYTES||!width||!height){
+  const digest=metadata[CONTENT_SHA256_METADATA];
+  if(!IMAGE_TYPES.has(mimeType)||!size||size>MAX_STORED_BYTES||!width||!height||typeof digest!=='string'||!CONTENT_SHA256.test(digest)){
     return null;
   }
   if(width>MAX_DIMENSION||height>MAX_DIMENSION||width*height>MAX_DECODED_PIXELS){
@@ -783,7 +828,7 @@ function storedValidation(object){
   if(object.size!==undefined&&Number(object.size)!==size){
     return null;
   }
-  return {mimeType,size};
+  return {mimeType,size,digest};
 }
 
 async function serveAsset(assetId,env,cors){
@@ -800,8 +845,8 @@ async function serveAsset(assetId,env,cors){
   if(!validation){
     return error('Brand asset not found',404,cors);
   }
-  const bytes=await storedObjectBytes(object);
-  if(bytes.byteLength!==validation.size){
+  const bytes=await storedObjectBytes(object,validation.size);
+  if(!bytes||bytes.byteLength!==validation.size||!constantTimeEqual(validation.digest,await contentSha256(bytes))){
     return error('Brand asset not found',404,cors);
   }
   return new Response(bytes,{
