@@ -5,7 +5,8 @@
   const SNAPSHOT_KEY="leadintel_customer_v2_workspace_saved_snapshot_v1";
   const SAVE_INTENT_KEY="leadintel_customer_v2_explicit_save_intent_v1";
   const FORCE_RESET_KEY="leadintel_customer_v2_force_reset_save_v1";
-  const RESET_PENDING_KEY="leadintel_customer_v2_reset_pending_v1";
+  const SERVER_RESET_PENDING_KEY="leadintel_customer_v2_reset_pending_v1";
+  const RESET_PENDING_KEY=SERVER_RESET_PENDING_KEY;
   const WORKSPACE_KEY="leadintel_customer_v2_workspace";
   const HYDRATION_KEY="leadintel_customer_v2_server_hydration";
   const DIRTY_KEY="leadintel_customer_v2_server_dirty";
@@ -194,5 +195,5 @@
   if(changed&&(explicitlySaved||hadMeaningfulUnsavedData)&&root.location?.reload){root.location.reload();return;}
   if(root.document?.readyState==="loading")root.document.addEventListener("DOMContentLoaded",installUi,{once:true});else installUi();
 
-  root.LeadIntelWorkspacePersistence={EXPLICIT_SAVE_KEY,SNAPSHOT_KEY,SAVE_INTENT_KEY,FORCE_RESET_KEY,RESET_PENDING_KEY,WORKSPACE_DATA_KEYS,isExplicitlySaved,hasUnsavedChanges,markExplicitlySaved,clearExplicitSave,currentWorkspaceData,hasMeaningfulWorkspaceData,captureWorkspaceSnapshot,restoreSavedSnapshot,clearWorkspaceData,prepareForLoad,snapshotFromServerPayload,saveWorkspace,renderPersistenceStatus,handleResetClick};
+  root.LeadIntelWorkspacePersistence={EXPLICIT_SAVE_KEY,SNAPSHOT_KEY,SAVE_INTENT_KEY,FORCE_RESET_KEY,SERVER_RESET_PENDING_KEY,RESET_PENDING_KEY,WORKSPACE_DATA_KEYS,isExplicitlySaved,hasUnsavedChanges,markExplicitlySaved,clearExplicitSave,currentWorkspaceData,hasMeaningfulWorkspaceData,captureWorkspaceSnapshot,restoreSavedSnapshot,clearWorkspaceData,prepareForLoad,snapshotFromServerPayload,saveWorkspace,renderPersistenceStatus,handleResetClick};
 })(typeof globalThis!=="undefined"?globalThis:this);
