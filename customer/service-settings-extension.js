@@ -72,7 +72,7 @@ function decorateGoogleCard(){
   const card=document.querySelector('#integration-communication-grid [data-integration="google"]');if(!card)return;
   card.querySelector('[data-google-connect-extension="1"]')?.remove();
   if(signedIn()||card.querySelector('[data-settings-signin="google"]'))return;
-  card.insertAdjacentHTML('beforeend','<div class="google-connect-panel" data-google-connect-extension="1"><button class="ai-settings-btn primary" data-service-action="google-signin" type="button">Continue with Google</button><small>Creates or opens your private LeadIntel workspace.</small></div>');
+  card.insertAdjacentHTML('beforeend','<div class="google-connect-panel" data-google-connect-extension="1"><button class="ai-settings-btn primary" data-service-action="google-signin" type="button">Connect with Google</button><small>Creates or opens your private LeadIntel workspace.</small></div>');
 }
 function decorateCards(){
   if(!settingsDrawerOpen())return;
