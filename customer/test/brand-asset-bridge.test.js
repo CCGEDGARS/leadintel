@@ -11,7 +11,7 @@ const indexSource = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'u
 const processMapSource = fs.readFileSync(path.join(__dirname, '..', 'process-map.js'), 'utf8');
 const API = 'https://leadintel-api.edgars-7e7.workers.dev';
 const WORKSPACE_ID = 'workspace-1';
-const CACHE_VERSION = '20260916-brand-assets-v1';
+const CACHE_VERSION = '20260916-brand-assets-v2';
 const CLEANUP_KEY = 'leadintel_customer_v2_brand_asset_cleanup_v1';
 
 function storage(initial = {}) {
@@ -37,7 +37,7 @@ function loadBridge(fetchImpl, initialStorage = {}, workspaceId = WORKSPACE_ID) 
     head: {appendChild() {}}
   };
   const sandbox = {
-    console,
+    console: {warn() {}},
     URL,
     URLSearchParams,
     FormData,
@@ -131,8 +131,10 @@ test('importBrandAsset and deleteBrandAsset are workspace scoped and fail closed
   assert.equal(calls[0].url, `${API}/api/customer/brand-assets/import?workspace_id=${WORKSPACE_ID}`);
   assert.deepEqual(JSON.parse(calls[0].options.body), {kind: 'logo', url: 'https://www.example.com/logo.png', alt_text: 'Logo'});
   assert.equal(calls[1].url, `${API}/api/customer/state?workspace_id=${WORKSPACE_ID}`);
-  assert.equal(calls[2].url, `${API}/api/customer/brand-assets/${imported.id}?workspace_id=${WORKSPACE_ID}`);
-  assert.equal(calls[2].options.method, 'DELETE');
+  assert.equal(calls[2].url, `${API}/api/customer/state?workspace_id=${WORKSPACE_ID}`);
+  assert.equal(JSON.parse(calls[2].options.body).payload.main.brandIdentity.assets.logo, null);
+  assert.equal(calls[3].url, `${API}/api/customer/brand-assets/${imported.id}?workspace_id=${WORKSPACE_ID}`);
+  assert.equal(calls[3].options.method, 'DELETE');
 
   const {bridge: failing} = loadBridge(async () => new Response(JSON.stringify({error: 'Workspace access denied'}), {status: 403}));
   await assert.rejects(() => failing.deleteBrandAsset('logo', imported), /Workspace access denied/);
@@ -481,7 +483,7 @@ test('workspace reset clears displayed identity and reports best-effort asset cl
   const events = [];
   const deleted = [];
   const sandbox = {
-    console,
+    console: {warn() {}},
     URLSearchParams,
     localStorage,
     sessionStorage: storage(),
