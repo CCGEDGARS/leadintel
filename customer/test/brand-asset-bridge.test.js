@@ -11,7 +11,7 @@ const indexSource = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'u
 const processMapSource = fs.readFileSync(path.join(__dirname, '..', 'process-map.js'), 'utf8');
 const API = 'https://leadintel-api.edgars-7e7.workers.dev';
 const WORKSPACE_ID = 'workspace-1';
-const CACHE_VERSION = '20260916-brand-assets-v2';
+const CACHE_VERSION = '20260916-brand-assets-v3';
 const CLEANUP_KEY = 'leadintel_customer_v2_brand_asset_cleanup_v1';
 
 function storage(initial = {}) {
@@ -232,11 +232,12 @@ test('post-commit cleanup queue storage failure returns the committed identity a
   assert.equal(result.cleanupQueued, false);
   assert.equal(result.cleanupWarning, true);
   assert.equal(JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).brandIdentity.assets.logo.id, nextAsset.id);
-  assert.equal(events.some(event => event.type === 'leadintel:brand-asset-cleanup-warning'), true);
+  const cleanupWarning = events.find(event => event.type === 'leadintel:brand-asset-cleanup-warning');
+  assert.match(cleanupWarning.detail.message, /Cleanup queue quota exceeded/);
   const transaction = events.find(event => event.type === 'leadintel:brand-asset-transaction');
   assert.equal(transaction.detail.committed, true);
   assert.equal(transaction.detail.cleanupWarning, true);
-  assert.equal(warnings.some(value => value.includes('Cleanup queue quota exceeded')), true);
+  assert.equal(warnings.length, 1);
 });
 
 test('real UI and bridge chain has one persistence owner and adopts the committed Draft identity without another save', async () => {
@@ -638,8 +639,9 @@ test('workspace reset clears displayed identity and reports best-effort asset cl
   assert.deepEqual(deleted, [['logo', logo.id], ['banner', banner.id]]);
   assert.equal(result.attempted, 2);
   assert.equal(result.deleted, 1);
+  assert.equal(result.queued, 0);
   assert.equal(result.failed, 1);
-  assert.deepEqual(Object.keys(result).sort(), ['attempted', 'deleted', 'failed']);
+  assert.deepEqual(Object.keys(result).sort(), ['attempted', 'deleted', 'failed', 'queued']);
   assert.equal(events.at(-1).type, 'leadintel:brand-assets-reset-cleanup');
   assert.equal(events.at(-1).detail.attempted, result.attempted);
   assert.equal(events.at(-1).detail.deleted, result.deleted);
@@ -677,6 +679,7 @@ test('workspace reset emits a cleanup result even when the delete bridge is unav
 
   assert.equal(result.attempted, 1);
   assert.equal(result.deleted, 0);
+  assert.equal(result.queued, 0);
   assert.equal(result.failed, 1);
   assert.equal(events.at(-1).type, 'leadintel:brand-assets-reset-cleanup');
   assert.equal(events.at(-1).detail.unavailable, true);
