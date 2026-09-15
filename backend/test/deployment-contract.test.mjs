@@ -24,6 +24,16 @@ test('production backend deploy runs only after successful Backend CI on main an
   assert.match(workflow,/npm run deploy/);
   assert.match(workflow,/CLOUDFLARE_API_TOKEN/);
   assert.match(workflow,/CLOUDFLARE_ACCOUNT_ID/);
+  const install=workflow.indexOf('run: npm ci');
+  const provision=workflow.indexOf('npx wrangler r2 bucket info leadintel-brand-assets --json');
+  const deploy=workflow.indexOf('run: npm run deploy');
+  assert.ok(install>=0&&provision>install&&deploy>provision,'R2 provisioning must run after npm ci and before Worker deploy');
+  assert.match(workflow,/npx wrangler r2 bucket create leadintel-brand-assets/);
+  assert.match(workflow,/npx wrangler r2 bucket list --json/);
+  assert.match(workflow,/bucket\.name === "leadintel-brand-assets"/);
+  assert.match(workflow,/R2 bucket verification failed for an existing bucket; refusing to deploy/);
+  assert.match(workflow,/R2 bucket is absent; creating leadintel-brand-assets/);
+  assert.match(workflow,/set -euo pipefail/);
 });
 
 test('production Worker declares its public Apollo callback URL and never stores signing material in wrangler vars',()=>{

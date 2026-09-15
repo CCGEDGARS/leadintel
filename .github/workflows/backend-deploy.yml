@@ -40,6 +40,37 @@ jobs:
           test -n "$CLOUDFLARE_ACCOUNT_ID"
       - name: Install backend dependencies
         run: npm ci
+      - name: Verify or create production brand asset bucket
+        shell: bash
+        run: |
+          set -euo pipefail
+          INFO_OUTPUT=''
+          if INFO_OUTPUT="$(npx wrangler r2 bucket info leadintel-brand-assets --json 2>&1)"; then
+            printf '%s\n' "$INFO_OUTPUT"
+          else
+            printf '%s\n' "$INFO_OUTPUT" >&2
+            BUCKET_LIST="$(npx wrangler r2 bucket list --json)"
+            BUCKET_STATE="$(printf '%s' "$BUCKET_LIST" | node -e '
+              let input="";
+              process.stdin.on("data", chunk => input += chunk);
+              process.stdin.on("end", () => {
+                const parsed=JSON.parse(input);
+                const buckets=Array.isArray(parsed) ? parsed : parsed.buckets;
+                if(!Array.isArray(buckets)) throw new Error("Unexpected Wrangler bucket list response");
+                process.stdout.write(buckets.some(bucket => bucket && bucket.name === "leadintel-brand-assets") ? "found" : "absent");
+              });
+            ')"
+            if [ "$BUCKET_STATE" = 'found' ]; then
+              printf '%s\n' 'R2 bucket verification failed for an existing bucket; refusing to deploy' >&2
+              exit 1
+            elif [ "$BUCKET_STATE" != 'absent' ]; then
+              printf '%s\n' 'R2 bucket list returned an unknown state; refusing to deploy' >&2
+              exit 1
+            fi
+            printf '%s\n' 'R2 bucket is absent; creating leadintel-brand-assets'
+            npx wrangler r2 bucket create leadintel-brand-assets
+          fi
+          npx wrangler r2 bucket info leadintel-brand-assets --json
       - name: Bootstrap protected Scrapling service token
         shell: bash
         run: |

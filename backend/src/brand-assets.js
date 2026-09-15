@@ -606,6 +606,50 @@ function isPrivateIpv6(host){
   return mapped?isPrivateIpv4(mapped[1]):false;
 }
 
+function isDnsAliasHost(host){
+  return ['nip.io','sslip.io','xip.io','localtest.me'].some(suffix=>host===suffix||host.endsWith(`.${suffix}`));
+}
+
+function publicHost(url){
+  const host=url.hostname.replace(/^\[|\]$/g,'').replace(/\.$/,'').toLowerCase();
+  if(!host||(!host.includes('.')&&!host.includes(':'))||host==='localhost'||host.endsWith('.localhost')||host.endsWith('.local')||host.endsWith('.internal')||isDnsAliasHost(host)||isPrivateIpv4(host)||isPrivateIpv6(host)){
+    throw new BrandAssetError('Import URL must use an approved public host');
+  }
+  return host;
+}
+
+async function workspaceImportHost(env,workspaceId){
+  const row=await env.DB.prepare('SELECT payload_json FROM customer_workspace_state WHERE workspace_id=?').bind(workspaceId).first();
+  if(!row||typeof row.payload_json!=='string'){
+    return null;
+  }
+  let payload;
+  try{
+    payload=JSON.parse(row.payload_json);
+  }catch{
+    return null;
+  }
+  const website=payload&&typeof payload==='object'&&!Array.isArray(payload)&&payload.main&&typeof payload.main==='object'&&!Array.isArray(payload.main)?payload.main.website:null;
+  if(typeof website!=='string'||!website.trim()){
+    return null;
+  }
+  let url;
+  try{
+    url=new URL(website);
+  }catch{
+    return null;
+  }
+  if(url.protocol!=='https:'||url.username||url.password){
+    return null;
+  }
+  try{
+    publicHost(url);
+  }catch{
+    return null;
+  }
+  return url.host.toLowerCase();
+}
+
 function configuredImportTargets(configured){
   const targets=[];
   for(const rawEntry of String(configured||'').split(',')){
@@ -616,7 +660,7 @@ function configuredImportTargets(configured){
     if(entry.includes('://')){
       try{
         const origin=new URL(entry);
-        if(['http:','https:'].includes(origin.protocol)&&!origin.username&&!origin.password&&origin.pathname==='/'&&!origin.search&&!origin.hash){
+        if(origin.protocol==='https:'&&!origin.username&&!origin.password&&origin.pathname==='/'&&!origin.search&&!origin.hash){
           targets.push({type:'origin',value:origin.origin.toLowerCase()});
         }
       }catch{}
@@ -630,25 +674,22 @@ function configuredImportTargets(configured){
   return targets;
 }
 
-function approvedImportUrl(raw,configuredHosts){
+function approvedImportUrl(raw,configuredHosts,workspaceHost){
   let url;
   try{
     url=new URL(String(raw||''));
   }catch{
-    throw new BrandAssetError('Import URL must be an approved public HTTP(S) image candidate');
+    throw new BrandAssetError('Import URL must be an approved public HTTPS image candidate');
   }
 
-  if(!['http:','https:'].includes(url.protocol)||url.username||url.password){
-    throw new BrandAssetError('Import URL must be an approved public HTTP(S) image candidate');
+  if(url.protocol!=='https:'||url.username||url.password){
+    throw new BrandAssetError('Import URL must be an approved public HTTPS image candidate');
   }
-  const host=url.hostname.replace(/^\[|\]$/g,'').replace(/\.$/,'').toLowerCase();
-  if(!host||(!host.includes('.')&&!host.includes(':'))||host==='localhost'||host.endsWith('.localhost')||host.endsWith('.local')||host.endsWith('.internal')||isPrivateIpv4(host)||isPrivateIpv6(host)){
-    throw new BrandAssetError('Import URL must use an approved public host');
-  }
+  const host=publicHost(url);
 
   const targets=configuredImportTargets(configuredHosts);
   const standardPort=url.port===''||(url.protocol==='http:'&&url.port==='80')||(url.protocol==='https:'&&url.port==='443');
-  const approved=targets.some(target=>{
+  const approved=url.host.toLowerCase()===workspaceHost||targets.some(target=>{
     if(target.type==='origin'){
       return target.value===url.origin.toLowerCase();
     }
@@ -704,9 +745,9 @@ async function readBoundedBody(response,limit){
   return bytes;
 }
 
-async function fetchImportedFile(rawUrl,kind,configuredHosts){
+async function fetchImportedFile(rawUrl,kind,configuredHosts,workspaceHost){
   const {limit}=limitForKind(kind);
-  let url=approvedImportUrl(rawUrl,configuredHosts);
+  let url=approvedImportUrl(rawUrl,configuredHosts,workspaceHost);
 
   for(let redirects=0;;redirects++){
     const controller=new AbortController();
@@ -725,7 +766,7 @@ async function fetchImportedFile(rawUrl,kind,configuredHosts){
         if(!location){
           throw new BrandAssetError('Image import redirect is missing a location');
         }
-        url=approvedImportUrl(new URL(location,url),configuredHosts);
+        url=approvedImportUrl(new URL(location,url),configuredHosts,workspaceHost);
         continue;
       }
       if(!response.ok){
@@ -883,7 +924,8 @@ export async function handleBrandAssetRoute(request,env,cors={}){
       if(!body){
         return error('Valid JSON body is required',400,cors);
       }
-      const imported=await fetchImportedFile(body.url,body.kind,env.BRAND_ASSET_IMPORT_HOSTS);
+      const savedWebsiteHost=await workspaceImportHost(env,workspaceId);
+      const imported=await fetchImportedFile(body.url,body.kind,env.BRAND_ASSET_IMPORT_HOSTS,savedWebsiteHost);
       const validated=await validateBrandAsset(imported,body.kind);
       const asset=await createAsset(env,{
         workspaceId,

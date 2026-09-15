@@ -132,7 +132,13 @@ class D1Statement{
   bind(...args){this.args=args;return this;}
   async first(){
     if(this.sql.includes('FROM sessions JOIN users'))return this.args[0]===this.db.tokenHash?this.db.user:null;
-    if(this.sql.includes('FROM workspace_members'))return this.args[0]===this.db.workspaceId&&this.args[1]===this.db.user.id?{role:this.db.role}:null;
+    if(this.sql.includes('FROM workspace_members'))return this.args[1]===this.db.user.id&&this.db.workspaceRoles.has(this.args[0])?{role:this.db.workspaceRoles.get(this.args[0])}:null;
+    if(this.sql.includes('FROM customer_workspace_state')){
+      this.db.stateQueries.push(this.args[0]);
+      if(!this.db.workspacePayloads.has(this.args[0]))return null;
+      const payload=this.db.workspacePayloads.get(this.args[0]);
+      return {payload_json:typeof payload==='string'?payload:JSON.stringify(payload)};
+    }
     throw new Error(`Unexpected first query: ${this.sql}`);
   }
   async run(){
@@ -144,13 +150,18 @@ class D1Statement{
 }
 
 class D1Db{
-  constructor({tokenHash,user,workspaceId,role,events}){Object.assign(this,{tokenHash,user,workspaceId,role,events,audits:[],failAudit:false});}
+  constructor({tokenHash,user,workspaceId,role,events,workspacePayload}){
+    Object.assign(this,{tokenHash,user,workspaceId,role,events,audits:[],failAudit:false,stateQueries:[]});
+    this.workspaceRoles=new Map([[workspaceId,role]]);
+    this.workspacePayloads=new Map();
+    if(workspacePayload!==null)this.workspacePayloads.set(workspaceId,workspacePayload);
+  }
   prepare(sql){return new D1Statement(this,sql);}
 }
 
-async function fixture(role='owner'){
+async function fixture(role='owner',workspacePayload={main:{website:'https://workspace.example/'}}){
   const token=`asset-${role}-session`,workspaceId='workspace-secret-name',user={id:'user-1',email:'private@example.com',display_name:'Private User',role},events=[];
-  const DB=new D1Db({tokenHash:await sha256(token),user,workspaceId,role,events});
+  const DB=new D1Db({tokenHash:await sha256(token),user,workspaceId,role,events,workspacePayload});
   return {token,workspaceId,DB,events,env:{DB,BRAND_ASSETS:new MemoryR2(events),BRAND_ASSET_IMPORT_HOSTS:'cdn.example.test,public.example'}};
 }
 
@@ -425,6 +436,68 @@ test('server-side import accepts only a configured host and audits the stored im
   }finally{globalThis.fetch=originalFetch;}
 });
 
+test('server-side import accepts the exact HTTPS host saved in the authorized workspace state',async()=>{
+  const {env,token,workspaceId,DB}=await fixture('owner',{main:{website:'https://company.example/path'}});env.BRAND_ASSET_IMPORT_HOSTS='';
+  const originalFetch=globalThis.fetch;const calls=[];
+  globalThis.fetch=async(url)=>{calls.push(String(url));return new Response(png(),{headers:{'Content-Type':'image/png','Content-Length':String(png().length)}});};
+  try{
+    const response=await handleBrandAssetRoute(importRequest(workspaceId,token,'https://company.example/assets/logo.png'),env,{});
+    assert.equal(response.status,201);assert.deepEqual(calls,['https://company.example/assets/logo.png']);assert.deepEqual(DB.stateQueries,[workspaceId]);
+  }finally{globalThis.fetch=originalFetch;}
+});
+
+test('workspace website authorization is exact and rejects subdomains, parents, lookalikes, arbitrary hosts, aliases, and private hosts',async()=>{
+  const {env,token,workspaceId}=await fixture('owner',{main:{website:'https://company.example.com/'}});env.BRAND_ASSET_IMPORT_HOSTS='';
+  const originalFetch=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;return new Response(png(),{headers:{'Content-Type':'image/png'}});};
+  try{
+    const urls=[
+      'https://cdn.company.example.com/logo.png',
+      'https://example.com/logo.png',
+      'https://company.example.com.evil.invalid/logo.png',
+      'https://arbitrary.example/logo.png',
+      'https://127.0.0.1.nip.io/logo.png',
+      'https://127.0.0.1/logo.png'
+    ];
+    for(const url of urls)assert.equal((await handleBrandAssetRoute(importRequest(workspaceId,token,url),env,{})).status,400,url);
+    assert.equal(calls,0);
+  }finally{globalThis.fetch=originalFetch;}
+});
+
+test('changing the saved workspace website immediately invalidates the old import host',async()=>{
+  const {env,token,workspaceId,DB}=await fixture('owner',{main:{website:'https://old.example/'}});env.BRAND_ASSET_IMPORT_HOSTS='';
+  const originalFetch=globalThis.fetch;globalThis.fetch=async()=>new Response(png(),{headers:{'Content-Type':'image/png'}});
+  try{
+    assert.equal((await handleBrandAssetRoute(importRequest(workspaceId,token,'https://old.example/logo.png'),env,{})).status,201);
+    DB.workspacePayloads.set(workspaceId,{main:{website:'https://new.example/'}});
+    assert.equal((await handleBrandAssetRoute(importRequest(workspaceId,token,'https://old.example/logo.png'),env,{})).status,400);
+    assert.equal((await handleBrandAssetRoute(importRequest(workspaceId,token,'https://new.example/logo.png'),env,{})).status,201);
+  }finally{globalThis.fetch=originalFetch;}
+});
+
+test('missing or malformed workspace state fails closed while configured exact hosts remain authorized',async()=>{
+  const cases=[null,'not-json',{}, {main:{}},{main:{website:'http://company.example/'}},{main:{website:'https://user:pass@company.example/'}},{main:{website:'https://127.0.0.1.nip.io/'}}];
+  const originalFetch=globalThis.fetch;globalThis.fetch=async()=>new Response(png(),{headers:{'Content-Type':'image/png'}});
+  try{
+    for(const payload of cases){
+      const {env,token,workspaceId}=await fixture('owner',payload);env.BRAND_ASSET_IMPORT_HOSTS='configured.example';
+      assert.equal((await handleBrandAssetRoute(importRequest(workspaceId,token,'https://company.example/logo.png'),env,{})).status,400);
+      assert.equal((await handleBrandAssetRoute(importRequest(workspaceId,token,'https://configured.example/logo.png'),env,{})).status,201);
+    }
+  }finally{globalThis.fetch=originalFetch;}
+});
+
+test('workspace-derived import authorization never leaks between workspaces',async()=>{
+  const {env,token,workspaceId,DB}=await fixture('owner',{main:{website:'https://one.example/'}});env.BRAND_ASSET_IMPORT_HOSTS='';
+  DB.workspaceRoles.set('workspace-two','owner');DB.workspacePayloads.set('workspace-two',{main:{website:'https://two.example/'}});
+  const originalFetch=globalThis.fetch;globalThis.fetch=async()=>new Response(png(),{headers:{'Content-Type':'image/png'}});
+  try{
+    assert.equal((await handleBrandAssetRoute(importRequest(workspaceId,token,'https://two.example/logo.png'),env,{})).status,400);
+    assert.equal((await handleBrandAssetRoute(importRequest('workspace-two',token,'https://one.example/logo.png'),env,{})).status,400);
+    assert.equal((await handleBrandAssetRoute(importRequest('workspace-two',token,'https://two.example/logo.png'),env,{})).status,201);
+    assert.deepEqual(DB.stateQueries.slice(-3),[workspaceId,'workspace-two','workspace-two']);
+  }finally{globalThis.fetch=originalFetch;}
+});
+
 test('missing allowlist, arbitrary hosts, DNS aliases, and private-lookalike hosts are rejected before fetch',async()=>{
   const {env,token,workspaceId}=await fixture();const originalFetch=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;return new Response(png(),{headers:{'Content-Type':'image/png'}});};
   try{
@@ -438,6 +511,16 @@ test('redirects are rechecked against the host allowlist before the redirected f
   const {env,token,workspaceId}=await fixture();const originalFetch=globalThis.fetch;const calls=[];
   globalThis.fetch=async url=>{calls.push(String(url));if(calls.length===1)return new Response(null,{status:302,headers:{Location:'https://169.254.169.254.nip.io/latest/meta-data'}});return new Response(png(),{headers:{'Content-Type':'image/png'}});};
   try{const response=await handleBrandAssetRoute(importRequest(workspaceId,token,'https://cdn.example.test/logo.png'),env,{});assert.equal(response.status,400);assert.deepEqual(calls,['https://cdn.example.test/logo.png']);}finally{globalThis.fetch=originalFetch;}
+});
+
+test('redirects from a workspace-authorized host cannot escape to a different host',async()=>{
+  const {env,token,workspaceId}=await fixture('owner',{main:{website:'https://company.example/'}});env.BRAND_ASSET_IMPORT_HOSTS='';
+  const originalFetch=globalThis.fetch;const calls=[];
+  globalThis.fetch=async url=>{calls.push(String(url));return new Response(null,{status:302,headers:{Location:'https://cdn.company.example/logo.png'}});};
+  try{
+    const response=await handleBrandAssetRoute(importRequest(workspaceId,token,'https://company.example/logo.png'),env,{});
+    assert.equal(response.status,400);assert.deepEqual(calls,['https://company.example/logo.png']);
+  }finally{globalThis.fetch=originalFetch;}
 });
 
 test('an import timeout while reading image bytes returns a bounded gateway error',async()=>{
