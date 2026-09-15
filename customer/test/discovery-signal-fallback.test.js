@@ -41,5 +41,7 @@ test('Company Discovery resolves named companies from evidence before verifying 
   assert.match(ui,/buildCompanyResolutionQueries/);
   assert.match(ui,/runDiscoverySearchBatch\(resolutionQueries,"resolving"\)/);
   assert.match(ui,/buildCandidateVerificationQueries\(resolved/);
+  assert.match(ui,/attachSourceEvidenceToResolvedCompanies\(resolved,companyMentions,firstPass\)/);
+  assert.match(ui,/mergeCompanyCandidates\(\[\.\.\.evidenceLinked,\.\.\.verified\]/);
   assert.doesNotMatch(ui,/buildCandidateVerificationQueries\(firstPass/);
 });
