@@ -8,7 +8,7 @@ const processMap=fs.readFileSync(path.join(root,'process-map.js'),'utf8');
 
 test('Step 4 exposes a dedicated Intelligence Sources registry',()=>{
   assert.match(ui,/Intelligence Sources/);
-  assert.match(ui,/Add Source/);
+  assert.match(ui,/Add preferred source/i);
   assert.match(ui,/Test Access/);
   assert.match(ui,/Configure Signals/);
   assert.match(ui,/Mandatory source/);
@@ -41,13 +41,28 @@ test('mandatory source controls are gated by useful audited access and use activ
   assert.match(ui,/frequency/);
 });
 
-test('process map loads Intelligence Sources with a versioned runtime',()=>{
-  assert.match(processMap,/intelligence-sources-ui\.js\?v=20260913-sources-before-research-v1/);
+test('process map loads Preferred Sources with a versioned runtime',()=>{
+  assert.match(processMap,/intelligence-sources-ui\.js\?v=20260915-preferred-sources-v1/);
 });
 
-test('Intelligence Sources is labelled optional and placed immediately before Step 1 research',()=>{
-  assert.match(ui,/Optional tools/);
-  assert.match(ui,/Manage trusted intelligence sources/);
+test('Preferred Sources is prominent and placed immediately before Step 1 research',()=>{
+  assert.match(ui,/Preferred sources/);
+  assert.match(ui,/Which websites should LeadIntel monitor\?/);
+  assert.match(ui,/Add your own preferred source/);
+  assert.match(ui,/\+ Add preferred source/);
+  assert.match(ui,/Research &amp; recommend sources/);
+  assert.match(ui,/You review every recommendation before anything is saved/);
+  assert.match(ui,/0 monitoring/);
   assert.match(ui,/step\.insertBefore\(panel,researchPanel\)/);
   assert.match(ui,/const researchPanel=step\.querySelector\('\.research-panel'\)/);
+});
+
+test('assistant recommendations reuse verified live discovery and require selection before saving',()=>{
+  assert.match(ui,/LeadIntelMarketResearchUx/);
+  assert.match(ui,/discoverSources\(root,'deep'\)/);
+  assert.match(ui,/data-recommended-source-index/);
+  assert.match(ui,/Select at least one recommended website/);
+  assert.match(ui,/Add selected sources/);
+  assert.match(ui,/test access before monitoring/);
+  assert.doesNotMatch(ui,/monitoring_enabled:true/);
 });
