@@ -4,7 +4,7 @@ Status: COMPLETE.
 
 Starting branch head: `829c89b9c4516e313ec4e9441837209383dacbbc`
 
-Implementation head before this report commit: `3c4f2959c4ee0060350c4ab5aa21e1a203c98677`
+Implementation head before this report commit: `d9b60554c5360f6f8c17f48537e0df5d167feeb0`
 
 ## Remote commits
 
@@ -19,6 +19,7 @@ Implementation head before this report commit: `3c4f2959c4ee0060350c4ab5aa21e1a2
 9. `bf55d9317ae0a551b92a1d1a1eef194e29fb5108` — branded-outreach bootstrap cache contract
 10. `2447c7b012b5e9281ba347cfd536440d7d44319d` — outreach engine/UI loader cache refresh
 11. `3c4f2959c4ee0060350c4ab5aa21e1a203c98677` — discovery entry-point cache refresh
+12. `d9b60554c5360f6f8c17f48537e0df5d167feeb0` — independent-review fix for frozen manual delivery and plain automation handoff
 
 ## Implemented
 
@@ -26,8 +27,12 @@ Implementation head before this report commit: `3c4f2959c4ee0060350c4ab5aa21e1a2
 - the approved package stores a deeply immutable `brandSnapshot`, immutable `approvedSource`, and deterministic `approvedEmail`
 - resolved managed logo/headshot/banner metadata are frozen with the identity revision
 - preview is always regenerated from the approved source plus frozen snapshot; persisted HTML is never trusted
-- current Gmail Compose and manual mailbox flows receive the exact approved text rendering through `drafts.emailBody`
-- `buildApprovedSendPayload` exposes the same subject, text fallback, and HTML for Task 6 delivery
+- approval retains the plain approved source in `drafts` and no longer overwrites it with branded rendering
+- Gmail Compose resolves its subject and text from `buildApprovedSendPayload`, not mutable drafts
+- explicit Gmail and Microsoft API requests resolve subject, text, and HTML from `buildApprovedSendPayload`, not mutable drafts
+- later mutation of `drafts` cannot change the approved preview or any explicit manual-send payload
+- automatic delivery handoff reads immutable `approvedSource` and receives no snapshot-rendered signature, legal footer, assets, or HTML
+- `buildApprovedSendPayload` exposes the same frozen subject, text fallback, and HTML used by preview and explicit manual delivery
 - later Step 1 identity changes cannot mutate an approved package
 - dossier rebuild and explicit regeneration invalidate approval, snapshot, rendered email, and contacted state
 - regeneration remains explicit and requires a fresh approval
@@ -36,7 +41,7 @@ Implementation head before this report commit: `3c4f2959c4ee0060350c4ab5aa21e1a2
 - arbitrary user-edited placeholder text is preserved
 - CRM stage/activity, recipient selection, idempotency inputs, and the separate human send action remain intact
 - no branded automatic-delivery path was enabled
-- `discovery-ui.js`, `outreach-engine.js`, and `outreach-ui.js` now share the fresh `20260916-brand-outreach-v1` cache chain
+- the full outreach, delivery, mailbox, and automation-handoff loader chain uses `20260916-brand-outreach-v2`
 
 ## Verification
 
@@ -46,13 +51,21 @@ Focused outreach and delivery verification: 25 passed, 0 failed, 0 skipped, 0 ca
 
 Final relevant regression verification after cache-contract changes: 109 passed, 0 failed, 0 skipped, 0 cancelled.
 
-JavaScript syntax checks passed for `customer/outreach-engine.js`, `customer/outreach-ui.js`, and `customer/discovery-ui.js`.
+Independent-review RED run: 6 passed and 2 failed for mutable draft delivery and missing plain automation handoff.
+
+Independent-review focused verification: 28 passed, 0 failed, 0 skipped, 0 cancelled.
+
+Independent-review affected regression verification: 156 passed, 0 failed, 0 skipped, 0 cancelled.
+
+JavaScript syntax checks passed for all 9 changed JavaScript runtime/loader files.
 
 The relevant regression set covered Brand Identity, outreach, manual delivery, language switching, automation isolation, state budget, and customer structure.
+
+The broad all-customer command is not a valid gate in this partial checkout because unrelated `step2-readiness-engine.js` and reference-customer runtime files are absent. No Task 5 affected test depends on those missing fixtures.
 
 ## Scope and concerns
 
 - Task 5 is complete with no blocker.
 - Safe HTML is frozen and exposed to delivery, but backend HTML validation/MIME and Microsoft Graph HTML transport intentionally remain Task 6.
-- Automatic Gmail delivery remains on its existing plain-text path until queue snapshot support exists, as required.
+- Automatic Gmail delivery remains on its existing plain-text path and receives only immutable `approvedSource`, as required.
 - Task 5 cache-contract changes are committed. `main` and Task 6+ remain untouched.
