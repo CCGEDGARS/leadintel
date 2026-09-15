@@ -13,5 +13,5 @@ test("market strategy activation has a visible handoff to Company Discovery", ()
   assert.match(app, /void activateMarketStrategy\(\)/);
   assert.match(app, /void Promise\.resolve\(\)\.then\(\(\)=>window\.LeadIntelWorkspacePersistence/);
   assert.match(index, /id="strategy-activation-feedback"/);
-  assert.match(index, /app\.js\?v=20260915-custom-signal-ux-v1/);
+  assert.match(index, /app\.js\?v=20260915-research-source-text-v1/);
 });
