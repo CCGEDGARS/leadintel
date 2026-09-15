@@ -1,5 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {mkdtempSync,readFileSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {spawnSync} from 'node:child_process';
 import app from '../src/app.js';
 import {
   brandAssetObjectKey,
@@ -21,6 +25,17 @@ const jpeg=()=>decode(JPEG_WITH_STUFFED_ENTROPY_BASE64);
 const webp=()=>decode(WEBP_BASE64);
 const file=(bytes,type,name='upload.bin')=>new File([bytes],name,{type});
 const randomId=character=>character.repeat(43);
+
+function validatedMetadata({workspaceId='private-workspace',mimeType='image/png',size=png().byteLength,width=3,height=2}={}){
+  return {
+    workspaceId,
+    validation:'decoded-v1',
+    validatedMimeType:mimeType,
+    validatedSize:String(size),
+    validatedWidth:String(width),
+    validatedHeight:String(height)
+  };
+}
 
 function crc32(bytes){
   let crc=0xffffffff;
@@ -208,6 +223,56 @@ test('images above the 6000 by 6000 dimension cap are rejected',async()=>{
   await assert.rejects(()=>validateBrandAsset(file(pngWithDimensions(3,6001),'image/png'),'headshot'),/6000/);
 });
 
+test('an image above 4,000,000 decoded pixels is rejected before loading a decoder',()=>{
+  const script=`
+    import {validateBrandAsset} from './src/brand-assets.js';
+    const bytes=Uint8Array.from(Buffer.from('${PNG_BASE64}','base64'));
+    const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+    const crc32=bytes=>{let crc=0xffffffff;for(const byte of bytes){crc^=byte;for(let bit=0;bit<8;bit++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}return (crc^0xffffffff)>>>0;};
+    view.setUint32(16,2001);view.setUint32(20,2000);view.setUint32(29,crc32(bytes.subarray(12,29)));
+    const upload={type:'image/png',size:bytes.byteLength,arrayBuffer:async()=>bytes.buffer};
+    await validateBrandAsset(upload,'logo').then(
+      ()=>{throw new Error('over-budget image was accepted');},
+      error=>{if(!/4,000,000 decoded pixels/.test(error.message))throw error;}
+    );
+  `;
+  const result=spawnSync(process.execPath,['--input-type=module','--eval',script],{
+    cwd:new URL('..',import.meta.url),encoding:'utf8'
+  });
+  assert.equal(result.status,0,result.stderr);
+});
+
+test('only the decoder matching the declared image format is loaded',()=>{
+  const cases=[
+    ['image/png',PNG_BASE64,'squoosh_png_bg.wasm'],
+    ['image/jpeg',JPEG_WITH_STUFFED_ENTROPY_BASE64,'mozjpeg_dec.wasm'],
+    ['image/webp',WEBP_BASE64,'webp_dec.wasm']
+  ];
+  const directory=mkdtempSync(join(tmpdir(),'leadintel-codecs-'));
+  try{
+    for(const [mimeType,base64,expectedWasm] of cases){
+      const logPath=join(directory,`${mimeType.split('/')[1]}.log`);
+      const script=`
+        import {decodeImage} from './src/image-decoders.js';
+        const bytes=Uint8Array.from(Buffer.from('${base64}','base64'));
+        const decoded=await decodeImage(bytes,'${mimeType}');
+        if(!decoded?.width||!decoded?.height)throw new Error('decoder returned no dimensions');
+      `;
+      const result=spawnSync(process.execPath,[
+        '--import','./test/register-wasm-loader.mjs','--input-type=module','--eval',script
+      ],{
+        cwd:new URL('..',import.meta.url),
+        encoding:'utf8',
+        env:{...process.env,LEADINTEL_WASM_LOAD_LOG:logPath}
+      });
+      assert.equal(result.status,0,result.stderr);
+      assert.deepEqual(readFileSync(logPath,'utf8').trim().split('\n'),[expectedWasm]);
+    }
+  }finally{
+    rmSync(directory,{recursive:true,force:true});
+  }
+});
+
 test('upload requires workspace membership with owner or researcher role',async()=>{
   const owner=await fixture('owner');let response=await handleBrandAssetRoute(uploadRequest(owner.workspaceId,null),owner.env,{});assert.equal(response.status,401);assert.equal(owner.env.BRAND_ASSETS.objects.size,0);
   const sales=await fixture('sales');response=await handleBrandAssetRoute(uploadRequest(sales.workspaceId,sales.token),sales.env,{});assert.equal(response.status,403);assert.equal(sales.env.BRAND_ASSETS.objects.size,0);
@@ -247,13 +312,51 @@ test('uploads use fully random uncorrelated IDs and keep ownership only in priva
   const second=(await (await handleBrandAssetRoute(uploadRequest(workspaceId,token),env,{})).json()).asset;
   assert.match(first.id,/^[A-Za-z0-9_-]{43}$/);assert.match(second.id,/^[A-Za-z0-9_-]{43}$/);assert.notEqual(first.id,second.id);assert.notEqual(first.id.slice(0,16),second.id.slice(0,16));assert.equal(first.id.startsWith(workspaceHash),false);
   assert.equal(first.url,`https://leadintel-api.edgars-7e7.workers.dev/api/customer/brand-assets/${first.id}`);assert.equal(JSON.stringify(first).includes(workspaceId),false);assert.equal(JSON.stringify(first).includes('private-company-logo.png'),false);assert.equal(JSON.stringify(first).includes('private@example.com'),false);
-  const key=brandAssetObjectKey(first.id);assert.equal(key,`brand-assets/${first.id}`);assert.deepEqual(env.BRAND_ASSETS.objects.get(key).customMetadata,{workspaceId});
+  const key=brandAssetObjectKey(first.id);assert.equal(key,`brand-assets/${first.id}`);assert.deepEqual(env.BRAND_ASSETS.objects.get(key).customMetadata,validatedMetadata({workspaceId}));
 });
 
 test('public GET returns only validated bytes with strict immutable headers',async()=>{
   const {env,token,workspaceId}=await fixture();let response=await handleBrandAssetRoute(uploadRequest(workspaceId,token,{bytes:webp(),type:'image/webp',kind:'banner'}),env,{});const {asset}=await response.json();
   response=await handleBrandAssetRoute(request(`/api/customer/brand-assets/${asset.id}`),env,{'Access-Control-Allow-Origin':'https://app.example'});assert.equal(response.status,200);assert.equal(response.headers.get('Content-Type'),'image/webp');assert.equal(response.headers.get('X-Content-Type-Options'),'nosniff');assert.equal(response.headers.get('Cache-Control'),'public, max-age=31536000, immutable');assert.equal(response.headers.get('Access-Control-Allow-Origin'),'https://app.example');assert.deepEqual(new Uint8Array(await response.arrayBuffer()),webp());assert.equal(response.headers.has('X-Workspace-Id'),false);
   env.BRAND_ASSETS.objects.get(brandAssetObjectKey(asset.id)).bytes=Uint8Array.from([0x4d,0x5a]);response=await handleBrandAssetRoute(request(`/api/customer/brand-assets/${asset.id}`),env,{});assert.equal(response.status,404);
+});
+
+test('public GET serves validated metadata without loading an image decoder',()=>{
+  const assetId=randomId('h');
+  const metadata=JSON.stringify(validatedMetadata());
+  const script=`
+    import {handleBrandAssetRoute} from './src/brand-assets.js';
+    const bytes=Uint8Array.from(Buffer.from('${PNG_BASE64}','base64'));
+    const object={bytes,httpMetadata:{contentType:'image/png'},customMetadata:${metadata},arrayBuffer:async()=>bytes.buffer};
+    const env={BRAND_ASSETS:{get:async()=>object}};
+    const request=new Request('https://leadintel-api.edgars-7e7.workers.dev/api/customer/brand-assets/${assetId}');
+    const response=await handleBrandAssetRoute(request,env,{});
+    if(response.status!==200)throw new Error('unexpected status '+response.status);
+  `;
+  const result=spawnSync(process.execPath,['--input-type=module','--eval',script],{
+    cwd:new URL('..',import.meta.url),encoding:'utf8'
+  });
+  assert.equal(result.status,0,result.stderr);
+});
+
+test('public GET fails closed when private validation metadata is missing or malformed',async()=>{
+  const assetId=randomId('i'),key=brandAssetObjectKey(assetId),events=[];
+  const bucket=new MemoryR2(events);
+  const requestForAsset=request(`/api/customer/brand-assets/${assetId}`);
+  const invalidMetadata=[
+    {},
+    {...validatedMetadata(),validation:'unknown'},
+    {...validatedMetadata(),validatedMimeType:'image/svg+xml'},
+    {...validatedMetadata(),validatedSize:'not-a-number'},
+    {...validatedMetadata(),validatedSize:String(png().byteLength+1)},
+    {...validatedMetadata(),validatedWidth:'0'},
+    {...validatedMetadata(),validatedWidth:'2001',validatedHeight:'2000'}
+  ];
+  for(const customMetadata of invalidMetadata){
+    bucket.objects.set(key,{bytes:png(),httpMetadata:{contentType:'image/png'},customMetadata});
+    const response=await handleBrandAssetRoute(requestForAsset,{BRAND_ASSETS:bucket},{});
+    assert.equal(response.status,404);
+  }
 });
 
 test('delete verifies workspace ownership and commits audit before deleting bytes',async()=>{
@@ -332,7 +435,7 @@ test('failed replacement preserves old bytes and uses audited cleanup for the ne
 });
 
 test('production app serves public asset GET before rejecting an unrelated Origin',async()=>{
-  const events=[],bucket=new MemoryR2(events),assetId=randomId('g'),key=`brand-assets/${assetId}`;bucket.objects.set(key,{bytes:png(),httpMetadata:{contentType:'image/png'},customMetadata:{workspaceId:'private-workspace'}});
+  const events=[],bucket=new MemoryR2(events),assetId=randomId('g'),key=`brand-assets/${assetId}`;bucket.objects.set(key,{bytes:png(),httpMetadata:{contentType:'image/png'},customMetadata:validatedMetadata()});
   const response=await app.fetch(request(`/api/customer/brand-assets/${assetId}`,{headers:{Origin:'https://email-client.example'}}),{APP_ORIGIN:'https://leadintel.ccgroup.lv',BRAND_ASSETS:bucket});assert.equal(response.status,200);assert.equal(response.headers.get('Content-Type'),'image/png');assert.deepEqual(new Uint8Array(await response.arrayBuffer()),png());
 });
 
