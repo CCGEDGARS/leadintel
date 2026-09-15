@@ -8,7 +8,7 @@ const LEADINTEL_API="https://leadintel-api.edgars-7e7.workers.dev";
 const MAX_DISCOVERY_QUERIES=10;
 const MAX_DISCOVERY_RESULTS_PER_QUERY=5;
 const DISCOVERY_SEARCH_CONCURRENCY=4;
-const ASSET_VERSION="20260915-evidence-link-v1";
+const ASSET_VERSION="20260915-error-sweep-v1";
 const LANGUAGE_ASSET_VERSION="20260914-workspace-isolation-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const $=id=>document.getElementById(id);
@@ -103,9 +103,10 @@ function showDiscoveryStep(){if(!moduleReady()){showToast("Add your company webs
 function showStrategyStep(){persistMainStep(4);document.querySelectorAll(".step-view").forEach(el=>el.classList.toggle("active",Number(el.dataset.step)===4));document.querySelectorAll("[data-step-marker]").forEach(el=>{const n=Number(el.dataset.stepMarker);el.classList.toggle("active",n===4);el.classList.toggle("complete",n<4);});saveMeta({...loadMeta(),visibleStep:4});window.scrollTo({top:0,behavior:"smooth"});}
 
 const DISCOVERY_REQUEST_TIMEOUT_MS=25000;
-const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS*5+5000;
-async function firecrawlCompanySearch(queryMeta){
-  const controller=new AbortController();
+const DISCOVERY_RUN_TIMEOUT_MS=25000;
+function linkedAbortController(parentSignal){const controller=new AbortController();if(parentSignal?.aborted)controller.abort(parentSignal.reason);else parentSignal?.addEventListener?.("abort",()=>controller.abort(parentSignal.reason),{once:true});return controller;}
+async function firecrawlCompanySearch(queryMeta,runSignal){
+  const controller=linkedAbortController(runSignal);
   const timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS);
   try{
     const response=await fetch(`${INTELLIGENCE_PROXY}/firecrawl-search`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:queryMeta.query,limit:MAX_DISCOVERY_RESULTS_PER_QUERY,scrapeOptions:{formats:["markdown"],onlyMainContent:true}}),signal:controller.signal});
@@ -119,14 +120,14 @@ async function firecrawlCompanySearch(queryMeta){
     clearTimeout(timeout);
   }
 }
-async function runDiscoverySearchBatch(items,phase){
+async function runDiscoverySearchBatch(items,phase,runSignal){
   const searches=Array(items.length).fill(null);
   discoveryProgress={phase,completed:0,total:items.length};renderDiscoverySafely();
   let nextIndex=0;
   const workers=Array.from({length:Math.min(DISCOVERY_SEARCH_CONCURRENCY,items.length)},async()=>{
     while(nextIndex<items.length){
       const index=nextIndex++;
-      try{searches[index]={results:await firecrawlCompanySearch(items[index]),error:null};}
+      try{if(runSignal?.aborted)throw new Error("Company search timed out");searches[index]={results:await firecrawlCompanySearch(items[index],runSignal),error:null};}
       catch(error){searches[index]={results:[],error};}
       finally{discoveryProgress.completed+=1;renderDiscoverySafely();}
     }
@@ -134,7 +135,7 @@ async function runDiscoverySearchBatch(items,phase){
   await Promise.all(workers);
   return searches;
 }
-async function extractCompaniesFromEvidence(evidence,market,targetCount){
+async function extractCompaniesFromEvidence(evidence,market,targetCount,runSignal){
   const fallback=LeadIntelDiscovery.extractCompanyMentions(evidence,targetCount);
   const b=bridge();const workspace=b?.workspace;
   if(!b?.session?.authenticated||!workspace?.id||!evidence.length)return fallback;
@@ -145,7 +146,7 @@ async function extractCompaniesFromEvidence(evidence,market,targetCount){
   }));
   const system="You extract prospective operating companies from supplied market evidence. Never invent a company or URL. Return strict JSON only.";
   const prompt=`Identify operating companies explicitly described as expanding, investing, building, modernising, hiring or otherwise matching the market signals in these sources. Publishers, government bodies, research institutes, directories and the seller itself are not prospects. Every company must include the exact supplied source URL where its name and event appear. Return {"companies":[{"company":"Exact company name","market":"${String(market||"").replace(/"/g,"'")}","sourceUrl":"Exact supplied URL"}]}. Evidence:\n${JSON.stringify(sources)}`;
-  const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS);
+  const controller=linkedAbortController(runSignal);const timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS);
   try{
     const response=await fetch(`${LEADINTEL_API}/api/ai/generate?workspace_id=${encodeURIComponent(workspace.id)}`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({system,prompt,max_output_tokens:1800}),signal:controller.signal});
     const payload=await response.json().catch(()=>({}));
@@ -170,28 +171,30 @@ async function runCompanyDiscovery(){
   if(!renderDiscoverySafely()){discovery.status="error";try{saveDiscovery();}catch{}renderDiscoverySafely();showToast("Discovery interface could not start. You can try again.");return;}
   let failures=0;
   let fatalError=null;
+  const runController=new AbortController();
   try{
     let searches=[];
     let resolutionSearches=[];
     let verificationSearches=[];
     let companyMentions=[];
     const allSearches=(async()=>{
-      searches=await runDiscoverySearchBatch(queries,"searching");
+      searches=await runDiscoverySearchBatch(queries,"searching",runController.signal);
       const firstPass=searches.flatMap(item=>item?.results||[]);
       const targetMarket=queries[0]?.market||main.profile?.targetMarkets||"";
-      companyMentions=await extractCompaniesFromEvidence(firstPass,targetMarket,limits.targetCount);
+      companyMentions=await extractCompaniesFromEvidence(firstPass,targetMarket,limits.targetCount,runController.signal);
       const resolutionQueries=LeadIntelDiscovery.buildCompanyResolutionQueries(companyMentions,main.profile||{website:main.website},limits.targetCount);
-      resolutionSearches=await runDiscoverySearchBatch(resolutionQueries,"resolving");
+      resolutionSearches=await runDiscoverySearchBatch(resolutionQueries,"resolving",runController.signal);
       const resolved=resolutionSearches.flatMap(item=>item?.results||[]);
       const verificationQueries=LeadIntelDiscovery.buildCandidateVerificationQueries(resolved,main.profile||{website:main.website},market,limits.targetCount);
-      verificationSearches=await runDiscoverySearchBatch(verificationQueries,"verifying");
+      verificationSearches=await runDiscoverySearchBatch(verificationQueries,"verifying",runController.signal);
     })();
     let runTimeout;
     const timedOut=await Promise.race([
       allSearches.then(()=>false),
-      new Promise(resolve=>{runTimeout=setTimeout(()=>resolve(true),DISCOVERY_RUN_TIMEOUT_MS);})
+      new Promise(resolve=>{runTimeout=setTimeout(()=>{runController.abort(new DOMException("Discovery run deadline reached","TimeoutError"));resolve(true);},DISCOVERY_RUN_TIMEOUT_MS);})
     ]);
     clearTimeout(runTimeout);
+    if(timedOut)await allSearches.catch(()=>{});
     const completedSearches=[...searches,...resolutionSearches,...verificationSearches].filter(Boolean);
     const expectedSearches=queries.length+resolutionSearches.length+verificationSearches.length;
     failures=completedSearches.filter(item=>item.error).length+(timedOut?Math.max(0,expectedSearches-completedSearches.length):0);
