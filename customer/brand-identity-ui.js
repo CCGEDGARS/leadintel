@@ -71,10 +71,11 @@
     const assetAdapter = options.assetAdapter || createAssetAdapter(options.root || root);
     const onChange = typeof options.onChange === 'function' ? options.onChange : function() {};
     const website = typeof options.website === 'function' ? options.website : function() { return ''; };
+    const publicEvidence = typeof options.publicEvidence === 'function' ? options.publicEvidence : function() { return {}; };
     const now = typeof options.now === 'function' ? options.now : function() { return new Date().toISOString(); };
     const extractSuggestions = typeof options.extractSuggestions === 'function'
       ? options.extractSuggestions
-      : defaultWebsiteSuggestions;
+      : extractWebsiteSuggestions;
     let identity = copyIdentity(options.identity);
     let expanded = false;
     let activeTab = 'desktop';
@@ -107,7 +108,7 @@
     }
 
     async function extractFromWebsite() {
-      const result = await extractSuggestions(website());
+      const result = await extractSuggestions(website(), publicEvidence());
       suggestions = sanitizeSuggestions(result);
       return {...suggestions};
     }
@@ -115,6 +116,11 @@
     function applySuggestion(key) {
       if (!Object.prototype.hasOwnProperty.call(suggestions, key) || !FIELD_KEYS.includes(key)) return copyIdentity(identity);
       return updateField(key, suggestions[key]);
+    }
+
+    async function applyLogoSuggestion() {
+      if (!suggestions.logoUrl) throw new Error('No verified logo suggestion is available.');
+      return replaceAsset('logo', suggestions.logoUrl);
     }
 
     async function replaceAsset(kind, source) {
@@ -200,6 +206,7 @@
       extractFromWebsite,
       suggestions: () => ({...suggestions}),
       applySuggestion,
+      applyLogoSuggestion,
       replaceAsset,
       removeAsset,
       saveReady,
@@ -213,20 +220,80 @@
   function sanitizeSuggestions(value) {
     const input = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
     const output = {};
+    const model = requireModel();
     for (const key of FIELD_KEYS) {
-      if (typeof input[key] === 'string' && input[key].trim()) output[key] = input[key].trim();
+      if (typeof input[key] !== 'string' || !input[key].trim()) continue;
+      const validation = model.validate({[key]: input[key]});
+      if (!validation.errors[key]) output[key] = model.normalize({[key]: input[key]})[key];
     }
-    if (typeof input.logoUrl === 'string' && /^https:\/\//i.test(input.logoUrl)) output.logoUrl = input.logoUrl.trim();
+    if (safeHttpsUrl(input.logoUrl)) output.logoUrl = input.logoUrl.trim();
     return output;
   }
 
-  async function defaultWebsiteSuggestions(value) {
-    if (!value) throw new Error('Add the main company website before extracting suggestions.');
-    let parsed;
-    try { parsed = new URL(value); } catch (_error) { throw new Error('Add a valid HTTPS company website first.'); }
-    const name = parsed.hostname.replace(/^www\./, '').split('.')[0].replace(/[-_]+/g, ' ')
-      .replace(/\b\w/g, letter => letter.toUpperCase());
-    return {companyDisplayName: name, website: parsed.href};
+  async function extractWebsiteSuggestions(value, evidence = {}) {
+    const website = safeHttpsUrl(value);
+    if (!website) throw new Error('Add a valid HTTPS company website first.');
+    const websiteUrl = new URL(website);
+    const source = evidence && typeof evidence === 'object' && !Array.isArray(evidence) ? evidence : {};
+    const profile = source.profile && typeof source.profile === 'object' && !Array.isArray(source.profile) ? source.profile : {};
+    const scrapedSources = Array.isArray(source.scrapedSources) ? source.scrapedSources : [];
+    const publicSources = scrapedSources.filter(item => {
+      if (!item || typeof item !== 'object' || !safeHttpsUrl(item.url)) return false;
+      if (String(item.status || '').toLowerCase().startsWith('error')) return false;
+      try { return new URL(item.url).origin === websiteUrl.origin && Boolean(String(item.text || item.title || '').trim()); }
+      catch (_error) { return false; }
+    });
+    const profileHasEvidence = ['companyName', 'companyDisplayName', 'phone', 'linkedinUrl', 'primaryColor', 'logoUrl']
+      .some(key => typeof profile[key] === 'string' && profile[key].trim());
+    if (!publicSources.length && !profileHasEvidence) return {};
+
+    const suggestions = {};
+    const companyName = firstText(profile.companyDisplayName, profile.companyName, publicSources[0]?.title);
+    if (companyName) suggestions.companyDisplayName = companyName;
+    suggestions.website = websiteUrl.href;
+
+    const publicText = publicSources.map(item => String(item.text || '')).join('\n');
+    const phone = firstText(profile.phone, publicText.match(/\+\d[\d\s().-]{5,28}\d/)?.[0]);
+    if (phone) suggestions.phone = phone;
+
+    const links = [profile.linkedinUrl, ...(Array.isArray(source.additionalLinks) ? source.additionalLinks : [])];
+    const linkedin = links.find(link => safeLinkedInUrl(link));
+    if (linkedin) suggestions.linkedinUrl = linkedin;
+    if (/^#[0-9a-f]{6}$/i.test(String(profile.primaryColor || '').trim())) suggestions.primaryColor = profile.primaryColor.trim();
+
+    const logoCandidates = [
+      profile.logoUrl,
+      source.websiteActivation?.logoUrl,
+      ...publicSources.flatMap(item => [item.logoUrl, item.metadata?.logoUrl, item.metadata?.logo])
+    ];
+    const logoUrl = logoCandidates.find(candidate => sameOriginHttpsUrl(candidate, websiteUrl.origin));
+    if (logoUrl) suggestions.logoUrl = logoUrl;
+    return sanitizeSuggestions(suggestions);
+  }
+
+  function safeHttpsUrl(value) {
+    if (typeof value !== 'string' || !value.trim()) return '';
+    try {
+      const parsed = new URL(value.trim());
+      return parsed.protocol === 'https:' && !parsed.username && !parsed.password ? parsed.href : '';
+    } catch (_error) { return ''; }
+  }
+
+  function safeLinkedInUrl(value) {
+    const safe = safeHttpsUrl(value);
+    if (!safe) return '';
+    const hostname = new URL(safe).hostname.toLowerCase();
+    return hostname === 'linkedin.com' || hostname.endsWith('.linkedin.com') ? safe : '';
+  }
+
+  function sameOriginHttpsUrl(value, origin) {
+    const safe = safeHttpsUrl(value);
+    if (!safe) return '';
+    return new URL(safe).origin === origin ? safe : '';
+  }
+
+  function firstText(...values) {
+    return values.find(value => typeof value === 'string' && value.trim())?.trim() || '';
   }
 
   function mount(options = {}) {
@@ -237,6 +304,7 @@
     const controller = createController({
       identity: typeof options.getIdentity === 'function' ? options.getIdentity() : options.identity,
       website: options.getWebsite,
+      publicEvidence: options.getPublicEvidence,
       onChange: identity => {
         if (typeof options.setIdentity === 'function') options.setIdentity(identity);
         renderSummary();
@@ -282,28 +350,58 @@
 
     function clearErrors() {
       host.querySelectorAll('[data-brand-error]').forEach(node => { node.textContent = ''; });
+      host.querySelectorAll('[data-brand-field]').forEach(input => input.setAttribute('aria-invalid', 'false'));
     }
 
     function showErrors(errors) {
       clearErrors();
+      let firstInvalid = null;
       for (const [key, message] of Object.entries(errors || {})) {
         const node = host.querySelector(`[data-brand-error="${key}"]`);
         if (node) node.textContent = message;
+        const input = host.querySelector(`[data-brand-field="${key}"]`);
+        if (input) {
+          input.setAttribute('aria-invalid', 'true');
+          if (!firstInvalid) firstInvalid = input;
+        }
       }
+      if (firstInvalid) firstInvalid.focus();
+      return firstInvalid;
+    }
+
+    function hidePreview() {
+      const panel = byId('brand-preview-panel');
+      const frame = byId('brand-preview-frame');
+      panel.hidden = true;
+      panel.removeAttribute('data-viewport');
+      frame.classList.remove('plain');
+      frame.replaceChildren();
     }
 
     function renderSuggestions(value) {
       const area = byId('brand-suggestions');
       const entries = Object.entries(value || {}).filter(([key]) => FIELD_KEYS.includes(key));
-      area.hidden = !entries.length;
+      const logo = value && value.logoUrl;
+      area.hidden = false;
+      if (!entries.length && !logo) {
+        area.innerHTML = '<p class="brand-suggestion-empty">No verified suggestions available yet. Complete company research or enter the details manually.</p>';
+        return;
+      }
       area.innerHTML = entries.map(([key, suggestion]) =>
-        `<button type="button" data-brand-suggestion="${key}"><span>${escapeHtml(fieldLabel(key))}</span><strong>${escapeHtml(suggestion)}</strong><small>Use suggestion</small></button>`
-      ).join('');
+        `<article class="brand-suggestion-item"><span>${escapeHtml(fieldLabel(key))}</span><strong>${escapeHtml(suggestion)}</strong><button class="text-btn" type="button" data-brand-suggestion="${key}">Apply</button></article>`
+      ).join('') + (logo ? '<article class="brand-suggestion-item"><span>Logo</span><strong>Verified website image</strong><button class="text-btn" type="button" data-brand-logo-suggestion>Apply and import</button></article>' : '');
     }
 
     function renderPreview(tab) {
       const result = controller.preview(tab);
-      if (!result.valid) { showErrors(result.errors); return; }
+      if (!result.valid) {
+        hidePreview();
+        showErrors(result.errors);
+        byId('brand-action-error').textContent = 'Review the highlighted fields before previewing.';
+        return;
+      }
+      clearErrors();
+      byId('brand-action-error').textContent = '';
       const panel = byId('brand-preview-panel');
       panel.hidden = false;
       panel.dataset.viewport = result.viewport;
@@ -313,6 +411,7 @@
         button.tabIndex = selected ? 0 : -1;
       });
       const frame = byId('brand-preview-frame');
+      frame.setAttribute('aria-labelledby', `brand-preview-tab-${result.viewport}`);
       if (result.contentType === 'text/html') {
         frame.classList.remove('plain');
         frame.innerHTML = result.content;
@@ -332,6 +431,9 @@
     host.querySelectorAll('[data-brand-field]').forEach(input => input.addEventListener('input', event => {
       const key = event.currentTarget.dataset.brandField;
       controller.updateField(key, event.currentTarget.value);
+      event.currentTarget.setAttribute('aria-invalid', 'false');
+      const error = host.querySelector(`[data-brand-error="${key}"]`);
+      if (error) error.textContent = '';
       if (key === 'primaryColor' && /^#[0-9a-f]{6}$/i.test(event.currentTarget.value)) byId('brand-primary-color').value = event.currentTarget.value;
     }));
     byId('brand-primary-color').addEventListener('input', event => {
@@ -350,7 +452,16 @@
       catch (error) { byId('brand-action-error').textContent = error.message; }
       finally { button.disabled = false; }
     });
-    byId('brand-suggestions').addEventListener('click', event => {
+    byId('brand-suggestions').addEventListener('click', async event => {
+      const logoButton = event.target.closest('[data-brand-logo-suggestion]');
+      if (logoButton) {
+        logoButton.disabled = true;
+        byId('brand-action-error').textContent = '';
+        try { await controller.applyLogoSuggestion(); renderAssets(); renderSuggestions(controller.suggestions()); }
+        catch (error) { byId('brand-action-error').textContent = error.message; }
+        finally { logoButton.disabled = false; }
+        return;
+      }
       const button = event.target.closest('[data-brand-suggestion]');
       if (!button) return;
       controller.applySuggestion(button.dataset.brandSuggestion);
@@ -358,7 +469,10 @@
     });
 
     for (const kind of ASSET_KINDS) {
-      byId(`brand-${kind}-input`).addEventListener('change', async event => {
+      const fileInput = byId(`brand-${kind}-input`);
+      const fileTrigger = host.querySelector(`[data-brand-file-trigger="${kind}"]`);
+      fileTrigger?.addEventListener('click', () => fileInput.click());
+      fileInput.addEventListener('change', async event => {
         const file = event.currentTarget.files && event.currentTarget.files[0];
         if (!file) return;
         byId('brand-action-error').textContent = '';
@@ -387,6 +501,7 @@
     });
     byId('brand-save').addEventListener('click', () => {
       const result = controller.saveReady();
+      if (!result.valid) hidePreview();
       showErrors(result.errors);
       byId('brand-action-error').textContent = result.valid ? 'Brand identity saved and ready for future outreach.' : 'Review the highlighted fields.';
       renderSummary();
@@ -407,5 +522,5 @@
     return String(value == null ? '' : value).replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
   }
 
-  return {createController, createAssetAdapter, mount};
+  return {createController, createAssetAdapter, extractWebsiteSuggestions, mount};
 });
