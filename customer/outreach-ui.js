@@ -7,7 +7,7 @@ const INTELLIGENCE_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
 const MAX_DOSSIER_SEARCH_QUERIES=2;
 const MAX_DOSSIER_RESULTS_PER_QUERY=5;
 const ASSET_VERSION="20260828-master-crm-v1";
-const LANGUAGE_ASSET_VERSION="20260916-brand-outreach-v2";
+const LANGUAGE_ASSET_VERSION="20260916-brand-outreach-v3";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const q=id=>document.getElementById(id);
 let outreach=loadOutreach();

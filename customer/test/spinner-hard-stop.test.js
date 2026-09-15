@@ -37,6 +37,6 @@ test('customer page loads the spinner-safe bundles with fresh cache keys',()=>{
   for(const marker of [
     'app.js?v=20260916-brand-assets-v2',
     'process-map.js?v=20260916-brand-outreach-v2',
-    'discovery-ui.js?v=20260916-brand-outreach-v2'
+    'discovery-ui.js?v=20260916-brand-outreach-v3'
   ])assert.ok(html.includes(marker),marker);
 });

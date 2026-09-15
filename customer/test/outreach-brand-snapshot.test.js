@@ -129,6 +129,25 @@ test('automatic handoff uses the frozen plain-text source and never queues snaps
   assert.equal(queued.contact_identity,'buyer.example');
 });
 
+test('CRM sent activity records the frozen approved subject after drafts mutate',()=>{
+  const draft=item();
+  const approved=Outreach.approveOutreachItem(draft,draft.drafts,'2026-09-15T21:00:00.000Z',{brandIdentity:readyIdentity});
+  approved.drafts.emailSubject='MUTATED CRM SUBJECT';
+  const activity=Delivery.buildSentCrmActivity(approved,{
+    recipientEmail:'buyer@example.com',
+    sentAt:'2026-09-15T21:05:00.000Z'
+  },{
+    id:'manual-send-buyer.example-1',
+    channel:'gmail-compose',
+    api:false
+  });
+  assert.equal(activity.subject,'A grounded subject');
+  assert.equal(activity.id,'manual-send-buyer.example-1');
+  assert.equal(activity.summary,'Email sent to buyer@example.com');
+  assert.equal(activity.occurred_at,'2026-09-15T21:05:00.000Z');
+  assert.deepEqual(activity.metadata,{recipient:'buyer@example.com',delivery_channel:'gmail-compose'});
+});
+
 test('explicit refresh invalidates approval and removes the frozen delivery rendering',()=>{
   const draft=item();
   const approved=Outreach.approveOutreachItem(draft,draft.drafts,'2026-09-15T21:00:00.000Z',{brandIdentity:readyIdentity});
@@ -184,13 +203,13 @@ test('outreach UI snapshots Step 1 identity, preserves edit detection and invali
   assert.match(source,/renderApprovedEmail\(item\)/);
   assert.match(source,/buildApprovedSendPayload\(item\)/);
   assert.doesNotMatch(source,/\.sendGmail\(|\.sendMicrosoftMail\(/,'Task 5 must not create an automatic delivery path');
-  assert.match(discovery,/const OUTREACH_ASSET_VERSION="20260916-brand-outreach-v2";/);
+  assert.match(discovery,/const OUTREACH_ASSET_VERSION="20260916-brand-outreach-v3";/);
   assert.match(discovery,/outreach-engine\.js\?v=\$\{OUTREACH_ASSET_VERSION\}/);
   assert.match(discovery,/outreach-ui\.js\?v=\$\{OUTREACH_ASSET_VERSION\}/);
-  assert.match(source,/const LANGUAGE_ASSET_VERSION="20260916-brand-outreach-v2";/);
-  assert.match(delivery,/const ASSET_VERSION="20260916-brand-outreach-v2";/);
+  assert.match(source,/const LANGUAGE_ASSET_VERSION="20260916-brand-outreach-v3";/);
+  assert.match(delivery,/const ASSET_VERSION="20260916-brand-outreach-v3";/);
   assert.match(processMap,/outreach-automation-loader\.js\?v=20260916-brand-outreach-v2/);
   assert.match(automationLoader,/outreach-automation-delivery-handoff\.js\?v=20260916-brand-outreach-v2/);
   assert.match(html,/process-map\.js\?v=20260916-brand-outreach-v2/);
-  assert.match(html,/discovery-ui\.js\?v=20260916-brand-outreach-v2/);
+  assert.match(html,/discovery-ui\.js\?v=20260916-brand-outreach-v3/);
 });
