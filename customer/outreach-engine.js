@@ -158,7 +158,8 @@
     if(brandSnapshot&&generated)drafts.emailBody=removeGeneratedSenderPlaceholder(drafts.emailBody);
     const approvedSource=freezeCopy(drafts);
     const approvedEmail=freezeCopy(renderEmail(approvedSource,brandSnapshot));
-    return {...item,drafts:{...approvedSource},approvedSource,brandSnapshot,approvedEmail,approved:true,approvedAt:clean(approvedAt),error:""};
+    const deliveryDrafts={...approvedSource,emailSubject:approvedEmail.subject,emailBody:approvedEmail.textBody};
+    return {...item,drafts:deliveryDrafts,approvedSource,brandSnapshot,approvedEmail,approved:true,approvedAt:clean(approvedAt),error:""};
   }
 
   function freezeCopy(value){
