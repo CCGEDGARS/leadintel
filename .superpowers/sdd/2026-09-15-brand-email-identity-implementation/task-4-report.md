@@ -3,7 +3,7 @@
 Status: COMPLETE.
 
 Starting branch head: `0b9c26988b4e7ef5d4267501ae1ca762040023fe`
-Implementation head before this report commit: `b1f02b589f1d573c8b19e1e4583c3858de85b7fb`
+Implementation head before this report commit: `61267ee862640b291220d7c5e6e879a233245962`
 
 ## Remote commits
 
@@ -44,6 +44,13 @@ Implementation head before this report commit: `b1f02b589f1d573c8b19e1e4583c3858
 35. `16b8002a8457afa9469763209807ab2e06032bc4` — final Task 4 page cache update
 36. `2d1704addaf8d1129d773134355087814a1971fd` — final save-intent and reload-recovery regression contracts
 37. `b1f02b589f1d573c8b19e1e4583c3858de85b7fb` — explicit-save timeout regression contract
+38. `cea6142fe15cc801581112fd2c2688329e8106ac` — RED production-composition tests for edits made after a workspace PUT begins
+39. `4a28d79cca6d2facf30ef649b378fa1acd10919b` — persisted-payload comparison and dirty-marker rebasing in the bridge
+40. `6bd067b9a51fa6cb12d7ac98e9a98c701df3b8a8` — exact persisted snapshots with PUT-start local-state comparison
+41. `9e1bfeb6ad64c53b6a24d5de0c7e14921d98b7aa` — page entry cache refresh for the dirty-state fix
+42. `a00d074413e14fb020ba7a44f18f1a379d49a287` — process-map cache refresh for the dirty-state fix
+43. `2ea36f913fca0ab3d8663b75f971da83474d2e30` — Task 4 race coverage cache contract
+44. `61267ee862640b291220d7c5e6e879a233245962` — spinner regression cache contract
 
 ## Implemented
 
@@ -64,7 +71,7 @@ Implementation head before this report commit: `b1f02b589f1d573c8b19e1e4583c3858
 - reset captures managed asset references, clears local identity, retries cleanup, and emits an observable result
 - failed reset deletions remain pending for retry; unavailable deletion also emits a consistent cleanup event
 - upload, import, and delete encode reserved characters in workspace identifiers
-- `server-bridge.js`, `workspace-reset-hygiene.js`, `workspace-persistence.js`, `process-map.js`, the page entry point, and cache regression tests use `20260916-brand-assets-v5`
+- `server-bridge.js`, `workspace-reset-hygiene.js`, `workspace-persistence.js`, `process-map.js`, the page entry point, and cache regression tests use `20260916-brand-assets-v6`
 
 ## Transaction re-review
 
@@ -89,7 +96,16 @@ Implementation head before this report commit: `b1f02b589f1d573c8b19e1e4583c3858
 - reload recovery directly resumes asset cleanup when the server-reset marker is already gone
 - reload recovery with both records saves once with explicit intent before cleanup
 - failed reload cleanup transfers to the observable brand-asset retry queue and clears the completed reset-cleanup record
-- Task 4 browser cache references now use `20260916-brand-assets-v5`
+- Task 4 browser cache references now use `20260916-brand-assets-v6`
+
+## Final dirty-state race fix
+
+- every workspace PUT captures the exact sanitized workspace payload sent to the backend
+- the saved snapshot is built only from that persisted request payload, never from newer local state observed after the request began
+- the persistence wrapper also captures raw local workspace data at PUT start and compares it at response time, avoiding false dirty results caused only by server-payload normalization
+- when a user edit occurs during an in-flight explicit or asset save, the edit remains local, `hasUnsavedChanges()` remains true, and the saved snapshot continues to represent the earlier persisted payload
+- the bridge rebases the workspace-scoped dirty marker onto the newly persisted server version instead of clearing it, preventing a false reload conflict while preserving the unsent edit
+- the next explicit save sends the newer edit, updates the persisted snapshot to that exact payload, and clears both dirty indicators
 
 ## Test evidence
 
@@ -105,9 +121,11 @@ Focused bridge and UI verification after implementation: 45 passed, 0 failed.
 
 Latest review RED verification: 1/5 passed and 4/5 failed for the intended save-intent and reload-recovery gaps.
 
-Final focused Task 4 verification: 29 passed, 0 failed, 0 skipped, 0 cancelled.
+Final dirty-state RED verification: 0/2 passed; both intended race reproductions failed before the production fix.
 
-Final related regression verification: 85 passed, 0 failed, 0 skipped, 0 cancelled.
+Final focused Task 4 verification: 31 passed, 0 failed, 0 skipped, 0 cancelled.
+
+Final related regression verification: 87 passed, 0 failed, 0 skipped, 0 cancelled.
 
 JavaScript syntax checks passed for the bridge, reset hygiene, Brand Identity UI, app integration, process map, and every modified regression test.
 
