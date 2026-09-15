@@ -8,7 +8,7 @@ const LEADINTEL_API="https://leadintel-api.edgars-7e7.workers.dev";
 const MAX_DISCOVERY_QUERIES=10;
 const MAX_DISCOVERY_RESULTS_PER_QUERY=5;
 const DISCOVERY_SEARCH_CONCURRENCY=4;
-const ASSET_VERSION="20260915-error-sweep-v1";
+const ASSET_VERSION="20260915-evidence-link-v1";
 const LANGUAGE_ASSET_VERSION="20260914-workspace-isolation-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const $=id=>document.getElementById(id);
