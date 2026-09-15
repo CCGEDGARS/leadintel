@@ -2,7 +2,7 @@
   'use strict';
   if(root.LeadIntelServerBridge)return;
   const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
-  const ASSET_VERSION='20260916-brand-assets-v3';
+  const ASSET_VERSION='20260916-brand-assets-v4';
   const asset=path=>`${path}?v=${ASSET_VERSION}`;
   const KEYS={main:'leadintel_customer_v2_state',discovery:'leadintel_customer_v2_discovery',outreach:'leadintel_customer_v2_outreach',delivery:'leadintel_customer_v2_delivery',meta:'leadintel_customer_v2_discovery_meta'};
   const WORKSPACE_KEY='leadintel_customer_v2_workspace';
@@ -12,6 +12,7 @@
   const DIRTY_KEY='leadintel_customer_v2_server_dirty';
   const VERSION_KEY='leadintel_customer_v2_server_versions';
   const CRM_MIGRATION_KEY='leadintel_customer_v2_crm_migrations';
+  const SAVE_INTENT_KEY='leadintel_customer_v2_explicit_save_intent_v1';
   const BRAND_ASSET_CLEANUP_KEY='leadintel_customer_v2_brand_asset_cleanup_v1';
   const BRAND_ASSET_KINDS=new Set(['logo','headshot','banner']);
   const BRAND_ASSET_ID=/^[A-Za-z0-9_-]{43}$/;
@@ -94,10 +95,11 @@
     try{await fetchSession();if(!bridge.session?.authenticated){setStatus('Local workspace · Sign in to sync','local');renderAccount();root.dispatchEvent(new CustomEvent('leadintel:server-ready',{detail:bridge}));return;}await fetchWorkspaces();pickWorkspace();renderAccount();if(!bridge.workspace){setStatus('Signed in · No workspace','error');return;}const stay=await hydrateAuthenticated();if(!stay)return;const migration=await migrateLocalPipeline();if(!migration.ok)console.warn('LeadIntel CRM migration:',migration.error||'migration unavailable');await flushBrandAssetCleanup();await Promise.all([refreshGmailStatus(),refreshMicrosoftMailStatus()]);root.dispatchEvent(new CustomEvent('leadintel:server-ready',{detail:bridge}));}catch(cause){console.warn('LeadIntel server bridge:',cause);setStatus('Local cache · Server unavailable','error');renderAccount();root.dispatchEvent(new CustomEvent('leadintel:server-ready',{detail:bridge}));}
   }
   function runWorkspaceSave(context,operation){const key=String(context.workspaceId),previous=workspaceSaveTransactions.get(key)||Promise.resolve();const run=previous.catch(()=>{}).then(()=>operation());const tracked=run.then(value=>{if(workspaceSaveTransactions.get(key)===tracked)workspaceSaveTransactions.delete(key);return value;},cause=>{if(workspaceSaveTransactions.get(key)===tracked)workspaceSaveTransactions.delete(key);throw cause;});workspaceSaveTransactions.set(key,tracked);return tracked;}
-  async function saveNow(){if(!bridge.session?.authenticated||!bridge.workspace||bridge.conflict)return {saved:false};clearTimeout(saveTimer);const context={workspaceId:bridge.workspace.id};return runWorkspaceSave(context,()=>saveWorkspaceState(context));}
-  async function saveWorkspaceState(context){if(!bridge.session?.authenticated||!bridge.workspace||bridge.workspace.id!==context.workspaceId||bridge.conflict)return {saved:false};markDirtyLocalState();setStatus('Saving to LeadIntel…','saving');const payload={schema_version:1,version:bridge.stateVersion,payload:bundle()};const {response,payload:result}=await api(`/api/customer/state?workspace_id=${encodeURIComponent(context.workspaceId)}`,{method:'PUT',body:JSON.stringify(payload)});
+  async function withWorkspaceSaveIntent(enabled,operation){if(!enabled)return operation();const previous=sessionStorage.getItem(SAVE_INTENT_KEY);sessionStorage.setItem(SAVE_INTENT_KEY,'1');try{return await operation();}finally{if(previous===null)sessionStorage.removeItem(SAVE_INTENT_KEY);else sessionStorage.setItem(SAVE_INTENT_KEY,previous);}}
+  async function saveNow(options={}){if(!bridge.session?.authenticated||!bridge.workspace||bridge.conflict)return {saved:false};clearTimeout(saveTimer);const context={workspaceId:bridge.workspace.id,saveIntent:options?.saveIntent===true};return runWorkspaceSave(context,()=>saveWorkspaceState(context));}
+  async function saveWorkspaceState(context){if(!bridge.session?.authenticated||!bridge.workspace||bridge.workspace.id!==context.workspaceId||bridge.conflict)return {saved:false};markDirtyLocalState();setStatus('Saving to LeadIntel…','saving');const payload={schema_version:1,version:bridge.stateVersion,payload:bundle()};const {response,payload:result}=await withWorkspaceSaveIntent(context.saveIntent,()=>api(`/api/customer/state?workspace_id=${encodeURIComponent(context.workspaceId)}`,{method:'PUT',body:JSON.stringify(payload)}));
     if(response.status===409){bridge.stateVersion=Number(result.current?.version)||bridge.stateVersion;sessionStorage.setItem(CONFLICT_KEY,'Server state changed in another session. Your local changes were preserved and were not overwritten.');enterConflict(result.current);return {saved:false,conflict:true};}
-    if(!response.ok){setStatus('Sync failed · Local cache safe','error');throw new Error(result.error||'Workspace save failed');}const savedWorkspaceId=context.workspaceId;bridge.stateVersion=Number(result.version)||bridge.stateVersion+1;rememberServerVersion(savedWorkspaceId,bridge.stateVersion);sessionStorage.setItem(HYDRATION_KEY,`${savedWorkspaceId}:${bridge.stateVersion}`);clearDirtyLocalState();bridge.conflict=false;bridge.conflictState=null;renderConflictActions();setStatus('Synced to LeadIntel','synced');const afterSave=root.LeadIntelWorkspaceResetHygiene?.afterWorkspaceSaved;if(typeof afterSave==='function')void Promise.resolve(afterSave(savedWorkspaceId)).catch(cause=>console.warn('LeadIntel brand asset reset cleanup:',cause));return {saved:true,version:bridge.stateVersion};
+    if(!response.ok){setStatus('Sync failed · Local cache safe','error');throw new Error(result.error||'Workspace save failed');}if(result?.saved===false){setStatus('Sync skipped · Local cache safe','error');return {saved:false,version:bridge.stateVersion};}const savedWorkspaceId=context.workspaceId;bridge.stateVersion=Number(result.version)||bridge.stateVersion+1;rememberServerVersion(savedWorkspaceId,bridge.stateVersion);sessionStorage.setItem(HYDRATION_KEY,`${savedWorkspaceId}:${bridge.stateVersion}`);clearDirtyLocalState();bridge.conflict=false;bridge.conflictState=null;renderConflictActions();setStatus('Synced to LeadIntel','synced');const afterSave=root.LeadIntelWorkspaceResetHygiene?.afterWorkspaceSaved;if(typeof afterSave==='function')void Promise.resolve(afterSave(savedWorkspaceId)).catch(cause=>console.warn('LeadIntel brand asset reset cleanup:',cause));return {saved:true,version:bridge.stateVersion};
   }
   async function resolveConflictUseServer(){if(!bridge.workspace||!bridge.conflictState)return {resolved:false};const state=bridge.conflictState;applyPayload(state.payload);bridge.stateVersion=Number(state.version)||0;rememberServerVersion(bridge.workspace.id,bridge.stateVersion);bridge.conflict=false;bridge.conflictState=null;clearDirtyLocalState();sessionStorage.removeItem(CONFLICT_KEY);sessionStorage.setItem(HYDRATION_KEY,`${bridge.workspace.id}:${bridge.stateVersion}`);renderConflictActions();setStatus('Synced to LeadIntel','synced');showToast('Server version restored.');location.reload();return {resolved:true,source:'server'};}
   async function resolveConflictKeepLocal(){if(!bridge.workspace||!bridge.conflictState)return {resolved:false};bridge.stateVersion=Number(bridge.conflictState.version)||bridge.stateVersion;bridge.conflict=false;bridge.conflictState=null;sessionStorage.removeItem(CONFLICT_KEY);rebaseDirtyLocalState();renderConflictActions();setStatus('Saving local changes…','saving');const result=await saveNow();if(result.saved)showToast('Your local changes are now saved to LeadIntel.');return {resolved:Boolean(result.saved),source:'local',...result};}
@@ -148,21 +150,21 @@
   function writeMainRaw(value){suppress=true;try{if(value===null)localStorage.removeItem(KEYS.main);else localStorage.setItem(KEYS.main,value);}finally{suppress=false;}}
   function requestedBrandIdentity(current,kind,asset){return {...current,status:'draft',assets:{...current.assets,[kind]:asset}};}
   function assetTransactionResult(options,asset,identity,cleanup){return options?.returnTransaction?{asset,identity,cleanupQueued:Boolean(cleanup?.queued),cleanupWarning:Boolean(cleanup?.warning)}:asset;}
-  function restoreMainRaw(previousRaw){try{writeMainRaw(previousRaw);return true;}catch(cause){emitBrandAssetEvent('leadintel:brand-asset-restore-failed',{message:String(cause?.message||cause)});return false;}}
+  function sameBrandAsset(left,right){const a=safeBrandAsset(left),b=safeBrandAsset(right);return a&&b?a.id===b.id:!a&&!b;}
+  function rollbackBrandAssetMutation(context,failedAsset,previousAsset){try{const currentMain=parse(KEYS.main),currentIdentity=safeBrandIdentity(currentMain.brandIdentity)||safeBrandIdentity({});if(!sameBrandAsset(currentIdentity.assets?.[context.kind],failedAsset))return false;const restored={...currentIdentity,assets:{...currentIdentity.assets,[context.kind]:previousAsset||null}};writeMainRaw(JSON.stringify({...currentMain,brandIdentity:restored}));return true;}catch(cause){emitBrandAssetEvent('leadintel:brand-asset-restore-failed',{message:String(cause?.message||cause)});return false;}}
   async function commitBrandAssetReplacement(context,nextAsset,options={}){
-    let previousRaw=null,previousAsset=null,safeNext=null,nextIdentity=null,previousCaptured=false;
+    let previousAsset=null,safeNext=null,nextIdentity=null;
     try{
-      previousRaw=localStorage.getItem(KEYS.main);previousCaptured=true;
       const previousMain=parse(KEYS.main),previousIdentity=safeBrandIdentity(previousMain.brandIdentity)||safeBrandIdentity({});
       previousAsset=safeBrandAsset(previousIdentity.assets?.[context.kind]);
       safeNext=safeBrandAsset(nextAsset);
       if(!safeNext)throw new Error('Brand asset upload returned an invalid managed asset');
       nextIdentity=requestedBrandIdentity(previousIdentity,context.kind,safeNext);
       writeMainRaw(JSON.stringify({...previousMain,brandIdentity:nextIdentity}));
-      const saved=await saveNow();
+      const saved=await saveNow({saveIntent:true});
       if(!saved?.saved)throw new Error(saved?.conflict?'Workspace save conflict':'Workspace save failed');
     }catch(cause){
-      if(previousCaptured)restoreMainRaw(previousRaw);
+      rollbackBrandAssetMutation(context,safeNext,previousAsset);
       const rollback=await cleanupManagedAsset(context,safeNext||nextAsset,safeNext?'rollback':'invalid-response');
       emitBrandAssetEvent('leadintel:brand-asset-transaction',{workspaceId:context.workspaceId,kind:context.kind,committed:false,rollbackDeleted:rollback.deleted,cleanupQueued:rollback.queued,cleanupWarning:Boolean(rollback.warning)});
       throw cause;
@@ -195,15 +197,15 @@
   }
   function removalResult(options,deleted,identity,cleanup){return options?.returnTransaction?{asset:null,identity,cleanupQueued:Boolean(cleanup?.queued),cleanupWarning:Boolean(cleanup?.warning)}:deleted;}
   async function commitBrandAssetRemoval(context,asset,options={}){
-    const previousRaw=localStorage.getItem(KEYS.main),previousMain=parse(KEYS.main),previousIdentity=safeBrandIdentity(previousMain.brandIdentity)||safeBrandIdentity({});
+    const previousMain=parse(KEYS.main),previousIdentity=safeBrandIdentity(previousMain.brandIdentity)||safeBrandIdentity({});
     const previousAsset=safeBrandAsset(previousIdentity.assets?.[context.kind])||safeBrandAsset(asset)||(BRAND_ASSET_ID.test(String(asset||''))?{id:String(asset)}:null);
     if(!previousAsset)throw new TypeError('A valid managed brand asset is required');
     const nextIdentity=requestedBrandIdentity(previousIdentity,context.kind,null);
     try{
       writeMainRaw(JSON.stringify({...previousMain,brandIdentity:nextIdentity}));
-      const saved=await saveNow();
+      const saved=await saveNow({saveIntent:true});
       if(!saved?.saved)throw new Error(saved?.conflict?'Workspace save conflict':'Workspace save failed');
-    }catch(cause){restoreMainRaw(previousRaw);throw cause;}
+    }catch(cause){rollbackBrandAssetMutation(context,null,previousAsset);throw cause;}
     const cleanup=await cleanupManagedAsset(context,previousAsset,'removal');
     emitBrandAssetEvent('leadintel:brand-asset-transaction',{workspaceId:context.workspaceId,kind:context.kind,committed:true,removed:true,cleanupQueued:cleanup.queued,cleanupWarning:Boolean(cleanup.warning)});
     return removalResult(options,cleanup.result||{ok:cleanup.deleted,status:cleanup.deleted?200:0,asset_id:previousAsset.id,queued:cleanup.queued,cleanup_warning:Boolean(cleanup.warning)},nextIdentity,cleanup);
@@ -211,6 +213,7 @@
   async function deleteBrandAsset(kind,asset,options={}){
     const context=brandAssetContext(kind);const id=typeof asset==='string'?asset:String(asset?.id||'');
     if(!BRAND_ASSET_ID.test(id))throw new TypeError('A valid managed brand asset is required');
+    if(options?.cleanupOnly===true)return runBrandAssetTransaction(context,()=>deleteBrandAssetRequest(context,id));
     return runBrandAssetTransaction(context,()=>commitBrandAssetRemoval(context,asset,options));
   }
   function crmPath(path=''){if(!bridge.workspace)throw new Error('No workspace selected');const join=path.includes('?')?'&':'?';return `/api/crm${path}${join}workspace_id=${encodeURIComponent(bridge.workspace.id)}`;}
