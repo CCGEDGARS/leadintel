@@ -46,8 +46,9 @@ test('Brand & Email Identity is collapsed immediately after Main company website
   const identityModule = html.indexOf('id="brand-identity"');
   const targetMarket = html.indexOf('id="target-market-selector"');
   const modelScript = html.indexOf('brand-identity.js?v=20260915-brand-identity-v2');
-  const uiScript = html.indexOf('brand-identity-ui.js?v=20260915-brand-identity-v2');
-  const appScript = html.indexOf('app.js?v=20260915-brand-identity-v2');
+  const profileScript = html.indexOf('profile-engine.js?v=20260915-brand-identity-v3');
+  const uiScript = html.indexOf('brand-identity-ui.js?v=20260915-brand-identity-v3');
+  const appScript = html.indexOf('app.js?v=20260915-brand-identity-v3');
 
   assert.ok(websitePanel >= 0 && websitePanel < identityModule && identityModule < targetMarket);
   assert.match(html, /Add your logo and sender details so outreach emails look consistent and personal\./);
@@ -56,7 +57,7 @@ test('Brand & Email Identity is collapsed immediately after Main company website
   assert.match(html, /id="brand-identity-status"[^>]*>Not configured</);
   assert.match(html, /id="brand-identity-toggle"[^>]*>[\s\S]*Set up email identity/);
   assert.match(html, /brand-identity\.css\?v=20260915-brand-identity-v2/);
-  assert.ok(modelScript >= 0 && modelScript < uiScript && uiScript < appScript);
+  assert.ok(profileScript >= 0 && profileScript < modelScript && modelScript < uiScript && uiScript < appScript);
 });
 
 test('expanded markup keeps every identity and asset control visibly labelled', () => {
