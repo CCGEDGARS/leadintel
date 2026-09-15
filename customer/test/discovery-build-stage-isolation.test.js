@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const safeHtml = '<script defer src="discovery-ui.js?v=test"></script>';
 const baseMarkers = [
   'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
-  'const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS+1000;',
+  'const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS*2+2000;',
   'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};',
   'initDiscoveryWhenReady();'
 ].join('\n');
