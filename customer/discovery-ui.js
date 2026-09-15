@@ -194,7 +194,7 @@ async function runCompanyDiscovery(){
       new Promise(resolve=>{runTimeout=setTimeout(()=>{runController.abort(new DOMException("Discovery run deadline reached","TimeoutError"));resolve(true);},DISCOVERY_RUN_TIMEOUT_MS);})
     ]);
     clearTimeout(runTimeout);
-    if(timedOut)await allSearches.catch(()=>{});
+
     const completedSearches=[...searches,...resolutionSearches,...verificationSearches].filter(Boolean);
     const expectedSearches=queries.length+resolutionSearches.length+verificationSearches.length;
     failures=completedSearches.filter(item=>item.error).length+(timedOut?Math.max(0,expectedSearches-completedSearches.length):0);
