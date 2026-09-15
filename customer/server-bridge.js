@@ -12,12 +12,43 @@
   const DIRTY_KEY='leadintel_customer_v2_server_dirty';
   const VERSION_KEY='leadintel_customer_v2_server_versions';
   const CRM_MIGRATION_KEY='leadintel_customer_v2_crm_migrations';
+  const BRAND_ASSET_KINDS=new Set(['logo','headshot','banner']);
+  const BRAND_ASSET_ID=/^[A-Za-z0-9_-]{43}$/;
+  const BRAND_ASSET_URL_PREFIX=`${API_BASE}/api/customer/brand-assets/`;
+  const BRAND_IDENTITY_STRING_FIELDS=['companyDisplayName','senderName','senderTitle','website','phone','linkedinUrl','primaryColor','signatureText','legalFooter','postalAddress','updatedAt'];
   let saveTimer=null;let suppress=false;let initialized=false;
-  const bridge={session:null,authProvider:localStorage.getItem(AUTH_PROVIDER_KEY)||'',workspaces:[],workspace:null,stateVersion:0,gmail:{configured:false,connected:false,email:'',role:''},microsoftMail:{configured:false,connected:false,email:'',role:''},status:'local',conflict:false,conflictState:null,saveNow,refreshGmailStatus,refreshMicrosoftMailStatus,syncReplies,sendGmail,sendMicrosoftMail,connectGmail,connectMicrosoftMail,disconnectGmail,disconnectMicrosoftMail,signIn,signOut,selectWorkspace,resolveConflictKeepLocal,resolveConflictUseServer,listCrmCompanies,getCrmCompany,saveCrmCompany,addCrmToPipeline,removeCrmFromPipeline,archiveCrmCompany,restoreCrmCompany,suppressCrmCompany,markCrmCustomer,saveCrmContacts,enrichCrmContact,recordCrmActivity,deleteCrmCompany,migrateLocalPipeline,switchProvider};
+  const bridge={session:null,authProvider:localStorage.getItem(AUTH_PROVIDER_KEY)||'',workspaces:[],workspace:null,stateVersion:0,gmail:{configured:false,connected:false,email:'',role:''},microsoftMail:{configured:false,connected:false,email:'',role:''},status:'local',conflict:false,conflictState:null,saveNow,refreshGmailStatus,refreshMicrosoftMailStatus,syncReplies,sendGmail,sendMicrosoftMail,connectGmail,connectMicrosoftMail,disconnectGmail,disconnectMicrosoftMail,uploadBrandAsset,importBrandAsset,deleteBrandAsset,signIn,signOut,selectWorkspace,resolveConflictKeepLocal,resolveConflictUseServer,listCrmCompanies,getCrmCompany,saveCrmCompany,addCrmToPipeline,removeCrmFromPipeline,archiveCrmCompany,restoreCrmCompany,suppressCrmCompany,markCrmCustomer,saveCrmContacts,enrichCrmContact,recordCrmActivity,deleteCrmCompany,migrateLocalPipeline,switchProvider};
   root.LeadIntelServerBridge=bridge;
+  if(!root.LeadIntelServer)root.LeadIntelServer=bridge;
 
   function parse(key){try{return JSON.parse(localStorage.getItem(key)||'{}');}catch{return {};}}
-  function bundle(){return {main:parse(KEYS.main),discovery:parse(KEYS.discovery),outreach:parse(KEYS.outreach),delivery:parse(KEYS.delivery),meta:{discovery:parse(KEYS.meta)}};}
+  function safeBrandAsset(value){
+    const normalized=root.LeadIntelBrandIdentity?.safeAssetReference?.(value);
+    if(normalized)return normalized;
+    if(!value||typeof value!=='object'||Array.isArray(value)||!BRAND_ASSET_ID.test(String(value.id||'')))return null;
+    const id=String(value.id),url=String(value.url||''),mimeType=String(value.mimeType||'').toLowerCase();
+    if(url!==`${BRAND_ASSET_URL_PREFIX}${id}`||!['image/png','image/jpeg','image/webp'].includes(mimeType))return null;
+    if(!Number.isSafeInteger(value.width)||value.width<1||value.width>6000||!Number.isSafeInteger(value.height)||value.height<1||value.height>6000)return null;
+    if(typeof value.updatedAt!=='string'||!Number.isFinite(Date.parse(value.updatedAt)))return null;
+    return {id,url,mimeType,width:value.width,height:value.height,altText:typeof value.altText==='string'?value.altText.trim().slice(0,300):'',updatedAt:value.updatedAt};
+  }
+  function safeBrandIdentity(value){
+    if(!value||typeof value!=='object'||Array.isArray(value))return value;
+    const normalized=root.LeadIntelBrandIdentity?.normalize?.(value);
+    if(normalized)return normalized;
+    const output={schemaVersion:1,status:value.status==='ready'?'ready':'draft',revision:Number.isSafeInteger(value.revision)&&value.revision>0?value.revision:1};
+    for(const key of BRAND_IDENTITY_STRING_FIELDS)output[key]=typeof value[key]==='string'&&!value[key].trim().toLowerCase().startsWith('data:image/')?value[key].trim():'';
+    const options=value.options&&typeof value.options==='object'&&!Array.isArray(value.options)?value.options:{};
+    output.options={includeLogo:options.includeLogo!==false,includeHeadshot:options.includeHeadshot===true,includeBanner:options.includeBanner===true};
+    const assets=value.assets&&typeof value.assets==='object'&&!Array.isArray(value.assets)?value.assets:{};
+    output.assets={logo:safeBrandAsset(assets.logo),headshot:safeBrandAsset(assets.headshot),banner:safeBrandAsset(assets.banner)};
+    return output;
+  }
+  function safeMainState(value){
+    if(!value||typeof value!=='object'||Array.isArray(value)||!Object.prototype.hasOwnProperty.call(value,'brandIdentity'))return value;
+    return {...value,brandIdentity:safeBrandIdentity(value.brandIdentity)};
+  }
+  function bundle(){return {main:safeMainState(parse(KEYS.main)),discovery:parse(KEYS.discovery),outreach:parse(KEYS.outreach),delivery:parse(KEYS.delivery),meta:{discovery:parse(KEYS.meta)}};}
   function isEmptyObject(value){return !value||typeof value!=='object'||Object.keys(value).length===0;}
   function hasLocalData(value=bundle()){return ['main','discovery','outreach','delivery'].some(key=>!isEmptyObject(value[key]));}
   function readVersionMap(){try{const value=JSON.parse(localStorage.getItem(VERSION_KEY)||'{}');return value&&typeof value==='object'&&!Array.isArray(value)?value:{};}catch{return {};}}
@@ -31,7 +62,7 @@
   function clearDirtyLocalState(){const current=readDirtyLocalState();if(!current||!bridge.workspace||current.workspace_id===bridge.workspace.id||!current.workspace_id)localStorage.removeItem(DIRTY_KEY);}
   function clearCustomerCache(){suppress=true;try{for(const key of Object.values(KEYS))localStorage.removeItem(key);}finally{suppress=false;}}
   function endpoint(path){return `${API_BASE}${path}`;}
-  async function api(path,options={}){const response=await fetch(endpoint(path),{credentials:'include',headers:{'Accept':'application/json',...(options.body?{'Content-Type':'application/json'}:{}),...(options.headers||{})},...options});const payload=await response.json().catch(()=>({}));return {response,payload};}
+  async function api(path,options={}){const {headers={},body,...rest}=options;const multipart=typeof FormData!=='undefined'&&body instanceof FormData;const response=await fetch(endpoint(path),{credentials:'include',...rest,body,headers:{'Accept':'application/json',...(body&&!multipart?{'Content-Type':'application/json'}:{}),...headers}});const payload=await response.json().catch(()=>({}));return {response,payload};}
   function returnTo(){const url=new URL(location.href);url.searchParams.delete('auth');url.searchParams.delete('gmail');url.searchParams.delete('microsoft_mail');url.searchParams.delete('reason');url.searchParams.delete('workspace_id');return url.toString();}
   function setStatus(text,kind=''){bridge.status=kind||text;const existing=document.querySelector('.autosave');if(existing){existing.innerHTML=`<i></i>${text}`;existing.dataset.serverStatus=kind||'';}const status=document.getElementById('server-sync-status');if(status){status.textContent=text;status.dataset.state=kind||'';}}
   function showToast(message){const el=document.getElementById('toast');if(!el)return;el.textContent=message;el.classList.add('show');clearTimeout(showToast.t);showToast.t=setTimeout(()=>el.classList.remove('show'),3000);}
@@ -61,7 +92,7 @@
   }
   async function saveNow(){if(!bridge.session?.authenticated||!bridge.workspace||bridge.conflict)return {saved:false};clearTimeout(saveTimer);markDirtyLocalState();setStatus('Saving to LeadIntel…','saving');const payload={schema_version:1,version:bridge.stateVersion,payload:bundle()};const {response,payload:result}=await api(`/api/customer/state?workspace_id=${encodeURIComponent(bridge.workspace.id)}`,{method:'PUT',body:JSON.stringify(payload)});
     if(response.status===409){bridge.stateVersion=Number(result.current?.version)||bridge.stateVersion;sessionStorage.setItem(CONFLICT_KEY,'Server state changed in another session. Your local changes were preserved and were not overwritten.');enterConflict(result.current);return {saved:false,conflict:true};}
-    if(!response.ok){setStatus('Sync failed · Local cache safe','error');throw new Error(result.error||'Workspace save failed');}bridge.stateVersion=Number(result.version)||bridge.stateVersion+1;rememberServerVersion(bridge.workspace.id,bridge.stateVersion);sessionStorage.setItem(HYDRATION_KEY,`${bridge.workspace.id}:${bridge.stateVersion}`);clearDirtyLocalState();bridge.conflict=false;bridge.conflictState=null;renderConflictActions();setStatus('Synced to LeadIntel','synced');return {saved:true,version:bridge.stateVersion};
+    if(!response.ok){setStatus('Sync failed · Local cache safe','error');throw new Error(result.error||'Workspace save failed');}const savedWorkspaceId=bridge.workspace.id;bridge.stateVersion=Number(result.version)||bridge.stateVersion+1;rememberServerVersion(savedWorkspaceId,bridge.stateVersion);sessionStorage.setItem(HYDRATION_KEY,`${savedWorkspaceId}:${bridge.stateVersion}`);clearDirtyLocalState();bridge.conflict=false;bridge.conflictState=null;renderConflictActions();setStatus('Synced to LeadIntel','synced');const afterSave=root.LeadIntelWorkspaceResetHygiene?.afterWorkspaceSaved;if(typeof afterSave==='function')void Promise.resolve(afterSave(savedWorkspaceId)).catch(cause=>console.warn('LeadIntel brand asset reset cleanup:',cause));return {saved:true,version:bridge.stateVersion};
   }
   async function resolveConflictUseServer(){if(!bridge.workspace||!bridge.conflictState)return {resolved:false};const state=bridge.conflictState;applyPayload(state.payload);bridge.stateVersion=Number(state.version)||0;rememberServerVersion(bridge.workspace.id,bridge.stateVersion);bridge.conflict=false;bridge.conflictState=null;clearDirtyLocalState();sessionStorage.removeItem(CONFLICT_KEY);sessionStorage.setItem(HYDRATION_KEY,`${bridge.workspace.id}:${bridge.stateVersion}`);renderConflictActions();setStatus('Synced to LeadIntel','synced');showToast('Server version restored.');location.reload();return {resolved:true,source:'server'};}
   async function resolveConflictKeepLocal(){if(!bridge.workspace||!bridge.conflictState)return {resolved:false};bridge.stateVersion=Number(bridge.conflictState.version)||bridge.stateVersion;bridge.conflict=false;bridge.conflictState=null;sessionStorage.removeItem(CONFLICT_KEY);rebaseDirtyLocalState();renderConflictActions();setStatus('Saving local changes…','saving');const result=await saveNow();if(result.saved)showToast('Your local changes are now saved to LeadIntel.');return {resolved:Boolean(result.saved),source:'local',...result};}
@@ -69,6 +100,38 @@
   async function signOut(){await api('/api/logout',{method:'POST'});bridge.authProvider='';localStorage.removeItem?.(AUTH_PROVIDER_KEY);sessionStorage.removeItem(HYDRATION_KEY);location.reload();}
   async function switchProvider(provider='google'){const routes={google:'/api/auth/google/start',microsoft:'/api/auth/microsoft/start'},selected=provider==='microsoft'?'microsoft':'google';const {response}=await api('/api/logout',{method:'POST'});if(!response.ok){showToast('Unable to switch workspace account.');return {ok:false};}bridge.authProvider=selected;localStorage.setItem?.(AUTH_PROVIDER_KEY,selected);location.href=endpoint(`${routes[selected]}?return_to=${encodeURIComponent(returnTo())}`);return {ok:true};}
   async function selectWorkspace(id){if(!bridge.workspaces.some(item=>item.id===id)||id===bridge.workspace?.id)return;if(hasDirtyLocalState()||bridge.conflict){const message=bridge.conflict?'Resolve the current sync conflict before switching workspaces.':'Finish syncing before switching workspaces.';setStatus(message,bridge.conflict?'error':'saving');showToast(message);const select=document.getElementById('server-workspace-select');if(select&&bridge.workspace)select.value=bridge.workspace.id;return;}clearCustomerCache();localStorage.setItem(WORKSPACE_KEY,id);sessionStorage.removeItem(HYDRATION_KEY);location.reload();}
+  function brandAssetContext(kind){
+    if(!bridge.session?.authenticated)throw new Error('Sign in to manage brand assets');
+    if(!bridge.workspace?.id)throw new Error('No workspace selected');
+    const normalized=String(kind||'').trim().toLowerCase();
+    if(!BRAND_ASSET_KINDS.has(normalized))throw new TypeError('Brand asset kind must be logo, headshot, or banner');
+    return {kind:normalized,workspaceId:bridge.workspace.id};
+  }
+  function assetError(response,payload,fallback){const error=new Error(payload?.error||fallback);error.status=response.status;return error;}
+  async function uploadBrandAsset(kind,file,options={}){
+    const context=brandAssetContext(kind);
+    if(!file||typeof file!=='object')throw new TypeError('A brand image file is required');
+    const form=new FormData();form.append('kind',context.kind);form.append('file',file);
+    if(typeof options.altText==='string'&&options.altText.trim())form.append('alt_text',options.altText.trim());
+    const {response,payload}=await api(`/api/customer/brand-assets?workspace_id=${encodeURIComponent(context.workspaceId)}`,{method:'POST',body:form});
+    if(!response.ok)throw assetError(response,payload,'Brand asset upload failed');
+    if(!payload?.asset)throw new Error('Brand asset upload returned no managed asset');
+    return payload.asset;
+  }
+  async function importBrandAsset(kind,url,options={}){
+    const context=brandAssetContext(kind);
+    const {response,payload}=await api(`/api/customer/brand-assets/import?workspace_id=${encodeURIComponent(context.workspaceId)}`,{method:'POST',body:JSON.stringify({kind:context.kind,url:String(url||''),alt_text:typeof options.altText==='string'?options.altText.trim():''})});
+    if(!response.ok)throw assetError(response,payload,'Brand asset import failed');
+    if(!payload?.asset)throw new Error('Brand asset import returned no managed asset');
+    return payload.asset;
+  }
+  async function deleteBrandAsset(kind,asset){
+    const context=brandAssetContext(kind);const id=typeof asset==='string'?asset:String(asset?.id||'');
+    if(!BRAND_ASSET_ID.test(id))throw new TypeError('A valid managed brand asset is required');
+    const {response,payload}=await api(`/api/customer/brand-assets/${encodeURIComponent(id)}?workspace_id=${encodeURIComponent(context.workspaceId)}`,{method:'DELETE'});
+    if(!response.ok)throw assetError(response,payload,'Brand asset removal failed');
+    return {ok:true,status:response.status,...payload};
+  }
   function crmPath(path=''){if(!bridge.workspace)throw new Error('No workspace selected');const join=path.includes('?')?'&':'?';return `/api/crm${path}${join}workspace_id=${encodeURIComponent(bridge.workspace.id)}`;}
   async function crmRequest(path,options={}){if(!bridge.session?.authenticated||!bridge.workspace)return {ok:false,status:401,error:'Sign in to use Master CRM'};const {response,payload}=await api(crmPath(path),options);if(!response.ok)return {ok:false,status:response.status,...payload};return {ok:true,status:response.status,...payload};}
   async function listCrmCompanies(filters={}){const params=new URLSearchParams();if(filters.q)params.set('q',filters.q);if(filters.lifecycle)params.set('lifecycle',filters.lifecycle);if(filters.pipeline_stage||filters.pipelineStage)params.set('pipeline_stage',filters.pipeline_stage||filters.pipelineStage);if(filters.limit)params.set('limit',filters.limit);if(filters.cursor)params.set('cursor',filters.cursor);const suffix=params.toString()?`?${params.toString()}`:'';return crmRequest(`/companies${suffix}`);}
@@ -93,8 +156,9 @@
   function connectMicrosoftMail(){if(!bridge.workspace)return;location.href=endpoint(`/api/integrations/microsoft-mail/start?workspace_id=${encodeURIComponent(bridge.workspace.id)}&return_to=${encodeURIComponent(returnTo())}`);}
   async function disconnectGmail(){if(!bridge.workspace)return {ok:false};const {response,payload}=await api(`/api/integrations/gmail/disconnect?workspace_id=${encodeURIComponent(bridge.workspace.id)}`,{method:'POST'});await refreshGmailStatus();return {ok:response.ok,...payload};}
   async function disconnectMicrosoftMail(){if(!bridge.workspace)return {ok:false};const {response,payload}=await api(`/api/integrations/microsoft-mail/disconnect?workspace_id=${encodeURIComponent(bridge.workspace.id)}`,{method:'POST'});await refreshMicrosoftMailStatus();return {ok:response.ok,...payload};}
-  async function sendGmail({domain,recipient,subject,body,idempotencyKey}){if(!bridge.workspace)return {ok:false,error:'No workspace selected'};const {response,payload}=await api(`/api/integrations/gmail/send?workspace_id=${encodeURIComponent(bridge.workspace.id)}`,{method:'POST',headers:{'Idempotency-Key':idempotencyKey},body:JSON.stringify({idempotency_key:idempotencyKey,domain,recipient,subject,body})});return {ok:response.ok,status:response.status,...payload};}
-  async function sendMicrosoftMail({domain,recipient,subject,body,idempotencyKey}){if(!bridge.workspace)return {ok:false,error:'No workspace selected'};const {response,payload}=await api(`/api/integrations/microsoft-mail/send?workspace_id=${encodeURIComponent(bridge.workspace.id)}`,{method:'POST',headers:{'Idempotency-Key':idempotencyKey},body:JSON.stringify({idempotency_key:idempotencyKey,domain,recipient,subject,body})});return {ok:response.ok,status:response.status,...payload};}
+  function mailPayload({domain,recipient,subject,body,idempotencyKey,textBody,htmlBody}){const payload={idempotency_key:idempotencyKey,domain,recipient,subject,body};if(typeof textBody==='string')payload.text_body=textBody;if(typeof htmlBody==='string')payload.html_body=htmlBody;return payload;}
+  async function sendGmail(input){if(!bridge.workspace)return {ok:false,error:'No workspace selected'};const {idempotencyKey}=input;const {response,payload}=await api(`/api/integrations/gmail/send?workspace_id=${encodeURIComponent(bridge.workspace.id)}`,{method:'POST',headers:{'Idempotency-Key':idempotencyKey},body:JSON.stringify(mailPayload(input))});return {ok:response.ok,status:response.status,...payload};}
+  async function sendMicrosoftMail(input){if(!bridge.workspace)return {ok:false,error:'No workspace selected'};const {idempotencyKey}=input;const {response,payload}=await api(`/api/integrations/microsoft-mail/send?workspace_id=${encodeURIComponent(bridge.workspace.id)}`,{method:'POST',headers:{'Idempotency-Key':idempotencyKey},body:JSON.stringify(mailPayload(input))});return {ok:response.ok,status:response.status,...payload};}
   async function syncReplies(){if(!bridge.workspace)return {ok:false,replies:[]};const {response,payload}=await api(`/api/integrations/gmail/sync?workspace_id=${encodeURIComponent(bridge.workspace.id)}`,{method:'POST'});return {ok:response.ok,status:response.status,replies:Array.isArray(payload.replies)?payload.replies:[],...payload};}
 
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
