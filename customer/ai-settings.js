@@ -75,7 +75,7 @@ function signInFromSettings(provider='google'){
   bridge()?.signIn?.(provider);
 }
 function authProvider(){
-  const value=localStorage.getItem('leadintel_auth_provider');
+  const value=bridge()?.authProvider||'';
   return value==='microsoft'||value==='google'?value:'';
 }
 function providerLabel(provider){return provider==='microsoft'?'Microsoft':'Google';}
