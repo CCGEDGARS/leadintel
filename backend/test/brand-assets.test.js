@@ -10,9 +10,10 @@ const {handleBrandAssetRoute,validateBrandAsset,replaceBrandAsset}=assetModule;
 const MiB=1024*1024;
 
 function png(width=3,height=2){
-  const bytes=new Uint8Array(24);
+  const bytes=new Uint8Array(45);
   bytes.set([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,0,0,0,13,0x49,0x48,0x44,0x52]);
   new DataView(bytes.buffer).setUint32(16,width);new DataView(bytes.buffer).setUint32(20,height);
+  bytes.set([8,6,0,0,0],24);bytes.set([0,0,0,0,0x49,0x45,0x4e,0x44,0,0,0,0],33);
   return bytes;
 }
 function jpeg(width=3,height=2){return Uint8Array.from([0xff,0xd8,0xff,0xc0,0,17,8,height>>8,height&255,width>>8,width&255,3,1,0x11,0,2,0x11,0,3,0x11,0,0xff,0xd9]);}
@@ -117,6 +118,12 @@ test('server-side import accepts a bounded public HTTP image and audits it',asyn
   const {env,token,workspaceId,DB}=await fixture();const originalFetch=globalThis.fetch;const calls=[];
   globalThis.fetch=async(url,options)=>{calls.push([String(url),options]);return new Response(jpeg(44,33),{status:200,headers:{'Content-Type':'image/jpeg','Content-Length':String(jpeg(44,33).length)}});};
   try{const response=await handleBrandAssetRoute(request(`/api/customer/brand-assets/import?workspace_id=${workspaceId}`,{method:'POST',token,headers:{'Content-Type':'application/json'},body:JSON.stringify({url:'https://cdn.example.test/logo.jpg',kind:'logo',alt_text:'Imported logo'})}),env,{});assert.equal(response.status,201);const {asset}=await response.json();assert.equal(asset.mimeType,'image/jpeg');assert.equal(asset.width,44);assert.equal(calls.length,1);assert.equal(calls[0][1].redirect,'manual');assert.ok(calls[0][1].signal instanceof AbortSignal);assert.equal(DB.audits.at(-1)[3],'brand_asset.imported');}finally{globalThis.fetch=originalFetch;}
+});
+
+test('an import timeout while reading image bytes returns a bounded gateway error',async()=>{
+  const {env,token,workspaceId}=await fixture();const originalFetch=globalThis.fetch;
+  globalThis.fetch=async()=>new Response(new ReadableStream({pull(controller){controller.error(new DOMException('Timed out','AbortError'));}}),{headers:{'Content-Type':'image/png'}});
+  try{const response=await handleBrandAssetRoute(request(`/api/customer/brand-assets/import?workspace_id=${workspaceId}`,{method:'POST',token,headers:{'Content-Type':'application/json'},body:JSON.stringify({url:'https://public.example/logo.png',kind:'logo'})}),env,{});assert.equal(response.status,504);}finally{globalThis.fetch=originalFetch;}
 });
 
 test('import blocks data, local, private, link-local, and unsafe redirect targets before fetching them',async()=>{
