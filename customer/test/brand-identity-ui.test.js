@@ -141,6 +141,70 @@ test('website extraction stores suggestions separately until a user applies one'
   assert.equal(changes.length, 1);
 });
 
+test('default extraction uses verified public evidence, rejects non-HTTPS, and returns no fabricated suggestions', async () => {
+  const UI = require('../brand-identity-ui.js');
+  await assert.rejects(
+    UI.extractWebsiteSuggestions('http://acme.example/', {}),
+    /valid HTTPS company website/i
+  );
+  assert.deepEqual(
+    await UI.extractWebsiteSuggestions('https://acme.example/', {scrapedSources: []}),
+    {}
+  );
+
+  const suggestions = await UI.extractWebsiteSuggestions('https://acme.example/', {
+    profile: {companyName: 'Acme Evidence Ltd'},
+    scrapedSources: [{
+      type: 'website',
+      status: 'ready',
+      url: 'https://acme.example/',
+      text: 'Contact our team on +371 20 000 000.',
+      logoUrl: 'https://acme.example/assets/logo.png'
+    }],
+    additionalLinks: ['https://www.linkedin.com/company/acme-evidence']
+  });
+  assert.deepEqual(suggestions, {
+    companyDisplayName: 'Acme Evidence Ltd',
+    website: 'https://acme.example/',
+    phone: '+371 20 000 000',
+    linkedinUrl: 'https://www.linkedin.com/company/acme-evidence',
+    logoUrl: 'https://acme.example/assets/logo.png'
+  });
+});
+
+test('logo evidence remains a suggestion until explicit approval imports a managed asset', async () => {
+  const UI = require('../brand-identity-ui.js');
+  const calls = [];
+  const managed = managedAsset('approved_logo');
+  const controller = UI.createController({
+    website: () => 'https://acme.example/',
+    publicEvidence: () => ({
+      profile: {companyName: 'Acme'},
+      scrapedSources: [{
+        type: 'website', status: 'ready', url: 'https://acme.example/', text: 'Acme',
+        logoUrl: 'https://acme.example/logo.png'
+      }]
+    }),
+    assetAdapter: {
+      upload: async () => managed,
+      import: async (kind, url) => { calls.push([kind, url]); return managed; },
+      delete: async () => {}
+    }
+  });
+
+  const suggestions = await controller.extractFromWebsite();
+  assert.equal(suggestions.logoUrl, 'https://acme.example/logo.png');
+  assert.equal(controller.identity().assets.logo, null);
+  assert.deepEqual(calls, []);
+
+  controller.applySuggestion('logoUrl');
+  assert.equal(controller.identity().assets.logo, null);
+  await controller.applyLogoSuggestion();
+  assert.deepEqual(calls, [['logo', 'https://acme.example/logo.png']]);
+  assert.equal(controller.identity().assets.logo.id, 'approved_logo');
+  assert.doesNotMatch(JSON.stringify(controller.identity()), /acme\.example\/logo\.png/);
+});
+
 test('failed asset replacement preserves the previous managed reference', async () => {
   const UI = require('../brand-identity-ui.js');
   const previous = managedAsset();
@@ -254,4 +318,36 @@ test('mobile stylesheet stacks controls and prevents preview page overflow', () 
   assert.match(css, /@media\s*\(max-width:\s*720px\)/);
   assert.match(css, /\.brand-identity-fields\s*\{[^}]*grid-template-columns:\s*1fr/s);
   assert.match(css, /\.brand-preview-frame\s*\{[^}]*max-width:\s*100%[^}]*overflow-x:\s*auto/s);
+});
+
+test('file selection uses focusable buttons and complete field error and tab semantics', () => {
+  const UIModel = require('../brand-identity.js');
+  const ids = {
+    companyDisplayName: 'brand-company-name', senderName: 'brand-sender-name',
+    senderTitle: 'brand-sender-title', website: 'brand-website', phone: 'brand-phone',
+    linkedinUrl: 'brand-linkedin', primaryColor: 'brand-primary-color-hex',
+    signatureText: 'brand-signature', legalFooter: 'brand-legal-footer', postalAddress: 'brand-postal-address'
+  };
+  for (const [field, id] of Object.entries(ids)) {
+    assert.match(html, new RegExp(`id="${id}"[^>]*maxlength="${UIModel.FIELD_LIMITS[field]}"[^>]*aria-describedby="${id}-error"[^>]*aria-invalid="false"`));
+    assert.match(html, new RegExp(`id="${id}-error"[^>]*data-brand-error="${field}"[^>]*aria-live="polite"`));
+  }
+  for (const kind of ['logo', 'headshot', 'banner']) {
+    assert.match(html, new RegExp(`<button[^>]*data-brand-file-trigger="${kind}"[^>]*>Upload or replace</button>`));
+    assert.doesNotMatch(html, new RegExp(`<label[^>]*for="brand-${kind}-input"[^>]*class="secondary-btn"`));
+  }
+  assert.match(html, /role="tablist"[^>]*aria-orientation="horizontal"/);
+  for (const tab of ['desktop', 'mobile', 'plain']) {
+    assert.match(html, new RegExp(`id="brand-preview-tab-${tab}"[^>]*role="tab"[^>]*aria-controls="brand-preview-frame"`));
+  }
+  assert.match(html, /id="brand-preview-frame"[^>]*role="tabpanel"[^>]*aria-labelledby="brand-preview-tab-desktop"/);
+});
+
+test('UI source hides stale preview, marks invalid fields, announces and focuses the first error', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'brand-identity-ui.js'), 'utf8');
+  assert.match(source, /function hidePreview\(/);
+  assert.match(source, /panel\.hidden\s*=\s*true/);
+  assert.match(source, /setAttribute\('aria-invalid',\s*'true'\)/);
+  assert.match(source, /firstInvalid.*\.focus\(\)/s);
+  assert.match(source, /brand-action-error/);
 });

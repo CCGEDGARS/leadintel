@@ -94,6 +94,34 @@ test('validate blocks a ready identity with missing sender fields or invalid opt
   });
 });
 
+test('model rejects oversized payload fields and constrains restored values to published limits', () => {
+  const limits = BrandIdentity.FIELD_LIMITS;
+  assert.deepEqual(limits, {
+    companyDisplayName: 160,
+    senderName: 120,
+    senderTitle: 160,
+    website: 2048,
+    phone: 32,
+    linkedinUrl: 2048,
+    primaryColor: 7,
+    signatureText: 2000,
+    legalFooter: 4000,
+    postalAddress: 1000
+  });
+
+  const oversized = {...readyIdentity};
+  for (const [field, limit] of Object.entries(limits)) oversized[field] = 'x'.repeat(limit + 4096);
+  const result = BrandIdentity.validate(oversized);
+  for (const [field, limit] of Object.entries(limits)) {
+    assert.match(result.errors[field], new RegExp(`maximum is ${limit} characters`, 'i'), field);
+  }
+
+  const restored = BrandIdentity.normalize(oversized);
+  for (const [field, limit] of Object.entries(limits)) {
+    assert.equal(restored[field].length, limit, field);
+  }
+});
+
 test('safeAssetReference keeps only approved metadata and rejects data, remote, and mismatched URLs', () => {
   const source = {
     id: 'logo_01',
