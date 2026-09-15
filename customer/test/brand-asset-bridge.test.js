@@ -100,7 +100,11 @@ test('importBrandAsset and deleteBrandAsset are workspace scoped and fail closed
   });
 
   assert.deepEqual(await bridge.importBrandAsset('logo', 'https://www.example.com/logo.png', {altText: 'Logo'}), imported);
-  assert.deepEqual(await bridge.deleteBrandAsset('logo', imported), {ok: true, status: 200, asset_id: imported.id});
+  const deletion = await bridge.deleteBrandAsset('logo', imported);
+  assert.equal(deletion.ok, true);
+  assert.equal(deletion.status, 200);
+  assert.equal(deletion.asset_id, imported.id);
+  assert.deepEqual(Object.keys(deletion).sort(), ['asset_id', 'ok', 'status']);
   assert.equal(calls[0].url, `${API}/api/customer/brand-assets/import?workspace_id=${WORKSPACE_ID}`);
   assert.deepEqual(JSON.parse(calls[0].options.body), {kind: 'logo', url: 'https://www.example.com/logo.png', alt_text: 'Logo'});
   assert.equal(calls[1].url, `${API}/api/customer/brand-assets/${imported.id}?workspace_id=${WORKSPACE_ID}`);
@@ -213,9 +217,14 @@ test('workspace reset clears displayed identity and reports best-effort asset cl
   assert.equal('brandIdentity' in localMain, false);
   const result = await sandbox.LeadIntelWorkspaceResetHygiene.afterWorkspaceSaved(WORKSPACE_ID);
   assert.deepEqual(deleted, [['logo', logo.id], ['banner', banner.id]]);
-  assert.deepEqual(result, {attempted: 2, deleted: 1, failed: 1});
+  assert.equal(result.attempted, 2);
+  assert.equal(result.deleted, 1);
+  assert.equal(result.failed, 1);
+  assert.deepEqual(Object.keys(result).sort(), ['attempted', 'deleted', 'failed']);
   assert.equal(events.at(-1).type, 'leadintel:brand-assets-reset-cleanup');
-  assert.deepEqual(events.at(-1).detail, result);
+  assert.equal(events.at(-1).detail.attempted, result.attempted);
+  assert.equal(events.at(-1).detail.deleted, result.deleted);
+  assert.equal(events.at(-1).detail.failed, result.failed);
   const pending = JSON.parse(localStorage.getItem(sandbox.LeadIntelWorkspaceResetHygiene.RESET_PENDING_KEY));
   assert.deepEqual(pending.assets, [{kind: 'banner', id: banner.id}]);
 });
