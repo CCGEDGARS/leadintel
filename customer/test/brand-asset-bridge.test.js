@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const BrandIdentityUI = require('../brand-identity-ui.js');
 
 const bridgeSource = fs.readFileSync(path.join(__dirname, '..', 'server-bridge.js'), 'utf8');
 const resetSource = fs.readFileSync(path.join(__dirname, '..', 'workspace-reset-hygiene.js'), 'utf8');
@@ -79,6 +80,12 @@ function assertAssetValue(actual, expected) {
   const keys = ['altText', 'height', 'id', 'mimeType', 'updatedAt', 'url', 'width'];
   assert.deepEqual(Object.keys(actual).sort(), keys);
   for (const key of keys) assert.equal(actual[key], expected[key], `asset ${key}`);
+}
+
+function deferred() {
+  let resolve;
+  const promise = new Promise(done => { resolve = done; });
+  return {promise, resolve};
 }
 
 test('uploadBrandAsset sends authenticated multipart data scoped to the selected workspace', async () => {
@@ -197,6 +204,154 @@ test('successful identity persistence retires the old object and queues observab
   assert.equal(retry.failed, 0);
   assert.equal(localStorage.getItem(CLEANUP_KEY), null);
   assert.equal(events.at(-1).type, 'leadintel:brand-asset-cleanup');
+});
+
+test('real UI and bridge chain has one persistence owner and adopts the committed Draft identity without another save', async () => {
+  const nextAsset = asset('o'.repeat(43));
+  const initialIdentity = {
+    status: 'ready',
+    revision: 3,
+    companyDisplayName: 'Acme',
+    senderName: 'Alex',
+    senderTitle: 'Director',
+    website: 'https://acme.example/',
+    phone: '',
+    linkedinUrl: '',
+    primaryColor: '#0f6557',
+    signatureText: 'Regards',
+    legalFooter: '',
+    postalAddress: '',
+    options: {includeLogo: true, includeHeadshot: false, includeBanner: false},
+    assets: {logo: null, headshot: null, banner: null},
+    updatedAt: '2026-09-15T20:00:00.000Z'
+  };
+  const puts = [];
+  const {bridge} = loadBridge(async (url, options) => {
+    if (url.includes('/brand-assets?')) return new Response(JSON.stringify({asset: nextAsset}), {status: 201});
+    if (url.includes('/customer/state')) {
+      puts.push(JSON.parse(options.body));
+      return new Response(JSON.stringify({version: 4}), {status: 200});
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  }, {leadintel_customer_v2_state: JSON.stringify({brandIdentity: initialIdentity})});
+  let uiPersistenceCalls = 0;
+  let adoptedIdentity = null;
+  const controller = BrandIdentityUI.createController({
+    identity: initialIdentity,
+    assetAdapter: BrandIdentityUI.createAssetAdapter({LeadIntelServerBridge: bridge}),
+    onChange(identity, detail) {
+      adoptedIdentity = identity;
+      if (detail?.persist !== false) uiPersistenceCalls++;
+    }
+  });
+
+  await controller.replaceAsset('logo', new Blob(['new'], {type: 'image/png'}));
+
+  assert.equal(puts.length, 1);
+  assert.equal(puts[0].payload.main.brandIdentity.status, 'draft');
+  assert.equal(puts[0].payload.main.brandIdentity.assets.logo.id, nextAsset.id);
+  assert.equal(controller.identity().assets.logo.id, nextAsset.id);
+  assert.equal(adoptedIdentity.assets.logo.id, nextAsset.id);
+  assert.equal(uiPersistenceCalls, 0);
+});
+
+test('workspace transaction queue prevents a failed stale replacement from restoring or deleting a later success', async () => {
+  const oldAsset = asset('p'.repeat(43));
+  const firstAsset = asset('q'.repeat(43));
+  const secondAsset = asset('r'.repeat(43));
+  const main = JSON.stringify({brandIdentity: {status: 'ready', assets: {logo: oldAsset}}});
+  const firstSaveStarted = deferred();
+  const releaseFirstSave = deferred();
+  const deleted = [];
+  let uploadCalls = 0;
+  let stateCalls = 0;
+  const {bridge, localStorage} = loadBridge(async (url) => {
+    if (url.includes('/brand-assets?')) {
+      uploadCalls++;
+      return new Response(JSON.stringify({asset: uploadCalls === 1 ? firstAsset : secondAsset}), {status: 201});
+    }
+    if (url.includes('/customer/state')) {
+      stateCalls++;
+      if (stateCalls === 1) {
+        firstSaveStarted.resolve();
+        await releaseFirstSave.promise;
+        return new Response(JSON.stringify({error: 'temporary save failure'}), {status: 503});
+      }
+      return new Response(JSON.stringify({version: 2}), {status: 200});
+    }
+    if (url.includes('/brand-assets/')) {
+      deleted.push(url);
+      return new Response(JSON.stringify({ok: true}), {status: 200});
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  }, {leadintel_customer_v2_state: main});
+
+  const first = bridge.uploadBrandAsset('logo', new Blob(['first'], {type: 'image/png'}));
+  await firstSaveStarted.promise;
+  const second = bridge.uploadBrandAsset('logo', new Blob(['second'], {type: 'image/png'}));
+  releaseFirstSave.resolve();
+  const results = await Promise.allSettled([first, second]);
+
+  assert.equal(results[0].status, 'rejected');
+  assert.equal(results[1].status, 'fulfilled');
+  assert.equal(JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).brandIdentity.assets.logo.id, secondAsset.id);
+  assert.equal(deleted.filter(url => url.includes(firstAsset.id)).length, 1);
+  assert.equal(deleted.filter(url => url.includes(oldAsset.id)).length, 1);
+  assert.equal(deleted.some(url => url.includes(secondAsset.id)), false);
+});
+
+test('post-upload local write failure restores prior metadata and cleans up the new object', async () => {
+  const oldAsset = asset('s'.repeat(43));
+  const nextAsset = asset('t'.repeat(43));
+  const main = JSON.stringify({brandIdentity: {status: 'ready', assets: {logo: oldAsset}}});
+  const deleted = [];
+  const {bridge, localStorage} = loadBridge(async (url) => {
+    if (url.includes('/brand-assets?')) return new Response(JSON.stringify({asset: nextAsset}), {status: 201});
+    if (url.includes('/brand-assets/')) {
+      deleted.push(url);
+      return new Response(JSON.stringify({ok: true}), {status: 200});
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  }, {leadintel_customer_v2_state: main});
+  const originalSetItem = localStorage.setItem.bind(localStorage);
+  let failNextMainWrite = true;
+  localStorage.setItem = (key, value) => {
+    if (key === 'leadintel_customer_v2_state' && failNextMainWrite) {
+      failNextMainWrite = false;
+      throw new Error('Quota exceeded');
+    }
+    return originalSetItem(key, value);
+  };
+
+  await assert.rejects(
+    () => bridge.uploadBrandAsset('logo', new Blob(['new'], {type: 'image/png'})),
+    /Quota exceeded/
+  );
+
+  assert.equal(localStorage.getItem('leadintel_customer_v2_state'), main);
+  assert.equal(deleted.length, 1);
+  assert.match(deleted[0], new RegExp(nextAsset.id));
+});
+
+test('asset removal persists an asset-less Draft identity before deleting and preserves the old asset when persistence fails', async () => {
+  const oldAsset = asset('u'.repeat(43));
+  const main = JSON.stringify({brandIdentity: {status: 'ready', assets: {logo: oldAsset}}});
+  const calls = [];
+  const {bridge, localStorage} = loadBridge(async (url, options) => {
+    calls.push({url, options});
+    if (url.includes('/customer/state')) return new Response(JSON.stringify({error: 'save unavailable'}), {status: 503});
+    if (url.includes('/brand-assets/')) return new Response(JSON.stringify({ok: true}), {status: 200});
+    throw new Error(`Unexpected request: ${url}`);
+  }, {leadintel_customer_v2_state: main});
+
+  await assert.rejects(() => bridge.deleteBrandAsset('logo', oldAsset), /save unavailable/i);
+
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].url, /\/api\/customer\/state\?/);
+  const persisted = JSON.parse(calls[0].options.body).payload.main.brandIdentity;
+  assert.equal(persisted.status, 'draft');
+  assert.equal(persisted.assets.logo, null);
+  assert.equal(localStorage.getItem('leadintel_customer_v2_state'), main);
 });
 
 test('mail senders map optional HTML and text bodies without changing legacy body', async () => {
