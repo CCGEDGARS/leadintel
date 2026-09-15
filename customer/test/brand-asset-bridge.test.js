@@ -613,6 +613,71 @@ test('reset generation cancels an in-flight import after empty reset cleanup has
   assert.deepEqual(deletedAssetIds, [importedAsset.id]);
 });
 
+test('reset cancels active and queued pre-reset uploads while allowing a post-reset upload', async () => {
+  const firstAsset = asset('G'.repeat(43));
+  const queuedAsset = asset('H'.repeat(43));
+  const postResetAsset = asset('I'.repeat(43));
+  const firstUploadStarted = deferred();
+  const releaseFirstUpload = deferred();
+  const statePayloads = [];
+  const deletedAssetIds = [];
+  let uploadCalls = 0;
+  const {bridge, localStorage, sandbox} = loadProductionComposition(async (url, options = {}) => {
+    const value = String(url);
+    if (value.includes('/brand-assets?')) {
+      uploadCalls++;
+      if (uploadCalls === 1) {
+        firstUploadStarted.resolve();
+        await releaseFirstUpload.promise;
+        return new Response(JSON.stringify({asset: firstAsset}), {status: 201});
+      }
+      return new Response(JSON.stringify({asset: uploadCalls === 2 ? queuedAsset : postResetAsset}), {status: 201});
+    }
+    if (value.includes('/customer/state')) {
+      statePayloads.push(JSON.parse(options.body));
+      return new Response(JSON.stringify({version: statePayloads.length, saved: true}), {status: 200});
+    }
+    if (value.includes('/brand-assets/')) {
+      deletedAssetIds.push(value.split('/brand-assets/')[1].split('?')[0]);
+      return new Response(JSON.stringify({ok: true}), {status: 200});
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  }, {
+    leadintel_customer_v2_workspace: WORKSPACE_ID,
+    leadintel_customer_v2_state: JSON.stringify({brandIdentity: {status: 'ready', senderName: 'Before reset', assets: {logo: null}}})
+  });
+  const button = {dataset: {resetArmed: 'true'}};
+  const event = {target: {closest(selector) { return selector === '#reset-workspace' ? button : null; }}};
+
+  const first = bridge.uploadBrandAsset('logo', new Blob(['first'], {type: 'image/png'}), {returnTransaction: true});
+  await firstUploadStarted.promise;
+  const queued = bridge.uploadBrandAsset('logo', new Blob(['queued'], {type: 'image/png'}), {returnTransaction: true});
+  sandbox.LeadIntelWorkspaceResetHygiene.handleResetClick(event);
+  sandbox.LeadIntelWorkspacePersistence.handleResetClick(event);
+  assert.equal((await bridge.saveNow()).saved, true);
+  await sandbox.LeadIntelWorkspaceResetHygiene.afterWorkspaceSaved(WORKSPACE_ID);
+  assert.equal(localStorage.getItem(sandbox.LeadIntelWorkspaceResetHygiene.ASSET_RESET_CLEANUP_KEY), null);
+
+  releaseFirstUpload.resolve();
+  const [firstResult, queuedResult] = await Promise.all([first, queued]);
+
+  assert.equal(firstResult.cancelled, true);
+  assert.equal(queuedResult.cancelled, true);
+  assert.equal(statePayloads.length, 1);
+  assert.equal(statePayloads[0].payload.main.brandIdentity ?? null, null);
+  assert.equal(JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).brandIdentity ?? null, null);
+  assert.deepEqual(deletedAssetIds.sort(), [firstAsset.id, queuedAsset.id].sort());
+  assert.equal(localStorage.getItem(CLEANUP_KEY), null);
+
+  const postResetResult = await bridge.uploadBrandAsset('logo', new Blob(['post-reset'], {type: 'image/png'}), {returnTransaction: true});
+
+  assert.equal(postResetResult.cancelled, undefined);
+  assert.equal(postResetResult.asset.id, postResetAsset.id);
+  assert.equal(statePayloads.length, 2);
+  assert.equal(statePayloads[1].payload.main.brandIdentity.assets.logo.id, postResetAsset.id);
+  assert.equal(JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).brandIdentity.assets.logo.id, postResetAsset.id);
+});
+
 test('overlapping asset and explicit saves retain per-operation intent and send the latest edit in a second PUT', async () => {
   const nextAsset = asset('8'.repeat(43));
   const firstPutStarted = deferred();
