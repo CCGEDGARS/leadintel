@@ -7,7 +7,12 @@
     "deploy": "wrangler deploy",
     "db:local": "wrangler d1 migrations apply leadintel --local",
     "db:remote": "wrangler d1 migrations apply leadintel --remote",
-    "test": "node --test test/*.test.js test/*.test.mjs"
+    "test": "node --import ./test/register-wasm-loader.mjs --test test/*.test.js test/*.test.mjs"
+  },
+  "dependencies": {
+    "@jsquash/jpeg": "1.6.0",
+    "@jsquash/png": "3.1.1",
+    "@jsquash/webp": "1.5.0"
   },
   "devDependencies": {
     "wrangler": "4.125.0"

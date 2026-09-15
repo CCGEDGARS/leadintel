@@ -1,4 +1,5 @@
 import {cookieValue,randomToken,sha256} from './security.js';
+import {decodeImage} from './image-decoders.js';
 
 const PUBLIC_ASSET_ORIGIN='https://leadintel-api.edgars-7e7.workers.dev';
 const ASSET_PATH='/api/customer/brand-assets';
@@ -342,6 +343,29 @@ function imageInfo(bytes){
   return pngInfo(bytes)||jpegInfo(bytes)||webpInfo(bytes);
 }
 
+async function fullyDecodedInfo(bytes,containerInfo){
+  let decoded;
+  try{
+    decoded=await decodeImage(bytes,containerInfo.mimeType);
+  }catch{
+    return null;
+  }
+
+  const width=Number(decoded?.width);
+  const height=Number(decoded?.height);
+  const expectedPixels=width*height*4;
+  if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)||width<1||height<1){
+    return null;
+  }
+  if(width!==containerInfo.width||height!==containerInfo.height){
+    return null;
+  }
+  if(decoded?.data?.byteLength!==expectedPixels){
+    return null;
+  }
+  return containerInfo;
+}
+
 export async function validateBrandAsset(file,kind){
   const {limit}=limitForKind(kind);
   const mimeType=normalizeMime(file?.type);
@@ -372,7 +396,11 @@ export async function validateBrandAsset(file,kind){
   if(info.width>MAX_DIMENSION||info.height>MAX_DIMENSION){
     throw new BrandAssetError('Brand asset dimensions must be between 1 and 6000 pixels');
   }
-  return {...info,size,bytes};
+  const decodedInfo=await fullyDecodedInfo(bytes,info);
+  if(!decodedInfo){
+    throw new BrandAssetError('Brand asset could not be fully decoded');
+  }
+  return {...decodedInfo,size,bytes};
 }
 
 function parsedAssetId(assetId){
@@ -459,11 +487,6 @@ async function createAsset(env,{workspaceId,validated,kind,altText,eventType,use
   const id=randomToken(32);
   const key=brandAssetObjectKey(id);
   const bucket=requireBinding(env);
-  await bucket.put(key,validated.bytes,{
-    httpMetadata:{contentType:validated.mimeType},
-    customMetadata:{workspaceId:String(workspaceId)}
-  });
-
   const asset={
     id,
     url:`${PUBLIC_ASSET_ORIGIN}${ASSET_PATH}/${id}`,
@@ -485,6 +508,10 @@ async function createAsset(env,{workspaceId,validated,kind,altText,eventType,use
       width:validated.width,
       height:validated.height
     }
+  });
+  await bucket.put(key,validated.bytes,{
+    httpMetadata:{contentType:validated.mimeType},
+    customMetadata:{workspaceId:String(workspaceId)}
   });
   return asset;
 }
@@ -728,9 +755,13 @@ async function serveAsset(assetId,env,cors){
   if(bytes.byteLength>MAX_STORED_BYTES){
     return error('Brand asset not found',404,cors);
   }
-  const info=imageInfo(bytes);
+  const containerInfo=imageInfo(bytes);
   const storedType=normalizeMime(object.httpMetadata?.contentType);
-  if(!info||!IMAGE_TYPES.has(info.mimeType)||(storedType&&storedType!==info.mimeType)||info.width>MAX_DIMENSION||info.height>MAX_DIMENSION){
+  if(!containerInfo||!IMAGE_TYPES.has(containerInfo.mimeType)||(storedType&&storedType!==containerInfo.mimeType)||containerInfo.width>MAX_DIMENSION||containerInfo.height>MAX_DIMENSION){
+    return error('Brand asset not found',404,cors);
+  }
+  const info=await fullyDecodedInfo(bytes,containerInfo);
+  if(!info){
     return error('Brand asset not found',404,cors);
   }
   return new Response(bytes,{
@@ -774,7 +805,7 @@ export async function handleBrandAssetRoute(request,env,cors={}){
         validated,
         kind:String(body.kind).toLowerCase(),
         altText:body.alt_text,
-        eventType:'brand_asset.imported',
+        eventType:'brand_asset.import_authorized',
         userId:access.user.id
       });
       return json({asset},201,cors);
@@ -800,7 +831,7 @@ export async function handleBrandAssetRoute(request,env,cors={}){
         validated,
         kind,
         altText:form.get('alt_text'),
-        eventType:'brand_asset.uploaded',
+        eventType:'brand_asset.upload_authorized',
         userId:access.user.id
       });
       return json({asset},201,cors);
