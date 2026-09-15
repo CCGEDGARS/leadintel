@@ -129,9 +129,15 @@ test('normalization restores a branded approved package from source plus snapsho
 
 test('outreach UI snapshots Step 1 identity, preserves edit detection and invalidates approval on regeneration',()=>{
   const source=fs.readFileSync(path.join(__dirname,'..','outreach-ui.js'),'utf8');
+  const discovery=fs.readFileSync(path.join(__dirname,'..','discovery-ui.js'),'utf8');
+  const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
   assert.match(source,/approveOutreachItem\(source,edited\.drafts,[\s\S]*brandIdentity:mainState\(\)\.brandIdentity/);
   assert.match(source,/regenerateDrafts\(\)[\s\S]*invalidateOutreachApproval\(current\)/);
   assert.match(source,/renderApprovedEmail\(item\)/);
   assert.match(source,/buildApprovedSendPayload\(item\)/);
   assert.doesNotMatch(source,/\.sendGmail\(|\.sendMicrosoftMail\(/,'Task 5 must not create an automatic delivery path');
+  assert.match(discovery,/const OUTREACH_ASSET_VERSION="20260916-brand-outreach-v1";/);
+  assert.match(discovery,/outreach-engine\.js\?v=\$\{OUTREACH_ASSET_VERSION\}/);
+  assert.match(discovery,/outreach-ui\.js\?v=\$\{OUTREACH_ASSET_VERSION\}/);
+  assert.match(html,/discovery-ui\.js\?v=20260916-brand-outreach-v1/);
 });
