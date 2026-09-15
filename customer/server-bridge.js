@@ -2,7 +2,7 @@
   'use strict';
   if(root.LeadIntelServerBridge)return;
   const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
-  const ASSET_VERSION='20260916-brand-assets-v1';
+  const ASSET_VERSION='20260916-brand-assets-v2';
   const asset=path=>`${path}?v=${ASSET_VERSION}`;
   const KEYS={main:'leadintel_customer_v2_state',discovery:'leadintel_customer_v2_discovery',outreach:'leadintel_customer_v2_outreach',delivery:'leadintel_customer_v2_delivery',meta:'leadintel_customer_v2_discovery_meta'};
   const WORKSPACE_KEY='leadintel_customer_v2_workspace';
@@ -17,7 +17,7 @@
   const BRAND_ASSET_ID=/^[A-Za-z0-9_-]{43}$/;
   const BRAND_ASSET_URL_PREFIX=`${API_BASE}/api/customer/brand-assets/`;
   const BRAND_IDENTITY_STRING_FIELDS=['companyDisplayName','senderName','senderTitle','website','phone','linkedinUrl','primaryColor','signatureText','legalFooter','postalAddress','updatedAt'];
-  let saveTimer=null;let suppress=false;let initialized=false;
+  let saveTimer=null;let suppress=false;let initialized=false;const brandAssetTransactions=new Map();
   const bridge={session:null,authProvider:localStorage.getItem(AUTH_PROVIDER_KEY)||'',workspaces:[],workspace:null,stateVersion:0,gmail:{configured:false,connected:false,email:'',role:''},microsoftMail:{configured:false,connected:false,email:'',role:''},status:'local',conflict:false,conflictState:null,saveNow,refreshGmailStatus,refreshMicrosoftMailStatus,syncReplies,sendGmail,sendMicrosoftMail,connectGmail,connectMicrosoftMail,disconnectGmail,disconnectMicrosoftMail,uploadBrandAsset,importBrandAsset,deleteBrandAsset,flushBrandAssetCleanup,signIn,signOut,selectWorkspace,resolveConflictKeepLocal,resolveConflictUseServer,listCrmCompanies,getCrmCompany,saveCrmCompany,addCrmToPipeline,removeCrmFromPipeline,archiveCrmCompany,restoreCrmCompany,suppressCrmCompany,markCrmCustomer,saveCrmContacts,enrichCrmContact,recordCrmActivity,deleteCrmCompany,migrateLocalPipeline,switchProvider};
   root.LeadIntelServerBridge=bridge;
   if(!root.LeadIntelServer)root.LeadIntelServer=bridge;
@@ -115,6 +115,12 @@
   function readBrandAssetCleanup(){try{const value=JSON.parse(localStorage.getItem(BRAND_ASSET_CLEANUP_KEY)||'[]');return Array.isArray(value)?value:[];}catch{return [];}}
   function writeBrandAssetCleanup(value){if(value.length)localStorage.setItem(BRAND_ASSET_CLEANUP_KEY,JSON.stringify(value));else localStorage.removeItem(BRAND_ASSET_CLEANUP_KEY);}
   function queueBrandAssetCleanup({workspaceId,kind,id,reason}){const queue=readBrandAssetCleanup();if(!queue.some(item=>item.workspace_id===workspaceId&&item.id===id))queue.push({workspace_id:workspaceId,kind,id,reason,queued_at:Date.now(),attempts:0});writeBrandAssetCleanup(queue);}
+  function runBrandAssetTransaction(context,operation){
+    const key=String(context.workspaceId),previous=brandAssetTransactions.get(key)||Promise.resolve();
+    const run=previous.catch(()=>{}).then(()=>operation());
+    const tracked=run.then(value=>{if(brandAssetTransactions.get(key)===tracked)brandAssetTransactions.delete(key);return value;},cause=>{if(brandAssetTransactions.get(key)===tracked)brandAssetTransactions.delete(key);throw cause;});
+    brandAssetTransactions.set(key,tracked);return tracked;
+  }
   async function deleteBrandAssetRequest(context,id){
     const {response,payload}=await api(`/api/customer/brand-assets/${encodeURIComponent(id)}?workspace_id=${encodeURIComponent(context.workspaceId)}`,{method:'DELETE'});
     if(!response.ok&&response.status!==404)throw assetError(response,payload,'Brand asset removal failed');
@@ -122,7 +128,7 @@
   }
   async function cleanupManagedAsset(context,asset,reason){
     if(!asset?.id||!BRAND_ASSET_ID.test(String(asset.id)))return {deleted:true,queued:false};
-    try{await deleteBrandAssetRequest(context,String(asset.id));return {deleted:true,queued:false};}
+    try{const result=await deleteBrandAssetRequest(context,String(asset.id));return {deleted:true,queued:false,result};}
     catch(error){queueBrandAssetCleanup({workspaceId:context.workspaceId,kind:context.kind,id:String(asset.id),reason});return {deleted:false,queued:true,error};}
   }
   async function flushBrandAssetCleanup(){
@@ -138,46 +144,72 @@
     writeBrandAssetCleanup(remaining);const detail={attempted,deleted,failed};emitBrandAssetEvent('leadintel:brand-asset-cleanup',detail);return detail;
   }
   function writeMainRaw(value){suppress=true;try{if(value===null)localStorage.removeItem(KEYS.main);else localStorage.setItem(KEYS.main,value);}finally{suppress=false;}}
-  async function commitBrandAssetReplacement(context,nextAsset){
-    const safeNext=safeBrandAsset(nextAsset);if(!safeNext)throw new Error('Brand asset upload returned an invalid managed asset');
-    const previousRaw=localStorage.getItem(KEYS.main),previousMain=parse(KEYS.main),previousIdentity=safeBrandIdentity(previousMain.brandIdentity)||safeBrandIdentity({}),previousAsset=safeBrandAsset(previousIdentity.assets?.[context.kind]);
-    const nextIdentity={...previousIdentity,assets:{...previousIdentity.assets,[context.kind]:safeNext}};
-    writeMainRaw(JSON.stringify({...previousMain,brandIdentity:nextIdentity}));
+  function requestedBrandIdentity(value,current,kind,asset){const requested=safeBrandIdentity(value)||current;return {...requested,status:'draft',assets:{...current.assets,[kind]:asset}};}
+  function assetTransactionResult(options,asset,identity,cleanup){return options?.returnTransaction?{asset,identity,cleanupQueued:Boolean(cleanup?.queued)}:asset;}
+  function restoreMainRaw(previousRaw){try{writeMainRaw(previousRaw);return true;}catch(cause){emitBrandAssetEvent('leadintel:brand-asset-restore-failed',{message:String(cause?.message||cause)});return false;}}
+  async function commitBrandAssetReplacement(context,nextAsset,options={}){
+    let previousRaw=null,previousAsset=null,safeNext=null,nextIdentity=null,previousCaptured=false;
     try{
+      previousRaw=localStorage.getItem(KEYS.main);previousCaptured=true;
+      const previousMain=parse(KEYS.main),previousIdentity=safeBrandIdentity(previousMain.brandIdentity)||safeBrandIdentity({});
+      previousAsset=safeBrandAsset(previousIdentity.assets?.[context.kind]);
+      safeNext=safeBrandAsset(nextAsset);
+      if(!safeNext)throw new Error('Brand asset upload returned an invalid managed asset');
+      nextIdentity=requestedBrandIdentity(options.identity,previousIdentity,context.kind,safeNext);
+      writeMainRaw(JSON.stringify({...previousMain,brandIdentity:nextIdentity}));
       const saved=await saveNow();
       if(!saved?.saved)throw new Error(saved?.conflict?'Workspace save conflict':'Workspace save failed');
     }catch(cause){
-      writeMainRaw(previousRaw);
-      const rollback=await cleanupManagedAsset(context,safeNext,'rollback');
+      if(previousCaptured)restoreMainRaw(previousRaw);
+      const rollback=await cleanupManagedAsset(context,safeNext||nextAsset,safeNext?'rollback':'invalid-response');
       emitBrandAssetEvent('leadintel:brand-asset-transaction',{workspaceId:context.workspaceId,kind:context.kind,committed:false,rollbackDeleted:rollback.deleted,cleanupQueued:rollback.queued});
       throw cause;
     }
     let retired={deleted:true,queued:false};
     if(previousAsset?.id&&previousAsset.id!==safeNext.id)retired=await cleanupManagedAsset(context,previousAsset,'replacement');
     emitBrandAssetEvent('leadintel:brand-asset-transaction',{workspaceId:context.workspaceId,kind:context.kind,committed:true,rollbackDeleted:false,cleanupQueued:retired.queued});
-    return safeNext;
+    return assetTransactionResult(options,safeNext,nextIdentity,retired);
   }
   async function uploadBrandAsset(kind,file,options={}){
     const context=brandAssetContext(kind);
     if(!file||typeof file!=='object')throw new TypeError('A brand image file is required');
-    const form=new FormData();form.append('kind',context.kind);form.append('file',file);
-    if(typeof options.altText==='string'&&options.altText.trim())form.append('alt_text',options.altText.trim());
-    const {response,payload}=await api(`/api/customer/brand-assets?workspace_id=${encodeURIComponent(context.workspaceId)}`,{method:'POST',body:form});
-    if(!response.ok)throw assetError(response,payload,'Brand asset upload failed');
-    if(!payload?.asset)throw new Error('Brand asset upload returned no managed asset');
-    return commitBrandAssetReplacement(context,payload.asset);
+    return runBrandAssetTransaction(context,async()=>{
+      const form=new FormData();form.append('kind',context.kind);form.append('file',file);
+      if(typeof options.altText==='string'&&options.altText.trim())form.append('alt_text',options.altText.trim());
+      const {response,payload}=await api(`/api/customer/brand-assets?workspace_id=${encodeURIComponent(context.workspaceId)}`,{method:'POST',body:form});
+      if(!response.ok)throw assetError(response,payload,'Brand asset upload failed');
+      if(!payload?.asset)throw new Error('Brand asset upload returned no managed asset');
+      return commitBrandAssetReplacement(context,payload.asset,options);
+    });
   }
   async function importBrandAsset(kind,url,options={}){
     const context=brandAssetContext(kind);
-    const {response,payload}=await api(`/api/customer/brand-assets/import?workspace_id=${encodeURIComponent(context.workspaceId)}`,{method:'POST',body:JSON.stringify({kind:context.kind,url:String(url||''),alt_text:typeof options.altText==='string'?options.altText.trim():''})});
-    if(!response.ok)throw assetError(response,payload,'Brand asset import failed');
-    if(!payload?.asset)throw new Error('Brand asset import returned no managed asset');
-    return commitBrandAssetReplacement(context,payload.asset);
+    return runBrandAssetTransaction(context,async()=>{
+      const {response,payload}=await api(`/api/customer/brand-assets/import?workspace_id=${encodeURIComponent(context.workspaceId)}`,{method:'POST',body:JSON.stringify({kind:context.kind,url:String(url||''),alt_text:typeof options.altText==='string'?options.altText.trim():''})});
+      if(!response.ok)throw assetError(response,payload,'Brand asset import failed');
+      if(!payload?.asset)throw new Error('Brand asset import returned no managed asset');
+      return commitBrandAssetReplacement(context,payload.asset,options);
+    });
   }
-  async function deleteBrandAsset(kind,asset){
+  function removalResult(options,deleted,identity,cleanup){return options?.returnTransaction?{asset:null,identity,cleanupQueued:Boolean(cleanup?.queued)}:deleted;}
+  async function commitBrandAssetRemoval(context,asset,options={}){
+    const previousRaw=localStorage.getItem(KEYS.main),previousMain=parse(KEYS.main),previousIdentity=safeBrandIdentity(previousMain.brandIdentity)||safeBrandIdentity({});
+    const previousAsset=safeBrandAsset(previousIdentity.assets?.[context.kind])||safeBrandAsset(asset)||(BRAND_ASSET_ID.test(String(asset||''))?{id:String(asset)}:null);
+    if(!previousAsset)throw new TypeError('A valid managed brand asset is required');
+    const nextIdentity=requestedBrandIdentity(options.identity,previousIdentity,context.kind,null);
+    try{
+      writeMainRaw(JSON.stringify({...previousMain,brandIdentity:nextIdentity}));
+      const saved=await saveNow();
+      if(!saved?.saved)throw new Error(saved?.conflict?'Workspace save conflict':'Workspace save failed');
+    }catch(cause){restoreMainRaw(previousRaw);throw cause;}
+    const cleanup=await cleanupManagedAsset(context,previousAsset,'removal');
+    emitBrandAssetEvent('leadintel:brand-asset-transaction',{workspaceId:context.workspaceId,kind:context.kind,committed:true,removed:true,cleanupQueued:cleanup.queued});
+    return removalResult(options,cleanup.result||{ok:cleanup.deleted,status:cleanup.deleted?200:0,asset_id:previousAsset.id,queued:cleanup.queued},nextIdentity,cleanup);
+  }
+  async function deleteBrandAsset(kind,asset,options={}){
     const context=brandAssetContext(kind);const id=typeof asset==='string'?asset:String(asset?.id||'');
     if(!BRAND_ASSET_ID.test(id))throw new TypeError('A valid managed brand asset is required');
-    return deleteBrandAssetRequest(context,id);
+    return runBrandAssetTransaction(context,()=>commitBrandAssetRemoval(context,asset,options));
   }
   function crmPath(path=''){if(!bridge.workspace)throw new Error('No workspace selected');const join=path.includes('?')?'&':'?';return `/api/crm${path}${join}workspace_id=${encodeURIComponent(bridge.workspace.id)}`;}
   async function crmRequest(path,options={}){if(!bridge.session?.authenticated||!bridge.workspace)return {ok:false,status:401,error:'Sign in to use Master CRM'};const {response,payload}=await api(crmPath(path),options);if(!response.ok)return {ok:false,status:response.status,...payload};return {ok:true,status:response.status,...payload};}
