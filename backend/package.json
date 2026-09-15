@@ -7,7 +7,7 @@
     "deploy": "wrangler deploy",
     "db:local": "wrangler d1 migrations apply leadintel --local",
     "db:remote": "wrangler d1 migrations apply leadintel --remote",
-    "test": "node --test test/*.test.*"
+    "test": "node --test test/*.test.js test/*.test.mjs"
   },
   "devDependencies": {
     "wrangler": "4.125.0"

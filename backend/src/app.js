@@ -21,6 +21,10 @@ export default {
       try{return await handleApolloCrmWebhook(request,env,{});}catch(cause){console.error(cause);return new Response(JSON.stringify({error:'Internal server error'}),{status:500,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});}
     }
     const origin=allowedOrigin(request,env.APP_ORIGIN);const cors=corsHeaders(origin);
+    const publicBrandAsset=request.method==='GET'&&url.pathname.startsWith('/api/customer/brand-assets/')&&url.pathname!=='/api/customer/brand-assets/import';
+    if(publicBrandAsset){
+      try{return await handleBrandAssetRoute(request,env,cors);}catch(cause){console.error(cause);return new Response(JSON.stringify({error:'Internal server error'}),{status:500,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...cors}});}
+    }
     if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
     if(request.headers.get('Origin')&&!origin)return new Response(JSON.stringify({error:'Origin not allowed'}),{status:403,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...cors}});
     try{
