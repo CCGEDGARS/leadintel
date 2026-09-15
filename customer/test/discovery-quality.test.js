@@ -25,10 +25,86 @@ test("discovery requires at least one active buying signal",()=>{
   assert.equal(discovery.hasActiveSignals({signals:[{name:"Expansion",active:true}]}),true);
 });
 
-test("discovery does not classify a company as qualified without signal evidence",()=>{
+test("discovery withholds a company without signal evidence from the actionable shortlist",()=>{
   const results=discovery.mergeCompanyCandidates([{url:"https://generic.lv",domain:"generic.lv",title:"Generic office furniture",text:"Office furniture company in Latvia"}],{website:"https://ajprodukti.lv",priorityOffers:"Office furniture",idealCustomer:"Companies"},{researchSourceTypes:["news"],signals:[{name:"Facility expansion",active:true,weight:9,keywords:"new factory; expansion"}]});
+  assert.deepEqual(results,[]);
+});
+
+test("discovery rejects a target-market label copied onto a conflicting country domain",()=>{
+  const results=discovery.mergeCompanyCandidates([{
+    url:"https://metals.lv/news/expansion",domain:"metals.lv",company:"Metals",market:"Sweden",
+    title:"Metals expands production capacity",description:"The company is expanding production capacity for metal structures.",
+    text:"We offer metal fabrication and metal structures from Latvia and are expanding production capacity."
+  }],{
+    website:"https://ercon.lv",priorityOffers:"metal fabrication; metal structures",idealCustomer:"Swedish industrial companies"
+  },{
+    signals:[{id:"expansion",name:"Capacity expansion",active:true,weight:9,keywords:"expanding production capacity; new factory"}]
+  });
+  assert.deepEqual(results,[]);
+});
+
+test("discovery rejects a same-service seller even when its target-market domain and signal match",()=>{
+  const results=discovery.mergeCompanyCandidates([{
+    url:"https://swedishmetal.se/news/expansion",domain:"swedishmetal.se",company:"Swedish Metal",market:"Sweden",
+    title:"Swedish Metal expands capacity",description:"Swedish Metal is expanding production capacity.",
+    text:"We offer metal fabrication and metal structure manufacturing services. We are expanding production capacity in Sweden."
+  }],{
+    website:"https://ercon.lv",priorityOffers:"metal fabrication; metal structure manufacturing",idealCustomer:"Swedish industrial companies buying outsourced fabrication"
+  },{
+    signals:[{id:"expansion",name:"Capacity expansion",active:true,weight:9,keywords:"expanding production capacity; new factory"}]
+  });
+  assert.deepEqual(results,[]);
+});
+
+test("discovery keeps a verified target-market buyer with company-specific signal evidence",()=>{
+  const results=discovery.mergeCompanyCandidates([{
+    url:"https://nordicfood.se/news/new-factory",domain:"nordicfood.se",company:"Nordic Food AB",market:"Sweden",
+    title:"Nordic Food opens a new factory",description:"The Swedish food producer is increasing manufacturing capacity.",
+    text:"Nordic Food AB is opening a new factory in Sweden and expanding production capacity. The investment includes new production lines."
+  }],{
+    website:"https://ercon.lv",priorityOffers:"metal fabrication; metal structures",idealCustomer:"Swedish industrial and manufacturing companies"
+  },{
+    signals:[{id:"expansion",name:"Capacity expansion",active:true,weight:9,keywords:"expanding production capacity; new factory"}]
+  });
   assert.equal(results.length,1);
-  assert.equal(results[0].matchedSignals.length,0);
-  assert.equal(results[0].score.signal,0);
-  assert.equal(results[0].confidence,"Low");
+  assert.equal(results[0].domain,"nordicfood.se");
+  assert.equal(results[0].matchedSignals.length,1);
+});
+
+test("discovery searches a recognised target-country domain without repeating the seller offer",()=>{
+  const [query]=discovery.buildDiscoveryQueries({
+    website:"https://ercon.lv",targetMarkets:"Sweden",priorityOffers:"metal fabrication services",
+    idealCustomer:"industrial manufacturing companies",customerPainPoints:"capacity bottlenecks"
+  },{
+    signals:[{id:"expansion",name:"Capacity expansion",active:true,weight:9,keywords:"new factory; capacity expansion"}]
+  },1);
+  assert.match(query.query,/site:\.se/i);
+  assert.doesNotMatch(query.query,/metal fabrication services/i);
+});
+
+test("generic service page titles do not become company identities",()=>{
+  const [company]=discovery.normalizeCompanySearchResults({data:[{
+    url:"https://metals.lv/",
+    title:"Metāla konstrukcijas",
+    description:"Metāla konstrukciju izgatavošana un montāža Latvijā."
+  }]},{id:"q1",market:"Sweden",query:"buyers in Sweden"});
+  assert.equal(company.company,"Metals");
+});
+
+test("legacy unverified candidates are removed from a restored discovery shortlist",()=>{
+  const state=discovery.normalizeDiscoveryState({status:"complete",candidates:[{
+    company:"IDM Serviss",domain:"idm.lv",website:"https://idm.lv/",market:"Sweden",matchedSignals:[],
+    evidence:[{url:"https://idm.lv/",title:"IDM Serviss",description:"Steel manufacturer",text:""}]
+  }]});
+  assert.deepEqual(state.candidates,[]);
+});
+
+test("only fully qualified candidates are actionable",()=>{
+  const base={
+    company:"Nordic Food Group",domain:"nordicfood.se",website:"https://nordicfood.se/",
+    matchedSignals:[{id:"expansion",name:"Expansion"}],
+    evidence:[{url:"https://nordicfood.se/news",title:"New factory",description:"",text:""}]
+  };
+  assert.equal(discovery.isActionableCandidate(base),false);
+  assert.equal(discovery.isActionableCandidate({...base,qualified:true,marketVerified:true,buyerVerified:true}),true);
 });

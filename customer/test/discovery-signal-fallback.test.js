@@ -2,7 +2,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const Discovery=require('../discovery-engine.js');
 
-test('evidence-backed companies remain visible when exact signal terms are absent',()=>{
+test('companies without exact signal evidence are withheld from the actionable shortlist',()=>{
   const candidates=Discovery.mergeCompanyCandidates([
     {
       domain:'ergostock.lv',
@@ -30,8 +30,5 @@ test('evidence-backed companies remain visible when exact signal terms are absen
     opportunities:[]
   },10);
 
-  assert.equal(candidates.length,1);
-  assert.equal(candidates[0].matchedSignals.length,0);
-  assert.equal(candidates[0].score.signal,0);
-  assert.equal(candidates[0].domain,'ergostock.lv');
+  assert.deepEqual(candidates,[]);
 });

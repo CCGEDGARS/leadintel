@@ -16,6 +16,24 @@
   const MAX_DISCOVERY_TARGET=50;
   const DEFAULT_DISCOVERY_STATE=Object.freeze({status:"idle",queries:[],rawResults:[],candidates:[],pipeline:[],lastRunAt:""});
   const STOPWORDS=new Set(["with","from","that","this","your","their","into","over","under","company","companies","business","businesses","priority","market","markets","customer","customers","service","services","product","products","industrial"]);
+  const MARKET_RULES=[
+    {code:"se",suffixes:[".se"],aliases:["sweden","swedish","sverige","svenska"]},
+    {code:"fi",suffixes:[".fi"],aliases:["finland","finnish","suomi"]},
+    {code:"no",suffixes:[".no"],aliases:["norway","norwegian","norge","norsk"]},
+    {code:"dk",suffixes:[".dk"],aliases:["denmark","danish","danmark","dansk"]},
+    {code:"lv",suffixes:[".lv"],aliases:["latvia","latvian","latvija","latvijas"]},
+    {code:"ee",suffixes:[".ee"],aliases:["estonia","estonian","eesti"]},
+    {code:"lt",suffixes:[".lt"],aliases:["lithuania","lithuanian","lietuva"]},
+    {code:"de",suffixes:[".de"],aliases:["germany","german","deutschland","deutsche"]},
+    {code:"gb",suffixes:[".uk",".co.uk"],aliases:["united kingdom","britain","british","england","english"]},
+    {code:"nl",suffixes:[".nl"],aliases:["netherlands","dutch","nederland"]},
+    {code:"pl",suffixes:[".pl"],aliases:["poland","polish","polska"]},
+    {code:"fr",suffixes:[".fr"],aliases:["france","french","français"]},
+    {code:"es",suffixes:[".es"],aliases:["spain","spanish","españa"]},
+    {code:"it",suffixes:[".it"],aliases:["italy","italian","italia"]}
+  ];
+  const GENERIC_COMPANY_TITLES=/^(?:home|welcome|about us|official site|services?|products?|solutions?|met[aā]la konstrukcijas|steel structures?|metal fabrication)$/i;
+  const SELLER_LANGUAGE=/(?:\bwe (?:offer|provide|manufacture|produce|fabricate|supply)\b|\bour (?:services|products|solutions)\b|\bmanufacturer\b|\bsupplier\b|\bfabrication services?\b|\bm[eē]s (?:pied[aā]v[aā]jam|ra[zž]ojam|izgatavojam|pieg[aā]d[aā]jam)\b|\bm[uū]su (?:pakalpojumi|produkti|produkcija)\b|\bra[zž]ot[aā]js\b|\bpieg[aā]d[aā]t[aā]js\b|\bizgatavo[sš]ana\b|\bmont[aā][zž]a\b)/i;
   const ROLE_GENERIC_WORDS=new Set(["chief","officer","director","manager","managing","head","vice","president","vp","senior","lead","leader","executive","global","regional","group"]);
   const SENIORITY_SCORE={owner:45,founder:45,c_suite:40,partner:35,vp:32,head:30,director:25,manager:15,senior:8};
 
@@ -81,7 +99,7 @@
   }
   function companyFromTitle(title,domain){
     const first=clean(title).split(/\s+[|–—:]\s+|\s+-\s+/)[0];
-    if(first&&first.length<=90&&!/^(home|welcome|about us|official site)$/i.test(first))return first;
+    if(first&&first.length<=90&&!GENERIC_COMPANY_TITLES.test(first))return first;
     return displayFromDomain(domain);
   }
   function keywords(value){
@@ -91,6 +109,39 @@
   function marketScore(marketState,market){
     const opp=(marketState?.opportunities||[]).find(item=>item.active!==false&&clean(item.market).toLowerCase()===clean(market).toLowerCase());
     return clamp(opp?.score?.total,0,100,50);
+  }
+  function marketRule(value){
+    const normalized=clean(value).toLowerCase();
+    return MARKET_RULES.find(rule=>rule.aliases.some(alias=>normalized===alias||normalized.includes(alias)))||null;
+  }
+  function domainCountryRule(domain){
+    const normalized=clean(domain).toLowerCase();
+    return MARKET_RULES.find(rule=>rule.suffixes.some(suffix=>normalized.endsWith(suffix)))||null;
+  }
+  function marketSiteFilter(market){
+    const rule=marketRule(market);
+    return rule?`site:${rule.suffixes[0]}`:"";
+  }
+  function evidenceSupportsTargetMarket(candidate={}){
+    const requested=marketRule(candidate.market);
+    if(!requested)return !clean(candidate.market)||clean(candidate.market).toLowerCase()==="priority market"||evidenceText({
+      title:candidate.evidence?.map(item=>item.title).join(" "),
+      description:candidate.evidence?.map(item=>item.description).join(" "),
+      text:candidate.evidence?.map(item=>item.text).join(" ")
+    }).includes(clean(candidate.market).toLowerCase());
+    const actual=domainCountryRule(candidate.domain);
+    if(actual&&actual.code!==requested.code)return false;
+    if(actual&&actual.code===requested.code)return true;
+    const hay=(candidate.evidence||[]).map(evidenceText).join(" ");
+    return requested.aliases.some(alias=>hay.includes(alias));
+  }
+  function isSameServiceSeller(candidate={},profile={}){
+    const offerTerms=keywords(profile.priorityOffers).slice(0,20);
+    if(!offerTerms.length)return false;
+    const hay=(candidate.evidence||[]).map(evidenceText).join(" ");
+    const overlap=offerTerms.filter(term=>hay.includes(term)).length;
+    const needed=Math.min(2,offerTerms.length);
+    return overlap>=needed&&SELLER_LANGUAGE.test(hay);
   }
 
   function buildCandidateNarrative(candidate={},language='en'){
@@ -139,7 +190,7 @@
     for(const variant of queryVariants){
       for(const market of uniqueMarkets){
         if(results.length>=limit)break;
-        const query=[market,icpText,offer,painTerms,signalTerms,clean(profile.buyingTriggers),variant].filter(Boolean).join(" ");
+        const query=[market,icpText,painTerms,signalTerms,clean(profile.buyingTriggers),variant,marketSiteFilter(market)].filter(Boolean).join(" ");
         if(results.some(item=>item.query===query))continue;
         results.push({id:`discover-${slug(market)}-${results.length+1}`,market,query,offer});
       }
@@ -226,6 +277,9 @@
     return [...grouped.values()].map(candidate=>{
       candidate.evidence=candidate.evidence.slice(0,5);
       candidate.matchedSignals=matchedSignalsForEvidence(signals,candidate.evidence);
+      if(!candidate.matchedSignals.length)return null;
+      if(!evidenceSupportsTargetMarket(candidate))return null;
+      if(isSameServiceSeller(candidate,profile))return null;
       const score={
         fit:fitScore(candidate,profile,marketState),
         signal:signalScore(candidate.matchedSignals),
@@ -235,8 +289,8 @@
       };
       score.total=score.fit+score.signal+score.evidence+score.timing+score.value;
       const confidence=score.total>=75&&candidate.matchedSignals.length&&candidate.evidence.length>=1?"High":score.total>=50?"Medium":"Low";
-      return {...candidate,id:`company-${slug(candidate.domain)}`,score,confidence,people:[],peopleStatus:"idle",saved:false};
-    }).sort((a,b)=>{
+      return {...candidate,id:`company-${slug(candidate.domain)}`,score,confidence,qualified:true,marketVerified:true,buyerVerified:true,people:[],peopleStatus:"idle",saved:false};
+    }).filter(Boolean).sort((a,b)=>{
       const signalDelta=(b.matchedSignals?.length||0)-(a.matchedSignals?.length||0);
       return signalDelta||b.score.total-a.score.total;
     }).slice(0,candidateLimit);
@@ -303,8 +357,15 @@
       id:clean(candidate.id)||`company-${slug(domain||candidate.company)}`,company:clean(candidate.company)||displayFromDomain(domain),domain,website,
       market:clean(candidate.market),score:candidate.score&&typeof candidate.score==="object"?candidate.score:{total:0},confidence:["High","Medium","Low"].includes(candidate.confidence)?candidate.confidence:"Low",
       matchedSignals:(Array.isArray(candidate.matchedSignals)?candidate.matchedSignals:[]).slice(0,12),evidence:(Array.isArray(candidate.evidence)?candidate.evidence:[]).slice(0,5),
+      qualified:candidate.qualified===true,marketVerified:candidate.marketVerified===true,buyerVerified:candidate.buyerVerified===true,
       people,peopleStatus:["idle","loading","complete","empty","error"].includes(candidate.peopleStatus)?candidate.peopleStatus:"idle",saved:Boolean(candidate.saved)
     };
+  }
+
+  function isActionableCandidate(candidate={}){
+    return candidate.qualified===true&&candidate.marketVerified===true&&candidate.buyerVerified===true
+      &&Array.isArray(candidate.matchedSignals)&&candidate.matchedSignals.length>0
+      &&Array.isArray(candidate.evidence)&&candidate.evidence.length>0;
   }
 
   function upsertPipelineItem(pipeline=[],candidate={}){
@@ -337,7 +398,7 @@
       status:allowedStatus.has(input.status)?input.status:"idle",
       queries:(Array.isArray(input.queries)?input.queries:[]).slice(0,10).map(q=>({id:clean(q.id),market:clean(q.market),query:clean(q.query),offer:clean(q.offer)})).filter(q=>q.id&&q.query),
       rawResults:(Array.isArray(input.rawResults)?input.rawResults:[]).slice(0,20).map(normalizeRaw).filter(item=>item.url&&item.domain),
-      candidates:(Array.isArray(input.candidates)?input.candidates:[]).slice(0,12).map(safeCandidate).filter(item=>item.domain),
+      candidates:(Array.isArray(input.candidates)?input.candidates:[]).slice(0,12).map(safeCandidate).filter(item=>item.domain&&isActionableCandidate(item)),
       pipeline:(Array.isArray(input.pipeline)?input.pipeline:[]).slice(0,50).map(normalizePipelineItem).filter(item=>item.domain),
       lastRunAt:clean(input.lastRunAt)
     };
@@ -349,5 +410,5 @@
     return {...state,status:state.candidates.length||state.rawResults.length?"partial":"error"};
   }
 
-  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,discoveryLimits,buildDiscoveryQueries,buildCandidateNarrative,normalizeCompanySearchResults,mergeCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,recoverInterruptedDiscoveryState,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,hasActiveSignals};
+  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,discoveryLimits,buildDiscoveryQueries,buildCandidateNarrative,normalizeCompanySearchResults,mergeCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,recoverInterruptedDiscoveryState,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,hasActiveSignals,isActionableCandidate};
 });

@@ -38,7 +38,8 @@ test('buildDiscoveryQueries supports provisional website-only strategy and respe
   assert.ok(queries.length>0&&queries.length<=4);
   assert.equal(new Set(queries.map(x=>x.id)).size,queries.length);
   assert.ok(queries.some(x=>/Sweden/i.test(x.query)));
-  assert.ok(queries.some(x=>/industrial automation/i.test(x.query)));
+  assert.ok(queries.some(x=>x.offer==='industrial automation'),'seller offer remains metadata for scoring but not a search term');
+  assert.ok(queries.every(x=>!/industrial automation/i.test(x.query)),'seller offer must not bias discovery toward competitors');
   assert.ok(queries.some(x=>/downtime/i.test(x.query)),'pain-point terms must inform discovery research');
   assert.ok(queries.every(x=>x.market&&x.query));
   assert.deepEqual(Discovery.buildDiscoveryQueries({}, {}, 4),[],'discovery still needs a company website or profile context');
@@ -64,27 +65,21 @@ test('mergeCompanyCandidates deduplicates domains and builds transparent five-pa
     {queryId:'q3',market:'Finland',url:'https://finnfab.fi/',domain:'finnfab.fi',company:'FinnFab',title:'FinnFab manufacturing',description:'production systems',text:'manufacturing equipment',date:''}
   ];
   const candidates=Discovery.mergeCompanyCandidates(raw,profile,market);
-  assert.equal(candidates.length,2);
+  assert.equal(candidates.length,1);
   const nordic=candidates.find(x=>x.domain==='nordicmachines.se');
-  const finnFab=candidates.find(x=>x.domain==='finnfab.fi');
   assert.equal(nordic.evidence.length,2);
   assert.ok(nordic.matchedSignals.some(x=>x.id==='facility-expansion'));
   for(const key of ['fit','signal','evidence','timing','value'])assert.ok(nordic.score[key]>=0,`${key} missing`);
   assert.equal(nordic.score.total,nordic.score.fit+nordic.score.signal+nordic.score.evidence+nordic.score.timing+nordic.score.value);
   assert.ok(nordic.score.total<=100);
   assert.ok(['High','Medium','Low'].includes(nordic.confidence));
-  assert.equal(finnFab.matchedSignals.length,0);
-  assert.equal(finnFab.score.signal,0);
-  assert.equal(finnFab.confidence,'Low');
+  assert.equal(candidates.some(x=>x.domain==='finnfab.fi'),false,'zero-signal companies are not actionable candidates');
 });
 
 test('signal score only uses evidence text, not query metadata',()=>{
   const raw=[{queryId:'q1',market:'Sweden',query:'new facility capacity expansion',url:'https://plainco.se/',domain:'plainco.se',company:'PlainCo',title:'PlainCo',description:'manufacturer',text:'manufacturer serving industrial clients',date:''}];
   const candidates=Discovery.mergeCompanyCandidates(raw,profile,market);
-  assert.equal(candidates.length,1);
-  assert.deepEqual(candidates[0].matchedSignals,[]);
-  assert.equal(candidates[0].score.signal,0);
-  assert.equal(candidates[0].confidence,'Low');
+  assert.deepEqual(candidates,[],'query words alone cannot qualify a company without evidence');
 });
 
 test('buildApolloPeopleSearchPayload uses exact domain and approved roles with safe discovery depth',()=>{
