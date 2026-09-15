@@ -4,7 +4,7 @@ Status: COMPLETE.
 
 Starting branch head: `829c89b9c4516e313ec4e9441837209383dacbbc`
 
-Implementation head before this report commit: `d9b60554c5360f6f8c17f48537e0df5d167feeb0`
+Implementation head before this report commit: `1ce1c0edbe2dff4adcf9ffea74b5bc0585a8b4d0`
 
 ## Remote commits
 
@@ -20,6 +20,7 @@ Implementation head before this report commit: `d9b60554c5360f6f8c17f48537e0df5d
 10. `2447c7b012b5e9281ba347cfd536440d7d44319d` — outreach engine/UI loader cache refresh
 11. `3c4f2959c4ee0060350c4ab5aa21e1a203c98677` — discovery entry-point cache refresh
 12. `d9b60554c5360f6f8c17f48537e0df5d167feeb0` — independent-review fix for frozen manual delivery and plain automation handoff
+13. `1ce1c0edbe2dff4adcf9ffea74b5bc0585a8b4d0` — CRM sent activity uses the frozen approved subject
 
 ## Implemented
 
@@ -31,6 +32,8 @@ Implementation head before this report commit: `d9b60554c5360f6f8c17f48537e0df5d
 - Gmail Compose resolves its subject and text from `buildApprovedSendPayload`, not mutable drafts
 - explicit Gmail and Microsoft API requests resolve subject, text, and HTML from `buildApprovedSendPayload`, not mutable drafts
 - later mutation of `drafts` cannot change the approved preview or any explicit manual-send payload
+- CRM send confirmation derives its recorded subject from the same frozen approved payload, not mutable drafts
+- CRM activity ID, recipient, channel, timestamp, metadata, and pipeline behavior remain unchanged
 - automatic delivery handoff reads immutable `approvedSource` and receives no snapshot-rendered signature, legal footer, assets, or HTML
 - `buildApprovedSendPayload` exposes the same frozen subject, text fallback, and HTML used by preview and explicit manual delivery
 - later Step 1 identity changes cannot mutate an approved package
@@ -41,7 +44,7 @@ Implementation head before this report commit: `d9b60554c5360f6f8c17f48537e0df5d
 - arbitrary user-edited placeholder text is preserved
 - CRM stage/activity, recipient selection, idempotency inputs, and the separate human send action remain intact
 - no branded automatic-delivery path was enabled
-- the full outreach, delivery, mailbox, and automation-handoff loader chain uses `20260916-brand-outreach-v2`
+- the outreach and delivery cache chain uses `20260916-brand-outreach-v3`; the unchanged process-map and automation loader remain on v2
 
 ## Verification
 
@@ -59,6 +62,14 @@ Independent-review affected regression verification: 156 passed, 0 failed, 0 ski
 
 JavaScript syntax checks passed for all 9 changed JavaScript runtime/loader files.
 
+CRM-subject RED run: 8 passed and 1 failed because the delivery engine did not expose a snapshot-derived CRM activity builder.
+
+CRM-subject focused verification: 22 passed, 0 failed, 0 skipped, 0 cancelled.
+
+CRM-subject affected regression verification: 157 passed, 0 failed, 0 skipped, 0 cancelled.
+
+JavaScript syntax checks passed for all 4 runtime files changed by the CRM-subject fix.
+
 The relevant regression set covered Brand Identity, outreach, manual delivery, language switching, automation isolation, state budget, and customer structure.
 
 The broad all-customer command is not a valid gate in this partial checkout because unrelated `step2-readiness-engine.js` and reference-customer runtime files are absent. No Task 5 affected test depends on those missing fixtures.
@@ -66,6 +77,6 @@ The broad all-customer command is not a valid gate in this partial checkout beca
 ## Scope and concerns
 
 - Task 5 is complete with no blocker.
-- Safe HTML is frozen and exposed to delivery, but backend HTML validation/MIME and Microsoft Graph HTML transport intentionally remain Task 6.
 - Automatic Gmail delivery remains on its existing plain-text path and receives only immutable `approvedSource`, as required.
-- Task 5 cache-contract changes are committed. `main` and Task 6+ remain untouched.
+- Task 6 backend commit `4ebd4538f7a9bd4fb3eddcbb809693248741e62d` was preserved below the final Task 5 CRM fix without overlap or force push.
+- Task 5 cache-contract changes are committed. This fix did not modify `main` or any Task 6 backend file.
