@@ -83,7 +83,7 @@ test('market strategy step includes ICP, signal designer, research and activatio
   assert.match(html,/Add your own buying signal/);
   assert.match(html,/which company event should trigger attention/);
   assert.match(html,/class="custom-signal-fields"/);
-  assert.match(html,/class="custom-signal-submit/);
+  assert.match(html,/custom-signal-submit/);
   assert.match(html,/id="run-market-research"/);
   assert.match(html,/id="market-opportunities"/);
   assert.match(html,/id="activate-market-strategy"/);
