@@ -96,17 +96,17 @@
               <div class="brand-suggestions" id="brand-suggestions" aria-live="polite" hidden></div>
 
               <div class="brand-identity-fields">
-                <label for="brand-company-name"><span>Company display name</span><input id="brand-company-name" data-brand-field="companyDisplayName" type="text" autocomplete="organization" placeholder="Acme Manufacturing"><small data-brand-error="companyDisplayName"></small></label>
-                <label for="brand-sender-name"><span>Sender name</span><input id="brand-sender-name" data-brand-field="senderName" type="text" autocomplete="name" placeholder="Alex Morgan"><small data-brand-error="senderName"></small></label>
-                <label for="brand-sender-title"><span>Sender job title</span><input id="brand-sender-title" data-brand-field="senderTitle" type="text" autocomplete="organization-title" placeholder="Commercial Director"><small data-brand-error="senderTitle"></small></label>
-                <label for="brand-website"><span>Company website</span><input id="brand-website" data-brand-field="website" type="url" inputmode="url" autocomplete="url" placeholder="https://example.com"><small data-brand-error="website"></small></label>
-                <label for="brand-phone"><span>Phone number</span><input id="brand-phone" data-brand-field="phone" type="tel" autocomplete="tel" placeholder="+371 20 000 000"><small data-brand-error="phone"></small></label>
-                <label for="brand-linkedin"><span>LinkedIn URL</span><input id="brand-linkedin" data-brand-field="linkedinUrl" type="url" inputmode="url" placeholder="https://www.linkedin.com/company/example"><small data-brand-error="linkedinUrl"></small></label>
-                <label for="brand-primary-color" class="brand-colour-picker"><span>Primary brand colour</span><input id="brand-primary-color" type="color" value="#0f6557"></label>
-                <label for="brand-primary-color-hex"><span>Primary colour hex value</span><input id="brand-primary-color-hex" data-brand-field="primaryColor" type="text" inputmode="text" maxlength="7" placeholder="#0f6557"><small data-brand-error="primaryColor"></small></label>
-                <label for="brand-signature" class="brand-field-wide"><span>Plain-text signature</span><textarea id="brand-signature" data-brand-field="signatureText" rows="3" placeholder="Kind regards,"></textarea><small data-brand-error="signatureText"></small></label>
-                <label for="brand-legal-footer" class="brand-field-wide"><span>Legal or footer text</span><textarea id="brand-legal-footer" data-brand-field="legalFooter" rows="2" placeholder="Optional registration or confidentiality text"></textarea><small data-brand-error="legalFooter"></small></label>
-                <label for="brand-postal-address" class="brand-field-wide"><span>Postal address</span><textarea id="brand-postal-address" data-brand-field="postalAddress" rows="2" autocomplete="street-address" placeholder="Street, city, postal code, country"></textarea><small data-brand-error="postalAddress"></small></label>
+                <label for="brand-company-name"><span>Company display name</span><input id="brand-company-name" maxlength="160" aria-describedby="brand-company-name-error" aria-invalid="false" data-brand-field="companyDisplayName" type="text" autocomplete="organization" placeholder="Acme Manufacturing"><small id="brand-company-name-error" data-brand-error="companyDisplayName" aria-live="polite"></small></label>
+                <label for="brand-sender-name"><span>Sender name</span><input id="brand-sender-name" maxlength="120" aria-describedby="brand-sender-name-error" aria-invalid="false" data-brand-field="senderName" type="text" autocomplete="name" placeholder="Alex Morgan"><small id="brand-sender-name-error" data-brand-error="senderName" aria-live="polite"></small></label>
+                <label for="brand-sender-title"><span>Sender job title</span><input id="brand-sender-title" maxlength="160" aria-describedby="brand-sender-title-error" aria-invalid="false" data-brand-field="senderTitle" type="text" autocomplete="organization-title" placeholder="Commercial Director"><small id="brand-sender-title-error" data-brand-error="senderTitle" aria-live="polite"></small></label>
+                <label for="brand-website"><span>Company website</span><input id="brand-website" maxlength="2048" aria-describedby="brand-website-error" aria-invalid="false" data-brand-field="website" type="url" inputmode="url" autocomplete="url" placeholder="https://example.com"><small id="brand-website-error" data-brand-error="website" aria-live="polite"></small></label>
+                <label for="brand-phone"><span>Phone number</span><input id="brand-phone" maxlength="32" aria-describedby="brand-phone-error" aria-invalid="false" data-brand-field="phone" type="tel" autocomplete="tel" placeholder="+371 20 000 000"><small id="brand-phone-error" data-brand-error="phone" aria-live="polite"></small></label>
+                <label for="brand-linkedin"><span>LinkedIn URL</span><input id="brand-linkedin" maxlength="2048" aria-describedby="brand-linkedin-error" aria-invalid="false" data-brand-field="linkedinUrl" type="url" inputmode="url" placeholder="https://www.linkedin.com/company/example"><small id="brand-linkedin-error" data-brand-error="linkedinUrl" aria-live="polite"></small></label>
+                <label for="brand-primary-color" class="brand-colour-picker"><span>Primary brand colour</span><input id="brand-primary-color" type="color" value="#0f6557" aria-describedby="brand-primary-color-hex-error"></label>
+                <label for="brand-primary-color-hex"><span>Primary colour hex value</span><input id="brand-primary-color-hex" maxlength="7" aria-describedby="brand-primary-color-hex-error" aria-invalid="false" data-brand-field="primaryColor" type="text" inputmode="text" placeholder="#0f6557"><small id="brand-primary-color-hex-error" data-brand-error="primaryColor" aria-live="polite"></small></label>
+                <label for="brand-signature" class="brand-field-wide"><span>Plain-text signature</span><textarea id="brand-signature" maxlength="2000" aria-describedby="brand-signature-error" aria-invalid="false" data-brand-field="signatureText" rows="3" placeholder="Kind regards,"></textarea><small id="brand-signature-error" data-brand-error="signatureText" aria-live="polite"></small></label>
+                <label for="brand-legal-footer" class="brand-field-wide"><span>Legal or footer text</span><textarea id="brand-legal-footer" maxlength="4000" aria-describedby="brand-legal-footer-error" aria-invalid="false" data-brand-field="legalFooter" rows="2" placeholder="Optional registration or confidentiality text"></textarea><small id="brand-legal-footer-error" data-brand-error="legalFooter" aria-live="polite"></small></label>
+                <label for="brand-postal-address" class="brand-field-wide"><span>Postal address</span><textarea id="brand-postal-address" maxlength="1000" aria-describedby="brand-postal-address-error" aria-invalid="false" data-brand-field="postalAddress" rows="2" autocomplete="street-address" placeholder="Street, city, postal code, country"></textarea><small id="brand-postal-address-error" data-brand-error="postalAddress" aria-live="polite"></small></label>
               </div>
 
               <fieldset class="brand-assets">
@@ -114,28 +114,28 @@
                 <p>PNG, JPEG or WebP. Only secure managed image references are saved—never image bytes.</p>
                 <div class="brand-asset-grid">
                   <article class="brand-asset-card">
-                    <label for="brand-logo-input"><span>Logo</span><small>Recommended for every branded email.</small></label>
+                    <label for="brand-logo-input"><span>Logo</span><small id="brand-logo-help">Recommended for every branded email.</small></label>
                     <div class="brand-asset-current" id="brand-logo-current"><span>No image uploaded</span></div>
-                    <input id="brand-logo-input" type="file" accept="image/png,image/jpeg,image/webp" hidden>
-                    <div class="brand-asset-actions"><label class="secondary-btn" for="brand-logo-input">Upload or replace</label><button class="text-btn" id="brand-logo-remove" type="button" hidden>Remove</button></div>
+                    <input class="brand-file-input" id="brand-logo-input" type="file" accept="image/png,image/jpeg,image/webp" aria-describedby="brand-logo-help brand-logo-error" tabindex="-1">
+                    <div class="brand-asset-actions"><button class="secondary-btn" type="button" data-brand-file-trigger="logo" aria-controls="brand-logo-input">Upload or replace</button><button class="text-btn" id="brand-logo-remove" type="button" hidden>Remove</button></div>
                     <label class="brand-option" for="brand-include-logo"><input id="brand-include-logo" type="checkbox" data-brand-option="includeLogo" checked> Include logo</label>
-                    <small data-brand-error="assets.logo"></small>
+                    <small id="brand-logo-error" data-brand-error="assets.logo" aria-live="polite"></small>
                   </article>
                   <article class="brand-asset-card">
-                    <label for="brand-headshot-input"><span>Sender headshot</span><small>Optional personal profile image.</small></label>
+                    <label for="brand-headshot-input"><span>Sender headshot</span><small id="brand-headshot-help">Optional personal profile image.</small></label>
                     <div class="brand-asset-current" id="brand-headshot-current"><span>No image uploaded</span></div>
-                    <input id="brand-headshot-input" type="file" accept="image/png,image/jpeg,image/webp" hidden>
-                    <div class="brand-asset-actions"><label class="secondary-btn" for="brand-headshot-input">Upload or replace</label><button class="text-btn" id="brand-headshot-remove" type="button" hidden>Remove</button></div>
+                    <input class="brand-file-input" id="brand-headshot-input" type="file" accept="image/png,image/jpeg,image/webp" aria-describedby="brand-headshot-help brand-headshot-error" tabindex="-1">
+                    <div class="brand-asset-actions"><button class="secondary-btn" type="button" data-brand-file-trigger="headshot" aria-controls="brand-headshot-input">Upload or replace</button><button class="text-btn" id="brand-headshot-remove" type="button" hidden>Remove</button></div>
                     <label class="brand-option" for="brand-include-headshot"><input id="brand-include-headshot" type="checkbox" data-brand-option="includeHeadshot"> Include headshot</label>
-                    <small data-brand-error="assets.headshot"></small>
+                    <small id="brand-headshot-error" data-brand-error="assets.headshot" aria-live="polite"></small>
                   </article>
                   <article class="brand-asset-card">
-                    <label for="brand-banner-input"><span>Promotional banner</span><small>Optional campaign image; disabled by default.</small></label>
+                    <label for="brand-banner-input"><span>Promotional banner</span><small id="brand-banner-help">Optional campaign image; disabled by default.</small></label>
                     <div class="brand-asset-current" id="brand-banner-current"><span>No image uploaded</span></div>
-                    <input id="brand-banner-input" type="file" accept="image/png,image/jpeg,image/webp" hidden>
-                    <div class="brand-asset-actions"><label class="secondary-btn" for="brand-banner-input">Upload or replace</label><button class="text-btn" id="brand-banner-remove" type="button" hidden>Remove</button></div>
+                    <input class="brand-file-input" id="brand-banner-input" type="file" accept="image/png,image/jpeg,image/webp" aria-describedby="brand-banner-help brand-banner-error" tabindex="-1">
+                    <div class="brand-asset-actions"><button class="secondary-btn" type="button" data-brand-file-trigger="banner" aria-controls="brand-banner-input">Upload or replace</button><button class="text-btn" id="brand-banner-remove" type="button" hidden>Remove</button></div>
                     <label class="brand-option" for="brand-include-banner"><input id="brand-include-banner" type="checkbox" data-brand-option="includeBanner"> Include banner</label>
-                    <small data-brand-error="assets.banner"></small>
+                    <small id="brand-banner-error" data-brand-error="assets.banner" aria-live="polite"></small>
                   </article>
                 </div>
               </fieldset>
@@ -147,13 +147,13 @@
               <p class="inline-error brand-action-message" id="brand-action-error" role="status" aria-live="polite"></p>
               <section class="brand-preview-panel" id="brand-preview-panel" hidden aria-labelledby="brand-preview-title">
                 <div class="brand-preview-head"><div><span class="eyebrow">Email preview</span><h4 id="brand-preview-title">Review your identity</h4></div>
-                  <div class="brand-preview-tabs" role="tablist" aria-label="Preview size">
-                    <button type="button" role="tab" data-brand-preview-tab="desktop" aria-selected="true" tabindex="0">Desktop</button>
-                    <button type="button" role="tab" data-brand-preview-tab="mobile" aria-selected="false" tabindex="-1">Mobile</button>
-                    <button type="button" role="tab" data-brand-preview-tab="plain" aria-selected="false" tabindex="-1">Plain text</button>
+                  <div class="brand-preview-tabs" role="tablist" aria-orientation="horizontal" aria-label="Preview size">
+                    <button id="brand-preview-tab-desktop" role="tab" aria-controls="brand-preview-frame" type="button" data-brand-preview-tab="desktop" aria-selected="true" tabindex="0">Desktop</button>
+                    <button id="brand-preview-tab-mobile" role="tab" aria-controls="brand-preview-frame" type="button" data-brand-preview-tab="mobile" aria-selected="false" tabindex="-1">Mobile</button>
+                    <button id="brand-preview-tab-plain" role="tab" aria-controls="brand-preview-frame" type="button" data-brand-preview-tab="plain" aria-selected="false" tabindex="-1">Plain text</button>
                   </div>
                 </div>
-                <div class="brand-preview-frame" id="brand-preview-frame"></div>
+                <div class="brand-preview-frame" id="brand-preview-frame" role="tabpanel" aria-labelledby="brand-preview-tab-desktop" tabindex="0"></div>
               </section>
             </div>
           </section>
