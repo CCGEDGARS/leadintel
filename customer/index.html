@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="market-selector.css?v=20260826-target-market-v1">
   <link rel="stylesheet" href="compact-sources.css?v=20260826-compact-sources-v1">
   <link rel="stylesheet" href="evidence-sources.css?v=20260906-evidence-v1">
+  <link rel="stylesheet" href="brand-identity.css?v=20260915-brand-identity-v1">
 </head>
 <body>
   <div class="page-shell">
@@ -75,6 +76,87 @@
             <div class="url-row"><span>https://</span><input id="company-website" type="text" inputmode="url" autocomplete="url" placeholder="yourcompany.com"></div>
             <p class="field-help">LeadIntel will scan the public website and use it as evidence—not as the final truth.</p>
           </div>
+
+          <section class="panel brand-identity-panel" id="brand-identity" aria-labelledby="brand-identity-title">
+            <div class="brand-identity-summary">
+              <div class="brand-identity-intro">
+                <span class="eyebrow">Optional · email personalization</span>
+                <h3 id="brand-identity-title">Brand &amp; Email Identity</h3>
+                <p>Add your logo and sender details so outreach emails look consistent and personal.</p>
+                <span class="brand-identity-status" id="brand-identity-status">Not configured</span>
+              </div>
+              <button class="secondary-btn brand-identity-toggle" id="brand-identity-toggle" type="button" aria-expanded="false" aria-controls="brand-identity-body"><span id="brand-identity-cta">Set up email identity</span><span aria-hidden="true">↓</span></button>
+            </div>
+
+            <div class="brand-identity-body" id="brand-identity-body" hidden>
+              <div class="brand-identity-toolbar">
+                <div><strong>Build your reusable email identity</strong><small>Saved details will be available for future outreach. This optional section never blocks company research.</small></div>
+                <button class="secondary-btn" id="brand-extract" type="button">Extract from website</button>
+              </div>
+              <div class="brand-suggestions" id="brand-suggestions" aria-live="polite" hidden></div>
+
+              <div class="brand-identity-fields">
+                <label for="brand-company-name"><span>Company display name</span><input id="brand-company-name" data-brand-field="companyDisplayName" type="text" autocomplete="organization" placeholder="Acme Manufacturing"><small data-brand-error="companyDisplayName"></small></label>
+                <label for="brand-sender-name"><span>Sender name</span><input id="brand-sender-name" data-brand-field="senderName" type="text" autocomplete="name" placeholder="Alex Morgan"><small data-brand-error="senderName"></small></label>
+                <label for="brand-sender-title"><span>Sender job title</span><input id="brand-sender-title" data-brand-field="senderTitle" type="text" autocomplete="organization-title" placeholder="Commercial Director"><small data-brand-error="senderTitle"></small></label>
+                <label for="brand-website"><span>Company website</span><input id="brand-website" data-brand-field="website" type="url" inputmode="url" autocomplete="url" placeholder="https://example.com"><small data-brand-error="website"></small></label>
+                <label for="brand-phone"><span>Phone number</span><input id="brand-phone" data-brand-field="phone" type="tel" autocomplete="tel" placeholder="+371 20 000 000"><small data-brand-error="phone"></small></label>
+                <label for="brand-linkedin"><span>LinkedIn URL</span><input id="brand-linkedin" data-brand-field="linkedinUrl" type="url" inputmode="url" placeholder="https://www.linkedin.com/company/example"><small data-brand-error="linkedinUrl"></small></label>
+                <label for="brand-primary-color" class="brand-colour-picker"><span>Primary brand colour</span><input id="brand-primary-color" type="color" value="#0f6557"></label>
+                <label for="brand-primary-color-hex"><span>Primary colour hex value</span><input id="brand-primary-color-hex" data-brand-field="primaryColor" type="text" inputmode="text" maxlength="7" placeholder="#0f6557"><small data-brand-error="primaryColor"></small></label>
+                <label for="brand-signature" class="brand-field-wide"><span>Plain-text signature</span><textarea id="brand-signature" data-brand-field="signatureText" rows="3" placeholder="Kind regards,"></textarea><small data-brand-error="signatureText"></small></label>
+                <label for="brand-legal-footer" class="brand-field-wide"><span>Legal or footer text</span><textarea id="brand-legal-footer" data-brand-field="legalFooter" rows="2" placeholder="Optional registration or confidentiality text"></textarea><small data-brand-error="legalFooter"></small></label>
+                <label for="brand-postal-address" class="brand-field-wide"><span>Postal address</span><textarea id="brand-postal-address" data-brand-field="postalAddress" rows="2" autocomplete="street-address" placeholder="Street, city, postal code, country"></textarea><small data-brand-error="postalAddress"></small></label>
+              </div>
+
+              <fieldset class="brand-assets">
+                <legend>Email images</legend>
+                <p>PNG, JPEG or WebP. Only secure managed image references are saved—never image bytes.</p>
+                <div class="brand-asset-grid">
+                  <article class="brand-asset-card">
+                    <label for="brand-logo-input"><span>Logo</span><small>Recommended for every branded email.</small></label>
+                    <div class="brand-asset-current" id="brand-logo-current"><span>No image uploaded</span></div>
+                    <input id="brand-logo-input" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+                    <div class="brand-asset-actions"><label class="secondary-btn" for="brand-logo-input">Upload or replace</label><button class="text-btn" id="brand-logo-remove" type="button" hidden>Remove</button></div>
+                    <label class="brand-option" for="brand-include-logo"><input id="brand-include-logo" type="checkbox" data-brand-option="includeLogo" checked> Include logo</label>
+                    <small data-brand-error="assets.logo"></small>
+                  </article>
+                  <article class="brand-asset-card">
+                    <label for="brand-headshot-input"><span>Sender headshot</span><small>Optional personal profile image.</small></label>
+                    <div class="brand-asset-current" id="brand-headshot-current"><span>No image uploaded</span></div>
+                    <input id="brand-headshot-input" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+                    <div class="brand-asset-actions"><label class="secondary-btn" for="brand-headshot-input">Upload or replace</label><button class="text-btn" id="brand-headshot-remove" type="button" hidden>Remove</button></div>
+                    <label class="brand-option" for="brand-include-headshot"><input id="brand-include-headshot" type="checkbox" data-brand-option="includeHeadshot"> Include headshot</label>
+                    <small data-brand-error="assets.headshot"></small>
+                  </article>
+                  <article class="brand-asset-card">
+                    <label for="brand-banner-input"><span>Promotional banner</span><small>Optional campaign image; disabled by default.</small></label>
+                    <div class="brand-asset-current" id="brand-banner-current"><span>No image uploaded</span></div>
+                    <input id="brand-banner-input" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+                    <div class="brand-asset-actions"><label class="secondary-btn" for="brand-banner-input">Upload or replace</label><button class="text-btn" id="brand-banner-remove" type="button" hidden>Remove</button></div>
+                    <label class="brand-option" for="brand-include-banner"><input id="brand-include-banner" type="checkbox" data-brand-option="includeBanner"> Include banner</label>
+                    <small data-brand-error="assets.banner"></small>
+                  </article>
+                </div>
+              </fieldset>
+
+              <div class="brand-preview-actions">
+                <button class="secondary-btn" id="brand-preview" type="button">Preview email</button>
+                <button class="primary-btn" id="brand-save" type="button">Save brand identity</button>
+              </div>
+              <p class="inline-error brand-action-message" id="brand-action-error" role="status" aria-live="polite"></p>
+              <section class="brand-preview-panel" id="brand-preview-panel" hidden aria-labelledby="brand-preview-title">
+                <div class="brand-preview-head"><div><span class="eyebrow">Email preview</span><h4 id="brand-preview-title">Review your identity</h4></div>
+                  <div class="brand-preview-tabs" role="tablist" aria-label="Preview size">
+                    <button type="button" role="tab" data-brand-preview-tab="desktop" aria-selected="true" tabindex="0">Desktop</button>
+                    <button type="button" role="tab" data-brand-preview-tab="mobile" aria-selected="false" tabindex="-1">Mobile</button>
+                    <button type="button" role="tab" data-brand-preview-tab="plain" aria-selected="false" tabindex="-1">Plain text</button>
+                  </div>
+                </div>
+                <div class="brand-preview-frame" id="brand-preview-frame"></div>
+              </section>
+            </div>
+          </section>
 
           <div class="panel source-panel target-market-panel" id="target-market-selector">
             <div class="panel-head"><div><span class="panel-number">02</span><div><h3>Where should LeadIntel find opportunities?</h3><p>Required · select one or more countries, regions or define a market manually.</p></div></div><span class="required-pill">Required</span></div>
@@ -317,7 +399,9 @@
   <script defer src="workspace-isolation.js?v=20260914-workspace-isolation-v1"></script>
   <script defer src="language.js?v=20260905-audit-v1"></script>
   <script defer src="server-bridge.js?v=20260915-mail-choice-v2" data-server-bridge="true"></script>
-  <script type="module" src="app.js?v=20260915-research-source-text-v1"></script>
+  <script defer src="brand-identity.js?v=20260915-brand-identity-v1"></script>
+  <script defer src="brand-identity-ui.js?v=20260915-brand-identity-v1"></script>
+  <script type="module" src="app.js?v=20260915-brand-identity-v1"></script>
   <script type="module" src="process-map.js?v=20260915-preferred-sources-v1"></script>
   <script defer src="discovery-ui.js?v=20260915-evidence-link-v1"></script>
   <script type="module" src="company-research-ui.js?v=20260915-step2-research-state-v1"></script>
