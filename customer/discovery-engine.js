@@ -239,6 +239,8 @@
       if(!url)return null;
       const domain=canonicalDomain(url);
       if(!domain||isBlockedDomain(domain))return null;
+      const verifiedDomain=canonicalDomain(queryMeta.domain||"");
+      if(queryMeta.kind==="verification"&&verifiedDomain&&domain!==verifiedDomain&&!domain.endsWith(`.${verifiedDomain}`))return null;
       const description=clean(item?.description||item?.snippet||"");
       const text=cleanEvidenceText(item?.markdown||item?.content||item?.text||description).slice(0,7000);
       return {
