@@ -181,6 +181,7 @@
     const button=event?.target?.closest?.("#reset-workspace");
     if(!button||button.dataset.resetArmed!=="true")return false;
     const bridge=root.LeadIntelServerBridge;
+    bridge?.invalidateBrandAssetTransactions?.(bridge.workspace?.id||root.localStorage?.getItem(WORKSPACE_KEY)||"");
     recordResetIntent(referencedBrandAssets());
     clearLocalBrandIdentity();
     clearBrowserWorkspaceResidue();
