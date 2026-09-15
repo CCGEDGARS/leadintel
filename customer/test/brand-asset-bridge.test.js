@@ -678,6 +678,56 @@ test('reset cancels active and queued pre-reset uploads while allowing a post-re
   assert.equal(JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).brandIdentity.assets.logo.id, postResetAsset.id);
 });
 
+test('reset cancels a queued pre-reset removal without recreating identity', async () => {
+  const oldAsset = asset('J'.repeat(43));
+  const uploadedAsset = asset('K'.repeat(43));
+  const uploadStarted = deferred();
+  const releaseUpload = deferred();
+  const statePayloads = [];
+  const deletedAssetIds = [];
+  const {bridge, localStorage, sandbox} = loadProductionComposition(async (url, options = {}) => {
+    const value = String(url);
+    if (value.includes('/brand-assets?')) {
+      uploadStarted.resolve();
+      await releaseUpload.promise;
+      return new Response(JSON.stringify({asset: uploadedAsset}), {status: 201});
+    }
+    if (value.includes('/customer/state')) {
+      statePayloads.push(JSON.parse(options.body));
+      return new Response(JSON.stringify({version: statePayloads.length, saved: true}), {status: 200});
+    }
+    if (value.includes('/brand-assets/')) {
+      deletedAssetIds.push(value.split('/brand-assets/')[1].split('?')[0]);
+      return new Response(JSON.stringify({ok: true}), {status: 200});
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  }, {
+    leadintel_customer_v2_workspace: WORKSPACE_ID,
+    leadintel_customer_v2_state: JSON.stringify({brandIdentity: {status: 'ready', assets: {logo: oldAsset}}})
+  });
+  const button = {dataset: {resetArmed: 'true'}};
+  const event = {target: {closest(selector) { return selector === '#reset-workspace' ? button : null; }}};
+
+  const uploading = bridge.uploadBrandAsset('banner', new Blob(['new'], {type: 'image/png'}), {returnTransaction: true});
+  await uploadStarted.promise;
+  const removing = bridge.deleteBrandAsset('logo', oldAsset, {returnTransaction: true});
+  sandbox.LeadIntelWorkspaceResetHygiene.handleResetClick(event);
+  sandbox.LeadIntelWorkspacePersistence.handleResetClick(event);
+  assert.equal((await bridge.saveNow()).saved, true);
+
+  releaseUpload.resolve();
+  const [uploadResult, removalResult] = await Promise.all([uploading, removing]);
+  await sandbox.LeadIntelWorkspaceResetHygiene.afterWorkspaceSaved(WORKSPACE_ID);
+
+  assert.equal(uploadResult.cancelled, true);
+  assert.equal(removalResult.cancelled, true);
+  assert.equal(removalResult.reset, true);
+  assert.equal(statePayloads.length, 1);
+  assert.equal(JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).brandIdentity ?? null, null);
+  assert.deepEqual(deletedAssetIds.sort(), [oldAsset.id, uploadedAsset.id].sort());
+  assert.equal(localStorage.getItem(sandbox.LeadIntelWorkspaceResetHygiene.ASSET_RESET_CLEANUP_KEY), null);
+});
+
 test('overlapping asset and explicit saves retain per-operation intent and send the latest edit in a second PUT', async () => {
   const nextAsset = asset('8'.repeat(43));
   const firstPutStarted = deferred();
