@@ -82,7 +82,7 @@ jobs:
           retention-days: 3
       - name: Check JavaScript syntax
         run: |
-          node --check backend/src/customer-state.js
+          node --check proxy.js\n          node --check backend/src/customer-state.js
           node --check backend/src/crm.js
           node --check backend/src/crm-routes.js
           node --check customer/profile-engine.js
