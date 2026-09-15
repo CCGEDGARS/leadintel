@@ -3,7 +3,7 @@
 Status: COMPLETE.
 
 Starting branch head: `0b9c26988b4e7ef5d4267501ae1ca762040023fe`
-Implementation head before this report commit: `c6e4cf62dbb311d2f14ab8a2897359158ed22e32`
+Implementation head before this report commit: `52f9793c94d9b4e37466570cb886989502c4e794`
 
 ## Remote commits
 
@@ -18,6 +18,15 @@ Implementation head before this report commit: `c6e4cf62dbb311d2f14ab8a289735915
 9. `07a98d5d37a743ce0e72b0f34109508c83892daf` — Task 4 page cache keys
 10. `f34916d5f6a077a1ee85810fdf21dfdd39e11cc7` — hardened review contracts and serialization-safe VM assertions
 11. `64917708221ffdfca158a4a848b467e203e69aa0` — updated cache regression contract
+12. `e02696b5208d01d0e76e684c77b55be2a31b3e09` — RED tests for stale identity, state PUT races, cleanup storage failure, and reset accounting
+13. `c405e28dd769cb066be03d6b8abd2d8ea075b769` — latest-state asset mutations and shared per-workspace save serialization
+14. `20def51594451928150068af651e180c8bd1162f` — mutation-only UI-to-bridge asset intents
+15. `6f9e4b98e79b3b7ec0499c701b0d7fe41c103fb1` — distinct queued reset cleanup accounting
+16. `2898bf2e18f723e82fb3555d929a33f03a116673` — reviewed Task 4 process-map cache references
+17. `933fda458d01f5e59d692f9fd28df8c736f992f4` — reviewed Task 4 page cache references
+18. `4264f785c37657a988dfeea4f34c67ef17522e15` — final Task 4 state-coordination regression contracts
+19. `047e353ffb23906cdf57d0a21190b56aa88d39ac` — Brand Identity bundle regression update
+20. `52f9793c94d9b4e37466570cb886989502c4e794` — process-map bundle regression update
 
 ## Implemented
 
@@ -36,18 +45,21 @@ Implementation head before this report commit: `c6e4cf62dbb311d2f14ab8a289735915
 - reset captures managed asset references, clears local identity, retries cleanup, and emits an observable result
 - failed reset deletions remain pending for retry; unavailable deletion also emits a consistent cleanup event
 - upload, import, and delete encode reserved characters in workspace identifiers
-- `server-bridge.js`, `workspace-reset-hygiene.js`, `process-map.js`, the page entry point, and cache regression tests use `20260916-brand-assets-v2`
+- `server-bridge.js`, `workspace-reset-hygiene.js`, `brand-identity-ui.js`, `process-map.js`, the page entry point, and cache regression tests use `20260916-brand-assets-v3`
 
 ## Transaction re-review
 
-- the UI passes its desired Draft identity and explicit asset mutation to the bridge
-- the bridge is the single persistence owner and returns the committed identity; the UI adopts it without writing or saving again
-- upload, import, replacement, and removal transactions are serialized by workspace
+- the UI sends only an explicit asset mutation; it never supplies a full identity snapshot for the bridge to commit
+- inside the per-workspace lock, the bridge re-reads and normalizes the latest local identity, applies only the asset mutation plus Draft status, and persists that result
+- unrelated edits made while upload is in flight are preserved
+- every workspace state PUT, including autosave, manual save, asset replacement, and asset removal, uses one per-workspace save queue
+- asset transactions enter the save queue without the save path entering the asset queue, avoiding lock-order deadlocks while preserving conflict handling
+- upload, import, replacement, and removal transactions remain serialized by workspace
 - a failed earlier transaction cannot restore stale metadata over a later successful transaction
-- all post-upload processing, including the initial local write, is inside the rollback and cleanup boundary
-- local write failures restore prior metadata and clean up or queue the newly created object
+- cleanup retry-storage failure after a committed save is non-fatal: the committed identity is returned and adopted, and a warning event/result is emitted
 - removal persists an asset-less Draft identity before deleting the old managed object; failed persistence leaves the old metadata and object intact
-- Task 4 browser cache references now use `20260916-brand-assets-v2`
+- reset reports deleted, queued, and failed cleanup outcomes separately
+- Task 4 browser cache references now use `20260916-brand-assets-v3`
 
 ## Test evidence
 
@@ -57,7 +69,11 @@ Focused Task 4 + server bridge run: 23/23 passed.
 
 Relevant Brand Identity, production-mount, persistence-timeout, and cache regressions: 32/32 passed.
 
-Final re-review verification: 72 passed, 0 failed, 0 skipped, 0 cancelled.
+Latest review RED verification: 16/20 passed and 4/20 failed for exactly the four missing behaviors.
+
+Focused bridge and UI verification after implementation: 45 passed, 0 failed.
+
+Final related regression verification: 76 passed, 0 failed, 0 skipped, 0 cancelled.
 
 JavaScript syntax checks passed for the bridge, reset hygiene, Brand Identity UI, app integration, process map, and every modified regression test.
 
