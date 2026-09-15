@@ -12,7 +12,7 @@ const indexSource = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'u
 const processMapSource = fs.readFileSync(path.join(__dirname, '..', 'process-map.js'), 'utf8');
 const API = 'https://leadintel-api.edgars-7e7.workers.dev';
 const WORKSPACE_ID = 'workspace-1';
-const CACHE_VERSION = '20260916-brand-assets-v3';
+const CACHE_VERSION = '20260916-brand-assets-v4';
 const CLEANUP_KEY = 'leadintel_customer_v2_brand_asset_cleanup_v1';
 
 function storage(initial = {}) {
@@ -178,7 +178,9 @@ test('failed identity persistence rolls back the new object and preserves old me
 
   await assert.rejects(() => bridge.uploadBrandAsset('logo', new Blob(['new'], {type: 'image/png'})), /revision conflict|conflict/i);
 
-  assert.equal(localStorage.getItem('leadintel_customer_v2_state'), main);
+  const rolledBack = JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).brandIdentity;
+  assert.equal(rolledBack.status, 'draft');
+  assert.equal(rolledBack.assets.logo.id, oldAsset.id);
   assert.equal(calls.at(-1).url, `${API}/api/customer/brand-assets/${nextAsset.id}?workspace_id=${WORKSPACE_ID}`);
   assert.equal(localStorage.getItem(CLEANUP_KEY), null);
   const transaction = events.find(event => event.type === 'leadintel:brand-asset-transaction');
@@ -584,7 +586,9 @@ test('post-upload local write failure restores prior metadata and cleans up the 
     /Quota exceeded/
   );
 
-  assert.equal(localStorage.getItem('leadintel_customer_v2_state'), main);
+  const rolledBack = JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).brandIdentity;
+  assert.equal(rolledBack.status, 'draft');
+  assert.equal(rolledBack.assets.logo.id, oldAsset.id);
   assert.equal(deleted.length, 1);
   assert.match(deleted[0], new RegExp(nextAsset.id));
 });
@@ -719,6 +723,7 @@ test('customer cache references use the Task 4 bridge and reset version everywhe
   assert.match(indexSource, new RegExp(`server-bridge\\.js\\?v=${CACHE_VERSION}`));
   assert.match(processMapSource, new RegExp(`server-bridge\\.js\\?v=${CACHE_VERSION}`));
   assert.match(processMapSource, new RegExp(`workspace-reset-hygiene\\.js\\?v=${CACHE_VERSION}`));
+  assert.match(processMapSource, new RegExp(`workspace-persistence\\.js\\?v=${CACHE_VERSION}`));
   assert.doesNotMatch(indexSource, /server-bridge\.js\?v=20260915-mail-choice-v2/);
   assert.doesNotMatch(processMapSource, /(?:server-bridge|workspace-reset-hygiene)\.js\?v=(?:20260915-mail-choice-v2|20260909-emergency-reset-v1)/);
 });
@@ -819,7 +824,7 @@ test('workspace reset emits a cleanup result even when the delete bridge is unav
 
 test('workspace reset reports queued cleanup separately from deleted and failed assets', async () => {
   const logo = asset('1'.repeat(43));
-  const resetKey = 'leadintel_customer_v2_reset_pending_v1';
+  const resetKey = 'leadintel_customer_v2_brand_asset_reset_cleanup_v1';
   const localStorage = storage({
     leadintel_customer_v2_workspace: WORKSPACE_ID,
     [resetKey]: JSON.stringify({workspace_id: WORKSPACE_ID, assets: [{kind: 'logo', id: logo.id}]})
