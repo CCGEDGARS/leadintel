@@ -2,7 +2,7 @@
   'use strict';
   if(root.LeadIntelServerBridge)return;
   const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
-  const ASSET_VERSION='20260915-mail-choice-v2';
+  const ASSET_VERSION='20260916-brand-assets-v1';
   const asset=path=>`${path}?v=${ASSET_VERSION}`;
   const KEYS={main:'leadintel_customer_v2_state',discovery:'leadintel_customer_v2_discovery',outreach:'leadintel_customer_v2_outreach',delivery:'leadintel_customer_v2_delivery',meta:'leadintel_customer_v2_discovery_meta'};
   const WORKSPACE_KEY='leadintel_customer_v2_workspace';
@@ -12,32 +12,35 @@
   const DIRTY_KEY='leadintel_customer_v2_server_dirty';
   const VERSION_KEY='leadintel_customer_v2_server_versions';
   const CRM_MIGRATION_KEY='leadintel_customer_v2_crm_migrations';
+  const BRAND_ASSET_CLEANUP_KEY='leadintel_customer_v2_brand_asset_cleanup_v1';
   const BRAND_ASSET_KINDS=new Set(['logo','headshot','banner']);
   const BRAND_ASSET_ID=/^[A-Za-z0-9_-]{43}$/;
   const BRAND_ASSET_URL_PREFIX=`${API_BASE}/api/customer/brand-assets/`;
   const BRAND_IDENTITY_STRING_FIELDS=['companyDisplayName','senderName','senderTitle','website','phone','linkedinUrl','primaryColor','signatureText','legalFooter','postalAddress','updatedAt'];
   let saveTimer=null;let suppress=false;let initialized=false;
-  const bridge={session:null,authProvider:localStorage.getItem(AUTH_PROVIDER_KEY)||'',workspaces:[],workspace:null,stateVersion:0,gmail:{configured:false,connected:false,email:'',role:''},microsoftMail:{configured:false,connected:false,email:'',role:''},status:'local',conflict:false,conflictState:null,saveNow,refreshGmailStatus,refreshMicrosoftMailStatus,syncReplies,sendGmail,sendMicrosoftMail,connectGmail,connectMicrosoftMail,disconnectGmail,disconnectMicrosoftMail,uploadBrandAsset,importBrandAsset,deleteBrandAsset,signIn,signOut,selectWorkspace,resolveConflictKeepLocal,resolveConflictUseServer,listCrmCompanies,getCrmCompany,saveCrmCompany,addCrmToPipeline,removeCrmFromPipeline,archiveCrmCompany,restoreCrmCompany,suppressCrmCompany,markCrmCustomer,saveCrmContacts,enrichCrmContact,recordCrmActivity,deleteCrmCompany,migrateLocalPipeline,switchProvider};
+  const bridge={session:null,authProvider:localStorage.getItem(AUTH_PROVIDER_KEY)||'',workspaces:[],workspace:null,stateVersion:0,gmail:{configured:false,connected:false,email:'',role:''},microsoftMail:{configured:false,connected:false,email:'',role:''},status:'local',conflict:false,conflictState:null,saveNow,refreshGmailStatus,refreshMicrosoftMailStatus,syncReplies,sendGmail,sendMicrosoftMail,connectGmail,connectMicrosoftMail,disconnectGmail,disconnectMicrosoftMail,uploadBrandAsset,importBrandAsset,deleteBrandAsset,flushBrandAssetCleanup,signIn,signOut,selectWorkspace,resolveConflictKeepLocal,resolveConflictUseServer,listCrmCompanies,getCrmCompany,saveCrmCompany,addCrmToPipeline,removeCrmFromPipeline,archiveCrmCompany,restoreCrmCompany,suppressCrmCompany,markCrmCustomer,saveCrmContacts,enrichCrmContact,recordCrmActivity,deleteCrmCompany,migrateLocalPipeline,switchProvider};
   root.LeadIntelServerBridge=bridge;
   if(!root.LeadIntelServer)root.LeadIntelServer=bridge;
 
   function parse(key){try{return JSON.parse(localStorage.getItem(key)||'{}');}catch{return {};}}
+  function isDataImagePayload(value){return typeof value==='string'&&/^data[\u0000-\u0020]*:[\u0000-\u0020]*image(?:[\u0000-\u0020]*\/|[\u0000-\u0020]*[;,]|$)/i.test(value.trim());}
   function safeBrandAsset(value){
     const normalized=root.LeadIntelBrandIdentity?.safeAssetReference?.(value);
-    if(normalized)return normalized;
-    if(!value||typeof value!=='object'||Array.isArray(value)||!BRAND_ASSET_ID.test(String(value.id||'')))return null;
-    const id=String(value.id),url=String(value.url||''),mimeType=String(value.mimeType||'').toLowerCase();
+    const source=normalized||value;
+    if(!source||typeof source!=='object'||Array.isArray(source)||!BRAND_ASSET_ID.test(String(source.id||'')))return null;
+    const id=String(source.id),url=String(source.url||''),mimeType=String(source.mimeType||'').toLowerCase();
     if(url!==`${BRAND_ASSET_URL_PREFIX}${id}`||!['image/png','image/jpeg','image/webp'].includes(mimeType))return null;
-    if(!Number.isSafeInteger(value.width)||value.width<1||value.width>6000||!Number.isSafeInteger(value.height)||value.height<1||value.height>6000)return null;
-    if(typeof value.updatedAt!=='string'||!Number.isFinite(Date.parse(value.updatedAt)))return null;
-    return {id,url,mimeType,width:value.width,height:value.height,altText:typeof value.altText==='string'?value.altText.trim().slice(0,300):'',updatedAt:value.updatedAt};
+    if(!Number.isSafeInteger(source.width)||source.width<1||source.width>6000||!Number.isSafeInteger(source.height)||source.height<1||source.height>6000)return null;
+    if(typeof source.updatedAt!=='string'||!Number.isFinite(Date.parse(source.updatedAt)))return null;
+    const rawAlt=typeof value?.altText==='string'?value.altText:'';const altText=typeof source.altText==='string'&&!isDataImagePayload(rawAlt)&&!isDataImagePayload(source.altText)?source.altText.trim().slice(0,300):'';
+    return {id,url,mimeType,width:source.width,height:source.height,altText,updatedAt:source.updatedAt};
   }
   function safeBrandIdentity(value){
-    if(!value||typeof value!=='object'||Array.isArray(value))return value;
+    if(!value||typeof value!=='object'||Array.isArray(value))return null;
     const normalized=root.LeadIntelBrandIdentity?.normalize?.(value);
-    if(normalized)return normalized;
-    const output={schemaVersion:1,status:value.status==='ready'?'ready':'draft',revision:Number.isSafeInteger(value.revision)&&value.revision>0?value.revision:1};
-    for(const key of BRAND_IDENTITY_STRING_FIELDS)output[key]=typeof value[key]==='string'&&!value[key].trim().toLowerCase().startsWith('data:image/')?value[key].trim():'';
+    const source=normalized&&typeof normalized==='object'?normalized:value;
+    const output={schemaVersion:1,status:source.status==='ready'?'ready':'draft',revision:Number.isSafeInteger(source.revision)&&source.revision>0?source.revision:1};
+    for(const key of BRAND_IDENTITY_STRING_FIELDS){const raw=value[key],candidate=typeof source[key]==='string'?source[key].trim():'';output[key]=isDataImagePayload(raw)||isDataImagePayload(candidate)?'':candidate;}
     const options=value.options&&typeof value.options==='object'&&!Array.isArray(value.options)?value.options:{};
     output.options={includeLogo:options.includeLogo!==false,includeHeadshot:options.includeHeadshot===true,includeBanner:options.includeBanner===true};
     const assets=value.assets&&typeof value.assets==='object'&&!Array.isArray(value.assets)?value.assets:{};
@@ -88,7 +91,7 @@
   function enterConflict(state,message){bridge.conflict=true;bridge.conflictState=state&&typeof state==='object'?state:null;renderConflictActions();setStatus('Sync conflict · local changes preserved','error');showToast(message||'Server state changed in another session. Your local changes are still safe in this browser.');}
   async function hydrateAuthenticated(){const state=await fetchWorkspaceState();const marker=`${bridge.workspace.id}:${state.version}`;const dirty=readDirtyLocalState();if(hasDirtyLocalState()){if(!dirty.workspace_id&&Number(state.version)===0)rebaseDirtyLocalState();else if(Number(dirty.base_version)!==Number(state.version)){enterConflict(state,'LeadIntel preserved your local changes because the server workspace changed in another session.');return true;}setStatus('Unsynced changes · retrying','saving');scheduleSave();return true;}if(state.version>0&&sessionStorage.getItem(HYDRATION_KEY)!==marker){applyPayload(state.payload);clearDirtyLocalState();rememberServerVersion(bridge.workspace.id,state.version);sessionStorage.setItem(HYDRATION_KEY,marker);setStatus('Synced to LeadIntel','synced');location.reload();return false;}if(state.version===0&&hasLocalData()){markDirtyLocalState();setStatus('Unsynced changes · saving','saving');scheduleSave();return true;}rememberServerVersion(bridge.workspace.id,state.version);setStatus('Synced to LeadIntel','synced');return true;}
   async function init(){if(initialized)return;initialized=true;injectCss();injectAccountUi();patchStorage();const conflictNote=sessionStorage.getItem(CONFLICT_KEY);if(conflictNote){sessionStorage.removeItem(CONFLICT_KEY);showToast(conflictNote);}
-    try{await fetchSession();if(!bridge.session?.authenticated){setStatus('Local workspace · Sign in to sync','local');renderAccount();root.dispatchEvent(new CustomEvent('leadintel:server-ready',{detail:bridge}));return;}await fetchWorkspaces();pickWorkspace();renderAccount();if(!bridge.workspace){setStatus('Signed in · No workspace','error');return;}const stay=await hydrateAuthenticated();if(!stay)return;const migration=await migrateLocalPipeline();if(!migration.ok)console.warn('LeadIntel CRM migration:',migration.error||'migration unavailable');await Promise.all([refreshGmailStatus(),refreshMicrosoftMailStatus()]);root.dispatchEvent(new CustomEvent('leadintel:server-ready',{detail:bridge}));}catch(cause){console.warn('LeadIntel server bridge:',cause);setStatus('Local cache · Server unavailable','error');renderAccount();root.dispatchEvent(new CustomEvent('leadintel:server-ready',{detail:bridge}));}
+    try{await fetchSession();if(!bridge.session?.authenticated){setStatus('Local workspace · Sign in to sync','local');renderAccount();root.dispatchEvent(new CustomEvent('leadintel:server-ready',{detail:bridge}));return;}await fetchWorkspaces();pickWorkspace();renderAccount();if(!bridge.workspace){setStatus('Signed in · No workspace','error');return;}const stay=await hydrateAuthenticated();if(!stay)return;const migration=await migrateLocalPipeline();if(!migration.ok)console.warn('LeadIntel CRM migration:',migration.error||'migration unavailable');await flushBrandAssetCleanup();await Promise.all([refreshGmailStatus(),refreshMicrosoftMailStatus()]);root.dispatchEvent(new CustomEvent('leadintel:server-ready',{detail:bridge}));}catch(cause){console.warn('LeadIntel server bridge:',cause);setStatus('Local cache · Server unavailable','error');renderAccount();root.dispatchEvent(new CustomEvent('leadintel:server-ready',{detail:bridge}));}
   }
   async function saveNow(){if(!bridge.session?.authenticated||!bridge.workspace||bridge.conflict)return {saved:false};clearTimeout(saveTimer);markDirtyLocalState();setStatus('Saving to LeadIntel…','saving');const payload={schema_version:1,version:bridge.stateVersion,payload:bundle()};const {response,payload:result}=await api(`/api/customer/state?workspace_id=${encodeURIComponent(bridge.workspace.id)}`,{method:'PUT',body:JSON.stringify(payload)});
     if(response.status===409){bridge.stateVersion=Number(result.current?.version)||bridge.stateVersion;sessionStorage.setItem(CONFLICT_KEY,'Server state changed in another session. Your local changes were preserved and were not overwritten.');enterConflict(result.current);return {saved:false,conflict:true};}
@@ -108,6 +111,52 @@
     return {kind:normalized,workspaceId:bridge.workspace.id};
   }
   function assetError(response,payload,fallback){const error=new Error(payload?.error||fallback);error.status=response.status;return error;}
+  function emitBrandAssetEvent(type,detail){try{root.dispatchEvent?.(new CustomEvent(type,{detail}));}catch{}}
+  function readBrandAssetCleanup(){try{const value=JSON.parse(localStorage.getItem(BRAND_ASSET_CLEANUP_KEY)||'[]');return Array.isArray(value)?value:[];}catch{return [];}}
+  function writeBrandAssetCleanup(value){if(value.length)localStorage.setItem(BRAND_ASSET_CLEANUP_KEY,JSON.stringify(value));else localStorage.removeItem(BRAND_ASSET_CLEANUP_KEY);}
+  function queueBrandAssetCleanup({workspaceId,kind,id,reason}){const queue=readBrandAssetCleanup();if(!queue.some(item=>item.workspace_id===workspaceId&&item.id===id))queue.push({workspace_id:workspaceId,kind,id,reason,queued_at:Date.now(),attempts:0});writeBrandAssetCleanup(queue);}
+  async function deleteBrandAssetRequest(context,id){
+    const {response,payload}=await api(`/api/customer/brand-assets/${encodeURIComponent(id)}?workspace_id=${encodeURIComponent(context.workspaceId)}`,{method:'DELETE'});
+    if(!response.ok&&response.status!==404)throw assetError(response,payload,'Brand asset removal failed');
+    return {ok:true,status:response.status,...payload};
+  }
+  async function cleanupManagedAsset(context,asset,reason){
+    if(!asset?.id||!BRAND_ASSET_ID.test(String(asset.id)))return {deleted:true,queued:false};
+    try{await deleteBrandAssetRequest(context,String(asset.id));return {deleted:true,queued:false};}
+    catch(error){queueBrandAssetCleanup({workspaceId:context.workspaceId,kind:context.kind,id:String(asset.id),reason});return {deleted:false,queued:true,error};}
+  }
+  async function flushBrandAssetCleanup(){
+    if(!bridge.session?.authenticated||!bridge.workspace?.id){const detail={attempted:0,deleted:0,failed:0};emitBrandAssetEvent('leadintel:brand-asset-cleanup',detail);return detail;}
+    const queue=readBrandAssetCleanup(),remaining=[];let attempted=0,deleted=0,failed=0;
+    for(const item of queue){
+      if(item?.workspace_id!==bridge.workspace.id){remaining.push(item);continue;}
+      if(!BRAND_ASSET_KINDS.has(item.kind)||!BRAND_ASSET_ID.test(String(item.id||'')))continue;
+      attempted++;
+      try{await deleteBrandAssetRequest({workspaceId:item.workspace_id,kind:item.kind},item.id);deleted++;}
+      catch{failed++;remaining.push({...item,attempts:(Number(item.attempts)||0)+1,last_attempt_at:Date.now()});}
+    }
+    writeBrandAssetCleanup(remaining);const detail={attempted,deleted,failed};emitBrandAssetEvent('leadintel:brand-asset-cleanup',detail);return detail;
+  }
+  function writeMainRaw(value){suppress=true;try{if(value===null)localStorage.removeItem(KEYS.main);else localStorage.setItem(KEYS.main,value);}finally{suppress=false;}}
+  async function commitBrandAssetReplacement(context,nextAsset){
+    const safeNext=safeBrandAsset(nextAsset);if(!safeNext)throw new Error('Brand asset upload returned an invalid managed asset');
+    const previousRaw=localStorage.getItem(KEYS.main),previousMain=parse(KEYS.main),previousIdentity=safeBrandIdentity(previousMain.brandIdentity)||safeBrandIdentity({}),previousAsset=safeBrandAsset(previousIdentity.assets?.[context.kind]);
+    const nextIdentity={...previousIdentity,assets:{...previousIdentity.assets,[context.kind]:safeNext}};
+    writeMainRaw(JSON.stringify({...previousMain,brandIdentity:nextIdentity}));
+    try{
+      const saved=await saveNow();
+      if(!saved?.saved)throw new Error(saved?.conflict?'Workspace save conflict':'Workspace save failed');
+    }catch(cause){
+      writeMainRaw(previousRaw);
+      const rollback=await cleanupManagedAsset(context,safeNext,'rollback');
+      emitBrandAssetEvent('leadintel:brand-asset-transaction',{workspaceId:context.workspaceId,kind:context.kind,committed:false,rollbackDeleted:rollback.deleted,cleanupQueued:rollback.queued});
+      throw cause;
+    }
+    let retired={deleted:true,queued:false};
+    if(previousAsset?.id&&previousAsset.id!==safeNext.id)retired=await cleanupManagedAsset(context,previousAsset,'replacement');
+    emitBrandAssetEvent('leadintel:brand-asset-transaction',{workspaceId:context.workspaceId,kind:context.kind,committed:true,rollbackDeleted:false,cleanupQueued:retired.queued});
+    return safeNext;
+  }
   async function uploadBrandAsset(kind,file,options={}){
     const context=brandAssetContext(kind);
     if(!file||typeof file!=='object')throw new TypeError('A brand image file is required');
@@ -116,21 +165,19 @@
     const {response,payload}=await api(`/api/customer/brand-assets?workspace_id=${encodeURIComponent(context.workspaceId)}`,{method:'POST',body:form});
     if(!response.ok)throw assetError(response,payload,'Brand asset upload failed');
     if(!payload?.asset)throw new Error('Brand asset upload returned no managed asset');
-    return payload.asset;
+    return commitBrandAssetReplacement(context,payload.asset);
   }
   async function importBrandAsset(kind,url,options={}){
     const context=brandAssetContext(kind);
     const {response,payload}=await api(`/api/customer/brand-assets/import?workspace_id=${encodeURIComponent(context.workspaceId)}`,{method:'POST',body:JSON.stringify({kind:context.kind,url:String(url||''),alt_text:typeof options.altText==='string'?options.altText.trim():''})});
     if(!response.ok)throw assetError(response,payload,'Brand asset import failed');
     if(!payload?.asset)throw new Error('Brand asset import returned no managed asset');
-    return payload.asset;
+    return commitBrandAssetReplacement(context,payload.asset);
   }
   async function deleteBrandAsset(kind,asset){
     const context=brandAssetContext(kind);const id=typeof asset==='string'?asset:String(asset?.id||'');
     if(!BRAND_ASSET_ID.test(id))throw new TypeError('A valid managed brand asset is required');
-    const {response,payload}=await api(`/api/customer/brand-assets/${encodeURIComponent(id)}?workspace_id=${encodeURIComponent(context.workspaceId)}`,{method:'DELETE'});
-    if(!response.ok)throw assetError(response,payload,'Brand asset removal failed');
-    return {ok:true,status:response.status,...payload};
+    return deleteBrandAssetRequest(context,id);
   }
   function crmPath(path=''){if(!bridge.workspace)throw new Error('No workspace selected');const join=path.includes('?')?'&':'?';return `/api/crm${path}${join}workspace_id=${encodeURIComponent(bridge.workspace.id)}`;}
   async function crmRequest(path,options={}){if(!bridge.session?.authenticated||!bridge.workspace)return {ok:false,status:401,error:'Sign in to use Master CRM'};const {response,payload}=await api(crmPath(path),options);if(!response.ok)return {ok:false,status:response.status,...payload};return {ok:true,status:response.status,...payload};}
