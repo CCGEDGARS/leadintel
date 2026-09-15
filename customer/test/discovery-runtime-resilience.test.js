@@ -8,7 +8,7 @@ const app=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
 test('Discovery requests and strategy handoff cannot remain silently stuck',()=>{
   assert.ok(ui.includes('DISCOVERY_REQUEST_TIMEOUT_MS=25000'));
   assert.ok(ui.includes('controller.abort()'));
-  assert.ok(ui.includes('Promise.all(queries.map'));
+  assert.ok(ui.includes('runDiscoverySearchBatch'));
   assert.ok(ui.includes('Finding companies'));
   assert.ok(ui.includes('leadintel:open-discovery'));
   assert.ok(app.includes('leadintel:open-discovery'));
