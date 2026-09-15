@@ -280,6 +280,6 @@ test('module exposes the same API through the browser global', () => {
 
   assert.deepEqual(
     Object.keys(context.globalThis.LeadIntelBrandIdentity).sort(),
-    ['normalize', 'renderEmail', 'safeAssetReference', 'snapshot', 'validate']
+    ['FIELD_LIMITS', 'normalize', 'renderEmail', 'safeAssetReference', 'snapshot', 'validate']
   );
 });

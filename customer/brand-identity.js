@@ -9,9 +9,21 @@
   const ASSET_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
   const ASSET_ORIGIN = 'https://leadintel-api.edgars-7e7.workers.dev';
   const ASSET_PATH_PREFIX = '/api/customer/brand-assets/';
+  const FIELD_LIMITS = Object.freeze({
+    companyDisplayName: 160,
+    senderName: 120,
+    senderTitle: 160,
+    website: 2048,
+    phone: 32,
+    linkedinUrl: 2048,
+    primaryColor: 7,
+    signatureText: 2000,
+    legalFooter: 4000,
+    postalAddress: 1000
+  });
 
-  function stringValue(value) {
-    return typeof value === 'string' ? value.trim() : '';
+  function stringValue(value, maximum = Number.MAX_SAFE_INTEGER) {
+    return typeof value === 'string' ? value.trim().slice(0, maximum) : '';
   }
 
   function booleanValue(value, fallback) {
@@ -53,22 +65,22 @@
     const assets = input.assets && typeof input.assets === 'object' && !Array.isArray(input.assets)
       ? input.assets
       : {};
-    const color = stringValue(input.primaryColor);
+    const color = stringValue(input.primaryColor, FIELD_LIMITS.primaryColor);
 
     return {
       schemaVersion: 1,
       status: input.status === 'ready' ? 'ready' : 'draft',
       revision: positiveInteger(input.revision, 1),
-      companyDisplayName: stringValue(input.companyDisplayName),
-      senderName: stringValue(input.senderName),
-      senderTitle: stringValue(input.senderTitle),
-      website: stringValue(input.website),
-      phone: stringValue(input.phone),
-      linkedinUrl: stringValue(input.linkedinUrl),
+      companyDisplayName: stringValue(input.companyDisplayName, FIELD_LIMITS.companyDisplayName),
+      senderName: stringValue(input.senderName, FIELD_LIMITS.senderName),
+      senderTitle: stringValue(input.senderTitle, FIELD_LIMITS.senderTitle),
+      website: stringValue(input.website, FIELD_LIMITS.website),
+      phone: stringValue(input.phone, FIELD_LIMITS.phone),
+      linkedinUrl: stringValue(input.linkedinUrl, FIELD_LIMITS.linkedinUrl),
       primaryColor: color ? color.toLowerCase() : DEFAULT_COLOR,
-      signatureText: stringValue(input.signatureText),
-      legalFooter: stringValue(input.legalFooter),
-      postalAddress: stringValue(input.postalAddress),
+      signatureText: stringValue(input.signatureText, FIELD_LIMITS.signatureText),
+      legalFooter: stringValue(input.legalFooter, FIELD_LIMITS.legalFooter),
+      postalAddress: stringValue(input.postalAddress, FIELD_LIMITS.postalAddress),
       options: {
         includeLogo: booleanValue(options.includeLogo, true),
         includeHeadshot: booleanValue(options.includeHeadshot, false),
@@ -88,22 +100,27 @@
     const identity = normalize(input);
     const errors = {};
 
-    if (identity.status === 'ready' && !identity.companyDisplayName) {
+    for (const [field, maximum] of Object.entries(FIELD_LIMITS)) {
+      const raw = stringValue(input[field]);
+      if (raw.length > maximum) errors[field] = `${fieldLabel(field)} maximum is ${maximum} characters.`;
+    }
+
+    if (!errors.companyDisplayName && identity.status === 'ready' && !identity.companyDisplayName) {
       errors.companyDisplayName = 'Company display name is required when identity is ready.';
     }
-    if (identity.status === 'ready' && !identity.senderName) {
+    if (!errors.senderName && identity.status === 'ready' && !identity.senderName) {
       errors.senderName = 'Sender name is required when identity is ready.';
     }
-    if (identity.website && !safeHttpsUrl(identity.website)) {
+    if (!errors.website && identity.website && !safeHttpsUrl(identity.website)) {
       errors.website = 'Website must be a valid HTTPS URL.';
     }
-    if (identity.phone && !validPhone(identity.phone)) {
+    if (!errors.phone && identity.phone && !validPhone(identity.phone)) {
       errors.phone = 'Phone number is invalid.';
     }
-    if (identity.linkedinUrl && !safeLinkedInUrl(identity.linkedinUrl)) {
+    if (!errors.linkedinUrl && identity.linkedinUrl && !safeLinkedInUrl(identity.linkedinUrl)) {
       errors.linkedinUrl = 'LinkedIn URL must be a valid HTTPS linkedin.com URL.';
     }
-    if (!/^#[0-9a-f]{6}$/.test(identity.primaryColor)) {
+    if (!errors.primaryColor && !/^#[0-9a-f]{6}$/.test(identity.primaryColor)) {
       errors.primaryColor = 'Primary brand colour must be a six-digit hex value.';
     }
 
@@ -271,6 +288,21 @@
     return digits.length >= 7 && digits.length <= 20;
   }
 
+  function fieldLabel(field) {
+    return ({
+      companyDisplayName: 'Company display name',
+      senderName: 'Sender name',
+      senderTitle: 'Sender job title',
+      website: 'Website',
+      phone: 'Phone number',
+      linkedinUrl: 'LinkedIn URL',
+      primaryColor: 'Primary brand colour',
+      signatureText: 'Plain-text signature',
+      legalFooter: 'Legal or footer text',
+      postalAddress: 'Postal address'
+    })[field] || field;
+  }
+
   function isIsoTimestamp(value) {
     if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value)) return false;
     const parsed = new Date(value);
@@ -286,5 +318,5 @@
     return value;
   }
 
-  return {normalize, validate, snapshot, renderEmail, safeAssetReference};
+  return {FIELD_LIMITS, normalize, validate, snapshot, renderEmail, safeAssetReference};
 });
