@@ -453,7 +453,6 @@ test('failed asset save restores only the matching asset field and preserves a c
     throw new Error(`Unexpected request: ${url}`);
   }, {leadintel_customer_v2_state: main});
 
-  sandbox.sessionStorage.setItem(sandbox.LeadIntelWorkspacePersistence.SAVE_INTENT_KEY, '1');
   const replacing = bridge.uploadBrandAsset('logo', new Blob(['new'], {type: 'image/png'}));
   await putStarted.promise;
   const edited = JSON.parse(localStorage.getItem('leadintel_customer_v2_state'));
@@ -510,6 +509,138 @@ test('production reset keeps asset cleanup pending until one reset PUT is follow
   releaseDelete.resolve();
   const result = await cleanup;
   assert.equal(result.deleted, 1);
+  assert.equal(localStorage.getItem(assetCleanupKey), null);
+});
+
+test('overlapping asset and explicit saves retain per-operation intent and send the latest edit in a second PUT', async () => {
+  const nextAsset = asset('8'.repeat(43));
+  const firstPutStarted = deferred();
+  const releaseFirstPut = deferred();
+  const statePayloads = [];
+  let stateCalls = 0;
+  const {bridge, localStorage, sandbox} = loadProductionComposition(async (url, options = {}) => {
+    const value = String(url);
+    if (value.includes('/brand-assets?')) return new Response(JSON.stringify({asset: nextAsset}), {status: 201});
+    if (value.includes('/customer/state')) {
+      stateCalls++;
+      statePayloads.push(JSON.parse(options.body));
+      if (stateCalls === 1) {
+        firstPutStarted.resolve();
+        await releaseFirstPut.promise;
+      }
+      return new Response(JSON.stringify({version: stateCalls, saved: true}), {status: 200});
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  }, {
+    leadintel_customer_v2_state: JSON.stringify({brandIdentity: {status: 'ready', senderName: 'Before', assets: {logo: null}}})
+  });
+
+  const replacing = bridge.uploadBrandAsset('logo', new Blob(['new'], {type: 'image/png'}));
+  await firstPutStarted.promise;
+  const latest = JSON.parse(localStorage.getItem('leadintel_customer_v2_state'));
+  latest.brandIdentity.senderName = 'Latest explicit edit';
+  localStorage.setItem('leadintel_customer_v2_state', JSON.stringify(latest));
+  const explicitSave = sandbox.LeadIntelWorkspacePersistence.saveWorkspace();
+  await new Promise(resolve => setImmediate(resolve));
+  releaseFirstPut.resolve();
+
+  await replacing;
+  assert.equal(await explicitSave, true);
+  assert.equal(statePayloads.length, 2);
+  assert.equal(statePayloads[0].payload.main.brandIdentity.senderName, 'Before');
+  assert.equal(statePayloads[1].payload.main.brandIdentity.senderName, 'Latest explicit edit');
+  assert.equal(statePayloads[0].payload.meta.persistence.explicit_saved, false);
+  assert.equal(statePayloads[1].payload.meta.persistence.explicit_saved, true);
+  assert.equal(sandbox.LeadIntelWorkspacePersistence.isExplicitlySaved(), true);
+  assert.equal(sandbox.LeadIntelWorkspacePersistence.hasUnsavedChanges(), false);
+});
+
+test('failed explicit workspace save remains unsaved', async () => {
+  let statePuts = 0;
+  const {sandbox, localStorage} = loadProductionComposition(async (url) => {
+    if (String(url).includes('/customer/state')) {
+      statePuts++;
+      return new Response(JSON.stringify({error: 'save unavailable'}), {status: 503});
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  }, {leadintel_customer_v2_state: JSON.stringify({website: 'https://example.com'})});
+
+  assert.equal(await sandbox.LeadIntelWorkspacePersistence.saveWorkspace(), false);
+
+  assert.equal(statePuts, 1);
+  assert.equal(sandbox.LeadIntelWorkspacePersistence.isExplicitlySaved(), false);
+  assert.equal(sandbox.LeadIntelWorkspacePersistence.hasUnsavedChanges(), true);
+  assert.equal(localStorage.getItem(sandbox.LeadIntelWorkspacePersistence.EXPLICIT_SAVE_KEY), null);
+  assert.equal(localStorage.getItem(sandbox.LeadIntelWorkspacePersistence.SNAPSHOT_KEY), null);
+});
+
+test('reload recovery with only asset cleanup pending deletes the asset without another workspace PUT', async () => {
+  const logo = asset('9'.repeat(43));
+  const assetCleanupKey = 'leadintel_customer_v2_brand_asset_reset_cleanup_v1';
+  const calls = [];
+  const {sandbox, localStorage} = loadProductionComposition(async (url, options = {}) => {
+    calls.push({url: String(url), method: options.method || 'GET'});
+    if (String(url).includes('/brand-assets/')) return new Response(JSON.stringify({ok: true}), {status: 200});
+    if (String(url).includes('/customer/state')) return new Response(JSON.stringify({version: 3, saved: true}), {status: 200});
+    throw new Error(`Unexpected request: ${url}`);
+  }, {
+    leadintel_customer_v2_workspace: WORKSPACE_ID,
+    [assetCleanupKey]: JSON.stringify({workspace_id: WORKSPACE_ID, assets: [{kind: 'logo', id: logo.id}]})
+  });
+
+  assert.equal(await sandbox.LeadIntelWorkspaceResetHygiene.finalizePendingReset(), true);
+
+  assert.equal(calls.filter(call => call.url.includes('/customer/state') && call.method === 'PUT').length, 0);
+  assert.equal(calls.filter(call => call.url.includes(`/brand-assets/${logo.id}`) && call.method === 'DELETE').length, 1);
+  assert.equal(localStorage.getItem(assetCleanupKey), null);
+});
+
+test('reload recovery queues failed asset deletion and clears the reset cleanup record', async () => {
+  const logo = asset('A'.repeat(43));
+  const assetCleanupKey = 'leadintel_customer_v2_brand_asset_reset_cleanup_v1';
+  let deletes = 0;
+  const {sandbox, localStorage} = loadProductionComposition(async (url) => {
+    if (String(url).includes('/brand-assets/')) {
+      deletes++;
+      return new Response(JSON.stringify({error: 'delete unavailable'}), {status: 503});
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  }, {
+    leadintel_customer_v2_workspace: WORKSPACE_ID,
+    [assetCleanupKey]: JSON.stringify({workspace_id: WORKSPACE_ID, assets: [{kind: 'logo', id: logo.id}]})
+  });
+
+  assert.equal(await sandbox.LeadIntelWorkspaceResetHygiene.finalizePendingReset(), true);
+
+  assert.equal(deletes, 1);
+  assert.equal(localStorage.getItem(assetCleanupKey), null);
+  const queued = JSON.parse(localStorage.getItem(CLEANUP_KEY));
+  assert.equal(queued.length, 1);
+  assert.equal(queued[0].id, logo.id);
+  assert.equal(queued[0].workspace_id, WORKSPACE_ID);
+});
+
+test('reload recovery with both reset records saves once with intent before cleanup', async () => {
+  const logo = asset('B'.repeat(43));
+  const serverResetKey = 'leadintel_customer_v2_reset_pending_v1';
+  const assetCleanupKey = 'leadintel_customer_v2_brand_asset_reset_cleanup_v1';
+  const calls = [];
+  const {sandbox, localStorage} = loadProductionComposition(async (url, options = {}) => {
+    calls.push({url: String(url), method: options.method || 'GET'});
+    if (String(url).includes('/customer/state')) return new Response(JSON.stringify({version: 4, saved: true}), {status: 200});
+    if (String(url).includes('/brand-assets/')) return new Response(JSON.stringify({ok: true}), {status: 200});
+    throw new Error(`Unexpected request: ${url}`);
+  }, {
+    leadintel_customer_v2_workspace: WORKSPACE_ID,
+    [serverResetKey]: JSON.stringify({workspace_id: WORKSPACE_ID, requested_at: 1}),
+    [assetCleanupKey]: JSON.stringify({workspace_id: WORKSPACE_ID, assets: [{kind: 'logo', id: logo.id}]})
+  });
+
+  assert.equal(await sandbox.LeadIntelWorkspaceResetHygiene.finalizePendingReset(), true);
+
+  assert.equal(calls.filter(call => call.url.includes('/customer/state') && call.method === 'PUT').length, 1);
+  assert.equal(calls.filter(call => call.url.includes(`/brand-assets/${logo.id}`) && call.method === 'DELETE').length, 1);
+  assert.equal(localStorage.getItem(serverResetKey), null);
   assert.equal(localStorage.getItem(assetCleanupKey), null);
 });
 
