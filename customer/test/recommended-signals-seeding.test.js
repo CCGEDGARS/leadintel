@@ -56,6 +56,6 @@ test('existing user-selected recommendations are preserved during migration',()=
 test('strategy UI identifies generated recommendations before the optional custom signal form',()=>{
   const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
   assert.match(html,/Recommended buying signals/);
-  assert.match(html,/Add your own signal/);
+  assert.match(html,/Add buying signal/);
   assert.match(html,/profile-engine\.js\?v=20260914-recommended-signals-v2/);
 });
