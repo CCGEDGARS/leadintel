@@ -1,34 +1,74 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import app from '../src/app.js';
+import {
+  brandAssetObjectKey,
+  deleteBrandAsset,
+  handleBrandAssetRoute,
+  replaceBrandAsset,
+  validateBrandAsset
+} from '../src/brand-assets.js';
 import {sha256} from '../src/security.js';
 
-let assetModule={};
-let moduleError=null;
-try{assetModule=await import('../src/brand-assets.js');}catch(cause){moduleError=cause;}
-const {handleBrandAssetRoute,validateBrandAsset,replaceBrandAsset}=assetModule;
-
 const MiB=1024*1024;
+const PNG_BASE64='iVBORw0KGgoAAAANSUhEUgAAAAMAAAACCAIAAAASFvFNAAAAFUlEQVR4nGMUa4piYGBgYGBgYoABABD8APYX3hcjAAAAAElFTkSuQmCC';
+const JPEG_WITH_STUFFED_ENTROPY_BASE64='/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAIBAQEBAQIBAQECAgICAgQDAgICAgUEBAMEBgUGBgYFBgYGBwkIBgcJBwYGCAsICQoKCgoKBggLDAsKDAkKCgr/2wBDAQICAgICAgUDAwUKBwYHCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgr/wAARCAAQABADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDM/aE8P+MvGHjLQGsfiB471F9HX7A3ijxXd2fh+SeaS9jtpdGg1B7cpALZZbiSX7TLMBdxR+SzRZBg1jW5NY0zxVbaD8StNtNR8L31mmpuvmxmHzNQbTGuXS10957rUTNL9lFo3lCKJbKGcTBfMi6nXbOOE2vxQ+KPj298O6H481iMeJbvxNotp4dNw89xPf3t9Z+aUF3Ev2dpFkgUXQmEk8FwDcoJ4fjHFH4A8G6b4a1rUYNZn1DXlvNHu9a1abVb230uJFneOW5uLeP7FqN1DFbkW8h3ROLVk8n7RLcwc2TYisqSpYV8tGMqS5ZclT93Kfvv4LylScedycKdTnjTkmoyaqVmFPLMVhJS+rJ0buUZRkqfJJQi4OMpU1CcE1JNQhCnFzadNycL/wD/2Q==';
+const WEBP_BASE64='UklGRjIAAABXRUJQVlA4ICYAAABQAQCdASoJAAcAAUAmJaAABAAAAP7vvRf//PzP/8MP//DD+iQAAA==';
 
-function png(width=3,height=2){
-  const bytes=new Uint8Array(45);
-  bytes.set([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,0,0,0,13,0x49,0x48,0x44,0x52]);
-  new DataView(bytes.buffer).setUint32(16,width);new DataView(bytes.buffer).setUint32(20,height);
-  bytes.set([8,6,0,0,0],24);bytes.set([0,0,0,0,0x49,0x45,0x4e,0x44,0,0,0,0],33);
+const decode=value=>new Uint8Array(Buffer.from(value,'base64'));
+const png=()=>decode(PNG_BASE64);
+const jpeg=()=>decode(JPEG_WITH_STUFFED_ENTROPY_BASE64);
+const webp=()=>decode(WEBP_BASE64);
+const file=(bytes,type,name='upload.bin')=>new File([bytes],name,{type});
+const randomId=character=>character.repeat(43);
+
+function crc32(bytes){
+  let crc=0xffffffff;
+  for(const byte of bytes){
+    crc^=byte;
+    for(let bit=0;bit<8;bit++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);
+  }
+  return (crc^0xffffffff)>>>0;
+}
+
+function pngWithDimensions(width,height){
+  const bytes=png();const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+  view.setUint32(16,width);view.setUint32(20,height);view.setUint32(29,crc32(bytes.subarray(12,29)));
   return bytes;
 }
-function jpeg(width=3,height=2){return Uint8Array.from([0xff,0xd8,0xff,0xc0,0,17,8,height>>8,height&255,width>>8,width&255,3,1,0x11,0,2,0x11,0,3,0x11,0,0xff,0xd9]);}
-function webp(width=3,height=2){
-  const bytes=new Uint8Array(30);bytes.set([0x52,0x49,0x46,0x46,22,0,0,0,0x57,0x45,0x42,0x50,0x56,0x50,0x38,0x58,10,0,0,0,0,0,0,0]);
-  const w=width-1,h=height-1;bytes.set([w&255,(w>>8)&255,(w>>16)&255,h&255,(h>>8)&255,(h>>16)&255],24);return bytes;
+
+function pngWithoutIdat(){
+  const bytes=png();return new Uint8Array([...bytes.subarray(0,33),...bytes.subarray(bytes.length-12)]);
 }
-function file(bytes,type,name='upload.bin'){return new File([bytes],name,{type});}
+
+function headerOnlyJpeg(width=3,height=2){
+  return Uint8Array.from([0xff,0xd8,0xff,0xc0,0,17,8,height>>8,height&255,width>>8,width&255,3,1,0x11,0,2,0x11,0,3,0x11,0,0xff,0xd9]);
+}
+
+function vp8xOnlyWebp(width=3,height=2){
+  const bytes=new Uint8Array(30);
+  bytes.set([0x52,0x49,0x46,0x46,22,0,0,0,0x57,0x45,0x42,0x50,0x56,0x50,0x38,0x58,10,0,0,0,0,0,0,0]);
+  const w=width-1,h=height-1;bytes.set([w&255,(w>>8)&255,(w>>16)&255,h&255,(h>>8)&255,(h>>16)&255],24);
+  return bytes;
+}
 
 class MemoryR2{
-  constructor(){this.objects=new Map();this.events=[];}
-  async put(key,value,options={}){const bytes=new Uint8Array(await new Response(value).arrayBuffer());this.objects.set(key,{bytes,httpMetadata:options.httpMetadata||{}});this.events.push(['put',key]);}
-  async get(key){const row=this.objects.get(key);if(!row)return null;return {body:row.bytes,httpMetadata:row.httpMetadata,arrayBuffer:async()=>row.bytes.buffer.slice(row.bytes.byteOffset,row.bytes.byteOffset+row.bytes.byteLength)};}
+  constructor(events=[]){this.objects=new Map();this.events=events;}
+  async put(key,value,options={}){
+    const bytes=new Uint8Array(await new Response(value).arrayBuffer());
+    this.objects.set(key,{bytes,httpMetadata:options.httpMetadata||{},customMetadata:options.customMetadata||{}});
+    this.events.push(['put',key]);
+  }
+  async get(key){
+    const row=this.objects.get(key);if(!row)return null;
+    return {...row,body:row.bytes,arrayBuffer:async()=>row.bytes.buffer.slice(row.bytes.byteOffset,row.bytes.byteOffset+row.bytes.byteLength)};
+  }
+  async head(key){
+    const row=this.objects.get(key);return row?{httpMetadata:row.httpMetadata,customMetadata:row.customMetadata}:null;
+  }
   async delete(key){this.objects.delete(key);this.events.push(['delete',key]);}
 }
+
 class D1Statement{
   constructor(db,sql){this.db=db;this.sql=sql;this.args=[];}
   bind(...args){this.args=args;return this;}
@@ -38,42 +78,67 @@ class D1Statement{
     throw new Error(`Unexpected first query: ${this.sql}`);
   }
   async run(){
-    if(this.sql.includes('INSERT INTO audit_events')){this.db.audits.push(this.args);return {success:true,meta:{changes:1}};}
-    throw new Error(`Unexpected run query: ${this.sql}`);
+    if(!this.sql.includes('INSERT INTO audit_events'))throw new Error(`Unexpected run query: ${this.sql}`);
+    if(this.db.failAudit)throw new Error('audit unavailable');
+    this.db.audits.push(this.args);this.db.events.push(['audit',this.args[3]]);
+    return {success:true,meta:{changes:1}};
   }
 }
-class D1Db{constructor({tokenHash,user,workspaceId,role}){Object.assign(this,{tokenHash,user,workspaceId,role,audits:[]});}prepare(sql){return new D1Statement(this,sql);}}
-async function fixture(role='owner'){
-  const token=`asset-${role}-session`,workspaceId='workspace-secret-name',user={id:'user-1',email:'private@example.com',display_name:'Private User',role};
-  const DB=new D1Db({tokenHash:await sha256(token),user,workspaceId,role});
-  return {token,workspaceId,DB,env:{DB,BRAND_ASSETS:new MemoryR2()}};
+
+class D1Db{
+  constructor({tokenHash,user,workspaceId,role,events}){Object.assign(this,{tokenHash,user,workspaceId,role,events,audits:[],failAudit:false});}
+  prepare(sql){return new D1Statement(this,sql);}
 }
-function request(path,{method='GET',token,body,headers={}}={}){return new Request(`https://leadintel-api.edgars-7e7.workers.dev${path}`,{method,headers:{...(token?{Cookie:`leadintel_session=${token}`}:{}),...headers},body});}
+
+async function fixture(role='owner'){
+  const token=`asset-${role}-session`,workspaceId='workspace-secret-name',user={id:'user-1',email:'private@example.com',display_name:'Private User',role},events=[];
+  const DB=new D1Db({tokenHash:await sha256(token),user,workspaceId,role,events});
+  return {token,workspaceId,DB,events,env:{DB,BRAND_ASSETS:new MemoryR2(events),BRAND_ASSET_IMPORT_HOSTS:'cdn.example.test,public.example'}};
+}
+
+function request(path,{method='GET',token,body,headers={}}={}){
+  return new Request(`https://leadintel-api.edgars-7e7.workers.dev${path}`,{method,headers:{...(token?{Cookie:`leadintel_session=${token}`}:{...{}}),...headers},body});
+}
+
 function uploadRequest(workspaceId,token,{bytes=png(),type='image/png',kind='logo',filename='private-company-logo.png',altText='Company logo'}={}){
   const body=new FormData();body.set('kind',kind);body.set('alt_text',altText);body.set('file',file(bytes,type,filename));
   return request(`/api/customer/brand-assets?workspace_id=${encodeURIComponent(workspaceId)}`,{method:'POST',token,body});
 }
 
-test('brand asset module exists and exposes the boundary functions',()=>{
-  assert.ifError(moduleError);assert.equal(typeof handleBrandAssetRoute,'function');assert.equal(typeof validateBrandAsset,'function');assert.equal(typeof replaceBrandAsset,'function');
+function importRequest(workspaceId,token,url,kind='logo'){
+  return request(`/api/customer/brand-assets/import?workspace_id=${workspaceId}`,{method:'POST',token,headers:{'Content-Type':'application/json'},body:JSON.stringify({url,kind,alt_text:'Imported image'})});
+}
+
+test('genuine PNG, stuffed-entropy JPEG, and VP8 WebP fixtures return decoded dimensions',async()=>{
+  assert.ok(jpeg().some((byte,index,bytes)=>byte===0xff&&bytes[index+1]===0x00),'JPEG fixture must contain FF00 entropy stuffing');
+  const cases=[[png(),'image/png',3,2],[jpeg(),'image/jpeg',16,16],[webp(),'image/webp',9,7]];
+  for(const [bytes,type,width,height] of cases){
+    const result=await validateBrandAsset(file(bytes,type),'logo');
+    assert.deepEqual({mimeType:result.mimeType,width:result.width,height:result.height},{mimeType:type,width,height});
+  }
 });
 
-test('PNG, JPEG, and WebP require matching MIME and return decoded dimensions',async()=>{
-  const cases=[[png(3,2),'image/png',3,2],[jpeg(321,123),'image/jpeg',321,123],[webp(640,480),'image/webp',640,480]];
-  for(const [bytes,type,width,height] of cases){const result=await validateBrandAsset(file(bytes,type), 'logo');assert.deepEqual({mimeType:result.mimeType,width:result.width,height:result.height},{mimeType:type,width,height});}
-  await assert.rejects(()=>validateBrandAsset(file(png(),'image/jpeg'),'logo'),/magic bytes/i);
-});
-
-test('SVG, data payloads, executables, and unknown image kinds are rejected',async()=>{
+test('declared MIME must match the complete image structure',async()=>{
+  await assert.rejects(()=>validateBrandAsset(file(png(),'image/jpeg'),'logo'),/magic bytes|structure/i);
   await assert.rejects(()=>validateBrandAsset(file('<svg/>','image/svg+xml'),'logo'),/PNG, JPEG, or WebP/i);
-  await assert.rejects(()=>validateBrandAsset(file('data:image/png;base64,AAAA','image/png'),'logo'),/magic bytes/i);
-  await assert.rejects(()=>validateBrandAsset(file(Uint8Array.from([0x4d,0x5a,0x90,0]),'image/png'),'logo'),/magic bytes/i);
+  await assert.rejects(()=>validateBrandAsset(file('data:image/png;base64,AAAA','image/png'),'logo'),/magic bytes|structure/i);
+  await assert.rejects(()=>validateBrandAsset(file(Uint8Array.from([0x4d,0x5a,0x90,0]),'image/png'),'logo'),/magic bytes|structure/i);
   await assert.rejects(()=>validateBrandAsset(file(png(),'image/png'),'avatar'),/kind/i);
 });
 
-test('an executable payload appended to an otherwise recognized image is rejected',async()=>{
-  const payload=new Uint8Array([...png(),...new TextEncoder().encode('<script>alert(1)</script>')]);
-  await assert.rejects(()=>validateBrandAsset(file(payload,'image/png'),'logo'),/magic bytes|structure/i);
+test('malformed PNG chunks, JPEG without a scan, and WebP without image data are rejected',async()=>{
+  const badCrc=png();badCrc[badCrc.length-1]^=0xff;
+  await assert.rejects(()=>validateBrandAsset(file(badCrc,'image/png'),'logo'),/magic bytes|structure/i);
+  await assert.rejects(()=>validateBrandAsset(file(pngWithoutIdat(),'image/png'),'logo'),/magic bytes|structure/i);
+  await assert.rejects(()=>validateBrandAsset(file(headerOnlyJpeg(),'image/jpeg'),'logo'),/magic bytes|structure/i);
+  await assert.rejects(()=>validateBrandAsset(file(vp8xOnlyWebp(),'image/webp'),'logo'),/magic bytes|structure/i);
+});
+
+test('recognized images with trailing executable payloads are rejected',async()=>{
+  const script=new TextEncoder().encode('<script>alert(1)</script>');
+  for(const [bytes,type] of [[png(),'image/png'],[jpeg(),'image/jpeg'],[webp(),'image/webp']]){
+    await assert.rejects(()=>validateBrandAsset(file(new Uint8Array([...bytes,...script]),type),'logo'),/magic bytes|structure/i);
+  }
 });
 
 test('logo uses a 2 MiB limit while headshot and banner use 5 MiB',async()=>{
@@ -84,8 +149,8 @@ test('logo uses a 2 MiB limit while headshot and banner use 5 MiB',async()=>{
 });
 
 test('images above the 6000 by 6000 dimension cap are rejected',async()=>{
-  await assert.rejects(()=>validateBrandAsset(file(png(6001,20),'image/png'),'logo'),/6000/);
-  await assert.rejects(()=>validateBrandAsset(file(jpeg(20,6001),'image/jpeg'),'headshot'),/6000/);
+  await assert.rejects(()=>validateBrandAsset(file(pngWithDimensions(6001,2),'image/png'),'logo'),/6000/);
+  await assert.rejects(()=>validateBrandAsset(file(pngWithDimensions(3,6001),'image/png'),'headshot'),/6000/);
 });
 
 test('upload requires workspace membership with owner or researcher role',async()=>{
@@ -95,61 +160,99 @@ test('upload requires workspace membership with owner or researcher role',async(
   const researcher=await fixture('researcher');response=await handleBrandAssetRoute(uploadRequest(researcher.workspaceId,researcher.token),researcher.env,{});assert.equal(response.status,201);
 });
 
-test('upload creates an opaque public URL, workspace-scoped key, metadata-only response, and audit event',async()=>{
-  const {env,token,workspaceId,DB}=await fixture();const response=await handleBrandAssetRoute(uploadRequest(workspaceId,token),env,{});assert.equal(response.status,201);
-  const {asset}=await response.json();assert.match(asset.id,/^[a-f0-9]{16}_[A-Za-z0-9_-]{32}$/);assert.equal(asset.url,`https://leadintel-api.edgars-7e7.workers.dev/api/customer/brand-assets/${asset.id}`);assert.deepEqual({mimeType:asset.mimeType,width:asset.width,height:asset.height,altText:asset.altText},{mimeType:'image/png',width:3,height:2,altText:'Company logo'});
-  assert.equal(JSON.stringify(asset).includes(workspaceId),false);assert.equal(JSON.stringify(asset).includes('private-company-logo.png'),false);assert.equal(JSON.stringify(asset).includes('private@example.com'),false);
-  const [key]=env.BRAND_ASSETS.objects.keys();assert.match(key,new RegExp(`^workspaces/${asset.id.slice(0,16)}/brand-assets/${asset.id}$`));assert.equal(DB.audits.length,1);assert.equal(DB.audits[0][3],'brand_asset.uploaded');
+test('uploads use fully random uncorrelated IDs and keep ownership only in private R2 metadata',async()=>{
+  const {env,token,workspaceId}=await fixture();const workspaceHash=(await sha256(workspaceId)).slice(0,16);
+  const first=(await (await handleBrandAssetRoute(uploadRequest(workspaceId,token),env,{})).json()).asset;
+  const second=(await (await handleBrandAssetRoute(uploadRequest(workspaceId,token),env,{})).json()).asset;
+  assert.match(first.id,/^[A-Za-z0-9_-]{43}$/);assert.match(second.id,/^[A-Za-z0-9_-]{43}$/);assert.notEqual(first.id,second.id);assert.notEqual(first.id.slice(0,16),second.id.slice(0,16));assert.equal(first.id.startsWith(workspaceHash),false);
+  assert.equal(first.url,`https://leadintel-api.edgars-7e7.workers.dev/api/customer/brand-assets/${first.id}`);assert.equal(JSON.stringify(first).includes(workspaceId),false);assert.equal(JSON.stringify(first).includes('private-company-logo.png'),false);assert.equal(JSON.stringify(first).includes('private@example.com'),false);
+  const key=brandAssetObjectKey(first.id);assert.equal(key,`brand-assets/${first.id}`);assert.deepEqual(env.BRAND_ASSETS.objects.get(key).customMetadata,{workspaceId});
 });
 
 test('public GET returns only validated bytes with strict immutable headers',async()=>{
-  const {env,token,workspaceId}=await fixture();let response=await handleBrandAssetRoute(uploadRequest(workspaceId,token,{bytes:webp(9,7),type:'image/webp',kind:'banner'}),env,{});const {asset}=await response.json();
-  response=await handleBrandAssetRoute(request(`/api/customer/brand-assets/${asset.id}`),env,{'Access-Control-Allow-Origin':'https://app.example'});assert.equal(response.status,200);assert.equal(response.headers.get('Content-Type'),'image/webp');assert.equal(response.headers.get('X-Content-Type-Options'),'nosniff');assert.equal(response.headers.get('Cache-Control'),'public, max-age=31536000, immutable');assert.equal(response.headers.get('Access-Control-Allow-Origin'),'https://app.example');assert.deepEqual(new Uint8Array(await response.arrayBuffer()),webp(9,7));assert.equal(response.headers.has('X-Workspace-Id'),false);
-  const key=[...env.BRAND_ASSETS.objects.keys()][0];env.BRAND_ASSETS.objects.get(key).bytes=Uint8Array.from([0x4d,0x5a]);response=await handleBrandAssetRoute(request(`/api/customer/brand-assets/${asset.id}`),env,{});assert.equal(response.status,404);
+  const {env,token,workspaceId}=await fixture();let response=await handleBrandAssetRoute(uploadRequest(workspaceId,token,{bytes:webp(),type:'image/webp',kind:'banner'}),env,{});const {asset}=await response.json();
+  response=await handleBrandAssetRoute(request(`/api/customer/brand-assets/${asset.id}`),env,{'Access-Control-Allow-Origin':'https://app.example'});assert.equal(response.status,200);assert.equal(response.headers.get('Content-Type'),'image/webp');assert.equal(response.headers.get('X-Content-Type-Options'),'nosniff');assert.equal(response.headers.get('Cache-Control'),'public, max-age=31536000, immutable');assert.equal(response.headers.get('Access-Control-Allow-Origin'),'https://app.example');assert.deepEqual(new Uint8Array(await response.arrayBuffer()),webp());assert.equal(response.headers.has('X-Workspace-Id'),false);
+  env.BRAND_ASSETS.objects.get(brandAssetObjectKey(asset.id)).bytes=Uint8Array.from([0x4d,0x5a]);response=await handleBrandAssetRoute(request(`/api/customer/brand-assets/${asset.id}`),env,{});assert.equal(response.status,404);
 });
 
-test('delete enforces writer authorization and workspace isolation, then audits deletion',async()=>{
-  const owner=await fixture();let response=await handleBrandAssetRoute(uploadRequest(owner.workspaceId,owner.token),owner.env,{});const {asset}=await response.json();
-  response=await handleBrandAssetRoute(request(`/api/customer/brand-assets/${asset.id}?workspace_id=another-workspace`,{method:'DELETE',token:owner.token}),owner.env,{});assert.equal(response.status,403);assert.equal(owner.env.BRAND_ASSETS.objects.size,1);
-  response=await handleBrandAssetRoute(request(`/api/customer/brand-assets/${asset.id}?workspace_id=${owner.workspaceId}`,{method:'DELETE',token:owner.token}),owner.env,{});assert.equal(response.status,200);assert.equal(owner.env.BRAND_ASSETS.objects.size,0);assert.equal(owner.DB.audits.at(-1)[3],'brand_asset.deleted');
+test('delete verifies workspace ownership and commits audit before deleting bytes',async()=>{
+  const owner=await fixture();let response=await handleBrandAssetRoute(uploadRequest(owner.workspaceId,owner.token),owner.env,{});const {asset}=await response.json();const key=brandAssetObjectKey(asset.id);
+  response=await handleBrandAssetRoute(request(`/api/customer/brand-assets/${asset.id}?workspace_id=another-workspace`,{method:'DELETE',token:owner.token}),owner.env,{});assert.equal(response.status,403);assert.equal(owner.env.BRAND_ASSETS.objects.has(key),true);
+  owner.events.length=0;response=await handleBrandAssetRoute(request(`/api/customer/brand-assets/${asset.id}?workspace_id=${owner.workspaceId}`,{method:'DELETE',token:owner.token}),owner.env,{});assert.equal(response.status,200);assert.equal(owner.env.BRAND_ASSETS.objects.has(key),false);assert.deepEqual(owner.events,[['audit','brand_asset.deleted'],['delete',key]]);
 });
 
-test('server-side import accepts a bounded public HTTP image and audits it',async()=>{
+test('route deletion leaves bytes intact when the required audit write fails',async()=>{
+  const owner=await fixture();const response=await handleBrandAssetRoute(uploadRequest(owner.workspaceId,owner.token),owner.env,{});const {asset}=await response.json();const key=brandAssetObjectKey(asset.id);owner.DB.failAudit=true;owner.events.length=0;
+  await assert.rejects(()=>handleBrandAssetRoute(request(`/api/customer/brand-assets/${asset.id}?workspace_id=${owner.workspaceId}`,{method:'DELETE',token:owner.token}),owner.env,{}),/audit unavailable/);assert.equal(owner.env.BRAND_ASSETS.objects.has(key),true);assert.deepEqual(owner.events,[]);
+});
+
+test('deleteBrandAsset primitive uses the same audited delete contract',async()=>{
+  const owner=await fixture();const assetId=randomId('a'),key=brandAssetObjectKey(assetId);owner.env.BRAND_ASSETS.objects.set(key,{bytes:png(),httpMetadata:{contentType:'image/png'},customMetadata:{workspaceId:owner.workspaceId}});
+  await deleteBrandAsset(owner.env,{workspaceId:owner.workspaceId,assetId,userId:owner.DB.user.id,eventType:'brand_asset.deleted'});assert.deepEqual(owner.events,[['audit','brand_asset.deleted'],['delete',key]]);
+});
+
+test('deleteBrandAsset primitive preserves bytes when audit fails',async()=>{
+  const owner=await fixture();const assetId=randomId('b'),key=brandAssetObjectKey(assetId);owner.env.BRAND_ASSETS.objects.set(key,{bytes:png(),httpMetadata:{contentType:'image/png'},customMetadata:{workspaceId:owner.workspaceId}});owner.DB.failAudit=true;
+  await assert.rejects(()=>deleteBrandAsset(owner.env,{workspaceId:owner.workspaceId,assetId,userId:owner.DB.user.id,eventType:'brand_asset.deleted'}),/audit unavailable/);assert.equal(owner.env.BRAND_ASSETS.objects.has(key),true);assert.equal(owner.events.some(([event])=>event==='delete'),false);
+});
+
+test('server-side import accepts only a configured host and audits the stored image',async()=>{
   const {env,token,workspaceId,DB}=await fixture();const originalFetch=globalThis.fetch;const calls=[];
-  globalThis.fetch=async(url,options)=>{calls.push([String(url),options]);return new Response(jpeg(44,33),{status:200,headers:{'Content-Type':'image/jpeg','Content-Length':String(jpeg(44,33).length)}});};
-  try{const response=await handleBrandAssetRoute(request(`/api/customer/brand-assets/import?workspace_id=${workspaceId}`,{method:'POST',token,headers:{'Content-Type':'application/json'},body:JSON.stringify({url:'https://cdn.example.test/logo.jpg',kind:'logo',alt_text:'Imported logo'})}),env,{});assert.equal(response.status,201);const {asset}=await response.json();assert.equal(asset.mimeType,'image/jpeg');assert.equal(asset.width,44);assert.equal(calls.length,1);assert.equal(calls[0][1].redirect,'manual');assert.ok(calls[0][1].signal instanceof AbortSignal);assert.equal(DB.audits.at(-1)[3],'brand_asset.imported');}finally{globalThis.fetch=originalFetch;}
+  globalThis.fetch=async(url,options)=>{calls.push([String(url),options]);return new Response(jpeg(),{status:200,headers:{'Content-Type':'image/jpeg','Content-Length':String(jpeg().length)}});};
+  try{
+    const response=await handleBrandAssetRoute(importRequest(workspaceId,token,'https://cdn.example.test/logo.jpg'),env,{});assert.equal(response.status,201);const {asset}=await response.json();assert.equal(asset.mimeType,'image/jpeg');assert.equal(asset.width,16);assert.equal(calls.length,1);assert.equal(calls[0][1].redirect,'manual');assert.ok(calls[0][1].signal instanceof AbortSignal);assert.equal(DB.audits.at(-1)[3],'brand_asset.imported');
+  }finally{globalThis.fetch=originalFetch;}
+});
+
+test('missing allowlist, arbitrary hosts, DNS aliases, and private-lookalike hosts are rejected before fetch',async()=>{
+  const {env,token,workspaceId}=await fixture();const originalFetch=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;return new Response(png(),{headers:{'Content-Type':'image/png'}});};
+  try{
+    const urls=['https://arbitrary.example/logo.png','https://169.254.169.254.nip.io/latest/meta-data','https://cdn.example.test.evil.invalid/logo.png','https://127.0.0.1.nip.io/logo.png'];
+    for(const url of urls){const response=await handleBrandAssetRoute(importRequest(workspaceId,token,url),env,{});assert.equal(response.status,400);}
+    env.BRAND_ASSET_IMPORT_HOSTS='';const response=await handleBrandAssetRoute(importRequest(workspaceId,token,'https://cdn.example.test/logo.png'),env,{});assert.equal(response.status,400);assert.equal(calls,0);
+  }finally{globalThis.fetch=originalFetch;}
+});
+
+test('redirects are rechecked against the host allowlist before the redirected fetch',async()=>{
+  const {env,token,workspaceId}=await fixture();const originalFetch=globalThis.fetch;const calls=[];
+  globalThis.fetch=async url=>{calls.push(String(url));if(calls.length===1)return new Response(null,{status:302,headers:{Location:'https://169.254.169.254.nip.io/latest/meta-data'}});return new Response(png(),{headers:{'Content-Type':'image/png'}});};
+  try{const response=await handleBrandAssetRoute(importRequest(workspaceId,token,'https://cdn.example.test/logo.png'),env,{});assert.equal(response.status,400);assert.deepEqual(calls,['https://cdn.example.test/logo.png']);}finally{globalThis.fetch=originalFetch;}
 });
 
 test('an import timeout while reading image bytes returns a bounded gateway error',async()=>{
   const {env,token,workspaceId}=await fixture();const originalFetch=globalThis.fetch;
   globalThis.fetch=async()=>new Response(new ReadableStream({pull(controller){controller.error(new DOMException('Timed out','AbortError'));}}),{headers:{'Content-Type':'image/png'}});
-  try{const response=await handleBrandAssetRoute(request(`/api/customer/brand-assets/import?workspace_id=${workspaceId}`,{method:'POST',token,headers:{'Content-Type':'application/json'},body:JSON.stringify({url:'https://public.example/logo.png',kind:'logo'})}),env,{});assert.equal(response.status,504);}finally{globalThis.fetch=originalFetch;}
+  try{const response=await handleBrandAssetRoute(importRequest(workspaceId,token,'https://public.example/logo.png'),env,{});assert.equal(response.status,504);}finally{globalThis.fetch=originalFetch;}
 });
 
-test('import blocks data, local, private, link-local, and unsafe redirect targets before fetching them',async()=>{
-  const {env,token,workspaceId}=await fixture();const originalFetch=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;return new Response(null,{status:302,headers:{Location:'http://169.254.169.254/latest/meta-data'}});};
-  try{
-    for(const url of ['data:image/png;base64,AAAA','http://localhost/logo.png','http://127.0.0.1/logo.png','http://10.0.0.1/logo.png','http://[::1]/logo.png']){const response=await handleBrandAssetRoute(request(`/api/customer/brand-assets/import?workspace_id=${workspaceId}`,{method:'POST',token,headers:{'Content-Type':'application/json'},body:JSON.stringify({url,kind:'logo'})}),env,{});assert.equal(response.status,400);}
-    assert.equal(calls,0);const response=await handleBrandAssetRoute(request(`/api/customer/brand-assets/import?workspace_id=${workspaceId}`,{method:'POST',token,headers:{'Content-Type':'application/json'},body:JSON.stringify({url:'https://public.example/logo.png',kind:'logo'})}),env,{});assert.equal(response.status,400);assert.equal(calls,1);
-  }finally{globalThis.fetch=originalFetch;}
-});
-
-test('import rejects excessive redirects, oversized responses, wrong types, and magic mismatches',async()=>{
+test('import rejects unsafe schemes, private literals, excessive redirects, oversized responses, wrong types, and bad magic',async()=>{
   const {env,token,workspaceId}=await fixture();const originalFetch=globalThis.fetch;
-  const invoke=()=>handleBrandAssetRoute(request(`/api/customer/brand-assets/import?workspace_id=${workspaceId}`,{method:'POST',token,headers:{'Content-Type':'application/json'},body:JSON.stringify({url:'https://public.example/logo.png',kind:'logo'})}),env,{});
   try{
-    globalThis.fetch=async()=>new Response(null,{status:302,headers:{Location:'https://public.example/again.png'}});assert.equal((await invoke()).status,400);
-    globalThis.fetch=async()=>new Response(png(),{headers:{'Content-Type':'image/png','Content-Length':String(2*MiB+1)}});assert.equal((await invoke()).status,413);
-    globalThis.fetch=async()=>new Response('<svg/>',{headers:{'Content-Type':'image/svg+xml'}});assert.equal((await invoke()).status,400);
-    globalThis.fetch=async()=>new Response('not a png',{headers:{'Content-Type':'image/png'}});assert.equal((await invoke()).status,400);
+    let calls=0;globalThis.fetch=async()=>{calls++;return new Response('{}');};
+    for(const url of ['data:image/png;base64,AAAA','http://localhost/logo.png','http://127.0.0.1/logo.png','http://10.0.0.1/logo.png','http://[::1]/logo.png'])assert.equal((await handleBrandAssetRoute(importRequest(workspaceId,token,url),env,{})).status,400);
+    assert.equal(calls,0);
+    globalThis.fetch=async()=>new Response(null,{status:302,headers:{Location:'https://public.example/again.png'}});assert.equal((await handleBrandAssetRoute(importRequest(workspaceId,token,'https://public.example/logo.png'),env,{})).status,400);
+    globalThis.fetch=async()=>new Response(png(),{headers:{'Content-Type':'image/png','Content-Length':String(2*MiB+1)}});assert.equal((await handleBrandAssetRoute(importRequest(workspaceId,token,'https://public.example/logo.png'),env,{})).status,413);
+    globalThis.fetch=async()=>new Response('<svg/>',{headers:{'Content-Type':'image/svg+xml'}});assert.equal((await handleBrandAssetRoute(importRequest(workspaceId,token,'https://public.example/logo.png'),env,{})).status,400);
+    globalThis.fetch=async()=>new Response('not a png',{headers:{'Content-Type':'image/png'}});assert.equal((await handleBrandAssetRoute(importRequest(workspaceId,token,'https://public.example/logo.png'),env,{})).status,400);
   }finally{globalThis.fetch=originalFetch;}
 });
 
-test('replacement saves metadata before deleting old bytes and preserves old bytes when save fails',async()=>{
-  const {env,workspaceId}=await fixture();const oldId=`${(await sha256(workspaceId)).slice(0,16)}_${'a'.repeat(32)}`;const nextId=`${oldId.slice(0,17)}${'b'.repeat(32)}`;
-  const oldKey=`workspaces/${oldId.slice(0,16)}/brand-assets/${oldId}`,nextKey=`workspaces/${nextId.slice(0,16)}/brand-assets/${nextId}`;env.BRAND_ASSETS.objects.set(oldKey,{bytes:png(),httpMetadata:{}});env.BRAND_ASSETS.objects.set(nextKey,{bytes:png(),httpMetadata:{}});const order=[];
-  await replaceBrandAsset(env,{workspaceId,previousAssetId:oldId,nextAsset:{id:nextId},saveMetadata:async()=>{order.push('saved');}});order.push(...env.BRAND_ASSETS.events.map(([event])=>event));assert.deepEqual(order,['saved','delete']);assert.equal(env.BRAND_ASSETS.objects.has(oldKey),false);
-  env.BRAND_ASSETS.events=[];env.BRAND_ASSETS.objects.set(oldKey,{bytes:png(),httpMetadata:{}});env.BRAND_ASSETS.objects.set(nextKey,{bytes:png(),httpMetadata:{}});await assert.rejects(()=>replaceBrandAsset(env,{workspaceId,previousAssetId:oldId,nextAsset:{id:nextId},saveMetadata:async()=>{throw new Error('revision conflict');}}),/revision conflict/);assert.equal(env.BRAND_ASSETS.objects.has(oldKey),true);assert.equal(env.BRAND_ASSETS.objects.has(nextKey),false);
+test('replacement saves metadata then audits before deleting old bytes',async()=>{
+  const owner=await fixture();const oldId=randomId('c'),nextId=randomId('d'),oldKey=brandAssetObjectKey(oldId),nextKey=brandAssetObjectKey(nextId);
+  owner.env.BRAND_ASSETS.objects.set(oldKey,{bytes:png(),httpMetadata:{},customMetadata:{workspaceId:owner.workspaceId}});owner.env.BRAND_ASSETS.objects.set(nextKey,{bytes:png(),httpMetadata:{},customMetadata:{workspaceId:owner.workspaceId}});owner.events.length=0;
+  await replaceBrandAsset(owner.env,{workspaceId:owner.workspaceId,userId:owner.DB.user.id,previousAssetId:oldId,nextAsset:{id:nextId},saveMetadata:async()=>owner.events.push(['saved'])});assert.deepEqual(owner.events,[['saved'],['audit','brand_asset.replaced'],['delete',oldKey]]);assert.equal(owner.env.BRAND_ASSETS.objects.has(oldKey),false);
+});
+
+test('failed replacement preserves old bytes and uses audited cleanup for the new object',async()=>{
+  const owner=await fixture();const oldId=randomId('e'),nextId=randomId('f'),oldKey=brandAssetObjectKey(oldId),nextKey=brandAssetObjectKey(nextId);
+  owner.env.BRAND_ASSETS.objects.set(oldKey,{bytes:png(),httpMetadata:{},customMetadata:{workspaceId:owner.workspaceId}});owner.env.BRAND_ASSETS.objects.set(nextKey,{bytes:png(),httpMetadata:{},customMetadata:{workspaceId:owner.workspaceId}});owner.events.length=0;
+  await assert.rejects(()=>replaceBrandAsset(owner.env,{workspaceId:owner.workspaceId,userId:owner.DB.user.id,previousAssetId:oldId,nextAsset:{id:nextId},saveMetadata:async()=>{throw new Error('revision conflict');}}),/revision conflict/);assert.equal(owner.env.BRAND_ASSETS.objects.has(oldKey),true);assert.equal(owner.env.BRAND_ASSETS.objects.has(nextKey),false);assert.deepEqual(owner.events,[['audit','brand_asset.replacement_rolled_back'],['delete',nextKey]]);
+});
+
+test('production app serves public asset GET before rejecting an unrelated Origin',async()=>{
+  const events=[],bucket=new MemoryR2(events),assetId=randomId('g'),key=`brand-assets/${assetId}`;bucket.objects.set(key,{bytes:png(),httpMetadata:{contentType:'image/png'},customMetadata:{workspaceId:'private-workspace'}});
+  const response=await app.fetch(request(`/api/customer/brand-assets/${assetId}`,{headers:{Origin:'https://email-client.example'}}),{APP_ORIGIN:'https://leadintel.ccgroup.lv',BRAND_ASSETS:bucket});assert.equal(response.status,200);assert.equal(response.headers.get('Content-Type'),'image/png');assert.deepEqual(new Uint8Array(await response.arrayBuffer()),png());
 });
 
 test('unrelated paths return null',async()=>{const {env}=await fixture();assert.equal(await handleBrandAssetRoute(request('/api/health'),env,{}),null);});
