@@ -4,7 +4,7 @@ Status: COMPLETE.
 
 Starting branch head: `829c89b9c4516e313ec4e9441837209383dacbbc`
 
-Implementation head before this report commit: `3d486bd6b56d9e5806a22410c730ed3f8f642e93`
+Implementation head before this report commit: `3c4f2959c4ee0060350c4ab5aa21e1a203c98677`
 
 ## Remote commits
 
@@ -14,6 +14,11 @@ Implementation head before this report commit: `3d486bd6b56d9e5806a22410c730ed3f
 4. `71d9d68ab62ed17c007422e40ed7562f67d91043` — approved email preview and reapproval UX
 5. `37c7593275d563ae1ff9d2699dd6403de61e6010` — explicit manual-send parity contract
 6. `3d486bd6b56d9e5806a22410c730ed3f8f642e93` — frozen text handoff to current manual delivery
+7. `37dd1056a5f33ff69bc918a445c8c2b20b767525` — outreach runtime cache-chain contract
+8. `e47178b71e983f720bdd5ea12153fc7525b4fe55` — refreshed discovery entry cache contract
+9. `bf55d9317ae0a551b92a1d1a1eef194e29fb5108` — branded-outreach bootstrap cache contract
+10. `2447c7b012b5e9281ba347cfd536440d7d44319d` — outreach engine/UI loader cache refresh
+11. `3c4f2959c4ee0060350c4ab5aa21e1a203c98677` — discovery entry-point cache refresh
 
 ## Implemented
 
@@ -31,6 +36,7 @@ Implementation head before this report commit: `3d486bd6b56d9e5806a22410c730ed3f
 - arbitrary user-edited placeholder text is preserved
 - CRM stage/activity, recipient selection, idempotency inputs, and the separate human send action remain intact
 - no branded automatic-delivery path was enabled
+- `discovery-ui.js`, `outreach-engine.js`, and `outreach-ui.js` now share the fresh `20260916-brand-outreach-v1` cache chain
 
 ## Verification
 
@@ -38,9 +44,9 @@ Initial RED run: 0 passed, 6 failed for the missing snapshot/rendering behavior.
 
 Focused outreach and delivery verification: 25 passed, 0 failed, 0 skipped, 0 cancelled.
 
-Final relevant regression verification: 103 passed, 0 failed, 0 skipped, 0 cancelled.
+Final relevant regression verification after cache-contract changes: 109 passed, 0 failed, 0 skipped, 0 cancelled.
 
-JavaScript syntax checks passed for `customer/outreach-engine.js` and `customer/outreach-ui.js`.
+JavaScript syntax checks passed for `customer/outreach-engine.js`, `customer/outreach-ui.js`, and `customer/discovery-ui.js`.
 
 The relevant regression set covered Brand Identity, outreach, manual delivery, language switching, automation isolation, state budget, and customer structure.
 
@@ -49,4 +55,4 @@ The relevant regression set covered Brand Identity, outreach, manual delivery, l
 - Task 5 is complete with no blocker.
 - Safe HTML is frozen and exposed to delivery, but backend HTML validation/MIME and Microsoft Graph HTML transport intentionally remain Task 6.
 - Automatic Gmail delivery remains on its existing plain-text path until queue snapshot support exists, as required.
-- Browser cache/version release changes intentionally remain Task 7; this task did not modify release files or `main`.
+- Task 5 cache-contract changes are committed. `main` and Task 6+ remain untouched.
