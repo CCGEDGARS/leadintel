@@ -278,7 +278,40 @@ function renderCandidates(){const target=$("company-candidates");if(!target)retu
     <div class="candidate-actions"><button class="secondary-btn small" type="button" data-action="save-crm" data-company-index="${index}" ${crmDisabled?"disabled":""}>${crmAuthenticated()?crmLabel:"Sign in for CRM"}</button><button class="primary-btn small" type="button" data-action="add-pipeline" data-company-index="${index}" ${pipelineDisabled?"disabled":""}>${pipelineLabel}</button></div>
   </article>`;}).join("");}
 
-async function findDecisionMakers(index){const candidate=discovery.candidates[index];if(!candidate)return;if(!candidateIsActionable(candidate)){showToast("Company qualification is incomplete · run Discovery again");return false;}const main=mainState();const payload=LeadIntelDiscovery.buildApolloPeopleSearchPayload(candidate,main.profile||{});if(!payload.q_organization_domains_list.length){showToast("A verified company domain is required");return false;}candidate.peopleStatus="loading";saveDiscovery();renderCandidates();try{const response=await fetch(`${INTELLIGENCE_PROXY}/`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||`Apollo returned ${response.status}`);candidate.people=LeadIntelDiscovery.selectDecisionMakers(LeadIntelDiscovery.normalizeApolloPeople(data),main.profile||{},4);candidate.peopleStatus=candidate.people.length?"complete":"empty";if(candidate.saved)discovery.pipeline=LeadIntelDiscovery.upsertPipelineItem(discovery.pipeline,candidate);saveDiscovery();if(crmAuthenticated()&&crmCompanyByDomain(candidate.domain)){const mapped=window.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate);const saved=await bridge().saveCrmCompany(mapped);if(!saved.ok)showToast(saved.error||"CRM contact update failed");else await refreshCrmState({render:false});}renderAll();showToast(!candidate.people.length?'No relevant decision-makers returned':candidate.people.length<3?`Only ${candidate.people.length} relevant decision-maker${candidate.people.length===1?"":"s"} found`:`${candidate.people.length} relevant decision-makers found`);return true;}catch(error){candidate.peopleStatus="error";saveDiscovery();renderAll();showToast(error.message||"Apollo people search unavailable");return false;}}
+async function findDecisionMakers(index){
+  const candidate=discovery.candidates[index];if(!candidate)return;
+  if(!candidateIsActionable(candidate)){showToast("Company qualification is incomplete · run Discovery again");return false;}
+  const main=mainState();
+  const payload=LeadIntelDiscovery.buildApolloPeopleSearchPayload(candidate,main.profile||{});
+  if(!payload.q_organization_domains_list.length){showToast("A verified company domain is required");return false;}
+  candidate.peopleStatus="loading";saveDiscovery();renderCandidates();
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS);
+  try{
+    const response=await fetch(`${INTELLIGENCE_PROXY}/`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),signal:controller.signal});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.error||`Apollo returned ${response.status}`);
+    candidate.people=LeadIntelDiscovery.selectDecisionMakers(LeadIntelDiscovery.normalizeApolloPeople(data),main.profile||{},4);
+    candidate.peopleStatus=candidate.people.length?"complete":"empty";
+    if(candidate.saved)discovery.pipeline=LeadIntelDiscovery.upsertPipelineItem(discovery.pipeline,candidate);
+    saveDiscovery();
+    if(crmAuthenticated()&&crmCompanyByDomain(candidate.domain)){
+      const mapped=window.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate);
+      const saved=await bridge().saveCrmCompany(mapped);
+      if(!saved.ok)showToast(saved.error||"CRM contact update failed");
+      else await refreshCrmState({render:false});
+    }
+    renderAll();
+    showToast(!candidate.people.length?'No relevant decision-makers returned':candidate.people.length<3?`Only ${candidate.people.length} relevant decision-maker${candidate.people.length===1?"":"s"} found`:`${candidate.people.length} relevant decision-makers found`);
+    return true;
+  }catch(error){
+    candidate.peopleStatus="error";saveDiscovery();renderAll();
+    showToast(error?.name==="AbortError"?"Apollo people search timed out":error.message||"Apollo people search unavailable");
+    return false;
+  }finally{
+    clearTimeout(timeout);
+  }
+}
 function saveLocalPipeline(candidate){discovery.pipeline=LeadIntelDiscovery.upsertPipelineItem(discovery.pipeline,candidate);candidate.saved=true;saveDiscovery();}
 async function ensureCrmCompany(candidate){let company=crmCompanyByDomain(candidate.domain||candidate.website);if(company?.lifecycle_status==="suppressed")throw Object.assign(new Error("Suppressed companies must be restored in CRM before enrichment"),{code:"CRM_COMPANY_SUPPRESSED"});if(company)return company;const mapped=window.LeadIntelCrm?.mapDiscoveryCandidateToCrm(candidate);if(!mapped)throw new Error("CRM mapping is unavailable");const saved=await bridge().saveCrmCompany(mapped);if(!saved.ok)throw Object.assign(new Error(saved.error||"CRM save failed"),{code:saved.code});company=saved.company;await refreshCrmState({render:false});return company;}
 async function enrichContact(companyIndex,personIndex,{phoneLookup=false}={}){const candidate=discovery.candidates[companyIndex];const person=candidate?.people?.[personIndex];if(!candidate||!person)return false;if(!person.id){showToast("Apollo person identity is missing · refresh decision-makers");return false;}if(!crmAuthenticated()){showToast("Sign in to enrich contacts with Apollo");return false;}const key=personKey(candidate,person);if(enrichmentPending.has(key))return false;enrichmentPending.add(key);renderCandidates();try{const company=await ensureCrmCompany(candidate);const result=await bridge().enrichCrmContact(company.id,person,{phoneLookup,allowPersonalEmail:false});if(!result.ok)throw Object.assign(new Error(result.error||"Apollo contact enrichment failed"),{code:result.code});enrichmentResults.set(key,result);await refreshCrmState({render:false});renderAll();window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company_id:company.id,contact_id:result.contact?.id||null}}));if(phoneLookup)showToast(result.contact?.phone_number?`${person.name} · verified phone saved to Master CRM`:`${person.name} · phone lookup requested · use Refresh phone to check`);else showToast(result.contact?.work_email?`${person.name} · verified email saved to Master CRM`:`${person.name} · no verified company email returned`);return true;}catch(error){showToast(error.code==="CRM_APOLLO_CREDIT_LIMIT"?"Apollo credit limit reached":error.message||"Apollo contact enrichment failed");return false;}finally{enrichmentPending.delete(key);renderCandidates();}}
