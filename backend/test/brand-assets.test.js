@@ -41,14 +41,48 @@ function pngWithoutIdat(){
   const bytes=png();return new Uint8Array([...bytes.subarray(0,33),...bytes.subarray(bytes.length-12)]);
 }
 
+function crcValidPngWithUndecodablePixels(){
+  const bytes=png();
+  const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+  let offset=8;
+  while(offset+12<=bytes.length){
+    const length=view.getUint32(offset);
+    const type=String.fromCharCode(...bytes.subarray(offset+4,offset+8));
+    if(type==='IDAT'){
+      bytes.fill(0,offset+8,offset+8+length);
+      view.setUint32(offset+8+length,crc32(bytes.subarray(offset+4,offset+8+length)));
+      return bytes;
+    }
+    offset+=12+length;
+  }
+  throw new Error('PNG fixture has no IDAT');
+}
+
 function headerOnlyJpeg(width=3,height=2){
   return Uint8Array.from([0xff,0xd8,0xff,0xc0,0,17,8,height>>8,height&255,width>>8,width&255,3,1,0x11,0,2,0x11,0,3,0x11,0,0xff,0xd9]);
+}
+
+function markerValidJpegWithUndecodableScan(width=3,height=2){
+  return Uint8Array.from([
+    0xff,0xd8,
+    0xff,0xc0,0,17,8,height>>8,height&255,width>>8,width&255,3,1,0x11,0,2,0x11,0,3,0x11,0,
+    0xff,0xda,0,12,3,1,0,2,0x11,3,0x11,0,0x3f,0,
+    1,2,3,
+    0xff,0xd9
+  ]);
 }
 
 function vp8xOnlyWebp(width=3,height=2){
   const bytes=new Uint8Array(30);
   bytes.set([0x52,0x49,0x46,0x46,22,0,0,0,0x57,0x45,0x42,0x50,0x56,0x50,0x38,0x58,10,0,0,0,0,0,0,0]);
   const w=width-1,h=height-1;bytes.set([w&255,(w>>8)&255,(w>>16)&255,h&255,(h>>8)&255,(h>>16)&255],24);
+  return bytes;
+}
+
+function riffValidWebpWithUndecodableVp8(width=3,height=2){
+  const bytes=new Uint8Array(30);
+  bytes.set([0x52,0x49,0x46,0x46,22,0,0,0,0x57,0x45,0x42,0x50,0x56,0x50,0x38,0x20,10,0,0,0],0);
+  bytes.set([0,0,0,0x9d,0x01,0x2a,width&255,(width>>8)&0x3f,height&255,(height>>8)&0x3f],20);
   return bytes;
 }
 
@@ -134,6 +168,27 @@ test('malformed PNG chunks, JPEG without a scan, and WebP without image data are
   await assert.rejects(()=>validateBrandAsset(file(vp8xOnlyWebp(),'image/webp'),'logo'),/magic bytes|structure/i);
 });
 
+test('CRC-valid PNG with undecodable pixel data is rejected',async()=>{
+  await assert.rejects(
+    ()=>validateBrandAsset(file(crcValidPngWithUndecodablePixels(),'image/png'),'logo'),
+    /decode|structure/i
+  );
+});
+
+test('marker-valid JPEG with an undecodable entropy scan is rejected',async()=>{
+  await assert.rejects(
+    ()=>validateBrandAsset(file(markerValidJpegWithUndecodableScan(),'image/jpeg'),'logo'),
+    /decode|structure/i
+  );
+});
+
+test('RIFF-valid WebP with an undecodable VP8 frame is rejected',async()=>{
+  await assert.rejects(
+    ()=>validateBrandAsset(file(riffValidWebpWithUndecodableVp8(),'image/webp'),'logo'),
+    /decode|structure/i
+  );
+});
+
 test('recognized images with trailing executable payloads are rejected',async()=>{
   const script=new TextEncoder().encode('<script>alert(1)</script>');
   for(const [bytes,type] of [[png(),'image/png'],[jpeg(),'image/jpeg'],[webp(),'image/webp']]){
@@ -158,6 +213,19 @@ test('upload requires workspace membership with owner or researcher role',async(
   const sales=await fixture('sales');response=await handleBrandAssetRoute(uploadRequest(sales.workspaceId,sales.token),sales.env,{});assert.equal(response.status,403);assert.equal(sales.env.BRAND_ASSETS.objects.size,0);
   response=await handleBrandAssetRoute(uploadRequest('another-workspace',owner.token),owner.env,{});assert.equal(response.status,403);assert.equal(owner.env.BRAND_ASSETS.objects.size,0);
   const researcher=await fixture('researcher');response=await handleBrandAssetRoute(uploadRequest(researcher.workspaceId,researcher.token),researcher.env,{});assert.equal(response.status,201);
+});
+
+test('failed upload intention audit prevents the R2 put and leaves no orphan',async()=>{
+  const owner=await fixture('owner');
+  owner.DB.failAudit=true;
+
+  await assert.rejects(
+    ()=>handleBrandAssetRoute(uploadRequest(owner.workspaceId,owner.token),owner.env,{}),
+    /audit unavailable/
+  );
+
+  assert.equal(owner.events.some(([event])=>event==='put'),false);
+  assert.equal(owner.env.BRAND_ASSETS.objects.size,0);
 });
 
 test('uploads use fully random uncorrelated IDs and keep ownership only in private R2 metadata',async()=>{
