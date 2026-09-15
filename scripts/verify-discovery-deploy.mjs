@@ -26,7 +26,7 @@ export function discoveryDeploymentFailures({ html = '', runtime = '', appRuntim
   }
   for (const marker of [
     'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
-    'const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS+1000;',
+    'const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS*2+2000;',
     'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};',
     'initDiscoveryWhenReady();'
   ]) {
