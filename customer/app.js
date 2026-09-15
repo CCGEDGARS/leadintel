@@ -116,12 +116,36 @@ function syncInputsFromState(){
   document.querySelectorAll("[data-question]").forEach(el=>el.value=state.answers[el.dataset.question]||"");renderTargetMarkets();renderDocuments();brandIdentityUI?.sync?.(state.brandIdentity);
 }
 
+function brandIdentityPublicEvidence(){
+  const source=state&&typeof state==="object"&&!Array.isArray(state)?state:{};
+  const text=(value,max=20000)=>typeof value==="string"?value.trim().slice(0,max):"";
+  const https=value=>{const candidate=text(value,2048);if(!candidate)return "";try{const url=new URL(candidate);return url.protocol==="https:"&&!url.username&&!url.password?url.href:"";}catch{return "";}};
+  const profileSource=source.profile&&typeof source.profile==="object"&&!Array.isArray(source.profile)?source.profile:{};
+  const profile={};
+  for(const key of ["companyName","companyDisplayName","phone","linkedinUrl","primaryColor","logoUrl"]){const value=text(profileSource[key],key.endsWith("Url")?2048:500);if(value)profile[key]=value;}
+  const scrapedSources=(Array.isArray(source.scrapedSources)?source.scrapedSources:[]).filter(item=>item&&typeof item==="object"&&!Array.isArray(item)).map(item=>{
+    const safe={};
+    for(const key of ["url","status","title","text","logoUrl"]){const value=text(item[key],key==="text"?20000:2048);if(value)safe[key]=value;}
+    const metadata=item.metadata&&typeof item.metadata==="object"&&!Array.isArray(item.metadata)?item.metadata:{};
+    const safeMetadata={};
+    for(const key of ["logoUrl","logo"]){const value=text(metadata[key],2048);if(value)safeMetadata[key]=value;}
+    if(Object.keys(safeMetadata).length)safe.metadata=safeMetadata;
+    return safe;
+  });
+  const additionalLinks=(Array.isArray(source.additionalLinks)?source.additionalLinks:[]).map(https).filter(Boolean).slice(0,8);
+  const activationSource=source.websiteActivation&&typeof source.websiteActivation==="object"&&!Array.isArray(source.websiteActivation)?source.websiteActivation:{};
+  const websiteActivation={};
+  const activationLogo=https(activationSource.logoUrl);if(activationLogo)websiteActivation.logoUrl=activationLogo;
+  return {profile,scrapedSources,additionalLinks,websiteActivation};
+}
+
 function initBrandIdentity(){
   const ui=globalThis.LeadIntelBrandIdentityUI;
   if(!ui?.mount)return;
   brandIdentityUI=ui.mount({
     getIdentity:()=>state.brandIdentity,
     getWebsite:()=>state.website,
+    getPublicEvidence:brandIdentityPublicEvidence,
     setIdentity:identity=>{
       state.brandIdentity=globalThis.LeadIntelBrandIdentity.normalize(identity);
       saveState();
