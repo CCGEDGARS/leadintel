@@ -122,6 +122,57 @@ test('safeAssetReference keeps only approved metadata and rejects data, remote, 
   assert.equal(BrandIdentity.safeAssetReference({...source, mimeType: 'image/svg+xml'}), null);
 });
 
+test('managed asset routes become absolute allowlisted LeadIntel API URLs in delivered HTML', () => {
+  const safeLogo = BrandIdentity.safeAssetReference(readyIdentity.assets.logo);
+  const rendered = BrandIdentity.renderEmail({
+    subject: 'Absolute asset URL',
+    bodyText: 'Hello',
+    brandSnapshot: readyIdentity
+  });
+
+  assert.equal(
+    safeLogo.url,
+    'https://leadintel-api.edgars-7e7.workers.dev/api/customer/brand-assets/logo_01'
+  );
+  assert.match(
+    rendered.htmlBody,
+    /src="https:\/\/leadintel-api\.edgars-7e7\.workers\.dev\/api\/customer\/brand-assets\/logo_01"/
+  );
+  assert.equal(BrandIdentity.safeAssetReference({
+    ...readyIdentity.assets.logo,
+    url: 'https://images.example/api/customer/brand-assets/logo_01'
+  }), null);
+});
+
+test('renderEmail fails explicitly for a present ready snapshot that does not validate', () => {
+  assert.throws(
+    () => BrandIdentity.renderEmail({
+      subject: 'Must not downgrade',
+      bodyText: 'Approved branded body',
+      brandSnapshot: {...readyIdentity, senderName: ''}
+    }),
+    {
+      name: 'TypeError',
+      message: 'Cannot render a present invalid ready brand identity.'
+    }
+  );
+});
+
+test('safeAssetReference rejects impossible calendar timestamps instead of rolling them forward', () => {
+  assert.ok(BrandIdentity.safeAssetReference({
+    ...readyIdentity.assets.logo,
+    updatedAt: '2024-02-29T12:00:00.000Z'
+  }));
+  assert.equal(BrandIdentity.safeAssetReference({
+    ...readyIdentity.assets.logo,
+    updatedAt: '2026-02-29T12:00:00.000Z'
+  }), null);
+  assert.equal(BrandIdentity.safeAssetReference({
+    ...readyIdentity.assets.logo,
+    updatedAt: '2026-02-31T12:00:00.000Z'
+  }), null);
+});
+
 test('renderEmail escapes every HTML value while preserving an equivalent literal plain-text part', () => {
   const rendered = BrandIdentity.renderEmail({
     subject: 'A <safe> subject',
