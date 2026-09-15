@@ -1,5 +1,5 @@
 const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
-const SETTINGS_VERSION='20260915-microsoft-settings-v1';
+const SETTINGS_VERSION='20260915-mail-choice-v2';
 const SERVICE_PROVIDERS=Object.freeze([
   {provider:'apollo',name:'Apollo.io',placeholder:'Apollo API key',purpose:'Company, decision-maker, email and phone enrichment'},
   {provider:'firecrawl',name:'Firecrawl',placeholder:'fc-…',purpose:'Website scraping, public research and evidence collection'}
@@ -55,7 +55,7 @@ function needsDecoration(){
   const grid=document.getElementById('integration-platform-grid');if(!grid)return false;
   for(const config of SERVICE_PROVIDERS){const card=grid.querySelector(`[data-integration="${config.provider}"]`);if(card&&!card.querySelector('[data-service-extension="1"]'))return true;}
   const health=document.getElementById('integration-health-summary');if(health&&!health.querySelector('.service-readiness-note'))return true;
-  const google=document.querySelector('#integration-communication-grid [data-integration="google"]');if(!signedIn()&&google&&!google.querySelector('[data-service-action="google-signin"]'))return true;
+  const google=document.querySelector('#integration-communication-grid [data-integration="google"]');if(!signedIn()&&google&&!google.querySelector('[data-service-action="google-signin"]')&&!google.querySelector('[data-settings-signin="google"]'))return true;
   return false;
 }
 function decorateReadiness(){
@@ -71,8 +71,8 @@ function decorateReadiness(){
 function decorateGoogleCard(){
   const card=document.querySelector('#integration-communication-grid [data-integration="google"]');if(!card)return;
   card.querySelector('[data-google-connect-extension="1"]')?.remove();
-  if(signedIn())return;
-  card.insertAdjacentHTML('beforeend','<div class="google-connect-panel" data-google-connect-extension="1"><button class="ai-settings-btn primary" data-service-action="google-signin" type="button">Connect with Google</button><small>Creates or opens your private LeadIntel workspace.</small></div>');
+  if(signedIn()||card.querySelector('[data-settings-signin="google"]'))return;
+  card.insertAdjacentHTML('beforeend','<div class="google-connect-panel" data-google-connect-extension="1"><button class="ai-settings-btn primary" data-service-action="google-signin" type="button">Continue with Google</button><small>Creates or opens your private LeadIntel workspace.</small></div>');
 }
 function decorateCards(){
   if(!settingsDrawerOpen())return;
