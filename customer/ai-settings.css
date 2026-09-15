@@ -18,6 +18,9 @@ body.ai-settings-opened{overflow:hidden}
 .ai-engine-summary span{font:600 10px/1.2 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.12em}
 .ai-engine-summary strong{font-size:16px}
 .ai-engine-summary small{font-size:12px}
+.workspace-signin-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:10px}
+.ai-settings-btn.microsoft{border-color:#2469b2;background:#2469b2;color:#fff}
+.ai-settings-btn.microsoft:hover:not(:disabled){border-color:#185b9f;background:#185b9f}
 .ai-settings-section{margin-top:26px;padding-top:2px}
 .ai-settings-section+.ai-settings-section{padding-top:25px;border-top:1px solid var(--ai-line)}
 .ai-section-title h3{font-size:20px;margin:5px 0 7px;letter-spacing:-.02em}
@@ -52,6 +55,8 @@ body.ai-settings-opened{overflow:hidden}
 .integration-status.neutral{color:#718078;background:#f5f7f5}
 .integration-purpose{margin:0;color:#40534c;font-size:12px;line-height:1.45}
 .integration-meta{padding-top:9px;border-top:1px solid #edf0ee;color:var(--ai-muted);font-size:11px;line-height:1.45;overflow-wrap:anywhere}
+.microsoft-mail-actions{display:flex;align-items:center;justify-content:flex-start;padding-top:2px}
+.microsoft-mail-actions .ai-settings-btn{width:100%}
 .ai-settings-btn{appearance:none;min-height:38px;padding:8px 11px;border:1px solid #bfc9c4;border-radius:9px;background:#fff;color:#263b33;font:700 11px/1.15 'DM Sans',sans-serif;cursor:pointer;transition:border-color .15s ease,background .15s ease,box-shadow .15s ease,transform .15s ease}
 .ai-settings-btn:hover:not(:disabled){border-color:#779b8f;background:#f4f8f5;transform:translateY(-1px)}
 .ai-settings-btn.primary{border-color:#15352b;background:#15352b;color:#fff}
@@ -63,7 +68,7 @@ body.ai-settings-opened{overflow:hidden}
 .ai-settings-open{min-height:34px!important;padding-inline:13px!important;background:transparent!important}
 .ai-security-note{display:grid;gap:5px;margin-top:25px;padding:15px 16px;border:1px solid #e0e4e1;border-radius:12px;background:var(--ai-soft);font-size:12px;line-height:1.5}
 .ai-security-note strong{font-size:12px}
-@media(max-width:680px){.ai-settings-drawer{width:100vw;padding:22px 18px}.ai-provider-actions{grid-template-columns:1fr}.ai-settings-head h2{font-size:24px}.integration-health-summary{align-items:stretch;flex-direction:column}.integration-health-summary .ai-settings-btn{width:100%}.integration-grid{grid-template-columns:1fr}}
+@media(max-width:680px){.ai-settings-drawer{width:100vw;padding:22px 18px}.ai-provider-actions,.workspace-signin-options{grid-template-columns:1fr}.ai-settings-head h2{font-size:24px}.integration-health-summary{align-items:stretch;flex-direction:column}.integration-health-summary .ai-settings-btn{width:100%}.integration-grid{grid-template-columns:1fr}}
 
 /* Typography v2 */
 .ai-settings-head p,.ai-section-title p{font-size:var(--type-body-sm);line-height:1.6}.ai-engine-summary span,.integration-summary-copy span{font:600 var(--type-micro)/1.25 'IBM Plex Mono',monospace}.ai-engine-summary small,.integration-summary-copy small{font-size:var(--type-meta)}.ai-provider-head small,.integration-card-head small{font-size:var(--type-meta);line-height:1.45}.ai-provider-status,.integration-status{font:600 var(--type-micro)/1.2 'IBM Plex Mono',monospace}.ai-settings-field{font-size:var(--type-secondary)}.ai-settings-field input{font:500 var(--type-control)/1.35 'DM Sans',sans-serif}.ai-key-meta,.integration-meta{font-size:var(--type-meta)}.integration-purpose{font-size:var(--type-secondary)}.ai-provider-error{font-size:var(--type-meta)}.ai-settings-btn{font:700 var(--type-secondary)/1.2 'DM Sans',sans-serif;min-height:40px}.ai-security-note{font-size:var(--type-secondary)}.ai-security-note strong{font-size:var(--type-secondary)}
