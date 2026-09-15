@@ -61,6 +61,7 @@ jobs:
           node --check src/oauth.js
           node --check src/customer-state.js
           node --check src/gmail.js
+          node --check src/microsoft-mail.js
           node --check src/saas-routes.js
           node --check src/crm.js
           node --check src/crm-routes.js

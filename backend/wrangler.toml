@@ -9,12 +9,16 @@ SESSION_TTL_HOURS = "168"
 CUSTOMER_APP_URL = "https://leadintel.ccgroup.lv/customer/"
 GOOGLE_OAUTH_REDIRECT_URI = "https://leadintel-api.edgars-7e7.workers.dev/api/auth/google/callback"
 GMAIL_OAUTH_REDIRECT_URI = "https://leadintel-api.edgars-7e7.workers.dev/api/integrations/gmail/callback"
+MICROSOFT_OAUTH_REDIRECT_URI = "https://leadintel-api.edgars-7e7.workers.dev/api/auth/microsoft/callback"
+MICROSOFT_MAIL_OAUTH_REDIRECT_URI = "https://leadintel-api.edgars-7e7.workers.dev/api/integrations/microsoft-mail/callback"
 APOLLO_WEBHOOK_URL = "https://leadintel-api.edgars-7e7.workers.dev/api/webhooks/apollo/crm-contact"
 SCRAPLING_SERVICE_URL = "https://leadintel-scrapling.onrender.com/api/scrapling"
 
 # Secrets are configured with `wrangler secret put` and are never committed:
 # GOOGLE_OAUTH_CLIENT_ID
 # GOOGLE_OAUTH_CLIENT_SECRET
+# MICROSOFT_OAUTH_CLIENT_ID
+# MICROSOFT_OAUTH_CLIENT_SECRET
 # OAUTH_TOKEN_ENCRYPTION_KEY (base64-encoded 32-byte AES key)
 # APOLLO_API_KEY
 # APOLLO_WEBHOOK_SECRET (optional dedicated callback-signing key; Apollo API key can be used as the server-side fallback)

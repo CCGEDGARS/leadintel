@@ -330,15 +330,8 @@ async function ensureMarketResearchWorkspace(mode){
   const bridge=await waitForMarketServerBridge();
   if(bridge?.session?.authenticated&&bridge?.workspace?.id){sessionStorage.removeItem(MARKET_RESEARCH_RESUME_KEY);return true;}
   sessionStorage.setItem(MARKET_RESEARCH_RESUME_KEY,selectedMode);
-  showToast(`Sign in with Google to start ${researchModeUi(selectedMode).label}`);
-  try{
-    await bridge?.signIn?.();
-  }catch(error){
-    sessionStorage.removeItem(MARKET_RESEARCH_RESUME_KEY);
-    showToast(`Sign-in could not start · ${error.message}`);
-    return false;
-  }
-  void resumePendingMarketResearchAfterAuth();
+  showToast(`Sign in with Google or Microsoft to start ${researchModeUi(selectedMode).label}`);
+  bridge?.signIn?.();
   return false;
 }
 async function resumePendingMarketResearchAfterAuth(){
