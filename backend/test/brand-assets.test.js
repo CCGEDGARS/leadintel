@@ -37,6 +37,15 @@ function validatedMetadata({workspaceId='private-workspace',mimeType='image/png'
   };
 }
 
+async function bytesSha256(bytes){
+  const digest=await crypto.subtle.digest('SHA-256',bytes);
+  return [...new Uint8Array(digest)].map(byte=>byte.toString(16).padStart(2,'0')).join('');
+}
+
+async function validatedMetadataWithDigest(bytes,options={}){
+  return {...validatedMetadata({size:bytes.byteLength,...options}),'content-sha256':await bytesSha256(bytes)};
+}
+
 function crc32(bytes){
   let crc=0xffffffff;
   for(const byte of bytes){
@@ -306,13 +315,13 @@ test('successful upload records an authorized attempt before the R2 put',async()
   ]);
 });
 
-test('uploads use fully random uncorrelated IDs and keep ownership only in private R2 metadata',async()=>{
+test('uploads use fully random uncorrelated IDs and persist the validated byte digest privately',async()=>{
   const {env,token,workspaceId}=await fixture();const workspaceHash=(await sha256(workspaceId)).slice(0,16);
   const first=(await (await handleBrandAssetRoute(uploadRequest(workspaceId,token),env,{})).json()).asset;
   const second=(await (await handleBrandAssetRoute(uploadRequest(workspaceId,token),env,{})).json()).asset;
   assert.match(first.id,/^[A-Za-z0-9_-]{43}$/);assert.match(second.id,/^[A-Za-z0-9_-]{43}$/);assert.notEqual(first.id,second.id);assert.notEqual(first.id.slice(0,16),second.id.slice(0,16));assert.equal(first.id.startsWith(workspaceHash),false);
   assert.equal(first.url,`https://leadintel-api.edgars-7e7.workers.dev/api/customer/brand-assets/${first.id}`);assert.equal(JSON.stringify(first).includes(workspaceId),false);assert.equal(JSON.stringify(first).includes('private-company-logo.png'),false);assert.equal(JSON.stringify(first).includes('private@example.com'),false);
-  const key=brandAssetObjectKey(first.id);assert.equal(key,`brand-assets/${first.id}`);assert.deepEqual(env.BRAND_ASSETS.objects.get(key).customMetadata,validatedMetadata({workspaceId}));
+  const key=brandAssetObjectKey(first.id);assert.equal(key,`brand-assets/${first.id}`);assert.deepEqual(env.BRAND_ASSETS.objects.get(key).customMetadata,await validatedMetadataWithDigest(png(),{workspaceId}));
 });
 
 test('public GET returns only validated bytes with strict immutable headers',async()=>{
@@ -321,9 +330,9 @@ test('public GET returns only validated bytes with strict immutable headers',asy
   env.BRAND_ASSETS.objects.get(brandAssetObjectKey(asset.id)).bytes=Uint8Array.from([0x4d,0x5a]);response=await handleBrandAssetRoute(request(`/api/customer/brand-assets/${asset.id}`),env,{});assert.equal(response.status,404);
 });
 
-test('public GET serves validated metadata without loading an image decoder',()=>{
+test('public GET serves matching digest metadata without loading an image decoder',async()=>{
   const assetId=randomId('h');
-  const metadata=JSON.stringify(validatedMetadata());
+  const metadata=JSON.stringify(await validatedMetadataWithDigest(png()));
   const script=`
     import {handleBrandAssetRoute} from './src/brand-assets.js';
     const bytes=Uint8Array.from(Buffer.from('${PNG_BASE64}','base64'));
@@ -355,6 +364,34 @@ test('public GET fails closed when private validation metadata is missing or mal
   for(const customMetadata of invalidMetadata){
     bucket.objects.set(key,{bytes:png(),httpMetadata:{contentType:'image/png'},customMetadata});
     const response=await handleBrandAssetRoute(requestForAsset,{BRAND_ASSETS:bucket},{});
+    assert.equal(response.status,404);
+  }
+});
+
+test('public GET rejects same-length substituted bytes when trusted metadata is unchanged',async()=>{
+  const assetId=randomId('j'),key=brandAssetObjectKey(assetId),trusted=png();
+  const bucket=new MemoryR2();
+  bucket.objects.set(key,{
+    bytes:Uint8Array.from({length:trusted.byteLength},(_,index)=>index===0?0x4d:index===1?0x5a:0),
+    httpMetadata:{contentType:'image/png'},
+    customMetadata:await validatedMetadataWithDigest(trusted)
+  });
+
+  const response=await handleBrandAssetRoute(request(`/api/customer/brand-assets/${assetId}`),{BRAND_ASSETS:bucket},{});
+  assert.equal(response.status,404);
+});
+
+test('public GET requires a canonical SHA-256 digest and serves only matching genuine bytes',async()=>{
+  const assetId=randomId('k'),key=brandAssetObjectKey(assetId),bytes=png(),bucket=new MemoryR2();
+  const metadata=await validatedMetadataWithDigest(bytes);
+  bucket.objects.set(key,{bytes,httpMetadata:{contentType:'image/png'},customMetadata:metadata});
+  let response=await handleBrandAssetRoute(request(`/api/customer/brand-assets/${assetId}`),{BRAND_ASSETS:bucket},{});
+  assert.equal(response.status,200);
+  assert.deepEqual(new Uint8Array(await response.arrayBuffer()),bytes);
+
+  for(const digest of [undefined,'',metadata['content-sha256'].toUpperCase(),'0'.repeat(63),'g'.repeat(64)]){
+    bucket.objects.set(key,{bytes,httpMetadata:{contentType:'image/png'},customMetadata:{...metadata,'content-sha256':digest}});
+    response=await handleBrandAssetRoute(request(`/api/customer/brand-assets/${assetId}`),{BRAND_ASSETS:bucket},{});
     assert.equal(response.status,404);
   }
 });
@@ -435,7 +472,7 @@ test('failed replacement preserves old bytes and uses audited cleanup for the ne
 });
 
 test('production app serves public asset GET before rejecting an unrelated Origin',async()=>{
-  const events=[],bucket=new MemoryR2(events),assetId=randomId('g'),key=`brand-assets/${assetId}`;bucket.objects.set(key,{bytes:png(),httpMetadata:{contentType:'image/png'},customMetadata:validatedMetadata()});
+  const events=[],bucket=new MemoryR2(events),assetId=randomId('g'),key=`brand-assets/${assetId}`;bucket.objects.set(key,{bytes:png(),httpMetadata:{contentType:'image/png'},customMetadata:await validatedMetadataWithDigest(png())});
   const response=await app.fetch(request(`/api/customer/brand-assets/${assetId}`,{headers:{Origin:'https://email-client.example'}}),{APP_ORIGIN:'https://leadintel.ccgroup.lv',BRAND_ASSETS:bucket});assert.equal(response.status,200);assert.equal(response.headers.get('Content-Type'),'image/png');assert.deepEqual(new Uint8Array(await response.arrayBuffer()),png());
 });
 
