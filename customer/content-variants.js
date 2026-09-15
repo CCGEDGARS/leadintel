@@ -20,6 +20,18 @@
   return {LANGUAGES,language,normalize,set,get,has,same};
 });
 
-if(typeof document!=="undefined"){
-  import('./apollo-bulk-enrichment.js?v=20260908-apollo-observer-v1');
+if(typeof window!=="undefined"&&typeof document!=="undefined"){
+  let apolloRequested=false;
+  const loadApolloEnrichment=()=>{
+    if(apolloRequested||document.querySelector('script[data-leadintel-apollo-enrichment]')){apolloRequested=true;return;}
+    const script=document.createElement("script");
+    script.type="module";
+    script.src="apollo-bulk-enrichment.js?v=20260914-stage5-scoped-v1";
+    script.dataset.leadintelApolloEnrichment="true";
+    script.addEventListener?.("error",()=>{apolloRequested=false;script.remove?.();},{once:true});
+    apolloRequested=true;
+    document.head.appendChild(script);
+  };
+  window.addEventListener("leadintel:open-discovery",loadApolloEnrichment);
+  window.addEventListener("leadintel:module-opened",event=>{if(Number(event.detail?.step)===5)loadApolloEnrichment();});
 }
