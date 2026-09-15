@@ -99,7 +99,7 @@ test('partial OpenAI coverage explains that Firecrawl evidence was preserved and
 test('research recovery assets are cache-busted and partial coverage uses neutral styling',()=>{
   const index=fs.readFileSync(indexPath,'utf8');
   const css=fs.readFileSync(marketCssPath,'utf8');
-  assert.match(index,/market\.css\?v=20260913-openai-retry-v3/);
+  assert.match(index,/market\.css\?v=20260915-custom-signal-ux-v1/);
   assert.match(index,/app\.js\?v=20260914-stage-isolated-v1/);
   assert.match(css,/\.research-run-feedback\[data-status="partial"\]/);
 });
