@@ -109,7 +109,7 @@ test('safeAssetReference keeps only approved metadata and rejects data, remote, 
 
   assert.deepEqual(BrandIdentity.safeAssetReference(source), {
     id: 'logo_01',
-    url: '/api/customer/brand-assets/logo_01',
+    url: 'https://leadintel-api.edgars-7e7.workers.dev/api/customer/brand-assets/logo_01',
     mimeType: 'image/png',
     width: 280,
     height: 96,
