@@ -95,7 +95,7 @@
     if(activation.status!=="active"||!activation.url||!source)return null;
     return {status:"active",url:activation.url,title:activation.title||source.title||"",description:activation.description||"",activatedAt:activation.activatedAt||"",contentChars:Number(activation.contentChars)||String(source.text||"").length,source:{type:"website",url:activation.url,title:activation.title||source.title||"",text:String(source.text||""),status:"ready"}};
   }
-  function snapshotFromServerPayload(payload={}){
+  function snapshotFromServerPayload(payload={},options={}){
     if(!isObject(payload))return null;const data={};
     if(isObject(payload.main))data["leadintel_customer_v2_state"]=JSON.stringify(payload.main);
     if(isObject(payload.discovery))data["leadintel_customer_v2_discovery"]=JSON.stringify(payload.discovery);
@@ -103,7 +103,7 @@
     if(isObject(payload.delivery))data["leadintel_customer_v2_delivery"]=JSON.stringify(payload.delivery);
     if(isObject(payload.meta?.discovery))data["leadintel_customer_v2_discovery_meta"]=JSON.stringify(payload.meta.discovery);
     const activation=buildActivationRecord(payload.main||{});if(activation)data["leadintel_customer_v2_website_activation_v1"]=JSON.stringify(activation);
-    const snapshot={schema_version:1,saved_at:new Date().toISOString(),data};root.localStorage?.setItem(SNAPSHOT_KEY,JSON.stringify(snapshot));markExplicitlySaved();dirtySinceSave=false;return snapshot;
+    const snapshot={schema_version:1,saved_at:new Date().toISOString(),data};root.localStorage?.setItem(SNAPSHOT_KEY,JSON.stringify(snapshot));markExplicitlySaved();dirtySinceSave=typeof options.dirty==='boolean'?options.dirty:!sameWorkspaceData(currentWorkspaceData(),data);return snapshot;
   }
 
   function jsonResponse(payload,status=200){return new Response(JSON.stringify(payload),{status,headers:{"Content-Type":"application/json"}});}
@@ -140,11 +140,11 @@
         return jsonResponse({...body,payload:{}},response.status);
       }
       if(method==="PUT"){
-        const forceReset=root.sessionStorage?.getItem(FORCE_RESET_KEY)==="1"||resetIntentMatchesUrl(url);const saveIntent=leadintelSaveIntent===true;const explicitSave=leadintelExplicitSave===true;const parsed=safeJson(typeof requestInit?.body==="string"?requestInit.body:"{}",{});
+        const forceReset=root.sessionStorage?.getItem(FORCE_RESET_KEY)==="1"||resetIntentMatchesUrl(url);const saveIntent=leadintelSaveIntent===true;const explicitSave=leadintelExplicitSave===true;const parsed=safeJson(typeof requestInit?.body==="string"?requestInit.body:"{}",{});const localDataAtPutStart=currentWorkspaceData();
         if(!saveIntent&&!forceReset){root.setTimeout?.(renderPersistenceStatus,0);return jsonResponse({version:Math.max(0,Number(parsed?.version)||0),saved:false},200);}
         const next=withPersistenceMetadata(parsed,!forceReset&&(explicitSave||isExplicitlySaved()));if(forceReset)next.payload.meta.persistence={explicit_saved:false};
         const response=await nativeFetch(input,{...requestInit,body:JSON.stringify(next)});const result=await response.clone().json().catch(()=>({}));const persisted=response.ok&&result?.saved!==false;
-        if(persisted){if(forceReset){root.sessionStorage?.removeItem(FORCE_RESET_KEY);root.localStorage?.removeItem(RESET_PENDING_KEY);root.setTimeout?.(renderPersistenceStatus,0);}else if(explicitSave)snapshotFromServerPayload(next.payload);else if(saveIntent&&isExplicitlySaved())captureWorkspaceSnapshot();}
+        if(persisted){if(forceReset){root.sessionStorage?.removeItem(FORCE_RESET_KEY);root.localStorage?.removeItem(RESET_PENDING_KEY);root.setTimeout?.(renderPersistenceStatus,0);}else if(explicitSave||(saveIntent&&isExplicitlySaved()))snapshotFromServerPayload(next.payload,{dirty:!sameWorkspaceData(currentWorkspaceData(),localDataAtPutStart)});}
         return response;
       }
       return nativeFetch(input,requestInit);
