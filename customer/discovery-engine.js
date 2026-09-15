@@ -17,20 +17,30 @@
   const DEFAULT_DISCOVERY_STATE=Object.freeze({status:"idle",queries:[],rawResults:[],candidates:[],pipeline:[],lastRunAt:""});
   const STOPWORDS=new Set(["with","from","that","this","your","their","into","over","under","company","companies","business","businesses","priority","market","markets","customer","customers","service","services","product","products","industrial"]);
   const MARKET_RULES=[
-    {code:"se",suffixes:[".se"],aliases:["sweden","swedish","sverige","svenska"]},
-    {code:"fi",suffixes:[".fi"],aliases:["finland","finnish","suomi"]},
-    {code:"no",suffixes:[".no"],aliases:["norway","norwegian","norge","norsk"]},
-    {code:"dk",suffixes:[".dk"],aliases:["denmark","danish","danmark","dansk"]},
-    {code:"lv",suffixes:[".lv"],aliases:["latvia","latvian","latvija","latvijas"]},
-    {code:"ee",suffixes:[".ee"],aliases:["estonia","estonian","eesti"]},
-    {code:"lt",suffixes:[".lt"],aliases:["lithuania","lithuanian","lietuva"]},
-    {code:"de",suffixes:[".de"],aliases:["germany","german","deutschland","deutsche"]},
-    {code:"gb",suffixes:[".uk",".co.uk"],aliases:["united kingdom","britain","british","england","english"]},
-    {code:"nl",suffixes:[".nl"],aliases:["netherlands","dutch","nederland"]},
-    {code:"pl",suffixes:[".pl"],aliases:["poland","polish","polska"]},
-    {code:"fr",suffixes:[".fr"],aliases:["france","french","français"]},
-    {code:"es",suffixes:[".es"],aliases:["spain","spanish","españa"]},
-    {code:"it",suffixes:[".it"],aliases:["italy","italian","italia"]}
+    {code:"se",suffixes:[".se"],searchNames:["Sweden","Sverige"],aliases:["sweden","swedish","sverige","svenska","zviedrija","zviedrijas","zviedru"]},
+    {code:"fi",suffixes:[".fi"],searchNames:["Finland","Suomi"],aliases:["finland","finnish","suomi","somija","somijas","somu"]},
+    {code:"no",suffixes:[".no"],searchNames:["Norway","Norge"],aliases:["norway","norwegian","norge","norsk","norvēģija","norvēģijas","norvēģu"]},
+    {code:"dk",suffixes:[".dk"],searchNames:["Denmark","Danmark"],aliases:["denmark","danish","danmark","dansk","dānija","dānijas","dāņu"]},
+    {code:"lv",suffixes:[".lv"],searchNames:["Latvia","Latvija"],aliases:["latvia","latvian","latvija","latvijas","latviešu"]},
+    {code:"ee",suffixes:[".ee"],searchNames:["Estonia","Eesti"],aliases:["estonia","estonian","eesti","igaunija","igaunijas","igauņu"]},
+    {code:"lt",suffixes:[".lt"],searchNames:["Lithuania","Lietuva"],aliases:["lithuania","lithuanian","lietuva","lietuvā","lietuviešu"]},
+    {code:"de",suffixes:[".de"],searchNames:["Germany","Deutschland"],aliases:["germany","german","deutschland","deutsche","vācija","vācijas","vācu"]},
+    {code:"gb",suffixes:[".uk",".co.uk"],searchNames:["United Kingdom","Britain"],aliases:["united kingdom","britain","british","england","english","apvienotā karaliste","lielbritānija","lielbritānijas"]},
+    {code:"nl",suffixes:[".nl"],searchNames:["Netherlands","Nederland"],aliases:["netherlands","dutch","nederland","nīderlande","nīderlandes","holande"]},
+    {code:"pl",suffixes:[".pl"],searchNames:["Poland","Polska"],aliases:["poland","polish","polska","polija","polijas","poļu"]},
+    {code:"fr",suffixes:[".fr"],searchNames:["France"],aliases:["france","french","français","francija","francijas","franču"]},
+    {code:"es",suffixes:[".es"],searchNames:["Spain","España"],aliases:["spain","spanish","españa","spānija","spānijas","spāņu"]},
+    {code:"it",suffixes:[".it"],searchNames:["Italy","Italia"],aliases:["italy","italian","italia","itālija","itālijas","itāļu"]}
+  ];
+  const SIGNAL_CONCEPTS=[
+    {match:/expan|capacity|new factor|new facilit|paplašin|jauna? ražot|jaudas palielin|utök|ny fabrik|produktionskapacitet/i,base:["new factory","new facility","capacity expansion","expanding production capacity"],local:{se:["ny fabrik","ny anläggning","utökar produktionskapaciteten","kapacitetsökning"]}},
+    {match:/moderni|automat|equipment|iekārt|robot|digital transform|moderniser|ny utrustning/i,base:["modernization","automation investment","new equipment","equipment upgrade","robotics"],local:{se:["modernisering","automationsinvestering","ny utrustning","robotisering"]}},
+    {match:/invest|funding|finansēj|ieguld|capital|finansier|investering/i,base:["investment","funding","capital investment","growth financing"],local:{se:["investering","finansiering","kapitalinvestering"]}},
+    {match:/hiring|recruit|vacanc|pieņem darbā|darbiniek|vakanc|rekryter|anställ/i,base:["hiring","recruitment","new vacancies","team growth"],local:{se:["rekrytering","anställer","nya lediga tjänster"]}},
+    {match:/relocat|pārcel|flyttar|nytt huvudkontor/i,base:["relocation","new headquarters","moving operations"],local:{se:["flyttar verksamheten","nytt huvudkontor"]}},
+    {match:/acqui|merger|apvieno|iegād|förvärv|fusion/i,base:["acquisition","merger","company acquisition"],local:{se:["företagsförvärv","fusion"]}},
+    {match:/leadership|management change|vadības mai|new director|appoint|ny vd|ledningsförändring/i,base:["leadership change","new CEO","new director","appointed"],local:{se:["ny vd","ny direktör","ledningsförändring","utsedd"]}},
+    {match:/tender|procurement|iepirk|upphandling/i,base:["tender","procurement","contract award"],local:{se:["upphandling","anbud","kontraktstilldelning"]}}
   ];
   const GENERIC_COMPANY_TITLES=/^(?:home|welcome|about us|official site|services?|products?|solutions?|met[aā]la konstrukcijas|steel structures?|metal fabrication)$/i;
   const SELLER_LANGUAGE=/(?:\bwe (?:offer|provide|manufacture|produce|fabricate|supply)\b|\bour (?:services|products|solutions)\b|\bmanufacturer\b|\bsupplier\b|\bfabrication services?\b|\bm[eē]s (?:pied[aā]v[aā]jam|ra[zž]ojam|izgatavojam|pieg[aā]d[aā]jam)\b|\bm[uū]su (?:pakalpojumi|produkti|produkcija)\b|\bra[zž]ot[aā]js\b|\bpieg[aā]d[aā]t[aā]js\b|\bizgatavo[sš]ana\b|\bmont[aā][zž]a\b)/i;
@@ -122,6 +132,17 @@
     const rule=marketRule(market);
     return rule?`site:${rule.suffixes[0]}`:"";
   }
+  function marketSearchNames(market){const rule=marketRule(market);return rule?rule.searchNames.join(" "):clean(market);}
+  function signalEvidenceTerms(signal={},market=""){
+    const source=[clean(signal.name),clean(signal.keywords)].join(" ");
+    const rule=marketRule(market);
+    const concepts=SIGNAL_CONCEPTS.filter(concept=>concept.match.test(source));
+    return [...new Set([
+      ...concepts.flatMap(concept=>concept.base),
+      ...concepts.flatMap(concept=>concept.local?.[rule?.code]||[]),
+      ...splitList(signal.keywords||signal.name)
+    ].map(term=>clean(term).toLowerCase()).filter(Boolean))];
+  }
   function evidenceSupportsTargetMarket(candidate={}){
     const requested=marketRule(candidate.market);
     if(!requested)return !clean(candidate.market)||clean(candidate.market).toLowerCase()==="priority market"||evidenceText({
@@ -172,7 +193,6 @@
     const offer=splitList(profile.priorityOffers)[0]||"commercial solution";
     const tendersAllowed=allowTenderDiscovery(marketState);
     const topSignals=(marketState.signals||[]).filter(item=>item.active!==false&&(tendersAllowed||!isTenderSignal(item))).sort((a,b)=>(Number(b.weight)||0)-(Number(a.weight)||0)).slice(0,3);
-    const signalTerms=topSignals.map(item=>splitList(item.keywords)[0]||clean(item.name)).filter(Boolean).join(" ");
     const results=[];
     const uniqueMarkets=[...new Set(markets.length?markets:["priority market"])];
     const queryVariants=[
@@ -190,7 +210,8 @@
     for(const variant of queryVariants){
       for(const market of uniqueMarkets){
         if(results.length>=limit)break;
-        const query=[market,icpText,painTerms,signalTerms,clean(profile.buyingTriggers),variant,marketSiteFilter(market)].filter(Boolean).join(" ");
+        const signalTerms=[...new Set(topSignals.flatMap(item=>signalEvidenceTerms(item,market)))].slice(0,8).join(" ");
+        const query=[marketSearchNames(market),icpText,painTerms,signalTerms,clean(profile.buyingTriggers),variant,marketSiteFilter(market)].filter(Boolean).join(" ");
         if(results.some(item=>item.query===query))continue;
         results.push({id:`discover-${slug(market)}-${results.length+1}`,market,query,offer});
       }
@@ -202,8 +223,6 @@
   function buildCandidateVerificationQueries(results=[],profile={},marketState={},maxCandidates=10){
     const limit=Math.max(1,Math.min(20,Number(maxCandidates)||10));
     const signals=activeSignals(marketState).filter(signal=>allowTenderDiscovery(marketState)||!isTenderSignal(signal)).sort((a,b)=>(Number(b.weight)||0)-(Number(a.weight)||0));
-    const signalTerms=[...new Set(signals.flatMap(signal=>splitList(signal.keywords||signal.name)).map(clean).filter(Boolean))].slice(0,6);
-    if(!signalTerms.length)return [];
     const own=canonicalDomain(profile.website||profile.companyWebsite||"");
     const seen=new Set();
     const checks=[];
@@ -215,6 +234,8 @@
       const requested=marketRule(item.market);
       const actual=domainCountryRule(domain);
       if(requested&&actual&&requested.code!==actual.code)continue;
+      const signalTerms=[...new Set(signals.flatMap(signal=>signalEvidenceTerms(signal,item.market)))].slice(0,10);
+      if(!signalTerms.length)continue;
       const quotedSignals=signalTerms.map(term=>`"${term.replace(/"/g,"")}"`).join(" OR ");
       checks.push({
         id:`verify-${slug(domain)}`,domain,market:clean(item.market),offer:"",kind:"verification",
@@ -252,10 +273,10 @@
   }
 
   function activeSignals(marketState){return (marketState?.signals||[]).filter(item=>item.active!==false);}
-  function matchedSignalsForEvidence(signals,evidence){
+  function matchedSignalsForEvidence(signals,evidence,market=""){
     const hay=evidence.map(evidenceText).join(" ");
     return signals.map(signal=>{
-      const terms=splitList(signal.keywords||signal.name).map(term=>term.toLowerCase()).filter(Boolean);
+      const terms=signalEvidenceTerms(signal,market);
       const matched=terms.filter(term=>hay.includes(term));
       return matched.length?{id:clean(signal.id),name:clean(signal.name),weight:clamp(signal.weight,1,10,5),matchedTerms:matched.slice(0,5)}:null;
     }).filter(Boolean);
@@ -304,7 +325,7 @@
     const signals=activeSignals(marketState);
     return [...grouped.values()].map(candidate=>{
       candidate.evidence=candidate.evidence.slice(0,5);
-      candidate.matchedSignals=matchedSignalsForEvidence(signals,candidate.evidence);
+      candidate.matchedSignals=matchedSignalsForEvidence(signals,candidate.evidence,candidate.market);
       if(!candidate.matchedSignals.length)return null;
       if(!evidenceSupportsTargetMarket(candidate))return null;
       if(isSameServiceSeller(candidate,profile))return null;
