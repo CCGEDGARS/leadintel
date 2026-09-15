@@ -75,7 +75,11 @@ test('Firecrawl router leaves unrelated fetches and local unsigned research unto
 
 test('Step 2 renders research summary, provenance, confidence and needs-input states',()=>{
   assert.match(ui,/Review what LeadIntel found\./);
-  assert.match(ui,/research-summary/);\n  assert.match(ui,/Research could not complete/);\n  assert.match(ui,/failureAt/);\n  assert.match(ui,/Run company research/);\n  assert.match(css,/\.research-summary-failed/);
+  assert.match(ui,/research-summary/);
+  assert.match(ui,/Research could not complete/);
+  assert.match(ui,/failureAt/);
+  assert.match(ui,/Run company research/);
+  assert.match(css,/\.research-summary-failed/);
   assert.match(ui,/research-field-meta/);
   assert.match(ui,/Needs your input/);
   assert.match(ui,/confidence/i);
