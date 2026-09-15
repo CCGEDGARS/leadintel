@@ -15,7 +15,7 @@ const extension=fs.existsSync(extensionPath)?fs.readFileSync(extensionPath,'utf8
 const extensionCss=fs.existsSync(extensionCssPath)?fs.readFileSync(extensionCssPath,'utf8'):'';
 
 test('Customer V2 loads the proven AI Settings plus the customer-owned Apollo and Firecrawl extension',()=>{
-  assert.match(processMap,/import ['"]\.\/ai-settings\.js\?v=20260915-active-tools-summary-v1['"]/);
+  assert.match(processMap,/import ['"]\.\/ai-settings\.js\?v=20260915-model-choice-v1['"]/);
   assert.match(processMap,/import ['"]\.\/service-settings-extension\.js\?v=20260915-mail-choice-v2['"]/);
   assert.equal(fs.existsSync(jsPath),true,'ai-settings.js must exist');
   assert.equal(fs.existsSync(extensionPath),true,'service-settings-extension.js must exist');
@@ -55,6 +55,19 @@ test('Active tools summary is status-only and keeps account sign-out on the sele
   assert.match(css,/\.active-tool-chip/);
 });
 
+test('model selection offers only Recommended and Advanced modes',()=>{
+  assert.match(js,/data-ai-model-mode/);
+  assert.match(js,/>Recommended · \$\{esc\(config\.model\)\}</);
+  assert.match(js,/>Advanced · custom model ID</);
+  assert.match(js,/data-ai-custom-model/);
+  assert.match(js,/mode==='advanced'&&!model/);
+  assert.match(js,/method:updatingModel\?'PATCH':'PUT'/);
+  assert.match(js,/configured\?'Save & test model':'Test & save'/);
+  assert.doesNotMatch(js,/Fast & economical|Highest quality/);
+  assert.match(css,/\.ai-custom-model\[hidden\]/);
+  assert.match(css,/select:focus-visible/);
+});
+
 test('AI provider status clearly separates a connected credential from the active provider',()=>{
   assert.match(js,/Connected means the API key is verified/i,'settings copy must define connected');
   assert.match(js,/Active means LeadIntel is currently using that provider/i,'settings copy must define active');
@@ -91,7 +104,7 @@ test('raw API keys are transient browser values and never persisted by either se
 });
 
 test('settings assets are cache-busted and controls have individual borders and focus treatment',()=>{
-  assert.match(js,/SETTINGS_VERSION='20260915-active-tools-summary-v1'/);
+  assert.match(js,/SETTINGS_VERSION='20260915-model-choice-v1'/);
   assert.match(extension,/SETTINGS_VERSION='20260915-mail-choice-v2'/);
   assert.match(js,/link\.href=`ai-settings\.css\?v=\$\{SETTINGS_VERSION\}`/);
   assert.match(extension,/link\.href=`service-settings-extension\.css\?v=\$\{SETTINGS_VERSION\}`/);

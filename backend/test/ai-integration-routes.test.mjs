@@ -30,6 +30,16 @@ test('AI credential mutations are workspace-owner only while generation and web 
   assert.match(source,/\/api\/ai\/web-search[\s\S]{0,1400}requireMember\(request,env,workspaceId,\['owner','researcher','sales'\]\)/);
 });
 
+test('configured providers can verify and change models without resubmitting the stored API key',()=>{
+  assert.match(source,/request\.method==='PATCH'/);
+  assert.match(source,/SELECT encrypted_api_key,active FROM workspace_ai_integrations/);
+  assert.match(source,/decryptSecret\(existing\.encrypted_api_key,key\)/);
+  assert.match(source,/verifyProviderCredential\(\{provider,apiKey,model\}\)/);
+  assert.match(source,/UPDATE workspace_ai_integrations SET model=\?,verified_at=CURRENT_TIMESTAMP/);
+  assert.match(source,/ai\.provider_model_updated/);
+  assert.doesNotMatch(source,/json\([^\n]*encrypted_api_key/);
+});
+
 test('OpenAI web search uses the stored workspace OpenAI integration even when another provider is active',()=>{
   assert.match(source,/import \{[^}]*searchWeb[^}]*\} from '\.\/ai-provider\.js'/);
   assert.match(source,/workspace_ai_integrations WHERE workspace_id=\? AND provider='openai' LIMIT 1/);

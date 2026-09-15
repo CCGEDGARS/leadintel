@@ -67,6 +67,26 @@ export async function handleAiRoute(request,env,cors={}){
     }catch{return error('Unable to save AI provider configuration',500,cors);}
   }
 
+  if(path==='/api/integrations/ai/provider'&&request.method==='PATCH'){
+    const access=await requireMember(request,env,workspaceId,['owner']);if(access.error)return error(access.error,access.status,cors);
+    if(!encryptionConfigured(env))return error('AI credential encryption is not configured',503,cors);
+    const body=await request.json().catch(()=>null);if(!body)return error('AI provider payload is required',400,cors);
+    const provider=normalizeAiProvider(body.provider);if(!provider)return error('Unsupported AI provider',400,cors);
+    let model;try{model=validateModel(provider,body.model);}catch(cause){return error(cause.message,400,cors);}
+    const existing=await env.DB.prepare(`SELECT encrypted_api_key,active FROM workspace_ai_integrations WHERE workspace_id=? AND provider=?`).bind(workspaceId,provider).first();
+    if(!existing)return error('Configure this AI provider before changing its model',409,cors);
+    try{
+      const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const apiKey=await decryptSecret(existing.encrypted_api_key,key);
+      await verifyProviderCredential({provider,apiKey,model});
+      await env.DB.prepare(`UPDATE workspace_ai_integrations SET model=?,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(model,workspaceId,provider).run();
+      await audit(env,{workspaceId,userId:access.user.id,type:'ai.provider_model_updated',provider,metadata:{model,active:Boolean(existing.active)}});
+      return json({saved:true,provider,model,active:Boolean(existing.active),verified_at:new Date().toISOString()},200,cors);
+    }catch(cause){
+      if(/request failed|returned no text|model is invalid/i.test(String(cause?.message||'')))return error(String(cause.message).slice(0,180),422,cors);
+      return error('Unable to update AI provider model',500,cors);
+    }
+  }
+
   if(path==='/api/integrations/ai/activate'&&request.method==='POST'){
     const access=await requireMember(request,env,workspaceId,['owner']);if(access.error)return error(access.error,access.status,cors);
     const body=await request.json().catch(()=>null);const provider=normalizeAiProvider(body?.provider);if(!provider)return error('Unsupported AI provider',400,cors);
