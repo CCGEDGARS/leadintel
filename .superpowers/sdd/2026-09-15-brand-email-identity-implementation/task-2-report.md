@@ -824,3 +824,81 @@ The `leadintel-brand-assets` R2 bucket still must be provisioned separately in t
 Existing objects written by an older deployment without the new `decoded-v1` private metadata will intentionally return 404. If such objects exist, they must be re-uploaded/re-imported through the validated write path (or migrated by a separately reviewed process that performs equivalent full validation) before rollout. This fail-closed behavior is deliberate.
 
 `BRAND_ASSET_IMPORT_HOSTS` remains empty by default and must be populated with reviewed exact hosts/origins before imports are enabled. Direct authenticated file upload remains available.
+
+---
+
+## Review Fix Report — Round 4 — 2026-09-15
+
+### Status and commits
+
+The remaining object-substitution finding was fixed on `codex/brand-email-identity`; `main` was not modified.
+
+1. `942983f944d3a1ac38165b60b02607fc9e5e14c8` — `test: bind public asset metadata to object bytes` (RED)
+2. `0b779b2763d9908c451f10db8ab6357ab6c71d1b` — `test: model streamed brand asset reads` (test fixture follows the R2 body contract)
+3. `d263a801e213616e186120b721b917556422d950` — `fix: bind brand asset metadata to stored bytes` (GREEN)
+
+### Implementation details
+
+- Validated upload and import writes now compute SHA-256 from the exact validated `Uint8Array` passed to R2 and store its canonical lowercase hexadecimal value in private custom metadata named `content-sha256`.
+- Public GET requires `content-sha256` to be exactly 64 lowercase hexadecimal characters, reads the body through a bounded stream capped at the stored validated byte length, hashes those exact bytes, and uses the existing constant-time comparator before returning a response.
+- Missing, empty, uppercase, short, non-hex, or mismatched digests return the existing fail-closed 404. Matching genuine bytes continue to return the prior safe MIME, nosniff, immutable-cache, CORS, and length headers.
+- The GET path still does not parse or decode images. The stream only retains chunks up to the existing encoded 5 MiB maximum (and normally the validated per-asset limit), so hashing does not reopen the decoded-image memory budget.
+
+### TDD evidence
+
+The behavioral tests were committed before the production implementation.
+
+RED command from `backend/`:
+
+```bash
+node --import ./test/register-wasm-loader.mjs --test --test-name-pattern='persist the validated byte digest|same-length substituted|canonical SHA-256|matching digest metadata|production app serves public' test/brand-assets.test.js
+```
+
+Result: exit `1`; 5 tests run, 2 passed, 3 failed. The pre-fix implementation omitted `content-sha256`, served a same-length `MZ` substitution with unchanged trusted metadata as `200`, and accepted missing/malformed digests as `200`.
+
+Focused GREEN command:
+
+```bash
+node --check src/brand-assets.js && node --import ./test/register-wasm-loader.mjs --test --test-name-pattern='persist the validated byte digest|same-length substituted|canonical SHA-256|matching digest metadata|public GET returns only validated bytes|production app serves public' test/brand-assets.test.js
+```
+
+Result: exit `0`; 6 tests passed, 0 failed.
+
+Complete asset-boundary GREEN command:
+
+```bash
+node --check src/brand-assets.js && node --import ./test/register-wasm-loader.mjs --test test/brand-assets.test.js
+```
+
+Result: exit `0`; 33 tests passed, 0 failed.
+
+Full backend command:
+
+```bash
+env -u NPM_CONFIG_NOPROXY -u npm_config_proxy -u NPM_CONFIG_PROXY -u NPM_CONFIG_HTTPS_PROXY -u npm_config_http_proxy -u NPM_CONFIG_HTTP_PROXY -u npm_config_noproxy -u npm_config_https_proxy npm test
+```
+
+Result: exit `0`; 274 tests passed, 0 failed, 0 skipped.
+
+Wrangler bundle-only verification:
+
+```bash
+env -u NPM_CONFIG_NOPROXY -u npm_config_proxy -u NPM_CONFIG_PROXY -u NPM_CONFIG_HTTPS_PROXY -u npm_config_http_proxy -u NPM_CONFIG_HTTP_PROXY -u npm_config_noproxy -u npm_config_https_proxy npx wrangler deploy --dry-run --outdir <temporary-directory>
+```
+
+Result: exit `0`; Wrangler 4.125.0 reported the `BRAND_ASSETS` R2 binding and exited at `--dry-run` without deployment. The environment emitted its existing proxy-detection warning only.
+
+Production dependency audit:
+
+```bash
+env -u NPM_CONFIG_NOPROXY -u npm_config_proxy -u NPM_CONFIG_PROXY -u NPM_CONFIG_HTTPS_PROXY -u npm_config_http_proxy -u NPM_CONFIG_HTTP_PROXY -u npm_config_noproxy -u npm_config_https_proxy npm audit --omit=dev
+```
+
+Result: exit `0`; `found 0 vulnerabilities`.
+
+### Coverage and follow-up
+
+- Added an upload persistence assertion for the exact SHA-256 metadata value.
+- Added a regression that substitutes different same-length bytes while preserving valid-looking image MIME and all prior metadata; public GET fails closed.
+- Added missing, empty, uppercase, short, non-hex, and genuine matching-digest public-read cases.
+- Existing objects that carry `decoded-v1` metadata but predate `content-sha256` intentionally fail closed until re-uploaded or migrated through an equivalently validated process. The pre-existing bucket-provisioning and reviewed-import-allowlist concerns remain unchanged.
