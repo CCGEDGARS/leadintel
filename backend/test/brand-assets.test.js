@@ -336,7 +336,7 @@ test('public GET serves matching digest metadata without loading an image decode
   const script=`
     import {handleBrandAssetRoute} from './src/brand-assets.js';
     const bytes=Uint8Array.from(Buffer.from('${PNG_BASE64}','base64'));
-    const object={bytes,httpMetadata:{contentType:'image/png'},customMetadata:${metadata},arrayBuffer:async()=>bytes.buffer};
+    const object={bytes,body:new Response(bytes).body,httpMetadata:{contentType:'image/png'},customMetadata:${metadata}};
     const env={BRAND_ASSETS:{get:async()=>object}};
     const request=new Request('https://leadintel-api.edgars-7e7.workers.dev/api/customer/brand-assets/${assetId}');
     const response=await handleBrandAssetRoute(request,env,{});
