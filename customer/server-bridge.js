@@ -2,7 +2,7 @@
   'use strict';
   if(root.LeadIntelServerBridge)return;
   const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
-  const ASSET_VERSION='20260916-brand-assets-v7';
+  const ASSET_VERSION='20260916-brand-assets-v8';
   const asset=path=>`${path}?v=${ASSET_VERSION}`;
   const KEYS={main:'leadintel_customer_v2_state',discovery:'leadintel_customer_v2_discovery',outreach:'leadintel_customer_v2_outreach',delivery:'leadintel_customer_v2_delivery',meta:'leadintel_customer_v2_discovery_meta'};
   const WORKSPACE_KEY='leadintel_customer_v2_workspace';
@@ -187,9 +187,9 @@
   }
   async function uploadBrandAsset(kind,file,options={}){
     const context=brandAssetContext(kind);
+    const operation=captureBrandAssetOperation(context);
     if(!file||typeof file!=='object')throw new TypeError('A brand image file is required');
     return runBrandAssetTransaction(context,async()=>{
-      const operation=captureBrandAssetOperation(context);
       const form=new FormData();form.append('kind',context.kind);form.append('file',file);
       if(typeof options.altText==='string'&&options.altText.trim())form.append('alt_text',options.altText.trim());
       const {response,payload}=await api(`/api/customer/brand-assets?workspace_id=${encodeURIComponent(context.workspaceId)}`,{method:'POST',body:form});
@@ -200,8 +200,8 @@
   }
   async function importBrandAsset(kind,url,options={}){
     const context=brandAssetContext(kind);
+    const operation=captureBrandAssetOperation(context);
     return runBrandAssetTransaction(context,async()=>{
-      const operation=captureBrandAssetOperation(context);
       const {response,payload}=await api(`/api/customer/brand-assets/import?workspace_id=${encodeURIComponent(context.workspaceId)}`,{method:'POST',body:JSON.stringify({kind:context.kind,url:String(url||''),alt_text:typeof options.altText==='string'?options.altText.trim():''})});
       if(!response.ok)throw assetError(response,payload,'Brand asset import failed');
       if(!payload?.asset)throw new Error('Brand asset import returned no managed asset');
@@ -209,7 +209,9 @@
     });
   }
   function removalResult(options,deleted,identity,cleanup){return options?.returnTransaction?{asset:null,identity,cleanupQueued:Boolean(cleanup?.queued),cleanupWarning:Boolean(cleanup?.warning)}:deleted;}
-  async function commitBrandAssetRemoval(context,asset,options={}){
+  function cancelBrandAssetRemoval(context){const result={cancelled:true,reset:true,asset:null,identity:null,cleanupQueued:false,cleanupWarning:false};emitBrandAssetEvent('leadintel:brand-asset-transaction',{workspaceId:context.workspaceId,kind:context.kind,committed:false,cancelled:true,reset:true,removed:false,cleanupQueued:false,cleanupWarning:false});return result;}
+  async function commitBrandAssetRemoval(context,asset,options={},operation){
+    if(brandAssetOperationCancelled(context,operation))return cancelBrandAssetRemoval(context);
     const previousMain=parse(KEYS.main),previousIdentity=safeBrandIdentity(previousMain.brandIdentity)||safeBrandIdentity({});
     const previousAsset=safeBrandAsset(previousIdentity.assets?.[context.kind])||safeBrandAsset(asset)||(BRAND_ASSET_ID.test(String(asset||''))?{id:String(asset)}:null);
     if(!previousAsset)throw new TypeError('A valid managed brand asset is required');
@@ -227,7 +229,8 @@
     const context=brandAssetContext(kind);const id=typeof asset==='string'?asset:String(asset?.id||'');
     if(!BRAND_ASSET_ID.test(id))throw new TypeError('A valid managed brand asset is required');
     if(options?.cleanupOnly===true)return runBrandAssetTransaction(context,async()=>{const cleanup=await cleanupManagedAsset(context,{id},'reset');return cleanup.result||{ok:cleanup.deleted,status:cleanup.deleted?200:0,asset_id:id,queued:cleanup.queued,cleanup_warning:Boolean(cleanup.warning)};});
-    return runBrandAssetTransaction(context,()=>commitBrandAssetRemoval(context,asset,options));
+    const operation=captureBrandAssetOperation(context);
+    return runBrandAssetTransaction(context,()=>commitBrandAssetRemoval(context,asset,options,operation));
   }
   function crmPath(path=''){if(!bridge.workspace)throw new Error('No workspace selected');const join=path.includes('?')?'&':'?';return `/api/crm${path}${join}workspace_id=${encodeURIComponent(bridge.workspace.id)}`;}
   async function crmRequest(path,options={}){if(!bridge.session?.authenticated||!bridge.workspace)return {ok:false,status:401,error:'Sign in to use Master CRM'};const {response,payload}=await api(crmPath(path),options);if(!response.ok)return {ok:false,status:response.status,...payload};return {ok:true,status:response.status,...payload};}
