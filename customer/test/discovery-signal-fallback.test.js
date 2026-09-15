@@ -32,3 +32,14 @@ test('companies without exact signal evidence are withheld from the actionable s
 
   assert.deepEqual(candidates,[]);
 });
+
+test('Company Discovery resolves named companies from evidence before verifying official domains',()=>{
+  const fs=require('node:fs');
+  const path=require('node:path');
+  const ui=fs.readFileSync(path.join(__dirname,'..','discovery-ui.js'),'utf8');
+  assert.match(ui,/extractCompaniesFromEvidence/);
+  assert.match(ui,/buildCompanyResolutionQueries/);
+  assert.match(ui,/runDiscoverySearchBatch\(resolutionQueries,"resolving"\)/);
+  assert.match(ui,/buildCandidateVerificationQueries\(resolved/);
+  assert.doesNotMatch(ui,/buildCandidateVerificationQueries\(firstPass/);
+});
