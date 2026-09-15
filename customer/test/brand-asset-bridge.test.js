@@ -75,6 +75,12 @@ function asset(id = 'a'.repeat(43)) {
   };
 }
 
+function assertAssetValue(actual, expected) {
+  const keys = ['altText', 'height', 'id', 'mimeType', 'updatedAt', 'url', 'width'];
+  assert.deepEqual(Object.keys(actual).sort(), keys);
+  for (const key of keys) assert.equal(actual[key], expected[key], `asset ${key}`);
+}
+
 test('uploadBrandAsset sends authenticated multipart data scoped to the selected workspace', async () => {
   const calls = [];
   const expected = asset();
@@ -87,7 +93,7 @@ test('uploadBrandAsset sends authenticated multipart data scoped to the selected
 
   const result = await bridge.uploadBrandAsset('logo', file, {altText: 'Company logo'});
 
-  assert.deepEqual(result, expected);
+  assertAssetValue(result, expected);
   assert.equal(calls[0].url, `${API}/api/customer/brand-assets?workspace_id=${WORKSPACE_ID}`);
   assert.equal(calls[0].options.method, 'POST');
   assert.equal(calls[0].options.credentials, 'include');
@@ -109,7 +115,7 @@ test('importBrandAsset and deleteBrandAsset are workspace scoped and fail closed
     return new Response(JSON.stringify({ok: true, asset_id: imported.id}), {status: 200});
   });
 
-  assert.deepEqual(await bridge.importBrandAsset('logo', 'https://www.example.com/logo.png', {altText: 'Logo'}), imported);
+  assertAssetValue(await bridge.importBrandAsset('logo', 'https://www.example.com/logo.png', {altText: 'Logo'}), imported);
   const deletion = await bridge.deleteBrandAsset('logo', imported);
   assert.equal(deletion.ok, true);
   assert.equal(deletion.status, 200);
@@ -178,7 +184,7 @@ test('successful identity persistence retires the old object and queues observab
     throw new Error(`Unexpected request: ${url}`);
   }, {leadintel_customer_v2_state: main});
 
-  assert.deepEqual(await bridge.uploadBrandAsset('logo', new Blob(['new'], {type: 'image/png'})), nextAsset);
+  assertAssetValue(await bridge.uploadBrandAsset('logo', new Blob(['new'], {type: 'image/png'})), nextAsset);
   assert.equal(JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).brandIdentity.assets.logo.id, nextAsset.id);
   let queue = JSON.parse(localStorage.getItem(CLEANUP_KEY));
   assert.equal(queue.length, 1);
@@ -248,7 +254,7 @@ test('workspace saves reject data-image values anywhere in malformed identity wi
       assets: {
         logo: 'data:image/png;base64,CCCC',
         headshot: {id: 'k'.repeat(43), url: ' data : image/jpeg;base64,DDDD ', bytes: [1]},
-        banner: ['data:image/png;base64,EEEE']
+        banner: {...asset('n'.repeat(43)), altText: ' DATA : IMAGE / png ; base64,EEEE '}
       }
     }
   };
@@ -265,8 +271,14 @@ test('workspace saves reject data-image values anywhere in malformed identity wi
   assert.equal(saved.senderName, 'Normal sender');
   assert.equal(saved.signatureText, 'We discuss data:image/png formats, not an embedded URL.');
   assert.equal('nested' in saved, false);
-  assert.deepEqual(saved.assets, {logo: null, headshot: null, banner: null});
-  assert.doesNotMatch(JSON.stringify(saved), /^data\s*:\s*image/i);
+  assert.equal(saved.assets.logo, null);
+  assert.equal(saved.assets.headshot, null);
+  assert.equal(saved.assets.banner.id, 'n'.repeat(43));
+  assert.equal(saved.assets.banner.altText, '');
+  for (const [key, value] of Object.entries(saved)) {
+    if (key === 'signatureText' || typeof value !== 'string') continue;
+    assert.doesNotMatch(value, /^data\s*:\s*image/i, key);
+  }
 });
 
 test('all brand asset operations encode reserved workspace identifier characters', async () => {
