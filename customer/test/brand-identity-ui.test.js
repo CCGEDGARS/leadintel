@@ -45,9 +45,9 @@ test('Brand & Email Identity is collapsed immediately after Main company website
   const websitePanel = html.indexOf('<h3>Main company website</h3>');
   const identityModule = html.indexOf('id="brand-identity"');
   const targetMarket = html.indexOf('id="target-market-selector"');
-  const modelScript = html.indexOf('brand-identity.js?v=20260915-brand-identity-v1');
-  const uiScript = html.indexOf('brand-identity-ui.js?v=20260915-brand-identity-v1');
-  const appScript = html.indexOf('app.js?v=20260915-brand-identity-v1');
+  const modelScript = html.indexOf('brand-identity.js?v=20260915-brand-identity-v2');
+  const uiScript = html.indexOf('brand-identity-ui.js?v=20260915-brand-identity-v2');
+  const appScript = html.indexOf('app.js?v=20260915-brand-identity-v2');
 
   assert.ok(websitePanel >= 0 && websitePanel < identityModule && identityModule < targetMarket);
   assert.match(html, /Add your logo and sender details so outreach emails look consistent and personal\./);
@@ -55,7 +55,7 @@ test('Brand & Email Identity is collapsed immediately after Main company website
   assert.match(html, /id="brand-identity-body"[^>]*hidden/);
   assert.match(html, /id="brand-identity-status"[^>]*>Not configured</);
   assert.match(html, /id="brand-identity-toggle"[^>]*>[\s\S]*Set up email identity/);
-  assert.match(html, /brand-identity\.css\?v=20260915-brand-identity-v1/);
+  assert.match(html, /brand-identity\.css\?v=20260915-brand-identity-v2/);
   assert.ok(modelScript >= 0 && modelScript < uiScript && uiScript < appScript);
 });
 
@@ -203,6 +203,9 @@ test('logo evidence remains a suggestion until explicit approval imports a manag
   assert.deepEqual(calls, [['logo', 'https://acme.example/logo.png']]);
   assert.equal(controller.identity().assets.logo.id, 'approved_logo');
   assert.doesNotMatch(JSON.stringify(controller.identity()), /acme\.example\/logo\.png/);
+  assert.equal(controller.suggestions().logoUrl, undefined);
+  await assert.rejects(controller.applyLogoSuggestion(), /No verified logo suggestion/);
+  assert.equal(calls.length, 1);
 });
 
 test('failed asset replacement preserves the previous managed reference', async () => {
