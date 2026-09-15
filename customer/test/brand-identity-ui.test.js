@@ -333,7 +333,7 @@ test('file selection uses focusable buttons and complete field error and tab sem
     assert.match(html, new RegExp(`id="${id}-error"[^>]*data-brand-error="${field}"[^>]*aria-live="polite"`));
   }
   for (const kind of ['logo', 'headshot', 'banner']) {
-    assert.match(html, new RegExp(`<button[^>]*data-brand-file-trigger="${kind}"[^>]*>Upload or replace</button>`));
+    assert.match(html, new RegExp(`<button[^>]*data-brand-file-trigger="${kind}"[^>]*aria-controls="brand-${kind}-input"[^>]*>Upload or replace</button>`));
     assert.doesNotMatch(html, new RegExp(`<label[^>]*for="brand-${kind}-input"[^>]*class="secondary-btn"`));
   }
   assert.match(html, /role="tablist"[^>]*aria-orientation="horizontal"/);
@@ -349,5 +349,9 @@ test('UI source hides stale preview, marks invalid fields, announces and focuses
   assert.match(source, /panel\.hidden\s*=\s*true/);
   assert.match(source, /setAttribute\('aria-invalid',\s*'true'\)/);
   assert.match(source, /firstInvalid.*\.focus\(\)/s);
+  assert.match(source, /data-brand-file-trigger.*addEventListener\('click'/s);
+  assert.match(source, /aria-labelledby.*brand-preview-tab-/s);
+  assert.match(source, /No verified suggestions available yet/);
+  assert.match(source, />Apply</);
   assert.match(source, /brand-action-error/);
 });
