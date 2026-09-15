@@ -110,7 +110,7 @@ function render(){
       summary.innerHTML='<span>Workspace access</span><strong>Sign in to configure LeadIntel</strong><small>Use your existing Google or Microsoft account. Mailbox permissions are connected separately.</small><div class="workspace-signin-options" id="ai-settings-signin"><button class="ai-settings-btn primary" data-settings-signin="google" type="button">Continue with Google</button><button class="ai-settings-btn microsoft" data-settings-signin="microsoft" type="button">Continue with Microsoft</button></div>';
     }
     else if(active)summary.innerHTML=`<span>AI engine</span><strong>Active provider · ${esc(active.name)} · ${esc(active.model)}</strong><small>${connectedCount} provider${connectedCount===1?'':'s'} connected · API key verified ${active.verified_at?esc(formatDate(active.verified_at)):'successfully'}${active.last_used_at?` · last used ${esc(formatDateTime(active.last_used_at))}`:''}.</small>${workspaceAccessControls()}`;
-    else summary.innerHTML=`<span>AI engine</span><strong>No active provider</strong><small>${connectedCount?`${connectedCount} provider${connectedCount===1?' is':'s are'} connected. Set one as active to use AI generation.`:'Test and save a provider below to activate AI generation.'}</small>${workspaceAccessControls()};
+    else summary.innerHTML=`<span>AI engine</span><strong>No active provider</strong><small>${connectedCount?`${connectedCount} provider${connectedCount===1?' is':'s are'} connected. Set one as active to use AI generation.`:'Test and save a provider below to activate AI generation.'}</small>${workspaceAccessControls()}`;
   }
   grid.innerHTML=PROVIDERS.map(config=>providerCard(config,providerState(config.provider))).join('');
   renderIntegrationMonitoring();
@@ -173,7 +173,7 @@ function renderIntegrationMonitoring(){
     <article class="integration-card microsoft-mail-card" data-integration="microsoft-mail"><div class="integration-card-head"><div><strong>Microsoft 365 Mail</strong><small>Optional human-approved outbound delivery</small></div><span class="integration-status ${esc(microsoftMail.state)}">${esc(microsoftMail.label)}</span></div><p class="integration-purpose">Microsoft Graph · send-only access. LeadIntel cannot read your inbox.</p><div class="integration-meta">${esc(microsoftMail.detail+checkedSuffix)}</div>${microsoftMailActions(microsoftMail)}</article>`;
   const activeAi=Boolean(status.providers.find(item=>item.active&&item.configured));
   const deliveryReady=gmail.state==='good'||microsoftMail.state==='good';
-  const critical=[activeAi,account.state==='good',deliveryReady,apollo.state==='good',firecrawl.state==='good'];const healthy=critical.filter(Boolean).length;
+  const critical=[activeAi,signedIn(),deliveryReady,apollo.state==='good',firecrawl.state==='good'];const healthy=critical.filter(Boolean).length;
   const checked=integrationStatus.checkedAt?`Last checked ${formatDateTime(integrationStatus.checkedAt)}`:'Run diagnostics to check all critical integrations.';
   health.querySelector('.integration-summary-copy').innerHTML=`<span>System health</span><strong>${signedIn()?`${healthy}/5 critical checks passing`:'Sign in to run workspace diagnostics'}</strong><small>${esc(checked)}</small>`;
   const button=document.getElementById('test-all-integrations');if(button){button.disabled=!signedIn()||integrationStatus.checking;button.textContent=integrationStatus.checking?'Testing…':'Test all integrations';}
