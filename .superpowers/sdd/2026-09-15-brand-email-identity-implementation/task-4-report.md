@@ -3,7 +3,7 @@
 Status: COMPLETE.
 
 Starting branch head: `0b9c26988b4e7ef5d4267501ae1ca762040023fe`
-Implementation head before this report commit: `be01c4972970e40a6798869a09260b42b327e309`
+Implementation head before this report commit: `b1f02b589f1d573c8b19e1e4583c3858de85b7fb`
 
 ## Remote commits
 
@@ -36,6 +36,14 @@ Implementation head before this report commit: `be01c4972970e40a6798869a09260b42
 27. `fe10b2bd36c18641f78b15340d16408449474036` — production-composition regression contracts
 28. `3155709d9d19ca4950c7208d16b815b2ca0bb964` — process bundle regression contract
 29. `be01c4972970e40a6798869a09260b42b327e309` — corrected mutation-only rollback assertions
+30. `c14478dab01182f8754d1e876d53b2b75672e9f5` — RED tests for overlapping save intent and reload cleanup recovery
+31. `6851ab0a7267a805995d1f16acee75aef3faeda8` — per-operation queued save intent and cleanup-only retry queue
+32. `72ef1acfeb345f069b85b3512cf86f2c01dc39ba` — success-only explicit-save state and request-scoped persistence intent
+33. `4152f8708c587b6a5e30a0077e2bdd93afd044ca` — direct reload cleanup recovery when server reset is complete
+34. `55992f95ab9e98d59647889ddf315714cfd8f60c` — final Task 4 process bundle cache update
+35. `16b8002a8457afa9469763209807ab2e06032bc4` — final Task 4 page cache update
+36. `2d1704addaf8d1129d773134355087814a1971fd` — final save-intent and reload-recovery regression contracts
+37. `b1f02b589f1d573c8b19e1e4583c3858de85b7fb` — explicit-save timeout regression contract
 
 ## Implemented
 
@@ -56,7 +64,7 @@ Implementation head before this report commit: `be01c4972970e40a6798869a09260b42
 - reset captures managed asset references, clears local identity, retries cleanup, and emits an observable result
 - failed reset deletions remain pending for retry; unavailable deletion also emits a consistent cleanup event
 - upload, import, and delete encode reserved characters in workspace identifiers
-- `server-bridge.js`, `workspace-reset-hygiene.js`, `workspace-persistence.js`, `process-map.js`, the page entry point, and cache regression tests use `20260916-brand-assets-v4`
+- `server-bridge.js`, `workspace-reset-hygiene.js`, `workspace-persistence.js`, `process-map.js`, the page entry point, and cache regression tests use `20260916-brand-assets-v5`
 
 ## Transaction re-review
 
@@ -75,7 +83,13 @@ Implementation head before this report commit: `be01c4972970e40a6798869a09260b42
 - rollback changes only the matching asset field; current Draft status and newer identity fields remain intact
 - server-reset state and asset-cleanup work use separate records, each cleared only after its own operation completes
 - reset performs one workspace PUT followed by direct workspace-scoped asset deletion
-- Task 4 browser cache references now use `20260916-brand-assets-v4`
+- save intent is carried by each queued operation and fetch request; no shared session save-intent flag remains
+- an overlapping asset save and explicit save produce two ordered backend PUTs, with the explicit PUT containing the latest edit
+- explicit-save state and snapshots are created only after a successful persisted response; failed explicit saves remain unsaved
+- reload recovery directly resumes asset cleanup when the server-reset marker is already gone
+- reload recovery with both records saves once with explicit intent before cleanup
+- failed reload cleanup transfers to the observable brand-asset retry queue and clears the completed reset-cleanup record
+- Task 4 browser cache references now use `20260916-brand-assets-v5`
 
 ## Test evidence
 
@@ -89,9 +103,11 @@ Latest review RED verification: 16/20 passed and 4/20 failed for exactly the fou
 
 Focused bridge and UI verification after implementation: 45 passed, 0 failed.
 
-Final focused Task 4 verification: 24 passed, 0 failed, 0 skipped, 0 cancelled.
+Latest review RED verification: 1/5 passed and 4/5 failed for the intended save-intent and reload-recovery gaps.
 
-Final related regression verification: 80 passed, 0 failed, 0 skipped, 0 cancelled.
+Final focused Task 4 verification: 29 passed, 0 failed, 0 skipped, 0 cancelled.
+
+Final related regression verification: 85 passed, 0 failed, 0 skipped, 0 cancelled.
 
 JavaScript syntax checks passed for the bridge, reset hygiene, Brand Identity UI, app integration, process map, and every modified regression test.
 
