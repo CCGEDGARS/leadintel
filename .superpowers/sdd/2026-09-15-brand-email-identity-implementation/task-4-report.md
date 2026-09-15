@@ -3,7 +3,7 @@
 Status: COMPLETE.
 
 Starting branch head: `0b9c26988b4e7ef5d4267501ae1ca762040023fe`
-Implementation head before this report commit: `61267ee862640b291220d7c5e6e879a233245962`
+Implementation head before this report commit: `cdbbdb639ba3971307b64f94f6427f0d25361a05`
 
 ## Remote commits
 
@@ -51,6 +51,13 @@ Implementation head before this report commit: `61267ee862640b291220d7c5e6e879a2
 42. `a00d074413e14fb020ba7a44f18f1a379d49a287` — process-map cache refresh for the dirty-state fix
 43. `2ea36f913fca0ab3d8663b75f971da83474d2e30` — Task 4 race coverage cache contract
 44. `61267ee862640b291220d7c5e6e879a233245962` — spinner regression cache contract
+45. `f92352f825e4fd4c3f16a4afde6bcc26b95d30b9` — RED production-composition test for reset versus in-flight upload
+46. `8a5a2d547af42f871649abc1eb6cafb8d428b062` — per-workspace reset generations and cancelled asset cleanup
+47. `e0be39c1921e5dbb7ec7026966669d1e42a03345` — reset invalidation before identity clearing and reset persistence
+48. `5a35cadcbc58e3156cd7b11cf1a754c82e5899ff` — page entry cache refresh for reset-race handling
+49. `c5aa19bedac1a6044ff2069f5febc4bc1c04beb8` — process-map cache refresh for reset-race handling
+50. `20efabfa3f3306d5b3bf0087ebb56681c95ee104` — upload and import reset-race regression contracts
+51. `cdbbdb639ba3971307b64f94f6427f0d25361a05` — spinner regression cache contract for runtime v7
 
 ## Implemented
 
@@ -71,7 +78,7 @@ Implementation head before this report commit: `61267ee862640b291220d7c5e6e879a2
 - reset captures managed asset references, clears local identity, retries cleanup, and emits an observable result
 - failed reset deletions remain pending for retry; unavailable deletion also emits a consistent cleanup event
 - upload, import, and delete encode reserved characters in workspace identifiers
-- `server-bridge.js`, `workspace-reset-hygiene.js`, `workspace-persistence.js`, `process-map.js`, the page entry point, and cache regression tests use `20260916-brand-assets-v6`
+- `server-bridge.js`, `workspace-reset-hygiene.js`, `workspace-persistence.js`, `process-map.js`, the page entry point, and cache regression tests use `20260916-brand-assets-v7`
 
 ## Transaction re-review
 
@@ -96,7 +103,7 @@ Implementation head before this report commit: `61267ee862640b291220d7c5e6e879a2
 - reload recovery directly resumes asset cleanup when the server-reset marker is already gone
 - reload recovery with both records saves once with explicit intent before cleanup
 - failed reload cleanup transfers to the observable brand-asset retry queue and clears the completed reset-cleanup record
-- Task 4 browser cache references now use `20260916-brand-assets-v6`
+- Task 4 browser cache references now use `20260916-brand-assets-v7`
 
 ## Final dirty-state race fix
 
@@ -106,6 +113,17 @@ Implementation head before this report commit: `61267ee862640b291220d7c5e6e879a2
 - when a user edit occurs during an in-flight explicit or asset save, the edit remains local, `hasUnsavedChanges()` remains true, and the saved snapshot continues to represent the earlier persisted payload
 - the bridge rebases the workspace-scoped dirty marker onto the newly persisted server version instead of clearing it, preventing a false reload conflict while preserving the unsent edit
 - the next explicit save sends the newer edit, updates the persisted snapshot to that exact payload, and clears both dirty indicators
+
+## Reset versus in-flight asset fix
+
+- each workspace owns an in-memory reset generation; upload and import capture that generation before starting the external asset request
+- reset invalidates the generation synchronously before recording cleanup intent, clearing `brandIdentity`, or entering the workspace save queue
+- a completed upload/import is cancelled before any local identity mutation or state PUT when its generation is stale, reset remains pending, or an identity present at operation start has been cleared
+- cancellation returns an explicit `{cancelled:true, reset:true}` transaction result and deletes the newly created managed object best-effort
+- failed cancellation deletion uses the existing observable cleanup retry queue, without attempting a workspace state save
+- old pre-reset assets continue through the independent reset-cleanup record; cancellation of the new object does not overwrite or consume that intent
+- reset and asset cleanup do not acquire the workspace save queue from inside the asset transaction, avoiding lock-order deadlock
+- production-composition coverage proves both upload and import cannot recreate identity, including an import that returns only after empty reset cleanup has already removed the pending marker
 
 ## Test evidence
 
@@ -126,6 +144,12 @@ Final dirty-state RED verification: 0/2 passed; both intended race reproductions
 Final focused Task 4 verification: 31 passed, 0 failed, 0 skipped, 0 cancelled.
 
 Final related regression verification: 87 passed, 0 failed, 0 skipped, 0 cancelled.
+
+Reset-race RED verification: the in-flight upload reproduction failed on the missing cancellation result, and the import reproduction failed after reset cleanup had already cleared its pending marker.
+
+Latest focused Task 4 verification: 33 passed, 0 failed, 0 skipped, 0 cancelled.
+
+Latest related production-composition and regression verification: 89 passed, 0 failed, 0 skipped, 0 cancelled.
 
 JavaScript syntax checks passed for the bridge, reset hygiene, Brand Identity UI, app integration, process map, and every modified regression test.
 
