@@ -2,7 +2,9 @@
   "use strict";
 
   const LEGACY_LOCAL_CLEANUP_KEY="leadintel_customer_v2_legacy_local_cleanup_20260901_v2";
-  const RESET_PENDING_KEY="leadintel_customer_v2_reset_pending_v1";
+  const LEGACY_RESET_PENDING_KEY="leadintel_customer_v2_reset_pending_v1";
+  const ASSET_RESET_CLEANUP_KEY="leadintel_customer_v2_brand_asset_reset_cleanup_v1";
+  const RESET_PENDING_KEY=ASSET_RESET_CLEANUP_KEY;
   const WORKSPACE_KEY="leadintel_customer_v2_workspace";
   const MAIN_STATE_KEY="leadintel_customer_v2_state";
   const BRAND_ASSET_ID=/^[A-Za-z0-9_-]{43}$/;
@@ -32,7 +34,7 @@
   function runEmergencyBrowserReset(){
     if(!emergencyResetRequested()||!root?.localStorage)return false;
     for(const key of LEGACY_LOCAL_WORKSPACE_KEYS)root.localStorage.removeItem(key);
-    root.localStorage.removeItem(RESET_PENDING_KEY);
+    root.localStorage.removeItem(ASSET_RESET_CLEANUP_KEY);
     try{root.sessionStorage?.removeItem("leadintel_customer_v2_server_hydration");}catch{}
     try{root.sessionStorage?.removeItem("leadintel_customer_v2_server_conflict");}catch{}
     root.location.replace("./");
@@ -84,13 +86,16 @@
   function recordResetIntent(assets=referencedBrandAssets()){
     if(!root?.localStorage)return false;
     const workspaceId=String(root.localStorage.getItem(WORKSPACE_KEY)||"");
-    root.localStorage.setItem(RESET_PENDING_KEY,JSON.stringify({workspace_id:workspaceId,requested_at:Date.now(),assets:Array.isArray(assets)?assets:[]}));
+    root.localStorage.setItem(ASSET_RESET_CLEANUP_KEY,JSON.stringify({workspace_id:workspaceId,requested_at:Date.now(),assets:Array.isArray(assets)?assets:[]}));
     return true;
   }
 
   function readResetIntent(){
     try{
-      const value=JSON.parse(root.localStorage?.getItem(RESET_PENDING_KEY)||"null");
+      const current=root.localStorage?.getItem(ASSET_RESET_CLEANUP_KEY);
+      const legacy=current?null:root.localStorage?.getItem(LEGACY_RESET_PENDING_KEY);
+      const value=JSON.parse(current||legacy||"null");
+      if(!current&&legacy&&Array.isArray(value?.assets))root.localStorage?.setItem(ASSET_RESET_CLEANUP_KEY,JSON.stringify(value));
       return value&&typeof value==="object"?value:null;
     }catch{return null;}
   }
@@ -112,7 +117,7 @@
     let deleted=0,queued=0;
     for(const asset of assets){
       try{
-        const result=await bridge.deleteBrandAsset(asset.kind,{id:asset.id});
+        const result=await bridge.deleteBrandAsset(asset.kind,{id:asset.id},{cleanupOnly:true});
         if(result?.ok||Number(result?.status)===404)deleted++;
         else if(result?.queued)queued++;
         else failed.push(asset);
@@ -123,9 +128,9 @@
     }
     const detail={attempted:assets.length,deleted,queued,failed:failed.length};
     if(failed.length){
-      root.localStorage.setItem(RESET_PENDING_KEY,JSON.stringify({...intent,assets:failed,last_cleanup_at:Date.now(),cleanup_failures:failed.length}));
+      root.localStorage.setItem(ASSET_RESET_CLEANUP_KEY,JSON.stringify({...intent,assets:failed,last_cleanup_at:Date.now(),cleanup_failures:failed.length}));
       console.warn("LeadIntel brand asset reset cleanup incomplete",detail);
-    }else root.localStorage.removeItem(RESET_PENDING_KEY);
+    }else root.localStorage.removeItem(ASSET_RESET_CLEANUP_KEY);
     emitAssetCleanup(detail);
     return detail;
   }
@@ -187,11 +192,12 @@
     root.__leadintelWorkspaceResetHygieneInstalled=true;
     if(runEmergencyBrowserReset())return;
     if(clearLegacyLocalAutosaveOnce())return;
+    readResetIntent();
     root.document.addEventListener("click",handleResetClick,true);
     root.addEventListener?.("leadintel:server-ready",()=>finalizePendingReset());
   }
 
-  const api={LEGACY_LOCAL_CLEANUP_KEY,RESET_PENDING_KEY,WORKSPACE_KEY,MAIN_STATE_KEY,LEGACY_LOCAL_WORKSPACE_KEYS,RESET_RESIDUE_KEYS,emergencyResetRequested,runEmergencyBrowserReset,clearLegacyLocalAutosaveOnce,clearBrowserWorkspaceResidue,referencedBrandAssets,clearLocalBrandIdentity,recordResetIntent,readResetIntent,resetIntentMatchesWorkspace,cleanupResetAssets,afterWorkspaceSaved,finalizePendingReset,refreshResetUi,handleResetClick,install};
+  const api={LEGACY_LOCAL_CLEANUP_KEY,LEGACY_RESET_PENDING_KEY,ASSET_RESET_CLEANUP_KEY,RESET_PENDING_KEY,WORKSPACE_KEY,MAIN_STATE_KEY,LEGACY_LOCAL_WORKSPACE_KEYS,RESET_RESIDUE_KEYS,emergencyResetRequested,runEmergencyBrowserReset,clearLegacyLocalAutosaveOnce,clearBrowserWorkspaceResidue,referencedBrandAssets,clearLocalBrandIdentity,recordResetIntent,readResetIntent,resetIntentMatchesWorkspace,cleanupResetAssets,afterWorkspaceSaved,finalizePendingReset,refreshResetUi,handleResetClick,install};
   root.LeadIntelWorkspaceResetHygiene=api;
   install();
 })(typeof globalThis!=="undefined"?globalThis:this);
