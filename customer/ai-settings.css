@@ -18,7 +18,7 @@ body.ai-settings-opened{overflow:hidden}
 .ai-engine-summary span{font:600 10px/1.2 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.12em}
 .ai-engine-summary strong{font-size:16px}
 .ai-engine-summary small{font-size:12px}
-.workspace-signin-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:10px}.workspace-access-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding-top:10px;border-top:1px solid #dfe7e2}
+.ai-engine-active-line{display:flex;align-items:center;flex-wrap:wrap;gap:9px}.ai-active-badge{display:inline-flex;align-items:center;min-height:24px;padding:5px 9px;border:1px solid #9ac7b9;border-radius:999px;background:#e7f5ee;color:var(--ai-green);font:700 10px/1 'IBM Plex Mono',monospace;letter-spacing:.1em}.workspace-signin-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:10px}.workspace-access-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding-top:10px;border-top:1px solid #dfe7e2}
 .workspace-access-controls small{color:var(--ai-muted);font-size:12px}
 .workspace-provider-actions{display:flex;gap:8px;margin-top:2px}
 .workspace-provider-actions .ai-settings-btn{width:100%}
