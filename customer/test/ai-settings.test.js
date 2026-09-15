@@ -37,7 +37,14 @@ test('AI Settings supports status, test-and-save, activation and disconnect thro
   assert.match(js,/Disconnect/);
 });
 
-test('AI engine summary exposes a prominent active status badge',()=>{\n  assert.match(js,/ai-engine-active-line/);\n  assert.match(js,/ai-active-badge/);\n  assert.match(js,/>ACTIVE<|>ACTIVE<\\/span>/);\n  assert.match(css,/\\.ai-active-badge/);\n});\n\ntest('AI provider status clearly separates a connected credential from the active provider',()=>{
+test('AI engine summary exposes a prominent active status badge',()=>{
+  assert.match(js,/ai-engine-active-line/);
+  assert.match(js,/ai-active-badge/);
+  assert.match(js,/>ACTIVE</);
+  assert.match(css,/ai-active-badge/);
+});
+
+test('AI provider status clearly separates a connected credential from the active provider',()=>{
   assert.match(js,/Connected means the API key is verified/i,'settings copy must define connected');
   assert.match(js,/Active means LeadIntel is currently using that provider/i,'settings copy must define active');
   assert.match(js,/configured\?'Connected':'Not connected'/,'configured non-active providers must be labelled Connected, not Verified');
