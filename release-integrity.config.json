@@ -54,7 +54,7 @@
       "status": 200,
       "contains": [
         "const DISCOVERY_REQUEST_TIMEOUT_MS=25000;",
-        "const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS*2+2000;",
+        "const DISCOVERY_RUN_TIMEOUT_MS=25000;",
         "window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};",
         "initDiscoveryWhenReady();",
         "function ensureDiscoveryMounted()"
