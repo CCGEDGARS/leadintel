@@ -152,8 +152,9 @@ function initBrandIdentity(){
     getIdentity:()=>state.brandIdentity,
     getWebsite:()=>state.website,
     getPublicEvidence:brandIdentityPublicEvidence,
-    setIdentity:identity=>{
+    setIdentity:(identity, detail={})=>{
       state.brandIdentity=globalThis.LeadIntelBrandIdentity.normalize(identity);
+      if(detail.persist===false){updateCompleteness();updateNavigationAvailability();return;}
       saveState();
     }
   });
