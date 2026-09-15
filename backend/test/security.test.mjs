@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {allowedOrigin,constantTimeEqual,cookieValue,corsHeaders} from "../src/security.js";
+import {allowedOrigin,constantTimeEqual,cookieValue,corsHeaders,isTrustedPreviewOrigin} from "../src/security.js";
 
 test("allows only the configured application origin",()=>{
   const allowed=new Request("https://api.example.test",{headers:{Origin:"https://app.example.test"}});
