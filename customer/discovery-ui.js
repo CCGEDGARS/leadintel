@@ -8,7 +8,7 @@ const LEADINTEL_API="https://leadintel-api.edgars-7e7.workers.dev";
 const MAX_DISCOVERY_QUERIES=10;
 const MAX_DISCOVERY_RESULTS_PER_QUERY=5;
 const DISCOVERY_SEARCH_CONCURRENCY=4;
-const ASSET_VERSION="20260915-entity-resolution-v1";
+const ASSET_VERSION="20260915-evidence-link-v1";
 const LANGUAGE_ASSET_VERSION="20260914-workspace-isolation-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const $=id=>document.getElementById(id);
@@ -174,12 +174,13 @@ async function runCompanyDiscovery(){
     let searches=[];
     let resolutionSearches=[];
     let verificationSearches=[];
+    let companyMentions=[];
     const allSearches=(async()=>{
       searches=await runDiscoverySearchBatch(queries,"searching");
       const firstPass=searches.flatMap(item=>item?.results||[]);
       const targetMarket=queries[0]?.market||main.profile?.targetMarkets||"";
-      const mentions=await extractCompaniesFromEvidence(firstPass,targetMarket,limits.targetCount);
-      const resolutionQueries=LeadIntelDiscovery.buildCompanyResolutionQueries(mentions,main.profile||{website:main.website},limits.targetCount);
+      companyMentions=await extractCompaniesFromEvidence(firstPass,targetMarket,limits.targetCount);
+      const resolutionQueries=LeadIntelDiscovery.buildCompanyResolutionQueries(companyMentions,main.profile||{website:main.website},limits.targetCount);
       resolutionSearches=await runDiscoverySearchBatch(resolutionQueries,"resolving");
       const resolved=resolutionSearches.flatMap(item=>item?.results||[]);
       const verificationQueries=LeadIntelDiscovery.buildCandidateVerificationQueries(resolved,main.profile||{website:main.website},market,limits.targetCount);
@@ -197,8 +198,9 @@ async function runCompanyDiscovery(){
     const firstPass=searches.flatMap(item=>item?.results||[]);
     const resolved=resolutionSearches.flatMap(item=>item?.results||[]);
     const verified=verificationSearches.flatMap(item=>item?.results||[]);
+    const evidenceLinked=LeadIntelDiscovery.attachSourceEvidenceToResolvedCompanies(resolved,companyMentions,firstPass);
     discovery.rawResults=[...firstPass,...resolved,...verified].slice(0,50);
-    discovery.candidates=LeadIntelDiscovery.mergeCompanyCandidates(verified,main.profile||{website:main.website},main.market||{},limits.targetCount);
+    discovery.candidates=LeadIntelDiscovery.mergeCompanyCandidates([...evidenceLinked,...verified],main.profile||{website:main.website},main.market||{},limits.targetCount);
     discovery.status=timedOut?discovery.candidates.length?"partial":"error":failures===0?"complete":discovery.candidates.length?"partial":"error";
     if(timedOut)fatalError=new Error("Company search timed out safely. Partial results were kept.");
   }catch(error){

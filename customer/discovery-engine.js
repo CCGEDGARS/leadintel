@@ -216,6 +216,8 @@
     const actual=domainCountryRule(candidate.domain);
     if(actual&&actual.code!==requested.code)return false;
     if(actual&&actual.code===requested.code)return true;
+    const evidenceCountries=(candidate.evidence||[]).map(item=>domainCountryRule(item.sourceDomain||canonicalDomain(item.url))).filter(Boolean);
+    if(evidenceCountries.some(rule=>rule.code===requested.code))return true;
     const hay=(candidate.evidence||[]).map(evidenceText).join(" ");
     return requested.aliases.some(alias=>hay.includes(alias));
   }
@@ -301,7 +303,7 @@
       if(!signalTerms.length)continue;
       const quotedSignals=signalTerms.map(term=>`"${term.replace(/"/g,"")}"`).join(" OR ");
       checks.push({
-        id:`verify-${slug(domain)}`,domain,market:clean(item.market),offer:"",kind:"verification",
+        id:`verify-${slug(domain)}`,domain,company:clean(item.company),sourceUrl:normalizeUrl(item.sourceUrl||""),market:clean(item.market),offer:"",kind:"verification",
         query:`site:${domain} (${quotedSignals}) company news expansion investment hiring facility contract`
       });
       if(checks.length>=limit)break;
@@ -330,10 +332,41 @@
       const text=cleanEvidenceText(item?.markdown||item?.content||item?.text||description).slice(0,7000);
       return {
         queryId:clean(queryMeta.id),market:clean(queryMeta.market),query:clean(queryMeta.query),url,domain,
-        company:queryMeta.kind==="resolution"&&validCompanyName(queryMeta.company)?cleanCompanyName(queryMeta.company):companyFromTitle(item?.title,domain),title:clean(item?.title)||displayFromDomain(domain),description,text,
+        company:["resolution","verification"].includes(queryMeta.kind)&&validCompanyName(queryMeta.company)?cleanCompanyName(queryMeta.company):companyFromTitle(item?.title,domain),title:clean(item?.title)||displayFromDomain(domain),description,text,
+        sourceUrl:normalizeUrl(queryMeta.sourceUrl||""),
         date:clean(item?.publishedDate||item?.date||item?.published_at||item?.metadata?.publishedDate)
       };
     }).filter(Boolean);
+  }
+
+  function attachSourceEvidenceToResolvedCompanies(resolved=[],mentions=[],evidence=[]){
+    const sourcesByUrl=new Map((evidence||[]).map(item=>[normalizeUrl(item?.url),item]).filter(([url])=>url));
+    const linksByCompany=new Map();
+    for(const mention of mentions||[]){
+      const company=cleanCompanyName(mention?.company);const sourceUrl=normalizeUrl(mention?.sourceUrl);
+      const source=sourcesByUrl.get(sourceUrl);if(!validCompanyName(company)||!source)continue;
+      const sourceIdentity=normalizedIdentity([source?.title,source?.description,source?.text].join(" "));
+      if(!sourceIdentity.includes(normalizedIdentity(company)))continue;
+      const key=normalizedIdentity(company);const links=linksByCompany.get(key)||[];
+      if(!links.some(item=>item.sourceUrl===sourceUrl))links.push({sourceUrl,source,market:clean(mention?.market)});
+      linksByCompany.set(key,links);
+    }
+    const output=[];const seen=new Set();
+    for(const official of resolved||[]){
+      const domain=clean(official?.domain)||canonicalDomain(official?.url);const company=cleanCompanyName(official?.company);
+      if(!domain||!validCompanyName(company)||!domainMatchesCompany(domain,company))continue;
+      const officialUrl=normalizeUrl(official?.url);const officialKey=`${domain}|${officialUrl}`;
+      if(officialUrl&&!seen.has(officialKey)){seen.add(officialKey);output.push({...official,domain,company,market:clean(official?.market)});}
+      for(const link of linksByCompany.get(normalizedIdentity(company))||[]){
+        const key=`${domain}|${link.sourceUrl}`;if(seen.has(key))continue;seen.add(key);
+        output.push({
+          queryId:clean(official?.queryId),query:clean(official?.query),market:link.market||clean(official?.market),
+          url:link.sourceUrl,domain,company,title:clean(link.source?.title),description:clean(link.source?.description),
+          text:cleanEvidenceText(link.source?.text||link.source?.description).slice(0,7000),date:clean(link.source?.date),sourceDomain:canonicalDomain(link.sourceUrl)
+        });
+      }
+    }
+    return output;
   }
 
   function activeSignals(marketState){return (marketState?.signals||[]).filter(item=>item.active!==false);}
@@ -383,7 +416,7 @@
       const current=grouped.get(domain)||{domain,company:clean(item.company)||displayFromDomain(domain),market:clean(item.market),website:`https://${domain}/`,evidence:[]};
       if(!current.market&&item.market)current.market=clean(item.market);
       if(current.company===displayFromDomain(domain)&&clean(item.company))current.company=clean(item.company);
-      if(!current.evidence.some(e=>e.url===item.url))current.evidence.push({url:item.url,title:cleanEvidenceText(item.title),description:cleanEvidenceText(item.description),text:cleanEvidenceText(item.text).slice(0,7000),date:clean(item.date)});
+      if(!current.evidence.some(e=>e.url===item.url))current.evidence.push({url:item.url,sourceDomain:clean(item.sourceDomain)||canonicalDomain(item.url),title:cleanEvidenceText(item.title),description:cleanEvidenceText(item.description),text:cleanEvidenceText(item.text).slice(0,7000),date:clean(item.date)});
       grouped.set(domain,current);
     }
     const signals=activeSignals(marketState);
@@ -523,5 +556,5 @@
     return {...state,status:state.candidates.length||state.rawResults.length?"partial":"error"};
   }
 
-  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,discoveryLimits,buildDiscoveryQueries,extractCompanyMentions,parseCompanyExtraction,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,mergeCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,recoverInterruptedDiscoveryState,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,hasActiveSignals,isActionableCandidate};
+  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,discoveryLimits,buildDiscoveryQueries,extractCompanyMentions,parseCompanyExtraction,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,recoverInterruptedDiscoveryState,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,hasActiveSignals,isActionableCandidate};
 });

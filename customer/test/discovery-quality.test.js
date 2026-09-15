@@ -197,3 +197,60 @@ test("company resolution rejects publisher domains even when their article names
   }]},{id:"resolve-cinis",kind:"resolution",company:"Cinis Fertilizer",market:"Zviedrija",query:'"Cinis Fertilizer" official website'});
   assert.deepEqual(resolved,[]);
 });
+
+test("resolved official company keeps its third-party buying-signal evidence",()=>{
+  const sourceUrl="https://www.ri.se/en/unique-bio-based-industry-is-established-kopmanholmen";
+  const evidence=[{
+    url:sourceUrl,domain:"ri.se",market:"Zviedrija",title:"Unique bio-based industry is established",
+    description:"Cinis Fertilizer intends to establish a new facility in Sweden and invest SEK 550 million.",
+    text:"Cinis Fertilizer intends to establish a new facility at the dockyard in Kopmanholmen."
+  }];
+  const mentions=[{company:"Cinis Fertilizer",market:"Zviedrija",sourceUrl}];
+  const resolved=[{
+    url:"https://cinis-fertilizer.com/",domain:"cinis-fertilizer.com",company:"Cinis Fertilizer",market:"Zviedrija",
+    title:"Cinis Fertilizer",description:"Fossil-free mineral fertilizer producer",text:"Official company website"
+  }];
+
+  assert.equal(typeof discovery.attachSourceEvidenceToResolvedCompanies,"function");
+  if(typeof discovery.attachSourceEvidenceToResolvedCompanies!=="function")return;
+  const linked=discovery.attachSourceEvidenceToResolvedCompanies(resolved,mentions,evidence);
+  const candidates=discovery.mergeCompanyCandidates(linked,{
+    website:"https://ercon.lv",priorityOffers:"metālapstrādes pakalpojumi",idealCustomer:"Zviedrijas ražošanas uzņēmumi"
+  },{
+    signals:[{id:"expansion",name:"Ražošanas paplašināšana",active:true,weight:9,keywords:"jauna ražotne; jaudas palielināšana"}]
+  },10);
+
+  assert.equal(candidates.length,1);
+  assert.equal(candidates[0].company,"Cinis Fertilizer");
+  assert.equal(candidates[0].domain,"cinis-fertilizer.com");
+  assert.ok(candidates[0].evidence.some(item=>item.url===sourceUrl),"publisher article remains evidence, never company identity");
+  assert.ok(candidates[0].matchedSignals.some(item=>item.id==="expansion"));
+});
+
+test("third-party evidence cannot qualify a company without a resolved official domain",()=>{
+  assert.equal(typeof discovery.attachSourceEvidenceToResolvedCompanies,"function");
+  if(typeof discovery.attachSourceEvidenceToResolvedCompanies!=="function")return;
+  const sourceUrl="https://industry-news.se/example-expansion";
+  const linked=discovery.attachSourceEvidenceToResolvedCompanies([], [{company:"Example AB",market:"Sweden",sourceUrl}], [{
+    url:sourceUrl,domain:"industry-news.se",market:"Sweden",title:"Example AB expands",text:"Example AB opens a new factory in Sweden."
+  }]);
+  assert.deepEqual(linked,[]);
+});
+
+test("target market can be verified by the linked evidence country when the official company uses dot-com",()=>{
+  const sourceUrl="https://industry-news.se/example-expansion";
+  const linked=discovery.attachSourceEvidenceToResolvedCompanies([{
+    url:"https://example-industries.com/",domain:"example-industries.com",company:"Example Industries",market:"Zviedrija",
+    title:"Example Industries",description:"Industrial producer",text:"Official company website"
+  }],[{company:"Example Industries",market:"Zviedrija",sourceUrl}],[{
+    url:sourceUrl,domain:"industry-news.se",market:"Zviedrija",title:"Example Industries invests",
+    description:"Example Industries builds a new facility and expands production capacity.",text:""
+  }]);
+  const candidates=discovery.mergeCompanyCandidates(linked,{
+    website:"https://ercon.lv",priorityOffers:"metālapstrādes pakalpojumi",idealCustomer:"Zviedrijas ražošanas uzņēmumi"
+  },{
+    signals:[{id:"expansion",name:"Ražošanas paplašināšana",active:true,weight:9,keywords:"jauna ražotne; jaudas palielināšana"}]
+  },10);
+  assert.equal(candidates.length,1);
+  assert.equal(candidates[0].domain,"example-industries.com");
+});
