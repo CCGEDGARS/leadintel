@@ -73,13 +73,28 @@ function modeLabel(meta){if(meta.mode==='ai')return `${meta.provider||'AI'}${met
 function renderResearchReview(){
   const state=readState();const meta=metaForCurrentState();const map=sourceMap(state);const summary=$('research-summary');
   if(summary){
+    summary.classList.remove('research-summary-failed');
     if(meta.generatedAt){
       const aiNote=meta.mode==='ai'?`AI enrichment active · ${esc(modeLabel(meta))}`:'Evidence-only draft · connect an AI provider in Settings for deeper synthesis.';
       const coverage=meta.quality?.coverage||{};const covered=Array.isArray(coverage.categories)?coverage.categories.length:0;const total=Number(coverage.total)||5;
       const coverageNote=`${covered}/${total} authoritative areas${coverage.minimumMet?' verified':' · Coverage incomplete; high confidence is capped'}`;
       summary.innerHTML=`<div class="research-summary-main"><div class="research-summary-icon">✦</div><div><strong>Research complete · ${Number(meta.sourceCount)||0} evidence source${Number(meta.sourceCount)===1?'':'s'}</strong><small class="${meta.mode==='ai'?'':'research-no-ai'}">${aiNote}${meta.failures?` · ${Number(meta.failures)} source/search request${Number(meta.failures)===1?'':'s'} unavailable`:''}</small><small class="research-coverage ${coverage.minimumMet?'complete':'incomplete'}">${esc(coverageNote)}</small></div></div><div class="research-summary-actions"><span class="research-mode">${esc(modeLabel(meta))}</span><button class="research-rerun" id="rerun-company-research" type="button">Rerun company research</button></div>`;
     }
-    summary.querySelector('#rerun-company-research')?.addEventListener('click',()=>runCompanyResearch({rerun:true}));
+    } else if(meta.failureAt){
+      summary.classList.add('research-summary-failed');
+      summary.innerHTML='<div class="research-summary-main"><div class="research-summary-icon">!</div><div><strong>Research could not complete.</strong><small>'+esc(meta.error||'The company research request did not finish.')+'</small><small class="research-retry-note">Your website and target market were preserved. Try again when ready.</small></div></div><div class="research-summary-actions"><span class="research-mode">Retry available</span><button class="research-rerun" id="rerun-company-research" type="button">Try research again</button></div>';
+    } else {
+      const ready=Boolean(normalizeUrl(state.website)&&selectedMarkets(state).length);
+      const detail=ready?'Your website and target market are ready. Run company research to pre-fill this step.':'Add the website and target market in Step 1, then run company research.';
+      const label=ready?'Run company research':'Go to Step 1';
+      const step1Action=ready?'':' data-go-step1="true"';
+      summary.innerHTML='<div class="research-summary-main"><div class="research-summary-icon">✦</div><div><strong>Research has not run yet.</strong><small>'+detail+'</small></div></div><div class="research-summary-actions"><span class="research-mode">'+(ready?'Evidence first':'Step 1 required')+'</span><button class="research-rerun" id="rerun-company-research" type="button"'+step1Action+'>'+label+'</button></div>';
+    }
+    const action=summary.querySelector('#rerun-company-research');
+    action?.addEventListener('click',()=>{
+      if(action.dataset.goStep1==='true'){document.getElementById('back-to-sources')?.click();return;}
+      void runCompanyResearch({rerun:Boolean(meta.generatedAt||meta.failureAt)});
+    });
   }
   document.querySelectorAll('[data-question]').forEach(textarea=>{
     const id=textarea.dataset.question;const target=document.querySelector(`[data-research-meta="${id}"]`);if(!target)return;
@@ -210,7 +225,11 @@ async function runCompanyResearch({rerun=false}={}){
     const message=runController.signal.aborted?'Company research stopped after 60 seconds.':(error.message||'Public research is temporarily unavailable.');
     setProgress('Research could not complete',message);toast('Company research stopped safely. Your existing workspace data is safe.');
     const latest=readState();
-    if(normalizeUrl(latest.website||'')===website){latest.website=website;latest.targetMarkets=markets;latest.additionalLinks=additionalLinks;latest.step=2;writeState(latest);setTimeout(()=>location.reload(),180);}
+    if(normalizeUrl(latest.website||'')===website){
+      const now=new Date().toISOString();const existing=readMeta();const previous=normalizeUrl(existing.website)===website?existing:{};
+      writeMeta(previous.generatedAt?{...previous,lastFailureAt:now,lastFailure:message}:{...previous,website,failureAt:now,error:message,generatedAt:'',mode:'failed',fields:previous.fields||{}});
+      latest.website=website;latest.targetMarkets=markets;latest.additionalLinks=additionalLinks;latest.step=2;writeState(latest);setTimeout(()=>location.reload(),180);
+    }
   }
   finally{clearTimeout(runTimer);running=false;setResearchButtonBusy(false);if(rerunButton)rerunButton.disabled=false;}
 }
