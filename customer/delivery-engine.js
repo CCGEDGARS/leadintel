@@ -1,8 +1,9 @@
 (function(root,factory){
-  const api=factory();
+  const outreach=root?.LeadIntelOutreach||(typeof module!=="undefined"&&module.exports?require("./outreach-engine.js"):null);
+  const api=factory(outreach);
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
   if(root)root.LeadIntelDelivery=api;
-})(typeof globalThis!=="undefined"?globalThis:this,function(){
+})(typeof globalThis!=="undefined"?globalThis:this,function(Outreach){
   "use strict";
 
   const CONNECTOR=Object.freeze({id:"gmail-compose",label:"Gmail Compose",syncMode:"manual-confirmation"});
@@ -28,8 +29,9 @@
 
   function buildGmailComposeUrl(packageItem,recipient){
     const to=normalizeEmail(recipient);
-    const subject=clean(packageItem?.drafts?.emailSubject);
-    const body=cleanMultiline(packageItem?.drafts?.emailBody);
+    const frozen=Outreach?.buildApprovedSendPayload?.(packageItem,to);
+    const subject=clean(frozen?.subject??packageItem?.drafts?.emailSubject);
+    const body=cleanMultiline(frozen?.textBody??packageItem?.drafts?.emailBody);
     if(!packageItem?.approved||!to||!subject||!body)return "";
     const url=new URL("https://mail.google.com/mail/");
     url.searchParams.set("view","cm");

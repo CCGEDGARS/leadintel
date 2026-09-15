@@ -33,7 +33,7 @@ import './reference-customer-launcher.js?v=20260911-reference-open-v2';
 import './lookalike-discovery.js?v=20260910-reference-portfolio-v1';
 import './intelligence-sources-ui.js?v=20260915-preferred-sources-v1';
 import './profile-action-runtime.js?v=20260912-bottom-profile-actions-v1';
-import './outreach-automation-loader.js?v=20260908-boot-isolation-v1';
+import './outreach-automation-loader.js?v=20260916-brand-outreach-v2';
 import './copilot-loader.js?v=20260911-copilot-freshness-v1';
 
 const PROCESS_STORAGE_KEY="leadintel_customer_v2_state";

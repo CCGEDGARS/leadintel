@@ -8,11 +8,13 @@ function approvedPackage(){
   return items.find(item=>item&&item.approved&&String(item.domain||'')===selected)||null;
 }
 function recipient(){return String(document.getElementById('delivery-recipient')?.value||'').trim().toLowerCase();}
+function buildApprovedAutomationPackage(pkg,recipientValue){
+  if(!pkg?.approved)return null;const source=pkg.approvedSource&&typeof pkg.approvedSource==='object'?pkg.approvedSource:(pkg.drafts&&typeof pkg.drafts==='object'?pkg.drafts:{});
+  return {domain:String(pkg.domain||''),recipient:String(recipientValue||'').trim().toLowerCase(),subject:String(source.emailSubject||''),body:String(source.emailBody||''),followup_body:String(source.followUp||''),approved_at:String(pkg.approvedAt||''),contact_identity:String(pkg.selectedPersonId||pkg.domain||''),approved:true};
+}
 function announceApprovedAutomationPackage(){
-  const pkg=approvedPackage();if(!pkg)return false;const drafts=pkg.drafts&&typeof pkg.drafts==='object'?pkg.drafts:{};
-  root.dispatchEvent(new CustomEvent('leadintel:approved-outreach-package',{detail:{
-    domain:String(pkg.domain||''),recipient:recipient(),subject:String(drafts.emailSubject||''),body:String(drafts.emailBody||''),followup_body:String(drafts.followUp||''),approved_at:String(pkg.approvedAt||''),contact_identity:String(pkg.selectedPersonId||pkg.domain||''),approved:true
-  }}));return true;
+  const detail=buildApprovedAutomationPackage(approvedPackage(),recipient());if(!detail)return false;
+  root.dispatchEvent(new CustomEvent('leadintel:approved-outreach-package',{detail}));return true;
 }
 function relevant(target){return target?.id==='delivery-recipient'||target?.id==='delivery-company-select';}
 function init(){
@@ -22,5 +24,6 @@ function init(){
   setTimeout(announceApprovedAutomationPackage,0);
 }
 if(typeof document!=='undefined'){if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();}
-root.LeadIntelOutreachAutomationDeliveryHandoff={announceApprovedAutomationPackage};
+root.LeadIntelOutreachAutomationDeliveryHandoff={announceApprovedAutomationPackage,buildApprovedAutomationPackage};
+if(typeof module!=='undefined'&&module.exports)module.exports=root.LeadIntelOutreachAutomationDeliveryHandoff;
 })(typeof window!=='undefined'?window:globalThis);

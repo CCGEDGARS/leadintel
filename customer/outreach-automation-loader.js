@@ -6,7 +6,7 @@ function loadAutomation(){
   loadPromise=Promise.all([
     import('./outreach-automation-bridge.js?v=20260908-boot-timeout-v2'),
     import('./outreach-automation-ui.js?v=20260908-outreach-auto-ui-v1'),
-    import('./outreach-automation-delivery-handoff.js?v=20260908-outreach-auto-handoff-v1')
+    import('./outreach-automation-delivery-handoff.js?v=20260916-brand-outreach-v2')
   ]).catch(error=>{loadPromise=null;console.error('[LeadIntel] Outreach automation failed to load',error);return [];});
   return loadPromise;
 }

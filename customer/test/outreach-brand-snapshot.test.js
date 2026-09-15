@@ -2,6 +2,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
+const vm=require('node:vm');
 const Outreach=require('../outreach-engine.js');
 const Delivery=require('../delivery-engine.js');
 
@@ -46,6 +47,13 @@ function item(body='Hello buyer,\n\nUseful context.\n\nBest,\n[Your name]\nSelle
   };
 }
 
+function loadBrowserConsumer(filename,globals={}){
+  const window={...globals,addEventListener(){}};
+  const document={readyState:'loading',addEventListener(){}};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'..',filename),'utf8'),{window,document,console,CustomEvent:class CustomEvent{constructor(type,init={}){this.type=type;this.detail=init.detail;}}});
+  return window;
+}
+
 test('approval freezes the valid ready identity revision and resolved managed assets',()=>{
   const source=structuredClone(readyIdentity);
   const approved=Outreach.approveOutreachItem(item(),item().drafts,'2026-09-15T21:00:00.000Z',{brandIdentity:source});
@@ -61,7 +69,7 @@ test('approval freezes the valid ready identity revision and resolved managed as
   assert.equal(approved.brandSnapshot.assets.logo.id,'logo_7');
 });
 
-test('approved preview and manual-send payload are exactly the same frozen rendering',()=>{
+test('manual Gmail compose and Gmail/Microsoft API payloads ignore later draft mutations and use the frozen rendering',()=>{
   const draft=item();
   const approved=Outreach.approveOutreachItem(draft,draft.drafts,'2026-09-15T21:00:00.000Z',{brandIdentity:readyIdentity});
   const preview=Outreach.renderApprovedEmail(approved);
@@ -71,9 +79,25 @@ test('approved preview and manual-send payload are exactly the same frozen rende
     preview
   );
   assert.equal(send.body,preview.textBody,'legacy body must carry the exact rendered text fallback');
-  assert.equal(approved.drafts.emailBody,preview.textBody,'existing explicit manual-send paths must receive the frozen text rendering');
+  assert.equal(approved.drafts.emailBody,approved.approvedSource.emailBody,'approval must retain the plain approved source rather than cache rendered branding in drafts');
+  approved.drafts.emailSubject='MUTATED SUBJECT';
+  approved.drafts.emailBody='MUTATED BODY';
   const compose=new URL(Delivery.buildGmailComposeUrl(approved,'buyer@example.com'));
+  assert.equal(compose.searchParams.get('su'),preview.subject);
   assert.equal(compose.searchParams.get('body'),preview.textBody);
+
+  const production=loadBrowserConsumer('production-gmail-ui.js',{LeadIntelOutreach:Outreach,LeadIntelDelivery:Delivery}).LeadIntelProductionMail;
+  assert.equal(typeof production?.buildProviderSendRequest,'function','production mailbox UI must expose the request builder used by both providers');
+  for(const idempotencyKey of ['gmail-key','microsoft-key']){
+    const request=production.buildProviderSendRequest(approved,'buyer@example.com',idempotencyKey);
+    assert.deepEqual(
+      {subject:request.subject,body:request.body,textBody:request.textBody,htmlBody:request.htmlBody},
+      {subject:preview.subject,body:preview.textBody,textBody:preview.textBody,htmlBody:preview.htmlBody}
+    );
+    assert.equal(request.recipient,'buyer@example.com');
+    assert.equal(request.domain,'buyer.example');
+    assert.equal(request.idempotencyKey,idempotencyKey);
+  }
   assert.match(preview.htmlBody,/SellerCo logo/);
   assert.match(preview.textBody,/Anna Seller/);
   assert.doesNotMatch(preview.textBody,/\[Your name\]/);
@@ -82,6 +106,27 @@ test('approved preview and manual-send payload are exactly the same frozen rende
   later.senderName='Different Step 1 Sender';
   later.revision=8;
   assert.deepEqual(Outreach.renderApprovedEmail(approved),preview,'later Step 1 changes must not affect the approved rendering');
+});
+
+test('automatic handoff uses the frozen plain-text source and never queues snapshot branding',()=>{
+  const draft=item();
+  const approved=Outreach.approveOutreachItem(draft,draft.drafts,'2026-09-15T21:00:00.000Z',{brandIdentity:readyIdentity});
+  const preview=Outreach.renderApprovedEmail(approved);
+  approved.drafts.emailSubject='MUTATED AUTOMATION SUBJECT';
+  approved.drafts.emailBody='MUTATED AUTOMATION BODY';
+
+  const handoff=loadBrowserConsumer('outreach-automation-delivery-handoff.js').LeadIntelOutreachAutomationDeliveryHandoff;
+  assert.equal(typeof handoff?.buildApprovedAutomationPackage,'function','automatic handoff must expose its real queue payload builder');
+  const queued=handoff.buildApprovedAutomationPackage(approved,'buyer@example.com');
+  assert.equal(queued.subject,approved.approvedSource.emailSubject);
+  assert.equal(queued.body,approved.approvedSource.emailBody);
+  assert.equal(queued.followup_body,approved.approvedSource.followUp);
+  assert.notEqual(queued.body,preview.textBody);
+  assert.doesNotMatch(queued.body,/Anna Seller|Confidential commercial communication|logo_7/);
+  assert.equal('htmlBody' in queued,false);
+  assert.equal('brandSnapshot' in queued,false);
+  assert.equal(queued.recipient,'buyer@example.com');
+  assert.equal(queued.contact_identity,'buyer.example');
 });
 
 test('explicit refresh invalidates approval and removes the frozen delivery rendering',()=>{
@@ -130,14 +175,22 @@ test('normalization restores a branded approved package from source plus snapsho
 test('outreach UI snapshots Step 1 identity, preserves edit detection and invalidates approval on regeneration',()=>{
   const source=fs.readFileSync(path.join(__dirname,'..','outreach-ui.js'),'utf8');
   const discovery=fs.readFileSync(path.join(__dirname,'..','discovery-ui.js'),'utf8');
+  const delivery=fs.readFileSync(path.join(__dirname,'..','delivery-ui.js'),'utf8');
+  const processMap=fs.readFileSync(path.join(__dirname,'..','process-map.js'),'utf8');
+  const automationLoader=fs.readFileSync(path.join(__dirname,'..','outreach-automation-loader.js'),'utf8');
   const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
   assert.match(source,/approveOutreachItem\(source,edited\.drafts,[\s\S]*brandIdentity:mainState\(\)\.brandIdentity/);
   assert.match(source,/regenerateDrafts\(\)[\s\S]*invalidateOutreachApproval\(current\)/);
   assert.match(source,/renderApprovedEmail\(item\)/);
   assert.match(source,/buildApprovedSendPayload\(item\)/);
   assert.doesNotMatch(source,/\.sendGmail\(|\.sendMicrosoftMail\(/,'Task 5 must not create an automatic delivery path');
-  assert.match(discovery,/const OUTREACH_ASSET_VERSION="20260916-brand-outreach-v1";/);
+  assert.match(discovery,/const OUTREACH_ASSET_VERSION="20260916-brand-outreach-v2";/);
   assert.match(discovery,/outreach-engine\.js\?v=\$\{OUTREACH_ASSET_VERSION\}/);
   assert.match(discovery,/outreach-ui\.js\?v=\$\{OUTREACH_ASSET_VERSION\}/);
-  assert.match(html,/discovery-ui\.js\?v=20260916-brand-outreach-v1/);
+  assert.match(source,/const LANGUAGE_ASSET_VERSION="20260916-brand-outreach-v2";/);
+  assert.match(delivery,/const ASSET_VERSION="20260916-brand-outreach-v2";/);
+  assert.match(processMap,/outreach-automation-loader\.js\?v=20260916-brand-outreach-v2/);
+  assert.match(automationLoader,/outreach-automation-delivery-handoff\.js\?v=20260916-brand-outreach-v2/);
+  assert.match(html,/process-map\.js\?v=20260916-brand-outreach-v2/);
+  assert.match(html,/discovery-ui\.js\?v=20260916-brand-outreach-v2/);
 });
