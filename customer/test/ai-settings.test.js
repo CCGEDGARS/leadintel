@@ -15,7 +15,7 @@ const extension=fs.existsSync(extensionPath)?fs.readFileSync(extensionPath,'utf8
 const extensionCss=fs.existsSync(extensionCssPath)?fs.readFileSync(extensionCssPath,'utf8'):'';
 
 test('Customer V2 loads the proven AI Settings plus the customer-owned Apollo and Firecrawl extension',()=>{
-  assert.match(processMap,/import ['"]\.\/ai-settings\.js\?v=20260915-active-provider-v1['"]/);
+  assert.match(processMap,/import ['"]\.\/ai-settings\.js\?v=20260915-active-tools-summary-v1['"]/);
   assert.match(processMap,/import ['"]\.\/service-settings-extension\.js\?v=20260915-mail-choice-v2['"]/);
   assert.equal(fs.existsSync(jsPath),true,'ai-settings.js must exist');
   assert.equal(fs.existsSync(extensionPath),true,'service-settings-extension.js must exist');
@@ -42,6 +42,17 @@ test('AI engine summary exposes a prominent active status badge',()=>{
   assert.match(js,/ai-active-badge/);
   assert.match(js,/>ACTIVE</);
   assert.match(css,/ai-active-badge/);
+});
+
+test('Active tools summary is status-only and keeps account sign-out on the selected account card',()=>{
+  assert.match(js,/function activeToolsSummary\(active\)/);
+  assert.match(js,/Active tools/);
+  assert.match(js,/active-tools-list/);
+  assert.match(js,/Manage every connection in its card below/);
+  assert.doesNotMatch(js,/function workspaceAccessControls/);
+  assert.match(js,/function workspaceProviderAction\(provider\)[\s\S]*data-settings-signout/);
+  assert.match(css,/\.active-tools-list/);
+  assert.match(css,/\.active-tool-chip/);
 });
 
 test('AI provider status clearly separates a connected credential from the active provider',()=>{
@@ -80,7 +91,7 @@ test('raw API keys are transient browser values and never persisted by either se
 });
 
 test('settings assets are cache-busted and controls have individual borders and focus treatment',()=>{
-  assert.match(js,/SETTINGS_VERSION='20260915-active-provider-v1'/);
+  assert.match(js,/SETTINGS_VERSION='20260915-active-tools-summary-v1'/);
   assert.match(extension,/SETTINGS_VERSION='20260915-mail-choice-v2'/);
   assert.match(js,/link\.href=`ai-settings\.css\?v=\$\{SETTINGS_VERSION\}`/);
   assert.match(extension,/link\.href=`service-settings-extension\.css\?v=\$\{SETTINGS_VERSION\}`/);

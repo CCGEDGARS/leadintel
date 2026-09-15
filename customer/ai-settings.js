@@ -1,6 +1,6 @@
 const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
 const FIRECRAWL_PROXY='https://apollo-proxy.edgars-7e7.workers.dev';
-const SETTINGS_VERSION='20260915-active-provider-v1';
+const SETTINGS_VERSION='20260915-active-tools-summary-v1';
 const PROVIDERS=Object.freeze([
   {provider:'openai',name:'OpenAI',model:'gpt-5.6',placeholder:'sk-…',hint:'Responses API'},
   {provider:'anthropic',name:'Anthropic',model:'claude-sonnet-4-6',placeholder:'sk-ant-…',hint:'Messages API'},
@@ -95,10 +95,19 @@ function workspaceProviderAction(provider){
   if(selected)return `<div class="workspace-provider-actions"><button class="ai-settings-btn" data-settings-switch="${provider}" type="button">Switch to ${providerLabel(provider)}</button></div>`;
   return '';
 }
-function workspaceAccessControls(){
-  const selected=authProvider();
-  const account=selected?`${providerLabel(selected)} account selected`:'Active workspace session';
-  return `<div class="workspace-access-controls"><small>Workspace access · ${esc(account)}</small><button class="ai-settings-btn danger" data-settings-signout type="button">Sign out</button></div>`;
+function activeToolItems(active){
+  const items=[];
+  if(active)items.push({name:active.name,detail:`AI · ${active.model}`,state:'ACTIVE'});
+  if(integrationStatus.apollo?.state==='good')items.push({name:'Apollo.io',detail:'Enrichment',state:'READY'});
+  if(integrationStatus.firecrawl?.state==='good')items.push({name:'Firecrawl',detail:'Research',state:'READY'});
+  if(integrationStatus.gmail?.state==='good')items.push({name:'Gmail',detail:'Mail delivery',state:'CONNECTED'});
+  if(integrationStatus.microsoftMail?.state==='good')items.push({name:'Microsoft 365',detail:'Mail delivery',state:'CONNECTED'});
+  return items;
+}
+function activeToolsSummary(active){
+  const items=activeToolItems(active);
+  if(!items.length)return '<div class="active-tools-empty">No active tools are ready yet.</div>';
+  return `<div class="active-tools-list" role="list" aria-label="Active LeadIntel tools">${items.map(item=>`<div class="active-tool-chip" role="listitem"><div><strong>${esc(item.name)}</strong><small>${esc(item.detail)}</small></div><span>${esc(item.state)}</span></div>`).join('')}</div>`;
 }
 function render(){
   const grid=document.getElementById('ai-provider-grid');if(!grid)return;
@@ -109,8 +118,8 @@ function render(){
     if(!signedIn()){
       summary.innerHTML='<span>Workspace access</span><strong>Sign in to configure LeadIntel</strong><small>Use your existing Google or Microsoft account. Mailbox permissions are connected separately.</small><div class="workspace-signin-options" id="ai-settings-signin"><button class="ai-settings-btn primary" data-settings-signin="google" type="button">Continue with Google</button><button class="ai-settings-btn microsoft" data-settings-signin="microsoft" type="button">Continue with Microsoft</button></div>';
     }
-    else if(active)summary.innerHTML=`<span>AI engine</span><strong class="ai-engine-active-line"><span>Active provider · ${esc(active.name)} · ${esc(active.model)}</span><span class="ai-active-badge" role="status">ACTIVE</span></strong><small>${connectedCount} provider${connectedCount===1?'':'s'} connected · API key verified ${active.verified_at?esc(formatDate(active.verified_at)):'successfully'}${active.last_used_at?` · last used ${esc(formatDateTime(active.last_used_at))}`:''}.</small>${workspaceAccessControls()}`;
-    else summary.innerHTML=`<span>AI engine</span><strong>No active provider</strong><small>${connectedCount?`${connectedCount} provider${connectedCount===1?' is':'s are'} connected. Set one as active to use AI generation.`:'Test and save a provider below to activate AI generation.'}</small>${workspaceAccessControls()}`;
+    else if(active)summary.innerHTML=`<span>Active tools</span><strong class="ai-engine-active-line"><span>Active provider · ${esc(active.name)} · ${esc(active.model)}</span><span class="ai-active-badge" role="status">ACTIVE</span></strong>${activeToolsSummary(active)}<small>${connectedCount} AI provider${connectedCount===1?'':'s'} connected · API key verified ${active.verified_at?esc(formatDate(active.verified_at)):'successfully'}${active.last_used_at?` · last used ${esc(formatDateTime(active.last_used_at))}`:''}. Manage every connection in its card below.</small>`;
+    else summary.innerHTML=`<span>Active tools</span><strong>No active AI provider</strong>${activeToolsSummary(null)}<small>${connectedCount?`${connectedCount} AI provider${connectedCount===1?' is':'s are'} connected. Set one as active below.`:'Test and save an AI provider below to activate AI generation.'} Manage every connection in its card below.</small>`;
   }
   grid.innerHTML=PROVIDERS.map(config=>providerCard(config,providerState(config.provider))).join('');
   renderIntegrationMonitoring();
