@@ -8,7 +8,7 @@ const Discovery = require('../discovery-engine.js');
 function loadDiscoveryRunner({ renderFails = false, fetchImpl = () => new Promise(() => {}), requestTimeout = 1 } = {}) {
   const source = fs.readFileSync(path.join(__dirname, '..', 'discovery-ui.js'), 'utf8')
     .replace('const DISCOVERY_REQUEST_TIMEOUT_MS=25000;', `const DISCOVERY_REQUEST_TIMEOUT_MS=${requestTimeout};`)
-    .replace('const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS*5+5000;', 'const DISCOVERY_RUN_TIMEOUT_MS=8;')
+    .replace('const DISCOVERY_RUN_TIMEOUT_MS=25000;', 'const DISCOVERY_RUN_TIMEOUT_MS=8;')
     .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\n')
     .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;');
   const mainState = {
@@ -52,9 +52,9 @@ test('a permanently pending provider cannot leave Company Discovery running', as
   assert.notEqual(context.__discoveryState().status, 'running');
 });
 
-test('the overall guard allows evidence, extraction, resolution and verification request windows', () => {
+test('the overall guard caps the complete Discovery run at 25 seconds and cancels active work', () => {
   const source=fs.readFileSync(path.join(__dirname,'..','discovery-ui.js'),'utf8');
-  assert.match(source,/DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS\*5\+5000/);
+  assert.match(source,/DISCOVERY_RUN_TIMEOUT_MS=25000/);\n  assert.match(source,/runController\.abort/);\n  assert.match(source,/runDiscoverySearchBatch\(queries,"searching",runController\.signal\)/);
 });
 
 test('a rendering failure cannot leave Company Discovery running', async () => {
