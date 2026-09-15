@@ -14,7 +14,7 @@ test('body-only content preserves the canonical plain-text body',()=>{
 });
 
 test('safe branded email markup and links survive validation unchanged',()=>{
-  const html='<!doctype html><html><body style="margin:0;padding:0;background:#ffffff;color:#1f2933;font-family:Arial,Helvetica,sans-serif;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;background:#ffffff;"><tr><td align="center"><div style="font-size:16px;line-height:1.55;color:#1f2933;">Hello<br>Buyer</div><a href="https://example.com/path?q=1" style="color:#0f6557;text-decoration:underline;">Website</a><a href="tel:+37120000000">Call</a><img src="'+ASSET_URL+'" alt="Seller logo" style="display:block;max-width:140px;max-height:48px;width:auto;height:auto;border:0;margin:0 0 20px 0;"></td></tr></table></body></html>';
+  const html='<!doctype html><html><body style="margin:0;padding:0;background:#ffffff;color:#1f2933;font-family:Arial,Helvetica,sans-serif;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;background:#ffffff;"><tr><td align="center"><div style="font-size:16px;line-height:1.55;color:#1f2933;">Hello<br>Buyer</div><a href="https://example.com/path?q=1" style="color:#0f6557;text-decoration:underline;">Website</a><a href="tel:+37120000000">Call</a><img src="'+ASSET_URL+'" alt="Seller logo" style="display:block;width:140px;height:48px;max-width:140px;max-height:48px;border:0;margin:0 0 20px 0;"></td></tr></table></body></html>';
   assert.deepEqual(validateEmailContent({body:'Canonical',text_body:'Hello\nBuyer',html_body:html}),{
     body:'Canonical',
     textBody:'Hello\nBuyer',
@@ -34,6 +34,14 @@ for(const [label,html] of [
   ['relative external images','<img src="/other/image.png" alt="Logo">'],
   ['tracking pixels','<img src="'+ASSET_URL+'" alt="" width="1" height="1">'],
   ['styled tracking pixels','<img src="'+ASSET_URL+'" alt="" style="display:block;width:1px;height:1px;">'],
+  ['tracking pixels using calc','<img src="'+ASSET_URL+'" alt="" style="display:block;width:calc(1px);height:calc(1px);">'],
+  ['tracking pixels using fractional shorthand','<img src="'+ASSET_URL+'" alt="" style="display:block;width:.1px;height:.1px;">'],
+  ['tracking pixels using unsupported point units','<img src="'+ASSET_URL+'" alt="" style="display:block;width:1pt;height:1pt;">'],
+  ['tracking pixels using sub-threshold decimals','<img src="'+ASSET_URL+'" alt="" style="display:block;width:2.999px;height:2.999px;">'],
+  ['images using unsupported percentage dimensions','<img src="'+ASSET_URL+'" alt="Logo" style="display:block;width:100%;height:100%;">'],
+  ['tracking pixels using min','<img src="'+ASSET_URL+'" alt="" style="display:block;max-width:min(1px);max-height:min(1px);">'],
+  ['images without explicit display dimensions','<img src="'+ASSET_URL+'" alt="Logo">'],
+  ['images without a vertical display bound','<img src="'+ASSET_URL+'" alt="Logo" style="display:block;max-width:140px;height:auto;">'],
   ['credentialed links','<a href="https://user:pass@example.com">Click</a>'],
   ['protocol-relative links','<a href="//example.com">Click</a>'],
   ['HTML comments','<!-- hidden --><div>Hello</div>'],

@@ -34,7 +34,7 @@ test('Microsoft Graph sendMail submits a tailored plain-text message and treats 
 
 test('Microsoft Graph sends validated branded HTML and keeps the rendered text as fallback input',async()=>{
   let request;const assetId='A'.repeat(43);
-  const html=`<div>Hello ✓</div><img src="https://leadintel-api.edgars-7e7.workers.dev/api/customer/brand-assets/${assetId}" alt="Logo">`;
+  const html=`<div>Hello ✓</div><img src="https://leadintel-api.edgars-7e7.workers.dev/api/customer/brand-assets/${assetId}" alt="Logo" style="display:block;width:140px;height:48px;max-width:140px;max-height:48px;">`;
   const fetchImpl=async(url,init)=>{request={url,init};return new Response(null,{status:202})};
   await microsoftMail.sendMicrosoftMessage('access-token',{to:'buyer@example.com',subject:'Branded',body:'Canonical',textBody:'Rendered text',htmlBody:html},fetchImpl);
   const payload=JSON.parse(request.init.body);

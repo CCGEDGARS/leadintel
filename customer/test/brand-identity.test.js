@@ -237,6 +237,23 @@ test('renderEmail escapes every HTML value while preserving an equivalent litera
   assert.doesNotMatch(rendered.htmlBody, /<Jamie>|<Lead>|<ignored>|recipientContext|<script/i);
 });
 
+test('renderEmail gives every managed image explicit non-tiny horizontal and vertical bounds', () => {
+  const identity = structuredClone(readyIdentity);
+  identity.options.includeHeadshot = true;
+  identity.options.includeBanner = true;
+  identity.assets.headshot = {...identity.assets.logo, id: 'headshot_01', url: '/api/customer/brand-assets/headshot_01'};
+  identity.assets.banner = {...identity.assets.logo, id: 'banner_01', url: '/api/customer/brand-assets/banner_01'};
+
+  const rendered = BrandIdentity.renderEmail({subject: 'Bounded images', bodyText: 'Hello', brandSnapshot: identity});
+  const imageTags = rendered.htmlBody.match(/<img\b[^>]*>/g) || [];
+
+  assert.equal(imageTags.length, 3);
+  for (const tag of imageTags) {
+    assert.match(tag, /(?:width|max-width):(?:[3-9]|[1-9]\d)(?:\d)*(?:px|%)/);
+    assert.match(tag, /(?:height|max-height):(?:[3-9]|[1-9]\d)(?:\d)*(?:px|%)/);
+  }
+});
+
 test('renderEmail keeps legacy and draft messages plain text without changing their content', () => {
   const input = {
     subject: 'Legacy subject',

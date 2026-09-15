@@ -196,13 +196,13 @@
     parts.push('<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;"><tr><td style="padding:24px;">');
 
     if (logo) {
-      parts.push(imageHtml(logo, identity.companyDisplayName + ' logo', 'display:block;max-width:140px;max-height:48px;width:auto;height:auto;border:0;margin:0 0 20px 0;'));
+      parts.push(imageHtml(logo, identity.companyDisplayName + ' logo', imageStyle(logo, 140, 48, 'border:0;margin:0 0 20px 0;')));
     }
 
     parts.push('<div style="font-size:16px;line-height:1.55;color:#1f2933;">' + multilineHtml(bodyText) + '</div>');
 
     if (banner) {
-      parts.push(imageHtml(banner, identity.companyDisplayName + ' promotional banner', 'display:block;max-width:100%;height:auto;border:0;margin:20px 0 0 0;'));
+      parts.push(imageHtml(banner, identity.companyDisplayName + ' promotional banner', imageStyle(banner, 552, 320, 'border:0;margin:20px 0 0 0;')));
     }
 
     parts.push('<div style="margin-top:24px;padding-top:16px;border-top:2px solid ' + escapeHtml(identity.primaryColor) + ';font-size:14px;line-height:1.45;color:#364152;">');
@@ -210,7 +210,7 @@
       parts.push('<div style="margin-bottom:10px;">' + multilineHtml(identity.signatureText) + '</div>');
     }
     if (headshot) {
-      parts.push(imageHtml(headshot, identity.senderName + ' headshot', 'display:block;max-width:64px;max-height:64px;width:auto;height:auto;border:0;border-radius:32px;margin:0 0 10px 0;'));
+      parts.push(imageHtml(headshot, identity.senderName + ' headshot', imageStyle(headshot, 64, 64, 'border:0;border-radius:32px;margin:0 0 10px 0;')));
     }
     parts.push('<div><strong style="color:#1f2933;">' + escapeHtml(identity.senderName) + '</strong></div>');
     if (identity.senderTitle) parts.push('<div>' + escapeHtml(identity.senderTitle) + '</div>');
@@ -246,6 +246,13 @@
   function imageHtml(asset, fallbackAlt, style) {
     const alt = asset.altText || fallbackAlt;
     return '<img src="' + escapeHtml(asset.url) + '" alt="' + escapeHtml(alt) + '" style="' + style + '">';
+  }
+
+  function imageStyle(asset, maxWidth, maxHeight, suffix) {
+    const scale = Math.min(1, maxWidth / asset.width, maxHeight / asset.height);
+    const width = Math.max(3, Math.round(asset.width * scale));
+    const height = Math.max(3, Math.round(asset.height * scale));
+    return 'display:block;width:' + width + 'px;height:' + height + 'px;max-width:' + maxWidth + 'px;max-height:' + maxHeight + 'px;' + suffix;
   }
 
   function multilineHtml(value) {

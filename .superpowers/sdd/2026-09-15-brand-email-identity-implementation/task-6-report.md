@@ -49,7 +49,35 @@ The two intervening Task 5 follow-up commits changed only customer frontend file
 
 ## Scope
 
-- no frontend files were changed
+- the security follow-up changes only the deterministic email renderer and its cache reference on the frontend
 - no migration or queue schema was changed
 - branded automatic Gmail delivery remains disabled until a future queue schema persists the approved brand snapshot
 - branch only; not merged or deployed
+
+## Security review follow-up
+
+Security review at `1ce1c0edbe2dff4adcf9ffea74b5bc0585a8b4d0` found that image-dimension declarations using CSS functions, fractional shorthand, and unsupported units bypassed the original tracking-pixel check. Images with no explicit display dimensions were also accepted.
+
+The follow-up uses one strict image-dimension parser for every `width`, `height`, `max-width`, and `max-height` declaration. Image CSS functions, unsupported units, duplicate declarations, values below 3 pixels, values above 6000 pixels, omitted styles, and omitted width/height are rejected. Every accepted image must now declare explicit non-tiny pixel width and height. This is server-authoritative and applies independently of the client renderer.
+
+The approved renderer now derives bounded, aspect-ratio-preserving pixel dimensions from validated managed-asset metadata. It emits explicit width and height for logo, headshot, and banner images, with a minimum displayed axis of 3 pixels for pathological source dimensions. The banner is bounded to the 552 × 320 pixel email content area. Safe renderer output remains accepted.
+
+Exact RED regressions were added for:
+
+- `width:calc(1px);height:calc(1px)`
+- `width:.1px;height:.1px`
+- `width:1pt;height:1pt`
+- `max-width:min(1px);max-height:min(1px)`
+- managed images with omitted display dimensions
+- managed images with no explicit vertical display bound
+
+Follow-up verification:
+
+- RED: 6 exact backend security regressions failed before the fix
+- RED: the renderer image-bound contract failed for banner output before the fix
+- GREEN: focused backend delivery/security suite — 46 passed, 0 failed
+- GREEN: affected renderer/frontend suite — 37 passed, 0 failed
+- GREEN: full backend suite — 307 passed, 0 failed
+- syntax checks passed for every changed JavaScript file
+- `npm audit --omit=dev` — 0 vulnerabilities
+- rebased on branch head `71fd3ef5460eaaef301281594abc540fc99f288e`; its only change after the reviewed head was the Task 5 report, so there was no conflict
