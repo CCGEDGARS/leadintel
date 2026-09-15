@@ -3,7 +3,7 @@
 Status: COMPLETE.
 
 Starting branch head: `0b9c26988b4e7ef5d4267501ae1ca762040023fe`
-Implementation head before this report commit: `64917708221ffdfca158a4a848b467e203e69aa0`
+Implementation head before this report commit: `c6e4cf62dbb311d2f14ab8a2897359158ed22e32`
 
 ## Remote commits
 
@@ -36,7 +36,18 @@ Implementation head before this report commit: `64917708221ffdfca158a4a848b467e2
 - reset captures managed asset references, clears local identity, retries cleanup, and emits an observable result
 - failed reset deletions remain pending for retry; unavailable deletion also emits a consistent cleanup event
 - upload, import, and delete encode reserved characters in workspace identifiers
-- `server-bridge.js`, `workspace-reset-hygiene.js`, `process-map.js`, the page entry point, and cache regression tests use `20260916-brand-assets-v1`
+- `server-bridge.js`, `workspace-reset-hygiene.js`, `process-map.js`, the page entry point, and cache regression tests use `20260916-brand-assets-v2`
+
+## Transaction re-review
+
+- the UI passes its desired Draft identity and explicit asset mutation to the bridge
+- the bridge is the single persistence owner and returns the committed identity; the UI adopts it without writing or saving again
+- upload, import, replacement, and removal transactions are serialized by workspace
+- a failed earlier transaction cannot restore stale metadata over a later successful transaction
+- all post-upload processing, including the initial local write, is inside the rollback and cleanup boundary
+- local write failures restore prior metadata and clean up or queue the newly created object
+- removal persists an asset-less Draft identity before deleting the old managed object; failed persistence leaves the old metadata and object intact
+- Task 4 browser cache references now use `20260916-brand-assets-v2`
 
 ## Test evidence
 
@@ -46,9 +57,9 @@ Focused Task 4 + server bridge run: 23/23 passed.
 
 Relevant Brand Identity, production-mount, persistence-timeout, and cache regressions: 32/32 passed.
 
-Combined fresh verification: 55 passed, 0 failed, 0 skipped, 0 cancelled.
+Final re-review verification: 72 passed, 0 failed, 0 skipped, 0 cancelled.
 
-JavaScript syntax checks passed for `customer/server-bridge.js`, `customer/workspace-reset-hygiene.js`, `customer/process-map.js`, `customer/test/brand-asset-bridge.test.js`, and `customer/test/spinner-hard-stop.test.js`.
+JavaScript syntax checks passed for the bridge, reset hygiene, Brand Identity UI, app integration, process map, and every modified regression test.
 
 The two VM cross-realm comparisons now verify every expected field and the exact result key set individually. No behavioral assertion was removed or relaxed.
 
