@@ -68,3 +68,10 @@ test('workspace switching clears the shared customer cache before loading anothe
   assert.match(bridge,/clearCustomerCache/);
   assert.match(bridge,/async function selectWorkspace\(id\).*clearCustomerCache\(\).*localStorage\.setItem\(WORKSPACE_KEY,id\)/s);
 });
+test('server bridge applies a hard deadline to every backend request',()=>{
+  assert.match(bridge,/const API_REQUEST_TIMEOUT_MS=15000/);
+  assert.match(bridge,/controller\.abort\(new DOMException\('LeadIntel request timed out','TimeoutError'\)\)/);
+  assert.match(bridge,/signal:controller\.signal/);
+  assert.match(bridge,/LeadIntel server request timed out/);
+  assert.match(bridge,/clearTimeout\(timeout\)/);
+});
