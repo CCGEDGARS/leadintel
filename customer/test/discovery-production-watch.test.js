@@ -51,7 +51,7 @@ function productionFetch({ customerHtml, discoveryUi }) {
 const shell = 'LeadIntel — Build Your Commercial Intelligence Strategy id="company-website"';
 const boundedDiscoveryRuntime = [
   'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
-  'const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS+1000;',
+  'const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS*2+2000;',
   'function ensureDiscoveryMounted(){}',
   'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};',
   'initDiscoveryWhenReady();'
@@ -104,7 +104,7 @@ test('production proof blocks a Discovery runtime that performs hidden-stage sta
       customerHtml: `${shell}<script defer src="discovery-ui.js?v=current"></script>`,
       discoveryUi: [
         'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
-        'const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS+1000;',
+        'const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS*2+2000;',
         'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};',
         'initDiscoveryWhenReady();'
       ].join('\n')
