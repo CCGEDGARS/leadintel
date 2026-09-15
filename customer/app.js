@@ -121,11 +121,17 @@ function brandIdentityPublicEvidence(){
   const text=(value,max=20000)=>typeof value==="string"?value.trim().slice(0,max):"";
   const https=value=>{const candidate=text(value,2048);if(!candidate)return "";try{const url=new URL(candidate);return url.protocol==="https:"&&!url.username&&!url.password?url.href:"";}catch{return "";}};
   const profileSource=source.profile&&typeof source.profile==="object"&&!Array.isArray(source.profile)?source.profile:{};
+  const color=value=>{const candidate=text(value,7).toLowerCase();return /^#[0-9a-f]{6}$/.test(candidate)?candidate:"";};
   const profile={};
-  for(const key of ["companyName","companyDisplayName","phone","linkedinUrl","primaryColor","logoUrl"]){const value=text(profileSource[key],key.endsWith("Url")?2048:500);if(value)profile[key]=value;}
+  for(const key of ["companyName","companyDisplayName","phone"]){const value=text(profileSource[key],500);if(value)profile[key]=value;}
+  for(const key of ["linkedinUrl","logoUrl"]){const value=https(profileSource[key]);if(value)profile[key]=value;}
+  const profileColor=color(profileSource.primaryColor);if(profileColor)profile.primaryColor=profileColor;
   const scrapedSources=(Array.isArray(source.scrapedSources)?source.scrapedSources:[]).filter(item=>item&&typeof item==="object"&&!Array.isArray(item)).map(item=>{
     const safe={};
-    for(const key of ["url","status","title","text","logoUrl"]){const value=text(item[key],key==="text"?20000:2048);if(value)safe[key]=value;}
+    const sourceUrl=https(item.url);if(sourceUrl)safe.url=sourceUrl;
+    for(const key of ["status","title","text"]){const value=text(item[key],key==="text"?20000:2048);if(value)safe[key]=value;}
+    const logoUrl=https(item.logoUrl);if(logoUrl)safe.logoUrl=logoUrl;
+    const primaryColor=color(item.primaryColor);if(primaryColor)safe.primaryColor=primaryColor;
     const metadata=item.metadata&&typeof item.metadata==="object"&&!Array.isArray(item.metadata)?item.metadata:{};
     const safeMetadata={};
     for(const key of ["logoUrl","logo"]){const value=text(metadata[key],2048);if(value)safeMetadata[key]=value;}
@@ -209,7 +215,12 @@ async function scrapeSource(url,type){
     const data=payload.data||payload;
     const text=String(data.markdown||data.content||"").slice(0,30000);
     if(!text.trim())throw new Error("No readable page content returned");
-    return {type,url,title:data.metadata?.title||data.title||new URL(url).hostname,text,status:"ready"};
+    const metadata=data.metadata&&typeof data.metadata==="object"&&!Array.isArray(data.metadata)?data.metadata:{};
+    const safeLogo=value=>{if(typeof value!=="string"||!value.trim())return "";try{const candidate=new URL(value.trim(),url);return candidate.protocol==="https:"&&!candidate.username&&!candidate.password?candidate.href:"";}catch{return "";}};
+    const safeColor=value=>typeof value==="string"&&/^#[0-9a-f]{6}$/i.test(value.trim())?value.trim().toLowerCase():"";
+    const logoUrl=[metadata.logoUrl,metadata.logo,metadata.ogImage,metadata.ogImageUrl,metadata.image].map(safeLogo).find(Boolean)||"";
+    const primaryColor=[metadata.primaryColor,metadata.themeColor,metadata["theme-color"],data.primaryColor].map(safeColor).find(Boolean)||"";
+    return {type,url,title:metadata.title||data.title||new URL(url).hostname,text,status:"ready",...(logoUrl?{logoUrl}:{}),...(primaryColor?{primaryColor}:{})};
   }catch(error){
     if(error?.name==="AbortError")throw new Error(`Source scrape timed out after ${Math.round(ANALYSIS_SOURCE_TIMEOUT_MS/1000)} seconds`);
     throw error;
