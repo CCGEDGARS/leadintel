@@ -70,6 +70,11 @@ test('SVG, data payloads, executables, and unknown image kinds are rejected',asy
   await assert.rejects(()=>validateBrandAsset(file(png(),'image/png'),'avatar'),/kind/i);
 });
 
+test('an executable payload appended to an otherwise recognized image is rejected',async()=>{
+  const payload=new Uint8Array([...png(),...new TextEncoder().encode('<script>alert(1)</script>')]);
+  await assert.rejects(()=>validateBrandAsset(file(payload,'image/png'),'logo'),/magic bytes|structure/i);
+});
+
 test('logo uses a 2 MiB limit while headshot and banner use 5 MiB',async()=>{
   const oversized=size=>({type:'image/png',size,arrayBuffer:async()=>png().buffer});
   await assert.rejects(()=>validateBrandAsset(oversized(2*MiB+1),'logo'),/2 MB/i);
