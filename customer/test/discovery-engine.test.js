@@ -58,6 +58,23 @@ test('normalizeCompanySearchResults rejects obvious non-company hosts and keeps 
   assert.match(results.find(x=>x.domain==='nordicmachines.se').text,/expanding capacity/i);
 });
 
+test('buildCandidateVerificationQueries creates bounded company-domain checks and rejects known market conflicts',()=>{
+  const raw=[
+    {url:'https://nordicfood.se/about',domain:'nordicfood.se',company:'Nordic Food AB',market:'Sweden',title:'Nordic Food',description:'Food producer'},
+    {url:'https://nordicfood.se/products',domain:'nordicfood.se',company:'Nordic Food AB',market:'Sweden',title:'Products',description:'Food products'},
+    {url:'https://latvianmetal.lv/',domain:'latvianmetal.lv',company:'Latvian Metal',market:'Sweden',title:'Latvian Metal',description:'Metal producer'},
+    {url:'https://acme.example/news',domain:'acme.example',company:'Acme',market:'Sweden',title:'Acme',description:'Own company'}
+  ];
+
+  const checks=Discovery.buildCandidateVerificationQueries(raw,profile,market,3);
+
+  assert.equal(checks.length,1);
+  assert.equal(checks[0].domain,'nordicfood.se');
+  assert.match(checks[0].query,/site:nordicfood\.se/i);
+  assert.match(checks[0].query,/new factory/i);
+  assert.doesNotMatch(checks[0].query,/industrial automation/i,'seller offer must not be used to verify buyers');
+});
+
 test('mergeCompanyCandidates deduplicates domains and builds transparent five-part scores',()=>{
   const raw=[
     {queryId:'q1',market:'Sweden',url:'https://nordicmachines.se/about',domain:'nordicmachines.se',company:'Nordic Machines',title:'Industrial Automation',description:'manufacturer',text:'manufacturer industrial automation new facility capacity expansion procurement',date:'2026-08-20'},
