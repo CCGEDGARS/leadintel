@@ -120,7 +120,9 @@
 
     async function applyLogoSuggestion() {
       if (!suggestions.logoUrl) throw new Error('No verified logo suggestion is available.');
-      return replaceAsset('logo', suggestions.logoUrl);
+      const asset = await replaceAsset('logo', suggestions.logoUrl);
+      delete suggestions.logoUrl;
+      return asset;
     }
 
     async function replaceAsset(kind, source) {
