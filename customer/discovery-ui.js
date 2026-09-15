@@ -4,10 +4,11 @@ const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
 const DELIVERY_STORAGE_KEY="leadintel_customer_v2_delivery";
 const DISCOVERY_META_KEY="leadintel_customer_v2_discovery_meta";
 const INTELLIGENCE_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
+const LEADINTEL_API="https://leadintel-api.edgars-7e7.workers.dev";
 const MAX_DISCOVERY_QUERIES=10;
 const MAX_DISCOVERY_RESULTS_PER_QUERY=5;
 const DISCOVERY_SEARCH_CONCURRENCY=4;
-const ASSET_VERSION="20260915-multilingual-discovery-v1";
+const ASSET_VERSION="20260915-entity-resolution-v1";
 const LANGUAGE_ASSET_VERSION="20260914-workspace-isolation-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const $=id=>document.getElementById(id);
@@ -102,7 +103,7 @@ function showDiscoveryStep(){if(!moduleReady()){showToast("Add your company webs
 function showStrategyStep(){persistMainStep(4);document.querySelectorAll(".step-view").forEach(el=>el.classList.toggle("active",Number(el.dataset.step)===4));document.querySelectorAll("[data-step-marker]").forEach(el=>{const n=Number(el.dataset.stepMarker);el.classList.toggle("active",n===4);el.classList.toggle("complete",n<4);});saveMeta({...loadMeta(),visibleStep:4});window.scrollTo({top:0,behavior:"smooth"});}
 
 const DISCOVERY_REQUEST_TIMEOUT_MS=25000;
-const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS*2+2000;
+const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS*5+5000;
 async function firecrawlCompanySearch(queryMeta){
   const controller=new AbortController();
   const timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS);
@@ -133,6 +134,27 @@ async function runDiscoverySearchBatch(items,phase){
   await Promise.all(workers);
   return searches;
 }
+async function extractCompaniesFromEvidence(evidence,market,targetCount){
+  const fallback=LeadIntelDiscovery.extractCompanyMentions(evidence,targetCount);
+  const b=bridge();const workspace=b?.workspace;
+  if(!b?.session?.authenticated||!workspace?.id||!evidence.length)return fallback;
+  discoveryProgress={phase:"extracting",completed:0,total:1};renderDiscoverySafely();
+  const sources=evidence.slice(0,16).map((item,index)=>({
+    id:`E${index+1}`,url:item.url,market:item.market,title:item.title,
+    description:item.description,text:String(item.text||"").slice(0,2200)
+  }));
+  const system="You extract prospective operating companies from supplied market evidence. Never invent a company or URL. Return strict JSON only.";
+  const prompt=`Identify operating companies explicitly described as expanding, investing, building, modernising, hiring or otherwise matching the market signals in these sources. Publishers, government bodies, research institutes, directories and the seller itself are not prospects. Every company must include the exact supplied source URL where its name and event appear. Return {"companies":[{"company":"Exact company name","market":"${String(market||"").replace(/"/g,"'")}","sourceUrl":"Exact supplied URL"}]}. Evidence:\n${JSON.stringify(sources)}`;
+  const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS);
+  try{
+    const response=await fetch(`${LEADINTEL_API}/api/ai/generate?workspace_id=${encodeURIComponent(workspace.id)}`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({system,prompt,max_output_tokens:1800}),signal:controller.signal});
+    const payload=await response.json().catch(()=>({}));
+    if(!response.ok)return fallback;
+    const extracted=LeadIntelDiscovery.parseCompanyExtraction(payload.text,evidence,targetCount);
+    const seen=new Set();return [...extracted,...fallback].filter(item=>{const key=item.company.toLowerCase();if(seen.has(key))return false;seen.add(key);return true;}).slice(0,targetCount);
+  }catch{return fallback;}
+  finally{clearTimeout(timeout);discoveryProgress.completed=1;renderDiscoverySafely();}
+}
 async function runCompanyDiscovery(){
   const main=mainState();
   if(!(main?.profile?.website||main?.website)){showToast("Add your company website first");return;}
@@ -150,11 +172,17 @@ async function runCompanyDiscovery(){
   let fatalError=null;
   try{
     let searches=[];
+    let resolutionSearches=[];
     let verificationSearches=[];
     const allSearches=(async()=>{
       searches=await runDiscoverySearchBatch(queries,"searching");
       const firstPass=searches.flatMap(item=>item?.results||[]);
-      const verificationQueries=LeadIntelDiscovery.buildCandidateVerificationQueries(firstPass,main.profile||{website:main.website},market,limits.targetCount);
+      const targetMarket=queries[0]?.market||main.profile?.targetMarkets||"";
+      const mentions=await extractCompaniesFromEvidence(firstPass,targetMarket,limits.targetCount);
+      const resolutionQueries=LeadIntelDiscovery.buildCompanyResolutionQueries(mentions,main.profile||{website:main.website},limits.targetCount);
+      resolutionSearches=await runDiscoverySearchBatch(resolutionQueries,"resolving");
+      const resolved=resolutionSearches.flatMap(item=>item?.results||[]);
+      const verificationQueries=LeadIntelDiscovery.buildCandidateVerificationQueries(resolved,main.profile||{website:main.website},market,limits.targetCount);
       verificationSearches=await runDiscoverySearchBatch(verificationQueries,"verifying");
     })();
     let runTimeout;
@@ -163,14 +191,14 @@ async function runCompanyDiscovery(){
       new Promise(resolve=>{runTimeout=setTimeout(()=>resolve(true),DISCOVERY_RUN_TIMEOUT_MS);})
     ]);
     clearTimeout(runTimeout);
-    const completedSearches=[...searches,...verificationSearches].filter(Boolean);
-    const expectedSearches=queries.length+(discoveryProgress.phase==="verifying"?discoveryProgress.total:0);
+    const completedSearches=[...searches,...resolutionSearches,...verificationSearches].filter(Boolean);
+    const expectedSearches=queries.length+resolutionSearches.length+verificationSearches.length;
     failures=completedSearches.filter(item=>item.error).length+(timedOut?Math.max(0,expectedSearches-completedSearches.length):0);
     const firstPass=searches.flatMap(item=>item?.results||[]);
+    const resolved=resolutionSearches.flatMap(item=>item?.results||[]);
     const verified=verificationSearches.flatMap(item=>item?.results||[]);
-    const combined=[...verified,...firstPass];
-    discovery.rawResults=combined.slice(0,20);
-    discovery.candidates=LeadIntelDiscovery.mergeCompanyCandidates(combined,main.profile||{website:main.website},main.market||{},limits.targetCount);
+    discovery.rawResults=[...firstPass,...resolved,...verified].slice(0,50);
+    discovery.candidates=LeadIntelDiscovery.mergeCompanyCandidates(verified,main.profile||{website:main.website},main.market||{},limits.targetCount);
     discovery.status=timedOut?discovery.candidates.length?"partial":"error":failures===0?"complete":discovery.candidates.length?"partial":"error";
     if(timedOut)fatalError=new Error("Company search timed out safely. Partial results were kept.");
   }catch(error){
@@ -255,7 +283,7 @@ function pipelineRows(){return crmAvailable?currentWorkspaceCrmPipeline().map(cr
 function renderPipeline(){const target=$("customer-pipeline");if(!target)return;const rows=pipelineRows();$("discovery-pipeline-count").textContent=String(rows.length);if(!rows.length){target.innerHTML='<div class="market-empty">No active opportunities yet. Save a ranked company when it deserves follow-up.</div>';return;}const stages=crmAvailable?(window.LeadIntelCrm?.STAGES||[]):LeadIntelDiscovery.CRM_STAGES;target.innerHTML=`<div class="pipeline-table"><div class="pipeline-row header"><span>Company</span><span>Score</span><span>People</span><span>Stage</span><span>Action</span></div>${rows.map((item,index)=>`<div class="pipeline-row" data-pipeline-row="${index}"><div><strong>${esc(item.company)}</strong><a href="${esc(item.website)}" target="_blank" rel="noopener">${esc(item.domain)}</a></div><span class="pipeline-score">${item.score?.total||0}</span><span>${item.people?.length||0}</span><select data-pipeline-stage="${index}" ${crmAvailable?`data-crm-id="${esc(item.crmId||item.id)}"`:""}>${stages.map(stage=>`<option ${stage===item.stage?"selected":""}>${esc(stage)}</option>`).join("")}</select><span class="pipeline-actions">${crmAvailable?`<button class="secondary-btn small" type="button" data-pipeline-remove="${esc(item.crmId||item.id)}" data-domain="${esc(item.domain)}">Remove</button><button class="secondary-btn small" type="button" data-open-crm-company="${esc(item.crmId||item.id)}">CRM</button>`:'<span>Local</span>'}</span></div>`).join("")}</div>`;}
 async function changePipelineStage(select){const rows=pipelineRows();const item=rows[Number(select.dataset.pipelineStage)];if(!item)return;if(crmAvailable&&select.dataset.crmId){const stage=window.LeadIntelCrm?.normalizeCrmStage(select.value)||"Discovered";const result=await bridge().addCrmToPipeline(select.dataset.crmId,stage);if(!result.ok){showToast(result.error||"Pipeline stage update failed");await refreshCrmState();return;}await refreshCrmState({render:false});renderAll();window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company:result.company}}));showToast(`${item.company} moved to ${stage}`);return;}item.stage=LeadIntelDiscovery.CRM_STAGES.includes(select.value)?select.value:"Discovered";item.updatedAt=new Date().toISOString();saveDiscovery();renderPipeline();showToast(`${item.company} moved to ${item.stage}`);}
 async function removePipelineCompany(id,domain){const result=await bridge()?.removeCrmFromPipeline(id);if(!result?.ok){showToast(result?.error||"Unable to remove company from Pipeline");return;}discovery.pipeline=discovery.pipeline.filter(item=>canonicalDomain(item.domain||item.website)!==canonicalDomain(domain));saveDiscovery();await refreshCrmState({render:false});renderAll();window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company:result.company}}));showToast("Removed from Pipeline · CRM history preserved");}
-function renderStatus(){const main=mainState();const ready=Boolean(main?.profile?.website||main?.website);const formal=Boolean(main?.market?.strategyApproved);const target=selectedDiscoveryTarget();const targetControl=$("discovery-target-count");const customTarget=$("discovery-target-custom");const meta=loadMeta();const customMode=meta.targetMode==="custom"||targetControl?.value==="custom";if(targetControl)targetControl.value=customMode?"custom":String(target||DEFAULT_DISCOVERY_TARGET);if(customTarget){customTarget.hidden=!customMode;if(customMode&&document.activeElement!==customTarget)customTarget.value=String(target);}const gate=$("continue-to-discovery");if(gate){gate.hidden=!formal;gate.disabled=!ready;gate.textContent=ready?"Find matching companies →":"Add website first";}if(!$("discovery-status"))return;const labels={idle:formal?"Ready":"Provisional",running:discoveryProgress.phase==="verifying"?"Verifying":"Searching",complete:"Complete",partial:"Partial",error:"Review"};$("discovery-status").textContent=labels[discovery.status]||"Ready";$("discovery-company").textContent=main.profile?.companyName||"Company";const markets=(main.market?.opportunities||[]).filter(x=>x.active!==false).map(x=>x.market).filter(Boolean);$("discovery-markets").textContent=[...new Set(markets)].join(" · ")||main.profile?.targetMarkets||main.profile?.currentMarkets?.join?.(" · ")||"Provisional";const targetNote=target?` · target up to ${target}`:"";const runningText=discoveryProgress.phase==="verifying"?`Verifying company websites · ${discoveryProgress.completed}/${discoveryProgress.total} checked…`:`Finding candidate domains · ${discoveryProgress.completed}/${discoveryProgress.total} searches checked…`;const text={idle:formal?"Ready to discover companies using the active Market Strategy.":"Website-only discovery is ready. Add optional market, ICP or signal context to improve precision.",running:runningText,complete:`Discovery complete · ${discovery.candidates.length} qualified companies from ${discovery.rawResults.length} evidence results${targetNote}.`,partial:`Discovery partially complete · ${discovery.candidates.length} qualified companies; one or more checks were unavailable${targetNote}.`,error:recoveredInterruptedRun?"The previous company search was interrupted. You can run it again.":"No company passed market, buyer-role, and buying-signal verification. No substitute companies were invented."};$("company-discovery-status").textContent=ready?(text[discovery.status]||text.idle):"Add your company website to enable Discovery.";const run=$("run-company-discovery");run.disabled=!ready||discovery.status==="running";run.innerHTML=discovery.status==="running"?(discoveryProgress.phase==="verifying"?"Verifying companies…":"Finding companies…"):discovery.lastRunAt?"Find more companies <span>↻</span>":"Find companies <span>→</span>";}
+function renderStatus(){const main=mainState();const ready=Boolean(main?.profile?.website||main?.website);const formal=Boolean(main?.market?.strategyApproved);const target=selectedDiscoveryTarget();const targetControl=$("discovery-target-count");const customTarget=$("discovery-target-custom");const meta=loadMeta();const customMode=meta.targetMode==="custom"||targetControl?.value==="custom";if(targetControl)targetControl.value=customMode?"custom":String(target||DEFAULT_DISCOVERY_TARGET);if(customTarget){customTarget.hidden=!customMode;if(customMode&&document.activeElement!==customTarget)customTarget.value=String(target);}const gate=$("continue-to-discovery");if(gate){gate.hidden=!formal;gate.disabled=!ready;gate.textContent=ready?"Find matching companies →":"Add website first";}if(!$("discovery-status"))return;const phaseLabels={extracting:"Extracting",resolving:"Resolving",verifying:"Verifying"};const labels={idle:formal?"Ready":"Provisional",running:phaseLabels[discoveryProgress.phase]||"Searching",complete:"Complete",partial:"Partial",error:"Review"};$("discovery-status").textContent=labels[discovery.status]||"Ready";$("discovery-company").textContent=main.profile?.companyName||"Company";const markets=(main.market?.opportunities||[]).filter(x=>x.active!==false).map(x=>x.market).filter(Boolean);$("discovery-markets").textContent=[...new Set(markets)].join(" · ")||main.profile?.targetMarkets||main.profile?.currentMarkets?.join?.(" · ")||"Provisional";const targetNote=target?` · target up to ${target}`:"";const phaseText={extracting:"Identifying companies named in market evidence…",resolving:`Resolving official company domains · ${discoveryProgress.completed}/${discoveryProgress.total} checked…`,verifying:`Verifying company websites · ${discoveryProgress.completed}/${discoveryProgress.total} checked…`};const runningText=phaseText[discoveryProgress.phase]||`Finding market evidence · ${discoveryProgress.completed}/${discoveryProgress.total} searches checked…`;const text={idle:formal?"Ready to discover companies using the active Market Strategy.":"Website-only discovery is ready. Add optional market, ICP or signal context to improve precision.",running:runningText,complete:`Discovery complete · ${discovery.candidates.length} qualified companies from ${discovery.rawResults.length} evidence results${targetNote}.`,partial:`Discovery partially complete · ${discovery.candidates.length} qualified companies; one or more checks were unavailable${targetNote}.`,error:recoveredInterruptedRun?"The previous company search was interrupted. You can run it again.":"No company passed market, buyer-role, and buying-signal verification. No substitute companies were invented."};$("company-discovery-status").textContent=ready?(text[discovery.status]||text.idle):"Add your company website to enable Discovery.";const run=$("run-company-discovery");run.disabled=!ready||discovery.status==="running";run.innerHTML=discovery.status==="running"?({extracting:"Identifying companies…",resolving:"Resolving domains…",verifying:"Verifying companies…"}[discoveryProgress.phase]||"Finding companies…"):discovery.lastRunAt?"Find more companies <span>↻</span>":"Find companies <span>→</span>";}
 function renderAll(){if(!discoveryMounted)return;renderStatus();renderCandidates();renderPipeline();}
 function renderDiscoverySafely(){try{renderAll();return true;}catch(error){console.error("Company Discovery render failed",error);const run=$("run-company-discovery");if(run){run.disabled=discovery?.status==="running";run.innerHTML=discovery?.status==="running"?"Finding companies…":discovery?.lastRunAt?"Find more companies <span>↻</span>":"Find companies <span>→</span>";}return false;}}
 function bindDiscovery(){
