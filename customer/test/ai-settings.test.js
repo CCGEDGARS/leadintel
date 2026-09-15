@@ -29,7 +29,7 @@ test('AI Settings supports status, test-and-save, activation and disconnect thro
   assert.match(js,/\/api\/integrations\/ai\/status/);
   assert.match(js,/\/api\/integrations\/ai\/provider/);
   assert.match(js,/\/api\/integrations\/ai\/activate/);
-  assert.match(js,/method:'PUT'/);
+  assert.match(js,/method:updatingModel\?'PATCH':'PUT'/);
   assert.match(js,/method:'POST'/);
   assert.match(js,/method:'DELETE'/);
   assert.match(js,/Test & save/);
