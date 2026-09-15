@@ -3,7 +3,7 @@
 Status: COMPLETE.
 
 Starting branch head: `0b9c26988b4e7ef5d4267501ae1ca762040023fe`
-Implementation head before this report commit: `cdbbdb639ba3971307b64f94f6427f0d25361a05`
+Implementation head before this report commit: `1b3edeaa59448d5753fa1c15be7986af24bacb9b`
 
 ## Remote commits
 
@@ -58,6 +58,13 @@ Implementation head before this report commit: `cdbbdb639ba3971307b64f94f6427f0d
 49. `c5aa19bedac1a6044ff2069f5febc4bc1c04beb8` — process-map cache refresh for reset-race handling
 50. `20efabfa3f3306d5b3bf0087ebb56681c95ee104` — upload and import reset-race regression contracts
 51. `cdbbdb639ba3971307b64f94f6427f0d25361a05` — spinner regression cache contract for runtime v7
+52. `b4be5cb26df8ebdd1c116c70af273d5d39774914` — RED production-composition test for queued pre-reset upload
+53. `7f82cb36c10c1d13b4a1ba57a55c09edfb934b0c` — RED production-composition test for queued pre-reset removal
+54. `0278d82b4603d98ca3eb9b6506b1e6bd47f9d5d9` — request-time reset generation for upload, import, and removal
+55. `440392a42dcc709dec5f2fc56abf9c0fa60d77f9` — page entry cache refresh for queued-reset handling
+56. `7eb3d06ff2bce7a4f616a18226ed5ca98c364b10` — process-map cache refresh for queued-reset handling
+57. `ee1854861422e0121364aac1290094528a2b69b8` — queued upload/removal and post-reset success regression contracts
+58. `1b3edeaa59448d5753fa1c15be7986af24bacb9b` — spinner regression cache contract for runtime v8
 
 ## Implemented
 
@@ -78,7 +85,7 @@ Implementation head before this report commit: `cdbbdb639ba3971307b64f94f6427f0d
 - reset captures managed asset references, clears local identity, retries cleanup, and emits an observable result
 - failed reset deletions remain pending for retry; unavailable deletion also emits a consistent cleanup event
 - upload, import, and delete encode reserved characters in workspace identifiers
-- `server-bridge.js`, `workspace-reset-hygiene.js`, `workspace-persistence.js`, `process-map.js`, the page entry point, and cache regression tests use `20260916-brand-assets-v7`
+- `server-bridge.js`, `workspace-reset-hygiene.js`, `workspace-persistence.js`, `process-map.js`, the page entry point, and cache regression tests use `20260916-brand-assets-v8`
 
 ## Transaction re-review
 
@@ -103,7 +110,7 @@ Implementation head before this report commit: `cdbbdb639ba3971307b64f94f6427f0d
 - reload recovery directly resumes asset cleanup when the server-reset marker is already gone
 - reload recovery with both records saves once with explicit intent before cleanup
 - failed reload cleanup transfers to the observable brand-asset retry queue and clears the completed reset-cleanup record
-- Task 4 browser cache references now use `20260916-brand-assets-v7`
+- Task 4 browser cache references now use `20260916-brand-assets-v8`
 
 ## Final dirty-state race fix
 
@@ -116,7 +123,7 @@ Implementation head before this report commit: `cdbbdb639ba3971307b64f94f6427f0d
 
 ## Reset versus in-flight asset fix
 
-- each workspace owns an in-memory reset generation; upload and import capture that generation before starting the external asset request
+- each workspace owns an in-memory reset generation; upload, import, and normal removal capture that generation synchronously when the public bridge method is called, before entering the per-workspace asset queue
 - reset invalidates the generation synchronously before recording cleanup intent, clearing `brandIdentity`, or entering the workspace save queue
 - a completed upload/import is cancelled before any local identity mutation or state PUT when its generation is stale, reset remains pending, or an identity present at operation start has been cleared
 - cancellation returns an explicit `{cancelled:true, reset:true}` transaction result and deletes the newly created managed object best-effort
@@ -124,6 +131,14 @@ Implementation head before this report commit: `cdbbdb639ba3971307b64f94f6427f0d
 - old pre-reset assets continue through the independent reset-cleanup record; cancellation of the new object does not overwrite or consume that intent
 - reset and asset cleanup do not acquire the workspace save queue from inside the asset transaction, avoiding lock-order deadlock
 - production-composition coverage proves both upload and import cannot recreate identity, including an import that returns only after empty reset cleanup has already removed the pending marker
+
+## Queued-before-reset boundary fix
+
+- reset generation belongs to the request, not the queued callback; an operation requested before reset remains stale even if it starts running after reset cleanup has completed
+- an active upload and a second queued upload both cancel after reset, produce no post-reset identity PUT, and delete or queue both newly created objects
+- a queued pre-reset removal returns the same cancelled/reset contract and cannot recreate an empty Draft identity; old object cleanup remains owned by reset cleanup
+- cleanup-only reset deletion is intentionally exempt from operation cancellation and continues through the asset queue without entering the workspace save queue
+- a genuinely post-reset upload captures the new generation, persists successfully, and proves reset does not permanently lock brand asset operations
 
 ## Test evidence
 
@@ -150,6 +165,12 @@ Reset-race RED verification: the in-flight upload reproduction failed on the mis
 Latest focused Task 4 verification: 33 passed, 0 failed, 0 skipped, 0 cancelled.
 
 Latest related production-composition and regression verification: 89 passed, 0 failed, 0 skipped, 0 cancelled.
+
+Queued-boundary RED verification: the queued upload and queued removal each failed on a missing cancellation result before request-time capture was implemented.
+
+Final focused Task 4 verification: 35 passed, 0 failed, 0 skipped, 0 cancelled.
+
+Final related production-composition and regression verification: 91 passed, 0 failed, 0 skipped, 0 cancelled.
 
 JavaScript syntax checks passed for the bridge, reset hygiene, Brand Identity UI, app integration, process map, and every modified regression test.
 
