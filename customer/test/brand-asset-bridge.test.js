@@ -574,6 +574,104 @@ test('failed explicit workspace save remains unsaved', async () => {
   assert.equal(localStorage.getItem(sandbox.LeadIntelWorkspacePersistence.SNAPSHOT_KEY), null);
 });
 
+test('explicit save snapshots only its in-flight payload and keeps a later edit dirty until the next save', async () => {
+  const firstPutStarted = deferred();
+  const releaseFirstPut = deferred();
+  const statePayloads = [];
+  let stateCalls = 0;
+  const mainKey = 'leadintel_customer_v2_state';
+  const dirtyKey = 'leadintel_customer_v2_server_dirty';
+  const {sandbox, localStorage} = loadProductionComposition(async (url, options = {}) => {
+    if (!String(url).includes('/customer/state')) throw new Error(`Unexpected request: ${url}`);
+    stateCalls++;
+    statePayloads.push(JSON.parse(options.body));
+    if (stateCalls === 1) {
+      firstPutStarted.resolve();
+      await releaseFirstPut.promise;
+    }
+    return new Response(JSON.stringify({version: stateCalls, saved: true}), {status: 200});
+  }, {[mainKey]: JSON.stringify({brandIdentity: {status: 'draft', senderName: 'Before', assets: {logo: null}}})});
+
+  const firstSave = sandbox.LeadIntelWorkspacePersistence.saveWorkspace();
+  await firstPutStarted.promise;
+  const edited = JSON.parse(localStorage.getItem(mainKey));
+  edited.brandIdentity.senderName = 'Edited after PUT began';
+  localStorage.setItem(mainKey, JSON.stringify(edited));
+  releaseFirstPut.resolve();
+  assert.equal(await firstSave, true);
+
+  assert.equal(statePayloads[0].payload.main.brandIdentity.senderName, 'Before');
+  assert.equal(JSON.parse(localStorage.getItem(mainKey)).brandIdentity.senderName, 'Edited after PUT began');
+  const firstSnapshot = JSON.parse(localStorage.getItem(sandbox.LeadIntelWorkspacePersistence.SNAPSHOT_KEY));
+  assert.equal(JSON.parse(firstSnapshot.data[mainKey]).brandIdentity.senderName, 'Before');
+  assert.equal(sandbox.LeadIntelWorkspacePersistence.hasUnsavedChanges(), true);
+  assert.notEqual(localStorage.getItem(dirtyKey), null);
+
+  assert.equal(await sandbox.LeadIntelWorkspacePersistence.saveWorkspace(), true);
+
+  assert.equal(statePayloads.length, 2);
+  assert.equal(statePayloads[1].payload.main.brandIdentity.senderName, 'Edited after PUT began');
+  const finalSnapshot = JSON.parse(localStorage.getItem(sandbox.LeadIntelWorkspacePersistence.SNAPSHOT_KEY));
+  assert.equal(JSON.parse(finalSnapshot.data[mainKey]).brandIdentity.senderName, 'Edited after PUT began');
+  assert.equal(sandbox.LeadIntelWorkspacePersistence.hasUnsavedChanges(), false);
+  assert.equal(localStorage.getItem(dirtyKey), null);
+});
+
+test('asset save snapshots its persisted payload instead of a newer unsent identity edit', async () => {
+  const nextAsset = asset('C'.repeat(43));
+  const firstPutStarted = deferred();
+  const releaseFirstPut = deferred();
+  const statePayloads = [];
+  let stateCalls = 0;
+  const mainKey = 'leadintel_customer_v2_state';
+  const dirtyKey = 'leadintel_customer_v2_server_dirty';
+  const explicitKey = 'leadintel_customer_v2_workspace_explicit_save_v1';
+  const snapshotKey = 'leadintel_customer_v2_workspace_saved_snapshot_v1';
+  const initialMain = {brandIdentity: {status: 'ready', senderName: 'Before asset PUT', assets: {logo: null}}};
+  const {bridge, sandbox, localStorage} = loadProductionComposition(async (url, options = {}) => {
+    const value = String(url);
+    if (value.includes('/brand-assets?')) return new Response(JSON.stringify({asset: nextAsset}), {status: 201});
+    if (value.includes('/customer/state')) {
+      stateCalls++;
+      statePayloads.push(JSON.parse(options.body));
+      if (stateCalls === 1) {
+        firstPutStarted.resolve();
+        await releaseFirstPut.promise;
+      }
+      return new Response(JSON.stringify({version: stateCalls, saved: true}), {status: 200});
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  }, {
+    [mainKey]: JSON.stringify(initialMain),
+    [explicitKey]: '1',
+    [snapshotKey]: JSON.stringify({schema_version: 1, saved_at: '2026-09-15T20:00:00.000Z', data: {[mainKey]: JSON.stringify(initialMain)}})
+  });
+
+  const replacing = bridge.uploadBrandAsset('logo', new Blob(['new'], {type: 'image/png'}));
+  await firstPutStarted.promise;
+  const edited = JSON.parse(localStorage.getItem(mainKey));
+  edited.brandIdentity.senderName = 'Edited during asset PUT';
+  localStorage.setItem(mainKey, JSON.stringify(edited));
+  releaseFirstPut.resolve();
+  await replacing;
+
+  assert.equal(statePayloads[0].payload.main.brandIdentity.senderName, 'Before asset PUT');
+  assert.equal(JSON.parse(localStorage.getItem(mainKey)).brandIdentity.senderName, 'Edited during asset PUT');
+  const assetSnapshot = JSON.parse(localStorage.getItem(snapshotKey));
+  const persistedMain = JSON.parse(assetSnapshot.data[mainKey]);
+  assert.equal(persistedMain.brandIdentity.senderName, 'Before asset PUT');
+  assert.equal(persistedMain.brandIdentity.assets.logo.id, nextAsset.id);
+  assert.equal(sandbox.LeadIntelWorkspacePersistence.hasUnsavedChanges(), true);
+  assert.notEqual(localStorage.getItem(dirtyKey), null);
+
+  assert.equal(await sandbox.LeadIntelWorkspacePersistence.saveWorkspace(), true);
+
+  assert.equal(statePayloads.length, 2);
+  assert.equal(statePayloads[1].payload.main.brandIdentity.senderName, 'Edited during asset PUT');
+  assert.equal(sandbox.LeadIntelWorkspacePersistence.hasUnsavedChanges(), false);
+  assert.equal(localStorage.getItem(dirtyKey), null);
+});
+
 test('reload recovery with only asset cleanup pending deletes the asset without another workspace PUT', async () => {
   const logo = asset('9'.repeat(43));
   const assetCleanupKey = 'leadintel_customer_v2_brand_asset_reset_cleanup_v1';
