@@ -1,7 +1,7 @@
 import './content-language.js?v=20260906-step2-language-v1';
 import './content-variants.js?v=20260905-step1-language-v1';
 import './business-identity.js?v=20260906-pain-headings-v1';
-import './evidence-view.js?v=20260915-research-source-counts-v1';
+import './evidence-view.js?v=20260915-research-source-text-v1';
 import './workspace-persistence.js?v=20260914-spinner-hard-stop-v1';
 import {withOpenAiRetry,describePartialCoverage} from './market-research-provider-resilience.js?v=20260913-openai-retry-v2';
 

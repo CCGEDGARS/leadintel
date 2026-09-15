@@ -102,13 +102,14 @@ test('new source discovery module contains no hardcoded LSM or Dienas Bizness re
 
 test('evidence-view bootstrap loads the market research UX module',()=>{
   const source=fs.readFileSync(path.join(__dirname,'..','evidence-view.js'),'utf8');
-  assert.match(source,/market-research-ux\.js\?v=20260915-research-source-counts-v1/);
+  assert.match(source,/market-research-ux\.js\?v=20260915-research-source-text-v1/);
 });
 
 test('research choice hierarchy is shipped through the CSP-approved static stylesheet',()=>{
   const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
   const css=fs.readFileSync(path.join(__dirname,'..','market.css'),'utf8');
-  assert.match(html,/market\.css\?v=20260915-research-source-counts-v1/);
+  const uxSource=fs.readFileSync(path.join(__dirname,'..','market-research-ux.js'),'utf8');
+  assert.match(html,/market\.css\?v=20260915-research-source-text-v1/);
   assert.match(html,/aria-label="Market Scan, up to 20 evidence sources"/);
   assert.match(html,/aria-label="Market Research, up to 80 evidence sources"/);
   assert.match(html,/aria-label="Market Intelligence, up to 200 evidence sources"/);
@@ -117,8 +118,11 @@ test('research choice hierarchy is shipped through the CSP-approved static style
   assert.match(css,/\.research-mode-action/);
   assert.match(css,/#run-detailed-research/);
   assert.match(css,/\.research-mode-action\{display:none!important\}/);
-  assert.match(css,/\.research-mode-source-count/);
+  assert.doesNotMatch(css,/\.research-mode-source-count/);
   assert.match(css,/\.research-mode-source-detail/);
+  assert.match(css,/\.research-mode-source-detail strong/);
+  assert.doesNotMatch(uxSource,/research-mode-source-count/);
+  assert.match(uxSource,/Up to <strong>\$\{esc\(view\.evidenceLimit\)\}<\/strong> evidence sources/);
   assert.match(css,/Simplified research choices: no gold/);
 });
 

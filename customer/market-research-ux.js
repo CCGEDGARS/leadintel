@@ -154,17 +154,13 @@
     style.textContent=`
       .research-actions{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px!important;align-items:stretch!important}
       .research-mode-choice{display:flex;min-width:0;flex-direction:column;gap:12px;position:relative;border-radius:16px;transition:transform .18s ease,box-shadow .18s ease}
-      .research-mode-choice>button{width:100%;height:100%;min-height:148px;padding:24px 20px!important;border:2px solid #1b3029!important;border-radius:15px!important;background:#fff!important;color:#14231e!important;display:flex!important;flex-direction:column;align-items:center;justify-content:center;gap:13px;box-shadow:0 5px 16px rgba(15,35,29,.06);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease,background .18s ease}
+      .research-mode-choice>button{width:100%;height:100%;min-height:118px;padding:20px!important;border:2px solid #1b3029!important;border-radius:15px!important;background:#fff!important;color:#14231e!important;display:flex!important;flex-direction:column;align-items:center;justify-content:center;gap:10px;box-shadow:0 5px 16px rgba(15,35,29,.06);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease,background .18s ease}
       .research-mode-choice>button:hover{transform:translateY(-3px);box-shadow:0 13px 28px rgba(15,35,29,.15);border-color:#0b5f4f!important}
       .research-mode-choice>button:focus-visible{outline:3px solid rgba(13,93,79,.28);outline-offset:3px}
       .research-mode-title{font-size:20px;font-weight:800;line-height:1.2;text-align:center}
-      .research-mode-source-count{display:inline-flex;align-items:baseline;gap:5px;padding:7px 11px;border:1px solid #b9d4ca;border-radius:999px;background:#edf6f2;color:#0d6453;font:700 10px 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.045em;line-height:1}
-      .research-mode-source-count strong{font-size:15px;letter-spacing:0;color:#0a594a}
       .research-mode-action{display:none!important}
       .research-mode-badge{position:static;padding:0;background:transparent;color:#b9cbc5;font:600 12px 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.08em}
       .research-mode-choice[data-research-mode="deep"]>button{background:#10261f!important;color:#fff!important;border-color:#10261f!important;box-shadow:0 10px 24px rgba(12,37,29,.2)}
-      .research-mode-choice[data-research-mode="deep"] .research-mode-source-count{border-color:rgba(202,231,220,.45);background:rgba(237,246,242,.1);color:#dcebe5}
-      .research-mode-choice[data-research-mode="deep"] .research-mode-source-count strong{color:#fff}
             .research-mode-choice[data-research-mode="deep"]>button:hover{background:#16362c!important;border-color:#16362c!important}
       .research-mode-choice[data-research-mode="intelligence"]>button{border-color:#385047!important;box-shadow:0 4px 12px rgba(15,35,29,.05)}
       .research-mode-choice.is-selected>button{outline:none!important;outline-offset:0}
@@ -172,6 +168,7 @@
       .research-mode-description{font-size:14px;line-height:1.5;color:#596762;padding:0 8px;max-width:38ch}
       .research-mode-description>span{display:block}
       .research-mode-source-detail{display:block;margin-top:7px;color:#0d6453;font:600 10px 'IBM Plex Mono',monospace;line-height:1.45}
+      .research-mode-source-detail strong{font-size:14px;font-weight:800;letter-spacing:0;color:#0a594a}
       .research-mode-hint{display:none!important}
       .opportunity-card.unresearched .opportunity-total{display:none!important}
       .pre-research-context{display:grid;gap:8px;margin-top:14px;grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -212,12 +209,11 @@
       if(!wrapper){wrapper=root.document.createElement("div");wrapper.className="research-mode-choice";button.before(wrapper);wrapper.appendChild(button);}
       wrapper.dataset.researchMode=mode;wrapper.classList.toggle("is-selected",mode===selected);
       let desc=wrapper.querySelector(".research-mode-description");if(!desc){desc=root.document.createElement("div");desc.className="research-mode-description";wrapper.appendChild(desc);}
-      const descriptionMarkup=`<span>${esc(view.description)}</span><strong class="research-mode-source-detail">${esc(view.sourceDetail)}</strong>`;
+      const descriptionMarkup=`<span>${esc(view.description)}</span><span class="research-mode-source-detail">Up to <strong>${esc(view.evidenceLimit)}</strong> evidence sources. ${esc(view.sourceDetail)}</span>`;
       if(desc.innerHTML!==descriptionMarkup)desc.innerHTML=descriptionMarkup;
       if(!/^Researching…$/i.test(clean(button.textContent))){
         const badge=view.badge?`<span class="research-mode-badge">${esc(view.badge)}</span>`:"";
-        const capacity=`<span class="research-mode-source-count">Up to <strong>${esc(view.evidenceLimit)}</strong> evidence sources</span>`;
-        const markup=`<span class="research-mode-title">${esc(view.label)}</span>${capacity}${badge}`;
+        const markup=`<span class="research-mode-title">${esc(view.label)}</span>${badge}`;
         if(button.innerHTML!==markup)button.innerHTML=markup;
       }
       button.setAttribute("aria-pressed",mode===selected?"true":"false");
