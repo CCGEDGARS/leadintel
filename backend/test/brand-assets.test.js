@@ -228,6 +228,19 @@ test('failed upload intention audit prevents the R2 put and leaves no orphan',as
   assert.equal(owner.env.BRAND_ASSETS.objects.size,0);
 });
 
+test('successful upload records an authorized attempt before the R2 put',async()=>{
+  const owner=await fixture('owner');
+
+  const response=await handleBrandAssetRoute(uploadRequest(owner.workspaceId,owner.token),owner.env,{});
+
+  assert.equal(response.status,201);
+  const {asset}=await response.json();
+  assert.deepEqual(owner.events,[
+    ['audit','brand_asset.upload_authorized'],
+    ['put',brandAssetObjectKey(asset.id)]
+  ]);
+});
+
 test('uploads use fully random uncorrelated IDs and keep ownership only in private R2 metadata',async()=>{
   const {env,token,workspaceId}=await fixture();const workspaceHash=(await sha256(workspaceId)).slice(0,16);
   const first=(await (await handleBrandAssetRoute(uploadRequest(workspaceId,token),env,{})).json()).asset;
@@ -268,7 +281,7 @@ test('server-side import accepts only a configured host and audits the stored im
   const {env,token,workspaceId,DB}=await fixture();const originalFetch=globalThis.fetch;const calls=[];
   globalThis.fetch=async(url,options)=>{calls.push([String(url),options]);return new Response(jpeg(),{status:200,headers:{'Content-Type':'image/jpeg','Content-Length':String(jpeg().length)}});};
   try{
-    const response=await handleBrandAssetRoute(importRequest(workspaceId,token,'https://cdn.example.test/logo.jpg'),env,{});assert.equal(response.status,201);const {asset}=await response.json();assert.equal(asset.mimeType,'image/jpeg');assert.equal(asset.width,16);assert.equal(calls.length,1);assert.equal(calls[0][1].redirect,'manual');assert.ok(calls[0][1].signal instanceof AbortSignal);assert.equal(DB.audits.at(-1)[3],'brand_asset.imported');
+    const response=await handleBrandAssetRoute(importRequest(workspaceId,token,'https://cdn.example.test/logo.jpg'),env,{});assert.equal(response.status,201);const {asset}=await response.json();assert.equal(asset.mimeType,'image/jpeg');assert.equal(asset.width,16);assert.equal(calls.length,1);assert.equal(calls[0][1].redirect,'manual');assert.ok(calls[0][1].signal instanceof AbortSignal);assert.equal(DB.audits.at(-1)[3],'brand_asset.import_authorized');
   }finally{globalThis.fetch=originalFetch;}
 });
 
