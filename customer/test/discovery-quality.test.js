@@ -82,6 +82,46 @@ test("discovery searches a recognised target-country domain without repeating th
   assert.doesNotMatch(query.query,/metal fabrication services/i);
 });
 
+test("Latvian market names resolve to the correct target-country search",()=>{
+  const [query]=discovery.buildDiscoveryQueries({
+    website:"https://ercon.lv",targetMarkets:"Zviedrija",priorityOffers:"metālapstrādes pakalpojumi",
+    idealCustomer:"ražošanas uzņēmumi",customerPainPoints:"ražošanas jaudas ierobežojumi"
+  },{
+    opportunities:[{market:"Zviedrija",active:true,score:{total:80}}],
+    signals:[{id:"expansion",name:"Ražošanas paplašināšana",active:true,weight:9,keywords:"jauna ražotne; jaudas palielināšana"}]
+  },1);
+  assert.match(query.query,/site:\.se/i);
+  assert.match(query.query,/Sweden|Sverige/i);
+});
+
+test("Latvian buying signals search for and match equivalent Swedish evidence",()=>{
+  const profile={website:"https://ercon.lv",priorityOffers:"metālapstrādes pakalpojumi",idealCustomer:"Zviedrijas ražošanas uzņēmumi"};
+  const market={signals:[{id:"expansion",name:"Ražošanas paplašināšana",active:true,weight:9,keywords:"jauna ražotne; jaudas palielināšana"}]};
+  const [verification]=discovery.buildCandidateVerificationQueries([{
+    url:"https://nordicfood.se/",domain:"nordicfood.se",company:"Nordic Food",market:"Zviedrija",title:"Nordic Food"
+  }],profile,market,1);
+  assert.match(verification.query,/ny fabrik|capacity expansion/i);
+
+  const candidates=discovery.mergeCompanyCandidates([{
+    url:"https://nordicfood.se/nyheter/ny-fabrik",domain:"nordicfood.se",company:"Nordic Food",market:"Zviedrija",
+    title:"Nordic Food bygger ny fabrik",description:"Bolaget utökar produktionskapaciteten i Sverige.",
+    text:"Nordic Food bygger en ny fabrik och utökar produktionskapaciteten i Sverige."
+  }],profile,market,10);
+  assert.equal(candidates.length,1);
+  assert.equal(candidates[0].domain,"nordicfood.se");
+  assert.deepEqual(candidates[0].matchedSignals.map(item=>item.id),["expansion"]);
+});
+
+test("Latvian market labels still reject a conflicting country domain",()=>{
+  const candidates=discovery.mergeCompanyCandidates([{
+    url:"https://latvianmetal.lv/news",domain:"latvianmetal.lv",company:"Latvian Metal",market:"Zviedrija",
+    title:"Jauna ražotne",description:"Uzņēmums palielina jaudu.",text:"Jauna ražotne un jaudas palielināšana Latvijā."
+  }],{website:"https://ercon.lv",priorityOffers:"metālapstrāde"},{
+    signals:[{id:"expansion",name:"Ražošanas paplašināšana",active:true,weight:9,keywords:"jauna ražotne; jaudas palielināšana"}]
+  });
+  assert.deepEqual(candidates,[]);
+});
+
 test("generic service page titles do not become company identities",()=>{
   const [company]=discovery.normalizeCompanySearchResults({data:[{
     url:"https://metals.lv/",
