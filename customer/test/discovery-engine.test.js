@@ -75,6 +75,15 @@ test('buildCandidateVerificationQueries creates bounded company-domain checks an
   assert.doesNotMatch(checks[0].query,/industrial automation/i,'seller offer must not be used to verify buyers');
 });
 
+test('domain verification keeps evidence only from the company being checked',()=>{
+  const results=Discovery.normalizeCompanySearchResults({data:[
+    {url:'https://nordicfood.se/news/new-factory',title:'Nordic Food expansion',description:'New factory in Sweden'},
+    {url:'https://unrelated.se/news/new-factory',title:'Unrelated expansion',description:'New factory in Sweden'}
+  ]},{id:'verify-nordicfood-se',kind:'verification',domain:'nordicfood.se',market:'Sweden',query:'site:nordicfood.se new factory'});
+
+  assert.deepEqual(results.map(item=>item.domain),['nordicfood.se']);
+});
+
 test('mergeCompanyCandidates deduplicates domains and builds transparent five-part scores',()=>{
   const raw=[
     {queryId:'q1',market:'Sweden',url:'https://nordicmachines.se/about',domain:'nordicmachines.se',company:'Nordic Machines',title:'Industrial Automation',description:'manufacturer',text:'manufacturer industrial automation new facility capacity expansion procurement',date:'2026-08-20'},
