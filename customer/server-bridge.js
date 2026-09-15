@@ -2,7 +2,7 @@
   'use strict';
   if(root.LeadIntelServerBridge)return;
   const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
-  const ASSET_VERSION='20260915-error-sweep-v1';
+  const ASSET_VERSION='20260915-mail-choice-v2';
   const API_REQUEST_TIMEOUT_MS=15000;
   const asset=path=>`${path}?v=${ASSET_VERSION}`;
   const KEYS={main:'leadintel_customer_v2_state',discovery:'leadintel_customer_v2_discovery',outreach:'leadintel_customer_v2_outreach',delivery:'leadintel_customer_v2_delivery',meta:'leadintel_customer_v2_discovery_meta'};
