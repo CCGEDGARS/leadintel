@@ -28,6 +28,7 @@ function loadDiscoveryRunner({ renderFails = false, fetchImpl = () => new Promis
   const context = {
     console: { ...console, error() {} },
     AbortController,
+    DOMException,
     LeadIntelDiscovery: Discovery,
     fetch: fetchImpl,
     localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, String(value)), removeItem: key => storage.delete(key) },
