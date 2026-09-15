@@ -3,6 +3,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const ux=require('../market-research-ux.js');
+const engine=require('../market-engine.js');
 
 const profile={
   targetMarkets:'Latvia',
@@ -21,6 +22,14 @@ test('idle market research labels contain no Review prefix and each has distinct
   assert.match(ux.MODE_COPY.intelligence.description,/Comprehensive investigation/i);
   assert.ok(Object.values(ux.MODE_COPY).every(item=>!/^Review\b/i.test(item.label)));
   assert.equal(ux.MODE_COPY.deep.badge,'Recommended');
+  assert.deepEqual(Object.values(ux.MODE_COPY).map(item=>item.evidenceLimit),[20,80,200]);
+  assert.deepEqual(
+    Object.keys(ux.MODE_COPY).map(mode=>ux.MODE_COPY[mode].evidenceLimit),
+    Object.keys(ux.MODE_COPY).map(mode=>engine.RESEARCH_MODES[mode].maxStoredResults)
+  );
+  assert.match(ux.MODE_COPY.quick.sourceDetail,/selected automatically/i);
+  assert.match(ux.MODE_COPY.deep.sourceDetail,/up to 8 priority websites/i);
+  assert.match(ux.MODE_COPY.intelligence.sourceDetail,/up to 15 priority websites/i);
   assert.equal(ux.MODE_COPY.quick.action,undefined);
   assert.equal(ux.MODE_COPY.deep.action,undefined);
   assert.equal(ux.MODE_COPY.intelligence.action,undefined);
@@ -93,18 +102,20 @@ test('new source discovery module contains no hardcoded LSM or Dienas Bizness re
 
 test('evidence-view bootstrap loads the market research UX module',()=>{
   const source=fs.readFileSync(path.join(__dirname,'..','evidence-view.js'),'utf8');
-  assert.match(source,/market-research-ux\.js\?v=20260913-strategy-flow-v1/);
+  assert.match(source,/market-research-ux\.js\?v=20260915-research-source-counts-v1/);
 });
 
 test('research choice hierarchy is shipped through the CSP-approved static stylesheet',()=>{
   const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
   const css=fs.readFileSync(path.join(__dirname,'..','market.css'),'utf8');
-  assert.match(html,/market\.css\?v=20260915-custom-signal-ux-v1/);
+  assert.match(html,/market\.css\?v=20260915-research-source-counts-v1/);
   assert.match(css,/\.research-actions \.research-mode-choice\[data-research-mode="deep"\]>button/);
   assert.match(css,/\.research-mode-choice\.is-selected>button/);
   assert.match(css,/\.research-mode-action/);
   assert.match(css,/#run-detailed-research/);
   assert.match(css,/\.research-mode-action\{display:none!important\}/);
+  assert.match(css,/\.research-mode-source-count/);
+  assert.match(css,/\.research-mode-source-detail/);
   assert.match(css,/Simplified research choices: no gold/);
 });
 
