@@ -1,12 +1,12 @@
-import './workspace-reset-hygiene.js?v=20260916-brand-assets-v3';
-import './workspace-persistence.js?v=20260914-spinner-hard-stop-v1';
+import './workspace-reset-hygiene.js?v=20260916-brand-assets-v4';
+import './workspace-persistence.js?v=20260916-brand-assets-v4';
 import './state-budget.js?v=20260826-state-budget-500kb';
 import './website-input-sync.js?v=20260901-saved-state-v2';
 import './custom-market-input-hygiene.js?v=20260903-password-manager-isolation-v5';
 import './website-activation.js?v=20260914-activation-timeout-v1';
 import './crm-engine.js?v=20260828-master-crm-v1';
 import './sync-conflict-hygiene.js?v=20260901-stale-blank-conflict-v1';
-import './server-bridge.js?v=20260916-brand-assets-v3';
+import './server-bridge.js?v=20260916-brand-assets-v4';
 import './crm-ui.js?v=20260905-app-audit-v2';
 import './ai-settings.js?v=20260915-model-choice-v1';
 import './service-settings-extension.js?v=20260915-mail-choice-v2';
