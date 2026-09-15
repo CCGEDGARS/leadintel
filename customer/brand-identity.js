@@ -7,6 +7,7 @@
 
   const DEFAULT_COLOR = '#0f6557';
   const ASSET_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
+  const ASSET_ORIGIN = 'https://leadintel-api.edgars-7e7.workers.dev';
   const ASSET_PATH_PREFIX = '/api/customer/brand-assets/';
 
   function stringValue(value) {
@@ -33,13 +34,15 @@
     const updatedAt = stringValue(value.updatedAt);
 
     if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) return null;
-    if (url !== ASSET_PATH_PREFIX + encodeURIComponent(id)) return null;
+    const assetPath = ASSET_PATH_PREFIX + encodeURIComponent(id);
+    const absoluteUrl = ASSET_ORIGIN + assetPath;
+    if (url !== assetPath && url !== absoluteUrl) return null;
     if (!ASSET_MIME_TYPES.has(mimeType)) return null;
     if (!Number.isSafeInteger(width) || width < 1 || width > 6000) return null;
     if (!Number.isSafeInteger(height) || height < 1 || height > 6000) return null;
     if (!isIsoTimestamp(updatedAt)) return null;
 
-    return {id, url, mimeType, width, height, altText, updatedAt};
+    return {id, url: absoluteUrl, mimeType, width, height, altText, updatedAt};
   }
 
   function normalize(value) {
@@ -132,8 +135,11 @@
     const identity = normalize(source.brandSnapshot);
     const validation = validate(source.brandSnapshot);
 
-    if (!source.brandSnapshot || identity.status !== 'ready' || !validation.valid) {
+    if (!source.brandSnapshot || identity.status !== 'ready') {
       return {subject, textBody: bodyText, htmlBody: null};
+    }
+    if (!validation.valid) {
+      throw new TypeError('Cannot render a present invalid ready brand identity.');
     }
 
     const signatureLines = [
@@ -267,7 +273,10 @@
 
   function isIsoTimestamp(value) {
     if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value)) return false;
-    return !Number.isNaN(Date.parse(value));
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return false;
+    const canonical = value.includes('.') ? value : value.replace('Z', '.000Z');
+    return parsed.toISOString() === canonical;
   }
 
   function deepFreeze(value) {
