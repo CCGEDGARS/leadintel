@@ -21,15 +21,21 @@
 .research-actions .research-mode-choice>button:hover{transform:translateY(-3px);box-shadow:0 13px 28px rgba(15,35,29,.15);border-color:#0b5f4f!important}
 .research-actions .research-mode-choice>button:focus-visible{outline:3px solid rgba(188,143,42,.42);outline-offset:3px}
 .research-mode-title{font-size:20px;font-weight:800;line-height:1.2;text-align:center}
+.research-mode-source-count{display:inline-flex;align-items:baseline;gap:5px;padding:7px 11px;border:1px solid #b9d4ca;border-radius:999px;background:#edf6f2;color:#0d6453;font:700 10px "IBM Plex Mono",monospace;text-transform:uppercase;letter-spacing:.045em;line-height:1}
+.research-mode-source-count strong{font-size:15px;letter-spacing:0;color:#0a594a}
 .research-mode-action{font:700 11px 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.035em;color:#0b6755}
 .research-mode-badge{position:absolute;top:12px;right:12px;padding:5px 8px;border-radius:999px;background:#d7af55;color:#12231d;font:700 9px 'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.05em}
 .research-actions .research-mode-choice[data-research-mode="deep"]>button{background:#10261f!important;color:#fff!important;border-color:#10261f!important;box-shadow:0 10px 24px rgba(12,37,29,.2)}
+.research-mode-choice[data-research-mode="deep"] .research-mode-source-count{border-color:rgba(202,231,220,.45);background:rgba(237,246,242,.1);color:#dcebe5}
+.research-mode-choice[data-research-mode="deep"] .research-mode-source-count strong{color:#fff}
 .research-mode-choice[data-research-mode="deep"] .research-mode-action{color:#efcf85}
 .research-actions .research-mode-choice[data-research-mode="deep"]>button:hover{background:#16362c!important;border-color:#16362c!important}
 .research-actions .research-mode-choice[data-research-mode="intelligence"]>button{border-color:#8a681e!important;box-shadow:inset 0 4px 0 #d7af55,0 5px 16px rgba(15,35,29,.06)}
 .research-mode-choice.is-selected>button{outline:none!important;outline-offset:0}
 .research-mode-choice.is-selected .research-mode-title::after{content:none!important}
 .research-mode-description{font-size:14px;line-height:1.5;color:#596762;padding:0 8px;max-width:38ch}
+.research-mode-description>span{display:block}
+.research-mode-source-detail{display:block;margin-top:7px;color:#0d6453;font:600 10px "IBM Plex Mono",monospace;line-height:1.45}
 @media(max-width:900px){.research-actions{grid-template-columns:1fr!important}.research-mode-choice{width:100%}.research-actions .research-mode-choice>button{min-height:118px}.research-mode-description{max-width:none}}
 
 /* Stable ID-level contrast beats generic secondary-button themes. */
