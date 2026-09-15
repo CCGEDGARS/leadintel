@@ -51,17 +51,17 @@
       async upload(kind, file, identity) {
         const api = server();
         if (typeof api?.uploadBrandAsset !== 'function') return unavailable('upload');
-        return api.uploadBrandAsset(kind, file, {identity, mutation: {operation: 'replace', kind}, returnTransaction: true});
+        return api.uploadBrandAsset(kind, file, {mutation: {operation: 'replace', kind}, returnTransaction: true});
       },
       async import(kind, url, identity) {
         const api = server();
         if (typeof api?.importBrandAsset !== 'function') return unavailable('import');
-        return api.importBrandAsset(kind, url, {identity, mutation: {operation: 'replace', kind}, returnTransaction: true});
+        return api.importBrandAsset(kind, url, {mutation: {operation: 'replace', kind}, returnTransaction: true});
       },
       async delete(kind, asset, identity) {
         const api = server();
         if (typeof api?.deleteBrandAsset !== 'function') return unavailable('removal');
-        return api.deleteBrandAsset(kind, asset, {identity, mutation: {operation: 'remove', kind}, returnTransaction: true});
+        return api.deleteBrandAsset(kind, asset, {mutation: {operation: 'remove', kind}, returnTransaction: true});
       }
     };
   }
