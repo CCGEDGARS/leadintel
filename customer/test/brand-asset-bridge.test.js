@@ -208,6 +208,37 @@ test('successful identity persistence retires the old object and queues observab
   assert.equal(events.at(-1).type, 'leadintel:brand-asset-cleanup');
 });
 
+test('post-commit cleanup queue storage failure returns the committed identity and emits an observable warning', async () => {
+  const oldAsset = asset('v'.repeat(43));
+  const nextAsset = asset('w'.repeat(43));
+  const main = JSON.stringify({brandIdentity: {status: 'ready', senderName: 'Alex', assets: {logo: oldAsset}}});
+  const {bridge, localStorage, sandbox, events} = loadBridge(async (url) => {
+    if (url.includes('/brand-assets?')) return new Response(JSON.stringify({asset: nextAsset}), {status: 201});
+    if (url.includes('/customer/state')) return new Response(JSON.stringify({version: 2}), {status: 200});
+    if (url.includes(oldAsset.id)) return new Response(JSON.stringify({error: 'delete unavailable'}), {status: 503});
+    throw new Error(`Unexpected request: ${url}`);
+  }, {leadintel_customer_v2_state: main});
+  const originalSetItem = localStorage.setItem.bind(localStorage);
+  localStorage.setItem = (key, value) => {
+    if (key === CLEANUP_KEY) throw new Error('Cleanup queue quota exceeded');
+    return originalSetItem(key, value);
+  };
+  const warnings = [];
+  sandbox.console.warn = (...values) => warnings.push(values.map(String).join(' '));
+
+  const result = await bridge.uploadBrandAsset('logo', new Blob(['new'], {type: 'image/png'}), {returnTransaction: true});
+
+  assert.equal(result.identity.assets.logo.id, nextAsset.id);
+  assert.equal(result.cleanupQueued, false);
+  assert.equal(result.cleanupWarning, true);
+  assert.equal(JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).brandIdentity.assets.logo.id, nextAsset.id);
+  assert.equal(events.some(event => event.type === 'leadintel:brand-asset-cleanup-warning'), true);
+  const transaction = events.find(event => event.type === 'leadintel:brand-asset-transaction');
+  assert.equal(transaction.detail.committed, true);
+  assert.equal(transaction.detail.cleanupWarning, true);
+  assert.equal(warnings.some(value => value.includes('Cleanup queue quota exceeded')), true);
+});
+
 test('real UI and bridge chain has one persistence owner and adopts the committed Draft identity without another save', async () => {
   const nextAsset = asset('o'.repeat(43));
   const initialIdentity = {
@@ -255,6 +286,96 @@ test('real UI and bridge chain has one persistence owner and adopts the committe
   assert.equal(controller.identity().assets.logo.id, nextAsset.id);
   assert.equal(adoptedIdentity.assets.logo.id, nextAsset.id);
   assert.equal(uiPersistenceCalls, 0);
+});
+
+test('upload commits only the asset mutation and preserves an unrelated user edit made while upload is in flight', async () => {
+  const nextAsset = asset('x'.repeat(43));
+  const initialIdentity = {
+    status: 'ready', revision: 2, companyDisplayName: 'Acme', senderName: 'Before upload',
+    senderTitle: '', website: 'https://acme.example/', phone: '', linkedinUrl: '', primaryColor: '#0f6557',
+    signatureText: '', legalFooter: '', postalAddress: '',
+    options: {includeLogo: true, includeHeadshot: false, includeBanner: false},
+    assets: {logo: null, headshot: null, banner: null}, updatedAt: '2026-09-15T20:00:00.000Z'
+  };
+  const uploadStarted = deferred();
+  const releaseUpload = deferred();
+  const puts = [];
+  const {bridge, localStorage} = loadBridge(async (url, options) => {
+    if (url.includes('/brand-assets?')) {
+      uploadStarted.resolve();
+      await releaseUpload.promise;
+      return new Response(JSON.stringify({asset: nextAsset}), {status: 201});
+    }
+    if (url.includes('/customer/state')) {
+      puts.push(JSON.parse(options.body));
+      return new Response(JSON.stringify({version: 3}), {status: 200});
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  }, {leadintel_customer_v2_state: JSON.stringify({brandIdentity: initialIdentity})});
+  const controller = BrandIdentityUI.createController({
+    identity: initialIdentity,
+    assetAdapter: BrandIdentityUI.createAssetAdapter({LeadIntelServerBridge: bridge}),
+    onChange(identity, detail) {
+      if (detail?.persist === false) return;
+      const current = JSON.parse(localStorage.getItem('leadintel_customer_v2_state'));
+      localStorage.setItem('leadintel_customer_v2_state', JSON.stringify({...current, brandIdentity: identity}));
+    }
+  });
+
+  const replacing = controller.replaceAsset('logo', new Blob(['new'], {type: 'image/png'}));
+  await uploadStarted.promise;
+  controller.updateField('senderName', 'Edited during upload');
+  releaseUpload.resolve();
+  await replacing;
+
+  assert.equal(puts.length, 1);
+  assert.equal(puts[0].payload.main.brandIdentity.senderName, 'Edited during upload');
+  assert.equal(puts[0].payload.main.brandIdentity.assets.logo.id, nextAsset.id);
+  assert.equal(controller.identity().senderName, 'Edited during upload');
+});
+
+test('in-flight workspace save serializes before upload and removal state PUTs without overlap', async () => {
+  const oldAsset = asset('y'.repeat(43));
+  const nextAsset = asset('z'.repeat(43));
+  const main = JSON.stringify({brandIdentity: {status: 'ready', senderName: 'Alex', assets: {logo: oldAsset}}});
+  const firstPutStarted = deferred();
+  const releaseFirstPut = deferred();
+  const statePayloads = [];
+  let activePuts = 0;
+  let maximumActivePuts = 0;
+  let stateCalls = 0;
+  const {bridge, localStorage} = loadBridge(async (url, options) => {
+    if (url.includes('/brand-assets?')) return new Response(JSON.stringify({asset: nextAsset}), {status: 201});
+    if (url.includes('/customer/state')) {
+      stateCalls++;
+      activePuts++;
+      maximumActivePuts = Math.max(maximumActivePuts, activePuts);
+      statePayloads.push(JSON.parse(options.body));
+      if (stateCalls === 1) {
+        firstPutStarted.resolve();
+        await releaseFirstPut.promise;
+      }
+      activePuts--;
+      return new Response(JSON.stringify({version: stateCalls}), {status: 200});
+    }
+    if (url.includes('/brand-assets/')) return new Response(JSON.stringify({ok: true}), {status: 200});
+    throw new Error(`Unexpected request: ${url}`);
+  }, {leadintel_customer_v2_state: main});
+
+  const autosave = bridge.saveNow();
+  await firstPutStarted.promise;
+  const replacing = bridge.uploadBrandAsset('logo', new Blob(['new'], {type: 'image/png'}));
+  const removing = bridge.deleteBrandAsset('logo', oldAsset);
+  await new Promise(resolve => setImmediate(resolve));
+  releaseFirstPut.resolve();
+  await Promise.all([autosave, replacing, removing]);
+
+  assert.equal(maximumActivePuts, 1);
+  assert.equal(statePayloads.length, 3);
+  assert.equal(statePayloads[0].payload.main.brandIdentity.assets.logo.id, oldAsset.id);
+  assert.equal(statePayloads[1].payload.main.brandIdentity.assets.logo.id, nextAsset.id);
+  assert.equal(statePayloads[2].payload.main.brandIdentity.assets.logo, null);
+  assert.equal(JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).brandIdentity.assets.logo, null);
 });
 
 test('workspace transaction queue prevents a failed stale replacement from restoring or deleting a later success', async () => {
@@ -559,4 +680,35 @@ test('workspace reset emits a cleanup result even when the delete bridge is unav
   assert.equal(result.failed, 1);
   assert.equal(events.at(-1).type, 'leadintel:brand-assets-reset-cleanup');
   assert.equal(events.at(-1).detail.unavailable, true);
+});
+
+test('workspace reset reports queued cleanup separately from deleted and failed assets', async () => {
+  const logo = asset('1'.repeat(43));
+  const resetKey = 'leadintel_customer_v2_reset_pending_v1';
+  const localStorage = storage({
+    leadintel_customer_v2_workspace: WORKSPACE_ID,
+    [resetKey]: JSON.stringify({workspace_id: WORKSPACE_ID, assets: [{kind: 'logo', id: logo.id}]})
+  });
+  const events = [];
+  const sandbox = {
+    console: {warn() {}}, URLSearchParams, localStorage, sessionStorage: storage(),
+    location: {search: '', replace() {}, reload() {}}, document: {addEventListener() {}}, addEventListener() {},
+    setTimeout() { return 1; }, dispatchEvent(event) { events.push(event); },
+    CustomEvent: class CustomEvent { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
+    LeadIntelServerBridge: {
+      session: {authenticated: true}, workspace: {id: WORKSPACE_ID}, workspaces: [{id: WORKSPACE_ID}],
+      async deleteBrandAsset() { return {ok: false, queued: true, asset_id: logo.id}; }
+    }
+  };
+  sandbox.globalThis = sandbox;
+  vm.runInNewContext(resetSource, sandbox, {filename: 'workspace-reset-hygiene.js'});
+
+  const result = await sandbox.LeadIntelWorkspaceResetHygiene.afterWorkspaceSaved(WORKSPACE_ID);
+
+  assert.equal(result.attempted, 1);
+  assert.equal(result.deleted, 0);
+  assert.equal(result.queued, 1);
+  assert.equal(result.failed, 0);
+  assert.equal(localStorage.getItem(resetKey), null);
+  assert.equal(events.at(-1).detail.queued, 1);
 });
