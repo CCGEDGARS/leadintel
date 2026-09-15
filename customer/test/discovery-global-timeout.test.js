@@ -8,7 +8,7 @@ const Discovery = require('../discovery-engine.js');
 function loadDiscoveryRunner({ renderFails = false, fetchImpl = () => new Promise(() => {}), requestTimeout = 1 } = {}) {
   const source = fs.readFileSync(path.join(__dirname, '..', 'discovery-ui.js'), 'utf8')
     .replace('const DISCOVERY_REQUEST_TIMEOUT_MS=25000;', `const DISCOVERY_REQUEST_TIMEOUT_MS=${requestTimeout};`)
-    .replace('const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS*2+2000;', 'const DISCOVERY_RUN_TIMEOUT_MS=8;')
+    .replace('const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS*5+5000;', 'const DISCOVERY_RUN_TIMEOUT_MS=8;')
     .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\n')
     .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;');
   const mainState = {
@@ -52,9 +52,9 @@ test('a permanently pending provider cannot leave Company Discovery running', as
   assert.notEqual(context.__discoveryState().status, 'running');
 });
 
-test('the overall guard allows both the discovery and verification request windows', () => {
+test('the overall guard allows evidence, extraction, resolution and verification request windows', () => {
   const source=fs.readFileSync(path.join(__dirname,'..','discovery-ui.js'),'utf8');
-  assert.match(source,/DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS\*2\+2000/);
+  assert.match(source,/DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS\*5\+5000/);
 });
 
 test('a rendering failure cannot leave Company Discovery running', async () => {
@@ -110,7 +110,7 @@ test('Company Discovery verifies candidate websites before strict qualification'
           description:'The Latvian manufacturer is expanding production capacity.',
           markdown:'Buyer is opening a new factory in Latvia and expanding production capacity.'
         }:{
-          url:'https://buyer.lv/',title:'Buyer',description:'Latvian industrial company.'
+          url:'https://buyer.lv/',title:'Buyer plans a new factory',description:'Buyer plans a new factory in Latvia.'
         }]})
       };
     }
@@ -138,7 +138,7 @@ test('Company Discovery bounds concurrent Firecrawl verification requests', asyn
         url:`https://${body.query.match(/^site:([^ ]+)/i)[1]}/news`,title:'Expansion',
         description:'Latvian manufacturer expansion',markdown:'The Latvian company opens a new factory and expands capacity.'
       }]:Array.from({length:5},(_,index)=>({
-        url:`https://buyer${index}.lv/`,title:`Buyer ${index}`,description:'Latvian industrial company.'
+        url:`https://buyer${index}.lv/`,title:`Buyer${index} plans a new factory`,description:`Buyer${index} plans a new factory in Latvia.`
       }));
       return {ok:true,json:async()=>({success:true,data})};
     }
