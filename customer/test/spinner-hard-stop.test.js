@@ -26,7 +26,7 @@ test('Firecrawl fallback cannot bypass an aborted request',()=>{
 test('cloud save has a hard timeout so activation cannot remain busy',()=>{
   assert.ok(persistence.includes('const SAVE_REQUEST_TIMEOUT_MS=10000;'));
   assert.ok(persistence.includes('function withTimeout(operation,timeoutMs=SAVE_REQUEST_TIMEOUT_MS'));
-  assert.ok(persistence.includes('withTimeout(()=>root.LeadIntelServerBridge?.saveNow?.(),SAVE_REQUEST_TIMEOUT_MS)'));
+  assert.ok(persistence.includes('withTimeout(()=>root.LeadIntelServerBridge?.saveNow?.({saveIntent:true,explicitSave:true}),SAVE_REQUEST_TIMEOUT_MS)'));
 });
 
 test('Discovery runtime cache key changes whenever spinner recovery changes',()=>{
@@ -36,7 +36,7 @@ test('Discovery runtime cache key changes whenever spinner recovery changes',()=
 test('customer page loads the spinner-safe bundles with fresh cache keys',()=>{
   for(const marker of [
     'app.js?v=20260916-brand-assets-v2',
-    'process-map.js?v=20260916-brand-assets-v4',
+    'process-map.js?v=20260916-brand-assets-v5',
     'discovery-ui.js?v=20260915-evidence-link-v1'
   ])assert.ok(html.includes(marker),marker);
 });
