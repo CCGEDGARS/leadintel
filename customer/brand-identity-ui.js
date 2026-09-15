@@ -48,20 +48,20 @@
       throw new Error(`Brand asset ${action} is unavailable until the secure server connection is ready.`);
     }
     return {
-      async upload(kind, file) {
+      async upload(kind, file, identity) {
         const api = server();
         if (typeof api?.uploadBrandAsset !== 'function') return unavailable('upload');
-        return api.uploadBrandAsset(kind, file);
+        return api.uploadBrandAsset(kind, file, {identity, mutation: {operation: 'replace', kind}, returnTransaction: true});
       },
-      async import(kind, url) {
+      async import(kind, url, identity) {
         const api = server();
         if (typeof api?.importBrandAsset !== 'function') return unavailable('import');
-        return api.importBrandAsset(kind, url);
+        return api.importBrandAsset(kind, url, {identity, mutation: {operation: 'replace', kind}, returnTransaction: true});
       },
-      async delete(kind, asset) {
+      async delete(kind, asset, identity) {
         const api = server();
         if (typeof api?.deleteBrandAsset !== 'function') return unavailable('removal');
-        return api.deleteBrandAsset(kind, asset);
+        return api.deleteBrandAsset(kind, asset, {identity, mutation: {operation: 'remove', kind}, returnTransaction: true});
       }
     };
   }
@@ -85,6 +85,12 @@
       identity = copyIdentity(next);
       if (forceDraft && hasConfiguredValue(identity)) identity.status = 'draft';
       onChange(copyIdentity(identity));
+      return copyIdentity(identity);
+    }
+
+    function adoptCommitted(value) {
+      identity = copyIdentity(value);
+      onChange(copyIdentity(identity), {persist: false, committed: true});
       return copyIdentity(identity);
     }
 
@@ -127,31 +133,39 @@
 
     async function replaceAsset(kind, source) {
       if (!ASSET_KINDS.includes(kind)) throw new TypeError('Unknown brand asset type.');
-      const previous = identity.assets[kind];
-      let uploaded;
-      try {
-        uploaded = typeof source === 'string'
-          ? await assetAdapter.import(kind, source)
-          : await assetAdapter.upload(kind, source);
-        const safe = managedAssetOnly(uploaded);
-        if (!safe) throw new Error('The server returned an invalid managed image reference.');
-        const next = copyIdentity(identity);
-        next.assets[kind] = safe;
-        emit(next);
+      const desired = copyIdentity(identity);
+      desired.status = 'draft';
+      const uploaded = typeof source === 'string'
+        ? await assetAdapter.import(kind, source, desired)
+        : await assetAdapter.upload(kind, source, desired);
+      const committed = uploaded && typeof uploaded === 'object' && uploaded.identity ? copyIdentity(uploaded.identity) : null;
+      const safe = managedAssetOnly(committed ? uploaded.asset : uploaded);
+      if (!safe) throw new Error('The server returned an invalid managed image reference.');
+      if (committed) {
+        if (committed.assets[kind]?.id !== safe.id) throw new Error('The server returned inconsistent committed brand identity.');
+        adoptCommitted(committed);
         return safe;
-      } catch (error) {
-        identity.assets[kind] = previous;
-        throw error;
       }
+      const next = copyIdentity(identity);
+      next.assets[kind] = safe;
+      emit(next);
+      return safe;
     }
 
     async function removeAsset(kind) {
       if (!ASSET_KINDS.includes(kind)) throw new TypeError('Unknown brand asset type.');
       const previous = identity.assets[kind];
       if (!previous) return null;
-      await assetAdapter.delete(kind, previous);
       const next = copyIdentity(identity);
       next.assets[kind] = null;
+      next.status = 'draft';
+      const removed = await assetAdapter.delete(kind, previous, next);
+      if (removed && typeof removed === 'object' && removed.identity) {
+        const committed = copyIdentity(removed.identity);
+        if (committed.assets[kind] !== null) throw new Error('The server returned inconsistent committed brand identity.');
+        adoptCommitted(committed);
+        return null;
+      }
       emit(next);
       return null;
     }
