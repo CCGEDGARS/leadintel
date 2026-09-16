@@ -60,6 +60,7 @@ test('Step 2 entry point loads the versioned canonical schema first',()=>{
 test('Step 2 is grouped as a Commercial Intelligence Brief',()=>{
   const Brief=require('../step2-brief-schema.js');
   const html=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');
+  const processMap=fs.readFileSync(path.join(ROOT,'process-map.js'),'utf8');
   assert.match(html,/Build your Commercial Intelligence Brief/);
   assert.match(html,/data-brief-group="targeting"/);
   assert.match(html,/data-brief-group="signals"/);
@@ -68,6 +69,8 @@ test('Step 2 is grouped as a Commercial Intelligence Brief',()=>{
   for(const retired of ['growth_markets','lookalike_customers','opportunity_value','success_outcome']){
     assert.doesNotMatch(html,new RegExp(`data-question="${retired}"`));
   }
+  assert.doesNotMatch(processMap,/data-question="sales_motion"/);
+  assert.doesNotMatch(processMap,/configureSalesMotionQuestion03/);
 });
 
 test('each brief group exposes a reviewed progress counter',()=>{

@@ -5,16 +5,10 @@ import fs from 'node:fs';
 const source = fs.readFileSync(new URL('../process-map.js', import.meta.url), 'utf8');
 const language = fs.readFileSync(new URL('../language.js', import.meta.url), 'utf8');
 
-test('Context Question 03 runtime keeps sales motion semantics', () => {
-  assert.match(source, /How do customers typically buy from you\?/);
-  assert.match(source, /data-question="sales_motion"/);
-  assert.match(source, /Mostly direct B2B sales through outbound prospecting and referrals/);
-});
-
-test('sales motion is isolated from legacy lookalike customer state', () => {
-  assert.match(source, /state\.answers=\{\.\.\.\(state\.answers\|\|\{\}\),sales_motion:value\}/);
-  assert.match(source, /state\.answerStatus=\{\.\.\.\(state\.answerStatus\|\|\{\}\),sales_motion:value\?"user":"missing"\}/);
-  assert.doesNotMatch(source, /sales_motion:value,lookalike_customers:value/);
+test('Commercial Intelligence Brief has no legacy sales-motion runtime injection', () => {
+  assert.doesNotMatch(source, /How do customers typically buy from you\?/);
+  assert.doesNotMatch(source, /data-question="sales_motion"/);
+  assert.doesNotMatch(source, /configureSalesMotionQuestion03/);
 });
 
 test('legacy lookalike recovery is no longer bootstrapped', () => {

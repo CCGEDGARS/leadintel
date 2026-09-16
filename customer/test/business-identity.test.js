@@ -92,7 +92,7 @@ test('Competitive Advantages spans the complete Commercial Positioning grid', ()
   const shell = fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
   assert.match(ui,/diff\.classList\.add\("wide","identity-wide"\)/);
   assert.match(processMap,/business-identity\.js\?v=20260906-pain-headings-v1/);
-  assert.match(shell,/process-map\.js\?v=20260916-commercial-brief-v1/);
+  assert.match(shell,/process-map\.js\?v=20260916-commercial-brief-v2/);
 });
 
 

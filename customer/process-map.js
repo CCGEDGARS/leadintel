@@ -40,60 +40,6 @@ const PROCESS_STORAGE_KEY="leadintel_customer_v2_state";
 const processMap=document.getElementById("commercial-process-map");
 
 function readProcessState(){try{return JSON.parse(localStorage.getItem(PROCESS_STORAGE_KEY)||"{}");}catch{return {};}}
-function writeProcessState(state){localStorage.setItem(PROCESS_STORAGE_KEY,JSON.stringify(state));}
-
-function syncSalesMotionValue(visible){
-  const value=String(visible?.value||"").trim();
-  const state=readProcessState();
-  state.answers={...(state.answers||{}),sales_motion:value};
-  state.answerStatus={...(state.answerStatus||{}),sales_motion:value?"user":"missing"};
-  state.profile=null;state.approved=false;
-  writeProcessState(state);
-  renderSalesMotionFeedback(visible);
-}
-function renderSalesMotionFeedback(textarea){
-  if(!textarea)return;
-  const card=textarea.closest(".question-card");if(!card)return;
-  let node=card.querySelector("[data-sales-motion-feedback]");
-  if(!node){
-    node=document.createElement("div");node.className="answer-feedback";node.dataset.salesMotionFeedback="true";textarea.insertAdjacentElement("afterend",node);
-  }
-  const enough=String(textarea.value||"").trim().length>=5;
-  node.innerHTML=`<span class="answer-quality-state ${enough?'enough':'more'}">${enough?'Enough to continue ✓':'Needs your input'}</span><span class="answer-save-state local">Saved in this browser</span><small class="answer-quality-guidance">What’s enough: Describe the main route customers use to buy from you. One short sentence is enough.</small>`;
-}
-function configureSalesMotionQuestion03(){
-  const grid=document.querySelector("#step-2 .question-grid");if(!grid)return null;
-  let visible=grid.querySelector('[data-question="sales_motion"]');
-  let card=visible?.closest(".question-card")||null;
-  const legacy=grid.querySelector('[data-question="lookalike_customers"]');
-  if(!card&&legacy){
-    card=legacy.closest(".question-card");
-    visible=legacy;
-    visible.value="";
-    legacy.dataset.question="sales_motion";
-  }
-  if(!card){
-    card=document.createElement("article");card.className="question-card";card.dataset.contextQuestion="03";
-    card.innerHTML='<span>03</span><label></label><textarea data-question="sales_motion" rows="3"></textarea>';
-    visible=card.querySelector("textarea");
-    const question04=grid.querySelector('[data-question="buyer_roles"]')?.closest(".question-card");
-    if(question04)grid.insertBefore(card,question04);else grid.appendChild(card);
-  }
-  card.querySelectorAll('[data-answer-feedback="lookalike_customers"],.step2-reference-action').forEach(node=>node.remove());
-  card.dataset.contextQuestion="03";card.hidden=false;card.removeAttribute("aria-hidden");card.style.removeProperty("display");card.style.removeProperty("visibility");card.style.removeProperty("opacity");
-  const number=card.querySelector(":scope > span");if(number)number.textContent="03";
-  let label=card.querySelector("label");if(!label){label=document.createElement("label");card.insertBefore(label,visible);}
-  label.innerHTML='How do customers typically buy from you?<small>Describe your normal sales motion: direct sales, inbound leads, outbound prospecting, partners, distributors, referrals, online sales, account management, or another route.</small>';
-  visible.dataset.question="sales_motion";
-  visible.placeholder="Mostly direct B2B sales through outbound prospecting and referrals, followed by a consultation and tailored proposal.";
-  visible.rows=3;
-  const state=readProcessState();const saved=String(state.answers?.sales_motion||"");
-  if(!visible.value&&saved)visible.value=saved;
-  if(!visible.dataset.salesMotionBound){visible.dataset.salesMotionBound="true";visible.addEventListener("input",()=>syncSalesMotionValue(visible));}
-  const question04=grid.querySelector('[data-question="buyer_roles"]')?.closest(".question-card");if(question04&&card.nextElementSibling!==question04)grid.insertBefore(card,question04);
-  renderSalesMotionFeedback(visible);
-  return card;
-}
 function ensureReferenceCustomerTool(){
   const step=document.getElementById("step-2");if(!step||step.querySelector("[data-reference-intelligence-card]"))return;
   const actions=step.querySelector(".step-actions");if(!actions)return;
@@ -107,11 +53,7 @@ function patchMarketLookalikeIsolation(){
   market.buildIcpCandidates=function(profile={},...args){return original({...profile,lookalikeCustomers:""},...args);};
   market.__salesMotionIsolationPatched=true;
 }
-function relabelSalesMotionProfile(){
-  const textarea=document.getElementById("profile-lookalikeCustomers");if(!textarea)return;
-  const field=textarea.closest(".profile-field");const label=field?.querySelector("label");if(label)label.textContent="Sales motion";
-}
-function syncContextArchitecture(){configureSalesMotionQuestion03();ensureReferenceCustomerTool();patchMarketLookalikeIsolation();}
+function syncContextArchitecture(){ensureReferenceCustomerTool();patchMarketLookalikeIsolation();}
 function contextReady(){
   const state=readProcessState();
   const input=document.getElementById("company-website");
@@ -189,7 +131,7 @@ function openProcessStep(step,attempt=0){
   }
   if(target===2)syncContextArchitecture();
   const marker=document.querySelector(`[data-step-marker="${target}"]`);
-  if(marker){marker.dispatchEvent(new MouseEvent("click",{bubbles:true}));if(target===2)setTimeout(syncContextArchitecture,0);if(target===3)setTimeout(relabelSalesMotionProfile,0);setTimeout(syncProcessMap,0);return;}
+  if(marker){marker.dispatchEvent(new MouseEvent("click",{bubbles:true}));if(target===2)setTimeout(syncContextArchitecture,0);setTimeout(syncProcessMap,0);return;}
   if(attempt<20)setTimeout(()=>openProcessStep(target,attempt+1),100);
 }
 if(processMap){
@@ -201,7 +143,7 @@ if(processMap){
   window.addEventListener("leadintel:website-activated",syncProcessMap);
   window.addEventListener("leadintel:server-ready",()=>{syncContextArchitecture();syncProcessMap();});
   window.addEventListener("leadintel:workspace-changed",()=>{syncContextArchitecture();syncProcessMap();});
-  window.addEventListener("leadintel:module-opened",event=>{const step=Number(event.detail?.step);if(step===2)syncContextArchitecture();if(step===3)setTimeout(relabelSalesMotionProfile,0);syncProcessMap();});
+  window.addEventListener("leadintel:module-opened",event=>{const step=Number(event.detail?.step);if(step===2)syncContextArchitecture();syncProcessMap();});
   window.addEventListener("storage",event=>{if(event.key===PROCESS_STORAGE_KEY)syncProcessMap();});
   syncContextArchitecture();syncProcessMap();
 }
