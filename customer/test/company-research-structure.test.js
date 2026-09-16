@@ -15,20 +15,24 @@ const css=read('company-research.css');
 test('Customer V2 loads the automatic company research module with Firecrawl workspace routing before research',()=>{
   assert.match(processMap,/firecrawl-workspace-router\.js\?v=20260914-spinner-hard-stop-v1/);
   assert.match(processMap,/company-research-security\.js\?v=20260906-authoritative-depth-v1/);
-  assert.match(processMap,/company-research-ui\.js\?v=20260916-research-cta-v1/);
+  assert.match(processMap,/company-research-ui\.js\?v=20260916-auto-research-v1/);
   assert.ok(processMap.indexOf('firecrawl-workspace-router.js')<processMap.indexOf('company-research-ui.js'),'Firecrawl router must load before company research');
   assert.match(processMap,/company-profile-handoff\.js\?v=20260826-intelligence-autofill-v1/);
   assert.match(ui,/company-research-engine\.js\?v=20260916-ercon-context-v1/);
   assert.match(read('index.html'),/profile-engine\.js\?v=20260915-brand-identity-v3/);
   assert.match(read('index.html'),/process-map\.js\?v=20260916-ercon-context-v1/);
-  assert.match(read('index.html'),/company-research-ui\.js\?v=20260916-research-cta-v1/);
+  assert.match(read('index.html'),/company-research-ui\.js\?v=20260916-auto-research-v1/);
 });
 
-test('Step 1 navigation opens immediately and keeps company research optional',()=>{
+test('Step 1 navigation opens immediately and initial company research starts automatically once ready',()=>{
   assert.match(ui,/Continue to optional context/);
   assert.match(ui,/rerun-company-research/);
   assert.doesNotMatch(ui,/function interceptStepOne/);
-  assert.doesNotMatch(ui,/to-questionnaire'\)\?\.addEventListener/);
+  assert.match(ui,/function shouldAutoStartCompanyResearch/);
+  assert.match(ui,/function scheduleInitialCompanyResearch/);
+  assert.match(ui,/leadintel:website-activated/);
+  assert.match(ui,/leadintel:module-opened/);
+  assert.match(ui,/LeadIntelWebsiteActivation\?\.isWebsiteActive/);
   assert.doesNotMatch(ui,/stopImmediatePropagation\(\)/);
   assert.match(ui,/MAX_COMPANY_RESEARCH_QUERIES\s*=\s*3/);
   assert.match(ui,/MAX_RESULTS_PER_QUERY\s*=\s*4/);
@@ -87,6 +91,7 @@ test('Step 2 renders research summary, provenance, confidence and needs-input st
   assert.match(ui,/rel="noopener"/);
   assert.match(css,/\.research-summary/);
   assert.match(css,/\.research-rerun\.research-primary/);
+  assert.match(css,/\.research-rerun\{[^}]*color:#0d5d4f/);
   assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
   assert.match(css,/\.research-field-meta/);
   assert.match(css,/\.research-confidence/);

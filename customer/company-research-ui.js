@@ -10,8 +10,9 @@ const MAX_RESULTS_PER_QUERY=4;
 const COMPANY_RESEARCH_REQUEST_TIMEOUT_MS=25000;
 const COMPANY_RESEARCH_RUN_TIMEOUT_MS=60000;
 const COMPANY_RESEARCH_SAVE_TIMEOUT_MS=10000;
-const RELEASE='20260916-research-cta-v1';
+const RELEASE='20260916-auto-research-v1';
 let running=false;
+let autoStartScheduled=false;
 
 const engine=()=>window.LeadIntelCompanyResearch;
 const $=id=>document.getElementById(id);
@@ -70,6 +71,20 @@ function sourceMap(state){
 }
 function metaForCurrentState(){const state=readState(),meta=readMeta();if(!meta?.website||normalizeUrl(meta.website)!==normalizeUrl(state.website))return {};return meta;}
 function modeLabel(meta){if(meta.mode==='ai')return `${meta.provider||'AI'}${meta.model?` · ${meta.model}`:''}`;return 'Evidence draft';}
+function shouldAutoStartCompanyResearch(){
+  if(running)return false;
+  const state=readState();const website=normalizeUrl(state.website);const meta=metaForCurrentState();
+  if(!website||!selectedMarkets(state).length||meta.generatedAt||meta.failureAt)return false;
+  const activationCheck=window.LeadIntelWebsiteActivation?.isWebsiteActive;
+  if(typeof activationCheck==='function')return activationCheck(state,website);
+  return state.websiteActivation?.status==='active'&&normalizeUrl(state.websiteActivation.url)===website;
+}
+function scheduleInitialCompanyResearch(){
+  if(autoStartScheduled||!shouldAutoStartCompanyResearch())return false;
+  autoStartScheduled=true;
+  setTimeout(()=>{autoStartScheduled=false;if(shouldAutoStartCompanyResearch())void runCompanyResearch({rerun:false});},0);
+  return true;
+}
 function renderResearchReview(){
   const state=readState();const meta=metaForCurrentState();const map=sourceMap(state);const summary=$('research-summary');
   if(summary){
@@ -241,7 +256,9 @@ async function runCompanyResearch({rerun=false}={}){
 function bind(){
   ensureResearchUi();
   document.getElementById('step-2')?.addEventListener('click',handleReviewAction);
-  window.addEventListener('leadintel:server-ready',()=>{renderResearchReview();void translateResearchAnswers();});
+  window.addEventListener('leadintel:website-activated',scheduleInitialCompanyResearch);
+  window.addEventListener('leadintel:module-opened',event=>{if(Number(event.detail?.step)===2)scheduleInitialCompanyResearch();});
+  window.addEventListener('leadintel:server-ready',()=>{renderResearchReview();void translateResearchAnswers();scheduleInitialCompanyResearch();});
   window.addEventListener('leadintel:workspace-changed',()=>{renderResearchReview();void translateResearchAnswers();});
   window.addEventListener('leadintel:language-changed',()=>void translateResearchAnswers());
   void translateResearchAnswers();
