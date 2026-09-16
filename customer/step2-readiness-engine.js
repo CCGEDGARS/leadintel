@@ -181,7 +181,7 @@
       };
     };
     engine.mergeDraft=function(existingAnswers={},draft={}){
-      const answers={};const meta={};for(const id of QUESTION_IDS){const existing=clean(existingAnswers[id]);const row=draft[id]||{};if(existing){answers[id]=existing;meta[id]={origin:"user",confidence:"",sourceIds:[],rationale:"Customer-provided context preserved."};}else if(clean(row.value)){answers[id]=clean(row.value);meta[id]={origin:"research",confidence:row.confidence||"low",sourceIds:Array.isArray(row.sourceIds)?row.sourceIds:[],rationale:clean(row.rationale)};}else{answers[id]="";meta[id]={origin:"needs-input",confidence:"",sourceIds:[],rationale:"Insufficient evidence; customer input recommended."};}}return {answers,meta};
+      const answers={};const meta={};for(const id of QUESTION_IDS){const existing=clean(existingAnswers[id]);const row=draft[id]||{};if(existing){answers[id]=existing;meta[id]={origin:"user",confidence:"",sourceIds:[],rationale:"Customer-provided context preserved."};}else if(clean(row.value)){answers[id]=clean(row.value);meta[id]={origin:"research",draftValue:clean(row.value),confidence:row.confidence||"low",sourceIds:Array.isArray(row.sourceIds)?row.sourceIds:[],rationale:clean(row.rationale)};}else{answers[id]="";meta[id]={origin:"needs-input",confidence:"",sourceIds:[],rationale:"Insufficient evidence; customer input recommended."};}}return {answers,meta};
     };
     engine.buildAiPrompt=function({website,targetMarkets=[],sources=[],documents=[]}={}){
       const shape={fields:Object.fromEntries(QUESTION_IDS.map(id=>[id,{value:"",confidence:"high|medium|low",source_ids:["S1"],rationale:"brief evidence reason"}]))};

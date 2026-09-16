@@ -113,12 +113,33 @@ test('draft merge fills blanks but never overwrites a non-empty customer answer'
   assert.equal(merged.answers.buyer_roles,'CEO');
   assert.equal(merged.meta.priority_offers.origin,'user');
   assert.equal(merged.meta.ideal_customer.origin,'research');
+  assert.equal(merged.meta.ideal_customer.draftValue,'Industrial manufacturers');
+});
+
+test('saved research metadata can restore a missing Step 2 draft without overwriting user input',()=>{
+  const recovered=engine.recoverDraftAnswers(
+    {priority_offers:'Customer-entered offer',ideal_customer:''},
+    {
+      priority_offers:{origin:'research',draftValue:'AI offer'},
+      ideal_customer:{origin:'research',draftValue:'Industrial manufacturers'},
+      buyer_roles:{origin:'needs-input',draftValue:'CEO'}
+    }
+  );
+  assert.equal(recovered.priority_offers,'Customer-entered offer');
+  assert.equal(recovered.ideal_customer,'Industrial manufacturers');
+  assert.equal(recovered.buyer_roles,'');
 });
 
 test('review actions are meaningful for research drafts and never show a dead Accept control for preserved user input',()=>{
   assert.deepEqual(engine.reviewActionState({origin:'user',reviewed:true}),{visible:false,label:'',disabled:true});
   assert.deepEqual(engine.reviewActionState({origin:'research',reviewed:false}),{visible:true,label:'Accept',disabled:false});
   assert.deepEqual(engine.reviewActionState({origin:'research',reviewed:true}),{visible:true,label:'Accepted ✓',disabled:true});
+});
+
+test('empty answers cannot retain stale research acceptance metadata',()=>{
+  const row=engine.reconcileResearchField('',{origin:'research',reviewed:true,confidence:'high',sourceIds:['S1'],rationale:'Old evidence'});
+  assert.deepEqual(row,{origin:'needs-input',reviewed:false,confidence:'',sourceIds:[],rationale:''});
+  assert.deepEqual(engine.reviewActionState(row),{visible:false,label:'',disabled:true});
 });
 
 test('deterministic fallback is conservative and leaves unsupported commercial claims blank',()=>{

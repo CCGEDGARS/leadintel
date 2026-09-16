@@ -89,6 +89,13 @@ test('research review persists draft, accepted and user-edited states into the s
   assert.match(layer,/answerStatus/);
 });
 
+test('the Step 2 research patch retains each generated value as recoverable draft metadata',()=>{
+  const merged=research.mergeDraft({}, {
+    ideal_customer:{value:'Industrial manufacturers',confidence:'medium',sourceIds:['S1'],rationale:'Evidence'}
+  });
+  assert.equal(merged.meta.ideal_customer.draftValue,'Industrial manufacturers');
+});
+
 test('readiness UI explains confirmed core inputs instead of presenting a vague completeness percentage',()=>{
   assert.match(layer,/Profile readiness/);
   assert.match(layer,/core inputs confirmed/i);

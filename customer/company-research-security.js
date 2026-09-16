@@ -1,4 +1,4 @@
-import './company-research-engine.js?v=20260916-ercon-context-v1';
+import './company-research-engine.js?v=20260916-step2-draft-handoff-v1';
 
 const engine=window.LeadIntelCompanyResearch;
 const MAX_AI_WEB_CHARS=3200;

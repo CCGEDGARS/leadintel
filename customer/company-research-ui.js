@@ -1,4 +1,4 @@
-import './company-research-engine.js?v=20260916-ercon-context-v1';
+import './company-research-engine.js?v=20260916-step2-draft-handoff-v1';
 import './content-language.js?v=20260916-campaign-language-v3';
 
 const MAIN_STORAGE_KEY='leadintel_customer_v2_state';
@@ -85,8 +85,17 @@ function scheduleInitialCompanyResearch(){
   setTimeout(()=>{autoStartScheduled=false;if(shouldAutoStartCompanyResearch())void runCompanyResearch({rerun:false});},0);
   return true;
 }
+function repairResearchHandoff(state,meta){
+  if(!meta.generatedAt)return false;
+  const recovered=engine()?.recoverDraftAnswers?.(state.answers||{},meta.fields||{});if(!recovered)return false;
+  const changed=engine().QUESTION_IDS.some(id=>String(recovered[id]||'').trim()!==String(state.answers?.[id]||'').trim());
+  if(!changed)return false;
+  state.answers=recovered;writeState(state);
+  window.dispatchEvent(new CustomEvent('leadintel:company-research-updated',{detail:{website:state.website,recovered:true}}));
+  return true;
+}
 function renderResearchReview(){
-  const state=readState();const meta=metaForCurrentState();const map=sourceMap(state);const summary=$('research-summary');
+  const state=readState();const meta=metaForCurrentState();repairResearchHandoff(state,meta);const map=sourceMap(state);const summary=$('research-summary');
   if(summary){
     summary.classList.remove('research-summary-failed');
     if(meta.generatedAt){
