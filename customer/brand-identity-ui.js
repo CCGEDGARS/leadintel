@@ -57,7 +57,7 @@
       async import(kind, url, identity) {
         const api = server();
         if (typeof api?.importBrandAsset !== 'function') return unavailable('import');
-        return api.importBrandAsset(kind, url, {mutation: {operation: 'replace', kind}, returnTransaction: true});
+        return api.importBrandAsset(kind, url, {expectedWebsite: identity.website, altText: identity.companyDisplayName ? identity.companyDisplayName + ' logo' : 'Company logo', mutation: {operation: 'replace', kind}, returnTransaction: true});
       },
       async delete(kind, asset, identity) {
         const api = server();
@@ -127,7 +127,7 @@
 
     async function applyLogoSuggestion() {
       if (!suggestions.logoUrl) throw new Error('No verified logo suggestion is available.');
-      throw new Error('For security, download the suggested logo and upload it using the Logo field. LeadIntel does not import or hotlink remote images.');
+      return replaceAsset('logo', suggestions.logoUrl);
     }
 
     async function replaceAsset(kind, source) {
@@ -448,7 +448,7 @@
       }
       area.innerHTML = entries.map(([key, suggestion]) =>
         `<article class="brand-suggestion-item"><span>${escapeHtml(fieldLabel(key))}</span><strong>${escapeHtml(suggestion)}</strong><button class="text-btn" type="button" data-brand-suggestion="${key}">Apply</button></article>`
-      ).join('') + (logo ? `<article class="brand-suggestion-item"><span>Logo</span><strong>Verified website image</strong><p>For security, download this image and upload it using the Logo field. LeadIntel never hotlinks remote images in sent email.</p><a class="text-btn" href="${escapeHtml(logo)}" target="_blank" rel="noopener noreferrer" data-brand-logo-download>Download image</a></article>` : '');
+      ).join('') + (logo ? `<article class="brand-suggestion-item"><span>Logo</span><strong>Verified website image</strong><p>Copy this same-site image into secure LeadIntel storage. If the website blocks copying, download it and use Upload or replace.</p><button class="secondary-btn" type="button" data-brand-logo-copy>Copy logo securely</button> <a class="text-btn" href="${escapeHtml(logo)}" target="_blank" rel="noopener noreferrer" data-brand-logo-download>Download image</a></article>` : '');
     }
 
     function renderPreview(tab) {
@@ -513,6 +513,15 @@
       finally { button.disabled = false; }
     });
     byId('brand-suggestions').addEventListener('click', async event => {
+      const logoButton = event.target.closest('[data-brand-logo-copy]');
+      if (logoButton) {
+        logoButton.disabled = true;
+        byId('brand-action-error').textContent = '';
+        try { await controller.applyLogoSuggestion(); renderAssets(); }
+        catch (error) { byId('brand-action-error').textContent = error.message; }
+        finally { logoButton.disabled = false; }
+        return;
+      }
       const button = event.target.closest('[data-brand-suggestion]');
       if (!button) return;
       controller.applySuggestion(button.dataset.brandSuggestion);

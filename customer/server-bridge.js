@@ -2,7 +2,7 @@
   'use strict';
   if(root.LeadIntelServerBridge)return;
   const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
-  const ASSET_VERSION='20260916-brand-assets-v9';
+  const ASSET_VERSION='20260916-brand-assets-v10';
   const asset=path=>`${path}?v=${ASSET_VERSION}`;
   const KEYS={main:'leadintel_customer_v2_state',discovery:'leadintel_customer_v2_discovery',outreach:'leadintel_customer_v2_outreach',delivery:'leadintel_customer_v2_delivery',meta:'leadintel_customer_v2_discovery_meta'};
   const WORKSPACE_KEY='leadintel_customer_v2_workspace';
@@ -139,12 +139,13 @@
   }
   async function deleteBrandAssetRequest(context,id){
     const {response,payload}=await api(`/api/customer/brand-assets/${encodeURIComponent(id)}?workspace_id=${encodeURIComponent(context.workspaceId)}`,{method:'DELETE'});
+    if(response.status===409&&payload?.retained===true)return {ok:true,status:409,...payload};
     if(!response.ok&&response.status!==404)throw assetError(response,payload,'Brand asset removal failed');
     return {ok:true,status:response.status,...payload};
   }
   async function cleanupManagedAsset(context,asset,reason){
     if(!asset?.id||!BRAND_ASSET_ID.test(String(asset.id)))return {deleted:true,queued:false};
-    try{const result=await deleteBrandAssetRequest(context,String(asset.id));return {deleted:true,queued:false,result};}
+    try{const result=await deleteBrandAssetRequest(context,String(asset.id));return {deleted:result.status!==409,retained:result.status===409,queued:false,result};}
     catch(error){const queue=queueBrandAssetCleanup({workspaceId:context.workspaceId,kind:context.kind,id:String(asset.id),reason});return {deleted:false,queued:queue.queued,warning:queue.warning,error,queueError:queue.error};}
   }
   async function flushBrandAssetCleanup(){
@@ -183,7 +184,9 @@
       emitBrandAssetEvent('leadintel:brand-asset-transaction',{workspaceId:context.workspaceId,kind:context.kind,committed:false,rollbackDeleted:rollback.deleted,cleanupQueued:rollback.queued,cleanupWarning:Boolean(rollback.warning)});
       throw cause;
     }
-    const retired={deleted:false,queued:false,retained:Boolean(previousAsset?.id&&previousAsset.id!==safeNext.id)};
+    const retired=previousAsset?.id&&previousAsset.id!==safeNext.id
+      ?await cleanupManagedAsset(context,previousAsset,'replaced')
+      :{deleted:false,queued:false,retained:false};
     emitBrandAssetEvent('leadintel:brand-asset-transaction',{workspaceId:context.workspaceId,kind:context.kind,committed:true,rollbackDeleted:false,cleanupQueued:retired.queued,cleanupWarning:Boolean(retired.warning)});
     return assetTransactionResult(options,safeNext,nextIdentity,retired);
   }
@@ -202,13 +205,23 @@
   }
   async function importBrandAsset(kind,url,options={}){
     const context=brandAssetContext(kind);
-    const operation=captureBrandAssetOperation(context);
-    return runBrandAssetTransaction(context,async()=>{
-      const {response,payload}=await api(`/api/customer/brand-assets/import?workspace_id=${encodeURIComponent(context.workspaceId)}`,{method:'POST',body:JSON.stringify({kind:context.kind,url:String(url||''),alt_text:typeof options.altText==='string'?options.altText.trim():''})});
-      if(!response.ok)throw assetError(response,payload,'Brand asset import failed');
-      if(!payload?.asset)throw new Error('Brand asset import returned no managed asset');
-      return commitBrandAssetReplacement(context,payload.asset,options,operation);
-    });
+    const fallback='Automatic logo copy was blocked by the website or browser. Download the image and upload it using the Logo field.';
+    let source,website;
+    try{source=new URL(String(url||''));website=new URL(String(options.expectedWebsite||''));}catch{throw new Error(fallback);}
+    if(source.protocol!=='https:'||website.protocol!=='https:'||source.origin!==website.origin)throw new Error(fallback);
+    let response;
+    try{response=await fetch(source.href,{method:'GET',mode:'cors',credentials:'omit',referrerPolicy:'no-referrer',redirect:'error',headers:{Accept:'image/png,image/jpeg,image/webp'}});}
+    catch{throw new Error(fallback);}
+    if(!response.ok||!response.url||new URL(response.url).origin!==source.origin)throw new Error(fallback);
+    const mimeType=String(response.headers.get('Content-Type')||'').split(';',1)[0].trim().toLowerCase();
+    const limit=context.kind==='logo'?2*1024*1024:5*1024*1024;
+    const declaredSize=Number(response.headers.get('Content-Length'));
+    if(!['image/png','image/jpeg','image/webp'].includes(mimeType)||(Number.isFinite(declaredSize)&&declaredSize>limit))throw new Error(fallback);
+    const blob=await response.blob();
+    if(blob.size<1||blob.size>limit||String(blob.type||'').split(';',1)[0].toLowerCase()!==mimeType)throw new Error(fallback);
+    const extension={'image/png':'png','image/jpeg':'jpg','image/webp':'webp'}[mimeType];
+    const file=typeof File==='function'?new File([blob],`website-${context.kind}.${extension}`,{type:mimeType}):blob;
+    return uploadBrandAsset(context.kind,file,{...options,altText:options.altText||'Company logo'});
   }
   function removalResult(options,deleted,identity,cleanup){return options?.returnTransaction?{asset:null,identity,cleanupQueued:Boolean(cleanup?.queued),cleanupWarning:Boolean(cleanup?.warning)}:deleted;}
   function cancelBrandAssetRemoval(context){const result={cancelled:true,reset:true,asset:null,identity:null,cleanupQueued:false,cleanupWarning:false};emitBrandAssetEvent('leadintel:brand-asset-transaction',{workspaceId:context.workspaceId,kind:context.kind,committed:false,cancelled:true,reset:true,removed:false,cleanupQueued:false,cleanupWarning:false});return result;}
@@ -223,7 +236,7 @@
       const saved=await saveNow({saveIntent:true});
       if(!saved?.saved)throw new Error(saved?.conflict?'Workspace save conflict':'Workspace save failed');
     }catch(cause){rollbackBrandAssetMutation(context,null,previousAsset);throw cause;}
-    const cleanup={deleted:false,queued:false,retained:true,result:{ok:true,status:200,asset_id:previousAsset.id,retained:true}};
+    const cleanup=await cleanupManagedAsset(context,previousAsset,'removed');
     emitBrandAssetEvent('leadintel:brand-asset-transaction',{workspaceId:context.workspaceId,kind:context.kind,committed:true,removed:true,cleanupQueued:cleanup.queued,cleanupWarning:Boolean(cleanup.warning)});
     return removalResult(options,cleanup.result||{ok:cleanup.deleted,status:cleanup.deleted?200:0,asset_id:previousAsset.id,queued:cleanup.queued,cleanup_warning:Boolean(cleanup.warning)},nextIdentity,cleanup);
   }

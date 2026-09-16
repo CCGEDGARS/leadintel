@@ -505,6 +505,49 @@ test('workspace reset deletion removes every current and retained workspace asse
   assert.deepEqual(owner.events,[['audit','brand_asset.workspace_reset_deleted'],['delete',brandAssetObjectKey(retainedId)],['audit','brand_asset.workspace_reset_deleted'],['delete',brandAssetObjectKey(currentId)]]);
 });
 
+test('single-asset delete preserves approved snapshot references and returns a stable retained result',async()=>{
+  const assetId=randomId('q');
+  const owner=await fixture('owner',{outreach:{items:[{approved:true,brandSnapshot:{status:'ready',assets:{logo:{id:assetId}}}}]}});
+  owner.env.BRAND_ASSETS.objects.set(brandAssetObjectKey(assetId),{bytes:png(),httpMetadata:{contentType:'image/png'},customMetadata:await validatedMetadataWithDigest(png(),{workspaceId:owner.workspaceId})});
+  owner.events.length=0;
+
+  const response=await handleBrandAssetRoute(request(`/api/customer/brand-assets/${assetId}?workspace_id=${owner.workspaceId}`,{method:'DELETE',token:owner.token}),owner.env,{});
+
+  assert.equal(response.status,409);
+  assert.deepEqual(await response.json(),{ok:true,asset_id:assetId,retained:true,reason:'workspace_reference'});
+  assert.equal(owner.env.BRAND_ASSETS.objects.has(brandAssetObjectKey(assetId)),true);
+  assert.deepEqual(owner.events,[]);
+  assert.deepEqual(owner.DB.stateQueries,[owner.workspaceId]);
+});
+
+test('single-asset delete audits and revokes an unreferenced object after state save',async()=>{
+  const assetId=randomId('p');
+  const owner=await fixture('owner',{main:{brandIdentity:{assets:{logo:null}}},outreach:{items:[]}});
+  owner.env.BRAND_ASSETS.objects.set(brandAssetObjectKey(assetId),{bytes:png(),httpMetadata:{contentType:'image/png'},customMetadata:await validatedMetadataWithDigest(png(),{workspaceId:owner.workspaceId})});
+  owner.events.length=0;
+
+  const response=await handleBrandAssetRoute(request(`/api/customer/brand-assets/${assetId}?workspace_id=${owner.workspaceId}`,{method:'DELETE',token:owner.token}),owner.env,{});
+
+  assert.equal(response.status,200);
+  assert.deepEqual(await response.json(),{ok:true,asset_id:assetId,deleted:true});
+  assert.equal(owner.env.BRAND_ASSETS.objects.has(brandAssetObjectKey(assetId)),false);
+  assert.deepEqual(owner.events,[['audit','brand_asset.deleted'],['delete',brandAssetObjectKey(assetId)]]);
+});
+
+test('single-asset delete cannot inspect or delete another workspace object',async()=>{
+  const assetId=randomId('o');
+  const owner=await fixture('owner',{outreach:{items:[]}});
+  owner.env.BRAND_ASSETS.objects.set(brandAssetObjectKey(assetId),{bytes:png(),httpMetadata:{contentType:'image/png'},customMetadata:await validatedMetadataWithDigest(png(),{workspaceId:'foreign-workspace'})});
+  owner.events.length=0;
+
+  const response=await handleBrandAssetRoute(request(`/api/customer/brand-assets/${assetId}?workspace_id=${owner.workspaceId}`,{method:'DELETE',token:owner.token}),owner.env,{});
+
+  assert.equal(response.status,403);
+  assert.equal(owner.env.BRAND_ASSETS.objects.has(brandAssetObjectKey(assetId)),true);
+  assert.deepEqual(owner.events,[]);
+  assert.deepEqual(owner.DB.stateQueries,[]);
+});
+
 test('workspace reset paginates beyond 10,000 foreign assets and still deletes the owned asset',async()=>{
   const owner=await fixture();owner.env.BRAND_ASSETS.pageSize=997;
   for(let index=0;index<10_050;index++){

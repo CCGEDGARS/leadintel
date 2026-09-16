@@ -541,6 +541,43 @@ export async function deleteBrandAsset(env,{workspaceId,assetId,userId,eventType
   await requireBinding(env).delete(key);
 }
 
+function referencedAssetIds(payload){
+  const ids=new Set();
+  const addAssets=assets=>{
+    if(!assets||typeof assets!=='object'||Array.isArray(assets))return;
+    for(const value of Object.values(assets)){
+      const id=String(value?.id||'');
+      if(ASSET_ID.test(id))ids.add(id);
+    }
+  };
+  addAssets(payload?.main?.brandIdentity?.assets);
+  const items=Array.isArray(payload?.outreach?.items)?payload.outreach.items:[];
+  for(const item of items){
+    if(item?.approved===true&&item.brandSnapshot&&typeof item.brandSnapshot==='object')addAssets(item.brandSnapshot.assets);
+  }
+  return ids;
+}
+
+async function workspaceAssetReferences(env,workspaceId){
+  if(!env.DB?.prepare)throw new BrandAssetError('Workspace state is unavailable',503);
+  let row;
+  try{row=await env.DB.prepare('SELECT payload_json FROM customer_workspace_state WHERE workspace_id=?').bind(workspaceId).first();}
+  catch{throw new BrandAssetError('Workspace state is unavailable',503);}
+  if(!row)return new Set();
+  try{return referencedAssetIds(JSON.parse(row.payload_json||'{}'));}
+  catch{throw new BrandAssetError('Workspace state is invalid',503);}
+}
+
+export async function deleteBrandAssetIfUnreferenced(env,{workspaceId,assetId,userId}){
+  await requireAssetOwner(env,workspaceId,assetId);
+  const references=await workspaceAssetReferences(env,workspaceId);
+  if(references.has(String(assetId))){
+    return {deleted:false,retained:true,reason:'workspace_reference'};
+  }
+  await deleteBrandAsset(env,{workspaceId,assetId,userId,eventType:'brand_asset.deleted'});
+  return {deleted:true,retained:false};
+}
+
 export async function replaceBrandAsset(env,{workspaceId,userId,previousAssetId,nextAsset,saveMetadata}){
   if(typeof saveMetadata!=='function'){
     throw new TypeError('saveMetadata must be a function');
@@ -794,13 +831,9 @@ export async function handleBrandAssetRoute(request,env,cors={}){
       if(access.error){
         return error(access.error,access.status,cors);
       }
-      await deleteBrandAsset(env,{
-        workspaceId,
-        assetId,
-        userId:access.user.id,
-        eventType:'brand_asset.deleted'
-      });
-      return json({ok:true,asset_id:assetId},200,cors);
+      const result=await deleteBrandAssetIfUnreferenced(env,{workspaceId,assetId,userId:access.user.id});
+      if(result.retained)return json({ok:true,asset_id:assetId,retained:true,reason:result.reason},409,cors);
+      return json({ok:true,asset_id:assetId,deleted:true},200,cors);
     }
     return error('Method not allowed',405,cors);
   }catch(cause){

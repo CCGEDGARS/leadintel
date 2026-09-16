@@ -5,6 +5,7 @@ const path=require('node:path');
 const vm=require('node:vm');
 const Outreach=require('../outreach-engine.js');
 const Delivery=require('../delivery-engine.js');
+const LOGO_ID='l'.repeat(43);
 
 const readyIdentity={
   schemaVersion:1,
@@ -21,7 +22,7 @@ const readyIdentity={
   legalFooter:'Confidential commercial communication.',
   postalAddress:'Riga, Latvia',
   assets:{
-    logo:{id:'logo_7',url:'https://leadintel-api.edgars-7e7.workers.dev/api/customer/brand-assets/logo_7',mimeType:'image/png',width:320,height:80,altText:'SellerCo logo',updatedAt:'2026-09-15T20:00:00.000Z'},
+    logo:{id:LOGO_ID,url:`https://leadintel-api.edgars-7e7.workers.dev/api/customer/brand-assets/${LOGO_ID}`,mimeType:'image/png',width:320,height:80,altText:'SellerCo logo',updatedAt:'2026-09-15T20:00:00.000Z'},
     headshot:null,
     banner:null
   },
@@ -59,14 +60,14 @@ test('approval freezes the valid ready identity revision and resolved managed as
   const approved=Outreach.approveOutreachItem(item(),item().drafts,'2026-09-15T21:00:00.000Z',{brandIdentity:source});
   assert.equal(approved.approved,true);
   assert.equal(approved.brandSnapshot.revision,7);
-  assert.equal(approved.brandSnapshot.assets.logo.id,'logo_7');
+  assert.equal(approved.brandSnapshot.assets.logo.id,LOGO_ID);
   assert.ok(Object.isFrozen(approved.brandSnapshot));
   assert.ok(Object.isFrozen(approved.brandSnapshot.assets));
 
   source.senderName='Changed Later';
   source.assets.logo.id='changed-later';
   assert.equal(approved.brandSnapshot.senderName,'Anna Seller');
-  assert.equal(approved.brandSnapshot.assets.logo.id,'logo_7');
+  assert.equal(approved.brandSnapshot.assets.logo.id,LOGO_ID);
 });
 
 test('manual Gmail compose and Gmail/Microsoft API payloads ignore later draft mutations and use the frozen rendering',()=>{
@@ -122,7 +123,7 @@ test('automatic handoff uses the frozen plain-text source and never queues snaps
   assert.equal(queued.body,approved.approvedSource.emailBody);
   assert.equal(queued.followup_body,approved.approvedSource.followUp);
   assert.notEqual(queued.body,preview.textBody);
-  assert.doesNotMatch(queued.body,/Anna Seller|Confidential commercial communication|logo_7/);
+  assert.doesNotMatch(queued.body,new RegExp(`Anna Seller|Confidential commercial communication|${LOGO_ID}`));
   assert.equal('htmlBody' in queued,false);
   assert.equal('brandSnapshot' in queued,false);
   assert.equal(queued.recipient,'buyer@example.com');

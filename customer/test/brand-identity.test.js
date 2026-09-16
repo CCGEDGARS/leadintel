@@ -7,6 +7,9 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const BrandIdentity = require('../brand-identity.js');
+const LOGO_ID = 'l'.repeat(43);
+const HEADSHOT_ID = 'h'.repeat(43);
+const BANNER_ID = 'b'.repeat(43);
 
 const readyIdentity = {
   schemaVersion: 1,
@@ -29,8 +32,8 @@ const readyIdentity = {
   },
   assets: {
     logo: {
-      id: 'logo_01',
-      url: '/api/customer/brand-assets/logo_01',
+      id: LOGO_ID,
+      url: '/api/customer/brand-assets/' + LOGO_ID,
       mimeType: 'image/png',
       width: 280,
       height: 96,
@@ -148,8 +151,8 @@ test('model rejects oversized payload fields and constrains restored values to p
 
 test('safeAssetReference keeps only approved metadata and rejects data, remote, and mismatched URLs', () => {
   const source = {
-    id: 'logo_01',
-    url: '/api/customer/brand-assets/logo_01',
+    id: LOGO_ID,
+    url: '/api/customer/brand-assets/' + LOGO_ID,
     mimeType: 'image/png',
     width: 280,
     height: 96,
@@ -160,8 +163,8 @@ test('safeAssetReference keeps only approved metadata and rejects data, remote, 
   };
 
   assert.deepEqual(BrandIdentity.safeAssetReference(source), {
-    id: 'logo_01',
-    url: 'https://leadintel-api.edgars-7e7.workers.dev/api/customer/brand-assets/logo_01',
+    id: LOGO_ID,
+    url: 'https://leadintel-api.edgars-7e7.workers.dev/api/customer/brand-assets/' + LOGO_ID,
     mimeType: 'image/png',
     width: 280,
     height: 96,
@@ -169,7 +172,7 @@ test('safeAssetReference keeps only approved metadata and rejects data, remote, 
     updatedAt: '2026-09-15T12:00:00.000Z'
   });
   assert.equal(BrandIdentity.safeAssetReference({...source, url: 'data:image/png;base64,AAAA'}), null);
-  assert.equal(BrandIdentity.safeAssetReference({...source, url: 'https://images.example/logo_01'}), null);
+  assert.equal(BrandIdentity.safeAssetReference({...source, url: 'https://images.example/' + LOGO_ID}), null);
   assert.equal(BrandIdentity.safeAssetReference({...source, url: '/api/customer/brand-assets/different'}), null);
   assert.equal(BrandIdentity.safeAssetReference({...source, mimeType: 'image/svg+xml'}), null);
 });
@@ -184,15 +187,15 @@ test('managed asset routes become absolute allowlisted LeadIntel API URLs in del
 
   assert.equal(
     safeLogo.url,
-    'https://leadintel-api.edgars-7e7.workers.dev/api/customer/brand-assets/logo_01'
+    'https://leadintel-api.edgars-7e7.workers.dev/api/customer/brand-assets/' + LOGO_ID
   );
   assert.match(
     rendered.htmlBody,
-    /src="https:\/\/leadintel-api\.edgars-7e7\.workers\.dev\/api\/customer\/brand-assets\/logo_01"/
+    new RegExp('src="https://leadintel-api\\.edgars-7e7\\.workers\\.dev/api/customer/brand-assets/' + LOGO_ID + '"')
   );
   assert.equal(BrandIdentity.safeAssetReference({
     ...readyIdentity.assets.logo,
-    url: 'https://images.example/api/customer/brand-assets/logo_01'
+    url: 'https://images.example/api/customer/brand-assets/' + LOGO_ID
   }), null);
 });
 
@@ -265,8 +268,8 @@ test('renderEmail gives every managed image explicit non-tiny horizontal and ver
   const identity = structuredClone(readyIdentity);
   identity.options.includeHeadshot = true;
   identity.options.includeBanner = true;
-  identity.assets.headshot = {...identity.assets.logo, id: 'headshot_01', url: '/api/customer/brand-assets/headshot_01'};
-  identity.assets.banner = {...identity.assets.logo, id: 'banner_01', url: '/api/customer/brand-assets/banner_01'};
+  identity.assets.headshot = {...identity.assets.logo, id: HEADSHOT_ID, url: '/api/customer/brand-assets/' + HEADSHOT_ID};
+  identity.assets.banner = {...identity.assets.logo, id: BANNER_ID, url: '/api/customer/brand-assets/' + BANNER_ID};
 
   const rendered = BrandIdentity.renderEmail({subject: 'Bounded images', bodyText: 'Hello', brandSnapshot: identity});
   const imageTags = rendered.htmlBody.match(/<img\b[^>]*>/g) || [];

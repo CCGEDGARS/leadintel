@@ -12,7 +12,7 @@ const indexSource = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'u
 const processMapSource = fs.readFileSync(path.join(__dirname, '..', 'process-map.js'), 'utf8');
 const API = 'https://leadintel-api.edgars-7e7.workers.dev';
 const WORKSPACE_ID = 'workspace-1';
-const CACHE_VERSION = '20260916-brand-assets-v9';
+const CACHE_VERSION = '20260916-brand-assets-v10';
 const CLEANUP_KEY = 'leadintel_customer_v2_brand_asset_cleanup_v1';
 
 function storage(initial = {}) {
@@ -123,32 +123,58 @@ test('uploadBrandAsset sends authenticated multipart data scoped to the selected
   assert.equal(JSON.parse(calls[1].options.body).payload.main.brandIdentity.assets.logo.id, expected.id);
 });
 
-test('importBrandAsset and retained removal are workspace scoped and fail closed', async () => {
+test('browser-mediated logo copy omits credentials and persists only the managed upload', async () => {
   const calls = [];
   const imported = asset('b'.repeat(43));
   const {bridge} = loadBridge(async (url, options) => {
     calls.push({url, options});
-    if (url.includes('/import')) return new Response(JSON.stringify({asset: imported}), {status: 201});
+    if (url === 'https://www.example.com/logo.png') {
+      const response = new Response(new Blob(['logo'], {type: 'image/png'}), {status: 200, headers: {'Content-Type': 'image/png', 'Content-Length': '4'}});
+      Object.defineProperty(response, 'url', {value: url});
+      return response;
+    }
+    if (url.includes('/brand-assets?') && options.method === 'POST') return new Response(JSON.stringify({asset: imported}), {status: 201});
     if (url.includes('/customer/state')) return new Response(JSON.stringify({version: 1}), {status: 200});
     return new Response(JSON.stringify({ok: true, asset_id: imported.id}), {status: 200});
   });
 
-  assertAssetValue(await bridge.importBrandAsset('logo', 'https://www.example.com/logo.png', {altText: 'Logo'}), imported);
+  assertAssetValue(await bridge.importBrandAsset('logo', 'https://www.example.com/logo.png', {expectedWebsite: 'https://www.example.com/', altText: 'Logo'}), imported);
   const deletion = await bridge.deleteBrandAsset('logo', imported);
   assert.equal(deletion.ok, true);
   assert.equal(deletion.status, 200);
   assert.equal(deletion.asset_id, imported.id);
-  assert.equal(deletion.retained, true);
-  assert.equal(calls[0].url, `${API}/api/customer/brand-assets/import?workspace_id=${WORKSPACE_ID}`);
-  assert.deepEqual(JSON.parse(calls[0].options.body), {kind: 'logo', url: 'https://www.example.com/logo.png', alt_text: 'Logo'});
-  assert.equal(calls[1].url, `${API}/api/customer/state?workspace_id=${WORKSPACE_ID}`);
+  assert.equal(calls[0].options.credentials, 'omit');
+  assert.equal(calls[0].options.referrerPolicy, 'no-referrer');
+  assert.equal(calls[0].options.redirect, 'error');
+  assert.equal(calls[1].url, `${API}/api/customer/brand-assets?workspace_id=${WORKSPACE_ID}`);
+  assert.ok(calls[1].options.body instanceof FormData);
   assert.equal(calls[2].url, `${API}/api/customer/state?workspace_id=${WORKSPACE_ID}`);
-  assert.equal(JSON.parse(calls[2].options.body).payload.main.brandIdentity.assets.logo, null);
-  assert.equal(calls.length, 3);
-  assert.equal(calls.some(call => call.url.includes(`/brand-assets/${imported.id}`) && call.options.method === 'DELETE'), false);
+  assert.equal(calls[3].url, `${API}/api/customer/state?workspace_id=${WORKSPACE_ID}`);
+  assert.equal(JSON.parse(calls[3].options.body).payload.main.brandIdentity.assets.logo, null);
+  assert.equal(calls[4].url, `${API}/api/customer/brand-assets/${imported.id}?workspace_id=${WORKSPACE_ID}`);
+  assert.equal(calls.some(call => call.url.includes('/brand-assets/import')), false);
 
   const {bridge: failing} = loadBridge(async () => new Response(JSON.stringify({error: 'Workspace access denied'}), {status: 403}));
   await assert.rejects(() => failing.deleteBrandAsset('logo', imported), /Workspace access denied/);
+});
+
+test('browser-mediated logo copy fails closed with a download-and-upload fallback', async () => {
+  const calls = [];
+  const {bridge} = loadBridge(async (url, options) => {
+    calls.push({url: String(url), options});
+    throw new TypeError('CORS blocked');
+  });
+
+  await assert.rejects(
+    () => bridge.importBrandAsset('logo', 'https://www.example.com/logo.png', {expectedWebsite: 'https://www.example.com/'}),
+    /Download the image and upload it using the Logo field/i
+  );
+  await assert.rejects(
+    () => bridge.importBrandAsset('logo', 'https://cdn.example.com/logo.png', {expectedWebsite: 'https://www.example.com/'}),
+    /Download the image and upload it using the Logo field/i
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(calls.some(call => call.url.includes('leadintel-api')), false);
 });
 
 test('a failed replacement request cannot mutate the previously saved asset metadata', async () => {
@@ -188,7 +214,7 @@ test('failed identity persistence rolls back the new object and preserves old me
   assert.equal(transaction.detail.rollbackDeleted, true);
 });
 
-test('successful identity persistence retains the old object for immutable approved snapshots', async () => {
+test('successful identity persistence deletes an unreferenced replaced object', async () => {
   const oldAsset = asset('i'.repeat(43));
   const nextAsset = asset('j'.repeat(43));
   const main = JSON.stringify({brandIdentity: {status: 'ready', assets: {logo: oldAsset}}});
@@ -197,17 +223,18 @@ test('successful identity persistence retains the old object for immutable appro
     calls.push({url, options});
     if (url.includes('/brand-assets?')) return new Response(JSON.stringify({asset: nextAsset}), {status: 201});
     if (url.includes('/customer/state')) return new Response(JSON.stringify({version: 2}), {status: 200});
+    if (url.includes(oldAsset.id) && options.method === 'DELETE') return new Response(JSON.stringify({ok: true, asset_id: oldAsset.id, deleted: true}), {status: 200});
     throw new Error(`Unexpected request: ${url}`);
   }, {leadintel_customer_v2_state: main});
 
   assertAssetValue(await bridge.uploadBrandAsset('logo', new Blob(['new'], {type: 'image/png'})), nextAsset);
   assert.equal(JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).brandIdentity.assets.logo.id, nextAsset.id);
   assert.equal(localStorage.getItem(CLEANUP_KEY), null);
-  assert.equal(calls.some(call => call.url.includes(oldAsset.id)), false);
+  assert.equal(calls.some(call => call.url.includes(oldAsset.id) && call.options.method === 'DELETE'), true);
   assert.equal(events.find(event => event.type === 'leadintel:brand-asset-transaction').detail.cleanupQueued, false);
 });
 
-test('post-commit replacement does not touch the cleanup queue because the old object is retained', async () => {
+test('post-commit replacement reports a visible warning if failed cleanup cannot be queued', async () => {
   const oldAsset = asset('v'.repeat(43));
   const nextAsset = asset('w'.repeat(43));
   const main = JSON.stringify({brandIdentity: {status: 'ready', senderName: 'Alex', assets: {logo: oldAsset}}});
@@ -226,12 +253,12 @@ test('post-commit replacement does not touch the cleanup queue because the old o
 
   assert.equal(result.identity.assets.logo.id, nextAsset.id);
   assert.equal(result.cleanupQueued, false);
-  assert.equal(result.cleanupWarning, false);
+  assert.equal(result.cleanupWarning, true);
   assert.equal(JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).brandIdentity.assets.logo.id, nextAsset.id);
-  assert.equal(events.some(event => event.type === 'leadintel:brand-asset-cleanup-warning'), false);
+  assert.equal(events.some(event => event.type === 'leadintel:brand-asset-cleanup-warning'), true);
   const transaction = events.find(event => event.type === 'leadintel:brand-asset-transaction');
   assert.equal(transaction.detail.committed, true);
-  assert.equal(transaction.detail.cleanupWarning, false);
+  assert.equal(transaction.detail.cleanupWarning, true);
 });
 
 test('real UI and bridge chain has one persistence owner and adopts the committed Draft identity without another save', async () => {
@@ -559,7 +586,12 @@ test('reset generation cancels an in-flight import after empty reset cleanup has
   const deletedAssetIds = [];
   const {bridge, localStorage, sandbox} = loadProductionComposition(async (url, options = {}) => {
     const value = String(url);
-    if (value.includes('/brand-assets/import')) {
+    if (value === 'https://example.com/logo.png') {
+      const response = new Response(new Blob(['logo'], {type: 'image/png'}), {status: 200, headers: {'Content-Type': 'image/png'}});
+      Object.defineProperty(response, 'url', {value});
+      return response;
+    }
+    if (value.includes('/brand-assets?') && options.method === 'POST') {
       importStarted.resolve();
       await releaseImport.promise;
       return new Response(JSON.stringify({asset: importedAsset}), {status: 201});
@@ -584,7 +616,7 @@ test('reset generation cancels an in-flight import after empty reset cleanup has
   const button = {dataset: {resetArmed: 'true'}};
   const event = {target: {closest(selector) { return selector === '#reset-workspace' ? button : null; }}};
 
-  const importing = bridge.importBrandAsset('logo', 'https://example.com/logo.png', {returnTransaction: true});
+  const importing = bridge.importBrandAsset('logo', 'https://example.com/logo.png', {expectedWebsite: 'https://example.com/', returnTransaction: true});
   await importStarted.promise;
   sandbox.LeadIntelWorkspaceResetHygiene.handleResetClick(event);
   sandbox.LeadIntelWorkspacePersistence.handleResetClick(event);
@@ -993,7 +1025,7 @@ test('workspace transaction queue prevents a failed stale replacement from resto
   assert.equal(results[1].status, 'fulfilled');
   assert.equal(JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).brandIdentity.assets.logo.id, secondAsset.id);
   assert.equal(deleted.filter(url => url.includes(firstAsset.id)).length, 1);
-  assert.equal(deleted.filter(url => url.includes(oldAsset.id)).length, 0);
+  assert.equal(deleted.filter(url => url.includes(oldAsset.id)).length, 1);
   assert.equal(deleted.some(url => url.includes(secondAsset.id)), false);
 });
 
@@ -1184,7 +1216,11 @@ test('all brand asset operations encode reserved workspace identifier characters
   const calls = [];
   const {bridge} = loadBridge(async (url, options = {}) => {
     calls.push(url);
-    if (url.includes('/brand-assets/import')) return new Response(JSON.stringify({asset: created}), {status: 201});
+    if (url === 'https://www.example.com/logo.png') {
+      const response = new Response(new Blob(['logo'], {type: 'image/png'}), {status: 200, headers: {'Content-Type': 'image/png'}});
+      Object.defineProperty(response, 'url', {value: url});
+      return response;
+    }
     if (url.includes('/brand-assets?') && options.method === 'DELETE') return new Response(JSON.stringify({ok: true, deleted: 2}), {status: 200});
     if (url.includes('/brand-assets?')) return new Response(JSON.stringify({asset: created}), {status: 201});
     if (url.includes('/customer/state')) return new Response(JSON.stringify({version: calls.length}), {status: 200});
@@ -1192,12 +1228,12 @@ test('all brand asset operations encode reserved workspace identifier characters
   }, {}, workspaceId);
 
   await bridge.uploadBrandAsset('logo', new Blob(['file'], {type: 'image/png'}));
-  await bridge.importBrandAsset('logo', 'https://www.example.com/logo.png');
+  await bridge.importBrandAsset('logo', 'https://www.example.com/logo.png', {expectedWebsite: 'https://www.example.com/'});
   await bridge.deleteBrandAsset('logo', created);
   await bridge.deleteAllBrandAssets();
 
   const assetCalls = calls.filter(url => url.includes('/brand-assets'));
-  assert.equal(assetCalls.length, 3);
+  assert.equal(assetCalls.length, 4);
   for (const url of assetCalls) assert.match(url, new RegExp(`workspace_id=${encoded.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
 });
 
@@ -1220,6 +1256,8 @@ test('successful replacement and removal retain old assets used by approved emai
     const value = String(url); calls.push({url: value, method: options.method || 'GET'});
     if (value.includes('/brand-assets?') && (options.method || 'GET') === 'POST') return new Response(JSON.stringify({asset: nextAsset}), {status: 201});
     if (value.includes('/customer/state')) return new Response(JSON.stringify({version: calls.length, saved: true}), {status: 200});
+    if (value.includes(`/brand-assets/${oldAsset.id}`) && options.method === 'DELETE') return new Response(JSON.stringify({ok: true, asset_id: oldAsset.id, retained: true, reason: 'workspace_reference'}), {status: 409});
+    if (value.includes(`/brand-assets/${nextAsset.id}`) && options.method === 'DELETE') return new Response(JSON.stringify({ok: true, asset_id: nextAsset.id, deleted: true}), {status: 200});
     if (value.includes(`/brand-assets/${oldAsset.id}`) && (options.method || 'GET') === 'GET') return new Response(new Blob(['old-image'], {type: 'image/png'}), {status: 200});
     throw new Error(`Unexpected request: ${value}`);
   };
@@ -1230,8 +1268,9 @@ test('successful replacement and removal retain old assets used by approved emai
 
   await bridge.uploadBrandAsset('logo', new Blob(['new'], {type: 'image/png'}));
   await bridge.deleteBrandAsset('logo', nextAsset);
-  assert.equal(calls.some(call => call.url.includes(`/brand-assets/${oldAsset.id}`) && call.method === 'DELETE'), false);
-  assert.equal(calls.some(call => call.url.includes(`/brand-assets/${nextAsset.id}`) && call.method === 'DELETE'), false);
+  assert.equal(calls.some(call => call.url.includes(`/brand-assets/${oldAsset.id}`) && call.method === 'DELETE'), true);
+  assert.equal(calls.some(call => call.url.includes(`/brand-assets/${nextAsset.id}`) && call.method === 'DELETE'), true);
+  assert.equal(localStorage.getItem(CLEANUP_KEY), null);
   const response = await fetchImpl(`${API}/api/customer/brand-assets/${oldAsset.id}`);
   assert.equal(response.status, 200);
   assert.equal(JSON.parse(localStorage.getItem('leadintel_customer_v2_outreach')).items[0].brandSnapshot.assets.logo.url, oldAsset.url);

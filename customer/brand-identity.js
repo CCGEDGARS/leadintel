@@ -45,7 +45,7 @@
     const altText = stringValue(value.altText);
     const updatedAt = stringValue(value.updatedAt);
 
-    if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) return null;
+    if (!/^[A-Za-z0-9_-]{43}$/.test(id)) return null;
     const assetPath = ASSET_PATH_PREFIX + encodeURIComponent(id);
     const absoluteUrl = ASSET_ORIGIN + assetPath;
     if (url !== assetPath && url !== absoluteUrl) return null;
