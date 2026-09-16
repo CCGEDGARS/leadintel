@@ -57,5 +57,5 @@ test('strategy UI identifies generated recommendations before the optional custo
   const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
   assert.match(html,/Recommended buying signals/);
   assert.match(html,/Add buying signal/);
-  assert.match(html,/profile-engine\.js\?v=20260914-recommended-signals-v2/);
+  assert.match(html,/profile-engine\.js\?v=20260915-brand-identity-v3/);
 });

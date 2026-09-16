@@ -1,4 +1,5 @@
 import {normalizeEmail} from './gmail.js';
+import {validateEmailContent} from './email-content.js';
 
 export async function refreshMicrosoftAccessToken(refreshToken,{clientId,clientSecret,scopes=[]},fetchImpl=fetch){
   if(!refreshToken)throw new Error('Microsoft mail refresh token is missing');
@@ -9,12 +10,13 @@ export async function refreshMicrosoftAccessToken(refreshToken,{clientId,clientS
   return {accessToken:String(payload.access_token),refreshToken:payload.refresh_token?String(payload.refresh_token):refreshToken,expiresIn:Number(payload.expires_in)||0,scope:String(payload.scope||'')};
 }
 
-export async function sendMicrosoftMessage(accessToken,{to,subject,body},fetchImpl=fetch){
+export async function sendMicrosoftMessage(accessToken,{to,subject,body,textBody,htmlBody},fetchImpl=fetch){
   if(!accessToken)throw new Error('Microsoft mail access token is required');
   const recipient=normalizeEmail(to);if(!recipient)throw new Error('Valid recipient email is required');
-  const cleanSubject=String(subject??'').trim();if(!cleanSubject)throw new Error('Email subject is required');if(cleanSubject.length>500)throw new Error('Email subject is too large');
-  const cleanBody=String(body??'').trim();if(!cleanBody)throw new Error('Email body is required');if(cleanBody.length>100000)throw new Error('Email body is too large');
-  const payload={message:{subject:cleanSubject,body:{contentType:'Text',content:cleanBody},toRecipients:[{emailAddress:{address:recipient}}]},saveToSentItems:true};
+  const cleanSubject=String(subject??'').trim();if(!cleanSubject)throw new Error('Email subject is required');if(/[\r\n]/.test(cleanSubject))throw new Error('Email header contains invalid newline characters');if(cleanSubject.length>500)throw new Error('Email subject is too large');
+  const content=validateEmailContent({body,text_body:textBody,html_body:htmlBody});
+  const graphBody=content.htmlBody?{contentType:'HTML',content:content.htmlBody}:{contentType:'Text',content:content.textBody};
+  const payload={message:{subject:cleanSubject,body:graphBody,toRecipients:[{emailAddress:{address:recipient}}]},saveToSentItems:true};
   const response=await fetchImpl('https://graph.microsoft.com/v1.0/me/sendMail',{method:'POST',headers:{Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(payload)});
   if(response.status!==202){const failure=await response.json().catch(()=>({}));throw new Error(failure.error?.message||`Microsoft send failed (${response.status})`);}
   return {accepted:true,status:202};

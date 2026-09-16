@@ -8,6 +8,25 @@ test('MIME builder uses CRLF, encodes subject and rejects header injection',()=>
   assert.match(mime,/Subject: =\?UTF-8\?B\?/);
   assert.match(mime,/\r\n\r\nLine 1\r\nLine 2$/);
   assert.throws(()=>buildMimeMessage({to:'buyer@example.com\r\nBcc:x@example.com',subject:'x',body:'y'}),/Valid recipient/);
+  assert.throws(()=>buildMimeMessage({to:'buyer@example.com',subject:'Safe\r\nBcc: victim@example.com',body:'y'}),/header/i);
+});
+
+test('HTML MIME uses a unique safe multipart boundary and UTF-8 alternatives',()=>{
+  const input={from:'sender@example.com',to:'buyer@example.com',subject:'Branded ✓',body:'Plain ✓',htmlBody:'<div>Branded ✓</div>'};
+  const first=buildMimeMessage(input);const second=buildMimeMessage(input);
+  const boundary=/boundary="([A-Za-z0-9_-]+)"/.exec(first)?.[1];
+  const secondBoundary=/boundary="([A-Za-z0-9_-]+)"/.exec(second)?.[1];
+  assert.match(boundary,/^leadintel_[A-Za-z0-9_-]{20,}$/);
+  assert.notEqual(boundary,secondBoundary);
+  assert.match(first,new RegExp(`Content-Type: multipart/alternative; boundary="${boundary}"\\r\\n`));
+  const parts=first.split(`--${boundary}`);
+  assert.equal(parts.length,4);
+  const plainEncoded=parts[1].split('\r\n\r\n')[1].trim();
+  const htmlEncoded=parts[2].split('\r\n\r\n')[1].trim();
+  assert.equal(Buffer.from(plainEncoded.replace(/\s/g,''),'base64').toString('utf8'),'Plain ✓');
+  assert.equal(Buffer.from(htmlEncoded.replace(/\s/g,''),'base64').toString('utf8'),'<div>Branded ✓</div>');
+  assert.match(parts[1],/Content-Type: text\/plain; charset=UTF-8/);
+  assert.match(parts[2],/Content-Type: text\/html; charset=UTF-8/);
 });
 
 test('base64url helpers preserve UTF-8',()=>{

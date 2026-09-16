@@ -26,6 +26,7 @@ function runProductionBuild({ customerHtml, discoveryUi }) {
     fs.writeFileSync(path.join(fixture, 'v2/index.html'), '<main>V2</main>');
     fs.writeFileSync(path.join(fixture, 'customer/index.html'), customerHtml);
     fs.writeFileSync(path.join(fixture, 'customer/discovery-ui.js'), discoveryUi);
+    fs.writeFileSync(path.join(fixture, 'customer/app.js'), 'function init(){}');
 
     const result = spawnSync('bash', ['scripts/build-vercel-static.sh'], {
       cwd: fixture,
@@ -48,13 +49,29 @@ function assertBuildRejected(result) {
   assert.equal(result.artifactExists, false);
 }
 
+test('the production build accepts the intended five-request-window Discovery runtime', () => {
+  const result = runProductionBuild({
+    customerHtml: '<script defer src="discovery-ui.js?v=current"></script>',
+    discoveryUi: [
+      'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
+      'const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS*5+5000;',
+      'function ensureDiscoveryMounted(){}',
+      'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};',
+      'initDiscoveryWhenReady();'
+    ].join('\n')
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.artifactExists, true);
+});
+
 test('the production build refuses the former module-graph Discovery bootstrap', () => {
   const result = runProductionBuild({
     customerHtml: '<script type="module" src="discovery-ui.js?v=regressed"></script>',
     discoveryUi: [
       'import "./content-variants.js";',
       'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
-      'const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS*2+2000;',
+      'const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS*5+5000;',
       'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};',
       'initDiscoveryWhenReady();'
     ].join('\n')

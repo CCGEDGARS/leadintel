@@ -2,7 +2,7 @@ import './content-language.js?v=20260906-step2-language-v1';
 import './content-variants.js?v=20260905-step1-language-v1';
 import './business-identity.js?v=20260906-pain-headings-v1';
 import './evidence-view.js?v=20260915-research-source-text-v1';
-import './workspace-persistence.js?v=20260914-spinner-hard-stop-v1';
+import './workspace-persistence.js?v=20260916-brand-assets-v10';
 import {withOpenAiRetry,describePartialCoverage} from './market-research-provider-resilience.js?v=20260913-openai-retry-v2';
 
 const STORAGE_KEY="leadintel_customer_v2_state";
@@ -30,12 +30,14 @@ let monitoringLoaded=false;
 let monitoringBusy=false;
 let marketTranslationGeneration=0;
 let pendingResearchMode="";
+let brandIdentityUI=null;
 const $=id=>document.getElementById(id);
 function contentLanguage(){return LeadIntelContentLanguage.resolveLanguage(window.LeadIntelLanguage?.get?.()||state.uiLanguage||'lv',navigator.languages||[]);}
 
 function defaultState(){
   const base=LeadIntelProfile.normalizeSavedState({step:1,website:"",targetMarkets:[],additionalLinks:[],documents:[],answers:{},scrapedSources:[],profile:null,approved:false});
   base.market=LeadIntelMarket.normalizeMarketState({});
+  base.brandIdentity=globalThis.LeadIntelBrandIdentity?.normalize?.({})||null;
   return base;
 }
 function loadState(){
@@ -46,6 +48,7 @@ function loadState(){
     const source=saved&&typeof saved==="object"&&!Array.isArray(saved)?saved:raw;
     const base=LeadIntelProfile.normalizeSavedState(source);
     base.market=LeadIntelMarket.recoverInterruptedResearch(source.market||{});
+    base.brandIdentity=globalThis.LeadIntelBrandIdentity?.normalize?.(source.brandIdentity||{})||null;
     base.step=window.LeadIntelWorkspaceIsolation?.safeStep
       ?window.LeadIntelWorkspaceIsolation.safeStep(localStorage,base,source.step)
       :([1,2,3,4,5,6,7].includes(Number(source.step))?Number(source.step):base.step);
@@ -110,7 +113,51 @@ function addCustomTargetMarket(){
 }
 function syncInputsFromState(){
   $("company-website").value=state.website.replace(/^https?:\/\//,"").replace(/\/$/,"");const additionalLinks=$("additional-links");if(additionalLinks)additionalLinks.value=state.additionalLinks.join("\n");
-  document.querySelectorAll("[data-question]").forEach(el=>el.value=state.answers[el.dataset.question]||"");renderTargetMarkets();renderDocuments();
+  document.querySelectorAll("[data-question]").forEach(el=>el.value=state.answers[el.dataset.question]||"");renderTargetMarkets();renderDocuments();brandIdentityUI?.sync?.(state.brandIdentity);
+}
+
+function brandIdentityPublicEvidence(){
+  const source=state&&typeof state==="object"&&!Array.isArray(state)?state:{};
+  const text=(value,max=20000)=>typeof value==="string"?value.trim().slice(0,max):"";
+  const https=value=>{const candidate=text(value,2048);if(!candidate)return "";try{const url=new URL(candidate);return url.protocol==="https:"&&!url.username&&!url.password?url.href:"";}catch{return "";}};
+  const profileSource=source.profile&&typeof source.profile==="object"&&!Array.isArray(source.profile)?source.profile:{};
+  const color=value=>{const candidate=text(value,7).toLowerCase();return /^#[0-9a-f]{6}$/.test(candidate)?candidate:"";};
+  const profile={};
+  for(const key of ["companyName","companyDisplayName","phone"]){const value=text(profileSource[key],500);if(value)profile[key]=value;}
+  for(const key of ["linkedinUrl","logoUrl"]){const value=https(profileSource[key]);if(value)profile[key]=value;}
+  const profileColor=color(profileSource.primaryColor);if(profileColor)profile.primaryColor=profileColor;
+  const scrapedSources=(Array.isArray(source.scrapedSources)?source.scrapedSources:[]).filter(item=>item&&typeof item==="object"&&!Array.isArray(item)).map(item=>{
+    const safe={};
+    const sourceUrl=https(item.url);if(sourceUrl)safe.url=sourceUrl;
+    for(const key of ["status","title","text"]){const value=text(item[key],key==="text"?20000:2048);if(value)safe[key]=value;}
+    const logoUrl=https(item.logoUrl);if(logoUrl)safe.logoUrl=logoUrl;
+    const primaryColor=color(item.primaryColor);if(primaryColor)safe.primaryColor=primaryColor;
+    const metadata=item.metadata&&typeof item.metadata==="object"&&!Array.isArray(item.metadata)?item.metadata:{};
+    const safeMetadata={};
+    for(const key of ["logoUrl","logo"]){const value=text(metadata[key],2048);if(value)safeMetadata[key]=value;}
+    if(Object.keys(safeMetadata).length)safe.metadata=safeMetadata;
+    return safe;
+  });
+  const additionalLinks=(Array.isArray(source.additionalLinks)?source.additionalLinks:[]).map(https).filter(Boolean).slice(0,8);
+  const activationSource=source.websiteActivation&&typeof source.websiteActivation==="object"&&!Array.isArray(source.websiteActivation)?source.websiteActivation:{};
+  const websiteActivation={};
+  const activationLogo=https(activationSource.logoUrl);if(activationLogo)websiteActivation.logoUrl=activationLogo;
+  return {profile,scrapedSources,additionalLinks,websiteActivation};
+}
+
+function initBrandIdentity(){
+  const ui=globalThis.LeadIntelBrandIdentityUI;
+  if(!ui?.mount)return;
+  brandIdentityUI=ui.mount({
+    getIdentity:()=>state.brandIdentity,
+    getWebsite:()=>state.website,
+    getPublicEvidence:brandIdentityPublicEvidence,
+    setIdentity:(identity, detail={})=>{
+      state.brandIdentity=globalThis.LeadIntelBrandIdentity.normalize(identity);
+      if(detail.persist===false){updateCompleteness();updateNavigationAvailability();return;}
+      saveState();
+    }
+  });
 }
 function readSources(){
   const previousWebsite=state.website;state.website=LeadIntelProfile.normalizeUrl($("company-website").value);const additionalLinks=$("additional-links");state.additionalLinks=(additionalLinks?.value||"").split(/\n/).map(LeadIntelProfile.normalizeUrl).filter(Boolean).slice(0,8);
@@ -169,7 +216,12 @@ async function scrapeSource(url,type){
     const data=payload.data||payload;
     const text=String(data.markdown||data.content||"").slice(0,30000);
     if(!text.trim())throw new Error("No readable page content returned");
-    return {type,url,title:data.metadata?.title||data.title||new URL(url).hostname,text,status:"ready"};
+    const metadata=data.metadata&&typeof data.metadata==="object"&&!Array.isArray(data.metadata)?data.metadata:{};
+    const safeLogo=value=>{if(typeof value!=="string"||!value.trim())return "";try{const candidate=new URL(value.trim(),url);return candidate.protocol==="https:"&&!candidate.username&&!candidate.password?candidate.href:"";}catch{return "";}};
+    const safeColor=value=>typeof value==="string"&&/^#[0-9a-f]{6}$/i.test(value.trim())?value.trim().toLowerCase():"";
+    const logoUrl=[metadata.logoUrl,metadata.logo,metadata.ogImage,metadata.ogImageUrl,metadata.image].map(safeLogo).find(Boolean)||"";
+    const primaryColor=[metadata.primaryColor,metadata.themeColor,metadata["theme-color"],data.primaryColor].map(safeColor).find(Boolean)||"";
+    return {type,url,title:metadata.title||data.title||new URL(url).hostname,text,status:"ready",...(logoUrl?{logoUrl}:{}),...(primaryColor?{primaryColor}:{})};
   }catch(error){
     if(error?.name==="AbortError")throw new Error(`Source scrape timed out after ${Math.round(ANALYSIS_SOURCE_TIMEOUT_MS/1000)} seconds`);
     throw error;
@@ -749,7 +801,7 @@ function bind(){
   });
 }
 function init(){
-  syncInputsFromState();bind();updateCompleteness();updateNavigationAvailability();observeNavigation();
+  syncInputsFromState();bind();initBrandIdentity();updateCompleteness();updateNavigationAvailability();observeNavigation();
   setStep(state.step||1);
   void resumePendingMarketResearchAfterAuth();
 }

@@ -1,3 +1,5 @@
+import {validateEmailContent} from './email-content.js';
+
 const encoder=new TextEncoder();
 const decoder=new TextDecoder();
 const REPLY_CATEGORIES=new Set(['meeting_request','positive','objection','not_now','referral','unsubscribe','out_of_office','neutral']);
@@ -7,17 +9,23 @@ function base64ToBytes(value){const binary=atob(value);const out=new Uint8Array(
 export function base64UrlEncode(value){return bytesToBase64(encoder.encode(String(value??''))).replaceAll('+','-').replaceAll('/','_').replaceAll('=','');}
 export function base64UrlDecode(value){const base=String(value||'').replaceAll('-','+').replaceAll('_','/');const padded=base+'='.repeat((4-base.length%4)%4);return decoder.decode(base64ToBytes(padded));}
 export function normalizeEmail(value){const raw=String(value??'').trim().toLowerCase();if(!raw||/[\r\n]/.test(raw)||raw.length>254)return '';return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)?raw:'';}
-function safeHeader(value,max=500){const text=String(value??'').replace(/[\r\n]+/g,' ').trim();return text.slice(0,max);}
+function safeHeader(value,max=500){const text=String(value??'');if(/[\r\n]/.test(text))throw new Error('Email header contains invalid newline characters');return text.trim().slice(0,max);}
 function encodeHeader(value){const bytes=encoder.encode(safeHeader(value,998));return `=?UTF-8?B?${bytesToBase64(bytes)}?=`;}
 function crlf(value){return String(value??'').replace(/\r\n|\r|\n/g,'\r\n');}
+function mimeBase64(value){const encoded=bytesToBase64(encoder.encode(String(value)));return encoded.match(/.{1,76}/g)?.join('\r\n')||'';}
+function mimeBoundary(){return `leadintel_${crypto.randomUUID().replaceAll('-','_')}`;}
 
-export function buildMimeMessage({from='',to,subject,body}){
+export function buildMimeMessage({from='',to,subject,body,textBody,htmlBody}){
   const recipient=normalizeEmail(to);if(!recipient)throw new Error('Valid recipient email is required');
   const sender=from?normalizeEmail(from):'';if(from&&!sender)throw new Error('Valid sender email is required');
   const cleanSubject=safeHeader(subject,500);if(!cleanSubject)throw new Error('Email subject is required');
-  const cleanBody=String(body??'').trim();if(!cleanBody)throw new Error('Email body is required');if(cleanBody.length>100000)throw new Error('Email body is too large');
-  const headers=[];if(sender)headers.push(`From: ${sender}`);headers.push(`To: ${recipient}`,`Subject: ${encodeHeader(cleanSubject)}`,'MIME-Version: 1.0','Content-Type: text/plain; charset=UTF-8','Content-Transfer-Encoding: 8bit');
-  return `${headers.join('\r\n')}\r\n\r\n${crlf(cleanBody)}`;
+  const content=validateEmailContent({body,text_body:textBody,html_body:htmlBody});
+  const headers=[];if(sender)headers.push(`From: ${sender}`);headers.push(`To: ${recipient}`,`Subject: ${encodeHeader(cleanSubject)}`,'MIME-Version: 1.0');
+  if(!content.htmlBody){headers.push('Content-Type: text/plain; charset=UTF-8','Content-Transfer-Encoding: 8bit');return `${headers.join('\r\n')}\r\n\r\n${crlf(content.textBody)}`;}
+  const boundary=mimeBoundary();headers.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
+  const plain=[`--${boundary}`,'Content-Type: text/plain; charset=UTF-8','Content-Transfer-Encoding: base64','',mimeBase64(content.textBody)].join('\r\n');
+  const html=[`--${boundary}`,'Content-Type: text/html; charset=UTF-8','Content-Transfer-Encoding: base64','',mimeBase64(content.htmlBody)].join('\r\n');
+  return `${headers.join('\r\n')}\r\n\r\n${plain}\r\n${html}\r\n--${boundary}--\r\n`;
 }
 
 export async function refreshGoogleAccessToken(refreshToken,{clientId,clientSecret},fetchImpl=fetch){

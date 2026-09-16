@@ -1,12 +1,12 @@
-import './workspace-reset-hygiene.js?v=20260909-emergency-reset-v1';
-import './workspace-persistence.js?v=20260914-spinner-hard-stop-v1';
+import './workspace-reset-hygiene.js?v=20260916-brand-assets-v10';
+import './workspace-persistence.js?v=20260916-brand-assets-v10';
 import './state-budget.js?v=20260826-state-budget-500kb';
 import './website-input-sync.js?v=20260901-saved-state-v2';
 import './custom-market-input-hygiene.js?v=20260903-password-manager-isolation-v5';
 import './website-activation.js?v=20260914-activation-timeout-v1';
 import './crm-engine.js?v=20260828-master-crm-v1';
 import './sync-conflict-hygiene.js?v=20260901-stale-blank-conflict-v1';
-import './server-bridge.js?v=20260915-mail-choice-v2';
+import './server-bridge.js?v=20260916-brand-assets-v10';
 import './crm-ui.js?v=20260905-app-audit-v2';
 import './ai-settings.js?v=20260915-model-choice-v1';
 import './service-settings-extension.js?v=20260915-mail-choice-v2';
@@ -33,7 +33,7 @@ import './reference-customer-launcher.js?v=20260911-reference-open-v2';
 import './lookalike-discovery.js?v=20260910-reference-portfolio-v1';
 import './intelligence-sources-ui.js?v=20260915-preferred-sources-v1';
 import './profile-action-runtime.js?v=20260912-bottom-profile-actions-v1';
-import './outreach-automation-loader.js?v=20260908-boot-isolation-v1';
+import './outreach-automation-loader.js?v=20260916-brand-outreach-v2';
 import './copilot-loader.js?v=20260911-copilot-freshness-v1';
 
 const PROCESS_STORAGE_KEY="leadintel_customer_v2_state";

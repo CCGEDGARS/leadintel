@@ -100,6 +100,6 @@ test('research recovery assets are cache-busted and partial coverage uses neutra
   const index=fs.readFileSync(indexPath,'utf8');
   const css=fs.readFileSync(marketCssPath,'utf8');
   assert.match(index,/market\.css\?v=20260915-research-source-text-v1/);
-  assert.match(index,/app\.js\?v=20260915-research-source-text-v1/);
+  assert.match(index,/app\.js\?v=20260916-brand-assets-v2/);
   assert.match(css,/\.research-run-feedback\[data-status="partial"\]/);
 });

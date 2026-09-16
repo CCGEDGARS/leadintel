@@ -40,6 +40,32 @@ jobs:
           test -n "$CLOUDFLARE_ACCOUNT_ID"
       - name: Install backend dependencies
         run: npm ci
+      - name: Verify or create production brand asset bucket
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED_BUCKET='leadintel-brand-assets'
+          INITIAL_INFO_OUTPUT=''
+          if INITIAL_INFO_OUTPUT="$(npx wrangler r2 bucket info "$EXPECTED_BUCKET" --json 2>&1)"; then
+            printf '%s' "$INITIAL_INFO_OUTPUT" | node scripts/verify-r2-bucket-json.mjs info "$EXPECTED_BUCKET"
+            printf '\n'
+          else
+            printf '%s\n' "$INITIAL_INFO_OUTPUT" >&2
+            BUCKET_LIST="$(npx wrangler r2 bucket list --json)"
+            BUCKET_STATE="$(printf '%s' "$BUCKET_LIST" | node scripts/verify-r2-bucket-json.mjs list "$EXPECTED_BUCKET")"
+            if [ "$BUCKET_STATE" = 'found' ]; then
+              printf '%s\n' 'R2 bucket verification failed for an existing bucket; refusing to deploy' >&2
+              exit 1
+            elif [ "$BUCKET_STATE" != 'absent' ]; then
+              printf '%s\n' 'R2 bucket list returned an unknown state; refusing to deploy' >&2
+              exit 1
+            fi
+            printf '%s\n' 'R2 bucket is absent; creating leadintel-brand-assets'
+            npx wrangler r2 bucket create "$EXPECTED_BUCKET"
+          fi
+          FINAL_INFO_OUTPUT="$(npx wrangler r2 bucket info "$EXPECTED_BUCKET" --json)"
+          printf '%s' "$FINAL_INFO_OUTPUT" | node scripts/verify-r2-bucket-json.mjs info "$EXPECTED_BUCKET"
+          printf '\n'
       - name: Bootstrap protected Scrapling service token
         shell: bash
         run: |

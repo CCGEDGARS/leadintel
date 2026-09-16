@@ -3,9 +3,9 @@
 
   const EXPLICIT_SAVE_KEY="leadintel_customer_v2_workspace_explicit_save_v1";
   const SNAPSHOT_KEY="leadintel_customer_v2_workspace_saved_snapshot_v1";
-  const SAVE_INTENT_KEY="leadintel_customer_v2_explicit_save_intent_v1";
   const FORCE_RESET_KEY="leadintel_customer_v2_force_reset_save_v1";
-  const RESET_PENDING_KEY="leadintel_customer_v2_reset_pending_v1";
+  const SERVER_RESET_PENDING_KEY="leadintel_customer_v2_reset_pending_v1";
+  const RESET_PENDING_KEY=SERVER_RESET_PENDING_KEY;
   const WORKSPACE_KEY="leadintel_customer_v2_workspace";
   const HYDRATION_KEY="leadintel_customer_v2_server_hydration";
   const DIRTY_KEY="leadintel_customer_v2_server_dirty";
@@ -95,7 +95,7 @@
     if(activation.status!=="active"||!activation.url||!source)return null;
     return {status:"active",url:activation.url,title:activation.title||source.title||"",description:activation.description||"",activatedAt:activation.activatedAt||"",contentChars:Number(activation.contentChars)||String(source.text||"").length,source:{type:"website",url:activation.url,title:activation.title||source.title||"",text:String(source.text||""),status:"ready"}};
   }
-  function snapshotFromServerPayload(payload={}){
+  function snapshotFromServerPayload(payload={},options={}){
     if(!isObject(payload))return null;const data={};
     if(isObject(payload.main))data["leadintel_customer_v2_state"]=JSON.stringify(payload.main);
     if(isObject(payload.discovery))data["leadintel_customer_v2_discovery"]=JSON.stringify(payload.discovery);
@@ -103,7 +103,7 @@
     if(isObject(payload.delivery))data["leadintel_customer_v2_delivery"]=JSON.stringify(payload.delivery);
     if(isObject(payload.meta?.discovery))data["leadintel_customer_v2_discovery_meta"]=JSON.stringify(payload.meta.discovery);
     const activation=buildActivationRecord(payload.main||{});if(activation)data["leadintel_customer_v2_website_activation_v1"]=JSON.stringify(activation);
-    const snapshot={schema_version:1,saved_at:new Date().toISOString(),data};root.localStorage?.setItem(SNAPSHOT_KEY,JSON.stringify(snapshot));markExplicitlySaved();dirtySinceSave=false;return snapshot;
+    const snapshot={schema_version:1,saved_at:new Date().toISOString(),data};root.localStorage?.setItem(SNAPSHOT_KEY,JSON.stringify(snapshot));markExplicitlySaved();dirtySinceSave=typeof options.dirty==='boolean'?options.dirty:!sameWorkspaceData(currentWorkspaceData(),data);return snapshot;
   }
 
   function jsonResponse(payload,status=200){return new Response(JSON.stringify(payload),{status,headers:{"Content-Type":"application/json"}});}
@@ -130,9 +130,9 @@
   function installFetchBoundary(){
     if(!root.fetch||root.__leadintelPersistenceFetchInstalled)return;root.__leadintelPersistenceFetchInstalled=true;nativeFetch=root.fetch.bind(root);
     root.fetch=async function(input,init={}){
-      const url=customerStateUrl(input);if(!url)return nativeFetch(input,init);const method=requestMethod(input,init);
+      const {leadintelSaveIntent=false,leadintelExplicitSave=false,...requestInit}=init||{};const url=customerStateUrl(input);if(!url)return nativeFetch(input,requestInit);const method=requestMethod(input,requestInit);
       if(method==="GET"){
-        const response=await nativeFetch(input,init);if(!response.ok)return response;const body=await response.clone().json().catch(()=>({}));const workspaceId=url.searchParams.get("workspace_id")||"";
+        const response=await nativeFetch(input,requestInit);if(!response.ok)return response;const body=await response.clone().json().catch(()=>({}));const workspaceId=url.searchParams.get("workspace_id")||"";
         if(resetIntentMatchesUrl(url)){const cleared=await clearPendingServerReset(url,body);return jsonResponse(cleared,200);}
         if(body?.payload?.meta?.persistence?.explicit_saved===true){snapshotFromServerPayload(body.payload);return response;}
         const version=Math.max(0,Number(body?.version)||0);if(workspaceId)root.sessionStorage?.setItem(HYDRATION_KEY,`${workspaceId}:${version}`);
@@ -140,14 +140,14 @@
         return jsonResponse({...body,payload:{}},response.status);
       }
       if(method==="PUT"){
-        const forceReset=root.sessionStorage?.getItem(FORCE_RESET_KEY)==="1"||resetIntentMatchesUrl(url);const saveIntent=root.sessionStorage?.getItem(SAVE_INTENT_KEY)==="1";const parsed=safeJson(typeof init?.body==="string"?init.body:"{}",{});
+        const forceReset=root.sessionStorage?.getItem(FORCE_RESET_KEY)==="1"||resetIntentMatchesUrl(url);const saveIntent=leadintelSaveIntent===true;const explicitSave=leadintelExplicitSave===true;const parsed=safeJson(typeof requestInit?.body==="string"?requestInit.body:"{}",{});const localDataAtPutStart=currentWorkspaceData();
         if(!saveIntent&&!forceReset){root.setTimeout?.(renderPersistenceStatus,0);return jsonResponse({version:Math.max(0,Number(parsed?.version)||0),saved:false},200);}
-        const next=withPersistenceMetadata(parsed,!forceReset&&isExplicitlySaved());if(forceReset)next.payload.meta.persistence={explicit_saved:false};
-        const response=await nativeFetch(input,{...init,body:JSON.stringify(next)});
-        if(response.ok){if(forceReset){root.sessionStorage?.removeItem(FORCE_RESET_KEY);root.localStorage?.removeItem(RESET_PENDING_KEY);root.setTimeout?.(renderPersistenceStatus,0);}if(saveIntent&&isExplicitlySaved())captureWorkspaceSnapshot();}
+        const next=withPersistenceMetadata(parsed,!forceReset&&(explicitSave||isExplicitlySaved()));if(forceReset)next.payload.meta.persistence={explicit_saved:false};
+        const response=await nativeFetch(input,{...requestInit,body:JSON.stringify(next)});const result=await response.clone().json().catch(()=>({}));const persisted=response.ok&&result?.saved!==false;
+        if(persisted){if(forceReset){root.sessionStorage?.removeItem(FORCE_RESET_KEY);root.localStorage?.removeItem(RESET_PENDING_KEY);root.setTimeout?.(renderPersistenceStatus,0);}else if(explicitSave||(saveIntent&&isExplicitlySaved()))snapshotFromServerPayload(next.payload,{dirty:!sameWorkspaceData(currentWorkspaceData(),localDataAtPutStart)});}
         return response;
       }
-      return nativeFetch(input,init);
+      return nativeFetch(input,requestInit);
     };
   }
 
@@ -169,10 +169,10 @@
   }
 
   async function saveWorkspace(){
-    if(saveBusy)return false;saveBusy=true;renderPersistenceStatus();captureWorkspaceSnapshot();markExplicitlySaved();dirtySinceSave=false;root.sessionStorage?.setItem(SAVE_INTENT_KEY,"1");
-    try{const bridge=await waitForBridge();if(bridge?.session?.authenticated&&bridge?.workspace){const result=await withTimeout(()=>root.LeadIntelServerBridge?.saveNow?.(),SAVE_REQUEST_TIMEOUT_MS);if(!result?.saved)throw new Error("Workspace could not be saved to LeadIntel");toast("Workspace saved");}else toast("Workspace saved in this browser");return true;}
-    catch(error){toast(`Save failed · ${String(error?.message||"Unknown error")}`);return false;}
-    finally{root.sessionStorage?.removeItem(SAVE_INTENT_KEY);saveBusy=false;renderPersistenceStatus();}
+    if(saveBusy)return false;saveBusy=true;renderPersistenceStatus();
+    try{const bridge=await waitForBridge();if(bridge?.session?.authenticated&&bridge?.workspace){const result=await withTimeout(()=>root.LeadIntelServerBridge?.saveNow?.({saveIntent:true,explicitSave:true}),SAVE_REQUEST_TIMEOUT_MS);if(!result?.saved)throw new Error("Workspace could not be saved to LeadIntel");toast("Workspace saved");}else{captureWorkspaceSnapshot();markExplicitlySaved();dirtySinceSave=false;toast("Workspace saved in this browser");}return true;}
+    catch(error){dirtySinceSave=true;toast(`Save failed · ${String(error?.message||"Unknown error")}`);return false;}
+    finally{saveBusy=false;renderPersistenceStatus();}
   }
   function ensureSaveButton(){const actions=root.document?.querySelector?.(".top-actions");if(!actions||root.document.getElementById("save-workspace"))return false;const button=root.document.createElement("button");button.className="ghost-btn";button.type="button";button.id="save-workspace";button.textContent="Save workspace";const reset=root.document.getElementById("reset-workspace");actions.insertBefore(button,reset||null);button.addEventListener("click",saveWorkspace);renderPersistenceStatus();return true;}
   function noteWorkspaceEdit(event){const target=event?.target;if(target?.closest&& !target.closest(".workspace"))return;if(target?.closest?.("#save-workspace,#reset-workspace,#ai-settings-drawer"))return;dirtySinceSave=true;renderPersistenceStatus();}
@@ -194,5 +194,5 @@
   if(changed&&(explicitlySaved||hadMeaningfulUnsavedData)&&root.location?.reload){root.location.reload();return;}
   if(root.document?.readyState==="loading")root.document.addEventListener("DOMContentLoaded",installUi,{once:true});else installUi();
 
-  root.LeadIntelWorkspacePersistence={EXPLICIT_SAVE_KEY,SNAPSHOT_KEY,SAVE_INTENT_KEY,FORCE_RESET_KEY,RESET_PENDING_KEY,WORKSPACE_DATA_KEYS,isExplicitlySaved,hasUnsavedChanges,markExplicitlySaved,clearExplicitSave,currentWorkspaceData,hasMeaningfulWorkspaceData,captureWorkspaceSnapshot,restoreSavedSnapshot,clearWorkspaceData,prepareForLoad,snapshotFromServerPayload,saveWorkspace,renderPersistenceStatus,handleResetClick};
+  root.LeadIntelWorkspacePersistence={EXPLICIT_SAVE_KEY,SNAPSHOT_KEY,FORCE_RESET_KEY,SERVER_RESET_PENDING_KEY,RESET_PENDING_KEY,WORKSPACE_DATA_KEYS,isExplicitlySaved,hasUnsavedChanges,markExplicitlySaved,clearExplicitSave,currentWorkspaceData,hasMeaningfulWorkspaceData,captureWorkspaceSnapshot,restoreSavedSnapshot,clearWorkspaceData,prepareForLoad,snapshotFromServerPayload,saveWorkspace,renderPersistenceStatus,handleResetClick};
 })(typeof globalThis!=="undefined"?globalThis:this);

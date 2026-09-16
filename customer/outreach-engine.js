@@ -1,8 +1,9 @@
 (function(root,factory){
-  const api=factory();
+  const brandIdentity=root?.LeadIntelBrandIdentity||(typeof module!=="undefined"&&module.exports?require("./brand-identity.js"):null);
+  const api=factory(brandIdentity);
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
   if(root)root.LeadIntelOutreach=api;
-})(typeof globalThis!=="undefined"?globalThis:this,function(){
+})(typeof globalThis!=="undefined"?globalThis:this,function(BrandIdentity){
   "use strict";
 
   const DEFAULT_OUTREACH_STATE=Object.freeze({selectedDomain:"",items:[]});
@@ -144,9 +145,52 @@
   }
 
   function approveOutreachItem(item={},editedDrafts={},approvedAt=new Date().toISOString()){
+    const options=arguments[3]&&typeof arguments[3]==="object"?arguments[3]:{};
     const drafts={emailSubject:clean(editedDrafts.emailSubject),emailBody:String(editedDrafts.emailBody??"").trim(),linkedinMessage:String(editedDrafts.linkedinMessage??"").trim(),callOpener:String(editedDrafts.callOpener??item?.drafts?.callOpener??"").trim(),followUp:String(editedDrafts.followUp??item?.drafts?.followUp??"").trim(),objectionReply:String(editedDrafts.objectionReply??item?.drafts?.objectionReply??"").trim(),tone:clean(editedDrafts.tone||item?.drafts?.tone||"consultative")};
     if(!drafts.emailSubject||!drafts.emailBody||!drafts.linkedinMessage)return {...item,drafts,approved:false,error:"Email subject, email body and LinkedIn message are required before approval."};
-    return {...item,drafts,approved:true,approvedAt:clean(approvedAt),error:""};
+    let brandSnapshot=null;
+    if(options.brandIdentity?.status==="ready"){
+      try{brandSnapshot=BrandIdentity?.snapshot(options.brandIdentity)||null;}
+      catch{return {...item,drafts,approved:false,error:"Brand identity is marked Ready but is not valid. Review it in Step 1 before approval."};}
+    }
+    const generatedBodies=[item?.drafts?.emailBody,item?.contentVariants?.drafts?.en?.emailBody,item?.contentVariants?.drafts?.lv?.emailBody].map(value=>String(value??"")).filter(Boolean);
+    const generated=generatedBodies.includes(drafts.emailBody);
+    if(brandSnapshot&&generated)drafts.emailBody=removeGeneratedSenderPlaceholder(drafts.emailBody);
+    const approvedSource=freezeCopy(drafts);
+    const approvedEmail=freezeCopy(renderEmail(approvedSource,brandSnapshot));
+    return {...item,drafts,approvedSource,brandSnapshot,approvedEmail,approvalSchemaVersion:1,approvalBrandMode:brandSnapshot?"branded":"plain",brandRevision:brandSnapshot?.revision||null,approved:true,approvedAt:clean(approvedAt),reapprovalRequired:false,error:""};
+  }
+
+  function freezeCopy(value){
+    const copy=value==null?value:JSON.parse(JSON.stringify(value));
+    const freeze=node=>{if(!node||typeof node!=="object"||Object.isFrozen(node))return node;Object.freeze(node);for(const child of Object.values(node))freeze(child);return node;};
+    return freeze(copy);
+  }
+  function removeGeneratedSenderPlaceholder(value){return String(value??"").replace(/^[ \t]*\[(?:Your name|Jūsu vārds)\][ \t]*(?:\r?\n)?/gim,"").trim();}
+  function renderEmail(source={},brandSnapshot=null){
+    const subject=clean(source.emailSubject);
+    const bodyText=String(source.emailBody??"").trim();
+    if(!brandSnapshot||!BrandIdentity?.renderEmail)return {subject,textBody:bodyText,htmlBody:null};
+    return BrandIdentity.renderEmail({subject,bodyText,brandSnapshot});
+  }
+  function hasBrandedApprovalProvenance(item={}){
+    if(clean(item.approvalBrandMode).toLowerCase()==="branded")return true;
+    if(Number(item.brandRevision)>0||Number(item.brandSchemaVersion)>0||Number(item.brandIdentityRevision)>0)return true;
+    if(item.brandMetadata&&typeof item.brandMetadata==="object")return true;
+    return Boolean(String(item.approvedEmail?.htmlBody??"").trim());
+  }
+  function renderApprovedEmail(item={}){
+    if(!item?.approved||item.reapprovalRequired)return null;
+    if(hasBrandedApprovalProvenance(item)&&!item.brandSnapshot)return null;
+    try{return freezeCopy(renderEmail(item.approvedSource||item.drafts||{},item.brandSnapshot||null));}
+    catch{return null;}
+  }
+  function buildApprovedSendPayload(item={},recipient=""){
+    const email=renderApprovedEmail(item);if(!email)return null;
+    return {recipient:clean(recipient),subject:email.subject,body:email.textBody,textBody:email.textBody,htmlBody:email.htmlBody};
+  }
+  function invalidateOutreachApproval(item={}){
+    return {...item,approved:false,approvedAt:"",contactedAt:"",brandSnapshot:null,approvedSource:null,approvedEmail:null,approvalSchemaVersion:1,approvalBrandMode:"plain",brandRevision:null,reapprovalRequired:false,error:""};
   }
 
   function localizeGeneratedItem(item={},candidate={},profile={},market={},language='en'){
@@ -172,9 +216,24 @@
   function normalizeItem(item={}){
     const domain=clean(item.domain).toLowerCase().replace(/^www\./,"");const researchStatus=RESEARCH_STATUSES.has(item.researchStatus)?item.researchStatus:"idle";
     const dossier=item.dossier&&typeof item.dossier==="object"?{...item.dossier,company:clean(item.dossier.company),domain:clean(item.dossier.domain)||domain,website:normalizeUrl(item.dossier.website),market:clean(item.dossier.market),recommendedOffer:clean(item.dossier.recommendedOffer),buyerRoles:splitList(item.dossier.buyerRoles),whyNow:clean(item.dossier.whyNow),evidence:(item.dossier.evidence||[]).map(normalizeEvidence).filter(Boolean).slice(0,15),hypotheses:(item.dossier.hypotheses||[]).map(clean).filter(Boolean).slice(0,8),people:(item.dossier.people||[]).slice(0,5)}:null;
-    return {domain,company:clean(item.company||dossier?.company),researchStatus,researchAt:clean(item.researchAt),dossier,selectedPersonId:clean(item.selectedPersonId),drafts:{tone:clean(item.drafts?.tone)||"consultative",emailSubject:clean(item.drafts?.emailSubject),emailBody:String(item.drafts?.emailBody||"").slice(0,12000),linkedinMessage:String(item.drafts?.linkedinMessage||"").slice(0,3000),callOpener:String(item.drafts?.callOpener||"").slice(0,6000),followUp:String(item.drafts?.followUp||"").slice(0,6000),objectionReply:String(item.drafts?.objectionReply||"").slice(0,6000)},approved:Boolean(item.approved),approvedAt:clean(item.approvedAt),contactedAt:clean(item.contactedAt),contentLanguage:['en','lv'].includes(item.contentLanguage)?item.contentLanguage:'',contentVariants:item.contentVariants&&typeof item.contentVariants==='object'?item.contentVariants:{}};
+    const drafts={tone:clean(item.drafts?.tone)||"consultative",emailSubject:clean(item.drafts?.emailSubject),emailBody:String(item.drafts?.emailBody||"").slice(0,12000),linkedinMessage:String(item.drafts?.linkedinMessage||"").slice(0,3000),callOpener:String(item.drafts?.callOpener||"").slice(0,6000),followUp:String(item.drafts?.followUp||"").slice(0,6000),objectionReply:String(item.drafts?.objectionReply||"").slice(0,6000)};
+    const requestedApproval=Boolean(item.approved);let brandSnapshot=null;let corruptedSnapshot=false;
+    const hasPersistedSnapshot=Object.prototype.hasOwnProperty.call(item,'brandSnapshot')&&item.brandSnapshot!==null&&item.brandSnapshot!==undefined;
+    if(requestedApproval&&hasPersistedSnapshot){
+      if(item.brandSnapshot?.status!=="ready")corruptedSnapshot=true;
+      else try{brandSnapshot=BrandIdentity?.snapshot(item.brandSnapshot)||null;if(!brandSnapshot)corruptedSnapshot=true;}catch{corruptedSnapshot=true;brandSnapshot=null;}
+    }
+    const brandedProvenance=hasBrandedApprovalProvenance(item);
+    if(requestedApproval&&brandedProvenance&&!hasPersistedSnapshot)corruptedSnapshot=true;
+    const reapprovalRequired=Boolean(item.reapprovalRequired)||corruptedSnapshot;
+    const approved=requestedApproval&&!reapprovalRequired;
+    const sourceInput=item.approvedSource&&typeof item.approvedSource==="object"?item.approvedSource:drafts;
+    const approvedSource=approved?freezeCopy({tone:clean(sourceInput.tone)||drafts.tone,emailSubject:clean(sourceInput.emailSubject)||drafts.emailSubject,emailBody:String(sourceInput.emailBody??drafts.emailBody).slice(0,12000),linkedinMessage:String(sourceInput.linkedinMessage??drafts.linkedinMessage).slice(0,3000),callOpener:String(sourceInput.callOpener??drafts.callOpener).slice(0,6000),followUp:String(sourceInput.followUp??drafts.followUp).slice(0,6000),objectionReply:String(sourceInput.objectionReply??drafts.objectionReply).slice(0,6000)}):null;
+    const approvedEmail=approved?freezeCopy(renderEmail(approvedSource||drafts,brandSnapshot)):null;
+    const approvalBrandMode=brandedProvenance?'branded':clean(item.approvalBrandMode).toLowerCase()==='plain'?'plain':brandSnapshot?'branded':'legacy-plain';
+    return {domain,company:clean(item.company||dossier?.company),researchStatus,researchAt:clean(item.researchAt),dossier,selectedPersonId:clean(item.selectedPersonId),drafts,approved,approvedAt:approved?clean(item.approvedAt):'',contactedAt:approved?clean(item.contactedAt):'',brandSnapshot,approvedSource,approvedEmail,approvalSchemaVersion:Number.isSafeInteger(Number(item.approvalSchemaVersion))?Number(item.approvalSchemaVersion):0,approvalBrandMode,brandRevision:Number(item.brandRevision)||brandSnapshot?.revision||null,reapprovalRequired,error:reapprovalRequired?'The approved branded email could not be verified. Regenerate the outreach and approve again before sending.':clean(item.error),contentLanguage:['en','lv'].includes(item.contentLanguage)?item.contentLanguage:'',contentVariants:item.contentVariants&&typeof item.contentVariants==='object'?item.contentVariants:{}};
   }
   function normalizeOutreachState(value={}){const input=value&&typeof value==="object"?value:{};return {selectedDomain:clean(input.selectedDomain).toLowerCase().replace(/^www\./,""),items:(Array.isArray(input.items)?input.items:[]).slice(0,50).map(normalizeItem).filter(x=>x.domain)};}
 
-  return {DEFAULT_OUTREACH_STATE,buildDossierSearchQueries,normalizeDossierResearchResults,recommendOffer,buildOpportunityDossier,buildOutreachDrafts,localizeGeneratedItem,approveOutreachItem,normalizeOutreachState,splitList};
+  return {DEFAULT_OUTREACH_STATE,buildDossierSearchQueries,normalizeDossierResearchResults,recommendOffer,buildOpportunityDossier,buildOutreachDrafts,localizeGeneratedItem,approveOutreachItem,renderApprovedEmail,buildApprovedSendPayload,invalidateOutreachApproval,normalizeOutreachState,splitList};
 });
