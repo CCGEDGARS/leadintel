@@ -47,7 +47,7 @@ test('Brand & Email Identity is collapsed immediately after Main company website
   const targetMarket = html.indexOf('id="target-market-selector"');
   const modelScript = html.indexOf('brand-identity.js?v=20260916-brand-timestamp-v1');
   const profileScript = html.indexOf('profile-engine.js?v=20260915-brand-identity-v3');
-  const uiScript = html.indexOf('brand-identity-ui.js?v=20260916-brand-image-state-v1');
+  const uiScript = html.indexOf('brand-identity-ui.js?v=20260916-secure-logo-upload-v1');
   const appScript = html.indexOf('app.js?v=20260916-brand-assets-v2');
 
   assert.ok(websitePanel >= 0 && websitePanel < identityModule && identityModule < targetMarket);
@@ -173,7 +173,7 @@ test('default extraction uses verified public evidence, rejects non-HTTPS, and r
   });
 });
 
-test('logo evidence remains a suggestion until explicit approval imports a managed asset', async () => {
+test('logo evidence remains a suggestion and secure UX requires download plus authenticated upload', async () => {
   const UI = require('../brand-identity-ui.js');
   const calls = [];
   const managed = managedAsset('approved_logo');
@@ -200,13 +200,15 @@ test('logo evidence remains a suggestion until explicit approval imports a manag
 
   controller.applySuggestion('logoUrl');
   assert.equal(controller.identity().assets.logo, null);
-  await controller.applyLogoSuggestion();
-  assert.deepEqual(calls, [['logo', 'https://acme.example/logo.png']]);
-  assert.equal(controller.identity().assets.logo.id, 'approved_logo');
-  assert.doesNotMatch(JSON.stringify(controller.identity()), /acme\.example\/logo\.png/);
-  assert.equal(controller.suggestions().logoUrl, undefined);
-  await assert.rejects(controller.applyLogoSuggestion(), /No verified logo suggestion/);
-  assert.equal(calls.length, 1);
+  await assert.rejects(controller.applyLogoSuggestion(), /download the suggested logo and upload it using the Logo field/i);
+  assert.deepEqual(calls, []);
+  assert.equal(controller.identity().assets.logo, null);
+  assert.equal(controller.suggestions().logoUrl, 'https://acme.example/logo.png');
+
+  const source = fs.readFileSync(path.join(ROOT, 'brand-identity-ui.js'), 'utf8');
+  assert.match(source, /data-brand-logo-download/);
+  assert.match(source, /LeadIntel never hotlinks remote images in sent email/);
+  assert.doesNotMatch(source, /data-brand-logo-suggestion/);
 });
 
 test('failed asset replacement preserves the previous managed reference', async () => {

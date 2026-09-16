@@ -13,7 +13,6 @@ MICROSOFT_OAUTH_REDIRECT_URI = "https://leadintel-api.edgars-7e7.workers.dev/api
 MICROSOFT_MAIL_OAUTH_REDIRECT_URI = "https://leadintel-api.edgars-7e7.workers.dev/api/integrations/microsoft-mail/callback"
 APOLLO_WEBHOOK_URL = "https://leadintel-api.edgars-7e7.workers.dev/api/webhooks/apollo/crm-contact"
 SCRAPLING_SERVICE_URL = "https://leadintel-scrapling.onrender.com/api/scrapling"
-BRAND_ASSET_IMPORT_HOSTS = ""
 
 # Secrets are configured with `wrangler secret put` and are never committed:
 # GOOGLE_OAUTH_CLIENT_ID
