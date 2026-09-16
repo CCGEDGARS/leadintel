@@ -31,12 +31,13 @@ test('production backend deploy runs only after successful Backend CI on main an
   const deploy=workflow.indexOf('run: npm run deploy');
   assert.ok(install>=0&&provision>install&&deploy>provision,'R2 provisioning must run after npm ci and before Worker deploy');
   assert.match(workflow,/npx wrangler r2 bucket create "\$EXPECTED_BUCKET"/);
-  assert.match(workflow,/npx wrangler r2 bucket list --json/);
+  assert.doesNotMatch(workflow,/wrangler r2 bucket list --json/,'Wrangler does not support JSON output for bucket list');
   assert.match(workflow,/verify-r2-bucket-json\.mjs info "\$EXPECTED_BUCKET"/);
-  assert.match(workflow,/verify-r2-bucket-json\.mjs list "\$EXPECTED_BUCKET"/);
   assert.equal((workflow.match(/verify-r2-bucket-json\.mjs info "\$EXPECTED_BUCKET"/g)||[]).length,2,'initial and final info responses must both be parsed');
-  assert.match(workflow,/R2 bucket verification failed for an existing bucket; refusing to deploy/);
-  assert.match(workflow,/R2 bucket is absent; creating leadintel-brand-assets/);
+  assert.match(workflow,/code:\[\[:space:\]\]\*10042/);
+  assert.match(workflow,/Cloudflare R2 is not enabled for this account/);
+  assert.match(workflow,/R2 bucket was not verified; attempting idempotent creation of leadintel-brand-assets/);
+  assert.match(workflow,/R2 bucket creation failed; refusing to deploy/);
   assert.match(workflow,/set -euo pipefail/);
 });
 
