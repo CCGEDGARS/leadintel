@@ -505,6 +505,33 @@ test('workspace reset deletion removes every current and retained workspace asse
   assert.deepEqual(owner.events,[['audit','brand_asset.workspace_reset_deleted'],['delete',brandAssetObjectKey(retainedId)],['audit','brand_asset.workspace_reset_deleted'],['delete',brandAssetObjectKey(currentId)]]);
 });
 
+test('workspace reset paginates beyond 10,000 foreign assets and still deletes the owned asset',async()=>{
+  const owner=await fixture();owner.env.BRAND_ASSETS.pageSize=997;
+  for(let index=0;index<10_050;index++){
+    const key=`brand-assets/${String(index).padStart(43,'0')}`;
+    owner.env.BRAND_ASSETS.objects.set(key,{bytes:png(),httpMetadata:{contentType:'image/png'},customMetadata:{workspaceId:'foreign-workspace'}});
+  }
+  const ownedId='z'.repeat(43),ownedKey=brandAssetObjectKey(ownedId);
+  owner.env.BRAND_ASSETS.objects.set(ownedKey,{bytes:png(),httpMetadata:{contentType:'image/png'},customMetadata:await validatedMetadataWithDigest(png(),{workspaceId:owner.workspaceId})});
+  owner.events.length=0;
+  const response=await handleBrandAssetRoute(request(`/api/customer/brand-assets?workspace_id=${owner.workspaceId}`,{method:'DELETE',token:owner.token}),owner.env,{});
+  assert.equal(response.status,200);assert.deepEqual(await response.json(),{ok:true,deleted:1});
+  assert.equal(owner.env.BRAND_ASSETS.objects.has(ownedKey),false);assert.equal(owner.env.BRAND_ASSETS.objects.size,10_050);
+  assert.deepEqual(owner.events,[['audit','brand_asset.workspace_reset_deleted'],['delete',ownedKey]]);
+});
+
+test('workspace reset fails closed on malformed inventory pages and repeated cursors',async()=>{
+  for(const list of [
+    async()=>({objects:[]}),
+    async()=>({objects:[],truncated:true,cursor:'same'})
+  ]){
+    const owner=await fixture();owner.env.BRAND_ASSETS.list=list;
+    const response=await handleBrandAssetRoute(request(`/api/customer/brand-assets?workspace_id=${owner.workspaceId}`,{method:'DELETE',token:owner.token}),owner.env,{});
+    assert.equal(response.status,503);
+    assert.equal(owner.env.BRAND_ASSETS.objects.size,0);
+  }
+});
+
 test('failed replacement preserves old bytes and uses audited cleanup for the new object',async()=>{
   const owner=await fixture();const oldId=randomId('e'),nextId=randomId('f'),oldKey=brandAssetObjectKey(oldId),nextKey=brandAssetObjectKey(nextId);
   owner.env.BRAND_ASSETS.objects.set(oldKey,{bytes:png(),httpMetadata:{},customMetadata:{workspaceId:owner.workspaceId}});owner.env.BRAND_ASSETS.objects.set(nextKey,{bytes:png(),httpMetadata:{},customMetadata:{workspaceId:owner.workspaceId}});owner.events.length=0;

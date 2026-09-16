@@ -568,20 +568,15 @@ export async function replaceBrandAsset(env,{workspaceId,userId,previousAssetId,
   return nextAsset;
 }
 
-const WORKSPACE_ASSET_SCAN_LIMIT=10_000;
-
 export async function deleteWorkspaceBrandAssets(env,{workspaceId,userId}){
   const bucket=requireBinding(env);
   const keys=[];
   const seenCursors=new Set();
   let cursor;
-  let scanned=0;
   do{
     const page=await bucket.list({prefix:'brand-assets/',cursor,limit:1000,include:['customMetadata']});
-    if(!page||!Array.isArray(page.objects))throw new BrandAssetError('Brand asset inventory is unavailable',503);
+    if(!page||!Array.isArray(page.objects)||typeof page.truncated!=='boolean')throw new BrandAssetError('Brand asset inventory is unavailable',503);
     for(const object of page.objects){
-      scanned++;
-      if(scanned>WORKSPACE_ASSET_SCAN_LIMIT)throw new BrandAssetError('Brand asset inventory is too large to reset safely',503);
       if(String(object?.customMetadata?.workspaceId||'')===String(workspaceId)&&typeof object?.key==='string')keys.push(object.key);
     }
     if(!page.truncated)break;

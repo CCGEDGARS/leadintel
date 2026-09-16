@@ -214,6 +214,39 @@ test('corrupted persisted branded snapshots invalidate approval and block every 
   assert.notEqual(Outreach.buildApprovedSendPayload(reapproved,'buyer@example.com'),null);
 });
 
+test('missing branded snapshot provenance invalidates approval and blocks restore and direct send',()=>{
+  const draft=item();
+  const approved=Outreach.approveOutreachItem(draft,draft.drafts,'2026-09-15T21:00:00.000Z',{brandIdentity:readyIdentity});
+  const corrupted=structuredClone(approved);
+  corrupted.brandSnapshot=null;
+
+  assert.equal(Outreach.renderApprovedEmail(corrupted),null,'direct consumers must not downgrade branded HTML to plain text');
+  assert.equal(Outreach.buildApprovedSendPayload(corrupted,'buyer@example.com'),null);
+
+  const restored=Outreach.normalizeOutreachState({selectedDomain:'buyer.example',items:[corrupted]}).items[0];
+  assert.equal(restored.approved,false);
+  assert.equal(restored.reapprovalRequired,true);
+  assert.match(restored.error,/branded email.*regenerate.*approve again/i);
+  assert.equal(restored.approvalBrandMode,'branded');
+  assert.equal(Outreach.renderApprovedEmail(restored),null);
+  assert.equal(Outreach.buildApprovedSendPayload(restored,'buyer@example.com'),null);
+});
+
+test('explicit branded approval provenance blocks downgrade even when cached HTML and snapshot are both missing',()=>{
+  const corrupted=item('Previously branded body.');
+  corrupted.approved=true;
+  corrupted.approvedAt='2026-09-15T21:00:00.000Z';
+  corrupted.approvalSchemaVersion=1;
+  corrupted.approvalBrandMode='branded';
+  corrupted.brandRevision=7;
+  corrupted.brandSnapshot=null;
+  corrupted.approvedEmail=null;
+  const restored=Outreach.normalizeOutreachState({selectedDomain:'buyer.example',items:[corrupted]}).items[0];
+  assert.equal(restored.approved,false);
+  assert.equal(restored.reapprovalRequired,true);
+  assert.equal(Outreach.buildApprovedSendPayload(restored,'buyer@example.com'),null);
+});
+
 test('legacy approved packages with no brand snapshot remain approved plain text',()=>{
   const legacy=item('Legacy approved plain text.');
   legacy.approved=true;
@@ -237,14 +270,17 @@ test('outreach UI snapshots Step 1 identity, preserves edit detection and invali
   assert.match(source,/regenerateDrafts\(\)[\s\S]*invalidateOutreachApproval\(current\)/);
   assert.match(source,/renderApprovedEmail\(item\)/);
   assert.match(source,/buildApprovedSendPayload\(item\)/);
+  assert.match(source,/Reapproval required/);
+  assert.match(source,/Regenerate & reapprove/);
+  assert.match(source,/Sending is blocked/);
   assert.doesNotMatch(source,/\.sendGmail\(|\.sendMicrosoftMail\(/,'Task 5 must not create an automatic delivery path');
-  assert.match(discovery,/const OUTREACH_ASSET_VERSION="20260916-brand-outreach-v4";/);
+  assert.match(discovery,/const OUTREACH_ASSET_VERSION="20260916-brand-outreach-v5";/);
   assert.match(discovery,/outreach-engine\.js\?v=\$\{OUTREACH_ASSET_VERSION\}/);
   assert.match(discovery,/outreach-ui\.js\?v=\$\{OUTREACH_ASSET_VERSION\}/);
-  assert.match(source,/const LANGUAGE_ASSET_VERSION="20260916-brand-outreach-v4";/);
-  assert.match(delivery,/const ASSET_VERSION="20260916-brand-outreach-v4";/);
+  assert.match(source,/const LANGUAGE_ASSET_VERSION="20260916-brand-outreach-v5";/);
+  assert.match(delivery,/const ASSET_VERSION="20260916-brand-outreach-v5";/);
   assert.match(processMap,/outreach-automation-loader\.js\?v=20260916-brand-outreach-v2/);
   assert.match(automationLoader,/outreach-automation-delivery-handoff\.js\?v=20260916-brand-outreach-v2/);
   assert.match(html,/process-map\.js\?v=20260916-brand-outreach-v2/);
-  assert.match(html,/discovery-ui\.js\?v=20260916-brand-outreach-v4/);
+  assert.match(html,/discovery-ui\.js\?v=20260916-brand-outreach-v5/);
 });
