@@ -173,7 +173,7 @@ test('default extraction uses verified public evidence, rejects non-HTTPS, and r
   });
 });
 
-test('logo evidence remains a suggestion and secure UX requires download plus authenticated upload', async () => {
+test('logo evidence remains a suggestion until explicit approval imports a managed asset', async () => {
   const UI = require('../brand-identity-ui.js');
   const calls = [];
   const managed = managedAsset('approved_logo');
@@ -200,15 +200,13 @@ test('logo evidence remains a suggestion and secure UX requires download plus au
 
   controller.applySuggestion('logoUrl');
   assert.equal(controller.identity().assets.logo, null);
-  await assert.rejects(controller.applyLogoSuggestion(), /download the suggested logo and upload it using the Logo field/i);
-  assert.deepEqual(calls, []);
-  assert.equal(controller.identity().assets.logo, null);
-  assert.equal(controller.suggestions().logoUrl, 'https://acme.example/logo.png');
-
-  const source = fs.readFileSync(path.join(ROOT, 'brand-identity-ui.js'), 'utf8');
-  assert.match(source, /data-brand-logo-download/);
-  assert.match(source, /LeadIntel never hotlinks remote images in sent email/);
-  assert.doesNotMatch(source, /data-brand-logo-suggestion/);
+  await controller.applyLogoSuggestion();
+  assert.deepEqual(calls, [['logo', 'https://acme.example/logo.png']]);
+  assert.equal(controller.identity().assets.logo.id, 'approved_logo');
+  assert.doesNotMatch(JSON.stringify(controller.identity()), /acme\.example\/logo\.png/);
+  assert.equal(controller.suggestions().logoUrl, undefined);
+  await assert.rejects(controller.applyLogoSuggestion(), /No verified logo suggestion/);
+  assert.equal(calls.length, 1);
 });
 
 test('failed asset replacement preserves the previous managed reference', async () => {
@@ -362,6 +360,7 @@ test('UI source hides stale preview, marks invalid fields, announces and focuses
   assert.match(source, />Apply</);
   assert.match(source, /brand-action-error/);
 });
+
 
 test('managed image load failures become explicit accessible states and successful replacement clears them', () => {
   const source = fs.readFileSync(path.join(ROOT, 'brand-identity-ui.js'), 'utf8');
