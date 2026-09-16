@@ -111,7 +111,7 @@ function riffValidWebpWithUndecodableVp8(width=3,height=2){
 }
 
 class MemoryR2{
-  constructor(events=[]){this.objects=new Map();this.events=events;}
+  constructor(events=[],pageSize=1000){this.objects=new Map();this.events=events;this.pageSize=pageSize;}
   async put(key,value,options={}){
     const bytes=new Uint8Array(await new Response(value).arrayBuffer());
     this.objects.set(key,{bytes,httpMetadata:options.httpMetadata||{},customMetadata:options.customMetadata||{}});
@@ -123,6 +123,14 @@ class MemoryR2{
   }
   async head(key){
     const row=this.objects.get(key);return row?{httpMetadata:row.httpMetadata,customMetadata:row.customMetadata}:null;
+  }
+  async list({prefix='',cursor,limit=1000,include=[]}={}){
+    const keys=[...this.objects.keys()].filter(key=>key.startsWith(prefix)).sort();
+    const offset=cursor?Number(cursor):0;
+    const selected=keys.slice(offset,offset+Math.min(limit,this.pageSize));
+    const objects=selected.map(key=>({key,...(include.includes('customMetadata')?{customMetadata:this.objects.get(key).customMetadata}:{})}));
+    const next=offset+selected.length;
+    return {objects,truncated:next<keys.length,cursor:next<keys.length?String(next):undefined};
   }
   async delete(key){this.objects.delete(key);this.events.push(['delete',key]);}
 }
@@ -702,10 +710,20 @@ test('import rejects unsafe schemes, private literals, excessive redirects, over
   }finally{globalThis.fetch=originalFetch;}
 });
 
-test('replacement saves metadata then audits before deleting old bytes',async()=>{
+test('replacement saves metadata and retains old bytes for immutable approved outreach',async()=>{
   const owner=await fixture();const oldId=randomId('c'),nextId=randomId('d'),oldKey=brandAssetObjectKey(oldId),nextKey=brandAssetObjectKey(nextId);
   owner.env.BRAND_ASSETS.objects.set(oldKey,{bytes:png(),httpMetadata:{},customMetadata:{workspaceId:owner.workspaceId}});owner.env.BRAND_ASSETS.objects.set(nextKey,{bytes:png(),httpMetadata:{},customMetadata:{workspaceId:owner.workspaceId}});owner.events.length=0;
-  await replaceBrandAsset(owner.env,{workspaceId:owner.workspaceId,userId:owner.DB.user.id,previousAssetId:oldId,nextAsset:{id:nextId},saveMetadata:async()=>owner.events.push(['saved'])});assert.deepEqual(owner.events,[['saved'],['audit','brand_asset.replaced'],['delete',oldKey]]);assert.equal(owner.env.BRAND_ASSETS.objects.has(oldKey),false);
+  await replaceBrandAsset(owner.env,{workspaceId:owner.workspaceId,userId:owner.DB.user.id,previousAssetId:oldId,nextAsset:{id:nextId},saveMetadata:async()=>owner.events.push(['saved'])});assert.deepEqual(owner.events,[['saved']]);assert.equal(owner.env.BRAND_ASSETS.objects.has(oldKey),true);assert.equal(owner.env.BRAND_ASSETS.objects.has(nextKey),true);
+});
+
+test('workspace reset deletion removes every current and retained workspace asset but preserves other workspaces',async()=>{
+  const owner=await fixture();owner.env.BRAND_ASSETS.pageSize=1;const retainedId=randomId('r'),currentId=randomId('s'),foreignId=randomId('t');
+  for(const [id,workspaceId] of [[retainedId,owner.workspaceId],[currentId,owner.workspaceId],[foreignId,'foreign-workspace']])owner.env.BRAND_ASSETS.objects.set(brandAssetObjectKey(id),{bytes:png(),httpMetadata:{contentType:'image/png'},customMetadata:await validatedMetadataWithDigest(png(),{workspaceId})});
+  owner.events.length=0;
+  const response=await handleBrandAssetRoute(request(`/api/customer/brand-assets?workspace_id=${owner.workspaceId}`,{method:'DELETE',token:owner.token}),owner.env,{});
+  assert.equal(response.status,200);assert.deepEqual(await response.json(),{ok:true,deleted:2});
+  assert.equal(owner.env.BRAND_ASSETS.objects.has(brandAssetObjectKey(retainedId)),false);assert.equal(owner.env.BRAND_ASSETS.objects.has(brandAssetObjectKey(currentId)),false);assert.equal(owner.env.BRAND_ASSETS.objects.has(brandAssetObjectKey(foreignId)),true);
+  assert.deepEqual(owner.events,[['audit','brand_asset.workspace_reset_deleted'],['delete',brandAssetObjectKey(retainedId)],['audit','brand_asset.workspace_reset_deleted'],['delete',brandAssetObjectKey(currentId)]]);
 });
 
 test('failed replacement preserves old bytes and uses audited cleanup for the new object',async()=>{

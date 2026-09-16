@@ -568,15 +568,9 @@ export async function replaceBrandAsset(env,{workspaceId,userId,previousAssetId,
     throw cause;
   }
 
-  if(previousAssetId&&previousAssetId!==nextAsset.id){
-    await deleteBrandAsset(env,{
-      workspaceId,
-      assetId:previousAssetId,
-      userId,
-      eventType:'brand_asset.replaced',
-      metadata:{replacement_asset_id:nextAsset.id}
-    });
-  }
+  // Previous objects can be referenced by immutable approved outreach. They
+  // are retained until the authenticated workspace-wide reset removes every
+  // R2 object owned by this workspace.
   return nextAsset;
 }
 
@@ -994,6 +988,38 @@ async function fetchImportedFile(rawUrl,kind,configuredHosts,workspaceHost,env){
   }
 }
 
+const WORKSPACE_ASSET_SCAN_LIMIT=10_000;
+
+export async function deleteWorkspaceBrandAssets(env,{workspaceId,userId}){
+  const bucket=requireBinding(env);
+  const keys=[];
+  const seenCursors=new Set();
+  let cursor;
+  let scanned=0;
+  do{
+    const page=await bucket.list({prefix:'brand-assets/',cursor,limit:1000,include:['customMetadata']});
+    if(!page||!Array.isArray(page.objects))throw new BrandAssetError('Brand asset inventory is unavailable',503);
+    for(const object of page.objects){
+      scanned++;
+      if(scanned>WORKSPACE_ASSET_SCAN_LIMIT)throw new BrandAssetError('Brand asset inventory is too large to reset safely',503);
+      if(String(object?.customMetadata?.workspaceId||'')===String(workspaceId)&&typeof object?.key==='string')keys.push(object.key);
+    }
+    if(!page.truncated)break;
+    const next=String(page.cursor||'');
+    if(!next||seenCursors.has(next))throw new BrandAssetError('Brand asset inventory pagination failed',503);
+    seenCursors.add(next);cursor=next;
+  }while(true);
+
+  let deleted=0;
+  for(const key of keys){
+    const assetId=key.slice('brand-assets/'.length);
+    if(!parsedAssetId(assetId))throw new BrandAssetError('Brand asset inventory is invalid',503);
+    await deleteBrandAsset(env,{workspaceId,assetId,userId,eventType:'brand_asset.workspace_reset_deleted'});
+    deleted++;
+  }
+  return {deleted};
+}
+
 async function storedObjectBytes(object,limit){
   if(!Number.isSafeInteger(limit)||limit<1||Number(object.size)>limit){
     return null;
@@ -1137,13 +1163,17 @@ export async function handleBrandAssetRoute(request,env,cors={}){
     }
 
     if(path===ASSET_PATH){
-      if(request.method!=='POST'){
+      if(!['POST','DELETE'].includes(request.method)){
         return error('Method not allowed',405,cors);
       }
       const workspaceId=url.searchParams.get('workspace_id')||'';
       const access=await requireWorkspaceWriter(request,env,workspaceId);
       if(access.error){
         return error(access.error,access.status,cors);
+      }
+      if(request.method==='DELETE'){
+        const result=await deleteWorkspaceBrandAssets(env,{workspaceId,userId:access.user.id});
+        return json({ok:true,deleted:result.deleted},200,cors);
       }
       const form=await request.formData().catch(()=>null);
       if(!form){

@@ -158,7 +158,7 @@
     if(brandSnapshot&&generated)drafts.emailBody=removeGeneratedSenderPlaceholder(drafts.emailBody);
     const approvedSource=freezeCopy(drafts);
     const approvedEmail=freezeCopy(renderEmail(approvedSource,brandSnapshot));
-    return {...item,drafts,approvedSource,brandSnapshot,approvedEmail,approved:true,approvedAt:clean(approvedAt),error:""};
+    return {...item,drafts,approvedSource,brandSnapshot,approvedEmail,approved:true,approvedAt:clean(approvedAt),reapprovalRequired:false,error:""};
   }
 
   function freezeCopy(value){
@@ -182,7 +182,7 @@
     return {recipient:clean(recipient),subject:email.subject,body:email.textBody,textBody:email.textBody,htmlBody:email.htmlBody};
   }
   function invalidateOutreachApproval(item={}){
-    return {...item,approved:false,approvedAt:"",contactedAt:"",brandSnapshot:null,approvedSource:null,approvedEmail:null,error:""};
+    return {...item,approved:false,approvedAt:"",contactedAt:"",brandSnapshot:null,approvedSource:null,approvedEmail:null,reapprovalRequired:false,error:""};
   }
 
   function localizeGeneratedItem(item={},candidate={},profile={},market={},language='en'){
@@ -209,12 +209,18 @@
     const domain=clean(item.domain).toLowerCase().replace(/^www\./,"");const researchStatus=RESEARCH_STATUSES.has(item.researchStatus)?item.researchStatus:"idle";
     const dossier=item.dossier&&typeof item.dossier==="object"?{...item.dossier,company:clean(item.dossier.company),domain:clean(item.dossier.domain)||domain,website:normalizeUrl(item.dossier.website),market:clean(item.dossier.market),recommendedOffer:clean(item.dossier.recommendedOffer),buyerRoles:splitList(item.dossier.buyerRoles),whyNow:clean(item.dossier.whyNow),evidence:(item.dossier.evidence||[]).map(normalizeEvidence).filter(Boolean).slice(0,15),hypotheses:(item.dossier.hypotheses||[]).map(clean).filter(Boolean).slice(0,8),people:(item.dossier.people||[]).slice(0,5)}:null;
     const drafts={tone:clean(item.drafts?.tone)||"consultative",emailSubject:clean(item.drafts?.emailSubject),emailBody:String(item.drafts?.emailBody||"").slice(0,12000),linkedinMessage:String(item.drafts?.linkedinMessage||"").slice(0,3000),callOpener:String(item.drafts?.callOpener||"").slice(0,6000),followUp:String(item.drafts?.followUp||"").slice(0,6000),objectionReply:String(item.drafts?.objectionReply||"").slice(0,6000)};
-    const approved=Boolean(item.approved);let brandSnapshot=null;
-    if(approved&&item.brandSnapshot?.status==="ready"){try{brandSnapshot=BrandIdentity?.snapshot(item.brandSnapshot)||null;}catch{brandSnapshot=null;}}
+    const requestedApproval=Boolean(item.approved);let brandSnapshot=null;let corruptedSnapshot=false;
+    const hasPersistedSnapshot=Object.prototype.hasOwnProperty.call(item,'brandSnapshot')&&item.brandSnapshot!==null&&item.brandSnapshot!==undefined;
+    if(requestedApproval&&hasPersistedSnapshot){
+      if(item.brandSnapshot?.status!=="ready")corruptedSnapshot=true;
+      else try{brandSnapshot=BrandIdentity?.snapshot(item.brandSnapshot)||null;if(!brandSnapshot)corruptedSnapshot=true;}catch{corruptedSnapshot=true;brandSnapshot=null;}
+    }
+    const reapprovalRequired=Boolean(item.reapprovalRequired)||corruptedSnapshot;
+    const approved=requestedApproval&&!reapprovalRequired;
     const sourceInput=item.approvedSource&&typeof item.approvedSource==="object"?item.approvedSource:drafts;
     const approvedSource=approved?freezeCopy({tone:clean(sourceInput.tone)||drafts.tone,emailSubject:clean(sourceInput.emailSubject)||drafts.emailSubject,emailBody:String(sourceInput.emailBody??drafts.emailBody).slice(0,12000),linkedinMessage:String(sourceInput.linkedinMessage??drafts.linkedinMessage).slice(0,3000),callOpener:String(sourceInput.callOpener??drafts.callOpener).slice(0,6000),followUp:String(sourceInput.followUp??drafts.followUp).slice(0,6000),objectionReply:String(sourceInput.objectionReply??drafts.objectionReply).slice(0,6000)}):null;
     const approvedEmail=approved?freezeCopy(renderEmail(approvedSource||drafts,brandSnapshot)):null;
-    return {domain,company:clean(item.company||dossier?.company),researchStatus,researchAt:clean(item.researchAt),dossier,selectedPersonId:clean(item.selectedPersonId),drafts,approved,approvedAt:clean(item.approvedAt),contactedAt:clean(item.contactedAt),brandSnapshot,approvedSource,approvedEmail,contentLanguage:['en','lv'].includes(item.contentLanguage)?item.contentLanguage:'',contentVariants:item.contentVariants&&typeof item.contentVariants==='object'?item.contentVariants:{}};
+    return {domain,company:clean(item.company||dossier?.company),researchStatus,researchAt:clean(item.researchAt),dossier,selectedPersonId:clean(item.selectedPersonId),drafts,approved,approvedAt:approved?clean(item.approvedAt):'',contactedAt:approved?clean(item.contactedAt):'',brandSnapshot,approvedSource,approvedEmail,reapprovalRequired,error:reapprovalRequired?'Brand identity snapshot is invalid. Regenerate the outreach and approve again.':clean(item.error),contentLanguage:['en','lv'].includes(item.contentLanguage)?item.contentLanguage:'',contentVariants:item.contentVariants&&typeof item.contentVariants==='object'?item.contentVariants:{}};
   }
   function normalizeOutreachState(value={}){const input=value&&typeof value==="object"?value:{};return {selectedDomain:clean(input.selectedDomain).toLowerCase().replace(/^www\./,""),items:(Array.isArray(input.items)?input.items:[]).slice(0,50).map(normalizeItem).filter(x=>x.domain)};}
 

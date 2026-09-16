@@ -112,6 +112,21 @@
   }
 
   async function cleanupResetAssets(intent,bridge){
+    if(typeof bridge.deleteAllBrandAssets==="function"){
+      try{
+        const result=await bridge.deleteAllBrandAssets();
+        const detail={attempted:Number(result?.deleted)||0,deleted:Number(result?.deleted)||0,queued:0,failed:0};
+        root.localStorage.removeItem(ASSET_RESET_CLEANUP_KEY);
+        emitAssetCleanup(detail);
+        return detail;
+      }catch(error){
+        const detail={attempted:0,deleted:0,queued:0,failed:1,error:String(error?.message||error)};
+        root.localStorage.setItem(ASSET_RESET_CLEANUP_KEY,JSON.stringify({...intent,last_cleanup_at:Date.now(),cleanup_failures:(Number(intent?.cleanup_failures)||0)+1}));
+        console.warn("LeadIntel brand asset reset cleanup incomplete",detail);
+        emitAssetCleanup(detail);
+        return detail;
+      }
+    }
     const assets=Array.isArray(intent?.assets)?intent.assets.filter(item=>BRAND_ASSET_KINDS.includes(item?.kind)&&BRAND_ASSET_ID.test(String(item?.id||""))):[];
     const failed=[];
     let deleted=0,queued=0;
@@ -140,7 +155,7 @@
     const intent=readResetIntent();
     const bridge=root.LeadIntelServerBridge;
     if(!intent||!bridge?.session?.authenticated||!bridge.workspace||String(workspaceId||"")!==bridge.workspace.id||!resetIntentMatchesWorkspace(intent,bridge))return Promise.resolve({attempted:0,deleted:0,queued:0,failed:0});
-    if(typeof bridge.deleteBrandAsset!=="function"){
+    if(typeof bridge.deleteAllBrandAssets!=="function"&&typeof bridge.deleteBrandAsset!=="function"){
       const attempted=Array.isArray(intent.assets)?intent.assets.length:0;
       const detail={attempted,deleted:0,queued:0,failed:attempted,unavailable:true};
       emitAssetCleanup(detail);

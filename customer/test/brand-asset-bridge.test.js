@@ -12,7 +12,7 @@ const indexSource = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'u
 const processMapSource = fs.readFileSync(path.join(__dirname, '..', 'process-map.js'), 'utf8');
 const API = 'https://leadintel-api.edgars-7e7.workers.dev';
 const WORKSPACE_ID = 'workspace-1';
-const CACHE_VERSION = '20260916-brand-assets-v8';
+const CACHE_VERSION = '20260916-brand-assets-v9';
 const CLEANUP_KEY = 'leadintel_customer_v2_brand_asset_cleanup_v1';
 
 function storage(initial = {}) {
@@ -123,7 +123,7 @@ test('uploadBrandAsset sends authenticated multipart data scoped to the selected
   assert.equal(JSON.parse(calls[1].options.body).payload.main.brandIdentity.assets.logo.id, expected.id);
 });
 
-test('importBrandAsset and deleteBrandAsset are workspace scoped and fail closed', async () => {
+test('importBrandAsset and retained removal are workspace scoped and fail closed', async () => {
   const calls = [];
   const imported = asset('b'.repeat(43));
   const {bridge} = loadBridge(async (url, options) => {
@@ -138,14 +138,14 @@ test('importBrandAsset and deleteBrandAsset are workspace scoped and fail closed
   assert.equal(deletion.ok, true);
   assert.equal(deletion.status, 200);
   assert.equal(deletion.asset_id, imported.id);
-  assert.deepEqual(Object.keys(deletion).sort(), ['asset_id', 'ok', 'status']);
+  assert.equal(deletion.retained, true);
   assert.equal(calls[0].url, `${API}/api/customer/brand-assets/import?workspace_id=${WORKSPACE_ID}`);
   assert.deepEqual(JSON.parse(calls[0].options.body), {kind: 'logo', url: 'https://www.example.com/logo.png', alt_text: 'Logo'});
   assert.equal(calls[1].url, `${API}/api/customer/state?workspace_id=${WORKSPACE_ID}`);
   assert.equal(calls[2].url, `${API}/api/customer/state?workspace_id=${WORKSPACE_ID}`);
   assert.equal(JSON.parse(calls[2].options.body).payload.main.brandIdentity.assets.logo, null);
-  assert.equal(calls[3].url, `${API}/api/customer/brand-assets/${imported.id}?workspace_id=${WORKSPACE_ID}`);
-  assert.equal(calls[3].options.method, 'DELETE');
+  assert.equal(calls.length, 3);
+  assert.equal(calls.some(call => call.url.includes(`/brand-assets/${imported.id}`) && call.options.method === 'DELETE'), false);
 
   const {bridge: failing} = loadBridge(async () => new Response(JSON.stringify({error: 'Workspace access denied'}), {status: 403}));
   await assert.rejects(() => failing.deleteBrandAsset('logo', imported), /Workspace access denied/);
@@ -188,40 +188,26 @@ test('failed identity persistence rolls back the new object and preserves old me
   assert.equal(transaction.detail.rollbackDeleted, true);
 });
 
-test('successful identity persistence retires the old object and queues observable retry on failure', async () => {
+test('successful identity persistence retains the old object for immutable approved snapshots', async () => {
   const oldAsset = asset('i'.repeat(43));
   const nextAsset = asset('j'.repeat(43));
   const main = JSON.stringify({brandIdentity: {status: 'ready', assets: {logo: oldAsset}}});
   const calls = [];
-  let oldDeleteAttempts = 0;
   const {bridge, localStorage, events} = loadBridge(async (url, options) => {
     calls.push({url, options});
     if (url.includes('/brand-assets?')) return new Response(JSON.stringify({asset: nextAsset}), {status: 201});
     if (url.includes('/customer/state')) return new Response(JSON.stringify({version: 2}), {status: 200});
-    if (url.includes(oldAsset.id)) {
-      oldDeleteAttempts++;
-      if (oldDeleteAttempts === 1) return new Response(JSON.stringify({error: 'temporary delete failure'}), {status: 503});
-      return new Response(JSON.stringify({ok: true, asset_id: oldAsset.id}), {status: 200});
-    }
     throw new Error(`Unexpected request: ${url}`);
   }, {leadintel_customer_v2_state: main});
 
   assertAssetValue(await bridge.uploadBrandAsset('logo', new Blob(['new'], {type: 'image/png'})), nextAsset);
   assert.equal(JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).brandIdentity.assets.logo.id, nextAsset.id);
-  let queue = JSON.parse(localStorage.getItem(CLEANUP_KEY));
-  assert.equal(queue.length, 1);
-  assert.equal(queue[0].id, oldAsset.id);
-  assert.equal(queue[0].reason, 'replacement');
-  assert.equal(events.find(event => event.type === 'leadintel:brand-asset-transaction').detail.cleanupQueued, true);
-
-  const retry = await bridge.flushBrandAssetCleanup();
-  assert.equal(retry.deleted, 1);
-  assert.equal(retry.failed, 0);
   assert.equal(localStorage.getItem(CLEANUP_KEY), null);
-  assert.equal(events.at(-1).type, 'leadintel:brand-asset-cleanup');
+  assert.equal(calls.some(call => call.url.includes(oldAsset.id)), false);
+  assert.equal(events.find(event => event.type === 'leadintel:brand-asset-transaction').detail.cleanupQueued, false);
 });
 
-test('post-commit cleanup queue storage failure returns the committed identity and emits an observable warning', async () => {
+test('post-commit replacement does not touch the cleanup queue because the old object is retained', async () => {
   const oldAsset = asset('v'.repeat(43));
   const nextAsset = asset('w'.repeat(43));
   const main = JSON.stringify({brandIdentity: {status: 'ready', senderName: 'Alex', assets: {logo: oldAsset}}});
@@ -236,21 +222,16 @@ test('post-commit cleanup queue storage failure returns the committed identity a
     if (key === CLEANUP_KEY) throw new Error('Cleanup queue quota exceeded');
     return originalSetItem(key, value);
   };
-  const warnings = [];
-  sandbox.console.warn = (...values) => warnings.push(values.map(String).join(' '));
-
   const result = await bridge.uploadBrandAsset('logo', new Blob(['new'], {type: 'image/png'}), {returnTransaction: true});
 
   assert.equal(result.identity.assets.logo.id, nextAsset.id);
   assert.equal(result.cleanupQueued, false);
-  assert.equal(result.cleanupWarning, true);
+  assert.equal(result.cleanupWarning, false);
   assert.equal(JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).brandIdentity.assets.logo.id, nextAsset.id);
-  const cleanupWarning = events.find(event => event.type === 'leadintel:brand-asset-cleanup-warning');
-  assert.match(cleanupWarning.detail.message, /Cleanup queue quota exceeded/);
+  assert.equal(events.some(event => event.type === 'leadintel:brand-asset-cleanup-warning'), false);
   const transaction = events.find(event => event.type === 'leadintel:brand-asset-transaction');
   assert.equal(transaction.detail.committed, true);
-  assert.equal(transaction.detail.cleanupWarning, true);
-  assert.equal(warnings.length, 1);
+  assert.equal(transaction.detail.cleanupWarning, false);
 });
 
 test('real UI and bridge chain has one persistence owner and adopts the committed Draft identity without another save', async () => {
@@ -477,10 +458,10 @@ test('production reset keeps asset cleanup pending until one reset PUT is follow
     const value = String(url);
     calls.push({url: value, method: options.method || 'GET'});
     if (value.includes('/customer/state')) return new Response(JSON.stringify({version: 2, saved: true}), {status: 200});
-    if (value.includes('/brand-assets/')) {
+    if (value.includes('/brand-assets?') && options.method === 'DELETE') {
       deleteStarted.resolve();
       await releaseDelete.promise;
-      return new Response(JSON.stringify({ok: true}), {status: 200});
+      return new Response(JSON.stringify({ok: true, deleted: 1}), {status: 200});
     }
     throw new Error(`Unexpected request: ${url}`);
   }, {
@@ -501,7 +482,7 @@ test('production reset keeps asset cleanup pending until one reset PUT is follow
   await bridge.saveNow();
   await deleteStarted.promise;
   assert.equal(calls.filter(call => call.url.includes('/customer/state') && call.method === 'PUT').length, 1);
-  assert.equal(calls.filter(call => call.url.includes('/brand-assets/') && call.method === 'DELETE').length, 1);
+  assert.equal(calls.filter(call => call.url.includes('/brand-assets?') && call.method === 'DELETE').length, 1);
   assert.equal(localStorage.getItem(serverResetKey), null);
   assert.notEqual(localStorage.getItem(assetCleanupKey), null);
 
@@ -521,7 +502,7 @@ test('reset invalidates an in-flight upload before it can recreate brand identit
   const deletedAssetIds = [];
   const {bridge, localStorage, sandbox} = loadProductionComposition(async (url, options = {}) => {
     const value = String(url);
-    if (value.includes('/brand-assets?')) {
+    if (value.includes('/brand-assets?') && options.method === 'POST') {
       uploadStarted.resolve();
       await releaseUpload.promise;
       return new Response(JSON.stringify({asset: uploadedAsset}), {status: 201});
@@ -529,6 +510,10 @@ test('reset invalidates an in-flight upload before it can recreate brand identit
     if (value.includes('/customer/state')) {
       statePayloads.push(JSON.parse(options.body));
       return new Response(JSON.stringify({version: statePayloads.length, saved: true}), {status: 200});
+    }
+    if (value.includes('/brand-assets?') && options.method === 'DELETE') {
+      deletedAssetIds.push('workspace-inventory');
+      return new Response(JSON.stringify({ok: true, deleted: 1}), {status: 200});
     }
     if (value.includes('/brand-assets/')) {
       deletedAssetIds.push(value.split('/brand-assets/')[1].split('?')[0]);
@@ -561,7 +546,7 @@ test('reset invalidates an in-flight upload before it can recreate brand identit
   assert.equal(statePayloads.length, 1);
   const localMain = JSON.parse(localStorage.getItem('leadintel_customer_v2_state'));
   assert.equal(localMain.brandIdentity ?? null, null);
-  assert.deepEqual(deletedAssetIds.sort(), [oldAsset.id, uploadedAsset.id].sort());
+  assert.deepEqual(deletedAssetIds.sort(), ['workspace-inventory', uploadedAsset.id].sort());
   assert.equal(localStorage.getItem(sandbox.LeadIntelWorkspaceResetHygiene.ASSET_RESET_CLEANUP_KEY), null);
   assert.equal(localStorage.getItem(CLEANUP_KEY), null);
 });
@@ -582,6 +567,10 @@ test('reset generation cancels an in-flight import after empty reset cleanup has
     if (value.includes('/customer/state')) {
       statePayloads.push(JSON.parse(options.body));
       return new Response(JSON.stringify({version: statePayloads.length, saved: true}), {status: 200});
+    }
+    if (value.includes('/brand-assets?') && options.method === 'DELETE') {
+      deletedAssetIds.push('workspace-inventory');
+      return new Response(JSON.stringify({ok: true, deleted: 0}), {status: 200});
     }
     if (value.includes('/brand-assets/')) {
       deletedAssetIds.push(value.split('/brand-assets/')[1].split('?')[0]);
@@ -610,7 +599,7 @@ test('reset generation cancels an in-flight import after empty reset cleanup has
   assert.equal(result.reset, true);
   assert.equal(statePayloads.length, 1);
   assert.equal(JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).brandIdentity ?? null, null);
-  assert.deepEqual(deletedAssetIds, [importedAsset.id]);
+  assert.deepEqual(deletedAssetIds, ['workspace-inventory', importedAsset.id]);
 });
 
 test('reset cancels active and queued pre-reset uploads while allowing a post-reset upload', async () => {
@@ -624,7 +613,7 @@ test('reset cancels active and queued pre-reset uploads while allowing a post-re
   let uploadCalls = 0;
   const {bridge, localStorage, sandbox} = loadProductionComposition(async (url, options = {}) => {
     const value = String(url);
-    if (value.includes('/brand-assets?')) {
+    if (value.includes('/brand-assets?') && options.method === 'POST') {
       uploadCalls++;
       if (uploadCalls === 1) {
         firstUploadStarted.resolve();
@@ -636,6 +625,10 @@ test('reset cancels active and queued pre-reset uploads while allowing a post-re
     if (value.includes('/customer/state')) {
       statePayloads.push(JSON.parse(options.body));
       return new Response(JSON.stringify({version: statePayloads.length, saved: true}), {status: 200});
+    }
+    if (value.includes('/brand-assets?') && options.method === 'DELETE') {
+      deletedAssetIds.push('workspace-inventory');
+      return new Response(JSON.stringify({ok: true, deleted: 0}), {status: 200});
     }
     if (value.includes('/brand-assets/')) {
       deletedAssetIds.push(value.split('/brand-assets/')[1].split('?')[0]);
@@ -666,7 +659,7 @@ test('reset cancels active and queued pre-reset uploads while allowing a post-re
   assert.equal(statePayloads.length, 1);
   assert.equal(statePayloads[0].payload.main.brandIdentity ?? null, null);
   assert.equal(JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).brandIdentity ?? null, null);
-  assert.deepEqual(deletedAssetIds.sort(), [firstAsset.id, queuedAsset.id].sort());
+  assert.deepEqual(deletedAssetIds.sort(), ['workspace-inventory', firstAsset.id, queuedAsset.id].sort());
   assert.equal(localStorage.getItem(CLEANUP_KEY), null);
 
   const postResetResult = await bridge.uploadBrandAsset('logo', new Blob(['post-reset'], {type: 'image/png'}), {returnTransaction: true});
@@ -687,7 +680,7 @@ test('reset cancels a queued pre-reset removal without recreating identity', asy
   const deletedAssetIds = [];
   const {bridge, localStorage, sandbox} = loadProductionComposition(async (url, options = {}) => {
     const value = String(url);
-    if (value.includes('/brand-assets?')) {
+    if (value.includes('/brand-assets?') && options.method === 'POST') {
       uploadStarted.resolve();
       await releaseUpload.promise;
       return new Response(JSON.stringify({asset: uploadedAsset}), {status: 201});
@@ -695,6 +688,10 @@ test('reset cancels a queued pre-reset removal without recreating identity', asy
     if (value.includes('/customer/state')) {
       statePayloads.push(JSON.parse(options.body));
       return new Response(JSON.stringify({version: statePayloads.length, saved: true}), {status: 200});
+    }
+    if (value.includes('/brand-assets?') && options.method === 'DELETE') {
+      deletedAssetIds.push('workspace-inventory');
+      return new Response(JSON.stringify({ok: true, deleted: 1}), {status: 200});
     }
     if (value.includes('/brand-assets/')) {
       deletedAssetIds.push(value.split('/brand-assets/')[1].split('?')[0]);
@@ -724,7 +721,7 @@ test('reset cancels a queued pre-reset removal without recreating identity', asy
   assert.equal(removalResult.reset, true);
   assert.equal(statePayloads.length, 1);
   assert.equal(JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).brandIdentity ?? null, null);
-  assert.deepEqual(deletedAssetIds.sort(), [oldAsset.id, uploadedAsset.id].sort());
+  assert.deepEqual(deletedAssetIds.sort(), ['workspace-inventory', uploadedAsset.id].sort());
   assert.equal(localStorage.getItem(sandbox.LeadIntelWorkspaceResetHygiene.ASSET_RESET_CLEANUP_KEY), null);
 });
 
@@ -894,7 +891,7 @@ test('reload recovery with only asset cleanup pending deletes the asset without 
   const calls = [];
   const {sandbox, localStorage} = loadProductionComposition(async (url, options = {}) => {
     calls.push({url: String(url), method: options.method || 'GET'});
-    if (String(url).includes('/brand-assets/')) return new Response(JSON.stringify({ok: true}), {status: 200});
+    if (String(url).includes('/brand-assets?') && options.method === 'DELETE') return new Response(JSON.stringify({ok: true, deleted: 1}), {status: 200});
     if (String(url).includes('/customer/state')) return new Response(JSON.stringify({version: 3, saved: true}), {status: 200});
     throw new Error(`Unexpected request: ${url}`);
   }, {
@@ -905,7 +902,7 @@ test('reload recovery with only asset cleanup pending deletes the asset without 
   assert.equal(await sandbox.LeadIntelWorkspaceResetHygiene.finalizePendingReset(), true);
 
   assert.equal(calls.filter(call => call.url.includes('/customer/state') && call.method === 'PUT').length, 0);
-  assert.equal(calls.filter(call => call.url.includes(`/brand-assets/${logo.id}`) && call.method === 'DELETE').length, 1);
+  assert.equal(calls.filter(call => call.url.includes('/brand-assets?') && call.method === 'DELETE').length, 1);
   assert.equal(localStorage.getItem(assetCleanupKey), null);
 });
 
@@ -913,8 +910,8 @@ test('reload recovery queues failed asset deletion and clears the reset cleanup 
   const logo = asset('A'.repeat(43));
   const assetCleanupKey = 'leadintel_customer_v2_brand_asset_reset_cleanup_v1';
   let deletes = 0;
-  const {sandbox, localStorage} = loadProductionComposition(async (url) => {
-    if (String(url).includes('/brand-assets/')) {
+  const {sandbox, localStorage} = loadProductionComposition(async (url, options = {}) => {
+    if (String(url).includes('/brand-assets?') && options.method === 'DELETE') {
       deletes++;
       return new Response(JSON.stringify({error: 'delete unavailable'}), {status: 503});
     }
@@ -927,11 +924,8 @@ test('reload recovery queues failed asset deletion and clears the reset cleanup 
   assert.equal(await sandbox.LeadIntelWorkspaceResetHygiene.finalizePendingReset(), true);
 
   assert.equal(deletes, 1);
-  assert.equal(localStorage.getItem(assetCleanupKey), null);
-  const queued = JSON.parse(localStorage.getItem(CLEANUP_KEY));
-  assert.equal(queued.length, 1);
-  assert.equal(queued[0].id, logo.id);
-  assert.equal(queued[0].workspace_id, WORKSPACE_ID);
+  assert.notEqual(localStorage.getItem(assetCleanupKey), null);
+  assert.equal(localStorage.getItem(CLEANUP_KEY), null);
 });
 
 test('reload recovery with both reset records saves once with intent before cleanup', async () => {
@@ -942,7 +936,7 @@ test('reload recovery with both reset records saves once with intent before clea
   const {sandbox, localStorage} = loadProductionComposition(async (url, options = {}) => {
     calls.push({url: String(url), method: options.method || 'GET'});
     if (String(url).includes('/customer/state')) return new Response(JSON.stringify({version: 4, saved: true}), {status: 200});
-    if (String(url).includes('/brand-assets/')) return new Response(JSON.stringify({ok: true}), {status: 200});
+    if (String(url).includes('/brand-assets?') && options.method === 'DELETE') return new Response(JSON.stringify({ok: true, deleted: 1}), {status: 200});
     throw new Error(`Unexpected request: ${url}`);
   }, {
     leadintel_customer_v2_workspace: WORKSPACE_ID,
@@ -953,7 +947,7 @@ test('reload recovery with both reset records saves once with intent before clea
   assert.equal(await sandbox.LeadIntelWorkspaceResetHygiene.finalizePendingReset(), true);
 
   assert.equal(calls.filter(call => call.url.includes('/customer/state') && call.method === 'PUT').length, 1);
-  assert.equal(calls.filter(call => call.url.includes(`/brand-assets/${logo.id}`) && call.method === 'DELETE').length, 1);
+  assert.equal(calls.filter(call => call.url.includes('/brand-assets?') && call.method === 'DELETE').length, 1);
   assert.equal(localStorage.getItem(serverResetKey), null);
   assert.equal(localStorage.getItem(assetCleanupKey), null);
 });
@@ -999,7 +993,7 @@ test('workspace transaction queue prevents a failed stale replacement from resto
   assert.equal(results[1].status, 'fulfilled');
   assert.equal(JSON.parse(localStorage.getItem('leadintel_customer_v2_state')).brandIdentity.assets.logo.id, secondAsset.id);
   assert.equal(deleted.filter(url => url.includes(firstAsset.id)).length, 1);
-  assert.equal(deleted.filter(url => url.includes(oldAsset.id)).length, 1);
+  assert.equal(deleted.filter(url => url.includes(oldAsset.id)).length, 0);
   assert.equal(deleted.some(url => url.includes(secondAsset.id)), false);
 });
 
@@ -1161,7 +1155,6 @@ test('workspace saves reject data-image values anywhere in malformed identity wi
   }
 });
 
-
 test('workspace persistence keeps legacy drafts but never stores a ready identity with an invalid updatedAt', async () => {
   const requests = [];
   const {bridge, localStorage, sandbox} = loadBridge(async (_url, options) => {
@@ -1183,14 +1176,16 @@ test('workspace persistence keeps legacy drafts but never stores a ready identit
   assert.equal(requests[1].payload.main.brandIdentity.status, 'draft');
   assert.equal(requests[1].payload.main.brandIdentity.updatedAt, '');
 });
+
 test('all brand asset operations encode reserved workspace identifier characters', async () => {
   const workspaceId = 'workspace /?#&=✓';
   const encoded = encodeURIComponent(workspaceId);
   const created = asset('l'.repeat(43));
   const calls = [];
-  const {bridge} = loadBridge(async (url) => {
+  const {bridge} = loadBridge(async (url, options = {}) => {
     calls.push(url);
     if (url.includes('/brand-assets/import')) return new Response(JSON.stringify({asset: created}), {status: 201});
+    if (url.includes('/brand-assets?') && options.method === 'DELETE') return new Response(JSON.stringify({ok: true, deleted: 2}), {status: 200});
     if (url.includes('/brand-assets?')) return new Response(JSON.stringify({asset: created}), {status: 201});
     if (url.includes('/customer/state')) return new Response(JSON.stringify({version: calls.length}), {status: 200});
     return new Response(JSON.stringify({ok: true, asset_id: created.id}), {status: 200});
@@ -1199,6 +1194,7 @@ test('all brand asset operations encode reserved workspace identifier characters
   await bridge.uploadBrandAsset('logo', new Blob(['file'], {type: 'image/png'}));
   await bridge.importBrandAsset('logo', 'https://www.example.com/logo.png');
   await bridge.deleteBrandAsset('logo', created);
+  await bridge.deleteAllBrandAssets();
 
   const assetCalls = calls.filter(url => url.includes('/brand-assets'));
   assert.equal(assetCalls.length, 3);
@@ -1213,6 +1209,64 @@ test('customer cache references use the Task 4 bridge and reset version everywhe
   assert.match(processMapSource, new RegExp(`workspace-persistence\\.js\\?v=${CACHE_VERSION}`));
   assert.doesNotMatch(indexSource, /server-bridge\.js\?v=20260915-mail-choice-v2/);
   assert.doesNotMatch(processMapSource, /(?:server-bridge|workspace-reset-hygiene)\.js\?v=(?:20260915-mail-choice-v2|20260909-emergency-reset-v1)/);
+});
+
+test('successful replacement and removal retain old assets used by approved email snapshots', async () => {
+  const oldAsset = asset('R'.repeat(43));
+  const nextAsset = asset('S'.repeat(43));
+  const approvedSnapshot = {status: 'ready', assets: {logo: oldAsset}};
+  const calls = [];
+  const fetchImpl = async (url, options = {}) => {
+    const value = String(url); calls.push({url: value, method: options.method || 'GET'});
+    if (value.includes('/brand-assets?') && (options.method || 'GET') === 'POST') return new Response(JSON.stringify({asset: nextAsset}), {status: 201});
+    if (value.includes('/customer/state')) return new Response(JSON.stringify({version: calls.length, saved: true}), {status: 200});
+    if (value.includes(`/brand-assets/${oldAsset.id}`) && (options.method || 'GET') === 'GET') return new Response(new Blob(['old-image'], {type: 'image/png'}), {status: 200});
+    throw new Error(`Unexpected request: ${value}`);
+  };
+  const {bridge, localStorage} = loadProductionComposition(fetchImpl, {
+    leadintel_customer_v2_state: JSON.stringify({brandIdentity: {status: 'ready', assets: {logo: oldAsset}}}),
+    leadintel_customer_v2_outreach: JSON.stringify({items: [{approved: true, brandSnapshot: approvedSnapshot}]})
+  });
+
+  await bridge.uploadBrandAsset('logo', new Blob(['new'], {type: 'image/png'}));
+  await bridge.deleteBrandAsset('logo', nextAsset);
+  assert.equal(calls.some(call => call.url.includes(`/brand-assets/${oldAsset.id}`) && call.method === 'DELETE'), false);
+  assert.equal(calls.some(call => call.url.includes(`/brand-assets/${nextAsset.id}`) && call.method === 'DELETE'), false);
+  const response = await fetchImpl(`${API}/api/customer/brand-assets/${oldAsset.id}`);
+  assert.equal(response.status, 200);
+  assert.equal(JSON.parse(localStorage.getItem('leadintel_customer_v2_outreach')).items[0].brandSnapshot.assets.logo.url, oldAsset.url);
+});
+
+test('workspace reset uses server-side inventory to delete current and retained assets', async () => {
+  const current = asset('T'.repeat(43));
+  const retained = asset('U'.repeat(43));
+  const cleanupKey = 'leadintel_customer_v2_legacy_local_cleanup_20260901_v2';
+  const localStorage = storage({
+    [cleanupKey]: 'done',
+    leadintel_customer_v2_workspace: WORKSPACE_ID,
+    leadintel_customer_v2_state: JSON.stringify({brandIdentity: {status: 'ready', assets: {logo: current}}}),
+    leadintel_customer_v2_outreach: JSON.stringify({items: [{approved: true, brandSnapshot: {status: 'ready', assets: {logo: retained}}}]})
+  });
+  const calls = [];
+  const listeners = {};
+  const events = [];
+  const sandbox = {
+    console, URLSearchParams, localStorage, sessionStorage: storage(), location: {search: '', replace() {}, reload() {}},
+    document: {addEventListener(type, handler) { listeners[type] = handler; }}, addEventListener() {}, setTimeout(handler) { handler(); return 1; },
+    dispatchEvent(event) { events.push(event); }, CustomEvent: class CustomEvent { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
+    LeadIntelServerBridge: {session: {authenticated: true}, workspace: {id: WORKSPACE_ID}, workspaces: [{id: WORKSPACE_ID}], conflict: false,
+      async deleteAllBrandAssets() { calls.push('delete-all'); return {ok: true, deleted: 2}; }}
+  };
+  sandbox.globalThis = sandbox;
+  vm.runInNewContext(resetSource, sandbox, {filename: 'workspace-reset-hygiene.js'});
+  const button = {dataset: {resetArmed: 'true'}};
+  listeners.click({target: {closest(selector) { return selector === '#reset-workspace' ? button : null; }}});
+  const result = await sandbox.LeadIntelWorkspaceResetHygiene.afterWorkspaceSaved(WORKSPACE_ID);
+  assert.deepEqual(calls, ['delete-all']);
+  assert.equal(result.deleted, 2);
+  assert.equal(result.failed, 0);
+  assert.equal(localStorage.getItem(sandbox.LeadIntelWorkspaceResetHygiene.RESET_PENDING_KEY), null);
+  assert.equal(events.at(-1).type, 'leadintel:brand-assets-reset-cleanup');
 });
 
 test('workspace reset clears displayed identity and reports best-effort asset cleanup', async () => {
