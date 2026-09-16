@@ -1,8 +1,8 @@
-import './content-language.js?v=20260906-step2-language-v1';
+import './content-language.js?v=20260916-campaign-language-v3';
 import './content-variants.js?v=20260905-step1-language-v1';
 import './business-identity.js?v=20260906-pain-headings-v1';
 import './evidence-view.js?v=20260915-research-source-text-v1';
-import './workspace-persistence.js?v=20260916-brand-assets-v10';
+import './workspace-persistence.js?v=20260916-ercon-context-v1';
 import {withOpenAiRetry,describePartialCoverage} from './market-research-provider-resilience.js?v=20260913-openai-retry-v2';
 
 const STORAGE_KEY="leadintel_customer_v2_state";
@@ -328,7 +328,7 @@ async function openModule(step){
   const safeTarget=window.LeadIntelWorkspaceIsolation?.safeStep?.(localStorage,state,target);
   if(target>=5&&safeTarget!==target){
     setStep(safeTarget||4);
-    showToast(target===6?"Save a company to Pipeline in Discovery before opening Content & Scripts.":"Complete the previous stage before continuing.");
+    showToast(target===6?"Save a company to Pipeline in Discovery before opening Campaign Studio.":"Complete the previous stage before continuing.");
     return false;
   }
   setStep(target);return true;
@@ -811,6 +811,9 @@ function bind(){
     state=loadState();editMode=false;syncInputsFromState();updateCompleteness();
     $("analysis-state").hidden=true;$("profile-content").hidden=true;
     setStep(1);
+  });
+  window.addEventListener("leadintel:company-research-updated",()=>{
+    state=loadState();editMode=false;syncInputsFromState();updateCompleteness();
   });
   window.addEventListener("leadintel:language-changed",event=>{
     LeadIntelContentLanguage.applyLanguageSelection(state,event.detail?.language);

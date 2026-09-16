@@ -295,6 +295,14 @@
     return {visible:true,label:"Accept",disabled:false};
   }
 
+  function reconcileResearchField(value,row={}){
+    if(!clean(value))return {origin:"needs-input",reviewed:false,confidence:"",sourceIds:[],rationale:""};
+    const origin=clean(row.origin).toLowerCase();
+    if(origin==="research")return {origin:"research",reviewed:Boolean(row.reviewed),confidence:CONFIDENCE.has(clean(row.confidence).toLowerCase())?clean(row.confidence).toLowerCase():"low",sourceIds:unique(row.sourceIds||[]).slice(0,6),rationale:truncate(row.rationale,500)};
+    if(origin==="user")return {origin:"user",reviewed:true,confidence:"",sourceIds:[],rationale:truncate(row.rationale,500)};
+    return {origin:"user",reviewed:true,confidence:"",sourceIds:[],rationale:"Customer-provided context preserved."};
+  }
+
   function deriveCompanyName(sources=[],website=""){
     const official=(sources||[]).find(source=>source.type==="website")||(sources||[])[0];
     const title=clean(official?.title);if(title){const first=clean(title.split(/\s[|–—]\s|\s-\s/)[0]);if(first&&first.length<=100)return first;}
@@ -313,5 +321,5 @@
     return {system,prompt};
   }
 
-  return {QUESTION_IDS,MAX_PUBLIC_QUERIES,MAX_SOURCES,RESEARCH_LIMITS,AUTHORITATIVE_CATEGORIES,safeUrl,resolveResearchLanguage,buildResearchQueries,buildAuthoritativePageQueries,classifyPageCategory,selectAuthoritativePageCandidates,normalizeSearchResults,mergeSources,filterResearchSources,evaluateResearchQuality,capDraftConfidence,parseAiDraft,buildEvidenceDraft,mergeDraft,reviewActionState,deriveCompanyName,buildAiPrompt};
+  return {QUESTION_IDS,MAX_PUBLIC_QUERIES,MAX_SOURCES,RESEARCH_LIMITS,AUTHORITATIVE_CATEGORIES,safeUrl,resolveResearchLanguage,buildResearchQueries,buildAuthoritativePageQueries,classifyPageCategory,selectAuthoritativePageCandidates,normalizeSearchResults,mergeSources,filterResearchSources,evaluateResearchQuality,capDraftConfidence,parseAiDraft,buildEvidenceDraft,mergeDraft,reconcileResearchField,reviewActionState,deriveCompanyName,buildAiPrompt};
 });

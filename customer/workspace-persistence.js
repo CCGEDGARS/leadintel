@@ -184,7 +184,7 @@
     ensureSaveButton();root.document?.addEventListener?.("input",noteWorkspaceEdit,true);root.document?.addEventListener?.("change",noteWorkspaceEdit,true);
     root.document?.addEventListener?.("click",event=>{if(event.target?.closest?.("[data-target-market],[data-remove-target-market],[data-remove-doc],[data-remove-signal],[data-opportunity-active],#add-target-market,#clear-target-markets,#add-custom-signal"))noteWorkspaceEdit(event);},true);
     root.document?.addEventListener?.("click",handleResetClick,true);
-    root.addEventListener?.("leadintel:website-activated",()=>{dirtySinceSave=true;renderPersistenceStatus();});root.addEventListener?.("leadintel:server-ready",()=>root.setTimeout?.(renderPersistenceStatus,0));renderPersistenceStatus();
+    root.addEventListener?.("leadintel:website-activated",()=>{dirtySinceSave=true;renderPersistenceStatus();});root.addEventListener?.("leadintel:workspace-dirty",()=>{dirtySinceSave=true;renderPersistenceStatus();});root.addEventListener?.("leadintel:server-ready",()=>root.setTimeout?.(renderPersistenceStatus,0));renderPersistenceStatus();
   }
 
   disableServerAutosave();installFetchBoundary();

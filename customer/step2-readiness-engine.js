@@ -236,13 +236,15 @@
   }
   function saveStateLabel(root,id,value){
     const bridge=root.LeadIntelServerBridge;const syncStatus=root.document.getElementById("server-sync-status");const status=clean(syncStatus?.textContent).toLowerCase();
+    if(!value){pendingAnswerSaves.delete(id);return {text:"Not answered",className:"local"};}
     if(bridge?.conflict)return {text:"Saved locally · resolve sync conflict",className:"problem"};
     if(!bridge?.session?.authenticated){pendingAnswerSaves.delete(id);return {text:"Saved in this browser",className:"local"};}
+    if(root.LeadIntelWorkspacePersistence?.hasUnsavedChanges?.())return {text:"Unsaved changes",className:"saving"};
     if(pendingAnswerSaves.has(id))return {text:"Saving…",className:"saving"};
     if(status.includes("synced to leadintel"))return {text:"Saved to LeadIntel ✓",className:"synced"};
     if(status.includes("saving")||status.includes("unsynced"))return {text:"Saving…",className:"saving"};
     if(status.includes("failed")||status.includes("unavailable")||status.includes("error"))return {text:"Saved locally · sync problem",className:"problem"};
-    return {text:value?"Saving…":"Saved to LeadIntel ✓",className:value?"saving":"synced"};
+    return {text:"Saving…",className:"saving"};
   }
   function renderAnswerFeedback(root,id){
     const textarea=root.document.querySelector(`[data-question="${id}"]`);if(!textarea)return;const node=ensureAnswerFeedback(root,id,textarea);if(!node)return;

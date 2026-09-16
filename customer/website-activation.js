@@ -50,7 +50,12 @@
     const base=state&&typeof state==="object"&&!Array.isArray(state)?state:{};const websiteSource=normalizedSource(source);
     if(!websiteSource)return {...base};
     const {url,title,description,text}=websiteSource;
-    const sameCompany=sameCompanyWebsite(base.website||base.companyContextWebsite||base.profile?.website||"",url);
+    // The visible website field is persisted while the customer types. It therefore
+    // cannot prove which company's context is currently loaded. Compare the new
+    // source with the last activated/canonical company first so changing the input
+    // cannot carry answers and documents into another company's workspace.
+    const activeCompanyWebsite=base.companyContextWebsite||base.websiteActivation?.url||base.profile?.website||base.website||"";
+    const sameCompany=sameCompanyWebsite(activeCompanyWebsite,url);
     const isolatedContext=sameCompany?{}:{
       additionalLinks:[],
       documents:[],

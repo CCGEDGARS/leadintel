@@ -1,5 +1,5 @@
-import './company-research-engine.js?v=20260906-selector-language-v2';
-import './content-language.js?v=20260906-step2-language-v1';
+import './company-research-engine.js?v=20260916-ercon-context-v1';
+import './content-language.js?v=20260916-campaign-language-v3';
 
 const MAIN_STORAGE_KEY='leadintel_customer_v2_state';
 const RESEARCH_META_KEY='leadintel_customer_v2_research_meta_v1';
@@ -97,7 +97,9 @@ function renderResearchReview(){
   }
   document.querySelectorAll('[data-question]').forEach(textarea=>{
     const id=textarea.dataset.question;const target=document.querySelector(`[data-research-meta="${id}"]`);if(!target)return;
-    const value=String(textarea.value||'').trim();const row=meta.fields?.[id]||{};
+    const persisted=String(state.answers?.[id]||'').trim();
+    if(!String(textarea.value||'').trim()&&persisted&&document.activeElement!==textarea)textarea.value=persisted;
+    const value=String(textarea.value||'').trim();const row=engine()?.reconcileResearchField?.(value,meta.fields?.[id]||{})||meta.fields?.[id]||{};
     const card=textarea.closest('.question-card');card?.classList.toggle('research-populated',Boolean(value&&row.origin==='research'));
     let origin='Needs your input',originClass='needs';
     if(value&&row.origin==='research'){origin=meta.mode==='ai'?'AI draft':'Evidence draft';originClass='';}
@@ -217,6 +219,8 @@ async function runCompanyResearch({rerun=false}={}){
     next.profile=null;next.approved=false;next.market={};next.step=2;writeState(next);
     const fields={};for(const id of researchEngine.QUESTION_IDS){const row=merged.meta[id]||{};fields[id]={...row,reviewed:Boolean(row.reviewed||row.origin==='user'),draftMode:ai.mode};}
     writeMeta({website,generatedAt:new Date().toISOString(),mode:ai.mode,provider:ai.provider||'',model:ai.model||'',sourceCount:sources.length,primarySourceCount:research.primary.length,supportingSourceCount:research.supporting.length,excludedSourceCount:research.excluded.length,characters:research.characters,limits:research.limits,quality,failures,reason:ai.reason||'',fields});
+    window.dispatchEvent(new CustomEvent('leadintel:company-research-updated',{detail:{website}}));
+    window.dispatchEvent(new CustomEvent('leadintel:workspace-dirty',{detail:{source:'company-research'}}));
     setProgress('Research complete','Opening your evidence-backed draft for review.',{done:true});
     await saveWorkspaceBestEffort();
     setTimeout(()=>location.reload(),180);
