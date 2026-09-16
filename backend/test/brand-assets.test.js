@@ -7,6 +7,7 @@ import {spawnSync} from 'node:child_process';
 import app from '../src/app.js';
 import {
   brandAssetObjectKey,
+  createD1BrandAssetStore,
   deleteBrandAsset,
   handleBrandAssetRoute,
   replaceBrandAsset,
@@ -135,6 +136,52 @@ class MemoryR2{
   async delete(key){this.objects.delete(key);this.events.push(['delete',key]);}
 }
 
+class AssetD1Statement{
+  constructor(db,sql){this.db=db;this.sql=sql;this.args=[];}
+  bind(...args){this.args=args;return this;}
+  async first(){
+    if(!this.sql.includes('FROM customer_brand_assets'))throw new Error(`Unexpected first query: ${this.sql}`);
+    return this.db.assets.get(this.args[0])||null;
+  }
+  async all(){
+    if(this.sql.includes('FROM customer_brand_asset_chunks')){
+      return {results:(this.db.chunks.get(this.args[0])||[]).map(chunk=>({chunk_data:chunk}))};
+    }
+    if(!this.sql.includes('FROM customer_brand_assets'))throw new Error(`Unexpected all query: ${this.sql}`);
+    const hasCursor=this.sql.includes('WHERE id>?');
+    const cursor=hasCursor?this.args[0]:null;
+    const limit=Number(this.args[hasCursor?1:0]);
+    const results=[...this.db.assets.values()].filter(row=>!cursor||row.id>cursor).sort((a,b)=>a.id.localeCompare(b.id)).slice(0,limit);
+    return {results};
+  }
+  async run(){
+    if(this.sql.includes('INSERT INTO customer_brand_assets')){
+      const [id,workspace_id,validation,mime_type,byte_size,width,height,content_sha256]=this.args;
+      if(this.db.assets.has(id))throw new Error('duplicate asset');
+      this.db.assets.set(id,{id,workspace_id,validation,mime_type,byte_size,width,height,content_sha256});
+    }else if(this.sql.includes('INSERT INTO customer_brand_asset_chunks')){
+      const [id,index,value]=this.args;
+      const chunks=this.db.chunks.get(id)||[];
+      chunks[index]=value.slice(0);this.db.chunks.set(id,chunks);
+    }else if(this.sql.includes('DELETE FROM customer_brand_asset_chunks')){
+      this.db.chunks.delete(this.args[0]);
+    }else if(this.sql.includes('DELETE FROM customer_brand_assets')){
+      this.db.assets.delete(this.args[0]);
+    }else throw new Error(`Unexpected run query: ${this.sql}`);
+    return {success:true};
+  }
+}
+
+class AssetD1Db{
+  constructor(){this.assets=new Map();this.chunks=new Map();}
+  prepare(sql){return new AssetD1Statement(this,sql);}
+  async batch(statements){
+    const assets=new Map(this.assets),chunks=new Map([...this.chunks].map(([id,parts])=>[id,[...parts]]));
+    try{return await Promise.all(statements.map(statement=>statement.run()));}
+    catch(error){this.assets=assets;this.chunks=chunks;throw error;}
+  }
+}
+
 class D1Statement{
   constructor(db,sql){this.db=db;this.sql=sql;this.args=[];}
   bind(...args){this.args=args;return this;}
@@ -198,6 +245,41 @@ test('genuine PNG, stuffed-entropy JPEG, and VP8 WebP fixtures return decoded di
     const result=await validateBrandAsset(file(bytes,type),'logo');
     assert.deepEqual({mimeType:result.mimeType,width:result.width,height:result.height},{mimeType:type,width,height});
   }
+});
+
+test('D1 brand asset store chunks bytes, preserves private metadata, paginates, and deletes',async()=>{
+  const db=new AssetD1Db(),store=createD1BrandAssetStore(db);
+  assert.ok(store);
+  const firstId='A'.repeat(43),secondId='B'.repeat(43);
+  const firstKey=brandAssetObjectKey(firstId),secondKey=brandAssetObjectKey(secondId);
+  const bytes=new Uint8Array(64*1024+17);bytes.fill(7);
+  const metadata=await validatedMetadataWithDigest(bytes,{workspaceId:'workspace-one',width:200,height:100});
+  await store.put(firstKey,bytes,{httpMetadata:{contentType:'image/png'},customMetadata:metadata});
+  await store.put(secondKey,png(),{httpMetadata:{contentType:'image/png'},customMetadata:await validatedMetadataWithDigest(png(),{workspaceId:'workspace-two'})});
+  assert.equal(db.chunks.get(firstId).length,2);
+  const head=await store.head(firstKey);
+  assert.equal(head.customMetadata.workspaceId,'workspace-one');
+  assert.equal(head.customMetadata['content-sha256'],metadata['content-sha256']);
+  const object=await store.get(firstKey);
+  assert.deepEqual(new Uint8Array(await new Response(object.body).arrayBuffer()),bytes);
+  const page1=await store.list({limit:1,include:['customMetadata']});
+  assert.equal(page1.truncated,true);assert.equal(page1.objects[0].key,firstKey);
+  const page2=await store.list({cursor:page1.cursor,limit:1,include:['customMetadata']});
+  assert.equal(page2.truncated,false);assert.equal(page2.objects[0].key,secondKey);
+  await store.delete(firstKey);
+  assert.equal(await store.head(firstKey),null);assert.equal(db.chunks.has(firstId),false);
+});
+
+test('D1 brand asset migration is workspace scoped, chunked, indexed, and cascade safe',()=>{
+  const sql=readFileSync(join(import.meta.dirname,'..','migrations','0020_brand_asset_storage.sql'),'utf8');
+  assert.match(sql,/CREATE TABLE IF NOT EXISTS customer_brand_assets/);
+  assert.match(sql,/workspace_id TEXT NOT NULL/);
+  assert.match(sql,/CHECK\(length\(id\) = 43\)/);
+  assert.match(sql,/byte_size INTEGER NOT NULL CHECK\(byte_size > 0 AND byte_size <= 5242880\)/);
+  assert.match(sql,/idx_customer_brand_assets_workspace/);
+  assert.match(sql,/CREATE TABLE IF NOT EXISTS customer_brand_asset_chunks/);
+  assert.match(sql,/PRIMARY KEY \(asset_id, chunk_index\)/);
+  assert.match(sql,/ON DELETE CASCADE/);
 });
 
 test('declared MIME must match the complete image structure',async()=>{
