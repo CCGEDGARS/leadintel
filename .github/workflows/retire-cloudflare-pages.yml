@@ -1,11 +1,6 @@
 name: Retire obsolete Cloudflare Pages project
 
 on:
-  push:
-    branches:
-      - ops/retire-cloudflare-pages
-    paths:
-      - .github/workflows/retire-cloudflare-pages.yml
   pull_request:
     branches:
       - main
@@ -42,9 +37,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          production_id=""
           pass=0
-
           while :; do
             pass=$((pass + 1))
             if [ "${pass}" -gt 250 ]; then
@@ -52,35 +45,53 @@ jobs:
               exit 1
             fi
 
-            deployment_json="$(npx --yes wrangler@4.40.2 pages deployment list --project-name "${PROJECT_NAME}" --json)"
-            ids="$(printf '%s' "${deployment_json}" | jq -r '.[] | (.Id // .id) // empty')"
+            list_response="$(mktemp)"
+            list_code="$(curl --silent --show-error \
+              --output "${list_response}" \
+              --write-out '%{http_code}' \
+              --request GET \
+              --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              --header "Content-Type: application/json" \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT_NAME}/deployments?per_page=25&page=1")"
 
-            if [ -n "${production_id}" ]; then
-              ids_to_delete="$(printf '%s\n' "${ids}" | grep -Fvx "${production_id}" | grep . || true)"
-            else
-              ids_to_delete="$(printf '%s\n' "${ids}" | grep . || true)"
-            fi
+            test "${list_code}" = "200"
+            jq -e '.success == true' "${list_response}" >/dev/null
+            ids="$(jq -r '.result[]?.id // empty' "${list_response}")"
+            rm -f "${list_response}"
 
-            if [ -z "${ids_to_delete}" ]; then
+            if [ -z "${ids}" ]; then
               break
             fi
 
+            deleted=0
             while IFS= read -r deployment_id; do
               [ -n "${deployment_id}" ] || continue
 
-              log_file="$(mktemp)"
-              if npx --yes wrangler@4.40.2 pages deployment delete "${deployment_id}" --project-name "${PROJECT_NAME}" --force 2>&1 | tee "${log_file}" | grep -q "Successfully deleted"; then
+              delete_response="$(mktemp)"
+              delete_code="$(curl --silent --show-error \
+                --output "${delete_response}" \
+                --write-out '%{http_code}' \
+                --request DELETE \
+                --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+                --header "Content-Type: application/json" \
+                "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT_NAME}/deployments/${deployment_id}")"
+
+              if [ "${delete_code}" = "200" ] && jq -e '.success == true' "${delete_response}" >/dev/null; then
+                deleted=$((deleted + 1))
                 echo "Deleted Pages deployment ${deployment_id}"
-              elif grep -qi "active production deployment" "${log_file}"; then
-                production_id="${deployment_id}"
+              elif jq -r '.errors[]?.message // empty' "${delete_response}" | grep -qi "active production deployment"; then
                 echo "Preserving active production deployment until project deletion."
               else
-                cat "${log_file}"
-                rm -f "${log_file}"
+                jq . "${delete_response}"
+                rm -f "${delete_response}"
                 exit 1
               fi
-              rm -f "${log_file}"
-            done <<< "${ids_to_delete}"
+              rm -f "${delete_response}"
+            done <<< "${ids}"
+
+            if [ "${deleted}" -eq 0 ]; then
+              break
+            fi
           done
 
       - name: Delete Pages project
