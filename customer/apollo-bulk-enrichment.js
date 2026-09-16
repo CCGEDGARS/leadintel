@@ -315,6 +315,10 @@ async function runBulk(type) {
   const keys = [...selected];
   if (!confirmAction(bulkConfirmationMessage(keys.length, type))) return;
   bulkRunning = true;
+  const taskCentre=window.LeadIntelTaskCentre;
+  const taskId='apollo-enrichment:batch:'+type+':'+Date.now();
+  taskCentre?.start({id:taskId,type:'apollo-enrichment',title:'Apollo batch '+(type==='phone'?'phone':'email')+' enrichment',stage:'Processing selected contacts',total:keys.length,completed:0,canRetry:true});
+  taskCentre?.registerActions(taskId,{retry:()=>runBulk(type)});
   updateToolbar();
   let started = 0;
   try {
@@ -325,8 +329,10 @@ async function runBulk(type) {
       started += 1;
       button.click();
       await waitForCompletion(key, type);
+      taskCentre?.update(taskId,{completed:started,resultCount:started,stage:'Processing selected contacts'});
     }
   } finally {
+    taskCentre?.complete(taskId,{stage:'Apollo batch complete',resultCount:started});
     bulkRunning = false;
     selected.clear();
     decorate();

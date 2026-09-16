@@ -201,15 +201,19 @@ async function runCompanyResearch({rerun=false}={}){
   const state=readState();const selectedLanguage=String($('language-select')?.value||window.LeadIntelLanguage?.get?.()||state.uiLanguage||'lv').toLowerCase();const researchLanguage=selectedContentLanguage(state);const website=normalizeUrl($('company-website')?.value||state.website);const markets=selectedMarkets(state);const additionalLinks=String($('additional-links')?.value||'').split(/\n/).map(normalizeUrl).filter(Boolean).slice(0,8);
   const error=$('step1-error');if(!website){if(error)error.textContent='Enter a valid company website.';return;}if(!markets.length){if(error)error.textContent='Choose at least one target market.';return;}if(error)error.textContent='';
   running=true;setResearchButtonBusy(true);const rerunButton=$('rerun-company-research');if(rerunButton)rerunButton.disabled=true;
-  const runController=new AbortController();const runTimer=setTimeout(()=>runController.abort(),COMPANY_RESEARCH_RUN_TIMEOUT_MS);
+  const runController=new AbortController();const runTimer=setTimeout(()=>runController.abort(),COMPANY_RESEARCH_RUN_TIMEOUT_MS);const taskId=`company-research:${Date.now()}`;const taskCentre=window.LeadIntelTaskCentre;
+  taskCentre?.start({id:taskId,type:'company-research',title:'Company research',stage:'Scanning company sources',total:4,completed:0,canCancel:true,canRetry:true});
+  taskCentre?.registerActions(taskId,{cancel:()=>runController.abort(),retry:()=>runCompanyResearch({rerun:true})});
   let failures=0;
   try{
     setProgress('Scanning company sources…','Reading the main website and any optional links you supplied.');
+    taskCentre?.update(taskId,{stage:'Scanning company sources',completed:0});
     const sourceRequests=[{url:website,type:'website',pageCategory:'company'},...additionalLinks.map(url=>({url,type:'link',pageCategory:''}))];const official=[];
     const settled=await Promise.allSettled(sourceRequests.map(source=>scrapeSource(source.url,source.type,source.pageCategory,runController.signal)));
     settled.forEach(result=>{if(result.status==='fulfilled')official.push(result.value);else failures++;});
     const companyName=researchEngine.deriveCompanyName(official,website);
     setProgress('Discovering authoritative company pages…','Finding company, offer, project, delivery and contact pages on the verified domain.');
+    taskCentre?.update(taskId,{stage:'Discovering authoritative pages',completed:1,resultCount:official.length});
     const authoritativeRows=[];const authoritativeQueries=researchEngine.buildAuthoritativePageQueries({website,companyName});
     const authoritativeSearchSettled=await Promise.allSettled(authoritativeQueries.map(query=>searchPublic(query,runController.signal)));
     authoritativeSearchSettled.forEach(result=>{if(result.status==='fulfilled')authoritativeRows.push(...result.value);else failures++;});
@@ -218,6 +222,7 @@ async function runCompanyResearch({rerun=false}={}){
     authoritativeSettled.forEach(result=>{if(result.status==='fulfilled')official.push(result.value);else failures++;});
     const queries=researchEngine.buildResearchQueries({website,companyName,targetMarkets:markets},MAX_COMPANY_RESEARCH_QUERIES);
     setProgress('Searching related public sources…',`Running ${queries.length} bounded company searches for evidence, news, partners and market context.`);
+    taskCentre?.update(taskId,{stage:'Searching related public sources',completed:2,resultCount:official.length});
     const publicRows=[];
     const publicSettled=await Promise.allSettled(queries.map(query=>searchPublic(query,runController.signal)));
     publicSettled.forEach(result=>{if(result.status==='fulfilled')publicRows.push(...result.value);else failures++;});
@@ -227,6 +232,7 @@ async function runCompanyResearch({rerun=false}={}){
     const quality=researchEngine.evaluateResearchQuality({website,primary:research.primary,supporting:research.supporting,failures});
     if(!quality.publishable)throw new Error(`Research quality check failed: ${quality.issues.join(' ')}`);
     setProgress('Building evidence-backed context…',`${research.primary.length} primary and ${research.supporting.length} supporting sources passed the quality check.`);
+    taskCentre?.update(taskId,{stage:'Building evidence-backed context',completed:3,resultCount:sources.length});
     const fallback=researchEngine.buildEvidenceDraft({sources:research.primary,targetMarkets:markets,uiLanguage:researchLanguage});const ai=await aiDraftFor({website,targetMarkets:markets,sources:research.primary,documents:state.documents||[],uiLanguage:researchLanguage},runController.signal);const draft=researchEngine.capDraftConfidence(combineDrafts(fallback,ai.draft),quality.coverage);const merged=researchEngine.mergeDraft(state.answers||{},draft,readMeta().fields||{});
     const latest=readState();if(JSON.stringify(latest.answers||{})!==JSON.stringify(state.answers||{})||latest.website!==state.website)throw new Error('Workspace changed during research. Your edits were preserved; rerun when ready.');
     const next={...state};next.uiLanguage=selectedLanguage;next.website=website;next.targetMarkets=markets;next.additionalLinks=additionalLinks;next.answers=merged.answers;
@@ -238,11 +244,13 @@ async function runCompanyResearch({rerun=false}={}){
     window.dispatchEvent(new CustomEvent('leadintel:company-research-updated',{detail:{website}}));
     window.dispatchEvent(new CustomEvent('leadintel:workspace-dirty',{detail:{source:'company-research'}}));
     setProgress('Research complete','Opening your evidence-backed draft for review.',{done:true});
+    taskCentre?.complete(taskId,{stage:'Research complete',resultCount:sources.length});
     await saveWorkspaceBestEffort();
     setTimeout(()=>location.reload(),180);
   }catch(error){
     const message=runController.signal.aborted?'Company research stopped after 60 seconds.':(error.message||'Public research is temporarily unavailable.');
     setProgress('Research could not complete',message);toast('Company research stopped safely. Your existing workspace data is safe.');
+    if(taskCentre?.get(taskId)?.status!=='canceled')taskCentre?.fail(taskId,message,{canRetry:true});
     const latest=readState();
     if(normalizeUrl(latest.website||'')===website){
       const now=new Date().toISOString();const existing=readMeta();const previous=normalizeUrl(existing.website)===website?existing:{};

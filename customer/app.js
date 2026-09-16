@@ -518,13 +518,16 @@ async function runMarketResearch(modeOverride=""){
   const queries=LeadIntelMarket.buildResearchQueries(profile,state.market.signals,{mode:state.market.researchMode,sourceTypes:selectedSources,instructions:state.market.researchInstructions,language:contentLanguage()});
   if(!queries.length){showToast("Add a target market to improve research precision");return;}
   const totalJobs=queries.length+state.market.researchCustomSources.length;
+  const taskCentre=window.LeadIntelTaskCentre;const taskId=`market-research:${Date.now()}`;
+  taskCentre?.start({id:taskId,type:'market-research',title:'Market research',stage:'Searching public sources',total:totalJobs,completed:0,canRetry:true});
+  taskCentre?.registerActions(taskId,{retry:()=>runMarketResearch(state.market.researchMode)});
   closeResearchPreview();
   const requestsGemini=["deep","intelligence"].includes(state.market.researchMode);
   state.market.researchQueries=queries;state.market.researchResults=[];state.market.opportunities=[];state.market.researchErrors=[];state.market.researchStatus="running";state.market.researchSourceStatus={openai:"running",firecrawl:"running",gemini:requestsGemini?"running":"idle"};state.market.researchVerification={status:requestsGemini?"running":"idle",provider:"gemini",role:"verification",webSearch:false,reason:"",summary:"",disagreements:[],missingEvidence:[],verifiedAt:""};state.market.researchProgress={completed:0,total:totalJobs};state.market.strategyApproved=false;saveState();renderMarketStrategy();
   const researchButtons=[$("run-market-research"),$("run-detailed-research"),$("run-market-intelligence")].filter(Boolean);researchButtons.forEach(button=>{button.disabled=true;button.textContent="Researching…";});
   let openAiAvailable=true,openAiSuccesses=0,openAiFailures=0,firecrawlSuccesses=0,firecrawlFailures=0;
   const recordResearchError=(provider,query,error)=>{if(state.market.researchErrors.length>=12)return;state.market.researchErrors.push({provider,query:String(query||"").slice(0,180),message:String(error?.message||error||"Request failed").replace(/\s+/g," ").trim().slice(0,240)});};
-  const updateProgress=completed=>{state.market.researchProgress={completed,total:totalJobs};saveState();renderResearchStatus();};
+  const updateProgress=completed=>{state.market.researchProgress={completed,total:totalJobs};taskCentre?.update(taskId,{completed,total:totalJobs,stage:'Checking market evidence',resultCount:state.market.researchResults.length});saveState();renderResearchStatus();};
   try{
     const queryResults=await LeadIntelMarket.mapWithConcurrency(queries,async query=>{
       const openAiJob=openAiAvailable?withOpenAiRetry(()=>LeadIntelMarket.withTimeout(signal=>searchOpenAiWeb(query,limits.resultsPerQuery,signal),RESEARCH_REQUEST_TIMEOUT_MS,"OpenAI search")).then(found=>({found}),error=>({error})):Promise.resolve({skipped:true});
@@ -554,12 +557,14 @@ async function runMarketResearch(modeOverride=""){
     state.market.opportunities=LeadIntelMarket.buildMarketOpportunities(profile,state.market.icps,state.market.signals,state.market.researchResults,contentLanguage());
     await LeadIntelMarket.withTimeout(()=>localizeMarketGeneratedContent({render:false}),RESEARCH_REQUEST_TIMEOUT_MS,"Content translation").catch(()=>false);
     state.market.researchStatus=operationalFailures===0?"complete":state.market.researchResults.length?"partial":"error";
+    if(state.market.researchStatus==='error')taskCentre?.fail(taskId,'Market research could not complete',{canRetry:true});else taskCentre?.complete(taskId,{status:state.market.researchStatus,stage:state.market.researchStatus==='partial'?'Completed with source warnings':'Market research complete',resultCount:state.market.researchResults.length});
   }catch(error){
     recordResearchError("LeadIntel","Research run",error);
     state.market.researchStatus=state.market.researchResults.length?"partial":"error";
     state.market.researchSourceStatus={openai:openAiSuccesses?"partial":"error",firecrawl:firecrawlSuccesses?"partial":"error",gemini:requestsGemini?"unavailable":"idle"};
     if(requestsGemini)state.market.researchVerification={status:"unavailable",provider:"gemini",role:"verification",webSearch:false,reason:"Research stopped before verification completed",summary:"",disagreements:[],missingEvidence:[],verifiedAt:""};
     showToast(`Research stopped safely · ${error.message}`);
+    taskCentre?.fail(taskId,error,{canRetry:true,resultCount:state.market.researchResults.length});
   }finally{
     state.market.researchProgress={completed:totalJobs,total:totalJobs};
     state.market.lastResearchAt=new Date().toISOString();state.market.researchHistory=LeadIntelMarket.appendResearchHistory(state.market.researchHistory,{id:`manual-${Date.now()}`,mode:state.market.researchMode,status:state.market.researchStatus,sourceCount:state.market.researchResults.length,queryCount:queries.length,completedAt:state.market.lastResearchAt});saveState();renderMarketStrategy();
