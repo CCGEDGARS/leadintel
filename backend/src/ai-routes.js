@@ -1,6 +1,7 @@
 import {sha256,cookieValue} from './security.js';
 import {importAesKey,encryptSecret,decryptSecret} from './oauth.js';
 import {AI_PROVIDERS,normalizeAiProvider,defaultAiModel,generateText,verifyProviderCredential,searchWeb} from './ai-provider.js';
+import {verifyMarketResearch} from './market-research-verifier.js';
 
 const uuid=()=>crypto.randomUUID();
 const json=(value,status=200,headers={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...headers}});
@@ -40,10 +41,11 @@ function providerStatus(rows,role){
 async function integrationRows(env,workspaceId){const {results=[]}=await env.DB.prepare(`SELECT provider,key_hint,model,active,verified_at,last_used_at FROM workspace_ai_integrations WHERE workspace_id=? ORDER BY provider`).bind(workspaceId).all();return results;}
 async function activeIntegration(env,workspaceId){return env.DB.prepare(`SELECT provider,encrypted_api_key,model,active,verified_at,last_used_at FROM workspace_ai_integrations WHERE workspace_id=? AND active=1 LIMIT 1`).bind(workspaceId).first();}
 async function openAiIntegration(env,workspaceId){return env.DB.prepare(`SELECT provider,encrypted_api_key,model,active,verified_at,last_used_at FROM workspace_ai_integrations WHERE workspace_id=? AND provider='openai' LIMIT 1`).bind(workspaceId).first();}
+async function geminiIntegration(env,workspaceId){return env.DB.prepare(`SELECT provider,encrypted_api_key,model,active,verified_at,last_used_at FROM workspace_ai_integrations WHERE workspace_id=? AND provider='gemini' LIMIT 1`).bind(workspaceId).first();}
 
 export async function handleAiRoute(request,env,cors={}){
   const url=new URL(request.url);const path=url.pathname;
-  const known=path.startsWith('/api/integrations/ai/')||path==='/api/ai/generate'||path==='/api/ai/web-search';if(!known)return null;
+  const known=path.startsWith('/api/integrations/ai/')||path==='/api/ai/generate'||path==='/api/ai/web-search'||path==='/api/ai/research-verification';if(!known)return null;
   const workspaceId=String(url.searchParams.get('workspace_id')||'').trim();if(!workspaceId)return error('workspace_id is required',400,cors);
 
   if(path==='/api/integrations/ai/status'&&request.method==='GET'){
@@ -116,6 +118,27 @@ export async function handleAiRoute(request,env,cors={}){
       await audit(env,{workspaceId,userId:access.user.id,type:'ai.web_search_completed',provider:'openai',metadata:{model:integration.model,input_tokens:result.usage.input_tokens,output_tokens:result.usage.output_tokens,result_count:result.results.length}});
       return json(result,200,cors);
     }catch(cause){return error(String(cause?.message||'OpenAI web search failed').slice(0,180),502,cors);}
+  }
+
+  if(path==='/api/ai/research-verification'&&request.method==='POST'){
+    const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
+    const unavailable=reason=>json({status:'unavailable',provider:'gemini',role:'verification',web_search:false,reason},200,cors);
+    if(!encryptionConfigured(env))return unavailable('AI credential encryption is not configured');
+    const body=await request.json().catch(()=>null);if(!body)return error('Research verification payload is required',400,cors);
+    if(!['deep','intelligence'].includes(body.mode))return error('Gemini verification is available for Market Research and Market Intelligence',400,cors);
+    const evidence=Array.isArray(body.evidence)?body.evidence.slice(0,200):[];
+    if(!evidence.length)return error('At least one evidence source is required for verification',400,cors);
+    const integration=await geminiIntegration(env,workspaceId);if(!integration)return unavailable('Gemini is not configured');
+    try{
+      const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const apiKey=await decryptSecret(integration.encrypted_api_key,key);
+      const result=await verifyMarketResearch({apiKey,model:integration.model,mode:body.mode,profile:body.profile,signals:body.signals,evidence,signal:request.signal});
+      await env.DB.prepare(`UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(workspaceId,'gemini').run();
+      await audit(env,{workspaceId,userId:access.user.id,type:'ai.research_verification_completed',provider:'gemini',metadata:{model:integration.model,input_tokens:result.usage.input_tokens,output_tokens:result.usage.output_tokens,evidence_count:evidence.length,disagreement_count:result.disagreements.length}});
+      return json(result,200,cors);
+    }catch(cause){
+      console.error('Gemini research verification unavailable',String(cause?.message||cause).slice(0,180));
+      return unavailable('Gemini verification is temporarily unavailable');
+    }
   }
 
   if(path==='/api/ai/generate'&&request.method==='POST'){

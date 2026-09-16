@@ -7,7 +7,7 @@
 
   const DEFAULT_MARKET_STATE=Object.freeze({
     icps:[],signals:[],researchQueries:[],researchResults:[],opportunities:[],
-    researchStatus:"idle",researchSourceStatus:{openai:"idle",firecrawl:"idle"},researchProgress:{completed:0,total:0},researchErrors:[],lastResearchAt:"",researchMode:"quick",researchSourceTypes:["news"],researchCustomSources:[],researchInstructions:"",researchHistory:[],monitoring:{enabled:false,frequency:"weekly",researchDepth:"deep",minimumScore:70,sourceTypes:["news","jobs","investments","company"],signalIds:[],customSources:[]},strategyApproved:false,strategyApprovedAt:""
+    researchStatus:"idle",researchSourceStatus:{openai:"idle",firecrawl:"idle",gemini:"idle"},researchVerification:{status:"idle",provider:"gemini",role:"verification",webSearch:false,reason:"",summary:"",disagreements:[],missingEvidence:[],verifiedAt:""},researchProgress:{completed:0,total:0},researchErrors:[],lastResearchAt:"",researchMode:"quick",researchSourceTypes:["news"],researchCustomSources:[],researchInstructions:"",researchHistory:[],monitoring:{enabled:false,frequency:"weekly",researchDepth:"deep",minimumScore:70,sourceTypes:["news","jobs","investments","company"],signalIds:[],customSources:[]},strategyApproved:false,strategyApprovedAt:""
   });
 
   const RESEARCH_MODES=Object.freeze({
@@ -306,7 +306,7 @@
     const markets=effectiveResearchMarkets(profile);
     const offer=splitList(profile.priorityOffers)[0]||"priority offer";
     return (markets.length?markets:["Priority market"]).slice(0,6).map(market=>{
-      const evidence=(researchResults||[]).filter(item=>clean(item.market).toLowerCase()===clean(market).toLowerCase()).slice(0,5);
+      const evidence=(researchResults||[]).filter(item=>clean(item.market).toLowerCase()===clean(market).toLowerCase()&&item?.verification?.relevance!=="reject"&&!item?.verification?.contradiction).slice(0,5);
       const score=evidence.length?{
         fit:fitScore(profile,icps),
         intent:intentScore(signals,evidence),
@@ -369,7 +369,8 @@
     const researchInstructions=clean(input.researchInstructions).slice(0,1200);
     const researchQueries=(Array.isArray(input.researchQueries)?input.researchQueries:[]).slice(0,RESEARCH_MODES[researchMode].maxQueries).map(item=>({id:clean(item?.id),market:clean(item?.market),offer:clean(item?.offer),sourceType:clean(item?.sourceType),query:clean(item?.query)})).filter(item=>item.id&&item.query);
     const researchResults=(Array.isArray(input.researchResults)?input.researchResults:[]).slice(0,RESEARCH_MODES[researchMode].maxStoredResults).map(item=>({
-      queryId:clean(item?.queryId),market:clean(item?.market),query:clean(item?.query),url:canonicalUrl(item?.url),title:clean(item?.title),description:clean(item?.description),text:String(item?.text||"").slice(0,5000),date:clean(item?.date),sourceProviders:normalizeProviders(item?.sourceProviders)
+      queryId:clean(item?.queryId),market:clean(item?.market),query:clean(item?.query),url:canonicalUrl(item?.url),title:clean(item?.title),description:clean(item?.description),text:String(item?.text||"").slice(0,5000),date:clean(item?.date),sourceProviders:normalizeProviders(item?.sourceProviders),
+      ...(item?.verification&&typeof item.verification==="object"?{verification:{provider:"gemini",role:"verification",relevance:["strong","moderate","weak","reject"].includes(item.verification.relevance)?item.verification.relevance:"weak",commercialFit:["strong","moderate","weak","unknown"].includes(item.verification.commercialFit)?item.verification.commercialFit:"unknown",contradiction:Boolean(item.verification.contradiction),rationale:clean(item.verification.rationale).slice(0,600),missingEvidence:(Array.isArray(item.verification.missingEvidence)?item.verification.missingEvidence:[]).map(clean).filter(Boolean).slice(0,8)}}:{})
     })).filter(item=>item.url);
     const opportunities=(Array.isArray(input.opportunities)?input.opportunities:[]).slice(0,12).map(item=>{
       const hasEvidence=Array.isArray(item?.evidence)&&item.evidence.length>0;
@@ -377,12 +378,14 @@
     }).filter(item=>item.id);
     const allowed=new Set(["idle","running","complete","partial","error"]),sourceAllowed=new Set(["idle","running","complete","partial","error","unavailable"]);
     const rawSourceStatus=input.researchSourceStatus&&typeof input.researchSourceStatus==="object"?input.researchSourceStatus:{};
-    const researchSourceStatus={openai:sourceAllowed.has(rawSourceStatus.openai)?rawSourceStatus.openai:"idle",firecrawl:sourceAllowed.has(rawSourceStatus.firecrawl)?rawSourceStatus.firecrawl:"idle"};
+    const researchSourceStatus={openai:sourceAllowed.has(rawSourceStatus.openai)?rawSourceStatus.openai:"idle",firecrawl:sourceAllowed.has(rawSourceStatus.firecrawl)?rawSourceStatus.firecrawl:"idle",gemini:sourceAllowed.has(rawSourceStatus.gemini)?rawSourceStatus.gemini:"idle"};
+    const rawVerification=input.researchVerification&&typeof input.researchVerification==="object"?input.researchVerification:{};
+    const researchVerification={status:sourceAllowed.has(rawVerification.status)?rawVerification.status:"idle",provider:"gemini",role:"verification",webSearch:false,reason:clean(rawVerification.reason).slice(0,300),summary:clean(rawVerification.summary).slice(0,1000),disagreements:(Array.isArray(rawVerification.disagreements)?rawVerification.disagreements:[]).map(clean).filter(Boolean).slice(0,12),missingEvidence:(Array.isArray(rawVerification.missingEvidence)?rawVerification.missingEvidence:[]).map(clean).filter(Boolean).slice(0,12),verifiedAt:clean(rawVerification.verifiedAt)};
     const rawProgress=input.researchProgress&&typeof input.researchProgress==="object"?input.researchProgress:{};
     const researchProgress={completed:Math.max(0,Number(rawProgress.completed)||0),total:Math.max(0,Number(rawProgress.total)||0)};
     const researchErrors=(Array.isArray(input.researchErrors)?input.researchErrors:[]).slice(0,12).map(item=>({provider:clean(item?.provider).slice(0,40),query:clean(item?.query).slice(0,180),message:clean(item?.message).slice(0,240)})).filter(item=>item.provider||item.message);
     return {
-      ...DEFAULT_MARKET_STATE,icps,signals,researchQueries,researchResults,opportunities,researchSourceStatus,researchProgress,researchErrors,
+      ...DEFAULT_MARKET_STATE,icps,signals,researchQueries,researchResults,opportunities,researchSourceStatus,researchVerification,researchProgress,researchErrors,
       researchStatus:allowed.has(input.researchStatus)?input.researchStatus:"idle",researchMode,researchSourceTypes:researchSourceTypes.length?researchSourceTypes:defaultResearchSources,researchCustomSources,researchInstructions,
       researchHistory:(Array.isArray(input.researchHistory)?input.researchHistory:[]).slice(0,20).map(item=>({id:clean(item?.id),mode:RESEARCH_MODES[item?.mode]?item.mode:"quick",status:clean(item?.status),sourceCount:Math.max(0,Number(item?.sourceCount)||0),queryCount:Math.max(0,Number(item?.queryCount)||0),completedAt:clean(item?.completedAt)})).filter(item=>item.id),monitoring:normalizeMonitoring(input.monitoring),
       lastResearchAt:clean(input.lastResearchAt),strategyApproved:Boolean(input.strategyApproved),strategyApprovedAt:clean(input.strategyApprovedAt),contentLanguage:['en','lv'].includes(input.contentLanguage)?input.contentLanguage:'',contentVariants:input.contentVariants&&typeof input.contentVariants==='object'?input.contentVariants:{}
@@ -395,7 +398,8 @@
     next.researchStatus="error";
     next.researchSourceStatus={
       openai:next.researchSourceStatus.openai==="running"?"error":next.researchSourceStatus.openai,
-      firecrawl:next.researchSourceStatus.firecrawl==="running"?"error":next.researchSourceStatus.firecrawl
+      firecrawl:next.researchSourceStatus.firecrawl==="running"?"error":next.researchSourceStatus.firecrawl,
+      gemini:next.researchSourceStatus.gemini==="running"?"error":next.researchSourceStatus.gemini
     };
     next.researchProgress={completed:0,total:0};
     next.researchErrors=[{provider:"LeadIntel",query:"Interrupted research run",message:"The page was closed or reloaded before research finished. Review the scope and retry."}];
