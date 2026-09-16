@@ -1,12 +1,25 @@
 const encoder = new TextEncoder();
 
+export function isTrustedPreviewOrigin(origin) {
+  try {
+    const url = new URL(String(origin || ""));
+    return url.protocol === "https:"
+      && /^leadintel(?:-git)?-[a-z0-9-]+-ccgedgars-projects\.vercel\.app$/i.test(url.hostname)
+      && !url.port
+      && url.username === ""
+      && url.password === "";
+  } catch {
+    return false;
+  }
+}
+
 export function allowedOrigin(request, configuredOrigin) {
   const origin = request.headers.get("Origin") || "";
   const allowed = String(configuredOrigin || "")
     .split(",")
     .map(value => value.trim())
     .filter(Boolean);
-  return allowed.includes(origin) ? origin : "";
+  return allowed.includes(origin) || isTrustedPreviewOrigin(origin) ? origin : "";
 }
 
 export function corsHeaders(origin) {

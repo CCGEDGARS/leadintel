@@ -104,9 +104,10 @@ function showDiscoveryStep(){if(!moduleReady()){showToast("Add your company webs
 function showStrategyStep(){persistMainStep(4);document.querySelectorAll(".step-view").forEach(el=>el.classList.toggle("active",Number(el.dataset.step)===4));document.querySelectorAll("[data-step-marker]").forEach(el=>{const n=Number(el.dataset.stepMarker);el.classList.toggle("active",n===4);el.classList.toggle("complete",n<4);});saveMeta({...loadMeta(),visibleStep:4});window.scrollTo({top:0,behavior:"smooth"});}
 
 const DISCOVERY_REQUEST_TIMEOUT_MS=25000;
-const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS*5+5000;
-async function firecrawlCompanySearch(queryMeta){
-  const controller=new AbortController();
+const DISCOVERY_RUN_TIMEOUT_MS=25000;
+function linkedAbortController(parentSignal){const controller=new AbortController();if(parentSignal?.aborted)controller.abort(parentSignal.reason);else parentSignal?.addEventListener?.("abort",()=>controller.abort(parentSignal.reason),{once:true});return controller;}
+async function firecrawlCompanySearch(queryMeta,runSignal){
+  const controller=linkedAbortController(runSignal);
   const timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS);
   try{
     const response=await fetch(`${INTELLIGENCE_PROXY}/firecrawl-search`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:queryMeta.query,limit:MAX_DISCOVERY_RESULTS_PER_QUERY,scrapeOptions:{formats:["markdown"],onlyMainContent:true}}),signal:controller.signal});
@@ -120,14 +121,14 @@ async function firecrawlCompanySearch(queryMeta){
     clearTimeout(timeout);
   }
 }
-async function runDiscoverySearchBatch(items,phase){
+async function runDiscoverySearchBatch(items,phase,runSignal){
   const searches=Array(items.length).fill(null);
   discoveryProgress={phase,completed:0,total:items.length};renderDiscoverySafely();
   let nextIndex=0;
   const workers=Array.from({length:Math.min(DISCOVERY_SEARCH_CONCURRENCY,items.length)},async()=>{
     while(nextIndex<items.length){
       const index=nextIndex++;
-      try{searches[index]={results:await firecrawlCompanySearch(items[index]),error:null};}
+      try{if(runSignal?.aborted)throw new Error("Company search timed out");searches[index]={results:await firecrawlCompanySearch(items[index],runSignal),error:null};}
       catch(error){searches[index]={results:[],error};}
       finally{discoveryProgress.completed+=1;renderDiscoverySafely();}
     }
@@ -135,7 +136,7 @@ async function runDiscoverySearchBatch(items,phase){
   await Promise.all(workers);
   return searches;
 }
-async function extractCompaniesFromEvidence(evidence,market,targetCount){
+async function extractCompaniesFromEvidence(evidence,market,targetCount,runSignal){
   const fallback=LeadIntelDiscovery.extractCompanyMentions(evidence,targetCount);
   const b=bridge();const workspace=b?.workspace;
   if(!b?.session?.authenticated||!workspace?.id||!evidence.length)return fallback;
@@ -146,7 +147,7 @@ async function extractCompaniesFromEvidence(evidence,market,targetCount){
   }));
   const system="You extract prospective operating companies from supplied market evidence. Never invent a company or URL. Return strict JSON only.";
   const prompt=`Identify operating companies explicitly described as expanding, investing, building, modernising, hiring or otherwise matching the market signals in these sources. Publishers, government bodies, research institutes, directories and the seller itself are not prospects. Every company must include the exact supplied source URL where its name and event appear. Return {"companies":[{"company":"Exact company name","market":"${String(market||"").replace(/"/g,"'")}","sourceUrl":"Exact supplied URL"}]}. Evidence:\n${JSON.stringify(sources)}`;
-  const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS);
+  const controller=linkedAbortController(runSignal);const timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS);
   try{
     const response=await fetch(`${LEADINTEL_API}/api/ai/generate?workspace_id=${encodeURIComponent(workspace.id)}`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({system,prompt,max_output_tokens:1800}),signal:controller.signal});
     const payload=await response.json().catch(()=>({}));
@@ -171,26 +172,27 @@ async function runCompanyDiscovery(){
   if(!renderDiscoverySafely()){discovery.status="error";try{saveDiscovery();}catch{}renderDiscoverySafely();showToast("Discovery interface could not start. You can try again.");return;}
   let failures=0;
   let fatalError=null;
+  const runController=new AbortController();
   try{
     let searches=[];
     let resolutionSearches=[];
     let verificationSearches=[];
     let companyMentions=[];
     const allSearches=(async()=>{
-      searches=await runDiscoverySearchBatch(queries,"searching");
+      searches=await runDiscoverySearchBatch(queries,"searching",runController.signal);
       const firstPass=searches.flatMap(item=>item?.results||[]);
       const targetMarket=queries[0]?.market||main.profile?.targetMarkets||"";
-      companyMentions=await extractCompaniesFromEvidence(firstPass,targetMarket,limits.targetCount);
+      companyMentions=await extractCompaniesFromEvidence(firstPass,targetMarket,limits.targetCount,runController.signal);
       const resolutionQueries=LeadIntelDiscovery.buildCompanyResolutionQueries(companyMentions,main.profile||{website:main.website},limits.targetCount);
-      resolutionSearches=await runDiscoverySearchBatch(resolutionQueries,"resolving");
+      resolutionSearches=await runDiscoverySearchBatch(resolutionQueries,"resolving",runController.signal);
       const resolved=resolutionSearches.flatMap(item=>item?.results||[]);
       const verificationQueries=LeadIntelDiscovery.buildCandidateVerificationQueries(resolved,main.profile||{website:main.website},market,limits.targetCount);
-      verificationSearches=await runDiscoverySearchBatch(verificationQueries,"verifying");
+      verificationSearches=await runDiscoverySearchBatch(verificationQueries,"verifying",runController.signal);
     })();
     let runTimeout;
     const timedOut=await Promise.race([
       allSearches.then(()=>false),
-      new Promise(resolve=>{runTimeout=setTimeout(()=>resolve(true),DISCOVERY_RUN_TIMEOUT_MS);})
+      new Promise(resolve=>{runTimeout=setTimeout(()=>{runController.abort(new DOMException("Discovery run deadline reached","TimeoutError"));resolve(true);},DISCOVERY_RUN_TIMEOUT_MS);})
     ]);
     clearTimeout(runTimeout);
     const completedSearches=[...searches,...resolutionSearches,...verificationSearches].filter(Boolean);
@@ -276,7 +278,40 @@ function renderCandidates(){const target=$("company-candidates");if(!target)retu
     <div class="candidate-actions"><button class="secondary-btn small" type="button" data-action="save-crm" data-company-index="${index}" ${crmDisabled?"disabled":""}>${crmAuthenticated()?crmLabel:"Sign in for CRM"}</button><button class="primary-btn small" type="button" data-action="add-pipeline" data-company-index="${index}" ${pipelineDisabled?"disabled":""}>${pipelineLabel}</button></div>
   </article>`;}).join("");}
 
-async function findDecisionMakers(index){const candidate=discovery.candidates[index];if(!candidate)return;if(!candidateIsActionable(candidate)){showToast("Company qualification is incomplete · run Discovery again");return false;}const main=mainState();const payload=LeadIntelDiscovery.buildApolloPeopleSearchPayload(candidate,main.profile||{});if(!payload.q_organization_domains_list.length){showToast("A verified company domain is required");return false;}candidate.peopleStatus="loading";saveDiscovery();renderCandidates();try{const response=await fetch(`${INTELLIGENCE_PROXY}/`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||`Apollo returned ${response.status}`);candidate.people=LeadIntelDiscovery.selectDecisionMakers(LeadIntelDiscovery.normalizeApolloPeople(data),main.profile||{},4);candidate.peopleStatus=candidate.people.length?"complete":"empty";if(candidate.saved)discovery.pipeline=LeadIntelDiscovery.upsertPipelineItem(discovery.pipeline,candidate);saveDiscovery();if(crmAuthenticated()&&crmCompanyByDomain(candidate.domain)){const mapped=window.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate);const saved=await bridge().saveCrmCompany(mapped);if(!saved.ok)showToast(saved.error||"CRM contact update failed");else await refreshCrmState({render:false});}renderAll();showToast(!candidate.people.length?'No relevant decision-makers returned':candidate.people.length<3?`Only ${candidate.people.length} relevant decision-maker${candidate.people.length===1?"":"s"} found`:`${candidate.people.length} relevant decision-makers found`);return true;}catch(error){candidate.peopleStatus="error";saveDiscovery();renderAll();showToast(error.message||"Apollo people search unavailable");return false;}}
+async function findDecisionMakers(index){
+  const candidate=discovery.candidates[index];if(!candidate)return;
+  if(!candidateIsActionable(candidate)){showToast("Company qualification is incomplete · run Discovery again");return false;}
+  const main=mainState();
+  const payload=LeadIntelDiscovery.buildApolloPeopleSearchPayload(candidate,main.profile||{});
+  if(!payload.q_organization_domains_list.length){showToast("A verified company domain is required");return false;}
+  candidate.peopleStatus="loading";saveDiscovery();renderCandidates();
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS);
+  try{
+    const response=await fetch(`${INTELLIGENCE_PROXY}/`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),signal:controller.signal});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.error||`Apollo returned ${response.status}`);
+    candidate.people=LeadIntelDiscovery.selectDecisionMakers(LeadIntelDiscovery.normalizeApolloPeople(data),main.profile||{},4);
+    candidate.peopleStatus=candidate.people.length?"complete":"empty";
+    if(candidate.saved)discovery.pipeline=LeadIntelDiscovery.upsertPipelineItem(discovery.pipeline,candidate);
+    saveDiscovery();
+    if(crmAuthenticated()&&crmCompanyByDomain(candidate.domain)){
+      const mapped=window.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate);
+      const saved=await bridge().saveCrmCompany(mapped);
+      if(!saved.ok)showToast(saved.error||"CRM contact update failed");
+      else await refreshCrmState({render:false});
+    }
+    renderAll();
+    showToast(!candidate.people.length?'No relevant decision-makers returned':candidate.people.length<3?`Only ${candidate.people.length} relevant decision-maker${candidate.people.length===1?"":"s"} found`:`${candidate.people.length} relevant decision-makers found`);
+    return true;
+  }catch(error){
+    candidate.peopleStatus="error";saveDiscovery();renderAll();
+    showToast(error?.name==="AbortError"?"Apollo people search timed out":error.message||"Apollo people search unavailable");
+    return false;
+  }finally{
+    clearTimeout(timeout);
+  }
+}
 function saveLocalPipeline(candidate){discovery.pipeline=LeadIntelDiscovery.upsertPipelineItem(discovery.pipeline,candidate);candidate.saved=true;saveDiscovery();}
 async function ensureCrmCompany(candidate){let company=crmCompanyByDomain(candidate.domain||candidate.website);if(company?.lifecycle_status==="suppressed")throw Object.assign(new Error("Suppressed companies must be restored in CRM before enrichment"),{code:"CRM_COMPANY_SUPPRESSED"});if(company)return company;const mapped=window.LeadIntelCrm?.mapDiscoveryCandidateToCrm(candidate);if(!mapped)throw new Error("CRM mapping is unavailable");const saved=await bridge().saveCrmCompany(mapped);if(!saved.ok)throw Object.assign(new Error(saved.error||"CRM save failed"),{code:saved.code});company=saved.company;await refreshCrmState({render:false});return company;}
 async function enrichContact(companyIndex,personIndex,{phoneLookup=false}={}){const candidate=discovery.candidates[companyIndex];const person=candidate?.people?.[personIndex];if(!candidate||!person)return false;if(!person.id){showToast("Apollo person identity is missing · refresh decision-makers");return false;}if(!crmAuthenticated()){showToast("Sign in to enrich contacts with Apollo");return false;}const key=personKey(candidate,person);if(enrichmentPending.has(key))return false;enrichmentPending.add(key);renderCandidates();try{const company=await ensureCrmCompany(candidate);const result=await bridge().enrichCrmContact(company.id,person,{phoneLookup,allowPersonalEmail:false});if(!result.ok)throw Object.assign(new Error(result.error||"Apollo contact enrichment failed"),{code:result.code});enrichmentResults.set(key,result);await refreshCrmState({render:false});renderAll();window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company_id:company.id,contact_id:result.contact?.id||null}}));if(phoneLookup)showToast(result.contact?.phone_number?`${person.name} · verified phone saved to Master CRM`:`${person.name} · phone lookup requested · use Refresh phone to check`);else showToast(result.contact?.work_email?`${person.name} · verified email saved to Master CRM`:`${person.name} · no verified company email returned`);return true;}catch(error){showToast(error.code==="CRM_APOLLO_CREDIT_LIMIT"?"Apollo credit limit reached":error.message||"Apollo contact enrichment failed");return false;}finally{enrichmentPending.delete(key);renderCandidates();}}

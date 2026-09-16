@@ -2,7 +2,8 @@
   'use strict';
   if(root.LeadIntelServerBridge)return;
   const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
-  const ASSET_VERSION='20260916-brand-assets-v10';
+  const ASSET_VERSION='20260916-error-sweep-v2';
+  const API_REQUEST_TIMEOUT_MS=15000;
   const asset=path=>`${path}?v=${ASSET_VERSION}`;
   const KEYS={main:'leadintel_customer_v2_state',discovery:'leadintel_customer_v2_discovery',outreach:'leadintel_customer_v2_outreach',delivery:'leadintel_customer_v2_delivery',meta:'leadintel_customer_v2_discovery_meta'};
   const WORKSPACE_KEY='leadintel_customer_v2_workspace';
@@ -71,7 +72,26 @@
   function clearDirtyLocalState(){const current=readDirtyLocalState();if(!current||!bridge.workspace||current.workspace_id===bridge.workspace.id||!current.workspace_id)localStorage.removeItem(DIRTY_KEY);}
   function clearCustomerCache(){suppress=true;try{for(const key of Object.values(KEYS))localStorage.removeItem(key);}finally{suppress=false;}}
   function endpoint(path){return `${API_BASE}${path}`;}
-  async function api(path,options={}){const {headers={},body,...rest}=options;const multipart=typeof FormData!=='undefined'&&body instanceof FormData;const response=await fetch(endpoint(path),{credentials:'include',...rest,body,headers:{'Accept':'application/json',...(body&&!multipart?{'Content-Type':'application/json'}:{}),...headers}});const payload=await response.json().catch(()=>({}));return {response,payload};}
+  async function api(path,options={}){
+    const {headers={},body,signal:externalSignal,...rest}=options;
+    const multipart=typeof FormData!=='undefined'&&body instanceof FormData;
+    const controller=new AbortController();
+    const forwardAbort=()=>controller.abort(externalSignal?.reason);
+    if(externalSignal?.aborted)forwardAbort();
+    else externalSignal?.addEventListener?.('abort',forwardAbort,{once:true});
+    const timeout=setTimeout(()=>controller.abort(new DOMException('LeadIntel request timed out','TimeoutError')),API_REQUEST_TIMEOUT_MS);
+    try{
+      const response=await fetch(endpoint(path),{credentials:'include',...rest,body,headers:{'Accept':'application/json',...(body&&!multipart?{'Content-Type':'application/json'}:{}),...headers},signal:controller.signal});
+      const payload=await response.json().catch(()=>({}));
+      return {response,payload};
+    }catch(cause){
+      if(controller.signal.aborted&&!externalSignal?.aborted)throw new Error('LeadIntel server request timed out');
+      throw cause;
+    }finally{
+      clearTimeout(timeout);
+      externalSignal?.removeEventListener?.('abort',forwardAbort);
+    }
+  }
   function returnTo(){const url=new URL(location.href);url.searchParams.delete('auth');url.searchParams.delete('gmail');url.searchParams.delete('microsoft_mail');url.searchParams.delete('reason');url.searchParams.delete('workspace_id');return url.toString();}
   function setStatus(text,kind=''){bridge.status=kind||text;const existing=document.querySelector('.autosave');if(existing){existing.innerHTML=`<i></i>${text}`;existing.dataset.serverStatus=kind||'';}const status=document.getElementById('server-sync-status');if(status){status.textContent=text;status.dataset.state=kind||'';}}
   function showToast(message){const el=document.getElementById('toast');if(!el)return;el.textContent=message;el.classList.add('show');clearTimeout(showToast.t);showToast.t=setTimeout(()=>el.classList.remove('show'),3000);}

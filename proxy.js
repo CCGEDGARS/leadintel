@@ -18,10 +18,25 @@ const ALLOWED_ORIGINS = new Set([
   'https://leadintel.ccgroup.lv',
 ]);
 
+function isTrustedPreviewOrigin(origin) {
+  try {
+    const url = new URL(String(origin || ''));
+    return url.protocol === 'https:'
+      && /^leadintel(?:-git)?-[a-z0-9-]+-ccgedgars-projects\.vercel\.app$/i.test(url.hostname)
+      && !url.port
+      && url.username === ''
+      && url.password === '';
+  } catch {
+    return false;
+  }
+}
+
 function isAllowedOrigin(request) {
   const origin = request.headers.get('Origin');
   if (!origin) return true;
-  return ALLOWED_ORIGINS.has(origin) || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+  return ALLOWED_ORIGINS.has(origin)
+    || isTrustedPreviewOrigin(origin)
+    || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
 }
 
 function corsHeaders(request) {

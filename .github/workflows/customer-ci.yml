@@ -9,6 +9,7 @@ on:
     paths:
       - 'customer/**'
       - 'backend/**'
+      - 'proxy.js'
       - 'scripts/build-vercel-static.sh'
       - 'scripts/verify-discovery-deploy.mjs'
       - 'scripts/release-integrity-core.mjs'
@@ -32,6 +33,7 @@ on:
     paths:
       - 'customer/**'
       - 'backend/**'
+      - 'proxy.js'
       - 'scripts/build-vercel-static.sh'
       - 'scripts/verify-discovery-deploy.mjs'
       - 'scripts/release-integrity-core.mjs'
@@ -82,6 +84,7 @@ jobs:
           retention-days: 3
       - name: Check JavaScript syntax
         run: |
+          node --check proxy.js
           node --check backend/src/customer-state.js
           node --check backend/src/crm.js
           node --check backend/src/crm-routes.js
