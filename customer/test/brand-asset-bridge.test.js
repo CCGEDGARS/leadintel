@@ -12,7 +12,8 @@ const indexSource = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'u
 const processMapSource = fs.readFileSync(path.join(__dirname, '..', 'process-map.js'), 'utf8');
 const API = 'https://leadintel-api.edgars-7e7.workers.dev';
 const WORKSPACE_ID = 'workspace-1';
-const CACHE_VERSION = '20260916-brand-assets-v10';
+const CACHE_VERSION = '20260916-error-sweep-v2';
+const WORKSPACE_CACHE_VERSION = '20260916-brand-assets-v10';
 const CLEANUP_KEY = 'leadintel_customer_v2_brand_asset_cleanup_v1';
 
 function storage(initial = {}) {
@@ -1241,8 +1242,8 @@ test('customer cache references use the Task 4 bridge and reset version everywhe
   assert.match(bridgeSource, new RegExp(`const ASSET_VERSION='${CACHE_VERSION}'`));
   assert.match(indexSource, new RegExp(`server-bridge\\.js\\?v=${CACHE_VERSION}`));
   assert.match(processMapSource, new RegExp(`server-bridge\\.js\\?v=${CACHE_VERSION}`));
-  assert.match(processMapSource, new RegExp(`workspace-reset-hygiene\\.js\\?v=${CACHE_VERSION}`));
-  assert.match(processMapSource, new RegExp(`workspace-persistence\\.js\\?v=${CACHE_VERSION}`));
+  assert.match(processMapSource, new RegExp(`workspace-reset-hygiene\\.js\\?v=${WORKSPACE_CACHE_VERSION}`));
+  assert.match(processMapSource, new RegExp(`workspace-persistence\\.js\\?v=${WORKSPACE_CACHE_VERSION}`));
   assert.doesNotMatch(indexSource, /server-bridge\.js\?v=20260915-mail-choice-v2/);
   assert.doesNotMatch(processMapSource, /(?:server-bridge|workspace-reset-hygiene)\.js\?v=(?:20260915-mail-choice-v2|20260909-emergency-reset-v1)/);
 });

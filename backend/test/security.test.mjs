@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {allowedOrigin,constantTimeEqual,cookieValue,corsHeaders} from "../src/security.js";
+import {allowedOrigin,constantTimeEqual,cookieValue,corsHeaders,isTrustedPreviewOrigin} from "../src/security.js";
 
 test("allows only the configured application origin",()=>{
   const allowed=new Request("https://api.example.test",{headers:{Origin:"https://app.example.test"}});
@@ -15,6 +15,28 @@ test("allows only the configured application origin",()=>{
   assert.match(headers["Access-Control-Allow-Headers"],/Idempotency-Key/);
   assert.match(headers["Access-Control-Allow-Methods"],/PATCH/);
   assert.match(headers["Access-Control-Allow-Methods"],/PUT/);
+});
+
+
+test("allows only trusted HTTPS LeadIntel preview origins",()=>{
+  for(const origin of [
+    "https://leadintel-g13t3b2us-ccgedgars-projects.vercel.app",
+    "https://leadintel-git-feature-app-error-sweep-ccgedgars-projects.vercel.app"
+  ]){
+    assert.equal(isTrustedPreviewOrigin(origin),true,origin);
+    const request=new Request("https://api.example.test",{headers:{Origin:origin}});
+    assert.equal(allowedOrigin(request,"https://leadintel.ccgroup.lv"),origin);
+  }
+});
+
+test("rejects lookalike, insecure, port-bearing and suffix-attack preview origins",()=>{
+  for(const origin of [
+    "https://leadintel-g13t3b2us-other-team.vercel.app",
+    "https://other-project-ccgedgars-projects.vercel.app",
+    "http://leadintel-g13t3b2us-ccgedgars-projects.vercel.app",
+    "https://leadintel-g13t3b2us-ccgedgars-projects.vercel.app:8443",
+    "https://leadintel-g13t3b2us-ccgedgars-projects.vercel.app.evil.test"
+  ])assert.equal(isTrustedPreviewOrigin(origin),false,origin);
 });
 
 test("constant-time comparison returns the correct result",()=>{
