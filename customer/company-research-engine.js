@@ -257,6 +257,13 @@
     if(selected==='en'||selected==='lv')return selected;
     return (Array.isArray(input.navigatorLanguages)?input.navigatorLanguages:[]).some(value=>clean(value).toLowerCase().startsWith('lv'))?'lv':'en';
   }
+  function researchOutputReadyForLanguage({answers={},meta={},language=''}={}){
+    const target=clean(language).toLowerCase().split('-')[0];
+    const generatedLanguage=clean(meta?.contentLanguage).toLowerCase().split('-')[0];
+    if(!meta?.generatedAt||!target||generatedLanguage!==target)return false;
+    const fields=meta?.fields&&typeof meta.fields==='object'?meta.fields:{};
+    return QUESTION_IDS.every(id=>!clean(answers?.[id])||DRAFT_ORIGINS.has(clean(fields[id]?.origin).toLowerCase()));
+  }
   function lvSourceText(value){const text=clean(value);return /[āčēģīķļņšūž]/i.test(text)||/\b(?:un|vai|ar|darba|biroja|mēbeles|noliktavu|ražotn|piegād|risinājum)\w*\b/i.test(text);}
   function taxonomyDraft(sources,library,lv=false){
     const labels=[];const ids=[];
@@ -335,5 +342,5 @@
     return {system,prompt};
   }
 
-  return {QUESTION_IDS,MAX_PUBLIC_QUERIES,MAX_SOURCES,RESEARCH_LIMITS,AUTHORITATIVE_CATEGORIES,safeUrl,resolveResearchLanguage,buildResearchQueries,buildAuthoritativePageQueries,classifyPageCategory,selectAuthoritativePageCandidates,normalizeSearchResults,mergeSources,filterResearchSources,evaluateResearchQuality,capDraftConfidence,parseAiDraft,buildEvidenceDraft,mergeDraft,recoverDraftAnswers,reconcileResearchField,reviewActionState,deriveCompanyName,buildAiPrompt};
+  return {QUESTION_IDS,MAX_PUBLIC_QUERIES,MAX_SOURCES,RESEARCH_LIMITS,AUTHORITATIVE_CATEGORIES,safeUrl,resolveResearchLanguage,researchOutputReadyForLanguage,buildResearchQueries,buildAuthoritativePageQueries,classifyPageCategory,selectAuthoritativePageCandidates,normalizeSearchResults,mergeSources,filterResearchSources,evaluateResearchQuality,capDraftConfidence,parseAiDraft,buildEvidenceDraft,mergeDraft,recoverDraftAnswers,reconcileResearchField,reviewActionState,deriveCompanyName,buildAiPrompt};
 });

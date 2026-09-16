@@ -101,9 +101,9 @@
     if(cache.has(key))return cache.get(key);
     if(pending.has(key))return pending.get(key);
     const task=(async()=>{
-      const result={};const entries=Object.entries(source);
-      for(let start=0;start<entries.length;start+=6){
-        const batch=Object.fromEntries(entries.slice(start,start+6));
+      const result={};const entries=Object.entries(source),batches=[];
+      for(let start=0;start<entries.length;start+=6)batches.push(Object.fromEntries(entries.slice(start,start+6)));
+      const translateBatch=async batch=>{
         if(JSON.stringify(batch).length>30000)throw Error('Content is too long to translate safely');
         const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),45000);
         try{
@@ -112,8 +112,12 @@
           const payload=await response.json();
           if(!response.ok)throw Error(response.status===409?'Select an active AI provider in Settings.':'Translation request failed ('+response.status+').');
           const output=JSON.parse(String(payload.text||'').replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''));
-          Object.assign(result,validate(batch,output,language));
+          return validate(batch,output,language);
         }finally{clearTimeout(timeout);}
+      };
+      for(let start=0;start<batches.length;start+=3){
+        const translated=await Promise.all(batches.slice(start,start+3).map(translateBatch));
+        translated.forEach(batch=>Object.assign(result,batch));
       }
       if(cache.size>=10)cache.delete(cache.keys().next().value);
       cache.set(key,result);return result;

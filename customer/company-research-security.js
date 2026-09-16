@@ -1,4 +1,4 @@
-import './company-research-engine.js?v=20260916-commercial-brief-v1';
+import './company-research-engine.js?v=20260916-translation-speed-v1';
 
 const engine=window.LeadIntelCompanyResearch;
 const MAX_AI_WEB_CHARS=3200;

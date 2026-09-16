@@ -35,8 +35,8 @@ test('Discovery runtime cache key changes whenever spinner recovery changes',()=
 
 test('customer page loads the spinner-safe bundles with fresh cache keys',()=>{
   for(const marker of [
-    'app.js?v=20260916-commercial-brief-v1',
-    'process-map.js?v=20260916-commercial-brief-v2',
+    'app.js?v=20260916-translation-speed-v1',
+    'process-map.js?v=20260916-translation-speed-v1',
     'discovery-ui.js?v=20260916-error-sweep-v2'
   ])assert.ok(html.includes(marker),marker);
 });

@@ -240,3 +240,20 @@ test('visible Latvian selection overrides stale English workspace state for rese
   assert.equal(engine.resolveResearchLanguage({selectorValue:'en',storedValue:'lv',navigatorLanguages:['lv-LV']}),'en');
   assert.equal(engine.resolveResearchLanguage({selectorValue:'auto',storedValue:'en',navigatorLanguages:['lv-LV','en-US']}),'lv');
 });
+
+test('fresh research already generated in the selected language skips redundant translation',()=>{
+  const answers={priority_offers:'Noliktavu aprīkojums',ideal_customer:'Ražošanas uzņēmumi'};
+  const meta={
+    generatedAt:'2026-09-16T09:00:00.000Z',
+    contentLanguage:'lv',
+    fields:{priority_offers:{origin:'research'},ideal_customer:{origin:'hypothesis_draft'}}
+  };
+  assert.equal(engine.researchOutputReadyForLanguage({answers,meta,language:'lv'}),true);
+  assert.equal(engine.researchOutputReadyForLanguage({answers,meta,language:'en'}),false);
+});
+
+test('research translation still runs for customer-authored or unmarked content',()=>{
+  const answers={priority_offers:'Customer-written value'};
+  assert.equal(engine.researchOutputReadyForLanguage({answers,meta:{generatedAt:'2026-09-16T09:00:00.000Z',contentLanguage:'lv',fields:{priority_offers:{origin:'user'}}},language:'lv'}),false);
+  assert.equal(engine.researchOutputReadyForLanguage({answers,meta:{generatedAt:'2026-09-16T09:00:00.000Z',fields:{priority_offers:{origin:'research'}}},language:'lv'}),false);
+});

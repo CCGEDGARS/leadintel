@@ -87,6 +87,25 @@ test('failed translations are retryable rather than cached as success',async()=>
   assert.equal(result.f0,'Pārdošanas apmācības');assert.equal(calls,2);
 });
 
+test('translation starts independent field batches concurrently',async()=>{
+  let calls=0;let release;
+  const gate=new Promise(resolve=>{release=resolve;});
+  const source=Object.fromEntries(Array.from({length:13},(_,index)=>[`f${index}`,`Source ${index}`]));
+  const root={fetch:async(_url,options)=>{
+    calls++;
+    await gate;
+    const prompt=JSON.parse(JSON.parse(options.body).prompt);
+    return {ok:true,status:200,json:async()=>({text:JSON.stringify(Object.fromEntries(Object.keys(prompt).map(key=>[key,`Tulkojums ${key}`])))})};
+  }};
+  const pending=language.request(root,'parallel-workspace','lv',source);
+  await new Promise(resolve=>setImmediate(resolve));
+  const startedTogether=calls;
+  release();
+  const result=await pending;
+  assert.equal(startedTogether,3);
+  assert.equal(Object.keys(result).length,13);
+});
+
 test('market content translation updates generated fields and evidence display text without changing source identity',async()=>{
   const market={
     icps:[{id:'icp-core',name:'Core ICP',description:'Factories and warehouses',targetMarkets:'Latvia',buyerRoles:'Procurement managers',offers:'Office furniture',value:'',exclusions:'',rationale:'Generated rationale'}],
