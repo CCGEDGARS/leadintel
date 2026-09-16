@@ -15,6 +15,9 @@
     deep:Object.freeze({maxQueries:12,resultsPerQuery:8,maxStoredResults:80}),
     intelligence:Object.freeze({maxQueries:24,resultsPerQuery:10,maxStoredResults:200})
   });
+  function researchRuntimePolicy(mode="quick"){
+    return {requestTimeoutMs:mode==="quick"?12000:15000,concurrency:4};
+  }
   const SOURCE_TYPES=Object.freeze({
     news:"news announcement expansion relocation modernisation",
     tenders:"tender procurement public procurement contract",
@@ -430,5 +433,5 @@
     return results;
   }
 
-  return {DEFAULT_MARKET_STATE,RESEARCH_MODES,SOURCE_TYPES,effectiveResearchMarkets,buildIcpCandidates,normalizeSignals,addCustomSignal,filterResearchSourceTypes,buildResearchQueries,buildResearchRecommendations,buildSuggestedSources,normalizeSearchResults,mergeResearchResults,buildMarketOpportunities,localizeGeneratedState,normalizeMarketState,recoverInterruptedResearch,withTimeout,mapWithConcurrency,normalizeMonitoring,appendResearchHistory,getMarketJourneyState,splitList};
+  return {DEFAULT_MARKET_STATE,RESEARCH_MODES,SOURCE_TYPES,researchRuntimePolicy,effectiveResearchMarkets,buildIcpCandidates,normalizeSignals,addCustomSignal,filterResearchSourceTypes,buildResearchQueries,buildResearchRecommendations,buildSuggestedSources,normalizeSearchResults,mergeResearchResults,buildMarketOpportunities,localizeGeneratedState,normalizeMarketState,recoverInterruptedResearch,withTimeout,mapWithConcurrency,normalizeMonitoring,appendResearchHistory,getMarketJourneyState,splitList};
 });

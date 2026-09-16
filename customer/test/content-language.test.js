@@ -148,3 +148,29 @@ test('Step 2 research answers are translated when the selected content language 
   assert.equal(node.value,'Biroja mēbeles un noliktavu aprīkojums');
   assert.equal(node.lang,'lv');
 });
+
+test('Step 2 translation skips fields already generated in the selected language',async()=>{
+  const ready={value:'Noliktavu aprīkojums',readOnly:false,lang:'lv'};
+  const needsTranslation={value:'Customer-written value',readOnly:false,lang:''};
+  const editor={
+    querySelectorAll(selector){return selector.includes('[data-question]')?[ready,needsTranslation]:[];},
+    contains(candidate){return candidate===ready||candidate===needsTranslation;},
+    before(){}
+  };
+  const notice={textContent:'',append(){}};
+  let requestBody;
+  const root={
+    document:{getElementById(){return notice;},createElement(){return notice;}},
+    LeadIntelServerBridge:{session:{authenticated:true},workspace:{id:'workspace-selective'}},
+    fetch:async(_url,options)=>{
+      requestBody=JSON.parse(options.body);
+      return {ok:true,status:200,json:async()=>({text:JSON.stringify({f0:'Klienta rakstīta vērtība'})})};
+    }
+  };
+
+  await language.translateEditor(root,editor,'lv');
+
+  assert.deepEqual(JSON.parse(requestBody.prompt),{f0:'Customer-written value'});
+  assert.equal(ready.value,'Noliktavu aprīkojums');
+  assert.equal(needsTranslation.value,'Klienta rakstīta vērtība');
+});

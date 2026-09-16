@@ -264,3 +264,9 @@ test('research work runs with bounded concurrency and reports progress',async()=
   assert.equal(maxActive,2);
   assert.deepEqual(progress.at(-1),{completed:5,total:5});
 });
+
+test('market research latency policy keeps scans fast and bounds deeper modes',()=>{
+  assert.deepEqual(Market.researchRuntimePolicy('quick'),{requestTimeoutMs:12000,concurrency:4});
+  assert.deepEqual(Market.researchRuntimePolicy('deep'),{requestTimeoutMs:15000,concurrency:4});
+  assert.deepEqual(Market.researchRuntimePolicy('intelligence'),{requestTimeoutMs:15000,concurrency:4});
+});

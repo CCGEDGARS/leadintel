@@ -1,5 +1,5 @@
-import './company-research-engine.js?v=20260916-translation-speed-v1';
-import './content-language.js?v=20260916-translation-speed-v1';
+import './company-research-engine.js?v=20260916-latency-fix-v2';
+import './content-language.js?v=20260916-latency-fix-v2';
 
 const MAIN_STORAGE_KEY='leadintel_customer_v2_state';
 const RESEARCH_META_KEY='leadintel_customer_v2_research_meta_v1';
@@ -31,6 +31,9 @@ function selectedContentLanguage(state=readState()){
 function translateResearchAnswers(){
   const editor=$('step-2');if(!editor||!window.LeadIntelContentLanguage)return Promise.resolve(false);
   const state=readState(),language=selectedContentLanguage(state),meta=metaForCurrentState();
+  editor.querySelectorAll('textarea[data-question]').forEach(node=>{
+    if(engine()?.researchFieldReadyForLanguage?.({field:meta.fields?.[node.dataset.question],meta,language}))node.lang=language;
+  });
   if(engine()?.researchOutputReadyForLanguage?.({answers:state.answers||{},meta,language})){
     editor.querySelectorAll('textarea[data-question]').forEach(node=>{node.lang=language;});
     return Promise.resolve(false);

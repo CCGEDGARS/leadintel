@@ -6,6 +6,7 @@
   'use strict';
   const cache=new Map(),pending=new Map(),originals=new WeakMap(),generations=new WeakMap(),locks=new WeakMap();
   const endpoint='https://leadintel-api.edgars-7e7.workers.dev/api/ai/generate';
+  const TRANSLATION_REQUEST_TIMEOUT_MS=20000;
   const EMAIL_LANGUAGES=Object.freeze({auto:'Auto · recipient local language',en:'English',lv:'Latvian',de:'German',sv:'Swedish',et:'Estonian',lt:'Lithuanian',fi:'Finnish',no:'Norwegian',da:'Danish',pl:'Polish',fr:'French',nl:'Dutch',es:'Spanish',it:'Italian',pt:'Portuguese',cs:'Czech',sk:'Slovak',ro:'Romanian',bg:'Bulgarian',hr:'Croatian',sl:'Slovenian',hu:'Hungarian',el:'Greek',uk:'Ukrainian'});
   const MARKET_LANGUAGES=Object.freeze({latvia:'lv',latvija:'lv',lithuania:'lt',lietuva:'lt',estonia:'et',eesti:'et',germany:'de',deutschland:'de',sweden:'sv',sverige:'sv',finland:'fi',suomi:'fi',norway:'no',norge:'no',denmark:'da',danmark:'da',poland:'pl',polska:'pl',france:'fr',netherlands:'nl',spain:'es',italy:'it',portugal:'pt',czechia:'cs','czech republic':'cs',slovakia:'sk',romania:'ro',bulgaria:'bg',croatia:'hr',slovenia:'sl',hungary:'hu',greece:'el',ukraine:'uk','united kingdom':'en',ireland:'en'});
   const DOMAIN_LANGUAGES=Object.freeze({lv:'lv',lt:'lt',ee:'et',de:'de',se:'sv',fi:'fi',no:'no',dk:'da',pl:'pl',fr:'fr',nl:'nl',es:'es',it:'it',pt:'pt',cz:'cs',sk:'sk',ro:'ro',bg:'bg',hr:'hr',si:'sl',hu:'hu',gr:'el',ua:'uk',uk:'en',ie:'en'});
@@ -105,7 +106,7 @@
       for(let start=0;start<entries.length;start+=6)batches.push(Object.fromEntries(entries.slice(start,start+6)));
       const translateBatch=async batch=>{
         if(JSON.stringify(batch).length>30000)throw Error('Content is too long to translate safely');
-        const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),45000);
+        const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),TRANSLATION_REQUEST_TIMEOUT_MS);
         try{
           const prompt=promptFor(batch,language);
           const response=await root.fetch(endpoint+'?workspace_id='+encodeURIComponent(workspace),{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({...prompt,max_output_tokens:6000}),signal:controller.signal});
@@ -130,6 +131,7 @@
     const nodes=[...editor.querySelectorAll('textarea[data-profile-field],textarea[data-question],.profile-analysis-card > span')];
     const source={},targets=[];
     for(const node of nodes){
+      if(resolveLanguage(node.lang)===(language||'').toLowerCase().split('-')[0]&&String(node.lang||'').trim())continue;
       const value='value' in node?node.value:node.textContent;
       const old=originals.get(node);
       const original=old&&value===old.rendered?old.source:String(value||'');
