@@ -59,7 +59,16 @@ jobs:
               --header "Content-Type: application/json" \
               "${api_base}?per_page=100&page=1")"
 
-            test "${list_code}" = "200"
+            if [ "${list_code}" = "404" ]; then
+              echo "Pages project is already absent."
+              jq . "${list_response}"
+              rm -f "${list_response}"
+              break
+            fi
+            if [ "${list_code}" != "200" ]; then
+              jq . "${list_response}"
+              exit 1
+            fi
             jq -e '.success == true' "${list_response}" >/dev/null
             ids="$(jq -r '.result[]?.id // empty' "${list_response}")"
             rm -f "${list_response}"
@@ -115,8 +124,12 @@ jobs:
             "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT_NAME}")"
 
           jq . "${response_file}"
-          test "${http_code}" = "200"
-          jq -e '.success == true' "${response_file}" >/dev/null
+          if [ "${http_code}" = "404" ]; then
+            echo "Pages project was already absent."
+          else
+            test "${http_code}" = "200"
+            jq -e '.success == true' "${response_file}" >/dev/null
+          fi
 
       - name: Verify Pages project is absent
         shell: bash
