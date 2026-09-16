@@ -7,14 +7,14 @@ const APPROVED_MISSION = 'Find qualified B2B opportunities, connect with decisio
 const answers = {
   priority_offers: 'Industrial steel structures; custom fabrication',
   ideal_customer: 'Manufacturers with 50-500 employees in Northern Europe',
-  lookalike_customers: 'ABB; Valmet',
   buyer_roles: 'Procurement Director; Production Director; CEO',
-  growth_markets: 'Industrial manufacturing; logistics centres',
-  differentiation: 'Fast engineering, custom production, reliable delivery',
-  buying_triggers: 'New factory; capacity expansion; equipment modernization',
   exclusions: 'Projects below EUR 20,000; private consumers',
-  opportunity_value: 'EUR 50,000-250,000',
-  success_outcome: 'Build a EUR 2M qualified pipeline in 12 months'
+  buying_outcomes: 'Increase production capacity while reducing installation downtime',
+  buying_triggers: 'New factory; capacity expansion; equipment modernization',
+  value_proposition: 'Custom production and installation with reliable delivery',
+  differentiation: 'Fast engineering, custom production, reliable delivery',
+  proof_points: 'ISO certified engineering and installation services',
+  objections: 'Implementation downtime and project delivery risk'
 };
 
 const targetMarkets = ['Nordics', 'Germany'];
@@ -65,11 +65,13 @@ test('calculates a high completeness score when mandatory context and strategic 
   assert.equal(score, 100);
 });
 
-test('keeps mandatory target markets authoritative while preserving optional segment focus', () => {
+test('keeps mandatory target markets authoritative and maps content inputs', () => {
   const profile = engine.buildCompanyIntelligenceProfile({ website: 'https://example.com', targetMarkets, additionalLinks: [], documents: [], answers, scrapedSources: websiteSources });
   assert.equal(profile.priorityOffers, answers.priority_offers);
   assert.equal(profile.targetMarkets, 'Nordics; Germany');
-  assert.equal(profile.marketFocus, answers.growth_markets);
+  assert.equal(profile.valueProposition, answers.value_proposition);
+  assert.equal(profile.proofPoints, answers.proof_points);
+  assert.equal(profile.commonObjections, answers.objections);
   assert.deepEqual(profile.researchMarkets,['Sweden','Finland','Norway','Denmark','Iceland','Germany']);
 });
 
@@ -120,9 +122,9 @@ test('includes extracted document text as evidence', () => {
 });
 
 test('reports material information gaps instead of inventing answers', () => {
-  const partial = {...answers, opportunity_value: '', buyer_roles: ''};
+  const partial = {...answers, value_proposition: '', buyer_roles: ''};
   const profile = engine.buildCompanyIntelligenceProfile({ website:'https://example.com', targetMarkets, additionalLinks:[], documents:[], answers:partial, scrapedSources: websiteSources });
-  assert.ok(profile.informationGaps.some(x => /commercial value/i.test(x)));
+  assert.ok(profile.informationGaps.some(x => /value proposition/i.test(x)));
   assert.ok(profile.informationGaps.some(x => /decision-maker/i.test(x)));
 });
 
@@ -211,4 +213,10 @@ test('profile evidence coverage reports authoritative page categories and requir
     {type:'link',url:'https://acme.example/products',title:'Products',text:'Equipment and solutions.',pageCategory:'offers'}
   ]});
   assert.equal(normalized.scrapedSources[0].pageCategory,'offers');
+});
+
+test('main workspace normalization preserves Campaign Studio settings',()=>{
+  const campaignStudio={schemaVersion:1,selectedPresetId:'preset-de',coreScenario:{id:'core',language:'auto'},presets:[{id:'preset-de',segment:'German retailers',language:'de'}]};
+  const normalized=engine.normalizeSavedState({website:'https://example.com',campaignStudio});
+  assert.deepEqual(normalized.campaignStudio,campaignStudio);
 });

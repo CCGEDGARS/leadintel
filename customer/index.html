@@ -220,23 +220,38 @@
 
         <section class="step-view" id="step-2" data-step="2">
           <div class="hero-copy compact">
-            <span class="eyebrow">Step 2 · Optional enrichment</span>
-            <h1>Review context your website cannot fully explain.</h1>
-            <p>LeadIntel already has your website and selected target market. These ten questions are optional; answer any that improve targeting, or skip these questions and open another module.</p>
+            <span class="eyebrow">Step 2 · Commercial Intelligence Brief</span>
+            <h1>Build your Commercial Intelligence Brief.</h1>
+            <p>Review the commercial decisions that power LeadIntel targeting, buying signals and campaign content. Accept, edit or replace every draft; unsupported fields remain open for your input. You may skip these questions and complete them later.</p>
           </div>
 
-          <div class="question-grid">
-            <article class="question-card"><span>01</span><label>What products or services are your highest commercial priority right now?<small>Select or describe up to three. LeadIntel will optimize opportunity discovery around these—not everything on your website.</small></label><textarea data-question="priority_offers" rows="4" placeholder="Example: custom steel structures; industrial installation; engineering services"></textarea></article>
-            <article class="question-card"><span>02</span><label>Describe your ideal customer.<small>Industries, company types, size, geography, maturity, or other characteristics that make a customer commercially attractive.</small></label><textarea data-question="ideal_customer" rows="4" placeholder="Example: manufacturers with 50–500 employees"></textarea></article>
-            <article class="question-card"><span>03</span><label>Name 3–5 existing customers you would like to find more companies similar to.<small>Optional if confidential. These become lookalike anchors, not automatic outreach targets.</small></label><textarea data-question="lookalike_customers" rows="3" placeholder="Company A; Company B; Company C"></textarea></article>
-            <article class="question-card"><span>04</span><label>Who normally makes or strongly influences the buying decision?<small>Roles are more useful than names: CEO, Procurement Director, Production Director, HR Director, Architect, Distributor, etc.</small></label><textarea data-question="buyer_roles" rows="3" placeholder="Procurement Director; Production Director; CEO"></textarea></article>
-            <article class="question-card"><span>05</span><label>Within your selected markets, which industries, segments or customer groups should LeadIntel prioritize?<small>Your geography is already selected in Step 1. Use this only to narrow the commercial focus inside those markets.</small></label><textarea data-question="growth_markets" rows="3" placeholder="Example: industrial manufacturers; logistics centres; food production companies"></textarea></article>
-            <article class="question-card"><span>06</span><label>Why do customers choose you instead of competitors?<small>Think speed, quality, specialization, technology, customization, certifications, service, price, reliability or access.</small></label><textarea data-question="differentiation" rows="4" placeholder="Example: fast engineering, custom production and reliable delivery"></textarea></article>
-            <article class="question-card signal-question"><span>07</span><label>What usually happens before a customer needs what you sell?<small>This seeds the Signal Designer. Describe real-world events: new factory, expansion, funding, hiring, tender, equipment replacement, regulation change, new distributor search, etc.</small></label><textarea data-question="buying_triggers" rows="4" placeholder="New facility; capacity expansion; equipment modernization; tender"></textarea></article>
-            <article class="question-card"><span>08</span><label>What makes a prospect unattractive or impossible to serve?<small>Minimum deal size, geography, consumer vs B2B, certifications, logistics, industries, capacity or other exclusion rules.</small></label><textarea data-question="exclusions" rows="4" placeholder="Example: projects below €20,000; private consumers; markets outside Europe"></textarea></article>
-            <article class="question-card"><span>09</span><label>What is the approximate commercial value of a good opportunity?<small>Typical order, project, annual contract or customer lifetime value. A range is enough.</small></label><textarea data-question="opportunity_value" rows="3" placeholder="€50,000–€250,000 per project"></textarea></article>
-            <article class="question-card"><span>10</span><label>What result would make LeadIntel successful for you in the next 6–12 months?<small>Be concrete: market entry, distributors, pipeline value, qualified opportunities, new logos, capacity utilization or revenue.</small></label><textarea data-question="success_outcome" rows="4" placeholder="Build a €2M qualified pipeline within 12 months"></textarea></article>
-          </div>
+          <section class="brief-question-group" data-brief-group="targeting">
+            <header class="brief-group-header"><div><span class="eyebrow">Targeting</span><h2>Define who LeadIntel should find.</h2><p>Set the commercial focus, decision roles and negative-fit rules used by Discovery.</p></div><strong data-brief-progress="targeting">0/4 reviewed</strong></header>
+            <div class="question-grid">
+              <article class="question-card"><span>01</span><label>What product or service is the current commercial priority?<small>Choose up to three. LeadIntel will optimize targeting and campaigns around these priorities.</small></label><textarea data-question="priority_offers" rows="4" placeholder="Example: custom steel structures; industrial installation; engineering services"></textarea></article>
+              <article class="question-card"><span>02</span><label>What does the best-fit customer look like?<small>Include industries, company types, size, maturity and priority segments inside the markets selected in Step 1.</small></label><textarea data-question="ideal_customer" rows="4" placeholder="Example: manufacturers with 50–500 employees expanding in Northern Europe"></textarea></article>
+              <article class="question-card"><span>03</span><label>Who makes or strongly influences the buying decision?<small>Roles are more useful than names: CEO, Procurement Director, Production Director, HR Director or technical owner.</small></label><textarea data-question="buyer_roles" rows="3" placeholder="Procurement Director; Production Director; CEO"></textarea></article>
+              <article class="question-card"><span>04</span><label>What makes a prospect unsuitable or impossible to serve?<small>Define negative ICP rules such as minimum deal size, geography, certifications, logistics, industries or capacity.</small></label><textarea data-question="exclusions" rows="4" placeholder="Example: private consumers; projects below €20,000; markets outside Europe"></textarea></article>
+            </div>
+          </section>
+
+          <section class="brief-question-group" data-brief-group="signals">
+            <header class="brief-group-header"><div><span class="eyebrow">Buying Signals</span><h2>Define why demand appears and when to act.</h2><p>These decisions guide signal monitoring, Why Now evidence and outreach timing.</p></div><strong data-brief-progress="signals">0/2 reviewed</strong></header>
+            <div class="question-grid">
+              <article class="question-card"><span>05</span><label>What problem or desired result creates demand for this offer?<small>Describe the customer problem or business result—not your product features.</small></label><textarea data-question="buying_outcomes" rows="4" placeholder="Example: reduce production downtime; add capacity; enter a new market"></textarea></article>
+              <article class="question-card signal-question"><span>06</span><label>What observable event indicates that this demand may exist now?<small>Use searchable events such as expansion, relocation, hiring, funding, tender, regulation change or equipment replacement.</small></label><textarea data-question="buying_triggers" rows="4" placeholder="New facility; capacity expansion; equipment modernization; tender"></textarea></article>
+            </div>
+          </section>
+
+          <section class="brief-question-group" data-brief-group="message">
+            <header class="brief-group-header"><div><span class="eyebrow">Commercial Message</span><h2>Define what LeadIntel may communicate.</h2><p>Build the approved value, differentiation, proof and objection context used by Campaign Studio.</p></div><strong data-brief-progress="message">0/4 reviewed</strong></header>
+            <div class="question-grid">
+              <article class="question-card"><span>07</span><label>How does the offer help the customer solve that problem or achieve that result?<small>Connect the offer to a concrete benefit without adding unsupported promises.</small></label><textarea data-question="value_proposition" rows="4" placeholder="Example: reduce installation time while keeping production disruption to a minimum"></textarea></article>
+              <article class="question-card"><span>08</span><label>Why should the customer choose your company instead of an alternative?<small>Think specialization, speed, reliability, technology, customization, service or access.</small></label><textarea data-question="differentiation" rows="4" placeholder="Example: certified specialists, custom delivery and one accountable project team"></textarea></article>
+              <article class="question-card"><span>09</span><label>What evidence may LeadIntel safely mention?<small>Use public or approved cases, certifications, quantified results, delivery history, expertise or references.</small></label><textarea data-question="proof_points" rows="4" placeholder="Example: ISO 9001; 120 completed projects; 15 years of experience"></textarea></article>
+              <article class="question-card"><span>10</span><label>What objections or concerns commonly prevent the customer from proceeding?<small>Describe concerns about timing, price, risk, implementation, switching, capacity or internal approval.</small></label><textarea data-question="objections" rows="4" placeholder="Example: implementation downtime; budget timing; concern about switching suppliers"></textarea></article>
+            </div>
+          </section>
 
           <div class="step-actions split"><button class="secondary-btn" type="button" id="back-to-sources">← Back</button><span id="step2-error" class="inline-error" role="alert"></span><button class="primary-btn" type="button" id="analyze-company">Build / refresh intelligence profile <span>✦</span></button></div>
         </section>
@@ -395,7 +410,8 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script defer src="background-task-centre.js?v=20260916-task-centre-v1"></script>
   <script defer src="content-variants.js?v=20260905-step1-language-v1"></script>
-  <script defer src="profile-engine.js?v=20260915-brand-identity-v3"></script>
+  <script defer src="step2-brief-schema.js?v=20260916-commercial-brief-v1"></script>
+  <script defer src="profile-engine.js?v=20260916-commercial-brief-v1"></script>
   <script defer src="market-engine.js?v=20260916-gemini-verification-v1"></script>
   <script defer src="market-research-verification.js?v=20260916-gemini-verification-v1"></script>
   <script defer src="discovery-engine.js?v=20260915-evidence-link-v1"></script>
@@ -404,9 +420,9 @@
   <script defer src="server-bridge.js?v=20260916-error-sweep-v2" data-server-bridge="true"></script>
   <script defer src="brand-identity.js?v=20260916-brand-timestamp-v1"></script>
   <script defer src="brand-identity-ui.js?v=20260916-browser-logo-copy-v2"></script>
-  <script type="module" src="app.js?v=20260916-ercon-context-v1"></script>
-  <script type="module" src="process-map.js?v=20260916-ercon-context-v1"></script>
+  <script type="module" src="app.js?v=20260916-commercial-brief-v1"></script>
+  <script type="module" src="process-map.js?v=20260916-commercial-brief-v1"></script>
   <script defer src="discovery-ui.js?v=20260916-error-sweep-v2"></script>
-  <script type="module" src="company-research-ui.js?v=20260916-step2-draft-handoff-v1"></script>
+  <script type="module" src="company-research-ui.js?v=20260916-commercial-brief-v1"></script>
 </body>
 </html>

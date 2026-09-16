@@ -5,9 +5,10 @@
 })(typeof globalThis!=="undefined"?globalThis:this,function(){
   "use strict";
 
-  const QUESTION_IDS=[
-    "priority_offers","ideal_customer","lookalike_customers","buyer_roles","growth_markets",
-    "differentiation","buying_triggers","exclusions","opportunity_value","success_outcome"
+  const Brief=(typeof globalThis!=="undefined"&&globalThis.LeadIntelStep2Brief)||(typeof require==="function"?require("./step2-brief-schema.js"):null);
+  const QUESTION_IDS=Brief?.FIELD_IDS||[
+    "priority_offers","ideal_customer","buyer_roles","exclusions","buying_outcomes",
+    "buying_triggers","value_proposition","differentiation","proof_points","objections"
   ];
   const COUNTRIES=["Latvia","Estonia","Lithuania","Finland","Sweden","Norway","Denmark","Iceland","Poland","Germany","France","Netherlands","Belgium","Luxembourg","Spain","Italy","United Kingdom","Ireland","United States","Canada","Austria","Switzerland","Czech Republic","Slovakia","Hungary"];
   const MARKET_REGIONS=Object.freeze({
@@ -131,12 +132,10 @@
   }
   function calculateCompleteness(input={}){
     const answers=input.answers||{};
-    const required=QUESTION_IDS.filter(id=>id!=="lookalike_customers");
     let score=0;
-    if(normalizeUrl(input.website))score+=20;
-    if(normalizeTargetMarkets(input.targetMarkets).length)score+=20;
-    required.forEach(id=>{if(clean(answers[id]))score+=6;});
-    if(clean(answers.lookalike_customers))score+=4;
+    if(normalizeUrl(input.website))score+=15;
+    if(normalizeTargetMarkets(input.targetMarkets).length)score+=15;
+    QUESTION_IDS.forEach(id=>{if(clean(answers[id]))score+=7;});
     if((input.additionalLinks||[]).some(normalizeUrl))score+=1;
     if((input.documents||[]).some(d=>clean(d?.text)||clean(d?.name)))score+=1;
     return Math.min(100,score);
@@ -183,9 +182,12 @@
   function informationGaps(answers,scrapedSources,documents){
     const gaps=[];
     if(!clean(answers.buyer_roles))gaps.push("Decision-maker roles are not defined.");
-    if(!clean(answers.opportunity_value))gaps.push("Typical commercial value of a good opportunity is missing.");
+    if(!clean(answers.buying_outcomes))gaps.push("The customer problem or desired business outcome is not defined.");
+    if(!clean(answers.value_proposition))gaps.push("The value proposition is not defined.");
     if(!clean(answers.differentiation))gaps.push("Competitive differentiation is not clear.");
     if(!clean(answers.buying_triggers))gaps.push("Buying triggers are not defined.");
+    if(!clean(answers.proof_points))gaps.push("No approved proof point is available for outreach.");
+    if(!clean(answers.objections))gaps.push("Common buyer objections are not defined.");
     if(!(scrapedSources||[]).length)gaps.push("No website evidence was successfully collected.");
     if(!(documents||[]).some(d=>clean(d.text)))gaps.push("No document text is available for supporting evidence.");
     return gaps;
@@ -245,11 +247,19 @@
     return {website,additionalLinks,documents:documentCount,total:website+additionalLinks+documentCount};
   }
   function buildCompanyIntelligenceProfile(input={}){
-    const answers=Object.fromEntries(QUESTION_IDS.map(id=>[id,clean(input.answers?.[id])]));
+    const migrated=Brief?.migrateState?Brief.migrateState(input):input;
+    const answers=Object.fromEntries(QUESTION_IDS.map(id=>[id,clean(migrated.answers?.[id])]));
+    const profileFields=Brief?.profileFields?Brief.profileFields(answers):{
+      priorityOffers:answers.priority_offers,idealCustomer:answers.ideal_customer,decisionMakers:answers.buyer_roles,
+      exclusions:answers.exclusions,customerPainPoints:answers.buying_outcomes,buyingOutcomes:answers.buying_outcomes,
+      buyingTriggers:answers.buying_triggers,valueProposition:answers.value_proposition,differentiation:answers.differentiation,
+      proofPoints:answers.proof_points,commonObjections:answers.objections
+    };
     const scraped=(input.scrapedSources||[]).filter(x=>x&&clean(x.text)&&sourceMatchesWebsite(x,input.website));
     const documents=(input.documents||[]).filter(x=>x&&clean(x.name));
     const combined=sourceText(scraped,documents);
-    const selectedTargetMarkets=normalizeTargetMarkets(input.targetMarkets).length?normalizeTargetMarkets(input.targetMarkets):normalizeTargetMarkets(answers.growth_markets);
+    const legacyMarketFocus=clean(migrated.legacyStrategyContext?.growthMarkets||input.answers?.growth_markets);
+    const selectedTargetMarkets=normalizeTargetMarkets(input.targetMarkets).length?normalizeTargetMarkets(input.targetMarkets):normalizeTargetMarkets(legacyMarketFocus);
     const researchMarkets=expandTargetMarkets(selectedTargetMarkets);
     const currentMarkets=detectCountries(combined).filter(country=>!researchMarkets.some(target=>target.toLowerCase()===country.toLowerCase()));
     const evidenceDigest=deriveEvidenceDigest(scraped,documents);
@@ -263,19 +273,13 @@
       companyName,
       website:normalizeUrl(input.website),
       companyOverview:companyOverview||evidenceDigest||`LeadIntel has limited public evidence for ${companyName}. Strategic answers are used as the primary context until more evidence is added.`,
-      priorityOffers:answers.priority_offers,
-      idealCustomer:answers.ideal_customer,
-      lookalikeCustomers:answers.lookalike_customers,
-      decisionMakers:answers.buyer_roles,
+      ...profileFields,
       currentMarkets,
       targetMarkets:selectedTargetMarkets.join("; "),
       researchMarkets,
-      marketFocus:answers.growth_markets,
-      differentiation:answers.differentiation,
-      buyingTriggers:answers.buying_triggers,
-      exclusions:answers.exclusions,
-      opportunityValue:answers.opportunity_value,
-      commercialObjective:answers.success_outcome,
+      marketFocus:legacyMarketFocus,
+      opportunityValue:clean(migrated.advancedScoring?.opportunityValue),
+      commercialObjective:clean(migrated.workspaceGoals?.successOutcome),
       mission:buildMission(),
       recommendedSignals:recommendSignals(answers.buying_triggers,combined),
       informationGaps:informationGaps(answers,scraped,documents),
@@ -288,9 +292,11 @@
     };
   }
   function normalizeSavedState(value={}){
-    const answers={}; QUESTION_IDS.forEach(id=>{answers[id]=clean(value.answers?.[id]);});
+    const migrated=Brief?.migrateState?Brief.migrateState(value):value;
+    const answers={}; QUESTION_IDS.forEach(id=>{answers[id]=clean(migrated.answers?.[id]);});
     const explicitTargets=normalizeTargetMarkets(value.targetMarkets);
-    const targetMarkets=explicitTargets.length?explicitTargets:normalizeTargetMarkets(answers.growth_markets);
+    const legacyMarketFocus=clean(migrated.legacyStrategyContext?.growthMarkets||value.answers?.growth_markets);
+    const targetMarkets=explicitTargets.length?explicitTargets:normalizeTargetMarkets(legacyMarketFocus);
     const docs=Array.isArray(value.documents)?value.documents.slice(0,5).map(d=>({name:clean(d?.name).slice(0,180),size:Number(d?.size)||0,text:String(d?.text||"").slice(0,25000),status:clean(d?.status)||"ready"})).filter(d=>d.name):[];
     const scrapedSources=Array.isArray(value.scrapedSources)?value.scrapedSources.slice(0,25).map(s=>({type:s?.type==="link"?"link":"website",url:normalizeUrl(s?.url),title:clean(s?.title).slice(0,180),text:String(s?.text||"").slice(0,30000),status:clean(s?.status)||"ready",pageCategory:["company","offers","proof","delivery","contact"].includes(s?.pageCategory)?s.pageCategory:"",...sourceBranding(s)})).filter(s=>s.url):[];
     const profile=value.profile&&typeof value.profile==="object"?{
@@ -298,7 +304,7 @@
       mission:buildMission(),
       targetMarkets:clean(value.profile.targetMarkets)||targetMarkets.join("; "),
       researchMarkets:Array.isArray(value.profile.researchMarkets)&&value.profile.researchMarkets.length?expandTargetMarkets(value.profile.researchMarkets):expandTargetMarkets(targetMarkets),
-      marketFocus:clean(value.profile.marketFocus)||answers.growth_markets,
+      marketFocus:clean(value.profile.marketFocus)||legacyMarketFocus,
       recommendedSignals:Array.isArray(value.profile.recommendedSignals)&&value.profile.recommendedSignals.length
         ?value.profile.recommendedSignals
         :recommendSignals(clean(answers.buying_triggers)||clean(value.profile.buyingTriggers),sourceText(scrapedSources,docs))
@@ -322,9 +328,15 @@
       additionalLinks:unique((value.additionalLinks||[]).map(normalizeUrl).filter(Boolean)).slice(0,8),
       documents:docs,
       answers,
+      answerStatus:migrated.answerStatus||{},
+      step2BriefSchemaVersion:migrated.step2BriefSchemaVersion,
+      legacyStrategyContext:migrated.legacyStrategyContext||{},
+      advancedScoring:migrated.advancedScoring||{},
+      workspaceGoals:migrated.workspaceGoals||{},
       scrapedSources,
       profile,
       approved:Boolean(value.approved),
+      ...(value.campaignStudio&&typeof value.campaignStudio==="object"&&!Array.isArray(value.campaignStudio)?{campaignStudio:value.campaignStudio}:{}),
       ...(value.referenceCustomers&&typeof value.referenceCustomers==="object"?{referenceCustomers:value.referenceCustomers}:{}),
       ...(value.referenceCustomerPortfolio&&typeof value.referenceCustomerPortfolio==="object"?{referenceCustomerPortfolio:value.referenceCustomerPortfolio}:{})
     };

@@ -8,7 +8,7 @@ const delivery=fs.readFileSync(path.join(root,'delivery-ui.js'),'utf8');
 const deliveryEngine=fs.readFileSync(path.join(root,'delivery-engine.js'),'utf8');
 const gmail=fs.readFileSync(path.join(root,'production-gmail-ui.js'),'utf8');
 
-test('Content & Scripts writes dossier and approval events to durable CRM',()=>{
+test('Campaign Studio writes dossier and approval events to durable CRM',()=>{
   assert.match(outreach,/recordCrmActivity/);
   assert.match(outreach,/dossier\.built/);
   assert.match(outreach,/content\.approved/);

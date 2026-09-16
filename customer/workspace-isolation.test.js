@@ -43,9 +43,9 @@ const mismatched=storage({
 assert.equal(isolation.reconcileLocalWorkspace(mismatched,main).cleared,true,"a different website must clear downstream data");
 
 const noPipeline=storage();
-assert.equal(isolation.safeStep(noPipeline,main,6),5,"Content & Scripts must wait for a current pipeline company");
+assert.equal(isolation.safeStep(noPipeline,main,6),5,"Campaign Studio must wait for a current pipeline company");
 noPipeline.setItem("leadintel_customer_v2_discovery",{pipeline:[{domain:"current-prospect.example"}]});
-assert.equal(isolation.safeStep(noPipeline,main,6),6,"a saved pipeline company unlocks Content & Scripts");
+assert.equal(isolation.safeStep(noPipeline,main,6),6,"a saved pipeline company unlocks Campaign Studio");
 assert.equal(isolation.safeStep(noPipeline,main,7),6,"Delivery must wait for outreach content");
 noPipeline.setItem("leadintel_customer_v2_outreach",{items:[{domain:"current-prospect.example",dossier:{email:"draft"}}]});
 assert.equal(isolation.safeStep(noPipeline,main,7),7,"outreach content unlocks Delivery");

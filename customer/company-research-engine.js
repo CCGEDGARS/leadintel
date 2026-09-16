@@ -5,7 +5,9 @@
 })(typeof globalThis!=="undefined"?globalThis:this,function(){
   "use strict";
 
-  const QUESTION_IDS=["priority_offers","ideal_customer","lookalike_customers","buyer_roles","growth_markets","differentiation","buying_triggers","exclusions","opportunity_value","success_outcome"];
+  const Brief=(typeof globalThis!=="undefined"&&globalThis.LeadIntelStep2Brief)||(typeof require==="function"?require("./step2-brief-schema.js"):null);
+  const QUESTION_IDS=Brief?.FIELD_IDS||["priority_offers","ideal_customer","buyer_roles","exclusions","buying_outcomes","buying_triggers","value_proposition","differentiation","proof_points","objections"];
+  const DRAFT_ORIGINS=new Set(["research","evidence_draft","hypothesis_draft"]);
   const CONFIDENCE=new Set(["high","medium","low"]);
   const MAX_PUBLIC_QUERIES=3;
   const MAX_SOURCES=25;
@@ -193,7 +195,9 @@
       const rationale=truncate(row.rationale,500);
       if(clean(language).toLowerCase().startsWith("lv")&&(hasEnglishProse(value)||hasEnglishProse(rationale)))return {};
       const sourceIds=unique(Array.isArray(row.source_ids)?row.source_ids:row.sourceIds||[]).map(String).filter(sourceId=>valid.has(sourceId)).slice(0,6);
-      output[id]={value,confidence,sourceIds,rationale};
+      const requestedType=clean(row.draft_type||row.draftType).toLowerCase();
+      const draftType=requestedType==="hypothesis"?"hypothesis":"evidence";
+      output[id]={value,confidence,sourceIds,rationale,draftType};
     }
     return output;
   }
@@ -269,7 +273,6 @@
     }
     const industries=taxonomyDraft(sources,INDUSTRIES,lv);
     draft.ideal_customer=item(industries.value,industries.ids,lv?"Savāktajos pierādījumos tieši minētās nozares vai klientu darbības vide.":"Industries/customer environments explicitly mentioned in collected evidence.");
-    draft.growth_markets=item(industries.value,industries.ids,lv?"Pierādījumos tieši minētie segmenti; mērķa ģeogrāfiju lietotājs nosaka 1. solī.":"Segments explicitly mentioned in collected evidence; selected geography remains controlled in Step 1.");
     const roles=taxonomyDraft(sources,ROLES,lv);draft.buyer_roles=item(roles.value,roles.ids,lv?"Pierādījumos tieši minētās pircēju vai amata lomas.":"Buyer/job roles explicitly present in collected evidence.");
     const differentiators=taxonomyDraft(sources,DIFFERENTIATORS,lv);draft.differentiation=item(differentiators.value,differentiators.ids,lv?"Pierādījumos atrastie skaidri formulētie kompetences, sertifikācijas vai piegādes apgalvojumi.":"Explicit capability, certification or delivery claims found in evidence.");
     const triggers=taxonomyDraft(sources,TRIGGERS,lv);draft.buying_triggers=item(triggers.value,triggers.ids,lv?"Savāktajos pierādījumos konstatētās komerciālo pirkšanas signālu pazīmes.":"Commercial trigger language observed in collected evidence.");
@@ -281,10 +284,12 @@
     for(const id of QUESTION_IDS){
       const current=clean(currentAnswers?.[id]);const row=draft?.[id]||emptyDraftItem();
       const previous=previousMeta[id];
-      const replaceDraft=previous?.origin==="research"&&!previous.reviewed;
+      const replaceDraft=DRAFT_ORIGINS.has(clean(previous?.origin).toLowerCase())&&!previous.reviewed;
       if(current&&!replaceDraft){answers[id]=current;meta[id]=previous?{...previous}:{origin:"user",confidence:"",sourceIds:[],rationale:"Existing answer preserved."};continue;}
       const value=truncate(row.value,1500);answers[id]=value;
-      meta[id]=value?{origin:"research",draftValue:value,confidence:CONFIDENCE.has(row.confidence)?row.confidence:"low",sourceIds:unique(row.sourceIds||row.source_ids||[]).slice(0,6),rationale:truncate(row.rationale,500)}:{origin:"needs-input",confidence:"",sourceIds:[],rationale:"Insufficient evidence; customer input recommended."};
+      const evidenceIds=unique(row.sourceIds||row.source_ids||[]).slice(0,6);
+      const hypothesis=clean(row.draftType||row.draft_type).toLowerCase()==="hypothesis"||(!evidenceIds.length&&value);
+      meta[id]=value?{origin:hypothesis?"hypothesis_draft":"evidence_draft",draftValue:value,confidence:CONFIDENCE.has(row.confidence)?row.confidence:"low",sourceIds:evidenceIds,rationale:truncate(row.rationale,500)}:{origin:"needs-input",confidence:"",sourceIds:[],rationale:"Insufficient evidence; customer input recommended."};
     }
     return {answers,meta};
   }
@@ -293,13 +298,13 @@
     const answers={};
     for(const id of QUESTION_IDS){
       const current=clean(currentAnswers?.[id]);const row=fields?.[id]||{};
-      answers[id]=current||(clean(row.origin).toLowerCase()==="research"?truncate(row.draftValue,1500):"");
+      answers[id]=current||(DRAFT_ORIGINS.has(clean(row.origin).toLowerCase())?truncate(row.draftValue,1500):"");
     }
     return answers;
   }
 
   function reviewActionState(row={}){
-    if(clean(row.origin).toLowerCase()!=="research")return {visible:false,label:"",disabled:true};
+    if(!DRAFT_ORIGINS.has(clean(row.origin).toLowerCase()))return {visible:false,label:"",disabled:true};
     if(Boolean(row.reviewed))return {visible:true,label:"Accepted ✓",disabled:true};
     return {visible:true,label:"Accept",disabled:false};
   }
@@ -307,7 +312,7 @@
   function reconcileResearchField(value,row={}){
     if(!clean(value))return {origin:"needs-input",reviewed:false,confidence:"",sourceIds:[],rationale:""};
     const origin=clean(row.origin).toLowerCase();
-    if(origin==="research")return {origin:"research",reviewed:Boolean(row.reviewed),confidence:CONFIDENCE.has(clean(row.confidence).toLowerCase())?clean(row.confidence).toLowerCase():"low",sourceIds:unique(row.sourceIds||[]).slice(0,6),rationale:truncate(row.rationale,500)};
+    if(DRAFT_ORIGINS.has(origin))return {origin,reviewed:Boolean(row.reviewed),confidence:CONFIDENCE.has(clean(row.confidence).toLowerCase())?clean(row.confidence).toLowerCase():"low",sourceIds:unique(row.sourceIds||[]).slice(0,6),rationale:truncate(row.rationale,500)};
     if(origin==="user")return {origin:"user",reviewed:true,confidence:"",sourceIds:[],rationale:truncate(row.rationale,500)};
     return {origin:"user",reviewed:true,confidence:"",sourceIds:[],rationale:"Customer-provided context preserved."};
   }
@@ -324,9 +329,9 @@
     const outputLanguage=requestedLanguage==="en"||requestedLanguage.startsWith("en")?"English":"Latvian";
     const sourceLines=sources.map(source=>`[${source.id}] ${source.title||source.url}\nURL: ${source.url}\n${String(source.text||"").slice(0,5000)}`).join("\n\n");
     const docLines=docs.map((doc,index)=>`[D${index+1}] PDF ${clean(doc.name)}\n${String(doc.text||"").slice(0,4000)}`).join("\n\n");
-    const system="You are the LeadIntel evidence analyst. Use only supplied evidence. Never invent customers, prices, deal values, certifications, buyer roles, markets, exclusions or objectives. Return strict JSON only. If evidence is insufficient for a field, use an empty value. Every returned value must be written entirely in "+outputLanguage+"; do not mix languages or leave English business terminology inside Latvian output.";
-    const schema=QUESTION_IDS.map(id=>`\"${id}\":{\"value\":\"\",\"confidence\":\"high|medium|low\",\"source_ids\":[\"S1\"],\"rationale\":\"brief evidence reason\"}`).join(",");
-    const prompt=`Output language: ${outputLanguage}\nCompany website: ${safeUrl(input.website)}\nTarget markets selected by customer: ${normalizeMarkets(input.targetMarkets).join("; ")}\n\nFill only what the evidence supports. Write complete, ready-to-use answers in the requested output language, not notes or placeholders. Target-market geography is already user-controlled, so growth_markets should describe industries/segments/customer groups inside those markets. opportunity_value, success_outcome and exclusions must remain empty unless explicitly evidenced. Buyer roles may be inferred only when the evidence strongly supports the buying function; mark inference low or medium confidence.\n\nReturn exactly this shape: {\"fields\":{${schema}}}\n\nWEB EVIDENCE\n${sourceLines||"No readable web evidence."}\n\nDOCUMENT EVIDENCE\n${docLines||"No document evidence."}`;
+    const system="You are the LeadIntel evidence analyst. Use supplied evidence for factual claims. Never invent customers, prices, certifications, proof, or company capabilities. You may add a commercially useful hypothesis only for ideal_customer, buyer_roles, buying_outcomes, buying_triggers, value_proposition, objections, or exclusions; label it draft_type hypothesis, keep confidence low or medium, and do not attach source IDs. Return strict JSON only. Every returned value must be written entirely in "+outputLanguage+"; do not mix languages or leave English business terminology inside Latvian output.";
+    const schema=QUESTION_IDS.map(id=>`\"${id}\":{\"value\":\"\",\"confidence\":\"high|medium|low\",\"draft_type\":\"evidence|hypothesis\",\"source_ids\":[\"S1\"],\"rationale\":\"brief evidence reason\"}`).join(",");
+    const prompt=`Output language: ${outputLanguage}\nCompany website: ${safeUrl(input.website)}\nTarget markets selected by customer: ${normalizeMarkets(input.targetMarkets).join("; ")}\n\nBuild a ready-to-use Commercial Intelligence Brief in one language that supports targeting, buying-signal discovery, and content creation. For evidence-backed fields, cite only supplied source IDs and set draft_type to evidence. When the evidence does not directly answer a commercially necessary field, either leave it empty or provide a clearly marked hypothesis under the permitted rules. proof_points and differentiation must remain empty unless explicitly evidenced. Buyer roles may be inferred only when the business model strongly supports the buying function.\n\nReturn exactly this shape: {\"fields\":{${schema}}}\n\nWEB EVIDENCE\n${sourceLines||"No readable web evidence."}\n\nDOCUMENT EVIDENCE\n${docLines||"No document evidence."}`;
     return {system,prompt};
   }
 

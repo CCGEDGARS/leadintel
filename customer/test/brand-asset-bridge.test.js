@@ -13,7 +13,7 @@ const processMapSource = fs.readFileSync(path.join(__dirname, '..', 'process-map
 const API = 'https://leadintel-api.edgars-7e7.workers.dev';
 const WORKSPACE_ID = 'workspace-1';
 const CACHE_VERSION = '20260916-error-sweep-v2';
-const WORKSPACE_CACHE_VERSION = '20260916-brand-assets-v10';
+const WORKSPACE_CACHE_VERSION = '20260916-ercon-context-v1';
 const CLEANUP_KEY = 'leadintel_customer_v2_brand_asset_cleanup_v1';
 
 function storage(initial = {}) {

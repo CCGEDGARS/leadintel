@@ -1,4 +1,4 @@
-const STEP_LABELS=Object.freeze({1:'Company & Market',2:'Strategic Intake',3:'Intelligence Profile',4:'Market Strategy',5:'Discovery',6:'Content & Scripts',7:'Delivery & Learning'});
+const STEP_LABELS=Object.freeze({1:'Company & Market',2:'Strategic Intake',3:'Intelligence Profile',4:'Market Strategy',5:'Discovery',6:'Campaign Studio',7:'Delivery & Learning'});
 const PROMPTS=Object.freeze({
   1:['What is missing from my company and market setup?','What should I add before continuing?','How does LeadIntel use this website?'],
   2:['Which answers would improve targeting most?','What buyer roles should I define?','What exclusions should I add?'],

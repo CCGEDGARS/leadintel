@@ -63,6 +63,23 @@ test('successful activation preserves customer inputs while resetting stale stra
   assert.equal(next.scrapedSources[0].text,'Fresh company evidence');
 });
 
+test('editing the visible website before activation cannot disguise a company switch',()=>{
+  const state={
+    website:'https://ercon.lv/',
+    companyContextWebsite:'https://ccgroup.lv/',
+    websiteActivation:{status:'active',url:'https://ccgroup.lv/'},
+    answers:{priority_offers:'Sales training'},
+    answerStatus:{priority_offers:'accepted'},
+    documents:[{name:'ccgroup.pdf',text:'Old company material'}],
+    additionalLinks:['https://ccgroup.lv/services']
+  };
+  const next=activation.buildActivatedState(state,{url:'https://ercon.lv/',title:'ERCON',text:'Fresh ERCON evidence'},'2026-09-16T13:59:00.000Z');
+  assert.deepEqual(next.answers,{},'the last activated company, not the edited input, determines isolation');
+  assert.deepEqual(next.answerStatus,{});
+  assert.deepEqual(next.documents,[]);
+  assert.deepEqual(next.additionalLinks,[]);
+});
+
 test('returnToWebsiteStep rewrites stale canonical navigation and activates Step 1 in the live UI',()=>{
   assert.equal(typeof activation.returnToWebsiteStep,'function');
   const previous={localStorage:global.localStorage,document:global.document,MouseEvent:global.MouseEvent};

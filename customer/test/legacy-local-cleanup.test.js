@@ -25,5 +25,5 @@ test('legacy browser autosave is cleared exactly once by the hygiene migration',
 });
 
 test('process shell cache-busts the emergency-reset hygiene release',()=>{
-  assert.match(processMap,/workspace-reset-hygiene\.js\?v=20260916-brand-assets-v10/);
+  assert.match(processMap,/workspace-reset-hygiene\.js\?v=20260916-ercon-context-v1/);
 });

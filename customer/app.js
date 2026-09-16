@@ -18,9 +18,9 @@ const RESEARCH_CONCURRENCY=3;
 const MARKET_RESEARCH_RESUME_KEY="leadintel_customer_v2_market_research_resume";
 const profileFields=[
   ["companyOverview","Company overview",true],["priorityOffers","Priority offers",false],["idealCustomer","Ideal customer profile",false],["customerPainPoints","Customer Pain Points",true],
-  ["lookalikeCustomers","Lookalike customers",false],["decisionMakers","Decision makers",false],["currentMarkets","Current market footprint",false],
-  ["targetMarkets","Priority growth markets",false],["marketFocus","Priority market focus",false],["differentiation","Competitive advantages",false],["buyingTriggers","Buying situations / triggers",true],
-  ["exclusions","Negative ICP / exclusions",false],["opportunityValue","Commercial value",false],["commercialObjective","6–12 month commercial objective",true]
+  ["decisionMakers","Decision makers",false],["currentMarkets","Current market footprint",false],["targetMarkets","Priority growth markets",false],
+  ["valueProposition","Value proposition",true],["differentiation","Competitive advantages",true],["proofPoints","Approved proof points",true],
+  ["buyingTriggers","Buying situations / triggers",true],["commonObjections","Common buyer objections",true],["exclusions","Negative ICP / exclusions",false]
 ];
 let state=loadState();
 let editMode=false;

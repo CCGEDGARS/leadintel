@@ -25,7 +25,7 @@ test('Step 2 repairs a split research handoff before rendering empty fields',()=
 });
 
 test('the repaired research handoff is cache-busted at every browser entry point',()=>{
-  for(const source of [shell,processMap])assert.match(source,/company-research-ui\.js\?v=20260916-step2-draft-handoff-v1/);
-  assert.match(researchUi,/company-research-engine\.js\?v=20260916-step2-draft-handoff-v1/);
-  assert.match(processMap,/step2-readiness-engine\.js\?v=20260916-step2-draft-handoff-v1/);
+  for(const source of [shell,processMap])assert.match(source,/company-research-ui\.js\?v=20260916-commercial-brief-v1/);
+  assert.match(researchUi,/company-research-engine\.js\?v=20260916-commercial-brief-v1/);
+  assert.match(processMap,/step2-readiness-engine\.js\?v=20260916-commercial-brief-v1/);
 });

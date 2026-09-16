@@ -8,7 +8,7 @@ test('Latvian company research rejects English AI field content',()=>{
   assert.deepEqual(parsed,{});
 });
 
-const QUESTION_IDS=['priority_offers','ideal_customer','lookalike_customers','buyer_roles','growth_markets','differentiation','buying_triggers','exclusions','opportunity_value','success_outcome'];
+const QUESTION_IDS=['priority_offers','ideal_customer','buyer_roles','exclusions','buying_outcomes','buying_triggers','value_proposition','differentiation','proof_points','objections'];
 
 test('company research queries are domain-grounded and capped at three',()=>{
   const queries=engine.buildResearchQueries({website:'https://www.acme-industrial.com/',companyName:'Acme Industrial',targetMarkets:['Sweden','Nordics']},10);
@@ -88,14 +88,14 @@ test('AI draft parser whitelists strategic fields, confidence and real evidence 
   const text='```json\n'+JSON.stringify({fields:{
     priority_offers:{value:'Industrial flooring',confidence:'high',source_ids:['S1','S9'],rationale:'Shown on product page'},
     buyer_roles:{value:'Facility Manager',confidence:'medium',source_ids:['S2'],rationale:'Role appears in case study'},
-    opportunity_value:{value:'EUR 100,000',confidence:'extreme',source_ids:['S1'],rationale:'Invalid confidence must be rejected'},
+    proof_points:{value:'EUR 100,000',confidence:'extreme',source_ids:['S1'],rationale:'Invalid confidence must be rejected'},
     rogue_field:{value:'Ignore me',confidence:'high',source_ids:['S1'],rationale:'Unknown'}
   }})+'\n```';
   const parsed=engine.parseAiDraft(text,['S1','S2']);
   assert.equal(parsed.priority_offers.value,'Industrial flooring');
   assert.deepEqual(parsed.priority_offers.sourceIds,['S1']);
   assert.equal(parsed.buyer_roles.confidence,'medium');
-  assert.equal(parsed.opportunity_value,undefined);
+  assert.equal(parsed.proof_points,undefined);
   assert.equal(parsed.rogue_field,undefined);
   assert.ok(Object.keys(parsed).every(key=>QUESTION_IDS.includes(key)));
 });
@@ -112,7 +112,7 @@ test('draft merge fills blanks but never overwrites a non-empty customer answer'
   assert.equal(merged.answers.ideal_customer,'Industrial manufacturers');
   assert.equal(merged.answers.buyer_roles,'CEO');
   assert.equal(merged.meta.priority_offers.origin,'user');
-  assert.equal(merged.meta.ideal_customer.origin,'research');
+  assert.equal(merged.meta.ideal_customer.origin,'evidence_draft');
   assert.equal(merged.meta.ideal_customer.draftValue,'Industrial manufacturers');
 });
 
@@ -120,8 +120,8 @@ test('saved research metadata can restore a missing Step 2 draft without overwri
   const recovered=engine.recoverDraftAnswers(
     {priority_offers:'Customer-entered offer',ideal_customer:''},
     {
-      priority_offers:{origin:'research',draftValue:'AI offer'},
-      ideal_customer:{origin:'research',draftValue:'Industrial manufacturers'},
+      priority_offers:{origin:'evidence_draft',draftValue:'AI offer'},
+      ideal_customer:{origin:'hypothesis_draft',draftValue:'Industrial manufacturers'},
       buyer_roles:{origin:'needs-input',draftValue:'CEO'}
     }
   );
@@ -132,12 +132,12 @@ test('saved research metadata can restore a missing Step 2 draft without overwri
 
 test('review actions are meaningful for research drafts and never show a dead Accept control for preserved user input',()=>{
   assert.deepEqual(engine.reviewActionState({origin:'user',reviewed:true}),{visible:false,label:'',disabled:true});
-  assert.deepEqual(engine.reviewActionState({origin:'research',reviewed:false}),{visible:true,label:'Accept',disabled:false});
-  assert.deepEqual(engine.reviewActionState({origin:'research',reviewed:true}),{visible:true,label:'Accepted ✓',disabled:true});
+  assert.deepEqual(engine.reviewActionState({origin:'evidence_draft',reviewed:false}),{visible:true,label:'Accept',disabled:false});
+  assert.deepEqual(engine.reviewActionState({origin:'hypothesis_draft',reviewed:true}),{visible:true,label:'Accepted ✓',disabled:true});
 });
 
 test('empty answers cannot retain stale research acceptance metadata',()=>{
-  const row=engine.reconcileResearchField('',{origin:'research',reviewed:true,confidence:'high',sourceIds:['S1'],rationale:'Old evidence'});
+  const row=engine.reconcileResearchField('',{origin:'evidence_draft',reviewed:true,confidence:'high',sourceIds:['S1'],rationale:'Old evidence'});
   assert.deepEqual(row,{origin:'needs-input',reviewed:false,confidence:'',sourceIds:[],rationale:''});
   assert.deepEqual(engine.reviewActionState(row),{visible:false,label:'',disabled:true});
 });
@@ -150,8 +150,8 @@ test('deterministic fallback is conservative and leaves unsupported commercial c
   const draft=engine.buildEvidenceDraft({sources,targetMarkets:['Sweden']});
   assert.match(draft.priority_offers.value,/industrial flooring|concrete repair/i);
   assert.match(draft.ideal_customer.value,/factor|warehouse|food production/i);
-  assert.equal(draft.opportunity_value.value,'');
-  assert.equal(draft.success_outcome.value,'');
+  assert.equal(draft.proof_points.value,'');
+  assert.equal(draft.objections.value,'');
   assert.equal(draft.exclusions.value,'');
   assert.ok(['high','medium','low'].includes(draft.priority_offers.confidence));
   assert.ok(draft.priority_offers.sourceIds.length>0);

@@ -9,3 +9,10 @@
 @media(prefers-reduced-motion:reduce){.research-rerun{transition:none}.research-rerun.research-primary:hover{transform:none}}
 
 .research-summary-failed{border-color:#e3c2bb;background:#fff7f4}.research-summary-failed .research-summary-icon{background:#fce9e5;color:#a3483f}.research-retry-note{color:#a3483f!important;font-weight:700}
+.brief-question-group{margin-top:28px;padding:24px;border:1px solid #d7e3dd;border-radius:24px;background:rgba(255,255,255,.58)}
+.brief-group-header{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:18px}
+.brief-group-header h2{margin:5px 0 4px;font-size:clamp(22px,2.3vw,31px);line-height:1.12;color:#11231d}
+.brief-group-header p{margin:0;max-width:720px;color:#69776f;line-height:1.55}
+.brief-group-header [data-brief-progress]{white-space:nowrap;font:700 12px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;padding:7px 10px;border:1px solid #cfe0d8;border-radius:999px;color:#2f6d5c;background:#eef7f3}
+.research-origin.hypothesis{color:#865c18;background:#fff4df;border-color:#efd4a0}
+@media(max-width:760px){.brief-question-group{padding:18px}.brief-group-header{align-items:flex-start;flex-direction:column;gap:8px}}

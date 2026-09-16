@@ -7,6 +7,45 @@ test('auto language resolves from browser preference and explicit choice wins',(
   assert.equal(language.resolveLanguage('en',['lv-LV']),'en');
   assert.equal(language.resolveLanguage('lv',['en-US']),'lv');
 });
+test('automatic campaign language uses the verified market and flags uncertain fallback',()=>{
+  assert.deepEqual(language.resolveCampaignLanguage({requested:'auto',market:'Germany',domain:'buyer.de'}),{language:'de',source:'market',confidence:'high',requiresConfirmation:false});
+  assert.deepEqual(language.resolveCampaignLanguage({requested:'auto',market:'Switzerland',domain:'buyer.ch'}),{language:'en',source:'fallback',confidence:'low',requiresConfirmation:true});
+  assert.deepEqual(language.resolveCampaignLanguage({requested:'sv',market:'Germany',domain:'buyer.de'}),{language:'sv',source:'manual',confidence:'confirmed',requiresConfirmation:false});
+});
+test('campaign localization uses native sales rewriting and returns provider provenance',async()=>{
+  let request;
+  const source={tone:'consultative',emailSubject:'NordHaus — 15 minute discussion',emailBody:'Hello Anna,\n\nWould a 15 minute discussion help?\n\n[Your name]',linkedinMessage:'Hello Anna',callOpener:'Hello Anna',followUp:'Following up once.',objectionReply:'Understood.'};
+  const localized={emailSubject:'NordHaus — 15-minütiges Gespräch',emailBody:'Guten Tag Anna,\n\nWäre ein 15-minütiges Gespräch hilfreich?\n\n[Your name]',linkedinMessage:'Guten Tag Anna',callOpener:'Guten Tag Anna',followUp:'Ich melde mich einmalig erneut.',objectionReply:'Verstanden.'};
+  const root={fetch:async(url,options)=>{request={url,body:JSON.parse(options.body)};return new Response(JSON.stringify({provider:'anthropic',model:'claude-sonnet-4-6',text:JSON.stringify(localized)}),{status:200,headers:{'Content-Type':'application/json'}});}};
+  const result=await language.localizeCampaignPackage(root,'workspace-1','de',source,{company:'NordHaus',market:'Germany',segment:'furniture retailers'});
+  assert.match(request.body.system,/native German/i);
+  assert.match(request.body.system,/sales email/i);
+  assert.equal(result.drafts.emailBody,localized.emailBody);
+  assert.equal(result.provider,'anthropic');
+  assert.equal(result.model,'claude-sonnet-4-6');
+});
+test('campaign localization rejects changed numeric facts',async()=>{
+  const source={tone:'consultative',emailSubject:'15 minute discussion',emailBody:'Would a 15 minute discussion help?',linkedinMessage:'Hello',callOpener:'Hello',followUp:'Following up.',objectionReply:'Understood.'};
+  const bad={emailSubject:'30-minütiges Gespräch',emailBody:'Wäre ein 30-minütiges Gespräch hilfreich?',linkedinMessage:'Hallo',callOpener:'Hallo',followUp:'Nachfrage.',objectionReply:'Verstanden.'};
+  const root={fetch:async()=>new Response(JSON.stringify({provider:'openai',model:'gpt-5.6',text:JSON.stringify(bad)}),{status:200,headers:{'Content-Type':'application/json'}})};
+  await assert.rejects(()=>language.localizeCampaignPackage(root,'workspace-1','de',source,{}),/numeric facts/i);
+});
+test('campaign localization rejects changed protected names products geography and URLs',async()=>{
+  const source={tone:'consultative',emailSubject:'Acme Model-X for Riga',emailBody:'Hello Anna, review https://acme.example/demo for Model-X in Riga.',linkedinMessage:'Hello Anna from Acme',callOpener:'Hello Anna',followUp:'Acme follow-up',objectionReply:'Model-X details.'};
+  const bad={emailSubject:'Globex Model-Y für Berlin',emailBody:'Hallo Maria, siehe https://globex.example/demo für Model-Y in Berlin.',linkedinMessage:'Hallo Maria von Globex',callOpener:'Hallo Maria',followUp:'Globex Nachfrage',objectionReply:'Model-Y Details.'};
+  const root={fetch:async()=>new Response(JSON.stringify({provider:'openai',model:'gpt-5.6',text:JSON.stringify(bad)}),{status:200,headers:{'Content-Type':'application/json'}})};
+  await assert.rejects(()=>language.localizeCampaignPackage(root,'workspace-1','de',source,{protectedTerms:['Acme','Anna','Riga']}),/protected facts/i);
+});
+test('campaign localization allows ordinary segment offer and role phrases to be translated',()=>{
+  const source={emailSubject:'Industrial automation',emailBody:'For furniture retailers and procurement managers in Germany.',linkedinMessage:'Industrial automation for furniture retailers.',callOpener:'Calling procurement managers.',followUp:'Following up about industrial automation.',objectionReply:'Understood.'};
+  const localized={emailSubject:'Industrieautomatisierung',emailBody:'Für Möbelhändler und Einkaufsleiter in Deutschland.',linkedinMessage:'Industrieautomatisierung für Möbelhändler.',callOpener:'Anruf bei Einkaufsleitern.',followUp:'Nachfrage zur Industrieautomatisierung.',objectionReply:'Verstanden.'};
+  assert.deepEqual(language.validateCampaignPackage(source,localized,{segment:'furniture retailers',offer:'industrial automation',buyerRole:'procurement managers',market:'Germany'}),localized);
+});
+test('campaign localization preserves compact alphanumeric product identifiers',()=>{
+  const source={emailSubject:'RX500 proposal',emailBody:'Review RX500.',linkedinMessage:'RX500',callOpener:'RX500',followUp:'RX500',objectionReply:'RX500'};
+  const changed={emailSubject:'PX500 Vorschlag',emailBody:'PX500 prüfen.',linkedinMessage:'PX500',callOpener:'PX500',followUp:'PX500',objectionReply:'PX500'};
+  assert.throws(()=>language.validateCampaignPackage(source,changed,{}),/protected facts/i);
+});
 test('translation validates all fields and rejects missing or extra output',()=>{
   const source={f0:'Laboratory testing',f1:'24 months'};
   assert.throws(()=>language.validate(source,{f0:'Laboratorijas pārbaudes'}));

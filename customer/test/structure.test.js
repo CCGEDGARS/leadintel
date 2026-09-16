@@ -20,11 +20,11 @@ test('customer onboarding exposes mandatory website and hybrid target market sel
   assert.match(html,/id="pdf-input"/);
 });
 
-test('customer onboarding contains all ten strategic questions with target-market question reframed as optional focus',()=>{
+test('customer onboarding contains all ten Commercial Intelligence Brief questions',()=>{
   const html=read('index.html');
-  const ids=['priority_offers','ideal_customer','lookalike_customers','buyer_roles','growth_markets','differentiation','buying_triggers','exclusions','opportunity_value','success_outcome'];
+  const ids=['priority_offers','ideal_customer','buyer_roles','exclusions','buying_outcomes','buying_triggers','value_proposition','differentiation','proof_points','objections'];
   ids.forEach(id=>assert.match(html,new RegExp(`data-question="${id}"`)));
-  assert.match(html,/Within your selected markets/i);
+  assert.match(html,/Commercial Intelligence Brief/i);
 });
 
 test('strategic intake is clearly optional enrichment',()=>{

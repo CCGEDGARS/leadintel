@@ -18,64 +18,64 @@ const processMap=read('process-map.js');
 const answers={
   priority_offers:'Sales training; AI sales coaching',
   ideal_customer:'B2B companies with established sales teams',
-  lookalike_customers:'Customer A; Customer B',
   buyer_roles:'CEO; Sales Director; HR Director',
-  buying_outcomes:'Improve conversion, sales execution and manager coaching',
-  differentiation:'Practical sales systems combined with AI coaching',
-  buying_triggers:'New Sales Director; rapid hiring; missed sales targets; market expansion',
   exclusions:'Consumer-only businesses; no active sales team',
-  opportunity_value:'EUR 5,000-25,000',
-  success_outcome:'Generate 30 qualified opportunities in 12 months'
+  buying_outcomes:'Improve conversion, sales execution and manager coaching',
+  buying_triggers:'New Sales Director; rapid hiring; missed sales targets; market expansion',
+  value_proposition:'Improve sales execution with a practical implementation system',
+  differentiation:'Practical sales systems combined with AI coaching',
+  proof_points:'Three published sales books and established enterprise clients',
+  objections:'Time commitment and uncertainty about implementation'
 };
 const confirmed=Object.fromEntries(Object.keys(answers).map(id=>[id,'user']));
 const evidence=[{type:'website',url:'https://example.com/',title:'Example',text:'Readable official company evidence.'}];
 
 test('Step 2 uses the ten commercial decisions LeadIntel needs downstream',()=>{
   assert.deepEqual(readiness.QUESTION_IDS,[
-    'priority_offers','ideal_customer','lookalike_customers','buyer_roles','buying_outcomes',
-    'differentiation','buying_triggers','exclusions','opportunity_value','success_outcome'
+    'priority_offers','ideal_customer','buyer_roles','exclusions','buying_outcomes',
+    'buying_triggers','value_proposition','differentiation','proof_points','objections'
   ]);
   assert.deepEqual(profile.QUESTION_IDS,readiness.QUESTION_IDS);
   assert.deepEqual(research.QUESTION_IDS,readiness.QUESTION_IDS);
   assert.match(layer,/business problem or desired outcome/i);
   assert.match(layer,/observable events/i);
-  assert.match(layer,/What makes an opportunity commercially worthwhile\?/i);
-  assert.match(layer,/delete state\.answers\.growth_markets/);
+  assert.match(layer,/What evidence may LeadIntel safely mention\?/i);
+  assert.match(layer,/LeadIntelStep2Brief|step2-brief-schema/i);
 });
 
 test('profile readiness counts only confirmed strategic answers and has transparent weights',()=>{
-  const answerStatus={...confirmed,buying_triggers:'draft',success_outcome:'draft'};
+  const answerStatus={...confirmed,buying_triggers:'draft',objections:'draft'};
   const summary=readiness.getReadinessSummary({website:'https://example.com/',targetMarkets:['Latvia'],answers,answerStatus,scrapedSources:evidence});
-  assert.equal(summary.score,86);
-  assert.equal(summary.coreConfirmed,7);
-  assert.equal(summary.coreTotal,9);
+  assert.equal(summary.score,90);
+  assert.equal(summary.coreConfirmed,8);
+  assert.equal(summary.coreTotal,10);
   assert.equal(summary.drafts,2);
   assert.equal(summary.missing,0);
 });
 
 test('missing core inputs reduce readiness even when unaccepted AI text is visible',()=>{
-  const partial={...answers,exclusions:'',opportunity_value:''};
-  const answerStatus={...confirmed,buying_triggers:'draft',success_outcome:'draft',exclusions:'missing',opportunity_value:'missing'};
+  const partial={...answers,exclusions:'',proof_points:''};
+  const answerStatus={...confirmed,buying_triggers:'draft',objections:'draft',exclusions:'missing',proof_points:'missing'};
   const summary=readiness.getReadinessSummary({website:'https://example.com/',targetMarkets:['Latvia'],answers:partial,answerStatus,scrapedSources:evidence});
-  assert.equal(summary.score,72);
-  assert.equal(summary.coreConfirmed,5);
+  assert.equal(summary.score,76);
+  assert.equal(summary.coreConfirmed,6);
   assert.equal(summary.drafts,2);
   assert.equal(summary.missing,2);
 });
 
 test('unaccepted research drafts do not become authoritative profile facts',()=>{
-  const answerStatus={...confirmed,buying_triggers:'draft',success_outcome:'draft'};
+  const answerStatus={...confirmed,buying_triggers:'draft',objections:'draft'};
   const result=profile.buildCompanyIntelligenceProfile({website:'https://example.com/',targetMarkets:['Latvia'],answers,answerStatus,scrapedSources:evidence,documents:[]});
   assert.equal(result.buyingTriggers,'');
-  assert.equal(result.commercialObjective,'');
+  assert.equal(result.commonObjections,'');
   assert.equal(result.buyingOutcomes,answers.buying_outcomes);
   assert.ok(result.informationGaps.some(value=>/buying triggers/i.test(value)));
 });
 
 test('saved workspace state keeps answer confirmation status so browser changes cannot promote drafts',()=>{
-  const normalized=profile.normalizeSavedState({website:'https://example.com/',targetMarkets:['Latvia'],answers,answerStatus:{...confirmed,buying_triggers:'draft',success_outcome:'accepted'}});
+  const normalized=profile.normalizeSavedState({website:'https://example.com/',targetMarkets:['Latvia'],answers,answerStatus:{...confirmed,buying_triggers:'draft',objections:'accepted'}});
   assert.equal(normalized.answerStatus.buying_triggers,'draft');
-  assert.equal(normalized.answerStatus.success_outcome,'accepted');
+  assert.equal(normalized.answerStatus.objections,'accepted');
   assert.equal(normalized.answerStatus.priority_offers,'user');
   assert.equal(normalized.answers.buying_outcomes,answers.buying_outcomes);
   assert.equal(normalized.answers.growth_markets,undefined);
@@ -94,6 +94,27 @@ test('the Step 2 research patch retains each generated value as recoverable draf
     ideal_customer:{value:'Industrial manufacturers',confidence:'medium',sourceIds:['S1'],rationale:'Evidence'}
   });
   assert.equal(merged.meta.ideal_customer.draftValue,'Industrial manufacturers');
+});
+
+test('research distinguishes cited evidence from uncited hypotheses',()=>{
+  const parsed=research.parseAiDraft(JSON.stringify({fields:{
+    proof_points:{value:'ISO 9001 certified',confidence:'high',draft_type:'evidence',source_ids:['S1'],rationale:'Certification page'},
+    objections:{value:'Concern about implementation time',confidence:'low',draft_type:'hypothesis',source_ids:[],rationale:'Likely buyer concern'}
+  }}),['S1']);
+  assert.equal(parsed.proof_points.draftType,'evidence');
+  assert.equal(parsed.objections.draftType,'hypothesis');
+});
+
+test('rerun preserves accepted and user answers while replacing unreviewed drafts',()=>{
+  const merged=research.mergeDraft(
+    {proof_points:'Approved proof',objections:'Old hypothesis',value_proposition:'User value'},
+    {proof_points:{value:'New proof',draftType:'evidence'},objections:{value:'New hypothesis',draftType:'hypothesis'},value_proposition:{value:'AI value',draftType:'evidence'}},
+    {proof_points:{origin:'evidence_draft',reviewed:true},objections:{origin:'hypothesis_draft',reviewed:false},value_proposition:{origin:'user',reviewed:true}}
+  );
+  assert.equal(merged.answers.proof_points,'Approved proof');
+  assert.equal(merged.answers.objections,'New hypothesis');
+  assert.equal(merged.answers.value_proposition,'User value');
+  assert.equal(merged.meta.objections.origin,'hypothesis_draft');
 });
 
 test('readiness UI explains confirmed core inputs instead of presenting a vague completeness percentage',()=>{
@@ -123,12 +144,12 @@ test('first-party website intelligence creates reviewable Step 2 drafts instead 
   assert.match(draft.buying_outcomes.rationale,/first-party|inferred|website/i);
 });
 
-test('first-party inference does not invent value, exclusions or LeadIntel success targets',()=>{
+test('first-party inference does not invent exclusions, proof or objections',()=>{
   const source={id:'S1',type:'website',url:'https://ccgroup.lv/',title:'Sales training',text:'Sales training and leadership coaching for B2B sales teams.'};
   const draft=research.buildEvidenceDraft({sources:[source],targetMarkets:['Latvia'],uiLanguage:'en'});
-  assert.equal(draft.opportunity_value.value,'');
   assert.equal(draft.exclusions.value,'');
-  assert.equal(draft.success_outcome.value,'');
+  assert.equal(draft.proof_points.value,'');
+  assert.equal(draft.objections.value,'');
 });
 
 test('first-party inference layer is loaded before company research UI',()=>{
@@ -158,15 +179,15 @@ test('question-specific sufficiency distinguishes useful answers from placeholde
   assert.equal(readiness.evaluateAnswer('buying_outcomes','Improve sales conversion and help managers coach the team more effectively.').enough,true);
   assert.equal(readiness.evaluateAnswer('buyer_roles','CEO').enough,true);
   assert.equal(readiness.evaluateAnswer('buying_triggers','new office').enough,true);
-  assert.equal(readiness.evaluateAnswer('success_outcome','more sales').enough,false);
+  assert.equal(readiness.evaluateAnswer('objections','price').enough,false);
 });
 
 test('confirmed but insufficient answers do not inflate profile readiness',()=>{
-  const weak={...answers,buying_outcomes:'sales',success_outcome:'more sales'};
+  const weak={...answers,buying_outcomes:'sales',objections:'price'};
   const summary=readiness.getReadinessSummary({website:'https://example.com/',targetMarkets:['Latvia'],answers:weak,answerStatus:confirmed,scrapedSources:evidence});
-  assert.equal(summary.coreConfirmed,7);
+  assert.equal(summary.coreConfirmed,8);
   assert.equal(summary.needsMore,2);
-  assert.equal(summary.score,86);
+  assert.equal(summary.score,90);
 });
 
 test('Step 2 tells the user both whether an answer is enough and whether it has synced',()=>{

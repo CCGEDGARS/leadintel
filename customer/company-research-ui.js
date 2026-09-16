@@ -1,4 +1,4 @@
-import './company-research-engine.js?v=20260916-step2-draft-handoff-v1';
+import './company-research-engine.js?v=20260916-commercial-brief-v1';
 import './content-language.js?v=20260916-campaign-language-v3';
 
 const MAIN_STORAGE_KEY='leadintel_customer_v2_state';
@@ -10,7 +10,7 @@ const MAX_RESULTS_PER_QUERY=4;
 const COMPANY_RESEARCH_REQUEST_TIMEOUT_MS=25000;
 const COMPANY_RESEARCH_RUN_TIMEOUT_MS=60000;
 const COMPANY_RESEARCH_SAVE_TIMEOUT_MS=10000;
-const RELEASE='20260916-auto-research-v1';
+const RELEASE='20260916-commercial-brief-v1';
 let running=false;
 let autoStartScheduled=false;
 
@@ -46,8 +46,8 @@ function ensureResearchUi(){
   const step2=document.getElementById('step-2');const hero=step2?.querySelector('.hero-copy');
   if(hero){
     const heading=hero.querySelector('h1');const paragraph=hero.querySelector('p');
-    if(heading)heading.textContent='Review what LeadIntel found.';
-    if(paragraph)paragraph.textContent='LeadIntel researched your company and selected markets and pre-filled only what the evidence supports. Edit anything; fields with insufficient evidence stay open for your input.';
+    if(heading)heading.textContent='Build your Commercial Intelligence Brief.';
+    if(paragraph)paragraph.textContent='Review the commercial decisions that power LeadIntel targeting, buying signals and campaign content. Accept, edit or replace every draft; unsupported fields remain open for your input.';
     if(!document.getElementById('research-summary'))hero.insertAdjacentHTML('afterend','<div class="research-summary" id="research-summary"><div class="research-summary-main"><div class="research-summary-icon">✦</div><div><strong>Research has not run yet.</strong><small>Add the website and target market in Step 1, then run company research.</small></div></div><div class="research-summary-actions"><span class="research-mode">Evidence first</span><button class="research-rerun research-primary" id="rerun-company-research" type="button">Start company research <span aria-hidden="true">→</span></button></div></div>');
   }
   document.querySelectorAll('[data-question]').forEach(textarea=>{
@@ -125,16 +125,18 @@ function renderResearchReview(){
     const persisted=String(state.answers?.[id]||'').trim();
     if(!String(textarea.value||'').trim()&&persisted&&document.activeElement!==textarea)textarea.value=persisted;
     const value=String(textarea.value||'').trim();const row=engine()?.reconcileResearchField?.(value,meta.fields?.[id]||{})||meta.fields?.[id]||{};
-    const card=textarea.closest('.question-card');card?.classList.toggle('research-populated',Boolean(value&&row.origin==='research'));
+    const draftOrigins=['research','evidence_draft','hypothesis_draft'];const isDraft=draftOrigins.includes(row.origin);
+    const card=textarea.closest('.question-card');card?.classList.toggle('research-populated',Boolean(value&&isDraft));
     let origin='Needs your input',originClass='needs';
-    if(value&&row.origin==='research'){origin=meta.mode==='ai'?'AI draft':'Evidence draft';originClass='';}
+    if(value&&row.origin==='hypothesis_draft'){origin='AI hypothesis';originClass='hypothesis';}
+    else if(value&&isDraft){origin='Evidence-backed draft';originClass='';}
     else if(value){origin='Your input';originClass='user';}
     const confidence=value&&row.confidence?`<span class="research-confidence ${esc(row.confidence)}">${esc(row.confidence)} confidence</span>`:'';
-    const reviewed=row.reviewed&&row.origin!=='research'?'<span class="research-reviewed">Saved ✓</span>':'';
+    const reviewed=row.reviewed&&!isDraft?'<span class="research-reviewed">Saved ✓</span>':'';
     const sourceIds=Array.isArray(row.sourceIds)?row.sourceIds:[];const sources=sourceIds.map(id=>map.get(id)).filter(Boolean).slice(0,3);
     const links=sources.length?`<div class="research-source-links">${sources.map(source=>source.type==='document'?`<span class="research-source-doc">${esc(source.title)}</span>`:`<a href="${esc(source.url)}" target="_blank" rel="noopener">${esc(source.title||source.url)}</a>`).join('')}</div>`:'';
     const rationale=row.rationale?`<div class="research-rationale">${esc(row.rationale)}</div>`:'';
-    const reviewAction=engine()?.reviewActionState?.(row)||{visible:row.origin==='research',label:row.reviewed?'Accepted ✓':'Accept',disabled:Boolean(row.reviewed)};
+    const reviewAction=engine()?.reviewActionState?.(row)||{visible:isDraft,label:row.reviewed?'Accepted ✓':'Accept',disabled:Boolean(row.reviewed)};
     const acceptAction=reviewAction.visible?`<button type="button" data-research-accept="${esc(id)}" ${reviewAction.disabled?'disabled':''}>${esc(reviewAction.label)}</button>`:'';
     const actions=value?`<div class="research-field-actions">${acceptAction}<button type="button" data-research-clear="${esc(id)}">Clear</button></div>`:'';
     target.innerHTML=`<div class="research-meta-top"><span class="research-origin ${originClass}">${origin}</span>${confidence}${reviewed}</div>${rationale}${links}${actions}`;

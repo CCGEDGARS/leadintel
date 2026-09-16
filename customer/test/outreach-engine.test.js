@@ -78,7 +78,7 @@ test('buildOutreachDrafts creates grounded editable email and LinkedIn drafts wi
 
 test('approveOutreachItem requires non-empty edited drafts and records approval',()=>{
   const dossier=Outreach.buildOpportunityDossier(candidate,profile,market,[]);
-  const item={domain:candidate.domain,dossier,drafts:Outreach.buildOutreachDrafts(dossier,null,profile,'brief'),approved:false};
+  const item={domain:candidate.domain,dossier,drafts:Outreach.buildOutreachDrafts(dossier,null,profile,'brief'),approved:false,campaignScenario:{id:'core',summary:'Default campaign',language:'en',resolvedLanguage:'en',languageSource:'manual'},localizationStatus:'native',localizationApprovalBlocked:false,localizationProvenance:{provider:'built-in',model:'LeadIntel native templates',language:'en',selectionSource:'manual'}};
   const bad=Outreach.approveOutreachItem(item,{emailSubject:'',emailBody:'',linkedinMessage:''},'2026-08-22T17:00:00.000Z');
   assert.equal(bad.approved,false);
   assert.ok(bad.error);

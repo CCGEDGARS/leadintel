@@ -11,7 +11,7 @@ test('customer workspace exposes a clickable seven-stage commercial process map'
   assert.match(html,/id="commercial-process-map"/);
   for(let step=1;step<=7;step++)assert.match(html,new RegExp(`data-process-step="${step}"`));
   assert.match(html,/Website/);
-  assert.match(html,/Content & Scripts/);
+  assert.match(html,/Campaign Studio/);
   assert.match(html,/Delivery & Learning/);
   assert.match(html,/src="process-map\.js(?:\?[^\"]*)?"/);
   assert.match(processMap,/data-process-step/);
@@ -20,10 +20,10 @@ test('customer workspace exposes a clickable seven-stage commercial process map'
   assert.match(processMap,/leadintel:module-opened/);
 });
 
-test('Step 6 is visibly positioned as the Content and Outreach Studio',()=>{
+test('Step 6 is visibly positioned as Campaign Studio',()=>{
   const ui=read('outreach-ui.js');
-  assert.match(ui,/Content & Outreach Studio/);
-  assert.match(ui,/Content & Scripts/);
+  assert.match(ui,/Campaign Studio/);
+  assert.match(ui,/Campaign Studio/);
   assert.doesNotMatch(ui,/<strong>Opportunity dossier<\/strong>/);
 });
 
