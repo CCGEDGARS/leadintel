@@ -15,13 +15,13 @@ const css=read('company-research.css');
 test('Customer V2 loads the automatic company research module with Firecrawl workspace routing before research',()=>{
   assert.match(processMap,/firecrawl-workspace-router\.js\?v=20260914-spinner-hard-stop-v1/);
   assert.match(processMap,/company-research-security\.js\?v=20260906-authoritative-depth-v1/);
-  assert.match(processMap,/company-research-ui\.js\?v=20260915-step2-research-state-v1/);
+  assert.match(processMap,/company-research-ui\.js\?v=20260916-ercon-context-v1/);
   assert.ok(processMap.indexOf('firecrawl-workspace-router.js')<processMap.indexOf('company-research-ui.js'),'Firecrawl router must load before company research');
   assert.match(processMap,/company-profile-handoff\.js\?v=20260826-intelligence-autofill-v1/);
-  assert.match(ui,/company-research-engine\.js\?v=20260906-selector-language-v2/);
+  assert.match(ui,/company-research-engine\.js\?v=20260916-ercon-context-v1/);
   assert.match(read('index.html'),/profile-engine\.js\?v=20260915-brand-identity-v3/);
-  assert.match(read('index.html'),/process-map\.js\?v=20260916-brand-outreach-v2/);
-  assert.match(read('index.html'),/company-research-ui\.js\?v=20260915-step2-research-state-v1/);
+  assert.match(read('index.html'),/process-map\.js\?v=20260916-ercon-context-v1/);
+  assert.match(read('index.html'),/company-research-ui\.js\?v=20260916-ercon-context-v1/);
 });
 
 test('Step 1 navigation opens immediately and keeps company research optional',()=>{
@@ -78,13 +78,16 @@ test('Step 2 renders research summary, provenance, confidence and needs-input st
   assert.match(ui,/research-summary/);
   assert.match(ui,/Research could not complete/);
   assert.match(ui,/failureAt/);
-  assert.match(ui,/Run company research/);
+  assert.match(ui,/Start company research/);
+  assert.match(ui,/research-primary/);
   assert.match(css,/\.research-summary-failed/);
   assert.match(ui,/research-field-meta/);
   assert.match(ui,/Needs your input/);
   assert.match(ui,/confidence/i);
   assert.match(ui,/rel="noopener"/);
   assert.match(css,/\.research-summary/);
+  assert.match(css,/\.research-rerun\.research-primary/);
+  assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
   assert.match(css,/\.research-field-meta/);
   assert.match(css,/\.research-confidence/);
 });

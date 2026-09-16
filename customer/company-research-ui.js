@@ -47,7 +47,7 @@ function ensureResearchUi(){
     const heading=hero.querySelector('h1');const paragraph=hero.querySelector('p');
     if(heading)heading.textContent='Review what LeadIntel found.';
     if(paragraph)paragraph.textContent='LeadIntel researched your company and selected markets and pre-filled only what the evidence supports. Edit anything; fields with insufficient evidence stay open for your input.';
-    if(!document.getElementById('research-summary'))hero.insertAdjacentHTML('afterend','<div class="research-summary" id="research-summary"><div class="research-summary-main"><div class="research-summary-icon">✦</div><div><strong>Research has not run yet.</strong><small>Add the website and target market in Step 1, then run company research.</small></div></div><div class="research-summary-actions"><span class="research-mode">Evidence first</span><button class="research-rerun" id="rerun-company-research" type="button">Rerun company research</button></div></div>');
+    if(!document.getElementById('research-summary'))hero.insertAdjacentHTML('afterend','<div class="research-summary" id="research-summary"><div class="research-summary-main"><div class="research-summary-icon">✦</div><div><strong>Research has not run yet.</strong><small>Add the website and target market in Step 1, then run company research.</small></div></div><div class="research-summary-actions"><span class="research-mode">Evidence first</span><button class="research-rerun research-primary" id="rerun-company-research" type="button">Start company research <span aria-hidden="true">→</span></button></div></div>');
   }
   document.querySelectorAll('[data-question]').forEach(textarea=>{
     const card=textarea.closest('.question-card');if(!card||card.querySelector('.research-field-meta'))return;
@@ -81,13 +81,14 @@ function renderResearchReview(){
       summary.innerHTML=`<div class="research-summary-main"><div class="research-summary-icon">✦</div><div><strong>Research complete · ${Number(meta.sourceCount)||0} evidence source${Number(meta.sourceCount)===1?'':'s'}</strong><small class="${meta.mode==='ai'?'':'research-no-ai'}">${aiNote}${meta.failures?` · ${Number(meta.failures)} source/search request${Number(meta.failures)===1?'':'s'} unavailable`:''}</small><small class="research-coverage ${coverage.minimumMet?'complete':'incomplete'}">${esc(coverageNote)}</small></div></div><div class="research-summary-actions"><span class="research-mode">${esc(modeLabel(meta))}</span><button class="research-rerun" id="rerun-company-research" type="button">Rerun company research</button></div>`;
     } else if(meta.failureAt){
       summary.classList.add('research-summary-failed');
-      summary.innerHTML='<div class="research-summary-main"><div class="research-summary-icon">!</div><div><strong>Research could not complete.</strong><small>'+esc(meta.error||'The company research request did not finish.')+'</small><small class="research-retry-note">Your website and target market were preserved. Try again when ready.</small></div></div><div class="research-summary-actions"><span class="research-mode">Retry available</span><button class="research-rerun" id="rerun-company-research" type="button">Try research again</button></div>';
+      summary.innerHTML='<div class="research-summary-main"><div class="research-summary-icon">!</div><div><strong>Research could not complete.</strong><small>'+esc(meta.error||'The company research request did not finish.')+'</small><small class="research-retry-note">Your website and target market were preserved. Try again when ready.</small></div></div><div class="research-summary-actions"><span class="research-mode">Retry available</span><button class="research-rerun research-primary" id="rerun-company-research" type="button">Try research again <span aria-hidden="true">→</span></button></div>';
     } else {
       const ready=Boolean(normalizeUrl(state.website)&&selectedMarkets(state).length);
       const detail=ready?'Your website and target market are ready. Run company research to pre-fill this step.':'Add the website and target market in Step 1, then run company research.';
-      const label=ready?'Run company research':'Go to Step 1';
+      const label=ready?'Start company research <span aria-hidden="true">→</span>':'Go to Step 1';
       const step1Action=ready?'':' data-go-step1="true"';
-      summary.innerHTML='<div class="research-summary-main"><div class="research-summary-icon">✦</div><div><strong>Research has not run yet.</strong><small>'+detail+'</small></div></div><div class="research-summary-actions"><span class="research-mode">'+(ready?'Evidence first':'Step 1 required')+'</span><button class="research-rerun" id="rerun-company-research" type="button"'+step1Action+'>'+label+'</button></div>';
+      const primaryClass=ready?' research-primary':'';
+      summary.innerHTML='<div class="research-summary-main"><div class="research-summary-icon">✦</div><div><strong>Research has not run yet.</strong><small>'+detail+'</small></div></div><div class="research-summary-actions"><span class="research-mode">'+(ready?'Evidence first':'Step 1 required')+'</span><button class="research-rerun'+primaryClass+'" id="rerun-company-research" type="button"'+step1Action+'>'+label+'</button></div>';
     }
     const action=summary.querySelector('#rerun-company-research');
     action?.addEventListener('click',()=>{
