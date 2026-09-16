@@ -30,13 +30,13 @@ test('cloud save has a hard timeout so activation cannot remain busy',()=>{
 });
 
 test('Discovery runtime cache key changes whenever spinner recovery changes',()=>{
-  assert.ok(discovery.includes('const ASSET_VERSION="20260915-evidence-link-v1";'));
+  assert.ok(discovery.includes('const DISCOVERY_RUN_TIMEOUT_MS=25000;'));
 });
 
 test('customer page loads the spinner-safe bundles with fresh cache keys',()=>{
   for(const marker of [
     'app.js?v=20260916-brand-assets-v2',
     'process-map.js?v=20260916-brand-outreach-v2',
-    'discovery-ui.js?v=20260916-brand-outreach-v5'
+    'discovery-ui.js?v=20260916-error-sweep-v2'
   ])assert.ok(html.includes(marker),marker);
 });

@@ -54,7 +54,7 @@ test('the production build accepts the intended five-request-window Discovery ru
     customerHtml: '<script defer src="discovery-ui.js?v=current"></script>',
     discoveryUi: [
       'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
-      'const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS*5+5000;',
+      'const DISCOVERY_RUN_TIMEOUT_MS=25000;',
       'function ensureDiscoveryMounted(){}',
       'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};',
       'initDiscoveryWhenReady();'
@@ -71,7 +71,7 @@ test('the production build refuses the former module-graph Discovery bootstrap',
     discoveryUi: [
       'import "./content-variants.js";',
       'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
-      'const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS*5+5000;',
+      'const DISCOVERY_RUN_TIMEOUT_MS=25000;',
       'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};',
       'initDiscoveryWhenReady();'
     ].join('\n')
