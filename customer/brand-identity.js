@@ -91,7 +91,7 @@
         headshot: safeAssetReference(assets.headshot),
         banner: safeAssetReference(assets.banner)
       },
-      updatedAt: stringValue(input.updatedAt)
+      updatedAt: isIsoTimestamp(stringValue(input.updatedAt)) ? stringValue(input.updatedAt) : ''
     };
   }
 
@@ -122,6 +122,9 @@
     }
     if (!errors.primaryColor && !/^#[0-9a-f]{6}$/.test(identity.primaryColor)) {
       errors.primaryColor = 'Primary brand colour must be a six-digit hex value.';
+    }
+    if (identity.status === 'ready' && !isIsoTimestamp(stringValue(input.updatedAt))) {
+      errors.updatedAt = 'Updated time must be a valid ISO-8601 timestamp.';
     }
 
     const rawAssets = input.assets && typeof input.assets === 'object' && !Array.isArray(input.assets)

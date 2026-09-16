@@ -10,6 +10,7 @@
 
   const TABS = ['desktop', 'mobile', 'plain'];
   const ASSET_KINDS = ['logo', 'headshot', 'banner'];
+  const ASSET_LABELS = Object.freeze({logo: 'Logo', headshot: 'Headshot', banner: 'Banner'});
   const FIELD_KEYS = [
     'companyDisplayName', 'senderName', 'senderTitle', 'website', 'phone',
     'linkedinUrl', 'primaryColor', 'signatureText', 'legalFooter', 'postalAddress'
@@ -126,9 +127,7 @@
 
     async function applyLogoSuggestion() {
       if (!suggestions.logoUrl) throw new Error('No verified logo suggestion is available.');
-      const asset = await replaceAsset('logo', suggestions.logoUrl);
-      delete suggestions.logoUrl;
-      return asset;
+      throw new Error('For security, download the suggested logo and upload it using the Logo field. LeadIntel does not import or hotlink remote images.');
     }
 
     async function replaceAsset(kind, source) {
@@ -173,10 +172,10 @@
     function saveReady() {
       const next = copyIdentity(identity);
       next.status = 'ready';
+      next.updatedAt = now();
       const result = model.validate(next);
       if (!result.valid) return result;
       next.revision = Math.max(1, Number(identity.revision) || 1) + 1;
-      next.updatedAt = now();
       identity = copyIdentity(next);
       onChange(copyIdentity(identity));
       return {valid: true, errors: {}, identity: copyIdentity(identity)};
@@ -196,6 +195,7 @@
       const selected = TABS.includes(tab) ? tab : activeTab;
       const renderable = copyIdentity(identity);
       if (renderable.status !== 'ready') renderable.status = 'ready';
+      if (!renderable.updatedAt) renderable.updatedAt = now();
       const validation = model.validate(renderable);
       if (!validation.valid) return {valid: false, errors: validation.errors, viewport: selected};
       const rendered = model.renderEmail({
@@ -359,11 +359,52 @@
         const asset = value.assets[kind];
         const output = byId(`brand-${kind}-current`);
         const remove = byId(`brand-${kind}-remove`);
-        if (output) output.innerHTML = asset
-          ? `<img src="${escapeHtml(asset.url)}" alt="${escapeHtml(asset.altText || kind)}"><span>Saved image</span>`
-          : '<span>No image uploaded</span>';
+        if (output) {
+          output.removeAttribute('data-load-error');
+          output.innerHTML = asset
+            ? `<img src="${escapeHtml(asset.url)}" alt="${escapeHtml(asset.altText || kind)}"><span><span aria-hidden="true">✓</span> Saved image</span>`
+            : '<span>No image uploaded</span>';
+          const image = output.querySelector('img');
+          if (image) {
+            image.addEventListener('load', () => renderAssetLoadState(output, image, kind, true));
+            image.addEventListener('error', () => renderAssetLoadState(output, image, kind, false));
+            if (image.complete) renderAssetLoadState(output, image, kind, image.naturalWidth > 0);
+          }
+        }
         if (remove) remove.hidden = !asset;
       }
+    }
+
+    function renderAssetLoadState(output, image, kind, loaded) {
+      if (!output || !image || !output.contains(image)) return;
+      const label = ASSET_LABELS[kind] || 'Managed';
+      if (loaded) {
+        output.removeAttribute('data-load-error');
+        image.hidden = false;
+        const status = output.querySelector('span');
+        if (status) status.innerHTML = '<span aria-hidden="true">✓</span> Saved image';
+        return;
+      }
+      output.dataset.loadError = 'true';
+      image.hidden = true;
+      const status = output.querySelector('span');
+      if (status) status.innerHTML = `<span aria-hidden="true">!</span> ${label} image unavailable. Upload or replace it.`;
+    }
+
+    function attachPreviewImageStatus(frame) {
+      frame.querySelectorAll('img').forEach(image => {
+        const reportFailure = () => {
+          if (!image.isConnected || !frame.contains(image)) return;
+          const status = root.document.createElement('div');
+          status.className = 'brand-preview-image-status';
+          status.setAttribute('role', 'status');
+          status.setAttribute('aria-live', 'polite');
+          status.innerHTML = '<span aria-hidden="true">!</span> Preview image unavailable. Upload or replace the managed image.';
+          image.replaceWith(status);
+        };
+        image.addEventListener('error', reportFailure);
+        if (image.complete && image.naturalWidth < 1) reportFailure();
+      });
     }
 
     function clearErrors() {
@@ -407,7 +448,7 @@
       }
       area.innerHTML = entries.map(([key, suggestion]) =>
         `<article class="brand-suggestion-item"><span>${escapeHtml(fieldLabel(key))}</span><strong>${escapeHtml(suggestion)}</strong><button class="text-btn" type="button" data-brand-suggestion="${key}">Apply</button></article>`
-      ).join('') + (logo ? '<article class="brand-suggestion-item"><span>Logo</span><strong>Verified website image</strong><button class="text-btn" type="button" data-brand-logo-suggestion>Apply and import</button></article>' : '');
+      ).join('') + (logo ? `<article class="brand-suggestion-item"><span>Logo</span><strong>Verified website image</strong><p>For security, download this image and upload it using the Logo field. LeadIntel never hotlinks remote images in sent email.</p><a class="text-btn" href="${escapeHtml(logo)}" target="_blank" rel="noopener noreferrer" data-brand-logo-download>Download image</a></article>` : '');
     }
 
     function renderPreview(tab) {
@@ -433,6 +474,7 @@
       if (result.contentType === 'text/html') {
         frame.classList.remove('plain');
         frame.innerHTML = result.content;
+        attachPreviewImageStatus(frame);
       } else {
         frame.classList.add('plain');
         frame.textContent = result.content;
@@ -471,15 +513,6 @@
       finally { button.disabled = false; }
     });
     byId('brand-suggestions').addEventListener('click', async event => {
-      const logoButton = event.target.closest('[data-brand-logo-suggestion]');
-      if (logoButton) {
-        logoButton.disabled = true;
-        byId('brand-action-error').textContent = '';
-        try { await controller.applyLogoSuggestion(); renderAssets(); renderSuggestions(controller.suggestions()); }
-        catch (error) { byId('brand-action-error').textContent = error.message; }
-        finally { logoButton.disabled = false; }
-        return;
-      }
       const button = event.target.closest('[data-brand-suggestion]');
       if (!button) return;
       controller.applySuggestion(button.dataset.brandSuggestion);

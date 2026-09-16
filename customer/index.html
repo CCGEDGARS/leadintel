@@ -14,7 +14,7 @@
   <link rel="stylesheet" href="market-selector.css?v=20260826-target-market-v1">
   <link rel="stylesheet" href="compact-sources.css?v=20260826-compact-sources-v1">
   <link rel="stylesheet" href="evidence-sources.css?v=20260906-evidence-v1">
-  <link rel="stylesheet" href="brand-identity.css?v=20260915-brand-identity-v2">
+  <link rel="stylesheet" href="brand-identity.css?v=20260916-brand-image-state-v1">
 </head>
 <body>
   <div class="page-shell">
@@ -115,7 +115,7 @@
                 <div class="brand-asset-grid">
                   <article class="brand-asset-card">
                     <label for="brand-logo-input"><span>Logo</span><small id="brand-logo-help">Recommended for every branded email.</small></label>
-                    <div class="brand-asset-current" id="brand-logo-current"><span>No image uploaded</span></div>
+                    <div class="brand-asset-current" id="brand-logo-current" role="status" aria-live="polite"><span>No image uploaded</span></div>
                     <input class="brand-file-input" id="brand-logo-input" type="file" accept="image/png,image/jpeg,image/webp" aria-describedby="brand-logo-help brand-logo-error" tabindex="-1">
                     <div class="brand-asset-actions"><button class="secondary-btn" type="button" data-brand-file-trigger="logo" aria-controls="brand-logo-input">Upload or replace</button><button class="text-btn" id="brand-logo-remove" type="button" hidden>Remove</button></div>
                     <label class="brand-option" for="brand-include-logo"><input id="brand-include-logo" type="checkbox" data-brand-option="includeLogo" checked> Include logo</label>
@@ -123,7 +123,7 @@
                   </article>
                   <article class="brand-asset-card">
                     <label for="brand-headshot-input"><span>Sender headshot</span><small id="brand-headshot-help">Optional personal profile image.</small></label>
-                    <div class="brand-asset-current" id="brand-headshot-current"><span>No image uploaded</span></div>
+                    <div class="brand-asset-current" id="brand-headshot-current" role="status" aria-live="polite"><span>No image uploaded</span></div>
                     <input class="brand-file-input" id="brand-headshot-input" type="file" accept="image/png,image/jpeg,image/webp" aria-describedby="brand-headshot-help brand-headshot-error" tabindex="-1">
                     <div class="brand-asset-actions"><button class="secondary-btn" type="button" data-brand-file-trigger="headshot" aria-controls="brand-headshot-input">Upload or replace</button><button class="text-btn" id="brand-headshot-remove" type="button" hidden>Remove</button></div>
                     <label class="brand-option" for="brand-include-headshot"><input id="brand-include-headshot" type="checkbox" data-brand-option="includeHeadshot"> Include headshot</label>
@@ -131,7 +131,7 @@
                   </article>
                   <article class="brand-asset-card">
                     <label for="brand-banner-input"><span>Promotional banner</span><small id="brand-banner-help">Optional campaign image; disabled by default.</small></label>
-                    <div class="brand-asset-current" id="brand-banner-current"><span>No image uploaded</span></div>
+                    <div class="brand-asset-current" id="brand-banner-current" role="status" aria-live="polite"><span>No image uploaded</span></div>
                     <input class="brand-file-input" id="brand-banner-input" type="file" accept="image/png,image/jpeg,image/webp" aria-describedby="brand-banner-help brand-banner-error" tabindex="-1">
                     <div class="brand-asset-actions"><button class="secondary-btn" type="button" data-brand-file-trigger="banner" aria-controls="brand-banner-input">Upload or replace</button><button class="text-btn" id="brand-banner-remove" type="button" hidden>Remove</button></div>
                     <label class="brand-option" for="brand-include-banner"><input id="brand-include-banner" type="checkbox" data-brand-option="includeBanner"> Include banner</label>
@@ -399,8 +399,8 @@
   <script defer src="workspace-isolation.js?v=20260914-workspace-isolation-v1"></script>
   <script defer src="language.js?v=20260905-audit-v1"></script>
   <script defer src="server-bridge.js?v=20260916-brand-assets-v8" data-server-bridge="true"></script>
-  <script defer src="brand-identity.js?v=20260915-brand-identity-v3"></script>
-  <script defer src="brand-identity-ui.js?v=20260916-brand-assets-v3"></script>
+  <script defer src="brand-identity.js?v=20260916-brand-timestamp-v1"></script>
+  <script defer src="brand-identity-ui.js?v=20260916-brand-image-state-v1"></script>
   <script type="module" src="app.js?v=20260916-brand-assets-v2"></script>
   <script type="module" src="process-map.js?v=20260916-brand-outreach-v2"></script>
   <script defer src="discovery-ui.js?v=20260916-brand-outreach-v3"></script>

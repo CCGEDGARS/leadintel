@@ -72,6 +72,29 @@ test('normalize returns the literal version 1 identity state without retaining u
   });
 });
 
+test('top-level updatedAt accepts only canonical ISO-8601 while legacy drafts migrate safely', () => {
+  const legacyDraft = BrandIdentity.normalize({status: 'draft', senderName: 'Legacy sender'});
+  assert.equal(legacyDraft.status, 'draft');
+  assert.equal(legacyDraft.updatedAt, '');
+  assert.equal(BrandIdentity.validate(legacyDraft).valid, true);
+
+  for (const invalid of [
+    'not-a-date',
+    '2026-02-29T12:00:00.000Z',
+    '2026-09-15T12:00:00+00:00',
+    '2026-09-15'
+  ]) {
+    const normalized = BrandIdentity.normalize({...readyIdentity, updatedAt: invalid});
+    assert.equal(normalized.updatedAt, '', invalid);
+    const result = BrandIdentity.validate({...readyIdentity, updatedAt: invalid});
+    assert.equal(result.valid, false, invalid);
+    assert.equal(result.errors.updatedAt, 'Updated time must be a valid ISO-8601 timestamp.');
+  }
+
+  assert.equal(BrandIdentity.normalize(readyIdentity).updatedAt, '2026-09-15T12:00:00.000Z');
+  assert.equal(BrandIdentity.validate(readyIdentity).valid, true);
+});
+
 test('validate blocks a ready identity with missing sender fields or invalid optional contact values', () => {
   const result = BrandIdentity.validate({
     status: 'ready',
@@ -80,7 +103,8 @@ test('validate blocks a ready identity with missing sender fields or invalid opt
     website: 'http://example.com',
     linkedinUrl: 'https://example.com/not-linkedin',
     phone: 'call-me',
-    primaryColor: '#fff'
+    primaryColor: '#fff',
+    updatedAt: '2026-09-15T12:00:00.000Z'
   });
 
   assert.equal(result.valid, false);

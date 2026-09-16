@@ -45,9 +45,9 @@ test('Brand & Email Identity is collapsed immediately after Main company website
   const websitePanel = html.indexOf('<h3>Main company website</h3>');
   const identityModule = html.indexOf('id="brand-identity"');
   const targetMarket = html.indexOf('id="target-market-selector"');
-  const modelScript = html.indexOf('brand-identity.js?v=20260915-brand-identity-v3');
+  const modelScript = html.indexOf('brand-identity.js?v=20260916-brand-timestamp-v1');
   const profileScript = html.indexOf('profile-engine.js?v=20260915-brand-identity-v3');
-  const uiScript = html.indexOf('brand-identity-ui.js?v=20260916-brand-assets-v3');
+  const uiScript = html.indexOf('brand-identity-ui.js?v=20260916-brand-image-state-v1');
   const appScript = html.indexOf('app.js?v=20260916-brand-assets-v2');
 
   assert.ok(websitePanel >= 0 && websitePanel < identityModule && identityModule < targetMarket);
@@ -56,7 +56,7 @@ test('Brand & Email Identity is collapsed immediately after Main company website
   assert.match(html, /id="brand-identity-body"[^>]*hidden/);
   assert.match(html, /id="brand-identity-status"[^>]*>Not configured</);
   assert.match(html, /id="brand-identity-toggle"[^>]*>[\s\S]*Set up email identity/);
-  assert.match(html, /brand-identity\.css\?v=20260915-brand-identity-v2/);
+  assert.match(html, /brand-identity\.css\?v=20260916-brand-image-state-v1/);
   assert.ok(profileScript >= 0 && profileScript < modelScript && modelScript < uiScript && uiScript < appScript);
 });
 
@@ -173,7 +173,7 @@ test('default extraction uses verified public evidence, rejects non-HTTPS, and r
   });
 });
 
-test('logo evidence remains a suggestion until explicit approval imports a managed asset', async () => {
+test('logo evidence remains a suggestion and secure UX requires download plus authenticated upload', async () => {
   const UI = require('../brand-identity-ui.js');
   const calls = [];
   const managed = managedAsset('approved_logo');
@@ -200,13 +200,15 @@ test('logo evidence remains a suggestion until explicit approval imports a manag
 
   controller.applySuggestion('logoUrl');
   assert.equal(controller.identity().assets.logo, null);
-  await controller.applyLogoSuggestion();
-  assert.deepEqual(calls, [['logo', 'https://acme.example/logo.png']]);
-  assert.equal(controller.identity().assets.logo.id, 'approved_logo');
-  assert.doesNotMatch(JSON.stringify(controller.identity()), /acme\.example\/logo\.png/);
-  assert.equal(controller.suggestions().logoUrl, undefined);
-  await assert.rejects(controller.applyLogoSuggestion(), /No verified logo suggestion/);
-  assert.equal(calls.length, 1);
+  await assert.rejects(controller.applyLogoSuggestion(), /download the suggested logo and upload it using the Logo field/i);
+  assert.deepEqual(calls, []);
+  assert.equal(controller.identity().assets.logo, null);
+  assert.equal(controller.suggestions().logoUrl, 'https://acme.example/logo.png');
+
+  const source = fs.readFileSync(path.join(ROOT, 'brand-identity-ui.js'), 'utf8');
+  assert.match(source, /data-brand-logo-download/);
+  assert.match(source, /LeadIntel never hotlinks remote images in sent email/);
+  assert.doesNotMatch(source, /data-brand-logo-suggestion/);
 });
 
 test('failed asset replacement preserves the previous managed reference', async () => {
@@ -338,6 +340,7 @@ test('file selection uses focusable buttons and complete field error and tab sem
   }
   for (const kind of ['logo', 'headshot', 'banner']) {
     assert.match(html, new RegExp(`<button[^>]*data-brand-file-trigger="${kind}"[^>]*aria-controls="brand-${kind}-input"[^>]*>Upload or replace</button>`));
+    assert.match(html, new RegExp(`id="brand-${kind}-current"[^>]*role="status"[^>]*aria-live="polite"`));
     assert.doesNotMatch(html, new RegExp(`<label[^>]*for="brand-${kind}-input"[^>]*class="secondary-btn"`));
   }
   assert.match(html, /role="tablist"[^>]*aria-orientation="horizontal"/);
@@ -358,4 +361,19 @@ test('UI source hides stale preview, marks invalid fields, announces and focuses
   assert.match(source, /No verified suggestions available yet/);
   assert.match(source, />Apply</);
   assert.match(source, /brand-action-error/);
+});
+
+test('managed image load failures become explicit accessible states and successful replacement clears them', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'brand-identity-ui.js'), 'utf8');
+  const css = fs.readFileSync(path.join(ROOT, 'brand-identity.css'), 'utf8');
+
+  assert.match(source, /ASSET_LABELS\s*=\s*Object\.freeze\(\{logo:\s*'Logo',\s*headshot:\s*'Headshot',\s*banner:\s*'Banner'\}\)/);
+  assert.match(source, /\$\{label\} image unavailable\. Upload or replace it\./);
+  assert.match(source, /addEventListener\('error',[\s\S]*renderAssetLoadState/);
+  assert.match(source, /addEventListener\('load',[\s\S]*renderAssetLoadState/);
+  assert.match(source, /function attachPreviewImageStatus\(/);
+  assert.match(source, /Preview image unavailable/);
+  assert.match(source, /output\.removeAttribute\('data-load-error'\)/);
+  assert.match(css, /\.brand-asset-current\[data-load-error="true"\]/);
+  assert.match(css, /\.brand-preview-image-status/);
 });
