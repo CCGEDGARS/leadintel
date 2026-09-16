@@ -1,0 +1,114 @@
+name: Retire obsolete Cloudflare Pages project
+
+on:
+  push:
+    branches:
+      - ops/retire-cloudflare-pages
+    paths:
+      - .github/workflows/retire-cloudflare-pages.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: retire-cloudflare-pages-leadintel
+  cancel-in-progress: false
+
+jobs:
+  retire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PROJECT_NAME: leadintel
+    steps:
+      - name: Safety checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${PROJECT_NAME}" = "leadintel"
+          test "${PROJECT_NAME}" != "leadintel-api"
+          test -n "${CLOUDFLARE_API_TOKEN}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID}"
+
+      - name: Delete historical Pages deployments
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          production_id=""
+          pass=0
+
+          while :; do
+            pass=$((pass + 1))
+            if [ "${pass}" -gt 250 ]; then
+              echo "Safety stop: deployment cleanup exceeded 250 passes."
+              exit 1
+            fi
+
+            deployment_json="$(npx --yes wrangler@4.40.2 pages deployment list --project-name "${PROJECT_NAME}" --json)"
+            ids="$(printf '%s' "${deployment_json}" | jq -r '.[] | (.Id // .id) // empty')"
+
+            if [ -n "${production_id}" ]; then
+              ids_to_delete="$(printf '%s\n' "${ids}" | grep -Fvx "${production_id}" | grep . || true)"
+            else
+              ids_to_delete="$(printf '%s\n' "${ids}" | grep . || true)"
+            fi
+
+            if [ -z "${ids_to_delete}" ]; then
+              break
+            fi
+
+            while IFS= read -r deployment_id; do
+              [ -n "${deployment_id}" ] || continue
+
+              log_file="$(mktemp)"
+              if npx --yes wrangler@4.40.2 pages deployment delete "${deployment_id}" --project-name "${PROJECT_NAME}" --force 2>&1 | tee "${log_file}" | grep -q "Successfully deleted"; then
+                echo "Deleted Pages deployment ${deployment_id}"
+              elif grep -qi "active production deployment" "${log_file}"; then
+                production_id="${deployment_id}"
+                echo "Preserving active production deployment until project deletion."
+              else
+                cat "${log_file}"
+                rm -f "${log_file}"
+                exit 1
+              fi
+              rm -f "${log_file}"
+            done <<< "${ids_to_delete}"
+          done
+
+      - name: Delete Pages project
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          response_file="$(mktemp)"
+          http_code="$(curl --silent --show-error \
+            --output "${response_file}" \
+            --write-out '%{http_code}' \
+            --request DELETE \
+            --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            --header "Content-Type: application/json" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT_NAME}")"
+
+          jq . "${response_file}"
+          test "${http_code}" = "200"
+          jq -e '.success == true' "${response_file}" >/dev/null
+
+      - name: Verify Pages project is absent
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          response_file="$(mktemp)"
+          http_code="$(curl --silent --show-error \
+            --output "${response_file}" \
+            --write-out '%{http_code}' \
+            --request GET \
+            --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            --header "Content-Type: application/json" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT_NAME}")"
+
+          jq . "${response_file}"
+          test "${http_code}" = "404"
