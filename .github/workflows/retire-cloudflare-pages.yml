@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: retire-cloudflare-pages-leadintel
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   retire:
@@ -37,6 +37,11 @@ jobs:
         run: |
           set -euo pipefail
 
+          api_base="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT_NAME}/deployments"
+          export api_base
+          marker_dir="$(mktemp -d)"
+          export marker_dir
+
           pass=0
           while :; do
             pass=$((pass + 1))
@@ -52,7 +57,7 @@ jobs:
               --request GET \
               --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
               --header "Content-Type: application/json" \
-              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT_NAME}/deployments?per_page=25&page=1")"
+              "${api_base}?per_page=100&page=1")"
 
             test "${list_code}" = "200"
             jq -e '.success == true' "${list_response}" >/dev/null
@@ -63,23 +68,23 @@ jobs:
               break
             fi
 
-            deleted=0
-            while IFS= read -r deployment_id; do
-              [ -n "${deployment_id}" ] || continue
-
+            rm -f "${marker_dir}"/*
+            printf '%s\n' "${ids}" | xargs -r -n1 -P8 bash -c '
+              set -euo pipefail
+              deployment_id="$1"
               delete_response="$(mktemp)"
               delete_code="$(curl --silent --show-error \
                 --output "${delete_response}" \
-                --write-out '%{http_code}' \
+                --write-out "%{http_code}" \
                 --request DELETE \
                 --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
                 --header "Content-Type: application/json" \
-                "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT_NAME}/deployments/${deployment_id}?force=true")"
+                "${api_base}/${deployment_id}?force=true")"
 
-              if [ "${delete_code}" = "200" ] && jq -e '.success == true' "${delete_response}" >/dev/null; then
-                deleted=$((deleted + 1))
+              if [ "${delete_code}" = "200" ] && jq -e ".success == true" "${delete_response}" >/dev/null; then
+                touch "${marker_dir}/${deployment_id}"
                 echo "Deleted Pages deployment ${deployment_id}"
-              elif jq -r '.errors[]?.message // empty' "${delete_response}" | grep -qi "active production deployment"; then
+              elif jq -r ".errors[]?.message // empty" "${delete_response}" | grep -qi "active production deployment"; then
                 echo "Preserving active production deployment until project deletion."
               else
                 jq . "${delete_response}"
@@ -87,8 +92,9 @@ jobs:
                 exit 1
               fi
               rm -f "${delete_response}"
-            done <<< "${ids}"
+            ' _
 
+            deleted="$(find "${marker_dir}" -type f | wc -l)"
             if [ "${deleted}" -eq 0 ]; then
               break
             fi
