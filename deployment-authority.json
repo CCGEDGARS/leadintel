@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "frontend": {
+    "provider": "vercel",
+    "project": "leadintel",
+    "outputDirectory": ".vercel-static"
+  },
+  "backend": {
+    "provider": "cloudflare-workers",
+    "service": "leadintel-api"
+  },
+  "retiredFrontendProviders": [
+    "cloudflare-pages",
+    "github-pages"
+  ]
+}
