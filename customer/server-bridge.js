@@ -75,17 +75,19 @@
   async function api(path,options={}){
     const {headers={},body,signal:externalSignal,...rest}=options;
     const multipart=typeof FormData!=='undefined'&&body instanceof FormData;
-    const controller=new AbortController();
-    const forwardAbort=()=>controller.abort(externalSignal?.reason);
+    const Controller=typeof AbortController==='function'?AbortController:null;
+    const controller=Controller?new Controller():null;
+    const forwardAbort=()=>controller?.abort(externalSignal?.reason);
     if(externalSignal?.aborted)forwardAbort();
     else externalSignal?.addEventListener?.('abort',forwardAbort,{once:true});
-    const timeout=setTimeout(()=>controller.abort(new DOMException('LeadIntel request timed out','TimeoutError')),API_REQUEST_TIMEOUT_MS);
+    const timeout=controller?setTimeout(()=>controller.abort(new DOMException('LeadIntel request timed out','TimeoutError')),API_REQUEST_TIMEOUT_MS):null;
     try{
-      const response=await fetch(endpoint(path),{credentials:'include',...rest,body,headers:{'Accept':'application/json',...(body&&!multipart?{'Content-Type':'application/json'}:{}),...headers},signal:controller.signal});
+      const request={credentials:'include',...rest,body,headers:{'Accept':'application/json',...(body&&!multipart?{'Content-Type':'application/json'}:{}),...headers},...(controller?{signal:controller.signal}:{})};
+      const response=await fetch(endpoint(path),request);
       const payload=await response.json().catch(()=>({}));
       return {response,payload};
     }catch(cause){
-      if(controller.signal.aborted&&!externalSignal?.aborted)throw new Error('LeadIntel server request timed out');
+      if(controller?.signal.aborted&&!externalSignal?.aborted)throw new Error('LeadIntel server request timed out');
       throw cause;
     }finally{
       clearTimeout(timeout);
