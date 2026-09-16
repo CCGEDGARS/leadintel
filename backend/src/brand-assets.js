@@ -570,26 +570,53 @@ export async function replaceBrandAsset(env,{workspaceId,userId,previousAssetId,
 
 export async function deleteWorkspaceBrandAssets(env,{workspaceId,userId}){
   const bucket=requireBinding(env);
-  const keys=[];
+  const candidates=[];
+  const seenKeys=new Set();
   const seenCursors=new Set();
   let cursor;
   do{
     const page=await bucket.list({prefix:'brand-assets/',cursor,limit:1000,include:['customMetadata']});
     if(!page||!Array.isArray(page.objects)||typeof page.truncated!=='boolean')throw new BrandAssetError('Brand asset inventory is unavailable',503);
     for(const object of page.objects){
-      if(String(object?.customMetadata?.workspaceId||'')===String(workspaceId)&&typeof object?.key==='string')keys.push(object.key);
+      const key=object?.key;
+      const owner=object?.customMetadata?.workspaceId;
+      if(typeof key!=='string'||typeof owner!=='string'||!owner||owner!==owner.trim()){
+        throw new BrandAssetError('Brand asset inventory is invalid',503);
+      }
+      const prefix='brand-assets/';
+      const assetId=key.startsWith(prefix)?key.slice(prefix.length):'';
+      if(!parsedAssetId(assetId)||key!==brandAssetObjectKey(assetId)||seenKeys.has(key)){
+        throw new BrandAssetError('Brand asset inventory is invalid',503);
+      }
+      seenKeys.add(key);
+      if(owner===String(workspaceId))candidates.push({key,assetId});
     }
     if(!page.truncated)break;
-    const next=String(page.cursor||'');
-    if(!next||seenCursors.has(next))throw new BrandAssetError('Brand asset inventory pagination failed',503);
+    if(typeof page.cursor!=='string')throw new BrandAssetError('Brand asset inventory pagination failed',503);
+    const next=page.cursor;
+    if(!next||next===cursor||seenCursors.has(next))throw new BrandAssetError('Brand asset inventory pagination failed',503);
     seenCursors.add(next);cursor=next;
   }while(true);
 
+  // Validate the complete candidate set against current R2 ownership before
+  // writing any audit event or deleting any object. A malformed later page or
+  // stale ownership record must not leave an earlier asset partially deleted.
+  for(const candidate of candidates){
+    let ownership;
+    try{
+      ownership=await assetOwnership(env,candidate.assetId);
+    }catch{
+      throw new BrandAssetError('Brand asset inventory is invalid',503);
+    }
+    if(ownership.key!==candidate.key||ownership.workspaceId!==String(workspaceId)){
+      throw new BrandAssetError('Brand asset inventory is invalid',503);
+    }
+  }
+
   let deleted=0;
-  for(const key of keys){
-    const assetId=key.slice('brand-assets/'.length);
-    if(!parsedAssetId(assetId))throw new BrandAssetError('Brand asset inventory is invalid',503);
-    await deleteBrandAsset(env,{workspaceId,assetId,userId,eventType:'brand_asset.workspace_reset_deleted'});
+  for(const {key,assetId} of candidates){
+    await audit(env,{workspaceId,userId,type:'brand_asset.workspace_reset_deleted',assetId});
+    await bucket.delete(key);
     deleted++;
   }
   return {deleted};
