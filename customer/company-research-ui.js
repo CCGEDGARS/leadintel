@@ -10,7 +10,7 @@ const MAX_RESULTS_PER_QUERY=4;
 const COMPANY_RESEARCH_REQUEST_TIMEOUT_MS=25000;
 const COMPANY_RESEARCH_RUN_TIMEOUT_MS=60000;
 const COMPANY_RESEARCH_SAVE_TIMEOUT_MS=10000;
-const RELEASE='20260915-step2-research-state-v1';
+const RELEASE='20260916-research-cta-v1';
 let running=false;
 
 const engine=()=>window.LeadIntelCompanyResearch;
