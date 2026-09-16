@@ -16,6 +16,12 @@ test('Gemini verification is explicitly evidence-bound and has no web-search rol
   assert.equal(request.maxOutputTokens,2400);
 });
 
+test('Gemini verification prompt remains bounded for intelligence-sized result sets',()=>{
+  const many=Array.from({length:200},(_,index)=>({id:`evidence-${index+1}`,url:`https://example.com/${index}`,title:'Large evidence record',description:'x'.repeat(1000),text:'y'.repeat(5000)}));
+  const request=buildVerificationRequest({mode:'intelligence',profile:{},signals:[],evidence:many});
+  assert.ok(request.prompt.length<=75000);
+});
+
 test('verification parser rejects invented evidence ids and sanitizes verdicts',()=>{
   const result=parseVerificationResponse(JSON.stringify({
     summary:'Expansion evidence is stronger than hiring evidence.',

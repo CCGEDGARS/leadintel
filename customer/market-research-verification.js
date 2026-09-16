@@ -6,7 +6,7 @@
   "use strict";
   const clean=(value,limit=500)=>String(value??"").replace(/\s+/g," ").trim().slice(0,limit);
   function buildVerificationPayload({mode="deep",profile={},signals=[],results=[]}={}){
-    return {mode,role:"verification",web_search:false,profile:{targetMarkets:clean(profile.targetMarkets,1200),priorityOffers:clean(profile.priorityOffers,1200),idealCustomer:clean(profile.idealCustomer,1200),buyingTriggers:clean(profile.buyingTriggers,1200)},signals:(signals||[]).filter(item=>item?.active!==false).slice(0,20).map(item=>({name:clean(item?.name,160),keywords:clean(item?.keywords,500)})),evidence:(results||[]).slice(0,200).map((item,index)=>({id:`evidence-${index+1}`,url:clean(item?.url,2048),title:clean(item?.title,300),description:clean(item?.description,1000),text:clean(item?.text,2500),date:clean(item?.date,80),market:clean(item?.market,160),query:clean(item?.query,500)}))};
+    return {mode,role:"verification",web_search:false,profile:{targetMarkets:clean(profile.targetMarkets,1200),priorityOffers:clean(profile.priorityOffers,1200),idealCustomer:clean(profile.idealCustomer,1200),buyingTriggers:clean(profile.buyingTriggers,1200)},signals:(signals||[]).filter(item=>item?.active!==false).slice(0,20).map(item=>({name:clean(item?.name,160),keywords:clean(item?.keywords,500)})),evidence:(results||[]).slice(0,60).map((item,index)=>({id:`evidence-${index+1}`,url:clean(item?.url,2048),title:clean(item?.title,240),description:clean(item?.description,400),text:clean(item?.text,400),date:clean(item?.date,80),market:clean(item?.market,160),query:clean(item?.query,300)}))};
   }
   function normalizeVerification(payload={}){
     const complete=payload?.status==="complete";

@@ -18,6 +18,13 @@ test('verification request uses stable evidence ids and does not claim Gemini fo
   assert.equal('sourceProviders' in request.evidence[0],false);
 });
 
+test('browser verification payload is bounded before transmission',()=>{
+  const many=Array.from({length:200},(_,index)=>({url:`https://example.com/${index}`,title:'Title',description:'x'.repeat(1000),text:'y'.repeat(5000)}));
+  const request=verifier.buildVerificationPayload({mode:'intelligence',profile:{},signals:[],results:many});
+  assert.ok(request.evidence.length<=60);
+  assert.ok(JSON.stringify(request).length<=75000);
+});
+
 test('verification merges known verdicts without adding Gemini to source provenance',()=>{
   const merged=verifier.applyVerification(results,{status:'complete',provider:'gemini',role:'verification',web_search:false,verdicts:[
     {evidence_id:'evidence-1',relevance:'strong',commercial_fit:'strong',contradiction:false,rationale:'Direct evidence.',missing_evidence:[]},

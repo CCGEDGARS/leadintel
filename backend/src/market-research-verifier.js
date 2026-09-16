@@ -6,10 +6,10 @@ const RELEVANCE=new Set(['strong','moderate','weak','reject']);
 const COMMERCIAL_FIT=new Set(['strong','moderate','weak','unknown']);
 
 function safeEvidence(items=[]){
-  return items.slice(0,200).map((item,index)=>({
+  return items.slice(0,60).map((item,index)=>({
     id:clean(item?.id,80)||`evidence-${index+1}`,
-    url:clean(item?.url,2048),title:clean(item?.title,300),description:clean(item?.description,1000),
-    text:clean(item?.text,2500),date:clean(item?.date,80),market:clean(item?.market,160),query:clean(item?.query,500)
+    url:clean(item?.url,2048),title:clean(item?.title,240),description:clean(item?.description,400),
+    text:clean(item?.text,400),date:clean(item?.date,80),market:clean(item?.market,160),query:clean(item?.query,300)
   })).filter(item=>item.id&&/^https:\/\//i.test(item.url));
 }
 

@@ -471,7 +471,7 @@ function researchModeUi(mode){
     method:"LeadIntel rotates across more active buying signals and the source categories you selected. OpenAI discovers relevant public pages; Firecrawl extracts evidence and checks specific URLs; Gemini independently cross-checks only the collected evidence."
   }:{
     label:"Market Scan",
-    method:"LeadIntel validates the strongest active buying signals across your selected source categories. OpenAI discovers public pages; Firecrawl verifies and extracts the available evidence."
+    method:"LeadIntel validates the strongest active buying signals across your selected source categories. OpenAI discovers public pages; Firecrawl extracts the available evidence."
   };
 }
 function openResearchPreview(mode){
@@ -593,7 +593,7 @@ function renderResearchStatus(){
   else if(status==="complete"&&sources.openai==="unavailable")message=`${modeLabel} complete · Discovery: OpenAI unavailable · Extraction: Firecrawl${["deep","intelligence"].includes(state.market.researchMode)?` · Verification: ${sources.gemini==="complete"?"Gemini":"Gemini unavailable"}`:""} · ${count} public evidence sources.`;
   else if(status==="complete")message=`${modeLabel} complete · Discovery: OpenAI · Extraction: Firecrawl${["deep","intelligence"].includes(state.market.researchMode)?` · Verification: ${sources.gemini==="complete"?"Gemini":"Gemini unavailable"}`:""} · ${queries} queries · ${count} public evidence sources.`;
   else if(status==="partial"&&partialCoverage)message=partialCoverage.status;
-  else if(status==="partial")message=`${modeLabel} partially complete · ${count} evidence sources · OpenAI signal discovery / Firecrawl verification had one or more unavailable requests.`;
+  else if(status==="partial")message=`${modeLabel} partially complete · ${count} evidence sources · OpenAI discovery or Firecrawl extraction had one or more unavailable requests.`;
   else if(status==="error")message="Research run failed · no public evidence was saved. Review the failure details below, adjust the scope if needed, and retry.";
   $("market-research-status").textContent=message;
   const feedback=$("research-run-feedback");
