@@ -51,11 +51,28 @@ function productionFetch({ customerHtml, discoveryUi }) {
 const shell = 'LeadIntel — Build Your Commercial Intelligence Strategy id="company-website"';
 const boundedDiscoveryRuntime = [
   'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
-  'const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS*2+2000;',
+  'const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS*5+5000;',
   'function ensureDiscoveryMounted(){}',
   'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};',
   'initDiscoveryWhenReady();'
 ].join('\n');
+
+test('production proof accepts the intended five-request-window Discovery runtime', async () => {
+  const { verifyRelease, VERDICTS } = await loadCore();
+  const proof = await verifyRelease({
+    config,
+    expectedSha: SHA,
+    ciConclusion: 'success',
+    ciRunId: '199',
+    fetchImpl: productionFetch({
+      customerHtml: `${shell}<script defer src="discovery-ui.js?v=current"></script>`,
+      discoveryUi: boundedDiscoveryRuntime
+    }),
+    nonce: 'intended-timeout-contract'
+  });
+
+  assert.equal(proof.verdict, VERDICTS.PROVEN, proof.failures.join('\n'));
+});
 
 test('production proof blocks the former module-graph Discovery bootstrap', async () => {
   const { verifyRelease, VERDICTS } = await loadCore();
@@ -104,7 +121,7 @@ test('production proof blocks a Discovery runtime that performs hidden-stage sta
       customerHtml: `${shell}<script defer src="discovery-ui.js?v=current"></script>`,
       discoveryUi: [
         'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
-        'const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS*2+2000;',
+        'const DISCOVERY_RUN_TIMEOUT_MS=DISCOVERY_REQUEST_TIMEOUT_MS*5+5000;',
         'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};',
         'initDiscoveryWhenReady();'
       ].join('\n')
