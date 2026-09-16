@@ -8,6 +8,7 @@ const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
 const processMap=fs.readFileSync(path.join(root,'process-map.js'),'utf8');
 const hygienePath=path.join(root,'workspace-reset-hygiene.js');
 const hygiene=fs.existsSync(hygienePath)?fs.readFileSync(hygienePath,'utf8'):'';
+const persistence=fs.readFileSync(path.join(root,'workspace-persistence.js'),'utf8');
 
 test('workspace reset does not use a native browser confirmation dialog',()=>{
   assert.doesNotMatch(app,/window\.confirm\s*\(/);
@@ -33,22 +34,23 @@ test('workspace reset clears browser-only company residue but preserves saved AP
 });
 
 test('confirmed workspace reset records durable reset intent for the next authenticated sync',()=>{
-  assert.match(hygiene,/leadintel_customer_v2_reset_pending_v1/,'reset must have a durable pending-reset marker');
-  assert.match(hygiene,/RESET_PENDING_KEY/);
-  assert.match(hygiene,/function recordResetIntent/);
-  assert.match(hygiene,/workspace_id/,'reset intent must retain workspace provenance when known');
-  assert.match(hygiene,/localStorage\.setItem\(RESET_PENDING_KEY/,'reset intent must survive reload and sign-in');
-  assert.match(hygiene,/handleResetClick[\s\S]*recordResetIntent\(\)/,'the marker must be written only on the confirmed reset click');
+  assert.match(persistence,/leadintel_customer_v2_reset_pending_v1/,'server reset must have a durable pending-reset marker');
+  assert.match(persistence,/function recordResetIntent/);
+  assert.match(persistence,/workspace_id/,'reset intent must retain workspace provenance when known');
+  assert.match(persistence,/localStorage\?\.setItem\(RESET_PENDING_KEY/,'reset intent must survive reload and sign-in');
+  assert.match(persistence,/handleResetClick[\s\S]*recordResetIntent\(\)/,'the server reset marker must be written only on the confirmed reset click');
+  assert.match(hygiene,/leadintel_customer_v2_brand_asset_reset_cleanup_v1/,'asset cleanup must retain its own durable reset record');
 });
 
 test('pending reset auto-finishes through the existing version-safe sync path after authentication',()=>{
+  assert.match(persistence,/async function clearPendingServerReset/);
+  assert.match(persistence,/nativeFetch\(url\.toString\(\),\{method:"PUT"/,'pending reset must clear the server with the current version');
   assert.match(hygiene,/async function finalizePendingReset/);
-  assert.match(hygiene,/LeadIntelServerBridge/);
   assert.match(hygiene,/resolveConflictKeepLocal/,'a reset that reconnects into a version conflict must reuse the safe keep-local resolver');
   assert.match(hygiene,/saveNow/,'a reset with no conflict must still save the blank workspace explicitly');
   assert.match(hygiene,/leadintel:server-ready/,'signed-out reset must resume automatically after Google sign-in');
-  assert.match(hygiene,/localStorage\.removeItem\(RESET_PENDING_KEY\)/,'pending reset marker must clear after successful server save');
-  assert.doesNotMatch(hygiene,/deleteCrmCompany|\/api\/crm|\/api\/integrations\/ai\/provider|disconnectProvider/,'reset completion must not touch CRM or AI-provider credentials');
+  assert.match(persistence,/localStorage\?\.removeItem\(RESET_PENDING_KEY\)/,'pending server reset marker must clear after a successful version-safe PUT');
+  assert.doesNotMatch(`${persistence}\n${hygiene}`,/deleteCrmCompany|\/api\/crm|\/api\/integrations\/ai\/provider|disconnectProvider/,'reset completion must not touch CRM or AI-provider credentials');
 });
 
 test('reset=1 provides a boot-safe browser recovery path before later runtimes can stall',()=>{

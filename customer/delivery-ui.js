@@ -3,6 +3,7 @@ const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
 const DELIVERY_STORAGE_KEY="leadintel_customer_v2_delivery";
   const ASSET_VERSION="20260916-brand-outreach-v5";
+const SERVER_BRIDGE_ASSET="server-bridge.js?v=20260916-brand-assets-v10";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const q=id=>document.getElementById(id);
 let delivery=loadDelivery();
@@ -104,7 +105,7 @@ function bindDelivery(){
 function loadProductionSaas(){
   const loadMailboxUi=()=>{if(document.querySelector('script[data-production-gmail-ui]'))return;const ui=document.createElement('script');ui.src=asset('production-gmail-ui.js');ui.dataset.productionGmailUi='true';document.body.appendChild(ui);};
   if(document.querySelector('script[data-server-bridge]')){loadMailboxUi();return;}
-  const bridge=document.createElement('script');bridge.src=asset('server-bridge.js');bridge.dataset.serverBridge='true';
+  const bridge=document.createElement('script');bridge.src=SERVER_BRIDGE_ASSET;bridge.dataset.serverBridge='true';
   bridge.addEventListener('load',loadMailboxUi);
   document.body.appendChild(bridge);
 }
