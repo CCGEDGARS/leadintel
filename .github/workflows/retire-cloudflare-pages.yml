@@ -74,7 +74,7 @@ jobs:
                 --request DELETE \
                 --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
                 --header "Content-Type: application/json" \
-                "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT_NAME}/deployments/${deployment_id}")"
+                "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT_NAME}/deployments/${deployment_id}?force=true")"
 
               if [ "${delete_code}" = "200" ] && jq -e '.success == true' "${delete_response}" >/dev/null; then
                 deleted=$((deleted + 1))
