@@ -6,6 +6,11 @@ on:
       - ops/retire-cloudflare-pages
     paths:
       - .github/workflows/retire-cloudflare-pages.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/retire-cloudflare-pages.yml
 
 permissions:
   contents: read
