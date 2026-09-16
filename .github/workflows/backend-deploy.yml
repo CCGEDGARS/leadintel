@@ -40,26 +40,6 @@ jobs:
           test -n "$CLOUDFLARE_ACCOUNT_ID"
       - name: Install backend dependencies
         run: npm ci
-      - name: Bootstrap protected Scrapling service token
-        shell: bash
-        run: |
-          set -euo pipefail
-          SCRAPLING_TOKEN="$(openssl rand -hex 32)"
-          printf '%s' "$SCRAPLING_TOKEN" | npx wrangler secret put SCRAPLING_SERVICE_TOKEN
-          cat > /tmp/scrapling-bootstrap-public.pem <<'PEM'
-          -----BEGIN PUBLIC KEY-----
-          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArHHWuAviJ2yvatZvZRWU
-          WDU+ulmrTI8MbCy17qgGzyYWqNX9lDRGLNMroMB8ntFYNVmPBzGq0BsC7faLwbpU
-          JdQEz+a2AyVeRUkX1WiYgMyjngDSuLAiA8RhVIOm4sFr0cUfoPW0elLLkkLcPZbP
-          2mZG/Wnc+z6rCJKT5T+Mnc9+MsF/IXwPpb/IUhxWD2e0cM6jcERG9OGteEnPtHpb
-          0p0CLW9HUng5izS0ipTygcP22X/3mUy2GwvmExDdScSo+CUKG4dkX5ny5qz+8ioK
-          enN2qD2ZOQRNPn6O9GHkhkJyrx+ed8hmVcgtKttsNSC7U6ECiU0Zp4r+Ur3e4+wn
-          TQIDAQAB
-          -----END PUBLIC KEY-----
-          PEM
-          CIPHERTEXT="$(printf '%s' "$SCRAPLING_TOKEN" | openssl pkeyutl -encrypt -pubin -inkey /tmp/scrapling-bootstrap-public.pem -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 | base64 -w0)"
-          printf 'SCRAPLING_TOKEN_CIPHERTEXT=%s\n' "$CIPHERTEXT"
-          unset SCRAPLING_TOKEN CIPHERTEXT
       - name: Apply production D1 migrations
         run: npm run db:remote
       - name: Deploy production Worker
