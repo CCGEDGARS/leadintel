@@ -8,6 +8,7 @@ const vercelConfigPath = path.join(root, 'vercel.json');
 const buildScriptPath = path.join(root, 'scripts/build-vercel-static.sh');
 const customerRootBuildScriptPath = path.join(root, 'customer/scripts/build-vercel-static.sh');
 const pagesWorkflowPath = path.join(root, '.github/workflows/deploy-pages.yml');
+const deploymentAuthorityPath = path.join(root, 'deployment-authority.json');
 const rootIndex = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const legacyV2Index = fs.readFileSync(path.join(root, 'v2/index.html'), 'utf8');
 
@@ -42,6 +43,19 @@ test('Vercel build remains deployable if project Root Directory is customer', ()
 
 test('obsolete GitHub Pages deployment workflow is removed', () => {
   assert.equal(fs.existsSync(pagesWorkflowPath), false);
+});
+
+test('repository declares Vercel as the only frontend deployment authority', () => {
+  assert.equal(fs.existsSync(deploymentAuthorityPath), true, 'deployment authority contract must exist');
+  const authority = JSON.parse(fs.readFileSync(deploymentAuthorityPath, 'utf8'));
+  assert.deepEqual(authority.frontend, {
+    provider: 'vercel',
+    project: 'leadintel',
+    outputDirectory: '.vercel-static'
+  });
+  assert.equal(authority.backend.provider, 'cloudflare-workers');
+  assert.equal(authority.backend.service, 'leadintel-api');
+  assert.deepEqual(authority.retiredFrontendProviders.sort(), ['cloudflare-pages', 'github-pages']);
 });
 
 test('production root is the LeadIntel entry page while active workspace remains available at /customer/', () => {
