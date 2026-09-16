@@ -16,6 +16,7 @@ const ASSET_VALIDATION='decoded-v1';
 const CONTENT_SHA256_METADATA='content-sha256';
 const CONTENT_SHA256=/^[a-f0-9]{64}$/;
 const ASSET_ID=/^[A-Za-z0-9_-]{43}$/;
+const D1_ASSET_CHUNK_BYTES=64*1024;
 const JPEG_SOF_MARKERS=new Set([0xc0,0xc1,0xc2,0xc3,0xc5,0xc6,0xc7,0xc9,0xca,0xcb,0xcd,0xce,0xcf]);
 
 const CRC_TABLE=new Uint32Array(256);
@@ -469,11 +470,107 @@ async function audit(env,{workspaceId,userId,type,assetId,metadata={}}){
   ).run();
 }
 
+function d1AssetMetadata(row){
+  if(!row)return null;
+  return {
+    size:Number(row.byte_size),
+    httpMetadata:{contentType:String(row.mime_type||'')},
+    customMetadata:{
+      workspaceId:String(row.workspace_id||''),
+      validation:String(row.validation||''),
+      validatedMimeType:String(row.mime_type||''),
+      validatedSize:String(row.byte_size||''),
+      validatedWidth:String(row.width||''),
+      validatedHeight:String(row.height||''),
+      [CONTENT_SHA256_METADATA]:String(row.content_sha256||'')
+    }
+  };
+}
+
+export function createD1BrandAssetStore(db){
+  if(!db?.prepare||typeof db.batch!=='function')return null;
+  const rowFor=assetId=>db.prepare(`SELECT id,workspace_id,validation,mime_type,byte_size,width,height,content_sha256
+    FROM customer_brand_assets WHERE id=?`).bind(assetId).first();
+  return {
+    async head(key){
+      const assetId=String(key||'').replace(/^brand-assets\//,'');
+      if(!parsedAssetId(assetId)||brandAssetObjectKey(assetId)!==key)return null;
+      return d1AssetMetadata(await rowFor(assetId));
+    },
+    async get(key){
+      const assetId=String(key||'').replace(/^brand-assets\//,'');
+      if(!parsedAssetId(assetId)||brandAssetObjectKey(assetId)!==key)return null;
+      const row=await rowFor(assetId);
+      if(!row)return null;
+      const result=await db.prepare('SELECT chunk_data FROM customer_brand_asset_chunks WHERE asset_id=? ORDER BY chunk_index ASC').bind(assetId).all();
+      const chunks=Array.isArray(result?.results)?result.results:[];
+      const bytes=new Uint8Array(Number(row.byte_size));
+      let offset=0;
+      for(const entry of chunks){
+        const value=entry?.chunk_data;
+        const chunk=value instanceof ArrayBuffer?new Uint8Array(value):ArrayBuffer.isView(value)?new Uint8Array(value.buffer,value.byteOffset,value.byteLength):null;
+        if(!chunk||offset+chunk.byteLength>bytes.byteLength)return null;
+        bytes.set(chunk,offset);
+        offset+=chunk.byteLength;
+      }
+      if(offset!==bytes.byteLength)return null;
+      return {...d1AssetMetadata(row),body:new Response(bytes).body};
+    },
+    async put(key,input,{httpMetadata={},customMetadata={}}={}){
+      const assetId=String(key||'').replace(/^brand-assets\//,'');
+      if(!parsedAssetId(assetId)||brandAssetObjectKey(assetId)!==key)throw new BrandAssetError('Brand asset storage key is invalid',503);
+      const bytes=input instanceof Uint8Array?input:new Uint8Array(input);
+      const statements=[
+        db.prepare(`INSERT INTO customer_brand_assets(
+          id,workspace_id,validation,mime_type,byte_size,width,height,content_sha256
+        ) VALUES(?,?,?,?,?,?,?,?)`).bind(
+          assetId,
+          String(customMetadata.workspaceId||''),
+          String(customMetadata.validation||''),
+          String(customMetadata.validatedMimeType||httpMetadata.contentType||''),
+          bytes.byteLength,
+          Number(customMetadata.validatedWidth),
+          Number(customMetadata.validatedHeight),
+          String(customMetadata[CONTENT_SHA256_METADATA]||'')
+        )
+      ];
+      for(let offset=0,index=0;offset<bytes.byteLength;offset+=D1_ASSET_CHUNK_BYTES,index++){
+        const chunk=bytes.slice(offset,Math.min(offset+D1_ASSET_CHUNK_BYTES,bytes.byteLength));
+        statements.push(db.prepare('INSERT INTO customer_brand_asset_chunks(asset_id,chunk_index,chunk_data) VALUES(?,?,?)').bind(assetId,index,chunk.buffer));
+      }
+      await db.batch(statements);
+    },
+    async delete(key){
+      const assetId=String(key||'').replace(/^brand-assets\//,'');
+      if(!parsedAssetId(assetId)||brandAssetObjectKey(assetId)!==key)return;
+      await db.batch([
+        db.prepare('DELETE FROM customer_brand_asset_chunks WHERE asset_id=?').bind(assetId),
+        db.prepare('DELETE FROM customer_brand_assets WHERE id=?').bind(assetId)
+      ]);
+    },
+    async list({cursor,limit=1000}={}){
+      const pageSize=Math.max(1,Math.min(1000,Number(limit)||1000));
+      if(cursor!==undefined&&cursor!==null&&!parsedAssetId(String(cursor)))throw new BrandAssetError('Brand asset inventory pagination failed',503);
+      const query=cursor
+        ?db.prepare(`SELECT id,workspace_id,validation,mime_type,byte_size,width,height,content_sha256
+          FROM customer_brand_assets WHERE id>? ORDER BY id ASC LIMIT ?`).bind(String(cursor),pageSize+1)
+        :db.prepare(`SELECT id,workspace_id,validation,mime_type,byte_size,width,height,content_sha256
+          FROM customer_brand_assets ORDER BY id ASC LIMIT ?`).bind(pageSize+1);
+      const result=await query.all();
+      const rows=Array.isArray(result?.results)?result.results:[];
+      const truncated=rows.length>pageSize;
+      const page=truncated?rows.slice(0,pageSize):rows;
+      const objects=page.map(row=>({key:brandAssetObjectKey(row.id),...d1AssetMetadata(row)}));
+      return {objects,truncated,...(truncated?{cursor:String(page.at(-1).id)}:{})};
+    }
+  };
+}
+
 function requireBinding(env){
-  if(!env.BRAND_ASSETS){
-    throw new BrandAssetError('Brand asset storage is not configured',503);
-  }
-  return env.BRAND_ASSETS;
+  if(env.BRAND_ASSETS)return env.BRAND_ASSETS;
+  const store=createD1BrandAssetStore(env.DB);
+  if(store)return store;
+  throw new BrandAssetError('Brand asset storage is not configured',503);
 }
 
 async function assetOwnership(env,assetId){
