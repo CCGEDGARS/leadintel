@@ -35,9 +35,5 @@ database_name = "leadintel"
 database_id = "79f8c0fb-82f9-4ff8-9ab7-38bf5742fc50"
 migrations_dir = "migrations"
 
-[[r2_buckets]]
-binding = "BRAND_ASSETS"
-bucket_name = "leadintel-brand-assets"
-
 [triggers]
 crons = ["0 * * * *"]
