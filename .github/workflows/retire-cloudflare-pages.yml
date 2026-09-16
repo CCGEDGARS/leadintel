@@ -57,7 +57,7 @@ jobs:
               --request GET \
               --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
               --header "Content-Type: application/json" \
-              "${api_base}?per_page=100&page=1")"
+              "${api_base}?per_page=25&page=1")"
 
             if [ "${list_code}" = "404" ]; then
               echo "Pages project is already absent."
