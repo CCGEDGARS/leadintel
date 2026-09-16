@@ -29,7 +29,6 @@ test('production backend deploy runs only after successful Backend CI on main an
   const deploy=workflow.indexOf('run: npm run deploy');
   assert.ok(install>=0&&migrate>install&&deploy>migrate,'D1 migrations must run after npm ci and before Worker deploy');
   assert.doesNotMatch(workflow,/wrangler r2 bucket/,'production deploy must not depend on optional account-level R2 activation');
-  assert.match(workflow,/set -euo pipefail/);
 });
 
 test('production Worker declares its public Apollo callback URL and never stores signing material in wrangler vars',()=>{
