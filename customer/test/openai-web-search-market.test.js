@@ -78,11 +78,11 @@ test('normalized saved market state preserves source provenance and source-statu
     researchSourceStatus:{openai:'complete',firecrawl:'complete'},
     researchResults:[{url:'https://example.com/a',market:'Latvia',sourceProviders:['openai','firecrawl']}]
   });
-  assert.deepEqual(state.researchSourceStatus,{openai:'complete',firecrawl:'complete'});
+  assert.deepEqual(state.researchSourceStatus,{openai:'complete',firecrawl:'complete',gemini:'idle'});
   assert.deepEqual(state.researchResults[0].sourceProviders,['openai','firecrawl']);
 });
 
-test('research status copy distinguishes OpenAI discovery from Firecrawl verification',()=>{
+test('research status copy distinguishes OpenAI discovery from Firecrawl extraction',()=>{
   assert.match(app,/OpenAI[^\n]{0,120}(discovery|signal)/i);
-  assert.match(app,/Firecrawl[^\n]{0,120}verif/i);
+  assert.match(app,/Firecrawl[^\n]{0,120}extract/i);
 });

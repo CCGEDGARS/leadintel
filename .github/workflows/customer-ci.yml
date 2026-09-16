@@ -100,6 +100,7 @@ jobs:
           node --check customer/lookalike-discovery.js
           node --check customer/evidence-view.js
           node --check customer/market-engine.js
+          node --check customer/market-research-verification.js
           node --check customer/linkedin-signals.js
           node --check customer/discovery-engine.js
           node --check customer/outreach-engine.js

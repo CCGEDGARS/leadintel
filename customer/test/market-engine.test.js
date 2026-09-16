@@ -232,7 +232,7 @@ test('an abandoned persisted research run is recovered instead of remaining stuc
     researchProgress:{completed:3,total:12}
   });
   assert.equal(recovered.researchStatus,'error');
-  assert.deepEqual(recovered.researchSourceStatus,{openai:'error',firecrawl:'error'});
+  assert.deepEqual(recovered.researchSourceStatus,{openai:'error',firecrawl:'error',gemini:'idle'});
   assert.deepEqual(recovered.researchProgress,{completed:0,total:0});
 });
 
