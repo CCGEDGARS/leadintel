@@ -17,6 +17,10 @@ const CONTENT_SHA256_METADATA='content-sha256';
 const CONTENT_SHA256=/^[a-f0-9]{64}$/;
 const MAX_REDIRECTS=3;
 const IMPORT_TIMEOUT_MS=5000;
+const DNS_TIMEOUT_MS=2000;
+const DNS_MAX_ANSWERS=64;
+const DNS_OVER_HTTPS_ENDPOINT='https://cloudflare-dns.com/dns-query';
+const DNS_FETCH=globalThis.fetch.bind(globalThis);
 const ASSET_ID=/^[A-Za-z0-9_-]{43}$/;
 const JPEG_SOF_MARKERS=new Set([0xc0,0xc1,0xc2,0xc3,0xc5,0xc6,0xc7,0xc9,0xca,0xcb,0xcd,0xce,0xcf]);
 
@@ -594,6 +598,199 @@ function isPrivateIpv4(host){
     a>=224;
 }
 
+function parseIpv4(value){
+  if(!/^\d+\.\d+\.\d+\.\d+$/.test(value)){
+    return null;
+  }
+  const parts=value.split('.').map(Number);
+  if(parts.some(part=>!Number.isInteger(part)||part<0||part>255)){
+    return null;
+  }
+  return parts;
+}
+
+function publicIpv4(value){
+  const parts=parseIpv4(value);
+  if(!parts){
+    return false;
+  }
+  const [a,b,c]=parts;
+  return !(a===0||a===10||a===127||
+    (a===100&&b>=64&&b<=127)||
+    (a===169&&b===254)||
+    (a===172&&b>=16&&b<=31)||
+    (a===192&&b===0&&c===0)||
+    (a===192&&b===0&&c===2)||
+    (a===192&&b===88&&c===99)||
+    (a===192&&b===168)||
+    (a===198&&(b===18||b===19))||
+    (a===198&&b===51&&c===100)||
+    (a===203&&b===0&&c===113)||
+    a>=224);
+}
+
+function parseIpv6(value){
+  let input=String(value||'').toLowerCase();
+  if(!input||input.includes('%')||input.indexOf('::')!==input.lastIndexOf('::')){
+    return null;
+  }
+  if(input.includes('.')){
+    const separator=input.lastIndexOf(':');
+    const ipv4=parseIpv4(input.slice(separator+1));
+    if(separator<0||!ipv4){
+      return null;
+    }
+    input=`${input.slice(0,separator)}:${((ipv4[0]<<8)|ipv4[1]).toString(16)}:${((ipv4[2]<<8)|ipv4[3]).toString(16)}`;
+  }
+  const compressed=input.includes('::');
+  const [leftText,rightText='']=input.split('::');
+  const left=leftText?leftText.split(':'):[];
+  const right=rightText?rightText.split(':'):[];
+  if([...left,...right].some(part=>!/^[0-9a-f]{1,4}$/.test(part))){
+    return null;
+  }
+  const missing=8-left.length-right.length;
+  if((compressed&&missing<1)||(!compressed&&missing!==0)){
+    return null;
+  }
+  const parts=[...left,...Array(compressed?missing:0).fill('0'),...right];
+  if(parts.length!==8){
+    return null;
+  }
+  return parts.reduce((result,part)=>(result<<16n)|BigInt(parseInt(part,16)),0n);
+}
+
+function ipv6Prefix(value,prefix,bits){
+  return value>>(128n-BigInt(bits))===prefix>>(128n-BigInt(bits));
+}
+
+function publicIpv6(value){
+  const address=parseIpv6(value);
+  if(address===null){
+    return false;
+  }
+  const globalStart=0x20000000000000000000000000000000n;
+  const globalEnd=0x40000000000000000000000000000000n;
+  if(address<globalStart||address>=globalEnd){
+    return false;
+  }
+  const denied=[
+    [0x20010000000000000000000000000000n,23],
+    [0x20010db8000000000000000000000000n,32],
+    [0x20020000000000000000000000000000n,16],
+    [0x3fff0000000000000000000000000000n,20]
+  ];
+  return !denied.some(([prefix,bits])=>ipv6Prefix(address,prefix,bits));
+}
+
+function publicIpAddress(value){
+  const address=String(value||'').trim().toLowerCase();
+  return address.includes(':')?publicIpv6(address):publicIpv4(address);
+}
+
+function validDnsName(value){
+  const name=String(value||'').toLowerCase().replace(/\.$/,'');
+  return name.length>0&&name.length<=253&&name.split('.').every(label=>/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label));
+}
+
+function normalizedDnsName(value){
+  const name=String(value||'').trim().toLowerCase().replace(/\.$/,'');
+  return validDnsName(name)?name:null;
+}
+
+async function dohQuery(host,type,dnsFetch=DNS_FETCH){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),DNS_TIMEOUT_MS);
+  try{
+    const endpoint=new URL(DNS_OVER_HTTPS_ENDPOINT);
+    endpoint.searchParams.set('name',host);
+    endpoint.searchParams.set('type',type);
+    const response=await dnsFetch(endpoint,{headers:{Accept:'application/dns-json'},signal:controller.signal});
+    if(!response.ok||normalizeMime(response.headers.get('Content-Type'))!=='application/dns-json'){
+      throw new BrandAssetError('Import host DNS lookup failed');
+    }
+    const payload=await response.json().catch(()=>null);
+    const expectedType=type==='A'?1:28;
+    if(!payload||typeof payload!=='object'||Array.isArray(payload)||payload.Status!==0||payload.TC===true||
+      !Array.isArray(payload.Question)||payload.Question.length!==1||
+      (payload.Answer!==undefined&&!Array.isArray(payload.Answer))||
+      (Array.isArray(payload.Answer)&&payload.Answer.length>DNS_MAX_ANSWERS)){
+      throw new BrandAssetError('Import host DNS lookup failed');
+    }
+    const question=payload.Question[0];
+    if(!question||typeof question!=='object'||normalizedDnsName(question.name)!==host||question.type!==expectedType){
+      throw new BrandAssetError('Import host DNS lookup failed');
+    }
+    const records=[];
+    const aliases=new Map();
+    for(const answer of payload.Answer||[]){
+      const name=normalizedDnsName(answer?.name);
+      if(!name||!Number.isInteger(answer.type)||!Number.isInteger(answer.TTL)||answer.TTL<0||typeof answer.data!=='string'||
+        (answer.type!==expectedType&&answer.type!==5)){
+        throw new BrandAssetError('Import host DNS lookup failed');
+      }
+      if(answer.type===5){
+        const target=normalizedDnsName(answer.data);
+        if(!target||(aliases.has(name)&&aliases.get(name)!==target)){
+          throw new BrandAssetError('Import host DNS lookup failed');
+        }
+        aliases.set(name,target);
+      }
+      records.push({...answer,name});
+    }
+    const aliasChain=new Set();
+    let terminal=host;
+    while(aliases.has(terminal)){
+      if(aliasChain.has(terminal)){
+        throw new BrandAssetError('Import host DNS lookup failed');
+      }
+      aliasChain.add(terminal);
+      terminal=aliases.get(terminal);
+    }
+    if([...aliases.keys()].some(name=>!aliasChain.has(name))){
+      throw new BrandAssetError('Import host DNS lookup failed');
+    }
+    const addresses=[];
+    for(const answer of records){
+      if(answer.type===expectedType){
+        if(answer.name!==terminal){
+          throw new BrandAssetError('Import host DNS lookup failed');
+        }
+        addresses.push(answer.data.trim());
+      }
+    }
+    return addresses;
+  }catch(cause){
+    if(cause instanceof BrandAssetError){
+      throw cause;
+    }
+    throw new BrandAssetError('Import host DNS lookup failed');
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
+async function resolveImportHost(host,env){
+  let addresses;
+  try{
+    addresses=typeof env?.BRAND_ASSET_DNS_RESOLVER==='function'
+      ?await env.BRAND_ASSET_DNS_RESOLVER(host)
+      :(await Promise.all([
+        dohQuery(host,'A',typeof env?.BRAND_ASSET_DNS_FETCH==='function'?env.BRAND_ASSET_DNS_FETCH:DNS_FETCH),
+        dohQuery(host,'AAAA',typeof env?.BRAND_ASSET_DNS_FETCH==='function'?env.BRAND_ASSET_DNS_FETCH:DNS_FETCH)
+      ])).flat();
+  }catch(cause){
+    if(cause instanceof BrandAssetError){
+      throw cause;
+    }
+    throw new BrandAssetError('Import host DNS lookup failed');
+  }
+  if(!Array.isArray(addresses)||addresses.length<1||addresses.length>DNS_MAX_ANSWERS||
+    addresses.some(address=>typeof address!=='string'||!publicIpAddress(address))){
+    throw new BrandAssetError('Import host did not resolve exclusively to public IP addresses');
+  }
+}
+
 function isPrivateIpv6(host){
   const value=host.replace(/^\[|\]$/g,'').toLowerCase();
   if(!value.includes(':')){
@@ -745,11 +942,12 @@ async function readBoundedBody(response,limit){
   return bytes;
 }
 
-async function fetchImportedFile(rawUrl,kind,configuredHosts,workspaceHost){
+async function fetchImportedFile(rawUrl,kind,configuredHosts,workspaceHost,env){
   const {limit}=limitForKind(kind);
   let url=approvedImportUrl(rawUrl,configuredHosts,workspaceHost);
 
   for(let redirects=0;;redirects++){
+    await resolveImportHost(publicHost(url),env);
     const controller=new AbortController();
     const timer=setTimeout(()=>controller.abort(),IMPORT_TIMEOUT_MS);
     try{
@@ -925,7 +1123,7 @@ export async function handleBrandAssetRoute(request,env,cors={}){
         return error('Valid JSON body is required',400,cors);
       }
       const savedWebsiteHost=await workspaceImportHost(env,workspaceId);
-      const imported=await fetchImportedFile(body.url,body.kind,env.BRAND_ASSET_IMPORT_HOSTS,savedWebsiteHost);
+      const imported=await fetchImportedFile(body.url,body.kind,env.BRAND_ASSET_IMPORT_HOSTS,savedWebsiteHost,env);
       const validated=await validateBrandAsset(imported,body.kind);
       const asset=await createAsset(env,{
         workspaceId,

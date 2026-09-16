@@ -162,7 +162,12 @@ class D1Db{
 async function fixture(role='owner',workspacePayload={main:{website:'https://workspace.example/'}}){
   const token=`asset-${role}-session`,workspaceId='workspace-secret-name',user={id:'user-1',email:'private@example.com',display_name:'Private User',role},events=[];
   const DB=new D1Db({tokenHash:await sha256(token),user,workspaceId,role,events,workspacePayload});
-  return {token,workspaceId,DB,events,env:{DB,BRAND_ASSETS:new MemoryR2(events),BRAND_ASSET_IMPORT_HOSTS:'cdn.example.test,public.example'}};
+  return {token,workspaceId,DB,events,env:{
+    DB,
+    BRAND_ASSETS:new MemoryR2(events),
+    BRAND_ASSET_IMPORT_HOSTS:'cdn.example.test,public.example',
+    BRAND_ASSET_DNS_RESOLVER:async()=>['93.184.216.34','2606:2800:220:1:248:1893:25c8:1946']
+  }};
 }
 
 function request(path,{method='GET',token,body,headers={}}={}){
@@ -433,6 +438,161 @@ test('server-side import accepts only a configured host and audits the stored im
   globalThis.fetch=async(url,options)=>{calls.push([String(url),options]);return new Response(jpeg(),{status:200,headers:{'Content-Type':'image/jpeg','Content-Length':String(jpeg().length)}});};
   try{
     const response=await handleBrandAssetRoute(importRequest(workspaceId,token,'https://cdn.example.test/logo.jpg'),env,{});assert.equal(response.status,201);const {asset}=await response.json();assert.equal(asset.mimeType,'image/jpeg');assert.equal(asset.width,16);assert.equal(calls.length,1);assert.equal(calls[0][1].redirect,'manual');assert.ok(calls[0][1].signal instanceof AbortSignal);assert.equal(DB.audits.at(-1)[3],'brand_asset.import_authorized');
+  }finally{globalThis.fetch=originalFetch;}
+});
+
+test('server-side import fails closed for unsafe, mixed, unresolved, and failed DNS results',async()=>{
+  const cases=[
+    ['private IPv4',['10.0.0.7']],
+    ['loopback IPv4',['127.0.0.1']],
+    ['link-local IPv4',['169.254.169.254']],
+    ['documentation IPv4',['192.0.2.10']],
+    ['private IPv6',['fd00::7']],
+    ['loopback IPv6',['::1']],
+    ['link-local IPv6',['fe80::1']],
+    ['documentation IPv6',['2001:db8::10']],
+    ['new documentation IPv6',['3fff::10']],
+    ['multicast IPv6',['ff02::1']],
+    ['mixed public and private',['93.184.216.34','10.0.0.8']],
+    ['unresolved',[]]
+  ];
+  const originalFetch=globalThis.fetch;
+  let imageFetches=0;
+  globalThis.fetch=async()=>{imageFetches++;return new Response(png(),{headers:{'Content-Type':'image/png'}});};
+  try{
+    for(const [label,addresses] of cases){
+      const {env,token,workspaceId}=await fixture();
+      env.BRAND_ASSET_DNS_RESOLVER=async host=>{assert.equal(host,'cdn.example.test');return addresses;};
+      const response=await handleBrandAssetRoute(importRequest(workspaceId,token,'https://cdn.example.test/logo.png'),env,{});
+      assert.equal(response.status,400,label);
+    }
+    const {env,token,workspaceId}=await fixture();
+    env.BRAND_ASSET_DNS_RESOLVER=async()=>{throw new Error('resolver unavailable');};
+    assert.equal((await handleBrandAssetRoute(importRequest(workspaceId,token,'https://cdn.example.test/logo.png'),env,{})).status,400);
+    assert.equal(imageFetches,0);
+  }finally{globalThis.fetch=originalFetch;}
+});
+
+test('server-side import accepts an ordinary hostname only when every resolved address is public',async()=>{
+  const {env,token,workspaceId}=await fixture();
+  const resolved=[];
+  env.BRAND_ASSET_DNS_RESOLVER=async host=>{resolved.push(host);return ['93.184.216.34','2606:2800:220:1:248:1893:25c8:1946'];};
+  const originalFetch=globalThis.fetch;
+  const imageFetches=[];
+  globalThis.fetch=async url=>{imageFetches.push(String(url));return new Response(png(),{headers:{'Content-Type':'image/png'}});};
+  try{
+    const response=await handleBrandAssetRoute(importRequest(workspaceId,token,'https://cdn.example.test/logo.png'),env,{});
+    assert.equal(response.status,201);
+    assert.deepEqual(resolved,['cdn.example.test']);
+    assert.deepEqual(imageFetches,['https://cdn.example.test/logo.png']);
+  }finally{globalThis.fetch=originalFetch;}
+});
+
+test('same-host redirect targets are DNS-validated again and rebinding fails before the redirected fetch',async()=>{
+  const {env,token,workspaceId}=await fixture();
+  env.BRAND_ASSET_IMPORT_HOSTS='cdn.example.test';
+  const resolutions=[];
+  env.BRAND_ASSET_DNS_RESOLVER=async host=>{
+    resolutions.push(host);
+    return resolutions.length===1?['93.184.216.34']:['10.0.0.9'];
+  };
+  const originalFetch=globalThis.fetch;
+  const imageFetches=[];
+  globalThis.fetch=async url=>{
+    imageFetches.push(String(url));
+    return new Response(null,{status:302,headers:{Location:'https://cdn.example.test/final-logo.png'}});
+  };
+  try{
+    const response=await handleBrandAssetRoute(importRequest(workspaceId,token,'https://cdn.example.test/logo.png'),env,{});
+    assert.equal(response.status,400);
+    assert.deepEqual(resolutions,['cdn.example.test','cdn.example.test']);
+    assert.deepEqual(imageFetches,['https://cdn.example.test/logo.png']);
+  }finally{globalThis.fetch=originalFetch;}
+});
+
+test('default resolver uses only the fixed DoH endpoint with two bounded queries and a separate image fetch',async()=>{
+  const {env,token,workspaceId}=await fixture();
+  delete env.BRAND_ASSET_DNS_RESOLVER;
+  const dnsCalls=[];
+  env.BRAND_ASSET_DNS_FETCH=async(url,options)=>{
+    dnsCalls.push([new URL(url),options]);
+    const type=new URL(url).searchParams.get('type');
+    const answer=type==='A'
+      ?[{name:'cdn.example.test.',type:1,TTL:60,data:'93.184.216.34'}]
+      :[{name:'cdn.example.test.',type:28,TTL:60,data:'2606:2800:220:1:248:1893:25c8:1946'}];
+    return new Response(JSON.stringify({Status:0,TC:false,Question:[{name:'cdn.example.test.',type:type==='A'?1:28}],Answer:answer}),{headers:{'Content-Type':'application/dns-json'}});
+  };
+  const originalFetch=globalThis.fetch;
+  const imageCalls=[];
+  globalThis.fetch=async url=>{imageCalls.push(String(url));return new Response(png(),{headers:{'Content-Type':'image/png'}});};
+  try{
+    const response=await handleBrandAssetRoute(importRequest(workspaceId,token,'https://cdn.example.test/logo.png'),env,{});
+    assert.equal(response.status,201);
+    assert.equal(dnsCalls.length,2);
+    assert.deepEqual(dnsCalls.map(([url])=>url.origin+url.pathname),[
+      'https://cloudflare-dns.com/dns-query',
+      'https://cloudflare-dns.com/dns-query'
+    ]);
+    assert.deepEqual(new Set(dnsCalls.map(([url])=>url.searchParams.get('type'))),new Set(['A','AAAA']));
+    for(const [url,options] of dnsCalls){
+      assert.equal(url.searchParams.get('name'),'cdn.example.test');
+      assert.equal(options.headers.Accept,'application/dns-json');
+      assert.ok(options.signal instanceof AbortSignal);
+    }
+    assert.deepEqual(imageCalls,['https://cdn.example.test/logo.png']);
+  }finally{globalThis.fetch=originalFetch;}
+});
+
+test('default resolver rejects malformed or incomplete DoH responses before image fetch',async()=>{
+  const payloads=[
+    new Response('{}',{headers:{'Content-Type':'application/dns-json'}}),
+    new Response(JSON.stringify({Status:2}),{headers:{'Content-Type':'application/dns-json'}}),
+    new Response(JSON.stringify({Status:0,TC:true,Answer:[]}),{headers:{'Content-Type':'application/dns-json'}}),
+    new Response(JSON.stringify({Status:0,Answer:{}}),{headers:{'Content-Type':'application/dns-json'}}),
+    new Response(JSON.stringify({Status:0,Answer:[{type:1,data:'10.0.0.1'}]}),{headers:{'Content-Type':'text/plain'}})
+  ];
+  const originalFetch=globalThis.fetch;
+  let imageCalls=0;
+  globalThis.fetch=async()=>{imageCalls++;return new Response(png(),{headers:{'Content-Type':'image/png'}});};
+  try{
+    for(const dnsResponse of payloads){
+      const {env,token,workspaceId}=await fixture();
+      delete env.BRAND_ASSET_DNS_RESOLVER;
+      env.BRAND_ASSET_DNS_FETCH=async()=>dnsResponse.clone();
+      const response=await handleBrandAssetRoute(importRequest(workspaceId,token,'https://cdn.example.test/logo.png'),env,{});
+      assert.equal(response.status,400);
+    }
+    assert.equal(imageCalls,0);
+  }finally{globalThis.fetch=originalFetch;}
+});
+
+test('default resolver rejects unrelated DNS answers and malformed questions',async()=>{
+  const responses=[
+    {Status:0,TC:false,Question:[{name:'cdn.example.test.',type:1}],Answer:[{name:'attacker.example.',type:1,TTL:60,data:'93.184.216.34'}]},
+    {Status:0,TC:false,Question:[{name:'other.example.',type:1}],Answer:[{name:'cdn.example.test.',type:1,TTL:60,data:'93.184.216.34'}]},
+    {Status:0,TC:false,Question:{name:'cdn.example.test.',type:1},Answer:[]},
+    {Status:0,TC:false,Question:[{name:'cdn.example.test.',type:1}],Answer:[
+      {name:'cdn.example.test.',type:5,TTL:60,data:'alias.example.'},
+      {name:'alias.example.',type:5,TTL:60,data:'cdn.example.test.'},
+      {name:'cdn.example.test.',type:1,TTL:60,data:'93.184.216.34'}
+    ]}
+  ];
+  const originalFetch=globalThis.fetch;
+  let imageCalls=0;
+  globalThis.fetch=async()=>{imageCalls++;return new Response(png(),{headers:{'Content-Type':'image/png'}});};
+  try{
+    for(const payload of responses){
+      const {env,token,workspaceId}=await fixture();
+      delete env.BRAND_ASSET_DNS_RESOLVER;
+      env.BRAND_ASSET_DNS_FETCH=async url=>{
+        const type=new URL(url).searchParams.get('type');
+        if(type==='AAAA')return new Response(JSON.stringify({Status:0,TC:false,Question:[{name:'cdn.example.test.',type:28}],Answer:[]}),{headers:{'Content-Type':'application/dns-json'}});
+        return new Response(JSON.stringify(payload),{headers:{'Content-Type':'application/dns-json'}});
+      };
+      const response=await handleBrandAssetRoute(importRequest(workspaceId,token,'https://cdn.example.test/logo.png'),env,{});
+      assert.equal(response.status,400);
+    }
+    assert.equal(imageCalls,0);
   }finally{globalThis.fetch=originalFetch;}
 });
 
