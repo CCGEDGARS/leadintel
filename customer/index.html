@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="evidence-sources.css?v=20260906-evidence-v1">
   <link rel="stylesheet" href="brand-identity.css?v=20260916-brand-image-state-v1">
   <link rel="stylesheet" href="background-task-centre.css?v=20260916-task-centre-v1">
+  <link rel="stylesheet" href="attention-centre.css?v=20260917-attention-v1">
 </head>
 <body>
   <div class="page-shell">
@@ -422,6 +423,9 @@
           <button class="leadintel-copilot-entry" id="leadintel-copilot-entry" type="button" aria-haspopup="dialog"><span class="copilot-entry-copy"><strong class="copilot-entry-title">Ask LeadIntel ✦</strong><small class="copilot-entry-subtitle">AI Commercial Copilot</small></span><span class="copilot-entry-badge" data-copilot-badge aria-live="polite"></span></button>
           <p>Get help interpreting evidence or deciding the next commercial action.</p>
         </section>
+        <section class="utility-card utility-attention">
+          <button class="attention-trigger" id="workspace-attention" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="workspace-attention-drawer"><span><small class="eyebrow">Workspace health</small><strong>Attention</strong><em data-attention-summary>Checking workspace…</em></span><b data-attention-count hidden>0</b></button>
+        </section>
         <section class="utility-card utility-settings">
           <span class="eyebrow">Workspace controls</span>
           <h3>Settings</h3>
@@ -450,9 +454,11 @@
   <script defer src="brand-identity-ui.js?v=20260916-browser-logo-copy-v2"></script>
   <script defer src="journey-progress.js?v=20260917-shell-stability-v1"></script>
   <script defer src="process-map.js?v=20260917-shell-stability-v1"></script>
+  <script defer src="attention-centre-model.js?v=20260917-attention-v1"></script>
+  <script defer src="attention-centre.js?v=20260917-attention-v1"></script>
   <script type="module" src="app.js?v=20260917-shell-stability-v1"></script>
   <script type="module" src="ai-settings.js?v=20260917-shell-stability-v1"></script>
-  <script type="module" src="copilot-loader.js?v=20260917-shell-stability-v1"></script>
+  <script type="module" src="copilot-loader.js?v=20260917-attention-v1"></script>
   <script type="module" src="shell-support-loader.js?v=20260917-shell-stability-v1"></script>
   <script defer src="discovery-ui.js?v=20260917-journey-v1"></script>
 </body>

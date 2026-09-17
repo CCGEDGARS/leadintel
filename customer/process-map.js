@@ -210,5 +210,5 @@ if(processMap){
   window.addEventListener("leadintel:module-opened",event=>{const step=Number(event.detail?.step);if(step===2)syncContextArchitecture();syncProcessMap();});
   window.addEventListener("storage",event=>{if(event.key===PROCESS_STORAGE_KEY)syncProcessMap();});
   syncContextArchitecture();syncProcessMap();
-  window.LeadIntelJourney={refresh:syncProcessMap,open:openProcessStep};
+  window.LeadIntelJourney={refresh:syncProcessMap,open:openProcessStep,getModel:()=>journeyModel(stageAvailability(),currentProcessStep())};
 }

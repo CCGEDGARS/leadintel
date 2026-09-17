@@ -35,3 +35,16 @@ test('loader provides a lightweight entry beneath the progress metric without re
   assert.match(source,/leadintel-copilot-entry/);
   assert.doesNotMatch(source,/innerHTML\s*=\s*[^;]*<main/i);
 });
+
+test('closing and reopening Copilot reuses modules but opens the drawer on every click',async()=>{
+  const {createCopilotController}=await import('../copilot-loader.js?test=reopen');
+  let loads=0,opens=0;
+  const controller=createCopilotController({
+    loadModules:async()=>{loads++;return {ui:{}};},
+    open:async()=>{opens++;}
+  });
+  await controller();
+  await controller();
+  assert.equal(loads,1);
+  assert.equal(opens,2);
+});
