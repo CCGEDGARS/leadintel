@@ -30,7 +30,7 @@
   function mount(){
     const trigger=document.getElementById('workspace-attention');if(!trigger||trigger.dataset.attentionBound==='1')return;trigger.dataset.attentionBound='1';trigger.addEventListener('click',()=>{const drawer=createDrawer();if(drawer.hidden)open();else close();});
     ['leadintel:tasks-changed','leadintel:workspace-changed','leadintel:journey-changed','leadintel:website-activated','leadintel:server-ready'].forEach(name=>root.addEventListener(name,schedule));
-    root.addEventListener('leadintel:workspace-reset',()=>{runtimeErrors=[];render();});
+    root.addEventListener('leadintel:workspace-reset',()=>{runtimeErrors=[];root.LeadIntelJourney?.refresh?.();render();});
     root.addEventListener('storage',schedule);root.addEventListener('error',event=>rememberError(event.message||event.error?.message));root.addEventListener('unhandledrejection',event=>rememberError(event.reason?.message||event.reason));
     document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!createDrawer().hidden)close();});document.addEventListener('input',schedule);document.addEventListener('change',schedule);
     render();root.setInterval(render,30000);root.LeadIntelAttention={refresh:render,list:()=>lastItems.slice(),open};

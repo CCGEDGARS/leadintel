@@ -66,4 +66,10 @@ test('confirmed reset refreshes Attention and clears transient runtime errors',(
   assert.match(app,/leadintel:workspace-reset/);
   assert.match(runtime,/leadintel:workspace-reset/);
   assert.match(runtime,/runtimeErrors\s*=\s*\[\]/);
+  assert.match(runtime,/workspace-reset[\s\S]*LeadIntelJourney\?\.refresh/);
+});
+
+test('a zero Attention count is visually hidden even when badge layout uses display grid',()=>{
+  const css=fs.readFileSync(path.join(root,'attention-centre.css'),'utf8');
+  assert.match(css,/\.attention-trigger>b\[hidden\]\s*\{\s*display:none/);
 });
