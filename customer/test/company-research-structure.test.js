@@ -16,13 +16,13 @@ const supportLoader=read('shell-support-loader.js');
 test('Customer V2 loads the automatic company research module with Firecrawl workspace routing before research',()=>{
   assert.match(processMap,/firecrawl-workspace-router\.js\?v=20260914-spinner-hard-stop-v1/);
   assert.match(processMap,/company-research-security\.js\?v=20260916-latency-fix-v2/);
-  assert.match(processMap,/company-research-ui\.js\?v=20260916-latency-fix-v2/);
+  assert.match(processMap,/company-research-ui\.js\?v=20260917-step2-reset-route-v1/);
   assert.ok(processMap.indexOf('firecrawl-workspace-router.js')<processMap.indexOf('company-research-ui.js'),'Firecrawl router must load before company research');
   assert.match(processMap,/company-profile-handoff\.js\?v=20260826-intelligence-autofill-v1/);
   assert.match(ui,/company-research-engine\.js\?v=20260916-latency-fix-v2/);
   assert.match(read('index.html'),/profile-engine\.js\?v=20260916-commercial-brief-v1/);
   assert.match(read('index.html'),/process-map\.js\?v=20260917-reset-status-v1/);
-  assert.match(supportLoader,/company-research-ui\.js\?v=20260916-latency-fix-v2/);
+  assert.match(supportLoader,/company-research-ui\.js\?v=20260917-step2-reset-route-v1/);
 });
 
 test('Step 1 navigation opens immediately and initial company research starts automatically once ready',()=>{
@@ -96,6 +96,14 @@ test('Step 2 renders research summary, provenance, confidence and needs-input st
   assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
   assert.match(css,/\.research-field-meta/);
   assert.match(css,/\.research-confidence/);
+});
+
+test('an incomplete reset workspace cannot remain visually stranded on Step 2',()=>{
+  assert.match(ui,/function companyResearchReady/);
+  assert.match(ui,/function returnToStepOneIfIncomplete/);
+  assert.match(ui,/step2\?\.classList\.contains\('active'\)/);
+  assert.match(ui,/back-to-sources/);
+  assert.match(ui,/setTimeout\(returnToStepOneIfIncomplete,0\)/);
 });
 
 test('fresh research persists answers and evidence into the existing main Customer V2 state then invalidates stale strategy',()=>{

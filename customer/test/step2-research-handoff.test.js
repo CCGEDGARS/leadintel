@@ -26,7 +26,7 @@ test('Step 2 repairs a split research handoff before rendering empty fields',()=
 });
 
 test('the repaired research handoff is cache-busted at every browser entry point',()=>{
-  assert.match(supportLoader,/company-research-ui\.js\?v=20260916-latency-fix-v2/);
+  assert.match(supportLoader,/company-research-ui\.js\?v=20260917-step2-reset-route-v1/);
   assert.match(shell,/shell-support-loader\.js\?v=20260917-shell-stability-v1/);
   assert.match(researchUi,/company-research-engine\.js\?v=20260916-latency-fix-v2/);
   assert.match(processMap,/step2-readiness-engine\.js\?v=20260916-commercial-brief-v1/);

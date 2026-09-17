@@ -80,6 +80,10 @@ function setStep(step){
   window.dispatchEvent(new CustomEvent("leadintel:module-opened",{detail:{step}}));
   window.scrollTo({top:0,behavior:"smooth"});
 }
+function restoreResetLanding(){
+  setStep(1);
+  window.LeadIntelJourney?.refresh?.();
+}
 function updateCompleteness(){
   const score=LeadIntelProfile.calculateCompleteness(state);const scoreEl=$("completeness-score"),ring=$("progress-ring"),caption=$("completeness-caption");if(!scoreEl||!ring||!caption)return;
   scoreEl.textContent=`${score}%`;ring.style.setProperty("--p",score);
@@ -780,7 +784,7 @@ async function resetWorkspace(){
   const button=$("reset-workspace");
   if(button?.dataset.resetArmed!=="true"){armWorkspaceReset();return;}
   disarmWorkspaceReset();
-  state=defaultState();editMode=false;saveState();for(const key of ["leadintel_customer_v2_discovery","leadintel_customer_v2_outreach","leadintel_customer_v2_delivery","leadintel_customer_v2_discovery_meta"])localStorage.removeItem(key);syncInputsFromState();setStep(1);window.dispatchEvent(new CustomEvent("leadintel:workspace-reset"));const bridge=window.LeadIntelServerBridge;if(bridge?.session?.authenticated&&bridge.workspace){try{const result=await bridge.saveNow();if(!result.saved)throw new Error("Server reset was not saved");}catch(error){showToast("Reset failed to sync: "+error.message);return;}}sessionStorage.removeItem("leadintel_customer_v2_server_hydration");showToast("All workspace data reset");
+  state=defaultState();editMode=false;saveState();for(const key of ["leadintel_customer_v2_discovery","leadintel_customer_v2_outreach","leadintel_customer_v2_delivery","leadintel_customer_v2_discovery_meta"])localStorage.removeItem(key);syncInputsFromState();restoreResetLanding();window.dispatchEvent(new CustomEvent("leadintel:workspace-reset"));setTimeout(restoreResetLanding,0);const bridge=window.LeadIntelServerBridge;if(bridge?.session?.authenticated&&bridge.workspace){try{const result=await bridge.saveNow();if(!result.saved)throw new Error("Server reset was not saved");}catch(error){showToast("Reset failed to sync: "+error.message);return;}}sessionStorage.removeItem("leadintel_customer_v2_server_hydration");showToast("All workspace data reset");
 }
 
 function bind(){

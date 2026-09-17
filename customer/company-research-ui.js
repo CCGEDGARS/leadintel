@@ -13,6 +13,7 @@ const COMPANY_RESEARCH_SAVE_TIMEOUT_MS=10000;
 const RELEASE='20260916-commercial-brief-v1';
 let running=false;
 let autoStartScheduled=false;
+let prerequisiteReturnScheduled=false;
 
 const engine=()=>window.LeadIntelCompanyResearch;
 const $=id=>document.getElementById(id);
@@ -24,6 +25,17 @@ function readMeta(){return readJson(RESEARCH_META_KEY,{});}
 function writeMeta(value){localStorage.setItem(RESEARCH_META_KEY,JSON.stringify(value));}
 function normalizeUrl(value){return engine()?.safeUrl(value)||'';}
 function selectedMarkets(state){return Array.isArray(state?.targetMarkets)?state.targetMarkets.map(value=>String(value||'').trim()).filter(Boolean):[];}
+function companyResearchReady(state=readState()){return Boolean(normalizeUrl(state.website)&&selectedMarkets(state).length);}
+function returnToStepOneIfIncomplete(){
+  const step2=$('step-2');
+  if(companyResearchReady()||!step2?.classList.contains('active')||prerequisiteReturnScheduled)return false;
+  prerequisiteReturnScheduled=true;
+  setTimeout(()=>{
+    prerequisiteReturnScheduled=false;
+    if(!companyResearchReady()&&step2.classList.contains('active'))$('back-to-sources')?.click();
+  },0);
+  return true;
+}
 function selectedContentLanguage(state=readState()){
   const selected=String($('language-select')?.value||window.LeadIntelLanguage?.get?.()||state.uiLanguage||'lv').toLowerCase();
   return engine().resolveResearchLanguage({selectorValue:selected,storedValue:state.uiLanguage,navigatorLanguages:navigator.languages||[]});
@@ -103,6 +115,7 @@ function repairResearchHandoff(state,meta){
   return true;
 }
 function renderResearchReview(){
+  if(returnToStepOneIfIncomplete())return;
   const state=readState();const meta=metaForCurrentState();repairResearchHandoff(state,meta);const map=sourceMap(state);const summary=$('research-summary');
   if(summary){
     summary.classList.remove('research-summary-failed');
@@ -287,6 +300,7 @@ function bind(){
   window.addEventListener('leadintel:module-opened',event=>{if(Number(event.detail?.step)===2)scheduleInitialCompanyResearch();});
   window.addEventListener('leadintel:server-ready',()=>{renderResearchReview();void translateResearchAnswers();scheduleInitialCompanyResearch();});
   window.addEventListener('leadintel:workspace-changed',()=>{renderResearchReview();void translateResearchAnswers();});
+  window.addEventListener('leadintel:workspace-reset',()=>setTimeout(returnToStepOneIfIncomplete,0));
   window.addEventListener('leadintel:language-changed',()=>void translateResearchAnswers());
   void translateResearchAnswers();
 }

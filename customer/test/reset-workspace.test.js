@@ -24,6 +24,13 @@ test('workspace reset uses a five-second inline confirm state on the existing bu
   assert.match(app,/style\.setProperty\(["']color["'],["']var\(--danger\)["']\)/);
 });
 
+test('confirmed workspace reset always restores the Stage 1 landing view after reset listeners finish',()=>{
+  assert.match(app,/function restoreResetLanding/);
+  assert.match(app,/setStep\(1\)/);
+  assert.match(app,/setTimeout\(restoreResetLanding,0\)/);
+  assert.match(app,/leadintel:workspace-reset/);
+});
+
 test('workspace reset clears browser-only company residue but preserves saved API provider configuration',()=>{
   assert.match(processMap,/workspace-reset-hygiene\.js/,'customer shell must install reset hygiene');
   assert.equal(fs.existsSync(hygienePath),true,'workspace-reset-hygiene.js must exist');
