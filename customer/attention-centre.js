@@ -12,7 +12,7 @@
     drawer.innerHTML='<header><div><span class="eyebrow">Workspace health</span><h2 id="attention-title">Attention</h2></div><button class="attention-close" type="button" aria-label="Close Attention">×</button></header><p class="attention-intro">Only items that need action now appear here. Future-stage work stays out of the way.</p><div class="attention-list" aria-live="polite"></div>';
     document.documentElement.appendChild(drawer);drawer.querySelector('.attention-close').addEventListener('click',close);return drawer;
   }
-  function collect(){return root.LeadIntelAttentionModel?.buildAttentionItems?.({model:root.LeadIntelJourney?.getModel?.()||[],tasks:root.LeadIntelTaskCentre?.list?.()||[],unsaved:Boolean(root.LeadIntelWorkspacePersistence?.hasUnsavedChanges?.()),runtimeErrors})||[];}
+  function collect(){const persistence=root.LeadIntelWorkspacePersistence;return root.LeadIntelAttentionModel?.buildAttentionItems?.({model:root.LeadIntelJourney?.getModel?.()||[],tasks:root.LeadIntelTaskCentre?.list?.()||[],workspaceStarted:Boolean(persistence?.hasMeaningfulWorkspaceData?.()),unsaved:Boolean(persistence?.hasUnsavedChanges?.()),runtimeErrors})||[];}
   function actionLabel(item){if(item.target.type==='stage')return 'Open stage';if(item.target.type==='tasks')return 'Review task';if(item.target.type==='save')return 'Save workspace';return 'Reload workspace';}
   function render(){
     const trigger=document.getElementById('workspace-attention');if(!trigger)return;
@@ -30,6 +30,7 @@
   function mount(){
     const trigger=document.getElementById('workspace-attention');if(!trigger||trigger.dataset.attentionBound==='1')return;trigger.dataset.attentionBound='1';trigger.addEventListener('click',()=>{const drawer=createDrawer();if(drawer.hidden)open();else close();});
     ['leadintel:tasks-changed','leadintel:workspace-changed','leadintel:journey-changed','leadintel:website-activated','leadintel:server-ready'].forEach(name=>root.addEventListener(name,schedule));
+    root.addEventListener('leadintel:workspace-reset',()=>{runtimeErrors=[];render();});
     root.addEventListener('storage',schedule);root.addEventListener('error',event=>rememberError(event.message||event.error?.message));root.addEventListener('unhandledrejection',event=>rememberError(event.reason?.message||event.reason));
     document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!createDrawer().hidden)close();});document.addEventListener('input',schedule);document.addEventListener('change',schedule);
     render();root.setInterval(render,30000);root.LeadIntelAttention={refresh:render,list:()=>lastItems.slice(),open};

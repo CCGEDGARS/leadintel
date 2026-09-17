@@ -2,7 +2,7 @@ import './content-language.js?v=20260916-latency-fix-v2';
 import './content-variants.js?v=20260905-step1-language-v1';
 import './business-identity.js?v=20260906-pain-headings-v1';
 import './evidence-view.js?v=20260915-research-source-text-v1';
-import './workspace-persistence.js?v=20260916-ercon-context-v1';
+import './workspace-persistence.js?v=20260917-reset-clean-v1';
 import {withOpenAiRetry,describePartialCoverage} from './market-research-provider-resilience.js?v=20260916-latency-fix-v2';
 
 const STORAGE_KEY="leadintel_customer_v2_state";
@@ -780,7 +780,7 @@ async function resetWorkspace(){
   const button=$("reset-workspace");
   if(button?.dataset.resetArmed!=="true"){armWorkspaceReset();return;}
   disarmWorkspaceReset();
-  state=defaultState();editMode=false;saveState();for(const key of ["leadintel_customer_v2_discovery","leadintel_customer_v2_outreach","leadintel_customer_v2_delivery","leadintel_customer_v2_discovery_meta"])localStorage.removeItem(key);syncInputsFromState();setStep(1);const bridge=window.LeadIntelServerBridge;if(bridge?.session?.authenticated&&bridge.workspace){try{const result=await bridge.saveNow();if(!result.saved)throw new Error("Server reset was not saved");}catch(error){showToast("Reset failed to sync: "+error.message);return;}}sessionStorage.removeItem("leadintel_customer_v2_server_hydration");showToast("All workspace data reset");
+  state=defaultState();editMode=false;saveState();for(const key of ["leadintel_customer_v2_discovery","leadintel_customer_v2_outreach","leadintel_customer_v2_delivery","leadintel_customer_v2_discovery_meta"])localStorage.removeItem(key);syncInputsFromState();setStep(1);window.dispatchEvent(new CustomEvent("leadintel:workspace-reset"));const bridge=window.LeadIntelServerBridge;if(bridge?.session?.authenticated&&bridge.workspace){try{const result=await bridge.saveNow();if(!result.saved)throw new Error("Server reset was not saved");}catch(error){showToast("Reset failed to sync: "+error.message);return;}}sessionStorage.removeItem("leadintel_customer_v2_server_hydration");showToast("All workspace data reset");
 }
 
 function bind(){

@@ -9,7 +9,7 @@ const Attention=fs.existsSync(modelPath)?require(modelPath):{};
 
 test('attention model prioritizes current required gaps and ignores optional gaps',()=>{
   assert.equal(typeof Attention.buildAttentionItems,'function');
-  const items=Attention.buildAttentionItems({model:[{
+  const items=Attention.buildAttentionItems({workspaceStarted:true,model:[{
     id:1,status:'current',name:'Company & Market',steps:[
       {id:'website',label:'Website activated',complete:false,optional:false,action:'Activate website'},
       {id:'markets',label:'Target markets selected',complete:true,optional:false},
@@ -19,6 +19,16 @@ test('attention model prioritizes current required gaps and ignores optional gap
   assert.deepEqual(items.map(item=>item.id),['stage-1-website']);
   assert.equal(items[0].severity,'important');
   assert.equal(items[0].target.type,'stage');
+});
+
+test('a pristine reset workspace is all clear until the user starts working',()=>{
+  const items=Attention.buildAttentionItems({workspaceStarted:false,unsaved:false,model:[{
+    id:1,status:'current',name:'Company & Market',steps:[
+      {id:'website',label:'Website activated',complete:false,optional:false},
+      {id:'markets',label:'Target markets selected',complete:false,optional:false}
+    ]
+  }]});
+  assert.deepEqual(items,[]);
 });
 
 test('attention model surfaces failed and stalled work automatically',()=>{
@@ -48,4 +58,12 @@ test('customer shell exposes an automatic Attention control and drawer runtime',
   assert.match(html,/data-attention-count/);
   assert.match(html,/attention-centre-model\.js\?v=/);
   assert.match(html,/attention-centre\.js\?v=/);
+});
+
+test('confirmed reset refreshes Attention and clears transient runtime errors',()=>{
+  const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
+  const runtime=fs.readFileSync(path.join(root,'attention-centre.js'),'utf8');
+  assert.match(app,/leadintel:workspace-reset/);
+  assert.match(runtime,/leadintel:workspace-reset/);
+  assert.match(runtime,/runtimeErrors\s*=\s*\[\]/);
 });

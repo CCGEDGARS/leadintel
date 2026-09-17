@@ -8,7 +8,7 @@ const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
 const processMap=fs.readFileSync(path.join(root,'process-map.js'),'utf8');
 
 test('workspace persistence boundary initializes before app state is loaded',()=>{
-  const importMatch=app.match(/^import ['"]\.\/workspace-persistence\.js\?v=20260916-ercon-context-v1['"];?/m);
+  const importMatch=app.match(/^import ['"]\.\/workspace-persistence\.js\?v=20260917-reset-clean-v1['"];?/m);
   assert.ok(importMatch,'app.js must import the persistence boundary directly');
   const importIndex=app.indexOf(importMatch[0]);
   const stateIndex=app.indexOf('let state=loadState()');
@@ -16,5 +16,5 @@ test('workspace persistence boundary initializes before app state is loaded',()=
 });
 
 test('process map reuses the same startup-order persistence module URL',()=>{
-  assert.match(processMap,/import ['"]\.\/workspace-persistence\.js\?v=20260916-ercon-context-v1['"]/);
+  assert.match(processMap,/import ['"]\.\/workspace-persistence\.js\?v=20260917-reset-clean-v1['"]/);
 });

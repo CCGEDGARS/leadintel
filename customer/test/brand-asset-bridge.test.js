@@ -14,7 +14,7 @@ const API = 'https://leadintel-api.edgars-7e7.workers.dev';
 const WORKSPACE_ID = 'workspace-1';
 const CACHE_VERSION = '20260916-error-sweep-v2';
 const RESET_CACHE_VERSION = '20260917-task-reset-v1';
-const WORKSPACE_CACHE_VERSION = '20260916-ercon-context-v1';
+const WORKSPACE_CACHE_VERSION = '20260917-reset-clean-v1';
 const CLEANUP_KEY = 'leadintel_customer_v2_brand_asset_cleanup_v1';
 
 function storage(initial = {}) {

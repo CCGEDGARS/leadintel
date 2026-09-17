@@ -4,7 +4,7 @@
  * block the journey shell. These import signatures remain documented because
  * release tests audit their versions and ordering.
  * import './workspace-reset-hygiene.js?v=20260917-task-reset-v1';
- * import './workspace-persistence.js?v=20260916-ercon-context-v1';
+ * import './workspace-persistence.js?v=20260917-reset-clean-v1';
  * import './state-budget.js?v=20260826-state-budget-500kb';
  * import './website-input-sync.js?v=20260901-saved-state-v2';
  * import './custom-market-input-hygiene.js?v=20260903-password-manager-isolation-v5';
