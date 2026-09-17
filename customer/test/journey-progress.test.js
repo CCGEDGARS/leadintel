@@ -76,6 +76,14 @@ test('customer shell contains seven permanent sidebar destinations and the activ
   assert.match(html,/data-stage-guide-kicker>Stage 1 · Not started</);
 });
 
+test('sidebar stage status has its own row and cannot squeeze the stage title',()=>{
+  const css=fs.readFileSync(path.join(__dirname,'..','premium.css'),'utf8');
+  const journeyStyles=css.match(/\/\* Commercial journey v2[\s\S]*?\/\* Workspace shell v3/)?.[0]||'';
+  assert.match(journeyStyles,/\.steps li\{[^}]*grid-template-columns:24px minmax\(0,1fr\)(?:;|})/);
+  assert.match(journeyStyles,/\.steps li>em\{[^}]*grid-column:2[^}]*justify-self:start[^}]*margin-top:7px/);
+  assert.match(journeyStyles,/\.steps li\.active>em\{[^}]*background:#dcece5[^}]*color:#286b59/);
+});
+
 test('progressive navigation shows completed stages, the current stage and only one next stage',()=>{
   assert.equal(typeof Journey.visibleStageIds,'function');
   assert.deepEqual(Journey.visibleStageIds([
