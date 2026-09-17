@@ -63,7 +63,7 @@
     const onReady=()=>{
       if(document.getElementById('background-task-centre'))return;
       const host=document.createElement('section');host.id='background-task-centre';host.className='task-centre';host.innerHTML='<button class="task-centre-trigger" type="button" aria-expanded="false" aria-controls="task-centre-drawer"><span class="task-centre-pulse" aria-hidden="true"></span><span><strong>Background tasks</strong><small data-task-summary>No tasks yet</small></span><b data-task-count hidden>0</b></button><div class="task-centre-drawer" id="task-centre-drawer" hidden><header><div><span class="eyebrow">Workspace activity</span><h2>Background Task Centre</h2></div><button class="task-centre-close" type="button" aria-label="Close background tasks">×</button></header><p class="task-centre-intro">Research and enrichment continue while you work in this page. Progress and completed results are preserved.</p><div class="task-centre-list" role="status" aria-live="polite"></div><button class="task-centre-clear" type="button">Clear finished tasks</button></div>';
-      (document.querySelector('.progress-panel')||document.body).appendChild(host);
+      (document.querySelector('[data-utility-tasks]')||document.querySelector('.progress-panel')||document.body).appendChild(host);
       const trigger=host.querySelector('.task-centre-trigger'),drawer=host.querySelector('.task-centre-drawer');
       const close=()=>{drawer.hidden=true;trigger.setAttribute('aria-expanded','false');};
       trigger.addEventListener('click',()=>{drawer.hidden=!drawer.hidden;trigger.setAttribute('aria-expanded',String(!drawer.hidden));});

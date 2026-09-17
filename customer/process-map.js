@@ -1,40 +1,46 @@
-import './workspace-reset-hygiene.js?v=20260917-task-reset-v1';
-import './workspace-persistence.js?v=20260916-ercon-context-v1';
-import './state-budget.js?v=20260826-state-budget-500kb';
-import './website-input-sync.js?v=20260901-saved-state-v2';
-import './custom-market-input-hygiene.js?v=20260903-password-manager-isolation-v5';
-import './website-activation.js?v=20260916-ercon-context-v1';
-import './crm-engine.js?v=20260828-master-crm-v1';
-import './sync-conflict-hygiene.js?v=20260901-stale-blank-conflict-v1';
-import './server-bridge.js?v=20260916-error-sweep-v2';
-import './crm-ui.js?v=20260905-app-audit-v2';
-import './ai-settings.js?v=20260915-model-choice-v1';
-import './service-settings-extension.js?v=20260915-mail-choice-v2';
-import './step2-readiness-engine.js?v=20260916-commercial-brief-v1';
-import './content-language.js?v=20260916-latency-fix-v2';
-import './content-variants.js?v=20260905-step1-language-v1';
-import './business-identity.js?v=20260906-pain-headings-v1';
-import './company-brain.js?v=20260909-step2-first-party-v1';
-import './step2-first-party-intelligence.js?v=20260909-first-party-step2-v1';
-import './firecrawl-workspace-router.js?v=20260914-spinner-hard-stop-v1';
-import './linkedin-signals.js?v=20260907-public-index-v1';
-import './company-research-security.js?v=20260916-latency-fix-v2';
-import './company-research-ui.js?v=20260916-latency-fix-v2';
-import './company-profile-handoff.js?v=20260826-intelligence-autofill-v1';
-import './reference-customers.js?v=20260911-reference-missing-info-v1';
-import './reference-customer-table-detection.js?v=20260911-reference-missing-info-v1';
-import './reference-customer-smart-import.js?v=20260910-reference-smart-import-v3';
-import './reference-customer-ai.js?v=20260911-invalid-json-recovery-v1';
-import './reference-customer-ui.js?v=20260911-reference-missing-info-v1';
-import './reference-customer-clear-list.js?v=20260909-reference-actions-v2';
-import './reference-customer-website-enrichment.js?v=20260911-reference-missing-info-v1';
-import './reference-customer-ai-runtime.js?v=20260911-reference-missing-info-v1';
-import './reference-customer-launcher.js?v=20260911-reference-open-v2';
-import './lookalike-discovery.js?v=20260910-reference-portfolio-v1';
-import './intelligence-sources-ui.js?v=20260915-preferred-sources-v1';
-import './profile-action-runtime.js?v=20260912-bottom-profile-actions-v1';
-import './outreach-automation-loader.js?v=20260916-brand-outreach-v2';
-import './copilot-loader.js?v=20260911-copilot-freshness-v1';
+/*
+ * Deferred dependency-order contract. shell-support-loader.js executes this
+ * established order after window.load so none of these optional features can
+ * block the journey shell. These import signatures remain documented because
+ * release tests audit their versions and ordering.
+ * import './workspace-reset-hygiene.js?v=20260917-task-reset-v1';
+ * import './workspace-persistence.js?v=20260916-ercon-context-v1';
+ * import './state-budget.js?v=20260826-state-budget-500kb';
+ * import './website-input-sync.js?v=20260901-saved-state-v2';
+ * import './custom-market-input-hygiene.js?v=20260903-password-manager-isolation-v5';
+ * import './website-activation.js?v=20260916-ercon-context-v1';
+ * import './crm-engine.js?v=20260828-master-crm-v1';
+ * import './sync-conflict-hygiene.js?v=20260901-stale-blank-conflict-v1';
+ * import './server-bridge.js?v=20260916-error-sweep-v2';
+ * import './crm-ui.js?v=20260905-app-audit-v2';
+ * import './ai-settings.js?v=20260915-model-choice-v1';
+ * import './service-settings-extension.js?v=20260915-mail-choice-v2';
+ * import './step2-readiness-engine.js?v=20260916-commercial-brief-v1';
+ * import './content-language.js?v=20260916-latency-fix-v2';
+ * import './content-variants.js?v=20260905-step1-language-v1';
+ * import './business-identity.js?v=20260906-pain-headings-v1';
+ * import './company-brain.js?v=20260909-step2-first-party-v1';
+ * import './step2-first-party-intelligence.js?v=20260909-first-party-step2-v1';
+ * import './firecrawl-workspace-router.js?v=20260914-spinner-hard-stop-v1';
+ * import './linkedin-signals.js?v=20260907-public-index-v1';
+ * import './company-research-security.js?v=20260916-latency-fix-v2';
+ * import './company-research-ui.js?v=20260916-latency-fix-v2';
+ * import './company-profile-handoff.js?v=20260826-intelligence-autofill-v1';
+ * import './reference-customers.js?v=20260911-reference-missing-info-v1';
+ * import './reference-customer-table-detection.js?v=20260911-reference-missing-info-v1';
+ * import './reference-customer-smart-import.js?v=20260910-reference-smart-import-v3';
+ * import './reference-customer-ai.js?v=20260911-invalid-json-recovery-v1';
+ * import './reference-customer-ui.js?v=20260911-reference-missing-info-v1';
+ * import './reference-customer-clear-list.js?v=20260909-reference-actions-v2';
+ * import './reference-customer-website-enrichment.js?v=20260911-reference-missing-info-v1';
+ * import './reference-customer-ai-runtime.js?v=20260911-reference-missing-info-v1';
+ * import './reference-customer-launcher.js?v=20260911-reference-open-v2';
+ * import './lookalike-discovery.js?v=20260910-reference-portfolio-v1';
+ * import './intelligence-sources-ui.js?v=20260915-preferred-sources-v1';
+ * import './profile-action-runtime.js?v=20260912-bottom-profile-actions-v1';
+ * import './outreach-automation-loader.js?v=20260916-brand-outreach-v2';
+ * import './copilot-loader.js?v=20260911-copilot-freshness-v1';
+ */
 
 const PROCESS_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
@@ -141,6 +147,18 @@ function syncProcessMap(){
   if(!processMap)return;
   const availability=stageAvailability();const current=currentProcessStep();
   const model=journeyModel(availability,current);
+  const visibleIds=window.LeadIntelJourneyProgress?.visibleStageIds?.(model)||[current];
+  const currentStage=model.find(stage=>stage.id===current)||model[0];
+  const completed=model.reduce((sum,stage)=>sum+stage.completed,0);
+  const total=model.reduce((sum,stage)=>sum+stage.total,0);
+  const position=processMap.querySelector('[data-journey-position]');
+  const title=processMap.querySelector('[data-journey-title]');
+  const overall=processMap.querySelector('[data-journey-overall]');
+  const overallBar=processMap.querySelector('[data-journey-overall-bar]');
+  if(position)position.textContent=`Stage ${current} of 7`;
+  if(title&&currentStage)title.textContent=currentStage.name;
+  if(overall)overall.textContent=`${completed} of ${total} steps complete`;
+  if(overallBar)overallBar.style.setProperty('--journey-progress',`${total?Math.round(completed/total*100):0}%`);
   processMap.querySelectorAll("[data-process-step]").forEach(button=>{
     const step=Number(button.dataset.processStep);const available=Boolean(availability[step]);
     const stage=model.find(item=>item.id===step);const status=stage?.status||(step===current?"current":available?"available":"locked");
@@ -153,6 +171,7 @@ function syncProcessMap(){
   });
   document.querySelectorAll("[data-step-marker]").forEach(marker=>{
     const step=Number(marker.dataset.stepMarker),stage=model.find(item=>item.id===step);if(!stage)return;
+    marker.hidden=!visibleIds.includes(step);
     marker.classList.toggle("available",stage.available);marker.classList.toggle("active",stage.status==="current");marker.classList.toggle("complete",stage.status==="complete");marker.classList.toggle("skipped",stage.status==="skipped");marker.setAttribute("aria-disabled",stage.available?"false":"true");
     if(stage.status==="current")marker.setAttribute("aria-current","step");else marker.removeAttribute("aria-current");
     const label=marker.querySelector("[data-sidebar-stage-state]");if(label)label.textContent=statusLabels[stage.status]||"Locked";
@@ -176,7 +195,7 @@ function openProcessStep(step,attempt=0){
 }
 if(processMap){
   processMap.addEventListener("click",event=>{const button=event.target.closest("[data-process-step]");if(button)openProcessStep(button.dataset.processStep);});
-  const steps=document.querySelector(".steps");if(steps&&typeof MutationObserver!=="undefined")new MutationObserver(syncProcessMap).observe(steps,{childList:true,subtree:true,attributes:true,attributeFilter:["class"]});
+  const steps=document.querySelector(".steps");
   steps?.addEventListener("keydown",event=>{const marker=event.target.closest("[data-step-marker]");if(!marker||!["Enter"," "].includes(event.key))return;event.preventDefault();openProcessStep(marker.dataset.stepMarker);});
   document.getElementById("company-website")?.addEventListener("input",()=>setTimeout(syncProcessMap,0));
   document.getElementById("target-market-selector")?.addEventListener("click",()=>setTimeout(syncProcessMap,0));

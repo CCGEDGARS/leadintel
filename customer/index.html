@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=20260826-target-market-v1">
   <link rel="stylesheet" href="market.css?v=20260915-research-source-text-v1">
-  <link rel="stylesheet" href="premium.css?v=20260917-journey-v1">
+  <link rel="stylesheet" href="premium.css?v=20260917-shell-stability-v1">
   <link rel="stylesheet" href="market-selector.css?v=20260826-target-market-v1">
   <link rel="stylesheet" href="compact-sources.css?v=20260826-compact-sources-v1">
   <link rel="stylesheet" href="evidence-sources.css?v=20260906-evidence-v1">
@@ -41,11 +41,11 @@
         <ol class="steps">
           <li data-step-marker="1" class="active" role="button" tabindex="0" aria-current="step"><span>01</span><div><strong>Company &amp; Market</strong><small>Source, identity and growth markets</small></div><em data-sidebar-stage-state>Current</em></li>
           <li data-step-marker="2" role="button" tabindex="0"><span>02</span><div><strong>Commercial Context</strong><small>Targeting, signals and campaign brief</small></div><em data-sidebar-stage-state>Available</em></li>
-          <li data-step-marker="3" role="button" tabindex="0"><span>03</span><div><strong>Intelligence Profile</strong><small>Evidence-backed commercial profile</small></div><em data-sidebar-stage-state>Available</em></li>
-          <li data-step-marker="4" role="button" tabindex="0"><span>04</span><div><strong>Market Strategy</strong><small>ICPs, signals and opportunities</small></div><em data-sidebar-stage-state>Locked</em></li>
-          <li data-step-marker="5" role="button" tabindex="0"><span>05</span><div><strong>Company Discovery</strong><small>Companies and decision-makers</small></div><em data-sidebar-stage-state>Locked</em></li>
-          <li data-step-marker="6" role="button" tabindex="0"><span>06</span><div><strong>Campaign Studio</strong><small>Scenarios, scripts and approval</small></div><em data-sidebar-stage-state>Locked</em></li>
-          <li data-step-marker="7" role="button" tabindex="0"><span>07</span><div><strong>Delivery &amp; Learning</strong><small>Outreach, outcomes and learning</small></div><em data-sidebar-stage-state>Locked</em></li>
+          <li data-step-marker="3" role="button" tabindex="0" hidden><span>03</span><div><strong>Intelligence Profile</strong><small>Evidence-backed commercial profile</small></div><em data-sidebar-stage-state>Available</em></li>
+          <li data-step-marker="4" role="button" tabindex="0" hidden><span>04</span><div><strong>Market Strategy</strong><small>ICPs, signals and opportunities</small></div><em data-sidebar-stage-state>Locked</em></li>
+          <li data-step-marker="5" role="button" tabindex="0" hidden><span>05</span><div><strong>Company Discovery</strong><small>Companies and decision-makers</small></div><em data-sidebar-stage-state>Locked</em></li>
+          <li data-step-marker="6" role="button" tabindex="0" hidden><span>06</span><div><strong>Campaign Studio</strong><small>Scenarios, scripts and approval</small></div><em data-sidebar-stage-state>Locked</em></li>
+          <li data-step-marker="7" role="button" tabindex="0" hidden><span>07</span><div><strong>Delivery &amp; Learning</strong><small>Outreach, outcomes and learning</small></div><em data-sidebar-stage-state>Locked</em></li>
         </ol>
         <div class="progress-metric">
           <div class="progress-ring" id="progress-ring"><span id="completeness-score">0%</span></div>
@@ -55,15 +55,18 @@
 
       <main class="content">
         <nav class="process-map" id="commercial-process-map" aria-label="LeadIntel commercial process">
-          <div class="process-map-head"><span class="eyebrow">Commercial journey</span><strong>Company foundation → revenue learning</strong><small>7 connected stages</small></div>
-          <div class="process-track">
-            <button class="process-stage active" type="button" data-process-step="1" aria-current="step"><span class="process-stage-meta"><span>01</span><em data-stage-state>Current</em></span><strong>Company &amp; Market</strong><small>Source, identity and markets</small><b data-stage-progress>0/4</b></button>
-            <button class="process-stage" type="button" data-process-step="2"><span class="process-stage-meta"><span>02</span><em data-stage-state>Available</em></span><strong>Commercial Context</strong><small>Targeting and campaign brief</small><b data-stage-progress>0/4</b></button>
-            <button class="process-stage" type="button" data-process-step="3"><span class="process-stage-meta"><span>03</span><em data-stage-state>Available</em></span><strong>Intelligence Profile</strong><small>Evidence-backed profile</small><b data-stage-progress>0/3</b></button>
-            <button class="process-stage" type="button" data-process-step="4"><span class="process-stage-meta"><span>04</span><em data-stage-state>Locked</em></span><strong>Market Strategy</strong><small>ICPs, signals and opportunities</small><b data-stage-progress>0/5</b></button>
-            <button class="process-stage" type="button" data-process-step="5"><span class="process-stage-meta"><span>05</span><em data-stage-state>Locked</em></span><strong>Company Discovery</strong><small>Companies and decision-makers</small><b data-stage-progress>0/5</b></button>
-            <button class="process-stage" type="button" data-process-step="6"><span class="process-stage-meta"><span>06</span><em data-stage-state>Locked</em></span><strong>Campaign Studio</strong><small>Scenarios, scripts and approval</small><b data-stage-progress>0/5</b></button>
-            <button class="process-stage" type="button" data-process-step="7"><span class="process-stage-meta"><span>07</span><em data-stage-state>Locked</em></span><strong>Delivery &amp; Learning</strong><small>Outreach, outcomes and learning</small><b data-stage-progress>0/5</b></button>
+          <div class="journey-compact">
+            <div class="journey-current"><span class="eyebrow" data-journey-position>Stage 1 of 7</span><strong data-journey-title>Company &amp; Market</strong></div>
+            <div class="journey-overall"><span data-journey-overall>0 of 31 steps complete</span><i data-journey-overall-bar></i></div>
+            <div class="journey-dots" aria-label="Seven-stage journey">
+              <button class="process-stage active" type="button" data-process-step="1" aria-label="Stage 1: Company and Market" aria-current="step"><span>1</span></button>
+              <button class="process-stage" type="button" data-process-step="2" aria-label="Stage 2: Commercial Context"><span>2</span></button>
+              <button class="process-stage" type="button" data-process-step="3" aria-label="Stage 3: Intelligence Profile"><span>3</span></button>
+              <button class="process-stage" type="button" data-process-step="4" aria-label="Stage 4: Market Strategy"><span>4</span></button>
+              <button class="process-stage" type="button" data-process-step="5" aria-label="Stage 5: Company Discovery"><span>5</span></button>
+              <button class="process-stage" type="button" data-process-step="6" aria-label="Stage 6: Campaign Studio"><span>6</span></button>
+              <button class="process-stage" type="button" data-process-step="7" aria-label="Stage 7: Delivery and Learning"><span>7</span></button>
+            </div>
           </div>
           <section class="journey-stage-guide" id="journey-stage-guide" aria-live="polite">
             <header><div><span class="eyebrow" data-stage-guide-kicker>Stage 1 · In progress</span><strong data-stage-guide-title>Company &amp; Market</strong></div><span data-stage-guide-progress>0 of 4 steps</span></header>
@@ -413,10 +416,25 @@
           </section>
         </section>
       </main>
+      <aside class="utility-panel" aria-label="Workspace tools">
+        <section class="utility-card utility-ai">
+          <span class="eyebrow">AI support</span>
+          <button class="leadintel-copilot-entry" id="leadintel-copilot-entry" type="button" aria-haspopup="dialog"><span class="copilot-entry-copy"><strong class="copilot-entry-title">Ask LeadIntel ✦</strong><small class="copilot-entry-subtitle">AI Commercial Copilot</small></span><span class="copilot-entry-badge" data-copilot-badge aria-live="polite"></span></button>
+          <p>Get help interpreting evidence or deciding the next commercial action.</p>
+        </section>
+        <section class="utility-card utility-settings">
+          <span class="eyebrow">Workspace controls</span>
+          <h3>Settings</h3>
+          <p>Manage AI providers, integrations and delivery connections.</p>
+          <button class="secondary-btn" id="open-settings" type="button" aria-haspopup="dialog" aria-controls="ai-settings-drawer">Open settings</button>
+        </section>
+        <div class="utility-task-slot" data-utility-tasks></div>
+      </aside>
     </div>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script defer src="background-task-centre.js?v=20260917-task-reset-v1"></script>
+  <script defer src="background-task-centre.js?v=20260917-shell-stability-v1"></script>
+  <!-- Optional company-research-ui.js is deferred by shell-support-loader.js. -->
   <script defer src="content-variants.js?v=20260905-step1-language-v1"></script>
   <script defer src="step2-brief-schema.js?v=20260916-commercial-brief-v1"></script>
   <script defer src="profile-engine.js?v=20260916-commercial-brief-v1"></script>
@@ -424,14 +442,18 @@
   <script defer src="market-research-verification.js?v=20260916-gemini-verification-v1"></script>
   <script defer src="discovery-engine.js?v=20260915-evidence-link-v1"></script>
   <script defer src="workspace-isolation.js?v=20260914-workspace-isolation-v1"></script>
+  <script defer src="workspace-reset-hygiene.js?v=20260917-task-reset-v1"></script>
+  <script defer src="website-activation.js?v=20260916-ercon-context-v1"></script>
   <script defer src="language.js?v=20260905-audit-v1"></script>
   <script defer src="server-bridge.js?v=20260916-error-sweep-v2" data-server-bridge="true"></script>
   <script defer src="brand-identity.js?v=20260916-brand-timestamp-v1"></script>
   <script defer src="brand-identity-ui.js?v=20260916-browser-logo-copy-v2"></script>
-  <script defer src="journey-progress.js?v=20260917-journey-v1"></script>
-  <script type="module" src="app.js?v=20260917-journey-v1"></script>
-  <script type="module" src="process-map.js?v=20260917-journey-v1"></script>
+  <script defer src="journey-progress.js?v=20260917-shell-stability-v1"></script>
+  <script defer src="process-map.js?v=20260917-shell-stability-v1"></script>
+  <script type="module" src="app.js?v=20260917-shell-stability-v1"></script>
+  <script type="module" src="ai-settings.js?v=20260917-shell-stability-v1"></script>
+  <script type="module" src="copilot-loader.js?v=20260917-shell-stability-v1"></script>
+  <script type="module" src="shell-support-loader.js?v=20260917-shell-stability-v1"></script>
   <script defer src="discovery-ui.js?v=20260917-journey-v1"></script>
-  <script type="module" src="company-research-ui.js?v=20260916-latency-fix-v2"></script>
 </body>
 </html>

@@ -61,3 +61,31 @@ test('customer shell contains seven permanent sidebar destinations and the activ
   assert.match(html,/id="journey-stage-guide"/);
   assert.match(html,/data-stage-mini-steps/);
 });
+
+test('progressive navigation shows completed stages, the current stage and only one next stage',()=>{
+  assert.equal(typeof Journey.visibleStageIds,'function');
+  assert.deepEqual(Journey.visibleStageIds([
+    {id:1,status:'complete'},{id:2,status:'skipped'},{id:3,status:'current'},
+    {id:4,status:'available'},{id:5,status:'available'},{id:6,status:'locked'},{id:7,status:'locked'}
+  ]),[1,2,3,4]);
+  assert.deepEqual(Journey.visibleStageIds([
+    {id:1,status:'current'},{id:2,status:'available'},{id:3,status:'available'},
+    {id:4,status:'locked'},{id:5,status:'locked'},{id:6,status:'locked'},{id:7,status:'locked'}
+  ]),[1,2]);
+});
+
+test('customer shell keeps AI support, settings and task activity in a permanent right utility rail',()=>{
+  const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
+  assert.match(html,/<aside class="utility-panel"[^>]*>/);
+  assert.match(html,/id="leadintel-copilot-entry"/);
+  assert.match(html,/id="open-settings"/);
+  assert.match(html,/data-utility-tasks/);
+});
+
+test('startup-critical journey runtime is not blocked by the optional module graph',()=>{
+  const processMap=fs.readFileSync(path.join(__dirname,'..','process-map.js'),'utf8');
+  const shellLoader=fs.readFileSync(path.join(__dirname,'..','shell-support-loader.js'),'utf8');
+  assert.doesNotMatch(processMap,/^import\s/m);
+  assert.match(shellLoader,/Promise\.allSettled/);
+  assert.match(shellLoader,/addEventListener\(["']load["']/);
+});

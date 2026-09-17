@@ -98,5 +98,21 @@
     });
   }
 
-  return {STAGES,buildJourneyModel};
+  function visibleStageIds(model=[]){
+    const visible=[];
+    let includedNext=false;
+    for(const stage of list(model)){
+      if(['complete','skipped','current'].includes(stage?.status)){
+        visible.push(stage.id);
+        continue;
+      }
+      if(!includedNext&&stage?.status==='available'){
+        visible.push(stage.id);
+        includedNext=true;
+      }
+    }
+    return visible;
+  }
+
+  return {STAGES,buildJourneyModel,visibleStageIds};
 });

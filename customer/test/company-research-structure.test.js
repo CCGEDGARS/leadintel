@@ -11,6 +11,7 @@ const router=read('firecrawl-workspace-router.js');
 const app=read('app.js');
 const handoff=read('company-profile-handoff.js');
 const css=read('company-research.css');
+const supportLoader=read('shell-support-loader.js');
 
 test('Customer V2 loads the automatic company research module with Firecrawl workspace routing before research',()=>{
   assert.match(processMap,/firecrawl-workspace-router\.js\?v=20260914-spinner-hard-stop-v1/);
@@ -20,8 +21,8 @@ test('Customer V2 loads the automatic company research module with Firecrawl wor
   assert.match(processMap,/company-profile-handoff\.js\?v=20260826-intelligence-autofill-v1/);
   assert.match(ui,/company-research-engine\.js\?v=20260916-latency-fix-v2/);
   assert.match(read('index.html'),/profile-engine\.js\?v=20260916-commercial-brief-v1/);
-  assert.match(read('index.html'),/process-map\.js\?v=20260917-journey-v1/);
-  assert.match(read('index.html'),/company-research-ui\.js\?v=20260916-latency-fix-v2/);
+  assert.match(read('index.html'),/process-map\.js\?v=20260917-shell-stability-v1/);
+  assert.match(supportLoader,/company-research-ui\.js\?v=20260916-latency-fix-v2/);
 });
 
 test('Step 1 navigation opens immediately and initial company research starts automatically once ready',()=>{
