@@ -54,8 +54,9 @@
     async function resume(id){const current=get(id),handler=actions.get(id)?.resume;if(!current||typeof handler!=='function')return false;start({...current,id,status:'running',stage:'Resuming'});await handler();return true;}
     function remove(id){actions.delete(id);tasks=tasks.filter(task=>task.id!==id);persist();emit();}
     function clearFinished(){tasks=tasks.filter(task=>ACTIVE.has(task.status));persist();emit();}
+    function clearAll(){actions.clear();tasks=[];persist();emit();}
     function subscribe(listener){listeners.push(listener);listener(list());return()=>{listeners=listeners.filter(item=>item!==listener);};}
-    return {start,update,complete,fail,cancel,retry,resume,get,list,remove,clearFinished,registerActions,subscribe,storageKey:STORAGE_KEY};
+    return {start,update,complete,fail,cancel,retry,resume,get,list,remove,clearFinished,clearAll,registerActions,subscribe,storageKey:STORAGE_KEY};
   }
 
   function mountTaskCentre(centre,document){

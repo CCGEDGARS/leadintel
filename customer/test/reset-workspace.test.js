@@ -2,6 +2,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
+const vm=require('node:vm');
 
 const root=path.join(__dirname,'..');
 const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
@@ -40,6 +41,28 @@ test('confirmed workspace reset records durable reset intent for the next authen
   assert.match(persistence,/localStorage\?\.setItem\(RESET_PENDING_KEY/,'reset intent must survive reload and sign-in');
   assert.match(persistence,/handleResetClick[\s\S]*recordResetIntent\(\)/,'the server reset marker must be written only on the confirmed reset click');
   assert.match(hygiene,/leadintel_customer_v2_brand_asset_reset_cleanup_v1/,'asset cleanup must retain its own durable reset record');
+});
+
+test('confirmed workspace reset clears the background task registry',()=>{
+  let clearCount=0;
+  const values=new Map([['leadintel_customer_v2_legacy_local_cleanup_20260901_v2','done']]);
+  const sandbox={
+    URLSearchParams,console,
+    localStorage:{getItem:key=>values.get(key)||null,setItem:(key,value)=>values.set(key,String(value)),removeItem:key=>values.delete(key)},
+    sessionStorage:{removeItem(){}},
+    location:{search:'',reload(){},replace(){}},
+    document:{addEventListener(){}},
+    LeadIntelTaskCentre:{clearAll(){clearCount++;}},
+    setTimeout(callback){callback();},
+    addEventListener(){},dispatchEvent(){},CustomEvent:class CustomEvent{constructor(type,options){this.type=type;this.detail=options?.detail;}}
+  };
+  sandbox.globalThis=sandbox;
+  vm.runInNewContext(hygiene,sandbox,{filename:'workspace-reset-hygiene.js'});
+  const button={dataset:{resetArmed:'true'}};
+
+  sandbox.LeadIntelWorkspaceResetHygiene.handleResetClick({target:{closest:selector=>selector==='#reset-workspace'?button:null}});
+
+  assert.equal(clearCount,1);
 });
 
 test('pending reset auto-finishes through the existing version-safe sync path after authentication',()=>{

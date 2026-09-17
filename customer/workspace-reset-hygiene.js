@@ -7,6 +7,7 @@
   const RESET_PENDING_KEY=ASSET_RESET_CLEANUP_KEY;
   const WORKSPACE_KEY="leadintel_customer_v2_workspace";
   const MAIN_STATE_KEY="leadintel_customer_v2_state";
+  const BACKGROUND_TASKS_KEY="leadintel_customer_v2_background_tasks_v1";
   const BRAND_ASSET_ID=/^[A-Za-z0-9_-]{43}$/;
   const BRAND_ASSET_KINDS=Object.freeze(["logo","headshot","banner"]);
   const LEGACY_LOCAL_WORKSPACE_KEYS=Object.freeze([
@@ -17,11 +18,13 @@
     "leadintel_customer_v2_discovery_meta",
     "leadintel_customer_v2_website_activation_v1",
     "leadintel_customer_v2_research_meta_v1",
+    "leadintel_customer_v2_background_tasks_v1",
     "leadintel_customer_v2_server_dirty"
   ]);
   const RESET_RESIDUE_KEYS=Object.freeze([
     "leadintel_customer_v2_website_activation_v1",
-    "leadintel_customer_v2_research_meta_v1"
+    "leadintel_customer_v2_research_meta_v1",
+    BACKGROUND_TASKS_KEY
   ]);
   let finalizingReset=false;
   let assetCleanupPromise=null;
@@ -199,6 +202,7 @@
     bridge?.invalidateBrandAssetTransactions?.(bridge.workspace?.id||root.localStorage?.getItem(WORKSPACE_KEY)||"");
     recordResetIntent(referencedBrandAssets());
     clearLocalBrandIdentity();
+    root.LeadIntelTaskCentre?.clearAll?.();
     clearBrowserWorkspaceResidue();
     root.setTimeout?.(refreshResetUi,0);
     if(bridge?.session?.authenticated&&bridge.conflict)root.setTimeout?.(()=>finalizePendingReset(),0);
@@ -215,7 +219,7 @@
     root.addEventListener?.("leadintel:server-ready",()=>finalizePendingReset());
   }
 
-  const api={LEGACY_LOCAL_CLEANUP_KEY,LEGACY_RESET_PENDING_KEY,ASSET_RESET_CLEANUP_KEY,RESET_PENDING_KEY,WORKSPACE_KEY,MAIN_STATE_KEY,LEGACY_LOCAL_WORKSPACE_KEYS,RESET_RESIDUE_KEYS,emergencyResetRequested,runEmergencyBrowserReset,clearLegacyLocalAutosaveOnce,clearBrowserWorkspaceResidue,referencedBrandAssets,clearLocalBrandIdentity,recordResetIntent,readResetIntent,resetIntentMatchesWorkspace,cleanupResetAssets,afterWorkspaceSaved,finalizePendingReset,refreshResetUi,handleResetClick,install};
+  const api={LEGACY_LOCAL_CLEANUP_KEY,LEGACY_RESET_PENDING_KEY,ASSET_RESET_CLEANUP_KEY,RESET_PENDING_KEY,WORKSPACE_KEY,MAIN_STATE_KEY,BACKGROUND_TASKS_KEY,LEGACY_LOCAL_WORKSPACE_KEYS,RESET_RESIDUE_KEYS,emergencyResetRequested,runEmergencyBrowserReset,clearLegacyLocalAutosaveOnce,clearBrowserWorkspaceResidue,referencedBrandAssets,clearLocalBrandIdentity,recordResetIntent,readResetIntent,resetIntentMatchesWorkspace,cleanupResetAssets,afterWorkspaceSaved,finalizePendingReset,refreshResetUi,handleResetClick,install};
   root.LeadIntelWorkspaceResetHygiene=api;
   install();
 })(typeof globalThis!=="undefined"?globalThis:this);

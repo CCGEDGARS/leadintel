@@ -1,4 +1,4 @@
-import './workspace-reset-hygiene.js?v=20260916-ercon-context-v1';
+import './workspace-reset-hygiene.js?v=20260917-task-reset-v1';
 import './workspace-persistence.js?v=20260916-ercon-context-v1';
 import './state-budget.js?v=20260826-state-budget-500kb';
 import './website-input-sync.js?v=20260901-saved-state-v2';

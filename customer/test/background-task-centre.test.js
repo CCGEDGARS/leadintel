@@ -61,6 +61,20 @@ test('registered cancel and retry actions update task state safely',async()=>{
   assert.equal(centre.get('apollo:1').status,'running');
 });
 
+test('clearing a workspace removes active and finished task history across reloads',()=>{
+  const storage=memoryStorage();
+  const centre=TaskCentre.createTaskCentre({storage,now:()=>1_000,recoverInterrupted:false});
+  centre.start({id:'research:active',type:'market-research',title:'Active research',total:4,completed:1});
+  centre.start({id:'research:finished',type:'market-research',title:'Finished research',total:1});
+  centre.complete('research:finished');
+
+  centre.clearAll();
+
+  assert.deepEqual(centre.list(),[]);
+  const reloaded=TaskCentre.createTaskCentre({storage,now:()=>2_000,recoverInterrupted:false});
+  assert.deepEqual(reloaded.list(),[]);
+});
+
 test('invalid counters and unsafe error payloads are normalized',()=>{
   const centre=TaskCentre.createTaskCentre({storage:memoryStorage(),now:()=>1_000,recoverInterrupted:false});
   centre.start({id:'safe:1',type:'market-research',title:'Safe task',total:2,completed:99,resultCount:-5});
