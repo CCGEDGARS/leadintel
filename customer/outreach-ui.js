@@ -7,7 +7,7 @@ const INTELLIGENCE_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
 const MAX_DOSSIER_SEARCH_QUERIES=2;
 const MAX_DOSSIER_RESULTS_PER_QUERY=5;
 const ASSET_VERSION="20260916-campaign-language-v2";
-const LANGUAGE_ASSET_VERSION="20260916-campaign-language-v2";
+const LANGUAGE_ASSET_VERSION="20260917-journey-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const q=id=>document.getElementById(id);
 let outreach=loadOutreach();
@@ -17,7 +17,7 @@ function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;"
 function readJson(key){try{return JSON.parse(localStorage.getItem(key)||"{}");}catch{return {};}}
 function mainState(){return readJson(MAIN_STORAGE_KEY);}
 function campaignStudio(){const main=mainState();return LeadIntelOutreach.normalizeCampaignStudio(main.campaignStudio||{},main.profile||{},contentLanguage());}
-function persistCampaignStudio(studio,{sync=true}={}){const main=mainState();main.campaignStudio=studio;localStorage.setItem(MAIN_STORAGE_KEY,JSON.stringify(main));if(sync)window.LeadIntelServerBridge?.saveNow?.().catch(()=>null);return studio;}
+function persistCampaignStudio(studio,{sync=true}={}){const main=mainState();main.campaignStudio=studio;localStorage.setItem(MAIN_STORAGE_KEY,JSON.stringify(main));window.LeadIntelJourney?.refresh?.();if(sync)window.LeadIntelServerBridge?.saveNow?.().catch(()=>null);return studio;}
 function ensureCampaignStudio(){const main=mainState(),studio=campaignStudio();if(JSON.stringify(main.campaignStudio||null)!==JSON.stringify(studio))persistCampaignStudio(studio,{sync:false});return studio;}
 function activeCampaignScenario(){const studio=ensureCampaignStudio();return studio.presets.find(item=>item.id===studio.selectedPresetId)||studio.coreScenario;}
 function persistMainStep(step){
@@ -28,7 +28,7 @@ function persistMainStep(step){
 function discoveryState(){return LeadIntelDiscovery.normalizeDiscoveryState(readJson(DISCOVERY_STORAGE_KEY));}
 function saveDiscovery(value){localStorage.setItem(DISCOVERY_STORAGE_KEY,JSON.stringify(LeadIntelDiscovery.normalizeDiscoveryState(value)));}
 function loadOutreach(){return LeadIntelOutreach.normalizeOutreachState(readJson(OUTREACH_STORAGE_KEY));}
-function saveOutreach(){outreach=LeadIntelOutreach.normalizeOutreachState(outreach);localStorage.setItem(OUTREACH_STORAGE_KEY,JSON.stringify(outreach));}
+function saveOutreach(){outreach=LeadIntelOutreach.normalizeOutreachState(outreach);localStorage.setItem(OUTREACH_STORAGE_KEY,JSON.stringify(outreach));window.LeadIntelJourney?.refresh?.();}
 function toast(message){const el=q("toast");if(!el)return;el.textContent=message;el.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove("show"),2600);}
 function pipeline(){return discoveryState().pipeline||[];}
 function selectedCandidate(){const domain=outreach.selectedDomain;return pipeline().find(item=>item.domain===domain)||null;}
@@ -60,8 +60,6 @@ async function syncCrmActivity(candidate,{activity=null,stage=""}={}){
 
 function injectOutreachUI(){
   if(!document.querySelector('link[data-leadintel-asset="outreach-css"]')){const link=document.createElement("link");link.rel="stylesheet";link.href=asset("outreach.css");link.dataset.leadintelAsset="outreach-css";document.head.appendChild(link);}
-  const steps=document.querySelector(".steps");
-  if(steps&&!steps.querySelector('[data-step-marker="6"]'))steps.insertAdjacentHTML("beforeend",'<li data-step-marker="6"><span>06</span><div><strong>Campaign Studio</strong><small>Scenarios, scripts, approval</small></div></li>');
   const pipelinePanel=document.querySelector("#step-5 .pipeline-panel");
   if(pipelinePanel&&!q("continue-to-outreach"))pipelinePanel.insertAdjacentHTML("afterend",'<div class="outreach-entry"><div><span class="eyebrow">Next step</span><strong>Turn a saved opportunity into an evidence-backed campaign.</strong></div><button class="primary-btn" id="continue-to-outreach" type="button">Open Campaign Studio →</button></div>');
   const content=document.querySelector("main.content");

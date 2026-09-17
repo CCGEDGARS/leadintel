@@ -12,7 +12,7 @@ test('customer workspace exposes a clickable seven-stage commercial process map'
   for(let step=1;step<=7;step++)assert.match(html,new RegExp(`data-process-step="${step}"`));
   assert.match(html,/Website/);
   assert.match(html,/Campaign Studio/);
-  assert.match(html,/Delivery & Learning/);
+  assert.match(html,/Delivery (?:&amp;|&) Learning/);
   assert.match(html,/src="process-map\.js(?:\?[^\"]*)?"/);
   assert.match(processMap,/data-process-step/);
   assert.match(processMap,/data-step-marker/);

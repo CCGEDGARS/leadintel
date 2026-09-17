@@ -13,7 +13,7 @@ function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;"
 function readJson(key){try{return JSON.parse(localStorage.getItem(key)||"{}");}catch{return {};}}
 function persistMainStep(step){const main=readJson(MAIN_STORAGE_KEY);main.step=Number(step)||1;localStorage.setItem(MAIN_STORAGE_KEY,JSON.stringify(main));}
 function loadDelivery(){return LeadIntelDelivery.normalizeDeliveryState(readJson(DELIVERY_STORAGE_KEY));}
-function saveDelivery(){delivery=LeadIntelDelivery.normalizeDeliveryState(delivery);localStorage.setItem(DELIVERY_STORAGE_KEY,JSON.stringify(delivery));}
+function saveDelivery(){delivery=LeadIntelDelivery.normalizeDeliveryState(delivery);localStorage.setItem(DELIVERY_STORAGE_KEY,JSON.stringify(delivery));window.LeadIntelJourney?.refresh?.();}
 function outreachState(){return LeadIntelOutreach.normalizeOutreachState(readJson(OUTREACH_STORAGE_KEY));}
 function discoveryState(){return LeadIntelDiscovery.normalizeDiscoveryState(readJson(DISCOVERY_STORAGE_KEY));}
 function saveDiscovery(value){localStorage.setItem(DISCOVERY_STORAGE_KEY,JSON.stringify(LeadIntelDiscovery.normalizeDiscoveryState(value)));}
@@ -54,8 +54,6 @@ async function outboundAllowed(domain){const resolved=await durableCompany(domai
 
 function injectDeliveryUI(){
   if(!document.querySelector('link[data-leadintel-asset="delivery-css"]')){const link=document.createElement("link");link.rel="stylesheet";link.href=asset("delivery.css");link.dataset.leadintelAsset="delivery-css";document.head.appendChild(link);}
-  const steps=document.querySelector(".steps");
-  if(steps&&!steps.querySelector('[data-step-marker="7"]'))steps.insertAdjacentHTML("beforeend",'<li data-step-marker="7"><span>07</span><div><strong>Delivery & learning</strong><small>Send, replies, outcomes</small></div></li>');
   const draftPanel=document.querySelector("#step-6 .outreach-drafts");
   if(draftPanel&&!q("continue-to-delivery"))draftPanel.insertAdjacentHTML("afterend",'<div class="delivery-entry"><div><span class="eyebrow">Next step</span><strong>Deliver approved content and teach LeadIntel what actually converts.</strong></div><button class="primary-btn" id="continue-to-delivery" type="button">Open Delivery & Learning →</button></div>');
   const content=document.querySelector("main.content");

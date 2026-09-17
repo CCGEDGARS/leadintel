@@ -115,9 +115,11 @@ test('customer page loads discovery engine and modular discovery UI',()=>{
   assert.match(html,/src="discovery-ui\.js(?:\?[^\"]*)?"/);
 });
 
-test('discovery UI injects Step 5, company discovery, decision makers and pipeline controls',()=>{
+test('customer shell owns Stage 5 while discovery UI injects its workspace controls',()=>{
+  const html=read('index.html');
   const ui=read('discovery-ui.js');
-  assert.match(ui,/data-step-marker="5"/);
+  assert.match(html,/data-step-marker="5"/);
+  assert.doesNotMatch(ui,/insertAdjacentHTML\("beforeend",'<li data-step-marker="5"/);
   assert.match(ui,/id="step-5"/);
   assert.match(ui,/id="run-company-discovery"/);
   assert.match(ui,/id="company-candidates"/);
@@ -150,10 +152,13 @@ test('discovery module loads outreach engine and modular outreach UI',()=>{
   assert.match(ui,/loadOutreachModules/);
 });
 
-test('outreach UI injects Step 6 opportunity dossier and human approval controls',()=>{
+test('customer shell owns Stage 6 while outreach UI injects opportunity and approval controls',()=>{
+  const html=read('index.html');
   const ui=read('outreach-ui.js');
+  assert.match(html,/data-step-marker="6"/);
+  assert.doesNotMatch(ui,/insertAdjacentHTML\("beforeend",'<li data-step-marker="6"/);
   for(const pattern of [
-    /data-step-marker="6"/,/id="step-6"/,/id="outreach-company-select"/,/id="build-opportunity-dossier"/,
+    /id="step-6"/,/id="outreach-company-select"/,/id="build-opportunity-dossier"/,
     /id="dossier-why-now"/,/id="dossier-evidence"/,/id="dossier-hypotheses"/,/id="outreach-email-subject"/,
     /id="outreach-email-body"/,/id="outreach-linkedin"/,/id="approve-outreach"/,/id="mark-contacted"/
   ]) assert.match(ui,pattern);

@@ -11,10 +11,13 @@ test('outreach module loads delivery engine and modular delivery UI',()=>{
   assert.match(ui,/loadDeliveryModules/);
 });
 
-test('delivery UI injects Step 7 controlled Gmail compose and CRM learning controls',()=>{
+test('customer shell owns Stage 7 while delivery UI injects controlled delivery and learning controls',()=>{
+  const html=read('index.html');
   const ui=read('delivery-ui.js');
+  assert.match(html,/data-step-marker="7"/);
+  assert.doesNotMatch(ui,/insertAdjacentHTML\("beforeend",'<li data-step-marker="7"/);
   for(const pattern of [
-    /data-step-marker="7"/,/id="step-7"/,/id="delivery-company-select"/,/id="delivery-recipient"/,
+    /id="step-7"/,/id="delivery-company-select"/,/id="delivery-recipient"/,
     /id="open-gmail-draft"/,/id="confirm-delivery-sent"/,/id="delivery-activity"/,
     /id="reply-text"/,/id="record-reply"/,/id="reply-classification"/,
     /data-outcome-stage="Meeting"/,/data-outcome-stage="Proposal"/,/data-outcome-stage="Won"/,/data-outcome-stage="Lost"/,

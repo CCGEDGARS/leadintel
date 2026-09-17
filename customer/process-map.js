@@ -37,6 +37,9 @@ import './outreach-automation-loader.js?v=20260916-brand-outreach-v2';
 import './copilot-loader.js?v=20260911-copilot-freshness-v1';
 
 const PROCESS_STORAGE_KEY="leadintel_customer_v2_state";
+const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
+const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
+const DELIVERY_STORAGE_KEY="leadintel_customer_v2_delivery";
 const processMap=document.getElementById("commercial-process-map");
 
 function readProcessState(){try{return JSON.parse(localStorage.getItem(PROCESS_STORAGE_KEY)||"{}");}catch{return {};}}
@@ -103,6 +106,31 @@ function currentProcessStep(){
   const state=readProcessState();
   return window.LeadIntelWorkspaceIsolation?.safeStep?.(localStorage,state,state.step)||Number(state.step)||1;
 }
+function readJourneyState(){
+  return {
+    main:readProcessState(),discovery:readStageJson(DISCOVERY_STORAGE_KEY),outreach:readStageJson(OUTREACH_STORAGE_KEY),delivery:readStageJson(DELIVERY_STORAGE_KEY)
+  };
+}
+function websiteActivated(main){
+  const candidate=String(document.getElementById("company-website")?.value||main.website||"").trim();
+  return Boolean(candidate&&window.LeadIntelWebsiteActivation?.isCurrentWebsiteActive(candidate));
+}
+function journeyModel(availability,current){
+  const state=readJourneyState();
+  return window.LeadIntelJourneyProgress?.buildJourneyModel?.({...state,currentStep:current,availability,websiteActivated:websiteActivated(state.main)})||[];
+}
+const statusLabels={current:"In progress",complete:"Complete",available:"Available",locked:"Locked",skipped:"Skipped · optional"};
+function renderStageGuide(stage){
+  const guide=document.getElementById("journey-stage-guide");if(!guide||!stage)return;
+  const kicker=guide.querySelector("[data-stage-guide-kicker]"),title=guide.querySelector("[data-stage-guide-title]"),progress=guide.querySelector("[data-stage-guide-progress]"),list=guide.querySelector("[data-stage-mini-steps]"),next=guide.querySelector("[data-stage-next-action]");
+  if(kicker)kicker.textContent=`Stage ${stage.id} · ${statusLabels[stage.status]||"Available"}`;
+  if(title)title.textContent=stage.name;
+  if(progress)progress.textContent=`${stage.completed} of ${stage.total} steps`;
+  if(next)next.textContent=stage.nextAction;
+  if(!list)return;
+  const nodes=stage.steps.map(item=>{const row=document.createElement("li");row.className=item.complete?"complete":"pending";const marker=document.createElement("span");marker.setAttribute("aria-hidden","true");marker.textContent=item.complete?"✓":"";const label=document.createElement("strong");label.textContent=item.label;row.append(marker,label);if(item.optional){const badge=document.createElement("em");badge.textContent="Optional";row.append(badge);}return row;});
+  list.replaceChildren(...nodes);
+}
 function processToast(message){
   const toast=document.getElementById("toast");
   if(!toast)return;
@@ -112,12 +140,24 @@ function processToast(message){
 function syncProcessMap(){
   if(!processMap)return;
   const availability=stageAvailability();const current=currentProcessStep();
+  const model=journeyModel(availability,current);
   processMap.querySelectorAll("[data-process-step]").forEach(button=>{
     const step=Number(button.dataset.processStep);const available=Boolean(availability[step]);
-    button.classList.toggle("available",available);button.classList.toggle("active",step===current);button.classList.toggle("complete",available&&step<current);
+    const stage=model.find(item=>item.id===step);const status=stage?.status||(step===current?"current":available?"available":"locked");
+    button.classList.toggle("available",available);button.classList.toggle("active",status==="current");button.classList.toggle("complete",status==="complete");button.classList.toggle("skipped",status==="skipped");
     button.setAttribute("aria-disabled",available?"false":"true");
     if(step===current)button.setAttribute("aria-current","step");else button.removeAttribute("aria-current");
+    const stateLabel=button.querySelector("[data-stage-state]"),progress=button.querySelector("[data-stage-progress]");
+    if(stateLabel)stateLabel.textContent=statusLabels[status]||"Locked";
+    if(progress&&stage)progress.textContent=`${stage.completed}/${stage.total}`;
   });
+  document.querySelectorAll("[data-step-marker]").forEach(marker=>{
+    const step=Number(marker.dataset.stepMarker),stage=model.find(item=>item.id===step);if(!stage)return;
+    marker.classList.toggle("available",stage.available);marker.classList.toggle("active",stage.status==="current");marker.classList.toggle("complete",stage.status==="complete");marker.classList.toggle("skipped",stage.status==="skipped");marker.setAttribute("aria-disabled",stage.available?"false":"true");
+    if(stage.status==="current")marker.setAttribute("aria-current","step");else marker.removeAttribute("aria-current");
+    const label=marker.querySelector("[data-sidebar-stage-state]");if(label)label.textContent=statusLabels[stage.status]||"Locked";
+  });
+  renderStageGuide(model.find(stage=>stage.id===current)||model[0]);
 }
 function openProcessStep(step,attempt=0){
   const target=Number(step)||1;
@@ -137,13 +177,19 @@ function openProcessStep(step,attempt=0){
 if(processMap){
   processMap.addEventListener("click",event=>{const button=event.target.closest("[data-process-step]");if(button)openProcessStep(button.dataset.processStep);});
   const steps=document.querySelector(".steps");if(steps&&typeof MutationObserver!=="undefined")new MutationObserver(syncProcessMap).observe(steps,{childList:true,subtree:true,attributes:true,attributeFilter:["class"]});
+  steps?.addEventListener("keydown",event=>{const marker=event.target.closest("[data-step-marker]");if(!marker||!["Enter"," "].includes(event.key))return;event.preventDefault();openProcessStep(marker.dataset.stepMarker);});
   document.getElementById("company-website")?.addEventListener("input",()=>setTimeout(syncProcessMap,0));
   document.getElementById("target-market-selector")?.addEventListener("click",()=>setTimeout(syncProcessMap,0));
   window.addEventListener("leadintel:website-synced",syncProcessMap);
   window.addEventListener("leadintel:website-activated",syncProcessMap);
   window.addEventListener("leadintel:server-ready",()=>{syncContextArchitecture();syncProcessMap();});
   window.addEventListener("leadintel:workspace-changed",()=>{syncContextArchitecture();syncProcessMap();});
+  window.addEventListener("leadintel:journey-changed",syncProcessMap);
+  window.addEventListener("leadintel:crm-changed",syncProcessMap);
+  window.addEventListener("leadintel:outreach-approved",syncProcessMap);
+  window.addEventListener("leadintel:company-research-updated",syncProcessMap);
   window.addEventListener("leadintel:module-opened",event=>{const step=Number(event.detail?.step);if(step===2)syncContextArchitecture();syncProcessMap();});
   window.addEventListener("storage",event=>{if(event.key===PROCESS_STORAGE_KEY)syncProcessMap();});
   syncContextArchitecture();syncProcessMap();
+  window.LeadIntelJourney={refresh:syncProcessMap,open:openProcessStep};
 }

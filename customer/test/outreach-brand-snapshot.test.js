@@ -279,14 +279,14 @@ test('outreach UI snapshots Step 1 identity, preserves edit detection and invali
   assert.match(source,/Regenerate & reapprove/);
   assert.match(source,/Sending is blocked/);
   assert.doesNotMatch(source,/\.sendGmail\(|\.sendMicrosoftMail\(/,'Task 5 must not create an automatic delivery path');
-  assert.match(discovery,/const OUTREACH_ASSET_VERSION="20260916-campaign-language-v2";/);
+  assert.match(discovery,/const OUTREACH_ASSET_VERSION="20260917-journey-v1";/);
   assert.match(discovery,/outreach-engine\.js\?v=\$\{OUTREACH_ASSET_VERSION\}/);
   assert.match(discovery,/outreach-localization\.js\?v=\$\{OUTREACH_ASSET_VERSION\}/);
   assert.match(discovery,/outreach-ui\.js\?v=\$\{OUTREACH_ASSET_VERSION\}/);
-  assert.match(source,/const LANGUAGE_ASSET_VERSION="20260916-campaign-language-v2";/);
+  assert.match(source,/const LANGUAGE_ASSET_VERSION="20260917-journey-v1";/);
   assert.match(delivery,/const ASSET_VERSION="20260916-brand-outreach-v5";/);
   assert.match(processMap,/outreach-automation-loader\.js\?v=20260916-brand-outreach-v2/);
   assert.match(automationLoader,/outreach-automation-delivery-handoff\.js\?v=20260916-brand-outreach-v2/);
-  assert.match(html,/process-map\.js\?v=20260917-task-reset-v1/);
-  assert.match(html,/discovery-ui\.js\?v=20260916-error-sweep-v2/);
+  assert.match(html,/process-map\.js\?v=20260917-journey-v1/);
+  assert.match(html,/discovery-ui\.js\?v=20260917-journey-v1/);
 });

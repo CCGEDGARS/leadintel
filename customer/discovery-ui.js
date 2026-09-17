@@ -10,7 +10,7 @@ const MAX_DISCOVERY_RESULTS_PER_QUERY=5;
 const DISCOVERY_SEARCH_CONCURRENCY=4;
 const ASSET_VERSION="20260915-evidence-link-v1";
 const LANGUAGE_ASSET_VERSION="20260914-workspace-isolation-v1";
-const OUTREACH_ASSET_VERSION="20260916-campaign-language-v2";
+const OUTREACH_ASSET_VERSION="20260917-journey-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const $=id=>document.getElementById(id);
 let recoveredInterruptedRun=false;
@@ -32,7 +32,7 @@ function bridge(){return window.LeadIntelServerBridge||null;}
 function crmAuthenticated(){const b=bridge();return Boolean(b?.session?.authenticated&&b?.workspace);}
 function persistMainStep(step){const marker=document.querySelector(`[data-step-marker="${step}"]`);if(marker&&!marker.classList.contains("active")){marker.dispatchEvent(new MouseEvent("click",{bubbles:true}));return;}const main=mainState();main.step=step;localStorage.setItem(MAIN_STORAGE_KEY,JSON.stringify(main));}
 function loadDiscovery(){try{const normalized=LeadIntelDiscovery.normalizeDiscoveryState(JSON.parse(localStorage.getItem(DISCOVERY_STORAGE_KEY)||"{}"));const recovered=LeadIntelDiscovery.recoverInterruptedDiscoveryState?LeadIntelDiscovery.recoverInterruptedDiscoveryState(normalized):normalized;recoveredInterruptedRun=normalized.status==="running"&&recovered.status!=="running";return recovered;}catch{return LeadIntelDiscovery.normalizeDiscoveryState({});}}
-function saveDiscovery(){localStorage.setItem(DISCOVERY_STORAGE_KEY,JSON.stringify(discovery));}
+function saveDiscovery(){localStorage.setItem(DISCOVERY_STORAGE_KEY,JSON.stringify(discovery));window.LeadIntelJourney?.refresh?.();}
 function moduleReady(){const main=mainState();return Boolean(main?.profile?.website||main?.website);}
 function showToast(message){const toast=$("toast");if(!toast)return;toast.textContent=message;toast.classList.add("show");clearTimeout(showToast.t);showToast.t=setTimeout(()=>toast.classList.remove("show"),3000);}
 function fingerprint(){const main=mainState();const market=main.market||{};return JSON.stringify({company:main.profile?.companyName||"",website:main.profile?.website||main.website||"",approved:market.strategyApprovedAt||"",icps:(market.icps||[]).filter(x=>x.active!==false).map(x=>[x.id,x.description,x.targetMarkets]),signals:(market.signals||[]).filter(x=>x.active!==false).map(x=>[x.id,x.weight,x.keywords]),opps:(market.opportunities||[]).filter(x=>x.active!==false).map(x=>[x.id,x.market,x.score?.total])});}
@@ -90,7 +90,6 @@ async function refreshCrmState({render=true}={}){if(!discoveryMounted||crmRefres
 
 function injectDiscoveryUI(){
   if(!document.querySelector('link[data-leadintel-asset="discovery-css"]')){const link=document.createElement("link");link.rel="stylesheet";link.href=asset("discovery.css");link.dataset.leadintelAsset="discovery-css";document.head.appendChild(link);}
-  const steps=document.querySelector(".steps");if(steps&&!steps.querySelector('[data-step-marker="5"]'))steps.insertAdjacentHTML("beforeend",'<li data-step-marker="5"><span>05</span><div><strong>Company discovery</strong><small>Companies, people, pipeline</small></div></li>');
   const activation=$("strategy-activation-card");if(activation&&!$("continue-to-discovery"))activation.insertAdjacentHTML("beforeend",'<button class="secondary-btn discovery-continue" id="continue-to-discovery" type="button">Continue to Discovery →</button>');
   const content=document.querySelector("main.content");if(content&&!$("step-5"))content.insertAdjacentHTML("beforeend",`<section class="step-view" id="step-5" data-step="5">
     <div class="profile-header discovery-header"><div><span class="eyebrow">Step 5 · Company Discovery</span><h1>Find companies worth approaching now.</h1><p>LeadIntel searches with the context currently available, removes obvious non-company sources, deduplicates domains and ranks each company using evidence—not a generic lead list. A formally activated strategy improves precision but is not required to explore.</p></div><div class="profile-header-actions"><span class="profile-status" id="discovery-status">Ready</span><button class="secondary-btn small" id="back-to-strategy" type="button">← Strategy</button></div></div>
