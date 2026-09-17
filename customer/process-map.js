@@ -126,10 +126,11 @@ function journeyModel(availability,current){
   return window.LeadIntelJourneyProgress?.buildJourneyModel?.({...state,currentStep:current,availability,websiteActivated:websiteActivated(state.main)})||[];
 }
 const statusLabels={current:"In progress",complete:"Complete",available:"Available",locked:"Locked",skipped:"Skipped · optional"};
+function stageStatusLabel(stage){return window.LeadIntelJourneyProgress?.stageStatusLabel?.(stage)||statusLabels[stage?.status]||"Available";}
 function renderStageGuide(stage){
   const guide=document.getElementById("journey-stage-guide");if(!guide||!stage)return;
   const kicker=guide.querySelector("[data-stage-guide-kicker]"),title=guide.querySelector("[data-stage-guide-title]"),progress=guide.querySelector("[data-stage-guide-progress]"),list=guide.querySelector("[data-stage-mini-steps]"),next=guide.querySelector("[data-stage-next-action]");
-  if(kicker)kicker.textContent=`Stage ${stage.id} · ${statusLabels[stage.status]||"Available"}`;
+  if(kicker)kicker.textContent=`Stage ${stage.id} · ${stageStatusLabel(stage)}`;
   if(title)title.textContent=stage.name;
   if(progress)progress.textContent=`${stage.completed} of ${stage.total} steps`;
   if(next)next.textContent=stage.nextAction;
@@ -166,7 +167,7 @@ function syncProcessMap(){
     button.setAttribute("aria-disabled",available?"false":"true");
     if(step===current)button.setAttribute("aria-current","step");else button.removeAttribute("aria-current");
     const stateLabel=button.querySelector("[data-stage-state]"),progress=button.querySelector("[data-stage-progress]");
-    if(stateLabel)stateLabel.textContent=statusLabels[status]||"Locked";
+    if(stateLabel)stateLabel.textContent=stageStatusLabel(stage);
     if(progress&&stage)progress.textContent=`${stage.completed}/${stage.total}`;
   });
   document.querySelectorAll("[data-step-marker]").forEach(marker=>{
@@ -174,7 +175,7 @@ function syncProcessMap(){
     marker.hidden=!visibleIds.includes(step);
     marker.classList.toggle("available",stage.available);marker.classList.toggle("active",stage.status==="current");marker.classList.toggle("complete",stage.status==="complete");marker.classList.toggle("skipped",stage.status==="skipped");marker.setAttribute("aria-disabled",stage.available?"false":"true");
     if(stage.status==="current")marker.setAttribute("aria-current","step");else marker.removeAttribute("aria-current");
-    const label=marker.querySelector("[data-sidebar-stage-state]");if(label)label.textContent=statusLabels[stage.status]||"Locked";
+    const label=marker.querySelector("[data-sidebar-stage-state]");if(label)label.textContent=stageStatusLabel(stage);
   });
   renderStageGuide(model.find(stage=>stage.id===current)||model[0]);
 }

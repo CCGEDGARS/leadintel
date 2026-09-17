@@ -20,6 +20,12 @@
   const activeItems=value=>list(value).filter(item=>item&&item.active!==false);
   const everyField=(source,fields)=>fields.every(field=>filled(source?.[field]));
   const step=(id,label,complete,{optional=false,action=label}={})=>({id,label,complete:Boolean(complete),optional,action});
+  const STATUS_LABELS=Object.freeze({current:'In progress',complete:'Complete',available:'Available',locked:'Locked',skipped:'Skipped · optional'});
+
+  function stageStatusLabel(stage={}){
+    if(stage.status==='current'&&Number(stage.completed)===0)return 'Not started';
+    return STATUS_LABELS[stage.status]||'Available';
+  }
 
   function stageSteps({main={},discovery={},outreach={},delivery={},websiteActivated=false}={}){
     const answers=main.answers&&typeof main.answers==='object'?main.answers:{};
@@ -114,5 +120,5 @@
     return visible;
   }
 
-  return {STAGES,buildJourneyModel,visibleStageIds};
+  return {STAGES,buildJourneyModel,visibleStageIds,stageStatusLabel};
 });

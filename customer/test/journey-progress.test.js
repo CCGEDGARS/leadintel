@@ -47,6 +47,18 @@ test('current stage names the next required action without blocking on optional 
   assert.equal(model[0].steps.find(step=>step.id==='brand').optional,true);
 });
 
+test('an empty current stage is labelled not started until real progress exists',()=>{
+  assert.equal(typeof Journey.stageStatusLabel,'function');
+  const empty=Journey.buildJourneyModel({currentStep:1,availability:{1:true}})[0];
+  const started=Journey.buildJourneyModel({
+    main:{website:'https://example.com'},currentStep:1,availability:{1:true},websiteActivated:true
+  })[0];
+
+  assert.equal(empty.status,'current');
+  assert.equal(Journey.stageStatusLabel(empty),'Not started');
+  assert.equal(Journey.stageStatusLabel(started),'In progress');
+});
+
 test('skipped optional context is distinguished from completed work',()=>{
   const model=Journey.buildJourneyModel({main:{answers:{}},currentStep:3,availability:{1:true,2:true,3:true}});
   assert.equal(model[1].status,'skipped');
@@ -60,6 +72,8 @@ test('customer shell contains seven permanent sidebar destinations and the activ
   assert.deepEqual(markers,[1,2,3,4,5,6,7]);
   assert.match(html,/id="journey-stage-guide"/);
   assert.match(html,/data-stage-mini-steps/);
+  assert.match(html,/data-sidebar-stage-state>Not started</);
+  assert.match(html,/data-stage-guide-kicker>Stage 1 · Not started</);
 });
 
 test('progressive navigation shows completed stages, the current stage and only one next stage',()=>{
