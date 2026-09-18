@@ -3,7 +3,7 @@ const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
 const DELIVERY_STORAGE_KEY="leadintel_customer_v2_delivery";
   const ASSET_VERSION="20260916-brand-outreach-v5";
-const SERVER_BRIDGE_ASSET="server-bridge.js?v=20260916-error-sweep-v2";
+const SERVER_BRIDGE_ASSET="server-bridge.js?v=20260918-account-provider-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const q=id=>document.getElementById(id);
 let delivery=loadDelivery();
