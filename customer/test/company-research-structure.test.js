@@ -25,8 +25,17 @@ test('Customer V2 loads the automatic company research module with Firecrawl wor
   assert.match(supportLoader,/company-research-ui\.js\?v=20260918-translation-fidelity-v3/);
 });
 
+test('Stage 1 exposes the primary next action directly after required market selection',()=>{
+  const html=read('index.html');
+  const marketStart=html.indexOf('id="target-market-selector"');
+  const action=html.indexOf('class="step-actions stage1-primary-action"',marketStart);
+  const optionalLinks=html.indexOf('<h3>Additional links</h3>');
+  assert.ok(marketStart>=0&&action>marketStart&&action<optionalLinks);
+  assert.match(html,/id="to-questionnaire">Continue to Company Research/);
+});
+
 test('Step 2 waits for an explicit research confirmation and explains the next action',()=>{
-  assert.match(ui,/Continue to optional context/);
+  assert.match(ui,/Continue to Company Research/);
   assert.match(ui,/rerun-company-research/);
   assert.match(ui,/Setup complete — ready for company research/);
   assert.match(ui,/Usually takes up to 1 minute/);
