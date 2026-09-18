@@ -1,5 +1,5 @@
-import './company-research-engine.js?v=20260916-latency-fix-v2';
-import './content-language.js?v=20260916-latency-fix-v2';
+import './company-research-engine.js?v=20260918-latvian-v1';
+import './content-language.js?v=20260918-latvian-v1';
 
 const MAIN_STORAGE_KEY='leadintel_customer_v2_state';
 const RESEARCH_META_KEY='leadintel_customer_v2_research_meta_v1';
@@ -10,7 +10,7 @@ const MAX_RESULTS_PER_QUERY=4;
 const COMPANY_RESEARCH_REQUEST_TIMEOUT_MS=25000;
 const COMPANY_RESEARCH_RUN_TIMEOUT_MS=60000;
 const COMPANY_RESEARCH_SAVE_TIMEOUT_MS=10000;
-const RELEASE='20260918-research-handoff-v1';
+const RELEASE='20260918-latvian-v1';
 let running=false;
 
 const engine=()=>window.LeadIntelCompanyResearch;
@@ -24,15 +24,66 @@ function writeMeta(value){localStorage.setItem(RESEARCH_META_KEY,JSON.stringify(
 function normalizeUrl(value){return engine()?.safeUrl(value)||'';}
 function selectedMarkets(state){return Array.isArray(state?.targetMarkets)?state.targetMarkets.map(value=>String(value||'').trim()).filter(Boolean):[];}
 function companyResearchReady(state=readState()){return Boolean(normalizeUrl(state.website)&&selectedMarkets(state).length);}
+const STEP2_COPY={
+  en:{
+    eyebrow:'Step 2 · Optional enrichment',title:'Build your Commercial Intelligence Brief.',intro:'Review the commercial decisions that power LeadIntel targeting, buying signals and campaign content. Accept, edit or replace every draft; unsupported fields remain open for your input. You may skip these questions and complete them later.',
+    groups:{
+      targeting:['Targeting','Define who LeadIntel should find.','Set the commercial focus, decision roles and negative-fit rules used by Discovery.'],
+      signals:['Buying Signals','Define why demand appears and when to act.','These decisions guide signal monitoring, Why Now evidence and outreach timing.'],
+      message:['Commercial Message','Define what LeadIntel may communicate.','Build the approved value, differentiation, proof and objection context used by Campaign Studio.']
+    },
+    questions:{
+      priority_offers:['What product or service is the current commercial priority?','Choose up to three. LeadIntel will optimize targeting and campaigns around these priorities.','Example: custom steel structures; industrial installation; engineering services'],
+      ideal_customer:['What does the best-fit customer look like?','Include industries, company types, size, maturity and priority segments inside the markets selected in Step 1.','Example: manufacturers with 50–500 employees expanding in Northern Europe'],
+      buyer_roles:['Who makes or strongly influences the buying decision?','Roles are more useful than names: CEO, Procurement Director, Production Director, HR Director or technical owner.','Procurement Director; Production Director; CEO'],
+      exclusions:['What makes a prospect unsuitable or impossible to serve?','Define negative ICP rules such as minimum deal size, geography, certifications, logistics, industries or capacity.','Example: private consumers; projects below €20,000; markets outside Europe'],
+      buying_outcomes:['What problem or desired result creates demand for this offer?','Describe the customer problem or business result—not your product features.','Example: reduce production downtime; add capacity; enter a new market'],
+      buying_triggers:['What observable event indicates that this demand may exist now?','Use searchable events such as expansion, relocation, hiring, funding, tender, regulation change or equipment replacement.','New facility; capacity expansion; equipment modernization; tender'],
+      value_proposition:['How does the offer help the customer solve that problem or achieve that result?','Connect the offer to a concrete benefit without adding unsupported promises.','Example: reduce installation time while keeping production disruption to a minimum'],
+      differentiation:['Why should the customer choose your company instead of an alternative?','Think specialization, speed, reliability, technology, customization, service or access.','Example: certified specialists, custom delivery and one accountable project team'],
+      proof_points:['What evidence may LeadIntel safely mention?','Use public or approved cases, certifications, quantified results, delivery history, expertise or references.','Example: ISO 9001; 120 completed projects; 15 years of experience'],
+      objections:['What objections or concerns commonly prevent the customer from proceeding?','Describe concerns about timing, price, risk, implementation, switching, capacity or internal approval.','Example: implementation downtime; budget timing; concern about switching suppliers']
+    }
+  },
+  lv:{
+    eyebrow:'2. solis · Izvēles papildinformācija',title:'Izveidojiet komerciālās inteliģences kopsavilkumu.',intro:'Pārskatiet komerciālos lēmumus, kurus LeadIntel izmantos mērķauditorijas atlasei, pirkšanas signāliem un kampaņu saturam. Pieņemiet, rediģējiet vai aizstājiet katru melnrakstu; neatbildētos laukus varat aizpildīt paši. Šos jautājumus varat izlaist un pabeigt vēlāk.',
+    groups:{
+      targeting:['Mērķauditorija','Definējiet, kādus uzņēmumus LeadIntel jāatrod.','Norādiet komerciālo fokusu, lēmumu pieņēmējus un neatbilstoša klienta kritērijus, ko izmantos uzņēmumu atlase.'],
+      signals:['Pirkšanas signāli','Definējiet, kāpēc rodas pieprasījums un kad jārīkojas.','Šie lēmumi nosaka signālu uzraudzību, “Kāpēc tagad” pierādījumus un uzrunas laiku.'],
+      message:['Komerciālais vēstījums','Definējiet, ko LeadIntel drīkst komunicēt.','Izveidojiet apstiprinātu vērtības piedāvājumu, atšķirības, pierādījumus un iebildumu kontekstu Kampaņu studijai.']
+    },
+    questions:{
+      priority_offers:['Kurš produkts vai pakalpojums pašlaik ir komerciālā prioritāte?','Izvēlieties līdz trim. LeadIntel optimizēs mērķauditoriju un kampaņas atbilstoši šīm prioritātēm.','Piemērs: pielāgotas tērauda konstrukcijas; rūpnieciskā montāža; inženiertehniskie pakalpojumi'],
+      ideal_customer:['Kāds ir vispiemērotākais klients?','Norādiet nozares, uzņēmumu veidus, lielumu, attīstības stadiju un prioritāros segmentus 1. solī izvēlētajos tirgos.','Piemērs: ražotāji ar 50–500 darbiniekiem, kas paplašinās Ziemeļeiropā'],
+      buyer_roles:['Kas pieņem vai būtiski ietekmē pirkuma lēmumu?','Lomas ir noderīgākas par vārdiem: izpilddirektors, iepirkumu direktors, ražošanas direktors, personāla direktors vai tehniskais vadītājs.','Iepirkumu direktors; ražošanas direktors; izpilddirektors'],
+      exclusions:['Kas potenciālo klientu padara neatbilstošu vai neapkalpojamu?','Definējiet negatīvā ICP kritērijus, piemēram, minimālo darījuma apjomu, ģeogrāfiju, sertifikātus, loģistiku, nozares vai jaudu.','Piemērs: privātpersonas; projekti zem €20 000; tirgi ārpus Eiropas'],
+      buying_outcomes:['Kāda problēma vai vēlamais rezultāts rada pieprasījumu pēc šī piedāvājuma?','Aprakstiet klienta problēmu vai biznesa rezultātu, nevis produkta funkcijas.','Piemērs: samazināt ražošanas dīkstāvi; palielināt jaudu; ieiet jaunā tirgū'],
+      buying_triggers:['Kāds novērojams notikums liecina, ka pieprasījums varētu būt aktuāls tagad?','Izmantojiet meklējamus notikumus, piemēram, paplašināšanos, pārcelšanos, darbinieku pieņemšanu, finansējumu, konkursu, regulējuma izmaiņas vai iekārtu nomaiņu.','Jauna ražotne; jaudas paplašināšana; iekārtu modernizācija; konkurss'],
+      value_proposition:['Kā piedāvājums palīdz klientam atrisināt problēmu vai sasniegt rezultātu?','Saistiet piedāvājumu ar konkrētu ieguvumu, nepievienojot nepamatotus solījumus.','Piemērs: samazināt montāžas laiku, pēc iespējas mazāk traucējot ražošanu'],
+      differentiation:['Kāpēc klientam jāizvēlas jūsu uzņēmums, nevis alternatīva?','Apsveriet specializāciju, ātrumu, uzticamību, tehnoloģijas, pielāgošanu, servisu vai pieejamību.','Piemērs: sertificēti speciālisti, pielāgota piegāde un viena atbildīga projekta komanda'],
+      proof_points:['Kādus pierādījumus LeadIntel drīkst droši pieminēt?','Izmantojiet publiskus vai apstiprinātus piemērus, sertifikātus, izmērāmus rezultātus, piegāžu vēsturi, kompetenci vai atsauksmes.','Piemērs: ISO 9001; 120 pabeigti projekti; 15 gadu pieredze'],
+      objections:['Kādi iebildumi vai bažas parasti kavē klientu turpināt?','Aprakstiet bažas par laiku, cenu, risku, ieviešanu, piegādātāja maiņu, jaudu vai iekšējo apstiprināšanu.','Piemērs: ieviešanas dīkstāve; budžeta laiks; bažas par piegādātāja maiņu']
+    }
+  }
+};
 function selectedContentLanguage(state=readState()){
   const selected=String($('language-select')?.value||window.LeadIntelLanguage?.get?.()||state.uiLanguage||'lv').toLowerCase();
   return engine().resolveResearchLanguage({selectorValue:selected,storedValue:state.uiLanguage,navigatorLanguages:navigator.languages||[]});
 }
+function applyStep2Copy(){
+  const language=selectedContentLanguage(),copy=STEP2_COPY[language==='lv'?'lv':'en'],step2=$('step-2');if(!step2)return;
+  const hero=step2.querySelector('.hero-copy');if(hero){const eyebrow=hero.querySelector('.eyebrow'),heading=hero.querySelector('h1'),paragraph=hero.querySelector('p');if(eyebrow)eyebrow.textContent=copy.eyebrow;if(heading)heading.textContent=copy.title;if(paragraph)paragraph.textContent=copy.intro;}
+  Object.entries(copy.groups).forEach(([key,values])=>{const group=step2.querySelector('[data-brief-group="'+key+'"]');if(!group)return;const header=group.querySelector('.brief-group-header');const eyebrow=header?.querySelector('.eyebrow'),heading=header?.querySelector('h2'),paragraph=header?.querySelector('p'),progress=header?.querySelector('[data-brief-progress]');if(eyebrow)eyebrow.textContent=values[0];if(heading)heading.textContent=values[1];if(paragraph)paragraph.textContent=values[2];if(progress){const count=progress.textContent.match(/\d+\/\d+/)?.[0]||'0/0';progress.textContent=count+(language==='lv'?' pārskatīti':' reviewed');}});
+  step2.querySelectorAll('textarea[data-question]').forEach(textarea=>{const values=copy.questions[textarea.dataset.question],label=textarea.closest('.question-card')?.querySelector('label');if(!values||!label)return;const first=[...label.childNodes].find(node=>node.nodeType===3);if(first)first.nodeValue=values[0];const small=label.querySelector('small');if(small)small.textContent=values[1];textarea.placeholder=values[2];});
+  const back=$('back-to-sources'),build=$('analyze-company');if(back)back.textContent=language==='lv'?'← Atpakaļ':'← Back';if(build)build.innerHTML=language==='lv'?'Izveidot / atjaunot inteliģences profilu <span>✦</span>':'Build / refresh intelligence profile <span>✦</span>';
+  const utility=document.querySelector('.utility-panel');if(utility){const ai=utility.querySelector('.utility-ai'),attention=utility.querySelector('.utility-attention'),settings=utility.querySelector('.utility-settings');if(ai){ai.querySelector('.eyebrow').textContent=language==='lv'?'AI atbalsts':'AI support';ai.querySelector('.copilot-entry-title').textContent=language==='lv'?'Jautāt LeadIntel ✦':'Ask LeadIntel ✦';ai.querySelector('.copilot-entry-subtitle').textContent=language==='lv'?'AI komerciālais asistents':'AI Commercial Copilot';ai.querySelector('p').textContent=language==='lv'?'Saņemiet palīdzību pierādījumu interpretēšanā vai nākamās komerciālās darbības izvēlē.':'Get help interpreting evidence or deciding the next commercial action.';}if(attention){attention.querySelector('.eyebrow').textContent=language==='lv'?'Darbvietas statuss':'Workspace health';attention.querySelector('strong').textContent=language==='lv'?'Uzmanība':'Attention';}if(settings){settings.querySelector('.eyebrow').textContent=language==='lv'?'Darbvietas vadība':'Workspace controls';settings.querySelector('h3').textContent=language==='lv'?'Iestatījumi':'Settings';settings.querySelector('p').textContent=language==='lv'?'Pārvaldiet AI nodrošinātājus, integrācijas un piegādes savienojumus.':'Manage AI providers, integrations and delivery connections.';settings.querySelector('button').textContent=language==='lv'?'Atvērt iestatījumus':'Open settings';}}
+}
 function translateResearchAnswers(){
-  const editor=$('step-2');if(!editor||!window.LeadIntelContentLanguage)return Promise.resolve(false);
+  const editor=$('step-2');applyStep2Copy();if(!editor||!window.LeadIntelContentLanguage)return Promise.resolve(false);
   const state=readState(),language=selectedContentLanguage(state),meta=metaForCurrentState();
   editor.querySelectorAll('textarea[data-question]').forEach(node=>{
-    if(engine()?.researchFieldReadyForLanguage?.({field:meta.fields?.[node.dataset.question],meta,language}))node.lang=language;
+    const ready=engine()?.researchFieldReadyForLanguage?.({field:meta.fields?.[node.dataset.question],meta,language,value:node.value||state.answers?.[node.dataset.question]});
+    if(ready)node.lang=language;else node.removeAttribute('lang');
   });
   if(engine()?.researchOutputReadyForLanguage?.({answers:state.answers||{},meta,language})){
     editor.querySelectorAll('textarea[data-question]').forEach(node=>{node.lang=language;});
@@ -44,20 +95,15 @@ function injectCss(){if(document.querySelector('link[data-leadintel-asset="compa
 function toast(message){const node=$('toast');if(!node)return;node.textContent=message;node.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>node.classList.remove('show'),3000);}
 
 function ensureResearchUi(){
-  injectCss();
-  const button=$('to-questionnaire');if(button){button.innerHTML='Continue to optional context <span>→</span>';}
+  injectCss();applyStep2Copy();
+  const lv=selectedContentLanguage()==='lv',button=$('to-questionnaire');if(button)button.innerHTML=(lv?'Turpināt uz izvēles kontekstu':'Continue to optional context')+' <span>→</span>';
   const step1=document.getElementById('step-1');
   if(step1&&!document.getElementById('company-research-progress')){
     const actions=step1.querySelector('.step-actions');
-    actions?.insertAdjacentHTML('beforebegin','<div class="company-research-progress" id="company-research-progress" hidden><div class="company-research-spinner" aria-hidden="true"></div><div><strong id="company-research-title">Preparing company research…</strong><small id="company-research-detail">LeadIntel will use public evidence and your selected market.</small></div></div>');
+    actions?.insertAdjacentHTML('beforebegin','<div class="company-research-progress" id="company-research-progress" hidden><div class="company-research-spinner" aria-hidden="true"></div><div><strong id="company-research-title">'+(lv?'Tiek sagatavota uzņēmuma izpēte…':'Preparing company research…')+'</strong><small id="company-research-detail">'+(lv?'LeadIntel izmantos publiskos pierādījumus un jūsu izvēlēto tirgu.':'LeadIntel will use public evidence and your selected market.')+'</small></div></div>');
   }
-  const step2=document.getElementById('step-2');const hero=step2?.querySelector('.hero-copy');
-  if(hero){
-    const heading=hero.querySelector('h1');const paragraph=hero.querySelector('p');
-    if(heading)heading.textContent='Build your Commercial Intelligence Brief.';
-    if(paragraph)paragraph.textContent='Review the commercial decisions that power LeadIntel targeting, buying signals and campaign content. Accept, edit or replace every draft; unsupported fields remain open for your input.';
-    if(!document.getElementById('research-summary'))hero.insertAdjacentHTML('afterend','<div class="research-summary" id="research-summary"><div class="research-summary-main"><div class="research-summary-icon">✦</div><div><strong>Research has not run yet.</strong><small>Add the website and target market in Step 1, then run company research.</small></div></div><div class="research-summary-actions"><span class="research-mode">Evidence first</span><button class="research-rerun research-primary" id="rerun-company-research" type="button">Start company research <span aria-hidden="true">→</span></button></div></div>');
-  }
+  const step2=document.getElementById('step-2'),hero=step2?.querySelector('.hero-copy');
+  if(hero&&!document.getElementById('research-summary'))hero.insertAdjacentHTML('afterend','<div class="research-summary" id="research-summary"></div>');
   document.querySelectorAll('[data-question]').forEach(textarea=>{
     const card=textarea.closest('.question-card');if(!card||card.querySelector('.research-field-meta'))return;
     card.insertAdjacentHTML('beforeend',`<div class="research-field-meta" data-research-meta="${esc(textarea.dataset.question)}"></div>`);
@@ -78,7 +124,7 @@ function sourceMap(state){
   return map;
 }
 function metaForCurrentState(){const state=readState(),meta=readMeta();if(!meta?.website||normalizeUrl(meta.website)!==normalizeUrl(state.website))return {};return meta;}
-function modeLabel(meta){if(meta.mode==='ai')return `${meta.provider||'AI'}${meta.model?` · ${meta.model}`:''}`;return 'Evidence draft';}
+function modeLabel(meta,lv=false){if(meta.mode==='ai')return `${meta.provider||'AI'}${meta.model?` · ${meta.model}`:''}`;return lv?'Pierādījumu melnraksts':'Evidence draft';}
 function repairResearchHandoff(state,meta){
   if(!meta.generatedAt)return false;
   const recovered=engine()?.recoverDraftAnswers?.(state.answers||{},meta.fields||{});if(!recovered)return false;
@@ -89,53 +135,45 @@ function repairResearchHandoff(state,meta){
   return true;
 }
 function renderResearchReview(){
-  const state=readState();const meta=metaForCurrentState();repairResearchHandoff(state,meta);const map=sourceMap(state);const summary=$('research-summary');
+  const state=readState(),meta=metaForCurrentState(),lv=selectedContentLanguage(state)==='lv',tx=(en,lat)=>lv?lat:en;repairResearchHandoff(state,meta);applyStep2Copy();const map=sourceMap(state),summary=$('research-summary');
   if(summary){
     summary.classList.remove('research-summary-failed');
     if(meta.generatedAt){
-      const aiNote=meta.mode==='ai'?`AI enrichment active · ${esc(modeLabel(meta))}`:'Evidence-only draft · connect an AI provider in Settings for deeper synthesis.';
-      const coverage=meta.quality?.coverage||{};const covered=Array.isArray(coverage.categories)?coverage.categories.length:0;const total=Number(coverage.total)||5;
-      const coverageNote=`${covered}/${total} authoritative areas${coverage.minimumMet?' verified':' · Coverage incomplete; high confidence is capped'}`;
-      summary.innerHTML=`<div class="research-summary-main"><div class="research-summary-icon">✦</div><div><strong>Research complete · ${Number(meta.sourceCount)||0} evidence source${Number(meta.sourceCount)===1?'':'s'}</strong><small class="${meta.mode==='ai'?'':'research-no-ai'}">${aiNote}${meta.failures?` · ${Number(meta.failures)} source/search request${Number(meta.failures)===1?'':'s'} unavailable`:''}</small><small class="research-coverage ${coverage.minimumMet?'complete':'incomplete'}">${esc(coverageNote)}</small></div></div><div class="research-summary-actions"><span class="research-mode">${esc(modeLabel(meta))}</span><button class="research-rerun" id="rerun-company-research" type="button">Rerun company research</button></div>`;
-    } else if(meta.failureAt){
+      const aiNote=meta.mode==='ai'?tx('AI enrichment active','AI papildināšana aktīva')+' · '+esc(modeLabel(meta,lv)):tx('Evidence-only draft · connect an AI provider in Settings for deeper synthesis.','Tikai pierādījumos balstīts melnraksts · lai iegūtu dziļāku analīzi, iestatījumos pievienojiet AI nodrošinātāju.');
+      const coverage=meta.quality?.coverage||{},covered=Array.isArray(coverage.categories)?coverage.categories.length:0,total=Number(coverage.total)||5;
+      const coverageNote=covered+'/'+total+' '+tx('authoritative areas','autoritatīvās jomas')+(coverage.minimumMet?tx(' verified',' pārbaudītas'):tx(' · Coverage incomplete; high confidence is capped',' · Pārklājums nepilnīgs; augsta pārliecība ir ierobežota'));
+      const count=Number(meta.sourceCount)||0,failureNote=meta.failures?' · '+Number(meta.failures)+' '+tx('source/search requests unavailable','avotu vai meklēšanas pieprasījumi nav pieejami'):'';
+      summary.innerHTML=`<div class="research-summary-main"><div class="research-summary-icon">✦</div><div><strong>${tx('Research complete','Izpēte pabeigta')} · ${count} ${tx(count===1?'evidence source':'evidence sources',count===1?'pierādījumu avots':'pierādījumu avoti')}</strong><small class="${meta.mode==='ai'?'':'research-no-ai'}">${aiNote}${failureNote}</small><small class="research-coverage ${coverage.minimumMet?'complete':'incomplete'}">${esc(coverageNote)}</small></div></div><div class="research-summary-actions"><span class="research-mode">${esc(modeLabel(meta,lv))}</span><button class="research-rerun" id="rerun-company-research" type="button">${tx('Rerun company research','Atkārtot uzņēmuma izpēti')}</button></div>`;
+    }else if(meta.failureAt){
       summary.classList.add('research-summary-failed');
-      summary.innerHTML='<div class="research-summary-main"><div class="research-summary-icon">!</div><div><strong>Research could not complete.</strong><small>'+esc(meta.error||'The company research request did not finish.')+'</small><small class="research-retry-note">Your website and target market were preserved. Try again when ready.</small></div></div><div class="research-summary-actions"><span class="research-mode">Retry available</span><button class="research-rerun research-primary" id="rerun-company-research" type="button">Try research again <span aria-hidden="true">→</span></button></div>';
-    } else {
-      const hasWebsite=Boolean(normalizeUrl(state.website));const hasMarkets=selectedMarkets(state).length>0;const ready=hasWebsite&&hasMarkets;
-      let title='Setup complete — ready for company research',detail='LeadIntel will analyse your website and selected market. Usually takes up to 1 minute.',badge='Ready to research',label='Start company research <span aria-hidden="true">→</span>';
-      if(!hasWebsite){title='Add your company website';detail=hasMarkets?'Your target market is saved. Add and activate your website to prepare company research.':'Add and activate your website, then select at least one target market.';badge='Website required';label='Add website';}
-      else if(!hasMarkets){title='Select a target market';detail='Your website is saved. Select at least one country, region or market to prepare company research.';badge='Market required';label='Select market';}
-      const step1Action=ready?'':' data-go-step1="true"';const primaryClass=ready?' research-primary':'';
+      summary.innerHTML='<div class="research-summary-main"><div class="research-summary-icon">!</div><div><strong>'+tx('Research could not complete.','Izpēti neizdevās pabeigt.')+'</strong><small>'+esc(meta.error||tx('The company research request did not finish.','Uzņēmuma izpētes pieprasījums netika pabeigts.'))+'</small><small class="research-retry-note">'+tx('Your website and target market were preserved. Try again when ready.','Jūsu vietne un mērķa tirgus ir saglabāti. Mēģiniet vēlreiz, kad esat gatavs.')+'</small></div></div><div class="research-summary-actions"><span class="research-mode">'+tx('Retry available','Var mēģināt vēlreiz')+'</span><button class="research-rerun research-primary" id="rerun-company-research" type="button">'+tx('Try research again','Mēģināt izpēti vēlreiz')+' <span aria-hidden="true">→</span></button></div>';
+    }else{
+      const hasWebsite=Boolean(normalizeUrl(state.website)),hasMarkets=selectedMarkets(state).length>0,ready=hasWebsite&&hasMarkets;
+      let title=tx('Setup complete — ready for company research','Iestatīšana pabeigta — var sākt uzņēmuma izpēti'),detail=tx('LeadIntel will analyse your website and selected market. Usually takes up to 1 minute.','LeadIntel analizēs jūsu vietni un izvēlēto tirgu. Parasti tas aizņem līdz 1 minūtei.'),badge=tx('Ready to research','Gatavs izpētei'),label=tx('Start company research','Sākt uzņēmuma izpēti')+' <span aria-hidden="true">→</span>';
+      if(!hasWebsite){title=tx('Add your company website','Pievienojiet uzņēmuma vietni');detail=hasMarkets?tx('Your target market is saved. Add and activate your website to prepare company research.','Mērķa tirgus ir saglabāts. Pievienojiet un aktivizējiet vietni, lai sagatavotu uzņēmuma izpēti.'):tx('Add and activate your website, then select at least one target market.','Pievienojiet un aktivizējiet vietni, pēc tam izvēlieties vismaz vienu mērķa tirgu.');badge=tx('Website required','Nepieciešama vietne');label=tx('Add website','Pievienot vietni');}
+      else if(!hasMarkets){title=tx('Select a target market','Izvēlieties mērķa tirgu');detail=tx('Your website is saved. Select at least one country, region or market to prepare company research.','Vietne ir saglabāta. Izvēlieties vismaz vienu valsti, reģionu vai tirgu, lai sagatavotu uzņēmuma izpēti.');badge=tx('Market required','Nepieciešams tirgus');label=tx('Select market','Izvēlēties tirgu');}
+      const step1Action=ready?'':' data-go-step1="true"',primaryClass=ready?' research-primary':'';
       summary.innerHTML='<div class="research-summary-main"><div class="research-summary-icon">✦</div><div><strong>'+title+'</strong><small>'+detail+'</small></div></div><div class="research-summary-actions"><span class="research-mode">'+badge+'</span><button class="research-rerun'+primaryClass+'" id="rerun-company-research" type="button"'+step1Action+'>'+label+'</button></div>';
     }
     const action=summary.querySelector('#rerun-company-research');
-    action?.addEventListener('click',()=>{
-      if(action.dataset.goStep1==='true'){document.getElementById('back-to-sources')?.click();return;}
-      void runCompanyResearch({rerun:Boolean(meta.generatedAt||meta.failureAt)});
-    });
+    action?.addEventListener('click',()=>{if(action.dataset.goStep1==='true'){document.getElementById('back-to-sources')?.click();return;}void runCompanyResearch({rerun:Boolean(meta.generatedAt||meta.failureAt)});});
   }
   document.querySelectorAll('[data-question]').forEach(textarea=>{
-    const id=textarea.dataset.question;const target=document.querySelector(`[data-research-meta="${id}"]`);if(!target)return;
-    const persisted=String(state.answers?.[id]||'').trim();
-    if(!String(textarea.value||'').trim()&&persisted&&document.activeElement!==textarea)textarea.value=persisted;
-    const value=String(textarea.value||'').trim();const row=engine()?.reconcileResearchField?.(value,meta.fields?.[id]||{})||meta.fields?.[id]||{};
-    const draftOrigins=['research','evidence_draft','hypothesis_draft'];const isDraft=draftOrigins.includes(row.origin);
-    const card=textarea.closest('.question-card');card?.classList.toggle('research-populated',Boolean(value&&isDraft));
-    let origin='Needs your input',originClass='needs';
-    if(value&&row.origin==='hypothesis_draft'){origin='AI hypothesis';originClass='hypothesis';}
-    else if(value&&isDraft){origin='Evidence-backed draft';originClass='';}
-    else if(value){origin='Your input';originClass='user';}
-    const confidence=value&&row.confidence?`<span class="research-confidence ${esc(row.confidence)}">${esc(row.confidence)} confidence</span>`:'';
-    const reviewed=row.reviewed&&!isDraft?'<span class="research-reviewed">Saved ✓</span>':'';
-    const sourceIds=Array.isArray(row.sourceIds)?row.sourceIds:[];const sources=sourceIds.map(id=>map.get(id)).filter(Boolean).slice(0,3);
+    const id=textarea.dataset.question,target=document.querySelector(`[data-research-meta="${id}"]`);if(!target)return;
+    const persisted=String(state.answers?.[id]||'').trim();if(!String(textarea.value||'').trim()&&persisted&&document.activeElement!==textarea)textarea.value=persisted;
+    const value=String(textarea.value||'').trim(),row=engine()?.reconcileResearchField?.(value,meta.fields?.[id]||{})||meta.fields?.[id]||{},draftOrigins=['research','evidence_draft','hypothesis_draft'],isDraft=draftOrigins.includes(row.origin);
+    textarea.closest('.question-card')?.classList.toggle('research-populated',Boolean(value&&isDraft));
+    let origin=tx('Needs your input','Nepieciešama jūsu informācija'),originClass='needs';
+    if(value&&row.origin==='hypothesis_draft'){origin=tx('AI hypothesis','AI hipotēze');originClass='hypothesis';}else if(value&&isDraft){origin=tx('Evidence-backed draft','Pierādījumos balstīts melnraksts');originClass='';}else if(value){origin=tx('Your input','Jūsu ievadītā informācija');originClass='user';}
+    const confidence=value&&row.confidence?`<span class="research-confidence ${esc(row.confidence)}">${esc(tx(row.confidence+' confidence',row.confidence==='high'?'augsta pārliecība':row.confidence==='medium'?'vidēja pārliecība':'zema pārliecība'))}</span>`:'';
+    const reviewed=row.reviewed&&!isDraft?'<span class="research-reviewed">'+tx('Saved ✓','Saglabāts ✓')+'</span>':'',sourceIds=Array.isArray(row.sourceIds)?row.sourceIds:[],sources=sourceIds.map(id=>map.get(id)).filter(Boolean).slice(0,3);
     const links=sources.length?`<div class="research-source-links">${sources.map(source=>source.type==='document'?`<span class="research-source-doc">${esc(source.title)}</span>`:`<a href="${esc(source.url)}" target="_blank" rel="noopener">${esc(source.title||source.url)}</a>`).join('')}</div>`:'';
-    const rationale=row.rationale?`<div class="research-rationale">${esc(row.rationale)}</div>`:'';
-    const reviewAction=engine()?.reviewActionState?.(row)||{visible:isDraft,label:row.reviewed?'Accepted ✓':'Accept',disabled:Boolean(row.reviewed)};
-    const acceptAction=reviewAction.visible?`<button type="button" data-research-accept="${esc(id)}" ${reviewAction.disabled?'disabled':''}>${esc(reviewAction.label)}</button>`:'';
-    const actions=value?`<div class="research-field-actions">${acceptAction}<button type="button" data-research-clear="${esc(id)}">Clear</button></div>`:'';
+    const rationale=row.rationale?`<div class="research-rationale" data-research-translatable>${esc(row.rationale)}</div>`:'',reviewAction=engine()?.reviewActionState?.(row)||{visible:isDraft,label:row.reviewed?'Accepted ✓':'Accept',disabled:Boolean(row.reviewed)};
+    const acceptLabel=row.reviewed?tx('Accepted ✓','Pieņemts ✓'):tx('Accept','Pieņemt'),acceptAction=reviewAction.visible?`<button type="button" data-research-accept="${esc(id)}" ${reviewAction.disabled?'disabled':''}>${acceptLabel}</button>`:'',actions=value?`<div class="research-field-actions">${acceptAction}<button type="button" data-research-clear="${esc(id)}">${tx('Clear','Notīrīt')}</button></div>`:'';
     target.innerHTML=`<div class="research-meta-top"><span class="research-origin ${originClass}">${origin}</span>${confidence}${reviewed}</div>${rationale}${links}${actions}`;
   });
 }
+
 function markUserInput(id,value){
   const state=readState();const meta=metaForCurrentState();if(!meta.generatedAt)return;
   meta.fields=meta.fields||{};meta.fields[id]={origin:String(value||'').trim()?'user':'needs-input',confidence:'',sourceIds:[],rationale:String(value||'').trim()?'Customer edited this field.':'Customer input recommended.',reviewed:Boolean(String(value||'').trim())};writeMeta(meta);renderResearchReview();
@@ -274,7 +312,7 @@ function bind(){
   window.addEventListener('leadintel:server-ready',()=>{renderResearchReview();void translateResearchAnswers();});
   window.addEventListener('leadintel:workspace-changed',()=>{renderResearchReview();void translateResearchAnswers();});
   window.addEventListener('leadintel:workspace-reset',()=>setTimeout(renderResearchReview,0));
-  window.addEventListener('leadintel:language-changed',()=>void translateResearchAnswers());
+  window.addEventListener('leadintel:language-changed',()=>{applyStep2Copy();renderResearchReview();void translateResearchAnswers();});
   void translateResearchAnswers();
 }
 
