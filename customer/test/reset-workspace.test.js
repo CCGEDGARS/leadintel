@@ -41,6 +41,12 @@ test('workspace reset clears browser-only company residue but preserves saved AP
   assert.doesNotMatch(hygiene,/\/api\/integrations\/ai\/provider|disconnectProvider|ai-settings/i,'workspace reset must not disconnect or delete saved AI provider credentials');
 });
 
+test('signed-in reset explicitly authorizes saving the blank workspace',()=>{
+  const resetBlock=app.match(/async function resetWorkspace\\(\\)\\{[\\s\\S]*?\\n\\}/)?.[0]||'';
+  assert.match(resetBlock,/bridge\\.saveNow\\(\\{saveIntent:true,explicitSave:true\\}\\)/);
+  assert.match(resetBlock,/Reset failed to sync/);
+});
+
 test('confirmed workspace reset records durable reset intent for the next authenticated sync',()=>{
   assert.match(persistence,/leadintel_customer_v2_reset_pending_v1/,'server reset must have a durable pending-reset marker');
   assert.match(persistence,/function recordResetIntent/);
