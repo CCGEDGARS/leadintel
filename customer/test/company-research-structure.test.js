@@ -25,15 +25,15 @@ test('Customer V2 loads the automatic company research module with Firecrawl wor
   assert.match(supportLoader,/company-research-ui\.js\?v=20260917-step2-reset-route-v1/);
 });
 
-test('Step 1 navigation opens immediately and initial company research starts automatically once ready',()=>{
+test('Step 2 waits for an explicit research confirmation and explains the next action',()=>{
   assert.match(ui,/Continue to optional context/);
   assert.match(ui,/rerun-company-research/);
-  assert.doesNotMatch(ui,/function interceptStepOne/);
-  assert.match(ui,/function shouldAutoStartCompanyResearch/);
-  assert.match(ui,/function scheduleInitialCompanyResearch/);
-  assert.match(ui,/leadintel:website-activated/);
-  assert.match(ui,/leadintel:module-opened/);
-  assert.match(ui,/LeadIntelWebsiteActivation\?\.isWebsiteActive/);
+  assert.match(ui,/Setup complete — ready for company research/);
+  assert.match(ui,/Usually takes 2–4 minutes/);
+  assert.match(ui,/Website required/);
+  assert.match(ui,/Market required/);
+  assert.doesNotMatch(ui,/function scheduleInitialCompanyResearch/);
+  assert.doesNotMatch(ui,/LeadIntelWebsiteActivation\?\.isWebsiteActive/);
   assert.doesNotMatch(ui,/stopImmediatePropagation\(\)/);
   assert.match(ui,/MAX_COMPANY_RESEARCH_QUERIES\s*=\s*3/);
   assert.match(ui,/MAX_RESULTS_PER_QUERY\s*=\s*4/);
@@ -98,12 +98,11 @@ test('Step 2 renders research summary, provenance, confidence and needs-input st
   assert.match(css,/\.research-confidence/);
 });
 
-test('an incomplete reset workspace cannot remain visually stranded on Step 2',()=>{
+test('Step 2 remains editable while prerequisites or research are incomplete',()=>{
   assert.match(ui,/function companyResearchReady/);
-  assert.match(ui,/function returnToStepOneIfIncomplete/);
-  assert.match(ui,/step2\?\.classList\.contains\('active'\)/);
-  assert.match(ui,/back-to-sources/);
-  assert.match(ui,/setTimeout\(returnToStepOneIfIncomplete,0\)/);
+  assert.doesNotMatch(ui,/function returnToStepOneIfIncomplete/);
+  assert.doesNotMatch(ui,/setTimeout\(returnToStepOneIfIncomplete,0\)/);
+  assert.match(ui,/Needs your input/);
 });
 
 test('fresh research persists answers and evidence into the existing main Customer V2 state then invalidates stale strategy',()=>{
