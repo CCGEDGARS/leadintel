@@ -46,7 +46,7 @@ function toast(message){const node=$('toast');if(!node)return;node.textContent=m
 
 function ensureResearchUi(){
   injectCss();
-  const button=$('to-questionnaire');if(button){button.innerHTML='Continue to optional context <span>→</span>';}
+  const button=$('to-questionnaire');if(button){button.innerHTML='Continue to Company Research <span>→</span>';}
   const step1=document.getElementById('step-1');
   if(step1&&!document.getElementById('company-research-progress')){
     const actions=step1.querySelector('.step-actions');
