@@ -11,7 +11,7 @@ const LEADINTEL_API="https://leadintel-api.edgars-7e7.workers.dev";
 const PDFJS_VERSION="6.2.108";
 const MAX_PDF_BYTES=15*1024*1024;
 const MAX_PDFS=5;
-const RESET_CONFIRM_WINDOW_MS=5000;
+const RESET_CONFIRM_WINDOW_MS=30000;
 const ANALYSIS_SOURCE_TIMEOUT_MS=25000;
 const MARKET_RESEARCH_RESUME_KEY="leadintel_customer_v2_market_research_resume";
 const profileFields=[
@@ -770,14 +770,14 @@ function armWorkspaceReset(){
   const button=$("reset-workspace");if(!button)return false;
   button.dataset.resetArmed="true";
   button.classList.add("reset-armed");
-  button.textContent="Confirm reset";
-  button.setAttribute("aria-label","Confirm reset of workspace data");
+  button.textContent="Click again to reset";
+  button.setAttribute("aria-label","Click again within 30 seconds to reset all workspace data");
   button.style.setProperty("color","var(--danger)");
   button.style.setProperty("background","rgba(165,71,62,.10)");
   button.style.setProperty("border-radius","9px");
   if(resetConfirmTimer)clearTimeout(resetConfirmTimer);
   resetConfirmTimer=setTimeout(disarmWorkspaceReset,RESET_CONFIRM_WINDOW_MS);
-  showToast("Click Confirm reset within 5 seconds");
+  showToast("Click the red reset button again within 30 seconds");
   return true;
 }
 async function resetWorkspace(){
