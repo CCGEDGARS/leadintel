@@ -151,12 +151,12 @@
     if(!notice){notice=root.document.createElement('div');notice.id='content-language-status';notice.setAttribute('role','status');notice.style.cssText='padding:12px 0;font-size:14px;line-height:1.5';editor.before(notice);}
     const show=(message,retry=false)=>{
       notice.textContent=message;
-      if(retry){const button=root.document.createElement('button');button.type='button';button.textContent=language==='lv'?'Mēģināt tulkot vēlreiz':'Retry translation';button.addEventListener('click',()=>translateEditor(root,editor,language));notice.append(' ',button);}
+      if(retry){const button=root.document.createElement('button');button.type='button';button.textContent='Retry translation';button.addEventListener('click',()=>translateEditor(root,editor,language));notice.append(' ',button);}
     };
     const bridge=root.LeadIntelServerBridge;
-    if(!bridge?.session?.authenticated||!bridge?.workspace?.id){targets.forEach(({node,readOnly})=>{if(locks.has(node)){node.readOnly=readOnly;locks.delete(node);}});show(language==='lv'?'Avota valodas priekšskatījums · Pierakstieties un izvēlieties AI nodrošinātāju, lai tulkotu saturu.':'Source-language preview · Sign in and select an AI provider to translate content.');return;}
+    if(!bridge?.session?.authenticated||!bridge?.workspace?.id){targets.forEach(({node,readOnly})=>{if(locks.has(node)){node.readOnly=readOnly;locks.delete(node);}});show('Source-language preview · Sign in and select an AI provider to translate content.');return;}
     const workspace=bridge.workspace.id;
-    show(language==='lv'?'Notiek satura tulkošana latviešu valodā · Avota teksts netiks mainīts, kamēr tulkojums nebūs pabeigts.':'Translating content to English · Source text remains unchanged until the translation is complete.');
+    show('Translating content to '+(language==='en'?'English':'Latvian')+' · Source text remains unchanged until the translation is complete.');
     targets.forEach(({node,readOnly})=>{if('readOnly' in node){locks.set(node,readOnly);node.readOnly=true;}});
     try{
       const translated=await request(root,workspace,language,source);
@@ -169,9 +169,9 @@
         if('value' in node)node.value=value;else node.textContent=value;
         node.lang=language;
       }
-      show(language==='lv'?'Satura valoda: latviešu · Redzamais tulkojums ir pabeigts; sākotnējais saglabātais saturs ir saglabāts.':'Content language: English · Display translation; original saved content is preserved.');
+      show('Content language: '+(language==='en'?'English':'Latviešu')+' · Display translation; original saved content is preserved.');
     }catch(error){
-      if(generations.get(editor)===generation)show(language==='lv'?'Tulkojums nav pieejams · Tiek rādīts sākotnējais teksts. '+(error.name==='AbortError'?'Pieprasījuma laiks beidzās.':error.message):'Translation unavailable · Showing original source text. '+(error.name==='AbortError'?'The request timed out.':error.message),true);
+      if(generations.get(editor)===generation)show('Translation unavailable · Showing original source text. '+(error.name==='AbortError'?'The request timed out.':error.message),true);
     }finally{
       if(generations.get(editor)===generation)targets.forEach(({node,readOnly})=>{if('readOnly' in node){node.readOnly=readOnly;locks.delete(node);}});
     }

@@ -1,4 +1,4 @@
-import './company-research-engine.js?v=20260918-latvian-v1';
+import './company-research-engine.js?v=20260918-dynamic-language-v2';
 
 const engine=window.LeadIntelCompanyResearch;
 const MAX_AI_WEB_CHARS=3200;
