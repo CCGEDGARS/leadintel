@@ -16,20 +16,20 @@ const supportLoader=read('shell-support-loader.js');
 test('Customer V2 loads the automatic company research module with Firecrawl workspace routing before research',()=>{
   assert.match(processMap,/firecrawl-workspace-router\.js\?v=20260914-spinner-hard-stop-v1/);
   assert.match(processMap,/company-research-security\.js\?v=20260916-latency-fix-v2/);
-  assert.match(processMap,/company-research-ui\.js\?v=20260917-step2-reset-route-v1/);
+  assert.match(processMap,/company-research-ui\.js\?v=20260918-research-handoff-v1/);
   assert.ok(processMap.indexOf('firecrawl-workspace-router.js')<processMap.indexOf('company-research-ui.js'),'Firecrawl router must load before company research');
   assert.match(processMap,/company-profile-handoff\.js\?v=20260826-intelligence-autofill-v1/);
   assert.match(ui,/company-research-engine\.js\?v=20260916-latency-fix-v2/);
   assert.match(read('index.html'),/profile-engine\.js\?v=20260916-commercial-brief-v1/);
-  assert.match(read('index.html'),/process-map\.js\?v=20260918-classic-scope-v1/);
-  assert.match(supportLoader,/company-research-ui\.js\?v=20260917-step2-reset-route-v1/);
+  assert.match(read('index.html'),/process-map\.js\?v=20260918-research-handoff-v1/);
+  assert.match(supportLoader,/company-research-ui\.js\?v=20260918-research-handoff-v1/);
 });
 
 test('Step 2 waits for an explicit research confirmation and explains the next action',()=>{
   assert.match(ui,/Continue to optional context/);
   assert.match(ui,/rerun-company-research/);
   assert.match(ui,/Setup complete — ready for company research/);
-  assert.match(ui,/Usually takes 2–4 minutes/);
+  assert.match(ui,/Usually takes up to 1 minute/);
   assert.match(ui,/Website required/);
   assert.match(ui,/Market required/);
   assert.doesNotMatch(ui,/function scheduleInitialCompanyResearch/);

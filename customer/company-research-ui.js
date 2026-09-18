@@ -10,10 +10,8 @@ const MAX_RESULTS_PER_QUERY=4;
 const COMPANY_RESEARCH_REQUEST_TIMEOUT_MS=25000;
 const COMPANY_RESEARCH_RUN_TIMEOUT_MS=60000;
 const COMPANY_RESEARCH_SAVE_TIMEOUT_MS=10000;
-const RELEASE='20260916-commercial-brief-v1';
+const RELEASE='20260918-research-handoff-v1';
 let running=false;
-let autoStartScheduled=false;
-let prerequisiteReturnScheduled=false;
 
 const engine=()=>window.LeadIntelCompanyResearch;
 const $=id=>document.getElementById(id);
@@ -26,16 +24,6 @@ function writeMeta(value){localStorage.setItem(RESEARCH_META_KEY,JSON.stringify(
 function normalizeUrl(value){return engine()?.safeUrl(value)||'';}
 function selectedMarkets(state){return Array.isArray(state?.targetMarkets)?state.targetMarkets.map(value=>String(value||'').trim()).filter(Boolean):[];}
 function companyResearchReady(state=readState()){return Boolean(normalizeUrl(state.website)&&selectedMarkets(state).length);}
-function returnToStepOneIfIncomplete(){
-  const step2=$('step-2');
-  if(companyResearchReady()||!step2?.classList.contains('active')||prerequisiteReturnScheduled)return false;
-  prerequisiteReturnScheduled=true;
-  setTimeout(()=>{
-    prerequisiteReturnScheduled=false;
-    if(!companyResearchReady()&&step2.classList.contains('active'))$('back-to-sources')?.click();
-  },0);
-  return true;
-}
 function selectedContentLanguage(state=readState()){
   const selected=String($('language-select')?.value||window.LeadIntelLanguage?.get?.()||state.uiLanguage||'lv').toLowerCase();
   return engine().resolveResearchLanguage({selectorValue:selected,storedValue:state.uiLanguage,navigatorLanguages:navigator.languages||[]});
@@ -91,20 +79,6 @@ function sourceMap(state){
 }
 function metaForCurrentState(){const state=readState(),meta=readMeta();if(!meta?.website||normalizeUrl(meta.website)!==normalizeUrl(state.website))return {};return meta;}
 function modeLabel(meta){if(meta.mode==='ai')return `${meta.provider||'AI'}${meta.model?` · ${meta.model}`:''}`;return 'Evidence draft';}
-function shouldAutoStartCompanyResearch(){
-  if(running)return false;
-  const state=readState();const website=normalizeUrl(state.website);const meta=metaForCurrentState();
-  if(!website||!selectedMarkets(state).length||meta.generatedAt||meta.failureAt)return false;
-  const activationCheck=window.LeadIntelWebsiteActivation?.isWebsiteActive;
-  if(typeof activationCheck==='function')return activationCheck(state,website);
-  return state.websiteActivation?.status==='active'&&normalizeUrl(state.websiteActivation.url)===website;
-}
-function scheduleInitialCompanyResearch(){
-  if(autoStartScheduled||!shouldAutoStartCompanyResearch())return false;
-  autoStartScheduled=true;
-  setTimeout(()=>{autoStartScheduled=false;if(shouldAutoStartCompanyResearch())void runCompanyResearch({rerun:false});},0);
-  return true;
-}
 function repairResearchHandoff(state,meta){
   if(!meta.generatedAt)return false;
   const recovered=engine()?.recoverDraftAnswers?.(state.answers||{},meta.fields||{});if(!recovered)return false;
@@ -115,7 +89,6 @@ function repairResearchHandoff(state,meta){
   return true;
 }
 function renderResearchReview(){
-  if(returnToStepOneIfIncomplete())return;
   const state=readState();const meta=metaForCurrentState();repairResearchHandoff(state,meta);const map=sourceMap(state);const summary=$('research-summary');
   if(summary){
     summary.classList.remove('research-summary-failed');
@@ -128,12 +101,12 @@ function renderResearchReview(){
       summary.classList.add('research-summary-failed');
       summary.innerHTML='<div class="research-summary-main"><div class="research-summary-icon">!</div><div><strong>Research could not complete.</strong><small>'+esc(meta.error||'The company research request did not finish.')+'</small><small class="research-retry-note">Your website and target market were preserved. Try again when ready.</small></div></div><div class="research-summary-actions"><span class="research-mode">Retry available</span><button class="research-rerun research-primary" id="rerun-company-research" type="button">Try research again <span aria-hidden="true">→</span></button></div>';
     } else {
-      const ready=Boolean(normalizeUrl(state.website)&&selectedMarkets(state).length);
-      const detail=ready?'Your website and target market are ready. Run company research to pre-fill this step.':'Add the website and target market in Step 1, then run company research.';
-      const label=ready?'Start company research <span aria-hidden="true">→</span>':'Go to Step 1';
-      const step1Action=ready?'':' data-go-step1="true"';
-      const primaryClass=ready?' research-primary':'';
-      summary.innerHTML='<div class="research-summary-main"><div class="research-summary-icon">✦</div><div><strong>Research has not run yet.</strong><small>'+detail+'</small></div></div><div class="research-summary-actions"><span class="research-mode">'+(ready?'Evidence first':'Step 1 required')+'</span><button class="research-rerun'+primaryClass+'" id="rerun-company-research" type="button"'+step1Action+'>'+label+'</button></div>';
+      const hasWebsite=Boolean(normalizeUrl(state.website));const hasMarkets=selectedMarkets(state).length>0;const ready=hasWebsite&&hasMarkets;
+      let title='Setup complete — ready for company research',detail='LeadIntel will analyse your website and selected market. Usually takes up to 1 minute.',badge='Ready to research',label='Start company research <span aria-hidden="true">→</span>';
+      if(!hasWebsite){title='Add your company website';detail=hasMarkets?'Your target market is saved. Add and activate your website to prepare company research.':'Add and activate your website, then select at least one target market.';badge='Website required';label='Add website';}
+      else if(!hasMarkets){title='Select a target market';detail='Your website is saved. Select at least one country, region or market to prepare company research.';badge='Market required';label='Select market';}
+      const step1Action=ready?'':' data-go-step1="true"';const primaryClass=ready?' research-primary':'';
+      summary.innerHTML='<div class="research-summary-main"><div class="research-summary-icon">✦</div><div><strong>'+title+'</strong><small>'+detail+'</small></div></div><div class="research-summary-actions"><span class="research-mode">'+badge+'</span><button class="research-rerun'+primaryClass+'" id="rerun-company-research" type="button"'+step1Action+'>'+label+'</button></div>';
     }
     const action=summary.querySelector('#rerun-company-research');
     action?.addEventListener('click',()=>{
@@ -296,11 +269,11 @@ async function runCompanyResearch({rerun=false}={}){
 function bind(){
   ensureResearchUi();
   document.getElementById('step-2')?.addEventListener('click',handleReviewAction);
-  window.addEventListener('leadintel:website-activated',scheduleInitialCompanyResearch);
-  window.addEventListener('leadintel:module-opened',event=>{if(Number(event.detail?.step)===2)scheduleInitialCompanyResearch();});
-  window.addEventListener('leadintel:server-ready',()=>{renderResearchReview();void translateResearchAnswers();scheduleInitialCompanyResearch();});
+  window.addEventListener('leadintel:website-activated',renderResearchReview);
+  window.addEventListener('leadintel:module-opened',event=>{if(Number(event.detail?.step)===2){renderResearchReview();void translateResearchAnswers();}});
+  window.addEventListener('leadintel:server-ready',()=>{renderResearchReview();void translateResearchAnswers();});
   window.addEventListener('leadintel:workspace-changed',()=>{renderResearchReview();void translateResearchAnswers();});
-  window.addEventListener('leadintel:workspace-reset',()=>setTimeout(returnToStepOneIfIncomplete,0));
+  window.addEventListener('leadintel:workspace-reset',()=>setTimeout(renderResearchReview,0));
   window.addEventListener('leadintel:language-changed',()=>void translateResearchAnswers());
   void translateResearchAnswers();
 }
