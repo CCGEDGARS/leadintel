@@ -15,14 +15,14 @@ const supportLoader=read('shell-support-loader.js');
 
 test('Customer V2 loads the automatic company research module with Firecrawl workspace routing before research',()=>{
   assert.match(processMap,/firecrawl-workspace-router\.js\?v=20260914-spinner-hard-stop-v1/);
-  assert.match(processMap,/company-research-security\.js\?v=20260918-dynamic-language-v2/);
-  assert.match(processMap,/company-research-ui\.js\?v=20260918-dynamic-language-v2/);
+  assert.match(processMap,/company-research-security\.js\?v=20260918-translation-fidelity-v3/);
+  assert.match(processMap,/company-research-ui\.js\?v=20260918-translation-fidelity-v3/);
   assert.ok(processMap.indexOf('firecrawl-workspace-router.js')<processMap.indexOf('company-research-ui.js'),'Firecrawl router must load before company research');
   assert.match(processMap,/company-profile-handoff\.js\?v=20260826-intelligence-autofill-v1/);
-  assert.match(ui,/company-research-engine\.js\?v=20260918-dynamic-language-v2/);
+  assert.match(ui,/company-research-engine\.js\?v=20260918-translation-fidelity-v3/);
   assert.match(read('index.html'),/profile-engine\.js\?v=20260916-commercial-brief-v1/);
   assert.match(read('index.html'),/process-map\.js\?v=20260918-classic-scope-v1/);
-  assert.match(supportLoader,/company-research-ui\.js\?v=20260918-dynamic-language-v2/);
+  assert.match(supportLoader,/company-research-ui\.js\?v=20260918-translation-fidelity-v3/);
 });
 
 test('Step 2 waits for an explicit research confirmation and explains the next action',()=>{
@@ -118,6 +118,14 @@ test('company research resolves output language from the visible selector at run
   assert.match(ui,/language-select/);
   assert.match(ui,/resolveResearchLanguage/);
   assert.match(ui,/next\.uiLanguage\s*=\s*selectedLanguage/);
+});
+
+test('research preserves an English master and rejects translations that collapse commercial detail',()=>{
+  const language=read('content-language.js');
+  assert.match(ui,/const researchLanguage='en'/);
+  assert.match(ui,/next\\.uiLanguage\\s*=\\s*selectedLanguage/);
+  assert.match(language,/never summarize, shorten, generalize/);
+  assert.match(language,/Translation lost source detail or meaning/);
 });
 
 test('research reruns preserve reviewed answers through provenance-aware merge',()=>{
