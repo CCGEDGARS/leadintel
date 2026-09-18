@@ -145,14 +145,14 @@ test('labels reset as a complete workspace reset and protects CRM records',()=>{
 });
 
 
-test('Latvian Step 2 localizes the complete interface and dynamic research controls',()=>{
-  assert.match(ui,/Izveidojiet komerciālās inteliģences kopsavilkumu/);
-  assert.match(ui,/Definējiet, kādus uzņēmumus LeadIntel jāatrod/);
-  assert.match(ui,/Pirkšanas signāli/);
-  assert.match(ui,/Komerciālais vēstījums/);
-  assert.match(ui,/Atkārtot uzņēmuma izpēti/);
-  assert.match(ui,/Nepieciešama jūsu informācija/);
-  assert.match(ui,/Pieņemt/);
-  assert.match(ui,/Notīrīt/);
+test('workspace interface stays English while selected language affects only dynamic research content',()=>{
+  assert.match(ui,/Build your Commercial Intelligence Brief\./);
+  assert.match(ui,/Define who LeadIntel should find\./);
+  assert.match(ui,/Buying Signals/);
+  assert.match(ui,/Commercial Message/);
+  assert.match(ui,/Rerun company research/);
+  assert.match(ui,/Needs your input/);
+  assert.doesNotMatch(ui,/STEP2_COPY|applyStep2Copy|AI atbalsts|Izveidojiet komerciālās inteliģences kopsavilkumu/);
   assert.match(ui,/data-research-translatable/);
+  assert.match(ui,/translateEditor\(window,editor,language\)/);
 });
