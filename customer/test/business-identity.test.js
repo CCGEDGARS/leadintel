@@ -157,7 +157,7 @@ test('Step 1 opens the questionnaire immediately and keeps evidence-first resear
   const researchEngine = fs.readFileSync(path.join(__dirname, '..', 'company-research-engine.js'), 'utf8');
   assert.match(index, /company-research-ui\.js/);
   assert.match(researchUi, /runCompanyResearch/);
-  assert.match(researchUi, /Continue to optional context/);
+  assert.match(researchUi, /Continue to Company Research/);
   assert.match(researchUi, /rerun-company-research/);
   assert.doesNotMatch(researchUi, /function interceptStepOne/);
   assert.match(researchUi, /Evidence draft/);
