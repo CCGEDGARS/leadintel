@@ -42,7 +42,7 @@
  * import './copilot-loader.js?v=20260911-copilot-freshness-v1';
  */
 
-const PROCESS_STORAGE_KEY="leadintel_customer_v2_state";
+(()=>{\nconst PROCESS_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
 const DELIVERY_STORAGE_KEY="leadintel_customer_v2_delivery";
@@ -213,3 +213,4 @@ if(processMap){
   syncContextArchitecture();syncProcessMap();
   window.LeadIntelJourney={refresh:syncProcessMap,open:openProcessStep,getModel:()=>journeyModel(stageAvailability(),currentProcessStep())};
 }
+\n})();\n
