@@ -174,3 +174,15 @@ test('Step 2 translation skips fields already generated in the selected language
   assert.equal(ready.value,'Noliktavu aprīkojums');
   assert.equal(needsTranslation.value,'Klienta rakstīta vērtība');
 });
+
+
+test('Latvian translation rejects broad English commercial prose, not only fixed phrases',()=>{
+  assert.throws(
+    ()=>language.validate(
+      {f0:'Custom manufacturing and installation of metal structures and equipment'},
+      {f0:'Custom manufacturing and installation of metal structures and equipment'},
+      'lv'
+    ),
+    /English/i
+  );
+});

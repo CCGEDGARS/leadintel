@@ -257,3 +257,26 @@ test('research translation still runs for customer-authored or unmarked content'
   assert.equal(engine.researchOutputReadyForLanguage({answers,meta:{generatedAt:'2026-09-16T09:00:00.000Z',contentLanguage:'lv',fields:{priority_offers:{origin:'user'}}},language:'lv'}),false);
   assert.equal(engine.researchOutputReadyForLanguage({answers,meta:{generatedAt:'2026-09-16T09:00:00.000Z',fields:{priority_offers:{origin:'research'}}},language:'lv'}),false);
 });
+
+
+test('Latvian readiness rejects English answers and rationales even when metadata says Latvian',()=>{
+  const meta={
+    generatedAt:'2026-09-18T13:00:00.000Z',
+    contentLanguage:'lv',
+    fields:{
+      priority_offers:{origin:'evidence_draft',rationale:'Supported by the official company website.'},
+      ideal_customer:{origin:'hypothesis_draft',rationale:'Pamatots ar uzņēmuma pakalpojumiem.'}
+    }
+  };
+  assert.equal(engine.researchFieldReadyForLanguage({
+    field:meta.fields.priority_offers,
+    meta,
+    language:'lv',
+    value:'Custom manufacturing and installation of metal structures and equipment'
+  }),false);
+  assert.equal(engine.researchOutputReadyForLanguage({
+    answers:{priority_offers:'Custom manufacturing and installation of metal structures and equipment',ideal_customer:'Rūpniecības uzņēmumi Zviedrijā'},
+    meta,
+    language:'lv'
+  }),false);
+});

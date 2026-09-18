@@ -143,3 +143,16 @@ test('labels reset as a complete workspace reset and protects CRM records',()=>{
   assert.match(resetBlock,/bridge\.saveNow\(\)/);
   assert.doesNotMatch(resetBlock,/deleteCompany|crmDelete|method:\s*["']DELETE["']/i);
 });
+
+
+test('Latvian Step 2 localizes the complete interface and dynamic research controls',()=>{
+  assert.match(ui,/Izveidojiet komerciālās inteliģences kopsavilkumu/);
+  assert.match(ui,/Definējiet, kādus uzņēmumus LeadIntel jāatrod/);
+  assert.match(ui,/Pirkšanas signāli/);
+  assert.match(ui,/Komerciālais vēstījums/);
+  assert.match(ui,/Atkārtot uzņēmuma izpēti/);
+  assert.match(ui,/Nepieciešama jūsu informācija/);
+  assert.match(ui,/Pieņemt/);
+  assert.match(ui,/Notīrīt/);
+  assert.match(ui,/data-research-translatable/);
+});
