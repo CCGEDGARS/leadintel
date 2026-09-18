@@ -15,11 +15,11 @@ test('workspace reset does not use a native browser confirmation dialog',()=>{
   assert.doesNotMatch(app,/window\.confirm\s*\(/);
 });
 
-test('workspace reset uses a five-second inline confirm state on the existing button',()=>{
+test('workspace reset keeps a clear 30-second inline confirmation state on the existing button',()=>{
   assert.match(app,/RESET_CONFIRM_WINDOW_MS\s*=\s*5000/);
   assert.match(app,/dataset\.resetArmed\s*=\s*["']true["']/);
   assert.match(app,/classList\.add\(["']reset-armed["']\)/);
-  assert.match(app,/Confirm reset/);
+  assert.match(app,/Click again to reset/);\n  assert.match(app,/within 30 seconds/);
   assert.match(app,/setTimeout\([^\n]*RESET_CONFIRM_WINDOW_MS\)/);
   assert.match(app,/style\.setProperty\(["']color["'],["']var\(--danger\)["']\)/);
 });
