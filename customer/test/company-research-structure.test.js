@@ -146,13 +146,14 @@ test('labels reset as a complete workspace reset and protects CRM records',()=>{
 
 
 test('workspace interface stays English while selected language affects only dynamic research content',()=>{
+  const html=read('index.html');
   assert.match(ui,/Build your Commercial Intelligence Brief\./);
-  assert.match(ui,/Define who LeadIntel should find\./);
-  assert.match(ui,/Buying Signals/);
-  assert.match(ui,/Commercial Message/);
+  assert.match(html,/Define who LeadIntel should find\./);
+  assert.match(html,/Buying Signals/);
+  assert.match(html,/Commercial Message/);
   assert.match(ui,/Rerun company research/);
   assert.match(ui,/Needs your input/);
-  assert.doesNotMatch(ui,/STEP2_COPY|applyStep2Copy|AI atbalsts|Izveidojiet komerciālās inteliģences kopsavilkumu/);
+  assert.doesNotMatch(ui+'\n'+html,/STEP2_COPY|applyStep2Copy|AI atbalsts|Izveidojiet komerciālās inteliģences kopsavilkumu/);
   assert.match(ui,/data-research-translatable/);
   assert.match(ui,/translateEditor\(window,editor,language\)/);
 });
