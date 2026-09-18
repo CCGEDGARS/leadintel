@@ -19,7 +19,8 @@ test('workspace reset keeps a clear 30-second inline confirmation state on the e
   assert.match(app,/RESET_CONFIRM_WINDOW_MS\s*=\s*30000/);
   assert.match(app,/dataset\.resetArmed\s*=\s*["']true["']/);
   assert.match(app,/classList\.add\(["']reset-armed["']\)/);
-  assert.match(app,/Click again to reset/);\n  assert.match(app,/within 30 seconds/);
+  assert.match(app,/Click again to reset/);
+  assert.match(app,/within 30 seconds/);
   assert.match(app,/setTimeout\([^\n]*RESET_CONFIRM_WINDOW_MS\)/);
   assert.match(app,/style\.setProperty\(["']color["'],["']var\(--danger\)["']\)/);
 });
