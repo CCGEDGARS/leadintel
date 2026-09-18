@@ -11,11 +11,11 @@ test('classic customer scripts share a browser realm without lexical redeclarati
   const processMap = fs.readFileSync(path.join(customerDir, 'process-map.js'), 'utf8');
   const discoveryUi = fs.readFileSync(path.join(customerDir, 'discovery-ui.js'), 'utf8');
 
-  assert.match(html, /<script defer src="process-map\\.js[^"]*"><\\/script>/);
-  assert.match(html, /<script defer src="discovery-ui\\.js[^"]*"><\\/script>/);
+  assert.match(html, /<script defer src="process-map\.js[^"]*"><\/script>/);
+  assert.match(html, /<script defer src="discovery-ui\.js[^"]*"><\/script>/);
 
   assert.doesNotThrow(
-    () => new vm.Script(processMap + '\\n' + discoveryUi),
+    () => new vm.Script(processMap + '\n' + discoveryUi),
     /already been declared/
   );
 });
