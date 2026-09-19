@@ -104,8 +104,8 @@ test('research completion is prominent while provider gaps remain explicit',()=>
   const index=fs.readFileSync(indexPath,'utf8');
   const css=fs.readFileSync(marketCssPath,'utf8');
   const app=fs.readFileSync(appPath,'utf8');
-  assert.match(index,/market\.css\?v=20260919-research-complete-banner-v1/);
-  assert.match(index,/app\.js\?v=20260919-saved-websites-reset-v1/);
+  assert.match(index,/market\.css\?v=20260919-openai-extend-progress-v1/);
+  assert.match(index,/app\.js\?v=20260919-openai-extend-progress-v1/);
   assert.match(index,/id="market-research-status" role="status" aria-live="polite"/);
   assert.match(app,/complete-with-warning/);
   assert.match(app,/research-status-icon/);
@@ -121,7 +121,19 @@ test('partial coverage offers an OpenAI-only recovery that preserves Firecrawl e
   assert.match(app,/async function retryOpenAiDiscovery\(/);
   assert.match(app,/const preservedResults=\[\.\.\.state\.market\.researchResults\]/);
   assert.match(app,/state\.market\.researchResults=LeadIntelMarket\.mergeResearchResults\(preservedResults/);
-  assert.match(app,/data-retry-openai/);
-  assert.match(app,/Retry OpenAI discovery/);
-  assert.match(app,/OpenAI retry/);
+  assert.match(app,/data-extend-openai/);
+  assert.match(app,/Extend with OpenAI/);
+  assert.match(app,/openAiRetryStatus/);
+});
+
+
+test('partial research offers one inline OpenAI extension action with live countdown progress',()=>{
+  const app=fs.readFileSync(appPath,'utf8');
+  assert.match(app,/Extend with OpenAI/);
+  assert.match(app,/data-extend-openai/);
+  assert.match(app,/function openAiRetryStatus/);
+  assert.match(app,/s remaining/);
+  assert.match(app,/OpenAI \${current}\/\${total} queries/);
+  assert.match(app,/startOpenAiCountdown/);
+  assert.doesNotMatch(app,/Retry OpenAI discovery/);
 });

@@ -24,7 +24,7 @@ test('profile approval reads only editable textarea fields', () => {
   assert.match(app, /querySelectorAll\(["']textarea\[data-profile-field\]["']\)/);
   assert.doesNotMatch(app, /querySelectorAll\(["']\[data-profile-field\]["']\)/);
   const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  assert.match(html, /app\.js\?v=20260919-saved-websites-reset-v1/);
+  assert.match(html, /app\.js\?v=20260919-openai-extend-progress-v1/);
 });
 
 
