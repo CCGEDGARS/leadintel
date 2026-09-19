@@ -53,8 +53,8 @@ function readProcessState(){try{return JSON.parse(localStorage.getItem(PROCESS_S
 function ensureReferenceCustomerTool(){
   const step=document.getElementById("step-2");if(!step||step.querySelector("[data-reference-intelligence-card]"))return;
   const actions=step.querySelector(".step-actions");if(!actions)return;
-  const card=document.createElement("section");card.className="panel reference-customer-core-card";card.dataset.referenceIntelligenceCard="true";card.style.marginTop="16px";
-  card.innerHTML='<div class="panel-head"><div><span class="eyebrow">Core targeting step</span><h3>Build your Lookalike Audience</h3><p>Upload and analyze your best existing customers. LeadIntel identifies the patterns they share and uses that Lookalike DNA to find, qualify and prioritise similar companies.</p></div><span class="required-pill">High impact</span></div><p class="field-help"><strong>Why this matters:</strong> Reference-customer intelligence directly improves Discovery accuracy, ICP quality and campaign relevance. It remains separate from the Context questionnaire so customer evidence is not mixed with assumptions.</p><div style="margin-top:16px"><button class="primary-btn" type="button" data-reference-customers-manage>Build Lookalike Audience Intelligence →</button></div>';
+  const card=document.createElement("section");card.className="panel brand-identity-panel reference-customer-core-card";card.dataset.referenceIntelligenceCard="true";card.style.marginTop="16px";
+  card.innerHTML='<div class="brand-identity-summary"><div class="brand-identity-intro"><span class="eyebrow">Core targeting · Lookalike discovery</span><h3>Build your Lookalike Audience</h3><p>Analyze your best existing customers to reveal shared patterns. Lookalike DNA directly improves Discovery accuracy, ICP quality and campaign relevance.</p><span class="brand-identity-status">High impact</span></div><button class="secondary-btn brand-identity-toggle" type="button" data-reference-customers-manage><span>Build lookalike audience</span><span aria-hidden="true">→</span></button></div>';
   actions.parentNode.insertBefore(card,actions);
 }
 function patchMarketLookalikeIsolation(){
