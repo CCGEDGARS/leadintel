@@ -46,7 +46,7 @@ sqliteTest('a booked meeting stops outreach, cancels follow-ups, advances CRM, a
   const env=await fixture();
   const first=await processCalendlyWebhook(env,{workspaceId:'w1',secret:'webhook-secret',body:webhook()});
   assert.equal(first.accepted,true);assert.equal(first.duplicate,false);assert.equal(first.matched,true);
-  assert.deepEqual(env.DB.raw.prepare(`SELECT status,stop_reason FROM outreach_automation_sequences WHERE id='s1'`).get(),{status:'cancelled',stop_reason:'meeting_booked'});
+  assert.deepEqual({...env.DB.raw.prepare(`SELECT status,stop_reason FROM outreach_automation_sequences WHERE id='s1'`).get()},{status:'cancelled',stop_reason:'meeting_booked'});
   assert.deepEqual(env.DB.raw.prepare(`SELECT status FROM outreach_automation_queue WHERE sequence_id='s1' AND step_index>0 ORDER BY step_index`).all().map(row=>row.status),['skipped','skipped']);
   assert.equal(env.DB.raw.prepare(`SELECT pipeline_stage FROM crm_companies WHERE id='c1'`).get().pipeline_stage,'Meeting');
   assert.equal(env.DB.raw.prepare(`SELECT COUNT(*) count FROM crm_activities WHERE activity_type='meeting.booked'`).get().count,1);
