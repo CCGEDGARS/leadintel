@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260826-target-market-v1">
+  <link rel="stylesheet" href="styles.css?v=20260919-consistent-next-actions-v1">
   <link rel="stylesheet" href="market.css?v=20260919-openai-extend-progress-v1">
   <link rel="stylesheet" href="premium.css?v=20260917-sidebar-status-v1">
   <link rel="stylesheet" href="market-selector.css?v=20260826-target-market-v1">
@@ -227,7 +227,7 @@
             <p class="privacy-note">PDF text is extracted locally in the browser and saved in this browser for the current workspace. Original file bytes are not uploaded by this onboarding screen.</p>
           </div>
 
-          <div class="step-actions stage1-primary-action"><span id="step1-error" class="inline-error" role="alert"></span><button class="primary-btn" type="button" id="to-questionnaire">Continue to Company Research <span>→</span></button></div>
+          <div class="step-actions stage-next-action stage1-primary-action"><span id="step1-error" class="inline-error" role="alert"></span><button class="primary-btn" type="button" id="to-questionnaire">Continue to Company Research <span aria-hidden="true">→</span></button></div>
 
         </section>
 
@@ -266,7 +266,7 @@
             </div>
           </section>
 
-          <div class="step-actions split"><button class="secondary-btn" type="button" id="back-to-sources">← Back</button><span id="step2-error" class="inline-error" role="alert"></span><button class="primary-btn" type="button" id="analyze-company">Build / refresh intelligence profile <span>✦</span></button></div>
+          <div class="step-actions split stage-next-action"><button class="secondary-btn" type="button" id="back-to-sources">← Back</button><span id="step2-error" class="inline-error" role="alert"></span><button class="primary-btn" type="button" id="analyze-company">Continue to Intelligence Profile <span aria-hidden="true">→</span></button></div>
         </section>
 
         <section class="step-view" id="step-3" data-step="3">
@@ -303,8 +303,9 @@
 
             <div class="approval-card" id="approval-card">
               <div><span class="eyebrow">Profile approval</span><h3>Approve this profile before building Market Strategy.</h3><p>Review the interpretation above. Approval saves it as the current source of truth.</p></div>
-              <div class="profile-approval-actions"><button class="secondary-btn" type="button" id="edit-profile">Edit Profile</button><button class="primary-btn" id="approve-profile" type="button">Approve Profile</button></div>
+              <div class="profile-approval-actions"><button class="secondary-btn" type="button" id="edit-profile">Edit profile</button></div>
             </div>
+            <div class="step-actions stage-next-action profile-next-action"><button class="primary-btn" id="approve-profile" type="button">Continue to Market Strategy <span aria-hidden="true">→</span></button></div>
           </div>
         </section>
 
