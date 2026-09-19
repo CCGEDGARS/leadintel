@@ -120,7 +120,7 @@ test('rerun preserves accepted and user answers while replacing unreviewed draft
 test('readiness UI explains confirmed core inputs instead of presenting a vague completeness percentage',()=>{
   assert.match(layer,/Profile readiness/);
   assert.match(layer,/core inputs confirmed/i);
-  assert.match(layer,/Build intelligence profile/);
+  assert.match(layer,/Continue to Intelligence Profile/);
   assert.match(layer,/draft\$\{summary\.drafts===1\?"":"s"\} to review/);
 });
 
