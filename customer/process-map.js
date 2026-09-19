@@ -15,7 +15,7 @@
  * import './crm-ui.js?v=20260905-app-audit-v2';
  * import './ai-settings.js?v=20260915-model-choice-v1';
  * import './service-settings-extension.js?v=20260919-calendly-v1';
- * import './step2-readiness-engine.js?v=20260916-commercial-brief-v1';
+ * import './step2-readiness-engine.js?v=20260919-clean-next-label-v1';
  * import './content-language.js?v=20260918-translation-fidelity-v3';
  * import './content-variants.js?v=20260905-step1-language-v1';
  * import './business-identity.js?v=20260906-pain-headings-v1';
