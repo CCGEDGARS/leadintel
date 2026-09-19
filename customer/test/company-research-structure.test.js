@@ -21,7 +21,7 @@ test('Customer V2 loads the automatic company research module with Firecrawl wor
   assert.match(processMap,/company-profile-handoff\.js\?v=20260826-intelligence-autofill-v1/);
   assert.match(ui,/company-research-engine\.js\?v=20260918-translation-fidelity-v3/);
   assert.match(read('index.html'),/profile-engine\.js\?v=20260916-commercial-brief-v1/);
-  assert.match(read('index.html'),/process-map\.js\?v=20260918-classic-scope-v1/);
+  assert.match(read('index.html'),/process-map\.js\?v=20260919-lookalike-green-card-v1/);
   assert.match(supportLoader,/company-research-ui\.js\?v=20260919-brief-section-border-v1/);
 });
 
@@ -137,8 +137,8 @@ test('company research resolves output language from the visible selector at run
 test('research preserves an English master and rejects translations that collapse commercial detail',()=>{
   const language=read('content-language.js');
   assert.match(ui,/const researchLanguage='en'/);
-  assert.match(ui,/next\\.uiLanguage\\s*=\\s*selectedLanguage/);
-  assert.match(language,/never summarize, shorten, generalize/);
+  assert.match(ui,/next\.uiLanguage\s*=\s*selectedLanguage/);
+  assert.match(language,/Do not add or remove facts/);
   assert.match(language,/Translation lost source detail or meaning/);
 });
 
@@ -162,7 +162,7 @@ test('labels reset as a complete workspace reset and protects CRM records',()=>{
   assert.match(html,/id="reset-workspace"[^>]*>Reset all workspace data</);
   assert.match(app,/Reset all workspace data/);
   assert.match(resetBlock,/leadintel_customer_v2_discovery/);
-  assert.match(resetBlock,/bridge\.saveNow\(\)/);
+  assert.match(resetBlock,/bridge\.saveNow\(\{saveIntent:true,explicitSave:true\}\)/);
   assert.doesNotMatch(resetBlock,/deleteCompany|crmDelete|method:\s*["']DELETE["']/i);
 });
 

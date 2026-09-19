@@ -22,10 +22,10 @@ test('customer boot loads reference engine, AI client, UI, AI runtime and lookal
   assert.ok(lookalike>runtime,'lookalike integration must load after AI analysis runtime');
 });
 
-test('reference customer card is prominent and uses a large upload-and-analyze CTA',()=>{
-  assert.match(profile,/REFERENCE CUSTOMER INTELLIGENCE/i);
-  assert.match(profile,/HIGH IMPACT/i);
-  assert.match(profile,/Upload & Analyze Customers/i);
+test('reference customer card is prominent and opens the lookalike builder',()=>{
+  assert.match(boot,/Build your Lookalike Audience/i);
+  assert.match(boot,/High impact/i);
+  assert.match(boot,/Build lookalike audience/i);
   assert.match(css,/reference-customer-summary/);
   assert.match(css,/reference-customer-manage/);
 });

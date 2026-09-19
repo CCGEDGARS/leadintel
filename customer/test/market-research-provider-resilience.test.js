@@ -30,7 +30,7 @@ test('provider resilience is loaded before research starts and wraps the OpenAI 
   const evidenceView=fs.readFileSync(evidenceViewPath,'utf8');
   const app=fs.readFileSync(appPath,'utf8');
   assert.match(evidenceView,/market-research-provider-resilience\.js\?v=20260916-latency-fix-v2/);
-  assert.match(app,/import\s*{\s*withOpenAiRetry\s*,\s*describePartialCoverage\s*}\s*from\s*['"]\.\/market-research-provider-resilience\.js\?v=20260916-latency-fix-v2['"]/);
+  assert.match(app,/import\s*{\s*withOpenAiRetry\s*,\s*cleanOpenAiResearchQuery\s*,\s*describePartialCoverage\s*}\s*from\s*['"]\.\/market-research-provider-resilience\.js\?v=20260916-latency-fix-v2['"]/);
   assert.match(app,/withOpenAiRetry\(\(\)=>LeadIntelMarket\.withTimeout\(/);
   assert.match(app,/describePartialCoverage\(/);
 });
@@ -43,15 +43,22 @@ test('managed Firecrawl 404 retries the direct proxy instead of failing every re
   assert.match(processMap,/firecrawl-workspace-router\.js\?v=20260914-spinner-hard-stop-v1/,'browser must receive the corrected router immediately');
 });
 
-test('OpenAI discovery does not retry a timeout that already consumed its latency budget',async()=>{
+test('OpenAI discovery automatically retries a timeout once',async()=>{
   const resilience=await loadResilienceModule();
   let attempts=0;
   await assert.rejects(()=>resilience.withOpenAiRetry(async()=>{
     attempts++;
     throw new Error('OpenAI search timed out');
-  },{sleep:async()=>{}}),/timed out/i);
+  },{sleep:async()=>{}}),/remained unavailable after 2 attempts/i);
 
-  assert.equal(attempts,1);
+  assert.equal(attempts,2);
+});
+
+test('OpenAI research queries are concise, deduplicated and use one language',async()=>{
+  const resilience=await loadResilienceModule();
+  const cleaned=resilience.cleanOpenAiResearchQuery('Sweden Drawing development and mechanical engineering Swedish industrial manufacturers, Swedish industrial manufacturers, engineering Facility expansion ziņas paziņojums paplašināšanās');
+  assert.equal(cleaned,'Sweden Drawing development and mechanical engineering Swedish industrial manufacturers engineering Facility expansion');
+  assert.ok(cleaned.length<=180);
 });
 
 test('OpenAI discovery does not retry configuration or validation failures',async()=>{
@@ -88,7 +95,7 @@ test('partial OpenAI coverage explains that Firecrawl evidence was preserved and
   assert.deepEqual(copy,{
     status:'Market Scan completed with 5 evidence sources. Firecrawl succeeded; OpenAI discovery was unavailable within the research time limit.',
     title:'Research completed with limited coverage',
-    intro:'5 public evidence sources were saved. Rerun Market Scan to retry the missing OpenAI discovery without losing these results.'
+    intro:'5 public evidence sources were saved. Retry only OpenAI discovery without losing these results.'
   });
   assert.equal(resilience.describePartialCoverage({modeLabel:'Market Scan',count:0,openAiStatus:'error',firecrawlStatus:'error'}),null);
 });
@@ -107,4 +114,14 @@ test('research completion is prominent while provider gaps remain explicit',()=>
   assert.match(css,/\.research-status-icon/);
   assert.match(css,/\.research-status-copy em/);
   assert.match(css,/\.research-run-feedback\[data-status="partial"\]/);
+});
+
+test('partial coverage offers an OpenAI-only recovery that preserves Firecrawl evidence',()=>{
+  const app=fs.readFileSync(appPath,'utf8');
+  assert.match(app,/async function retryOpenAiDiscovery\(/);
+  assert.match(app,/const preservedResults=\[\.\.\.state\.market\.researchResults\]/);
+  assert.match(app,/state\.market\.researchResults=LeadIntelMarket\.mergeResearchResults\(preservedResults/);
+  assert.match(app,/data-retry-openai/);
+  assert.match(app,/Retry OpenAI discovery/);
+  assert.match(app,/OpenAI retry/);
 });
