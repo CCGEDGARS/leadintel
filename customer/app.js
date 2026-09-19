@@ -691,10 +691,25 @@ function renderMarketJourney(){
     activationButton.dataset.activationContinue="false";
   }
 }
+function savedResearchWebsites(){
+  return [...new Set((state.market.researchCustomSources||[]).map(LeadIntelProfile.normalizeUrl).filter(Boolean))];
+}
+function renderSavedResearchWebsites(){
+  const list=$("research-saved-websites"),summary=$("research-saved-websites-summary");if(!list||!summary)return;
+  const websites=savedResearchWebsites();summary.textContent=websites.length?`${websites.length} website${websites.length===1?"":"s"} saved`:"No websites saved";
+  list.hidden=!websites.length;
+  list.innerHTML=websites.map(url=>{let label=url;try{label=new URL(url).hostname.replace(/^www\\./i,"");}catch{}return `<li><span><strong>${esc(label)}</strong><small>${esc(url)}</small></span><button type="button" class="text-btn" data-remove-research-website="${esc(url)}" aria-label="Remove ${esc(label)}">Remove</button></li>`;}).join("");
+}
+function removeSavedResearchWebsite(url){
+  const target=LeadIntelProfile.normalizeUrl(url);if(!target)return;
+  state.market.researchCustomSources=(state.market.researchCustomSources||[]).filter(item=>LeadIntelProfile.normalizeUrl(item)!==target);
+  state.market.monitoring=LeadIntelMarket.normalizeMonitoring({...state.market.monitoring,customSources:(state.market.monitoring?.customSources||[]).filter(item=>LeadIntelProfile.normalizeUrl(item)!==target)});
+  $("research-custom-sources").value=state.market.researchCustomSources.join("\\n");saveState();renderResearchControls();renderMonitoringControls();showToast("Website removed from research and monitoring");
+}
 function renderResearchControls(){
   state.market.researchMode=normalizeResearchMode(state.market.researchMode);$("research-mode").value=state.market.researchMode;syncResearchSourcesToSignals();const selectedSources=new Set(state.market.researchSourceTypes?.length?state.market.researchSourceTypes:(state.market.researchMode==="quick"?["news"]:["news","jobs","investments","company","registries"]));const tenderAllowed=LeadIntelMarket.filterResearchSourceTypes(["tenders"],state.market.signals||[]).includes("tenders");document.querySelectorAll('#research-source-types input').forEach(input=>{input.disabled=input.value==="tenders"&&!tenderAllowed;input.checked=selectedSources.has(input.value)&&!input.disabled;});
   const tenderNote=$("tender-source-note");if(tenderNote)tenderNote.textContent=tenderAllowed?"Tender research is available because the tender signal is active.":"Tenders are excluded. Activate the tender signal above if you want to include them.";
-  $("research-custom-sources").value=(state.market.researchCustomSources||[]).join("\n");$("research-instructions").value=state.market.researchInstructions||"";
+  $("research-custom-sources").value=(state.market.researchCustomSources||[]).join("\n");$("research-instructions").value=state.market.researchInstructions||"";renderSavedResearchWebsites();
   const recommendations=LeadIntelMarket.buildResearchRecommendations(state.profile||{},state.market.signals||[],[...selectedSources],contentLanguage());$("research-recommendations").innerHTML=recommendations.length?recommendations.map(item=>`<div><strong>${esc(item.label)}</strong><span>${esc(item.reason)}</span></div>`).join(""):"<span>Select a source category to see the recommendation.</span>";
   [["run-market-research","quick"],["run-detailed-research","deep"],["run-market-intelligence","intelligence"]].forEach(([id,mode])=>{const button=$(id);const limits=LeadIntelMarket.RESEARCH_MODES[mode];if(button)button.title=`${researchModeUi(mode).label}: maximum ${limits.maxQueries} searches, ${limits.resultsPerQuery} results per search and ${limits.maxStoredResults} stored sources`;});
 }
@@ -830,7 +845,7 @@ async function resetWorkspace(){
   const button=$("reset-workspace");
   if(button?.dataset.resetArmed!=="true"){armWorkspaceReset();return;}
   disarmWorkspaceReset();
-  state=defaultState();editMode=false;saveState();for(const key of ["leadintel_customer_v2_discovery","leadintel_customer_v2_outreach","leadintel_customer_v2_delivery","leadintel_customer_v2_discovery_meta"])localStorage.removeItem(key);syncInputsFromState();restoreResetLanding();window.dispatchEvent(new CustomEvent("leadintel:workspace-reset"));setTimeout(restoreResetLanding,0);const bridge=window.LeadIntelServerBridge;if(bridge?.session?.authenticated&&bridge.workspace){try{const result=await bridge.saveNow({saveIntent:true,explicitSave:true});if(!result.saved)throw new Error("Server reset was not saved");}catch(error){showToast("Reset failed to sync: "+error.message);return;}}sessionStorage.removeItem("leadintel_customer_v2_server_hydration");showToast("All workspace data reset");
+  const persistence=window.LeadIntelWorkspacePersistence;persistence?.clearExplicitSave?.();persistence?.clearWorkspaceData?.();window.LeadIntelWorkspaceResetHygiene?.clearBrowserWorkspaceResidue?.();state=defaultState();editMode=false;saveState();for(const key of ["leadintel_customer_v2_discovery","leadintel_customer_v2_outreach","leadintel_customer_v2_delivery","leadintel_customer_v2_discovery_meta","leadintel_customer_v2_website_activation_v1","leadintel_customer_v2_research_meta_v1","leadintel_customer_v2_workspace_saved_snapshot_v1"])localStorage.removeItem(key);syncInputsFromState();restoreResetLanding();window.dispatchEvent(new CustomEvent("leadintel:workspace-reset"));setTimeout(restoreResetLanding,0);const bridge=window.LeadIntelServerBridge;if(bridge?.session?.authenticated&&bridge.workspace){try{const result=await bridge.saveNow({saveIntent:true,explicitSave:true});if(!result.saved)throw new Error("Server reset was not saved");}catch(error){showToast("Reset failed to sync: "+error.message);return;}}sessionStorage.removeItem("leadintel_customer_v2_server_hydration");showToast("All workspace data reset");
 }
 
 function bind(){
@@ -854,7 +869,7 @@ function bind(){
     event.preventDefault();
     event.stopImmediatePropagation();
     void activateMarketStrategy();
-  });$("save-monitoring").addEventListener("click",saveMonitoringConfig);$("run-monitoring-now").addEventListener("click",runMonitoringNow);$("research-mode").addEventListener("change",()=>{state.market.researchMode=normalizeResearchMode($("research-mode").value);saveState();renderResearchControls();});$("research-source-types").addEventListener("change",readResearchSettings);$("research-custom-sources").addEventListener("change",readResearchSettings);$("research-instructions").addEventListener("change",readResearchSettings);
+  });$("save-monitoring").addEventListener("click",saveMonitoringConfig);$("run-monitoring-now").addEventListener("click",runMonitoringNow);$("research-mode").addEventListener("change",()=>{state.market.researchMode=normalizeResearchMode($("research-mode").value);saveState();renderResearchControls();});$("research-source-types").addEventListener("change",readResearchSettings);$("research-custom-sources").addEventListener("change",()=>{readResearchSettings();renderSavedResearchWebsites();});$("research-saved-websites")?.addEventListener("click",event=>{const button=event.target.closest("[data-remove-research-website]");if(button)removeSavedResearchWebsite(button.dataset.removeResearchWebsite);});$("research-instructions").addEventListener("change",readResearchSettings);
   $("monitoring-alerts").addEventListener("click",event=>{const button=event.target.closest('[data-monitor-alert-read]');if(button)markMonitoringAlertRead(button.dataset.monitorAlertRead);});
   $("signal-designer").addEventListener("click",e=>{const btn=e.target.closest("[data-remove-signal]");if(btn)removeSignal(Number(btn.dataset.removeSignal));});
   [$("icp-list"),$("market-opportunities")].forEach(container=>{container.addEventListener("change",()=>readMarketEdits());});
