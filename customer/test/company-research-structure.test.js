@@ -138,7 +138,7 @@ test('research preserves an English master and rejects translations that collaps
   const language=read('content-language.js');
   assert.match(ui,/const researchLanguage='en'/);
   assert.match(ui,/next\.uiLanguage\s*=\s*selectedLanguage/);
-  assert.match(language,/never summarize, shorten, generalize/);
+  assert.match(language,/Do not add or remove facts/);
   assert.match(language,/Translation lost source detail or meaning/);
 });
 
