@@ -98,3 +98,13 @@ test('reset=1 provides a boot-safe browser recovery path before later runtimes c
   assert.match(hygiene,/location\.replace/,'recovery must navigate away from the reset query');
   assert.doesNotMatch(hygiene,/localStorage\.clear\(\)/,'recovery must not wipe unrelated storage or saved provider settings');
 });
+
+
+test('confirmed reset clears saved website records, browser snapshots and all workspace data keys',()=>{
+  const resetBlock=app.match(/async function resetWorkspace\(\)\{[\s\S]*?\n\}/)?.[0]||'';
+  assert.match(resetBlock,/clearExplicitSave/,'reset must discard the saved browser snapshot');
+  assert.match(resetBlock,/clearWorkspaceData/,'reset must clear every registered workspace data key');
+  assert.match(resetBlock,/leadintel_customer_v2_website_activation_v1/,'reset must clear the active company website record');
+  assert.match(resetBlock,/leadintel_customer_v2_research_meta_v1/,'reset must clear company research metadata');
+  assert.match(resetBlock,/leadintel_customer_v2_workspace_saved_snapshot_v1/,'reset must prevent a previous snapshot from restoring deleted websites');
+});
