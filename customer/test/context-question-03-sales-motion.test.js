@@ -17,7 +17,7 @@ test('legacy lookalike recovery is no longer bootstrapped', () => {
 });
 
 test('Reference Customer Intelligence is presented as a core Lookalike targeting step', () => {
-  assert.match(source, /Core targeting step/);
+  assert.match(source, /Core targeting · Lookalike discovery/);
   assert.match(source, /Build your Lookalike Audience/);
   assert.match(source, /directly improves Discovery/);
   assert.match(source, /data-reference-customers-manage/);
