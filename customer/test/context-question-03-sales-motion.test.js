@@ -16,9 +16,12 @@ test('legacy lookalike recovery is no longer bootstrapped', () => {
   assert.doesNotMatch(source, /scheduleRepairs|ensureReferenceQuestion/);
 });
 
-test('Reference Customer Intelligence remains a separate optional tool', () => {
-  assert.match(source, /Reference Customer Intelligence/);
+test('Reference Customer Intelligence is presented as a core Lookalike targeting step', () => {
+  assert.match(source, /Core targeting step/);
+  assert.match(source, /Build your Lookalike Audience/);
+  assert.match(source, /directly improves Discovery/);
   assert.match(source, /data-reference-customers-manage/);
+  assert.doesNotMatch(source, /Optional advanced tool/);
 });
 
 test('sales motion never creates a false lookalike ICP', () => {
