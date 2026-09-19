@@ -29,5 +29,5 @@ test('the repaired research handoff is cache-busted at every browser entry point
   assert.match(supportLoader,/company-research-ui\.js\?v=20260919-brief-section-border-v1/);
   assert.match(shell,/shell-support-loader\.js\?v=20260919-brief-section-border-v1/);
   assert.match(researchUi,/company-research-engine\.js\?v=20260918-translation-fidelity-v3/);
-  assert.match(processMap,/step2-readiness-engine\.js\?v=20260916-commercial-brief-v1/);
+  assert.match(processMap,/step2-readiness-engine\.js\?v=20260919-clean-next-label-v1/);
 });
