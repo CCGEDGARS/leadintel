@@ -14,3 +14,13 @@
 .research-saved-websites li strong,.research-saved-websites li small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .research-saved-websites li small{color:var(--muted,#65736e)}
 .research-saved-websites li button{flex:0 0 auto;color:var(--danger,#a5473e)}
+
+/* Consistent stage-to-stage navigation */
+.stage-next-action{margin-top:18px;border-top:1px solid var(--line);padding-top:24px}
+.stage-next-action .primary-btn{min-width:320px;min-height:52px;padding:14px 20px;font-size:15px}
+.profile-next-action{justify-content:flex-end}
+@media(max-width:620px){
+  .stage-next-action{align-items:stretch}
+  .stage-next-action .primary-btn{width:100%;min-width:0}
+  .step-actions.split.stage-next-action .inline-error{order:3;width:100%}
+}

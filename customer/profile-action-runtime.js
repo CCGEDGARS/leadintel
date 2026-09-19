@@ -11,8 +11,7 @@ const PROFILE_ACTION_STATE_KEY='leadintel_customer_v2_state';
     const approved=Boolean(readState().approved);
     const button=document.getElementById('approve-profile');
     if(button){
-      const label=approved?'Continue to Market Strategy →':'Approve Profile';
-      setText(button,label);
+      button.innerHTML='Continue to Market Strategy <span aria-hidden="true">→</span>';
       if(button.disabled)button.disabled=false;
       const ariaDisabled='false';
       if(button.getAttribute('aria-disabled')!==ariaDisabled)button.setAttribute('aria-disabled',ariaDisabled);

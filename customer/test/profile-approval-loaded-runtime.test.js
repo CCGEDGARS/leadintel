@@ -10,7 +10,7 @@ test('app runtime owns approval persistence',()=>{
   assert.match(app,/function approveProfile\(\)/);
   assert.match(app,/state\.approved=true/);
   assert.match(app,/approvedAt/);
-  assert.match(app,/\$\("approve-profile"\)\.addEventListener\("click",\(\)=>state\.approved\?openMarketStrategy\(\):approveProfile\(\)\)/);
+  assert.match(app,/\$\("approve-profile"\)\.addEventListener\("click",\(\)=>\{if\(!state\.approved\)approveProfile\(\);openMarketStrategy\(\);\}\)/);
 });
 
 test('loaded profile presentation runtime does not duplicate approval state writes',()=>{

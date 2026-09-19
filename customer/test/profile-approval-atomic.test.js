@@ -9,7 +9,7 @@ test('Approve Profile has one authoritative persistence path in app.js',()=>{
   assert.match(app,/function approveProfile\(\)/);
   assert.match(app,/state\.approved=true/);
   assert.match(app,/state\.profile\.approvedAt/);
-  assert.match(app,/\$\("approve-profile"\)\.addEventListener\("click",\(\)=>state\.approved\?openMarketStrategy\(\):approveProfile\(\)\)/);
+  assert.match(app,/\$\("approve-profile"\)\.addEventListener\("click",\(\)=>\{if\(!state\.approved\)approveProfile\(\);openMarketStrategy\(\);\}\)/);
   assert.doesNotMatch(runtime,/document\.addEventListener\(['"]click['"]/);
 });
 

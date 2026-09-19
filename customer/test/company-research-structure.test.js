@@ -30,7 +30,7 @@ test('Stage 1 exposes the primary next action after all available company source
   const marketStart=html.indexOf('id="target-market-selector"');
   const optionalLinks=html.indexOf('<h3>Additional links</h3>',marketStart);
   const materials=html.indexOf('<h3>Company materials</h3>',optionalLinks);
-  const action=html.indexOf('class="step-actions stage1-primary-action"',materials);
+  const action=html.indexOf('class="step-actions stage1-primary-action',materials);
   assert.ok(marketStart>=0&&optionalLinks>marketStart&&materials>optionalLinks&&action>materials);
   assert.match(html,/id="to-questionnaire">Continue to Company Research/);
 });
