@@ -125,3 +125,14 @@ test('partial coverage offers an OpenAI-only recovery that preserves Firecrawl e
   assert.match(app,/Retry OpenAI discovery/);
   assert.match(app,/OpenAI retry/);
 });
+
+
+test('partial research offers one inline OpenAI extension action with live countdown progress',()=>{
+  assert.match(app,/Extend with OpenAI/);
+  assert.match(app,/data-extend-openai/);
+  assert.match(app,/function openAiRetryStatus/);
+  assert.match(app,/s remaining/);
+  assert.match(app,/OpenAI \${current}\/\${total} queries/);
+  assert.match(app,/startOpenAiCountdown/);
+  assert.doesNotMatch(app,/Retry OpenAI discovery/);
+});
