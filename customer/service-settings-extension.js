@@ -106,7 +106,7 @@ function decorateCards(){
 }
 function queueDecorate(force=false){if(!settingsDrawerOpen())return;if(!force&&!needsDecoration())return;if(renderQueued)return;renderQueued=true;queueMicrotask(()=>{renderQueued=false;decorateCards();});}
 async function refreshServiceStatus(verify=false){
-  if(!signedIn()){serviceStatus={role:'',providers:[],checked_at:null};queueDecorate(true);return serviceStatus;}
+  if(!signedIn()){serviceStatus={role:'',providers:[],checked_at:null};calendlyStatus={role:'',configured:false,connected:false,scheduling_url:DEFAULT_CALENDLY_URL,status:'not_connected'};queueDecorate(true);return serviceStatus;}
   try{
     const [services,calendly]=await Promise.all([api(`/api/integrations/services/status${verify?'?verify=1':''}`),api('/api/integrations/calendly/status')]);
     if(!services.response.ok)throw new Error(services.payload.error||'Unable to load service integrations');serviceStatus=services.payload;
