@@ -13,10 +13,14 @@ import {handleMarketMonitoringRoute,runDueMarketMonitoring} from './market-monit
 import {handleIntelligenceSourceRoute,runDueSourceHealthChecks} from './intelligence-sources.js';
 import {handleCopilotRoute} from './copilot-routes.js';
 import {handleBrandAssetRoute} from './brand-assets.js';
+import {handleCalendlyWebhook,handleCalendlyIntegrationRoute} from './calendly-integration.js';
 
 export default {
   async fetch(request,env){
     const url=new URL(request.url);
+    if(url.pathname.startsWith('/api/webhooks/calendly/')){
+      try{return await handleCalendlyWebhook(request,env);}catch(cause){console.error(cause);return new Response(JSON.stringify({error:'Internal server error'}),{status:500,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});}
+    }
     if(url.pathname==='/api/webhooks/apollo/crm-contact'){
       try{return await handleApolloCrmWebhook(request,env,{});}catch(cause){console.error(cause);return new Response(JSON.stringify({error:'Internal server error'}),{status:500,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});}
     }
@@ -52,6 +56,7 @@ export default {
       const copilot=await handleCopilotRoute(request,env,cors);if(copilot)return copilot;
       const scrapling=await handleScraplingRoute(request,env,cors);if(scrapling)return scrapling;
       const service=await handleServiceIntegrationRoute(request,env,cors);if(service)return service;
+      const calendly=await handleCalendlyIntegrationRoute(request,env,cors);if(calendly)return calendly;
       const sources=await handleIntelligenceSourceRoute(request,env,cors);if(sources)return sources;
       const monitoring=await handleMarketMonitoringRoute(request,env,cors);if(monitoring)return monitoring;
       const runtimeEnv=await withWorkspaceServiceCredentials(request,env);
