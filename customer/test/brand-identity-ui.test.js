@@ -47,7 +47,7 @@ test('Brand & Email Identity is collapsed immediately after Main company website
   const identityModule = html.indexOf('id="brand-identity"');
   const targetMarket = html.indexOf('id="target-market-selector"');
   const modelScript = html.indexOf('brand-identity.js?v=20260916-brand-timestamp-v1');
-  const profileScript = html.indexOf('profile-engine.js?v=20260916-commercial-brief-v1');
+  const profileScript = html.indexOf('profile-engine.js?v=20260919-top-five-signals-v1');
   const uiScript = html.indexOf('brand-identity-ui.js?v=20260916-browser-logo-copy-v2');
   const appScript = html.indexOf('app.js?v=20260919-consistent-next-actions-v1');
 
