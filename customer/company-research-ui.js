@@ -10,7 +10,7 @@ const MAX_RESULTS_PER_QUERY=4;
 const COMPANY_RESEARCH_REQUEST_TIMEOUT_MS=25000;
 const COMPANY_RESEARCH_RUN_TIMEOUT_MS=60000;
 const COMPANY_RESEARCH_SAVE_TIMEOUT_MS=10000;
-const RELEASE='20260918-translation-fidelity-v3';
+const RELEASE='20260919-brief-section-border-v1';
 let running=false;
 
 const engine=()=>window.LeadIntelCompanyResearch;

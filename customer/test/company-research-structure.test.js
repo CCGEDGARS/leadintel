@@ -16,22 +16,27 @@ const supportLoader=read('shell-support-loader.js');
 test('Customer V2 loads the automatic company research module with Firecrawl workspace routing before research',()=>{
   assert.match(processMap,/firecrawl-workspace-router\.js\?v=20260914-spinner-hard-stop-v1/);
   assert.match(processMap,/company-research-security\.js\?v=20260918-translation-fidelity-v3/);
-  assert.match(processMap,/company-research-ui\.js\?v=20260918-translation-fidelity-v3/);
+  assert.match(processMap,/company-research-ui\.js\?v=20260919-brief-section-border-v1/);
   assert.ok(processMap.indexOf('firecrawl-workspace-router.js')<processMap.indexOf('company-research-ui.js'),'Firecrawl router must load before company research');
   assert.match(processMap,/company-profile-handoff\.js\?v=20260826-intelligence-autofill-v1/);
   assert.match(ui,/company-research-engine\.js\?v=20260918-translation-fidelity-v3/);
   assert.match(read('index.html'),/profile-engine\.js\?v=20260916-commercial-brief-v1/);
   assert.match(read('index.html'),/process-map\.js\?v=20260918-classic-scope-v1/);
-  assert.match(supportLoader,/company-research-ui\.js\?v=20260918-translation-fidelity-v3/);
+  assert.match(supportLoader,/company-research-ui\.js\?v=20260919-brief-section-border-v1/);
 });
 
-test('Stage 1 exposes the primary next action directly after required market selection',()=>{
+test('Stage 1 exposes the primary next action after all available company sources',()=>{
   const html=read('index.html');
   const marketStart=html.indexOf('id="target-market-selector"');
-  const action=html.indexOf('class="step-actions stage1-primary-action"',marketStart);
-  const optionalLinks=html.indexOf('<h3>Additional links</h3>');
-  assert.ok(marketStart>=0&&action>marketStart&&action<optionalLinks);
+  const optionalLinks=html.indexOf('<h3>Additional links</h3>',marketStart);
+  const materials=html.indexOf('<h3>Company materials</h3>',optionalLinks);
+  const action=html.indexOf('class="step-actions stage1-primary-action"',materials);
+  assert.ok(marketStart>=0&&optionalLinks>marketStart&&materials>optionalLinks&&action>materials);
   assert.match(html,/id="to-questionnaire">Continue to Company Research/);
+});
+
+test('Commercial brief sections use a clearly visible shared outer border',()=>{
+  assert.match(css,/\.brief-question-group\{[^}]*border:1\.5px solid #bfd2c8/);
 });
 
 test('Step 2 waits for an explicit research confirmation and explains the next action',()=>{
