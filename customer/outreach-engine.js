@@ -8,6 +8,7 @@
   "use strict";
 
   const DEFAULT_OUTREACH_STATE=Object.freeze({selectedDomain:"",items:[]});
+  const STRATEGY_CALL_URL="https://calendly.com/edgars-7go/strategy-call-2?utm_source=leadintel&utm_medium=outreach&utm_campaign=strategy-call-2";
   const RESEARCH_STATUSES=new Set(["idle","running","complete","partial","error"]);
 
   function clean(value){return String(value??"").replace(/\s+/g," ").trim();}
@@ -163,6 +164,11 @@
 
   function firstName(contact){return clean(contact?.firstName)||clean(contact?.name).split(" ")[0]||"";}
   function evidenceHook(dossier,language='en'){const lv=isLv(language);const signal=dossier.matchedSignals?.[0]?.name;if(signal)return lv?`publiski pieejamā informācija, kas saistīta ar signālu “${signal}”`:`public information connected to ${signal}`;const item=dossier.evidence?.[0];return item?.title?(lv?`publiski pieejamā informācija par “${item.title}”`:`the public information around ${item.title}`):(lv?'uzņēmuma nesenā publiskā aktivitāte':"your company's recent public activity");}
+  function withStrategyCall(drafts={},language='en'){
+    const invitation=isLv(language)?`Rezervējiet 20 minūšu stratēģijas sarunu: ${STRATEGY_CALL_URL}`:`Book a 20-minute strategy call: ${STRATEGY_CALL_URL}`;
+    const add=value=>{const text=String(value||'').trim();return text.includes('calendly.com/edgars-7go/strategy-call-2')?text:`${text}\n\n${invitation}`.trim();};
+    return {...drafts,emailBody:add(drafts.emailBody),followUp:add(drafts.followUp)};
+  }
   function applyCampaignGuidance(drafts={},scenario={},language='en'){
     const segment=clean(scenario.segment),value=clean(scenario.valueProposition),cta=clean(scenario.cta);if(!segment&&!value&&!cta)return drafts;
     const context=isLv(language)?`Mēs strādājam tieši ar segmentu “${segment}”${value?`, īpaši akcentējot ${value}`:''}.`:`We work specifically with ${segment}${value?`, focusing on ${value}`:''}.`;
@@ -195,7 +201,7 @@
         followUp=`${hello}\n\nVēlos noslēgt saraksti par manu iepriekšējo ziņu saistībā ar ${hook}. Iespējams, esmu kļūdījies par aktualitāti. Ja ${offer} ir jūsu darba kārtībā, labprāt salīdzināšu pieejas; ja nav, dodiet ziņu, un turpmāk nerakstīšu.\n\nAr cieņu,\n[Jūsu vārds]`;
         objectionReply=`Saprotu un nevēlos turpināt pēc pamatota atteikuma. Lai pareizi izprastu situāciju: kam būtu jāmainās, lai ${offer} kļūtu aktuāls — laikam, prioritātei, pieejai vai kam citam?`;
       }
-      return {...applyCampaignGuidance({tone:['consultative','direct','brief'].includes(tone)?tone:'consultative',emailSubject:`${company} — ${offer}`,emailBody,linkedinMessage:linkedinMessage.slice(0,899),callOpener,followUp,objectionReply},scenario||{},language),resolvedLanguage,languageSource:resolution.source,languageConfidence:resolution.confidence,languageRequiresConfirmation:resolution.requiresConfirmation,requiresAiLocalization:!['en','lv'].includes(resolvedLanguage)};
+      return {...withStrategyCall(applyCampaignGuidance({tone:['consultative','direct','brief'].includes(tone)?tone:'consultative',emailSubject:`${company} — ${offer}`,emailBody,linkedinMessage:linkedinMessage.slice(0,899),callOpener,followUp,objectionReply},scenario||{},language),language),resolvedLanguage,languageSource:resolution.source,languageConfidence:resolution.confidence,languageRequiresConfirmation:resolution.requiresConfirmation,requiresAiLocalization:!['en','lv'].includes(resolvedLanguage)};
     }
     if(tone==="direct"){
       emailBody=`${hello}\n\nI noticed ${hook} at ${company}. It may be relevant to compare how you are approaching this with ${offer}.\n\nWe help companies with ${offer}, and I would rather test fit than assume there is one. Would a short 20-minute conversation next week be useful?\n\nBest,\n[Your name]\n${sender}`;
@@ -216,7 +222,7 @@
       followUp=`${hello}\n\nI wanted to close the loop on my earlier note about ${hook}. I may be wrong about the relevance. If ${offer} is on your agenda, I’m happy to compare approaches; if it isn’t, just tell me and I won’t keep chasing.\n\nBest,\n[Your name]`;
       objectionReply=`That makes sense. I’m not trying to push past a genuine “no.” To understand it properly: what would have to be different for ${offer} to become relevant — timing, priority, approach, or something else?`;
     }
-    return {...applyCampaignGuidance({tone:["consultative","direct","brief"].includes(tone)?tone:"consultative",emailSubject:`${company} — ${offer}`,emailBody,linkedinMessage:linkedinMessage.slice(0,899),callOpener,followUp,objectionReply},scenario||{},language),resolvedLanguage,languageSource:resolution.source,languageConfidence:resolution.confidence,languageRequiresConfirmation:resolution.requiresConfirmation,requiresAiLocalization:!['en','lv'].includes(resolvedLanguage)};
+    return {...withStrategyCall(applyCampaignGuidance({tone:["consultative","direct","brief"].includes(tone)?tone:"consultative",emailSubject:`${company} — ${offer}`,emailBody,linkedinMessage:linkedinMessage.slice(0,899),callOpener,followUp,objectionReply},scenario||{},language),language),resolvedLanguage,languageSource:resolution.source,languageConfidence:resolution.confidence,languageRequiresConfirmation:resolution.requiresConfirmation,requiresAiLocalization:!['en','lv'].includes(resolvedLanguage)};
   }
 
   function approveOutreachItem(item={},editedDrafts={},approvedAt=new Date().toISOString()){
@@ -317,5 +323,5 @@
   }
   function normalizeOutreachState(value={}){const input=value&&typeof value==="object"?value:{};return {selectedDomain:clean(input.selectedDomain).toLowerCase().replace(/^www\./,""),items:(Array.isArray(input.items)?input.items:[]).slice(0,50).map(normalizeItem).filter(x=>x.domain)};}
 
-  return {DEFAULT_OUTREACH_STATE,buildDossierSearchQueries,normalizeDossierResearchResults,recommendOffer,buildOpportunityDossier,buildOutreachDrafts,localizeGeneratedItem,approveOutreachItem,renderApprovedEmail,buildApprovedSendPayload,invalidateOutreachApproval,normalizeOutreachState,splitList,buildCoreScenario,normalizeCampaignStudio,saveCoreScenario,regenerateCoreScenario,saveCampaignPreset,normalizeCampaignScenario,scenarioSummary};
+  return {DEFAULT_OUTREACH_STATE,STRATEGY_CALL_URL,buildDossierSearchQueries,normalizeDossierResearchResults,recommendOffer,buildOpportunityDossier,buildOutreachDrafts,localizeGeneratedItem,approveOutreachItem,renderApprovedEmail,buildApprovedSendPayload,invalidateOutreachApproval,normalizeOutreachState,splitList,buildCoreScenario,normalizeCampaignStudio,saveCoreScenario,regenerateCoreScenario,saveCampaignPreset,normalizeCampaignScenario,scenarioSummary};
 });
