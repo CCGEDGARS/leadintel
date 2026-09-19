@@ -17,10 +17,14 @@ test('legacy lookalike recovery is no longer bootstrapped', () => {
 });
 
 test('Reference Customer Intelligence is presented as a core Lookalike targeting step', () => {
-  assert.match(source, /Core targeting step/);
+  assert.match(source, /Core targeting · Lookalike discovery/);
   assert.match(source, /Build your Lookalike Audience/);
   assert.match(source, /directly improves Discovery/);
   assert.match(source, /data-reference-customers-manage/);
+  assert.match(source, /brand-identity-panel reference-customer-core-card/, 'Lookalike step must use the established green feature-panel treatment');
+  assert.match(source, /brand-identity-summary/);
+  assert.match(source, /brand-identity-status/);
+  assert.match(source, /brand-identity-toggle/);
   assert.doesNotMatch(source, /Optional advanced tool/);
 });
 
