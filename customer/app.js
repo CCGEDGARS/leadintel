@@ -296,7 +296,7 @@ function approveProfile(){
 }
 function updateApprovalUI(){
   const approved=state.approved;$("profile-status").textContent=approved?"Approved":"Provisional";$("profile-status").classList.toggle("approved",approved);
-  $("approve-profile").textContent=approved?"Continue to Market Strategy →":"Approve Profile";$("approve-profile").disabled=false;
+  $("approve-profile").innerHTML='Continue to Market Strategy <span aria-hidden="true">→</span>';$("approve-profile").disabled=false;
   const approvalCard=$("approval-card");approvalCard.classList.toggle("approved",approved);
   const approvalTitle=approvalCard.querySelector("h3"),approvalCopy=approvalCard.querySelector("p"),approvalEyebrow=approvalCard.querySelector(".eyebrow");
   if(approvalEyebrow)approvalEyebrow.textContent=approved?"Profile approved":"Profile approval";
@@ -871,7 +871,7 @@ function bind(){
   $("pdf-input").addEventListener("change",e=>handlePdfFiles(e.target.files));
   $("document-list").addEventListener("click",e=>{const btn=e.target.closest("[data-remove-doc]");if(!btn)return;state.documents.splice(Number(btn.dataset.removeDoc),1);saveState();renderDocuments();});
   const zone=$("upload-zone");["dragenter","dragover"].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault();zone.classList.add("dragging");}));["dragleave","drop"].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault();zone.classList.remove("dragging");}));zone.addEventListener("drop",e=>handlePdfFiles(e.dataTransfer.files));
-  $("edit-profile").addEventListener("click",toggleEdit);$("approve-profile").addEventListener("click",()=>state.approved?openMarketStrategy():approveProfile());$("recommended-signals").addEventListener("change",()=>{saveProfileEdits();seedMarketStrategy();saveState();updateApprovalUI();showToast("Profile changed · approve it again before continuing");});$("improve-profile").addEventListener("click",()=>openModule(1));
+  $("edit-profile").addEventListener("click",toggleEdit);$("approve-profile").addEventListener("click",()=>{if(!state.approved)approveProfile();openMarketStrategy();});$("recommended-signals").addEventListener("change",()=>{saveProfileEdits();seedMarketStrategy();saveState();updateApprovalUI();showToast("Profile changed · approve it again before continuing");});$("improve-profile").addEventListener("click",()=>openModule(1));
   $("back-to-profile").addEventListener("click",()=>openModule(3));
   $("add-custom-signal").addEventListener("click",addCustomSignal);$("run-market-research").addEventListener("click",()=>openResearchPreview("quick"));$("run-detailed-research").addEventListener("click",()=>openResearchPreview("deep"));$("run-market-intelligence").addEventListener("click",()=>openResearchPreview("intelligence"));$("confirm-market-research").addEventListener("click",()=>{if(pendingResearchMode)void runMarketResearch(pendingResearchMode);});$("cancel-market-research").addEventListener("click",closeResearchPreview);$("add-suggested-sources").addEventListener("click",addSuggestedSources);$("edit-research-settings").addEventListener("click",()=>{const settings=$("research-settings");settings.open=true;closeResearchPreview();settings.scrollIntoView({behavior:"smooth",block:"start"});});$("activate-market-strategy").addEventListener("click",event=>{
     event.preventDefault();
