@@ -109,7 +109,7 @@ test('research choice hierarchy is shipped through the CSP-approved static style
   const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
   const css=fs.readFileSync(path.join(__dirname,'..','market.css'),'utf8');
   const uxSource=fs.readFileSync(path.join(__dirname,'..','market-research-ux.js'),'utf8');
-  assert.match(html,/market\.css\?v=20260919-openai-extend-progress-v1/);
+  assert.match(html,/market\.css\?v=20260919-top-five-uniform-cards-v1/);
   assert.match(html,/aria-label="Market Scan, up to 20 evidence sources"/);
   assert.match(html,/aria-label="Market Research, up to 80 evidence sources"/);
   assert.match(html,/aria-label="Market Intelligence, up to 200 evidence sources"/);

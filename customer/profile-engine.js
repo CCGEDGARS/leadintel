@@ -142,9 +142,13 @@
   }
   function recommendSignals(answerText,sourceText){
     const combined=`${clean(answerText)} ${clean(sourceText)}`;
-    const matched=SIGNAL_LIBRARY.filter(signal=>signal.patterns.some(pattern=>pattern.test(combined)));
-    const defaults=["facility-expansion","capital-investment","hiring","market-entry"].map(id=>SIGNAL_LIBRARY.find(x=>x.id===id));
-    return uniqueObjects([...matched,...defaults],"id").slice(0,8).map(item=>({...item,reason:signalReason(item,combined)}));
+    const priorityScore={High:3,Medium:2,Low:1};
+    const matched=SIGNAL_LIBRARY
+      .map((signal,index)=>({...signal,matchScore:signal.patterns.filter(pattern=>pattern.test(combined)).length,index}))
+      .filter(signal=>signal.matchScore>0)
+      .sort((a,b)=>b.matchScore-a.matchScore-(priorityScore[a.priority]||0)+(priorityScore[b.priority]||0)||a.index-b.index);
+    const defaults=["facility-expansion","capital-investment","market-entry","hiring"].map(id=>SIGNAL_LIBRARY.find(x=>x.id===id));
+    return uniqueObjects([...matched,...defaults],"id").slice(0,5).map(({matchScore,index,...item})=>({...item,reason:signalReason(item,combined)}));
   }
   function uniqueObjects(items,key){const seen=new Set();return items.filter(item=>item&&!seen.has(item[key])&&seen.add(item[key]));}
   function signalReason(signal,text){

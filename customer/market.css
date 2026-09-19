@@ -80,3 +80,24 @@
 .strategy-activation-feedback[data-state="success"]{color:#0d6453}
 
 .research-panel>.research-status .research-status-copy{flex:1}.research-panel>.research-status>.primary-btn{margin-left:auto;align-self:center;white-space:nowrap;min-width:170px}.research-panel>.research-status>.primary-btn:disabled{opacity:.72;cursor:progress}@media(max-width:680px){.research-panel>.research-status{flex-wrap:wrap}.research-panel>.research-status>.primary-btn{width:100%;margin-left:36px}}
+
+/* Uniform research-depth cards */
+.research-actions .research-mode-choice[data-research-mode]>button,
+#run-market-research,
+#run-detailed-research,
+#run-market-intelligence{
+  border:2px solid #385047!important;
+  background:#fff!important;
+  color:#14231e!important;
+  box-shadow:0 4px 12px rgba(15,35,29,.05)!important;
+}
+.research-actions .research-mode-choice[data-research-mode]>button:hover,
+#run-market-research:hover,
+#run-detailed-research:hover,
+#run-market-intelligence:hover{
+  border-color:#0b5f4f!important;
+  background:#fff!important;
+  color:#14231e!important;
+  box-shadow:0 13px 28px rgba(15,35,29,.15)!important;
+}
+.research-mode-choice[data-research-mode="deep"] .research-mode-badge{color:#0b6755!important}

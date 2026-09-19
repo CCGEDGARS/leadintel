@@ -114,12 +114,14 @@
   function normalizeSignals(profileSignals=[],savedSignals=[]){
     const savedMap=new Map((savedSignals||[]).map(item=>[clean(item?.id),item]));
     const result=[];
-    for(const seed of profileSignals||[]){
+    for(const seed of (profileSignals||[]).slice(0,5)){
       const id=clean(seed?.id)||`signal-${slug(seed?.name)}`;
       result.push(normalizeSignal({...seed,id,...(savedMap.get(id)||{})}));
       savedMap.delete(id);
     }
-    for(const saved of savedMap.values())result.push(normalizeSignal(saved));
+    for(const saved of savedMap.values()){
+      if(clean(saved?.id).startsWith("custom-"))result.push(normalizeSignal(saved));
+    }
     return result.slice(0,20);
   }
 
