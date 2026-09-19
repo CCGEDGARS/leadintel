@@ -132,3 +132,15 @@ test('strategy flow runtime derives the active page step from saved research sta
   assert.match(source,/data-strategy-flow-step/);
   assert.match(source,/market\.strategyApproved/);
 });
+
+
+test('saved research websites are visible and individually removable',()=>{
+  const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
+  const appSource=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
+  assert.match(html,/id="research-saved-websites-summary"/);
+  assert.match(html,/id="research-saved-websites"/);
+  assert.match(appSource,/function renderSavedResearchWebsites/);
+  assert.match(appSource,/data-remove-research-website/);
+  assert.match(appSource,/function removeSavedResearchWebsite/);
+  assert.match(appSource,/Website removed from research and monitoring/);
+});
