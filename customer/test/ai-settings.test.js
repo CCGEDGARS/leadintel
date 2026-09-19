@@ -105,7 +105,7 @@ test('raw API keys are transient browser values and never persisted by either se
 
 test('settings assets are cache-busted and controls have individual borders and focus treatment',()=>{
   assert.match(js,/SETTINGS_VERSION='20260915-model-choice-v1'/);
-  assert.match(extension,/SETTINGS_VERSION='20260915-mail-choice-v2'/);
+  assert.match(extension,/SETTINGS_VERSION='20260919-calendly-v1'/);
   assert.match(js,/link\.href=`ai-settings\.css\?v=\$\{SETTINGS_VERSION\}`/);
   assert.match(extension,/link\.href=`service-settings-extension\.css\?v=\$\{SETTINGS_VERSION\}`/);
   assert.equal(fs.existsSync(cssPath),true,'ai-settings.css must exist');
@@ -173,7 +173,7 @@ test('Settings retains the integration control centre and adds LeadIntel readine
   assert.match(js,/id="integration-communication-grid"/);
   for(const name of ['Apollo.io','Firecrawl','Google Account','Gmail'])assert.match(js,new RegExp(name.replace('.','\\.')));
   assert.match(extension,/LeadIntel readiness/);
-  assert.match(extension,/LeadIntel readiness: \$\{Number\(aiReady\)\+1\+Number\(deliveryReady\)\+serviceReady\}\/5 connected/);
+  assert.match(extension,/LeadIntel readiness: \$\{Number\(aiReady\)\+1\+Number\(deliveryReady\)\+serviceReady\+Number\(calendlyReady\)\}\/6 connected/);
 });
 
 test('service diagnostics use verification status and never run research or enrichment just to test settings',()=>{
