@@ -1,4 +1,4 @@
-import './content-language.js?v=20260918-syntax-fix-v1';
+import './content-language.js?v=20260918-translation-fidelity-v3';
 import './content-variants.js?v=20260905-step1-language-v1';
 import './business-identity.js?v=20260906-pain-headings-v1';
 import './evidence-view.js?v=20260919-single-lookalike-entry-v1';
