@@ -1,4 +1,4 @@
-import './company-research-engine.js?v=20260918-dynamic-language-v2';
+import './company-research-engine.js?v=20260918-translation-fidelity-v3';
 
 const engine=window.LeadIntelCompanyResearch;
 const MAX_AI_WEB_CHARS=3200;
