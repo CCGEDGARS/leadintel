@@ -104,7 +104,7 @@ test('research completion is prominent while provider gaps remain explicit',()=>
   const index=fs.readFileSync(indexPath,'utf8');
   const css=fs.readFileSync(marketCssPath,'utf8');
   const app=fs.readFileSync(appPath,'utf8');
-  assert.match(index,/market\.css\?v=20260919-saved-websites-reset-v1/);
+  assert.match(index,/market\.css\?v=20260919-research-complete-banner-v1/);
   assert.match(index,/app\.js\?v=20260919-saved-websites-reset-v1/);
   assert.match(index,/id="market-research-status" role="status" aria-live="polite"/);
   assert.match(app,/complete-with-warning/);
