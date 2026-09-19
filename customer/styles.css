@@ -3,3 +3,14 @@
 .language-control select{appearance:none;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);padding:8px 24px 8px 9px;font:600 12px "DM Sans",sans-serif;cursor:pointer}
 .language-control select:focus{outline:2px solid rgba(13,93,79,.22);outline-offset:2px}
 @media(max-width:620px){.language-control span{display:none}.language-control select{padding:8px 6px}}
+
+
+.research-saved-websites{margin-top:14px;padding:14px;border:1px solid var(--line,#d9e3de);border-radius:12px;background:#fff}
+.research-saved-websites-head{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.research-saved-websites-head span{color:var(--muted,#65736e);font-size:.85rem}
+.research-saved-websites ul{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:8px}
+.research-saved-websites li{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 12px;border:1px solid var(--line,#d9e3de);border-radius:10px;background:var(--surface-soft,#f7faf8)}
+.research-saved-websites li span{display:grid;min-width:0}
+.research-saved-websites li strong,.research-saved-websites li small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.research-saved-websites li small{color:var(--muted,#65736e)}
+.research-saved-websites li button{flex:0 0 auto;color:var(--danger,#a5473e)}
