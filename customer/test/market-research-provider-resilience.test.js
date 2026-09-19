@@ -93,10 +93,18 @@ test('partial OpenAI coverage explains that Firecrawl evidence was preserved and
   assert.equal(resilience.describePartialCoverage({modeLabel:'Market Scan',count:0,openAiStatus:'error',firecrawlStatus:'error'}),null);
 });
 
-test('research recovery assets are cache-busted and partial coverage uses neutral styling',()=>{
+test('research completion is prominent while provider gaps remain explicit',()=>{
   const index=fs.readFileSync(indexPath,'utf8');
   const css=fs.readFileSync(marketCssPath,'utf8');
-  assert.match(index,/market\.css\?v=20260915-research-source-text-v1/);
-  assert.match(index,/app\.js\?v=20260917-step2-reset-route-v1/);
+  const app=fs.readFileSync(appPath,'utf8');
+  assert.match(index,/market\.css\?v=20260919-research-complete-banner-v1/);
+  assert.match(index,/app\.js\?v=20260919-research-complete-banner-v1/);
+  assert.match(index,/id="market-research-status" role="status" aria-live="polite"/);
+  assert.match(app,/complete-with-warning/);
+  assert.match(app,/research-status-icon/);
+  assert.match(app,/evidence source\$\{count===1\?"":"s"\} saved/);
+  assert.match(css,/\.research-panel>\.research-status\[data-status="complete"\]/);
+  assert.match(css,/\.research-status-icon/);
+  assert.match(css,/\.research-status-copy em/);
   assert.match(css,/\.research-run-feedback\[data-status="partial"\]/);
 });

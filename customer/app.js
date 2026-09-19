@@ -603,7 +603,16 @@ function renderResearchStatus(){
   else if(status==="partial"&&partialCoverage)message=partialCoverage.status;
   else if(status==="partial")message=`${modeLabel} partially complete · ${count} evidence sources · OpenAI discovery or Firecrawl extraction had one or more unavailable requests.`;
   else if(status==="error")message="Research run failed · no public evidence was saved. Review the failure details below, adjust the scope if needed, and retry.";
-  $("market-research-status").textContent=message;
+  const statusNode=$("market-research-status");
+  const completedWithEvidence=(status==="complete"||status==="partial")&&count>0;
+  if(statusNode){
+    statusNode.dataset.status=completedWithEvidence?(status==="partial"?"complete-with-warning":"complete"):status;
+    if(completedWithEvidence){
+      const warning=status==="partial"?(partialCoverage?.status||"Some research providers were unavailable; saved evidence remains available."):"";
+      const providerSummary=status==="complete"?`OpenAI discovery and Firecrawl extraction completed${["deep","intelligence"].includes(state.market.researchMode)&&sources.gemini==="complete"?" · Gemini verification completed":""}.`:"";
+      statusNode.innerHTML=`<span class="research-status-icon" aria-hidden="true">✓</span><span class="research-status-copy"><strong>${esc(modeLabel)} complete</strong><small><b>${count} evidence source${count===1?"":"s"} saved.</b>${providerSummary?` <span>${esc(providerSummary)}</span>`:""}${warning?` <em>${esc(warning)}</em>`:""}</small></span>`;
+    }else statusNode.textContent=message;
+  }
   const feedback=$("research-run-feedback");
   if(feedback){
     const errors=state.market.researchErrors||[];const show=status==="error"||status==="partial";
