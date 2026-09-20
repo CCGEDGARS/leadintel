@@ -116,13 +116,19 @@
 .strategy-activation{align-items:center}
 @media(max-width:680px){.research-panel>.research-status>.research-recovery-action{width:100%;margin-left:36px}}
 
-/* Centered Company Discovery handoff */
-.strategy-activation{
+/* Compact Company Discovery handoff */
+.approval-card.strategy-activation{
   display:grid;
   grid-template-columns:minmax(0,1fr);
   place-items:center;
-  align-content:center;
-  min-height:190px;
+  min-height:0;
+  margin-top:18px;
+  padding:24px 0 0;
+  border:0;
+  border-top:1px solid var(--line);
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
   text-align:center;
 }
 .strategy-activation>div{display:contents}
@@ -139,9 +145,11 @@
   align-items:center;
   justify-content:center;
   text-align:center;
+  font-size:18px;
+  line-height:1.25;
 }
 .strategy-activation-feedback{grid-row:2;text-align:center;max-width:640px;margin:12px auto 0}
 @media(max-width:680px){
-  .strategy-activation{display:grid;min-height:150px;padding:20px}
-  .strategy-activation .stage-next-action{width:100%;min-height:58px;margin:0}
+  .approval-card.strategy-activation{display:grid;min-height:0;padding:20px 0 0}
+  .strategy-activation .stage-next-action{width:100%;min-height:58px;margin:0;font-size:16px}
 }
