@@ -115,3 +115,33 @@
 .research-panel>.research-status>.research-recovery-action:hover{background:#f6fbf8}
 .strategy-activation{align-items:center}
 @media(max-width:680px){.research-panel>.research-status>.research-recovery-action{width:100%;margin-left:36px}}
+
+/* Centered Company Discovery handoff */
+.strategy-activation{
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  place-items:center;
+  align-content:center;
+  min-height:190px;
+  text-align:center;
+}
+.strategy-activation>div{display:contents}
+.strategy-activation #strategy-activation-step,
+.strategy-activation #strategy-activation-title,
+.strategy-activation #strategy-activation-description{display:none}
+.strategy-activation .stage-next-action{
+  grid-row:1;
+  justify-self:center;
+  width:min(640px,100%);
+  min-height:72px;
+  margin:0;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+}
+.strategy-activation-feedback{grid-row:2;text-align:center;max-width:640px;margin:12px auto 0}
+@media(max-width:680px){
+  .strategy-activation{display:grid;min-height:150px;padding:20px}
+  .strategy-activation .stage-next-action{width:100%;min-height:58px;margin:0}
+}

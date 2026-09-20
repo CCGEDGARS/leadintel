@@ -5,6 +5,7 @@ import test from "node:test";
 const app = fs.readFileSync(new URL("../app.js", import.meta.url), "utf8");
 const index = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const discovery = fs.readFileSync(new URL("../discovery-ui.js", import.meta.url), "utf8");
+const marketCss = fs.readFileSync(new URL("../market.css", import.meta.url), "utf8");
 
 test("market strategy activation has a visible handoff to Company Discovery", () => {
   assert.match(app, /function openDiscoveryAfterActivation\(\)/);
@@ -21,4 +22,7 @@ test("market strategy activation has a visible handoff to Company Discovery", ()
   assert.match(app, /button\.textContent="Preparing Company Discovery…"/);
   assert.match(app, /button\.textContent="Continue to Company Discovery →"/);
   assert.match(index, /app\.js\?v=20260920-simplified-research-handoff-v1/);
+  assert.match(index, /market\.css\?v=20260920-centered-discovery-cta-v1/);
+  assert.match(marketCss, /\.strategy-activation\{[\s\S]*place-items:center/);
+  assert.match(marketCss, /\.strategy-activation \.stage-next-action\{[\s\S]*justify-self:center[\s\S]*justify-content:center[\s\S]*text-align:center/);
 });
