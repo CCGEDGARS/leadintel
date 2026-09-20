@@ -128,5 +128,5 @@ test('Market Strategy explains its four-step page journey before research',()=>{
   assert.match(html,/id="strategy-flow"/);
   assert.match(html,/Step 1 · Choose research depth/);
   assert.match(html,/id="research-results-intro" hidden/);
-  assert.match(app,/Step 3 · Activate strategy/);
+  assert.match(app,/Next step/);
 });

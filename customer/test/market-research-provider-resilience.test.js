@@ -109,7 +109,7 @@ test('research completion is prominent while provider gaps remain explicit',()=>
   assert.match(index,/id="market-research-status" role="status" aria-live="polite"/);
   assert.match(app,/complete-with-warning/);
   assert.match(app,/research-status-icon/);
-  assert.match(app,/evidence source\$\{count===1\?"":"s"\} saved/);
+  assert.match(app,/source\$\{count===1\?"":"s"\} saved/);
   assert.match(css,/\.research-panel>\.research-status\[data-status="complete"\]/);
   assert.match(css,/\.research-status-icon/);
   assert.match(css,/\.research-status-copy em/);
