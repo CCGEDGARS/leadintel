@@ -78,6 +78,8 @@
 .strategy-activation-feedback[data-state="running"]{color:#66736f}
 .strategy-activation-feedback[data-state="error"]{color:#a5473e}
 .strategy-activation-feedback[data-state="success"]{color:#0d6453}
+.strategy-activation .stage-next-action{min-width:320px;min-height:52px;justify-content:center;white-space:nowrap}
+@media(max-width:680px){.strategy-activation .stage-next-action{min-width:0;width:100%;white-space:normal}}
 
 .research-panel>.research-status .research-status-copy{flex:1}.research-panel>.research-status>.primary-btn{margin-left:auto;align-self:center;white-space:nowrap;min-width:170px}.research-panel>.research-status>.primary-btn:disabled{opacity:.72;cursor:progress}@media(max-width:680px){.research-panel>.research-status{flex-wrap:wrap}.research-panel>.research-status>.primary-btn{width:100%;margin-left:36px}}
 
