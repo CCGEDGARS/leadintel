@@ -90,7 +90,7 @@ async function refreshCrmState({render=true}={}){if(!discoveryMounted||crmRefres
 
 function injectDiscoveryUI(){
   if(!document.querySelector('link[data-leadintel-asset="discovery-css"]')){const link=document.createElement("link");link.rel="stylesheet";link.href=asset("discovery.css");link.dataset.leadintelAsset="discovery-css";document.head.appendChild(link);}
-  const activation=$("strategy-activation-card");if(activation&&!$("continue-to-discovery"))activation.insertAdjacentHTML("beforeend",'<button class="secondary-btn discovery-continue" id="continue-to-discovery" type="button">Continue to Discovery →</button>');
+  $("continue-to-discovery")?.remove();
   const content=document.querySelector("main.content");if(content&&!$("step-5"))content.insertAdjacentHTML("beforeend",`<section class="step-view" id="step-5" data-step="5">
     <div class="profile-header discovery-header"><div><span class="eyebrow">Step 5 · Company Discovery</span><h1>Find companies worth approaching now.</h1><p>LeadIntel searches with the context currently available, removes obvious non-company sources, deduplicates domains and ranks each company using evidence—not a generic lead list. A formally activated strategy improves precision but is not required to explore.</p></div><div class="profile-header-actions"><span class="profile-status" id="discovery-status">Ready</span><button class="secondary-btn small" id="back-to-strategy" type="button">← Strategy</button></div></div>
     <div class="strategy-banner discovery-banner"><div><span>Company</span><strong id="discovery-company">—</strong></div><div><span>Market context</span><strong id="discovery-markets">—</strong></div><div><span>Active pipeline</span><strong id="discovery-pipeline-count">0</strong></div></div>

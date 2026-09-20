@@ -103,3 +103,15 @@
   box-shadow:0 13px 28px rgba(15,35,29,.15)!important;
 }
 .research-mode-choice[data-research-mode="deep"] .research-mode-badge{color:#0b6755!important}
+
+/* Simplified completed-research handoff */
+.research-panel[data-market-stage="review"]>.market-research-head,
+.research-panel[data-market-stage="active"]>.market-research-head{display:none}
+.research-panel[data-market-stage="review"]>.research-status,
+.research-panel[data-market-stage="active"]>.research-status{margin-top:0}
+.research-status-copy>small:empty{display:none}
+.research-status-copy em{display:block;margin:4px 0 0;padding:0;background:transparent;color:#7b5a17;font-weight:650}
+.research-panel>.research-status>.research-recovery-action{margin-left:auto;align-self:center;min-width:132px;white-space:nowrap;background:#fff;color:var(--accent2);border:1px solid #8eb7aa;box-shadow:none}
+.research-panel>.research-status>.research-recovery-action:hover{background:#f6fbf8}
+.strategy-activation{align-items:center}
+@media(max-width:680px){.research-panel>.research-status>.research-recovery-action{width:100%;margin-left:36px}}

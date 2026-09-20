@@ -649,26 +649,26 @@ function renderResearchStatus(){
   const completedWithEvidence=(status==="complete"||status==="partial")&&count>0;
   if(statusNode){
     statusNode.dataset.status=completedWithEvidence?(status==="partial"?"complete-with-warning":"complete"):status;
-    if(state.market.openAiRetryProgress){const progress=state.market.openAiRetryProgress;statusNode.dataset.status="complete-with-warning";statusNode.innerHTML=`<span class="research-status-icon" aria-hidden="true">↻</span><span class="research-status-copy"><strong>Extending with OpenAI…</strong><small>${esc(openAiRetryStatus(progress))} · ${count} Firecrawl evidence source${count===1?"":"s"} preserved.</small></span><button type="button" class="primary-btn" disabled>Working…</button>`;}
+    if(state.market.openAiRetryProgress){const progress=state.market.openAiRetryProgress;statusNode.dataset.status="complete-with-warning";statusNode.innerHTML=`<span class="research-status-icon" aria-hidden="true">↻</span><span class="research-status-copy"><strong>Retrying OpenAI…</strong><small>${esc(openAiRetryStatus(progress))} · ${count} Firecrawl evidence source${count===1?"":"s"} preserved.</small></span><button type="button" class="secondary-btn research-recovery-action" disabled>Working…</button>`;}
     else if(completedWithEvidence){
-      const warning=status==="partial"?(partialCoverage?.status||"Some research providers were unavailable; saved evidence remains available."):"";
+      const warning=status==="partial"?(sources.openai==="unavailable"||sources.openai==="error"?"OpenAI discovery timed out. Your Firecrawl results are preserved.":"Some research checks were unavailable. Saved results are preserved."):"";
       const providerSummary=status==="complete"?`OpenAI discovery and Firecrawl extraction completed${["deep","intelligence"].includes(state.market.researchMode)&&sources.gemini==="complete"?" · Gemini verification completed":""}.`:"";
-      const extend=status==="partial"&&partialCoverage?`<button type="button" class="primary-btn" data-extend-openai>Extend with OpenAI</button>`:"";
-      statusNode.innerHTML=`<span class="research-status-icon" aria-hidden="true">✓</span><span class="research-status-copy"><strong>${esc(modeLabel)} complete</strong><small><b>${count} evidence source${count===1?"":"s"} saved.</b>${providerSummary?` <span>${esc(providerSummary)}</span>`:""}${warning?` <em>${esc(warning)}</em>`:""}</small></span>${extend}`;
+      const retry=status==="partial"&&partialCoverage?`<button type="button" class="secondary-btn research-recovery-action" data-extend-openai>Retry OpenAI</button>`:"";
+      statusNode.innerHTML=`<span class="research-status-icon" aria-hidden="true">✓</span><span class="research-status-copy"><strong>${esc(modeLabel)} complete · ${count} source${count===1?"":"s"} saved</strong><small>${providerSummary?`<span>${esc(providerSummary)}</span>`:""}${warning?`<em>${esc(warning)}</em>`:""}</small></span>${retry}`;
       statusNode.querySelector("[data-extend-openai]")?.addEventListener("click",()=>void retryOpenAiDiscovery());
     }else statusNode.textContent=message;
   }
   const feedback=$("research-run-feedback");
   if(feedback){
-    const errors=state.market.researchErrors||[];const show=status==="error"||status==="partial";
+    const errors=state.market.researchErrors||[];const show=status==="error";
     feedback.hidden=!show;
     feedback.dataset.status=status;
-    if(show){const title=status==="error"?"Research run failed":partialCoverage?.title||"Research completed with gaps";const intro=status==="error"?"No public evidence was saved. The buttons below are active so you can review the scope and retry.":partialCoverage?.intro||`${count} public evidence source${count===1?" was":"s were"} saved, but some checks failed.`;const recovery="";feedback.innerHTML=`<div><span class="eyebrow">Run report</span><h4>${title}</h4><p>${intro}</p>${recovery}</div>${errors.length?`<ul>${errors.slice(0,6).map(item=>`<li><strong>${esc(item.provider||"Source")}</strong><span>${esc(item.message||"Request failed")}</span><small>${esc(item.query)}</small></li>`).join("")}</ul>`:`<p class="research-feedback-empty">The public research providers returned no usable results. Open the review step to change sources, add specific URLs or retry.</p>`}`;}
+    if(show)feedback.innerHTML=`<div><span class="eyebrow">Research error</span><h4>Research run failed</h4><p>No public evidence was saved. Review the scope and try again.</p></div>${errors.length?`<ul>${errors.slice(0,6).map(item=>`<li><strong>${esc(item.provider||"Source")}</strong><span>${esc(item.message||"Request failed")}</span><small>${esc(item.query)}</small></li>`).join("")}</ul>`:`<p class="research-feedback-empty">The public research providers returned no usable results. Open the research settings to change sources or add specific URLs.</p>`}`;
+    else feedback.innerHTML="";
   }
   const actions=[["run-market-research","Market Scan","Retry Market Scan"],["run-detailed-research","Market Research","Retry Market Research"],["run-market-intelligence","Market Intelligence","Retry Market Intelligence"]];
   actions.forEach(([id,label,retryLabel])=>{const button=$(id);if(!button)return;button.textContent=status==="running"?"Researching…":status==="error"?retryLabel:`Review ${label}`;button.disabled=status==="running";});
 }
-
 function renderMarketJourney(){
   const view=LeadIntelMarket.getMarketJourneyState(state.market);
   const researchPanel=document.querySelector('.research-panel');
@@ -682,17 +682,17 @@ function renderMarketJourney(){
   const description=$("strategy-activation-description");
   const step=$("strategy-activation-step");
   if(view.stage==="active"){
-    step.textContent="Strategy active";
-    title.textContent="LeadIntel is ready to find matching companies";
-    description.textContent="Your approved customers, buying signals and market evidence now guide Discovery.";
+    step.textContent="Strategy saved";
+    title.textContent="Ready to find matching companies";
+    description.textContent="Your approved market evidence will guide Company Discovery."
     activationButton.hidden=false;
     activationButton.disabled=false;
     activationButton.textContent="Continue to Company Discovery →";
     activationButton.dataset.activationContinue="true";
   }else{
-    step.textContent="Step 3 · Activate strategy";
-    title.textContent="Use these results as your market strategy";
-    description.textContent="This tells LeadIntel which customers, signals and opportunities to prioritize in Discovery.";
+    step.textContent="Next step";
+    title.textContent="Ready to find matching companies";
+    description.textContent="Your selected opportunities and signals will be saved automatically."
     activationButton.hidden=false;
     activationButton.disabled=false;
     activationButton.textContent="Continue to Company Discovery →";
