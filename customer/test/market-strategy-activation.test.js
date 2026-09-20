@@ -22,7 +22,7 @@ test("market strategy activation has a visible handoff to Company Discovery", ()
   assert.match(app, /button\.textContent="Preparing Company Discovery…"/);
   assert.match(app, /button\.textContent="Continue to Company Discovery →"/);
   assert.match(index, /app\.js\?v=20260920-simplified-research-handoff-v1/);
-  assert.match(index, /market\.css\?v=20260920-centered-discovery-cta-v1/);
+  assert.match(index, /market\.css\?v=20260920-compact-discovery-footer-v2/);
   assert.match(marketCss, /\.strategy-activation\{[\s\S]*place-items:center/);
   assert.match(marketCss, /\.strategy-activation \.stage-next-action\{[\s\S]*justify-self:center[\s\S]*justify-content:center[\s\S]*text-align:center/);
 });
