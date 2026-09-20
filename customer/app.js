@@ -695,7 +695,7 @@ function renderMarketJourney(){
     description.textContent="This tells LeadIntel which customers, signals and opportunities to prioritize in Discovery.";
     activationButton.hidden=false;
     activationButton.disabled=false;
-    activationButton.textContent="Activate Market Strategy";
+    activationButton.textContent="Continue to Company Discovery →";
     activationButton.dataset.activationContinue="false";
   }
 }
@@ -745,8 +745,8 @@ function renderMarketStrategy(){
   $("strategy-signal-count").textContent=String(state.market.signals.filter(item=>item.active).length);
   $("strategy-status").textContent=state.market.strategyApproved?"Active":state.approved?"Draft":"Provisional";$("strategy-status").classList.toggle("approved",state.market.strategyApproved);
   $("strategy-activation-card").classList.toggle("approved",state.market.strategyApproved);
-  $("activate-market-strategy").textContent=state.market.strategyApproved?"Strategy Active ✓":"Activate Market Strategy";
-  $("activate-market-strategy").disabled=state.market.strategyApproved;
+  $("activate-market-strategy").textContent="Continue to Company Discovery →";
+  $("activate-market-strategy").disabled=false;
   renderIcps();renderSignalDesigner();renderResearchControls();renderResearchStatus();renderResearchHistory();renderMarketOpportunities();renderMonitoringControls();renderMarketJourney();loadMonitoringServerState();
 }
 function setActivationFeedback(message,tone){
@@ -787,8 +787,8 @@ async function activateMarketStrategy(){
     if(!openDiscoveryAfterActivation())setTimeout(()=>{if(!openDiscoveryAfterActivation())showToast("Strategy is active · open Company Discovery from the journey above");},100);
     return;
   }
-  if(button){button.disabled=true;button.dataset.activationBusy="true";button.textContent="Activating…";}
-  setActivationFeedback("Activating your market strategy…","running");
+  if(button){button.disabled=true;button.dataset.activationBusy="true";button.textContent="Preparing Company Discovery…";}
+  setActivationFeedback("Saving your market strategy and preparing Company Discovery…","running");
   const fail=message=>{
     renderMarketStrategy();
     setActivationFeedback(message,"error");
@@ -819,7 +819,7 @@ async function activateMarketStrategy(){
     if(button)button.dataset.activationBusy="false";
     if(button&&!state.market.strategyApproved){
       button.disabled=false;
-      if(button.textContent==="Activating…")button.textContent="Activate Market Strategy";
+      if(button.textContent==="Preparing Company Discovery…")button.textContent="Continue to Company Discovery →";
     }
   }
 }
