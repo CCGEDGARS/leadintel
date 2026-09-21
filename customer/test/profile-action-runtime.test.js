@@ -6,8 +6,8 @@ const source = fs.readFileSync(new URL('../profile-action-runtime.js', import.me
 
 test('profile action runtime mirrors approval presentation without owning actions', () => {
   assert.match(source, /Continue to Market Strategy/);
-  assert.match(source, /if\(button\.disabled\)button\.disabled=false/);
-  assert.match(source, /Continue to Market Strategy/);
+  assert.match(source, /approveButton\.disabled=approved/);
+  assert.match(source, /continueButton\.disabled=!approved/);
   assert.doesNotMatch(source, /document\.addEventListener\(['"]click['"]/);
   assert.doesNotMatch(source, /openMarketStrategy/);
   assert.doesNotMatch(source, /persistApprovedState/);
