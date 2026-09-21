@@ -25,6 +25,7 @@ let editMode=false;
 let pdfModule=null;
 let resetConfirmTimer=null;
 let openAiCountdownTimer=null;
+let researchElapsedTimer=null;
 let monitoringLoaded=false;
 let monitoringBusy=false;
 let pendingResearchMode="";
@@ -515,7 +516,7 @@ async function runMarketResearch(modeOverride=""){
   taskCentre?.registerActions(taskId,{retry:()=>runMarketResearch(state.market.researchMode)});
   closeResearchPreview();
   const requestsGemini=["deep","intelligence"].includes(state.market.researchMode);
-  state.market.researchQueries=queries;state.market.researchResults=[];state.market.opportunities=[];state.market.researchErrors=[];state.market.researchStatus="running";state.market.researchSourceStatus={openai:"running",firecrawl:"running",gemini:requestsGemini?"running":"idle"};state.market.researchVerification={status:requestsGemini?"running":"idle",provider:"gemini",role:"verification",webSearch:false,reason:"",summary:"",disagreements:[],missingEvidence:[],verifiedAt:""};state.market.researchProgress={completed:0,total:totalJobs};state.market.strategyApproved=false;saveState();renderMarketStrategy();
+  state.market.researchQueries=queries;state.market.researchResults=[];state.market.opportunities=[];state.market.researchErrors=[];state.market.researchStatus="running";state.market.researchStartedAt=Date.now();state.market.researchPhase="finding";state.market.researchSourceStatus={openai:"running",firecrawl:"running",gemini:requestsGemini?"running":"idle"};state.market.researchVerification={status:requestsGemini?"running":"idle",provider:"gemini",role:"verification",webSearch:false,reason:"",summary:"",disagreements:[],missingEvidence:[],verifiedAt:""};state.market.researchProgress={completed:0,total:totalJobs};state.market.strategyApproved=false;saveState();renderMarketStrategy();clearInterval(researchElapsedTimer);researchElapsedTimer=setInterval(renderResearchStatus,1000);
   const researchButtons=[$("run-market-research"),$("run-detailed-research"),$("run-market-intelligence")].filter(Boolean);researchButtons.forEach(button=>{button.disabled=true;button.textContent="Researching…";});
   let openAiAvailable=true,openAiSuccesses=0,openAiFailures=0,firecrawlSuccesses=0,firecrawlFailures=0;
   const recordResearchError=(provider,query,error)=>{if(state.market.researchErrors.length>=12)return;state.market.researchErrors.push({provider,query:String(query||"").slice(0,180),message:String(error?.message||error||"Request failed").replace(/\s+/g," ").trim().slice(0,240)});};
@@ -530,6 +531,8 @@ async function runMarketResearch(modeOverride=""){
       else if(openAi.found&&!openAi.found.available){openAiAvailable=false;state.market.researchSourceStatus.openai="unavailable";if(!state.market.researchErrors.some(item=>item.provider==="OpenAI"))recordResearchError("OpenAI",query.query,openAi.found.reason);}
       else if(openAi.error){openAiFailures++;recordResearchError("OpenAI",query.query,openAi.error);}
       if(firecrawl.results){firecrawlResults=firecrawl.results;firecrawlSuccesses++;}else{firecrawlFailures++;recordResearchError("Firecrawl",query.query,firecrawl.error);}
+      state.market.researchResults=LeadIntelMarket.mergeResearchResults(state.market.researchResults,openAiResults,firecrawlResults).slice(0,limits.maxStoredResults);
+      state.market.researchPhase=state.market.researchResults.length?"extracting":"finding";
       return {openAiResults,firecrawlResults};
     },{concurrency:runtime.concurrency,onProgress:progress=>updateProgress(progress.completed)});
     for(const result of queryResults)state.market.researchResults=LeadIntelMarket.mergeResearchResults(state.market.researchResults,result.openAiResults,result.firecrawlResults).slice(0,limits.maxStoredResults);
@@ -541,11 +544,13 @@ async function runMarketResearch(modeOverride=""){
     if(openAiAvailable)state.market.researchSourceStatus.openai=openAiFailures===0?"complete":openAiSuccesses?"partial":"error";
     state.market.researchSourceStatus.firecrawl=firecrawlFailures===0?"complete":firecrawlSuccesses?"partial":"error";
     if(requestsGemini){
+      state.market.researchPhase="verifying";renderResearchStatus();
       const verificationPayload=await LeadIntelMarket.withTimeout(signal=>verifyResearchWithGemini(state.market.researchMode,profile,state.market.researchResults,state.market.signals,signal),runtime.requestTimeoutMs,"Gemini verification").catch(error=>({status:"unavailable",provider:"gemini",role:"verification",web_search:false,reason:error.message}));
       const verified=globalThis.LeadIntelResearchVerification.applyVerification(state.market.researchResults,verificationPayload);
       state.market.researchResults=verified.results;state.market.researchVerification=verified.verification;state.market.researchSourceStatus.gemini=verified.verification.status;
     }
     const operationalFailures=openAiFailures+firecrawlFailures;
+    state.market.researchPhase="building";renderResearchStatus();
     state.market.opportunities=LeadIntelMarket.buildMarketOpportunities(profile,state.market.icps,state.market.signals,state.market.researchResults,contentLanguage());
     state.market.researchStatus=operationalFailures===0?"complete":state.market.researchResults.length?"partial":"error";
     if(state.market.researchStatus==='error')taskCentre?.fail(taskId,'Market research could not complete',{canRetry:true});else taskCentre?.complete(taskId,{status:state.market.researchStatus,stage:state.market.researchStatus==='partial'?'Completed with source warnings':'Market research complete',resultCount:state.market.researchResults.length});
@@ -557,6 +562,7 @@ async function runMarketResearch(modeOverride=""){
     showToast(`Research stopped safely · ${error.message}`);
     taskCentre?.fail(taskId,error,{canRetry:true,resultCount:state.market.researchResults.length});
   }finally{
+    clearInterval(researchElapsedTimer);researchElapsedTimer=null;state.market.researchPhase="complete";
     state.market.researchProgress={completed:totalJobs,total:totalJobs};
     state.market.lastResearchAt=new Date().toISOString();state.market.researchHistory=LeadIntelMarket.appendResearchHistory(state.market.researchHistory,{id:`manual-${Date.now()}`,mode:state.market.researchMode,status:state.market.researchStatus,sourceCount:state.market.researchResults.length,queryCount:queries.length,completedAt:state.market.lastResearchAt});saveState();renderMarketStrategy();
     researchButtons.forEach(button=>{button.disabled=false;});
@@ -609,7 +615,7 @@ function renderMarketOpportunities(){
   const target=$("market-opportunities");
   if(!state.market.opportunities.length){target.innerHTML=`<div class="market-empty">${state.market.researchStatus==="running"?"Researching markets…":"Target market strategy is ready. Run market research to add live evidence and improve confidence."}</div>`;return;}
   target.innerHTML=state.market.opportunities.map((opp,index)=>opp.profileOnly?`<article class="opportunity-card unresearched ${opp.active?"active":""}">
-    <div class="opportunity-top"><label class="market-toggle"><input type="checkbox" data-opportunity-active="${index}" ${opp.active?"checked":""}><span></span></label><div><span class="opportunity-market">Selected market</span><h4 lang="${contentLanguage()}">${esc(opp.title)}</h4><span class="not-researched-label">Not researched yet</span></div><div class="opportunity-total"><strong>${opp.score.total}</strong><span>/100</span></div></div>
+    <div class="opportunity-top"><label class="market-toggle"><input type="checkbox" data-opportunity-active="${index}" ${opp.active?"checked":""}><span></span></label><div><span class="opportunity-market">Selected market</span><h4 lang="${contentLanguage()}">${esc(opp.title)}</h4><span class="not-researched-label" data-research-running="${state.market.researchStatus==="running"?"true":"false"}">${state.market.researchStatus==="running"?"Research in progress":"Not researched yet"}</span></div><div class="opportunity-total"><strong>${opp.score.total}</strong><span>/100</span></div></div>
   </article>`:`<article class="opportunity-card ${opp.active?"active":""}">
     <div class="opportunity-top"><label class="market-toggle"><input type="checkbox" data-opportunity-active="${index}" ${opp.active?"checked":""}><span></span></label><div><span class="opportunity-market">${esc(opp.marketLabel||opp.market)}</span><h4 lang="${contentLanguage()}">${esc(opp.title)}</h4></div><div class="opportunity-total"><strong>${opp.score.total}</strong><span>/100</span></div></div>
     <div class="opportunity-meta"><span class="confidence ${opp.confidence.toLowerCase()}">${opp.confidence} confidence</span><span>${opp.evidence.length} evidence source${opp.evidence.length===1?"":"s"}</span></div>
@@ -620,35 +626,47 @@ function renderMarketOpportunities(){
     </details>
   </article>`).join("");
 }
+function researchRunning(){return state.market.researchStatus==="running";}
+function researchProgressView(){
+  const progress=state.market.openAiRetryProgress||state.market.researchProgress||{completed:0,total:state.market.researchQueries?.length||1};
+  const total=Math.max(1,Number(progress.total)||1),completed=Math.min(total,Number(progress.completed)||0);
+  const sources=state.market.researchSourceStatus||{};
+  const phase=state.market.researchPhase||(completed===0?"finding":completed<total?"extracting":sources.gemini==="running"?"verifying":"building");
+  const labels={finding:"Finding evidence",extracting:"Extracting information",verifying:"Verifying findings",building:"Building opportunities",complete:"Complete"};
+  const workPercent=Math.round(completed/total*80);
+  const percent=phase==="verifying"?92:phase==="building"?96:phase==="complete"?100:Math.min(80,workPercent);
+  const elapsed=Math.max(0,Math.floor((Date.now()-Number(state.market.researchStartedAt||Date.now()))/1000));
+  const elapsedLabel=elapsed>=60?`${Math.floor(elapsed/60)}m ${elapsed%60}s`:`${elapsed}s`;
+  const market=LeadIntelMarket.splitList(state.profile?.targetMarkets).join(" · ")||LeadIntelMarket.splitList(state.profile?.currentMarkets).join(" · ")||"selected markets";
+  return {title:`Researching ${market}`,phase:labels[phase]||labels.finding,percent,meta:`${completed} of ${total} searches checked · ${state.market.researchResults.length} source${state.market.researchResults.length===1?"":"s"} found · ${elapsedLabel} elapsed`};
+}
 function renderResearchStatus(){
   const status=state.market.researchStatus;const count=state.market.researchResults.length;const queries=state.market.researchQueries.length;const sources=state.market.researchSourceStatus||{openai:"idle",firecrawl:"idle",gemini:"idle"};
   const modeLabel=researchModeUi(state.market.researchMode).label;
   const partialCoverage=status==="partial"?describePartialCoverage({modeLabel,count,openAiStatus:sources.openai,firecrawlStatus:sources.firecrawl}):null;
-  let message="Target market selected · live market research can increase confidence.";
-  if(status==="running"){const retry=state.market.openAiRetryProgress;const progress=retry||state.market.researchProgress||{completed:0,total:queries};message=retry?openAiRetryStatus(progress):`${modeLabel} is running · ${progress.completed}/${progress.total||queries} searches checked · Discovery: OpenAI · Extraction: Firecrawl${sources.gemini==="running"?" · Verification: Gemini":""}…`;}
-  else if(status==="complete"&&sources.openai==="unavailable")message=`${modeLabel} complete · Discovery: OpenAI unavailable · Extraction: Firecrawl${["deep","intelligence"].includes(state.market.researchMode)?` · Verification: ${sources.gemini==="complete"?"Gemini":"Gemini unavailable"}`:""} · ${count} public evidence sources.`;
-  else if(status==="complete")message=`${modeLabel} complete · Discovery: OpenAI · Extraction: Firecrawl${["deep","intelligence"].includes(state.market.researchMode)?` · Verification: ${sources.gemini==="complete"?"Gemini":"Gemini unavailable"}`:""} · ${queries} queries · ${count} public evidence sources.`;
-  else if(status==="partial"&&partialCoverage)message=partialCoverage.status;
-  else if(status==="partial")message=`${modeLabel} partially complete · ${count} evidence sources · OpenAI discovery or Firecrawl extraction had one or more unavailable requests.`;
-  else if(status==="error")message="Research run failed · no public evidence was saved. Review the failure details below, adjust the scope if needed, and retry.";
   const statusNode=$("market-research-status");
   const completedWithEvidence=(status==="complete"||status==="partial")&&count>0;
   if(statusNode){
     statusNode.dataset.status=completedWithEvidence?(status==="partial"?"complete-with-warning":"complete"):status;
-    if(state.market.openAiRetryProgress){const progress=state.market.openAiRetryProgress;statusNode.dataset.status="complete-with-warning";statusNode.innerHTML=`<span class="research-status-icon" aria-hidden="true">↻</span><span class="research-status-copy"><strong>Retrying OpenAI…</strong><small>${esc(openAiRetryStatus(progress))} · ${count} Firecrawl evidence source${count===1?"":"s"} preserved.</small></span><button type="button" class="secondary-btn research-recovery-action" disabled>Working…</button>`;}
+    if(status==="running"&&!state.market.openAiRetryProgress){
+      const view=researchProgressView();
+      statusNode.innerHTML=`<div class="market-research-progress-head"><span class="research-status-icon is-running" aria-hidden="true">⌕</span><span class="research-status-copy"><strong id="market-research-progress-title">${esc(view.title)}</strong><small id="market-research-progress-phase">${esc(view.phase)} · This may take 1–3 minutes. Please keep this page open.</small></span><strong class="market-research-progress-percent" id="market-research-progress-percent">${view.percent}%</strong></div><div class="market-research-progress-track" id="market-research-progress"><i class="market-research-progress-bar" id="market-research-progress-bar" style="width:${view.percent}%"></i></div><div class="market-research-progress-meta" id="market-research-progress-meta">${esc(view.meta)}</div>`;
+    }else if(state.market.openAiRetryProgress){const progress=state.market.openAiRetryProgress;statusNode.dataset.status="complete-with-warning";statusNode.innerHTML=`<span class="research-status-icon" aria-hidden="true">↻</span><span class="research-status-copy"><strong>Retrying OpenAI…</strong><small>${esc(openAiRetryStatus(progress))} · ${count} Firecrawl evidence source${count===1?"":"s"} preserved.</small></span><button type="button" class="secondary-btn research-recovery-action" disabled>Working…</button>`;}
     else if(completedWithEvidence){
       const warning=status==="partial"?(sources.openai==="unavailable"||sources.openai==="error"?"OpenAI discovery timed out. Your Firecrawl results are preserved.":"Some research checks were unavailable. Saved results are preserved."):"";
       const providerSummary=status==="complete"?`OpenAI discovery and Firecrawl extraction completed${["deep","intelligence"].includes(state.market.researchMode)&&sources.gemini==="complete"?" · Gemini verification completed":""}.`:"";
       const retry=status==="partial"&&partialCoverage?`<button type="button" class="secondary-btn research-recovery-action" data-extend-openai>Retry OpenAI</button>`:"";
       statusNode.innerHTML=`<span class="research-status-icon" aria-hidden="true">✓</span><span class="research-status-copy"><strong>${esc(modeLabel)} complete · ${count} source${count===1?"":"s"} saved</strong><small>${providerSummary?`<span>${esc(providerSummary)}</span>`:""}${warning?`<em>${esc(warning)}</em>`:""}</small></span>${retry}`;
       statusNode.querySelector("[data-extend-openai]")?.addEventListener("click",()=>void retryOpenAiDiscovery());
-    }else statusNode.textContent=message;
+    }else{
+      const messages={error:"Research run failed · no public evidence was saved. Review the failure details below, adjust the scope if needed, and retry.",partial:`${modeLabel} partially complete · ${count} evidence sources · some provider checks were unavailable.`,idle:"Target market selected · live market research can increase confidence."};
+      statusNode.textContent=status==="partial"&&partialCoverage?partialCoverage.status:(messages[status]||messages.idle);
+    }
   }
   const feedback=$("research-run-feedback");
   if(feedback){
     const errors=state.market.researchErrors||[];const show=status==="error";
-    feedback.hidden=!show;
-    feedback.dataset.status=status;
+    feedback.hidden=!show;feedback.dataset.status=status;
     if(show)feedback.innerHTML=`<div><span class="eyebrow">Research error</span><h4>Research run failed</h4><p>No public evidence was saved. Review the scope and try again.</p></div>${errors.length?`<ul>${errors.slice(0,6).map(item=>`<li><strong>${esc(item.provider||"Source")}</strong><span>${esc(item.message||"Request failed")}</span><small>${esc(item.query)}</small></li>`).join("")}</ul>`:`<p class="research-feedback-empty">The public research providers returned no usable results. Open the research settings to change sources or add specific URLs.</p>`}`;
     else feedback.innerHTML="";
   }
@@ -668,9 +686,11 @@ function renderMarketJourney(){
   const description=$("strategy-activation-description");
   const step=$("strategy-activation-step");
   activationButton.hidden=false;
-  activationButton.disabled=false;
-  activationButton.textContent="Review & Continue to Company Discovery →";
-  activationButton.setAttribute("aria-disabled","false");
+  const running=researchRunning();
+  activationButton.disabled=running;
+  activationButton.textContent=running?"Research in progress — please wait":"Review & Continue to Company Discovery →";
+  activationButton.setAttribute("aria-disabled",String(running));
+  activationButton.dataset.researchRunning=String(running);
   if(view.stage==="active"){
     step.textContent="Strategy saved";
     title.textContent="Ready to find matching companies";
