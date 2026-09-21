@@ -207,10 +207,15 @@ function applyMode() {
   if (settings.mode === 'automatic' && settings.automaticEnabled) scheduleAutomatic();
 }
 
+export function apolloToolbarShouldShow(root = typeof document !== 'undefined' ? document : null) {
+  return Boolean(root?.querySelector?.('.decision-makers .person-row [data-action="enrich-contact"]'));
+}
+
 function ensureToolbar() {
   const target = document.getElementById('company-candidates');
-  if (!target || document.getElementById('apollo-enrichment-toolbar')) return;
-  target.insertAdjacentHTML('beforebegin', [
+  if (!target) return;
+  let toolbar = document.getElementById('apollo-enrichment-toolbar');
+  if (!toolbar) target.insertAdjacentHTML('beforebegin', [
     '<div class="apollo-enrichment-toolbar" id="apollo-enrichment-toolbar">',
     '<div class="apollo-toolbar-main"><div><strong>Verify decision-makers with Apollo</strong><br><small>One-by-one is the default. Batch and Automatic are optional.</small></div>',
     '<label class="apollo-mode-control" for="apollo-enrichment-mode"><span>Mode</span><select id="apollo-enrichment-mode" data-apollo-mode aria-label="Apollo enrichment mode">',
@@ -227,6 +232,8 @@ function ensureToolbar() {
     '<small>Automatic mode only considers contacts with a direct LinkedIn profile, a role, and an available Apollo email-verification action. It runs while this workspace is open and stops at the daily limit.</small>',
     '</div>'
   ].join(''));
+  toolbar = document.getElementById('apollo-enrichment-toolbar');
+  if (toolbar) toolbar.hidden=!apolloToolbarShouldShow(document);
   applyMode();
 }
 
@@ -280,6 +287,8 @@ function decorate() {
     style();
     ensureToolbar();
     document.querySelectorAll('.decision-makers').forEach(decorateDecisionSection);
+    const toolbar=document.getElementById('apollo-enrichment-toolbar');
+    if(toolbar)toolbar.hidden=!apolloToolbarShouldShow(document);
     pruneStaleSelections();
     applyMode();
   } finally {
