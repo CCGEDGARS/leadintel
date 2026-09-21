@@ -166,9 +166,9 @@ test('Step 1 opens the questionnaire immediately and keeps evidence-first resear
 });
 
 
-test('Business Identity exposes a language selector and keeps generated Latvian copy consistent', () => {
+test('Business Identity keeps language handling internal while the workspace stays English-only', () => {
   const index = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  assert.match(index, /language-select/);
+  assert.doesNotMatch(index, /language-select/);
 
   const lvInput = JSON.parse(JSON.stringify(input));
   lvInput.uiLanguage = 'lv';
