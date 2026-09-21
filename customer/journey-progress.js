@@ -58,7 +58,7 @@
       4:[
         step('icps','Ideal customer profiles reviewed',activeItems(market.icps).length>0,{action:'Review and activate at least one ICP'}),
         step('signals','Buying signals activated',activeItems(market.signals).length>0,{action:'Activate at least one buying signal'}),
-        step('research','Market research completed',filled(market.lastResearchAt)&&['complete','partial'].includes(market.researchStatus),{action:'Run market research'}),
+        step('research',market.researchStatus==='running'?'Market research in progress':'Market research completed',filled(market.lastResearchAt)&&['complete','partial'].includes(market.researchStatus),{action:market.researchStatus==='running'?'Wait for market research to finish':'Run market research'}),
         step('opportunities','Market opportunities selected',activeItems(market.opportunities).length>0,{action:'Select at least one market opportunity'}),
         step('strategy','Market strategy activated',Boolean(market.strategyApproved),{action:'Activate the market strategy'})
       ],
