@@ -40,3 +40,14 @@ test('discovery labels distinguish free people search from credit-consuming enri
   assert.match(controls,/Verify selected emails with Apollo/i);
   assert.match(controls,/Find selected phones with Apollo/i);
 });
+
+
+test('Apollo toolbar stays hidden until a discovered decision-maker can be verified',async()=>{
+  const mod=await import(`${pathToFileURL(modulePath).href}?t=${Date.now()+3}`);
+  const emptyDocument={querySelector:()=>null};
+  const readyDocument={querySelector:(selector)=>selector.includes('enrich-contact')?{}:null};
+  assert.equal(mod.apolloToolbarShouldShow(emptyDocument),false);
+  assert.equal(mod.apolloToolbarShouldShow(readyDocument),true);
+  const controls=fs.readFileSync(modulePath,'utf8');
+  assert.match(controls,/toolbar\.hidden=!apolloToolbarShouldShow\(document\)/);
+});
