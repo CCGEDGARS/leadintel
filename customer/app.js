@@ -1,7 +1,7 @@
 import './content-language.js?v=20260918-translation-fidelity-v3';
 import './content-variants.js?v=20260905-step1-language-v1';
 import './business-identity.js?v=20260906-pain-headings-v1';
-import './evidence-view.js?v=20260921-signal-focus-space-v1';
+import './evidence-view.js?v=20260921-separated-profile-cta-v1';
 import './workspace-persistence.js?v=20260917-reset-clean-v1';
 import {withOpenAiRetry,cleanOpenAiResearchQuery,describePartialCoverage} from './market-research-provider-resilience.js?v=20260916-latency-fix-v2';
 

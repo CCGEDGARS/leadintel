@@ -64,3 +64,41 @@
   .intel-signal-summary-panel{min-height:0;padding:22px!important}
   .intel-signal-theme{min-height:92px}
 }
+
+
+/* Separate the profile decision from the page-progression action */
+.intel-signal-summary-panel{
+  margin-bottom:34px;
+  padding-bottom:36px!important;
+}
+#approval-card .profile-approval-actions{
+  display:flex;
+  width:auto;
+  margin-top:18px;
+  justify-content:flex-end;
+}
+#approval-card .profile-approval-actions #edit-profile{
+  margin:0;
+}
+.profile-next-action{
+  display:flex;
+  justify-content:center;
+  width:100%;
+  margin-top:28px;
+  padding:36px 0 8px;
+  border-top:1px solid rgba(13,27,46,.10);
+}
+.profile-next-action #approve-profile{
+  width:min(100%,640px);
+  min-height:72px;
+  margin:0;
+  justify-content:center;
+  text-align:center;
+}
+@media(max-width:800px){
+  .intel-signal-summary-panel{margin-bottom:24px;padding-bottom:26px!important}
+  #approval-card .profile-approval-actions{align-items:stretch}
+  #approval-card .profile-approval-actions #edit-profile{width:100%}
+  .profile-next-action{margin-top:22px;padding-top:24px}
+  .profile-next-action #approve-profile{min-height:62px}
+}

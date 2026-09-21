@@ -6,7 +6,7 @@ if(typeof window!=="undefined"){
     .then(()=>import('./intelligence-profile-ui.js?v=20260921-profile-review-v1'))
     .then(()=>import('./lookalike-discovery.js?v=20260909-canonical-profile-v5'))
     .then(()=>import('./reference-customer-ui.js?v=20260909-canonical-profile-v5'))
-    .then(()=>import('./intelligence-profile-runtime.js?v=20260921-signal-focus-space-v1'))
+    .then(()=>import('./intelligence-profile-runtime.js?v=20260921-separated-profile-cta-v1'))
     .catch(error=>console.error('LeadIntel intelligence runtime failed to load',error));
   void import('./opportunity-led-icp.js?v=20260907-opportunity-led-v1');
   void import('./market-research-ux.js?v=20260915-research-source-text-v1');

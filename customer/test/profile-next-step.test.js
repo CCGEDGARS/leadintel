@@ -10,8 +10,9 @@ test('bottom profile CTA presentation mirrors the app-owned next-step action',()
   const html=read('index.html');
   assert.doesNotMatch(html,/profile-header-actions[^\n]*edit-profile/);
   assert.match(html,/profile-approval-actions[\s\S]*id="edit-profile"/);
-  assert.match(html,/profile-approval-actions[\s\S]*id="approve-profile"[\s\S]*Approve &amp; continue to Market Strategy/);
-  assert.doesNotMatch(html,/profile-next-action[^\n]*id="approve-profile"/);
+  assert.match(html,/profile-approval-actions">\s*<button[^>]+id="edit-profile"[^>]*>Edit profile<\/button>\s*<\/div>/);
+  assert.match(html,/profile-next-action[\s\S]*id="approve-profile"[\s\S]*Approve &amp; continue to Market Strategy/);
+  assert.match(html,/profile-next-action/);
   assert.doesNotMatch(html,/approve-profile-bottom/);
   assert.match(runtime,/Approve &amp; continue to Market Strategy/);
   assert.match(runtime,/Approve this profile before building Market Strategy/);
