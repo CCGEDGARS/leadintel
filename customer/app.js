@@ -315,10 +315,7 @@ function ensureMarketStrategySeeded(){
     ?state.profile.recommendedSignals
     :(LeadIntelProfile.recommendedSignalsForProfile?.(state.profile)||[]);
   if(!state.profile.recommendedSignals?.length&&generatedSignals.length)state.profile.recommendedSignals=generatedSignals;
-  const tendersAllowed=(state.market.researchSourceTypes||[]).includes("tenders");
-  state.market.signals=LeadIntelMarket.normalizeSignals(generatedSignals,state.market.signals)
-    .map(signal=>!tendersAllowed&&/tender|procurement|iepirk/i.test([signal.name,signal.keywords].join(" "))
-      ?{...signal,active:false}:signal);
+  state.market.signals=LeadIntelMarket.normalizeSignals(generatedSignals,state.market.signals);
   if(!state.market.opportunities.length)state.market.opportunities=LeadIntelMarket.buildMarketOpportunities(state.profile,state.market.icps,state.market.signals,state.market.researchResults||[],language);
   state.market=LeadIntelMarket.localizeGeneratedState(state.market,state.profile,language);
   saveState();
@@ -766,17 +763,22 @@ function strategyHandoffModel(){
   const monitoring=LeadIntelMarket.normalizeMonitoring(state.market.monitoring);
   const blockers=[];
   if(!icps.length)blockers.push("No active ICP");
-  if(!signals.length)blockers.push("No active buying signal");
+  if(!signals.length)blockers.push("No active buying signal — required before Company Discovery can rank purchase intent.");
   if(!opportunities.length)blockers.push("No active market opportunity");
   if(!state.market.lastResearchAt||!evidence.length)blockers.push("Market research has not completed");
   const warnings=[];
+  if(signals.length===1)warnings.push("Only one active buying signal. Company Discovery can run, but ranking will be narrow. At least 3 active signals are recommended.");
+  else if(signals.length===2)warnings.push("Only 2 active buying signals. Company Discovery can run, but at least 3 active signals are recommended.");
+  if(evidence.length>0&&evidence.length<3)warnings.push("Fewer than 3 evidence sources were saved. Discovery confidence may be limited.");
   const sources=state.market.researchSourceStatus||{};
   if(state.market.researchStatus==="partial"||Object.values(sources).some(value=>["partial","error","unavailable"].includes(value)))warnings.push("Some research checks were unavailable; saved evidence will still be used.");
   if(!monitoring.enabled)warnings.push("Monitoring is off. You can continue and enable it later.");
   const customSources=state.market.researchCustomSources||[];
   if(customSources.length&&!monitoring.customSources?.length)warnings.push("Preferred research sources are saved but are not included in monitoring.");
+  const actions=[];
+  if(signals.length<3)actions.push("review-signals","retry-signals");
   return {
-    blockers,warnings,
+    blockers,warnings,actions,
     summary:[
       ["Active ICPs",icps.map(item=>item.name||item.description).filter(Boolean).join(" · ")||"None"],
       ["Buying signals",signals.map(item=>item.name).filter(Boolean).join(" · ")||"None"],
@@ -793,10 +795,33 @@ function renderStrategyHandoff(){
   const renderNotice=(id,items)=>{const node=$(id);node.hidden=!items.length;node.querySelector("ul").innerHTML=items.map(item=>`<li>${esc(item)}</li>`).join("");};
   renderNotice("strategy-handoff-blockers",model.blockers);
   renderNotice("strategy-handoff-warnings",model.warnings);
+  const repairActions=$("strategy-handoff-repair-actions");
+  const reviewSignals=$("review-buying-signals");
+  const retrySignals=$("retry-signal-recommendations");
+  reviewSignals.hidden=!model.actions.includes("review-signals");
+  retrySignals.hidden=!model.actions.includes("retry-signals");
+  repairActions.hidden=reviewSignals.hidden&&retrySignals.hidden;
   const confirm=$("confirm-strategy-handoff");
   confirm.disabled=Boolean(model.blockers.length);
-  confirm.textContent=model.blockers.length?"Complete Required Items":state.market.strategyApproved?"Continue to Company Discovery →":"Activate Strategy & Continue →";
+  confirm.textContent=model.blockers.length?"Complete Required Items":model.warnings.length?"Continue with limited results →":state.market.strategyApproved?"Continue to Company Discovery →":"Activate Strategy & Continue →";
   return model;
+}
+function reviewBuyingSignalsFromHandoff(){
+  closeStrategyHandoff();
+  const target=$("signal-designer");
+  target?.scrollIntoView({behavior:"smooth",block:"center"});
+  target?.querySelector('[data-signal-field="active"]')?.focus();
+}
+function retrySignalRecommendationsFromHandoff(){
+  const regenerated=LeadIntelProfile.recommendedSignalsForProfile?.(state.profile||{})||[];
+  const candidates=[...(state.profile?.recommendedSignals||[]),...regenerated,...(LeadIntelProfile.SIGNAL_LIBRARY||[])];
+  const unique=[];const seen=new Set();
+  for(const signal of candidates){const id=String(signal?.id||"").trim();if(!id||seen.has(id))continue;seen.add(id);unique.push(signal);if(unique.length===5)break;}
+  state.profile.recommendedSignals=unique;
+  state.market.signals=LeadIntelMarket.normalizeSignals(unique,state.market.signals);
+  state.market.strategyApproved=false;state.market.strategyApprovedAt="";
+  saveState();renderMarketStrategy();renderStrategyHandoff();
+  showToast(`${state.market.signals.length} buying signal recommendations are ready for review`);
 }
 function openStrategyHandoff(){
   readMarketEdits(false);
@@ -917,6 +942,8 @@ function bind(){
     event.preventDefault();
     openStrategyHandoff();
   });$("cancel-strategy-handoff").addEventListener("click",closeStrategyHandoff);$("confirm-strategy-handoff").addEventListener("click",()=>void activateMarketStrategy());$("strategy-handoff-dialog").addEventListener("click",event=>{if(event.target===$("strategy-handoff-dialog"))closeStrategyHandoff();});$("save-monitoring").addEventListener("click",saveMonitoringConfig);$("run-monitoring-now").addEventListener("click",runMonitoringNow);$("research-mode").addEventListener("change",()=>{state.market.researchMode=normalizeResearchMode($("research-mode").value);saveState();renderResearchControls();});$("research-source-types").addEventListener("change",readResearchSettings);$("research-custom-sources").addEventListener("change",()=>{readResearchSettings();renderSavedResearchWebsites();});$("research-saved-websites")?.addEventListener("click",event=>{const button=event.target.closest("[data-remove-research-website]");if(button)removeSavedResearchWebsite(button.dataset.removeResearchWebsite);});$("research-instructions").addEventListener("change",readResearchSettings);
+  $("review-buying-signals").addEventListener("click",reviewBuyingSignalsFromHandoff);
+  $("retry-signal-recommendations").addEventListener("click",retrySignalRecommendationsFromHandoff);
   $("monitoring-alerts").addEventListener("click",event=>{const button=event.target.closest('[data-monitor-alert-read]');if(button)markMonitoringAlertRead(button.dataset.monitorAlertRead);});
   $("signal-designer").addEventListener("click",e=>{const btn=e.target.closest("[data-remove-signal]");if(btn)removeSignal(Number(btn.dataset.removeSignal));});
   [$("icp-list"),$("market-opportunities")].forEach(container=>{container.addEventListener("change",()=>readMarketEdits());});
