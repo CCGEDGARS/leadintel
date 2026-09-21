@@ -51,3 +51,43 @@
   .step-actions.split.stage-next-action>.primary-btn{order:2}
   .step-actions.split.stage-next-action>.inline-error{order:3;width:100%;text-align:center}
 }
+
+
+/* One clear workflow action at the bottom of every stage. */
+.workflow-next-action{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr)!important;
+  place-items:center!important;
+  min-height:0!important;
+  margin-top:28px!important;
+  padding:24px 0 0!important;
+  border:0!important;
+  border-top:1px solid var(--line)!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  text-align:center!important;
+}
+.workflow-next-action>div{display:none!important}
+.workflow-next-action .stage-next-action{
+  width:min(640px,100%)!important;
+  min-height:72px!important;
+  margin:0!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  text-align:center!important;
+  font-size:18px!important;
+  line-height:1.25!important;
+}
+.workflow-next-action .stage-next-action:disabled{
+  opacity:1!important;
+  background:#7c8580!important;
+  color:#fff!important;
+  box-shadow:none!important;
+  cursor:not-allowed!important;
+}
+@media(max-width:680px){
+  .workflow-next-action{margin-top:20px!important;padding-top:20px!important}
+  .workflow-next-action .stage-next-action{width:100%!important;min-height:58px!important;font-size:16px!important}
+}
