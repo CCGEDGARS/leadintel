@@ -46,7 +46,11 @@ test("pre-flight blocks zero signals but permits an explicit limited-results con
   assert.match(app, /No active buying signal[\s\S]{0,240}required/);
   assert.match(app, /Continue with limited results →/);
   assert.match(app, /Fewer than 3 evidence sources/);
-  assert.match(app, /Review buying signals/);
+});
+
+test("recommended tender signals are not silently disabled by research-source settings", () => {
+  assert.doesNotMatch(app, /!tendersAllowed[\s\S]{0,180}active:false/);
+  assert.match(app, /LeadIntelMarket\.normalizeSignals\(generatedSignals,state\.market\.signals\)/);
 });
 
 test("activation waits for the canonical Discovery API and recovers visibly on timeout", () => {
