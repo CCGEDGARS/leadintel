@@ -50,4 +50,5 @@ test('Apollo toolbar stays hidden until a discovered decision-maker can be verif
   assert.equal(mod.apolloToolbarShouldShow(readyDocument),true);
   const controls=fs.readFileSync(modulePath,'utf8');
   assert.match(controls,/toolbar\.hidden=!apolloToolbarShouldShow\(document\)/);
+  assert.match(controls,/\.apollo-enrichment-toolbar\[hidden\]\{display:none!important\}/);
 });
