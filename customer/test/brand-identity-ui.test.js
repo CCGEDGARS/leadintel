@@ -49,7 +49,7 @@ test('Brand & Email Identity is collapsed immediately after Main company website
   const modelScript = html.indexOf('brand-identity.js?v=20260916-brand-timestamp-v1');
   const profileScript = html.indexOf('profile-engine.js?v=20260919-top-five-signals-v1');
   const uiScript = html.indexOf('brand-identity-ui.js?v=20260916-browser-logo-copy-v2');
-  const appScript = html.indexOf('app.js?v=20260920-simplified-research-handoff-v1');
+  const appScript = html.indexOf('app.js?v=20260921-profile-approval-flow-v1');
 
   assert.ok(websitePanel >= 0 && websitePanel < identityModule && identityModule < targetMarket);
   assert.match(html, /Add your logo and sender details so outreach emails look consistent and personal\./);

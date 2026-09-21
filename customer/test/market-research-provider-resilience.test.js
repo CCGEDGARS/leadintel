@@ -105,7 +105,7 @@ test('research completion is prominent while provider gaps remain explicit',()=>
   const css=fs.readFileSync(marketCssPath,'utf8');
   const app=fs.readFileSync(appPath,'utf8');
   assert.match(index,/market\.css\?v=20260920-compact-discovery-footer-v2/);
-  assert.match(index,/app\.js\?v=20260920-simplified-research-handoff-v1/);
+  assert.match(index,/app\.js\?v=20260921-profile-approval-flow-v1/);
   assert.match(index,/id="market-research-status" role="status" aria-live="polite"/);
   assert.match(app,/complete-with-warning/);
   assert.match(app,/research-status-icon/);

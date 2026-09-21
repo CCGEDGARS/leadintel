@@ -20,7 +20,7 @@ test('canonical intelligence profile replaces the legacy commercial context grou
 test('legacy commercial context layout is no longer loaded by the customer shell',()=>{
   const evidenceView=read('evidence-view.js');
   assert.doesNotMatch(evidenceView,/commercial-context-layout\.js/);
-  assert.match(evidenceView,/intelligence-profile-runtime\.js\?v=20260909-canonical-profile-v5/);
+  assert.match(evidenceView,/intelligence-profile-runtime\.js\?v=20260921-profile-review-v1/);
 });
 
 test('new intelligence profile CSS owns responsive primary-card layout',()=>{
