@@ -27,11 +27,10 @@ let resetConfirmTimer=null;
 let openAiCountdownTimer=null;
 let monitoringLoaded=false;
 let monitoringBusy=false;
-let marketTranslationGeneration=0;
 let pendingResearchMode="";
 let brandIdentityUI=null;
 const $=id=>document.getElementById(id);
-function contentLanguage(){return LeadIntelContentLanguage.resolveLanguage(window.LeadIntelLanguage?.get?.()||state.uiLanguage||'lv',navigator.languages||[]);}
+function contentLanguage(){return 'en';}
 
 function defaultState(){
   const base=LeadIntelProfile.normalizeSavedState({step:1,website:"",targetMarkets:[],additionalLinks:[],documents:[],answers:{},scrapedSources:[],profile:null,approved:false});
@@ -77,7 +76,7 @@ function setStep(step){
   document.querySelectorAll(".step-view").forEach(el=>el.classList.toggle("active",Number(el.dataset.step)===step));
   document.querySelectorAll("[data-step-marker]").forEach(el=>{const n=Number(el.dataset.stepMarker);el.classList.toggle("active",n===step);el.classList.toggle("complete",n<step);});
   if(step===3&&state.profile){$("analysis-state").hidden=true;$("profile-content").hidden=false;renderProfile();ensureMarketStrategySeeded();}
-  if(step===4){renderMarketStrategy();void localizeMarketGeneratedContent();}
+  if(step===4)renderMarketStrategy();
   window.dispatchEvent(new CustomEvent("leadintel:module-opened",{detail:{step}}));
   window.scrollTo({top:0,behavior:"smooth"});
 }
@@ -399,20 +398,6 @@ async function resumePendingMarketResearchAfterAuth(){
   void runMarketResearch(mode);
   return true;
 }
-async function localizeMarketGeneratedContent({render=true}={}){
-  if(!state.market?.opportunities?.length)return false;
-  const language=contentLanguage();const bridge=await waitForMarketServerBridge();
-  if(!bridge?.session?.authenticated||!bridge.workspace?.id)return false;
-  const generation=++marketTranslationGeneration;
-  const source=LeadIntelContentLanguage.marketContentSource(state.market);const signature=JSON.stringify(source);
-  try{
-    const translated=await LeadIntelContentLanguage.translateMarketState(window,bridge.workspace.id,state.market,language);
-    if(generation!==marketTranslationGeneration||language!==contentLanguage()||JSON.stringify(LeadIntelContentLanguage.marketContentSource(state.market))!==signature)return false;
-    state.market=translated;saveState();if(render&&state.step===4)renderMarketStrategy();return true;
-  }catch(error){
-    if(generation===marketTranslationGeneration)showToast(`Content translation unavailable · ${error.message}`);return false;
-  }
-}
 async function searchOpenAiWeb(queryMeta,maxResults=5,signal){
   const bridge=await waitForMarketServerBridge();const workspace=bridge?.workspace;
   if(!bridge?.session?.authenticated||!workspace?.id)return {available:false,reason:"Sign in to use OpenAI signal discovery",results:[]};
@@ -576,7 +561,6 @@ async function runMarketResearch(modeOverride=""){
     state.market.lastResearchAt=new Date().toISOString();state.market.researchHistory=LeadIntelMarket.appendResearchHistory(state.market.researchHistory,{id:`manual-${Date.now()}`,mode:state.market.researchMode,status:state.market.researchStatus,sourceCount:state.market.researchResults.length,queryCount:queries.length,completedAt:state.market.lastResearchAt});saveState();renderMarketStrategy();
     researchButtons.forEach(button=>{button.disabled=false;});
   }
-  if(state.market.opportunities.length)void localizeMarketGeneratedContent({render:true});
   const sourceNote=` · Discovery: ${state.market.researchSourceStatus.openai==="unavailable"?"OpenAI unavailable":"OpenAI"} · Extraction: Firecrawl${requestsGemini?` · Verification: ${state.market.researchSourceStatus.gemini==="complete"?"Gemini":"Gemini unavailable"}`:""}`;
   showToast(`${state.market.researchStatus==="complete"?"Market research complete":state.market.researchStatus==="partial"?"Market research partially complete":"Market research could not complete"}${sourceNote} · ${state.market.researchResults.length} evidence sources`);
 }
@@ -891,14 +875,6 @@ function bind(){
   });
   window.addEventListener("leadintel:company-research-updated",()=>{
     state=loadState();editMode=false;syncInputsFromState();updateCompleteness();
-  });
-  window.addEventListener("leadintel:language-changed",event=>{
-    LeadIntelContentLanguage.applyLanguageSelection(state,event.detail?.language);
-    marketTranslationGeneration++;
-    if(state.profile)state.market=LeadIntelMarket.localizeGeneratedState(state.market,state.profile,contentLanguage());
-    saveState();
-    if(state.profile&&state.step===4)renderMarketStrategy();
-    if(state.profile)void localizeMarketGeneratedContent();
   });
 }
 function init(){
