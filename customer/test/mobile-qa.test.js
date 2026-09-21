@@ -10,9 +10,11 @@ test('mobile layout keeps the workflow usable at phone widths',()=>{
   assert.match(css,/\.process-track\{display:flex;overflow-x:auto/);
   assert.match(css,/\.approval-card\{display:block\}/);
 });
-test('the selected content language control is available in the main shell',()=>{
+test('language controls are removed from the shell and reserved for Campaign Studio',()=>{
   const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
-  assert.match(html,/id=["']language-select["']/);
-  assert.match(html,/value=["']lv["']/);
+  const outreach=fs.readFileSync(path.join(root,'outreach-ui.js'),'utf8');
+  assert.doesNotMatch(html,/id=["']language-select["']/);
+  assert.doesNotMatch(html,/src=["']language\.js/);
+  assert.match(outreach,/id=["']translate-outreach["']/);
   assert.match(html,/content-variants\.js\?v=20260905-step1-language-v1/);
 });
