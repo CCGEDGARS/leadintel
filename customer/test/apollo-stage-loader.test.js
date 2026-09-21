@@ -48,7 +48,7 @@ test('Apollo enrichment loads only when Company Discovery opens', async () => {
   listeners.get('leadintel:module-opened')?.({ detail: { step: 5 } });
   assert.equal(appendedScripts.length, 1, 'opening Discovery must load Apollo once');
   assert.equal(appendedScripts[0].type, 'module');
-  assert.match(appendedScripts[0].src, /apollo-bulk-enrichment\.js\?v=20260914-stage5-scoped-v1/);
+  assert.match(appendedScripts[0].src, /apollo-bulk-enrichment\.js\?v=20260921-contact-gated-v1/);
 
   listeners.get('leadintel:module-opened')?.({ detail: { step: 5 } });
   assert.equal(appendedScripts.length, 1, 'reopening Discovery must not duplicate Apollo');
