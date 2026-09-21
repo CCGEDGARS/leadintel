@@ -35,3 +35,10 @@ test('intelligence profile does not repeat the Lookalike Audience entry point',(
   assert.equal(typeof UI.renderReferenceCustomerSummary,'undefined');
   assert.match(html,/Supporting Context/);
 });
+
+test('supporting context is expanded by default and uses a spacious review grid',()=>{
+  const html=UI.renderSupporting({companyOverview:'Industrial engineering',currentMarkets:['Sweden'],buyingOutcomes:'Faster delivery'},{activated:false});
+  assert.match(html,/<details class="intel-supporting" open>/);
+  assert.match(html,/intel-supporting-grid/);
+  assert.match(html,/Industrial engineering/);
+});

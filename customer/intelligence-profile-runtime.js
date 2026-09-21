@@ -1,4 +1,4 @@
-const INTELLIGENCE_PROFILE_ASSET_VERSION='20260909-canonical-profile-v7';
+const INTELLIGENCE_PROFILE_ASSET_VERSION='20260921-profile-review-v8';
 (function installIntelligenceProfileRuntime(root){
   if(typeof document==='undefined')return;
   const UI=root.LeadIntelIntelligenceProfileUI;
@@ -52,7 +52,7 @@ const INTELLIGENCE_PROFILE_ASSET_VERSION='20260909-canonical-profile-v7';
     return true;
   }
   function upgradeStatus(state){const status=document.getElementById('profile-status');if(!status)return;const diagnostics=state.profile?.canonical?.diagnostics||[];const known=diagnostics.filter(x=>x.state==='known').length,review=diagnostics.filter(x=>x.state==='needs_confirmation').length,missing=diagnostics.filter(x=>x.state==='missing').length;status.textContent=state.approved?'Confirmed profile':`${known} known · ${review} review · ${missing} missing`;}
-  function compactSignals(profile){const list=document.getElementById('recommended-signals');const panel=list?.closest('.signals-panel');if(!list||!panel)return;const active=(profile.recommendedSignals||[]).filter(x=>x.active!==false);panel.classList.add('intel-signal-summary-panel');const title=panel.querySelector('.section-title');if(title)title.innerHTML=`<div><span class="eyebrow">Signal focus</span><h3>${active.length} active signal themes</h3><p>The detailed signal library belongs in Market Strategy, where weights and keywords can be edited.</p></div>`;list.innerHTML=`<div class="intel-signal-summary"><span>${active.slice(0,5).map(x=>`<b>${escapeHtml(x.name)}</b>`).join('')}</span><button class="secondary-btn small" type="button" data-open-signal-designer>Open Signal Designer →</button></div>`;}
+  function compactSignals(profile){const list=document.getElementById('recommended-signals');const panel=list?.closest('.signals-panel');if(!list||!panel)return;const active=(profile.recommendedSignals||[]).filter(x=>x.active!==false);panel.classList.add('intel-signal-summary-panel');const title=panel.querySelector('.section-title');if(title)title.innerHTML=`<div><span class="eyebrow">Signal focus</span><h3>${active.length} active signal themes</h3><p>Approve the profile below, then edit signal weights and keywords in Market Strategy.</p></div>`;list.innerHTML=`<div class="intel-signal-summary"><span>${active.slice(0,5).map(x=>`<b>${escapeHtml(x.name)}</b>`).join('')}</span></div>`;}
   function compactEvidence(profile){
     const lower=document.querySelector('.profile-lower-grid');if(!lower)return;
     const panels=[...lower.children];if(!panels.length)return;
@@ -87,7 +87,6 @@ const INTELLIGENCE_PROFILE_ASSET_VERSION='20260909-canonical-profile-v7';
   document.addEventListener('click',event=>{
     const editButton=event.target.closest('#edit-profile');
     if(editButton){event.preventDefault();event.stopImmediatePropagation();if(profileIsEditing())saveCanonicalEdits();else enterEditMode();return;}
-    if(event.target.closest('[data-open-signal-designer]')){event.preventDefault();document.querySelector('[data-step-marker="4"]')?.click();setTimeout(()=>document.getElementById('signal-designer')?.scrollIntoView({behavior:'smooth',block:'start'}),80);}
   },true);
   root.addEventListener('leadintel:reference-customers-updated',()=>setTimeout(apply,0));
   root.addEventListener('leadintel:workspace-changed',()=>setTimeout(apply,0));

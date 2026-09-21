@@ -11,7 +11,7 @@ const PROFILE_ACTION_STATE_KEY='leadintel_customer_v2_state';
     const approved=Boolean(readState().approved);
     const button=document.getElementById('approve-profile');
     if(button){
-      button.innerHTML='Continue to Market Strategy <span aria-hidden="true">→</span>';
+      button.innerHTML=approved?'Continue to Market Strategy <span aria-hidden="true">→</span>':'Approve &amp; continue to Market Strategy <span aria-hidden="true">→</span>';
       if(button.disabled)button.disabled=false;
       const ariaDisabled='false';
       if(button.getAttribute('aria-disabled')!==ariaDisabled)button.setAttribute('aria-disabled',ariaDisabled);

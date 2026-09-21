@@ -30,10 +30,10 @@ test('canonical edit mode is controlled only by runtime state, never stale edita
   assert.doesNotMatch(source,/textarea:not\(\[readonly\]\)/);
 });
 
-test('Step 3 replaces full signal library with compact summary and preserves Step 4 Signal Designer link',()=>{
+test('Step 3 summarises signals without a broken link into the approval-gated next stage',()=>{
   assert.match(source,/active signal themes/i);
-  assert.match(source,/Open Signal Designer/i);
-  assert.match(source,/data-step-marker/);
+  assert.match(source,/Approve the profile below/i);
+  assert.doesNotMatch(source,/Open Signal Designer|data-open-signal-designer/);
 });
 
 test('legacy lookalike textarea is retired from visible Step 2 intake',()=>{

@@ -296,7 +296,7 @@ function approveProfile(){
 }
 function updateApprovalUI(){
   const approved=state.approved;$("profile-status").textContent=approved?"Approved":"Provisional";$("profile-status").classList.toggle("approved",approved);
-  $("approve-profile").innerHTML='Continue to Market Strategy <span aria-hidden="true">→</span>';$("approve-profile").disabled=false;
+  $("approve-profile").innerHTML=approved?'Continue to Market Strategy <span aria-hidden="true">→</span>':'Approve &amp; continue to Market Strategy <span aria-hidden="true">→</span>';$("approve-profile").disabled=false;
   const approvalCard=$("approval-card");approvalCard.classList.toggle("approved",approved);
   const approvalTitle=approvalCard.querySelector("h3"),approvalCopy=approvalCard.querySelector("p"),approvalEyebrow=approvalCard.querySelector(".eyebrow");
   if(approvalEyebrow)approvalEyebrow.textContent=approved?"Profile approved":"Profile approval";

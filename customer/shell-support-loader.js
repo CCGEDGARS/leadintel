@@ -25,7 +25,7 @@ const SUPPORT_MODULES=[
   './reference-customer-launcher.js?v=20260911-reference-open-v2',
   './lookalike-discovery.js?v=20260910-reference-portfolio-v1',
   './intelligence-sources-ui.js?v=20260915-preferred-sources-v1',
-  './profile-action-runtime.js?v=20260912-bottom-profile-actions-v1',
+  './profile-action-runtime.js?v=20260921-profile-approval-flow-v1',
   './outreach-automation-loader.js?v=20260916-brand-outreach-v2'
 ];
 
