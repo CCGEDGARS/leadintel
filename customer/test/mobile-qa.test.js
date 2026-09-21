@@ -16,5 +16,5 @@ test('language controls are removed from the shell and reserved for Campaign Stu
   assert.doesNotMatch(html,/id=["']language-select["']/);
   assert.doesNotMatch(html,/src=["']language\.js/);
   assert.match(outreach,/id=["']translate-outreach["']/);
-  assert.match(html,/content-variants\.js\?v=20260905-step1-language-v1/);
+  assert.match(html,/content-variants\.js\?v=20260921-contact-gated-v2/);
 });
