@@ -173,6 +173,9 @@
 .strategy-handoff-warnings{border-color:#e2d2a7;background:#fffaf0}
 .strategy-handoff-warnings>strong{color:#7b5a17}
 .strategy-handoff-actions{display:flex;justify-content:flex-end;gap:10px;padding-top:4px}
+.strategy-handoff-repair-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+.strategy-handoff-repair-actions[hidden]{display:none}
+.strategy-handoff-repair-actions .secondary-btn{min-height:44px}
 @media(max-width:680px){.strategy-handoff-card{padding:20px}.strategy-handoff-summary{grid-template-columns:1fr}.strategy-handoff-actions{display:grid}.strategy-handoff-actions button{width:100%}}
 
 
