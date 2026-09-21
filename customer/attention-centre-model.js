@@ -16,7 +16,7 @@
       else if(['running','queued'].includes(task.status)&&now-Number(task.updatedAt||now)>STALL_MS)items.push({id:`task-${id}`,severity:'important',title:clean(task.title||'Background task may be stalled',120),detail:'No progress has been reported for more than three minutes.',target:{type:'tasks'}});
     });
     const current=model.find(stage=>stage?.status==='current');
-    if(workspaceStarted)current?.steps?.filter(step=>!step.complete&&!step.optional).forEach(step=>items.push({id:`stage-${current.id}-${clean(step.id,80)}`,severity:'important',title:clean(step.label||'Required step unfinished',120),detail:clean(step.action||`Finish this required step in ${current.name}.`),target:{type:'stage',id:current.id}}));
+    if(workspaceStarted){const next=current?.steps?.find(step=>!step.complete&&!step.optional);if(next)items.push({id:`stage-${current.id}-${clean(next.id,80)}`,severity:'important',title:clean(next.label||'Required step unfinished',120),detail:clean(next.action||`Finish this required step in ${current.name}.`),target:{type:'stage',id:current.id}});}
     if(unsaved)items.push({id:'unsaved-workspace',severity:'improve',title:'Workspace changes are not saved',detail:'Save the workspace so these changes are available next time.',target:{type:'save'}});
     return items.filter((item,index,array)=>array.findIndex(candidate=>candidate.id===item.id)===index).slice(0,10);
   }
