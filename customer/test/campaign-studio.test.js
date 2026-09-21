@@ -89,16 +89,18 @@ test('the saved scenario language controls scripts and is inherited by presets',
   assert.doesNotMatch(drafts.emailBody,/Hello|I came across/);
 });
 
-test('automatic scenario language follows opportunity market independently of interface language',()=>{
-  const scenario={segment:'retailers',offer:'consulting',tone:'consultative',language:'auto'};
-  const drafts=Outreach.buildOutreachDrafts({company:'NordHaus',domain:'nordhaus.de',market:'Germany',recommendedOffer:'consulting'}, {},profile,'consultative','lv',scenario);
+test('legacy automatic language settings migrate to English and manual localization remains available',()=>{
+  const legacy=Outreach.normalizeCampaignScenario({segment:'retailers',offer:'consulting',tone:'consultative',language:'auto'});
+  assert.equal(legacy.language,'en');
+  const scenario={...legacy,language:'de'};
+  const drafts=Outreach.buildOutreachDrafts({company:'NordHaus',domain:'nordhaus.de',market:'Germany',recommendedOffer:'consulting'}, {},profile,'consultative','en',scenario);
   assert.equal(drafts.resolvedLanguage,'de');
   assert.equal(drafts.requiresAiLocalization,true);
   assert.match(drafts.emailBody,/Hello|I came across/);
-  const approved=Outreach.approveOutreachItem({drafts,campaignScenario:{...scenario,resolvedLanguage:'de',languageSource:'market'},localizationStatus:'complete',localizationProvenance:{provider:'anthropic',model:'claude-sonnet-4-6',language:'de',selectionSource:'market'}},drafts,'2026-09-16T12:00:00.000Z');
-  assert.equal(approved.campaignSnapshot.language,'auto');
+  const approved=Outreach.approveOutreachItem({drafts,campaignScenario:{...scenario,resolvedLanguage:'de',languageSource:'manual'},localizationStatus:'complete',localizationProvenance:{provider:'anthropic',model:'claude-sonnet-4-6',language:'de',selectionSource:'manual'}},drafts,'2026-09-16T12:00:00.000Z');
+  assert.equal(approved.campaignSnapshot.language,'de');
   assert.equal(approved.campaignSnapshot.resolvedLanguage,'de');
-  assert.equal(approved.campaignSnapshot.languageSource,'market');
+  assert.equal(approved.campaignSnapshot.languageSource,'manual');
 });
 
 test('workspace persistence retains localization status and AI provenance',()=>{
