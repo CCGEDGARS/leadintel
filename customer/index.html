@@ -8,9 +8,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260921-profile-enrichment-v1">
-  <link rel="stylesheet" href="market.css?v=20260920-compact-discovery-footer-v2">
-  <link rel="stylesheet" href="premium.css?v=20260920-tasks-below-settings-v1">
+  <link rel="stylesheet" href="styles.css?v=20260826-target-market-v1">
+  <link rel="stylesheet" href="market.css?v=20260920-single-strategy-cta-v1">
+  <link rel="stylesheet" href="premium.css?v=20260917-sidebar-status-v1">
   <link rel="stylesheet" href="market-selector.css?v=20260826-target-market-v1">
   <link rel="stylesheet" href="compact-sources.css?v=20260826-compact-sources-v1">
   <link rel="stylesheet" href="evidence-sources.css?v=20260906-evidence-v1">
@@ -227,7 +227,7 @@
             <p class="privacy-note">PDF text is extracted locally in the browser and saved in this browser for the current workspace. Original file bytes are not uploaded by this onboarding screen.</p>
           </div>
 
-          <div class="step-actions stage1-primary-action stage-next-action"><span id="step1-error" class="inline-error" role="alert"></span><button class="primary-btn" type="button" id="to-questionnaire">Continue to Company Research <span aria-hidden="true">→</span></button></div>
+          <div class="step-actions stage1-primary-action"><span id="step1-error" class="inline-error" role="alert"></span><button class="primary-btn" type="button" id="to-questionnaire">Continue to Company Research <span>→</span></button></div>
 
         </section>
 
@@ -266,7 +266,7 @@
             </div>
           </section>
 
-          <div class="step-actions split stage-next-action"><button class="secondary-btn" type="button" id="back-to-sources">← Back</button><span id="step2-error" class="inline-error" role="alert"></span><button class="primary-btn" type="button" id="analyze-company">Continue to Intelligence Profile <span aria-hidden="true">→</span></button></div>
+          <div class="step-actions split"><button class="secondary-btn" type="button" id="back-to-sources">← Back</button><span id="step2-error" class="inline-error" role="alert"></span><button class="primary-btn" type="button" id="analyze-company">Build / refresh intelligence profile <span>✦</span></button></div>
         </section>
 
         <section class="step-view" id="step-3" data-step="3">
@@ -303,13 +303,7 @@
 
             <div class="approval-card" id="approval-card">
               <div><span class="eyebrow">Profile approval</span><h3>Approve this profile before building Market Strategy.</h3><p>Review the interpretation above. Approval saves it as the current source of truth.</p></div>
-              <div class="profile-approval-actions">
-                <button class="secondary-btn" type="button" id="edit-profile">Edit profile</button>
-                <button class="primary-btn profile-approve-btn" type="button" id="approve-profile">Approve profile</button>
-              </div>
-            </div>
-            <div class="step-actions profile-next-action">
-              <button class="primary-btn stage-next-action" id="continue-market-strategy" type="button" disabled aria-disabled="true">Continue to Market Strategy <span aria-hidden="true">→</span></button>
+              <div class="profile-approval-actions"><button class="secondary-btn" type="button" id="edit-profile">Edit Profile</button><button class="primary-btn" id="approve-profile" type="button">Approve Profile</button></div>
             </div>
           </div>
         </section>
@@ -386,7 +380,7 @@
               <div class="research-brief" id="research-settings-fields">
                 <div class="research-recommendation-card"><strong>Why LeadIntel recommends these searches</strong><p>AI-generated guidance explains why each selected source category is relevant to your profile, offers and buying signals.</p><div id="research-recommendations" class="research-recommendations"></div></div>
                 <label class="research-guidance"><span>Research recommendations or questions</span><textarea id="research-instructions" rows="3" maxlength="1200" placeholder="Example: Focus on Latvian public-sector tenders and companies opening new production facilities."></textarea><small>Add context that should influence the search. It will be included in the research brief.</small></label>
-                <label class="research-guidance"><span>Specific public URLs to check · one URL per line</span><textarea id="research-custom-sources" rows="3" placeholder="https://example.com/news&#10;https://example.com/tenders"></textarea><small>These pages are scraped directly and shown as evidence alongside search results.</small></label><section class="research-saved-websites" aria-labelledby="research-saved-websites-summary"><div class="research-saved-websites-head"><strong>Saved research websites</strong><span id="research-saved-websites-summary">No websites saved</span></div><ul id="research-saved-websites" hidden></ul></section>
+                <label class="research-guidance"><span>Specific public URLs to check · one URL per line</span><textarea id="research-custom-sources" rows="3" placeholder="https://example.com/news&#10;https://example.com/tenders"></textarea><small>These pages are scraped directly and shown as evidence alongside search results.</small></label>
               </div>
               <div class="research-controls">
                 <label><span>Research depth</span><select id="research-mode"><option value="quick">Market Scan · 4 searches × 5 results</option><option value="deep">Market Research · 12 searches × 8 results</option><option value="intelligence">Market Intelligence · 24 searches × 10 results</option></select></label>
@@ -403,7 +397,7 @@
           </section>
 
           <div class="approval-card strategy-activation" id="strategy-activation-card">
-            <div><span class="eyebrow" id="strategy-activation-step">Next step</span><h3 id="strategy-activation-title">Ready to find matching companies</h3><p id="strategy-activation-description">Your selected opportunities and signals will be saved automatically.</p><p class="strategy-activation-feedback" id="strategy-activation-feedback" role="status" aria-live="polite" hidden></p></div>
+            <div><span class="eyebrow" id="strategy-activation-step">Step 2 · Strategy activation</span><h3 id="strategy-activation-title">Use these results as your market strategy</h3><p id="strategy-activation-description">This tells LeadIntel which customers, signals and opportunities to prioritize in Discovery.</p><p class="strategy-activation-feedback" id="strategy-activation-feedback" role="status" aria-live="polite" hidden></p></div>
             <button class="primary-btn stage-next-action" id="activate-market-strategy" type="button" disabled aria-disabled="true">Complete Market Research First</button>
           </div>
 
@@ -448,13 +442,12 @@
   <!-- Optional company-research-ui.js is deferred by shell-support-loader.js. -->
   <script defer src="content-variants.js?v=20260905-step1-language-v1"></script>
   <script defer src="step2-brief-schema.js?v=20260916-commercial-brief-v1"></script>
-  <script defer src="profile-engine.js?v=20260919-top-five-signals-v1"></script>
-  <script defer src="market-engine.js?v=20260921-standard-market-next-step-v1"></script>
+  <script defer src="profile-engine.js?v=20260916-commercial-brief-v1"></script>
+  <script defer src="market-engine.js?v=20260916-latency-fix-v2"></script>
   <script defer src="market-research-verification.js?v=20260916-gemini-verification-v1"></script>
-<script defer src="profile-enrichment-checkpoint.js?v=20260921-profile-enrichment-v1"></script>
-<script defer src="profile-enrichment-checkpoint-ui.js?v=20260921-profile-enrichment-v1"></script>
-  <script defer src="workflow-next-action.js?v=20260921-unified-workflow-next-actions-v1"></script>
-<script defer src="discovery-engine.js?v=20260915-evidence-link-v1"></script>
+  <script defer src="profile-enrichment-checkpoint.js?v=20260921-profile-enrichment-v2"></script>
+  <script defer src="profile-enrichment-checkpoint-ui.js?v=20260921-profile-enrichment-v2"></script>
+  <script defer src="discovery-engine.js?v=20260915-evidence-link-v1"></script>
   <script defer src="workspace-isolation.js?v=20260914-workspace-isolation-v1"></script>
   <script defer src="workspace-reset-hygiene.js?v=20260917-task-reset-v1"></script>
   <script defer src="website-activation.js?v=20260916-ercon-context-v1"></script>
@@ -466,10 +459,10 @@
   <script defer src="process-map.js?v=20260919-lookalike-green-card-v1"></script>
   <script defer src="attention-centre-model.js?v=20260917-reset-clean-v1"></script>
   <script defer src="attention-centre.js?v=20260917-reset-visual-v1"></script>
-  <script type="module" src="app.js?v=20260921-standard-market-next-step-v1"></script>
+  <script type="module" src="app.js?v=20260920-single-strategy-cta-v1"></script>
   <script type="module" src="ai-settings.js?v=20260917-shell-stability-v1"></script>
   <script type="module" src="copilot-loader.js?v=20260917-attention-v1"></script>
-  <script type="module" src="shell-support-loader.js?v=20260921-two-stage-profile-action-v1"></script>
-  <script defer src="discovery-ui.js?v=20260921-unified-workflow-next-actions-v1"></script>
+  <script type="module" src="shell-support-loader.js?v=20260919-brief-section-border-v1"></script>
+  <script defer src="discovery-ui.js?v=20260917-journey-v1"></script>
 </body>
 </html>

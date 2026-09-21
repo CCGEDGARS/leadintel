@@ -7,9 +7,21 @@
 
   function readJson(key){try{return JSON.parse(localStorage.getItem(key)||"{}");}catch{return {};}}
   function model(){return window.LeadIntelProfileEnrichmentCheckpoint;}
+  function domain(value){
+    const raw=String(value||"").trim();
+    if(!raw)return "";
+    try{return new URL(/^https?:\/\//i.test(raw)?raw:`https://${raw}`).hostname.replace(/^www\./i,"").toLowerCase();}
+    catch{return raw.replace(/^https?:\/\//i,"").replace(/^www\./i,"").split("/")[0].toLowerCase();}
+  }
+  function fallbackPending({website,researchMeta={},referenceCustomers={}}){
+    const researchReady=Boolean(researchMeta.generatedAt&&domain(website)&&domain(website)===domain(researchMeta.website));
+    const lookalikeReady=Boolean(referenceCustomers.activated&&referenceCustomers.dna&&Number(referenceCustomers.dna.activeCount)>0);
+    return [!researchReady&&"company-research",!lookalikeReady&&"lookalike-audience"].filter(Boolean);
+  }
   function pendingItems(){
     const state=readJson(MAIN_STORAGE_KEY);
-    return model()?.pending({website:state.website,researchMeta:readJson(RESEARCH_META_KEY),referenceCustomers:state.referenceCustomers})||[];
+    const input={website:state.website,researchMeta:readJson(RESEARCH_META_KEY),referenceCustomers:state.referenceCustomers};
+    return model()?.pending(input)||fallbackPending(input);
   }
 
   function ensureDialog(){

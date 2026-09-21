@@ -22,4 +22,5 @@ test('checkpoint dialog is accessible and omits completed recommendations',()=>{
   assert.match(source,/pending\.includes\("company-research"\)/);
   assert.match(source,/pending\.includes\("lookalike-audience"\)/);
   assert.match(source,/event\.key==="Escape"/);
+  assert.match(source,/function fallbackPending/);
 });
