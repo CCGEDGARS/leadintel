@@ -11,6 +11,6 @@ test('profile approval remains authoritative when the profile continuation is cl
   assert.match(app,/Continue to Market Strategy/);
   assert.match(app,/\$\("approve-profile"\)\.addEventListener\("click",\(\)=>approveProfile\(\)\)/);
   assert.match(app,/\$\("continue-market-strategy"\)\.addEventListener\("click",openMarketStrategy\)/);
-  assert.match(app,/continueButton\.disabled=!approved/);
+  assert.match(app,/\$\("continue-market-strategy"\)\.disabled=!approved/);
   assert.doesNotMatch(runtime,/approve-profile-bottom/);
 });
