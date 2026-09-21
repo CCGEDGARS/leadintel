@@ -152,6 +152,7 @@ function style() {
   node.id = 'apollo-enrichment-style';
   node.textContent = [
     '.apollo-enrichment-toolbar{display:flex;flex-direction:column;gap:10px;margin:0 0 14px;padding:14px 16px;border:1px solid rgba(15,118,110,.22);border-radius:14px;background:rgba(15,118,110,.045)}',
+    '.apollo-enrichment-toolbar[hidden]{display:none!important}',
     '.apollo-toolbar-main,.apollo-toolbar-actions,.apollo-auto-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}',
     '.apollo-toolbar-main strong{font-size:14px;color:var(--ink,#10251f)}',
     '.apollo-toolbar-main small,.apollo-enrichment-toolbar small{color:var(--muted,#64748b);line-height:1.45}',
