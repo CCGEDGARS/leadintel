@@ -26,7 +26,7 @@ if(typeof window!=="undefined"&&typeof document!=="undefined"){
     if(apolloRequested||document.querySelector('script[data-leadintel-apollo-enrichment]')){apolloRequested=true;return;}
     const script=document.createElement("script");
     script.type="module";
-    script.src="apollo-bulk-enrichment.js?v=20260921-contact-gated-v1";
+    script.src="apollo-bulk-enrichment.js?v=20260921-contact-gated-v2";
     script.dataset.leadintelApolloEnrichment="true";
     script.addEventListener?.("error",()=>{apolloRequested=false;script.remove?.();},{once:true});
     apolloRequested=true;
