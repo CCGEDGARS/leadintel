@@ -668,9 +668,9 @@ function renderMarketJourney(){
   const description=$("strategy-activation-description");
   const step=$("strategy-activation-step");
   activationButton.hidden=false;
-  activationButton.disabled=!view.activationEnabled;
-  activationButton.textContent=view.activationLabel;
-  activationButton.setAttribute("aria-disabled",String(!view.activationEnabled));
+  activationButton.disabled=false;
+  activationButton.textContent="Review & Continue to Company Discovery →";
+  activationButton.setAttribute("aria-disabled","false");
   if(view.stage==="active"){
     step.textContent="Strategy saved";
     title.textContent="Ready to find matching companies";
@@ -729,8 +729,6 @@ function renderMarketStrategy(){
   $("strategy-signal-count").textContent=String(state.market.signals.filter(item=>item.active).length);
   $("strategy-status").textContent=state.market.strategyApproved?"Active":state.approved?"Draft":"Provisional";$("strategy-status").classList.toggle("approved",state.market.strategyApproved);
   $("strategy-activation-card").classList.toggle("approved",state.market.strategyApproved);
-  $("activate-market-strategy").textContent="Continue to Company Discovery →";
-  $("activate-market-strategy").disabled=false;
   renderIcps();renderSignalDesigner();renderResearchControls();renderResearchStatus();renderResearchHistory();renderMarketOpportunities();renderMonitoringControls();renderMarketJourney();loadMonitoringServerState();
 }
 function setActivationFeedback(message,tone){
@@ -740,71 +738,109 @@ function setActivationFeedback(message,tone){
   target.dataset.state=tone||"";
   target.hidden=!message;
 }
-function openDiscoveryAfterActivation(){
-  window.__leadIntelPendingDiscoveryOpen=true;
-  const opened=()=>document.getElementById("step-5")?.classList.contains("active")||false;
-  const complete=()=>{const active=opened();if(active)window.__leadIntelPendingDiscoveryOpen=false;return active;};
-  const attempt=()=>{
-    if(window.LeadIntelDiscoveryUI?.open){
-      window.LeadIntelDiscoveryUI.open();
-      if(complete())return true;
-    }
-    window.dispatchEvent(new CustomEvent("leadintel:open-discovery"));
-    if(complete())return true;
-    const continueButton=$("continue-to-discovery");
-    if(continueButton){continueButton.click();if(complete())return true;}
-    const processButton=document.querySelector('[data-process-step="5"]');
-    if(processButton){processButton.click();if(complete())return true;}
-    const marker=document.querySelector('[data-step-marker="5"]');
-    if(marker){marker.dispatchEvent(new MouseEvent("click",{bubbles:true}));return complete();}
-    return false;
+function strategyHandoffModel(){
+  const icps=(state.market.icps||[]).filter(item=>item.active);
+  const signals=(state.market.signals||[]).filter(item=>item.active);
+  const opportunities=(state.market.opportunities||[]).filter(item=>item.active);
+  const evidence=(state.market.researchResults||[]);
+  const monitoring=LeadIntelMarket.normalizeMonitoring(state.market.monitoring);
+  const blockers=[];
+  if(!icps.length)blockers.push("No active ICP");
+  if(!signals.length)blockers.push("No active buying signal");
+  if(!opportunities.length)blockers.push("No active market opportunity");
+  if(!state.market.lastResearchAt||!evidence.length)blockers.push("Market research has not completed");
+  const warnings=[];
+  const sources=state.market.researchSourceStatus||{};
+  if(state.market.researchStatus==="partial"||Object.values(sources).some(value=>["partial","error","unavailable"].includes(value)))warnings.push("Some research checks were unavailable; saved evidence will still be used.");
+  if(!monitoring.enabled)warnings.push("Monitoring is off. You can continue and enable it later.");
+  const customSources=state.market.researchCustomSources||[];
+  if(customSources.length&&!monitoring.customSources?.length)warnings.push("Preferred research sources are saved but are not included in monitoring.");
+  return {
+    blockers,warnings,
+    summary:[
+      ["Active ICPs",icps.map(item=>item.name||item.description).filter(Boolean).join(" · ")||"None"],
+      ["Buying signals",signals.map(item=>item.name).filter(Boolean).join(" · ")||"None"],
+      ["Market opportunities",opportunities.map(item=>item.market).filter(Boolean).join(" · ")||"None"],
+      ["Evidence",evidence.length+" saved source"+(evidence.length===1?"":"s")],
+      ["Monitoring",monitoring.enabled?(monitoring.frequency+" · minimum score "+monitoring.minimumScore):"Off (optional)"],
+      ["Next", "Company Discovery will find and rank matching companies using this active strategy."]
+    ]
   };
-  const activated=attempt();
-  if(!activated)[100,300,700,1200].forEach(delay=>setTimeout(()=>{if(!opened())attempt();},delay));
-  return activated;
+}
+function renderStrategyHandoff(){
+  const model=strategyHandoffModel();
+  $("strategy-handoff-summary").innerHTML=model.summary.map(([label,value])=>`<div><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`).join("");
+  const renderNotice=(id,items)=>{const node=$(id);node.hidden=!items.length;node.querySelector("ul").innerHTML=items.map(item=>`<li>${esc(item)}</li>`).join("");};
+  renderNotice("strategy-handoff-blockers",model.blockers);
+  renderNotice("strategy-handoff-warnings",model.warnings);
+  const confirm=$("confirm-strategy-handoff");
+  confirm.disabled=Boolean(model.blockers.length);
+  confirm.textContent=model.blockers.length?"Complete Required Items":state.market.strategyApproved?"Continue to Company Discovery →":"Activate Strategy & Continue →";
+  return model;
+}
+function openStrategyHandoff(){
+  readMarketEdits(false);
+  renderMarketStrategy();
+  renderStrategyHandoff();
+  const dialog=$("strategy-handoff-dialog");
+  if(typeof dialog.showModal==="function")dialog.showModal();else dialog.setAttribute("open","");
+}
+function closeStrategyHandoff(){
+  const dialog=$("strategy-handoff-dialog");
+  if(typeof dialog.close==="function")dialog.close();else dialog.removeAttribute("open");
+}
+function waitForDiscoveryOpen(timeoutMs=5000){
+  const started=Date.now();
+  return new Promise(resolve=>{
+    const check=()=>{
+      if(document.getElementById("step-5")?.classList.contains("active")){resolve(true);return;}
+      if(Date.now()-started>=timeoutMs){resolve(false);return;}
+      setTimeout(check,50);
+    };
+    check();
+  });
+}
+async function openDiscoveryAfterActivation(){
+  window.__leadIntelPendingDiscoveryOpen=true;
+  if(window.LeadIntelDiscoveryUI?.open)window.LeadIntelDiscoveryUI.open();
+  else window.dispatchEvent(new CustomEvent("leadintel:open-discovery"));
+  const opened=await waitForDiscoveryOpen();
+  window.__leadIntelPendingDiscoveryOpen=!opened;
+  return opened;
 }
 async function activateMarketStrategy(){
   const button=$("activate-market-strategy");
+  const confirm=$("confirm-strategy-handoff");
   if(button?.dataset.activationBusy==="true")return;
-  if(state.market.strategyApproved){
-    setActivationFeedback("Strategy is active · opening Company Discovery…","success");
-    if(!openDiscoveryAfterActivation())setTimeout(()=>{if(!openDiscoveryAfterActivation())showToast("Strategy is active · open Company Discovery from the journey above");},100);
-    return;
-  }
-  if(button){button.disabled=true;button.dataset.activationBusy="true";button.textContent="Preparing Company Discovery…";}
-  setActivationFeedback("Saving your market strategy and preparing Company Discovery…","running");
-  const fail=message=>{
-    renderMarketStrategy();
-    setActivationFeedback(message,"error");
-    showToast(message);
-    $("strategy-activation-card")?.scrollIntoView({behavior:"smooth",block:"center"});
-  };
+  const model=strategyHandoffModel();
+  if(model.blockers.length){renderStrategyHandoff();return;}
+  if(button){button.disabled=true;button.dataset.activationBusy="true";button.textContent="Opening Company Discovery…";}
+  if(confirm){confirm.disabled=true;confirm.textContent="Opening Company Discovery…";}
+  setActivationFeedback(state.market.strategyApproved?"Strategy is active · opening Company Discovery…":"Saving your market strategy and opening Company Discovery…","running");
   try{
-    readMarketEdits(false);
-    if(!state.market.icps.some(item=>item.active)){fail("Activate at least one ICP before continuing");return;}
-    if(!state.market.signals.some(item=>item.active)){fail("Activate at least one buying signal before continuing");return;}
-    if(!state.market.lastResearchAt){fail("Run market research before activating the strategy");return;}
-    if(!state.market.opportunities.some(item=>item.active)){fail("Keep at least one market opportunity active before continuing");return;}
-    state.market.strategyApproved=true;
-    state.market.strategyApprovedAt=new Date().toISOString();
-    saveState();
-    renderMarketStrategy();
-    setActivationFeedback("Strategy activated · opening Company Discovery…","success");
-    let opened=openDiscoveryAfterActivation();
-    if(!opened)setTimeout(()=>{opened=openDiscoveryAfterActivation();},100);
-    void Promise.resolve().then(()=>window.LeadIntelWorkspacePersistence?.saveWorkspace?.()).catch(error=>console.warn("Market strategy cloud save deferred",error));
-    showToast(opened?"Market Strategy activated · Company Discovery is ready":"Market Strategy activated · Company Discovery is loading");
+    if(!state.market.strategyApproved){
+      state.market.strategyApproved=true;
+      state.market.strategyApprovedAt=new Date().toISOString();
+      saveState();
+      void Promise.resolve().then(()=>window.LeadIntelWorkspacePersistence?.saveWorkspace?.()).catch(error=>console.warn("Market strategy cloud save deferred",error));
+    }
+    closeStrategyHandoff();
+    const opened=await openDiscoveryAfterActivation();
+    if(!opened){
+      setActivationFeedback("Company Discovery did not open. Please try again.","error");
+      showToast("Company Discovery did not open. Please try again.");
+      if(button){button.disabled=false;button.textContent="Try Company Discovery Again →";}
+      return;
+    }
+    setActivationFeedback("Company Discovery opened.","success");
+    showToast("Market Strategy activated · Company Discovery is ready");
   }catch(error){
     console.error("Market strategy activation failed",error);
-    renderMarketStrategy();
     setActivationFeedback("Activation failed · "+(error?.message||"Please try again"),"error");
     showToast("Activation failed · "+(error?.message||"Please try again"));
   }finally{
     if(button)button.dataset.activationBusy="false";
-    if(button&&!state.market.strategyApproved){
-      button.disabled=false;
-      if(button.textContent==="Preparing Company Discovery…")button.textContent="Continue to Company Discovery →";
-    }
+    if(confirm)confirm.disabled=false;
   }
 }
 function disarmWorkspaceReset(){
@@ -859,9 +895,8 @@ function bind(){
   $("back-to-profile").addEventListener("click",()=>openModule(3));
   $("add-custom-signal").addEventListener("click",addCustomSignal);$("run-market-research").addEventListener("click",()=>openResearchPreview("quick"));$("run-detailed-research").addEventListener("click",()=>openResearchPreview("deep"));$("run-market-intelligence").addEventListener("click",()=>openResearchPreview("intelligence"));$("confirm-market-research").addEventListener("click",()=>{if(pendingResearchMode)void runMarketResearch(pendingResearchMode);});$("cancel-market-research").addEventListener("click",closeResearchPreview);$("add-suggested-sources").addEventListener("click",addSuggestedSources);$("edit-research-settings").addEventListener("click",()=>{const settings=$("research-settings");settings.open=true;closeResearchPreview();settings.scrollIntoView({behavior:"smooth",block:"start"});});$("activate-market-strategy").addEventListener("click",event=>{
     event.preventDefault();
-    event.stopImmediatePropagation();
-    void activateMarketStrategy();
-  });$("save-monitoring").addEventListener("click",saveMonitoringConfig);$("run-monitoring-now").addEventListener("click",runMonitoringNow);$("research-mode").addEventListener("change",()=>{state.market.researchMode=normalizeResearchMode($("research-mode").value);saveState();renderResearchControls();});$("research-source-types").addEventListener("change",readResearchSettings);$("research-custom-sources").addEventListener("change",()=>{readResearchSettings();renderSavedResearchWebsites();});$("research-saved-websites")?.addEventListener("click",event=>{const button=event.target.closest("[data-remove-research-website]");if(button)removeSavedResearchWebsite(button.dataset.removeResearchWebsite);});$("research-instructions").addEventListener("change",readResearchSettings);
+    openStrategyHandoff();
+  });$("cancel-strategy-handoff").addEventListener("click",closeStrategyHandoff);$("confirm-strategy-handoff").addEventListener("click",()=>void activateMarketStrategy());$("strategy-handoff-dialog").addEventListener("click",event=>{if(event.target===$("strategy-handoff-dialog"))closeStrategyHandoff();});$("save-monitoring").addEventListener("click",saveMonitoringConfig);$("run-monitoring-now").addEventListener("click",runMonitoringNow);$("research-mode").addEventListener("change",()=>{state.market.researchMode=normalizeResearchMode($("research-mode").value);saveState();renderResearchControls();});$("research-source-types").addEventListener("change",readResearchSettings);$("research-custom-sources").addEventListener("change",()=>{readResearchSettings();renderSavedResearchWebsites();});$("research-saved-websites")?.addEventListener("click",event=>{const button=event.target.closest("[data-remove-research-website]");if(button)removeSavedResearchWebsite(button.dataset.removeResearchWebsite);});$("research-instructions").addEventListener("change",readResearchSettings);
   $("monitoring-alerts").addEventListener("click",event=>{const button=event.target.closest('[data-monitor-alert-read]');if(button)markMonitoringAlertRead(button.dataset.monitorAlertRead);});
   $("signal-designer").addEventListener("click",e=>{const btn=e.target.closest("[data-remove-signal]");if(btn)removeSignal(Number(btn.dataset.removeSignal));});
   [$("icp-list"),$("market-opportunities")].forEach(container=>{container.addEventListener("change",()=>readMarketEdits());});
