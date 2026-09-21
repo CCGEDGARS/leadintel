@@ -15,7 +15,7 @@ test("market strategy activation has a visible handoff to Company Discovery", ()
   assert.match(app, /void activateMarketStrategy\(\)/);
   assert.match(app, /void Promise\.resolve\(\)\.then\(\(\)=>window\.LeadIntelWorkspacePersistence/);
   assert.match(index, /id="strategy-activation-feedback"/);
-  assert.match(index, /id="activate-market-strategy"[^>]*>Continue to Company Discovery →<\/button>/);
+  assert.match(index, /id="activate-market-strategy"[^>]*disabled[^>]*aria-disabled="true"[^>]*>Complete Market Research First<\/button>/);
   assert.doesNotMatch(index, />Use this strategy<\/button>/);
   assert.doesNotMatch(discovery, /insertAdjacentHTML\("beforeend"[\s\S]*Continue to Discovery/);
   assert.match(discovery, /\$\("continue-to-discovery"\)\?\.remove\(\)/);
