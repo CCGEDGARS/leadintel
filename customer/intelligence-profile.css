@@ -16,3 +16,51 @@
   #approval-card .profile-approval-actions #edit-profile{order:2;margin:0;width:100%}
   #approval-card .profile-approval-actions #approve-profile{order:1;width:100%;min-height:58px}
 }
+
+
+/* Reusable attention panel: one restrained border language for important content */
+.intel-attention-panel{
+  border:1px solid rgba(18,112,92,.28)!important;
+  border-radius:18px!important;
+  background:#fff!important;
+}
+.intel-signal-summary-panel{
+  padding:28px!important;
+  min-height:250px;
+  box-shadow:0 12px 30px rgba(13,27,46,.035);
+}
+.intel-signal-summary-panel .section-title{margin-bottom:24px}
+.intel-signal-summary-panel .section-title h3{margin:6px 0 8px}
+.intel-signal-summary-panel .section-title p{max-width:760px;line-height:1.55}
+.intel-signal-summary{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:14px;
+  width:100%;
+}
+.intel-signal-theme{
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  gap:18px;
+  min-height:112px;
+  padding:18px;
+  border:1px solid rgba(18,112,92,.18);
+  border-radius:14px;
+  background:#f8faf9;
+}
+.intel-signal-theme span{
+  color:#176e5c;
+  font:600 12px/1.2 "IBM Plex Mono",monospace;
+  letter-spacing:.08em;
+}
+.intel-signal-theme strong{
+  font-size:15px;
+  line-height:1.4;
+  color:#13201c;
+}
+@media(max-width:900px){
+  .intel-signal-summary{grid-template-columns:1fr}
+  .intel-signal-summary-panel{min-height:0;padding:22px!important}
+  .intel-signal-theme{min-height:92px}
+}
