@@ -96,7 +96,8 @@ test('market strategy progressively reveals research results, activation and mon
   assert.match(html,/id="research-settings"/);
   assert.match(html,/Customize research settings/);
   assert.match(html,/id="research-results-details"/);
-  assert.match(html,/id="strategy-activation-card"[^>]*hidden/);
+  assert.match(html,/id="strategy-activation-card"/);
+  assert.doesNotMatch(html,/id="strategy-activation-card"[^>]*hidden/);
   assert.match(html,/id="monitoring-panel"[^>]*hidden/);
   assert.match(app,/getMarketJourneyState/);
   assert.match(app,/research-results-details/);
