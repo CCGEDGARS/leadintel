@@ -7,22 +7,41 @@ const index = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8")
 const discovery = fs.readFileSync(new URL("../discovery-ui.js", import.meta.url), "utf8");
 const marketCss = fs.readFileSync(new URL("../market.css", import.meta.url), "utf8");
 
-test("market strategy activation has a visible handoff to Company Discovery", () => {
-  assert.match(app, /function openDiscoveryAfterActivation\(\)/);
-  assert.match(app, /setActivationFeedback\("Strategy activated · opening Company Discovery/);
-  assert.match(app, /\$\("activate-market-strategy"\)\.addEventListener\("click",event=>/);
-  assert.match(app, /event\.stopImmediatePropagation\(\)/);
-  assert.match(app, /void activateMarketStrategy\(\)/);
-  assert.match(app, /void Promise\.resolve\(\)\.then\(\(\)=>window\.LeadIntelWorkspacePersistence/);
-  assert.match(index, /id="strategy-activation-feedback"/);
-  assert.match(index, /id="activate-market-strategy"[^>]*disabled[^>]*aria-disabled="true"[^>]*>Complete Market Research First<\/button>/);
-  assert.doesNotMatch(index, />Use this strategy<\/button>/);
-  assert.doesNotMatch(discovery, /insertAdjacentHTML\("beforeend"[\s\S]*Continue to Discovery/);
-  assert.match(discovery, /\$\("continue-to-discovery"\)\?\.remove\(\)/);
-  assert.match(app, /button\.textContent="Preparing Company Discovery…"/);
-  assert.match(app, /button\.textContent="Continue to Company Discovery →"/);
-  assert.match(index, /app\.js\?v=20260921-standard-market-next-step-v1/);
-  assert.match(index, /market\.css\?v=20260920-compact-discovery-footer-v2/);
-  assert.match(marketCss, /\.strategy-activation\{[\s\S]*place-items:center/);
-  assert.match(marketCss, /\.strategy-activation \.stage-next-action\{[\s\S]*justify-self:center[\s\S]*justify-content:center[\s\S]*text-align:center/);
+test("Step 4 places optional monitoring before the final Company Discovery handoff", () => {
+  const monitoring = index.indexOf('id="monitoring-panel"');
+  const activation = index.indexOf('id="strategy-activation-card"');
+  assert.ok(monitoring >= 0, "monitoring panel is present");
+  assert.ok(activation > monitoring, "final handoff follows monitoring");
+  assert.match(index, /Step 3 · Optional Continuous Monitoring/);
+  assert.match(index, /id="activate-market-strategy"[^>]*>Review & Continue to Company Discovery →<\/button>/);
+});
+
+test("Company Discovery handoff has a review dialog with explicit blockers and warnings", () => {
+  assert.match(index, /id="strategy-handoff-dialog"/);
+  assert.match(index, /id="strategy-handoff-summary"/);
+  assert.match(index, /id="strategy-handoff-blockers"/);
+  assert.match(index, /id="strategy-handoff-warnings"/);
+  assert.match(index, /id="cancel-strategy-handoff"/);
+  assert.match(index, /id="confirm-strategy-handoff"/);
+  assert.match(app, /function strategyHandoffModel\(\)/);
+  assert.match(app, /function openStrategyHandoff\(\)/);
+  assert.match(app, /Monitoring is off/);
+  assert.match(app, /No active ICP/);
+  assert.match(app, /No active buying signal/);
+  assert.match(app, /No active market opportunity/);
+  assert.match(app, /Market research has not completed/);
+});
+
+test("activation waits for the canonical Discovery API and recovers visibly on timeout", () => {
+  assert.match(app, /async function openDiscoveryAfterActivation\(\)/);
+  assert.match(app, /await waitForDiscoveryOpen/);
+  assert.match(app, /Company Discovery did not open\. Please try again\./);
+  assert.match(app, /Try Company Discovery Again →/);
+  assert.match(app, /await openDiscoveryAfterActivation\(\)/);
+  assert.doesNotMatch(app, /\[100,300,700,1200\]/);
+  assert.match(app, /\$\("confirm-strategy-handoff"\)\.addEventListener/);
+  assert.doesNotMatch(app, /\$\("activate-market-strategy"\)\.addEventListener\("click",event=>[\s\S]{0,180}activateMarketStrategy/);
+  assert.match(discovery, /window\.LeadIntelDiscoveryUI=\{open:openDiscoveryFromHandoff\}/);
+  assert.match(index, /app\.js\?v=20260921-strategy-handoff-v2/);
+  assert.match(marketCss, /\.strategy-handoff-dialog/);
 });
