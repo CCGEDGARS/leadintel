@@ -65,8 +65,8 @@ test('failed research keeps actionable diagnostics and clearly labels retry acti
 
 test('research status copy does not repeat the word research',()=>{
   assert.doesNotMatch(app,/\$\{modeLabel(?:\.toLowerCase\(\))?\} research/);
-  assert.match(app,/\$\{modeLabel\} is running/);
-  assert.match(app,/\$\{modeLabel\} complete/);
+  assert.match(app,/title:\`Researching \$\{market\}\`/);
+  assert.match(app,/\$\{esc\(modeLabel\)\} complete/);
 });
 
 test('market research cannot remain indefinitely busy and exposes live progress',()=>{
