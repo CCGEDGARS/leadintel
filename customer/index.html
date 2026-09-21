@@ -402,13 +402,8 @@
             </details>
           </section>
 
-          <div class="approval-card strategy-activation" id="strategy-activation-card">
-            <div><span class="eyebrow" id="strategy-activation-step">Next step</span><h3 id="strategy-activation-title">Ready to find matching companies</h3><p id="strategy-activation-description">Your selected opportunities and signals will be saved automatically.</p><p class="strategy-activation-feedback" id="strategy-activation-feedback" role="status" aria-live="polite" hidden></p></div>
-            <button class="primary-btn stage-next-action" id="activate-market-strategy" type="button" disabled aria-disabled="true">Complete Market Research First</button>
-          </div>
-
           <section class="panel strategy-panel monitoring-panel" id="monitoring-panel" hidden>
-            <div class="market-research-head"><div class="section-title"><span class="eyebrow">Step 3 · Continuous monitoring</span><h3>Watch for new opportunities automatically</h3><p>Use the recommended settings below, or open advanced settings when you need more control.</p></div><label class="monitoring-master"><input id="monitoring-enabled" type="checkbox"><span>Enable monitoring</span></label></div>
+            <div class="market-research-head"><div class="section-title"><span class="eyebrow">Step 3 · Optional Continuous Monitoring</span><h3>Watch for new opportunities automatically</h3><p>Use the recommended settings below, or open advanced settings when you need more control.</p></div><label class="monitoring-master"><input id="monitoring-enabled" type="checkbox"><span>Enable monitoring</span></label></div>
             <div class="monitoring-grid">
               <label><span>Frequency</span><select id="monitoring-frequency"><option value="daily">Daily</option><option value="weekly" selected>Weekly</option><option value="monthly">Monthly</option></select></label>
               <label><span>Research depth</span><select id="monitoring-depth"><option value="quick">Quick</option><option value="deep" selected>Deep</option></select></label>
@@ -422,6 +417,21 @@
               <div class="monitoring-results"><div><h4>New opportunity alerts</h4><div id="monitoring-alerts" class="monitoring-list"><div class="market-empty">No monitoring alerts yet.</div></div></div><div><h4>Monitoring history</h4><div id="monitoring-history" class="monitoring-list"><div class="market-empty">No automatic runs yet.</div></div></div></div>
             </details>
           </section>
+
+          <div class="approval-card strategy-activation" id="strategy-activation-card">
+            <div><span class="eyebrow" id="strategy-activation-step">Final step</span><h3 id="strategy-activation-title">Ready to find matching companies</h3><p id="strategy-activation-description">Review the active strategy before opening Company Discovery.</p><p class="strategy-activation-feedback" id="strategy-activation-feedback" role="status" aria-live="polite" hidden></p></div>
+            <button class="primary-btn stage-next-action" id="activate-market-strategy" type="button" aria-haspopup="dialog" aria-controls="strategy-handoff-dialog">Review & Continue to Company Discovery →</button>
+          </div>
+
+          <dialog class="strategy-handoff-dialog" id="strategy-handoff-dialog" aria-labelledby="strategy-handoff-title">
+            <form method="dialog" class="strategy-handoff-card">
+              <div class="strategy-handoff-head"><span class="eyebrow">Company Discovery pre-flight</span><h3 id="strategy-handoff-title">Review before Company Discovery</h3><p>Confirm exactly what LeadIntel will use to find and rank companies.</p></div>
+              <div class="strategy-handoff-summary" id="strategy-handoff-summary"></div>
+              <section class="strategy-handoff-notice strategy-handoff-blockers" id="strategy-handoff-blockers" hidden><strong>Complete before continuing</strong><ul></ul></section>
+              <section class="strategy-handoff-notice strategy-handoff-warnings" id="strategy-handoff-warnings" hidden><strong>Optional notes</strong><ul></ul></section>
+              <div class="strategy-handoff-actions"><button class="secondary-btn" id="cancel-strategy-handoff" type="button">Back to Strategy</button><button class="primary-btn" id="confirm-strategy-handoff" type="button">Activate Strategy & Continue →</button></div>
+            </form>
+          </dialog>
         </section>
       </main>
       <aside class="utility-panel" aria-label="Workspace tools">
@@ -466,7 +476,7 @@
   <script defer src="process-map.js?v=20260919-lookalike-green-card-v1"></script>
   <script defer src="attention-centre-model.js?v=20260917-reset-clean-v1"></script>
   <script defer src="attention-centre.js?v=20260917-reset-visual-v1"></script>
-  <script type="module" src="app.js?v=20260921-standard-market-next-step-v1"></script>
+  <script type="module" src="app.js?v=20260921-strategy-handoff-v2"></script>
   <script type="module" src="ai-settings.js?v=20260917-shell-stability-v1"></script>
   <script type="module" src="copilot-loader.js?v=20260917-attention-v1"></script>
   <script type="module" src="shell-support-loader.js?v=20260921-two-stage-profile-action-v1"></script>
