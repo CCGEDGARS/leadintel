@@ -68,6 +68,7 @@
 
 /* Separate the profile decision from the page-progression action */
 .intel-signal-summary-panel{
+  margin-top:34px;
   margin-bottom:34px;
   padding-bottom:36px!important;
 }
@@ -96,7 +97,7 @@
   text-align:center;
 }
 @media(max-width:800px){
-  .intel-signal-summary-panel{margin-bottom:24px;padding-bottom:26px!important}
+  .intel-signal-summary-panel{margin-top:24px;margin-bottom:24px;padding-bottom:26px!important}
   #approval-card .profile-approval-actions{align-items:stretch}
   #approval-card .profile-approval-actions #edit-profile{width:100%}
   .profile-next-action{margin-top:22px;padding-top:24px}

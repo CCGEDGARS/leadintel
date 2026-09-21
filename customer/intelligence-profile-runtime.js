@@ -1,4 +1,4 @@
-const INTELLIGENCE_PROFILE_ASSET_VERSION='20260921-separated-profile-cta-v1';
+const INTELLIGENCE_PROFILE_ASSET_VERSION='20260921-signal-section-gap-v1';
 (function installIntelligenceProfileRuntime(root){
   if(typeof document==='undefined')return;
   const UI=root.LeadIntelIntelligenceProfileUI;
