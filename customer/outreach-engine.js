@@ -41,7 +41,7 @@
       trigger:field('trigger'),valueProposition:field('valueProposition'),
       objective:field('objective'),cta:field('cta'),
       tone:['consultative','direct','brief'].includes(field('tone'))?field('tone'):'consultative',
-      language:campaignLanguage(field('language')||language),status:['draft','approved','needs_review'].includes(field('status'))?field('status'):'draft',
+      language:(()=>{const selected=campaignLanguage(field('language')||language);return selected==='auto'?'en':selected;})(),status:['draft','approved','needs_review'].includes(field('status'))?field('status'):'draft',
       resolvedLanguage:field('resolvedLanguage'),languageSource:field('languageSource'),
       summary:field('summary'),profileFingerprint:field('profileFingerprint'),
       version:Math.max(1,Number(input.version||base.version)||1),updatedAt:clean(input.updatedAt||base.updatedAt)
@@ -54,7 +54,7 @@
       id:'core',segment:splitList(profile.idealCustomer)[0]||splitList(profile.targetMarkets)[0],offer:splitList(profile.priorityOffers)[0],
       buyerRole:splitList(profile.decisionMakers)[0],trigger:splitList(profile.buyingTriggers)[0],valueProposition:clean(profile.valueProposition)||clean(profile.differentiation),
       objective:clean(profile.commercialObjective),cta:isLv(language)?'īsa iepazīšanās saruna':'a short introductory conversation',
-      tone:'consultative',language:'auto',status:'draft',profileFingerprint:profileFingerprint(profile),version:1
+      tone:'consultative',language:'en',status:'draft',profileFingerprint:profileFingerprint(profile),version:1
     },{},language);
     scenario.summary=scenarioSummary(scenario,scenario.language);return scenario;
   }
