@@ -305,10 +305,11 @@
               <div><span class="eyebrow">Profile approval</span><h3>Approve this profile before building Market Strategy.</h3><p>Review the interpretation above. Approval saves it as the current source of truth.</p></div>
               <div class="profile-approval-actions">
                 <button class="secondary-btn" type="button" id="edit-profile">Edit profile</button>
+                <button class="primary-btn profile-approve-btn" type="button" id="approve-profile">Approve profile</button>
               </div>
             </div>
             <div class="step-actions profile-next-action">
-              <button class="primary-btn stage-next-action" id="approve-profile" type="button">Approve &amp; continue to Market Strategy <span aria-hidden="true">→</span></button>
+              <button class="primary-btn stage-next-action" id="continue-market-strategy" type="button" disabled aria-disabled="true">Continue to Market Strategy <span aria-hidden="true">→</span></button>
             </div>
           </div>
         </section>
@@ -462,10 +463,10 @@
   <script defer src="process-map.js?v=20260919-lookalike-green-card-v1"></script>
   <script defer src="attention-centre-model.js?v=20260917-reset-clean-v1"></script>
   <script defer src="attention-centre.js?v=20260917-reset-visual-v1"></script>
-  <script type="module" src="app.js?v=20260921-signal-section-gap-v1"></script>
+  <script type="module" src="app.js?v=20260921-two-stage-profile-action-v1"></script>
   <script type="module" src="ai-settings.js?v=20260917-shell-stability-v1"></script>
   <script type="module" src="copilot-loader.js?v=20260917-attention-v1"></script>
-  <script type="module" src="shell-support-loader.js?v=20260919-brief-section-border-v1"></script>
+  <script type="module" src="shell-support-loader.js?v=20260921-two-stage-profile-action-v1"></script>
   <script defer src="discovery-ui.js?v=20260920-single-discovery-cta-v1"></script>
 </body>
 </html>

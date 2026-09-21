@@ -9,13 +9,20 @@ const PROFILE_ACTION_STATE_KEY='leadintel_customer_v2_state';
   function toggleClass(node,name,enabled){if(node&&node.classList.contains(name)!==enabled)node.classList.toggle(name,enabled);}
   function syncApprovalControls(){
     const approved=Boolean(readState().approved);
-    const button=document.getElementById('approve-profile');
-    if(button){
-      button.innerHTML=approved?'Continue to Market Strategy <span aria-hidden="true">→</span>':'Approve &amp; continue to Market Strategy <span aria-hidden="true">→</span>';
-      if(button.disabled)button.disabled=false;
-      const ariaDisabled='false';
-      if(button.getAttribute('aria-disabled')!==ariaDisabled)button.setAttribute('aria-disabled',ariaDisabled);
-      toggleClass(button,'approved',approved);
+    const approveButton=document.getElementById('approve-profile');
+    if(approveButton){
+      approveButton.innerHTML=approved?'Approved <span aria-hidden="true">✓</span>':'Approve profile';
+      approveButton.disabled=approved;
+      approveButton.setAttribute('aria-disabled',approved?'true':'false');
+      toggleClass(approveButton,'approved',approved);
+    }
+
+    const continueButton=document.getElementById('continue-market-strategy');
+    if(continueButton){
+      continueButton.innerHTML='Continue to Market Strategy <span aria-hidden="true">→</span>';
+      continueButton.disabled=!approved;
+      continueButton.setAttribute('aria-disabled',approved?'false':'true');
+      toggleClass(continueButton,'approved',approved);
     }
 
     const status=document.getElementById('profile-status');

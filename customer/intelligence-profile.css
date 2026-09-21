@@ -103,3 +103,43 @@
   .profile-next-action{margin-top:22px;padding-top:24px}
   .profile-next-action #approve-profile{min-height:62px}
 }
+
+
+/* Two-stage profile decision: approve first, navigate second */
+#approval-card .profile-approval-actions{
+  gap:12px;
+  flex-direction:row;
+  align-items:center;
+}
+#approval-card .profile-approval-actions #edit-profile,
+#approval-card .profile-approval-actions #approve-profile{
+  width:auto;
+  min-height:48px;
+  margin:0;
+}
+#approval-card .profile-approval-actions #approve-profile{
+  padding-inline:24px;
+}
+.profile-next-action #continue-market-strategy{
+  width:min(100%,640px);
+  min-height:72px;
+  margin:0;
+  justify-content:center;
+  text-align:center;
+}
+.profile-next-action #continue-market-strategy:disabled{
+  opacity:.45;
+  cursor:not-allowed;
+  box-shadow:none;
+}
+@media(max-width:800px){
+  #approval-card .profile-approval-actions{
+    flex-direction:column;
+    align-items:stretch;
+  }
+  #approval-card .profile-approval-actions #edit-profile,
+  #approval-card .profile-approval-actions #approve-profile{
+    width:100%;
+  }
+  .profile-next-action #continue-market-strategy{min-height:62px}
+}

@@ -1,7 +1,7 @@
 import './content-language.js?v=20260918-translation-fidelity-v3';
 import './content-variants.js?v=20260905-step1-language-v1';
 import './business-identity.js?v=20260906-pain-headings-v1';
-import './evidence-view.js?v=20260921-signal-section-gap-v1';
+import './evidence-view.js?v=20260921-two-stage-profile-action-v1';
 import './workspace-persistence.js?v=20260917-reset-clean-v1';
 import {withOpenAiRetry,cleanOpenAiResearchQuery,describePartialCoverage} from './market-research-provider-resilience.js?v=20260916-latency-fix-v2';
 
@@ -296,7 +296,9 @@ function approveProfile(){
 }
 function updateApprovalUI(){
   const approved=state.approved;$("profile-status").textContent=approved?"Approved":"Provisional";$("profile-status").classList.toggle("approved",approved);
-  $("approve-profile").innerHTML=approved?'Continue to Market Strategy <span aria-hidden="true">→</span>':'Approve &amp; continue to Market Strategy <span aria-hidden="true">→</span>';$("approve-profile").disabled=false;
+  const approveButton=$("approve-profile"),continueButton=$("continue-market-strategy");
+  approveButton.innerHTML=approved?'Approved <span aria-hidden="true">✓</span>':'Approve profile';approveButton.disabled=approved;approveButton.setAttribute("aria-disabled",approved?"true":"false");
+  continueButton.innerHTML='Continue to Market Strategy <span aria-hidden="true">→</span>';$("continue-market-strategy").disabled=!approved;continueButton.setAttribute("aria-disabled",approved?"false":"true");
   const approvalCard=$("approval-card");approvalCard.classList.toggle("approved",approved);
   const approvalTitle=approvalCard.querySelector("h3"),approvalCopy=approvalCard.querySelector("p"),approvalEyebrow=approvalCard.querySelector(".eyebrow");
   if(approvalEyebrow)approvalEyebrow.textContent=approved?"Profile approved":"Profile approval";
@@ -871,7 +873,7 @@ function bind(){
   $("pdf-input").addEventListener("change",e=>handlePdfFiles(e.target.files));
   $("document-list").addEventListener("click",e=>{const btn=e.target.closest("[data-remove-doc]");if(!btn)return;state.documents.splice(Number(btn.dataset.removeDoc),1);saveState();renderDocuments();});
   const zone=$("upload-zone");["dragenter","dragover"].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault();zone.classList.add("dragging");}));["dragleave","drop"].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault();zone.classList.remove("dragging");}));zone.addEventListener("drop",e=>handlePdfFiles(e.dataTransfer.files));
-  $("edit-profile").addEventListener("click",toggleEdit);$("approve-profile").addEventListener("click",()=>{if(!state.approved)approveProfile();openMarketStrategy();});$("recommended-signals").addEventListener("change",()=>{saveProfileEdits();seedMarketStrategy();saveState();updateApprovalUI();showToast("Profile changed · approve it again before continuing");});$("improve-profile").addEventListener("click",()=>openModule(1));
+  $("edit-profile").addEventListener("click",toggleEdit);$("approve-profile").addEventListener("click",()=>approveProfile());$("continue-market-strategy").addEventListener("click",openMarketStrategy);$("recommended-signals").addEventListener("change",()=>{saveProfileEdits();seedMarketStrategy();saveState();updateApprovalUI();showToast("Profile changed · approve it again before continuing");});$("improve-profile").addEventListener("click",()=>openModule(1));
   $("back-to-profile").addEventListener("click",()=>openModule(3));
   $("add-custom-signal").addEventListener("click",addCustomSignal);$("run-market-research").addEventListener("click",()=>openResearchPreview("quick"));$("run-detailed-research").addEventListener("click",()=>openResearchPreview("deep"));$("run-market-intelligence").addEventListener("click",()=>openResearchPreview("intelligence"));$("confirm-market-research").addEventListener("click",()=>{if(pendingResearchMode)void runMarketResearch(pendingResearchMode);});$("cancel-market-research").addEventListener("click",closeResearchPreview);$("add-suggested-sources").addEventListener("click",addSuggestedSources);$("edit-research-settings").addEventListener("click",()=>{const settings=$("research-settings");settings.open=true;closeResearchPreview();settings.scrollIntoView({behavior:"smooth",block:"start"});});$("activate-market-strategy").addEventListener("click",event=>{
     event.preventDefault();
