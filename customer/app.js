@@ -683,21 +683,19 @@ function renderMarketJourney(){
   const title=$("strategy-activation-title");
   const description=$("strategy-activation-description");
   const step=$("strategy-activation-step");
+  activationButton.hidden=false;
+  activationButton.disabled=!view.activationEnabled;
+  activationButton.textContent=view.activationLabel;
+  activationButton.setAttribute("aria-disabled",String(!view.activationEnabled));
   if(view.stage==="active"){
     step.textContent="Strategy saved";
     title.textContent="Ready to find matching companies";
     description.textContent="Your approved market evidence will guide Company Discovery."
-    activationButton.hidden=false;
-    activationButton.disabled=false;
-    activationButton.textContent="Continue to Company Discovery →";
     activationButton.dataset.activationContinue="true";
   }else{
     step.textContent="Next step";
     title.textContent="Ready to find matching companies";
     description.textContent="Your selected opportunities and signals will be saved automatically."
-    activationButton.hidden=false;
-    activationButton.disabled=false;
-    activationButton.textContent="Continue to Company Discovery →";
     activationButton.dataset.activationContinue="false";
   }
 }

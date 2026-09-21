@@ -188,16 +188,34 @@ test('localizeGeneratedState updates only generated strategy prose and preserves
   assert.equal(localized.contentVariants.opportunities[localized.opportunities[0].id].lv.title,localized.opportunities[0].title);
 });
 
-test('first-time market journey exposes research only',()=>{
+test('first-time market journey keeps the standard next-step action visible but disabled',()=>{
   const view=Market.getMarketJourneyState({researchStatus:'idle',lastResearchAt:'',strategyApproved:false});
-  assert.deepEqual(view,{
-    stage:'research',
-    researched:false,
-    showScore:false,
-    showActivation:false,
-    showMonitoring:false,
-    researchLabel:'Run quick research'
-  });
+  assert.equal(view.stage,'research');
+  assert.equal(view.researched,false);
+  assert.equal(view.showActivation,true);
+  assert.equal(view.activationEnabled,false);
+  assert.equal(view.activationLabel,'Complete Market Research First');
+});
+
+test('initial research run explains why the standard next-step action is disabled',()=>{
+  const view=Market.getMarketJourneyState({researchStatus:'running',lastResearchAt:'',researchResults:[],strategyApproved:false});
+  assert.equal(view.showActivation,true);
+  assert.equal(view.activationEnabled,false);
+  assert.equal(view.activationLabel,'Research in Progress…');
+});
+
+test('usable research unlocks Company Discovery even when OpenAI extension is retried',()=>{
+  const view=Market.getMarketJourneyState({researchStatus:'partial',lastResearchAt:'2026-09-21T10:00:00.000Z',researchResults:[{url:'https://example.com/evidence'}],strategyApproved:false});
+  assert.equal(view.showActivation,true);
+  assert.equal(view.activationEnabled,true);
+  assert.equal(view.activationLabel,'Continue to Company Discovery →');
+});
+
+test('failed research with no usable evidence keeps the next step visible and blocked',()=>{
+  const view=Market.getMarketJourneyState({researchStatus:'error',lastResearchAt:'',researchResults:[],strategyApproved:false});
+  assert.equal(view.showActivation,true);
+  assert.equal(view.activationEnabled,false);
+  assert.equal(view.activationLabel,'Retry Market Research First');
 });
 
 test('completed research reveals review and activation but keeps monitoring hidden',()=>{
@@ -221,7 +239,8 @@ test('failed research does not unlock strategy activation',()=>{
   const view=Market.getMarketJourneyState({researchStatus:'error',lastResearchAt:'2026-09-06T12:00:00.000Z',strategyApproved:false});
   assert.equal(view.stage,'research');
   assert.equal(view.researched,false);
-  assert.equal(view.showActivation,false);
+  assert.equal(view.showActivation,true);
+  assert.equal(view.activationEnabled,false);
   assert.equal(view.showMonitoring,false);
 });
 

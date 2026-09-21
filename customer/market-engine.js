@@ -233,11 +233,15 @@
   function getMarketJourneyState(value={}){
     const researched=Boolean(clean(value.lastResearchAt))&&["complete","partial"].includes(value.researchStatus);
     const active=researched&&Boolean(value.strategyApproved);
+    const running=value.researchStatus==="running";
+    const failed=value.researchStatus==="error";
     return {
       stage:active?"active":researched?"review":"research",
       researched,
       showScore:researched,
-      showActivation:researched,
+      showActivation:true,
+      activationEnabled:researched,
+      activationLabel:researched?"Continue to Company Discovery →":running?"Research in Progress…":failed?"Retry Market Research First":"Complete Market Research First",
       showMonitoring:active,
       researchLabel:researched?"Rerun market research":"Run quick research"
     };
