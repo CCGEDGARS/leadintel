@@ -45,9 +45,10 @@ test('workspace reset clears browser-only company residue but preserves saved AP
 });
 
 test('signed-in reset explicitly authorizes saving the blank workspace',()=>{
-  const resetBlock=app.match(/async function resetWorkspace\(\)\{[\s\S]*?\n\}/)?.[0]||'';
-  assert.match(resetBlock,/bridge\.saveNow\(\{saveIntent:true,explicitSave:true\}\)/);
-  assert.match(resetBlock,/Reset failed to sync/);
+  assert.match(app,/function saveResetStateToServer\(\)/);
+  assert.match(app,/bridge\.saveNow\(\{saveIntent:true,explicitSave:true\}\)/);
+  assert.match(app,/Server reset was not saved/);
+  assert.match(app,/async function resetWorkspace\(\)[\s\S]*saveResetStateToServer\(\)/);
 });
 
 test('confirmed workspace reset records durable reset intent for the next authenticated sync',()=>{
