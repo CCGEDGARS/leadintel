@@ -42,7 +42,7 @@ test('localization removes stale activation until real opportunity evidence exis
   const unavailable=api.localizeGeneratedState({icps:[stale],opportunities:[]},profile,'en').icps.find(item=>item.type==='opportunity-led');
   assert.equal(unavailable.active,false);
   assert.equal(unavailable.opportunityDataAvailable,false);
-  const available=api.localizeGeneratedState({icps:[stale],opportunities:[{active:true,profileOnly:false,evidence:[{url:'https://example.com'}]}]},profile,'en').icps.find(item=>item.type==='opportunity-led');
+  const available=api.localizeGeneratedState({icps:[stale],opportunities:[{id:'opp-latvia',market:'Latvia',active:true,profileOnly:false,evidence:[{url:'https://example.com'}]}]},profile,'en').icps.find(item=>item.type==='opportunity-led');
   assert.equal(available.active,true);
   assert.equal(available.opportunityDataAvailable,true);
 });
