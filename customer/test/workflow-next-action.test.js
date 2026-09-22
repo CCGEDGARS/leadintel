@@ -1,3 +1,5 @@
+const fs=require('node:fs');
+const path=require('node:path');
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const NextAction=require('../workflow-next-action.js');
@@ -38,4 +40,10 @@ test('Step 5 hides the empty pipeline and continuation control until an opportun
   NextAction.applyStageVisibility(document,5,{pipelineCount:1});
   assert.equal(pipeline.hidden,false);
   assert.equal(footer.hidden,false);
+});
+
+
+test('the workflow footer CSS respects the hidden state',()=>{
+  const css=fs.readFileSync(path.join(__dirname,'..','styles.css'),'utf8');
+  assert.match(css,/\.workflow-next-action\[hidden\]\s*\{\s*display:none!important\s*\}/);
 });

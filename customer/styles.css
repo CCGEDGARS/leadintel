@@ -68,6 +68,7 @@
   box-shadow:none!important;
   text-align:center!important;
 }
+.workflow-next-action[hidden]{display:none!important}
 .workflow-next-action>div{display:none!important}
 .workflow-next-action .stage-next-action{
   width:min(640px,100%)!important;
