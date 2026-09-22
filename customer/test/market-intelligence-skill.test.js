@@ -21,9 +21,9 @@ test('LeadIntel market intelligence skill exists and governs research orchestrat
     'Scrapling',
     'Apollo',
     'LinkedIn',
-    'Market Scan',
+    'Quick Overview',
     'Market Research',
-    'Market Intelligence'
+    'Deep Analysis'
   ]) assert.match(text,new RegExp(required,'i'),`skill must cover ${required}`);
 });
 

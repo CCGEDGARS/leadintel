@@ -19,15 +19,17 @@ test("running market research renders a prominent phase-based progress card", ()
   assert.match(app, /Extracting information/);
   assert.match(app, /Verifying findings/);
   assert.match(app, /Building opportunities/);
-  assert.match(app, /This may take 1–3 minutes\. Please keep this page open\./);
+  assert.match(app, /researchModeUi\(state\.market\.researchMode\)\.estimate/);
+  assert.match(app, /usually 5–10 minutes/);
   assert.match(marketCss, /\.market-research-progress/);
   assert.match(marketCss, /\.market-research-progress-bar/);
 });
 
-test("quick validation rotates practical phase-specific research insights", () => {
+test("every research mode rotates practical phase-specific research insights", () => {
   assert.match(app, /function quickResearchInsight\(view\)/);
-  assert.match(app, /state\.market\.researchMode!==["']quick["']/);
-  assert.match(app, /Research insight/);
+  assert.doesNotMatch(app, /state\.market\.researchMode!==["']quick["']/);
+  assert.match(app, /Market Research insight|\$\{mode\} insight/);
+  assert.match(app, /Deep Analysis/);
   assert.match(app, /strongest buying points/i);
   assert.match(app, /market demand/i);
   assert.match(app, /potential resistance/i);

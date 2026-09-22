@@ -14,12 +14,14 @@ const profile={
 const marketState={signals:[{name:'New Sales Director',active:true,keywords:'sales director appointment'}]};
 
 test('idle market research labels contain no Review prefix and each has distinct readable copy',()=>{
-  assert.equal(ux.MODE_COPY.quick.label,'Market Scan');
+  assert.equal(ux.MODE_COPY.quick.label,'Quick Overview');
   assert.equal(ux.MODE_COPY.deep.label,'Market Research');
-  assert.equal(ux.MODE_COPY.intelligence.label,'Market Intelligence');
+  assert.equal(ux.MODE_COPY.intelligence.label,'Deep Analysis');
+  assert.equal(ux.MODE_COPY.deep.estimate,'Usually 2–4 minutes');
+  assert.equal(ux.MODE_COPY.intelligence.estimate,'Usually 5–10 minutes');
   assert.match(ux.MODE_COPY.quick.description,/Fast validation/i);
   assert.match(ux.MODE_COPY.deep.description,/Deeper research/i);
-  assert.match(ux.MODE_COPY.intelligence.description,/Comprehensive investigation/i);
+  assert.match(ux.MODE_COPY.intelligence.description,/strategic/i);
   assert.ok(Object.values(ux.MODE_COPY).every(item=>!/^Review\b/i.test(item.label)));
   assert.equal(ux.MODE_COPY.deep.badge,'Recommended');
   assert.deepEqual(Object.values(ux.MODE_COPY).map(item=>item.evidenceLimit),[20,80,200]);
@@ -110,9 +112,9 @@ test('research choice hierarchy is shipped through the CSP-approved static style
   const css=fs.readFileSync(path.join(__dirname,'..','market.css'),'utf8');
   const uxSource=fs.readFileSync(path.join(__dirname,'..','market-research-ux.js'),'utf8');
   assert.match(html,/market\.css\?v=20260921-research-progress-v1/);
-  assert.match(html,/aria-label="Market Scan, up to 20 evidence sources"/);
+  assert.match(html,/aria-label="Quick Overview, up to 20 evidence sources"/);
   assert.match(html,/aria-label="Market Research, up to 80 evidence sources"/);
-  assert.match(html,/aria-label="Market Intelligence, up to 200 evidence sources"/);
+  assert.match(html,/aria-label="Deep Analysis, up to 200 evidence sources"/);
   assert.match(css,/\.research-actions \.research-mode-choice\[data-research-mode="deep"\]>button/);
   assert.match(css,/\.research-mode-choice\.is-selected>button/);
   assert.match(css,/\.research-mode-action/);

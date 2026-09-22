@@ -9,9 +9,9 @@
   const PROFILE_CONTEXT_LABEL="Company profile context · not a market research result";
   const BUTTON_IDS=Object.freeze(["run-market-research","run-detailed-research","run-market-intelligence"]);
   const BUTTON_META=Object.freeze({
-    "run-market-research":Object.freeze({mode:"quick",label:"Market Scan"}),
+    "run-market-research":Object.freeze({mode:"quick",label:"Quick Overview"}),
     "run-detailed-research":Object.freeze({mode:"deep",label:"Market Research"}),
-    "run-market-intelligence":Object.freeze({mode:"intelligence",label:"Market Intelligence"})
+    "run-market-intelligence":Object.freeze({mode:"intelligence",label:"Deep Analysis"})
   });
   let activated=false;
   let observer=null;

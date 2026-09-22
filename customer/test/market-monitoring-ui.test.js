@@ -8,14 +8,16 @@ const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
 const css=fs.readFileSync(path.join(root,'market.css'),'utf8');
 const discovery=fs.readFileSync(path.join(root,'discovery-ui.js'),'utf8');
 
-test('market strategy exposes Market Scan, Market Research and Market Intelligence with transparent limits',()=>{
+test('market strategy exposes Quick Overview, Market Research and Deep Analysis with transparent limits',()=>{
   assert.match(html,/id="research-mode"/);
-  assert.match(html,/value="quick"[\s\S]*Market Scan/);
+  assert.match(html,/value="quick"[\s\S]*Quick Overview/);
   assert.match(html,/value="deep"[\s\S]*Market Research/);
-  assert.match(html,/value="intelligence"[\s\S]*Market Intelligence/);
-  assert.match(html,/id="run-market-research"[^>]*>Review Market Scan</);
+  assert.match(html,/value="intelligence"[\s\S]*Deep Analysis/);
+  assert.match(html,/id="run-market-research"[^>]*>Review Quick Overview</);
   assert.match(html,/id="run-detailed-research"[^>]*>Review Market Research</);
-  assert.match(html,/id="run-market-intelligence"[^>]*>Review Market Intelligence</);
+  assert.match(html,/id="run-market-intelligence"[^>]*>Review Deep Analysis</);
+  assert.match(html,/Usually 2–4 minutes/);
+  assert.match(html,/Usually 5–10 minutes/);
   assert.match(html,/class="research-mode-hint"/);
   assert.match(html,/id="research-source-types"/);
   assert.match(html,/id="research-recommendations"/);
@@ -57,9 +59,9 @@ test('failed research keeps actionable diagnostics and clearly labels retry acti
   assert.match(html,/id="research-run-feedback"/);
   assert.match(app,/researchErrors/);
   assert.match(app,/Research run failed/);
-  assert.match(app,/Retry Market Scan/);
+  assert.match(app,/Retry Quick Overview/);
   assert.match(app,/Retry Market Research/);
-  assert.match(app,/Retry Market Intelligence/);
+  assert.match(app,/Retry Deep Analysis/);
   assert.match(app,/No public evidence was saved/);
 });
 

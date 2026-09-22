@@ -437,7 +437,7 @@ async function searchCustomSource(url,index,signal){
 }
 async function verifyResearchWithGemini(mode,profile,results,signals,signal){
   const unavailable=reason=>({status:"unavailable",provider:"gemini",role:"verification",web_search:false,reason});
-  if(!["deep","intelligence"].includes(mode))return {status:"idle",provider:"gemini",role:"verification",web_search:false,reason:"Verification is reserved for Market Research and Market Intelligence"};
+  if(!["deep","intelligence"].includes(mode))return {status:"idle",provider:"gemini",role:"verification",web_search:false,reason:"Verification is reserved for Market Research and Deep Analysis"};
   if(!results.length)return unavailable("No evidence was available to verify");
   const bridge=await waitForMarketServerBridge();const workspace=bridge?.workspace;
   if(!bridge?.session?.authenticated||!workspace?.id)return unavailable("Sign in to use Gemini verification");
@@ -469,13 +469,16 @@ function normalizeResearchMode(mode){return LeadIntelMarket.RESEARCH_MODES[mode]
 function researchModeUi(mode){
   const selected=normalizeResearchMode(mode);
   return selected==="intelligence"?{
-    label:"Market Intelligence",
+    label:"Deep Analysis",
+    estimate:"usually 5–10 minutes",
     method:"LeadIntel performs the widest investigation across active buying signals and selected source categories. OpenAI discovers relevant public pages; Firecrawl extracts evidence and checks specific URLs; Gemini independently cross-checks only the collected evidence."
   }:selected==="deep"?{
     label:"Market Research",
+    estimate:"usually 2–4 minutes",
     method:"LeadIntel rotates across more active buying signals and the source categories you selected. OpenAI discovers relevant public pages; Firecrawl extracts evidence and checks specific URLs; Gemini independently cross-checks only the collected evidence."
   }:{
-    label:"Market Scan",
+    label:"Quick Overview",
+    estimate:"usually under 1 minute",
     method:"LeadIntel validates the strongest active buying signals across your selected source categories. OpenAI discovers public pages; Firecrawl extracts the available evidence."
   };
 }
@@ -487,16 +490,16 @@ function openResearchPreview(mode){
   const limits=LeadIntelMarket.RESEARCH_MODES[pendingResearchMode];
   const modeUi=researchModeUi(pendingResearchMode);
   const profile=researchProfile();const language=contentLanguage();
-  const queries=LeadIntelMarket.buildResearchQueries(profile,state.market.signals,{mode:pendingResearchMode,sourceTypes:state.market.researchSourceTypes,instructions:state.market.researchInstructions,language});
+  const queries=LeadIntelMarket.buildResearchPlan(profile,state.market.signals,{mode:pendingResearchMode,sourceTypes:state.market.researchSourceTypes,instructions:state.market.researchInstructions,language});
   const labels=state.market.researchSourceTypes.map(type=>type[0].toUpperCase()+type.slice(1));
   $("research-preview-title").textContent=modeUi.label;
-  $("research-preview-scope").textContent=`${queries.length} planned search${queries.length===1?"":"es"} · up to ${limits.resultsPerQuery} results each · maximum ${limits.maxStoredResults} saved evidence sources${state.market.researchCustomSources.length?` · ${state.market.researchCustomSources.length} direct URL${state.market.researchCustomSources.length===1?"":"s"}`:""}.`;
+  $("research-preview-scope").textContent=`${queries.length} planned search${queries.length===1?"":"es"} · ${modeUi.estimate} · up to ${limits.resultsPerQuery} results each · maximum ${limits.maxStoredResults} saved evidence sources${state.market.researchCustomSources.length?` · ${state.market.researchCustomSources.length} direct URL${state.market.researchCustomSources.length===1?"":"s"}`:""}.`;
   $("research-preview-sources").textContent=labels.join(", ")||"No source categories selected";
   $("research-preview-method").textContent=modeUi.method;
   const suggestions=LeadIntelMarket.buildSuggestedSources(profile,state.market.signals,state.market.researchSourceTypes,language);const added=new Set(state.market.researchCustomSources||[]);
   $("research-suggested-sources").innerHTML=suggestions.length?suggestions.map((item,index)=>`<label><input type="checkbox" data-suggested-source value="${esc(item.url)}" ${added.has(item.url)?"checked disabled":""}><span><strong>${esc(item.name)}</strong><small>${esc(item.reason)}</small><code>${esc(item.url)}</code></span></label>`).join(""):"<p>No specific site recommendations are available for the selected market and source categories. You can still add any public URL manually.</p>";
   $("add-suggested-sources").hidden=!suggestions.length;$("add-suggested-sources").disabled=!suggestions.some(item=>!added.has(item.url));
-  $("research-preview-queries").innerHTML=queries.map(item=>`<li>${esc(item.query)}</li>`).join("")||"<li>No searches could be prepared. Add a target market.</li>";
+  $("research-preview-queries").innerHTML=queries.map(item=>`<li><strong>${esc(item.researchCategory)}</strong> · ${esc(item.query)}</li>`).join("")||"<li>No searches could be prepared. Add a target market.</li>";
   $("confirm-market-research").textContent=`Start ${modeUi.label}`;
   $("confirm-market-research").disabled=!queries.length;
   $("research-run-preview").hidden=false;
@@ -521,7 +524,7 @@ async function runMarketResearch(modeOverride=""){
   const selectedSources=state.market.researchSourceTypes;
   const limits=LeadIntelMarket.RESEARCH_MODES[state.market.researchMode];
   const runtime=LeadIntelMarket.researchRuntimePolicy(state.market.researchMode);
-  const queries=LeadIntelMarket.buildResearchQueries(profile,state.market.signals,{mode:state.market.researchMode,sourceTypes:selectedSources,instructions:state.market.researchInstructions,language:contentLanguage()});
+  const queries=LeadIntelMarket.buildResearchPlan(profile,state.market.signals,{mode:state.market.researchMode,sourceTypes:selectedSources,instructions:state.market.researchInstructions,language:contentLanguage()});
   if(!queries.length){showToast("Add a target market to improve research precision");return;}
   const totalJobs=queries.length+state.market.researchCustomSources.length;
   const taskCentre=window.LeadIntelTaskCentre;const taskId=`market-research:${Date.now()}`;
@@ -529,7 +532,7 @@ async function runMarketResearch(modeOverride=""){
   taskCentre?.registerActions(taskId,{retry:()=>runMarketResearch(state.market.researchMode)});
   closeResearchPreview();
   const requestsGemini=["deep","intelligence"].includes(state.market.researchMode);
-  state.market.researchQueries=queries;state.market.researchResults=[];state.market.opportunities=[];state.market.researchErrors=[];state.market.researchStatus="running";state.market.researchStartedAt=Date.now();state.market.researchPhase="finding";state.market.researchSourceStatus={openai:"running",firecrawl:"running",gemini:requestsGemini?"running":"idle"};state.market.researchVerification={status:requestsGemini?"running":"idle",provider:"gemini",role:"verification",webSearch:false,reason:"",summary:"",disagreements:[],missingEvidence:[],verifiedAt:""};state.market.researchProgress={completed:0,total:totalJobs};state.market.strategyApproved=false;saveState();renderMarketStrategy();clearInterval(researchElapsedTimer);researchElapsedTimer=setInterval(renderResearchStatus,1000);
+  state.market.researchQueries=queries;state.market.researchResults=[];state.market.opportunities=[];state.market.marketConditions=null;state.market.researchErrors=[];state.market.researchStatus="running";state.market.researchStartedAt=Date.now();state.market.researchPhase="finding";state.market.researchSourceStatus={openai:"running",firecrawl:"running",gemini:requestsGemini?"running":"idle"};state.market.researchVerification={status:requestsGemini?"running":"idle",provider:"gemini",role:"verification",webSearch:false,reason:"",summary:"",disagreements:[],missingEvidence:[],verifiedAt:""};state.market.researchProgress={completed:0,total:totalJobs};state.market.strategyApproved=false;saveState();renderMarketStrategy();clearInterval(researchElapsedTimer);researchElapsedTimer=setInterval(renderResearchStatus,1000);
   const researchButtons=[$("run-market-research"),$("run-detailed-research"),$("run-market-intelligence")].filter(Boolean);researchButtons.forEach(button=>{button.disabled=true;button.textContent="Researching…";});
   let openAiAvailable=true,openAiSuccesses=0,openAiFailures=0,firecrawlSuccesses=0,firecrawlFailures=0;
   const recordResearchError=(provider,query,error)=>{if(state.market.researchErrors.length>=12)return;state.market.researchErrors.push({provider,query:String(query||"").slice(0,180),message:String(error?.message||error||"Request failed").replace(/\s+/g," ").trim().slice(0,240)});};
@@ -565,6 +568,7 @@ async function runMarketResearch(modeOverride=""){
     const operationalFailures=openAiFailures+firecrawlFailures;
     state.market.researchPhase="building";renderResearchStatus();
     state.market.opportunities=LeadIntelMarket.buildMarketOpportunities(profile,state.market.icps,state.market.signals,state.market.researchResults,contentLanguage());
+    state.market.marketConditions=state.market.researchMode==="quick"?null:globalThis.LeadIntelMarketConditions?.buildPack(state.market.researchResults)||null;
     state.market.researchStatus=operationalFailures===0?"complete":state.market.researchResults.length?"partial":"error";
     if(state.market.researchStatus==='error')taskCentre?.fail(taskId,'Market research could not complete',{canRetry:true});else taskCentre?.complete(taskId,{status:state.market.researchStatus,stage:state.market.researchStatus==='partial'?'Completed with source warnings':'Market research complete',resultCount:state.market.researchResults.length});
   }catch(error){
@@ -624,6 +628,26 @@ async function retryOpenAiDiscovery(){
   showToast(failures?"Firecrawl results preserved — OpenAI still unavailable":"Research complete — OpenAI and Firecrawl succeeded");
 }
 function scoreCell(label,value){return `<div><span>${label}</span><strong>${value}/20</strong><i style="--score:${value}"></i></div>`;}
+function marketConditionSources(items=[]){
+  const links=(items||[]).filter(item=>item?.url).slice(0,4);
+  return links.length?`<ul>${links.map(item=>`<li><a href="${esc(item.url)}" target="_blank" rel="noopener">${esc(item.title||item.organisation||"View source")}</a></li>`).join("")}</ul>`:`<p class="condition-caveat">No sufficiently specific source was verified for this topic.</p>`;
+}
+function renderMarketConditions(){
+  const section=$("market-conditions"),grid=$("market-condition-grid");if(!section||!grid)return;
+  const pack=globalThis.LeadIntelMarketConditions?.normalizePack(state.market.marketConditions);
+  section.hidden=!pack;if(!pack){grid.innerHTML="";return;}
+  const fundingEvidence=[...(pack.funding.active||[]),...(pack.funding.closed||[])].map(item=>item.source);
+  const pricingEvidence=(pack.pricing.examples||[]).map(item=>item.source);
+  const cards=[
+    ["Market direction",`${pack.direction.label} · ${pack.direction.confidence} confidence`,pack.direction.summary,pack.direction.evidence],
+    ["Competition",`${pack.competition.evidence.length} source${pack.competition.evidence.length===1?"":"s"} reviewed`,pack.competition.summary,pack.competition.evidence],
+    ["Funding",pack.funding.active.length?`${pack.funding.active.length} active programme${pack.funding.active.length===1?"":"s"}`:"No active programme verified",pack.funding.summary,fundingEvidence],
+    ["Pricing",pack.pricing.range?`${pack.pricing.range.minimum}–${pack.pricing.range.maximum} ${pack.pricing.range.currency}/${pack.pricing.range.unit}`:"No reliable range yet",pack.pricing.summary,pricingEvidence],
+    ["Demand and buying points",`${pack.demand.evidence.length} commercial source${pack.demand.evidence.length===1?"":"s"}`,pack.demand.summary,pack.demand.evidence],
+    ["Practical advice","Focus and resistance",[...(pack.advice.focus||[]),...(pack.advice.resistance||[])].join(" "),[]]
+  ];
+  grid.innerHTML=cards.map(([title,headline,summary,evidence])=>`<details class="market-condition-card"><summary><span>${esc(title)}</span><strong>${esc(headline)}</strong></summary><p>${esc(summary)}</p>${marketConditionSources(evidence)}</details>`).join("");
+}
 function renderMarketOpportunities(){
   const target=$("market-opportunities");
   if(!state.market.opportunities.length){target.innerHTML=`<div class="market-empty">${state.market.researchStatus==="running"?"Researching markets…":"Target market strategy is ready. Run market research to add live evidence and improve confidence."}</div>`;return;}
@@ -655,7 +679,6 @@ function researchProgressView(){
 }
 let quickResearchInsightTimer=0;
 function quickResearchInsight(view){
-  if(state.market.researchMode!=="quick")return null;
   const markets=LeadIntelMarket.splitList(state.profile?.targetMarkets).join(" · ")||LeadIntelMarket.splitList(state.profile?.currentMarkets).join(" · ")||"your selected market";
   const offer=LeadIntelMarket.splitList(state.profile?.priorityOffers)[0]||"your priority offer";
   const activeSignals=(state.market.signals||[]).filter(signal=>signal&&signal.active!==false).length;
@@ -680,7 +703,9 @@ function quickResearchInsight(view){
   };
   const phase=messages[view.phaseKey]?view.phaseKey:"finding";
   const options=messages[phase];
-  return {label:"Research insight",text:options[Math.floor(view.elapsed/8)%options.length]};
+  const mode=researchModeUi(state.market.researchMode).label;
+  const strategic=state.market.researchMode==="intelligence"?[`Checking market direction, competition, pricing and official funding before drawing conclusions.`,`Looking for independent evidence that can support strategic decisions—not just more links.`]:state.market.researchMode==="deep"?[`Comparing demand, competition, funding and pricing evidence for ${markets}.`,`Looking for practical buyer motives, likely resistance and commercially useful market conditions.`]:options;
+  return {label:`${mode} insight`,text:(strategic[Math.floor(view.elapsed/8)%strategic.length])};
 }
 function updateQuickResearchInsight(statusNode,view){
   const card=statusNode.querySelector("[data-quick-research-insight]");
@@ -703,7 +728,7 @@ function renderRunningResearchStatus(statusNode,view){
     head=statusNode.querySelector("[data-research-progress-runtime]");
   }
   head.querySelector("#market-research-progress-title").textContent=view.title;
-  head.querySelector("#market-research-progress-phase").textContent=`${view.phase} · This may take 1–3 minutes. Please keep this page open.`;
+  head.querySelector("#market-research-progress-phase").textContent=`${view.phase} · ${researchModeUi(state.market.researchMode).estimate}. You can keep this page open while LeadIntel works.`;
   head.querySelector("#market-research-progress-percent").textContent=`${view.percent}%`;
   statusNode.querySelector("#market-research-progress-bar").style.width=`${view.percent}%`;
   statusNode.querySelector("#market-research-progress-meta").textContent=view.meta;
@@ -739,7 +764,7 @@ function renderResearchStatus(){
     if(show)feedback.innerHTML=`<div><span class="eyebrow">Research error</span><h4>Research run failed</h4><p>No public evidence was saved. Review the scope and try again.</p></div>${errors.length?`<ul>${errors.slice(0,6).map(item=>`<li><strong>${esc(item.provider||"Source")}</strong><span>${esc(item.message||"Request failed")}</span><small>${esc(item.query)}</small></li>`).join("")}</ul>`:`<p class="research-feedback-empty">The public research providers returned no usable results. Open the research settings to change sources or add specific URLs.</p>`}`;
     else feedback.innerHTML="";
   }
-  const actions=[["run-market-research","Market Scan","Retry Market Scan"],["run-detailed-research","Market Research","Retry Market Research"],["run-market-intelligence","Market Intelligence","Retry Market Intelligence"]];
+  const actions=[["run-market-research","Quick Overview","Retry Quick Overview"],["run-detailed-research","Market Research","Retry Market Research"],["run-market-intelligence","Deep Analysis","Retry Deep Analysis"]];
   actions.forEach(([id,label,retryLabel])=>{const button=$(id);if(!button)return;button.textContent=status==="running"?"Researching…":status==="error"?retryLabel:`Review ${label}`;button.disabled=status==="running";});
 }
 function renderMarketJourney(){
@@ -818,7 +843,7 @@ function renderMarketStrategy(){
   $("strategy-signal-count").textContent=String(state.market.signals.filter(item=>item.active).length);
   $("strategy-status").textContent=state.market.strategyApproved?"Active":state.approved?"Draft":"Provisional";$("strategy-status").classList.toggle("approved",state.market.strategyApproved);
   $("strategy-activation-card").classList.toggle("approved",state.market.strategyApproved);
-  renderIcps();renderSignalDesigner();renderResearchControls();renderResearchStatus();renderResearchHistory();renderMarketOpportunities();renderMonitoringControls();renderMarketJourney();loadMonitoringServerState();
+  renderIcps();renderSignalDesigner();renderResearchControls();renderResearchStatus();renderResearchHistory();renderMarketConditions();renderMarketOpportunities();renderMonitoringControls();renderMarketJourney();loadMonitoringServerState();
 }
 function setActivationFeedback(message,tone){
   const target=$("strategy-activation-feedback");
