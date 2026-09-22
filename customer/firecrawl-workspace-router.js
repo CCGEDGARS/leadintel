@@ -52,7 +52,7 @@ async function routedFetch(input,options={}){
     if(scrapling&&url){
       try{
         const fallback=await originalFetch(scrapling,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({url}),signal:options?.signal});
-        if(fallback.ok)return tagExtractor(fallback,'scrapling');
+        if(fallback.ok)return fallback&&tagExtractor(fallback,'scrapling');
       }catch{}
     }
     return originalFetch(input,options);
@@ -62,7 +62,7 @@ async function routedFetch(input,options={}){
     if(scrapling&&url){
       try{
         const fallback=await originalFetch(scrapling,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({url}),signal:options?.signal});
-        if(fallback.ok)return tagExtractor(fallback,'scrapling');
+        if(fallback.ok)return fallback&&tagExtractor(fallback,'scrapling');
       }catch{}
     }
     return originalFetch(input,options);
