@@ -9,6 +9,69 @@
   const unique=values=>[...new Set(values.map(clean).filter(Boolean))];
   const organisation=item=>clean(item.organisation)||(()=>{try{return new URL(item.url).hostname.replace(/^www\./,"");}catch{return "Unknown source";}})();
   const evidenceItem=item=>({title:clean(item.title)||"Source evidence",url:clean(item.url),organisation:organisation(item),date:clean(item.date)});
+  const host=value=>{try{return new URL(value).hostname.replace(/^www\./,"").toLowerCase();}catch{return "";}};
+  const officialHost=value=>/(^|\.)(europa\.eu|ec\.europa\.eu|eurostat\.ec\.europa\.eu|oecd\.org|worldbank\.org|gov\.[a-z]{2}|govt\.[a-z]{2}|stat\.[a-z]{2}|statistics\.[a-z]{2})$/i.test(host(value));
+  const fingerprint=item=>clean(`${item.title||""} ${item.text||item.description||""}`).toLowerCase().replace(/[^a-z0-9 ]/g," ").split(/\s+/).filter(word=>word.length>3).slice(0,24).sort().join(" ");
+  function scoreEvidence(item={},now=Date.now()){
+    let score=20;const domain=host(item.url);const parsed=Date.parse(item.date);const age=Number.isFinite(parsed)?Math.max(0,(now-parsed)/86400000):null;
+    if(item.official===true||officialHost(item.url))score+=30;
+    else if(/(university|institute|association|chamber|research|statistic)/i.test(`${domain} ${organisation(item)}`))score+=18;
+    else if(domain)score+=8;
+    if(age!==null)score+=age<=90?20:age<=365?12:age<=730?4:-8;
+    if(clean(item.text).length>=800)score+=15;else if(clean(item.text).length>=250)score+=8;
+    if(clean(item.date))score+=5;if(clean(item.title))score+=2;
+    return Math.max(0,Math.min(100,score));
+  }
+  function assessEvidence(results=[],options={}){
+    const now=Date.parse(options.now)||Date.now();const seenUrls=new Set(),seenFingerprints=new Set();let duplicatesRemoved=0;
+    const ranked=[];
+    for(const raw of Array.isArray(results)?results:[]){
+      const item={...raw};const url=clean(item.url);const baseFingerprint=fingerprint(item);const family=clean(item.indicatorFamily||item.researchCategory);const fp=baseFingerprint?`${item.official===true||officialHost(url)?"official":"other"}:${family}:${baseFingerprint}`:"";
+      if(!url||seenUrls.has(url)||(fp&&seenFingerprints.has(fp))){duplicatesRemoved++;continue;}
+      seenUrls.add(url);if(fp)seenFingerprints.add(fp);
+      ranked.push({...item,qualityScore:scoreEvidence(item,now),sourceClass:item.official===true||officialHost(url)?"official":/news|press|media/i.test(`${item.researchCategory} ${host(url)}`)?"media":"industry"});
+    }
+    ranked.sort((a,b)=>b.qualityScore-a.qualityScore);
+    return {results:ranked,duplicatesRemoved,organisations:unique(ranked.map(organisation)),domains:unique(ranked.map(item=>host(item.url))),sourceClasses:unique(ranked.map(item=>item.sourceClass))};
+  }
+
+  function extractStructuredEvidence(results=[]){
+    const funding=[],pricing=[],competitors=[],indicators=[];
+    for(const item of results){
+      const text=clean(`${item.title||""} ${item.description||""} ${item.text||""}`);const category=clean(item.researchCategory);
+      if(category==="funding"&&(item.official===true||officialHost(item.url))){
+        const status=/\b(closed|expired|applications? closed)\b/i.test(text)?"closed":/\b(open|applications? (?:are )?open|apply (?:by|before)|deadline)\b/i.test(text)?"open":"unknown";
+        const deadline=text.match(/(?:deadline|apply (?:by|before))[:\s-]*((?:\d{1,2}\s+)?[A-Z][a-z]+\s+\d{4}|\d{4}-\d{2}-\d{2})/i)?.[1]||"";
+        const eligibility=text.match(/(?:eligible|eligibility)[:\s-]*([^.;]{3,160})/i)?.[1]||"";
+        funding.push({name:clean(item.title)||"Official funding programme",status,deadline,eligibility,url:item.url,source:evidenceItem(item)});
+      }
+      const price=inferredPricing(item);if(price)pricing.push({...price,url:item.url,source:evidenceItem(item)});
+      if(category==="competition")competitors.push({name:clean(item.title),url:item.url,source:evidenceItem(item)});
+      const direction=inferDirection(item);if(direction)indicators.push({direction,family:inferFamily(item),source:evidenceItem(item)});
+    }
+    return {funding,pricing,competitors,indicators};
+  }
+
+  function buildQualityGate(results=[],options={}){
+    const mode=["quick","deep","intelligence"].includes(options.mode)?options.mode:"deep";const assessed=assessEvidence(results,options);
+    const categories=new Set(assessed.results.map(item=>clean(item.researchCategory)||"commercial"));const gaps=[];
+    const minSources=mode==="intelligence"?8:mode==="deep"?5:2;const minDomains=mode==="intelligence"?5:mode==="deep"?3:2;
+    if(assessed.results.length<minSources)gaps.push("evidence volume");
+    if(assessed.domains.length<minDomains||assessed.sourceClasses.length<2)gaps.push("source diversity");
+    if(mode!=="quick")for(const category of ["direction","competition","funding","pricing","commercial"])if(!categories.has(category))gaps.push(category);
+    const average=assessed.results.length?Math.round(assessed.results.reduce((sum,item)=>sum+item.qualityScore,0)/assessed.results.length):0;
+    const passed=gaps.length===0&&average>=50;const confidence=passed&&assessed.organisations.length>=3&&average>=65?"High":assessed.results.length>=2&&average>=40?"Medium":"Low";
+    return {passed,confidence,score:average,gaps:[...new Set(gaps)],sourceCount:assessed.results.length,domainCount:assessed.domains.length,duplicatesRemoved:assessed.duplicatesRemoved};
+  }
+
+  function buildAdaptivePlan(input={}){
+    const mode=input.mode||"quick";if(mode==="quick")return {queries:[],gaps:[]};
+    const results=Array.isArray(input.results)?input.results:[];const categories=new Set(results.map(item=>clean(item.researchCategory)));const gaps=[];
+    for(const category of ["direction","competition","funding","pricing","commercial"])if(!categories.has(category)||results.filter(item=>clean(item.researchCategory)===category).length<2)gaps.push(category);
+    const intents={direction:"official statistics sector output orders employment latest",competition:"competitor landscape market share supplier positioning",funding:"official EU and national funding open calls eligibility deadline",pricing:"public pricing hourly rate contract value comparable examples",commercial:"current buyer projects investments tenders and demand signals"};
+    const limit=mode==="intelligence"?6:4;const market=clean(input.market)||"target market",offer=clean(input.offer)||"priority offer";
+    return {gaps,queries:gaps.slice(0,limit).map((category,index)=>({id:`adaptive-${category}-${index+1}`,market,offer,researchCategory:category,sourceType:category==="funding"?"investments":category==="direction"?"registries":"news",query:`${market} ${offer} ${intents[category]}`}))};
+  }
 
   function inferDirection(item={}){
     const explicit=clean(item.direction).toLowerCase();
@@ -79,16 +142,17 @@
   function categoryEvidence(results,category){return results.filter(item=>clean(item.researchCategory)===category).map(evidenceItem);}
   function buildPack(results=[]){
     const list=Array.isArray(results)?results:[];
+    const assessed=assessEvidence(list);const structured=extractStructuredEvidence(assessed.results);
     return {
-      version:1,generatedAt:new Date().toISOString(),
-      direction:classifyDirection(list.filter(item=>clean(item.researchCategory)==="direction"||item.direction||item.indicatorFamily)),
-      competition:{summary:"Use the cited sources to compare visible competitors, positioning and underserved segments.",evidence:categoryEvidence(list,"competition")},
-      funding:classifyFunding(list.filter(item=>clean(item.researchCategory)==="funding"||item.funding)),
-      pricing:classifyPricing(list.filter(item=>clean(item.researchCategory)==="pricing"||item.pricing)),
-      demand:{summary:"Prioritise recurring buyer needs that are supported by current evidence.",evidence:categoryEvidence(list,"commercial")},
+      version:2,generatedAt:new Date().toISOString(),quality:buildQualityGate(assessed.results,{mode:"deep"}),structured,
+      direction:classifyDirection(assessed.results.filter(item=>clean(item.researchCategory)==="direction"||item.direction||item.indicatorFamily)),
+      competition:{summary:"Use the cited sources to compare visible competitors, positioning and underserved segments.",evidence:categoryEvidence(assessed.results,"competition")},
+      funding:classifyFunding(assessed.results.filter(item=>clean(item.researchCategory)==="funding"||item.funding)),
+      pricing:classifyPricing(assessed.results.filter(item=>clean(item.researchCategory)==="pricing"||item.pricing)),
+      demand:{summary:"Prioritise recurring buyer needs that are supported by current evidence.",evidence:categoryEvidence(assessed.results,"commercial")},
       advice:{focus:["Lead with the strongest verified demand signal.","Use evidence as context, not as a claim about the buyer."],resistance:["Avoid overstating market growth or funding availability.","Expect buyers to ask for proof, timing and commercial relevance."]}
     };
   }
-  function normalizePack(value){return value&&value.version===1?value:null;}
-  return {buildPack,normalizePack,classifyDirection,classifyFunding,classifyPricing};
+  function normalizePack(value){return value&&(value.version===1||value.version===2)?value:null;}
+  return {buildPack,normalizePack,classifyDirection,classifyFunding,classifyPricing,assessEvidence,extractStructuredEvidence,buildQualityGate,buildAdaptivePlan,scoreEvidence};
 });

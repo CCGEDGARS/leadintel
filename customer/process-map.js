@@ -21,7 +21,7 @@
  * import './business-identity.js?v=20260906-pain-headings-v1';
  * import './company-brain.js?v=20260909-step2-first-party-v1';
  * import './step2-first-party-intelligence.js?v=20260909-first-party-step2-v1';
- * import './firecrawl-workspace-router.js?v=20260914-spinner-hard-stop-v1';
+ * import './firecrawl-workspace-router.js?v=20260922-adaptive-evidence-v1';
  * import './linkedin-signals.js?v=20260907-public-index-v1';
  * import './company-research-security.js?v=20260918-translation-fidelity-v3';
  * import './company-research-ui.js?v=20260919-brief-section-border-v1';
