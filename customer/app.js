@@ -331,7 +331,7 @@ async function openModule(step){
 
 function icpActivationRequirement(icp={}){
   if(icp.type==="opportunity-led"){
-    const available=Boolean(LeadIntelMarket.hasVerifiedOpportunity?.(state.market.opportunities||[]));
+    const available=(state.market.opportunities||[]).some(item=>item?.active!==false&&item?.profileOnly!==true&&Array.isArray(item?.evidence)&&item.evidence.length>0);
     return {available,reason:"Add and select an evidence-backed market opportunity before activating this ICP."};
   }
   if(icp.type==="lookalike-led"||icp.id==="icp-reference-lookalike"){
