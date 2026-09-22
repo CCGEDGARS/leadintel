@@ -15,14 +15,16 @@ test('workspace reset does not use a native browser confirmation dialog',()=>{
   assert.doesNotMatch(app,/window\.confirm\s*\(/);
 });
 
-test('workspace reset keeps a clear 30-second inline confirmation state on the existing button',()=>{
-  assert.match(app,/RESET_CONFIRM_WINDOW_MS\s*=\s*30000/);
-  assert.match(app,/dataset\.resetArmed\s*=\s*["']true["']/);
-  assert.match(app,/classList\.add\(["']reset-armed["']\)/);
-  assert.match(app,/Click again to reset/);
-  assert.match(app,/within 30 seconds/);
-  assert.match(app,/setTimeout\([^\n]*RESET_CONFIRM_WINDOW_MS\)/);
-  assert.match(app,/style\.setProperty\(["']color["'],["']var\(--danger\)["']\)/);
+test('workspace reset opens one Reset Center with three explicit modes',()=>{
+  const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+  assert.match(html,/id="reset-center"/);
+  assert.match(html,/Start a new company workspace/);
+  assert.match(html,/Clear selected sections/);
+  assert.match(html,/Factory reset LeadIntel/);
+  assert.match(html,/id="factory-reset-confirmation"/);
+  assert.match(html,/Type RESET to confirm/);
+  assert.match(app,/function openResetCenter\(\)/);
+  assert.match(app,/function closeResetCenter\(\)/);
 });
 
 test('confirmed workspace reset always restores the Stage 1 landing view after reset listeners finish',()=>{
@@ -37,7 +39,7 @@ test('workspace reset clears browser-only company residue but preserves saved AP
   assert.equal(fs.existsSync(hygienePath),true,'workspace-reset-hygiene.js must exist');
   assert.match(hygiene,/leadintel_customer_v2_website_activation_v1/,'website activation cache must be resettable workspace residue');
   assert.match(hygiene,/leadintel_customer_v2_research_meta_v1/,'research cache must be resettable workspace residue');
-  assert.match(hygiene,/dataset\.resetArmed!==["']true["']/,'derived caches must clear only on the confirmed second reset click');
+  assert.match(hygiene,/function prepareWorkspaceReset\(\)/,'destructive reset must explicitly prepare audited cleanup');
   assert.match(hygiene,/localStorage\.removeItem\(key\)/,'reset hygiene must remove derived browser workspace keys');
   assert.doesNotMatch(hygiene,/\/api\/integrations\/ai\/provider|disconnectProvider|ai-settings/i,'workspace reset must not disconnect or delete saved AI provider credentials');
 });
@@ -72,9 +74,7 @@ test('confirmed workspace reset clears the background task registry',()=>{
   };
   sandbox.globalThis=sandbox;
   vm.runInNewContext(hygiene,sandbox,{filename:'workspace-reset-hygiene.js'});
-  const button={dataset:{resetArmed:'true'}};
-
-  sandbox.LeadIntelWorkspaceResetHygiene.handleResetClick({target:{closest:selector=>selector==='#reset-workspace'?button:null}});
+  sandbox.LeadIntelWorkspaceResetHygiene.prepareWorkspaceReset();
 
   assert.equal(clearCount,1);
 });
@@ -107,4 +107,24 @@ test('confirmed reset clears saved website records, browser snapshots and all wo
   assert.match(resetBlock,/leadintel_customer_v2_website_activation_v1/,'reset must clear the active company website record');
   assert.match(resetBlock,/leadintel_customer_v2_research_meta_v1/,'reset must clear company research metadata');
   assert.match(resetBlock,/leadintel_customer_v2_workspace_saved_snapshot_v1/,'reset must prevent a previous snapshot from restoring deleted websites');
+});
+
+
+test('Reset Center preserves account connections while applying each data scope',()=>{
+  assert.match(app,/async function resetCompanyWorkspace\(\)/);
+  assert.match(app,/async function resetSelectedSections\(\)/);
+  assert.match(app,/async function factoryResetLeadIntel\(\)/);
+  assert.match(app,/factory-reset-confirmation/);
+  assert.match(app,/value\.trim\(\)!=="RESET"/);
+  assert.match(app,/LeadIntelIntelligenceSources\?\.clearAll/,'company and factory reset must clear backend Preferred Sources');
+  assert.match(app,/leadintel:workspace-sections-reset/);
+  assert.doesNotMatch(app,/disconnectProvider|signOut\(|deleteAccount/,'reset modes must not silently disconnect accounts');
+});
+
+test('Preferred Sources exposes a silent bulk clear for coordinated reset',()=>{
+  const sources=fs.readFileSync(path.join(root,'intelligence-sources-ui.js'),'utf8');
+  assert.match(sources,/async function clearAll\(\)/);
+  assert.match(sources,/Promise\.all/);
+  assert.match(sources,/method:'DELETE'/);
+  assert.match(sources,/LeadIntelIntelligenceSources=\{[^}]*clearAll/);
 });
