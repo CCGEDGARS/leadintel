@@ -195,9 +195,7 @@
   // The existing reset button uses a two-click armed state. Capture the second
   // click before app.js performs the reset so managed asset references can be
   // retained for audited cleanup after the cleared workspace state is saved.
-  function handleResetClick(event){
-    const button=event?.target?.closest?.("#reset-workspace");
-    if(!button||button.dataset.resetArmed!=="true")return false;
+  function prepareWorkspaceReset(){
     const bridge=root.LeadIntelServerBridge;
     bridge?.invalidateBrandAssetTransactions?.(bridge.workspace?.id||root.localStorage?.getItem(WORKSPACE_KEY)||"");
     recordResetIntent(referencedBrandAssets());
@@ -207,6 +205,12 @@
     root.setTimeout?.(refreshResetUi,0);
     if(bridge?.session?.authenticated&&bridge.conflict)root.setTimeout?.(()=>finalizePendingReset(),0);
     return true;
+  }
+
+  function handleResetClick(event){
+    const button=event?.target?.closest?.("#reset-workspace");
+    if(!button||button.dataset.resetArmed!=="true")return false;
+    return prepareWorkspaceReset();
   }
 
   function install(){
@@ -219,7 +223,7 @@
     root.addEventListener?.("leadintel:server-ready",()=>finalizePendingReset());
   }
 
-  const api={LEGACY_LOCAL_CLEANUP_KEY,LEGACY_RESET_PENDING_KEY,ASSET_RESET_CLEANUP_KEY,RESET_PENDING_KEY,WORKSPACE_KEY,MAIN_STATE_KEY,BACKGROUND_TASKS_KEY,LEGACY_LOCAL_WORKSPACE_KEYS,RESET_RESIDUE_KEYS,emergencyResetRequested,runEmergencyBrowserReset,clearLegacyLocalAutosaveOnce,clearBrowserWorkspaceResidue,referencedBrandAssets,clearLocalBrandIdentity,recordResetIntent,readResetIntent,resetIntentMatchesWorkspace,cleanupResetAssets,afterWorkspaceSaved,finalizePendingReset,refreshResetUi,handleResetClick,install};
+  const api={LEGACY_LOCAL_CLEANUP_KEY,LEGACY_RESET_PENDING_KEY,ASSET_RESET_CLEANUP_KEY,RESET_PENDING_KEY,WORKSPACE_KEY,MAIN_STATE_KEY,BACKGROUND_TASKS_KEY,LEGACY_LOCAL_WORKSPACE_KEYS,RESET_RESIDUE_KEYS,emergencyResetRequested,runEmergencyBrowserReset,clearLegacyLocalAutosaveOnce,clearBrowserWorkspaceResidue,referencedBrandAssets,clearLocalBrandIdentity,recordResetIntent,readResetIntent,resetIntentMatchesWorkspace,cleanupResetAssets,afterWorkspaceSaved,finalizePendingReset,refreshResetUi,prepareWorkspaceReset,handleResetClick,install};
   root.LeadIntelWorkspaceResetHygiene=api;
   install();
 })(typeof globalThis!=="undefined"?globalThis:this);
