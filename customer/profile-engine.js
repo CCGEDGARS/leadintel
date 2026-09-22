@@ -150,6 +150,9 @@
     const defaults=["facility-expansion","capital-investment","market-entry","hiring"].map(id=>SIGNAL_LIBRARY.find(x=>x.id===id));
     return uniqueObjects([...matched,...defaults],"id").slice(0,5).map(({matchScore,index,...item})=>({...item,reason:signalReason(item,combined)}));
   }
+  function mergeSignalRecommendations(existing,recommended){
+    return uniqueObjects([...(Array.isArray(existing)?existing:[]),...(Array.isArray(recommended)?recommended:[])],"id").slice(0,5);
+  }
   function uniqueObjects(items,key){const seen=new Set();return items.filter(item=>item&&!seen.has(item[key])&&seen.add(item[key]));}
   function signalReason(signal,text){
     if(signal.patterns.some(p=>p.test(text)))return "Matches a declared buying trigger or supporting source evidence.";
@@ -309,9 +312,10 @@
       targetMarkets:clean(value.profile.targetMarkets)||targetMarkets.join("; "),
       researchMarkets:Array.isArray(value.profile.researchMarkets)&&value.profile.researchMarkets.length?expandTargetMarkets(value.profile.researchMarkets):expandTargetMarkets(targetMarkets),
       marketFocus:clean(value.profile.marketFocus)||legacyMarketFocus,
-      recommendedSignals:Array.isArray(value.profile.recommendedSignals)&&value.profile.recommendedSignals.length
-        ?value.profile.recommendedSignals
-        :recommendSignals(clean(answers.buying_triggers)||clean(value.profile.buyingTriggers),sourceText(scrapedSources,docs))
+      recommendedSignals:mergeSignalRecommendations(
+        value.profile.recommendedSignals,
+        recommendSignals(clean(answers.buying_triggers)||clean(value.profile.buyingTriggers),sourceText(scrapedSources,docs))
+      )
     }:null;
     if(profile){
       delete profile.logoUrl;delete profile.primaryColor;Object.assign(profile,deriveBranding(scrapedSources));
