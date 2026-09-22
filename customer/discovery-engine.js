@@ -536,9 +536,15 @@
     const url=normalizeUrl(item.url);const domain=clean(item.domain)||canonicalDomain(url);
     return {queryId:clean(item.queryId),market:clean(item.market),query:clean(item.query),url,domain,company:clean(item.company),title:clean(item.title),description:clean(item.description),text:String(item.text||"").slice(0,7000),date:clean(item.date)};
   }
+  function discoveryOutcomeStatus({timedOut=false,failures=0,candidateCount=0}={}){
+    const count=Math.max(0,Number(candidateCount)||0);
+    if(timedOut||Number(failures)>0)return count?"partial":"error";
+    return count?"complete":"no_results";
+  }
+
   function normalizeDiscoveryState(value={}){
     const input=value&&typeof value==="object"?value:{};
-    const allowedStatus=new Set(["idle","running","complete","partial","error"]);
+    const allowedStatus=new Set(["idle","running","complete","no_results","partial","error"]);
     return {
       ...DEFAULT_DISCOVERY_STATE,
       status:allowedStatus.has(input.status)?input.status:"idle",
@@ -556,5 +562,5 @@
     return {...state,status:state.candidates.length||state.rawResults.length?"partial":"error"};
   }
 
-  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,discoveryLimits,buildDiscoveryQueries,extractCompanyMentions,parseCompanyExtraction,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,recoverInterruptedDiscoveryState,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,hasActiveSignals,isActionableCandidate};
+  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,discoveryLimits,buildDiscoveryQueries,extractCompanyMentions,parseCompanyExtraction,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,recoverInterruptedDiscoveryState,discoveryOutcomeStatus,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,hasActiveSignals,isActionableCandidate};
 });
