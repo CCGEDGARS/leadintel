@@ -64,7 +64,7 @@
       ],
       5:[
         step('scope','Discovery amount selected',Boolean(discovery.targetCount||discovery.queries?.length||candidates.length),{action:'Choose how many companies to find'}),
-        step('companies','Companies found and verified',['complete','partial'].includes(discovery.status)&&candidates.length>0,{action:'Find and verify matching companies'}),
+        step('companies',discovery.status==='no_results'?'No qualified companies found':'Companies found and verified',['complete','partial'].includes(discovery.status)&&candidates.length>0,{action:discovery.status==='no_results'?'Review ICPs and buying signals, then broaden the search':'Find and verify matching companies'}),
         step('review','Qualified companies reviewed',candidates.some(item=>item?.company&&item?.domain),{action:'Review qualified companies'}),
         step('pipeline','Opportunity saved to pipeline',pipeline.length>0,{action:'Save at least one opportunity to the pipeline'}),
         step('people','Decision-makers found',candidates.some(item=>list(item?.people).length>0)||pipeline.some(item=>list(item?.people).length>0),{action:'Find decision-makers for a selected company'})
