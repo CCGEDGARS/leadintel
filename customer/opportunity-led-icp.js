@@ -65,6 +65,7 @@
     if(!Market||typeof Market.buildIcpCandidates!=="function")return Market;
     if(Market.__opportunityLedIcpInstalled)return Market;
 
+    Market.hasVerifiedOpportunity=hasVerifiedOpportunity;
     const originalBuild=Market.buildIcpCandidates.bind(Market);
     const originalNormalize=Market.normalizeMarketState.bind(Market);
     const originalLocalize=Market.localizeGeneratedState.bind(Market);
