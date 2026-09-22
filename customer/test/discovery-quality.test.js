@@ -254,3 +254,10 @@ test("target market can be verified by the linked evidence country when the offi
   assert.equal(candidates.length,1);
   assert.equal(candidates[0].domain,"example-industries.com");
 });
+
+
+test("a technically successful run with zero qualified companies is a no-results outcome",()=>{
+  assert.equal(discovery.discoveryOutcomeStatus({timedOut:false,failures:0,candidateCount:0}),"no_results");
+  assert.equal(discovery.discoveryOutcomeStatus({timedOut:false,failures:0,candidateCount:2}),"complete");
+  assert.equal(discovery.normalizeDiscoveryState({status:"no_results"}).status,"no_results");
+});
