@@ -1,4 +1,4 @@
-import './content-language.js?v=20260918-translation-fidelity-v3';
+import './content-language.js?v=20260922-campaign-only-v1';
 import './content-variants.js?v=20260921-contact-gated-v2';
 import './business-identity.js?v=20260906-pain-headings-v1';
 import './evidence-view.js?v=20260921-two-stage-profile-action-v1';

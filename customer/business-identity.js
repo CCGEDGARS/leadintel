@@ -381,8 +381,6 @@
       const label=field.closest(".profile-field")?.querySelector("label");if(label)label.textContent=fieldText(chromeLanguage,field.dataset.profileField);
       
     });
-
-    root.LeadIntelContentLanguage?.translateEditor(root,editor,language);
   }
   function queueLayout(root,force=false){if(layoutQueued)return;layoutQueued=true;setTimeout(()=>{layoutQueued=false;layoutProfile(root,force);},0);}
   function watchProfile(root){
