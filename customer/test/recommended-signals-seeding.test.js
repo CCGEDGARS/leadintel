@@ -58,5 +58,5 @@ test('strategy UI identifies generated recommendations before the optional custo
   const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
   assert.match(html,/Recommended buying signals/);
   assert.match(html,/Add buying signal/);
-  assert.match(html,/profile-engine\\.js\\?v=20260922-step3-signal-backfill-v1/);
+  assert.match(html,/profile-engine\.js\?v=20260922-step3-signal-backfill-v1/);
 });
