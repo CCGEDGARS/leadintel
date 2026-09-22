@@ -28,9 +28,43 @@
       <div class="top-actions">
         <span class="autosave"><i></i>Autosaved locally</span>
 
-        <button class="ghost-btn" type="button" id="reset-workspace">Reset all workspace data</button>
+        <button class="ghost-btn" type="button" id="reset-workspace" aria-haspopup="dialog">Reset workspace</button>
       </div>
     </header>
+
+    <div class="reset-center" id="reset-center" hidden>
+      <div class="reset-center-backdrop" data-close-reset-center></div>
+      <section class="reset-center-dialog" role="dialog" aria-modal="true" aria-labelledby="reset-center-title">
+        <header>
+          <div><span class="eyebrow">Workspace controls</span><h2 id="reset-center-title">Reset Center</h2><p>Choose exactly what LeadIntel should remove. Your account, sign-in and connected providers remain connected.</p></div>
+          <button type="button" class="reset-center-close" data-close-reset-center aria-label="Close Reset Center">×</button>
+        </header>
+        <div class="reset-center-options">
+          <article>
+            <div><span>01</span><h3>Start a new company workspace</h3><p>Remove this company’s profile, research, sources, strategy, discovery, pipeline and campaigns. Preserve account settings and integrations.</p></div>
+            <button type="button" class="secondary-btn" id="reset-new-company">Start new workspace</button>
+          </article>
+          <article>
+            <div><span>02</span><h3>Clear selected sections</h3><p>Remove only the areas you choose.</p>
+              <div class="reset-section-choices">
+                <label><input type="checkbox" value="research"> Research, evidence and market strategy</label>
+                <label><input type="checkbox" value="sources"> Preferred sources and monitoring</label>
+                <label><input type="checkbox" value="discovery"> Company Discovery and pipeline</label>
+                <label><input type="checkbox" value="campaigns"> Campaigns and generated content</label>
+              </div>
+            </div>
+            <button type="button" class="secondary-btn" id="reset-selected-sections">Clear selected sections</button>
+          </article>
+          <article class="is-danger">
+            <div><span>03</span><h3>Factory reset LeadIntel</h3><p>Remove all workspace data and local LeadIntel preferences. This cannot be undone. Account authentication and external provider connections are not silently disconnected.</p>
+              <label class="factory-reset-field" for="factory-reset-confirmation">Type RESET to confirm<input id="factory-reset-confirmation" autocomplete="off" spellcheck="false" placeholder="RESET"></label>
+            </div>
+            <button type="button" class="danger-btn" id="factory-reset-leadintel" disabled>Factory reset</button>
+          </article>
+        </div>
+        <footer><button type="button" class="secondary-btn" data-close-reset-center>Cancel</button><span id="reset-center-status" role="status" aria-live="polite"></span></footer>
+      </section>
+    </div>
 
     <div class="workspace">
       <aside class="progress-panel" aria-label="Onboarding progress">
