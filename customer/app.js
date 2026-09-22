@@ -904,37 +904,78 @@ async function activateMarketStrategy(){
     if(confirm)confirm.disabled=false;
   }
 }
-function disarmWorkspaceReset(){
-  const button=$("reset-workspace");
-  if(resetConfirmTimer){clearTimeout(resetConfirmTimer);resetConfirmTimer=null;}
-  if(!button)return;
-  button.dataset.resetArmed="false";
-  button.classList.remove("reset-armed");
-  button.textContent="Reset all workspace data";
-  button.setAttribute("aria-label","Reset all workspace data");
-  button.style.removeProperty("color");
-  button.style.removeProperty("background");
-  button.style.removeProperty("border-radius");
+function resetCenterStatus(message="",tone=""){
+  const node=$("reset-center-status");if(!node)return;
+  node.textContent=message;node.dataset.tone=tone;
 }
-function armWorkspaceReset(){
-  const button=$("reset-workspace");if(!button)return false;
-  button.dataset.resetArmed="true";
-  button.classList.add("reset-armed");
-  button.textContent="Click again to reset";
-  button.setAttribute("aria-label","Click again within 30 seconds to reset all workspace data");
-  button.style.setProperty("color","var(--danger)");
-  button.style.setProperty("background","rgba(165,71,62,.10)");
-  button.style.setProperty("border-radius","9px");
-  if(resetConfirmTimer)clearTimeout(resetConfirmTimer);
-  resetConfirmTimer=setTimeout(disarmWorkspaceReset,RESET_CONFIRM_WINDOW_MS);
-  showToast("Click the red reset button again within 30 seconds");
-  return true;
+function openResetCenter(){
+  const center=$("reset-center");if(!center)return;
+  center.hidden=false;document.documentElement.classList.add("reset-center-open");
+  resetCenterStatus("");$("factory-reset-confirmation").value="";$("factory-reset-leadintel").disabled=true;
+  center.querySelector(".reset-center-close")?.focus();
 }
+function closeResetCenter(){
+  const center=$("reset-center");if(!center)return;
+  center.hidden=true;document.documentElement.classList.remove("reset-center-open");$("reset-workspace")?.focus();
+}
+async function saveResetStateToServer(){
+  const bridge=window.LeadIntelServerBridge;
+  if(bridge?.session?.authenticated&&bridge.workspace){
+    const result=await bridge.saveNow({saveIntent:true,explicitSave:true});
+    if(!result.saved)throw new Error("Server reset was not saved");
+  }
+}
+function clearResetLocalKeys(keys=[]){keys.forEach(key=>localStorage.removeItem(key));}
 async function resetWorkspace(){
-  const button=$("reset-workspace");
-  if(button?.dataset.resetArmed!=="true"){armWorkspaceReset();return;}
-  disarmWorkspaceReset();
-  const persistence=window.LeadIntelWorkspacePersistence;persistence?.clearExplicitSave?.();persistence?.clearWorkspaceData?.();window.LeadIntelWorkspaceResetHygiene?.clearBrowserWorkspaceResidue?.();state=defaultState();editMode=false;saveState();for(const key of ["leadintel_customer_v2_discovery","leadintel_customer_v2_outreach","leadintel_customer_v2_delivery","leadintel_customer_v2_discovery_meta","leadintel_customer_v2_website_activation_v1","leadintel_customer_v2_research_meta_v1","leadintel_customer_v2_workspace_saved_snapshot_v1"])localStorage.removeItem(key);syncInputsFromState();restoreResetLanding();window.dispatchEvent(new CustomEvent("leadintel:workspace-reset"));setTimeout(restoreResetLanding,0);const bridge=window.LeadIntelServerBridge;if(bridge?.session?.authenticated&&bridge.workspace){try{const result=await bridge.saveNow({saveIntent:true,explicitSave:true});if(!result.saved)throw new Error("Server reset was not saved");}catch(error){showToast("Reset failed to sync: "+error.message);return;}}sessionStorage.removeItem("leadintel_customer_v2_server_hydration");showToast("All workspace data reset");
+  window.LeadIntelWorkspaceResetHygiene?.prepareWorkspaceReset?.();
+  await window.LeadIntelIntelligenceSources?.clearAll?.();
+  const persistence=window.LeadIntelWorkspacePersistence;
+  persistence?.clearExplicitSave?.();persistence?.clearWorkspaceData?.();
+  window.LeadIntelWorkspaceResetHygiene?.clearBrowserWorkspaceResidue?.();
+  state=defaultState();editMode=false;saveState();
+  clearResetLocalKeys(["leadintel_customer_v2_discovery","leadintel_customer_v2_outreach","leadintel_customer_v2_delivery","leadintel_customer_v2_discovery_meta","leadintel_customer_v2_website_activation_v1","leadintel_customer_v2_research_meta_v1","leadintel_customer_v2_workspace_saved_snapshot_v1"]);
+  syncInputsFromState();restoreResetLanding();
+  window.dispatchEvent(new CustomEvent("leadintel:workspace-reset",{detail:{scope:"company"}}));
+  setTimeout(restoreResetLanding,0);
+  await saveResetStateToServer();
+  sessionStorage.removeItem("leadintel_customer_v2_server_hydration");
+}
+async function resetCompanyWorkspace(){
+  resetCenterStatus("Removing company workspace data…");
+  try{await resetWorkspace();closeResetCenter();showToast("New company workspace ready");}
+  catch(error){resetCenterStatus("Reset stopped: "+error.message,"error");}
+}
+async function resetSelectedSections(){
+  const selected=[...document.querySelectorAll(".reset-section-choices input:checked")].map(input=>input.value);
+  if(!selected.length){resetCenterStatus("Select at least one section to clear.","error");return;}
+  resetCenterStatus("Clearing selected sections…");
+  try{
+    if(selected.includes("research")){
+      state.market=LeadIntelMarket.normalizeMarketState({});
+      state.profile=null;state.approved=false;
+      clearResetLocalKeys(["leadintel_customer_v2_research_meta_v1"]);
+    }
+    if(selected.includes("sources"))await window.LeadIntelIntelligenceSources?.clearAll?.();
+    if(selected.includes("discovery"))clearResetLocalKeys(["leadintel_customer_v2_discovery","leadintel_customer_v2_discovery_meta"]);
+    if(selected.includes("campaigns"))clearResetLocalKeys(["leadintel_customer_v2_outreach","leadintel_customer_v2_delivery"]);
+    saveState();syncInputsFromState();await saveResetStateToServer();
+    window.dispatchEvent(new CustomEvent("leadintel:workspace-sections-reset",{detail:{sections:selected}}));
+    document.querySelectorAll(".reset-section-choices input:checked").forEach(input=>{input.checked=false;});
+    closeResetCenter();showToast("Selected sections cleared");
+  }catch(error){resetCenterStatus("Could not clear sections: "+error.message,"error");}
+}
+function clearFactoryPreferences(){
+  ["leadintel_customer_v2_content_language","leadintel_customer_v2_ui_preferences","leadintel_customer_v2_attention_preferences","leadintel_customer_v2_dismissed_guidance"].forEach(key=>localStorage.removeItem(key));
+}
+async function factoryResetLeadIntel(){
+  const input=$("factory-reset-confirmation");
+  if(input.value.trim()!=="RESET"){resetCenterStatus("Type RESET exactly to confirm the factory reset.","error");return;}
+  resetCenterStatus("Running factory reset…");
+  try{
+    await resetWorkspace();clearFactoryPreferences();
+    window.dispatchEvent(new CustomEvent("leadintel:factory-reset"));
+    closeResetCenter();showToast("LeadIntel factory reset complete");
+  }catch(error){resetCenterStatus("Factory reset stopped: "+error.message,"error");}
 }
 
 function bind(){
@@ -964,7 +1005,12 @@ function bind(){
   $("signal-designer").addEventListener("click",e=>{const btn=e.target.closest("[data-remove-signal]");if(btn)removeSignal(Number(btn.dataset.removeSignal));});
   [$("icp-list"),$("market-opportunities")].forEach(container=>{container.addEventListener("change",()=>readMarketEdits());});
   $("signal-designer").addEventListener("change",()=>{readMarketEdits();renderResearchControls();renderMonitoringControls();});
-  $("reset-workspace").addEventListener("click",resetWorkspace);
+  $("reset-workspace").addEventListener("click",openResetCenter);
+  document.querySelectorAll("[data-close-reset-center]").forEach(node=>node.addEventListener("click",closeResetCenter));
+  $("reset-new-company").addEventListener("click",resetCompanyWorkspace);
+  $("reset-selected-sections").addEventListener("click",resetSelectedSections);
+  $("factory-reset-confirmation").addEventListener("input",event=>{$("factory-reset-leadintel").disabled=event.target.value.trim()!=="RESET";resetCenterStatus("");});
+  $("factory-reset-leadintel").addEventListener("click",factoryResetLeadIntel);
   window.addEventListener("leadintel:server-ready",()=>{void resumePendingMarketResearchAfterAuth();});
   window.addEventListener("leadintel:website-activated",()=>{
     state=loadState();editMode=false;syncInputsFromState();updateCompleteness();
