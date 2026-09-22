@@ -63,6 +63,6 @@ test("activation waits for the canonical Discovery API and recovers visibly on t
   assert.match(app, /\$\("confirm-strategy-handoff"\)\.addEventListener/);
   assert.doesNotMatch(app, /\$\("activate-market-strategy"\)\.addEventListener\("click",event=>[\s\S]{0,180}activateMarketStrategy/);
   assert.match(discovery, /window\.LeadIntelDiscoveryUI=\{open:openDiscoveryFromHandoff\}/);
-  assert.match(index, /app\.js\?v=20260921-preflight-quality-gate-v1/);
+  assert.match(index, /app\.js\?v=20260922-step3-recovery-v1/);
   assert.match(marketCss, /\.strategy-handoff-dialog/);
 });

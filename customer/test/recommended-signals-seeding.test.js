@@ -32,7 +32,7 @@ test('legacy saved profiles are repopulated with recommended buying signals',()=
   assert.ok(signals.some(signal=>/facility expansion/i.test(signal.name)));
 });
 
-test('existing user-selected recommendations are preserved during migration',()=>{
+test('existing user-selected recommendations are preserved while missing recommendations are backfilled',()=>{
   const state=profileEngine.normalizeSavedState({
     website:'ercon.lv',
     targetMarkets:['Latvia'],
@@ -49,13 +49,14 @@ test('existing user-selected recommendations are preserved during migration',()=
       }]
     }
   });
-  assert.equal(state.profile.recommendedSignals.length,1);
-  assert.equal(state.profile.recommendedSignals[0].active,false);
+  assert.ok(state.profile.recommendedSignals.length>=4);
+  assert.equal(state.profile.recommendedSignals.find(signal=>signal.id==='facility-expansion').active,false);
+  assert.ok(state.profile.recommendedSignals.filter(signal=>signal.active!==false).length>=3);
 });
 
 test('strategy UI identifies generated recommendations before the optional custom signal form',()=>{
   const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
   assert.match(html,/Recommended buying signals/);
   assert.match(html,/Add buying signal/);
-  assert.match(html,/profile-engine\.js\?v=20260919-top-five-signals-v1/);
+  assert.match(html,/profile-engine\.js\?v=20260922-step3-signal-backfill-v1/);
 });
