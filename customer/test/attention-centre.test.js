@@ -17,7 +17,7 @@ test('attention model prioritizes current required gaps and ignores optional gap
     ]
   }]});
   assert.deepEqual(items.map(item=>item.id),['stage-1-website']);
-  assert.equal(items[0].severity,'important');
+  assert.equal(items[0].severity,'error');
   assert.equal(items[0].target.type,'stage');
 });
 
@@ -40,6 +40,7 @@ test('attention model surfaces failed and stalled work automatically',()=>{
   ]});
   assert.deepEqual(items.map(item=>item.id),['task-failed','task-stalled']);
   assert.ok(items.every(item=>item.target.type==='tasks'));
+  assert.ok(items.every(item=>item.severity==='error'));
 });
 
 test('attention model includes unsaved work and bounded runtime failures',()=>{
@@ -49,7 +50,8 @@ test('attention model includes unsaved work and bounded runtime failures',()=>{
   ]});
   assert.equal(items[0].id,'runtime-runtime-1');
   assert.doesNotMatch(items.map(item=>item.detail).join(' '),/secret/);
-  assert.ok(items.some(item=>item.id==='unsaved-workspace'));
+  const unsaved=items.find(item=>item.id==='unsaved-workspace');
+  assert.equal(unsaved.severity,'recommendation');
 });
 
 test('customer shell exposes an automatic Attention control and drawer runtime',()=>{
@@ -72,4 +74,17 @@ test('confirmed reset refreshes Attention and clears transient runtime errors',(
 test('a zero Attention count is visually hidden even when badge layout uses display grid',()=>{
   const css=fs.readFileSync(path.join(root,'attention-centre.css'),'utf8');
   assert.match(css,/\.attention-trigger>b\[hidden\]\s*\{\s*display:none/);
+});
+
+
+test('workspace health uses red for errors, orange for recommendations and green for healthy state',()=>{
+  const runtime=fs.readFileSync(path.join(root,'attention-centre.js'),'utf8');
+  const css=fs.readFileSync(path.join(root,'attention-centre.css'),'utf8');
+  assert.match(runtime,/severity==='error'/);
+  assert.match(runtime,/severity==='recommendation'/);
+  assert.match(runtime,/attention-empty is-healthy/);
+  assert.match(runtime,/actionableItems/);
+  assert.match(css,/\.attention-item\.is-error[^}]*#c2413b/);
+  assert.match(css,/\.attention-item\.is-recommendation[^}]*#f59e0b/);
+  assert.match(css,/\.attention-empty\.is-healthy[^}]*#2f7d5c/);
 });
