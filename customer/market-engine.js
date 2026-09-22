@@ -6,7 +6,7 @@
   "use strict";
 
   const DEFAULT_MARKET_STATE=Object.freeze({
-    icps:[],signals:[],researchQueries:[],researchResults:[],opportunities:[],
+    icps:[],signals:[],researchQueries:[],researchResults:[],opportunities:[],researchQuality:null,
     researchStatus:"idle",researchSourceStatus:{openai:"idle",firecrawl:"idle",gemini:"idle"},researchVerification:{status:"idle",provider:"gemini",role:"verification",webSearch:false,reason:"",summary:"",disagreements:[],missingEvidence:[],verifiedAt:""},researchProgress:{completed:0,total:0},researchErrors:[],lastResearchAt:"",researchMode:"quick",researchSourceTypes:["news"],researchCustomSources:[],researchInstructions:"",researchHistory:[],marketConditions:null,monitoring:{enabled:false,frequency:"weekly",researchDepth:"deep",minimumScore:70,sourceTypes:["news","jobs","investments","company"],signalIds:[],customSources:[]},strategyApproved:false,strategyApprovedAt:""
   });
 
@@ -51,10 +51,10 @@
     }catch{return "";}
   }
   function normalizeProviders(value){
-    const allowed=new Set(["openai","firecrawl"]),seen=new Set();
+    const allowed=new Set(["openai","firecrawl","scrapling"]),seen=new Set();
     const input=Array.isArray(value)?value:[value];
     input.map(item=>clean(item).toLowerCase()).filter(item=>allowed.has(item)).forEach(item=>seen.add(item));
-    return ["openai","firecrawl"].filter(item=>seen.has(item));
+    return ["openai","firecrawl","scrapling"].filter(item=>seen.has(item));
   }
   function priorityWeight(priority){return /^high$/i.test(clean(priority))?9:/^medium$/i.test(clean(priority))?7:/^low$/i.test(clean(priority))?5:6;}
   function defaultKeywords(signal){
@@ -301,7 +301,7 @@
         queryId:clean(queryMeta.id),market:clean(queryMeta.market),query:clean(queryMeta.query),researchCategory:clean(queryMeta.researchCategory)||"commercial",
         url,title:clean(item?.title)||new URL(url).hostname,description,
         text:body.slice(0,5000),date:clean(item?.publishedDate||item?.date||item?.published_at||item?.metadata?.publishedDate),
-        sourceProviders:normalizeProviders([...(Array.isArray(item?.sourceProviders)?item.sourceProviders:[]),sourceProvider])
+        sourceProviders:normalizeProviders([...(Array.isArray(item?.sourceProviders)?item.sourceProviders:[]),sourceProvider]),extractedBy:clean(item?.extractedBy),extractedAt:clean(item?.extractedAt),qualityScore:Math.max(0,Math.min(100,Number(item?.qualityScore)||0)),sourceClass:clean(item?.sourceClass)
       };
     }).filter(Boolean);
   }
@@ -312,14 +312,15 @@
       const url=canonicalUrl(item?.url);if(!url)continue;
       const next={
         queryId:clean(item?.queryId),market:clean(item?.market),query:clean(item?.query),researchCategory:clean(item?.researchCategory)||"commercial",url,
-        title:clean(item?.title),description:clean(item?.description),text:String(item?.text||"").slice(0,5000),date:clean(item?.date),
-        sourceProviders:normalizeProviders(item?.sourceProviders)
+        title:clean(item?.title),description:clean(item?.description),text:String(item?.text||"").slice(0,12000),date:clean(item?.date),
+        sourceProviders:normalizeProviders(item?.sourceProviders),extractedBy:clean(item?.extractedBy),extractedAt:clean(item?.extractedAt),qualityScore:Math.max(0,Math.min(100,Number(item?.qualityScore)||0)),sourceClass:clean(item?.sourceClass)
       };
       const current=merged.get(url);
       if(!current){merged.set(url,next);continue;}
       current.queryId=current.queryId||next.queryId;current.market=current.market||next.market;current.query=current.query||next.query;
       current.title=current.title||next.title;current.description=current.description||next.description;current.text=current.text||next.text;current.date=current.date||next.date;
       current.sourceProviders=normalizeProviders([...(current.sourceProviders||[]),...(next.sourceProviders||[])]);
+      current.extractedBy=next.extractedBy||current.extractedBy;current.extractedAt=next.extractedAt||current.extractedAt;current.qualityScore=Math.max(current.qualityScore||0,next.qualityScore||0);current.sourceClass=next.sourceClass||current.sourceClass;
     }
     return [...merged.values()];
   }
@@ -421,7 +422,7 @@
     const researchInstructions=clean(input.researchInstructions).slice(0,1200);
     const researchQueries=(Array.isArray(input.researchQueries)?input.researchQueries:[]).slice(0,RESEARCH_MODES[researchMode].maxQueries).map(item=>({id:clean(item?.id),market:clean(item?.market),offer:clean(item?.offer),sourceType:clean(item?.sourceType),researchCategory:clean(item?.researchCategory)||"commercial",query:clean(item?.query)})).filter(item=>item.id&&item.query);
     const researchResults=(Array.isArray(input.researchResults)?input.researchResults:[]).slice(0,RESEARCH_MODES[researchMode].maxStoredResults).map(item=>({
-      queryId:clean(item?.queryId),market:clean(item?.market),query:clean(item?.query),researchCategory:clean(item?.researchCategory)||"commercial",url:canonicalUrl(item?.url),title:clean(item?.title),description:clean(item?.description),text:String(item?.text||"").slice(0,5000),date:clean(item?.date),sourceProviders:normalizeProviders(item?.sourceProviders),
+      queryId:clean(item?.queryId),market:clean(item?.market),query:clean(item?.query),researchCategory:clean(item?.researchCategory)||"commercial",url:canonicalUrl(item?.url),title:clean(item?.title),description:clean(item?.description),text:String(item?.text||"").slice(0,12000),date:clean(item?.date),sourceProviders:normalizeProviders(item?.sourceProviders),extractedBy:clean(item?.extractedBy),extractedAt:clean(item?.extractedAt),qualityScore:Math.max(0,Math.min(100,Number(item?.qualityScore)||0)),sourceClass:clean(item?.sourceClass),
       ...(item?.verification&&typeof item.verification==="object"?{verification:{provider:"gemini",role:"verification",relevance:["strong","moderate","weak","reject"].includes(item.verification.relevance)?item.verification.relevance:"weak",commercialFit:["strong","moderate","weak","unknown"].includes(item.verification.commercialFit)?item.verification.commercialFit:"unknown",contradiction:Boolean(item.verification.contradiction),rationale:clean(item.verification.rationale).slice(0,600),missingEvidence:(Array.isArray(item.verification.missingEvidence)?item.verification.missingEvidence:[]).map(clean).filter(Boolean).slice(0,8)}}:{})
     })).filter(item=>item.url);
     const opportunities=(Array.isArray(input.opportunities)?input.opportunities:[]).slice(0,12).map(item=>{
@@ -440,7 +441,7 @@
       ...DEFAULT_MARKET_STATE,icps,signals,researchQueries,researchResults,opportunities,researchSourceStatus,researchVerification,researchProgress,researchErrors,
       researchStatus:allowed.has(input.researchStatus)?input.researchStatus:"idle",researchMode,researchSourceTypes:researchSourceTypes.length?researchSourceTypes:defaultResearchSources,researchCustomSources,researchInstructions,
       researchHistory:(Array.isArray(input.researchHistory)?input.researchHistory:[]).slice(0,20).map(item=>({id:clean(item?.id),mode:RESEARCH_MODES[item?.mode]?item.mode:"quick",status:clean(item?.status),sourceCount:Math.max(0,Number(item?.sourceCount)||0),queryCount:Math.max(0,Number(item?.queryCount)||0),completedAt:clean(item?.completedAt)})).filter(item=>item.id),monitoring:normalizeMonitoring(input.monitoring),
-      lastResearchAt:clean(input.lastResearchAt),marketConditions:input.marketConditions&&typeof input.marketConditions==="object"?input.marketConditions:null,strategyApproved:Boolean(input.strategyApproved),strategyApprovedAt:clean(input.strategyApprovedAt),contentLanguage:['en','lv'].includes(input.contentLanguage)?input.contentLanguage:'',contentVariants:input.contentVariants&&typeof input.contentVariants==='object'?input.contentVariants:{}
+      lastResearchAt:clean(input.lastResearchAt),marketConditions:input.marketConditions&&typeof input.marketConditions==="object"?input.marketConditions:null,researchQuality:input.researchQuality&&typeof input.researchQuality==="object"?input.researchQuality:null,strategyApproved:Boolean(input.strategyApproved),strategyApprovedAt:clean(input.strategyApprovedAt),contentLanguage:['en','lv'].includes(input.contentLanguage)?input.contentLanguage:'',contentVariants:input.contentVariants&&typeof input.contentVariants==='object'?input.contentVariants:{}
     };
   }
 

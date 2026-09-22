@@ -36,6 +36,10 @@ function scraplingTarget(kind){
 function extractScrapeUrl(options={}){
   try{const body=typeof options.body==='string'?JSON.parse(options.body):options.body;return String(body?.url||'').trim();}catch{return '';}
 }
+function tagExtractor(response,extractor){
+  try{const headers=new Headers(response.headers);headers.set('X-LeadIntel-Extractor',extractor);return new Response(response.body,{status:response.status,statusText:response.statusText,headers});}
+  catch{return response;}
+}
 async function routedFetch(input,options={}){
   const target=rewriteTarget(input);if(!target)return originalFetch(input,options);
   const kind=target.includes('/firecrawl/scrape')?'scrape':'search';
@@ -48,7 +52,7 @@ async function routedFetch(input,options={}){
     if(scrapling&&url){
       try{
         const fallback=await originalFetch(scrapling,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({url}),signal:options?.signal});
-        if(fallback.ok)return fallback;
+        if(fallback.ok)return fallback&&tagExtractor(fallback,'scrapling');
       }catch{}
     }
     return originalFetch(input,options);
@@ -58,7 +62,7 @@ async function routedFetch(input,options={}){
     if(scrapling&&url){
       try{
         const fallback=await originalFetch(scrapling,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({url}),signal:options?.signal});
-        if(fallback.ok)return fallback;
+        if(fallback.ok)return fallback&&tagExtractor(fallback,'scrapling');
       }catch{}
     }
     return originalFetch(input,options);

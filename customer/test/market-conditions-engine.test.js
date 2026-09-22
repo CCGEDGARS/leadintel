@@ -75,3 +75,46 @@ test('comparable public price text produces a bounded observed range',()=>{
   ]);
   assert.deepEqual(pack.pricing.range,{minimum:65,maximum:90,currency:'EUR',unit:'hour'});
 });
+
+test('evidence quality favours recent official sources and suppresses syndicated copies',()=>{
+  const results=[
+    source({url:'https://ec.europa.eu/call',organisation:'European Commission',official:true,date:'2026-08-01',title:'Manufacturing call opens',text:'Applications are open for manufacturing innovation.'}),
+    source({url:'https://news-one.example/story',organisation:'News One',date:'2026-08-02',title:'Manufacturing call opens',text:'Applications are open for manufacturing innovation.'}),
+    source({url:'https://news-two.example/repost',organisation:'News Two',date:'2026-08-02',title:'Manufacturing call opens',text:'Applications are open for manufacturing innovation.'})
+  ];
+  const assessed=engine.assessEvidence(results,{now:'2026-09-22T00:00:00Z'});
+  assert.equal(assessed.results.length,2);
+  assert.equal(assessed.results[0].url,'https://ec.europa.eu/call');
+  assert.equal(assessed.duplicatesRemoved,1);
+});
+
+test('adaptive plan targets evidence gaps and is bounded by the selected mode',()=>{
+  const plan=engine.buildAdaptivePlan({
+    mode:'deep',market:'Sweden',offer:'industrial engineering',
+    results:[source({researchCategory:'commercial'})]
+  });
+  assert.ok(plan.queries.length>0);
+  assert.ok(plan.queries.length<=4);
+  assert.ok(plan.gaps.includes('direction'));
+  assert.match(plan.queries.map(item=>item.query).join(' '),/official statistics|funding|pricing/i);
+  assert.deepEqual(engine.buildAdaptivePlan({mode:'quick',market:'Sweden',results:[]}).queries,[]);
+});
+
+test('quality gate reports missing coverage and prevents false high confidence',()=>{
+  const gate=engine.buildQualityGate([source({researchCategory:'direction',official:true})],{mode:'deep'});
+  assert.equal(gate.passed,false);
+  assert.notEqual(gate.confidence,'High');
+  assert.ok(gate.gaps.includes('source diversity'));
+  assert.ok(gate.gaps.includes('pricing'));
+});
+
+test('structured extraction records official funding and comparable pricing facts',()=>{
+  const extracted=engine.extractStructuredEvidence([
+    source({url:'https://commission.europa.eu/funding/call',researchCategory:'funding',title:'Green Industry Fund',text:'Applications are open. Deadline 30 June 2027. Eligible SMEs may apply.'}),
+    source({url:'https://pricing.example/rates',researchCategory:'pricing',text:'Industrial engineering services cost 85 EUR per hour.'})
+  ]);
+  assert.equal(extracted.funding[0].status,'open');
+  assert.match(extracted.funding[0].deadline,/30 June 2027/);
+  assert.equal(extracted.pricing[0].amount,85);
+  assert.equal(extracted.pricing[0].unit,'hour');
+});

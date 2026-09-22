@@ -40,7 +40,17 @@ test('managed Firecrawl 404 retries the direct proxy instead of failing every re
   const processMap=fs.readFileSync(processMapPath,'utf8');
   assert.match(router,/status===404/,'a backend-managed 404 must be retryable through the direct managed proxy');
   assert.match(router,/if\(!retryableStatus\(response\.status\)\)return response;[\s\S]*originalFetch\(input,options\)/,'retryable backend failures must fall through to the direct proxy');
-  assert.match(processMap,/firecrawl-workspace-router\.js\?v=20260914-spinner-hard-stop-v1/,'browser must receive the corrected router immediately');
+  assert.match(processMap,/firecrawl-workspace-router\.js\?v=20260914-spinner-hard-stop-v1&adaptive-evidence=1/,'browser must receive the corrected router immediately');
+});
+
+test('Scrapling extraction fallback is exposed to the evidence pipeline',()=>{
+  const router=fs.readFileSync(firecrawlRouterPath,'utf8');
+  const app=fs.readFileSync(appPath,'utf8');
+  assert.match(router,/X-LeadIntel-Extractor/);
+  assert.match(router,/scrapling/);
+  assert.match(app,/extractResearchPages/);
+  assert.match(app,/buildAdaptivePlan/);
+  assert.match(app,/buildQualityGate/);
 });
 
 test('OpenAI discovery automatically retries a timeout once',async()=>{
