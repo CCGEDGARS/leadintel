@@ -25,7 +25,26 @@ test('opportunity-led extension adds a fourth ICP and completes the desktop 2x2 
   assert.equal(opportunity.name,'Opportunity-led ICP');
   assert.match(opportunity.description,/specific commercial opportunity/i);
   assert.match(opportunity.rationale,/market evidence/i);
-  assert.equal(opportunity.active,true);
+  assert.equal(opportunity.active,false);
+  assert.equal(opportunity.opportunityDataAvailable,false);
+});
+
+test('opportunity-led cannot activate without a selected evidence-backed market opportunity',()=>{
+  assert.equal(Opportunity.hasVerifiedOpportunity([]),false);
+  assert.equal(Opportunity.hasVerifiedOpportunity([{active:true,profileOnly:true,evidence:[]}]),false);
+  assert.equal(Opportunity.hasVerifiedOpportunity([{active:false,profileOnly:false,evidence:[{url:'https://example.com'}]}]),false);
+  assert.equal(Opportunity.hasVerifiedOpportunity([{active:true,profileOnly:false,evidence:[{url:'https://example.com'}]}]),true);
+});
+
+test('localization removes stale activation until real opportunity evidence exists',()=>{
+  const api=Opportunity.install(Market);
+  const stale={...Opportunity.buildOpportunityIcp(profile,'en'),active:true};
+  const unavailable=api.localizeGeneratedState({icps:[stale],opportunities:[]},profile,'en').icps.find(item=>item.type==='opportunity-led');
+  assert.equal(unavailable.active,false);
+  assert.equal(unavailable.opportunityDataAvailable,false);
+  const available=api.localizeGeneratedState({icps:[stale],opportunities:[{active:true,profileOnly:false,evidence:[{url:'https://example.com'}]}]},profile,'en').icps.find(item=>item.type==='opportunity-led');
+  assert.equal(available.active,true);
+  assert.equal(available.opportunityDataAvailable,true);
 });
 
 test('opportunity-led ICP has native Latvian copy',()=>{
