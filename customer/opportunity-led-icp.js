@@ -15,6 +15,12 @@
     return clean(profile.currentMarkets);
   }
 
+  function hasVerifiedOpportunity(opportunities=[]){
+    return (Array.isArray(opportunities)?opportunities:[]).some(item=>
+      item?.active!==false&&item?.profileOnly!==true&&Array.isArray(item?.evidence)&&item.evidence.length>0
+    );
+  }
+
   function buildOpportunityIcp(profile={},language="en"){
     const lv=isLv(language);
     const targetMarkets=clean(profile.targetMarkets)||currentMarkets(profile)||(lv?"Prioritārie tirgi vēl nav definēti":"Priority markets not yet defined");
@@ -27,7 +33,8 @@
       value:clean(profile.opportunityValue),
       exclusions:clean(profile.exclusions),
       offers:clean(profile.priorityOffers),
-      active:true,
+      active:false,
+      opportunityDataAvailable:false,
       description:lv
         ?"Uzņēmumi, kuros LeadIntel identificē konkrētu komerciālu iespēju, pat ja tie pilnībā neatbilst pamata ideālā klienta profilam."
         :"Companies where LeadIntel identifies a specific commercial opportunity, even when they do not fully match the core ideal-customer profile.",
@@ -43,6 +50,7 @@
       type:clean(item.type)||fallback.type||TYPE,
       name:clean(item.name)||fallback.name||"Opportunity-led ICP",
       active:item.active!==false,
+      opportunityDataAvailable:Boolean(item.opportunityDataAvailable),
       description:clean(item.description)||fallback.description||"",
       targetMarkets:clean(item.targetMarkets)||fallback.targetMarkets||"",
       buyerRoles:clean(item.buyerRoles)||fallback.buyerRoles||"",
@@ -57,6 +65,7 @@
     if(!Market||typeof Market.buildIcpCandidates!=="function")return Market;
     if(Market.__opportunityLedIcpInstalled)return Market;
 
+    Market.hasVerifiedOpportunity=hasVerifiedOpportunity;
     const originalBuild=Market.buildIcpCandidates.bind(Market);
     const originalNormalize=Market.normalizeMarketState.bind(Market);
     const originalLocalize=Market.localizeGeneratedState.bind(Market);
@@ -83,9 +92,11 @@
       const generated=buildOpportunityIcp(profile,language);
       const source=(Array.isArray(market?.icps)?market.icps:[]).find(item=>item?.type===TYPE||item?.id===ID);
       const preserved=source?sanitizeIcp(source,generated):generated;
+      const opportunityDataAvailable=hasVerifiedOpportunity(localized.opportunities);
       const next={
         ...generated,
-        active:preserved.active,
+        active:opportunityDataAvailable&&preserved.active,
+        opportunityDataAvailable,
         targetMarkets:preserved.targetMarkets||generated.targetMarkets,
         buyerRoles:preserved.buyerRoles||generated.buyerRoles,
         value:preserved.value||generated.value,
@@ -101,5 +112,5 @@
     return Market;
   }
 
-  return {ID,TYPE,buildOpportunityIcp,install};
+  return {ID,TYPE,hasVerifiedOpportunity,buildOpportunityIcp,install};
 });

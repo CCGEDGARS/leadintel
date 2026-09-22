@@ -63,6 +63,19 @@ test("activation waits for the canonical Discovery API and recovers visibly on t
   assert.match(app, /\$\("confirm-strategy-handoff"\)\.addEventListener/);
   assert.doesNotMatch(app, /\$\("activate-market-strategy"\)\.addEventListener\("click",event=>[\s\S]{0,180}activateMarketStrategy/);
   assert.match(discovery, /window\.LeadIntelDiscoveryUI=\{open:openDiscoveryFromHandoff\}/);
-  assert.match(index, /app\.js\?v=20260922-step3-recovery-v1/);
+  assert.match(index, /app\.js\?v=20260922-step3-recovery-v1&icp-data-gates=1/);
   assert.match(marketCss, /\.strategy-handoff-dialog/);
+});
+
+
+test("data-dependent ICP switches are disabled until their real prerequisites exist", () => {
+  assert.match(app, /function icpActivationRequirement\(icp=\{\}\)/);
+  assert.match(app, /profileOnly!==true/);
+  assert.match(app, /Array\.isArray\(item\?\.evidence\)&&item\.evidence\.length>0/);
+  assert.match(app, /referenceModelAvailable===true/);
+  assert.match(app, /data-icp-field="active"[\s\S]{0,240}disabled/);
+  assert.match(app, /function enforceIcpActivationRequirements\(\)/);
+  assert.match(app, /Cannot activate yet/);
+  assert.match(marketCss, /\.market-toggle input:disabled\+span/);
+  assert.match(marketCss, /\.icp-requirement/);
 });

@@ -329,8 +329,26 @@ async function openModule(step){
   setStep(target);return true;
 }
 
+function icpActivationRequirement(icp={}){
+  if(icp.type==="opportunity-led"){
+    const available=(state.market.opportunities||[]).some(item=>item?.active!==false&&item?.profileOnly!==true&&Array.isArray(item?.evidence)&&item.evidence.length>0);
+    return {available,reason:"Add and select an evidence-backed market opportunity before activating this ICP."};
+  }
+  if(icp.type==="lookalike-led"||icp.id==="icp-reference-lookalike"){
+    const available=icp.referenceModelAvailable===true;
+    return {available,reason:"Activate at least one saved reference-customer model before activating this ICP."};
+  }
+  return {available:true,reason:""};
+}
+function enforceIcpActivationRequirements(){
+  let changed=false;
+  (state.market.icps||[]).forEach(icp=>{
+    if(!icpActivationRequirement(icp).available&&icp.active){icp.active=false;changed=true;}
+  });
+  if(changed)saveState();
+}
 function readMarketEdits(markDirty=true){
-  document.querySelectorAll("[data-icp-field]").forEach(el=>{const item=state.market.icps[Number(el.dataset.index)];if(!item)return;const field=el.dataset.icpField;item[field]=field==="active"?el.checked:el.value.trim();});
+  document.querySelectorAll("[data-icp-field]").forEach(el=>{const item=state.market.icps[Number(el.dataset.index)];if(!item)return;const field=el.dataset.icpField;if(field==="active"){item.active=icpActivationRequirement(item).available&&el.checked;}else item[field]=el.value.trim();});
   document.querySelectorAll("[data-signal-field]").forEach(el=>{const item=state.market.signals[Number(el.dataset.index)];if(!item)return;const field=el.dataset.signalField;if(field==="active")item.active=el.checked;else if(field==="weight")item.weight=Math.max(1,Math.min(10,Number(el.value)||1));else item[field]=el.value.trim();});
   document.querySelectorAll("[data-opportunity-active]").forEach(el=>{const item=state.market.opportunities[Number(el.dataset.opportunityActive)];if(item)item.active=el.checked;});
   syncResearchSourcesToSignals();
@@ -342,14 +360,19 @@ function syncResearchSourcesToSignals(){
   if(state.market.monitoring)state.market.monitoring.sourceTypes=LeadIntelMarket.filterResearchSourceTypes(state.market.monitoring.sourceTypes||[],state.market.signals||[]);
 }
 function renderIcps(){
-  $("icp-list").innerHTML=state.market.icps.map((icp,index)=>`<article class="icp-card ${icp.active?"active":""}">
-    <div class="icp-card-head"><label class="market-toggle"><input type="checkbox" data-icp-field="active" data-index="${index}" ${icp.active?"checked":""}><span></span></label><div><span class="icp-type">${esc(icp.type)}</span><input class="market-inline-title" data-icp-field="name" data-index="${index}" value="${esc(icp.name)}"></div></div>
+  enforceIcpActivationRequirements();
+  $("icp-list").innerHTML=state.market.icps.map((icp,index)=>{
+    const requirement=icpActivationRequirement(icp);
+    return `<article class="icp-card ${icp.active?"active":""} ${requirement.available?"":"unavailable"}">
+    <div class="icp-card-head"><label class="market-toggle" ${requirement.available?"":`title="${esc(requirement.reason)}"`}><input type="checkbox" data-icp-field="active" data-index="${index}" ${icp.active?"checked":""} ${requirement.available?"":"disabled"}><span></span></label><div><span class="icp-type">${esc(icp.type)}</span><input class="market-inline-title" data-icp-field="name" data-index="${index}" value="${esc(icp.name)}"></div></div>
     <label>Definition<textarea rows="2" data-icp-field="description" data-index="${index}">${esc(icp.description)}</textarea></label>
     <div class="icp-fields"><label>Target markets<input data-icp-field="targetMarkets" data-index="${index}" value="${esc(icp.targetMarkets)}"></label><label>Buyer roles<input data-icp-field="buyerRoles" data-index="${index}" value="${esc(icp.buyerRoles)}"></label></div>
     <div class="icp-fields"><label>Priority offers<input data-icp-field="offers" data-index="${index}" value="${esc(icp.offers)}"></label><label>Commercial value<input data-icp-field="value" data-index="${index}" value="${esc(icp.value)}"></label></div>
     <label>Exclusions<input data-icp-field="exclusions" data-index="${index}" value="${esc(icp.exclusions)}"></label>
     <p>${esc(icp.rationale)}</p>
-  </article>`).join("");
+    ${requirement.available?"":`<div class="icp-requirement" role="status"><strong>Cannot activate yet</strong><span>${esc(requirement.reason)}</span></div>`}
+  </article>`;
+  }).join("");
 }
 function renderSignalDesigner(){
   $("signal-designer").innerHTML=state.market.signals.map((signal,index)=>`<div class="signal-config-row ${signal.active?"active":""}">
