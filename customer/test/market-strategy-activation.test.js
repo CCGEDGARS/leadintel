@@ -66,3 +66,15 @@ test("activation waits for the canonical Discovery API and recovers visibly on t
   assert.match(index, /app\.js\?v=20260922-step3-recovery-v1/);
   assert.match(marketCss, /\.strategy-handoff-dialog/);
 });
+
+
+test("data-dependent ICP switches are disabled until their real prerequisites exist", () => {
+  assert.match(app, /function icpActivationRequirement\(icp=\{\}\)/);
+  assert.match(app, /LeadIntelMarket\.hasVerifiedOpportunity/);
+  assert.match(app, /referenceModelAvailable===true/);
+  assert.match(app, /data-icp-field="active"[\s\S]{0,240}disabled/);
+  assert.match(app, /function enforceIcpActivationRequirements\(\)/);
+  assert.match(app, /Cannot activate yet/);
+  assert.match(marketCss, /\.market-toggle input:disabled\+span/);
+  assert.match(marketCss, /\.icp-requirement/);
+});
