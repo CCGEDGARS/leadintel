@@ -128,18 +128,18 @@ test('fresh research persists answers and evidence into the existing main Custom
   assert.match(ui,/market\s*=\s*\{\}/);
 });
 
-test('company research resolves output language from the visible selector at run time',()=>{
-  assert.match(ui,/language-select/);
-  assert.match(ui,/resolveResearchLanguage/);
-  assert.match(ui,/next\.uiLanguage\s*=\s*selectedLanguage/);
+test('company research always persists English workspace content',()=>{
+  assert.match(ui,/const researchLanguage='en'/);
+  assert.match(ui,/next\.uiLanguage='en'/);
+  assert.doesNotMatch(ui,/language-select|selectedLanguage|translateResearchAnswers/);
 });
 
-test('research preserves an English master and rejects translations that collapse commercial detail',()=>{
+test('research keeps an English master without launching a workspace translation pass',()=>{
   const language=read('content-language.js');
   assert.match(ui,/const researchLanguage='en'/);
-  assert.match(ui,/next\.uiLanguage\s*=\s*selectedLanguage/);
-  assert.match(language,/Do not add or remove facts/);
-  assert.match(language,/Translation lost source detail or meaning/);
+  assert.match(ui,/next\.uiLanguage='en'/);
+  assert.doesNotMatch(ui,/translateEditor|data-research-translatable/);
+  assert.doesNotMatch(language,/content-language-status|Retry translation|Translation unavailable/i);
 });
 
 test('research reruns preserve reviewed answers through provenance-aware merge',()=>{
@@ -167,7 +167,7 @@ test('labels reset as a complete workspace reset and protects CRM records',()=>{
 });
 
 
-test('workspace interface stays English while selected language affects only dynamic research content',()=>{
+test('workspace and research content stay English while localization remains in Campaign Studio',()=>{
   const html=read('index.html');
   assert.match(ui,/Build your Commercial Intelligence Brief\./);
   assert.match(html,/Define who LeadIntel should find\./);
@@ -175,7 +175,5 @@ test('workspace interface stays English while selected language affects only dyn
   assert.match(html,/Commercial Message/);
   assert.match(ui,/Rerun company research/);
   assert.match(ui,/Needs your input/);
-  assert.doesNotMatch(ui+'\n'+html,/STEP2_COPY|applyStep2Copy|AI atbalsts|Izveidojiet komerciālās inteliģences kopsavilkumu/);
-  assert.match(ui,/data-research-translatable/);
-  assert.match(ui,/translateEditor\(window,editor,language\)/);
+  assert.doesNotMatch(ui+'\\n'+html,/language-select|translateEditor|data-research-translatable|AI atbalsts/);
 });
