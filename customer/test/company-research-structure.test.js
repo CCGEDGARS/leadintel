@@ -159,7 +159,8 @@ test('profile build consumes the collected public evidence instead of running th
 test('labels reset as a complete workspace reset and protects CRM records',()=>{
   const html=read('index.html');
   const resetBlock=app.match(/async function resetWorkspace\(\)\{[\s\S]*?\n\}\n\nfunction bind/)?.[0]||'';
-  assert.match(html,/id="reset-workspace"[^>]*>Reset all workspace data</);
+  assert.match(html,/id="reset-workspace"[^>]*>Reset workspace</);
+  assert.match(html,/id="reset-center"/);
   assert.match(app,/Reset all workspace data/);
   assert.match(resetBlock,/leadintel_customer_v2_discovery/);
   assert.match(resetBlock,/bridge\.saveNow\(\{saveIntent:true,explicitSave:true\}\)/);
