@@ -37,6 +37,6 @@ test('customer page loads the spinner-safe bundles with fresh cache keys',()=>{
   for(const marker of [
     'app.js?v=20260922-step3-recovery-v1',
     'process-map.js?v=20260919-lookalike-green-card-v1',
-    'discovery-ui.js?v=20260921-unified-workflow-next-actions-v1'
+    'discovery-ui.js?v=20260922-step5-progressive-disclosure-v1'
   ])assert.ok(html.includes(marker),marker);
 });
