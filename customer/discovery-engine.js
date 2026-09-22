@@ -542,6 +542,24 @@
     return count?"complete":"no_results";
   }
 
+  function zeroResultGuidance({evidenceCount=0,activeSignalCount=0,targetCount=10}={}){
+    const evidence=Math.max(0,Number(evidenceCount)||0);
+    const signals=Math.max(0,Number(activeSignalCount)||0);
+    const target=Math.max(1,Number(targetCount)||10);
+    const signalStep=signals<3
+      ? "Open Market Strategy and activate at least 3 buying signals: capacity expansion, a new facility or investment, and hiring or outsourcing. Keep tender or procurement only when it is relevant."
+      : "Open Market Strategy and broaden narrow ICP or signal keywords so they describe observable buyer events, not only one exact phrase.";
+    const amountStep=target===10
+      ? "Return to Company Discovery, keep the search at 10 companies, and run it again. Increase the amount only after qualified results appear."
+      : "Return to Company Discovery, return to 10 companies, and run it again. Increase the amount only after qualified results appear.";
+    return {
+      primaryAction:"review_strategy",
+      primaryLabel:"Adjust strategy to get results",
+      summary:`${evidence} evidence results were found, so the source search worked. No candidate passed every market, buyer-role, and buying-signal requirement.`,
+      steps:[signalStep,"Confirm that at least one active ICP describes Swedish industrial or manufacturing buyers—not companies that merely resemble your own supplier profile.",amountStep]
+    };
+  }
+
   function normalizeDiscoveryState(value={}){
     const input=value&&typeof value==="object"?value:{};
     const allowedStatus=new Set(["idle","running","complete","no_results","partial","error"]);
@@ -562,5 +580,5 @@
     return {...state,status:state.candidates.length||state.rawResults.length?"partial":"error"};
   }
 
-  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,discoveryLimits,buildDiscoveryQueries,extractCompanyMentions,parseCompanyExtraction,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,recoverInterruptedDiscoveryState,discoveryOutcomeStatus,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,hasActiveSignals,isActionableCandidate};
+  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,discoveryLimits,buildDiscoveryQueries,extractCompanyMentions,parseCompanyExtraction,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,recoverInterruptedDiscoveryState,discoveryOutcomeStatus,zeroResultGuidance,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,hasActiveSignals,isActionableCandidate};
 });

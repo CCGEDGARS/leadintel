@@ -261,3 +261,18 @@ test("a technically successful run with zero qualified companies is a no-results
   assert.equal(discovery.discoveryOutcomeStatus({timedOut:false,failures:0,candidateCount:2}),"complete");
   assert.equal(discovery.normalizeDiscoveryState({status:"no_results"}).status,"no_results");
 });
+
+
+test("zero-result guidance tells the user what to change before retrying",()=>{
+  const limited=discovery.zeroResultGuidance({evidenceCount:20,activeSignalCount:1,targetCount:10});
+  assert.equal(limited.primaryAction,"review_strategy");
+  assert.equal(limited.primaryLabel,"Adjust strategy to get results");
+  assert.match(limited.summary,/20 evidence results were found/);
+  assert.match(limited.steps.join(" "),/activate at least 3 buying signals/i);
+  assert.match(limited.steps.join(" "),/keep the search at 10 companies/i);
+  assert.doesNotMatch(limited.steps.join(" "),/increase.*25|increase.*50/i);
+
+  const broader=discovery.zeroResultGuidance({evidenceCount:20,activeSignalCount:4,targetCount:25});
+  assert.match(broader.steps.join(" "),/broaden narrow ICP or signal keywords/i);
+  assert.match(broader.steps.join(" "),/return to 10 companies/i);
+});
