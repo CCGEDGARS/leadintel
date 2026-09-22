@@ -651,7 +651,63 @@ function researchProgressView(){
   const elapsed=Math.max(0,Math.floor((Date.now()-Number(state.market.researchStartedAt||Date.now()))/1000));
   const elapsedLabel=elapsed>=60?`${Math.floor(elapsed/60)}m ${elapsed%60}s`:`${elapsed}s`;
   const market=LeadIntelMarket.splitList(state.profile?.targetMarkets).join(" · ")||LeadIntelMarket.splitList(state.profile?.currentMarkets).join(" · ")||"selected markets";
-  return {title:`Researching ${market}`,phase:labels[phase]||labels.finding,percent,meta:`${completed} of ${total} searches checked · ${state.market.researchResults.length} source${state.market.researchResults.length===1?"":"s"} found · ${elapsedLabel} elapsed`};
+  return {title:`Researching ${market}`,phase:labels[phase]||labels.finding,phaseKey:phase,percent,elapsed,meta:`${completed} of ${total} searches checked · ${state.market.researchResults.length} source${state.market.researchResults.length===1?"":"s"} found · ${elapsedLabel} elapsed`};
+}
+let quickResearchInsightTimer=0;
+function quickResearchInsight(view){
+  if(state.market.researchMode!=="quick")return null;
+  const markets=LeadIntelMarket.splitList(state.profile?.targetMarkets).join(" · ")||LeadIntelMarket.splitList(state.profile?.currentMarkets).join(" · ")||"your selected market";
+  const offer=LeadIntelMarket.splitList(state.profile?.priorityOffers)[0]||"your priority offer";
+  const activeSignals=(state.market.signals||[]).filter(signal=>signal&&signal.active!==false).length;
+  const sourceCount=state.market.researchResults.length;
+  const messages={
+    finding:[
+      `Scanning ${markets} for market demand connected to ${offer}.`,
+      `Looking for recent evidence that can reveal practical buying triggers and motives.`
+    ],
+    extracting:[
+      `Checking which findings reveal the strongest buying points for ${offer}.`,
+      `Separating useful market demand evidence from generic or duplicated web content.`
+    ],
+    verifying:[
+      `Comparing ${sourceCount} source${sourceCount===1?"":"s"} before treating a market signal as reliable.`,
+      `Checking whether potential pain points and resistance are supported by evidence.`
+    ],
+    building:[
+      `Turning the strongest findings into practical advice on what to focus on next.`,
+      `${activeSignals||"Active"} buying signal${activeSignals===1?"":"s"} will help prioritize triggers, motives and potential resistance.`
+    ]
+  };
+  const phase=messages[view.phaseKey]?view.phaseKey:"finding";
+  const options=messages[phase];
+  return {label:"Research insight",text:options[Math.floor(view.elapsed/8)%options.length]};
+}
+function updateQuickResearchInsight(statusNode,view){
+  const card=statusNode.querySelector("[data-quick-research-insight]");
+  if(!card)return;
+  const insight=quickResearchInsight(view);
+  card.hidden=!insight;
+  if(!insight)return;
+  const label=card.querySelector("strong"),text=card.querySelector("span");
+  label.textContent=insight.label;
+  if(text.textContent===insight.text)return;
+  const apply=()=>{text.textContent=insight.text;card.classList.remove("is-changing");};
+  clearTimeout(quickResearchInsightTimer);
+  if(!text.textContent||window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches)apply();
+  else{card.classList.add("is-changing");quickResearchInsightTimer=setTimeout(apply,160);}
+}
+function renderRunningResearchStatus(statusNode,view){
+  let head=statusNode.querySelector("[data-research-progress-runtime]");
+  if(!head){
+    statusNode.innerHTML=`<div class="market-research-progress-head" data-research-progress-runtime><span class="research-status-icon is-running" aria-hidden="true">⌕</span><span class="research-status-copy"><strong id="market-research-progress-title"></strong><small id="market-research-progress-phase"></small></span><strong class="market-research-progress-percent" id="market-research-progress-percent"></strong></div><div class="market-research-progress-track" id="market-research-progress"><i class="market-research-progress-bar" id="market-research-progress-bar"></i></div><div class="market-research-progress-meta" id="market-research-progress-meta"></div><aside class="quick-research-insight" data-quick-research-insight aria-live="off" hidden><strong>Research insight</strong><span></span></aside>`;
+    head=statusNode.querySelector("[data-research-progress-runtime]");
+  }
+  head.querySelector("#market-research-progress-title").textContent=view.title;
+  head.querySelector("#market-research-progress-phase").textContent=`${view.phase} · This may take 1–3 minutes. Please keep this page open.`;
+  head.querySelector("#market-research-progress-percent").textContent=`${view.percent}%`;
+  statusNode.querySelector("#market-research-progress-bar").style.width=`${view.percent}%`;
+  statusNode.querySelector("#market-research-progress-meta").textContent=view.meta;
+  updateQuickResearchInsight(statusNode,view);
 }
 function renderResearchStatus(){
   const status=state.market.researchStatus;const count=state.market.researchResults.length;const queries=state.market.researchQueries.length;const sources=state.market.researchSourceStatus||{openai:"idle",firecrawl:"idle",gemini:"idle"};
@@ -663,7 +719,7 @@ function renderResearchStatus(){
     statusNode.dataset.status=completedWithEvidence?(status==="partial"?"complete-with-warning":"complete"):status;
     if(status==="running"&&!state.market.openAiRetryProgress){
       const view=researchProgressView();
-      statusNode.innerHTML=`<div class="market-research-progress-head"><span class="research-status-icon is-running" aria-hidden="true">⌕</span><span class="research-status-copy"><strong id="market-research-progress-title">${esc(view.title)}</strong><small id="market-research-progress-phase">${esc(view.phase)} · This may take 1–3 minutes. Please keep this page open.</small></span><strong class="market-research-progress-percent" id="market-research-progress-percent">${view.percent}%</strong></div><div class="market-research-progress-track" id="market-research-progress"><i class="market-research-progress-bar" id="market-research-progress-bar" style="width:${view.percent}%"></i></div><div class="market-research-progress-meta" id="market-research-progress-meta">${esc(view.meta)}</div>`;
+      renderRunningResearchStatus(statusNode,view);
     }else if(state.market.openAiRetryProgress){const progress=state.market.openAiRetryProgress;statusNode.dataset.status="complete-with-warning";statusNode.innerHTML=`<span class="research-status-icon" aria-hidden="true">↻</span><span class="research-status-copy"><strong>Retrying OpenAI…</strong><small>${esc(openAiRetryStatus(progress))} · ${count} Firecrawl evidence source${count===1?"":"s"} preserved.</small></span><button type="button" class="secondary-btn research-recovery-action" disabled>Working…</button>`;}
     else if(completedWithEvidence){
       const warning=status==="partial"?(sources.openai==="unavailable"||sources.openai==="error"?"OpenAI discovery timed out. Your Firecrawl results are preserved.":"Some research checks were unavailable. Saved results are preserved."):"";

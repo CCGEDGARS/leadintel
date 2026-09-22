@@ -191,6 +191,13 @@
 .market-research-progress-bar{display:block;width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,#0d6453,#45a483);transition:width .35s ease;position:relative}
 .market-research-progress-bar:after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 20%,rgba(255,255,255,.55) 48%,transparent 75%);animation:research-shimmer 1.3s linear infinite}
 .market-research-progress-meta{font:600 10px "IBM Plex Mono",monospace;color:#526861}
+.quick-research-insight{display:grid;grid-template-columns:auto 1fr;align-items:start;gap:10px;padding:12px 14px;border:1px solid #c8ddd5;border-radius:11px;background:rgba(255,255,255,.72);opacity:1;transform:translateY(0);transition:opacity .16s ease,transform .16s ease}
+.quick-research-insight[hidden]{display:none}
+.quick-research-insight.is-changing{opacity:0;transform:translateY(3px)}
+.quick-research-insight strong{font:700 10px "IBM Plex Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:#0d6453;white-space:nowrap}
+.quick-research-insight span{font:600 12px/1.45 "DM Sans",sans-serif;color:#324b43}
+@media(prefers-reduced-motion:reduce){.quick-research-insight{transition:none}.quick-research-insight.is-changing{opacity:1;transform:none}}
+
 .not-researched-label[data-research-running="true"]{background:#e8f4ee;color:#0d6453}
 #activate-market-strategy[data-research-running="true"]{cursor:progress;opacity:.68}
 @keyframes research-pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.08);opacity:.72}}
