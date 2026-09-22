@@ -4,7 +4,7 @@
   if(root)root.LeadIntelContentLanguage=api;
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
-  const cache=new Map(),pending=new Map(),originals=new WeakMap(),generations=new WeakMap(),locks=new WeakMap();
+  const cache=new Map(),pending=new Map();
   const endpoint='https://leadintel-api.edgars-7e7.workers.dev/api/ai/generate';
   const TRANSLATION_REQUEST_TIMEOUT_MS=20000;
   const EMAIL_LANGUAGES=Object.freeze({auto:'Auto · recipient local language',en:'English',lv:'Latvian',de:'German',sv:'Swedish',et:'Estonian',lt:'Lithuanian',fi:'Finnish',no:'Norwegian',da:'Danish',pl:'Polish',fr:'French',nl:'Dutch',es:'Spanish',it:'Italian',pt:'Portuguese',cs:'Czech',sk:'Slovak',ro:'Romanian',bg:'Bulgarian',hr:'Croatian',sl:'Slovenian',hu:'Hungarian',el:'Greek',uk:'Ukrainian'});
@@ -136,49 +136,6 @@
     pending.set(key,task);
     try{return await task;}finally{pending.delete(key);}
   }
-  async function translateEditor(root,editor,language){
-    const generation=(generations.get(editor)||0)+1;generations.set(editor,generation);
-    const nodes=[...editor.querySelectorAll('textarea[data-profile-field],textarea[data-question],.profile-analysis-card > span,[data-research-translatable]')];
-    const source={},targets=[];
-    for(const node of nodes){
-      if(resolveLanguage(node.lang)===(language||'').toLowerCase().split('-')[0]&&String(node.lang||'').trim())continue;
-      const value='value' in node?node.value:node.textContent;
-      const old=originals.get(node);
-      const original=old&&value===old.rendered?old.source:String(value||'');
-      if(!original.trim())continue;
-      const key='f'+targets.length;source[key]=original;
-      targets.push({node,key,source:original,readOnly:locks.has(node)?locks.get(node):node.readOnly,value});
-    }
-    if(!targets.length)return;
-    let notice=root.document.getElementById('content-language-status');
-    if(!notice){notice=root.document.createElement('div');notice.id='content-language-status';notice.setAttribute('role','status');notice.style.cssText='padding:12px 0;font-size:14px;line-height:1.5';editor.before(notice);}
-    const show=(message,retry=false)=>{
-      notice.textContent=message;
-      if(retry){const button=root.document.createElement('button');button.type='button';button.textContent='Retry translation';button.addEventListener('click',()=>translateEditor(root,editor,language));notice.append(' ',button);}
-    };
-    const bridge=root.LeadIntelServerBridge;
-    if(!bridge?.session?.authenticated||!bridge?.workspace?.id){targets.forEach(({node,readOnly})=>{if(locks.has(node)){node.readOnly=readOnly;locks.delete(node);}});show('Source-language preview · Sign in and select an AI provider to translate content.');return;}
-    const workspace=bridge.workspace.id;
-    show('Translating content to '+(language==='en'?'English':'Latvian')+' · Source text remains unchanged until the translation is complete.');
-    targets.forEach(({node,readOnly})=>{if('readOnly' in node){locks.set(node,readOnly);node.readOnly=true;}});
-    try{
-      const translated=await request(root,workspace,language,source);
-      if(generations.get(editor)!==generation||root.LeadIntelServerBridge?.workspace?.id!==workspace)return;
-      for(const target of targets){
-        const {node,key}=target;if(!editor.contains(node))continue;
-        const current='value' in node?node.value:node.textContent;
-        if(current!==target.value)continue;
-        const value=translated[key];originals.set(node,{source:target.source,rendered:value});
-        if('value' in node)node.value=value;else node.textContent=value;
-        node.lang=language;
-      }
-      show('Content language: '+(language==='en'?'English':'Latviešu')+' · Display translation; original saved content is preserved.');
-    }catch(error){
-      if(generations.get(editor)===generation)show('Translation unavailable · Showing original source text. '+(error.name==='AbortError'?'The request timed out.':error.message),true);
-    }finally{
-      if(generations.get(editor)===generation)targets.forEach(({node,readOnly})=>{if('readOnly' in node){node.readOnly=readOnly;locks.delete(node);}});
-    }
-  }
   const MARKET_FIELDS={icp:['name','description','targetMarkets','buyerRoles','offers','value','exclusions','rationale'],signal:['name','keywords','reason'],opportunity:['title','hypothesis','rationale']};
   function marketContentSource(market={}){
     const source={};
@@ -214,5 +171,5 @@
     const source=marketContentSource(market);if(!Object.keys(source).length)return applyMarketContent(market,{},language);
     return applyMarketContent(market,await request(root,workspace,resolveLanguage(language),source),language);
   }
-  return {EMAIL_LANGUAGES,resolveLanguage,resolveCampaignLanguage,applyLanguageSelection,cacheKey,promptFor,validate,validateCampaignPackage,request,localizeCampaignPackage,translateEditor,marketContentSource,applyMarketContent,translateMarketState};
+  return {EMAIL_LANGUAGES,resolveLanguage,resolveCampaignLanguage,applyLanguageSelection,cacheKey,promptFor,validate,validateCampaignPackage,request,localizeCampaignPackage,marketContentSource,applyMarketContent,translateMarketState};
 });
