@@ -90,14 +90,14 @@ test('OpenAI discovery reports a clear terminal message after both transient att
 
 test('partial OpenAI coverage explains that Firecrawl evidence was preserved and how to recover',async()=>{
   const resilience=await loadResilienceModule();
-  const copy=resilience.describePartialCoverage({modeLabel:'Market Scan',count:5,openAiStatus:'error',firecrawlStatus:'complete'});
+  const copy=resilience.describePartialCoverage({modeLabel:'Quick Overview',count:5,openAiStatus:'error',firecrawlStatus:'complete'});
 
   assert.deepEqual(copy,{
-    status:'Market Scan completed with 5 evidence sources. Firecrawl succeeded; OpenAI discovery was unavailable within the research time limit.',
+    status:'Quick Overview completed with 5 evidence sources. Firecrawl succeeded; OpenAI discovery was unavailable within the research time limit.',
     title:'Research completed with limited coverage',
     intro:'5 public evidence sources were saved. Retry only OpenAI discovery without losing these results.'
   });
-  assert.equal(resilience.describePartialCoverage({modeLabel:'Market Scan',count:0,openAiStatus:'error',firecrawlStatus:'error'}),null);
+  assert.equal(resilience.describePartialCoverage({modeLabel:'Quick Overview',count:0,openAiStatus:'error',firecrawlStatus:'error'}),null);
 });
 
 test('research completion is prominent while provider gaps remain explicit',()=>{

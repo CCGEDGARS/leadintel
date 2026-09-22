@@ -9,7 +9,8 @@
   const API_BASE="https://leadintel-api.edgars-7e7.workers.dev";
   const MODE_COPY=Object.freeze({
     quick:Object.freeze({
-      label:"Market Scan",
+      label:"Quick Overview",
+      estimate:"Usually under 1 minute",
       description:"Fast validation of the strongest buying signals and opportunities in your selected market.",
       evidenceLimit:20,
       sourceDetail:"Sources are selected automatically during the scan.",
@@ -17,14 +18,16 @@
     }),
     deep:Object.freeze({
       label:"Market Research",
+      estimate:"Usually 2–4 minutes",
       description:"Deeper research across companies, market activity, news, hiring, expansion and other relevant sources.",
       evidenceLimit:80,
       sourceDetail:"LeadIntel can recommend up to 8 priority websites before research.",
       badge:"Recommended"
     }),
     intelligence:Object.freeze({
-      label:"Market Intelligence",
-      description:"Comprehensive investigation across multiple source types to uncover opportunities, patterns, competitors and hidden signals.",
+      label:"Deep Analysis",
+      estimate:"Usually 5–10 minutes",
+      description:"Strategic analysis across market trends, segments, competitors, risks, funding and hidden opportunities.",
       evidenceLimit:200,
       sourceDetail:"LeadIntel can recommend up to 15 priority websites before research.",
       badge:""
@@ -286,8 +289,8 @@
     const list=root.document.getElementById("research-suggested-sources"),add=root.document.getElementById("add-suggested-sources");
     const heading=block.querySelector("div>span"),help=block.querySelector("div>small");
     if(mode==="quick"){
-      block.hidden=false;if(heading)heading.textContent="Sources selected automatically";if(help)help.textContent="Market Scan chooses the strongest available source categories and sites automatically. No specific sites are pre-recommended.";
-      if(list)list.innerHTML='<div class="source-discovery-status">Automatic source selection · no site-selection step is required for Market Scan.</div>';if(add)add.hidden=true;return;
+      block.hidden=false;if(heading)heading.textContent="Sources selected automatically";if(help)help.textContent="Quick Overview chooses the strongest available source categories and sites automatically. No specific sites are pre-recommended.";
+      if(list)list.innerHTML='<div class="source-discovery-status">Automatic source selection · no site-selection step is required for Quick Overview.</div>';if(add)add.hidden=true;return;
     }
     block.hidden=false;if(add)add.hidden=false;
     if(heading)heading.textContent=policy.grouped?"Source Intelligence Map":"Live source discovery";

@@ -211,3 +211,18 @@
 .icp-requirement{display:grid;gap:4px;margin-top:16px;padding:12px 14px;border:1px solid #dfcfaa;border-radius:10px;background:#fffaf0;color:#755b1d}
 .icp-requirement strong{font-size:12px}
 .icp-requirement span{font-size:11.5px;line-height:1.45;color:#756b54}
+
+/* Evidence-backed market condition pack */
+.market-conditions{margin:18px 0 22px;padding:20px;border:1px solid #c6d9d1;border-radius:16px;background:#f7fbf9}
+.market-conditions[hidden]{display:none}
+.market-conditions-head h3{margin:5px 0 4px;font-size:22px}
+.market-conditions-head p{margin:0 0 16px;color:var(--muted)}
+.market-condition-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.market-condition-card{border:1px solid #d4e0db;border-radius:12px;background:#fff;overflow:hidden}
+.market-condition-card summary{display:grid;gap:5px;padding:14px;cursor:pointer;list-style:none}
+.market-condition-card summary::-webkit-details-marker{display:none}
+.market-condition-card summary span{font:700 10px "IBM Plex Mono",monospace;letter-spacing:.06em;text-transform:uppercase;color:#0d6453}
+.market-condition-card summary strong{font-size:15px}
+.market-condition-card>p,.market-condition-card>ul{margin:0;padding:0 14px 14px;color:#52615b;font-size:12px;line-height:1.5}
+.market-condition-card>ul{padding-left:32px}.market-condition-card a{color:#0d6453}.condition-caveat{font-style:italic}
+@media(max-width:760px){.market-condition-grid{grid-template-columns:1fr}}

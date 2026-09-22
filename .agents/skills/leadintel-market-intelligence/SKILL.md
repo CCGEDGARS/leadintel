@@ -21,9 +21,9 @@ LeadIntel research is evidence acquisition plus adaptive commercial reasoning, n
 ## Research depth
 | Mode | Required behavior |
 | --- | --- |
-| **Market Scan** | Fast validation of the strongest active signals. Automatic source choice, high recency bias, limited first-pass research, early stop when enough credible evidence exists. |
+| **Quick Overview** | Fast validation of the strongest active signals. Automatic source choice, high recency bias, limited first-pass research, early stop when enough credible evidence exists. |
 | **Market Research** | Broader signal families plus live source discovery. Perform company-level adaptive follow-up and verify the strongest findings. |
-| **Market Intelligence** | Widest source intelligence map, iterative follow-up, competitor/pattern/context analysis, stronger triangulation and explicit intelligence gaps. |
+| **Deep Analysis** | Widest source intelligence map, iterative follow-up, competitor/pattern/context analysis, stronger triangulation and explicit intelligence gaps. |
 
 Do not differentiate the modes only by raw query count. They must differ in reasoning depth, source breadth, follow-up behavior and verification standard.
 

@@ -6,9 +6,9 @@ const guard=fs.readFileSync(new URL('../market-research-guard.js',import.meta.ur
 const evidenceView=fs.readFileSync(new URL('../evidence-view.js',import.meta.url),'utf8');
 
 test('running research keeps only the selected mode labelled Researching',()=>{
-  assert.match(guard,/"run-market-research":Object\.freeze\(\{mode:"quick",label:"Market Scan"\}\)/);
+  assert.match(guard,/"run-market-research":Object\.freeze\(\{mode:"quick",label:"Quick Overview"\}\)/);
   assert.match(guard,/"run-detailed-research":Object\.freeze\(\{mode:"deep",label:"Market Research"\}\)/);
-  assert.match(guard,/"run-market-intelligence":Object\.freeze\(\{mode:"intelligence",label:"Market Intelligence"\}\)/);
+  assert.match(guard,/"run-market-intelligence":Object\.freeze\(\{mode:"intelligence",label:"Deep Analysis"\}\)/);
   assert.match(guard,/market\.researchStatus!=="running"/);
   assert.match(guard,/const label=id===activeId\?"Researching…":BUTTON_META\[id\]\.label/);
   assert.match(guard,/button\.disabled=true/);

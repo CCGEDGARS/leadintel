@@ -396,10 +396,10 @@
             <div class="market-research-head">
               <div class="section-title"><span class="eyebrow">Step 1 · Choose research depth</span><h3>How deeply should LeadIntel research this market?</h3><p>Select one option to review the research plan before starting.</p></div>
               <div class="research-actions">
-                <button class="primary-btn research-primary-action" id="run-market-research" type="button" aria-label="Market Scan, up to 20 evidence sources">Review Market Scan</button>
+                <button class="primary-btn research-primary-action" id="run-market-research" type="button" aria-label="Quick Overview, up to 20 evidence sources">Review Quick Overview</button>
                 <button class="secondary-btn research-secondary-action" id="run-detailed-research" type="button" aria-label="Market Research, up to 80 evidence sources">Review Market Research</button>
-                <button class="secondary-btn research-secondary-action" id="run-market-intelligence" type="button" aria-label="Market Intelligence, up to 200 evidence sources">Review Market Intelligence</button>
-                <small class="research-mode-hint">Market Scan validates quickly. Market Research broadens the evidence. Market Intelligence performs the widest investigation.</small>
+                <button class="secondary-btn research-secondary-action" id="run-market-intelligence" type="button" aria-label="Deep Analysis, up to 200 evidence sources">Review Deep Analysis</button>
+                <small class="research-mode-hint">Quick Overview validates the strongest signals. Market Research examines demand and commercial conditions. Deep Analysis adds strategic trends, risks and market gaps.</small>
               </div>
             </div>
             <div class="research-status market-research-progress" id="market-research-status" role="status" aria-live="polite">
@@ -408,7 +408,7 @@
               <div class="market-research-progress-meta" id="market-research-progress-meta">No market research run yet.</div>
             </div>
             <section class="research-run-preview" id="research-run-preview" hidden aria-labelledby="research-preview-title">
-              <div class="research-preview-head"><div><span class="eyebrow">Review before starting</span><h4 id="research-preview-title">Market Scan</h4><p>No search starts until you confirm below.</p></div><button class="text-btn" id="cancel-market-research" type="button" aria-label="Close research preview">Close</button></div>
+              <div class="research-preview-head"><div><span class="eyebrow">Review before starting</span><h4 id="research-preview-title">Quick Overview</h4><p>No search starts until you confirm below.</p></div><button class="text-btn" id="cancel-market-research" type="button" aria-label="Close research preview">Close</button></div>
               <div class="research-preview-grid">
                 <div><span>Scope</span><strong id="research-preview-scope"></strong></div>
                 <div><span>Sources</span><strong id="research-preview-sources"></strong></div>
@@ -416,7 +416,7 @@
               <div class="research-preview-method"><span>How it works</span><p id="research-preview-method"></p></div>
               <div class="research-suggested-block"><div><span>Recommended sites for this market</span><small>Select any sites you want LeadIntel to check directly and keep ready for monitoring.</small></div><div id="research-suggested-sources" class="research-suggested-sources"></div><button class="secondary-btn" id="add-suggested-sources" type="button">Add selected sites</button></div>
               <div class="research-preview-queries"><span>Planned searches</span><ol id="research-preview-queries"></ol></div>
-              <div class="research-preview-actions"><button class="secondary-btn" id="edit-research-settings" type="button">Edit sources &amp; instructions</button><button class="primary-btn" id="confirm-market-research" type="button">Start Market Scan</button></div>
+              <div class="research-preview-actions"><button class="secondary-btn" id="edit-research-settings" type="button">Edit sources &amp; instructions</button><button class="primary-btn" id="confirm-market-research" type="button">Start Quick Overview</button></div>
             </section>
             <section class="research-run-feedback" id="research-run-feedback" hidden aria-live="polite"></section>
             <details class="progressive-disclosure research-settings" id="research-settings">
@@ -427,11 +427,15 @@
                 <label class="research-guidance"><span>Specific public URLs to check · one URL per line</span><textarea id="research-custom-sources" rows="3" placeholder="https://example.com/news&#10;https://example.com/tenders"></textarea><small>These pages are scraped directly and shown as evidence alongside search results.</small></label><section class="research-saved-websites" aria-labelledby="research-saved-websites-summary"><div class="research-saved-websites-head"><strong>Saved research websites</strong><span id="research-saved-websites-summary">No websites saved</span></div><ul id="research-saved-websites" hidden></ul></section>
               </div>
               <div class="research-controls">
-                <label><span>Research depth</span><select id="research-mode"><option value="quick">Market Scan · 4 searches × 5 results</option><option value="deep">Market Research · 12 searches × 8 results</option><option value="intelligence">Market Intelligence · 24 searches × 10 results</option></select></label>
+                <label><span>Research depth</span><select id="research-mode"><option value="quick">Quick Overview · 4 searches × 5 results</option><option value="deep">Market Research · 12 searches × 8 results · Usually 2–4 minutes</option><option value="intelligence">Deep Analysis · 24 searches × 10 results · Usually 5–10 minutes</option></select></label>
                 <fieldset id="research-source-types"><legend>Source categories</legend><label><input type="checkbox" value="news" checked> News</label><label><input type="checkbox" value="tenders"> Tenders</label><label><input type="checkbox" value="jobs" checked> Jobs</label><label><input type="checkbox" value="investments" checked> Investments</label><label><input type="checkbox" value="company" checked> Company sites</label><label><input type="checkbox" value="registries"> Registries</label><small id="tender-source-note">Tender research is available only when the tender signal is active.</small></fieldset>
               </div>
             </details>
             <div class="research-results-intro" id="research-results-intro" hidden><span class="eyebrow">Step 2 · Review findings</span><h3>Review what LeadIntel found</h3><p>Check the opportunities, buying signals and supporting evidence before activating the strategy.</p></div>
+            <section class="market-conditions" id="market-conditions" hidden aria-labelledby="market-conditions-title">
+              <div class="market-conditions-head"><span class="eyebrow">Market conditions</span><h3 id="market-conditions-title">What the evidence means commercially</h3><p>Concise guidance built only from the sources collected in this research run.</p></div>
+              <div class="market-condition-grid" id="market-condition-grid"></div>
+            </section>
             <div class="market-opportunities" id="market-opportunities"><div class="market-empty">Run market research to create evidence-backed market hypotheses.</div></div>
             <details class="progressive-disclosure research-analysis" id="research-results-details" hidden>
               <summary>View research details and scoring model</summary>
@@ -499,6 +503,7 @@
   <script defer src="step2-brief-schema.js?v=20260916-commercial-brief-v1"></script>
   <script defer src="profile-engine.js?v=20260922-step3-signal-backfill-v1"></script>
   <script defer src="market-engine.js?v=20260921-standard-market-next-step-v1"></script>
+  <script defer src="market-conditions-engine.js?v=20260922-market-conditions-v1"></script>
   <script defer src="market-research-verification.js?v=20260916-gemini-verification-v1"></script>
 <script defer src="profile-enrichment-checkpoint.js?v=20260921-profile-enrichment-v2"></script>
 <script defer src="profile-enrichment-checkpoint-ui.js?v=20260921-profile-enrichment-v2"></script>
