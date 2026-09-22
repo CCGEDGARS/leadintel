@@ -112,7 +112,7 @@ function renderResearchReview(){
     const reviewed=row.reviewed&&!isDraft?'<span class="research-reviewed">Saved ✓</span>':'';
     const sourceIds=Array.isArray(row.sourceIds)?row.sourceIds:[];const sources=sourceIds.map(id=>map.get(id)).filter(Boolean).slice(0,3);
     const links=sources.length?`<div class="research-source-links">${sources.map(source=>source.type==='document'?`<span class="research-source-doc">${esc(source.title)}</span>`:`<a href="${esc(source.url)}" target="_blank" rel="noopener">${esc(source.title||source.url)}</a>`).join('')}</div>`:'';
-    const rationale=row.rationale?`<div class="research-rationale" data-research-translatable>${esc(row.rationale)}</div>`:'';
+    const rationale=row.rationale?`<div class="research-rationale">${esc(row.rationale)}</div>`:'';
     const reviewAction=engine()?.reviewActionState?.(row)||{visible:isDraft,label:row.reviewed?'Accepted ✓':'Accept',disabled:Boolean(row.reviewed)};
     const acceptAction=reviewAction.visible?`<button type="button" data-research-accept="${esc(id)}" ${reviewAction.disabled?'disabled':''}>${esc(reviewAction.label)}</button>`:'';
     const actions=value?`<div class="research-field-actions">${acceptAction}<button type="button" data-research-clear="${esc(id)}">Clear</button></div>`:'';
