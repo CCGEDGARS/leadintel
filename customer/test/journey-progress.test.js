@@ -111,3 +111,15 @@ test('startup-critical journey runtime is not blocked by the optional module gra
   assert.match(shellLoader,/Promise\.allSettled/);
   assert.match(shellLoader,/addEventListener\(["']load["']/);
 });
+
+test('zero-result discovery guides the user without claiming companies were verified',()=>{
+  const stage=Journey.buildJourneyModel({
+    currentStep:5,availability:{5:true},
+    discovery:{status:'no_results',targetCount:10,lastRunAt:'2026-09-22T13:00:00Z',rawResults:Array(20).fill({url:'https://evidence.example'})}
+  })[4];
+  const companies=stage.steps.find(step=>step.id==='companies');
+  assert.equal(companies.complete,false);
+  assert.equal(companies.label,'No qualified companies found');
+  assert.equal(companies.action,'Review ICPs and buying signals, then broaden the search');
+  assert.equal(stage.nextAction,'Review ICPs and buying signals, then broaden the search');
+});
