@@ -39,6 +39,13 @@ test("workspace attention exposes only the next actionable requirement", () => {
   assert.match(journey, /Wait for market research to finish/);
 });
 
+test("market research health labels distinguish not run, running and completed states", () => {
+  assert.match(journey, /Market research not run/);
+  assert.match(journey, /Market research in progress/);
+  assert.match(journey, /Market research completed/);
+  assert.doesNotMatch(journey, /researchStatus==='running'\?'Market research in progress':'Market research completed'/);
+});
+
 test("production assets are cache-busted for the research progress release", () => {
   assert.match(index, /app\.js\?v=20260922-step3-recovery-v1/);
   assert.match(index, /market\.css\?v=20260921-research-progress-v1/);
