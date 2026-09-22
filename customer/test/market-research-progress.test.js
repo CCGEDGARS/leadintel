@@ -24,6 +24,19 @@ test("running market research renders a prominent phase-based progress card", ()
   assert.match(marketCss, /\.market-research-progress-bar/);
 });
 
+test("quick validation rotates practical phase-specific research insights", () => {
+  assert.match(app, /function quickResearchInsight\(view\)/);
+  assert.match(app, /state\.market\.researchMode!==["']quick["']/);
+  assert.match(app, /Research insight/);
+  assert.match(app, /strongest buying points/i);
+  assert.match(app, /market demand/i);
+  assert.match(app, /potential resistance/i);
+  assert.match(app, /buying triggers and motives/i);
+  assert.match(app, /data-quick-research-insight/);
+  assert.match(marketCss, /\.quick-research-insight/);
+  assert.match(marketCss, /prefers-reduced-motion:\s*reduce/);
+});
+
 test("running research disables the final handoff and marks markets as in progress", () => {
   assert.match(app, /researchRunning\(\).*activate-market-strategy/s);
   assert.match(app, /Research in progress — please wait/);
