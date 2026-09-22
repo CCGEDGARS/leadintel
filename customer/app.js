@@ -2,6 +2,7 @@ import './content-language.js?v=20260922-campaign-only-v1';
 import './content-variants.js?v=20260921-contact-gated-v2';
 import './business-identity.js?v=20260906-pain-headings-v1';
 import './evidence-view.js?v=20260921-two-stage-profile-action-v1';
+import './profile-approval-ui.js?v=20260922-step3-recovery-v1';
 import './workspace-persistence.js?v=20260917-reset-clean-v1';
 import {withOpenAiRetry,cleanOpenAiResearchQuery,describePartialCoverage} from './market-research-provider-resilience.js?v=20260916-latency-fix-v2';
 
@@ -295,15 +296,7 @@ function approveProfile(){
   showToast("Company Intelligence Profile approved");
 }
 function updateApprovalUI(){
-  const approved=state.approved;$("profile-status").textContent=approved?"Approved":"Provisional";$("profile-status").classList.toggle("approved",approved);
-  const approveButton=$("approve-profile"),continueButton=$("continue-market-strategy");
-  approveButton.innerHTML=approved?'Approved <span aria-hidden="true">✓</span>':'Approve profile';approveButton.disabled=approved;approveButton.setAttribute("aria-disabled",approved?"true":"false");
-  continueButton.innerHTML='Continue to Market Strategy <span aria-hidden="true">→</span>';$("continue-market-strategy").disabled=!approved;continueButton.setAttribute("aria-disabled",approved?"false":"true");
-  const approvalCard=$("approval-card");approvalCard.classList.toggle("approved",approved);
-  const approvalTitle=approvalCard.querySelector("h3"),approvalCopy=approvalCard.querySelector("p"),approvalEyebrow=approvalCard.querySelector(".eyebrow");
-  if(approvalEyebrow)approvalEyebrow.textContent=approved?"Profile approved":"Profile approval";
-  if(approvalTitle)approvalTitle.textContent=approved?"Your approved profile is ready for Market Strategy.":"Approve this profile before building Market Strategy.";
-  if(approvalCopy)approvalCopy.textContent=approved?"LeadIntel will use this reviewed version to generate ICPs, buying signals and market opportunities.":"Review the interpretation above. Approval saves it as the current source of truth.";
+  globalThis.LeadIntelProfileApprovalUI?.updateProfileApprovalUI(document,state.approved);
 }
 function openMarketStrategy(){if(!state.profile){openModule(4);return;}if(!state.approved){setStep(3);showToast("Approve the profile before continuing to Market Strategy");return;}ensureMarketStrategySeeded();setStep(4);}
 function ensureMarketStrategySeeded(){
