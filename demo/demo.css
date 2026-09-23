@@ -70,8 +70,8 @@ button:focus-visible,a:focus-visible{outline:3px solid rgba(13,93,79,.36);outlin
 .progress-step:hover .progress-step-dot{border-color:#8eb8a7;transform:scale(1.06)}
 .progress-step[aria-current="step"] .progress-step-dot{background:var(--green-dark);border-color:var(--green-dark);color:#fff;box-shadow:0 0 0 4px #e2eee8}
 .demo-canvas{position:relative;isolation:isolate;min-height:545px;overflow:hidden;border:1px solid #dce4dc;border-radius:19px;background:#ebf0ec;display:grid;place-items:center;padding:27px}
-.workspace-preview{position:absolute;inset:12px;z-index:0;overflow:hidden;border:1px solid #d7e0d9;border-radius:14px;background:#f5f7f4;filter:blur(8px);opacity:.76;transform:scale(1.025);pointer-events:none;user-select:none}
-.preview-veil{position:absolute;inset:0;z-index:1;background:linear-gradient(110deg,rgba(247,248,244,.73),rgba(247,248,244,.54) 51%,rgba(237,244,239,.72))}
+.workspace-preview{position:absolute;inset:12px;z-index:0;overflow:hidden;border:1px solid #d7e0d9;border-radius:14px;background:#f5f7f4;filter:blur(6px);opacity:.9;transform:scale(1.025);pointer-events:none;user-select:none}
+.preview-veil{position:absolute;inset:0;z-index:1;background:linear-gradient(110deg,rgba(247,248,244,.42),rgba(247,248,244,.34) 51%,rgba(237,244,239,.44))}
 .mock-topbar{height:43px;padding:0 18px;display:flex;align-items:center;justify-content:space-between;background:#fff;border-bottom:1px solid #dde4de;color:#6c7772;font-size:10px;font-weight:600}
 .mock-brand{display:flex;align-items:center;gap:7px;color:var(--ink);font-weight:700}.mock-mark{width:16px;height:16px;border-radius:4px;background:var(--green-dark)}
 .mock-top-meta{display:flex;gap:18px;align-items:center;font:500 8px var(--mono);color:#88938d}

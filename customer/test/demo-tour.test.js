@@ -51,7 +51,7 @@ test('tour stage index is always bounded to one of the seven stages', () => {
 test('demo route uses the LeadIntel design palette and adapts for narrow screens', () => {
   assert.match(demoCss, /--bg:#f7f8f4/);
   assert.match(demoCss, /--green-dark:#123f36/);
-  assert.match(demoCss, /filter:blur\(8px\)/);
+  assert.match(demoCss, /filter:blur\(6px\)/);
   assert.match(demoCss, /@media\(max-width:760px\)/);
   assert.match(demoCss, /prefers-reduced-motion:reduce/);
 });
