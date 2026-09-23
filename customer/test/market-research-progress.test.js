@@ -25,6 +25,27 @@ test("running market research renders a prominent phase-based progress card", ()
   assert.match(marketCss, /\.market-research-progress-bar/);
 });
 
+test("active research has a large accessible live window with minimize and reopen controls", () => {
+  assert.match(index, /<dialog[^>]*id="market-research-window"[^>]*aria-labelledby="market-research-window-title"/);
+  assert.match(index, /data-research-window-message/);
+  assert.match(index, /data-minimize-research-window/);
+  assert.match(index, /data-reopen-research-window/);
+  assert.match(index, /role="progressbar"[^>]*aria-valuemin="0"[^>]*aria-valuemax="100"/);
+  assert.match(index, /id="market-research-window-message"[^>]*aria-live="polite"/);
+  assert.match(app, /function renderResearchProgressWindow\(/);
+  assert.match(app, /function minimizeResearchProgressWindow\(/);
+  assert.match(app, /function reopenResearchProgressWindow\(/);
+  assert.match(app, /renderResearchProgressWindow\(status,status==="running"\?researchProgressView\(\):null\)/);
+  assert.match(app, /if\(running&&!wasRunning\)researchWindowMinimized=false/);
+  assert.match(app, /dock\.hidden=!researchWindowMinimized/);
+  assert.match(app, /addEventListener\("cancel",event=>\{event\.preventDefault\(\);minimizeResearchProgressWindow\(\)/);
+  assert.match(app, /quickResearchInsight\(view\)/);
+  assert.match(marketCss, /\.market-research-window\s*\{/);
+  assert.match(marketCss, /width:\s*min\(900px,\s*calc\(100vw\s*-\s*32px\)\)/);
+  assert.match(marketCss, /font-size:\s*24px/);
+  assert.match(marketCss, /@media\(max-width:600px\)\{\.market-research-window/);
+});
+
 test("every research mode rotates practical phase-specific research insights", () => {
   assert.match(app, /function quickResearchInsight\(view\)/);
   assert.doesNotMatch(app, /state\.market\.researchMode!==["']quick["']/);
@@ -36,6 +57,8 @@ test("every research mode rotates practical phase-specific research insights", (
   assert.match(app, /buying triggers and motives/i);
   assert.match(app, /data-quick-research-insight/);
   assert.match(marketCss, /\.quick-research-insight/);
+  assert.match(marketCss, /\.quick-research-insight\{[^}]*grid-template-columns:1fr/);
+  assert.match(marketCss, /\.quick-research-insight span\{font:600 20px\/1\.5/);
   assert.match(marketCss, /prefers-reduced-motion:\s*reduce/);
 });
 
@@ -62,8 +85,8 @@ test("market research health labels distinguish not run, running and completed s
 });
 
 test("production assets are cache-busted for the research progress release", () => {
-  assert.match(index, /app\.js\?v=20260922-step3-recovery-v1/);
-  assert.match(index, /market\.css\?v=20260921-research-progress-v1/);
+  assert.match(index, /app\.js\?v=20260923-dynamic-research-window-v1/);
+  assert.match(index, /market\.css\?v=20260923-dynamic-research-window-v2/);
   assert.match(index, /journey-progress\.js\?v=20260922-health-research-label-v1/);
   assert.match(index, /attention-centre-model\.js\?v=20260921-research-progress-v1/);
 });

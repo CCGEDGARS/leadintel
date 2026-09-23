@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=20260922-hidden-workflow-cta-v1&reset-center=1">
-  <link rel="stylesheet" href="market.css?v=20260921-research-progress-v1&icp-data-gates=1&quick-insights=1">
+  <link rel="stylesheet" href="market.css?v=20260923-dynamic-research-window-v2&icp-data-gates=1&quick-insights=1">
   <link rel="stylesheet" href="premium.css?v=20260920-tasks-below-settings-v1">
   <link rel="stylesheet" href="market-selector.css?v=20260826-target-market-v1">
   <link rel="stylesheet" href="compact-sources.css?v=20260826-compact-sources-v1">
@@ -402,7 +402,7 @@
                 <small class="research-mode-hint">Quick Overview validates the strongest signals. Market Research examines demand and commercial conditions. Deep Analysis adds strategic trends, risks and market gaps.</small>
               </div>
             </div>
-            <div class="research-status market-research-progress" id="market-research-status" role="status" aria-live="polite">
+            <div class="research-status market-research-progress" id="market-research-status" role="status" aria-live="polite" tabindex="-1">
               <div class="market-research-progress-head"><span class="research-status-icon" aria-hidden="true">⌕</span><span class="research-status-copy"><strong id="market-research-progress-title">Ready for market research</strong><small id="market-research-progress-phase">Choose a research depth to begin.</small></span><strong class="market-research-progress-percent" id="market-research-progress-percent">0%</strong></div>
               <div class="market-research-progress-track" id="market-research-progress"><i class="market-research-progress-bar" id="market-research-progress-bar"></i></div>
               <div class="market-research-progress-meta" id="market-research-progress-meta">No market research run yet.</div>
@@ -496,6 +496,26 @@
       </aside>
     </div>
   </div>
+  <dialog class="market-research-window" id="market-research-window" aria-labelledby="market-research-window-title" aria-describedby="market-research-window-message">
+    <section class="market-research-window-card">
+      <header class="market-research-window-head">
+        <div><span class="eyebrow">Market research in progress</span><h2 id="market-research-window-title" data-research-window-title>Researching your selected market</h2></div>
+        <strong class="market-research-window-percent" data-research-window-percent>0%</strong>
+        <button class="secondary-btn" type="button" data-minimize-research-window>Minimize</button>
+      </header>
+      <p class="market-research-window-phase" data-research-window-phase aria-live="polite">Finding evidence</p>
+      <div class="market-research-window-track" role="progressbar" aria-label="Market research progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-research-window-progress><i data-research-window-bar></i></div>
+      <p class="market-research-window-meta" data-research-window-meta></p>
+      <section class="market-research-window-insight" aria-label="Research update">
+        <span class="eyebrow" data-research-window-insight-label>Market Research insight</span>
+        <p id="market-research-window-message" data-research-window-message aria-live="polite">LeadIntel is preparing the search.</p>
+      </section>
+      <footer class="market-research-window-footer"><span>Minimizing keeps the search running.</span><button class="secondary-btn" type="button" data-minimize-research-window>Minimize window</button></footer>
+    </section>
+  </dialog>
+  <button class="market-research-progress-dock" type="button" data-reopen-research-window aria-haspopup="dialog" aria-controls="market-research-window" aria-expanded="false" hidden>
+    <span class="eyebrow">Research continues</span><strong data-research-dock-title>Market research</strong><small data-research-dock-phase>Finding evidence</small><i class="market-research-dock-track"><b data-research-dock-bar></b></i><span class="market-research-dock-action">Show progress</span>
+  </button>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script defer src="background-task-centre.js?v=20260917-shell-stability-v1"></script>
   <!-- Optional company-research-ui.js is deferred by shell-support-loader.js. -->
@@ -520,7 +540,7 @@
   <script defer src="process-map.js?v=20260919-lookalike-green-card-v1"></script>
   <script defer src="attention-centre-model.js?v=20260921-research-progress-v1&health-colors=1"></script>
   <script defer src="attention-centre.js?v=20260917-reset-visual-v1&health-colors=1"></script>
-  <script type="module" src="app.js?v=20260922-step3-recovery-v1&icp-data-gates=1&reset-center=1&quick-insights=1&adaptive-evidence=1"></script>
+  <script type="module" src="app.js?v=20260923-dynamic-research-window-v1&icp-data-gates=1&reset-center=1&quick-insights=1&adaptive-evidence=1"></script>
   <script type="module" src="ai-settings.js?v=20260917-shell-stability-v1"></script>
   <script type="module" src="copilot-loader.js?v=20260917-attention-v1"></script>
   <script type="module" src="shell-support-loader.js?v=20260921-two-stage-profile-action-v1&reset-center=1"></script>

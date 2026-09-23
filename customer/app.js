@@ -27,6 +27,8 @@ let pdfModule=null;
 let resetConfirmTimer=null;
 let openAiCountdownTimer=null;
 let researchElapsedTimer=null;
+let researchWindowMinimized=false;
+let researchWindowWasRunning=false;
 let monitoringLoaded=false;
 let monitoringBusy=false;
 let pendingResearchMode="";
@@ -635,13 +637,13 @@ async function retryOpenAiDiscovery(){
   const runtime=LeadIntelMarket.researchRuntimePolicy(state.market.researchMode);
   const priorErrors=[...(state.market.researchErrors||[])].filter(item=>String(item.provider).toLowerCase()!=="openai");
   let successes=0,failures=0;const startedAt=Date.now();
-  state.market.researchStatus="running";state.market.researchSourceStatus.openai="running";state.market.openAiRetryProgress={completed:0,total:queries.length,attempt:1,deadlineAt:Date.now()+runtime.requestTimeoutMs};state.market.researchErrors=priorErrors;saveState();startOpenAiCountdown();renderMarketStrategy();
+  state.market.researchStatus="running";state.market.researchSourceStatus.openai="running";state.market.openAiRetryProgress={completed:0,total:queries.length,attempt:1,startedAt,deadlineAt:Date.now()+runtime.requestTimeoutMs};state.market.researchErrors=priorErrors;saveState();startOpenAiCountdown();renderMarketStrategy();
   try{
     const retried=await LeadIntelMarket.mapWithConcurrency(queries,async(query,index)=>{
       const attemptStarted=Date.now();
       try{
         const found=await withOpenAiRetry(attempt=>{
-          state.market.openAiRetryProgress={completed:index,total:queries.length,attempt,deadlineAt:Date.now()+runtime.requestTimeoutMs};renderResearchStatus();
+          state.market.openAiRetryProgress={completed:index,total:queries.length,attempt,startedAt,deadlineAt:Date.now()+runtime.requestTimeoutMs};renderResearchStatus();
           return LeadIntelMarket.withTimeout(signal=>searchOpenAiWeb(query,limits.resultsPerQuery,signal),runtime.requestTimeoutMs,"OpenAI search");
         });
         if(!found.available)throw new Error(found.reason||"OpenAI discovery unavailable");
@@ -700,17 +702,20 @@ function renderMarketOpportunities(){
 }
 function researchRunning(){return state.market.researchStatus==="running";}
 function researchProgressView(){
-  const progress=state.market.openAiRetryProgress||state.market.researchProgress||{completed:0,total:state.market.researchQueries?.length||1};
+  const retry=state.market.openAiRetryProgress;
+  const progress=retry||state.market.researchProgress||{completed:0,total:state.market.researchQueries?.length||1};
   const total=Math.max(1,Number(progress.total)||1),completed=Math.min(total,Number(progress.completed)||0);
   const sources=state.market.researchSourceStatus||{};
-  const phase=state.market.researchPhase||(completed===0?"finding":completed<total?"extracting":sources.gemini==="running"?"verifying":"building");
-  const labels={finding:"Finding evidence",extracting:"Extracting information and checking source pages",following:"Closing evidence gaps",verifying:"Verifying findings",building:"Building opportunities",complete:"Complete"};
+  const phase=retry?"retrying":state.market.researchPhase||(completed===0?"finding":completed<total?"extracting":sources.gemini==="running"?"verifying":"building");
+  const labels={finding:"Finding evidence",extracting:"Extracting information and checking source pages",following:"Closing evidence gaps",verifying:"Verifying findings",building:"Building opportunities",retrying:"Retrying source discovery",complete:"Complete"};
   const workPercent=Math.round(completed/total*80);
-  const percent=phase==="verifying"?92:phase==="building"?96:phase==="complete"?100:Math.min(80,workPercent);
-  const elapsed=Math.max(0,Math.floor((Date.now()-Number(state.market.researchStartedAt||Date.now()))/1000));
+  const percent=retry?Math.min(88,workPercent):phase==="verifying"?92:phase==="building"?96:phase==="complete"?100:Math.min(80,workPercent);
+  const elapsedStart=Number(retry?.startedAt||state.market.researchStartedAt||Date.now());
+  const elapsed=Math.max(0,Math.floor((Date.now()-elapsedStart)/1000));
   const elapsedLabel=elapsed>=60?`${Math.floor(elapsed/60)}m ${elapsed%60}s`:`${elapsed}s`;
   const market=LeadIntelMarket.splitList(state.profile?.targetMarkets).join(" · ")||LeadIntelMarket.splitList(state.profile?.currentMarkets).join(" · ")||"selected markets";
-  return {title:`Researching ${market}`,phase:labels[phase]||labels.finding,phaseKey:phase,percent,elapsed,meta:`${completed} of ${total} searches checked · ${state.market.researchResults.length} source${state.market.researchResults.length===1?"":"s"} found · ${elapsedLabel} elapsed`};
+  const meta=retry?`${openAiRetryStatus(retry)} · ${state.market.researchResults.length} saved source${state.market.researchResults.length===1?"":"s"} · ${elapsedLabel} elapsed`:`${completed} of ${total} searches checked · ${state.market.researchResults.length} source${state.market.researchResults.length===1?"":"s"} found · ${elapsedLabel} elapsed`;
+  return {title:`${retry?"Retrying":"Researching"} ${market}`,phase:retry?labels.retrying:labels[phase]||labels.finding,phaseKey:phase,percent,elapsed,meta};
 }
 let quickResearchInsightTimer=0;
 function quickResearchInsight(view){
@@ -718,6 +723,11 @@ function quickResearchInsight(view){
   const offer=LeadIntelMarket.splitList(state.profile?.priorityOffers)[0]||"your priority offer";
   const activeSignals=(state.market.signals||[]).filter(signal=>signal&&signal.active!==false).length;
   const sourceCount=state.market.researchResults.length;
+  if(state.market.openAiRetryProgress){
+    const retryMessages=["Retrying OpenAI discovery against the planned market searches.",sourceCount?`${sourceCount} saved evidence source${sourceCount===1?" remains":"s remain"} available while this retry runs.`:"This retry checks source discovery from the original research plan."];
+    const mode=researchModeUi(state.market.researchMode).label;
+    return {label:`${mode} recovery`,text:retryMessages[Math.floor(view.elapsed/8)%retryMessages.length]};
+  }
   const messages={
     finding:[
       `Scanning ${markets} for market demand connected to ${offer}.`,
@@ -760,6 +770,54 @@ function updateQuickResearchInsight(statusNode,view){
   if(!text.textContent||window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches)apply();
   else{card.classList.add("is-changing");quickResearchInsightTimer=setTimeout(apply,160);}
 }
+function focusWithoutScrolling(node){try{node?.focus({preventScroll:true});}catch{node?.focus();}}
+function minimizeResearchProgressWindow(){
+  if(!researchRunning())return;
+  researchWindowMinimized=true;
+  const dialog=$("market-research-window"),dock=document.querySelector("[data-reopen-research-window]");
+  if(dialog?.open)dialog.close();
+  dock.hidden=false;dock.setAttribute("aria-expanded","false");focusWithoutScrolling(dock);
+}
+function reopenResearchProgressWindow(){
+  if(!researchRunning())return;
+  researchWindowMinimized=false;
+  const dialog=$("market-research-window"),dock=document.querySelector("[data-reopen-research-window]");
+  dock.hidden=true;dock.setAttribute("aria-expanded","true");
+  if(dialog&&!dialog.open){if(typeof dialog.showModal==="function")dialog.showModal();else dialog.setAttribute("open","");}
+  focusWithoutScrolling(dialog?.querySelector("[data-minimize-research-window]"));
+}
+function renderResearchProgressWindow(status,view){
+  const dialog=$("market-research-window"),dock=document.querySelector("[data-reopen-research-window]");
+  if(!dialog||!dock)return;
+  const running=status==="running";
+  const wasRunning=researchWindowWasRunning;
+  if(running&&!wasRunning)researchWindowMinimized=false;
+  researchWindowWasRunning=running;
+  if(!running){
+    if(dialog.open)dialog.close();
+    else dialog.removeAttribute("open");
+    researchWindowMinimized=false;dock.hidden=true;dock.setAttribute("aria-expanded","false");
+    if(wasRunning)focusWithoutScrolling($("market-research-status"));
+    return;
+  }
+  const progress=view||researchProgressView(),insight=quickResearchInsight(progress);
+  dialog.querySelector("[data-research-window-title]").textContent=progress.title;
+  dialog.querySelector("[data-research-window-phase]").textContent=progress.phase;
+  dialog.querySelector("[data-research-window-percent]").textContent=`${progress.percent}%`;
+  dialog.querySelector("[data-research-window-meta]").textContent=progress.meta;
+  dialog.querySelector("[data-research-window-message]").textContent=insight.text;
+  dialog.querySelector("[data-research-window-insight-label]").textContent=insight.label;
+  const progressbar=dialog.querySelector("[data-research-window-progress]");
+  progressbar.setAttribute("aria-valuenow",String(progress.percent));
+  progressbar.setAttribute("aria-valuetext",`${progress.percent}% · ${progress.phase}`);
+  dialog.querySelector("[data-research-window-bar]").style.width=`${progress.percent}%`;
+  dock.querySelector("[data-research-dock-title]").textContent=progress.title;
+  dock.querySelector("[data-research-dock-phase]").textContent=`${progress.phase} · ${progress.percent}%`;
+  dock.querySelector("[data-research-dock-bar]").style.width=`${progress.percent}%`;
+  dock.hidden=!researchWindowMinimized;dock.setAttribute("aria-expanded",String(!researchWindowMinimized));
+  if(researchWindowMinimized){if(dialog.open)dialog.close();return;}
+  if(!dialog.open){if(typeof dialog.showModal==="function")dialog.showModal();else dialog.setAttribute("open","");}
+}
 function renderRunningResearchStatus(statusNode,view){
   let head=statusNode.querySelector("[data-research-progress-runtime]");
   if(!head){
@@ -796,6 +854,7 @@ function renderResearchStatus(){
       statusNode.textContent=status==="partial"&&partialCoverage?partialCoverage.status:(messages[status]||messages.idle);
     }
   }
+  renderResearchProgressWindow(status,status==="running"?researchProgressView():null);
   const feedback=$("research-run-feedback");
   if(feedback){
     const errors=state.market.researchErrors||[];const show=status==="error";
@@ -1115,7 +1174,11 @@ function bind(){
   const zone=$("upload-zone");["dragenter","dragover"].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault();zone.classList.add("dragging");}));["dragleave","drop"].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault();zone.classList.remove("dragging");}));zone.addEventListener("drop",e=>handlePdfFiles(e.dataTransfer.files));
   $("edit-profile").addEventListener("click",toggleEdit);$("approve-profile").addEventListener("click",()=>approveProfile());$("continue-market-strategy").addEventListener("click",openMarketStrategy);$("recommended-signals").addEventListener("change",()=>{saveProfileEdits();seedMarketStrategy();saveState();updateApprovalUI();showToast("Profile changed · approve it again before continuing");});$("improve-profile").addEventListener("click",()=>openModule(1));
   $("back-to-profile").addEventListener("click",()=>openModule(3));
-  $("add-custom-signal").addEventListener("click",addCustomSignal);$("run-market-research").addEventListener("click",()=>openResearchPreview("quick"));$("run-detailed-research").addEventListener("click",()=>openResearchPreview("deep"));$("run-market-intelligence").addEventListener("click",()=>openResearchPreview("intelligence"));$("confirm-market-research").addEventListener("click",()=>{if(pendingResearchMode)void runMarketResearch(pendingResearchMode);});$("cancel-market-research").addEventListener("click",closeResearchPreview);$("add-suggested-sources").addEventListener("click",addSuggestedSources);$("edit-research-settings").addEventListener("click",()=>{const settings=$("research-settings");settings.open=true;closeResearchPreview();settings.scrollIntoView({behavior:"smooth",block:"start"});});$("activate-market-strategy").addEventListener("click",event=>{
+  $("add-custom-signal").addEventListener("click",addCustomSignal);$("run-market-research").addEventListener("click",()=>openResearchPreview("quick"));$("run-detailed-research").addEventListener("click",()=>openResearchPreview("deep"));$("run-market-intelligence").addEventListener("click",()=>openResearchPreview("intelligence"));$("confirm-market-research").addEventListener("click",()=>{if(pendingResearchMode)void runMarketResearch(pendingResearchMode);});$("cancel-market-research").addEventListener("click",closeResearchPreview);$("add-suggested-sources").addEventListener("click",addSuggestedSources);$("edit-research-settings").addEventListener("click",()=>{const settings=$("research-settings");settings.open=true;closeResearchPreview();settings.scrollIntoView({behavior:"smooth",block:"start"});});
+  document.querySelectorAll("[data-minimize-research-window]").forEach(button=>button.addEventListener("click",minimizeResearchProgressWindow));
+  const researchWindow=$("market-research-window");researchWindow?.addEventListener("cancel",event=>{event.preventDefault();minimizeResearchProgressWindow();});
+  document.querySelector("[data-reopen-research-window]")?.addEventListener("click",reopenResearchProgressWindow);
+  $("activate-market-strategy").addEventListener("click",event=>{
     event.preventDefault();
     openStrategyHandoff();
   });$("cancel-strategy-handoff").addEventListener("click",closeStrategyHandoff);$("confirm-strategy-handoff").addEventListener("click",()=>void activateMarketStrategy());$("strategy-handoff-dialog").addEventListener("click",event=>{if(event.target===$("strategy-handoff-dialog"))closeStrategyHandoff();});$("save-monitoring").addEventListener("click",saveMonitoringConfig);$("run-monitoring-now").addEventListener("click",runMonitoringNow);$("research-mode").addEventListener("change",()=>{state.market.researchMode=normalizeResearchMode($("research-mode").value);saveState();renderResearchControls();});$("research-source-types").addEventListener("change",readResearchSettings);$("research-custom-sources").addEventListener("change",()=>{readResearchSettings();renderSavedResearchWebsites();});$("research-saved-websites")?.addEventListener("click",event=>{const button=event.target.closest("[data-remove-research-website]");if(button)removeSavedResearchWebsite(button.dataset.removeResearchWebsite);});$("research-instructions").addEventListener("change",readResearchSettings);
