@@ -24,7 +24,11 @@ test('guided tour follows the seven stages in the customer workspace', () => {
 });
 
 test('lookalike guidance describes customer references as a soft preference', () => {
-  assert.match(stages[4].action, /best customers as references/i);
+  assert.match(stages[4].what, /analyze existing customer websites/i);
+  assert.match(stages[4].action, /review the inferred group or groups/i);
+  assert.match(stages[4].action, /one-company profile is marked low confidence/i);
+  assert.match(stages[4].next, /guides Discovery queries and ranking/i);
+  assert.match(stages[4].next, /soft preference/i);
   assert.match(demoHtml, /soft preference/i);
   assert.match(demoHtml, /does not exclude other companies/i);
   assert.match(demoHtml, /reference customers are not added to outreach/i);

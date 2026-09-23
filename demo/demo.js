@@ -60,10 +60,10 @@
       navHint:"Companies and decision-makers",
       headline:"Find companies that fit the strategy you approved.",
       summary:"Search the selected markets, check the evidence and identify the people who may own the relevant decision.",
-      what:"Company Discovery finds and qualifies potential companies, then helps identify relevant decision-makers.",
-      why:"A thoughtful shortlist gives your team a grounded place to begin a sales conversation.",
-      action:"Review company evidence, qualification and decision-maker matches. Add your best customers as references to build a lookalike profile.",
-      next:"Save the opportunities you want to pursue. Their evidence then informs campaign content and scripts.",
+      what:"Company Discovery finds and qualifies potential companies. You can also analyze existing customer websites to create a commercial profile and suggested customer groups.",
+      why:"A profile based on customers you value can make search and prioritization more relevant. It is evidence to review, not a guarantee of fit.",
+      action:"Add customers with websites, analyze the list, review the inferred group or groups, then activate only the segments that fit. A one-company profile is marked low confidence.",
+      next:"The selected profile guides Discovery queries and ranking in your Step 1 market as a soft preference. It does not exclude other companies or add references to outreach.",
       preview:{kicker:"STAGE 5 · COMPANY DISCOVERY",title:"Review matching companies",subtitle:"Companies and decision-makers",stats:[["Company fit","Evidence for review"],["Market","Your selected target market"],["People","Relevant decision-maker roles"]],panels:[["Company evidence","Check why a company appears in the results."],["Decision-makers","Review role relevance and identity evidence."]],rows:[["Company","Market fit","Review status"],["Potential company","Signal and profile match","Review evidence"],["Potential company","Market and offer match","Check decision-makers"]]}
     },
     {
