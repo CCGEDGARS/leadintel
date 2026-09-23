@@ -100,7 +100,7 @@ button:focus-visible,a:focus-visible{outline:3px solid rgba(13,93,79,.36);outlin
 .guide-block:nth-child(odd){border-right:1px solid var(--line-soft)}
 .guide-block:nth-last-child(-n+2){border-bottom:0}
 .guide-block p{margin:7px 0 0;color:#53615a;font-size:13px;line-height:1.5}
-.block-label{font-size:9px;letter-spacing:.1em}
+.block-label{margin:0;color:var(--ink);font-family:var(--body);font-size:11px;font-weight:700;line-height:1.35;letter-spacing:.045em}
 .next-block{background:#f5faf7}
 .profile-note{display:grid;grid-template-columns:150px minmax(0,1fr);gap:13px;margin-top:12px;padding:11px 13px;border:1px solid #c8ded3;border-radius:10px;background:#edf6f2;color:var(--green-dark)}
 .profile-note strong{font-size:12px}.profile-note span{font-size:12px;line-height:1.45;color:#536d62}
