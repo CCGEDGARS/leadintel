@@ -40,5 +40,5 @@ test('new intelligence profile CSS owns a compact single-column evidence area',(
 
 test('legacy evidence dashboard layout is no longer a runtime dependency',()=>{
   assert.doesNotMatch(evidenceView,/profile-evidence-layout\.js/);
-  assert.match(evidenceView,/intelligence-profile-runtime\.js\?v=20260921-two-stage-profile-action-v1/);
+  assert.match(evidenceView,/intelligence-profile-runtime\.js\?v=20260923-reference-interface-v1/);
 });

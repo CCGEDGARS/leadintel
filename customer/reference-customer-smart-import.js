@@ -5,10 +5,14 @@ const SMART_XLSX_VERSION='0.18.5';
   if(typeof document==='undefined')return;
   const clean=value=>String(value??'').replace(/\s+/g,' ').trim();
   function readState(){try{return JSON.parse(localStorage.getItem(SMART_REFERENCE_STORAGE_KEY)||'{}');}catch{return {};}}
-  async function writeState(state){
+  function writeState(state){
+    const Ref=root.LeadIntelReferenceCustomers;
+    if(Ref?.persistReferenceWorkspaceState)return Ref.persistReferenceWorkspaceState(root,state,{render:true});
     localStorage.setItem(SMART_REFERENCE_STORAGE_KEY,JSON.stringify(state));
-    await root.LeadIntelServerBridge?.saveNow?.().catch(()=>null);
-    window.dispatchEvent(new CustomEvent('leadintel:reference-customers-updated'));
+    root.dispatchEvent(new CustomEvent('leadintel:reference-customers-updated'));
+    root.LeadIntelReferenceCustomerUI?.render?.();
+    try{const pending=root.LeadIntelServerBridge?.saveNow?.();if(pending&&typeof pending.then==='function')void Promise.resolve(pending).catch(()=>null);}catch{}
+    return state;
   }
   function setStatus(message){const node=document.getElementById('reference-import-status');if(node)node.textContent=message;}
   function mergeRows(Ref,state,newRows,source){

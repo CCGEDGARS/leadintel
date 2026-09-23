@@ -61,8 +61,8 @@ test('production entrypoints bust cached profile assets after the overview hygie
   const html=fs.readFileSync(path.join(customer,'index.html'),'utf8');
   const app=fs.readFileSync(path.join(customer,'app.js'),'utf8');
   const evidence=fs.readFileSync(path.join(customer,'evidence-view.js'),'utf8');
-  assert.match(html,/profile-engine\\.js\\?v=20260922-step3-signal-backfill-v1&profile-overview-hygiene=1/);
-  assert.match(html,/app\\.js\\?v=20260923-research-depth-return-v1[^" ]*profile-overview-hygiene=1/);
-  assert.match(app,/evidence-view\\.js\\?v=20260921-two-stage-profile-action-v1&profile-overview-hygiene=1/);
-  assert.match(evidence,/intelligence-profile-ui\\.js\\?v=20260921-profile-review-v1&profile-overview-hygiene=1/);
+  assert.match(html,/profile-engine\.js\?v=20260922-step3-signal-backfill-v1&profile-overview-hygiene=1/);
+  assert.match(html,/app\.js\?v=20260923-research-depth-return-v1[^" ]*profile-overview-hygiene=1/);
+  assert.match(app,/evidence-view\.js\?v=20260921-two-stage-profile-action-v1&profile-overview-hygiene=1&reference-interface=20260923/);
+  assert.match(evidence,/intelligence-profile-ui\.js\?v=20260921-profile-review-v1&profile-overview-hygiene=1/);
 });

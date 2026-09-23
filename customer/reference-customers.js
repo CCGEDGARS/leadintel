@@ -5,9 +5,20 @@
 })(typeof globalThis!=="undefined"?globalThis:this,function(){
   "use strict";
   const MAX_ROWS=200,MAX_ACTIVE=50;
+  const REFERENCE_WORKSPACE_STORAGE_KEY='leadintel_customer_v2_state';
   const clean=v=>String(v??'').replace(/\s+/g,' ').trim();
   const normName=v=>clean(v).toLowerCase().replace(/[^a-z0-9āčēģīķļņšūž]+/gi,' ').trim();
   const normKey=v=>clean(v).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[_./\\-]+/g,' ').replace(/\s+/g,' ').trim();
+  function persistReferenceWorkspaceState(root,state,{render=true,eventName='leadintel:reference-customers-updated'}={}){
+    root.localStorage.setItem(REFERENCE_WORKSPACE_STORAGE_KEY,JSON.stringify(state));
+    if(eventName&&typeof root.dispatchEvent==='function'&&typeof root.CustomEvent==='function')root.dispatchEvent(new root.CustomEvent(eventName));
+    if(render)root.LeadIntelReferenceCustomerUI?.render?.();
+    try{
+      const pending=root.LeadIntelServerBridge?.saveNow?.();
+      if(pending&&typeof pending.then==='function')void Promise.resolve(pending).catch(()=>null);
+    }catch{}
+    return state;
+  }
   function normalizeUrl(value){const raw=clean(value);if(!raw)return '';try{const u=new URL(/^https?:\/\//i.test(raw)?raw:`https://${raw}`);return ['http:','https:'].includes(u.protocol)?u.href:'';}catch{return '';}}
   function domain(value){try{return new URL(normalizeUrl(value)).hostname.replace(/^www\./i,'').toLowerCase();}catch{return '';}}
   function looksLikeWebsite(value){const v=clean(value);return /^(?:https?:\/\/|www\.)/i.test(v)||/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(?:[\/:?#]|$)/i.test(v);}
@@ -133,5 +144,5 @@
   function migrateLegacyLookalikes(value=''){
     const names=String(value||'').split(/\n|;|,/).map(clean).filter(Boolean);return normalizeImportedRows(names.map(name=>({Company:name})),{sourceType:'pdf'});
   }
-  return {MAX_ROWS,MAX_ACTIVE,parseCsv,normalizeImportedRows,normalizeReferenceState,activateReferenceCustomers,activateReferenceSegments,getActiveReferenceModel,buildReferenceSegments,buildReferenceDna,migrateLegacyLookalikes,normalizeUrl,domain};
+  return {MAX_ROWS,MAX_ACTIVE,parseCsv,normalizeImportedRows,normalizeReferenceState,activateReferenceCustomers,activateReferenceSegments,getActiveReferenceModel,buildReferenceSegments,buildReferenceDna,migrateLegacyLookalikes,normalizeUrl,domain,persistReferenceWorkspaceState};
 });

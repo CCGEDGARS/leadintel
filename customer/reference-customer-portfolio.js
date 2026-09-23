@@ -10,6 +10,12 @@
   const Lib=root?.LeadIntelReferenceCustomerLibrary||(typeof require==='function'?(()=>{try{return require('./reference-customer-library.js');}catch{return null;}})():null);
   function idFor(name='list'){let h=2166136261;for(const ch of `${clean(name)}|${Date.now()}|${Math.random()}`){h^=ch.charCodeAt(0);h=Math.imul(h,16777619);}return `rcl-${(h>>>0).toString(36)}`;}
   function normalizeReference(value={}){return Ref?.normalizeReferenceState?Ref.normalizeReferenceState(value||{}):clone(value||{});}
+  function stableSerialize(value){
+    if(Array.isArray(value))return `[${value.map(stableSerialize).join(',')}]`;
+    if(value&&typeof value==='object')return `{${Object.keys(value).sort().map(key=>`${JSON.stringify(key)}:${stableSerialize(value[key])}`).join(',')}}`;
+    return JSON.stringify(value);
+  }
+  function comparableReference(value){const reference=normalizeReference(value);if(reference&&typeof reference==='object')delete reference.updatedAt;return reference;}
   function emptyReference(){return normalizeReference({rows:[],analyses:{},segments:[],activeSegmentIds:[],activeIds:[],activated:false,fingerprint:'',dna:null,publishedModel:null,draftDirty:false});}
   function normalizeList(value={}){
     const reference=normalizeReference(value.reference||value.referenceCustomers||{});
@@ -55,6 +61,18 @@
   function selectList(state={},listId=''){
     const next=ensurePortfolio(state),id=clean(listId),list=next.referenceCustomerPortfolio.lists.find(x=>x.id===id);if(!list)return next;
     next.referenceCustomerPortfolio.selectedListId=id;next.referenceCustomers=clone(list.reference);return next;
+  }
+  function hasUnsavedCurrentListDraft(state={}){
+    const next=ensurePortfolio(state),portfolio=next.referenceCustomerPortfolio;
+    const selected=portfolio.lists.find(list=>list.id===portfolio.selectedListId);
+    if(!selected)return Boolean(next.referenceCustomers?.rows?.length);
+    return stableSerialize(comparableReference(next.referenceCustomers))!==stableSerialize(comparableReference(selected.reference));
+  }
+  function selectListSafely(state={},listId=''){
+    const next=ensurePortfolio(state),id=clean(listId);
+    if(hasUnsavedCurrentListDraft(next))return {ok:false,reason:'unsaved-draft',state:next};
+    if(!next.referenceCustomerPortfolio.lists.some(list=>list.id===id))return {ok:false,reason:'missing-list',state:next};
+    return {ok:true,reason:'',state:selectList(next,id)};
   }
   function newList(state={}){const next=ensurePortfolio(state);next.referenceCustomerPortfolio.selectedListId='';next.referenceCustomers=emptyReference();return next;}
   function deleteList(state={},listId=''){
@@ -111,5 +129,5 @@
     next=saveCurrentList(next,{name:'Reference Customers',markets:next.targetMarkets||[],purpose:'Legacy reference customer model'});
     const id=next.referenceCustomerPortfolio.selectedListId;if(reference?.publishedModel?.active)next=setListActive(next,id,true);return next;
   }
-  return {normalizePortfolio,ensurePortfolio,saveCurrentList,selectList,newList,deleteList,setListActive,syncCurrentList,getActiveModels,getCombinedActiveModel,migrateLegacy};
+  return {normalizePortfolio,ensurePortfolio,saveCurrentList,selectList,selectListSafely,hasUnsavedCurrentListDraft,newList,deleteList,setListActive,syncCurrentList,getActiveModels,getCombinedActiveModel,migrateLegacy};
 });

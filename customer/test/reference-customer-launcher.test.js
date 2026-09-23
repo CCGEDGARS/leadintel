@@ -10,7 +10,7 @@ const profileRuntime=fs.readFileSync(path.join(__dirname,'..','profile-action-ru
 test('Reference Customer CTA is owned by one dedicated launcher and loads the upload runtime before opening',()=>{
   assert.ok(fs.existsSync(launcherPath),'dedicated Reference Customer launcher must exist');
   const launcher=fs.readFileSync(launcherPath,'utf8');
-  assert.match(processMap,/reference-customer-launcher\.js\?v=20260911-reference-open-v2/);
+  assert.match(processMap,/reference-customer-launcher\.js\?v=20260923-reference-interface-v1/);
   assert.match(launcher,/data-reference-customers-manage/);
   assert.match(launcher,/reference-customer-upload-mode\.js/);
   assert.match(launcher,/LeadIntelReferenceCustomerUI\?\.open/);

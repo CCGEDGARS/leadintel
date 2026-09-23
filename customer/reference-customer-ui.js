@@ -10,7 +10,7 @@ let pdfModule=null;
   const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const clean=value=>String(value??'').replace(/\s+/g,' ').trim();
   function readState(){try{return JSON.parse(localStorage.getItem(REFERENCE_STORAGE_KEY)||'{}');}catch{return {};}}
-  async function writeState(state){localStorage.setItem(REFERENCE_STORAGE_KEY,JSON.stringify(state));await root.LeadIntelServerBridge?.saveNow?.().catch(()=>null);window.dispatchEvent(new CustomEvent('leadintel:reference-customers-updated'));}
+  function writeState(state){return Ref.persistReferenceWorkspaceState(root,state,{render:false});}
   function ensureState(state){state.referenceCustomers=Ref.normalizeReferenceState(state.referenceCustomers||{});return state;}
   function toast(message){const node=document.getElementById('toast');if(!node)return;node.textContent=message;node.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>node.classList.remove('show'),2600);}
   function ensureModal(){
@@ -21,8 +21,8 @@ let pdfModule=null;
       <div class="reference-workflow"><span class="active">1 · Upload</span><span>2 · Analyze</span><span>3 · Review</span><span>4 · Activate</span></div>
       <div id="reference-market-summary" class="reference-market-summary"></div>
       <section class="reference-format-guide"><div><strong>Keep the list simple</strong><p><b>Include a Company Name, Website, or both.</b> LeadIntel can find missing information before analysis.</p><div class="reference-format-example"><span>Company Name</span><span>Website</span><span>Example Company</span><span>https://example.com</span></div></div><button class="secondary-btn" type="button" id="reference-template-download">Download example CSV</button></section>
-      <div class="reference-import-actions"><button class="primary-btn reference-upload" type="button" id="reference-upload-button" aria-label="Upload &amp; Analyze Customers">Upload &amp; Analyze Customers</button><input type="file" id="reference-file-input" accept=".csv,.xlsx,.xls,text/csv" hidden><button class="secondary-btn" type="button" id="reference-add-manual">Add manually</button><details class="reference-pdf-fallback"><summary>Have only a PDF?</summary><button class="text-btn reference-upload-pdf" type="button" id="reference-pdf-upload-button">Upload PDF for review</button><input type="file" id="reference-pdf-input" accept=".pdf,application/pdf" hidden></details></div>
-      <div id="reference-manual-form" class="reference-manual-form" hidden><input id="reference-manual-company" placeholder="Company Name"><input id="reference-manual-website" placeholder="Website"><button class="primary-btn small" type="button" id="reference-save-manual">Add company</button></div>
+      <div class="reference-import-actions"><button class="primary-btn reference-upload" type="button" id="reference-upload-button" aria-label="Upload &amp; Analyze Customers">Upload &amp; Analyze Customers</button><input type="file" id="reference-file-input" accept=".csv,.xlsx,.xls,text/csv" hidden><button class="secondary-btn" type="button" id="reference-add-manual" aria-controls="reference-manual-form" aria-expanded="false">Add manually</button><details class="reference-pdf-fallback"><summary>Have only a PDF?</summary><button class="text-btn reference-upload-pdf" type="button" id="reference-pdf-upload-button">Upload PDF for review</button><input type="file" id="reference-pdf-input" accept=".pdf,application/pdf" hidden></details></div>
+      <form id="reference-manual-form" class="reference-manual-form" aria-label="Add a reference company" hidden><label for="reference-manual-company">Company name<input id="reference-manual-company" name="companyName" placeholder="Company Name" autocomplete="organization"></label><label for="reference-manual-website">Website <span>(optional)</span><input id="reference-manual-website" name="website" placeholder="Website (optional)" inputmode="url" autocomplete="url"></label><div class="reference-manual-actions"><button class="primary-btn small" type="submit" id="reference-save-manual">Add company</button><button class="secondary-btn small" type="button" id="reference-cancel-manual">Cancel</button></div></form>
       <div id="reference-import-status" class="reference-import-status" aria-live="polite"></div>
       <div class="reference-table-wrap"><table class="reference-table"><thead><tr><th>Company</th><th>Website</th><th>Analysis</th><th></th></tr></thead><tbody id="reference-table-body"></tbody></table></div>
       <div class="reference-analysis-actions"><button class="primary-btn" type="button" id="reference-analyze">Analyze customer list</button><small>LeadIntel will scrape the ready websites and create a compact commercial profile for each company. Website content itself is not stored here.</small></div>
@@ -46,8 +46,16 @@ let pdfModule=null;
     modal.querySelector('#reference-pdf-upload-button')?.addEventListener('click',()=>{if(!pdfInput)return;pdfInput.value='';pdfInput.click();});
     pdfInput?.addEventListener('change',async event=>{try{await handleFile(event.target.files?.[0]);}finally{event.target.value='';}});
     modal.querySelector('#reference-template-download')?.addEventListener('click',downloadTemplate);
-    modal.querySelector('#reference-add-manual')?.addEventListener('click',()=>{modal.querySelector('#reference-manual-form').hidden=false;});
-    modal.querySelector('#reference-save-manual')?.addEventListener('click',addManual);
+    const manualToggle=modal.querySelector('#reference-add-manual'),manualForm=modal.querySelector('#reference-manual-form');
+    manualToggle?.addEventListener('click',()=>{
+      const opening=Boolean(manualForm?.hidden);if(manualForm)manualForm.hidden=!opening;
+      manualToggle.setAttribute('aria-expanded',String(opening));
+      if(opening){modal.querySelector('#reference-manual-company')?.focus();modal.querySelector('#reference-import-status').textContent='';}
+    });
+    manualForm?.addEventListener('submit',event=>{void addManual(event);});
+    modal.querySelector('#reference-cancel-manual')?.addEventListener('click',()=>{
+      if(manualForm)manualForm.hidden=true;manualToggle?.setAttribute('aria-expanded','false');manualToggle?.focus();
+    });
     modal.querySelector('#reference-analyze')?.addEventListener('click',analyzeCustomerList);
     modal.querySelector('#reference-activate')?.addEventListener('click',activateSelectedSegments);
   }
@@ -84,7 +92,31 @@ let pdfModule=null;
     }catch(error){statusNode.textContent=error.message||'Unable to import customer list';}}
   async function getPdfModule(){if(pdfModule)return pdfModule;pdfModule=await import(`https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.min.mjs`);pdfModule.GlobalWorkerOptions.workerSrc=`https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`;return pdfModule;}
   async function parsePdfRows(file){const pdfjs=await getPdfModule(),pdf=await pdfjs.getDocument({data:await file.arrayBuffer()}).promise;const rows=[];for(let pageNo=1;pageNo<=Math.min(pdf.numPages,30)&&rows.length<200;pageNo++){const page=await pdf.getPage(pageNo),content=await page.getTextContent();const line=content.items.map(item=>item.str).join(' ').replace(/\s+/g,' ').trim();for(const part of line.split(/\s{2,}|\s*[|•]\s*/)){const value=clean(part);if(value.length<2)continue;const urlMatch=value.match(/https?:\/\/\S+|\b(?:www\.)?[a-z0-9.-]+\.[a-z]{2,}\b/i);if(urlMatch){const website=urlMatch[0];const company=clean(value.replace(urlMatch[0],'').replace(/[-–—,:;]+$/,''))||website;rows.push({Company:company,Website:website});}}}return rows;}
-  async function addManual(){const modal=ensureModal();const raw={Company:modal.querySelector('#reference-manual-company').value,Website:modal.querySelector('#reference-manual-website').value};const rows=Ref.normalizeImportedRows([raw],{sourceType:'manual'});if(!rows.length){toast('Enter a Company Name, Website, or both');return;}const state=ensureState(readState());mergeRows(state,rows,{type:'manual',name:'Manual entry'});await writeState(state);modal.querySelector('#reference-manual-form').hidden=true;for(const id of ['reference-manual-company','reference-manual-website'])modal.querySelector(`#${id}`).value='';render();}
+  async function addManual(event){
+    event?.preventDefault?.();
+    const modal=ensureModal(),form=modal.querySelector('#reference-manual-form'),button=modal.querySelector('#reference-save-manual'),status=modal.querySelector('#reference-import-status');
+    const raw={Company:modal.querySelector('#reference-manual-company').value,Website:modal.querySelector('#reference-manual-website').value};
+    const rows=Ref.normalizeImportedRows([raw],{sourceType:'manual'});
+    if(!rows.length){status.textContent='Enter a company name, a website, or both.';modal.querySelector('#reference-manual-company')?.focus();return;}
+    if(button.disabled)return;
+    button.disabled=true;button.textContent='Adding…';
+    try{
+      const state=ensureState(readState()),incoming=rows[0],existing=state.referenceCustomers.rows.some(row=>(incoming.domain&&row.domain===incoming.domain)||row.id===incoming.id);
+      if(existing){status.textContent=`${incoming.companyName||incoming.domain} is already in this list.`;return;}
+      mergeRows(state,rows,{type:'manual',name:'Manual entry'});
+      writeState(state);
+      form.hidden=true;modal.querySelector('#reference-add-manual')?.setAttribute('aria-expanded','false');
+      for(const id of ['reference-manual-company','reference-manual-website'])modal.querySelector(`#${id}`).value='';
+      render();
+      root.LeadIntelReferenceCustomerLibraryUI?.openEditor?.();
+      status.textContent=state.referenceCustomerPortfolio?.selectedListId
+        ?`${incoming.companyName||incoming.domain} added to the draft. Save Updated List before viewing results or activating the model.`
+        :`${incoming.companyName||incoming.domain} added. Save this customer list before analyzing it.`;
+    }catch(error){
+      status.textContent=error?.message||'Unable to add the company. Your current list is still available.';
+      form.hidden=false;modal.querySelector('#reference-add-manual')?.setAttribute('aria-expanded','true');
+    }finally{button.disabled=false;button.textContent='Add company';}
+  }
   async function confirmRow(id){const state=ensureState(readState());const row=state.referenceCustomers.rows.find(item=>item.id===id);if(!row)return;if(!row.domain){toast('A valid Website is required before analysis');return;}row.status='ready';row.reviewed=true;state.referenceCustomers=Ref.normalizeReferenceState(state.referenceCustomers);await writeState(state);render();}
   async function removeRow(id){const state=ensureState(readState());state.referenceCustomers.rows=state.referenceCustomers.rows.filter(row=>row.id!==id);delete state.referenceCustomers.analyses?.[id];state.referenceCustomers.segments=[];state.referenceCustomers.activeSegmentIds=[];state.referenceCustomers.activeIds=[];state.referenceCustomers.activated=false;state.referenceCustomers.dna=null;state.referenceCustomers=Ref.normalizeReferenceState(state.referenceCustomers);await writeState(state);render();}
   function inferAnalysis(text=''){const hay=clean(text).toLowerCase();const industry=/manufactur|factory|production|ražošan|rūpnīc/.test(hay)?'industrial manufacturing':/logistics|warehouse|noliktav/.test(hay)?'logistics':/software|saas|platform|technology/.test(hay)?'software / technology':/construction|būvniec/.test(hay)?'construction':/consult|training|coaching|professional service/.test(hay)?'professional services':'';const employees=hay.match(/(?:about|over|more than|approximately|around)?\s*(\d{2,5})\s+(?:employees|staff|people|darbiniek)/i);const n=employees?Number(employees[1]):0;const sizeBand=n?(n<50?'<50':n<=100?'50-100':n<=500?'100-500':'500+') :'';const businessModel=/\bb2b\b|business customers|corporate clients|industrial clients|companies/.test(hay)?'B2B':'';const growthStage=/expansion|growing|new market|export|investment|paplašin|eksport|investīc/.test(hay)?'growth / expansion':'';const operatingComplexity=/multiple locations|multi-site|factory|warehouse|operations|production/.test(hay)?'operationally complex':'';const buyerRoles=[];for(const [label,re] of [['CEO',/chief executive|\bceo\b/],['Sales Director',/sales director|head of sales/],['HR Director',/hr director|human resources director/],['COO',/chief operating officer|\bcoo\b/],['Procurement',/procurement|purchasing|iepirkum/],['Operations',/operations director|operations manager/],['Plant Manager',/plant manager|production manager/]])if(re.test(hay))buyerRoles.push(label);const buyingTriggers=[];for(const [label,re] of [['Expansion',/expansion|new facility|new factory|capacity|paplašin/],['Modernization',/moderni[sz]|automation investment|equipment upgrade|digital transformation/],['Hiring',/hiring|recruit|vacanc/],['Market entry',/new market|market entry|export expansion/]])if(re.test(hay))buyingTriggers.push(label);const customerOutcome=/increase sales|sales performance|revenue growth|conversion/.test(hay)?'improve commercial performance':/efficien|productivity|reduce cost/.test(hay)?'improve operational efficiency':'';const supported=[industry,sizeBand,businessModel,growthStage,operatingComplexity,customerOutcome,...buyerRoles,...buyingTriggers].filter(Boolean).length;return {industry,sizeBand,businessModel,growthStage,operatingComplexity,customerOutcome,buyerRoles,buyingTriggers,confidence:supported>=5?'high':supported>=2?'medium':'low'};}
