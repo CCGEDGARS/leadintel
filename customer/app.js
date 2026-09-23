@@ -436,9 +436,10 @@ async function searchCustomSource(url,index,signal){
   const extractor=response.headers.get("X-LeadIntel-Extractor")||"firecrawl";
   return LeadIntelMarket.normalizeSearchResults({results:[{url,title:metadata.title||url,description:metadata.description||text.slice(0,500),text}]},{id:`custom-${index+1}`,market:"Custom source",offer:"User-specified source",sourceType:"custom",query:url},extractor);
 }
-async function extractResearchPages(results,mode,signal){
+async function extractResearchPages(results,mode,signal,{previouslyExtracted=[]}={}){
   const limits={quick:2,deep:4,intelligence:6};const selected=[];const domains=new Set();
-  for(const item of results){let domain="";try{domain=new URL(item.url).hostname;}catch{}if(!domain||domains.has(domain))continue;domains.add(domain);selected.push(item);if(selected.length>=limits[mode])break;}
+  const extractedUrls=new Set(previouslyExtracted.filter(item=>item?.extractedAt).map(item=>item.url));
+  for(const item of results){if(item.extractedAt||extractedUrls.has(item.url))continue;let domain="";try{domain=new URL(item.url).hostname;}catch{}if(!domain||domains.has(domain))continue;domains.add(domain);selected.push(item);if(selected.length>=limits[mode])break;}
   return LeadIntelMarket.mapWithConcurrency(selected,async(item,index)=>{
     try{
       const response=await fetch(`${FIRECRAWL_PROXY}/firecrawl-scrape`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:item.url,formats:["markdown"],onlyMainContent:true,timeout:30000}),signal});
@@ -585,7 +586,7 @@ async function runMarketResearch(modeOverride=""){
         return LeadIntelMarket.mergeResearchResults(openAi.results||[],firecrawl);
       },{concurrency:runtime.concurrency,onProgress:progress=>updateProgress(queries.length+state.market.researchCustomSources.length+progress.completed)});
       for(const result of followUps)state.market.researchResults=LeadIntelMarket.mergeResearchResults(state.market.researchResults,result).slice(0,limits.maxStoredResults);
-      const followUpExtracted=await LeadIntelMarket.withTimeout(signal=>extractResearchPages(state.market.researchResults,state.market.researchMode,signal),runtime.requestTimeoutMs,"Follow-up evidence extraction").catch(()=>[]);
+      const followUpExtracted=await LeadIntelMarket.withTimeout(signal=>extractResearchPages(state.market.researchResults,state.market.researchMode,signal,{previouslyExtracted:extracted}),runtime.requestTimeoutMs,"Follow-up evidence extraction").catch(()=>[]);
       state.market.researchResults=LeadIntelMarket.mergeResearchResults(state.market.researchResults,followUpExtracted).slice(0,limits.maxStoredResults);
     }
     if(openAiAvailable)state.market.researchSourceStatus.openai=openAiFailures===0?"complete":openAiSuccesses?"partial":"error";
