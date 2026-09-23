@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const engine = require('../profile-engine.js');
 
 const noisyEvidence = '![Hero](https://images.squarespace-cdn.com/content/v1/example/hero.png) (https://images.squarespace-cdn.com/content/v1/example/Screenshot.png) Example Advisory provides advanced B2B sales training, coaching and AI assistants for sales teams. Its programs help companies improve sales conversion and manager effectiveness.';
@@ -51,4 +53,16 @@ test('saved legitimate human-edited company overview is preserved', () => {
     profile:{companyName:'Example Advisory',companyOverview:edited,evidenceDigest:'Clean evidence summary.',mission:'legacy mission'}
   });
   assert.equal(state.profile.companyOverview,edited);
+});
+
+
+test('production entrypoints bust cached profile assets after the overview hygiene release', () => {
+  const customer=path.join(__dirname,'..');
+  const html=fs.readFileSync(path.join(customer,'index.html'),'utf8');
+  const app=fs.readFileSync(path.join(customer,'app.js'),'utf8');
+  const evidence=fs.readFileSync(path.join(customer,'evidence-view.js'),'utf8');
+  assert.match(html,/profile-engine\\.js\\?v=20260922-step3-signal-backfill-v1&profile-overview-hygiene=1/);
+  assert.match(html,/app\\.js\\?v=20260923-research-depth-return-v1[^" ]*profile-overview-hygiene=1/);
+  assert.match(app,/evidence-view\\.js\\?v=20260921-two-stage-profile-action-v1&profile-overview-hygiene=1/);
+  assert.match(evidence,/intelligence-profile-ui\\.js\\?v=20260921-profile-review-v1&profile-overview-hygiene=1/);
 });
