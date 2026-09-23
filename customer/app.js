@@ -873,6 +873,16 @@ function renderMarketJourney(){
   const view=LeadIntelMarket.getMarketJourneyState(state.market);
   const researchPanel=document.querySelector('.research-panel');
   if(researchPanel)researchPanel.dataset.marketStage=view.stage;
+  const depthEyebrow=$("market-research-depth-eyebrow"),depthTitle=$("market-research-depth-title"),depthDescription=$("market-research-depth-description");
+  if(view.researched){
+    if(depthEyebrow)depthEyebrow.textContent=view.stage==="active"?"Market research · Strategy active":"Market research · Review or rerun";
+    if(depthTitle)depthTitle.textContent="Choose a research depth or run it again.";
+    if(depthDescription)depthDescription.textContent="Quick Overview, Market Research and Deep Analysis stay available. Choose any option to review and start another market research run.";
+  }else{
+    if(depthEyebrow)depthEyebrow.textContent="Step 1 · Choose research depth";
+    if(depthTitle)depthTitle.textContent="How deeply should LeadIntel research this market?";
+    if(depthDescription)depthDescription.textContent="Select one option to review the research plan before starting.";
+  }
   $("research-results-details").hidden=!view.showScore;
   const resultsIntro=$("research-results-intro");if(resultsIntro)resultsIntro.hidden=!view.researched;
   $("strategy-activation-card").hidden=!view.showActivation;
