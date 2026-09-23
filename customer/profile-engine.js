@@ -93,8 +93,39 @@
   function truncate(value,max=1200){const text=clean(value);return text.length>max?`${text.slice(0,max-1)}…`:text;}
   const NAVIGATION_LABEL_RE=/\bUZZINĀT\s+VAIRĀK\b|\b(?:LEARN|READ|VIEW)\s+MORE\b|\bGET\s+IN\s+TOUCH\b|\bCONTACT\s+US\b/gi;
   const NAVIGATION_FRAGMENT_RE=/\bRealizētie\s+projekti\b|\bUzņēmumi,?\s+kas\s+izvēlas(?:\s+mūsu)?\s+risinājumus\b|\bCase\s+studies\b|\bCompanies\s+that\s+choose\s+us\b/i;
+  const NAVIGATION_LABELS=['home','about us','manufacturing','serial production','projects','engineering','workforce solutions','quality','gallery','contacts','contact','en','lv'];
+  const NAVIGATION_ANCHORS=new Set(['home','about us','gallery','contacts','contact']);
+  function navigationLabelMatches(text){
+    const matches=[];
+    for(const label of NAVIGATION_LABELS){
+      const escaped=label.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/\s+/g,'\\s+');
+      const pattern=new RegExp(`\\b${escaped}\\b`,'gi');
+      for(const match of String(text??'').matchAll(pattern))matches.push({label,start:match.index,end:match.index+match[0].length});
+    }
+    return matches.sort((a,b)=>a.start-b.start);
+  }
+  function navigationRuns(text){
+    const matches=navigationLabelMatches(text),runs=[];let run=[];
+    for(const match of matches){
+      if(run.length&&match.start-run[run.length-1].end>80){runs.push(run);run=[];}
+      run.push(match);
+    }
+    if(run.length)runs.push(run);
+    return runs.filter(items=>new Set(items.map(item=>item.label)).size>=4&&items.some(item=>NAVIGATION_ANCHORS.has(item.label))&&items.filter(item=>NAVIGATION_ANCHORS.has(item.label)).length>=2);
+  }
+  function stripNavigationChains(text){
+    let value=String(text??'');
+    for(const run of navigationRuns(value).reverse()){
+      const first=run[0].start,last=run[run.length-1].end;
+      const previousBoundary=Math.max(value.lastIndexOf('.',first),value.lastIndexOf('!',first),value.lastIndexOf('?',first));
+      const start=previousBoundary>=0?previousBoundary+1:(first<80?0:first);
+      value=`${value.slice(0,start)}. ${value.slice(last)}`;
+    }
+    return value;
+  }
+  function isNavigationContaminated(text){return navigationRuns(text).length>0;}
   function cleanEvidenceText(text){
-    return String(text??"")
+    return stripNavigationChains(String(text??""))
       .replace(/!\[[^\]]*\]\((?:https?:\/\/|data:)[^)]+\)/gi," ")
       .replace(/\[([^\]]+)\]\((?:https?:\/\/)[^)]+\)/gi," $1 ")
       .replace(/\((?:https?:\/\/)[^)]+\)/gi," ")
@@ -109,7 +140,7 @@
       .replace(/\s+/g," ")
       .trim();
   }
-  function hasEvidenceNavigationNoise(value){return NAVIGATION_FRAGMENT_RE.test(String(value??""));}
+  function hasEvidenceNavigationNoise(value){return NAVIGATION_FRAGMENT_RE.test(String(value??""))||isNavigationContaminated(value);}
   function hasAssetNoise(value){
     const text=String(value??"");
     return /!\[[^\]]*\]\(|(?:images\.)?squarespace-cdn\.com|https?:\/\/[^\s)\]]+\.(?:png|jpe?g|gif|webp|svg)(?:[?#][^\s)\]]*)?|\b\S+\.(?:png|jpe?g|gif|webp|svg)(?:[?#]\S*)?/i.test(text);
@@ -120,6 +151,14 @@
   function evidenceSentences(text){
     const cleaned=cleanEvidenceText(text);if(!cleaned)return [];
     return cleaned.split(/(?<=[.!?])\s+/).map(normalizeEvidenceSentence).filter(sentence=>sentence.length>45).slice(0,24);
+  }
+  function splitRepeatedCompanyIntro(sentence,companyName){
+    const name=clean(companyName);if(!name)return [sentence];
+    const escaped=name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    const pattern=new RegExp(`\\b${escaped}\\s+(?=(?:is|are|was|were|provides?|offers?|speciali[sz]es?|manufactures?|develops?|delivers?|designs?|produces?)\\b)`,'gi');
+    const starts=[...sentence.matchAll(pattern)].map(match=>match.index).filter((index,i,array)=>i===0||index-array[i-1]>25);
+    if(starts.length<2)return [sentence];
+    return starts.map((start,index)=>sentence.slice(start,starts[index+1]??sentence.length).trim()).filter(Boolean);
   }
   function firstSentence(text){
     const cleaned=cleanEvidenceText(text);if(!cleaned)return "";
@@ -171,9 +210,10 @@
     if(title)return title.slice(0,90);
     try{return new URL(normalizeUrl(website)).hostname.replace(/^www\./,"");}catch{return "Company";}
   }
-  function deriveCompanyOverview(scrapedSources,documents){
+  function deriveCompanyOverview(scrapedSources,documents,companyName=""){
     const candidates=[...(scrapedSources||[]).map(source=>source?.text||""),...(documents||[]).map(doc=>doc?.text||"")]
       .flatMap(evidenceSentences)
+      .flatMap(sentence=>splitRepeatedCompanyIntro(sentence,companyName))
       .filter(Boolean);
     const descriptive=unique(candidates.filter(sentence=>BUSINESS_DESCRIPTION_RE.test(sentence)));
     const fallback=unique(candidates);
@@ -272,7 +312,7 @@
     const evidenceDigest=deriveEvidenceDigest(scraped,documents);
     const evidenceSources=buildEvidenceSources(scraped,documents);
     const companyName=inferCompanyName(scraped,input.website);
-    const companyOverview=deriveCompanyOverview(scraped,documents);
+    const companyOverview=deriveCompanyOverview(scraped,documents,companyName);
     const branding=deriveBranding(scraped);
     return {
       version:2,
@@ -319,7 +359,7 @@
     }:null;
     if(profile){
       delete profile.logoUrl;delete profile.primaryColor;Object.assign(profile,deriveBranding(scrapedSources));
-      const regeneratedOverview=deriveCompanyOverview(scrapedSources,docs);
+      const regeneratedOverview=deriveCompanyOverview(scrapedSources,docs,knownCompanyName(value.website)||clean(value.profile?.companyName)||inferCompanyName(scrapedSources,value.website));
       const regeneratedDigest=deriveEvidenceDigest(scrapedSources,docs);
       const companyName=knownCompanyName(value.website)||clean(profile.companyName)||inferCompanyName(scrapedSources,value.website);
       if(knownCompanyName(value.website))profile.companyName=companyName;

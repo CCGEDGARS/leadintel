@@ -33,6 +33,7 @@ test('intelligence profile does not repeat the Lookalike Audience entry point',(
   const html=UI.render({canonical:{fields:{},diagnostics:[],contradictions:[]}}, {referenceCustomers:{activated:true,activeIds:['a','b'],dna:{confidence:'high'}},targetMarkets:['Germany']});
   assert.doesNotMatch(html,/reference-customer-summary|Teach LeadIntel what a great customer looks like|Upload & Analyze Customers/i);
   assert.equal(typeof UI.renderReferenceCustomerSummary,'undefined');
+  assert.match(html,/Core Profile Quality/);
   assert.match(html,/Supporting Context/);
 });
 
