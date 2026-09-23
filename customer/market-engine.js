@@ -284,7 +284,7 @@
       showScore:researched,
       showActivation:true,
       activationEnabled:researched,
-      activationLabel:researched?"Continue to Company Discovery →":running?"Research in Progress…":failed?"Retry Market Research First":"Complete Market Research First",
+      activationLabel:researched?"Continue to Companies →":running?"Research in Progress…":failed?"Retry Market Research First":"Complete Market Research First",
       showMonitoring:active,
       researchLabel:researched?"Rerun market research":"Run quick research"
     };

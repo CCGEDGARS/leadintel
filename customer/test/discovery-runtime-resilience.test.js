@@ -16,6 +16,6 @@ test('Discovery requests and strategy handoff cannot remain silently stuck',()=>
   assert.ok(ui.includes('Discovery stopped safely'));
   assert.ok(ui.includes('void refreshCrmState({render:false})'));
   assert.ok(app.includes('await waitForDiscoveryOpen()'));
-  assert.ok(app.includes('Company Discovery did not open. Please try again.'));
+  assert.ok(app.includes('Companies did not open. Please try again.'));
 
 });

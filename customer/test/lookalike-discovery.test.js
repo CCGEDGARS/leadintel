@@ -23,10 +23,11 @@ test('active Reference Customer DNA produces explainable lookalike score',()=>{
   assert.ok(score.reasons.some(x=>/industry/i.test(x)));
 });
 
-test('low-confidence reference hypotheses influence ranking less than repeated strong patterns',()=>{
+test('low-confidence customer hypotheses influence ranking less than repeated high-confidence patterns',()=>{
   const candidate={company:'Nordic Machines',industry:'industrial manufacturing'};
   const high=Discovery.scoreLookalikeMatch(candidate,{active:true,dimensions:[{key:'industry',values:['industrial manufacturing'],weight:1,confidence:'high'}]});
   const low=Discovery.scoreLookalikeMatch(candidate,{active:true,dimensions:[{key:'industry',values:['industrial manufacturing'],weight:1,confidence:'low'}]});
+
   assert.ok(low.total<high.total);
 });
 

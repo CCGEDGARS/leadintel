@@ -76,15 +76,16 @@ test('dynamic Customer V2 modules keep their own stable cache contract',()=>{
   assert.match(bridge,/\?v=/);
 });
 
-test('Step 6 terminology is consistently Campaign Studio across the current UI',()=>{
+test('Step 6 uses Messages while adjacent workflow modules keep their own content',()=>{
   const discovery=read('discovery-ui.js');
   const outreach=read('outreach-ui.js');
   const delivery=read('delivery-ui.js');
   assert.doesNotMatch(discovery,/Opportunity Dossiers/);
   assert.doesNotMatch(outreach,/<strong>Opportunity dossier<\/strong>/);
   assert.doesNotMatch(delivery,/← Dossier/);
-  assert.match(discovery,/Campaign Studio/);
-  assert.doesNotMatch(discovery,/Content & Outreach Studio/);
-  assert.match(outreach,/Campaign Studio/);
-  assert.match(delivery,/Campaign Studio/);
+  assert.match(discovery,/Buyers/);
+  assert.match(outreach,/Step 6 · Messages/);
+  assert.match(outreach,/← Buyers/);
+  assert.match(delivery,/Delivery/);
+  assert.match(delivery,/← Messages/);
 });

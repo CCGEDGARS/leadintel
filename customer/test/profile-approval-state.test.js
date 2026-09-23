@@ -9,7 +9,7 @@ const approvalUI=fs.readFileSync(path.join(__dirname,'..','profile-approval-ui.j
 
 test('profile approval remains authoritative when the profile continuation is clicked',()=>{
   assert.match(app,/state\.approved=true/);
-  assert.match(approvalUI,/Continue to Market Strategy/);
+  assert.match(approvalUI,/Continue to Strategy/);
   assert.match(app,/\$\("approve-profile"\)\.addEventListener\("click",\(\)=>approveProfile\(\)\)/);
   assert.match(app,/\$\("continue-market-strategy"\)\.addEventListener\("click",openMarketStrategy\)/);
   assert.match(approvalUI,/continueButton\.disabled=!approved/);

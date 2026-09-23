@@ -19,7 +19,7 @@ const PROFILE_ACTION_STATE_KEY='leadintel_customer_v2_state';
 
     const continueButton=document.getElementById('continue-market-strategy');
     if(continueButton){
-      continueButton.innerHTML='Continue to Market Strategy <span aria-hidden="true">→</span>';
+      continueButton.innerHTML='Continue to Strategy <span aria-hidden="true">→</span>';
       continueButton.disabled=!approved;
       continueButton.setAttribute('aria-disabled',approved?'false':'true');
       toggleClass(continueButton,'approved',approved);
@@ -35,7 +35,7 @@ const PROFILE_ACTION_STATE_KEY='leadintel_customer_v2_state';
       const heading=card.querySelector('h3');
       const copy=card.querySelector('p');
       setText(eyebrow,approved?'Profile approved':'Profile approval');
-      setText(heading,approved?'Your approved profile is ready for Market Strategy.':'Approve this profile before building Market Strategy.');
+      setText(heading,approved?'Your approved profile is ready for Strategy.':'Approve this profile before building your Strategy.');
       setText(copy,approved?'LeadIntel will use this reviewed version to generate ICPs, buying signals and market opportunities.':'Review the interpretation above. Approval saves it as the current source of truth.');
       toggleClass(card,'approved',approved);
     }

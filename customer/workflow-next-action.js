@@ -7,16 +7,19 @@
 
   function count(value){return Math.max(0,Number(value)||0);}
   function forStage(stage,state={}){
-    if(Number(stage)===5)return count(state.pipelineCount)>0
-      ?{label:"Continue to Campaign Studio →",enabled:true,visible:true}
-      :{label:"Save an Opportunity First",enabled:false,visible:false};
+    if(Number(stage)===5){
+      if(count(state.pipelineCount)===0)return {label:"Save a Company First",enabled:false,visible:false,journeyStage:5};
+      return count(state.buyerCount)>0
+        ?{label:"Continue to Messages →",enabled:true,visible:true,journeyStage:6}
+        :{label:"Continue to Buyers →",enabled:true,visible:true,journeyStage:5};
+    }
     if(Number(stage)===6)return count(state.approvedCampaignCount)>0
-      ?{label:"Continue to Delivery & Learning →",enabled:true}
-      :{label:"Approve a Campaign First",enabled:false};
+      ?{label:"Continue to Delivery →",enabled:true}
+      :{label:"Approve a Message First",enabled:false};
     if(Number(stage)===7){
-      if(count(state.approvedCampaignCount)===0)return {label:"Approve a Campaign First",enabled:false};
-      if(!state.sent)return {label:"Send an Approved Campaign First",enabled:false};
-      if(!state.outcome)return {label:"Record the Campaign Outcome",enabled:false};
+      if(count(state.approvedCampaignCount)===0)return {label:"Approve a Message First",enabled:false};
+      if(!state.sent)return {label:"Send an Approved Message First",enabled:false};
+      if(!state.outcome)return {label:"Record the Outcome",enabled:false};
       return {label:"Workflow Complete ✓",enabled:false};
     }
     return {label:"Continue →",enabled:false};
@@ -30,6 +33,7 @@
     const gate=document?.getElementById?.("continue-to-outreach");
     const footer=gate?.closest?.(".workflow-next-action");
     if(footer)footer.hidden=hidden;
+    if(gate?.dataset&&action.journeyStage)gate.dataset.journeyStage=String(action.journeyStage);
     return action;
   }
   return {forStage,applyStageVisibility};

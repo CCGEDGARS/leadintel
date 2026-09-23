@@ -10,8 +10,7 @@ test('commercial journey exposes one canonical seven-stage model',()=>{
   assert.equal(typeof Journey.buildJourneyModel,'function');
   const model=Journey.buildJourneyModel({currentStep:1,availability:{1:true}});
   assert.deepEqual(model.map(stage=>stage.name),[
-    'Company & Market','Commercial Context','Intelligence Profile','Market Strategy',
-    'Company Discovery','Campaign Studio','Delivery & Learning'
+    'Setup','Profile','Strategy','Companies','Buyers','Messages','Delivery'
   ]);
 });
 
@@ -30,7 +29,7 @@ test('commercial journey derives completed substeps from real workspace outcomes
 
   const model=Journey.buildJourneyModel({main,discovery,outreach,delivery,currentStep:7,availability,websiteActivated:true});
 
-  assert.deepEqual(model.map(stage=>[stage.completed,stage.total]),[[4,4],[4,4],[3,3],[5,5],[5,5],[5,5],[5,5]]);
+  assert.deepEqual(model.map(stage=>[stage.completed,stage.total]),[[4,4],[7,7],[5,5],[4,4],[1,1],[5,5],[5,5]]);
   assert.equal(model[6].status,'current');
   assert.equal(model[6].nextAction,'Stage complete');
 });
@@ -59,8 +58,8 @@ test('an empty current stage is labelled not started until real progress exists'
   assert.equal(Journey.stageStatusLabel(started),'In progress');
 });
 
-test('skipped optional context is distinguished from completed work',()=>{
-  const model=Journey.buildJourneyModel({main:{answers:{}},currentStep:3,availability:{1:true,2:true,3:true}});
+test('skipped optional profile context is distinguished from completed work',()=>{
+  const model=Journey.buildJourneyModel({main:{answers:{}},currentStep:4,availability:{1:true,2:true,3:true,4:true}});
   assert.equal(model[1].status,'skipped');
   assert.equal(model[1].completed,0);
 });
@@ -68,7 +67,7 @@ test('skipped optional context is distinguished from completed work',()=>{
 test('customer shell contains seven permanent sidebar destinations and the active-stage guide',()=>{
   const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
   const sidebar=html.match(/<ol class="steps">([\s\S]*?)<\/ol>/)?.[1]||'';
-  const markers=[...sidebar.matchAll(/data-step-marker="(\d)"/g)].map(match=>Number(match[1]));
+  const markers=[...new Set([...sidebar.matchAll(/data-workflow-stage="(\d)"/g)].map(match=>Number(match[1])))];
   assert.deepEqual(markers,[1,2,3,4,5,6,7]);
   assert.match(html,/id="journey-stage-guide"/);
   assert.match(html,/data-stage-mini-steps/);
@@ -96,6 +95,26 @@ test('progressive navigation shows completed stages, the current stage and only 
   ]),[1,2]);
 });
 
+test('friendly journey stages route through the preserved internal module IDs',()=>{
+  assert.equal(Journey.journeyStageForModuleStep(2),2);
+  assert.equal(Journey.journeyStageForModuleStep(3),2);
+  assert.equal(Journey.journeyStageForModuleStep(4),3);
+  assert.equal(Journey.journeyStageForModuleStep(5,'companies'),4);
+  assert.equal(Journey.journeyStageForModuleStep(5,'buyers'),5);
+  assert.deepEqual(Journey.routeForJourneyStage(2,{profile:{companyName:'Example'}}),{moduleStep:3,focus:'profile'});
+  assert.deepEqual(Journey.routeForJourneyStage(3,{}),{moduleStep:4,focus:'strategy'});
+  assert.deepEqual(Journey.routeForJourneyStage(4,{}),{moduleStep:5,focus:'companies'});
+  assert.deepEqual(Journey.routeForJourneyStage(5,{}),{moduleStep:5,focus:'buyers'});
+  assert.deepEqual(Journey.routeForJourneyStage(6,{}),{moduleStep:6,focus:'messages'});
+  assert.deepEqual(Journey.routeForJourneyStage(7,{}),{moduleStep:7,focus:'delivery'});
+});
+
+test('process map renders the conceptual current stage instead of its legacy module ID',()=>{
+  const processMap=fs.readFileSync(path.join(__dirname,'..','process-map.js'),'utf8');
+  assert.match(processMap,/const currentStage=model\.find\(stage=>stage\.status==='current'\)\|\|model\[0\]/);
+  assert.match(processMap,/renderStageGuide\(currentStage\)/);
+});
+
 test('customer shell keeps AI support, settings and task activity in a permanent right utility rail',()=>{
   const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
   assert.match(html,/<aside class="utility-panel"[^>]*>/);
@@ -116,10 +135,10 @@ test('zero-result discovery guides the user without claiming companies were veri
   const stage=Journey.buildJourneyModel({
     currentStep:5,availability:{5:true},
     discovery:{status:'no_results',targetCount:10,lastRunAt:'2026-09-22T13:00:00Z',rawResults:Array(20).fill({url:'https://evidence.example'})}
-  })[4];
+  })[3];
   const companies=stage.steps.find(step=>step.id==='companies');
   assert.equal(companies.complete,false);
   assert.equal(companies.label,'No qualified companies found');
-  assert.equal(companies.action,'Review ICPs and buying signals, then broaden the search');
-  assert.equal(stage.nextAction,'Review ICPs and buying signals, then broaden the search');
+  assert.equal(companies.action,'Review the strategy, then broaden the search');
+  assert.equal(stage.nextAction,'Review the strategy, then broaden the search');
 });

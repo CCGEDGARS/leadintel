@@ -7,7 +7,7 @@ const root=path.join(__dirname,'..');
 
 test('profile action offers missing enrichment without blocking continuation',()=>{
   const source=fs.readFileSync(path.join(root,'profile-enrichment-checkpoint-ui.js'),'utf8');
-  assert.match(source,/Improve your Intelligence Profile/);
+  assert.match(source,/Improve your Profile/);
   assert.match(source,/Run Company Research/);
   assert.match(source,/Build Lookalike Audience/);
   assert.match(source,/Continue Without Enrichment/);

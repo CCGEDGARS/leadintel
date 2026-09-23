@@ -148,7 +148,7 @@ test('zero-result guidance recommends a deeper research mode only after a quick 
   assert.ok(quick.steps.some(step=>/smaller market evidence set/i.test(step)));
   assert.ok(quick.steps.some(step=>/broadened the search/i.test(step)));
   assert.equal(marketResearch.primaryAction,'review_strategy');
-  assert.equal(marketResearch.primaryLabel,'Review Market Strategy');
+  assert.equal(marketResearch.primaryLabel,'Review Strategy');
   assert.ok(!marketResearch.steps.some(step=>/smaller market evidence set/i.test(step)));
   assert.match(marketResearch.summary,/valid finding/i);
 });

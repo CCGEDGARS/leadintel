@@ -57,11 +57,11 @@ test('Step 2 entry point loads the versioned canonical schema first',()=>{
   assert.ok(html.indexOf('step2-brief-schema.js')<html.indexOf('profile-engine.js'));
 });
 
-test('Step 2 is grouped as a Commercial Intelligence Brief',()=>{
+test('Profile stage is grouped as a commercial profile',()=>{
   const Brief=require('../step2-brief-schema.js');
   const html=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');
   const processMap=fs.readFileSync(path.join(ROOT,'process-map.js'),'utf8');
-  assert.match(html,/Build your Commercial Intelligence Brief/);
+  assert.match(html,/Build your commercial profile/);
   assert.match(html,/data-brief-group="targeting"/);
   assert.match(html,/data-brief-group="signals"/);
   assert.match(html,/data-brief-group="message"/);

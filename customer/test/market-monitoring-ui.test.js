@@ -139,7 +139,7 @@ test('research settings stay collapsed until the user opens the disclosure',()=>
 test('Market Strategy explains its four-step page journey before research',()=>{
   for(const step of ['Choose research depth','Review findings','Activate strategy','Discover companies'])assert.match(html,new RegExp(step));
   assert.match(html,/id="strategy-flow"/);
-  assert.match(html,/Step 1 · Choose research depth/);
+  assert.match(html,/Strategy · Choose research depth/);
   assert.match(html,/id="research-results-intro" hidden/);
   assert.match(app,/Next step/);
 });

@@ -18,7 +18,7 @@ export function createCopilotController({loadModules,open,onBusy=()=>{},onError=
   };
 }
 const openCopilot=createCopilotController({
-  loadModules:async()=>{const [api,context,ui,fileIntelligence]=await Promise.all([import('./copilot-api.js?v=20260908-copilot-polish-v1'),import('./copilot-context.js?v=20260908-copilot-polish-v1'),import('./copilot-ui.js?v=20260911-copilot-freshness-v1'),import('./copilot-file-intelligence.js?v=20260909-customer-file-intelligence-v1')]);return {api,context,ui,fileIntelligence};},
+  loadModules:async()=>{const [api,context,ui,fileIntelligence]=await Promise.all([import('./copilot-api.js?v=20260908-copilot-polish-v1'),import('./copilot-context.js?v=20260924-friendly-workflow-labels-v1'),import('./copilot-ui.js?v=20260911-copilot-freshness-v1'),import('./copilot-file-intelligence.js?v=20260909-customer-file-intelligence-v1')]);return {api,context,ui,fileIntelligence};},
   open:async({api,context,ui,fileIntelligence})=>{setStatus('');await ui.openCopilot?.({api,context});fileIntelligence.installCopilotFileIntelligence?.();},
   onBusy:busy=>{const entry=ensureEntry();if(entry)entry.disabled=busy;},
   onError:cause=>{console.warn('Ask LeadIntel unavailable:',cause);setStatus('Copilot unavailable');}
