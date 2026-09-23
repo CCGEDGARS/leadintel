@@ -21,7 +21,7 @@ test('Customer V2 loads the automatic company research module with Firecrawl wor
   assert.match(processMap,/company-profile-handoff\.js\?v=20260826-intelligence-autofill-v1/);
   assert.match(ui,/company-research-engine\.js\?v=20260918-translation-fidelity-v3/);
   assert.match(read('index.html'),/profile-engine\.js\?v=20260922-step3-signal-backfill-v1/);
-  assert.match(read('index.html'),/process-map\.js\?v=20260919-lookalike-green-card-v1/);
+  assert.match(read('index.html'),/process-map\.js\?v=20260923-customer-profile-inference-v1/);
   assert.match(supportLoader,/company-research-ui\.js\?v=20260919-brief-section-border-v1/);
 });
 

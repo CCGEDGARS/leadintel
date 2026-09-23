@@ -15,15 +15,15 @@
   function haystack(candidate={}){return clean([candidate.company,candidate.domain,candidate.market,candidate.industry,candidate.sizeBand,candidate.businessModel,candidate.growthStage,candidate.operatingComplexity,candidate.description,...(candidate.evidence||[]).flatMap(e=>[e.title,e.description,e.text])].join(' ')).toLowerCase();}
   function scoreLookalikeMatch(candidate={},dna=null){
     if(!dna?.active||!Array.isArray(dna.dimensions)||!dna.dimensions.length)return {active:false,total:0,dimensions:[],reasons:[]};
-    const hay=haystack(candidate);const dimensions=[];let earned=0,possible=0;
+    const hay=haystack(candidate);const dimensions=[];let earned=0,possible=0,confidenceTotal=0,confidenceCount=0;
     for(const dimension of dna.dimensions){
       const values=(dimension.values||[]).map(clean).filter(Boolean);if(!values.length)continue;
-      const weight=Math.max(.25,Math.min(3,Number(dimension.weight)||1));possible+=weight;
+      const weight=Math.max(.25,Math.min(3,Number(dimension.weight)||1));const confidence=clean(dimension.confidence).toLowerCase()||'low';const confidenceWeight=confidence==='high'?1:confidence==='medium'?.75:.5;possible+=weight;confidenceTotal+=confidenceWeight;confidenceCount++;
       const matched=values.filter(value=>{const literal=clean(value).toLowerCase();if(literal&&hay.includes(literal))return true;const tokens=words(value);return tokens.length&&tokens.filter(t=>hay.includes(t)).length>=Math.min(2,tokens.length);});
       if(matched.length)earned+=weight;
-      dimensions.push({key:clean(dimension.key),matched:Boolean(matched.length),matchedValues:matched.slice(0,3),weight,confidence:clean(dimension.confidence)||'low'});
+      dimensions.push({key:clean(dimension.key),matched:Boolean(matched.length),matchedValues:matched.slice(0,3),weight,confidence});
     }
-    const total=possible?Math.round(100*earned/possible):0;
+    const total=possible?Math.round(100*earned/possible*(confidenceCount?confidenceTotal/confidenceCount:0)):0;
     const reasons=dimensions.filter(d=>d.matched).map(d=>`${d.key}: ${d.matchedValues.join(', ')}`);
     return {active:true,total,dimensions,reasons};
   }
@@ -37,7 +37,7 @@
   function buildLookalikeDiscoveryQueries(profile={},dna=null,maxQueries=4){
     if(!dna?.active)return [];
     const markets=split(profile.targetMarkets);if(!markets.length)return [];
-    const traits=(dna.dimensions||[]).flatMap(d=>(d.values||[]).slice(0,2)).map(clean).filter(Boolean).slice(0,10);
+    const traits=[clean(dna.profileName),...(dna.dimensions||[]).flatMap(d=>(d.values||[]).slice(0,2))].filter(Boolean).map(clean).slice(0,10);
     const offer=split(profile.priorityOffers)[0]||'commercial solution';const icp=clean(profile.idealCustomer);
     const limit=Math.max(1,Math.min(12,Number(maxQueries)||4));const out=[];
     for(const market of markets){if(out.length>=limit)break;out.push({id:`lookalike-${slug(market)}-${out.length+1}`,market,offer,query:[market,traits.join(' '),icp,offer,'company official website'].filter(Boolean).join(' '),lookalike:true});}

@@ -43,6 +43,46 @@ test('coherent customer list stays one group instead of inventing segments',()=>
   assert.equal(segmentation.segments.length,1);
 });
 
+test('coherent reference companies produce a named, evidence-based profile rather than a generic group',()=>{
+  const rows=Ref.normalizeImportedRows([
+    {Company:'Factory A',Website:'https://factory-a.example'},
+    {Company:'Factory B',Website:'https://factory-b.example'},
+    {Company:'Factory C',Website:'https://factory-c.example'},
+    {Company:'Factory D',Website:'https://factory-d.example'},
+    {Company:'Factory E',Website:'https://factory-e.example'}
+  ],{sourceType:'csv'});
+  const analyses=Object.fromEntries(rows.map(row=>[row.id,{
+    industry:'industrial manufacturing',businessModel:'B2B',sizeBand:'100-500',
+    customerOutcome:'reliable production capacity',confidence:'high'
+  }]));
+  const result=Ref.buildReferenceSegments(rows,analyses);
+  assert.equal(result.segments[0].name,'Industrial manufacturing customers');
+  assert.equal(result.segments[0].confidence,'high');
+  assert.match(result.segments[0].summary,/industrial manufacturing/i);
+  assert.ok(result.segments[0].traits.some(trait=>/B2B/.test(trait)));
+});
+
+test('a single reference company yields a clearly marked low-confidence profile hypothesis',()=>{
+  const rows=Ref.normalizeImportedRows([{Company:'Factory A',Website:'https://factory-a.example'}],{sourceType:'csv'});
+  const result=Ref.buildReferenceSegments(rows,{
+    [rows[0].id]:{industry:'industrial manufacturing',businessModel:'B2B',confidence:'high'}
+  });
+  assert.equal(result.segments[0].name,'Hypothesis: industrial manufacturing');
+  assert.equal(result.segments[0].confidence,'low');
+  assert.match(result.segments[0].summary,/1 reference company/i);
+});
+
+test('normalization caps high confidence for a two-company segment',()=>{
+  const rows=Ref.normalizeImportedRows([
+    {Company:'Factory A',Website:'https://factory-a.example'},
+    {Company:'Factory B',Website:'https://factory-b.example'}
+  ],{sourceType:'csv'});
+  const normalized=Ref.normalizeReferenceState({rows,segments:[{
+    id:'small-segment',name:'Industrial manufacturers',rowIds:rows.map(row=>row.id),confidence:'high'
+  }]});
+  assert.equal(normalized.segments[0].confidence,'medium');
+});
+
 test('activation can use selected AI segments as the priority model',()=>{
   const rows=Ref.normalizeImportedRows([
     {Company:'Factory A',Website:'https://factory-a.example'},
@@ -58,4 +98,20 @@ test('activation can use selected AI segments as the priority model',()=>{
   assert.equal(active.activated,true);
   assert.deepEqual(active.activeSegmentIds,['segment-industrial']);
   assert.deepEqual(new Set(active.activeIds),new Set([rows[0].id,rows[1].id]));
+});
+
+test('activated DNA carries its approved profile and sample size',()=>{
+  const rows=Ref.normalizeImportedRows([
+    {Company:'Factory A',Website:'https://factory-a.example'},
+    {Company:'Factory B',Website:'https://factory-b.example'},
+    {Company:'Factory C',Website:'https://factory-c.example'},
+    {Company:'Factory D',Website:'https://factory-d.example'}
+  ],{sourceType:'csv'});
+  const analyses=Object.fromEntries(rows.map(row=>[row.id,{industry:'industrial manufacturing',businessModel:'B2B',confidence:'high'}]));
+  const segmentation=Ref.buildReferenceSegments(rows,analyses);
+  const active=Ref.activateReferenceSegments({rows,analyses,...segmentation},[segmentation.segments[0].id]);
+  const dna=Ref.buildReferenceDna(active,analyses);
+  assert.equal(dna.profileName,'Industrial manufacturing customers');
+  assert.equal(dna.sampleSize,4);
+  assert.equal(dna.profileConfidence,'high');
 });
