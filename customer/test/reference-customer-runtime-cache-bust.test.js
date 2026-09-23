@@ -8,16 +8,16 @@ test('Reference Customer action modules use a fresh cache key end to end',()=>{
   const index=read('index.html');
   const processMap=read('process-map.js');
   assert.match(index,/process-map\.js\?v=20260919-lookalike-green-card-v1/);
-  assert.match(processMap,/reference-customer-ui\.js\?v=20260911-reference-missing-info-v1/);
-  assert.match(processMap,/reference-customer-clear-list\.js\?v=20260909-reference-actions-v2/);
-  assert.match(processMap,/reference-customer-website-enrichment\.js\?v=20260911-reference-missing-info-v1/);
-  assert.match(processMap,/reference-customer-ai-runtime\.js\?v=20260911-reference-missing-info-v1/);
+  assert.match(processMap,/reference-customer-ui\.js\?v=20260923-reference-interface-v1/);
+  assert.match(processMap,/reference-customer-clear-list\.js\?v=20260923-reference-interface-v1/);
+  assert.match(processMap,/reference-customer-website-enrichment\.js\?v=20260923-reference-interface-v1/);
+  assert.match(processMap,/reference-customer-ai-runtime\.js\?v=20260923-reference-interface-v1/);
   assert.match(processMap,/lookalike-discovery\.js\?v=20260910-reference-portfolio-v1/);
   const analysis=read('reference-customer-ai-runtime.js');
   assert.match(analysis,/reference-customer-library\.js\?v=20260910-reference-portfolio-v1/);
-  assert.match(analysis,/reference-customer-portfolio\.js\?v=20260911-reference-delete-v1/);
-  assert.match(analysis,/reference-customer-library-ui\.js\?v=20260911-reference-missing-info-v1/);
-  assert.match(analysis,/reference-customer-delete-ui\.js\?v=20260911-reference-delete-v1/);
+  assert.match(analysis,/reference-customer-portfolio\.js\?v=20260923-reference-interface-v1/);
+  assert.match(analysis,/reference-customer-library-ui\.js\?v=20260923-reference-interface-v1/);
+  assert.match(analysis,/reference-customer-delete-ui\.js\?v=20260923-reference-interface-v1/);
 });
 
 test('clear-list action uses branded inline confirmation rather than native browser confirm',()=>{

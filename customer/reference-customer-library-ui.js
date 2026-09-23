@@ -14,11 +14,13 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
   let analyzingListId='';
 
   function readState(){try{return JSON.parse(localStorage.getItem(REFERENCE_LIBRARY_STATE_KEY)||'{}');}catch{return {};}}
-  async function writeState(state){
+  function writeState(state){
+    if(Ref.persistReferenceWorkspaceState)return Ref.persistReferenceWorkspaceState(root,state,{render:true});
     localStorage.setItem(REFERENCE_LIBRARY_STATE_KEY,JSON.stringify(state));
-    await root.LeadIntelServerBridge?.saveNow?.().catch(()=>null);
     root.dispatchEvent(new CustomEvent('leadintel:reference-customers-updated'));
     root.LeadIntelReferenceCustomerUI?.render?.();
+    try{const pending=root.LeadIntelServerBridge?.saveNow?.();if(pending&&typeof pending.then==='function')void Promise.resolve(pending).catch(()=>null);}catch{}
+    return state;
   }
   function ensurePanel(modal){
     if(!modal)return null;
@@ -41,6 +43,7 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
   function injectStyles(){
     if(document.getElementById('reference-library-styles'))return;
     const style=document.createElement('style');style.id='reference-library-styles';style.textContent=`
+      .reference-unsaved-notice{padding:11px 13px;border:1px solid #e9cf8a;border-radius:10px;background:#fff8e6;color:#614d1e;font-size:12px;line-height:1.45}.reference-unsaved-notice strong{color:#49390f}
       .reference-library-summary{margin:14px 0 18px;padding:18px;border:1px solid #d9e6e1;border-radius:16px;background:#f8fbfa;display:flex;flex-direction:column;gap:16px}
       .reference-library-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.reference-library-main{display:flex;flex-direction:column;gap:5px;min-width:0}.reference-library-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.reference-library-head strong{font-size:18px;color:#10251f}.reference-library-badge{display:inline-flex;align-items:center;border-radius:999px;padding:5px 9px;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;background:#dff4ec;color:#0d684f}.reference-library-badge.inactive{background:#edf0ef;color:#64716d}.reference-library-badge.pending{background:#fff0cf;color:#75510b}.reference-library-status{font-size:13px;color:#607083;line-height:1.45}.reference-library-status strong{color:#1f3b32}
       .reference-current-card{padding:16px;border:1px solid #dfe8e4;border-radius:14px;background:#fff;display:flex;flex-direction:column;gap:12px}.reference-current-message{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.reference-current-message strong{font-size:15px;color:#173029}.reference-current-message span{font-size:12px;color:#677872}.reference-current-name{display:grid;grid-template-columns:minmax(240px,1fr) auto;gap:10px;align-items:end}.reference-save-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.reference-current-name label{display:flex;flex-direction:column;gap:5px;font-size:11px;font-weight:800;color:#62706c;text-transform:uppercase;letter-spacing:.04em}.reference-current-name input,.reference-advanced-grid input{min-height:44px;border:1px solid #d3ddda;border-radius:10px;padding:9px 11px;background:white;color:#173029;font-size:14px}.reference-simple-actions{display:flex;gap:9px;flex-wrap:wrap}.reference-simple-actions button{min-height:42px}.reference-simple-actions .primary-action{background:#10251f;color:#fff}.reference-simple-actions button[disabled]{opacity:.42;cursor:not-allowed}
@@ -70,8 +73,9 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     const selected=portfolio.lists.find(list=>list.id===portfolio.selectedListId)||null;
     return selected||{name:'',markets:state.targetMarkets||[],purpose:''};
   }
-  function renderSavedLists(state,editorHtml=''){ 
+  function renderSavedLists(state,editorHtml='',draftDirty=false){
     const portfolio=state.referenceCustomerPortfolio,selectedId=portfolio.selectedListId;
+    const lock=draftDirty?'disabled title="Save the current draft before switching lists or using saved results."':'';
     if(!portfolio.lists.length)return `<div class="reference-saved-lists"><div class="reference-saved-head"><strong>Saved Lists</strong><span>No saved lists yet</span></div>${editorHtml}</div>`;
     const unselectedEditor=!selectedId?editorHtml:'';
     return `<div class="reference-saved-lists"><div class="reference-saved-head"><strong>Saved Lists</strong><span>${portfolio.lists.length} saved · ${portfolio.lists.filter(x=>x.active).length} active</span></div>${unselectedEditor}${portfolio.lists.map(list=>{
@@ -82,12 +86,13 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
       const canActivate=Boolean(list.active||model||canReview);
       const isSelected=list.id===selectedId;
       const isAnalyzing=list.id===analyzingListId;
-      return `<div class="reference-saved-row ${list.active?'active':''} ${list.id===selectedId?'selected':''}" data-reference-list-row="${esc(list.id)}"><div class="reference-saved-info"><strong>${esc(list.name)}<span class="reference-list-state ${list.active?'active':''}">${stateLabel}</span></strong><small>${rows} customers · ${analyzed} analyzed${canReview?` · ${segments} segment${segments===1?'':'s'} · Ready for review`:''}${model?` · ${esc(model.confidence||'low')} confidence`:''}${list.markets?.length?` · ${esc(list.markets.join(' · '))}`:''}</small></div><div class="reference-saved-buttons">${canReview?`<button class="${isSelected?'primary-btn':'secondary-btn'}" type="button" data-view-reference-results="${esc(list.id)}">View Results</button>`:`<button class="${isSelected?'primary-btn':'secondary-btn'}" type="button" data-analyze-reference-list="${esc(list.id)}" ${isAnalyzing?'disabled':''}>${isAnalyzing?'Analyzing…':'Analyze'}</button>`}<button class="${list.active?'secondary-btn':'primary-btn'}" type="button" data-activate-reference-list="${esc(list.id)}" ${canActivate?'':'disabled'}>${list.active?'Deactivate':'Activate'}</button><button class="secondary-btn" type="button" data-edit-reference-list="${esc(list.id)}">Edit</button><button class="secondary-btn" type="button" data-delete-reference-list="${esc(list.id)}">Delete</button></div></div>${list.id===selectedId?editorHtml:''}`;
+      return `<div class="reference-saved-row ${list.active?'active':''} ${list.id===selectedId?'selected':''}" data-reference-list-row="${esc(list.id)}"><div class="reference-saved-info"><strong>${esc(list.name)}<span class="reference-list-state ${list.active?'active':''}">${stateLabel}</span></strong><small>${rows} customers · ${analyzed} analyzed${canReview?` · ${segments} segment${segments===1?'':'s'} · Ready for review`:''}${model?` · ${esc(model.confidence||'low')} confidence`:''}${list.markets?.length?` · ${esc(list.markets.join(' · '))}`:''}</small></div><div class="reference-saved-buttons">${canReview?`<button class="${isSelected?'primary-btn':'secondary-btn'}" type="button" data-view-reference-results="${esc(list.id)}" ${lock}>View Results</button>`:`<button class="${isSelected?'primary-btn':'secondary-btn'}" type="button" data-analyze-reference-list="${esc(list.id)}" ${isAnalyzing?'disabled':''} ${lock}>${isAnalyzing?'Analyzing…':'Analyze'}</button>`}<button class="${list.active?'secondary-btn':'primary-btn'}" type="button" data-activate-reference-list="${esc(list.id)}" ${canActivate?'':'disabled'} ${lock}>${list.active?'Deactivate':'Activate'}</button><button class="secondary-btn" type="button" data-edit-reference-list="${esc(list.id)}" ${lock}>Edit</button><button class="secondary-btn" type="button" data-delete-reference-list="${esc(list.id)}" ${lock}>Delete</button></div></div>${list.id===selectedId?editorHtml:''}`;
     }).join('')}</div>`;
   }
-  function currentMessage({saved,analyzed,segments,selected}){
+  function currentMessage({saved,analyzed,segments,selected,draftDirty}){
     if(!saved)return '<strong>Start a customer list</strong><span>Upload a CSV/Excel file or add companies manually below.</span>';
-    if(!selected)return `<strong>${saved} customers imported</strong><span>This list is not saved yet. Give it a name and click Save List.</span>`;
+    if(!selected)return `<strong>${saved} customers in this draft</strong><span>This list is not saved yet. Give it a name and click Save List before analyzing it.</span>`;
+    if(draftDirty)return `<strong>${esc(selected.name)} · ${saved} customers in the draft</strong><span>Save Updated List to keep these changes. Saved results and activation are paused until you save.</span>`;
     if(!analyzed)return `<strong>${esc(selected.name)} · ${saved} customers</strong><span>Saved. Next step: Analyze List.</span>`;
     if(!selected.active)return `<strong>${esc(selected.name)} · ${analyzed} analyzed</strong><span>${segments?`${segments} segment${segments===1?'':'s'} ready. Review below, then Activate Model.`:'Analysis complete. Review the results below.'}</span>`;
     return `<strong>${esc(selected.name)} · Active</strong><span>This model is currently influencing Lookalike-led Discovery.</span>`;
@@ -101,17 +106,20 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     const saved=reference.rows.length,analyzed=Object.keys(reference.analyses||{}).length,segments=(reference.segments||[]).length;
     const selected=portfolio.lists.find(list=>list.id===portfolio.selectedListId)||null;
     const activeModels=portfolio.lists.filter(list=>list.active&&list.reference?.publishedModel?.active).length;
-    const canAnalyze=Boolean(saved&&selected),hasPublished=Boolean(reference.publishedModel?.active),candidateReady=Boolean(analyzed&&segments);
-    const canActivate=Boolean(selected&&(hasPublished||candidateReady));
-    const statusLabel=selected?(selected.active?'Active Model':'Saved List'):(saved?'Unsaved':'New List');
-    const statusClass=selected?.active?'':selected?'inactive':saved?'pending':'inactive';
+    const draftDirty=Portfolio.hasUnsavedCurrentListDraft?.(state)||false;
+    const canAnalyze=Boolean(saved&&selected&&!draftDirty),hasPublished=Boolean(reference.publishedModel?.active),candidateReady=Boolean(analyzed&&segments);
+    const canActivate=Boolean(selected&&!draftDirty&&(hasPublished||candidateReady));
+    const analyzeControl=modal.querySelector('#reference-analyze');if(analyzeControl)analyzeControl.disabled=!canAnalyze;
+    const activateControl=modal.querySelector('#reference-activate');if(activateControl)activateControl.disabled=!canActivate;
+    const statusLabel=draftDirty?'Unsaved changes':selected?(selected.active?'Active Model':'Saved List'):(saved?'Unsaved':'New List');
+    const statusClass=draftDirty?'pending':selected?.active?'':selected?'inactive':saved?'pending':'inactive';
     const saveLabel=selected?'Save Updated List':'Save List';
-    const showEditor=Boolean(editorOpen||!portfolio.lists.length||(saved&&!selected));
+    const showEditor=Boolean(editorOpen||draftDirty||!portfolio.lists.length||(saved&&!selected));
     const activateLabel=selected?.active?(reference.draftDirty?'Update Model':'Model Active'):'Activate Model';
-    const editorHtml=showEditor?`<div class="reference-current-card"><div class="reference-current-message">${currentMessage({saved,analyzed,segments,selected})}</div><div class="reference-current-name"><label>List name<input id="reference-list-name" value="${esc(meta.name||'')}" placeholder="e.g. Latvia Sales Training"></label><div class="reference-save-actions"><button class="primary-btn" type="button" data-save-reference-list ${saved?'':'disabled'}>${saveLabel}</button>${selected?`<button class="secondary-btn" type="button" data-save-reference-list-as-new ${saved?'':'disabled'}>Save as New List</button>`:''}</div></div>
+    const editorHtml=showEditor?`${draftDirty?'<div class="reference-unsaved-notice" role="status"><strong>Unsaved list changes.</strong> Save Updated List before opening results, activating, or switching to another list.</div>':''}<div class="reference-current-card"><div class="reference-current-message">${currentMessage({saved,analyzed,segments,selected,draftDirty})}</div><div class="reference-current-name"><label>List name<input id="reference-list-name" value="${esc(meta.name||'')}" placeholder="e.g. Latvia Sales Training"></label><div class="reference-save-actions"><button class="primary-btn" type="button" data-save-reference-list ${saved?'':'disabled'}>${saveLabel}</button>${selected?`<button class="secondary-btn" type="button" data-save-reference-list-as-new ${saved?'':'disabled'}>Save as New List</button>`:''}</div></div>
       <details class="reference-advanced"><summary>Advanced list settings</summary><div class="reference-advanced-grid"><label>Markets<input id="reference-list-markets" value="${esc((meta.markets||[]).join('; '))}" placeholder="Latvia; Baltics"></label><label>Purpose<input id="reference-list-purpose" value="${esc(meta.purpose||'')}" placeholder="What should this list help discover?"></label><button class="secondary-btn" type="button" data-download-reference-template>Download example CSV</button></div></details></div>`:'';
-    panel.innerHTML=`<div class="reference-library-top"><div class="reference-library-main"><div class="reference-library-head"><strong>Customer List</strong><span class="reference-library-badge ${statusClass}">${esc(statusLabel)}</span></div><div class="reference-library-status">${portfolio.lists.length} saved list${portfolio.lists.length===1?'':'s'} · ${activeModels} active model${activeModels===1?'':'s'}. Upload → Save → Analyze → Review → Activate.</div></div><button class="secondary-btn" type="button" data-new-reference-list>+ New List</button></div>
-      ${renderSavedLists(state,editorHtml)}`;
+    panel.innerHTML=`<div class="reference-library-top"><div class="reference-library-main"><div class="reference-library-head"><strong>Customer List</strong><span class="reference-library-badge ${statusClass}">${esc(statusLabel)}</span></div><div class="reference-library-status">${portfolio.lists.length} saved list${portfolio.lists.length===1?'':'s'} · ${activeModels} active model${activeModels===1?'':'s'}. Upload → Save → Analyze → Review → Activate.</div></div><button class="secondary-btn" type="button" data-new-reference-list ${draftDirty?'disabled title="Save your changes before creating another list."':''}>+ New List</button></div>
+      ${renderSavedLists(state,editorHtml,draftDirty)}`;
     void persistLegacyMigration(state);
   }
   function metadataFromUi(state){
@@ -143,24 +151,42 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     return state.referenceCustomerPortfolio.selectedListId;
   }
   function openEditor(){editorOpen=true;syncLibraryUi();document.querySelector('.reference-current-card')?.scrollIntoView?.({behavior:'smooth',block:'nearest'});}
-  async function openList(id){let state=snapshot();state=Portfolio.selectList(state,id);await writeState(state);syncLibraryUi();}
+  function blockOnUnsavedDraft(action,state=snapshot()){
+    if(!Portfolio.hasUnsavedCurrentListDraft?.(state))return false;
+    editorOpen=true;
+    const status=document.getElementById('reference-import-status');
+    if(status)status.textContent=`${action} paused. Save Updated List to keep your current customer changes, then continue.`;
+    syncLibraryUi();
+    document.querySelector('.reference-current-card')?.scrollIntoView?.({behavior:'smooth',block:'nearest'});
+    return true;
+  }
+  async function openList(id){
+    let state=snapshot();
+    if(blockOnUnsavedDraft('Opening another list',state))return false;
+    const selection=Portfolio.selectListSafely?Portfolio.selectListSafely(state,id):{ok:true,state:Portfolio.selectList(state,id)};
+    if(!selection.ok)return false;
+    state=selection.state;await writeState(state);syncLibraryUi();return true;
+  }
   async function viewResults(id){
-    editorOpen=false;
-    await openList(id);
+    if(!await openList(id))return;
+    editorOpen=false;syncLibraryUi();
     const review=document.getElementById('reference-segment-review');
     review?.scrollIntoView?.({behavior:'smooth',block:'start'});
   }
   async function analyzeList(id){
-    editorOpen=false;
-    analyzingListId=id;
-    let state=snapshot();state=Portfolio.selectList(state,id);await writeState(state);syncLibraryUi();
+    let state=snapshot();if(blockOnUnsavedDraft('Analyzing a saved list',state))return;
+    const selection=Portfolio.selectListSafely?Portfolio.selectListSafely(state,id):{ok:true,state:Portfolio.selectList(state,id)};
+    if(!selection.ok)return;
+    editorOpen=false;analyzingListId=id;state=selection.state;await writeState(state);syncLibraryUi();
     const button=document.getElementById('reference-analyze');if(!button)throw new Error('Analysis control is unavailable');
     button.click();
   }
   function finishAnalysis(){analyzingListId='';syncLibraryUi();}
   async function activateList(id){
-    editorOpen=false;
-    let state=snapshot();state=Portfolio.selectList(state,id);
+    let state=snapshot();if(blockOnUnsavedDraft('Activating a saved list',state))return;
+    const selection=Portfolio.selectListSafely?Portfolio.selectListSafely(state,id):{ok:true,state:Portfolio.selectList(state,id)};
+    if(!selection.ok)return;
+    editorOpen=false;state=selection.state;
     const list=state.referenceCustomerPortfolio.lists.find(item=>item.id===id);if(!list)throw new Error('Customer list is unavailable');
     if(list.active){state=Portfolio.setListActive(state,id,false);await writeState(state);syncLibraryUi();return;}
     let reference=Ref.normalizeReferenceState(state.referenceCustomers||{});
@@ -176,13 +202,13 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     state=Portfolio.setListActive(state,id,true);await writeState(state);syncLibraryUi();
   }
   async function editList(id){
-    editorOpen=true;
     const state=snapshot();
-    if(state.referenceCustomerPortfolio.selectedListId===id)syncLibraryUi();else await openList(id);
+    editorOpen=true;
+    if(state.referenceCustomerPortfolio.selectedListId===id)syncLibraryUi();else if(!await openList(id))return;
     document.getElementById('reference-list-name')?.focus();
     document.querySelector('.reference-current-card')?.scrollIntoView?.({behavior:'smooth',block:'nearest'});
   }
-  async function createNewList(){editorOpen=true;let state=snapshot();state=Portfolio.newList(state);await writeState(state);syncLibraryUi();}
+  async function createNewList(){let state=snapshot();if(blockOnUnsavedDraft('Creating a new list',state))return;editorOpen=true;state=Portfolio.newList(state);await writeState(state);syncLibraryUi();}
   async function toggleList(id,active){let state=snapshot();state=Portfolio.setListActive(state,id,active);await writeState(state);syncLibraryUi();}
   async function activateCurrent(){
     let state=snapshot();const selected=state.referenceCustomerPortfolio.lists.find(list=>list.id===state.referenceCustomerPortfolio.selectedListId)||null;
@@ -194,6 +220,7 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
   }
 
   async function publishSelected(button){
+    const current=snapshot();if(blockOnUnsavedDraft('Activating this model',current))throw new Error('Save the current customer list changes before activating it');
     const selectedSegments=[...document.querySelectorAll('[data-reference-segment]:checked')].map(node=>node.dataset.referenceSegment).filter(Boolean);
     if(!selectedSegments.length)throw new Error('Analyze the list and select at least one customer segment first');
     let state=snapshot();
@@ -211,6 +238,8 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
   }
 
   document.addEventListener('click',event=>{
+    const analyzeControl=event.target?.closest?.('#reference-analyze');
+    if(analyzeControl&&blockOnUnsavedDraft('Analyzing the current list')){event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();return;}
     const activate=event.target?.closest?.('#reference-activate');
     if(activate){event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();void publishSelected(activate).catch(error=>{activate.disabled=false;const status=document.getElementById('reference-action-status')||document.getElementById('reference-import-status');if(status)status.textContent=clean(error?.message)||'Unable to activate model';});return;}
     const save=event.target?.closest?.('[data-save-reference-list]');if(save){event.preventDefault();void saveList().catch(error=>{const status=document.getElementById('reference-import-status');if(status)status.textContent=clean(error?.message)||'Unable to save list';});return;}

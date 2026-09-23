@@ -1,4 +1,4 @@
-const REFERENCE_CUSTOMER_LAUNCH_VERSION='20260911-reference-open-v2';
+const REFERENCE_CUSTOMER_LAUNCH_VERSION='20260923-reference-interface-v1';
 
 (function installReferenceCustomerLauncher(root){
   'use strict';

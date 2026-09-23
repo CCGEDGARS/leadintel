@@ -17,7 +17,7 @@ test('saved list UI exposes explicit branded inline delete confirmation',()=>{
 
 test('working-list clear action is distinguished from saved-list deletion',()=>{
   assert.match(runtime,/Clear current draft/);
-  assert.match(runtime,/Saved Lists are not deleted/);
+  assert.match(runtime,/Saved Lists and active models remain unchanged/);
 });
 
 test('reference customer actions use unambiguous list labels',()=>{
@@ -34,6 +34,6 @@ test('reference customer action relabeling is idempotent so MutationObserver can
 });
 
 test('reference customer runtime loads deletion controls',()=>{
-  assert.match(loader,/reference-customer-delete-ui\.js\?v=20260911-reference-delete-v1/);
-  assert.match(loader,/reference-customer-portfolio\.js\?v=20260911-reference-delete-v1/);
+  assert.match(loader,/reference-customer-delete-ui\.js\?v=20260923-reference-interface-v1/);
+  assert.match(loader,/reference-customer-portfolio\.js\?v=20260923-reference-interface-v1/);
 });

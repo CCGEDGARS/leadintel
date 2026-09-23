@@ -41,8 +41,7 @@ test('activation performs bounded analysis and stores compact DNA without scrape
   assert.doesNotMatch(source,/referenceCustomers\.(?:raw|scrapedSources|pageBodies)/);
 });
 
-test('reference manager persists through existing workspace bridge',()=>{
+test('reference manager persists locally through the shared nonblocking workspace writer',()=>{
   assert.match(source,/leadintel_customer_v2_state/);
-  assert.match(source,/LeadIntelServerBridge/);
-  assert.match(source,/saveNow/);
+  assert.match(source,/Ref\.persistReferenceWorkspaceState\(root,state/);
 });

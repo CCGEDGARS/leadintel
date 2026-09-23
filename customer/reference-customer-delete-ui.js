@@ -9,25 +9,41 @@ const REFERENCE_DELETE_STATE_KEY='leadintel_customer_v2_state';
 
   function readState(){try{return JSON.parse(localStorage.getItem(REFERENCE_DELETE_STATE_KEY)||'{}');}catch{return {};}}
   function setText(node,text){if(node&&node.textContent!==text)node.textContent=text;}
-  async function writeState(state){
+  function setStatus(message){const status=document.getElementById('reference-import-status');if(status)status.textContent=message;}
+  function hasUnsavedDraft(){return Boolean(Portfolio.hasUnsavedCurrentListDraft?.(readState()));}
+  function requireSavedDraft(action){
+    if(!hasUnsavedDraft())return false;
+    pendingDeleteId='';decorate();
+    setStatus(`${action} paused. Save the current customer list changes first; your draft is still here.`);
+    root.LeadIntelReferenceCustomerLibraryUI?.openEditor?.();
+    return true;
+  }
+  function writeState(state){
+    const Ref=root.LeadIntelReferenceCustomers;
+    if(Ref?.persistReferenceWorkspaceState)return Ref.persistReferenceWorkspaceState(root,state,{render:true});
     localStorage.setItem(REFERENCE_DELETE_STATE_KEY,JSON.stringify(state));
-    await root.LeadIntelServerBridge?.saveNow?.().catch(()=>null);
     root.dispatchEvent(new CustomEvent('leadintel:reference-customers-updated'));
     root.LeadIntelReferenceCustomerUI?.render?.();
+    try{const pending=root.LeadIntelServerBridge?.saveNow?.();if(pending&&typeof pending.then==='function')void Promise.resolve(pending).catch(()=>null);}catch{}
+    return state;
   }
   function selectedName(id){const p=Portfolio.normalizePortfolio(readState().referenceCustomerPortfolio||{});return p.lists.find(x=>x.id===id)?.name||'this customer list';}
   async function deleteSavedList(id){
+    if(requireSavedDraft('Deleting a saved list'))return false;
     const name=selectedName(id);
     const next=Portfolio.deleteList(readState(),id);
     pendingDeleteId='';
-    await writeState(next);
-    const status=document.getElementById('reference-import-status');
-    if(status)status.textContent=`${name} deleted from Saved Lists.`;
+    writeState(next);
+    setStatus(`${name} deleted from Saved Lists.`);
+    return true;
   }
   function renameClearControls(modal){
-    for(const button of modal.querySelectorAll('button'))if(button.textContent.trim()==='Clear customer list')setText(button,'Clear current draft');
+    for(const button of modal.querySelectorAll('button')){
+      if(button.matches('[data-reference-clear-confirm-yes]'))setText(button,'Clear draft');
+      else if(button.textContent.trim()==='Clear customer list')setText(button,'Clear current draft');
+    }
     for(const strong of modal.querySelectorAll('strong,h3'))if(strong.textContent.trim()==='Clear customer list?')setText(strong,'Clear current draft?');
-    for(const node of modal.querySelectorAll('p'))if(node.textContent.includes('Remove all reference customers and reset Lookalike Intelligence'))setText(node,'Clear the current working customer rows. Saved Lists are not deleted.');
+    for(const node of modal.querySelectorAll('small,p'))if(node.textContent.includes('Remove all reference customers and reset Lookalike Intelligence'))setText(node,'Clear every company in the current working draft. Saved Lists and active models remain unchanged.');
   }
   function renameListActions(modal){
     const create=modal.querySelector('[data-new-reference-list]');setText(create,'Create New List');
@@ -35,14 +51,15 @@ const REFERENCE_DELETE_STATE_KEY='leadintel_customer_v2_state';
   }
   function buildDeleteControls(row,id){
     const buttons=row.querySelector('.reference-saved-buttons');if(!buttons)return;
+    const draftLocked=hasUnsavedDraft();
     for(const node of buttons.querySelectorAll('[data-delete-reference-list],[data-confirm-delete-list],[data-cancel-delete-list],[data-delete-warning]'))node.remove();
     if(pendingDeleteId===id){
       const warning=document.createElement('span');warning.dataset.deleteWarning='true';warning.textContent='Permanently delete?';warning.style.cssText='font-size:11px;font-weight:700;color:#9f2f2f;align-self:center';buttons.appendChild(warning);
-      const confirm=document.createElement('button');confirm.type='button';confirm.className='secondary-btn';confirm.dataset.confirmDeleteList=id;confirm.textContent='Confirm delete';confirm.style.cssText='border-color:#d7a3a3;color:#9f2f2f';buttons.appendChild(confirm);
+      const confirm=document.createElement('button');confirm.type='button';confirm.className='secondary-btn';confirm.dataset.confirmDeleteList=id;confirm.textContent='Confirm delete';confirm.style.cssText='border-color:#d7a3a3;color:#9f2f2f';confirm.disabled=draftLocked;if(draftLocked)confirm.title='Save the current draft before deleting a saved list.';buttons.appendChild(confirm);
       const cancel=document.createElement('button');cancel.type='button';cancel.className='secondary-btn';cancel.dataset.cancelDeleteList=id;cancel.textContent='Cancel';buttons.appendChild(cancel);
       return;
     }
-    const button=document.createElement('button');button.type='button';button.className='secondary-btn';button.dataset.deleteReferenceList=id;button.textContent='Delete';button.setAttribute('aria-label',`Delete ${selectedName(id)}`);buttons.appendChild(button);
+    const button=document.createElement('button');button.type='button';button.className='secondary-btn';button.dataset.deleteReferenceList=id;button.textContent='Delete';button.setAttribute('aria-label',`Delete ${selectedName(id)}`);button.disabled=draftLocked;if(draftLocked)button.title='Save the current draft before deleting a saved list.';buttons.appendChild(button);
   }
   function decorate(){
     const modal=document.getElementById('reference-customer-modal');if(!modal)return;
@@ -57,13 +74,13 @@ const REFERENCE_DELETE_STATE_KEY='leadintel_customer_v2_state';
   }
   document.addEventListener('click',event=>{
     const begin=event.target?.closest?.('[data-delete-reference-list]');
-    if(begin){event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();pendingDeleteId=begin.dataset.deleteReferenceList;decorate();return;}
+    if(begin){event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();if(requireSavedDraft('Deleting a saved list'))return;pendingDeleteId=begin.dataset.deleteReferenceList;decorate();return;}
     const cancel=event.target?.closest?.('[data-cancel-delete-list]');
     if(cancel){event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();pendingDeleteId='';decorate();return;}
     const confirm=event.target?.closest?.('[data-confirm-delete-list]');
     if(!confirm)return;
     event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
-    void deleteSavedList(confirm.dataset.confirmDeleteList);
+    void deleteSavedList(confirm.dataset.confirmDeleteList).catch(()=>{setStatus('Unable to delete this saved list. Your current list is still here.');});
   },true);
   root.addEventListener('leadintel:reference-customers-updated',()=>setTimeout(decorate,0));
   root.addEventListener('leadintel:server-ready',()=>setTimeout(decorate,0));

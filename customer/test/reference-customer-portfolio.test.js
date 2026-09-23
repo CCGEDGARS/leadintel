@@ -36,9 +36,71 @@ test('selecting a saved list loads it back into the current editor',()=>{
   let state={referenceCustomers:referenceState({active:false,count:2})};
   state=Portfolio.saveCurrentList(state,{name:'First'});
   const id=state.referenceCustomerPortfolio.selectedListId;
+  assert.equal(Portfolio.hasUnsavedCurrentListDraft(state),false);
   state.referenceCustomers={rows:[]};
   state=Portfolio.selectList(state,id);
   assert.equal(state.referenceCustomers.rows.length,2);
+});
+
+test('a pending fifth company is preserved instead of being replaced by the four-company saved snapshot',()=>{
+  assert.equal(typeof Portfolio.selectListSafely,'function');
+  let state={referenceCustomers:referenceState({active:false,count:4})};
+  state=Portfolio.saveCurrentList(state,{name:'Reference Customers',markets:['Sweden']});
+  const id=state.referenceCustomerPortfolio.selectedListId;
+  state.referenceCustomers.rows.push({id:'r5',companyName:'Ivarssons i Metsjö AB',website:'https://metsjo.se/',domain:'metsjo.se',status:'ready',reviewed:true});
+
+  const selection=Portfolio.selectListSafely(state,id);
+
+  assert.equal(selection.ok,false);
+  assert.equal(selection.reason,'unsaved-draft');
+  assert.equal(selection.state.referenceCustomers.rows.length,5);
+  assert.equal(selection.state.referenceCustomerPortfolio.selectedListId,id);
+});
+
+test('saving an edited reference list commits the fifth company and clears the unsaved state',()=>{
+  let state={referenceCustomers:referenceState({active:false,count:4})};
+  state=Portfolio.saveCurrentList(state,{name:'Reference Customers',markets:['Sweden']});
+  const id=state.referenceCustomerPortfolio.selectedListId;
+  state.referenceCustomers.rows.push({id:'r5',companyName:'Ivarssons i Metsjö AB',website:'https://metsjo.se/',domain:'metsjo.se',status:'ready',reviewed:true});
+  assert.equal(Portfolio.hasUnsavedCurrentListDraft(state),true);
+
+  state=Portfolio.saveCurrentList(state,{name:'Reference Customers',markets:['Sweden']});
+
+  assert.equal(state.referenceCustomerPortfolio.selectedListId,id);
+  assert.equal(state.referenceCustomerPortfolio.lists[0].reference.rows.length,5);
+  assert.equal(Portfolio.hasUnsavedCurrentListDraft(state),false);
+});
+
+test('an unsaved new customer list is recognized before switching to another saved list',()=>{
+  let state={referenceCustomers:referenceState({active:false,count:2})};
+  state=Portfolio.saveCurrentList(state,{name:'Saved'});
+  const savedId=state.referenceCustomerPortfolio.selectedListId;
+  state=Portfolio.newList(state);
+  state.referenceCustomers=referenceState({active:false,count:1});
+
+  assert.equal(Portfolio.hasUnsavedCurrentListDraft(state),true);
+  const selection=Portfolio.selectListSafely(state,savedId);
+  assert.equal(selection.ok,false);
+  assert.equal(selection.reason,'unsaved-draft');
+  assert.equal(selection.state.referenceCustomers.rows.length,1);
+});
+
+test('a clean customer draft can still switch to another saved list',()=>{
+  assert.equal(typeof Portfolio.selectListSafely,'function');
+  let state={referenceCustomers:referenceState({active:false,count:2})};
+  state=Portfolio.saveCurrentList(state,{name:'First'});
+  const firstId=state.referenceCustomerPortfolio.selectedListId;
+  state.referenceCustomers=referenceState({active:false,count:3});
+  state.referenceCustomerPortfolio.selectedListId='';
+  state=Portfolio.saveCurrentList(state,{name:'Second'});
+  const secondId=state.referenceCustomerPortfolio.selectedListId;
+  state=Portfolio.selectList(state,firstId);
+
+  const selection=Portfolio.selectListSafely(state,secondId);
+
+  assert.equal(selection.ok,true);
+  assert.equal(selection.state.referenceCustomerPortfolio.selectedListId,secondId);
+  assert.equal(selection.state.referenceCustomers.rows.length,3);
 });
 
 test('newList clears only the editor and preserves saved and active lists',()=>{

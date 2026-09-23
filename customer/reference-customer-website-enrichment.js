@@ -68,7 +68,7 @@
     const document=root.document;if(!document)return;
     const Ref=()=>root.LeadIntelReferenceCustomers;
     function readState(){try{return JSON.parse(root.localStorage.getItem(STORAGE_KEY)||'{}');}catch{return {};}}
-    async function writeState(state){root.localStorage.setItem(STORAGE_KEY,JSON.stringify(state));await root.LeadIntelServerBridge?.saveNow?.().catch(()=>null);root.dispatchEvent(new root.CustomEvent('leadintel:reference-customers-updated'));root.LeadIntelReferenceCustomerUI?.render?.();}
+    function writeState(state){const Reference=Ref();if(Reference?.persistReferenceWorkspaceState)return Reference.persistReferenceWorkspaceState(root,state,{render:true});root.localStorage.setItem(STORAGE_KEY,JSON.stringify(state));root.dispatchEvent(new root.CustomEvent('leadintel:reference-customers-updated'));root.LeadIntelReferenceCustomerUI?.render?.();try{const pending=root.LeadIntelServerBridge?.saveNow?.();if(pending&&typeof pending.then==='function')void Promise.resolve(pending).catch(()=>null);}catch{}return state;}
     function setTwoLineLabel(button,label,firstLine,secondLine){
       if(!button)return;
       button.setAttribute('aria-label',label);

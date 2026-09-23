@@ -108,5 +108,5 @@ test('Excel smart import consumes new-vs-append mode itself before stopping prop
   assert.match(smartImport,/Portfolio\.newList\(state\)/);
   assert.match(smartImport,/mode!=='append'/);
   assert.match(smartImport,/event\.stopImmediatePropagation\(\)/);
-  assert.match(processMap,/reference-customer-smart-import\.js\?v=20260910-reference-smart-import-v3/);
+  assert.match(processMap,/reference-customer-smart-import\.js\?v=20260923-reference-interface-v1/);
 });
