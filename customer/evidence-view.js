@@ -3,7 +3,7 @@ if(typeof window!=="undefined"){
     .then(()=>import('./canonical-intelligence.js?v=20260909-canonical-profile-v5'))
     .then(()=>import('./reference-customers.js?v=20260909-canonical-profile-v5'))
     .then(()=>import('./canonical-profile-runtime.js?v=20260909-canonical-profile-v5'))
-    .then(()=>import('./intelligence-profile-ui.js?v=20260921-profile-review-v1'))
+    .then(()=>import('./intelligence-profile-ui.js?v=20260921-profile-review-v1&profile-overview-hygiene=1'))
     .then(()=>import('./lookalike-discovery.js?v=20260909-canonical-profile-v5'))
     .then(()=>import('./reference-customer-ui.js?v=20260909-canonical-profile-v5'))
     .then(()=>import('./intelligence-profile-runtime.js?v=20260921-two-stage-profile-action-v1'))
