@@ -49,12 +49,13 @@ function assertBuildRejected(result) {
   assert.equal(result.artifactExists, false);
 }
 
-test('the production build accepts the intended five-request-window Discovery runtime', () => {
+test('the production build accepts the bounded staged Discovery runtime', () => {
   const result = runProductionBuild({
     customerHtml: '<script defer src="discovery-ui.js?v=current"></script>',
     discoveryUi: [
       'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
-      'const DISCOVERY_RUN_TIMEOUT_MS=120000;',
+      'const DISCOVERY_RUN_TIMEOUT_MIN_MS=120000;',
+      'function discoveryRunTimeoutMs(',
       'function ensureDiscoveryMounted(){}',
       'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};',
       'initDiscoveryWhenReady();'
@@ -71,7 +72,8 @@ test('the production build refuses the former module-graph Discovery bootstrap',
     discoveryUi: [
       'import "./content-variants.js";',
       'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
-      'const DISCOVERY_RUN_TIMEOUT_MS=120000;',
+      'const DISCOVERY_RUN_TIMEOUT_MIN_MS=120000;',
+      'function discoveryRunTimeoutMs(',
       'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};',
       'initDiscoveryWhenReady();'
     ].join('\n')

@@ -8,7 +8,7 @@ const LEADINTEL_API="https://leadintel-api.edgars-7e7.workers.dev";
 const MAX_DISCOVERY_QUERIES=10;
 const MAX_DISCOVERY_RESULTS_PER_QUERY=5;
 const DISCOVERY_SEARCH_CONCURRENCY=4;
-const ASSET_VERSION="20260923-discovery-timeout-v1";
+const ASSET_VERSION="20260923-discovery-timeout-v2";
 const LANGUAGE_ASSET_VERSION="20260914-workspace-isolation-v1";
 const OUTREACH_ASSET_VERSION="20260922-step5-progressive-disclosure-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -104,8 +104,12 @@ function showDiscoveryStep(){if(!moduleReady()){showToast("Add your company webs
 function showStrategyStep(){persistMainStep(4);document.querySelectorAll(".step-view").forEach(el=>el.classList.toggle("active",Number(el.dataset.step)===4));document.querySelectorAll("[data-step-marker]").forEach(el=>{const n=Number(el.dataset.stepMarker);el.classList.toggle("active",n===4);el.classList.toggle("complete",n<4);});saveMeta({...loadMeta(),visibleStep:4});window.scrollTo({top:0,behavior:"smooth"});}
 
 const DISCOVERY_REQUEST_TIMEOUT_MS=25000;
-const DISCOVERY_RUN_TIMEOUT_MS=120000;
+const DISCOVERY_RUN_TIMEOUT_MIN_MS=120000;
+const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=20000;
 function linkedAbortController(parentSignal){const controller=new AbortController();if(parentSignal?.aborted)controller.abort(parentSignal.reason);else parentSignal?.addEventListener?.("abort",()=>controller.abort(parentSignal.reason),{once:true});return controller;}
+// Budget every bounded provider wave plus named-company extraction, then leave a small scheduler/network margin.
+function discoveryRunTimeoutMs(targetCount,queryCount){const entityQueries=Math.max(1,Math.min(20,Number(targetCount)||10));const marketWaves=Math.ceil(Math.max(1,Number(queryCount)||4)/DISCOVERY_SEARCH_CONCURRENCY);const entityWaves=Math.ceil(entityQueries/DISCOVERY_SEARCH_CONCURRENCY);const requestWaves=marketWaves+(entityWaves*2)+1;return Math.max(DISCOVERY_RUN_TIMEOUT_MIN_MS,requestWaves*DISCOVERY_REQUEST_TIMEOUT_MS+DISCOVERY_RUN_TIMEOUT_MARGIN_MS);}
+function throwIfDiscoveryRunAborted(signal){if(!signal?.aborted)return;const reason=signal.reason;if(reason instanceof Error)throw reason;const error=new Error("Company discovery was canceled");error.name="AbortError";throw error;}
 async function firecrawlCompanySearch(queryMeta,runSignal){
   const controller=linkedAbortController(runSignal);
   const timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS);
@@ -121,19 +125,20 @@ async function firecrawlCompanySearch(queryMeta,runSignal){
     clearTimeout(timeout);
   }
 }
-async function runDiscoverySearchBatch(items,phase,runSignal){
-  const searches=Array(items.length).fill(null);
+async function runDiscoverySearchBatch(items,phase,runSignal,searches=Array(items.length).fill(null)){
   discoveryProgress={phase,completed:0,total:items.length};window.LeadIntelTaskCentre?.update(activeDiscoveryTaskId,{stage:phase==="resolving"?"Resolving official company domains":phase==="verifying"?"Verifying company websites":"Searching market evidence",completed:0,total:Math.max(items.length,1),resultCount:discovery.candidates.length});renderDiscoverySafely();
   let nextIndex=0;
   const workers=Array.from({length:Math.min(DISCOVERY_SEARCH_CONCURRENCY,items.length)},async()=>{
     while(nextIndex<items.length){
+      if(runSignal?.aborted)break;
       const index=nextIndex++;
       try{if(runSignal?.aborted)throw new Error("Company search timed out");searches[index]={results:await firecrawlCompanySearch(items[index],runSignal),error:null};}
       catch(error){searches[index]={results:[],error};}
-      finally{discoveryProgress.completed+=1;window.LeadIntelTaskCentre?.update(activeDiscoveryTaskId,{completed:discoveryProgress.completed,total:Math.max(discoveryProgress.total,1),resultCount:discovery.candidates.length});renderDiscoverySafely();}
+      finally{if(!runSignal?.aborted){discoveryProgress.completed+=1;window.LeadIntelTaskCentre?.update(activeDiscoveryTaskId,{completed:discoveryProgress.completed,total:Math.max(discoveryProgress.total,1),resultCount:discovery.candidates.length});renderDiscoverySafely();}}
     }
   });
   await Promise.all(workers);
+  throwIfDiscoveryRunAborted(runSignal);
   return searches;
 }
 async function extractCompaniesFromEvidence(evidence,market,targetCount,runSignal){
@@ -154,8 +159,8 @@ async function extractCompaniesFromEvidence(evidence,market,targetCount,runSigna
     if(!response.ok)return fallback;
     const extracted=LeadIntelDiscovery.parseCompanyExtraction(payload.text,evidence,targetCount);
     const seen=new Set();return [...extracted,...fallback].filter(item=>{const key=item.company.toLowerCase();if(seen.has(key))return false;seen.add(key);return true;}).slice(0,targetCount);
-  }catch{return fallback;}
-  finally{clearTimeout(timeout);discoveryProgress.completed=1;renderDiscoverySafely();}
+  }catch(error){if(runSignal?.aborted)throw error;return fallback;}
+  finally{clearTimeout(timeout);if(!runSignal?.aborted){discoveryProgress.completed=1;renderDiscoverySafely();}}
 }
 async function runCompanyDiscovery(){
   const main=mainState();
@@ -178,30 +183,36 @@ async function runCompanyDiscovery(){
   taskCentre?.start({id:taskId,type:'company-discovery',title:'Company discovery',stage:'Searching market evidence',total:Math.max(queries.length,1),completed:0,canCancel:true,canRetry:true});
   taskCentre?.registerActions(taskId,{cancel:()=>runController.abort(),retry:()=>runCompanyDiscovery()});
   try{
-    let searches=[];
+    let searches=Array(queries.length).fill(null);
     let resolutionSearches=[];
     let verificationSearches=[];
     let companyMentions=[];
+    let expectedSearches=queries.length;
     const allSearches=(async()=>{
-      searches=await runDiscoverySearchBatch(queries,"searching",runController.signal);
+      await runDiscoverySearchBatch(queries,"searching",runController.signal,searches);
+      throwIfDiscoveryRunAborted(runController.signal);
       const firstPass=searches.flatMap(item=>item?.results||[]);
       const targetMarket=queries[0]?.market||main.profile?.targetMarkets||"";
       companyMentions=await extractCompaniesFromEvidence(firstPass,targetMarket,limits.targetCount,runController.signal);
+      throwIfDiscoveryRunAborted(runController.signal);
       const resolutionQueries=LeadIntelDiscovery.buildCompanyResolutionQueries(companyMentions,main.profile||{website:main.website},limits.targetCount);
-      resolutionSearches=await runDiscoverySearchBatch(resolutionQueries,"resolving",runController.signal);
+      resolutionSearches=Array(resolutionQueries.length).fill(null);expectedSearches+=resolutionQueries.length;
+      await runDiscoverySearchBatch(resolutionQueries,"resolving",runController.signal,resolutionSearches);
+      throwIfDiscoveryRunAborted(runController.signal);
       const resolved=resolutionSearches.flatMap(item=>item?.results||[]);
       const verificationQueries=LeadIntelDiscovery.buildCandidateVerificationQueries(resolved,main.profile||{website:main.website},market,limits.targetCount);
-      verificationSearches=await runDiscoverySearchBatch(verificationQueries,"verifying",runController.signal);
+      verificationSearches=Array(verificationQueries.length).fill(null);expectedSearches+=verificationQueries.length;
+      await runDiscoverySearchBatch(verificationQueries,"verifying",runController.signal,verificationSearches);
     })();
     let runTimeout;
-    const timedOut=await Promise.race([
+    const runTimeoutMs=discoveryRunTimeoutMs(targetCount,queries.length);
+    let timedOut=false;
+    try{timedOut=await Promise.race([
       allSearches.then(()=>false),
-      new Promise(resolve=>{runTimeout=setTimeout(()=>{runController.abort(new DOMException("Discovery run deadline reached","TimeoutError"));resolve(true);},DISCOVERY_RUN_TIMEOUT_MS);})
-    ]);
-    clearTimeout(runTimeout);
+      new Promise(resolve=>{runTimeout=setTimeout(()=>{runController.abort(new DOMException("Discovery run deadline reached","TimeoutError"));resolve(true);},runTimeoutMs);})
+    ]);}finally{clearTimeout(runTimeout);}
     const completedSearches=[...searches,...resolutionSearches,...verificationSearches].filter(Boolean);
-    const expectedSearches=queries.length+resolutionSearches.length+verificationSearches.length;
-    failures=completedSearches.filter(item=>item.error).length+(timedOut?Math.max(0,expectedSearches-completedSearches.length):0);
+    failures=completedSearches.filter(item=>item.error).length+(timedOut?Math.max(1,expectedSearches-completedSearches.length):0);
     const firstPass=searches.flatMap(item=>item?.results||[]);
     const resolved=resolutionSearches.flatMap(item=>item?.results||[]);
     const verified=verificationSearches.flatMap(item=>item?.results||[]);
@@ -211,6 +222,7 @@ async function runCompanyDiscovery(){
     taskCentre?.update(taskId,{stage:'Verifying qualified companies',completed:Math.max(1,completedSearches.length),total:Math.max(1,expectedSearches),resultCount:discovery.candidates.length});
     discovery.status=LeadIntelDiscovery.discoveryOutcomeStatus({timedOut,failures,candidateCount:discovery.candidates.length});
     if(timedOut)fatalError=new Error("Company search timed out safely. Partial results were kept.");
+    else if(discovery.status==="error"&&failures)fatalError=new Error(`Company search did not complete: ${failures} provider check${failures===1?"":"s"} failed or timed out. No no-match conclusion was made.`);
   }catch(error){
     fatalError=error instanceof Error?error:new Error(String(error||"Company discovery failed"));
     discovery.status=discovery.candidates.length?"partial":"error";

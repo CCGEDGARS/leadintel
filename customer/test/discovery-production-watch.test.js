@@ -51,13 +51,14 @@ function productionFetch({ customerHtml, discoveryUi }) {
 const shell = 'LeadIntel — Build Your Commercial Intelligence Strategy id="company-website"';
 const boundedDiscoveryRuntime = [
   'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
-  'const DISCOVERY_RUN_TIMEOUT_MS=120000;',
+  'const DISCOVERY_RUN_TIMEOUT_MIN_MS=120000;',
+  'function discoveryRunTimeoutMs(',
   'function ensureDiscoveryMounted(){}',
   'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};',
   'initDiscoveryWhenReady();'
 ].join('\n');
 
-test('production proof accepts the intended five-request-window Discovery runtime', async () => {
+test('production proof accepts the bounded staged Discovery runtime', async () => {
   const { verifyRelease, VERDICTS } = await loadCore();
   const proof = await verifyRelease({
     config,
@@ -121,7 +122,8 @@ test('production proof blocks a Discovery runtime that performs hidden-stage sta
       customerHtml: `${shell}<script defer src="discovery-ui.js?v=current"></script>`,
       discoveryUi: [
         'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
-        'const DISCOVERY_RUN_TIMEOUT_MS=120000;',
+        'const DISCOVERY_RUN_TIMEOUT_MIN_MS=120000;',
+        'function discoveryRunTimeoutMs(',
         'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};',
         'initDiscoveryWhenReady();'
       ].join('\n')

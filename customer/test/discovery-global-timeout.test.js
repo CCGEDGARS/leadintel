@@ -5,17 +5,22 @@ const path = require('node:path');
 const vm = require('node:vm');
 const Discovery = require('../discovery-engine.js');
 
-function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchImpl = () => new Promise(() => {}), requestTimeout = 1, scaleProductionRunTimeout = 0 } = {}) {
+function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchImpl = () => new Promise(() => {}), requestTimeout = 1, scaleProductionRunTimeout = 15000 } = {}) {
   let source = fs.readFileSync(path.join(__dirname, '..', 'discovery-ui.js'), 'utf8');
-  const runTimeout = source.match(/const DISCOVERY_RUN_TIMEOUT_MS=(\d+);/);
+  const runTimeout = source.match(/const DISCOVERY_RUN_TIMEOUT_MIN_MS=(\d+);/);
+  const runMargin = source.match(/const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=(\d+);/);
   const testRunTimeout = scaleProductionRunTimeout
     ? Math.ceil(Number(runTimeout?.[1] || 0) / scaleProductionRunTimeout)
     : 8;
+  const testRunMargin = scaleProductionRunTimeout
+    ? Math.ceil(Number(runMargin?.[1] || 0) / scaleProductionRunTimeout)
+    : 2;
   source = source
     .replace('const DISCOVERY_REQUEST_TIMEOUT_MS=25000;', `const DISCOVERY_REQUEST_TIMEOUT_MS=${requestTimeout};`)
-    .replace(runTimeout?.[0], `const DISCOVERY_RUN_TIMEOUT_MS=${testRunTimeout};`)
+    .replace(runTimeout?.[0], `const DISCOVERY_RUN_TIMEOUT_MIN_MS=${testRunTimeout};`)
+    .replace(runMargin?.[0], `const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=${testRunMargin};`)
     .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\nglobalThis.__setDiscovery = value => { discovery = LeadIntelDiscovery.normalizeDiscoveryState(value); };\nglobalThis.__renderStatus = renderStatus;\nglobalThis.__renderCandidates = renderCandidates;\n')
-    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;');
+    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;');
   const mainState = {
     website: 'https://acme.example/',
     profile: {
@@ -127,11 +132,44 @@ test('a normal three-stage search is allowed to outlast one provider request win
   assert.notEqual(context.__discoveryState().status, 'error');
 });
 
-test('the overall guard allows the staged Discovery run time to finish and cancels work after two minutes', () => {
-  const source=fs.readFileSync(path.join(__dirname,'..','discovery-ui.js'),'utf8');
-  assert.match(source,/DISCOVERY_RUN_TIMEOUT_MS=120000/);
-  assert.match(source,/runController\.abort/);
-  assert.match(source,/runDiscoverySearchBatch\(queries,"searching",runController\.signal\)/);
+test('the run deadline covers the worst-case bounded search stages at each supported target size', () => {
+  const context=loadDiscoveryRunner({requestTimeout:25,scaleProductionRunTimeout:1000});
+  assert.equal(context.__discoveryRunTimeoutMs(10,4),220);
+  assert.equal(context.__discoveryRunTimeoutMs(25,8),345);
+  assert.equal(context.__discoveryRunTimeoutMs(50,10),370);
+});
+
+test('an aborted resolution stage does not start company verification', async () => {
+  const phases=[];
+  let actions=null;
+  const context=loadDiscoveryRunner({
+    requestTimeout:1000,
+    fetchImpl:async (_url,options)=>{
+      const query=JSON.parse(options.body).query;
+      if(query.startsWith('"')){
+        actions.cancel();
+        throw Object.assign(new Error('aborted'),{name:'AbortError'});
+      }
+      return {ok:true,json:async()=>({success:true,data:Array.from({length:5},(_,index)=>({
+        url:`https://industrynews${index}.example/article`,
+        title:`Buyer${index} plans a new factory`,
+        description:`Buyer${index} plans a new factory in Latvia.`,
+        markdown:`Buyer${index} plans a new factory in Latvia.`
+      }))})};
+    }
+  });
+  context.LeadIntelTaskCentre={
+    start(){},
+    registerActions(_id,value){actions=value;},
+    update(_id,value){if(value.stage)phases.push(value.stage);},
+    get(){return {status:'canceled'};},
+    fail(){},complete(){}
+  };
+
+  await context.__runDiscovery();
+
+  assert.ok(phases.includes('Resolving official company domains'));
+  assert.equal(phases.includes('Verifying company websites'),false);
 });
 
 test('an errored search is not presented as a confirmed no-match and offers retry', () => {
@@ -145,6 +183,26 @@ test('an errored search is not presented as a confirmed no-match and offers retr
   assert.match(context.__elements.get('company-discovery-status').textContent, /search did not complete/i);
   assert.doesNotMatch(context.__elements.get('company-discovery-status').textContent, /no company passed/i);
   assert.match(context.__elements.get('run-company-discovery').innerHTML, /Retry company search/);
+});
+
+test('provider failures fail the Discovery task and cannot be reported as completed zero results', async () => {
+  let failedTask='';
+  let completedTask=false;
+  const context=loadDiscoveryRunner({
+    fetchImpl:async()=>({ok:false,status:503,json:async()=>({error:'Provider unavailable'})})
+  });
+  context.LeadIntelTaskCentre={
+    start(){},registerActions(){},update(){},get(){return {status:'running'};},
+    fail(_id,error){failedTask=error.message;},
+    complete(){completedTask=true;}
+  };
+
+  await context.__runDiscovery();
+
+  assert.equal(context.__discoveryState().status,'error');
+  assert.match(failedTask,/provider checks failed or timed out/i);
+  assert.match(failedTask,/no no-match conclusion/i);
+  assert.equal(completedTask,false);
 });
 
 test('a rendering failure cannot leave Company Discovery running', async () => {
