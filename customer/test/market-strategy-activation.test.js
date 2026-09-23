@@ -26,6 +26,7 @@ test("Company Discovery handoff has a review dialog with explicit blockers and w
   assert.match(app, /function strategyHandoffModel\(\)/);
   assert.match(app, /function openStrategyHandoff\(\)/);
   assert.match(app, /Monitoring is off/);
+  assert.match(app, /This one-time Company Discovery will still run normally/);
   assert.match(app, /No active ICP/);
   assert.match(app, /No active buying signal/);
   assert.match(app, /No active market opportunity/);
@@ -46,6 +47,8 @@ test("pre-flight blocks zero signals but permits an explicit limited-results con
   assert.match(app, /No active buying signal[\s\S]{0,240}required/);
   assert.match(app, /Continue with limited results →/);
   assert.match(app, /Fewer than 3 evidence sources/);
+  assert.match(app, /hasLimitedResults:lowSignalCoverage\|\|lowEvidenceCoverage\|\|incompleteResearch/);
+  assert.match(app, /model\.hasLimitedResults\?"Continue with limited results →"/);
 });
 
 test("recommended tender signals are not silently disabled by research-source settings", () => {
@@ -63,7 +66,7 @@ test("activation waits for the canonical Discovery API and recovers visibly on t
   assert.match(app, /\$\("confirm-strategy-handoff"\)\.addEventListener/);
   assert.doesNotMatch(app, /\$\("activate-market-strategy"\)\.addEventListener\("click",event=>[\s\S]{0,180}activateMarketStrategy/);
   assert.match(discovery, /window\.LeadIntelDiscoveryUI=\{open:openDiscoveryFromHandoff\}/);
-  assert.match(index, /app\.js\?v=20260922-step3-recovery-v1&icp-data-gates=1/);
+  assert.match(index, /app\.js\?v=20260923-research-depth-return-v1&icp-data-gates=1/);
   assert.match(marketCss, /\.strategy-handoff-dialog/);
 });
 

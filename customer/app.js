@@ -27,6 +27,8 @@ let pdfModule=null;
 let resetConfirmTimer=null;
 let openAiCountdownTimer=null;
 let researchElapsedTimer=null;
+let researchWindowMinimized=false;
+let researchWindowWasRunning=false;
 let monitoringLoaded=false;
 let monitoringBusy=false;
 let pendingResearchMode="";
@@ -436,9 +438,10 @@ async function searchCustomSource(url,index,signal){
   const extractor=response.headers.get("X-LeadIntel-Extractor")||"firecrawl";
   return LeadIntelMarket.normalizeSearchResults({results:[{url,title:metadata.title||url,description:metadata.description||text.slice(0,500),text}]},{id:`custom-${index+1}`,market:"Custom source",offer:"User-specified source",sourceType:"custom",query:url},extractor);
 }
-async function extractResearchPages(results,mode,signal){
+async function extractResearchPages(results,mode,signal,{previouslyExtracted=[]}={}){
   const limits={quick:2,deep:4,intelligence:6};const selected=[];const domains=new Set();
-  for(const item of results){let domain="";try{domain=new URL(item.url).hostname;}catch{}if(!domain||domains.has(domain))continue;domains.add(domain);selected.push(item);if(selected.length>=limits[mode])break;}
+  const extractedUrls=new Set(previouslyExtracted.filter(item=>item?.extractedAt).map(item=>item.url));
+  for(const item of results){if(item.extractedAt||extractedUrls.has(item.url))continue;let domain="";try{domain=new URL(item.url).hostname;}catch{}if(!domain||domains.has(domain))continue;domains.add(domain);selected.push(item);if(selected.length>=limits[mode])break;}
   return LeadIntelMarket.mapWithConcurrency(selected,async(item,index)=>{
     try{
       const response=await fetch(`${FIRECRAWL_PROXY}/firecrawl-scrape`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:item.url,formats:["markdown"],onlyMainContent:true,timeout:30000}),signal});
@@ -484,15 +487,18 @@ function researchModeUi(mode){
   return selected==="intelligence"?{
     label:"Deep Analysis",
     estimate:"usually 5–10 minutes",
-    method:"LeadIntel performs the widest investigation across active buying signals and selected source categories. OpenAI discovers relevant public pages; Firecrawl extracts evidence and checks specific URLs; Gemini independently cross-checks only the collected evidence."
+    method:"LeadIntel performs the widest investigation across active buying signals and selected source categories. OpenAI discovers relevant public pages; Firecrawl extracts evidence and checks specific URLs; Gemini independently cross-checks only the collected evidence.",
+    discoveryNote:"Deep Analysis adds broad strategic context. Company Discovery still runs its own separate search and applies the same qualification checks."
   }:selected==="deep"?{
     label:"Market Research",
     estimate:"usually 2–4 minutes",
-    method:"LeadIntel rotates across more active buying signals and the source categories you selected. OpenAI discovers relevant public pages; Firecrawl extracts evidence and checks specific URLs; Gemini independently cross-checks only the collected evidence."
+    method:"LeadIntel rotates across more active buying signals and the source categories you selected. OpenAI discovers relevant public pages; Firecrawl extracts evidence and checks specific URLs; Gemini independently cross-checks only the collected evidence.",
+    discoveryNote:"Market Research is the recommended starting point for Company Discovery. Stage 5 still runs its own company search and checks each match against your active market and buying signals."
   }:{
     label:"Quick Overview",
     estimate:"usually under 1 minute",
-    method:"LeadIntel validates the strongest active buying signals across your selected source categories. OpenAI discovers public pages; Firecrawl extracts the available evidence."
+    method:"LeadIntel validates the strongest active buying signals across your selected source categories. OpenAI discovers public pages; Firecrawl extracts the available evidence.",
+    discoveryNote:"Quick Overview collects a lighter market evidence set. Company Discovery still runs a separate search and the selected company target stays the same, but it has less context for ranking matches. Market Research is recommended for a fuller starting point."
   };
 }
 function openResearchPreview(mode){
@@ -509,6 +515,7 @@ function openResearchPreview(mode){
   $("research-preview-scope").textContent=`${queries.length} planned search${queries.length===1?"":"es"} · ${modeUi.estimate} · up to ${limits.resultsPerQuery} results each · maximum ${limits.maxStoredResults} saved evidence sources${state.market.researchCustomSources.length?` · ${state.market.researchCustomSources.length} direct URL${state.market.researchCustomSources.length===1?"":"s"}`:""}.`;
   $("research-preview-sources").textContent=labels.join(", ")||"No source categories selected";
   $("research-preview-method").textContent=modeUi.method;
+  $("research-preview-discovery-note").textContent=modeUi.discoveryNote;
   const suggestions=LeadIntelMarket.buildSuggestedSources(profile,state.market.signals,state.market.researchSourceTypes,language);const added=new Set(state.market.researchCustomSources||[]);
   $("research-suggested-sources").innerHTML=suggestions.length?suggestions.map((item,index)=>`<label><input type="checkbox" data-suggested-source value="${esc(item.url)}" ${added.has(item.url)?"checked disabled":""}><span><strong>${esc(item.name)}</strong><small>${esc(item.reason)}</small><code>${esc(item.url)}</code></span></label>`).join(""):"<p>No specific site recommendations are available for the selected market and source categories. You can still add any public URL manually.</p>";
   $("add-suggested-sources").hidden=!suggestions.length;$("add-suggested-sources").disabled=!suggestions.some(item=>!added.has(item.url));
@@ -585,7 +592,7 @@ async function runMarketResearch(modeOverride=""){
         return LeadIntelMarket.mergeResearchResults(openAi.results||[],firecrawl);
       },{concurrency:runtime.concurrency,onProgress:progress=>updateProgress(queries.length+state.market.researchCustomSources.length+progress.completed)});
       for(const result of followUps)state.market.researchResults=LeadIntelMarket.mergeResearchResults(state.market.researchResults,result).slice(0,limits.maxStoredResults);
-      const followUpExtracted=await LeadIntelMarket.withTimeout(signal=>extractResearchPages(state.market.researchResults,state.market.researchMode,signal),runtime.requestTimeoutMs,"Follow-up evidence extraction").catch(()=>[]);
+      const followUpExtracted=await LeadIntelMarket.withTimeout(signal=>extractResearchPages(state.market.researchResults,state.market.researchMode,signal,{previouslyExtracted:extracted}),runtime.requestTimeoutMs,"Follow-up evidence extraction").catch(()=>[]);
       state.market.researchResults=LeadIntelMarket.mergeResearchResults(state.market.researchResults,followUpExtracted).slice(0,limits.maxStoredResults);
     }
     if(openAiAvailable)state.market.researchSourceStatus.openai=openAiFailures===0?"complete":openAiSuccesses?"partial":"error";
@@ -634,13 +641,13 @@ async function retryOpenAiDiscovery(){
   const runtime=LeadIntelMarket.researchRuntimePolicy(state.market.researchMode);
   const priorErrors=[...(state.market.researchErrors||[])].filter(item=>String(item.provider).toLowerCase()!=="openai");
   let successes=0,failures=0;const startedAt=Date.now();
-  state.market.researchStatus="running";state.market.researchSourceStatus.openai="running";state.market.openAiRetryProgress={completed:0,total:queries.length,attempt:1,deadlineAt:Date.now()+runtime.requestTimeoutMs};state.market.researchErrors=priorErrors;saveState();startOpenAiCountdown();renderMarketStrategy();
+  state.market.researchStatus="running";state.market.researchSourceStatus.openai="running";state.market.openAiRetryProgress={completed:0,total:queries.length,attempt:1,startedAt,deadlineAt:Date.now()+runtime.requestTimeoutMs};state.market.researchErrors=priorErrors;saveState();startOpenAiCountdown();renderMarketStrategy();
   try{
     const retried=await LeadIntelMarket.mapWithConcurrency(queries,async(query,index)=>{
       const attemptStarted=Date.now();
       try{
         const found=await withOpenAiRetry(attempt=>{
-          state.market.openAiRetryProgress={completed:index,total:queries.length,attempt,deadlineAt:Date.now()+runtime.requestTimeoutMs};renderResearchStatus();
+          state.market.openAiRetryProgress={completed:index,total:queries.length,attempt,startedAt,deadlineAt:Date.now()+runtime.requestTimeoutMs};renderResearchStatus();
           return LeadIntelMarket.withTimeout(signal=>searchOpenAiWeb(query,limits.resultsPerQuery,signal),runtime.requestTimeoutMs,"OpenAI search");
         });
         if(!found.available)throw new Error(found.reason||"OpenAI discovery unavailable");
@@ -699,17 +706,20 @@ function renderMarketOpportunities(){
 }
 function researchRunning(){return state.market.researchStatus==="running";}
 function researchProgressView(){
-  const progress=state.market.openAiRetryProgress||state.market.researchProgress||{completed:0,total:state.market.researchQueries?.length||1};
+  const retry=state.market.openAiRetryProgress;
+  const progress=retry||state.market.researchProgress||{completed:0,total:state.market.researchQueries?.length||1};
   const total=Math.max(1,Number(progress.total)||1),completed=Math.min(total,Number(progress.completed)||0);
   const sources=state.market.researchSourceStatus||{};
-  const phase=state.market.researchPhase||(completed===0?"finding":completed<total?"extracting":sources.gemini==="running"?"verifying":"building");
-  const labels={finding:"Finding evidence",extracting:"Extracting information and checking source pages",following:"Closing evidence gaps",verifying:"Verifying findings",building:"Building opportunities",complete:"Complete"};
+  const phase=retry?"retrying":state.market.researchPhase||(completed===0?"finding":completed<total?"extracting":sources.gemini==="running"?"verifying":"building");
+  const labels={finding:"Finding evidence",extracting:"Extracting information and checking source pages",following:"Closing evidence gaps",verifying:"Verifying findings",building:"Building opportunities",retrying:"Retrying source discovery",complete:"Complete"};
   const workPercent=Math.round(completed/total*80);
-  const percent=phase==="verifying"?92:phase==="building"?96:phase==="complete"?100:Math.min(80,workPercent);
-  const elapsed=Math.max(0,Math.floor((Date.now()-Number(state.market.researchStartedAt||Date.now()))/1000));
+  const percent=retry?Math.min(88,workPercent):phase==="verifying"?92:phase==="building"?96:phase==="complete"?100:Math.min(80,workPercent);
+  const elapsedStart=Number(retry?.startedAt||state.market.researchStartedAt||Date.now());
+  const elapsed=Math.max(0,Math.floor((Date.now()-elapsedStart)/1000));
   const elapsedLabel=elapsed>=60?`${Math.floor(elapsed/60)}m ${elapsed%60}s`:`${elapsed}s`;
   const market=LeadIntelMarket.splitList(state.profile?.targetMarkets).join(" · ")||LeadIntelMarket.splitList(state.profile?.currentMarkets).join(" · ")||"selected markets";
-  return {title:`Researching ${market}`,phase:labels[phase]||labels.finding,phaseKey:phase,percent,elapsed,meta:`${completed} of ${total} searches checked · ${state.market.researchResults.length} source${state.market.researchResults.length===1?"":"s"} found · ${elapsedLabel} elapsed`};
+  const meta=retry?`${openAiRetryStatus(retry)} · ${state.market.researchResults.length} saved source${state.market.researchResults.length===1?"":"s"} · ${elapsedLabel} elapsed`:`${completed} of ${total} searches checked · ${state.market.researchResults.length} source${state.market.researchResults.length===1?"":"s"} found · ${elapsedLabel} elapsed`;
+  return {title:`${retry?"Retrying":"Researching"} ${market}`,phase:retry?labels.retrying:labels[phase]||labels.finding,phaseKey:phase,percent,elapsed,meta};
 }
 let quickResearchInsightTimer=0;
 function quickResearchInsight(view){
@@ -717,6 +727,11 @@ function quickResearchInsight(view){
   const offer=LeadIntelMarket.splitList(state.profile?.priorityOffers)[0]||"your priority offer";
   const activeSignals=(state.market.signals||[]).filter(signal=>signal&&signal.active!==false).length;
   const sourceCount=state.market.researchResults.length;
+  if(state.market.openAiRetryProgress){
+    const retryMessages=["Retrying OpenAI discovery against the planned market searches.",sourceCount?`${sourceCount} saved evidence source${sourceCount===1?" remains":"s remain"} available while this retry runs.`:"This retry checks source discovery from the original research plan."];
+    const mode=researchModeUi(state.market.researchMode).label;
+    return {label:`${mode} recovery`,text:retryMessages[Math.floor(view.elapsed/8)%retryMessages.length]};
+  }
   const messages={
     finding:[
       `Scanning ${markets} for market demand connected to ${offer}.`,
@@ -759,6 +774,54 @@ function updateQuickResearchInsight(statusNode,view){
   if(!text.textContent||window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches)apply();
   else{card.classList.add("is-changing");quickResearchInsightTimer=setTimeout(apply,160);}
 }
+function focusWithoutScrolling(node){try{node?.focus({preventScroll:true});}catch{node?.focus();}}
+function minimizeResearchProgressWindow(){
+  if(!researchRunning())return;
+  researchWindowMinimized=true;
+  const dialog=$("market-research-window"),dock=document.querySelector("[data-reopen-research-window]");
+  if(dialog?.open)dialog.close();
+  dock.hidden=false;dock.setAttribute("aria-expanded","false");focusWithoutScrolling(dock);
+}
+function reopenResearchProgressWindow(){
+  if(!researchRunning())return;
+  researchWindowMinimized=false;
+  const dialog=$("market-research-window"),dock=document.querySelector("[data-reopen-research-window]");
+  dock.hidden=true;dock.setAttribute("aria-expanded","true");
+  if(dialog&&!dialog.open){if(typeof dialog.showModal==="function")dialog.showModal();else dialog.setAttribute("open","");}
+  focusWithoutScrolling(dialog?.querySelector("[data-minimize-research-window]"));
+}
+function renderResearchProgressWindow(status,view){
+  const dialog=$("market-research-window"),dock=document.querySelector("[data-reopen-research-window]");
+  if(!dialog||!dock)return;
+  const running=status==="running";
+  const wasRunning=researchWindowWasRunning;
+  if(running&&!wasRunning)researchWindowMinimized=false;
+  researchWindowWasRunning=running;
+  if(!running){
+    if(dialog.open)dialog.close();
+    else dialog.removeAttribute("open");
+    researchWindowMinimized=false;dock.hidden=true;dock.setAttribute("aria-expanded","false");
+    if(wasRunning)focusWithoutScrolling($("market-research-status"));
+    return;
+  }
+  const progress=view||researchProgressView(),insight=quickResearchInsight(progress);
+  dialog.querySelector("[data-research-window-title]").textContent=progress.title;
+  dialog.querySelector("[data-research-window-phase]").textContent=progress.phase;
+  dialog.querySelector("[data-research-window-percent]").textContent=`${progress.percent}%`;
+  dialog.querySelector("[data-research-window-meta]").textContent=progress.meta;
+  dialog.querySelector("[data-research-window-message]").textContent=insight.text;
+  dialog.querySelector("[data-research-window-insight-label]").textContent=insight.label;
+  const progressbar=dialog.querySelector("[data-research-window-progress]");
+  progressbar.setAttribute("aria-valuenow",String(progress.percent));
+  progressbar.setAttribute("aria-valuetext",`${progress.percent}% · ${progress.phase}`);
+  dialog.querySelector("[data-research-window-bar]").style.width=`${progress.percent}%`;
+  dock.querySelector("[data-research-dock-title]").textContent=progress.title;
+  dock.querySelector("[data-research-dock-phase]").textContent=`${progress.phase} · ${progress.percent}%`;
+  dock.querySelector("[data-research-dock-bar]").style.width=`${progress.percent}%`;
+  dock.hidden=!researchWindowMinimized;dock.setAttribute("aria-expanded",String(!researchWindowMinimized));
+  if(researchWindowMinimized){if(dialog.open)dialog.close();return;}
+  if(!dialog.open){if(typeof dialog.showModal==="function")dialog.showModal();else dialog.setAttribute("open","");}
+}
 function renderRunningResearchStatus(statusNode,view){
   let head=statusNode.querySelector("[data-research-progress-runtime]");
   if(!head){
@@ -795,6 +858,7 @@ function renderResearchStatus(){
       statusNode.textContent=status==="partial"&&partialCoverage?partialCoverage.status:(messages[status]||messages.idle);
     }
   }
+  renderResearchProgressWindow(status,status==="running"?researchProgressView():null);
   const feedback=$("research-run-feedback");
   if(feedback){
     const errors=state.market.researchErrors||[];const show=status==="error";
@@ -809,6 +873,16 @@ function renderMarketJourney(){
   const view=LeadIntelMarket.getMarketJourneyState(state.market);
   const researchPanel=document.querySelector('.research-panel');
   if(researchPanel)researchPanel.dataset.marketStage=view.stage;
+  const depthEyebrow=$("market-research-depth-eyebrow"),depthTitle=$("market-research-depth-title"),depthDescription=$("market-research-depth-description");
+  if(view.researched){
+    if(depthEyebrow)depthEyebrow.textContent=view.stage==="active"?"Market research · Strategy active":"Market research · Review or rerun";
+    if(depthTitle)depthTitle.textContent="Choose a research depth or run it again.";
+    if(depthDescription)depthDescription.textContent="Quick Overview, Market Research and Deep Analysis stay available. Choose any option to review and start another market research run.";
+  }else{
+    if(depthEyebrow)depthEyebrow.textContent="Step 1 · Choose research depth";
+    if(depthTitle)depthTitle.textContent="How deeply should LeadIntel research this market?";
+    if(depthDescription)depthDescription.textContent="Select one option to review the research plan before starting.";
+  }
   $("research-results-details").hidden=!view.showScore;
   const resultsIntro=$("research-results-intro");if(resultsIntro)resultsIntro.hidden=!view.researched;
   $("strategy-activation-card").hidden=!view.showActivation;
@@ -896,6 +970,10 @@ function strategyHandoffModel(){
   const opportunities=(state.market.opportunities||[]).filter(item=>item.active);
   const evidence=(state.market.researchResults||[]);
   const monitoring=LeadIntelMarket.normalizeMonitoring(state.market.monitoring);
+  const sources=state.market.researchSourceStatus||{};
+  const lowSignalCoverage=signals.length>0&&signals.length<3;
+  const lowEvidenceCoverage=evidence.length>0&&evidence.length<3;
+  const incompleteResearch=state.market.researchStatus==="partial"||Object.values(sources).some(value=>["partial","error","unavailable"].includes(value));
   const blockers=[];
   if(!icps.length)blockers.push("No active ICP");
   if(!signals.length)blockers.push("No active buying signal — required before Company Discovery can rank purchase intent.");
@@ -904,16 +982,16 @@ function strategyHandoffModel(){
   const warnings=[];
   if(signals.length===1)warnings.push("Only one active buying signal. Company Discovery can run, but ranking will be narrow. At least 3 active signals are recommended.");
   else if(signals.length===2)warnings.push("Only 2 active buying signals. Company Discovery can run, but at least 3 active signals are recommended.");
-  if(evidence.length>0&&evidence.length<3)warnings.push("Fewer than 3 evidence sources were saved. Discovery confidence may be limited.");
-  const sources=state.market.researchSourceStatus||{};
-  if(state.market.researchStatus==="partial"||Object.values(sources).some(value=>["partial","error","unavailable"].includes(value)))warnings.push("Some research checks were unavailable; saved evidence will still be used.");
-  if(!monitoring.enabled)warnings.push("Monitoring is off. You can continue and enable it later.");
+  if(lowEvidenceCoverage)warnings.push("Fewer than 3 evidence sources were saved. Discovery confidence may be limited.");
+  if(incompleteResearch)warnings.push("Some research checks were unavailable; saved evidence will still be used.");
+  if(!monitoring.enabled)warnings.push("Monitoring is off. This one-time Company Discovery will still run normally. Turn on monitoring later to track new buying signals over time.");
   const customSources=state.market.researchCustomSources||[];
   if(customSources.length&&!monitoring.customSources?.length)warnings.push("Preferred research sources are saved but are not included in monitoring.");
   const actions=[];
   if(signals.length<3)actions.push("review-signals","retry-signals");
   return {
     blockers,warnings,actions,
+    hasLimitedResults:lowSignalCoverage||lowEvidenceCoverage||incompleteResearch,
     summary:[
       ["Active ICPs",icps.map(item=>item.name||item.description).filter(Boolean).join(" · ")||"None"],
       ["Buying signals",signals.map(item=>item.name).filter(Boolean).join(" · ")||"None"],
@@ -938,7 +1016,7 @@ function renderStrategyHandoff(){
   repairActions.hidden=reviewSignals.hidden&&retrySignals.hidden;
   const confirm=$("confirm-strategy-handoff");
   confirm.disabled=Boolean(model.blockers.length);
-  confirm.textContent=model.blockers.length?"Complete Required Items":model.warnings.length?"Continue with limited results →":state.market.strategyApproved?"Continue to Company Discovery →":"Activate Strategy & Continue →";
+  confirm.textContent=model.blockers.length?"Complete Required Items":model.hasLimitedResults?"Continue with limited results →":state.market.strategyApproved?"Continue to Company Discovery →":"Activate Strategy & Continue →";
   return model;
 }
 function reviewBuyingSignalsFromHandoff(){
@@ -1114,7 +1192,11 @@ function bind(){
   const zone=$("upload-zone");["dragenter","dragover"].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault();zone.classList.add("dragging");}));["dragleave","drop"].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault();zone.classList.remove("dragging");}));zone.addEventListener("drop",e=>handlePdfFiles(e.dataTransfer.files));
   $("edit-profile").addEventListener("click",toggleEdit);$("approve-profile").addEventListener("click",()=>approveProfile());$("continue-market-strategy").addEventListener("click",openMarketStrategy);$("recommended-signals").addEventListener("change",()=>{saveProfileEdits();seedMarketStrategy();saveState();updateApprovalUI();showToast("Profile changed · approve it again before continuing");});$("improve-profile").addEventListener("click",()=>openModule(1));
   $("back-to-profile").addEventListener("click",()=>openModule(3));
-  $("add-custom-signal").addEventListener("click",addCustomSignal);$("run-market-research").addEventListener("click",()=>openResearchPreview("quick"));$("run-detailed-research").addEventListener("click",()=>openResearchPreview("deep"));$("run-market-intelligence").addEventListener("click",()=>openResearchPreview("intelligence"));$("confirm-market-research").addEventListener("click",()=>{if(pendingResearchMode)void runMarketResearch(pendingResearchMode);});$("cancel-market-research").addEventListener("click",closeResearchPreview);$("add-suggested-sources").addEventListener("click",addSuggestedSources);$("edit-research-settings").addEventListener("click",()=>{const settings=$("research-settings");settings.open=true;closeResearchPreview();settings.scrollIntoView({behavior:"smooth",block:"start"});});$("activate-market-strategy").addEventListener("click",event=>{
+  $("add-custom-signal").addEventListener("click",addCustomSignal);$("run-market-research").addEventListener("click",()=>openResearchPreview("quick"));$("run-detailed-research").addEventListener("click",()=>openResearchPreview("deep"));$("run-market-intelligence").addEventListener("click",()=>openResearchPreview("intelligence"));$("confirm-market-research").addEventListener("click",()=>{if(pendingResearchMode)void runMarketResearch(pendingResearchMode);});$("cancel-market-research").addEventListener("click",closeResearchPreview);$("add-suggested-sources").addEventListener("click",addSuggestedSources);$("edit-research-settings").addEventListener("click",()=>{const settings=$("research-settings");settings.open=true;closeResearchPreview();settings.scrollIntoView({behavior:"smooth",block:"start"});});
+  document.querySelectorAll("[data-minimize-research-window]").forEach(button=>button.addEventListener("click",minimizeResearchProgressWindow));
+  const researchWindow=$("market-research-window");researchWindow?.addEventListener("cancel",event=>{event.preventDefault();minimizeResearchProgressWindow();});
+  document.querySelector("[data-reopen-research-window]")?.addEventListener("click",reopenResearchProgressWindow);
+  $("activate-market-strategy").addEventListener("click",event=>{
     event.preventDefault();
     openStrategyHandoff();
   });$("cancel-strategy-handoff").addEventListener("click",closeStrategyHandoff);$("confirm-strategy-handoff").addEventListener("click",()=>void activateMarketStrategy());$("strategy-handoff-dialog").addEventListener("click",event=>{if(event.target===$("strategy-handoff-dialog"))closeStrategyHandoff();});$("save-monitoring").addEventListener("click",saveMonitoringConfig);$("run-monitoring-now").addEventListener("click",runMonitoringNow);$("research-mode").addEventListener("change",()=>{state.market.researchMode=normalizeResearchMode($("research-mode").value);saveState();renderResearchControls();});$("research-source-types").addEventListener("change",readResearchSettings);$("research-custom-sources").addEventListener("change",()=>{readResearchSettings();renderSavedResearchWebsites();});$("research-saved-websites")?.addEventListener("click",event=>{const button=event.target.closest("[data-remove-research-website]");if(button)removeSavedResearchWebsite(button.dataset.removeResearchWebsite);});$("research-instructions").addEventListener("change",readResearchSettings);
@@ -1131,6 +1213,7 @@ function bind(){
   $("factory-reset-confirmation").addEventListener("input",event=>{$("factory-reset-leadintel").disabled=event.target.value.trim()!=="RESET";resetCenterStatus("");});
   $("factory-reset-leadintel").addEventListener("click",factoryResetLeadIntel);
   window.addEventListener("leadintel:server-ready",()=>{void resumePendingMarketResearchAfterAuth();});
+  window.addEventListener("leadintel:review-market-research",()=>openResearchPreview("deep"));
   window.addEventListener("leadintel:website-activated",()=>{
     state=loadState();editMode=false;syncInputsFromState();updateCompleteness();
     $("analysis-state").hidden=true;$("profile-content").hidden=true;

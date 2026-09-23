@@ -32,6 +32,16 @@ test('market strategy exposes Quick Overview, Market Research and Deep Analysis 
   assert.match(app,/appendResearchHistory/);
 });
 
+test('completed and active Market Strategy keep research depth choices visible after returning from Company Discovery',()=>{
+  assert.match(html,/id="market-research-depth-eyebrow"/);
+  assert.match(html,/id="market-research-depth-title"/);
+  assert.match(html,/id="market-research-depth-description"/);
+  assert.doesNotMatch(css,/\.research-panel\[data-market-stage="review"\]>\.market-research-head[\s\S]{0,140}display:none/);
+  assert.doesNotMatch(css,/\.research-panel\[data-market-stage="active"\]>\.market-research-head[\s\S]{0,140}display:none/);
+  assert.match(app,/Choose a research depth or run it again/);
+  assert.match(app,/Quick Overview, Market Research and Deep Analysis stay available/);
+});
+
 test('research settings explain source choices and accept user guidance before a run',()=>{
   assert.match(html,/Why LeadIntel recommends these searches/);
   assert.match(html,/Specific public URLs/);
@@ -67,7 +77,7 @@ test('failed research keeps actionable diagnostics and clearly labels retry acti
 
 test('research status copy does not repeat the word research',()=>{
   assert.doesNotMatch(app,/\$\{modeLabel(?:\.toLowerCase\(\))?\} research/);
-  assert.match(app,/title:\`Researching \$\{market\}\`/);
+  assert.match(app,/title:\`\$\{retry\?"Retrying":"Researching"\} \$\{market\}\`/);
   assert.match(app,/\$\{esc\(modeLabel\)\} complete/);
 });
 

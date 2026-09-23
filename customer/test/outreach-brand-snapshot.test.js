@@ -288,5 +288,5 @@ test('outreach UI snapshots Step 1 identity, preserves edit detection and invali
   assert.match(processMap,/outreach-automation-loader\.js\?v=20260916-brand-outreach-v2/);
   assert.match(automationLoader,/outreach-automation-delivery-handoff\.js\?v=20260916-brand-outreach-v2/);
   assert.match(html,/process-map\.js\?v=20260919-lookalike-green-card-v1/);
-  assert.match(html,/discovery-ui\.js\?v=20260922-actionable-zero-result-v1/);
+  assert.match(html,/discovery-ui\.js\?v=20260923-adaptive-discovery-v1/);
 });

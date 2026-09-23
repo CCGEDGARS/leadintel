@@ -111,7 +111,7 @@ test('research choice hierarchy is shipped through the CSP-approved static style
   const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
   const css=fs.readFileSync(path.join(__dirname,'..','market.css'),'utf8');
   const uxSource=fs.readFileSync(path.join(__dirname,'..','market-research-ux.js'),'utf8');
-  assert.match(html,/market\.css\?v=20260921-research-progress-v1/);
+  assert.match(html,/market\.css\?v=20260923-research-depth-return-v1/);
   assert.match(html,/aria-label="Quick Overview, up to 20 evidence sources"/);
   assert.match(html,/aria-label="Market Research, up to 80 evidence sources"/);
   assert.match(html,/aria-label="Deep Analysis, up to 200 evidence sources"/);

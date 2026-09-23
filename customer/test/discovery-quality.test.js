@@ -266,8 +266,8 @@ test("a technically successful run with zero qualified companies is a no-results
 test("zero-result guidance tells the user what to change before retrying",()=>{
   const limited=discovery.zeroResultGuidance({evidenceCount:20,activeSignalCount:1,targetCount:10});
   assert.equal(limited.primaryAction,"review_strategy");
-  assert.equal(limited.primaryLabel,"Adjust strategy to get results");
-  assert.match(limited.summary,/20 evidence results were found/);
+  assert.equal(limited.primaryLabel,"Review Market Strategy");
+  assert.match(limited.summary,/20 evidence results were checked/);
   assert.match(limited.steps.join(" "),/activate at least 3 buying signals/i);
   assert.match(limited.steps.join(" "),/keep the search at 10 companies/i);
   assert.doesNotMatch(limited.steps.join(" "),/increase.*25|increase.*50/i);
