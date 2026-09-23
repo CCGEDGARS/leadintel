@@ -68,7 +68,7 @@
   }
   function normalizeAnalysis(value={}){
     const copy={};
-    for(const key of ['industry','sizeBand','businessModel','growthStage','operatingComplexity','customerOutcome'])if(clean(value[key]))copy[key]=clean(value[key]);
+    for(const key of ['industry','sizeBand','businessModel','growthStage','operatingComplexity','customerOutcome','summary'])if(clean(value[key]))copy[key]=clean(value[key]);
     for(const key of ['buyerRoles','buyingTriggers'])if(Array.isArray(value[key]))copy[key]=[...new Set(value[key].map(clean).filter(Boolean))].slice(0,8);
     copy.confidence=['high','medium','low'].includes(clean(value.confidence).toLowerCase())?clean(value.confidence).toLowerCase():'low';
     return copy;
@@ -77,7 +77,9 @@
     const rowIds=[...new Set((segment.rowIds||[]).map(clean).filter(id=>allowedRows.has(id)))];
     if(!rowIds.length)return null;
     const id=clean(segment.id)||`segment-${stableId(rowIds.sort().join('|'))}`;
-    return {id,name:clean(segment.name)||'Reference customer group',rowIds,count:rowIds.length,confidence:['high','medium','low'].includes(clean(segment.confidence).toLowerCase())?clean(segment.confidence).toLowerCase():'low',summary:clean(segment.summary),traits:Array.isArray(segment.traits)?segment.traits.map(clean).filter(Boolean).slice(0,8):[]};
+    let confidence=['high','medium','low'].includes(clean(segment.confidence).toLowerCase())?clean(segment.confidence).toLowerCase():'low';
+    if(rowIds.length<=1)confidence='low';else if(rowIds.length<=3&&confidence==='high')confidence='medium';
+    return {id,name:clean(segment.name)||'Reference customer group',rowIds,count:rowIds.length,confidence,summary:clean(segment.summary),traits:Array.isArray(segment.traits)?segment.traits.map(clean).filter(Boolean).slice(0,8):[]};
   }
   function normalizeReferenceState(value={}){
     const rows=normalizeImportedRows((value.rows||[]).map(row=>({Company:row.companyName,Website:row.website,Country:row.country,Product:row.productService,Value:row.approximateValue,'Why good':row.reason,Notes:row.notes})),{sourceType:'state'}).map(row=>{
@@ -110,12 +112,18 @@
   function getActiveReferenceModel(state={}){const normalized=normalizeReferenceState(state);if(!normalized.activated||!normalized.activeIds.length)return null;const ids=new Set(normalized.activeIds);return {active:true,fingerprint:normalized.fingerprint,activeRows:normalized.rows.filter(r=>ids.has(r.id)),activeSegments:normalized.segments.filter(segment=>normalized.activeSegmentIds.includes(segment.id)),dna:normalized.dna};}
   function confidenceFor(analyses,rowIds){const levels=rowIds.map(id=>clean(analyses[id]?.confidence).toLowerCase()).filter(Boolean);if(levels.filter(v=>v==='high').length>=Math.ceil(rowIds.length*.6))return 'high';if(levels.some(v=>v==='high'||v==='medium'))return 'medium';return 'low';}
   function commonValues(analyses,rowIds,key,arrayValue=false,limit=4){const counts=new Map();for(const id of rowIds){const raw=analyses[id]?.[key];const values=arrayValue?(Array.isArray(raw)?raw:[]):[raw];for(const value of values.map(clean).filter(Boolean))counts.set(value,(counts.get(value)||0)+1);}return [...counts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,limit).map(([value,count])=>({value,count}));}
+  function profileConfidence(rowIds,analyses){const confidence=confidenceFor(analyses,rowIds);if(rowIds.length<=1)return 'low';if(rowIds.length<=3&&confidence==='high')return 'medium';return confidence;}
+  function titleCase(value){const text=clean(value);return text?text[0].toLocaleUpperCase()+text.slice(1):'';}
+  function inferredProfileName(rowIds,analyses){const dominant=commonValues(analyses,rowIds,'industry',false,3)[0];if(!dominant||dominant.count/rowIds.length<.6)return 'Reference customer profile';return rowIds.length===1?`Hypothesis: ${dominant.value}`:`${titleCase(dominant.value)} customers`;}
   function segmentFromRows(name,rowIds,analyses){
     const traits=[];
     for(const [key,isArray] of [['industry',false],['sizeBand',false],['businessModel',false],['growthStage',false],['operatingComplexity',false],['customerOutcome',false],['buyerRoles',true],['buyingTriggers',true]]){
-      const top=commonValues(analyses,rowIds,key,isArray,2);if(top.length)traits.push(...top.map(item=>`${key}: ${item.value}`));
+      const top=commonValues(analyses,rowIds,key,isArray,2);if(top.length)traits.push(...top.map(item=>`${key}: ${item.value} (${item.count}/${rowIds.length})`));
     }
-    return {id:`segment-${stableId(`${name}|${[...rowIds].sort().join('|')}`)}`,name,rowIds:[...rowIds],count:rowIds.length,confidence:confidenceFor(analyses,rowIds),summary:traits.slice(0,4).join(' · '),traits:traits.slice(0,8)};
+    const dominantIndustry=commonValues(analyses,rowIds,'industry',false,1)[0],industry=dominantIndustry&&dominantIndustry.count/rowIds.length>=.6?dominantIndustry.value:'';
+    const shared=traits.slice(0,4).join(' · ');
+    const summary=rowIds.length===1?`Based on 1 reference company, this is a tentative${industry?` ${industry}`:''} customer profile${shared?` · observed traits: ${shared}`:''}.`:`${rowIds.length} reference companies${industry?` share ${industry}`:' form this group'}${shared?` · shared traits: ${shared}`:''}.`;
+    return {id:`segment-${stableId(`${name}|${[...rowIds].sort().join('|')}`)}`,name,rowIds:[...rowIds],count:rowIds.length,confidence:profileConfidence(rowIds,analyses),summary,traits:traits.slice(0,8)};
   }
   function buildReferenceSegments(rows=[],analyses={}){
     const eligible=(rows||[]).filter(row=>row?.id&&analyses[row.id]&&Object.keys(analyses[row.id]).some(key=>key!=='confidence'&&clean(Array.isArray(analyses[row.id][key])?analyses[row.id][key].join(' '):analyses[row.id][key])));
@@ -131,15 +139,18 @@
       if(remainder.length>=2)segments.push(segmentFromRows('Other reference customers',remainder,analyses));
       return {meaningful:true,segments,analyzedCount:eligible.length};
     }
-    const rowIds=eligible.map(row=>row.id);return {meaningful:false,segments:[segmentFromRows('Reference customer group',rowIds,analyses)],analyzedCount:eligible.length};
+    const rowIds=eligible.map(row=>row.id);return {meaningful:false,segments:[segmentFromRows(inferredProfileName(rowIds,analyses),rowIds,analyses)],analyzedCount:eligible.length};
   }
   function buildReferenceDna(state={},analysesArg={}){
     const model=getActiveReferenceModel(state);if(!model)return null;const rows=model.activeRows;const dimensions=[];const analyses=Object.keys(analysesArg||{}).length?analysesArg:normalizeReferenceState(state).analyses;
     const definitions=[['industry',false],['sizeBand',false],['businessModel',false],['growthStage',false],['operatingComplexity',false],['customerOutcome',false],['buyerRoles',true],['buyingTriggers',true]];
-    for(const [key,isArray] of definitions){const counts=new Map(),conf=[];for(const row of rows){const a=analyses[row.id]||{};let values=isArray?(Array.isArray(a[key])?a[key]:[]):[a[key]];values=values.map(clean).filter(Boolean);if(values.length)conf.push(clean(a.confidence).toLowerCase());for(const v of values)counts.set(v,(counts.get(v)||0)+1);}if(counts.size){const values=[...counts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5).map(([v])=>v);const evidenceCount=Math.max(...counts.values());dimensions.push({key,values,weight:1,confidence:conf.includes('high')?'high':conf.includes('medium')?'medium':'low',evidenceCount});}}
+    for(const [key,isArray] of definitions){const counts=new Map(),conf=[];for(const row of rows){const a=analyses[row.id]||{};let values=isArray?(Array.isArray(a[key])?a[key]:[]):[a[key]];values=values.map(clean).filter(Boolean);if(values.length)conf.push(clean(a.confidence).toLowerCase());for(const v of values)counts.set(v,(counts.get(v)||0)+1);}if(counts.size){const values=[...counts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5).map(([v])=>v);const evidenceCount=Math.max(...counts.values());let dimensionConfidence=conf.includes('high')?'high':conf.includes('medium')?'medium':'low';if(rows.length<=1)dimensionConfidence='low';else if(rows.length<=3&&dimensionConfidence==='high')dimensionConfidence='medium';dimensions.push({key,values,weight:1,confidence:dimensionConfidence,evidenceCount});}}
     const uniqueAnalyzed=new Set(rows.filter(r=>analyses[r.id]&&Object.keys(analyses[r.id]).some(k=>k!=='confidence'&&clean(Array.isArray(analyses[r.id][k])?analyses[r.id][k].join(' '):analyses[r.id][k]))).map(r=>r.id)).size;
-    const ratio=rows.length?uniqueAnalyzed/rows.length:0;const confidence=ratio>=.75&&rows.length>=4?'high':ratio>=.4?'medium':'low';
-    return {version:2,active:true,fingerprint:model.fingerprint,activeCount:rows.length,analyzableCount:uniqueAnalyzed,confidence,dimensions,segmentIds:model.activeSegments.map(segment=>segment.id),builtAt:new Date().toISOString()};
+    const ratio=rows.length?uniqueAnalyzed/rows.length:0;let confidence=ratio>=.75&&rows.length>=4?'high':ratio>=.4?'medium':'low';
+    const selectedSegments=model.activeSegments,profileName=selectedSegments.length===1?selectedSegments[0].name:selectedSegments.length?'Selected reference customer profiles':'',profileSummary=selectedSegments.map(segment=>segment.summary).filter(Boolean).join(' ');
+    const segmentConfidence=selectedSegments.some(segment=>segment.confidence==='low')?'low':selectedSegments.some(segment=>segment.confidence==='medium')?'medium':'high';
+    if(rows.length<=1||segmentConfidence==='low')confidence='low';else if((rows.length<=3||segmentConfidence==='medium')&&confidence==='high')confidence='medium';
+    return {version:2,active:true,fingerprint:model.fingerprint,activeCount:rows.length,sampleSize:rows.length,analyzableCount:uniqueAnalyzed,confidence,profileName,profileSummary,profileConfidence:confidence,dimensions,segmentIds:selectedSegments.map(segment=>segment.id),builtAt:new Date().toISOString()};
   }
   function migrateLegacyLookalikes(value=''){
     const names=String(value||'').split(/\n|;|,/).map(clean).filter(Boolean);return normalizeImportedRows(names.map(name=>({Company:name})),{sourceType:'pdf'});

@@ -59,12 +59,13 @@ const REFERENCE_AI_CONCURRENCY=4;
     status(`Running AI analysis on ${evidence.length} reference customers…`);
     const result=await AI.requestReferenceCustomerAnalysis({workspaceId:workspace,rows:evidence});
     if(!Object.keys(result.analyses||{}).length)throw new Error('AI analysis returned no supported company classifications');
+    const coherentProfile=result.segmentationMeaningful?result:Ref.buildReferenceSegments(state.referenceCustomers.rows,result.analyses);
     state=readState();state.referenceCustomers=Ref.normalizeReferenceState(state.referenceCustomers||{});
     state.referenceCustomers=Ref.markReferenceDraftChanged({
       ...state.referenceCustomers,
       analyses:result.analyses,
-      segments:result.segments,
-      segmentationMeaningful:Boolean(result.segmentationMeaningful),
+      segments:coherentProfile.segments,
+      segmentationMeaningful:Boolean(coherentProfile.meaningful),
       analyzedAt:new Date().toISOString()
     });
     state=Portfolio.syncCurrentList(state);

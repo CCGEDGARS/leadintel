@@ -23,14 +23,22 @@ test('active Reference Customer DNA produces explainable lookalike score',()=>{
   assert.ok(score.reasons.some(x=>/industry/i.test(x)));
 });
 
+test('low-confidence reference hypotheses influence ranking less than repeated strong patterns',()=>{
+  const candidate={company:'Nordic Machines',industry:'industrial manufacturing'};
+  const high=Discovery.scoreLookalikeMatch(candidate,{active:true,dimensions:[{key:'industry',values:['industrial manufacturing'],weight:1,confidence:'high'}]});
+  const low=Discovery.scoreLookalikeMatch(candidate,{active:true,dimensions:[{key:'industry',values:['industrial manufacturing'],weight:1,confidence:'low'}]});
+  assert.ok(low.total<high.total);
+});
+
 test('Step 1 target markets constrain lookalike queries country by country',()=>{
   const profile={website:'https://seller.example',targetMarkets:'Germany; Poland',priorityOffers:'Industrial automation',idealCustomer:'manufacturers'};
-  const dna={active:true,dimensions:[{key:'industry',values:['industrial manufacturing'],weight:1,confidence:'high'}]};
+  const dna={active:true,profileName:'Industrial manufacturing customers',dimensions:[{key:'industry',values:['industrial manufacturing'],weight:1,confidence:'high'}]};
   const queries=Discovery.buildLookalikeDiscoveryQueries(profile,dna,6);
   assert.ok(queries.length>=2);
   assert.ok(queries.some(q=>q.market==='Germany'));
   assert.ok(queries.some(q=>q.market==='Poland'));
   assert.equal(queries.some(q=>q.market==='Sweden'),false);
+  assert.ok(queries.every(q=>q.query.includes('Industrial manufacturing customers')));
 });
 
 test('hard exclusion blocks candidate even with strong lookalike similarity',()=>{

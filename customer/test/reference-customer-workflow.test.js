@@ -48,13 +48,13 @@ test('AI runtime uses configured AI after scraping and before activation',()=>{
 
 test('manager analyzes before activation and shows segment review controls',()=>{
   assert.match(ui,/Analyze customer list/i);
-  assert.match(ui,/Customer segments/i);
+  assert.match(ui,/Suggested customer profile/i);
   assert.match(ui,/Activate selected segments/i);
-  assert.match(ui,/No meaningful sub-segments detected/i);
+  assert.match(ui,/Approve only if this profile fits/i);
 });
 
 test('activation copy explains downstream effect without implying outreach',()=>{
-  assert.match(ui,/priority model/i);
+  assert.match(ui,/soft preference/i);
   assert.match(ui,/Discovery/i);
-  assert.match(ui,/does not add these companies to outreach/i);
+  assert.match(ui,/does not exclude other companies or add these references to outreach/i);
 });

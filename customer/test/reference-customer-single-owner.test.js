@@ -33,9 +33,9 @@ test('upload mode exposes import-state helpers without intercepting document cli
 });
 
 test('single-owner Reference Customer runtime is cache-busted at every changed module boundary',()=>{
-  assert.match(processMap,/reference-customer-ui\.js\?v=20260923-reference-interface-v1/);
-  assert.match(processMap,/reference-customer-ai-runtime\.js\?v=20260923-reference-view-results-v1/);
-  assert.match(processMap,/reference-customer-launcher\.js\?v=20260923-reference-interface-v1/);
+  assert.match(processMap,/reference-customer-ui\.js\?v=20260923-customer-profile-inference-v1/);
+  assert.match(processMap,/reference-customer-ai-runtime\.js\?v=20260923-customer-profile-inference-v1/);
+  assert.match(processMap,/reference-customer-launcher\.js\?v=20260923-customer-profile-inference-v1/);
   assert.match(aiRuntime,/reference-customer-upload-mode\.js\?v=20260911-reference-single-owner-v1/);
-  assert.match(launcher,/REFERENCE_CUSTOMER_LAUNCH_VERSION='20260923-reference-interface-v1'/);
+  assert.match(launcher,/REFERENCE_CUSTOMER_LAUNCH_VERSION='20260923-customer-profile-inference-v1'/);
 });
