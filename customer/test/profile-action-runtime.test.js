@@ -5,7 +5,7 @@ import fs from 'node:fs';
 const source = fs.readFileSync(new URL('../profile-action-runtime.js', import.meta.url), 'utf8');
 
 test('profile action runtime mirrors approval presentation without owning actions', () => {
-  assert.match(source, /Continue to Market Strategy/);
+  assert.match(source, /Continue to Strategy/);
   assert.match(source, /approveButton\.disabled=approved/);
   assert.match(source, /continueButton\.disabled=!approved/);
   assert.doesNotMatch(source, /document\.addEventListener\(['"]click['"]/);
@@ -15,7 +15,7 @@ test('profile action runtime mirrors approval presentation without owning action
 
 test('profile approval runtime is loaded by the process map with the single-owner cache key', () => {
   const processMap = fs.readFileSync(new URL('../process-map.js', import.meta.url), 'utf8');
-  assert.match(processMap, /profile-action-runtime\.js\?v=20260919-consistent-next-actions-v1/);
+  assert.match(processMap, /profile-action-runtime\.js\?v=20260924-friendly-workflow-labels-v1/);
 });
 
 
@@ -24,7 +24,7 @@ test('profile approval reads only editable textarea fields', () => {
   assert.match(app, /querySelectorAll\(["']textarea\[data-profile-field\]["']\)/);
   assert.doesNotMatch(app, /querySelectorAll\(["']\[data-profile-field\]["']\)/);
   const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  assert.match(html, /app\.js\?v=20260923-research-depth-return-v1/);
+  assert.match(html, /app\.js\?v=20260924-friendly-workflow-labels-v1/);
 });
 
 

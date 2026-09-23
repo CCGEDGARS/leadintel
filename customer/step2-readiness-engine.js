@@ -288,7 +288,7 @@
     const label=document.querySelector(".progress-metric strong");if(label&&label.textContent!=="Profile readiness")label.textContent="Profile readiness";
     if(score&&score.textContent!==`${summary.score}%`)score.textContent=`${summary.score}%`;if(ring)ring.style.setProperty("--p",summary.score);
     if(caption){let text=!clean(state.website)?"Add your website to begin.":!(state.targetMarkets||[]).length?"Choose at least one target market.":`${summary.coreConfirmed}/${summary.coreTotal} core inputs confirmed${summary.needsMore?` · ${summary.needsMore} need${summary.needsMore===1?"s":""} more detail`:""}${summary.drafts?` · ${summary.drafts} draft${summary.drafts===1?"":"s"} to review`:""}${summary.missing?` · ${summary.missing} missing`:""}.`;if(caption.textContent!==text)caption.textContent=text;}
-    const button=document.getElementById("analyze-company");if(button){const text="Continue to Intelligence Profile";if(!button.textContent.includes(text))button.innerHTML=`${text} <span aria-hidden="true">→</span>`;}
+    const button=document.getElementById("analyze-company");if(button){const text="Review your Profile";if(!button.textContent.includes(text))button.innerHTML=`${text} <span aria-hidden="true">→</span>`;}
     const profileLabel=document.querySelector("#profile-completeness")?.parentElement?.querySelector("small");if(profileLabel&&profileLabel.textContent!=="Profile readiness")profileLabel.textContent="Profile readiness";
     renderBriefProgress(root,summary.statuses);renderAllAnswerFeedback(root);
   }

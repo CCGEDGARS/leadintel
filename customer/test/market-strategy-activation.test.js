@@ -12,8 +12,8 @@ test("Step 4 places optional monitoring before the final Company Discovery hando
   const activation = index.indexOf('id="strategy-activation-card"');
   assert.ok(monitoring >= 0, "monitoring panel is present");
   assert.ok(activation > monitoring, "final handoff follows monitoring");
-  assert.match(index, /Step 3 · Optional Continuous Monitoring/);
-  assert.match(index, /id="activate-market-strategy"[^>]*>Review & Continue to Company Discovery →<\/button>/);
+  assert.match(index, /Strategy · Optional monitoring/);
+  assert.match(index, /id="activate-market-strategy"[^>]*>Review & Continue to Companies →<\/button>/);
 });
 
 test("Company Discovery handoff has a review dialog with explicit blockers and warnings", () => {
@@ -26,7 +26,7 @@ test("Company Discovery handoff has a review dialog with explicit blockers and w
   assert.match(app, /function strategyHandoffModel\(\)/);
   assert.match(app, /function openStrategyHandoff\(\)/);
   assert.match(app, /Monitoring is off/);
-  assert.match(app, /This one-time Company Discovery will still run normally/);
+  assert.match(app, /This one-time company search will still run normally/);
   assert.match(app, /No active ICP/);
   assert.match(app, /No active buying signal/);
   assert.match(app, /No active market opportunity/);
@@ -59,14 +59,14 @@ test("recommended tender signals are not silently disabled by research-source se
 test("activation waits for the canonical Discovery API and recovers visibly on timeout", () => {
   assert.match(app, /async function openDiscoveryAfterActivation\(\)/);
   assert.match(app, /await waitForDiscoveryOpen/);
-  assert.match(app, /Company Discovery did not open\. Please try again\./);
-  assert.match(app, /Try Company Discovery Again →/);
+  assert.match(app, /Companies did not open\. Please try again\./);
+  assert.match(app, /Try Companies Again →/);
   assert.match(app, /await openDiscoveryAfterActivation\(\)/);
   assert.doesNotMatch(app, /\[100,300,700,1200\]/);
   assert.match(app, /\$\("confirm-strategy-handoff"\)\.addEventListener/);
   assert.doesNotMatch(app, /\$\("activate-market-strategy"\)\.addEventListener\("click",event=>[\s\S]{0,180}activateMarketStrategy/);
   assert.match(discovery, /window\.LeadIntelDiscoveryUI=\{open:openDiscoveryFromHandoff\}/);
-  assert.match(index, /app\.js\?v=20260923-research-depth-return-v1&icp-data-gates=1/);
+  assert.match(index, /app\.js\?v=20260924-friendly-workflow-labels-v1&icp-data-gates=1/);
   assert.match(marketCss, /\.strategy-handoff-dialog/);
 });
 

@@ -49,7 +49,7 @@
               <div class="reset-section-choices">
                 <label><input type="checkbox" value="research"> Research, evidence and market strategy</label>
                 <label><input type="checkbox" value="sources"> Preferred sources and monitoring</label>
-                <label><input type="checkbox" value="discovery"> Company Discovery and pipeline</label>
+                <label><input type="checkbox" value="discovery"> Companies and Buyers</label>
                 <label><input type="checkbox" value="campaigns"> Campaigns and generated content</label>
               </div>
             </div>
@@ -74,13 +74,14 @@
           <p>Start with your company website and the market where you want LeadIntel to find opportunities.</p>
         </div>
         <ol class="steps">
-          <li data-step-marker="1" class="active" role="button" tabindex="0" aria-current="step"><span>01</span><div><strong>Company &amp; Market</strong><small>Source, identity and growth markets</small></div><em data-sidebar-stage-state>Not started</em></li>
-          <li data-step-marker="2" role="button" tabindex="0"><span>02</span><div><strong>Commercial Context</strong><small>Targeting, signals and campaign brief</small></div><em data-sidebar-stage-state>Available</em></li>
-          <li data-step-marker="3" role="button" tabindex="0" hidden><span>03</span><div><strong>Intelligence Profile</strong><small>Evidence-backed commercial profile</small></div><em data-sidebar-stage-state>Available</em></li>
-          <li data-step-marker="4" role="button" tabindex="0" hidden><span>04</span><div><strong>Market Strategy</strong><small>ICPs, signals and opportunities</small></div><em data-sidebar-stage-state>Locked</em></li>
-          <li data-step-marker="5" role="button" tabindex="0" hidden><span>05</span><div><strong>Company Discovery</strong><small>Companies and decision-makers</small></div><em data-sidebar-stage-state>Locked</em></li>
-          <li data-step-marker="6" role="button" tabindex="0" hidden><span>06</span><div><strong>Campaign Studio</strong><small>Scenarios, scripts and approval</small></div><em data-sidebar-stage-state>Locked</em></li>
-          <li data-step-marker="7" role="button" tabindex="0" hidden><span>07</span><div><strong>Delivery &amp; Learning</strong><small>Outreach, outcomes and learning</small></div><em data-sidebar-stage-state>Locked</em></li>
+          <li data-step-marker="1" data-module-step="1" data-workflow-stage="1" class="active" role="button" tabindex="0" aria-current="step"><span>01</span><div><strong>Setup</strong><small>Company details and target markets</small></div><em data-sidebar-stage-state>Not started</em></li>
+          <li data-step-marker="2" data-module-step="2" data-workflow-stage="2" role="button" tabindex="0"><span>02</span><div><strong>Profile</strong><small>Your company evidence and customer context</small></div><em data-sidebar-stage-state>Available</em></li>
+          <li data-step-marker="3" role="button" tabindex="0" hidden aria-hidden="true"><span>03</span><div><strong>Profile review</strong><small>Internal profile review screen</small></div><em data-sidebar-stage-state>Available</em></li>
+          <li data-step-marker="4" data-module-step="4" data-workflow-stage="3" role="button" tabindex="0" hidden><span>03</span><div><strong>Strategy</strong><small>Who to pursue and what to watch for</small></div><em data-sidebar-stage-state>Locked</em></li>
+          <li data-step-marker="5" data-module-step="5" data-workflow-stage="4" data-journey-focus="companies" role="button" tabindex="0" hidden><span>04</span><div><strong>Companies</strong><small>Find companies that fit your strategy</small></div><em data-sidebar-stage-state>Locked</em></li>
+          <li data-step-marker="5" data-module-step="5" data-workflow-stage="5" data-journey-focus="buyers" role="button" tabindex="0" hidden><span>05</span><div><strong>Buyers</strong><small>Identify and qualify the relevant buyers</small></div><em data-sidebar-stage-state>Locked</em></li>
+          <li data-step-marker="6" data-module-step="6" data-workflow-stage="6" role="button" tabindex="0" hidden><span>06</span><div><strong>Messages</strong><small>Turn evidence into relevant messages</small></div><em data-sidebar-stage-state>Locked</em></li>
+          <li data-step-marker="7" data-module-step="7" data-workflow-stage="7" role="button" tabindex="0" hidden><span>07</span><div><strong>Delivery</strong><small>Send, record outcomes and learn</small></div><em data-sidebar-stage-state>Locked</em></li>
         </ol>
         <div class="progress-metric">
           <div class="progress-ring" id="progress-ring"><span id="completeness-score">0%</span></div>
@@ -91,20 +92,20 @@
       <main class="content">
         <nav class="process-map" id="commercial-process-map" aria-label="LeadIntel commercial process">
           <div class="journey-compact">
-            <div class="journey-current"><span class="eyebrow" data-journey-position>Stage 1 of 7</span><strong data-journey-title>Company &amp; Market</strong></div>
+            <div class="journey-current"><span class="eyebrow" data-journey-position>Stage 1 of 7</span><strong data-journey-title>Setup</strong></div>
             <div class="journey-overall"><span data-journey-overall>0 of 31 steps complete</span><i data-journey-overall-bar></i></div>
             <div class="journey-dots" aria-label="Seven-stage journey">
-              <button class="process-stage active" type="button" data-process-step="1" aria-label="Stage 1: Company and Market" aria-current="step"><span>1</span></button>
-              <button class="process-stage" type="button" data-process-step="2" aria-label="Stage 2: Commercial Context"><span>2</span></button>
-              <button class="process-stage" type="button" data-process-step="3" aria-label="Stage 3: Intelligence Profile"><span>3</span></button>
-              <button class="process-stage" type="button" data-process-step="4" aria-label="Stage 4: Market Strategy"><span>4</span></button>
-              <button class="process-stage" type="button" data-process-step="5" aria-label="Stage 5: Company Discovery"><span>5</span></button>
-              <button class="process-stage" type="button" data-process-step="6" aria-label="Stage 6: Campaign Studio"><span>6</span></button>
-              <button class="process-stage" type="button" data-process-step="7" aria-label="Stage 7: Delivery and Learning"><span>7</span></button>
+              <button class="process-stage active" type="button" data-process-step="1" aria-label="Stage 1: Setup" aria-current="step"><span>1</span></button>
+              <button class="process-stage" type="button" data-process-step="2" aria-label="Stage 2: Profile"><span>2</span></button>
+              <button class="process-stage" type="button" data-process-step="3" aria-label="Stage 3: Strategy"><span>3</span></button>
+              <button class="process-stage" type="button" data-process-step="4" aria-label="Stage 4: Companies"><span>4</span></button>
+              <button class="process-stage" type="button" data-process-step="5" aria-label="Stage 5: Buyers"><span>5</span></button>
+              <button class="process-stage" type="button" data-process-step="6" aria-label="Stage 6: Messages"><span>6</span></button>
+              <button class="process-stage" type="button" data-process-step="7" aria-label="Stage 7: Delivery"><span>7</span></button>
             </div>
           </div>
           <section class="journey-stage-guide" id="journey-stage-guide" aria-live="polite">
-            <header><div><span class="eyebrow" data-stage-guide-kicker>Stage 1 · Not started</span><strong data-stage-guide-title>Company &amp; Market</strong></div><span data-stage-guide-progress>0 of 4 steps</span></header>
+            <header><div><span class="eyebrow" data-stage-guide-kicker>Stage 1 · Not started</span><strong data-stage-guide-title>Setup</strong></div><span data-stage-guide-progress>0 of 4 steps</span></header>
             <ol class="stage-mini-steps" data-stage-mini-steps></ol>
             <p><strong>Next action</strong><span data-stage-next-action>Activate the main company website</span></p>
           </section>
@@ -112,7 +113,7 @@
 
         <section class="step-view active" id="step-1" data-step="1">
           <div class="hero-copy">
-            <span class="eyebrow">Step 1 · Company & target market</span>
+            <span class="eyebrow">Step 1 · Setup</span>
             <h1>Tell LeadIntel who you are and where you want to grow.</h1>
             <p>Your company website and at least one target market are required. Supporting pages and PDFs are optional evidence that can improve precision.</p>
           </div>
@@ -261,14 +262,14 @@
             <p class="privacy-note">PDF text is extracted locally in the browser and saved in this browser for the current workspace. Original file bytes are not uploaded by this onboarding screen.</p>
           </div>
 
-          <div class="step-actions stage1-primary-action stage-next-action"><span id="step1-error" class="inline-error" role="alert"></span><button class="primary-btn" type="button" id="to-questionnaire">Continue to Company Research <span aria-hidden="true">→</span></button></div>
+          <div class="step-actions stage1-primary-action stage-next-action"><span id="step1-error" class="inline-error" role="alert"></span><button class="primary-btn" type="button" id="to-questionnaire">Continue to Profile <span aria-hidden="true">→</span></button></div>
 
         </section>
 
         <section class="step-view" id="step-2" data-step="2">
           <div class="hero-copy compact">
-            <span class="eyebrow">Step 2 · Optional enrichment</span>
-            <h1>Build your Commercial Intelligence Brief.</h1>
+            <span class="eyebrow">Step 2 · Profile</span>
+            <h1>Build your commercial profile.</h1>
             <p>Review the commercial decisions that power LeadIntel targeting, buying signals and campaign content. Accept, edit or replace every draft; unsupported fields remain open for your input. You may skip these questions and complete them later.</p>
           </div>
 
@@ -276,7 +277,7 @@
             <header class="brief-group-header"><div><span class="eyebrow">Targeting</span><h2>Define who LeadIntel should find.</h2><p>Set the commercial focus, decision roles and negative-fit rules used by Discovery.</p></div><strong data-brief-progress="targeting">0/4 reviewed</strong></header>
             <div class="question-grid">
               <article class="question-card"><span>01</span><label>What product or service is the current commercial priority?<small>Choose up to three. LeadIntel will optimize targeting and campaigns around these priorities.</small></label><textarea data-question="priority_offers" rows="4" placeholder="Example: custom steel structures; industrial installation; engineering services"></textarea></article>
-              <article class="question-card"><span>02</span><label>What does the best-fit customer look like?<small>Include industries, company types, size, maturity and priority segments inside the markets selected in Step 1.</small></label><textarea data-question="ideal_customer" rows="4" placeholder="Example: manufacturers with 50–500 employees expanding in Northern Europe"></textarea></article>
+              <article class="question-card"><span>02</span><label>What does the best-fit customer look like?<small>Include industries, company types, size, maturity and priority segments inside the markets selected in Setup.</small></label><textarea data-question="ideal_customer" rows="4" placeholder="Example: manufacturers with 50–500 employees expanding in Northern Europe"></textarea></article>
               <article class="question-card"><span>03</span><label>Who makes or strongly influences the buying decision?<small>Roles are more useful than names: CEO, Procurement Director, Production Director, HR Director or technical owner.</small></label><textarea data-question="buyer_roles" rows="3" placeholder="Procurement Director; Production Director; CEO"></textarea></article>
               <article class="question-card"><span>04</span><label>What makes a prospect unsuitable or impossible to serve?<small>Define negative ICP rules such as minimum deal size, geography, certifications, logistics, industries or capacity.</small></label><textarea data-question="exclusions" rows="4" placeholder="Example: private consumers; projects below €20,000; markets outside Europe"></textarea></article>
             </div>
@@ -291,7 +292,7 @@
           </section>
 
           <section class="brief-question-group" data-brief-group="message">
-            <header class="brief-group-header"><div><span class="eyebrow">Commercial Message</span><h2>Define what LeadIntel may communicate.</h2><p>Build the approved value, differentiation, proof and objection context used by Campaign Studio.</p></div><strong data-brief-progress="message">0/4 reviewed</strong></header>
+            <header class="brief-group-header"><div><span class="eyebrow">Commercial Message</span><h2>Define what LeadIntel may communicate.</h2><p>Build the approved value, differentiation, proof and objection context used in Messages.</p></div><strong data-brief-progress="message">0/4 reviewed</strong></header>
             <div class="question-grid">
               <article class="question-card"><span>07</span><label>How does the offer help the customer solve that problem or achieve that result?<small>Connect the offer to a concrete benefit without adding unsupported promises.</small></label><textarea data-question="value_proposition" rows="4" placeholder="Example: reduce installation time while keeping production disruption to a minimum"></textarea></article>
               <article class="question-card"><span>08</span><label>Why should the customer choose your company instead of an alternative?<small>Think specialization, speed, reliability, technology, customization, service or access.</small></label><textarea data-question="differentiation" rows="4" placeholder="Example: certified specialists, custom delivery and one accountable project team"></textarea></article>
@@ -300,7 +301,7 @@
             </div>
           </section>
 
-          <div class="step-actions split stage-next-action"><button class="secondary-btn" type="button" id="back-to-sources">← Back</button><span id="step2-error" class="inline-error" role="alert"></span><button class="primary-btn" type="button" id="analyze-company">Continue to Intelligence Profile <span aria-hidden="true">→</span></button></div>
+          <div class="step-actions split stage-next-action"><button class="secondary-btn" type="button" id="back-to-sources">← Setup</button><span id="step2-error" class="inline-error" role="alert"></span><button class="primary-btn" type="button" id="analyze-company">Review your Profile <span aria-hidden="true">→</span></button></div>
         </section>
 
         <section class="step-view" id="step-3" data-step="3">
@@ -314,7 +315,7 @@
 
           <div id="profile-content" hidden>
             <div class="profile-header">
-              <div><span class="eyebrow">Step 3 · Company Intelligence Profile</span><h1 id="profile-company-name">Company</h1><p>This is the operating context LeadIntel will use for market research, ICP generation, signal design and opportunity scoring.</p></div>
+              <div><span class="eyebrow">Step 2 · Profile review</span><h1 id="profile-company-name">Company</h1><p>This evidence-backed profile brings your company information and commercial input together. LeadIntel uses it to guide strategy, company research and communication.</p></div>
               <div class="profile-header-actions"><span class="profile-status" id="profile-status">Draft</span></div>
             </div>
 
@@ -326,7 +327,7 @@
             <div class="profile-grid" id="profile-editor"></div>
 
             <section class="panel signals-panel">
-              <div class="section-title"><div><span class="eyebrow">Recommended signal library</span><h3>What LeadIntel should watch for</h3><p>These are recommendations, not fixed rules. Activate or deactivate them now; Step 4 lets you edit weights, keywords and add your own.</p></div></div>
+              <div class="section-title"><div><span class="eyebrow">Recommended signal library</span><h3>What LeadIntel should watch for</h3><p>These are recommendations, not fixed rules. Activate or deactivate them now; Strategy lets you edit weights, keywords and add your own.</p></div></div>
               <div class="signal-list" id="recommended-signals"></div>
             </section>
 
@@ -336,26 +337,26 @@
             </section>
 
             <div class="approval-card" id="approval-card">
-              <div><span class="eyebrow">Profile approval</span><h3>Approve this profile before building Market Strategy.</h3><p>Review the interpretation above. Approval saves it as the current source of truth.</p></div>
+              <div><span class="eyebrow">Profile approval</span><h3>Approve this profile before building your Strategy.</h3><p>Review the interpretation above. Approval saves it as the current source of truth.</p></div>
               <div class="profile-approval-actions">
                 <button class="secondary-btn" type="button" id="edit-profile">Edit profile</button>
                 <button class="primary-btn profile-approve-btn" type="button" id="approve-profile">Approve profile</button>
               </div>
             </div>
             <div class="step-actions profile-next-action">
-              <button class="primary-btn stage-next-action" id="continue-market-strategy" type="button" disabled aria-disabled="true">Continue to Market Strategy <span aria-hidden="true">→</span></button>
+              <button class="primary-btn stage-next-action" id="continue-market-strategy" type="button" disabled aria-disabled="true">Continue to Strategy <span aria-hidden="true">→</span></button>
             </div>
           </div>
         </section>
 
         <section class="step-view" id="step-4" data-step="4">
           <div class="profile-header strategy-header">
-            <div><span class="eyebrow">Step 4 · Market Strategy</span><h1>Turn company context into market decisions.</h1><p>LeadIntel converts the current intelligence profile into ICPs, editable buying signals and evidence-backed market opportunity hypotheses.</p></div>
+            <div><span class="eyebrow">Step 3 · Strategy</span><h1>Turn company context into market decisions.</h1><p>LeadIntel combines company evidence and your input to recommend ideal customers, active buying signals and market opportunities.</p></div>
             <div class="profile-header-actions"><span class="profile-status" id="strategy-status">Draft</span><button class="secondary-btn small" id="back-to-profile" type="button">← Profile</button></div>
           </div>
 
           <!-- Optional sources sit directly before the research-depth fields. -->
-          <nav class="strategy-flow" id="strategy-flow" aria-label="Market Strategy steps">
+          <nav class="strategy-flow" id="strategy-flow" aria-label="Strategy steps">
             <div class="strategy-flow-step is-active" data-strategy-flow-step="1"><span>1</span><div><strong>Choose research depth</strong><small>Select how deeply LeadIntel should investigate.</small></div></div>
             <div class="strategy-flow-step" data-strategy-flow-step="2"><span>2</span><div><strong>Review findings</strong><small>Check opportunities, signals and evidence.</small></div></div>
             <div class="strategy-flow-step" data-strategy-flow-step="3"><span>3</span><div><strong>Activate strategy</strong><small>Confirm what LeadIntel should prioritize.</small></div></div>
@@ -394,7 +395,7 @@
 
           <section class="panel strategy-panel research-panel">
             <div class="market-research-head">
-              <div class="section-title"><span class="eyebrow" id="market-research-depth-eyebrow">Step 1 · Choose research depth</span><h3 id="market-research-depth-title">How deeply should LeadIntel research this market?</h3><p id="market-research-depth-description">Select one option to review the research plan before starting.</p></div>
+              <div class="section-title"><span class="eyebrow" id="market-research-depth-eyebrow">Strategy · Choose research depth</span><h3 id="market-research-depth-title">How deeply should LeadIntel research this market?</h3><p id="market-research-depth-description">Select one option to review the research plan before starting.</p></div>
               <div class="research-actions">
                 <button class="primary-btn research-primary-action" id="run-market-research" type="button" aria-label="Quick Overview, up to 20 evidence sources">Review Quick Overview</button>
                 <button class="secondary-btn research-secondary-action" id="run-detailed-research" type="button" aria-label="Market Research, up to 80 evidence sources">Review Market Research</button>
@@ -414,7 +415,7 @@
                 <div><span>Sources</span><strong id="research-preview-sources"></strong></div>
               </div>
               <div class="research-preview-method"><span>How it works</span><p id="research-preview-method"></p></div>
-              <div class="research-preview-discovery-note"><strong>How this affects Company Discovery</strong><p id="research-preview-discovery-note"></p></div>
+              <div class="research-preview-discovery-note"><strong>How this shapes Companies</strong><p id="research-preview-discovery-note"></p></div>
               <div class="research-suggested-block"><div><span>Recommended sites for this market</span><small>Select any sites you want LeadIntel to check directly and keep ready for monitoring.</small></div><div id="research-suggested-sources" class="research-suggested-sources"></div><button class="secondary-btn" id="add-suggested-sources" type="button">Add selected sites</button></div>
               <div class="research-preview-queries"><span>Planned searches</span><ol id="research-preview-queries"></ol></div>
               <div class="research-preview-actions"><button class="secondary-btn" id="edit-research-settings" type="button">Edit sources &amp; instructions</button><button class="primary-btn" id="confirm-market-research" type="button">Start Quick Overview</button></div>
@@ -432,7 +433,7 @@
                 <fieldset id="research-source-types"><legend>Source categories</legend><label><input type="checkbox" value="news" checked> News</label><label><input type="checkbox" value="tenders"> Tenders</label><label><input type="checkbox" value="jobs" checked> Jobs</label><label><input type="checkbox" value="investments" checked> Investments</label><label><input type="checkbox" value="company" checked> Company sites</label><label><input type="checkbox" value="registries"> Registries</label><small id="tender-source-note">Tender research is available only when the tender signal is active.</small></fieldset>
               </div>
             </details>
-            <div class="research-results-intro" id="research-results-intro" hidden><span class="eyebrow">Step 2 · Review findings</span><h3>Review what LeadIntel found</h3><p>Check the opportunities, buying signals and supporting evidence before activating the strategy.</p></div>
+            <div class="research-results-intro" id="research-results-intro" hidden><span class="eyebrow">Strategy · Review findings</span><h3>Review what LeadIntel found</h3><p>Check the opportunities, buying signals and supporting evidence before activating the strategy.</p></div>
             <section class="market-conditions" id="market-conditions" hidden aria-labelledby="market-conditions-title">
               <div class="market-conditions-head"><span class="eyebrow">Market conditions</span><h3 id="market-conditions-title">What the evidence means commercially</h3><p>Concise guidance built only from the sources collected in this research run.</p></div>
               <div class="market-condition-grid" id="market-condition-grid"></div>
@@ -446,7 +447,7 @@
           </section>
 
           <section class="panel strategy-panel monitoring-panel" id="monitoring-panel" hidden>
-            <div class="market-research-head"><div class="section-title"><span class="eyebrow">Step 3 · Optional Continuous Monitoring</span><h3>Watch for new opportunities automatically</h3><p>Use the recommended settings below, or open advanced settings when you need more control.</p></div><label class="monitoring-master"><input id="monitoring-enabled" type="checkbox"><span>Enable monitoring</span></label></div>
+            <div class="market-research-head"><div class="section-title"><span class="eyebrow">Strategy · Optional monitoring</span><h3>Watch for new opportunities automatically</h3><p>Use the recommended settings below, or open advanced settings when you need more control.</p></div><label class="monitoring-master"><input id="monitoring-enabled" type="checkbox"><span>Enable monitoring</span></label></div>
             <div class="monitoring-grid">
               <label><span>Frequency</span><select id="monitoring-frequency"><option value="daily">Daily</option><option value="weekly" selected>Weekly</option><option value="monthly">Monthly</option></select></label>
               <label><span>Research depth</span><select id="monitoring-depth"><option value="quick">Quick</option><option value="deep" selected>Deep</option></select></label>
@@ -462,13 +463,13 @@
           </section>
 
           <div class="approval-card strategy-activation" id="strategy-activation-card">
-            <div><span class="eyebrow" id="strategy-activation-step">Final step</span><h3 id="strategy-activation-title">Ready to find matching companies</h3><p id="strategy-activation-description">Review the active strategy before opening Company Discovery.</p><p class="strategy-activation-feedback" id="strategy-activation-feedback" role="status" aria-live="polite" hidden></p></div>
-            <button class="primary-btn stage-next-action" id="activate-market-strategy" type="button" aria-haspopup="dialog" aria-controls="strategy-handoff-dialog">Review & Continue to Company Discovery →</button>
+            <div><span class="eyebrow" id="strategy-activation-step">Final step</span><h3 id="strategy-activation-title">Ready to find matching companies</h3><p id="strategy-activation-description">Review the active strategy before finding companies.</p><p class="strategy-activation-feedback" id="strategy-activation-feedback" role="status" aria-live="polite" hidden></p></div>
+            <button class="primary-btn stage-next-action" id="activate-market-strategy" type="button" aria-haspopup="dialog" aria-controls="strategy-handoff-dialog">Review & Continue to Companies →</button>
           </div>
 
           <dialog class="strategy-handoff-dialog" id="strategy-handoff-dialog" aria-labelledby="strategy-handoff-title">
             <form method="dialog" class="strategy-handoff-card">
-              <div class="strategy-handoff-head"><span class="eyebrow">Company Discovery pre-flight</span><h3 id="strategy-handoff-title">Review before Company Discovery</h3><p>Confirm exactly what LeadIntel will use to find and rank companies.</p></div>
+              <div class="strategy-handoff-head"><span class="eyebrow">Companies review</span><h3 id="strategy-handoff-title">Review before finding companies</h3><p>Confirm exactly what LeadIntel will use to find and rank companies.</p></div>
               <div class="strategy-handoff-summary" id="strategy-handoff-summary"></div>
               <section class="strategy-handoff-notice strategy-handoff-blockers" id="strategy-handoff-blockers" hidden><strong>Complete before continuing</strong><ul></ul></section>
               <section class="strategy-handoff-notice strategy-handoff-warnings" id="strategy-handoff-warnings" hidden><strong>Optional notes</strong><ul></ul></section>
@@ -523,13 +524,13 @@
   <script defer src="content-variants.js?v=20260921-contact-gated-v2"></script>
   <script defer src="step2-brief-schema.js?v=20260916-commercial-brief-v1"></script>
   <script defer src="profile-engine.js?v=20260922-step3-signal-backfill-v1&profile-overview-hygiene=1"></script>
-  <script defer src="market-engine.js?v=20260921-standard-market-next-step-v1&adaptive-evidence=1"></script>
+  <script defer src="market-engine.js?v=20260924-friendly-workflow-labels-v1&adaptive-evidence=1"></script>
   <script defer src="market-conditions-engine.js?v=20260922-market-conditions-v1&adaptive-evidence=1"></script>
   <script defer src="market-research-verification.js?v=20260916-gemini-verification-v1"></script>
 <script defer src="profile-enrichment-checkpoint.js?v=20260921-profile-enrichment-v2"></script>
-<script defer src="profile-enrichment-checkpoint-ui.js?v=20260921-profile-enrichment-v2"></script>
-  <script defer src="workflow-next-action.js?v=20260922-step5-progressive-disclosure-v1"></script>
-<script defer src="discovery-engine.js?v=20260923-adaptive-discovery-v1"></script>
+<script defer src="profile-enrichment-checkpoint-ui.js?v=20260924-friendly-workflow-labels-v1"></script>
+  <script defer src="workflow-next-action.js?v=20260924-friendly-workflow-labels-v1"></script>
+<script defer src="discovery-engine.js?v=20260924-friendly-workflow-labels-v1"></script>
   <script defer src="workspace-isolation.js?v=20260914-workspace-isolation-v1"></script>
   <script defer src="workspace-reset-hygiene.js?v=20260917-task-reset-v1&reset-center=1"></script>
   <script defer src="website-activation.js?v=20260916-ercon-context-v1"></script>
@@ -537,14 +538,14 @@
   <script defer src="server-bridge.js?v=20260918-account-provider-v1" data-server-bridge="true"></script>
   <script defer src="brand-identity.js?v=20260916-brand-timestamp-v1"></script>
   <script defer src="brand-identity-ui.js?v=20260916-browser-logo-copy-v2"></script>
-  <script defer src="journey-progress.js?v=20260922-health-research-label-v1"></script>
-  <script defer src="process-map.js?v=20260923-customer-profile-inference-v1"></script>
+  <script defer src="journey-progress.js?v=20260924-friendly-workflow-labels-v1"></script>
+  <script defer src="process-map.js?v=20260924-friendly-workflow-labels-v1"></script>
   <script defer src="attention-centre-model.js?v=20260921-research-progress-v1&health-colors=1"></script>
   <script defer src="attention-centre.js?v=20260917-reset-visual-v1&health-colors=1"></script>
-  <script type="module" src="app.js?v=20260923-research-depth-return-v1&icp-data-gates=1&reset-center=1&quick-insights=1&adaptive-evidence=1&strategy-handoff-copy=1&profile-overview-hygiene=1&reference-interface=20260923"></script>
+  <script type="module" src="app.js?v=20260924-friendly-workflow-labels-v1&icp-data-gates=1&reset-center=1&quick-insights=1&adaptive-evidence=1&strategy-handoff-copy=1&profile-overview-hygiene=1"></script>
   <script type="module" src="ai-settings.js?v=20260917-shell-stability-v1"></script>
-  <script type="module" src="copilot-loader.js?v=20260917-attention-v1"></script>
-  <script type="module" src="shell-support-loader.js?v=20260923-customer-profile-inference-v1&reset-center=1"></script>
-  <script defer src="discovery-ui.js?v=20260923-adaptive-discovery-v1"></script>
+  <script type="module" src="copilot-loader.js?v=20260924-friendly-workflow-labels-v1"></script>
+  <script type="module" src="shell-support-loader.js?v=20260924-friendly-workflow-labels-v1&reset-center=1"></script>
+  <script defer src="discovery-ui.js?v=20260924-friendly-workflow-labels-v1"></script>
 </body>
 </html>

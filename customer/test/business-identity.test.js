@@ -92,7 +92,7 @@ test('Competitive Advantages spans the complete Commercial Positioning grid', ()
   const shell = fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
   assert.match(ui,/diff\.classList\.add\("wide","identity-wide"\)/);
   assert.match(processMap,/business-identity\.js\?v=20260906-pain-headings-v1/);
-  assert.match(shell,/process-map\.js\?v=20260923-customer-profile-inference-v1/);
+  assert.match(shell,/process-map\.js\?v=20260924-friendly-workflow-labels-v1/);
 });
 
 
@@ -157,7 +157,7 @@ test('Step 1 opens the questionnaire immediately and keeps evidence-first resear
   const researchEngine = fs.readFileSync(path.join(__dirname, '..', 'company-research-engine.js'), 'utf8');
   assert.match(index, /company-research-ui\.js/);
   assert.match(researchUi, /runCompanyResearch/);
-  assert.match(researchUi, /Continue to Company Research/);
+  assert.match(researchUi, /Continue to Profile/);
   assert.match(researchUi, /rerun-company-research/);
   assert.doesNotMatch(researchUi, /function interceptStepOne/);
   assert.match(researchUi, /Evidence draft/);

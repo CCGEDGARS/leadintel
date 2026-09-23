@@ -16,7 +16,7 @@ test('Reference Customer CTA is isolated from profile actions and owned by the d
 });
 
 test('approved profile presentation mirrors app state without duplicating the click handler',()=>{
-  assert.match(runtime,/Continue to Market Strategy/);
+  assert.match(runtime,/Continue to Strategy/);
   assert.match(runtime,/approveButton\.disabled=approved/);
   assert.match(app,/\$\("approve-profile"\)\.addEventListener\("click",\(\)=>approveProfile\(\)\)/);
   assert.match(app,/\$\("continue-market-strategy"\)\.addEventListener\("click",openMarketStrategy\)/);
@@ -25,7 +25,7 @@ test('approved profile presentation mirrors app state without duplicating the cl
 
 test('bottom profile card semantics are owned by app.js',()=>{
   assert.match(runtime,/approval-card/);
-  assert.match(runtime,/Continue to Market Strategy/);
+  assert.match(runtime,/Continue to Strategy/);
   assert.match(app,/\$\("approve-profile"\)\.addEventListener\("click",\(\)=>approveProfile\(\)\)/);
   assert.match(app,/\$\("continue-market-strategy"\)\.addEventListener\("click",openMarketStrategy\)/);
   assert.doesNotMatch(app,/approve-profile-bottom/);

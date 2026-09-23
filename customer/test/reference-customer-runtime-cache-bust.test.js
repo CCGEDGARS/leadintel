@@ -7,8 +7,7 @@ const read=path=>fs.readFileSync(new URL(`../${path}`,import.meta.url),'utf8');
 test('Reference Customer action modules use a fresh cache key end to end',()=>{
   const index=read('index.html');
   const processMap=read('process-map.js');
-  assert.match(index,/process-map\.js\?v=20260923-customer-profile-inference-v1/);
-  assert.match(processMap,/reference-customers\.js\?v=20260923-customer-profile-inference-v1/);
+  assert.match(index,/process-map\.js\?v=20260924-friendly-workflow-labels-v1/);
   assert.match(processMap,/reference-customer-ui\.js\?v=20260923-customer-profile-inference-v1/);
   assert.match(processMap,/reference-customer-clear-list\.js\?v=20260923-reference-interface-v1/);
   assert.match(processMap,/reference-customer-website-enrichment\.js\?v=20260923-reference-interface-v1/);
@@ -21,10 +20,10 @@ test('Reference Customer action modules use a fresh cache key end to end',()=>{
   assert.match(analysis,/reference-customer-delete-ui\.js\?v=20260923-reference-interface-v1/);
   const supportLoader=read('shell-support-loader.js');
   assert.match(supportLoader,/reference-customers\.js\?v=20260923-customer-profile-inference-v1/);
-  assert.match(supportLoader,/reference-customer-ui\.js\?v=20260923-customer-profile-inference-v1/);
+  assert.match(supportLoader,/reference-customer-ui\.js\?v=20260924-friendly-workflow-labels-v1/);
   assert.match(supportLoader,/reference-customer-ai-runtime\.js\?v=20260923-customer-profile-inference-v1/);
   assert.match(supportLoader,/lookalike-discovery\.js\?v=20260923-customer-profile-inference-v1/);
-  assert.match(index,/shell-support-loader\.js\?v=20260923-customer-profile-inference-v1/);
+  assert.match(index,/shell-support-loader\.js\?v=20260924-friendly-workflow-labels-v1/);
 });
 
 test('clear-list action uses branded inline confirmation rather than native browser confirm',()=>{

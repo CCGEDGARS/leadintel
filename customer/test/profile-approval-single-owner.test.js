@@ -16,5 +16,5 @@ test('app.js is the sole owner of profile approval and profile-next-step clicks'
 
 test('profile runtime is presentation-only and mirrors app semantics',()=>{
   assert.match(runtime,/syncApprovalControls/);
-  assert.match(runtime,/Continue to Market Strategy/);
+  assert.match(runtime,/Continue to Strategy/);
 });

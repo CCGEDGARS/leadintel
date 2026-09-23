@@ -208,7 +208,7 @@ test('usable research unlocks Company Discovery even when OpenAI extension is re
   const view=Market.getMarketJourneyState({researchStatus:'partial',lastResearchAt:'2026-09-21T10:00:00.000Z',researchResults:[{url:'https://example.com/evidence'}],strategyApproved:false});
   assert.equal(view.showActivation,true);
   assert.equal(view.activationEnabled,true);
-  assert.equal(view.activationLabel,'Continue to Company Discovery →');
+  assert.equal(view.activationLabel,'Continue to Companies →');
 });
 
 test('failed research with no usable evidence keeps the next step visible and blocked',()=>{

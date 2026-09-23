@@ -33,7 +33,7 @@ test('research preview explains how each market mode relates to separate company
   assert.match(app,/Quick Overview collects a lighter market evidence set/);
   assert.match(app,/separate search and the selected company target stays the same/);
   assert.match(app,/Market Research is recommended for a fuller starting point/);
-  assert.match(app,/Market Research is the recommended starting point for Company Discovery/);
+  assert.match(app,/Market Research is the recommended starting point for Companies/);
   assert.match(app,/Deep Analysis adds broad strategic context/);
   assert.match(app,/textContent=modeUi\.discoveryNote/);
   assert.match(discovery,/dispatchEvent\(new CustomEvent\("leadintel:review-market-research"\)\)/);

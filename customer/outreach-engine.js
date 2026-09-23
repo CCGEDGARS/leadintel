@@ -235,7 +235,7 @@
     let brandSnapshot=null;
     if(options.brandIdentity?.status==="ready"){
       try{brandSnapshot=BrandIdentity?.snapshot(options.brandIdentity)||null;}
-      catch{return {...item,drafts,approved:false,error:"Brand identity is marked Ready but is not valid. Review it in Step 1 before approval."};}
+      catch{return {...item,drafts,approved:false,error:"Brand identity is marked Ready but is not valid. Review it in Setup before approval."};}
     }
     const generatedBodies=[item?.drafts?.emailBody,item?.contentVariants?.drafts?.en?.emailBody,item?.contentVariants?.drafts?.lv?.emailBody].map(value=>String(value??"")).filter(Boolean);
     const generated=generatedBodies.includes(drafts.emailBody);

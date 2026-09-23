@@ -24,13 +24,13 @@ test('customer onboarding contains all ten Commercial Intelligence Brief questio
   const html=read('index.html');
   const ids=['priority_offers','ideal_customer','buyer_roles','exclusions','buying_outcomes','buying_triggers','value_proposition','differentiation','proof_points','objections'];
   ids.forEach(id=>assert.match(html,new RegExp(`data-question="${id}"`)));
-  assert.match(html,/Commercial Intelligence Brief/i);
+  assert.match(html,/Build your commercial profile/i);
 });
 
 test('strategic intake is clearly optional enrichment',()=>{
   const html=read('index.html');
-  assert.match(html,/Optional enrichment/);
   assert.match(html,/skip these questions/i);
+  assert.match(html,/complete them later/i);
   assert.doesNotMatch(html,/These ten answers control what the system prioritizes/);
   assert.doesNotMatch(html,/Approval gate/);
 });

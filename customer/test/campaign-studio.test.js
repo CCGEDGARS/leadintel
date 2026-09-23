@@ -163,7 +163,7 @@ test('campaign context influences generated scripts and is snapshotted on approv
 test('Campaign Studio UI replaces Content and Scripts and exposes scenario and segment controls',()=>{
   const fs=require('node:fs');
   const ui=fs.readFileSync(require.resolve('../outreach-ui.js'),'utf8');
-  assert.match(ui,/Campaign Studio/);
+  assert.match(ui,/Step 6 · Messages/);
   assert.match(ui,/core-scenario-summary/);
   assert.match(ui,/core-scenario-offer/);
   assert.match(ui,/core-scenario-segment/);

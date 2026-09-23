@@ -622,17 +622,17 @@
     const signals=Math.max(0,Number(activeSignalCount)||0);
     const target=Math.max(1,Number(targetCount)||10);
     const signalStep=signals<3
-      ? "Open Market Strategy and activate at least 3 buying signals: capacity expansion, a new facility or investment, and hiring or outsourcing. Keep tender or procurement only when it is relevant."
-      : "Open Market Strategy and broaden narrow ICP or signal keywords so they describe observable buyer events, not only one exact phrase.";
+      ? "Open Strategy and activate at least 3 buying signals: capacity expansion, a new facility or investment, and hiring or outsourcing. Keep tender or procurement only when it is relevant."
+      : "Open Strategy and broaden narrow ICP or signal keywords so they describe observable buyer events, not only one exact phrase.";
     const amountStep=target===10
-      ? "Return to Company Discovery, keep the search at 10 companies, and run it again. Increase the amount only after qualified results appear."
-      : "Return to Company Discovery, return to 10 companies, and run it again. Increase the amount only after qualified results appear.";
+      ? "Return to Companies, keep the search at 10 companies, and run it again. Increase the amount only after qualified results appear."
+      : "Return to Companies, return to 10 companies, and run it again. Increase the amount only after qualified results appear.";
     const quickMode=clean(researchMode)==="quick";
     const steps=[signalStep,"Confirm that at least one active ICP describes the intended buyers, rather than companies that merely resemble your own supplier profile."];
-    if(quickMode)steps.unshift("Quick Overview uses a smaller market evidence set. Run Market Research in Stage 4, then retry Company Discovery; Stage 5 still performs its own company search.");
+    if(quickMode)steps.unshift("Quick Overview uses a smaller market evidence set. Run Market Research in Strategy, then run the Companies search again.");
     if(Number(adaptiveFollowUpSearches)>0)steps.push(`LeadIntel already broadened the search with ${Number(adaptiveFollowUpSearches)} follow-up searches. Public evidence may still be too limited to verify a qualified company.`);
     steps.push(amountStep);
-    return {primaryAction:quickMode?"review_research":"review_strategy",primaryLabel:quickMode?"Review Market Research":"Review Market Strategy",summary:`${evidence} evidence results were checked. No company passed every active market and buying-signal check. A zero-result run can be a valid finding when qualifying public evidence is unavailable.`,steps};
+    return {primaryAction:quickMode?"review_research":"review_strategy",primaryLabel:quickMode?"Review Market Research":"Review Strategy",summary:`${evidence} evidence results were checked. No company passed every active market and buying-signal check. A zero-result run can be a valid finding when qualifying public evidence is unavailable.`,steps};
   }
 
   function normalizeDiscoveryFunnel(value={}){

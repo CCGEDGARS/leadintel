@@ -16,13 +16,13 @@ const supportLoader=read('shell-support-loader.js');
 test('Customer V2 loads the automatic company research module with Firecrawl workspace routing before research',()=>{
   assert.match(processMap,/firecrawl-workspace-router\.js\?v=20260914-spinner-hard-stop-v1/);
   assert.match(processMap,/company-research-security\.js\?v=20260918-translation-fidelity-v3/);
-  assert.match(processMap,/company-research-ui\.js\?v=20260919-brief-section-border-v1/);
+  assert.match(processMap,/company-research-ui\.js\?v=20260924-friendly-workflow-labels-v1/);
   assert.ok(processMap.indexOf('firecrawl-workspace-router.js')<processMap.indexOf('company-research-ui.js'),'Firecrawl router must load before company research');
   assert.match(processMap,/company-profile-handoff\.js\?v=20260826-intelligence-autofill-v1/);
   assert.match(ui,/company-research-engine\.js\?v=20260918-translation-fidelity-v3/);
   assert.match(read('index.html'),/profile-engine\.js\?v=20260922-step3-signal-backfill-v1/);
-  assert.match(read('index.html'),/process-map\.js\?v=20260923-customer-profile-inference-v1/);
-  assert.match(supportLoader,/company-research-ui\.js\?v=20260919-brief-section-border-v1/);
+  assert.match(read('index.html'),/process-map\.js\?v=20260924-friendly-workflow-labels-v1/);
+  assert.match(supportLoader,/company-research-ui\.js\?v=20260924-friendly-workflow-labels-v1/);
 });
 
 test('Stage 1 exposes the primary next action after all available company sources',()=>{
@@ -32,7 +32,7 @@ test('Stage 1 exposes the primary next action after all available company source
   const materials=html.indexOf('<h3>Company materials</h3>',optionalLinks);
   const action=html.indexOf('class="step-actions stage1-primary-action',materials);
   assert.ok(marketStart>=0&&optionalLinks>marketStart&&materials>optionalLinks&&action>materials);
-  assert.match(html,/id="to-questionnaire">Continue to Company Research/);
+  assert.match(html,/id="to-questionnaire">Continue to Profile/);
 });
 
 test('Commercial brief sections use a clearly visible shared outer border',()=>{
@@ -40,7 +40,7 @@ test('Commercial brief sections use a clearly visible shared outer border',()=>{
 });
 
 test('Step 2 waits for an explicit research confirmation and explains the next action',()=>{
-  assert.match(ui,/Continue to Company Research/);
+  assert.match(ui,/Continue to Profile/);
   assert.match(ui,/rerun-company-research/);
   assert.match(ui,/Setup complete — ready for company research/);
   assert.match(ui,/Usually takes up to 1 minute/);
@@ -93,7 +93,7 @@ test('Firecrawl router leaves unrelated fetches and local unsigned research unto
 });
 
 test('Step 2 renders research summary, provenance, confidence and needs-input states',()=>{
-  assert.match(ui,/Build your Commercial Intelligence Brief\./);
+  assert.match(read('index.html'),/Build your commercial profile\./);
   assert.match(ui,/research-summary/);
   assert.match(ui,/Research could not complete/);
   assert.match(ui,/failureAt/);
@@ -170,7 +170,7 @@ test('labels Reset Center scopes clearly and protects CRM records',()=>{
 
 test('workspace and research content stay English while localization remains in Campaign Studio',()=>{
   const html=read('index.html');
-  assert.match(ui,/Build your Commercial Intelligence Brief\./);
+  assert.match(html,/Build your commercial profile\./);
   assert.match(html,/Define who LeadIntel should find\./);
   assert.match(html,/Buying Signals/);
   assert.match(html,/Commercial Message/);

@@ -1,8 +1,8 @@
 import './content-language.js?v=20260922-campaign-only-v1';
 import './content-variants.js?v=20260921-contact-gated-v2';
 import './business-identity.js?v=20260906-pain-headings-v1';
-import './evidence-view.js?v=20260921-two-stage-profile-action-v1&profile-overview-hygiene=1&reference-interface=20260923';
-import './profile-approval-ui.js?v=20260922-step3-recovery-v1';
+import './evidence-view.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&reference-interface=20260923';
+import './profile-approval-ui.js?v=20260924-friendly-workflow-labels-v1';
 import './workspace-persistence.js?v=20260917-reset-clean-v1';
 import {withOpenAiRetry,cleanOpenAiResearchQuery,describePartialCoverage} from './market-research-provider-resilience.js?v=20260916-latency-fix-v2';
 
@@ -66,7 +66,7 @@ function invalidateStrategicOutputs(clearSources=false){
 }
 function updateNavigationAvailability(){
   document.querySelectorAll("[data-step-marker]").forEach(el=>{
-    const step=Number(el.dataset.stepMarker);const available=LeadIntelProfile.canAccessModule(state,step);
+    const step=Number(el.dataset.moduleStep||el.dataset.stepMarker);const available=LeadIntelProfile.canAccessModule(state,step);
     el.classList.toggle("available",available);el.setAttribute("aria-disabled",available?"false":"true");
   });
 }
@@ -84,6 +84,8 @@ function setStep(step){
   window.dispatchEvent(new CustomEvent("leadintel:module-opened",{detail:{step}}));
   window.scrollTo({top:0,behavior:"smooth"});
 }
+window.LeadIntelCustomerNavigation={setStep,openModule};
+window.addEventListener("leadintel:open-module",event=>{const step=Number(event.detail?.step);if(step>=1&&step<=7)void openModule(step);});
 function restoreResetLanding(){
   setStep(1);
   window.LeadIntelJourney?.refresh?.();
@@ -181,7 +183,7 @@ function validateStep1(){
   if(!state.targetMarkets.length){$("step1-error").textContent="Choose at least one target market.";return false;}
   $("step1-error").textContent="";return true;
 }
-function validateStep2(){readAnswers();if(!LeadIntelProfile.canBuildProfile(state)){$("step2-error").textContent="Add a valid company website and target market in Step 1 first.";return false;}$("step2-error").textContent="";return true;}
+function validateStep2(){readAnswers();if(!LeadIntelProfile.canBuildProfile(state)){$("step2-error").textContent="Add a valid company website and target market in Setup first.";return false;}$("step2-error").textContent="";return true;}
 
 async function getPdfModule(){
   if(pdfModule)return pdfModule;
@@ -257,7 +259,7 @@ async function analyzeCompany(targetStep=3){
   analysisLog(`${usable.length}/${sources.length} web sources readable`);analysisLog(`${state.documents.filter(d=>d.text).length} PDFs with extracted text`);
   await new Promise(resolve=>setTimeout(resolve,350));
   state.profile=LeadIntelProfile.buildCompanyIntelligenceProfile({...state,scrapedSources:usable});seedMarketStrategy();
-  saveState();analysisLog("Company Intelligence Profile built");
+  saveState();analysisLog("Profile built");
   await new Promise(resolve=>setTimeout(resolve,250));
   $("analysis-state").hidden=true;$("profile-content").hidden=false;renderProfile();
   if(requestedStep>3)setStep(requestedStep);return true;
@@ -295,12 +297,12 @@ function seedMarketStrategy(){
 function approveProfile(){
   saveProfileEdits();state.approved=true;state.profile.approvedAt=new Date().toISOString();seedMarketStrategy();saveState();editMode=false;updateApprovalUI();
   window.dispatchEvent(new CustomEvent("leadintel:workspace-changed",{detail:{source:"profile-approval"}}));
-  showToast("Company Intelligence Profile approved");
+  showToast("Profile approved");
 }
 function updateApprovalUI(){
   globalThis.LeadIntelProfileApprovalUI?.updateProfileApprovalUI(document,state.approved);
 }
-function openMarketStrategy(){if(!state.profile){openModule(4);return;}if(!state.approved){setStep(3);showToast("Approve the profile before continuing to Market Strategy");return;}ensureMarketStrategySeeded();setStep(4);}
+function openMarketStrategy(){if(!state.profile){openModule(4);return;}if(!state.approved){setStep(3);showToast("Approve the profile before continuing to Strategy");return;}ensureMarketStrategySeeded();setStep(4);}
 function ensureMarketStrategySeeded(){
   if(!state.profile)return;
   const language=contentLanguage();
@@ -320,12 +322,12 @@ async function openModule(step){
   if(!LeadIntelProfile.canAccessModule(state,target)){showToast("Add your company website and target market first");setStep(1);return false;}
   if(target<=2){setStep(target);return true;}
   if(!state.profile)return analyzeCompany(Math.min(target,3));
-  if(target>=4&&!state.approved){setStep(3);showToast("Approve the profile before continuing to Market Strategy");return false;}
+  if(target>=4&&!state.approved){setStep(3);showToast("Approve the profile before continuing to Strategy");return false;}
   ensureMarketStrategySeeded();
   const safeTarget=window.LeadIntelWorkspaceIsolation?.safeStep?.(localStorage,state,target);
   if(target>=5&&safeTarget!==target){
     setStep(safeTarget||4);
-    showToast(target===6?"Save a company to Pipeline in Discovery before opening Campaign Studio.":"Complete the previous stage before continuing.");
+    showToast(target===6?"Save a company in Companies before opening Messages.":"Complete the previous stage before continuing.");
     return false;
   }
   setStep(target);return true;
@@ -488,17 +490,17 @@ function researchModeUi(mode){
     label:"Deep Analysis",
     estimate:"usually 5–10 minutes",
     method:"LeadIntel performs the widest investigation across active buying signals and selected source categories. OpenAI discovers relevant public pages; Firecrawl extracts evidence and checks specific URLs; Gemini independently cross-checks only the collected evidence.",
-    discoveryNote:"Deep Analysis adds broad strategic context. Company Discovery still runs its own separate search and applies the same qualification checks."
+    discoveryNote:"Deep Analysis adds broad strategic context. The Companies stage still runs its own search and applies the same qualification checks."
   }:selected==="deep"?{
     label:"Market Research",
     estimate:"usually 2–4 minutes",
     method:"LeadIntel rotates across more active buying signals and the source categories you selected. OpenAI discovers relevant public pages; Firecrawl extracts evidence and checks specific URLs; Gemini independently cross-checks only the collected evidence.",
-    discoveryNote:"Market Research is the recommended starting point for Company Discovery. Stage 5 still runs its own company search and checks each match against your active market and buying signals."
+    discoveryNote:"Market Research is the recommended starting point for Companies. The Companies stage runs its own search and checks each match against your active market and buying signals."
   }:{
     label:"Quick Overview",
     estimate:"usually under 1 minute",
     method:"LeadIntel validates the strongest active buying signals across your selected source categories. OpenAI discovers public pages; Firecrawl extracts the available evidence.",
-    discoveryNote:"Quick Overview collects a lighter market evidence set. Company Discovery still runs a separate search and the selected company target stays the same, but it has less context for ranking matches. Market Research is recommended for a fuller starting point."
+    discoveryNote:"Quick Overview collects a lighter market evidence set. The Companies stage still runs a separate search and the selected company target stays the same, but it has less context for ranking matches. Market Research is recommended for a fuller starting point."
   };
 }
 function openResearchPreview(mode){
@@ -879,7 +881,7 @@ function renderMarketJourney(){
     if(depthTitle)depthTitle.textContent="Choose a research depth or run it again.";
     if(depthDescription)depthDescription.textContent="Quick Overview, Market Research and Deep Analysis stay available. Choose any option to review and start another market research run.";
   }else{
-    if(depthEyebrow)depthEyebrow.textContent="Step 1 · Choose research depth";
+    if(depthEyebrow)depthEyebrow.textContent="Strategy · Choose research depth";
     if(depthTitle)depthTitle.textContent="How deeply should LeadIntel research this market?";
     if(depthDescription)depthDescription.textContent="Select one option to review the research plan before starting.";
   }
@@ -894,13 +896,13 @@ function renderMarketJourney(){
   activationButton.hidden=false;
   const running=researchRunning();
   activationButton.disabled=running;
-  activationButton.textContent=running?"Research in progress — please wait":"Review & Continue to Company Discovery →";
+  activationButton.textContent=running?"Research in progress — please wait":"Review & Continue to Companies →";
   activationButton.setAttribute("aria-disabled",String(running));
   activationButton.dataset.researchRunning=String(running);
   if(view.stage==="active"){
     step.textContent="Strategy saved";
     title.textContent="Ready to find matching companies";
-    description.textContent="Your approved market evidence will guide Company Discovery."
+    description.textContent="Your approved market evidence will guide the Companies stage."
     activationButton.dataset.activationContinue="true";
   }else{
     step.textContent="Next step";
@@ -976,15 +978,15 @@ function strategyHandoffModel(){
   const incompleteResearch=state.market.researchStatus==="partial"||Object.values(sources).some(value=>["partial","error","unavailable"].includes(value));
   const blockers=[];
   if(!icps.length)blockers.push("No active ICP");
-  if(!signals.length)blockers.push("No active buying signal — required before Company Discovery can rank purchase intent.");
+  if(!signals.length)blockers.push("No active buying signal — required before companies can be ranked for purchase intent.");
   if(!opportunities.length)blockers.push("No active market opportunity");
   if(!state.market.lastResearchAt||!evidence.length)blockers.push("Market research has not completed");
   const warnings=[];
-  if(signals.length===1)warnings.push("Only one active buying signal. Company Discovery can run, but ranking will be narrow. At least 3 active signals are recommended.");
-  else if(signals.length===2)warnings.push("Only 2 active buying signals. Company Discovery can run, but at least 3 active signals are recommended.");
+  if(signals.length===1)warnings.push("Only one active buying signal. Companies can be found, but ranking will be narrow. At least 3 active signals are recommended.");
+  else if(signals.length===2)warnings.push("Only 2 active buying signals. Companies can be found, but at least 3 active signals are recommended.");
   if(lowEvidenceCoverage)warnings.push("Fewer than 3 evidence sources were saved. Discovery confidence may be limited.");
   if(incompleteResearch)warnings.push("Some research checks were unavailable; saved evidence will still be used.");
-  if(!monitoring.enabled)warnings.push("Monitoring is off. This one-time Company Discovery will still run normally. Turn on monitoring later to track new buying signals over time.");
+  if(!monitoring.enabled)warnings.push("Monitoring is off. This one-time company search will still run normally. Turn on monitoring later to track new buying signals over time.");
   const customSources=state.market.researchCustomSources||[];
   if(customSources.length&&!monitoring.customSources?.length)warnings.push("Preferred research sources are saved but are not included in monitoring.");
   const actions=[];
@@ -998,7 +1000,7 @@ function strategyHandoffModel(){
       ["Market opportunities",opportunities.map(item=>item.market).filter(Boolean).join(" · ")||"None"],
       ["Evidence",evidence.length+" saved source"+(evidence.length===1?"":"s")],
       ["Monitoring",monitoring.enabled?(monitoring.frequency+" · minimum score "+monitoring.minimumScore):"Off (optional)"],
-      ["Next", "Company Discovery will find and rank matching companies using this active strategy."]
+      ["Next", "The Companies stage will find and rank matching companies using this active strategy."]
     ]
   };
 }
@@ -1016,7 +1018,7 @@ function renderStrategyHandoff(){
   repairActions.hidden=reviewSignals.hidden&&retrySignals.hidden;
   const confirm=$("confirm-strategy-handoff");
   confirm.disabled=Boolean(model.blockers.length);
-  confirm.textContent=model.blockers.length?"Complete Required Items":model.hasLimitedResults?"Continue with limited results →":state.market.strategyApproved?"Continue to Company Discovery →":"Activate Strategy & Continue →";
+  confirm.textContent=model.blockers.length?"Complete Required Items":model.hasLimitedResults?"Continue with limited results →":state.market.strategyApproved?"Continue to Companies →":"Activate Strategy & Continue →";
   return model;
 }
 function reviewBuyingSignalsFromHandoff(){
@@ -1072,9 +1074,9 @@ async function activateMarketStrategy(){
   if(button?.dataset.activationBusy==="true")return;
   const model=strategyHandoffModel();
   if(model.blockers.length){renderStrategyHandoff();return;}
-  if(button){button.disabled=true;button.dataset.activationBusy="true";button.textContent="Opening Company Discovery…";}
-  if(confirm){confirm.disabled=true;confirm.textContent="Opening Company Discovery…";}
-  setActivationFeedback(state.market.strategyApproved?"Strategy is active · opening Company Discovery…":"Saving your market strategy and opening Company Discovery…","running");
+  if(button){button.disabled=true;button.dataset.activationBusy="true";button.textContent="Opening Companies…";}
+  if(confirm){confirm.disabled=true;confirm.textContent="Opening Companies…";}
+  setActivationFeedback(state.market.strategyApproved?"Strategy is active · opening Companies…":"Saving your strategy and opening Companies…","running");
   try{
     if(!state.market.strategyApproved){
       state.market.strategyApproved=true;
@@ -1085,13 +1087,13 @@ async function activateMarketStrategy(){
     closeStrategyHandoff();
     const opened=await openDiscoveryAfterActivation();
     if(!opened){
-      setActivationFeedback("Company Discovery did not open. Please try again.","error");
-      showToast("Company Discovery did not open. Please try again.");
-      if(button){button.disabled=false;button.textContent="Try Company Discovery Again →";}
+      setActivationFeedback("Companies did not open. Please try again.","error");
+      showToast("Companies did not open. Please try again.");
+      if(button){button.disabled=false;button.textContent="Try Companies Again →";}
       return;
     }
-    setActivationFeedback("Company Discovery opened.","success");
-    showToast("Market Strategy activated · Company Discovery is ready");
+    setActivationFeedback("Companies opened.","success");
+    showToast("Strategy approved · Companies are ready");
   }catch(error){
     console.error("Market strategy activation failed",error);
     setActivationFeedback("Activation failed · "+(error?.message||"Please try again"),"error");
@@ -1185,12 +1187,12 @@ function bind(){
   $("custom-target-market").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();addCustomTargetMarket();}});
   $("clear-target-markets").addEventListener("click",()=>setTargetMarkets([]));
   document.querySelectorAll("[data-question]").forEach(el=>el.addEventListener("input",readAnswers));
-  document.querySelector(".steps")?.addEventListener("click",e=>{const marker=e.target.closest("[data-step-marker]");if(marker)openModule(Number(marker.dataset.stepMarker));});
+  document.querySelector(".steps")?.addEventListener("click",e=>{const marker=e.target.closest("[data-step-marker]");if(!marker)return;const journeyStage=Number(marker.dataset.workflowStage);if(journeyStage){window.LeadIntelJourney?.openWorkflowStage?.(journeyStage);return;}openModule(Number(marker.dataset.stepMarker));});
   $("to-questionnaire").addEventListener("click",()=>openModule(2));$("back-to-sources").addEventListener("click",()=>openModule(1));$("analyze-company").addEventListener("click",()=>analyzeCompany(3));
   $("pdf-input").addEventListener("change",e=>handlePdfFiles(e.target.files));
   $("document-list").addEventListener("click",e=>{const btn=e.target.closest("[data-remove-doc]");if(!btn)return;state.documents.splice(Number(btn.dataset.removeDoc),1);saveState();renderDocuments();});
   const zone=$("upload-zone");["dragenter","dragover"].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault();zone.classList.add("dragging");}));["dragleave","drop"].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault();zone.classList.remove("dragging");}));zone.addEventListener("drop",e=>handlePdfFiles(e.dataTransfer.files));
-  $("edit-profile").addEventListener("click",toggleEdit);$("approve-profile").addEventListener("click",()=>approveProfile());$("continue-market-strategy").addEventListener("click",openMarketStrategy);$("recommended-signals").addEventListener("change",()=>{saveProfileEdits();seedMarketStrategy();saveState();updateApprovalUI();showToast("Profile changed · approve it again before continuing");});$("improve-profile").addEventListener("click",()=>openModule(1));
+  $("edit-profile").addEventListener("click",toggleEdit);$("approve-profile").addEventListener("click",()=>approveProfile());$("continue-market-strategy").addEventListener("click",openMarketStrategy);$("recommended-signals").addEventListener("change",()=>{saveProfileEdits();seedMarketStrategy();saveState();updateApprovalUI();showToast("Profile changed · approve it again before continuing");});$("improve-profile").addEventListener("click",()=>openModule(2));
   $("back-to-profile").addEventListener("click",()=>openModule(3));
   $("add-custom-signal").addEventListener("click",addCustomSignal);$("run-market-research").addEventListener("click",()=>openResearchPreview("quick"));$("run-detailed-research").addEventListener("click",()=>openResearchPreview("deep"));$("run-market-intelligence").addEventListener("click",()=>openResearchPreview("intelligence"));$("confirm-market-research").addEventListener("click",()=>{if(pendingResearchMode)void runMarketResearch(pendingResearchMode);});$("cancel-market-research").addEventListener("click",closeResearchPreview);$("add-suggested-sources").addEventListener("click",addSuggestedSources);$("edit-research-settings").addEventListener("click",()=>{const settings=$("research-settings");settings.open=true;closeResearchPreview();settings.scrollIntoView({behavior:"smooth",block:"start"});});
   document.querySelectorAll("[data-minimize-research-window]").forEach(button=>button.addEventListener("click",minimizeResearchProgressWindow));

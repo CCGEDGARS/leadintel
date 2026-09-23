@@ -15,7 +15,7 @@ test('copilot loader is boot-safe and defers polished UI modules',()=>{
   assert.doesNotMatch(source,/MutationObserver/);
   assert.doesNotMatch(source,/document\.body/);
   assert.match(source,/import\(['"]\.\/copilot-api\.js\?v=20260908-copilot-polish-v1/);
-  assert.match(source,/import\(['"]\.\/copilot-context\.js\?v=20260908-copilot-polish-v1/);
+  assert.match(source,/import\(['"]\.\/copilot-context\.js\?v=20260924-friendly-workflow-labels-v1/);
   assert.match(source,/import\(['"]\.\/copilot-ui\.js\?v=20260911-copilot-freshness-v1/);
   assert.match(source,/try\s*\{|catch\s*\(/);
   assert.match(source,/Ask LeadIntel/);

@@ -9,7 +9,7 @@ const MAX_RESULTS_PER_QUERY=4;
 const COMPANY_RESEARCH_REQUEST_TIMEOUT_MS=25000;
 const COMPANY_RESEARCH_RUN_TIMEOUT_MS=60000;
 const COMPANY_RESEARCH_SAVE_TIMEOUT_MS=10000;
-const RELEASE='20260919-brief-section-border-v1';
+const RELEASE='20260924-friendly-workflow-labels-v1';
 let running=false;
 
 const engine=()=>window.LeadIntelCompanyResearch;
@@ -28,7 +28,7 @@ function toast(message){const node=$('toast');if(!node)return;node.textContent=m
 
 function ensureResearchUi(){
   injectCss();
-  const button=$('to-questionnaire');if(button){button.innerHTML='Continue to Company Research <span>→</span>';}
+  const button=$('to-questionnaire');if(button){button.innerHTML='Continue to Profile <span>→</span>';}
   const step1=document.getElementById('step-1');
   if(step1&&!document.getElementById('company-research-progress')){
     const actions=step1.querySelector('.step-actions');
@@ -39,7 +39,7 @@ function ensureResearchUi(){
     const heading=hero.querySelector('h1');const paragraph=hero.querySelector('p');
     if(heading)heading.textContent='Build your Commercial Intelligence Brief.';
     if(paragraph)paragraph.textContent='Review the commercial decisions that power LeadIntel targeting, buying signals and campaign content. Accept, edit or replace every draft; unsupported fields remain open for your input.';
-    if(!document.getElementById('research-summary'))hero.insertAdjacentHTML('afterend','<div class="research-summary" id="research-summary"><div class="research-summary-main"><div class="research-summary-icon">✦</div><div><strong>Research has not run yet.</strong><small>Add the website and target market in Step 1, then run company research.</small></div></div><div class="research-summary-actions"><span class="research-mode">Evidence first</span><button class="research-rerun research-primary" id="rerun-company-research" type="button">Start company research <span aria-hidden="true">→</span></button></div></div>');
+    if(!document.getElementById('research-summary'))hero.insertAdjacentHTML('afterend','<div class="research-summary" id="research-summary"><div class="research-summary-main"><div class="research-summary-icon">✦</div><div><strong>Research has not run yet.</strong><small>Add the website and target market in Setup, then run company research.</small></div></div><div class="research-summary-actions"><span class="research-mode">Evidence first</span><button class="research-rerun research-primary" id="rerun-company-research" type="button">Start company research <span aria-hidden="true">→</span></button></div></div>');
   }
   document.querySelectorAll('[data-question]').forEach(textarea=>{
     const card=textarea.closest('.question-card');if(!card||card.querySelector('.research-field-meta'))return;
