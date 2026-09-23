@@ -5,11 +5,16 @@ const path = require('node:path');
 const vm = require('node:vm');
 const Discovery = require('../discovery-engine.js');
 
-function loadDiscoveryRunner({ renderFails = false, fetchImpl = () => new Promise(() => {}), requestTimeout = 1 } = {}) {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'discovery-ui.js'), 'utf8')
+function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchImpl = () => new Promise(() => {}), requestTimeout = 1, scaleProductionRunTimeout = 0 } = {}) {
+  let source = fs.readFileSync(path.join(__dirname, '..', 'discovery-ui.js'), 'utf8');
+  const runTimeout = source.match(/const DISCOVERY_RUN_TIMEOUT_MS=(\d+);/);
+  const testRunTimeout = scaleProductionRunTimeout
+    ? Math.ceil(Number(runTimeout?.[1] || 0) / scaleProductionRunTimeout)
+    : 8;
+  source = source
     .replace('const DISCOVERY_REQUEST_TIMEOUT_MS=25000;', `const DISCOVERY_REQUEST_TIMEOUT_MS=${requestTimeout};`)
-    .replace('const DISCOVERY_RUN_TIMEOUT_MS=25000;', 'const DISCOVERY_RUN_TIMEOUT_MS=8;')
-    .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\n')
+    .replace(runTimeout?.[0], `const DISCOVERY_RUN_TIMEOUT_MS=${testRunTimeout};`)
+    .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\nglobalThis.__setDiscovery = value => { discovery = LeadIntelDiscovery.normalizeDiscoveryState(value); };\nglobalThis.__renderStatus = renderStatus;\nglobalThis.__renderCandidates = renderCandidates;\n')
     .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;');
   const mainState = {
     website: 'https://acme.example/',
@@ -25,6 +30,17 @@ function loadDiscoveryRunner({ renderFails = false, fetchImpl = () => new Promis
     }
   };
   const storage = new Map([['leadintel_customer_v2_state', JSON.stringify(mainState)]]);
+  const elements = new Map();
+  const getElementById = id => {
+    if (renderFails && id === 'discovery-status') return { textContent: '' };
+    if (!renderNodes) return null;
+    if (!elements.has(id)) elements.set(id, {
+      id, textContent: '', innerHTML: '', value: '', hidden: false, disabled: false, dataset: {},
+      classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
+      addEventListener() {}, remove() {}, insertAdjacentHTML() {}
+    });
+    return elements.get(id);
+  };
   const context = {
     console: { ...console, error() {} },
     AbortController,
@@ -32,7 +48,7 @@ function loadDiscoveryRunner({ renderFails = false, fetchImpl = () => new Promis
     LeadIntelDiscovery: Discovery,
     fetch: fetchImpl,
     localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, String(value)), removeItem: key => storage.delete(key) },
-    document: { getElementById: id => renderFails && id === 'discovery-status' ? { textContent: '' } : null, querySelector: () => null, querySelectorAll: () => [], createElement: () => ({ dataset: {}, addEventListener() {} }), head: { appendChild() {} }, body: { appendChild() {} } },
+    document: { getElementById, querySelector: () => null, querySelectorAll: () => [], createElement: () => ({ dataset: {}, addEventListener() {} }), head: { appendChild() {} }, body: { appendChild() {} } },
     navigator: { languages: [] },
     setTimeout,
     clearTimeout,
@@ -40,6 +56,7 @@ function loadDiscoveryRunner({ renderFails = false, fetchImpl = () => new Promis
   };
   context.window = context;
   vm.runInNewContext(source, context, { filename: 'discovery-ui.js' });
+  context.__elements = elements;
   return context;
 }
 
@@ -53,11 +70,81 @@ test('a permanently pending provider cannot leave Company Discovery running', as
   assert.notEqual(context.__discoveryState().status, 'running');
 });
 
-test('the overall guard caps the complete Discovery run at 25 seconds and cancels active work', () => {
+test('a normal three-stage search is allowed to outlast one provider request window', async () => {
+  const phases = new Set();
+  const requestCounts = { market_search: 0, resolution: 0, verification: 0 };
+  const companyNames = [
+    'North Steel', 'Svea Machinery', 'Nordic Foundry', 'Polar Engineering', 'Baltic Mining',
+    'Kiruna Metals', 'Stockholm Equipment', 'Vasa Industrial', 'Gothenburg Systems', 'Sundsvall Works'
+  ];
+  let marketSearchIndex = 0;
+  const context = loadDiscoveryRunner({
+    requestTimeout: 1000,
+    scaleProductionRunTimeout: 1000,
+    fetchImpl: async (_url, options) => {
+      const query = JSON.parse(options.body).query;
+      await new Promise(resolve => setTimeout(resolve, 8));
+      if (query.startsWith('site:')) {
+        phases.add('verification');
+        requestCounts.verification += 1;
+        const domain = query.match(/^site:([^ ]+)/)?.[1] || 'northsteel.lv';
+        const company = companyNames.find(name => name.toLowerCase().replace(/[^a-z]/g, '') === domain.split('.')[0]) || 'North Steel';
+        return { ok: true, json: async () => ({ success: true, data: [{
+          url: `https://${domain}/news/new-factory`,
+          title: `${company} opens a new factory in Latvia`,
+          description: `${company} plans a new factory and expands production capacity in Latvia.`,
+          markdown: `${company} plans a new factory and expands production capacity in Latvia.`
+        }] }) };
+      }
+      const resolution = query.match(/^"([^"]+)"/);
+      if (resolution) {
+        phases.add('resolution');
+        requestCounts.resolution += 1;
+        const company = resolution[1];
+        const domain = company.toLowerCase().replace(/[^a-z]/g, '');
+        return { ok: true, json: async () => ({ success: true, data: [{
+          url: `https://${domain}.lv/`, title: `${company} official website`,
+          description: 'Industrial manufacturing company in Latvia.'
+        }] }) };
+      }
+      phases.add('market_search');
+      requestCounts.market_search += 1;
+      const start = (marketSearchIndex++ % 4) * 5;
+      return { ok: true, json: async () => ({ success: true, data: companyNames.slice(start, start + 5).map((company, index) => ({
+        url: `https://industrynews${start + index}.example/articles/${index}`,
+        title: `${company} plans a new factory`,
+        description: `${company} plans a new factory and expands production capacity in Latvia.`,
+        markdown: `${company} plans a new factory and expands production capacity in Latvia.`
+      })) }) };
+    }
+  });
+
+  await context.__runDiscovery();
+
+  assert.deepEqual([...phases].sort(), ['market_search', 'resolution', 'verification']);
+  assert.ok(requestCounts.resolution > 4, 'the pipeline should have enough time to process multiple company resolutions');
+  assert.ok(requestCounts.verification > 4, 'the pipeline should have enough time to verify multiple company websites');
+  assert.notEqual(context.__discoveryState().status, 'error');
+});
+
+test('the overall guard allows the staged Discovery run time to finish and cancels work after two minutes', () => {
   const source=fs.readFileSync(path.join(__dirname,'..','discovery-ui.js'),'utf8');
-  assert.match(source,/DISCOVERY_RUN_TIMEOUT_MS=25000/);
+  assert.match(source,/DISCOVERY_RUN_TIMEOUT_MS=120000/);
   assert.match(source,/runController\.abort/);
   assert.match(source,/runDiscoverySearchBatch\(queries,"searching",runController\.signal\)/);
+});
+
+test('an errored search is not presented as a confirmed no-match and offers retry', () => {
+  const context = loadDiscoveryRunner({ renderNodes: true });
+  context.__setDiscovery({ status: 'error', rawResults: [], candidates: [], lastRunAt: '2026-09-23T00:00:00.000Z' });
+
+  context.__renderStatus();
+  context.__renderCandidates();
+
+  assert.equal(context.__elements.get('discovery-status').textContent, 'Search issue');
+  assert.match(context.__elements.get('company-discovery-status').textContent, /search did not complete/i);
+  assert.doesNotMatch(context.__elements.get('company-discovery-status').textContent, /no company passed/i);
+  assert.match(context.__elements.get('run-company-discovery').innerHTML, /Retry company search/);
 });
 
 test('a rendering failure cannot leave Company Discovery running', async () => {
