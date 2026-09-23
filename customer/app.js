@@ -487,15 +487,18 @@ function researchModeUi(mode){
   return selected==="intelligence"?{
     label:"Deep Analysis",
     estimate:"usually 5–10 minutes",
-    method:"LeadIntel performs the widest investigation across active buying signals and selected source categories. OpenAI discovers relevant public pages; Firecrawl extracts evidence and checks specific URLs; Gemini independently cross-checks only the collected evidence."
+    method:"LeadIntel performs the widest investigation across active buying signals and selected source categories. OpenAI discovers relevant public pages; Firecrawl extracts evidence and checks specific URLs; Gemini independently cross-checks only the collected evidence.",
+    discoveryNote:"Deep Analysis adds broad strategic context. Company Discovery still runs its own separate search and applies the same qualification checks."
   }:selected==="deep"?{
     label:"Market Research",
     estimate:"usually 2–4 minutes",
-    method:"LeadIntel rotates across more active buying signals and the source categories you selected. OpenAI discovers relevant public pages; Firecrawl extracts evidence and checks specific URLs; Gemini independently cross-checks only the collected evidence."
+    method:"LeadIntel rotates across more active buying signals and the source categories you selected. OpenAI discovers relevant public pages; Firecrawl extracts evidence and checks specific URLs; Gemini independently cross-checks only the collected evidence.",
+    discoveryNote:"Market Research is the recommended starting point for Company Discovery. Stage 5 still runs its own company search and checks each match against your active market and buying signals."
   }:{
     label:"Quick Overview",
     estimate:"usually under 1 minute",
-    method:"LeadIntel validates the strongest active buying signals across your selected source categories. OpenAI discovers public pages; Firecrawl extracts the available evidence."
+    method:"LeadIntel validates the strongest active buying signals across your selected source categories. OpenAI discovers public pages; Firecrawl extracts the available evidence.",
+    discoveryNote:"Quick Overview collects a lighter market evidence set. Company Discovery still runs a separate search and the selected company target stays the same, but it has less context for ranking matches. Market Research is recommended for a fuller starting point."
   };
 }
 function openResearchPreview(mode){
@@ -512,6 +515,7 @@ function openResearchPreview(mode){
   $("research-preview-scope").textContent=`${queries.length} planned search${queries.length===1?"":"es"} · ${modeUi.estimate} · up to ${limits.resultsPerQuery} results each · maximum ${limits.maxStoredResults} saved evidence sources${state.market.researchCustomSources.length?` · ${state.market.researchCustomSources.length} direct URL${state.market.researchCustomSources.length===1?"":"s"}`:""}.`;
   $("research-preview-sources").textContent=labels.join(", ")||"No source categories selected";
   $("research-preview-method").textContent=modeUi.method;
+  $("research-preview-discovery-note").textContent=modeUi.discoveryNote;
   const suggestions=LeadIntelMarket.buildSuggestedSources(profile,state.market.signals,state.market.researchSourceTypes,language);const added=new Set(state.market.researchCustomSources||[]);
   $("research-suggested-sources").innerHTML=suggestions.length?suggestions.map((item,index)=>`<label><input type="checkbox" data-suggested-source value="${esc(item.url)}" ${added.has(item.url)?"checked disabled":""}><span><strong>${esc(item.name)}</strong><small>${esc(item.reason)}</small><code>${esc(item.url)}</code></span></label>`).join(""):"<p>No specific site recommendations are available for the selected market and source categories. You can still add any public URL manually.</p>";
   $("add-suggested-sources").hidden=!suggestions.length;$("add-suggested-sources").disabled=!suggestions.some(item=>!added.has(item.url));
@@ -1199,6 +1203,7 @@ function bind(){
   $("factory-reset-confirmation").addEventListener("input",event=>{$("factory-reset-leadintel").disabled=event.target.value.trim()!=="RESET";resetCenterStatus("");});
   $("factory-reset-leadintel").addEventListener("click",factoryResetLeadIntel);
   window.addEventListener("leadintel:server-ready",()=>{void resumePendingMarketResearchAfterAuth();});
+  window.addEventListener("leadintel:review-market-research",()=>openResearchPreview("deep"));
   window.addEventListener("leadintel:website-activated",()=>{
     state=loadState();editMode=false;syncInputsFromState();updateCompleteness();
     $("analysis-state").hidden=true;$("profile-content").hidden=true;

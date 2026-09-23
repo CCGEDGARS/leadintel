@@ -85,8 +85,8 @@ test("market research health labels distinguish not run, running and completed s
 });
 
 test("production assets are cache-busted for the research progress release", () => {
-  assert.match(index, /app\.js\?v=20260923-dynamic-research-window-v1/);
-  assert.match(index, /market\.css\?v=20260923-dynamic-research-window-v2/);
+  assert.match(index, /app\.js\?v=20260923-adaptive-discovery-v1/);
+  assert.match(index, /market\.css\?v=20260923-adaptive-discovery-v1/);
   assert.match(index, /journey-progress\.js\?v=20260922-health-research-label-v1/);
   assert.match(index, /attention-centre-model\.js\?v=20260921-research-progress-v1/);
 });

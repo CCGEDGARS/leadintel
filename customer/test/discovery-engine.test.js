@@ -45,6 +45,19 @@ test('buildDiscoveryQueries supports provisional website-only strategy and respe
   assert.deepEqual(Discovery.buildDiscoveryQueries({}, {}, 4),[],'discovery still needs a company website or profile context');
 });
 
+test('adaptive discovery follow-ups add bounded, relevant queries without repeating attempted searches',()=>{
+  const initial=Discovery.buildDiscoveryQueries(profile,market,4);
+  const followUps=Discovery.buildDiscoveryFollowUpQueries(profile,market,initial,4);
+  assert.equal(followUps.length,4);
+  assert.equal(new Set(followUps.map(item=>item.query)).size,followUps.length);
+  assert.ok(followUps.every(item=>item.market&&item.query));
+  assert.ok(followUps.every(item=>!initial.some(query=>query.query===item.query)));
+  assert.ok(followUps.some(item=>/Sweden/i.test(item.query)));
+  assert.ok(followUps.some(item=>/factory|facility|capacity|modernization|investment/i.test(item.query)));
+  assert.ok(followUps.every(item=>!/industrial automation/i.test(item.query)), 'the seller offer must not bias the prospect search');
+  assert.deepEqual(Discovery.buildDiscoveryFollowUpQueries({},market,[],4),[]);
+});
+
 test('normalizeCompanySearchResults rejects obvious non-company hosts and keeps direct company domains',()=>{
   const meta={id:'dq-1',market:'Sweden',query:'Sweden manufacturers'};
   const results=Discovery.normalizeCompanySearchResults({data:[
@@ -106,6 +119,38 @@ test('signal score only uses evidence text, not query metadata',()=>{
   const raw=[{queryId:'q1',market:'Sweden',query:'new facility capacity expansion',url:'https://plainco.se/',domain:'plainco.se',company:'PlainCo',title:'PlainCo',description:'manufacturer',text:'manufacturer serving industrial clients',date:''}];
   const candidates=Discovery.mergeCompanyCandidates(raw,profile,market);
   assert.deepEqual(candidates,[],'query words alone cannot qualify a company without evidence');
+});
+
+test('potential company matches show missing proof but can never become actionable leads',()=>{
+  const possible=[
+    {url:'https://northstar.com/news/factory',domain:'northstar.com',company:'Northstar',market:'Sweden',title:'Northstar plans a new factory',description:'Northstar plans a new factory and expands production capacity.',text:'Northstar plans a new factory and expands production capacity.'},
+    {url:'https://plainbuyer.se/about',domain:'plainbuyer.se',company:'Plain Buyer',market:'Sweden',title:'Plain Buyer',description:'Swedish industrial manufacturer',text:'Plain Buyer is a Swedish industrial manufacturer serving regional clients.'},
+    {url:'https://acme.example/about',domain:'acme.example',company:'Acme Industrial',market:'Sweden',title:'Acme expands',description:'New factory and capacity expansion',text:'Acme expands with a new factory and capacity expansion.'}
+  ];
+  const potential=Discovery.buildPotentialCompanyCandidates(possible,profile,market,[]);
+  assert.deepEqual(potential.map(item=>item.domain).sort(),['northstar.com','plainbuyer.se']);
+  const northstar=potential.find(item=>item.domain==='northstar.com');
+  const plainbuyer=potential.find(item=>item.domain==='plainbuyer.se');
+  assert.ok(northstar.qualificationGaps.includes('Target market evidence is missing'));
+  assert.ok(plainbuyer.qualificationGaps.includes('No active buying signal was confirmed'));
+  assert.equal(northstar.marketVerified,false);
+  assert.equal(plainbuyer.marketVerified,true,'potential matches retain the checks they did pass');
+  assert.ok(potential.every(item=>item.qualified===false&&item.buyerVerified===false));
+  assert.ok(potential.every(item=>!Discovery.isActionableCandidate(item)));
+  assert.deepEqual(Discovery.buildPotentialCompanyCandidates(possible,profile,market,[{domain:'northstar.com'}]).map(item=>item.domain),['plainbuyer.se']);
+});
+
+test('zero-result guidance recommends a deeper research mode only after a quick overview',()=>{
+  const quick=Discovery.zeroResultGuidance({researchMode:'quick',evidenceCount:20,activeSignalCount:3,targetCount:10,adaptiveFollowUpSearches:4});
+  const marketResearch=Discovery.zeroResultGuidance({researchMode:'deep',evidenceCount:80,activeSignalCount:4,targetCount:10,adaptiveFollowUpSearches:4});
+  assert.equal(quick.primaryAction,'review_research');
+  assert.equal(quick.primaryLabel,'Review Market Research');
+  assert.ok(quick.steps.some(step=>/smaller market evidence set/i.test(step)));
+  assert.ok(quick.steps.some(step=>/broadened the search/i.test(step)));
+  assert.equal(marketResearch.primaryAction,'review_strategy');
+  assert.equal(marketResearch.primaryLabel,'Review Market Strategy');
+  assert.ok(!marketResearch.steps.some(step=>/smaller market evidence set/i.test(step)));
+  assert.match(marketResearch.summary,/valid finding/i);
 });
 
 test('buildApolloPeopleSearchPayload uses exact domain and approved roles with safe discovery depth',()=>{
@@ -189,6 +234,21 @@ test('normalizeDiscoveryState caps candidates, pipeline and selected decision-ma
   assert.ok(state.pipeline.length<=50);
   assert.ok(state.candidates.every(x=>x.people.length<=4));
   assert.equal(state.pipeline[0].stage,'Discovered');
+});
+
+test('normalizeDiscoveryState persists the search funnel and keeps potential matches separate and non-actionable',()=>{
+  const state=Discovery.normalizeDiscoveryState({
+    funnel:{marketSearchesCompleted:8,marketSearchesTotal:8,evidencePages:17,companiesIdentified:4,officialDomainsResolved:3,companySitesChecked:2,verifiedCompanies:1,qualifiedCompanies:0,adaptiveFollowUpSearches:4},
+    potentialMatches:[{company:'Northstar',domain:'northstar.com',website:'https://northstar.com/',qualified:true,buyerVerified:true,marketVerified:true,matchedSignals:[{id:'expansion',name:'Expansion'}],qualificationGaps:['Target market evidence is missing'],evidence:[{url:'https://northstar.com/news',title:'Expansion'}]}]
+  });
+  assert.equal(state.funnel.marketSearchesCompleted,8);
+  assert.equal(state.funnel.evidencePages,17);
+  assert.equal(state.funnel.adaptiveFollowUpSearches,4);
+  assert.equal(state.potentialMatches.length,1);
+  assert.equal(state.potentialMatches[0].qualified,false);
+  assert.equal(state.potentialMatches[0].buyerVerified,false);
+  assert.equal(state.potentialMatches[0].marketVerified,true);
+  assert.equal(Discovery.isActionableCandidate(state.potentialMatches[0]),false);
 });
 
 

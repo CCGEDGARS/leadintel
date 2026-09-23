@@ -39,9 +39,9 @@ test('Company Discovery resolves named companies from evidence before verifying 
   const ui=fs.readFileSync(path.join(__dirname,'..','discovery-ui.js'),'utf8');
   assert.match(ui,/extractCompaniesFromEvidence/);
   assert.match(ui,/buildCompanyResolutionQueries/);
-  assert.match(ui,/runDiscoverySearchBatch\(resolutionQueries,"resolving",runController\.signal,resolutionSearches\)/);
+  assert.match(ui,/runDiscoverySearchBatch\(resolutionQueries,"resolving",runController\.signal,resolutionRows\)/);
   assert.match(ui,/buildCandidateVerificationQueries\(resolved/);
-  assert.match(ui,/attachSourceEvidenceToResolvedCompanies\(resolved,companyMentions,firstPass\)/);
-  assert.match(ui,/mergeCompanyCandidates\(\[\.\.\.evidenceLinked,\.\.\.verified\]/);
+  assert.match(ui,/attachSourceEvidenceToResolvedCompanies\(resolved,mentions,allMarketEvidence\)/);
+  assert.match(ui,/mergeCompanyCandidates\(\[\.\.\.linkedEvidence,\.\.\.allVerified\]/);
   assert.doesNotMatch(ui,/buildCandidateVerificationQueries\(firstPass/);
 });

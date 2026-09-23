@@ -1,5 +1,7 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
 const market=require('../market-engine.js');
 const ux=require('../market-research-ux.js');
 
@@ -21,6 +23,21 @@ test('three market research modes have explicit, progressively bounded cost cont
   assert.deepEqual(market.RESEARCH_MODES.quick,{maxQueries:4,resultsPerQuery:5,maxStoredResults:20});
   assert.deepEqual(market.RESEARCH_MODES.deep,{maxQueries:12,resultsPerQuery:8,maxStoredResults:80});
   assert.deepEqual(market.RESEARCH_MODES.intelligence,{maxQueries:24,resultsPerQuery:10,maxStoredResults:200});
+});
+
+test('research preview explains how each market mode relates to separate company discovery',()=>{
+  const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
+  const app=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
+  const discovery=fs.readFileSync(path.join(__dirname,'..','discovery-ui.js'),'utf8');
+  assert.match(html,/id="research-preview-discovery-note"/);
+  assert.match(app,/Quick Overview collects a lighter market evidence set/);
+  assert.match(app,/separate search and the selected company target stays the same/);
+  assert.match(app,/Market Research is recommended for a fuller starting point/);
+  assert.match(app,/Market Research is the recommended starting point for Company Discovery/);
+  assert.match(app,/Deep Analysis adds broad strategic context/);
+  assert.match(app,/textContent=modeUi\.discoveryNote/);
+  assert.match(discovery,/dispatchEvent\(new CustomEvent\("leadintel:review-market-research"\)\)/);
+  assert.match(app,/addEventListener\("leadintel:review-market-research",\(\)=>openResearchPreview\("deep"\)\)/);
 });
 
 test('market intelligence creates a wider set of unique searches than market research',()=>{
