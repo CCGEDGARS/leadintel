@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Explore LeadIntel’s seven-stage commercial intelligence workflow in a guided product tour.">
+  <meta name="theme-color" content="#f7f8f4">
+  <title>LeadIntel | Seven-stage product tour</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="demo.css">
+  <script defer src="demo.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand" aria-label="LeadIntel">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="brand-copy"><strong>LeadIntel</strong><small>COMMERCIAL INTELLIGENCE OS</small></span>
+    </div>
+    <div class="topbar-context"><span class="topbar-dot" aria-hidden="true"></span>Guided product tour</div>
+    <span class="preview-badge">PREVIEW MODE</span>
+  </header>
+
+  <div class="page-layout">
+    <aside class="tour-sidebar" aria-label="Tour stages">
+      <div class="sidebar-intro">
+        <span class="eyebrow">THE WORKFLOW</span>
+        <h2>Seven stages.<br>One connected process.</h2>
+        <p>Choose any stage to see what happens and why it matters.</p>
+      </div>
+      <nav id="tour-stage-nav" class="stage-nav" aria-label="Choose a tour stage"></nav>
+      <div class="sidebar-note">
+        <span class="note-icon" aria-hidden="true">i</span>
+        <p>This is a guided preview. The workspace behind the guide is illustrative and inactive.</p>
+      </div>
+    </aside>
+
+    <main class="tour-main">
+      <section class="intro-row" aria-labelledby="tour-title">
+        <div>
+          <span class="eyebrow">LEADINTEL · FROM CONTEXT TO CONVERSATION</span>
+          <h1 id="tour-title">See how the seven stages work together.</h1>
+        </div>
+        <p class="intro-copy">Move through the journey at your own pace. Each stage prepares the next one, from your company context to approved outreach and learning.</p>
+      </section>
+
+      <section class="journey-progress" aria-label="Seven-stage tour progress">
+        <div class="progress-heading">
+          <div><span class="eyebrow" id="stage-kicker">STAGE 1 OF 7</span><strong id="progress-title">Company &amp; Market</strong></div>
+          <span id="progress-count" class="progress-count">01 / 07</span>
+        </div>
+        <nav id="progress-nav" class="progress-nav" aria-label="Jump to a tour stage"></nav>
+      </section>
+
+      <section class="demo-canvas" aria-label="Stage guide and illustrative workspace preview">
+        <div id="workspace-preview" class="workspace-preview" aria-hidden="true" inert></div>
+        <div class="preview-veil" aria-hidden="true"></div>
+        <article id="guide-card" class="guide-card" aria-live="polite" aria-atomic="true">
+          <div class="guide-heading">
+            <div>
+              <span id="guide-kicker" class="eyebrow">STAGE 1 · COMPANY &amp; MARKET</span>
+              <h2 id="guide-title">Start with your company and the markets you want to reach.</h2>
+            </div>
+            <span id="guide-number" class="guide-number">01</span>
+          </div>
+          <p id="guide-summary" class="guide-summary"></p>
+
+          <div class="guide-grid">
+            <section class="guide-block">
+              <span class="block-label">01 · WHAT IT IS</span>
+              <p id="guide-what"></p>
+            </section>
+            <section class="guide-block">
+              <span class="block-label">02 · WHY IT MATTERS</span>
+              <p id="guide-why"></p>
+            </section>
+            <section class="guide-block">
+              <span class="block-label">03 · WHAT YOU DO</span>
+              <p id="guide-action"></p>
+            </section>
+            <section class="guide-block next-block">
+              <span class="block-label">04 · WHAT HAPPENS NEXT</span>
+              <p id="guide-next"></p>
+            </section>
+          </div>
+
+          <div id="profile-note" class="profile-note" hidden>
+            <strong>Lookalike audience</strong>
+            <span>Approved customer patterns guide discovery as a soft preference. It does not exclude other companies. Reference customers are not added to outreach.</span>
+          </div>
+
+          <div id="final-callout" class="final-callout" hidden>
+            <span class="eyebrow">READY TO APPLY IT TO YOUR BUSINESS?</span>
+            <p>Let’s map the workflow to your offer, market and sales process.</p>
+            <a class="booking-button" href="https://calendly.com/edgars-7go/strategy-call-2" target="_blank" rel="noopener noreferrer">Book a LeadIntel strategy call <span aria-hidden="true">→</span></a>
+          </div>
+        </article>
+      </section>
+
+      <footer class="tour-controls">
+        <button id="previous-stage" class="control-button secondary" type="button">← <span>Previous stage</span></button>
+        <span id="control-hint" class="control-hint">Use the stage list to explore the process.</span>
+        <button id="next-stage" class="control-button primary" type="button"><span>Next stage</span> <span aria-hidden="true">→</span></button>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>

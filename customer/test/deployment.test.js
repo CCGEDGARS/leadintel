@@ -24,9 +24,10 @@ test('Vercel builds a safe static artifact instead of exposing the repository ro
 
   assert.ok(staticBuild, 'Vercel must explicitly allowlist the static build');
   assert.equal(staticBuild.config?.distDir, '.vercel-static');
-  assert.match(buildScript, /mkdir -p \.vercel-static\/v2 \.vercel-static\/customer/);
+  assert.match(buildScript, /mkdir -p \.vercel-static\/v2 \.vercel-static\/customer \.vercel-static\/demo/);
   assert.match(buildScript, /cp -R customer\/\. \.vercel-static\/customer\//);
   assert.match(buildScript, /cp -R v2\/\. \.vercel-static\/v2\//);
+  assert.match(buildScript, /cp -R demo\/\. \.vercel-static\/demo\//);
   assert.doesNotMatch(buildScript, /cp -R backend|cp backend/);
 });
 
