@@ -26,6 +26,7 @@ test("Company Discovery handoff has a review dialog with explicit blockers and w
   assert.match(app, /function strategyHandoffModel\(\)/);
   assert.match(app, /function openStrategyHandoff\(\)/);
   assert.match(app, /Monitoring is off/);
+  assert.match(app, /This one-time Company Discovery will still run normally/);
   assert.match(app, /No active ICP/);
   assert.match(app, /No active buying signal/);
   assert.match(app, /No active market opportunity/);
@@ -46,6 +47,8 @@ test("pre-flight blocks zero signals but permits an explicit limited-results con
   assert.match(app, /No active buying signal[\s\S]{0,240}required/);
   assert.match(app, /Continue with limited results →/);
   assert.match(app, /Fewer than 3 evidence sources/);
+  assert.match(app, /hasLimitedResults:lowSignalCoverage\|\|lowEvidenceCoverage\|\|incompleteResearch/);
+  assert.match(app, /model\.hasLimitedResults\?"Continue with limited results →"/);
 });
 
 test("recommended tender signals are not silently disabled by research-source settings", () => {

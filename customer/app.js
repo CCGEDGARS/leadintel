@@ -956,6 +956,10 @@ function strategyHandoffModel(){
   const opportunities=(state.market.opportunities||[]).filter(item=>item.active);
   const evidence=(state.market.researchResults||[]);
   const monitoring=LeadIntelMarket.normalizeMonitoring(state.market.monitoring);
+  const sources=state.market.researchSourceStatus||{};
+  const lowSignalCoverage=signals.length>0&&signals.length<3;
+  const lowEvidenceCoverage=evidence.length>0&&evidence.length<3;
+  const incompleteResearch=state.market.researchStatus==="partial"||Object.values(sources).some(value=>["partial","error","unavailable"].includes(value));
   const blockers=[];
   if(!icps.length)blockers.push("No active ICP");
   if(!signals.length)blockers.push("No active buying signal — required before Company Discovery can rank purchase intent.");
@@ -964,16 +968,16 @@ function strategyHandoffModel(){
   const warnings=[];
   if(signals.length===1)warnings.push("Only one active buying signal. Company Discovery can run, but ranking will be narrow. At least 3 active signals are recommended.");
   else if(signals.length===2)warnings.push("Only 2 active buying signals. Company Discovery can run, but at least 3 active signals are recommended.");
-  if(evidence.length>0&&evidence.length<3)warnings.push("Fewer than 3 evidence sources were saved. Discovery confidence may be limited.");
-  const sources=state.market.researchSourceStatus||{};
-  if(state.market.researchStatus==="partial"||Object.values(sources).some(value=>["partial","error","unavailable"].includes(value)))warnings.push("Some research checks were unavailable; saved evidence will still be used.");
-  if(!monitoring.enabled)warnings.push("Monitoring is off. You can continue and enable it later.");
+  if(lowEvidenceCoverage)warnings.push("Fewer than 3 evidence sources were saved. Discovery confidence may be limited.");
+  if(incompleteResearch)warnings.push("Some research checks were unavailable; saved evidence will still be used.");
+  if(!monitoring.enabled)warnings.push("Monitoring is off. This one-time Company Discovery will still run normally. Turn on monitoring later to track new buying signals over time.");
   const customSources=state.market.researchCustomSources||[];
   if(customSources.length&&!monitoring.customSources?.length)warnings.push("Preferred research sources are saved but are not included in monitoring.");
   const actions=[];
   if(signals.length<3)actions.push("review-signals","retry-signals");
   return {
     blockers,warnings,actions,
+    hasLimitedResults:lowSignalCoverage||lowEvidenceCoverage||incompleteResearch,
     summary:[
       ["Active ICPs",icps.map(item=>item.name||item.description).filter(Boolean).join(" · ")||"None"],
       ["Buying signals",signals.map(item=>item.name).filter(Boolean).join(" · ")||"None"],
@@ -998,7 +1002,7 @@ function renderStrategyHandoff(){
   repairActions.hidden=reviewSignals.hidden&&retrySignals.hidden;
   const confirm=$("confirm-strategy-handoff");
   confirm.disabled=Boolean(model.blockers.length);
-  confirm.textContent=model.blockers.length?"Complete Required Items":model.warnings.length?"Continue with limited results →":state.market.strategyApproved?"Continue to Company Discovery →":"Activate Strategy & Continue →";
+  confirm.textContent=model.blockers.length?"Complete Required Items":model.hasLimitedResults?"Continue with limited results →":state.market.strategyApproved?"Continue to Company Discovery →":"Activate Strategy & Continue →";
   return model;
 }
 function reviewBuyingSignalsFromHandoff(){
