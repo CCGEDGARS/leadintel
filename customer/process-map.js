@@ -33,7 +33,7 @@
  * import './reference-customer-ui.js?v=20260923-reference-interface-v1';
  * import './reference-customer-clear-list.js?v=20260923-reference-interface-v1';
  * import './reference-customer-website-enrichment.js?v=20260923-reference-interface-v1';
- * import './reference-customer-ai-runtime.js?v=20260923-reference-interface-v1';
+ * import './reference-customer-ai-runtime.js?v=20260923-reference-view-results-v1';
  * import './reference-customer-launcher.js?v=20260923-reference-interface-v1';
  * import './lookalike-discovery.js?v=20260910-reference-portfolio-v1';
  * import './intelligence-sources-ui.js?v=20260915-preferred-sources-v1';

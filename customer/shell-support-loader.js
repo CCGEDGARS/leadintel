@@ -21,7 +21,7 @@ const SUPPORT_MODULES=[
   './reference-customer-ui.js?v=20260923-reference-interface-v1',
   './reference-customer-clear-list.js?v=20260923-reference-interface-v1',
   './reference-customer-website-enrichment.js?v=20260923-reference-interface-v1',
-  './reference-customer-ai-runtime.js?v=20260923-reference-interface-v1',
+  './reference-customer-ai-runtime.js?v=20260923-reference-view-results-v1',
   './reference-customer-launcher.js?v=20260923-reference-interface-v1',
   './lookalike-discovery.js?v=20260910-reference-portfolio-v1',
   './intelligence-sources-ui.js?v=20260915-preferred-sources-v1&reset-center=1',

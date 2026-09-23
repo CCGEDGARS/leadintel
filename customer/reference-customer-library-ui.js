@@ -40,6 +40,20 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     const analyze=modal?.querySelector?.('#reference-analyze');if(analyze){analyze.textContent='Analyze List';analyze.setAttribute('aria-hidden','true');}
     const activate=modal?.querySelector?.('#reference-activate');if(activate){activate.textContent='Activate Model';activate.setAttribute('aria-hidden','true');}
   }
+  function workflowStepFor(state,selected,draftDirty=false){
+    if(!selected||draftDirty)return 1;
+    if(analyzingListId)return 2;
+    if(selected.active&&selected.reference?.publishedModel?.active&&!state.referenceCustomers?.draftDirty)return 4;
+    return Object.keys(state.referenceCustomers?.analyses||{}).length&&(state.referenceCustomers?.segments||[]).length?3:2;
+  }
+  function setWorkflowStep(modal,step){
+    const steps=modal?.querySelectorAll?.('.reference-workflow span');if(!steps?.length)return;
+    [...steps].forEach((node,index)=>{
+      const active=index===step-1;
+      node.classList.toggle('active',active);
+      if(active)node.setAttribute('aria-current','step');else node.removeAttribute('aria-current');
+    });
+  }
   function injectStyles(){
     if(document.getElementById('reference-library-styles'))return;
     const style=document.createElement('style');style.id='reference-library-styles';style.textContent=`
@@ -107,6 +121,7 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     const selected=portfolio.lists.find(list=>list.id===portfolio.selectedListId)||null;
     const activeModels=portfolio.lists.filter(list=>list.active&&list.reference?.publishedModel?.active).length;
     const draftDirty=Portfolio.hasUnsavedCurrentListDraft?.(state)||false;
+    setWorkflowStep(modal,workflowStepFor(state,selected,draftDirty));
     const canAnalyze=Boolean(saved&&selected&&!draftDirty),hasPublished=Boolean(reference.publishedModel?.active),candidateReady=Boolean(analyzed&&segments);
     const canActivate=Boolean(selected&&!draftDirty&&(hasPublished||candidateReady));
     const analyzeControl=modal.querySelector('#reference-analyze');if(analyzeControl)analyzeControl.disabled=!canAnalyze;
@@ -170,6 +185,11 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
   async function viewResults(id){
     if(!await openList(id))return;
     editorOpen=false;syncLibraryUi();
+    const state=snapshot(),selected=state.referenceCustomerPortfolio.lists.find(list=>list.id===id)||null;
+    const analyzed=Object.keys(state.referenceCustomers?.analyses||{}).length;
+    const segments=state.referenceCustomers?.segments?.length||0;
+    const status=document.getElementById('reference-import-status');
+    if(status)status.textContent=`Reviewing ${selected?.name||'saved list'} · ${analyzed} analyzed · ${segments} segment${segments===1?'':'s'}. Review the segment below, then activate when ready.`;
     const review=document.getElementById('reference-segment-review');
     review?.scrollIntoView?.({behavior:'smooth',block:'start'});
   }

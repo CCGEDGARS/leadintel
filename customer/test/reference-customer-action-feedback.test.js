@@ -35,6 +35,6 @@ test('process map loads refreshed reference-customer action runtimes',()=>{
   const source=read('process-map.js');
   assert.match(source,/reference-customer-clear-list\.js\?v=20260923-reference-interface-v1/);
   assert.match(source,/reference-customer-website-enrichment\.js\?v=20260923-reference-interface-v1/);
-  assert.match(source,/reference-customer-ai-runtime\.js\?v=20260923-reference-interface-v1/);
+  assert.match(source,/reference-customer-ai-runtime\.js\?v=20260923-reference-view-results-v1/);
   assert.match(source,/lookalike-discovery\.js\?v=20260910-reference-portfolio-v1/);
 });
