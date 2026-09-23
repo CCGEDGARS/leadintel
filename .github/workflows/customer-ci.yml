@@ -7,6 +7,7 @@ on:
       - main
       - 'feature/**'
     paths:
+      - 'demo/**'
       - 'customer/**'
       - 'backend/**'
       - 'proxy.js'
@@ -32,6 +33,7 @@ on:
       - '.github/workflows/release-integrity.yml'
   pull_request:
     paths:
+      - 'demo/**'
       - 'customer/**'
       - 'backend/**'
       - 'proxy.js'
@@ -128,6 +130,7 @@ jobs:
           node --check customer/copilot-api.js
           node --check customer/copilot-context.js
           node --check customer/copilot-ui.js
+          node --check demo/demo.js
           node --check scripts/release-integrity-core.mjs
           node --check scripts/verify-discovery-deploy.mjs
           node --check scripts/verify-release-integrity.mjs

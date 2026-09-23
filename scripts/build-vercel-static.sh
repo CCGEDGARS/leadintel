@@ -4,12 +4,13 @@ set -euo pipefail
 node scripts/verify-discovery-deploy.mjs
 
 rm -rf .vercel-static
-mkdir -p .vercel-static/v2 .vercel-static/customer
+mkdir -p .vercel-static/v2 .vercel-static/customer .vercel-static/demo
 
 cp index.html .vercel-static/index.html
 cp LeadIntel.html .vercel-static/LeadIntel.html
 cp -R v2/. .vercel-static/v2/
 cp -R customer/. .vercel-static/customer/
+cp -R demo/. .vercel-static/demo/
 
 # Test and server-runtime files are useful in the repository but must never be part of the public static artifact.
 rm -rf .vercel-static/customer/test
