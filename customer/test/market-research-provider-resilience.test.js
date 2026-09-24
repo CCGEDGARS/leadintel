@@ -114,13 +114,16 @@ test('research completion is prominent while provider gaps remain explicit',()=>
   const index=fs.readFileSync(indexPath,'utf8');
   const css=fs.readFileSync(marketCssPath,'utf8');
   const app=fs.readFileSync(appPath,'utf8');
-  assert.match(index,/market\.css\?v=20260923-research-depth-return-v1/);
+  assert.match(index,/market\.css\?v=20260924-completion-status-space-v1/);
   assert.match(index,/app\.js\?v=20260924-friendly-workflow-labels-v1/);
   assert.match(index,/id="market-research-status" role="status" aria-live="polite"/);
   assert.match(app,/complete-with-warning/);
   assert.match(app,/research-status-icon/);
   assert.match(app,/source\$\{count===1\?"":"s"\} saved/);
   assert.match(css,/\.research-panel>\.research-status\[data-status="complete"\]/);
+  assert.match(css,/min-height:112px/);
+  assert.match(css,/margin:24px 0 16px/);
+  assert.match(css,/@media\(max-width:680px\)[\s\S]*?min-height:0/);
   assert.match(css,/\.research-status-icon/);
   assert.match(css,/\.research-status-copy em/);
   assert.match(app,/const show=status==="error"/);

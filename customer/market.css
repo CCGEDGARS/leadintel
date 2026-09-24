@@ -255,3 +255,49 @@
 .market-research-progress-dock:focus-visible{outline:3px solid #1771c8;outline-offset:3px}
 @media(max-width:600px){.market-research-window{width:calc(100vw - 20px);max-width:calc(100vw - 20px);max-height:90dvh;border-radius:17px}.market-research-window-card{gap:17px;padding:21px;border-radius:17px}.market-research-window-head{grid-template-columns:minmax(0,1fr) auto;gap:12px}.market-research-window-head h2{font-size:25px}.market-research-window-head .secondary-btn{grid-column:2;grid-row:1;min-height:42px;padding:8px 12px;font-size:13px}.market-research-window-percent{grid-column:1;grid-row:2;font-size:22px}.market-research-window-phase{font-size:17px}.market-research-window-track{height:12px}.market-research-window-meta{font-size:11px}.market-research-window-insight{min-height:125px;padding:20px}.market-research-window-insight p{font-size:20px;line-height:1.4}.market-research-window-footer{align-items:flex-start;flex-direction:column;font-size:14px}.market-research-progress-dock{right:10px;bottom:10px;width:calc(100vw - 20px);padding:15px 16px}}
 @media(prefers-reduced-motion:reduce){.market-research-window-track i,.market-research-dock-track b{transition:none}.market-research-window-track i:after{animation:none}}
+
+/* Give completed research status room to read as a separate confirmation. */
+.research-panel>.research-status[data-status="complete"],
+.research-panel>.research-status[data-status="complete-with-warning"]{
+  box-sizing:border-box;
+  min-height:112px;
+  margin:24px 0 16px;
+  padding:24px 28px;
+  gap:16px;
+  align-items:center;
+  border-radius:14px;
+}
+.research-panel>.research-status[data-status="complete"] .research-status-icon,
+.research-panel>.research-status[data-status="complete-with-warning"] .research-status-icon{
+  flex-basis:40px;
+  width:40px;
+  height:40px;
+  font-size:18px;
+}
+.research-panel>.research-status[data-status="complete"] .research-status-copy,
+.research-panel>.research-status[data-status="complete-with-warning"] .research-status-copy{gap:6px}
+.research-panel>.research-status[data-status="complete"] .research-status-copy>strong,
+.research-panel>.research-status[data-status="complete-with-warning"] .research-status-copy>strong{font-size:16px;line-height:1.4}
+.research-panel>.research-status[data-status="complete"] .research-status-copy>small,
+.research-panel>.research-status[data-status="complete-with-warning"] .research-status-copy>small{font-size:13px;line-height:1.55}
+@media(max-width:680px){
+  .research-panel>.research-status[data-status="complete"],
+  .research-panel>.research-status[data-status="complete-with-warning"]{
+    min-height:0;
+    margin:18px 0 14px;
+    padding:18px;
+    gap:12px;
+    align-items:flex-start;
+  }
+  .research-panel>.research-status[data-status="complete"] .research-status-icon,
+  .research-panel>.research-status[data-status="complete-with-warning"] .research-status-icon{
+    flex-basis:34px;
+    width:34px;
+    height:34px;
+    font-size:16px;
+  }
+  .research-panel>.research-status[data-status="complete"] .research-status-copy>strong,
+  .research-panel>.research-status[data-status="complete-with-warning"] .research-status-copy>strong{font-size:15px}
+  .research-panel>.research-status[data-status="complete"] .research-status-copy>small,
+  .research-panel>.research-status[data-status="complete-with-warning"] .research-status-copy>small{font-size:12px}
+}
