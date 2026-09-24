@@ -4,7 +4,7 @@
   if(root?.document)api.mount(root.document);
 })(typeof globalThis!=="undefined"?globalThis:this,function(){
   "use strict";
-  const CALENDLY_URL="https://calendly.com/edgars-7go/strategy-call-2";
+  const CALENDLY_URL="https://calendly.com/edgars-7go/free-strategy-call";
   const stages=[
     {
       title:"Setup",
