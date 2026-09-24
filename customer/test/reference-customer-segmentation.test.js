@@ -61,8 +61,77 @@ test('coherent reference companies produce a named, evidence-based profile rathe
   assert.equal(result.meaningful,false);
   assert.equal(result.segments[0].name,'Industrial manufacturing customers');
   assert.equal(result.segments[0].confidence,'high');
-  assert.match(result.segments[0].summary,/industrial manufacturing/i);
+  assert.match(result.segments[0].summary,/4 recurring commercial dimensions/i);
+  assert.ok(result.segments[0].traits.some(trait=>/industry: industrial manufacturing \(5\/5\)/i.test(trait)));
   assert.ok(result.segments[0].traits.some(trait=>/B2B/.test(trait)));
+});
+
+test('five high-confidence company analyses do not create a high-confidence profile without repeated traits',()=>{
+  const rows=Ref.normalizeImportedRows(Array.from({length:5},(_,i)=>({Company:`Reference ${i+1}`,Website:`https://reference-${i+1}.example`})),{sourceType:'csv'});
+  const analyses=Object.fromEntries(rows.map((row,index)=>[row.id,{
+    industry:`industry ${index+1}`,businessModel:`model ${index+1}`,customerOutcome:`outcome ${index+1}`,confidence:'high'
+  }]));
+
+  const result=Ref.buildReferenceSegments(rows,analyses);
+  const profile=result.segments[0];
+
+  assert.equal(profile.confidence,'low');
+  assert.equal(profile.recurringDimensionCount,0);
+  assert.equal(profile.canActivate,false);
+  assert.match(profile.summary,/No recurring commercial traits/i);
+  assert.doesNotMatch(profile.summary,/shared traits/i);
+  assert.ok(profile.traits.every(trait=>/\(1\/5\)/.test(trait)));
+});
+
+test('profile confidence reflects repeated traits while one-off traits remain review evidence',()=>{
+  const rows=Ref.normalizeImportedRows(Array.from({length:5},(_,i)=>({Company:`Reference ${i+1}`,Website:`https://reference-${i+1}.example`})),{sourceType:'csv'});
+  const analyses=Object.fromEntries(rows.map((row,index)=>[row.id,{
+    industry:index<4?'industrial equipment':`other industry ${index+1}`,
+    sizeBand:index<4?'500+':`size ${index+1}`,
+    businessModel:`unique model ${index+1}`,
+    confidence:'high'
+  }]));
+
+  const profile=Ref.buildReferenceSegments(rows,analyses).segments[0];
+
+  assert.equal(profile.confidence,'high');
+  assert.equal(profile.recurringDimensionCount,2);
+  assert.equal(profile.canActivate,true);
+  assert.ok(profile.traits.some(trait=>/industry: industrial equipment \(4\/5\)/i.test(trait)));
+  assert.ok(profile.traits.some(trait=>/business model: unique model 1 \(1\/5\)/i.test(trait)));
+  assert.match(profile.summary,/2 recurring commercial dimensions/i);
+});
+
+test('normalizing AI-proposed segments recalculates confidence from cross-company agreement',()=>{
+  const rows=Ref.normalizeImportedRows(Array.from({length:5},(_,i)=>({Company:`Reference ${i+1}`,Website:`https://reference-${i+1}.example`})),{sourceType:'csv'});
+  const analyses=Object.fromEntries(rows.map((row,index)=>[row.id,{
+    industry:`industry ${index+1}`,businessModel:`model ${index+1}`,confidence:'high'
+  }]));
+  const normalized=Ref.normalizeReferenceState({rows,analyses,segments:[{
+    id:'ai-profile',name:'Industrial equipment customers',rowIds:rows.map(row=>row.id),confidence:'high',summary:'AI said high confidence',traits:['Industrial equipment']
+  }]});
+
+  assert.equal(normalized.segments[0].confidence,'low');
+  assert.equal(normalized.segments[0].recurringDimensionCount,0);
+  assert.match(normalized.segments[0].summary,/No recurring commercial traits/i);
+  assert.doesNotMatch(normalized.segments[0].summary,/AI said high confidence/i);
+});
+
+test('activated DNA excludes one-off values from multi-company lookalike dimensions',()=>{
+  const rows=Ref.normalizeImportedRows(Array.from({length:5},(_,i)=>({Company:`Reference ${i+1}`,Website:`https://reference-${i+1}.example`})),{sourceType:'csv'});
+  const analyses=Object.fromEntries(rows.map((row,index)=>[row.id,{
+    industry:`industry ${index+1}`,businessModel:`model ${index+1}`,
+    sizeBand:index<4?'500+':`size ${index+1}`,customerOutcome:index<4?'reliable delivery':`outcome ${index+1}`,confidence:'high'
+  }]));
+  const segmentation=Ref.buildReferenceSegments(rows,analyses);
+  const state=Ref.activateReferenceSegments({rows,analyses,...segmentation},[segmentation.segments[0].id]);
+  const dna=Ref.buildReferenceDna(state,analyses);
+
+  assert.equal(dna.profileConfidence,'high');
+  assert.ok(dna.dimensions.some(dimension=>dimension.key==='sizeBand'&&dimension.values.includes('500+')&&dimension.evidenceCount===4));
+  assert.ok(dna.dimensions.some(dimension=>dimension.key==='customerOutcome'&&dimension.values.includes('reliable delivery')));
+  assert.equal(dna.dimensions.some(dimension=>dimension.key==='industry'),false);
+  assert.equal(dna.dimensions.some(dimension=>dimension.key==='businessModel'),false);
 });
 
 test('a single reference company yields a clearly marked low-confidence profile hypothesis',()=>{

@@ -35,7 +35,7 @@
     return {...best,modelMatches};
   }
   function buildLookalikeDiscoveryQueries(profile={},dna=null,maxQueries=4){
-    if(!dna?.active)return [];
+    if(!dna?.active||!Array.isArray(dna.dimensions)||!dna.dimensions.length)return [];
     const markets=split(profile.targetMarkets);if(!markets.length)return [];
     const traits=[clean(dna.profileName),...(dna.dimensions||[]).flatMap(d=>(d.values||[]).slice(0,2))].filter(Boolean).map(clean).slice(0,10);
     const offer=split(profile.priorityOffers)[0]||'commercial solution';const icp=clean(profile.idealCustomer);

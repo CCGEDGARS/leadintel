@@ -1,4 +1,4 @@
-const REFERENCE_CUSTOMER_LAUNCH_VERSION='20260923-customer-profile-inference-v1';
+const REFERENCE_CUSTOMER_LAUNCH_VERSION='20260924-reference-consensus-v1';
 
 (function installReferenceCustomerLauncher(root){
   'use strict';

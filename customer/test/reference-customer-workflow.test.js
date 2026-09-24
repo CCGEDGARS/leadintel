@@ -50,10 +50,19 @@ test('manager analyzes before activation and shows segment review controls',()=>
   assert.match(ui,/Analyze customer list/i);
   assert.match(ui,/Suggested customer profile/i);
   assert.match(ui,/Activate selected segments/i);
-  assert.match(ui,/Approve only if this profile fits/i);
+  assert.match(ui,/Review before activation/i);
+});
+
+test('profile review distinguishes one-off observations and requires explicit selection',()=>{
+  assert.match(ui,/No shared profile detected/i);
+  assert.match(ui,/Observed attributes/i);
+  assert.match(ui,/segment\.canActivate/);
+  assert.match(ui,/checked:not\(:disabled\)/);
+  assert.doesNotMatch(ui,/!reference\.activated&&segments\.length===1/);
 });
 
 test('activation copy explains downstream effect without implying outreach',()=>{
+  assert.match(ui,/Only traits repeated across a segment/i);
   assert.match(ui,/soft preference/i);
   assert.match(ui,/Discovery/i);
   assert.match(ui,/does not exclude other companies or add these references to outreach/i);

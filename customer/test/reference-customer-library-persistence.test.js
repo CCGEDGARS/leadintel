@@ -49,6 +49,29 @@ test('publishing a refreshed model replaces the published model and clears pendi
   assert.equal(refreshed.publishedModel.dna.active,true);
 });
 
+test('a profile with no repeated dimensions cannot be published',()=>{
+  const rows=Ref.normalizeImportedRows(Array.from({length:5},(_,i)=>({Company:`Reference ${i+1}`,Website:`https://reference-${i+1}.example`})),{sourceType:'csv'});
+  const analyses=Object.fromEntries(rows.map((row,index)=>[row.id,{industry:`industry ${index+1}`,businessModel:`model ${index+1}`,confidence:'high'}]));
+  const segmentation=Ref.buildReferenceSegments(rows,analyses);
+  let state=Ref.activateReferenceSegments({rows,analyses,...segmentation},[segmentation.segments[0].id]);
+  state.dna=Ref.buildReferenceDna(state,analyses);
+
+  assert.deepEqual(state.dna.dimensions,[]);
+  assert.equal(Ref.publishReferenceModel(state).publishedModel,null);
+  assert.equal(Ref.getActiveReferenceModel(state),null);
+});
+
+test('legacy published models are recalibrated and removed from Discovery when their traits do not repeat',()=>{
+  const rows=Ref.normalizeImportedRows(Array.from({length:5},(_,i)=>({Company:`Reference ${i+1}`,Website:`https://reference-${i+1}.example`})),{sourceType:'csv'});
+  const analyses=Object.fromEntries(rows.map((row,index)=>[row.id,{industry:`industry ${index+1}`,businessModel:`model ${index+1}`,confidence:'high'}]));
+  const oldSegment={id:'legacy-segment',name:'Industrial equipment customers',rowIds:rows.map(row=>row.id),count:rows.length,confidence:'high',summary:'Previously marked high confidence',traits:['Industrial equipment']};
+  const oldDna={version:2,active:true,fingerprint:'legacy-fingerprint',activeCount:rows.length,sampleSize:rows.length,analyzableCount:rows.length,confidence:'high',profileConfidence:'high',profileName:oldSegment.name,dimensions:[{key:'industry',values:Object.values(analyses).map(item=>item.industry),weight:1,confidence:'high',evidenceCount:1}]};
+  const normalized=Ref.normalizeReferenceState({rows,analyses,segments:[oldSegment],activeSegmentIds:[oldSegment.id],activeIds:rows.map(row=>row.id),activated:true,fingerprint:'legacy-fingerprint',dna:oldDna,publishedModel:{active:true,fingerprint:'legacy-fingerprint',activeCount:rows.length,confidence:'high',dna:oldDna,activeRows:rows,activeSegments:[oldSegment],segmentIds:[oldSegment.id]},draftDirty:false});
+
+  assert.equal(normalized.publishedModel,null);
+  assert.equal(Ref.getActiveReferenceModel(normalized),null);
+});
+
 test('legacy activated models migrate to a persistent published model',()=>{
   const {state}=builtState();
   const migrated=Ref.normalizeReferenceState(state);
@@ -65,6 +88,15 @@ test('Reference Customer library UI exposes persistent active-model and pending-
   assert.match(ui,/Update Active Model/);
   assert.match(runtime,/markReferenceDraftChanged/);
   assert.match(runtime,/publishedModel/);
+});
+
+test('saved-list activation is unavailable when the analyzed companies share no traits',()=>{
+  const ui=fs.readFileSync(path.join(__dirname,'..','reference-customer-library-ui.js'),'utf8');
+  assert.match(ui,/hasActivatableSegment/);
+  assert.match(ui,/No repeated traits; Discovery unavailable/);
+  assert.match(ui,/No traits repeat across these companies/);
+  assert.match(ui,/filter\(segment=>segment\.canActivate!==false\)/);
+  assert.match(ui,/No recurring customer traits were found/);
 });
 
 test('Reference Customer library presents a simple list-first workflow and hides advanced metadata by default',()=>{

@@ -11,6 +11,7 @@
 
   function normalizePublishedModel(value){
     if(!value||typeof value!=='object'||value.active===false||!value.dna||typeof value.dna!=='object')return null;
+    if(value.dna.calibrationVersion===1&&!value.dna.dimensions?.length)return null;
     const fingerprint=clean(value.fingerprint||value.dna.fingerprint);
     if(!fingerprint)return null;
     const activeRows=Array.isArray(value.activeRows)?clone(value.activeRows):[];
@@ -29,6 +30,35 @@
       activatedAt:clean(value.activatedAt||value.dna.builtAt),
       updatedAt:clean(value.updatedAt||value.activatedAt||value.dna.builtAt)
     };
+  }
+
+  function recalibrateStoredDna(value={}){
+    const sampleSize=Math.max(0,Number(value.sampleSize||value.activeCount)||0),threshold=sampleSize<=1?1:Math.max(2,Math.ceil(sampleSize*.6));
+    if(!sampleSize)return null;
+    const dimensions=(value.dimensions||[]).map(dimension=>{
+      const strongest=clean(dimension?.values?.[0]),evidenceCount=Math.max(0,Number(dimension?.evidenceCount)||0);
+      if(!strongest||evidenceCount<threshold)return null;
+      const prevalence=evidenceCount/sampleSize;
+      const confidence=sampleSize<=1?'low':sampleSize<=3?'medium':prevalence>=.8&&clean(dimension.confidence)==='high'?'high':'medium';
+      return {...dimension,label:clean(dimension.label)||clean(dimension.key),values:[strongest],evidenceByValue:{[strongest]:evidenceCount},evidenceCount,supportThreshold:threshold,prevalence:Number(prevalence.toFixed(2)),confidence};
+    }).filter(Boolean);
+    if(!dimensions.length)return null;
+    const strongDimensions=dimensions.filter(dimension=>dimension.confidence==='high'&&dimension.prevalence>=.8).length;
+    const confidence=sampleSize<=1?'low':strongDimensions>=2&&clean(value.profileConfidence||value.confidence)==='high'?'high':'medium';
+    return {...clone(value),version:3,calibrationVersion:1,active:true,activeCount:sampleSize,sampleSize,confidence,profileConfidence:confidence,dimensions,profileSummary:`Recalibrated from recorded support across ${sampleSize} reference companies. Only traits meeting the ${threshold}/${sampleSize} support threshold are retained.`};
+  }
+  function recalibratePublishedModel(publishedModel,referenceState={}){
+    if(!publishedModel||publishedModel.dna?.calibrationVersion===1)return publishedModel;
+    const publishedIds=(publishedModel.activeRows||[]).map(row=>clean(row?.id)).filter(Boolean),hasFullAnalysis=publishedIds.length===publishedModel.activeCount&&publishedIds.every(id=>{
+      const analysis=referenceState.analyses?.[id];return Boolean(analysis&&Object.keys(analysis).some(key=>key!=='confidence'&&clean(Array.isArray(analysis[key])?analysis[key].join(' '):analysis[key])));
+    });
+    if(hasFullAnalysis){
+      const candidate=baseNormalize({...referenceState,activated:true,activeIds:publishedIds,activeSegmentIds:publishedModel.segmentIds||[],fingerprint:publishedModel.fingerprint,dna:null});
+      const calibrated=Ref.buildReferenceDna(candidate,candidate.analyses||{});
+      if(calibrated)return normalizePublishedModel({...publishedModel,confidence:calibrated.confidence,dna:calibrated,activeCount:calibrated.activeCount,activeRows:candidate.rows.filter(row=>publishedIds.includes(row.id)),activeSegments:candidate.segments.filter(segment=>(publishedModel.segmentIds||[]).includes(segment.id))});
+    }
+    const calibrated=recalibrateStoredDna(publishedModel.dna||{});
+    return calibrated?normalizePublishedModel({...publishedModel,confidence:calibrated.confidence,dna:calibrated}):null;
   }
 
   function legacyPublishedModel(raw,normalized){
@@ -51,7 +81,8 @@
   function normalizeReferenceState(value={}){
     const raw=value&&typeof value==='object'?value:{};
     const normalized=baseNormalize(raw);
-    const publishedModel=normalizePublishedModel(raw.publishedModel)||legacyPublishedModel(raw,normalized);
+    let publishedModel=normalizePublishedModel(raw.publishedModel)||legacyPublishedModel(raw,normalized);
+    if(publishedModel&&publishedModel.dna.calibrationVersion!==1)publishedModel=recalibratePublishedModel(publishedModel,normalized);
     const explicitDirty=raw.draftDirty===true;
     const implicitDirty=Boolean(publishedModel&&(!normalized.activated||!normalized.dna||normalized.fingerprint!==publishedModel.fingerprint));
     return {
