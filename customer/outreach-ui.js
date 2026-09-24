@@ -6,12 +6,12 @@ const DISCOVERY_META_KEY="leadintel_customer_v2_discovery_meta";
 const INTELLIGENCE_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
 const MAX_DOSSIER_SEARCH_QUERIES=2;
 const MAX_DOSSIER_RESULTS_PER_QUERY=5;
-const ASSET_VERSION="20260924-friendly-workflow-labels-v1";
-const LANGUAGE_ASSET_VERSION="20260924-friendly-workflow-labels-v1";
+const ASSET_VERSION="20260924-workspace-content-english-v1";
+const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const q=id=>document.getElementById(id);
 let outreach=loadOutreach();
-function contentLanguage(){return 'en';}
+function contentLanguage(){return LeadIntelContentLanguage.workspaceContentLanguage();}
 
 function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
 function readJson(key){try{return JSON.parse(localStorage.getItem(key)||"{}");}catch{return {};}}

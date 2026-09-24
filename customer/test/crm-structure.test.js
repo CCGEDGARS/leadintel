@@ -33,6 +33,14 @@ test('CRM contact detail renders durable verified email and phone fields',()=>{
   assert.match(ui,/Verified phone|No verified phone/i);
 });
 
+test('CRM detail provides a retryable control for complete activity history',()=>{
+  assert.match(ui,/data-crm-load-activity/);
+  assert.match(ui,/Load older activity/);
+  assert.match(ui,/getCrmActivities/);
+  assert.match(ui,/activityCursor/);
+  assert.match(css,/crm-load-activity/);
+});
+
 test('CRM company actions preserve lifecycle semantics and expose destructive delete only as a separate action',()=>{
   for(const value of ['add-pipeline','remove-pipeline','mark-customer','archive','suppress','restore','delete-permanently'])assert.match(ui,new RegExp(`data-crm-action="${value}"`));
   assert.match(ui,/confirm\(/);

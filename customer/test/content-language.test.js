@@ -1,6 +1,9 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const language=require('../content-language.js');
+test('the core workspace content-language policy stays English and separate from campaign localization',()=>{
+  assert.equal(language.workspaceContentLanguage(),'en');
+});
 test('auto language resolves from browser preference and explicit choice wins',()=>{
   assert.equal(language.resolveLanguage('auto',['lv-LV','en-US']),'lv');
   assert.equal(language.resolveLanguage('auto',['de-DE','en-US']),'en');

@@ -1,4 +1,4 @@
-import './content-language.js?v=20260922-campaign-only-v1';
+import './content-language.js?v=20260924-workspace-content-english-v1';
 import './content-variants.js?v=20260921-contact-gated-v2';
 import './business-identity.js?v=20260906-pain-headings-v1';
 import './evidence-view.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&reference-interface=20260923';
@@ -34,7 +34,7 @@ let monitoringBusy=false;
 let pendingResearchMode="";
 let brandIdentityUI=null;
 const $=id=>document.getElementById(id);
-function contentLanguage(){return 'en';}
+function contentLanguage(){return LeadIntelContentLanguage.workspaceContentLanguage();}
 
 function defaultState(){
   const base=LeadIntelProfile.normalizeSavedState({step:1,website:"",targetMarkets:[],additionalLinks:[],documents:[],answers:{},scrapedSources:[],profile:null,approved:false});
