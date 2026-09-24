@@ -88,5 +88,5 @@ test("production assets are cache-busted for the research progress release", () 
   assert.match(index, /app\.js\?v=20260924-friendly-workflow-labels-v1/);
   assert.match(index, /market\.css\?v=20260923-research-depth-return-v1/);
   assert.match(index, /journey-progress\.js\?v=20260924-friendly-workflow-labels-v1/);
-  assert.match(index, /attention-centre-model\.js\?v=20260921-research-progress-v1/);
+  assert.match(index, /attention-centre-model\.js\?v=20260924-openai-credit-health-v1/);
 });

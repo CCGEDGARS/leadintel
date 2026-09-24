@@ -2,6 +2,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
+const vm=require('node:vm');
 
 const root=path.join(__dirname,'..');
 const modelPath=path.join(root,'attention-centre-model.js');
@@ -60,6 +61,8 @@ test('customer shell exposes an automatic Attention control and drawer runtime',
   assert.match(html,/data-attention-count/);
   assert.match(html,/attention-centre-model\.js\?v=/);
   assert.match(html,/attention-centre\.js\?v=/);
+  assert.match(html,/attention-centre-model\.js\?v=20260924-openai-credit-health-v1/);
+  assert.match(html,/attention-centre\.js\?v=20260924-openai-credit-health-v1/);
 });
 
 test('confirmed reset refreshes Attention and clears transient runtime errors',()=>{
@@ -87,4 +90,79 @@ test('workspace health uses red for errors, orange for recommendations and green
   assert.match(css,/\.attention-item\.is-error[^}]*#c2413b/);
   assert.match(css,/\.attention-item\.is-recommendation[^}]*#f59e0b/);
   assert.match(css,/\.attention-empty\.is-healthy[^}]*#2f7d5c/);
+});
+
+test('workspace health identifies exhausted OpenAI API credits and clears after successful synthesis',()=>{
+  const state={website:'https://www.ercon.lv/'};
+  const failed={website:'https://www.ercon.lv',generatedAt:'2026-09-24T16:00:00.000Z',mode:'evidence',sourceCount:13,reason:'OpenAI request failed (429) · code: credit_balance_exhausted'};
+  const issue=Attention.aiProviderIssueFromResearch({state,researchMeta:failed});
+  assert.deepEqual(issue,{provider:'openai',code:'credit_balance_exhausted',sourceCount:13});
+
+  const items=Attention.buildAttentionItems({workspaceStarted:false,aiProviderIssue:issue});
+  assert.equal(items.length,1);
+  assert.equal(items[0].severity,'error');
+  assert.equal(items[0].title,'OpenAI API credits exhausted');
+  assert.match(items[0].detail,/13 saved company research sources/i);
+  assert.equal(items[0].target.type,'ai-billing');
+
+  const success={...failed,mode:'ai',reason:''};
+  assert.equal(Attention.aiProviderIssueFromResearch({state,researchMeta:success}),null);
+  assert.deepEqual(Attention.buildAttentionItems({workspaceStarted:false,aiProviderIssue:null}),[]);
+});
+
+test('workspace health ignores an OpenAI credit error for a different active company',()=>{
+  const issue=Attention.aiProviderIssueFromResearch({
+    state:{website:'https://other-company.example'},
+    researchMeta:{website:'https://www.ercon.lv',generatedAt:'2026-09-24T16:00:00.000Z',mode:'evidence',reason:'OpenAI request failed (429) · code: credit_balance_exhausted'}
+  });
+  assert.equal(issue,null);
+});
+
+test('workspace health sends the credit warning action to OpenAI billing',()=>{
+  const runtime=fs.readFileSync(path.join(root,'attention-centre.js'),'utf8');
+  assert.match(runtime,/Open OpenAI billing/);
+  assert.match(runtime,/https:\/\/platform\.openai\.com\/settings\/organization\/billing\/overview/);
+  assert.match(runtime,/leadintel_customer_v2_research_meta_v1/);
+});
+
+test('workspace health renders the saved credit failure, opens billing and clears after synthesis succeeds',()=>{
+  const runtimeSource=fs.readFileSync(path.join(root,'attention-centre.js'),'utf8');
+  const local=new Map([
+    ['leadintel_customer_v2_state',JSON.stringify({website:'https://www.ercon.lv/'})],
+    ['leadintel_customer_v2_research_meta_v1',JSON.stringify({website:'https://www.ercon.lv',generatedAt:'2026-09-24T16:00:00.000Z',mode:'evidence',sourceCount:13,reason:'OpenAI request failed (429) · code: credit_balance_exhausted'})]
+  ]);
+  const makeElement=()=>({children:[],handlers:{},dataset:{},hidden:false,textContent:'',classList:{add(){},remove(){}},setAttribute(){},focus(){},append(...children){this.children.push(...children);},appendChild(child){this.children.push(child);},replaceChildren(...children){this.children=children;},addEventListener(type,handler){this.handlers[type]=handler;},querySelector(selector){return this.queries?.[selector]||null;}});
+  const trigger=makeElement(),count=makeElement(),summary=makeElement(),list=makeElement(),closeButton=makeElement();
+  trigger.queries={'[data-attention-count]':count,'[data-attention-summary]':summary};
+  const ids=new Map([['workspace-attention',trigger]]);
+  const document={
+    readyState:'complete',
+    documentElement:{appendChild(element){if(element.id)ids.set(element.id,element);}},
+    getElementById(id){return ids.get(id)||null;},
+    createElement(){const element=makeElement();element.queries={'.attention-list':list,'.attention-close':closeButton};return element;},
+    querySelector(){return null;},
+    addEventListener(){}
+  };
+  const opened=[];
+  const window={
+    document,localStorage:{getItem(key){return local.get(key)||null;}},LeadIntelAttentionModel:Attention,
+    LeadIntelWorkspacePersistence:{hasMeaningfulWorkspaceData(){return false;},hasUnsavedChanges(){return false;}},
+    LeadIntelJourney:{getModel(){return []; }},LeadIntelTaskCentre:{list(){return []; }},
+    handlers:{},addEventListener(type,handler){this.handlers[type]=handler;},setInterval(){},open(...args){opened.push(args);},location:{reload(){assert.fail('billing action must not reload the workspace');}}
+  };
+  vm.runInNewContext(runtimeSource,{window,setTimeout,clearTimeout});
+
+  assert.equal(window.LeadIntelAttention.list()[0].id,'ai-openai-credit-balance');
+  assert.equal(count.textContent,'1');
+  trigger.handlers.click();
+  const billingAction=list.children[0].children[1];
+  assert.equal(billingAction.textContent,'Open OpenAI billing');
+  billingAction.handlers.click();
+  assert.deepEqual(opened[0],['https://platform.openai.com/settings/organization/billing/overview','_blank','noopener,noreferrer']);
+
+  local.set('leadintel_customer_v2_research_meta_v1',JSON.stringify({website:'https://www.ercon.lv',generatedAt:'2026-09-24T16:10:00.000Z',mode:'ai',sourceCount:13,reason:''}));
+  window.LeadIntelAttention.refresh();
+  assert.deepEqual(window.LeadIntelAttention.list(),[]);
+  assert.equal(count.hidden,true);
+  assert.equal(summary.textContent,'Workspace healthy');
 });
