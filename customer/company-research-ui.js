@@ -9,7 +9,7 @@ const MAX_RESULTS_PER_QUERY=4;
 const COMPANY_RESEARCH_REQUEST_TIMEOUT_MS=25000;
 const COMPANY_RESEARCH_RUN_TIMEOUT_MS=60000;
 const COMPANY_RESEARCH_SAVE_TIMEOUT_MS=10000;
-const RELEASE='20260924-friendly-workflow-labels-v1';
+const RELEASE='20260924-evidence-synthesis-retry-v1';
 let running=false;
 
 const engine=()=>window.LeadIntelCompanyResearch;
@@ -76,10 +76,12 @@ function renderResearchReview(){
   if(summary){
     summary.classList.remove('research-summary-failed');
     if(meta.generatedAt){
-      const aiNote=meta.mode==='ai'?`AI enrichment active · ${esc(modeLabel(meta))}`:'Evidence-only draft · connect an AI provider in Settings for deeper synthesis.';
+      const aiAvailable=meta.mode==='ai';
+      const aiNote=aiAvailable?`AI synthesis complete · ${esc(modeLabel(meta))}`:`Why AI synthesis did not complete: ${esc(meta.reason||'No AI-generated fields were returned.')}`;
       const coverage=meta.quality?.coverage||{};const covered=Array.isArray(coverage.categories)?coverage.categories.length:0;const total=Number(coverage.total)||5;
       const coverageNote=`${covered}/${total} authoritative areas${coverage.minimumMet?' verified':' · Coverage incomplete; high confidence is capped'}`;
-      summary.innerHTML=`<div class="research-summary-main"><div class="research-summary-icon">✦</div><div><strong>Research complete · ${Number(meta.sourceCount)||0} evidence source${Number(meta.sourceCount)===1?'':'s'}</strong><small class="${meta.mode==='ai'?'':'research-no-ai'}">${aiNote}${meta.failures?` · ${Number(meta.failures)} source/search request${Number(meta.failures)===1?'':'s'} unavailable`:''}</small><small class="research-coverage ${coverage.minimumMet?'complete':'incomplete'}">${esc(coverageNote)}</small></div></div><div class="research-summary-actions"><span class="research-mode">${esc(modeLabel(meta))}</span><button class="research-rerun" id="rerun-company-research" type="button">Rerun company research</button></div>`;
+      const noAiActions=aiAvailable?'':`<small class="research-synthesis-note">Your ${Number(meta.sourceCount)||0} evidence sources are saved. Resolve the AI provider issue in Settings, then synthesize these sources without repeating research.</small><div class="research-summary-followup"><button class="research-rerun research-primary" id="synthesize-company-research" type="button">Synthesize saved evidence</button><button class="research-rerun" id="open-ai-settings-from-research" type="button">Open AI settings</button></div>`;
+      summary.innerHTML=`<div class="research-summary-main"><div class="research-summary-icon">✦</div><div><strong>${aiAvailable?'Research and AI synthesis complete':'Evidence collected · AI synthesis did not complete'} · ${Number(meta.sourceCount)||0} source${Number(meta.sourceCount)===1?'':'s'}</strong><small class="${aiAvailable?'':'research-no-ai'}">${aiNote}${meta.failures?` · ${Number(meta.failures)} source/search request${Number(meta.failures)===1?'':'s'} unavailable`:''}</small><small class="research-coverage ${coverage.minimumMet?'complete':'incomplete'}">${esc(coverageNote)}</small>${noAiActions}</div></div><div class="research-summary-actions"><span class="research-mode">${esc(aiAvailable?modeLabel(meta):'Evidence only')}</span><button class="research-rerun" id="rerun-company-research" type="button">Refresh company research</button></div>`;
     } else if(meta.failureAt){
       summary.classList.add('research-summary-failed');
       summary.innerHTML='<div class="research-summary-main"><div class="research-summary-icon">!</div><div><strong>Research could not complete.</strong><small>'+esc(meta.error||'The company research request did not finish.')+'</small><small class="research-retry-note">Your website and target market were preserved. Try again when ready.</small></div></div><div class="research-summary-actions"><span class="research-mode">Retry available</span><button class="research-rerun research-primary" id="rerun-company-research" type="button">Try research again <span aria-hidden="true">→</span></button></div>';
@@ -91,6 +93,10 @@ function renderResearchReview(){
       const step1Action=ready?'':' data-go-step1="true"';const primaryClass=ready?' research-primary':'';
       summary.innerHTML='<div class="research-summary-main"><div class="research-summary-icon">✦</div><div><strong>'+title+'</strong><small>'+detail+'</small></div></div><div class="research-summary-actions"><span class="research-mode">'+badge+'</span><button class="research-rerun'+primaryClass+'" id="rerun-company-research" type="button"'+step1Action+'>'+label+'</button></div>';
     }
+    const synthesis=summary.querySelector('#synthesize-company-research');
+    synthesis?.addEventListener('click',()=>runAiSynthesis());
+    const openSettings=summary.querySelector('#open-ai-settings-from-research');
+    openSettings?.addEventListener('click',()=>document.getElementById('open-settings')?.click());
     const action=summary.querySelector('#rerun-company-research');
     action?.addEventListener('click',()=>{
       if(action.dataset.goStep1==='true'){document.getElementById('back-to-sources')?.click();return;}
@@ -178,10 +184,48 @@ async function aiDraftFor({website,targetMarkets,sources,documents,uiLanguage},p
     const docIds=(documents||[]).filter(doc=>String(doc?.text||'').trim()).slice(0,5).map((_,index)=>`D${index+1}`);const validIds=[...sources.map(source=>source.id),...docIds];const draft=engine().parseAiDraft(payload.text,validIds,uiLanguage);
     if(!Object.values(draft).some(row=>String(row?.value||'').trim()))return {draft:null,mode:'evidence',reason:'AI returned no additional evidence-backed fields.'};
     return {draft,mode:'ai',provider:payload.provider==='gemini'?'Google Gemini':payload.provider==='anthropic'?'Anthropic':'OpenAI',model:payload.model||''};
-  }catch(error){return {draft:null,mode:'evidence',reason:error.message||'AI enrichment unavailable.'};}
+  }catch(error){return {draft:null,mode:'evidence',reason:parentSignal?.aborted?'AI synthesis stopped after 60 seconds.':error.message||'AI enrichment unavailable.'};}
 }
 function combineDrafts(fallback,ai){
   const result={};for(const id of engine().QUESTION_IDS){const aiRow=ai?.[id];result[id]=aiRow&&String(aiRow.value||'').trim()?aiRow:fallback[id];}return result;
+}
+
+async function runAiSynthesis(){
+  if(running)return false;
+  const researchEngine=engine();if(!researchEngine){toast('Research engine is still loading. Try again.');return false;}
+  const state=readState();const meta=metaForCurrentState();const website=normalizeUrl(state.website);
+  if(!website||!meta.generatedAt){toast('Run company research before synthesizing evidence.');return false;}
+  const savedSources=[...sourceMap(state).values()].filter(source=>source.type!=='document'&&String(source.text||'').trim());
+  const primarySources=savedSources.filter(source=>source.role==='primary');const sources=primarySources.length?primarySources:savedSources;
+  if(!sources.length){toast('Saved evidence is missing. Refresh company research before trying AI synthesis.');return false;}
+  running=true;const button=$('synthesize-company-research');if(button){button.disabled=true;button.textContent='Synthesizing saved evidence…';}
+  const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),COMPANY_RESEARCH_RUN_TIMEOUT_MS);
+  try{
+    setProgress('Synthesizing saved evidence…',`Interpreting ${sources.length} primary company sources for commercial fit, buyers and buying triggers.`);
+    const ai=await aiDraftFor({website,targetMarkets:selectedMarkets(state),sources,documents:state.documents||[],uiLanguage:'en'},controller.signal);
+    const latest=readState();const latestMeta=metaForCurrentState();
+    if(normalizeUrl(latest.website)!==website||normalizeUrl(latestMeta.website)!==website)throw new Error('Workspace changed during AI synthesis. Your edits were preserved; try again when ready.');
+    if(ai.mode!=='ai'||!ai.draft){
+      writeMeta({...latestMeta,mode:'evidence',provider:'',model:'',reason:ai.reason||'AI returned no additional evidence-backed fields.'});
+      renderResearchReview();toast(`AI synthesis did not complete: ${ai.reason||'no additional evidence-backed fields were returned.'}`);return false;
+    }
+    const fallback=researchEngine.buildEvidenceDraft({sources,targetMarkets:selectedMarkets(latest),uiLanguage:'en'});
+    const draft=researchEngine.capDraftConfidence(combineDrafts(fallback,ai.draft),latestMeta.quality?.coverage||{});
+    const merged=researchEngine.mergeDraft(latest.answers||{},draft,latestMeta.fields||{});
+    const next={...latest,answers:merged.answers,answerStatus:{...(latest.answerStatus||{})},profile:null,approved:false,market:{}};
+    for(const [id,row] of Object.entries(merged.meta))next.answerStatus[id]=row.origin==='user'?'user':row.reviewed?'accepted':merged.answers[id]?'draft':'missing';
+    writeState(next);
+    const fields={};for(const id of researchEngine.QUESTION_IDS){const row=merged.meta[id]||{};fields[id]={...row,reviewed:Boolean(row.reviewed||row.origin==='user'),draftMode:'ai'};}
+    writeMeta({...latestMeta,generatedAt:new Date().toISOString(),mode:'ai',provider:ai.provider||'',model:ai.model||'',reason:'',fields});
+    window.dispatchEvent(new CustomEvent('leadintel:company-research-updated',{detail:{website,synthesized:true}}));
+    window.dispatchEvent(new CustomEvent('leadintel:workspace-dirty',{detail:{source:'company-research-synthesis'}}));
+    setProgress('AI synthesis complete','Your commercial brief now includes an AI synthesis grounded in the saved company evidence.',{done:true});
+    renderResearchReview();await saveWorkspaceBestEffort();toast('AI synthesis complete. Review the updated commercial brief.');return true;
+  }catch(error){
+    const reason=controller.signal.aborted?'AI synthesis stopped after 60 seconds.':(error.message||'AI synthesis is temporarily unavailable.');
+    const latestMeta=metaForCurrentState();if(normalizeUrl(latestMeta.website)===website){writeMeta({...latestMeta,mode:'evidence',provider:'',model:'',reason});renderResearchReview();}
+    toast(reason);return false;
+  }finally{clearTimeout(timer);running=false;}
 }
 
 async function runCompanyResearch({rerun=false}={}){
@@ -231,8 +275,10 @@ async function runCompanyResearch({rerun=false}={}){
     writeMeta({website,generatedAt:new Date().toISOString(),contentLanguage:researchLanguage,mode:ai.mode,provider:ai.provider||'',model:ai.model||'',sourceCount:sources.length,primarySourceCount:research.primary.length,supportingSourceCount:research.supporting.length,excludedSourceCount:research.excluded.length,characters:research.characters,limits:research.limits,quality,failures,reason:ai.reason||'',fields});
     window.dispatchEvent(new CustomEvent('leadintel:company-research-updated',{detail:{website}}));
     window.dispatchEvent(new CustomEvent('leadintel:workspace-dirty',{detail:{source:'company-research'}}));
-    setProgress('Research complete','Opening your evidence-backed draft for review.',{done:true});
-    taskCentre?.complete(taskId,{stage:'Research complete',resultCount:sources.length});
+    const completionStage=ai.mode==='ai'?'Research and AI synthesis complete':'Evidence collected; AI synthesis unavailable';
+    const completionDetail=ai.mode==='ai'?'Opening your evidence-backed commercial brief for review.':`${sources.length} sources saved. ${ai.reason||'Activate an AI provider to synthesize the saved evidence.'}`;
+    setProgress(completionStage,completionDetail,{done:true});
+    taskCentre?.complete(taskId,{stage:completionStage,resultCount:sources.length});
     await saveWorkspaceBestEffort();
     setTimeout(()=>location.reload(),180);
   }catch(error){
@@ -256,6 +302,11 @@ function bind(){
   window.addEventListener('leadintel:module-opened',event=>{if(Number(event.detail?.step)===2){renderResearchReview();}});
   window.addEventListener('leadintel:server-ready',()=>{renderResearchReview();});
   window.addEventListener('leadintel:workspace-changed',()=>{renderResearchReview();});
+  window.addEventListener('leadintel:ai-provider-changed',()=>{
+    const meta=metaForCurrentState();
+    if(meta.generatedAt&&meta.mode!=='ai')writeMeta({...meta,reason:'AI provider settings changed. Retry synthesis to use the updated connection.'});
+    renderResearchReview();
+  });
   window.addEventListener('leadintel:workspace-reset',()=>setTimeout(renderResearchReview,0));
 }
 
