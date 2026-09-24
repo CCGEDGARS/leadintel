@@ -6,15 +6,17 @@ const path=require('node:path');
 const root=path.join(__dirname,'..');
 const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const app=fs.readFileSync(path.join(root,'app.js'),'utf8');
+const discovery=fs.readFileSync(path.join(root,'discovery-ui.js'),'utf8');
 const outreach=fs.readFileSync(path.join(root,'outreach-ui.js'),'utf8');
+const delivery=fs.readFileSync(path.join(root,'delivery-ui.js'),'utf8');
 const engine=fs.readFileSync(path.join(root,'outreach-engine.js'),'utf8');
 
 test('the core workspace is English-only and has no global translation controls',()=>{
   assert.doesNotMatch(html,/id=["']language-select["']/);
   assert.doesNotMatch(html,/src=["']language\.js/);
-  assert.match(app,/function contentLanguage\(\)\{return 'en';\}/);
+  for(const source of [app,discovery,outreach,delivery])assert.match(source,/workspaceContentLanguage/);
   assert.doesNotMatch(app,/localizeMarketGeneratedContent|leadintel:language-changed|LeadIntelLanguage/);
-  assert.doesNotMatch(outreach,/leadintel:language-changed|LeadIntelLanguage/);
+  for(const source of [discovery,outreach,delivery])assert.doesNotMatch(source,/leadintel:language-changed|LeadIntelLanguage/);
 });
 
 test('translation is an explicit Campaign Studio action',()=>{

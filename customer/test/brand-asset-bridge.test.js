@@ -12,7 +12,7 @@ const indexSource = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'u
 const processMapSource = fs.readFileSync(path.join(__dirname, '..', 'process-map.js'), 'utf8');
 const API = 'https://leadintel-api.edgars-7e7.workers.dev';
 const WORKSPACE_ID = 'workspace-1';
-const CACHE_VERSION = '20260918-account-provider-v1';
+const CACHE_VERSION = '20260924-crm-activity-pages-v1';
 const RESET_CACHE_VERSION = '20260917-task-reset-v1';
 const WORKSPACE_CACHE_VERSION = '20260917-reset-clean-v1';
 const CLEANUP_KEY = 'leadintel_customer_v2_brand_asset_cleanup_v1';
@@ -76,6 +76,25 @@ function loadProductionComposition(fetchImpl, initialStorage = {}, workspaceId =
   vm.runInNewContext(persistenceSource, loaded.sandbox, {filename: 'workspace-persistence.js'});
   return loaded;
 }
+
+test('getCrmActivities requests one workspace-scoped page and forwards its cursor', async () => {
+  let requestedUrl = '';
+  const {bridge} = loadBridge(async url => {
+    requestedUrl = String(url);
+    return new Response(JSON.stringify({activities: [], next_cursor: null}), {status: 200, headers: {'Content-Type': 'application/json'}});
+  });
+
+  const cursor = JSON.stringify({occurred_at: '2030-01-01T00:00:00.000Z', created_at: '2026-09-24T00:00:00.000Z', id: 'activity-0001'});
+  assert.equal(typeof bridge.getCrmActivities, 'function', 'server bridge must expose CRM activity pagination');
+  const result = await bridge.getCrmActivities('company/one', {limit: 40, cursor});
+
+  assert.equal(result.ok, true);
+  const request = new URL(requestedUrl);
+  assert.equal(request.pathname, '/api/crm/companies/company%2Fone/activities');
+  assert.equal(request.searchParams.get('workspace_id'), WORKSPACE_ID);
+  assert.equal(request.searchParams.get('limit'), '40');
+  assert.equal(request.searchParams.get('cursor'), cursor);
+});
 
 function asset(id = 'a'.repeat(43)) {
   return {

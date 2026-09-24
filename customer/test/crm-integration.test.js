@@ -14,7 +14,7 @@ test('process shell loads CRM engine before the server bridge and CRM UI',()=>{
 });
 
 test('server bridge exposes authenticated Master CRM operations without placing CRM into customer state bundle',()=>{
-  for(const method of ['listCrmCompanies','getCrmCompany','saveCrmCompany','addCrmToPipeline','removeCrmFromPipeline','archiveCrmCompany','restoreCrmCompany','suppressCrmCompany','markCrmCustomer','saveCrmContacts','recordCrmActivity','deleteCrmCompany'])assert.match(bridge,new RegExp(method));
+  for(const method of ['listCrmCompanies','getCrmCompany','getCrmActivities','saveCrmCompany','addCrmToPipeline','removeCrmFromPipeline','archiveCrmCompany','restoreCrmCompany','suppressCrmCompany','markCrmCustomer','saveCrmContacts','recordCrmActivity','deleteCrmCompany'])assert.match(bridge,new RegExp(method));
   assert.match(bridge,/`\/api\/crm\$\{path\}/);
   assert.match(bridge,/crmRequest\('\/companies'/);
   assert.doesNotMatch(bridge,/KEYS=\{[^}]*crm:/);

@@ -57,6 +57,32 @@ sqliteTest('CRM activity POST is idempotent and cross-workspace company ids do n
   response=await handleCrmRoute(req(`/api/crm/companies/${id}?workspace_id=w2`,{token}),env,{});assert.equal(response.status,404);
 });
 
+sqliteTest('CRM activity route returns stable pages for timelines longer than one page',async()=>{
+  const {env,token}=await fixture();
+  let response=await handleCrmRoute(req('/api/crm/companies?workspace_id=w1',{method:'POST',token,body:{company:{company_name:'Acme',domain:'acme.example'}}}),env,{});
+  const id=(await payload(response)).company.id;
+  for(let index=0;index<25;index++){
+    response=await handleCrmRoute(req(`/api/crm/companies/${id}/activities?workspace_id=w1`,{
+      method:'POST',token,
+      body:{id:`timeline-${String(index).padStart(4,'0')}`,type:'content.approved',summary:`Entry ${index}`,occurred_at:new Date(Date.UTC(2030,0,1,index,0,0)).toISOString()}
+    }),env,{});
+    assert.equal(response.status,200);
+  }
+
+  response=await handleCrmRoute(req(`/api/crm/companies/${id}/activities?workspace_id=w1&limit=10`,{token}),env,{});
+  assert.equal(response.status,200);
+  const first=await payload(response);
+  assert.equal(first.activities.length,10);
+  assert.ok(first.next_cursor);
+
+  response=await handleCrmRoute(req(`/api/crm/companies/${id}/activities?workspace_id=w1&limit=10&cursor=${encodeURIComponent(first.next_cursor)}`,{token}),env,{});
+  assert.equal(response.status,200);
+  const second=await payload(response);
+  assert.equal(second.activities.length,10);
+  assert.ok(second.next_cursor);
+  assert.equal(new Set([...first.activities,...second.activities].map(row=>row.id)).size,20);
+});
+
 sqliteTest('production app delegates CRM routes before SaaS and core routers',()=>{
   const source=fs.readFileSync(path.join(__dirname,'..','src','app.js'),'utf8');
   assert.match(source,/import \{handleCrmRoute\} from ['"]\.\/crm-routes\.js['"]/);

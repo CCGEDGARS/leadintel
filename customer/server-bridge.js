@@ -2,7 +2,7 @@
   'use strict';
   if(root.LeadIntelServerBridge)return;
   const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
-  const ASSET_VERSION='20260918-account-provider-v1';
+  const ASSET_VERSION='20260924-crm-activity-pages-v1';
   const API_REQUEST_TIMEOUT_MS=15000;
   const asset=path=>`${path}?v=${ASSET_VERSION}`;
   const KEYS={main:'leadintel_customer_v2_state',discovery:'leadintel_customer_v2_discovery',outreach:'leadintel_customer_v2_outreach',delivery:'leadintel_customer_v2_delivery',meta:'leadintel_customer_v2_discovery_meta'};
@@ -21,7 +21,7 @@
   const BRAND_ASSET_URL_PREFIX=`${API_BASE}/api/customer/brand-assets/`;
   const BRAND_IDENTITY_STRING_FIELDS=['companyDisplayName','senderName','senderTitle','website','phone','linkedinUrl','primaryColor','signatureText','legalFooter','postalAddress','updatedAt'];
   let saveTimer=null;let suppress=false;let initialized=false;const brandAssetTransactions=new Map(),workspaceSaveTransactions=new Map(),brandAssetResetGenerations=new Map();
-  const bridge={session:null,authProvider:localStorage.getItem(AUTH_PROVIDER_KEY)||'',workspaces:[],workspace:null,stateVersion:0,gmail:{configured:false,connected:false,email:'',role:''},microsoftMail:{configured:false,connected:false,email:'',role:''},status:'local',conflict:false,conflictState:null,saveNow,refreshGmailStatus,refreshMicrosoftMailStatus,syncReplies,sendGmail,sendMicrosoftMail,connectGmail,connectMicrosoftMail,disconnectGmail,disconnectMicrosoftMail,uploadBrandAsset,importBrandAsset,deleteBrandAsset,deleteAllBrandAssets,flushBrandAssetCleanup,invalidateBrandAssetTransactions,signIn,signOut,selectWorkspace,resolveConflictKeepLocal,resolveConflictUseServer,listCrmCompanies,getCrmCompany,saveCrmCompany,addCrmToPipeline,removeCrmFromPipeline,archiveCrmCompany,restoreCrmCompany,suppressCrmCompany,markCrmCustomer,saveCrmContacts,enrichCrmContact,recordCrmActivity,deleteCrmCompany,migrateLocalPipeline,switchProvider};
+  const bridge={session:null,authProvider:localStorage.getItem(AUTH_PROVIDER_KEY)||'',workspaces:[],workspace:null,stateVersion:0,gmail:{configured:false,connected:false,email:'',role:''},microsoftMail:{configured:false,connected:false,email:'',role:''},status:'local',conflict:false,conflictState:null,saveNow,refreshGmailStatus,refreshMicrosoftMailStatus,syncReplies,sendGmail,sendMicrosoftMail,connectGmail,connectMicrosoftMail,disconnectGmail,disconnectMicrosoftMail,uploadBrandAsset,importBrandAsset,deleteBrandAsset,deleteAllBrandAssets,flushBrandAssetCleanup,invalidateBrandAssetTransactions,signIn,signOut,selectWorkspace,resolveConflictKeepLocal,resolveConflictUseServer,listCrmCompanies,getCrmCompany,getCrmActivities,saveCrmCompany,addCrmToPipeline,removeCrmFromPipeline,archiveCrmCompany,restoreCrmCompany,suppressCrmCompany,markCrmCustomer,saveCrmContacts,enrichCrmContact,recordCrmActivity,deleteCrmCompany,migrateLocalPipeline,switchProvider};
   root.LeadIntelServerBridge=bridge;
   if(!root.LeadIntelServer)root.LeadIntelServer=bridge;
 
@@ -283,6 +283,7 @@
   async function crmRequest(path,options={}){if(!bridge.session?.authenticated||!bridge.workspace)return {ok:false,status:401,error:'Sign in to use Master CRM'};const {response,payload}=await api(crmPath(path),options);if(!response.ok)return {ok:false,status:response.status,...payload};return {ok:true,status:response.status,...payload};}
   async function listCrmCompanies(filters={}){const params=new URLSearchParams();if(filters.q)params.set('q',filters.q);if(filters.lifecycle)params.set('lifecycle',filters.lifecycle);if(filters.pipeline_stage||filters.pipelineStage)params.set('pipeline_stage',filters.pipeline_stage||filters.pipelineStage);if(filters.limit)params.set('limit',filters.limit);if(filters.cursor)params.set('cursor',filters.cursor);const suffix=params.toString()?`?${params.toString()}`:'';return crmRequest(`/companies${suffix}`);}
   async function getCrmCompany(id){return crmRequest(`/companies/${encodeURIComponent(id)}`);}
+  async function getCrmActivities(id,filters={}){const params=new URLSearchParams();if(filters.limit)params.set('limit',filters.limit);if(filters.cursor)params.set('cursor',filters.cursor);const suffix=params.toString()?`?${params.toString()}`:'';return crmRequest(`/companies/${encodeURIComponent(id)}/activities${suffix}`);}
   async function saveCrmCompany(payload){return crmRequest('/companies',{method:'POST',body:JSON.stringify(payload||{})});}
   async function addCrmToPipeline(id,stage='Discovered'){return crmRequest(`/companies/${encodeURIComponent(id)}/pipeline`,{method:'POST',body:JSON.stringify({stage})});}
   async function removeCrmFromPipeline(id){return crmRequest(`/companies/${encodeURIComponent(id)}/pipeline`,{method:'DELETE'});}
