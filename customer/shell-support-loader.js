@@ -6,7 +6,7 @@ const SUPPORT_MODULES=[
   './sync-conflict-hygiene.js?v=20260901-stale-blank-conflict-v1',
   './service-settings-extension.js?v=20260919-calendly-v1',
   './step2-readiness-engine.js?v=20260924-friendly-workflow-labels-v1',
-  './company-brain.js?v=20260909-step2-first-party-v1',
+  './company-brain.js?v=20260924-workspace-profile-english-v1',
   './step2-first-party-intelligence.js?v=20260909-first-party-step2-v1',
   './firecrawl-workspace-router.js?v=20260914-spinner-hard-stop-v1&adaptive-evidence=1',
   './linkedin-signals.js?v=20260907-public-index-v1',

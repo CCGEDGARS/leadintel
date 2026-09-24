@@ -56,6 +56,8 @@
   function splitOffers(value){return identityValue(value).replace(/\s*;\s*/g,", ");}
   function scorePercent(values){return Math.round(values.filter(Boolean).length/values.length*100);}
   function detectLanguage(profile={},input={},context={}){
+    const workspaceLanguage=globalThis.LeadIntelContentLanguage?.workspaceContentLanguage?.();
+    if(workspaceLanguage)return String(workspaceLanguage).toLowerCase().startsWith("lv")?"lv":"en";
     const requested=clean(input.uiLanguage||context.language||profile.uiLanguage).toLowerCase();
     if(requested.startsWith("lv")||requested==="auto"||!requested)return "lv";
     if(requested.startsWith("en"))return "en";

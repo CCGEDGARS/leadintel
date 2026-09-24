@@ -170,6 +170,7 @@
 
   function install(root){
     const engine=root?.LeadIntelProfile;if(!engine||engine.__companyBrainPatched)return engine;
+    const workspaceLanguage=()=>String(root?.LeadIntelContentLanguage?.workspaceContentLanguage?.()||"en").toLowerCase().startsWith("lv")?"lv":"en";
     const originalBuild=engine.buildCompanyIntelligenceProfile;
     const originalNormalize=engine.normalizeSavedState;
     const originalDerive=engine.deriveBusinessIdentity;
@@ -178,7 +179,7 @@
       const companyClassification=classifyCompany({...input,profile});
       const companyClaims=claimsForProfile(profile,input);
       const recommendedSignals=recommendSignals({...input,profile:{...profile,companyClassification},companyClassification});
-      const language=/^lv/i.test(input.uiLanguage||profile.identityLanguage||"")?"lv":(/[āčēģīķļņšūž]/i.test(allText({...input,profile}))?"lv":"en");
+      const language=workspaceLanguage();
       const customerPainPoints=derivePainPoints({...profile,companyClassification},{...input,companyClassification},language).join("\n\n");
       const identity=typeof engine.deriveBusinessIdentity==="function"?engine.deriveBusinessIdentity({...profile,companyClassification,customerPainPoints},{...input,companyClassification}):null;
       return {...profile,...(identity||{}),companyClassification,companyClaims,recommendedSignals,customerPainPoints,customerPainPointsStatus:"AI-inferred · review recommended",customerPainPointsLanguage:language};
@@ -186,7 +187,7 @@
     if(typeof originalDerive==="function")engine.deriveBusinessIdentity=function(profile={},input={}){
       const derived=originalDerive(profile,input);
       const companyClassification=profile.companyClassification||classifyCompany({...input,profile});
-      const language=derived.identityLanguage||derived.analysis?.language||(/[āčēģīķļņšūž]/i.test(allText({...input,profile}))?"lv":"en");
+      const language=workspaceLanguage();
       const customerPainPoints=derivePainPoints({...profile,companyClassification},{...input,companyClassification},language).join("\n\n");
       const frameworks=deriveFrameworks({...profile,companyClassification},{...input,companyClassification},language,derived.analysis||{});
       return {...derived,customerPainPoints,customerPainPointsStatus:"AI-inferred · review recommended",customerPainPointsLanguage:language,analysis:{...(derived.analysis||{}),frameworks}};
@@ -198,7 +199,7 @@
         normalized.profile.companyClassification=companyClassification;
         normalized.profile.companyClaims=normalized.profile.companyClaims||claimsForProfile(normalized.profile,normalized);
         normalized.profile.recommendedSignals=recommendSignals({...normalized,profile:normalized.profile,companyClassification});
-        const language=normalized.profile.customerPainPointsLanguage||normalized.profile.identityLanguage||(/[āčēģīķļņšūž]/i.test(allText({...normalized,profile:normalized.profile}))?"lv":"en");
+        const language=workspaceLanguage();
         const generated=!normalized.profile.customerPainPointsStatus||normalized.profile.customerPainPointsStatus==="AI-inferred · review recommended";
         if(generated){normalized.profile.customerPainPoints=derivePainPoints(normalized.profile,{...normalized,companyClassification},language).join("\n\n");normalized.profile.customerPainPointsStatus="AI-inferred · review recommended";normalized.profile.customerPainPointsLanguage=language;}
       }
