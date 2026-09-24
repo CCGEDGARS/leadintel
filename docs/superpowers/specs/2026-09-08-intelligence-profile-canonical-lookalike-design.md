@@ -362,6 +362,16 @@ LeadIntel should infer common commercial traits from activated reference compani
 
 Do not infer unsupported traits as facts. Each DNA dimension should retain evidence/confidence.
 
+#### Cross-company support and confidence
+
+Company-level extraction confidence and customer-profile confidence are separate measures. The profile confidence must account for agreement across the analyzed reference companies; several individually high-confidence company analyses do not by themselves support a high-confidence shared profile.
+
+For a list with two or more analyzed companies, a trait enters Reference Customer DNA only when it appears in at least `max(2, ceil(60% of the analyzed companies))` members of the selected segment. Keep one-off observations visible in the review screen with their exact `x/n` support count, but exclude them from Discovery queries and lookalike ranking. A one-company list may be activated as a low-confidence hypothesis.
+
+The profile is high confidence only when at least two dimensions have strong repeated support (at least 80% of the segment) and the underlying company analyses are high confidence. If no trait repeats, show that no shared profile was found and block activation until the list is corrected or expanded. Suggested profiles require explicit user selection; they are not preselected for activation.
+
+Previously published profiles must be recalibrated from current company analyses or recorded per-dimension support before they continue influencing Discovery. Retire a published profile from Discovery when no dimensions meet the support threshold.
+
 ### 10.8 Lookalike scoring
 Discovery results should expose a Lookalike Match score, for example:
 - `Lookalike Match: 92/100`

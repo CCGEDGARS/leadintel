@@ -4,7 +4,7 @@ const Portfolio=require('../reference-customer-portfolio.js');
 
 function referenceState({active=false,count=3,fingerprint='rc-a'}={}){
   const rows=Array.from({length:count},(_,i)=>({id:`r${i+1}`,companyName:`Company ${i+1}`,website:`https://c${i+1}.example.com`,status:'ready',reviewed:true}));
-  const dna=active?{active:true,activeCount:count,confidence:'high',fingerprint,dimensions:[{key:'industry',values:['B2B services'],weight:1,confidence:'high'}]}:null;
+  const dna=active?{version:3,calibrationVersion:1,active:true,activeCount:count,sampleSize:count,confidence:'high',profileConfidence:'high',fingerprint,dimensions:[{key:'industry',label:'Industry',values:['B2B services'],evidenceByValue:{'B2B services':count},evidenceCount:count,supportThreshold:Math.max(2,Math.ceil(count*.6)),prevalence:1,weight:1,confidence:'high'}]}:null;
   const publishedModel=active?{active:true,activeCount:count,confidence:'high',fingerprint,dna,activeRows:rows,activeSegments:[],segmentIds:[],activatedAt:'2026-09-10T06:00:00.000Z',updatedAt:'2026-09-10T06:00:00.000Z'}:null;
   return {version:3,rows,analyses:{},segments:[],activeSegmentIds:[],activeIds:active?rows.map(r=>r.id):[],activated:active,fingerprint:active?fingerprint:'',dna,publishedModel,draftDirty:false};
 }

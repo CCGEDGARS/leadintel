@@ -9,6 +9,14 @@ test('inactive reference model does not affect discovery scoring',()=>{
   assert.deepEqual(without,{active:false,total:0,dimensions:[],reasons:[]});
 });
 
+test('an active model with no recurring dimensions does not create a generic lookalike query',()=>{
+  const profile={targetMarkets:'Sweden',priorityOffers:'Industrial engineering',idealCustomer:'manufacturing companies'};
+  const queries=Discovery.buildLookalikeDiscoveryQueries(profile,{active:true,profileName:'Reference customer profile',dimensions:[]},4);
+  assert.deepEqual(queries,[]);
+  const score=Discovery.scoreLookalikeMatch({company:'A Swedish manufacturer'},{active:true,dimensions:[]});
+  assert.equal(score.active,false);
+});
+
 test('active Reference Customer DNA produces explainable lookalike score',()=>{
   const dna={active:true,dimensions:[
     {key:'industry',values:['industrial manufacturing'],weight:1,confidence:'high'},

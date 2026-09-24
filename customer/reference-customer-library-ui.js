@@ -96,18 +96,21 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
       const ref=list.reference||{},rows=ref.rows?.length||0,analyzed=Object.keys(ref.analyses||{}).length,model=ref.publishedModel;
       const segments=(ref.segments||[]).length;
       const canReview=Boolean(analyzed&&segments);
-      const stateLabel=list.active?'Active':canReview||model?'Ready':'Saved';
-      const canActivate=Boolean(list.active||model||canReview);
+      const hasActivatableSegment=(ref.segments||[]).some(segment=>segment.canActivate!==false);
+      const stateLabel=list.active?'Active':model?'Ready':canReview?(hasActivatableSegment?'Review':'No shared traits'):'Saved';
+      const canActivate=Boolean(list.active||model||hasActivatableSegment);
       const isSelected=list.id===selectedId;
       const isAnalyzing=list.id===analyzingListId;
-      return `<div class="reference-saved-row ${list.active?'active':''} ${list.id===selectedId?'selected':''}" data-reference-list-row="${esc(list.id)}"><div class="reference-saved-info"><strong>${esc(list.name)}<span class="reference-list-state ${list.active?'active':''}">${stateLabel}</span></strong><small>${rows} customers · ${analyzed} analyzed${canReview?` · ${segments} segment${segments===1?'':'s'} · Ready for review`:''}${model?` · ${esc(model.confidence||'low')} confidence`:''}${list.markets?.length?` · ${esc(list.markets.join(' · '))}`:''}</small></div><div class="reference-saved-buttons">${canReview?`<button class="${isSelected?'primary-btn':'secondary-btn'}" type="button" data-view-reference-results="${esc(list.id)}" ${lock}>View Results</button>`:`<button class="${isSelected?'primary-btn':'secondary-btn'}" type="button" data-analyze-reference-list="${esc(list.id)}" ${isAnalyzing?'disabled':''} ${lock}>${isAnalyzing?'Analyzing…':'Analyze'}</button>`}<button class="${list.active?'secondary-btn':'primary-btn'}" type="button" data-activate-reference-list="${esc(list.id)}" ${canActivate?'':'disabled'} ${lock}>${list.active?'Deactivate':'Activate'}</button><button class="secondary-btn" type="button" data-edit-reference-list="${esc(list.id)}" ${lock}>Edit</button><button class="secondary-btn" type="button" data-delete-reference-list="${esc(list.id)}" ${lock}>Delete</button></div></div>${list.id===selectedId?editorHtml:''}`;
+      const reviewStatus=canReview?(hasActivatableSegment?'· Review profile':'· No repeated traits; Discovery unavailable'):'';
+      return `<div class="reference-saved-row ${list.active?'active':''} ${list.id===selectedId?'selected':''}" data-reference-list-row="${esc(list.id)}"><div class="reference-saved-info"><strong>${esc(list.name)}<span class="reference-list-state ${list.active?'active':''}">${stateLabel}</span></strong><small>${rows} customers · ${analyzed} analyzed${canReview?` · ${segments} segment${segments===1?'':'s'} ${reviewStatus}`:''}${model?` · ${esc(model.confidence||'low')} confidence`:''}${list.markets?.length?` · ${esc(list.markets.join(' · '))}`:''}</small></div><div class="reference-saved-buttons">${canReview?`<button class="${isSelected?'primary-btn':'secondary-btn'}" type="button" data-view-reference-results="${esc(list.id)}" ${lock}>View Results</button>`:`<button class="${isSelected?'primary-btn':'secondary-btn'}" type="button" data-analyze-reference-list="${esc(list.id)}" ${isAnalyzing?'disabled':''} ${lock}>${isAnalyzing?'Analyzing…':'Analyze'}</button>`}<button class="${list.active?'secondary-btn':'primary-btn'}" type="button" data-activate-reference-list="${esc(list.id)}" ${canActivate?'':'disabled'} ${lock}>${list.active?'Deactivate':'Activate'}</button><button class="secondary-btn" type="button" data-edit-reference-list="${esc(list.id)}" ${lock}>Edit</button><button class="secondary-btn" type="button" data-delete-reference-list="${esc(list.id)}" ${lock}>Delete</button></div></div>${list.id===selectedId?editorHtml:''}`;
     }).join('')}</div>`;
   }
-  function currentMessage({saved,analyzed,segments,selected,draftDirty}){
+  function currentMessage({saved,analyzed,segments,selected,draftDirty,hasActivatableSegment}){
     if(!saved)return '<strong>Start a customer list</strong><span>Upload a CSV/Excel file or add companies manually below.</span>';
     if(!selected)return `<strong>${saved} customers in this draft</strong><span>This list is not saved yet. Give it a name and click Save List before analyzing it.</span>`;
     if(draftDirty)return `<strong>${esc(selected.name)} · ${saved} customers in the draft</strong><span>Save Updated List to keep these changes. Saved results and activation are paused until you save.</span>`;
     if(!analyzed)return `<strong>${esc(selected.name)} · ${saved} customers</strong><span>Saved. Next step: Analyze List.</span>`;
+    if(segments&&!hasActivatableSegment&&!selected.active)return `<strong>${esc(selected.name)} · ${analyzed} analyzed</strong><span>No traits repeat across these companies. Add or correct the reference customers before activating a lookalike profile.</span>`;
     if(!selected.active)return `<strong>${esc(selected.name)} · ${analyzed} analyzed</strong><span>${segments?`${segments} segment${segments===1?'':'s'} ready. Review below, then Activate Model.`:'Analysis complete. Review the results below.'}</span>`;
     return `<strong>${esc(selected.name)} · Active</strong><span>This model is currently influencing Lookalike-led Discovery.</span>`;
   }
@@ -122,7 +125,8 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     const activeModels=portfolio.lists.filter(list=>list.active&&list.reference?.publishedModel?.active).length;
     const draftDirty=Portfolio.hasUnsavedCurrentListDraft?.(state)||false;
     setWorkflowStep(modal,workflowStepFor(state,selected,draftDirty));
-    const canAnalyze=Boolean(saved&&selected&&!draftDirty),hasPublished=Boolean(reference.publishedModel?.active),candidateReady=Boolean(analyzed&&segments);
+    const hasActivatableSegment=(reference.segments||[]).some(segment=>segment.canActivate!==false);
+    const canAnalyze=Boolean(saved&&selected&&!draftDirty),hasPublished=Boolean(reference.publishedModel?.active),candidateReady=Boolean(analyzed&&segments&&hasActivatableSegment);
     const canActivate=Boolean(selected&&!draftDirty&&(hasPublished||candidateReady));
     const analyzeControl=modal.querySelector('#reference-analyze');if(analyzeControl)analyzeControl.disabled=!canAnalyze;
     const activateControl=modal.querySelector('#reference-activate');if(activateControl)activateControl.disabled=!canActivate;
@@ -131,7 +135,7 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     const saveLabel=selected?'Save Updated List':'Save List';
     const showEditor=Boolean(editorOpen||draftDirty||!portfolio.lists.length||(saved&&!selected));
     const activateLabel=selected?.active?(reference.draftDirty?'Update Model':'Model Active'):'Activate Model';
-    const editorHtml=showEditor?`${draftDirty?'<div class="reference-unsaved-notice" role="status"><strong>Unsaved list changes.</strong> Save Updated List before opening results, activating, or switching to another list.</div>':''}<div class="reference-current-card"><div class="reference-current-message">${currentMessage({saved,analyzed,segments,selected,draftDirty})}</div><div class="reference-current-name"><label>List name<input id="reference-list-name" value="${esc(meta.name||'')}" placeholder="e.g. Latvia Sales Training"></label><div class="reference-save-actions"><button class="primary-btn" type="button" data-save-reference-list ${saved?'':'disabled'}>${saveLabel}</button>${selected?`<button class="secondary-btn" type="button" data-save-reference-list-as-new ${saved?'':'disabled'}>Save as New List</button>`:''}</div></div>
+    const editorHtml=showEditor?`${draftDirty?'<div class="reference-unsaved-notice" role="status"><strong>Unsaved list changes.</strong> Save Updated List before opening results, activating, or switching to another list.</div>':''}<div class="reference-current-card"><div class="reference-current-message">${currentMessage({saved,analyzed,segments,selected,draftDirty,hasActivatableSegment})}</div><div class="reference-current-name"><label>List name<input id="reference-list-name" value="${esc(meta.name||'')}" placeholder="e.g. Latvia Sales Training"></label><div class="reference-save-actions"><button class="primary-btn" type="button" data-save-reference-list ${saved?'':'disabled'}>${saveLabel}</button>${selected?`<button class="secondary-btn" type="button" data-save-reference-list-as-new ${saved?'':'disabled'}>Save as New List</button>`:''}</div></div>
       <details class="reference-advanced"><summary>Advanced list settings</summary><div class="reference-advanced-grid"><label>Markets<input id="reference-list-markets" value="${esc((meta.markets||[]).join('; '))}" placeholder="Latvia; Baltics"></label><label>Purpose<input id="reference-list-purpose" value="${esc(meta.purpose||'')}" placeholder="What should this list help discover?"></label><button class="secondary-btn" type="button" data-download-reference-template>Download example CSV</button></div></details></div>`:'';
     panel.innerHTML=`<div class="reference-library-top"><div class="reference-library-main"><div class="reference-library-head"><strong>Customer List</strong><span class="reference-library-badge ${statusClass}">${esc(statusLabel)}</span></div><div class="reference-library-status">${portfolio.lists.length} saved list${portfolio.lists.length===1?'':'s'} · ${activeModels} active model${activeModels===1?'':'s'}. Upload → Save → Analyze → Review → Activate.</div></div><button class="secondary-btn" type="button" data-new-reference-list ${draftDirty?'disabled title="Save your changes before creating another list."':''}>+ New List</button></div>
       ${renderSavedLists(state,editorHtml,draftDirty)}`;
@@ -211,11 +215,13 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     if(list.active){state=Portfolio.setListActive(state,id,false);await writeState(state);syncLibraryUi();return;}
     let reference=Ref.normalizeReferenceState(state.referenceCustomers||{});
     if(!reference.publishedModel?.active){
-      const segmentIds=(reference.segments||[]).map(segment=>segment.id).filter(Boolean);
-      if(!Object.keys(reference.analyses||{}).length||!segmentIds.length)throw new Error('Analyze this customer list before activating it');
+      const segmentIds=(reference.segments||[]).filter(segment=>segment.canActivate!==false).map(segment=>segment.id).filter(Boolean);
+      if(!Object.keys(reference.analyses||{}).length)throw new Error('Analyze this customer list before activating it');
+      if(!segmentIds.length)throw new Error('No recurring customer traits were found. Add or correct reference companies, then analyze the list again.');
       reference=Ref.activateReferenceSegments(reference,segmentIds);
       reference.dna=Ref.buildReferenceDna(reference,reference.analyses||{});
       if(!reference.dna?.active)throw new Error('Analysis did not produce an activatable customer model');
+      if(!reference.dna.dimensions?.length)throw new Error('No recurring customer traits were found. Add or correct reference companies, then analyze the list again.');
       reference=Ref.publishReferenceModel(reference);state.referenceCustomers=reference;
       state=Portfolio.saveCurrentList(state,{name:list.name,markets:list.markets,purpose:list.purpose});
     }
@@ -248,6 +254,7 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     reference=Ref.activateReferenceSegments(reference,selectedSegments);
     reference.dna=Ref.buildReferenceDna(reference,reference.analyses||{});
     if(!reference.dna?.active)throw new Error('Analyze the customer list before activating the model');
+    if(!reference.dna.dimensions?.length)throw new Error('No recurring customer traits were found. Add or correct reference companies, then analyze the list again.');
     reference=Ref.publishReferenceModel(reference);reference.analyzedAt=reference.analyzedAt||new Date().toISOString();state.referenceCustomers=reference;
     state=Portfolio.saveCurrentList(state,metadataFromUi(state));
     const id=state.referenceCustomerPortfolio.selectedListId;state=Portfolio.setListActive(state,id,true);
