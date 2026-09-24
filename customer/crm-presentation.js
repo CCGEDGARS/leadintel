@@ -39,11 +39,10 @@
   }
   function evidenceKind(record,url){
     const provided=clean(record?.sourceKind||record?.source_kind,80).toLowerCase();
+    if(provided==="linkedin-public-index")return "Public LinkedIn-indexed page";
     let host="";
     try{host=new URL(url||"https://"+clean(record?.sourceDomain||record?.source_domain,255)).hostname;}catch{}
-    return provided==="linkedin-public-index"||/(^|\.)linkedin\.com$/i.test(host)
-      ?"Public LinkedIn-indexed page"
-      :"Public web page";
+    return /(^|\.)linkedin\.com$/i.test(host)?"LinkedIn page":"Public web page";
   }
   function evidenceHtml(evidence=[]){
     const records=Array.isArray(evidence)?evidence:[];

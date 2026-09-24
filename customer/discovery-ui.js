@@ -10,9 +10,9 @@ const MAX_DISCOVERY_RESULTS_PER_QUERY=5;
 const DISCOVERY_SEARCH_CONCURRENCY=4;
 const MAX_DISCOVERY_FOLLOW_UP_QUERIES=4;
 const MAX_DISCOVERY_COMPANY_CHECKS=20;
-const ASSET_VERSION="20260924-friendly-workflow-labels-v1";
-const LANGUAGE_ASSET_VERSION="20260914-workspace-isolation-v1";
-const OUTREACH_ASSET_VERSION="20260924-friendly-workflow-labels-v1";
+const ASSET_VERSION="20260924-workspace-content-english-v1";
+const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
+const OUTREACH_ASSET_VERSION="20260924-workspace-content-english-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const $=id=>document.getElementById(id);
 let recoveredInterruptedRun=false;
@@ -28,7 +28,7 @@ let discoveryEvidenceUrls=new Set();
 let discoveryCheckedCompanyDomains=new Set();
 const enrichmentResults=new Map();
 const enrichmentPending=new Set();
-function contentLanguage(){const main=mainState();return LeadIntelContentLanguage.resolveLanguage(window.LeadIntelLanguage?.get?.()||main.uiLanguage||'lv',navigator.languages||[]);}
+function contentLanguage(){return window.LeadIntelContentLanguage?.workspaceContentLanguage?.()||'en';}
 
 function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
 function mainState(){try{return JSON.parse(localStorage.getItem(MAIN_STORAGE_KEY)||"{}");}catch{return {};}}
@@ -486,7 +486,6 @@ function bindDiscovery(){
   window.addEventListener("leadintel:server-ready",()=>refreshCrmState());
   window.addEventListener("leadintel:crm-migrated",()=>refreshCrmState());
   window.addEventListener("leadintel:crm-changed",()=>refreshCrmState());
-  window.addEventListener("leadintel:language-changed",renderAll);
 }
 function loadOutreachModules(){if(document.querySelector('script[data-outreach-engine]'))return;const engine=document.createElement("script");engine.src=`outreach-engine.js?v=${OUTREACH_ASSET_VERSION}`;engine.dataset.outreachEngine="true";engine.addEventListener("load",()=>{const localization=document.createElement("script");localization.src=`outreach-localization.js?v=${OUTREACH_ASSET_VERSION}`;localization.dataset.outreachLocalization="true";localization.addEventListener("load",()=>{if(document.querySelector('script[data-outreach-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src=`outreach-ui.js?v=${OUTREACH_ASSET_VERSION}`;ui.dataset.outreachUi="true";document.body.appendChild(ui);});document.body.appendChild(localization);});document.body.appendChild(engine);}
 function openDiscoveryFromHandoff(options={}){if(!moduleReady())return false;showDiscoveryStep(options.focus||"companies");return Boolean($("step-5")?.classList.contains("active"));}

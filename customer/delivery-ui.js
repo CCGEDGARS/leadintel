@@ -2,12 +2,12 @@ const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
 const DELIVERY_STORAGE_KEY="leadintel_customer_v2_delivery";
-  const ASSET_VERSION="20260924-friendly-workflow-labels-v1";
-const SERVER_BRIDGE_ASSET="server-bridge.js?v=20260918-account-provider-v1";
+  const ASSET_VERSION="20260924-workspace-content-english-v1";
+const SERVER_BRIDGE_ASSET="server-bridge.js?v=20260924-crm-activity-pages-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const q=id=>document.getElementById(id);
 let delivery=loadDelivery();
-function contentLanguage(){const main=readJson(MAIN_STORAGE_KEY);return LeadIntelContentLanguage.resolveLanguage(window.LeadIntelLanguage?.get?.()||main.uiLanguage||'lv',navigator.languages||[]);}
+function contentLanguage(){return LeadIntelContentLanguage.workspaceContentLanguage();}
 
 function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
 function readJson(key){try{return JSON.parse(localStorage.getItem(key)||"{}");}catch{return {};}}
@@ -98,7 +98,6 @@ function renderAll(){ensureSelection();renderSelector();renderState();renderActi
 function bindDelivery(){
   q("continue-to-delivery")?.addEventListener("click",showDeliveryStep);q("back-to-outreach")?.addEventListener("click",showOutreachStep);q("delivery-company-select")?.addEventListener("change",e=>{delivery.selectedDomain=e.target.value;saveDelivery();renderAll();});q("open-gmail-draft")?.addEventListener("click",openGmailDraft);q("confirm-delivery-sent")?.addEventListener("click",confirmSent);q("reply-text")?.addEventListener("input",previewReply);q("record-reply")?.addEventListener("click",recordReply);q("step-7")?.addEventListener("click",e=>{const btn=e.target.closest("[data-outcome-stage]");if(btn)recordOutcome(btn.dataset.outcomeStage);});q("export-learning-data")?.addEventListener("click",exportLearningData);q("reset-workspace")?.addEventListener("click",()=>setTimeout(()=>{if(!localStorage.getItem(MAIN_STORAGE_KEY))localStorage.removeItem(DELIVERY_STORAGE_KEY);},0));
   window.addEventListener("leadintel:module-opened",event=>{if(Number(event.detail?.step)!==7)return;persistMainStep(7);ensureSelection();renderAll();});
-  window.addEventListener("leadintel:language-changed",renderAll);
 }
 function loadProductionSaas(){
   const loadMailboxUi=()=>{if(document.querySelector('script[data-production-gmail-ui]'))return;const ui=document.createElement('script');ui.src=asset('production-gmail-ui.js');ui.dataset.productionGmailUi='true';document.body.appendChild(ui);};

@@ -1,5 +1,7 @@
 # Step 1 — selected-language content generation
 
+> **Historical plan, superseded 24 September 2026.** The current product contract keeps generated content in the core workspace in English across Market, Discovery, Scripts and Delivery. Other languages are selected for an individual campaign in Campaign Studio; localization errors keep approval blocked. There is no global workspace language switch.
+
 ## Scope
 
 LeadIntel keeps interface navigation, headings, labels and workflow controls in English. Generated commercial content now follows the selected content language across:

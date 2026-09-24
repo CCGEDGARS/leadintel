@@ -11,6 +11,7 @@
   const MARKET_LANGUAGES=Object.freeze({latvia:'lv',latvija:'lv',lithuania:'lt',lietuva:'lt',estonia:'et',eesti:'et',germany:'de',deutschland:'de',sweden:'sv',sverige:'sv',finland:'fi',suomi:'fi',norway:'no',norge:'no',denmark:'da',danmark:'da',poland:'pl',polska:'pl',france:'fr',netherlands:'nl',spain:'es',italy:'it',portugal:'pt',czechia:'cs','czech republic':'cs',slovakia:'sk',romania:'ro',bulgaria:'bg',croatia:'hr',slovenia:'sl',hungary:'hu',greece:'el',ukraine:'uk','united kingdom':'en',ireland:'en'});
   const DOMAIN_LANGUAGES=Object.freeze({lv:'lv',lt:'lt',ee:'et',de:'de',se:'sv',fi:'fi',no:'no',dk:'da',pl:'pl',fr:'fr',nl:'nl',es:'es',it:'it',pt:'pt',cz:'cs',sk:'sk',ro:'ro',bg:'bg',hr:'hr',si:'sl',hu:'hu',gr:'el',ua:'uk',uk:'en',ie:'en'});
   const CAMPAIGN_FIELDS=Object.freeze(['emailSubject','emailBody','linkedinMessage','callOpener','followUp','objectionReply']);
+  function workspaceContentLanguage(){return 'en';}
   function resolveLanguage(value,navigatorLanguages=[]){
     const selected=String(value||'lv').toLowerCase();
     if(selected==='en'||selected==='lv')return selected;
@@ -171,5 +172,5 @@
     const source=marketContentSource(market);if(!Object.keys(source).length)return applyMarketContent(market,{},language);
     return applyMarketContent(market,await request(root,workspace,resolveLanguage(language),source),language);
   }
-  return {EMAIL_LANGUAGES,resolveLanguage,resolveCampaignLanguage,applyLanguageSelection,cacheKey,promptFor,validate,validateCampaignPackage,request,localizeCampaignPackage,marketContentSource,applyMarketContent,translateMarketState};
+  return {EMAIL_LANGUAGES,workspaceContentLanguage,resolveLanguage,resolveCampaignLanguage,applyLanguageSelection,cacheKey,promptFor,validate,validateCampaignPackage,request,localizeCampaignPackage,marketContentSource,applyMarketContent,translateMarketState};
 });

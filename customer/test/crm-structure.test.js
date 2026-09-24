@@ -6,6 +6,7 @@ const root=path.join(__dirname,'..');
 const uiPath=path.join(root,'crm-ui.js');
 const presentationPath=path.join(root,'crm-presentation.js');
 const cssPath=path.join(root,'crm.css');
+const supportLoader=fs.readFileSync(path.join(root,'shell-support-loader.js'),'utf8');
 const processMap=fs.readFileSync(path.join(root,'process-map.js'),'utf8');
 const ui=fs.existsSync(uiPath)?fs.readFileSync(uiPath,'utf8'):'';
 const presentation=fs.existsSync(presentationPath)?fs.readFileSync(presentationPath,'utf8'):'';
@@ -28,6 +29,12 @@ test('CRM detail loads the evidence renderer before displaying durable company a
   assert.ok(renderer<uiImport,'CRM evidence renderer must load before the detail UI');
   assert.match(ui,/LeadIntelCrmPresentation\?\.intelligenceHtml/);
   assert.match(ui,/LeadIntelCrmPresentation\?\.contactsHtml/);
+  const rendererLoad=supportLoader.indexOf("await import('./crm-presentation.js?v=");
+  const uiLoad=supportLoader.indexOf("await import('./crm-ui.js?v=");
+  assert.ok(rendererLoad>=0,'deferred loader must load the CRM evidence renderer');
+  assert.ok(uiLoad>=0,'deferred loader must load the CRM UI');
+  assert.ok(rendererLoad<uiLoad,'CRM UI must wait for the evidence renderer');
+  assert.match(supportLoader,/20260924-crm-evidence-activity-v1/);
 });
 test('CRM workspace includes search, lifecycle views, pipeline view and company detail',()=>{
   assert.match(ui,/id="crm-search"/);
@@ -45,6 +52,14 @@ test('CRM contact detail renders email status, contact source, and phone fields'
   assert.match(presentation,/Contact source/);
   assert.match(presentation,/phone_number/);
   assert.match(ui,/LeadIntelCrmPresentation\?\.contactsHtml/);
+});
+
+test('CRM detail provides a retryable control for complete activity history',()=>{
+  assert.match(ui,/data-crm-load-activity/);
+  assert.match(ui,/Load older activity/);
+  assert.match(ui,/getCrmActivities/);
+  assert.match(ui,/activityCursor/);
+  assert.match(css,/crm-load-activity/);
 });
 
 test('CRM company actions preserve lifecycle semantics and expose destructive delete only as a separate action',()=>{

@@ -10,11 +10,13 @@ test('CRM intelligence detail shows score factors and classified evidence links'
     score_breakdown:{fit:24,signal:20,evidence:16,timing:10,value:8,total:78},
     evidence:[
       {url:'https://www.linkedin.com/company/acme',title:'Acme is hiring',description:'The company announced a new sales team.'},
+      {url:'https://www.linkedin.com/in/acme-founder',sourceKind:'linkedin-public-index',title:'Public index result'},
       {url:'https://industry.example/news/acme-expansion',title:'Acme opens a new office',description:'A public industry-news mention.'}
     ]
   });
   assert.match(html,/24\s*\/\s*30/);
   assert.match(html,/20\s*\/\s*25/);
+  assert.match(html,/>LinkedIn page</);
   assert.match(html,/Public LinkedIn-indexed page/);
   assert.match(html,/Public web page/);
   assert.match(html,/Acme is hiring/);

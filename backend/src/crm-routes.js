@@ -2,7 +2,7 @@ import {sha256,cookieValue} from './security.js';
 import {buildApolloMatchUrl,provenBusinessEmail,publicPersonSummary,strongPersonalEmail} from './enrichment.js';
 import {apolloWebhookSigningSecret,buildApolloCrmWebhookUrl,handleApolloCrmWebhook} from './apollo-crm-webhook.js';
 import {
-  listCrmCompanies,getCrmCompany,upsertCrmCompany,updateCrmCompany,
+  listCrmCompanies,listCrmActivities,getCrmCompany,upsertCrmCompany,updateCrmCompany,
   setCrmPipelineStage,removeCrmFromPipeline,archiveCrmCompany,restoreCrmCompany,
   suppressCrmCompany,markCrmCustomer,deleteCrmCompany,upsertCrmContacts,
   patchCrmContact,archiveCrmContact,appendCrmActivity
@@ -125,7 +125,7 @@ export async function handleCrmRoute(request,env,corsOverride={}){
         return error('Method not allowed',405,cors);
       }
       if(company.action==='activities'){
-        if(request.method==='GET'){const detail=await getCrmCompany(env.DB,access.context,company.id);return json({activities:detail.activities},200,cors);}
+        if(request.method==='GET')return json(await listCrmActivities(env.DB,access.context,company.id,{limit:url.searchParams.get('limit')||'',cursor:url.searchParams.get('cursor')||''}),200,cors);
         if(request.method==='POST'){const body=await request.json().catch(()=>null);if(!body||!CLIENT_ACTIVITY_TYPES.has(String(body.type||body.activity_type||'')))return error('Unsupported CRM activity type',400,cors,'CRM_ACTIVITY_INVALID');const result=await appendCrmActivity(env.DB,access.context,{...body,companyId:company.id});return json(result,200,cors);}
         return error('Method not allowed',405,cors);
       }
