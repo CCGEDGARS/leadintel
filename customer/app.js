@@ -1,6 +1,6 @@
 import './content-language.js?v=20260924-workspace-content-english-v1';
 import './content-variants.js?v=20260921-contact-gated-v2';
-import './business-identity.js?v=20260906-pain-headings-v1';
+import './business-identity.js?v=20260924-workspace-profile-english-v1';
 import './evidence-view.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&reference-interface=20260923';
 import './profile-approval-ui.js?v=20260924-friendly-workflow-labels-v1';
 import './workspace-persistence.js?v=20260917-reset-clean-v1';

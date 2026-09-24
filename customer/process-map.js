@@ -19,8 +19,8 @@
  * import './step2-readiness-engine.js?v=20260924-friendly-workflow-labels-v1';
  * import './content-language.js?v=20260924-workspace-content-english-v1';
  * import './content-variants.js?v=20260921-contact-gated-v2';
- * import './business-identity.js?v=20260906-pain-headings-v1';
- * import './company-brain.js?v=20260909-step2-first-party-v1';
+ * import './business-identity.js?v=20260924-workspace-profile-english-v1';
+ * import './company-brain.js?v=20260924-workspace-profile-english-v1';
  * import './step2-first-party-intelligence.js?v=20260909-first-party-step2-v1';
  * import './firecrawl-workspace-router.js?v=20260914-spinner-hard-stop-v1&adaptive-evidence=1';
  * import './linkedin-signals.js?v=20260907-public-index-v1';

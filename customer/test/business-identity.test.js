@@ -91,7 +91,7 @@ test('Competitive Advantages spans the complete Commercial Positioning grid', ()
   const processMap = fs.readFileSync(path.join(__dirname,'..','process-map.js'),'utf8');
   const shell = fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
   assert.match(ui,/diff\.classList\.add\("wide","identity-wide"\)/);
-  assert.match(processMap,/business-identity\.js\?v=20260906-pain-headings-v1/);
+  assert.match(processMap,/business-identity\.js\?v=20260924-workspace-profile-english-v1/);
   assert.match(shell,/process-map\.js\?v=20260924-friendly-workflow-labels-v1/);
 });
 
@@ -166,10 +166,13 @@ test('Step 1 opens the questionnaire immediately and keeps evidence-first resear
 });
 
 
-test('Business Identity keeps language handling internal while the workspace stays English-only', () => {
+test('Business Identity follows the English workspace policy and repairs stale generated Latvian profile text', () => {
   const index = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
   assert.doesNotMatch(index, /language-select/);
 
+  const previousLanguagePolicy=globalThis.LeadIntelContentLanguage;
+  globalThis.LeadIntelContentLanguage={workspaceContentLanguage:()=> 'en'};
+  try {
   const lvInput = JSON.parse(JSON.stringify(input));
   lvInput.uiLanguage = 'lv';
   lvInput.answers.priority_offers = 'Biroja mēbeles, ergonomiski krēsli, regulējami galdi, noliktavu un darbnīcu aprīkojums, 3D vizualizācijas';
@@ -177,9 +180,25 @@ test('Business Identity keeps language handling internal while the workspace sta
   lvInput.answers.buying_outcomes = '';
   lvInput.scrapedSources = [{type:'website', url:'https://example.lv', text:'Piedāvājam biroja mēbeles, ergonomiskus krēslus, noliktavu aprīkojumu un darba vietu plānošanu ar 3D vizualizācijām.'}];
   const result = profile.buildCompanyIntelligenceProfile(lvInput);
-  assert.equal(result.analysis.language, 'lv');
-  assert.match(result.analysis.frameworks.fab.benefits, /ergonom|sakārtot|vizualizēt/i);
-  assert.doesNotMatch(result.elevatorPitch, /We help|through|Our approach/i);
+  assert.equal(result.analysis.language, 'en');
+  assert.match(result.analysis.frameworks.fab.benefits, /ergonomic|organised|visualise/i);
+  assert.match(result.customerPainPoints,/How it can help earn more:/);
+  assert.doesNotMatch(result.customerPainPoints,/Kā var palīdzēt|Neergonomiskas|Nesakārtota/i);
+  assert.match(result.elevatorPitch, /We help|through|Our approach/i);
+
+  const latvianFallback='Konkrētā klienta problēma vēl nav pietiekami pamatota; LeadIntel jāprasa apstiprinājums, pirms to uzskatīt par faktu.';
+  const oldGenerated={...lvInput,profile:{companyName:'AJ Produkti',priorityOffers:lvInput.answers.priority_offers,customerPainPoints:latvianFallback,customerPainPointsStatus:'AI-inferred · review recommended',customerPainPointsLanguage:'lv'}};
+  const repaired=profile.normalizeSavedState(oldGenerated);
+  assert.equal(repaired.profile.customerPainPointsLanguage,'en');
+  assert.match(repaired.profile.customerPainPoints,/How it can help earn more:/);
+  assert.doesNotMatch(repaired.profile.customerPainPoints,/Konkrētā klienta|Kā var palīdzēt/i);
+
+  const confirmed=profile.normalizeSavedState({...oldGenerated,profile:{...oldGenerated.profile,customerPainPointsStatus:'Customer-confirmed'}});
+  assert.equal(confirmed.profile.customerPainPoints,latvianFallback);
+  } finally {
+    if(previousLanguagePolicy===undefined)delete globalThis.LeadIntelContentLanguage;
+    else globalThis.LeadIntelContentLanguage=previousLanguagePolicy;
+  }
 });
 
 

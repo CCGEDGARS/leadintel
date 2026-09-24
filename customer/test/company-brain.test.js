@@ -78,3 +78,35 @@ test('runtime patch upgrades Step 3 profile without warehouse contamination or g
   assert.doesNotMatch(identity.analysis.frameworks.goldenCircle.why.toLowerCase(),/warehouse|workshop|storage/);
   assert.match(identity.analysis.frameworks.goldenCircle.why.toLowerCase(),/sales|manager|commercial|ai/);
 });
+
+test('profile pain-point generation follows the English workspace policy and refreshes stale generated Latvian text',()=>{
+  const englishFallback='The specific customer problem is not yet sufficiently evidenced; LeadIntel should ask for confirmation before treating a pain point as fact.';
+  const latvianFallback='Konkrētā klienta problēma vēl nav pietiekami pamatota; LeadIntel jāprasa apstiprinājums, pirms to uzskatīt par faktu.';
+  const source={id:'E1',url:'https://ercon.lv/',title:'Ercon',text:'Ercon nodrošina rūpniecības inženieriju un metālapstrādi Latvijas uzņēmumiem.'};
+  const input={
+    uiLanguage:'lv',
+    profile:{companyName:'Ercon',priorityOffers:'Rūpniecības inženierija un metālapstrāde'},
+    answers:{},
+    scrapedSources:[source],
+    documents:[]
+  };
+  const engine={
+    buildCompanyIntelligenceProfile(value){return {...value.profile};},
+    normalizeSavedState(value){return structuredClone(value);},
+    deriveBusinessIdentity(){return {identityLanguage:'lv',analysis:{language:'lv'}};}
+  };
+  const root={LeadIntelProfile:engine,LeadIntelContentLanguage:{workspaceContentLanguage:()=> 'en'}};
+  Brain.install(root);
+
+  const generated=engine.buildCompanyIntelligenceProfile(input);
+  assert.equal(generated.customerPainPoints,englishFallback);
+  assert.equal(generated.customerPainPointsLanguage,'en');
+
+  const saved={...input,profile:{...input.profile,customerPainPoints:latvianFallback,customerPainPointsStatus:'AI-inferred · review recommended',customerPainPointsLanguage:'lv'}};
+  const refreshed=engine.normalizeSavedState(saved);
+  assert.equal(refreshed.profile.customerPainPoints,englishFallback);
+  assert.equal(refreshed.profile.customerPainPointsLanguage,'en');
+
+  const confirmed={...saved,profile:{...saved.profile,customerPainPointsStatus:'Customer-confirmed'}};
+  assert.equal(engine.normalizeSavedState(confirmed).profile.customerPainPoints,latvianFallback);
+});
