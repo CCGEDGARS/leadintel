@@ -207,6 +207,7 @@ async function runAiSynthesis(){
     if(normalizeUrl(latest.website)!==website||normalizeUrl(latestMeta.website)!==website)throw new Error('Workspace changed during AI synthesis. Your edits were preserved; try again when ready.');
     if(ai.mode!=='ai'||!ai.draft){
       writeMeta({...latestMeta,mode:'evidence',provider:'',model:'',reason:ai.reason||'AI returned no additional evidence-backed fields.'});
+      window.dispatchEvent(new CustomEvent('leadintel:company-research-updated',{detail:{website,synthesisFailed:true}}));
       renderResearchReview();toast(`AI synthesis did not complete: ${ai.reason||'no additional evidence-backed fields were returned.'}`);return false;
     }
     const fallback=researchEngine.buildEvidenceDraft({sources,targetMarkets:selectedMarkets(latest),uiLanguage:'en'});
@@ -223,7 +224,7 @@ async function runAiSynthesis(){
     renderResearchReview();await saveWorkspaceBestEffort();toast('AI synthesis complete. Review the updated commercial brief.');return true;
   }catch(error){
     const reason=controller.signal.aborted?'AI synthesis stopped after 60 seconds.':(error.message||'AI synthesis is temporarily unavailable.');
-    const latestMeta=metaForCurrentState();if(normalizeUrl(latestMeta.website)===website){writeMeta({...latestMeta,mode:'evidence',provider:'',model:'',reason});renderResearchReview();}
+    const latestMeta=metaForCurrentState();if(normalizeUrl(latestMeta.website)===website){writeMeta({...latestMeta,mode:'evidence',provider:'',model:'',reason});window.dispatchEvent(new CustomEvent('leadintel:company-research-updated',{detail:{website,synthesisFailed:true}}));renderResearchReview();}
     toast(reason);return false;
   }finally{clearTimeout(timer);running=false;}
 }
@@ -304,8 +305,9 @@ function bind(){
   window.addEventListener('leadintel:workspace-changed',()=>{renderResearchReview();});
   window.addEventListener('leadintel:ai-provider-changed',()=>{
     const meta=metaForCurrentState();
-    if(meta.generatedAt&&meta.mode!=='ai')writeMeta({...meta,reason:'AI provider settings changed. Retry synthesis to use the updated connection.'});
+    if(meta.generatedAt&&meta.mode!=='ai'&&!/\bcode:\s*credit_balance_exhausted\b/i.test(String(meta.reason||'')))writeMeta({...meta,reason:'AI provider settings changed. Retry synthesis to use the updated connection.'});
     renderResearchReview();
+    window.dispatchEvent(new CustomEvent('leadintel:company-research-updated',{detail:{website:meta.website,providerSettingsChanged:true}}));
   });
   window.addEventListener('leadintel:workspace-reset',()=>setTimeout(renderResearchReview,0));
 }

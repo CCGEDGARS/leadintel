@@ -15,3 +15,7 @@ Required behavior:
 5. Gemini generation uses the canonical `systemInstruction` request field.
 6. Provider errors remain sanitized: status plus safe machine-readable code/parameter/status only; never provider message bodies or API keys.
 7. Existing encrypted per-workspace storage and single-active-provider semantics remain unchanged.
+
+## Workspace recovery signal — 2026-09-24
+
+When company research records `credit_balance_exhausted` for the current website, Workspace Health adds a red OpenAI API credit warning with a direct billing action. The warning uses the saved research metadata, stays visible across page reloads, and clears when AI synthesis succeeds or the active company changes. The item must not expose provider credentials or raw upstream response bodies.

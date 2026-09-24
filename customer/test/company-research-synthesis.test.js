@@ -116,3 +116,18 @@ test('AI retry synthesizes saved primary evidence without rerunning web research
   assert.equal(runtime.saves,1);
   assert.ok(runtime.events.includes('leadintel:company-research-updated'));
 });
+
+test('credit exhaustion is retained as the workspace health reason until synthesis succeeds',async()=>{
+  const runtime=createRuntime({fetchImpl:async()=>({
+    ok:false,status:502,
+    async json(){return {error:'OpenAI request failed (429) · code: credit_balance_exhausted'};}
+  })});
+
+  assert.equal(await runtime.hooks.runAiSynthesis(),false);
+  assert.equal(runtime.getMeta().reason,'OpenAI request failed (429) · code: credit_balance_exhausted');
+  assert.ok(runtime.events.includes('leadintel:company-research-updated'));
+  runtime.dispatch('leadintel:ai-provider-changed');
+  assert.equal(runtime.getMeta().reason,'OpenAI request failed (429) · code: credit_balance_exhausted');
+  assert.equal(runtime.getState().scrapedSources.length,3);
+  assert.equal(runtime.getState().answers.ideal_customer,'Manufacturing');
+});
