@@ -12,7 +12,8 @@
  * import './crm-engine.js?v=20260828-master-crm-v1';
  * import './sync-conflict-hygiene.js?v=20260901-stale-blank-conflict-v1';
  * import './server-bridge.js?v=20260924-crm-activity-pages-v1';
- * import './crm-ui.js?v=20260924-crm-activity-pages-v1';
+ * import './crm-presentation.js?v=20260924-crm-evidence-activity-v1';
+ * import './crm-ui.js?v=20260924-crm-evidence-activity-v1';
  * import './ai-settings.js?v=20260915-model-choice-v1';
  * import './service-settings-extension.js?v=20260919-calendly-v1';
  * import './step2-readiness-engine.js?v=20260924-friendly-workflow-labels-v1';

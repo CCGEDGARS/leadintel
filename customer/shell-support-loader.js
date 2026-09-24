@@ -4,7 +4,6 @@ const SUPPORT_MODULES=[
   './custom-market-input-hygiene.js?v=20260903-password-manager-isolation-v5',
   './crm-engine.js?v=20260828-master-crm-v1',
   './sync-conflict-hygiene.js?v=20260901-stale-blank-conflict-v1',
-  './crm-ui.js?v=20260924-crm-activity-pages-v1',
   './service-settings-extension.js?v=20260919-calendly-v1',
   './step2-readiness-engine.js?v=20260924-friendly-workflow-labels-v1',
   './company-brain.js?v=20260909-step2-first-party-v1',
@@ -30,7 +29,12 @@ const SUPPORT_MODULES=[
 ];
 
 async function loadSupportModules(){
-  const results=await Promise.allSettled(SUPPORT_MODULES.map(source=>import(source)));
+  const crmResults=[];
+  try{await import('./crm-presentation.js?v=20260924-crm-evidence-activity-v1');crmResults.push({status:'fulfilled'});}
+  catch(reason){crmResults.push({status:'rejected',reason});}
+  try{await import('./crm-ui.js?v=20260924-crm-evidence-activity-v1');crmResults.push({status:'fulfilled'});}
+  catch(reason){crmResults.push({status:'rejected',reason});}
+  const results=[...crmResults,...await Promise.allSettled(SUPPORT_MODULES.map(source=>import(source)))];
   const failed=results.filter(result=>result.status==='rejected');
   if(failed.length)console.warn(`LeadIntel: ${failed.length} optional module${failed.length===1?'':'s'} did not load.`,failed);
   window.dispatchEvent(new CustomEvent('leadintel:support-modules-ready',{detail:{loaded:results.length-failed.length,failed:failed.length}}));
