@@ -22,6 +22,7 @@ test('Master CRM is a persistent top-level workspace, not Step 8',()=>{
 test('CRM detail loads the evidence renderer before displaying durable company and contact provenance',()=>{
   const renderer=processMap.indexOf('crm-presentation.js?v=');
   const uiImport=processMap.indexOf('crm-ui.js?v=');
+  assert.doesNotMatch(processMap,/^import\s/m,'CRM dependencies must stay in the deferred loader');
   assert.ok(renderer>=0,'CRM evidence renderer must load');
   assert.ok(uiImport>=0,'CRM UI must load');
   assert.ok(renderer<uiImport,'CRM evidence renderer must load before the detail UI');
