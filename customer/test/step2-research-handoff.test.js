@@ -26,7 +26,7 @@ test('Step 2 repairs a split research handoff before rendering empty fields',()=
 });
 
 test('the repaired research handoff is cache-busted at every browser entry point',()=>{
-  assert.match(supportLoader,/company-research-ui\.js\?v=20260924-friendly-workflow-labels-v1/);
+  assert.match(supportLoader,/company-research-ui\.js\?v=20260924-evidence-synthesis-retry-v1/);
   assert.match(shell,/shell-support-loader\.js\?v=20260924-friendly-workflow-labels-v1/);
   assert.match(researchUi,/company-research-engine\.js\?v=20260918-translation-fidelity-v3/);
   assert.match(processMap,/step2-readiness-engine\.js\?v=20260924-friendly-workflow-labels-v1/);
