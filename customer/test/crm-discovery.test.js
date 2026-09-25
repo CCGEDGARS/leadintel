@@ -7,7 +7,7 @@ const source=fs.readFileSync(path.join(__dirname,'..','discovery-ui.js'),'utf8')
 test('Discovery exposes separate Save to CRM and Add to Pipeline actions',()=>{
   assert.match(source,/data-action="save-crm"/);
   assert.match(source,/data-action="add-pipeline"/);
-  assert.match(source,/In CRM/);
+  assert.match(source,/Saved in CRM ✓/);
   assert.match(source,/Suppressed/);
 });
 
