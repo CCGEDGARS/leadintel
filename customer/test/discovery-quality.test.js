@@ -13,10 +13,10 @@ test("discovery excludes the customer website and tender portals when tenders ar
   assert.equal(results[0].score.signal>0,true);
 });
 
-test("discovery query is buyer-oriented and omits tender terms when tenders are disabled",()=>{
+test("discovery query targets operating prospects and omits tenders when tenders are disabled",()=>{
   const queries=discovery.buildDiscoveryQueries({website:"https://www.ajprodukti.lv",targetMarkets:"Latvia",priorityOffers:"Office furniture",idealCustomer:"Companies and institutions",buyingTriggers:"New facilities and office expansion"},{researchSourceTypes:["news"],icps:[{active:true,description:"Companies opening or expanding facilities"}],signals:[{id:"tender",name:"Tender or procurement activity",active:true,weight:9,keywords:"tender; procurement"}]},1);
-  assert.match(queries[0].query,/buyer|organization|customer/i);
-  assert.doesNotMatch(queries[0].query,/manufacturer|tender|procurement|iepirk/i);
+  assert.match(queries[0].query,/company|facility|investment/i);
+  assert.doesNotMatch(queries[0].query,/office furniture|tender|procurement|iepirk/i);
 });
 
 test("discovery requires at least one active buying signal",()=>{
@@ -159,6 +159,31 @@ test("discovery searches a recognised target-country domain without repeating th
   },1);
   assert.match(query.query,/site:\.se/i);
   assert.doesNotMatch(query.query,/metal fabrication services/i);
+});
+
+test("a repeat company search explores different query families and country filters",()=>{
+  const profile={website:"https://ercon.lv",targetMarkets:"Sweden",priorityOffers:"metal fabrication services",idealCustomer:"industrial manufacturers"};
+  const market={signals:[{name:"Capacity expansion",active:true,keywords:"new factory; investment"}]};
+  const first=discovery.buildDiscoveryQueries(profile,market,6);
+  const next=discovery.buildDiscoveryQueries(profile,market,6,first);
+  assert.equal(first.length,6);
+  assert.equal(next.length,6);
+  assert.equal(new Set([...first,...next].map(item=>item.query)).size,12);
+  assert.ok(first.some(item=>/site:\.se/.test(item.query)));
+  assert.ok(first.some(item=>!/site:\.se/.test(item.query)));
+  assert.ok(first.every(item=>!/metal fabrication services/i.test(item.query)));
+});
+
+test("a mixed-company article does not transfer another firm's sales hiring signal",()=>{
+  const sourceUrl="https://industry.se/science-partners.pdf";
+  const source={url:sourceUrl,domain:"industry.se",market:"Sweden",title:"LKAB and Coorstek industry partners",description:"Coorstek expands its sales team.",text:"LKAB is a Swedish industrial minerals producer. Coorstek hires sales representatives for its expansion."};
+  const resolved={url:"https://lkab.com/",domain:"lkab.com",company:"LKAB",market:"Sweden",title:"LKAB minerals",description:"Industrial mineral producer",text:"LKAB produces minerals in Sweden."};
+  const linked=discovery.attachSourceEvidenceToResolvedCompanies([resolved],[{company:"LKAB",market:"Sweden",sourceUrl}],[source]);
+  assert.equal(linked.length,2);
+  assert.doesNotMatch(linked[1].text,/Coorstek|sales representatives/i);
+  const profile={website:"https://ercon.lv",idealCustomer:"Swedish industrial mineral producers",priorityOffers:"metal structures"};
+  const market={signals:[{id:"sales",name:"Sales team hiring or expansion",active:true,keywords:"recruitment; expansion",weight:8}]};
+  assert.deepEqual(discovery.mergeCompanyCandidates(linked,profile,market,10),[]);
 });
 
 test("Latvian market names resolve to the correct target-country search",()=>{
