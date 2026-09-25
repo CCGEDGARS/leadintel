@@ -10,7 +10,7 @@ const discoveryUi = fs.readFileSync(path.join(root, 'discovery-ui.js'), 'utf8');
 test('Company Discovery bootstrap is not blocked by a module dependency graph', () => {
   assert.match(
     html,
-    /<script defer src="discovery-ui\.js\?v=20260925-gemini-extraction-fallback-v1"><\/script>/,
+    /<script defer src="discovery-ui\.js\?v=20260925-company-discovery-recovery-v1"><\/script>/,
     'Discovery must load as an independent deferred script'
   );
   assert.doesNotMatch(
@@ -23,4 +23,12 @@ test('Company Discovery bootstrap is not blocked by a module dependency graph', 
     /<script defer src="workflow-next-action\.js\?v=20260925-buyers-stage-view-v1"><\/script>/,
     'The Buyers handoff must load the updated workflow gate after deployment'
   );
+});
+
+test('Discovery shell cache keys match the runtime asset version', () => {
+  const runtimeVersion = discoveryUi.match(/const ASSET_VERSION="([^"]+)";/)?.[1];
+  assert.ok(runtimeVersion, 'Discovery must declare an asset version');
+  for (const asset of ['discovery-engine.js', 'discovery-ui.js']) {
+    assert.ok(html.includes(`<script defer src="${asset}?v=${runtimeVersion}"></script>`), `${asset} must load the current Discovery release`);
+  }
 });
