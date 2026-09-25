@@ -25,7 +25,7 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
     .replace(runMargin?.[0], `const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=${testRunMargin};`)
     .replace(extractionTimeout?.[0], `const COMPANY_EXTRACTION_TIMEOUT_MS=${testExtractionTimeout};`)
     .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\nglobalThis.__setDiscovery = value => { discovery = LeadIntelDiscovery.normalizeDiscoveryState({...value,qualityVersion:value.qualityVersion??LeadIntelDiscovery.DISCOVERY_QUALITY_VERSION}); };\nglobalThis.__renderStatus = renderStatus;\nglobalThis.__setDiscoveryProgress=value=>{discoveryProgress=value;};\nglobalThis.__renderCandidates = renderCandidates;\n')
-    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__savePotentialProspect = savePotentialProspect;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;');
+    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__savePotentialProspect = savePotentialProspect;\nglobalThis.__addSelectedProspectToPipeline = addSelectedProspectToPipeline;\nglobalThis.__setCrmCompanies = companies => { crmCompanies = companies; };\nglobalThis.__renderPipeline = renderPipeline;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;');
   const mainState = {
     website: 'https://acme.example/',
     profile: {
@@ -277,6 +277,30 @@ test('a verified-fit prospect can be saved by the user without inventing a signa
   assert.equal(restored.selectedProspects[0].domain,'northstar.com');
   assert.deepEqual(restored.selectedProspects[0].matchedSignals,[]);
   assert.equal(restored.selectedProspects[0].score,undefined);
+});
+
+test('Buyers can explicitly promote a selected prospect without fabricating a score or buying signal',async()=>{
+  const additions=[];
+  const context=loadDiscoveryRunner({renderNodes:true,bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},addCrmToPipeline:async(id,stage)=>{additions.push({id,stage});return {ok:true,company:{id,normalized_domain:'northstar.com',pipeline_stage:stage}};}}});
+  context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};
+  const candidate={company:'Northstar',domain:'northstar.com',website:'https://northstar.com/',market:'Sweden',marketVerified:true,fitVerified:true,qualificationGaps:['No active buying signal was confirmed'],evidence:[{url:'https://northstar.com/',title:'Northstar industrial manufacturer',text:'Northstar manufactures industrial equipment in Sweden.'}]};
+  context.__setDiscovery({status:'complete',selectedProspects:[candidate]});
+  context.__setCrmCompanies([{id:'crm-1',normalized_domain:'northstar.com',company_name:'Northstar',lifecycle_status:'prospect',source:'user_selected_discovery',pipeline_stage:null}]);
+  context.__renderPipeline();
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/Add to Pipeline · signal unconfirmed/);
+  assert.equal(context.__elements.get('discovery-pipeline-count').textContent,'1');
+  assert.match(context.__elements.get('discovery-selection-breakdown').textContent,/0 in Pipeline · 1 prospect/);
+  assert.equal(await context.__addSelectedProspectToPipeline('northstar.com'),true);
+  assert.deepEqual(additions,[{id:'crm-1',stage:'Discovered'}]);
+  const state=context.__discoveryState();
+  assert.equal(state.pipeline.length,1);
+  assert.equal(state.pipeline[0].qualified,false);
+  assert.equal(state.pipeline[0].matchedSignals.length,0);
+  assert.equal(state.pipeline[0].score.total,undefined);
+  context.__renderPipeline();
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/Buying signal unconfirmed · manually added/);
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/pipeline-score">—</);
+  assert.match(context.__elements.get('discovery-selection-breakdown').textContent,/1 in Pipeline · 0 prospects/);
 });
 
 test('a user-selected fit-and-market verified potential match can display Apollo decision-makers without CRM promotion',async()=>{
