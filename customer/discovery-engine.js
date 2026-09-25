@@ -225,6 +225,24 @@
     }
     return output;
   }
+  function describeCompanyExtractionOutcome({provider="",fallback={},aiNames=0,textNames=0,responseOk=true,errorStatus=0,errorMessage=""}={}){
+    const providerName={openai:"OpenAI",gemini:"Gemini",anthropic:"Anthropic"}[String(provider||"").toLowerCase()]||"Workspace AI";
+    const aiCount=Math.max(0,Number(aiNames)||0);const textCount=Math.max(0,Number(textNames)||0);
+    if(!responseOk){
+      let issue=`${providerName} extraction failed`;
+      if(fallback?.status==="failed")issue="OpenAI failed; Gemini fallback also failed";
+      else if(fallback?.status==="not_configured")issue="OpenAI failed; Gemini fallback is not configured";
+      else if(fallback?.status==="lookup_failed")issue="OpenAI failed; Gemini configuration could not be checked";
+      else if(providerName==="OpenAI"&&(Number(errorStatus)===429||/quota|credit.?balance|billing/i.test(String(errorMessage||""))))issue="OpenAI quota or rate limit blocked extraction";
+      return {status:"fallback",method:"Text fallback",message:`${issue}; built-in text matching recovered ${textCount} company name${textCount===1?"":"s"}.`};
+    }
+    const source=fallback?.used===true&&fallback?.provider==="gemini"
+      ?`Gemini fallback after OpenAI ${({quota_or_rate_limit:"quota or rate limit",provider_outage:"provider outage",timeout:"timeout"}[fallback.reason]||"failure")}`
+      :`${providerName} primary · no fallback`;
+    if(aiCount)return {status:"ai",method:"AI",message:`${source} verified ${aiCount} company name${aiCount===1?"":"s"}${textCount?`; text matching added ${textCount} more`:""}.`};
+    if(textCount)return {status:"ai",method:"AI",message:`${source} returned no source-verified names; text matching recovered ${textCount} company name${textCount===1?"":"s"}.`};
+    return {status:"ai",method:"AI",message:`${source} found no source-verified company names; text matching found none.`};
+  }
   function buildCompanyResolutionQueries(mentions=[],profile={},maxCompanies=10){
     const limit=Math.max(1,Math.min(20,Number(maxCompanies)||10));const own=canonicalDomain(profile.website||profile.companyWebsite||"");
     const seen=new Set();const queries=[];
@@ -748,5 +766,5 @@
     return {...state,status:state.candidates.length||state.rawResults.length?"partial":"error"};
   }
 
-  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,DISCOVERY_QUALITY_VERSION,discoveryLimits,buildDiscoveryQueries,buildDiscoveryFollowUpQueries,extractCompanyMentions,parseCompanyExtraction,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildPotentialCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,retainLastSuccessfulDiscoveryCandidates,recoverInterruptedDiscoveryState,discoveryOutcomeStatus,zeroResultGuidance,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,isLowQualityDiscoveryEvidence,hasActiveSignals,isActionableCandidate};
+  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,DISCOVERY_QUALITY_VERSION,discoveryLimits,buildDiscoveryQueries,buildDiscoveryFollowUpQueries,extractCompanyMentions,parseCompanyExtraction,describeCompanyExtractionOutcome,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildPotentialCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,retainLastSuccessfulDiscoveryCandidates,recoverInterruptedDiscoveryState,discoveryOutcomeStatus,zeroResultGuidance,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,isLowQualityDiscoveryEvidence,hasActiveSignals,isActionableCandidate};
 });
