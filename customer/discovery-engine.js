@@ -14,11 +14,17 @@
   const TENDER_HOSTS=["eis.gov.lv","iub.gov.lv","procurement.gov.lv"];
   const DEFAULT_DISCOVERY_TARGET=10;
   const MAX_DISCOVERY_TARGET=50;
+  const DISCOVERY_QUALITY_VERSION=2;
+  const MINIMUM_DISCOVERY_FIT_SCORE=10;
   const DEFAULT_DISCOVERY_FUNNEL=Object.freeze({marketSearchesCompleted:0,marketSearchesTotal:0,evidencePages:0,companiesIdentified:0,officialDomainsResolved:0,companySitesChecked:0,verifiedCompanies:0,qualifiedCompanies:0,adaptiveFollowUpSearches:0});
-  const DEFAULT_DISCOVERY_STATE=Object.freeze({status:"idle",queries:[],rawResults:[],candidates:[],potentialMatches:[],funnel:DEFAULT_DISCOVERY_FUNNEL,pipeline:[],lastRunAt:""});
+  const DEFAULT_DISCOVERY_STATE=Object.freeze({status:"idle",queries:[],rawResults:[],candidates:[],potentialMatches:[],funnel:DEFAULT_DISCOVERY_FUNNEL,pipeline:[],lastRunAt:"",qualityVersion:DISCOVERY_QUALITY_VERSION,needsRefresh:false});
   const MAX_DISCOVERY_FOLLOW_UP_QUERIES=4;
   const MAX_DISCOVERY_COMPANY_CHECKS=20;
   const STOPWORDS=new Set(["with","from","that","this","your","their","into","over","under","company","companies","business","businesses","priority","market","markets","customer","customers","service","services","product","products","industrial"]);
+  const GENERIC_SIGNAL_TERMS=new Set(["new","product","products","service","services","launch","launched","launches","latest","update","updates","company","companies"]);
+  const FIT_GENERIC_TERMS=new Set(["company","companies","business","businesses","industry","industries","industrial","manufacturing","manufacturer","manufacturers","production","producer","producers","factory","factories","facility","facilities","engineering","engineer","engineers","product","products","service","services","market","markets","customer","customers","equipment","project","projects","technology","technologies","solution","solutions","organization","organizations","employee","employees","custom","serial","sweden","swedish","sverige"]);
+  const LOW_QUALITY_DISCOVERY_TITLE=/\b(?:\d+\s+top|top\s+\d+|top\s+(?:manufacturing|industrial|technology|business|company)\s+companies|best\s+(?:manufacturing|industrial|technology|business|company)\s+companies|companies\s+in\s+(?:sweden|sverige|finland|norway|denmark)|list\s+of\s+(?:top\s+)?\d+\s+companies|company\s+directory)\b/i;
+  const LOW_QUALITY_DISCOVERY_HOSTS=["f6s.com","crunchbase.com","tracxn.com"];
   const MARKET_RULES=[
     {code:"se",suffixes:[".se"],searchNames:["Sweden","Sverige"],aliases:["sweden","swedish","sverige","svenska","zviedrija","zviedrijas","zviedru"]},
     {code:"fi",suffixes:[".fi"],searchNames:["Finland","Suomi"],aliases:["finland","finnish","suomi","somija","somijas","somu"]},
@@ -136,15 +142,37 @@
     return rule?`site:${rule.suffixes[0]}`:"";
   }
   function marketSearchNames(market){const rule=marketRule(market);return rule?rule.searchNames.join(" "):clean(market);}
+  function evidenceTokens(value){return clean(value).normalize("NFKC").toLowerCase().match(/[\p{L}\p{N}]+/gu)||[];}
+  function evidenceContainsTerm(haystack,term){
+    const words=evidenceTokens(haystack);const wanted=evidenceTokens(term);
+    if(!words.length||!wanted.length||wanted.length>words.length)return false;
+    for(let start=0;start<=words.length-wanted.length;start++){
+      if(wanted.every((word,index)=>words[start+index]===word))return true;
+    }
+    return false;
+  }
+  function isLowQualityDiscoveryEvidence(item={}){
+    const sourceDomain=canonicalDomain(item.sourceDomain||item.url);
+    return LOW_QUALITY_DISCOVERY_HOSTS.some(host=>sourceDomain===host||sourceDomain.endsWith(`.${host}`))
+      ||LOW_QUALITY_DISCOVERY_TITLE.test(clean(item.title));
+  }
+  function trustedEvidence(candidate={}){return (candidate.evidence||[]).filter(item=>!isLowQualityDiscoveryEvidence(item));}
   function signalEvidenceTerms(signal={},market=""){
     const source=[clean(signal.name),clean(signal.keywords)].join(" ");
     const rule=marketRule(market);
     const concepts=SIGNAL_CONCEPTS.filter(concept=>concept.match.test(source));
+    if(/(?:product|service).*(?:launch|release|introduc|roll.?out)|(?:launch|release|introduc|roll.?out).*(?:product|service)/i.test(source)){
+      concepts.push({base:["product launch","service launch","new product launch","new service launch","launch of a new product","launch of a new service","launching a new product","launching a new service"]});
+    }
     return [...new Set([
       ...concepts.flatMap(concept=>concept.base),
       ...concepts.flatMap(concept=>concept.local?.[rule?.code]||[]),
-      ...splitList(signal.keywords||signal.name)
-    ].map(term=>clean(term).toLowerCase()).filter(Boolean))];
+      ...splitList(signal.keywords),
+      ...splitList(signal.name)
+    ].map(term=>clean(term).toLowerCase()).filter(term=>{
+      const words=evidenceTokens(term);
+      return words.length>1||!GENERIC_SIGNAL_TERMS.has(words[0]);
+    }))];
   }
   function cleanCompanyName(value){
     return clean(value).replace(/^["'“”‘’]+|["'“”‘’.,;:!?]+$/g,"").replace(/\s+(?:has|have)$/i,"").trim();
@@ -222,13 +250,13 @@
     const evidenceCountries=(candidate.evidence||[]).map(item=>domainCountryRule(item.sourceDomain||canonicalDomain(item.url))).filter(Boolean);
     if(evidenceCountries.some(rule=>rule.code===requested.code))return true;
     const hay=(candidate.evidence||[]).map(evidenceText).join(" ");
-    return requested.aliases.some(alias=>hay.includes(alias));
+    return requested.aliases.some(alias=>evidenceContainsTerm(hay,alias));
   }
   function isSameServiceSeller(candidate={},profile={}){
     const offerTerms=keywords(profile.priorityOffers).slice(0,20);
     if(!offerTerms.length)return false;
-    const hay=(candidate.evidence||[]).map(evidenceText).join(" ");
-    const overlap=offerTerms.filter(term=>hay.includes(term)).length;
+    const hay=trustedEvidence(candidate).map(evidenceText).join(" ");
+    const overlap=offerTerms.filter(term=>evidenceContainsTerm(hay,term)).length;
     const needed=Math.min(2,offerTerms.length);
     return overlap>=needed&&SELLER_LANGUAGE.test(hay);
   }
@@ -406,32 +434,37 @@
 
   function activeSignals(marketState){return (marketState?.signals||[]).filter(item=>item.active!==false);}
   function matchedSignalsForEvidence(signals,evidence,market=""){
-    const hay=evidence.map(evidenceText).join(" ");
+    const hay=trustedEvidence({evidence}).map(evidenceText).join(" ");
     return signals.map(signal=>{
       const terms=signalEvidenceTerms(signal,market);
-      const matched=terms.filter(term=>hay.includes(term));
+      const matched=terms.filter(term=>evidenceContainsTerm(hay,term));
       return matched.length?{id:clean(signal.id),name:clean(signal.name),weight:clamp(signal.weight,1,10,5),matchedTerms:matched.slice(0,5)}:null;
     }).filter(Boolean);
   }
   function fitScore(candidate,profile,marketState){
-    const hay=candidate.evidence.map(evidenceText).join(" ");
+    const hay=trustedEvidence(candidate).map(evidenceText).join(" ");
     const source=[profile.idealCustomer,profile.priorityOffers,profile.customerPainPoints,...(marketState.icps||[]).filter(x=>x.active!==false).map(x=>`${x.description} ${x.offers}`)].join(" ");
-    const terms=keywords(source).slice(0,30);
-    const matches=terms.filter(term=>hay.includes(term)).length;
-    const marketMatch=clean(candidate.market)&&hay.includes(clean(candidate.market).toLowerCase());
-    return Math.min(30,8+Math.min(17,matches*3)+(marketMatch?5:0));
+    const terms=[...new Set(keywords(source).filter(term=>term.length>=5&&!FIT_GENERIC_TERMS.has(term)))].slice(0,40);
+    const specificMatches=terms.filter(term=>evidenceContainsTerm(hay,term));
+    const industrialContext=/manufactur|producer|production|industr|ra[zž]o[sš]an|tillverk|fabrik/i.test(source);
+    const industrialEvidence=["manufacturer","manufacturing","producer","production","production capacity","factory","facility","plant","tillverkare","tillverkning","produktion","produktionskapacitet","produktionskapaciteten","fabrik","anläggning","ražotājs","ražotne"].some(term=>evidenceContainsTerm(hay,term));
+    const metalworkingContext=/metal|met[aā]lapstr[aā]d|steel|t[eē]rauds/i.test(source);
+    const metalworkingEvidence=["metalworking","metal fabrication","metal structures","steel structures","metal processing","metal components","metāla konstrukcijas","metālapstrāde"].some(term=>evidenceContainsTerm(hay,term));
+    return Math.min(30,specificMatches.length*5+(industrialContext&&industrialEvidence?5:0)+(metalworkingContext&&metalworkingEvidence?5:0));
   }
   function signalScore(matched){
     if(!matched.length)return 0;
     return Math.min(25,Math.round(matched.reduce((sum,item)=>sum+item.weight,0)*1.8));
   }
   function evidenceScore(candidate){
-    const count=candidate.evidence.length;
-    const chars=candidate.evidence.reduce((sum,item)=>sum+clean(item.text).length+clean(item.description).length,0);
-    return Math.min(20,6+count*5+(chars>=1200?4:chars>=400?2:0));
+    const evidence=trustedEvidence(candidate);
+    if(!evidence.length)return 0;
+    const sources=new Set(evidence.map(item=>clean(item.sourceDomain)||canonicalDomain(item.url)).filter(Boolean));
+    const chars=evidence.reduce((sum,item)=>sum+clean(item.text).length+clean(item.description).length,0);
+    return Math.min(20,4+sources.size*4+(chars>=1600?2:chars>=800?1:0));
   }
   function timingScore(candidate){
-    const dates=candidate.evidence.map(item=>Date.parse(item.date)).filter(Number.isFinite);
+    const dates=trustedEvidence(candidate).map(item=>Date.parse(item.date)).filter(Number.isFinite);
     if(!dates.length)return 4;
     const age=Math.max(0,(Date.now()-Math.max(...dates))/86400000);
     return age<=30?15:age<=90?12:age<=365?8:5;
@@ -461,15 +494,18 @@
       if(!candidate.matchedSignals.length)return null;
       if(!evidenceSupportsTargetMarket(candidate))return null;
       if(isSameServiceSeller(candidate,profile))return null;
+      const fit=fitScore(candidate,profile,marketState);
+      if(fit<MINIMUM_DISCOVERY_FIT_SCORE)return null;
       const score={
-        fit:fitScore(candidate,profile,marketState),
+        fit,
         signal:signalScore(candidate.matchedSignals),
         evidence:evidenceScore(candidate),
         timing:timingScore(candidate),
         value:valueScore(candidate,profile,marketState)
       };
       score.total=score.fit+score.signal+score.evidence+score.timing+score.value;
-      const confidence=score.total>=75&&candidate.matchedSignals.length&&candidate.evidence.length>=1?"High":score.total>=50?"Medium":"Low";
+      const credibleSources=new Set(trustedEvidence(candidate).map(item=>clean(item.sourceDomain)||canonicalDomain(item.url)).filter(Boolean)).size;
+      const confidence=score.total>=75&&fit>=15&&score.evidence>=12&&credibleSources>=2?"High":score.total>=50&&credibleSources>=2?"Medium":"Low";
       return {...candidate,id:`company-${slug(candidate.domain)}`,score,confidence,qualified:true,marketVerified:true,buyerVerified:true,people:[],peopleStatus:"idle",saved:false};
     }).filter(Boolean).sort((a,b)=>{
       const signalDelta=(b.matchedSignals?.length||0)-(a.matchedSignals?.length||0);
@@ -498,10 +534,12 @@
       if(isSameServiceSeller(candidate,profile))return null;
       const matchedSignals=matchedSignalsForEvidence(activeSignals(marketState),candidate.evidence,candidate.market);
       const marketVerified=evidenceSupportsTargetMarket(candidate);
-      if(!matchedSignals.length&&!marketVerified)return null;
+      const fitVerified=fitScore(candidate,profile,marketState)>=MINIMUM_DISCOVERY_FIT_SCORE;
+      if(!matchedSignals.length&&!marketVerified&&!fitVerified)return null;
       const qualificationGaps=[];
       if(!marketVerified)qualificationGaps.push("Target market evidence is missing");
       if(!matchedSignals.length)qualificationGaps.push("No active buying signal was confirmed");
+      if(!fitVerified)qualificationGaps.push("Target customer fit is not evidenced");
       return {id:`potential-${slug(candidate.domain)}`,company:candidate.company,domain:candidate.domain,website:candidate.website,market:candidate.market,qualified:false,marketVerified,buyerVerified:false,matchedSignals,evidence:candidate.evidence,qualificationGaps};
     }).filter(Boolean).sort((a,b)=>a.qualificationGaps.length-b.qualificationGaps.length||b.evidence.length-a.evidence.length).slice(0,limit);
   }
@@ -644,16 +682,28 @@
   function normalizeDiscoveryState(value={}){
     const input=value&&typeof value==="object"?value:{};
     const allowedStatus=new Set(["idle","running","complete","no_results","partial","error"]);
+    const hadSearchResults=Boolean(
+      clean(input.lastRunAt)
+      ||(Array.isArray(input.queries)&&input.queries.length)
+      ||(Array.isArray(input.rawResults)&&input.rawResults.length)
+      ||(Array.isArray(input.candidates)&&input.candidates.length)
+      ||(Array.isArray(input.potentialMatches)&&input.potentialMatches.length)
+    );
+    const needsRefresh=Number(input.qualityVersion||0)<DISCOVERY_QUALITY_VERSION&&hadSearchResults;
+    const preserveInterruptedEvidence=input.status==="running"&&needsRefresh&&Array.isArray(input.rawResults)&&input.rawResults.length>0;
+    const clearOldResults=needsRefresh&&!preserveInterruptedEvidence;
     return {
       ...DEFAULT_DISCOVERY_STATE,
-      status:allowedStatus.has(input.status)?input.status:"idle",
-      queries:(Array.isArray(input.queries)?input.queries:[]).slice(0,14).map(q=>({id:clean(q.id),market:clean(q.market),query:clean(q.query),offer:clean(q.offer)})).filter(q=>q.id&&q.query),
-      rawResults:(Array.isArray(input.rawResults)?input.rawResults:[]).slice(0,20).map(normalizeRaw).filter(item=>item.url&&item.domain),
-      candidates:(Array.isArray(input.candidates)?input.candidates:[]).slice(0,12).map(safeCandidate).filter(item=>item.domain&&isActionableCandidate(item)),
-      potentialMatches:(Array.isArray(input.potentialMatches)?input.potentialMatches:[]).slice(0,12).map(safePotentialCandidate).filter(item=>item.domain&&item.evidence.length&&item.qualificationGaps.length),
-      funnel:normalizeDiscoveryFunnel(input.funnel),
+      status:clearOldResults&&input.status!=="running"?"idle":allowedStatus.has(input.status)?input.status:"idle",
+      queries:(clearOldResults?[]:(Array.isArray(input.queries)?input.queries:[])).slice(0,14).map(q=>({id:clean(q.id),market:clean(q.market),query:clean(q.query),offer:clean(q.offer)})).filter(q=>q.id&&q.query),
+      rawResults:(clearOldResults?[]:(Array.isArray(input.rawResults)?input.rawResults:[])).slice(0,20).map(normalizeRaw).filter(item=>item.url&&item.domain),
+      candidates:(needsRefresh?[]:(Array.isArray(input.candidates)?input.candidates:[])).slice(0,12).map(safeCandidate).filter(item=>item.domain&&isActionableCandidate(item)),
+      potentialMatches:(needsRefresh?[]:(Array.isArray(input.potentialMatches)?input.potentialMatches:[])).slice(0,12).map(safePotentialCandidate).filter(item=>item.domain&&item.evidence.length&&item.qualificationGaps.length),
+      funnel:normalizeDiscoveryFunnel(clearOldResults?{}:input.funnel),
       pipeline:(Array.isArray(input.pipeline)?input.pipeline:[]).slice(0,50).map(normalizePipelineItem).filter(item=>item.domain),
-      lastRunAt:clean(input.lastRunAt)
+      lastRunAt:clearOldResults?"":clean(input.lastRunAt),
+      qualityVersion:DISCOVERY_QUALITY_VERSION,
+      needsRefresh:needsRefresh||input.needsRefresh===true
     };
   }
 
@@ -663,5 +713,5 @@
     return {...state,status:state.candidates.length||state.rawResults.length?"partial":"error"};
   }
 
-  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,discoveryLimits,buildDiscoveryQueries,buildDiscoveryFollowUpQueries,extractCompanyMentions,parseCompanyExtraction,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildPotentialCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,recoverInterruptedDiscoveryState,discoveryOutcomeStatus,zeroResultGuidance,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,hasActiveSignals,isActionableCandidate};
+  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,DISCOVERY_QUALITY_VERSION,discoveryLimits,buildDiscoveryQueries,buildDiscoveryFollowUpQueries,extractCompanyMentions,parseCompanyExtraction,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildPotentialCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,recoverInterruptedDiscoveryState,discoveryOutcomeStatus,zeroResultGuidance,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,isLowQualityDiscoveryEvidence,hasActiveSignals,isActionableCandidate};
 });
