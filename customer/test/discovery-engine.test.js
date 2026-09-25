@@ -159,8 +159,16 @@ test('mergeCompanyCandidates deduplicates domains and builds transparent five-pa
   for(const key of ['fit','signal','evidence','timing','value'])assert.ok(nordic.score[key]>=0,`${key} missing`);
   assert.equal(nordic.score.total,nordic.score.fit+nordic.score.signal+nordic.score.evidence+nordic.score.timing+nordic.score.value);
   assert.ok(nordic.score.total<=100);
+  assert.ok(nordic.score.fit<=24,'word overlap alone cannot claim full customer fit');
+  assert.ok(nordic.fitReasons.length,'candidate explains which customer terms were evidenced');
   assert.ok(['High','Medium','Low'].includes(nordic.confidence));
   assert.equal(candidates.some(x=>x.domain==='finnfab.fi'),false,'zero-signal companies are not actionable candidates');
+});
+
+test('old annual report expansion with an unrelated sales mention is not a current hiring signal',()=>{
+  const hiring={...market,signals:[{id:'sales',name:'Sales team hiring or expansion',keywords:'recruitment; expansion',weight:9,active:true}]};
+  const item={market:'Sweden',url:'https://thulegroup.com/annual-report-2021',domain:'thulegroup.com',company:'Thule Group',title:'Annual report 2021',description:'Sales in Europe increased.',text:'We expanded our global development centre. We manufacture consumer products in Sweden.',date:''};
+  assert.equal(Discovery.mergeCompanyCandidates([item],profile,hiring).length,0);
 });
 
 test('signal score only uses evidence text, not query metadata',()=>{

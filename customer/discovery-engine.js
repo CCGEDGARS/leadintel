@@ -14,7 +14,7 @@
   const TENDER_HOSTS=["eis.gov.lv","iub.gov.lv","procurement.gov.lv"];
   const DEFAULT_DISCOVERY_TARGET=10;
   const MAX_DISCOVERY_TARGET=50;
-  const DISCOVERY_QUALITY_VERSION=3;
+  const DISCOVERY_QUALITY_VERSION=4;
   const MINIMUM_DISCOVERY_FIT_SCORE=10;
   const DEFAULT_DISCOVERY_FUNNEL=Object.freeze({marketSearchesCompleted:0,marketSearchesTotal:0,evidencePages:0,companiesIdentified:0,officialDomainsResolved:0,companySitesChecked:0,verifiedCompanies:0,qualifiedCompanies:0,adaptiveFollowUpSearches:0,openAiFallbackSearches:0});
   const DEFAULT_DISCOVERY_STATE=Object.freeze({status:"idle",queries:[],rawResults:[],candidates:[],companyMentions:[],searchFailures:[],checkedCompanyDomains:[],lastSuccessfulRunAt:"",latestRunCandidateCount:0,retainedLastSuccessfulResults:false,extraction:{status:"idle",method:"",message:""},potentialMatches:[],selectedProspects:[],funnel:DEFAULT_DISCOVERY_FUNNEL,pipeline:[],lastRunAt:"",qualityVersion:DISCOVERY_QUALITY_VERSION,needsRefresh:false});
@@ -513,10 +513,14 @@
       const salesHiring=/(?:sales|commercial|account manager|sälj|försälj)/i.test(`${clean(signal.name)} ${clean(signal.keywords)}`)
         &&/(?:hir|recruit|vacanc|team|anställ|rekryter|growth|expan)/i.test(`${clean(signal.name)} ${clean(signal.keywords)}`);
       const matched=terms.filter(term=>sources.some(source=>{
+        // Historical reports and articles cannot confirm a current buying trigger.
+        const explicitYear=String(source.date||source.title||'').match(/\b20(?:1\d|2\d)\b/);
+        if(explicitYear&&Number(explicitYear[0])<new Date().getFullYear()-1)return false;
         const text=evidenceText(source);
         if(!evidenceContainsTerm(text,term))return false;
         if(!salesHiring)return true;
-        return /(?:sales|commercial|account manager|sälj|försälj).{0,80}(?:hir|recruit|vacanc|expan|growth|anställ|rekryter)|(?:hir|recruit|vacanc|expan|growth|anställ|rekryter).{0,80}(?:sales|commercial|account manager|sälj|försälj)/i.test(text);
+        // Keep both concepts in the same sentence: a sales link elsewhere on a page is insufficient.
+        return text.split(/[.!?\n]+/).some(sentence=>/(?:sales|commercial|account manager|sälj|försälj).{0,80}(?:hir|recruit|vacanc|expan|growth|anställ|rekryter)|(?:hir|recruit|vacanc|expan|growth|anställ|rekryter).{0,80}(?:sales|commercial|account manager|sälj|försälj)/i.test(sentence)&&evidenceContainsTerm(sentence,term));
       }));
       return matched.length?{id:clean(signal.id),name:clean(signal.name),weight:clamp(signal.weight,1,10,5),matchedTerms:matched.slice(0,5)}:null;
     }).filter(Boolean);
@@ -530,7 +534,8 @@
     const industrialEvidence=["manufacturer","manufacturing","producer","production","production capacity","factory","facility","plant","tillverkare","tillverkning","produktion","produktionskapacitet","produktionskapaciteten","fabrik","anläggning","ražotājs","ražotne"].some(term=>evidenceContainsTerm(hay,term));
     const metalworkingContext=/metal|met[aā]lapstr[aā]d|steel|t[eē]rauds/i.test(source);
     const metalworkingEvidence=["metalworking","metal fabrication","metal structures","steel structures","metal processing","metal components","metāla konstrukcijas","metālapstrāde"].some(term=>evidenceContainsTerm(hay,term));
-    return Math.min(30,specificMatches.length*5+(industrialContext&&industrialEvidence?5:0)+(metalworkingContext&&metalworkingEvidence?5:0));
+    // Lexical overlap alone cannot establish the full commercial fit of a prospective buyer.
+    return Math.min(24,specificMatches.length*5+(industrialContext&&industrialEvidence?5:0)+(metalworkingContext&&metalworkingEvidence?5:0));
   }
   function signalScore(matched){
     if(!matched.length)return 0;
@@ -586,7 +591,8 @@
       score.total=score.fit+score.signal+score.evidence+score.timing+score.value;
       const credibleSources=new Set(trustedEvidence(candidate).map(item=>clean(item.sourceDomain)||canonicalDomain(item.url)).filter(Boolean)).size;
       const confidence=score.total>=75&&fit>=15&&score.evidence>=12&&credibleSources>=2?"High":score.total>=50&&credibleSources>=2?"Medium":"Low";
-      return {...candidate,id:`company-${slug(candidate.domain)}`,score,confidence,qualified:true,marketVerified:true,buyerVerified:true,people:[],peopleStatus:"idle",saved:false};
+      const fitTerms=[...new Set(keywords([profile.idealCustomer,profile.priorityOffers,...(marketState.icps||[]).filter(x=>x.active!==false).map(x=>`${x.description} ${x.offers}`)].join(' ')).filter(term=>term.length>=5&&!FIT_GENERIC_TERMS.has(term)))].filter(term=>trustedEvidence(candidate).some(e=>evidenceContainsTerm(evidenceText(e),term))).slice(0,4);
+      return {...candidate,id:`company-${slug(candidate.domain)}`,score,confidence,fitReasons:fitTerms,qualified:true,marketVerified:true,buyerVerified:true,people:[],peopleStatus:"idle",saved:false};
     }).filter(Boolean).sort((a,b)=>{
       const signalDelta=(b.matchedSignals?.length||0)-(a.matchedSignals?.length||0);
       return signalDelta||b.score.total-a.score.total;
