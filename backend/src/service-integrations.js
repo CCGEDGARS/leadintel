@@ -1,5 +1,6 @@
 import {sha256,cookieValue} from './security.js';
 import {importAesKey,encryptSecret,decryptSecret} from './oauth.js';
+import {APOLLO_PEOPLE_SEARCH_URL,normalizeDomain as normalizeApolloDomain} from './enrichment.js';
 
 const PROVIDERS=Object.freeze(['apollo','firecrawl']);
 const PROVIDER_NAMES=Object.freeze({apollo:'Apollo.io',firecrawl:'Firecrawl'});
@@ -7,8 +8,10 @@ const FIRECRAWL_PROXY_URL='https://apollo-proxy.edgars-7e7.workers.dev';
 const MAX_DIRECT_PAGE_BYTES=2_000_000;
 const MAX_DIRECT_PAGE_CHARS=60_000;
 const MAX_DIRECT_REDIRECTS=4;
+const APOLLO_PEOPLE_SENIORITIES=Object.freeze(['owner','founder','c_suite','partner','vp','head','director','manager']);
+const DNS_DOMAIN=/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
 const json=(value,status=200,headers={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...headers}});
-const error=(message,status,headers)=>json({error:message},status,headers);
+const error=(message,status,headers,code)=>json({error:message,...(code?{code}:{})},status,headers);
 const uuid=()=>crypto.randomUUID();
 const clean=(value,max=1000)=>String(value??'').replace(/\s+/g,' ').trim().slice(0,max);
 const keyHint=apiKey=>`••••${String(apiKey||'').slice(-4)}`;
@@ -191,6 +194,50 @@ async function forwardFirecrawl(request,env,cors,workspaceId,kind){
   return json(upstream,200,cors);
 }
 
+function normalizeApolloPeopleSearch(body){
+  const domains=Array.isArray(body?.q_organization_domains_list)?body.q_organization_domains_list:(body?.domain?[body.domain]:[]);
+  if(domains.length!==1||typeof domains[0]!=='string')return {error:'Buyer search requires one verified company domain'};
+  const domain=normalizeApolloDomain(domains[0]);
+  if(!domain||!DNS_DOMAIN.test(domain)||/^\d+(?:\.\d+){3}$/.test(domain))return {error:'Buyer search requires one verified company domain'};
+  const rawTitles=body?.person_titles??(body?.role?[body.role]:[]);
+  if(!Array.isArray(rawTitles)||rawTitles.some(value=>typeof value!=='string'))return {error:'Buyer roles must be a list of text values'};
+  const seen=new Set();const titles=[];
+  for(const raw of rawTitles){const title=clean(raw,120);const key=title.toLowerCase();if(!title||seen.has(key))continue;seen.add(key);titles.push(title);if(titles.length===10)break;}
+  return {payload:{q_organization_domains_list:[domain],person_titles:titles,include_similar_titles:true,person_seniorities:[...APOLLO_PEOPLE_SENIORITIES],page:1,per_page:10},domain,roleCount:titles.length};
+}
+
+function publicApolloBuyer(person={}){
+  const name=clean(person.name||[person.first_name,person.last_name].filter(Boolean).join(' '),180);
+  return {
+    id:clean(person.id||person.person_id,180),name,title:clean(person.title,180),seniority:clean(person.seniority,80),
+    organization_name:clean(person.organization?.name||person.organization_name,180),
+    city:clean(person.city,120),country:clean(person.country,120),
+    linkedin_url:clean(person.linkedin_url||person.linkedin_profile_url||person.linkedin,1000)
+  };
+}
+
+async function forwardApolloPeopleSearch(request,env,cors,workspaceId){
+  const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
+  const body=await request.json().catch(()=>null);if(!body||typeof body!=='object'||Array.isArray(body))return error('Apollo buyer-search payload is required',400,cors,'SERVICE_APOLLO_PAYLOAD_REQUIRED');
+  const normalized=normalizeApolloPeopleSearch(body);if(normalized.error)return error(normalized.error,400,cors,'SERVICE_APOLLO_DOMAIN_INVALID');
+  const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'apollo');
+  if(!credential.configured||!credential.apiKey)return error('Apollo is not connected for this workspace. Connect it in Settings.',503,cors,'SERVICE_APOLLO_NOT_CONFIGURED');
+  let response;
+  try{response=await fetch(APOLLO_PEOPLE_SEARCH_URL,{method:'POST',headers:{'Content-Type':'application/json','Cache-Control':'no-cache','Accept':'application/json','X-Api-Key':credential.apiKey},body:JSON.stringify(normalized.payload),signal:request.signal});}
+  catch{return error('Apollo buyer search is temporarily unavailable. Try again.',502,cors,'SERVICE_APOLLO_UNAVAILABLE');}
+  const upstream=await response.json().catch(()=>({}));
+  if(!response.ok){
+    if(response.status===401||response.status===403)return error('Apollo rejected this key or API access. Verify the Apollo connection in Settings.',502,cors,'SERVICE_APOLLO_AUTH_FAILED');
+    if(response.status===429)return error('Apollo request limit reached. Check the Apollo account and try again later.',429,cors,'SERVICE_APOLLO_RATE_LIMIT');
+    return error(`Apollo buyer search failed (${response.status})`,502,cors,'SERVICE_APOLLO_UPSTREAM_FAILED');
+  }
+  const rawPeople=Array.isArray(upstream?.people)?upstream.people:Array.isArray(upstream?.contacts)?upstream.contacts:Array.isArray(upstream?.data?.people)?upstream.data.people:[];
+  const people=rawPeople.slice(0,10).map(publicApolloBuyer).filter(person=>person.name||person.title);
+  if(credential.source==='customer')await env.DB.prepare(`UPDATE workspace_service_integrations SET last_used_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider='apollo'`).bind(workspaceId).run();
+  await audit(env,{workspaceId,userId:access.user.id,type:'service.apollo_people_search',provider:'apollo',metadata:{source:credential.source,domain:normalized.domain,role_count:normalized.roleCount,result_count:people.length}});
+  return json({people},200,cors);
+}
+
 export async function handleServiceIntegrationRoute(request,env,cors={}){
   const url=new URL(request.url);const path=url.pathname;
   const known=path.startsWith('/api/integrations/services/');if(!known)return null;
@@ -227,5 +274,6 @@ export async function handleServiceIntegrationRoute(request,env,cors={}){
 
   if(path==='/api/integrations/services/firecrawl/scrape'&&request.method==='POST')return forwardFirecrawl(request,env,cors,workspaceId,'scrape');
   if(path==='/api/integrations/services/firecrawl/search'&&request.method==='POST')return forwardFirecrawl(request,env,cors,workspaceId,'search');
+  if(path==='/api/integrations/services/apollo/people-search'&&request.method==='POST')return forwardApolloPeopleSearch(request,env,cors,workspaceId);
   return error('Method not allowed',405,cors);
 }

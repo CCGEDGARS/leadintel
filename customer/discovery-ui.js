@@ -448,9 +448,8 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry}={}){
   taskCentre?.registerActions(taskId,{cancel:()=>controller.abort(),retry:retry||(()=>false)});
   const timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS);
   try{
-    const response=await fetch(`${INTELLIGENCE_PROXY}/`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),signal:controller.signal});
-    const data=await response.json().catch(()=>({}));
-    if(!response.ok)throw new Error(data.error||`Apollo returned ${response.status}`);
+    const data=await bridge()?.searchApolloPeople?.(payload,{signal:controller.signal,timeoutMs:DISCOVERY_REQUEST_TIMEOUT_MS});
+    if(!data?.ok)throw Object.assign(new Error(data?.error||"Apollo people search is unavailable"),{code:data?.code,status:data?.status});
     candidate.people=LeadIntelDiscovery.selectDecisionMakers(LeadIntelDiscovery.normalizeApolloPeople(data),main.profile||{},4);
     candidate.peopleStatus=candidate.people.length?"complete":"empty";
     persist();

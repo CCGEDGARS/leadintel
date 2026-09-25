@@ -29,13 +29,14 @@ test('production entrypoint delegates service routes then injects workspace cred
   assert.match(appSource,/handleServiceIntegrationRoute\(request,env,cors\)[\s\S]*withWorkspaceServiceCredentials\(request,env\)[\s\S]*handleCrmRoute\(request,runtimeEnv,cors\)[\s\S]*core\.fetch\(request,runtimeEnv\)/);
 });
 
-test('service integration router exposes owner-only status save delete and Firecrawl research proxy routes',()=>{
+test('service integration router exposes owner-only status save delete and provider-backed search routes',()=>{
   assert.equal(fs.existsSync(routePath),true,'src/service-integrations.js must exist');
   for(const route of [
     '/api/integrations/services/status',
     '/api/integrations/services/provider',
     '/api/integrations/services/firecrawl/scrape',
-    '/api/integrations/services/firecrawl/search'
+    '/api/integrations/services/firecrawl/search',
+    '/api/integrations/services/apollo/people-search'
   ])assert.match(source,new RegExp(route.replaceAll('/','\\/')));
   assert.match(source,/\/api\/integrations\/services\/provider[\s\S]{0,2600}requireMember\(request,env,workspaceId,\['owner'\]\)/);
   assert.match(source,/encryptSecret\(apiKey,key\)/);

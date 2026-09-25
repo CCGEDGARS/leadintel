@@ -2,7 +2,7 @@
   'use strict';
   if(root.LeadIntelServerBridge)return;
   const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
-  const ASSET_VERSION='20260924-crm-activity-pages-v1';
+  const ASSET_VERSION='20260925-apollo-buyer-search-v1';
   const API_REQUEST_TIMEOUT_MS=15000;
   const asset=path=>`${path}?v=${ASSET_VERSION}`;
   const KEYS={main:'leadintel_customer_v2_state',discovery:'leadintel_customer_v2_discovery',outreach:'leadintel_customer_v2_outreach',delivery:'leadintel_customer_v2_delivery',meta:'leadintel_customer_v2_discovery_meta'};
@@ -21,7 +21,7 @@
   const BRAND_ASSET_URL_PREFIX=`${API_BASE}/api/customer/brand-assets/`;
   const BRAND_IDENTITY_STRING_FIELDS=['companyDisplayName','senderName','senderTitle','website','phone','linkedinUrl','primaryColor','signatureText','legalFooter','postalAddress','updatedAt'];
   let saveTimer=null;let suppress=false;let initialized=false;const brandAssetTransactions=new Map(),workspaceSaveTransactions=new Map(),brandAssetResetGenerations=new Map();
-  const bridge={session:null,authProvider:localStorage.getItem(AUTH_PROVIDER_KEY)||'',workspaces:[],workspace:null,stateVersion:0,gmail:{configured:false,connected:false,email:'',role:''},microsoftMail:{configured:false,connected:false,email:'',role:''},status:'local',conflict:false,conflictState:null,saveNow,refreshGmailStatus,refreshMicrosoftMailStatus,syncReplies,sendGmail,sendMicrosoftMail,connectGmail,connectMicrosoftMail,disconnectGmail,disconnectMicrosoftMail,uploadBrandAsset,importBrandAsset,deleteBrandAsset,deleteAllBrandAssets,flushBrandAssetCleanup,invalidateBrandAssetTransactions,signIn,signOut,selectWorkspace,resolveConflictKeepLocal,resolveConflictUseServer,listCrmCompanies,getCrmCompany,getCrmActivities,saveCrmCompany,addCrmToPipeline,removeCrmFromPipeline,archiveCrmCompany,restoreCrmCompany,suppressCrmCompany,markCrmCustomer,saveCrmContacts,enrichCrmContact,recordCrmActivity,deleteCrmCompany,migrateLocalPipeline,switchProvider};
+  const bridge={session:null,authProvider:localStorage.getItem(AUTH_PROVIDER_KEY)||'',workspaces:[],workspace:null,stateVersion:0,gmail:{configured:false,connected:false,email:'',role:''},microsoftMail:{configured:false,connected:false,email:'',role:''},status:'local',conflict:false,conflictState:null,saveNow,refreshGmailStatus,refreshMicrosoftMailStatus,syncReplies,sendGmail,sendMicrosoftMail,connectGmail,connectMicrosoftMail,disconnectGmail,disconnectMicrosoftMail,uploadBrandAsset,importBrandAsset,deleteBrandAsset,deleteAllBrandAssets,flushBrandAssetCleanup,invalidateBrandAssetTransactions,signIn,signOut,selectWorkspace,resolveConflictKeepLocal,resolveConflictUseServer,listCrmCompanies,getCrmCompany,getCrmActivities,saveCrmCompany,addCrmToPipeline,removeCrmFromPipeline,archiveCrmCompany,restoreCrmCompany,suppressCrmCompany,markCrmCustomer,saveCrmContacts,enrichCrmContact,searchApolloPeople,recordCrmActivity,deleteCrmCompany,migrateLocalPipeline,switchProvider};
   root.LeadIntelServerBridge=bridge;
   if(!root.LeadIntelServer)root.LeadIntelServer=bridge;
 
@@ -73,14 +73,15 @@
   function clearCustomerCache(){suppress=true;try{for(const key of Object.values(KEYS))localStorage.removeItem(key);}finally{suppress=false;}}
   function endpoint(path){return `${API_BASE}${path}`;}
   async function api(path,options={}){
-    const {headers={},body,signal:externalSignal,...rest}=options;
+    const {headers={},body,signal:externalSignal,timeoutMs,...rest}=options;
     const multipart=typeof FormData!=='undefined'&&body instanceof FormData;
     const Controller=typeof AbortController==='function'?AbortController:null;
     const controller=Controller?new Controller():null;
     const forwardAbort=()=>controller?.abort(externalSignal?.reason);
     if(externalSignal?.aborted)forwardAbort();
     else externalSignal?.addEventListener?.('abort',forwardAbort,{once:true});
-    const timeout=controller?setTimeout(()=>controller.abort(new DOMException('LeadIntel request timed out','TimeoutError')),API_REQUEST_TIMEOUT_MS):null;
+    const requestTimeoutMs=Math.max(1000,Math.min(60000,Number(timeoutMs)||API_REQUEST_TIMEOUT_MS));
+    const timeout=controller?setTimeout(()=>controller.abort(new DOMException('LeadIntel request timed out','TimeoutError')),requestTimeoutMs):null;
     try{
       const request={credentials:'include',...rest,body,headers:{'Accept':'application/json',...(body&&!multipart?{'Content-Type':'application/json'}:{}),...headers},...(controller?{signal:controller.signal}:{})};
       const response=await fetch(endpoint(path),request);
@@ -293,6 +294,7 @@
   async function markCrmCustomer(id){return crmRequest(`/companies/${encodeURIComponent(id)}/mark-customer`,{method:'POST'});}
   async function saveCrmContacts(companyId,contacts){return crmRequest(`/companies/${encodeURIComponent(companyId)}/contacts`,{method:'POST',body:JSON.stringify({contacts:Array.isArray(contacts)?contacts:[]})});}
   async function enrichCrmContact(companyId,person,options={}){const selected=person&&typeof person==='object'?person:{};return crmRequest(`/companies/${encodeURIComponent(companyId)}/enrich-contact`,{method:'POST',body:JSON.stringify({person_id:String(selected.id||''),name:String(selected.name||''),title:String(selected.title||''),phone_lookup:Boolean(options.phoneLookup),allow_personal_email:Boolean(options.allowPersonalEmail)})});}
+  async function searchApolloPeople(payload,options={}){if(!bridge.session?.authenticated||!bridge.workspace)return {ok:false,status:401,error:'Sign in to search for buyers with Apollo'};const {response,payload:result}=await api(`/api/integrations/services/apollo/people-search?workspace_id=${encodeURIComponent(bridge.workspace.id)}`,{method:'POST',body:JSON.stringify(payload||{}),signal:options.signal,timeoutMs:options.timeoutMs||25000});return {ok:response.ok,status:response.status,...result};}
   async function recordCrmActivity(companyId,activity){return crmRequest(`/companies/${encodeURIComponent(companyId)}/activities`,{method:'POST',body:JSON.stringify(activity||{})});}
   async function deleteCrmCompany(id){return crmRequest(`/companies/${encodeURIComponent(id)}`,{method:'DELETE'});}
   function crmMigrationMap(){try{const value=JSON.parse(localStorage.getItem(CRM_MIGRATION_KEY)||'{}');return value&&typeof value==='object'&&!Array.isArray(value)?value:{};}catch{return {};}}
