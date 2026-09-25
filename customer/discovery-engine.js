@@ -16,7 +16,7 @@
   const MAX_DISCOVERY_TARGET=50;
   const DISCOVERY_QUALITY_VERSION=2;
   const MINIMUM_DISCOVERY_FIT_SCORE=10;
-  const DEFAULT_DISCOVERY_FUNNEL=Object.freeze({marketSearchesCompleted:0,marketSearchesTotal:0,evidencePages:0,companiesIdentified:0,officialDomainsResolved:0,companySitesChecked:0,verifiedCompanies:0,qualifiedCompanies:0,adaptiveFollowUpSearches:0});
+  const DEFAULT_DISCOVERY_FUNNEL=Object.freeze({marketSearchesCompleted:0,marketSearchesTotal:0,evidencePages:0,companiesIdentified:0,officialDomainsResolved:0,companySitesChecked:0,verifiedCompanies:0,qualifiedCompanies:0,adaptiveFollowUpSearches:0,openAiFallbackSearches:0});
   const DEFAULT_DISCOVERY_STATE=Object.freeze({status:"idle",queries:[],rawResults:[],candidates:[],companyMentions:[],searchFailures:[],checkedCompanyDomains:[],lastSuccessfulRunAt:"",latestRunCandidateCount:0,retainedLastSuccessfulResults:false,extraction:{status:"idle",method:"",message:""},potentialMatches:[],funnel:DEFAULT_DISCOVERY_FUNNEL,pipeline:[],lastRunAt:"",qualityVersion:DISCOVERY_QUALITY_VERSION,needsRefresh:false});
   const MAX_DISCOVERY_FOLLOW_UP_QUERIES=4;
   const MAX_DISCOVERY_COMPANY_CHECKS=20;
@@ -677,7 +677,7 @@
       company:clean(query.company).slice(0,160),domain:canonicalDomain(query.domain),sourceUrl:normalizeUrl(query.sourceUrl),
       kind:["resolution","verification"].includes(clean(query.kind))?clean(query.kind):"",offer:clean(query.offer).slice(0,200)
     };
-    const reason=["timeout","rate_limit","provider_unavailable","network_error","auth_error","request_rejected","unknown_error"].includes(clean(failure.reason))?clean(failure.reason):"unknown_error";
+    const reason=["timeout","rate_limit","quota_exhausted","provider_unavailable","network_error","auth_error","request_rejected","unknown_error"].includes(clean(failure.reason))?clean(failure.reason):"unknown_error";
     const status=clamp(Math.floor(Number(failure.status)||0),0,599,0);
     return {id:clean(failure.id)||`${phase}:${queryMeta.id||queryMeta.domain||"search"}`,phase,queryMeta,company:clean(failure.company||queryMeta.company).slice(0,160),domain:canonicalDomain(failure.domain||queryMeta.domain),reason,status};
   }
@@ -753,7 +753,7 @@
   function normalizeDiscoveryFunnel(value={}){
     const input=value&&typeof value==="object"?value:{};
     const count=key=>clamp(Math.floor(Number(input[key])||0),0,1000000,0);
-    return {marketSearchesCompleted:count("marketSearchesCompleted"),marketSearchesTotal:count("marketSearchesTotal"),evidencePages:count("evidencePages"),companiesIdentified:count("companiesIdentified"),officialDomainsResolved:count("officialDomainsResolved"),companySitesChecked:count("companySitesChecked"),verifiedCompanies:count("verifiedCompanies"),qualifiedCompanies:count("qualifiedCompanies"),adaptiveFollowUpSearches:count("adaptiveFollowUpSearches")};
+    return {marketSearchesCompleted:count("marketSearchesCompleted"),marketSearchesTotal:count("marketSearchesTotal"),evidencePages:count("evidencePages"),companiesIdentified:count("companiesIdentified"),officialDomainsResolved:count("officialDomainsResolved"),companySitesChecked:count("companySitesChecked"),verifiedCompanies:count("verifiedCompanies"),qualifiedCompanies:count("qualifiedCompanies"),adaptiveFollowUpSearches:count("adaptiveFollowUpSearches"),openAiFallbackSearches:count("openAiFallbackSearches")};
   }
 
   function normalizeDiscoveryState(value={}){

@@ -412,6 +412,74 @@ test('provider failures fail the Discovery task and cannot be reported as comple
   assert.match(context.__elements.get('discovery-funnel').innerHTML,/Retry failed checks/);
 });
 
+test('Firecrawl HTTP 402 switches official-domain lookup to grounded OpenAI results', async () => {
+  const requests=[];
+  const context=loadDiscoveryRunner({
+    requestTimeout:100,
+    bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'}},
+    fetchImpl:async(url,options)=>{
+      requests.push({url,options});
+      if(url.includes('/api/ai/web-search'))return {ok:true,status:200,json:async()=>({results:[
+        {url:'https://northstar.com/',title:'Northstar official website',description:'Northstar builds industrial machinery in Latvia.'},
+        {url:'https://unrelated.example/',title:'Unrelated source',description:'Other company.'}
+      ]})};
+      return {ok:false,status:402,json:async()=>({error:'Credits exhausted'})};
+    }
+  });
+  const results=await context.__firecrawlCompanySearch({id:'resolve-northstar',kind:'resolution',company:'Northstar',market:'Latvia',query:'"Northstar" Latvia official company website'},new AbortController().signal);
+  assert.equal(requests.length,2,'a billing error must not retry Firecrawl');
+  assert.match(requests[1].url,/\/api\/ai\/web-search\?workspace_id=workspace-1/);
+  assert.equal(requests[1].options.credentials,'include');
+  assert.equal(results.length,1,'source and company-domain checks still reject unrelated results');
+  assert.equal(results[0].domain,'northstar.com');
+  assert.equal(context.__discoveryState().funnel.openAiFallbackSearches,1);
+});
+
+test('Firecrawl HTTP 402 without usable fallback stops and tells the user to check credits', async () => {
+  let requests=0;
+  const context=loadDiscoveryRunner({renderNodes:true,fetchImpl:async()=>{requests+=1;return {ok:false,status:402,json:async()=>({error:'Billing limit'})};}});
+  await assert.rejects(context.__firecrawlCompanySearch({id:'resolve-northstar',kind:'resolution',company:'Northstar',market:'Latvia',query:'Northstar official company website'},new AbortController().signal),error=>error.status===402);
+  assert.equal(requests,1,'credit failures are not transient');
+  context.__setDiscovery({status:'error',lastRunAt:new Date().toISOString(),searchFailures:[{phase:'resolving',company:'Northstar',queryMeta:{id:'resolve-northstar',company:'Northstar',kind:'resolution',query:'Northstar official company website'},reason:'quota_exhausted',status:402}]});
+  context.__renderDiscoveryFunnel();
+  const html=context.__elements.get('discovery-funnel').innerHTML;
+  assert.match(html,/Firecrawl credits or billing limit reached/);
+  assert.match(html,/Open AI &amp; Tools/);
+  assert.match(html,/Retry failed checks with fallback/);
+});
+
+test('saved failed official-domain lookups reuse discovered names and market evidence', async () => {
+  const requests=[];
+  const context=loadDiscoveryRunner({
+    renderNodes:true,requestTimeout:100,
+    bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'}},
+    fetchImpl:async(url,options)=>{
+      const query=JSON.parse(options.body).query;
+      requests.push({url,query});
+      if(url.includes('/api/ai/web-search'))return {ok:true,status:200,json:async()=>({results:[query.startsWith('site:')
+        ?{url:'https://northstar.com/news/new-factory',title:'Northstar invests in a new factory',description:'Northstar invests in a new factory in Latvia for industrial automation.'}
+        :{url:'https://northstar.com/',title:'Northstar official site',description:'Northstar is an industrial automation manufacturer in Latvia.'}
+      ]})};
+      return {ok:false,status:402,json:async()=>({error:'Credits exhausted'})};
+    }
+  });
+  context.__setDiscovery({
+    status:'error',lastRunAt:'2026-09-25T17:00:00.000Z',
+    rawResults:[{queryId:'discover-latvia-1',market:'Latvia',url:'https://industry.example/northstar',domain:'industry.example',company:'Northstar',title:'Northstar invests in new factory',description:'Northstar invests in a new factory in Latvia for industrial automation.'}],
+    companyMentions:[{company:'Northstar',market:'Latvia',sourceUrl:'https://industry.example/northstar'}],
+    funnel:{marketSearchesCompleted:4,marketSearchesTotal:4,evidencePages:1,companiesIdentified:1,officialDomainsResolved:0,companySitesChecked:0,qualifiedCompanies:0},
+    searchFailures:[{phase:'resolving',company:'Northstar',queryMeta:{id:'resolve-northstar',kind:'resolution',company:'Northstar',market:'Latvia',sourceUrl:'https://industry.example/northstar',query:'"Northstar" Latvia official company website'},reason:'request_rejected',status:402}]
+  });
+  await context.__retryFailedDiscoveryChecks();
+  const state=context.__discoveryState();
+  assert.equal(requests.length,4,'only one official-domain lookup and one website check should call Firecrawl and OpenAI');
+  assert.ok(requests.every(item=>!item.query.includes('discover-')));
+  assert.equal(state.funnel.marketSearchesCompleted,4);
+  assert.equal(state.funnel.officialDomainsResolved,1);
+  assert.equal(state.funnel.openAiFallbackSearches,2);
+  assert.equal(state.searchFailures.length,0);
+});
+
 test('a rendering failure cannot leave Company Discovery running', async () => {
   const context = loadDiscoveryRunner({ renderFails: true });
   await assert.doesNotReject(context.__runDiscovery());

@@ -10,7 +10,7 @@ const MAX_DISCOVERY_RESULTS_PER_QUERY=5;
 const DISCOVERY_SEARCH_CONCURRENCY=4;
 const MAX_DISCOVERY_FOLLOW_UP_QUERIES=4;
 const MAX_DISCOVERY_COMPANY_CHECKS=20;
-const ASSET_VERSION="20260925-company-discovery-recovery-v1";
+const ASSET_VERSION="20260925-company-search-credit-fallback-v1";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20260925-buyers-stage-view-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -124,11 +124,24 @@ function linkedAbortController(parentSignal){const controller=new AbortControlle
 // Budget search waves and up to two bounded extraction calls (OpenAI plus Gemini fallback).
 function discoveryRunTimeoutMs(targetCount,queryCount){const entityQueries=Math.max(1,Math.min(MAX_DISCOVERY_COMPANY_CHECKS,(Number(targetCount)||10)*2));const marketWaves=Math.ceil((Math.max(1,Number(queryCount)||4)+MAX_DISCOVERY_FOLLOW_UP_QUERIES)/DISCOVERY_SEARCH_CONCURRENCY);const entityWaves=Math.ceil(entityQueries/DISCOVERY_SEARCH_CONCURRENCY);const requestWaves=marketWaves+(entityWaves*2);const extractionCalls=2;return Math.max(DISCOVERY_RUN_TIMEOUT_MIN_MS,requestWaves*DISCOVERY_REQUEST_TIMEOUT_MS+extractionCalls*COMPANY_EXTRACTION_TIMEOUT_MS+DISCOVERY_RUN_TIMEOUT_MARGIN_MS);}
 function throwIfDiscoveryRunAborted(signal){if(!signal?.aborted)return;const reason=signal.reason;if(reason instanceof Error)throw reason;const error=new Error("Company discovery was canceled");error.name="AbortError";throw error;}
-function discoveryFailureReason(error={}){const status=Number(error?.status)||0;if(error?.code==="DISCOVERY_SEARCH_TIMEOUT"||error?.name==="AbortError"||status===408)return "timeout";if(status===429)return "rate_limit";if(status>=500)return "provider_unavailable";if(status===401||status===403)return "auth_error";if(status>=400)return "request_rejected";if(error?.name==="TypeError")return "network_error";return "unknown_error";}
-function discoveryFailureLabel(failure={}){const status=Number(failure.status)||0;switch(failure.reason){case "timeout":return "Search provider timed out";case "rate_limit":return "Search provider rate limit reached";case "provider_unavailable":return `Search provider unavailable${status?` (HTTP ${status})`:""}`;case "network_error":return "Could not connect to the search provider";case "auth_error":return `Search provider authorization failed${status?` (HTTP ${status})`:""}`;case "request_rejected":return `Search provider rejected the request${status?` (HTTP ${status})`:""}`;default:return "Search provider returned an unexpected error";}}
+function discoveryFailureReason(error={}){const status=Number(error?.status)||0;if(error?.code==="DISCOVERY_SEARCH_TIMEOUT"||error?.name==="AbortError"||status===408)return "timeout";if(status===429)return "rate_limit";if(status===402)return "quota_exhausted";if(status>=500)return "provider_unavailable";if(status===401||status===403)return "auth_error";if(status>=400)return "request_rejected";if(error?.name==="TypeError")return "network_error";return "unknown_error";}
+function discoveryFailureLabel(failure={}){const status=Number(failure.status)||0;if(status===402)return "Firecrawl credits or billing limit reached (HTTP 402)";switch(failure.reason){case "timeout":return "Search provider timed out";case "rate_limit":return "Search provider rate limit reached";case "provider_unavailable":return `Search provider unavailable${status?` (HTTP ${status})`:""}`;case "network_error":return "Could not connect to the search provider";case "auth_error":return `Search provider authorization failed${status?` (HTTP ${status})`:""}`;case "request_rejected":return `Search provider rejected the request${status?` (HTTP ${status})`:""}`;default:return "Search provider returned an unexpected error";}}
 function discoverySearchFailure(error,queryMeta={},phase="searching"){const reason=discoveryFailureReason(error);return {id:`${phase}:${queryMeta.id||queryMeta.domain||"search"}`,phase,queryMeta,company:queryMeta.company||"",domain:queryMeta.domain||"",reason,status:Number(error?.status)||(reason==="timeout"?408:0)};}
 function waitForDiscoveryRetry(signal){return new Promise(resolve=>{const finish=()=>{clearTimeout(timer);signal?.removeEventListener?.("abort",finish);resolve();};const timer=setTimeout(finish,DISCOVERY_RETRY_DELAY_MS);signal?.addEventListener?.("abort",finish,{once:true});});}
 function retryableDiscoveryFailure(error){const reason=discoveryFailureReason(error);return ["timeout","rate_limit","provider_unavailable","network_error"].includes(reason);}
+async function openAiCompanySearch(queryMeta,runSignal){
+  const b=bridge(),workspace=b?.workspace;
+  if(!b?.session?.authenticated||!workspace?.id)return [];
+  const controller=linkedAbortController(runSignal);
+  const timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS);
+  try{
+    const response=await fetch(`${LEADINTEL_API}/api/ai/web-search?workspace_id=${encodeURIComponent(workspace.id)}`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify({query:queryMeta.query,max_results:MAX_DISCOVERY_RESULTS_PER_QUERY}),signal:controller.signal});
+    if(!response.ok)return [];
+    const payload=await response.json().catch(()=>({}));
+    return LeadIntelDiscovery.normalizeCompanySearchResults({results:payload.results},queryMeta);
+  }catch{return [];}
+  finally{clearTimeout(timeout);}
+}
 async function firecrawlCompanySearch(queryMeta,runSignal){
   let lastError=null;
   for(let attempt=0;attempt<=DISCOVERY_PROVIDER_RETRIES;attempt++){
@@ -144,6 +157,11 @@ async function firecrawlCompanySearch(queryMeta,runSignal){
       if(runSignal?.aborted)throw error;
       lastError=error;
       if(error?.name==="AbortError"){lastError=new Error("Company search timed out");lastError.name="TimeoutError";lastError.code="DISCOVERY_SEARCH_TIMEOUT";lastError.status=408;}
+      if(lastError.status===402){
+        const fallback=await openAiCompanySearch(queryMeta,runSignal);
+        if(runSignal?.aborted)throwIfDiscoveryRunAborted(runSignal);
+        if(fallback.length){discovery.funnel.openAiFallbackSearches=(Number(discovery.funnel.openAiFallbackSearches)||0)+1;return fallback;}
+      }
       if(attempt>=DISCOVERY_PROVIDER_RETRIES||!retryableDiscoveryFailure(lastError))throw lastError;
     }finally{
       clearTimeout(timeout);
@@ -230,7 +248,7 @@ async function runCompanyDiscovery(){
   const previousRunAt=discovery.lastSuccessfulRunAt||(previousCandidates.length?discovery.lastRunAt:"");
   recoveredInterruptedRun=false;discovery.needsRefresh=false;discovery.queries=queries;discovery.rawResults=[];discovery.candidates=previousCandidates;discovery.companyMentions=[];discovery.searchFailures=[];discovery.checkedCompanyDomains=[];discovery.latestRunCandidateCount=0;discovery.lastSuccessfulRunAt=previousRunAt;discovery.retainedLastSuccessfulResults=previousCandidates.length>0;discovery.extraction={status:"pending",method:"",message:"Company-name extraction will report its method after the evidence search."};discovery.potentialMatches=[];
   discoveryEvidenceUrls=new Set();discoveryCheckedCompanyDomains=new Set();
-  discovery.funnel={marketSearchesCompleted:0,marketSearchesTotal:queries.length,evidencePages:0,companiesIdentified:0,officialDomainsResolved:0,companySitesChecked:0,verifiedCompanies:0,qualifiedCompanies:0,adaptiveFollowUpSearches:0};
+  discovery.funnel={marketSearchesCompleted:0,marketSearchesTotal:queries.length,evidencePages:0,companiesIdentified:0,officialDomainsResolved:0,companySitesChecked:0,verifiedCompanies:0,qualifiedCompanies:0,adaptiveFollowUpSearches:0,openAiFallbackSearches:0};
   enrichmentResults.clear();enrichmentPending.clear();discovery.status="running";
   const taskCentre=window.LeadIntelTaskCentre;const taskId=`company-discovery:${Date.now()}`;
   activeDiscoveryTaskId=taskId;
@@ -393,30 +411,41 @@ async function runCompanyDiscovery(){
 async function retryFailedDiscoveryChecks(){
   if(discovery.status==="running")return false;
   const failures=Array.isArray(discovery.searchFailures)?discovery.searchFailures:[];
-  if(!failures.length||failures.some(item=>item.phase!=="verifying"||!item.queryMeta?.query||!item.queryMeta?.domain))return runCompanyDiscovery();
+  const resolutionOnly=failures.length>0&&failures.every(item=>item.phase==="resolving"&&item.queryMeta?.query&&item.queryMeta?.company);
+  if(!resolutionOnly&&(!failures.length||failures.some(item=>item.phase!=="verifying"||!item.queryMeta?.query||!item.queryMeta?.domain)))return runCompanyDiscovery();
   const main=mainState();const market=main.market||{};const profile=main.profile||{website:main.website};
   const previousCandidates=discovery.candidates.slice();const previousRunAt=discovery.lastSuccessfulRunAt||(previousCandidates.length?discovery.lastRunAt:"");
   const targetCount=persistDiscoveryTarget();const queries=failures.map(item=>item.queryMeta);
-  discovery.status="running";discovery.searchFailures=[];discoveryProgress={phase:"verifying",completed:0,total:queries.length};
+  discovery.status="running";discovery.searchFailures=[];discoveryProgress={phase:resolutionOnly?"resolving":"verifying",completed:0,total:queries.length};
   discoveryEvidenceUrls=new Set((discovery.rawResults||[]).map(item=>item.url).filter(Boolean));
   discoveryCheckedCompanyDomains=new Set(discovery.checkedCompanyDomains||[]);
   activeDiscoveryTaskId=`company-verification-retry:${Date.now()}`;
   const taskCentre=window.LeadIntelTaskCentre;const taskId=activeDiscoveryTaskId;const runController=new AbortController();
-  taskCentre?.start({id:taskId,type:"company-discovery",title:"Retry company website checks",stage:"Verifying company websites",total:queries.length,completed:0,canCancel:true,canRetry:true});
+  taskCentre?.start({id:taskId,type:"company-discovery",title:resolutionOnly?"Retry official domain lookups":"Retry company website checks",stage:resolutionOnly?"Resolving company websites":"Verifying company websites",total:queries.length,completed:0,canCancel:true,canRetry:true});
   taskCentre?.registerActions(taskId,{cancel:()=>runController.abort(),retry:()=>retryFailedDiscoveryChecks()});
   let timedOut=false;
   try{
     const rows=Array(queries.length).fill(null);
-    const searches=(async()=>{await runDiscoverySearchBatch(queries,"verifying",runController.signal,rows,{retryOnly:true});return rows;})();
+    let verificationQueries=[];let verificationRows=[];
+    const searches=(async()=>{
+      await runDiscoverySearchBatch(queries,resolutionOnly?"resolving":"verifying",runController.signal,rows,{retryOnly:true});
+      if(resolutionOnly){
+        const previousResolved=(discovery.rawResults||[]).filter(item=>String(item.queryId||"").startsWith("resolve-"));
+        verificationQueries=LeadIntelDiscovery.buildCandidateVerificationQueries([...previousResolved,...rows.flatMap(item=>item?.results||[])],profile,market,targetCount);
+        verificationRows=Array(verificationQueries.length).fill(null);
+        await runDiscoverySearchBatch(verificationQueries,"verifying",runController.signal,verificationRows,{retryOnly:true});
+      }
+      return rows;
+    })();
     let runTimeout;
     try{timedOut=await Promise.race([searches.then(()=>false),new Promise(resolve=>{runTimeout=setTimeout(()=>{runController.abort(new DOMException("Verification retry deadline reached","TimeoutError"));resolve(true);},Math.max(DISCOVERY_REQUEST_TIMEOUT_MS*2,DISCOVERY_RUN_TIMEOUT_MIN_MS));})]);}
     finally{clearTimeout(runTimeout);}
     const rowsResult=await searches.catch(()=>rows);
-    discovery.searchFailures=failedDiscoverySearches([{phase:"verifying",rows:rowsResult,queries}]);
+    discovery.searchFailures=failedDiscoverySearches([{phase:resolutionOnly?"resolving":"verifying",rows:rowsResult,queries},...(resolutionOnly?[{phase:"verifying",rows:verificationRows,queries:verificationQueries}]:[])]);
     const raw=Array.isArray(discovery.rawResults)?discovery.rawResults:[];
     const marketEvidence=raw.filter(item=>String(item.queryId||"").startsWith("discover-"));
-    const resolved=raw.filter(item=>String(item.queryId||"").startsWith("resolve-"));
-    const verified=[...raw.filter(item=>String(item.queryId||"").startsWith("verify-")),...rowsResult.flatMap(item=>item?.results||[])];
+    const resolved=[...raw.filter(item=>String(item.queryId||"").startsWith("resolve-")),...(resolutionOnly?rowsResult.flatMap(item=>item?.results||[]):[])];
+    const verified=[...raw.filter(item=>String(item.queryId||"").startsWith("verify-")),...(resolutionOnly?verificationRows:rowsResult).flatMap(item=>item?.results||[])];
     const candidateEvidence=(discovery.potentialMatches||[]).flatMap(candidate=>(candidate.evidence||[]).map(item=>({
       queryId:`review-${candidate.id}`,market:candidate.market,domain:candidate.domain,company:candidate.company,url:item.url,sourceDomain:item.sourceDomain,
       title:item.title,description:item.description,text:item.text,date:item.date
@@ -506,7 +535,7 @@ function renderDiscoveryFunnel(){
     [Number(funnel.companySitesChecked)||0,"Company sites checked"],
     [Number(funnel.qualifiedCompanies)||0,"Qualified companies"]
   ];
-  target.innerHTML=`<div class="discovery-funnel-head"><strong>Search funnel</strong><span>${esc(phase)}</span></div><div class="discovery-funnel-track" role="progressbar" aria-label="Market searches checked" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><i style="width:${percent}%"></i></div><div class="discovery-funnel-grid">${metrics.map(([value,label])=>`<div><strong>${esc(value)}</strong><span>${esc(label)}</span></div>`).join("")}</div>${discovery.extraction?.message?`<p class="discovery-funnel-extraction"><strong>Company extraction:</strong> ${esc(discovery.extraction.message)}</p>`:""}${Number(funnel.adaptiveFollowUpSearches)?`<p class="discovery-funnel-followup">LeadIntel added ${Number(funnel.adaptiveFollowUpSearches)} follow-up searches because the first pass found too few qualified companies.</p>`:""}${discoverySearchFailuresHtml()}`;
+  target.innerHTML=`<div class="discovery-funnel-head"><strong>Search funnel</strong><span>${esc(phase)}</span></div><div class="discovery-funnel-track" role="progressbar" aria-label="Market searches checked" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><i style="width:${percent}%"></i></div><div class="discovery-funnel-grid">${metrics.map(([value,label])=>`<div><strong>${esc(value)}</strong><span>${esc(label)}</span></div>`).join("")}</div>${discovery.extraction?.message?`<p class="discovery-funnel-extraction"><strong>Company extraction:</strong> ${esc(discovery.extraction.message)}</p>`:""}${Number(funnel.openAiFallbackSearches)?`<p class="discovery-funnel-followup">Firecrawl returned a credit or billing error for ${Number(funnel.openAiFallbackSearches)} search${Number(funnel.openAiFallbackSearches)===1?"":"es"}; grounded OpenAI web search supplied source-linked results instead.</p>`:""}${Number(funnel.adaptiveFollowUpSearches)?`<p class="discovery-funnel-followup">LeadIntel added ${Number(funnel.adaptiveFollowUpSearches)} follow-up searches because the first pass found too few qualified companies.</p>`:""}${discoverySearchFailuresHtml()}`;
 }
 function discoverySearchFailuresHtml(){
   const failures=Array.isArray(discovery.searchFailures)?discovery.searchFailures:[];if(!failures.length)return "";
@@ -516,7 +545,9 @@ function discoverySearchFailuresHtml(){
   const shown=unique.slice(0,4).map(item=>`<li><strong>${esc(labels[item.phase]||"Research check")}</strong>${item.company?` · ${esc(item.company)}`:item.domain?` · ${esc(item.domain)}`:""} — ${esc(discoveryFailureLabel(item))}</li>`).join("");
   const more=unique.length>4?`<li>+ ${unique.length-4} more failed checks</li>`:"";
   const action=verifyingOnly?"Retry company-site checks":"Retry failed checks";
-  return `<div class="discovery-search-failures" role="alert"><strong>${failures.length} provider check${failures.length===1?"":"s"} failed after an automatic retry.</strong><ul>${shown}${more}</ul><button class="secondary-btn small" type="button" data-action="retry-failed-checks">${action} (${failures.length})</button></div>`;
+  const creditBlocked=failures.every(item=>Number(item.status)===402);
+  if(creditBlocked)return `<div class="discovery-search-failures" role="alert"><strong>${failures.length} provider check${failures.length===1?"":"s"} stopped: Firecrawl returned HTTP 402.</strong><ul>${shown}${more}</ul><p>Check Firecrawl credits or billing in AI &amp; Tools. Grounded OpenAI web search can recover these checks when it returns matching source links.</p><button class="secondary-btn small" type="button" data-action="retry-failed-checks">Retry failed checks with fallback (${failures.length})</button> <button class="secondary-btn small" type="button" data-action="open-provider-settings">Open AI &amp; Tools</button></div>`;
+  return `<div class="discovery-search-failures" role="alert"><strong>${failures.length} provider check${failures.length===1?"":"s"} failed.</strong><ul>${shown}${more}</ul><button class="secondary-btn small" type="button" data-action="retry-failed-checks">${action} (${failures.length})</button></div>`;
 }
 function potentialBuyerResultsHtml(candidate){
   if(candidate.peopleStatus==="loading")return '<div class="potential-match-buyers-status">Searching Apollo for the selected company…</div>';
@@ -658,7 +689,7 @@ function renderDiscoverySafely(){try{renderAll();return true;}catch(error){conso
 function bindDiscovery(){
   $("continue-to-discovery")?.addEventListener("click",showDiscoveryStep);$("back-to-strategy")?.addEventListener("click",showStrategyStep);$("run-company-discovery")?.addEventListener("click",()=>{if(discovery.status==="no_results"){reviewDiscoveryGuidance();return;}runCompanyDiscovery();});$("discovery-target-count")?.addEventListener("change",()=>{persistDiscoveryTarget();renderStatus();const custom=$("discovery-target-custom");if(custom&&!custom.hidden)custom.focus();});$("discovery-target-custom")?.addEventListener("input",()=>{persistDiscoveryTarget();renderStatus();});$("activate-market-strategy")?.addEventListener("click",()=>setTimeout(renderStatus,0));
   $("company-candidates")?.addEventListener("click",event=>{const btn=event.target.closest("[data-action]");if(!btn)return;if(btn.dataset.action==="review-strategy"){showStrategyStep();return;}if(btn.dataset.action==="review-research"){reviewMarketResearch();return;}if(btn.dataset.action==="open-ai-settings"){document.getElementById("open-settings")?.click();return;}const index=Number(btn.dataset.companyIndex);const personIndex=Number(btn.dataset.personIndex);if(btn.dataset.action==="find-decision-makers"){setJourneyFocus("buyers",{scroll:false});findDecisionMakers(index);}if(btn.dataset.action==="enrich-contact")enrichContact(index,personIndex,{phoneLookup:false});if(btn.dataset.action==="find-phone")enrichContact(index,personIndex,{phoneLookup:true});if(btn.dataset.action==="refresh-phone")refreshEnrichedContact(index,personIndex);if(btn.dataset.action==="save-crm")saveCandidate(index,{pipeline:false});if(btn.dataset.action==="add-pipeline")saveCandidate(index,{pipeline:true});});
-  $("discovery-funnel")?.addEventListener("click",event=>{const btn=event.target.closest('[data-action="retry-failed-checks"]');if(btn)retryFailedDiscoveryChecks();});
+  $("discovery-funnel")?.addEventListener("click",event=>{if(event.target.closest('[data-action="open-provider-settings"]')){document.getElementById("open-settings")?.click();return;}const btn=event.target.closest('[data-action="retry-failed-checks"]');if(btn)retryFailedDiscoveryChecks();});
   $("discovery-potential-matches")?.addEventListener("click",event=>{const btn=event.target.closest('[data-action="find-potential-buyers"]');if(btn)findPotentialDecisionMakers(btn.dataset.domain);});
   $("customer-pipeline")?.addEventListener("change",event=>{const select=event.target.closest("[data-pipeline-stage]");if(select)changePipelineStage(select);});
   $("customer-pipeline")?.addEventListener("click",event=>{const buyer=event.target.closest("[data-find-pipeline-buyers]");if(buyer){findPipelineDecisionMakers(buyer.dataset.findPipelineBuyers);return;}const remove=event.target.closest("[data-pipeline-remove]");if(remove){removePipelineCompany(remove.dataset.pipelineRemove,remove.dataset.domain);return;}const open=event.target.closest("[data-open-crm-company]");if(open)document.getElementById("open-crm")?.click();});
