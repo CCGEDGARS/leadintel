@@ -96,7 +96,7 @@ function decorateCards(){
   for(const config of SERVICE_PROVIDERS){
     const card=grid.querySelector(`[data-integration="${config.provider}"]`);if(!card)continue;
     const row=providerState(config.provider);
-    const observed=config.provider==='firecrawl'?window.LeadIntelIntegrationHealth?.firecrawl:null;
+    const observed=window.LeadIntelIntegrationHealth?.[config.provider];
     card.classList.add('customer-service-card');
     const purpose=card.querySelector('.integration-purpose');if(purpose)purpose.textContent=`${config.purpose}. Add your own key or use the managed fallback.`;
     const badge=card.querySelector('.integration-status');if(badge){badge.textContent=observed?.label||statusLabel(row);badge.className=`integration-status ${observed?.state|| (row?.state==='bad'?'bad':row?.source?'good':'neutral')}`;}

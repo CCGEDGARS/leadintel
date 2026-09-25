@@ -49,5 +49,5 @@ test('Health reads saved Discovery HTTP 402 and keeps extension badges from hidi
   assert.match(extension,/window\.LeadIntelIntegrationHealth\?\.firecrawl/);
   assert.match(extension,/badge\.textContent=observed\?\.label\|\|statusLabel\(row\)/);
   assert.match(extension,/Firecrawl needs attention/);
-  assert.match(source,/window\.LeadIntelIntegrationHealth=\{firecrawl\}/);
+  assert.match(source,/window\.LeadIntelIntegrationHealth=\{apollo,firecrawl\}/);
 });

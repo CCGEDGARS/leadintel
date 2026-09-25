@@ -15,7 +15,7 @@
  * import './crm-presentation.js?v=20260924-crm-evidence-activity-v1';
  * import './crm-ui.js?v=20260924-crm-evidence-activity-v1';
  * import './ai-settings.js?v=20260915-model-choice-v1';
- * import './service-settings-extension.js?v=20260925-firecrawl-health-warning-v1';
+ * import './service-settings-extension.js?v=20260925-provider-credit-health-v1';
  * import './step2-readiness-engine.js?v=20260924-friendly-workflow-labels-v1';
  * import './content-language.js?v=20260924-workspace-content-english-v1';
  * import './content-variants.js?v=20260921-contact-gated-v2';

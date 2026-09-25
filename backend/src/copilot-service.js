@@ -1,5 +1,6 @@
 import {importAesKey,decryptSecret} from './oauth.js';
 import {generateText,searchWeb} from './ai-provider.js';
+import {creditFailure,recordProviderCredit} from './provider-credit-health.js';
 import {buildCopilotWorkspaceContext} from './copilot-context.js';
 import {productKnowledgeFor,technicalGuidanceFor} from './copilot-knowledge.js';
 import {routeCopilotSkills,skillInstructions} from './copilot-skills.js';
@@ -46,9 +47,13 @@ async function providerCredential(env,workspaceId,{openAiOnly=false}={}){
 }
 async function productionProvider(env,workspaceId){
   const fetchImpl=typeof env.COPILOT_FETCH_IMPL==='function'?env.COPILOT_FETCH_IMPL:fetch;const active=await providerCredential(env,workspaceId);if(!active)return null;
+  const observe=async(provider,run)=>{
+    try{const result=await run();await recordProviderCredit(env,{workspaceId,userId:null,provider,kind:'recovered'});return result;}
+    catch(cause){if(creditFailure(0,cause?.message))await recordProviderCredit(env,{workspaceId,userId:null,provider,kind:'failed'});throw cause;}
+  };
   return {
-    async generate(options){return generateText({...active,...options,fetchImpl:boundedFetch(fetchImpl,REASONING_TIMEOUT_MS)});},
-    async search(options){const openai=active.provider==='openai'?active:await providerCredential(env,workspaceId,{openAiOnly:true});if(!openai)throw new Error('OpenAI web search is not configured');return searchWeb({apiKey:openai.apiKey,model:openai.model,query:options.query,maxResults:options.maxResults||5,fetchImpl:boundedFetch(fetchImpl,SEARCH_TIMEOUT_MS)});}
+    async generate(options){return observe(active.provider,()=>generateText({...active,...options,fetchImpl:boundedFetch(fetchImpl,REASONING_TIMEOUT_MS)}));},
+    async search(options){const openai=active.provider==='openai'?active:await providerCredential(env,workspaceId,{openAiOnly:true});if(!openai)throw new Error('OpenAI web search is not configured');return observe('openai',()=>searchWeb({apiKey:openai.apiKey,model:openai.model,query:options.query,maxResults:options.maxResults||5,fetchImpl:boundedFetch(fetchImpl,SEARCH_TIMEOUT_MS)}));}
   };
 }
 function selectedKnowledge(question,screen){return technicalGuidanceFor(question)||productKnowledgeFor({step:screen?.step||1,topic:question});}

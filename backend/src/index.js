@@ -3,6 +3,7 @@ import {canonicalSnapshot,ingestCanonicalSnapshot} from "./canonical.js";
 import {assessCandidate,compileQueries} from "./quality.js";
 import {listRuns,policyFor,recordRunEvent,runBudgetState,validDispatchUrl} from "./runs.js";
 import {APOLLO_PEOPLE_SEARCH_URL,apolloSearchBody,enrichmentDecision,normalizeDomain,provenBusinessEmail,publicPersonSummary,rankApolloPeople,strongPersonalEmail} from "./enrichment.js";
+import {creditFailure,recordProviderCredit} from "./provider-credit-health.js";
 
 const json = (value,status=200,headers={}) => new Response(JSON.stringify(value),{status,headers:{"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store",...headers}});
 const error = (message,status,headers) => json({error:message},status,headers);
@@ -175,7 +176,7 @@ async function router(request,env) {
       VALUES(?,?,?,?,?,?,?,?)`).bind(requestId,workspaceId,opportunityId,record.company_id,"processing",role,user.id,personalApproved?1:0).run();
     try{
       const searchResponse=await fetch(APOLLO_PEOPLE_SEARCH_URL,{method:"POST",headers:{"Content-Type":"application/json","Cache-Control":"no-cache","Accept":"application/json","X-Api-Key":env.APOLLO_API_KEY},body:JSON.stringify(apolloSearchBody({domain,roles:[role]}))});
-      if(!searchResponse.ok)throw Object.assign(new Error(`Apollo search returned ${searchResponse.status}`),{code:`apollo_search_${searchResponse.status}`});
+      if(!searchResponse.ok){const detail=await searchResponse.clone().text().catch(()=>"");if(creditFailure(searchResponse.status,detail.slice(0,800)))await recordProviderCredit(env,{workspaceId,userId:user.id,provider:'apollo',kind:'failed',source:'managed'});throw Object.assign(new Error(`Apollo search returned ${searchResponse.status}`),{code:`apollo_search_${searchResponse.status}`});}
       const search=await searchResponse.json();const rankedPeople=rankApolloPeople(search.people||[],role);const candidate=rankedPeople[0];const personId=String(candidate?.id||candidate?.person_id||"");
       if(!personId){
         await env.DB.prepare("UPDATE enrichment_requests SET status='not_found',credits_reserved=0,completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP,response_summary_json=? WHERE id=?")
@@ -184,7 +185,8 @@ async function router(request,env) {
       }
       const matchUrl=new URL("https://api.apollo.io/api/v1/people/match");matchUrl.searchParams.set("id",personId);matchUrl.searchParams.set("reveal_personal_emails",personalApproved?"true":"false");matchUrl.searchParams.set("reveal_phone_number","false");matchUrl.searchParams.set("run_waterfall_email","false");matchUrl.searchParams.set("run_waterfall_phone","false");
       const matchResponse=await fetch(matchUrl,{method:"POST",headers:{"Content-Type":"application/json","Cache-Control":"no-cache","Accept":"application/json","X-Api-Key":env.APOLLO_API_KEY}});
-      if(!matchResponse.ok)throw Object.assign(new Error(`Apollo match returned ${matchResponse.status}`),{code:`apollo_match_${matchResponse.status}`});
+      if(!matchResponse.ok){const detail=await matchResponse.clone().text().catch(()=>"");if(creditFailure(matchResponse.status,detail.slice(0,800)))await recordProviderCredit(env,{workspaceId,userId:user.id,provider:'apollo',kind:'failed',source:'managed'});throw Object.assign(new Error(`Apollo match returned ${matchResponse.status}`),{code:`apollo_match_${matchResponse.status}`});}
+      await recordProviderCredit(env,{workspaceId,userId:user.id,provider:'apollo',kind:'recovered',source:'managed'});
       const matched=await matchResponse.json();const person=matched.person||{};const businessEmail=provenBusinessEmail(person,domain);const personalEmail=personalApproved?strongPersonalEmail(person,domain,role,personId):"";const selectedEmail=businessEmail||personalEmail;const emailType=businessEmail?"work":"personal";const emailStatus=businessEmail?"Verified":"Strong match";const summary=publicPersonSummary(person);
       if(!selectedEmail){
         await env.DB.prepare("UPDATE enrichment_requests SET status='not_found',credits_used=1,person_provider_id=?,completed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP,response_summary_json=? WHERE id=?")
