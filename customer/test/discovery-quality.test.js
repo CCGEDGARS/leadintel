@@ -93,6 +93,48 @@ test("discovery rejects a same-service seller even when its target-market domain
   assert.deepEqual(results,[]);
 });
 
+test("a manufacturer that buys automation is not excluded as an automation seller",()=>{
+  const results=discovery.mergeCompanyCandidates([{
+    url:"https://steelworks.se/news/expansion",domain:"steelworks.se",company:"Steelworks AB",market:"Sweden",
+    title:"Steelworks AB announces production capacity expansion",
+    description:"The Swedish steel manufacturer is investing in industrial automation for its own production lines.",
+    text:"Steelworks AB, a Swedish steel manufacturer, is investing in industrial automation to improve its own production lines as it expands capacity."
+  }],{
+    website:"https://ercon.lv",priorityOffers:"industrial automation",idealCustomer:"steel manufacturers"
+  },{
+    signals:[{id:"expansion",name:"Capacity expansion",active:true,weight:9,keywords:"capacity expansion; new factory"}]
+  });
+  assert.equal(results.length,1);
+  assert.equal(results[0].domain,"steelworks.se");
+});
+
+test("a company explicitly offering the same automation service remains excluded",()=>{
+  const results=discovery.mergeCompanyCandidates([{
+    url:"https://automation.se/news/expansion",domain:"automation.se",company:"Automation AB",market:"Sweden",
+    title:"Automation AB expands its business",description:"We provide industrial automation systems and equipment.",
+    text:"We provide industrial automation systems and equipment to manufacturers in Sweden while expanding our business."
+  }],{
+    website:"https://ercon.lv",priorityOffers:"industrial automation",idealCustomer:"steel manufacturers"
+  },{
+    signals:[{id:"expansion",name:"Capacity expansion",active:true,weight:9,keywords:"business expansion; new factory"}]
+  });
+  assert.deepEqual(results,[]);
+});
+
+test("a company branded as the target service manufacturer remains excluded",()=>{
+  const results=discovery.mergeCompanyCandidates([{
+    url:"https://automation.se/news/expansion",domain:"automation.se",company:"Automation AB",market:"Sweden",
+    title:"Automation AB announces business expansion",
+    description:"Automation AB is an industrial automation systems manufacturer.",
+    text:"Automation AB is an industrial automation systems manufacturer expanding in Sweden."
+  }],{
+    website:"https://ercon.lv",priorityOffers:"industrial automation",idealCustomer:"steel manufacturers"
+  },{
+    signals:[{id:"expansion",name:"Capacity expansion",active:true,weight:9,keywords:"business expansion; new factory"}]
+  });
+  assert.deepEqual(results,[]);
+});
+
 test("discovery keeps a verified target-market buyer with company-specific signal evidence",()=>{
   const results=discovery.mergeCompanyCandidates([{
     url:"https://nordicfood.se/news/new-factory",domain:"nordicfood.se",company:"Nordic Food AB",market:"Sweden",

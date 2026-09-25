@@ -183,6 +183,9 @@ test('potential company matches show missing proof but can never become actionab
   assert.ok(plainbuyer.qualificationGaps.includes('No active buying signal was confirmed'));
   assert.equal(northstar.marketVerified,false);
   assert.equal(plainbuyer.marketVerified,true,'potential matches retain the checks they did pass');
+  assert.equal(typeof Discovery.isPotentialBuyerSearchAllowed,'function');
+  assert.equal(Discovery.isPotentialBuyerSearchAllowed({...plainbuyer,fitVerified:true,qualificationGaps:plainbuyer.qualificationGaps.filter(gap=>gap!=="Target customer fit is not evidenced")}),true,'market and ICP fit can be user-approved for buyer discovery even without a public signal');
+  assert.equal(Discovery.isPotentialBuyerSearchAllowed(northstar),false,'missing market proof must still block buyer discovery');
   assert.ok(potential.every(item=>item.qualified===false&&item.buyerVerified===false));
   assert.ok(potential.every(item=>!Discovery.isActionableCandidate(item)));
   assert.deepEqual(Discovery.buildPotentialCompanyCandidates(possible,profile,market,[{domain:'northstar.com'}]).map(item=>item.domain),['plainbuyer.se']);
@@ -301,7 +304,10 @@ test('normalizeDiscoveryState persists the search funnel and keeps potential mat
   const state=Discovery.normalizeDiscoveryState({
     qualityVersion:Discovery.DISCOVERY_QUALITY_VERSION,
     funnel:{marketSearchesCompleted:8,marketSearchesTotal:8,evidencePages:17,companiesIdentified:4,officialDomainsResolved:3,companySitesChecked:2,verifiedCompanies:1,qualifiedCompanies:0,adaptiveFollowUpSearches:4},
-    potentialMatches:[{company:'Northstar',domain:'northstar.com',website:'https://northstar.com/',qualified:true,buyerVerified:true,marketVerified:true,matchedSignals:[{id:'expansion',name:'Expansion'}],qualificationGaps:['Target market evidence is missing'],evidence:[{url:'https://northstar.com/news',title:'Expansion'}]}]
+    companyMentions:[{company:'Northstar',market:'Sweden',sourceUrl:'https://industry.example/northstar'}],
+    searchFailures:[{phase:'verifying',company:'Northstar',domain:'northstar.com',queryMeta:{id:'verify-northstar',kind:'verification',company:'Northstar',domain:'northstar.com',market:'Sweden',query:'site:northstar.com expansion'},reason:'provider_unavailable',status:503}],
+    checkedCompanyDomains:['already-checked.se'],
+    potentialMatches:[{company:'Northstar',domain:'northstar.com',website:'https://northstar.com/',qualified:true,buyerVerified:true,marketVerified:true,fitVerified:true,matchedSignals:[{id:'expansion',name:'Expansion'}],qualificationGaps:['No active buying signal was confirmed'],people:[{id:'person-1',name:'Pat Example',title:'COO',linkedin_url:'https://www.linkedin.com/in/pat-example'}],peopleStatus:'complete',buyerSearchMode:'user_selected_without_signal',evidence:[{url:'https://northstar.com/news',title:'Expansion'}]}]
   });
   assert.equal(state.funnel.marketSearchesCompleted,8);
   assert.equal(state.funnel.evidencePages,17);
@@ -310,6 +316,13 @@ test('normalizeDiscoveryState persists the search funnel and keeps potential mat
   assert.equal(state.potentialMatches[0].qualified,false);
   assert.equal(state.potentialMatches[0].buyerVerified,false);
   assert.equal(state.potentialMatches[0].marketVerified,true);
+  assert.equal(state.potentialMatches[0].fitVerified,true);
+  assert.equal(state.potentialMatches[0].people[0].name,'Pat Example');
+  assert.equal(state.potentialMatches[0].buyerSearchMode,'user_selected_without_signal');
+  assert.equal(state.companyMentions[0].company,'Northstar');
+  assert.equal(state.searchFailures[0].phase,'verifying');
+  assert.equal(state.searchFailures[0].status,503);
+  assert.equal(state.checkedCompanyDomains[0],'already-checked.se');
   assert.equal(Discovery.isActionableCandidate(state.potentialMatches[0]),false);
 });
 

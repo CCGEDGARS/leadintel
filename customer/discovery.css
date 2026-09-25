@@ -153,6 +153,19 @@
 .potential-match-evidence strong,.potential-match-evidence small{display:block}
 .potential-match-evidence strong{font-size:9px;line-height:1.3}
 .potential-match-evidence small{margin-top:4px;font-size:9px;line-height:1.4;color:#69746e}
+.discovery-search-failures{margin-top:12px;padding:12px 13px;border:1px solid #e7c7b8;border-radius:9px;background:#fff8f4;color:#5a3526}
+.discovery-search-failures>strong{font-size:11px}
+.discovery-search-failures ul{margin:7px 0 9px;padding-left:18px;font-size:10px;line-height:1.55}
+.discovery-search-failures button{min-height:32px}
+.potential-match-buyer-action{margin-top:9px;padding:8px;border:1px solid #eadcb8;border-radius:8px;background:#fffaf0}
+.potential-match-buyer-action p,.potential-match-user-selection{display:block;margin:0 0 7px;font-size:9px;line-height:1.45;color:#6c6147}
+.potential-match-people{display:grid;gap:5px;margin-top:8px}
+.potential-match-people>strong{font-size:9px;color:#123c32}
+.potential-match-people>div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px;font-size:9px;line-height:1.4}
+.potential-match-people a{color:#176b59}
+.potential-match-buyers-status{margin-top:8px;font-size:9px;line-height:1.4;color:#51655a}
+.potential-match-buyers-status.warning{color:#8b4c32}
+.potential-match-user-selection{margin-top:7px;color:#876116}
 @media(max-width:800px){.potential-match-card{grid-template-columns:1fr 1fr}.potential-match-evidence{grid-column:1/-1}}
 @media(max-width:560px){.discovery-funnel-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.potential-match-card{grid-template-columns:1fr}.potential-match-evidence{grid-column:auto}.discovery-funnel-head{align-items:flex-start;flex-direction:column}}
 
