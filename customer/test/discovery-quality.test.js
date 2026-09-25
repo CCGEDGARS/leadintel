@@ -30,6 +30,21 @@ test("discovery withholds a company without signal evidence from the actionable 
   assert.deepEqual(results,[]);
 });
 
+test("verified-fit prospects rank by evidence without receiving an opportunity score",()=>{
+  const profile={website:"https://ercon.lv",idealCustomer:"Swedish industrial manufacturers",priorityOffers:"metal structures"};
+  const market={signals:[{id:"factory",name:"Factory investment",keywords:"new factory",active:true}]};
+  const results=[
+    {url:"https://alpha.se/",domain:"alpha.se",company:"Alpha",market:"Sweden",title:"Alpha industrial manufacturer",description:"Alpha industrial manufacturer in Sweden.",text:"Alpha is an industrial manufacturer in Sweden producing metal structures."},
+    {url:"https://beta.se/",domain:"beta.se",company:"Beta",market:"Sweden",title:"Beta industrial manufacturer",description:"Beta industrial manufacturer in Sweden.",text:"Beta is an industrial manufacturer in Sweden producing metal structures."},
+    {url:"https://industry.se/beta",domain:"beta.se",sourceDomain:"industry.se",company:"Beta",market:"Sweden",title:"Beta manufacturing",description:"Beta industrial manufacturer in Sweden.",text:"Beta manufactures industrial equipment and metal structures in Sweden."}
+  ];
+  const prospects=discovery.buildPotentialCompanyCandidates(results,profile,market,[]);
+  assert.deepEqual(prospects.map(item=>item.company),["Beta","Alpha"]);
+  assert.ok(prospects[0].researchPriority>prospects[1].researchPriority);
+  assert.equal(prospects[0].score,undefined);
+  assert.equal(prospects[0].qualified,false);
+});
+
 test("signal matching does not treat substrings or generic product words as buying events",()=>{
   const profile={website:"https://ercon.lv",priorityOffers:"metal structures; installation",idealCustomer:"Swedish manufacturers of industrial equipment"};
   const market={signals:[

@@ -77,6 +77,17 @@ test('Buyers keeps saved companies visible and only offers Messages after a buye
   assert.equal(gate.dataset.journeyStage,'6');
 });
 
+test('a selected prospect keeps Buyers visible without opening the opportunity Pipeline',()=>{
+  const pipeline={hidden:true};
+  const footer={hidden:false};
+  const gate={dataset:{},disabled:false,setAttribute(){},closest:()=>footer};
+  const document={querySelector:()=>pipeline,getElementById:()=>gate};
+  NextAction.applyStageVisibility(document,5,{pipelineCount:0,prospectCount:1,buyerCount:0,focus:'buyers'});
+  assert.equal(pipeline.hidden,false);
+  assert.equal(footer.hidden,true);
+  assert.equal(gate.disabled,true);
+});
+
 
 test('the workflow footer CSS respects the hidden state',()=>{
   const css=fs.readFileSync(path.join(__dirname,'..','styles.css'),'utf8');
