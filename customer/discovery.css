@@ -19,6 +19,39 @@
 @media(max-width:900px){.discovery-target-control{min-width:220px}.discovery-run-btn{min-width:220px}}
 @media(max-width:760px){.discovery-run-btn{width:100%;min-width:0}.discovery-target-control input.discovery-target-custom{margin-bottom:0}}
 
+/* Make live company verification status easy to spot while results are checked. */
+.research-status.is-active{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  min-height:52px;
+  margin:16px 0 12px;
+  padding:12px 16px;
+  border:1px solid #b9d8cc;
+  border-left:5px solid var(--accent2);
+  border-radius:11px;
+  background:#edf6f1;
+  color:#124f43;
+  font-size:16px;
+  font-weight:700;
+  line-height:1.45;
+  box-shadow:0 4px 14px rgba(13,93,79,.08);
+}
+.research-status.is-active::before{
+  content:"IN PROGRESS";
+  flex:0 0 auto;
+  padding:5px 8px;
+  border-radius:6px;
+  background:var(--accent2);
+  color:#fff;
+  font:700 10px/1.2 "IBM Plex Mono",monospace;
+  letter-spacing:.04em;
+}
+@media(max-width:600px){
+  .research-status.is-active{align-items:flex-start;gap:8px;padding:12px;font-size:14px}
+  .research-status.is-active::before{margin-top:1px;font-size:9px}
+}
+
 /* Discovery target controls v3 */
 .discovery-panel .discovery-controls{
   display:block;

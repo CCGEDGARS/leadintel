@@ -38,6 +38,6 @@ test('customer page loads the spinner-safe bundles with fresh cache keys',()=>{
   for(const marker of [
     'app.js?v=20260924-friendly-workflow-labels-v1',
     'process-map.js?v=20260924-friendly-workflow-labels-v1',
-    'discovery-ui.js?v=20260925-discovery-coverage-v1'
+    'discovery-ui.js?v=20260925-discovery-progress-visibility-v1'
   ])assert.ok(html.includes(marker),marker);
 });

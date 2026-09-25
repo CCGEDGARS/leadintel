@@ -24,7 +24,7 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
     .replace(runTimeout?.[0], `const DISCOVERY_RUN_TIMEOUT_MIN_MS=${testRunTimeout};`)
     .replace(runMargin?.[0], `const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=${testRunMargin};`)
     .replace(extractionTimeout?.[0], `const COMPANY_EXTRACTION_TIMEOUT_MS=${testExtractionTimeout};`)
-    .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\nglobalThis.__setDiscovery = value => { discovery = LeadIntelDiscovery.normalizeDiscoveryState({...value,qualityVersion:value.qualityVersion??LeadIntelDiscovery.DISCOVERY_QUALITY_VERSION}); };\nglobalThis.__renderStatus = renderStatus;\nglobalThis.__renderCandidates = renderCandidates;\n')
+    .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\nglobalThis.__setDiscovery = value => { discovery = LeadIntelDiscovery.normalizeDiscoveryState({...value,qualityVersion:value.qualityVersion??LeadIntelDiscovery.DISCOVERY_QUALITY_VERSION}); };\nglobalThis.__renderStatus = renderStatus;\nglobalThis.__setDiscoveryProgress=value=>{discoveryProgress=value;};\nglobalThis.__renderCandidates = renderCandidates;\n')
     .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;');
   const mainState = {
     website: 'https://acme.example/',
@@ -48,7 +48,7 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
     if (!renderNodes) return null;
     if (!elements.has(id)) elements.set(id, {
       id, textContent: '', innerHTML: '', value: '', hidden: false, disabled: false, dataset: {},
-      classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
+      classList: (()=>{const values=new Set();return {add(...names){names.forEach(name=>values.add(name));},remove(...names){names.forEach(name=>values.delete(name));},toggle(name,force){const enabled=force??!values.has(name);if(enabled)values.add(name);else values.delete(name);return enabled;},contains(name){return values.has(name);}};})(),
       addEventListener() {}, remove() {}, insertAdjacentHTML() {}
     });
     return elements.get(id);
@@ -484,6 +484,19 @@ test('a rendering failure cannot leave Company Discovery running', async () => {
   const context = loadDiscoveryRunner({ renderFails: true });
   await assert.doesNotReject(context.__runDiscovery());
   assert.equal(context.__discoveryState().status, 'error');
+});
+
+test('company discovery highlights and announces its active verification status',()=>{
+  const context=loadDiscoveryRunner({renderNodes:true});
+  context.__setDiscovery({status:'running'});
+  context.__setDiscoveryProgress({phase:'verifying',completed:10,total:12});
+  context.__renderStatus();
+  const status=context.__elements.get('company-discovery-status');
+  assert.equal(status.classList.contains('is-active'),true);
+  assert.match(status.textContent,/Verifying company websites.*10\/12 checked/i);
+  context.__setDiscovery({status:'complete'});
+  context.__renderStatus();
+  assert.equal(status.classList.contains('is-active'),false);
 });
 
 test('Company Discovery asks Firecrawl to attach page evidence to search results', async () => {
