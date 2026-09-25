@@ -10,7 +10,7 @@ const MAX_DISCOVERY_RESULTS_PER_QUERY=5;
 const DISCOVERY_SEARCH_CONCURRENCY=4;
 const MAX_DISCOVERY_FOLLOW_UP_QUERIES=4;
 const MAX_DISCOVERY_COMPANY_CHECKS=20;
-const ASSET_VERSION="20260925-crm-storage-proof-v2";
+const ASSET_VERSION="20260925-company-search-resilience-v1";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20260925-buyers-stage-view-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -111,7 +111,8 @@ function setJourneyFocus(focus,{scroll=true}={}){const normalized=focus==='buyer
 function showDiscoveryStep(focus="companies"){if(!moduleReady()){showToast("Add your company website first");return;}ensureDiscoveryMounted();const normalized=focus==='buyers'?'buyers':'companies';setJourneyFocus(normalized,{scroll:false});syncStrategyFingerprint();persistMainStep(5);renderAll();renderDiscoveryFocus(normalized);if(crmAuthenticated())refreshCrmState();if(normalized==='buyers')setTimeout(()=>setJourneyFocus('buyers'),0);else window.scrollTo({top:0,behavior:"smooth"});}
 function showStrategyStep(){persistMainStep(4);document.querySelectorAll(".step-view").forEach(el=>el.classList.toggle("active",Number(el.dataset.step)===4));document.querySelectorAll("[data-step-marker]").forEach(el=>{const n=Number(el.dataset.stepMarker);el.classList.toggle("active",n===4);el.classList.toggle("complete",n<4);});saveMeta({...loadMeta(),visibleStep:4});window.scrollTo({top:0,behavior:"smooth"});}
 function reviewMarketResearch(){showStrategyStep();window.dispatchEvent(new CustomEvent("leadintel:review-market-research"));}
-function reviewDiscoveryGuidance(){if(mainState()?.market?.researchMode==="quick"){reviewMarketResearch();return;}showStrategyStep();}
+function companyExtractionMiss(){return Boolean(discovery?.rawResults?.length&&Number(discovery?.funnel?.companiesIdentified)===0);}
+function reviewDiscoveryGuidance(){if(companyExtractionMiss()){if(discovery?.extraction?.status==="fallback")document.getElementById("open-settings")?.click();else reviewMarketResearch();return;}if(mainState()?.market?.researchMode==="quick"){reviewMarketResearch();return;}showStrategyStep();}
 
 const DISCOVERY_REQUEST_TIMEOUT_MS=25000;
 const DISCOVERY_RUN_TIMEOUT_MIN_MS=120000;
@@ -136,394 +137,103 @@ async function firecrawlCompanySearch(queryMeta,runSignal){
   }
 }
 async function runDiscoverySearchBatch(items,phase,runSignal,searches=Array(items.length).fill(null)){
-  discoveryProgress={phase,completed:0,total:items.length};window.LeadIntelTaskCentre?.update(activeDiscoveryTaskId,{stage:phase==="resolving"?"Resolving official company domains":phase==="verifying"?"Verifying company websites":"Searching market evidence",completed:0,total:Math.max(items.length,1),resultCount:discovery.candidates.length});renderDiscoverySafely();
-  let nextIndex=0;
-  const workers=Array.from({length:Math.min(DISCOVERY_SEARCH_CONCURRENCY,items.length)},async()=>{
-    while(nextIndex<items.length){
-      if(runSignal?.aborted)break;
-      const index=nextIndex++;
-      try{if(runSignal?.aborted)throw new Error("Company search timed out");searches[index]={results:await firecrawlCompanySearch(items[index],runSignal),error:null};}
-      catch(error){searches[index]={results:[],error};}
-      finally{if(!runSignal?.aborted){
-        const completed=searches[index];
-        for(const result of completed?.results||[]){if(result.url)discoveryEvidenceUrls.add(result.url);}
-        discovery.funnel.evidencePages=discoveryEvidenceUrls.size;
-        if(phase==="searching"||phase==="following"){discovery.funnel.marketSearchesCompleted+=1;}
-        else if(phase==="verifying"&&!completed?.error){if(items[index].domain)discoveryCheckedCompanyDomains.add(items[index].domain);discovery.funnel.companySitesChecked=discoveryCheckedCompanyDomains.size;}
-        discoveryProgress.completed+=1;window.LeadIntelTaskCentre?.update(activeDiscoveryTaskId,{completed:discoveryProgress.completed,total:Math.max(discoveryProgress.total,1),resultCount:discovery.candidates.length});renderDiscoverySafely();
-      }}
-    }
-  });
-  await Promise.all(workers);
-  throwIfDiscoveryRunAborted(runSignal);
-  return searches;
-}
-async function extractCompaniesFromEvidence(evidence,market,targetCount,runSignal){
-  const fallback=LeadIntelDiscovery.extractCompanyMentions(evidence,targetCount);
-  const b=bridge();const workspace=b?.workspace;
-  if(!b?.session?.authenticated||!workspace?.id||!evidence.length)return fallback;
-  discoveryProgress={phase:"extracting",completed:0,total:1};window.LeadIntelTaskCentre?.update(activeDiscoveryTaskId,{stage:"Extracting named companies",completed:0,total:1});renderDiscoverySafely();
-  const sources=evidence.slice(0,16).map((item,index)=>({
-    id:`E${index+1}`,url:item.url,market:item.market,title:item.title,
-    description:item.description,text:String(item.text||"").slice(0,2200)
-  }));
-  const system="You extract prospective operating companies from supplied market evidence. Never invent a company or URL. Return strict JSON only.";
-  const prompt=`Identify operating companies explicitly described as expanding, investing, building, modernising, hiring or otherwise matching the market signals in these sources. Publishers, government bodies, research institutes, directories and the seller itself are not prospects. Every company must include the exact supplied source URL where its name and event appear. Return {"companies":[{"company":"Exact company name","market":"${String(market||"").replace(/"/g,"'")}","sourceUrl":"Exact supplied URL"}]}. Evidence:\n${JSON.stringify(sources)}`;
-  const controller=linkedAbortController(runSignal);const timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS);
-  try{
-    const response=await fetch(`${LEADINTEL_API}/api/ai/generate?workspace_id=${encodeURIComponent(workspace.id)}`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({system,prompt,max_output_tokens:1800}),signal:controller.signal});
-    const payload=await response.json().catch(()=>({}));
-    if(!response.ok)return fallback;
-    const extracted=LeadIntelDiscovery.parseCompanyExtraction(payload.text,evidence,targetCount);
-    const seen=new Set();return [...extracted,...fallback].filter(item=>{const key=item.company.toLowerCase();if(seen.has(key))return false;seen.add(key);return true;}).slice(0,targetCount);
-  }catch(error){if(runSignal?.aborted)throw error;return fallback;}
-  finally{clearTimeout(timeout);if(!runSignal?.aborted){discoveryProgress.completed=1;renderDiscoverySafely();}}
-}
-async function runCompanyDiscovery(){
-  const main=mainState();
-  if(!(main?.profile?.website||main?.website)){showToast("Add your company website first");return;}
-  syncStrategyFingerprint();
-  const market=main.market||{};
-  if(!LeadIntelDiscovery.hasActiveSignals?.(market)){showToast("Activate at least one buying signal in Strategy before finding companies");return;}
-  const targetCount=persistDiscoveryTarget();
-  const limits=LeadIntelDiscovery.discoveryLimits(targetCount);
-  const queries=LeadIntelDiscovery.buildDiscoveryQueries(main.profile||{website:main.website},market,limits.queryCount);
-  if(!queries.length){showToast("Add optional market or offer context to make discovery more precise");return;}
-  recoveredInterruptedRun=false;discovery.needsRefresh=false;discovery.queries=queries;discovery.rawResults=[];discovery.candidates=[];discovery.potentialMatches=[];
-  discoveryEvidenceUrls=new Set();discoveryCheckedCompanyDomains=new Set();
-  discovery.funnel={marketSearchesCompleted:0,marketSearchesTotal:queries.length,evidencePages:0,companiesIdentified:0,officialDomainsResolved:0,companySitesChecked:0,verifiedCompanies:0,qualifiedCompanies:0,adaptiveFollowUpSearches:0};
-  enrichmentResults.clear();enrichmentPending.clear();discovery.status="running";
-  const taskCentre=window.LeadIntelTaskCentre;const taskId=`company-discovery:${Date.now()}`;
-  activeDiscoveryTaskId=taskId;
-  try{saveDiscovery();}catch(error){discovery.status="error";renderDiscoverySafely();showToast("Discovery could not save its running state. You can try again.");return;}
-  if(!renderDiscoverySafely()){discovery.status="error";try{saveDiscovery();}catch{}renderDiscoverySafely();showToast("Discovery interface could not start. You can try again.");return;}
-  let failures=0;
-  let fatalError=null;
-  let searches=Array(queries.length).fill(null);
-  let resolutionSearches=[];
-  let verificationSearches=[];
-  let followUpSearches=[];
-  let followUpResolutionSearches=[];
-  let followUpVerificationSearches=[];
-  let companyMentions=[];
-  let expectedSearches=queries.length;
-  let followUpQueries=[];
-  const runController=new AbortController();
-  taskCentre?.start({id:taskId,type:'company-discovery',title:'Company discovery',stage:'Searching market evidence',total:Math.max(queries.length,1),completed:0,canCancel:true,canRetry:true});
-  taskCentre?.registerActions(taskId,{cancel:()=>runController.abort(),retry:()=>runCompanyDiscovery()});
-  try{
-    const allSearches=(async()=>{
-      const profile=main.profile||{website:main.website};
-      const targetMarket=queries[0]?.market||profile.targetMarkets||"";
-      const allMarketEvidence=[];
-      const allResolved=[];
-      const allVerified=[];
-      const rememberMentions=items=>{
-        const seen=new Set(companyMentions.map(item=>item.company.toLowerCase()));
-        for(const item of items||[]){const key=item.company.toLowerCase();if(!seen.has(key)){seen.add(key);companyMentions.push(item);}}
-        discovery.funnel.companiesIdentified=companyMentions.length;
-      };
-      const collectResolutionAndVerification=async(mentions,remainingLimit)=>{
-        const resolutionQueries=LeadIntelDiscovery.buildCompanyResolutionQueries(mentions,profile,remainingLimit);
-        const resolutionRows=Array(resolutionQueries.length).fill(null);expectedSearches+=resolutionQueries.length;
-        resolutionSearches=resolutionRows;
-        await runDiscoverySearchBatch(resolutionQueries,"resolving",runController.signal,resolutionRows);
-        throwIfDiscoveryRunAborted(runController.signal);
-        const resolved=resolutionRows.flatMap(item=>item?.results||[]);allResolved.push(...resolved);
-        discovery.rawResults=[...allMarketEvidence,...allResolved,...allVerified].slice(0,50);
-        discovery.funnel.officialDomainsResolved=new Set(allResolved.map(item=>item.domain).filter(Boolean)).size;
-        const verificationQueries=LeadIntelDiscovery.buildCandidateVerificationQueries(resolved,profile,market,remainingLimit);
-        const verificationRows=Array(verificationQueries.length).fill(null);expectedSearches+=verificationQueries.length;
-        verificationSearches=verificationRows;
-        await runDiscoverySearchBatch(verificationQueries,"verifying",runController.signal,verificationRows);
-        const verified=verificationRows.flatMap(item=>item?.results||[]);allVerified.push(...verified);
-        discovery.rawResults=[...allMarketEvidence,...allResolved,...allVerified].slice(0,50);
-        discovery.funnel.verifiedCompanies=new Set(allVerified.map(item=>item.domain).filter(Boolean)).size;
-        return LeadIntelDiscovery.attachSourceEvidenceToResolvedCompanies(resolved,mentions,allMarketEvidence);
-      };
+  discoveryProgress={phase,completed:0…33861 tokens truncated…n><option value="monthly">Monthly</option></select></label>
+              <label><span>Research depth</span><select id="monitoring-depth"><option value="quick">Quick</option><option value="deep" selected>Deep</option></select></label>
+              <label><span>Minimum alert score</span><input id="monitoring-minimum-score" type="number" min="1" max="100" value="70"></label>
+            </div>
+            <div class="monitoring-actions"><button class="primary-btn" id="save-monitoring" type="button">Save monitoring settings</button><button class="secondary-btn" id="run-monitoring-now" type="button">Run monitoring now</button><span id="monitoring-status" class="research-status">Activate the market strategy before enabling monitoring.</span></div>
+            <details class="progressive-disclosure monitoring-advanced" id="monitoring-advanced">
+              <summary>Advanced monitoring settings</summary>
+              <label class="monitoring-custom"><span>Custom public sources · one URL per line</span><textarea id="monitoring-custom-sources" rows="2" placeholder="https://example.com/news"></textarea></label>
+              <div class="monitoring-selection"><div><strong>Signals to monitor</strong><div id="monitoring-signals" class="monitoring-chips"></div></div><div><strong>Source categories</strong><div id="monitoring-sources" class="monitoring-chips"></div></div></div>
+              <div class="monitoring-results"><div><h4>New opportunity alerts</h4><div id="monitoring-alerts" class="monitoring-list"><div class="market-empty">No monitoring alerts yet.</div></div></div><div><h4>Monitoring history</h4><div id="monitoring-history" class="monitoring-list"><div class="market-empty">No automatic runs yet.</div></div></div></div>
+            </details>
+          </section>
 
-      await runDiscoverySearchBatch(queries,"searching",runController.signal,searches);
-      throwIfDiscoveryRunAborted(runController.signal);
-      const firstPass=searches.flatMap(item=>item?.results||[]);allMarketEvidence.push(...firstPass);
-      discovery.rawResults=[...allMarketEvidence];
-      const firstMentions=await extractCompaniesFromEvidence(firstPass,targetMarket,Math.min(targetCount,MAX_DISCOVERY_COMPANY_CHECKS),runController.signal);
-      rememberMentions(firstMentions);
-      let linkedEvidence=await collectResolutionAndVerification(companyMentions,MAX_DISCOVERY_COMPANY_CHECKS);
-      discovery.candidates=LeadIntelDiscovery.mergeCompanyCandidates([...linkedEvidence,...allVerified],profile,market,targetCount);
-      discovery.funnel.qualifiedCompanies=discovery.candidates.length;
-      renderDiscoverySafely();
+          <div class="approval-card strategy-activation" id="strategy-activation-card">
+            <div><span class="eyebrow" id="strategy-activation-step">Final step</span><h3 id="strategy-activation-title">Ready to find matching companies</h3><p id="strategy-activation-description">Review the active strategy before finding companies.</p><p class="strategy-activation-feedback" id="strategy-activation-feedback" role="status" aria-live="polite" hidden></p></div>
+            <button class="primary-btn stage-next-action" id="activate-market-strategy" type="button" aria-haspopup="dialog" aria-controls="strategy-handoff-dialog">Review & Continue to Companies →</button>
+          </div>
 
-      const firstPassSucceeded=searches.every(item=>item&&!item.error)
-        &&resolutionSearches.every(item=>item&&!item.error)
-        &&verificationSearches.every(item=>item&&!item.error);
-      if(firstPassSucceeded&&discovery.candidates.length<targetCount&&companyMentions.length<MAX_DISCOVERY_COMPANY_CHECKS){
-        const remainingLimit=MAX_DISCOVERY_COMPANY_CHECKS-companyMentions.length;
-        followUpQueries=LeadIntelDiscovery.buildDiscoveryFollowUpQueries(profile,market,queries,MAX_DISCOVERY_FOLLOW_UP_QUERIES);
-        if(followUpQueries.length){
-          discovery.queries=[...queries,...followUpQueries];
-          discovery.funnel.marketSearchesTotal=queries.length+followUpQueries.length;
-          discovery.funnel.adaptiveFollowUpSearches=followUpQueries.length;
-          followUpSearches=Array(followUpQueries.length).fill(null);expectedSearches+=followUpQueries.length;
-          discoveryProgress={phase:"following",completed:0,total:followUpQueries.length};renderDiscoverySafely();
-          await runDiscoverySearchBatch(followUpQueries,"following",runController.signal,followUpSearches);
-          throwIfDiscoveryRunAborted(runController.signal);
-          const followUpEvidence=followUpSearches.flatMap(item=>item?.results||[]);allMarketEvidence.push(...followUpEvidence);
-          discovery.rawResults=[...allMarketEvidence,...allResolved,...allVerified].slice(0,50);
-          const followUpMentions=await extractCompaniesFromEvidence(followUpEvidence,targetMarket,remainingLimit,runController.signal);
-          rememberMentions(followUpMentions);
-          const newMentions=companyMentions.slice(firstMentions.length,MAX_DISCOVERY_COMPANY_CHECKS);
-          const followUpResolutionQueries=LeadIntelDiscovery.buildCompanyResolutionQueries(newMentions,profile,remainingLimit);
-          followUpResolutionSearches=Array(followUpResolutionQueries.length).fill(null);expectedSearches+=followUpResolutionQueries.length;
-          await runDiscoverySearchBatch(followUpResolutionQueries,"resolving",runController.signal,followUpResolutionSearches);
-          throwIfDiscoveryRunAborted(runController.signal);
-          const followUpResolved=followUpResolutionSearches.flatMap(item=>item?.results||[]);allResolved.push(...followUpResolved);
-          discovery.rawResults=[...allMarketEvidence,...allResolved,...allVerified].slice(0,50);
-          discovery.funnel.officialDomainsResolved=new Set(allResolved.map(item=>item.domain).filter(Boolean)).size;
-          const followUpVerificationQueries=LeadIntelDiscovery.buildCandidateVerificationQueries(followUpResolved,profile,market,remainingLimit);
-          followUpVerificationSearches=Array(followUpVerificationQueries.length).fill(null);expectedSearches+=followUpVerificationQueries.length;
-          await runDiscoverySearchBatch(followUpVerificationQueries,"verifying",runController.signal,followUpVerificationSearches);
-          const followUpVerified=followUpVerificationSearches.flatMap(item=>item?.results||[]);allVerified.push(...followUpVerified);
-          discovery.rawResults=[...allMarketEvidence,...allResolved,...allVerified].slice(0,50);
-          discovery.funnel.verifiedCompanies=new Set(allVerified.map(item=>item.domain).filter(Boolean)).size;
-          linkedEvidence=LeadIntelDiscovery.attachSourceEvidenceToResolvedCompanies(allResolved,companyMentions,allMarketEvidence);
-          discovery.candidates=LeadIntelDiscovery.mergeCompanyCandidates([...linkedEvidence,...allVerified],profile,market,targetCount);
-          discovery.funnel.qualifiedCompanies=discovery.candidates.length;
-        }
-      }
-      discovery.potentialMatches=LeadIntelDiscovery.buildPotentialCompanyCandidates([...linkedEvidence,...allVerified],profile,market,discovery.candidates);
-      discovery.rawResults=[...allMarketEvidence,...allResolved,...allVerified].slice(0,50);
-    })();
-    let runTimeout;
-    const runTimeoutMs=discoveryRunTimeoutMs(targetCount,queries.length);
-    let timedOut=false;
-    try{timedOut=await Promise.race([
-      allSearches.then(()=>false),
-      new Promise(resolve=>{runTimeout=setTimeout(()=>{runController.abort(new DOMException("Discovery run deadline reached","TimeoutError"));resolve(true);},runTimeoutMs);})
-    ]);}finally{clearTimeout(runTimeout);}
-    const completedSearches=[...searches,...resolutionSearches,...verificationSearches,...followUpSearches,...followUpResolutionSearches,...followUpVerificationSearches].filter(Boolean);
-    failures=completedSearches.filter(item=>item.error).length+(timedOut?Math.max(1,expectedSearches-completedSearches.length):0);
-    taskCentre?.update(taskId,{stage:'Verifying qualified companies',completed:Math.max(1,completedSearches.length),total:Math.max(1,expectedSearches),resultCount:discovery.candidates.length});
-    discovery.status=LeadIntelDiscovery.discoveryOutcomeStatus({timedOut,failures,candidateCount:discovery.candidates.length});
-    if(timedOut)fatalError=new Error("Company search timed out safely. Partial results were kept.");
-    else if(discovery.status==="error"&&failures)fatalError=new Error(`Company search did not complete: ${failures} provider check${failures===1?"":"s"} failed or timed out. No no-match conclusion was made.`);
-  }catch(error){
-    fatalError=error instanceof Error?error:new Error(String(error||"Company discovery failed"));
-    discovery.status=discovery.candidates.length?"partial":"error";
-  }
-  discovery.funnel.qualifiedCompanies=discovery.candidates.length;
-  discovery.funnel.officialDomainsResolved=new Set([...resolutionSearches,...followUpResolutionSearches].flatMap(item=>item?.results||[]).map(item=>item.domain).filter(Boolean)).size;
-  discovery.funnel.verifiedCompanies=new Set([...verificationSearches,...followUpVerificationSearches].flatMap(item=>item?.results||[]).map(item=>item.domain).filter(Boolean)).size;
-  discovery.lastRunAt=new Date().toISOString();
-  discoveryProgress={phase:"complete",completed:discoveryProgress.completed,total:discoveryProgress.total};
-  try{saveDiscovery();}catch(error){console.error("Companies state could not be saved",error);}
-  renderDiscoverySafely();
-  if(crmAuthenticated()){
-    void refreshCrmState({render:false}).then(()=>renderAll()).catch(error=>{
-      showToast("CRM refresh unavailable · "+(error?.message||"results remain available"));
-    });
-  }
-  if(fatalError){
-    if(taskCentre?.get(taskId)?.status!=='canceled')taskCentre?.fail(taskId,fatalError,{canRetry:true,resultCount:discovery.candidates.length});
-    activeDiscoveryTaskId="";
-    showToast("Discovery stopped safely · "+fatalError.message);
-    return;
-  }
-  taskCentre?.complete(taskId,{status:discovery.status,stage:discovery.status==='partial'?'Discovery completed with warnings':discovery.status==='no_results'?'Discovery finished · no qualified companies':'Company discovery complete',resultCount:discovery.candidates.length});
-  activeDiscoveryTaskId="";
-  const targetNote=targetCount?" · target up to "+targetCount:"";
-  const issueNote=failures?" · "+failures+" search issue"+(failures===1?"":"s"):"";
-  showToast(discovery.candidates.length?discovery.candidates.length+" qualified companies found"+targetNote+issueNote:"No companies passed buyer, market, and signal verification");
-}
-function scoreCell(label,value,max){return `<div><span>${label}</span><strong>${Number(value)||0}/${max}</strong><i style="--score:${Math.round((Number(value)||0)/max*20)}"></i></div>`;}
-function linkedInSearchUrl(person={},candidate={}){
-  const terms=[person?.name,person?.title,candidate?.company,candidate?.domain].map(value=>String(value||"").trim()).filter(Boolean).join(" ");
-  return `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(terms||"decision maker")}`;
-}
-function linkedInPersonHtml(person={},candidate={}){
-  const direct=String(person?.linkedin_url||"").trim();
-  if(direct)return `<a class="person-linkedin" href="${esc(direct)}" target="_blank" rel="noopener noreferrer">View public LinkedIn profile ↗</a><small class="people-note">Apollo identity link · confirm the current role before outreach.</small>`;
-  return `<a class="person-linkedin" href="${esc(linkedInSearchUrl(person,candidate))}" target="_blank" rel="noopener noreferrer">Search LinkedIn manually ↗</a><small class="people-note">No direct public profile URL returned; confirm identity before outreach.</small>`;
-}
-function enrichmentResultHtml(result){
-  if(!result)return "";
-  const rows=[];
-  if(result.contact?.work_email)rows.push(`<small class="verified-contact"><strong>Verified work email</strong> · ${esc(result.contact.work_email)} · Apollo</small>`);
-  if(result.contact?.phone_number)rows.push(`<small class="verified-contact"><strong>Verified phone</strong> · ${esc(result.contact.phone_number)} · Apollo</small>`);
-  else if(result.request?.status==="pending_phone")rows.push('<small class="verified-contact">Phone lookup pending · refresh to check Apollo verification</small>');
-  if(!result.contact?.work_email&&result.reason==="verified_company_email_not_returned")rows.push('<small class="people-note">Apollo did not return a verified company email for this person.</small>');
-  return rows.join("");
-}
-function peopleHtml(candidate,candidateIndex){
-  if(candidate.peopleStatus==="loading")return '<div class="people-note">Searching Apollo for matching roles…</div>';
-  if(candidate.peopleStatus==="error")return '<div class="people-note warning">Apollo search was unavailable. Company evidence remains intact.</div>';
-  if(candidate.peopleStatus==="empty")return '<div class="people-note">No relevant decision-makers returned for the available role context.</div>';
-  if(!candidate.people?.length)return '<div class="people-note">People search is optional. Apollo People Search does not reveal email addresses; it identifies likely roles. Contact details stay hidden until you verify a work email.</div>';
-  const shortage=candidate.people.length<3?`<div class="people-note warning">Only ${candidate.people.length} relevant decision-maker${candidate.people.length===1?"":"s"} found. LeadIntel did not fill the shortlist with unrelated roles.</div>`:"";
-  return `${shortage}<div class="people-list">${candidate.people.map((person,personIndex)=>{
-    const key=personKey(candidate,person);
-    const result=enrichmentResults.get(key);
-    const pending=enrichmentPending.has(key);
-    const hasEmail=Boolean(result?.contact?.work_email);
-    const hasPhone=Boolean(result?.contact?.phone_number);
-    const phonePending=result?.request?.status==="pending_phone"&&!hasPhone;
-    const emailLabel=pending?"Working…":hasEmail?"Email verified ✓":crmAuthenticated()?"Verify email with Apollo · 1 credit":"Sign in to verify email";
-    const phoneAction=phonePending?"refresh-phone":"find-phone";
-    const phoneLabel=hasPhone?"Phone verified ✓":phonePending?"Refresh phone":"Find phone · paid";
-    return `<div class="person-row"><div><strong>${esc(person.name)}</strong><span>${esc(person.title)}</span>${person.organization?`<small>${esc(person.organization)}</small>`:""}${linkedInPersonHtml(person,candidate)}${enrichmentResultHtml(result)}</div><div class="person-actions"><button class="secondary-btn small" type="button" data-action="enrich-contact" aria-label="Enrich contact: verify the selected work email" title="Enrich contact: verify the selected work email" data-company-index="${candidateIndex}" data-person-index="${personIndex}" ${pending||!crmAuthenticated()||hasEmail?"disabled":""}>${emailLabel}</button><button class="secondary-btn small" type="button" data-action="${phoneAction}" data-company-index="${candidateIndex}" data-person-index="${personIndex}" ${pending||!crmAuthenticated()||hasPhone?"disabled":""}>${phoneLabel}</button></div></div>`;
-  }).join("")}</div>`;
-}
-function candidateCrmMeta(candidate){const company=crmCompanyByDomain(candidate.domain||candidate.website);const inPipeline=currentWorkspaceCrmPipeline().some(item=>canonicalDomain(item.normalized_domain||item.website)===canonicalDomain(candidate.domain||candidate.website));return {company,suppressed:company?.lifecycle_status==="suppressed",inPipeline};}
-function candidateIsActionable(candidate){return Boolean(LeadIntelDiscovery.isActionableCandidate?.(candidate));}
-function renderDiscoveryFunnel(){
-  const target=$("discovery-funnel");if(!target)return;
-  const funnel=discovery.funnel||{};
-  const visible=discovery.status!=="idle"||Boolean(discovery.lastRunAt);
-  target.hidden=!visible;if(!visible){target.innerHTML="";return;}
-  const completed=Number(funnel.marketSearchesCompleted)||0;const total=Number(funnel.marketSearchesTotal)||0;
-  const percent=total?Math.min(100,Math.round(completed/total*100)):0;
-  const phase=discovery.status==="running"?(discoveryProgress.phase==="following"?"Broadening the search":discoveryProgress.phase==="resolving"?"Confirming company websites":discoveryProgress.phase==="verifying"?"Checking company evidence":"Searching market evidence"):discovery.status==="error"||discovery.status==="partial"?"Search stopped with issues":"Search complete";
-  const metrics=[
-    [`${completed} of ${total}`,"Market searches checked"],
-    [Number(funnel.evidencePages)||0,"Evidence pages"],
-    [Number(funnel.companiesIdentified)||0,"Companies identified"],
-    [Number(funnel.officialDomainsResolved)||0,"Official domains resolved"],
-    [Number(funnel.companySitesChecked)||0,"Company sites checked"],
-    [Number(funnel.qualifiedCompanies)||0,"Qualified companies"]
-  ];
-  target.innerHTML=`<div class="discovery-funnel-head"><strong>Search funnel</strong><span>${esc(phase)}</span></div><div class="discovery-funnel-track" role="progressbar" aria-label="Market searches checked" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><i style="width:${percent}%"></i></div><div class="discovery-funnel-grid">${metrics.map(([value,label])=>`<div><strong>${esc(value)}</strong><span>${esc(label)}</span></div>`).join("")}</div>${Number(funnel.adaptiveFollowUpSearches)?`<p class="discovery-funnel-followup">LeadIntel added ${Number(funnel.adaptiveFollowUpSearches)} follow-up searches because the first pass found too few qualified companies.</p>`:""}`;
-}
-function renderPotentialMatches(){
-  const target=$("discovery-potential-matches");if(!target)return;
-  const matches=Array.isArray(discovery.potentialMatches)?discovery.potentialMatches:[];
-  target.hidden=!matches.length;if(!matches.length){target.innerHTML="";return;}
-  target.innerHTML=`<div class="potential-matches-head"><span class="eyebrow">Needs human review</span><h3 id="potential-matches-title">Potential matches · not qualified</h3><p>These companies have some relevant public evidence, but at least one qualification check is missing. They are not saved as leads and have no CRM or Pipeline actions.</p></div><div class="potential-match-list">${matches.map(candidate=>`<article class="potential-match-card"><div><span class="opportunity-market">${esc(candidate.market||"Market not confirmed")}</span><h4>${esc(candidate.company)}</h4><a href="${esc(candidate.website)}" target="_blank" rel="noopener noreferrer">${esc(candidate.domain)} ↗</a></div><div class="potential-match-gaps"><strong>Still needs confirmation</strong><ul>${candidate.qualificationGaps.map(gap=>`<li>${esc(gap)}</li>`).join("")}</ul></div>${candidate.evidence.length?`<div class="potential-match-evidence">${candidate.evidence.slice(0,3).map(evidence=>`<a href="${esc(evidence.url)}" target="_blank" rel="noopener noreferrer"><strong>${esc(evidence.title||candidate.domain)}</strong><small>${esc(evidence.description||evidence.text).slice(0,220)}${LeadIntelDiscovery.isLowQualityDiscoveryEvidence?.(evidence)?'<em>Generic listing · excluded from fit, signal and evidence scoring</em>':''}</small></a>`).join("")}</div>`:""}</article>`).join("")}</div>`;
-}
-function renderCandidates(){const target=$("company-candidates");if(!target)return;if(!discovery.candidates.length){
-  if(discovery.status==="no_results"){
-    const main=mainState();
-    const activeSignalCount=(main.market?.signals||[]).filter(item=>item&&item.active!==false).length;
-    const guidance=LeadIntelDiscovery.zeroResultGuidance({evidenceCount:discovery.rawResults.length,activeSignalCount,targetCount:selectedDiscoveryTarget(),researchMode:main.market?.researchMode||"deep",adaptiveFollowUpSearches:discovery.funnel?.adaptiveFollowUpSearches||0});
-    const action=guidance.primaryAction==="review_research"?"review-research":"review-strategy";
-    target.innerHTML=`<div class="market-empty discovery-recovery"><span class="eyebrow">Next action</span><h4>No company met every qualification check</h4><p>${esc(guidance.summary)}</p><p class="discovery-recovery-valid">A zero-result run does not mean you configured the steps incorrectly. Some markets have little public evidence for current buying signals.</p><ol>${guidance.steps.map(step=>`<li>${esc(step)}</li>`).join("")}</ol><p class="discovery-recovery-note"><strong>Keep the selected amount for now.</strong> Increasing it repeats the same qualification checks; it does not create missing evidence.</p><button class="primary-btn" type="button" data-action="${action}">${esc(guidance.primaryLabel)} <span>→</span></button></div>`;
-    return;
-  }
-  const message=discovery.needsRefresh?"Discovery scoring has been improved. Run the search again to refresh saved results before acting on them.":discovery.status==="running"?(discoveryProgress.phase==="verifying"?"Checking candidate websites for market, buyer-role, and buying-signal evidence…":discoveryProgress.phase==="following"?"Broadening the search to find additional company evidence…":"Finding candidate company domains…"):discovery.status==="error"?"Search stopped before verification finished. This is not a confirmed no-match; review the search status before retrying.":discovery.lastRunAt?"Company discovery did not complete. Review the status above before retrying.":"Run discovery to create a ranked shortlist of direct company domains.";
-  target.innerHTML=`<div class="market-empty">${message}</div>`;
-  return;
-}target.innerHTML=discovery.candidates.map((c,index)=>{const crm=candidateCrmMeta(c);const crmLabel=crm.suppressed?"Suppressed":crm.company?"Saved in CRM ✓":"Save in CRM";const pipelineLabel=crm.suppressed?"Suppressed":crm.inPipeline?`In Pipeline ✓ · ${crm.company.pipeline_stage}`:"Add to Pipeline";const crmDisabled=!crmAuthenticated()||crm.suppressed;const pipelineDisabled=crm.suppressed;return `<article class="company-card ${crm.inPipeline||c.saved?"saved":""}" data-company-index="${index}">
-    <div class="company-card-top"><div><span class="opportunity-market">${esc(c.market||"Target market")}</span><h4>${esc(c.company)}</h4><a href="${esc(c.website)}" target="_blank" rel="noopener">${esc(c.domain)} ↗</a></div><div class="company-total"><strong>${c.score.total}</strong><span>/100</span></div></div>
-    <div class="company-score-grid">${scoreCell("Fit",c.score.fit,30)}${scoreCell("Signal",c.score.signal,25)}${scoreCell("Evidence",c.score.evidence,20)}${scoreCell("Timing",c.score.timing,15)}${scoreCell("Value",c.score.value,10)}</div>
-    <div class="candidate-meta"><span class="confidence ${String(c.confidence).toLowerCase()}">${esc(c.confidence)} confidence</span><span>${c.evidence.length} source${c.evidence.length===1?"":"s"}</span><span>${c.matchedSignals.length} matched signal${c.matchedSignals.length===1?"":"s"}</span>${crm.company?`<span>${esc(crmLabel)}</span>`:""}</div>
-    <div class="matched-signals">${c.matchedSignals.length?c.matchedSignals.map(s=>`<span><strong>${esc(s.name)}</strong> · ${esc(s.matchedTerms.join(", "))}</span>`).join(""):'<span class="muted-signal">No active signal term found in the returned company evidence.</span>'}</div>
-    <p class="candidate-narrative" lang="${contentLanguage()}">${esc(LeadIntelDiscovery.buildCandidateNarrative(c,contentLanguage()))}</p>
-    <div class="candidate-evidence">${c.evidence.map(e=>`<a href="${esc(e.url)}" target="_blank" rel="noopener"><strong>${esc(e.title||c.domain)}</strong><small>${esc(e.description||e.text).slice(0,190)}${LeadIntelDiscovery.isLowQualityDiscoveryEvidence?.(e)?'<em>Generic listing · excluded from fit, signal and evidence scoring</em>':''}</small></a>`).join("")}</div>
-    <div class="decision-makers"><div class="decision-head"><strong>Potential buyers</strong><button class="secondary-btn small" type="button" data-action="find-decision-makers" data-company-index="${index}" ${c.peopleStatus==="loading"?"disabled":""}>${c.people?.length?"Refresh buyers":"Find buyers"}</button></div>${peopleHtml(c,index)}</div>
-    <div class="candidate-actions"><button class="secondary-btn small" type="button" data-action="save-crm" data-company-index="${index}" ${crmDisabled?"disabled":""}>${crmAuthenticated()?crmLabel:"Sign in for CRM"}</button><button class="primary-btn small" type="button" data-action="add-pipeline" data-company-index="${index}" ${pipelineDisabled?"disabled":""}>${pipelineLabel}</button></div>
-  </article>`;}).join("");}
+          <dialog class="strategy-handoff-dialog" id="strategy-handoff-dialog" aria-labelledby="strategy-handoff-title">
+            <form method="dialog" class="strategy-handoff-card">
+              <div class="strategy-handoff-head"><span class="eyebrow">Companies review</span><h3 id="strategy-handoff-title">Review before finding companies</h3><p>Confirm exactly what LeadIntel will use to find and rank companies.</p></div>
+              <div class="strategy-handoff-summary" id="strategy-handoff-summary"></div>
+              <section class="strategy-handoff-notice strategy-handoff-blockers" id="strategy-handoff-blockers" hidden><strong>Complete before continuing</strong><ul></ul></section>
+              <section class="strategy-handoff-notice strategy-handoff-warnings" id="strategy-handoff-warnings" hidden><strong>Optional notes</strong><ul></ul></section>
+              <div class="strategy-handoff-repair-actions" id="strategy-handoff-repair-actions" hidden><button class="secondary-btn" id="review-buying-signals" type="button">Review buying signals</button><button class="secondary-btn" id="retry-signal-recommendations" type="button">Retry signal recommendations</button></div>
+              <div class="strategy-handoff-actions"><button class="secondary-btn" id="cancel-strategy-handoff" type="button">Back to Strategy</button><button class="primary-btn" id="confirm-strategy-handoff" type="button">Activate Strategy & Continue →</button></div>
+            </form>
+          </dialog>
+        </section>
+      </main>
+      <aside class="utility-panel" aria-label="Workspace tools">
+        <section class="utility-card utility-ai">
+          <span class="eyebrow">AI support</span>
+          <button class="leadintel-copilot-entry" id="leadintel-copilot-entry" type="button" aria-haspopup="dialog"><span class="copilot-entry-copy"><strong class="copilot-entry-title">Ask LeadIntel ✦</strong><small class="copilot-entry-subtitle">AI Commercial Copilot</small></span><span class="copilot-entry-badge" data-copilot-badge aria-live="polite"></span></button>
+          <p>Get help interpreting evidence or deciding the next commercial action.</p>
+        </section>
+        <section class="utility-card utility-attention">
+          <button class="attention-trigger" id="workspace-attention" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="workspace-attention-drawer"><span><small class="eyebrow">Workspace health</small><strong>Attention</strong><em data-attention-summary>Checking workspace…</em></span><b data-attention-count hidden>0</b></button>
+        </section>
+        <section class="utility-card utility-settings">
+          <span class="eyebrow">Workspace controls</span>
+          <h3>Settings</h3>
+          <p>Manage AI providers, integrations and delivery connections.</p>
+          <button class="secondary-btn" id="open-settings" type="button" aria-haspopup="dialog" aria-controls="ai-settings-drawer">Open settings</button>
+        </section>
+        <div class="utility-task-slot" data-utility-tasks></div>
+      </aside>
+    </div>
+  </div>
+  <dialog class="market-research-window" id="market-research-window" aria-labelledby="market-research-window-title" aria-describedby="market-research-window-message">
+    <section class="market-research-window-card">
+      <header class="market-research-window-head">
+        <div><span class="eyebrow">Market research in progress</span><h2 id="market-research-window-title" data-research-window-title>Researching your selected market</h2></div>
+        <strong class="market-research-window-percent" data-research-window-percent>0%</strong>
+        <button class="secondary-btn" type="button" data-minimize-research-window>Minimize</button>
+      </header>
+      <p class="market-research-window-phase" data-research-window-phase aria-live="polite">Finding evidence</p>
+      <div class="market-research-window-track" role="progressbar" aria-label="Market research progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-research-window-progress><i data-research-window-bar></i></div>
+      <p class="market-research-window-meta" data-research-window-meta></p>
+      <section class="market-research-window-insight" aria-label="Research update">
+        <span class="eyebrow" data-research-window-insight-label>Market Research insight</span>
+        <p id="market-research-window-message" data-research-window-message aria-live="polite">LeadIntel is preparing the search.</p>
+      </section>
+      <footer class="market-research-window-footer"><span>Minimizing keeps the search running.</span><button class="secondary-btn" type="button" data-minimize-research-window>Minimize window</button></footer>
+    </section>
+  </dialog>
+  <button class="market-research-progress-dock" type="button" data-reopen-research-window aria-haspopup="dialog" aria-controls="market-research-window" aria-expanded="false" hidden>
+    <span class="eyebrow">Research continues</span><strong data-research-dock-title>Market research</strong><small data-research-dock-phase>Finding evidence</small><i class="market-research-dock-track"><b data-research-dock-bar></b></i><span class="market-research-dock-action">Show progress</span>
+  </button>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script defer src="background-task-centre.js?v=20260917-shell-stability-v1"></script>
+  <!-- Optional company-research-ui.js is deferred by shell-support-loader.js. -->
+  <script defer src="content-variants.js?v=20260921-contact-gated-v2"></script>
+  <script defer src="step2-brief-schema.js?v=20260916-commercial-brief-v1"></script>
+  <script defer src="profile-engine.js?v=20260922-step3-signal-backfill-v1&profile-overview-hygiene=1"></script>
+  <script defer src="market-engine.js?v=20260924-friendly-workflow-labels-v1&adaptive-evidence=1"></script>
+  <script defer src="market-conditions-engine.js?v=20260922-market-conditions-v1&adaptive-evidence=1"></script>
+  <script defer src="market-research-verification.js?v=20260916-gemini-verification-v1"></script>
+<script defer src="profile-enrichment-checkpoint.js?v=20260921-profile-enrichment-v2"></script>
+<script defer src="profile-enrichment-checkpoint-ui.js?v=20260924-friendly-workflow-labels-v1"></script>
+  <script defer src="workflow-next-action.js?v=20260925-buyers-stage-view-v1"></script>
+<script defer src="discovery-engine.js?v=20260925-company-search-resilience-v1"></script>
+  <script defer src="workspace-isolation.js?v=20260914-workspace-isolation-v1"></script>
+  <script defer src="workspace-reset-hygiene.js?v=20260917-task-reset-v1&reset-center=1"></script>
+  <script defer src="website-activation.js?v=20260916-ercon-context-v1"></script>
 
-async function findDecisionMakers(index){
-  const candidate=discovery.candidates[index];if(!candidate)return false;
-  if(!candidateIsActionable(candidate)){showToast("Company qualification is incomplete · run Discovery again");return false;}
-  return searchDecisionMakers(candidate,{pipeline:Boolean(candidate.saved),retry:()=>findDecisionMakers(index)});
-}
-function findPipelineDecisionMakers(index){
-  const selected=pipelineRows()[Number(index)];if(!selected)return false;
-  const domain=canonicalDomain(selected.domain||selected.website);if(!domain){showToast("A verified company domain is required");return false;}
-  const existingCandidate=discovery.candidates.find(item=>canonicalDomain(item.domain||item.website)===domain);
-  const existingPipeline=discovery.pipeline.find(item=>canonicalDomain(item.domain||item.website)===domain);
-  const candidate={...(existingCandidate||{}),...(existingPipeline||{}),...selected,domain,saved:true};
-  discovery.pipeline=LeadIntelDiscovery.upsertPipelineItem(discovery.pipeline,candidate);saveDiscovery();renderPipeline();
-  return searchDecisionMakers(candidate,{pipeline:true,retry:()=>retryPipelineDecisionMakers(domain)});
-}
-function retryPipelineDecisionMakers(domain){const index=pipelineRows().findIndex(item=>canonicalDomain(item.domain||item.website)===domain);return index<0?false:findPipelineDecisionMakers(index);}
-async function searchDecisionMakers(candidate,{pipeline=false,retry}={}){
-  const main=mainState();
-  const payload=LeadIntelDiscovery.buildApolloPeopleSearchPayload(candidate,main.profile||{});
-  if(!payload.q_organization_domains_list.length){showToast("A verified company domain is required");return false;}
-  const persist=()=>{if(pipeline||candidate.saved)discovery.pipeline=LeadIntelDiscovery.upsertPipelineItem(discovery.pipeline,candidate);saveDiscovery();renderAll();};
-  candidate.peopleStatus="loading";persist();
-  const controller=new AbortController();
-  const taskCentre=window.LeadIntelTaskCentre;const taskId=`decision-maker-search:${candidate.domain||candidate.id||"company"}:${Date.now()}`;
-  taskCentre?.start({id:taskId,type:'decision-maker-search',title:`Buyer search · ${candidate.company}`,stage:'Searching Apollo people',total:1,completed:0,canCancel:true,canRetry:true});
-  taskCentre?.registerActions(taskId,{cancel:()=>controller.abort(),retry:retry||(()=>false)});
-  const timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS);
-  try{
-    const data=await bridge()?.searchApolloPeople?.(payload,{signal:controller.signal,timeoutMs:DISCOVERY_REQUEST_TIMEOUT_MS});
-    if(!data?.ok)throw Object.assign(new Error(data?.error||"Apollo people search is unavailable"),{code:data?.code,status:data?.status});
-    candidate.people=LeadIntelDiscovery.selectDecisionMakers(LeadIntelDiscovery.normalizeApolloPeople(data),main.profile||{},4);
-    candidate.peopleStatus=candidate.people.length?"complete":"empty";
-    persist();
-    if(crmAuthenticated()&&crmCompanyByDomain(candidate.domain)){
-      const mapped=window.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate);
-      const saved=await bridge().saveCrmCompany(mapped);
-      if(!saved.ok)showToast(saved.error||"CRM contact update failed");
-      else await refreshCrmState({render:false});
-    }
-    renderAll();
-    showToast(!candidate.people.length?'No relevant decision-makers returned':candidate.people.length<3?`Only ${candidate.people.length} relevant decision-maker${candidate.people.length===1?"":"s"} found`:`${candidate.people.length} relevant decision-makers found`);
-    taskCentre?.complete(taskId,{stage:'Decision-maker search complete',resultCount:candidate.people.length});
-    return true;
-  }catch(error){
-    candidate.peopleStatus="error";persist();
-    showToast(error?.name==="AbortError"?"Apollo people search timed out":error.message||"Apollo people search unavailable");
-    if(taskCentre?.get(taskId)?.status!=='canceled')taskCentre?.fail(taskId,error,{canRetry:true});
-    return false;
-  }finally{
-    clearTimeout(timeout);
-  }
-}
-function saveLocalPipeline(candidate){discovery.pipeline=LeadIntelDiscovery.upsertPipelineItem(discovery.pipeline,candidate);candidate.saved=true;saveDiscovery();}
-async function ensureCrmCompany(candidate){let company=crmCompanyByDomain(candidate.domain||candidate.website);if(company?.lifecycle_status==="suppressed")throw Object.assign(new Error("Suppressed companies must be restored in CRM before enrichment"),{code:"CRM_COMPANY_SUPPRESSED"});if(company)return company;const mapped=window.LeadIntelCrm?.mapDiscoveryCandidateToCrm(candidate);if(!mapped)throw new Error("CRM mapping is unavailable");const saved=await bridge().saveCrmCompany(mapped);if(!saved.ok)throw Object.assign(new Error(saved.error||"CRM save failed"),{code:saved.code});company=saved.company;await refreshCrmState({render:false});return company;}
-async function enrichContact(companyIndex,personIndex,{phoneLookup=false}={}){const candidate=discovery.candidates[companyIndex];const person=candidate?.people?.[personIndex];if(!candidate||!person)return false;if(!person.id){showToast("Apollo person identity is missing · refresh decision-makers");return false;}if(!crmAuthenticated()){showToast("Sign in to enrich contacts with Apollo");return false;}const key=personKey(candidate,person);if(enrichmentPending.has(key))return false;const taskCentre=window.LeadIntelTaskCentre;const taskId=`apollo-enrichment:${person.id}:${phoneLookup?'phone':'email'}:${Date.now()}`;taskCentre?.start({id:taskId,type:'apollo-enrichment',title:`Apollo ${phoneLookup?'phone':'email'} · ${person.name}`,stage:'Preparing CRM contact',total:2,completed:0,canRetry:true});taskCentre?.registerActions(taskId,{retry:()=>enrichContact(companyIndex,personIndex,{phoneLookup})});enrichmentPending.add(key);renderCandidates();try{const company=await ensureCrmCompany(candidate);taskCentre?.update(taskId,{stage:'Verifying contact with Apollo',completed:1});const result=await bridge().enrichCrmContact(company.id,person,{phoneLookup,allowPersonalEmail:false});if(!result.ok)throw Object.assign(new Error(result.error||"Apollo contact enrichment failed"),{code:result.code});enrichmentResults.set(key,result);await refreshCrmState({render:false});renderAll();window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company_id:company.id,contact_id:result.contact?.id||null}}));taskCentre?.complete(taskId,{stage:'Apollo enrichment complete',resultCount:Number(Boolean(result.contact?.work_email))+Number(Boolean(result.contact?.phone_number))});if(phoneLookup)showToast(result.contact?.phone_number?`${person.name} · verified phone saved to Master CRM`:`${person.name} · phone lookup requested · use Refresh phone to check`);else showToast(result.contact?.work_email?`${person.name} · verified email saved to Master CRM`:`${person.name} · no verified company email returned`);return true;}catch(error){taskCentre?.fail(taskId,error,{canRetry:true});showToast(error.code==="CRM_APOLLO_CREDIT_LIMIT"?"Apollo credit limit reached":error.message||"Apollo contact enrichment failed");return false;}finally{enrichmentPending.delete(key);renderCandidates();}}
-async function refreshEnrichedContact(companyIndex,personIndex){const candidate=discovery.candidates[companyIndex];const person=candidate?.people?.[personIndex];if(!candidate||!person?.id)return false;if(!crmAuthenticated()){showToast("Sign in to refresh Apollo contact status");return false;}const company=crmCompanyByDomain(candidate.domain||candidate.website);if(!company){showToast("Save this company to Master CRM before refreshing the phone");return false;}const key=personKey(candidate,person);if(enrichmentPending.has(key))return false;enrichmentPending.add(key);renderCandidates();try{const detail=await bridge().getCrmCompany(company.id);if(!detail.ok)throw new Error(detail.error||"Unable to refresh CRM contact");const contact=(detail.contacts||[]).find(item=>String(item.external_person_id||"")===String(person.id))||null;const previous=enrichmentResults.get(key)||{};const result={...previous,request:{...(previous.request||{}),status:contact?.phone_number?"verified":"pending_phone"},contact:contact||previous.contact||null};enrichmentResults.set(key,result);renderCandidates();showToast(contact?.phone_number?`${person.name} · verified phone loaded from Master CRM`:`${person.name} · phone lookup is still pending`);return Boolean(contact?.phone_number);}catch(error){showToast(error.message||"Unable to refresh phone status");return false;}finally{enrichmentPending.delete(key);renderCandidates();}}
-async function saveCandidate(index,{pipeline=false}={}){const candidate=discovery.candidates[index];if(!candidate)return false;if(!candidateIsActionable(candidate)){showToast("Company qualification is incomplete · run Discovery again");return false;}if(!crmAuthenticated()){if(pipeline){saveLocalPipeline(candidate);renderAll();showToast(`${candidate.company} saved to local Pipeline · sign in for durable CRM`);return true;}showToast("Sign in with Google to save this company to Master CRM");return false;}const existing=crmCompanyByDomain(candidate.domain||candidate.website);if(existing?.lifecycle_status==="suppressed"){showToast("Suppressed companies must be restored in CRM before pipeline activation");return false;}const mapped=window.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate);const saved=await bridge().saveCrmCompany(mapped);if(!saved.ok){showToast(saved.code==="CRM_COMPANY_SUPPRESSED"?"Suppressed companies must be restored in CRM first":saved.error||"CRM save failed");return false;}const company=saved.company;if(pipeline){const activated=await bridge().addCrmToPipeline(company.id,"Discovered");if(!activated.ok){showToast(activated.code==="CRM_COMPANY_SUPPRESSED"?"Suppressed companies must be restored in CRM first":activated.error||"Pipeline update failed");return false;}saveLocalPipeline(candidate);}await refreshCrmState({render:false});renderAll();window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company}}));showToast(pipeline?`${candidate.company} added to durable Pipeline`:`${candidate.company} saved to Master CRM`);return true;}
-function pipelineRows(){return crmAvailable?currentWorkspaceCrmPipeline().map(crmToLocalPipeline):discovery.pipeline;}
-function renderPipeline(){
-  const target=$("customer-pipeline");if(!target)return;
-  const rows=pipelineRows();
-  const countNode=$("discovery-pipeline-count");if(countNode)countNode.textContent=String(rows.length);
-  const buyerCount=rows.filter(item=>Array.isArray(item.people)&&item.people.length>0).length;
-  const focus=loadMeta().activeJourneyStage===5?"buyers":"companies";
-  const guideDescription=$("discovery-buyers-description");
-  if(guideDescription)guideDescription.textContent=rows.length
-    ?"Choose a saved company below and select Find buyers. Review the suggested decision-makers before moving to Messages."
-    :"No saved companies yet. Return to Companies, save a qualified match to your Pipeline, then come back here to find its buyers.";
-  window.LeadIntelNextAction?.applyStageVisibility?.(document,5,{pipelineCount:rows.length,buyerCount,focus});
-  if(!rows.length){target.innerHTML="";return;}
-  const stages=crmAvailable?(window.LeadIntelCrm?.STAGES||[]):LeadIntelDiscovery.CRM_STAGES;
-  target.innerHTML=`<div class="pipeline-table"><div class="pipeline-row header"><span>Company</span><span>Score</span><span>People</span><span>Stage</span><span>Action</span></div>${rows.map((item,index)=>{
-    const people=Array.isArray(item.people)?item.people:[];
-    const summary=people.length?`<div class="pipeline-buyer-summary"><strong>Suggested buyers</strong>${people.slice(0,4).map(person=>`<span>${esc(person.name)} · ${esc(person.title)}</span>`).join("")}</div>`:item.peopleStatus==="empty"?'<small class="pipeline-buyer-status">No matching buyer roles found. You can search again.</small>':item.peopleStatus==="error"?'<small class="pipeline-buyer-status">Buyer search failed. Try again.</small>':item.peopleStatus==="loading"?'<small class="pipeline-buyer-status">Searching for buyers…</small>':"";
-    const buyerAction=focus==="buyers"?`<button class="primary-btn small" type="button" data-find-pipeline-buyers="${index}" aria-label="Find buyers for ${esc(item.company)}" ${item.peopleStatus==="loading"?"disabled":""}>${item.people?.length?"Refresh buyers":item.peopleStatus==="loading"?"Searching…":"Find buyers"}</button>`:"";
-    const crmActions=crmAvailable?`<button class="secondary-btn small" type="button" data-pipeline-remove="${esc(item.crmId||item.id)}" data-domain="${esc(item.domain)}">Remove</button><button class="secondary-btn small" type="button" data-open-crm-company="${esc(item.crmId||item.id)}">Open CRM</button>`:'';
-    const crmStatus=crmAvailable?'<small class="pipeline-crm-status">Saved in CRM ✓</small>':item.crmId?'<small class="pipeline-local-status">Previously saved in CRM · reconnect to verify</small>':crmAuthenticated()?'<small class="pipeline-local-status">CRM not confirmed · local workflow safe</small>':'<small class="pipeline-local-status">CRM status unknown · browser copy retained</small>';
-    return `<div class="pipeline-row" data-pipeline-row="${index}"><div class="pipeline-company-cell"><strong>${esc(item.company)}</strong><a href="${esc(item.website)}" target="_blank" rel="noopener">${esc(item.domain)}</a>${crmStatus}${summary}</div><span class="pipeline-score">${item.score?.total||0}</span><span>${people.length}</span><select data-pipeline-stage="${index}" ${crmAvailable?`data-crm-id="${esc(item.crmId||item.id)}"`:""}>${stages.map(stage=>`<option ${stage===item.stage?"selected":""}>${esc(stage)}</option>`).join("")}</select><span class="pipeline-actions">${buyerAction}${crmActions}</span></div>`;
-  }).join("")}</div>`;
-}
-async function changePipelineStage(select){const rows=pipelineRows();const item=rows[Number(select.dataset.pipelineStage)];if(!item)return;if(crmAvailable&&select.dataset.crmId){const stage=window.LeadIntelCrm?.normalizeCrmStage(select.value)||"Discovered";const result=await bridge().addCrmToPipeline(select.dataset.crmId,stage);if(!result.ok){showToast(result.error||"Pipeline stage update failed");await refreshCrmState();return;}await refreshCrmState({render:false});renderAll();window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company:result.company}}));showToast(`${item.company} moved to ${stage}`);return;}item.stage=LeadIntelDiscovery.CRM_STAGES.includes(select.value)?select.value:"Discovered";item.updatedAt=new Date().toISOString();saveDiscovery();renderPipeline();showToast(`${item.company} moved to ${item.stage}`);}
-async function removePipelineCompany(id,domain){const result=await bridge()?.removeCrmFromPipeline(id);if(!result?.ok){showToast(result?.error||"Unable to remove company from Pipeline");return;}discovery.pipeline=discovery.pipeline.filter(item=>canonicalDomain(item.domain||item.website)!==canonicalDomain(domain));saveDiscovery();await refreshCrmState({render:false});renderAll();window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company:result.company}}));showToast("Removed from Pipeline · CRM history preserved");}
-function renderStatus(){const main=mainState();const ready=Boolean(main?.profile?.website||main?.website);const formal=Boolean(main?.market?.strategyApproved);const target=selectedDiscoveryTarget();const targetControl=$("discovery-target-count");const customTarget=$("discovery-target-custom");const meta=loadMeta();const customMode=meta.targetMode==="custom"||targetControl?.value==="custom";if(targetControl)targetControl.value=customMode?"custom":String(target||DEFAULT_DISCOVERY_TARGET);if(customTarget){customTarget.hidden=!customMode;if(customMode&&document.activeElement!==customTarget)customTarget.value=String(target);}const gate=$("continue-to-discovery");if(gate){gate.hidden=!formal;gate.disabled=!ready;gate.textContent=ready?"Find matching companies →":"Add website first";}if(!$("discovery-status"))return;const phaseLabels={extracting:"Extracting",resolving:"Resolving",verifying:"Verifying",following:"Broadening search"};const labels={idle:discovery.needsRefresh?"Recheck":formal?"Ready":"Provisional",running:phaseLabels[discoveryProgress.phase]||"Searching",complete:"Complete",no_results:"No matches",partial:"Partial",error:"Search issue"};$("discovery-status").textContent=labels[discovery.status]||"Ready";$("discovery-company").textContent=main.profile?.companyName||"Company";const markets=(main.market?.opportunities||[]).filter(x=>x.active!==false).map(x=>x.market).filter(Boolean);$("discovery-markets").textContent=[...new Set(markets)].join(" · ")||main.profile?.targetMarkets||main.profile?.currentMarkets?.join?.(" · ")||"Provisional";const targetNote=target?` · target up to ${target}`:"";const phaseText={extracting:"Identifying companies named in market evidence…",resolving:`Resolving official company domains · ${discoveryProgress.completed}/${discoveryProgress.total} checked…`,verifying:`Verifying company websites · ${discoveryProgress.completed}/${discoveryProgress.total} checked…`,following:`Broadening the search · ${discoveryProgress.completed}/${discoveryProgress.total} follow-up searches checked…`};const runningText=phaseText[discoveryProgress.phase]||`Finding market evidence · ${discoveryProgress.completed}/${discoveryProgress.total} searches checked…`;const text={idle:discovery.needsRefresh?"Discovery scoring has been improved. Run the search again to refresh saved results before acting on them.":formal?"Ready to find companies using the active strategy.":"Company search is ready. Add optional market, ICP or signal context to improve precision.",running:runningText,complete:`Company search complete · ${discovery.candidates.length} qualified companies from ${discovery.rawResults.length} evidence results${targetNote}.`,no_results:`Search finished · ${discovery.rawResults.length} evidence results checked; no company passed every active market and buying-signal check${targetNote}.`,partial:`Company search partially complete · ${discovery.candidates.length} qualified companies; one or more checks were unavailable${targetNote}.`,error:recoveredInterruptedRun?"The previous company search was interrupted before it finished. Retry to continue.":"The search did not complete because one or more provider checks failed or timed out. This is not a confirmed no-match."};$("company-discovery-status").textContent=ready?(text[discovery.status]||text.idle):"Add your company website to enable the search.";const run=$("run-company-discovery");run.disabled=!ready||discovery.status==="running";run.innerHTML=discovery.needsRefresh?"Refresh company results <span>↻</span>":discovery.status==="running"?({extracting:"Identifying companies…",resolving:"Resolving domains…",verifying:"Verifying companies…",following:"Finding more companies…"}[discoveryProgress.phase]||"Finding companies…"):discovery.status==="no_results"?(main.market?.researchMode==="quick"?"Review Market Research <span>→</span>":"Review Strategy <span>→</span>"):discovery.status==="error"?"Retry company search <span>↻</span>":discovery.lastRunAt?"Find more companies <span>↻</span>":"Find companies <span>→</span>";}
-function renderAll(){if(!discoveryMounted)return;renderStatus();renderDiscoveryFunnel();renderCandidates();renderPotentialMatches();renderPipeline();}
-function renderDiscoverySafely(){try{renderAll();return true;}catch(error){console.error("Companies page render failed",error);const run=$("run-company-discovery");if(run){run.disabled=discovery?.status==="running";run.innerHTML=discovery?.status==="running"?"Finding companies…":discovery?.status==="error"?"Retry company search <span>↻</span>":discovery?.lastRunAt?"Find more companies <span>↻</span>":"Find companies <span>→</span>";}return false;}}
-function bindDiscovery(){
-  $("continue-to-discovery")?.addEventListener("click",showDiscoveryStep);$("back-to-strategy")?.addEventListener("click",showStrategyStep);$("run-company-discovery")?.addEventListener("click",()=>{if(discovery.status==="no_results"){reviewDiscoveryGuidance();return;}runCompanyDiscovery();});$("discovery-target-count")?.addEventListener("change",()=>{persistDiscoveryTarget();renderStatus();const custom=$("discovery-target-custom");if(custom&&!custom.hidden)custom.focus();});$("discovery-target-custom")?.addEventListener("input",()=>{persistDiscoveryTarget();renderStatus();});$("activate-market-strategy")?.addEventListener("click",()=>setTimeout(renderStatus,0));
-  $("company-candidates")?.addEventListener("click",event=>{const btn=event.target.closest("[data-action]");if(!btn)return;if(btn.dataset.action==="review-strategy"){showStrategyStep();return;}if(btn.dataset.action==="review-research"){reviewMarketResearch();return;}const index=Number(btn.dataset.companyIndex);const personIndex=Number(btn.dataset.personIndex);if(btn.dataset.action==="find-decision-makers"){setJourneyFocus("buyers",{scroll:false});findDecisionMakers(index);}if(btn.dataset.action==="enrich-contact")enrichContact(index,personIndex,{phoneLookup:false});if(btn.dataset.action==="find-phone")enrichContact(index,personIndex,{phoneLookup:true});if(btn.dataset.action==="refresh-phone")refreshEnrichedContact(index,personIndex);if(btn.dataset.action==="save-crm")saveCandidate(index,{pipeline:false});if(btn.dataset.action==="add-pipeline")saveCandidate(index,{pipeline:true});});
-  $("customer-pipeline")?.addEventListener("change",event=>{const select=event.target.closest("[data-pipeline-stage]");if(select)changePipelineStage(select);});
-  $("customer-pipeline")?.addEventListener("click",event=>{const buyer=event.target.closest("[data-find-pipeline-buyers]");if(buyer){findPipelineDecisionMakers(buyer.dataset.findPipelineBuyers);return;}const remove=event.target.closest("[data-pipeline-remove]");if(remove){removePipelineCompany(remove.dataset.pipelineRemove,remove.dataset.domain);return;}const open=event.target.closest("[data-open-crm-company]");if(open)document.getElementById("open-crm")?.click();});
-  $("reset-workspace")?.addEventListener("click",()=>setTimeout(()=>{if(!localStorage.getItem(MAIN_STORAGE_KEY)){localStorage.removeItem(DISCOVERY_STORAGE_KEY);localStorage.removeItem(`${DISCOVERY_STORAGE_KEY}_meta`);discovery=LeadIntelDiscovery.normalizeDiscoveryState({});crmCompanies=[];crmPipeline=[];crmAvailable=false;enrichmentResults.clear();enrichmentPending.clear();}},0));
-  window.addEventListener("leadintel:open-discovery",event=>showDiscoveryStep(event.detail?.focus||"companies"));window.addEventListener("leadintel:module-opened",event=>{if(Number(event.detail?.step)!==5)return;syncStrategyFingerprint();saveMeta({...loadMeta(),visibleStep:5});renderAll();renderDiscoveryFocus(loadMeta().activeJourneyStage===5?"buyers":"companies");if(crmAuthenticated())refreshCrmState();});
-  window.addEventListener("leadintel:website-activated",()=>{
-    resetLocalDownstreamState();
-    syncStrategyFingerprint();
-    renderAll();
-  });
-  window.addEventListener("leadintel:server-ready",()=>refreshCrmState());
-  window.addEventListener("leadintel:crm-migrated",()=>refreshCrmState());
-  window.addEventListener("leadintel:crm-changed",()=>refreshCrmState());
-}
-function loadOutreachModules(){if(document.querySelector('script[data-outreach-engine]'))return;const engine=document.createElement("script");engine.src=`outreach-engine.js?v=${OUTREACH_ASSET_VERSION}`;engine.dataset.outreachEngine="true";engine.addEventListener("load",()=>{const localization=document.createElement("script");localization.src=`outreach-localization.js?v=${OUTREACH_ASSET_VERSION}`;localization.dataset.outreachLocalization="true";localization.addEventListener("load",()=>{if(document.querySelector('script[data-outreach-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src=`outreach-ui.js?v=${OUTREACH_ASSET_VERSION}`;ui.dataset.outreachUi="true";document.body.appendChild(ui);});document.body.appendChild(localization);});document.body.appendChild(engine);}
-function openDiscoveryFromHandoff(options={}){if(!moduleReady())return false;showDiscoveryStep(options.focus||"companies");return Boolean($("step-5")?.classList.contains("active"));}
-function ensureDiscoveryMounted(){if(discoveryMounted)return;discovery=loadDiscovery();discoveryMounted=true;syncStrategyFingerprint();renderAll();if(recoveredInterruptedRun){saveDiscovery();setTimeout(()=>showToast("Previous company search was interrupted. You can run it again."),0);}if(crmAuthenticated())refreshCrmState();loadOutreachModules();}
-function initDiscovery(){if(window.LeadIntelDiscoveryUI?.open)return;injectDiscoveryUI();bindDiscovery();window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};window.LeadIntelDiscoveryUI.getPipeline=pipelineRows;if(window.__leadIntelPendingDiscoveryOpen&&openDiscoveryFromHandoff())window.__leadIntelPendingDiscoveryOpen=false;else if(mainState().step===5&&moduleReady())showDiscoveryStep();else if(loadMeta().visibleStep===5&&moduleReady())showDiscoveryStep();}
-function initDiscoveryWhenReady(attempt=0){if(!window.LeadIntelDiscovery){if(attempt<400)setTimeout(()=>initDiscoveryWhenReady(attempt+1),25);return;}initDiscovery();}
-initDiscoveryWhenReady();
+  <script defer src="server-bridge.js?v=20260925-apollo-buyer-search-v1" data-server-bridge="true"></script>
+  <script defer src="brand-identity.js?v=20260916-brand-timestamp-v1"></script>
+  <script defer src="brand-identity-ui.js?v=20260916-browser-logo-copy-v2"></script>
+  <script defer src="journey-progress.js?v=20260924-friendly-workflow-labels-v1"></script>
+  <script defer src="process-map.js?v=20260924-friendly-workflow-labels-v1"></script>
+  <script defer src="attention-centre-model.js?v=20260924-openai-credit-health-v1"></script>
+  <script defer src="attention-centre.js?v=20260924-openai-credit-health-v1"></script>
+  <script type="module" src="app.js?v=20260924-friendly-workflow-labels-v1&icp-data-gates=1&reset-center=1&quick-insights=1&adaptive-evidence=1&strategy-handoff-copy=1&profile-overview-hygiene=1&workspace-content-english=1"></script>
+  <script type="module" src="ai-settings.js?v=20260917-shell-stability-v1"></script>
+  <script type="module" src="copilot-loader.js?v=20260924-friendly-workflow-labels-v1"></script>
+  <script type="module" src="shell-support-loader.js?v=20260924-friendly-workflow-labels-v1&reset-center=1"></script>
+  <script defer src="discovery-ui.js?v=20260925-company-search-resilience-v1"></script>
+</body>
+</html>

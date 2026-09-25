@@ -71,6 +71,16 @@ test('normalizeCompanySearchResults rejects obvious non-company hosts and keeps 
   assert.match(results.find(x=>x.domain==='nordicmachines.se').text,/expanding capacity/i);
 });
 
+test('text fallback extracts a named company from common press-release verbs',()=>{
+  const mentions=Discovery.extractCompanyMentions([{
+    url:'https://news.example.com/modvion-turbine',market:'Sweden',
+    title:'Modvion unveils a wooden wind turbine tower for larger onshore turbines',
+    description:'Modvion has unveiled a new product after a capacity investment.'
+  }],10);
+  assert.deepEqual(mentions.map(item=>item.company),['Modvion']);
+  assert.equal(mentions[0].sourceUrl,'https://news.example.com/modvion-turbine');
+});
+
 test('buildCandidateVerificationQueries creates bounded company-domain checks and rejects known market conflicts',()=>{
   const raw=[
     {url:'https://nordicfood.se/about',domain:'nordicfood.se',company:'Nordic Food AB',market:'Sweden',title:'Nordic Food',description:'Food producer'},
@@ -151,6 +161,14 @@ test('zero-result guidance recommends a deeper research mode only after a quick 
   assert.equal(marketResearch.primaryLabel,'Review Strategy');
   assert.ok(!marketResearch.steps.some(step=>/smaller market evidence set/i.test(step)));
   assert.match(marketResearch.summary,/valid finding/i);
+});
+
+test('zero-result guidance distinguishes failed company-name extraction from a qualified no-match',()=>{
+  const result=Discovery.zeroResultGuidance({evidenceCount:31,evidencePages:10,companiesIdentified:0,extractionStatus:'fallback'});
+  assert.equal(result.primaryAction,'open_ai_settings');
+  assert.match(result.summary,/31 evidence results across 10 unique pages/);
+  assert.match(result.summary,/extraction gap/);
+  assert.ok(result.steps.some(step=>/workspace AI provider or credits/i.test(step)));
 });
 
 test('buildApolloPeopleSearchPayload uses exact domain and approved roles with safe discovery depth',()=>{
@@ -255,6 +273,21 @@ test('normalizeDiscoveryState persists the search funnel and keeps potential mat
   assert.equal(state.potentialMatches[0].buyerVerified,false);
   assert.equal(state.potentialMatches[0].marketVerified,true);
   assert.equal(Discovery.isActionableCandidate(state.potentialMatches[0]),false);
+});
+
+test('zero-result reruns retain the last successful company results and label their run date',()=>{
+  const previous={company:'Modvion',domain:'modvion.com',website:'https://modvion.com/',market:'Sweden',score:{total:86},confidence:'High',qualified:true,marketVerified:true,buyerVerified:true,matchedSignals:[{id:'launch',name:'Product launch'}],evidence:[{url:'https://modvion.com/news/launch',title:'Product launch'}]};
+  const normalized=Discovery.normalizeDiscoveryState({qualityVersion:Discovery.DISCOVERY_QUALITY_VERSION,status:'complete',lastRunAt:'2026-09-24T10:00:00.000Z',candidates:[previous]});
+  const retained=Discovery.retainLastSuccessfulDiscoveryCandidates(normalized,[],'2026-09-25T12:00:00.000Z');
+  assert.deepEqual(retained.candidates.map(item=>item.domain),['modvion.com']);
+  assert.equal(retained.latestRunCandidateCount,0);
+  assert.equal(retained.retainedLastSuccessfulResults,true);
+  assert.equal(retained.lastSuccessfulRunAt,'2026-09-24T10:00:00.000Z');
+  const state=Discovery.normalizeDiscoveryState({...normalized,...retained,status:'no_results',lastRunAt:'2026-09-25T12:00:00.000Z'});
+  assert.equal(state.candidates[0].company,'Modvion');
+  assert.equal(state.retainedLastSuccessfulResults,true);
+  assert.equal(state.latestRunCandidateCount,0);
+  assert.equal(state.lastSuccessfulRunAt,'2026-09-24T10:00:00.000Z');
 });
 
 test('results from the previous scoring rules are cleared for review while the saved pipeline is retained',()=>{
