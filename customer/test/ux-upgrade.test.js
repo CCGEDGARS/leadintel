@@ -27,6 +27,13 @@ test('Step 6 is visibly positioned as Messages',()=>{
   assert.doesNotMatch(ui,/<strong>Opportunity dossier<\/strong>/);
 });
 
+test('Companies and Buyers read the same CRM-backed pipeline snapshot',()=>{
+  const discovery=read('discovery-ui.js');
+  const outreach=read('outreach-ui.js');
+  assert.match(discovery,/LeadIntelDiscoveryUI=\{open:openDiscoveryFromHandoff\};window\.LeadIntelDiscoveryUI\.getPipeline=pipelineRows/);
+  assert.match(outreach,/function pipeline\(\)\{const shared=window\.LeadIntelDiscoveryUI\?\.getPipeline\?\.\(\);return Array\.isArray\(shared\)\?shared:/);
+});
+
 test('Content and Scripts includes five practical script formats with edit copy regenerate and approval controls',()=>{
   const ui=read('outreach-ui.js');
   for(const id of ['outreach-email-body','outreach-linkedin','outreach-call-opener','outreach-follow-up','outreach-objection-reply']){

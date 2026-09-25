@@ -30,7 +30,7 @@ function saveDiscovery(value){localStorage.setItem(DISCOVERY_STORAGE_KEY,JSON.st
 function loadOutreach(){return LeadIntelOutreach.normalizeOutreachState(readJson(OUTREACH_STORAGE_KEY));}
 function saveOutreach(){outreach=LeadIntelOutreach.normalizeOutreachState(outreach);localStorage.setItem(OUTREACH_STORAGE_KEY,JSON.stringify(outreach));window.LeadIntelJourney?.refresh?.();}
 function toast(message){const el=q("toast");if(!el)return;el.textContent=message;el.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove("show"),2600);}
-function pipeline(){return discoveryState().pipeline||[];}
+function pipeline(){const shared=window.LeadIntelDiscoveryUI?.getPipeline?.();return Array.isArray(shared)?shared:(discoveryState().pipeline||[]);}
 function selectedCandidate(){const domain=outreach.selectedDomain;return pipeline().find(item=>item.domain===domain)||null;}
 function currentItem(){return outreach.items.find(item=>item.domain===outreach.selectedDomain)||null;}
 function upsertItem(next){const idx=outreach.items.findIndex(item=>item.domain===next.domain);if(idx>=0)outreach.items[idx]=next;else outreach.items.unshift(next);outreach.items=outreach.items.slice(0,50);saveOutreach();return next;}
