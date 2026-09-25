@@ -14,13 +14,16 @@ test('Discovery labels CRM save and pipeline actions separately',()=>{
   assert.match(source,/Suppressed/);
 });
 
-test('Buyer pipeline explains when a company is kept in the browser instead of CRM',()=>{
-  assert.match(source,/Browser only · not in CRM/);
-  assert.match(source,/CRM sync not confirmed · browser copy retained/);
+test('Buyer pipeline distinguishes a confirmed CRM record from an unverified browser copy',()=>{
+  assert.match(source,/Previously saved in CRM · reconnect to verify/);
+  assert.match(source,/CRM not confirmed · local workflow safe/);
+  assert.match(source,/CRM status unknown · browser copy retained/);
   assert.match(source,/pipeline-local-status/);
+  assert.match(source,/crmId:company\.id/);
   const start=source.indexOf('function renderPipeline(');
   const end=source.indexOf('async function changePipelineStage',start);
   const render=source.slice(start,end);
+  assert.match(render,/item\.crmId\?/);
   assert.match(render,/const crmStatus=[\s\S]*pipeline-company-cell"><strong>\$\{esc\(item\.company\)\}[\s\S]*\$\{crmStatus\}/);
   assert.doesNotMatch(render,/'<span>Local<\/span>'/);
 });
