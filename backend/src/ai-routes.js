@@ -31,6 +31,21 @@ function validateApiKey(value){
   const apiKey=String(value||'').trim();if(apiKey.length<8||apiKey.length>8192||/[\r\n]/.test(apiKey))throw new Error('A valid AI provider API key is required');return apiKey;
 }
 function keyHint(apiKey){return `••••${String(apiKey).slice(-4)}`;}
+function extractionFailureReason(cause){
+  const message=String(cause?.message||'');
+  const status=Number(message.match(/request failed \((\d{3})\)/i)?.[1]||0);
+  if(status===429)return 'quota_or_rate_limit';
+  if(status>=500)return 'provider_unavailable';
+  if(/returned no text|invalid company extraction output/i.test(message))return 'invalid_output';
+  return '';
+}
+function validCompanyExtractionOutput(value){
+  const raw=String(value||'').replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/i,'').trim();
+  try{const parsed=JSON.parse(raw);return Array.isArray(parsed)||Array.isArray(parsed?.companies);}catch{return false;}
+}
+function failoverFailure({attempted,configured,reason}){
+  return {used:false,attempted,configured,primary:'openai',provider:'gemini',reason};
+}
 function providerStatus(rows,role){
   const byProvider=new Map((rows||[]).map(row=>[row.provider,row]));
   return {role,providers:AI_PROVIDERS.map(provider=>{
@@ -148,13 +163,31 @@ export async function handleAiRoute(request,env,cors={}){
     const prompt=String(body.prompt||'').trim(),system=String(body.system||'').trim();
     if(!prompt||prompt.length>80000||system.length>20000)return error('AI generation prompt is invalid or too large',400,cors);
     const integration=await activeIntegration(env,workspaceId);if(!integration)return error('No active AI provider is configured for this workspace',409,cors);
+    const purpose=String(body.purpose||'').trim();
     try{
       const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const apiKey=await decryptSecret(integration.encrypted_api_key,key);
-      const result=await generateText({provider:integration.provider,apiKey,model:integration.model,system,prompt,maxOutputTokens:body.max_output_tokens});
+      const result=await generateText({provider:integration.provider,apiKey,model:integration.model,system,prompt,maxOutputTokens:body.max_output_tokens,signal:request.signal});
+      if(purpose==='company_discovery_extraction'&&!validCompanyExtractionOutput(result.text))throw new Error('AI provider returned invalid company extraction output');
       await env.DB.prepare(`UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(workspaceId,integration.provider).run();
       await audit(env,{workspaceId,userId:access.user.id,type:'ai.generation_completed',provider:integration.provider,metadata:{model:integration.model,input_tokens:result.usage.input_tokens,output_tokens:result.usage.output_tokens}});
       return json(result,200,cors);
-    }catch(cause){return error(String(cause?.message||'AI provider request failed').slice(0,180),502,cors);}
+    }catch(cause){
+      const reason=purpose==='company_discovery_extraction'&&integration.provider==='openai'?extractionFailureReason(cause):'';
+      if(!reason||request.signal.aborted)return error(String(cause?.message||'AI provider request failed').slice(0,180),502,cors);
+      const failover=await geminiIntegration(env,workspaceId);
+      if(!failover?.verified_at)return error('OpenAI extraction is unavailable and a verified Gemini backup is not configured',502,cors,{failover:failoverFailure({attempted:false,configured:Boolean(failover),reason:failover?'gemini_not_verified':'gemini_not_configured'})});
+      try{
+        const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const apiKey=await decryptSecret(failover.encrypted_api_key,key);
+        const result=await generateText({provider:'gemini',apiKey,model:failover.model,system,prompt,maxOutputTokens:body.max_output_tokens,signal:request.signal});
+        if(!validCompanyExtractionOutput(result.text))throw new Error('AI provider returned invalid company extraction output');
+        await env.DB.prepare(`UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(workspaceId,'gemini').run();
+        await audit(env,{workspaceId,userId:access.user.id,type:'ai.generation_completed',provider:'gemini',metadata:{model:failover.model,input_tokens:result.usage.input_tokens,output_tokens:result.usage.output_tokens,purpose,failover_from:'openai',failover_reason:reason}});
+        return json({...result,failover:{used:true,attempted:true,configured:true,primary:'openai',provider:'gemini',reason}},200,cors);
+      }catch(fallbackError){
+        console.error('Gemini company extraction fallback failed',String(fallbackError?.message||fallbackError).slice(0,180));
+        return error('OpenAI extraction failed and Gemini fallback was unavailable',502,cors,{failover:failoverFailure({attempted:true,configured:true,reason})});
+      }
+    }
   }
 
   return error('Method not allowed',405,cors);

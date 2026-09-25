@@ -40,7 +40,7 @@ test('server bridge routes buyer search through workspace-authenticated Apollo i
 test('customer entry point cache-busts the changed buyer-search scripts',()=>{
   const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
   assert.match(html,/server-bridge\.js\?v=20260925-apollo-buyer-search-v1/);
-  assert.match(html,/discovery-ui\.js\?v=20260925-company-search-resilience-v1/);
+  assert.match(html,/discovery-ui\.js\?v=20260925-gemini-company-extraction-fallback-v1/);
 });
 
 test('dirty local state survives reload and is retried before reporting synced',()=>{

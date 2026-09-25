@@ -103,9 +103,10 @@ function parseStructuredWebResults(payload,sources,maxResults){
   return [...unique.values()];
 }
 
-async function openAiRequest(options,fetchImpl){
+async function openAiRequest(options,fetchImpl,signal){
   const response=await fetchImpl('https://api.openai.com/v1/responses',{
     method:'POST',
+    ...(signal?{signal}:{}),
     headers:{'Content-Type':'application/json','Accept':'application/json',Authorization:`Bearer ${options.apiKey}`},
     body:JSON.stringify({model:options.model,instructions:options.system||undefined,input:options.prompt,max_output_tokens:options.maxOutputTokens,store:false})
   });
@@ -154,10 +155,11 @@ async function verifyOpenAiCredential(options,fetchImpl){
   return {provider:'openai',model:options.model,text};
 }
 
-async function anthropicRequest(options,fetchImpl){
+async function anthropicRequest(options,fetchImpl,signal){
   const body={model:options.model,max_tokens:options.maxOutputTokens,messages:[{role:'user',content:options.prompt}]};if(options.system)body.system=options.system;
   const response=await fetchImpl('https://api.anthropic.com/v1/messages',{
     method:'POST',
+    ...(signal?{signal}:{}),
     headers:{'Content-Type':'application/json','Accept':'application/json','x-api-key':options.apiKey,'anthropic-version':'2023-06-01'},
     body:JSON.stringify(body)
   });
@@ -177,11 +179,12 @@ async function verifyAnthropicCredential(options,fetchImpl){
   return {provider:'anthropic',model:options.model,text};
 }
 
-async function geminiRequest(options,fetchImpl){
+async function geminiRequest(options,fetchImpl,signal){
   const body={contents:[{role:'user',parts:[{text:options.prompt}]}],generationConfig:{maxOutputTokens:options.maxOutputTokens}};
   if(options.system)body.systemInstruction={parts:[{text:options.system}]};
   const response=await fetchImpl(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(options.model)}:generateContent`,{
     method:'POST',
+    ...(signal?{signal}:{}),
     headers:{'Content-Type':'application/json','Accept':'application/json','x-goog-api-key':options.apiKey},
     body:JSON.stringify(body)
   });
@@ -201,12 +204,12 @@ async function verifyGeminiCredential(options,fetchImpl){
   return {provider:'gemini',model:options.model,text};
 }
 
-export async function generateText({provider,apiKey,model,system='',prompt,maxOutputTokens=1200,fetchImpl=fetch}){
+export async function generateText({provider,apiKey,model,system='',prompt,maxOutputTokens=1200,signal,fetchImpl=fetch}){
   const options=validatedOptions({provider,apiKey,model,system,prompt,maxOutputTokens});
   try{
-    if(options.provider==='openai')return await openAiRequest(options,fetchImpl);
-    if(options.provider==='anthropic')return await anthropicRequest(options,fetchImpl);
-    return await geminiRequest(options,fetchImpl);
+    if(options.provider==='openai')return await openAiRequest(options,fetchImpl,signal);
+    if(options.provider==='anthropic')return await anthropicRequest(options,fetchImpl,signal);
+    return await geminiRequest(options,fetchImpl,signal);
   }catch(error){
     if(/request failed \(\d+\)/.test(String(error?.message||''))||/returned no text$/.test(String(error?.message||''))||/^(Unsupported AI provider|AI provider API key is required|AI provider model is invalid|AI prompt is required)$/.test(String(error?.message||'')))throw error;
     throw new Error(`${PROVIDER_LABELS[options.provider]} request failed (502)`);

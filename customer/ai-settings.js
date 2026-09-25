@@ -1,6 +1,6 @@
 const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
 const FIRECRAWL_PROXY='https://apollo-proxy.edgars-7e7.workers.dev';
-const SETTINGS_VERSION='20260915-model-choice-v1';
+const SETTINGS_VERSION='20260925-gemini-extraction-fallback-v1';
 const PROVIDERS=Object.freeze([
   {provider:'openai',name:'OpenAI',model:'gpt-5.6',placeholder:'sk-…',hint:'Responses API'},
   {provider:'anthropic',name:'Anthropic',model:'claude-sonnet-4-6',placeholder:'sk-ant-…',hint:'Messages API'},
@@ -136,12 +136,13 @@ function providerCard(config,current){
   const stateLabel=active?'Active':configured?'Connected':'Not connected';
   const model=current?.model||config.model;const mode=model===config.model?'recommended':'advanced';const providerError=providerErrors[config.provider]||'';
   const usageMeta=current?.last_used_at?` · last used ${esc(formatDateTime(current.last_used_at))}`:'';
+  const backupNote=config.provider==='gemini'?'<div class="ai-model-note">When OpenAI is active, a verified Gemini key backs up Company Discovery extraction after a provider or quota error, or invalid extraction output. A valid empty result does not trigger another call.</div>':'';
   return `<article class="ai-provider-card ${active?'active':''}" data-provider-card="${config.provider}">
     <div class="ai-provider-head"><div><span class="ai-provider-name">${esc(config.name)}</span><small>${esc(config.hint)} · Your API key · billed by provider</small></div><span class="ai-provider-status ${active?'active':configured?'connected':''}">${stateLabel}</span></div>
     <label class="ai-settings-field">API key<input data-ai-key="${config.provider}" type="password" autocomplete="new-password" spellcheck="false" data-form-type="other" data-lpignore="true" data-1p-ignore="true" autocapitalize="none" placeholder="${esc(config.placeholder)}" ${disabled?'disabled':''}></label>
     <label class="ai-settings-field">Model choice<select data-ai-model-mode="${config.provider}" ${disabled?'disabled':''}><option value="recommended" ${mode==='recommended'?'selected':''}>Recommended · ${esc(config.model)}</option><option value="advanced" ${mode==='advanced'?'selected':''}>Advanced · custom model ID</option></select></label>
     <label class="ai-settings-field ai-custom-model" data-ai-custom-model="${config.provider}" ${mode==='advanced'?'':'hidden'}>Custom model ID<input data-ai-model="${config.provider}" type="text" value="${mode==='advanced'?esc(model):''}" autocomplete="off" spellcheck="false" placeholder="Enter the exact provider model ID" ${disabled?'disabled':''}></label>
-    <div class="ai-model-note">Recommended is maintained by LeadIntel. Advanced accepts an exact model ID supported by your provider account.</div>
+    <div class="ai-model-note">Recommended is maintained by LeadIntel. Advanced accepts an exact model ID supported by your provider account.</div>${backupNote}
     <div class="ai-key-meta">${configured?`Saved key ${esc(current.key_hint||'')} · API key verified ${esc(formatDate(current.verified_at))}${usageMeta}`:'No credential stored yet.'}</div>
     <div class="ai-provider-error" data-ai-error="${config.provider}" role="alert" ${providerError?'':'hidden'}>${esc(providerError)}</div>
     <div class="ai-provider-actions">

@@ -65,3 +65,16 @@ test('AI routes use encrypted storage and unified provider adapter without retur
   assert.match(source,/key_hint/);
   assert.doesNotMatch(source,/json\([^\n]*encrypted_api_key/);
 });
+
+test('Gemini failover is purpose-scoped, requires a verified Gemini integration and reports safe provenance',()=>{
+  assert.match(source,/purpose==='company_discovery_extraction'&&integration\.provider==='openai'/);
+  assert.match(source,/function extractionFailureReason/);
+  assert.match(source,/if\(status===429\)return 'quota_or_rate_limit'/);
+  assert.match(source,/if\(status>=500\)return 'provider_unavailable'/);
+  assert.match(source,/if\(!reason\|\|request\.signal\.aborted\)/);
+  assert.match(source,/function validCompanyExtractionOutput/);
+  assert.match(source,/if\(!failover\?\.verified_at\)/);
+  assert.match(source,/generateText\(\{provider:'gemini',apiKey,model:failover\.model/);
+  assert.match(source,/failover:\{used:true,attempted:true,configured:true,primary:'openai',provider:'gemini',reason\}/);
+  assert.match(source,/failover_from:'openai'/);
+});

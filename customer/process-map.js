@@ -14,7 +14,7 @@
  * import './server-bridge.js?v=20260925-apollo-buyer-search-v1';
  * import './crm-presentation.js?v=20260924-crm-evidence-activity-v1';
  * import './crm-ui.js?v=20260924-crm-evidence-activity-v1';
- * import './ai-settings.js?v=20260915-model-choice-v1';
+ * import './ai-settings.js?v=20260925-gemini-extraction-fallback-v1';
  * import './service-settings-extension.js?v=20260919-calendly-v1';
  * import './step2-readiness-engine.js?v=20260924-friendly-workflow-labels-v1';
  * import './content-language.js?v=20260924-workspace-content-english-v1';

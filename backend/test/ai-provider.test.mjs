@@ -129,6 +129,18 @@ test('Gemini adapter uses current GenerateContent fields and extracts text',asyn
   assert.deepEqual(result.usage,{input_tokens:7,output_tokens:5});
 });
 
+test('text generation forwards the caller abort signal to OpenAI and Gemini',async()=>{
+  const controller=new AbortController();const seen=[];
+  const fetchImpl=async(url,options)=>{
+    seen.push({url:String(url),signal:options.signal});
+    if(String(url).includes('generativelanguage.googleapis.com'))return new Response(JSON.stringify({candidates:[{content:{parts:[{text:'{"companies":[]}'}]}}]}),{status:200});
+    return new Response(JSON.stringify({output_text:'{"companies":[]}'}),{status:200});
+  };
+  await generateText({provider:'openai',apiKey:'sk-test',model:'gpt-5.6',prompt:'Extract names',signal:controller.signal,fetchImpl});
+  await generateText({provider:'gemini',apiKey:'gem-test',model:'gemini-3.7-flash',prompt:'Extract names',signal:controller.signal,fetchImpl});
+  assert.equal(seen.length,2);assert.ok(seen.every(item=>item.signal===controller.signal));
+});
+
 test('provider errors expose only safe upstream code and parameter diagnostics',async()=>{
   const fetchImpl=async()=>new Response(JSON.stringify({error:{message:'Account owner secret details sk-live-do-not-leak',type:'invalid_request_error',code:'invalid_parameter',param:'max_output_tokens'}}),{status:400,headers:{'Content-Type':'application/json'}});
   await assert.rejects(()=>generateText({provider:'openai',apiKey:'sk-live-do-not-leak',prompt:'x',fetchImpl}),error=>{

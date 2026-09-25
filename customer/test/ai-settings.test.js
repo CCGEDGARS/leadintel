@@ -15,7 +15,7 @@ const extension=fs.existsSync(extensionPath)?fs.readFileSync(extensionPath,'utf8
 const extensionCss=fs.existsSync(extensionCssPath)?fs.readFileSync(extensionCssPath,'utf8'):'';
 
 test('Customer V2 loads the proven AI Settings plus the customer-owned Apollo and Firecrawl extension',()=>{
-  assert.match(processMap,/import ['"]\.\/ai-settings\.js\?v=20260915-model-choice-v1['"]/);
+  assert.match(processMap,/import ['"]\.\/ai-settings\.js\?v=20260925-gemini-extraction-fallback-v1['"]/);
   assert.match(processMap,/import ['"]\.\/service-settings-extension\.js\?v=20260919-calendly-v1['"]/);
   assert.equal(fs.existsSync(jsPath),true,'ai-settings.js must exist');
   assert.equal(fs.existsSync(extensionPath),true,'service-settings-extension.js must exist');
@@ -78,6 +78,13 @@ test('AI provider status clearly separates a connected credential from the activ
   assert.match(css,/\.ai-provider-status\.connected/,'connected providers must have a distinct badge treatment');
 });
 
+test('Gemini provider card explains its scoped Company Discovery backup role',()=>{
+  assert.match(js,/const backupNote=config\.provider==='gemini'\?/);
+  assert.match(js,/When OpenAI is active, a verified Gemini key backs up Company Discovery extraction/);
+  assert.match(js,/A valid empty result does not trigger another call/);
+  assert.match(processMap,/import ['"]\.\/ai-settings\.js\?v=20260925-gemini-extraction-fallback-v1['"]/);
+});
+
 test('Apollo and Firecrawl use owner-controlled workspace service routes and editable customer-key fields',()=>{
   assert.match(extension,/\/api\/integrations\/services\/status/);
   assert.match(extension,/\/api\/integrations\/services\/provider/);
@@ -104,7 +111,7 @@ test('raw API keys are transient browser values and never persisted by either se
 });
 
 test('settings assets are cache-busted and controls have individual borders and focus treatment',()=>{
-  assert.match(js,/SETTINGS_VERSION='20260915-model-choice-v1'/);
+  assert.match(js,/SETTINGS_VERSION='20260925-gemini-extraction-fallback-v1'/);
   assert.match(extension,/SETTINGS_VERSION='20260919-calendly-v1'/);
   assert.match(js,/link\.href=`ai-settings\.css\?v=\$\{SETTINGS_VERSION\}`/);
   assert.match(extension,/link\.href=`service-settings-extension\.css\?v=\$\{SETTINGS_VERSION\}`/);

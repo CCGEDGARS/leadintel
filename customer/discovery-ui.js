@@ -10,7 +10,7 @@ const MAX_DISCOVERY_RESULTS_PER_QUERY=5;
 const DISCOVERY_SEARCH_CONCURRENCY=4;
 const MAX_DISCOVERY_FOLLOW_UP_QUERIES=4;
 const MAX_DISCOVERY_COMPANY_CHECKS=20;
-const ASSET_VERSION="20260925-company-search-resilience-v1";
+const ASSET_VERSION="20260925-gemini-company-extraction-fallback-v1";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20260925-buyers-stage-view-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -160,6 +160,10 @@ async function runDiscoverySearchBatch(items,phase,runSignal,searches=Array(item
   return searches;
 }
 function extractionFallbackMessage(response,payload){
+  const failover=payload?.failover;
+  if(failover?.attempted)return "OpenAI extraction failed and the configured Gemini backup was also unavailable; built-in text matching was used.";
+  if(failover?.reason==="gemini_not_verified")return "OpenAI extraction failed; verify the saved Gemini key in Settings before it can be used as a backup. Built-in text matching was used.";
+  if(failover?.primary==="openai"&&!failover.configured)return "OpenAI extraction failed and a verified Gemini backup is not configured; built-in text matching was used.";
   const detail=String(payload?.code||payload?.error||"").toLowerCase();
   if(/credit_balance_exhausted|insufficient_quota|credit.?balance|billing|quota|\b429\b/.test(detail)||response?.status===429)return "Workspace AI was unavailable or out of credits; built-in text matching was used.";
   if(response?.status===409)return "No active workspace AI provider is configured; built-in text matching was used.";
@@ -187,18 +191,19 @@ async function extractCompaniesFromEvidence(evidence,market,targetCount,runSigna
   const prompt=`Identify operating companies explicitly described as expanding, investing, building, modernising, hiring or otherwise matching the market signals in these sources. Publishers, government bodies, research institutes, directories and the seller itself are not prospects. Every company must include the exact supplied source URL where its name and event appear. Return {"companies":[{"company":"Exact company name","market":"${String(market||"").replace(/"/g,"'")}","sourceUrl":"Exact supplied URL"}]}. Evidence:\n${JSON.stringify(sources)}`;
   const controller=linkedAbortController(runSignal);const timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS);
   try{
-    const response=await fetch(`${LEADINTEL_API}/api/ai/generate?workspace_id=${encodeURIComponent(workspace.id)}`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({system,prompt,max_output_tokens:1800}),signal:controller.signal});
+    const response=await fetch(`${LEADINTEL_API}/api/ai/generate?workspace_id=${encodeURIComponent(workspace.id)}`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({system,prompt,max_output_tokens:1800,purpose:"company_discovery_extraction"}),signal:controller.signal});
     const payload=await response.json().catch(()=>({}));
     if(!response.ok){setCompanyExtraction("fallback","Text fallback",`${extractionFallbackMessage(response,payload)} ${fallback.length} company name${fallback.length===1?" was":"s were"} recovered.`);return fallback;}
     const extracted=LeadIntelDiscovery.parseCompanyExtraction(payload.text,evidence,targetCount);
     const seen=new Set();const combined=[...extracted,...fallback].filter(item=>{const key=item.company.toLowerCase();if(seen.has(key))return false;seen.add(key);return true;}).slice(0,targetCount);
+    const provider=payload.failover?.used?"Gemini fallback":payload.provider==="openai"?"OpenAI":payload.provider==="anthropic"?"Anthropic":payload.provider==="gemini"?"Gemini":"Workspace AI";
     if(extracted.length){
       const extra=combined.length-extracted.length;
-      setCompanyExtraction("ai","AI",`AI extraction verified ${extracted.length} company name${extracted.length===1?"":"s"}${extra?`; text matching added ${extra} more`:""}.`);
+      setCompanyExtraction("ai",provider,`${provider} extraction verified ${extracted.length} company name${extracted.length===1?"":"s"}${extra?`; text matching added ${extra} more`:""}.`);
     }else if(fallback.length){
-      setCompanyExtraction("fallback","Text fallback",`AI returned no source-verified names; text matching recovered ${fallback.length} company name${fallback.length===1?"":"s"}.`);
+      setCompanyExtraction("ai",provider,`${provider} returned no source-verified names; text matching recovered ${fallback.length} company name${fallback.length===1?"":"s"}.`);
     }else{
-      setCompanyExtraction("ai","AI","AI and text matching found no source-verified company names in this evidence set.");
+      setCompanyExtraction("ai",provider,`${provider} and text matching found no source-verified company names in this evidence set.`);
     }
     return combined;
   }catch(error){
@@ -428,7 +433,7 @@ function renderDiscoveryFunnel(){
     [Number(funnel.companySitesChecked)||0,"Company sites checked"],
     [Number(funnel.qualifiedCompanies)||0,"Qualified companies"]
   ];
-  target.innerHTML=`<div class="discovery-funnel-head"><strong>Search funnel</strong><span>${esc(phase)}</span></div><div class="discovery-funnel-track" role="progressbar" aria-label="Market searches checked" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><i style="width:${percent}%"></i></div><div class="discovery-funnel-grid">${metrics.map(([value,label])=>`<div><strong>${esc(value)}</strong><span>${esc(label)}</span></div>`).join("")}</div>${discovery.extraction?.message?`<p class="discovery-funnel-extraction"><strong>Company extraction:</strong> ${esc(discovery.extraction.message)}</p>`:""}${Number(funnel.adaptiveFollowUpSearches)?`<p class="discovery-funnel-followup">LeadIntel added ${Number(funnel.adaptiveFollowUpSearches)} follow-up searches because the first pass found too few qualified companies.</p>`:""}`;
+  target.innerHTML=`<div class="discovery-funnel-head"><strong>Search funnel</strong><span>${esc(phase)}</span></div><div class="discovery-funnel-track" role="progressbar" aria-label="Market searches checked" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><i style="width:${percent}%"></i></div><div class="discovery-funnel-grid">${metrics.map(([value,label])=>`<div><strong>${esc(value)}</strong><span>${esc(label)}</span></div>`).join("")}</div>${discovery.extraction?.message?`<p class="discovery-funnel-extraction"><strong>Company extraction${discovery.extraction.method?` · ${esc(discovery.extraction.method)}`:""}:</strong> ${esc(discovery.extraction.message)}</p>`:""}${Number(funnel.adaptiveFollowUpSearches)?`<p class="discovery-funnel-followup">LeadIntel added ${Number(funnel.adaptiveFollowUpSearches)} follow-up searches because the first pass found too few qualified companies.</p>`:""}`;
 }
 function renderPotentialMatches(){
   const target=$("discovery-potential-matches");if(!target)return;

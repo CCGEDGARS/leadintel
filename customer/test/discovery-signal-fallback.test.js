@@ -45,3 +45,15 @@ test('Company Discovery resolves named companies from evidence before verifying 
   assert.match(ui,/mergeCompanyCandidates\(\[\.\.\.linkedEvidence,\.\.\.allVerified\]/);
   assert.doesNotMatch(ui,/buildCandidateVerificationQueries\(firstPass/);
 });
+
+test('company-name extraction requests Gemini failover explicitly and displays the provider used',()=>{
+  const fs=require('node:fs');
+  const path=require('node:path');
+  const ui=fs.readFileSync(path.join(__dirname,'..','discovery-ui.js'),'utf8');
+  assert.match(ui,/purpose:"company_discovery_extraction"/);
+  assert.match(ui,/payload\.failover\?\.used\?"Gemini fallback"/);
+  assert.match(ui,/Company extraction\$\{discovery\.extraction\.method/);
+  assert.match(ui,/configured Gemini backup was also unavailable/);
+  assert.match(ui,/verify the saved Gemini key in Settings/);
+  assert.match(ui,/const ASSET_VERSION="20260925-gemini-company-extraction-fallback-v1"/);
+});
