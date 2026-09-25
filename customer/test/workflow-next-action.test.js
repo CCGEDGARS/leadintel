@@ -28,7 +28,7 @@ test('Step 5 hides the empty pipeline and continuation control until an opportun
 
   const pipeline={hidden:false};
   const footer={hidden:false};
-  const gate={dataset:{},closest:()=>footer};
+  const gate={dataset:{},textContent:'Save a Company First',disabled:false,attributes:{},setAttribute(name,value){this.attributes[name]=value;},closest:()=>footer};
   const document={
     querySelector(selector){return selector==='.pipeline-panel'?pipeline:null;},
     getElementById(id){return id==='continue-to-outreach'?gate:null;}
@@ -37,12 +37,19 @@ test('Step 5 hides the empty pipeline and continuation control until an opportun
   NextAction.applyStageVisibility(document,5,{pipelineCount:0,buyerCount:0});
   assert.equal(pipeline.hidden,true);
   assert.equal(footer.hidden,true);
+  assert.equal(gate.textContent,'Save a Company First');
+  assert.equal(gate.disabled,true);
+  assert.equal(gate.attributes['aria-disabled'],'true');
 
   NextAction.applyStageVisibility(document,5,{pipelineCount:1,buyerCount:0});
   assert.equal(pipeline.hidden,false);
   assert.equal(footer.hidden,false);
+  assert.equal(gate.textContent,'Continue to Buyers →');
+  assert.equal(gate.disabled,false);
+  assert.equal(gate.attributes['aria-disabled'],'false');
   assert.equal(gate.dataset.journeyStage,'5');
   NextAction.applyStageVisibility(document,5,{pipelineCount:1,buyerCount:1});
+  assert.equal(gate.textContent,'Continue to Messages →');
   assert.equal(gate.dataset.journeyStage,'6');
 });
 

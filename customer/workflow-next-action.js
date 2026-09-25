@@ -33,6 +33,11 @@
     const gate=document?.getElementById?.("continue-to-outreach");
     const footer=gate?.closest?.(".workflow-next-action");
     if(footer)footer.hidden=hidden;
+    if(gate){
+      gate.textContent=action.label;
+      gate.disabled=!action.enabled;
+      gate.setAttribute?.("aria-disabled",String(!action.enabled));
+    }
     if(gate?.dataset&&action.journeyStage)gate.dataset.journeyStage=String(action.journeyStage);
     return action;
   }
