@@ -2,11 +2,13 @@ import {sha256,cookieValue} from './security.js';
 import {importAesKey,encryptSecret,decryptSecret} from './oauth.js';
 import {AI_PROVIDERS,normalizeAiProvider,defaultAiModel,generateText,verifyProviderCredential,searchWeb} from './ai-provider.js';
 import {verifyMarketResearch} from './market-research-verifier.js';
+import {generateCompanyExtraction} from './company-extraction-fallback.js';
 
 const uuid=()=>crypto.randomUUID();
 const json=(value,status=200,headers={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...headers}});
 const error=(message,status,headers,extra={})=>json({error:message,...extra},status,headers);
 const PROVIDER_NAMES=Object.freeze({openai:'OpenAI',anthropic:'Anthropic',gemini:'Google Gemini'});
+const COMPANY_EXTRACTION_PROVIDER_TIMEOUT_MS=20000;
 
 async function sessionUser(request,env){
   const token=cookieValue(request,'leadintel_session');if(!token)return null;const tokenHash=await sha256(token);
@@ -147,13 +149,42 @@ export async function handleAiRoute(request,env,cors={}){
     const body=await request.json().catch(()=>null);if(!body)return error('AI generation payload is required',400,cors);
     const prompt=String(body.prompt||'').trim(),system=String(body.system||'').trim();
     if(!prompt||prompt.length>80000||system.length>20000)return error('AI generation prompt is invalid or too large',400,cors);
-    const integration=await activeIntegration(env,workspaceId);if(!integration)return error('No active AI provider is configured for this workspace',409,cors);
+    const integration=await activeIntegration(env,workspaceId);if(!integration)return error('No active AI provider is configured for this workspace',409,cors,body.task==='company-extraction'?{provider:'',fallback:{status:'not_used',used:false}}:{});
     try{
-      const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const apiKey=await decryptSecret(integration.encrypted_api_key,key);
-      const result=await generateText({provider:integration.provider,apiKey,model:integration.model,system,prompt,maxOutputTokens:body.max_output_tokens});
-      await env.DB.prepare(`UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(workspaceId,integration.provider).run();
-      await audit(env,{workspaceId,userId:access.user.id,type:'ai.generation_completed',provider:integration.provider,metadata:{model:integration.model,input_tokens:result.usage.input_tokens,output_tokens:result.usage.output_tokens}});
-      return json(result,200,cors);
+      const extractionRequest={system,prompt,maxOutputTokens:body.max_output_tokens};
+      const runProvider=async(providerIntegration,input)=>{
+        const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const apiKey=await decryptSecret(providerIntegration.encrypted_api_key,key);
+        let controller=null,timer=null,timedOut=false,onRequestAbort=null;let signal=request.signal;
+        if(body.task==='company-extraction'){
+          if(request.signal?.aborted){const canceled=new Error('AI generation was canceled');canceled.name='AbortError';throw canceled;}
+          controller=new AbortController();signal=controller.signal;
+          onRequestAbort=()=>controller.abort(request.signal.reason);
+          request.signal?.addEventListener('abort',onRequestAbort,{once:true});
+          timer=setTimeout(()=>{timedOut=true;controller.abort();},COMPANY_EXTRACTION_PROVIDER_TIMEOUT_MS);
+        }
+        try{return await generateText({provider:providerIntegration.provider,apiKey,model:providerIntegration.model,...input,signal});}
+        catch(cause){
+          if(timedOut)throw new Error(`${PROVIDER_NAMES[providerIntegration.provider]||'AI provider'} request timed out`);
+          if(request.signal?.aborted){const canceled=new Error('AI generation was canceled');canceled.name='AbortError';throw canceled;}
+          throw cause;
+        }finally{
+          if(timer)clearTimeout(timer);
+          if(onRequestAbort)request.signal?.removeEventListener('abort',onRequestAbort);
+        }
+      };
+      const attempt=await generateCompanyExtraction({
+        task:body.task,fallbackProvider:body.fallback_provider,primaryIntegration:integration,
+        getFallbackIntegration:()=>geminiIntegration(env,workspaceId),request:extractionRequest,runProvider
+      });
+      if(!attempt.ok){
+        const message=attempt.fallback.status==='failed'?'OpenAI extraction failed and Gemini fallback also failed':String(attempt.error?.message||'AI provider request failed').slice(0,180);
+        const metadata=body.task==='company-extraction'?{provider:integration.provider,fallback:attempt.fallback}:{};
+        return error(message,502,cors,metadata);
+      }
+      const result=attempt.result;const usedProvider=result.provider||integration.provider;
+      await env.DB.prepare(`UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(workspaceId,usedProvider).run();
+      await audit(env,{workspaceId,userId:access.user.id,type:'ai.generation_completed',provider:usedProvider,metadata:{model:result.model||integration.model,input_tokens:result.usage?.input_tokens||0,output_tokens:result.usage?.output_tokens||0,fallback_used:Boolean(attempt.fallback.used),fallback_from:attempt.fallback.used?'openai':undefined}});
+      return json(body.task==='company-extraction'?{...result,fallback:attempt.fallback}:result,200,cors);
     }catch(cause){return error(String(cause?.message||'AI provider request failed').slice(0,180),502,cors);}
   }
 

@@ -20,13 +20,13 @@ export function normalizeAiProvider(value){
 
 export function defaultAiModel(provider){return DEFAULT_MODELS[normalizeAiProvider(provider)]||'';}
 
-function validatedOptions({provider,apiKey,model,system='',prompt,maxOutputTokens}){
+function validatedOptions({provider,apiKey,model,system='',prompt,maxOutputTokens,signal}){
   const normalized=normalizeAiProvider(provider);if(!normalized)throw new Error('Unsupported AI provider');
   const key=clean(apiKey);if(!key)throw new Error('AI provider API key is required');
   const selectedModel=clean(model)||defaultAiModel(normalized);if(!selectedModel||selectedModel.length>160)throw new Error('AI provider model is invalid');
   const userPrompt=clean(prompt);if(!userPrompt)throw new Error('AI prompt is required');
   const systemPrompt=clean(system);
-  return {provider:normalized,apiKey:key,model:selectedModel,system:systemPrompt,prompt:userPrompt,maxOutputTokens:clampTokens(maxOutputTokens)};
+  return {provider:normalized,apiKey:key,model:selectedModel,system:systemPrompt,prompt:userPrompt,maxOutputTokens:clampTokens(maxOutputTokens),signal};
 }
 
 function textFromOpenAi(payload){
@@ -106,6 +106,7 @@ function parseStructuredWebResults(payload,sources,maxResults){
 async function openAiRequest(options,fetchImpl){
   const response=await fetchImpl('https://api.openai.com/v1/responses',{
     method:'POST',
+    signal:options.signal,
     headers:{'Content-Type':'application/json','Accept':'application/json',Authorization:`Bearer ${options.apiKey}`},
     body:JSON.stringify({model:options.model,instructions:options.system||undefined,input:options.prompt,max_output_tokens:options.maxOutputTokens,store:false})
   });
@@ -158,6 +159,7 @@ async function anthropicRequest(options,fetchImpl){
   const body={model:options.model,max_tokens:options.maxOutputTokens,messages:[{role:'user',content:options.prompt}]};if(options.system)body.system=options.system;
   const response=await fetchImpl('https://api.anthropic.com/v1/messages',{
     method:'POST',
+    signal:options.signal,
     headers:{'Content-Type':'application/json','Accept':'application/json','x-api-key':options.apiKey,'anthropic-version':'2023-06-01'},
     body:JSON.stringify(body)
   });
@@ -182,6 +184,7 @@ async function geminiRequest(options,fetchImpl){
   if(options.system)body.systemInstruction={parts:[{text:options.system}]};
   const response=await fetchImpl(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(options.model)}:generateContent`,{
     method:'POST',
+    signal:options.signal,
     headers:{'Content-Type':'application/json','Accept':'application/json','x-goog-api-key':options.apiKey},
     body:JSON.stringify(body)
   });
@@ -201,8 +204,8 @@ async function verifyGeminiCredential(options,fetchImpl){
   return {provider:'gemini',model:options.model,text};
 }
 
-export async function generateText({provider,apiKey,model,system='',prompt,maxOutputTokens=1200,fetchImpl=fetch}){
-  const options=validatedOptions({provider,apiKey,model,system,prompt,maxOutputTokens});
+export async function generateText({provider,apiKey,model,system='',prompt,maxOutputTokens=1200,signal,fetchImpl=fetch}){
+  const options=validatedOptions({provider,apiKey,model,system,prompt,maxOutputTokens,signal});
   try{
     if(options.provider==='openai')return await openAiRequest(options,fetchImpl);
     if(options.provider==='anthropic')return await anthropicRequest(options,fetchImpl);

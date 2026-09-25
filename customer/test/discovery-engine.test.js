@@ -81,6 +81,44 @@ test('text fallback extracts a named company from common press-release verbs',()
   assert.equal(mentions[0].sourceUrl,'https://news.example.com/modvion-turbine');
 });
 
+test('company extraction status names Gemini and explains when it was used as the OpenAI fallback',()=>{
+  assert.equal(typeof Discovery.describeCompanyExtractionOutcome,'function','extraction outcome copy must expose provider and fallback status');
+  const outcome=Discovery.describeCompanyExtractionOutcome({
+    provider:'gemini',fallback:{used:true,provider:'gemini',reason:'quota_or_rate_limit'},aiNames:2,textNames:1
+  });
+  assert.equal(outcome.status,'ai');
+  assert.match(outcome.message,/Gemini fallback/i);
+  assert.match(outcome.message,/OpenAI.*quota or rate limit/i);
+  assert.match(outcome.message,/2 company names/i);
+  assert.match(outcome.message,/text matching added 1/i);
+});
+
+test('a successful empty OpenAI answer is not described as a Gemini fallback',()=>{
+  const outcome=Discovery.describeCompanyExtractionOutcome({provider:'openai',fallback:{used:false,status:'not_used'},aiNames:0,textNames:0});
+  assert.equal(outcome.status,'ai');
+  assert.match(outcome.message,/OpenAI/i);
+  assert.doesNotMatch(outcome.message,/Gemini fallback/i);
+});
+
+test('failed company extraction status explains whether Gemini was unconfigured or also failed',()=>{
+  const missing=Discovery.describeCompanyExtractionOutcome({provider:'openai',fallback:{status:'not_configured'},textNames:1,responseOk:false});
+  assert.match(missing.message,/Gemini fallback is not configured/i);
+  assert.match(missing.message,/text matching recovered 1 company name/i);
+  const failed=Discovery.describeCompanyExtractionOutcome({provider:'openai',fallback:{status:'failed'},textNames:0,responseOk:false});
+  assert.match(failed.message,/Gemini fallback also failed/i);
+  assert.match(failed.message,/text matching recovered 0 company names/i);
+});
+
+test('Gemini extraction must cite the supplied source and name in that source before qualification',()=>{
+  const evidence=[{url:'https://evidence.example/northstar-expansion',market:'Sweden',title:'Northstar AB expands production',text:'Northstar AB announces a new production facility.'}];
+  const extracted=Discovery.parseCompanyExtraction({companies:[
+    {company:'Northstar AB',sourceUrl:'https://evidence.example/northstar-expansion'},
+    {company:'Northstar AB',sourceUrl:'https://invented.example/story'},
+    {company:'Invented Industries',sourceUrl:'https://evidence.example/northstar-expansion'}
+  ]},evidence,10);
+  assert.deepEqual(extracted,[{company:'Northstar AB',market:'Sweden',sourceUrl:'https://evidence.example/northstar-expansion'}]);
+});
+
 test('buildCandidateVerificationQueries creates bounded company-domain checks and rejects known market conflicts',()=>{
   const raw=[
     {url:'https://nordicfood.se/about',domain:'nordicfood.se',company:'Nordic Food AB',market:'Sweden',title:'Nordic Food',description:'Food producer'},

@@ -10,7 +10,7 @@ const MAX_DISCOVERY_RESULTS_PER_QUERY=5;
 const DISCOVERY_SEARCH_CONCURRENCY=4;
 const MAX_DISCOVERY_FOLLOW_UP_QUERIES=4;
 const MAX_DISCOVERY_COMPANY_CHECKS=20;
-const ASSET_VERSION="20260925-company-search-resilience-v1";
+const ASSET_VERSION="20260925-gemini-extraction-fallback-v1";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20260925-buyers-stage-view-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -115,11 +115,12 @@ function companyExtractionMiss(){return Boolean(discovery?.rawResults?.length&&N
 function reviewDiscoveryGuidance(){if(companyExtractionMiss()){if(discovery?.extraction?.status==="fallback")document.getElementById("open-settings")?.click();else reviewMarketResearch();return;}if(mainState()?.market?.researchMode==="quick"){reviewMarketResearch();return;}showStrategyStep();}
 
 const DISCOVERY_REQUEST_TIMEOUT_MS=25000;
+const COMPANY_EXTRACTION_TIMEOUT_MS=47000;
 const DISCOVERY_RUN_TIMEOUT_MIN_MS=120000;
 const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=20000;
 function linkedAbortController(parentSignal){const controller=new AbortController();if(parentSignal?.aborted)controller.abort(parentSignal.reason);else parentSignal?.addEventListener?.("abort",()=>controller.abort(parentSignal.reason),{once:true});return controller;}
-// Budget every bounded provider wave plus named-company extraction, then leave a small scheduler/network margin.
-function discoveryRunTimeoutMs(targetCount,queryCount){const entityQueries=Math.max(1,Math.min(MAX_DISCOVERY_COMPANY_CHECKS,(Number(targetCount)||10)*2));const marketWaves=Math.ceil((Math.max(1,Number(queryCount)||4)+MAX_DISCOVERY_FOLLOW_UP_QUERIES)/DISCOVERY_SEARCH_CONCURRENCY);const entityWaves=Math.ceil(entityQueries/DISCOVERY_SEARCH_CONCURRENCY);const requestWaves=marketWaves+(entityWaves*2)+2;return Math.max(DISCOVERY_RUN_TIMEOUT_MIN_MS,requestWaves*DISCOVERY_REQUEST_TIMEOUT_MS+DISCOVERY_RUN_TIMEOUT_MARGIN_MS);}
+// Budget search waves and up to two bounded extraction calls (OpenAI plus Gemini fallback).
+function discoveryRunTimeoutMs(targetCount,queryCount){const entityQueries=Math.max(1,Math.min(MAX_DISCOVERY_COMPANY_CHECKS,(Number(targetCount)||10)*2));const marketWaves=Math.ceil((Math.max(1,Number(queryCount)||4)+MAX_DISCOVERY_FOLLOW_UP_QUERIES)/DISCOVERY_SEARCH_CONCURRENCY);const entityWaves=Math.ceil(entityQueries/DISCOVERY_SEARCH_CONCURRENCY);const requestWaves=marketWaves+(entityWaves*2);const extractionCalls=2;return Math.max(DISCOVERY_RUN_TIMEOUT_MIN_MS,requestWaves*DISCOVERY_REQUEST_TIMEOUT_MS+extractionCalls*COMPANY_EXTRACTION_TIMEOUT_MS+DISCOVERY_RUN_TIMEOUT_MARGIN_MS);}
 function throwIfDiscoveryRunAborted(signal){if(!signal?.aborted)return;const reason=signal.reason;if(reason instanceof Error)throw reason;const error=new Error("Company discovery was canceled");error.name="AbortError";throw error;}
 async function firecrawlCompanySearch(queryMeta,runSignal){
   const controller=linkedAbortController(runSignal);
@@ -159,12 +160,6 @@ async function runDiscoverySearchBatch(items,phase,runSignal,searches=Array(item
   throwIfDiscoveryRunAborted(runSignal);
   return searches;
 }
-function extractionFallbackMessage(response,payload){
-  const detail=String(payload?.code||payload?.error||"").toLowerCase();
-  if(/credit_balance_exhausted|insufficient_quota|credit.?balance|billing|quota|\b429\b/.test(detail)||response?.status===429)return "Workspace AI was unavailable or out of credits; built-in text matching was used.";
-  if(response?.status===409)return "No active workspace AI provider is configured; built-in text matching was used.";
-  return "Workspace AI extraction was unavailable; built-in text matching was used.";
-}
 function setCompanyExtraction(status,method,message){
   discovery.extraction={status,method,message};
   renderDiscoverySafely();
@@ -185,25 +180,23 @@ async function extractCompaniesFromEvidence(evidence,market,targetCount,runSigna
   }));
   const system="You extract prospective operating companies from supplied market evidence. Never invent a company or URL. Return strict JSON only.";
   const prompt=`Identify operating companies explicitly described as expanding, investing, building, modernising, hiring or otherwise matching the market signals in these sources. Publishers, government bodies, research institutes, directories and the seller itself are not prospects. Every company must include the exact supplied source URL where its name and event appear. Return {"companies":[{"company":"Exact company name","market":"${String(market||"").replace(/"/g,"'")}","sourceUrl":"Exact supplied URL"}]}. Evidence:\n${JSON.stringify(sources)}`;
-  const controller=linkedAbortController(runSignal);const timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS);
+  const controller=linkedAbortController(runSignal);const timeout=setTimeout(()=>controller.abort(),COMPANY_EXTRACTION_TIMEOUT_MS);
   try{
-    const response=await fetch(`${LEADINTEL_API}/api/ai/generate?workspace_id=${encodeURIComponent(workspace.id)}`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({system,prompt,max_output_tokens:1800}),signal:controller.signal});
+    const response=await fetch(`${LEADINTEL_API}/api/ai/generate?workspace_id=${encodeURIComponent(workspace.id)}`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({task:"company-extraction",fallback_provider:"gemini",system,prompt,max_output_tokens:1800}),signal:controller.signal});
     const payload=await response.json().catch(()=>({}));
-    if(!response.ok){setCompanyExtraction("fallback","Text fallback",`${extractionFallbackMessage(response,payload)} ${fallback.length} company name${fallback.length===1?" was":"s were"} recovered.`);return fallback;}
+    if(!response.ok){
+      const outcome=LeadIntelDiscovery.describeCompanyExtractionOutcome({provider:payload.provider||"openai",fallback:payload.fallback||{},textNames:fallback.length,responseOk:false,errorStatus:response.status,errorMessage:payload.error||""});
+      setCompanyExtraction(outcome.status,outcome.method,outcome.message);return fallback;
+    }
     const extracted=LeadIntelDiscovery.parseCompanyExtraction(payload.text,evidence,targetCount);
     const seen=new Set();const combined=[...extracted,...fallback].filter(item=>{const key=item.company.toLowerCase();if(seen.has(key))return false;seen.add(key);return true;}).slice(0,targetCount);
-    if(extracted.length){
-      const extra=combined.length-extracted.length;
-      setCompanyExtraction("ai","AI",`AI extraction verified ${extracted.length} company name${extracted.length===1?"":"s"}${extra?`; text matching added ${extra} more`:""}.`);
-    }else if(fallback.length){
-      setCompanyExtraction("fallback","Text fallback",`AI returned no source-verified names; text matching recovered ${fallback.length} company name${fallback.length===1?"":"s"}.`);
-    }else{
-      setCompanyExtraction("ai","AI","AI and text matching found no source-verified company names in this evidence set.");
-    }
+    const outcome=LeadIntelDiscovery.describeCompanyExtractionOutcome({provider:payload.provider,fallback:payload.fallback||{},aiNames:extracted.length,textNames:Math.max(0,combined.length-extracted.length)});
+    setCompanyExtraction(outcome.status,outcome.method,outcome.message);
     return combined;
   }catch(error){
     if(runSignal?.aborted)throw error;
-    setCompanyExtraction("fallback","Text fallback",`${extractionFallbackMessage(null,{error:error?.message})} ${fallback.length} company name${fallback.length===1?" was":"s were"} recovered.`);
+    const outcome=LeadIntelDiscovery.describeCompanyExtractionOutcome({provider:"openai",fallback:{status:"not_used"},textNames:fallback.length,responseOk:false,errorMessage:error?.message||""});
+    setCompanyExtraction(outcome.status,outcome.method,outcome.message);
     return fallback;
   }finally{clearTimeout(timeout);if(!runSignal?.aborted){discoveryProgress.completed=1;renderDiscoverySafely();}}
 }
