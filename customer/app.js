@@ -168,9 +168,12 @@ function initBrandIdentity(){
   });
 }
 function readSources(){
-  const previousWebsite=state.website;state.website=LeadIntelProfile.normalizeUrl($("company-website").value);const additionalLinks=$("additional-links");state.additionalLinks=(additionalLinks?.value||"").split(/\n/).map(LeadIntelProfile.normalizeUrl).filter(Boolean).slice(0,8);
+  const previousWebsite=state.website;const enteredWebsite=LeadIntelProfile.normalizeUrl($("company-website").value);
+  const isolation=window.LeadIntelWorkspaceIsolation;
+  const sameCompany=Boolean(previousWebsite&&enteredWebsite&&isolation?.canonicalDomain(previousWebsite)===isolation?.canonicalDomain(enteredWebsite));
+  state.website=sameCompany?previousWebsite:enteredWebsite;
+  const additionalLinks=$("additional-links");state.additionalLinks=(additionalLinks?.value||"").split(/\n/).map(LeadIntelProfile.normalizeUrl).filter(Boolean).slice(0,8);
   if(previousWebsite&&state.website!==previousWebsite){
-    const isolation=window.LeadIntelWorkspaceIsolation;
     if(!isolation||isolation.canonicalDomain(previousWebsite)!==isolation.canonicalDomain(state.website))isolation?.clearDerivedWorkspaceData?.(localStorage);
     invalidateStrategicOutputs(true);
   }
@@ -1178,7 +1181,14 @@ async function factoryResetLeadIntel(){
 }
 
 function bind(){
-  $("company-website").addEventListener("input",readSources);$("additional-links").addEventListener("input",readSources);
+  $("company-website").addEventListener("input",()=>{
+    // Editing an existing website is tentative until the field is committed. A partial
+    // domain typed mid-edit must never erase approved strategy or discovery results.
+    if(state.profile&&window.LeadIntelWorkspaceIsolation?.canonicalDomain(state.website)!==window.LeadIntelWorkspaceIsolation?.canonicalDomain($("company-website").value))return;
+    readSources();
+  });
+  $("company-website").addEventListener("change",readSources);
+  $("additional-links").addEventListener("input",readSources);
   $("target-market-selector").addEventListener("click",e=>{
     const chip=e.target.closest("[data-target-market]");if(chip){toggleTargetMarket(chip.dataset.targetMarket);return;}
     const remove=e.target.closest("[data-remove-target-market]");if(remove){toggleTargetMarket(remove.dataset.removeTargetMarket);}

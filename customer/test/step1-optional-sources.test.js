@@ -12,6 +12,7 @@ test('Step 1 tolerates the removed optional additional-links input',()=>{
 });
 
 test('Step 1 continues reading and validating the required company website',()=>{
-  assert.match(app,/state\.website=LeadIntelProfile\.normalizeUrl\(\$\("company-website"\)\.value\)/);
+  assert.match(app,/enteredWebsite=LeadIntelProfile\.normalizeUrl\(\$\("company-website"\)\.value\)/);
+  assert.match(app,/state\.website=sameCompany\?previousWebsite:enteredWebsite/);
   assert.match(app,/if\(!state\.website\)/);
 });
