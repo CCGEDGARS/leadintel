@@ -3,7 +3,7 @@ const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
 const DELIVERY_STORAGE_KEY="leadintel_customer_v2_delivery";
   const ASSET_VERSION="20260924-workspace-content-english-v1";
-const SERVER_BRIDGE_ASSET="server-bridge.js?v=20260924-crm-activity-pages-v1";
+const SERVER_BRIDGE_ASSET="server-bridge.js?v=20260925-apollo-buyer-search-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const q=id=>document.getElementById(id);
 let delivery=loadDelivery();

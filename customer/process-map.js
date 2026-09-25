@@ -11,7 +11,7 @@
  * import './website-activation.js?v=20260916-ercon-context-v1';
  * import './crm-engine.js?v=20260828-master-crm-v1';
  * import './sync-conflict-hygiene.js?v=20260901-stale-blank-conflict-v1';
- * import './server-bridge.js?v=20260924-crm-activity-pages-v1';
+ * import './server-bridge.js?v=20260925-apollo-buyer-search-v1';
  * import './crm-presentation.js?v=20260924-crm-evidence-activity-v1';
  * import './crm-ui.js?v=20260924-crm-evidence-activity-v1';
  * import './ai-settings.js?v=20260915-model-choice-v1';

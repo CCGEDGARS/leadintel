@@ -64,6 +64,35 @@ sqliteTest('owner save encrypts Apollo key, returns only a hint, and authenticat
   }finally{globalThis.fetch=originalFetch;}
 });
 
+sqliteTest('Apollo buyer search uses the authenticated workspace key and returns identity-only results',async()=>{
+  const {env,DB,token}=await fixture('owner');const originalFetch=globalThis.fetch;const calls=[];
+  globalThis.fetch=async (url,options={})=>{
+    calls.push({url:String(url),options});
+    if(String(url).endsWith('/auth/health'))return new Response(JSON.stringify({healthy:true,is_logged_in:true}),{status:200,headers:{'Content-Type':'application/json'}});
+    return new Response(JSON.stringify({people:[{id:'apollo-person-1',name:'Marta Buyer',title:'Procurement Director',seniority:'director',email:'private@example.com',organization:{name:'Example AB'},city:'Stockholm',country:'Sweden',linkedin_url:'https://www.linkedin.com/in/marta-buyer'}]}),{status:200,headers:{'Content-Type':'application/json'}});
+  };
+  try{
+    const saved=await handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'PUT',token,body:{provider:'apollo',api_key:'apollo-customer-secret-ABCD'}}),env,{});
+    assert.equal(saved.status,200);
+    const response=await handleServiceIntegrationRoute(req('/api/integrations/services/apollo/people-search?workspace_id=w1',{method:'POST',token,body:{q_organization_domains_list:['example.com'],person_titles:['Procurement Director'],include_similar_titles:true,person_seniorities:['director'],page:1,per_page:10}}),env,{});
+    assert.equal(response.status,200);const result=await payload(response);
+    assert.equal(calls[1].url,'https://api.apollo.io/api/v1/mixed_people/api_search');
+    assert.equal(calls[1].options.headers['X-Api-Key'],'apollo-customer-secret-ABCD');
+    assert.deepEqual(JSON.parse(calls[1].options.body),{q_organization_domains_list:['example.com'],person_titles:['Procurement Director'],include_similar_titles:true,person_seniorities:['owner','founder','c_suite','partner','vp','head','director','manager'],page:1,per_page:10});
+    assert.equal(result.people[0].id,'apollo-person-1');assert.equal(result.people[0].organization_name,'Example AB');
+    assert.equal('email' in result.people[0],false,'buyer search must not expose contact details before explicit enrichment');
+    const row=DB.raw.prepare(`SELECT last_used_at FROM workspace_service_integrations WHERE workspace_id='w1' AND provider='apollo'`).get();assert.ok(row.last_used_at);
+  }finally{globalThis.fetch=originalFetch;}
+});
+
+sqliteTest('Apollo buyer search fails clearly when no workspace or managed key is available',async()=>{
+  const {env,token}=await fixture('owner');delete env.APOLLO_API_KEY;
+  const response=await handleServiceIntegrationRoute(req('/api/integrations/services/apollo/people-search?workspace_id=w1',{method:'POST',token,body:{q_organization_domains_list:['example.com'],person_titles:['CEO']}}),env,{});
+  assert.equal(response.status,503);const result=await payload(response);
+  assert.equal(result.code,'SERVICE_APOLLO_NOT_CONFIGURED');
+  assert.match(result.error,/Apollo.*workspace/i);
+});
+
 sqliteTest('non-owner cannot replace workspace service credentials',async()=>{
   const {env,token}=await fixture('researcher');let fetchCalled=false;const originalFetch=globalThis.fetch;globalThis.fetch=async()=>{fetchCalled=true;return new Response('{}',{status:200});};
   try{

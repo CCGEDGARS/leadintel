@@ -31,6 +31,18 @@ test('server bridge exposes CRM-native Apollo enrichment without exposing Apollo
   assert.doesNotMatch(bridge,/APOLLO_API_KEY|X-Api-Key/);
 });
 
+test('server bridge routes buyer search through workspace-authenticated Apollo integration',()=>{
+  assert.match(bridge,/searchApolloPeople/);
+  assert.match(bridge,/\/api\/integrations\/services\/apollo\/people-search/);
+  assert.match(bridge,/searchApolloPeople\(payload,options=\{\}\)/);
+});
+
+test('customer entry point cache-busts the changed buyer-search scripts',()=>{
+  const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
+  assert.match(html,/server-bridge\.js\?v=20260925-apollo-buyer-search-v1/);
+  assert.match(html,/discovery-ui\.js\?v=20260925-apollo-buyer-search-v1/);
+});
+
 test('dirty local state survives reload and is retried before reporting synced',()=>{
   assert.match(bridge,/DIRTY_KEY/);
   assert.match(bridge,/localStorage\.setItem\(DIRTY_KEY/);

@@ -23,6 +23,14 @@ test('Buyers focus shows a distinct saved-company list and supports buyer search
   assert.match(source,/Find buyers/);
 });
 
+test('buyer search uses the authenticated workspace Apollo integration',()=>{
+  const start=source.indexOf('async function searchDecisionMakers(');
+  const end=source.indexOf('function saveLocalPipeline',start);
+  const search=source.slice(start,end);
+  assert.match(search,/searchApolloPeople/);
+  assert.doesNotMatch(search,/fetch\(`\$\{INTELLIGENCE_PROXY\}/);
+});
+
 test('Discovery uses Master CRM as authenticated source while preserving local fallback',()=>{
   assert.match(source,/listCrmCompanies/);
   assert.match(source,/saveCrmCompany/);
