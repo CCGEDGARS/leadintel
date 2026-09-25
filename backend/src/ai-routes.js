@@ -149,7 +149,9 @@ export async function handleAiRoute(request,env,cors={}){
     const body=await request.json().catch(()=>null);if(!body)return error('AI generation payload is required',400,cors);
     const prompt=String(body.prompt||'').trim(),system=String(body.system||'').trim();
     if(!prompt||prompt.length>80000||system.length>20000)return error('AI generation prompt is invalid or too large',400,cors);
-    const integration=await activeIntegration(env,workspaceId);if(!integration)return error('No active AI provider is configured for this workspace',409,cors,body.task==='company-extraction'?{provider:'',fallback:{status:'not_used',used:false}}:{});
+    const companyExtraction=body.task==='company-extraction';
+    const integration=companyExtraction?await openAiIntegration(env,workspaceId):await activeIntegration(env,workspaceId);
+    if(!integration)return error(companyExtraction?'OpenAI integration is required for company extraction':'No active AI provider is configured for this workspace',409,cors,companyExtraction?{provider:'openai',fallback:{status:'not_used',used:false}}:{});
     try{
       const extractionRequest={system,prompt,maxOutputTokens:body.max_output_tokens};
       const runProvider=async(providerIntegration,input)=>{

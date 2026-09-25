@@ -15,7 +15,8 @@ class FakeD1{
       async first(){
         if(sql.includes('JOIN users ON users.id=sessions.user_id'))return {id:'user-1',email:'owner@example.com',display_name:'Owner',role:'owner',expires_at:'2099-01-01T00:00:00Z'};
         if(sql.includes('SELECT role FROM workspace_members'))return {role:'owner'};
-        if(sql.includes('active=1 LIMIT 1'))return database.integrations.openai;
+        if(sql.includes("provider='openai'"))return database.integrations.openai||null;
+        if(sql.includes('active=1 LIMIT 1'))return database.integrations.active||database.integrations.openai;
         if(sql.includes("provider='gemini'"))return database.integrations.gemini||null;
         return null;
       },
@@ -30,14 +31,14 @@ class FakeD1{
   async batch(){return {success:true};}
 }
 
-async function makeEnv(){
+async function makeEnv(activeProvider='openai'){
   const key=await importAesKey(ENCRYPTION_KEY);
+  const openai={provider:'openai',encrypted_api_key:await encryptSecret('openai-test-key',key),model:'gpt-5.6',active:activeProvider==='openai'?1:0};
+  const gemini={provider:'gemini',encrypted_api_key:await encryptSecret('gemini-test-key',key),model:'gemini-3.7-flash',active:activeProvider==='gemini'?1:0};
+  const anthropic={provider:'anthropic',encrypted_api_key:await encryptSecret('anthropic-test-key',key),model:'claude-sonnet-4-6',active:activeProvider==='anthropic'?1:0};
   return {
     OAUTH_TOKEN_ENCRYPTION_KEY:ENCRYPTION_KEY,
-    DB:new FakeD1({
-      openai:{provider:'openai',encrypted_api_key:await encryptSecret('openai-test-key',key),model:'gpt-5.6',active:1},
-      gemini:{provider:'gemini',encrypted_api_key:await encryptSecret('gemini-test-key',key),model:'gemini-3.7-flash',active:0}
-    })
+    DB:new FakeD1({openai,gemini,anthropic,active:{openai,gemini,anthropic}[activeProvider]})
   };
 }
 
@@ -77,6 +78,25 @@ test('AI generation does not spend on Gemini when OpenAI returns a valid empty c
   const originalFetch=globalThis.fetch;const calls=[];
   const env=await makeEnv();
   globalThis.fetch=async(url,options)=>{
+    calls.push(String(url));
+    return new Response(JSON.stringify({output:[{type:'message',content:[{type:'output_text',text:'{"companies":[]}'}]}]}),{status:200,headers:{'Content-Type':'application/json'}});
+  };
+  try{
+    const response=await handleAiRoute(generationRequest(),env,{});
+    const payload=await response.json();
+    assert.equal(response.status,200);
+    assert.equal(payload.provider,'openai');
+    assert.equal(payload.fallback.used,false);
+    assert.equal(calls.length,1);
+    assert.match(calls[0],/api\.openai\.com/);
+    assert.deepEqual(env.DB.lastUsed,['openai']);
+  }finally{globalThis.fetch=originalFetch;}
+});
+
+test('company extraction uses OpenAI first even when another provider is active for general AI generation',async()=>{
+  const originalFetch=globalThis.fetch;const calls=[];
+  const env=await makeEnv('anthropic');
+  globalThis.fetch=async url=>{
     calls.push(String(url));
     return new Response(JSON.stringify({output:[{type:'message',content:[{type:'output_text',text:'{"companies":[]}'}]}]}),{status:200,headers:{'Content-Type':'application/json'}});
   };
