@@ -18,4 +18,9 @@ test('Company Discovery bootstrap is not blocked by a module dependency graph', 
     /^import\s/m,
     'Discovery must not wait for a redundant static import before it can create Step 5'
   );
+  assert.match(
+    html,
+    /<script defer src="workflow-next-action\.js\?v=20260925-buyers-stage-view-v1"><\/script>/,
+    'The Buyers handoff must load the updated workflow gate after deployment'
+  );
 });
