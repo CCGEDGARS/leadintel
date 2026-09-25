@@ -157,3 +157,4 @@
 .buyers-focus-guide h3{margin:0;color:#14231e;font-size:clamp(18px,2vw,23px);font-weight:750;letter-spacing:-.025em}
 .buyers-focus-guide p{margin:0;max-width:76ch;color:#53645d;line-height:1.55}
 .buyers-focus-guide .eyebrow{color:#0c6958}
+.candidate-evidence em,.potential-match-evidence em{display:block;margin-top:5px;color:#876116;font-style:normal;font-size:8px;font-weight:600}

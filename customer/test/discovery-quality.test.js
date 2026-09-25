@@ -6,7 +6,7 @@ test("discovery excludes the customer website and tender portals when tenders ar
   const results=discovery.mergeCompanyCandidates([
     {url:"https://ajprodukti.lv/levelpath",domain:"ajprodukti.lv",title:"Levelpath – AJ Produkti",description:"AJ Produkti office furniture",text:"AJ Produkti office furniture"},
     {url:"https://eis.gov.lv/EKEIS/Supplier/ViewProcurement",domain:"eis.gov.lv",title:"Public procurement tender",description:"Supplier procurement notice",text:"Tender procurement notice"},
-    {url:"https://buyer.lv/news/new-factory",domain:"buyer.lv",title:"Buyer opens a new factory in Latvia",description:"Expansion announcement",text:"The company opens a new factory and expands capacity in Latvia."}
+    {url:"https://buyer.lv/news/new-factory",domain:"buyer.lv",title:"Buyer opens a new factory in Latvia",description:"Expansion announcement",text:"The company opens a new factory and expands capacity in Latvia. It needs office furniture for the new offices."}
   ],{website:"https://www.ajprodukti.lv",targetMarkets:"Latvia",priorityOffers:"Office furniture",idealCustomer:"Companies and institutions",exclusions:"Tenders"},{researchSourceTypes:["news"],signals:[{id:"facility-expansion",name:"Facility expansion",active:true,weight:9,keywords:"new factory; expansion"}]});
   assert.deepEqual(results.map(item=>item.domain),["buyer.lv"]);
   assert.deepEqual(results[0].matchedSignals.map(item=>item.name),["Facility expansion"]);
@@ -28,6 +28,43 @@ test("discovery requires at least one active buying signal",()=>{
 test("discovery withholds a company without signal evidence from the actionable shortlist",()=>{
   const results=discovery.mergeCompanyCandidates([{url:"https://generic.lv",domain:"generic.lv",title:"Generic office furniture",text:"Office furniture company in Latvia"}],{website:"https://ajprodukti.lv",priorityOffers:"Office furniture",idealCustomer:"Companies"},{researchSourceTypes:["news"],signals:[{name:"Facility expansion",active:true,weight:9,keywords:"new factory; expansion"}]});
   assert.deepEqual(results,[]);
+});
+
+test("signal matching does not treat substrings or generic product words as buying events",()=>{
+  const profile={website:"https://ercon.lv",priorityOffers:"metal structures; installation",idealCustomer:"Swedish manufacturers of industrial equipment"};
+  const market={signals:[
+    {id:"ai-crm",name:"AI, CRM or sales-tech transformation",active:true,weight:9,keywords:"AI; CRM; sales-tech transformation"},
+    {id:"launch",name:"Product or service launch",active:true,weight:8,keywords:"product; launch"}
+  ]};
+  const evidence=[{
+    url:"https://modvion.com/news/wooden-tower",domain:"modvion.com",company:"Modvion",market:"Sweden",
+    title:"Modvion introduces a sustainable wooden wind turbine tower",
+    description:"Product information is available on the company site.",
+    text:"The company maintains its product information and launches product improvements throughout the year in Sweden."
+  }];
+  assert.deepEqual(discovery.mergeCompanyCandidates(evidence,profile,market),[]);
+  const possible=discovery.buildPotentialCompanyCandidates(evidence,profile,market,[]);
+  assert.equal(possible.length,1);
+  assert.ok(possible[0].qualificationGaps.includes("No active buying signal was confirmed"));
+  assert.ok(possible[0].qualificationGaps.includes("Target customer fit is not evidenced"));
+});
+
+test("generic company directories do not add fit, signal, evidence or confidence points",()=>{
+  const profile={website:"https://ercon.lv",priorityOffers:"metal structures; installation",idealCustomer:"wind energy infrastructure operators"};
+  const market={signals:[{id:"expansion",name:"Capacity expansion",active:true,weight:9,keywords:"new factory; capacity expansion"}]};
+  const verified=[
+    {url:"https://nordicwind.se/news/factory",domain:"nordicwind.se",sourceDomain:"nordicwind.se",company:"Nordic Wind",market:"Sweden",title:"Nordic Wind plans a new factory",description:"The Swedish company is expanding capacity.",text:"Nordic Wind plans a new factory in Sweden and will install metal structures for its wind-energy infrastructure."},
+    {url:"https://industrynews.se/nordicwind-expansion",domain:"nordicwind.se",sourceDomain:"industrynews.se",company:"Nordic Wind",market:"Sweden",title:"Nordic Wind expands",description:"Nordic Wind plans a new factory and expands capacity.",text:"Nordic Wind plans a new factory in Sweden and expands its production capacity."}
+  ];
+  const directory={url:"https://www.f6s.com/nordicwind",domain:"nordicwind.se",sourceDomain:"f6s.com",company:"Nordic Wind",market:"Sweden",title:"63 Top Manufacturing Companies in Sweden · September 2026 – F6S",description:"Company profile, product updates and funding.",text:"Nordic Wind is listed among manufacturing companies in Sweden. Latest product and AI updates."};
+  assert.equal(discovery.isLowQualityDiscoveryEvidence(directory),true);
+  assert.equal(discovery.isLowQualityDiscoveryEvidence({...directory,title:"Nordic Wind company profile"}),true,"known company directories remain low quality even without listicle titles");
+  const clean=discovery.mergeCompanyCandidates(verified,profile,market)[0];
+  const noisy=discovery.mergeCompanyCandidates([...verified,directory],profile,market)[0];
+  assert.ok(clean);
+  assert.ok(noisy);
+  for(const key of ["fit","signal","evidence","timing","value","total"])assert.equal(noisy.score[key],clean.score[key],`${key} should ignore generic directory content`);
+  assert.equal(noisy.confidence,clean.confidence);
 });
 
 test("discovery rejects a target-market label copied onto a conflicting country domain",()=>{
@@ -60,7 +97,7 @@ test("discovery keeps a verified target-market buyer with company-specific signa
   const results=discovery.mergeCompanyCandidates([{
     url:"https://nordicfood.se/news/new-factory",domain:"nordicfood.se",company:"Nordic Food AB",market:"Sweden",
     title:"Nordic Food opens a new factory",description:"The Swedish food producer is increasing manufacturing capacity.",
-    text:"Nordic Food AB is opening a new factory in Sweden and expanding production capacity. The investment includes new production lines."
+    text:"Nordic Food AB is opening a new factory in Sweden and expanding production capacity. The investment includes new production lines and requires outsourced metal fabrication for the new plant."
   }],{
     website:"https://ercon.lv",priorityOffers:"metal fabrication; metal structures",idealCustomer:"Swedish industrial and manufacturing companies"
   },{
@@ -105,7 +142,7 @@ test("Latvian buying signals search for and match equivalent Swedish evidence",(
   const candidates=discovery.mergeCompanyCandidates([{
     url:"https://nordicfood.se/nyheter/ny-fabrik",domain:"nordicfood.se",company:"Nordic Food",market:"Zviedrija",
     title:"Nordic Food bygger ny fabrik",description:"Bolaget utökar produktionskapaciteten i Sverige.",
-    text:"Nordic Food bygger en ny fabrik och utökar produktionskapaciteten i Sverige."
+    text:"Nordic Food bygger en ny fabrik och utökar produktionskapaciteten i Sverige. The expansion requires metal structures and on-site installation."
   }],profile,market,10);
   assert.equal(candidates.length,1);
   assert.equal(candidates[0].domain,"nordicfood.se");
@@ -214,17 +251,21 @@ test("resolved official company keeps its third-party buying-signal evidence",()
   assert.equal(typeof discovery.attachSourceEvidenceToResolvedCompanies,"function");
   if(typeof discovery.attachSourceEvidenceToResolvedCompanies!=="function")return;
   const linked=discovery.attachSourceEvidenceToResolvedCompanies(resolved,mentions,evidence);
-  const candidates=discovery.mergeCompanyCandidates(linked,{
+  const profile={
     website:"https://ercon.lv",priorityOffers:"metālapstrādes pakalpojumi",idealCustomer:"Zviedrijas ražošanas uzņēmumi"
-  },{
+  };
+  const market={
     signals:[{id:"expansion",name:"Ražošanas paplašināšana",active:true,weight:9,keywords:"jauna ražotne; jaudas palielināšana"}]
-  },10);
+  };
+  const candidates=discovery.mergeCompanyCandidates(linked,profile,market,10);
 
-  assert.equal(candidates.length,1);
-  assert.equal(candidates[0].company,"Cinis Fertilizer");
-  assert.equal(candidates[0].domain,"cinis-fertilizer.com");
-  assert.ok(candidates[0].evidence.some(item=>item.url===sourceUrl),"publisher article remains evidence, never company identity");
-  assert.ok(candidates[0].matchedSignals.some(item=>item.id==="expansion"));
+  assert.deepEqual(candidates,[],"a sector and event match without evidence of offer fit stays out of the qualified shortlist");
+  const possible=discovery.buildPotentialCompanyCandidates(linked,profile,market,[]);
+  assert.equal(possible.length,1);
+  assert.equal(possible[0].company,"Cinis Fertilizer");
+  assert.ok(possible[0].evidence.some(item=>item.url===sourceUrl),"publisher article remains evidence, never company identity");
+  assert.ok(possible[0].matchedSignals.some(item=>item.id==="expansion"));
+  assert.ok(possible[0].qualificationGaps.includes("Target customer fit is not evidenced"));
 });
 
 test("third-party evidence cannot qualify a company without a resolved official domain",()=>{
@@ -244,7 +285,7 @@ test("target market can be verified by the linked evidence country when the offi
     title:"Example Industries",description:"Industrial producer",text:"Official company website"
   }],[{company:"Example Industries",market:"Zviedrija",sourceUrl}],[{
     url:sourceUrl,domain:"industry-news.se",market:"Zviedrija",title:"Example Industries invests",
-    description:"Example Industries builds a new facility and expands production capacity.",text:""
+    description:"Example Industries builds a new facility and expands production capacity in Sweden. The expansion requires custom metal structures for installation.",text:""
   }]);
   const candidates=discovery.mergeCompanyCandidates(linked,{
     website:"https://ercon.lv",priorityOffers:"metālapstrādes pakalpojumi",idealCustomer:"Zviedrijas ražošanas uzņēmumi"

@@ -238,6 +238,7 @@ test('normalizeDiscoveryState caps candidates, pipeline and selected decision-ma
 
 test('normalizeDiscoveryState persists the search funnel and keeps potential matches separate and non-actionable',()=>{
   const state=Discovery.normalizeDiscoveryState({
+    qualityVersion:Discovery.DISCOVERY_QUALITY_VERSION,
     funnel:{marketSearchesCompleted:8,marketSearchesTotal:8,evidencePages:17,companiesIdentified:4,officialDomainsResolved:3,companySitesChecked:2,verifiedCompanies:1,qualifiedCompanies:0,adaptiveFollowUpSearches:4},
     potentialMatches:[{company:'Northstar',domain:'northstar.com',website:'https://northstar.com/',qualified:true,buyerVerified:true,marketVerified:true,matchedSignals:[{id:'expansion',name:'Expansion'}],qualificationGaps:['Target market evidence is missing'],evidence:[{url:'https://northstar.com/news',title:'Expansion'}]}]
   });
@@ -249,6 +250,25 @@ test('normalizeDiscoveryState persists the search funnel and keeps potential mat
   assert.equal(state.potentialMatches[0].buyerVerified,false);
   assert.equal(state.potentialMatches[0].marketVerified,true);
   assert.equal(Discovery.isActionableCandidate(state.potentialMatches[0]),false);
+});
+
+test('results from the previous scoring rules are cleared for review while the saved pipeline is retained',()=>{
+  const state=Discovery.normalizeDiscoveryState({
+    qualityVersion:Discovery.DISCOVERY_QUALITY_VERSION-1,status:'complete',lastRunAt:'2026-09-24T12:00:00.000Z',
+    queries:[{id:'q1',query:'Sweden product launch'}],rawResults:[{url:'https://example.se/news',domain:'example.se'}],
+    candidates:[{company:'Example AB',domain:'example.se',website:'https://example.se/',qualified:true,marketVerified:true,buyerVerified:true,matchedSignals:[{name:'Product launch'}],evidence:[{url:'https://example.se/news'}]}],
+    potentialMatches:[{company:'Other AB',domain:'other.se',website:'https://other.se/',qualificationGaps:['Needs review'],evidence:[{url:'https://other.se/news'}]}],
+    pipeline:[{company:'Saved AB',domain:'saved.se',website:'https://saved.se/',stage:'Qualified'}]
+  });
+  assert.equal(state.status,'idle');
+  assert.equal(state.needsRefresh,true);
+  assert.deepEqual(state.queries,[]);
+  assert.deepEqual(state.rawResults,[]);
+  assert.deepEqual(state.candidates,[]);
+  assert.deepEqual(state.potentialMatches,[]);
+  assert.equal(state.lastRunAt,'');
+  assert.equal(state.pipeline.length,1);
+  assert.equal(state.pipeline[0].domain,'saved.se');
 });
 
 

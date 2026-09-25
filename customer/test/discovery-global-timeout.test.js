@@ -19,7 +19,7 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
     .replace('const DISCOVERY_REQUEST_TIMEOUT_MS=25000;', `const DISCOVERY_REQUEST_TIMEOUT_MS=${requestTimeout};`)
     .replace(runTimeout?.[0], `const DISCOVERY_RUN_TIMEOUT_MIN_MS=${testRunTimeout};`)
     .replace(runMargin?.[0], `const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=${testRunMargin};`)
-    .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\nglobalThis.__setDiscovery = value => { discovery = LeadIntelDiscovery.normalizeDiscoveryState(value); };\nglobalThis.__renderStatus = renderStatus;\nglobalThis.__renderCandidates = renderCandidates;\n')
+    .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\nglobalThis.__setDiscovery = value => { discovery = LeadIntelDiscovery.normalizeDiscoveryState({...value,qualityVersion:value.qualityVersion??LeadIntelDiscovery.DISCOVERY_QUALITY_VERSION}); };\nglobalThis.__renderStatus = renderStatus;\nglobalThis.__renderCandidates = renderCandidates;\n')
     .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;');
   const mainState = {
     website: 'https://acme.example/',
@@ -98,8 +98,8 @@ test('a normal three-stage search is allowed to outlast one provider request win
         return { ok: true, json: async () => ({ success: true, data: [{
           url: `https://${domain}/news/new-factory`,
           title: `${company} opens a new factory in Latvia`,
-          description: `${company} plans a new factory and expands production capacity in Latvia.`,
-          markdown: `${company} plans a new factory and expands production capacity in Latvia.`
+          description: `${company} plans a new factory and expands production capacity in Latvia with new industrial automation.`,
+          markdown: `${company} plans a new factory and expands production capacity in Latvia with new industrial automation.`
         }] }) };
       }
       const resolution = query.match(/^"([^"]+)"/);
@@ -110,7 +110,7 @@ test('a normal three-stage search is allowed to outlast one provider request win
         const domain = company.toLowerCase().replace(/[^a-z]/g, '');
         return { ok: true, json: async () => ({ success: true, data: [{
           url: `https://${domain}.lv/`, title: `${company} official website`,
-          description: 'Industrial manufacturing company in Latvia.'
+          description: 'Industrial manufacturing company investing in industrial automation in Latvia.'
         }] }) };
       }
       phases.add('market_search');
@@ -119,8 +119,8 @@ test('a normal three-stage search is allowed to outlast one provider request win
       return { ok: true, json: async () => ({ success: true, data: companyNames.slice(start, start + 5).map((company, index) => ({
         url: `https://industrynews${start + index}.example/articles/${index}`,
         title: `${company} plans a new factory`,
-        description: `${company} plans a new factory and expands production capacity in Latvia.`,
-        markdown: `${company} plans a new factory and expands production capacity in Latvia.`
+        description: `${company} plans a new factory and expands production capacity in Latvia with new industrial automation.`,
+        markdown: `${company} plans a new factory and expands production capacity in Latvia with new industrial automation.`
       })) }) };
     }
   });
@@ -152,19 +152,19 @@ test('a successful first pass with no qualified companies gets one bounded follo
       const query=JSON.parse(options.body).query;
       if(query.startsWith('site:'))return {ok:true,json:async()=>({success:true,data:[{
         url:'https://northsteel.lv/news/new-factory',title:'North Steel opens a new factory',
-        description:'North Steel plans a new factory in Latvia and expands production capacity.',
-        markdown:'North Steel plans a new factory in Latvia and expands production capacity.'
+        description:'North Steel plans a new factory in Latvia, expands production capacity and invests in industrial automation.',
+        markdown:'North Steel plans a new factory in Latvia, expands production capacity and invests in industrial automation.'
       }]})};
       if(query.startsWith('"'))return {ok:true,json:async()=>({success:true,data:[{
-        url:'https://northsteel.lv/',title:'North Steel official website',description:'Latvian industrial manufacturer.'
+        url:'https://northsteel.lv/',title:'North Steel official website',description:'Latvian industrial manufacturing company investing in industrial automation.'
       }]})};
       marketRequests+=1;
       if(marketRequests<=4){initialResults+=1;return {ok:true,json:async()=>({success:true,data:[]})};}
       followUpResults+=1;
       return {ok:true,json:async()=>({success:true,data:[{
         url:'https://industrynews.lv/north-steel-factory',title:'North Steel plans a new factory',
-        description:'North Steel plans a new factory in Latvia and expands production capacity.',
-        markdown:'North Steel plans a new factory in Latvia and expands production capacity.'
+        description:'North Steel plans a new factory in Latvia, expands production capacity and invests in industrial automation.',
+        markdown:'North Steel plans a new factory in Latvia, expands production capacity and invests in industrial automation.'
       }]})};
     }
   });
@@ -256,6 +256,17 @@ test('an errored search is not presented as a confirmed no-match and offers retr
   assert.match(context.__elements.get('run-company-discovery').innerHTML, /Retry company search/);
 });
 
+test('saved results from older scoring rules require a fresh company search',()=>{
+  const context=loadDiscoveryRunner({renderNodes:true});
+  context.__setDiscovery({qualityVersion:Discovery.DISCOVERY_QUALITY_VERSION-1,status:'complete',rawResults:[{url:'https://old.se/news',domain:'old.se'}],lastRunAt:'2026-09-24T12:00:00.000Z'});
+  context.__renderStatus();
+  context.__renderCandidates();
+  assert.equal(context.__discoveryState().needsRefresh,true);
+  assert.match(context.__elements.get('company-discovery-status').textContent,/scoring has been improved/i);
+  assert.match(context.__elements.get('company-candidates').innerHTML,/refresh saved results before acting/i);
+  assert.match(context.__elements.get('run-company-discovery').innerHTML,/Refresh company results/i);
+});
+
 test('provider failures fail the Discovery task and cannot be reported as completed zero results', async () => {
   let failedTask='';
   let completedTask=false;
@@ -328,8 +339,8 @@ test('Company Discovery verifies candidate websites before strict qualification'
         ok:true,
         json:async()=>({success:true,data:[verified?{
           url:'https://buyer.lv/news/new-factory',title:'Buyer opens a new factory',
-          description:'The Latvian manufacturer is expanding production capacity.',
-          markdown:'Buyer is opening a new factory in Latvia and expanding production capacity.'
+          description:'The Latvian industrial manufacturing company is expanding production capacity with new industrial automation.',
+          markdown:'Buyer is opening a new factory in Latvia, expanding production capacity and investing in industrial automation.'
         }:{
           url:'https://buyer.lv/',title:'Buyer plans a new factory',description:'Buyer plans a new factory in Latvia.'
         }]})
