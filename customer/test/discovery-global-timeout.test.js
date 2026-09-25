@@ -9,16 +9,21 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
   let source = fs.readFileSync(path.join(__dirname, '..', 'discovery-ui.js'), 'utf8');
   const runTimeout = source.match(/const DISCOVERY_RUN_TIMEOUT_MIN_MS=(\d+);/);
   const runMargin = source.match(/const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=(\d+);/);
+  const extractionTimeout = source.match(/const COMPANY_EXTRACTION_TIMEOUT_MS=(\d+);/);
   const testRunTimeout = scaleProductionRunTimeout
     ? Math.ceil(Number(runTimeout?.[1] || 0) / scaleProductionRunTimeout)
     : 8;
   const testRunMargin = scaleProductionRunTimeout
     ? Math.ceil(Number(runMargin?.[1] || 0) / scaleProductionRunTimeout)
     : 2;
+  const testExtractionTimeout = scaleProductionRunTimeout
+    ? Math.ceil(Number(extractionTimeout?.[1] || 0) / scaleProductionRunTimeout)
+    : Number(extractionTimeout?.[1] || 0);
   source = source
     .replace('const DISCOVERY_REQUEST_TIMEOUT_MS=25000;', `const DISCOVERY_REQUEST_TIMEOUT_MS=${requestTimeout};`)
     .replace(runTimeout?.[0], `const DISCOVERY_RUN_TIMEOUT_MIN_MS=${testRunTimeout};`)
     .replace(runMargin?.[0], `const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=${testRunMargin};`)
+    .replace(extractionTimeout?.[0], `const COMPANY_EXTRACTION_TIMEOUT_MS=${testExtractionTimeout};`)
     .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\nglobalThis.__setDiscovery = value => { discovery = LeadIntelDiscovery.normalizeDiscoveryState({...value,qualityVersion:value.qualityVersion??LeadIntelDiscovery.DISCOVERY_QUALITY_VERSION}); };\nglobalThis.__renderStatus = renderStatus;\nglobalThis.__renderCandidates = renderCandidates;\n')
     .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;');
   const mainState = {
@@ -150,9 +155,9 @@ test('a normal three-stage search is allowed to outlast one provider request win
 
 test('the run deadline covers the worst-case bounded search stages at each supported target size', () => {
   const context=loadDiscoveryRunner({requestTimeout:25,scaleProductionRunTimeout:1000});
-  assert.equal(context.__discoveryRunTimeoutMs(10,4),370);
-  assert.equal(context.__discoveryRunTimeoutMs(25,8),395);
-  assert.equal(context.__discoveryRunTimeoutMs(50,10),420);
+  assert.equal(context.__discoveryRunTimeoutMs(10,4),414);
+  assert.equal(context.__discoveryRunTimeoutMs(25,8),439);
+  assert.equal(context.__discoveryRunTimeoutMs(50,10),464);
 });
 
 test('a successful first pass with no qualified companies gets one bounded follow-up pass',async()=>{
@@ -394,3 +399,4 @@ test('Company Discovery bounds concurrent Firecrawl verification requests', asyn
 
   assert.ok(maximum<=4,`expected at most four concurrent provider requests, observed ${maximum}`);
 });
+
