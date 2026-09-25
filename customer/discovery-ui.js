@@ -10,7 +10,7 @@ const MAX_DISCOVERY_RESULTS_PER_QUERY=8;
 const DISCOVERY_SEARCH_CONCURRENCY=4;
 const MAX_DISCOVERY_FOLLOW_UP_QUERIES=4;
 const MAX_DISCOVERY_COMPANY_CHECKS=30;
-const ASSET_VERSION="20260925-discovery-progress-visibility-v1";
+const ASSET_VERSION="20260925-discovery-recovery-v1";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20260925-buyers-stage-view-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -144,6 +144,7 @@ async function openAiCompanySearch(queryMeta,runSignal){
 }
 async function firecrawlCompanySearch(queryMeta,runSignal){
   let lastError=null;
+  let fallbackAttempted=false;
   for(let attempt=0;attempt<=DISCOVERY_PROVIDER_RETRIES;attempt++){
     if(runSignal?.aborted)throwIfDiscoveryRunAborted(runSignal);
     const controller=linkedAbortController(runSignal);
@@ -157,7 +158,8 @@ async function firecrawlCompanySearch(queryMeta,runSignal){
       if(runSignal?.aborted)throw error;
       lastError=error;
       if(error?.name==="AbortError"){lastError=new Error("Company search timed out");lastError.name="TimeoutError";lastError.code="DISCOVERY_SEARCH_TIMEOUT";lastError.status=408;}
-      if(lastError.status===402){
+      if(!fallbackAttempted&&(lastError.status===402||retryableDiscoveryFailure(lastError))){
+        fallbackAttempted=true;
         const fallback=await openAiCompanySearch(queryMeta,runSignal);
         if(runSignal?.aborted)throwIfDiscoveryRunAborted(runSignal);
         if(fallback.length){discovery.funnel.openAiFallbackSearches=(Number(discovery.funnel.openAiFallbackSearches)||0)+1;return fallback;}
@@ -532,7 +534,7 @@ function renderDiscoveryFunnel(){
     [Number(funnel.companySitesChecked)||0,"Company sites checked"],
     [Number(funnel.qualifiedCompanies)||0,"Qualified companies"]
   ];
-  target.innerHTML=`<div class="discovery-funnel-head"><strong>Search funnel</strong><span>${esc(phase)}</span></div><div class="discovery-funnel-track" role="progressbar" aria-label="Market searches checked" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><i style="width:${percent}%"></i></div><div class="discovery-funnel-grid">${metrics.map(([value,label])=>`<div><strong>${esc(value)}</strong><span>${esc(label)}</span></div>`).join("")}</div>${discovery.extraction?.message?`<p class="discovery-funnel-extraction"><strong>Company extraction:</strong> ${esc(discovery.extraction.message)}</p>`:""}${Number(funnel.openAiFallbackSearches)?`<p class="discovery-funnel-followup">Firecrawl returned a credit or billing error for ${Number(funnel.openAiFallbackSearches)} search${Number(funnel.openAiFallbackSearches)===1?"":"es"}; grounded OpenAI web search supplied source-linked results instead.</p>`:""}${Number(funnel.adaptiveFollowUpSearches)?`<p class="discovery-funnel-followup">LeadIntel added ${Number(funnel.adaptiveFollowUpSearches)} follow-up searches because the first pass found too few qualified companies.</p>`:""}${discoverySearchFailuresHtml()}`;
+  target.innerHTML=`<div class="discovery-funnel-head"><strong>Search funnel</strong><span>${esc(phase)}</span></div><div class="discovery-funnel-track" role="progressbar" aria-label="Market searches checked" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><i style="width:${percent}%"></i></div><div class="discovery-funnel-grid">${metrics.map(([value,label])=>`<div><strong>${esc(value)}</strong><span>${esc(label)}</span></div>`).join("")}</div>${discovery.extraction?.message?`<p class="discovery-funnel-extraction"><strong>Company extraction:</strong> ${esc(discovery.extraction.message)}</p>`:""}${Number(funnel.openAiFallbackSearches)?`<p class="discovery-funnel-followup">Firecrawl could not complete ${Number(funnel.openAiFallbackSearches)} search${Number(funnel.openAiFallbackSearches)===1?"":"es"}; grounded OpenAI web search supplied source-linked results instead.</p>`:""}${Number(funnel.adaptiveFollowUpSearches)?`<p class="discovery-funnel-followup">LeadIntel added ${Number(funnel.adaptiveFollowUpSearches)} follow-up searches because the first pass found too few qualified companies.</p>`:""}${discoverySearchFailuresHtml()}`;
 }
 function discoverySearchFailuresHtml(){
   const failures=Array.isArray(discovery.searchFailures)?discovery.searchFailures:[];if(!failures.length)return "";
@@ -557,7 +559,9 @@ function renderPotentialMatches(){
   const target=$("discovery-potential-matches");if(!target)return;
   const matches=Array.isArray(discovery.potentialMatches)?discovery.potentialMatches:[];
   target.hidden=!matches.length;if(!matches.length){target.innerHTML="";return;}
-  target.innerHTML=`<div class="potential-matches-head"><span class="eyebrow">Needs human review</span><h3 id="potential-matches-title">Potential matches · not qualified</h3><p>These named companies have public evidence, but at least one qualification check is missing. They are not automatically saved as leads.</p></div><div class="potential-match-list">${matches.map(candidate=>{const canSearch=LeadIntelDiscovery.isPotentialBuyerSearchAllowed?.(candidate);const buyerLabel=candidate.people?.length?"Refresh buyers":candidate.peopleStatus==="loading"?"Searching…":"Find buyers anyway";return `<article class="potential-match-card"><div><span class="opportunity-market">${esc(candidate.market||"Market not confirmed")}</span><h4>${esc(candidate.company)}</h4><a href="${esc(candidate.website)}" target="_blank" rel="noopener noreferrer">${esc(candidate.domain)} ↗</a>${canSearch?`<div class="potential-match-buyer-action"><p>Target market and customer fit are evidenced, but no public buying signal was confirmed. You can still request buyers as a user-selected prospect; it will remain unqualified and will not be saved to CRM or Pipeline.</p><button class="secondary-btn small" type="button" data-action="find-potential-buyers" data-domain="${esc(candidate.domain)}" ${candidate.peopleStatus==="loading"?"disabled":""}>${buyerLabel}</button></div>`:""}${potentialBuyerResultsHtml(candidate)}</div><div class="potential-match-gaps"><strong>Still needs confirmation</strong><ul>${candidate.qualificationGaps.map(gap=>`<li>${esc(gap)}</li>`).join("")}</ul></div>${candidate.evidence.length?`<div class="potential-match-evidence">${candidate.evidence.slice(0,3).map(evidence=>`<a href="${esc(evidence.url)}" target="_blank" rel="noopener noreferrer"><strong>${esc(evidence.title||candidate.domain)}</strong><small>${esc(evidence.description||evidence.text).slice(0,220)}${LeadIntelDiscovery.isLowQualityDiscoveryEvidence?.(evidence)?'<em>Generic listing · excluded from fit, signal and evidence scoring</em>':''}</small></a>`).join("")}</div>`:""}</article>`;}).join("")}</div>`;
+  const requiredSignals=(mainState()?.market?.signals||[]).filter(signal=>signal?.active!==false).map(signal=>String(signal?.name||"").trim()).filter(Boolean).slice(0,4);
+  const signalNote=requiredSignals.length?`<p class="potential-match-signal-note"><strong>Signals required to qualify:</strong> ${requiredSignals.map(esc).join(" · ")}</p><button class="secondary-btn small" type="button" data-action="review-strategy">Review active signals in Strategy</button>`:"";
+  target.innerHTML=`<div class="potential-matches-head"><span class="eyebrow">Needs human review</span><h3 id="potential-matches-title">Potential matches · not qualified</h3><p>These named companies have public evidence, but at least one qualification check is missing. They are not automatically marked as qualified leads. Companies with verified fit can be saved explicitly as unconfirmed prospects.</p>${signalNote}</div><div class="potential-match-list">${matches.map(candidate=>{const canSearch=LeadIntelDiscovery.isPotentialBuyerSearchAllowed?.(candidate);const buyerLabel=candidate.people?.length?"Refresh buyers":candidate.peopleStatus==="loading"?"Searching…":"Find buyers anyway";const savedProspect=crmCompanyByDomain(candidate.domain);const siteChecked=(discovery.checkedCompanyDomains||[]).some(domain=>canonicalDomain(domain)===canonicalDomain(candidate.domain));const saveLabel=savedProspect?"Saved in CRM ✓":!crmAuthenticated()?"Sign in to save prospect":siteChecked?"Save prospect in CRM":"Check company site first";return `<article class="potential-match-card"><div><span class="opportunity-market">${esc(candidate.market||"Market not confirmed")}</span><h4>${esc(candidate.company)}</h4><a href="${esc(candidate.website)}" target="_blank" rel="noopener noreferrer">${esc(candidate.domain)} ↗</a>${canSearch?`<div class="potential-match-buyer-action"><p>Target market and customer fit are evidenced, but no public buying signal was confirmed. You can choose buyer research. Once the company website check succeeds, you can save this unconfirmed prospect in CRM. It will remain outside the qualified list and Pipeline.</p><button class="secondary-btn small" type="button" data-action="find-potential-buyers" data-domain="${esc(candidate.domain)}" ${candidate.peopleStatus==="loading"?"disabled":""}>${buyerLabel}</button><button class="secondary-btn small" type="button" data-action="save-potential-prospect" data-domain="${esc(candidate.domain)}" ${!crmAuthenticated()||savedProspect||!siteChecked?"disabled":""}>${saveLabel}</button></div>`:""}${potentialBuyerResultsHtml(candidate)}</div><div class="potential-match-gaps"><strong>Still needs confirmation</strong><ul>${candidate.qualificationGaps.map(gap=>`<li>${esc(gap)}</li>`).join("")}</ul></div>${candidate.evidence.length?`<div class="potential-match-evidence">${candidate.evidence.slice(0,3).map(evidence=>`<a href="${esc(evidence.url)}" target="_blank" rel="noopener noreferrer"><strong>${esc(evidence.title||candidate.domain)}</strong><small>${esc(evidence.description||evidence.text).slice(0,220)}${LeadIntelDiscovery.isLowQualityDiscoveryEvidence?.(evidence)?'<em>Generic listing · excluded from fit, signal and evidence scoring</em>':''}</small></a>`).join("")}</div>`:""}</article>`;}).join("")}</div>`;
 }
 function discoveryRecoveryHtml(){
   const main=mainState();const activeSignalCount=(main.market?.signals||[]).filter(item=>item&&item.active!==false).length;
@@ -603,6 +607,23 @@ async function findPotentialDecisionMakers(domain){
   if(!roles){showToast("Add buyer roles to your company profile before searching");return false;}
   candidate.buyerSearchMode="user_selected_without_signal";
   return searchDecisionMakers(candidate,{allowCrmSync:false,retry:()=>findPotentialDecisionMakers(domain)});
+}
+async function savePotentialProspect(domain){
+  const candidate=discovery.potentialMatches.find(item=>canonicalDomain(item.domain||item.website)===canonicalDomain(domain));
+  if(!candidate||!LeadIntelDiscovery.isPotentialBuyerSearchAllowed?.(candidate)){showToast("Only companies with verified customer fit and market can be saved as prospects");return false;}
+  if(!(discovery.checkedCompanyDomains||[]).some(checked=>canonicalDomain(checked)===canonicalDomain(candidate.domain))){showToast("Retry the company website check before saving this prospect");return false;}
+  if(!crmAuthenticated()){showToast("Sign in with Google to save this prospect to Master CRM");return false;}
+  const existing=crmCompanyByDomain(candidate.domain);
+  if(existing?.lifecycle_status==="suppressed"){showToast("Suppressed companies must be restored in CRM first");return false;}
+  if(existing){showToast(`${candidate.company} is already in Master CRM`);return true;}
+  const mapped=window.LeadIntelCrm?.mapDiscoveryCandidateToCrm({...candidate,source:"user_selected_discovery",opportunity_hypothesis:"Customer fit and target market verified. No public buying signal confirmed; selected by the workspace user."});
+  if(!mapped){showToast("CRM mapping is unavailable");return false;}
+  const saved=await bridge().saveCrmCompany(mapped);
+  if(!saved.ok){showToast(saved.error||"Unable to save this prospect to CRM");return false;}
+  await refreshCrmState({render:false});renderAll();
+  window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company:saved.company}}));
+  showToast(`${candidate.company} saved as an unconfirmed prospect in Master CRM`);
+  return true;
 }
 function findPipelineDecisionMakers(index){
   const selected=pipelineRows()[Number(index)];if(!selected)return false;
@@ -687,7 +708,7 @@ function bindDiscovery(){
   $("continue-to-discovery")?.addEventListener("click",showDiscoveryStep);$("back-to-strategy")?.addEventListener("click",showStrategyStep);$("run-company-discovery")?.addEventListener("click",()=>{if(discovery.status==="no_results"){reviewDiscoveryGuidance();return;}runCompanyDiscovery();});$("discovery-target-count")?.addEventListener("change",()=>{persistDiscoveryTarget();renderStatus();const custom=$("discovery-target-custom");if(custom&&!custom.hidden)custom.focus();});$("discovery-target-custom")?.addEventListener("input",()=>{persistDiscoveryTarget();renderStatus();});$("activate-market-strategy")?.addEventListener("click",()=>setTimeout(renderStatus,0));
   $("company-candidates")?.addEventListener("click",event=>{const btn=event.target.closest("[data-action]");if(!btn)return;if(btn.dataset.action==="review-strategy"){showStrategyStep();return;}if(btn.dataset.action==="review-research"){reviewMarketResearch();return;}if(btn.dataset.action==="open-ai-settings"){document.getElementById("open-settings")?.click();return;}const index=Number(btn.dataset.companyIndex);const personIndex=Number(btn.dataset.personIndex);if(btn.dataset.action==="find-decision-makers"){setJourneyFocus("buyers",{scroll:false});findDecisionMakers(index);}if(btn.dataset.action==="enrich-contact")enrichContact(index,personIndex,{phoneLookup:false});if(btn.dataset.action==="find-phone")enrichContact(index,personIndex,{phoneLookup:true});if(btn.dataset.action==="refresh-phone")refreshEnrichedContact(index,personIndex);if(btn.dataset.action==="save-crm")saveCandidate(index,{pipeline:false});if(btn.dataset.action==="add-pipeline")saveCandidate(index,{pipeline:true});});
   $("discovery-funnel")?.addEventListener("click",event=>{if(event.target.closest('[data-action="open-provider-settings"]')){document.getElementById("open-settings")?.click();return;}const btn=event.target.closest('[data-action="retry-failed-checks"]');if(btn)retryFailedDiscoveryChecks();});
-  $("discovery-potential-matches")?.addEventListener("click",event=>{const btn=event.target.closest('[data-action="find-potential-buyers"]');if(btn)findPotentialDecisionMakers(btn.dataset.domain);});
+  $("discovery-potential-matches")?.addEventListener("click",event=>{const btn=event.target.closest("[data-action]");if(!btn)return;if(btn.dataset.action==="find-potential-buyers")findPotentialDecisionMakers(btn.dataset.domain);if(btn.dataset.action==="save-potential-prospect")savePotentialProspect(btn.dataset.domain);if(btn.dataset.action==="review-strategy")showStrategyStep();});
   $("customer-pipeline")?.addEventListener("change",event=>{const select=event.target.closest("[data-pipeline-stage]");if(select)changePipelineStage(select);});
   $("customer-pipeline")?.addEventListener("click",event=>{const buyer=event.target.closest("[data-find-pipeline-buyers]");if(buyer){findPipelineDecisionMakers(buyer.dataset.findPipelineBuyers);return;}const remove=event.target.closest("[data-pipeline-remove]");if(remove){removePipelineCompany(remove.dataset.pipelineRemove,remove.dataset.domain);return;}const open=event.target.closest("[data-open-crm-company]");if(open)document.getElementById("open-crm")?.click();});
   $("reset-workspace")?.addEventListener("click",()=>setTimeout(()=>{if(!localStorage.getItem(MAIN_STORAGE_KEY)){localStorage.removeItem(DISCOVERY_STORAGE_KEY);localStorage.removeItem(`${DISCOVERY_STORAGE_KEY}_meta`);discovery=LeadIntelDiscovery.normalizeDiscoveryState({});crmCompanies=[];crmPipeline=[];crmAvailable=false;enrichmentResults.clear();enrichmentPending.clear();}},0));
