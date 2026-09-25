@@ -1,11 +1,11 @@
 # Company extraction provider fallback
 
-Company Discovery still collects public evidence with Firecrawl. The active workspace AI provider extracts named companies from that evidence. Gemini is a one-time backup for this extraction task only.
+Company Discovery still collects public evidence with Firecrawl. OpenAI extracts named companies first, regardless of which provider is active for general AI generation. Gemini is a one-time backup for this extraction task only; its saved workspace integration does not need to be active.
 
 The backend tries Gemini only when all of these conditions are true:
 
 - the request is explicitly marked `company-extraction` and asks for Gemini fallback;
-- OpenAI is the active primary provider;
+- OpenAI is configured for the workspace and is the extraction primary;
 - OpenAI fails with a timeout, HTTP 408, HTTP 429, or a server error (5xx);
 - Gemini has a saved workspace integration.
 
