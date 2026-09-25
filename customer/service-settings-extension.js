@@ -77,9 +77,10 @@ function decorateReadiness(){
   if(!signedIn()){summary.textContent='Connect with Google or Microsoft to configure LeadIntel';return;}
   const aiReady=Boolean(document.querySelector('.ai-provider-card.active'));
   const deliveryReady=Boolean(document.querySelector('#integration-communication-grid [data-integration="gmail"] .integration-status.good, #integration-communication-grid [data-integration="microsoft-mail"] .integration-status.good'));
-  const serviceReady=SERVICE_PROVIDERS.filter(config=>providerState(config.provider)?.state==='good').length;
+  const observedFirecrawl=window.LeadIntelIntegrationHealth?.firecrawl;
+  const serviceReady=SERVICE_PROVIDERS.filter(config=>providerState(config.provider)?.state==='good'&&(config.provider!=='firecrawl'||observedFirecrawl?.state==='good')).length;
   const calendlyReady=Boolean(calendlyStatus.connected);
-  summary.textContent=`LeadIntel readiness: ${Number(aiReady)+1+Number(deliveryReady)+serviceReady+Number(calendlyReady)}/6 connected`;
+  summary.textContent=`LeadIntel readiness: ${Number(aiReady)+1+Number(deliveryReady)+serviceReady+Number(calendlyReady)}/6 connected${observedFirecrawl?.state==='bad'?' · Firecrawl needs attention':''}`;
 }
 function decorateGoogleCard(){
   const card=document.querySelector('#integration-communication-grid [data-integration="google"]');if(!card)return;
@@ -95,10 +96,11 @@ function decorateCards(){
   for(const config of SERVICE_PROVIDERS){
     const card=grid.querySelector(`[data-integration="${config.provider}"]`);if(!card)continue;
     const row=providerState(config.provider);
+    const observed=config.provider==='firecrawl'?window.LeadIntelIntegrationHealth?.firecrawl:null;
     card.classList.add('customer-service-card');
     const purpose=card.querySelector('.integration-purpose');if(purpose)purpose.textContent=`${config.purpose}. Add your own key or use the managed fallback.`;
-    const badge=card.querySelector('.integration-status');if(badge){badge.textContent=statusLabel(row);badge.className=`integration-status ${row?.state==='bad'?'bad':row?.source?'good':'neutral'}`;}
-    const meta=card.querySelector('.integration-meta');if(meta)meta.textContent=serviceDetail(config,row,meta.textContent);
+    const badge=card.querySelector('.integration-status');if(badge){badge.textContent=observed?.label||statusLabel(row);badge.className=`integration-status ${observed?.state|| (row?.state==='bad'?'bad':row?.source?'good':'neutral')}`;}
+    const meta=card.querySelector('.integration-meta');if(meta)meta.textContent=observed?.detail||serviceDetail(config,row,meta.textContent);
     const existing=card.querySelector('[data-service-extension="1"]');const html=serviceControls(config,row);if(existing)existing.outerHTML=html;else card.insertAdjacentHTML('beforeend',html);
   }
   const communication=document.getElementById('integration-communication-grid');if(communication){const current=communication.querySelector('[data-integration="calendly"]');const html=calendlyCard();if(current)current.outerHTML=html;else communication.insertAdjacentHTML('beforeend',html);}

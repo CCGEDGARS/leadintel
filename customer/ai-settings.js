@@ -1,5 +1,4 @@
 const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
-const FIRECRAWL_PROXY='https://apollo-proxy.edgars-7e7.workers.dev';
 const SETTINGS_VERSION='20260915-model-choice-v1';
 const PROVIDERS=Object.freeze([
   {provider:'openai',name:'OpenAI',model:'gpt-5.6',placeholder:'sk-…',hint:'Responses API'},
@@ -184,7 +183,7 @@ function renderIntegrationMonitoring(){
   const apollo=integrationState(integrationStatus.apollo),firecrawl=integrationState(integrationStatus.firecrawl),googleAccount=workspaceProviderStatus('google'),microsoftAccount=workspaceProviderStatus('microsoft'),gmail=integrationState(integrationStatus.gmail),microsoftMail=integrationState(integrationStatus.microsoftMail);
   const checkedSuffix=integrationStatus.checkedAt?` · checked ${formatDateTime(integrationStatus.checkedAt)}`:'';
   platform.innerHTML=`<article class="integration-card" data-integration="apollo"><div class="integration-card-head"><div><strong>Apollo.io</strong><small>Decision-maker and contact enrichment</small></div><span class="integration-status ${esc(apollo.state)}">${esc(apollo.label)}</span></div><p class="integration-purpose">Platform managed · LeadIntel never exposes the platform credential.</p><div class="integration-meta">${esc(apollo.detail+checkedSuffix)}</div></article>
-    <article class="integration-card" data-integration="firecrawl"><div class="integration-card-head"><div><strong>Firecrawl</strong><small>Website research and evidence verification</small></div><span class="integration-status ${esc(firecrawl.state)}">${esc(firecrawl.label)}</span></div><p class="integration-purpose">Platform managed · secure research proxy.</p><div class="integration-meta">${esc(firecrawl.detail+checkedSuffix)}</div></article>`;
+    <article class="integration-card" data-integration="firecrawl"><div class="integration-card-head"><div><strong>Firecrawl</strong><small>Website research and evidence verification</small></div><span class="integration-status ${esc(firecrawl.state)}">${esc(firecrawl.label)}</span></div><p class="integration-purpose">${firecrawl.source==='customer'?'Your Firecrawl key':'LeadIntel managed Firecrawl'}</p><div class="integration-meta">${esc(firecrawl.detail+checkedSuffix)}</div></article>`;
   communication.innerHTML=`<article class="integration-card workspace-provider-card" data-integration="google"><div class="integration-card-head"><div><strong>Google Account</strong><small>Optional workspace sign-in</small></div><span class="integration-status ${esc(googleAccount.state)}">${esc(googleAccount.label)}</span></div><p class="integration-purpose">Choose Google only if you want to use a Google account for LeadIntel workspace access. Gmail is connected separately.</p><div class="integration-meta">${esc(googleAccount.detail+checkedSuffix)}</div>${workspaceProviderAction('google')}</article>
     <article class="integration-card workspace-provider-card" data-integration="microsoft-account"><div class="integration-card-head"><div><strong>Microsoft Account</strong><small>Optional workspace sign-in</small></div><span class="integration-status ${esc(microsoftAccount.state)}">${esc(microsoftAccount.label)}</span></div><p class="integration-purpose">Choose Microsoft only if you want to use a Microsoft account for LeadIntel workspace access. Microsoft 365 Mail is connected separately.</p><div class="integration-meta">${esc(microsoftAccount.detail+checkedSuffix)}</div>${workspaceProviderAction('microsoft')}</article>
     <article class="integration-card" data-integration="gmail"><div class="integration-card-head"><div><strong>Gmail</strong><small>Optional outbound delivery and reply synchronization</small></div><span class="integration-status ${esc(gmail.state)}">${esc(gmail.label)}</span></div><p class="integration-purpose">Mailbox connection is optional and separate from workspace sign-in.</p><div class="integration-meta">${esc(gmail.detail+checkedSuffix)}</div></article>
@@ -244,9 +243,24 @@ async function checkApolloStatus(){
 }
 async function checkFirecrawlStatus(){
   try{
-    const response=await fetch(FIRECRAWL_PROXY,{method:'OPTIONS',mode:'cors',cache:'no-store'});
-    return response.ok?{state:'good',label:'Reachable',detail:'Platform managed · secure proxy reachable. This no-cost check does not claim that the hidden provider credential was exercised.'}:{state:'bad',label:'Unavailable',detail:`Research proxy returned status ${response.status}.`};
-  }catch(error){return {state:'bad',label:'Unavailable',detail:`Research proxy reachability failed · ${String(error.message||error).slice(0,120)}`};}
+    const {response,payload}=await api('/api/integrations/services/status?verify=1');
+    if(!response.ok)throw new Error(payload.error||`Service status returned ${response.status}`);
+    const provider=(payload.providers||[]).find(row=>row.provider==='firecrawl');
+    if(!provider)throw new Error('Firecrawl service status is missing');
+    const source=provider.source==='customer'?'customer':'managed';
+    const owner=source==='customer'?'Your Firecrawl key':'LeadIntel managed Firecrawl';
+    const observed=window.LeadIntelDiscoveryUI?.firecrawlHealth?.()||{};
+    const latest=observed.lastRunAt?`Last company search ${formatDateTime(observed.lastRunAt)}. `:'';
+    if(observed.blocked||observed.usedFallback)return {state:'bad',label:'Credit or billing issue',source,detail:`${owner}: ${latest}HTTP 402 blocked ${observed.blocked?'one or more checks':'Firecrawl checks; OpenAI supplied fallback results'}. ${source==='customer'?'Check your Firecrawl credits and spending limit.':'LeadIntel must restore managed Firecrawl credits or billing; you do not need to top up your own account.'}`};
+    if(provider.state==='bad')return {state:'bad',label:'Connection error',source,detail:`${owner}: ${provider.metadata?.error||provider.label||'Credential verification failed'}`};
+    if(source==='customer'){
+      const credits=Number(provider.metadata?.remaining_credits);
+      if(Number.isFinite(credits)&&credits<=0)return {state:'bad',label:'No Firecrawl credits',source,detail:'Your Firecrawl account reports zero remaining credits. Check your plan, billing or spending limit.'};
+      if(Number.isFinite(credits))return {state:'good',label:'Credits available',source,detail:`Your Firecrawl account reports ${credits} remaining credits. This checks the balance, not a paid search.`};
+      return {state:'warn',label:'Balance unknown',source,detail:'Your Firecrawl key is connected, but the remaining credit balance could not be confirmed.'};
+    }
+    return {state:'warn',label:'Credits unverified',source,detail:'LeadIntel managed proxy is reachable. A connection check cannot confirm its search credits; the next research request will test availability.'};
+  }catch(error){return {state:'bad',label:'Unavailable',detail:`Research status check failed · ${String(error.message||error).slice(0,120)}`};}
 }
 async function checkGmailStatus(){
   try{
@@ -263,7 +277,7 @@ async function refreshIntegrationStatus(){
   const checkedAt=new Date().toISOString();
   const refreshMicrosoft=Promise.resolve(bridge()?.refreshMicrosoftMailStatus?.()).catch(()=>null);
   const [apollo,firecrawl,gmail]=await Promise.all([checkApolloStatus(),checkFirecrawlStatus(),checkGmailStatus(),refreshMicrosoft]);
-  integrationStatus={checkedAt,checking:false,apollo,firecrawl,account:workspaceAccountStatus(),gmail,microsoftMail:microsoftMailStatus()};renderIntegrationMonitoring();return integrationStatus;
+  integrationStatus={checkedAt,checking:false,apollo,firecrawl,account:workspaceAccountStatus(),gmail,microsoftMail:microsoftMailStatus()};window.LeadIntelIntegrationHealth={firecrawl};renderIntegrationMonitoring();return integrationStatus;
 }
 async function refreshAllStatus(){
   await refreshStatus();await refreshIntegrationStatus();return {ai:status,integrations:integrationStatus};

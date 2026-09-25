@@ -16,7 +16,7 @@ const extensionCss=fs.existsSync(extensionCssPath)?fs.readFileSync(extensionCssP
 
 test('Customer V2 loads the proven AI Settings plus the customer-owned Apollo and Firecrawl extension',()=>{
   assert.match(processMap,/import ['"]\.\/ai-settings\.js\?v=20260915-model-choice-v1['"]/);
-  assert.match(processMap,/import ['"]\.\/service-settings-extension\.js\?v=20260919-calendly-v1['"]/);
+  assert.match(processMap,/import ['"]\.\/service-settings-extension\.js\?v=20260925-firecrawl-health-warning-v1['"]/);
   assert.equal(fs.existsSync(jsPath),true,'ai-settings.js must exist');
   assert.equal(fs.existsSync(extensionPath),true,'service-settings-extension.js must exist');
   assert.match(js,/id="open-settings"/);
@@ -162,7 +162,7 @@ test('Settings clearly changes data integrations from platform-only to customer-
   assert.match(extension,/Add your own Apollo and Firecrawl API keys/);
   assert.match(extension,/Customer-owned credential/);
   assert.match(extension,/serviceDetail/);
-  assert.match(extension,/meta\.textContent=serviceDetail/,'customer-owned status must replace stale Platform managed metadata');
+  assert.match(extension,/meta\.textContent=observed\?\.detail\|\|serviceDetail/,'live Firecrawl failures must take precedence over the saved credential metadata');
 });
 
 test('Settings retains the integration control centre and adds LeadIntel readiness for customer-owned services',()=>{
