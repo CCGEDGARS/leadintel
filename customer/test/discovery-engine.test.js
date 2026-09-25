@@ -236,6 +236,11 @@ test('normalizeDiscoveryState caps candidates, pipeline and selected decision-ma
   assert.equal(state.pipeline[0].stage,'Discovered');
 });
 
+test('normalizeDiscoveryState preserves the CRM record id needed to report saved status offline',()=>{
+  const state=Discovery.normalizeDiscoveryState({pipeline:[{id:'local-modvion',crmId:'crm-company-42',company:'Modvion',domain:'modvion.com',website:'https://modvion.com/'}]});
+  assert.equal(state.pipeline[0].crmId,'crm-company-42');
+});
+
 test('normalizeDiscoveryState persists the search funnel and keeps potential matches separate and non-actionable',()=>{
   const state=Discovery.normalizeDiscoveryState({
     qualityVersion:Discovery.DISCOVERY_QUALITY_VERSION,
