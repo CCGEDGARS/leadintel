@@ -49,7 +49,9 @@
   }
   function rankCandidates(candidates=[],profile={},modelOrDna=null){
     return (candidates||[]).filter(c=>!isHardExcluded(c,profile)).map(candidate=>{
-      const lookalikeMatch=scoreLookalikeSet(candidate,modelOrDna);const base=Math.max(0,Math.min(100,Number(candidate?.score?.total)||0));const priorityScore=lookalikeMatch.active?Math.round(lookalikeMatch.total*.58+base*.42):base;
+      const lookalikeMatch=scoreLookalikeSet(candidate,modelOrDna);const base=Math.max(0,Math.min(100,Number(candidate?.score?.total)||0));
+      // Resemblance is a soft preference; independently verified fit and signals lead the ranking.
+      const priorityScore=lookalikeMatch.active?Math.round(base*.8+lookalikeMatch.total*.2):base;
       return {...candidate,lookalikeMatch,lookalikeModelMatches:lookalikeMatch.modelMatches||[],priorityScore};
     }).sort((a,b)=>b.priorityScore-a.priorityScore||Number(b.score?.total||0)-Number(a.score?.total||0));
   }
@@ -88,8 +90,8 @@
   function install(Discovery){
     if(!Discovery||Discovery.__lookalikeInstalled)return Discovery;const originalQueries=Discovery.buildDiscoveryQueries?.bind(Discovery);const originalMerge=Discovery.mergeCompanyCandidates?.bind(Discovery);
     Discovery.scoreLookalikeMatch=scoreLookalikeMatch;Discovery.scoreLookalikeSet=scoreLookalikeSet;Discovery.buildLookalikeDiscoveryQueries=buildLookalikeDiscoveryQueries;Discovery.isHardExcluded=isHardExcluded;Discovery.rankCandidatesWithLookalike=rankCandidates;
-    if(originalQueries)Discovery.buildDiscoveryQueries=function(profile={},marketState={},maxQueries=4){const model=activeModelFromBrowser();const dna=model?.dna;if(!dna?.active)return originalQueries(profile,marketState,maxQueries);const look=buildLookalikeDiscoveryQueries(profile,dna,maxQueries);const base=originalQueries(profile,marketState,maxQueries);const seen=new Set(look.map(q=>q.query));return [...look,...base.filter(q=>!seen.has(q.query))].slice(0,Math.max(1,Math.min(12,Number(maxQueries)||4)));};
-    if(originalMerge)Discovery.mergeCompanyCandidates=function(results=[],profile={},marketState={}){const base=originalMerge(results,profile,marketState);const model=activeModelFromBrowser();return rankCandidates(base,profile,model||null).slice(0,12);};
+    if(originalQueries)Discovery.buildDiscoveryQueries=function(profile={},marketState={},maxQueries=4,previousQueries=[]){const model=activeModelFromBrowser();const dna=model?.dna;if(!dna?.active)return originalQueries(profile,marketState,maxQueries,previousQueries);const attempted=new Set((previousQueries||[]).map(q=>clean(q?.query||q).toLowerCase()));const look=buildLookalikeDiscoveryQueries(profile,dna,maxQueries).filter(q=>!attempted.has(q.query.toLowerCase()));const base=originalQueries(profile,marketState,maxQueries,previousQueries);const seen=new Set(look.map(q=>q.query));return [...look,...base.filter(q=>!seen.has(q.query))].slice(0,Math.max(1,Math.min(12,Number(maxQueries)||4)));};
+    if(originalMerge)Discovery.mergeCompanyCandidates=function(results=[],profile={},marketState={},maxCandidates=12){const base=originalMerge(results,profile,marketState,maxCandidates);const model=activeModelFromBrowser();return rankCandidates(base,profile,model||null).slice(0,maxCandidates);};
     Discovery.__lookalikeInstalled=true;return Discovery;
   }
   return {install,installMarketStrategy,refreshCurrentStep4,syncReferenceLookalikeIcp,isLookalikeStrategyEnabled,scoreLookalikeMatch,scoreLookalikeSet,buildLookalikeDiscoveryQueries,isHardExcluded,rankCandidates};
