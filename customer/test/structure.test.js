@@ -139,7 +139,7 @@ test('discovery UI wires Firecrawl and Apollo people search with hard caps',()=>
   const ui=read('discovery-ui.js');
   const engine=read('discovery-engine.js');
   assert.match(ui,/MAX_DISCOVERY_QUERIES\s*=\s*10/);
-  assert.match(ui,/MAX_DISCOVERY_RESULTS_PER_QUERY\s*=\s*5/);
+  assert.match(ui,/MAX_DISCOVERY_RESULTS_PER_QUERY\s*=\s*8/);
   assert.match(ui,/firecrawl-search/);
   assert.match(ui,/LeadIntelDiscovery/);
   assert.match(engine,/q_organization_domains_list/);

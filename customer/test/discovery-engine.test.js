@@ -341,6 +341,18 @@ test('zero-result reruns retain the last successful company results and label th
   assert.equal(state.lastSuccessfulRunAt,'2026-09-24T10:00:00.000Z');
 });
 
+test('find more retains earlier qualified companies and ranks new matches with them',()=>{
+  const candidate=(company,domain,score)=>({company,domain,website:`https://${domain}/`,market:'Sweden',score:{total:score},qualified:true,marketVerified:true,buyerVerified:true,matchedSignals:[{id:'expansion',name:'Capacity expansion'}],evidence:[{url:`https://${domain}/news`,title:'New factory'}]});
+  const earlier=candidate('Modvion','modvion.com',86);
+  const newest=candidate('LKAB','lkab.com',71);
+  const added=Discovery.retainLastSuccessfulDiscoveryCandidates({candidates:[earlier],lastSuccessfulRunAt:'2026-09-24'},[newest],'2026-09-25');
+  assert.deepEqual(added.candidates.map(item=>item.company),['Modvion','LKAB']);
+  assert.equal(added.latestRunCandidateCount,1);
+  const updated=Discovery.retainLastSuccessfulDiscoveryCandidates(added,[candidate('LKAB','lkab.com',90)],'2026-09-26');
+  assert.deepEqual(updated.candidates.map(item=>item.company),['LKAB','Modvion']);
+  assert.equal(updated.latestRunCandidateCount,0);
+});
+
 test('results from the previous scoring rules are cleared for review while the saved pipeline is retained',()=>{
   const state=Discovery.normalizeDiscoveryState({
     qualityVersion:Discovery.DISCOVERY_QUALITY_VERSION-1,status:'complete',lastRunAt:'2026-09-24T12:00:00.000Z',
@@ -362,9 +374,9 @@ test('results from the previous scoring rules are cleared for review while the s
 
 
 test('discovery limits start at ten and support bounded custom targets',()=>{
-  assert.deepEqual(Discovery.discoveryLimits(),{targetCount:10,queryCount:4,resultsPerQuery:5});
-  assert.deepEqual(Discovery.discoveryLimits(25),{targetCount:25,queryCount:8,resultsPerQuery:5});
-  assert.deepEqual(Discovery.discoveryLimits(37),{targetCount:37,queryCount:10,resultsPerQuery:5});
+  assert.deepEqual(Discovery.discoveryLimits(),{targetCount:10,queryCount:6,resultsPerQuery:8});
+  assert.deepEqual(Discovery.discoveryLimits(25),{targetCount:25,queryCount:8,resultsPerQuery:8});
+  assert.deepEqual(Discovery.discoveryLimits(37),{targetCount:37,queryCount:10,resultsPerQuery:8});
   assert.equal(Discovery.discoveryLimits(0).targetCount,10);
   assert.equal(Discovery.discoveryLimits(500).targetCount,50);
 });

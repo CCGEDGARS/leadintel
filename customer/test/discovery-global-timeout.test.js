@@ -149,7 +149,7 @@ test('a normal three-stage search is allowed to outlast one provider request win
   await context.__runDiscovery();
 
   assert.deepEqual([...phases].sort(), ['market_search', 'resolution', 'verification']);
-  assert.equal(requestCounts.market_search,4,'a full target does not trigger adaptive searches');
+  assert.equal(requestCounts.market_search,6,'a full target does not trigger adaptive searches');
   assert.ok(requestCounts.resolution > 4, 'the pipeline should have enough time to process multiple company resolutions');
   assert.ok(requestCounts.verification > 4, 'the pipeline should have enough time to verify multiple company websites');
   assert.notEqual(context.__discoveryState().status, 'error');
@@ -157,9 +157,9 @@ test('a normal three-stage search is allowed to outlast one provider request win
 
 test('the run deadline covers the worst-case bounded search stages at each supported target size', () => {
   const context=loadDiscoveryRunner({requestTimeout:25,scaleProductionRunTimeout:1000});
-  assert.equal(context.__discoveryRunTimeoutMs(10,4),414);
-  assert.equal(context.__discoveryRunTimeoutMs(25,8),439);
-  assert.equal(context.__discoveryRunTimeoutMs(50,10),464);
+  assert.equal(context.__discoveryRunTimeoutMs(10,4),658);
+  assert.equal(context.__discoveryRunTimeoutMs(25,8),683);
+  assert.equal(context.__discoveryRunTimeoutMs(50,10),708);
 });
 
 test('a successful first pass with no qualified companies gets one bounded follow-up pass',async()=>{
@@ -180,7 +180,7 @@ test('a successful first pass with no qualified companies gets one bounded follo
         url:'https://northsteel.lv/',title:'North Steel official website',description:'Latvian industrial manufacturing company investing in industrial automation.'
       }]})};
       marketRequests+=1;
-      if(marketRequests<=4){initialResults+=1;return {ok:true,json:async()=>({success:true,data:[]})};}
+      if(marketRequests<=6){initialResults+=1;return {ok:true,json:async()=>({success:true,data:[]})};}
       followUpResults+=1;
       return {ok:true,json:async()=>({success:true,data:[{
         url:'https://industrynews.lv/north-steel-factory',title:'North Steel plans a new factory',
@@ -193,13 +193,13 @@ test('a successful first pass with no qualified companies gets one bounded follo
   await context.__runDiscovery();
 
   const result=context.__discoveryState();
-  assert.equal(initialResults,4);
+  assert.equal(initialResults,6);
   assert.equal(followUpResults,4,'the second pass has a strict four-search cap');
   assert.equal(result.status,'complete');
   assert.equal(result.candidates.length,1);
   assert.equal(result.candidates[0].domain,'northsteel.lv');
-  assert.equal(result.funnel.marketSearchesCompleted,8);
-  assert.equal(result.funnel.marketSearchesTotal,8);
+  assert.equal(result.funnel.marketSearchesCompleted,10);
+  assert.equal(result.funnel.marketSearchesTotal,10);
   assert.equal(result.funnel.evidencePages,3,'repeated URLs count once in the funnel');
   assert.equal(result.funnel.companiesIdentified,1);
   assert.equal(result.funnel.officialDomainsResolved,1);
@@ -403,8 +403,8 @@ test('provider failures fail the Discovery task and cannot be reported as comple
   assert.match(failedTask,/provider checks failed or timed out/i);
   assert.match(failedTask,/no no-match conclusion/i);
   assert.equal(completedTask,false);
-  assert.equal(requests,8,'each transient provider failure gets exactly one bounded retry');
-  assert.equal(context.__discoveryState().searchFailures.length,4);
+  assert.equal(requests,12,'each transient provider failure gets exactly one bounded retry');
+  assert.equal(context.__discoveryState().searchFailures.length,6);
   assert.ok(context.__discoveryState().searchFailures.every(item=>item.phase==='searching'&&item.reason==='provider_unavailable'&&item.status===503));
   context.__renderDiscoveryFunnel();
   assert.match(context.__elements.get('discovery-funnel').innerHTML,/Market evidence/);
@@ -513,7 +513,7 @@ test('Company Discovery asks Firecrawl to attach page evidence to search results
 
   assert.deepEqual(requestBody, {
     query: 'Latvia office furniture companies official website',
-    limit: 5,
+    limit: 8,
     scrapeOptions: { formats: ['markdown'], onlyMainContent: true }
   });
   assert.equal(results.length, 1);
