@@ -27,16 +27,17 @@
   function applyStageVisibility(document,stage,state={}){
     const action=forStage(stage,state);
     if(Number(stage)!==5)return action;
-    const hidden=action.visible===false;
+    const pipelineEmpty=count(state.pipelineCount)===0;
     const pipeline=document?.querySelector?.(".pipeline-panel");
-    if(pipeline)pipeline.hidden=hidden;
+    if(pipeline)pipeline.hidden=pipelineEmpty;
     const gate=document?.getElementById?.("continue-to-outreach");
     const footer=gate?.closest?.(".workflow-next-action");
-    if(footer)footer.hidden=hidden;
+    if(footer)footer.hidden=pipelineEmpty||(state.focus==="buyers"&&count(state.buyerCount)===0);
     if(gate){
+      const blocked=!action.enabled||(state.focus==="buyers"&&count(state.buyerCount)===0);
       gate.textContent=action.label;
-      gate.disabled=!action.enabled;
-      gate.setAttribute?.("aria-disabled",String(!action.enabled));
+      gate.disabled=blocked;
+      gate.setAttribute?.("aria-disabled",String(blocked));
     }
     if(gate?.dataset&&action.journeyStage)gate.dataset.journeyStage=String(action.journeyStage);
     return action;
