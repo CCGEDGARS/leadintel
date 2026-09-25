@@ -53,6 +53,30 @@ test('Step 5 hides the empty pipeline and continuation control until an opportun
   assert.equal(gate.dataset.journeyStage,'6');
 });
 
+test('Buyers keeps saved companies visible and only offers Messages after a buyer is found',()=>{
+  const pipeline={hidden:true};
+  const footer={hidden:false};
+  const gate={dataset:{},disabled:false,textContent:'',attributes:{},setAttribute(name,value){this.attributes[name]=value;},closest:()=>footer};
+  const document={
+    querySelector(selector){return selector==='.pipeline-panel'?pipeline:null;},
+    getElementById(id){return id==='continue-to-outreach'?gate:null;}
+  };
+
+  NextAction.applyStageVisibility(document,5,{pipelineCount:1,buyerCount:0,focus:'buyers'});
+  assert.equal(pipeline.hidden,false);
+  assert.equal(footer.hidden,true);
+  assert.equal(gate.textContent,'Continue to Buyers →');
+  assert.equal(gate.disabled,true);
+  assert.equal(gate.attributes['aria-disabled'],'true');
+
+  NextAction.applyStageVisibility(document,5,{pipelineCount:1,buyerCount:1,focus:'buyers'});
+  assert.equal(footer.hidden,false);
+  assert.equal(gate.textContent,'Continue to Messages →');
+  assert.equal(gate.disabled,false);
+  assert.equal(gate.attributes['aria-disabled'],'false');
+  assert.equal(gate.dataset.journeyStage,'6');
+});
+
 
 test('the workflow footer CSS respects the hidden state',()=>{
   const css=fs.readFileSync(path.join(__dirname,'..','styles.css'),'utf8');

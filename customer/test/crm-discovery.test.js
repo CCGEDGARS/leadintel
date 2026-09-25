@@ -11,6 +11,15 @@ test('Discovery exposes separate Save to CRM and Add to Pipeline actions',()=>{
   assert.match(source,/Suppressed/);
 });
 
+test('Buyers focus shows a distinct saved-company list and supports buyer search from the pipeline',()=>{
+  assert.match(source,/discoveryPanel\.hidden=buyers/);
+  assert.match(source,/buyers-focus-guide/);
+  assert.match(source,/data-find-pipeline-buyers/);
+  assert.match(source,/function findPipelineDecisionMakers/);
+  assert.match(source,/function searchDecisionMakers\(candidate/);
+  assert.match(source,/Find buyers/);
+});
+
 test('Discovery uses Master CRM as authenticated source while preserving local fallback',()=>{
   assert.match(source,/listCrmCompanies/);
   assert.match(source,/saveCrmCompany/);
