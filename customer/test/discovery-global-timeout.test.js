@@ -5,7 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const Discovery = require('../discovery-engine.js');
 
-function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchImpl = () => new Promise(() => {}), requestTimeout = 1, scaleProductionRunTimeout = 15000, researchMode = 'deep' } = {}) {
+function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchImpl = () => new Promise(() => {}), bridgeImpl = null, requestTimeout = 1, scaleProductionRunTimeout = 15000, researchMode = 'deep' } = {}) {
   let source = fs.readFileSync(path.join(__dirname, '..', 'discovery-ui.js'), 'utf8');
   const runTimeout = source.match(/const DISCOVERY_RUN_TIMEOUT_MIN_MS=(\d+);/);
   const runMargin = source.match(/const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=(\d+);/);
@@ -25,14 +25,15 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
     .replace(runMargin?.[0], `const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=${testRunMargin};`)
     .replace(extractionTimeout?.[0], `const COMPANY_EXTRACTION_TIMEOUT_MS=${testExtractionTimeout};`)
     .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\nglobalThis.__setDiscovery = value => { discovery = LeadIntelDiscovery.normalizeDiscoveryState({...value,qualityVersion:value.qualityVersion??LeadIntelDiscovery.DISCOVERY_QUALITY_VERSION}); };\nglobalThis.__renderStatus = renderStatus;\nglobalThis.__renderCandidates = renderCandidates;\n')
-    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;');
+    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;');
   const mainState = {
     website: 'https://acme.example/',
     profile: {
       website: 'https://acme.example/',
       targetMarkets: 'Latvia',
       priorityOffers: 'industrial automation',
-      idealCustomer: 'manufacturers'
+      idealCustomer: 'manufacturers',
+      decisionMakers: 'COO; Procurement Director; Plant Manager'
     },
     market: {
       researchMode,
@@ -57,6 +58,7 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
     AbortController,
     DOMException,
     LeadIntelDiscovery: Discovery,
+    LeadIntelServerBridge: bridgeImpl,
     fetch: fetchImpl,
     localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, String(value)), removeItem: key => storage.delete(key) },
     document: { getElementById, querySelector: () => null, querySelectorAll: () => [], createElement: () => ({ dataset: {}, addEventListener() {} }), head: { appendChild() {} }, body: { appendChild() {} } },
@@ -229,6 +231,46 @@ test('a completed zero-result run renders the search funnel and unqualified matc
   assert.doesNotMatch(context.__elements.get('discovery-potential-matches').innerHTML,/Save to CRM|Add to Pipeline/);
 });
 
+test('only fit-and-market verified potential companies offer a clearly flagged buyer search',()=>{
+  const context=loadDiscoveryRunner({renderNodes:true});
+  context.__setDiscovery({
+    status:'no_results',
+    potentialMatches:[
+      {company:'Northstar',domain:'northstar.com',website:'https://northstar.com/',market:'Latvia',marketVerified:true,fitVerified:true,qualificationGaps:['No active buying signal was confirmed'],evidence:[{url:'https://industry.example/northstar',title:'Northstar company profile',description:'Latvian industrial manufacturer.'}]},
+      {company:'Unknown Buyer',domain:'unknown.example',website:'https://unknown.example/',market:'Latvia',marketVerified:false,fitVerified:true,qualificationGaps:['Target market evidence is missing','No active buying signal was confirmed'],evidence:[{url:'https://industry.example/unknown',title:'Unknown Buyer profile'}]}
+    ]
+  });
+  context.__renderPotentialMatches();
+  const html=context.__elements.get('discovery-potential-matches').innerHTML;
+  assert.equal((html.match(/data-action="find-potential-buyers"/g)||[]).length,1);
+  assert.match(html,/Find buyers anyway/);
+  assert.match(html,/No active buying signal was confirmed/);
+  assert.match(html,/will remain unqualified/);
+  assert.doesNotMatch(html,/Save to CRM|Add to Pipeline/);
+});
+
+test('a user-selected fit-and-market verified potential match can display Apollo decision-makers without CRM promotion',async()=>{
+  let crmSaves=0;
+  const context=loadDiscoveryRunner({
+    renderNodes:true,
+    requestTimeout:1000,
+    scaleProductionRunTimeout:1000,
+    bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},searchApolloPeople:async()=>({ok:true,people:[{id:'p1',name:'Pat Example',title:'Chief Operating Officer',linkedin_url:'https://www.linkedin.com/in/pat-example'}]}),saveCrmCompany:async()=>{crmSaves+=1;return {ok:true};}},
+    fetchImpl:async()=>({ok:true,json:async()=>({success:true,data:[]})})
+  });
+  context.__setDiscovery({
+    status:'no_results',
+    potentialMatches:[{company:'Northstar',domain:'northstar.com',website:'https://northstar.com/',market:'Latvia',marketVerified:true,fitVerified:true,qualificationGaps:['No active buying signal was confirmed'],evidence:[{url:'https://industry.example/northstar',title:'Northstar company profile',description:'Latvian industrial manufacturer.'}]}]
+  });
+  await context.__findPotentialDecisionMakers('northstar.com');
+  const candidate=context.__discoveryState().potentialMatches[0];
+  assert.equal(candidate.peopleStatus,'complete');
+  assert.equal(candidate.people[0].name,'Pat Example');
+  assert.equal(candidate.buyerSearchMode,'user_selected_without_signal');
+  assert.equal(context.__discoveryState().pipeline.length,0);
+  assert.equal(crmSaves,0);
+});
+
 test('an aborted resolution stage does not start company verification', async () => {
   const phases=[];
   let actions=null;
@@ -275,6 +317,59 @@ test('an errored search is not presented as a confirmed no-match and offers retr
   assert.match(context.__elements.get('run-company-discovery').innerHTML, /Retry company search/);
 });
 
+test('transient Firecrawl failures are retried once before being reported',async()=>{
+  let requests=0;
+  const context=loadDiscoveryRunner({fetchImpl:async()=>{
+    requests+=1;
+    if(requests===1)return {ok:false,status:503,json:async()=>({error:'temporary outage'})};
+    return {ok:true,json:async()=>({success:true,data:[{url:'https://buyer.lv/news',title:'Buyer update',description:'Company update.'}]})};
+  }});
+  const result=await context.__firecrawlCompanySearch({id:'verify-buyer',market:'Latvia',domain:'buyer.lv',company:'Buyer',kind:'verification',query:'site:buyer.lv expansion'});
+  assert.equal(requests,2);
+  assert.equal(result.length,1);
+});
+
+test('failed company-site checks can be retried without repeating market searches and successful results qualify',async()=>{
+  let requests=0;
+  const context=loadDiscoveryRunner({
+    renderNodes:true,
+    requestTimeout:1000,
+    fetchImpl:async(_url,options)=>{
+      requests+=1;
+      const query=JSON.parse(options.body).query;
+      assert.match(query,/^site:northstar\.com/);
+      return {ok:true,json:async()=>({success:true,data:[{
+        url:'https://northstar.com/news/new-factory',title:'Northstar expands its Latvian production site',
+        description:'Northstar is a Latvian industrial manufacturer investing in automation and expanding production capacity at a new factory.',
+        markdown:'Northstar is a Latvian industrial manufacturer investing in automation and expanding production capacity at a new factory.'
+      }]})};
+    }
+  });
+  context.__setDiscovery({
+    qualityVersion:Discovery.DISCOVERY_QUALITY_VERSION,status:'error',lastRunAt:'2026-09-25T11:00:00.000Z',
+    rawResults:[{queryId:'discover-latvia-1',market:'Latvia',url:'https://industry.example/northstar',domain:'industry.example',company:'Northstar',title:'Northstar company profile',description:'Latvian industrial manufacturer investing in automation.'}],
+    companyMentions:[{company:'Northstar',market:'Latvia',sourceUrl:'https://industry.example/northstar'}],
+    checkedCompanyDomains:[],
+    funnel:{marketSearchesCompleted:4,marketSearchesTotal:4,evidencePages:1,companiesIdentified:1,officialDomainsResolved:1,companySitesChecked:0,qualifiedCompanies:0},
+    potentialMatches:[{company:'Northstar',domain:'northstar.com',website:'https://northstar.com/',market:'Latvia',marketVerified:true,fitVerified:true,qualificationGaps:['No active buying signal was confirmed'],evidence:[{url:'https://industry.example/northstar',sourceDomain:'industry.example',title:'Northstar company profile',description:'Latvian industrial manufacturer investing in automation.'}]}],
+    searchFailures:[{phase:'verifying',company:'Northstar',domain:'northstar.com',queryMeta:{id:'verify-northstar',kind:'verification',company:'Northstar',domain:'northstar.com',market:'Latvia',sourceUrl:'https://industry.example/northstar',query:'site:northstar.com "new factory"'},reason:'provider_unavailable',status:503}]
+  });
+  assert.equal(context.__discoveryState().searchFailures[0].phase,'verifying');
+  assert.equal(context.__discoveryState().searchFailures[0].queryMeta.domain,'northstar.com');
+  assert.match(context.__discoveryState().searchFailures[0].queryMeta.query,/^site:/);
+
+  await context.__retryFailedDiscoveryChecks();
+
+  const state=context.__discoveryState();
+  assert.equal(requests,1,`the failed website check alone should be retried: ${JSON.stringify(context.__discoveryState().searchFailures)}`);
+  assert.equal(state.funnel.marketSearchesCompleted,4,'market searches must not be repeated or recounted');
+  assert.equal(state.funnel.companySitesChecked,1);
+  assert.equal(state.funnel.qualifiedCompanies,1,JSON.stringify({potential:state.potentialMatches,candidates:state.candidates,raw:state.rawResults,failures:state.searchFailures}));
+  assert.equal(state.candidates[0].domain,'northstar.com');
+  assert.equal(state.searchFailures.length,0);
+  assert.equal(state.status,'complete');
+});
+
 test('saved results from older scoring rules require a fresh company search',()=>{
   const context=loadDiscoveryRunner({renderNodes:true});
   context.__setDiscovery({qualityVersion:Discovery.DISCOVERY_QUALITY_VERSION-1,status:'complete',rawResults:[{url:'https://old.se/news',domain:'old.se'}],lastRunAt:'2026-09-24T12:00:00.000Z'});
@@ -291,6 +386,9 @@ test('provider failures fail the Discovery task and cannot be reported as comple
   let completedTask=false;
   let requests=0;
   const context=loadDiscoveryRunner({
+    renderNodes:true,
+    requestTimeout:1,
+    scaleProductionRunTimeout:500,
     fetchImpl:async()=>{requests+=1;return {ok:false,status:503,json:async()=>({error:'Provider unavailable'})};}
   });
   context.LeadIntelTaskCentre={
@@ -305,7 +403,13 @@ test('provider failures fail the Discovery task and cannot be reported as comple
   assert.match(failedTask,/provider checks failed or timed out/i);
   assert.match(failedTask,/no no-match conclusion/i);
   assert.equal(completedTask,false);
-  assert.equal(requests,4,'provider errors must not trigger additional billed searches');
+  assert.equal(requests,8,'each transient provider failure gets exactly one bounded retry');
+  assert.equal(context.__discoveryState().searchFailures.length,4);
+  assert.ok(context.__discoveryState().searchFailures.every(item=>item.phase==='searching'&&item.reason==='provider_unavailable'&&item.status===503));
+  context.__renderDiscoveryFunnel();
+  assert.match(context.__elements.get('discovery-funnel').innerHTML,/Market evidence/);
+  assert.match(context.__elements.get('discovery-funnel').innerHTML,/HTTP 503/);
+  assert.match(context.__elements.get('discovery-funnel').innerHTML,/Retry failed checks/);
 });
 
 test('a rendering failure cannot leave Company Discovery running', async () => {
@@ -399,4 +503,3 @@ test('Company Discovery bounds concurrent Firecrawl verification requests', asyn
 
   assert.ok(maximum<=4,`expected at most four concurrent provider requests, observed ${maximum}`);
 });
-

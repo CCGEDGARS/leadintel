@@ -17,7 +17,7 @@
   const DISCOVERY_QUALITY_VERSION=2;
   const MINIMUM_DISCOVERY_FIT_SCORE=10;
   const DEFAULT_DISCOVERY_FUNNEL=Object.freeze({marketSearchesCompleted:0,marketSearchesTotal:0,evidencePages:0,companiesIdentified:0,officialDomainsResolved:0,companySitesChecked:0,verifiedCompanies:0,qualifiedCompanies:0,adaptiveFollowUpSearches:0});
-  const DEFAULT_DISCOVERY_STATE=Object.freeze({status:"idle",queries:[],rawResults:[],candidates:[],lastSuccessfulRunAt:"",latestRunCandidateCount:0,retainedLastSuccessfulResults:false,extraction:{status:"idle",method:"",message:""},potentialMatches:[],funnel:DEFAULT_DISCOVERY_FUNNEL,pipeline:[],lastRunAt:"",qualityVersion:DISCOVERY_QUALITY_VERSION,needsRefresh:false});
+  const DEFAULT_DISCOVERY_STATE=Object.freeze({status:"idle",queries:[],rawResults:[],candidates:[],companyMentions:[],searchFailures:[],checkedCompanyDomains:[],lastSuccessfulRunAt:"",latestRunCandidateCount:0,retainedLastSuccessfulResults:false,extraction:{status:"idle",method:"",message:""},potentialMatches:[],funnel:DEFAULT_DISCOVERY_FUNNEL,pipeline:[],lastRunAt:"",qualityVersion:DISCOVERY_QUALITY_VERSION,needsRefresh:false});
   const MAX_DISCOVERY_FOLLOW_UP_QUERIES=4;
   const MAX_DISCOVERY_COMPANY_CHECKS=20;
   const STOPWORDS=new Set(["with","from","that","this","your","their","into","over","under","company","companies","business","businesses","priority","market","markets","customer","customers","service","services","product","products","industrial"]);
@@ -52,7 +52,8 @@
     {match:/tender|procurement|iepirk|upphandling/i,base:["tender","procurement","contract award"],local:{se:["upphandling","anbud","kontraktstilldelning"]}}
   ];
   const GENERIC_COMPANY_TITLES=/^(?:home|welcome|about us|official site|services?|products?|solutions?|met[aā]la konstrukcijas|steel structures?|metal fabrication)$/i;
-  const SELLER_LANGUAGE=/(?:\bwe (?:offer|provide|manufacture|produce|fabricate|supply)\b|\bour (?:services|products|solutions)\b|\bmanufacturer\b|\bsupplier\b|\bfabrication services?\b|\bm[eē]s (?:pied[aā]v[aā]jam|ra[zž]ojam|izgatavojam|pieg[aā]d[aā]jam)\b|\bm[uū]su (?:pakalpojumi|produkti|produkcija)\b|\bra[zž]ot[aā]js\b|\bpieg[aā]d[aā]t[aā]js\b|\bizgatavo[sš]ana\b|\bmont[aā][zž]a\b)/i;
+  const SELLER_LANGUAGE=/(?:\bwe (?:offer|provide|manufacture|produce|fabricate|supply|sell|deliver)\b|\bour (?:services|products|solutions)\b|\bfabrication services?\b|\bm[eē]s (?:pied[aā]v[aā]jam|ra[zž]ojam|izgatavojam|pieg[aā]d[aā]jam)\b|\bm[uū]su (?:pakalpojumi|produkti|produkcija)\b)/i;
+  const SAME_OFFER_SELLER_ROLES=new Set(["manufacturer","manufacturers","supplier","suppliers","provider","providers","fabricator","fabricators","ražotājs","ražotāji","piegādātājs","piegādātāji","tillverkare","leverantör","leverantörer"]);
   const ROLE_GENERIC_WORDS=new Set(["chief","officer","director","manager","managing","head","vice","president","vp","senior","lead","leader","executive","global","regional","group"]);
   const SENIORITY_SCORE={owner:45,founder:45,c_suite:40,partner:35,vp:32,head:30,director:25,manager:15,senior:8};
 
@@ -273,10 +274,28 @@
   function isSameServiceSeller(candidate={},profile={}){
     const offerTerms=keywords(profile.priorityOffers).slice(0,20);
     if(!offerTerms.length)return false;
-    const hay=trustedEvidence(candidate).map(evidenceText).join(" ");
-    const overlap=offerTerms.filter(term=>evidenceContainsTerm(hay,term)).length;
     const needed=Math.min(2,offerTerms.length);
-    return overlap>=needed&&SELLER_LANGUAGE.test(hay);
+    const statements=trustedEvidence(candidate).flatMap(item=>[item.title,item.description,item.text]
+      .flatMap(value=>clean(value).split(/[.!?;\n]+/)).map(clean).filter(Boolean));
+    return statements.some(statement=>{
+      const overlap=offerTerms.filter(term=>evidenceContainsTerm(statement,term));
+      if(overlap.length<needed)return false;
+      if(SELLER_LANGUAGE.test(statement))return true;
+      const words=evidenceTokens(statement);
+      return overlap.some(term=>{
+        const wanted=evidenceTokens(term);
+        if(!wanted.length)return false;
+        for(let start=0;start<=words.length-wanted.length;start++){
+          if(!wanted.every((word,index)=>words[start+index]===word))continue;
+          const end=start+wanted.length;
+          if(words.slice(end,end+3).some(word=>SAME_OFFER_SELLER_ROLES.has(word)))return true;
+          for(let roleIndex=Math.max(0,start-5);roleIndex<start;roleIndex++){
+            if(SAME_OFFER_SELLER_ROLES.has(words[roleIndex])&&words[roleIndex+1]==="of")return true;
+          }
+        }
+        return false;
+      });
+    });
   }
 
   function buildCandidateNarrative(candidate={},language='en'){
@@ -558,7 +577,7 @@
       if(!marketVerified)qualificationGaps.push("Target market evidence is missing");
       if(!matchedSignals.length)qualificationGaps.push("No active buying signal was confirmed");
       if(!fitVerified)qualificationGaps.push("Target customer fit is not evidenced");
-      return {id:`potential-${slug(candidate.domain)}`,company:candidate.company,domain:candidate.domain,website:candidate.website,market:candidate.market,qualified:false,marketVerified,buyerVerified:false,matchedSignals,evidence:candidate.evidence,qualificationGaps};
+      return {id:`potential-${slug(candidate.domain)}`,company:candidate.company,domain:candidate.domain,website:candidate.website,market:candidate.market,qualified:false,marketVerified,fitVerified,buyerVerified:false,matchedSignals,evidence:candidate.evidence,qualificationGaps};
     }).filter(Boolean).sort((a,b)=>a.qualificationGaps.length-b.qualificationGaps.length||b.evidence.length-a.evidence.length).slice(0,limit);
   }
 
@@ -636,13 +655,41 @@
       text:cleanEvidenceText(item?.text).slice(0,2500),date:clean(item?.date)
     })).filter(item=>item.url);
     const gaps=[...new Set((Array.isArray(candidate.qualificationGaps)?candidate.qualificationGaps:[]).map(clean).filter(Boolean))].slice(0,4);
-    return {id:clean(candidate.id)||`potential-${slug(domain||candidate.company)}`,company:clean(candidate.company)||displayFromDomain(domain),domain,website:normalizeUrl(candidate.website)||(domain?`https://${domain}/`:""),market:clean(candidate.market),qualified:false,marketVerified:candidate.marketVerified===true,buyerVerified:false,matchedSignals:(Array.isArray(candidate.matchedSignals)?candidate.matchedSignals:[]).slice(0,12),evidence,qualificationGaps:gaps};
+    const people=(Array.isArray(candidate.people)?candidate.people:[]).slice(0,4).map(person=>({id:clean(person?.id),name:clean(person?.name),title:clean(person?.title),seniority:clean(person?.seniority),organization:clean(person?.organization),city:clean(person?.city),country:clean(person?.country),linkedin_url:normalizeLinkedInUrl(person?.linkedin_url||person?.linkedin)}));
+    return {id:clean(candidate.id)||`potential-${slug(domain||candidate.company)}`,company:clean(candidate.company)||displayFromDomain(domain),domain,website:normalizeUrl(candidate.website)||(domain?`https://${domain}/`:""),market:clean(candidate.market),qualified:false,marketVerified:candidate.marketVerified===true,fitVerified:candidate.fitVerified===true,buyerVerified:false,matchedSignals:(Array.isArray(candidate.matchedSignals)?candidate.matchedSignals:[]).slice(0,12),evidence,qualificationGaps:gaps,people,peopleStatus:["idle","loading","complete","empty","error"].includes(candidate.peopleStatus)?candidate.peopleStatus:"idle",buyerSearchMode:candidate.buyerSearchMode==="user_selected_without_signal"?candidate.buyerSearchMode:""};
+  }
+
+  function isPotentialBuyerSearchAllowed(candidate={}){
+    const gaps=Array.isArray(candidate.qualificationGaps)?candidate.qualificationGaps.map(clean).filter(Boolean):[];
+    return Boolean(canonicalDomain(candidate.domain||candidate.website)
+      &&candidate.qualified!==true
+      &&candidate.marketVerified===true
+      &&candidate.fitVerified===true
+      &&gaps.length===1
+      &&gaps[0]==="No active buying signal was confirmed");
+  }
+
+  function safeSearchFailure(failure={}){
+    const phase=["searching","following","resolving","verifying"].includes(clean(failure.phase))?clean(failure.phase):"searching";
+    const query=failure.queryMeta&&typeof failure.queryMeta==="object"?failure.queryMeta:{};
+    const queryMeta={
+      id:clean(query.id).slice(0,100),market:clean(query.market).slice(0,100),query:clean(query.query).slice(0,1000),
+      company:clean(query.company).slice(0,160),domain:canonicalDomain(query.domain),sourceUrl:normalizeUrl(query.sourceUrl),
+      kind:["resolution","verification"].includes(clean(query.kind))?clean(query.kind):"",offer:clean(query.offer).slice(0,200)
+    };
+    const reason=["timeout","rate_limit","provider_unavailable","network_error","auth_error","request_rejected","unknown_error"].includes(clean(failure.reason))?clean(failure.reason):"unknown_error";
+    const status=clamp(Math.floor(Number(failure.status)||0),0,599,0);
+    return {id:clean(failure.id)||`${phase}:${queryMeta.id||queryMeta.domain||"search"}`,phase,queryMeta,company:clean(failure.company||queryMeta.company).slice(0,160),domain:canonicalDomain(failure.domain||queryMeta.domain),reason,status};
   }
 
   function isActionableCandidate(candidate={}){
     return candidate.qualified===true&&candidate.marketVerified===true&&candidate.buyerVerified===true
       &&Array.isArray(candidate.matchedSignals)&&candidate.matchedSignals.length>0
       &&Array.isArray(candidate.evidence)&&candidate.evidence.length>0;
+  }
+
+  function safeCompanyMention(mention={}){
+    return {company:cleanCompanyName(mention.company).slice(0,160),market:clean(mention.market).slice(0,100),sourceUrl:normalizeUrl(mention.sourceUrl)};
   }
 
   function upsertPipelineItem(pipeline=[],candidate={}){
@@ -730,6 +777,9 @@
       queries:(clearOldResults?[]:(Array.isArray(input.queries)?input.queries:[])).slice(0,14).map(q=>({id:clean(q.id),market:clean(q.market),query:clean(q.query),offer:clean(q.offer)})).filter(q=>q.id&&q.query),
       rawResults:(clearOldResults?[]:(Array.isArray(input.rawResults)?input.rawResults:[])).slice(0,20).map(normalizeRaw).filter(item=>item.url&&item.domain),
       candidates:safeCandidates,
+      companyMentions:(Array.isArray(input.companyMentions)?input.companyMentions:[]).slice(0,MAX_DISCOVERY_COMPANY_CHECKS).map(safeCompanyMention).filter(item=>item.company&&item.sourceUrl),
+      searchFailures:(Array.isArray(input.searchFailures)?input.searchFailures:[]).slice(0,MAX_DISCOVERY_COMPANY_CHECKS*2).map(safeSearchFailure),
+      checkedCompanyDomains:[...new Set((Array.isArray(input.checkedCompanyDomains)?input.checkedCompanyDomains:[]).map(canonicalDomain).filter(Boolean))].slice(0,MAX_DISCOVERY_COMPANY_CHECKS),
       lastSuccessfulRunAt:needsRefresh?"":clean(input.lastSuccessfulRunAt||(safeCandidates.length&&["complete","partial"].includes(input.status)?input.lastRunAt:"")),
       latestRunCandidateCount:clamp(Math.floor(Number(input.latestRunCandidateCount??(safeCandidates.length?safeCandidates.length:0))||0),0,50,0),
       retainedLastSuccessfulResults:input.retainedLastSuccessfulResults===true&&!needsRefresh,
@@ -766,5 +816,5 @@
     return {...state,status:state.candidates.length||state.rawResults.length?"partial":"error"};
   }
 
-  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,DISCOVERY_QUALITY_VERSION,discoveryLimits,buildDiscoveryQueries,buildDiscoveryFollowUpQueries,extractCompanyMentions,parseCompanyExtraction,describeCompanyExtractionOutcome,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildPotentialCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,retainLastSuccessfulDiscoveryCandidates,recoverInterruptedDiscoveryState,discoveryOutcomeStatus,zeroResultGuidance,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,isLowQualityDiscoveryEvidence,hasActiveSignals,isActionableCandidate};
+  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,DISCOVERY_QUALITY_VERSION,discoveryLimits,buildDiscoveryQueries,buildDiscoveryFollowUpQueries,extractCompanyMentions,parseCompanyExtraction,describeCompanyExtractionOutcome,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildPotentialCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,retainLastSuccessfulDiscoveryCandidates,recoverInterruptedDiscoveryState,discoveryOutcomeStatus,zeroResultGuidance,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,isLowQualityDiscoveryEvidence,hasActiveSignals,isActionableCandidate,isPotentialBuyerSearchAllowed};
 });
