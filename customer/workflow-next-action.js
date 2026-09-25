@@ -27,7 +27,7 @@
   function applyStageVisibility(document,stage,state={}){
     const action=forStage(stage,state);
     if(Number(stage)!==5)return action;
-    const pipelineEmpty=count(state.pipelineCount)===0;
+    const pipelineEmpty=count(state.pipelineCount)+count(state.prospectCount)===0;
     const pipeline=document?.querySelector?.(".pipeline-panel");
     if(pipeline)pipeline.hidden=pipelineEmpty;
     const gate=document?.getElementById?.("continue-to-outreach");

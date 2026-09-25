@@ -225,8 +225,8 @@ test('a completed zero-result run renders the search funnel and unqualified matc
   assert.match(context.__elements.get('discovery-funnel').innerHTML,/8 of 8/);
   assert.match(context.__elements.get('company-candidates').innerHTML,/Review Market Research/);
   assert.match(context.__elements.get('company-candidates').innerHTML,/valid finding/i);
-  assert.match(context.__elements.get('discovery-potential-matches').innerHTML,/Potential matches/i);
-  assert.match(context.__elements.get('discovery-potential-matches').innerHTML,/not qualified/i);
+  assert.match(context.__elements.get('discovery-potential-matches').innerHTML,/Ranked companies to review/i);
+  assert.match(context.__elements.get('discovery-potential-matches').innerHTML,/buying signal unconfirmed/i);
   assert.match(context.__elements.get('discovery-potential-matches').innerHTML,/Target market evidence is missing/);
   assert.doesNotMatch(context.__elements.get('discovery-potential-matches').innerHTML,/Save to CRM|Add to Pipeline/);
 });
@@ -234,7 +234,7 @@ test('a completed zero-result run renders the search funnel and unqualified matc
 test('only fit-and-market verified potential companies offer a clearly flagged buyer search',()=>{
   const context=loadDiscoveryRunner({renderNodes:true});
   context.__setDiscovery({
-    status:'no_results',
+    status:'no_results',checkedCompanyDomains:['northstar.com'],
     potentialMatches:[
       {company:'Northstar',domain:'northstar.com',website:'https://northstar.com/',market:'Latvia',marketVerified:true,fitVerified:true,qualificationGaps:['No active buying signal was confirmed'],evidence:[{url:'https://industry.example/northstar',title:'Northstar company profile',description:'Latvian industrial manufacturer.'}]},
       {company:'Unknown Buyer',domain:'unknown.example',website:'https://unknown.example/',market:'Latvia',marketVerified:false,fitVerified:true,qualificationGaps:['Target market evidence is missing','No active buying signal was confirmed'],evidence:[{url:'https://industry.example/unknown',title:'Unknown Buyer profile'}]}
@@ -244,9 +244,9 @@ test('only fit-and-market verified potential companies offer a clearly flagged b
   const html=context.__elements.get('discovery-potential-matches').innerHTML;
   assert.equal((html.match(/data-action="find-potential-buyers"/g)||[]).length,1);
   assert.equal((html.match(/data-action="save-potential-prospect"/g)||[]).length,1);
-  assert.match(html,/Find buyers anyway/);
+  assert.match(html,/Find buyers/);
   assert.match(html,/No active buying signal was confirmed/);
-  assert.match(html,/remain outside the qualified list and Pipeline/);
+  assert.match(html,/outside the qualified opportunity list and Pipeline/);
   assert.doesNotMatch(html,/Save to CRM|Add to Pipeline/);
 });
 
@@ -273,6 +273,10 @@ test('a verified-fit prospect can be saved by the user without inventing a signa
   assert.equal(saved[0].company.opportunity_score,undefined);
   assert.equal(saved[0].company.pipeline_stage,undefined);
   assert.equal(context.__discoveryState().pipeline.length,0);
+  const restored=require('../discovery-engine.js').normalizeDiscoveryState(context.__discoveryState());
+  assert.equal(restored.selectedProspects[0].domain,'northstar.com');
+  assert.deepEqual(restored.selectedProspects[0].matchedSignals,[]);
+  assert.equal(restored.selectedProspects[0].score,undefined);
 });
 
 test('a user-selected fit-and-market verified potential match can display Apollo decision-makers without CRM promotion',async()=>{
@@ -285,7 +289,7 @@ test('a user-selected fit-and-market verified potential match can display Apollo
     fetchImpl:async()=>({ok:true,json:async()=>({success:true,data:[]})})
   });
   context.__setDiscovery({
-    status:'no_results',
+    status:'no_results',checkedCompanyDomains:['northstar.com'],
     potentialMatches:[{company:'Northstar',domain:'northstar.com',website:'https://northstar.com/',market:'Latvia',marketVerified:true,fitVerified:true,qualificationGaps:['No active buying signal was confirmed'],evidence:[{url:'https://industry.example/northstar',title:'Northstar company profile',description:'Latvian industrial manufacturer.'}]}]
   });
   await context.__findPotentialDecisionMakers('northstar.com');
