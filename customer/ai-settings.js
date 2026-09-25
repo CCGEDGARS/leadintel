@@ -1,5 +1,5 @@
 const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
-const SETTINGS_VERSION='20260915-model-choice-v1';
+const SETTINGS_VERSION='20260925-provider-credit-health-v1';
 const PROVIDERS=Object.freeze([
   {provider:'openai',name:'OpenAI',model:'gpt-5.6',placeholder:'sk-…',hint:'Responses API'},
   {provider:'anthropic',name:'Anthropic',model:'claude-sonnet-4-6',placeholder:'sk-ant-…',hint:'Messages API'},
@@ -132,11 +132,13 @@ function handleModelModeChange(event){
 }
 function providerCard(config,current){
   const configured=Boolean(current?.configured);const active=Boolean(current?.active);const owner=isOwner();const disabled=!signedIn()||!owner;
-  const stateLabel=active?'Active':configured?'Connected':'Not connected';
+  const outOfCredits=configured&&current?.credit_issue?.code==='credits_exhausted';
+  const stateLabel=outOfCredits?'Credits exhausted':active?'Active':configured?'Connected':'Not connected';
   const model=current?.model||config.model;const mode=model===config.model?'recommended':'advanced';const providerError=providerErrors[config.provider]||'';
   const usageMeta=current?.last_used_at?` · last used ${esc(formatDateTime(current.last_used_at))}`:'';
-  return `<article class="ai-provider-card ${active?'active':''}" data-provider-card="${config.provider}">
-    <div class="ai-provider-head"><div><span class="ai-provider-name">${esc(config.name)}</span><small>${esc(config.hint)} · Your API key · billed by provider</small></div><span class="ai-provider-status ${active?'active':configured?'connected':''}">${stateLabel}</span></div>
+  return `<article class="ai-provider-card ${active?'active':''} ${outOfCredits?'credit-alert':''}" data-provider-card="${config.provider}">
+    <div class="ai-provider-head"><div><span class="ai-provider-name">${esc(config.name)}</span><small>${esc(config.hint)} · Your API key · billed by provider</small></div><span class="ai-provider-status ${outOfCredits?'credit-alert':active?'active':configured?'connected':''}">${stateLabel}</span></div>
+    ${outOfCredits?`<div class="ai-credit-warning" role="alert">${esc(config.name)} reported exhausted credits or a billing limit during a real request. Check your ${esc(config.name)} balance and spending limit, then retry. A successful request clears this alert.</div>`:''}
     <label class="ai-settings-field">API key<input data-ai-key="${config.provider}" type="password" autocomplete="new-password" spellcheck="false" data-form-type="other" data-lpignore="true" data-1p-ignore="true" autocapitalize="none" placeholder="${esc(config.placeholder)}" ${disabled?'disabled':''}></label>
     <label class="ai-settings-field">Model choice<select data-ai-model-mode="${config.provider}" ${disabled?'disabled':''}><option value="recommended" ${mode==='recommended'?'selected':''}>Recommended · ${esc(config.model)}</option><option value="advanced" ${mode==='advanced'?'selected':''}>Advanced · custom model ID</option></select></label>
     <label class="ai-settings-field ai-custom-model" data-ai-custom-model="${config.provider}" ${mode==='advanced'?'':'hidden'}>Custom model ID<input data-ai-model="${config.provider}" type="text" value="${mode==='advanced'?esc(model):''}" autocomplete="off" spellcheck="false" placeholder="Enter the exact provider model ID" ${disabled?'disabled':''}></label>
@@ -191,8 +193,10 @@ function renderIntegrationMonitoring(){
   const activeAi=Boolean(status.providers.find(item=>item.active&&item.configured));
   const deliveryReady=gmail.state==='good'||microsoftMail.state==='good';
   const critical=[activeAi,signedIn(),deliveryReady,apollo.state==='good',firecrawl.state==='good'];const healthy=critical.filter(Boolean).length;
+  const creditAlerts=[...status.providers.filter(item=>item.configured&&item.credit_issue?.code==='credits_exhausted').map(item=>item.name),...(apollo.creditIssue?['Apollo.io']:[]),...(firecrawl.creditIssue?['Firecrawl']:[])];
   const checked=integrationStatus.checkedAt?`Last checked ${formatDateTime(integrationStatus.checkedAt)}`:'Run diagnostics to check all critical integrations.';
-  health.querySelector('.integration-summary-copy').innerHTML=`<span>System health</span><strong>${signedIn()?`${healthy}/5 critical checks passing`:'Sign in to run workspace diagnostics'}</strong><small>${esc(checked)}</small>`;
+  health.classList.toggle('credit-alert',creditAlerts.length>0);
+  health.querySelector('.integration-summary-copy').innerHTML=`<span>System health</span><strong>${creditAlerts.length?`Credit alert: ${esc(creditAlerts.join(', '))}`:signedIn()?`${healthy}/5 critical checks passing`:'Sign in to run workspace diagnostics'}</strong><small>${esc(checked)}</small>`;
   const button=document.getElementById('test-all-integrations');if(button){button.disabled=!signedIn()||integrationStatus.checking;button.textContent=integrationStatus.checking?'Testing…':'Test all integrations';}
 }
 async function handleCommunicationAction(event){
@@ -237,7 +241,12 @@ async function checkApolloStatus(){
   try{
     const {response,payload}=await api('/api/enrichment-policy');
     if(!response.ok)throw new Error(payload.error||`Status ${response.status}`);
-    const configured=Boolean(payload.configured);const daily=Number(payload.usage?.daily)||0;const monthly=Number(payload.usage?.monthly)||0;const dailyLimit=Number(payload.policy?.daily_credit_limit)||0;const monthlyLimit=Number(payload.policy?.monthly_credit_limit)||0;
+    const daily=Number(payload.usage?.daily)||0;const monthly=Number(payload.usage?.monthly)||0;const dailyLimit=Number(payload.policy?.daily_credit_limit)||0;const monthlyLimit=Number(payload.policy?.monthly_credit_limit)||0;
+    const service=await api('/api/integrations/services/status');
+    const apollo=(service.payload?.providers||[]).find(row=>row.provider==='apollo');
+    const configured=Boolean(payload.configured||apollo?.configured);
+    if(configured&&((dailyLimit>0&&daily>=dailyLimit)||(monthlyLimit>0&&monthly>=monthlyLimit)))return {state:'bad',label:'Credit limit reached',creditIssue:true,detail:`Workspace Apollo credit limit reached: ${daily}/${dailyLimit} today · ${monthly}/${monthlyLimit} this month. Ask the workspace owner to review the enrichment policy.`};
+    if(apollo?.credit_issue?.code==='credits_exhausted'&&apollo.credit_issue.source===apollo.source)return {state:'bad',label:'Credits exhausted',creditIssue:true,detail:apollo.source==='managed'?'LeadIntel managed Apollo reported exhausted credits or a billing limit. LeadIntel must restore service.':'Your Apollo account reported exhausted credits or a billing limit. Check your Apollo plan and billing.'};
     return configured?{state:'good',label:'Operational',detail:`Platform managed · usage ${daily}${dailyLimit?`/${dailyLimit}`:''} today · ${monthly}${monthlyLimit?`/${monthlyLimit}`:''} this month`}:{state:'bad',label:'Not configured',detail:'LeadIntel enrichment service is not configured.'};
   }catch(error){return {state:'bad',label:'Unavailable',detail:`Apollo status check failed · ${String(error.message||error).slice(0,120)}`};}
 }
@@ -249,13 +258,15 @@ async function checkFirecrawlStatus(){
     if(!provider)throw new Error('Firecrawl service status is missing');
     const source=provider.source==='customer'?'customer':'managed';
     const owner=source==='customer'?'Your Firecrawl key':'LeadIntel managed Firecrawl';
+    if(provider.metadata?.proxy_status===402)return {state:'bad',label:'Credits exhausted',creditIssue:true,source,detail:'LeadIntel managed Firecrawl returned HTTP 402. LeadIntel must restore its credits or billing.'};
+    if(provider.credit_issue?.code==='credits_exhausted'&&provider.credit_issue.source===source)return {state:'bad',label:'Credits exhausted',creditIssue:true,source,detail:`${owner} reported exhausted credits or a billing limit during a real request. ${source==='customer'?'Check your Firecrawl plan and billing.':'LeadIntel must restore managed Firecrawl service.'}`};
     const observed=window.LeadIntelDiscoveryUI?.firecrawlHealth?.()||{};
     const latest=observed.lastRunAt?`Last company search ${formatDateTime(observed.lastRunAt)}. `:'';
-    if(observed.blocked||observed.usedFallback)return {state:'bad',label:'Credit or billing issue',source,detail:`${owner}: ${latest}HTTP 402 blocked ${observed.blocked?'one or more checks':'Firecrawl checks; OpenAI supplied fallback results'}. ${source==='customer'?'Check your Firecrawl credits and spending limit.':'LeadIntel must restore managed Firecrawl credits or billing; you do not need to top up your own account.'}`};
+    if(observed.blocked||observed.usedFallback)return {state:'bad',label:'Credit or billing issue',creditIssue:true,source,detail:`${owner}: ${latest}HTTP 402 blocked ${observed.blocked?'one or more checks':'Firecrawl checks; OpenAI supplied fallback results'}. ${source==='customer'?'Check your Firecrawl credits and spending limit.':'LeadIntel must restore managed Firecrawl credits or billing; you do not need to top up your own account.'}`};
     if(provider.state==='bad')return {state:'bad',label:'Connection error',source,detail:`${owner}: ${provider.metadata?.error||provider.label||'Credential verification failed'}`};
     if(source==='customer'){
       const credits=Number(provider.metadata?.remaining_credits);
-      if(Number.isFinite(credits)&&credits<=0)return {state:'bad',label:'No Firecrawl credits',source,detail:'Your Firecrawl account reports zero remaining credits. Check your plan, billing or spending limit.'};
+      if(Number.isFinite(credits)&&credits<=0)return {state:'bad',label:'No Firecrawl credits',creditIssue:true,source,detail:'Your Firecrawl account reports zero remaining credits. Check your plan, billing or spending limit.'};
       if(Number.isFinite(credits))return {state:'good',label:'Credits available',source,detail:`Your Firecrawl account reports ${credits} remaining credits. This checks the balance, not a paid search.`};
       return {state:'warn',label:'Balance unknown',source,detail:'Your Firecrawl key is connected, but the remaining credit balance could not be confirmed.'};
     }
@@ -277,7 +288,7 @@ async function refreshIntegrationStatus(){
   const checkedAt=new Date().toISOString();
   const refreshMicrosoft=Promise.resolve(bridge()?.refreshMicrosoftMailStatus?.()).catch(()=>null);
   const [apollo,firecrawl,gmail]=await Promise.all([checkApolloStatus(),checkFirecrawlStatus(),checkGmailStatus(),refreshMicrosoft]);
-  integrationStatus={checkedAt,checking:false,apollo,firecrawl,account:workspaceAccountStatus(),gmail,microsoftMail:microsoftMailStatus()};window.LeadIntelIntegrationHealth={firecrawl};renderIntegrationMonitoring();return integrationStatus;
+  integrationStatus={checkedAt,checking:false,apollo,firecrawl,account:workspaceAccountStatus(),gmail,microsoftMail:microsoftMailStatus()};window.LeadIntelIntegrationHealth={apollo,firecrawl};renderIntegrationMonitoring();return integrationStatus;
 }
 async function refreshAllStatus(){
   await refreshStatus();await refreshIntegrationStatus();return {ai:status,integrations:integrationStatus};

@@ -68,8 +68,8 @@ test('AI generation retries the same company evidence with configured Gemini aft
     assert.equal(calls[0].body.input,calls[1].body.contents[0].parts[0].text,'Gemini must receive the same evidence prompt');
     assert.equal(calls[0].body.instructions,calls[1].body.systemInstruction.parts[0].text,'Gemini must receive the same extraction rules');
     assert.deepEqual(env.DB.lastUsed,['gemini']);
-    assert.equal(env.DB.audits[0].provider,'gemini');
-    assert.equal(env.DB.audits[0].metadata.fallback_used,true);
+    assert.equal(env.DB.audits.find(row=>row.metadata.fallback_used)?.provider,'gemini');
+    assert.equal(env.DB.audits.find(row=>row.metadata.fallback_used)?.metadata.fallback_used,true);
     assert.doesNotMatch(JSON.stringify(payload),/openai-test-key|gemini-test-key/);
   }finally{globalThis.fetch=originalFetch;}
 });

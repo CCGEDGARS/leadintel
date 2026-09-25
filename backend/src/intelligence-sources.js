@@ -1,5 +1,6 @@
 import {sha256,cookieValue} from './security.js';
 import {resolveWorkspaceServiceCredential} from './service-integrations.js';
+import {creditFailure,recordProviderCredit} from './provider-credit-health.js';
 import {normalizeSourceInput,validateSourceUrl,gradeAccessAudit,inferExtractableData} from './intelligence-sources-engine.js';
 
 const MANAGED_FIRECRAWL='https://apollo-proxy.edgars-7e7.workers.dev';
@@ -21,7 +22,8 @@ async function publicScrape(env,workspaceId,url){
   const customer=credential.source==='customer';const target=customer?'https://api.firecrawl.dev/v2/scrape':`${clean(env.FIRECRAWL_PROXY_URL||MANAGED_FIRECRAWL,500)}/firecrawl-scrape`;
   const headers={'Content-Type':'application/json',Accept:'application/json'};if(customer)headers.Authorization=`Bearer ${credential.apiKey}`;
   const response=await fetch(target,{method:'POST',headers,body:JSON.stringify({url,formats:['markdown'],onlyMainContent:true,timeout:25000})});
-  const payload=await response.json().catch(()=>({}));if(!response.ok)throw Object.assign(new Error(clean(payload?.error||`Firecrawl scrape returned ${response.status}`,500)),{provider:customer?'firecrawl_customer':'firecrawl_managed'});
+  const payload=await response.json().catch(()=>({}));if(!response.ok){if(creditFailure(response.status,payload?.error||payload?.message))await recordProviderCredit(env,{workspaceId,userId:null,provider:'firecrawl',kind:'failed',source:credential.source});throw Object.assign(new Error(clean(payload?.error||`Firecrawl scrape returned ${response.status}`,500)),{provider:customer?'firecrawl_customer':'firecrawl_managed'});}
+  await recordProviderCredit(env,{workspaceId,userId:null,provider:'firecrawl',kind:'recovered',source:credential.source});
   const data=payload?.data||payload;const text=String(data?.markdown||data?.content||'').trim();return {ok:Boolean(text),text,title:clean(data?.metadata?.title||data?.title,300),provider:customer?'firecrawl_customer':'firecrawl_managed',method:'public_scrape'};
 }
 

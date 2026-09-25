@@ -3,6 +3,7 @@ import {importAesKey,encryptSecret,decryptSecret} from './oauth.js';
 import {AI_PROVIDERS,normalizeAiProvider,defaultAiModel,generateText,verifyProviderCredential,searchWeb} from './ai-provider.js';
 import {verifyMarketResearch} from './market-research-verifier.js';
 import {generateCompanyExtraction} from './company-extraction-fallback.js';
+import {creditFailure,recordProviderCredit,providerCreditIssue} from './provider-credit-health.js';
 
 const uuid=()=>crypto.randomUUID();
 const json=(value,status=200,headers={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...headers}});
@@ -52,7 +53,11 @@ export async function handleAiRoute(request,env,cors={}){
 
   if(path==='/api/integrations/ai/status'&&request.method==='GET'){
     const access=await requireMember(request,env,workspaceId);if(access.error)return error(access.error,access.status,cors);
-    try{return json(providerStatus(await integrationRows(env,workspaceId),access.member.role),200,cors);}catch{return error('AI integration storage is not ready',503,cors);}
+    try{
+      const result=providerStatus(await integrationRows(env,workspaceId),access.member.role);
+      await Promise.all(result.providers.map(async row=>{if(row.configured)row.credit_issue=await providerCreditIssue(env,workspaceId,row.provider);}));
+      return json(result,200,cors);
+    }catch{return error('AI integration storage is not ready',503,cors);}
   }
 
   if(path==='/api/integrations/ai/provider'&&request.method==='PUT'){
@@ -66,7 +71,7 @@ export async function handleAiRoute(request,env,cors={}){
       const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const encrypted=await encryptSecret(apiKey,key);const makeActive=body.make_active!==false;
       const statements=[];if(makeActive)statements.push(env.DB.prepare(`UPDATE workspace_ai_integrations SET active=0,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=?`).bind(workspaceId));
       statements.push(env.DB.prepare(`INSERT INTO workspace_ai_integrations(workspace_id,provider,encrypted_api_key,key_hint,model,active,verified_at,created_at,updated_at) VALUES(?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(workspace_id,provider) DO UPDATE SET encrypted_api_key=excluded.encrypted_api_key,key_hint=excluded.key_hint,model=excluded.model,active=excluded.active,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP`).bind(workspaceId,provider,encrypted,keyHint(apiKey),model,makeActive?1:0));
-      await env.DB.batch(statements);await audit(env,{workspaceId,userId:access.user.id,type:'ai.provider_saved',provider,metadata:{model,active:makeActive}});
+      await env.DB.batch(statements);await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider,kind:'recovered'});await audit(env,{workspaceId,userId:access.user.id,type:'ai.provider_saved',provider,metadata:{model,active:makeActive}});
       return json({saved:true,provider,model,active:makeActive,key_hint:keyHint(apiKey),verified_at:new Date().toISOString()},200,cors);
     }catch{return error('Unable to save AI provider configuration',500,cors);}
   }
@@ -117,9 +122,10 @@ export async function handleAiRoute(request,env,cors={}){
       const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const apiKey=await decryptSecret(integration.encrypted_api_key,key);
       const result=await searchWeb({apiKey,model:integration.model,query,maxResults,signal:request.signal});
       await env.DB.prepare(`UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(workspaceId,'openai').run();
+      await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'openai',kind:'recovered'});
       await audit(env,{workspaceId,userId:access.user.id,type:'ai.web_search_completed',provider:'openai',metadata:{model:integration.model,input_tokens:result.usage.input_tokens,output_tokens:result.usage.output_tokens,result_count:result.results.length}});
       return json(result,200,cors);
-    }catch(cause){return error(String(cause?.message||'OpenAI web search failed').slice(0,180),502,cors);}
+    }catch(cause){if(creditFailure(0,cause?.message))await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'openai',kind:'failed'});return error(String(cause?.message||'OpenAI web search failed').slice(0,180),502,cors);}
   }
 
   if(path==='/api/ai/research-verification'&&request.method==='POST'){
@@ -135,9 +141,11 @@ export async function handleAiRoute(request,env,cors={}){
       const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const apiKey=await decryptSecret(integration.encrypted_api_key,key);
       const result=await verifyMarketResearch({apiKey,model:integration.model,mode:body.mode,profile:body.profile,signals:body.signals,evidence,signal:request.signal});
       await env.DB.prepare(`UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(workspaceId,'gemini').run();
+      await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'gemini',kind:'recovered'});
       await audit(env,{workspaceId,userId:access.user.id,type:'ai.research_verification_completed',provider:'gemini',metadata:{model:integration.model,input_tokens:result.usage.input_tokens,output_tokens:result.usage.output_tokens,evidence_count:evidence.length,disagreement_count:result.disagreements.length}});
       return json(result,200,cors);
     }catch(cause){
+      if(creditFailure(0,cause?.message))await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'gemini',kind:'failed'});
       console.error('Gemini research verification unavailable',String(cause?.message||cause).slice(0,180));
       return unavailable('Gemini verification is temporarily unavailable');
     }
@@ -164,8 +172,13 @@ export async function handleAiRoute(request,env,cors={}){
           request.signal?.addEventListener('abort',onRequestAbort,{once:true});
           timer=setTimeout(()=>{timedOut=true;controller.abort();},COMPANY_EXTRACTION_PROVIDER_TIMEOUT_MS);
         }
-        try{return await generateText({provider:providerIntegration.provider,apiKey,model:providerIntegration.model,...input,signal});}
+        try{
+          const result=await generateText({provider:providerIntegration.provider,apiKey,model:providerIntegration.model,...input,signal});
+          await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:providerIntegration.provider,kind:'recovered'});
+          return result;
+        }
         catch(cause){
+          if(creditFailure(0,cause?.message))await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:providerIntegration.provider,kind:'failed'});
           if(timedOut)throw new Error(`${PROVIDER_NAMES[providerIntegration.provider]||'AI provider'} request timed out`);
           if(request.signal?.aborted){const canceled=new Error('AI generation was canceled');canceled.name='AbortError';throw canceled;}
           throw cause;

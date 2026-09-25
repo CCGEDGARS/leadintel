@@ -16,7 +16,7 @@ const extensionCss=fs.existsSync(extensionCssPath)?fs.readFileSync(extensionCssP
 
 test('Customer V2 loads the proven AI Settings plus the customer-owned Apollo and Firecrawl extension',()=>{
   assert.match(processMap,/import ['"]\.\/ai-settings\.js\?v=20260915-model-choice-v1['"]/);
-  assert.match(processMap,/import ['"]\.\/service-settings-extension\.js\?v=20260925-firecrawl-health-warning-v1['"]/);
+  assert.match(processMap,/import ['"]\.\/service-settings-extension\.js\?v=20260925-provider-credit-health-v1['"]/);
   assert.equal(fs.existsSync(jsPath),true,'ai-settings.js must exist');
   assert.equal(fs.existsSync(extensionPath),true,'service-settings-extension.js must exist');
   assert.match(js,/id="open-settings"/);
@@ -104,7 +104,7 @@ test('raw API keys are transient browser values and never persisted by either se
 });
 
 test('settings assets are cache-busted and controls have individual borders and focus treatment',()=>{
-  assert.match(js,/SETTINGS_VERSION='20260915-model-choice-v1'/);
+  assert.match(js,/SETTINGS_VERSION='20260925-provider-credit-health-v1'/);
   assert.match(extension,/SETTINGS_VERSION='20260919-calendly-v1'/);
   assert.match(js,/link\.href=`ai-settings\.css\?v=\$\{SETTINGS_VERSION\}`/);
   assert.match(extension,/link\.href=`service-settings-extension\.css\?v=\$\{SETTINGS_VERSION\}`/);

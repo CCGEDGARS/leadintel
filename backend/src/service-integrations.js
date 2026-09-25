@@ -1,6 +1,7 @@
 import {sha256,cookieValue} from './security.js';
 import {importAesKey,encryptSecret,decryptSecret} from './oauth.js';
 import {APOLLO_PEOPLE_SEARCH_URL,normalizeDomain as normalizeApolloDomain} from './enrichment.js';
+import {creditFailure,recordProviderCredit,providerCreditIssue} from './provider-credit-health.js';
 
 const PROVIDERS=Object.freeze(['apollo','firecrawl']);
 const PROVIDER_NAMES=Object.freeze({apollo:'Apollo.io',firecrawl:'Firecrawl'});
@@ -153,7 +154,7 @@ async function providerStatus(env,workspaceId,provider,{verify=false}={}){
     return {provider,name:PROVIDER_NAMES[provider],configured:false,source:'managed',state:'good',label:'LeadIntel managed fallback',key_hint:'',verified_at:null,last_used_at:null,metadata:{}};
   }
   const check=verify?await verifyManagedFirecrawl(env):{ok:true,status:200};
-  return {provider,name:PROVIDER_NAMES[provider],configured:false,source:'managed',state:check.ok?'good':'bad',label:check.ok?'LeadIntel managed fallback':'Managed fallback unavailable',key_hint:'',verified_at:null,last_used_at:null,metadata:{proxy_status:check.status}};
+  return {provider,name:PROVIDER_NAMES[provider],configured:false,source:'managed',state:check.ok?'good':'bad',label:check.status===402?'Credits exhausted':check.ok?'LeadIntel managed fallback':'Managed fallback unavailable',key_hint:'',verified_at:null,last_used_at:null,metadata:{proxy_status:check.status}};
 }
 
 function workspaceIdFrom(url){return clean(url.searchParams.get('workspace_id')||'',120);}
@@ -182,12 +183,14 @@ async function forwardFirecrawl(request,env,cors,workspaceId,kind){
   }
   const upstream=await response.json().catch(()=>({}));
   if(!response.ok){
+    if(creditFailure(response.status,upstream?.error||upstream?.message))await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'firecrawl',kind:'failed',source:credential.source});
     const canFallback=kind==='scrape'&&researchUrl&&retryableFirecrawlStatus(response.status,{managed:credential.source==='managed'});
     if(canFallback){
       try{const direct=await fetchDirectPublicPage(researchUrl.href);await audit(env,{workspaceId,userId:access.user.id,type:'service.firecrawl_scrape',provider:'firecrawl',metadata:{source:'direct-fallback',upstream_source:credential.source,upstream_status:response.status}});return json(direct,200,cors);}catch{}
     }
     return error(upstream.error||`Firecrawl ${kind} failed (${response.status})`,response.status>=400&&response.status<600?response.status:502,cors);
   }
+  await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'firecrawl',kind:'recovered',source:credential.source});
   if(credential.source==='customer')await env.DB.prepare(`UPDATE workspace_service_integrations SET last_used_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider='firecrawl'`).bind(workspaceId).run();
   await audit(env,{workspaceId,userId:access.user.id,type:`service.firecrawl_${kind}`,provider:'firecrawl',metadata:{source:credential.source}});
   if(kind==='search'&&credential.source==='customer'&&Array.isArray(upstream?.data?.web))return json({success:true,data:upstream.data.web},200,cors);
@@ -227,10 +230,12 @@ async function forwardApolloPeopleSearch(request,env,cors,workspaceId){
   catch{return error('Apollo buyer search is temporarily unavailable. Try again.',502,cors,'SERVICE_APOLLO_UNAVAILABLE');}
   const upstream=await response.json().catch(()=>({}));
   if(!response.ok){
+    if(creditFailure(response.status,JSON.stringify(upstream).slice(0,800)))await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'apollo',kind:'failed',source:credential.source});
     if(response.status===401||response.status===403)return error('Apollo rejected this key or API access. Verify the Apollo connection in Settings.',502,cors,'SERVICE_APOLLO_AUTH_FAILED');
     if(response.status===429)return error('Apollo request limit reached. Check the Apollo account and try again later.',429,cors,'SERVICE_APOLLO_RATE_LIMIT');
     return error(`Apollo buyer search failed (${response.status})`,502,cors,'SERVICE_APOLLO_UPSTREAM_FAILED');
   }
+  await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'apollo',kind:'recovered',source:credential.source});
   const rawPeople=Array.isArray(upstream?.people)?upstream.people:Array.isArray(upstream?.contacts)?upstream.contacts:Array.isArray(upstream?.data?.people)?upstream.data.people:[];
   const people=rawPeople.slice(0,10).map(publicApolloBuyer).filter(person=>person.name||person.title);
   if(credential.source==='customer')await env.DB.prepare(`UPDATE workspace_service_integrations SET last_used_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider='apollo'`).bind(workspaceId).run();
@@ -246,7 +251,12 @@ export async function handleServiceIntegrationRoute(request,env,cors={}){
   if(path==='/api/integrations/services/status'&&request.method==='GET'){
     const access=await requireMember(request,env,workspaceId);if(access.error)return error(access.error,access.status,cors);
     const verify=url.searchParams.get('verify')==='1';
-    const providers=[];for(const provider of PROVIDERS)providers.push(await providerStatus(env,workspaceId,provider,{verify}));
+    const providers=[];for(const provider of PROVIDERS){
+      const state=await providerStatus(env,workspaceId,provider,{verify});
+      state.credit_issue=await providerCreditIssue(env,workspaceId,provider);
+      if(state.credit_issue?.source===state.source){state.state='bad';state.label='Credits exhausted';}
+      providers.push(state);
+    }
     return json({role:access.member.role,providers,checked_at:new Date().toISOString()},200,cors);
   }
 
