@@ -25,7 +25,7 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
     .replace(runMargin?.[0], `const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=${testRunMargin};`)
     .replace(extractionTimeout?.[0], `const COMPANY_EXTRACTION_TIMEOUT_MS=${testExtractionTimeout};`)
     .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\nglobalThis.__setDiscovery = value => { discovery = LeadIntelDiscovery.normalizeDiscoveryState({...value,qualityVersion:value.qualityVersion??LeadIntelDiscovery.DISCOVERY_QUALITY_VERSION}); };\nglobalThis.__renderStatus = renderStatus;\nglobalThis.__setDiscoveryProgress=value=>{discoveryProgress=value;};\nglobalThis.__renderCandidates = renderCandidates;\n')
-    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;');
+    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__savePotentialProspect = savePotentialProspect;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;');
   const mainState = {
     website: 'https://acme.example/',
     profile: {
@@ -243,10 +243,36 @@ test('only fit-and-market verified potential companies offer a clearly flagged b
   context.__renderPotentialMatches();
   const html=context.__elements.get('discovery-potential-matches').innerHTML;
   assert.equal((html.match(/data-action="find-potential-buyers"/g)||[]).length,1);
+  assert.equal((html.match(/data-action="save-potential-prospect"/g)||[]).length,1);
   assert.match(html,/Find buyers anyway/);
   assert.match(html,/No active buying signal was confirmed/);
-  assert.match(html,/will remain unqualified/);
+  assert.match(html,/remain outside the qualified list and Pipeline/);
   assert.doesNotMatch(html,/Save to CRM|Add to Pipeline/);
+});
+
+test('a verified-fit prospect can be saved by the user without inventing a signal or activating Pipeline',async()=>{
+  const saved=[];
+  const context=loadDiscoveryRunner({
+    renderNodes:true,
+    bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},saveCrmCompany:async payload=>{saved.push(payload);return {ok:true,company:{id:'company-1',normalized_domain:payload.company.domain}};}}
+  });
+  context.LeadIntelCrm=require('../crm-engine.js');
+  context.dispatchEvent=()=>{};
+  context.__setDiscovery({status:'no_results',checkedCompanyDomains:['northstar.com'],potentialMatches:[
+    {company:'Northstar',domain:'northstar.com',website:'https://northstar.com/',market:'Sweden',marketVerified:true,fitVerified:true,qualificationGaps:['No active buying signal was confirmed'],evidence:[{url:'https://northstar.com/news',title:'Northstar company site'}]},
+    {company:'Thule Group',domain:'thulegroup.com',website:'https://thulegroup.com/',market:'Sweden',marketVerified:true,fitVerified:true,qualificationGaps:['No active buying signal was confirmed'],evidence:[{url:'https://thulegroup.com/',title:'Thule Group'}]},
+    {company:'Unverified',domain:'unverified.com',website:'https://unverified.com/',market:'Sweden',marketVerified:false,fitVerified:true,qualificationGaps:['Target market evidence is missing','No active buying signal was confirmed'],evidence:[{url:'https://unverified.com/',title:'Unverified'}]}
+  ]});
+  assert.equal(await context.__savePotentialProspect('unverified.com'),false);
+  assert.equal(await context.__savePotentialProspect('thulegroup.com'),false,'a timed-out company-site check cannot be bypassed');
+  assert.equal(saved.length,0);
+  assert.equal(await context.__savePotentialProspect('northstar.com'),true);
+  assert.equal(saved.length,1);
+  assert.deepEqual(saved[0].intelligence.matched_signals,[]);
+  assert.equal(saved[0].company.source,'user_selected_discovery');
+  assert.equal(saved[0].company.opportunity_score,undefined);
+  assert.equal(saved[0].company.pipeline_stage,undefined);
+  assert.equal(context.__discoveryState().pipeline.length,0);
 });
 
 test('a user-selected fit-and-market verified potential match can display Apollo decision-makers without CRM promotion',async()=>{
@@ -269,6 +295,24 @@ test('a user-selected fit-and-market verified potential match can display Apollo
   assert.equal(candidate.buyerSearchMode,'user_selected_without_signal');
   assert.equal(context.__discoveryState().pipeline.length,0);
   assert.equal(crmSaves,0);
+});
+
+test('a timed-out company website check can recover with grounded official-domain evidence',async()=>{
+  let failedSearches=0,groundedSearches=0;
+  const context=loadDiscoveryRunner({
+    requestTimeout:1000,
+    bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'}},
+    fetchImpl:async url=>{
+      if(url.includes('/firecrawl-search')){failedSearches++;return {ok:false,status:503,json:async()=>({})};}
+      if(url.includes('/api/ai/web-search')){groundedSearches++;return {ok:true,json:async()=>({results:[{url:'https://thulegroup.com/news/factory',title:'Thule Group new factory',description:'Thule Group expands production in Sweden.'}]})};}
+      throw new Error('Unexpected request');
+    }
+  });
+  const results=await context.__firecrawlCompanySearch({id:'verify-thule',kind:'verification',company:'Thule Group',domain:'thulegroup.com',market:'Sweden',query:'site:thulegroup.com new factory'});
+  assert.equal(failedSearches,1);
+  assert.equal(groundedSearches,1);
+  assert.equal(results[0].domain,'thulegroup.com');
+  assert.equal(context.__discoveryState().funnel.openAiFallbackSearches,1);
 });
 
 test('an aborted resolution stage does not start company verification', async () => {

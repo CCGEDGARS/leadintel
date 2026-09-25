@@ -186,6 +186,14 @@ test("a mixed-company article does not transfer another firm's sales hiring sign
   assert.deepEqual(discovery.mergeCompanyCandidates(linked,profile,market,10),[]);
 });
 
+test("a contractor profile mentioning a buyer does not become that buyer's evidence",()=>{
+  const sourceUrl="https://eitech.se/projects/lkab";
+  const resolved=[{url:"https://lkab.com/",domain:"lkab.com",company:"LKAB",market:"Sweden",title:"LKAB",text:"LKAB produces iron ore in Sweden."}];
+  const thirdParty=[{url:sourceUrl,domain:"eitech.se",market:"Sweden",title:"Since January 2018 Eitech has been part of VINCI Energies",description:"Eitech provides engineering and turnkey projects to industrial customers including LKAB. Eitech offers installation and maintenance.",text:"LKAB is mentioned as a customer of Eitech."}];
+  const linked=discovery.attachSourceEvidenceToResolvedCompanies(resolved,[{company:"LKAB",market:"Sweden",sourceUrl}],thirdParty);
+  assert.deepEqual(linked.map(item=>item.url),["https://lkab.com/"]);
+});
+
 test("Latvian market names resolve to the correct target-country search",()=>{
   const [query]=discovery.buildDiscoveryQueries({
     website:"https://ercon.lv",targetMarkets:"Zviedrija",priorityOffers:"metālapstrādes pakalpojumi",

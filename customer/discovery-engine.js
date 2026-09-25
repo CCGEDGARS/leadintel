@@ -408,12 +408,12 @@
       const requested=marketRule(item.market);
       const actual=domainCountryRule(domain);
       if(requested&&actual&&requested.code!==actual.code)continue;
-      const signalTerms=[...new Set(signals.flatMap(signal=>signalEvidenceTerms(signal,item.market)))].slice(0,10);
+      const signalTerms=[...new Set(signals.flatMap(signal=>signalEvidenceTerms(signal,item.market)))].slice(0,3);
       if(!signalTerms.length)continue;
       const quotedSignals=signalTerms.map(term=>`"${term.replace(/"/g,"")}"`).join(" OR ");
       checks.push({
         id:`verify-${slug(domain)}`,domain,company:clean(item.company),sourceUrl:normalizeUrl(item.sourceUrl||""),market:clean(item.market),offer:"",kind:"verification",
-        query:`site:${domain} (${quotedSignals}) company news expansion investment hiring facility contract`
+        query:`site:${domain} (${quotedSignals}) news`
       });
       if(checks.length>=limit)break;
     }
@@ -450,6 +450,13 @@
 
   function attributedCompanyEvidence(source,company){
     const name=cleanCompanyName(company);
+    const title=cleanEvidenceText(source?.title);
+    if(!evidenceContainsTerm(title,name)){
+      const firstNamedBody=[source?.description,source?.text].map(cleanEvidenceText).find(part=>evidenceContainsTerm(part,name))||"";
+      const firstMention=firstNamedBody.toLowerCase().indexOf(name.toLowerCase());
+      const sourceBrand=canonicalDomain(source?.url).split(".").slice(-2,-1)[0]||"";
+      if(firstMention>160||(sourceBrand.length>=5&&evidenceContainsTerm(title,sourceBrand)))return "";
+    }
     const segments=[source?.description,source?.text].flatMap(value=>cleanEvidenceText(value).split(/(?<=[.!?])\s+|\n+/)).map(clean).filter(Boolean);
     const selected=[];
     for(let index=0;index<segments.length;index++){
@@ -459,8 +466,13 @@
       if(next&&/^(?:the (?:company|expansion|investment|project|manufacturer)|its|their|it)\b/i.test(next))selected.push(next);
     }
     if(selected.length)return selected.join(" ").slice(0,1500);
-    const title=cleanEvidenceText(source?.title);
     return evidenceContainsTerm(title,name)&&!/(?:\band\b|\boch\b|&)/i.test(title)?title.slice(0,250):"";
+  }
+
+  function evidenceBelongsToCompany(source,company,domain){
+    const sourceDomain=canonicalDomain(source?.url);
+    const officialDomain=canonicalDomain(domain);
+    return Boolean(sourceDomain&&officialDomain&&(sourceDomain===officialDomain||sourceDomain.endsWith(`.${officialDomain}`)||attributedCompanyEvidence(source,company)));
   }
 
   function attachSourceEvidenceToResolvedCompanies(resolved=[],mentions=[],evidence=[]){
@@ -588,7 +600,7 @@
     for(const item of results||[]){
       const domain=clean(item?.domain)||canonicalDomain(item?.url);
       const company=cleanCompanyName(item?.company)||companyFromTitle(item?.title,domain);
-      if(!domain||!normalizeUrl(item?.url)||isBlockedDomain(domain)||!validCompanyName(company)||!domainMatchesCompany(domain,company))continue;
+      if(!domain||!normalizeUrl(item?.url)||isBlockedDomain(domain)||!validCompanyName(company)||!domainMatchesCompany(domain,company)||!evidenceBelongsToCompany(item,company,domain))continue;
       if(qualifiedDomains.has(domain)||isExcludedDiscoverySource(item,profile,marketState))continue;
       const candidate=grouped.get(domain)||{domain,company,market:clean(item?.market),website:`https://${domain}/`,evidence:[]};
       if(!candidate.market&&item.market)candidate.market=clean(item.market);
@@ -684,7 +696,7 @@
       url:normalizeUrl(item?.url),sourceDomain:clean(item?.sourceDomain)||canonicalDomain(item?.url),
       title:cleanEvidenceText(item?.title).slice(0,300),description:cleanEvidenceText(item?.description).slice(0,700),
       text:cleanEvidenceText(item?.text).slice(0,2500),date:clean(item?.date)
-    })).filter(item=>item.url);
+    })).filter(item=>item.url&&evidenceBelongsToCompany(item,candidate.company||displayFromDomain(domain),domain));
     const gaps=[...new Set((Array.isArray(candidate.qualificationGaps)?candidate.qualificationGaps:[]).map(clean).filter(Boolean))].slice(0,4);
     const people=(Array.isArray(candidate.people)?candidate.people:[]).slice(0,4).map(person=>({id:clean(person?.id),name:clean(person?.name),title:clean(person?.title),seniority:clean(person?.seniority),organization:clean(person?.organization),city:clean(person?.city),country:clean(person?.country),linkedin_url:normalizeLinkedInUrl(person?.linkedin_url||person?.linkedin)}));
     return {id:clean(candidate.id)||`potential-${slug(domain||candidate.company)}`,company:clean(candidate.company)||displayFromDomain(domain),domain,website:normalizeUrl(candidate.website)||(domain?`https://${domain}/`:""),market:clean(candidate.market),qualified:false,marketVerified:candidate.marketVerified===true,fitVerified:candidate.fitVerified===true,buyerVerified:false,matchedSignals:(Array.isArray(candidate.matchedSignals)?candidate.matchedSignals:[]).slice(0,12),evidence,qualificationGaps:gaps,people,peopleStatus:["idle","loading","complete","empty","error"].includes(candidate.peopleStatus)?candidate.peopleStatus:"idle",buyerSearchMode:candidate.buyerSearchMode==="user_selected_without_signal"?candidate.buyerSearchMode:""};
