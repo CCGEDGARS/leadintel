@@ -76,6 +76,20 @@ test('a permanently pending provider cannot leave Company Discovery running', as
   assert.notEqual(context.__discoveryState().status, 'running');
 });
 
+test('a zero-result rerun keeps and clearly marks the last successful company results',async()=>{
+  const context=loadDiscoveryRunner({fetchImpl:async()=>({ok:true,json:async()=>({success:true,data:[]})})});
+  const previous={company:'Modvion',domain:'modvion.com',website:'https://modvion.com/',market:'Sweden',score:{total:86},confidence:'High',qualified:true,marketVerified:true,buyerVerified:true,matchedSignals:[{id:'launch',name:'Product launch',matchedTerms:['launch']}],evidence:[{url:'https://modvion.com/news/launch',title:'Modvion unveils a turbine tower'}]};
+  context.__setDiscovery({status:'complete',lastRunAt:'2026-09-24T10:00:00.000Z',candidates:[previous],pipeline:[]});
+  await context.__runDiscovery();
+  const state=context.__discoveryState();
+  assert.equal(state.status,'no_results');
+  assert.equal(state.latestRunCandidateCount,0);
+  assert.equal(state.funnel.qualifiedCompanies,0);
+  assert.equal(state.retainedLastSuccessfulResults,true);
+  assert.equal(state.candidates[0].domain,'modvion.com');
+  assert.equal(state.lastSuccessfulRunAt,'2026-09-24T10:00:00.000Z');
+});
+
 test('a normal three-stage search is allowed to outlast one provider request window', async () => {
   const phases = new Set();
   const requestCounts = { market_search: 0, resolution: 0, verification: 0 };
