@@ -14,6 +14,17 @@ test('Discovery labels CRM save and pipeline actions separately',()=>{
   assert.match(source,/Suppressed/);
 });
 
+test('Buyer pipeline explains when a company is kept in the browser instead of CRM',()=>{
+  assert.match(source,/Browser only · not in CRM/);
+  assert.match(source,/CRM sync not confirmed · browser copy retained/);
+  assert.match(source,/pipeline-local-status/);
+  const start=source.indexOf('function renderPipeline(');
+  const end=source.indexOf('async function changePipelineStage',start);
+  const render=source.slice(start,end);
+  assert.match(render,/const crmStatus=[\s\S]*pipeline-company-cell"><strong>\$\{esc\(item\.company\)\}[\s\S]*\$\{crmStatus\}/);
+  assert.doesNotMatch(render,/'<span>Local<\/span>'/);
+});
+
 test('Buyers focus shows a distinct saved-company list and supports buyer search from the pipeline',()=>{
   assert.match(source,/discoveryPanel\.hidden=buyers/);
   assert.match(source,/buyers-focus-guide/);
