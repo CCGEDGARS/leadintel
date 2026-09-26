@@ -74,6 +74,7 @@ function repairResearchHandoff(state,meta){
 function renderResearchReview(){
   const state=readState();const meta=metaForCurrentState();repairResearchHandoff(state,meta);const map=sourceMap(state);const summary=$('research-summary');
   if(summary){
+    if(summary.dataset)summary.dataset.researchState=meta.generatedAt?'complete':meta.failureAt?'failed':'ready';
     summary.classList.remove('research-summary-failed');
     if(meta.generatedAt){
       const aiAvailable=meta.mode==='ai';
