@@ -16,12 +16,12 @@ test('legacy lookalike recovery is no longer bootstrapped', () => {
   assert.doesNotMatch(source, /scheduleRepairs|ensureReferenceQuestion/);
 });
 
-test('past customer context is explained as optional evidence for opportunity targeting', () => {
-  assert.match(source, /Optional targeting evidence · Past customers/);
-  assert.match(source, /Improve opportunity targeting/);
-  assert.match(source, /Discovery searches for demand signals/);
+test('past customers and chosen targets are explained as separate lists', () => {
+  assert.match(source, /Customer and prospect lists/);
+  assert.match(source, /Choose who to learn from and who to pursue/);
+  assert.match(source, /LeadIntel researches their fit and public demand signals/);
   assert.match(source, /data-reference-customers-manage/);
-  assert.match(source, /brand-identity-panel reference-customer-core-card/, 'Past customer context uses the established green feature-panel treatment');
+  assert.match(source, /brand-identity-panel reference-customer-core-card/, 'Customer and target lists use the existing feature panel');
   assert.match(source, /brand-identity-summary/);
   assert.match(source, /brand-identity-status/);
   assert.match(source, /brand-identity-toggle/);
