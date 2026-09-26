@@ -136,6 +136,22 @@ test('buildCandidateVerificationQueries creates bounded company-domain checks an
   assert.doesNotMatch(checks[0].query,/industrial automation/i,'seller offer must not be used to verify buyers');
 });
 
+test('saved targets receive website checks without configured buying signals',()=>{
+  const checks=Discovery.buildCandidateVerificationQueries([
+    {url:'https://boliden.com/',domain:'boliden.com',company:'Boliden',market:'Sweden',title:'Boliden'}
+  ],{website:'https://ercon.lv/'},{signals:[]},5);
+  assert.equal(checks.length,1);
+  assert.match(checks[0].query,/site:boliden\.com/);
+  assert.match(checks[0].query,/investment/);
+});
+
+test('placeholder opportunity market does not override the selected country',()=>{
+  const queries=Discovery.buildDiscoveryQueries({website:'https://ercon.lv/',targetMarkets:'Sweden'},
+    {opportunities:[{active:true,market:'Priority market'}]},4);
+  assert.ok(queries.length>0);
+  assert.ok(queries.every(query=>query.market==='Sweden'));
+});
+
 test('domain verification keeps evidence only from the company being checked',()=>{
   const results=Discovery.normalizeCompanySearchResults({data:[
     {url:'https://nordicfood.se/news/new-factory',title:'Nordic Food expansion',description:'New factory in Sweden'},
