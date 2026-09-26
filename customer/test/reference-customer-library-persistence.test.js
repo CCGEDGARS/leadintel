@@ -95,7 +95,7 @@ test('saved-list activation is unavailable when the analyzed companies share no 
   assert.match(ui,/hasActivatableSegment/);
   assert.match(ui,/No shared buyer traits; opportunity search available/);
   assert.match(ui,/Opportunity discovery still works from your offers, market and signals/);
-  assert.match(ui,/filter\(segment=>segment\.canActivate!==false\)/);
+  assert.match(ui,/filter\(segment=>segment\.canActivate!==false&&checked\.includes\(segment\.id\)\)/);
   assert.match(ui,/No recurring customer traits were found/);
 });
 
