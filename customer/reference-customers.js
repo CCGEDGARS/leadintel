@@ -109,7 +109,13 @@
     const activeSegmentIds=[...new Set((value.activeSegmentIds||[]).map(clean).filter(id=>segmentIds.has(id)))];
     const activeIds=[...new Set((value.activeIds||[]).map(clean).filter(id=>allowed.has(id)))].slice(0,MAX_ACTIVE);
     const activated=Boolean(value.activated&&activeIds.length);
-    const normalized={version:2,source:value.source&&typeof value.source==='object'?{type:clean(value.source.type),name:clean(value.source.name)}:{type:'',name:''},rows,analyses,segments,segmentationMeaningful:Boolean(value.segmentationMeaningful&&segments.length>1),activeSegmentIds,activeIds,activated,fingerprint:activated?clean(value.fingerprint)||fingerprint(activeIds):'',dna:value.dna&&typeof value.dna==='object'?value.dna:null,activatedAt:activated?clean(value.activatedAt):'',analyzedAt:clean(value.analyzedAt)};
+    const map=value.opportunityMap&&typeof value.opportunityMap==='object'?value.opportunityMap:null;
+    const opportunityMap=map&&rowIds.has(clean(map.customerId))?{
+      customerId:clean(map.customerId),service:clean(map.service).slice(0,600),problem:clean(map.problem).slice(0,900),dealTrigger:clean(map.dealTrigger).slice(0,600),
+      hypotheses:(Array.isArray(map.hypotheses)?map.hypotheses:[]).slice(0,5).map(item=>({niche:clean(item.niche).slice(0,160),sharedNeed:clean(item.sharedNeed).slice(0,400),whyRelevant:clean(item.whyRelevant).slice(0,500),evidenceToCheck:clean(item.evidenceToCheck).slice(0,300)})).filter(item=>item.niche&&item.sharedNeed),
+      updatedAt:clean(map.updatedAt),analysisAt:clean(map.analysisAt)
+    }:null;
+    const normalized={version:2,source:value.source&&typeof value.source==='object'?{type:clean(value.source.type),name:clean(value.source.name)}:{type:'',name:''},rows,analyses,segments,segmentationMeaningful:Boolean(value.segmentationMeaningful&&segments.length>1),activeSegmentIds,activeIds,activated,fingerprint:activated?clean(value.fingerprint)||fingerprint(activeIds):'',dna:value.dna&&typeof value.dna==='object'?value.dna:null,activatedAt:activated?clean(value.activatedAt):'',analyzedAt:clean(value.analyzedAt),opportunityMap};
     if(activated&&activeIds.some(id=>hasAnalysisFacts(analyses[id])))normalized.dna=buildReferenceDnaFromState(normalized,analyses);
     return normalized;
   }

@@ -100,5 +100,21 @@ ${JSON.stringify(items)}`;
       return parseReferenceCustomerAnalysis(second,usable.map(row=>row.id));
     }
   }
-  return {buildReferenceCustomerPrompt,parseReferenceCustomerAnalysis,requestReferenceCustomerAnalysis};
+  function parseOpportunityMap(text){
+    let value;try{value=JSON.parse(stripFence(text));}catch{try{value=JSON.parse(extractJsonObject(text));}catch{throw new Error('AI returned an invalid opportunity map');}}
+    const hypotheses=(Array.isArray(value?.hypotheses)?value.hypotheses:[]).slice(0,5).map(item=>({niche:clean(item?.niche).slice(0,160),sharedNeed:clean(item?.sharedNeed).slice(0,400),whyRelevant:clean(item?.whyRelevant).slice(0,500),evidenceToCheck:clean(item?.evidenceToCheck).slice(0,300)})).filter(item=>item.niche&&item.sharedNeed&&item.evidenceToCheck);
+    if(!hypotheses.length)throw new Error('AI found no useful opportunity hypotheses');
+    return hypotheses;
+  }
+  async function requestOpportunityMap({workspaceId,customer,analysis,seller,service,problem,dealTrigger,market,fetchImpl}={}){
+    if(!clean(workspaceId))throw new Error('Sign in to research an opportunity map');
+    if(!clean(service)||!clean(problem))throw new Error('Describe what you sold and the problem it solved');
+    const fetcher=fetchImpl||globalThis.fetch;
+    const url=new URL('/api/ai/generate',API_BASE);url.searchParams.set('workspace_id',clean(workspaceId));
+    const prompt=`Develop up to five commercial hypotheses for prospecting in ${clean(market)||'the selected market'}. The company website analysis describes what the customer does; the seller's account describes why the deal happened. Do not conflate them. Find adjacent niches that may share the same problem, including industries different from the customer. Every niche must state the specific need and the public evidence needed to test it. These are hypotheses, not qualified companies. Do not give market counts, spending estimates, named prospects, or buying intent without external evidence. Return JSON only: {"hypotheses":[{"niche":"","sharedNeed":"","whyRelevant":"","evidenceToCheck":""}]}. Context: ${JSON.stringify({customer:{name:clean(customer?.companyName),website:clean(customer?.website)},customerWebsiteAnalysis:analysis||{},seller:{website:clean(seller?.website),offers:clean(seller?.priorityOffers||seller?.answers?.priorityOffers)},knownDeal:{service:clean(service),problem:clean(problem),dealTrigger:clean(dealTrigger)},market:clean(market)})}`;
+    const response=await fetcher(url.toString(),{method:'POST',credentials:'include',headers:{Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify({system:'You are LeadIntel opportunity research. Distinguish verified customer facts, seller-supplied deal facts and hypotheses. Return valid JSON only.',prompt,max_output_tokens:2200})});
+    const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(clean(payload?.error)||`Opportunity analysis failed (${response.status})`);
+    return parseOpportunityMap(payload?.text??payload?.output_text??payload?.content??'');
+  }
+  return {buildReferenceCustomerPrompt,parseReferenceCustomerAnalysis,requestReferenceCustomerAnalysis,parseOpportunityMap,requestOpportunityMap};
 });
