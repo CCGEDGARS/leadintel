@@ -156,8 +156,8 @@ let pdfModule=null;
       render();
       root.LeadIntelReferenceCustomerLibraryUI?.openEditor?.();
       status.textContent=state.referenceCustomerPortfolio?.selectedListId
-        ?`${incoming.companyName||incoming.domain} added to the draft. Save Updated List before viewing results or activating the model.`
-        :`${incoming.companyName||incoming.domain} added. Save this customer list before analyzing it.`;
+        ?`${incoming.companyName||incoming.domain} added to the draft. Press Save & Analyze to save the change and review its buyer context.`
+        :`${incoming.companyName||incoming.domain} added. Press Save & Analyze to keep the list and start research.`;
     }catch(error){
       status.textContent=error?.message||'Unable to add the company. Your current list is still available.';
       form.hidden=false;modal.querySelector('#reference-add-manual')?.setAttribute('aria-expanded','true');
