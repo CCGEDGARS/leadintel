@@ -16,7 +16,24 @@
   }
   function sync(){
     const research=document.getElementById('research-summary'),profileHero=document.querySelector('#step-2 > .hero-copy');
-    if(research&&profileHero&&research.nextElementSibling!==profileHero){profileHero.before(research);research.classList.add('step-action-research');}
+    if(research&&profileHero){
+      const complete=research.dataset.researchState==='complete';
+      if(complete){
+        const step2=document.getElementById('step-2');
+        insert(step2,'Review the drafted answers, then open Profile review','Check the AI suggestions and fill any gaps. When ready, press Review your Profile at the end of this page.');
+        const banner=step2.querySelector(':scope > .step-action-guidance');
+        if(banner&&!banner.querySelector('.step-guidance-jump')){
+          const button=document.createElement('button');button.type='button';button.className='secondary-btn step-guidance-jump';button.textContent='Review draft answers ↓';
+          button.addEventListener('click',()=>step2.querySelector('[data-brief-group]')?.scrollIntoView({behavior:'smooth',block:'start'}));banner.append(button);
+        }
+        research.classList.remove('step-action-research');
+        if(profileHero.nextElementSibling!==research)profileHero.after(research);
+      }else{
+        document.querySelector('#step-2 > .step-action-guidance')?.remove();
+        if(research.nextElementSibling!==profileHero)profileHero.before(research);
+        research.classList.add('step-action-research');
+      }
+    }
     for(const [step,copy] of Object.entries(guidance)){
       const section=document.getElementById(`step-${step}`);if(!section)continue;
       if(step==='3'){
@@ -32,6 +49,6 @@
   }
   let scheduled=false;
   function schedule(){if(scheduled)return;scheduled=true;queueMicrotask(()=>{scheduled=false;sync();});}
-  function start(){sync();new MutationObserver(schedule).observe(document.querySelector('main.content')||document.body,{childList:true,subtree:true});window.addEventListener('leadintel:module-opened',schedule);}
+  function start(){sync();new MutationObserver(schedule).observe(document.querySelector('main.content')||document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['data-research-state']});window.addEventListener('leadintel:module-opened',schedule);}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
 })();
