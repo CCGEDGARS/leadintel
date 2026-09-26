@@ -20,7 +20,7 @@ const SUPPORT_MODULES=[
   './reference-customer-ui.js?v=20260924-reference-consensus-v1&opportunity-context=1&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1',
   './reference-customer-clear-list.js?v=20260923-reference-interface-v1',
   './reference-customer-website-enrichment.js?v=20260923-reference-interface-v1',
-  './reference-customer-ai-runtime.js?v=20260924-reference-consensus-v1&opportunity-context=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&flow-summary=1',
+  './reference-customer-ai-runtime.js?v=20260926-customer-activation-guidance-v2',
   './reference-customer-launcher.js?v=20260923-reference-interface-v1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1',
   './lookalike-discovery.js?v=20260924-reference-consensus-v1&opportunity-context=1',
   './intelligence-sources-ui.js?v=20260924-friendly-workflow-labels-v1&reset-center=1',
