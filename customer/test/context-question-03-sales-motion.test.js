@@ -17,9 +17,9 @@ test('legacy lookalike recovery is no longer bootstrapped', () => {
 });
 
 test('past customers and chosen targets are explained as separate lists', () => {
-  assert.match(source, /Customer and prospect lists/);
-  assert.match(source, /Choose who to learn from and who to pursue/);
-  assert.match(source, /LeadIntel researches their fit and public demand signals/);
+  assert.match(source, /Customer and prospect intelligence/);
+  assert.match(source, /Turn what you know into better B2B opportunities/);
+  assert.match(source, /Research chosen prospects for fit and public demand signals/);
   assert.match(source, /data-reference-customers-manage/);
   assert.match(source, /brand-identity-panel reference-customer-core-card/, 'Customer and target lists use the existing feature panel');
   assert.match(source, /brand-identity-summary/);

@@ -30,6 +30,14 @@
 .brand-identity-toggle { flex: 0 0 auto; }
 .brand-identity-toggle span:last-child { margin-left: 8px; }
 
+.reference-customer-core-card .reference-value-lead { color: #40564e; line-height: 1.45; }
+.reference-customer-core-card .reference-value-points { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 15px 0 10px; }
+.reference-customer-core-card .reference-value-points > div { display: flex; flex-direction: column; gap: 3px; padding: 11px 14px; border-left: 3px solid #176b58; border-radius: 8px; background: rgba(255,255,255,.8); }
+.reference-customer-core-card .reference-value-points strong { color: #17382f; font-size: 13px; }
+.reference-customer-core-card .reference-value-points span { color: #50625a; font-size: 13px; line-height: 1.4; }
+.reference-customer-core-card .reference-value-note { font-size: 12px; line-height: 1.4; }
+@media (max-width: 720px) { .reference-customer-core-card .reference-value-points { grid-template-columns: 1fr; } }
+
 .reference-customer-core-card .lookalike-build-btn {
   display: inline-flex;
   align-items: center;
