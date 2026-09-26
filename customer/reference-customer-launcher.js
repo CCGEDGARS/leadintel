@@ -1,4 +1,4 @@
-const REFERENCE_CUSTOMER_LAUNCH_VERSION='20260924-reference-consensus-v1&opportunity-context=1&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&inline-activate=1';
+const REFERENCE_CUSTOMER_LAUNCH_VERSION='20260924-reference-consensus-v1&opportunity-context=1&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&inline-activate=1&target-research=1';
 
 (function installReferenceCustomerLauncher(root){
   'use strict';

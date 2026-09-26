@@ -23,9 +23,12 @@ test('customer lists explain what is active, mapped, and saved for research',()=
 test('target research handoff identifies Step 4 and the next search action',()=>{
   const targets=read('reference-customer-ui.js');
   const discovery=read('discovery-ui.js');
-  assert.match(targets,/Go to Step 4 · Research targets/);
+  assert.match(targets,/Research target companies now/);
   assert.match(targets,/source:'target-companies'/);
   assert.match(discovery,/event\.detail\?\.source==='target-companies'/);
+  assert.match(targets,/startResearch:true/);
+  assert.match(read('reference-customer-library-ui.js'),/startResearch:true/);
+  assert.match(discovery,/event\.detail\?\.startResearch.*runCompanyDiscovery/);
   assert.match(discovery,/You are now in Step 4 · Companies/);
-  assert.match(discovery,/Results will be provisional until you finish those steps/);
+  assert.match(discovery,/Research can proceed with the current context/);
 });
