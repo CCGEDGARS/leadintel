@@ -85,8 +85,8 @@ test('unsaved draft editor renders when saved lists already exist',()=>{
 test('analyzed lists expose an explicit review state and View Results action',()=>{
   assert.match(ui,/const segments=\(ref\.segments\|\|\[\]\)\.length/);
   assert.match(ui,/const canReview=Boolean\(analyzed&&segments\)/);
-  assert.match(ui,/Review profile/);
-  assert.match(ui,/No repeated traits; Discovery unavailable/);
+  assert.match(ui,/Review buyer context/);
+  assert.match(ui,/No shared buyer traits; opportunity search available/);
   assert.match(ui,/data-view-reference-results/);
   assert.match(ui,/>View Results<\/button>/);
 });

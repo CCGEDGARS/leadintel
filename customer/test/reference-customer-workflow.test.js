@@ -22,10 +22,10 @@ test('customer boot loads reference engine, AI client, UI, AI runtime and lookal
   assert.ok(lookalike>runtime,'lookalike integration must load after AI analysis runtime');
 });
 
-test('reference customer card is prominent and opens the lookalike builder',()=>{
-  assert.match(boot,/Build your Lookalike Audience/i);
-  assert.match(boot,/High impact/i);
-  assert.match(boot,/Build lookalike audience/i);
+test('reference customer card explains optional context and opens customer evidence',()=>{
+  assert.match(boot,/Improve opportunity targeting/i);
+  assert.match(boot,/Discovery searches for demand signals/i);
+  assert.match(boot,/Add past customers/i);
   assert.match(css,/reference-customer-summary/);
   assert.match(css,/reference-customer-manage/);
 });
@@ -54,7 +54,7 @@ test('manager analyzes before activation and shows segment review controls',()=>
 });
 
 test('profile review distinguishes one-off observations and requires explicit selection',()=>{
-  assert.match(ui,/No shared profile detected/i);
+  assert.match(ui,/No shared customer pattern detected/i);
   assert.match(ui,/Observed attributes/i);
   assert.match(ui,/segment\.canActivate/);
   assert.match(ui,/checked:not\(:disabled\)/);
@@ -63,7 +63,7 @@ test('profile review distinguishes one-off observations and requires explicit se
 
 test('activation copy explains downstream effect without implying outreach',()=>{
   assert.match(ui,/Only traits repeated across a segment/i);
-  assert.match(ui,/soft preference/i);
+  assert.match(ui,/verified opportunities rank by fit and demand signals/i);
   assert.match(ui,/Discovery/i);
   assert.match(ui,/does not exclude other companies or add these references to outreach/i);
 });

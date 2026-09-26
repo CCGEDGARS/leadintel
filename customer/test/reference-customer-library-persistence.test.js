@@ -93,8 +93,8 @@ test('Reference Customer library UI exposes persistent active-model and pending-
 test('saved-list activation is unavailable when the analyzed companies share no traits',()=>{
   const ui=fs.readFileSync(path.join(__dirname,'..','reference-customer-library-ui.js'),'utf8');
   assert.match(ui,/hasActivatableSegment/);
-  assert.match(ui,/No repeated traits; Discovery unavailable/);
-  assert.match(ui,/No traits repeat across these companies/);
+  assert.match(ui,/No shared buyer traits; opportunity search available/);
+  assert.match(ui,/Opportunity discovery still works from your offers, market and signals/);
   assert.match(ui,/filter\(segment=>segment\.canActivate!==false\)/);
   assert.match(ui,/No recurring customer traits were found/);
 });

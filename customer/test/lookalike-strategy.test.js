@@ -28,7 +28,7 @@ test('Step 4 always contains one Reference Customer Lookalike lens',()=>{
   assert.equal(synced.length,1);
   assert.equal(synced[0].id,'icp-reference-lookalike');
   assert.equal(synced[0].type,'lookalike-led');
-  assert.equal(synced[0].name,'Reference Customer Lookalike');
+  assert.equal(synced[0].name,'Past Customer Context');
   assert.equal(synced[0].active,false);
   assert.equal(synced[0].referenceModelAvailable,false);
 });
@@ -43,7 +43,7 @@ test('an activated Reference Customer model automatically turns Lookalike-led on
   assert.equal(lens.referenceCount,4);
   assert.equal(lens.referenceConfidence,'high');
   assert.equal(lens.referenceDraftDirty,true);
-  assert.match(lens.description,/proven customers/i);
+  assert.match(lens.description,/verified demand signals/i);
 });
 
 test('user may switch off the same published Lookalike model without it turning itself back on',()=>{

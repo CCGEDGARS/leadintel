@@ -30,6 +30,21 @@
 .brand-identity-toggle { flex: 0 0 auto; }
 .brand-identity-toggle span:last-child { margin-left: 8px; }
 
+.reference-customer-core-card .lookalike-build-btn {
+  min-height: 58px;
+  padding: 15px 22px;
+  border-radius: 12px;
+  background: #0d5d4f;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  box-shadow: 0 12px 26px rgba(13, 93, 79, .22);
+  white-space: nowrap;
+}
+.reference-customer-core-card .lookalike-build-btn:hover { background: #084d41; box-shadow: 0 15px 28px rgba(13, 93, 79, .28); }
+.reference-customer-core-card .lookalike-build-btn:focus-visible { outline: 3px solid #bc8f2a; outline-offset: 3px; }
+.reference-customer-core-card .lookalike-build-btn span:last-child { font-size: 20px; line-height: 1; }
+
 .brand-identity-body {
   margin-top: 24px;
   padding-top: 24px;
