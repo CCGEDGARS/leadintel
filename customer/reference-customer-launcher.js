@@ -1,4 +1,4 @@
-const REFERENCE_CUSTOMER_LAUNCH_VERSION='20260924-reference-consensus-v1';
+const REFERENCE_CUSTOMER_LAUNCH_VERSION='20260924-reference-consensus-v1&opportunity-context=1&target-segments=1';
 
 (function installReferenceCustomerLauncher(root){
   'use strict';
@@ -27,9 +27,9 @@ const REFERENCE_CUSTOMER_LAUNCH_VERSION='20260924-reference-consensus-v1';
     });
   }
 
-  async function open(){
+  async function open(segment='customers'){
     if(root.LeadIntelReferenceCustomerUI?.open){
-      root.LeadIntelReferenceCustomerUI.open();
+      root.LeadIntelReferenceCustomerUI.open(segment);
       warmUploadRuntime();
       return true;
     }
@@ -38,7 +38,7 @@ const REFERENCE_CUSTOMER_LAUNCH_VERSION='20260924-reference-consensus-v1';
       try{
         await ensureReferenceCustomerRuntime();
         if(root.LeadIntelReferenceCustomerUI?.open){
-          root.LeadIntelReferenceCustomerUI.open();
+          root.LeadIntelReferenceCustomerUI.open(segment);
           warmUploadRuntime();
           return true;
         }

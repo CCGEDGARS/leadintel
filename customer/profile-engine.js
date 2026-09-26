@@ -386,6 +386,7 @@
       approved:Boolean(value.approved),
       ...(value.campaignStudio&&typeof value.campaignStudio==="object"&&!Array.isArray(value.campaignStudio)?{campaignStudio:value.campaignStudio}:{}),
       ...(value.referenceCustomers&&typeof value.referenceCustomers==="object"?{referenceCustomers:value.referenceCustomers}:{}),
+      ...(Array.isArray(value.targetCompanies)?{targetCompanies:value.targetCompanies.slice(0,50)}:{}),
       ...(value.referenceCustomerPortfolio&&typeof value.referenceCustomerPortfolio==="object"?{referenceCustomerPortfolio:value.referenceCustomerPortfolio}:{})
     };
   }
