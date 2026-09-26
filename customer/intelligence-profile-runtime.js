@@ -1,5 +1,5 @@
 const INTELLIGENCE_PROFILE_ASSET_VERSION='20260921-two-stage-profile-action-v1';
-const REFERENCE_CUSTOMERS_CSS_VERSION='20260923-reference-interface-v1';
+const REFERENCE_CUSTOMERS_CSS_VERSION='20260923-reference-interface-v1&target-segments=1';
 (function installIntelligenceProfileRuntime(root){
   if(typeof document==='undefined')return;
   const UI=root.LeadIntelIntelligenceProfileUI;

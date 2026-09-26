@@ -21,6 +21,19 @@
   }
   function normalizeUrl(value){const raw=clean(value);if(!raw)return '';try{const u=new URL(/^https?:\/\//i.test(raw)?raw:`https://${raw}`);return ['http:','https:'].includes(u.protocol)?u.href:'';}catch{return '';}}
   function domain(value){try{return new URL(normalizeUrl(value)).hostname.replace(/^www\./i,'').toLowerCase();}catch{return '';}}
+  function normalizeTargetCompanies(rows=[],sellerWebsite=''){
+    const seller=domain(sellerWebsite),seen=new Set(),out=[];
+    for(const raw of Array.isArray(rows)?rows:[]){
+      const companyName=clean(raw?.companyName||raw?.Company).slice(0,180);
+      const website=normalizeUrl(raw?.website||raw?.Website),host=domain(website);
+      if(!companyName&&!host)continue;
+      if(seller&&host&&(host===seller||host.endsWith(`.${seller}`)))continue;
+      const key=host||normName(companyName);if(seen.has(key))continue;
+      seen.add(key);out.push({companyName:companyName||host,website,domain:host,addedAt:clean(raw?.addedAt)||new Date().toISOString()});
+      if(out.length>=50)break;
+    }
+    return out;
+  }
   function looksLikeWebsite(value){const v=clean(value);return /^(?:https?:\/\/|www\.)/i.test(v)||/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(?:[\/:?#]|$)/i.test(v);}
   function stableId(value){let h=2166136261;for(const ch of String(value||'')){h^=ch.charCodeAt(0);h=Math.imul(h,16777619);}return (h>>>0).toString(36);}
   function fingerprint(ids){return `rc-${stableId([...ids].sort().join('|'))}`;}
@@ -178,5 +191,5 @@
   function migrateLegacyLookalikes(value=''){
     const names=String(value||'').split(/\n|;|,/).map(clean).filter(Boolean);return normalizeImportedRows(names.map(name=>({Company:name})),{sourceType:'pdf'});
   }
-  return {MAX_ROWS,MAX_ACTIVE,parseCsv,normalizeImportedRows,normalizeReferenceState,activateReferenceCustomers,activateReferenceSegments,getActiveReferenceModel,buildReferenceSegments,buildReferenceDna,migrateLegacyLookalikes,normalizeUrl,domain,persistReferenceWorkspaceState};
+  return {MAX_ROWS,MAX_ACTIVE,parseCsv,normalizeImportedRows,normalizeTargetCompanies,normalizeReferenceState,activateReferenceCustomers,activateReferenceSegments,getActiveReferenceModel,buildReferenceSegments,buildReferenceDna,migrateLegacyLookalikes,normalizeUrl,domain,persistReferenceWorkspaceState};
 });

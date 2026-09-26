@@ -16,7 +16,7 @@ test('Reference Customer manage CTA is handled by the dedicated launcher without
 });
 
 test('Reference Customer manager opens before optional upload runtime loading', () => {
-  assert.match(launcher, /if\(root\.LeadIntelReferenceCustomerUI\?\.open\)\{\s*root\.LeadIntelReferenceCustomerUI\.open\(\)/, 'already-loaded manager must open synchronously');
+  assert.match(launcher, /if\(root\.LeadIntelReferenceCustomerUI\?\.open\)\{\s*root\.LeadIntelReferenceCustomerUI\.open\(segment\)/, 'already-loaded manager must open synchronously');
   const start = launcher.indexOf('async function ensureReferenceCustomerRuntime()');
   assert.notEqual(start, -1, 'ensureReferenceCustomerRuntime must exist');
   const end = launcher.indexOf('\n  function warmUploadRuntime', start + 1);
