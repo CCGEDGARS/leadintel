@@ -1,0 +1,8 @@
+.step-action-guidance,.research-summary.step-action-research{box-sizing:border-box;border:2px solid #0d684f;border-left:7px solid #0d684f;border-radius:14px;background:#f4faf7;box-shadow:0 9px 25px rgba(13,104,79,.09);padding:18px 22px;margin:0 0 24px;width:100%;max-width:none}
+.step-action-guidance .step-action-label,.research-summary.step-action-research:before{display:block;content:'WHAT TO DO NOW';font:800 11px/1.3 'IBM Plex Mono',monospace;letter-spacing:.11em;color:#0d684f;text-transform:uppercase;margin-bottom:7px}
+.step-action-guidance strong,.research-summary.step-action-research strong{display:block;color:#122c24;font-size:19px;line-height:1.3;font-weight:800}
+.step-action-guidance p{color:#425c52;font-size:14px;line-height:1.5;margin:5px 0 0}
+.research-summary.step-action-research{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 18px}
+.research-summary.step-action-research:before{flex-basis:100%;margin:0}
+.research-summary.step-action-research .research-summary-actions .research-primary{font-size:15px;padding:14px 19px}
+@media(max-width:680px){.step-action-guidance,.research-summary.step-action-research{padding:15px 16px;margin-bottom:19px}.step-action-guidance strong,.research-summary.step-action-research strong{font-size:17px}.research-summary.step-action-research .research-summary-actions{width:100%}.research-summary.step-action-research .research-rerun{width:100%}}
