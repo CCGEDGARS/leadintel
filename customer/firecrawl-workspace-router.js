@@ -24,8 +24,11 @@ function compactSearchQuery(value,max=FIRECRAWL_SEARCH_QUERY_MAX_CHARS){
 function sanitizeSearchRequestOptions(options={}){
   let body;try{body=typeof options.body==='string'?JSON.parse(options.body):options.body;}catch{return options;}
   if(!body||typeof body!=='object'||Array.isArray(body)||!Object.prototype.hasOwnProperty.call(body,'query'))return options;
-  const query=compactSearchQuery(body.query);if(query===String(body.query??'').trim())return options;
-  return {...options,body:JSON.stringify({...body,query})};
+  const query=compactSearchQuery(body.query);
+  const mode=options.headers instanceof Headers?options.headers.get('X-LeadIntel-Research-Mode'):options.headers?.['X-LeadIntel-Research-Mode'];
+  const limit=mode==='full'?body.limit:Math.min(3,Math.max(1,Number(body.limit)||3));
+  if(query===String(body.query??'').trim()&&limit===body.limit)return options;
+  return {...options,body:JSON.stringify({...body,query,limit})};
 }
 function retryableStatus(status){return status===404||status===408||status===429||status>=500;}
 function scraplingTarget(kind){
@@ -44,6 +47,7 @@ async function routedFetch(input,options={}){
   const target=rewriteTarget(input);if(!target)return originalFetch(input,options);
   const kind=target.includes('/firecrawl/scrape')?'scrape':'search';
   if(kind==='search')options=sanitizeSearchRequestOptions(options);
+  const mode=options.headers instanceof Headers?options.headers.get('X-LeadIntel-Research-Mode'):options.headers?.['X-LeadIntel-Research-Mode'];
   try{
     const response=await originalFetch(target,{...options,credentials:'include',headers:{Accept:'application/json',...(options.headers||{})}});
     if(!retryableStatus(response.status))return response;
@@ -55,7 +59,7 @@ async function routedFetch(input,options={}){
         if(fallback.ok)return fallback&&tagExtractor(fallback,'scrapling');
       }catch{}
     }
-    return originalFetch(input,options);
+    return mode==='saving'?response:originalFetch(input,options);
   }catch(error){
     if(error?.name==="AbortError"||options?.signal?.aborted)throw error;
     const scrapling=scraplingTarget(kind);const url=extractScrapeUrl(options);
@@ -65,6 +69,7 @@ async function routedFetch(input,options={}){
         if(fallback.ok)return fallback&&tagExtractor(fallback,'scrapling');
       }catch{}
     }
+    if(mode==='saving')throw error;
     return originalFetch(input,options);
   }
 }
