@@ -1,7 +1,7 @@
 import './content-language.js?v=20260924-workspace-content-english-v1';
 import './content-variants.js?v=20260921-contact-gated-v2';
 import './business-identity.js?v=20260924-workspace-profile-english-v1';
-import './evidence-view.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&reference-interface=20260923&target-segments=1&profile-ux=1';
+import './evidence-view.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&reference-interface=20260923&target-segments=1&profile-ux=1&target-list-edit=1';
 import './profile-approval-ui.js?v=20260924-friendly-workflow-labels-v1';
 import './workspace-persistence.js?v=20260926-visible-save-v1';
 import {withOpenAiRetry,cleanOpenAiResearchQuery,describePartialCoverage} from './market-research-provider-resilience.js?v=20260916-latency-fix-v2';
@@ -57,7 +57,12 @@ function loadState(){
     return base;
   }catch{return defaultState();}
 }
-function saveState(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));updateCompleteness();updateNavigationAvailability();window.LeadIntelJourney?.refresh?.();}
+function saveState(){
+  // Company lists are edited by the separate modal. Keep its latest targets when
+  // the main app saves a state object that was loaded before those edits.
+  try{const current=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');if(Array.isArray(current.targetCompanies))state.targetCompanies=current.targetCompanies;}catch{}
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(state));updateCompleteness();updateNavigationAvailability();window.LeadIntelJourney?.refresh?.();
+}
 function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
 function showToast(message){const el=$("toast");if(!el)return;el.textContent=message;el.classList.add("show");clearTimeout(showToast.t);showToast.t=setTimeout(()=>el.classList.remove("show"),2400);}
 function invalidateStrategicOutputs(clearSources=false){
