@@ -231,6 +231,7 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
   function mapIsReady(reference){return Boolean(reference.opportunityMap?.hypotheses?.length&&reference.opportunityMap.analysisAt===reference.analyzedAt);}
   async function activateList(id){
     let state=snapshot();if(blockOnUnsavedDraft('Activating a saved list',state))return;
+    if(state.referenceCustomerPortfolio.selectedListId!==id){await viewResults(id);const status=document.getElementById('reference-import-status');if(status)status.textContent='Review and select the customer profile in View Results before activation.';return;}
     const selection=Portfolio.selectListSafely?Portfolio.selectListSafely(state,id):{ok:true,state:Portfolio.selectList(state,id)};
     if(!selection.ok)return;
     editorOpen=false;state=selection.state;
