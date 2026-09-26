@@ -251,12 +251,13 @@ async function runCompanyDiscovery(){
   if(!(main?.profile?.website||main?.website)){showToast("Add your company website first");return;}
   syncStrategyFingerprint();
   const market=main.market||{};
-  if(!LeadIntelDiscovery.hasActiveSignals?.(market)){showToast("Activate at least one buying signal in Strategy before finding companies");return;}
+  const targetPool=selectedTargets(main);
+  if(!LeadIntelDiscovery.hasActiveSignals?.(market)&&!targetPool.length){showToast("Activate at least one buying signal in Strategy or add target companies before searching");return;}
   const targetCount=persistDiscoveryTarget();
   const limits=LeadIntelDiscovery.discoveryLimits(targetCount);
   const baseQueries=LeadIntelDiscovery.buildDiscoveryQueries(main.profile||{website:main.website},market,limits.queryCount,discovery.queries);
   const targetMarket=(main.targetMarkets||[])[0]||main.profile?.targetMarkets||'';
-  const targetPool=selectedTargets(main),targetOffset=Number(loadMeta().targetResearchOffset)||0;
+  const targetOffset=Number(loadMeta().targetResearchOffset)||0;
   const researchTargets=[...targetPool.slice(targetOffset),...targetPool.slice(0,targetOffset)].slice(0,5);
   const queries=[...baseQueries,...targetEvidenceQueries(researchTargets,targetMarket,market),...opportunityHypothesisQueries(main,targetMarket)];
   if(!queries.length){showToast("Add optional market or offer context to make discovery more precise");return;}
