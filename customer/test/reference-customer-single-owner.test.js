@@ -37,5 +37,5 @@ test('single-owner Reference Customer runtime is cache-busted at every changed m
   assert.match(processMap,/reference-customer-ai-runtime\.js\?v=20260926-profile-review-action-v3/);
   assert.match(processMap,/reference-customer-launcher\.js\?v=20260924-reference-consensus-v1/);
   assert.match(aiRuntime,/reference-customer-upload-mode\.js\?v=20260911-reference-single-owner-v1/);
-  assert.match(launcher,/REFERENCE_CUSTOMER_LAUNCH_VERSION='20260924-reference-consensus-v1&opportunity-context=1&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1'/);
+  assert.match(launcher,/REFERENCE_CUSTOMER_LAUNCH_VERSION='20260924-reference-consensus-v1&opportunity-context=1&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&inline-activate=1'/);
 });
