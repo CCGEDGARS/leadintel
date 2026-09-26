@@ -3,6 +3,8 @@
 .step-action-guidance strong,.research-summary.step-action-research strong{display:block;color:#332a17;font-size:17px;line-height:1.35;font-weight:800}
 .step-action-guidance p{color:#5a503d;font-size:14px;line-height:1.5;margin:5px 0 0}
 .step-guidance-jump{margin-top:12px;border:1px solid #caa044;background:#fff;color:#684d18;font-weight:800}
+.step-guidance-customers{margin-left:9px}
+@media(max-width:680px){.step-guidance-customers{margin-left:0;display:block;width:100%;margin-top:8px}}
 .research-summary.step-action-research{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 18px}
 .research-summary.step-action-research:before{flex-basis:100%;margin:0}
 .research-summary.step-action-research .research-summary-actions .research-primary{font-size:15px;padding:14px 19px}
