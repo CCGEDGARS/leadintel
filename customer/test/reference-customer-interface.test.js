@@ -22,7 +22,9 @@ test('manual add keeps the saved-list workflow visible so the updated draft can 
   assert.match(ui,/LeadIntelReferenceCustomerLibraryUI\?\.openEditor\?\.\(\)/);
   assert.match(library,/Portfolio\.hasUnsavedCurrentListDraft\?\.\(state\)/);
   assert.match(library,/Save Updated List to keep these changes/);
-  assert.match(library,/Save Updated List before opening results, activating, or switching/);
+  assert.match(library,/canSaveAndAnalyze\?'Save &amp; Analyze':'Save Updated List'/);
+  assert.match(library,/before opening results, activating, or switching/);
+  assert.match(library,/const id=await saveList\(\);[\s\S]*?await analyzeList\(id\)/);
 });
 
 test('saved-list navigation cannot overwrite an unsaved company draft',()=>{
