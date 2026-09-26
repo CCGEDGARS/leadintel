@@ -34,7 +34,7 @@
  * import './reference-customer-ui.js?v=20260924-reference-consensus-v1&opportunity-context=1';
  * import './reference-customer-clear-list.js?v=20260923-reference-interface-v1';
  * import './reference-customer-website-enrichment.js?v=20260923-reference-interface-v1';
- * import './reference-customer-ai-runtime.js?v=20260924-reference-consensus-v1';
+ * import './reference-customer-ai-runtime.js?v=20260926-customer-activation-guidance-v2';
  * import './reference-customer-launcher.js?v=20260924-reference-consensus-v1';
  * import './lookalike-discovery.js?v=20260924-reference-consensus-v1&opportunity-context=1';
  * import './intelligence-sources-ui.js?v=20260915-preferred-sources-v1';
