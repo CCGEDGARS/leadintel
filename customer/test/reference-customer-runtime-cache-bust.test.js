@@ -11,19 +11,19 @@ test('Reference Customer action modules use a fresh cache key end to end',()=>{
   assert.match(processMap,/reference-customer-ui\.js\?v=20260924-reference-consensus-v1/);
   assert.match(processMap,/reference-customer-clear-list\.js\?v=20260923-reference-interface-v1/);
   assert.match(processMap,/reference-customer-website-enrichment\.js\?v=20260923-reference-interface-v1/);
-  assert.match(processMap,/reference-customer-ai-runtime\.js\?v=20260926-customer-activation-guidance-v2/);
+  assert.match(processMap,/reference-customer-ai-runtime\.js\?v=20260926-profile-review-action-v3/);
   assert.match(processMap,/lookalike-discovery\.js\?v=20260924-reference-consensus-v1/);
   const analysis=read('reference-customer-ai-runtime.js');
   assert.match(analysis,/reference-customer-library\.js\?v=20260924-reference-consensus-v1/);
   assert.match(analysis,/reference-customer-portfolio\.js\?v=20260923-reference-interface-v1/);
-  assert.match(analysis,/reference-customer-library-ui\.js\?v=20260926-customer-activation-guidance-v2/);
+  assert.match(analysis,/reference-customer-library-ui\.js\?v=20260926-profile-review-action-v3/);
   assert.match(analysis,/reference-customer-delete-ui\.js\?v=20260923-reference-interface-v1/);
   const supportLoader=read('shell-support-loader.js');
   assert.match(supportLoader,/reference-customers\.js\?v=20260924-reference-consensus-v1/);
   assert.match(supportLoader,/reference-customer-ui\.js\?v=20260924-reference-consensus-v1/);
-  assert.match(supportLoader,/reference-customer-ai-runtime\.js\?v=20260926-customer-activation-guidance-v2/);
+  assert.match(supportLoader,/reference-customer-ai-runtime\.js\?v=20260926-profile-review-action-v3/);
   assert.match(supportLoader,/lookalike-discovery\.js\?v=20260924-reference-consensus-v1/);
-  assert.match(index,/shell-support-loader\.js\?v=20260926-customer-activation-guidance-v2/);
+  assert.match(index,/shell-support-loader\.js\?v=20260926-profile-review-action-v3/);
 });
 
 test('clear-list action uses branded inline confirmation rather than native browser confirm',()=>{
