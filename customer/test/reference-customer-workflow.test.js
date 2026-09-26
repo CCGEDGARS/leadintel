@@ -23,8 +23,8 @@ test('customer boot loads reference engine, AI client, UI, AI runtime and lookal
 });
 
 test('reference customer card explains optional context and opens customer evidence',()=>{
-  assert.match(boot,/Choose who to learn from and who to pursue/i);
-  assert.match(boot,/LeadIntel researches their fit and public demand signals/i);
+  assert.match(boot,/Turn what you know into better B2B opportunities/i);
+  assert.match(boot,/Research chosen prospects for fit and public demand signals/i);
   assert.match(boot,/Add Customers/i);
   assert.match(css,/reference-customer-summary/);
   assert.match(css,/reference-customer-manage/);
