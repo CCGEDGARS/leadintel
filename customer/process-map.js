@@ -111,6 +111,8 @@ function stageAvailability(){
   };
 }
 function currentProcessStep(){
+  const visible=Number(document.querySelector('.step-view.active')?.dataset.step);
+  if(visible>=1&&visible<=7)return visible;
   const state=readProcessState();
   return window.LeadIntelWorkspaceIsolation?.safeStep?.(localStorage,state,state.step)||Number(state.step)||1;
 }
@@ -138,7 +140,7 @@ function renderStageGuide(stage){
   if(progress)progress.textContent=`${stage.completed} of ${stage.total} steps`;
   if(next)next.textContent=stage.nextAction;
   if(!list)return;
-  const nodes=stage.steps.map(item=>{const row=document.createElement("li");row.className=item.complete?"complete":"pending";const marker=document.createElement("span");marker.setAttribute("aria-hidden","true");marker.textContent=item.complete?"✓":"";const label=document.createElement("strong");label.textContent=item.label;row.append(marker,label);if(item.optional){const badge=document.createElement("em");badge.textContent="Optional";row.append(badge);}return row;});
+  const nodes=stage.steps.map(item=>{const row=document.createElement("li");row.className=item.complete?"complete":"pending";const button=document.createElement("button");button.type="button";button.className="stage-mini-step-link";button.dataset.stageMiniStep=item.id;button.dataset.stageId=stage.id;button.setAttribute("aria-label",`Review ${item.label}`);const marker=document.createElement("span");marker.setAttribute("aria-hidden","true");marker.textContent=item.complete?"✓":"";const label=document.createElement("strong");label.textContent=item.label;button.append(marker,label);if(item.optional){const badge=document.createElement("em");badge.textContent="Optional";button.append(badge);}row.append(button);return row;});
   list.replaceChildren(...nodes);
 }
 function processToast(message){
@@ -175,16 +177,17 @@ function syncProcessMap(){
   document.querySelectorAll("[data-workflow-stage]").forEach(marker=>{
     const step=Number(marker.dataset.workflowStage),stage=model.find(item=>item.id===step);if(!stage)return;
     marker.hidden=!visibleIds.includes(step);
-    marker.classList.toggle("available",stage.available);marker.classList.toggle("active",stage.status==="current");marker.classList.toggle("complete",stage.status==="complete");marker.classList.toggle("skipped",stage.status==="skipped");marker.setAttribute("aria-disabled",stage.available?"false":"true");
+    marker.classList.toggle("available",stage.available);marker.classList.toggle("active",stage.status==="current");marker.classList.toggle("complete",stage.status==="complete");marker.classList.toggle("skipped",stage.status==="skipped");marker.setAttribute("aria-disabled",(stage.available||step<=currentStage?.id)?"false":"true");
     if(stage.status==="current")marker.setAttribute("aria-current","step");else marker.removeAttribute("aria-current");
-    const label=marker.querySelector("[data-sidebar-stage-state]");if(label)label.textContent=stageStatusLabel(stage);
+    const label=marker.querySelector("[data-sidebar-stage-state]");if(label)label.textContent=`${stageStatusLabel(stage)} · ${stage.completed}/${stage.total}`;
   });
   renderStageGuide(currentStage);
 }
 function openProcessStep(stageId){
   const target=Math.min(7,Math.max(1,Number(stageId)||1));
   const availability=stageAvailability();const current=currentProcessStep();const model=journeyModel(availability,current);const stage=model.find(item=>item.id===target);
-  if(!stage?.available&&stage?.status!=='current'){
+  const currentStageId=model.find(item=>item.status==='current')?.id||1;
+  if(!stage?.available&&stage?.status!=='current'&&target>currentStageId){
     const fallback=model.slice(0,target-1).reverse().find(item=>item.available||item.status==='current')?.id||1;
     openProcessStep(fallback);
     const messages={5:'Find a matching company first, then identify its buyers.',6:'Save a company and identify at least one buyer before preparing messages.',7:'Approve a message package before opening Delivery.'};
@@ -197,12 +200,26 @@ function openProcessStep(stageId){
     if(window.LeadIntelDiscoveryUI?.open){window.LeadIntelDiscoveryUI.open({focus});setTimeout(syncProcessMap,0);return;}
     window.dispatchEvent(new CustomEvent('leadintel:open-discovery',{detail:{focus}}));setTimeout(syncProcessMap,0);return;
   }
-  window.dispatchEvent(new CustomEvent('leadintel:open-module',{detail:{step:route.moduleStep,journeyStage:target}}));
+  window.dispatchEvent(new CustomEvent('leadintel:open-module',{detail:{step:target===2?2:route.moduleStep,journeyStage:target}}));
   if(target===2)setTimeout(syncContextArchitecture,0);
   setTimeout(syncProcessMap,0);
 }
+function reviewMiniStep(stageId,itemId){
+  const profileGroups={'offer-customer':'priority_offers','decision-fit':'buyer_roles','demand-signals':'buying_outcomes','message-proof':'value_proposition'};
+  if(stageId===2&&profileGroups[itemId]){
+    window.dispatchEvent(new CustomEvent('leadintel:open-module',{detail:{step:2,journeyStage:2}}));
+    setTimeout(()=>{const field=document.querySelector(`[data-question="${profileGroups[itemId]}"]`);field?.scrollIntoView({behavior:'smooth',block:'center'});field?.focus({preventScroll:true});syncProcessMap();},80);
+    return;
+  }
+  if(stageId===2&&['profile','review','approval'].includes(itemId)){
+    window.dispatchEvent(new CustomEvent('leadintel:open-module',{detail:{step:3,journeyStage:2}}));
+    setTimeout(syncProcessMap,80);
+    return;
+  }
+  openProcessStep(stageId);
+}
 if(processMap){
-  processMap.addEventListener("click",event=>{const button=event.target.closest("[data-process-step]");if(button)openProcessStep(button.dataset.processStep);});
+  processMap.addEventListener("click",event=>{const substep=event.target.closest("[data-stage-mini-step]");if(substep){reviewMiniStep(Number(substep.dataset.stageId),substep.dataset.stageMiniStep);return;}const button=event.target.closest("[data-process-step]");if(button)openProcessStep(button.dataset.processStep);});
   const steps=document.querySelector(".steps");
   steps?.addEventListener("keydown",event=>{const marker=event.target.closest("[data-workflow-stage]");if(!marker||!["Enter"," "].includes(event.key))return;event.preventDefault();openProcessStep(marker.dataset.workflowStage);});
   document.getElementById("company-website")?.addEventListener("input",()=>setTimeout(syncProcessMap,0));
@@ -212,6 +229,7 @@ if(processMap){
   window.addEventListener("leadintel:server-ready",()=>{syncContextArchitecture();syncProcessMap();});
   window.addEventListener("leadintel:workspace-changed",()=>{syncContextArchitecture();syncProcessMap();});
   window.addEventListener("leadintel:journey-changed",syncProcessMap);
+  window.addEventListener("leadintel:open-discovery",()=>setTimeout(syncProcessMap,120));
   window.addEventListener("leadintel:crm-changed",syncProcessMap);
   window.addEventListener("leadintel:outreach-approved",syncProcessMap);
   window.addEventListener("leadintel:company-research-updated",syncProcessMap);
