@@ -10,7 +10,7 @@ const MAX_DISCOVERY_RESULTS_PER_QUERY=8;
 const DISCOVERY_SEARCH_CONCURRENCY=4;
 const MAX_DISCOVERY_FOLLOW_UP_QUERIES=4;
 const MAX_DISCOVERY_COMPANY_CHECKS=30;
-const ASSET_VERSION="20260925-pipeline-choice-v1&sidebar-preservation=1&target-segments=1";
+const ASSET_VERSION="20260925-pipeline-choice-v1&sidebar-preservation=1&target-segments=1&target-quality=1";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20260925-buyers-stage-view-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -175,7 +175,7 @@ async function firecrawlCompanySearch(queryMeta,runSignal){
         fallbackAttempted=true;
         const fallback=await openAiCompanySearch(queryMeta,runSignal);
         if(runSignal?.aborted)throwIfDiscoveryRunAborted(runSignal);
-        if(fallback.length){discovery.funnel.openAiFallbackSearches=(Number(discovery.funnel.openAiFallbackSearches)||0)+1;return fallback;}
+        if(fallback.length){discovery.funnel.openAiFallbackSearches=(Number(discovery.funnel.openAiFallbackSearches)||0)+1;discovery.providerFallbacks.push({queryId:queryMeta.id,status:Number(lastError.status)||0});return fallback;}
       }
       if(attempt>=DISCOVERY_PROVIDER_RETRIES||!retryableDiscoveryFailure(lastError))throw lastError;
     }finally{
@@ -246,24 +246,26 @@ async function extractCompaniesFromEvidence(evidence,market,targetCount,runSigna
   if(!runSignal?.aborted){discoveryProgress.completed=1;renderDiscoverySafely();}
   return combined;
 }
-async function runCompanyDiscovery(){
+async function runCompanyDiscovery({targetOnly=false}={}){
   const main=mainState();
   if(!(main?.profile?.website||main?.website)){showToast("Add your company website first");return;}
   syncStrategyFingerprint();
   const market=main.market||{};
   const targetPool=selectedTargets(main);
+  if(targetOnly&&!targetPool.length){showToast("Add target companies before researching them");return;}
   if(!LeadIntelDiscovery.hasActiveSignals?.(market)&&!targetPool.length){showToast("Activate at least one buying signal in Strategy or add target companies before searching");return;}
   const targetCount=persistDiscoveryTarget();
   const limits=LeadIntelDiscovery.discoveryLimits(targetCount);
-  const baseQueries=LeadIntelDiscovery.buildDiscoveryQueries(main.profile||{website:main.website},market,limits.queryCount,discovery.queries);
+  const profileForQueries={...(main.profile||{website:main.website}),targetMarkets:(main.targetMarkets||[]).join(", ")||main.profile?.targetMarkets};
+  const baseQueries=targetOnly?[]:LeadIntelDiscovery.buildDiscoveryQueries(profileForQueries,market,limits.queryCount,discovery.queries);
   const targetMarket=(main.targetMarkets||[])[0]||main.profile?.targetMarkets||'';
   const targetOffset=Number(loadMeta().targetResearchOffset)||0;
   const researchTargets=[...targetPool.slice(targetOffset),...targetPool.slice(0,targetOffset)].slice(0,5);
-  const queries=[...baseQueries,...targetEvidenceQueries(researchTargets,targetMarket,market),...opportunityHypothesisQueries(main,targetMarket)];
+  const queries=targetOnly?targetEvidenceQueries(researchTargets,targetMarket,market):[...baseQueries,...targetEvidenceQueries(researchTargets,targetMarket,market),...opportunityHypothesisQueries(main,targetMarket)];
   if(!queries.length){showToast("Add optional market or offer context to make discovery more precise");return;}
   const previousCandidates=discovery.candidates.slice();
   const previousRunAt=discovery.lastSuccessfulRunAt||(previousCandidates.length?discovery.lastRunAt:"");
-  recoveredInterruptedRun=false;discovery.needsRefresh=false;discovery.queries=queries;discovery.rawResults=[];discovery.candidates=previousCandidates;discovery.companyMentions=[];discovery.searchFailures=[];discovery.checkedCompanyDomains=[];discovery.latestRunCandidateCount=0;discovery.lastSuccessfulRunAt=previousRunAt;discovery.retainedLastSuccessfulResults=previousCandidates.length>0;discovery.extraction={status:"pending",method:"",message:"Company-name extraction will report its method after the evidence search."};discovery.potentialMatches=[];
+  recoveredInterruptedRun=false;discovery.needsRefresh=false;discovery.queries=queries;discovery.rawResults=[];discovery.candidates=previousCandidates;discovery.companyMentions=[];discovery.searchFailures=[];discovery.providerFallbacks=[];discovery.checkedCompanyDomains=[];discovery.latestRunCandidateCount=0;discovery.lastSuccessfulRunAt=previousRunAt;discovery.retainedLastSuccessfulResults=previousCandidates.length>0;discovery.extraction=targetOnly?{status:"targets",method:"Target list",message:"Using your saved target names; checking their public evidence."}:{status:"pending",method:"",message:"Company-name extraction will report its method after the evidence search."};discovery.potentialMatches=[];
   discoveryEvidenceUrls=new Set();discoveryCheckedCompanyDomains=new Set();
   discovery.funnel={marketSearchesCompleted:0,marketSearchesTotal:queries.length,evidencePages:0,companiesIdentified:0,officialDomainsResolved:0,companySitesChecked:0,verifiedCompanies:0,qualifiedCompanies:0,adaptiveFollowUpSearches:0,openAiFallbackSearches:0};
   enrichmentResults.clear();enrichmentPending.clear();discovery.status="running";
@@ -288,7 +290,7 @@ async function runCompanyDiscovery(){
   taskCentre?.registerActions(taskId,{cancel:()=>runController.abort(),retry:()=>runCompanyDiscovery()});
   try{
     const allSearches=(async()=>{
-      const profile=main.profile||{website:main.website};
+      const profile=profileForQueries;
       const targetMarket=queries[0]?.market||profile.targetMarkets||"";
       const allMarketEvidence=[];
       const allResolved=[];
@@ -322,13 +324,13 @@ async function runCompanyDiscovery(){
       throwIfDiscoveryRunAborted(runController.signal);
       const firstPass=searches.flatMap(item=>item?.results||[]);allMarketEvidence.push(...firstPass);
       discovery.rawResults=[...allMarketEvidence];
-      const firstMentions=await extractCompaniesFromEvidence(firstPass,targetMarket,Math.min(targetCount*3,MAX_DISCOVERY_COMPANY_CHECKS),runController.signal);
-      rememberMentions(firstMentions);
+      const firstMentions=targetOnly?[]:await extractCompaniesFromEvidence(firstPass,targetMarket,Math.min(targetCount*3,MAX_DISCOVERY_COMPANY_CHECKS),runController.signal);
       const targetMentions=queries.filter(query=>query.kind==='target-evidence').flatMap(query=>{
         const source=searches[queries.indexOf(query)]?.results?.find(item=>(query.domain&&item.domain===query.domain)||`${item.title} ${item.description}`.toLowerCase().includes(query.company.toLowerCase()));
         return source?[{company:query.company,market:query.market,sourceUrl:source.url}]:[];
       });
       rememberMentions(targetMentions);
+      rememberMentions(firstMentions);
       let linkedEvidence=await collectResolutionAndVerification(companyMentions,MAX_DISCOVERY_COMPANY_CHECKS);
       runCandidates=LeadIntelDiscovery.mergeCompanyCandidates([...linkedEvidence,...allVerified],profile,market,targetCount);
       discovery.candidates=runCandidates.length?runCandidates:previousCandidates;
@@ -340,7 +342,7 @@ async function runCompanyDiscovery(){
       const firstPassSucceeded=searches.every(item=>item&&!item.error)
         &&resolutionSearches.every(item=>item&&!item.error)
         &&verificationSearches.every(item=>item&&!item.error);
-      if(firstPassSucceeded&&runCandidates.length<targetCount&&companyMentions.length<MAX_DISCOVERY_COMPANY_CHECKS){
+      if(!targetOnly&&firstPassSucceeded&&runCandidates.length<targetCount&&companyMentions.length<MAX_DISCOVERY_COMPANY_CHECKS){
         const remainingLimit=MAX_DISCOVERY_COMPANY_CHECKS-companyMentions.length;
         followUpQueries=LeadIntelDiscovery.buildDiscoveryFollowUpQueries(profile,market,queries,MAX_DISCOVERY_FOLLOW_UP_QUERIES);
         if(followUpQueries.length){
@@ -377,7 +379,7 @@ async function runCompanyDiscovery(){
           discovery.funnel.qualifiedCompanies=runCandidates.length;
         }
       }
-      discovery.potentialMatches=LeadIntelDiscovery.buildPotentialCompanyCandidates([...linkedEvidence,...allVerified],profile,market,discovery.candidates);
+      discovery.potentialMatches=LeadIntelDiscovery.buildPotentialCompanyCandidates([...linkedEvidence,...allVerified],profile,market,discovery.candidates).filter(candidate=>!targetOnly||researchTargets.some(item=>item.domain===canonicalDomain(candidate.domain)||item.companyName.toLowerCase()===candidate.company.toLowerCase()));
       discovery.rawResults=[...allMarketEvidence,...allResolved,...allVerified].slice(0,50);
     })();
     let runTimeout;
@@ -558,7 +560,7 @@ function renderDiscoveryFunnel(){
     [Number(funnel.companySitesChecked)||0,"Company sites checked"],
     [Number(funnel.qualifiedCompanies)||0,"Qualified companies"]
   ];
-  target.innerHTML=`<div class="discovery-funnel-head"><strong>Search funnel</strong><span>${esc(phase)}</span></div><div class="discovery-funnel-track" role="progressbar" aria-label="Market searches checked" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><i style="width:${percent}%"></i></div><div class="discovery-funnel-grid">${metrics.map(([value,label])=>`<div><strong>${esc(value)}</strong><span>${esc(label)}</span></div>`).join("")}</div>${discovery.extraction?.message?`<p class="discovery-funnel-extraction"><strong>Company extraction:</strong> ${esc(discovery.extraction.message)}</p>`:""}${Number(funnel.openAiFallbackSearches)?`<p class="discovery-funnel-followup">Firecrawl could not complete ${Number(funnel.openAiFallbackSearches)} search${Number(funnel.openAiFallbackSearches)===1?"":"es"}; grounded OpenAI web search supplied source-linked results instead.</p>`:""}${Number(funnel.adaptiveFollowUpSearches)?`<p class="discovery-funnel-followup">LeadIntel added ${Number(funnel.adaptiveFollowUpSearches)} follow-up searches because the first pass found too few qualified companies.</p>`:""}${discoverySearchFailuresHtml()}`;
+  target.innerHTML=`<div class="discovery-funnel-head"><strong>Search funnel</strong><span>${esc(phase)}</span></div><div class="discovery-funnel-track" role="progressbar" aria-label="Market searches checked" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><i style="width:${percent}%"></i></div><div class="discovery-funnel-grid">${metrics.map(([value,label])=>`<div><strong>${esc(value)}</strong><span>${esc(label)}</span></div>`).join("")}</div>${discovery.extraction?.message?`<p class="discovery-funnel-extraction"><strong>Company extraction:</strong> ${esc(discovery.extraction.message)}</p>`:""}${Number(funnel.openAiFallbackSearches)?`<p class="discovery-funnel-followup">Firecrawl could not complete ${Number(funnel.openAiFallbackSearches)} search${Number(funnel.openAiFallbackSearches)===1?"":"es"}${discovery.providerFallbacks?.some(item=>item.status===402)?" (HTTP 402: check Firecrawl credits or billing)":discovery.providerFallbacks?.some(item=>item.status===408)?" (timeout)":""}; grounded OpenAI web search supplied source-linked results instead.</p>`:""}${Number(funnel.adaptiveFollowUpSearches)?`<p class="discovery-funnel-followup">LeadIntel added ${Number(funnel.adaptiveFollowUpSearches)} follow-up searches because the first pass found too few qualified companies.</p>`:""}${discoverySearchFailuresHtml()}`;
 }
 function discoverySearchFailuresHtml(){
   const failures=Array.isArray(discovery.searchFailures)?discovery.searchFailures:[];if(!failures.length)return "";
@@ -765,7 +767,7 @@ function bindDiscovery(){
   $("customer-pipeline")?.addEventListener("change",event=>{const select=event.target.closest("[data-pipeline-stage]");if(select)changePipelineStage(select);});
   $("customer-pipeline")?.addEventListener("click",event=>{const promote=event.target.closest("[data-add-prospect-pipeline]");if(promote){addSelectedProspectToPipeline(promote.dataset.addProspectPipeline);return;}const prospect=event.target.closest("[data-find-prospect-buyers]");if(prospect){findPotentialDecisionMakers(prospect.dataset.findProspectBuyers);return;}const buyer=event.target.closest("[data-find-pipeline-buyers]");if(buyer){findPipelineDecisionMakers(buyer.dataset.findPipelineBuyers);return;}const remove=event.target.closest("[data-pipeline-remove]");if(remove){removePipelineCompany(remove.dataset.pipelineRemove,remove.dataset.domain);return;}const open=event.target.closest("[data-open-crm-company]");if(open)document.getElementById("open-crm")?.click();});
   $("reset-workspace")?.addEventListener("click",()=>setTimeout(()=>{if(!localStorage.getItem(MAIN_STORAGE_KEY)){localStorage.removeItem(DISCOVERY_STORAGE_KEY);localStorage.removeItem(`${DISCOVERY_STORAGE_KEY}_meta`);discovery=LeadIntelDiscovery.normalizeDiscoveryState({});crmCompanies=[];crmPipeline=[];crmAvailable=false;enrichmentResults.clear();enrichmentPending.clear();}},0));
-  window.addEventListener("leadintel:open-discovery",event=>{targetListHandoff=event.detail?.source==='target-companies';if(!moduleReady()){showToast('Add your company website first');return;}showDiscoveryStep(event.detail?.focus||"companies");if(event.detail?.startResearch&&targetListHandoff&&discovery.status!=='running')void runCompanyDiscovery();});window.addEventListener("leadintel:module-opened",event=>{if(Number(event.detail?.step)!==5)return;syncStrategyFingerprint();saveMeta({...loadMeta(),visibleStep:5});renderAll();renderDiscoveryFocus(loadMeta().activeJourneyStage===5?"buyers":"companies");if(crmAuthenticated())refreshCrmState();});
+  window.addEventListener("leadintel:open-discovery",event=>{targetListHandoff=event.detail?.source==='target-companies';if(!moduleReady()){showToast('Add your company website first');return;}showDiscoveryStep(event.detail?.focus||"companies");if(event.detail?.startResearch&&targetListHandoff&&discovery.status!=='running')void runCompanyDiscovery({targetOnly:true});});window.addEventListener("leadintel:module-opened",event=>{if(Number(event.detail?.step)!==5)return;syncStrategyFingerprint();saveMeta({...loadMeta(),visibleStep:5});renderAll();renderDiscoveryFocus(loadMeta().activeJourneyStage===5?"buyers":"companies");if(crmAuthenticated())refreshCrmState();});
   window.addEventListener("leadintel:website-activated",()=>{
     resetLocalDownstreamState();
     syncStrategyFingerprint();
@@ -779,6 +781,6 @@ function bindDiscovery(){
 function loadOutreachModules(){if(document.querySelector('script[data-outreach-engine]'))return;const engine=document.createElement("script");engine.src=`outreach-engine.js?v=${OUTREACH_ASSET_VERSION}`;engine.dataset.outreachEngine="true";engine.addEventListener("load",()=>{const localization=document.createElement("script");localization.src=`outreach-localization.js?v=${OUTREACH_ASSET_VERSION}`;localization.dataset.outreachLocalization="true";localization.addEventListener("load",()=>{if(document.querySelector('script[data-outreach-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src=`outreach-ui.js?v=${OUTREACH_ASSET_VERSION}`;ui.dataset.outreachUi="true";document.body.appendChild(ui);});document.body.appendChild(localization);});document.body.appendChild(engine);}
 function openDiscoveryFromHandoff(options={}){if(!moduleReady())return false;showDiscoveryStep(options.focus||"companies");return Boolean($("step-5")?.classList.contains("active"));}
 function ensureDiscoveryMounted(){if(discoveryMounted)return;discovery=loadDiscovery();discoveryMounted=true;syncStrategyFingerprint();renderAll();if(recoveredInterruptedRun){saveDiscovery();setTimeout(()=>showToast("Previous company search was interrupted. You can run it again."),0);}if(crmAuthenticated())refreshCrmState();loadOutreachModules();}
-function initDiscovery(){if(window.LeadIntelDiscoveryUI?.open)return;injectDiscoveryUI();bindDiscovery();window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};window.LeadIntelDiscoveryUI.getPipeline=pipelineRows;window.LeadIntelDiscoveryUI.firecrawlHealth=()=>{const state=discovery||loadDiscovery();return {lastRunAt:state.lastRunAt||"",blocked:(state.searchFailures||[]).some(item=>Number(item.status)===402),usedFallback:Number(state.funnel?.openAiFallbackSearches)||0};};if(window.__leadIntelPendingDiscoveryOpen&&openDiscoveryFromHandoff())window.__leadIntelPendingDiscoveryOpen=false;else if(mainState().step===5&&moduleReady())showDiscoveryStep();else if(loadMeta().visibleStep===5&&moduleReady())showDiscoveryStep();}
+function initDiscovery(){if(window.LeadIntelDiscoveryUI?.open)return;injectDiscoveryUI();bindDiscovery();window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};window.LeadIntelDiscoveryUI.getPipeline=pipelineRows;window.LeadIntelDiscoveryUI.firecrawlHealth=()=>{const state=discovery||loadDiscovery();return {lastRunAt:state.lastRunAt||"",blocked:[...(state.searchFailures||[]),...(state.providerFallbacks||[])].some(item=>Number(item.status)===402),usedFallback:Number(state.funnel?.openAiFallbackSearches)||0};};if(window.__leadIntelPendingDiscoveryOpen&&openDiscoveryFromHandoff())window.__leadIntelPendingDiscoveryOpen=false;else if(mainState().step===5&&moduleReady())showDiscoveryStep();else if(loadMeta().visibleStep===5&&moduleReady())showDiscoveryStep();}
 function initDiscoveryWhenReady(attempt=0){if(!window.LeadIntelDiscovery){if(attempt<400)setTimeout(()=>initDiscoveryWhenReady(attempt+1),25);return;}initDiscovery();}
 initDiscoveryWhenReady();
