@@ -9,7 +9,7 @@ test('profile action offers missing enrichment without blocking continuation',()
   const source=fs.readFileSync(path.join(root,'profile-enrichment-checkpoint-ui.js'),'utf8');
   assert.match(source,/Improve your Profile/);
   assert.match(source,/Run Company Research/);
-  assert.match(source,/Build Lookalike Audience/);
+  assert.match(source,/Add Past Customers/);
   assert.match(source,/Continue Without Enrichment/);
   assert.match(source,/addEventListener\("click",interceptProfileAction,true\)/);
   assert.match(source,/button\.click\(\)/);

@@ -1,6 +1,6 @@
 import './reference-customer-library.js?v=20260924-reference-consensus-v1';
 import './reference-customer-portfolio.js?v=20260923-reference-interface-v1';
-import './reference-customer-library-ui.js?v=20260924-reference-consensus-v1';
+import './reference-customer-library-ui.js?v=20260924-reference-consensus-v1&opportunity-context=1';
 import './reference-customer-delete-ui.js?v=20260923-reference-interface-v1';
 import './reference-customer-upload-mode.js?v=20260911-reference-single-owner-v1';
 

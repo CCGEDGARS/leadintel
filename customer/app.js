@@ -3,7 +3,7 @@ import './content-variants.js?v=20260921-contact-gated-v2';
 import './business-identity.js?v=20260924-workspace-profile-english-v1';
 import './evidence-view.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&reference-interface=20260923';
 import './profile-approval-ui.js?v=20260924-friendly-workflow-labels-v1';
-import './workspace-persistence.js?v=20260917-reset-clean-v1';
+import './workspace-persistence.js?v=20260926-visible-save-v1';
 import {withOpenAiRetry,cleanOpenAiResearchQuery,describePartialCoverage} from './market-research-provider-resilience.js?v=20260916-latency-fix-v2';
 
 const STORAGE_KEY="leadintel_customer_v2_state";

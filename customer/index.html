@@ -14,7 +14,8 @@
   <link rel="stylesheet" href="market-selector.css?v=20260826-target-market-v1">
   <link rel="stylesheet" href="compact-sources.css?v=20260826-compact-sources-v1">
   <link rel="stylesheet" href="evidence-sources.css?v=20260906-evidence-v1">
-  <link rel="stylesheet" href="brand-identity.css?v=20260916-brand-image-state-v1">
+  <link rel="stylesheet" href="brand-identity.css?v=20260916-brand-image-state-v1&lookalike-cta=1">
+  <link rel="stylesheet" href="workspace-save.css?v=20260926-visible-save-v1">
   <link rel="stylesheet" href="background-task-centre.css?v=20260916-task-centre-v1">
   <link rel="stylesheet" href="attention-centre.css?v=20260917-reset-visual-v1&health-colors=1">
 </head>
@@ -90,6 +91,13 @@
       </aside>
 
       <main class="content">
+        <div class="workspace-save-bar" role="region" aria-label="Workspace save status" data-state="new">
+          <div class="workspace-save-copy">
+            <span class="eyebrow">Workspace progress</span>
+            <strong id="workspace-save-state" role="status" aria-live="polite">New workspace · ready</strong>
+          </div>
+          <button class="workspace-save-button" type="button" id="save-workspace" disabled>Save workspace</button>
+        </div>
         <nav class="process-map" id="commercial-process-map" aria-label="LeadIntel commercial process">
           <div class="journey-compact">
             <div class="journey-current"><span class="eyebrow" data-journey-position>Stage 1 of 7</span><strong data-journey-title>Setup</strong></div>
@@ -528,7 +536,7 @@
   <script defer src="market-conditions-engine.js?v=20260922-market-conditions-v1&adaptive-evidence=1"></script>
   <script defer src="market-research-verification.js?v=20260916-gemini-verification-v1"></script>
 <script defer src="profile-enrichment-checkpoint.js?v=20260921-profile-enrichment-v2"></script>
-<script defer src="profile-enrichment-checkpoint-ui.js?v=20260924-friendly-workflow-labels-v1"></script>
+<script defer src="profile-enrichment-checkpoint-ui.js?v=20260924-friendly-workflow-labels-v1&opportunity-context=1"></script>
   <script defer src="workflow-next-action.js?v=20260925-buyers-stage-view-v1"></script>
 <script defer src="discovery-engine.js?v=20260925-pipeline-choice-v1&sidebar-preservation=1"></script>
   <script defer src="workspace-isolation.js?v=20260914-workspace-isolation-v1"></script>
@@ -539,13 +547,13 @@
   <script defer src="brand-identity.js?v=20260916-brand-timestamp-v1"></script>
   <script defer src="brand-identity-ui.js?v=20260916-browser-logo-copy-v2"></script>
   <script defer src="journey-progress.js?v=20260924-friendly-workflow-labels-v1"></script>
-  <script defer src="process-map.js?v=20260924-friendly-workflow-labels-v1"></script>
+  <script defer src="process-map.js?v=20260924-friendly-workflow-labels-v1&visible-actions=1"></script>
   <script defer src="attention-centre-model.js?v=20260924-openai-credit-health-v1"></script>
   <script defer src="attention-centre.js?v=20260924-openai-credit-health-v1"></script>
-  <script type="module" src="app.js?v=20260924-friendly-workflow-labels-v1&icp-data-gates=1&reset-center=1&quick-insights=1&adaptive-evidence=1&strategy-handoff-copy=1&profile-overview-hygiene=1&workspace-content-english=1&sidebar-preservation=1"></script>
+  <script type="module" src="app.js?v=20260924-friendly-workflow-labels-v1&icp-data-gates=1&reset-center=1&quick-insights=1&adaptive-evidence=1&strategy-handoff-copy=1&profile-overview-hygiene=1&workspace-content-english=1&sidebar-preservation=1&visible-save=1"></script>
   <script type="module" src="ai-settings.js?v=20260925-provider-credit-health-v1"></script>
   <script type="module" src="copilot-loader.js?v=20260924-friendly-workflow-labels-v1"></script>
-  <script type="module" src="shell-support-loader.js?v=20260926-research-coverage-status-v1&reset-center=1"></script>
-  <script defer src="discovery-ui.js?v=20260925-pipeline-choice-v1&sidebar-preservation=1"></script>
+  <script type="module" src="shell-support-loader.js?v=20260926-research-coverage-status-v1&reset-center=1&opportunity-context=1"></script>
+  <script defer src="discovery-ui.js?v=20260925-pipeline-choice-v1&sidebar-preservation=1&opportunity-context=1"></script>
 </body>
 </html>

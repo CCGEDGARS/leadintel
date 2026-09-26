@@ -4,7 +4,7 @@
  * block the journey shell. These import signatures remain documented because
  * release tests audit their versions and ordering.
  * import './workspace-reset-hygiene.js?v=20260917-task-reset-v1';
- * import './workspace-persistence.js?v=20260917-reset-clean-v1';
+ * import './workspace-persistence.js?v=20260926-visible-save-v1';
  * import './state-budget.js?v=20260826-state-budget-500kb';
  * import './website-input-sync.js?v=20260901-saved-state-v2';
  * import './custom-market-input-hygiene.js?v=20260903-password-manager-isolation-v5';
@@ -31,12 +31,12 @@
  * import './reference-customer-table-detection.js?v=20260911-reference-missing-info-v1';
  * import './reference-customer-smart-import.js?v=20260923-reference-interface-v1';
  * import './reference-customer-ai.js?v=20260911-invalid-json-recovery-v1';
- * import './reference-customer-ui.js?v=20260924-reference-consensus-v1';
+ * import './reference-customer-ui.js?v=20260924-reference-consensus-v1&opportunity-context=1';
  * import './reference-customer-clear-list.js?v=20260923-reference-interface-v1';
  * import './reference-customer-website-enrichment.js?v=20260923-reference-interface-v1';
  * import './reference-customer-ai-runtime.js?v=20260924-reference-consensus-v1';
  * import './reference-customer-launcher.js?v=20260924-reference-consensus-v1';
- * import './lookalike-discovery.js?v=20260924-reference-consensus-v1';
+ * import './lookalike-discovery.js?v=20260924-reference-consensus-v1&opportunity-context=1';
  * import './intelligence-sources-ui.js?v=20260915-preferred-sources-v1';
  * import './profile-action-runtime.js?v=20260924-friendly-workflow-labels-v1';
  * import './outreach-automation-loader.js?v=20260916-brand-outreach-v2';
@@ -55,7 +55,7 @@ function ensureReferenceCustomerTool(){
   const step=document.getElementById("step-2");if(!step||step.querySelector("[data-reference-intelligence-card]"))return;
   const actions=step.querySelector(".step-actions");if(!actions)return;
   const card=document.createElement("section");card.className="panel brand-identity-panel reference-customer-core-card";card.dataset.referenceIntelligenceCard="true";card.style.marginTop="16px";
-  card.innerHTML='<div class="brand-identity-summary"><div class="brand-identity-intro"><span class="eyebrow">Core targeting · Lookalike discovery</span><h3>Build your Lookalike Audience</h3><p>Analyze your best existing customers to reveal shared patterns. Lookalike DNA directly improves Discovery accuracy, ICP quality and campaign relevance.</p><span class="brand-identity-status">High impact</span></div><button class="secondary-btn brand-identity-toggle" type="button" data-reference-customers-manage><span>Build lookalike audience</span><span aria-hidden="true">→</span></button></div>';
+  card.innerHTML='<div class="brand-identity-summary"><div class="brand-identity-intro"><span class="eyebrow">Optional targeting evidence · Past customers</span><h3>Improve opportunity targeting</h3><p>Add one or more real customers you have served to help LeadIntel understand possible buyers. Discovery searches for demand signals in your target market using your offers and strategy, even without a customer list.</p><span class="brand-identity-status">Helpful context</span></div><button class="primary-btn brand-identity-toggle lookalike-build-btn" type="button" data-reference-customers-manage><span>Add past customers</span><span aria-hidden="true">→</span></button></div>';
   actions.parentNode.insertBefore(card,actions);
 }
 function patchMarketLookalikeIsolation(){
