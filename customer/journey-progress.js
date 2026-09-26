@@ -145,8 +145,9 @@
   function visibleStageIds(model=[]){
     const visible=[];
     let includedNext=false;
+    const currentId=Math.max(1,...list(model).filter(stage=>stage?.status==='current').map(stage=>Number(stage.id)||1));
     for(const stage of list(model)){
-      if(['complete','skipped','current'].includes(stage?.status)){
+      if(Number(stage?.id)<=currentId||['complete','skipped','current'].includes(stage?.status)){
         visible.push(stage.id);
         continue;
       }
