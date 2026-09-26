@@ -11,7 +11,10 @@ test('customer lists explain what is active, mapped, and saved for research',()=
   assert.match(ui,/map\.analysisAt===reference\.analyzedAt|opportunityMap\.analysisAt===reference\.analyzedAt/);
   assert.match(ui,/Target Companies<\/strong>/);
   assert.match(ui,/targetCount\} saved/);
-  assert.match(ui,/Go to Step 4 · Review targets/);
+  assert.match(ui,/Research saved target companies/);
+  assert.match(ui,/targetCount&&\(!saved\|\|activeModels\)/);
+  assert.match(ui,/Build the Opportunity Map in View Results before activating/);
+  assert.match(ui,/Review and select the suggested customer profile before activation/);
   assert.match(ui,/source:'target-companies'/);
   assert.match(ui,/Customer model active\. It now informs Company Discovery/);
   assert.match(ui,/Customer model deactivated\. The saved list remains available/);
