@@ -17,7 +17,7 @@
   const DISCOVERY_QUALITY_VERSION=4;
   const MINIMUM_DISCOVERY_FIT_SCORE=10;
   const DEFAULT_DISCOVERY_FUNNEL=Object.freeze({marketSearchesCompleted:0,marketSearchesTotal:0,evidencePages:0,companiesIdentified:0,officialDomainsResolved:0,companySitesChecked:0,verifiedCompanies:0,qualifiedCompanies:0,adaptiveFollowUpSearches:0,openAiFallbackSearches:0});
-  const DEFAULT_DISCOVERY_STATE=Object.freeze({status:"idle",queries:[],rawResults:[],candidates:[],companyMentions:[],searchFailures:[],providerFallbacks:[],checkedCompanyDomains:[],lastSuccessfulRunAt:"",latestRunCandidateCount:0,retainedLastSuccessfulResults:false,extraction:{status:"idle",method:"",message:""},potentialMatches:[],selectedProspects:[],funnel:DEFAULT_DISCOVERY_FUNNEL,pipeline:[],lastRunAt:"",qualityVersion:DISCOVERY_QUALITY_VERSION,needsRefresh:false});
+  const DEFAULT_DISCOVERY_STATE=Object.freeze({status:"idle",savingMode:false,queries:[],rawResults:[],candidates:[],companyMentions:[],searchFailures:[],providerFallbacks:[],checkedCompanyDomains:[],lastSuccessfulRunAt:"",latestRunCandidateCount:0,retainedLastSuccessfulResults:false,extraction:{status:"idle",method:"",message:""},potentialMatches:[],selectedProspects:[],funnel:DEFAULT_DISCOVERY_FUNNEL,pipeline:[],lastRunAt:"",qualityVersion:DISCOVERY_QUALITY_VERSION,needsRefresh:false});
   const MAX_DISCOVERY_FOLLOW_UP_QUERIES=4;
   const MAX_DISCOVERY_COMPANY_CHECKS=30;
   const STOPWORDS=new Set(["with","from","that","this","your","their","into","over","under","company","companies","business","businesses","priority","market","markets","customer","customers","service","services","product","products","industrial"]);
@@ -825,6 +825,7 @@
     const extraction=input.extraction&&typeof input.extraction==="object"?input.extraction:{};
     return {
       ...DEFAULT_DISCOVERY_STATE,
+      savingMode:input.savingMode===true,
       status:clearOldResults&&input.status!=="running"?"idle":allowedStatus.has(input.status)?input.status:"idle",
       queries:(clearOldResults?[]:(Array.isArray(input.queries)?input.queries:[])).slice(0,14).map(q=>({id:clean(q.id),market:clean(q.market),query:clean(q.query),offer:clean(q.offer)})).filter(q=>q.id&&q.query),
       rawResults:(clearOldResults?[]:(Array.isArray(input.rawResults)?input.rawResults:[])).slice(0,20).map(normalizeRaw).filter(item=>item.url&&item.domain),
@@ -837,8 +838,8 @@
       latestRunCandidateCount:clamp(Math.floor(Number(input.latestRunCandidateCount??(safeCandidates.length?safeCandidates.length:0))||0),0,50,0),
       retainedLastSuccessfulResults:input.retainedLastSuccessfulResults===true&&!needsRefresh,
       extraction:{
-        status:["idle","pending","ai","fallback"].includes(extraction.status)?extraction.status:"idle",
-        method:["AI","Text fallback"].includes(extraction.method)?extraction.method:"",
+        status:["idle","pending","ai","fallback","targets"].includes(extraction.status)?extraction.status:"idle",
+        method:["AI","Text fallback","Target list"].includes(extraction.method)?extraction.method:"",
         message:clean(extraction.message).slice(0,300)
       },
       potentialMatches:(needsRefresh?[]:(Array.isArray(input.potentialMatches)?input.potentialMatches:[])).slice(0,12).map(safePotentialCandidate).filter(item=>item.domain&&item.evidence.length&&item.qualificationGaps.length),

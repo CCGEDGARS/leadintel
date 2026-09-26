@@ -11,7 +11,7 @@ test('customer lists explain what is active, mapped, and saved for research',()=
   assert.match(ui,/map\.analysisAt===reference\.analyzedAt|opportunityMap\.analysisAt===reference\.analyzedAt/);
   assert.match(ui,/Target Companies<\/strong>/);
   assert.match(ui,/targetCount\} saved/);
-  assert.match(ui,/Research saved target companies/);
+  assert.match(ui,/Test one target · Saving Mode/);
   assert.match(ui,/targetCount&&\(!saved\|\|activeModels\)/);
   assert.match(ui,/Build the Opportunity Map in View Results before activating/);
   assert.match(ui,/Review and select the suggested customer profile before activation/);
@@ -23,7 +23,7 @@ test('customer lists explain what is active, mapped, and saved for research',()=
 test('target research handoff identifies Step 4 and the next search action',()=>{
   const targets=read('reference-customer-ui.js');
   const discovery=read('discovery-ui.js');
-  assert.match(targets,/Research target companies now/);
+  assert.match(targets,/Test one target · Saving Mode/);
   assert.match(targets,/source:'target-companies'/);
   assert.match(discovery,/event\.detail\?\.source==='target-companies'/);
   assert.match(targets,/startResearch:true/);
