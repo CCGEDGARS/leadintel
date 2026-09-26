@@ -95,6 +95,17 @@ test('progressive navigation shows completed stages, the current stage and only 
   ]),[1,2]);
 });
 
+test('a later active stage keeps unfinished earlier stages visible for editing',()=>{
+  assert.deepEqual(Journey.visibleStageIds([
+    {id:1,status:'complete'},{id:2,status:'available'},{id:3,status:'locked'},
+    {id:4,status:'current'},{id:5,status:'available'},{id:6,status:'locked'}
+  ]),[1,2,3,4,5]);
+  const processMap=fs.readFileSync(path.join(__dirname,'..','process-map.js'),'utf8');
+  assert.match(processMap,/\.step-view\.active/);
+  assert.match(processMap,/data-stage-mini-step/);
+  assert.match(processMap,/reviewMiniStep/);
+});
+
 test('friendly journey stages route through the preserved internal module IDs',()=>{
   assert.equal(Journey.journeyStageForModuleStep(2),2);
   assert.equal(Journey.journeyStageForModuleStep(3),2);
