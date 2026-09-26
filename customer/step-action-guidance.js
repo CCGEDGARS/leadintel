@@ -20,11 +20,15 @@
       const complete=research.dataset.researchState==='complete';
       if(complete){
         const step2=document.getElementById('step-2');
-        insert(step2,'Review the drafted answers, then open Profile review','Check the AI suggestions and fill any gaps. When ready, press Review your Profile at the end of this page.');
+        insert(step2,'Review your answers and add customer context','Check the AI suggestions, then add past buyers or chosen target companies if you have them. Press Review your Profile at the end of this page.');
         const banner=step2.querySelector(':scope > .step-action-guidance');
         if(banner&&!banner.querySelector('.step-guidance-jump')){
           const button=document.createElement('button');button.type='button';button.className='secondary-btn step-guidance-jump';button.textContent='Review draft answers ↓';
           button.addEventListener('click',()=>step2.querySelector('[data-brief-group]')?.scrollIntoView({behavior:'smooth',block:'start'}));banner.append(button);
+        }
+        if(banner&&!banner.querySelector('.step-guidance-customers')){
+          const button=document.createElement('button');button.type='button';button.className='secondary-btn step-guidance-jump step-guidance-customers';button.textContent='Add Customers →';
+          button.addEventListener('click',()=>step2.querySelector('[data-reference-customers-manage]')?.click());banner.append(button);
         }
         research.classList.remove('step-action-research');
         if(profileHero.nextElementSibling!==research)profileHero.after(research);
