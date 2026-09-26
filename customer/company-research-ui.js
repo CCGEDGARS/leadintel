@@ -9,7 +9,7 @@ const MAX_RESULTS_PER_QUERY=4;
 const COMPANY_RESEARCH_REQUEST_TIMEOUT_MS=25000;
 const COMPANY_RESEARCH_RUN_TIMEOUT_MS=60000;
 const COMPANY_RESEARCH_SAVE_TIMEOUT_MS=10000;
-const RELEASE='20260924-evidence-synthesis-retry-v1';
+const RELEASE='20260926-research-coverage-status-v1';
 let running=false;
 
 const engine=()=>window.LeadIntelCompanyResearch;
@@ -79,9 +79,11 @@ function renderResearchReview(){
       const aiAvailable=meta.mode==='ai';
       const aiNote=aiAvailable?`AI synthesis complete · ${esc(modeLabel(meta))}`:`Why AI synthesis did not complete: ${esc(meta.reason||'No AI-generated fields were returned.')}`;
       const coverage=meta.quality?.coverage||{};const covered=Array.isArray(coverage.categories)?coverage.categories.length:0;const total=Number(coverage.total)||5;
-      const coverageNote=`${covered}/${total} authoritative areas${coverage.minimumMet?' verified':' · Coverage incomplete; high confidence is capped'}`;
+      const coverageNote=coverage.minimumMet
+        ?`Research finished · source coverage: ${covered} of ${total} areas. Review the evidence against the profile before approval.`
+        :`Research finished successfully · sources support ${covered} of ${total} areas. Review and complete profile fields that lack evidence; confidence remains limited.`;
       const noAiActions=aiAvailable?'':`<small class="research-synthesis-note">Your ${Number(meta.sourceCount)||0} evidence sources are saved. Resolve the AI provider issue in Settings, then synthesize these sources without repeating research.</small><div class="research-summary-followup"><button class="research-rerun research-primary" id="synthesize-company-research" type="button">Synthesize saved evidence</button><button class="research-rerun" id="open-ai-settings-from-research" type="button">Open AI settings</button></div>`;
-      summary.innerHTML=`<div class="research-summary-main"><div class="research-summary-icon">✦</div><div><strong>${aiAvailable?'Research and AI synthesis complete':'Evidence collected · AI synthesis did not complete'} · ${Number(meta.sourceCount)||0} source${Number(meta.sourceCount)===1?'':'s'}</strong><small class="${aiAvailable?'':'research-no-ai'}">${aiNote}${meta.failures?` · ${Number(meta.failures)} source/search request${Number(meta.failures)===1?'':'s'} unavailable`:''}</small><small class="research-coverage ${coverage.minimumMet?'complete':'incomplete'}">${esc(coverageNote)}</small>${noAiActions}</div></div><div class="research-summary-actions"><span class="research-mode">${esc(aiAvailable?modeLabel(meta):'Evidence only')}</span><button class="research-rerun" id="rerun-company-research" type="button">Refresh company research</button></div>`;
+      summary.innerHTML=`<div class="research-summary-main"><div class="research-summary-icon">✦</div><div><strong>${aiAvailable?'Research and AI synthesis complete':'Evidence collected · AI synthesis did not complete'} · ${Number(meta.sourceCount)||0} source${Number(meta.sourceCount)===1?'':'s'}</strong><small class="${aiAvailable?'':'research-no-ai'}">${aiNote}${meta.failures?` · ${Number(meta.failures)} source/search request${Number(meta.failures)===1?'':'s'} unavailable`:''}</small><small class="research-coverage ${coverage.minimumMet?'complete':'partial'}">${esc(coverageNote)}</small>${noAiActions}</div></div><div class="research-summary-actions"><span class="research-mode">${esc(aiAvailable?modeLabel(meta):'Evidence only')}</span><button class="research-rerun" id="rerun-company-research" type="button">Refresh company research</button></div>`;
     } else if(meta.failureAt){
       summary.classList.add('research-summary-failed');
       summary.innerHTML='<div class="research-summary-main"><div class="research-summary-icon">!</div><div><strong>Research could not complete.</strong><small>'+esc(meta.error||'The company research request did not finish.')+'</small><small class="research-retry-note">Your website and target market were preserved. Try again when ready.</small></div></div><div class="research-summary-actions"><span class="research-mode">Retry available</span><button class="research-rerun research-primary" id="rerun-company-research" type="button">Try research again <span aria-hidden="true">→</span></button></div>';

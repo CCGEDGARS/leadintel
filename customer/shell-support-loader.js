@@ -11,7 +11,7 @@ const SUPPORT_MODULES=[
   './firecrawl-workspace-router.js?v=20260914-spinner-hard-stop-v1&adaptive-evidence=1',
   './linkedin-signals.js?v=20260907-public-index-v1',
   './company-research-security.js?v=20260916-latency-fix-v2',
-  './company-research-ui.js?v=20260924-evidence-synthesis-retry-v1',
+  './company-research-ui.js?v=20260926-research-coverage-status-v1',
   './company-profile-handoff.js?v=20260924-friendly-workflow-labels-v1',
   './reference-customers.js?v=20260924-reference-consensus-v1',
   './reference-customer-table-detection.js?v=20260911-reference-missing-info-v1',

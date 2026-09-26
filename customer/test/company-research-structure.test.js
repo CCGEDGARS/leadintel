@@ -16,13 +16,13 @@ const supportLoader=read('shell-support-loader.js');
 test('Customer V2 loads the automatic company research module with Firecrawl workspace routing before research',()=>{
   assert.match(processMap,/firecrawl-workspace-router\.js\?v=20260914-spinner-hard-stop-v1/);
   assert.match(processMap,/company-research-security\.js\?v=20260918-translation-fidelity-v3/);
-  assert.match(processMap,/company-research-ui\.js\?v=20260924-evidence-synthesis-retry-v1/);
+  assert.match(processMap,/company-research-ui\.js\?v=20260926-research-coverage-status-v1/);
   assert.ok(processMap.indexOf('firecrawl-workspace-router.js')<processMap.indexOf('company-research-ui.js'),'Firecrawl router must load before company research');
   assert.match(processMap,/company-profile-handoff\.js\?v=20260826-intelligence-autofill-v1/);
   assert.match(ui,/company-research-engine\.js\?v=20260918-translation-fidelity-v3/);
   assert.match(read('index.html'),/profile-engine\.js\?v=20260922-step3-signal-backfill-v1/);
   assert.match(read('index.html'),/process-map\.js\?v=20260924-friendly-workflow-labels-v1/);
-  assert.match(supportLoader,/company-research-ui\.js\?v=20260924-evidence-synthesis-retry-v1/);
+  assert.match(supportLoader,/company-research-ui\.js\?v=20260926-research-coverage-status-v1/);
 });
 
 test('Stage 1 exposes the primary next action after all available company sources',()=>{
@@ -68,8 +68,9 @@ test('company research discovers and scrapes authoritative internal pages before
 
 test('research summary exposes authoritative coverage instead of relying on source count alone',()=>{
   assert.match(ui,/quality\?\.coverage/);
-  assert.match(ui,/authoritative areas/);
-  assert.match(ui,/Coverage incomplete/);
+  assert.match(ui,/source coverage/);
+  assert.match(ui,/Research finished successfully/);
+  assert.match(ui,/profile fields that lack evidence/);
 });
 
 test('signed-in research transparently routes legacy Firecrawl calls through authenticated workspace endpoints',()=>{
