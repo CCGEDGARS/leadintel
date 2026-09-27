@@ -40,8 +40,8 @@ test('Company Discovery resolves named companies from evidence before verifying 
   assert.match(ui,/extractCompaniesFromEvidence/);
   assert.match(ui,/buildCompanyResolutionQueries/);
   assert.match(ui,/runDiscoverySearchBatch\(resolutionQueries,"resolving",runController\.signal,resolutionRows\)/);
-  assert.match(ui,/buildCandidateVerificationQueries\(resolved/);
-  assert.match(ui,/attachSourceEvidenceToResolvedCompanies\(resolved,mentions,allMarketEvidence\)/);
+  assert.match(ui,/buildCandidateVerificationQueries\(\[\.\.\.knownDomains,\.\.\.resolved\]/);
+  assert.match(ui,/attachSourceEvidenceToResolvedCompanies\(resolved,unresolvedMentions,allMarketEvidence\)/);
   assert.match(ui,/mergeCompanyCandidates\(\[\.\.\.linkedEvidence,\.\.\.allVerified\]/);
   assert.doesNotMatch(ui,/buildCandidateVerificationQueries\(firstPass/);
 });

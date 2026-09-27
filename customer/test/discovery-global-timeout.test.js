@@ -343,6 +343,47 @@ test('a timed-out company website check can recover with grounded official-domai
   assert.equal(context.__discoveryState().funnel.openAiFallbackSearches,1);
 });
 
+test('Saving Mode verifies a saved target domain without repeating resolution and recovers via one website scrape',async()=>{
+  const requests=[];
+  const context=loadDiscoveryRunner({requestTimeout:1000,scaleProductionRunTimeout:1000,fetchImpl:async(url,options)=>{
+    requests.push({url,body:JSON.parse(options.body)});
+    if(url.includes('/firecrawl-scrape'))return {ok:true,json:async()=>({data:{markdown:'Södra is a Swedish manufacturer expanding its new factory and investing in industrial automation.',metadata:{sourceURL:'https://sodra.com/',title:'Södra expansion in Sweden'}}})};
+    if(url.includes('/firecrawl-search')&&requests.filter(item=>item.url.includes('/firecrawl-search')).length===1)return {ok:true,json:async()=>({data:[{url:'https://sodra.com/',title:'Södra',description:'Södra is a Swedish manufacturer.'}]})};
+    if(url.includes('/firecrawl-search'))throw new TypeError('Connection failed');
+    throw new Error('Unexpected request');
+  }});
+  const state=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));
+  state.targetCompanies=[{companyName:'Södra',website:'https://sodra.com/',domain:'sodra.com'}];state.targetMarkets=['Sweden'];state.profile.targetMarkets='Sweden';
+  context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(state));
+  await context.__runDiscovery({targetOnly:true,savingMode:true,targetDomain:'sodra.com'});
+  assert.equal(requests.some(item=>item.body.query?.includes('official company website')),false);
+  assert.equal(requests.filter(item=>item.url.includes('/firecrawl-search')).length,2);
+  assert.equal(requests.filter(item=>item.url.includes('/firecrawl-scrape')).length,1);
+  assert.equal(context.__discoveryState().savingMode,true);
+  assert.equal(context.__discoveryState().funnel.companySitesChecked,1);
+  assert.equal(context.__discoveryState().searchFailures.length,0);
+});
+
+test('retry of a failed saved-target lookup uses the known domain and preserves Saving Mode',async()=>{
+  const requests=[];
+  const context=loadDiscoveryRunner({requestTimeout:1000,scaleProductionRunTimeout:1000,fetchImpl:async(url,options)=>{
+    requests.push({url,body:JSON.parse(options.body)});
+    if(url.includes('/firecrawl-search'))return {ok:true,json:async()=>({data:[{url:'https://sodra.com/news/new-factory',title:'Södra new factory',description:'Södra expands production in Sweden with a new factory.'}]})};
+    throw new Error('Unexpected request');
+  }});
+  const state=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));
+  state.targetCompanies=[{companyName:'Södra',website:'https://sodra.com/',domain:'sodra.com'}];state.targetMarkets=['Sweden'];
+  context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(state));
+  context.__setDiscovery({status:'error',savingMode:true,searchFailures:[{phase:'resolving',company:'Södra',queryMeta:{id:'resolve-sodra',kind:'resolution',company:'Södra',market:'Sweden',query:'"Södra" Sweden official company website'},reason:'network_error'}],funnel:{marketSearchesCompleted:1,marketSearchesTotal:1,openAiFallbackSearches:1}});
+  await context.__retryFailedDiscoveryChecks();
+  assert.equal(requests.length,1);
+  assert.match(requests[0].body.query,/site:sodra\.com/);
+  assert.doesNotMatch(requests[0].body.query,/official company website/);
+  assert.equal(requests[0].body.limit,2);
+  assert.equal(context.__discoveryState().funnel.openAiFallbackSearches,0);
+  assert.equal(context.__discoveryState().funnel.companySitesChecked,1);
+});
+
 test('an aborted resolution stage does not start company verification', async () => {
   const phases=[];
   let actions=null;
