@@ -60,6 +60,7 @@ function setup(){
       if(id==='reference-customer-modal')return modal;
       if(id==='reference-segment-review')return review;
       if(id==='reference-import-status')return status;
+      if(id==='reference-list-name')return {value:'Demo'};
       return null;
     },
     querySelector(){return null;}
@@ -71,12 +72,15 @@ function setup(){
       publishReferenceModel(value){return value;},
       markReferenceDraftChanged(value){return value;},
       normalizeReferenceState(value){return value;},
-      persistReferenceWorkspaceState(_root,value){localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(value));return value;}
+      persistReferenceWorkspaceState(_root,value){localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(value));return value;},
+      async saveReferenceWorkflowState(){return {synced:true};},
+      referenceWorkflowSaveNotice(){return 'Saved locally';}
     },
     LeadIntelReferenceCustomerPortfolio:{
       migrateLegacy(value){return value;},
       normalizePortfolio(value){return value;},
       hasUnsavedCurrentListDraft(){return false;},
+      saveCurrentList(value){return value;},
       selectListSafely(value,id){return {ok:true,state:{...value,referenceCustomerPortfolio:{...value.referenceCustomerPortfolio,selectedListId:id}}};}
     },
     LeadIntelReferenceCustomerUI:{render(){}},
@@ -85,7 +89,7 @@ function setup(){
     CustomEvent:function CustomEvent(){}
   };
   vm.runInNewContext(source,context,{filename:'reference-customer-library-ui.js'});
-  return {library:context.LeadIntelReferenceCustomerLibraryUI,steps,status,review};
+  return {library:context.LeadIntelReferenceCustomerLibraryUI,steps,status,review,context,store};
 }
 
 test('View Results visibly moves an analyzed saved list into Review',async()=>{
@@ -100,4 +104,17 @@ test('View Results visibly moves an analyzed saved list into Review',async()=>{
   assert.match(status.textContent,/5 analyzed/);
   assert.match(status.textContent,/1 segment/);
   assert.equal(review.scrollCount,1);
+});
+
+test('Save Changes explicitly syncs an analyzed list without starting analysis',async()=>{
+  const {library,status,context,store}=setup();
+  let syncs=0,analysisClicks=0;
+  context.LeadIntelReferenceCustomers.saveReferenceWorkflowState=async()=>{syncs++;return {synced:true};};
+  context.document.getElementById=(()=>{const original=context.document.getElementById;return id=>id==='reference-analyze'?{click(){analysisClicks++;}}:original(id);})();
+  const before=JSON.parse(store.get('leadintel_customer_v2_state')).referenceCustomers.analyses;
+  assert.equal(await library.saveList(),'demo');
+  assert.equal(syncs,1);
+  assert.equal(analysisClicks,0);
+  assert.deepEqual(JSON.parse(store.get('leadintel_customer_v2_state')).referenceCustomers.analyses,before);
+  assert.match(status.textContent,/saved and synced.*No analysis was run/i);
 });
