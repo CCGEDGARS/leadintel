@@ -1,3 +1,4 @@
+import './company-brain.js?v=20260927-company-alignment-v1';
 import './content-language.js?v=20260924-workspace-content-english-v1';
 import './content-variants.js?v=20260921-contact-gated-v2';
 import './business-identity.js?v=20260924-workspace-profile-english-v1';
@@ -323,8 +324,15 @@ function ensureMarketStrategySeeded(){
   if(!state.market.icps.length)state.market.icps=LeadIntelMarket.buildIcpCandidates(state.profile,language);
   const generatedSignals=state.profile.recommendedSignals?.length
     ?state.profile.recommendedSignals
-    :(LeadIntelProfile.recommendedSignalsForProfile?.(state.profile)||[]);
+    :(globalThis.LeadIntelCompanyBrain?.recommendSignals?.({profile:state.profile,answers:state.answers||{}})||LeadIntelProfile.recommendedSignalsForProfile?.(state.profile)||[]);
   if(!state.profile.recommendedSignals?.length&&generatedSignals.length)state.profile.recommendedSignals=generatedSignals;
+  const previousIds=(state.market.signals||[]).filter(item=>item.active!==false&&!String(item.id||'').startsWith('custom-')).map(item=>item.id).sort().join('|');
+  const generatedIds=generatedSignals.filter(item=>item.active!==false).map(item=>item.id).sort().join('|');
+  if(previousIds&&previousIds!==generatedIds&&(state.market.researchResults||[]).length){
+    state.market.researchContextStale=true;
+    state.market.strategyApproved=false;
+    state.market.strategyApprovedAt='';
+  }
   state.market.signals=LeadIntelMarket.normalizeSignals(generatedSignals,state.market.signals);
   if(!state.market.opportunities.length)state.market.opportunities=LeadIntelMarket.buildMarketOpportunities(state.profile,state.market.icps,state.market.signals,state.market.researchResults||[],language);
   state.market=LeadIntelMarket.localizeGeneratedState(state.market,state.profile,language);
@@ -576,6 +584,7 @@ async function runMarketResearch(modeOverride=""){
   closeResearchPreview();
   const requestsGemini=["deep","intelligence"].includes(state.market.researchMode);
   state.market.researchQuality=null;
+  state.market.researchContextStale=false;
   state.market.researchQueries=queries;state.market.researchResults=[];state.market.opportunities=[];state.market.marketConditions=null;state.market.researchErrors=[];state.market.researchStatus="running";state.market.researchStartedAt=Date.now();state.market.researchPhase="finding";state.market.researchSourceStatus={openai:"running",firecrawl:"running",gemini:requestsGemini?"running":"idle"};state.market.researchVerification={status:requestsGemini?"running":"idle",provider:"gemini",role:"verification",webSearch:false,reason:"",summary:"",disagreements:[],missingEvidence:[],verifiedAt:""};state.market.researchProgress={completed:0,total:totalJobs};state.market.strategyApproved=false;saveState();renderMarketStrategy();clearInterval(researchElapsedTimer);researchElapsedTimer=setInterval(renderResearchStatus,1000);
   const researchButtons=[$("run-market-research"),$("run-detailed-research"),$("run-market-intelligence")].filter(Boolean);researchButtons.forEach(button=>{button.disabled=true;button.textContent="Researching…";});
   let openAiAvailable=true,openAiSuccesses=0,openAiFailures=0,firecrawlSuccesses=0,firecrawlFailures=0;
@@ -998,6 +1007,11 @@ function strategyHandoffModel(){
   const lowEvidenceCoverage=evidence.length>0&&evidence.length<3;
   const incompleteResearch=state.market.researchStatus==="partial"||Object.values(sources).some(value=>["partial","error","unavailable"].includes(value));
   const blockers=[];
+  const unrelated=globalThis.LeadIntelCompanyBrain?.unrelatedSignals?.(state.profile||{},signals)||[];
+  if(unrelated.length)blockers.push(`These buying signals do not match the Step 1 company's approved offer: ${unrelated.map(item=>item.name).join(", ")}. Review signals and rerun market research before finding companies.`);
+  const unrelatedRoles=globalThis.LeadIntelCompanyBrain?.unrelatedBuyerRoles?.(state.profile||{},icps)||[];
+  if(unrelatedRoles.length)blockers.push("Buyer roles include sales or HR roles for an industrial project offer. Review the Step 3 profile and active ICP buyer roles so they reflect the Step 1 company's actual buyers.");
+  if(state.market.researchContextStale)blockers.push("Saved market research used buying signals from another company context. Run market research again for the Step 1 company before finding companies.");
   if(!icps.length)blockers.push("No active ICP");
   if(!signals.length)blockers.push("No active buying signal — required before companies can be ranked for purchase intent.");
   if(!opportunities.length)blockers.push("No active market opportunity");
@@ -1011,11 +1025,13 @@ function strategyHandoffModel(){
   const customSources=state.market.researchCustomSources||[];
   if(customSources.length&&!monitoring.customSources?.length)warnings.push("Preferred research sources are saved but are not included in monitoring.");
   const actions=[];
-  if(signals.length<3)actions.push("review-signals","retry-signals");
+  if(signals.length<3||unrelated.length)actions.push("review-signals","retry-signals");
   return {
     blockers,warnings,actions,
     hasLimitedResults:lowSignalCoverage||lowEvidenceCoverage||incompleteResearch,
     summary:[
+      ["Your company (Step 1)",[state.profile?.companyName,state.website].filter(Boolean).join(" · ")||"Not set"],
+      ["Approved offer",state.profile?.priorityOffers||"Not set"],
       ["Active ICPs",icps.map(item=>item.name||item.description).filter(Boolean).join(" · ")||"None"],
       ["Buying signals",signals.map(item=>item.name).filter(Boolean).join(" · ")||"None"],
       ["Market opportunities",opportunities.map(item=>item.market).filter(Boolean).join(" · ")||"None"],
@@ -1049,8 +1065,8 @@ function reviewBuyingSignalsFromHandoff(){
   target?.querySelector('[data-signal-field="active"]')?.focus();
 }
 function retrySignalRecommendationsFromHandoff(){
-  const regenerated=LeadIntelProfile.recommendedSignalsForProfile?.(state.profile||{})||[];
-  const candidates=[...(state.profile?.recommendedSignals||[]),...regenerated,...(LeadIntelProfile.SIGNAL_LIBRARY||[])];
+  const regenerated=globalThis.LeadIntelCompanyBrain?.recommendSignals?.({profile:state.profile||{},answers:state.answers||{}})||[];
+  const candidates=[...regenerated,...(state.profile?.recommendedSignals||[]).filter(item=>item.id?.startsWith('custom-'))];
   const unique=[];const seen=new Set();
   for(const signal of candidates){const id=String(signal?.id||"").trim();if(!id||seen.has(id))continue;seen.add(id);unique.push(signal);if(unique.length===5)break;}
   state.profile.recommendedSignals=unique;

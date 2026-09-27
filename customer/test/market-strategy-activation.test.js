@@ -66,7 +66,7 @@ test("activation waits for the canonical Discovery API and recovers visibly on t
   assert.match(app, /\$\("confirm-strategy-handoff"\)\.addEventListener/);
   assert.doesNotMatch(app, /\$\("activate-market-strategy"\)\.addEventListener\("click",event=>[\s\S]{0,180}activateMarketStrategy/);
   assert.match(discovery, /window\.LeadIntelDiscoveryUI=\{open:openDiscoveryFromHandoff\}/);
-  assert.match(index, /app\.js\?v=20260924-friendly-workflow-labels-v1&icp-data-gates=1/);
+  assert.match(index, /app\.js\?v=20260927-company-alignment-v1&icp-data-gates=1/);
   assert.match(marketCss, /\.strategy-handoff-dialog/);
 });
 
@@ -84,4 +84,12 @@ test("data-dependent ICP switches are disabled until their real prerequisites ex
   assert.match(marketCss, /\.market-toggle input:disabled\+span/);
   assert.match(marketCss, /\.icp-requirement/);
   assert.match(marketCss, /\.icp-unlock-hint/);
+});
+
+test('company discovery blocks unrelated seller signals and stale research',()=>{
+  assert.match(app,/LeadIntelCompanyBrain\?\.unrelatedSignals|LeadIntelCompanyBrain\?\.recommendSignals/);
+  assert.match(app,/unrelatedSignals\?\.\(state\.profile\|\|\{\},signals\)/);
+  assert.match(app,/if\(state\.market\.researchContextStale\)blockers\.push/);
+  assert.match(app,/state\.market\.researchContextStale=true/);
+  assert.match(app,/state\.market\.researchContextStale=false/);
 });
