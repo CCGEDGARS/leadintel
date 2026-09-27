@@ -289,3 +289,9 @@ test('market research latency policy gives OpenAI enough time while keeping conc
   assert.deepEqual(Market.researchRuntimePolicy('deep'),{requestTimeoutMs:35000,concurrency:3});
   assert.deepEqual(Market.researchRuntimePolicy('intelligence'),{requestTimeoutMs:45000,concurrency:3});
 });
+
+test('normalizing a strategy preserves a stale research-context gate',()=>{
+  const state=Market.normalizeMarketState({researchContextStale:true,researchStatus:'partial',signals:[{id:'industrial-project',name:'New industrial project'}]});
+  assert.equal(state.researchContextStale,true);
+  assert.equal(Market.normalizeMarketState(state).researchContextStale,true);
+});
