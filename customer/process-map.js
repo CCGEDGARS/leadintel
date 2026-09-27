@@ -49,7 +49,7 @@ const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
 const DELIVERY_STORAGE_KEY="leadintel_customer_v2_delivery";
 const processMap=document.getElementById("commercial-process-map");
-let expandedSidebarStage=null;
+let expandedSidebarStage=0;
 
 function readProcessState(){try{return JSON.parse(localStorage.getItem(PROCESS_STORAGE_KEY)||"{}");}catch{return {};}}
 function ensureReferenceCustomerTool(){
@@ -178,7 +178,6 @@ function syncProcessMap(){
   const availability=stageAvailability();const current=currentProcessStep();
   const model=journeyModel(availability,current);
   const currentStage=model.find(stage=>stage.status==='current')||model[0];
-  if(expandedSidebarStage===null)expandedSidebarStage=currentStage?.id||1;
   const completed=model.reduce((sum,stage)=>sum+stage.completed,0);
   const total=model.reduce((sum,stage)=>sum+stage.total,0);
   const position=processMap.querySelector('[data-journey-position]');
@@ -210,7 +209,6 @@ function syncProcessMap(){
 }
 function openProcessStep(stageId){
   const target=Math.min(7,Math.max(1,Number(stageId)||1));
-  expandedSidebarStage=target;
   const availability=stageAvailability();const current=currentProcessStep();const model=journeyModel(availability,current);const stage=model.find(item=>item.id===target);
   const currentStageId=model.find(item=>item.status==='current')?.id||1;
   if(!stage?.available&&stage?.status!=='current'&&target>currentStageId){
