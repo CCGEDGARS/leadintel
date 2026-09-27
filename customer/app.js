@@ -58,9 +58,14 @@ function loadState(){
   }catch{return defaultState();}
 }
 function saveState(){
-  // Company lists are edited by the separate modal. Keep its latest targets when
-  // the main app saves a state object that was loaded before those edits.
-  try{const current=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');if(Array.isArray(current.targetCompanies))state.targetCompanies=current.targetCompanies;}catch{}
+  // The customer modal and the main journey edit the same storage key independently.
+  // Keep the modal's latest lists and activation when an older in-memory app state saves.
+  try{
+    const current=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');
+    if(Array.isArray(current.targetCompanies))state.targetCompanies=current.targetCompanies;
+    if(current.referenceCustomers&&typeof current.referenceCustomers==='object')state.referenceCustomers=current.referenceCustomers;
+    if(current.referenceCustomerPortfolio&&typeof current.referenceCustomerPortfolio==='object')state.referenceCustomerPortfolio=current.referenceCustomerPortfolio;
+  }catch{}
   localStorage.setItem(STORAGE_KEY,JSON.stringify(state));updateCompleteness();updateNavigationAvailability();window.LeadIntelJourney?.refresh?.();
 }
 function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
