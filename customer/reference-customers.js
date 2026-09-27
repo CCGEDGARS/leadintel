@@ -19,6 +19,32 @@
     }catch{}
     return state;
   }
+  async function saveReferenceWorkflowState(root){
+    const SAVE_TIMEOUT_MS=20000;
+    const bridge=root?.LeadIntelServerBridge;
+    if(!bridge?.session?.authenticated)return {synced:false,localOnly:true,message:'Sign in to sync this change to your LeadIntel account.'};
+    if(!bridge.workspace)return {synced:false,localOnly:true,message:'No LeadIntel workspace is selected. Your change remains in this browser.'};
+    if(typeof bridge.saveNow!=='function')return {synced:false,localOnly:false,message:'LeadIntel could not start workspace sync.'};
+    let timeoutId;
+    try{
+      const result=await Promise.race([
+        Promise.resolve().then(()=>bridge.saveNow({saveIntent:true,explicitSave:true})),
+        new Promise((_,reject)=>{timeoutId=setTimeout(()=>reject(new Error('Workspace sync timed out')),SAVE_TIMEOUT_MS);})
+      ]);
+      if(result?.saved===true)return {synced:true,localOnly:false,version:Number(result.version)||0};
+      return {synced:false,localOnly:false,message:bridge.conflict?'Another session changed this workspace. Resolve the sync conflict before continuing.':'LeadIntel did not confirm the save. Your change remains in this browser; click Save workspace and check the sync status.'};
+    }catch(error){
+      const message=error?.message==='Workspace sync timed out'?'Workspace sync is taking too long. Your change remains in this browser; check the sync status before leaving.':'Workspace sync failed. Your change remains in this browser; click Save workspace and check the sync status.';
+      return {synced:false,localOnly:false,message};
+    }finally{
+      clearTimeout(timeoutId);
+    }
+  }
+  function referenceWorkflowSaveNotice(action,result={}){
+    if(result.synced)return `${action} saved and synced to your LeadIntel account.`;
+    if(result.localOnly)return `${action} is saved in this browser only. ${result.message||'Sign in to sync it to your account.'}`;
+    return `${action} is saved in this browser, but account sync is not confirmed. ${result.message||'Click Save workspace and check the sync status before leaving.'}`;
+  }
   function normalizeUrl(value){const raw=clean(value);if(!raw)return '';try{const u=new URL(/^https?:\/\//i.test(raw)?raw:`https://${raw}`);return ['http:','https:'].includes(u.protocol)?u.href:'';}catch{return '';}}
   function domain(value){try{return new URL(normalizeUrl(value)).hostname.replace(/^www\./i,'').toLowerCase();}catch{return '';}}
   function normalizeTargetCompanies(rows=[],sellerWebsite=''){
@@ -197,5 +223,5 @@
   function migrateLegacyLookalikes(value=''){
     const names=String(value||'').split(/\n|;|,/).map(clean).filter(Boolean);return normalizeImportedRows(names.map(name=>({Company:name})),{sourceType:'pdf'});
   }
-  return {MAX_ROWS,MAX_ACTIVE,parseCsv,normalizeImportedRows,normalizeTargetCompanies,normalizeReferenceState,activateReferenceCustomers,activateReferenceSegments,getActiveReferenceModel,buildReferenceSegments,buildReferenceDna,migrateLegacyLookalikes,normalizeUrl,domain,persistReferenceWorkspaceState};
+  return {MAX_ROWS,MAX_ACTIVE,parseCsv,normalizeImportedRows,normalizeTargetCompanies,normalizeReferenceState,activateReferenceCustomers,activateReferenceSegments,getActiveReferenceModel,buildReferenceSegments,buildReferenceDna,migrateLegacyLookalikes,normalizeUrl,domain,persistReferenceWorkspaceState,saveReferenceWorkflowState,referenceWorkflowSaveNotice};
 });

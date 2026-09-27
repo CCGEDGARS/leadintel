@@ -135,7 +135,9 @@ let pdfModule=null;
       current.referenceCustomers.opportunityMap={customerId:rows[0].id,service,problem,dealTrigger,hypotheses,updatedAt:new Date().toISOString(),analysisAt:current.referenceCustomers.analyzedAt};
       const Portfolio=root.LeadIntelReferenceCustomerPortfolio;const saved=Portfolio?.syncCurrentList?.(current)||current;
       await writeState(saved);render();root.LeadIntelReferenceCustomerLibraryUI?.sync?.();
-    }catch(error){status.textContent=error?.message||'Opportunity analysis failed. Your customer list is unchanged.';button.disabled=false;button.textContent='Build Opportunity Map';}
+      const sync=await Ref.saveReferenceWorkflowState(root),visibleStatus=document.getElementById('customer-opportunity-status');
+      if(visibleStatus)visibleStatus.textContent=Ref.referenceWorkflowSaveNotice('Opportunity Map',sync);
+    }catch(error){const visibleStatus=document.getElementById('customer-opportunity-status');if(visibleStatus)visibleStatus.textContent=error?.message||'Opportunity analysis failed. Your customer list is unchanged.';const currentButton=document.querySelector('#customer-opportunity-form [type="submit"]');if(currentButton){currentButton.disabled=false;currentButton.textContent='Build Opportunity Map';}}
   }
   function mergeRows(state,newRows,source){
     const existing=state.referenceCustomers?.rows||[];const combined=Ref.normalizeImportedRows([...existing.map(row=>({Company:row.companyName,Website:row.website})),...newRows.map(row=>({Company:row.companyName,Website:row.website}))],{sourceType:'state'});

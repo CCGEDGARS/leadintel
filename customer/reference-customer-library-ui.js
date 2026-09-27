@@ -253,7 +253,7 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     if(!selection.ok)return;
     editorOpen=false;state=selection.state;
     const list=state.referenceCustomerPortfolio.lists.find(item=>item.id===id);if(!list)throw new Error('Customer list is unavailable');
-    if(list.active){state=Portfolio.setListActive(state,id,false);await writeState(state);syncLibraryUi();const status=document.getElementById('reference-import-status');if(status)status.textContent='Customer model deactivated. The saved list remains available.';return;}
+    if(list.active){state=Portfolio.setListActive(state,id,false);await writeState(state);const sync=await Ref.saveReferenceWorkflowState(root);syncLibraryUi();const status=document.getElementById('reference-import-status');if(status)status.textContent=sync.synced?'Customer model deactivated and synced. The saved list remains available.':Ref.referenceWorkflowSaveNotice('Customer model deactivation',sync);return;}
     let reference=Ref.normalizeReferenceState(state.referenceCustomers||{});
     if(Object.keys(reference.analyses||{}).length===1&&!mapIsReady(reference))throw new Error('Build the Opportunity Map in View Results before activating this customer model');
     if(!reference.publishedModel?.active){
@@ -269,7 +269,7 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
       reference=Ref.publishReferenceModel(reference);state.referenceCustomers=reference;
       state=Portfolio.saveCurrentList(state,{name:list.name,markets:list.markets,purpose:list.purpose});
     }
-    state=Portfolio.setListActive(state,id,true);await writeState(state);syncLibraryUi();const status=document.getElementById('reference-import-status');if(status)status.textContent='Customer model active. It now informs Company Discovery; target companies still need separate research.';
+    state=Portfolio.setListActive(state,id,true);await writeState(state);const sync=await Ref.saveReferenceWorkflowState(root);syncLibraryUi();const status=document.getElementById('reference-import-status');if(status)status.textContent=sync.synced?'Customer model active and synced. It now informs Company Discovery; target companies still need separate research.':Ref.referenceWorkflowSaveNotice('Customer model activation',sync);
   }
   async function editList(id){
     const state=snapshot();
@@ -279,7 +279,7 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     document.querySelector('.reference-current-card')?.scrollIntoView?.({behavior:'smooth',block:'nearest'});
   }
   async function createNewList(){let state=snapshot();if(blockOnUnsavedDraft('Creating a new list',state))return;editorOpen=true;state=Portfolio.newList(state);await writeState(state);syncLibraryUi();}
-  async function toggleList(id,active){let state=snapshot();state=Portfolio.setListActive(state,id,active);await writeState(state);syncLibraryUi();}
+  async function toggleList(id,active){let state=snapshot();state=Portfolio.setListActive(state,id,active);await writeState(state);const sync=await Ref.saveReferenceWorkflowState(root);syncLibraryUi();const status=document.getElementById('reference-import-status');if(status)status.textContent=Ref.referenceWorkflowSaveNotice(active?'Customer model activation':'Customer model deactivation',sync);}
   async function activateCurrent(){
     let state=snapshot();const selected=state.referenceCustomerPortfolio.lists.find(list=>list.id===state.referenceCustomerPortfolio.selectedListId)||null;
     if(!selected)throw new Error('Save the customer list before activating it');
@@ -303,9 +303,9 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     reference=Ref.publishReferenceModel(reference);reference.analyzedAt=reference.analyzedAt||new Date().toISOString();state.referenceCustomers=reference;
     state=Portfolio.saveCurrentList(state,metadataFromUi(state));
     const id=state.referenceCustomerPortfolio.selectedListId;state=Portfolio.setListActive(state,id,true);
-    button.disabled=true;await writeState(state);
+    button.disabled=true;await writeState(state);const sync=await Ref.saveReferenceWorkflowState(root);
     const status=document.getElementById('reference-action-status')||document.getElementById('reference-import-status');
-    if(status)status.textContent=`Model activated · ${reference.publishedModel?.activeCount||reference.dna?.activeCount||0} reference customers. This saved list now influences Discovery.`;
+    if(status)status.textContent=sync.synced?`Model activated and synced · ${reference.publishedModel?.activeCount||reference.dna?.activeCount||0} reference customers. This saved list now influences Discovery.`:Ref.referenceWorkflowSaveNotice('Customer model activation',sync);
     syncLibraryUi();
   }
 

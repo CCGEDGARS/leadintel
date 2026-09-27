@@ -29,6 +29,26 @@ test('opportunity map survives reference normalization and is removed with its c
   assert.equal(Ref.normalizeReferenceState({...saved,rows:[]}).opportunityMap,null);
 });
 
+test('explicit workflow saves make the cloud write durable and report when it is only local',async()=>{
+  let options;
+  const saved=await Ref.saveReferenceWorkflowState({LeadIntelServerBridge:{session:{authenticated:true},workspace:{id:'workspace-1'},saveNow:async value=>{options=value;return {saved:true,version:7};}}});
+  assert.deepEqual(options,{saveIntent:true,explicitSave:true});
+  assert.equal(saved.synced,true);
+  assert.equal(saved.version,7);
+  const local=await Ref.saveReferenceWorkflowState({LeadIntelServerBridge:{session:{authenticated:false},saveNow:async()=>{throw new Error('must not run');}}});
+  assert.equal(local.synced,false);
+  assert.equal(local.localOnly,true);
+  assert.match(Ref.referenceWorkflowSaveNotice('Opportunity Map',local),/saved in this browser only/);
+});
+
+test('building and activating a one-customer map each request confirmed workspace sync',()=>{
+  const mapUi=source('reference-customer-ui.js'),libraryUi=source('reference-customer-library-ui.js');
+  assert.match(mapUi,/await Ref\.saveReferenceWorkflowState\(root\)/);
+  assert.match(mapUi,/referenceWorkflowSaveNotice\('Opportunity Map'/);
+  assert.match(libraryUi,/await Ref\.saveReferenceWorkflowState\(root\)/);
+  assert.match(libraryUi,/referenceWorkflowSaveNotice\('Customer model activation'/);
+});
+
 test('the map is displayed only for one analyzed customer and shows unverified sizing',()=>{
   const ui=source('reference-customer-ui.js');
   assert.match(ui,/analyzed\.length!==1/);
