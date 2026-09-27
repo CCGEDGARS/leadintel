@@ -384,6 +384,28 @@ test('retry of a failed saved-target lookup uses the known domain and preserves 
   assert.equal(context.__discoveryState().funnel.companySitesChecked,1);
 });
 
+test('Saving Mode samples two saved targets and one opportunity hypothesis within its search budget',async()=>{
+  const requests=[];
+  const context=loadDiscoveryRunner({requestTimeout:1000,scaleProductionRunTimeout:1000,fetchImpl:async(url,options)=>{
+    const body=JSON.parse(options.body);requests.push({url,body});
+    const target=/site:(sodra|boliden)\.com/.exec(body.query);
+    return {ok:true,json:async()=>({data:target?[{url:`https://${target[1]}.com/news`,title:target[1],description:`${target[1]} operates in Sweden.`}]:[]})};
+  }});
+  const state=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));
+  state.targetCompanies=['Södra','Boliden','Billerud'].map((companyName,index)=>({companyName,website:`https://${['sodra','boliden','billerud'][index]}.com/`,domain:`${['sodra','boliden','billerud'][index]}.com`}));
+  state.targetMarkets=['Sweden'];state.profile.targetMarkets='Sweden';
+  state.referenceCustomers={analyzedAt:'2026-09-27T09:00:00Z',opportunityMap:{analysisAt:'2026-09-27T09:00:00Z',service:'Automation',problem:'Production efficiency',hypotheses:[{niche:'Packaging plants',sharedNeed:'Upgrade machinery',evidenceToCheck:'Factory investment'}]}};
+  context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(state));
+  await context.__runDiscovery({savingMode:true});
+  const searches=requests.filter(item=>item.url.includes('/firecrawl-search'));
+  assert.ok(searches.length<=10);
+  assert.equal(searches.filter(item=>item.body.query.includes('site:sodra.com')||item.body.query.includes('site:boliden.com')||item.body.query.includes('site:billerud.com')).filter(item=>!item.body.query.startsWith('site:')).length,2);
+  assert.equal(context.__discoveryState().funnel.marketSearchesTotal,4);
+  assert.ok(searches.every(item=>item.body.limit<=4));
+  assert.equal(context.__discoveryState().funnel.firecrawlSearchCalls,searches.length);
+  assert.ok(context.__discoveryState().funnel.companySitesChecked<=3);
+});
+
 test('an aborted resolution stage does not start company verification', async () => {
   const phases=[];
   let actions=null;

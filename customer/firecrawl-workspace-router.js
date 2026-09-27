@@ -26,7 +26,7 @@ function sanitizeSearchRequestOptions(options={}){
   if(!body||typeof body!=='object'||Array.isArray(body)||!Object.prototype.hasOwnProperty.call(body,'query'))return options;
   const query=compactSearchQuery(body.query);
   const mode=options.headers instanceof Headers?options.headers.get('X-LeadIntel-Research-Mode'):options.headers?.['X-LeadIntel-Research-Mode'];
-  const limit=mode==='full'?body.limit:Math.min(3,Math.max(1,Number(body.limit)||3));
+  const limit=mode==='full'?body.limit:Math.min(4,Math.max(1,Number(body.limit)||4));
   if(query===String(body.query??'').trim()&&limit===body.limit)return options;
   return {...options,body:JSON.stringify({...body,query,limit})};
 }

@@ -8,7 +8,7 @@ const SUPPORT_MODULES=[
   './step2-readiness-engine.js?v=20260924-friendly-workflow-labels-v1',
   './company-brain.js?v=20260924-workspace-profile-english-v1',
   './step2-first-party-intelligence.js?v=20260909-first-party-step2-v1',
-  './firecrawl-workspace-router.js?v=20260914-spinner-hard-stop-v1&adaptive-evidence=1&saving-mode=1',
+  './firecrawl-workspace-router.js?v=20260914-spinner-hard-stop-v1&adaptive-evidence=1&saving-mode=1&balanced-saving=1',
   './linkedin-signals.js?v=20260907-public-index-v1',
   './company-research-security.js?v=20260916-latency-fix-v2',
   './company-research-ui.js?v=20260926-guidance-status-v3',
