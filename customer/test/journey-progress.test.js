@@ -111,6 +111,9 @@ test('sidebar shows all seven stages and expandable substeps without changing st
   const css=fs.readFileSync(path.join(__dirname,'..','premium.css'),'utf8');
   assert.match(processMap,/marker\.hidden=false/);
   assert.match(processMap,/renderSidebarSteps\(marker,stage,expandedSidebarStage===step\)/);
+  assert.match(processMap,/let expandedSidebarStage=0;/);
+  assert.doesNotMatch(processMap,/expandedSidebarStage=currentStage/);
+  assert.doesNotMatch(processMap,/expandedSidebarStage=target/);
   assert.match(processMap,/button\.disabled=!stage\.available/);
   assert.match(processMap,/reviewMiniStep\(Number\(substep\.dataset\.stageId\),substep\.dataset\.sidebarSubstep\)/);
   assert.match(css,/\.progress-panel\{overflow-y:auto/);
