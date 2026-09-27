@@ -344,11 +344,19 @@ async function openModule(step){
 function icpActivationRequirement(icp={}){
   if(icp.type==="opportunity-led"){
     const available=(state.market.opportunities||[]).some(item=>item?.active!==false&&item?.profileOnly!==true&&Array.isArray(item?.evidence)&&item.evidence.length>0);
-    return {available,reason:"Add and select an evidence-backed market opportunity before activating this ICP."};
+    return {available,reason:"Run Market Research below, then select an opportunity with a public evidence source.",action:"Go to Market Research",target:"run-market-research"};
   }
   if(icp.type==="lookalike-led"||icp.id==="icp-reference-lookalike"){
-    const available=icp.referenceModelAvailable===true;
-    return {available,reason:"Activate at least one saved reference-customer model before activating this ICP."};
+    // Reference Customers saves independently of this module's in-memory state.
+    // Read the persisted model so an already activated customer is never shown as locked.
+    let available=false;
+    try{
+      const saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");
+      const portfolio=globalThis.LeadIntelReferenceCustomerPortfolio;
+      available=Boolean(portfolio?.getCombinedActiveModel?.(portfolio.migrateLegacy(saved))
+        ||globalThis.LeadIntelReferenceCustomers?.getActiveReferenceModel?.(saved.referenceCustomers||{}));
+    }catch{available=false;}
+    return {available,reason:"In Profile, open Add Customers, build the Opportunity Map and activate the selected customer profile.",action:"Go to Add Customers",target:"reference-customers"};
   }
   return {available:true,reason:""};
 }
@@ -377,12 +385,12 @@ function renderIcps(){
     const requirement=icpActivationRequirement(icp);
     return `<article class="icp-card ${icp.active?"active":""} ${requirement.available?"":"unavailable"}">
     <div class="icp-card-head"><label class="market-toggle" ${requirement.available?"":`title="${esc(requirement.reason)}"`}><input type="checkbox" data-icp-field="active" data-index="${index}" ${icp.active?"checked":""} ${requirement.available?"":"disabled"}><span></span></label><div><span class="icp-type">${esc(icp.type)}</span><input class="market-inline-title" data-icp-field="name" data-index="${index}" value="${esc(icp.name)}"></div></div>
+    ${requirement.available?"":`<div class="icp-unlock-hint" role="status"><strong>Why is this off?</strong><span>${esc(requirement.reason)}</span><button type="button" data-icp-unlock="${esc(requirement.target)}">${esc(requirement.action)} →</button></div>`}
     <label>Definition<textarea rows="2" data-icp-field="description" data-index="${index}">${esc(icp.description)}</textarea></label>
     <div class="icp-fields"><label>Target markets<input data-icp-field="targetMarkets" data-index="${index}" value="${esc(icp.targetMarkets)}"></label><label>Buyer roles<input data-icp-field="buyerRoles" data-index="${index}" value="${esc(icp.buyerRoles)}"></label></div>
     <div class="icp-fields"><label>Priority offers<input data-icp-field="offers" data-index="${index}" value="${esc(icp.offers)}"></label><label>Commercial value<input data-icp-field="value" data-index="${index}" value="${esc(icp.value)}"></label></div>
     <label>Exclusions<input data-icp-field="exclusions" data-index="${index}" value="${esc(icp.exclusions)}"></label>
     <p>${esc(icp.rationale)}</p>
-    ${requirement.available?"":`<div class="icp-requirement" role="status"><strong>Cannot activate yet</strong><span>${esc(requirement.reason)}</span></div>`}
   </article>`;
   }).join("");
 }
@@ -1222,6 +1230,14 @@ function bind(){
   $("monitoring-alerts").addEventListener("click",event=>{const button=event.target.closest('[data-monitor-alert-read]');if(button)markMonitoringAlertRead(button.dataset.monitorAlertRead);});
   $("signal-designer").addEventListener("click",e=>{const btn=e.target.closest("[data-remove-signal]");if(btn)removeSignal(Number(btn.dataset.removeSignal));});
   [$("icp-list"),$("market-opportunities")].forEach(container=>{container.addEventListener("change",()=>readMarketEdits());});
+  $("icp-list").addEventListener("click",event=>{
+    const button=event.target.closest("[data-icp-unlock]");if(!button)return;
+    if(button.dataset.icpUnlock==="run-market-research"){$("run-market-research")?.scrollIntoView({behavior:"smooth",block:"center"});$("run-market-research")?.focus({preventScroll:true});return;}
+    if(button.dataset.icpUnlock==="reference-customers"){
+      window.dispatchEvent(new CustomEvent("leadintel:open-module",{detail:{step:2,journeyStage:2}}));
+      setTimeout(()=>document.querySelector("[data-reference-customers-manage]")?.click(),80);
+    }
+  });
   $("signal-designer").addEventListener("change",()=>{readMarketEdits();renderResearchControls();renderMonitoringControls();});
   $("reset-workspace").addEventListener("click",openResetCenter);
   document.querySelectorAll("[data-close-reset-center]").forEach(node=>node.addEventListener("click",closeResetCenter));
@@ -1238,6 +1254,10 @@ function bind(){
   });
   window.addEventListener("leadintel:company-research-updated",()=>{
     state=loadState();editMode=false;syncInputsFromState();updateCompleteness();
+  });
+  window.addEventListener("leadintel:reference-customers-updated",()=>{
+    state=loadState();
+    if(Number(state.step)===4&&state.profile){ensureMarketStrategySeeded();renderMarketStrategy();}
   });
 }
 function init(){
