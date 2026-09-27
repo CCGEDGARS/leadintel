@@ -49,6 +49,7 @@ const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
 const DELIVERY_STORAGE_KEY="leadintel_customer_v2_delivery";
 const processMap=document.getElementById("commercial-process-map");
+let expandedSidebarStage=null;
 
 function readProcessState(){try{return JSON.parse(localStorage.getItem(PROCESS_STORAGE_KEY)||"{}");}catch{return {};}}
 function ensureReferenceCustomerTool(){
@@ -143,6 +144,29 @@ function renderStageGuide(stage){
   const nodes=stage.steps.map(item=>{const row=document.createElement("li");row.className=item.complete?"complete":"pending";const button=document.createElement("button");button.type="button";button.className="stage-mini-step-link";button.dataset.stageMiniStep=item.id;button.dataset.stageId=stage.id;button.setAttribute("aria-label",`Review ${item.label}`);const marker=document.createElement("span");marker.setAttribute("aria-hidden","true");marker.textContent=item.complete?"✓":"";const label=document.createElement("strong");label.textContent=item.label;button.append(marker,label);if(item.optional){const badge=document.createElement("em");badge.textContent="Optional";button.append(badge);}row.append(button);return row;});
   list.replaceChildren(...nodes);
 }
+function renderSidebarSteps(marker,stage,expanded){
+  let toggle=marker.querySelector('[data-sidebar-expand]');
+  if(!toggle){
+    toggle=document.createElement('button');toggle.type='button';toggle.className='sidebar-expand';toggle.dataset.sidebarExpand='true';
+    marker.append(toggle);
+  }
+  toggle.textContent=expanded?'Hide steps ↑':'Show steps ↓';
+  toggle.setAttribute('aria-label',`${expanded?'Hide':'Show'} ${stage.name} steps`);
+  toggle.setAttribute('aria-expanded',String(expanded));
+  let list=marker.querySelector('[data-sidebar-substeps]');
+  if(!list){list=document.createElement('ol');list.className='sidebar-substeps';list.dataset.sidebarSubsteps='true';marker.append(list);}
+  list.hidden=!expanded;
+  const nodes=stage.steps.map(item=>{
+    const row=document.createElement('li');
+    const button=document.createElement('button');button.type='button';button.dataset.sidebarSubstep=item.id;button.dataset.stageId=stage.id;
+    button.disabled=!stage.available&&stage.status!=='current'&&stage.status!=='complete'&&stage.status!=='skipped';
+    button.setAttribute('aria-label',`${item.complete?'Completed: ':'Review: '}${item.label}`);
+    const symbol=document.createElement('span');symbol.textContent=item.complete?'✓':'○';symbol.setAttribute('aria-hidden','true');
+    const label=document.createElement('span');label.textContent=item.label;
+    button.append(symbol,label);row.append(button);return row;
+  });
+  list.replaceChildren(...nodes);
+}
 function processToast(message){
   const toast=document.getElementById("toast");
   if(!toast)return;
@@ -153,8 +177,8 @@ function syncProcessMap(){
   if(!processMap)return;
   const availability=stageAvailability();const current=currentProcessStep();
   const model=journeyModel(availability,current);
-  const visibleIds=window.LeadIntelJourneyProgress?.visibleStageIds?.(model)||[current];
   const currentStage=model.find(stage=>stage.status==='current')||model[0];
+  if(expandedSidebarStage===null)expandedSidebarStage=currentStage?.id||1;
   const completed=model.reduce((sum,stage)=>sum+stage.completed,0);
   const total=model.reduce((sum,stage)=>sum+stage.total,0);
   const position=processMap.querySelector('[data-journey-position]');
@@ -176,15 +200,17 @@ function syncProcessMap(){
   });
   document.querySelectorAll("[data-workflow-stage]").forEach(marker=>{
     const step=Number(marker.dataset.workflowStage),stage=model.find(item=>item.id===step);if(!stage)return;
-    marker.hidden=!visibleIds.includes(step);
+    marker.hidden=false;
     marker.classList.toggle("available",stage.available);marker.classList.toggle("active",stage.status==="current");marker.classList.toggle("complete",stage.status==="complete");marker.classList.toggle("skipped",stage.status==="skipped");marker.setAttribute("aria-disabled",(stage.available||step<=currentStage?.id)?"false":"true");
     if(stage.status==="current")marker.setAttribute("aria-current","step");else marker.removeAttribute("aria-current");
     const label=marker.querySelector("[data-sidebar-stage-state]");if(label)label.textContent=`${stageStatusLabel(stage)} · ${stage.completed}/${stage.total}`;
+    renderSidebarSteps(marker,stage,expandedSidebarStage===step);
   });
   renderStageGuide(currentStage);
 }
 function openProcessStep(stageId){
   const target=Math.min(7,Math.max(1,Number(stageId)||1));
+  expandedSidebarStage=target;
   const availability=stageAvailability();const current=currentProcessStep();const model=journeyModel(availability,current);const stage=model.find(item=>item.id===target);
   const currentStageId=model.find(item=>item.status==='current')?.id||1;
   if(!stage?.available&&stage?.status!=='current'&&target>currentStageId){
@@ -221,7 +247,13 @@ function reviewMiniStep(stageId,itemId){
 if(processMap){
   processMap.addEventListener("click",event=>{const substep=event.target.closest("[data-stage-mini-step]");if(substep){reviewMiniStep(Number(substep.dataset.stageId),substep.dataset.stageMiniStep);return;}const button=event.target.closest("[data-process-step]");if(button)openProcessStep(button.dataset.processStep);});
   const steps=document.querySelector(".steps");
-  steps?.addEventListener("keydown",event=>{const marker=event.target.closest("[data-workflow-stage]");if(!marker||!["Enter"," "].includes(event.key))return;event.preventDefault();openProcessStep(marker.dataset.workflowStage);});
+  steps?.addEventListener('click',event=>{
+    const toggle=event.target.closest('[data-sidebar-expand]');
+    if(toggle){event.preventDefault();event.stopPropagation();const id=Number(toggle.closest('[data-workflow-stage]')?.dataset.workflowStage);expandedSidebarStage=expandedSidebarStage===id?0:id;syncProcessMap();return;}
+    const substep=event.target.closest('[data-sidebar-substep]');
+    if(substep){event.preventDefault();event.stopPropagation();reviewMiniStep(Number(substep.dataset.stageId),substep.dataset.sidebarSubstep);}
+  },true);
+  steps?.addEventListener("keydown",event=>{if(event.target.closest('[data-sidebar-expand],[data-sidebar-substep]'))return;const marker=event.target.closest("[data-workflow-stage]");if(!marker||!["Enter"," "].includes(event.key))return;event.preventDefault();openProcessStep(marker.dataset.workflowStage);});
   document.getElementById("company-website")?.addEventListener("input",()=>setTimeout(syncProcessMap,0));
   document.getElementById("target-market-selector")?.addEventListener("click",()=>setTimeout(syncProcessMap,0));
   window.addEventListener("leadintel:website-synced",syncProcessMap);
