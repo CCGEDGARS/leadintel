@@ -16,8 +16,8 @@ test('customer lists explain what is active, mapped, and saved for research',()=
   assert.match(ui,/Build the Opportunity Map in View Results before activating/);
   assert.match(ui,/Review and select the suggested customer profile before activation/);
   assert.match(ui,/source:'target-companies'/);
-  assert.match(ui,/Customer model active\. It now informs Company Discovery/);
-  assert.match(ui,/Customer model deactivated\. The saved list remains available/);
+  assert.match(ui,/Customer model active and synced\. It now informs Company Discovery/);
+  assert.match(ui,/Customer model deactivated and synced\. The saved list remains available/);
 });
 
 test('target research handoff identifies Step 4 and the next search action',()=>{
