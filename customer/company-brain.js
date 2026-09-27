@@ -19,6 +19,7 @@
   }
 
   const OFFER_CATEGORIES=[
+    ["industrial-projects",/\b(industrial project|industrial engineering|project delivery|industrial installation|metal fabrication|metālapstrād|rūpniecisk\w* projekt|iekārtu uzstādīšan)/i],
     ["sales-training",/\b(sales training|sales coach|sales coaching|sales methodology|pārdošanas apmāc|pārdošanas trener|pārdošanas kouč)/i],
     ["coaching",/\b(coaching|business coach|business coaching|koučing|koučs|mentor(?:ing)?|mentoring|mentorings)\b/i],
     ["leadership-development",/\b(leadership|vadīb(?:a|as)|manager training|vadītāju apmāc)/i],
@@ -33,16 +34,21 @@
   function detectOfferCategories(text){return OFFER_CATEGORIES.filter(([,re])=>re.test(text)).map(([id])=>id);}
 
   function classifyCompany(input={}){
-    const text=allText(input);
+    // The seller's approved offer is authoritative. A scraped page may mention
+    // sales or training in a customer story without making that the seller's offer.
+    const approvedOffer=clean(input?.profile?.priorityOffers||input?.answers?.priority_offers);
+    const text=approvedOffer||allText(input);
     const offerCategories=detectOfferCategories(text);
     let businessType="other";
     const professionalCount=["sales-training","coaching","leadership-development","ai-consulting","marketing"].filter(id=>offerCategories.includes(id)).length;
     if(professionalCount>=1&&/\b(training|coaching|consult|mentor|apmāc|kouč|konsult|mārketing|marketing)\b/i.test(text))businessType="professional-services";
+    else if(offerCategories.includes("industrial-projects"))businessType="industrial-services";
     else if(offerCategories.includes("software"))businessType="software";
     else if(offerCategories.includes("manufacturing"))businessType="manufacturer";
     else if(offerCategories.includes("distribution"))businessType="distributor";
     const likelyBuyerFunctions=[];
     if(businessType==="professional-services")likelyBuyerFunctions.push("CEO/Owner","Sales/Commercial Leadership","HR/L&D","Team Leadership");
+    if(businessType==="industrial-services")likelyBuyerFunctions.push("Project Director","Operations","Production","Procurement","CEO/Owner");
     if(businessType==="software")likelyBuyerFunctions.push("CEO/Owner","Operations","IT/Digital","Commercial Leadership");
     if(businessType==="manufacturer"||businessType==="distributor")likelyBuyerFunctions.push("Procurement","Operations","Production","CEO/Owner");
     const evidence=(input.scrapedSources||[]).filter(item=>clean(item?.text)).slice(0,5).map((item,index)=>({id:clean(item.id)||`E${index+1}`,url:clean(item.url),title:clean(item.title)}));
@@ -116,6 +122,7 @@
   }
 
   const SIGNALS={
+    "industrial-project":{id:"industrial-project",name:"New industrial project or production contract",priority:"High"},
     "sales-leadership-change":{id:"sales-leadership-change",name:"New Sales or Commercial Director",priority:"High"},
     "sales-team-hiring":{id:"sales-team-hiring",name:"Sales team hiring or expansion",priority:"High"},
     "sales-transformation":{id:"sales-transformation",name:"Sales transformation or restructuring",priority:"High"},
@@ -142,6 +149,9 @@
       if(/launch|new product|new service|jaun\w* produkt|jaun\w* pakalpoj/i.test(triggerText))add("product-launch");
       if(/merger|acquisition|m&a|apvienošan|iegāde/i.test(triggerText))add("merger-integration");
     }else{
+      if(classification.businessType==="industrial-services"){
+        add("industrial-project");add("facility-expansion");add("capital-investment");
+      }
       if(/facility|factory|new site|capacity expansion|rūpnīc|ražotn|jaun\w* viet/i.test(triggerText))add("facility-expansion");
       if(/capex|moderni[sz]ation|equipment investment|capital investment|moderniz|iekārtu iegād/i.test(triggerText))add("capital-investment");
       if(/new market|market entry|export|international expansion|jaun\w* tirg|eksport/i.test(triggerText))add("market-entry");
@@ -154,6 +164,7 @@
     if(id==="tender")return "Explicit procurement/tender trigger was supplied or evidenced.";
     if(triggerText&&new RegExp(id==="market-entry"?"market|export":id==="product-launch"?"launch|product|service":"$a","i").test(triggerText))return "Matches an explicit buying trigger supplied for this workspace.";
     if(classification.businessType==="professional-services")return "Recommended because this event commonly creates demand for the company's sales, leadership, coaching or AI-enabled commercial services.";
+    if(classification.businessType==="industrial-services")return "Candidate event linked to industrial project delivery; verify demand for this seller's specific service before qualifying a company.";
     return "Recommended because the event matches the company's classified business model and supplied buying-trigger context.";
   }
 
@@ -195,7 +206,7 @@
     if(typeof originalNormalize==="function")engine.normalizeSavedState=function(value={}){
       const normalized=originalNormalize(value);
       if(normalized.profile&&typeof normalized.profile==="object"){
-        const companyClassification=normalized.profile.companyClassification||classifyCompany({...normalized,profile:normalized.profile});
+        const companyClassification=classifyCompany({...normalized,profile:normalized.profile});
         normalized.profile.companyClassification=companyClassification;
         normalized.profile.companyClaims=normalized.profile.companyClaims||claimsForProfile(normalized.profile,normalized);
         normalized.profile.recommendedSignals=recommendSignals({...normalized,profile:normalized.profile,companyClassification});
@@ -209,5 +220,16 @@
     return engine;
   }
 
-  return {claim,classifyCompany,derivePainPoints,deriveFrameworks,recommendSignals,install};
+  const SALES_SIGNAL_IDS=new Set(["sales-leadership-change","sales-team-hiring","sales-transformation","ai-sales-tech","leadership-development"]);
+  function unrelatedSignals(profile={},signals=[]){
+    const classification=classifyCompany({profile});
+    if(classification.businessType==="professional-services")return [];
+    return (signals||[]).filter(signal=>signal?.active!==false&&SALES_SIGNAL_IDS.has(clean(signal?.id)));
+  }
+  function unrelatedBuyerRoles(profile={},icps=[]){
+    if(classifyCompany({profile}).businessType!=="industrial-services")return [];
+    const roles=[clean(profile.decisionMakers),...(icps||[]).filter(item=>item.active!==false).map(item=>clean(item.buyerRoles))].filter(Boolean);
+    return unique(roles.filter(value=>/\b(sales|commercial director|hr|human resources|learning and development)\b/i.test(value)));
+  }
+  return {claim,classifyCompany,derivePainPoints,deriveFrameworks,recommendSignals,unrelatedSignals,unrelatedBuyerRoles,install};
 });
