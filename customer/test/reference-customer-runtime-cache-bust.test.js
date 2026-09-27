@@ -23,7 +23,7 @@ test('Reference Customer action modules use a fresh cache key end to end',()=>{
   assert.match(supportLoader,/reference-customer-ui\.js\?v=20260927-opportunity-map-durable-v1/);
   assert.match(supportLoader,/reference-customer-ai-runtime\.js\?v=20260927-save-only-v1/);
   assert.match(supportLoader,/lookalike-discovery\.js\?v=20260924-reference-consensus-v1/);
-  assert.match(index,/shell-support-loader\.js\?v=20260927-save-only-v1/);
+  assert.match(index,/shell-support-loader\.js\?v=20260927-company-alignment-v1/);
 });
 
 test('clear-list action uses branded inline confirmation rather than native browser confirm',()=>{
