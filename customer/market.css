@@ -204,11 +204,14 @@
 
 
 /* ICPs that depend on real customer or opportunity data stay visibly unavailable. */
-.icp-card.unavailable{background:#f6f7f5;border-color:#d9dfdb;opacity:.72}
+.icp-card.unavailable{background:#f9faf8;border-color:#d9dfdb;opacity:1}
 .market-toggle input:disabled+span{background:#d7ddda;cursor:not-allowed;box-shadow:inset 0 0 0 1px #c7cfca}
 .icp-requirement{display:grid;gap:4px;margin-top:16px;padding:12px 14px;border:1px solid #dfcfaa;border-radius:10px;background:#fffaf0;color:#755b1d}
 .icp-requirement strong{font-size:12px}
 .icp-requirement span{font-size:11.5px;line-height:1.45;color:#756b54}
+.icp-unlock-hint{display:grid;gap:6px;margin:13px 0 15px;padding:12px 14px;border:1px solid #dfcfaa;border-radius:10px;background:#fffaf0;color:#674c14;font-size:12px;line-height:1.45}
+.icp-unlock-hint strong{font-size:13px}.icp-unlock-hint button{justify-self:start;border:1px solid #bda774;border-radius:7px;background:#fff;color:#4e3c17;padding:7px 10px;font:700 12px 'DM Sans',sans-serif;cursor:pointer}
+.icp-unlock-hint button:hover,.icp-unlock-hint button:focus-visible{outline:2px solid #836719;outline-offset:2px}
 
 /* Evidence-backed market condition pack */
 .market-conditions{margin:18px 0 22px;padding:20px;border:1px solid #c6d9d1;border-radius:16px;background:#f7fbf9}
