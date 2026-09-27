@@ -101,7 +101,7 @@ test('View Results selects the requested list and scrolls to its segment review'
 
 
 test('completed enrichment exposes update and copy save modes',()=>{
-  assert.match(ui,/Save Updated List/);
+  assert.match(ui,/Save Changes/);
   assert.match(ui,/data-save-reference-list-as-new/);
   assert.match(ui,/>Save as New List<\/button>/);
   assert.match(ui,/async function saveAsNewList\(\)/);
