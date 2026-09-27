@@ -106,6 +106,17 @@ test('a later active stage keeps unfinished earlier stages visible for editing',
   assert.match(processMap,/reviewMiniStep/);
 });
 
+test('sidebar shows all seven stages and expandable substeps without changing stage access',()=>{
+  const processMap=fs.readFileSync(path.join(__dirname,'..','process-map.js'),'utf8');
+  const css=fs.readFileSync(path.join(__dirname,'..','premium.css'),'utf8');
+  assert.match(processMap,/marker\.hidden=false/);
+  assert.match(processMap,/renderSidebarSteps\(marker,stage,expandedSidebarStage===step\)/);
+  assert.match(processMap,/button\.disabled=!stage\.available/);
+  assert.match(processMap,/reviewMiniStep\(Number\(substep\.dataset\.stageId\),substep\.dataset\.sidebarSubstep\)/);
+  assert.match(css,/\.progress-panel\{overflow-y:auto/);
+  assert.match(css,/\.steps \.sidebar-substeps\[hidden\]\{display:none\}/);
+});
+
 test('friendly journey stages route through the preserved internal module IDs',()=>{
   assert.equal(Journey.journeyStageForModuleStep(2),2);
   assert.equal(Journey.journeyStageForModuleStep(3),2);
