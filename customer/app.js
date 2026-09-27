@@ -1010,7 +1010,7 @@ function strategyHandoffModel(){
   const unrelated=globalThis.LeadIntelCompanyBrain?.unrelatedSignals?.(state.profile||{},signals)||[];
   if(unrelated.length)blockers.push(`These buying signals do not match the Step 1 company's approved offer: ${unrelated.map(item=>item.name).join(", ")}. Review signals and rerun market research before finding companies.`);
   const unrelatedRoles=globalThis.LeadIntelCompanyBrain?.unrelatedBuyerRoles?.(state.profile||{},icps)||[];
-  if(unrelatedRoles.length)blockers.push("Buyer roles include sales or HR roles for an industrial project offer. Review the Step 3 profile and active ICP buyer roles so they reflect the Step 1 company's actual buyers.");
+  if(unrelatedRoles.length)blockers.push("Buyer roles include sales or HR roles for an industrial project offer. Use industrial buyer roles below to replace them with project, operations, production, engineering, procurement and owner roles. Your saved research will remain available.");
   if(state.market.researchContextStale)blockers.push("Saved market research used buying signals from another company context. Run market research again for the Step 1 company before finding companies.");
   if(!icps.length)blockers.push("No active ICP");
   if(!signals.length)blockers.push("No active buying signal — required before companies can be ranked for purchase intent.");
@@ -1026,6 +1026,7 @@ function strategyHandoffModel(){
   if(customSources.length&&!monitoring.customSources?.length)warnings.push("Preferred research sources are saved but are not included in monitoring.");
   const actions=[];
   if(signals.length<3||unrelated.length)actions.push("review-signals","retry-signals");
+  if(unrelatedRoles.length)actions.push("repair-buyer-roles");
   return {
     blockers,warnings,actions,
     hasLimitedResults:lowSignalCoverage||lowEvidenceCoverage||incompleteResearch,
@@ -1050,9 +1051,11 @@ function renderStrategyHandoff(){
   const repairActions=$("strategy-handoff-repair-actions");
   const reviewSignals=$("review-buying-signals");
   const retrySignals=$("retry-signal-recommendations");
+  const repairRoles=$("repair-buyer-roles");
   reviewSignals.hidden=!model.actions.includes("review-signals");
   retrySignals.hidden=!model.actions.includes("retry-signals");
-  repairActions.hidden=reviewSignals.hidden&&retrySignals.hidden;
+  repairRoles.hidden=!model.actions.includes("repair-buyer-roles");
+  repairActions.hidden=reviewSignals.hidden&&retrySignals.hidden&&repairRoles.hidden;
   const confirm=$("confirm-strategy-handoff");
   confirm.disabled=Boolean(model.blockers.length);
   confirm.textContent=model.blockers.length?"Complete Required Items":model.hasLimitedResults?"Continue with limited results →":state.market.strategyApproved?"Continue to Companies →":"Activate Strategy & Continue →";
@@ -1063,6 +1066,14 @@ function reviewBuyingSignalsFromHandoff(){
   const target=$("signal-designer");
   target?.scrollIntoView({behavior:"smooth",block:"center"});
   target?.querySelector('[data-signal-field="active"]')?.focus();
+}
+async function repairBuyerRolesFromHandoff(){
+  const repair=globalThis.LeadIntelCompanyBrain?.repairIndustrialBuyerRoles;
+  if(!repair)return;
+  state=repair(state);
+  saveState();renderProfile();renderMarketStrategy();renderStrategyHandoff();
+  const saved=await window.LeadIntelWorkspacePersistence?.saveWorkspace?.();
+  if(!saved)showToast("Buyer roles changed in this browser. Save workspace before leaving.");
 }
 function retrySignalRecommendationsFromHandoff(){
   const regenerated=globalThis.LeadIntelCompanyBrain?.recommendSignals?.({profile:state.profile||{},answers:state.answers||{}})||[];
@@ -1247,6 +1258,7 @@ function bind(){
     openStrategyHandoff();
   });$("cancel-strategy-handoff").addEventListener("click",closeStrategyHandoff);$("confirm-strategy-handoff").addEventListener("click",()=>void activateMarketStrategy());$("strategy-handoff-dialog").addEventListener("click",event=>{if(event.target===$("strategy-handoff-dialog"))closeStrategyHandoff();});$("save-monitoring").addEventListener("click",saveMonitoringConfig);$("run-monitoring-now").addEventListener("click",runMonitoringNow);$("research-mode").addEventListener("change",()=>{state.market.researchMode=normalizeResearchMode($("research-mode").value);saveState();renderResearchControls();});$("research-source-types").addEventListener("change",readResearchSettings);$("research-custom-sources").addEventListener("change",()=>{readResearchSettings();renderSavedResearchWebsites();});$("research-saved-websites")?.addEventListener("click",event=>{const button=event.target.closest("[data-remove-research-website]");if(button)removeSavedResearchWebsite(button.dataset.removeResearchWebsite);});$("research-instructions").addEventListener("change",readResearchSettings);
   $("review-buying-signals").addEventListener("click",reviewBuyingSignalsFromHandoff);
+  $("repair-buyer-roles").addEventListener("click",()=>void repairBuyerRolesFromHandoff());
   $("retry-signal-recommendations").addEventListener("click",retrySignalRecommendationsFromHandoff);
   $("monitoring-alerts").addEventListener("click",event=>{const button=event.target.closest('[data-monitor-alert-read]');if(button)markMonitoringAlertRead(button.dataset.monitorAlertRead);});
   $("signal-designer").addEventListener("click",e=>{const btn=e.target.closest("[data-remove-signal]");if(btn)removeSignal(Number(btn.dataset.removeSignal));});
