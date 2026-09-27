@@ -23,7 +23,7 @@ test('Firecrawl router compacts overlong market search queries before backend va
   const options={
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({query:raw,limit:4})
+    body:JSON.stringify({query:raw,limit:8})
   };
   const sanitized=sanitizeSearchRequestOptions(options);
   const body=JSON.parse(sanitized.body);
@@ -31,7 +31,7 @@ test('Firecrawl router compacts overlong market search queries before backend va
   assert.ok(body.query.length>0);
   assert.ok(body.query.length<=600);
   assert.equal(/\s{2,}/.test(body.query),false);
-  assert.equal(body.limit,3);
+  assert.equal(body.limit,4);
   assert.equal(sanitized.method,'POST');
 });
 
