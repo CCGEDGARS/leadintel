@@ -66,7 +66,7 @@ test("activation waits for the canonical Discovery API and recovers visibly on t
   assert.match(app, /\$\("confirm-strategy-handoff"\)\.addEventListener/);
   assert.doesNotMatch(app, /\$\("activate-market-strategy"\)\.addEventListener\("click",event=>[\s\S]{0,180}activateMarketStrategy/);
   assert.match(discovery, /window\.LeadIntelDiscoveryUI=\{open:openDiscoveryFromHandoff\}/);
-  assert.match(index, /app\.js\?v=20260927-company-alignment-v1&icp-data-gates=1/);
+  assert.match(index, /app\.js\?v=20260927-buyer-role-repair-v1&icp-data-gates=1/);
   assert.match(marketCss, /\.strategy-handoff-dialog/);
 });
 
@@ -92,4 +92,12 @@ test('company discovery blocks unrelated seller signals and stale research',()=>
   assert.match(app,/if\(state\.market\.researchContextStale\)blockers\.push/);
   assert.match(app,/state\.market\.researchContextStale=true/);
   assert.match(app,/state\.market\.researchContextStale=false/);
+});
+
+test('buyer-role mismatch offers a no-research repair directly in the review dialog',()=>{
+  assert.match(index,/id="repair-buyer-roles"[^>]*>Use industrial buyer roles · keep research/);
+  assert.match(app,/async function repairBuyerRolesFromHandoff\(\)/);
+  assert.match(app,/state=repair\(state\)/);
+  assert.match(app,/renderStrategyHandoff\(\);\s*const saved=await window\.LeadIntelWorkspacePersistence\?\.saveWorkspace\?\.\(\)/);
+  assert.match(app,/repairRoles\.hidden=!model\.actions\.includes\("repair-buyer-roles"\)/);
 });

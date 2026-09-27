@@ -133,3 +133,17 @@ test('industrial project buyer roles are checked before company discovery',()=>{
   assert.equal(Brain.unrelatedBuyerRoles(profile,[{active:true,buyerRoles:'Sales Director'}]).length,2);
   assert.deepEqual(Brain.unrelatedBuyerRoles({priorityOffers:'Corporate sales training',decisionMakers:'Sales Director'},[]),[]);
 });
+
+test('buyer-role repair keeps market evidence, opportunities, signals, and the active seller',()=>{
+  const original={website:'https://www.ercon.lv/',profile:{companyName:'Ercon',priorityOffers:'Full-service industrial project delivery',decisionMakers:'CEO/Owner; Sales Director'},market:{icps:[{id:'core',buyerRoles:'Sales Director',active:true}],signals:[{id:'industrial-project',name:'New industrial project'}],researchResults:[{url:'https://example.com/evidence'}],opportunities:[{market:'Sweden'}],researchStatus:'partial',strategyApproved:true}};
+  const fixed=Brain.repairIndustrialBuyerRoles(original);
+  assert.deepEqual(Brain.unrelatedBuyerRoles(fixed.profile,fixed.market.icps),[]);
+  assert.match(fixed.profile.decisionMakers,/Project Director; Operations Director/);
+  assert.equal(fixed.market.icps[0].buyerRoles,fixed.profile.decisionMakers);
+  assert.deepEqual(fixed.market.researchResults,original.market.researchResults);
+  assert.deepEqual(fixed.market.opportunities,original.market.opportunities);
+  assert.deepEqual(fixed.market.signals,original.market.signals);
+  assert.equal(fixed.website,original.website);
+  assert.equal(fixed.market.strategyApproved,false);
+  assert.equal(original.profile.decisionMakers,'CEO/Owner; Sales Director');
+});

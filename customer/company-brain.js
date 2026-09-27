@@ -231,5 +231,11 @@
     const roles=[clean(profile.decisionMakers),...(icps||[]).filter(item=>item.active!==false).map(item=>clean(item.buyerRoles))].filter(Boolean);
     return unique(roles.filter(value=>/\b(sales|commercial director|hr|human resources|learning and development)\b/i.test(value)));
   }
-  return {claim,classifyCompany,derivePainPoints,deriveFrameworks,recommendSignals,unrelatedSignals,unrelatedBuyerRoles,install};
+  function repairIndustrialBuyerRoles(state={}){
+    const profile=state.profile||{},icps=state.market?.icps||[];
+    if(classifyCompany({profile}).businessType!=="industrial-services"||!unrelatedBuyerRoles(profile,icps).length)return state;
+    const roles="Project Director; Operations Director; Production Director; Engineering Director; Procurement Director; CEO/Owner";
+    return {...state,profile:{...profile,decisionMakers:roles},market:{...state.market,icps:icps.map(icp=>({...icp,buyerRoles:roles})),strategyApproved:false,strategyApprovedAt:""}};
+  }
+  return {claim,classifyCompany,derivePainPoints,deriveFrameworks,recommendSignals,unrelatedSignals,unrelatedBuyerRoles,repairIndustrialBuyerRoles,install};
 });
