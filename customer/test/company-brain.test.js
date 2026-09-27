@@ -110,3 +110,26 @@ test('profile pain-point generation follows the English workspace policy and ref
   const confirmed={...saved,profile:{...saved.profile,customerPainPointsStatus:'Customer-confirmed'}};
   assert.equal(engine.normalizeSavedState(confirmed).profile.customerPainPoints,latvianFallback);
 });
+
+test('industrial seller offer takes precedence over unrelated scraped sales wording and stale classification',()=>{
+  const input={website:'https://www.ercon.lv/',profile:{companyName:'Ercon',priorityOffers:'Full-service industrial project delivery',companyOverview:'Industrial engineering and installation',companyClassification:{businessType:'professional-services',offerCategories:['sales-training']},recommendedSignals:[{id:'sales-team-hiring',name:'Sales team hiring or expansion'}]},scrapedSources:[{text:'Our partner offered sales training at this event.'}]};
+  const classified=Brain.classifyCompany(input);
+  assert.equal(classified.businessType,'industrial-services');
+  const recommended=Brain.recommendSignals({...input,companyClassification:classified,profile:{...input.profile,companyClassification:classified}});
+  assert.deepEqual(recommended.map(item=>item.id),['industrial-project','facility-expansion','capital-investment']);
+  assert.deepEqual(Brain.unrelatedSignals(input.profile,input.profile.recommendedSignals).map(item=>item.id),['sales-team-hiring']);
+});
+
+test('loading a saved seller profile replaces stale classification and sales recommendations',()=>{
+  const engine={normalizeSavedState(value){return structuredClone(value);},buildCompanyIntelligenceProfile(value){return value.profile;}};
+  Brain.install({LeadIntelProfile:engine});
+  const saved=engine.normalizeSavedState({website:'https://www.ercon.lv/',profile:{companyName:'Ercon',priorityOffers:'Full-service industrial project delivery',companyClassification:{businessType:'professional-services',offerCategories:['sales-training']},recommendedSignals:[{id:'sales-team-hiring',name:'Sales team hiring or expansion'}]}});
+  assert.equal(saved.profile.companyClassification.businessType,'industrial-services');
+  assert.deepEqual(saved.profile.recommendedSignals.map(item=>item.id),['industrial-project','facility-expansion','capital-investment']);
+});
+
+test('industrial project buyer roles are checked before company discovery',()=>{
+  const profile={priorityOffers:'Full-service industrial project delivery',decisionMakers:'CEO/Owner; Sales/Commercial Director'};
+  assert.equal(Brain.unrelatedBuyerRoles(profile,[{active:true,buyerRoles:'Sales Director'}]).length,2);
+  assert.deepEqual(Brain.unrelatedBuyerRoles({priorityOffers:'Corporate sales training',decisionMakers:'Sales Director'},[]),[]);
+});
