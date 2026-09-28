@@ -13,7 +13,7 @@ const MAX_DISCOVERY_COMPANY_CHECKS=30;
 const SAVING_SEARCH_RESULT_LIMIT=4;
 const SAVING_COMPANY_CHECK_LIMIT=3;
 const SAVING_FIRECRAWL_CALL_LIMIT=10;
-const ASSET_VERSION="20260925-pipeline-choice-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1";
+const ASSET_VERSION="20260928-proxy-cors-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20260925-buyers-stage-view-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -166,7 +166,7 @@ async function scrapeCompanyWebsiteForVerification(queryMeta,runSignal){
   const timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS);
   try{
     const url=`https://${queryMeta.domain}/`;
-    const response=await fetch(`${INTELLIGENCE_PROXY}/firecrawl-scrape`,{method:"POST",headers:{"Content-Type":"application/json","X-LeadIntel-Research-Mode":"saving"},body:JSON.stringify({url,formats:["markdown"],onlyMainContent:true,timeout:DISCOVERY_REQUEST_TIMEOUT_MS}),signal:controller.signal});
+    const response=await fetch(`${INTELLIGENCE_PROXY}/firecrawl-scrape`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url,formats:["markdown"],onlyMainContent:true,timeout:DISCOVERY_REQUEST_TIMEOUT_MS}),signal:controller.signal});
     if(!response.ok)return [];
     const payload=await response.json().catch(()=>({})),page=payload.data||payload;
     const content=String(page.markdown||page.content||"").trim();
@@ -187,7 +187,7 @@ async function firecrawlCompanySearch(queryMeta,runSignal){
       discoveryFirecrawlCalls++;discovery.funnel.firecrawlSearchCalls=discoveryFirecrawlCalls;
       const body={query:queryMeta.query,limit:activeDiscoverySavingMode?queryMeta.kind==='verification'?2:SAVING_SEARCH_RESULT_LIMIT:MAX_DISCOVERY_RESULTS_PER_QUERY};
       if(!activeDiscoverySavingMode||queryMeta.kind==='verification')body.scrapeOptions={formats:["markdown"],onlyMainContent:true};
-      const response=await fetch(`${INTELLIGENCE_PROXY}/firecrawl-search`,{method:"POST",headers:{"Content-Type":"application/json","X-LeadIntel-Research-Mode":activeDiscoverySavingMode?"saving":"full"},body:JSON.stringify(body),signal:controller.signal});
+      const response=await fetch(`${INTELLIGENCE_PROXY}/firecrawl-search`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),signal:controller.signal});
       const payload=await response.json().catch(()=>({}));
       if(!response.ok){const error=new Error("Company search provider request failed");error.status=response.status;throw error;}
       return LeadIntelDiscovery.normalizeCompanySearchResults(payload,queryMeta);
