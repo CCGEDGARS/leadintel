@@ -5,6 +5,11 @@
   let runtimeErrors=[];
   let refreshTimer=0;
   let lastItems=[];
+  let providerIssues=[];
+  let checkedWorkspace='';
+  let lastProviderCheck=0;
+  let providerCheckBusy=false;
+  const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
   const OPENAI_BILLING_URL='https://platform.openai.com/settings/organization/billing/overview';
   const clean=value=>String(value??'').replace(/(?:api[_ -]?key|token|authorization|secret)\s*[=:]\s*\S+/gi,'[protected]').replace(/\s+/g,' ').trim().slice(0,240);
   function createDrawer(){
@@ -13,8 +18,23 @@
     drawer.innerHTML='<header><div><span class="eyebrow">Workspace health</span><h2 id="attention-title">Workspace Health</h2></div><button class="attention-close" type="button" aria-label="Close Attention">×</button></header><p class="attention-intro">Red items require a fix. Orange items are recommendations. Green means the workspace is healthy.</p><div class="attention-list" aria-live="polite"></div>';
     document.documentElement.appendChild(drawer);drawer.querySelector('.attention-close').addEventListener('click',close);return drawer;
   }
-  function collect(){const persistence=root.LeadIntelWorkspacePersistence;let state={},researchMeta={};try{state=JSON.parse(root.localStorage?.getItem('leadintel_customer_v2_state')||'null')||{};researchMeta=JSON.parse(root.localStorage?.getItem('leadintel_customer_v2_research_meta_v1')||'null')||{};}catch{}const model=root.LeadIntelAttentionModel;const aiProviderIssue=model?.aiProviderIssueFromResearch?.({state,researchMeta})||null;return model?.buildAttentionItems?.({model:root.LeadIntelJourney?.getModel?.()||[],tasks:root.LeadIntelTaskCentre?.list?.()||[],workspaceStarted:Boolean(persistence?.hasMeaningfulWorkspaceData?.()),unsaved:Boolean(persistence?.hasUnsavedChanges?.()),runtimeErrors,aiProviderIssue})||[];}
-  function actionLabel(item){if(item.target.type==='stage')return 'Open stage';if(item.target.type==='tasks')return 'Review task';if(item.target.type==='save')return 'Save workspace';if(item.target.type==='ai-billing')return 'Open OpenAI billing';return 'Reload workspace';}
+  function collect(){const persistence=root.LeadIntelWorkspacePersistence;let state={},researchMeta={},discovery={};try{state=JSON.parse(root.localStorage?.getItem('leadintel_customer_v2_state')||'null')||{};researchMeta=JSON.parse(root.localStorage?.getItem('leadintel_customer_v2_research_meta_v1')||'null')||{};discovery=JSON.parse(root.localStorage?.getItem('leadintel_customer_v2_discovery')||'null')||{};}catch{}const model=root.LeadIntelAttentionModel;const providerStatusCurrent=checkedWorkspace===root.LeadIntelServerBridge?.workspace?.id&&lastProviderCheck>0;const aiProviderIssue=providerStatusCurrent?null:model?.aiProviderIssueFromResearch?.({state,researchMeta})||null;const firecrawlBlocked=[...(discovery.searchFailures||[]),...(discovery.providerFallbacks||[])].some(item=>Number(item.status)===402);const issues=firecrawlBlocked&&!providerIssues.some(item=>item.provider==='firecrawl')?[...providerIssues,{provider:'firecrawl',name:'Firecrawl',source:'unknown'}]:providerIssues;return model?.buildAttentionItems?.({model:root.LeadIntelJourney?.getModel?.()||[],tasks:root.LeadIntelTaskCentre?.list?.()||[],workspaceStarted:Boolean(persistence?.hasMeaningfulWorkspaceData?.()),unsaved:Boolean(persistence?.hasUnsavedChanges?.()),runtimeErrors,aiProviderIssue,providerIssues:issues})||[];}
+  async function refreshProviderCredits(){
+    const workspaceId=root.LeadIntelServerBridge?.workspace?.id;
+    if(!workspaceId||!root.LeadIntelServerBridge?.session?.authenticated||!root.fetch){providerIssues=[];checkedWorkspace='';render();return;}
+    if(providerCheckBusy||checkedWorkspace===workspaceId&&Date.now()-lastProviderCheck<30000)return;
+    providerCheckBusy=true;checkedWorkspace=workspaceId;
+    try{
+      const url=path=>`${API_BASE}${path}?workspace_id=${encodeURIComponent(workspaceId)}`;
+      const [aiResponse,serviceResponse]=await Promise.all([root.fetch(url('/api/integrations/ai/status'),{credentials:'include'}),root.fetch(url('/api/integrations/services/status'),{credentials:'include'})]);
+      if(!aiResponse.ok||!serviceResponse.ok)throw new Error('Provider status unavailable');
+      const [ai,services]=await Promise.all([aiResponse.json(),serviceResponse.json()]);
+      if(root.LeadIntelServerBridge?.workspace?.id!==workspaceId)return;
+      providerIssues=root.LeadIntelAttentionModel?.providerCreditIssues?.({ai,services})||[];lastProviderCheck=Date.now();render();
+    }catch{/* Keep the last confirmed provider alert until status can be checked. */}
+    finally{providerCheckBusy=false;}
+  }
+  function actionLabel(item){if(item.target.type==='stage')return 'Open stage';if(item.target.type==='tasks')return 'Review task';if(item.target.type==='save')return 'Save workspace';if(item.target.type==='settings')return 'Open AI & Tools';if(item.target.type==='ai-billing')return 'Open OpenAI billing';return 'Reload workspace';}
   function render(){
     const trigger=document.getElementById('workspace-attention');if(!trigger)return;
     lastItems=collect();const actionableItems=lastItems.filter(item=>item.severity==='error'||item.severity==='recommendation');const errors=actionableItems.filter(item=>item.severity==='error');const recommendations=actionableItems.filter(item=>item.severity==='recommendation');const count=trigger.querySelector('[data-attention-count]'),summary=trigger.querySelector('[data-attention-summary]');
@@ -28,15 +48,15 @@
   function schedule(){clearTimeout(refreshTimer);refreshTimer=setTimeout(render,50);}
   function open(){const drawer=createDrawer(),trigger=document.getElementById('workspace-attention');render();drawer.hidden=false;trigger?.setAttribute('aria-expanded','true');drawer.querySelector('.attention-close')?.focus();}
   function close(){const drawer=document.getElementById('workspace-attention-drawer'),trigger=document.getElementById('workspace-attention');if(drawer)drawer.hidden=true;trigger?.setAttribute('aria-expanded','false');trigger?.focus();}
-  function activate(item){close();if(item.target.type==='stage')root.LeadIntelJourney?.open?.(item.target.id);else if(item.target.type==='tasks')document.querySelector('.task-centre-trigger')?.click();else if(item.target.type==='save')document.getElementById('save-workspace')?.click();else if(item.target.type==='ai-billing')root.open?.(OPENAI_BILLING_URL,'_blank','noopener,noreferrer');else root.location.reload();}
+  function activate(item){close();if(item.target.type==='stage')root.LeadIntelJourney?.open?.(item.target.id);else if(item.target.type==='tasks')document.querySelector('.task-centre-trigger')?.click();else if(item.target.type==='save')document.getElementById('save-workspace')?.click();else if(item.target.type==='settings')document.getElementById('open-settings')?.click();else if(item.target.type==='ai-billing')root.open?.(OPENAI_BILLING_URL,'_blank','noopener,noreferrer');else root.location.reload();}
   function rememberError(message){const text=clean(message);if(!text)return;runtimeErrors=[...runtimeErrors,{id:`${Date.now()}-${runtimeErrors.length}`,message:text}].slice(-3);schedule();}
   function mount(){
     const trigger=document.getElementById('workspace-attention');if(!trigger||trigger.dataset.attentionBound==='1')return;trigger.dataset.attentionBound='1';trigger.addEventListener('click',()=>{const drawer=createDrawer();if(drawer.hidden)open();else close();});
-    ['leadintel:tasks-changed','leadintel:workspace-changed','leadintel:journey-changed','leadintel:website-activated','leadintel:server-ready','leadintel:company-research-updated'].forEach(name=>root.addEventListener(name,schedule));
+    ['leadintel:tasks-changed','leadintel:workspace-changed','leadintel:journey-changed','leadintel:website-activated','leadintel:server-ready','leadintel:company-research-updated'].forEach(name=>root.addEventListener(name,()=>{schedule();if(name==='leadintel:server-ready'||name==='leadintel:tasks-changed'||name==='leadintel:company-research-updated')void refreshProviderCredits();}));
     root.addEventListener('leadintel:workspace-reset',()=>{runtimeErrors=[];root.LeadIntelJourney?.refresh?.();render();});
     root.addEventListener('storage',schedule);root.addEventListener('error',event=>rememberError(event.message||event.error?.message));root.addEventListener('unhandledrejection',event=>rememberError(event.reason?.message||event.reason));
     document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!createDrawer().hidden)close();});document.addEventListener('input',schedule);document.addEventListener('change',schedule);
-    render();root.setInterval(render,30000);root.LeadIntelAttention={refresh:render,list:()=>lastItems.slice(),open};
+    render();void refreshProviderCredits();root.setInterval(()=>{render();void refreshProviderCredits();},30000);root.LeadIntelAttention={refresh:render,list:()=>lastItems.slice(),open};
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
 })(typeof window!=='undefined'?window:null);

@@ -61,8 +61,8 @@ test('customer shell exposes an automatic Attention control and drawer runtime',
   assert.match(html,/data-attention-count/);
   assert.match(html,/attention-centre-model\.js\?v=/);
   assert.match(html,/attention-centre\.js\?v=/);
-  assert.match(html,/attention-centre-model\.js\?v=20260924-openai-credit-health-v1/);
-  assert.match(html,/attention-centre\.js\?v=20260924-openai-credit-health-v1/);
+  assert.match(html,/attention-centre-model\.js\?v=20260928-all-provider-credit-health-v1/);
+  assert.match(html,/attention-centre\.js\?v=20260928-all-provider-credit-health-v1/);
 });
 
 test('confirmed reset refreshes Attention and clears transient runtime errors',()=>{
@@ -90,6 +90,35 @@ test('workspace health uses red for errors, orange for recommendations and green
   assert.match(css,/\.attention-item\.is-error[^}]*#c2413b/);
   assert.match(css,/\.attention-item\.is-recommendation[^}]*#f59e0b/);
   assert.match(css,/\.attention-empty\.is-healthy[^}]*#2f7d5c/);
+});
+
+test('workspace health identifies every confirmed provider credit issue without treating a plain rate limit as exhaustion',()=>{
+  const issues=Attention.providerCreditIssues({
+    ai:{providers:[{provider:'openai',configured:true,credit_issue:{code:'credits_exhausted',source:'customer'}},{provider:'gemini',configured:true,credit_issue:{code:'credits_exhausted',source:'customer'}},{provider:'anthropic',configured:true,credit_issue:null}]},
+    services:{providers:[{provider:'firecrawl',configured:true,credit_issue:{code:'credits_exhausted',source:'managed'}},{provider:'apollo',configured:true,credit_issue:{code:'credits_exhausted',source:'managed'}}]}
+  });
+  const items=Attention.buildAttentionItems({workspaceStarted:false,providerIssues:issues,aiProviderIssue:{provider:'openai',code:'credit_balance_exhausted'}});
+  assert.deepEqual(items.map(item=>item.title),['OpenAI credit or billing issue','Google Gemini credit or billing issue','Firecrawl credit or billing issue','Apollo.io credit or billing issue']);
+  assert.ok(items.every(item=>item.severity==='error'&&item.target.type==='settings'));
+  assert.match(items[2].detail,/LeadIntel manages Firecrawl billing/);
+  assert.equal(Attention.providerCreditIssues({ai:{providers:[{provider:'gemini',configured:true,credit_issue:null}]}}).length,0);
+});
+
+test('Workspace Health polls provider status and clears recovered credit alerts',async()=>{
+  const source=fs.readFileSync(path.join(root,'attention-centre.js'),'utf8');
+  const makeElement=()=>({children:[],dataset:{},hidden:false,textContent:'',classList:{add(){},remove(){}},setAttribute(){},addEventListener(){},append(...children){this.children.push(...children);},appendChild(child){this.children.push(child);},replaceChildren(...children){this.children=children;},querySelector(){return null;}});
+  const trigger=makeElement(),list=makeElement();trigger.querySelector=selector=>selector==='[data-attention-count]'?makeElement():selector==='[data-attention-summary]'?makeElement():null;
+  const document={readyState:'complete',documentElement:{appendChild(){}},getElementById:id=>id==='workspace-attention'?trigger:null,createElement(){const node=makeElement();node.querySelector=()=>list;return node;},addEventListener(){},querySelector(){return null;}};
+  let exhausted=true;
+  const handlers={};const window={document,LeadIntelAttentionModel:Attention,LeadIntelServerBridge:{workspace:{id:'workspace-1'},session:{authenticated:true}},localStorage:{getItem(){return null;}},LeadIntelJourney:{getModel(){return [];}},LeadIntelTaskCentre:{list(){return [];}},addEventListener(name,fn){handlers[name]=fn;},setInterval(){},fetch:async url=>({ok:true,json:async()=>url.includes('/ai/status')?{providers:[{provider:'gemini',configured:true,credit_issue:exhausted?{code:'credits_exhausted',source:'customer'}:null}]}:{providers:[]}})};
+  vm.runInNewContext(source,{window,setTimeout,clearTimeout,Date,Promise});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.ok(window.LeadIntelAttention.list().some(item=>item.title==='Google Gemini credit or billing issue'));
+  exhausted=false;
+  // A different signed-in workspace must never inherit the previous workspace's alert.
+  window.LeadIntelServerBridge.workspace.id='workspace-2';
+  handlers['leadintel:server-ready']();await new Promise(resolve=>setImmediate(resolve));
+  assert.ok(!window.LeadIntelAttention.list().some(item=>item.title==='Google Gemini credit or billing issue'));
 });
 
 test('workspace health identifies exhausted OpenAI API credits and clears after successful synthesis',()=>{
