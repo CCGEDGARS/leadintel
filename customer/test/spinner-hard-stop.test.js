@@ -24,9 +24,9 @@ test('Firecrawl fallback cannot bypass an aborted request',()=>{
 });
 
 test('cloud save has a hard timeout so activation cannot remain busy',()=>{
-  assert.ok(persistence.includes('const SAVE_REQUEST_TIMEOUT_MS=10000;'));
+  assert.ok(persistence.includes('const SAVE_REQUEST_TIMEOUT_MS=45000;'));
   assert.ok(persistence.includes('function withTimeout(operation,timeoutMs=SAVE_REQUEST_TIMEOUT_MS'));
-  assert.ok(persistence.includes('withTimeout(()=>root.LeadIntelServerBridge?.saveNow?.({saveIntent:true,explicitSave:true}),SAVE_REQUEST_TIMEOUT_MS)'));
+  assert.ok(persistence.includes('withTimeout(()=>bridge.conflict?bridge.resolveConflictKeepLocal?.():bridge.saveNow?.({saveIntent:true,explicitSave:true}),SAVE_REQUEST_TIMEOUT_MS)'));
 });
 
 test('Discovery runtime cache key changes whenever spinner recovery changes',()=>{
