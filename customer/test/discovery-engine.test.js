@@ -236,6 +236,13 @@ test('zero-result guidance distinguishes failed company-name extraction from a q
   assert.ok(result.steps.some(step=>/workspace AI provider or credits/i.test(step)));
 });
 
+test('Saving Mode zero-result guidance reports the limited website sample',()=>{
+  const result=Discovery.zeroResultGuidance({evidenceCount:21,companiesIdentified:3,companySitesChecked:1,savingMode:true});
+  assert.match(result.summary,/identified 3 companies but checked 1 company website/);
+  assert.match(result.summary,/does not establish/);
+  assert.ok(result.steps.some(step=>/Full research/.test(step)));
+});
+
 test('buildApolloPeopleSearchPayload uses exact domain and approved roles with safe discovery depth',()=>{
   const payload=Discovery.buildApolloPeopleSearchPayload({domain:'nordicmachines.se'},profile);
   assert.deepEqual(payload.q_organization_domains_list,['nordicmachines.se']);
