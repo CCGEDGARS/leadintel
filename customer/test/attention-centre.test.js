@@ -61,8 +61,8 @@ test('customer shell exposes an automatic Attention control and drawer runtime',
   assert.match(html,/data-attention-count/);
   assert.match(html,/attention-centre-model\.js\?v=/);
   assert.match(html,/attention-centre\.js\?v=/);
-  assert.match(html,/attention-centre-model\.js\?v=20260924-openai-credit-health-v1/);
-  assert.match(html,/attention-centre\.js\?v=20260924-openai-credit-health-v1/);
+  assert.match(html,/attention-centre-model\.js\?v=20260928-all-provider-credit-health-v1/);
+  assert.match(html,/attention-centre\.js\?v=20260928-all-provider-credit-health-v1/);
 });
 
 test('confirmed reset refreshes Attention and clears transient runtime errors',()=>{
@@ -90,6 +90,18 @@ test('workspace health uses red for errors, orange for recommendations and green
   assert.match(css,/\.attention-item\.is-error[^}]*#c2413b/);
   assert.match(css,/\.attention-item\.is-recommendation[^}]*#f59e0b/);
   assert.match(css,/\.attention-empty\.is-healthy[^}]*#2f7d5c/);
+});
+
+test('workspace health identifies every confirmed provider credit issue without treating a plain rate limit as exhaustion',()=>{
+  const issues=Attention.providerCreditIssues({
+    ai:{providers:[{provider:'openai',configured:true,credit_issue:{code:'credits_exhausted',source:'customer'}},{provider:'gemini',configured:true,credit_issue:{code:'credits_exhausted',source:'customer'}},{provider:'anthropic',configured:true,credit_issue:null}]},
+    services:{providers:[{provider:'firecrawl',configured:true,credit_issue:{code:'credits_exhausted',source:'managed'}},{provider:'apollo',configured:true,credit_issue:{code:'credits_exhausted',source:'managed'}}]}
+  });
+  const items=Attention.buildAttentionItems({workspaceStarted:false,providerIssues:issues,aiProviderIssue:{provider:'openai',code:'credit_balance_exhausted'}});
+  assert.deepEqual(items.map(item=>item.title),['OpenAI credit or billing issue','Google Gemini credit or billing issue','Firecrawl credit or billing issue','Apollo.io credit or billing issue']);
+  assert.ok(items.every(item=>item.severity==='error'&&item.target.type==='settings'));
+  assert.match(items[2].detail,/LeadIntel manages Firecrawl billing/);
+  assert.equal(Attention.providerCreditIssues({ai:{providers:[{provider:'gemini',configured:true,credit_issue:null}]}}).length,0);
 });
 
 test('workspace health identifies exhausted OpenAI API credits and clears after successful synthesis',()=>{
