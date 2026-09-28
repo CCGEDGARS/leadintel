@@ -10,7 +10,7 @@ const discoveryUi = fs.readFileSync(path.join(root, 'discovery-ui.js'), 'utf8');
 test('Company Discovery bootstrap is not blocked by a module dependency graph', () => {
   assert.match(
     html,
-    /<script defer src="discovery-ui\.js\?v=20260928-proxy-cors-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&opportunity-context=1&opportunity-map=1&target-research=1"><\/script>/,
+    /<script defer src="discovery-ui\.js\?v=20260928-proxy-cors-v1&revisit-results=1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&opportunity-context=1&opportunity-map=1&target-research=1"><\/script>/,
     'Discovery must load as an independent deferred script'
   );
   assert.doesNotMatch(
@@ -29,6 +29,7 @@ test('Discovery shell cache keys match the runtime asset version', () => {
   const runtimeVersion = discoveryUi.match(/const ASSET_VERSION="([^"]+)";/)?.[1];
   assert.ok(runtimeVersion, 'Discovery must declare an asset version');
   for (const asset of ['discovery-engine.js', 'discovery-ui.js']) {
-    assert.ok(html.includes(`<script defer src="${asset}?v=${runtimeVersion}${asset==='discovery-ui.js'?'&opportunity-context=1&opportunity-map=1&target-research=1':''}"></script>`), `${asset} must load the current Discovery release`);
+    const assetVersion=asset==='discovery-ui.js'?runtimeVersion.replace('20260928-proxy-cors-v1','20260928-proxy-cors-v1&revisit-results=1'):runtimeVersion;
+    assert.ok(html.includes(`<script defer src="${asset}?v=${assetVersion}${asset==='discovery-ui.js'?'&opportunity-context=1&opportunity-map=1&target-research=1':''}"></script>`), `${asset} must load the current Discovery release`);
   }
 });
