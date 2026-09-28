@@ -325,6 +325,30 @@ test('a user-selected fit-and-market verified potential match can display Apollo
   assert.equal(crmSaves,0);
 });
 
+test('selected prospect buyer names persist and render as separate review cards',async()=>{
+  const context=loadDiscoveryRunner({
+    renderNodes:true,
+    requestTimeout:1000,
+    bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},searchApolloPeople:async()=>({ok:true,people:[
+      {id:'p1',name:'Johan',title:'Chief Operating Officer'},
+      {id:'p2',name:'Mika',title:'Procurement Director',linkedin_url:'https://www.linkedin.com/in/mika-example'}
+    ]})}
+  });
+  const candidate={company:'Northstar',domain:'northstar.com',website:'https://northstar.com/',market:'Sweden',marketVerified:true,fitVerified:true,qualificationGaps:['No active buying signal was confirmed'],evidence:[{url:'https://northstar.com/',title:'Northstar industrial manufacturer'}]};
+  context.__setDiscovery({status:'no_results',selectedProspects:[candidate]});
+  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5}));
+  assert.equal(await context.__findPotentialDecisionMakers('northstar.com'),true);
+  const restored=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
+  assert.deepEqual(restored.selectedProspects[0].people.map(person=>person.name),['Johan','Mika']);
+  assert.equal(restored.pipeline.length,0);
+  context.__renderPipeline();
+  const html=context.__elements.get('customer-pipeline').innerHTML;
+  assert.equal((html.match(/class="selected-prospect-person"/g)||[]).length,2);
+  assert.match(html,/First name only/);
+  assert.match(html,/linkedin\.com\/in\/mika-example/);
+  assert.equal(context.__elements.get('discovery-status').textContent,'1 saved company');
+});
+
 test('a timed-out company website check can recover with grounded official-domain evidence',async()=>{
   let failedSearches=0,groundedSearches=0;
   const context=loadDiscoveryRunner({
