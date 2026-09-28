@@ -368,15 +368,18 @@ test('a first-name-only buyer triggers one public source check and renders a sou
     fetchImpl:async(url,options)=>{
       if(!String(url).includes('/firecrawl-search'))throw new Error('Unexpected request');
       publicSearches++;
-      assert.match(JSON.parse(options.body).query,/"Mikael"/);
-      return {ok:true,json:async()=>({data:[{url:'https://boliden.com/management',title:'Management',markdown:'Mikael Example — President & CEO. mikael.example@boliden.com'}]})};
+      if(publicSearches===1){assert.match(JSON.parse(options.body).query,/"Mikael"/);return {ok:true,json:async()=>({data:[{url:'https://boliden.com/management',title:'Management',markdown:'Mikael Example — President & CEO. mikael.example@boliden.com'}]})};}
+      assert.match(JSON.parse(options.body).query,/site:linkedin\.com\/in\//);
+      return {ok:true,json:async()=>({data:[{url:'https://www.linkedin.com/in/mikael-example',title:'Mikael Example – Boliden | LinkedIn',description:'President and CEO at Boliden'}]})};
     }});
   context.__setDiscovery({status:'no_results',selectedProspects:[{company:'Boliden',domain:'boliden.com',market:'Sweden',buyerSearchMode:'user_selected_target',buyerRoles:'CEO'}]});
   assert.equal(await context.__findPotentialDecisionMakers('boliden.com'),true);
   await new Promise(resolve=>setTimeout(resolve,15));
-  assert.equal(publicSearches,1);
+  assert.equal(publicSearches,2);
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Mikael Example');
+  assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicLinkedinUrl,'https://www.linkedin.com/in/mikael-example');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Public work email · unverified/);
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/View public profile ↗/);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/mikael\.example@boliden\.com/);
 });
 

@@ -463,3 +463,22 @@ test('generic company inboxes and ambiguous surnames cannot be assigned to a buy
   const ambiguous=Discovery.matchPublicBuyerDetails(person,[{url:'https://northstar.com/team',markdown:'Lotta Andersson — CEO. Lotta Svensson — CEO.'}],'northstar.com');
   assert.equal(ambiguous[0].publicName,undefined);
 });
+
+test('public LinkedIn result needs exact sourced name and company and rejects ambiguous profiles',()=>{
+  const person=[{id:'p1',name:'Mikael',publicName:'Mikael Staffas',publicNameUrl:'https://boliden.com/management',title:'President & CEO'}];
+  const found=Discovery.matchPublicLinkedInProfiles(person,[
+    {url:'https://se.linkedin.com/in/mikael-staffas-0791a68',title:'Mikael Staffas – Boliden | LinkedIn',description:'President and CEO at Boliden'},
+    {url:'https://se.linkedin.com/in/mikael-other',title:'Mikael Other – Boliden | LinkedIn',description:'Boliden'},
+    {url:'https://linkedin.com/posts/mikael-staffas',title:'Mikael Staffas – Boliden',description:'Boliden'}
+  ],'Boliden');
+  assert.equal(found[0].publicLinkedinUrl,'https://se.linkedin.com/in/mikael-staffas-0791a68');
+  const saved=Discovery.normalizeDiscoveryState({selectedProspects:[{company:'Boliden',domain:'boliden.com',buyerSearchMode:'user_selected_target',people:found}]});
+  assert.equal(saved.selectedProspects[0].people[0].publicLinkedinUrl,found[0].publicLinkedinUrl);
+  const ambiguous=Discovery.matchPublicLinkedInProfiles(person,[
+    {url:'https://linkedin.com/in/mikael-staffas-one',title:'Mikael Staffas – Boliden',description:'Boliden'},
+    {url:'https://linkedin.com/in/mikael-staffas-two',title:'Mikael Staffas – Boliden',description:'Boliden'}
+  ],'Boliden');
+  assert.equal(ambiguous[0].publicLinkedinUrl,undefined);
+  const unrelated=Discovery.matchPublicLinkedInProfiles(person,[{url:'https://linkedin.com/in/mikael-staffas',title:'Mikael Staffas – Other company',description:'Another company'}],'Boliden');
+  assert.equal(unrelated[0].publicLinkedinUrl,undefined);
+});
