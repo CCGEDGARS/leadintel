@@ -14,9 +14,15 @@
     if(!/\bcode:\s*credit_balance_exhausted\b/i.test(String(researchMeta.reason||'')))return null;
     return {provider:'openai',code:'credit_balance_exhausted',sourceCount:Math.max(0,Math.floor(Number(researchMeta.sourceCount)||0))};
   }
-  function buildAttentionItems({model=[],tasks=[],unsaved=false,runtimeErrors=[],aiProviderIssue=null,workspaceStarted=true,now=Date.now()}={}){
+  function providerCreditIssues({ai={},services={}}={}){
+    const names={openai:'OpenAI',gemini:'Google Gemini',anthropic:'Anthropic',firecrawl:'Firecrawl',apollo:'Apollo.io'};
+    return [...(ai.providers||[]),...(services.providers||[])].filter(row=>row?.configured&&row.credit_issue?.code==='credits_exhausted').map(row=>({provider:row.provider,name:names[row.provider]||row.name||row.provider,source:row.credit_issue.source||row.source||'customer'})).filter(row=>names[row.provider]);
+  }
+  function buildAttentionItems({model=[],tasks=[],unsaved=false,runtimeErrors=[],aiProviderIssue=null,providerIssues=[],workspaceStarted=true,now=Date.now()}={}){
     const items=[];
-    if(aiProviderIssue?.provider==='openai'&&aiProviderIssue?.code==='credit_balance_exhausted'){
+    const creditProviders=new Set(providerIssues.map(issue=>issue.provider));
+    providerIssues.forEach(issue=>items.push({id:`provider-${issue.provider}-credits`,severity:'error',title:`${clean(issue.name,60)} credit or billing issue`,detail:issue.source==='managed'?`LeadIntel manages ${issue.name} billing and must restore service. Your account does not need a top-up.`:issue.source==='unknown'?`${issue.name} returned HTTP 402 during the latest company search. Open AI & Tools to check which account supplies it.`:`${issue.name} reported exhausted credits or a billing limit during a real request. Check its balance and spending limit, then retry.`,target:{type:'settings'}}));
+    if(!creditProviders.has('openai')&&aiProviderIssue?.provider==='openai'&&aiProviderIssue?.code==='credit_balance_exhausted'){
       const sourceCount=Math.max(0,Math.floor(Number(aiProviderIssue.sourceCount)||0));
       const savedNote=sourceCount?`Your ${sourceCount} saved company research sources are safe.`:'Your saved company research is safe.';
       items.push({id:'ai-openai-credit-balance',severity:'error',title:'OpenAI API credits exhausted',detail:`OpenAI reports that the API credit balance for the connected organization is exhausted. Check that organization and add credits in OpenAI billing, then retry synthesis. ${savedNote}`,target:{type:'ai-billing'}});
@@ -32,5 +38,5 @@
     if(unsaved)items.push({id:'unsaved-workspace',severity:'recommendation',title:'Workspace changes are not saved',detail:'Save the workspace so these changes are available next time.',target:{type:'save'}});
     return items.filter((item,index,array)=>array.findIndex(candidate=>candidate.id===item.id)===index).slice(0,10);
   }
-  return {aiProviderIssueFromResearch,buildAttentionItems};
+  return {aiProviderIssueFromResearch,providerCreditIssues,buildAttentionItems};
 });
