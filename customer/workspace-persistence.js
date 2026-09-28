@@ -9,6 +9,7 @@
   const WORKSPACE_KEY="leadintel_customer_v2_workspace";
   const HYDRATION_KEY="leadintel_customer_v2_server_hydration";
   const DIRTY_KEY="leadintel_customer_v2_server_dirty";
+  const VERSION_KEY="leadintel_customer_v2_server_versions";
   const CONFLICT_KEY="leadintel_customer_v2_server_conflict";
   const API_BASE="https://leadintel-api.edgars-7e7.workers.dev";
   const SAVE_REQUEST_TIMEOUT_MS=10000;
@@ -61,6 +62,14 @@
   }
   function captureWorkspaceSnapshot(){const snapshot={schema_version:1,saved_at:new Date().toISOString(),data:currentWorkspaceData()};root.localStorage?.setItem(SNAPSHOT_KEY,JSON.stringify(snapshot));return snapshot;}
   function sameWorkspaceData(a,b){const left=isObject(a)?a:{};const right=isObject(b)?b:{};const keys=[...new Set([...Object.keys(left),...Object.keys(right)])].sort();return keys.every(key=>String(left[key]??"")===String(right[key]??""));}
+  function hasLocalChangesSinceSnapshot(){const snapshot=readSnapshot();if(!snapshot)return false;const key="leadintel_customer_v2_discovery";const current=safeJson(root.localStorage?.getItem(key)||"{}",{});const saved=safeJson(snapshot.data[key]||"{}",{});return JSON.stringify(current)!==JSON.stringify(saved);}
+  function protectLocalChanges(){
+    const workspaceId=String(root.localStorage?.getItem(WORKSPACE_KEY)||"");
+    if(!workspaceId||root.localStorage?.getItem(DIRTY_KEY))return;
+    const versions=safeJson(root.localStorage?.getItem(VERSION_KEY)||"{}",{});
+    const baseVersion=Math.max(0,Number(versions?.[workspaceId])||0);
+    root.localStorage?.setItem(DIRTY_KEY,JSON.stringify({workspace_id:workspaceId,base_version:baseVersion,updated_at:Date.now()}));
+  }
   function restoreSavedSnapshot(){
     const snapshot=readSnapshot();if(!snapshot)return false;const current=currentWorkspaceData();if(sameWorkspaceData(current,snapshot.data))return false;
     for(const key of WORKSPACE_DATA_KEYS)root.localStorage?.removeItem(key);
@@ -134,6 +143,10 @@
       if(method==="GET"){
         const response=await nativeFetch(input,requestInit);if(!response.ok)return response;const body=await response.clone().json().catch(()=>({}));const workspaceId=url.searchParams.get("workspace_id")||"";
         if(resetIntentMatchesUrl(url)){const cleared=await clearPendingServerReset(url,body);return jsonResponse(cleared,200);}
+        if(isExplicitlySaved()&&hasLocalChangesSinceSnapshot()){
+          dirtySinceSave=true;protectLocalChanges();root.setTimeout?.(renderPersistenceStatus,0);
+          return response;
+        }
         if(body?.payload?.meta?.persistence?.explicit_saved===true){snapshotFromServerPayload(body.payload);return response;}
         const version=Math.max(0,Number(body?.version)||0);if(workspaceId)root.sessionStorage?.setItem(HYDRATION_KEY,`${workspaceId}:${version}`);
         if(isExplicitlySaved())return jsonResponse({...body,payload:payloadFromSnapshot()},response.status);
@@ -152,8 +165,8 @@
   }
 
   function disableServerAutosave(){if(typeof Storage!=="undefined"&&Storage.prototype)Storage.prototype.__leadintelServerPatched=true;}
-  function hasUnsavedChanges(){return dirtySinceSave||(!isExplicitlySaved()&&hasMeaningfulWorkspaceData());}
-  function persistenceLabel(){if(!hasMeaningfulWorkspaceData()&&!dirtySinceSave)return "New workspace · ready";if(!isExplicitlySaved())return "Unsaved draft · not saved";return dirtySinceSave?"Unsaved changes · click Save workspace":"Workspace saved";}
+  function hasUnsavedChanges(){return dirtySinceSave||hasLocalChangesSinceSnapshot()||(!isExplicitlySaved()&&hasMeaningfulWorkspaceData());}
+  function persistenceLabel(){if(!hasMeaningfulWorkspaceData()&&!hasUnsavedChanges())return "New workspace · ready";if(!isExplicitlySaved())return "Unsaved draft · not saved";return hasUnsavedChanges()?"Unsaved changes · click Save workspace":"Workspace saved";}
   function renderPersistenceStatus(){const label=persistenceLabel();const status=root.document?.querySelector?.(".autosave");if(status)status.innerHTML=`<i></i>${label}`;const visibleStatus=root.document?.getElementById?.("workspace-save-state");if(visibleStatus)visibleStatus.textContent=label;const bar=root.document?.querySelector?.(".workspace-save-bar");if(bar)bar.dataset.state=hasUnsavedChanges()?"unsaved":isExplicitlySaved()?"saved":"new";const button=root.document?.getElementById?.("save-workspace");if(button){button.textContent=isExplicitlySaved()&&hasUnsavedChanges()?"Save changes":"Save workspace";button.disabled=saveBusy;}}
   function toast(message){const el=root.document?.getElementById?.("toast");if(!el)return;el.textContent=message;el.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove("show"),2400);}
   function waitForBridge(timeout=1800){if(root.LeadIntelServerBridge?.session!==null&&root.LeadIntelServerBridge?.session!==undefined)return Promise.resolve(root.LeadIntelServerBridge);return new Promise(resolve=>{let done=false;const finish=()=>{if(done)return;done=true;root.removeEventListener?.("leadintel:server-ready",finish);resolve(root.LeadIntelServerBridge||null);};root.addEventListener?.("leadintel:server-ready",finish,{once:true});root.setTimeout?.(finish,timeout);});}
@@ -175,7 +188,7 @@
     finally{saveBusy=false;renderPersistenceStatus();}
   }
   function ensureSaveButton(){let button=root.document?.getElementById?.("save-workspace");if(!button){const actions=root.document?.querySelector?.(".top-actions");if(!actions)return false;button=root.document.createElement("button");button.className="ghost-btn";button.type="button";button.id="save-workspace";actions.insertBefore(button,root.document.getElementById("reset-workspace")||null);}if(button.dataset.workspaceSaveBound==="1")return false;button.dataset.workspaceSaveBound="1";button.addEventListener("click",saveWorkspace);renderPersistenceStatus();return true;}
-  function noteWorkspaceEdit(event){const target=event?.target;if(target?.closest&& !target.closest(".workspace"))return;if(target?.closest?.("#save-workspace,#reset-workspace,#ai-settings-drawer"))return;dirtySinceSave=true;renderPersistenceStatus();}
+  function noteWorkspaceEdit(event){const target=event?.target;if(target?.closest&& !target.closest(".workspace"))return;if(target?.closest?.("#save-workspace,#reset-workspace,#ai-settings-drawer"))return;dirtySinceSave=true;protectLocalChanges();renderPersistenceStatus();}
   function handleResetClick(event){
     const button=event?.target?.closest?.("#reset-workspace");if(!button||button.dataset.resetArmed!=="true")return false;
     root.sessionStorage?.setItem(FORCE_RESET_KEY,"1");recordResetIntent();clearExplicitSave();root.setTimeout?.(()=>root.sessionStorage?.removeItem(FORCE_RESET_KEY),5000);root.setTimeout?.(renderPersistenceStatus,0);return true;
@@ -184,7 +197,7 @@
     ensureSaveButton();root.document?.addEventListener?.("input",noteWorkspaceEdit,true);root.document?.addEventListener?.("change",noteWorkspaceEdit,true);
     root.document?.addEventListener?.("click",event=>{if(event.target?.closest?.("[data-target-market],[data-remove-target-market],[data-remove-doc],[data-remove-signal],[data-opportunity-active],#add-target-market,#clear-target-markets,#add-custom-signal"))noteWorkspaceEdit(event);},true);
     root.document?.addEventListener?.("click",handleResetClick,true);
-    root.addEventListener?.("leadintel:website-activated",()=>{dirtySinceSave=true;renderPersistenceStatus();});root.addEventListener?.("leadintel:workspace-dirty",()=>{dirtySinceSave=true;renderPersistenceStatus();});root.addEventListener?.("leadintel:server-ready",()=>root.setTimeout?.(renderPersistenceStatus,0));renderPersistenceStatus();
+    root.addEventListener?.("leadintel:website-activated",()=>{dirtySinceSave=true;protectLocalChanges();renderPersistenceStatus();});root.addEventListener?.("leadintel:workspace-dirty",()=>{dirtySinceSave=true;protectLocalChanges();renderPersistenceStatus();});root.addEventListener?.("leadintel:server-ready",()=>root.setTimeout?.(renderPersistenceStatus,0));renderPersistenceStatus();
   }
 
   disableServerAutosave();installFetchBoundary();
