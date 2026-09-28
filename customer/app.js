@@ -1,4 +1,4 @@
-import './company-brain.js?v=20260927-company-alignment-v1';
+import './company-brain.js?v=20260928-buyer-role-repair-v2';
 import './content-language.js?v=20260924-workspace-content-english-v1';
 import './content-variants.js?v=20260921-contact-gated-v2';
 import './business-identity.js?v=20260924-workspace-profile-english-v1';
@@ -1069,7 +1069,7 @@ function reviewBuyingSignalsFromHandoff(){
 }
 async function repairBuyerRolesFromHandoff(){
   const repair=globalThis.LeadIntelCompanyBrain?.repairIndustrialBuyerRoles;
-  if(!repair)return;
+  if(!repair){showToast("Refresh this page to load the buyer-role repair, then try again.");return;}
   state=repair(state);
   saveState();renderProfile();renderMarketStrategy();renderStrategyHandoff();
   const saved=await window.LeadIntelWorkspacePersistence?.saveWorkspace?.();
