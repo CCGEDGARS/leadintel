@@ -1020,7 +1020,7 @@ function strategyHandoffModel(){
   if(signals.length===1)warnings.push("Only one active buying signal. Companies can be found, but ranking will be narrow. At least 3 active signals are recommended.");
   else if(signals.length===2)warnings.push("Only 2 active buying signals. Companies can be found, but at least 3 active signals are recommended.");
   if(lowEvidenceCoverage)warnings.push("Fewer than 3 evidence sources were saved. Discovery confidence may be limited.");
-  if(incompleteResearch)warnings.push("Some research checks were unavailable; saved evidence will still be used.");
+  if(incompleteResearch)warnings.push(`Some research checks were unavailable; your ${evidence.length} saved sources will still be used.`);
   if(!monitoring.enabled)warnings.push("Monitoring is off. This one-time company search will still run normally. Turn on monitoring later to track new buying signals over time.");
   const customSources=state.market.researchCustomSources||[];
   if(customSources.length&&!monitoring.customSources?.length)warnings.push("Preferred research sources are saved but are not included in monitoring.");
@@ -1058,7 +1058,7 @@ function renderStrategyHandoff(){
   repairActions.hidden=reviewSignals.hidden&&retrySignals.hidden&&repairRoles.hidden;
   const confirm=$("confirm-strategy-handoff");
   confirm.disabled=Boolean(model.blockers.length);
-  confirm.textContent=model.blockers.length?"Complete Required Items":model.hasLimitedResults?"Continue with limited results →":state.market.strategyApproved?"Continue to Companies →":"Activate Strategy & Continue →";
+  confirm.textContent=model.blockers.length?"Complete Required Items":"Continue to Companies →";
   return model;
 }
 function reviewBuyingSignalsFromHandoff(){
