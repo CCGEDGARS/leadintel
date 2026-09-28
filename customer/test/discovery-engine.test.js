@@ -411,3 +411,17 @@ test('discovery limits start at ten and support bounded custom targets',()=>{
   assert.equal(Discovery.discoveryLimits(0).targetCount,10);
   assert.equal(Discovery.discoveryLimits(500).targetCount,50);
 });
+
+test('a user-selected target survives reload as an unqualified buyer-search prospect',()=>{
+  const state=Discovery.normalizeDiscoveryState({selectedProspects:[{
+    company:'Billerud',domain:'billerud.com',website:'https://billerud.com/',market:'Sweden',
+    qualified:false,marketVerified:false,fitVerified:false,evidence:[],
+    qualificationGaps:['Customer fit and buying signal are unverified'],
+    buyerSearchMode:'user_selected_target',peopleStatus:'idle'
+  }]});
+  assert.equal(state.selectedProspects.length,1);
+  assert.equal(state.selectedProspects[0].buyerSearchMode,'user_selected_target');
+  assert.equal(state.selectedProspects[0].qualified,false);
+  assert.equal(state.selectedProspects[0].fitVerified,false);
+  assert.deepEqual(state.selectedProspects[0].evidence,[]);
+});
