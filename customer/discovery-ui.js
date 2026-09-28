@@ -849,6 +849,18 @@ async function findPublicProspectContacts(domain){
       }catch(error){profileIssue=error?.name==='AbortError'?'Public profile search timed out':error.message||'Public profile search failed';}
     }
     candidate.publicContactStatus=candidate.publicContacts.length||named?"complete":"empty";
+    if(crmAuthenticated()&&candidate.people.some(person=>person.publicNameUrl||person.publicEmailUrl||person.publicLinkedinUrl)){
+      try{
+        let company=crmCompanyByDomain(domain);
+        if(!company){const found=await bridge().listCrmCompanies({q:domain,limit:20});company=found?.ok?(found.companies||[]).find(row=>canonicalDomain(row.normalized_domain||row.website)===canonicalDomain(domain)):null;}
+        if(company){
+          const contacts=window.LeadIntelCrm.mapContacts(candidate.people.filter(person=>person.publicNameUrl||person.publicEmailUrl||person.publicLinkedinUrl));
+          const saved=await bridge().saveCrmContacts(company.id,contacts);
+          if(!saved?.ok)showToast(saved?.error||"Public buyer details could not be saved to CRM");
+          else window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company}}));
+        }
+      }catch{showToast("Public buyer details found, but CRM sync failed. Retry from this card.");}
+    }
     showToast(profileIssue|| (named?`${named} full name${named===1?"":"s"} found on company pages · check source before outreach`:candidate.publicContacts.length?`${candidate.publicContacts.length} public company contact${candidate.publicContacts.length===1?"":"s"} found · unverified`:"No public buyer names or company contacts found in this search"));
     return true;
   }catch(error){candidate.publicContactStatus="error";showToast(error.name==="AbortError"?"Public contact search timed out":error.message);return false;}

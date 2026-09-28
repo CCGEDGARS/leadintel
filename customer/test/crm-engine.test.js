@@ -21,6 +21,17 @@ test('legacy Contact Found stage migrates safely to Qualified',()=>{
   assert.equal(payload.company.pipeline_stage,'Qualified');
 });
 
+test('source-backed buyer details retain public evidence and unverified email status',()=>{
+  const [contact]=crm.mapContacts([{id:'apollo-1',name:'Mikael',title:'CEO',publicName:'Mikael Example',publicNameUrl:'https://example.com/team',publicEmail:'mikael.example@example.com',publicEmailUrl:'https://example.com/team',publicLinkedinUrl:'https://www.linkedin.com/in/mikael-example'}]);
+  assert.equal(contact.name,'Mikael Example');
+  assert.equal(contact.work_email,'mikael.example@example.com');
+  assert.equal(contact.email_status,'public_unverified');
+  assert.equal(contact.public_name_url,'https://example.com/team');
+  assert.equal(contact.public_email_url,'https://example.com/team');
+  assert.equal(contact.linkedin_url,'https://www.linkedin.com/in/mikael-example');
+  assert.equal(crm.mapContacts([{id:'apollo-2',name:'Anna Verified',publicName:'Anna Other',publicNameUrl:'https://example.com/team'}])[0].name,'Anna Verified');
+});
+
 test('CRM filtering supports lifecycle, pipeline and company/contact search projection',()=>{
   const companies=[
     {id:'1',company_name:'Acme',normalized_domain:'acme.example',lifecycle_status:'prospect',pipeline_stage:'Qualified',contact_search:'Anna Buyer anna@acme.example'},

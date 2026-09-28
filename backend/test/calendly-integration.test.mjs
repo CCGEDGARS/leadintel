@@ -18,7 +18,7 @@ CREATE TABLE workspace_members(workspace_id TEXT,user_id TEXT,role TEXT,PRIMARY 
 CREATE TABLE gmail_connections(workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id),user_id TEXT,google_email TEXT,encrypted_refresh_token TEXT,scopes TEXT,status TEXT,history_id TEXT,connected_at TEXT,updated_at TEXT,disconnected_at TEXT);
 CREATE TABLE audit_events(id TEXT PRIMARY KEY,workspace_id TEXT,user_id TEXT,event_type TEXT,entity_type TEXT,entity_id TEXT,metadata_json TEXT);
 INSERT INTO workspaces VALUES('w1');INSERT INTO users VALUES('u1','owner@example.com','Owner','owner');INSERT INTO workspace_members VALUES('w1','u1','owner');INSERT INTO gmail_connections(workspace_id,user_id,status) VALUES('w1','u1','connected');`);
-    this.raw.exec(fs.readFileSync(new URL('../migrations/0011_master_crm.sql',import.meta.url),'utf8'));
+    this.raw.exec(fs.readFileSync(new URL('../migrations/0011_master_crm.sql',import.meta.url),'utf8'));this.raw.exec(fs.readFileSync(new URL('../migrations/0022_crm_public_contact_sources.sql',import.meta.url),'utf8'));
     this.raw.exec(fs.readFileSync(new URL('../migrations/0015_outreach_automation.sql',import.meta.url),'utf8'));
     this.raw.exec(fs.readFileSync(new URL('../migrations/0021_calendly_integration.sql',import.meta.url),'utf8'));
   }
