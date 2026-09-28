@@ -264,3 +264,29 @@
 .discovery-target-list{border:1px solid #c8ded5;background:#f6fbf8;border-radius:14px;padding:16px 18px;margin:16px 0}.discovery-target-heading{display:flex;justify-content:space-between;align-items:center;gap:14px}.discovery-target-heading strong{color:#135947}.discovery-target-heading p{margin:5px 0 0;color:#52675e;line-height:1.4}.discovery-target-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.discovery-target-chips span{border:1px solid #d1e3dc;border-radius:999px;background:#fff;padding:7px 10px;font-size:12px;color:#24564a}@media(max-width:600px){.discovery-target-heading{align-items:stretch;flex-direction:column}}
 .discovery-target-handoff{padding:12px 14px;margin-bottom:14px;border:1px solid #9ecbb7;border-radius:10px;background:#e6f5ed;color:#234a3c;line-height:1.5}.discovery-target-handoff strong{display:block;color:#0e583f}.discovery-target-handoff small{display:block;margin-top:5px;color:#715414}
 .discovery-saving-label{margin-top:8px;font:700 11px 'DM Sans',sans-serif;color:#0d5d4f}#discovery-research-mode{border-color:#a9cfc1;background:#f3faf6}#discovery-research-mode-help{max-width:320px}
+
+/* A target is a deliberate company choice, not a search filter chip. */
+.discovery-target-list{padding:24px;border-color:#cddfd7;background:#f7faf8}
+.discovery-target-heading{align-items:flex-start}
+.discovery-target-heading strong{display:block;font-size:20px;line-height:1.25;color:#143d32}
+.discovery-target-heading p{max-width:70ch;margin-top:7px;font-size:13px;line-height:1.5;color:#53675e}
+.discovery-target-chips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:20px}
+.discovery-target-chips .target-company-card{display:flex;flex-direction:column;min-width:0;min-height:168px;padding:18px;border:1px solid #d9e5df;border-radius:13px;background:#fff;box-shadow:0 3px 12px rgba(15,52,41,.035)}
+.target-company-card.is-selected{border-color:#81b5a3;background:#f5fbf8}
+.target-company-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.target-company-name{font-size:19px;font-weight:700;line-height:1.25;color:#142b23;overflow-wrap:anywhere}
+.target-company-status{flex:0 0 auto;max-width:52%;padding:5px 8px;border-radius:7px;background:#f5f1e8;color:#745a28;font-size:10px;font-weight:700;line-height:1.35;text-align:center}
+.target-company-status.is-qualified{background:#e7f3ed;color:#12624e}
+.target-company-domain{display:block;margin:10px 0 14px;color:#12614f;font-size:12px;line-height:1.4;overflow-wrap:anywhere;text-decoration:none}
+.target-company-card-actions{margin-top:auto}
+.target-company-card-actions button{width:100%;min-height:40px;font-size:12px}
+.target-company-card-actions button:disabled{opacity:.75;cursor:default}
+.selected-prospect-list{padding:26px;background:#f8faf8}
+.selected-prospect-list>.eyebrow{display:block;margin-bottom:6px;color:#12614f}
+.selected-prospect-list h3{font-size:25px;letter-spacing:-.025em}
+.selected-prospect-row{gap:16px;padding:26px;border-color:#d6e4dc;box-shadow:0 4px 16px rgba(15,52,41,.035)}
+.selected-prospect-company h4{font-size:27px;letter-spacing:-.025em}
+.selected-prospect-context{max-width:66ch;margin:0;color:#53675e;font-size:14px;line-height:1.5}
+.selected-prospect-actions .primary-btn{min-width:200px}
+@media(max-width:1080px){.discovery-target-chips{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:680px){.discovery-target-list{padding:17px}.discovery-target-heading{display:grid}.discovery-target-chips{grid-template-columns:1fr}.discovery-target-chips .target-company-card{min-height:0}.selected-prospect-list{padding:17px}.selected-prospect-row{padding:18px}.selected-prospect-company h4{font-size:23px}.selected-prospect-actions .primary-btn{min-width:0}}
