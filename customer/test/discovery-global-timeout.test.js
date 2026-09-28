@@ -390,7 +390,7 @@ test('a saved first-name-only buyer receives one automatic public check when Buy
     return {ok:true,json:async()=>({data:[{url:'https://boliden.com/management',title:'Leadership',markdown:'Mikael Example — President & CEO'}]})};
   }});
   context.__setDiscovery({selectedProspects:[{company:'Boliden',domain:'boliden.com',buyerSearchMode:'user_selected_target',people:[{id:'p1',name:'Mikael',title:'President & CEO'}]}]});
-  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5}));
+  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:4,visibleStep:5}));
   context.__scheduleSavedBuyerPublicChecks();
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,30));
