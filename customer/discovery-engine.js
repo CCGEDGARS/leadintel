@@ -790,7 +790,7 @@
     }
     if(savingMode){
       const checked=Math.max(0,Number(companySitesChecked)||0);
-      return {primaryAction:"review_strategy",primaryLabel:"Review Strategy",summary:`Saving Mode identified ${identified||0} companies but checked ${checked} company website${checked===1?"":"s"}. None qualified in this small sample; this does not establish that the Swedish market has no suitable buyers.`,steps:["Review the active buyer profile and signals for the company in Step 1. Keep only signals that describe a real reason to need its services.","Return to Companies and choose Full research when you want broader verification. It uses more Firecrawl requests; increasing the company amount while staying in Saving Mode will not expand this sample."]};
+      return {primaryAction:"review_strategy",primaryLabel:"Review Strategy",summary:`Saving Mode identified ${identified||0} companies but checked ${checked} company website${checked===1?"":"s"}. None qualified in this small sample; this does not establish that the target market has no suitable buyers.`,steps:["Review the active buyer profile and signals for the company in Step 1. Keep only signals that describe a real reason to need its services.","Return to Companies and choose Full research when you want broader verification. It uses more Firecrawl requests; increasing the company amount while staying in Saving Mode will not expand this sample."]};
     }
     const signalStep=signals<3
       ? "Open Strategy and activate at least 3 buying signals: capacity expansion, a new facility or investment, and hiring or outsourcing. Keep tender or procurement only when it is relevant."
