@@ -496,9 +496,10 @@ async function verifyResearchWithGemini(mode,profile,results,signals,signal){
     return data;
   }catch{return unavailable("Gemini verification is temporarily unavailable");}
 }
-function readResearchSettings(){
+function readResearchSettings(sourceTypesChanged=false){
   const sourceTypes=[...document.querySelectorAll('#research-source-types input:checked')].map(input=>input.value);
   state.market.researchSourceTypes=LeadIntelMarket.filterResearchSourceTypes(sourceTypes.length?sourceTypes:["news"],state.market.signals||[]);
+  if(sourceTypesChanged)state.market.researchSourceTypesCustomized=true;
   state.market.researchCustomSources=LeadIntelMarket.splitList($("research-custom-sources").value).slice(0,20);
   state.market.researchInstructions=$("research-instructions").value.trim().slice(0,1200);
   saveState();return state.market;
@@ -536,6 +537,9 @@ function openResearchPreview(mode){
   if(!state.profile){showToast("Add your website and target market so LeadIntel can build a profile first");return;}
   ensureMarketStrategySeeded();readMarketEdits();readResearchSettings();
   pendingResearchMode=normalizeResearchMode(mode);
+  if(pendingResearchMode!=="quick"&&!state.market.researchSourceTypesCustomized&&state.market.researchSourceTypes.length===1&&state.market.researchSourceTypes[0]==="news"){
+    state.market.researchSourceTypes=["news","jobs","investments","company","registries"];
+  }
   state.market.researchMode=pendingResearchMode;$("research-mode").value=pendingResearchMode;saveState();renderResearchControls();
   const limits=LeadIntelMarket.RESEARCH_MODES[pendingResearchMode];
   const modeUi=researchModeUi(pendingResearchMode);
@@ -1256,7 +1260,7 @@ function bind(){
   $("activate-market-strategy").addEventListener("click",event=>{
     event.preventDefault();
     openStrategyHandoff();
-  });$("cancel-strategy-handoff").addEventListener("click",closeStrategyHandoff);$("confirm-strategy-handoff").addEventListener("click",()=>void activateMarketStrategy());$("strategy-handoff-dialog").addEventListener("click",event=>{if(event.target===$("strategy-handoff-dialog"))closeStrategyHandoff();});$("save-monitoring").addEventListener("click",saveMonitoringConfig);$("run-monitoring-now").addEventListener("click",runMonitoringNow);$("research-mode").addEventListener("change",()=>{state.market.researchMode=normalizeResearchMode($("research-mode").value);saveState();renderResearchControls();});$("research-source-types").addEventListener("change",readResearchSettings);$("research-custom-sources").addEventListener("change",()=>{readResearchSettings();renderSavedResearchWebsites();});$("research-saved-websites")?.addEventListener("click",event=>{const button=event.target.closest("[data-remove-research-website]");if(button)removeSavedResearchWebsite(button.dataset.removeResearchWebsite);});$("research-instructions").addEventListener("change",readResearchSettings);
+  });$("cancel-strategy-handoff").addEventListener("click",closeStrategyHandoff);$("confirm-strategy-handoff").addEventListener("click",()=>void activateMarketStrategy());$("strategy-handoff-dialog").addEventListener("click",event=>{if(event.target===$("strategy-handoff-dialog"))closeStrategyHandoff();});$("save-monitoring").addEventListener("click",saveMonitoringConfig);$("run-monitoring-now").addEventListener("click",runMonitoringNow);$("research-mode").addEventListener("change",()=>{state.market.researchMode=normalizeResearchMode($("research-mode").value);saveState();renderResearchControls();});$("research-source-types").addEventListener("change",()=>readResearchSettings(true));$("research-custom-sources").addEventListener("change",()=>{readResearchSettings();renderSavedResearchWebsites();});$("research-saved-websites")?.addEventListener("click",event=>{const button=event.target.closest("[data-remove-research-website]");if(button)removeSavedResearchWebsite(button.dataset.removeResearchWebsite);});$("research-instructions").addEventListener("change",readResearchSettings);
   $("review-buying-signals").addEventListener("click",reviewBuyingSignalsFromHandoff);
   $("repair-buyer-roles").addEventListener("click",()=>void repairBuyerRolesFromHandoff());
   $("retry-signal-recommendations").addEventListener("click",retrySignalRecommendationsFromHandoff);
