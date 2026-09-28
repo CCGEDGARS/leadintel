@@ -43,12 +43,12 @@ test("pre-flight explains weak signal coverage and provides direct repair action
   assert.match(app, /function retrySignalRecommendationsFromHandoff\(\)/);
 });
 
-test("pre-flight blocks zero signals but permits an explicit limited-results continuation", () => {
+test("pre-flight blocks zero signals and explains partial research without implying a smaller company list", () => {
   assert.match(app, /No active buying signal[\s\S]{0,240}required/);
-  assert.match(app, /Continue with limited results →/);
+  assert.match(app, /Continue to Companies →/);
   assert.match(app, /Fewer than 3 evidence sources/);
   assert.match(app, /hasLimitedResults:lowSignalCoverage\|\|lowEvidenceCoverage\|\|incompleteResearch/);
-  assert.match(app, /model\.hasLimitedResults\?"Continue with limited results →"/);
+  assert.match(app, /Some research checks were unavailable; your \$\{evidence.length\} saved sources will still be used/);
 });
 
 test("recommended tender signals are not silently disabled by research-source settings", () => {
@@ -66,7 +66,7 @@ test("activation waits for the canonical Discovery API and recovers visibly on t
   assert.match(app, /\$\("confirm-strategy-handoff"\)\.addEventListener/);
   assert.doesNotMatch(app, /\$\("activate-market-strategy"\)\.addEventListener\("click",event=>[\s\S]{0,180}activateMarketStrategy/);
   assert.match(discovery, /window\.LeadIntelDiscoveryUI=\{open:openDiscoveryFromHandoff\}/);
-  assert.match(index, /app\.js\?v=20260928-buyer-role-repair-v2&icp-data-gates=1/);
+  assert.match(index, /app\.js\?v=20260928-strategy-handoff-copy-v1&icp-data-gates=1/);
   assert.match(marketCss, /\.strategy-handoff-dialog/);
 });
 
