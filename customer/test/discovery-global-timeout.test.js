@@ -361,6 +361,25 @@ test('selected prospect buyer names persist and render as separate review cards'
   assert.equal(context.__elements.get('discovery-status').textContent,'1 saved company');
 });
 
+test('a first-name-only buyer triggers one public source check and renders a sourced full name without Apollo enrichment',async()=>{
+  let publicSearches=0;
+  const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,
+    bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},searchApolloPeople:async()=>({ok:true,people:[{id:'p1',name:'Mikael',title:'President & CEO'}]})},
+    fetchImpl:async(url,options)=>{
+      if(!String(url).includes('/firecrawl-search'))throw new Error('Unexpected request');
+      publicSearches++;
+      assert.match(JSON.parse(options.body).query,/"Mikael"/);
+      return {ok:true,json:async()=>({data:[{url:'https://boliden.com/management',title:'Management',markdown:'Mikael Example — President & CEO. mikael.example@boliden.com'}]})};
+    }});
+  context.__setDiscovery({status:'no_results',selectedProspects:[{company:'Boliden',domain:'boliden.com',market:'Sweden',buyerSearchMode:'user_selected_target',buyerRoles:'CEO'}]});
+  assert.equal(await context.__findPotentialDecisionMakers('boliden.com'),true);
+  await new Promise(resolve=>setTimeout(resolve,15));
+  assert.equal(publicSearches,1);
+  assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Mikael Example');
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/Public work email · unverified/);
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/mikael\.example@boliden\.com/);
+});
+
 test('a timed-out company website check can recover with grounded official-domain evidence',async()=>{
   let failedSearches=0,groundedSearches=0;
   const context=loadDiscoveryRunner({
