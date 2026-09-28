@@ -708,7 +708,7 @@
     const gaps=[...new Set((Array.isArray(candidate.qualificationGaps)?candidate.qualificationGaps:[]).map(clean).filter(Boolean))].slice(0,4);
     const people=(Array.isArray(candidate.people)?candidate.people:[]).slice(0,4).map(person=>({id:clean(person?.id),name:clean(person?.name),title:clean(person?.title),seniority:clean(person?.seniority),organization:clean(person?.organization),city:clean(person?.city),country:clean(person?.country),linkedin_url:normalizeLinkedInUrl(person?.linkedin_url||person?.linkedin)}));
     const researchPriority=Number.isFinite(Number(candidate.researchPriority))?Number(candidate.researchPriority):((candidate.fitVerified===true?10:0)+(candidate.marketVerified===true?10:0)+evidenceScore({evidence})+timingScore({evidence}));
-    return {id:clean(candidate.id)||`potential-${slug(domain||candidate.company)}`,company:clean(candidate.company)||displayFromDomain(domain),domain,website:normalizeUrl(candidate.website)||(domain?`https://${domain}/`:""),market:clean(candidate.market),qualified:false,marketVerified:candidate.marketVerified===true,fitVerified:candidate.fitVerified===true,buyerVerified:false,matchedSignals:(Array.isArray(candidate.matchedSignals)?candidate.matchedSignals:[]).slice(0,12),evidence,qualificationGaps:gaps,researchPriority:clamp(researchPriority,0,75,0),people,peopleStatus:["idle","loading","complete","empty","error"].includes(candidate.peopleStatus)?candidate.peopleStatus:"idle",buyerSearchMode:candidate.buyerSearchMode==="user_selected_without_signal"?candidate.buyerSearchMode:""};
+    return {id:clean(candidate.id)||`potential-${slug(domain||candidate.company)}`,company:clean(candidate.company)||displayFromDomain(domain),domain,website:normalizeUrl(candidate.website)||(domain?`https://${domain}/`:""),market:clean(candidate.market),qualified:false,marketVerified:candidate.marketVerified===true,fitVerified:candidate.fitVerified===true,buyerVerified:false,matchedSignals:(Array.isArray(candidate.matchedSignals)?candidate.matchedSignals:[]).slice(0,12),evidence,qualificationGaps:gaps,researchPriority:clamp(researchPriority,0,75,0),people,peopleStatus:["idle","loading","complete","empty","error"].includes(candidate.peopleStatus)?candidate.peopleStatus:"idle",buyerSearchMode:["user_selected_without_signal","user_selected_target"].includes(candidate.buyerSearchMode)?candidate.buyerSearchMode:""};
   }
 
   function isPotentialBuyerSearchAllowed(candidate={}){
@@ -847,7 +847,7 @@
         message:clean(extraction.message).slice(0,300)
       },
       potentialMatches:(needsRefresh?[]:(Array.isArray(input.potentialMatches)?input.potentialMatches:[])).slice(0,12).map(safePotentialCandidate).filter(item=>item.domain&&item.evidence.length&&item.qualificationGaps.length),
-      selectedProspects:(Array.isArray(input.selectedProspects)?input.selectedProspects:[]).slice(0,50).map(safePotentialCandidate).filter(item=>item.domain&&item.evidence.length&&isPotentialBuyerSearchAllowed(item)),
+      selectedProspects:(Array.isArray(input.selectedProspects)?input.selectedProspects:[]).slice(0,50).map(safePotentialCandidate).filter(item=>item.domain&&(item.buyerSearchMode==="user_selected_target"||item.evidence.length&&isPotentialBuyerSearchAllowed(item))),
       funnel:normalizeDiscoveryFunnel(clearOldResults?{}:input.funnel),
       pipeline:(Array.isArray(input.pipeline)?input.pipeline:[]).slice(0,50).map(normalizePipelineItem).filter(item=>item.domain),
       lastRunAt:clearOldResults?"":clean(input.lastRunAt),
