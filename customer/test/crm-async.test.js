@@ -3,10 +3,10 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const path=require('node:path');
-function harness(bridge){
-  const window={LeadIntelServerBridge:bridge};
+function harness(bridge,extra={}){
+  const window={LeadIntelServerBridge:bridge,...extra};
   const document={readyState:'loading',addEventListener(){},getElementById(){return null;}};
-  const source=fs.readFileSync(path.join(__dirname,'../crm-ui.js'),'utf8').replace('})(window);','root.testAccess={state,loadCompanies,openCompany,loadMoreActivities:typeof loadMoreActivities==="function"?loadMoreActivities:null};})(window);');
+  const source=fs.readFileSync(path.join(__dirname,'../crm-ui.js'),'utf8').replace('})(window);','root.testAccess={state,loadCompanies,openCompany,loadMoreActivities:typeof loadMoreActivities==="function"?loadMoreActivities:null,findBuyersForSavedCompany};})(window);');
   vm.runInNewContext(source,{window,document,console,setTimeout,clearTimeout});
   return window.testAccess;
 }
@@ -45,4 +45,24 @@ test('company details load older CRM activity pages without duplicates',async()=
   assert.equal(h.state.detail.activities.length,45);
   assert.equal(new Set(h.state.detail.activities.map(activity=>activity.id)).size,45);
   assert.equal(h.state.activityCursor,null);
+});
+test('saved CRM prospect finds and persists buyer roles without company rediscovery or Pipeline promotion',async()=>{
+  const calls=[];
+  const company={id:'billerud-1',company_name:'Billerud',normalized_domain:'billerud.com',lifecycle_status:'prospect',pipeline_stage:null};
+  const bridge={workspace:{id:'one'},session:{authenticated:true},
+    async searchApolloPeople(payload){calls.push(['apollo',payload]);return {ok:true,people:[{id:'person-1',name:'Johan',title:'Operations Director'}]};},
+    async saveCrmContacts(id,contacts){calls.push(['contacts',id,contacts]);return {ok:true};},
+    async listCrmCompanies(){return {ok:true,companies:[company]};},
+    async getCrmCompany(){return {ok:true,company,contacts:[{name:'Johan',title:'Operations Director'}],activities:[]};}
+  };
+  const engine={buildApolloPeopleSearchPayload:({domain},profile)=>({q_organization_domains_list:[domain],person_titles:profile.decisionMakers}),normalizeApolloPeople:result=>result.people,selectDecisionMakers:people=>people};
+  const h=harness(bridge,{LeadIntelCrm:{canonicalDomain:value=>value},LeadIntelDiscovery:engine,localStorage:{getItem:()=>JSON.stringify({profile:{decisionMakers:['Operations Director']}})}});
+  h.state.selectedId=company.id;h.state.detail={company,contacts:[]};
+  assert.equal(await h.findBuyersForSavedCompany(),true);
+  assert.deepEqual(calls.map(call=>call[0]),['apollo','contacts']);
+  assert.equal(calls[0][1].q_organization_domains_list[0],'billerud.com');
+  assert.equal(calls[1][2][0].external_person_id,'person-1');
+  assert.equal(calls[1][2][0].work_email,undefined);
+  assert.equal(h.state.detail.contacts.length,1);
+  assert.equal(company.pipeline_stage,null);
 });
