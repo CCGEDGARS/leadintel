@@ -16,5 +16,5 @@ test('workspace persistence boundary initializes before app state is loaded',()=
 });
 
 test('process map reuses the same startup-order persistence module URL',()=>{
-  assert.match(processMap,/import ['"]\.\/workspace-persistence\.js\?v=20260926-visible-save-v1['"]/);
+  assert.match(processMap,/import ['"]\.\/workspace-persistence\.js\?v=20260926-visible-save-v1&refresh-protection=1['"]/);
 });
