@@ -47,5 +47,20 @@ test('old discovery fingerprint with equivalent website does not invalidate sear
   const before=JSON.stringify({company:'Ercon',website:'https://www.ercon.lv/',approved:'approved',icps:[],signals:[],opps:[]});
   const same=JSON.stringify({company:'Ercon',website:'ercon.lv',approved:'approved',icps:[],signals:[],opps:[]});
   assert.equal(context.sameStrategyFingerprint(before,same),true);
-  assert.equal(context.sameStrategyFingerprint(before,JSON.stringify({...JSON.parse(same),approved:'changed'})),false);
+  assert.equal(context.sameStrategyFingerprint(before,JSON.stringify({...JSON.parse(same),approved:'changed'})),true,'reapproval alone must preserve the prior search');
+  assert.equal(context.sameStrategyFingerprint(before,JSON.stringify({...JSON.parse(same),signals:[['new-signal',9,'expansion']]})),false,'changing targeting must invalidate the prior search');
+});
+
+test('a draft strategy still lets the user revisit results scoped to the same company',()=>{
+  const values={
+    [isolation.DISCOVERY_META_KEY]:JSON.stringify({website:'https://www.ercon.lv/',fingerprint:'{}'}),
+    [isolation.DISCOVERY_KEY]:JSON.stringify({potentialMatches:[{company:'Billerud',domain:'billerud.com'}]})
+  };
+  const storage={getItem:key=>values[key]??null};
+  const main={website:'https://www.ercon.lv/',targetMarkets:['Sweden'],profile:{companyName:'Ercon'},approved:true,market:{strategyApproved:false}};
+  assert.equal(isolation.hasPreviousDiscovery(storage,main),true);
+  assert.equal(isolation.safeStep(storage,main,5),5);
+  assert.equal(isolation.safeStep(storage,main,7),5);
+  assert.equal(isolation.safeStep(storage,{...main,website:'https://other.se/'},5),4,'another company cannot inherit Ercon results');
+  assert.equal(isolation.safeStep({getItem:()=>null},main,5),4,'first-time company discovery still needs an approved strategy');
 });

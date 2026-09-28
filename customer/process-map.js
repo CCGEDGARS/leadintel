@@ -99,6 +99,7 @@ function stageAvailability(){
   const profile=Boolean(current.profile);
   const approved=Boolean(current.approved);
   const strategy=Boolean(current.market?.strategyApproved);
+  const previousDiscovery=Boolean(window.LeadIntelWorkspaceIsolation?.hasPreviousDiscovery?.(localStorage,current));
   const pipeline=hasPipelineOpportunity();
   const content=hasOutreachContent();
   return {
@@ -106,7 +107,7 @@ function stageAvailability(){
     2:ready,
     3:ready,
     4:ready&&profile&&approved,
-    5:ready&&profile&&approved&&strategy,
+    5:ready&&profile&&approved&&(strategy||previousDiscovery),
     6:ready&&profile&&approved&&strategy&&pipeline,
     7:ready&&profile&&approved&&strategy&&pipeline&&content
   };
