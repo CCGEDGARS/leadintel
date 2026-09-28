@@ -23,7 +23,7 @@ class D1Statement{
   async run(){const result=this.db.prepare(this.sql).run(...this.args);return {success:true,meta:{changes:Number(result.changes||0)}};}
 }
 class D1Db{
-  constructor(){this.raw=new DatabaseSync(':memory:');this.batchTail=Promise.resolve();const migration=fs.readFileSync(path.join(__dirname,'..','migrations','0011_master_crm.sql'),'utf8');this.raw.exec(migration);}
+  constructor(){this.raw=new DatabaseSync(':memory:');this.batchTail=Promise.resolve();const migration=fs.readFileSync(path.join(__dirname,'..','migrations','0011_master_crm.sql'),'utf8');this.raw.exec(migration);this.raw.exec(fs.readFileSync(new URL('../migrations/0022_crm_public_contact_sources.sql',import.meta.url),'utf8'));}
   prepare(sql){return new D1Statement(this.raw,sql);}
   async batch(statements){const previous=this.batchTail;let release;this.batchTail=new Promise(resolve=>{release=resolve;});await previous;try{this.raw.exec('BEGIN IMMEDIATE');const out=[];for(const statement of statements)out.push(await statement.run());this.raw.exec('COMMIT');return out;}catch(error){this.raw.exec('ROLLBACK');throw error;}finally{release();}}
 }
@@ -31,6 +31,22 @@ const ctx=(workspaceId='w1',role='owner')=>({workspaceId,userId:'u1',role});
 
 const sqliteTest=(name,fn)=>test(name,{skip:DatabaseSync?false:'requires Node 22+ node:sqlite'},fn);
 const candidate=(domain='example.com')=>({company:{company_name:'Example Manufacturing',domain,website:`https://${domain}/`,country:'LV',industry:'Manufacturing',opportunity_score:81,confidence:'High',source:'discovery'},intelligence:{matched_signals:[{name:'Expansion'}],evidence:[{url:`https://${domain}/news`,title:'Expansion'}],opportunity_hypothesis:'Expansion creates an opportunity',score_breakdown:{fit:25}},contacts:[{id:'apollo-1',name:'Anna Buyer',title:'Procurement Director',work_email:'ANNA@EXAMPLE.COM',source:'apollo'}]});
+
+sqliteTest('public buyer evidence survives CRM refresh without downgrading a verified email',async()=>{
+  const db=new D1Db();
+  const {company}=await upsertCrmCompany(db,ctx(),{...candidate(),contacts:[]});
+  const publicContact={external_person_id:'apollo-1',source:'apollo',name:'Anna Buyer',work_email:'anna@example.com',email_status:'public_unverified',public_name_url:'https://example.com/team',public_email_url:'https://example.com/team',public_linkedin_url:'https://www.linkedin.com/in/anna-buyer'};
+  await upsertCrmContacts(db,ctx(),company.id,[publicContact]);
+  let [contact]=(await getCrmCompany(db,ctx(),company.id)).contacts;
+  assert.equal(contact.public_email_url,'https://example.com/team');
+  assert.equal(contact.email_status,'public_unverified');
+  await upsertCrmContacts(db,ctx(),company.id,[{external_person_id:'apollo-1',source:'apollo',name:'Anna Buyer',work_email:'anna.verified@example.com',email_status:'verified'}]);
+  await upsertCrmContacts(db,ctx(),company.id,[publicContact]);
+  [contact]=(await getCrmCompany(db,ctx(),company.id)).contacts;
+  assert.equal(contact.work_email,'anna.verified@example.com');
+  assert.equal(contact.email_status,'verified');
+  assert.equal(contact.public_name_url,'https://example.com/team');
+});
 
 sqliteTest('suppression cannot be cleared by archive or customer actions, even by owner',async()=>{
   for(const role of ['owner','sales'])for(const action of [archiveCrmCompany,markCrmCustomer]){

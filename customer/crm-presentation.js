@@ -84,10 +84,13 @@
       const emailStatus=clean(contact?.email_status,80)||"Not recorded";
       const source=sourceLabel(contact?.source);
       const profileUrl=safeLinkedInProfileUrl(contact?.linkedin_url);
+      const publicProfileUrl=safeLinkedInProfileUrl(contact?.public_linkedin_url);
+      const nameEvidence=safePublicUrl(contact?.public_name_url);
+      const emailEvidence=safePublicUrl(contact?.public_email_url);
       const link=profileUrl
-        ?`<a class="crm-contact-linkedin" href="${esc(profileUrl)}" target="_blank" rel="noopener noreferrer">View LinkedIn profile ↗</a><small class="crm-contact-provenance">${source==="Apollo"?"Apollo-provided identity link · ":""}Confirm the current role before outreach.</small>`
+        ?`<a class="crm-contact-linkedin" href="${esc(profileUrl)}" target="_blank" rel="noopener noreferrer">View LinkedIn profile ↗</a><small class="crm-contact-provenance">${publicProfileUrl===profileUrl?"Public profile match · ":source==="Apollo"?"Apollo-provided identity link · ":""}Confirm the current role before outreach.</small>`
         :"";
-      return `<div class="crm-contact"><strong>${esc(contact?.name||"Unnamed contact")}</strong><span>${esc(contact?.title||"Role not set")}</span><small>${esc(email||"No work email saved")}</small><small>Email status · ${esc(emailStatus)}</small><small class="crm-contact-source">Contact source · ${esc(source)}</small><small>${contact?.phone_number?`Phone · ${esc(contact.phone_number)}`:"No phone saved"}</small>${link}</div>`;
+      return `<div class="crm-contact"><strong>${esc(contact?.name||"Unnamed contact")}</strong>${nameEvidence?`<a href="${esc(nameEvidence)}" target="_blank" rel="noopener noreferrer">Public name source ↗</a>`:""}<span>${esc(contact?.title||"Role not set")}</span><small>${esc(email||"No work email saved")}</small>${emailEvidence?`<a href="${esc(emailEvidence)}" target="_blank" rel="noopener noreferrer">Public email source ↗</a>`:""}<small>Email status · ${esc(emailStatus)}</small><small class="crm-contact-source">Contact source · ${esc(source)}</small><small>${contact?.phone_number?`Phone · ${esc(contact.phone_number)}`:"No phone saved"}</small>${link}</div>`;
     }).join("");
   }
   return {safePublicUrl,safeLinkedInProfileUrl,scoreBreakdownHtml,evidenceHtml,intelligenceHtml,contactsHtml};
