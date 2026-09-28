@@ -438,6 +438,7 @@ test('Saving Mode samples two saved targets and one opportunity hypothesis withi
   assert.equal(searches.filter(item=>item.body.query.includes('site:sodra.com')||item.body.query.includes('site:boliden.com')||item.body.query.includes('site:billerud.com')).filter(item=>!item.body.query.startsWith('site:')).length,2);
   assert.equal(context.__discoveryState().funnel.marketSearchesTotal,4);
   assert.ok(searches.every(item=>item.body.limit<=4));
+  assert.equal(searches.some(item=>/official company website/.test(item.body.query)&&/Södra|Boliden/.test(item.body.query)),false,"known target domains should skip resolution during general discovery");
   assert.equal(context.__discoveryState().funnel.firecrawlSearchCalls,searches.length);
   assert.ok(context.__discoveryState().funnel.companySitesChecked<=3);
 });
