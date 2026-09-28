@@ -441,3 +441,25 @@ test('public contacts retain an official source and remain unverified after relo
   assert.equal(saved.selectedProspects[0].qualified,false);
   assert.equal(saved.selectedProspects[0].publicContacts.length,contacts.length);
 });
+
+test('official company evidence adds full buyer names and explicit personal work emails without Apollo',()=>{
+  const people=[{id:'p1',name:'Lotta',title:'CEO & President'},{id:'p2',name:'Jacob',title:'Team Leader'}];
+  const results=[{url:'https://northstar.com/team',title:'Our leadership',markdown:'Lotta Andersson — CEO & President. lotta.andersson@northstar.com. Jacob Berg — Team Leader. jacob.berg@northstar.com.'},
+    {url:'https://directory.example/people',title:'Another Lotta',markdown:'Lotta Wrong — CEO. lotta.wrong@northstar.com'}];
+  const found=Discovery.matchPublicBuyerDetails(people,results,'northstar.com');
+  assert.equal(found[0].publicName,'Lotta Andersson');
+  assert.equal(found[0].publicEmail,'lotta.andersson@northstar.com');
+  assert.equal(found[0].publicNameUrl,'https://northstar.com/team');
+  assert.equal(found[1].publicName,'Jacob Berg');
+  const restored=Discovery.normalizeDiscoveryState({selectedProspects:[{company:'Northstar',domain:'northstar.com',buyerSearchMode:'user_selected_target',people:found}]});
+  assert.equal(restored.selectedProspects[0].people[0].publicEmail,'lotta.andersson@northstar.com');
+});
+
+test('generic company inboxes and ambiguous surnames cannot be assigned to a buyer',()=>{
+  const person=[{name:'Lotta',title:'CEO'}];
+  const generic=Discovery.matchPublicBuyerDetails(person,[{url:'https://northstar.com/team',markdown:'Lotta Andersson — CEO. Email info@northstar.com'}],'northstar.com');
+  assert.equal(generic[0].publicName,'Lotta Andersson');
+  assert.equal(generic[0].publicEmail,'');
+  const ambiguous=Discovery.matchPublicBuyerDetails(person,[{url:'https://northstar.com/team',markdown:'Lotta Andersson — CEO. Lotta Svensson — CEO.'}],'northstar.com');
+  assert.equal(ambiguous[0].publicName,undefined);
+});
