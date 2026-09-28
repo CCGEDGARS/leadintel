@@ -7,7 +7,7 @@
 
   const DEFAULT_MARKET_STATE=Object.freeze({
     icps:[],signals:[],researchQueries:[],researchResults:[],opportunities:[],researchQuality:null,
-    researchStatus:"idle",researchSourceStatus:{openai:"idle",firecrawl:"idle",gemini:"idle"},researchVerification:{status:"idle",provider:"gemini",role:"verification",webSearch:false,reason:"",summary:"",disagreements:[],missingEvidence:[],verifiedAt:""},researchProgress:{completed:0,total:0},researchErrors:[],lastResearchAt:"",researchMode:"quick",researchSourceTypes:["news"],researchCustomSources:[],researchInstructions:"",researchHistory:[],marketConditions:null,monitoring:{enabled:false,frequency:"weekly",researchDepth:"deep",minimumScore:70,sourceTypes:["news","jobs","investments","company"],signalIds:[],customSources:[]},strategyApproved:false,strategyApprovedAt:""
+    researchStatus:"idle",researchSourceStatus:{openai:"idle",firecrawl:"idle",gemini:"idle"},researchVerification:{status:"idle",provider:"gemini",role:"verification",webSearch:false,reason:"",summary:"",disagreements:[],missingEvidence:[],verifiedAt:""},researchProgress:{completed:0,total:0},researchErrors:[],lastResearchAt:"",researchMode:"quick",researchSourceTypes:["news"],researchSourceTypesCustomized:false,researchCustomSources:[],researchInstructions:"",researchHistory:[],marketConditions:null,monitoring:{enabled:false,frequency:"weekly",researchDepth:"deep",minimumScore:70,sourceTypes:["news","jobs","investments","company"],signalIds:[],customSources:[]},strategyApproved:false,strategyApprovedAt:""
   });
 
   const RESEARCH_MODES=Object.freeze({
@@ -178,7 +178,7 @@
   }
 
   const RESEARCH_ALLOCATIONS=Object.freeze({
-    deep:Object.freeze({direction:3,competition:2,funding:2,pricing:1,commercial:4}),
+    deep:Object.freeze({direction:2,competition:1,funding:1,pricing:0,commercial:8}),
     intelligence:Object.freeze({direction:5,competition:4,funding:4,pricing:3,commercial:8})
   });
   const RESEARCH_CATEGORY_INTENTS=Object.freeze({
@@ -188,32 +188,44 @@
     pricing:["price per hour rates currency service", "project pricing examples quotes", "public procurement contract value unit price"]
   });
   function buildCommercialResearchPlan(profile={},signals=[],input={},count=4){
-    const legacy=buildResearchQueries(profile,signals,input);
     const markets=effectiveResearchMarkets(profile);const market=markets[0]||"priority market";
-    const offer=splitList(profile.priorityOffers)[0]||"commercial opportunity";
-    const activeTerms=(signals||[]).filter(item=>item.active!==false).flatMap(item=>splitList(String(item.keywords||"").replace(/,/g,";"))).filter(Boolean);
-    const intents=["latest company announcements", "buyer demand events", "active buying signals", "commercial opportunity evidence", "new projects and investments", "buyer role priorities", "supplier demand indicators", "verified company developments"];
-    const planned=legacy.slice(0,count).map((item,index)=>({...item,id:`q-${slug(market)}-commercial-${index+1}`,researchCategory:"commercial"}));
-    for(let index=planned.length;index<count;index++){
-      const query=[market,offer,clean(profile.marketFocus),clean(profile.idealCustomer),activeTerms[index%Math.max(1,activeTerms.length)]||clean(profile.buyingTriggers),intents[index%intents.length],`follow-up ${index+1}`,clean(input.instructions),new Date().getUTCFullYear()].filter(Boolean).join(" ");
-      planned.push({id:`q-${slug(market)}-commercial-${index+1}`,market,offer,sourceType:"news",researchCategory:"commercial",query});
+    const offer=compactResearchTerm(profile.priorityOffers,6)||"commercial opportunity";
+    const buyer=compactResearchTerm(profile.idealCustomer,4)||"companies";
+    const active=(signals||[]).filter(item=>item.active!==false).filter(item=>!isTenderSignal(item)||filterResearchSourceTypes(input.sourceTypes||[],signals).includes("tenders")).sort((a,b)=>Number(b.weight)-Number(a.weight));
+    const sourceTypes=filterResearchSourceTypes(input.sourceTypes||["news"],signals);
+    const sources=sourceTypes.length?sourceTypes:["news"];
+    const intents=["company announcement", "new project", "supplier opportunity", "contract award", "facility investment", "production expansion", "project pipeline", "official company update"];
+    const planned=[];
+    for(let index=0;index<count;index++){
+      const signal=active[index%Math.max(active.length,1)];
+      const signalTerm=compactResearchTerm(signal?.name||profile.buyingTriggers,7)||"buyer demand";
+      const sourceType=sources[index%sources.length];
+      const sourceTerm={news:"news",jobs:"hiring",investments:"investment",company:"company site",registries:"official filings",tenders:"procurement"}[sourceType];
+      const query=[market,index%2?offer:buyer,signalTerm,intents[index%intents.length],sourceTerm,new Date().getUTCFullYear()].filter(Boolean).join(" ");
+      planned.push({id:`q-${slug(market)}-commercial-${index+1}`,market,offer,sourceType,researchCategory:"commercial",query});
     }
     return planned;
+  }
+  function compactResearchTerm(value,maxWords=8){
+    return clean(splitList(value)[0]||value).split(/\s+/).slice(0,maxWords).join(" ");
   }
   function buildResearchPlan(profile={},signals=[],input={mode:"quick"}){
     const mode=RESEARCH_MODES[input?.mode]?input.mode:"quick";
     if(mode==="quick")return buildCommercialResearchPlan(profile,signals,input,RESEARCH_MODES.quick.maxQueries);
     const allocation=RESEARCH_ALLOCATIONS[mode];
     const markets=effectiveResearchMarkets(profile);const market=markets[0]||"priority market";
-    const offer=splitList(profile.priorityOffers)[0]||"commercial opportunity";
-    const context=[clean(profile.marketFocus),clean(profile.idealCustomer),new Date().getUTCFullYear()].filter(Boolean).join(" ");
+    const offer=compactResearchTerm(profile.priorityOffers,6)||"commercial opportunity";
+    const context=new Date().getUTCFullYear();
+    const selectedSources=filterResearchSourceTypes(input.sourceTypes||["news"],signals);
     const planned=[];
     for(const category of ["direction","competition","funding","pricing"]){
       const intents=RESEARCH_CATEGORY_INTENTS[category];
       for(let index=0;index<allocation[category];index++){
         const intent=intents[index%intents.length];
         const variation=index>=intents.length?`follow-up ${index+1}`:"";
-        planned.push({id:`q-${slug(market)}-${category}-${index+1}`,market,offer,sourceType:category==="funding"?"investments":category==="direction"?"registries":"news",researchCategory:category,query:[market,offer,context,intent,variation,clean(input.instructions)].filter(Boolean).join(" ")});
+        const preferred=category==="funding"?"investments":category==="direction"?"registries":"news";
+        const sourceType=selectedSources.includes(preferred)?preferred:selectedSources[0]||"news";
+        planned.push({id:`q-${slug(market)}-${category}-${index+1}`,market,offer,sourceType,researchCategory:category,query:[market,offer,context,intent,variation,compactResearchTerm(input.instructions,8)].filter(Boolean).join(" ")});
       }
     }
     planned.push(...buildCommercialResearchPlan(profile,signals,input,allocation.commercial));
@@ -439,7 +451,7 @@
     const researchErrors=(Array.isArray(input.researchErrors)?input.researchErrors:[]).slice(0,12).map(item=>({provider:clean(item?.provider).slice(0,40),query:clean(item?.query).slice(0,180),message:clean(item?.message).slice(0,240)})).filter(item=>item.provider||item.message);
     return {
       ...DEFAULT_MARKET_STATE,icps,signals,researchQueries,researchResults,opportunities,researchSourceStatus,researchVerification,researchProgress,researchErrors,
-      researchStatus:allowed.has(input.researchStatus)?input.researchStatus:"idle",researchMode,researchSourceTypes:researchSourceTypes.length?researchSourceTypes:defaultResearchSources,researchCustomSources,researchInstructions,
+      researchStatus:allowed.has(input.researchStatus)?input.researchStatus:"idle",researchMode,researchSourceTypes:researchSourceTypes.length?researchSourceTypes:defaultResearchSources,researchSourceTypesCustomized:input.researchSourceTypesCustomized===true,researchCustomSources,researchInstructions,
       researchHistory:(Array.isArray(input.researchHistory)?input.researchHistory:[]).slice(0,20).map(item=>({id:clean(item?.id),mode:RESEARCH_MODES[item?.mode]?item.mode:"quick",status:clean(item?.status),sourceCount:Math.max(0,Number(item?.sourceCount)||0),queryCount:Math.max(0,Number(item?.queryCount)||0),completedAt:clean(item?.completedAt)})).filter(item=>item.id),monitoring:normalizeMonitoring(input.monitoring),
       lastResearchAt:clean(input.lastResearchAt),marketConditions:input.marketConditions&&typeof input.marketConditions==="object"?input.marketConditions:null,researchQuality:input.researchQuality&&typeof input.researchQuality==="object"?input.researchQuality:null,researchContextStale:input.researchContextStale===true,strategyApproved:Boolean(input.strategyApproved),strategyApprovedAt:clean(input.strategyApprovedAt),contentLanguage:['en','lv'].includes(input.contentLanguage)?input.contentLanguage:'',contentVariants:input.contentVariants&&typeof input.contentVariants==='object'?input.contentVariants:{}
     };
