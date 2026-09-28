@@ -85,6 +85,13 @@
   function normalizedStep(value){
     const step=Number(value);return [1,2,3,4,5,6,7].includes(step)?step:1;
   }
+  function hasPreviousDiscovery(storage,main={}){
+    const website=websiteFromMain(main);
+    const meta=read(storage,DISCOVERY_META_KEY);
+    if(!website||websiteFromMeta(meta)!==website)return false;
+    const discovery=read(storage,DISCOVERY_KEY);
+    return ["rawResults","candidates","potentialMatches","pipeline","selectedProspects"].some(key=>Array.isArray(discovery[key])&&discovery[key].length>0);
+  }
   function safeStep(storage,main={},requested=1){
     const target=normalizedStep(requested);
     const website=websiteFromMain(main);
@@ -92,7 +99,7 @@
     if(!website||!markets.length)return 1;
     if(!main.profile)return Math.min(target,2);
     if(!main.approved)return Math.min(target,3);
-    if(!main.market?.strategyApproved)return Math.min(target,4);
+    if(!main.market?.strategyApproved)return target>=5&&hasPreviousDiscovery(storage,main)?5:Math.min(target,4);
     if(target<=5)return target;
     const discovery=read(storage,DISCOVERY_KEY);
     const hasPipeline=Array.isArray(discovery.pipeline)&&discovery.pipeline.length>0;
@@ -122,7 +129,7 @@
     MAIN_KEY,DISCOVERY_KEY,OUTREACH_KEY,DELIVERY_KEY,DISCOVERY_META_KEY,
     RESEARCH_META_KEY,MARKET_RESEARCH_RESUME_KEY,DIRTY_KEY,DERIVED_KEYS,
     clean,normalizeUrl,canonicalDomain,websiteFromMain,websiteFromMeta,
-    hasMeaningfulDerivedData,clearDerivedWorkspaceData,reconcileLocalWorkspace,safeStep,
+    hasMeaningfulDerivedData,clearDerivedWorkspaceData,reconcileLocalWorkspace,hasPreviousDiscovery,safeStep,
     filterPipelineForWorkspace,pipelineScopeNeedsReset
   };
 });
