@@ -29,3 +29,18 @@ test('a discovery result saves automatically after a debounce and reports saved 
   assert.match(snapshot.data.leadintel_customer_v2_discovery,/Billerud/);
   assert.equal(button.textContent,'Save now');
 });
+
+test('save panel recovers a server conflict by keeping local changes',async()=>{
+  const values=new Map([['leadintel_customer_v2_state',JSON.stringify({website:'https://ercon.lv',profile:{website:'https://ercon.lv'}})]]);
+  let click,kept=0;
+  const button={textContent:'',disabled:false,dataset:{},addEventListener(name,handler){if(name==='click')click=handler;}};
+  const status={textContent:''},bar={dataset:{}};
+  const bridge={session:{authenticated:true},workspace:{id:'w1'},conflict:true,async resolveConflictKeepLocal(){kept++;bridge.conflict=false;return {saved:true};}};
+  const sandbox={console,URL,Request,Response,Date,Promise,LeadIntelServerBridge:bridge,localStorage:{getItem:key=>values.get(key)||null,setItem:(key,value)=>values.set(key,String(value)),removeItem:key=>values.delete(key)},sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}},location:{href:'https://leadintel.ccgroup.lv/customer/'},fetch:async()=>new Response('{}',{status:200}),document:{readyState:'complete',querySelector:selector=>selector==='.workspace-save-bar'?bar:null,getElementById:id=>id==='save-workspace'?button:id==='workspace-save-state'?status:null,addEventListener(){}},addEventListener(){},removeEventListener(){},setTimeout,clearTimeout,CustomEvent:class CustomEvent{}};
+  sandbox.globalThis=sandbox;
+  vm.runInNewContext(source,sandbox,{filename:'workspace-persistence.js'});
+  assert.equal(button.textContent,'Keep my local changes');
+  click();await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(kept,1);
+  assert.doesNotMatch(status.textContent,/Sync failed|Sync conflict/);
+});

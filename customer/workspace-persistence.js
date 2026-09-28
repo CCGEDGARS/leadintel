@@ -12,7 +12,7 @@
   const VERSION_KEY="leadintel_customer_v2_server_versions";
   const CONFLICT_KEY="leadintel_customer_v2_server_conflict";
   const API_BASE="https://leadintel-api.edgars-7e7.workers.dev";
-  const SAVE_REQUEST_TIMEOUT_MS=10000;
+  const SAVE_REQUEST_TIMEOUT_MS=45000;
   const AUTOSAVE_DEBOUNCE_MS=2200;
 
   const WORKSPACE_DATA_KEYS=Object.freeze([
@@ -170,8 +170,8 @@
 
   function disableServerAutosave(){if(typeof Storage!=="undefined"&&Storage.prototype)Storage.prototype.__leadintelServerPatched=true;}
   function hasUnsavedChanges(){return dirtySinceSave||hasLocalChangesSinceSnapshot()||(!isExplicitlySaved()&&hasMeaningfulWorkspaceData());}
-  function persistenceLabel(){if(saveBusy)return "Saving workspace…";if(saveError)return "Sync failed · changes kept in this browser";if(!hasMeaningfulWorkspaceData()&&!hasUnsavedChanges())return "New workspace · ready";if(!isExplicitlySaved())return "Unsaved draft · saving shortly";if(hasUnsavedChanges())return "Unsaved changes · saving shortly";return isBrowserOnlySnapshot()?"Saved in this browser · cloud sync pending":"Saved automatically to LeadIntel";}
-  function renderPersistenceStatus(){const label=persistenceLabel();const status=root.document?.querySelector?.(".autosave");if(status)status.innerHTML=`<i></i>${label}`;const visibleStatus=root.document?.getElementById?.("workspace-save-state");if(visibleStatus)visibleStatus.textContent=label;const bar=root.document?.querySelector?.(".workspace-save-bar");if(bar)bar.dataset.state=saveError?"error":saveBusy?"saving":hasUnsavedChanges()?"unsaved":isExplicitlySaved()?"saved":"new";const button=root.document?.getElementById?.("save-workspace");if(button){button.textContent=saveBusy?"Saving…":saveError?"Retry save":"Save now";button.disabled=saveBusy;}}
+  function persistenceLabel(){if(saveBusy)return "Saving workspace…";if(saveError)return `${saveError} · changes kept in this browser`;if(!hasMeaningfulWorkspaceData()&&!hasUnsavedChanges())return "New workspace · ready";if(!isExplicitlySaved())return "Unsaved draft · saving shortly";if(hasUnsavedChanges())return "Unsaved changes · saving shortly";return isBrowserOnlySnapshot()?"Saved in this browser · cloud sync pending":"Saved automatically to LeadIntel";}
+  function renderPersistenceStatus(){const label=persistenceLabel();const status=root.document?.querySelector?.(".autosave");if(status)status.innerHTML=`<i></i>${label}`;const visibleStatus=root.document?.getElementById?.("workspace-save-state");if(visibleStatus)visibleStatus.textContent=label;const bar=root.document?.querySelector?.(".workspace-save-bar");if(bar)bar.dataset.state=saveError?"error":saveBusy?"saving":hasUnsavedChanges()?"unsaved":isExplicitlySaved()?"saved":"new";const button=root.document?.getElementById?.("save-workspace");if(button){button.textContent=saveBusy?"Saving…":root.LeadIntelServerBridge?.conflict?"Keep my local changes":saveError?"Retry save":"Save now";button.disabled=saveBusy;}}
   function toast(message){const el=root.document?.getElementById?.("toast");if(!el)return;el.textContent=message;el.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove("show"),2400);}
   function waitForBridge(timeout=1800){if(root.LeadIntelServerBridge?.session!==null&&root.LeadIntelServerBridge?.session!==undefined)return Promise.resolve(root.LeadIntelServerBridge);return new Promise(resolve=>{let done=false;const finish=()=>{if(done)return;done=true;root.removeEventListener?.("leadintel:server-ready",finish);resolve(root.LeadIntelServerBridge||null);};root.addEventListener?.("leadintel:server-ready",finish,{once:true});root.setTimeout?.(finish,timeout);});}
 
@@ -187,8 +187,8 @@
 
   async function saveWorkspace({automatic=false}={}){
     if(saveBusy)return false;saveBusy=true;renderPersistenceStatus();
-    try{const bridge=await waitForBridge();if(bridge?.session?.authenticated&&bridge?.workspace){const result=await withTimeout(()=>root.LeadIntelServerBridge?.saveNow?.({saveIntent:true,explicitSave:true}),SAVE_REQUEST_TIMEOUT_MS);if(!result?.saved)throw new Error("Workspace could not be saved to LeadIntel");if(!automatic)toast("Workspace saved");}else{captureWorkspaceSnapshot();markExplicitlySaved();dirtySinceSave=false;if(!automatic)toast("Workspace saved in this browser");}saveError="";return true;}
-    catch(error){dirtySinceSave=true;saveError=String(error?.message||"Unknown error");if(!automatic)toast(`Save failed · ${saveError}`);return false;}
+    try{const bridge=await waitForBridge();if(bridge?.session?.authenticated&&bridge?.workspace){const result=await withTimeout(()=>bridge.conflict?bridge.resolveConflictKeepLocal?.():bridge.saveNow?.({saveIntent:true,explicitSave:true}),SAVE_REQUEST_TIMEOUT_MS);if(!result?.saved)throw new Error(result?.conflict?"conflict":"Workspace could not be saved to LeadIntel");if(!automatic)toast("Workspace saved");}else{captureWorkspaceSnapshot();markExplicitlySaved();dirtySinceSave=false;if(!automatic)toast("Workspace saved in this browser");}saveError="";return true;}
+    catch(error){dirtySinceSave=true;const detail=String(error?.message||"");saveError=root.LeadIntelServerBridge?.conflict||detail==="conflict"?"Sync conflict · keep your local changes":/timed out|timeout/i.test(detail)?"Sync timed out · retry save":/failed to fetch|network/i.test(detail)?"Could not reach LeadIntel · retry save":"Sync failed · retry save";if(!automatic)toast(saveError);return false;}
     finally{saveBusy=false;renderPersistenceStatus();if(!saveError&&hasUnsavedChanges())scheduleAutoSave();}
   }
   function scheduleAutoSave(){if(root.localStorage?.getItem(RESET_PENDING_KEY)||!hasMeaningfulWorkspaceData())return;root.clearTimeout?.(autoSaveTimer);autoSaveTimer=root.setTimeout?.(()=>{autoSaveTimer=null;if(saveBusy){scheduleAutoSave();return;}if(hasUnsavedChanges()||(isBrowserOnlySnapshot()&&root.LeadIntelServerBridge?.session?.authenticated&&root.LeadIntelServerBridge?.workspace))void saveWorkspace({automatic:true});},AUTOSAVE_DEBOUNCE_MS);renderPersistenceStatus();}
