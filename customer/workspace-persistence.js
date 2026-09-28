@@ -13,6 +13,7 @@
   const CONFLICT_KEY="leadintel_customer_v2_server_conflict";
   const API_BASE="https://leadintel-api.edgars-7e7.workers.dev";
   const SAVE_REQUEST_TIMEOUT_MS=10000;
+  const AUTOSAVE_DEBOUNCE_MS=2200;
 
   const WORKSPACE_DATA_KEYS=Object.freeze([
     "leadintel_customer_v2_state",
@@ -27,13 +28,16 @@
   let nativeFetch=null;
   let dirtySinceSave=false;
   let saveBusy=false;
+  let autoSaveTimer=null;
+  let saveError="";
 
   function safeJson(value,fallback=null){try{return JSON.parse(value);}catch{return fallback;}}
   function isObject(value){return Boolean(value&&typeof value==="object"&&!Array.isArray(value));}
   function readSnapshot(){const parsed=safeJson(root.localStorage?.getItem(SNAPSHOT_KEY)||"",null);return isObject(parsed)&&isObject(parsed.data)?parsed:null;}
+  function isBrowserOnlySnapshot(){return readSnapshot()?.server_synced===false;}
   function isExplicitlySaved(){return root.localStorage?.getItem(EXPLICIT_SAVE_KEY)==="1"&&Boolean(readSnapshot());}
   function markExplicitlySaved(){root.localStorage?.setItem(EXPLICIT_SAVE_KEY,"1");return true;}
-  function clearExplicitSave(){root.localStorage?.removeItem(EXPLICIT_SAVE_KEY);root.localStorage?.removeItem(SNAPSHOT_KEY);dirtySinceSave=false;return true;}
+  function clearExplicitSave(){root.localStorage?.removeItem(EXPLICIT_SAVE_KEY);root.localStorage?.removeItem(SNAPSHOT_KEY);dirtySinceSave=false;root.clearTimeout?.(autoSaveTimer);autoSaveTimer=null;return true;}
 
   function currentWorkspaceData(){
     const data={};
@@ -60,7 +64,7 @@
     }
     return ["leadintel_customer_v2_discovery_meta","leadintel_customer_v2_website_activation_v1","leadintel_customer_v2_research_meta_v1"].some(key=>hasText(data[key]));
   }
-  function captureWorkspaceSnapshot(){const snapshot={schema_version:1,saved_at:new Date().toISOString(),data:currentWorkspaceData()};root.localStorage?.setItem(SNAPSHOT_KEY,JSON.stringify(snapshot));return snapshot;}
+  function captureWorkspaceSnapshot(){const snapshot={schema_version:1,server_synced:false,saved_at:new Date().toISOString(),data:currentWorkspaceData()};root.localStorage?.setItem(SNAPSHOT_KEY,JSON.stringify(snapshot));return snapshot;}
   function sameWorkspaceData(a,b){const left=isObject(a)?a:{};const right=isObject(b)?b:{};const keys=[...new Set([...Object.keys(left),...Object.keys(right)])].sort();return keys.every(key=>String(left[key]??"")===String(right[key]??""));}
   function hasLocalChangesSinceSnapshot(){const snapshot=readSnapshot();if(!snapshot)return false;const key="leadintel_customer_v2_discovery";const current=safeJson(root.localStorage?.getItem(key)||"{}",{});const saved=safeJson(snapshot.data[key]||"{}",{});return JSON.stringify(current)!==JSON.stringify(saved);}
   function protectLocalChanges(){
@@ -112,7 +116,7 @@
     if(isObject(payload.delivery))data["leadintel_customer_v2_delivery"]=JSON.stringify(payload.delivery);
     if(isObject(payload.meta?.discovery))data["leadintel_customer_v2_discovery_meta"]=JSON.stringify(payload.meta.discovery);
     const activation=buildActivationRecord(payload.main||{});if(activation)data["leadintel_customer_v2_website_activation_v1"]=JSON.stringify(activation);
-    const snapshot={schema_version:1,saved_at:new Date().toISOString(),data};root.localStorage?.setItem(SNAPSHOT_KEY,JSON.stringify(snapshot));markExplicitlySaved();dirtySinceSave=typeof options.dirty==='boolean'?options.dirty:!sameWorkspaceData(currentWorkspaceData(),data);return snapshot;
+    const snapshot={schema_version:1,server_synced:true,saved_at:new Date().toISOString(),data};root.localStorage?.setItem(SNAPSHOT_KEY,JSON.stringify(snapshot));markExplicitlySaved();dirtySinceSave=typeof options.dirty==='boolean'?options.dirty:!sameWorkspaceData(currentWorkspaceData(),data);return snapshot;
   }
 
   function jsonResponse(payload,status=200){return new Response(JSON.stringify(payload),{status,headers:{"Content-Type":"application/json"}});}
@@ -166,8 +170,8 @@
 
   function disableServerAutosave(){if(typeof Storage!=="undefined"&&Storage.prototype)Storage.prototype.__leadintelServerPatched=true;}
   function hasUnsavedChanges(){return dirtySinceSave||hasLocalChangesSinceSnapshot()||(!isExplicitlySaved()&&hasMeaningfulWorkspaceData());}
-  function persistenceLabel(){if(!hasMeaningfulWorkspaceData()&&!hasUnsavedChanges())return "New workspace · ready";if(!isExplicitlySaved())return "Unsaved draft · not saved";return hasUnsavedChanges()?"Unsaved changes · click Save workspace":"Workspace saved";}
-  function renderPersistenceStatus(){const label=persistenceLabel();const status=root.document?.querySelector?.(".autosave");if(status)status.innerHTML=`<i></i>${label}`;const visibleStatus=root.document?.getElementById?.("workspace-save-state");if(visibleStatus)visibleStatus.textContent=label;const bar=root.document?.querySelector?.(".workspace-save-bar");if(bar)bar.dataset.state=hasUnsavedChanges()?"unsaved":isExplicitlySaved()?"saved":"new";const button=root.document?.getElementById?.("save-workspace");if(button){button.textContent=isExplicitlySaved()&&hasUnsavedChanges()?"Save changes":"Save workspace";button.disabled=saveBusy;}}
+  function persistenceLabel(){if(saveBusy)return "Saving workspace…";if(saveError)return "Sync failed · changes kept in this browser";if(!hasMeaningfulWorkspaceData()&&!hasUnsavedChanges())return "New workspace · ready";if(!isExplicitlySaved())return "Unsaved draft · saving shortly";if(hasUnsavedChanges())return "Unsaved changes · saving shortly";return isBrowserOnlySnapshot()?"Saved in this browser · cloud sync pending":"Saved automatically to LeadIntel";}
+  function renderPersistenceStatus(){const label=persistenceLabel();const status=root.document?.querySelector?.(".autosave");if(status)status.innerHTML=`<i></i>${label}`;const visibleStatus=root.document?.getElementById?.("workspace-save-state");if(visibleStatus)visibleStatus.textContent=label;const bar=root.document?.querySelector?.(".workspace-save-bar");if(bar)bar.dataset.state=saveError?"error":saveBusy?"saving":hasUnsavedChanges()?"unsaved":isExplicitlySaved()?"saved":"new";const button=root.document?.getElementById?.("save-workspace");if(button){button.textContent=saveBusy?"Saving…":saveError?"Retry save":"Save now";button.disabled=saveBusy;}}
   function toast(message){const el=root.document?.getElementById?.("toast");if(!el)return;el.textContent=message;el.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove("show"),2400);}
   function waitForBridge(timeout=1800){if(root.LeadIntelServerBridge?.session!==null&&root.LeadIntelServerBridge?.session!==undefined)return Promise.resolve(root.LeadIntelServerBridge);return new Promise(resolve=>{let done=false;const finish=()=>{if(done)return;done=true;root.removeEventListener?.("leadintel:server-ready",finish);resolve(root.LeadIntelServerBridge||null);};root.addEventListener?.("leadintel:server-ready",finish,{once:true});root.setTimeout?.(finish,timeout);});}
 
@@ -181,14 +185,15 @@
     });
   }
 
-  async function saveWorkspace(){
+  async function saveWorkspace({automatic=false}={}){
     if(saveBusy)return false;saveBusy=true;renderPersistenceStatus();
-    try{const bridge=await waitForBridge();if(bridge?.session?.authenticated&&bridge?.workspace){const result=await withTimeout(()=>root.LeadIntelServerBridge?.saveNow?.({saveIntent:true,explicitSave:true}),SAVE_REQUEST_TIMEOUT_MS);if(!result?.saved)throw new Error("Workspace could not be saved to LeadIntel");toast("Workspace saved");}else{captureWorkspaceSnapshot();markExplicitlySaved();dirtySinceSave=false;toast("Workspace saved in this browser");}return true;}
-    catch(error){dirtySinceSave=true;toast(`Save failed · ${String(error?.message||"Unknown error")}`);return false;}
-    finally{saveBusy=false;renderPersistenceStatus();}
+    try{const bridge=await waitForBridge();if(bridge?.session?.authenticated&&bridge?.workspace){const result=await withTimeout(()=>root.LeadIntelServerBridge?.saveNow?.({saveIntent:true,explicitSave:true}),SAVE_REQUEST_TIMEOUT_MS);if(!result?.saved)throw new Error("Workspace could not be saved to LeadIntel");if(!automatic)toast("Workspace saved");}else{captureWorkspaceSnapshot();markExplicitlySaved();dirtySinceSave=false;if(!automatic)toast("Workspace saved in this browser");}saveError="";return true;}
+    catch(error){dirtySinceSave=true;saveError=String(error?.message||"Unknown error");if(!automatic)toast(`Save failed · ${saveError}`);return false;}
+    finally{saveBusy=false;renderPersistenceStatus();if(!saveError&&hasUnsavedChanges())scheduleAutoSave();}
   }
-  function ensureSaveButton(){let button=root.document?.getElementById?.("save-workspace");if(!button){const actions=root.document?.querySelector?.(".top-actions");if(!actions)return false;button=root.document.createElement("button");button.className="ghost-btn";button.type="button";button.id="save-workspace";actions.insertBefore(button,root.document.getElementById("reset-workspace")||null);}if(button.dataset.workspaceSaveBound==="1")return false;button.dataset.workspaceSaveBound="1";button.addEventListener("click",saveWorkspace);renderPersistenceStatus();return true;}
-  function noteWorkspaceEdit(event){const target=event?.target;if(target?.closest&& !target.closest(".workspace"))return;if(target?.closest?.("#save-workspace,#reset-workspace,#ai-settings-drawer"))return;dirtySinceSave=true;protectLocalChanges();renderPersistenceStatus();}
+  function scheduleAutoSave(){if(root.localStorage?.getItem(RESET_PENDING_KEY)||!hasMeaningfulWorkspaceData())return;root.clearTimeout?.(autoSaveTimer);autoSaveTimer=root.setTimeout?.(()=>{autoSaveTimer=null;if(saveBusy){scheduleAutoSave();return;}if(hasUnsavedChanges()||(isBrowserOnlySnapshot()&&root.LeadIntelServerBridge?.session?.authenticated&&root.LeadIntelServerBridge?.workspace))void saveWorkspace({automatic:true});},AUTOSAVE_DEBOUNCE_MS);renderPersistenceStatus();}
+  function ensureSaveButton(){let button=root.document?.getElementById?.("save-workspace");if(!button){const actions=root.document?.querySelector?.(".top-actions");if(!actions)return false;button=root.document.createElement("button");button.className="ghost-btn";button.type="button";button.id="save-workspace";actions.insertBefore(button,root.document.getElementById("reset-workspace")||null);}if(button.dataset.workspaceSaveBound==="1")return false;button.dataset.workspaceSaveBound="1";button.addEventListener("click",()=>{root.clearTimeout?.(autoSaveTimer);autoSaveTimer=null;void saveWorkspace();});renderPersistenceStatus();return true;}
+  function noteWorkspaceEdit(event){const target=event?.target;if(target?.closest&& !target.closest(".workspace"))return;if(target?.closest?.("#save-workspace,#reset-workspace,#ai-settings-drawer"))return;dirtySinceSave=true;saveError="";protectLocalChanges();scheduleAutoSave();}
   function handleResetClick(event){
     const button=event?.target?.closest?.("#reset-workspace");if(!button||button.dataset.resetArmed!=="true")return false;
     root.sessionStorage?.setItem(FORCE_RESET_KEY,"1");recordResetIntent();clearExplicitSave();root.setTimeout?.(()=>root.sessionStorage?.removeItem(FORCE_RESET_KEY),5000);root.setTimeout?.(renderPersistenceStatus,0);return true;
@@ -197,7 +202,7 @@
     ensureSaveButton();root.document?.addEventListener?.("input",noteWorkspaceEdit,true);root.document?.addEventListener?.("change",noteWorkspaceEdit,true);
     root.document?.addEventListener?.("click",event=>{if(event.target?.closest?.("[data-target-market],[data-remove-target-market],[data-remove-doc],[data-remove-signal],[data-opportunity-active],#add-target-market,#clear-target-markets,#add-custom-signal"))noteWorkspaceEdit(event);},true);
     root.document?.addEventListener?.("click",handleResetClick,true);
-    root.addEventListener?.("leadintel:website-activated",()=>{dirtySinceSave=true;protectLocalChanges();renderPersistenceStatus();});root.addEventListener?.("leadintel:workspace-dirty",()=>{dirtySinceSave=true;protectLocalChanges();renderPersistenceStatus();});root.addEventListener?.("leadintel:server-ready",()=>root.setTimeout?.(renderPersistenceStatus,0));renderPersistenceStatus();
+    root.addEventListener?.("leadintel:website-activated",()=>{dirtySinceSave=true;saveError="";protectLocalChanges();scheduleAutoSave();});root.addEventListener?.("leadintel:workspace-dirty",()=>{dirtySinceSave=true;saveError="";protectLocalChanges();scheduleAutoSave();});root.addEventListener?.("leadintel:server-ready",()=>{if(hasUnsavedChanges()||isBrowserOnlySnapshot())scheduleAutoSave();else renderPersistenceStatus();});renderPersistenceStatus();
   }
 
   disableServerAutosave();installFetchBoundary();
