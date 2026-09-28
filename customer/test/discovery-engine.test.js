@@ -425,3 +425,19 @@ test('a user-selected target survives reload as an unqualified buyer-search pros
   assert.equal(state.selectedProspects[0].fitVerified,false);
   assert.deepEqual(state.selectedProspects[0].evidence,[]);
 });
+
+test('public contacts retain an official source and remain unverified after reload',()=>{
+  const results=[
+    {url:'https://sodra.com/contact',markdown:'Contact sales@sodra.com or +46 470 891 23'},
+    {url:'https://unrelated.example/contact',markdown:'false@sodra.com +46 470 999 99'},
+    {url:'https://sodra.com/team',markdown:'press@agency.example'}
+  ];
+  const contacts=Discovery.extractPublicContacts(results,'sodra.com');
+  assert.ok(contacts.some(row=>row.value==='sales@sodra.com'));
+  assert.ok(contacts.some(row=>row.kind==='phone'&&row.value.includes('+46')));
+  assert.ok(contacts.every(row=>row.url.startsWith('https://sodra.com/')&&row.status==='public_unverified'));
+  assert.ok(!contacts.some(row=>row.value.includes('false@')||row.value.includes('agency.example')));
+  const saved=Discovery.normalizeDiscoveryState({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',publicContacts:contacts,publicContactStatus:'complete'}]});
+  assert.equal(saved.selectedProspects[0].qualified,false);
+  assert.equal(saved.selectedProspects[0].publicContacts.length,contacts.length);
+});
