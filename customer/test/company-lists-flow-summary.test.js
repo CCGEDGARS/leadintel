@@ -30,5 +30,5 @@ test('target research handoff identifies Step 4 and the next search action',()=>
   assert.match(read('reference-customer-library-ui.js'),/startResearch:true/);
   assert.match(discovery,/event\.detail\?\.startResearch.*runCompanyDiscovery/);
   assert.match(discovery,/You are now in Step 4 · Companies/);
-  assert.match(discovery,/Research can proceed with the current context/);
+  assert.match(discovery,/Select a target for Buyers or run discovery/);
 });
