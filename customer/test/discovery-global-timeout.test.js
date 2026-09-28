@@ -25,7 +25,7 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
     .replace(runMargin?.[0], `const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=${testRunMargin};`)
     .replace(extractionTimeout?.[0], `const COMPANY_EXTRACTION_TIMEOUT_MS=${testExtractionTimeout};`)
     .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\nglobalThis.__setDiscovery = value => { discovery = LeadIntelDiscovery.normalizeDiscoveryState({...value,qualityVersion:value.qualityVersion??LeadIntelDiscovery.DISCOVERY_QUALITY_VERSION}); };\nglobalThis.__renderStatus = renderStatus;\nglobalThis.__setDiscoveryProgress=value=>{discoveryProgress=value;};\nglobalThis.__renderCandidates = renderCandidates;\n')
-    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__savePotentialProspect = savePotentialProspect;\nglobalThis.__addSelectedProspectToPipeline = addSelectedProspectToPipeline;\nglobalThis.__setCrmCompanies = companies => { crmCompanies = companies; };\nglobalThis.__renderPipeline = renderPipeline;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;\nglobalThis.__potentialBuyerResultsHtml = potentialBuyerResultsHtml;');
+    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__scheduleSavedBuyerPublicChecks = scheduleSavedBuyerPublicChecks;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__savePotentialProspect = savePotentialProspect;\nglobalThis.__addSelectedProspectToPipeline = addSelectedProspectToPipeline;\nglobalThis.__setCrmCompanies = companies => { crmCompanies = companies; };\nglobalThis.__renderPipeline = renderPipeline;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;\nglobalThis.__potentialBuyerResultsHtml = potentialBuyerResultsHtml;');
   const mainState = {
     website: 'https://acme.example/',
     profile: {
@@ -381,6 +381,25 @@ test('a first-name-only buyer triggers one public source check and renders a sou
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Public work email · unverified/);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/View public profile ↗/);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/mikael\.example@boliden\.com/);
+});
+
+test('a saved first-name-only buyer receives one automatic public check when Buyers opens',async()=>{
+  let requests=0;
+  const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,fetchImpl:async()=>{
+    requests++;
+    return {ok:true,json:async()=>({data:[{url:'https://boliden.com/management',title:'Leadership',markdown:'Mikael Example — President & CEO'}]})};
+  }});
+  context.__setDiscovery({selectedProspects:[{company:'Boliden',domain:'boliden.com',buyerSearchMode:'user_selected_target',people:[{id:'p1',name:'Mikael',title:'President & CEO'}]}]});
+  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5}));
+  context.__scheduleSavedBuyerPublicChecks();
+  context.__scheduleSavedBuyerPublicChecks();
+  await new Promise(resolve=>setTimeout(resolve,30));
+  assert.equal(requests,2); // Company page, then public profile search.
+  assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Mikael Example');
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/Mikael Example/);
+  context.__scheduleSavedBuyerPublicChecks();
+  await new Promise(resolve=>setTimeout(resolve,5));
+  assert.equal(requests,2);
 });
 
 test('a timed-out company website check can recover with grounded official-domain evidence',async()=>{
