@@ -772,7 +772,7 @@
     return count?"complete":"no_results";
   }
 
-  function zeroResultGuidance({evidenceCount=0,evidencePages=0,companiesIdentified=null,extractionStatus="idle",activeSignalCount=0,targetCount=10,researchMode="deep",adaptiveFollowUpSearches=0}={}){
+  function zeroResultGuidance({evidenceCount=0,evidencePages=0,companiesIdentified=null,extractionStatus="idle",activeSignalCount=0,targetCount=10,researchMode="deep",adaptiveFollowUpSearches=0,savingMode=false,companySitesChecked=0}={}){
     const evidence=Math.max(0,Number(evidenceCount)||0);
     const identified=Number(companiesIdentified);
     const signals=Math.max(0,Number(activeSignalCount)||0);
@@ -787,6 +787,10 @@
           ?["AI extraction was unavailable and built-in text matching found no company names. Review the workspace AI provider or credits, then rerun Companies.","The search results and any previously qualified companies remain available for review."]
           :["Review the source quality in Market Research, then run Companies again. LeadIntel only promotes company names supported by the collected evidence.","Keep the current result amount; a larger target does not repair an extraction gap."]
       };
+    }
+    if(savingMode){
+      const checked=Math.max(0,Number(companySitesChecked)||0);
+      return {primaryAction:"review_strategy",primaryLabel:"Review Strategy",summary:`Saving Mode identified ${identified||0} companies but checked ${checked} company website${checked===1?"":"s"}. None qualified in this small sample; this does not establish that the Swedish market has no suitable buyers.`,steps:["Review the active buyer profile and signals for the company in Step 1. Keep only signals that describe a real reason to need its services.","Return to Companies and choose Full research when you want broader verification. It uses more Firecrawl requests; increasing the company amount while staying in Saving Mode will not expand this sample."]};
     }
     const signalStep=signals<3
       ? "Open Strategy and activate at least 3 buying signals: capacity expansion, a new facility or investment, and hiring or outsourcing. Keep tender or procurement only when it is relevant."
