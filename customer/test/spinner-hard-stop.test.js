@@ -36,7 +36,7 @@ test('Discovery runtime cache key changes whenever spinner recovery changes',()=
 
 test('customer page loads the spinner-safe bundles with fresh cache keys',()=>{
   for(const marker of [
-    'app.js?v=20260928-strategy-handoff-copy-v1',
+    'app.js?v=20260928-signal-research-plan-v1',
     'process-map.js?v=20260924-friendly-workflow-labels-v1',
     'discovery-ui.js?v=20260928-proxy-cors-v1'
   ])assert.ok(html.includes(marker),marker);
