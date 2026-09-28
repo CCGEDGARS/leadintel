@@ -61,7 +61,7 @@ test('production entrypoints bust cached profile assets after the overview hygie
   const app=fs.readFileSync(path.join(customer,'app.js'),'utf8');
   const evidence=fs.readFileSync(path.join(customer,'evidence-view.js'),'utf8');
   assert.match(html,/profile-engine\.js\?v=20260922-step3-signal-backfill-v1&profile-overview-hygiene=1/);
-  assert.match(html,/app\.js\?v=20260927-buyer-role-repair-v1[^" ]*profile-overview-hygiene=1/);
+  assert.match(html,/app\.js\?v=20260928-buyer-role-repair-v2[^" ]*profile-overview-hygiene=1/);
   assert.match(app,/evidence-view\.js\?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&reference-interface=20260923/);
   assert.match(evidence,/intelligence-profile-ui\.js\?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1/);
 });
