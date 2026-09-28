@@ -176,12 +176,36 @@
 .potential-matches-head h3{margin:4px 0 6px;font-size:17px;color:#3f351e}
 .potential-matches-head p{margin:0;max-width:85ch;font-size:11px;line-height:1.55;color:#6c6147}
 .potential-matches-head .potential-match-signal-note{margin:10px 0 8px;font-size:12px;color:#514323}
-.selected-prospect-list{margin-top:20px;padding:18px;border:1px solid #d2e4dd;border-radius:12px;background:#f6faf8}
-.selected-prospect-list h3{margin:0 0 5px;font-size:16px}
-.selected-prospect-list p{margin:0 0 12px;font-size:12px;color:#53665e}
-.selected-prospect-row{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:12px;background:white;border:1px solid #dbe8e2;border-radius:10px;margin-top:8px}
-.selected-prospect-row div{display:grid;gap:3px}.selected-prospect-row small{color:#53665e}
-.selected-prospect-row .selected-prospect-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.selected-prospect-list{margin-top:20px;padding:22px;border:1px solid #d2e4dd;border-radius:15px;background:#f6faf8}
+.selected-prospect-list h3{margin:0 0 6px;font-size:20px;line-height:1.3}
+.selected-prospect-list>p{margin:0 0 18px;color:#53665e;font-size:14px;line-height:1.55;max-width:82ch}
+.selected-prospect-row{display:grid;gap:18px;padding:22px;background:#fff;border:1px solid #dbe8e2;border-radius:14px;margin-top:12px}
+.selected-prospect-company{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
+.selected-prospect-company .eyebrow{color:#537468;font-size:11px}
+.selected-prospect-company h4{margin:4px 0;font-size:24px;line-height:1.2}
+.selected-prospect-company a{color:#0d6453;font-size:14px;text-decoration:none}
+.selected-prospect-company a:hover{text-decoration:underline}
+.selected-prospect-signal{flex:0 0 auto;padding:8px 10px;border:1px solid #e9d7ac;border-radius:999px;background:#fff8e9;color:#765c24;font-size:12px;font-weight:700}
+.selected-prospect-buyers{border-top:1px solid #e3ece7;padding-top:17px}
+.selected-prospect-buyers-heading{display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin-bottom:12px}
+.selected-prospect-buyers-heading strong{font-size:16px;color:#20362e}
+.selected-prospect-buyers-heading span{font-size:12px;color:#697b72}
+.selected-prospect-people{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;list-style:none;padding:0;margin:0}
+.selected-prospect-person{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:12px;align-items:start;min-width:0;padding:15px;border:1px solid #dce8e1;border-radius:11px;background:#fbfdfb}
+.selected-prospect-rank{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:#e3f0ea;color:#116551;font:700 12px "IBM Plex Mono",monospace}
+.selected-prospect-person-details{min-width:0}
+.selected-prospect-person-name{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.selected-prospect-person-name strong{font-size:17px;line-height:1.35;color:#162820}
+.selected-prospect-person-name small{padding:3px 6px;border-radius:5px;background:#fff3dc;color:#765c24;font-size:11px;font-weight:700}
+.selected-prospect-person p{margin:5px 0 0;color:#3c5348;font-size:14px;line-height:1.45;overflow-wrap:anywhere}
+.selected-prospect-person-location{display:block;margin-top:5px;color:#67796d;font-size:12px}
+.selected-prospect-person>a{color:#0d6453;font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap}
+.selected-prospect-person>a:hover{text-decoration:underline}
+.selected-prospect-people-note{margin:12px 0 0!important;color:#64746c;font-size:12px;line-height:1.5}
+.selected-prospect-people-state{margin:0;color:#53665e;font-size:14px;line-height:1.5}
+.selected-prospect-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;align-items:center;padding-top:16px;border-top:1px solid #e3ece7}
+@media(max-width:920px){.selected-prospect-people{grid-template-columns:1fr}}
+@media(max-width:620px){.selected-prospect-list{padding:16px}.selected-prospect-row{padding:16px}.selected-prospect-company,.selected-prospect-buyers-heading{display:grid}.selected-prospect-signal{justify-self:start}.selected-prospect-person{grid-template-columns:28px minmax(0,1fr)}.selected-prospect-person>a{grid-column:2}.selected-prospect-actions{justify-content:stretch}.selected-prospect-actions button{width:100%}}
 #discovery-selection-breakdown{display:block;margin-top:4px;color:#60736a;font-size:11px}
 .discovery-pipeline-instruction{margin:0 0 13px;padding:12px 14px;border:1px solid #cbded5;border-radius:10px;background:#f4faf6;color:#274c3d;font-size:12px;line-height:1.5}
 .potential-matches-head [data-action="review-strategy"]{margin-top:3px}
