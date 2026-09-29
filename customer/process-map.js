@@ -18,7 +18,7 @@
  * import './service-settings-extension.js?v=20260925-provider-credit-health-v1';
  * import './step2-readiness-engine.js?v=20260924-friendly-workflow-labels-v1';
  * import './content-language.js?v=20260924-workspace-content-english-v1';
- * import './content-variants.js?v=20260921-contact-gated-v2';
+ * import './content-variants.js?v=20260929-apollo-labels-v1';
  * import './business-identity.js?v=20260924-workspace-profile-english-v1';
  * import './company-brain.js?v=20260924-workspace-profile-english-v1';
  * import './step2-first-party-intelligence.js?v=20260909-first-party-step2-v1';

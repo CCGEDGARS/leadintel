@@ -108,4 +108,4 @@ function loadProductionSaas(){
 }
 function initDelivery(){injectDeliveryUI();bindDelivery();renderAll();if(readJson(MAIN_STORAGE_KEY).step===7)showDeliveryStep();loadProductionSaas();}
 initDelivery();
-import './content-variants.js?v=20260921-contact-gated-v2';
+import './content-variants.js?v=20260929-apollo-labels-v1';

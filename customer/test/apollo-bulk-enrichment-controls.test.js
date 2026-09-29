@@ -34,8 +34,8 @@ test('discovery labels distinguish free people search from credit-consuming enri
   const source=fs.readFileSync(path.join(root,'discovery-ui.js'),'utf8');
   assert.match(source,/Apollo People Search does not reveal email addresses/i);
   const controls=fs.readFileSync(modulePath,'utf8');
-  assert.match(controls,/Verify email with Apollo · 1 credit/i);
-  assert.match(controls,/Find phone with Apollo · up to 9 credits/i);
+  assert.match(controls,/Verify email with Apollo/i);
+  assert.match(controls,/Find phone with Apollo/i);
   assert.match(controls,/Finding people does not reveal contact details/i);
   assert.match(controls,/Verify selected emails with Apollo/i);
   assert.match(controls,/Find selected phones with Apollo/i);

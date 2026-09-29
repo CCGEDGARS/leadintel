@@ -35,7 +35,7 @@ test('Discovery requires durable CRM identity before paid enrichment',()=>{
 });
 
 test('phone lookup is a separate explicit paid action and never runs silently with email enrichment',()=>{
-  assert.match(ui,/Find phone[^<\n]*paid/i);
+  assert.match(ui,/Find phone with Apollo/i);
   assert.match(ui,/phoneAction\s*=\s*phonePending\?"refresh-phone":"find-phone"/);
   assert.match(ui,/data-action="\$\{phoneAction\}"/);
   assert.match(ui,/phoneLookup\s*:\s*true/);
@@ -55,5 +55,5 @@ test('pending Apollo phone lookup can be refreshed from durable CRM without buyi
 test('Discovery exposes Apollo LinkedIn identity links without implying role verification',()=>{
   assert.match(ui,/View public LinkedIn profile/);
   assert.match(ui,/confirm the current role before outreach/);
-  assert.match(ui,/Verify email with Apollo · 1 credit/);
+  assert.match(ui,/Verify email with Apollo/);
 });

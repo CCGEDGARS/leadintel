@@ -1,6 +1,6 @@
 import './company-brain.js?v=20260928-buyer-role-repair-v2';
 import './content-language.js?v=20260924-workspace-content-english-v1';
-import './content-variants.js?v=20260921-contact-gated-v2';
+import './content-variants.js?v=20260929-apollo-labels-v1';
 import './business-identity.js?v=20260924-workspace-profile-english-v1';
 import './evidence-view.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&reference-interface=20260923&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&map-activation-guide=1';
 import './profile-approval-ui.js?v=20260924-friendly-workflow-labels-v1';

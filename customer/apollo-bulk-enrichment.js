@@ -258,11 +258,11 @@ function decoratePersonRow(row) {
     checkbox.checked = selected.has(key);
   }
   if (emailButton && !/Working|verified/i.test(emailButton.textContent || '')) {
-    const emailLabel = emailButton.disabled ? 'Sign in to verify email' : 'Verify email with Apollo · 1 credit';
+    const emailLabel = emailButton.disabled ? 'Sign in to verify email' : 'Verify email with Apollo';
     if(emailButton.textContent!==emailLabel) emailButton.textContent=emailLabel;
   }
-  if (phoneButton && phoneButton.dataset.action === 'find-phone' && !/verified/i.test(phoneButton.textContent || '')) {
-    const phoneLabel = phoneButton.disabled ? 'Sign in to find phone' : 'Find phone with Apollo · up to 9 credits';
+  if (phoneButton && phoneButton.dataset.action === 'find-phone' && !/verified|found/i.test(phoneButton.textContent || '')) {
+    const phoneLabel = phoneButton.disabled ? 'Sign in to find phone' : 'Find phone with Apollo';
     if(phoneButton.textContent!==phoneLabel) phoneButton.textContent=phoneLabel;
   }
 }
