@@ -9,8 +9,12 @@ function approvedPackage(){
 }
 function recipient(){return String(document.getElementById('delivery-recipient')?.value||'').trim().toLowerCase();}
 function buildApprovedAutomationPackage(pkg,recipientValue){
-  if(!pkg?.approved)return null;const source=pkg.approvedSource&&typeof pkg.approvedSource==='object'?pkg.approvedSource:(pkg.drafts&&typeof pkg.drafts==='object'?pkg.drafts:{});
-  return {domain:String(pkg.domain||''),recipient:String(recipientValue||'').trim().toLowerCase(),subject:String(source.emailSubject||''),body:String(source.emailBody||''),followup_body:String(source.followUp||''),approved_at:String(pkg.approvedAt||''),contact_identity:String(pkg.selectedPersonId||pkg.domain||''),approved:true};
+  if(!pkg?.approved||pkg.reapprovalRequired)return null;const source=pkg.approvedSource&&typeof pkg.approvedSource==='object'?pkg.approvedSource:(pkg.drafts&&typeof pkg.drafts==='object'?pkg.drafts:{});
+  const branded=Boolean(pkg.brandSnapshot||pkg.approvalBrandMode==='branded');const approved=root.LeadIntelOutreach?.renderApprovedEmail?.(pkg)||(!branded?pkg.approvedEmail:null);
+  if(branded&&!approved)return null;
+  const followup=String(source.followUp||'');let followupEmail=null;
+  if(branded&&followup){try{followupEmail=root.LeadIntelBrandIdentity?.renderEmail?.({subject:String(source.emailSubject||''),bodyText:followup,brandSnapshot:pkg.brandSnapshot})||null;}catch{return null;}if(!followupEmail)return null;}
+  return {domain:String(pkg.domain||''),recipient:String(recipientValue||'').trim().toLowerCase(),subject:String(approved?.subject||source.emailSubject||''),body:String(approved?.textBody||source.emailBody||''),html_body:String(approved?.htmlBody||''),followup_body:String(followupEmail?.textBody||followup),followup_html_body:String(followupEmail?.htmlBody||''),approved_at:String(pkg.approvedAt||''),contact_identity:String(pkg.selectedPersonId||pkg.domain||''),approved:true};
 }
 function announceApprovedAutomationPackage(){
   const detail=buildApprovedAutomationPackage(approvedPackage(),recipient());if(!detail)return false;

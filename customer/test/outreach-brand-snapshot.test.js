@@ -113,22 +113,22 @@ test('manual Gmail compose and Gmail/Microsoft API payloads ignore later draft m
   assert.deepEqual(Outreach.renderApprovedEmail(approved),preview,'later Step 1 changes must not affect the approved rendering');
 });
 
-test('automatic handoff uses the frozen plain-text source and never queues snapshot branding',()=>{
+test('automatic handoff queues the frozen branded rendering and follow-up',()=>{
   const draft=item();
   const approved=Outreach.approveOutreachItem(draft,draft.drafts,'2026-09-15T21:00:00.000Z',{brandIdentity:readyIdentity});
   const preview=Outreach.renderApprovedEmail(approved);
   approved.drafts.emailSubject='MUTATED AUTOMATION SUBJECT';
   approved.drafts.emailBody='MUTATED AUTOMATION BODY';
 
-  const handoff=loadBrowserConsumer('outreach-automation-delivery-handoff.js').LeadIntelOutreachAutomationDeliveryHandoff;
+  const handoff=loadBrowserConsumer('outreach-automation-delivery-handoff.js',{LeadIntelOutreach:Outreach,LeadIntelBrandIdentity:require('../brand-identity.js')}).LeadIntelOutreachAutomationDeliveryHandoff;
   assert.equal(typeof handoff?.buildApprovedAutomationPackage,'function','automatic handoff must expose its real queue payload builder');
   const queued=handoff.buildApprovedAutomationPackage(approved,'buyer@example.com');
   assert.equal(queued.subject,approved.approvedSource.emailSubject);
-  assert.equal(queued.body,approved.approvedSource.emailBody);
-  assert.equal(queued.followup_body,approved.approvedSource.followUp);
-  assert.notEqual(queued.body,preview.textBody);
-  assert.doesNotMatch(queued.body,new RegExp(`Anna Seller|Confidential commercial communication|${LOGO_ID}`));
-  assert.equal('htmlBody' in queued,false);
+  assert.equal(queued.body,preview.textBody);
+  assert.equal(queued.html_body,preview.htmlBody);
+  assert.match(queued.followup_body,/Follow-up/);
+  assert.match(queued.followup_body,/Anna Seller/);
+  assert.match(queued.followup_html_body,/SellerCo/);
   assert.equal('brandSnapshot' in queued,false);
   assert.equal(queued.recipient,'buyer@example.com');
   assert.equal(queued.contact_identity,'buyer.example');
@@ -285,8 +285,8 @@ test('outreach UI snapshots Step 1 identity, preserves edit detection and invali
   assert.match(discovery,/outreach-ui\.js\?v=\$\{OUTREACH_ASSET_VERSION\}/);
   assert.match(source,/const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";/);
   assert.match(delivery,/const ASSET_VERSION="20260924-workspace-content-english-v1";/);
-  assert.match(processMap,/outreach-automation-loader\.js\?v=20260929-delivery-setup-v1/);
-  assert.match(automationLoader,/outreach-automation-delivery-handoff\.js\?v=20260916-brand-outreach-v2/);
+  assert.match(processMap,/outreach-automation-loader\.js\?v=20260929-delivery-modes-v2/);
+  assert.match(automationLoader,/outreach-automation-delivery-handoff\.js\?v=20260929-delivery-modes-v2/);
   assert.match(html,/process-map\.js\?v=20260924-friendly-workflow-labels-v1/);
   assert.match(html,/discovery-ui\.js\?v=20260928-proxy-cors-v1/);
 });

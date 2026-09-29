@@ -39,7 +39,7 @@
  * import './lookalike-discovery.js?v=20260924-reference-consensus-v1&opportunity-context=1';
  * import './intelligence-sources-ui.js?v=20260915-preferred-sources-v1';
  * import './profile-action-runtime.js?v=20260924-friendly-workflow-labels-v1';
- * import './outreach-automation-loader.js?v=20260929-delivery-setup-v1';
+ * import './outreach-automation-loader.js?v=20260929-delivery-modes-v2';
  * import './copilot-loader.js?v=20260911-copilot-freshness-v1';
  */
 

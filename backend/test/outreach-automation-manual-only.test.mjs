@@ -7,7 +7,9 @@ test('manual-only production switch disables automatic Gmail delivery',()=>{
   assert.equal(automaticGmailDeliveryEnabled({AUTOMATIC_GMAIL_DELIVERY_MODE:'manual_only'}),false);
 });
 
-test('automation remains testable when no production switch is configured',()=>{
-  assert.equal(automaticGmailDeliveryMode({}),'enabled');
-  assert.equal(automaticGmailDeliveryEnabled({}),true);
+test('automatic delivery requires an explicit enabled switch',()=>{
+  assert.equal(automaticGmailDeliveryMode({}),'manual_only');
+  assert.equal(automaticGmailDeliveryEnabled({}),false);
+  assert.equal(automaticGmailDeliveryMode({AUTOMATIC_GMAIL_DELIVERY_MODE:'enabled'}),'enabled');
+  assert.equal(automaticGmailDeliveryEnabled({AUTOMATIC_GMAIL_DELIVERY_MODE:'enabled'}),true);
 });

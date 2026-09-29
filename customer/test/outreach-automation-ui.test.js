@@ -54,10 +54,21 @@ test('setup offers the same server-backed limits under brand identity',()=>{
   assert.match(ui,/brand\.after\(card\)/);
   assert.match(ui,/saveOutreachAutomationPolicy/);
   assert.match(ui,/Saving a limit will not send email/);
+  assert.match(ui,/delivery-setup-mode/);
+  assert.match(ui,/Connect Gmail before enabling automatic delivery/);
+  assert.match(ui,/root\.confirm\('Activate automatic Gmail delivery/);
+  assert.match(ui,/Meeting requests/);
 });
 
 test('automation stylesheet exists and names the panel',()=>{
   const css=read('outreach-automation.css');
   assert.match(css,/\.outreach-automation-panel/);
   assert.match(css,/\.outreach-automation-grid/);
+});
+
+test('automation panel waits for Delivery instead of appearing in Messages during Setup',()=>{
+  const ui=read('outreach-automation-ui.js');
+  assert.match(ui,/document\.querySelector\('\.step-view\[data-step="7"\]'\)/);
+  assert.match(ui,/if\(!destination\)return/);
+  assert.doesNotMatch(ui,/\.step-view\[data-step="6"\]/);
 });

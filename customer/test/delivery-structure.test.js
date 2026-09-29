@@ -31,7 +31,7 @@ test('delivery UI keeps sending explicit while production Gmail status is loaded
   assert.match(ui,/Manual confirmation/);
   assert.match(ui,/Production Gmail status loads here/i);
   assert.match(ui,/buildGmailComposeUrl/);
-  assert.match(ui,/never auto-sends/i);
+  assert.match(ui,/Manual sends require an explicit action/i);
   assert.doesNotMatch(ui,/gmail\.googleapis\.com|users\/messages\/send|access_token|sendEmail\s*\(/i);
 });
 

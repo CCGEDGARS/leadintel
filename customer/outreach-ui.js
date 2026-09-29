@@ -177,7 +177,7 @@ function bindOutreach(){
 function loadDeliveryModules(){
   if(document.querySelector('script[data-delivery-engine]'))return;
   const engine=document.createElement("script");engine.src=`delivery-engine.js?v=${LANGUAGE_ASSET_VERSION}`;engine.dataset.deliveryEngine="true";
-  engine.addEventListener("load",()=>{if(document.querySelector('script[data-delivery-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src=`delivery-ui.js?v=${LANGUAGE_ASSET_VERSION}`;ui.dataset.deliveryUi="true";document.body.appendChild(ui);});
+  engine.addEventListener("load",()=>{if(document.querySelector('script[data-delivery-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src=`delivery-ui.js?v=${LANGUAGE_ASSET_VERSION}&delivery-modes=2`;ui.dataset.deliveryUi="true";document.body.appendChild(ui);});
   document.body.appendChild(engine);
 }
 function initOutreach(){injectOutreachUI();bindOutreach();renderAll();if(mainState().step===6)showOutreachStep();loadDeliveryModules();}
