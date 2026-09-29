@@ -257,8 +257,8 @@ function decoratePersonRow(row) {
     checkbox.dataset.apolloSelect = key;
     checkbox.checked = selected.has(key);
   }
-  if (emailButton && !/Working|verified/i.test(emailButton.textContent || '')) {
-    const emailLabel = emailButton.disabled ? 'Sign in to verify email' : 'Verify email with Apollo';
+  if (emailButton && !/Working|Checking|verified|found/i.test(emailButton.textContent || '')) {
+    const emailLabel = emailButton.disabled ? 'Sign in to find email' : 'Find work email';
     if(emailButton.textContent!==emailLabel) emailButton.textContent=emailLabel;
   }
   if (phoneButton && phoneButton.dataset.action === 'find-phone' && !/verified|found/i.test(phoneButton.textContent || '')) {
@@ -271,7 +271,7 @@ function decorateDecisionSection(section) {
   if (!section.querySelector('.apollo-cost-note')) {
     const head = section.querySelector('.decision-head');
     head?.insertAdjacentHTML('afterend',
-      '<div class="apollo-cost-note">Finding people does not reveal contact details. Verify email with Apollo · 1 credit per contact. Find phone with Apollo · up to 9 credits per contact.</div>');
+      '<div class="apollo-cost-note">Email lookup checks public company sources first. If no person-specific work email is found, Apollo verification is offered. Phone lookup uses Apollo.</div>');
   }
   section.querySelectorAll('.person-row').forEach(decoratePersonRow);
 }
@@ -314,7 +314,7 @@ async function waitForCompletion(key, type = 'email', timeoutMs = 30000) {
   while (Date.now() - started < timeoutMs) {
     decorate();
     const button = document.querySelector(actionSelector(key, type));
-    if (!button || !/Working|pending/i.test(button.textContent || '')) return true;
+    if (!button || !/Working|Checking|pending/i.test(button.textContent || '')) return true;
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
   return false;
@@ -337,7 +337,9 @@ async function runBulk(type) {
       const button = document.querySelector(actionSelector(key, type));
       if (!button || button.disabled) continue;
       started += 1;
+      button.dataset.apolloPreconfirmed='true';
       button.click();
+      delete button.dataset.apolloPreconfirmed;
       await waitForCompletion(key, type);
       taskCentre?.update(taskId,{completed:started,resultCount:started,stage:'Processing selected contacts'});
     }
@@ -391,7 +393,9 @@ async function runAutomatic() {
       markAutomaticProcessed(settings, key);
       processed += 1;
       updateAutomaticStatus('Verifying ' + processed + ' of ' + available + ' automatically…');
+      button.dataset.apolloPreconfirmed='true';
       button.click();
+      delete button.dataset.apolloPreconfirmed;
       await waitForCompletion(key, 'email');
     }
     const refreshed = readSettings();

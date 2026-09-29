@@ -182,4 +182,4 @@ function loadDeliveryModules(){
 }
 function initOutreach(){injectOutreachUI();bindOutreach();renderAll();if(mainState().step===6)showOutreachStep();loadDeliveryModules();}
 initOutreach();
-import './content-variants.js?v=20260929-apollo-labels-v1';
+import './content-variants.js?v=20260929-public-first-email-v1';

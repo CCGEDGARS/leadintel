@@ -770,7 +770,8 @@
   function safeCandidate(candidate={}){
     const domain=canonicalDomain(candidate.domain||candidate.website);
     const website=normalizeUrl(candidate.website)|| (domain?`https://${domain}/`:"");
-    const people=(Array.isArray(candidate.people)?candidate.people:[]).slice(0,4).map(p=>({id:clean(p?.id),name:clean(p?.name),title:clean(p?.title),seniority:clean(p?.seniority),organization:clean(p?.organization),city:clean(p?.city),country:clean(p?.country),linkedin_url:normalizeLinkedInUrl(p?.linkedin_url||p?.linkedin)}));
+    const people=(Array.isArray(candidate.people)?candidate.people:[]).slice(0,4).map(p=>({id:clean(p?.id),name:clean(p?.name),title:clean(p?.title),seniority:clean(p?.seniority),organization:clean(p?.organization),city:clean(p?.city),country:clean(p?.country),linkedin_url:normalizeLinkedInUrl(p?.linkedin_url||p?.linkedin),publicName:clean(p?.publicName),publicNameUrl:normalizeUrl(p?.publicNameUrl),publicEmail:clean(p?.publicEmail),publicEmailUrl:normalizeUrl(p?.publicEmailUrl)}));
+    for(const person of people){if(canonicalDomain(person.publicNameUrl)!==domain||!person.publicName.toLowerCase().startsWith(`${person.name.split(/\s+/)[0].toLowerCase()} `)){person.publicName='';person.publicNameUrl='';}if(canonicalDomain(person.publicEmailUrl)!==domain||!person.publicEmail.toLowerCase().endsWith(`@${domain}`)||!person.publicName){person.publicEmail='';person.publicEmailUrl='';}}
     return {
       id:clean(candidate.id)||`company-${slug(domain||candidate.company)}`,crmId:clean(candidate.crmId),company:clean(candidate.company)||displayFromDomain(domain),domain,website,
       market:clean(candidate.market),score:candidate.score&&typeof candidate.score==="object"?candidate.score:{total:0},confidence:["High","Medium","Low"].includes(candidate.confidence)?candidate.confidence:"Low",

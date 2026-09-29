@@ -14,7 +14,7 @@ test('Discovery makes a shortage explicit instead of implying four contacts were
 });
 
 test('Discovery exposes a separate authenticated paid enrichment action for selected people',()=>{
-  assert.match(ui,/Enrich contact/);
+  assert.match(ui,/Find a public work email, then verify with Apollo if unavailable/);
   assert.match(ui,/data-action="enrich-contact"/);
   assert.match(ui,/bridge\(\)\.enrichCrmContact/);
   assert.match(ui,/person_id|person\.id/);
@@ -57,5 +57,5 @@ test('pending Apollo phone lookup can be refreshed from durable CRM without buyi
 test('Discovery exposes Apollo LinkedIn identity links without implying role verification',()=>{
   assert.match(ui,/View public LinkedIn profile/);
   assert.match(ui,/confirm the current role before outreach/);
-  assert.match(ui,/Verify email with Apollo/);
+  assert.match(ui,/Find work email/);
 });

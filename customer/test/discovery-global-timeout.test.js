@@ -25,7 +25,7 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
     .replace(runMargin?.[0], `const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=${testRunMargin};`)
     .replace(extractionTimeout?.[0], `const COMPANY_EXTRACTION_TIMEOUT_MS=${testExtractionTimeout};`)
     .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\nglobalThis.__setDiscovery = value => { discovery = LeadIntelDiscovery.normalizeDiscoveryState({...value,qualityVersion:value.qualityVersion??LeadIntelDiscovery.DISCOVERY_QUALITY_VERSION}); };\nglobalThis.__renderStatus = renderStatus;\nglobalThis.__setDiscoveryProgress=value=>{discoveryProgress=value;};\nglobalThis.__renderCandidates = renderCandidates;\n')
-    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__scheduleSavedBuyerPublicChecks = scheduleSavedBuyerPublicChecks;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__savePotentialProspect = savePotentialProspect;\nglobalThis.__addSelectedProspectToPipeline = addSelectedProspectToPipeline;\nglobalThis.__setCrmCompanies = companies => { crmCompanies = companies; };\nglobalThis.__renderPipeline = renderPipeline;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;\nglobalThis.__potentialBuyerResultsHtml = potentialBuyerResultsHtml;');
+    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__enrichSelectedProspect = enrichSelectedProspect;\nglobalThis.__enrichContact = enrichContact;\nglobalThis.__scheduleSavedBuyerPublicChecks = scheduleSavedBuyerPublicChecks;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__savePotentialProspect = savePotentialProspect;\nglobalThis.__addSelectedProspectToPipeline = addSelectedProspectToPipeline;\nglobalThis.__setCrmCompanies = companies => { crmCompanies = companies; };\nglobalThis.__renderPipeline = renderPipeline;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;\nglobalThis.__potentialBuyerResultsHtml = potentialBuyerResultsHtml;');
   const mainState = {
     website: 'https://acme.example/',
     profile: {
@@ -424,6 +424,61 @@ test('a saved first-name buyer can gain a sourced full name from a unique public
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,5));
   assert.equal(requests,2);
+});
+
+test('email button stops at a sourced public work email without calling Apollo',async()=>{
+  let searches=0,apolloCalls=0,savedContacts=0,confirmations=0;
+  const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,
+    bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},saveCrmCompany:async()=>({ok:true,company:{id:'crm-sodra',normalized_domain:'sodra.com'}}),saveCrmContacts:async()=>{savedContacts++;return {ok:true};},enrichCrmContact:async()=>{apolloCalls++;return {ok:true};}},
+    fetchImpl:async()=>{searches++;return {ok:true,json:async()=>({data:searches===1?[{url:'https://sodra.com/team',title:'Team',markdown:'Jacob Jonstoij — Team Leader. jacob.jonstoij@sodra.com'}]:[]})};}
+  });
+  context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};context.confirm=()=>{confirmations++;return true;};
+  context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
+  assert.equal(await context.__enrichSelectedProspect('sodra.com',0),true);
+  assert.equal(apolloCalls,0);
+  assert.equal(confirmations,0);
+  assert.ok(savedContacts>=1);
+  assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicEmail,'jacob.jonstoij@sodra.com');
+});
+
+test('email button offers Apollo only after a completed public search has no person match',async()=>{
+  let searches=0,apolloCalls=0,confirmations=0;
+  const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,
+    bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},saveCrmCompany:async()=>({ok:true,company:{id:'crm-sodra',normalized_domain:'sodra.com'}}),enrichCrmContact:async()=>{apolloCalls++;return {ok:true,contact:{work_email:'jacob@sodra.com'}};}},
+    fetchImpl:async()=>{searches++;return {ok:true,json:async()=>({data:[]})};}
+  });
+  context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};context.confirm=()=>{confirmations++;return true;};
+  context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
+  assert.equal(await context.__enrichSelectedProspect('sodra.com',0),true);
+  assert.equal(searches,2);
+  assert.equal(confirmations,1);
+  assert.equal(apolloCalls,1);
+});
+
+test('public search failure does not silently activate Apollo',async()=>{
+  let apolloCalls=0;
+  const context=loadDiscoveryRunner({renderNodes:false,requestTimeout:1000,
+    bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},enrichCrmContact:async()=>{apolloCalls++;return {ok:true};}},
+    fetchImpl:async()=>({ok:false,status:503,json:async()=>({})})
+  });
+  context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
+  assert.equal(await context.__enrichSelectedProspect('sodra.com',0,{confirmed:true}),false);
+  assert.equal(apolloCalls,0);
+});
+
+test('qualified company email action uses public evidence before Apollo',async()=>{
+  let apolloCalls=0,savedContacts=0,confirmations=0;
+  const context=loadDiscoveryRunner({renderNodes:false,requestTimeout:1000,
+    bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},saveCrmCompany:async()=>({ok:true,company:{id:'crm-sodra',normalized_domain:'sodra.com'}}),saveCrmContacts:async()=>{savedContacts++;return {ok:true};},enrichCrmContact:async()=>{apolloCalls++;return {ok:true};}},
+    fetchImpl:async()=>({ok:true,json:async()=>({data:[{url:'https://sodra.com/team',title:'Team',markdown:'Jacob Jonstoij — Team Leader. jacob.jonstoij@sodra.com'}]})})
+  });
+  context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};context.confirm=()=>{confirmations++;return true;};
+  context.__setDiscovery({candidates:[{company:'Södra',domain:'sodra.com',qualified:true,marketVerified:true,buyerVerified:true,matchedSignals:[{id:'s1'}],evidence:[{url:'https://sodra.com/news',title:'Södra news'}],people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
+  assert.equal(await context.__enrichContact(0,0),true);
+  assert.equal(apolloCalls,0);
+  assert.equal(confirmations,0);
+  assert.equal(savedContacts,1);
+  assert.equal(context.__discoveryState().candidates[0].people[0].publicEmail,'jacob.jonstoij@sodra.com');
 });
 
 test('a timed-out company website check can recover with grounded official-domain evidence',async()=>{
