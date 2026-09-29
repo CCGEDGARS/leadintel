@@ -14,7 +14,7 @@ test('Discovery makes a shortage explicit instead of implying four contacts were
 });
 
 test('Discovery exposes a separate authenticated paid enrichment action for selected people',()=>{
-  assert.match(ui,/Find a public work email, then verify with Apollo if unavailable/);
+  assert.match(ui,/Confirm email with Hunter and Apollo/);
   assert.match(ui,/data-action="enrich-contact"/);
   assert.match(ui,/bridge\(\)\.enrichCrmContact/);
   assert.match(ui,/person_id|person\.id/);
@@ -28,20 +28,28 @@ test('verified enrichment stays out of local Discovery state and is rendered fro
   assert.doesNotMatch(ui,/person\.email\s*=.*saveDiscovery/s);
 });
 
+test('selected buyer card shows Apollo outcome and makes another lookup explicit',()=>{
+  assert.match(ui,/\$\{enrichmentResultHtml\(enrichmentResults\.get\(personKey\(candidate,person\)\)\)\}<\/div>\$\{!direct/);
+  assert.match(ui,/Confirm email/);
+  assert.match(ui,/confirmBuyerContact\(candidate,Number\(button\.dataset\.personIndex\),\{kind:"email"\}\)/);
+  assert.match(ui,/Apollo check failed/);
+});
+
 test('Discovery requires durable CRM identity before paid enrichment',()=>{
   assert.match(ui,/crmCompanyByDomain/);
   assert.match(ui,/saveCrmCompany/);
   assert.match(ui,/Sign in.*enrich/i);
 });
 
-test('phone lookup is a separate explicit paid action and never runs silently with email enrichment',()=>{
-  assert.match(ui,/Find phone with Apollo/i);
+test('phone lookup is explicit or enabled by the buyer auto-confirm checkbox',()=>{
+  assert.match(ui,/Confirm phone/i);
   assert.match(ui,/Phone found ✓/);
   assert.doesNotMatch(ui,/Find phone · paid|Find phone · up to 9 credits/);
   assert.match(ui,/phoneAction\s*=\s*phonePending\?"refresh-phone":"find-phone"/);
   assert.match(ui,/data-action="\$\{phoneAction\}"/);
-  assert.match(ui,/phoneLookup\s*:\s*true/);
-  assert.match(ui,/phoneLookup\s*:\s*false/);
+  assert.match(ui,/auto-confirm-toggle/);
+  assert.match(ui,/await apollo\(true\)/);
+  assert.match(ui,/await apollo\(false\)/);
   assert.match(ui,/Verified phone/i);
   assert.match(ui,/Phone lookup.*pending/i);
 });
@@ -58,11 +66,4 @@ test('Discovery exposes Apollo LinkedIn identity links without implying role ver
   assert.match(ui,/View public LinkedIn profile/);
   assert.match(ui,/confirm the current role before outreach/);
   assert.match(ui,/Find work email/);
-});
-
-
-test('selected buyer card shows Apollo outcome and makes another lookup explicit',()=>{
-  assert.match(ui,/\$\{enrichmentResultHtml\(enrichmentResults\.get\(personKey\(candidate,person\)\)\)\}<\/div>\$\{!direct/);
-  assert.match(ui,/result\?\.reason==="verified_company_email_not_returned"\?"Retry Apollo email"/);
-  assert.match(ui,/Apollo check failed/);
 });

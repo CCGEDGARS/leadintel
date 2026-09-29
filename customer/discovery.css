@@ -203,7 +203,7 @@
 .selected-prospect-public-email strong{font-weight:700}
 .selected-prospect-public-email a,.selected-prospect-person-name a{color:#0d6453}
 .buyer-contact-fields{display:grid;gap:5px;margin-top:10px;font-size:11px;line-height:1.4;overflow-wrap:anywhere}
-.buyer-contact-fields>div{display:grid;grid-template-columns:58px minmax(0,1fr);gap:7px}
+.buyer-contact-fields>div{display:grid;grid-template-columns:94px minmax(0,1fr);gap:7px}
 .buyer-contact-fields strong{font-size:10px;color:#52665b}
 .buyer-contact-fields span{color:#315b49}
 .buyer-contact-fields a{color:#0d6453}
@@ -317,5 +317,11 @@
 .email-pattern-panel label{display:block;margin:8px 0;font-weight:600}
 .email-pattern-panel select{display:block;width:100%;max-width:420px;margin-top:5px;padding:8px;border:1px solid #cbd8cf;border-radius:7px;background:white;color:#173b2c;font:inherit}
 .email-pattern-panel small{display:block;margin-top:8px;line-height:1.4}
+.email-pattern-panel ul{margin:10px 0 0;padding-left:18px;columns:2;column-gap:20px}
+.email-pattern-panel li{break-inside:avoid;margin:0 0 5px;color:#52665c}
+.buyer-email-result{display:block;margin-bottom:3px}
+.auto-confirm-toggle{display:inline-flex;align-items:center;gap:7px;font-size:11px;color:#415c4d;cursor:pointer}
+.auto-confirm-toggle input{width:16px;height:16px;accent-color:#12614f}
+@media(max-width:680px){.email-pattern-panel ul{columns:1}.buyer-contact-fields>div{grid-template-columns:88px minmax(0,1fr)}}
 @media(max-width:1080px){.discovery-target-chips{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:680px){.discovery-target-list{padding:17px}.discovery-target-heading{display:grid}.discovery-target-chips{grid-template-columns:1fr}.discovery-target-chips .target-company-card{min-height:0}.selected-prospect-list{padding:17px}.selected-prospect-row{padding:18px}.selected-prospect-company h4{font-size:23px}.selected-prospect-actions .primary-btn{min-width:0}}

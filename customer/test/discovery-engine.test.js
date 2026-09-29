@@ -576,3 +576,12 @@ test('Hunter pattern checks survive selected buyer state normalization without a
   assert.equal(checks['marta.berzina@gmail.com'].status,'webmail');
   assert.equal(checks['other@unrelated.test'],undefined);
 });
+
+test('automatic confirmation choice and sourced contact findings survive a reload',()=>{
+  const state=Discovery.normalizeDiscoveryState({selectedProspects:[{company:'Example',domain:'example.lv',buyerSearchMode:'user_selected_target',people:[{id:'p1',name:'Marta Berzina',publicName:'Marta Berzina',publicNameUrl:'https://example.lv/team',publicPhone:'+371 2000 0000',publicPhoneUrl:'https://example.lv/team',autoConfirm:true,autoConfirmedFor:'p1:buyer-contacts-v10-pattern-search',patternFindings:[{email:'marta.berzina@gmail.com',url:'https://association.test/marta'},{email:'other@unrelated.test',url:'https://association.test/other'}]}]}]});
+  const person=state.selectedProspects[0].people[0];
+  assert.equal(person.autoConfirm,true);
+  assert.equal(person.patternFindings.length,1);
+  assert.equal(person.patternFindings[0].email,'marta.berzina@gmail.com');
+  assert.equal(person.publicPhone,'+371 2000 0000');
+});

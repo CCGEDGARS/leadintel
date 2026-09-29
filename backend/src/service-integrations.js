@@ -309,6 +309,25 @@ export async function handleServiceIntegrationRoute(request,env,cors={}){
     return json({email,status,deliverability,identity_confirmed:false,provider:'Hunter',checked_at:new Date().toISOString()},200,cors);
   }
 
+  if(path==='/api/integrations/services/hunter/find-email'&&request.method==='POST'){
+    const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
+    const body=await request.json().catch(()=>null),domain=clean(body?.domain,253).toLowerCase(),first=clean(body?.first_name,80),last=clean(body?.last_name,80);
+    if(!DNS_DOMAIN.test(domain)||!first||!last||!/^[-\p{L}'’ ]{2,80}$/u.test(first)||!/^[-\p{L}'’ ]{2,80}$/u.test(last))return error('Company domain and full name are required',400,cors);
+    const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'hunter');
+    if(credential.source!=='customer'||!credential.apiKey)return error('Connect Hunter in Settings before confirming email',503,cors,'SERVICE_HUNTER_NOT_CONFIGURED');
+    const params=new URLSearchParams({domain,first_name:first,last_name:last});
+    let response;try{response=await fetch(`https://api.hunter.io/v2/email-finder?${params}`,{method:'GET',headers:{Accept:'application/json','X-API-KEY':credential.apiKey}});}catch{return error('Hunter is temporarily unavailable',502,cors);}
+    if(response.status===451)return error('Hunter cannot process this person',451,cors,'SERVICE_HUNTER_CLAIMED_EMAIL');
+    if(!response.ok)return error(response.status===401?'Hunter key was rejected':response.status===403||response.status===429?'Hunter request limit reached':`Hunter email search failed (${response.status})`,response.status>=400&&response.status<500?response.status:502,cors);
+    const payload=await response.json().catch(()=>({})),data=payload.data||{};
+    const email=clean(data.email,320).toLowerCase();
+    if(email&&!email.endsWith(`@${domain}`))return error('Hunter returned an unexpected company domain',502,cors);
+    const source=Array.isArray(data.sources)?data.sources.find(item=>{try{const url=new URL(item.uri);return ['http:','https:'].includes(url.protocol)&&!url.username&&!url.password;}catch{return false;}})?.uri||'':'';
+    await env.DB.prepare(`UPDATE workspace_service_integrations SET last_used_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider='hunter'`).bind(workspaceId).run();
+    await audit(env,{workspaceId,userId:access.user.id,type:'service.hunter_find_email',provider:'hunter',metadata:{found:Boolean(email),domain}});
+    return json({email,source:clean(source,1000),source_type:clean(data.source_type,30),status:clean(data.verification?.status,30),provider:'Hunter',identity_confirmed:false},200,cors);
+  }
+
   if(path==='/api/integrations/services/firecrawl/scrape'&&request.method==='POST')return forwardFirecrawl(request,env,cors,workspaceId,'scrape');
   if(path==='/api/integrations/services/firecrawl/search'&&request.method==='POST')return forwardFirecrawl(request,env,cors,workspaceId,'search');
   if(path==='/api/integrations/services/apollo/people-search'&&request.method==='POST')return forwardApolloPeopleSearch(request,env,cors,workspaceId);

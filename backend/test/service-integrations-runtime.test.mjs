@@ -137,6 +137,20 @@ sqliteTest('Hunter verifies one requested pattern without claiming a Gmail ident
   }finally{globalThis.fetch=originalFetch;}
 });
 
+sqliteTest('Hunter finder is scoped to a company domain and returns only a safe email and source',async()=>{
+  const {env,token}=await fixture('owner');const originalFetch=globalThis.fetch;const calls=[];
+  globalThis.fetch=async (url,options={})=>{calls.push({url:String(url),options});return new Response(JSON.stringify(calls.length===1?{data:{plan_name:'Starter'}}:{data:{email:'marta.berzina@example.lv',source_type:'found',verification:{status:'valid'},sources:[{uri:'https://example.lv/team'}],phone_number:'private',api_key:'leak'}}),{status:200});};
+  try{
+    const save=await handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'PUT',token,body:{provider:'hunter',api_key:'hunter-secret-WXYZ'}}),env,{});assert.equal(save.status,200);
+    const invalid=await handleServiceIntegrationRoute(req('/api/integrations/services/hunter/find-email?workspace_id=w1',{method:'POST',token,body:{domain:'localhost',first_name:'Marta',last_name:'Berzina'}}),env,{});assert.equal(invalid.status,400);
+    const response=await handleServiceIntegrationRoute(req('/api/integrations/services/hunter/find-email?workspace_id=w1',{method:'POST',token,body:{domain:'example.lv',first_name:'Marta',last_name:'Berzina'}}),env,{});
+    assert.equal(response.status,200);const result=await payload(response);
+    assert.equal(result.email,'marta.berzina@example.lv');assert.equal(result.source,'https://example.lv/team');assert.equal(result.identity_confirmed,false);
+    assert.equal(JSON.stringify(result).includes('private'),false);assert.equal(JSON.stringify(result).includes('hunter-secret'),false);
+    assert.match(calls[1].url,/^https:\/\/api\.hunter\.io\/v2\/email-finder\?/);assert.equal(calls[1].options.headers['X-API-KEY'],'hunter-secret-WXYZ');
+  }finally{globalThis.fetch=originalFetch;}
+});
+
 sqliteTest('customer Firecrawl key is verified, used for signed-in research, and records last use',async()=>{
   const {env,DB,token}=await fixture('owner');const originalFetch=globalThis.fetch;const calls=[];
   globalThis.fetch=async (url,options={})=>{

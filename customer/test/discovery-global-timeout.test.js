@@ -25,7 +25,7 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
     .replace(runMargin?.[0], `const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=${testRunMargin};`)
     .replace(extractionTimeout?.[0], `const COMPANY_EXTRACTION_TIMEOUT_MS=${testExtractionTimeout};`)
     .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\nglobalThis.__setDiscovery = value => { discovery = LeadIntelDiscovery.normalizeDiscoveryState({...value,qualityVersion:value.qualityVersion??LeadIntelDiscovery.DISCOVERY_QUALITY_VERSION}); };\nglobalThis.__renderStatus = renderStatus;\nglobalThis.__setDiscoveryProgress=value=>{discoveryProgress=value;};\nglobalThis.__renderCandidates = renderCandidates;\n')
-    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__enrichSelectedProspect = enrichSelectedProspect;\nglobalThis.__enrichContact = enrichContact;\nglobalThis.__scheduleSavedBuyerPublicChecks = scheduleSavedBuyerPublicChecks;\nglobalThis.__findPublicProspectContacts = findPublicProspectContacts;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__savePotentialProspect = savePotentialProspect;\nglobalThis.__addSelectedProspectToPipeline = addSelectedProspectToPipeline;\nglobalThis.__setCrmCompanies = companies => { crmCompanies = companies; };\nglobalThis.__renderPipeline = renderPipeline;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;\nglobalThis.__potentialBuyerResultsHtml = potentialBuyerResultsHtml;');
+    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__confirmBuyerContact = confirmBuyerContact;\nglobalThis.__toggleBuyerAutoConfirm = toggleBuyerAutoConfirm;\nglobalThis.__enrichSelectedProspect = enrichSelectedProspect;\nglobalThis.__enrichContact = enrichContact;\nglobalThis.__scheduleSavedBuyerPublicChecks = scheduleSavedBuyerPublicChecks;\nglobalThis.__findPublicProspectContacts = findPublicProspectContacts;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__savePotentialProspect = savePotentialProspect;\nglobalThis.__addSelectedProspectToPipeline = addSelectedProspectToPipeline;\nglobalThis.__setCrmCompanies = companies => { crmCompanies = companies; };\nglobalThis.__renderPipeline = renderPipeline;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;\nglobalThis.__potentialBuyerResultsHtml = potentialBuyerResultsHtml;');
   const mainState = {
     website: 'https://acme.example/',
     profile: {
@@ -57,6 +57,9 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
     console: { ...console, error() {} },
     AbortController,
     DOMException,
+    URL,
+    URLSearchParams,
+    dispatchEvent() {},
     LeadIntelDiscovery: Discovery,
     LeadIntelServerBridge: bridgeImpl,
     fetch: fetchImpl,
@@ -361,6 +364,27 @@ test('selected prospect buyer names persist and render as separate review cards'
   assert.equal(context.__elements.get('discovery-status').textContent,'1 saved company');
 });
 
+test('opted-in confirmation runs Hunter finder and verifier plus Apollo email and phone once',async()=>{
+  const calls=[];
+  const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,
+    bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},enrichCrmContact:async (_company,person,options)=>{calls.push(options.phoneLookup?'apollo-phone':'apollo-email');return {ok:true,contact:{name:person.name,...(options.phoneLookup?{phone_number:'+371 2000 0000'}:{work_email:'marta.berzina@example.lv'})}};}},
+    fetchImpl:async(url)=>{
+      const target=String(url);calls.push(target.includes('/status?')?'hunter-status':target.includes('find-email')?'hunter-finder':'hunter-verifier');
+      if(target.includes('/status?'))return {ok:true,json:async()=>({providers:[{provider:'hunter',source:'customer'}]})};
+      if(target.includes('find-email'))return {ok:true,json:async()=>({email:'marta.berzina@example.lv'})};
+      return {ok:true,json:async()=>({email:'marta.berzina@example.lv',status:'valid',deliverability:'deliverable',checked_at:new Date().toISOString()})};
+    }});
+  context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.lv',buyerSearchMode:'user_selected_target',publicContactStatus:'complete',people:[{id:'apollo-12345',name:'Marta Berzina'}]}]});
+  context.__setCrmCompanies([{id:'c1',normalized_domain:'example.lv'}]);
+  const candidate=context.__discoveryState().selectedProspects[0];
+  const box={dataset:{autoConfirm:'example.lv',autoScope:'selected',personIndex:'0'},checked:true};
+  context.__toggleBuyerAutoConfirm(box);
+  await new Promise(resolve=>setTimeout(resolve,30));
+  assert.deepEqual(calls,['hunter-status','hunter-finder','hunter-verifier','apollo-email','apollo-phone']);
+  assert.equal(candidate.people[0].hunterChecks['marta.berzina@example.lv'].deliverability,'deliverable');
+  assert.equal(candidate.people[0].autoConfirmedFor,'apollo-12345:buyer-contacts-v10-pattern-search');
+});
+
 test('a first-name-only buyer triggers one public source check and renders a sourced full name without Apollo enrichment',async()=>{
   let publicSearches=0;
   const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,
@@ -370,16 +394,17 @@ test('a first-name-only buyer triggers one public source check and renders a sou
       publicSearches++;
       if(publicSearches===1){assert.match(JSON.parse(options.body).query,/"Mikael"/);return {ok:true,json:async()=>({data:[{url:'https://boliden.com/management',title:'Management',markdown:'Mikael Example — President & CEO. mikael.example@boliden.com'}]})};}
       if(publicSearches===2)return {ok:true,json:async()=>({data:[]})};
+      if(JSON.parse(options.body).query.includes('@'))return {ok:true,json:async()=>({data:[]})};
       assert.match(JSON.parse(options.body).query,/site:linkedin\.com\/in\//);
       return {ok:true,json:async()=>({data:[{url:'https://www.linkedin.com/in/mikael-example',title:'Mikael Example – Boliden | LinkedIn',description:'President and CEO at Boliden'}]})};
     }});
   context.__setDiscovery({status:'no_results',selectedProspects:[{company:'Boliden',domain:'boliden.com',market:'Sweden',buyerSearchMode:'user_selected_target',buyerRoles:'CEO'}]});
   assert.equal(await context.__findPotentialDecisionMakers('boliden.com'),true);
   await new Promise(resolve=>setTimeout(resolve,15));
-  assert.equal(publicSearches,3);
+  assert.equal(publicSearches,5); // Two additional grouped company and Gmail pattern searches.
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Mikael Example');
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicLinkedinUrl,'https://www.linkedin.com/in/mikael-example');
-  assert.match(context.__elements.get('customer-pipeline').innerHTML,/mikael\.example@boliden\.com · Public · unverified/);
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/mikael\.example@boliden\.com · Public listing · identity unconfirmed/);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/View profile ↗<\/a> · Public match/);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/mikael\.example@boliden\.com/);
 });
@@ -395,12 +420,12 @@ test('a saved first-name-only buyer receives one automatic public check when Buy
   context.__scheduleSavedBuyerPublicChecks();
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,30));
-  assert.equal(requests,5); // Official pages, contact page, homepage, combined profile search, focused fallback.
+  assert.equal(requests,7); // Official pages, contact page, homepage, profiles, and two pattern searches.
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Mikael Example');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Mikael Example/);
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,5));
-  assert.equal(requests,5);
+  assert.equal(requests,7);
 });
 
 test('a saved first-name buyer can gain a sourced full name from a unique public LinkedIn result',async()=>{
@@ -410,6 +435,7 @@ test('a saved first-name buyer can gain a sourced full name from a unique public
     assert.match(String(url),/firecrawl-search/);
     requests++;
     if(requests<=2)return {ok:true,json:async()=>({data:[]})};
+    if(JSON.parse(options.body).query.includes('@'))return {ok:true,json:async()=>({data:[]})};
     assert.match(JSON.parse(options.body).query,/"Jacob".*"Södra"/);
     return {ok:true,json:async()=>({data:[{url:'https://se.linkedin.com/in/jacob-jonstoij',title:'Jacob Jonstoij – Södra | LinkedIn',description:'Teamledare at Södra'}]})};
   }});
@@ -417,15 +443,15 @@ test('a saved first-name buyer can gain a sourced full name from a unique public
   context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:4,visibleStep:5}));
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,30));
-  assert.equal(requests,3);
+  assert.equal(requests,5);
   const person=context.__discoveryState().selectedProspects[0].people[0];
   assert.equal(person.publicName,'Jacob Jonstoij');
-  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v9');
+  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v10-pattern-search');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Jacob Jonstoij/);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/View profile ↗<\/a> · Public match/);
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,5));
-  assert.equal(requests,3);
+  assert.equal(requests,5);
 });
 
 test('a focused LinkedIn lookup resolves a buyer missed by the combined search',async()=>{
@@ -434,6 +460,7 @@ test('a focused LinkedIn lookup resolves a buyer missed by the combined search',
     if(String(url).includes('/firecrawl-scrape'))return {ok:true,json:async()=>({data:{}})};
     requests++;
     if(requests<4)return {ok:true,json:async()=>({data:[]})};
+    if(JSON.parse(options.body).query.includes('@'))return {ok:true,json:async()=>({data:[]})};
     assert.match(JSON.parse(options.body).query,/"Jacob" "Södra" "Team Leader"/);
     return {ok:true,json:async()=>({data:[{url:'https://se.linkedin.com/in/jacob-jonstoij-3bb486222',title:'Jacob Jonstoij – Team Leader | LinkedIn',description:'Team Leader at Södra'}]})};
   }});
@@ -441,7 +468,7 @@ test('a focused LinkedIn lookup resolves a buyer missed by the combined search',
   context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:4,visibleStep:5}));
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,30));
-  assert.equal(requests,4);
+  assert.equal(requests,6);
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Jacob Jonstoij');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Jacob Jonstoij/);
 });
