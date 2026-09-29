@@ -146,8 +146,11 @@
         if(!sourcedName){
           const role=clean(person.title).toLowerCase();
           const roleWords=role.split(/[^\p{L}]+/u).filter(word=>word.length>=4&&!['team','chief','head','vice'].includes(word));
-          const teamLeader=/team\s+lead(?:er)?/i.test(role)&&/teamledare|team\s+lead(?:er)?/i.test(text);
-          if(!teamLeader&&!roleWords.some(word=>text.includes(word)))continue;
+          const titleRole=/team\s+lead(?:er)?/i.test(role)&&/teamledare|team\s+lead(?:er)?/i.test(title)
+            ||roleWords.some(word=>title.toLowerCase().includes(word));
+          const description=clean(row?.description||row?.content).toLowerCase();
+          const explicitEmployment=new RegExp(`(?:teamledare|team\\s+lead(?:er)?)\\s+(?:at|hos|på)\\s+${company.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}`,'i').test(description);
+          if(!titleRole&&!explicitEmployment)continue;
         }
         matches.set(url,candidateName);
       }

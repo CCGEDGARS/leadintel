@@ -507,3 +507,12 @@ test('a unique public LinkedIn result can resolve a first name when company and 
   ],'Södra');
   assert.equal(ambiguous[0].publicName,undefined);
 });
+
+test('an incidental company mention does not make a different Jacob ambiguous',()=>{
+  const found=Discovery.matchPublicLinkedInProfiles([{id:'p-jacob',name:'Jacob',title:'Team Leader'}],[
+    {url:'https://dk.linkedin.com/in/jacob-klingemann',title:'Jacob Klingemann - Investment Director',description:'Team leader for due diligence of transactions. ... Södra. member.'},
+    {url:'https://se.linkedin.com/in/jacob-jonstoij-3bb486222',title:'Jacob Jonstoij – Team Leader - LinkedIn',description:'Jacob Jonstoij. Team Leader. Södra Tingholsmgymnasiet.'}
+  ],'Södra');
+  assert.equal(found[0].publicName,'Jacob Jonstoij');
+  assert.equal(found[0].publicLinkedinUrl,'https://se.linkedin.com/in/jacob-jonstoij-3bb486222');
+});
