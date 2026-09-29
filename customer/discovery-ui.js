@@ -1,6 +1,6 @@
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
-const PUBLIC_NAME_CHECK_VERSION="buyer-contacts-v2";
+const PUBLIC_NAME_CHECK_VERSION="buyer-contacts-v3";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
 const DELIVERY_STORAGE_KEY="leadintel_customer_v2_delivery";
 const DISCOVERY_META_KEY="leadintel_customer_v2_discovery_meta";
@@ -903,6 +903,17 @@ async function runPublicProspectContacts(domain){
         const profilePayload=await profileResponse.json();
         const profiles=Array.isArray(profilePayload.data)?profilePayload.data:Array.isArray(profilePayload.data?.web)?profilePayload.data.web:Array.isArray(profilePayload.web)?profilePayload.web:Array.isArray(profilePayload.results)?profilePayload.results:[];
         candidate.people=LeadIntelDiscovery.matchPublicLinkedInProfiles(candidate.people,profiles,candidate.company);
+        // A combined query can rank one buyer out of the first results. Give unresolved
+        // first names one focused public lookup each, capped to two additional searches.
+        const unresolved=candidate.people.filter(person=>!LeadIntelDiscovery.normalizeLinkedInUrl(person.linkedin_url)&&!person.publicLinkedinUrl&&!String(person.name||'').trim().includes(' ')).slice(0,2);
+        for(const person of unresolved){
+          const focusedQuery=`site:linkedin.com/in/ "${String(person.name).slice(0,40)}" "${String(candidate.company||'').slice(0,80)}" "${String(person.title||'').slice(0,80)}"`;
+          const focusedResponse=await fetch(`${INTELLIGENCE_PROXY}/firecrawl-search`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:focusedQuery,limit:5}),signal:controller.signal});
+          if(!focusedResponse.ok)continue;
+          const focusedPayload=await focusedResponse.json();
+          const focusedResults=Array.isArray(focusedPayload.data)?focusedPayload.data:Array.isArray(focusedPayload.data?.web)?focusedPayload.data.web:Array.isArray(focusedPayload.web)?focusedPayload.web:Array.isArray(focusedPayload.results)?focusedPayload.results:[];
+          candidate.people=LeadIntelDiscovery.matchPublicLinkedInProfiles(candidate.people,focusedResults,candidate.company);
+        }
       }catch(error){profileIssue=error?.name==='AbortError'?'Public profile search timed out':error.message||'Public profile search failed';}
     }
     const totalNamed=candidate.people.filter(person=>person.publicNameUrl).length;

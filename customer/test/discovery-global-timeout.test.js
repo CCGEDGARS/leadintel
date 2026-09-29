@@ -394,12 +394,12 @@ test('a saved first-name-only buyer receives one automatic public check when Buy
   context.__scheduleSavedBuyerPublicChecks();
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,30));
-  assert.equal(requests,2); // Company page, then public profile search.
+  assert.equal(requests,3); // Company page, combined profile search, then focused fallback.
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Mikael Example');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Mikael Example/);
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,5));
-  assert.equal(requests,2);
+  assert.equal(requests,3);
 });
 
 test('a saved first-name buyer can gain a sourced full name from a unique public LinkedIn result',async()=>{
@@ -418,12 +418,29 @@ test('a saved first-name buyer can gain a sourced full name from a unique public
   assert.equal(requests,2);
   const person=context.__discoveryState().selectedProspects[0].people[0];
   assert.equal(person.publicName,'Jacob Jonstoij');
-  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v2');
+  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v3');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Jacob Jonstoij/);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/View profile ↗<\/a> · Public match/);
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,5));
   assert.equal(requests,2);
+});
+
+test('a focused LinkedIn lookup resolves a buyer missed by the combined search',async()=>{
+  let requests=0;
+  const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,fetchImpl:async(url,options)=>{
+    requests++;
+    if(requests<3)return {ok:true,json:async()=>({data:[]})};
+    assert.match(JSON.parse(options.body).query,/"Jacob" "Södra" "Team Leader"/);
+    return {ok:true,json:async()=>({data:[{url:'https://se.linkedin.com/in/jacob-jonstoij-3bb486222',title:'Jacob Jonstoij – Team Leader | LinkedIn',description:'Team Leader at Södra'}]})};
+  }});
+  context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
+  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:4,visibleStep:5}));
+  context.__scheduleSavedBuyerPublicChecks();
+  await new Promise(resolve=>setTimeout(resolve,30));
+  assert.equal(requests,3);
+  assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Jacob Jonstoij');
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/Jacob Jonstoij/);
 });
 
 test('email button stops at a sourced public work email without calling Apollo',async()=>{
@@ -450,7 +467,7 @@ test('email button offers Apollo only after a completed public search has no per
   context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};context.confirm=()=>{confirmations++;return true;};
   context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
   assert.equal(await context.__enrichSelectedProspect('sodra.com',0),true);
-  assert.equal(searches,2);
+  assert.equal(searches,3);
   assert.equal(confirmations,1);
   assert.equal(apolloCalls,1);
 });
