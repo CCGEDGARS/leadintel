@@ -39,6 +39,7 @@ test('signed-in header identifies the Google account provider and email',()=>{
   assert.equal(nodes.get('server-auth-provider').hidden,false);
   assert.equal(nodes.get('server-auth-provider').textContent,'Google · edgars@example.com');
   assert.equal(nodes.get('server-auth-provider').title,'Signed in with Google as edgars@example.com');
+  assert.equal(nodes.get('server-signin-options').hidden,true);
 });
 
 test('signed-in header identifies Microsoft without guessing an unknown provider',()=>{
@@ -59,6 +60,7 @@ test('signed-in header identifies Microsoft without guessing an unknown provider
 });
 
 test('account provider badge is compact, readable, and mobile-safe',()=>{
+  assert.match(serverCss,/\.server-signin-options\[hidden\]\{display:none\}/);
   assert.match(serverCss,/\.server-auth-provider\{/);
   assert.match(serverCss,/white-space:nowrap/);
   assert.match(serverCss,/font:600 11px "DM Sans",sans-serif/);
