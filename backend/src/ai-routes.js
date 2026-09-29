@@ -2,6 +2,7 @@ import {sha256,cookieValue} from './security.js';
 import {importAesKey,encryptSecret,decryptSecret} from './oauth.js';
 import {AI_PROVIDERS,normalizeAiProvider,defaultAiModel,generateText,verifyProviderCredential,searchWeb} from './ai-provider.js';
 import {verifyMarketResearch} from './market-research-verifier.js';
+import {reviewContactEvidence} from './contact-evidence-review.js';
 import {generateCompanyExtraction} from './company-extraction-fallback.js';
 import {creditFailure,recordProviderCredit,providerCreditIssue} from './provider-credit-health.js';
 
@@ -48,7 +49,7 @@ async function geminiIntegration(env,workspaceId){return env.DB.prepare(`SELECT 
 
 export async function handleAiRoute(request,env,cors={}){
   const url=new URL(request.url);const path=url.pathname;
-  const known=path.startsWith('/api/integrations/ai/')||path==='/api/ai/generate'||path==='/api/ai/web-search'||path==='/api/ai/research-verification';if(!known)return null;
+  const known=path.startsWith('/api/integrations/ai/')||path==='/api/ai/generate'||path==='/api/ai/web-search'||path==='/api/ai/research-verification'||path==='/api/ai/contact-evidence-review';if(!known)return null;
   const workspaceId=String(url.searchParams.get('workspace_id')||'').trim();if(!workspaceId)return error('workspace_id is required',400,cors);
 
   if(path==='/api/integrations/ai/status'&&request.method==='GET'){
@@ -120,7 +121,7 @@ export async function handleAiRoute(request,env,cors={}){
     const integration=await openAiIntegration(env,workspaceId);if(!integration)return error('OpenAI integration is required for web search',409,cors);
     try{
       const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const apiKey=await decryptSecret(integration.encrypted_api_key,key);
-      const result=await searchWeb({apiKey,model:integration.model,query,maxResults,signal:request.signal});
+      const result=await searchWeb({apiKey,model:integration.model,query,maxResults,purpose:body.purpose==='contact_research'?'contact_research':'general',signal:request.signal});
       await env.DB.prepare(`UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(workspaceId,'openai').run();
       await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'openai',kind:'recovered'});
       await audit(env,{workspaceId,userId:access.user.id,type:'ai.web_search_completed',provider:'openai',metadata:{model:integration.model,input_tokens:result.usage.input_tokens,output_tokens:result.usage.output_tokens,result_count:result.results.length}});
@@ -149,6 +150,21 @@ export async function handleAiRoute(request,env,cors={}){
       console.error('Gemini research verification unavailable',String(cause?.message||cause).slice(0,180));
       return unavailable('Gemini verification is temporarily unavailable');
     }
+  }
+
+  if(path==='/api/ai/contact-evidence-review'&&request.method==='POST'){
+    const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
+    const unavailable=reason=>json({status:'unavailable',provider:'gemini',web_search:false,reason},200,cors);
+    if(!encryptionConfigured(env))return unavailable('AI credential encryption is not configured');
+    const body=await request.json().catch(()=>null);if(!body)return error('Contact evidence payload is required',400,cors);
+    const integration=await geminiIntegration(env,workspaceId);if(!integration)return unavailable('Gemini is not configured');
+    try{
+      const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const apiKey=await decryptSecret(integration.encrypted_api_key,key);
+      const result=await reviewContactEvidence({body,apiKey,model:integration.model,signal:request.signal});
+      await env.DB.prepare(`UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider='gemini'`).bind(workspaceId).run();
+      await audit(env,{workspaceId,userId:access.user.id,type:'ai.contact_evidence_reviewed',provider:'gemini',metadata:{evidence_count:Math.min(16,body.evidence?.length||0),conflict_count:result.conflicts.length}});
+      return json(result,200,cors);
+    }catch(cause){console.error('Gemini contact review unavailable',String(cause?.message||cause).slice(0,160));return unavailable('Gemini contact review was unavailable');}
   }
 
   if(path==='/api/ai/generate'&&request.method==='POST'){

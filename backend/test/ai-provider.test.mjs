@@ -100,7 +100,7 @@ test('OpenAI web search forwards the caller abort signal to the upstream request
 
 test('web-search route forwards the incoming request abort signal',()=>{
   const routes=fs.readFileSync(new URL('../src/ai-routes.js',import.meta.url),'utf8');
-  assert.match(routes,/searchWeb\(\{apiKey,model:integration\.model,query,maxResults,signal:request\.signal\}\)/);
+  assert.match(routes,/searchWeb\(\{apiKey,model:integration\.model,query,maxResults,purpose:body\.purpose===.*contact_research.*signal:request\.signal\}\)/);
 });
 
 test('Anthropic adapter uses Messages API and extracts text',async()=>{

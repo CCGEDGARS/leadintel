@@ -461,6 +461,13 @@ test('official company evidence adds full buyer names and explicit personal work
   assert.equal(restored.selectedProspects[0].people[0].publicEmail,'lotta.andersson@northstar.com');
 });
 
+test('official full names retain Swedish letters at the end of the surname',()=>{
+  const found=Discovery.matchPublicBuyerDetails([{id:'lotta',name:'Lotta',title:'CEO & President'}],[
+    {url:'https://sodra.com/organisation',title:'Group senior management',markdown:'Lotta Lyrå — CEO & President of Södra.'}
+  ],'sodra.com');
+  assert.equal(found[0].publicName,'Lotta Lyrå');
+});
+
 test('generic company inboxes and ambiguous surnames cannot be assigned to a buyer',()=>{
   const person=[{name:'Lotta',title:'CEO'}];
   const generic=Discovery.matchPublicBuyerDetails(person,[{url:'https://northstar.com/team',markdown:'Lotta Andersson — CEO. Email info@northstar.com'}],'northstar.com');

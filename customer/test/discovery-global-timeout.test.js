@@ -25,7 +25,7 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
     .replace(runMargin?.[0], `const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=${testRunMargin};`)
     .replace(extractionTimeout?.[0], `const COMPANY_EXTRACTION_TIMEOUT_MS=${testExtractionTimeout};`)
     .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\nglobalThis.__setDiscovery = value => { discovery = LeadIntelDiscovery.normalizeDiscoveryState({...value,qualityVersion:value.qualityVersion??LeadIntelDiscovery.DISCOVERY_QUALITY_VERSION}); };\nglobalThis.__renderStatus = renderStatus;\nglobalThis.__setDiscoveryProgress=value=>{discoveryProgress=value;};\nglobalThis.__renderCandidates = renderCandidates;\n')
-    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__enrichSelectedProspect = enrichSelectedProspect;\nglobalThis.__enrichContact = enrichContact;\nglobalThis.__scheduleSavedBuyerPublicChecks = scheduleSavedBuyerPublicChecks;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__savePotentialProspect = savePotentialProspect;\nglobalThis.__addSelectedProspectToPipeline = addSelectedProspectToPipeline;\nglobalThis.__setCrmCompanies = companies => { crmCompanies = companies; };\nglobalThis.__renderPipeline = renderPipeline;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;\nglobalThis.__potentialBuyerResultsHtml = potentialBuyerResultsHtml;');
+    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__enrichSelectedProspect = enrichSelectedProspect;\nglobalThis.__enrichContact = enrichContact;\nglobalThis.__scheduleSavedBuyerPublicChecks = scheduleSavedBuyerPublicChecks;\nglobalThis.__findPublicProspectContacts = findPublicProspectContacts;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__savePotentialProspect = savePotentialProspect;\nglobalThis.__addSelectedProspectToPipeline = addSelectedProspectToPipeline;\nglobalThis.__setCrmCompanies = companies => { crmCompanies = companies; };\nglobalThis.__renderPipeline = renderPipeline;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;\nglobalThis.__potentialBuyerResultsHtml = potentialBuyerResultsHtml;');
   const mainState = {
     website: 'https://acme.example/',
     profile: {
@@ -369,13 +369,14 @@ test('a first-name-only buyer triggers one public source check and renders a sou
       if(!String(url).includes('/firecrawl-search'))throw new Error('Unexpected request');
       publicSearches++;
       if(publicSearches===1){assert.match(JSON.parse(options.body).query,/"Mikael"/);return {ok:true,json:async()=>({data:[{url:'https://boliden.com/management',title:'Management',markdown:'Mikael Example — President & CEO. mikael.example@boliden.com'}]})};}
+      if(publicSearches===2)return {ok:true,json:async()=>({data:[]})};
       assert.match(JSON.parse(options.body).query,/site:linkedin\.com\/in\//);
       return {ok:true,json:async()=>({data:[{url:'https://www.linkedin.com/in/mikael-example',title:'Mikael Example – Boliden | LinkedIn',description:'President and CEO at Boliden'}]})};
     }});
   context.__setDiscovery({status:'no_results',selectedProspects:[{company:'Boliden',domain:'boliden.com',market:'Sweden',buyerSearchMode:'user_selected_target',buyerRoles:'CEO'}]});
   assert.equal(await context.__findPotentialDecisionMakers('boliden.com'),true);
   await new Promise(resolve=>setTimeout(resolve,15));
-  assert.equal(publicSearches,2);
+  assert.equal(publicSearches,3);
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Mikael Example');
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicLinkedinUrl,'https://www.linkedin.com/in/mikael-example');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/mikael\.example@boliden\.com · Public · unverified/);
@@ -394,12 +395,12 @@ test('a saved first-name-only buyer receives one automatic public check when Buy
   context.__scheduleSavedBuyerPublicChecks();
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,30));
-  assert.equal(requests,3); // Company page, combined profile search, then focused fallback.
+  assert.equal(requests,4); // Official pages, contact page, combined profile search, focused fallback.
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Mikael Example');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Mikael Example/);
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,5));
-  assert.equal(requests,3);
+  assert.equal(requests,4);
 });
 
 test('a saved first-name buyer can gain a sourced full name from a unique public LinkedIn result',async()=>{
@@ -407,7 +408,7 @@ test('a saved first-name buyer can gain a sourced full name from a unique public
   const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,fetchImpl:async(url,options)=>{
     assert.match(String(url),/firecrawl-search/);
     requests++;
-    if(requests===1)return {ok:true,json:async()=>({data:[]})};
+    if(requests<=2)return {ok:true,json:async()=>({data:[]})};
     assert.match(JSON.parse(options.body).query,/"Jacob".*"Södra"/);
     return {ok:true,json:async()=>({data:[{url:'https://se.linkedin.com/in/jacob-jonstoij',title:'Jacob Jonstoij – Södra | LinkedIn',description:'Teamledare at Södra'}]})};
   }});
@@ -415,22 +416,22 @@ test('a saved first-name buyer can gain a sourced full name from a unique public
   context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:4,visibleStep:5}));
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,30));
-  assert.equal(requests,2);
+  assert.equal(requests,3);
   const person=context.__discoveryState().selectedProspects[0].people[0];
   assert.equal(person.publicName,'Jacob Jonstoij');
-  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v4');
+  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v5');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Jacob Jonstoij/);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/View profile ↗<\/a> · Public match/);
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,5));
-  assert.equal(requests,2);
+  assert.equal(requests,3);
 });
 
 test('a focused LinkedIn lookup resolves a buyer missed by the combined search',async()=>{
   let requests=0;
   const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,fetchImpl:async(url,options)=>{
     requests++;
-    if(requests<3)return {ok:true,json:async()=>({data:[]})};
+    if(requests<4)return {ok:true,json:async()=>({data:[]})};
     assert.match(JSON.parse(options.body).query,/"Jacob" "Södra" "Team Leader"/);
     return {ok:true,json:async()=>({data:[{url:'https://se.linkedin.com/in/jacob-jonstoij-3bb486222',title:'Jacob Jonstoij – Team Leader | LinkedIn',description:'Team Leader at Södra'}]})};
   }});
@@ -438,9 +439,38 @@ test('a focused LinkedIn lookup resolves a buyer missed by the combined search',
   context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:4,visibleStep:5}));
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,30));
-  assert.equal(requests,3);
+  assert.equal(requests,4);
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Jacob Jonstoij');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Jacob Jonstoij/);
+});
+
+test('grounded follow-up extracts an official person email and keeps company phone separate',async()=>{
+  let apolloCalls=0,openAiCalls=0,scrapes=0,geminiCalls=0;
+  const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,
+    bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},enrichCrmContact:async()=>{apolloCalls++;return {ok:true};}},
+    fetchImpl:async(url,options)=>{
+      const target=String(url);
+      if(target.includes('/api/ai/web-search')){openAiCalls++;return {ok:true,json:async()=>({results:[{url:'https://sodra.com/team',title:'Södra team',description:'Jacob Jonstoij — Team Leader'}]})};}
+      if(target.includes('/firecrawl-scrape')){scrapes++;return {ok:true,json:async()=>({data:{title:'Södra team',markdown:'Jacob Jonstoij — Team Leader. jacob.jonstoij@sodra.com'}})};}
+      if(target.includes('/api/ai/contact-evidence-review')){geminiCalls++;return {ok:true,json:async()=>({status:'complete',provider:'gemini',web_search:false,conflicts:[]})};}
+      if(target.includes('/firecrawl-search')){
+        const query=JSON.parse(options.body).query;
+        if(query.includes('(contact OR contacts'))return {ok:true,json:async()=>({data:[{url:'https://sodra.com/contact',title:'Contact',markdown:'info@sodra.com · +46 470 890 00'}]})};
+        return {ok:true,json:async()=>({data:[]})};
+      }
+      throw new Error(`Unexpected request ${target}`);
+    }
+  });
+  context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
+  assert.equal(await context.__findPublicProspectContacts('sodra.com'),true);
+  const candidate=context.__discoveryState().selectedProspects[0],person=candidate.people[0];
+  assert.equal(person.publicEmail,'jacob.jonstoij@sodra.com');
+  assert.equal(person.publicEmailUrl,'https://sodra.com/team');
+  assert.equal(person.phone_number,undefined);
+  assert.ok(candidate.publicContacts.some(row=>row.kind==='phone'&&row.value.includes('+46')));
+  assert.equal(candidate.publicResearch.openai,'complete');
+  assert.equal(candidate.publicResearch.gemini,'complete');
+  assert.equal(openAiCalls,1);assert.equal(scrapes,1);assert.equal(geminiCalls,1);assert.equal(apolloCalls,0);
 });
 
 test('email button stops at a sourced public work email without calling Apollo',async()=>{
@@ -467,7 +497,7 @@ test('email button offers Apollo only after a completed public search has no per
   context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};context.confirm=()=>{confirmations++;return true;};
   context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
   assert.equal(await context.__enrichSelectedProspect('sodra.com',0),true);
-  assert.equal(searches,3);
+  assert.equal(searches,5);
   assert.equal(confirmations,1);
   assert.equal(apolloCalls,1);
 });

@@ -127,6 +127,8 @@ export async function searchWeb({apiKey,model,query,maxResults=5,purpose='genera
         model:options.model,
         instructions:sourceAccessAudit
           ?'Audit the named website or data provider using current primary sources. Find the official service/API pages, data-field documentation, pricing or account requirements when published, terms of use, robots or automation restrictions, privacy/copyright limits, and contact or commercial-access instructions. Distinguish public webpage visibility from authenticated database access and authorised API access. Return only sources actually found, use each source URL exactly, prefer the provider own pages, and do not invent capabilities, access, prices, or URLs.'
+          :purpose==='contact_research'
+          ?'Search the public web for professional identity and business contact evidence requested in the query. Return only source URLs actually found and cited, prefer official company pages and public professional profiles, and do not invent email addresses or phone numbers. A snippet is a lead to check, not proof of a working contact method.'
           :'Search the public web for current, source-backed commercial signals relevant to the query. Return only results supported by sources you actually found. Use each source URL exactly. Prefer recent, company-specific evidence and do not invent URLs.',
         input:options.prompt,
         tools:[{type:'web_search'}],tool_choice:'required',include:['web_search_call.action.sources'],
