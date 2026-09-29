@@ -5,7 +5,7 @@ import vm from 'node:vm';
 
 const source=fs.readFileSync(new URL('../discovery-ui.js',import.meta.url),'utf8');
 const start=source.indexOf('function emailPatternCandidates(');
-const end=source.indexOf('function emailPatternPanel(',start);
+const end=source.indexOf('function contactFlowControls(',start);
 const context={URL,canonicalDomain:value=>{try{return new URL(value).hostname;}catch{return String(value||'').toLowerCase();}}};
 vm.runInNewContext(`${source.slice(start,end)};globalThis.patterns=emailPatternCandidates;globalThis.label=hunterStatusLabel;`,context);
 const listingsStart=source.indexOf('function patternListings('),listingsEnd=source.indexOf('async function searchBuyerEmailPatterns(',listingsStart);

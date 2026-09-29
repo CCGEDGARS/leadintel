@@ -25,7 +25,7 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
     .replace(runMargin?.[0], `const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=${testRunMargin};`)
     .replace(extractionTimeout?.[0], `const COMPANY_EXTRACTION_TIMEOUT_MS=${testExtractionTimeout};`)
     .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\nglobalThis.__setDiscovery = value => { discovery = LeadIntelDiscovery.normalizeDiscoveryState({...value,qualityVersion:value.qualityVersion??LeadIntelDiscovery.DISCOVERY_QUALITY_VERSION}); };\nglobalThis.__renderStatus = renderStatus;\nglobalThis.__setDiscoveryProgress=value=>{discoveryProgress=value;};\nglobalThis.__renderCandidates = renderCandidates;\n')
-    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__confirmBuyerContact = confirmBuyerContact;\nglobalThis.__toggleBuyerAutoConfirm = toggleBuyerAutoConfirm;\nglobalThis.__enrichSelectedProspect = enrichSelectedProspect;\nglobalThis.__enrichContact = enrichContact;\nglobalThis.__scheduleSavedBuyerPublicChecks = scheduleSavedBuyerPublicChecks;\nglobalThis.__findPublicProspectContacts = findPublicProspectContacts;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__savePotentialProspect = savePotentialProspect;\nglobalThis.__addSelectedProspectToPipeline = addSelectedProspectToPipeline;\nglobalThis.__setCrmCompanies = companies => { crmCompanies = companies; };\nglobalThis.__renderPipeline = renderPipeline;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;\nglobalThis.__potentialBuyerResultsHtml = potentialBuyerResultsHtml;');
+    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__confirmBuyerContact = confirmBuyerContact;\nglobalThis.__toggleBuyerContactFlow = toggleBuyerContactFlow;\nglobalThis.__enrichSelectedProspect = enrichSelectedProspect;\nglobalThis.__enrichContact = enrichContact;\nglobalThis.__scheduleSavedBuyerPublicChecks = scheduleSavedBuyerPublicChecks;\nglobalThis.__findPublicProspectContacts = findPublicProspectContacts;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__savePotentialProspect = savePotentialProspect;\nglobalThis.__addSelectedProspectToPipeline = addSelectedProspectToPipeline;\nglobalThis.__setCrmCompanies = companies => { crmCompanies = companies; };\nglobalThis.__renderPipeline = renderPipeline;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;\nglobalThis.__potentialBuyerResultsHtml = potentialBuyerResultsHtml;');
   const mainState = {
     website: 'https://acme.example/',
     profile: {
@@ -377,12 +377,15 @@ test('opted-in confirmation runs Hunter finder and verifier plus Apollo email an
   context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.lv',buyerSearchMode:'user_selected_target',publicContactStatus:'complete',people:[{id:'apollo-12345',name:'Marta Berzina'}]}]});
   context.__setCrmCompanies([{id:'c1',normalized_domain:'example.lv'}]);
   const candidate=context.__discoveryState().selectedProspects[0];
-  const box={dataset:{autoConfirm:'example.lv',autoScope:'selected',personIndex:'0'},checked:true};
-  context.__toggleBuyerAutoConfirm(box);
+  const emailBox={dataset:{flowDomain:'example.lv',flowScope:'selected',flowConfirm:'email',personIndex:'0'},checked:true};
+  const phoneBox={dataset:{flowDomain:'example.lv',flowScope:'selected',flowConfirm:'phone',personIndex:'0'},checked:true};
+  context.__toggleBuyerContactFlow(emailBox);
+  context.__toggleBuyerContactFlow(phoneBox);
   await new Promise(resolve=>setTimeout(resolve,30));
   assert.deepEqual(calls,['hunter-status','hunter-finder','hunter-verifier','apollo-email','apollo-phone']);
   assert.equal(candidate.people[0].hunterChecks['marta.berzina@example.lv'].deliverability,'deliverable');
-  assert.equal(candidate.people[0].autoConfirmedFor,'apollo-12345:buyer-contacts-v10-pattern-search');
+  assert.equal(candidate.people[0].flowEmailCompletedFor,'apollo-12345:buyer-contacts-v10-pattern-search');
+  assert.equal(candidate.people[0].flowPhoneCompletedFor,'apollo-12345:buyer-contacts-v10-pattern-search');
 });
 
 test('a first-name-only buyer triggers one public source check and renders a sourced full name without Apollo enrichment',async()=>{

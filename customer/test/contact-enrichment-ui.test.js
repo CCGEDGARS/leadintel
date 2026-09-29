@@ -41,7 +41,7 @@ test('Discovery requires durable CRM identity before paid enrichment',()=>{
   assert.match(ui,/Sign in.*enrich/i);
 });
 
-test('phone lookup is explicit or enabled by the buyer auto-confirm checkbox',()=>{
+test('phone lookup is explicit or enabled by the buyer phone flow checkbox',()=>{
   assert.match(ui,/Confirm phone/i);
   assert.match(ui,/Phone found ✓/);
   assert.doesNotMatch(ui,/Find phone · paid|Find phone · up to 9 credits/);

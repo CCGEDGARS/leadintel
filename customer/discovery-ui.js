@@ -14,7 +14,7 @@ const MAX_DISCOVERY_COMPANY_CHECKS=30;
 const SAVING_SEARCH_RESULT_LIMIT=4;
 const SAVING_COMPANY_CHECK_LIMIT=3;
 const SAVING_FIRECRAWL_CALL_LIMIT=10;
-const ASSET_VERSION="20260928-proxy-cors-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&auto-contact-confirm=1";
+const ASSET_VERSION="20260928-proxy-cors-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20260925-buyers-stage-view-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -588,11 +588,11 @@ function buyerContactRows(person={},candidate={},result={}){
     if(!addresses.length)return type==='gmail'?'No Gmail address found':'No company email found';
     return addresses.map(email=>{
       const check=person.hunterChecks?.[email],publicRow=found.find(item=>item.email===email);
-      const label=contact.work_email===email?'Apollo verified':check?hunterStatusLabel(check,email):publicRow?'Public listing · identity unconfirmed':'Hunter suggested · unconfirmed';
+      const label=contact.work_email===email?'Apollo verified · primary for flow':check?hunterStatusLabel(check,email):publicRow?'Public listing · identity unconfirmed':'Hunter suggested · unconfirmed';
       return `<span class="buyer-email-result">${esc(email)} · ${esc(label)}${source(publicRow?.url)}</span>`;
     }).join('');
   };
-  return `<div class="buyer-contact-fields" aria-label="Contact details"><div><strong>LinkedIn</strong><span>${profile?`<a href="${esc(profile)}" target="_blank" rel="noopener noreferrer">View profile ↗</a> · ${profileSource?"Public match · confirm identity":"Apollo profile · confirm role"}`:"No direct profile matched"}</span></div><div><strong>Phone</strong><span>${phone?`${esc(phone)} · Apollo${contact.phone_status==="Verified"?" verified":""}`:person.publicPhone?`${esc(person.publicPhone)} · Public · unverified${source(person.publicPhoneUrl)}`:companyPhone?`No direct phone · Company phone ${esc(companyPhone.value)} · Public · unverified${source(companyPhone.url)}`:"No direct phone found"}</span></div><div><strong>Company email</strong><span>${renderEmails('company')}</span></div><div><strong>Gmail</strong><span>${renderEmails('gmail')}</span></div></div>`;
+  return `<div class="buyer-contact-fields" aria-label="Contact details"><div><strong>LinkedIn</strong><span>${profile?`<a href="${esc(profile)}" target="_blank" rel="noopener noreferrer">View profile ↗</a> · ${profileSource?"Public match · confirm identity":"Apollo profile · confirm role"}`:"No direct profile matched"}</span></div><div><strong>Phone</strong><span>${phone?`${esc(phone)} · Apollo${contact.phone_status==="Verified"?" verified":""}`:person.publicPhone?`${esc(person.publicPhone)} · Public · unverified${source(person.publicPhoneUrl)}`:companyPhone?`No direct phone · Company phone ${esc(companyPhone.value)} · Public · unverified${source(companyPhone.url)}`:"No direct phone found"}</span></div><div><strong>Company email</strong><span>${renderEmails('company')}</span></div><div><strong>Gmail</strong><span>${renderEmails('gmail')}</span></div><small class="people-note">Automatic flow uses a verified company email as primary. Gmail findings need manual identity review.</small></div>`;
 }
 function emailPatternCandidates(person={},domain=''){
   const full=String(person.publicName||person.name||'').trim().replace(/\s+/g,' ').split(' ');
@@ -611,12 +611,8 @@ function hunterStatusLabel(check,email){
   if(check.status==='accept_all')return 'Hunter: accepts all addresses · inconclusive';
   return 'Hunter: inconclusive';
 }
-function emailPatternPanel(candidate,person){
-  const options=emailPatternCandidates(person,candidate.domain);
-  if(!options.length)return '';
-  const found=new Set((person.patternFindings||[]).map(item=>item.email));
-  const checked=person.hunterChecks||{};
-  return `<details class="email-pattern-panel"><summary>Pattern research · ${options.length} company and Gmail formats</summary><p>LeadIntel searches public sources for these formats during buyer research. Generated addresses remain guesses until a source lists them or you select Confirm email.</p><ul>${options.map(item=>`<li>${esc(item.email)} · ${esc(checked[item.email]?hunterStatusLabel(checked[item.email],item.email):found.has(item.email)?'Public listing · identity unconfirmed':'No public match')}</li>`).join('')}</ul></details>`;
+function contactFlowControls(candidate,person,index,scope){
+  return ['email','phone'].map(kind=>`<label class="auto-confirm-toggle"><input type="checkbox" data-flow-confirm="${kind}" data-flow-domain="${esc(candidate.domain)}" data-flow-scope="${scope}" data-person-index="${index}" ${person[kind==='email'?'flowConfirmEmail':'flowConfirmPhone']?'checked':''} ${!crmAuthenticated()?'disabled':''}> Add to flow</label>`);
 }
 function enrichmentResultHtml(result){
   if(!result)return "";
@@ -645,7 +641,7 @@ function peopleHtml(candidate,candidateIndex){
     const emailLabel=pending?"Checking public sources…":hasEmail?"Email verified ✓":person.publicEmail?"Public email found ✓":crmAuthenticated()?"Find work email":"Sign in to find email";
     const phoneAction=phonePending?"refresh-phone":"find-phone";
     const phoneLabel=hasPhone?"Phone found ✓":phonePending?"Refresh phone":"Find phone with Apollo";
-    return `<div class="person-row"><div><strong>${esc(person.publicName||person.name)}</strong><span>${esc(person.title)}</span>${person.organization?`<small>${esc(person.organization)}</small>`:""}${buyerContactRows(person,candidate,result)}${emailPatternPanel(candidate,person)}</div><div class="person-actions"><button class="secondary-btn small" type="button" data-action="enrich-contact" aria-label="Confirm email with Hunter and Apollo" title="Check candidate addresses with Hunter and confirm with Apollo" data-company-index="${candidateIndex}" data-person-index="${personIndex}" ${pending||!crmAuthenticated()||hasEmail?"disabled":""}>${pending?"Confirming…":hasEmail?"Email confirmed ✓":"Confirm email"}</button><button class="secondary-btn small" type="button" data-action="${phoneAction}" data-company-index="${candidateIndex}" data-person-index="${personIndex}" ${pending||!crmAuthenticated()||hasPhone?"disabled":""}>${pending?"Confirming…":hasPhone?"Phone confirmed ✓":"Confirm phone"}</button><label class="auto-confirm-toggle"><input type="checkbox" data-auto-confirm="${esc(candidate.domain)}" data-auto-scope="company" data-person-index="${personIndex}" ${person.autoConfirm?"checked":""} ${!crmAuthenticated()?"disabled":""}> Auto-confirm both</label></div></div>`;
+    return `<div class="person-row"><div><strong>${esc(person.publicName||person.name)}</strong><span>${esc(person.title)}</span>${person.organization?`<small>${esc(person.organization)}</small>`:""}${buyerContactRows(person,candidate,result)}</div><div class="person-actions"><button class="secondary-btn small" type="button" data-action="enrich-contact" aria-label="Confirm email with Hunter and Apollo" title="Check candidate addresses with Hunter and confirm with Apollo" data-company-index="${candidateIndex}" data-person-index="${personIndex}" ${pending||!crmAuthenticated()||hasEmail?"disabled":""}>${pending?"Confirming…":hasEmail?"Email confirmed ✓":"Confirm email"}</button>${contactFlowControls(candidate,person,personIndex,"company")[0]}<button class="secondary-btn small" type="button" data-action="${phoneAction}" data-company-index="${candidateIndex}" data-person-index="${personIndex}" ${pending||!crmAuthenticated()||hasPhone?"disabled":""}>${pending?"Confirming…":hasPhone?"Phone confirmed ✓":"Confirm phone"}</button>${contactFlowControls(candidate,person,personIndex,"company")[1]}</div></div>`;
   }).join("")}</div>`;
 }
 function candidateCrmMeta(candidate){const company=crmCompanyByDomain(candidate.domain||candidate.website);const inPipeline=currentWorkspaceCrmPipeline().some(item=>canonicalDomain(item.normalized_domain||item.website)===canonicalDomain(candidate.domain||candidate.website));return {company,suppressed:company?.lifecycle_status==="suppressed",inPipeline};}
@@ -827,7 +823,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     candidate.people=LeadIntelDiscovery.selectDecisionMakers(LeadIntelDiscovery.normalizeApolloPeople(data),buyerProfile,4).map(person=>{
       const prior=priorPeople.get(person.id);
       return prior&&String(prior.name||'').split(/\s+/)[0].toLowerCase()===String(person.name||'').split(/\s+/)[0].toLowerCase()
-        ?{...person,publicName:prior.publicName,publicNameUrl:prior.publicNameUrl,publicEmail:prior.publicEmail,publicEmailUrl:prior.publicEmailUrl,publicPhone:prior.publicPhone,publicPhoneUrl:prior.publicPhoneUrl,publicLinkedinUrl:prior.publicLinkedinUrl,hunterChecks:prior.hunterChecks,patternFindings:prior.patternFindings,hunterFound:prior.hunterFound,autoConfirm:prior.autoConfirm,autoConfirmedFor:prior.autoConfirmedFor}:person;
+        ?{...person,publicName:prior.publicName,publicNameUrl:prior.publicNameUrl,publicEmail:prior.publicEmail,publicEmailUrl:prior.publicEmailUrl,publicPhone:prior.publicPhone,publicPhoneUrl:prior.publicPhoneUrl,publicLinkedinUrl:prior.publicLinkedinUrl,hunterChecks:prior.hunterChecks,patternFindings:prior.patternFindings,hunterFound:prior.hunterFound,flowConfirmEmail:prior.flowConfirmEmail,flowConfirmPhone:prior.flowConfirmPhone,flowEmailCompletedFor:prior.flowEmailCompletedFor,flowPhoneCompletedFor:prior.flowPhoneCompletedFor}:person;
     });
     candidate.peopleStatus=candidate.people.length?"complete":"empty";candidate.buyerRolesChanged=false;
     persist();
@@ -932,20 +928,35 @@ async function confirmBuyerContact(candidate,index,{scope='selected',kind='email
         const company=crmCompanyByDomain(candidate.domain);if(company){const detail=await bridge().getCrmCompany(company.id);const contact=(detail.contacts||[]).find(item=>String(item.external_person_id||'')===String(person.id));if(contact)enrichmentResults.set(key,{...previous,contact,request:{...previous.request,status:contact.phone_number?'verified':'pending_phone'}});}
       }else await apollo(true);
     }
-    if(automatic)person.autoConfirmedFor=fingerprint;
+    if(automatic)person[kind==='email'?'flowEmailCompletedFor':'flowPhoneCompletedFor']=fingerprint;
     saveDiscovery();await refreshCrmState({render:false});renderAll();
     showToast(issues.length?`${person.publicName||person.name} · ${issues.join(' · ')}`:`${person.publicName||person.name} · confirmation results updated`);
     return !issues.length;
   }finally{enrichmentPending.delete(key);renderAll();}
 }
-function toggleBuyerAutoConfirm(box){
-  const domain=canonicalDomain(box.dataset.autoConfirm),scope=box.dataset.autoScope,index=Number(box.dataset.personIndex);
+const contactFlowPromises=new Map();
+async function runBuyerContactFlow(candidate,index,scope){
+  const person=candidate?.people?.[index];if(!person||!crmAuthenticated()||candidate.publicContactStatus==='loading')return;
+  const key=personKey(candidate,person);if(contactFlowPromises.has(key))return contactFlowPromises.get(key);
+  const run=(async()=>{
+    const fingerprint=`${person.id}:${PUBLIC_NAME_CHECK_VERSION}`;
+    for(const kind of ['email','phone']){
+      if(!person[kind==='email'?'flowConfirmEmail':'flowConfirmPhone']||person[kind==='email'?'flowEmailCompletedFor':'flowPhoneCompletedFor']===fingerprint)continue;
+      await confirmBuyerContact(candidate,index,{scope,kind,automatic:true});
+    }
+  })();
+  contactFlowPromises.set(key,run);
+  try{await run;}finally{contactFlowPromises.delete(key);}
+}
+function toggleBuyerContactFlow(box){
+  const domain=canonicalDomain(box.dataset.flowDomain),scope=box.dataset.flowScope,index=Number(box.dataset.personIndex),kind=box.dataset.flowConfirm;
+  if(!['email','phone'].includes(kind))return;
   const candidate=(scope==='selected'?discovery.selectedProspects:discovery.candidates).find(item=>canonicalDomain(item.domain)===domain);
   const person=candidate?.people?.[index];if(!person)return;
-  person.autoConfirm=box.checked;
-  if(!box.checked)person.autoConfirmedFor='';
+  person[kind==='email'?'flowConfirmEmail':'flowConfirmPhone']=box.checked;
+  if(!box.checked)person[kind==='email'?'flowEmailCompletedFor':'flowPhoneCompletedFor']='';
   saveDiscovery();
-  if(box.checked&&candidate.publicContactStatus!=='loading')void confirmBuyerContact(candidate,index,{scope,both:true,automatic:true});
+  if(box.checked&&candidate.publicContactStatus!=='loading')void runBuyerContactFlow(candidate,index,scope);
 }
 async function enrichContact(companyIndex,personIndex,{phoneLookup=false,confirmed=false}={}){
   const candidate=discovery.candidates[companyIndex],person=candidate?.people?.[personIndex];
@@ -972,7 +983,7 @@ function selectedBuyerKey(candidate,person){return personKey(candidate,person);}
 function prospectContactControls(candidate,person){
   const key=selectedBuyerKey(candidate,person),result=enrichmentResults.get(key),pending=enrichmentPending.has(key);
   const index=candidate.people.indexOf(person),phone=result?.contact?.phone_number;
-  return `<div class="selected-prospect-contact-actions"><button class="secondary-btn small" type="button" data-prospect-enrich-email="${esc(candidate.domain)}" data-person-index="${index}" ${!crmAuthenticated()||pending?'disabled':''}>${pending?'Confirming…':'Confirm email'}</button><button class="secondary-btn small" type="button" data-prospect-enrich-phone="${esc(candidate.domain)}" data-person-index="${index}" ${!crmAuthenticated()||pending||phone?'disabled':''}>${phone?'Phone confirmed ✓':pending?'Confirming…':'Confirm phone'}</button><label class="auto-confirm-toggle"><input type="checkbox" data-auto-confirm="${esc(candidate.domain)}" data-auto-scope="selected" data-person-index="${index}" ${person.autoConfirm?'checked':''} ${!crmAuthenticated()?'disabled':''}> Auto-confirm both</label></div>`;
+  return `<div class="selected-prospect-contact-actions"><button class="secondary-btn small" type="button" data-prospect-enrich-email="${esc(candidate.domain)}" data-person-index="${index}" ${!crmAuthenticated()||pending?'disabled':''}>${pending?'Confirming…':'Confirm email'}</button>${contactFlowControls(candidate,person,index,"selected")[0]}<button class="secondary-btn small" type="button" data-prospect-enrich-phone="${esc(candidate.domain)}" data-person-index="${index}" ${!crmAuthenticated()||pending||phone?'disabled':''}>${phone?'Phone confirmed ✓':pending?'Confirming…':'Confirm phone'}</button>${contactFlowControls(candidate,person,index,"selected")[1]}</div>`;
 }
 async function findPublicProspectContacts(domain){
   const key=canonicalDomain(domain);
@@ -1173,7 +1184,7 @@ async function runPublicProspectContacts(domain){
       }catch{showToast("Public buyer details found, but CRM sync failed. Retry from this card.");}
     }
     showToast(profileIssue|| (totalNamed?`${totalNamed} public full name${totalNamed===1?"":"s"} found · check source before outreach`:candidate.publicContacts.length?`${candidate.publicContacts.length} public company contact${candidate.publicContacts.length===1?"":"s"} found · unverified`:"No public buyer names or company contacts found in this search"));
-    for(let index=0;index<candidate.people.length;index++)if(candidate.people[index].autoConfirm&&candidate.people[index].autoConfirmedFor!==`${candidate.people[index].id}:${PUBLIC_NAME_CHECK_VERSION}`)void confirmBuyerContact(candidate,index,{scope:(discovery.selectedProspects||[]).includes(candidate)?'selected':'company',both:true,automatic:true});
+    for(let index=0;index<candidate.people.length;index++)void runBuyerContactFlow(candidate,index,(discovery.selectedProspects||[]).includes(candidate)?'selected':'company');
     return true;
   }catch(error){candidate.publicContactStatus="error";showToast(error.name==="AbortError"?"Public contact search timed out":error.message);return false;}
   finally{clearTimeout(timeout);saveDiscovery();renderPipeline();renderCandidates();}
@@ -1259,7 +1270,7 @@ function renderSelectedProspects(prospects){
       const publicProfile=LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl);
       const direct=apolloProfile||publicProfile;
       const linkedIn=direct||linkedInSearchUrl(person,candidate);
-      return `<li class="selected-prospect-person"><span class="selected-prospect-rank">${index+1}</span><div class="selected-prospect-person-details"><div class="selected-prospect-person-name"><strong>${esc(name||"Name unavailable")}</strong>${name&&!/\s/.test(name)?'<small>First name only</small>':publicName&&!verifiedName?`<small>Public name · <a href="${esc(person.publicNameUrl)}" target="_blank" rel="noopener noreferrer">Source ↗</a></small>`:""}</div><p>${esc(person.title||"Role not provided")}</p>${location?`<small class="selected-prospect-person-location">${esc(location)}</small>`:""}${buyerContactRows(person,candidate,enrichmentResults.get(personKey(candidate,person)))}${emailPatternPanel(candidate,person)}${enrichmentResultHtml(enrichmentResults.get(personKey(candidate,person)))}</div>${!direct?`<a href="${esc(linkedIn)}" target="_blank" rel="noopener noreferrer">Search LinkedIn ↗</a>`:""}${prospectContactControls(candidate,person)}</li>`;
+      return `<li class="selected-prospect-person"><span class="selected-prospect-rank">${index+1}</span><div class="selected-prospect-person-details"><div class="selected-prospect-person-name"><strong>${esc(name||"Name unavailable")}</strong>${name&&!/\s/.test(name)?'<small>First name only</small>':publicName&&!verifiedName?`<small>Public name · <a href="${esc(person.publicNameUrl)}" target="_blank" rel="noopener noreferrer">Source ↗</a></small>`:""}</div><p>${esc(person.title||"Role not provided")}</p>${location?`<small class="selected-prospect-person-location">${esc(location)}</small>`:""}${buyerContactRows(person,candidate,enrichmentResults.get(personKey(candidate,person)))}${enrichmentResultHtml(enrichmentResults.get(personKey(candidate,person)))}</div>${!direct?`<a href="${esc(linkedIn)}" target="_blank" rel="noopener noreferrer">Search LinkedIn ↗</a>`:""}${prospectContactControls(candidate,person)}</li>`;
     }).join("")}</ol><p class="selected-prospect-people-note">Confirm each person’s identity and role before outreach. LeadIntel checks public contact evidence automatically for saved buyers.</p></section>`:
       candidate.peopleStatus==="loading"?'<p class="selected-prospect-people-state" role="status">Searching for decision-makers…</p>':
       candidate.peopleStatus==="error"?'<p class="selected-prospect-people-state" role="status">Buyer search failed. You can retry below.</p>':
@@ -1327,11 +1338,11 @@ function renderDiscoverySafely(){try{renderAll();return true;}catch(error){conso
 function bindDiscovery(){
   $("discovery-target-list")?.addEventListener("click",event=>{const button=event.target.closest("[data-select-target-buyers]");if(button)selectTargetForBuyers(button.dataset.selectTargetBuyers);});
   $("continue-to-discovery")?.addEventListener("click",showDiscoveryStep);$("back-to-strategy")?.addEventListener("click",showStrategyStep);$("run-company-discovery")?.addEventListener("click",()=>{if(discovery.status==="no_results"){reviewDiscoveryGuidance();return;}runCompanyDiscovery({savingMode:$("discovery-research-mode")?.value!=="full"});});$("discovery-target-count")?.addEventListener("change",()=>{persistDiscoveryTarget();renderStatus();const custom=$("discovery-target-custom");if(custom&&!custom.hidden)custom.focus();});$("discovery-target-custom")?.addEventListener("input",()=>{persistDiscoveryTarget();renderStatus();});$("activate-market-strategy")?.addEventListener("click",()=>setTimeout(renderStatus,0));
-  $("company-candidates")?.addEventListener("change",event=>{const box=event.target.closest("[data-auto-confirm]");if(box)toggleBuyerAutoConfirm(box);});
+  $("company-candidates")?.addEventListener("change",event=>{const box=event.target.closest("[data-flow-confirm]");if(box)toggleBuyerContactFlow(box);});
   $("company-candidates")?.addEventListener("click",event=>{const btn=event.target.closest("[data-action]");if(!btn)return;if(btn.dataset.action==="review-strategy"){showStrategyStep();return;}if(btn.dataset.action==="review-research"){reviewMarketResearch();return;}if(btn.dataset.action==="open-ai-settings"){document.getElementById("open-settings")?.click();return;}const index=Number(btn.dataset.companyIndex);const personIndex=Number(btn.dataset.personIndex);if(btn.dataset.action==="find-decision-makers"){setJourneyFocus("buyers",{scroll:false});findDecisionMakers(index);}if(btn.dataset.action==="enrich-contact")void confirmBuyerContact(discovery.candidates[index],personIndex,{scope:"company",kind:"email"});if(btn.dataset.action==="find-phone")void confirmBuyerContact(discovery.candidates[index],personIndex,{scope:"company",kind:"phone"});if(btn.dataset.action==="refresh-phone")refreshEnrichedContact(index,personIndex);if(btn.dataset.action==="save-crm")saveCandidate(index,{pipeline:false});if(btn.dataset.action==="add-pipeline")saveCandidate(index,{pipeline:true});});
   $("discovery-funnel")?.addEventListener("click",event=>{if(event.target.closest('[data-action="open-provider-settings"]')){document.getElementById("open-settings")?.click();return;}const btn=event.target.closest('[data-action="retry-failed-checks"]');if(btn)retryFailedDiscoveryChecks();});
   $("discovery-potential-matches")?.addEventListener("click",event=>{const btn=event.target.closest("[data-action]");if(!btn)return;if(btn.dataset.action==="find-potential-buyers")findPotentialDecisionMakers(btn.dataset.domain);if(btn.dataset.action==="save-potential-prospect")savePotentialProspect(btn.dataset.domain);if(btn.dataset.action==="review-strategy")showStrategyStep();});
-  $("customer-pipeline")?.addEventListener("change",event=>{const box=event.target.closest("[data-auto-confirm]");if(box){toggleBuyerAutoConfirm(box);return;}const select=event.target.closest("[data-pipeline-stage]");if(select){changePipelineStage(select);return;}const roles=event.target.closest("[data-prospect-buyer-roles]");if(roles){const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(roles.dataset.prospectBuyerRoles));if(candidate){candidate.buyerRoles=roles.value.split(/[;\n]/).map(value=>value.trim()).filter(Boolean).slice(0,10).join("; ");candidate.buyerRolesChanged=true;selectedBuyerEnrichment.clear();saveDiscovery();renderPipeline();showToast("Buyer roles saved · refresh buyers to apply them");}return;}const check=event.target.closest("[data-select-prospect-person]");if(check){if(check.checked)selectedBuyerEnrichment.add(check.dataset.selectProspectPerson);else selectedBuyerEnrichment.delete(check.dataset.selectProspectPerson);renderPipeline();}});
+  $("customer-pipeline")?.addEventListener("change",event=>{const box=event.target.closest("[data-flow-confirm]");if(box){toggleBuyerContactFlow(box);return;}const select=event.target.closest("[data-pipeline-stage]");if(select){changePipelineStage(select);return;}const roles=event.target.closest("[data-prospect-buyer-roles]");if(roles){const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(roles.dataset.prospectBuyerRoles));if(candidate){candidate.buyerRoles=roles.value.split(/[;\n]/).map(value=>value.trim()).filter(Boolean).slice(0,10).join("; ");candidate.buyerRolesChanged=true;selectedBuyerEnrichment.clear();saveDiscovery();renderPipeline();showToast("Buyer roles saved · refresh buyers to apply them");}return;}const check=event.target.closest("[data-select-prospect-person]");if(check){if(check.checked)selectedBuyerEnrichment.add(check.dataset.selectProspectPerson);else selectedBuyerEnrichment.delete(check.dataset.selectProspectPerson);renderPipeline();}});
   $("customer-pipeline")?.addEventListener("click",event=>{const button=event.target.closest("button");if(button?.dataset.findPublicContacts){findPublicProspectContacts(button.dataset.findPublicContacts);return;}if(button?.dataset.prospectEnrichEmail){const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(button.dataset.prospectEnrichEmail));void confirmBuyerContact(candidate,Number(button.dataset.personIndex),{kind:"email"});return;}if(button?.dataset.prospectEnrichPhone){const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(button.dataset.prospectEnrichPhone));void confirmBuyerContact(candidate,Number(button.dataset.personIndex),{kind:"phone"});return;}if(button?.dataset.prospectBatchEmail){enrichSelectedProspectBatch(button.dataset.prospectBatchEmail);return;}if(button?.dataset.prospectBatchPhone){enrichSelectedProspectBatch(button.dataset.prospectBatchPhone,true);return;}const promote=event.target.closest("[data-add-prospect-pipeline]");if(promote){addSelectedProspectToPipeline(promote.dataset.addProspectPipeline);return;}const prospect=event.target.closest("[data-find-prospect-buyers]");if(prospect){findPotentialDecisionMakers(prospect.dataset.findProspectBuyers);return;}const buyer=event.target.closest("[data-find-pipeline-buyers]");if(buyer){findPipelineDecisionMakers(buyer.dataset.findPipelineBuyers);return;}const remove=event.target.closest("[data-pipeline-remove]");if(remove){removePipelineCompany(remove.dataset.pipelineRemove,remove.dataset.domain);return;}const open=event.target.closest("[data-open-crm-company]");if(open)document.getElementById("open-crm")?.click();});
   $("reset-workspace")?.addEventListener("click",()=>setTimeout(()=>{if(!localStorage.getItem(MAIN_STORAGE_KEY)){localStorage.removeItem(DISCOVERY_STORAGE_KEY);localStorage.removeItem(`${DISCOVERY_STORAGE_KEY}_meta`);discovery=LeadIntelDiscovery.normalizeDiscoveryState({});crmCompanies=[];crmPipeline=[];crmAvailable=false;enrichmentResults.clear();enrichmentPending.clear();}},0));
   window.addEventListener("leadintel:open-discovery",event=>{targetListHandoff=event.detail?.source==='target-companies';if(!moduleReady()){showToast('Add your company website first');return;}showDiscoveryStep(event.detail?.focus||"companies");if(event.detail?.startResearch&&targetListHandoff&&discovery.status!=='running')void runCompanyDiscovery({targetOnly:true,savingMode:event.detail?.savingMode!==false,targetDomain:event.detail?.targetDomain||""});});window.addEventListener("leadintel:module-opened",event=>{if(Number(event.detail?.step)!==5)return;syncStrategyFingerprint();saveMeta({...loadMeta(),visibleStep:5});renderAll();renderDiscoveryFocus(loadMeta().activeJourneyStage===5?"buyers":"companies");scheduleSavedBuyerPublicChecks();if(crmAuthenticated())refreshCrmState();});
