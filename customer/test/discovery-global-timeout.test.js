@@ -423,12 +423,12 @@ test('a saved first-name-only buyer receives one automatic public check when Buy
   context.__scheduleSavedBuyerPublicChecks();
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,30));
-  assert.equal(requests,7); // Official pages, contact page, homepage, profiles, and two pattern searches.
+  assert.equal(requests,8); // Official pages, profiles, grouped patterns, and one focused email search.
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Mikael Example');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Mikael Example/);
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,5));
-  assert.equal(requests,7);
+  assert.equal(requests,8);
 });
 
 test('a saved first-name buyer can gain a sourced full name from a unique public LinkedIn result',async()=>{
@@ -446,15 +446,15 @@ test('a saved first-name buyer can gain a sourced full name from a unique public
   context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:4,visibleStep:5}));
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,30));
-  assert.equal(requests,5);
+  assert.equal(requests,6);
   const person=context.__discoveryState().selectedProspects[0].people[0];
   assert.equal(person.publicName,'Jacob Jonstoij');
-  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v10-pattern-search');
+  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v11-focused-email-evidence');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Jacob Jonstoij/);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/View profile ↗<\/a> · Public match/);
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,5));
-  assert.equal(requests,5);
+  assert.equal(requests,6);
 });
 
 test('a focused LinkedIn lookup resolves a buyer missed by the combined search',async()=>{
@@ -471,7 +471,7 @@ test('a focused LinkedIn lookup resolves a buyer missed by the combined search',
   context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:4,visibleStep:5}));
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,30));
-  assert.equal(requests,6);
+  assert.equal(requests,7);
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Jacob Jonstoij');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Jacob Jonstoij/);
 });

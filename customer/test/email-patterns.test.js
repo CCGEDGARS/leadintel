@@ -36,3 +36,24 @@ test('automatic pattern search records exact public addresses with a source, inc
   assert.equal(results[0].url,'https://example.lv/team');
   assert.equal(results[1].email,'marta.berzina@gmail.com');
 });
+
+test('format examples are not mistaken for a sourced buyer email',()=>{
+  const result=context.listings({publicName:'Lotta Lyrå'},'sodra.com',[{url:'https://directory.test/sodra',description:'Södra Email Formats and Examples · lotta.lyra@sodra.com · Lotta Lyrå'}]);
+  assert.equal(result.length,0);
+});
+
+test('focused grounded search can recover a name and address from a public association PDF',async()=>{
+  const candidates=[];
+  const focusedContext={...context,crmAuthenticated:()=>true,bridge:()=>({workspace:{id:'workspace-1'}}),LEADINTEL_API:'https://api.test',
+    searchBuyerPublicPages:async query=>{candidates.push(query);return [];},
+    fetch:async(_url,options)=>{const body=JSON.parse(options.body);assert.match(body.query,/"lotta.lyra@sodra.com" "Lotta Lyrå"/);return {ok:true,json:async()=>({results:[{url:'https://association.test/annual-report.pdf',description:'Lotta Lyrå · E-mail: lotta.lyra@sodra.com · Board member'}]})};}};
+  const searchStart=source.indexOf('async function searchBuyerEmailPatterns('),searchEnd=source.indexOf('async function groundedBuyerFollowUp(',searchStart);
+  vm.runInNewContext(`${source.slice(searchStart,searchEnd)};globalThis.search=searchBuyerEmailPatterns;`,focusedContext);
+  const candidate={domain:'sodra.com',people:[{publicName:'Lotta Lyrå'}]};
+  const research=await focusedContext.search(candidate,[],new AbortController().signal);
+  assert.equal(research.searches,4);
+  assert.equal(research.failed,0);
+  assert.equal(candidate.people[0].patternFindings[0].email,'lotta.lyra@sodra.com');
+  assert.equal(candidate.people[0].patternFindings[0].url,'https://association.test/annual-report.pdf');
+  assert.match(candidates[2],/lotta.lyra@sodra.com/);
+});

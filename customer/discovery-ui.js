@@ -1,6 +1,7 @@
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
-const PUBLIC_NAME_CHECK_VERSION="buyer-contacts-v10-pattern-search";
+const PUBLIC_NAME_CHECK_VERSION="buyer-contacts-v11-focused-email-evidence";
+const CONTACT_CONFIRM_VERSION="buyer-contacts-v10-pattern-search";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
 const DELIVERY_STORAGE_KEY="leadintel_customer_v2_delivery";
 const DISCOVERY_META_KEY="leadintel_customer_v2_discovery_meta";
@@ -14,7 +15,7 @@ const MAX_DISCOVERY_COMPANY_CHECKS=30;
 const SAVING_SEARCH_RESULT_LIMIT=4;
 const SAVING_COMPANY_CHECK_LIMIT=3;
 const SAVING_FIRECRAWL_CALL_LIMIT=10;
-const ASSET_VERSION="20260928-proxy-cors-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1";
+const ASSET_VERSION="20260928-proxy-cors-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20260925-buyers-stage-view-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -878,7 +879,7 @@ async function confirmBuyerContact(candidate,index,{scope='selected',kind='email
   const person=candidate?.people?.[index];if(!person||!crmAuthenticated())return false;
   const key=personKey(candidate,person);if(enrichmentPending.has(key))return false;
   const workspaceId=bridge()?.workspace?.id;if(!workspaceId)return false;
-  const fingerprint=`${person.id}:${PUBLIC_NAME_CHECK_VERSION}`;
+  const fingerprint=`${person.id}:${CONTACT_CONFIRM_VERSION}`;
   enrichmentPending.add(key);renderAll();
   const issues=[];
   const service=async(path,body)=>{
@@ -938,7 +939,7 @@ async function runBuyerContactFlow(candidate,index,scope){
   const person=candidate?.people?.[index];if(!person||!crmAuthenticated()||candidate.publicContactStatus==='loading')return;
   const key=personKey(candidate,person);if(contactFlowPromises.has(key))return contactFlowPromises.get(key);
   const run=(async()=>{
-    const fingerprint=`${person.id}:${PUBLIC_NAME_CHECK_VERSION}`;
+    const fingerprint=`${person.id}:${CONTACT_CONFIRM_VERSION}`;
     for(const kind of ['email','phone']){
       if(!person[kind==='email'?'flowConfirmEmail':'flowConfirmPhone']||person[kind==='email'?'flowEmailCompletedFor':'flowPhoneCompletedFor']===fingerprint)continue;
       await confirmBuyerContact(candidate,index,{scope,kind,automatic:true});
@@ -1009,6 +1010,7 @@ function patternListings(person,domain,rows){
       if(!body.includes(email)||findings.some(item=>item.email===email))continue;
       const at=body.indexOf(email),nearby=body.slice(Math.max(0,at-220),Math.min(body.length,at+email.length+220));
       if((email.endsWith('@gmail.com')||canonicalDomain(url.href)!==domain)&&!nearby.includes(name))continue;
+      if(/email formats? and examples?|email pattern|guessed email|predicted email/i.test(nearby))continue;
       findings.push({email,url:url.href,status:'public_unverified'});
     }
   }
@@ -1029,6 +1031,27 @@ async function searchBuyerEmailPatterns(candidate,existingRows,signal){
       catch(error){if(error?.name==='AbortError')throw error;failed++;}
     }
     person.patternFindings=patternListings(person,candidate.domain,rows);
+    // Grouped OR searches can bury exact matches, especially in association PDFs.
+    // Check the most likely address with the full name in a focused query.
+    if(!person.patternFindings.some(item=>item.email.endsWith(`@${canonicalDomain(candidate.domain)}`))){
+      const email=patterns.find(item=>item.type==='Company')?.email;
+      const name=String(person.publicName||person.name||'').trim();
+      if(email&&name){
+        const query=`"${email}" "${name}"`;
+        searches++;
+        try{person.patternFindings=patternListings(person,candidate.domain,[...rows,...await searchBuyerPublicPages(query,5,signal)]);}
+        catch(error){if(error?.name==='AbortError')throw error;failed++;}
+        if(!person.patternFindings.some(item=>item.email===email)&&crmAuthenticated()&&bridge()?.workspace?.id){
+          searches++;
+          try{
+            const response=await fetch(`${LEADINTEL_API}/api/ai/web-search?workspace_id=${encodeURIComponent(bridge().workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({query,max_results:5,purpose:'contact_research'}),signal});
+            if(!response.ok)throw new Error(`Grounded search failed (${response.status})`);
+            const payload=await response.json();
+            person.patternFindings=patternListings(person,candidate.domain,[...rows,...(payload.results||[])]);
+          }catch(error){if(error?.name==='AbortError')throw error;failed++;}
+        }
+      }
+    }
   }));
   return {searches,failed};
 }
@@ -1160,7 +1183,7 @@ async function runPublicProspectContacts(domain){
     candidate.publicContacts=LeadIntelDiscovery.extractPublicContacts(results,domain);
     const patternResearch=await searchBuyerEmailPatterns(candidate,results,controller.signal);
     research.patternSearches=patternResearch.searches;
-    if(patternResearch.failed)research.issues.push(`${patternResearch.failed} email-pattern searches unavailable`);
+    if(patternResearch.failed)research.issues.push(`${patternResearch.failed} email evidence searches unavailable`);
     const review=await reviewBuyerPublicEvidence(candidate,[...results,...groundedProfiles],controller.signal);
     research.gemini=review.status==='complete'?'complete':'unavailable';research.conflicts=(review.conflicts||[]).slice(0,4);
     research.sources=[...new Set(results.filter(row=>canonicalDomain(row.url)===domain&&(row.markdown||row.content)).map(row=>row.url))].slice(0,8);
@@ -1277,7 +1300,7 @@ function renderSelectedProspects(prospects){
       '<p class="selected-prospect-people-state">Find decision-makers to see relevant people here.</p>';
     const publicContacts=(candidate.publicContacts||[]).map(row=>`<li><strong>${esc(row.value)}</strong> · Public listing, unverified · <a href="${esc(row.url)}" target="_blank" rel="noopener noreferrer">Source ↗</a></li>`).join("");
     const research=candidate.publicResearch||{};
-    const publicResearchNote=research.checkedAt?`<div class="selected-prospect-research-report"><p><strong>${esc(publicResearchOutcome(candidate))}</strong></p><p>Research activity · ${Number(research.officialPages)||0} official pages read · ${Number(research.profileResults)||0} Firecrawl profile results · ${Number(research.openaiResults)||0} OpenAI source results · ${Number(research.geminiResults)||0} grounded Gemini source results · ${Number(research.patternSearches)||0} grouped email-pattern searches. ${Number(research.conflicts?.length)||0?`${research.conflicts.length} identity conflict${research.conflicts.length===1?"":"s"} need review. `:""}Generated addresses, public listings and provider checks retain separate status. Mailbox deliverability alone does not confirm the person.</p>${research.sources?.length||research.issues?.length?`<details><summary>Research sources and gaps</summary>${research.sources?.length?`<ul>${research.sources.map(url=>`<li><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a></li>`).join("")}</ul>`:""}${research.issues?.length?`<p>${research.issues.map(esc).join(" · ")}</p>`:""}</details>`:""}</div>`:"";
+    const publicResearchNote=research.checkedAt?`<div class="selected-prospect-research-report"><p><strong>${esc(publicResearchOutcome(candidate))}</strong></p><p>Research activity · ${Number(research.officialPages)||0} official pages read · ${Number(research.profileResults)||0} Firecrawl profile results · ${Number(research.openaiResults)||0} OpenAI source results · ${Number(research.geminiResults)||0} grounded Gemini source results · ${Number(research.patternSearches)||0} email evidence searches. ${Number(research.conflicts?.length)||0?`${research.conflicts.length} identity conflict${research.conflicts.length===1?"":"s"} need review. `:""}Generated addresses, public listings and provider checks retain separate status. Mailbox deliverability alone does not confirm the person.</p>${research.sources?.length||research.issues?.length?`<details><summary>Research sources and gaps</summary>${research.sources?.length?`<ul>${research.sources.map(url=>`<li><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a></li>`).join("")}</ul>`:""}${research.issues?.length?`<p>${research.issues.map(esc).join(" · ")}</p>`:""}</details>`:""}</div>`:"";
     const batchCount=people.filter(person=>selectedBuyerEnrichment.has(selectedBuyerKey(candidate,person))).length;
     return `<article class="selected-prospect-row"><header class="selected-prospect-company"><div><span class="eyebrow">${esc(candidate.market||"Target market")} · Selected target</span><h4>${esc(candidate.company||domain)}</h4><a href="${esc(candidate.website||`https://${domain}/`)}" target="_blank" rel="noopener noreferrer">${esc(domain)} ↗</a></div><span class="selected-prospect-signal">${candidate.buyerSearchMode==="user_selected_target"?"Opportunity unverified":"Buying signal unconfirmed"}</span></header>${candidate.buyerSearchMode==="user_selected_target"?'<p class="selected-prospect-context">You chose this company. LeadIntel has not confirmed that it needs your service. Find relevant people to evaluate the opportunity.</p>':""}<label class="selected-prospect-roles">Buyer roles for this company<input type="text" data-prospect-buyer-roles="${esc(domain)}" value="${esc(candidate.buyerRoles||mainState().profile?.decisionMakers||"")}" placeholder="Procurement Director; Operations Director; Plant Manager"><small>Separate roles with semicolons. Changes apply to the next buyer search and do not rerun company discovery.</small></label>${candidate.buyerRolesChanged?'<p class="selected-prospect-roles-warning">Buyer roles changed. The people below are from the previous search; choose Refresh buyers to apply the new roles.</p>':""}${peopleHtml}<section class="selected-prospect-public"><strong>Public names &amp; company contacts</strong><p>${candidate.publicContactStatus==="loading"?"Checking official company pages for names, emails, phones, and profiles…":"LeadIntel checks official company pages and matching public LinkedIn profiles once for saved buyers. Public details remain unverified; refresh here when needed."}</p>${publicResearchNote}${publicContacts?`<ul>${publicContacts}</ul>`:candidate.publicContactStatus==="empty"?'<small>No public names or company contacts found in this search.</small>':""}<button class="secondary-btn small" type="button" data-find-public-contacts="${esc(domain)}" ${candidate.publicContactStatus==="loading"?"disabled":""}>${candidate.publicContactStatus==="loading"?"Checking public pages…":candidate.publicContactStatus==="complete"?"Refresh public contacts":"Find public contacts"}</button></section>${batchCount?`<div class="selected-prospect-batch"><strong>${batchCount} selected · confirm Apollo lookup</strong><button class="secondary-btn small" type="button" data-prospect-batch-email="${esc(domain)}">Check selected emails with Apollo</button><button class="secondary-btn small" type="button" data-prospect-batch-phone="${esc(domain)}">Find selected phones with Apollo</button></div>`:""}<div class="selected-prospect-actions"><button class="${people.length?"secondary-btn":"primary-btn"} small" type="button" data-find-prospect-buyers="${esc(domain)}" ${candidate.peopleStatus==="loading"?"disabled":""}>${people.length?"Refresh buyers":candidate.peopleStatus==="loading"?"Searching…":"Find decision-makers →"}</button>${candidate.buyerSearchMode==="user_selected_target"?"":`<button class="secondary-btn small" type="button" data-add-prospect-pipeline="${esc(domain)}" ${crmAuthenticated()?"":"disabled"}>Add to Pipeline · signal unconfirmed</button>`}</div></article>`;
   }).join("");
