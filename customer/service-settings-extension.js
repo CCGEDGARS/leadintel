@@ -3,7 +3,8 @@ const SETTINGS_VERSION='20260919-calendly-v1';
 const DEFAULT_CALENDLY_URL='https://calendly.com/edgars-7go/strategy-call-2';
 const SERVICE_PROVIDERS=Object.freeze([
   {provider:'apollo',name:'Apollo.io',placeholder:'Apollo API key',purpose:'Company, decision-maker, email and phone enrichment'},
-  {provider:'firecrawl',name:'Firecrawl',placeholder:'fc-…',purpose:'Website scraping, public research and evidence collection'}
+  {provider:'firecrawl',name:'Firecrawl',placeholder:'fc-…',purpose:'Website scraping, public research and evidence collection'},
+  {provider:'hunter',name:'Hunter',placeholder:'Hunter API key',purpose:'Email verification for candidate addresses'}
 ]);
 let serviceStatus={role:'',providers:[],checked_at:null};
 let calendlyStatus={role:'',configured:false,connected:false,scheduling_url:DEFAULT_CALENDLY_URL,status:'not_connected'};
@@ -56,6 +57,7 @@ function calendlyCard(){
 function serviceDetail(config,row,current){
   if(row?.source!=='customer')return current;
   if(config.provider==='firecrawl'&&Number.isFinite(Number(row?.metadata?.remaining_credits)))return `Customer-owned credential · ${Number(row.metadata.remaining_credits)} Firecrawl credits remaining${row.last_used_at?` · last used ${shortDate(row.last_used_at)}`:''}`;
+  if(config.provider==='hunter')return `Customer-owned credential${Number.isFinite(Number(row?.metadata?.remaining_verifications))&&row.metadata.remaining_verifications!==null?` · ${Number(row.metadata.remaining_verifications)} verifications remaining`:''}${row.verified_at?` · checked ${shortDate(row.verified_at)}`:''}`;
   return `Customer-owned credential${row.verified_at?` · verified ${shortDate(row.verified_at)}`:''}${row.last_used_at?` · last used ${shortDate(row.last_used_at)}`:''}`;
 }
 function connectGoogle(){
@@ -78,7 +80,7 @@ function decorateReadiness(){
   const aiReady=Boolean(document.querySelector('.ai-provider-card.active'));
   const deliveryReady=Boolean(document.querySelector('#integration-communication-grid [data-integration="gmail"] .integration-status.good, #integration-communication-grid [data-integration="microsoft-mail"] .integration-status.good'));
   const observedFirecrawl=window.LeadIntelIntegrationHealth?.firecrawl;
-  const serviceReady=SERVICE_PROVIDERS.filter(config=>providerState(config.provider)?.state==='good'&&(config.provider!=='firecrawl'||observedFirecrawl?.state==='good')).length;
+  const serviceReady=SERVICE_PROVIDERS.filter(config=>config.provider!=='hunter'&&providerState(config.provider)?.state==='good'&&(config.provider!=='firecrawl'||observedFirecrawl?.state==='good')).length;
   const calendlyReady=Boolean(calendlyStatus.connected);
   summary.textContent=`LeadIntel readiness: ${Number(aiReady)+1+Number(deliveryReady)+serviceReady+Number(calendlyReady)}/6 connected${observedFirecrawl?.state==='bad'?' · Firecrawl needs attention':''}`;
 }
@@ -92,13 +94,13 @@ function decorateCards(){
   if(!settingsDrawerOpen())return;
   const grid=document.getElementById('integration-platform-grid');if(!grid)return;
   const section=document.getElementById('platform-integration-heading')?.closest('.ai-settings-section');
-  if(section){const heading=section.querySelector('#platform-integration-heading');if(heading)heading.textContent='Data & intelligence integrations';const intro=section.querySelector('.ai-section-title p');if(intro)intro.textContent='Add your own Apollo and Firecrawl API keys, or use LeadIntel managed fallback where available. Your saved secrets stay encrypted on the backend.';}
+  if(section){const heading=section.querySelector('#platform-integration-heading');if(heading)heading.textContent='Data & intelligence integrations';const intro=section.querySelector('.ai-section-title p');if(intro)intro.textContent='Connect Apollo, Firecrawl or Hunter with your own API key. Managed fallback is available for Apollo and Firecrawl. Saved keys are encrypted on the backend.';}
   for(const config of SERVICE_PROVIDERS){
     const card=grid.querySelector(`[data-integration="${config.provider}"]`);if(!card)continue;
     const row=providerState(config.provider);
     const observed=window.LeadIntelIntegrationHealth?.[config.provider];
     card.classList.add('customer-service-card');
-    const purpose=card.querySelector('.integration-purpose');if(purpose)purpose.textContent=`${config.purpose}. Add your own key or use the managed fallback.`;
+    const purpose=card.querySelector('.integration-purpose');if(purpose)purpose.textContent=`${config.purpose}. ${config.provider==='hunter'?'Connect your own key.':'Add your own key or use the managed fallback.'}`;
     const badge=card.querySelector('.integration-status');if(badge){badge.textContent=observed?.label||statusLabel(row);badge.className=`integration-status ${observed?.state|| (row?.state==='bad'?'bad':row?.source?'good':'neutral')}`;}
     const meta=card.querySelector('.integration-meta');if(meta)meta.textContent=observed?.detail||serviceDetail(config,row,meta.textContent);
     const existing=card.querySelector('[data-service-extension="1"]');const html=serviceControls(config,row);if(existing)existing.outerHTML=html;else card.insertAdjacentHTML('beforeend',html);
@@ -140,7 +142,7 @@ async function disconnectCalendly(){
   catch(cause){errors.calendly=String(cause?.message||cause);}finally{busy='';queueDecorate(true);}
 }
 async function disconnectService(provider){
-  if(!window.confirm(`Disconnect your ${SERVICE_PROVIDERS.find(row=>row.provider===provider)?.name||provider} key? LeadIntel will return to the managed fallback when available.`))return;
+  if(!window.confirm(`Disconnect your ${SERVICE_PROVIDERS.find(row=>row.provider===provider)?.name||provider} key?${provider==='hunter'?' Email verification through Hunter will be unavailable.':' LeadIntel will return to the managed fallback when available.'}`))return;
   busy=provider;queueDecorate(true);
   try{const {response,payload}=await api('/api/integrations/services/provider',{method:'DELETE',body:JSON.stringify({provider})});if(!response.ok)throw new Error(payload.error||'Unable to disconnect provider');errors[provider]='';await refreshServiceStatus(false);}catch(cause){errors[provider]=String(cause?.message||cause);}finally{busy='';queueDecorate(true);}
 }

@@ -3,8 +3,8 @@ import {importAesKey,encryptSecret,decryptSecret} from './oauth.js';
 import {APOLLO_PEOPLE_SEARCH_URL,normalizeDomain as normalizeApolloDomain} from './enrichment.js';
 import {creditFailure,recordProviderCredit,providerCreditIssue} from './provider-credit-health.js';
 
-const PROVIDERS=Object.freeze(['apollo','firecrawl']);
-const PROVIDER_NAMES=Object.freeze({apollo:'Apollo.io',firecrawl:'Firecrawl'});
+const PROVIDERS=Object.freeze(['apollo','firecrawl','hunter']);
+const PROVIDER_NAMES=Object.freeze({apollo:'Apollo.io',firecrawl:'Firecrawl',hunter:'Hunter'});
 const FIRECRAWL_PROXY_URL='https://apollo-proxy.edgars-7e7.workers.dev';
 const MAX_DIRECT_PAGE_BYTES=2_000_000;
 const MAX_DIRECT_PAGE_CHARS=60_000;
@@ -49,7 +49,14 @@ async function verifyFirecrawl(apiKey){
   const payload=await response.json().catch(()=>({}));if(!response.ok||payload.success===false)throw new Error(payload.error||`Firecrawl verification failed (${response.status})`);
   const data=payload.data||{};return {remaining_credits:Number(data.remainingCredits)||0,plan_credits:Number(data.planCredits)||0,billing_period_end:data.billingPeriodEnd||null};
 }
-async function verifyCredential(provider,apiKey){return provider==='apollo'?verifyApollo(apiKey):verifyFirecrawl(apiKey);}
+async function verifyHunter(apiKey){
+  const response=await fetch('https://api.hunter.io/v2/account',{method:'GET',headers:{Accept:'application/json','X-API-KEY':apiKey}});
+  if(!response.ok)throw new Error(response.status===401||response.status===403?'Hunter rejected this API key':`Hunter connection check failed (${response.status})`);
+  const payload=await response.json().catch(()=>({}));
+  if(!payload?.data||typeof payload.data!=='object')throw new Error('Hunter account information was unavailable');
+  return {plan:clean(payload.data.plan_name,80),remaining_verifications:Number.isFinite(Number(payload.data.requests?.verifications?.remaining))?Number(payload.data.requests.verifications.remaining):null};
+}
+async function verifyCredential(provider,apiKey){if(provider==='apollo')return verifyApollo(apiKey);if(provider==='firecrawl')return verifyFirecrawl(apiKey);return verifyHunter(apiKey);}
 async function verifyManagedFirecrawl(env){
   const base=clean(env.FIRECRAWL_PROXY_URL||FIRECRAWL_PROXY_URL,500);
   try{const response=await fetch(base,{method:'OPTIONS'});return {ok:response.ok,status:response.status};}catch{return {ok:false,status:0};}
@@ -153,6 +160,7 @@ async function providerStatus(env,workspaceId,provider,{verify=false}={}){
     if(verify){try{await verifyApollo(env.APOLLO_API_KEY);}catch(cause){return {provider,name:PROVIDER_NAMES[provider],configured:false,source:'managed',state:'bad',label:'Managed fallback error',key_hint:'',verified_at:null,last_used_at:null,metadata:{error:clean(cause?.message||cause,180)}};}}
     return {provider,name:PROVIDER_NAMES[provider],configured:false,source:'managed',state:'good',label:'LeadIntel managed fallback',key_hint:'',verified_at:null,last_used_at:null,metadata:{}};
   }
+  if(provider==='hunter')return {provider,name:PROVIDER_NAMES[provider],configured:false,source:'none',state:'neutral',label:'Not connected',key_hint:'',verified_at:null,last_used_at:null,metadata:{}};
   const check=verify?await verifyManagedFirecrawl(env):{ok:true,status:200};
   return {provider,name:PROVIDER_NAMES[provider],configured:false,source:'managed',state:check.ok?'good':'bad',label:check.status===402?'Credits exhausted':check.ok?'LeadIntel managed fallback':'Managed fallback unavailable',key_hint:'',verified_at:null,last_used_at:null,metadata:{proxy_status:check.status}};
 }
@@ -279,7 +287,7 @@ export async function handleServiceIntegrationRoute(request,env,cors={}){
     const body=await request.json().catch(()=>null);const provider=normalizeProvider(body?.provider);if(!provider)return error('Unsupported service provider',400,cors);
     const result=await env.DB.prepare(`DELETE FROM workspace_service_integrations WHERE workspace_id=? AND provider=?`).bind(workspaceId,provider).run();
     await audit(env,{workspaceId,userId:access.user.id,type:'service.provider_disconnected',provider});
-    return json({disconnected:Number(result?.meta?.changes||0)>0,provider,fallback:provider==='firecrawl'||Boolean(env.APOLLO_API_KEY)},200,cors);
+    return json({disconnected:Number(result?.meta?.changes||0)>0,provider,fallback:provider==='firecrawl'||(provider==='apollo'&&Boolean(env.APOLLO_API_KEY))},200,cors);
   }
 
   if(path==='/api/integrations/services/firecrawl/scrape'&&request.method==='POST')return forwardFirecrawl(request,env,cors,workspaceId,'scrape');

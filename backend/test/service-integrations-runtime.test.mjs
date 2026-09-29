@@ -10,6 +10,7 @@ import {handleServiceIntegrationRoute,resolveWorkspaceServiceCredential,withWork
 
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
 const migration=fs.readFileSync(path.join(__dirname,'..','migrations','0013_workspace_service_integrations.sql'),'utf8');
+const hunterMigration=fs.readFileSync(path.join(__dirname,'..','migrations','0023_hunter_service_integration.sql'),'utf8');
 const sqliteTest=(name,fn)=>test(name,{skip:DatabaseSync?false:'requires Node 22+ node:sqlite'},fn);
 
 class D1Statement{
@@ -32,6 +33,7 @@ class D1Db{
       INSERT INTO workspaces VALUES('w1','Workspace One');
     `);
     this.raw.exec(migration);
+    this.raw.exec(hunterMigration);
   }
   prepare(sql){return new D1Statement(this.raw,sql);}
 }
@@ -98,6 +100,22 @@ sqliteTest('non-owner cannot replace workspace service credentials',async()=>{
   try{
     const response=await handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'PUT',token,body:{provider:'apollo',api_key:'should-not-be-used'}}),env,{});
     assert.equal(response.status,403);assert.equal(fetchCalled,false);assert.equal(env.DB.raw.prepare(`SELECT COUNT(*) count FROM workspace_service_integrations`).get().count,0);
+  }finally{globalThis.fetch=originalFetch;}
+});
+
+sqliteTest('Hunter key uses the free account check and stays encrypted without a managed fallback',async()=>{
+  const {env,DB,token}=await fixture('owner');const originalFetch=globalThis.fetch;const calls=[];
+  globalThis.fetch=async (url,options={})=>{calls.push({url:String(url),options});return new Response(JSON.stringify({data:{plan_name:'Starter',requests:{verifications:{remaining:42}},email:'private@example.test'}}),{status:200,headers:{'Content-Type':'application/json'}});};
+  try{
+    const saved=await handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'PUT',token,body:{provider:'hunter',api_key:'hunter-secret-WXYZ'}}),env,{});
+    assert.equal(saved.status,200);const data=await payload(saved);assert.equal(data.metadata.remaining_verifications,42);
+    assert.equal(JSON.stringify(data).includes('hunter-secret-WXYZ'),false);assert.equal(JSON.stringify(data).includes('private@example.test'),false);
+    assert.equal(calls[0].url,'https://api.hunter.io/v2/account');assert.equal(calls[0].options.headers['X-API-KEY'],'hunter-secret-WXYZ');
+    const row=DB.raw.prepare("SELECT encrypted_api_key FROM workspace_service_integrations WHERE provider='hunter'").get();assert.ok(row.encrypted_api_key);assert.equal(row.encrypted_api_key.includes('hunter-secret-WXYZ'),false);
+    const status=await payload(await handleServiceIntegrationRoute(req('/api/integrations/services/status?workspace_id=w1',{token}),env,{}));
+    assert.equal(status.providers.find(item=>item.provider==='hunter').source,'customer');
+    const removed=await payload(await handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'DELETE',token,body:{provider:'hunter'}}),env,{}));assert.equal(removed.fallback,false);
+    const unconfigured=await payload(await handleServiceIntegrationRoute(req('/api/integrations/services/status?workspace_id=w1',{token}),env,{}));assert.equal(unconfigured.providers.find(item=>item.provider==='hunter').source,'none');
   }finally{globalThis.fetch=originalFetch;}
 });
 
