@@ -378,8 +378,8 @@ test('a first-name-only buyer triggers one public source check and renders a sou
   assert.equal(publicSearches,2);
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Mikael Example');
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicLinkedinUrl,'https://www.linkedin.com/in/mikael-example');
-  assert.match(context.__elements.get('customer-pipeline').innerHTML,/Public work email · unverified/);
-  assert.match(context.__elements.get('customer-pipeline').innerHTML,/View public profile ↗/);
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/mikael\.example@boliden\.com · Public · unverified/);
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/View profile ↗<\/a> · Public match/);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/mikael\.example@boliden\.com/);
 });
 
@@ -418,9 +418,9 @@ test('a saved first-name buyer can gain a sourced full name from a unique public
   assert.equal(requests,2);
   const person=context.__discoveryState().selectedProspects[0].people[0];
   assert.equal(person.publicName,'Jacob Jonstoij');
-  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'linkedin-firstname-v1');
+  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v2');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Jacob Jonstoij/);
-  assert.match(context.__elements.get('customer-pipeline').innerHTML,/View public profile ↗/);
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/View profile ↗<\/a> · Public match/);
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,5));
   assert.equal(requests,2);
