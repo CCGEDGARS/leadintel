@@ -14,7 +14,7 @@ const MAX_DISCOVERY_COMPANY_CHECKS=30;
 const SAVING_SEARCH_RESULT_LIMIT=4;
 const SAVING_COMPANY_CHECK_LIMIT=3;
 const SAVING_FIRECRAWL_CALL_LIMIT=10;
-const ASSET_VERSION="20260928-proxy-cors-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1";
+const ASSET_VERSION="20260928-proxy-cors-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20260925-buyers-stage-view-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -578,7 +578,6 @@ function buyerContactRows(person={},candidate={},result={}){
   const phone=contact.phone_number;
   const profile=LeadIntelDiscovery.normalizeLinkedInUrl(person.linkedin_url||person.publicLinkedinUrl);
   const profileSource=Boolean(person.publicLinkedinUrl&&!person.linkedin_url);
-  const companyPhone=(candidate.publicContacts||[]).find(row=>row.kind==="phone");
   const source=url=>url?` · <a href="${esc(url)}" target="_blank" rel="noopener noreferrer">Source ↗</a>`:"";
   const found=[...(person.patternFindings||[])];
   if(person.publicEmail&&!found.some(item=>item.email===person.publicEmail.toLowerCase()))found.unshift({email:person.publicEmail.toLowerCase(),url:person.publicEmailUrl,status:'public_unverified'});
@@ -592,7 +591,7 @@ function buyerContactRows(person={},candidate={},result={}){
       return `<span class="buyer-email-result">${esc(email)} · ${esc(label)}${source(publicRow?.url)}</span>`;
     }).join('');
   };
-  return `<div class="buyer-contact-fields" aria-label="Contact details"><div><strong>LinkedIn</strong><span>${profile?`<a href="${esc(profile)}" target="_blank" rel="noopener noreferrer">View profile ↗</a> · ${profileSource?"Public match · confirm identity":"Apollo profile · confirm role"}`:"No direct profile matched"}</span></div><div><strong>Phone</strong><span>${phone?`${esc(phone)} · Apollo${contact.phone_status==="Verified"?" verified":""}`:person.publicPhone?`${esc(person.publicPhone)} · Public · unverified${source(person.publicPhoneUrl)}`:companyPhone?`No direct phone · Company phone ${esc(companyPhone.value)} · Public · unverified${source(companyPhone.url)}`:"No direct phone found"}</span></div><div><strong>Company email</strong><span>${renderEmails('company')}</span></div><div><strong>Gmail</strong><span>${renderEmails('gmail')}</span></div><small class="people-note">Automatic flow uses a verified company email as primary. Gmail findings need manual identity review.</small></div>`;
+  return `<div class="buyer-contact-fields" aria-label="Contact details"><div><strong>LinkedIn</strong><span>${profile?`<a href="${esc(profile)}" target="_blank" rel="noopener noreferrer">View profile ↗</a> · ${profileSource?"Public match · confirm identity":"Apollo profile · confirm role"}`:"No direct profile matched"}</span></div><div><strong>Phone</strong><span>${phone?`${esc(phone)} · Apollo${contact.phone_status==="Verified"?" verified":""}`:person.publicPhone?`${esc(person.publicPhone)} · Public · unverified${source(person.publicPhoneUrl)}`:"No direct phone"}</span></div><div><strong>Company email</strong><span>${renderEmails('company')}</span></div><div><strong>Gmail</strong><span>${renderEmails('gmail')}</span></div><small class="people-note">Automatic flow uses a verified company email as primary. Gmail findings need manual identity review.</small></div>`;
 }
 function emailPatternCandidates(person={},domain=''){
   const full=String(person.publicName||person.name||'').trim().replace(/\s+/g,' ').split(' ');
