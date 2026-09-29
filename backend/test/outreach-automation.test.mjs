@@ -7,7 +7,7 @@ import {
 test('automation policy defaults to manual and off with conservative limits',()=>{
   const p=defaultAutomationPolicy();
   assert.equal(p.mode,'manual');assert.equal(p.enabled,false);assert.equal(p.paused,false);assert.equal(p.emergencyStop,false);
-  assert.equal(p.workspaceDailyLimit,20);assert.equal(p.mailboxDailyLimit,20);assert.deepEqual(p.workingDays,[1,2,3,4,5]);
+  assert.equal(p.workspaceDailyLimit,5);assert.equal(p.mailboxDailyLimit,5);assert.deepEqual(p.workingDays,[1,2,3,4,5]);
   assert.equal(p.timezone,'Europe/Riga');assert.equal(p.sendWindowStart,'09:00');assert.equal(p.sendWindowEnd,'16:30');
   assert.equal(p.minDelayMinutes,8);assert.equal(p.maxDelayMinutes,18);assert.equal(p.maxFollowups,2);assert.deepEqual(p.followupDelaysDays,[3,7]);
 });
@@ -15,9 +15,16 @@ test('automation policy defaults to manual and off with conservative limits',()=
 test('policy normalization rejects unsafe malformed automatic settings',()=>{
   assert.throws(()=>normalizeAutomationPolicy({mode:'automatic',enabled:true,workspaceDailyLimit:0}),/workspace daily limit/i);
   assert.throws(()=>normalizeAutomationPolicy({mode:'automatic',enabled:true,mailboxDailyLimit:-1}),/mailbox daily limit/i);
+  assert.throws(()=>normalizeAutomationPolicy({mode:'automatic',enabled:true,workspaceDailyLimit:501}),/workspace daily limit/i);
   assert.throws(()=>normalizeAutomationPolicy({mode:'automatic',enabled:true,minDelayMinutes:20,maxDelayMinutes:5}),/maximum delay/i);
   assert.throws(()=>normalizeAutomationPolicy({mode:'automatic',enabled:true,timezone:'Mars\/Olympus'}),/timezone/i);
   assert.throws(()=>normalizeAutomationPolicy({mode:'automatic',enabled:true,sendWindowStart:'18:00',sendWindowEnd:'09:00'}),/send window/i);
+});
+
+test('custom daily limits match the setup control and remain server bounded',()=>{
+  const p=normalizeAutomationPolicy({mode:'automatic',enabled:true,workspaceDailyLimit:75,mailboxDailyLimit:40});
+  assert.equal(p.workspaceDailyLimit,75);assert.equal(p.mailboxDailyLimit,40);
+  assert.equal(evaluateAutomaticSend({policy:p,now:new Date('2026-09-08T08:30:00Z'),recipient:'buyer@example.com',workspaceSentToday:40,mailboxSentToday:40}).reason,'mailbox_daily_limit');
 });
 
 test('normalization preserves explicit valid automatic owner configuration',()=>{
@@ -65,8 +72,8 @@ test('eligibility fails closed for every safety boundary',()=>{
     [{suppressed:true},'suppressed'],
     [{recipient:'bad-email'},'invalid_recipient'],
     [{replyStopped:true},'reply_stopped'],
-    [{workspaceSentToday:20},'workspace_daily_limit'],
-    [{mailboxSentToday:20},'mailbox_daily_limit'],
+    [{workspaceSentToday:5},'workspace_daily_limit'],
+    [{mailboxSentToday:5},'mailbox_daily_limit'],
     [{now:new Date('2026-09-12T09:00:00Z')},'disabled_weekday'],
     [{now:new Date('2026-09-08T04:30:00Z')},'outside_window'],
     [{lastAutomaticSentAt:new Date('2026-09-08T08:25:00Z'),policy:{...defaultAutomationPolicy(),mode:'automatic',enabled:true,minDelayMinutes:8,maxDelayMinutes:18}},'minimum_spacing']

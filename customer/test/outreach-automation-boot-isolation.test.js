@@ -13,9 +13,9 @@ test('customer boot does not eagerly load outreach automation network modules',(
   assert.match(processMap,/import '\.\/outreach-automation-loader\.js\?v=/);
 });
 
-test('outreach automation loader activates only for Delivery step 7',()=>{
+test('outreach automation loader activates for Setup and Delivery only',()=>{
   const loader=fs.readFileSync(path.join(root,'outreach-automation-loader.js'),'utf8');
-  assert.match(loader,/Number\(event\.detail\?\.step\)===7/);
+  assert.match(loader,/Number\(step\)===1\|\|Number\(step\)===7/);
   assert.match(loader,/Promise\.all/);
   assert.doesNotMatch(loader,/setTimeout\([^)]*loadAutomation/);
 });

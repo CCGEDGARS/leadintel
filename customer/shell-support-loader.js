@@ -25,7 +25,7 @@ const SUPPORT_MODULES=[
   './lookalike-discovery.js?v=20260924-reference-consensus-v1&opportunity-context=1',
   './intelligence-sources-ui.js?v=20260924-friendly-workflow-labels-v1&reset-center=1',
   './profile-action-runtime.js?v=20260924-friendly-workflow-labels-v1',
-  './outreach-automation-loader.js?v=20260916-brand-outreach-v2'
+  './outreach-automation-loader.js?v=20260929-delivery-setup-v1'
 ];
 
 async function loadSupportModules(){

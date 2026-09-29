@@ -9,7 +9,7 @@ const read=name=>fs.readFileSync(path.join(root,name),'utf8');
 test('Outreach Automation panel exposes all safety controls and live status labels',()=>{
   const ui=read('outreach-automation-ui.js');
   for(const text of [
-    'Outreach Automation','Manual','Automatic','10','20','30','50','Custom',
+    'Outreach Automation','Manual','Automatic','5','10','20','Custom',
     'Mailbox daily limit','Working days','Timezone','Send window','Delay range',
     'Follow-ups','Pause automation','Resume automation','Emergency stop',
     'Sent today','Queue','Next send','Queue preview','Blocked reason'
@@ -39,12 +39,21 @@ test('approved contact queue action is explicit and gated by automatic mode and 
   assert.match(ui,/leadintel:approved-outreach-package/);
 });
 
-test('automation UI is loaded through the Delivery-only lazy loader',()=>{
+test('automation UI is loaded through the Setup and Delivery lazy loader',()=>{
   const processMap=read('process-map.js');
   const loader=read('outreach-automation-loader.js');
   assert.match(processMap,/outreach-automation-loader\.js/);
   assert.match(loader,/outreach-automation-ui\.js/);
-  assert.match(loader,/Number\(event\.detail\?\.step\)===7/);
+  assert.match(loader,/maybeLoad\(event\.detail\?\.step\)/);
+  assert.match(loader,/Number\(step\)===1\|\|Number\(step\)===7/);
+});
+
+test('setup offers the same server-backed limits under brand identity',()=>{
+  const ui=read('outreach-automation-ui.js');
+  assert.match(ui,/document\.getElementById\('brand-identity'\)/);
+  assert.match(ui,/brand\.after\(card\)/);
+  assert.match(ui,/saveOutreachAutomationPolicy/);
+  assert.match(ui,/Saving a limit will not send email/);
 });
 
 test('automation stylesheet exists and names the panel',()=>{

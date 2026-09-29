@@ -36,7 +36,7 @@ function request(path,{method='GET',token,body}={}){return new Request(`https://
 sqliteTest('policy GET is fail-safe default, sales can read, and only owner can mutate',async()=>{
   const owner=await fixture('owner');
   let response=await handleOutreachAutomationRoute(request('/api/outreach-automation/policy?workspace_id=w1',{token:owner.token}),owner.env,{});let result=await response.json();
-  assert.equal(response.status,200);assert.equal(result.policy.mode,'manual');assert.equal(result.policy.enabled,false);assert.equal(result.policy.workspaceDailyLimit,20);
+  assert.equal(response.status,200);assert.equal(result.policy.mode,'manual');assert.equal(result.policy.enabled,false);assert.equal(result.policy.workspaceDailyLimit,5);
   const sales=await fixture('sales');response=await handleOutreachAutomationRoute(request('/api/outreach-automation/policy?workspace_id=w1',{token:sales.token}),sales.env,{});assert.equal(response.status,200);
   response=await handleOutreachAutomationRoute(request('/api/outreach-automation/policy?workspace_id=w1',{method:'PUT',token:sales.token,body:{mode:'automatic',enabled:true}}),sales.env,{});assert.equal(response.status,403);
   response=await handleOutreachAutomationRoute(request('/api/outreach-automation/policy?workspace_id=w1',{method:'PUT',token:owner.token,body:{mode:'automatic',enabled:true,workspaceDailyLimit:20,mailboxDailyLimit:20,workingDays:[1,2,3,4,5],timezone:'Europe/Riga',sendWindowStart:'09:00',sendWindowEnd:'16:30',minDelayMinutes:8,maxDelayMinutes:18,maxFollowups:2,followupDelaysDays:[3,7],replyPollIntervalMinutes:60}}),owner.env,{});result=await response.json();
