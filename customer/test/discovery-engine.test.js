@@ -459,6 +459,14 @@ test('long official pages preserve footer contacts and leadership evidence',()=>
   assert.equal(person.publicEmail,'');
 });
 
+test('Swedish company phone formatting does not inflate the contact list',()=>{
+  const rows=[{url:'https://sodra.com/contact',markdown:'Phone +46 470 890 00. Switchboard +46470-89000. Office 0470 890 00. Another office +46 470 890 90.'}];
+  const contacts=Discovery.extractPublicContacts(rows,'sodra.com').filter(row=>row.kind==='phone');
+  assert.equal(contacts.length,2);
+  const saved=Discovery.normalizeDiscoveryState({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',publicContacts:[...contacts,{kind:'phone',value:'0046 470 890 00',url:rows[0].url}]}]});
+  assert.equal(saved.selectedProspects[0].publicContacts.filter(row=>row.kind==='phone').length,2);
+});
+
 test('official company evidence adds full buyer names and explicit personal work emails without Apollo',()=>{
   const people=[{id:'p1',name:'Lotta',title:'CEO & President'},{id:'p2',name:'Jacob',title:'Team Leader'}];
   const results=[{url:'https://northstar.com/team',title:'Our leadership',markdown:'Lotta Andersson — CEO & President. lotta.andersson@northstar.com. Jacob Berg — Team Leader. jacob.berg@northstar.com.'},
