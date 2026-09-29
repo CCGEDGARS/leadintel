@@ -1,6 +1,6 @@
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
-const PUBLIC_NAME_CHECK_VERSION="buyer-contacts-v7";
+const PUBLIC_NAME_CHECK_VERSION="buyer-contacts-v8";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
 const DELIVERY_STORAGE_KEY="leadintel_customer_v2_delivery";
 const DISCOVERY_META_KEY="leadintel_customer_v2_discovery_meta";
@@ -956,7 +956,8 @@ async function runPublicProspectContacts(domain){
     try{
       const homepage=await scrapeOfficialContactPage(`https://${domain}/`,domain,controller.signal);
       if(homepage){results.push(homepage);research.officialPages++;
-        const links=officialLinksFromMarkdown(homepage.markdown,homepage.url,domain).filter(url=>!results.some(row=>row.url===url)).slice(0,2);
+        const indexed=results.filter(row=>canonicalDomain(row.url)===domain&&/(contact|kontakt|team|leadership|management|organisation|organization|ledning|people)/i.test(new URL(row.url).pathname)).map(row=>row.url);
+        const links=[...new Set([...officialLinksFromMarkdown(homepage.markdown,homepage.url,domain),...indexed])].filter(url=>!results.some(row=>row.url===url&&(row.markdown||row.content))).slice(0,3);
         const pages=await Promise.allSettled(links.map(url=>scrapeOfficialContactPage(url,domain,controller.signal)));
         for(const outcome of pages)if(outcome.status==='fulfilled'&&outcome.value){results.push(outcome.value);research.officialPages++;}
         candidate.publicContacts=LeadIntelDiscovery.extractPublicContacts(results,domain);

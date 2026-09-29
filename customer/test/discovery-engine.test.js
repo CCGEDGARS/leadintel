@@ -448,6 +448,17 @@ test('public contact extraction does not mistake page dates for company phones',
   assert.ok(!contacts.some(row=>row.kind==='phone'&&row.value.includes('2024')));
 });
 
+test('long official pages preserve footer contacts and leadership evidence',()=>{
+  const markdown=`${'Company news and services. '.repeat(1300)} Lotta Lyrå — CEO & President. Contact info@sodra.com or +46 470 891 23.`;
+  const results=[{url:'https://sodra.com/en/global/',markdown}];
+  const contacts=Discovery.extractPublicContacts(results,'sodra.com');
+  assert.ok(contacts.some(row=>row.kind==='email'&&row.value==='info@sodra.com'));
+  assert.ok(contacts.some(row=>row.kind==='phone'&&row.value.includes('+46 470')));
+  const [person]=Discovery.matchPublicBuyerDetails([{name:'Lotta',title:'CEO & President'}],results,'sodra.com');
+  assert.equal(person.publicName,'Lotta Lyrå');
+  assert.equal(person.publicEmail,'');
+});
+
 test('official company evidence adds full buyer names and explicit personal work emails without Apollo',()=>{
   const people=[{id:'p1',name:'Lotta',title:'CEO & President'},{id:'p2',name:'Jacob',title:'Team Leader'}];
   const results=[{url:'https://northstar.com/team',title:'Our leadership',markdown:'Lotta Andersson — CEO & President. lotta.andersson@northstar.com. Jacob Berg — Team Leader. jacob.berg@northstar.com.'},

@@ -74,13 +74,19 @@
       return parsed.href.replace(/\/$/,"");
     }catch{return "";}
   }
+  function publicPageText(row){
+    const text=[row?.title,row?.description,row?.markdown,row?.content].map(clean).join(" ");
+    // Full-page scrapes keep contact details in the footer. Retain both ends
+    // when a provider returns a page larger than our evidence scan budget.
+    return text.length<=64000?text:`${text.slice(0,32000)} ${text.slice(-32000)}`;
+  }
   function extractPublicContacts(results=[],companyDomain=""){
     const domain=canonicalDomain(companyDomain),seen=new Set(),contacts=[];
     if(!domain)return contacts;
     for(const result of (Array.isArray(results)?results:[]).slice(0,20)){
       const url=normalizeUrl(result?.url||result?.metadata?.sourceURL||result?.metadata?.url);
       if(!url||canonicalDomain(url)!==domain)continue;
-      const text=[result?.title,result?.description,result?.markdown,result?.content].map(clean).join(" ").slice(0,16000);
+      const text=publicPageText(result);
       const emails=text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)||[];
       const phones=text.match(/(?:\+\d{1,3}[\s().-]*)?(?:\d[\s().-]*){8,15}/g)||[];
       for(const [kind,values] of [["email",emails],["phone",phones]])for(const raw of values){
@@ -105,7 +111,7 @@
       for(const row of results.slice(0,20)){
         const url=normalizeUrl(row?.url||row?.metadata?.sourceURL||row?.metadata?.url);
         if(!url||canonicalDomain(url)!==domain)continue;
-        const text=[row?.title,row?.description,row?.markdown,row?.content].map(clean).join(" ").slice(0,16000);
+        const text=publicPageText(row);
         const pattern=new RegExp(`\\b${first.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}\\s+([\\p{Lu}][\\p{L}'’.-]{2,})(?=$|[^\\p{L}'’.-])`,"giu");
         for(const match of text.matchAll(pattern)){
           const last=match[1],name=`${first} ${last}`;
