@@ -59,3 +59,10 @@ test('Discovery exposes Apollo LinkedIn identity links without implying role ver
   assert.match(ui,/confirm the current role before outreach/);
   assert.match(ui,/Find work email/);
 });
+
+
+test('selected buyer card shows Apollo outcome and makes another lookup explicit',()=>{
+  assert.match(ui,/\$\{enrichmentResultHtml\(enrichmentResults\.get\(personKey\(candidate,person\)\)\)\}<\/div>\$\{!direct/);
+  assert.match(ui,/result\?\.reason==="verified_company_email_not_returned"\?"Retry Apollo email"/);
+  assert.match(ui,/Apollo check failed/);
+});
