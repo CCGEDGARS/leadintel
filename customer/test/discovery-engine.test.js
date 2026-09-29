@@ -481,6 +481,20 @@ test('a unique LinkedIn profile upgrades a truncated sourced surname when role a
   assert.equal(wrong[0].publicLinkedinUrl,undefined);
 });
 
+test('grounded citation with generic title can support a unique name, company, and role',()=>{
+  const found=Discovery.matchPublicLinkedInProfiles([{id:'lotta',name:'Lotta',title:'CEO & President'}],[{url:'https://se.linkedin.com/in/lottalyra',title:'LinkedIn',description:'Lotta Lyrå is CEO & President at Södra.'}],'Södra');
+  assert.equal(found[0].publicName,'Lotta Lyrå');
+  const ambiguous=Discovery.matchPublicLinkedInProfiles([{name:'Lotta',title:'CEO & President'}],[{url:'https://linkedin.com/in/some-profile',title:'LinkedIn',description:'Lotta Lyrå and Lotta Andersson are presidents at Södra.'}],'Södra');
+  assert.equal(ambiguous[0].publicLinkedinUrl,undefined);
+});
+
+test('public research persists only official source links and bounded provider counts',()=>{
+  const saved=Discovery.normalizeDiscoveryState({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',publicResearch:{officialPages:3,openaiResults:5,geminiResults:2,geminiSearch:'complete',sources:['https://sodra.com/en/global/','https://evil.example/']}}]});
+  assert.equal(saved.selectedProspects[0].publicResearch.geminiSearch,'complete');
+  assert.equal(saved.selectedProspects[0].publicResearch.openaiResults,5);
+  assert.deepEqual(saved.selectedProspects[0].publicResearch.sources,['https://sodra.com/en/global/']);
+});
+
 test('generic company inboxes and ambiguous surnames cannot be assigned to a buyer',()=>{
   const person=[{name:'Lotta',title:'CEO'}];
   const generic=Discovery.matchPublicBuyerDetails(person,[{url:'https://northstar.com/team',markdown:'Lotta Andersson — CEO. Email info@northstar.com'}],'northstar.com');

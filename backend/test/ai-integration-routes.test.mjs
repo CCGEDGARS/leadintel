@@ -19,7 +19,8 @@ test('AI router recognizes settings, generation and OpenAI web-search routes',()
     '/api/integrations/ai/provider',
     '/api/integrations/ai/activate',
     '/api/ai/generate',
-    '/api/ai/web-search'
+    '/api/ai/web-search',
+    '/api/ai/grounded-contact-search'
   ])assert.match(source,new RegExp(route.replaceAll('/','\\/')));
 });
 
@@ -28,6 +29,7 @@ test('AI credential mutations are workspace-owner only while generation and web 
   assert.match(source,/\/api\/integrations\/ai\/activate[\s\S]{0,1200}requireMember\(request,env,workspaceId,\['owner'\]\)/);
   assert.match(source,/\/api\/ai\/generate[\s\S]{0,1200}requireMember\(request,env,workspaceId,\['owner','researcher','sales'\]\)/);
   assert.match(source,/\/api\/ai\/web-search[\s\S]{0,1400}requireMember\(request,env,workspaceId,\['owner','researcher','sales'\]\)/);
+  assert.match(source,/\/api\/ai\/grounded-contact-search[\s\S]{0,1600}requireMember\(request,env,workspaceId,\['owner','researcher','sales'\]\)/);
 });
 
 test('configured providers can verify and change models without resubmitting the stored API key',()=>{

@@ -3,6 +3,7 @@ import {importAesKey,encryptSecret,decryptSecret} from './oauth.js';
 import {AI_PROVIDERS,normalizeAiProvider,defaultAiModel,generateText,verifyProviderCredential,searchWeb} from './ai-provider.js';
 import {verifyMarketResearch} from './market-research-verifier.js';
 import {reviewContactEvidence} from './contact-evidence-review.js';
+import {groundedContactSearch} from './grounded-contact-search.js';
 import {generateCompanyExtraction} from './company-extraction-fallback.js';
 import {creditFailure,recordProviderCredit,providerCreditIssue} from './provider-credit-health.js';
 
@@ -49,7 +50,7 @@ async function geminiIntegration(env,workspaceId){return env.DB.prepare(`SELECT 
 
 export async function handleAiRoute(request,env,cors={}){
   const url=new URL(request.url);const path=url.pathname;
-  const known=path.startsWith('/api/integrations/ai/')||path==='/api/ai/generate'||path==='/api/ai/web-search'||path==='/api/ai/research-verification'||path==='/api/ai/contact-evidence-review';if(!known)return null;
+  const known=path.startsWith('/api/integrations/ai/')||path==='/api/ai/generate'||path==='/api/ai/web-search'||path==='/api/ai/research-verification'||path==='/api/ai/contact-evidence-review'||path==='/api/ai/grounded-contact-search';if(!known)return null;
   const workspaceId=String(url.searchParams.get('workspace_id')||'').trim();if(!workspaceId)return error('workspace_id is required',400,cors);
 
   if(path==='/api/integrations/ai/status'&&request.method==='GET'){
@@ -165,6 +166,22 @@ export async function handleAiRoute(request,env,cors={}){
       await audit(env,{workspaceId,userId:access.user.id,type:'ai.contact_evidence_reviewed',provider:'gemini',metadata:{evidence_count:Math.min(16,body.evidence?.length||0),conflict_count:result.conflicts.length}});
       return json(result,200,cors);
     }catch(cause){console.error('Gemini contact review unavailable',String(cause?.message||cause).slice(0,160));return unavailable('Gemini contact review was unavailable');}
+  }
+
+  if(path==='/api/ai/grounded-contact-search'&&request.method==='POST'){
+    const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
+    const unavailable=reason=>json({status:'unavailable',provider:'gemini',web_search:false,results:[],reason},200,cors);
+    if(!encryptionConfigured(env))return unavailable('AI credential encryption is not configured');
+    const body=await request.json().catch(()=>null);
+    if(!body||String(body.company||'').length>160||String(body.domain||'').length>180||String(body.person?.name||'').length>120||String(body.person?.title||'').length>120)return error('Contact search payload is invalid',400,cors);
+    const integration=await geminiIntegration(env,workspaceId);if(!integration)return unavailable('Gemini is not configured');
+    try{
+      const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY),apiKey=await decryptSecret(integration.encrypted_api_key,key);
+      const result=await groundedContactSearch({apiKey,model:integration.model,company:body.company,domain:body.domain,person:body.person,signal:request.signal});
+      await env.DB.prepare(`UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider='gemini'`).bind(workspaceId).run();
+      await audit(env,{workspaceId,userId:access.user.id,type:'ai.grounded_contact_searched',provider:'gemini',metadata:{model:integration.model,query_count:result.query_count,result_count:result.results.length}});
+      return json(result,200,cors);
+    }catch(cause){console.error('Gemini grounded contact search unavailable',String(cause?.message||cause).slice(0,160));return unavailable('Grounded contact search unavailable');}
   }
 
   if(path==='/api/ai/generate'&&request.method==='POST'){

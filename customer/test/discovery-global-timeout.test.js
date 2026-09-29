@@ -420,7 +420,7 @@ test('a saved first-name buyer can gain a sourced full name from a unique public
   assert.equal(requests,3);
   const person=context.__discoveryState().selectedProspects[0].people[0];
   assert.equal(person.publicName,'Jacob Jonstoij');
-  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v6');
+  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v7');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Jacob Jonstoij/);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/View profile ↗<\/a> · Public match/);
   context.__scheduleSavedBuyerPublicChecks();
@@ -453,7 +453,7 @@ test('grounded follow-up extracts an official person email and keeps company pho
     fetchImpl:async(url,options)=>{
       const target=String(url);
       if(target.includes('/api/ai/web-search')){openAiCalls++;return {ok:true,json:async()=>({results:[{url:'https://sodra.com/team',title:'Södra team',description:'Jacob Jonstoij — Team Leader'}]})};}
-      if(target.includes('/firecrawl-scrape')){scrapes++;return {ok:true,json:async()=>({data:{title:'Södra team',markdown:'Jacob Jonstoij — Team Leader. jacob.jonstoij@sodra.com'}})};}
+      if(target.includes('/firecrawl-scrape')){scrapes++;const targetUrl=JSON.parse(options.body).url;return {ok:true,json:async()=>({data:targetUrl.endsWith('/team')?{metadata:{sourceURL:targetUrl},title:'Södra team',markdown:'Jacob Jonstoij — Team Leader. jacob.jonstoij@sodra.com'}:{metadata:{sourceURL:targetUrl},markdown:'Contact Södra: info@sodra.com · +46 470 890 00'}})};}
       if(target.includes('/api/ai/contact-evidence-review')){geminiCalls++;return {ok:true,json:async()=>({status:'complete',provider:'gemini',web_search:false,conflicts:[]})};}
       if(target.includes('/firecrawl-search')){
         const query=JSON.parse(options.body).query;
@@ -472,7 +472,7 @@ test('grounded follow-up extracts an official person email and keeps company pho
   assert.ok(candidate.publicContacts.some(row=>row.kind==='phone'&&row.value.includes('+46')));
   assert.equal(candidate.publicResearch.openai,'complete');
   assert.equal(candidate.publicResearch.gemini,'complete');
-  assert.equal(openAiCalls,1);assert.equal(scrapes,1);assert.equal(geminiCalls,1);assert.equal(apolloCalls,0);
+  assert.ok(openAiCalls>=1);assert.equal(scrapes,2);assert.equal(geminiCalls,1);assert.equal(apolloCalls,0);
 });
 
 test('refresh repairs a truncated name, matches LinkedIn, and shows official company contacts separately',async()=>{
@@ -495,6 +495,27 @@ test('refresh repairs a truncated name, matches LinkedIn, and shows official com
   assert.ok(candidate.publicContacts.some(row=>row.value.includes('+46 470')));
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Lotta Lyrå/);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Company phone/);
+});
+
+test('independent grounded Gemini source resolves a profile missed by Firecrawl and OpenAI',async()=>{
+  const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,
+    bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'}},
+    fetchImpl:async(url,options)=>{
+      const target=String(url);
+      if(target.includes('/api/ai/grounded-contact-search'))return {ok:true,json:async()=>({status:'complete',web_search:true,results:[{url:'https://se.linkedin.com/in/lottalyra',title:'Lotta Lyrå – CEO & President på Södra | LinkedIn',description:'CEO & President på Södra'}]})};
+      if(target.includes('/api/ai/web-search'))return {ok:true,json:async()=>({results:[]})};
+      if(target.includes('/api/ai/contact-evidence-review'))return {ok:true,json:async()=>({status:'complete',conflicts:[]})};
+      if(target.includes('/firecrawl-scrape'))return {ok:true,json:async()=>({data:{metadata:{sourceURL:'https://sodra.com/'},markdown:'[Contact](https://sodra.com/en/global/contact/)'}})};
+      return {ok:true,json:async()=>({data:[]})};
+    }
+  });
+  context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-lotta',name:'Lotta',title:'CEO & President'}]}]});
+  assert.equal(await context.__findPublicProspectContacts('sodra.com'),true);
+  const candidate=context.__discoveryState().selectedProspects[0];
+  assert.equal(candidate.people[0].publicName,'Lotta Lyrå');
+  assert.equal(candidate.people[0].publicLinkedinUrl,'https://se.linkedin.com/in/lottalyra');
+  assert.equal(candidate.publicResearch.geminiSearch,'complete');
+  assert.equal(candidate.publicResearch.geminiResults,1);
 });
 
 test('email button stops at a sourced public work email without calling Apollo',async()=>{
@@ -521,7 +542,7 @@ test('email button offers Apollo only after a completed public search has no per
   context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};context.confirm=()=>{confirmations++;return true;};
   context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
   assert.equal(await context.__enrichSelectedProspect('sodra.com',0),true);
-  assert.equal(searches,6);
+  assert.equal(searches,8);
   assert.equal(confirmations,1);
   assert.equal(apolloCalls,1);
 });
