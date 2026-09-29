@@ -290,6 +290,25 @@ export async function handleServiceIntegrationRoute(request,env,cors={}){
     return json({disconnected:Number(result?.meta?.changes||0)>0,provider,fallback:provider==='firecrawl'||(provider==='apollo'&&Boolean(env.APOLLO_API_KEY))},200,cors);
   }
 
+  if(path==='/api/integrations/services/hunter/verify-email'&&request.method==='POST'){
+    const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
+    const body=await request.json().catch(()=>null);const email=clean(body?.email,320).toLowerCase();
+    if(!/^[a-z0-9][a-z0-9._%+-]{0,63}@[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?\.[a-z]{2,}$/i.test(email)||email.includes('..'))return error('A valid email address is required',400,cors);
+    const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'hunter');
+    if(credential.source!=='customer'||!credential.apiKey)return error('Connect Hunter in Settings before checking an email',503,cors,'SERVICE_HUNTER_NOT_CONFIGURED');
+    let response;try{response=await fetch(`https://api.hunter.io/v2/email-verifier?email=${encodeURIComponent(email)}`,{method:'GET',headers:{Accept:'application/json','X-API-KEY':credential.apiKey}});}catch{return error('Hunter is temporarily unavailable',502,cors);}
+    if(response.status===451)return error('Hunter cannot process this address',451,cors,'SERVICE_HUNTER_CLAIMED_EMAIL');
+    if(response.status===202||response.status===222)return json({email,status:'unknown',deliverability:'inconclusive',identity_confirmed:false,provider:'Hunter',pending:response.status===202},200,cors);
+    if(!response.ok)return error(response.status===401?'Hunter key was rejected':response.status===403||response.status===429?'Hunter request limit reached':`Hunter verification failed (${response.status})`,response.status>=400&&response.status<500?response.status:502,cors);
+    const payload=await response.json().catch(()=>({}));const data=payload.data||{};
+    if(String(data.email||'').toLowerCase()!==email)return error('Hunter returned an unexpected email address',502,cors);
+    const status=['valid','invalid','accept_all','webmail','disposable','unknown'].includes(data.status)?data.status:'unknown';
+    const deliverability=status==='valid'&&!data.accept_all&&!data.block?'deliverable':status==='invalid'?'undeliverable':'inconclusive';
+    await env.DB.prepare(`UPDATE workspace_service_integrations SET last_used_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider='hunter'`).bind(workspaceId).run();
+    await audit(env,{workspaceId,userId:access.user.id,type:'service.hunter_verify_email',provider:'hunter',metadata:{status,domain:email.split('@')[1]}});
+    return json({email,status,deliverability,identity_confirmed:false,provider:'Hunter',checked_at:new Date().toISOString()},200,cors);
+  }
+
   if(path==='/api/integrations/services/firecrawl/scrape'&&request.method==='POST')return forwardFirecrawl(request,env,cors,workspaceId,'scrape');
   if(path==='/api/integrations/services/firecrawl/search'&&request.method==='POST')return forwardFirecrawl(request,env,cors,workspaceId,'search');
   if(path==='/api/integrations/services/apollo/people-search'&&request.method==='POST')return forwardApolloPeopleSearch(request,env,cors,workspaceId);

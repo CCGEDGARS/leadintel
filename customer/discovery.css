@@ -311,5 +311,11 @@
 .selected-prospect-company h4{font-size:27px;letter-spacing:-.025em}
 .selected-prospect-context{max-width:66ch;margin:0;color:#53675e;font-size:14px;line-height:1.5}
 .selected-prospect-actions .primary-btn{min-width:200px}
+.email-pattern-panel{margin-top:12px;padding:11px 13px;border:1px solid #d6e4dc;border-radius:10px;background:#f8fbf8;max-width:560px;font-size:12px}
+.email-pattern-panel summary{cursor:pointer;font-weight:700;color:#244c3d}
+.email-pattern-panel p{margin:9px 0;line-height:1.45;color:#52665c}
+.email-pattern-panel label{display:block;margin:8px 0;font-weight:600}
+.email-pattern-panel select{display:block;width:100%;max-width:420px;margin-top:5px;padding:8px;border:1px solid #cbd8cf;border-radius:7px;background:white;color:#173b2c;font:inherit}
+.email-pattern-panel small{display:block;margin-top:8px;line-height:1.4}
 @media(max-width:1080px){.discovery-target-chips{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:680px){.discovery-target-list{padding:17px}.discovery-target-heading{display:grid}.discovery-target-chips{grid-template-columns:1fr}.discovery-target-chips .target-company-card{min-height:0}.selected-prospect-list{padding:17px}.selected-prospect-row{padding:18px}.selected-prospect-company h4{font-size:23px}.selected-prospect-actions .primary-btn{min-width:0}}

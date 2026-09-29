@@ -569,3 +569,10 @@ test('an incidental company mention does not make a different Jacob ambiguous',(
   assert.equal(found[0].publicName,'Jacob Jonstoij');
   assert.equal(found[0].publicLinkedinUrl,'https://se.linkedin.com/in/jacob-jonstoij-3bb486222');
 });
+test('Hunter pattern checks survive selected buyer state normalization without accepting unrelated domains',()=>{
+  const selected=Discovery.normalizeDiscoveryState({selectedProspects:[{company:'Example',domain:'example.lv',buyerSearchMode:'user_selected_target',people:[{id:'p1',name:'Marta Berzina',hunterChecks:{'marta.berzina@example.lv':{status:'valid',deliverability:'deliverable',checked_at:'2026-09-29T11:00:00Z'},'marta.berzina@gmail.com':{status:'webmail',deliverability:'inconclusive',checked_at:'2026-09-29T11:00:00Z'},'other@unrelated.test':{status:'valid',deliverability:'deliverable'}}}]}]});
+  const checks=selected.selectedProspects[0].people[0].hunterChecks;
+  assert.equal(checks['marta.berzina@example.lv'].deliverability,'deliverable');
+  assert.equal(checks['marta.berzina@gmail.com'].status,'webmail');
+  assert.equal(checks['other@unrelated.test'],undefined);
+});

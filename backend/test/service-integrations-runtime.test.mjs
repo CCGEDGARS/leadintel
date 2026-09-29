@@ -119,6 +119,24 @@ sqliteTest('Hunter key uses the free account check and stays encrypted without a
   }finally{globalThis.fetch=originalFetch;}
 });
 
+sqliteTest('Hunter verifies one requested pattern without claiming a Gmail identity',async()=>{
+  const {env,token}=await fixture('owner');const originalFetch=globalThis.fetch;const calls=[];
+  globalThis.fetch=async (url,options={})=>{
+    calls.push({url:String(url),options});
+    return new Response(JSON.stringify(calls.length===1?{data:{plan_name:'Starter',requests:{verifications:{remaining:10}}}}:{data:{email:'marta.buyer@gmail.com',status:'webmail',webmail:true,score:50}}),{status:200,headers:{'Content-Type':'application/json'}});
+  };
+  try{
+    const before=await handleServiceIntegrationRoute(req('/api/integrations/services/hunter/verify-email?workspace_id=w1',{method:'POST',token,body:{email:'marta.buyer@gmail.com'}}),env,{});
+    assert.equal(before.status,503);assert.equal(calls.length,0);
+    const saved=await handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'PUT',token,body:{provider:'hunter',api_key:'hunter-secret-WXYZ'}}),env,{});assert.equal(saved.status,200);
+    const response=await handleServiceIntegrationRoute(req('/api/integrations/services/hunter/verify-email?workspace_id=w1',{method:'POST',token,body:{email:'marta.buyer@gmail.com'}}),env,{});
+    assert.equal(response.status,200);const result=await payload(response);
+    assert.equal(result.status,'webmail');assert.equal(result.deliverability,'inconclusive');assert.equal(result.identity_confirmed,false);
+    assert.equal(calls[1].url,'https://api.hunter.io/v2/email-verifier?email=marta.buyer%40gmail.com');
+    assert.equal(calls[1].options.headers['X-API-KEY'],'hunter-secret-WXYZ');assert.equal(JSON.stringify(result).includes('hunter-secret'),false);
+  }finally{globalThis.fetch=originalFetch;}
+});
+
 sqliteTest('customer Firecrawl key is verified, used for signed-in research, and records last use',async()=>{
   const {env,DB,token}=await fixture('owner');const originalFetch=globalThis.fetch;const calls=[];
   globalThis.fetch=async (url,options={})=>{
