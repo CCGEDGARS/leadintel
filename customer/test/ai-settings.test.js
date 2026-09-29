@@ -159,7 +159,8 @@ test('signed-out Settings exposes Google and Microsoft onboarding while retainin
 
 test('Settings clearly changes data integrations from platform-only to customer-owned with managed fallback',()=>{
   assert.match(extension,/Data & intelligence integrations/);
-  assert.match(extension,/Add your own Apollo and Firecrawl API keys/);
+  assert.match(extension,/Connect Apollo, Firecrawl or Hunter with your own API key/);
+  assert.match(extension,/Managed fallback is available for Apollo and Firecrawl/);
   assert.match(extension,/Customer-owned credential/);
   assert.match(extension,/serviceDetail/);
   assert.match(extension,/meta\.textContent=observed\?\.detail\|\|serviceDetail/,'live Firecrawl failures must take precedence over the saved credential metadata');
@@ -171,7 +172,7 @@ test('Settings retains the integration control centre and adds LeadIntel readine
   assert.match(js,/Test all integrations/);
   assert.match(js,/id="integration-platform-grid"/);
   assert.match(js,/id="integration-communication-grid"/);
-  for(const name of ['Apollo.io','Firecrawl','Google Account','Gmail'])assert.match(js,new RegExp(name.replace('.','\\.')));
+  for(const name of ['Apollo.io','Firecrawl','Hunter','Google Account','Gmail'])assert.match(js,new RegExp(name.replace('.','\\.')));
   assert.match(extension,/LeadIntel readiness/);
   assert.match(extension,/LeadIntel readiness: \$\{Number\(aiReady\)\+1\+Number\(deliveryReady\)\+serviceReady\+Number\(calendlyReady\)\}\/6 connected/);
 });
