@@ -1,6 +1,6 @@
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
-const PUBLIC_NAME_CHECK_VERSION="buyer-contacts-v5";
+const PUBLIC_NAME_CHECK_VERSION="buyer-contacts-v6";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
 const DELIVERY_STORAGE_KEY="leadintel_customer_v2_delivery";
 const DISCOVERY_META_KEY="leadintel_customer_v2_discovery_meta";
@@ -920,6 +920,16 @@ async function runPublicProspectContacts(domain){
     const results=[...primary,...contacts].filter((row,index,list)=>list.findIndex(item=>item.url===row.url)===index).slice(0,9);
     research.officialPages=results.filter(row=>canonicalDomain(row.url)===domain).length;
     candidate.publicContacts=LeadIntelDiscovery.extractPublicContacts(results,domain);
+    if(!candidate.publicContacts.length){
+      try{
+        const response=await fetch(`${INTELLIGENCE_PROXY}/firecrawl-scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:`https://${domain}/`,formats:['markdown'],onlyMainContent:false}),signal:controller.signal});
+        if(response.ok){const payload=await response.json(),page=payload.data||payload,source=page.metadata?.sourceURL||`https://${domain}/`;
+          if(canonicalDomain(source)===domain&&(page.markdown||page.content)){
+            results.push({url:source,title:page.metadata?.title||page.title||'',markdown:page.markdown||page.content});research.officialPages++;candidate.publicContacts=LeadIntelDiscovery.extractPublicContacts(results,domain);
+          }
+        }
+      }catch(error){if(error?.name==='AbortError')throw error;research.issues.push('Official homepage unavailable');}
+    }
     candidate.people=LeadIntelDiscovery.matchPublicBuyerDetails(candidate.people||[],results,domain);
     const profileNames=candidate.people.filter(person=>!LeadIntelDiscovery.normalizeLinkedInUrl(person.linkedin_url)&&!person.publicLinkedinUrl).map(person=>person.publicNameUrl?person.publicName:person.name).filter(Boolean).slice(0,4);
     let profileIssue='';
@@ -929,11 +939,11 @@ async function runPublicProspectContacts(domain){
         const profiles=await searchBuyerPublicPages(profileQuery,8,controller.signal);
         research.profileResults+=profiles.length;
         candidate.people=LeadIntelDiscovery.matchPublicLinkedInProfiles(candidate.people,profiles,candidate.company);
-        // A combined query can rank one buyer out of the first results. Give unresolved
-        // first names one focused public lookup each, capped to two additional searches.
-        const unresolved=candidate.people.filter(person=>!LeadIntelDiscovery.normalizeLinkedInUrl(person.linkedin_url)&&!person.publicLinkedinUrl&&!String(person.name||'').trim().includes(' ')).slice(0,2);
+        // A combined query can miss a buyer, including a person whose full name
+        // came from an official page. Search unresolved people individually.
+        const unresolved=candidate.people.filter(person=>!LeadIntelDiscovery.normalizeLinkedInUrl(person.linkedin_url)&&!person.publicLinkedinUrl).slice(0,4);
         for(const person of unresolved){
-          const focusedQuery=`site:linkedin.com/in/ "${String(person.name).slice(0,40)}" "${String(candidate.company||'').slice(0,80)}" "${String(person.title||'').slice(0,80)}"`;
+          const focusedQuery=`site:linkedin.com/in/ "${String(person.name||'').trim().split(/\s+/)[0].slice(0,40)}" "${String(candidate.company||'').slice(0,80)}" "${String(person.title||'').slice(0,80)}"`;
           const focusedResults=await searchBuyerPublicPages(focusedQuery,5,controller.signal);
           research.profileResults+=focusedResults.length;
           candidate.people=LeadIntelDiscovery.matchPublicLinkedInProfiles(candidate.people,focusedResults,candidate.company);

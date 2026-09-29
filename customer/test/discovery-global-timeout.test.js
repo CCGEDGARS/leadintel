@@ -395,17 +395,18 @@ test('a saved first-name-only buyer receives one automatic public check when Buy
   context.__scheduleSavedBuyerPublicChecks();
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,30));
-  assert.equal(requests,4); // Official pages, contact page, combined profile search, focused fallback.
+  assert.equal(requests,5); // Official pages, contact page, homepage, combined profile search, focused fallback.
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Mikael Example');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Mikael Example/);
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,5));
-  assert.equal(requests,4);
+  assert.equal(requests,5);
 });
 
 test('a saved first-name buyer can gain a sourced full name from a unique public LinkedIn result',async()=>{
   let requests=0;
   const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,fetchImpl:async(url,options)=>{
+    if(String(url).includes('/firecrawl-scrape'))return {ok:true,json:async()=>({data:{}})};
     assert.match(String(url),/firecrawl-search/);
     requests++;
     if(requests<=2)return {ok:true,json:async()=>({data:[]})};
@@ -419,7 +420,7 @@ test('a saved first-name buyer can gain a sourced full name from a unique public
   assert.equal(requests,3);
   const person=context.__discoveryState().selectedProspects[0].people[0];
   assert.equal(person.publicName,'Jacob Jonstoij');
-  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v5');
+  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v6');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Jacob Jonstoij/);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/View profile ↗<\/a> · Public match/);
   context.__scheduleSavedBuyerPublicChecks();
@@ -430,6 +431,7 @@ test('a saved first-name buyer can gain a sourced full name from a unique public
 test('a focused LinkedIn lookup resolves a buyer missed by the combined search',async()=>{
   let requests=0;
   const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,fetchImpl:async(url,options)=>{
+    if(String(url).includes('/firecrawl-scrape'))return {ok:true,json:async()=>({data:{}})};
     requests++;
     if(requests<4)return {ok:true,json:async()=>({data:[]})};
     assert.match(JSON.parse(options.body).query,/"Jacob" "Södra" "Team Leader"/);
@@ -473,6 +475,28 @@ test('grounded follow-up extracts an official person email and keeps company pho
   assert.equal(openAiCalls,1);assert.equal(scrapes,1);assert.equal(geminiCalls,1);assert.equal(apolloCalls,0);
 });
 
+test('refresh repairs a truncated name, matches LinkedIn, and shows official company contacts separately',async()=>{
+  const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,fetchImpl:async(url,options)=>{
+    const target=String(url);
+    if(target.includes('/firecrawl-scrape'))return {ok:true,json:async()=>({data:{metadata:{sourceURL:'https://sodra.com/en/global/'},markdown:'Contact us. Phone: +46 470 890 00. Email: info@sodra.com'}})};
+    const query=JSON.parse(options.body).query;
+    if(query.includes('site:linkedin.com/in/')&&query.includes('"Lotta"'))return {ok:true,json:async()=>({data:[{url:'https://se.linkedin.com/in/lottalyra',title:'Lotta Lyrå – CEO & President på Södra | LinkedIn',description:'CEO & President på Södra'}]})};
+    if(query.includes('site:linkedin.com/in/'))return {ok:true,json:async()=>({data:[]})};
+    if(query.includes('(contact OR contacts'))return {ok:true,json:async()=>({data:[]})};
+    return {ok:true,json:async()=>({data:[{url:'https://sodra.com/sv/se/omoss/organisation/',title:'Management',markdown:'Lotta Lyrå — CEO & President of Södra.'}]})};
+  }});
+  context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-lotta',name:'Lotta',title:'CEO & President',publicName:'Lotta Lyr',publicNameUrl:'https://sodra.com/sv/se/omoss/organisation/'}]}]});
+  assert.equal(await context.__findPublicProspectContacts('sodra.com'),true);
+  const candidate=context.__discoveryState().selectedProspects[0],person=candidate.people[0];
+  assert.equal(person.publicName,'Lotta Lyrå');
+  assert.equal(person.publicLinkedinUrl,'https://se.linkedin.com/in/lottalyra');
+  assert.equal(person.publicEmail,'');
+  assert.ok(candidate.publicContacts.some(row=>row.value==='info@sodra.com'));
+  assert.ok(candidate.publicContacts.some(row=>row.value.includes('+46 470')));
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/Lotta Lyrå/);
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/Company phone/);
+});
+
 test('email button stops at a sourced public work email without calling Apollo',async()=>{
   let searches=0,apolloCalls=0,savedContacts=0,confirmations=0;
   const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,
@@ -497,7 +521,7 @@ test('email button offers Apollo only after a completed public search has no per
   context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};context.confirm=()=>{confirmations++;return true;};
   context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
   assert.equal(await context.__enrichSelectedProspect('sodra.com',0),true);
-  assert.equal(searches,5);
+  assert.equal(searches,6);
   assert.equal(confirmations,1);
   assert.equal(apolloCalls,1);
 });

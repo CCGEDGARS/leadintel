@@ -466,6 +466,19 @@ test('official full names retain Swedish letters at the end of the surname',()=>
     {url:'https://sodra.com/organisation',title:'Group senior management',markdown:'Lotta Lyrå — CEO & President of Södra.'}
   ],'sodra.com');
   assert.equal(found[0].publicName,'Lotta Lyrå');
+  const stale=Discovery.matchPublicBuyerDetails([{id:'lotta',name:'Lotta',title:'CEO & President',publicName:'Lotta Lyr',publicNameUrl:'https://sodra.com/organisation'}],[
+    {url:'https://sodra.com/organisation',title:'Group senior management',markdown:'Lotta Lyrå — CEO & President of Södra.'}
+  ],'sodra.com');
+  assert.equal(stale[0].publicName,'Lotta Lyrå');
+});
+
+test('a unique LinkedIn profile upgrades a truncated sourced surname when role and company match',()=>{
+  const person={id:'lotta',name:'Lotta',title:'CEO & President',publicName:'Lotta Lyr',publicNameUrl:'https://sodra.com/organisation'};
+  const found=Discovery.matchPublicLinkedInProfiles([person],[{url:'https://se.linkedin.com/in/lottalyra',title:'Lotta Lyrå – CEO & President på Södra | LinkedIn',description:'CEO & President på Södra'}],'Södra');
+  assert.equal(found[0].publicName,'Lotta Lyrå');
+  assert.equal(found[0].publicLinkedinUrl,'https://se.linkedin.com/in/lottalyra');
+  const wrong=Discovery.matchPublicLinkedInProfiles([person],[{url:'https://se.linkedin.com/in/lotta-lyrsson',title:'Lotta Lyrsson – Other company',description:'Other company'}],'Södra');
+  assert.equal(wrong[0].publicLinkedinUrl,undefined);
 });
 
 test('generic company inboxes and ambiguous surnames cannot be assigned to a buyer',()=>{

@@ -121,6 +121,8 @@
       const names=[...new Set(matches.map(match=>match.name.toLowerCase()))];
       if(names.length!==1)return person;
       const match=matches.find(item=>item.email)||matches[0];
+      const previous=clean(person.publicName);
+      if(previous&&previous.toLowerCase()!==match.name.toLowerCase()&&!match.name.toLowerCase().startsWith(previous.toLowerCase()))return person;
       return {...person,publicName:match.name,publicNameUrl:match.url,publicEmail:match.email,publicEmailUrl:match.email?match.url:""};
     });
   }
@@ -140,10 +142,12 @@
         const title=clean(row?.title);
         const candidateName=clean(title.split(/\s+[–—|·-]\s*|\s*\|\s*/u)[0]);
         if(!candidateName||candidateName.split(/\s+/).length!==2||candidateName.split(/\s+/)[0].toLowerCase()!==first)continue;
-        if(sourcedName&&candidateName.toLowerCase()!==name.toLowerCase())continue;
+        const nameMatches=candidateName.toLowerCase()===name.toLowerCase();
+        const extendsTruncatedName=sourcedName&&candidateName.toLowerCase().startsWith(name.toLowerCase())&&candidateName.length>name.length;
+        if(sourcedName&&!nameMatches&&!extendsTruncatedName)continue;
         const text=[row?.title,row?.description,row?.content].map(clean).join(' ').toLowerCase();
         if(!text.includes(company))continue;
-        if(!sourcedName){
+        if(!sourcedName||extendsTruncatedName){
           const role=clean(person.title).toLowerCase();
           const roleWords=role.split(/[^\p{L}]+/u).filter(word=>word.length>=4&&!['team','chief','head','vice'].includes(word));
           const titleRole=/team\s+lead(?:er)?/i.test(role)&&/teamledare|team\s+lead(?:er)?/i.test(title)
@@ -156,7 +160,7 @@
       }
       if(matches.size!==1)return person;
       const [url,matchedName]=[...matches][0];
-      return sourcedName?{...person,publicLinkedinUrl:url}:{...person,publicName:matchedName,publicNameUrl:url,publicLinkedinUrl:url};
+      return sourcedName&&matchedName.toLowerCase()===name.toLowerCase()?{...person,publicLinkedinUrl:url}:{...person,publicName:matchedName,publicNameUrl:url,publicLinkedinUrl:url};
     });
   }
   function canonicalDomain(value){
