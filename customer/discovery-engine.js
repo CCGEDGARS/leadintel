@@ -86,7 +86,7 @@
       for(const [kind,values] of [["email",emails],["phone",phones]])for(const raw of values){
         const value=raw.trim().replace(/[.,;:)]+$/g,"");
         if(kind==="email"&&!value.toLowerCase().endsWith(`@${domain}`))continue;
-        if(kind==="phone"&&(value.replace(/\D/g,"").length<9||!/[+\s()-]/.test(value)))continue;
+        if(kind==="phone"&&(value.replace(/\D/g,"").length<9||value.replace(/\D/g,"").length>15||!/[+\s()-]/.test(value)||/\b(?:19|20)\d{2}[-./ ]\d{1,2}[-./ ]\d{1,2}\b/.test(value)))continue;
         const key=`${kind}:${value.toLowerCase()}`;if(seen.has(key))continue;seen.add(key);
         contacts.push({kind,value,url,status:"public_unverified"});if(contacts.length>=8)return contacts;
       }

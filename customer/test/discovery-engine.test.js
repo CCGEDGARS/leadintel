@@ -442,6 +442,12 @@ test('public contacts retain an official source and remain unverified after relo
   assert.equal(saved.selectedProspects[0].publicContacts.length,contacts.length);
 });
 
+test('public contact extraction does not mistake page dates for company phones',()=>{
+  const contacts=Discovery.extractPublicContacts([{url:'https://example.com/contact',markdown:'Published 2024-11-26-662. Call +46 470 891 23.'}],'example.com');
+  assert.ok(contacts.some(row=>row.kind==='phone'&&row.value.includes('+46')));
+  assert.ok(!contacts.some(row=>row.kind==='phone'&&row.value.includes('2024')));
+});
+
 test('official company evidence adds full buyer names and explicit personal work emails without Apollo',()=>{
   const people=[{id:'p1',name:'Lotta',title:'CEO & President'},{id:'p2',name:'Jacob',title:'Team Leader'}];
   const results=[{url:'https://northstar.com/team',title:'Our leadership',markdown:'Lotta Andersson — CEO & President. lotta.andersson@northstar.com. Jacob Berg — Team Leader. jacob.berg@northstar.com.'},
