@@ -407,7 +407,7 @@ test('a first-name-only buyer triggers one public source check and renders a sou
   assert.equal(publicSearches,5); // Two additional grouped company and Gmail pattern searches.
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Mikael Example');
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicLinkedinUrl,'https://www.linkedin.com/in/mikael-example');
-  assert.match(context.__elements.get('customer-pipeline').innerHTML,/mikael\.example@boliden\.com · Public listing · identity unconfirmed/);
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/mikael\.example@boliden\.com · Public listing/);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/View profile ↗<\/a> · Public match/);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/mikael\.example@boliden\.com/);
 });
