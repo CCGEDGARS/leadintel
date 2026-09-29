@@ -524,7 +524,8 @@ test('refresh repairs a truncated name, matches LinkedIn, and shows official com
   assert.ok(candidate.publicContacts.some(row=>row.value==='info@sodra.com'));
   assert.ok(candidate.publicContacts.some(row=>row.value.includes('+46 470')));
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Lotta Lyrå/);
-  assert.match(context.__elements.get('customer-pipeline').innerHTML,/Company phone/);
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/<strong>Phone<\/strong><span>No direct phone<\/span>/);
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/<strong>\+46 470 890 00<\/strong> · Public listing/);
 });
 
 test('independent grounded Gemini source resolves a profile missed by Firecrawl and OpenAI',async()=>{
