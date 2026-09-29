@@ -482,3 +482,22 @@ test('public LinkedIn result needs exact sourced name and company and rejects am
   const unrelated=Discovery.matchPublicLinkedInProfiles(person,[{url:'https://linkedin.com/in/mikael-staffas',title:'Mikael Staffas – Other company',description:'Another company'}],'Boliden');
   assert.equal(unrelated[0].publicLinkedinUrl,undefined);
 });
+
+test('a unique public LinkedIn result can resolve a first name when company and role agree',()=>{
+  const person=[{id:'p-jacob',name:'Jacob',title:'Team Leader'}];
+  const found=Discovery.matchPublicLinkedInProfiles(person,[
+    {url:'https://se.linkedin.com/in/jacob-jonstoij',title:'Jacob Jonstoij – Södra | LinkedIn',description:'Teamledare at Södra'}
+  ],'Södra');
+  assert.equal(found[0].publicName,'Jacob Jonstoij');
+  assert.equal(found[0].publicNameUrl,'https://se.linkedin.com/in/jacob-jonstoij');
+  assert.equal(found[0].publicLinkedinUrl,found[0].publicNameUrl);
+  const saved=Discovery.normalizeDiscoveryState({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:found}]});
+  assert.equal(saved.selectedProspects[0].people[0].publicName,'Jacob Jonstoij');
+  const wrongRole=Discovery.matchPublicLinkedInProfiles(person,[{url:'https://linkedin.com/in/jacob-jonstoij',title:'Jacob Jonstoij – Södra',description:'Software engineer at Södra'}],'Södra');
+  assert.equal(wrongRole[0].publicName,undefined);
+  const ambiguous=Discovery.matchPublicLinkedInProfiles(person,[
+    {url:'https://linkedin.com/in/jacob-jonstoij',title:'Jacob Jonstoij – Södra',description:'Teamledare at Södra'},
+    {url:'https://linkedin.com/in/jacob-andersson',title:'Jacob Andersson – Södra',description:'Teamledare at Södra'}
+  ],'Södra');
+  assert.equal(ambiguous[0].publicName,undefined);
+});

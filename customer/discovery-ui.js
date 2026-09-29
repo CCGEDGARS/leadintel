@@ -1,5 +1,6 @@
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
+const PUBLIC_NAME_CHECK_VERSION="linkedin-firstname-v1";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
 const DELIVERY_STORAGE_KEY="leadintel_customer_v2_delivery";
 const DISCOVERY_META_KEY="leadintel_customer_v2_discovery_meta";
@@ -13,7 +14,7 @@ const MAX_DISCOVERY_COMPANY_CHECKS=30;
 const SAVING_SEARCH_RESULT_LIMIT=4;
 const SAVING_COMPANY_CHECK_LIMIT=3;
 const SAVING_FIRECRAWL_CALL_LIMIT=10;
-const ASSET_VERSION="20260928-proxy-cors-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1";
+const ASSET_VERSION="20260928-proxy-cors-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20260925-buyers-stage-view-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -835,20 +836,21 @@ async function findPublicProspectContacts(domain){
     const payload=await response.json(),results=Array.isArray(payload.data)?payload.data:Array.isArray(payload.data?.web)?payload.data.web:Array.isArray(payload.web)?payload.web:Array.isArray(payload.results)?payload.results:[];
     candidate.publicContacts=LeadIntelDiscovery.extractPublicContacts(results,domain);
     candidate.people=LeadIntelDiscovery.matchPublicBuyerDetails(candidate.people||[],results,domain);
-    const named=candidate.people.filter(person=>person.publicNameUrl).length;
-    const profileNames=candidate.people.filter(person=>person.publicNameUrl&&!LeadIntelDiscovery.normalizeLinkedInUrl(person.linkedin_url)).map(person=>person.publicName).slice(0,4);
+    const profileNames=candidate.people.filter(person=>!LeadIntelDiscovery.normalizeLinkedInUrl(person.linkedin_url)&&!person.publicLinkedinUrl).map(person=>person.publicNameUrl?person.publicName:person.name).filter(Boolean).slice(0,4);
     let profileIssue='';
     if(profileNames.length){
       try{
-        const profileQuery=`site:linkedin.com/in/ ${profileNames.map(name=>`"${name}"`).join(' OR ')} "${String(candidate.company||'').slice(0,80)}"`;
-        const profileResponse=await fetch(`${INTELLIGENCE_PROXY}/firecrawl-search`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:profileQuery,limit:5}),signal:controller.signal});
+        const profileQuery=`site:linkedin.com/in/ (${profileNames.map(name=>`"${name}"`).join(' OR ')}) "${String(candidate.company||'').slice(0,80)}"`;
+        const profileResponse=await fetch(`${INTELLIGENCE_PROXY}/firecrawl-search`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:profileQuery,limit:8}),signal:controller.signal});
         if(!profileResponse.ok)throw new Error(profileResponse.status===402?'Firecrawl credits or billing blocked public profile search':`Public profile search failed (${profileResponse.status})`);
         const profilePayload=await profileResponse.json();
         const profiles=Array.isArray(profilePayload.data)?profilePayload.data:Array.isArray(profilePayload.data?.web)?profilePayload.data.web:Array.isArray(profilePayload.web)?profilePayload.web:Array.isArray(profilePayload.results)?profilePayload.results:[];
         candidate.people=LeadIntelDiscovery.matchPublicLinkedInProfiles(candidate.people,profiles,candidate.company);
       }catch(error){profileIssue=error?.name==='AbortError'?'Public profile search timed out':error.message||'Public profile search failed';}
     }
-    candidate.publicContactStatus=candidate.publicContacts.length||named?"complete":"empty";
+    const totalNamed=candidate.people.filter(person=>person.publicNameUrl).length;
+    candidate.publicContactStatus=candidate.publicContacts.length||totalNamed?"complete":"empty";
+    candidate.publicContactVersion=PUBLIC_NAME_CHECK_VERSION;
     if(crmAuthenticated()&&candidate.people.some(person=>person.publicNameUrl||person.publicEmailUrl||person.publicLinkedinUrl)){
       try{
         let company=crmCompanyByDomain(domain);
@@ -861,7 +863,7 @@ async function findPublicProspectContacts(domain){
         }
       }catch{showToast("Public buyer details found, but CRM sync failed. Retry from this card.");}
     }
-    showToast(profileIssue|| (named?`${named} full name${named===1?"":"s"} found on company pages · check source before outreach`:candidate.publicContacts.length?`${candidate.publicContacts.length} public company contact${candidate.publicContacts.length===1?"":"s"} found · unverified`:"No public buyer names or company contacts found in this search"));
+    showToast(profileIssue|| (totalNamed?`${totalNamed} public full name${totalNamed===1?"":"s"} found · check source before outreach`:candidate.publicContacts.length?`${candidate.publicContacts.length} public company contact${candidate.publicContacts.length===1?"":"s"} found · unverified`:"No public buyer names or company contacts found in this search"));
     return true;
   }catch(error){candidate.publicContactStatus="error";showToast(error.name==="AbortError"?"Public contact search timed out":error.message);return false;}
   finally{clearTimeout(timeout);saveDiscovery();renderPipeline();}
@@ -871,7 +873,8 @@ function scheduleSavedBuyerPublicChecks(){
     const domain=canonicalDomain(candidate.domain);
     if(!domain||automaticPublicChecks.has(domain)||!candidate.people?.some(person=>!String(person.name||'').trim().includes(' ')&&!person.publicNameUrl))continue;
     // A completed or failed lookup is a real attempt. Do not spend requests on every visit.
-    if(candidate.publicContactStatus&&candidate.publicContactStatus!=='idle')continue;
+    if(candidate.publicContactStatus==='loading'||candidate.publicContactStatus==='error')continue;
+    if(candidate.publicContactStatus&&candidate.publicContactStatus!=='idle'&&candidate.publicContactVersion===PUBLIC_NAME_CHECK_VERSION)continue;
     automaticPublicChecks.add(domain);
     setTimeout(()=>{if(loadMeta().visibleStep===5)void findPublicProspectContacts(domain);},0);
   }

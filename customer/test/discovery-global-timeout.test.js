@@ -402,6 +402,30 @@ test('a saved first-name-only buyer receives one automatic public check when Buy
   assert.equal(requests,2);
 });
 
+test('a saved first-name buyer can gain a sourced full name from a unique public LinkedIn result',async()=>{
+  let requests=0;
+  const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,fetchImpl:async(url,options)=>{
+    assert.match(String(url),/firecrawl-search/);
+    requests++;
+    if(requests===1)return {ok:true,json:async()=>({data:[]})};
+    assert.match(JSON.parse(options.body).query,/"Jacob".*"Södra"/);
+    return {ok:true,json:async()=>({data:[{url:'https://se.linkedin.com/in/jacob-jonstoij',title:'Jacob Jonstoij – Södra | LinkedIn',description:'Teamledare at Södra'}]})};
+  }});
+  context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',publicContactStatus:'complete',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
+  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:4,visibleStep:5}));
+  context.__scheduleSavedBuyerPublicChecks();
+  await new Promise(resolve=>setTimeout(resolve,30));
+  assert.equal(requests,2);
+  const person=context.__discoveryState().selectedProspects[0].people[0];
+  assert.equal(person.publicName,'Jacob Jonstoij');
+  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'linkedin-firstname-v1');
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/Jacob Jonstoij/);
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/View public profile ↗/);
+  context.__scheduleSavedBuyerPublicChecks();
+  await new Promise(resolve=>setTimeout(resolve,5));
+  assert.equal(requests,2);
+});
+
 test('a timed-out company website check can recover with grounded official-domain evidence',async()=>{
   let failedSearches=0,groundedSearches=0;
   const context=loadDiscoveryRunner({
