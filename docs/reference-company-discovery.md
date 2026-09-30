@@ -2,7 +2,7 @@
 
 Reference Companies replaces the displayed Top Customers label without renaming storage keys or losing saved portfolios. References can be existing customers or ideal examples from any country. Manual entry records company name, website and a short business reason. The Reference type selector and classification labels are removed; existing stored classifications remain compatible. Existing Excel/CSV import, deduplication, and PDF review paths remain in use. Recommend 3–5 relevant references; no mandatory five-company gate.
 
-Target Companies contains a region-aware discovery action, 5/10/20 presets and custom integer 1–50. The action saves the selection in synchronized discovery metadata and invokes full general discovery, rather than target-only research. Known targets remain editable via Add manually. Existing target test controls remain scoped to those saved companies. Reference copying is hidden to prevent converting examples into outreach targets.
+Target Companies contains a region-aware discovery action, 5/10/20 presets and custom integer 1–50. The action saves the selection in synchronized discovery metadata and invokes full general discovery, rather than target-only research. Known targets remain editable via Add manually. Target-list test controls and the Saving Mode explanation are removed; the dialog offers one main discovery action. Reference copying is hidden to prevent converting examples into outreach targets.
 
 Discovery combines the seller offer, ICP, target region, active reference model and signals. Fit-oriented queries supplement signal queries. Extraction admits relevant operating companies without inventing a buying event; later evidence gates still control qualification. Reference domains are excluded from new results.
 
