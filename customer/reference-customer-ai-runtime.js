@@ -1,7 +1,7 @@
 import './first-party-research.js?v=20260930-research-pipeline-v1';
-import './reference-customer-library.js?v=20260924-reference-consensus-v1&reference-similarity=20260930-v1';
-import './reference-customer-portfolio.js?v=20260923-reference-interface-v1&reference-discovery=5&reference-similarity=20260930-v1';
-import './reference-customer-library-ui.js?v=20260927-save-only-v1&target-research=1&saving-mode=1&reference-discovery=5&reference-similarity=20260930-v1';
+import './reference-customer-library.js?v=20260924-reference-consensus-v1&reference-similarity=20260930-v1&reference-refresh=2';
+import './reference-customer-portfolio.js?v=20260923-reference-interface-v1&reference-discovery=5&reference-similarity=20260930-v1&reference-refresh=2';
+import './reference-customer-library-ui.js?v=20260927-save-only-v1&target-research=1&saving-mode=1&reference-discovery=5&reference-similarity=20260930-v1&reference-refresh=2';
 import './reference-customer-delete-ui.js?v=20260923-reference-interface-v1&reference-discovery=5';
 import './reference-customer-upload-mode.js?v=20260911-reference-single-owner-v1&reference-discovery=5';
 
@@ -31,8 +31,10 @@ const REFERENCE_AI_CONCURRENCY=4;
     const bridge=root.LeadIntelServerBridge;
     return bridge?.session?.authenticated&&bridge?.workspace?.id?clean(bridge.workspace.id):'';
   }
+  let analysisRunning=false;
   function status(message){
     const text=clean(message);
+    const refresh=document.getElementById('reference-refresh-status');if(refresh)refresh.textContent=text;
     const top=document.getElementById('reference-import-status');if(top)top.textContent=text;
     const local=document.getElementById('reference-action-status');if(local)local.textContent=text;
   }
@@ -94,10 +96,12 @@ const REFERENCE_AI_CONCURRENCY=4;
     status(`AI analysis complete · ${Object.keys(result.analyses).length} companies classified · ${evidence.reduce((total,row)=>total+(row.coverage?.pagesRead||1),0)} website pages read${failures?` · ${failures} websites need review`:''}. Review the Customer segments before activation.`);
   }
   document.addEventListener('click',async event=>{
-    const button=event.target?.closest?.('#reference-analyze');if(!button)return;
+    const button=(event.target?.closest?.('#reference-analyze')||event.target?.closest?.('[data-refresh-reference-analysis]'));if(!button)return;
     event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
+    if(analysisRunning)return;
+    analysisRunning=true;button.disabled=true;status('Starting company analysis…');
     try{await runAiAnalysis(button);}catch(error){status(clean(error?.message)||'AI analysis failed');}
-    finally{button.disabled=false;root.LeadIntelReferenceCustomerLibraryUI?.finishAnalysis?.();}
+    finally{analysisRunning=false;button.disabled=false;root.LeadIntelReferenceCustomerLibraryUI?.finishAnalysis?.();}
   },true);
   root.LeadIntelReferenceCustomerAIRuntime={runAiAnalysis};
 })(globalThis);

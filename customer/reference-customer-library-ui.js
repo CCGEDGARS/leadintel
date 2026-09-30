@@ -302,7 +302,7 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
   }
 
   document.addEventListener('click',event=>{
-    const analyzeControl=event.target?.closest?.('#reference-analyze');
+    const analyzeControl=(event.target?.closest?.('#reference-analyze')||event.target?.closest?.('[data-refresh-reference-analysis]'));
     if(analyzeControl&&blockOnUnsavedDraft('Analyzing the current list')){event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();return;}
     const activate=event.target?.closest?.('#reference-activate');
     if(activate){event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();void publishSelected(activate).catch(error=>{activate.disabled=false;const status=document.getElementById('reference-action-status')||document.getElementById('reference-import-status');if(status)status.textContent=clean(error?.message)||'Unable to activate model';});return;}
