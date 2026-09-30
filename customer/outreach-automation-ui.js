@@ -5,7 +5,7 @@ let policy=null,status=null,approvedPackage=null,busy=false,suppressedContacts=[
 const days=[['1','Mon'],['2','Tue'],['3','Wed'],['4','Thu'],['5','Fri'],['6','Sat'],['0','Sun']];
 function bridge(){return root.LeadIntelServerBridge||null;}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function css(){if(document.querySelector('link[data-outreach-automation-css]'))return;const l=document.createElement('link');l.rel='stylesheet';l.href='./outreach-automation.css?v=20260930-contact-suppression-v1';l.dataset.outreachAutomationCss='1';document.head.appendChild(l);}
+function css(){if(document.querySelector('link[data-outreach-automation-css]'))return;const l=document.createElement('link');l.rel='stylesheet';l.href='./outreach-automation.css?v=20260930-setup-delivery-v2';l.dataset.outreachAutomationCss='1';document.head.appendChild(l);}
 function anchor(){return document.querySelector('.step-view[data-step="7"]');}
 function isOwner(){return String(status?.role||policy?.role||'')==='owner';}
 function serverPolicy(){return policy?.policy||policy||{automaticDelivery:'manual_only'};}
@@ -29,24 +29,25 @@ async function queueApprovedPackages(domain=''){
 function renderSetup(){
   const brand=document.getElementById('brand-identity');if(!brand)return;
   let card=document.getElementById('delivery-setup');if(!card){card=document.createElement('section');card.id='delivery-setup';card.className='panel brand-identity-panel delivery-setup';brand.after(card);}
-  const p=serverPolicy(),ready=Boolean(policy),locked=p.automaticDelivery==='manual_only',owner=isOwner();
-  const limit=Number(p.workspaceDailyLimit||20),preset=[5,10,20].includes(limit)?String(limit):'custom';
-  card.innerHTML=`<div class="brand-identity-summary"><div class="brand-identity-intro"><span class="eyebrow">Email delivery</span><h3>Delivery settings</h3><p>Choose how many emails LeadIntel may send automatically each day. Review and approve messages before activating automatic delivery.</p></div><span class="brand-identity-status">${locked?'Manual delivery':p.mode==='automatic'&&p.enabled?'Automatic delivery on':'Manual delivery'}</span></div>
-    <div class="delivery-setup-controls"><label for="delivery-setup-mode">Mode</label><select id="delivery-setup-mode" ${!ready||!owner?'disabled':''}><option value="manual" ${p.mode!=='automatic'?'selected':''}>Manual</option><option value="automatic" ${p.mode==='automatic'?'selected':''} ${locked||!bridge()?.gmail?.connected?'disabled':''}>Automatic</option></select><label for="delivery-setup-limit">Automatic daily limit</label><select id="delivery-setup-limit" ${!ready||!owner?'disabled':''}><option value="5" ${preset==='5'?'selected':''}>5 emails</option><option value="10" ${preset==='10'?'selected':''}>10 emails</option><option value="20" ${preset==='20'?'selected':''}>20 emails</option><option value="custom" ${preset==='custom'?'selected':''}>Custom</option></select><input id="delivery-setup-custom" type="number" min="1" max="500" value="${esc(limit)}" aria-label="Custom automatic daily limit" ${preset==='custom'?'':'hidden'} ${!ready||!owner?'disabled':''}><button id="delivery-setup-save" class="secondary-btn" type="button" ${!ready||!owner?'disabled':''}>Save delivery settings</button></div>
-    <p class="delivery-setup-note">${locked?'Automatic sending is not available yet. Saving a limit will not send email.':'One Gmail mailbox is connected per workspace today. The sending window and mailbox rules may allow fewer messages than this limit. Set the mode, schedule and pause controls in Delivery.'}</p><p id="delivery-setup-message" role="status" aria-live="polite"></p>`;
+  const p=serverPolicy(),ready=Boolean(policy),owner=isOwner(),preferred=p.preferredMode||p.mode||'manual';
+  const limit=Number(p.workspaceDailyLimit||5),preset=[5,10,20].includes(limit)?String(limit):'custom';
+  const active=p.automaticDelivery==='enabled'&&p.mode==='automatic'&&p.enabled;
+  card.innerHTML=`<div class="delivery-setup-header"><div><span class="eyebrow">Step 1 · Delivery preference</span><h3>How should messages be delivered?</h3><p>Save the way you want this workspace to operate. Choose the daily limit for a future automatic flow.</p></div><span class="brand-identity-status">${active?'Automatic sending on':'Sending: manual'}</span></div>
+    <fieldset class="delivery-mode-options" ${!ready||!owner?'disabled':''}><legend>Delivery mode</legend><label class="delivery-mode-option"><input type="radio" name="delivery-setup-mode" value="manual" ${preferred!=='automatic'?'checked':''}><span><strong>Manual</strong><small>Review and send each approved message yourself.</small></span></label><label class="delivery-mode-option"><input type="radio" name="delivery-setup-mode" value="automatic" ${preferred==='automatic'?'checked':''}><span><strong>Automatic plan</strong><small>Save the preference now. Sending stays off until activation in Delivery.</small></span></label></fieldset>
+    <div class="delivery-setup-controls"><label for="delivery-setup-limit">Daily email limit</label><select id="delivery-setup-limit" ${!ready||!owner?'disabled':''}><option value="5" ${preset==='5'?'selected':''}>5 emails</option><option value="10" ${preset==='10'?'selected':''}>10 emails</option><option value="20" ${preset==='20'?'selected':''}>20 emails</option><option value="custom" ${preset==='custom'?'selected':''}>Custom</option></select><input id="delivery-setup-custom" type="number" min="1" max="500" value="${esc(limit)}" aria-label="Custom daily email limit" ${preset==='custom'?'':'hidden'} ${!ready||!owner?'disabled':''}><button id="delivery-setup-save" class="primary-btn" type="button" ${!ready||!owner?'disabled':''}>Save preference</button></div>
+    <p class="delivery-setup-note">${!ready?'Sign in to save this preference to your workspace.':!owner?'Only the workspace owner can change delivery settings.':active?'Automatic sending is active. Manage its schedule, pause and stop controls in Delivery.':'Saving a limit will not send email. Automatic sending requires a connected mailbox, approved messages and a separate activation in Delivery.'}</p><p id="delivery-setup-message" role="status" aria-live="polite"></p>`;
   const choice=card.querySelector('#delivery-setup-limit'),custom=card.querySelector('#delivery-setup-custom');
   choice.addEventListener('change',()=>{custom.hidden=choice.value!=='custom';});
+  card.querySelectorAll('[name="delivery-setup-mode"]').forEach(input=>input.addEventListener('change',()=>{card.dataset.mode=input.value;}));
   card.querySelector('#delivery-setup-save').addEventListener('click',async()=>{
     const value=Number(choice.value==='custom'?custom.value:choice.value),notice=card.querySelector('#delivery-setup-message');
     if(!Number.isInteger(value)||value<1||value>500){notice.textContent='Choose a whole number from 1 to 500.';return;}
     const b=bridge();if(!b?.saveOutreachAutomationPolicy){notice.textContent='Sign in to save this setting.';return;}
-    const mode=card.querySelector('#delivery-setup-mode').value;
-    if(mode==='automatic'&&(!b.gmail?.connected||locked)){notice.textContent='Connect Gmail before enabling automatic delivery.';return;}
-    if(mode==='automatic'&&p.mode!=='automatic'&&!root.confirm('Activate automatic Gmail delivery for approved queued messages within this daily limit?'))return;
+    const mode=card.querySelector('[name="delivery-setup-mode"]:checked')?.value||'manual';
     const button=card.querySelector('#delivery-setup-save');button.disabled=true;
-    const result=await b.saveOutreachAutomationPolicy({...p,mode,enabled:mode==='automatic',workspaceDailyLimit:value,mailboxDailyLimit:value});
+    const result=await b.saveOutreachAutomationPolicy({...p,mode,enabled:active&&mode==='automatic',workspaceDailyLimit:value,mailboxDailyLimit:value});
     button.disabled=false;if(!result.ok){notice.textContent=result.error||'Could not save the daily limit.';return;}
-    await refresh();if(mode==='automatic'&&p.mode!=='automatic')await queueApprovedPackages();document.getElementById('delivery-setup-message').textContent=mode==='automatic'?'Automatic delivery settings saved. Approved messages with a matching verified CRM email are queued.':'Delivery settings saved. No emails were sent.';
+    await refresh();document.getElementById('delivery-setup-message').textContent=mode==='automatic'?(active?'Automatic limit saved. Sending remains active; manage it in Delivery.':'Automatic plan saved. Sending is off; activate it separately in Delivery when available.'):'Manual preference saved. No emails were sent.';
   });
 }
 function selectedDays(p){const set=new Set((p.workingDays||[1,2,3,4,5]).map(String));return days.map(([n,label])=>`<label class="oa-day"><input type="checkbox" data-oa-day="${n}" ${set.has(n)?'checked':''}>${label}</label>`).join('');}

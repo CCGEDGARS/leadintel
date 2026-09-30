@@ -44,6 +44,20 @@ sqliteTest('policy GET is fail-safe default, sales can read, and only owner can 
   const audit=owner.db.raw.prepare(`SELECT event_type,metadata_json FROM audit_events WHERE event_type='outreach_automation.policy_updated'`).get();assert.ok(audit);assert.match(audit.metadata_json,/automatic/);
 });
 
+sqliteTest('manual-only production saves an automatic plan without enabling delivery',async()=>{
+  const {env,token,db}=await fixture();env.AUTOMATIC_GMAIL_DELIVERY_MODE='manual_only';
+  const url='/api/outreach-automation/policy?workspace_id=w1';
+  let response=await handleOutreachAutomationRoute(request(url,{method:'PUT',token,body:{mode:'automatic',enabled:false,workspaceDailyLimit:10,mailboxDailyLimit:10}}),env,{});
+  assert.equal(response.status,200);let result=await response.json();
+  assert.equal(result.policy.preferredMode,'automatic');assert.equal(result.policy.mode,'manual');assert.equal(result.policy.enabled,false);
+  assert.equal(result.policy.workspaceDailyLimit,10);
+  assert.equal(db.raw.prepare('SELECT mode,enabled FROM outreach_automation_policies WHERE workspace_id=?').get('w1').enabled,0);
+  response=await handleOutreachAutomationRoute(request(url,{method:'PUT',token,body:{mode:'automatic',enabled:true}}),env,{});
+  assert.equal(response.status,409);
+  response=await handleOutreachAutomationRoute(request(url,{token}),env,{});result=await response.json();
+  assert.equal(result.policy.preferredMode,'automatic');assert.equal(result.policy.mode,'manual');assert.equal(result.policy.enabled,false);
+});
+
 sqliteTest('invalid policy fields are rejected with 400',async()=>{
   const {env,token}=await fixture();
   for(const body of [

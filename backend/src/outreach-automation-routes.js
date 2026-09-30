@@ -23,7 +23,7 @@ function rowToPolicy(row){if(!row)return defaultAutomationPolicy();return normal
 },defaultAutomationPolicy());}
 async function policyRow(env,workspaceId){return env.DB.prepare(`SELECT * FROM outreach_automation_policies WHERE workspace_id=?`).bind(workspaceId).first();}
 async function policyFor(env,workspaceId){return rowToPolicy(await policyRow(env,workspaceId));}
-function exposedPolicy(env,policy){const manualOnly=!automaticGmailDeliveryEnabled(env);return {...policy,mode:manualOnly?'manual':policy.mode,enabled:manualOnly?false:policy.enabled,automaticDelivery:manualOnly?'manual_only':'enabled'};}
+function exposedPolicy(env,policy){const manualOnly=!automaticGmailDeliveryEnabled(env);return {...policy,preferredMode:policy.mode,mode:manualOnly?'manual':policy.mode,enabled:manualOnly?false:policy.enabled,automaticDelivery:manualOnly?'manual_only':'enabled'};}
 function safeNow(env){const injected=String(env.OUTREACH_AUTOMATION_TEST_NOW||'').trim();const date=injected?new Date(injected):new Date();return Number.isFinite(date.getTime())?date:new Date();}
 function zonedLocalToUtc({year,month,day,hour=0,minute=0},timeZone){const target=Date.UTC(year,month-1,day,hour,minute);let guess=target;for(let i=0;i<4;i++){const observed=localClockParts(new Date(guess),timeZone);const observedUtc=Date.UTC(observed.year,observed.month-1,observed.day,observed.hour,observed.minute);const diff=target-observedUtc;if(!diff)break;guess+=diff;}return new Date(guess);}
 function localDayBounds(now,timeZone){const local=localClockParts(now,timeZone);const start=zonedLocalToUtc({year:local.year,month:local.month,day:local.day},timeZone);const nextCalendar=new Date(Date.UTC(local.year,local.month-1,local.day+1));const end=zonedLocalToUtc({year:nextCalendar.getUTCFullYear(),month:nextCalendar.getUTCMonth()+1,day:nextCalendar.getUTCDate()},timeZone);return {start:start.toISOString(),end:end.toISOString()};}
@@ -88,8 +88,9 @@ export async function handleOutreachAutomationRoute(request,env,corsOverride){
     const row=await policyRow(env,workspaceId);return json({policy:exposedPolicy(env,rowToPolicy(row)),role:access.member.role,updatedAt:row?.updated_at||null},200,cors);
   }
   if(path==='/api/outreach-automation/policy'&&request.method==='PUT'){
-    const access=await requireMember(request,env,workspaceId,['owner']);if(access.error)return error(access.error,access.status,cors);const body=await request.json().catch(()=>null);if(!body)return error('Automation policy payload is required',400,cors);if(!automaticGmailDeliveryEnabled(env)&&(body.mode==='automatic'||body.enabled===true))return error('Automatic Gmail delivery is disabled. Use the explicit Send with Gmail action instead.',409,cors);
+    const access=await requireMember(request,env,workspaceId,['owner']);if(access.error)return error(access.error,access.status,cors);const body=await request.json().catch(()=>null);if(!body)return error('Automation policy payload is required',400,cors);if(!automaticGmailDeliveryEnabled(env)&&body.enabled===true)return error('Automatic Gmail delivery is disabled. You may save a planned mode with sending off.',409,cors);
     const before=await policyFor(env,workspaceId);let after;try{after=normalizeAutomationPolicy(body,before);}catch(cause){return error(String(cause?.message||'Invalid automation policy'),400,cors);}
+    if(!automaticGmailDeliveryEnabled(env)&&after.enabled)return error('Automatic Gmail delivery is disabled',409,cors);
     await savePolicy(env,workspaceId,access.user.id,after);await audit(env,{workspaceId,userId:access.user.id,type:'outreach_automation.policy_updated',metadata:{before,after}});return json({policy:exposedPolicy(env,after),role:access.member.role},200,cors);
   }
   if(path==='/api/outreach-automation/status'&&request.method==='GET'){

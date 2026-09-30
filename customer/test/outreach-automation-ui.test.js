@@ -55,8 +55,10 @@ test('setup offers the same server-backed limits under brand identity',()=>{
   assert.match(ui,/saveOutreachAutomationPolicy/);
   assert.match(ui,/Saving a limit will not send email/);
   assert.match(ui,/delivery-setup-mode/);
-  assert.match(ui,/Connect Gmail before enabling automatic delivery/);
-  assert.match(ui,/root\.confirm\('Activate automatic Gmail delivery/);
+  assert.match(ui,/Automatic plan/);
+  assert.match(ui,/preferredMode/);
+  assert.match(ui,/enabled:active&&mode==='automatic'/);
+  assert.match(ui,/Sending stays off until activation in Delivery/);
   assert.match(ui,/Meeting requests/);
 });
 
