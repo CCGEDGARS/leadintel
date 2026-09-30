@@ -223,5 +223,16 @@
   function migrateLegacyLookalikes(value=''){
     const names=String(value||'').split(/\n|;|,/).map(clean).filter(Boolean);return normalizeImportedRows(names.map(name=>({Company:name})),{sourceType:'pdf'});
   }
-  return {MAX_ROWS,MAX_ACTIVE,parseCsv,normalizeImportedRows,normalizeTargetCompanies,normalizeReferenceState,activateReferenceCustomers,activateReferenceSegments,getActiveReferenceModel,buildReferenceSegments,buildReferenceDna,migrateLegacyLookalikes,normalizeUrl,domain,persistReferenceWorkspaceState,saveReferenceWorkflowState,referenceWorkflowSaveNotice};
+  function targetResearchSummary(target={},discovery={},meta={}){
+    const key=domain(target.domain||target.website),name=clean(target.companyName).toLowerCase();
+    const matches=item=>key&&domain(item.domain||item.website)===key||clean(item.company).toLowerCase()===name;
+    const saved=meta.targetResearchByDomain?.[key];
+    const qualified=(discovery.candidates||[]).find(matches),review=(discovery.potentialMatches||[]).find(matches);
+    const completed=Boolean(saved?.completedAt)||(meta.lastTargetResearchNames||[]).includes(name)&&Boolean(discovery.lastRunAt);
+    const verified=saved?saved.qualified===true:Boolean(qualified);
+    const gaps=saved?.gaps||review?.qualificationGaps||[];
+    const evidence=saved?.evidence||review?.evidence||qualified?.evidence||[];
+    return {completed:completed||Boolean(qualified||review),qualified:verified,label:verified?'Research completed · Qualified':completed||review?'Research completed · Opportunity unverified':'Research pending',gaps:verified?[]:gaps.length?gaps:['The search did not confirm all opportunity requirements.'],evidence,completedAt:saved?.completedAt||discovery.lastRunAt||''};
+  }
+  return {MAX_ROWS,MAX_ACTIVE,parseCsv,normalizeImportedRows,normalizeTargetCompanies,normalizeReferenceState,activateReferenceCustomers,activateReferenceSegments,getActiveReferenceModel,buildReferenceSegments,buildReferenceDna,migrateLegacyLookalikes,normalizeUrl,domain,persistReferenceWorkspaceState,saveReferenceWorkflowState,referenceWorkflowSaveNotice,targetResearchSummary};
 });
