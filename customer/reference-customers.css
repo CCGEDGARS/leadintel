@@ -32,5 +32,8 @@
 .target-companies-panel .target-test-choice select{box-sizing:border-box;width:100%;min-width:0;max-width:none;min-height:44px}
 .target-companies-panel .target-company-actions>button:disabled{opacity:.45;cursor:not-allowed;transform:none}
 .target-companies-panel .target-company-actions>button:focus-visible,.target-companies-panel .target-test-choice select:focus-visible{outline:3px solid rgba(15,109,92,.3);outline-offset:2px}
+.target-companies-panel .target-save-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0 14px}
+.target-companies-panel .target-save-row #target-company-status{flex:1;min-width:0}
+.target-companies-panel .target-save-row button{min-height:40px;padding:8px 13px!important;font-size:13px!important;white-space:nowrap}
 @media(max-width:900px){.target-companies-panel .target-company-actions{grid-template-columns:repeat(2,minmax(0,1fr))}.target-companies-panel .target-company-actions>button{width:100%}}
-@media(max-width:520px){.target-companies-panel .target-company-actions{grid-template-columns:1fr}}
+@media(max-width:520px){.target-companies-panel .target-company-actions{grid-template-columns:1fr}.target-companies-panel .target-save-row{align-items:stretch;flex-direction:column}.target-companies-panel .target-save-row button{width:100%}}
