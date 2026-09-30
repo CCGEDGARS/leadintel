@@ -14,7 +14,7 @@ test('Step 1 activation markup exposes an explicit button and live status',()=>{
   assert.equal(typeof activation.activationMarkup,'function');
   const markup=activation.activationMarkup();
   assert.match(markup,/id="activate-website"/);
-  assert.match(markup,/ACTIVATE WEBSITE/);
+  assert.match(markup,/Activate website/);
   assert.match(markup,/id="website-activation-status"/);
   assert.match(processMapSource,/website-activation\.js\?v=/);
 });

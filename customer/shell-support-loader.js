@@ -1,6 +1,6 @@
 const SUPPORT_MODULES=[
   './state-budget.js?v=20260826-state-budget-500kb',
-  './website-input-sync.js?v=20260901-saved-state-v2',
+  './website-input-sync.js?v=20260930-setup-focus-v1',
   './custom-market-input-hygiene.js?v=20260903-password-manager-isolation-v5',
   './crm-engine.js?v=20260828-master-crm-v1',
   './sync-conflict-hygiene.js?v=20260901-stale-blank-conflict-v1',

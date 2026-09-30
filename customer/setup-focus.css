@@ -1,0 +1,17 @@
+/* Keep Setup focused on the two required decisions. The sidebar still shows progress. */
+body:has(#step-1.active) .journey-stage-guide,
+body:has(#step-1.active) #step-1 > .step-action-guidance { display: none; }
+body:has(#step-1.active) .process-map { margin-bottom: 22px; }
+body:has(#step-1.active) #step-1 .hero-copy { margin-bottom: 22px; }
+body:has(#step-1.active) #step-1 .hero-copy h1 { max-width: 680px; font-size: clamp(31px,3.2vw,42px); line-height: 1.12; }
+body:has(#step-1.active) #step-1 .hero-copy p { margin-bottom: 0; }
+#step-1 .target-market-panel { border-color: #c5d9ce; }
+#step-1 .brand-identity-panel { margin-top: 18px; }
+#step-1 #delivery-setup { margin-top: 12px; }
+#step-1 .stage1-primary-action { border-top: 1px solid #dce5dd; margin-top: 22px; }
+#step-1 .stage1-primary-action .primary-btn { min-height: 48px; }
+@media (max-width: 680px) {
+  body:has(#step-1.active) .process-map { margin-bottom: 18px; }
+  body:has(#step-1.active) #step-1 .hero-copy { margin-bottom: 18px; }
+  #step-1 .stage1-primary-action .primary-btn { width: 100%; }
+}

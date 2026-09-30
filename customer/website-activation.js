@@ -85,7 +85,7 @@
   function isActivationRecordActive(record={},website=""){
     const target=normalizeUrl(website);return Boolean(target&&record?.status==="active"&&sameUrl(record.url,target)&&record.source?.type==="website"&&sameUrl(record.source.url,target)&&clean(record.source.text));
   }
-  function activationMarkup(){return '<button class="activate-website-btn" id="activate-website" type="button">ACTIVATE WEBSITE</button><div class="website-activation-status" id="website-activation-status" data-state="idle" role="status" aria-live="polite">Not activated yet — connect the website to load company evidence.</div>';}
+  function activationMarkup(){return '<button class="activate-website-btn" id="activate-website" type="button">Activate website</button><div class="website-activation-status" id="website-activation-status" data-state="idle" role="status" aria-live="polite">Enter your company website, then activate it.</div>';}
   function readJson(key,fallback={}){try{const parsed=JSON.parse(root.localStorage.getItem(key)||"null");return parsed&&typeof parsed==="object"&&!Array.isArray(parsed)?parsed:fallback;}catch{return fallback;}}
   function readState(){return readJson(STORAGE_KEY,{});}
   function writeState(value){root.localStorage.setItem(STORAGE_KEY,JSON.stringify(value));}
@@ -105,7 +105,7 @@
   function render(){
     if(!root?.document||!root?.localStorage)return;ensureActivationUi();
     const button=root.document.getElementById("activate-website"),website=visibleWebsite(),record=readActivationRecord();
-    if(button&&!running){button.disabled=!website;button.textContent=isActivationRecordActive(record,website)?"RE-ACTIVATE":"ACTIVATE WEBSITE";}
+    if(button&&!running){button.disabled=!website;button.textContent=isActivationRecordActive(record,website)?"Refresh website evidence":"Activate website";}
     if(running)return;
     if(activationError){setStatus("error",activationError);return;}
     if(!website){setStatus("idle","Enter your company website, then activate it.");return;}
@@ -168,7 +168,7 @@
   async function activateWebsite(){
     if(running)return false;const url=visibleWebsite(),button=root?.document?.getElementById("activate-website");
     if(!url){activationError="Enter a valid website URL first.";setStatus("error",activationError);return false;}
-    activationError="";running=true;if(button){button.disabled=true;button.textContent="ACTIVATING…";}setStatus("loading","Connecting to the website and loading public company evidence…");
+    activationError="";running=true;if(button){button.disabled=true;button.textContent="Activating…";}setStatus("loading","Connecting to the website and loading public company evidence…");
     try{
       const source=await scrapeWebsite(url),at=new Date().toISOString(),record=buildActivationRecord(source,at),next=buildActivatedState(readState(),source,at);
       clearDerivedWorkspaceData();
