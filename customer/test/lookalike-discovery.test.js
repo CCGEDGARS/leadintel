@@ -50,7 +50,7 @@ test('Step 1 target markets constrain lookalike queries country by country',()=>
   assert.ok(queries.every(q=>q.query.includes('industrial manufacturing')&&q.query.includes('factory expansion')));
 });
 
-test('verified opportunity score outranks resemblance, with reference context only breaking ties',()=>{
+test('activated lookalike resemblance changes review priority without changing opportunity evidence',()=>{
   const dna={active:true,dimensions:[{key:'industry',values:['sawmill'],weight:1,confidence:'high'}]};
   const candidates=[
     {company:'Strong signal',industry:'pulp mill',score:{total:80}},
@@ -58,8 +58,30 @@ test('verified opportunity score outranks resemblance, with reference context on
   ];
   const ranked=Discovery.rankCandidatesWithLookalike(candidates,{},dna);
   assert.equal(ranked[0].company,'Strong signal');
-  assert.equal(ranked[0].priorityScore,80);
-  assert.equal(ranked[1].priorityScore,65);
+  assert.equal(ranked[0].priorityScore,70);
+  assert.equal(ranked[1].priorityScore,69);
+  assert.equal(ranked[1].score.total,65);
+});
+
+test('high confidence resemblance can prioritize a qualified lookalike over a slightly stronger trigger',()=>{
+  const dna={active:true,confidence:'high',dimensions:[{key:'industry',values:['sawmill'],weight:1,confidence:'high'}]};
+  const ranked=Discovery.rankCandidatesWithLookalike([{company:'Trigger only',industry:'pulp mill',score:{total:80}},{company:'Both',industry:'sawmill',score:{total:75}}],{},dna);
+  assert.equal(ranked[0].company,'Both');
+  assert.equal(ranked[0].priorityScore,81);
+  assert.equal(ranked[0].score.total,75);
+});
+
+test('without an active model opportunity ranking stays unchanged',()=>{
+  const ranked=Discovery.rankCandidatesWithLookalike([{company:'A',score:{total:80}},{company:'B',score:{total:65}}],{},null);
+  assert.deepEqual(ranked.map(x=>x.priorityScore),[80,65]);
+});
+
+test('separate opportunity and resemblance scores survive saved discovery state',()=>{
+  const candidate={company:'Both',domain:'both.se',website:'https://both.se/',market:'Sweden',qualified:true,marketVerified:true,buyerVerified:true,score:{total:75},priorityScore:81,lookalikeMatch:{active:true,total:100,reasons:['industry: sawmill']},matchedSignals:[{id:'project',name:'New project'}],evidence:[{url:'https://both.se/news',title:'New project'}]};
+  const restored=Discovery.normalizeDiscoveryState({qualityVersion:Discovery.DISCOVERY_QUALITY_VERSION,candidates:[candidate]}).candidates[0];
+  assert.equal(restored.priorityScore,81);
+  assert.equal(restored.lookalikeMatch.total,100);
+  assert.equal(restored.score.total,75);
 });
 
 test('seller and known customers cannot be returned as new opportunities',()=>{

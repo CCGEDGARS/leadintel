@@ -288,5 +288,5 @@ test('outreach UI snapshots Step 1 identity, preserves edit detection and invali
   assert.match(processMap,/outreach-automation-loader\.js\?v=20260929-delivery-modes-v2/);
   assert.match(automationLoader,/outreach-automation-delivery-handoff\.js\?v=20260929-delivery-modes-v2/);
   assert.match(html,/process-map\.js\?v=20260924-friendly-workflow-labels-v1/);
-  assert.match(html,/discovery-ui\.js\?v=20260928-proxy-cors-v1/);
+  assert.match(html,/discovery-ui\.js\?v=20260930-lookalike-priority-v1/);
 });

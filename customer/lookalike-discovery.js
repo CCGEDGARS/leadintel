@@ -52,8 +52,10 @@
     const seller=host(profile.website),knownCustomers=new Set((modelOrDna?.activeRows||[]).map(row=>host(row.domain||row.website)).filter(Boolean));
     return (candidates||[]).filter(c=>{const domain=host(c.domain||c.website);return !isHardExcluded(c,profile)&&(!seller||!domain||domain!==seller)&&(!domain||!knownCustomers.has(domain));}).map(candidate=>{
       const lookalikeMatch=scoreLookalikeSet(candidate,modelOrDna);const base=Math.max(0,Math.min(100,Number(candidate?.score?.total)||0));
-      // Reference buyers break close ties; they never outweigh the verified opportunity score.
-      const priorityScore=base;
+      // Resemblance changes review order, while qualification still requires independent evidence.
+      const confidence=clean(modelOrDna?.dna?.confidence||modelOrDna?.confidence).toLowerCase();
+      const influence=lookalikeMatch.active?(confidence==='high'?.25:confidence==='medium'?.2:.12):0;
+      const priorityScore=Math.round(base*(1-influence)+lookalikeMatch.total*influence);
       return {...candidate,lookalikeMatch,lookalikeModelMatches:lookalikeMatch.modelMatches||[],priorityScore};
     }).sort((a,b)=>b.priorityScore-a.priorityScore||b.lookalikeMatch.total-a.lookalikeMatch.total);
   }

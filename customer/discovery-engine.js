@@ -822,6 +822,7 @@
     return {
       id:clean(candidate.id)||`company-${slug(domain||candidate.company)}`,crmId:clean(candidate.crmId),company:clean(candidate.company)||displayFromDomain(domain),domain,website,
       market:clean(candidate.market),score:candidate.score&&typeof candidate.score==="object"?candidate.score:{total:0},confidence:["High","Medium","Low"].includes(candidate.confidence)?candidate.confidence:"Low",
+      priorityScore:clamp(Number(candidate.priorityScore??candidate.score?.total)||0,0,100,0),lookalikeMatch:candidate.lookalikeMatch?.active===true?{active:true,total:clamp(Number(candidate.lookalikeMatch.total)||0,0,100,0),reasons:(Array.isArray(candidate.lookalikeMatch.reasons)?candidate.lookalikeMatch.reasons:[]).map(clean).slice(0,4)}:null,
       matchedSignals:(Array.isArray(candidate.matchedSignals)?candidate.matchedSignals:[]).slice(0,12),evidence:(Array.isArray(candidate.evidence)?candidate.evidence:[]).slice(0,5),
       qualified:candidate.qualified===true,marketVerified:candidate.marketVerified===true,buyerVerified:candidate.buyerVerified===true,
       people,peopleStatus:["idle","loading","complete","empty","error"].includes(candidate.peopleStatus)?candidate.peopleStatus:"idle",publicContacts,publicResearch,publicContactStatus:["idle","loading","complete","empty","error"].includes(candidate.publicContactStatus)?candidate.publicContactStatus:"idle",publicContactVersion:clean(candidate.publicContactVersion).slice(0,40),saved:Boolean(candidate.saved)
@@ -996,7 +997,7 @@
     const retained=current.length===0&&previous.length>0;
     const byDomain=new Map(previous.map(item=>[item.domain,item]));
     for(const item of current)byDomain.set(item.domain,item);
-    const candidates=[...byDomain.values()].sort((a,b)=>(Number(b.score?.total)||0)-(Number(a.score?.total)||0)).slice(0,50);
+    const candidates=[...byDomain.values()].sort((a,b)=>(Number(b.priorityScore??b.score?.total)||0)-(Number(a.priorityScore??a.score?.total)||0)).slice(0,50);
     return {
       candidates,
       lastSuccessfulRunAt:current.length?clean(completedAt):clean(state.lastSuccessfulRunAt),
