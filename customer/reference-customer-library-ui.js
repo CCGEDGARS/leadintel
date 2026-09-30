@@ -36,7 +36,7 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
   function simplifyBaseUi(modal){
     const steps=modal?.querySelectorAll?.('.reference-workflow span');
     if(steps?.length>=4){steps[0].textContent='1 · List';steps[1].textContent='2 · Analyze';steps[2].textContent='3 · Review';steps[3].textContent='4 · Activate';}
-    const upload=modal?.querySelector?.('#reference-upload-button');if(upload)upload.textContent='Upload customer list';
+    const upload=modal?.querySelector?.('#reference-upload-button');if(upload)upload.textContent='Import reference list';
     const analyze=modal?.querySelector?.('#reference-analyze');if(analyze){analyze.textContent='Analyze List';analyze.setAttribute('aria-hidden','true');}
     const activate=modal?.querySelector?.('#reference-activate');if(activate){activate.textContent='Activate Model';activate.setAttribute('aria-hidden','true');}
   }

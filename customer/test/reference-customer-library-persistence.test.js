@@ -118,7 +118,7 @@ test('importing a customer file starts a separate draft without intercepting the
   const uploadMode=fs.readFileSync(path.join(__dirname,'..','reference-customer-upload-mode.js'),'utf8');
   const baseUi=fs.readFileSync(path.join(__dirname,'..','reference-customer-ui.js'),'utf8');
   const aiRuntime=fs.readFileSync(path.join(__dirname,'..','reference-customer-ai-runtime.js'),'utf8');
-  assert.match(uploadMode,/Import Customer List/);
+  assert.match(uploadMode,/Import reference list/);
   assert.match(uploadMode,/Portfolio\.newList\(state\)/);
   assert.match(uploadMode,/reference-file-input/);
   assert.match(uploadMode,/consumeImportMode/);

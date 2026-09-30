@@ -47,7 +47,7 @@ const REFERENCE_DELETE_STATE_KEY='leadintel_customer_v2_state';
   }
   function renameListActions(modal){
     const create=modal.querySelector('[data-new-reference-list]');setText(create,'Create New List');
-    const upload=modal.querySelector('#reference-upload-button');setText(upload,'Import Customer List');
+    const upload=modal.querySelector('#reference-upload-button');setText(upload,'Import reference list');
   }
   function buildDeleteControls(row,id){
     const buttons=row.querySelector('.reference-saved-buttons');if(!buttons)return;

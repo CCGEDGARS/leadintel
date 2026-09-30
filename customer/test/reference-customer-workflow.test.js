@@ -24,8 +24,8 @@ test('customer boot loads reference engine, AI client, UI, AI runtime and lookal
 
 test('reference customer card explains optional context and opens customer evidence',()=>{
   assert.match(boot,/Turn what you know into better B2B opportunities/i);
-  assert.match(boot,/Research chosen prospects for fit and public demand signals/i);
-  assert.match(boot,/Add Customers/i);
+  assert.match(boot,/Find a ranked shortlist in your selected region/i);
+  assert.match(boot,/Manage companies/i);
   assert.match(css,/reference-customer-summary/);
   assert.match(css,/reference-customer-manage/);
 });
@@ -47,7 +47,7 @@ test('AI runtime uses configured AI after scraping and before activation',()=>{
 });
 
 test('manager analyzes before activation and shows segment review controls',()=>{
-  assert.match(ui,/Analyze customer list/i);
+  assert.match(ui,/Analyze reference list/i);
   assert.match(ui,/Suggested customer profile/i);
   assert.match(ui,/Activate selected segments/i);
   assert.match(ui,/Review before activation/i);

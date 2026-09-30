@@ -10,7 +10,7 @@ const REFERENCE_CUSTOMERS_CSS_VERSION='20260923-reference-interface-v1&target-se
   let editing=false;
   function addCss(href){if(document.querySelector(`link[href^="${href.split('?')[0]}"]`))return;const link=document.createElement('link');link.rel='stylesheet';link.href=href;document.head.appendChild(link);}
   addCss(`intelligence-profile.css?v=${INTELLIGENCE_PROFILE_ASSET_VERSION}`);
-  addCss(`reference-customers.css?v=${REFERENCE_CUSTOMERS_CSS_VERSION}`);
+  addCss(`reference-customers.css?v=${REFERENCE_CUSTOMERS_CSS_VERSION}&reference-discovery=1`);
   function readState(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');}catch{return {};}}
   function writeState(state){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
   function toast(message){const node=document.getElementById('toast');if(!node)return;node.textContent=message;node.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>node.classList.remove('show'),2600);}

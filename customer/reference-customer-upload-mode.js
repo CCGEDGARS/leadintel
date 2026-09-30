@@ -19,8 +19,8 @@ const REFERENCE_UPLOAD_STATE_KEY='leadintel_customer_v2_state';
     if(!modal)return;
     const upload=modal.querySelector('#reference-upload-button');
     if(upload){
-      setText(upload,'Import Customer List');
-      upload.title='Import a CSV or Excel customer list. Saved lists will not be changed until you save the imported list.';
+      setText(upload,'Import reference list');
+      upload.title='Import a CSV or Excel reference list. Saved lists will not be changed until you save the imported list.';
     }
   }
 

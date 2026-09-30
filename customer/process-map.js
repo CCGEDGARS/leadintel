@@ -27,15 +27,15 @@
  * import './company-research-security.js?v=20260918-translation-fidelity-v3';
  * import './company-research-ui.js?v=20260926-guidance-status-v3';
  * import './company-profile-handoff.js?v=20260826-intelligence-autofill-v1';
- * import './reference-customers.js?v=20260927-opportunity-map-durable-v1';
+ * import './reference-customers.js?v=20260927-opportunity-map-durable-v1&reference-discovery=1';
  * import './reference-customer-table-detection.js?v=20260911-reference-missing-info-v1';
  * import './reference-customer-smart-import.js?v=20260923-reference-interface-v1';
  * import './reference-customer-ai.js?v=20260911-invalid-json-recovery-v1';
- * import './reference-customer-ui.js?v=20260927-opportunity-map-durable-v1&opportunity-context=1';
+ * import './reference-customer-ui.js?v=20260927-opportunity-map-durable-v1&opportunity-context=1&reference-discovery=1';
  * import './reference-customer-clear-list.js?v=20260923-reference-interface-v1';
  * import './reference-customer-website-enrichment.js?v=20260923-reference-interface-v1';
- * import './reference-customer-ai-runtime.js?v=20260927-opportunity-map-durable-v1';
- * import './reference-customer-launcher.js?v=20260927-opportunity-map-durable-v1';
+ * import './reference-customer-ai-runtime.js?v=20260927-opportunity-map-durable-v1&reference-discovery=1';
+ * import './reference-customer-launcher.js?v=20260927-opportunity-map-durable-v1&reference-discovery=1';
  * import './lookalike-discovery.js?v=20260930-contact-suppression-v1&opportunity-context=1';
  * import './intelligence-sources-ui.js?v=20260915-preferred-sources-v1';
  * import './profile-action-runtime.js?v=20260924-friendly-workflow-labels-v1';
@@ -56,7 +56,7 @@ function ensureReferenceCustomerTool(){
   const step=document.getElementById("step-2");if(!step||step.querySelector("[data-reference-intelligence-card]"))return;
   const actions=step.querySelector(".step-actions");if(!actions)return;
   const card=document.createElement("section");card.className="panel brand-identity-panel reference-customer-core-card";card.dataset.referenceIntelligenceCard="true";card.style.marginTop="16px";
-  card.innerHTML='<div class="brand-identity-summary"><div class="brand-identity-intro"><span class="eyebrow">Customer and prospect intelligence</span><h3>Turn what you know into better B2B opportunities</h3><p class="reference-value-lead">Add customers who bought from you and companies you want to win. LeadIntel uses each list to focus research in your chosen market.</p><div class="reference-value-points"><div><strong>Top Customers</strong><span>Use past buyers to sharpen the picture of a good fit.</span></div><div><strong>Target Companies</strong><span>Research chosen prospects for fit and public demand signals, then prioritize evidence-backed opportunities.</span></div></div><p class="reference-value-note">Use either list or both. Adding a target alone does not qualify it as a lead.</p><span class="brand-identity-status">Evidence-backed priorities</span></div><button class="brand-identity-toggle lookalike-build-btn" type="button" data-reference-customers-manage><span>Add Customers</span><span aria-hidden="true">→</span></button></div>';
+  card.innerHTML='<div class="brand-identity-summary"><div class="brand-identity-intro"><span class="eyebrow">Customer and prospect intelligence</span><h3>Turn what you know into better B2B opportunities</h3><p class="reference-value-lead">Add customers or ideal examples from any country, then find prospects in your target region. LeadIntel uses each list to focus research in your chosen market.</p><div class="reference-value-points"><div><strong>Reference Companies</strong><span>Use 3–5 customers or ideal examples to describe a good fit.</span></div><div><strong>Target Companies</strong><span>Find a ranked shortlist in your selected region, or add known prospects manually.</span></div></div><p class="reference-value-note">Use either list or both. Adding a target alone does not qualify it as a lead.</p><span class="brand-identity-status">Evidence-backed priorities</span></div><button class="brand-identity-toggle lookalike-build-btn" type="button" data-reference-customers-manage><span>Manage companies</span><span aria-hidden="true">→</span></button></div>';
   actions.parentNode.insertBefore(card,actions);
 }
 function patchMarketLookalikeIsolation(){

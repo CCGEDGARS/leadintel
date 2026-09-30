@@ -8,7 +8,7 @@ test('target tab hides the customer workflow and preserves separate customer dat
   const ui=read('reference-customer-ui.js'),css=read('reference-customers.css');
   assert.match(ui,/querySelector\('\.reference-customer-dialog'\)\.classList\.toggle\('show-targets',targets\)/);
   assert.match(css,/\.reference-customer-dialog\.show-targets>\*:not\(header\):not\(\.reference-segment-tabs\):not\(\.target-companies-panel\)\{display:none!important\}/);
-  assert.match(ui,/Copying keeps the original customer list/);
+  assert.match(ui,/Reference Companies guide discovery/);
   assert.doesNotMatch(ui,/modal\.classList\.toggle\('show-targets',targets\)/);
 });
 

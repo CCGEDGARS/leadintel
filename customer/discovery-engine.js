@@ -222,6 +222,7 @@
     const domain=clean(item.domain)||canonicalDomain(item.url);
     const own=canonicalDomain(profile.website||profile.companyWebsite||"");
     if(own&&(domain===own||domain.endsWith("."+own)))return true;
+    if((profile.referenceDomains||[]).some(ref=>domain===ref||domain.endsWith('.'+ref)))return true;
     const tendersAllowed=allowTenderDiscovery(marketState);
     if(!tendersAllowed&&isTenderSource(item))return true;
     if(/tender|procurement|iepirk/i.test(clean(profile.exclusions))&&isTenderSource(item))return true;
@@ -473,6 +474,7 @@
       "factory operator equipment upgrade project",
       "engineering employer hiring production expansion"
     ];
+    if(profile.discoveryFitFirst)queryVariants.unshift("companies manufacturers products official website", "industry association company members suppliers products");
     for(const [variantIndex,variant] of queryVariants.entries()){
       for(const market of uniqueMarkets){
         if(results.length>=limit)break;
@@ -660,6 +662,15 @@
     // Lexical overlap alone cannot establish the full commercial fit of a prospective buyer.
     return Math.min(24,specificMatches.length*5+(industrialContext&&industrialEvidence?5:0)+(metalworkingContext&&metalworkingEvidence?5:0));
   }
+  function companyFitSummary(candidate,profile={},marketState={}){
+    const evidence=trustedEvidence(candidate);
+    if(!evidence.length)return {fitScore:null,fitDescription:"No usable company evidence; fit is unconfirmed."};
+    const sources=new Set(evidence.map(item=>clean(item.sourceDomain)||canonicalDomain(item.url)).filter(Boolean)).size;
+    const score=Math.min(sources<2?70:100,Math.round(fitScore(candidate,profile,marketState)/24*100));
+    const terms=[...new Set(keywords([profile.idealCustomer,profile.priorityOffers,...(marketState.icps||[]).filter(x=>x.active!==false).map(x=>`${x.description} ${x.offers}`)].join(' ')).filter(term=>term.length>=5&&!FIT_GENERIC_TERMS.has(term)))].filter(term=>evidence.some(e=>evidenceContainsTerm(evidenceText(e),term))).slice(0,4);
+    return {fitScore:score,fitDescription:terms.length?`Company evidence matches ${terms.join(', ')}${sources<2?'; limited to one source':''}.`:"Public company evidence found; offer fit remains weak or unconfirmed."};
+  }
+
   function signalScore(matched){
     if(!matched.length)return 0;
     return Math.min(25,Math.round(matched.reduce((sum,item)=>sum+item.weight,0)*1.8));
@@ -715,15 +726,15 @@
       const credibleSources=new Set(trustedEvidence(candidate).map(item=>clean(item.sourceDomain)||canonicalDomain(item.url)).filter(Boolean)).size;
       const confidence=score.total>=75&&fit>=15&&score.evidence>=12&&credibleSources>=2?"High":score.total>=50&&credibleSources>=2?"Medium":"Low";
       const fitTerms=[...new Set(keywords([profile.idealCustomer,profile.priorityOffers,...(marketState.icps||[]).filter(x=>x.active!==false).map(x=>`${x.description} ${x.offers}`)].join(' ')).filter(term=>term.length>=5&&!FIT_GENERIC_TERMS.has(term)))].filter(term=>trustedEvidence(candidate).some(e=>evidenceContainsTerm(evidenceText(e),term))).slice(0,4);
-      return {...candidate,id:`company-${slug(candidate.domain)}`,score,confidence,fitReasons:fitTerms,qualified:true,marketVerified:true,buyerVerified:true,people:[],peopleStatus:"idle",saved:false};
+      return {...candidate,...companyFitSummary(candidate,profile,marketState),id:`company-${slug(candidate.domain)}`,score,confidence,fitReasons:fitTerms,qualified:true,marketVerified:true,buyerVerified:true,people:[],peopleStatus:"idle",saved:false};
     }).filter(Boolean).sort((a,b)=>{
       const signalDelta=(b.matchedSignals?.length||0)-(a.matchedSignals?.length||0);
-      return signalDelta||b.score.total-a.score.total;
+      return (b.fitScore||0)-(a.fitScore||0)||signalDelta||b.score.total-a.score.total;
     }).slice(0,candidateLimit);
   }
 
   function buildPotentialCompanyCandidates(results=[],profile={},marketState={},qualifiedCandidates=[],maxCandidates=12){
-    const limit=Math.max(1,Math.min(20,Number(maxCandidates)||12));
+    const limit=Math.max(1,Math.min(50,Number(maxCandidates)||12));
     const qualifiedDomains=new Set((qualifiedCandidates||[]).map(candidate=>canonicalDomain(candidate?.domain||candidate?.website)).filter(Boolean));
     const grouped=new Map();
     for(const item of results||[]){
@@ -751,8 +762,8 @@
       if(!matchedSignals.length)qualificationGaps.push("No active buying signal was confirmed");
       if(!fitVerified)qualificationGaps.push("Target customer fit is not evidenced");
       const researchPriority=fit+evidenceScore(candidate)+timingScore(candidate)+(marketVerified?10:0);
-      return {id:`potential-${slug(candidate.domain)}`,company:candidate.company,domain:candidate.domain,website:candidate.website,market:candidate.market,qualified:false,marketVerified,fitVerified,buyerVerified:false,matchedSignals,evidence:candidate.evidence,qualificationGaps,researchPriority};
-    }).filter(Boolean).sort((a,b)=>Number(b.marketVerified&&b.fitVerified)-Number(a.marketVerified&&a.fitVerified)||b.researchPriority-a.researchPriority||a.company.localeCompare(b.company)).slice(0,limit);
+      return {...companyFitSummary(candidate,profile,marketState),id:`potential-${slug(candidate.domain)}`,company:candidate.company,domain:candidate.domain,website:candidate.website,market:candidate.market,qualified:false,marketVerified,fitVerified,buyerVerified:false,matchedSignals,evidence:candidate.evidence,qualificationGaps,researchPriority};
+    }).filter(Boolean).sort((a,b)=>Number(b.marketVerified&&b.fitVerified)-Number(a.marketVerified&&a.fitVerified)||(b.fitScore||0)-(a.fitScore||0)||b.researchPriority-a.researchPriority||a.company.localeCompare(b.company)).slice(0,limit);
   }
 
   function buildApolloPeopleSearchPayload(candidate={},profile={}){
@@ -853,7 +864,7 @@
     const publicContacts=dedupePublicContacts((Array.isArray(candidate.publicContacts)?candidate.publicContacts:[]).slice(0,8).map(row=>({kind:row?.kind==="email"?"email":"phone",value:clean(row?.value).slice(0,180),url:normalizeUrl(row?.url),status:"public_unverified"})).filter(row=>row.value&&row.url&&canonicalDomain(row.url)===domain&&(row.kind!=="email"||row.value.toLowerCase().endsWith(`@${domain}`))));
     const rawResearch=candidate.publicResearch||{};
     const publicResearch={firecrawl:rawResearch.firecrawl==='complete'?'complete':'unavailable',openai:rawResearch.openai==='complete'?'complete':'unavailable',gemini:rawResearch.gemini==='complete'?'complete':'unavailable',geminiSearch:rawResearch.geminiSearch==='complete'?'complete':'unavailable',openaiResults:clamp(Number(rawResearch.openaiResults)||0,0,40,0),geminiResults:clamp(Number(rawResearch.geminiResults)||0,0,40,0),sources:(Array.isArray(rawResearch.sources)?rawResearch.sources:[]).map(normalizeUrl).filter(url=>canonicalDomain(url)===domain).slice(0,8),officialPages:clamp(Number(rawResearch.officialPages)||0,0,30,0),profileResults:clamp(Number(rawResearch.profileResults)||0,0,30,0),patternSearches:clamp(Number(rawResearch.patternSearches)||0,0,20,0),checkedAt:clean(rawResearch.checkedAt).slice(0,40),issues:(Array.isArray(rawResearch.issues)?rawResearch.issues:[]).map(clean).slice(0,4),conflicts:(Array.isArray(rawResearch.conflicts)?rawResearch.conflicts:[]).slice(0,4).map(item=>({person_id:clean(item.person_id).slice(0,100),reason:clean(item.reason).slice(0,300)}))};
-    return {id:clean(candidate.id)||`potential-${slug(domain||candidate.company)}`,company:clean(candidate.company)||displayFromDomain(domain),website:normalizeUrl(candidate.website)||(domain?`https://${domain}/`:""),domain,market:clean(candidate.market),qualified:false,marketVerified:candidate.marketVerified===true,fitVerified:candidate.fitVerified===true,buyerVerified:false,matchedSignals:(Array.isArray(candidate.matchedSignals)?candidate.matchedSignals:[]).slice(0,12),evidence,qualificationGaps:gaps,researchPriority:clamp(researchPriority,0,75,0),people,peopleStatus:["idle","loading","complete","empty","error"].includes(candidate.peopleStatus)?candidate.peopleStatus:"idle",buyerSearchMode:["user_selected_without_signal","user_selected_target"].includes(candidate.buyerSearchMode)?candidate.buyerSearchMode:"",buyerRoles:splitList(candidate.buyerRoles).slice(0,10).join("; "),buyerRolesChanged:candidate.buyerRolesChanged===true,publicContacts,publicResearch,publicContactStatus:["idle","loading","complete","empty","error"].includes(candidate.publicContactStatus)?candidate.publicContactStatus:"idle",publicContactVersion:clean(candidate.publicContactVersion).slice(0,40)};
+    return {fitScore:candidate.fitScore==null?null:clamp(Number(candidate.fitScore)||0,0,100,0),fitDescription:clean(candidate.fitDescription).slice(0,300),id:clean(candidate.id)||`potential-${slug(domain||candidate.company)}`,company:clean(candidate.company)||displayFromDomain(domain),website:normalizeUrl(candidate.website)||(domain?`https://${domain}/`:""),domain,market:clean(candidate.market),qualified:false,marketVerified:candidate.marketVerified===true,fitVerified:candidate.fitVerified===true,buyerVerified:false,matchedSignals:(Array.isArray(candidate.matchedSignals)?candidate.matchedSignals:[]).slice(0,12),evidence,qualificationGaps:gaps,researchPriority:clamp(researchPriority,0,75,0),people,peopleStatus:["idle","loading","complete","empty","error"].includes(candidate.peopleStatus)?candidate.peopleStatus:"idle",buyerSearchMode:["user_selected_without_signal","user_selected_target"].includes(candidate.buyerSearchMode)?candidate.buyerSearchMode:"",buyerRoles:splitList(candidate.buyerRoles).slice(0,10).join("; "),buyerRolesChanged:candidate.buyerRolesChanged===true,publicContacts,publicResearch,publicContactStatus:["idle","loading","complete","empty","error"].includes(candidate.publicContactStatus)?candidate.publicContactStatus:"idle",publicContactVersion:clean(candidate.publicContactVersion).slice(0,40)};
   }
 
   function isPotentialBuyerSearchAllowed(candidate={}){
@@ -991,7 +1002,7 @@
         method:["AI","Text fallback","Target list"].includes(extraction.method)?extraction.method:"",
         message:clean(extraction.message).slice(0,300)
       },
-      potentialMatches:(needsRefresh?[]:(Array.isArray(input.potentialMatches)?input.potentialMatches:[])).slice(0,12).map(safePotentialCandidate).filter(item=>item.domain&&item.evidence.length&&item.qualificationGaps.length),
+      potentialMatches:(needsRefresh?[]:(Array.isArray(input.potentialMatches)?input.potentialMatches:[])).slice(0,50).map(safePotentialCandidate).filter(item=>item.domain&&item.evidence.length&&item.qualificationGaps.length),
       selectedProspects:(Array.isArray(input.selectedProspects)?input.selectedProspects:[]).slice(0,50).map(safePotentialCandidate).filter(item=>item.domain&&(item.buyerSearchMode==="user_selected_target"||item.evidence.length&&isPotentialBuyerSearchAllowed(item))),
       funnel:normalizeDiscoveryFunnel(clearOldResults?{}:input.funnel),
       pipeline:(Array.isArray(input.pipeline)?input.pipeline:[]).slice(0,50).map(normalizePipelineItem).filter(item=>item.domain),
@@ -1022,5 +1033,5 @@
     return {...state,status:state.candidates.length||state.rawResults.length?"partial":"error"};
   }
 
-  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,DISCOVERY_QUALITY_VERSION,discoveryLimits,buyerRolesForTarget,buildDiscoveryQueries,buildDiscoveryFollowUpQueries,extractCompanyMentions,extractPublicContacts,matchPublicBuyerDetails,matchPublicLinkedInProfiles,parseCompanyExtraction,describeCompanyExtractionOutcome,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildPotentialCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,retainLastSuccessfulDiscoveryCandidates,recoverInterruptedDiscoveryState,discoveryOutcomeStatus,zeroResultGuidance,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,isLowQualityDiscoveryEvidence,hasActiveSignals,isActionableCandidate,isPotentialBuyerSearchAllowed};
+  return {companyFitSummary,CRM_STAGES,DEFAULT_DISCOVERY_STATE,DISCOVERY_QUALITY_VERSION,discoveryLimits,buyerRolesForTarget,buildDiscoveryQueries,buildDiscoveryFollowUpQueries,extractCompanyMentions,extractPublicContacts,matchPublicBuyerDetails,matchPublicLinkedInProfiles,parseCompanyExtraction,describeCompanyExtractionOutcome,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildPotentialCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,retainLastSuccessfulDiscoveryCandidates,recoverInterruptedDiscoveryState,discoveryOutcomeStatus,zeroResultGuidance,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,isLowQualityDiscoveryEvidence,hasActiveSignals,isActionableCandidate,isPotentialBuyerSearchAllowed};
 });

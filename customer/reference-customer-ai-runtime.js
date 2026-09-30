@@ -1,8 +1,8 @@
 import './reference-customer-library.js?v=20260924-reference-consensus-v1';
 import './reference-customer-portfolio.js?v=20260923-reference-interface-v1';
-import './reference-customer-library-ui.js?v=20260927-save-only-v1&target-research=1&saving-mode=1';
-import './reference-customer-delete-ui.js?v=20260923-reference-interface-v1';
-import './reference-customer-upload-mode.js?v=20260911-reference-single-owner-v1';
+import './reference-customer-library-ui.js?v=20260927-save-only-v1&target-research=1&saving-mode=1&reference-discovery=1';
+import './reference-customer-delete-ui.js?v=20260923-reference-interface-v1&reference-discovery=1';
+import './reference-customer-upload-mode.js?v=20260911-reference-single-owner-v1&reference-discovery=1';
 
 const REFERENCE_AI_STATE_KEY='leadintel_customer_v2_state';
 const REFERENCE_AI_FIRECRAWL='https://apollo-proxy.edgars-7e7.workers.dev';
@@ -55,7 +55,7 @@ const REFERENCE_AI_CONCURRENCY=4;
     // produce a successful analysis with no durable customer list behind it.
     const currentList=state.referenceCustomerPortfolio?.lists?.find(list=>list.id===state.referenceCustomerPortfolio.selectedListId);
     if(!currentList){
-      const name=clean(document.getElementById('reference-list-name')?.value)||`Top Customers · ${ready[0].companyName||ready[0].domain}`;
+      const name=clean(document.getElementById('reference-list-name')?.value)||`Reference Companies · ${ready[0].companyName||ready[0].domain}`;
       state=Portfolio.saveCurrentList(state,{name,markets:state.targetMarkets||[]});
     }else if(Portfolio.hasUnsavedCurrentListDraft(state)){
       state=Portfolio.saveCurrentList(state,{name:currentList.name,markets:currentList.markets,purpose:currentList.purpose});

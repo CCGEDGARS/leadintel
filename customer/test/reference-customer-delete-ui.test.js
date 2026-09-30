@@ -22,15 +22,15 @@ test('working-list clear action is distinguished from saved-list deletion',()=>{
 
 test('reference customer actions use unambiguous list labels',()=>{
   assert.match(runtime,/Create New List/);
-  assert.match(runtime,/Import Customer List/);
+  assert.match(runtime,/Import reference list/);
 });
 
 test('reference customer action relabeling is idempotent so MutationObserver cannot self-trigger forever',()=>{
   assert.match(runtime,/function setText\(node,text\)\{if\(node&&node\.textContent!==text\)node\.textContent=text;\}/);
   assert.match(runtime,/setText\(create,'Create New List'\)/);
-  assert.match(runtime,/setText\(upload,'Import Customer List'\)/);
+  assert.match(runtime,/setText\(upload,'Import reference list'\)/);
   assert.doesNotMatch(runtime,/if\(create\)create\.textContent='Create New List'/);
-  assert.doesNotMatch(runtime,/if\(upload\)upload\.textContent='Import Customer List'/);
+  assert.doesNotMatch(runtime,/if\(upload\)upload\.textContent='Import reference list'/);
 });
 
 test('reference customer runtime loads deletion controls',()=>{

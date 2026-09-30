@@ -57,7 +57,7 @@
       const influence=lookalikeMatch.active?(confidence==='high'?.25:confidence==='medium'?.2:.12):0;
       const priorityScore=Math.round(base*(1-influence)+lookalikeMatch.total*influence);
       return {...candidate,lookalikeMatch,lookalikeModelMatches:lookalikeMatch.modelMatches||[],priorityScore};
-    }).sort((a,b)=>b.priorityScore-a.priorityScore||b.lookalikeMatch.total-a.lookalikeMatch.total);
+    }).sort((a,b)=>(b.fitScore??0)-(a.fitScore??0)||b.priorityScore-a.priorityScore||b.lookalikeMatch.total-a.lookalikeMatch.total);
   }
   function isLv(language){return String(language||'en').toLowerCase()==='lv';}
   function referenceCount(model={}){return Math.max(0,Number(model?.dna?.activeCount)||Number(model?.activeCount)||Number(model?.activeRows?.length)||0);}
