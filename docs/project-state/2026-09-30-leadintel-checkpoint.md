@@ -37,3 +37,13 @@ The test browser was signed out. Do not pretend the user's authenticated workflo
 First verify the active runtime and actual activation/save/reload, then run a fresh Swedish company search using existing Ercon profile and references. Inspect every returned match for identity, Swedish presence and sourced similarity; expose gaps and avoid padding. Continue the same verified shortlist into Buyers, check names/roles/LinkedIn and save/reopen in CRM. Preserve records on research failure or refresh. Use the approved Master CRM design: dedicated workspace-scoped D1 records, not localStorage-only or embedded CRM in the workspace budget.
 
 Realistic target: one usable, verified Profile → Companies → Buyers → CRM journey, with up to the requested five qualified companies and 3–4 evidenced buyers per company where public evidence supports them. Fewer results are acceptable only with clear coverage gaps. This is an acceptance target, not a promised overnight outcome or a full SaaS launch claim. No background work is implied while the session is paused.
+
+## User-expanded minimum acceptance target — 23:02 Riga
+
+The core journey above is only the minimum. Tomorrow's acceptance scope also includes trigger tracking and its connection to scripts: Profile → Companies → Buyers → Triggers → Scripts → CRM.
+
+Each tracked trigger must belong to the correct company and retain its source URL, publication/event date when available, detection time, verification status, and commercial relevance. Separate a historical event from a newly detected change; do not present old news as a fresh buying signal. Show tracked triggers and a supported refresh/recheck path. Recurring automatic monitoring may only be called implemented after the scheduler, persistence, deduplication, and actual execution are verified; a manual refresh alone is not automatic monitoring.
+
+Selecting a buyer and a verified trigger must generate a relevant script using the seller's offer, reference/company fit, buyer role, and that specific sourced trigger. Preserve the trigger-to-script association and provenance through CRM save/reopen. Clearly mark commercial need as a hypothesis unless directly evidenced. Do not fabricate pain, urgency or buying intent from a trigger. Script generation must not automatically send outreach.
+
+Acceptance: demonstrate a sourced company trigger, its tracking state, and a tailored buyer script linked to that trigger; save and reopen the linked records in CRM. Audit the existing trigger and script implementation before extending it. This expanded scope is a target to complete and verify, not a guarantee that all unresolved dependencies will be finished in one day.
