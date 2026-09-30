@@ -42,7 +42,7 @@ test('signed-in Firecrawl routing retries enhanced fallbacks only for retryable 
   assert.match(router,/function\s+retryableStatus\s*\(/);
   assert.match(router,/status===429\|\|status>=500/);
   assert.match(router,/catch\s*\([^)]*\)[\s\S]*originalFetch\(input,options\)/);
-  assert.match(router,/if\(!retryableStatus\(response\.status\)\)return response;[\s\S]*scraplingTarget\(kind\)[\s\S]*originalFetch\(input,options\)/);
+  assert.match(router,/if\(!retryableStatus\(response\.status\)&&!await weakScrapeResponse\(response,kind\)\)return response;[\s\S]*scraplingTarget\(kind\)[\s\S]*originalFetch\(input,options\)/);
   assert.match(router,/if\(fallback\.ok\)return fallback/);
   assert.doesNotMatch(router,/status===400\|\|status===401\|\|status===403[\s\S]{0,200}originalFetch\(input,options\)/);
 });

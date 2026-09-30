@@ -5,7 +5,7 @@ const path=require('node:path');
 const vm=require('node:vm');
 const engine=require('../company-research-engine.js');
 const source=fs.readFileSync(path.join(__dirname,'..','company-research-ui.js'),'utf8')
-  .replace(/^import .*?;\s*/m,'')
+  .replace(/^import .*?;\s*/gm,'')
   +'\nglobalThis.__researchUi={renderResearchReview,runAiSynthesis:typeof runAiSynthesis==="function"?runAiSynthesis:null};';
 
 function createRuntime({fetchImpl}={}){

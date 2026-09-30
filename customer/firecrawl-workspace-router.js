@@ -26,9 +26,13 @@ function sanitizeSearchRequestOptions(options={}){
   if(!body||typeof body!=='object'||Array.isArray(body)||!Object.prototype.hasOwnProperty.call(body,'query'))return options;
   const query=compactSearchQuery(body.query);
   const mode=options.headers instanceof Headers?options.headers.get('X-LeadIntel-Research-Mode'):options.headers?.['X-LeadIntel-Research-Mode'];
-  const limit=mode==='full'?body.limit:Math.min(4,Math.max(1,Number(body.limit)||4));
+  const limit=Math.min(mode==='saving'?4:10,Math.max(1,Math.floor(Number(body.limit)||4)));
   if(query===String(body.query??'').trim()&&limit===body.limit)return options;
   return {...options,body:JSON.stringify({...body,query,limit})};
+}
+async function weakScrapeResponse(response,kind){
+  if(kind!=='scrape'||!response.ok)return false;
+  try{const payload=await response.clone().json();const data=payload.data||payload;const text=String(data.markdown||data.content||'').replace(/\s+/g,' ').trim();return text.length<120||(/captcha|verify you are human|cloudflare ray id|access denied/i.test(text)&&text.length<1000);}catch{return true;}
 }
 function retryableStatus(status){return status===404||status===408||status===429||status>=500;}
 function scraplingTarget(kind){
@@ -50,7 +54,7 @@ async function routedFetch(input,options={}){
   const mode=options.headers instanceof Headers?options.headers.get('X-LeadIntel-Research-Mode'):options.headers?.['X-LeadIntel-Research-Mode'];
   try{
     const response=await originalFetch(target,{...options,credentials:'include',headers:{Accept:'application/json',...(options.headers||{})}});
-    if(!retryableStatus(response.status))return response;
+    if(!retryableStatus(response.status)&&!await weakScrapeResponse(response,kind))return response;
     if(options?.signal?.aborted)return response;
     const scrapling=scraplingTarget(kind);const url=extractScrapeUrl(options);
     if(scrapling&&url){

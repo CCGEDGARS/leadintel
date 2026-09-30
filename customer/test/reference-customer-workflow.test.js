@@ -43,7 +43,7 @@ test('AI runtime uses configured AI after scraping and before activation',()=>{
   assert.match(runtime,/LeadIntelReferenceCustomerAI/);
   assert.match(runtime,/requestReferenceCustomerAnalysis/);
   assert.match(runtime,/AI analysis/i);
-  assert.match(runtime,/firecrawl-scrape/);
+  assert.match(runtime,/collectWebsiteEvidence/);
 });
 
 test('manager analyzes before activation and shows segment review controls',()=>{

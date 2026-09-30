@@ -35,6 +35,7 @@ function productionFetch({ customerHtml, discoveryUi }) {
     if (parsed.pathname === '/customer/website-input-sync.js') {
       return response({ text: 'toVisibleWebsite syncVisibleWebsite displayChanged' });
     }
+    if (parsed.pathname === '/customer/first-party-research.js') { return response({text:fs.readFileSync(path.join(root,'customer/first-party-research.js'),'utf8')}); }
     if (parsed.pathname === '/customer/discovery-ui.js') {
       return response({ text: discoveryUi });
     }

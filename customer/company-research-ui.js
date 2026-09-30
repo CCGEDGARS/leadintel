@@ -1,3 +1,4 @@
+import './first-party-research.js?v=20260930-research-pipeline-v1';
 import './company-research-engine.js?v=20260918-translation-fidelity-v3';
 
 const MAIN_STORAGE_KEY='leadintel_customer_v2_state';
@@ -150,10 +151,10 @@ function requestError(error,label){return error?.name==='AbortError'?new Error(l
 async function scrapeSource(url,type,pageCategory='',parentSignal=null){
   const request=requestSignal(parentSignal);
   try{
-    const response=await fetch(`${FIRECRAWL_PROXY}/firecrawl-scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,formats:['markdown'],onlyMainContent:true,timeout:30000}),signal:request.signal});
+    const response=await fetch(`${FIRECRAWL_PROXY}/firecrawl-scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,formats:['markdown','links'],onlyMainContent:true,timeout:30000}),signal:request.signal});
     const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`Source returned ${response.status}`);
     const data=payload.data||payload;const text=String(data.markdown||data.content||'').slice(0,30000);if(!text.trim())throw new Error('No readable page content returned');
-    return {type,url,title:data.metadata?.title||data.title||new URL(url).hostname,text,status:'ready',pageCategory};
+    return {type,url,title:data.metadata?.title||data.title||new URL(url).hostname,text,links:data.links||[],status:'ready',pageCategory};
   }catch(error){throw requestError(error,'Company source request');}
   finally{request.dispose();}
 }
@@ -250,7 +251,7 @@ async function runCompanyResearch({rerun=false}={}){
     const companyName=researchEngine.deriveCompanyName(official,website);
     setProgress('Discovering authoritative company pages…','Finding company, offer, project, delivery and contact pages on the verified domain.');
     taskCentre?.update(taskId,{stage:'Discovering authoritative pages',completed:1,resultCount:official.length});
-    const authoritativeRows=[];const authoritativeQueries=researchEngine.buildAuthoritativePageQueries({website,companyName});
+    const authoritativeRows=official.flatMap(page=>window.LeadIntelFirstPartyResearch.selectInternalLinks(page,website,'company',5).map(url=>({url,title:url})));const authoritativeQueries=researchEngine.buildAuthoritativePageQueries({website,companyName});
     const authoritativeSearchSettled=await Promise.allSettled(authoritativeQueries.map(query=>searchPublic(query,runController.signal)));
     authoritativeSearchSettled.forEach(result=>{if(result.status==='fulfilled')authoritativeRows.push(...result.value);else failures++;});
     const existingUrls=new Set(official.map(source=>researchEngine.safeUrl(source.url)));const authoritativeCandidates=researchEngine.selectAuthoritativePageCandidates(authoritativeRows,website,8).filter(source=>!existingUrls.has(researchEngine.safeUrl(source.url)));

@@ -15,7 +15,7 @@ const MAX_DISCOVERY_COMPANY_CHECKS=30;
 const SAVING_SEARCH_RESULT_LIMIT=4;
 const SAVING_COMPANY_CHECK_LIMIT=3;
 const SAVING_FIRECRAWL_CALL_LIMIT=10;
-const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1";
+const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20260925-buyers-stage-view-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -184,21 +184,15 @@ async function openAiCompanySearch(queryMeta,runSignal){
   finally{clearTimeout(timeout);}
 }
 async function scrapeCompanyWebsiteForVerification(queryMeta,runSignal){
-  if(!activeDiscoverySavingMode||queryMeta.kind!=="verification"||!queryMeta.domain)return [];
-  const controller=linkedAbortController(runSignal);
-  const timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS);
+  if(queryMeta.kind!=="verification"||!queryMeta.domain)return [];
   try{
-    const url=`https://${queryMeta.domain}/`;
-    const response=await fetch(`${INTELLIGENCE_PROXY}/firecrawl-scrape`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url,formats:["markdown"],onlyMainContent:true,timeout:DISCOVERY_REQUEST_TIMEOUT_MS}),signal:controller.signal});
-    if(!response.ok)return [];
-    const payload=await response.json().catch(()=>({})),page=payload.data||payload;
-    const content=String(page.markdown||page.content||"").trim();
-    if(!content)return [];
-    return LeadIntelDiscovery.normalizeCompanySearchResults({results:[{url:page.metadata?.sourceURL||url,title:page.metadata?.title||queryMeta.company||queryMeta.domain,description:page.metadata?.description||"",markdown:content}]},queryMeta);
+    const research=await window.LeadIntelFirstPartyResearch.collectWebsiteEvidence({website:`https://${queryMeta.domain}/`,purpose:'verification',maxPages:activeDiscoverySavingMode?1:3,signal:runSignal});
+    return LeadIntelDiscovery.normalizeCompanySearchResults({results:research.pages.map(page=>({url:page.url,title:page.title,markdown:page.text}))},queryMeta);
   }catch(error){if(runSignal?.aborted)throw error;return [];}
-  finally{clearTimeout(timeout);}
 }
 async function firecrawlCompanySearch(queryMeta,runSignal){
+  const websiteEvidence=await scrapeCompanyWebsiteForVerification(queryMeta,runSignal);
+  if(websiteEvidence.length)return websiteEvidence;
   let lastError=null;
   let fallbackAttempted=false;
   for(let attempt=0;attempt<=(activeDiscoverySavingMode?0:DISCOVERY_PROVIDER_RETRIES);attempt++){
@@ -250,7 +244,7 @@ async function runDiscoverySearchBatch(items,phase,runSignal,searches=Array(item
         for(const result of completed?.results||[]){if(result.url)discoveryEvidenceUrls.add(result.url);}
         discovery.funnel.evidencePages=discoveryEvidenceUrls.size;
         if(!retryOnly&&(phase==="searching"||phase==="following")){discovery.funnel.marketSearchesCompleted+=1;}
-        else if(phase==="verifying"&&!completed?.error){if(items[index].domain)discoveryCheckedCompanyDomains.add(items[index].domain);discovery.checkedCompanyDomains=[...discoveryCheckedCompanyDomains];discovery.funnel.companySitesChecked=discoveryCheckedCompanyDomains.size;}
+        else if(phase==="verifying"&&!completed?.error&&(completed?.results||[]).some(row=>canonicalDomain(row.url)===canonicalDomain(items[index].domain)&&window.LeadIntelFirstPartyResearch.usableText(row.markdown||row.content||row.text))){if(items[index].domain)discoveryCheckedCompanyDomains.add(items[index].domain);discovery.checkedCompanyDomains=[...discoveryCheckedCompanyDomains];discovery.funnel.companySitesChecked=discoveryCheckedCompanyDomains.size;}
         discoveryProgress.completed+=1;window.LeadIntelTaskCentre?.update(activeDiscoveryTaskId,{completed:discoveryProgress.completed,total:Math.max(discoveryProgress.total,1),resultCount:discovery.latestRunCandidateCount});renderDiscoverySafely();
       }}
     }
@@ -385,6 +379,16 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
         return LeadIntelDiscovery.attachSourceEvidenceToResolvedCompanies(resolved,unresolvedMentions,allMarketEvidence);
       };
 
+      if(!targetOnly&&!savingMode&&bridge()?.session?.authenticated){
+        taskCentre?.update(taskId,{stage:'Planning local-language searches'});
+        const planningController=linkedAbortController(runController.signal),planningTimer=setTimeout(()=>planningController.abort(),20000);
+        try{
+          const planned=await window.LeadIntelFirstPartyResearch.planLocalQueries({profile:profileForQueries,model:referenceModel,markets:main.targetMarkets||[],workspaceId:bridge().workspace.id,limit:limits.queryCount,signal:planningController.signal});
+          const queriesBefore=queries.length;
+          if(planned.length){const retained=queries.filter(query=>query.kind==='target-evidence');queries.splice(0,queries.length,...planned,...retained);searches=Array(queries.length).fill(null);expectedSearches+=queries.length-queriesBefore;discovery.queries=queries;discovery.funnel.marketSearchesTotal=queries.length;}
+        }catch(error){if(runController.signal.aborted)throw error;discovery.providerFallbacks.push({phase:'query-planning',reason:'Local-language planning unavailable; using reference query families'});}
+        finally{clearTimeout(planningTimer);}
+      }
       await runDiscoverySearchBatch(queries,"searching",runController.signal,searches);
       throwIfDiscoveryRunAborted(runController.signal);
       const firstPass=searches.flatMap(item=>item?.results||[]);allMarketEvidence.push(...firstPass);
@@ -848,8 +852,13 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
   const taskCentre=window.LeadIntelTaskCentre;const taskId=`decision-maker-search:${candidate.domain||candidate.id||"company"}:${Date.now()}`;
   taskCentre?.start({id:taskId,type:'decision-maker-search',title:`Buyer search · ${candidate.company}`,stage:'Searching Apollo people',total:1,completed:0,canCancel:true,canRetry:true});
   taskCentre?.registerActions(taskId,{cancel:()=>controller.abort(),retry:retry||(()=>false)});
-  const timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS);
+  const timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS*3);
   try{
+    taskCentre?.update(taskId,{stage:'Verifying company before buyer search'});
+    const verified=await window.LeadIntelFirstPartyResearch.collectWebsiteEvidence({website:candidate.website||`https://${candidate.domain}/`,purpose:'buyers',maxPages:3,signal:controller.signal});
+    candidate.evidence=LeadIntelDiscovery.normalizeCompanySearchResults({results:[...(candidate.evidence||[]),...verified.pages.map(page=>({url:page.url,title:page.title,markdown:page.text}))]}, {kind:'verification',domain:candidate.domain,company:candidate.company,market:candidate.market}).slice(0,12);
+    discovery.checkedCompanyDomains=[...new Set([...(discovery.checkedCompanyDomains||[]),candidate.domain])];
+    taskCentre?.update(taskId,{stage:'Searching relevant buyers'});
     const data=await bridge()?.searchApolloPeople?.(payload,{signal:controller.signal,timeoutMs:DISCOVERY_REQUEST_TIMEOUT_MS});
     if(!data?.ok)throw Object.assign(new Error(data?.error||"Apollo people search is unavailable"),{code:data?.code,status:data?.status});
     const priorPeople=new Map((candidate.people||[]).filter(person=>person.id).map(person=>[person.id,person]));

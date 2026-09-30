@@ -10,15 +10,15 @@
   function buildReferenceCustomerPrompt(rows=[],seller={}){
     const items=(rows||[]).map(row=>({
       id:clean(row.id),companyName:clean(row.companyName),website:clean(row.website),
-      referenceReason:clean(row.reason),knownService:clean(row.productService),websiteEvidence:String(row.text||'').replace(/\s+/g,' ').trim().slice(0,Math.min(6500,Math.floor(58000/Math.max(1,rows.length))))
-    })).filter(row=>row.id&&row.websiteEvidence);
+      referenceReason:clean(row.reason),knownService:clean(row.productService),websiteEvidence:row.sources?.length?'':String(row.text||'').replace(/\s+/g,' ').trim().slice(0,Math.min(12000,Math.floor(58000/Math.max(1,rows.length)))),websiteSources:(row.sources||[]).map(page=>({url:page.url,text:clean(page.text).slice(0,Math.floor(Math.min(12000,58000/Math.max(1,rows.length))/Math.max(1,row.sources.length)))}))
+    })).filter(row=>row.id&&(row.websiteEvidence||row.websiteSources.some(page=>page.text)));
     return `Analyze these existing reference customers using ONLY the supplied first-party website evidence.
 
 Compare companies at two levels: their specific product industry and broader commercial/production characteristics. Use the SAME concise label for equivalent evidenced characteristics across the list, even when companies make different products. One company is a valid similarity seed; repeated traits are not a prerequisite.
 
 For each company infer, only when supported: broadIndustry (e.g. industrial equipment manufacturing), productionModel (e.g. equipment manufacturer, component manufacturer, distributor), capabilities (concise product/material/process terms), and industry, sizeBand, businessModel, growthStage, operatingComplexity, customerOutcome, buyerRoles, buyingTriggers, and a one-sentence summary. Use confidence high/medium/low. Leave unsupported fields empty. Do not invent facts.
 
-For broadIndustry, productionModel and capabilities, include sourceEvidence entries with field, an EXACT verbatim supporting quote from supplied websiteEvidence, and the supplied website URL. Do not infer outsourcing, supplier demand, purchasing intent or employee counts from general business descriptions. Seller context helps relevance but is not evidence of customer purchasing behavior.
+For broadIndustry, productionModel and capabilities, include sourceEvidence entries with field, an EXACT verbatim supporting quote from supplied websiteEvidence or websiteSources, and the EXACT URL of the page containing that quote. Do not infer outsourcing, supplier demand, purchasing intent or employee counts from general business descriptions. Seller context helps relevance but is not evidence of customer purchasing behavior.
 
 SELLER CONTEXT:
 ${JSON.stringify(seller)}
@@ -71,7 +71,7 @@ ${JSON.stringify(items)}`;
     const analyses={};
     for(const company of Array.isArray(raw?.companies)?raw.companies:[]){const id=clean(company?.id);if(!id||!allowed.has(id))continue;analyses[id]=normalizeAnalysis(company);
       const source=evidenceRows.find(row=>clean(row.id)===id);
-      if(source){const text=clean(source.text).toLowerCase();const valid=analyses[id].sourceEvidence.filter(item=>item.quote.length>=12&&text.includes(clean(item.quote).toLowerCase())&&item.url===clean(source.website));analyses[id].sourceEvidence=valid;for(const field of ['broadIndustry','productionModel','capabilities'])if(!valid.some(item=>item.field===field))analyses[id][field]=field==='capabilities'?[]:'';}}
+      if(source){const text=clean(source.text).toLowerCase();const supplied=source.sources?.length?source.sources:[{url:source.website,text:source.text}];const valid=analyses[id].sourceEvidence.filter(item=>item.quote.length>=12&&supplied.some(page=>item.url===clean(page.url)&&clean(page.text).toLowerCase().includes(clean(item.quote).toLowerCase())));analyses[id].sourceEvidence=valid;for(const field of ['broadIndustry','productionModel','capabilities'])if(!valid.some(item=>item.field===field))analyses[id][field]=field==='capabilities'?[]:'';}}
     const sourceSegments=Array.isArray(raw?.segmentation?.segments)?raw.segmentation.segments:[];
     const segments=[];
     for(let index=0;index<sourceSegments.length;index++){

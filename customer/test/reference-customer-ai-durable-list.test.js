@@ -17,13 +17,13 @@ function setup(beforeResult=()=>{},saveNow=async()=>({saved:true})){
   const root={
     localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v)},
     document:{addEventListener(){},getElementById:id=>id==='reference-list-name'?{value:'Reference Customers'}:null},
-    LeadIntelReferenceCustomers:Ref,LeadIntelReferenceCustomerPortfolio:Portfolio,
+    LeadIntelReferenceCustomers:Ref,LeadIntelReferenceCustomerPortfolio:Portfolio,LeadIntelFirstPartyResearch:require('../first-party-research.js'),
     LeadIntelReferenceCustomerAI:{async requestReferenceCustomerAnalysis(){beforeResult(store);return {analyses:{[row.id]:{industry:'Paper manufacturing',confidence:'low'}},segmentationMeaningful:true,segments:[{id:'paper',name:'Paper manufacturers',canActivate:true}]};}},
     LeadIntelServerBridge:{session:{authenticated:true},workspace:{id:'workspace-1'},saveNow},
-    fetch:async()=>({ok:true,json:async()=>({data:{markdown:'Paper manufacturer'}})}),
+    fetch:async()=>({ok:true,json:async()=>({data:{markdown:'Billerud manufactures paper and packaging materials for industrial customers. Its production capabilities include paper, pulp and sustainable packaging materials.'}})}),
     CustomEvent:class{},dispatchEvent(){},setTimeout,console
   };
-  root.globalThis=root;
+  root.LeadIntelFirstPartyResearch={...root.LeadIntelFirstPartyResearch,collectWebsiteEvidence:options=>require('../first-party-research.js').collectWebsiteEvidence({...options,fetchImpl:root.fetch})};root.globalThis=root;
   vm.runInNewContext(source,root,{filename:'reference-customer-ai-runtime.js'});
   return {root,row,read:()=>JSON.parse(store.get(key))};
 }

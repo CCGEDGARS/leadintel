@@ -31,7 +31,7 @@ test('Firecrawl router compacts overlong market search queries before backend va
   assert.ok(body.query.length>0);
   assert.ok(body.query.length<=600);
   assert.equal(/\s{2,}/.test(body.query),false);
-  assert.equal(body.limit,4);
+  assert.equal(body.limit,8);
   assert.equal(sanitized.method,'POST');
 });
 
@@ -46,3 +46,5 @@ test('Full research can explicitly request more results',()=>{
   const options={method:'POST',headers:{'X-LeadIntel-Research-Mode':'full'},body:JSON.stringify({query:'Sweden factory projects',limit:8})};
   assert.equal(sanitizeSearchRequestOptions(options),options);
 });
+
+ test('Saving research retains the explicit four-result cap',()=>{const {sanitizeSearchRequestOptions}=productionQueryHelpers();const options={headers:{'X-LeadIntel-Research-Mode':'saving'},body:JSON.stringify({query:'Sweden industrial companies',limit:8})};assert.equal(JSON.parse(sanitizeSearchRequestOptions(options).body).limit,4);});

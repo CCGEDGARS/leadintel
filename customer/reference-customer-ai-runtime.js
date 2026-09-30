@@ -1,3 +1,4 @@
+import './first-party-research.js?v=20260930-research-pipeline-v1';
 import './reference-customer-library.js?v=20260924-reference-consensus-v1&reference-similarity=20260930-v1';
 import './reference-customer-portfolio.js?v=20260923-reference-interface-v1&reference-discovery=5&reference-similarity=20260930-v1';
 import './reference-customer-library-ui.js?v=20260927-save-only-v1&target-research=1&saving-mode=1&reference-discovery=5&reference-similarity=20260930-v1';
@@ -36,10 +37,9 @@ const REFERENCE_AI_CONCURRENCY=4;
     const local=document.getElementById('reference-action-status');if(local)local.textContent=text;
   }
   async function scrapeRow(row){
-    const response=await fetch(`${REFERENCE_AI_FIRECRAWL}/firecrawl-scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:row.website,formats:['markdown'],onlyMainContent:true,timeout:25000})});
-    const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(clean(payload?.error)||`Website returned ${response.status}`);
-    const data=payload.data||payload;const text=String(data.markdown||data.content||'').replace(/\s+/g,' ').trim().slice(0,6500);if(!text)throw new Error('No readable website content');
-    return {id:row.id,companyName:row.companyName,website:row.website,text,reason:row.reason,productService:row.productService};
+    const collected=await root.LeadIntelFirstPartyResearch.collectWebsiteEvidence({website:row.website,maxPages:5});
+    const sources=root.LeadIntelFirstPartyResearch.boundedSources(collected.pages);
+    return {id:row.id,companyName:row.companyName,website:row.website,text:sources.map(page=>page.text).join(' '),sources,coverage:collected.coverage,reason:row.reason,productService:row.productService};
   }
   async function mapLimit(rows,worker){
     const results=new Array(rows.length);let cursor=0;
@@ -72,6 +72,7 @@ const REFERENCE_AI_CONCURRENCY=4;
     status(`Running AI analysis on ${evidence.length} reference customers…`);
     const result=await AI.requestReferenceCustomerAnalysis({workspaceId:workspace,rows:evidence,seller:{website:state.website,offers:state.profile?.priorityOffers,idealCustomer:state.profile?.idealCustomer,targetMarkets:state.targetMarkets}});
     if(!Object.keys(result.analyses||{}).length)throw new Error('AI analysis returned no supported company classifications');
+    for(const row of evidence){if(result.analyses[row.id])result.analyses[row.id].evidenceCoverage=row.coverage;}
     const coherentProfile=result.segmentationMeaningful?result:Ref.buildReferenceSegments(state.referenceCustomers.rows,result.analyses);
     state=readState();
     const savedList=state.referenceCustomerPortfolio?.lists?.find(list=>list.id===listId);
@@ -90,7 +91,7 @@ const REFERENCE_AI_CONCURRENCY=4;
     await writeState(state);
     const synced=await root.LeadIntelServerBridge.saveNow?.({saveIntent:true});
     if(synced?.saved!==true)throw new Error('Analysis finished, but the result has not synced to your workspace. Check workspace sync before continuing.');
-    status(`AI analysis complete · ${Object.keys(result.analyses).length} companies classified${failures?` · ${failures} websites need review`:''}. Review the Customer segments before activation.`);
+    status(`AI analysis complete · ${Object.keys(result.analyses).length} companies classified · ${evidence.reduce((total,row)=>total+(row.coverage?.pagesRead||1),0)} website pages read${failures?` · ${failures} websites need review`:''}. Review the Customer segments before activation.`);
   }
   document.addEventListener('click',async event=>{
     const button=event.target?.closest?.('#reference-analyze');if(!button)return;

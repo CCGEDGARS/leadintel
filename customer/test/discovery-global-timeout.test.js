@@ -71,6 +71,12 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
     CustomEvent: class CustomEvent {}
   };
   context.window = context;
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../first-party-research.js'),'utf8'),context);
+  // Existing buyer fixtures represent a previously verified company; provide its readable official page.
+  const readWebsite=context.LeadIntelFirstPartyResearch.collectWebsiteEvidence;
+  context.LeadIntelFirstPartyResearch.collectWebsiteEvidence=options=>options.purpose==='buyers'
+    ?readWebsite({...options,fetchImpl:async()=>({ok:true,json:async()=>({data:{markdown:'Official company website. We operate an industrial manufacturing business in the selected market, with production facilities, engineering capabilities and a management team.',metadata:{sourceURL:options.website}}})})})
+    :readWebsite(options);
   vm.runInNewContext(source, context, { filename: 'discovery-ui.js' });
   context.__elements = elements;
   return context;
@@ -189,7 +195,7 @@ test('a successful first pass with no qualified companies gets one bounded follo
       if(query.startsWith('site:'))return {ok:true,json:async()=>({success:true,data:[{
         url:'https://northsteel.lv/news/new-factory',title:'North Steel opens a new factory',
         description:'North Steel plans a new factory in Latvia, expands production capacity and invests in industrial automation.',
-        markdown:'North Steel plans a new factory in Latvia, expands production capacity and invests in industrial automation.'
+        markdown:'North Steel plans a new factory in Latvia, expands production capacity and invests in industrial automation. The new production site supplies manufacturing customers.'
       }]})};
       if(query.startsWith('"'))return {ok:true,json:async()=>({success:true,data:[{
         url:'https://northsteel.lv/',title:'North Steel official website',description:'Latvian industrial manufacturing company investing in industrial automation.'
@@ -200,7 +206,7 @@ test('a successful first pass with no qualified companies gets one bounded follo
       return {ok:true,json:async()=>({success:true,data:[{
         url:'https://industrynews.lv/north-steel-factory',title:'North Steel plans a new factory',
         description:'North Steel plans a new factory in Latvia, expands production capacity and invests in industrial automation.',
-        markdown:'North Steel plans a new factory in Latvia, expands production capacity and invests in industrial automation.'
+        markdown:'North Steel plans a new factory in Latvia, expands production capacity and invests in industrial automation. The new production site supplies manufacturing customers.'
       }]})};
     }
   });
@@ -626,7 +632,7 @@ test('Saving Mode verifies a saved target domain without repeating resolution an
   const requests=[];
   const context=loadDiscoveryRunner({requestTimeout:1000,scaleProductionRunTimeout:1000,fetchImpl:async(url,options)=>{
     requests.push({url,body:JSON.parse(options.body)});
-    if(url.includes('/firecrawl-scrape'))return {ok:true,json:async()=>({data:{markdown:'Södra is a Swedish manufacturer expanding its new factory and investing in industrial automation.',metadata:{sourceURL:'https://sodra.com/',title:'Södra expansion in Sweden'}}})};
+    if(url.includes('/firecrawl-scrape'))return {ok:true,json:async()=>({data:{markdown:'Södra is a Swedish manufacturer expanding its new factory and investing in industrial automation. The company produces industrial materials for manufacturing customers.',metadata:{sourceURL:'https://sodra.com/',title:'Södra expansion in Sweden'}}})};
     if(url.includes('/firecrawl-search')&&requests.filter(item=>item.url.includes('/firecrawl-search')).length===1)return {ok:true,json:async()=>({data:[{url:'https://sodra.com/',title:'Södra',description:'Södra is a Swedish manufacturer.'}]})};
     if(url.includes('/firecrawl-search'))throw new TypeError('Connection failed');
     throw new Error('Unexpected request');
@@ -636,7 +642,7 @@ test('Saving Mode verifies a saved target domain without repeating resolution an
   context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(state));
   await context.__runDiscovery({targetOnly:true,savingMode:true,targetDomain:'sodra.com'});
   assert.equal(requests.some(item=>item.body.query?.includes('official company website')),false);
-  assert.equal(requests.filter(item=>item.url.includes('/firecrawl-search')).length,2);
+  assert.equal(requests.filter(item=>item.url.includes('/firecrawl-search')).length,1);
   assert.equal(requests.filter(item=>item.url.includes('/firecrawl-scrape')).length,1);
   assert.equal(context.__discoveryState().savingMode,true);
   assert.equal(context.__discoveryState().funnel.companySitesChecked,1);
@@ -655,12 +661,13 @@ test('retry of a failed saved-target lookup uses the known domain and preserves 
   context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(state));
   context.__setDiscovery({status:'error',savingMode:true,searchFailures:[{phase:'resolving',company:'Södra',queryMeta:{id:'resolve-sodra',kind:'resolution',company:'Södra',market:'Sweden',query:'"Södra" Sweden official company website'},reason:'network_error'}],funnel:{marketSearchesCompleted:1,marketSearchesTotal:1,openAiFallbackSearches:1}});
   await context.__retryFailedDiscoveryChecks();
-  assert.equal(requests.length,1);
-  assert.match(requests[0].body.query,/site:sodra\.com/);
-  assert.doesNotMatch(requests[0].body.query,/official company website/);
-  assert.equal(requests[0].body.limit,2);
+  assert.equal(requests.length,2);
+  assert.match(requests[0].body.url,/sodra\.com/);
+  assert.match(requests[1].body.query,/site:sodra\.com/);
+  assert.doesNotMatch(requests[1].body.query,/official company website/);
+  assert.equal(requests[1].body.limit,2);
   assert.equal(context.__discoveryState().funnel.openAiFallbackSearches,0);
-  assert.equal(context.__discoveryState().funnel.companySitesChecked,1);
+  assert.equal(context.__discoveryState().funnel.companySitesChecked,0);
 });
 
 test('Saving Mode samples two saved targets and one opportunity hypothesis within its search budget',async()=>{
@@ -756,7 +763,7 @@ test('failed company-site checks can be retried without repeating market searche
       return {ok:true,json:async()=>({success:true,data:[{
         url:'https://northstar.com/news/new-factory',title:'Northstar expands its Latvian production site',
         description:'Northstar is a Latvian industrial manufacturer investing in automation and expanding production capacity at a new factory.',
-        markdown:'Northstar is a Latvian industrial manufacturer investing in automation and expanding production capacity at a new factory.'
+        markdown:'Northstar is a Latvian industrial manufacturer investing in automation and expanding production capacity at a new factory. The company designs and manufactures industrial equipment.'
       }]})};
     }
   });
@@ -776,7 +783,7 @@ test('failed company-site checks can be retried without repeating market searche
   await context.__retryFailedDiscoveryChecks();
 
   const state=context.__discoveryState();
-  assert.equal(requests,1,`the failed website check alone should be retried: ${JSON.stringify(context.__discoveryState().searchFailures)}`);
+  assert.equal(requests,2,`one direct website read and the failed evidence search should be retried: ${JSON.stringify(context.__discoveryState().searchFailures)}`);
   assert.equal(state.funnel.marketSearchesCompleted,4,'market searches must not be repeated or recounted');
   assert.equal(state.funnel.companySitesChecked,1);
   assert.equal(state.funnel.qualifiedCompanies,1,JSON.stringify({potential:state.potentialMatches,candidates:state.candidates,raw:state.rawResults,failures:state.searchFailures}));
@@ -887,8 +894,8 @@ test('saved failed official-domain lookups reuse discovered names and market evi
   });
   await context.__retryFailedDiscoveryChecks();
   const state=context.__discoveryState();
-  assert.equal(requests.length,4,'only one official-domain lookup and one website check should call Firecrawl and OpenAI');
-  assert.ok(requests.every(item=>!item.query.includes('discover-')));
+  assert.equal(requests.length,5,'one direct website read plus official-domain and evidence searches should call the existing providers');
+  assert.ok(requests.every(item=>!String(item.query||'').includes('discover-')));
   assert.equal(state.funnel.marketSearchesCompleted,4);
   assert.equal(state.funnel.officialDomainsResolved,1);
   assert.equal(state.funnel.openAiFallbackSearches,2);
@@ -999,3 +1006,5 @@ test('Company Discovery bounds concurrent Firecrawl verification requests', asyn
 
   assert.ok(maximum<=4,`expected at most four concurrent provider requests, observed ${maximum}`);
 });
+
+test('unreadable company website blocks buyer lookup before Apollo is called',async()=>{let apolloCalls=0;const context=loadDiscoveryRunner({requestTimeout:1000,bridgeImpl:{session:{authenticated:true},workspace:{id:'ws'},searchApolloPeople:async()=>{apolloCalls++;return {ok:true,people:[]};}}});context.__setDiscovery({checkedCompanyDomains:['northstar.com'],potentialMatches:[{company:'Northstar',domain:'northstar.com',website:'https://northstar.com/',market:'Latvia',marketVerified:true,fitVerified:true,qualificationGaps:['No active buying signal was confirmed'],evidence:[{url:'https://northstar.com/about',text:'Latvian industrial manufacturer.'}]}]});context.LeadIntelFirstPartyResearch.collectWebsiteEvidence=async()=>{throw new Error('Insufficient readable company evidence');};await context.__findPotentialDecisionMakers('northstar.com');assert.equal(apolloCalls,0);assert.equal(context.__discoveryState().potentialMatches[0].peopleStatus,'error');});

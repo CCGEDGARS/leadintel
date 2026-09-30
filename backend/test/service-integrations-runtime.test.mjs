@@ -215,6 +215,15 @@ sqliteTest('website scrape survives a dead managed Firecrawl route by using a bo
   }finally{globalThis.fetch=originalFetch;}
 });
 
+sqliteTest('first-party research forwards link extraction without accepting arbitrary formats',async()=>{
+  const {env,token}=await fixture('owner');const originalFetch=globalThis.fetch;let forwarded;
+  globalThis.fetch=async(_,options)=>{forwarded=JSON.parse(options.body);return new Response(JSON.stringify({success:true,data:{markdown:'Readable company evidence',links:['/products']}}),{status:200,headers:{'Content-Type':'application/json'}});};
+  try{
+    const response=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/scrape?workspace_id=w1',{method:'POST',token,body:{url:'https://company.se/',formats:['markdown','links','executeJavascript']}}),env,{});
+    assert.equal(response.status,200);assert.deepEqual(forwarded.formats,['markdown','links']);assert.deepEqual((await payload(response)).data.links,['/products']);
+  }finally{globalThis.fetch=originalFetch;}
+});
+
 sqliteTest('direct website fallback refuses local or private-network targets',async()=>{
   const {env,token}=await fixture('owner');const originalFetch=globalThis.fetch;const calls=[];
   globalThis.fetch=async (url,options={})=>{calls.push({url:String(url),options});return new Response(JSON.stringify({error:'Route not found'}),{status:404,headers:{'Content-Type':'application/json'}});};

@@ -20,7 +20,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "LeadIntel — Build Your Commercial Intelligence Strategy",
+        "LeadIntel \u2014 Build Your Commercial Intelligence Strategy",
         "id=\"company-website\""
       ]
     },
@@ -79,6 +79,17 @@
       "notContains": [
         "location.replace('/customer/')",
         "location.replace('/v2/')"
+      ]
+    },
+    {
+      "id": "first-party-research",
+      "type": "text",
+      "url": "/customer/first-party-research.js",
+      "status": 200,
+      "contains": [
+        "collectWebsiteEvidence",
+        "planLocalQueries",
+        "Insufficient readable company evidence"
       ]
     }
   ],
