@@ -35,6 +35,7 @@ const REFERENCE_AI_CONCURRENCY=4;
   function status(message){
     const text=clean(message);
     const refresh=document.getElementById('reference-refresh-status');if(refresh)refresh.textContent=text;
+    const visible=document.querySelector?.('[data-refresh-reference-analysis]');if(visible){visible.disabled=analysisRunning;visible.setAttribute?.('aria-busy',String(analysisRunning));visible.textContent=analysisRunning?'Analyzing companies…':'Refresh company analysis';}
     const top=document.getElementById('reference-import-status');if(top)top.textContent=text;
     const local=document.getElementById('reference-action-status');if(local)local.textContent=text;
   }
@@ -101,7 +102,7 @@ const REFERENCE_AI_CONCURRENCY=4;
     if(analysisRunning)return;
     analysisRunning=true;button.disabled=true;status('Starting company analysis…');
     try{await runAiAnalysis(button);}catch(error){status(clean(error?.message)||'AI analysis failed');}
-    finally{analysisRunning=false;button.disabled=false;root.LeadIntelReferenceCustomerLibraryUI?.finishAnalysis?.();}
+    finally{analysisRunning=false;button.disabled=false;const visible=document.querySelector?.('[data-refresh-reference-analysis]');if(visible){visible.disabled=false;visible.setAttribute?.('aria-busy','false');visible.textContent='Refresh company analysis';}root.LeadIntelReferenceCustomerLibraryUI?.finishAnalysis?.();}
   },true);
   root.LeadIntelReferenceCustomerAIRuntime={runAiAnalysis};
 })(globalThis);
