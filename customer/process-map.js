@@ -100,14 +100,15 @@ function stageAvailability(){
   const approved=Boolean(current.approved);
   const strategy=Boolean(current.market?.strategyApproved);
   const previousDiscovery=Boolean(window.LeadIntelWorkspaceIsolation?.hasPreviousDiscovery?.(localStorage,current));
+  const savedTargets=Array.isArray(current.targetCompanies)&&current.targetCompanies.length>0;
   const pipeline=hasPipelineOpportunity();
   const content=hasOutreachContent();
   return {
     1:true,
     2:ready,
     3:ready,
-    4:ready&&profile&&approved,
-    5:ready&&profile&&approved&&(strategy||previousDiscovery),
+    4:ready&&profile,
+    5:ready&&(savedTargets||previousDiscovery||profile&&approved&&strategy),
     6:ready&&profile&&approved&&strategy&&pipeline,
     7:ready&&profile&&approved&&strategy&&pipeline&&content
   };

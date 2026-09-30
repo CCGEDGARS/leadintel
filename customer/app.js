@@ -343,7 +343,7 @@ async function openModule(step){
   if(!LeadIntelProfile.canAccessModule(state,target)){showToast("Add your company website and target market first");setStep(1);return false;}
   if(target<=2){setStep(target);return true;}
   if(!state.profile)return analyzeCompany(Math.min(target,3));
-  if(target>=4&&!state.approved){setStep(3);showToast("Approve the profile before continuing to Strategy");return false;}
+  if(target>=5&&!state.approved){setStep(3);showToast("Approve the profile before continuing");return false;}
   ensureMarketStrategySeeded();
   const safeTarget=window.LeadIntelWorkspaceIsolation?.safeStep?.(localStorage,state,target);
   if(target>=5&&safeTarget!==target){

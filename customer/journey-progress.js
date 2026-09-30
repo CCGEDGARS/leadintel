@@ -112,7 +112,7 @@
         :definition.id===2?Boolean(availability[2]||availability[3])
         :definition.id===3?Boolean(availability[4])
         :definition.id===4?Boolean(availability[5])
-        :definition.id===5?Boolean(availability[5]&&(candidates.length||pipeline.length))
+        :definition.id===5?Boolean(availability[5]&&(candidates.length||pipeline.length||list(discovery.selectedProspects).length))
         :Boolean(availability[definition.id]);
       let status=definition.id===activeJourneyStage?'current':requiredComplete?'complete':available?'available':'locked';
       const answers=input.main?.answers&&typeof input.main.answers==='object'?input.main.answers:{};
