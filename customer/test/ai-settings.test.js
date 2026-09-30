@@ -104,7 +104,8 @@ test('raw API keys are transient browser values and never persisted by either se
 });
 
 test('settings assets are cache-busted and controls have individual borders and focus treatment',()=>{
-  assert.match(js,/SETTINGS_VERSION='20260925-provider-credit-health-v1'/);
+  assert.match(js,/SETTINGS_VERSION='20260930-openai-gpt-6-1-sol-v1'/);
+  assert.match(js,/provider:'openai',name:'OpenAI',model:'gpt-6\.1-sol'/);
   assert.match(extension,/SETTINGS_VERSION='20260919-calendly-v1'/);
   assert.match(js,/link\.href=`ai-settings\.css\?v=\$\{SETTINGS_VERSION\}`/);
   assert.match(extension,/link\.href=`service-settings-extension\.css\?v=\$\{SETTINGS_VERSION\}`/);
