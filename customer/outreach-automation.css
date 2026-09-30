@@ -4,3 +4,4 @@
 .oa-activity{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin:16px 0}.oa-activity div{padding:12px;border:1px solid rgba(148,163,184,.2);border-radius:10px}.oa-activity strong,.oa-activity span{display:block}.oa-activity span{font-size:11px;color:#94a3b8}@media(max-width:840px){.oa-activity{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 #outreach-contact-suppression{margin-top:1rem}#oa-suppress-form{display:flex;gap:.75rem;align-items:end;flex-wrap:wrap}#oa-suppress-form label{min-width:240px;flex:1}#oa-suppress-form input{width:100%;box-sizing:border-box}#outreach-contact-suppression li{overflow-wrap:anywhere}
+.delivery-setup-header .delivery-setup-badge{display:flex;flex-direction:column;align-items:flex-start;gap:3px;white-space:normal;min-width:164px;text-transform:none;letter-spacing:0}.delivery-setup-badge strong{font:700 12px/1.3 "DM Sans",sans-serif}.delivery-setup-badge small{font:500 11px/1.3 "DM Sans",sans-serif;color:#356a5c}

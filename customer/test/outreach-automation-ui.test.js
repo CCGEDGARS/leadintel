@@ -2,6 +2,7 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
+const vm=require('node:vm');
 
 const root=path.join(__dirname,'..');
 const read=name=>fs.readFileSync(path.join(root,name),'utf8');
@@ -60,6 +61,17 @@ test('setup offers the same server-backed limits under brand identity',()=>{
   assert.match(ui,/enabled:active&&mode==='automatic'/);
   assert.match(ui,/Sending stays off until activation in Delivery/);
   assert.match(ui,/Meeting requests/);
+});
+
+test('setup badge follows the selected plan while reporting actual sending state',()=>{
+  const source=read('outreach-automation-ui.js');const context={};vm.runInNewContext(source,context);
+  const badge=context.LeadIntelOutreachAutomationUI.setupBadge;
+  assert.equal(badge('automatic',false,true).title,'Automatic plan');
+  assert.match(badge('automatic',false,true).detail,/Sending off.*Save to keep/);
+  assert.equal(badge('automatic',false).detail,'Sending off · Saved');
+  assert.equal(badge('manual',true).detail,'Sending on until saved');
+  assert.equal(badge('automatic',true).detail,'Sending on');
+  assert.match(source,/addEventListener\('change',\(\)=>updateSetupBadge\(card,active,true\)\)/);
 });
 
 test('automation stylesheet exists and names the panel',()=>{

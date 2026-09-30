@@ -5,7 +5,7 @@ let policy=null,status=null,approvedPackage=null,busy=false,suppressedContacts=[
 const days=[['1','Mon'],['2','Tue'],['3','Wed'],['4','Thu'],['5','Fri'],['6','Sat'],['0','Sun']];
 function bridge(){return root.LeadIntelServerBridge||null;}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function css(){if(document.querySelector('link[data-outreach-automation-css]'))return;const l=document.createElement('link');l.rel='stylesheet';l.href='./outreach-automation.css?v=20260930-setup-delivery-v2';l.dataset.outreachAutomationCss='1';document.head.appendChild(l);}
+function css(){if(document.querySelector('link[data-outreach-automation-css]'))return;const l=document.createElement('link');l.rel='stylesheet';l.href='./outreach-automation.css?v=20260930-setup-badge-v3';l.dataset.outreachAutomationCss='1';document.head.appendChild(l);}
 function anchor(){return document.querySelector('.step-view[data-step="7"]');}
 function isOwner(){return String(status?.role||policy?.role||'')==='owner';}
 function serverPolicy(){return policy?.policy||policy||{automaticDelivery:'manual_only'};}
@@ -26,19 +26,32 @@ async function queueApprovedPackages(domain=''){
   message(`${queued} approved verified contact${queued===1?'':'s'} queued.${skipped?` ${skipped} skipped; review contact verification or previous outreach.`:''}`);
   return {queued,skipped};
 }
+function setupBadge(mode,active,dirty=false){
+  if(active&&mode==='automatic')return {title:'Automatic',detail:dirty?'Sending on · Save changes':'Sending on'};
+  if(active)return {title:'Manual selected',detail:'Sending on until saved'};
+  if(mode==='automatic')return {title:'Automatic plan',detail:dirty?'Sending off · Save to keep':'Sending off · Saved'};
+  return {title:'Manual',detail:dirty?'Automatic sending off · Save to keep':'Automatic sending off'};
+}
+function updateSetupBadge(card,active,dirty=false){
+  const mode=card.querySelector('[name="delivery-setup-mode"]:checked')?.value||'manual';
+  const badge=card.querySelector('#delivery-setup-badge');if(!badge)return;
+  const value=setupBadge(mode,active,dirty);badge.querySelector('strong').textContent=value.title;badge.querySelector('small').textContent=value.detail;
+}
 function renderSetup(){
   const brand=document.getElementById('brand-identity');if(!brand)return;
   let card=document.getElementById('delivery-setup');if(!card){card=document.createElement('section');card.id='delivery-setup';card.className='panel brand-identity-panel delivery-setup';brand.after(card);}
   const p=serverPolicy(),ready=Boolean(policy),owner=isOwner(),preferred=p.preferredMode||p.mode||'manual';
   const limit=Number(p.workspaceDailyLimit||5),preset=[5,10,20].includes(limit)?String(limit):'custom';
   const active=p.automaticDelivery==='enabled'&&p.mode==='automatic'&&p.enabled;
-  card.innerHTML=`<div class="delivery-setup-header"><div><span class="eyebrow">Step 1 · Delivery preference</span><h3>How should messages be delivered?</h3><p>Save the way you want this workspace to operate. Choose the daily limit for a future automatic flow.</p></div><span class="brand-identity-status">${active?'Automatic sending on':'Sending: manual'}</span></div>
+  const initialBadge=setupBadge(preferred,active);
+  card.innerHTML=`<div class="delivery-setup-header"><div><span class="eyebrow">Step 1 · Delivery preference</span><h3>How should messages be delivered?</h3><p>Save the way you want this workspace to operate. Choose the daily limit for a future automatic flow.</p></div><span class="brand-identity-status delivery-setup-badge" id="delivery-setup-badge" role="status" aria-live="polite"><strong>${initialBadge.title}</strong><small>${initialBadge.detail}</small></span></div>
     <fieldset class="delivery-mode-options" ${!ready||!owner?'disabled':''}><legend>Delivery mode</legend><label class="delivery-mode-option"><input type="radio" name="delivery-setup-mode" value="manual" ${preferred!=='automatic'?'checked':''}><span><strong>Manual</strong><small>Review and send each approved message yourself.</small></span></label><label class="delivery-mode-option"><input type="radio" name="delivery-setup-mode" value="automatic" ${preferred==='automatic'?'checked':''}><span><strong>Automatic plan</strong><small>Save the preference now. Sending stays off until activation in Delivery.</small></span></label></fieldset>
     <div class="delivery-setup-controls"><label for="delivery-setup-limit">Daily email limit</label><select id="delivery-setup-limit" ${!ready||!owner?'disabled':''}><option value="5" ${preset==='5'?'selected':''}>5 emails</option><option value="10" ${preset==='10'?'selected':''}>10 emails</option><option value="20" ${preset==='20'?'selected':''}>20 emails</option><option value="custom" ${preset==='custom'?'selected':''}>Custom</option></select><input id="delivery-setup-custom" type="number" min="1" max="500" value="${esc(limit)}" aria-label="Custom daily email limit" ${preset==='custom'?'':'hidden'} ${!ready||!owner?'disabled':''}><button id="delivery-setup-save" class="primary-btn" type="button" ${!ready||!owner?'disabled':''}>Save preference</button></div>
     <p class="delivery-setup-note">${!ready?'Sign in to save this preference to your workspace.':!owner?'Only the workspace owner can change delivery settings.':active?'Automatic sending is active. Manage its schedule, pause and stop controls in Delivery.':'Saving a limit will not send email. Automatic sending requires a connected mailbox, approved messages and a separate activation in Delivery.'}</p><p id="delivery-setup-message" role="status" aria-live="polite"></p>`;
   const choice=card.querySelector('#delivery-setup-limit'),custom=card.querySelector('#delivery-setup-custom');
-  choice.addEventListener('change',()=>{custom.hidden=choice.value!=='custom';});
-  card.querySelectorAll('[name="delivery-setup-mode"]').forEach(input=>input.addEventListener('change',()=>{card.dataset.mode=input.value;}));
+  choice.addEventListener('change',()=>{custom.hidden=choice.value!=='custom';updateSetupBadge(card,active,true);});
+  custom.addEventListener('input',()=>updateSetupBadge(card,active,true));
+  card.querySelectorAll('[name="delivery-setup-mode"]').forEach(input=>input.addEventListener('change',()=>updateSetupBadge(card,active,true)));
   card.querySelector('#delivery-setup-save').addEventListener('click',async()=>{
     const value=Number(choice.value==='custom'?custom.value:choice.value),notice=card.querySelector('#delivery-setup-message');
     if(!Number.isInteger(value)||value<1||value>500){notice.textContent='Choose a whole number from 1 to 500.';return;}
@@ -118,5 +131,5 @@ async function enqueueApproved(){const b=bridge();const p=serverPolicy();if(!(p.
 function receivePackage(event){const value=event?.detail;if(!value||typeof value!=='object')return;approvedPackage={...value,approved_at:value.approved_at||value.approvedAt||new Date().toISOString(),approved:true};render();}
 function init(){if(typeof document==='undefined')return;css();root.addEventListener?.('leadintel:approved-outreach-package',receivePackage);root.addEventListener?.('leadintel:outreach-approved',event=>{if(event.detail?.domain)void queueApprovedPackages(String(event.detail.domain));});root.addEventListener?.('leadintel:server-ready',()=>refresh());root.addEventListener?.('leadintel:module-opened',()=>{if(!document.getElementById(ID))render();});render();setTimeout(refresh,0);}
 if(typeof document!=='undefined'){if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();}
-root.LeadIntelOutreachAutomationUI={refresh,receivePackage,enqueueApproved,queueApprovedPackages};
+root.LeadIntelOutreachAutomationUI={refresh,receivePackage,enqueueApproved,queueApprovedPackages,setupBadge};
 })(typeof window!=='undefined'?window:globalThis);
