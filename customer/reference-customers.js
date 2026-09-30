@@ -1,5 +1,7 @@
 (function(root,factory){
-  const api=factory();
+  const runtimeVersion='20260930-reference-activation-v6';
+  const api=root?.LeadIntelReferenceCustomers?.runtimeVersion===runtimeVersion?root.LeadIntelReferenceCustomers:factory();
+  api.runtimeVersion=runtimeVersion;
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
   if(root)root.LeadIntelReferenceCustomers=api;
 })(typeof globalThis!=="undefined"?globalThis:this,function(){

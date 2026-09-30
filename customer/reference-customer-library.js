@@ -2,6 +2,7 @@
   'use strict';
   const Ref=root?.LeadIntelReferenceCustomers||(typeof module!=='undefined'&&module.exports?require('./reference-customers.js'):null);
   if(!Ref)return;
+  if(Ref.libraryRuntimeVersion==='20260930-reference-activation-v6')return;
   const clean=value=>String(value??'').replace(/\s+/g,' ').trim();
   const clone=value=>value==null?value:JSON.parse(JSON.stringify(value));
   const baseNormalize=Ref.normalizeReferenceState.bind(Ref);
@@ -168,6 +169,7 @@
     return baseGetActive(normalized);
   }
 
+  Ref.libraryRuntimeVersion='20260930-reference-activation-v6';
   Ref.normalizeReferenceState=normalizeReferenceState;
   Ref.activateReferenceCustomers=activateReferenceCustomers;
   Ref.activateReferenceSegments=activateReferenceSegments;

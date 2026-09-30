@@ -3,6 +3,7 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
 (function installReferenceCustomerLibraryUI(root){
   'use strict';
   if(typeof document==='undefined')return;
+  if(root.LeadIntelReferenceCustomerLibraryUI?.runtimeVersion==='20260930-reference-activation-v6')return;
   const Ref=root.LeadIntelReferenceCustomers;
   const Portfolio=root.LeadIntelReferenceCustomerPortfolio;
   if(!Ref?.publishReferenceModel||!Ref?.markReferenceDraftChanged||!Portfolio)return;
@@ -171,9 +172,11 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     void persistLegacyMigration(state);
   }
   function metadataFromUi(state){
-    const name=clean(document.getElementById('reference-list-name')?.value);
-    const markets=clean(document.getElementById('reference-list-markets')?.value).split(/\n|;|,/).map(clean).filter(Boolean);
-    const purpose=clean(document.getElementById('reference-list-purpose')?.value);
+    const selected=state.referenceCustomerPortfolio.lists.find(list=>list.id===state.referenceCustomerPortfolio.selectedListId);
+    const nameInput=document.getElementById('reference-list-name'),marketInput=document.getElementById('reference-list-markets'),purposeInput=document.getElementById('reference-list-purpose');
+    const name=nameInput?clean(nameInput.value):selected?.name;
+    const markets=marketInput?clean(marketInput.value).split(/\n|;|,/).map(clean).filter(Boolean):selected?.markets||[];
+    const purpose=purposeInput?clean(purposeInput.value):selected?.purpose||'';
     return {name:name||`Customer List ${state.referenceCustomerPortfolio.lists.length+1}`,markets,purpose};
   }
   async function saveList(){
@@ -323,5 +326,5 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
   root.addEventListener('leadintel:reference-customers-updated',()=>setTimeout(syncLibraryUi,0));
   root.addEventListener('leadintel:server-ready',()=>setTimeout(syncLibraryUi,0));
   if(document.body&&typeof MutationObserver!=='undefined')new MutationObserver(records=>{if(records.some(record=>[...record.addedNodes].some(node=>node?.id==='reference-customer-modal'||node?.querySelector?.('#reference-customer-modal'))))setTimeout(syncLibraryUi,0);}).observe(document.body,{childList:true,subtree:true});
-  root.LeadIntelReferenceCustomerLibraryUI={sync:syncLibraryUi,publishSelected,saveList,saveAsNewList,openEditor,openList,viewResults,analyzeList,finishAnalysis,activateList,editList,createNewList,toggleList,activateCurrent,legacyLabels:LEGACY_LABELS};
+  root.LeadIntelReferenceCustomerLibraryUI={runtimeVersion:'20260930-reference-activation-v6',sync:syncLibraryUi,publishSelected,saveList,saveAsNewList,openEditor,openList,viewResults,analyzeList,finishAnalysis,activateList,editList,createNewList,toggleList,activateCurrent,legacyLabels:LEGACY_LABELS};
 })(globalThis);

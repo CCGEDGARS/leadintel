@@ -71,3 +71,6 @@ Refreshing an unchanged active list replaces its published discovery model using
 Verification covers locale-selector recovery, long navigation, exact quote validation, active-model replacement, failed-refresh preservation and list-edit protection. Production provider access and signed-in results must be verified separately; page count alone is not a quality gate.
 
 Reviewed-profile activation publishes the selected fresh analysis even when the saved list already has an active older model. Only the saved-list Activate/Deactivate control toggles list activity. Regression coverage exercises the inline click with an already active list.
+
+### Runtime and activation consistency
+Reference APIs and profile/list UI installs are versioned singletons. Independently versioned imports must reuse the same API object, so a UI loaded before the library receives its published-model normalization rules. Repeated imports must not register duplicate activation handlers. The full runtime regression loads the UI before a duplicate base import, publishes updated quoted analysis over an active older model, verifies the selected checkbox and active discovery evidence, then reloads from persisted storage. Activation preserves saved list name, markets, and purpose when editing controls are absent.
