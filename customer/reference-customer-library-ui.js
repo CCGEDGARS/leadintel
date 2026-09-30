@@ -304,7 +304,7 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
   document.addEventListener('click',event=>{
     const analyzeControl=(event.target?.closest?.('#reference-analyze')||event.target?.closest?.('[data-refresh-reference-analysis]'));
     if(analyzeControl&&blockOnUnsavedDraft('Analyzing the current list')){event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();return;}
-    const activate=event.target?.closest?.('#reference-activate');
+    const activate=event.target?.closest?.('#reference-activate')||event.target?.closest?.('[data-activate-reviewed-profile]');
     if(activate){event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();void publishSelected(activate).catch(error=>{activate.disabled=false;const status=document.getElementById('reference-action-status')||document.getElementById('reference-import-status');if(status)status.textContent=clean(error?.message)||'Unable to activate model';});return;}
     const save=event.target?.closest?.('[data-save-reference-list]');if(save){event.preventDefault();void saveList().catch(error=>{const status=document.getElementById('reference-import-status');if(status)status.textContent=clean(error?.message)||'Unable to save list';});return;}
     const saveAsNew=event.target?.closest?.('[data-save-reference-list-as-new]');if(saveAsNew){event.preventDefault();void saveAsNewList().catch(error=>{const status=document.getElementById('reference-import-status');if(status)status.textContent=clean(error?.message)||'Unable to save a new list';});return;}

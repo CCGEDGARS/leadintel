@@ -69,3 +69,5 @@ The collector follows discovered locale pages and a second level of commercial p
 Refreshing an unchanged active list replaces its published discovery model using references with quoted commercial evidence. Failed references remain visible for review and are excluded from the new active seeds. A fully unsuccessful refresh retains the previous model; an edited source list still requires review. Analysis-version fingerprints invalidate stale discovery results without deleting CRM records.
 
 Verification covers locale-selector recovery, long navigation, exact quote validation, active-model replacement, failed-refresh preservation and list-edit protection. Production provider access and signed-in results must be verified separately; page count alone is not a quality gate.
+
+Reviewed-profile activation publishes the selected fresh analysis even when the saved list already has an active older model. Only the saved-list Activate/Deactivate control toggles list activity. Regression coverage exercises the inline click with an already active list.
