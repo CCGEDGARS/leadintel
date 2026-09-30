@@ -121,7 +121,7 @@
     const activeCount=models.reduce((sum,m)=>sum+(Number(m.activeCount||m.dna?.activeCount)||0),0);
     const confidence=models.some(m=>clean(m.confidence||m.dna?.confidence)==='high')?'high':models.some(m=>clean(m.confidence||m.dna?.confidence)==='medium')?'medium':'low';
     const fingerprint=`multi-${models.map(m=>clean(m.fingerprint)).sort().join('+')}`;
-    return {active:true,fingerprint,activeCount,confidence,models,dna:{active:true,activeCount,confidence,fingerprint,dimensions:mergeDimensions(models)}};
+    return {active:true,fingerprint,activeCount,confidence,models,dna:{active:true,activeCount,confidence,fingerprint,dimensions:mergeDimensions(models),referenceProfiles:models.flatMap(model=>model.dna?.referenceProfiles||[])}};
   }
   function migrateLegacy(state={}){
     let next=ensurePortfolio(state);if(next.referenceCustomerPortfolio.lists.length)return next;

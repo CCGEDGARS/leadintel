@@ -86,7 +86,7 @@ test('analyzed lists expose an explicit review state and profile review action',
   assert.match(ui,/const segments=\(ref\.segments\|\|\[\]\)\.length/);
   assert.match(ui,/const canReview=Boolean\(analyzed&&segments\)/);
   assert.match(ui,/Review buyer context/);
-  assert.match(ui,/No shared buyer traits; opportunity search available/);
+  assert.match(ui,/Individual reference profiles available/);
   assert.match(ui,/data-view-reference-results/);
   assert.match(ui,/>Review profile ↓<\/button>/);
 });

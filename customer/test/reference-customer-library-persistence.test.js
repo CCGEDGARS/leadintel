@@ -49,7 +49,7 @@ test('publishing a refreshed model replaces the published model and clears pendi
   assert.equal(refreshed.publishedModel.dna.active,true);
 });
 
-test('a profile with no repeated dimensions cannot be published',()=>{
+test('individual reference profiles can be published without claiming shared traits',()=>{
   const rows=Ref.normalizeImportedRows(Array.from({length:5},(_,i)=>({Company:`Reference ${i+1}`,Website:`https://reference-${i+1}.example`})),{sourceType:'csv'});
   const analyses=Object.fromEntries(rows.map((row,index)=>[row.id,{industry:`industry ${index+1}`,businessModel:`model ${index+1}`,confidence:'high'}]));
   const segmentation=Ref.buildReferenceSegments(rows,analyses);
@@ -57,19 +57,21 @@ test('a profile with no repeated dimensions cannot be published',()=>{
   state.dna=Ref.buildReferenceDna(state,analyses);
 
   assert.deepEqual(state.dna.dimensions,[]);
-  assert.equal(Ref.publishReferenceModel(state).publishedModel,null);
-  assert.equal(Ref.getActiveReferenceModel(state),null);
+  assert.equal(Ref.publishReferenceModel(state).publishedModel.active,true);
+  assert.equal(Ref.getActiveReferenceModel(state).dna.referenceProfiles.length,5);
+  assert.equal(state.dna.profileConfidence,'low');
 });
 
-test('legacy published models are recalibrated and removed from Discovery when their traits do not repeat',()=>{
+test('legacy published models retain individual seeds without inventing a shared pattern',()=>{
   const rows=Ref.normalizeImportedRows(Array.from({length:5},(_,i)=>({Company:`Reference ${i+1}`,Website:`https://reference-${i+1}.example`})),{sourceType:'csv'});
   const analyses=Object.fromEntries(rows.map((row,index)=>[row.id,{industry:`industry ${index+1}`,businessModel:`model ${index+1}`,confidence:'high'}]));
   const oldSegment={id:'legacy-segment',name:'Industrial equipment customers',rowIds:rows.map(row=>row.id),count:rows.length,confidence:'high',summary:'Previously marked high confidence',traits:['Industrial equipment']};
   const oldDna={version:2,active:true,fingerprint:'legacy-fingerprint',activeCount:rows.length,sampleSize:rows.length,analyzableCount:rows.length,confidence:'high',profileConfidence:'high',profileName:oldSegment.name,dimensions:[{key:'industry',values:Object.values(analyses).map(item=>item.industry),weight:1,confidence:'high',evidenceCount:1}]};
   const normalized=Ref.normalizeReferenceState({rows,analyses,segments:[oldSegment],activeSegmentIds:[oldSegment.id],activeIds:rows.map(row=>row.id),activated:true,fingerprint:'legacy-fingerprint',dna:oldDna,publishedModel:{active:true,fingerprint:'legacy-fingerprint',activeCount:rows.length,confidence:'high',dna:oldDna,activeRows:rows,activeSegments:[oldSegment],segmentIds:[oldSegment.id]},draftDirty:false});
 
-  assert.equal(normalized.publishedModel,null);
-  assert.equal(Ref.getActiveReferenceModel(normalized),null);
+  assert.equal(normalized.publishedModel.dna.calibrationVersion,2);
+  assert.equal(Ref.getActiveReferenceModel(normalized).dna.referenceProfiles.length,5);
+  assert.deepEqual(normalized.publishedModel.dna.dimensions,[]);
 });
 
 test('legacy activated models migrate to a persistent published model',()=>{
@@ -90,13 +92,13 @@ test('Reference Customer library UI exposes persistent active-model and pending-
   assert.match(runtime,/publishedModel/);
 });
 
-test('saved-list activation is unavailable when the analyzed companies share no traits',()=>{
+test('saved-list activation supports individual evidenced reference profiles',()=>{
   const ui=fs.readFileSync(path.join(__dirname,'..','reference-customer-library-ui.js'),'utf8');
   assert.match(ui,/hasActivatableSegment/);
-  assert.match(ui,/No shared buyer traits; opportunity search available/);
+  assert.match(ui,/Individual reference profiles available/);
   assert.match(ui,/Opportunity discovery still works from your offers, market and signals/);
   assert.match(ui,/filter\(segment=>segment\.canActivate!==false&&checked\.includes\(segment\.id\)\)/);
-  assert.match(ui,/No recurring customer traits were found/);
+  assert.match(ui,/No evidenced reference characteristics are available/);
 });
 
 test('Reference Customer library presents a simple list-first workflow and hides advanced metadata by default',()=>{

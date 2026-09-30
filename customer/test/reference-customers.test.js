@@ -68,7 +68,7 @@ test('imported reference list is inert until explicitly activated',()=>{
   assert.equal(Ref.getActiveReferenceModel(state),null);
   const active=Ref.activateReferenceCustomers(state,rows.map(r=>r.id));
   assert.equal(active.activated,true);
-  assert.equal(Ref.getActiveReferenceModel(active).activeRows.length,2);
+  assert.equal(Ref.getActiveReferenceModel(active),null,'An activation flag alone must not claim a usable model');
 });
 
 test('active reference model is bounded and carries a stable fingerprint',()=>{

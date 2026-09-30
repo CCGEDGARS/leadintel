@@ -11,7 +11,7 @@
 
   function normalizePublishedModel(value){
     if(!value||typeof value!=='object'||value.active===false||!value.dna||typeof value.dna!=='object')return null;
-    if(value.dna.calibrationVersion===1&&!value.dna.dimensions?.length)return null;
+    if(!Ref.hasUsableReferenceDna(value.dna))return null;
     const fingerprint=clean(value.fingerprint||value.dna.fingerprint);
     if(!fingerprint)return null;
     const activeRows=Array.isArray(value.activeRows)?clone(value.activeRows):[];
@@ -48,7 +48,7 @@
     return {...clone(value),version:3,calibrationVersion:1,active:true,activeCount:sampleSize,sampleSize,confidence,profileConfidence:confidence,dimensions,profileSummary:`Recalibrated from recorded support across ${sampleSize} reference companies. Only traits meeting the ${threshold}/${sampleSize} support threshold are retained.`};
   }
   function recalibratePublishedModel(publishedModel,referenceState={}){
-    if(!publishedModel||publishedModel.dna?.calibrationVersion===1)return publishedModel;
+    if(!publishedModel||publishedModel.dna?.calibrationVersion===2)return publishedModel;
     const publishedIds=(publishedModel.activeRows||[]).map(row=>clean(row?.id)).filter(Boolean),hasFullAnalysis=publishedIds.length===publishedModel.activeCount&&publishedIds.every(id=>{
       const analysis=referenceState.analyses?.[id];return Boolean(analysis&&Object.keys(analysis).some(key=>key!=='confidence'&&clean(Array.isArray(analysis[key])?analysis[key].join(' '):analysis[key])));
     });
@@ -82,7 +82,7 @@
     const raw=value&&typeof value==='object'?value:{};
     const normalized=baseNormalize(raw);
     let publishedModel=normalizePublishedModel(raw.publishedModel)||legacyPublishedModel(raw,normalized);
-    if(publishedModel&&publishedModel.dna.calibrationVersion!==1)publishedModel=recalibratePublishedModel(publishedModel,normalized);
+    if(publishedModel&&publishedModel.dna.calibrationVersion!==2)publishedModel=recalibratePublishedModel(publishedModel,normalized);
     const explicitDirty=raw.draftDirty===true;
     const implicitDirty=Boolean(publishedModel&&(!normalized.activated||!normalized.dna||normalized.fingerprint!==publishedModel.fingerprint));
     return {

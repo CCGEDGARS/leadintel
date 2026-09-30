@@ -13,7 +13,8 @@ test('customer lists explain what is active, mapped, and saved for research',()=
   assert.match(ui,/targetCount\} saved/);
   assert.match(ui,/Manage Target Companies/);
   assert.match(ui,/targetCount&&\(!saved\|\|activeModels\)/);
-  assert.match(ui,/Build the Opportunity Map in View Results before activating/);
+  assert.doesNotMatch(ui,/throw new Error\('Build the Opportunity Map/);
+  assert.match(ui,/Opportunity Map is optional/);
   assert.match(ui,/Review and select the suggested customer profile before activation/);
 
   assert.match(ui,/Customer model active and synced\. It now informs Company Discovery/);

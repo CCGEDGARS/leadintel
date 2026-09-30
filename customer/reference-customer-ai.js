@@ -7,19 +7,26 @@
   const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
   const clean=value=>String(value??'').replace(/\s+/g,' ').trim();
   const unique=list=>[...new Set((list||[]).map(clean).filter(Boolean))];
-  function buildReferenceCustomerPrompt(rows=[]){
+  function buildReferenceCustomerPrompt(rows=[],seller={}){
     const items=(rows||[]).map(row=>({
       id:clean(row.id),companyName:clean(row.companyName),website:clean(row.website),
-      websiteEvidence:String(row.text||'').replace(/\s+/g,' ').trim().slice(0,2800)
+      referenceReason:clean(row.reason),knownService:clean(row.productService),websiteEvidence:String(row.text||'').replace(/\s+/g,' ').trim().slice(0,Math.min(6500,Math.floor(58000/Math.max(1,rows.length))))
     })).filter(row=>row.id&&row.websiteEvidence);
     return `Analyze these existing reference customers using ONLY the supplied first-party website evidence.
 
-For each company infer, only when supported: industry, sizeBand, businessModel, growthStage, operatingComplexity, customerOutcome, buyerRoles, buyingTriggers, and a one-sentence summary. Use confidence high/medium/low. Leave unsupported fields empty. Do not invent facts.
+Compare companies at two levels: their specific product industry and broader commercial/production characteristics. Use the SAME concise label for equivalent evidenced characteristics across the list, even when companies make different products. One company is a valid similarity seed; repeated traits are not a prerequisite.
+
+For each company infer, only when supported: broadIndustry (e.g. industrial equipment manufacturing), productionModel (e.g. equipment manufacturer, component manufacturer, distributor), capabilities (concise product/material/process terms), and industry, sizeBand, businessModel, growthStage, operatingComplexity, customerOutcome, buyerRoles, buyingTriggers, and a one-sentence summary. Use confidence high/medium/low. Leave unsupported fields empty. Do not invent facts.
+
+For broadIndustry, productionModel and capabilities, include sourceEvidence entries with field, an EXACT verbatim supporting quote from supplied websiteEvidence, and the supplied website URL. Do not infer outsourcing, supplier demand, purchasing intent or employee counts from general business descriptions. Seller context helps relevance but is not evidence of customer purchasing behavior.
+
+SELLER CONTEXT:
+${JSON.stringify(seller)}
 
 Then decide whether the list contains genuinely meaningful commercial segments. Segment only when at least two groups have materially different, repeated characteristics and each meaningful group contains at least two analyzed companies. Do not create segments merely to make the output look complete. If there is no meaningful segmentation, set meaningful=false and return one coherent segment containing all analyzed company IDs.
 
 Return JSON ONLY with this exact shape:
-{"companies":[{"id":"row-id","industry":"","sizeBand":"","businessModel":"","growthStage":"","operatingComplexity":"","customerOutcome":"","buyerRoles":[],"buyingTriggers":[],"confidence":"low|medium|high","summary":""}],"segmentation":{"meaningful":true,"segments":[{"name":"","rowIds":["row-id"],"confidence":"low|medium|high","summary":"","traits":[]}]}}
+{"companies":[{"id":"row-id","industry":"","broadIndustry":"","productionModel":"","capabilities":[],"sourceEvidence":[{"field":"broadIndustry","quote":"","url":""}],"sizeBand":"","businessModel":"","growthStage":"","operatingComplexity":"","customerOutcome":"","buyerRoles":[],"buyingTriggers":[],"confidence":"low|medium|high","summary":""}],"segmentation":{"meaningful":true,"segments":[{"name":"","rowIds":["row-id"],"confidence":"low|medium|high","summary":"","traits":[]}]}}
 
 Rules:
 - Never return a company or row ID that is not supplied below.
@@ -50,17 +57,21 @@ ${JSON.stringify(items)}`;
   function safeConfidence(value){const v=clean(value).toLowerCase();return ['high','medium','low'].includes(v)?v:'low';}
   function normalizeAnalysis(company={}){
     const out={};
-    for(const key of ['industry','sizeBand','businessModel','growthStage','operatingComplexity','customerOutcome','summary'])out[key]=clean(company[key]);
+    for(const key of ['industry','broadIndustry','productionModel','sizeBand','businessModel','growthStage','operatingComplexity','customerOutcome','summary'])out[key]=clean(company[key]);
     out.buyerRoles=unique(Array.isArray(company.buyerRoles)?company.buyerRoles:[]).slice(0,8);
     out.buyingTriggers=unique(Array.isArray(company.buyingTriggers)?company.buyingTriggers:[]).slice(0,8);
+    out.capabilities=unique(Array.isArray(company.capabilities)?company.capabilities:[]).slice(0,8);
+    out.sourceEvidence=(Array.isArray(company.sourceEvidence)?company.sourceEvidence:[]).map(item=>({field:clean(item.field),quote:clean(item.quote),url:clean(item.url)})).filter(item=>item.field&&item.quote&&item.url).slice(0,16);
     out.confidence=safeConfidence(company.confidence);
     return out;
   }
-  function parseReferenceCustomerAnalysis(text,allowedIds=[]){
+  function parseReferenceCustomerAnalysis(text,allowedIds=[],evidenceRows=[]){
     const allowed=new Set((allowedIds||[]).map(clean).filter(Boolean));
     const candidate=stripFence(text);let raw;try{raw=JSON.parse(candidate);}catch{try{raw=JSON.parse(extractJsonObject(candidate));}catch{throw new Error('AI returned invalid reference customer analysis');}}
     const analyses={};
-    for(const company of Array.isArray(raw?.companies)?raw.companies:[]){const id=clean(company?.id);if(!id||!allowed.has(id))continue;analyses[id]=normalizeAnalysis(company);}
+    for(const company of Array.isArray(raw?.companies)?raw.companies:[]){const id=clean(company?.id);if(!id||!allowed.has(id))continue;analyses[id]=normalizeAnalysis(company);
+      const source=evidenceRows.find(row=>clean(row.id)===id);
+      if(source){const text=clean(source.text).toLowerCase();const valid=analyses[id].sourceEvidence.filter(item=>item.quote.length>=12&&text.includes(clean(item.quote).toLowerCase())&&item.url===clean(source.website));analyses[id].sourceEvidence=valid;for(const field of ['broadIndustry','productionModel','capabilities'])if(!valid.some(item=>item.field===field))analyses[id][field]=field==='capabilities'?[]:'';}}
     const sourceSegments=Array.isArray(raw?.segmentation?.segments)?raw.segmentation.segments:[];
     const segments=[];
     for(let index=0;index<sourceSegments.length;index++){
@@ -77,7 +88,7 @@ ${JSON.stringify(items)}`;
     }
     return {analyses,segments,segmentationMeaningful:meaningful};
   }
-  async function requestReferenceCustomerAnalysis({workspaceId,rows=[],fetchImpl}={}){
+  async function requestReferenceCustomerAnalysis({workspaceId,rows=[],seller={},fetchImpl}={}){
     const id=clean(workspaceId);if(!id)throw new Error('Sign in to a LeadIntel workspace before AI analysis');
     const usable=(rows||[]).filter(row=>clean(row?.id)&&clean(row?.text));if(!usable.length)throw new Error('No website evidence is available for AI analysis');
     const fetcher=fetchImpl||globalThis.fetch;if(typeof fetcher!=='function')throw new Error('AI analysis is unavailable');
@@ -90,14 +101,14 @@ ${JSON.stringify(items)}`;
       const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(clean(payload?.error)||`AI analysis failed (${response.status})`);
       return payload?.text??payload?.output_text??payload?.content??'';
     };
-    const prompt=buildReferenceCustomerPrompt(usable);
+    const prompt=buildReferenceCustomerPrompt(usable,seller);
     const first=await generate(prompt,7000);
-    try{return parseReferenceCustomerAnalysis(first,usable.map(row=>row.id));}
+    try{return parseReferenceCustomerAnalysis(first,usable.map(row=>row.id),usable);}
     catch(error){
       if(clean(error?.message)!=='AI returned invalid reference customer analysis')throw error;
       const recovery=`${prompt}\n\nRECOVERY ATTEMPT: The previous response was malformed or incomplete. Return one complete JSON object only. Keep every string concise, include no markdown or commentary, and finish the JSON within the token limit.`;
       const second=await generate(recovery,8192);
-      return parseReferenceCustomerAnalysis(second,usable.map(row=>row.id));
+      return parseReferenceCustomerAnalysis(second,usable.map(row=>row.id),usable);
     }
   }
   function parseOpportunityMap(text){

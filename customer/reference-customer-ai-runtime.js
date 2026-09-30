@@ -1,6 +1,6 @@
-import './reference-customer-library.js?v=20260924-reference-consensus-v1';
-import './reference-customer-portfolio.js?v=20260923-reference-interface-v1&reference-discovery=5';
-import './reference-customer-library-ui.js?v=20260927-save-only-v1&target-research=1&saving-mode=1&reference-discovery=5';
+import './reference-customer-library.js?v=20260924-reference-consensus-v1&reference-similarity=20260930-v1';
+import './reference-customer-portfolio.js?v=20260923-reference-interface-v1&reference-discovery=5&reference-similarity=20260930-v1';
+import './reference-customer-library-ui.js?v=20260927-save-only-v1&target-research=1&saving-mode=1&reference-discovery=5&reference-similarity=20260930-v1';
 import './reference-customer-delete-ui.js?v=20260923-reference-interface-v1&reference-discovery=5';
 import './reference-customer-upload-mode.js?v=20260911-reference-single-owner-v1&reference-discovery=5';
 
@@ -38,8 +38,8 @@ const REFERENCE_AI_CONCURRENCY=4;
   async function scrapeRow(row){
     const response=await fetch(`${REFERENCE_AI_FIRECRAWL}/firecrawl-scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:row.website,formats:['markdown'],onlyMainContent:true,timeout:25000})});
     const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(clean(payload?.error)||`Website returned ${response.status}`);
-    const data=payload.data||payload;const text=String(data.markdown||data.content||'').replace(/\s+/g,' ').trim().slice(0,5000);if(!text)throw new Error('No readable website content');
-    return {id:row.id,companyName:row.companyName,website:row.website,text};
+    const data=payload.data||payload;const text=String(data.markdown||data.content||'').replace(/\s+/g,' ').trim().slice(0,6500);if(!text)throw new Error('No readable website content');
+    return {id:row.id,companyName:row.companyName,website:row.website,text,reason:row.reason,productService:row.productService};
   }
   async function mapLimit(rows,worker){
     const results=new Array(rows.length);let cursor=0;
@@ -70,7 +70,7 @@ const REFERENCE_AI_CONCURRENCY=4;
     const evidence=scraped.filter(item=>item.ok).map(item=>item.value);const failures=scraped.length-evidence.length;
     if(!evidence.length)throw new Error('No reference customer websites could be read');
     status(`Running AI analysis on ${evidence.length} reference customers…`);
-    const result=await AI.requestReferenceCustomerAnalysis({workspaceId:workspace,rows:evidence});
+    const result=await AI.requestReferenceCustomerAnalysis({workspaceId:workspace,rows:evidence,seller:{website:state.website,offers:state.profile?.priorityOffers,idealCustomer:state.profile?.idealCustomer,targetMarkets:state.targetMarkets}});
     if(!Object.keys(result.analyses||{}).length)throw new Error('AI analysis returned no supported company classifications');
     const coherentProfile=result.segmentationMeaningful?result:Ref.buildReferenceSegments(state.referenceCustomers.rows,result.analyses);
     state=readState();
@@ -83,7 +83,7 @@ const REFERENCE_AI_CONCURRENCY=4;
       ...state.referenceCustomers,
       analyses:result.analyses,
       segments:coherentProfile.segments,
-      segmentationMeaningful:Boolean(coherentProfile.meaningful),
+      segmentationMeaningful:Boolean(coherentProfile.meaningful||coherentProfile.segmentationMeaningful),
       analyzedAt:new Date().toISOString()
     });
     state=Portfolio.syncCurrentList(state);

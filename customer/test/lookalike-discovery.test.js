@@ -47,7 +47,8 @@ test('Step 1 target markets constrain lookalike queries country by country',()=>
   assert.ok(queries.some(q=>q.market==='Germany'));
   assert.ok(queries.some(q=>q.market==='Poland'));
   assert.equal(queries.some(q=>q.market==='Sweden'),false);
-  assert.ok(queries.every(q=>q.query.includes('industrial manufacturing')&&q.query.includes('factory expansion')));
+  assert.ok(queries.every(q=>q.query.includes('industrial manufacturing')));
+  assert.ok(queries.some(q=>!q.query.includes('factory expansion')),'Similarity search must work without a buying event');
 });
 
 test('activated lookalike resemblance changes review priority without changing opportunity evidence',()=>{

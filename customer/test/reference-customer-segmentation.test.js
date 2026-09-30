@@ -77,7 +77,7 @@ test('five high-confidence company analyses do not create a high-confidence prof
 
   assert.equal(profile.confidence,'low');
   assert.equal(profile.recurringDimensionCount,0);
-  assert.equal(profile.canActivate,false);
+  assert.equal(profile.canActivate,true);
   assert.match(profile.summary,/No recurring commercial traits/i);
   assert.doesNotMatch(profile.summary,/shared traits/i);
   assert.ok(profile.traits.every(trait=>/\(1\/5\)/.test(trait)));

@@ -54,7 +54,7 @@ test('manager analyzes before activation and shows segment review controls',()=>
 });
 
 test('profile review distinguishes one-off observations and requires explicit selection',()=>{
-  assert.match(ui,/No shared customer pattern detected/i);
+  assert.match(ui,/Individual reference profiles ready/i);
   assert.match(ui,/Observed attributes/i);
   assert.match(ui,/segment\.canActivate/);
   assert.match(ui,/checked:not\(:disabled\)/);
@@ -62,7 +62,7 @@ test('profile review distinguishes one-off observations and requires explicit se
 });
 
 test('activation copy explains downstream effect without implying outreach',()=>{
-  assert.match(ui,/Only traits repeated across a segment/i);
+  assert.match(ui,/one reference is enough/i);
   assert.match(ui,/verified opportunities rank by fit and demand signals/i);
   assert.match(ui,/Discovery/i);
   assert.match(ui,/does not exclude other companies or add these references to outreach/i);

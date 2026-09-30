@@ -118,7 +118,7 @@ test('newList clears only the editor and preserves saved and active lists',()=>{
 test('active model aggregation preserves per-list models and creates usable combined DNA',()=>{
   let state={referenceCustomers:referenceState({active:true,fingerprint:'rc-a'})};
   state=Portfolio.saveCurrentList(state,{name:'A'});state=Portfolio.setListActive(state,state.referenceCustomerPortfolio.selectedListId,true);
-  state.referenceCustomers=referenceState({active:true,fingerprint:'rc-b'});state.referenceCustomers.publishedModel.dna.dimensions=[{key:'sizeBand',values:['50-200'],weight:1,confidence:'medium'}];
+  state.referenceCustomers=referenceState({active:true,fingerprint:'rc-b'});state.referenceCustomers.publishedModel.dna.dimensions=[{key:'sizeBand',values:['50-200'],weight:1,confidence:'medium',evidenceCount:3}];
   state.referenceCustomerPortfolio.selectedListId='';state=Portfolio.saveCurrentList(state,{name:'B'});state=Portfolio.setListActive(state,state.referenceCustomerPortfolio.selectedListId,true);
   const combined=Portfolio.getCombinedActiveModel(state);
   assert.equal(combined.active,true);
