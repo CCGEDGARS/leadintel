@@ -1,7 +1,7 @@
-import './first-party-research.js?v=20260930-research-pipeline-v1';
-import './reference-customer-library.js?v=20260924-reference-consensus-v1&reference-similarity=20260930-v1&reference-refresh=2';
-import './reference-customer-portfolio.js?v=20260923-reference-interface-v1&reference-discovery=5&reference-similarity=20260930-v1&reference-refresh=2';
-import './reference-customer-library-ui.js?v=20260927-save-only-v1&target-research=1&saving-mode=1&reference-discovery=5&reference-similarity=20260930-v1&reference-refresh=2';
+import './first-party-research.js?v=20260930-research-pipeline-v2';
+import './reference-customer-library.js?v=20260924-reference-consensus-v1&reference-similarity=20260930-v1&reference-refresh=4';
+import './reference-customer-portfolio.js?v=20260923-reference-interface-v1&reference-discovery=5&reference-similarity=20260930-v1&reference-refresh=4';
+import './reference-customer-library-ui.js?v=20260927-save-only-v1&target-research=1&saving-mode=1&reference-discovery=5&reference-similarity=20260930-v1&reference-refresh=4';
 import './reference-customer-delete-ui.js?v=20260923-reference-interface-v1&reference-discovery=5';
 import './reference-customer-upload-mode.js?v=20260911-reference-single-owner-v1&reference-discovery=5';
 
@@ -83,18 +83,13 @@ const REFERENCE_AI_CONCURRENCY=4;
     if(workspaceId()!==workspace||!sameRows||state.referenceCustomerPortfolio?.selectedListId!==listId)
       throw new Error('The reference list changed during analysis. The results were not applied. Open the saved list and analyze it again.');
     state.referenceCustomers=Ref.normalizeReferenceState(state.referenceCustomers||{});
-    state.referenceCustomers=Ref.markReferenceDraftChanged({
-      ...state.referenceCustomers,
-      analyses:result.analyses,
-      segments:coherentProfile.segments,
-      segmentationMeaningful:Boolean(coherentProfile.meaningful||coherentProfile.segmentationMeaningful),
-      analyzedAt:new Date().toISOString()
-    });
+    state.referenceCustomers=Ref.applyRefreshedAnalysis(state.referenceCustomers,result.analyses,new Date().toISOString());
     state=Portfolio.syncCurrentList(state);
     await writeState(state);
     const synced=await root.LeadIntelServerBridge.saveNow?.({saveIntent:true});
     if(synced?.saved!==true)throw new Error('Analysis finished, but the result has not synced to your workspace. Check workspace sync before continuing.');
-    status(`AI analysis complete · ${Object.keys(result.analyses).length} companies classified · ${evidence.reduce((total,row)=>total+(row.coverage?.pagesRead||1),0)} website pages read${failures?` · ${failures} websites need review`:''}. Review the Customer segments before activation.`);
+    const usableCount=Object.values(result.analyses).filter(analysis=>analysis.sourceEvidence?.some(item=>['broadIndustry','productionModel','capabilities'].includes(item.field))).length;
+    status(`AI analysis complete · ${usableCount}/${ready.length} references have quoted commercial evidence · ${Object.keys(result.analyses).length} companies classified · ${evidence.reduce((total,row)=>total+(row.coverage?.pagesRead||1),0)} website pages read${failures?` · ${failures} websites need review`:''}. Review the reference profiles. ${state.referenceCustomers.draftDirty?'Previous model retained; review and activate the new analysis.':state.referenceCustomers.publishedModel?.active?'Refreshed evidence is active in company discovery.':'Select and activate the profile to use it in discovery.'}`);
   }
   document.addEventListener('click',async event=>{
     const button=(event.target?.closest?.('#reference-analyze')||event.target?.closest?.('[data-refresh-reference-analysis]'));if(!button)return;

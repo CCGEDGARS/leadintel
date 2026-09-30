@@ -144,3 +144,17 @@ test('Excel smart import consumes new-vs-append mode itself before stopping prop
   assert.match(smartImport,/event\.stopImmediatePropagation\(\)/);
   assert.match(processMap,/reference-customer-smart-import\.js\?v=20260923-reference-interface-v1/);
 });
+test('refresh of an unchanged active list replaces the exact discovery seed and excludes weak references',()=>{
+ const {state,rows}=builtState();const old=Ref.publishReferenceModel(state);const analyses={[rows[0].id]:{broadIndustry:'Lifting machinery',productionModel:'Equipment manufacturer',capabilities:['Welded assemblies'],confidence:'medium',sourceEvidence:[{field:'broadIndustry',quote:'We manufacture lifting machinery',url:'https://acme.example/products'}]},[rows[1].id]:{operatingComplexity:'Regional websites',confidence:'low'}};
+ const refreshed=Ref.applyRefreshedAnalysis(Ref.markReferenceDraftChanged(old),analyses,'2026-09-30T20:00:00Z');const active=Ref.getActiveReferenceModel(refreshed);
+ assert.equal(refreshed.draftDirty,false);assert.equal(active.activeRows.length,1);assert.equal(active.dna.referenceProfiles[0].companyName,'Acme');assert.equal(active.dna.referenceProfiles[0].dimensions.find(d=>d.key==='broadIndustry').values[0],'Lifting machinery');assert.equal(refreshed.analyzedAt,'2026-09-30T20:00:00Z');
+});
+test('failed refresh retains prior published evidence and an edited list requires review',()=>{
+ const {state,rows}=builtState();const old=Ref.publishReferenceModel(state);const failed=Ref.applyRefreshedAnalysis(old,{[rows[0].id]:{confidence:'low'}});assert.equal(failed.draftDirty,true);assert.equal(Ref.getActiveReferenceModel(failed).dna.activeCount,2);
+ const edited=Ref.applyRefreshedAnalysis({...old,rows:[rows[0]]},{[rows[0].id]:{broadIndustry:'Changed sector',sourceEvidence:[{field:'broadIndustry',quote:'We make equipment for construction',url:'https://acme.example/'}]}});assert.equal(edited.draftDirty,true);assert.equal(Ref.getActiveReferenceModel(edited).dna.activeCount,2);
+});
+test('refreshed profiles drive lookalike queries while directory-only classifications cannot activate',()=>{
+ const AI=require('../reference-customer-ai.js'),Look=require('../lookalike-discovery.js');const {state,rows}=builtState();const quote='We manufacture lifting machinery and welded assemblies.';const evidence=[{id:rows[0].id,website:rows[0].website,text:quote,sources:[{url:rows[0].website,text:quote}]}];const parsed=AI.parseReferenceCustomerAnalysis(JSON.stringify({companies:[{id:rows[0].id,broadIndustry:'Lifting machinery',productionModel:'Equipment manufacturer',capabilities:['Welded assemblies'],sourceEvidence:['broadIndustry','productionModel','capabilities'].map(field=>({field,quote,url:rows[0].website})),confidence:'high'}]}),[rows[0].id],evidence);
+ const refreshed=Ref.applyRefreshedAnalysis(Ref.publishReferenceModel(state),parsed.analyses);const model=Ref.getActiveReferenceModel(refreshed);const queries=Look.buildLookalikeDiscoveryQueries({targetMarkets:['Sweden']},model.dna,5);assert.ok(queries.some(q=>q.query.includes('Lifting machinery')));assert.ok(queries.some(q=>q.query.includes('Equipment manufacturer')));assert.ok(queries.every(q=>q.referenceCompany==='Acme'));
+ const weak={rows:[rows[0]],analyses:{[rows[0].id]:{analysisVersion:4,operatingComplexity:'Country selector',sourceEvidence:[],confidence:'low'}}};let candidate=Ref.activateReferenceCustomers(weak,[rows[0].id]);candidate.dna=Ref.buildReferenceDna(candidate,candidate.analyses);assert.equal(Ref.hasUsableReferenceDna(candidate.dna),false);
+});

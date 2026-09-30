@@ -15,7 +15,9 @@
       let path=url.pathname;try{path=decodeURI(path);}catch{}const label=path+' '+clean(item?.title||'');
       const company=/product|service|capabilit|manufactur|production|solution|project|case|customer|about|produkt|tjänst|tjanst|tillverk|lösning|losning|referens|om-oss/i.test(label);
       const people=/contact|kontakt|team|people|leadership|management|ledning|organisation|organization|about|om-oss/i.test(label);
-      const score=(purpose==='buyers'?people?10:company?2:0:purpose==='verification'?/contact|kontakt/i.test(label)?11:company?10:people?3:0:company?10:people?3:0);
+      const locale=/^\/(?:en(?:[-_][a-z]{2})?|english)(?:\/|$)/i.test(path);
+      const commercial=/product|capabilit|manufactur|production|produkt|tillverk/i.test(label);
+      const score=(purpose==='buyers'?people?10:company?2:0:purpose==='verification'?/contact|kontakt/i.test(label)?11:company?10:people?3:0:commercial?16:company?12:locale?10:people?1:0);
       if(score)urls.set(normalized,{url:url.href,score});
     }
     return [...urls.values()].sort((a,b)=>b.score-a.score||a.url.localeCompare(b.url)).slice(0,Math.max(0,Math.min(6,limit))).map(x=>x.url);
@@ -32,25 +34,32 @@
         const payload=await Promise.race([response.json().catch(()=>({})),cancelled]);if(!response.ok)throw new Error(`Website extraction failed (${response.status})`);
         const data=payload.data||payload,actual=data.metadata?.sourceURL||data.metadata?.url||url;
         if(host(actual)!==domain)throw new Error('Website redirected outside the company domain');
-        const text=String(data.markdown||data.content||'').trim().slice(0,20000);
+        const text=String(data.markdown||data.content||'').trim().slice(0,60000);
         if(!usableText(text))throw new Error('Insufficient readable company evidence');
         return {url:actual,title:clean(data.metadata?.title||data.title)||domain,text,links:data.links||[],provider:response.headers?.get?.('X-LeadIntel-Extractor')||data.metadata?.source||'firecrawl',fetchedAt:new Date().toISOString()};
       }finally{clearTimeout(timer);controller.signal.removeEventListener('abort',stop);signal?.removeEventListener('abort',abort);}
     }
     const home=await read(website);pages.push(home);
-    const urls=selectInternalLinks(home,home.url,purpose,Math.max(0,maxPages-1));
-    // Bound concurrency and depth: homepage plus relevant first-level links only.
-    for(let i=0;i<urls.length;i+=2){
+    const pageLimit=Math.max(1,Math.min(8,Number(maxPages)||5));
+    const visited=new Set([home.url.replace(/\/$/,'')]),queue=selectInternalLinks(home,home.url,purpose,6).map(url=>({url,depth:1}));
+    while(queue.length&&pages.length<pageLimit&&visited.size<pageLimit+3){
       if(signal?.aborted)throw signal.reason||Object.assign(new Error('Research cancelled'),{name:'AbortError'});
-      const batch=await Promise.allSettled(urls.slice(i,i+2).map(read));
-      batch.forEach((result,index)=>{if(result.status==='fulfilled')pages.push(result.value);else issues.push({url:urls[i+index],reason:clean(result.reason?.message)});});
+      const next=queue.shift(),key=next.url.replace(/\/$/,'');if(visited.has(key))continue;visited.add(key);
+      try{const page=await read(next.url);pages.push(page);
+        if(next.depth<2){const links=selectInternalLinks(page,page.url,purpose,6).filter(url=>!visited.has(url.replace(/\/$/,'')));queue.unshift(...links.map(url=>({url,depth:next.depth+1})));}
+      }catch(error){issues.push({url:next.url,reason:clean(error.message)});}
     }
     if(signal?.aborted)throw signal.reason||Object.assign(new Error('Research cancelled'),{name:'AbortError'});
-    return {domain,pages,issues,coverage:{pagesRead:pages.length,pagesPlanned:urls.length+1,partial:issues.length>0}};
+    return {domain,pages,issues,coverage:{pagesRead:pages.length,pagesPlanned:visited.size,partial:issues.length>0}};
+  }
+  function selectEvidenceText(text,budget){
+    const blocks=String(text||'').split(/\n+/).map(clean).filter(Boolean);
+    const substantive=blocks.filter(block=>/(manufactur|produc|equipment|machin|develop|capabilit|steel|metal|weld|assembly|mining|construction|harvest|forestry|crane|lift|tillverk|produkt)/i.test(block)&&block.replace(/\[[^\]]*\]\([^)]*\)/g,'').length>=40);
+    return clean([...substantive,...blocks.filter(block=>!substantive.includes(block))].join(' ')).slice(0,budget);
   }
   function boundedSources(pages=[],budget=12000){
     const usable=pages.filter(page=>page.url&&usableText(page.text));const perPage=Math.floor(budget/Math.max(1,usable.length));
-    return usable.map(page=>({url:page.url,title:page.title,text:clean(page.text).slice(0,perPage),provider:page.provider,fetchedAt:page.fetchedAt}));
+    return usable.map(page=>({url:page.url,title:page.title,text:selectEvidenceText(page.text,perPage),provider:page.provider,fetchedAt:page.fetchedAt}));
   }
   function parseQueryPlan(text,markets=[],limit=8){
     let raw;try{raw=JSON.parse(String(text).replace(/^```(?:json)?\s*/i,'').replace(/```\s*$/,''));}catch{return [];}
@@ -65,5 +74,5 @@
     const response=await fetchImpl(`https://leadintel-api.edgars-7e7.workers.dev/api/ai/generate?workspace_id=${encodeURIComponent(workspaceId)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},signal,body:JSON.stringify({task:'discovery-query-planning',system:'Plan public company discovery queries. Translation is search planning, not verified evidence. Return JSON only.',prompt:`Create up to ${limit} diverse short company discovery queries for markets ${JSON.stringify(markets)}. Use both the native business language of each market and English. Prioritize broad industry, production model and specific capabilities in separate query families. Start with one English and one native-language query per market before deeper variants. Include the market in every query. Do not require buying events, combine unrelated industries, invent company names, or add tender queries. Return {"queries":[{"market":"exact supplied market","language":"language code","query":""}]}. Context: ${JSON.stringify(context).slice(0,10000)}`,max_output_tokens:1800})});
     if(!response.ok)throw new Error('Local-language query planning unavailable');const data=await response.json();return parseQueryPlan(data.text,markets,limit);
   }
-  return {usableText,selectInternalLinks,collectWebsiteEvidence,boundedSources,parseQueryPlan,planLocalQueries};
+  return {selectEvidenceText,usableText,selectInternalLinks,collectWebsiteEvidence,boundedSources,parseQueryPlan,planLocalQueries};
 });

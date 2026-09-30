@@ -25,6 +25,7 @@
       confidence:clean(value.confidence||value.dna.confidence)||'low',
       dna:{...clone(value.dna),active:true,fingerprint,activeCount:Number(value.dna.activeCount||activeCount)||activeCount},
       activeRows,
+      sourceRows:Array.isArray(value.sourceRows)?clone(value.sourceRows):clone(activeRows),
       activeSegments,
       segmentIds:Array.isArray(value.segmentIds)?[...new Set(value.segmentIds.map(clean).filter(Boolean))]:activeSegments.map(segment=>clean(segment.id)).filter(Boolean),
       activatedAt:clean(value.activatedAt||value.dna.builtAt),
@@ -138,6 +139,17 @@
     return normalizeReferenceState({...normalized,publishedModel,draftDirty:false,updatedAt:now});
   }
 
+  function applyRefreshedAnalysis(state={},analyses={},analyzedAt=new Date().toISOString()){
+    const previous=normalizeReferenceState(state),wasActive=Boolean(previous.publishedModel?.active&&previous.publishedModel.sourceRows?.length===previous.rows.length&&previous.rows.every(row=>previous.publishedModel.sourceRows.some(old=>old.id===row.id&&old.website===row.website)));
+    const supportedRows=previous.rows.filter(row=>analyses[row.id]?.sourceEvidence?.some(item=>['broadIndustry','productionModel','capabilities'].includes(item.field)));
+    const segmentation=Ref.buildReferenceSegments(previous.rows,analyses);
+    let next=markReferenceDraftChanged({...previous,analyses,segments:segmentation.segments,segmentationMeaningful:segmentation.meaningful,analyzedAt});
+    if(wasActive&&supportedRows.length){
+      next=activateReferenceCustomers(next,supportedRows.map(row=>row.id));next.fingerprint=`${next.fingerprint}:analysis:${analyzedAt}`;next.dna=Ref.buildReferenceDna(next,next.analyses);
+      next=publishReferenceModel(next);next.publishedModel.sourceRows=clone(previous.rows);
+    }
+    return next;
+  }
   function getActiveReferenceModel(state={}){
     const normalized=normalizeReferenceState(state);
     const published=normalized.publishedModel;
@@ -162,9 +174,10 @@
   Ref.markReferenceDraftChanged=markReferenceDraftChanged;
   Ref.publishReferenceModel=publishReferenceModel;
   Ref.getActiveReferenceModel=getActiveReferenceModel;
+  Ref.applyRefreshedAnalysis=applyRefreshedAnalysis;
   Ref.normalizePublishedModel=normalizePublishedModel;
 
-  const api={normalizeReferenceState,activateReferenceCustomers,activateReferenceSegments,markReferenceDraftChanged,publishReferenceModel,getActiveReferenceModel,normalizePublishedModel};
+  const api={applyRefreshedAnalysis,normalizeReferenceState,activateReferenceCustomers,activateReferenceSegments,markReferenceDraftChanged,publishReferenceModel,getActiveReferenceModel,normalizePublishedModel};
   root.LeadIntelReferenceCustomerLibrary=api;
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

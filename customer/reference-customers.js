@@ -110,6 +110,7 @@
     for(const key of ['industry','broadIndustry','productionModel','sizeBand','businessModel','growthStage','operatingComplexity','customerOutcome','summary'])if(clean(value[key]))copy[key]=clean(value[key]);
     for(const key of ['buyerRoles','buyingTriggers','capabilities'])if(Array.isArray(value[key]))copy[key]=[...new Set(value[key].map(clean).filter(Boolean))].slice(0,8);
     copy.sourceEvidence=(Array.isArray(value.sourceEvidence)?value.sourceEvidence:[]).map(item=>({field:clean(item.field),quote:clean(item.quote),url:normalizeUrl(item.url)})).filter(item=>item.field&&item.quote&&item.url).slice(0,16);
+    if(value.analysisVersion===4)copy.analysisVersion=4;
     copy.confidence=['high','medium','low'].includes(clean(value.confidence).toLowerCase())?clean(value.confidence).toLowerCase():'low';
     return copy;
   }
@@ -163,7 +164,7 @@
   function confidenceFor(analyses,rowIds){const levels=rowIds.map(id=>clean(analyses[id]?.confidence).toLowerCase()).filter(Boolean);if(levels.filter(v=>v==='high').length>=Math.ceil(rowIds.length*.6))return 'high';if(levels.some(v=>v==='high'||v==='medium'))return 'medium';return 'low';}
   const PROFILE_DIMENSIONS=[['broadIndustry',false],['productionModel',false],['capabilities',true],['industry',false],['sizeBand',false],['businessModel',false],['growthStage',false],['operatingComplexity',false],['customerOutcome',false],['buyerRoles',true],['buyingTriggers',true]];
   const DIMENSION_LABELS={broadIndustry:'Commercial sector',productionModel:'Production model',capabilities:'Products and capabilities',industry:'Industry',sizeBand:'Company size',businessModel:'Business model',growthStage:'Growth stage',operatingComplexity:'Operating complexity',customerOutcome:'Customer outcome',buyerRoles:'Buyer roles',buyingTriggers:'Buying triggers'};
-  function hasAnalysisFacts(analysis={}){return PROFILE_DIMENSIONS.some(([key,arrayValue])=>arrayValue?Array.isArray(analysis[key])&&analysis[key].some(clean):Boolean(clean(analysis[key])));}
+  function hasAnalysisFacts(analysis={}){if(analysis.analysisVersion===4&&!analysis.sourceEvidence?.some(item=>['broadIndustry','productionModel','capabilities'].includes(item.field)))return false;return PROFILE_DIMENSIONS.some(([key,arrayValue])=>arrayValue?Array.isArray(analysis[key])&&analysis[key].some(clean):Boolean(clean(analysis[key])));}
   function hasUsableReferenceDna(dna){return Boolean(dna?.active&&(dna.dimensions?.length||dna.referenceProfiles?.some(profile=>profile.dimensions?.length)));}
   function supportThreshold(sampleSize){return sampleSize<=1?1:Math.max(2,Math.ceil(sampleSize*.6));}
   function commonValues(analyses,rowIds,key,arrayValue=false,limit=4){const counts=new Map();for(const id of rowIds){const raw=analyses[id]?.[key];const values=[...new Set((arrayValue?(Array.isArray(raw)?raw:[]):[raw]).map(clean).filter(Boolean))];for(const value of values)counts.set(value,(counts.get(value)||0)+1);}return [...counts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,limit).map(([value,count])=>({value,count}));}
@@ -198,7 +199,13 @@
     const rowIds=eligible.map(row=>row.id);return {meaningful:false,segments:[segmentFromRows(inferredProfileName(rowIds,analyses),rowIds,analyses)],analyzedCount:eligible.length};
   }
   function buildReferenceDnaFromState(normalized,analyses){
-    const ids=new Set(normalized.activeIds||[]),rows=(normalized.rows||[]).filter(row=>ids.has(row.id));if(!normalized.activated||!rows.length)return null;
+    analyses=Object.fromEntries(Object.entries(analyses).map(([id,analysis])=>{
+      if(analysis.analysisVersion!==4)return [id,analysis];
+      const supported=new Set((analysis.sourceEvidence||[]).map(item=>item.field)),verified={...analysis};
+      for(const [key,arrayValue] of PROFILE_DIMENSIONS)if(!supported.has(key))verified[key]=arrayValue?[]:'';
+      return [id,verified];
+    }));
+    const ids=new Set(normalized.activeIds||[]),rows=(normalized.rows||[]).filter(row=>ids.has(row.id)&&(analyses[row.id]?.analysisVersion!==4||hasAnalysisFacts(analyses[row.id])));if(!normalized.activated||!rows.length)return null;
     const rowIds=rows.map(row=>row.id),dimensions=[],threshold=supportThreshold(rows.length);
     for(const [key,arrayValue] of PROFILE_DIMENSIONS){
       const allValues=commonValues(analyses,rowIds,key,arrayValue,100),values=allValues.filter(item=>item.count>=threshold).slice(0,5);if(!values.length)continue;

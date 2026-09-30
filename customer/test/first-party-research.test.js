@@ -57,3 +57,8 @@ test('buyer search verifies live company content before Apollo and does not manu
  const source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');const start=source.indexOf('async function searchDecisionMakers'),end=source.indexOf('function personKey',start);const block=source.slice(start,end<0?undefined:end);
  assert.ok(block.indexOf('collectWebsiteEvidence')<block.indexOf('searchApolloPeople'));assert.match(block,/purpose:'buyers'/);assert.doesNotMatch(block,/candidate\.qualified\s*=\s*true/);
 });
+test('country selector follows a discovered English page to product evidence within budget',async()=>{
+ const seen=[];const result=await R.collectWebsiteEvidence({website:'https://equipment.example/',maxPages:3,fetchImpl:async(_,options)=>{const {url}=JSON.parse(options.body);seen.push(url);const locale=url.endsWith('/en');return {ok:true,json:async()=>({data:{markdown:url.endsWith('/products')?evidence:'Choose your country and regional customer contacts. '.repeat(4),links:url.endsWith('.example/')?['/en','/en/contact']:locale?['/en/products']:[],metadata:{sourceURL:url}}})};}});
+ assert.ok(seen.includes('https://equipment.example/en/products'));assert.equal(result.pages.length,3);assert.equal(new Set(seen).size,seen.length);
+});
+test('product evidence beyond long navigation survives the bounded prompt budget',()=>{const text=Array.from({length:100},(_,i)=>`[Country ${i}](/region-${i})`).join('\n')+'\nWe manufacture hydraulic cranes and welded steel assemblies for industrial machinery.';const bounded=R.boundedSources([{url:'https://example.com/products',text}],180);assert.match(bounded[0].text,/manufacture hydraulic cranes/);assert.ok(bounded[0].text.length<=180);});

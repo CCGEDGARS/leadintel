@@ -60,3 +60,12 @@ The shared reader uses extracted first-level links, not the Firecrawl Map/Crawl 
 ### Verification
 
 Behavioral tests cover Swedish internal-link selection, per-page citation validation, large-upload prompt limits, partial extraction, blocker/foreign-domain rejection, cancellation, authenticated bilingual planning, HTTP-200 fallback and the no-Apollo-on-failed-company-precheck gate. Full customer/backend regression suites and the static build are required. Production status additionally requires exact-SHA CI, release manifest, backend health and configured smoke proof. An authenticated ten-company end-to-end run must be reported separately from deployment proof.
+
+
+## Reference evidence refresh (30 September 2026)
+
+The collector follows discovered locale pages and a second level of commercial pages within the same company domain. Product and production pages outrank contacts; requests and depth remain bounded. Evidence budgets prioritize substantive product/manufacturing text over navigation. No URL or commercial fact is fabricated.
+
+Refreshing an unchanged active list replaces its published discovery model using references with quoted commercial evidence. Failed references remain visible for review and are excluded from the new active seeds. A fully unsuccessful refresh retains the previous model; an edited source list still requires review. Analysis-version fingerprints invalidate stale discovery results without deleting CRM records.
+
+Verification covers locale-selector recovery, long navigation, exact quote validation, active-model replacement, failed-refresh preservation and list-edit protection. Production provider access and signed-in results must be verified separately; page count alone is not a quality gate.
