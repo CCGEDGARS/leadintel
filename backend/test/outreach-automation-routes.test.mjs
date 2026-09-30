@@ -19,7 +19,7 @@ class DB{
       CREATE TABLE gmail_connections(workspace_id TEXT PRIMARY KEY,user_id TEXT,google_email TEXT,encrypted_refresh_token TEXT,scopes TEXT,status TEXT,history_id TEXT,connected_at TEXT,updated_at TEXT,disconnected_at TEXT);
       CREATE TABLE gmail_messages(id TEXT PRIMARY KEY,workspace_id TEXT,idempotency_key TEXT,domain TEXT,recipient TEXT,subject TEXT,gmail_message_id TEXT,gmail_thread_id TEXT,sent_by TEXT,sent_at TEXT,status TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,UNIQUE(workspace_id,idempotency_key));
       INSERT INTO workspaces(id,name,market) VALUES('w1','Test','LV');`);
-    this.raw.exec(fs.readFileSync(new URL('../migrations/0015_outreach_automation.sql',import.meta.url),'utf8'));this.raw.exec(fs.readFileSync(new URL('../migrations/0024_automation_brand_html.sql',import.meta.url),'utf8'));
+    this.raw.exec(fs.readFileSync(new URL('../migrations/0015_outreach_automation.sql',import.meta.url),'utf8'));this.raw.exec(fs.readFileSync(new URL('../migrations/0024_automation_brand_html.sql',import.meta.url),'utf8'));this.raw.exec(fs.readFileSync(new URL('../migrations/0025_contact_suppression.sql',import.meta.url),'utf8'));
   }
   prepare(sql){return new Statement(this.raw,sql);}async batch(rows){for(const row of rows)await row.run();}
 }
@@ -68,4 +68,16 @@ sqliteTest('status counts confirmed sends in the configured timezone-local day a
   response=await handleOutreachAutomationRoute(request('/api/outreach-automation/status?workspace_id=w1',{token}),env,{});const result=await response.json();
   assert.equal(response.status,200);assert.equal(result.usage.workspaceSentToday,1);assert.equal(result.usage.mailboxSentToday,1);assert.equal(result.usage.workspaceLimit,20);assert.equal(result.queue.queued,1);assert.equal(result.queue.blockedByLimit,1);assert.match(result.queue.nextEligibleSendAt,/^2026-09-08T08:00/);
   assert.deepEqual(result.activity,{sent:0,failed:0,replies:1,interested:1,meetingRequests:1});
+});
+
+sqliteTest('owner suppression is workspace-wide, idempotent, and blocks automatic queueing',async()=>{
+  const {env,token,db}=await fixture();
+  let response=await handleOutreachAutomationRoute(request('/api/outreach-automation/suppression?workspace_id=w1',{method:'POST',token,body:{email:'Buyer@Example.com',reason:'manual'}}),env,{});
+  assert.equal(response.status,200);assert.equal((await response.json()).email,'buyer@example.com');
+  response=await handleOutreachAutomationRoute(request('/api/outreach-automation/suppression?workspace_id=w1',{method:'POST',token,body:{email:'buyer@example.com'}}),env,{});
+  assert.equal(response.status,200);
+  assert.equal(db.raw.prepare('SELECT COUNT(*) n FROM outreach_contact_suppression').get().n,1);
+  response=await handleOutreachAutomationRoute(request('/api/outreach-automation/suppression?workspace_id=w1',{token}),env,{});
+  assert.deepEqual((await response.json()).contacts.map(c=>c.email),['buyer@example.com']);
+  const sales=await fixture('sales');response=await handleOutreachAutomationRoute(request('/api/outreach-automation/suppression?workspace_id=w1',{method:'POST',token:sales.token,body:{email:'buyer@example.com'}}),sales.env,{});assert.equal(response.status,403);
 });

@@ -4,9 +4,9 @@ let loadPromise=null;
 function loadAutomation(){
   if(loadPromise)return loadPromise;
   loadPromise=Promise.all([
-    import('./outreach-automation-bridge.js?v=20260908-boot-timeout-v2'),
-    import('./outreach-automation-ui.js?v=20260929-delivery-modes-v2'),
-    import('./outreach-automation-delivery-handoff.js?v=20260929-delivery-modes-v2')
+    import('./outreach-automation-bridge.js?v=20260930-contact-suppression-v1'),
+    import('./outreach-automation-ui.js?v=20260930-contact-suppression-v1'),
+    import('./outreach-automation-delivery-handoff.js?v=20260930-contact-suppression-v1')
   ]).catch(error=>{loadPromise=null;console.error('[LeadIntel] Outreach automation failed to load',error);return [];});
   return loadPromise;
 }

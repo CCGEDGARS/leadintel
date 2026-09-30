@@ -1,4 +1,5 @@
 import {importAesKey,decryptSecret} from './oauth.js';
+import {suppressContact} from './contact-suppression.js';
 import {refreshGoogleAccessToken,fetchGmailThread,normalizeInboundReplies} from './gmail.js';
 import {findCrmCompanyByDomain,appendCrmActivity,setCrmPipelineStage} from './crm.js';
 
@@ -20,6 +21,7 @@ export async function pollOutreachReplies(env,{now=new Date(),limit=25,fetchThre
     for(const reply of replies){const id=`auto-reply-${sequence.id}-${String(reply.gmailMessageId||'').slice(0,80)}`;const inserted=await env.DB.prepare(`INSERT OR IGNORE INTO outreach_automation_processed_replies(id,workspace_id,sequence_id,gmail_message_id,gmail_thread_id,sender_email,received_at,category) VALUES(?,?,?,?,?,?,?,?)`).bind(id,sequence.workspace_id,sequence.id,reply.gmailMessageId,reply.gmailThreadId,reply.senderEmail,reply.receivedAt,reply.category).run();if(Number(inserted?.meta?.changes||0)<1)continue;summary.replies++;
       const {results:pending=[]}=await env.DB.prepare(`SELECT id FROM outreach_automation_queue WHERE sequence_id=? AND status IN ('queued','waiting_window','blocked_limit','failed') ORDER BY step_index`).bind(sequence.id).all();
       await env.DB.batch([env.DB.prepare(`UPDATE outreach_automation_sequences SET status='stopped_reply',stop_reason='inbound_reply',replied_at=?,last_polled_at=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND status='active'`).bind(reply.receivedAt,clock.toISOString(),sequence.id),env.DB.prepare(`UPDATE outreach_automation_queue SET status='cancelled_reply',last_error_code='inbound_reply',last_error_message='Pending automatic follow-up cancelled because an inbound reply was received',updated_at=CURRENT_TIMESTAMP WHERE sequence_id=? AND status IN ('queued','waiting_window','blocked_limit','failed')`).bind(sequence.id)]);stopped=true;summary.stopped++;
+      if(reply.category==='unsubscribe')await suppressContact(env.DB,sequence.workspace_id,reply.senderEmail,{reason:'unsubscribe',source:`gmail_reply:${reply.gmailMessageId}`});
       await audit(env,{workspaceId:sequence.workspace_id,userId:sequence.created_by,type:'outreach_automation.reply_stopped_sequence',entityId:sequence.id,metadata:{gmail_message_id:reply.gmailMessageId,gmail_thread_id:reply.gmailThreadId,category:reply.category,cancelled_queue_item_ids:pending.map(item=>item.id)}});
       try{await onReply({env,sequence,reply});}catch(cause){await audit(env,{workspaceId:sequence.workspace_id,userId:sequence.created_by,type:'outreach_automation.reply_crm_sync_failed',entityId:sequence.id,metadata:{gmail_message_id:reply.gmailMessageId,error:String(cause?.message||cause).slice(0,160)}});}
       break;

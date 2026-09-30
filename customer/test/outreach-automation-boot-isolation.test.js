@@ -28,5 +28,5 @@ test('outreach automation API requests have a hard browser timeout',()=>{
 
 test('lazy loader cache-busts the timeout-capable automation bridge',()=>{
   const loader=fs.readFileSync(path.join(root,'outreach-automation-loader.js'),'utf8');
-  assert.match(loader,/outreach-automation-bridge\.js\?v=20260908-boot-timeout-v2/);
+  assert.match(loader,/outreach-automation-bridge\.js\?v=20260930-contact-suppression-v1/);
 });

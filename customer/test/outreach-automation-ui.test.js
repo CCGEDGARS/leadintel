@@ -72,3 +72,12 @@ test('automation panel waits for Delivery instead of appearing in Messages durin
   assert.match(ui,/if\(!destination\)return/);
   assert.doesNotMatch(ui,/\.step-view\[data-step="6"\]/);
 });
+
+test('manual Delivery keeps workspace-wide do-not-contact controls visible',()=>{
+  const ui=read('outreach-automation-ui.js');const bridge=read('outreach-automation-bridge.js');
+  assert.match(ui,/renderSuppression\(destination\)/);
+  assert.match(ui,/Do not contact/);
+  assert.match(ui,/suppressOutreachContact/);
+  assert.match(ui,/listSuppressedContacts/);
+  assert.match(bridge,/api\/outreach-automation\/suppression/);
+});

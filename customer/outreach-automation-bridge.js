@@ -22,6 +22,8 @@
     bridge.getOutreachAutomationPolicy=()=>call(root,bridge,'/api/outreach-automation/policy');
     bridge.saveOutreachAutomationPolicy=policy=>call(root,bridge,'/api/outreach-automation/policy',{method:'PUT',body:JSON.stringify(policy||{})});
     bridge.getOutreachAutomationStatus=()=>call(root,bridge,'/api/outreach-automation/status');
+    bridge.listSuppressedContacts=()=>call(root,bridge,'/api/outreach-automation/suppression');
+    bridge.suppressOutreachContact=email=>call(root,bridge,'/api/outreach-automation/suppression',{method:'POST',body:JSON.stringify({email})});
     bridge.enqueueOutreachAutomation=payload=>call(root,bridge,'/api/outreach-automation/sequences',{method:'POST',body:JSON.stringify(payload||{})});
     return true;
   }

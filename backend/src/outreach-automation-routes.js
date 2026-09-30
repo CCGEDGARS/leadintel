@@ -1,5 +1,6 @@
 import {allowedOrigin,corsHeaders,sha256,cookieValue} from './security.js';
 import {normalizeEmail} from './gmail.js';
+import {isContactSuppressed,suppressContact} from './contact-suppression.js';
 import {validateEmailContent} from './email-content.js';
 import {defaultAutomationPolicy,normalizeAutomationPolicy,localClockParts,nextEnabledWindow,automaticGmailDeliveryEnabled} from './outreach-automation.js';
 
@@ -45,6 +46,7 @@ async function enqueueSequence(request,env,cors,workspaceId){
   const connection=await env.DB.prepare(`SELECT workspace_id,google_email,status FROM gmail_connections WHERE workspace_id=? AND status='connected'`).bind(workspaceId).first();if(!connection)return error('Gmail is not connected for this workspace',409,cors,{code:'GMAIL_NOT_CONNECTED'});
   const company=await env.DB.prepare(`SELECT id,lifecycle_status FROM crm_companies WHERE workspace_id=? AND normalized_domain=? AND deleted_at IS NULL LIMIT 1`).bind(workspaceId,domain).first();if(company?.lifecycle_status==='suppressed')return error('Suppressed companies cannot receive automated outreach',409,cors,{code:'CRM_COMPANY_SUPPRESSED'});
   if(!company)return error('Save the target company in CRM before automatic delivery',409,cors,{code:'CRM_COMPANY_REQUIRED'});
+  if(await isContactSuppressed(env.DB,workspaceId,recipient))return error('Contact is on the do-not-contact list',409,cors,{code:'CONTACT_SUPPRESSED'});
   const verified=await env.DB.prepare(`SELECT id FROM crm_contacts WHERE workspace_id=? AND company_id=? AND normalized_email=? AND LOWER(email_status)='verified' AND archived_at IS NULL LIMIT 1`).bind(workspaceId,company.id,recipient).first();
   if(!verified)return error('Automatic delivery requires a verified work email on this CRM company',409,cors,{code:'CRM_EMAIL_NOT_VERIFIED'});
   const sourcePackageKey=await sha256(`${workspaceId}|${domain}|${recipient}|${approvedAt}`);const sequenceId=`auto-seq-${sourcePackageKey.slice(0,24)}`;const queueId=`auto-q-${sourcePackageKey.slice(0,24)}-0`;const idempotencyKey=`auto-${sourcePackageKey}-0`;
@@ -68,6 +70,19 @@ async function enqueueSequence(request,env,cors,workspaceId){
 export async function handleOutreachAutomationRoute(request,env,corsOverride){
   const url=new URL(request.url);const path=url.pathname;if(!path.startsWith('/api/outreach-automation/'))return null;
   const cors=corsOverride??corsHeaders(allowedOrigin(request,env.APP_ORIGIN));const workspaceId=url.searchParams.get('workspace_id')||'';
+  if(path==='/api/outreach-automation/suppression'&&request.method==='GET'){
+    const access=await requireMember(request,env,workspaceId);if(access.error)return error(access.error,access.status,cors);
+    const {results=[]}=await env.DB.prepare('SELECT email,reason,source,created_at,updated_at FROM outreach_contact_suppression WHERE workspace_id=? ORDER BY updated_at DESC LIMIT 200').bind(workspaceId).all();
+    return json({contacts:results},200,cors);
+  }
+  if(path==='/api/outreach-automation/suppression'&&request.method==='POST'){
+    const access=await requireMember(request,env,workspaceId,['owner']);if(access.error)return error(access.error,access.status,cors);
+    const body=await request.json().catch(()=>null);const address=normalizeEmail(body?.email);if(!address)return error('Valid contact email is required',400,cors);
+    const reason=['manual','objection'].includes(body?.reason)?body.reason:'manual';
+    const email=await suppressContact(env.DB,workspaceId,address,{reason,source:'workspace_owner'});
+    await audit(env,{workspaceId,userId:access.user.id,type:'outreach.contact_suppressed',entityType:'contact_suppression',entityId:email,metadata:{reason}});
+    return json({email,suppressed:true},200,cors);
+  }
   if(path==='/api/outreach-automation/policy'&&request.method==='GET'){
     const access=await requireMember(request,env,workspaceId);if(access.error)return error(access.error,access.status,cors);
     const row=await policyRow(env,workspaceId);return json({policy:exposedPolicy(env,rowToPolicy(row)),role:access.member.role,updatedAt:row?.updated_at||null},200,cors);

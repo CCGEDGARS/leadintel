@@ -25,6 +25,7 @@ class D1Db{
     CREATE TABLE gmail_connections(workspace_id TEXT PRIMARY KEY,user_id TEXT,google_email TEXT,encrypted_refresh_token TEXT,scopes TEXT,status TEXT DEFAULT 'connected',history_id TEXT,connected_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,disconnected_at TEXT);
     CREATE TABLE gmail_messages(id TEXT PRIMARY KEY,workspace_id TEXT,idempotency_key TEXT,domain TEXT,recipient TEXT,subject TEXT,status TEXT,sent_at TEXT,customer_project_id TEXT,gmail_message_id TEXT,gmail_thread_id TEXT,sent_by TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,UNIQUE(workspace_id,idempotency_key));
     CREATE TABLE gmail_replies(id TEXT PRIMARY KEY,workspace_id TEXT,customer_project_id TEXT,received_at TEXT);
+    CREATE TABLE outreach_contact_suppression(workspace_id TEXT,email TEXT COLLATE NOCASE,reason TEXT,source TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(workspace_id,email));
     CREATE TABLE microsoft_mail_connections(workspace_id TEXT PRIMARY KEY,user_id TEXT,microsoft_email TEXT,encrypted_refresh_token TEXT,scopes TEXT,status TEXT DEFAULT 'connected',connected_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,disconnected_at TEXT);
     CREATE TABLE microsoft_mail_messages(id TEXT PRIMARY KEY,workspace_id TEXT,customer_project_id TEXT,idempotency_key TEXT,domain TEXT,recipient TEXT,subject TEXT,sent_by TEXT,sent_at TEXT,status TEXT,provider_status TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,UNIQUE(workspace_id,idempotency_key));
     CREATE TABLE email_activity_events(id TEXT PRIMARY KEY,workspace_id TEXT,customer_project_id TEXT,user_id TEXT,kind TEXT,provider TEXT,provider_message_id TEXT,provider_thread_id TEXT,occurred_at TEXT,payload_json TEXT);
@@ -142,4 +143,13 @@ test('customer activity combines Gmail and Microsoft sends and identifies each p
   const response=await handleSaasRoute(req('/api/customer/activity?workspace_id=w1',{token}),env,{});
   assert.equal(response.status,200);const result=await response.json();assert.equal(result.limits.sent_today,2);assert.equal(result.limits.remaining_today,18);
   assert.deepEqual(new Set(result.recent.map(item=>item.provider)),new Set(['gmail','microsoft']));
+});
+
+test('manual Gmail and Microsoft sends block a contact on the do-not-contact list',async()=>{
+  const {env,token}=await fixture();
+  env.DB.raw.prepare(`INSERT INTO outreach_contact_suppression(workspace_id,email,reason,source) VALUES('w1','buyer@example.com','manual','test')`).run();
+  for(const provider of ['gmail','microsoft-mail']){
+    const response=await handleSaasRoute(new Request(`https://api.example.test/api/integrations/${provider}/send?workspace_id=w1`,{method:'POST',headers:{Cookie:`leadintel_session=${token}`,'Content-Type':'application/json','Idempotency-Key':`blocked-contact-${provider}-12345`},body:JSON.stringify({domain:'example.com',recipient:'buyer@example.com',subject:'Hello',body:'Hello buyer'})}),env,{});
+    assert.equal(response.status,409);assert.equal((await response.json()).code,'CONTACT_SUPPRESSED');
+  }
 });

@@ -36,10 +36,10 @@
  * import './reference-customer-website-enrichment.js?v=20260923-reference-interface-v1';
  * import './reference-customer-ai-runtime.js?v=20260927-opportunity-map-durable-v1';
  * import './reference-customer-launcher.js?v=20260927-opportunity-map-durable-v1';
- * import './lookalike-discovery.js?v=20260930-core-buyer-roles-v2&opportunity-context=1';
+ * import './lookalike-discovery.js?v=20260930-contact-suppression-v1&opportunity-context=1';
  * import './intelligence-sources-ui.js?v=20260915-preferred-sources-v1';
  * import './profile-action-runtime.js?v=20260924-friendly-workflow-labels-v1';
- * import './outreach-automation-loader.js?v=20260929-delivery-modes-v2';
+ * import './outreach-automation-loader.js?v=20260930-contact-suppression-v1';
  * import './copilot-loader.js?v=20260911-copilot-freshness-v1';
  */
 

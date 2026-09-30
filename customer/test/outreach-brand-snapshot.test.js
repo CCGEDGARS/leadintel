@@ -285,8 +285,8 @@ test('outreach UI snapshots Step 1 identity, preserves edit detection and invali
   assert.match(discovery,/outreach-ui\.js\?v=\$\{OUTREACH_ASSET_VERSION\}/);
   assert.match(source,/const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";/);
   assert.match(delivery,/const ASSET_VERSION="20260924-workspace-content-english-v1";/);
-  assert.match(processMap,/outreach-automation-loader\.js\?v=20260929-delivery-modes-v2/);
-  assert.match(automationLoader,/outreach-automation-delivery-handoff\.js\?v=20260929-delivery-modes-v2/);
+  assert.match(processMap,/outreach-automation-loader\.js\?v=20260930-contact-suppression-v1/);
+  assert.match(automationLoader,/outreach-automation-delivery-handoff\.js\?v=20260930-contact-suppression-v1/);
   assert.match(html,/process-map\.js\?v=20260924-friendly-workflow-labels-v1/);
-  assert.match(html,/discovery-ui\.js\?v=20260930-core-buyer-roles-v2/);
+  assert.match(html,/discovery-ui\.js\?v=20260930-contact-suppression-v1/);
 });

@@ -1,11 +1,11 @@
 (function(root){
 'use strict';
 const ID='outreach-automation-panel';
-let policy=null,status=null,approvedPackage=null,busy=false;
+let policy=null,status=null,approvedPackage=null,busy=false,suppressedContacts=[];
 const days=[['1','Mon'],['2','Tue'],['3','Wed'],['4','Thu'],['5','Fri'],['6','Sat'],['0','Sun']];
 function bridge(){return root.LeadIntelServerBridge||null;}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function css(){if(document.querySelector('link[data-outreach-automation-css]'))return;const l=document.createElement('link');l.rel='stylesheet';l.href='./outreach-automation.css?v=20260929-delivery-modes-v2';l.dataset.outreachAutomationCss='1';document.head.appendChild(l);}
+function css(){if(document.querySelector('link[data-outreach-automation-css]'))return;const l=document.createElement('link');l.rel='stylesheet';l.href='./outreach-automation.css?v=20260930-contact-suppression-v1';l.dataset.outreachAutomationCss='1';document.head.appendChild(l);}
 function anchor(){return document.querySelector('.step-view[data-step="7"]');}
 function isOwner(){return String(status?.role||policy?.role||'')==='owner';}
 function serverPolicy(){return policy?.policy||policy||{automaticDelivery:'manual_only'};}
@@ -51,9 +51,21 @@ function renderSetup(){
 }
 function selectedDays(p){const set=new Set((p.workingDays||[1,2,3,4,5]).map(String));return days.map(([n,label])=>`<label class="oa-day"><input type="checkbox" data-oa-day="${n}" ${set.has(n)?'checked':''}>${label}</label>`).join('');}
 function queueEligibility(){const p=serverPolicy(),b=bridge();return Boolean(isOwner()&&p.mode==='automatic'&&p.enabled&&b?.gmail?.connected&&approvedPackage&&!busy);}
+function renderSuppression(destination){
+  let card=document.getElementById('outreach-contact-suppression');
+  if(!card){card=document.createElement('section');card.id='outreach-contact-suppression';card.className='oa-card';destination.appendChild(card);}
+  const owner=isOwner();
+  card.innerHTML=`<h3>Do not contact</h3><p>Block an email address across manual and automatic outreach in this workspace. Replies asking to unsubscribe are added automatically.</p><form id="oa-suppress-form"><label>Contact email<input id="oa-suppress-email" type="email" required placeholder="name@company.com" ${owner?'':'disabled'}></label><button type="submit" ${owner?'':'disabled'}>Block contact</button></form><p>${suppressedContacts.length} blocked contact${suppressedContacts.length===1?'':'s'}</p>${suppressedContacts.length?`<details><summary>View blocked contacts</summary><ul>${suppressedContacts.map(row=>`<li>${esc(row.email)} · ${esc(row.reason)}</li>`).join('')}</ul></details>`:''}<p id="oa-suppress-message" role="status"></p>`;
+  card.querySelector('#oa-suppress-form')?.addEventListener('submit',async event=>{
+    event.preventDefault();const address=card.querySelector('#oa-suppress-email').value.trim();const result=await bridge()?.suppressOutreachContact?.(address);
+    if(!result?.ok){card.querySelector('#oa-suppress-message').textContent=result?.error||'Could not block contact';return;}
+    await refresh();document.getElementById('oa-suppress-message').textContent='Contact blocked from outreach.';
+  });
+}
 function render(){
   renderSetup();
   const destination=anchor();if(!destination)return;
+  renderSuppression(destination);
   const p=serverPolicy();const s=serverStatus();let el=document.getElementById(ID);if(!el){el=document.createElement('section');el.id=ID;el.className='outreach-automation-panel';}if(el.parentNode!==destination)destination.appendChild(el);
   if(p.automaticDelivery==='manual_only'){
     el.innerHTML=`<div class="oa-head"><div><span class="oa-kicker">Gmail delivery</span><h3>Manual delivery</h3><p>Automatic Gmail delivery is not active. Review each approved message and use the explicit Send with Gmail action. Your daily limit is saved for a later automatic pilot.</p></div><span class="oa-role">Manual only</span></div>`;
@@ -90,7 +102,7 @@ function render(){
 }
 function message(text,error=false){const el=document.getElementById('oa-message');if(el){el.textContent=text||'';el.dataset.error=error?'1':'0';}}
 function readPolicy(){const el=document.getElementById(ID);const limitChoice=el.querySelector('#oa-workspace-limit').value;const limit=limitChoice==='custom'?Number(el.querySelector('#oa-custom-limit').value):Number(limitChoice);return {mode:el.querySelector('#oa-mode').value,enabled:el.querySelector('#oa-enabled').checked,paused:Boolean(serverPolicy().paused),emergencyStop:Boolean(serverPolicy().emergencyStop),workspaceDailyLimit:limit,mailboxDailyLimit:Number(el.querySelector('#oa-mailbox-limit').value),workingDays:[...el.querySelectorAll('[data-oa-day]:checked')].map(x=>Number(x.dataset.oaDay)),timezone:el.querySelector('#oa-timezone').value.trim(),sendWindowStart:el.querySelector('#oa-window-start').value,sendWindowEnd:el.querySelector('#oa-window-end').value,minDelayMinutes:Number(el.querySelector('#oa-delay-min').value),maxDelayMinutes:Number(el.querySelector('#oa-delay-max').value),maxFollowups:Number(el.querySelector('#oa-followups').value),followupDelaysDays:el.querySelector('#oa-followup-days').value.split(',').map(x=>Number(x.trim())).filter(Number.isFinite),replyPollIntervalMinutes:Number(el.querySelector('#oa-reply-poll').value)};}
-async function refresh(){const b=bridge();if(!b?.getOutreachAutomationPolicy||!b?.getOutreachAutomationStatus)return;const [p,s]=await Promise.all([b.getOutreachAutomationPolicy(),b.getOutreachAutomationStatus()]);if(!p.ok||!s.ok){message(p.error||s.error||'Unable to load automation status',true);return;}policy=p;status=s;render();}
+async function refresh(){const b=bridge();if(!b?.getOutreachAutomationPolicy||!b?.getOutreachAutomationStatus)return;const [p,s,blocked]=await Promise.all([b.getOutreachAutomationPolicy(),b.getOutreachAutomationStatus(),b.listSuppressedContacts?.()||Promise.resolve({ok:false})]);if(!p.ok||!s.ok){message(p.error||s.error||'Unable to load automation status',true);return;}policy=p;status=s;if(blocked?.ok)suppressedContacts=blocked.contacts||[];render();}
 async function mutate(next,success){const b=bridge();if(!b?.saveOutreachAutomationPolicy)return;const wasAutomatic=serverPolicy().mode==='automatic'&&serverPolicy().enabled;busy=true;render();const result=await b.saveOutreachAutomationPolicy(next);busy=false;if(!result.ok){render();message(result.error||'Settings were not saved',true);return;}await refresh();if(!wasAutomatic&&next.mode==='automatic'&&next.enabled)await queueApprovedPackages();message(success||'Automation settings saved.');}
 async function save(){const next=readPolicy();if(next.mode==='automatic'&&next.enabled){const ok=window.confirm('Activate Automatic outreach? Approved contacts may be emailed without per-message confirmation. Server limits, send windows, pause, emergency stop, suppression and reply-stop rules remain enforced.');if(!ok)return;}await mutate(next,'Automation settings saved.');}
 function bind(el){
