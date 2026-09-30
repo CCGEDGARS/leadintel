@@ -13,7 +13,7 @@ test('supports exactly the three customer AI providers',()=>{
 });
 
 test('provides editable production defaults for all three providers',()=>{
-  assert.equal(defaultAiModel('openai'),'gpt-5.6');
+  assert.equal(defaultAiModel('openai'),'gpt-6.1-sol');
   assert.equal(defaultAiModel('anthropic'),'claude-sonnet-4-6');
   assert.equal(defaultAiModel('gemini'),'gemini-3.7-flash');
 });
