@@ -63,6 +63,16 @@
     if(Array.isArray(value))return [...new Set(value.map(clean).filter(Boolean))];
     return [...new Set(String(value??"").split(/\n|;|\||,/).map(clean).filter(Boolean))];
   }
+  function buyerRolesForTarget(main={},candidate={}){
+    const core=(main.market?.icps||[]).find(icp=>icp.active!==false&&(icp.type==='core'||icp.id==='icp-core'));
+    const coreRoles=splitList(core?.buyerRoles).slice(0,10).join('; ');
+    const profileRoles=splitList(main.profile?.decisionMakers).slice(0,10).join('; ');
+    const stored=splitList(candidate.buyerRoles).slice(0,10).join('; ');
+    if(!coreRoles)return stored||profileRoles;
+    const industrial=/industrial|metalwork|fabricat|production|installation|manufactur/i.test(String(main.profile?.priorityOffers||''));
+    const unrelated=industrial&&/\b(sales|commercial leadership|hr|learning and development|team leadership)\b/i.test(stored);
+    return !stored||stored===profileRoles||unrelated?coreRoles:stored;
+  }
   function slug(value){return clean(value).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"item";}
   function normalizeUrl(value){try{const u=new URL(clean(value));return ["http:","https:"].includes(u.protocol)?u.href:"";}catch{return "";}}
   function normalizeLinkedInUrl(value){
@@ -1012,5 +1022,5 @@
     return {...state,status:state.candidates.length||state.rawResults.length?"partial":"error"};
   }
 
-  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,DISCOVERY_QUALITY_VERSION,discoveryLimits,buildDiscoveryQueries,buildDiscoveryFollowUpQueries,extractCompanyMentions,extractPublicContacts,matchPublicBuyerDetails,matchPublicLinkedInProfiles,parseCompanyExtraction,describeCompanyExtractionOutcome,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildPotentialCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,retainLastSuccessfulDiscoveryCandidates,recoverInterruptedDiscoveryState,discoveryOutcomeStatus,zeroResultGuidance,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,isLowQualityDiscoveryEvidence,hasActiveSignals,isActionableCandidate,isPotentialBuyerSearchAllowed};
+  return {CRM_STAGES,DEFAULT_DISCOVERY_STATE,DISCOVERY_QUALITY_VERSION,discoveryLimits,buyerRolesForTarget,buildDiscoveryQueries,buildDiscoveryFollowUpQueries,extractCompanyMentions,extractPublicContacts,matchPublicBuyerDetails,matchPublicLinkedInProfiles,parseCompanyExtraction,describeCompanyExtractionOutcome,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildPotentialCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,upsertPipelineItem,normalizeDiscoveryState,retainLastSuccessfulDiscoveryCandidates,recoverInterruptedDiscoveryState,discoveryOutcomeStatus,zeroResultGuidance,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,isLowQualityDiscoveryEvidence,hasActiveSignals,isActionableCandidate,isPotentialBuyerSearchAllowed};
 });
