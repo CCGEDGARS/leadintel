@@ -128,7 +128,7 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     return `<div class="reference-activation-guidance ${active?'active':'pending'}" role="status"><h4>${esc(next)}</h4><p>${active?'The saved customer model is available to the next Company Discovery search.':!analyzed?'Save keeps the list without research. Press Analyze separately when you want a suggested profile.':'Use the links below to inspect the suggested profile and build the map. After the map is built, select the relevant checkbox and press Activate.'}</p><div class="reference-activation-steps">${item('1 · Save, then Analyze',analyzed?'Complete':'Save first; analyze separately',Boolean(analyzed))}${item('2 · Review profile',active?'Selected and activated':analyzed&&needsMap&&!mapReady?'Inspect below; select after building the map':analyzed?'Select the relevant checkbox below':'After analysis',active,reviewAction)}${item('3 · Opportunity Map',mapLabel,!needsMap||mapReady,mapAction)}${item('4 · Activate',active?'Active in Discovery':needsMap&&!mapReady?'Available after the map is built':'Press Activate after selecting a profile',active)}</div><div class="reference-activation-effect"><b>When it is used:</b> Only after Activate will the customer model guide a new Company Discovery search. The Opportunity Map separately adds buyer niches to test. Each discovered company still needs its own evidence and qualification before you find decision makers.</div></div>`;
   }
   function currentMessage({saved,analyzed,segments,selected,draftDirty,hasActivatableSegment}){
-    if(!saved)return '<strong>Start a customer list</strong><span>Upload a CSV/Excel file or add companies manually below.</span>';
+    if(!saved)return '<strong>Start a reference list</strong><span>Upload a CSV/Excel file or add companies manually below.</span>';
     if(!selected)return `<strong>${saved} customers in this draft</strong><span>This list is not saved yet. Give it a name and click Save List. Analyze separately when you want to review the buyer context.</span>`;
     if(draftDirty)return `<strong>${esc(selected.name)} · ${saved} customers in the draft</strong><span>Press Save Changes to keep these edits without another analysis. Saved results and activation are paused until you save.</span>`;
     if(!analyzed)return `<strong>${esc(selected.name)} · ${saved} customers</strong><span>Saved without analysis. Press Analyze above when you are ready to begin research.</span>`;
@@ -165,7 +165,7 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     const activateLabel=selected?.active?(reference.draftDirty?'Update Model':'Model Active'):'Activate Model';
     const editorHtml=showEditor?`${draftDirty?`<div class="reference-unsaved-notice" role="status"><strong>Unsaved list changes.</strong> Press Save Changes to keep your edits without running analysis. Then you can open results, activate, or switch lists.</div>`:''}<div class="reference-current-card"><div class="reference-current-message">${currentMessage({saved,analyzed,segments,selected,draftDirty,hasActivatableSegment})}</div><div class="reference-current-name"><label>List name<input id="reference-list-name" value="${esc(meta.name||'')}" placeholder="e.g. Latvia Sales Training"></label><div class="reference-save-actions"><button class="primary-btn" type="button" data-save-reference-list ${saved?'':'disabled'}>${saveLabel}</button>${selected?`<button class="secondary-btn" type="button" data-save-reference-list-as-new ${saved?'':'disabled'}>Save as New List</button>`:''}</div></div>
       <details class="reference-advanced"><summary>Advanced list settings</summary><div class="reference-advanced-grid"><label>Markets<input id="reference-list-markets" value="${esc((meta.markets||[]).join('; '))}" placeholder="Latvia; Baltics"></label><label>Purpose<input id="reference-list-purpose" value="${esc(meta.purpose||'')}" placeholder="What should this list help discover?"></label><button class="secondary-btn" type="button" data-download-reference-template>Download example CSV</button></div></details></div>`:'';
-    panel.innerHTML=`<div class="reference-library-top"><div class="reference-library-main"><div class="reference-library-head"><strong>Saved customer lists</strong><span class="reference-library-badge ${statusClass}">${esc(statusLabel)}</span></div><div class="reference-library-status">${portfolio.lists.length} saved · ${activeModels} active. Include only companies that bought from you.</div>${saved&&!activeModels?'<button class="text-btn" type="button" data-show-targets>Are these prospects instead? View Target Companies →</button>':''}</div><button class="secondary-btn" type="button" data-new-reference-list ${draftDirty?'disabled title="Save your changes before creating another list."':''}>+ New List</button></div>
+    panel.innerHTML=`<div class="reference-library-top"><div class="reference-library-main"><div class="reference-library-head"><strong>Saved reference lists</strong><span class="reference-library-badge ${statusClass}">${esc(statusLabel)}</span></div><div class="reference-library-status">${portfolio.lists.length} saved · ${activeModels} active. Use existing customers or ideal examples from any country.</div>${saved&&!activeModels?'<button class="text-btn" type="button" data-show-targets>Are these prospects instead? View Target Companies →</button>':''}</div><button class="secondary-btn" type="button" data-new-reference-list ${draftDirty?'disabled title="Save your changes before creating another list."':''}>+ New List</button></div>
       <div class="reference-flow-summary" aria-label="What LeadIntel will use"><div><strong>Customer context</strong><span>${activeCustomers.length?`${esc(activeCustomers.join(', '))} active · ${esc(activeLists[0].reference.publishedModel?.confidence||'low')} confidence · used in Discovery`:`${saved?`${saved} saved`:'No customers saved'} · ${activeModels?'another customer model active':'activate a model to use it in Discovery'}`}</span></div><div><strong>Opportunity Map</strong><span>${mapReady?`${opportunityMap.hypotheses.length} buyer niches ready for the next company search`:'Add what you sold and why in View Results to guide niche searches'}</span></div><div><strong>Target Companies</strong><span>${targetCount} saved · ${targetCount?'research and qualification are separate':'add prospects to research'}</span></div>${targetCount&&(!saved||activeModels)?'<button class="secondary-btn small" type="button" data-reference-research-targets>Test one target · Saving Mode →</button>':''}</div>
       ${renderSavedLists(state,editorHtml,draftDirty)}`;
     void persistLegacyMigration(state);
@@ -196,7 +196,7 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     editorOpen=false;
     await writeState(state);
     const sync=await Ref.saveReferenceWorkflowState(root);
-    const status=document.getElementById('reference-import-status');if(status)status.textContent=sync.synced?'New customer list saved and synced. No analysis was run.':Ref.referenceWorkflowSaveNotice('New customer list save',sync);
+    const status=document.getElementById('reference-import-status');if(status)status.textContent=sync.synced?'New reference list saved and synced. No analysis was run.':Ref.referenceWorkflowSaveNotice('New reference list save',sync);
     syncLibraryUi();
     return state.referenceCustomerPortfolio.selectedListId;
   }
@@ -252,7 +252,7 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
       const checked=[...document.querySelectorAll('input[data-reference-segment]:checked:not(:disabled)')].map(node=>node.dataset.referenceSegment);
       if(!checked.length){await writeState(state);syncLibraryUi();document.getElementById('reference-segment-review')?.scrollIntoView?.({behavior:'smooth',block:'start'});throw new Error('Review and select the suggested customer profile before activation');}
       const segmentIds=(reference.segments||[]).filter(segment=>segment.canActivate!==false&&checked.includes(segment.id)).map(segment=>segment.id).filter(Boolean);
-      if(!Object.keys(reference.analyses||{}).length)throw new Error('Analyze this customer list before activating it');
+      if(!Object.keys(reference.analyses||{}).length)throw new Error('Analyze this reference list before activating it');
       if(!segmentIds.length)throw new Error('No recurring customer traits were found. Add or correct reference companies, then analyze the list again.');
       reference=Ref.activateReferenceSegments(reference,segmentIds);
       reference.dna=Ref.buildReferenceDna(reference,reference.analyses||{});
@@ -274,7 +274,7 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
   async function toggleList(id,active){let state=snapshot();state=Portfolio.setListActive(state,id,active);await writeState(state);const sync=await Ref.saveReferenceWorkflowState(root);syncLibraryUi();const status=document.getElementById('reference-import-status');if(status)status.textContent=Ref.referenceWorkflowSaveNotice(active?'Customer model activation':'Customer model deactivation',sync);}
   async function activateCurrent(){
     let state=snapshot();const selected=state.referenceCustomerPortfolio.lists.find(list=>list.id===state.referenceCustomerPortfolio.selectedListId)||null;
-    if(!selected)throw new Error('Save the customer list before activating it');
+    if(!selected)throw new Error('Save the reference list before activating it');
     const reference=state.referenceCustomers||{};
     if(reference.publishedModel?.active&&!reference.draftDirty&&!selected.active){await toggleList(selected.id,true);return;}
     const button=document.getElementById('reference-activate');if(!button)throw new Error('Activation control is unavailable');
@@ -282,7 +282,7 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
   }
 
   async function publishSelected(button){
-    const current=snapshot();if(blockOnUnsavedDraft('Activating this model',current))throw new Error('Save the current customer list changes before activating it');
+    const current=snapshot();if(blockOnUnsavedDraft('Activating this model',current))throw new Error('Save the current reference list changes before activating it');
     const selectedSegments=[...document.querySelectorAll('[data-reference-segment]:checked')].map(node=>node.dataset.referenceSegment).filter(Boolean);
     if(!selectedSegments.length)throw new Error('Analyze the list and select at least one customer segment first');
     let state=snapshot();
@@ -290,7 +290,7 @@ const REFERENCE_LIBRARY_STATE_KEY='leadintel_customer_v2_state';
     if(Object.keys(reference.analyses||{}).length===1&&!mapIsReady(reference))throw new Error('Build the Opportunity Map before activating this customer model');
     reference=Ref.activateReferenceSegments(reference,selectedSegments);
     reference.dna=Ref.buildReferenceDna(reference,reference.analyses||{});
-    if(!reference.dna?.active)throw new Error('Analyze the customer list before activating the model');
+    if(!reference.dna?.active)throw new Error('Analyze the reference list before activating the model');
     if(!reference.dna.dimensions?.length)throw new Error('No recurring customer traits were found. Add or correct reference companies, then analyze the list again.');
     reference=Ref.publishReferenceModel(reference);reference.analyzedAt=reference.analyzedAt||new Date().toISOString();state.referenceCustomers=reference;
     state=Portfolio.saveCurrentList(state,metadataFromUi(state));

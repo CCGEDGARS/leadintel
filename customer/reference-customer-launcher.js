@@ -1,4 +1,4 @@
-const REFERENCE_CUSTOMER_LAUNCH_VERSION='20260927-opportunity-map-durable-v1&opportunity-context=1&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&inline-activate=1&target-research=1&saving-mode=1&map-activation-guide=1&target-controls=1&target-save=1&target-status=1&reference-discovery=2';
+const REFERENCE_CUSTOMER_LAUNCH_VERSION='20260927-opportunity-map-durable-v1&opportunity-context=1&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&inline-activate=1&target-research=1&saving-mode=1&map-activation-guide=1&target-controls=1&target-save=1&target-status=1&reference-discovery=3';
 
 (function installReferenceCustomerLauncher(root){
   'use strict';
@@ -16,13 +16,13 @@ const REFERENCE_CUSTOMER_LAUNCH_VERSION='20260927-opportunity-map-durable-v1&opp
   }
 
   async function ensureReferenceCustomerRuntime(){
-    await import(`./reference-customers.js?v=${REFERENCE_CUSTOMER_LAUNCH_VERSION}&reference-discovery=2`);
-    await import(`./reference-customer-ui.js?v=${REFERENCE_CUSTOMER_LAUNCH_VERSION}&reference-discovery=2`);
+    await import(`./reference-customers.js?v=${REFERENCE_CUSTOMER_LAUNCH_VERSION}&reference-discovery=3`);
+    await import(`./reference-customer-ui.js?v=${REFERENCE_CUSTOMER_LAUNCH_VERSION}&reference-discovery=3`);
     return root.LeadIntelReferenceCustomerUI||null;
   }
 
   function warmUploadRuntime(){
-    void import(`./reference-customer-upload-mode.js?v=${REFERENCE_CUSTOMER_LAUNCH_VERSION}&reference-discovery=2`).catch(error=>{
+    void import(`./reference-customer-upload-mode.js?v=${REFERENCE_CUSTOMER_LAUNCH_VERSION}&reference-discovery=3`).catch(error=>{
       console.error('Reference Customer upload runtime failed to warm',error);
     });
   }

@@ -1,8 +1,8 @@
 import './reference-customer-library.js?v=20260924-reference-consensus-v1';
-import './reference-customer-portfolio.js?v=20260923-reference-interface-v1';
-import './reference-customer-library-ui.js?v=20260927-save-only-v1&target-research=1&saving-mode=1&reference-discovery=2';
-import './reference-customer-delete-ui.js?v=20260923-reference-interface-v1&reference-discovery=2';
-import './reference-customer-upload-mode.js?v=20260911-reference-single-owner-v1&reference-discovery=2';
+import './reference-customer-portfolio.js?v=20260923-reference-interface-v1&reference-discovery=3';
+import './reference-customer-library-ui.js?v=20260927-save-only-v1&target-research=1&saving-mode=1&reference-discovery=3';
+import './reference-customer-delete-ui.js?v=20260923-reference-interface-v1&reference-discovery=3';
+import './reference-customer-upload-mode.js?v=20260911-reference-single-owner-v1&reference-discovery=3';
 
 const REFERENCE_AI_STATE_KEY='leadintel_customer_v2_state';
 const REFERENCE_AI_FIRECRAWL='https://apollo-proxy.edgars-7e7.workers.dev';
@@ -52,7 +52,7 @@ const REFERENCE_AI_CONCURRENCY=4;
     if(!ready.length)throw new Error('Upload companies with valid websites first');
     const workspace=workspaceId();if(!workspace)throw new Error('AI analysis requires a signed-in LeadIntel workspace');
     // Keep the source list before any network request. An unsaved draft must not
-    // produce a successful analysis with no durable customer list behind it.
+    // produce a successful analysis with no durable reference list behind it.
     const currentList=state.referenceCustomerPortfolio?.lists?.find(list=>list.id===state.referenceCustomerPortfolio.selectedListId);
     if(!currentList){
       const name=clean(document.getElementById('reference-list-name')?.value)||`Reference Companies · ${ready[0].companyName||ready[0].domain}`;
@@ -63,7 +63,7 @@ const REFERENCE_AI_CONCURRENCY=4;
     const listId=state.referenceCustomerPortfolio.selectedListId;
     await writeState(state);
     const saved=await root.LeadIntelServerBridge.saveNow?.({saveIntent:true});
-    if(saved?.saved!==true)throw new Error('The customer list has not synced to your workspace. Check workspace sync and retry analysis.');
+    if(saved?.saved!==true)throw new Error('The reference list has not synced to your workspace. Check workspace sync and retry analysis.');
     button.disabled=true;status(`Scraping reference customer websites… 0/${ready.length}`);
     let completed=0;
     const scraped=await mapLimit(ready,async row=>{const result=await scrapeRow(row);completed++;status(`Scraping reference customer websites… ${completed}/${ready.length}`);return result;});
@@ -77,7 +77,7 @@ const REFERENCE_AI_CONCURRENCY=4;
     const savedList=state.referenceCustomerPortfolio?.lists?.find(list=>list.id===listId);
     const sameRows=ready.every(row=>savedList?.reference?.rows?.some(current=>current.id===row.id&&current.website===row.website)&&state.referenceCustomers?.rows?.some(current=>current.id===row.id&&current.website===row.website));
     if(workspaceId()!==workspace||!sameRows||state.referenceCustomerPortfolio?.selectedListId!==listId)
-      throw new Error('The customer list changed during analysis. The results were not applied. Open the saved list and analyze it again.');
+      throw new Error('The reference list changed during analysis. The results were not applied. Open the saved list and analyze it again.');
     state.referenceCustomers=Ref.normalizeReferenceState(state.referenceCustomers||{});
     state.referenceCustomers=Ref.markReferenceDraftChanged({
       ...state.referenceCustomers,

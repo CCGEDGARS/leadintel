@@ -21,7 +21,7 @@
     const reference=normalizeReference(value.reference||value.referenceCustomers||{});
     return {
       id:clean(value.id)||idFor(value.name),
-      name:clean(value.name)||'Untitled customer list',
+      name:clean(value.name)||'Untitled reference list',
       markets:[...new Set((Array.isArray(value.markets)?value.markets:String(value.markets||'').split(/\n|;|,/)).map(clean).filter(Boolean))].slice(0,12),
       purpose:clean(value.purpose),
       active:Boolean(value.active&&reference.publishedModel?.active),
@@ -47,7 +47,7 @@
     const list=normalizeList({
       ...(selected||{}),
       id:selected?.id||idFor(meta.name||'customer-list'),
-      name:clean(meta.name)||selected?.name||'Untitled customer list',
+      name:clean(meta.name)||selected?.name||'Untitled reference list',
       markets:meta.markets!==undefined?meta.markets:(selected?.markets||[]),
       purpose:meta.purpose!==undefined?meta.purpose:(selected?.purpose||''),
       active:selected?.active||false,

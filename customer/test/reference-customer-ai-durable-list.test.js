@@ -47,7 +47,7 @@ test('analysis does not claim success when the saved customer list disappears mi
     state.referenceCustomerPortfolio=Portfolio.normalizePortfolio({lists:[]});
     store.set(key,JSON.stringify(state));
   });
-  await assert.rejects(root.LeadIntelReferenceCustomerAIRuntime.runAiAnalysis({disabled:false}),/customer list changed during analysis/i);
+  await assert.rejects(root.LeadIntelReferenceCustomerAIRuntime.runAiAnalysis({disabled:false}),/reference list changed during analysis/i);
   assert.equal(read().referenceCustomerPortfolio.lists.length,0);
 });
 
@@ -65,6 +65,6 @@ test('analysis will not overwrite a saved list if its current draft was cleared 
     state.referenceCustomers=Ref.normalizeReferenceState({rows:[]});
     store.set(key,JSON.stringify(state));
   });
-  await assert.rejects(root.LeadIntelReferenceCustomerAIRuntime.runAiAnalysis({disabled:false}),/customer list changed during analysis/i);
+  await assert.rejects(root.LeadIntelReferenceCustomerAIRuntime.runAiAnalysis({disabled:false}),/reference list changed during analysis/i);
   assert.equal(read().referenceCustomerPortfolio.lists[0].reference.rows.length,1);
 });

@@ -9,7 +9,7 @@
   const FIRECRAWL_PROXY='https://apollo-proxy.edgars-7e7.workers.dev';
   const MAX_ENRICH=25;
   const FIND_INFO_LABEL='Find Missing Info';
-  const ANALYZE_LABEL='Analyze customer list';
+  const ANALYZE_LABEL='Analyze reference list';
   const clean=value=>String(value??'').replace(/\s+/g,' ').trim();
   const norm=value=>clean(value).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
   const STOPWORDS=new Set(['company','co','corporation','corp','inc','incorporated','limited','ltd','llc','group','holding','holdings','sia','as','ab','oy','ou','uab','gmbh','sarl','bv','plc','the']);
@@ -97,7 +97,7 @@
       const modal=document.getElementById('reference-customer-modal');if(!modal)return;
       const guide=modal.querySelector('.reference-format-guide p');if(guide)guide.innerHTML='<b>Company Name or Website is required.</b> LeadIntel can find a missing official website or identify a missing company name before analysis.';
       const manualWebsite=modal.querySelector('#reference-manual-website');if(manualWebsite)manualWebsite.placeholder='Website (optional)';
-      const empty=modal.querySelector('.reference-empty');if(empty)empty.textContent='Upload a customer list with a Company Name, Website, or both. LeadIntel can find missing information.';
+      const empty=modal.querySelector('.reference-empty');if(empty)empty.textContent='Upload a reference list with a Company Name, Website, or both. LeadIntel can find missing information.';
       const importActions=modal.querySelector('.reference-import-actions');
       if(importActions){
         let button=importActions.querySelector('#reference-find-websites')||modal.querySelector('#reference-find-websites');
