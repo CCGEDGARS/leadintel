@@ -1,8 +1,8 @@
 import './reference-customer-library.js?v=20260924-reference-consensus-v1';
-import './reference-customer-portfolio.js?v=20260923-reference-interface-v1&reference-discovery=3';
-import './reference-customer-library-ui.js?v=20260927-save-only-v1&target-research=1&saving-mode=1&reference-discovery=3';
-import './reference-customer-delete-ui.js?v=20260923-reference-interface-v1&reference-discovery=3';
-import './reference-customer-upload-mode.js?v=20260911-reference-single-owner-v1&reference-discovery=3';
+import './reference-customer-portfolio.js?v=20260923-reference-interface-v1&reference-discovery=4';
+import './reference-customer-library-ui.js?v=20260927-save-only-v1&target-research=1&saving-mode=1&reference-discovery=4';
+import './reference-customer-delete-ui.js?v=20260923-reference-interface-v1&reference-discovery=4';
+import './reference-customer-upload-mode.js?v=20260911-reference-single-owner-v1&reference-discovery=4';
 
 const REFERENCE_AI_STATE_KEY='leadintel_customer_v2_state';
 const REFERENCE_AI_FIRECRAWL='https://apollo-proxy.edgars-7e7.workers.dev';
