@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "application": "LeadIntel",
+  "environment": "production",
+  "verifiedAt": "2026-10-01T05:45:21.732Z",
+  "expected": {
+    "sha": "c47aef1844a09c299e24a7801b3ade993ebd0711",
+    "ref": "main"
+  },
+  "ci": {
+    "runId": "36821257423",
+    "conclusion": "success",
+    "passed": true
+  },
+  "manifest": {
+    "url": "https://leadintel.ccgroup.lv/release.json?verify=91816c31-b7a5-467f-845a-ea135b6a0130",
+    "status": 200,
+    "commit": "c47aef1844a09c299e24a7801b3ade993ebd0711",
+    "ref": "main",
+    "service": "leadintel-customer",
+    "passed": true
+  },
+  "backend": {
+    "url": "https://leadintel-api.edgars-7e7.workers.dev/api/health",
+    "status": 200,
+    "passed": true
+  },
+  "smokeChecks": [
+    {
+      "id": "customer-shell",
+      "url": "https://leadintel.ccgroup.lv/customer/",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "website-input-normalization",
+      "url": "https://leadintel.ccgroup.lv/customer/website-input-sync.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "discovery-bootstrap",
+      "url": "https://leadintel.ccgroup.lv/customer/",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "discovery-runtime",
+      "url": "https://leadintel.ccgroup.lv/customer/discovery-ui.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "production-entry",
+      "url": "https://leadintel.ccgroup.lv/",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "first-party-research",
+      "url": "https://leadintel.ccgroup.lv/customer/first-party-research.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    }
+  ],
+  "deployment": {
+    "required": false,
+    "passed": null
+  },
+  "verdict": "PROVEN",
+  "failures": []
+}
