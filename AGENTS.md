@@ -19,3 +19,7 @@ The required production chain is:
 Never silently substitute an older deployment or old file when the newest intended revision is unproven. An older verified version may only be identified as **LAST KNOWN WORKING**, with the unresolved gate for the newer revision stated explicitly.
 
 Use the fixed release labels defined by the release-integrity skill: **LATEST CODE**, **VERIFIED PREVIEW**, **PROVEN PRODUCTION**, and **LAST KNOWN WORKING**.
+
+## Cooperation and completion rules
+
+The user agreements recorded in `docs/project-state/2026-09-30-leadintel-checkpoint.md` govern continuing work. Own the connected Profile → Companies → Buyers → Triggers → Scripts → CRM workflow. For recurring bugs, record the root cause, inspect related paths, add meaningful regression coverage, and verify save/reload/downstream behavior. Report separately what tests prove, what the exact production release proves, and what authenticated customer evidence proves. Do not substitute a build passing for customer acceptance, ask the customer to repeatedly diagnose basic controls, or claim background work is continuing after the turn. Script generation and approval do not authorize sending outreach.

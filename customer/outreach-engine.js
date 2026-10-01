@@ -127,7 +127,7 @@
       const text=clean(item?.markdown||item?.content||item?.text||description).slice(0,6000);
       return {
         url,title,description,text,
-        date:clean(item?.publishedDate||item?.date||item?.published_at||item?.metadata?.publishedDate||item?.metadata?.modifiedTime),
+        date:clean(item?.publishedDate||item?.date||item?.published_at||item?.metadata?.publishedDate),
         sourceType:sourceTypeFor(url,targetDomain,meta.sourceType)
       };
     }).filter(Boolean);
@@ -143,7 +143,7 @@
   }
 
   function evidenceFromCandidate(candidate={}){
-    return (candidate.evidence||[]).map(item=>({url:normalizeUrl(item.url),title:clean(item.title)||clean(candidate.company),description:clean(item.description),text:clean(item.text||item.description).slice(0,6000),date:clean(item.date),sourceType:"Discovery"})).filter(item=>item.url);
+    return (candidate.evidence||[]).map(item=>({url:normalizeUrl(item.url),title:clean(item.title)||clean(candidate.company),description:clean(item.description),text:clean(item.text||item.description).slice(0,6000),date:clean(item.date),detectedAt:clean(item.detectedAt),sourceType:"Discovery"})).filter(item=>item.url);
   }
   function dedupeEvidence(items=[]){const map=new Map();for(const item of items){if(!item?.url)continue;const key=item.url.replace(/\/$/,"");if(!map.has(key))map.set(key,item);}return [...map.values()].slice(0,15);}
   function activeObservedSignals(candidate={},market={},evidence=[]){
@@ -162,8 +162,35 @@
     return {company:clean(candidate.company),domain:clean(candidate.domain)||domainOf(candidate.website),website:normalizeUrl(candidate.website),market:clean(candidate.market),score:candidate.score||{},confidence:clean(candidate.confidence)||"Low",matchedSignals:observed,recommendedOffer,buyerRoles:splitList(profile.decisionMakers),people:(candidate.people||[]).slice(0,5),whyNow,evidence,hypotheses,researchStatus:sourceCount?"complete":"error",researchAt:new Date().toISOString()};
   }
 
+  function normalizeSelectedTrigger(value,dossier={}){
+    if(!value||value.verification!=='user_reviewed')return null;
+    const companyDomain=domainOf(`https://${clean(dossier.domain)}`),url=normalizeUrl(value.url);
+    const evidence=(dossier.evidence||[]).find(item=>normalizeUrl(item.url)===url);
+    if(!companyDomain||companyDomain!==clean(value.companyDomain)||!evidence)return null;
+    const excerpt=clean(evidence.text||evidence.description).slice(0,900);
+    if(!excerpt||clean(value.excerpt)!==excerpt)return null;
+    return {id:url,companyDomain,url,title:clean(evidence.title)||url,excerpt,sourceDate:clean(evidence.date),detectedAt:clean(value.detectedAt),reviewedAt:clean(value.reviewedAt),verification:'user_reviewed',tracked:true};
+  }
+  function reviewTrigger(item={},url='',reviewedAt=new Date().toISOString()){
+    const dossier=item.dossier||{},evidence=(dossier.evidence||[]).find(row=>normalizeUrl(row.url)===normalizeUrl(url));
+    if(!evidence)throw new Error('Choose a source from this company dossier');
+    const selectedTrigger=normalizeSelectedTrigger({url:evidence.url,companyDomain:domainOf(`https://${dossier.domain}`),excerpt:clean(evidence.text||evidence.description).slice(0,900),detectedAt:evidence.detectedAt||item.researchAt||reviewedAt,reviewedAt,verification:'user_reviewed'},dossier);
+    if(!selectedTrigger)throw new Error('This source has no usable excerpt. Research the company before selecting a trigger.');
+    return invalidateOutreachApproval({...item,dossier:{...dossier,selectedTrigger}});
+  }
+  function buildScriptContext(dossier={},contact={}){
+    dossier=dossier||{};contact=contact||{};
+    const trigger=normalizeSelectedTrigger(dossier.selectedTrigger,dossier);
+    return {companyDomain:clean(dossier.domain),buyerId:clean(contact.id),buyerName:clean(contact.name),buyerRole:clean(contact.title),trigger};
+  }
+  function buildCrmScriptSnapshot(item={}){return {version:1,savedAt:new Date().toISOString(),item:normalizeItem(item)};}
+  function restoreCrmScriptSnapshot(snapshot,domain){
+    if(!clean(domain)||!clean(snapshot?.item?.domain)||snapshot?.version!==1||!snapshot.item||domainOf(`https://${snapshot.item.domain}`)!==domainOf(`https://${domain}`))return null;
+    return normalizeItem(snapshot.item);
+  }
+
   function firstName(contact){return clean(contact?.firstName)||clean(contact?.name).split(" ")[0]||"";}
-  function evidenceHook(dossier,language='en'){const lv=isLv(language);const signal=dossier.matchedSignals?.[0]?.name;if(signal)return lv?`publiski pieejamā informācija, kas saistīta ar signālu “${signal}”`:`public information connected to ${signal}`;const item=dossier.evidence?.[0];return item?.title?(lv?`publiski pieejamā informācija par “${item.title}”`:`the public information around ${item.title}`):(lv?'uzņēmuma nesenā publiskā aktivitāte':"your company's recent public activity");}
+  function evidenceHook(dossier,language='en'){const lv=isLv(language);const trigger=normalizeSelectedTrigger(dossier.selectedTrigger,dossier);if(trigger)return `${trigger.title}${trigger.sourceDate?` (${trigger.sourceDate})`:lv?' (avota datums nav zināms)':' (source date unknown)'}`;const signal=dossier.matchedSignals?.[0]?.name;if(signal)return lv?`publiski pieejamā informācija, kas saistīta ar signālu “${signal}”`:`public information connected to ${signal}`;const item=dossier.evidence?.[0];return item?.title?(lv?`publiski pieejamā informācija par “${item.title}”`:`the public information around ${item.title}`):(lv?'publiski pieejamā informācija par uzņēmumu':"public company information");}
   function withStrategyCall(drafts={},language='en'){
     const invitation=isLv(language)?`Rezervējiet 20 minūšu stratēģijas sarunu: ${STRATEGY_CALL_URL}`:`Book a 20-minute strategy call: ${STRATEGY_CALL_URL}`;
     const add=value=>{const text=String(value||'').trim();return text.includes('calendly.com/edgars-7go/strategy-call-2')?text:`${text}\n\n${invitation}`.trim();};
@@ -201,7 +228,7 @@
         followUp=`${hello}\n\nVēlos noslēgt saraksti par manu iepriekšējo ziņu saistībā ar ${hook}. Iespējams, esmu kļūdījies par aktualitāti. Ja ${offer} ir jūsu darba kārtībā, labprāt salīdzināšu pieejas; ja nav, dodiet ziņu, un turpmāk nerakstīšu.\n\nAr cieņu,\n[Jūsu vārds]`;
         objectionReply=`Saprotu un nevēlos turpināt pēc pamatota atteikuma. Lai pareizi izprastu situāciju: kam būtu jāmainās, lai ${offer} kļūtu aktuāls — laikam, prioritātei, pieejai vai kam citam?`;
       }
-      return {...withStrategyCall(applyCampaignGuidance({tone:['consultative','direct','brief'].includes(tone)?tone:'consultative',emailSubject:`${company} — ${offer}`,emailBody,linkedinMessage:linkedinMessage.slice(0,899),callOpener,followUp,objectionReply},scenario||{},language),language),resolvedLanguage,languageSource:resolution.source,languageConfidence:resolution.confidence,languageRequiresConfirmation:resolution.requiresConfirmation,requiresAiLocalization:!['en','lv'].includes(resolvedLanguage)};
+      return {scriptContext:buildScriptContext(dossier,contact),...withStrategyCall(applyCampaignGuidance({tone:['consultative','direct','brief'].includes(tone)?tone:'consultative',emailSubject:`${company} — ${offer}`,emailBody,linkedinMessage:linkedinMessage.slice(0,899),callOpener,followUp,objectionReply},scenario||{},language),language),resolvedLanguage,languageSource:resolution.source,languageConfidence:resolution.confidence,languageRequiresConfirmation:resolution.requiresConfirmation,requiresAiLocalization:!['en','lv'].includes(resolvedLanguage)};
     }
     if(tone==="direct"){
       emailBody=`${hello}\n\nI noticed ${hook} at ${company}. It may be relevant to compare how you are approaching this with ${offer}.\n\nWe help companies with ${offer}, and I would rather test fit than assume there is one. Would a short 20-minute conversation next week be useful?\n\nBest,\n[Your name]\n${sender}`;
@@ -222,7 +249,7 @@
       followUp=`${hello}\n\nI wanted to close the loop on my earlier note about ${hook}. I may be wrong about the relevance. If ${offer} is on your agenda, I’m happy to compare approaches; if it isn’t, just tell me and I won’t keep chasing.\n\nBest,\n[Your name]`;
       objectionReply=`That makes sense. I’m not trying to push past a genuine “no.” To understand it properly: what would have to be different for ${offer} to become relevant — timing, priority, approach, or something else?`;
     }
-    return {...withStrategyCall(applyCampaignGuidance({tone:["consultative","direct","brief"].includes(tone)?tone:"consultative",emailSubject:`${company} — ${offer}`,emailBody,linkedinMessage:linkedinMessage.slice(0,899),callOpener,followUp,objectionReply},scenario||{},language),language),resolvedLanguage,languageSource:resolution.source,languageConfidence:resolution.confidence,languageRequiresConfirmation:resolution.requiresConfirmation,requiresAiLocalization:!['en','lv'].includes(resolvedLanguage)};
+    return {scriptContext:buildScriptContext(dossier,contact),...withStrategyCall(applyCampaignGuidance({tone:["consultative","direct","brief"].includes(tone)?tone:"consultative",emailSubject:`${company} — ${offer}`,emailBody,linkedinMessage:linkedinMessage.slice(0,899),callOpener,followUp,objectionReply},scenario||{},language),language),resolvedLanguage,languageSource:resolution.source,languageConfidence:resolution.confidence,languageRequiresConfirmation:resolution.requiresConfirmation,requiresAiLocalization:!['en','lv'].includes(resolvedLanguage)};
   }
 
   function approveOutreachItem(item={},editedDrafts={},approvedAt=new Date().toISOString()){
@@ -284,6 +311,7 @@
     const target=isLv(language)?'lv':'en';const sourceCandidate={...candidate,company:candidate.company||item.company,domain:candidate.domain||item.domain,people:candidate.people?.length?candidate.people:item.dossier.people,evidence:candidate.evidence?.length?candidate.evidence:[]};
     const research=item.dossier.evidence||[];
     const dossiers={en:buildOpportunityDossier(sourceCandidate,profile,market,research,'en'),lv:buildOpportunityDossier(sourceCandidate,profile,market,research,'lv')};
+    for(const dossier of Object.values(dossiers))dossier.selectedTrigger=normalizeSelectedTrigger(item.dossier.selectedTrigger,dossier);
     const currentDossier={...item.dossier};
     const stored=item.contentVariants&&typeof item.contentVariants==='object'?item.contentVariants:{};
     const currentDossierVariant=stored.dossier?.[item.contentLanguage||'en']||{};
@@ -298,11 +326,12 @@
     return {...item,dossier:currentDossier,drafts,contentLanguage:target,contentVariants:{dossier:{en:{whyNow:dossiers.en.whyNow,hypotheses:dossiers.en.hypotheses},lv:{whyNow:dossiers.lv.whyNow,hypotheses:dossiers.lv.hypotheses}},drafts:{en:{emailSubject:variants.en.emailSubject,emailBody:variants.en.emailBody,linkedinMessage:variants.en.linkedinMessage,callOpener:variants.en.callOpener,followUp:variants.en.followUp,objectionReply:variants.en.objectionReply},lv:{emailSubject:variants.lv.emailSubject,emailBody:variants.lv.emailBody,linkedinMessage:variants.lv.linkedinMessage,callOpener:variants.lv.callOpener,followUp:variants.lv.followUp,objectionReply:variants.lv.objectionReply}}}};
   }
 
-  function normalizeEvidence(item={}){const url=normalizeUrl(item.url);if(!url)return null;return {url,title:clean(item.title),description:clean(item.description),text:String(item.text||"").slice(0,6000),date:clean(item.date),sourceType:["Official","Public","Discovery"].includes(clean(item.sourceType))?clean(item.sourceType):"Public"};}
+  function normalizeEvidence(item={}){const url=normalizeUrl(item.url);if(!url)return null;return {url,title:clean(item.title),description:clean(item.description),text:String(item.text||"").slice(0,6000),date:clean(item.date),detectedAt:clean(item.detectedAt),sourceType:["Official","Public","Discovery"].includes(clean(item.sourceType))?clean(item.sourceType):"Public"};}
   function normalizeItem(item={}){
     const domain=clean(item.domain).toLowerCase().replace(/^www\./,"");const researchStatus=RESEARCH_STATUSES.has(item.researchStatus)?item.researchStatus:"idle";
-    const dossier=item.dossier&&typeof item.dossier==="object"?{...item.dossier,company:clean(item.dossier.company),domain:clean(item.dossier.domain)||domain,website:normalizeUrl(item.dossier.website),market:clean(item.dossier.market),recommendedOffer:clean(item.dossier.recommendedOffer),buyerRoles:splitList(item.dossier.buyerRoles),whyNow:clean(item.dossier.whyNow),evidence:(item.dossier.evidence||[]).map(normalizeEvidence).filter(Boolean).slice(0,15),hypotheses:(item.dossier.hypotheses||[]).map(clean).filter(Boolean).slice(0,8),people:(item.dossier.people||[]).slice(0,5)}:null;
-    const drafts={tone:clean(item.drafts?.tone)||"consultative",emailSubject:clean(item.drafts?.emailSubject),emailBody:String(item.drafts?.emailBody||"").slice(0,12000),linkedinMessage:String(item.drafts?.linkedinMessage||"").slice(0,3000),callOpener:String(item.drafts?.callOpener||"").slice(0,6000),followUp:String(item.drafts?.followUp||"").slice(0,6000),objectionReply:String(item.drafts?.objectionReply||"").slice(0,6000)};
+    let dossier=item.dossier&&typeof item.dossier==="object"?{...item.dossier,company:clean(item.dossier.company),domain:clean(item.dossier.domain)||domain,website:normalizeUrl(item.dossier.website),market:clean(item.dossier.market),recommendedOffer:clean(item.dossier.recommendedOffer),buyerRoles:splitList(item.dossier.buyerRoles),whyNow:clean(item.dossier.whyNow),evidence:(item.dossier.evidence||[]).map(normalizeEvidence).filter(Boolean).slice(0,15),hypotheses:(item.dossier.hypotheses||[]).map(clean).filter(Boolean).slice(0,8),people:(item.dossier.people||[]).slice(0,5)}:null;
+    if(dossier)dossier.selectedTrigger=normalizeSelectedTrigger(dossier.selectedTrigger,dossier);
+    const drafts={scriptContext:buildScriptContext(dossier||{},(dossier?.people||[]).find(person=>clean(person.id)===clean(item.selectedPersonId))||dossier?.people?.[0]||{}),tone:clean(item.drafts?.tone)||"consultative",emailSubject:clean(item.drafts?.emailSubject),emailBody:String(item.drafts?.emailBody||"").slice(0,12000),linkedinMessage:String(item.drafts?.linkedinMessage||"").slice(0,3000),callOpener:String(item.drafts?.callOpener||"").slice(0,6000),followUp:String(item.drafts?.followUp||"").slice(0,6000),objectionReply:String(item.drafts?.objectionReply||"").slice(0,6000)};
     const requestedApproval=Boolean(item.approved);let brandSnapshot=null;let corruptedSnapshot=false;
     const hasPersistedSnapshot=Object.prototype.hasOwnProperty.call(item,'brandSnapshot')&&item.brandSnapshot!==null&&item.brandSnapshot!==undefined;
     if(requestedApproval&&hasPersistedSnapshot){
@@ -323,5 +352,5 @@
   }
   function normalizeOutreachState(value={}){const input=value&&typeof value==="object"?value:{};return {selectedDomain:clean(input.selectedDomain).toLowerCase().replace(/^www\./,""),items:(Array.isArray(input.items)?input.items:[]).slice(0,50).map(normalizeItem).filter(x=>x.domain)};}
 
-  return {DEFAULT_OUTREACH_STATE,STRATEGY_CALL_URL,buildDossierSearchQueries,normalizeDossierResearchResults,recommendOffer,buildOpportunityDossier,buildOutreachDrafts,localizeGeneratedItem,approveOutreachItem,renderApprovedEmail,buildApprovedSendPayload,invalidateOutreachApproval,normalizeOutreachState,splitList,buildCoreScenario,normalizeCampaignStudio,saveCoreScenario,regenerateCoreScenario,saveCampaignPreset,normalizeCampaignScenario,scenarioSummary};
+  return {normalizeSelectedTrigger,reviewTrigger,buildScriptContext,buildCrmScriptSnapshot,restoreCrmScriptSnapshot,DEFAULT_OUTREACH_STATE,STRATEGY_CALL_URL,buildDossierSearchQueries,normalizeDossierResearchResults,recommendOffer,buildOpportunityDossier,buildOutreachDrafts,localizeGeneratedItem,approveOutreachItem,renderApprovedEmail,buildApprovedSendPayload,invalidateOutreachApproval,normalizeOutreachState,splitList,buildCoreScenario,normalizeCampaignStudio,saveCoreScenario,regenerateCoreScenario,saveCampaignPreset,normalizeCampaignScenario,scenarioSummary};
 });
