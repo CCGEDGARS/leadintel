@@ -20,9 +20,11 @@ Known targets and found companies show their origins. Fit, evidence gaps and con
 - Concurrent imports could publish an older file preview: generation guard and workspace/seller checks reject stale completions. Imports require review before mutation; failed sync exposes retry and retains local targets.
 - Parent loaders could serve old UI/CSS after changing child files: invalidate the complete owning import chain.
 
+- Browser inspection caught search controls overflowing a narrow desktop content column: stack the heading above a fluid two-column control row, with a single-column mobile fallback. Functional tests alone do not prove layout.
+
 ## Validation boundaries
 
-The customer suite passed 1,307 tests before publication, including new runtime regression tests for merge/preservation, paused Lookalike, selected-company normalization, reviewed import, failed synchronization, stale import and Pipeline-independent continuation.
+The customer suite passed 1,308 tests before publication, including new runtime regression tests for merge/preservation, paused Lookalike, selected-company normalization, reviewed import, failed synchronization, stale import and Pipeline-independent continuation.
 
 Production requires the repository exact-SHA CI/manifest/health/smoke proof. This document does not assert production release success. Browser verification uses a separate local-only Ercon/Sweden review workspace; it is not the customer's authenticated workspace and must not be reported as authenticated customer acceptance.
 

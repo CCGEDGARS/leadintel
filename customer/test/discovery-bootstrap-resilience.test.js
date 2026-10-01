@@ -20,7 +20,7 @@ test('Company Discovery bootstrap is not blocked by a module dependency graph', 
   );
   assert.match(
     html,
-    /<script defer src="workflow-next-action\.js\?v=20260925-buyers-stage-view-v1&company-workflow=20261001-v1"><\/script>/,
+    /<script defer src="workflow-next-action\.js\?v=20260925-buyers-stage-view-v1&company-workflow=20261001-v2"><\/script>/,
     'The Buyers handoff must load the updated workflow gate after deployment'
   );
 });

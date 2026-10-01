@@ -328,3 +328,13 @@
 
 /* One company search, explicit research and selection actions. */
 .company-workflow-actions{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0}.company-run-context{font-size:13px;line-height:1.6;color:#476158;padding:12px 16px;background:#f2f7f4;border-radius:10px}.company-shortlist-heading{margin:26px 0 14px}.company-shortlist-heading h3{margin:0 0 6px}.company-shortlist-heading p{font-size:14px;color:#53665f}.company-search-details{margin:18px 0}.company-search-details>summary{cursor:pointer;font-size:13px;font-weight:700;padding:10px 0;color:#35584b}.company-next-action{display:flex;align-items:center;justify-content:space-between;gap:16px;border-top:1px solid #d9e4dd;margin-top:24px;padding-top:20px}.company-next-action span{color:#53665f;font-size:14px}.company-next-action button:disabled{opacity:.5;cursor:not-allowed}.decision-makers>summary{cursor:pointer;font-size:13px;font-weight:700;padding:10px 0}.company-workflow-actions button:focus-visible,.company-next-action button:focus-visible,.company-search-details summary:focus-visible{outline:3px solid #8cc8b4;outline-offset:3px}@media(max-width:680px){.company-workflow-actions{display:grid;grid-template-columns:1fr}.company-next-action{flex-direction:column;align-items:stretch}.company-next-action button{width:100%}.candidate-actions{flex-wrap:wrap}.candidate-actions button{flex:1 1 150px}}
+
+/* Keep search controls inside the content column at desktop and mobile widths. */
+.discovery-panel .market-research-head{display:block}
+.discovery-panel .market-research-head>.section-title{width:100%;max-width:none;min-width:0}
+.discovery-panel .discovery-controls{width:100%;min-width:0;max-width:100%;margin-top:18px;flex:auto}
+.discovery-panel .discovery-target-control{width:100%;min-width:0;max-width:100%}
+.discovery-panel .discovery-control-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(210px,.85fr);gap:12px;width:100%;min-width:0}
+.discovery-panel .discovery-control-row .discovery-run-btn{width:100%;min-width:0;margin-top:0}
+.discovery-panel .discovery-target-control small{max-width:none}
+@media(max-width:680px){.discovery-panel .discovery-control-row{grid-template-columns:minmax(0,1fr)}.discovery-panel .discovery-control-row .discovery-run-btn{width:100%;min-width:0}}
