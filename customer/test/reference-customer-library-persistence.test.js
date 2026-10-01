@@ -158,3 +158,12 @@ test('refreshed profiles drive lookalike queries while directory-only classifica
  const refreshed=Ref.applyRefreshedAnalysis(Ref.publishReferenceModel(state),parsed.analyses);const model=Ref.getActiveReferenceModel(refreshed);const queries=Look.buildLookalikeDiscoveryQueries({targetMarkets:['Sweden']},model.dna,5);assert.ok(queries.some(q=>q.query.includes('Lifting machinery')));assert.ok(queries.some(q=>q.query.includes('Equipment manufacturer')));assert.ok(queries.every(q=>q.referenceCompany==='Acme'));
  const weak={rows:[rows[0]],analyses:{[rows[0].id]:{analysisVersion:4,operatingComplexity:'Country selector',sourceEvidence:[],confidence:'low'}}};let candidate=Ref.activateReferenceCustomers(weak,[rows[0].id]);candidate.dna=Ref.buildReferenceDna(candidate,candidate.analyses);assert.equal(Ref.hasUsableReferenceDna(candidate.dna),false);
 });
+
+test('published checkbox recovers row-based refreshes without selecting unsupported segments',()=>{
+ const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync(require.resolve('../reference-customer-ui.js'),'utf8');const scope={};vm.createContext(scope);vm.runInContext(source.slice(source.indexOf('function isPublishedSegmentSelected('),source.indexOf('function individualReferenceCards(')),scope);
+ const reference={publishedModel:{active:true,segmentIds:[],activeRows:[{id:'a'},{id:'b'}]},draftDirty:false};
+ assert.equal(scope.isPublishedSegmentSelected(reference,{id:'new',rowIds:['a','b']}),true);
+ assert.equal(scope.isPublishedSegmentSelected(reference,{id:'other',rowIds:['a','c']}),false);
+ assert.equal(scope.isPublishedSegmentSelected({...reference,draftDirty:true},{id:'new',rowIds:['a','b']}),false);
+ const {state,rows}=builtState();const analyses=Object.fromEntries(rows.map(row=>[row.id,{broadIndustry:'Machinery',productionModel:'Equipment manufacturer',sourceEvidence:[{field:'broadIndustry',quote:'We manufacture machinery',url:row.website}],confidence:'medium'}]));const refreshed=Ref.applyRefreshedAnalysis(Ref.publishReferenceModel(state),analyses);assert.ok(refreshed.activeSegmentIds.length);assert.deepEqual(refreshed.publishedModel.segmentIds,refreshed.activeSegmentIds);
+});

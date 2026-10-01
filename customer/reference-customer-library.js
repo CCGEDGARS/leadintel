@@ -146,7 +146,7 @@
     const segmentation=Ref.buildReferenceSegments(previous.rows,analyses);
     let next=markReferenceDraftChanged({...previous,analyses,segments:segmentation.segments,segmentationMeaningful:segmentation.meaningful,analyzedAt});
     if(wasActive&&supportedRows.length){
-      next=activateReferenceCustomers(next,supportedRows.map(row=>row.id));next.fingerprint=`${next.fingerprint}:analysis:${analyzedAt}`;next.dna=Ref.buildReferenceDna(next,next.analyses);
+      next=activateReferenceCustomers(next,supportedRows.map(row=>row.id));const supportedIds=new Set(supportedRows.map(row=>row.id));next.activeSegmentIds=next.segments.filter(segment=>segment.canActivate!==false&&segment.rowIds?.length&&segment.rowIds.every(id=>supportedIds.has(id))).map(segment=>segment.id);next.fingerprint=`${next.fingerprint}:analysis:${analyzedAt}`;next.dna=Ref.buildReferenceDna(next,next.analyses);
       next=publishReferenceModel(next);next.publishedModel.sourceRows=clone(previous.rows);
     }
     return next;
