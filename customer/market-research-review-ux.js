@@ -7,10 +7,15 @@
 
   const STORAGE_KEY="leadintel_customer_v2_state";
   const MODE_META=Object.freeze({
-    quick:Object.freeze({depth:"Fast",capacity:"up to 20 evidence sources",summary:"Focused validation of the strongest active opportunities.",themes:["Strongest buying signals","Company growth & expansion","Sales-team hiring and change"]}),
-    deep:Object.freeze({depth:"Detailed",capacity:"up to 80 evidence sources",summary:"Broader commercial research with live source discovery and cross-signal validation.",themes:["Active buying signals","Leadership changes","Hiring & team growth","Commercial transformation","Company expansion","Relevant market news"]}),
-    intelligence:Object.freeze({depth:"Comprehensive",capacity:"up to 200 evidence sources",summary:"Widest investigation with a multi-source intelligence map and cross-source pattern detection.",themes:["Active buying signals","Leadership & hiring","Expansion & investment","Technology transformation","Competitor activity","Industry & specialist sources","Official & registry evidence","Cross-source patterns"]})
+    quick:Object.freeze({depth:"Fast",capacity:"up to 20 evidence sources",summary:"Focused validation of the strongest active opportunities."}),
+    deep:Object.freeze({depth:"Detailed",capacity:"up to 80 evidence sources",summary:"Broader commercial research with live source discovery and cross-signal validation."}),
+    intelligence:Object.freeze({depth:"Comprehensive",capacity:"up to 200 evidence sources",summary:"Widest investigation with a multi-source intelligence map and cross-source pattern detection."})
   });
+
+  function themesFromPlan(values=[]){
+    const labels={direction:'Market direction and demand',competition:'Competitor activity',funding:'Funding and investment',pricing:'Pricing evidence',commercial:'Commercial demand'};
+    return [...new Set(values.filter(value=>typeof value==='string'&&value.trim()).map(value=>labels[value]||value.trim()))].slice(0,12);
+  }
 
   function readState(root){try{return JSON.parse(root.localStorage?.getItem(STORAGE_KEY)||"{}");}catch{return {};}}
   function mode(root){const value=readState(root)?.market?.researchMode;return MODE_META[value]?value:"quick";}
@@ -44,6 +49,8 @@
     const preview=root.document.getElementById("research-run-preview");if(!preview||preview.hidden)return;
     const wrapper=preview.querySelector(".research-preview-queries");const list=root.document.getElementById("research-preview-queries");if(!wrapper||!list)return;
     const selected=mode(root),meta=MODE_META[selected];
+    let planned=[];try{planned=JSON.parse(list.dataset.plannedThemes||"[]");}catch{}
+    const themes=themesFromPlan(Array.isArray(planned)?planned:[]);
     let card=wrapper.querySelector(".research-plan-card");
     if(!card){
       card=root.document.createElement("div");card.className="research-plan-card";
@@ -52,7 +59,8 @@
       let details=wrapper.querySelector("details.exact-searches");
       if(!details){details=root.document.createElement("details");details.className="exact-searches planned-searches";const summary=root.document.createElement("summary");summary.textContent="View exact searches";details.appendChild(summary);details.appendChild(list);wrapper.appendChild(details);}
     }
-    card.innerHTML=`<div class="research-plan-head"><div><span>Research Plan</span><strong>${esc(meta.depth)} investigation</strong></div><div class="research-plan-badges"><b>${esc(meta.depth)}</b><b>${esc(meta.capacity)}</b></div></div><p class="research-plan-summary">${esc(meta.summary)}</p><div class="research-plan-themes-title">Investigation themes</div><div class="research-plan-themes">${meta.themes.map(item=>`<div class="research-plan-theme">${esc(item)}</div>`).join("")}</div>`;
+    const markup=`<div class="research-plan-head"><div><span>Research Plan</span><strong>${esc(meta.depth)} investigation</strong></div><div class="research-plan-badges"><b>${esc(meta.depth)}</b><b>${esc(meta.capacity)}</b></div></div><p class="research-plan-summary">${esc(meta.summary)}</p><div class="research-plan-themes-title">Investigation themes</div><div class="research-plan-themes">${themes.map(item=>`<div class="research-plan-theme">${esc(item)}</div>`).join("")}</div>`;
+    if(card.innerHTML!==markup)card.innerHTML=markup;
   }
 
   function updateSourceCount(root){
@@ -78,5 +86,5 @@
     schedule(preview);return true;
   }
 
-  return {MODE_META,enhanceResearchPlan,updateSourceCount,install};
+  return {MODE_META,themesFromPlan,enhanceResearchPlan,updateSourceCount,install};
 });

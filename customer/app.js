@@ -2,7 +2,7 @@ import './company-brain.js?v=20260928-buyer-role-repair-v2';
 import './content-language.js?v=20260924-workspace-content-english-v1';
 import './content-variants.js?v=20260929-public-first-email-v1';
 import './business-identity.js?v=20260924-workspace-profile-english-v1';
-import './evidence-view.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&reference-interface=20260923&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&map-activation-guide=1&reference-discovery=5&reference-similarity=20260930-v1&reference-activation=6&company-workflow=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1';
+import './evidence-view.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&reference-interface=20260923&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&map-activation-guide=1&reference-discovery=5&reference-similarity=20260930-v1&reference-activation=6&company-workflow=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1&actual-themes=20261001-v1';
 import './profile-approval-ui.js?v=20260924-friendly-workflow-labels-v1';
 import './workspace-persistence.js?v=20260928-sync-timeout-v1&refresh-protection=1&auto-save=1';
 import {withOpenAiRetry,cleanOpenAiResearchQuery,describePartialCoverage} from './market-research-provider-resilience.js?v=20260916-latency-fix-v2';
@@ -554,6 +554,7 @@ function openResearchPreview(mode){
   const suggestions=LeadIntelMarket.buildSuggestedSources(profile,state.market.signals,state.market.researchSourceTypes,language);const added=new Set(state.market.researchCustomSources||[]);
   $("research-suggested-sources").innerHTML=suggestions.length?suggestions.map((item,index)=>`<label><input type="checkbox" data-suggested-source value="${esc(item.url)}" ${added.has(item.url)?"checked disabled":""}><span><strong>${esc(item.name)}</strong><small>${esc(item.reason)}</small><code>${esc(item.url)}</code></span></label>`).join(""):"<p>No specific site recommendations are available for the selected market and source categories. You can still add any public URL manually.</p>";
   $("add-suggested-sources").hidden=!suggestions.length;$("add-suggested-sources").disabled=!suggestions.some(item=>!added.has(item.url));
+  $("research-preview-queries").dataset.plannedThemes=JSON.stringify(queries.map(item=>item.signalName||item.researchCategory));
   $("research-preview-queries").innerHTML=queries.map(item=>`<li><strong>${esc(item.researchCategory)}</strong> · ${esc(item.query)}</li>`).join("")||"<li>No searches could be prepared. Add a target market.</li>";
   $("confirm-market-research").textContent=`Start ${modeUi.label}`;
   $("confirm-market-research").disabled=!queries.length;

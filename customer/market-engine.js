@@ -202,7 +202,7 @@
       const sourceType=sources[index%sources.length];
       const sourceTerm={news:"news",jobs:"hiring",investments:"investment",company:"company site",registries:"official filings",tenders:"procurement"}[sourceType];
       const query=[market,index%2?offer:buyer,signalTerm,intents[index%intents.length],sourceTerm,new Date().getUTCFullYear()].filter(Boolean).join(" ");
-      planned.push({id:`q-${slug(market)}-commercial-${index+1}`,market,offer,sourceType,researchCategory:"commercial",query});
+      planned.push({id:`q-${slug(market)}-commercial-${index+1}`,market,offer,sourceType,researchCategory:"commercial",signalName:clean(signal?.name||profile.buyingTriggers)||"Buyer demand",query});
     }
     return planned;
   }

@@ -33,3 +33,18 @@ test('review UX module is loaded by evidence view',()=>{
   const evidence=read('evidence-view.js');
   assert.match(evidence,/market-research-review-ux\.js/);
 });
+
+test('Ercon preview themes come from the actual industrial plan, never static sales examples',()=>{
+  const Market=require('../market-engine.js'),Ux=require('../market-research-review-ux.js');
+  const signals=[{name:'Industrial project announcements',active:true,weight:3},{name:'Production facility expansion',active:true,weight:2},{name:'Capital investment',active:true,weight:1}];
+  const profile={priorityOffers:'Industrial engineering and installation',idealCustomer:'Industrial manufacturers',targetMarkets:'Sweden'};
+  for(const mode of ['quick','deep','intelligence']){
+    const plan=Market.buildResearchPlan(profile,signals,{mode,sourceTypes:['news']});
+    const themes=Ux.themesFromPlan(plan.map(item=>item.signalName||item.researchCategory));
+    assert.ok(themes.includes('Industrial project announcements'));
+    assert.doesNotMatch(themes.join(' '),/sales.team|leadership|team growth/i);
+    assert.doesNotMatch(plan.map(item=>item.query).join(' '),/sales.team/i);
+  }
+  assert.deepEqual(Ux.themesFromPlan(['Sales team hiring','Sales team hiring']),['Sales team hiring'],'a real selected sales signal remains valid for a sales seller');
+  assert.deepEqual(Ux.themesFromPlan([]),[],'no invented themes when no plan exists');
+});
