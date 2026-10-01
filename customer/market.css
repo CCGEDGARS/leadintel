@@ -309,3 +309,25 @@
 .research-panel>.research-status[data-status="complete-with-warning"] .research-status-icon{background:#9b741e}
 .research-panel>.research-status[data-status="complete-with-warning"] .research-status-copy>strong{color:#73551b}
 .research-report-access:empty{display:none}.research-report-access{padding:18px;margin:16px 0;border:1px solid #c9ddd3;border-radius:12px;background:#f5faf7;display:flex;align-items:center;gap:16px;flex-wrap:wrap}.research-report-access>button{background:#12614f;color:white;border:0;border-radius:9px;padding:12px 24px;font:700 14px "DM Sans",sans-serif;cursor:pointer}.research-report-access details{flex:1}.research-report-access small{flex-basis:100%;color:#596b65}.research-report-access summary{cursor:pointer}.report-actions button{border:1px solid #c9ddd3;border-radius:8px;padding:10px 14px;background:#fff;color:#173c30;font-weight:700;cursor:pointer}#research-report-dialog::backdrop{background:rgba(8,28,22,.65)}
+
+/* Saved research report library */
+.research-report-access{display:block;padding:24px;background:#f7faf8}
+.report-library-heading{display:flex;align-items:center;justify-content:space-between;gap:20px}
+.report-library-heading strong{font:700 18px "DM Sans",sans-serif;color:#173c30}
+.report-library-heading p{margin:6px 0 0;color:#61716b;font-size:14px;line-height:1.5}
+.research-report-access button{font:600 14px "DM Sans",sans-serif;border-radius:8px;padding:10px 16px;cursor:pointer;min-height:42px}
+.research-report-access .report-latest-button{border:1px solid #12614f;background:#12614f;color:white;white-space:nowrap}
+.report-library-history{margin-top:20px;border-top:1px solid #d8e4dd;padding-top:16px}
+.report-library-history summary{font:600 14px "DM Sans",sans-serif;color:#31594a;cursor:pointer}
+.report-library-history summary span{margin-left:6px;background:#e4eee8;padding:2px 8px;border-radius:20px;font-size:12px}
+.saved-report-list{display:grid;gap:10px;margin-top:16px}
+.saved-report-row{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px;background:white;border:1px solid #dbe6df;border-radius:10px;margin:0}
+.saved-report-info{min-width:0}.saved-report-title{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.saved-report-title strong{font-size:15px;color:#213b30}
+.saved-report-status{font:600 11px "DM Sans",sans-serif;padding:4px 8px;border-radius:20px;background:#fff4dc;color:#8b6015}.saved-report-status.is-complete{background:#e7f4eb;color:#236744}
+.saved-report-meta{font-size:13px;color:#54685d;margin-top:8px}.saved-report-evidence{font-size:12px;color:#758078;margin-top:4px}
+.saved-report-actions{display:flex;gap:8px;flex-shrink:0}.research-report-access .report-view-button{background:#fff;border:1px solid #bdd3c6;color:#12614f}.research-report-access .report-delete-button{background:transparent;border:1px solid transparent;color:#915349}.research-report-access .report-delete-button:hover{background:#fff0ed;border-color:#ebd0ca}
+.report-library-footer{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:12px}.report-library-footer span{font-size:12px;color:#718076}
+.report-delete-dialog{width:min(460px,calc(100vw - 32px));border:1px solid #dbe6df;border-radius:18px;padding:0;box-shadow:0 24px 80px #102b2433;background:white;color:#213b30}
+.report-delete-dialog::backdrop{background:rgba(8,28,22,.5)}.report-delete-content{padding:28px}.report-delete-eyebrow{font:700 11px "DM Sans",sans-serif;letter-spacing:1.4px;color:#718076}.report-delete-content h2{font:700 24px "DM Sans",sans-serif;margin:12px 0}.report-delete-content p{font:400 14px/1.6 "DM Sans",sans-serif;color:#61716b}.report-delete-note{background:#f2f7f4;border-radius:8px;padding:12px}.report-delete-dialog-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:24px}.report-delete-dialog-actions button{font:600 14px "DM Sans",sans-serif;border:1px solid #cadbd1;background:white;color:#31594a;padding:11px 16px;border-radius:8px;cursor:pointer}.report-delete-dialog-actions [data-delete-confirm]{background:#a74336;border-color:#a74336;color:white}
+.research-report-access button:focus-visible,.report-delete-dialog button:focus-visible,.report-library-history summary:focus-visible{outline:3px solid #83bbaa;outline-offset:3px}
+@media(max-width:640px){.research-report-access{padding:18px}.report-library-heading{align-items:flex-start;flex-direction:column}.saved-report-row{align-items:flex-start;flex-direction:column;gap:12px}.saved-report-actions{align-self:flex-end}.report-library-footer{align-items:flex-start;flex-direction:column}.report-delete-content{padding:22px}}

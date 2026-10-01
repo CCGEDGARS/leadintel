@@ -13,6 +13,8 @@
     market.researchReportsInitialized=true;
     return history.length-market.researchReports.length;
   }
+  function dateLabel(value){const date=new Date(value);return Number.isNaN(date.getTime())?'Date unavailable':new Intl.DateTimeFormat(undefined,{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}).format(date);}
+  function historyHtml(history){return normalize(history).map((r,i)=>`<article class="saved-report-row"><div class="saved-report-info"><div class="saved-report-title"><strong>${esc(modes[r.mode]||'Research report')}</strong><span class="saved-report-status ${r.status==='complete'?'is-complete':'is-partial'}">${r.status==='complete'?'Complete':'Partial coverage'}</span></div><div class="saved-report-meta">Saved ${esc(dateLabel(r.createdAt))} · ${r.sources.length} sources</div><div class="saved-report-evidence">Evidence collected ${esc(dateLabel(r.researchedAt))}</div></div><div class="saved-report-actions"><button type="button" class="report-view-button" data-report-index="${i}">View</button><button type="button" class="report-delete-button" data-report-delete="${i}" aria-label="Delete ${esc(modes[r.mode]||'research')} report saved ${esc(dateLabel(r.createdAt))}">Delete</button></div></article>`).join('');}
   const css=`*{box-sizing:border-box}body{margin:0;background:#f1f4f2;color:#172d27;font:15px/1.65 Arial,sans-serif}.report{max-width:1000px;margin:24px auto;background:white;padding:48px;border-radius:16px}header{border-bottom:3px solid #12614f;padding-bottom:24px}.eyebrow{color:#12614f;letter-spacing:2px;font-size:12px;text-transform:uppercase}h1{font-size:34px;line-height:1.2}h2{margin-top:32px;font-size:22px}h3{font-size:17px}small,.muted{color:#596b65}.metrics{display:flex;gap:24px;flex-wrap:wrap;margin:24px 0}.metrics strong{display:block;font-size:23px}.notice{padding:14px;background:#fff6df;border-left:4px solid #ac812d}article{border:1px solid #dbe4df;border-radius:10px;padding:18px;margin:12px 0}a{color:#12614f;overflow-wrap:anywhere}li{margin-bottom:8px}.source{break-inside:avoid}.source p{white-space:pre-wrap}.toolbar{position:sticky;top:0;background:white;border-bottom:1px solid #dbe4df;padding:12px;display:flex;gap:8px;flex-wrap:wrap}button{padding:10px 16px;border:1px solid #12614f;border-radius:8px;background:white;color:#12614f;cursor:pointer}.primary{background:#12614f;color:white}footer{border-top:1px solid #dbe4df;margin-top:32px;padding-top:20px}@page{size:A4;margin:16mm}@media print{body{background:white;font-size:10pt}.report{margin:0;padding:0;max-width:none;border-radius:0}.toolbar{display:none}h1{font-size:25pt}h2,h3{break-after:avoid}article{break-inside:avoid}a{color:#172d27}a.source-link:after{content:' (' attr(href) ')';font-size:9pt}.source p{max-height:none}}@media(max-width:650px){.report{margin:0;padding:24px}h1{font-size:27px}}`;
   function body(r){const sources=r.sources||[];const citation=s=>{const index=sources.findIndex(x=>x.url===s.url);return index>=0?`<a href="#source-${index+1}">[${index+1}]</a>`:'';};
     const gaps=[...(r.quality?.gaps||[]),...(r.errors||[]).map(x=>`${x.provider||'Source'}: ${x.message||'Unavailable'}`),...(r.verification?.status==='unavailable'?[`Verification: ${r.verification.reason||'Unavailable'}`]:[]),...(r.stale?['This report retains earlier evidence. Context needs review before reuse.']:[])];
@@ -28,21 +30,34 @@
     dialog.querySelector('[data-report-print]').onclick=()=>{frame.contentWindow.focus();frame.contentWindow.print();};
     dialog.querySelector('[data-report-download]').onclick=()=>{const blob=new Blob([documentHtml(current)],{type:'text/html'});const link=d.createElement('a');const objectUrl=URL.createObjectURL(blob);link.href=objectUrl;link.download=`LeadIntel-${String(current.company).replace(/[^a-z0-9-]/gi,'-')}-${current.id}.html`;link.click();setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);};
     dialog.querySelector('[data-report-strategy]').onclick=()=>{dialog.close();onStrategy();};
-    function remove(id){
-      const main=getState();const history=normalize(main.market.researchReports);
-      if(id!==null&&!history.some(report=>report.id===id))return;
-      if(!history.length)return;
-      const message=id===null?'Delete all saved reports? Research evidence used by Strategy will be kept.':'Delete this saved report? Research evidence used by Strategy will be kept.';
-      if(!globalThis.confirm(message))return;
+    const confirmation=d.createElement('dialog');confirmation.className='report-delete-dialog';confirmation.setAttribute('aria-labelledby','report-delete-title');confirmation.setAttribute('aria-describedby','report-delete-description');
+    confirmation.innerHTML='<div class="report-delete-content"><span class="report-delete-eyebrow">SAVED REPORTS</span><h2 id="report-delete-title">Delete report?</h2><p id="report-delete-description"></p><p class="report-delete-note">Your research sources and Strategy remain available.</p><div class="report-delete-dialog-actions"><button type="button" data-delete-cancel>Keep report</button><button type="button" data-delete-confirm>Delete report</button></div></div>';d.body.appendChild(confirmation);
+    let pendingDelete=null,deleteFocus=null;
+    const cancelDelete=confirmation.querySelector('[data-delete-cancel]');const confirmDelete=confirmation.querySelector('[data-delete-confirm]');
+    cancelDelete.onclick=()=>confirmation.close();
+    confirmation.addEventListener('close',()=>{pendingDelete=null;if(deleteFocus?.isConnected)deleteFocus.focus();});
+    confirmDelete.onclick=()=>{
+      if(!pendingDelete)return;
+      const id=pendingDelete.id;const main=getState();
       deleteSaved(main.market,id);save();
       if(dialog.open&&(id===null||current?.id===id))dialog.close();
-      render();
+      confirmation.close();render();
+      d.querySelector('[data-report-latest]')?.focus();
+    };
+    function remove(id){
+      const history=normalize(getState().market.researchReports);const report=history.find(r=>r.id===id);
+      if(!history.length||(id!==null&&!report))return;
+      pendingDelete={id};deleteFocus=d.activeElement;
+      confirmation.querySelector('#report-delete-title').textContent=id===null?'Delete all saved reports?':'Delete this report?';
+      confirmation.querySelector('#report-delete-description').textContent=id===null?`This removes ${history.length} saved report${history.length===1?'':'s'} from your workspace. This cannot be undone.`:`${modes[report.mode]||'Research report'} · Saved ${dateLabel(report.createdAt)}. This cannot be undone.`;
+      cancelDelete.textContent=id===null?'Keep reports':'Keep report';confirmDelete.textContent=id===null?'Delete all reports':'Delete report';
+      confirmation.showModal();cancelDelete.focus();
     }
     function render(){
       const m=getState().market||{};const history=normalize(m.researchReports);
       const latest=history[0]||(!m.researchReportsInitialized&&m.researchResults?.length?snapshot(getState(),'legacy-current'):null);
       for(const host of d.querySelectorAll('[data-research-reports]')){
-        host.innerHTML=latest?'<button type="button" data-report-latest>View report</button><details><summary>Saved reports ('+history.length+')</summary>'+history.map((r,i)=>`<p class="saved-report-row"><button type="button" data-report-index="${i}">${esc(modes[r.mode]||r.mode)} · ${esc(r.researchedAt||r.createdAt)} · ${esc(r.status)} · ${r.sources.length} sources</button> <button type="button" data-report-delete="${i}" aria-label="Delete ${esc(modes[r.mode]||r.mode)} report from ${esc(r.createdAt)}">Delete</button></p>`).join('')+(history.length?'<button type="button" data-report-delete-all>Delete all saved reports</button>':'')+'</details><small>Saved with your workspace · Print / Save PDF or download to share</small>':'<small>No saved reports. Your research evidence remains available in Strategy.</small>';
+        host.innerHTML=latest?`<div class="report-library-heading"><div><strong>Research reports</strong><p>Open, print or download your saved research.</p></div><button type="button" class="report-latest-button" data-report-latest>View latest report</button></div><details class="report-library-history"><summary>Saved reports <span>${history.length}</span></summary><div class="saved-report-list">${historyHtml(history)}</div>${history.length?'<div class="report-library-footer"><span>Deleting reports keeps your Strategy evidence.</span><button type="button" class="report-delete-button" data-report-delete-all>Delete all reports</button></div>':''}</details>`:'<div class="report-library-heading"><div><strong>No saved reports</strong><p>New research reports will appear here. Your existing evidence remains in Strategy.</p></div></div>';
         host.querySelector('[data-report-latest]')?.addEventListener('click',()=>open(latest));
         host.querySelectorAll('[data-report-index]').forEach(button=>button.onclick=()=>open(history[Number(button.dataset.reportIndex)]));
         host.querySelectorAll('[data-report-delete]').forEach(button=>button.onclick=()=>remove(history[Number(button.dataset.reportDelete)]?.id));
@@ -51,5 +66,5 @@
     }
     return {render,capture(){const main=getState();const report=snapshot(main);main.market.researchReports=append(main.market.researchReports,report);main.market.researchReportsInitialized=true;save();render();},openLatest(){const m=getState().market||{};open(normalize(m.researchReports)[0]||snapshot(getState()));}};
   }
-  return {snapshot,normalize,append,deleteSaved,body,documentHtml,install};
+  return {snapshot,normalize,append,deleteSaved,dateLabel,historyHtml,body,documentHtml,install};
 });

@@ -22,3 +22,13 @@ test('delete one or all reports persists without changing Strategy evidence',()=
  main.market.researchReports=Report.append(reloaded.researchReports,Report.snapshot(main,'new'));
  assert.deepEqual(main.market.researchReports.map(x=>x.id),['new']);
 });
+
+test('report cards distinguish snapshot dates from evidence dates and escape titles',()=>{
+ const one=Report.snapshot(fixture,'one');one.createdAt='2026-10-01T12:00:00Z';
+ const two={...one,id:'two',createdAt:'2026-10-01T13:00:00Z'};
+ const html=Report.historyHtml([two,one]);
+ assert.ok(html.includes('Partial coverage'));assert.ok(html.includes('Evidence collected'));
+ assert.ok(html.includes(Report.dateLabel(one.createdAt)));assert.ok(html.includes(Report.dateLabel(two.createdAt)));
+ assert.ok(!html.includes('2026-10-01T12:00:00Z'));assert.ok(html.includes('data-report-delete="1"'));
+ assert.equal(Report.dateLabel('broken'),'Date unavailable');
+});
