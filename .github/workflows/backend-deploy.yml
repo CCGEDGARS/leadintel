@@ -43,6 +43,6 @@ jobs:
       - name: Apply production D1 migrations
         run: npm run db:remote
       - name: Deploy production Worker
-        run: npm run deploy
+        run: npm run deploy -- --var "BACKEND_RELEASE_SHA:${{ github.event.workflow_run.head_sha }}"
       - name: Verify production health
         run: curl --fail --silent --show-error https://leadintel-api.edgars-7e7.workers.dev/api/health

@@ -8,6 +8,11 @@ on:
       - 'feature/**'
     paths:
       - 'backend/**'
+      - 'customer/discovery-engine.js'
+      - 'customer/lookalike-discovery.js'
+      - 'customer/targeting-policy.js'
+      - 'customer/reference-*.js'
+      - 'customer/company-brain.js'
       - 'api/**'
       - 'requirements.txt'
       - 'release-integrity.config.json'
@@ -18,6 +23,11 @@ on:
   pull_request:
     paths:
       - 'backend/**'
+      - 'customer/discovery-engine.js'
+      - 'customer/lookalike-discovery.js'
+      - 'customer/targeting-policy.js'
+      - 'customer/reference-*.js'
+      - 'customer/company-brain.js'
       - 'api/**'
       - 'requirements.txt'
       - 'release-integrity.config.json'

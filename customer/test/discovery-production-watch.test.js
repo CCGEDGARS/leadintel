@@ -30,11 +30,12 @@ function productionFetch({ customerHtml, discoveryUi }) {
       return response({ json: { service: 'leadintel-customer', commit: SHA, ref: 'main' } });
     }
     if (parsed.hostname === 'leadintel-api.edgars-7e7.workers.dev') {
-      return response({ json: { status: 'ok', service: 'leadintel-api' } });
+      return response({ json: { ...config.backendHealth.json } });
     }
     if (parsed.pathname === '/customer/website-input-sync.js') {
       return response({ text: 'toVisibleWebsite syncVisibleWebsite displayChanged' });
     }
+    if (parsed.pathname === '/customer/approved-workflow-ui.js') { return response({text:fs.readFileSync(path.join(root,'customer/approved-workflow-ui.js'),'utf8')}); }
     if (parsed.pathname === '/customer/first-party-research.js') { return response({text:fs.readFileSync(path.join(root,'customer/first-party-research.js'),'utf8')}); }
     if (parsed.pathname === '/customer/discovery-ui.js') {
       return response({ text: discoveryUi });

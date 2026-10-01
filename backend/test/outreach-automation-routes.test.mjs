@@ -19,7 +19,7 @@ class DB{
       CREATE TABLE gmail_connections(workspace_id TEXT PRIMARY KEY,user_id TEXT,google_email TEXT,encrypted_refresh_token TEXT,scopes TEXT,status TEXT,history_id TEXT,connected_at TEXT,updated_at TEXT,disconnected_at TEXT);
       CREATE TABLE gmail_messages(id TEXT PRIMARY KEY,workspace_id TEXT,idempotency_key TEXT,domain TEXT,recipient TEXT,subject TEXT,gmail_message_id TEXT,gmail_thread_id TEXT,sent_by TEXT,sent_at TEXT,status TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP,UNIQUE(workspace_id,idempotency_key));
       INSERT INTO workspaces(id,name,market) VALUES('w1','Test','LV');`);
-    this.raw.exec(fs.readFileSync(new URL('../migrations/0015_outreach_automation.sql',import.meta.url),'utf8'));this.raw.exec(fs.readFileSync(new URL('../migrations/0024_automation_brand_html.sql',import.meta.url),'utf8'));this.raw.exec(fs.readFileSync(new URL('../migrations/0025_contact_suppression.sql',import.meta.url),'utf8'));
+    this.raw.exec(fs.readFileSync(new URL('../migrations/0015_outreach_automation.sql',import.meta.url),'utf8'));this.raw.exec(fs.readFileSync(new URL('../migrations/0024_automation_brand_html.sql',import.meta.url),'utf8'));this.raw.exec(fs.readFileSync(new URL('../migrations/0025_contact_suppression.sql',import.meta.url),'utf8'));this.raw.exec(fs.readFileSync(new URL('../migrations/0027_approved_workflow.sql',import.meta.url),'utf8'));
   }
   prepare(sql){return new Statement(this.raw,sql);}async batch(rows){for(const row of rows)await row.run();}
 }

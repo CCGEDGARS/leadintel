@@ -1,3 +1,5 @@
+import {handleApprovedWorkflowRoute} from './approved-workflow-routes.js';
+import {runApprovedWorkflows} from './approved-workflow-runner.js';
 import core from './index.js';
 import {allowedOrigin,corsHeaders} from './security.js';
 import {handleAiRoute} from './ai-routes.js';
@@ -59,6 +61,7 @@ export default {
       const calendly=await handleCalendlyIntegrationRoute(request,env,cors);if(calendly)return calendly;
       const sources=await handleIntelligenceSourceRoute(request,env,cors);if(sources)return sources;
       const monitoring=await handleMarketMonitoringRoute(request,env,cors);if(monitoring)return monitoring;
+      const workflow=await handleApprovedWorkflowRoute(request,env,cors);if(workflow)return workflow;
       const runtimeEnv=await withWorkspaceServiceCredentials(request,env);
       const crm=await handleCrmRoute(request,runtimeEnv,cors);if(crm)return crm;
       const automation=await handleOutreachAutomationRoute(request,runtimeEnv,cors);if(automation)return automation;
@@ -70,7 +73,7 @@ export default {
   },
   async scheduled(controller,env,ctx){
     const now=new Date(controller.scheduledTime||Date.now());
-    const outreachCycle=pollOutreachReplies(env,{now}).then(()=>runOutreachAutomation(env,{now}));
+    const outreachCycle=runApprovedWorkflows(env,{now}).catch(cause=>console.error('Approved workflow cycle failed',cause)).then(()=>pollOutreachReplies(env,{now}).then(()=>runOutreachAutomation(env,{now})));
     ctx.waitUntil(Promise.allSettled([
       runDueMarketMonitoring(env,now),
       runDueSourceHealthChecks(env,now),

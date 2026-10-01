@@ -43,6 +43,7 @@ function renderSetup(){
   let card=document.getElementById('delivery-setup');if(!card){card=document.createElement('section');card.id='delivery-setup';card.className='panel brand-identity-panel delivery-setup';brand.after(card);}
   const authenticated=Boolean(bridge()?.session?.authenticated&&bridge()?.workspace?.id);
   const p=serverPolicy(),ready=authenticated&&Boolean(policy)&&policyWorkspace===bridge()?.workspace?.id,owner=isOwner(),preferred=p.preferredMode||p.mode||'manual';
+  if(p.approvedWorkflow){card.innerHTML=`<div class="delivery-setup-header"><div><span class="eyebrow">Approved workflow</span><h3>Delivery is controlled by your workflow</h3><p>Status: ${esc(p.approvedWorkflow.status)}. Review approved limits, pause or take over in Workflow automation.</p></div></div><button data-open-approved-workflow>Open workflow controls</button>`;card.querySelector('[data-open-approved-workflow]')?.addEventListener('click',()=>root.LeadIntelApprovedWorkflow?.open());return;}
   const limit=Number(p.workspaceDailyLimit||5),preset=[5,10,20].includes(limit)?String(limit):'custom';
   const active=p.automaticDelivery==='enabled'&&p.mode==='automatic'&&p.enabled;
   const initialBadge=setupBadge(preferred,active);
@@ -84,6 +85,7 @@ function render(){
   const destination=anchor();if(!destination)return;
   renderSuppression(destination);
   const p=serverPolicy();const s=serverStatus();let el=document.getElementById(ID);if(!el){el=document.createElement('section');el.id=ID;el.className='outreach-automation-panel';}if(el.parentNode!==destination)destination.appendChild(el);
+  if(p.approvedWorkflow){el.innerHTML=`<div class="oa-head"><div><span class="oa-kicker">Approved workflow delivery</span><h3>${p.approvedWorkflow.status==='automatic'?'Automatic workflow':'Workflow '+esc(p.approvedWorkflow.status)}</h3><p>Only messages created under your approved workflow can send automatically. Use the workflow controls for review, limits, pause and manual takeover.</p><p>${Number(s.activity?.sent)||0} sent · ${Number(s.queue?.queued)||0} queued · ${Number(s.activity?.replies)||0} replies</p></div></div><button data-open-approved-workflow>Open workflow controls</button>`;el.querySelector('[data-open-approved-workflow]')?.addEventListener('click',()=>root.LeadIntelApprovedWorkflow?.open());return;}
   if(p.automaticDelivery==='manual_only'){
     el.innerHTML=`<div class="oa-head"><div><span class="oa-kicker">Gmail delivery</span><h3>Manual delivery</h3><p>Automatic Gmail delivery is not active. Review each approved message and use the explicit Send with Gmail action. Your daily limit is saved for a later automatic pilot.</p></div><span class="oa-role">Manual only</span></div>`;
     return;

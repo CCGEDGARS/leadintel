@@ -27,7 +27,7 @@ async function router(request,env) {
   if(request.method==="OPTIONS")return new Response(null,{status:204,headers:cors});
   if(request.headers.get("Origin")&&!origin)return error("Origin not allowed",403,cors);
 
-  if(url.pathname==="/api/health")return json({status:"ok",service:"leadintel-api"},200,cors);
+  if(url.pathname==="/api/health")return json({status:"ok",service:"leadintel-api",workflow_version:"approved-workflow-v1",release_sha:env.BACKEND_RELEASE_SHA||""},200,cors);
   if(!url.pathname.startsWith("/api/"))return env.ASSETS.fetch(request);
 
   if(url.pathname==="/api/login"&&request.method==="POST") {
