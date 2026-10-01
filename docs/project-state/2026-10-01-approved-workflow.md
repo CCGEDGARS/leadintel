@@ -31,4 +31,6 @@ Release is subject to exact-SHA CI, production migration/deploy and release-inte
 
 ## Local validation
 
-384 backend tests and 1,354 customer tests passed. Customer static build and Wrangler Worker dry-run build passed. The native end-to-end test uses mocked external providers; no real email was sent. Additional regression coverage verifies that renewed approval after a source-context change creates a new revision, stops the old run and cannot reuse old stage results. Delivery UI delegates to the shared workflow controls rather than displaying a contradictory standalone sending state.
+384 backend tests and 1,355 customer tests passed. Customer static build and Wrangler Worker dry-run build passed. The native end-to-end test uses mocked external providers; no real email was sent. Additional regression coverage verifies that renewed approval after a source-context change creates a new revision, stops the old run and cannot reuse old stage results. Delivery UI delegates to the shared workflow controls rather than displaying a contradictory standalone sending state.
+
+A client isolation regression also verifies that controls loaded in one workspace cannot mutate a newly selected workspace, and late responses cannot render another workspace’s data.

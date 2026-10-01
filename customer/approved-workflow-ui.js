@@ -9,10 +9,12 @@
   async function api(body){
     const id=bridge()?.workspace?.id;
     if(!bridge()?.session?.authenticated||!id)throw new Error('Sign in to configure automatic execution.');
+    if(body&&workspace!==id)throw new Error('Workspace changed. Refresh the workflow before changing settings.');
     if(workspace&&workspace!==id){data=null;dirty=false;}
     workspace=id;
     const response=await fetch(API+'/api/approved-workflow?workspace_id='+encodeURIComponent(id),{method:body?'POST':'GET',credentials:'include',headers:{Accept:'application/json','Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
     const value=await response.json().catch(()=>({}));
+    if(bridge()?.workspace?.id!==id)throw new Error('Workspace changed. Refresh the workflow before continuing.');
     if(!response.ok)throw new Error(value.error||'Could not load the workflow.');
     return value;
   }
@@ -62,7 +64,7 @@
     dialog.querySelector('[data-wf-refresh]').addEventListener('click',load);
   }
   function actionButton(action,label,disabled){return '<button data-wf-action="'+action+'" '+(disabled?'disabled':'')+'>'+label+'</button>';}
-  async function load(){if(busy||dirty)return;busy=true;try{data=await api();render();notice('');}catch(error){notice(error.message);}finally{busy=false;}}
+  async function load(){if(workspace&&workspace!==bridge()?.workspace?.id){dirty=false;data=null;}if(busy||dirty)return;busy=true;try{data=await api();render();notice('');}catch(error){notice(error.message);}finally{busy=false;}}
   async function mutate(action,extra={}){
     if((busy&&!['pause','stop','manual'].includes(action))||!data)return;busy=true;notice(action==='run'?'Running the approved workflow…':'Saving…');
     try{data=await api({action,revision:data.revision,...extra});render();notice(action==='activate'?'Workflow approved. The server will start the research cycle automatically.':action==='manual'?'Automatic work paused. Continue using the normal stage controls.':action==='save'?'Settings saved. Review the affected stages.':'Workflow updated.');}
