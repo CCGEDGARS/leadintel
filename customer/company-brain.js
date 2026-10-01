@@ -61,7 +61,7 @@
 
   function derivePainPoints(profile={},input={},language="en"){
     const classification=input.companyClassification||profile.companyClassification||classifyCompany({...input,profile});
-    const text=allText({...input,profile});
+    const text=clean(profile.priorityOffers)||allText({...input,profile});
     const lv=String(language).toLowerCase().startsWith("lv");
     const pains=[];const add=(en,latvian)=>{const value=lv?latvian:en;if(value&&!pains.includes(value))pains.push(value);};
 
@@ -90,6 +90,10 @@
       "Nesakārtota instrumentu, materiālu un preču uzglabāšana var aizņemt lieku platību, paildzināt meklēšanu un palielināt kļūdu vai darba drošības risku."
     );
 
+    if(classification.businessType==="industrial-services"){
+      add("Engineering drawings and production requirements may be incomplete or misaligned, increasing clarification and rework. Confirm this need for each prospect.","Rasējumi un ražošanas prasības var būt nepilnīgi vai nesaskaņoti, palielinot precizēšanu un pārstrādi. Pārbaudiet šo vajadzību katram uzņēmumam.");
+      add("Production, supplier delivery and on-site installation may be difficult to coordinate within project deadlines. This is a hypothesis to validate, not confirmed buying intent.","Ražošanu, piegādes un uzstādīšanu var būt grūti saskaņot projekta termiņos. Tā ir pārbaudāma hipotēze, nevis apstiprināts pirkšanas nodoms.");
+    }
     if(!pains.length)add(
       "The specific customer problem is not yet sufficiently evidenced; LeadIntel should ask for confirmation before treating a pain point as fact.",
       "Konkrētā klienta problēma vēl nav pietiekami pamatota; LeadIntel jāprasa apstiprinājums, pirms to uzskatīt par faktu."

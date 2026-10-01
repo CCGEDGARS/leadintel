@@ -143,3 +143,6 @@
   }
   .profile-next-action #continue-market-strategy{min-height:62px}
 }
+
+/* Profile review separates completeness, inference and evidence. */
+.intel-core-grid{align-items:start}.intel-core-card p{line-height:1.65;white-space:pre-line}.intel-review-attention{padding:22px;background:#fff8e8;border:1px solid #e6cf96;border-radius:12px;margin-bottom:22px}.intel-review-attention h3{margin:0 0 12px;font-size:18px}.intel-review-attention li{margin:8px 0;line-height:1.5}.intel-review-attention p{font-size:13px;color:#756449}.intel-supporting{margin-top:20px}

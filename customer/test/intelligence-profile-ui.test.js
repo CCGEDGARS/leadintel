@@ -37,9 +37,16 @@ test('intelligence profile does not repeat the Lookalike Audience entry point',(
   assert.match(html,/Supporting Context/);
 });
 
-test('supporting context is expanded by default and uses a spacious review grid',()=>{
+test('supporting context is collapsed by default and uses a spacious review grid',()=>{
   const html=UI.renderSupporting({companyOverview:'Industrial engineering',currentMarkets:['Sweden'],buyingOutcomes:'Faster delivery'},{activated:false});
-  assert.match(html,/<details class="intel-supporting" open>/);
+  assert.match(html,/<details class="intel-supporting">/);
   assert.match(html,/intel-supporting-grid/);
   assert.match(html,/Industrial engineering/);
+});
+
+test('user input does not imply independently verified high confidence',()=>{
+ const html=UI.renderCoreCard('decisionMakers',{value:'Sales Director',status:'user_confirmed',confidence:'high'});
+ assert.match(html,/Provided by you/);assert.doesNotMatch(html,/High confidence/);
+ const review=UI.renderAttention({canonical:{diagnostics:[{field:'commercialObjective',state:'missing'}]}});
+ assert.match(review,/Needs your attention/);assert.match(review,/Commercial Objective: not yet provided/);
 });

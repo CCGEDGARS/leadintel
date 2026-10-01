@@ -31,7 +31,7 @@ test('canonical edit mode is controlled only by runtime state, never stale edita
 });
 
 test('Step 3 summarises signals without a broken link into the approval-gated next stage',()=>{
-  assert.match(source,/active signal themes/i);
+  assert.match(source,/enabled buying signals/i);
   assert.match(source,/Approve the profile below/i);
   assert.match(source,/intel-attention-panel/);
   assert.match(source,/intel-signal-theme/);

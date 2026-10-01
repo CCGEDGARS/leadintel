@@ -26,10 +26,10 @@ test('market entry routes to Profile then opens market tab without starting a se
  const actions=[];const root={LeadIntelCustomerNavigation:{setStep:step=>actions.push(step)},LeadIntelReferenceCustomerLauncher:{open:async segment=>{actions.push(segment);return true;}}};
  assert.equal(await Market.open(root),true);assert.deepEqual(actions,[2,'market']);
 });
-test('delegated navigation installs once and reviews findings through Strategy event',()=>{
+test('delegated navigation installs once and reviews findings through Profile Review event',()=>{
  const f=fixture();Market.install(f.root);Market.install(f.root);assert.equal(f.listeners.length,1);
  f.listeners[0]({target:{closest:selector=>selector==='[data-review-market-strategy]'?{}:null}});
- assert.deepEqual(f.events,['leadintel:open-market-strategy']);
+ assert.deepEqual(f.events,['leadintel:review-research-profile']);
 });
 test('only Profile owns research controls while Strategy retains findings and decisions',()=>{
  const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
@@ -45,4 +45,14 @@ test('market research progress belongs to Profile and known companies remain in 
  assert.equal(stages[2].steps.some(step=>step.id==='research'),false);
  const ui=fs.readFileSync(path.join(__dirname,'..','discovery-ui.js'),'utf8');assert.match(ui,/Add or import known companies/);
  const manager=fs.readFileSync(path.join(__dirname,'..','reference-customer-ui.js'),'utf8');assert.match(manager,/data-company-segment="targets" hidden/);assert.match(manager,/data-company-segment="market"/);
+});
+
+test('profile approval seeding preserves evidence, reports and research linkage',()=>{
+ const vm=require('node:vm'),Engine=require('../market-engine.js');
+ const source=fs.readFileSync(path.join(__dirname,'..','app.js'),'utf8');
+ const fn=source.slice(source.indexOf('function seedMarketStrategy(){'),source.indexOf('function approveProfile(){'));
+ const state={profile:{priorityOffers:'Legal support',idealCustomer:'Businesses',targetMarkets:'Finland',recommendedSignals:[{id:'legal',name:'Legal proceedings',active:true}]},market:{signals:[{id:'legal',name:'Legal proceedings',active:true},{id:'custom-manual',name:'Custom signal',active:false}],researchStatus:'partial',lastResearchAt:'2026-10-01',researchResults:[{url:'https://example.com/legal',title:'Legal proceedings',market:'Finland'}],researchReports:[{id:'saved',sources:[]}],researchProfileLink:{linkedAt:'2026-10-01',sourceCount:1},researchErrors:[{provider:'OpenAI',message:'Timed out'}]}};
+ vm.runInNewContext(fn+';seedMarketStrategy()',{state,LeadIntelMarket:Engine,contentLanguage:()=> 'en'});
+ assert.equal(state.market.researchStatus,'partial');assert.equal(state.market.lastResearchAt,'2026-10-01');
+ assert.equal(state.market.researchResults[0].url,'https://example.com/legal');assert.equal(state.market.researchReports[0].id,'saved');assert.equal(state.market.researchProfileLink.sourceCount,1);assert.equal(state.market.researchErrors[0].message,'Timed out');assert.equal(state.market.signals.find(item=>item.id==='custom-manual').active,false);
 });

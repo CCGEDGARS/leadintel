@@ -25,7 +25,7 @@
     if(root.document.__profileMarketInstalled)return;root.document.__profileMarketInstalled=true;environment=root;
     root.document.addEventListener('click',event=>{
       if(event.target?.closest?.('[data-open-profile-market]')){void open(root);return;}
-      if(event.target?.closest?.('[data-review-market-strategy]')){root.dispatchEvent(new root.CustomEvent('leadintel:open-market-strategy'));return;}
+      if(event.target?.closest?.('[data-review-market-strategy]')){root.dispatchEvent(new root.CustomEvent('leadintel:review-research-profile'));return;}
       if(event.target?.closest?.('[data-complete-market-profile]')){root.LeadIntelReferenceCustomerUI?.close?.();root.LeadIntelCustomerNavigation?.setStep?.(2);const button=root.document.getElementById('analyze-company');button?.scrollIntoView?.({behavior:'smooth',block:'center'});button?.focus?.({preventScroll:true});}
     });
   }

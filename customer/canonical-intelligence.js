@@ -90,6 +90,7 @@
     return (input?.documents||[]).flatMap((doc,index)=>{const value=clean(doc?.claims?.[fieldKey]||doc?.fields?.[fieldKey]);return value?[{value,provenance:'document',status:'first_party_evidence',confidence:'high',sourceIds:[clean(doc.id)||`D${index+1}`]}]:[];});
   }
   function websiteCandidate(input,fieldKey,derived){
+    if(fieldKey==='customerPainPoints'&&derived?.customerPainPoints)return null;
     const value=clean(derived?.websiteFields?.[fieldKey]||input?.baseProfile?.[fieldKey]);if(!value)return null;
     const ids=partitionSources(input?.scrapedSources||[],input.website).firstParty.filter(s=>clean(s.text)).slice(0,5).map((s,index)=>clean(s.id)||`W${index+1}`);
     return {value,provenance:'website',status:'first_party_evidence',confidence:ids.length?'medium':'low',sourceIds:ids};

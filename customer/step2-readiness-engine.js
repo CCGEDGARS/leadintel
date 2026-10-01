@@ -285,11 +285,11 @@
   }
   function renderReadiness(root){
     const document=root.document;const state=readJson(root.localStorage,STORAGE_KEY,{});const summary=getReadinessSummary(state,root);const score=document.getElementById("completeness-score"),ring=document.getElementById("progress-ring"),caption=document.getElementById("completeness-caption");
-    const label=document.querySelector(".progress-metric strong");if(label&&label.textContent!=="Profile readiness")label.textContent="Profile readiness";
+    const label=document.querySelector(".progress-metric strong");if(label&&label.textContent!=="Information completeness")label.textContent="Information completeness";
     if(score&&score.textContent!==`${summary.score}%`)score.textContent=`${summary.score}%`;if(ring)ring.style.setProperty("--p",summary.score);
     if(caption){let text=!clean(state.website)?"Add your website to begin.":!(state.targetMarkets||[]).length?"Choose at least one target market.":`${summary.coreConfirmed}/${summary.coreTotal} core inputs confirmed${summary.needsMore?` · ${summary.needsMore} need${summary.needsMore===1?"s":""} more detail`:""}${summary.drafts?` · ${summary.drafts} draft${summary.drafts===1?"":"s"} to review`:""}${summary.missing?` · ${summary.missing} missing`:""}.`;if(caption.textContent!==text)caption.textContent=text;}
     const button=document.getElementById("analyze-company");if(button){const text="Review your Profile";if(!button.textContent.includes(text))button.innerHTML=`${text} <span aria-hidden="true">→</span>`;}
-    const profileLabel=document.querySelector("#profile-completeness")?.parentElement?.querySelector("small");if(profileLabel&&profileLabel.textContent!=="Profile readiness")profileLabel.textContent="Profile readiness";
+    const profileLabel=document.querySelector("#profile-completeness")?.parentElement?.querySelector("small");if(profileLabel&&profileLabel.textContent!=="Information completeness")profileLabel.textContent="Information completeness";
     renderBriefProgress(root,summary.statuses);renderAllAnswerFeedback(root);
   }
   function renderBuyingOutcomesProfileField(root){

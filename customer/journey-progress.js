@@ -55,7 +55,7 @@
         step('profile','Intelligence profile generated',Boolean(profile),{action:'Generate the intelligence profile'}),
         step('review','Evidence reviewed and gaps corrected',Boolean(profile&&main.approved),{action:'Review evidence and correct missing information'}),
         step('approval','Intelligence profile approved',Boolean(main.approved),{action:'Approve the intelligence profile'}),
-        step('research',market.researchStatus==='running'?'Market research in progress':filled(market.lastResearchAt)&&['complete','partial'].includes(market.researchStatus)?'Market research completed':'Market research not run',filled(market.lastResearchAt)&&['complete','partial'].includes(market.researchStatus),{action:market.researchStatus==='running'?'Wait for market research to finish':'Run market research'})
+        step('research',market.researchStatus==='running'?'Market research in progress':filled(market.lastResearchAt)&&['complete','partial'].includes(market.researchStatus)?(market.researchStatus==='partial'?'Research saved · partial coverage':'Market research completed'):'Market research not run',filled(market.lastResearchAt)&&['complete','partial'].includes(market.researchStatus),{action:market.researchStatus==='running'?'Wait for market research to finish':'Run market research'})
       ],
       4:[
         step('icps','Customer definition configured',activeItems(market.icps).length>0,{action:'Review and activate at least one ICP'}),

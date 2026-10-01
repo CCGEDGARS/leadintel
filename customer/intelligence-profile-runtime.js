@@ -1,4 +1,4 @@
-const INTELLIGENCE_PROFILE_ASSET_VERSION='20260921-two-stage-profile-action-v1';
+const INTELLIGENCE_PROFILE_ASSET_VERSION='20260921-two-stage-profile-action-v1&review=20261001-v2';
 const REFERENCE_CUSTOMERS_CSS_VERSION='20260923-reference-interface-v1&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&inline-activate=1&saving-mode=1&target-controls=1&target-save=1&target-status=1&company-workflow=20261001-v2&profile-market=20261001-v1';
 (function installIntelligenceProfileRuntime(root){
   if(typeof document==='undefined')return;
@@ -30,7 +30,7 @@ const REFERENCE_CUSTOMERS_CSS_VERSION='20260923-reference-interface-v1&target-se
     const edit=profileIsEditing();
     const signature=JSON.stringify([profile.canonical.generatedAt,profile.canonical.diagnostics,profile.canonical.contradictions,state.referenceCustomers?.fingerprint,state.referenceCustomers?.analyzedAt,edit]);
     if(!force&&editor.dataset.canonicalSignature===signature&&editor.querySelector('.intel-profile-shell')){installCanonicalCompat(editor);setEditButton(edit);return;}
-    editor.className='intel-profile-mount';editor.innerHTML=UI.render(profile,{edit,referenceCustomers:state.referenceCustomers||{},targetMarkets:state.targetMarkets||[]});installCanonicalCompat(editor);editor.dataset.canonicalSignature=signature;
+    editor.className='intel-profile-mount';editor.innerHTML=UI.render(profile,{edit,referenceCustomers:state.referenceCustomers||{},targetMarkets:state.targetMarkets||[],market:state.market||{}});installCanonicalCompat(editor);editor.dataset.canonicalSignature=signature;
     setEditButton(edit);upgradeStatus(state);compactSignals(profile);compactEvidence(profile);retireLegacyLookalike();
   }
   function enterEditMode(){editing=true;const editor=document.getElementById('profile-editor');if(editor)delete editor.dataset.canonicalSignature;replaceProfileGrid(true);setEditButton(true);setTimeout(()=>document.querySelector('#profile-editor [data-profile-field]:not([data-canonical-compat])')?.focus(),0);}
@@ -53,7 +53,7 @@ const REFERENCE_CUSTOMERS_CSS_VERSION='20260923-reference-interface-v1&target-se
     return true;
   }
   function upgradeStatus(state){const status=document.getElementById('profile-status');if(!status)return;const diagnostics=state.profile?.canonical?.diagnostics||[];const known=diagnostics.filter(x=>x.state==='known').length,review=diagnostics.filter(x=>x.state==='needs_confirmation').length,missing=diagnostics.filter(x=>x.state==='missing').length;status.textContent=state.approved?'Confirmed profile':`${known} known · ${review} review · ${missing} missing`;}
-  function compactSignals(profile){const list=document.getElementById('recommended-signals');const panel=list?.closest('.signals-panel');if(!list||!panel)return;const active=(profile.recommendedSignals||[]).filter(x=>x.active!==false);panel.classList.add('intel-signal-summary-panel','intel-attention-panel');const title=panel.querySelector('.section-title');if(title)title.innerHTML=`<div><span class="eyebrow">Signal focus</span><h3>${active.length} active signal themes</h3><p>Approve the profile below, then edit signal weights and keywords in Strategy.</p></div>`;list.innerHTML=`<div class="intel-signal-summary" role="list" aria-label="Active signal themes">${active.slice(0,5).map((x,index)=>`<article class="intel-signal-theme" role="listitem"><span>${String(index+1).padStart(2,'0')}</span><strong>${escapeHtml(x.name)}</strong></article>`).join('')}</div>`;}
+  function compactSignals(profile){const list=document.getElementById('recommended-signals');const panel=list?.closest('.signals-panel');if(!list||!panel)return;const market=readState().market||{};const configured=Boolean(market.signals?.length);const active=(configured?market.signals:profile.recommendedSignals||[]).filter(x=>x.active!==false);panel.classList.add('intel-signal-summary-panel','intel-attention-panel');const title=panel.querySelector('.section-title');if(title)title.innerHTML=`<div><span class="eyebrow">Signal focus</span><h3>${active.length} ${configured?'enabled buying signals':'suggested buying signals'}</h3><p>Approve the profile below, then edit signal weights and keywords in Strategy.</p></div>`;list.innerHTML=`<div class="intel-signal-summary" role="list" aria-label="Buying signals">${active.slice(0,5).map((x,index)=>`<article class="intel-signal-theme" role="listitem"><span>${String(index+1).padStart(2,'0')}</span><strong>${escapeHtml(x.name)}</strong></article>`).join('')}</div>`;}
   function compactEvidence(profile){
     const lower=document.querySelector('.profile-lower-grid');if(!lower)return;
     const panels=[...lower.children];if(!panels.length)return;

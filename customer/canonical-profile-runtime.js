@@ -18,7 +18,7 @@ const CANONICAL_MIGRATION_KEY='leadintel_canonical_profile_v1_migrated';
     const brain=Brain?.deriveCanonicalContext?.(input,input.uiLanguage)||null;
     return {
       ...(brain||{}),
-      customerPainPoints:brain?.customerPainPoints||base?.customerPainPoints||'',
+      customerPainPoints:brain?.customerPainPoints||Brain?.derivePainPoints?.(base||{},input,input.uiLanguage||'en')?.join('\n\n')||base?.customerPainPoints||'',
       customerPainPointsConfidence:base?.customerPainPointsStatus&&/confirm/i.test(base.customerPainPointsStatus)?'high':'medium',
       recommendedSignals:brain?.recommendedSignals||base?.recommendedSignals||[],
       interpretation:brain?.interpretation||base?.analysis?.interpretation||{},
@@ -37,7 +37,7 @@ const CANONICAL_MIGRATION_KEY='leadintel_canonical_profile_v1_migrated';
     merged.informationGaps=gapsFromDiagnostics(merged.canonical?.diagnostics||[]);
     return merged;
   }
-  function patchedBuild(input={}){return applyCanonical(originalBuild(input),input);}
+  function patchedBuild(input={}){return {...applyCanonical(originalBuild(input),input),generatedContextVersion:2};}
   function preserveConfirmedFields(current,rebuilt){
     const fields=current?.canonical?.fields||{};
     for(const [key,record] of Object.entries(fields)){
@@ -58,10 +58,10 @@ const CANONICAL_MIGRATION_KEY='leadintel_canonical_profile_v1_migrated';
   function writeState(state){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
   function migrateCurrentWorkspace(){
     if(typeof localStorage==='undefined')return false;const raw=readState();if(!raw.website)return false;
-    const needsProfileMigration=raw.profile&&Number(raw.profile?.canonical?.version)!==Canonical.VERSION;const needsReferenceMigration=Refs&&raw.answers?.lookalike_customers&&!raw.referenceCustomers?.rows?.length;
+    const needsProfileMigration=raw.profile&&(Number(raw.profile?.canonical?.version)!==Canonical.VERSION||raw.profile.generatedContextVersion!==2);const needsReferenceMigration=Refs&&raw.answers?.lookalike_customers&&!raw.referenceCustomers?.rows?.length;
     if(!needsProfileMigration&&!needsReferenceMigration)return false;
     const normalized=patchedNormalize({...raw,researchMeta:readResearchMeta(raw)});
-    const merged={...raw,profile:normalized.profile,referenceCustomers:normalized.referenceCustomers||raw.referenceCustomers,answerStatus:normalized.answerStatus||raw.answerStatus,scrapedSources:normalized.scrapedSources||raw.scrapedSources,documents:normalized.documents||raw.documents,targetMarkets:normalized.targetMarkets||raw.targetMarkets,additionalLinks:normalized.additionalLinks||raw.additionalLinks};writeState(merged);return true;
+    const merged={...raw,approved:needsProfileMigration?false:raw.approved,profile:normalized.profile,referenceCustomers:normalized.referenceCustomers||raw.referenceCustomers,answerStatus:normalized.answerStatus||raw.answerStatus,scrapedSources:normalized.scrapedSources||raw.scrapedSources,documents:normalized.documents||raw.documents,targetMarkets:normalized.targetMarkets||raw.targetMarkets,additionalLinks:normalized.additionalLinks||raw.additionalLinks};writeState(merged);return true;
   }
   function promoteEdits(preserveApproval=false){
     const state=readState();if(!state.profile?.canonical?.fields)return;let changed=false;

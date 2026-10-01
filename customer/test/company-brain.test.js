@@ -99,12 +99,12 @@ test('profile pain-point generation follows the English workspace policy and ref
   Brain.install(root);
 
   const generated=engine.buildCompanyIntelligenceProfile(input);
-  assert.equal(generated.customerPainPoints,englishFallback);
+  assert.match(generated.customerPainPoints,/Engineering drawings/);
   assert.equal(generated.customerPainPointsLanguage,'en');
 
   const saved={...input,profile:{...input.profile,customerPainPoints:latvianFallback,customerPainPointsStatus:'AI-inferred · review recommended',customerPainPointsLanguage:'lv'}};
   const refreshed=engine.normalizeSavedState(saved);
-  assert.equal(refreshed.profile.customerPainPoints,englishFallback);
+  assert.match(refreshed.profile.customerPainPoints,/Engineering drawings/);
   assert.equal(refreshed.profile.customerPainPointsLanguage,'en');
 
   const confirmed={...saved,profile:{...saved.profile,customerPainPointsStatus:'Customer-confirmed'}};
@@ -162,4 +162,10 @@ test('tender exclusion conflicts distinguish price qualification from broad excl
  assert.equal(Brain.strategyConflicts({exclusions:'lowest price in tender'},signals)[0].blocking,false);
  assert.equal(Brain.strategyConflicts({exclusions:'No tenders'},signals)[0].blocking,true);
  assert.deepEqual(Brain.strategyConflicts({exclusions:'No tenders'},[{...signals[0],active:false}]),[]);
+});
+
+test('industrial pain hypotheses exclude unrelated historical seller content',()=>{
+ const profile={priorityOffers:'Drawing development; custom metal manufacturing'};
+ const pains=Brain.derivePainPoints(profile,{scrapedSources:[{text:'Sales training and ergonomic workplace furniture'}]},'en').join(' ');
+ assert.match(pains,/Engineering drawings/);assert.doesNotMatch(pains,/sales skills|ergonomic|storage of tools/i);
 });
