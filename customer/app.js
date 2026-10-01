@@ -67,6 +67,8 @@ function saveState(){
     if(current.referenceCustomers&&typeof current.referenceCustomers==='object')state.referenceCustomers=current.referenceCustomers;
     if(current.referenceCustomerPortfolio&&typeof current.referenceCustomerPortfolio==='object')state.referenceCustomerPortfolio=current.referenceCustomerPortfolio;
   }catch{}
+  if(state.targetingConfirmation&&!LeadIntelTargeting.isConfirmed(state))state.targetingConfirmation=null;
+  if(typeof renderTargetingConfirmation==="function")renderTargetingConfirmation();
   localStorage.setItem(STORAGE_KEY,JSON.stringify(state));updateCompleteness();updateNavigationAvailability();window.LeadIntelJourney?.refresh?.();
 }
 function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
@@ -132,7 +134,7 @@ function addCustomTargetMarket(){
 }
 function syncInputsFromState(){
   $("company-website").value=state.website.replace(/^https?:\/\//,"").replace(/\/$/,"");const additionalLinks=$("additional-links");if(additionalLinks)additionalLinks.value=state.additionalLinks.join("\n");
-  document.querySelectorAll("[data-question]").forEach(el=>el.value=state.answers[el.dataset.question]||"");renderTargetMarkets();renderDocuments();brandIdentityUI?.sync?.(state.brandIdentity);
+  document.querySelectorAll("[data-question]").forEach(el=>el.value=state.answers[el.dataset.question]||"");renderTargetMarkets();renderDocuments();renderTargetingConfirmation();brandIdentityUI?.sync?.(state.brandIdentity);
 }
 
 function brandIdentityPublicEvidence(){
@@ -189,6 +191,21 @@ function readSources(){
     invalidateStrategicOutputs(true);
   }
   saveState();
+}
+function renderTargetingConfirmation(){
+  const confirmed=LeadIntelTargeting.isConfirmed(state),button=$("confirm-targeting"),status=$("targeting-confirmation-status");
+  if(button)button.textContent=confirmed?"Targeting confirmed ✓":"Confirm targeting →";
+  if(status)status.textContent=confirmed?"Saved. Company search will use these answers.":"Complete the four required answers, then confirm targeting before searching for companies.";
+}
+function confirmTargeting(){
+  readAnswers();const missing=LeadIntelTargeting.missing(state);
+  for(const id of Object.keys(LeadIntelTargeting.fields)){const input=document.querySelector(`[data-question="${id}"]`);input?.setAttribute("aria-invalid",missing.includes(id)?"true":"false");}
+  if(missing.length){$("targeting-confirmation-status").textContent=`Complete ${missing.length} required ${missing.length===1?"answer":"answers"} before confirming targeting.`;document.querySelector(`[data-question="${missing[0]}"]`)?.focus();return false;}
+  state.targetingConfirmation=LeadIntelTargeting.confirm(state);
+  try{const key="leadintel_customer_v2_research_meta_v1",meta=JSON.parse(localStorage.getItem(key)||"{}");for(const id of Object.keys(LeadIntelTargeting.fields)){if(meta.fields?.[id]){meta.fields[id].reviewed=true;meta.fields[id].origin="user";}}localStorage.setItem(key,JSON.stringify(meta));}catch{}
+  for(const id of Object.keys(LeadIntelTargeting.fields))state.answerStatus[id]="accepted";
+  if(state.profile){Object.assign(state.profile,LeadIntelTargeting.profileFields(state));for(const key of Object.values(LeadIntelTargeting.fields)){const record=state.profile.canonical?.fields?.[key];if(record)Object.assign(record,{value:state.profile[key],status:"user_confirmed",provenance:"user",confidence:"high"});}}
+  saveState();showToast("Targeting confirmed and saved");return true;
 }
 function readAnswers(){document.querySelectorAll("[data-question]").forEach(el=>{state.answers[el.dataset.question]=el.value.trim();});saveState();}
 function validateStep1(){
@@ -1247,6 +1264,7 @@ function bind(){
   $("custom-target-market").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();addCustomTargetMarket();}});
   $("clear-target-markets").addEventListener("click",()=>setTargetMarkets([]));
   document.querySelectorAll("[data-question]").forEach(el=>el.addEventListener("input",readAnswers));
+  $("confirm-targeting")?.addEventListener("click",confirmTargeting);
   document.querySelector(".steps")?.addEventListener("click",e=>{const marker=e.target.closest("[data-step-marker]");if(!marker)return;const journeyStage=Number(marker.dataset.workflowStage);if(journeyStage){window.LeadIntelJourney?.openWorkflowStage?.(journeyStage);return;}openModule(Number(marker.dataset.stepMarker));});
   $("to-questionnaire").addEventListener("click",()=>openModule(2));$("back-to-sources").addEventListener("click",()=>openModule(1));$("analyze-company").addEventListener("click",()=>analyzeCompany(3));
   $("pdf-input").addEventListener("change",e=>handlePdfFiles(e.target.files));

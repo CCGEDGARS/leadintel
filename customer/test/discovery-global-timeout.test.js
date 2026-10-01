@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const Discovery = require('../discovery-engine.js');
+const Targeting = require('../targeting-policy.js');
 
 function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchImpl = () => new Promise(() => {}), bridgeImpl = null, requestTimeout = 1, scaleProductionRunTimeout = 15000, researchMode = 'deep' } = {}) {
   let source = fs.readFileSync(path.join(__dirname, '..', 'discovery-ui.js'), 'utf8');
@@ -41,6 +42,8 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
       opportunities: [{ market: 'Latvia', active: true, score: { total: 80 } }]
     }
   };
+  mainState.answers={priority_offers:mainState.profile.priorityOffers,ideal_customer:mainState.profile.idealCustomer,buyer_roles:mainState.profile.decisionMakers,exclusions:'No specific exclusions'};
+  mainState.targetingConfirmation=Targeting.confirm(mainState);
   const storage = new Map([['leadintel_customer_v2_state', JSON.stringify(mainState)]]);
   const elements = new Map();
   const getElementById = id => {
@@ -61,6 +64,7 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
     URLSearchParams,
     dispatchEvent() {},
     LeadIntelDiscovery: Discovery,
+    LeadIntelTargeting: Targeting,
     LeadIntelServerBridge: bridgeImpl,
     fetch: fetchImpl,
     localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, String(value)), removeItem: key => storage.delete(key) },
@@ -638,7 +642,7 @@ test('Saving Mode verifies a saved target domain without repeating resolution an
     throw new Error('Unexpected request');
   }});
   const state=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));
-  state.targetCompanies=[{companyName:'Södra',website:'https://sodra.com/',domain:'sodra.com'}];state.targetMarkets=['Sweden'];state.profile.targetMarkets='Sweden';
+  state.targetCompanies=[{companyName:'Södra',website:'https://sodra.com/',domain:'sodra.com'}];state.targetMarkets=['Sweden'];state.profile.targetMarkets='Sweden';state.targetingConfirmation=Targeting.confirm(state);
   context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(state));
   await context.__runDiscovery({targetOnly:true,savingMode:true,targetDomain:'sodra.com'});
   assert.equal(requests.some(item=>item.body.query?.includes('official company website')),false);
@@ -657,7 +661,7 @@ test('retry of a failed saved-target lookup uses the known domain and preserves 
     throw new Error('Unexpected request');
   }});
   const state=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));
-  state.targetCompanies=[{companyName:'Södra',website:'https://sodra.com/',domain:'sodra.com'}];state.targetMarkets=['Sweden'];
+  state.targetCompanies=[{companyName:'Södra',website:'https://sodra.com/',domain:'sodra.com'}];state.targetMarkets=['Sweden'];state.targetingConfirmation=Targeting.confirm(state);
   context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(state));
   context.__setDiscovery({status:'error',savingMode:true,searchFailures:[{phase:'resolving',company:'Södra',queryMeta:{id:'resolve-sodra',kind:'resolution',company:'Södra',market:'Sweden',query:'"Södra" Sweden official company website'},reason:'network_error'}],funnel:{marketSearchesCompleted:1,marketSearchesTotal:1,openAiFallbackSearches:1}});
   await context.__retryFailedDiscoveryChecks();
@@ -679,7 +683,7 @@ test('Saving Mode samples two saved targets and one opportunity hypothesis withi
   }});
   const state=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));
   state.targetCompanies=['Södra','Boliden','Billerud'].map((companyName,index)=>({companyName,website:`https://${['sodra','boliden','billerud'][index]}.com/`,domain:`${['sodra','boliden','billerud'][index]}.com`}));
-  state.targetMarkets=['Sweden'];state.profile.targetMarkets='Sweden';
+  state.targetMarkets=['Sweden'];state.profile.targetMarkets='Sweden';state.targetingConfirmation=Targeting.confirm(state);
   state.referenceCustomers={analyzedAt:'2026-09-27T09:00:00Z',opportunityMap:{analysisAt:'2026-09-27T09:00:00Z',service:'Automation',problem:'Production efficiency',hypotheses:[{niche:'Packaging plants',sharedNeed:'Upgrade machinery',evidenceToCheck:'Factory investment'}]}};
   context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(state));
   await context.__runDiscovery({savingMode:true});

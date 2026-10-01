@@ -27,10 +27,10 @@ test('customer onboarding contains all ten Commercial Intelligence Brief questio
   assert.match(html,/Build your commercial profile/i);
 });
 
-test('strategic intake is clearly optional enrichment',()=>{
+test('targeting is required while other brief enrichment remains optional',()=>{
   const html=read('index.html');
-  assert.match(html,/skip these questions/i);
-  assert.match(html,/complete them later/i);
+  assert.match(html,/four Targeting answers are required before company search/i);
+  assert.match(html,/answers can be completed later/i);
   assert.doesNotMatch(html,/These ten answers control what the system prioritizes/);
   assert.doesNotMatch(html,/Approval gate/);
 });

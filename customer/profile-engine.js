@@ -377,6 +377,7 @@
       documents:docs,
       answers,
       answerStatus:migrated.answerStatus||{},
+      targetingConfirmation:value.targetingConfirmation&&typeof value.targetingConfirmation==="object"?{...value.targetingConfirmation}:null,
       step2BriefSchemaVersion:migrated.step2BriefSchemaVersion,
       legacyStrategyContext:migrated.legacyStrategyContext||{},
       advancedScoring:migrated.advancedScoring||{},

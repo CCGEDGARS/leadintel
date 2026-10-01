@@ -313,6 +313,11 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
   if(recheckOnly)targetOnly=true;
   const main=mainState();
   if(!(main?.profile?.website||main?.website)){showToast("Add your company website first");return;}
+  if(!window.LeadIntelTargeting?.isConfirmed(main)){
+    window.LeadIntelCustomerNavigation?.setStep?.(2);
+    document.querySelector('[data-question="priority_offers"]')?.focus();
+    showToast("Confirm the four required targeting answers in Profile before searching for companies");return false;
+  }
   syncStrategyFingerprint();
   const market=main.market||{};
   const targetPool=recheckOnly?existingCompanyResearchTargets(main):selectedTargets(main);
@@ -330,7 +335,7 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
   const lookalikeIcp=(market.icps||[]).find(item=>item.type==='lookalike'||item.id==='icp-lookalike');
   const referenceModel=lookalikeIcp?.active===false?null:window.LeadIntelReferenceCustomerPortfolio?.getCombinedActiveModel?.(main)||window.LeadIntelReferenceCustomers?.getActiveReferenceModel?.(main.referenceCustomers||{});
   const referenceTraits=(referenceModel?.dna?.referenceProfiles||[]).flatMap(ref=>ref.dimensions||[]).filter(d=>['industry','broadIndustry','productionModel','capabilities'].includes(d.key)).flatMap(d=>d.values||[]);
-  const profileForQueries={referenceDomains,referenceSimilarityModel:referenceModel,discoveryFitFirst:true,...(main.profile||{website:main.website}),exclusions:[main.profile?.exclusions,...referenceDomains].filter(Boolean).join('; '),targetMarkets:(main.targetMarkets||[]).join(", ")||main.profile?.targetMarkets};
+  const profileForQueries={referenceDomains,referenceSimilarityModel:referenceModel,discoveryFitFirst:true,...(main.profile||{website:main.website}),...window.LeadIntelTargeting.profileFields(main),exclusions:[main.answers?.exclusions,...referenceDomains].filter(Boolean).join('; '),targetMarkets:(main.targetMarkets||[]).join(", ")||main.profile?.targetMarkets};
   profileForQueries.idealCustomer=[profileForQueries.idealCustomer,...new Set(referenceTraits)].filter(Boolean).join('; ');
   const baseQueries=targetOnly?[]:LeadIntelDiscovery.buildDiscoveryQueries(profileForQueries,market,savingMode?Math.min(targetPool.length?1:2,limits.queryCount):limits.queryCount,discovery.queries);
   const targetMarket=(main.targetMarkets||[])[0]||main.profile?.targetMarkets||'';
@@ -553,7 +558,7 @@ async function retryFailedDiscoveryChecks(){
   const failures=Array.isArray(discovery.searchFailures)?discovery.searchFailures:[];
   let resolutionOnly=failures.length>0&&failures.every(item=>item.phase==="resolving"&&item.queryMeta?.query&&item.queryMeta?.company);
   if(!resolutionOnly&&(!failures.length||failures.some(item=>item.phase!=="verifying"||!item.queryMeta?.query||!item.queryMeta?.domain)))return runCompanyDiscovery();
-  const main=mainState();const market=main.market||{};const profile=main.profile||{website:main.website};
+  const main=mainState();if(!window.LeadIntelTargeting?.isConfirmed(main))return runCompanyDiscovery();const market=main.market||{};const profile={...(main.profile||{website:main.website}),...window.LeadIntelTargeting.profileFields(main)};
   activeDiscoverySavingMode=discovery.savingMode===true;discoveryFirecrawlCalls=0;discovery.funnel.firecrawlSearchCalls=0;
   const previousCandidates=discovery.candidates.slice();const previousRunAt=discovery.lastSuccessfulRunAt||(previousCandidates.length?discovery.lastRunAt:"");
   const targetCount=persistDiscoveryTarget();let queries=failures.map(item=>item.queryMeta);
