@@ -1,0 +1,7 @@
+# Research evidence repair
+
+Reproduced defects in the prior Quick Research path: extracted page text lost to the first search snippet; commercial searches focused on the first selected market/offer; provider availability and verification failures could appear complete; early arrival caps discarded better later evidence; an empty failed rerun removed saved research.
+
+Repairs rotate selected markets, up to three offers and customer segments within the four-query Quick budget. Automatic source choice uses company/news/investment classes, while explicit manual choices stay intact. Preview and execution share this setting. Candidate evidence is assessed for quality, recency and offer relevance before the final storage cap. Extraction prioritizes distinct domains and retains richer readable content with matching provenance. Failed extraction and adaptive requests are recorded. Partial coverage has a warning label and displays evidence/provider gaps. OpenAI retries cannot clear other gaps. An empty failed rerun restores prior research and its original timestamp, marks its context stale and requires review.
+
+Validation: customer regression suite plus static build. New regressions exercise richer extraction, preservation against a weaker duplicate, balanced automatic planning, explicit source choices, and ranking before cap. No authenticated customer sources were available to this execution session; these changes repair reproduced code paths, not a factual re-audit of the customer's private 20-source run. No provider-key changes or outreach were performed.

@@ -304,3 +304,7 @@
   .research-panel>.research-status[data-status="complete"] .research-status-copy>small,
   .research-panel>.research-status[data-status="complete-with-warning"] .research-status-copy>small{font-size:12px}
 }
+
+.research-panel>.research-status[data-status="complete-with-warning"]{border-color:#dbc38c;background:#fff8e9;color:#73551b}
+.research-panel>.research-status[data-status="complete-with-warning"] .research-status-icon{background:#9b741e}
+.research-panel>.research-status[data-status="complete-with-warning"] .research-status-copy>strong{color:#73551b}

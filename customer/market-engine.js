@@ -188,15 +188,18 @@
     pricing:["price per hour rates currency service", "project pricing examples quotes", "public procurement contract value unit price"]
   });
   function buildCommercialResearchPlan(profile={},signals=[],input={},count=4){
-    const markets=effectiveResearchMarkets(profile);const market=markets[0]||"priority market";
-    const offer=compactResearchTerm(profile.priorityOffers,6)||"commercial opportunity";
-    const buyer=compactResearchTerm(profile.idealCustomer,4)||"companies";
+    const markets=effectiveResearchMarkets(profile);
+    const offers=splitList(profile.priorityOffers).slice(0,3);
+    const buyers=splitList(profile.idealCustomer).slice(0,3);
     const active=(signals||[]).filter(item=>item.active!==false).filter(item=>!isTenderSignal(item)||filterResearchSourceTypes(input.sourceTypes||[],signals).includes("tenders")).sort((a,b)=>Number(b.weight)-Number(a.weight));
-    const sourceTypes=filterResearchSourceTypes(input.sourceTypes||["news"],signals);
+    const sourceTypes=filterResearchSourceTypes(input.sourceTypesCustomized===false?["company","news","investments"]:input.sourceTypes||["company","news","investments"],signals);
     const sources=sourceTypes.length?sourceTypes:["news"];
     const intents=["company announcement", "new project", "supplier opportunity", "contract award", "investment announcement", "business expansion", "project pipeline", "official company update"];
     const planned=[];
     for(let index=0;index<count;index++){
+      const market=markets[index%Math.max(markets.length,1)]||"priority market";
+      const offer=compactResearchTerm(offers[index%Math.max(offers.length,1)],6)||"commercial opportunity";
+      const buyer=compactResearchTerm(buyers[index%Math.max(buyers.length,1)],4)||"companies";
       const signal=active[index%Math.max(active.length,1)];
       const signalTerm=compactResearchTerm(signal?.name||profile.buyingTriggers,7)||"buyer demand";
       const sourceType=sources[index%sources.length];
@@ -330,9 +333,12 @@
       const current=merged.get(url);
       if(!current){merged.set(url,next);continue;}
       current.queryId=current.queryId||next.queryId;current.market=current.market||next.market;current.query=current.query||next.query;
-      current.title=current.title||next.title;current.description=current.description||next.description;current.text=current.text||next.text;current.date=current.date||next.date;
+      current.title=current.title||next.title;current.description=current.description||next.description;
+      const richer=next.text.trim().length>current.text.trim().length;
+      if(richer){current.text=next.text;if(next.extractedAt){current.title=next.title||current.title;current.description=next.description||current.description;}}
+      current.date=current.date||next.date;
       current.sourceProviders=normalizeProviders([...(current.sourceProviders||[]),...(next.sourceProviders||[])]);
-      current.extractedBy=next.extractedBy||current.extractedBy;current.extractedAt=next.extractedAt||current.extractedAt;current.qualityScore=Math.max(current.qualityScore||0,next.qualityScore||0);current.sourceClass=next.sourceClass||current.sourceClass;
+      if(richer&&next.extractedAt){current.extractedBy=next.extractedBy;current.extractedAt=next.extractedAt;}current.qualityScore=Math.max(current.qualityScore||0,next.qualityScore||0);current.sourceClass=next.sourceClass||current.sourceClass;
     }
     return [...merged.values()];
   }

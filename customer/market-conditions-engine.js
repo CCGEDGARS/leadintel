@@ -31,7 +31,9 @@
       seenUrls.add(url);if(fp)seenFingerprints.add(fp);
       ranked.push({...item,qualityScore:scoreEvidence(item,now),sourceClass:item.official===true||officialHost(url)?"official":/news|press|media/i.test(`${item.researchCategory} ${host(url)}`)?"media":"industry"});
     }
-    ranked.sort((a,b)=>b.qualityScore-a.qualityScore);
+    const terms=unique(String(options.profile?.priorityOffers||"").toLowerCase().split(/[^a-z0-9]+/).filter(term=>term.length>3));
+    const relevance=item=>{const text=clean(`${item.title} ${item.description} ${item.text}`).toLowerCase();return Math.min(20,terms.filter(term=>text.includes(term)).length*5);};
+    ranked.sort((a,b)=>(b.qualityScore+relevance(b))-(a.qualityScore+relevance(a)));
     return {results:ranked,duplicatesRemoved,organisations:unique(ranked.map(organisation)),domains:unique(ranked.map(item=>host(item.url))),sourceClasses:unique(ranked.map(item=>item.sourceClass))};
   }
 
@@ -60,6 +62,7 @@
     if(assessed.domains.length<minDomains||assessed.sourceClasses.length<2)gaps.push("source diversity");
     if(mode!=="quick")for(const category of ["direction","competition","funding","pricing","commercial"])if(!categories.has(category))gaps.push(category);
     const average=assessed.results.length?Math.round(assessed.results.reduce((sum,item)=>sum+item.qualityScore,0)/assessed.results.length):0;
+    if(average<50)gaps.push("evidence quality");
     const passed=gaps.length===0&&average>=50;const confidence=passed&&assessed.organisations.length>=3&&average>=65?"High":assessed.results.length>=2&&average>=40?"Medium":"Low";
     return {passed,confidence,score:average,gaps:[...new Set(gaps)],sourceCount:assessed.results.length,domainCount:assessed.domains.length,duplicatesRemoved:assessed.duplicatesRemoved};
   }
