@@ -1,0 +1,9 @@
+# OpenAI discovery diagnostics and evidence recovery
+
+Confirmed defects: the retry wrapper replaced the original failure message; the backend converted missing/invalid structured search summaries and cancelled/network operations into indistinguishable generic 502s. This obscured diagnosis and caused unnecessary paid retries of response-format failures.
+
+Repairs preserve sanitized failure categories and the last error after two transient attempts. Provider HTTP codes and safe provider diagnostic tokens remain intact. Abort/network errors carry explicit categories; missing or malformed summaries without any discovered sources are non-transient response errors. If the hosted search actually returned source URLs but its structured summary failed, those exact discovered URLs are retained without invented descriptions or dates and with an extraction warning. The UI records that warning as partial coverage. Retry OpenAI is available for partially failed OpenAI runs, not just wholly failed ones, and a retry captures a new dated report. Unreadable backend responses are reported rather than treated as empty successful searches.
+
+Security: upstream free-form messages and credentials are not exposed. Source-only recovery accepts only normalized HTTP(S) URLs from the actual web-search source/annotation payload. No model change or blanket timeout increase was applied. Official Responses API documentation confirms search sources and citation annotations as returned evidence structures.
+
+The historical customer screenshot retained only the old generic terminal message. Its exact upstream cause cannot be reconstructed from that screenshot. Code tests reproduce masking, format-loss, abort and network failures; authenticated provider acceptance still requires a new OpenAI-only retry in that workspace. Existing Firecrawl results are preserved.

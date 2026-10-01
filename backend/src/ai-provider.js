@@ -137,11 +137,22 @@ export async function searchWeb({apiKey,model,query,maxResults=5,purpose='genera
       })
     });
     const payload=await parseJson(response);if(!response.ok)throw sanitizedUpstreamError('openai',response.status,payload);
-    const sources=openAiSearchSources(payload);const results=parseStructuredWebResults(payload,sources,limit);
-    return {provider:'openai',model:options.model,results,sources,usage:usage(payload?.usage?.input_tokens,payload?.usage?.output_tokens)};
+    const sources=openAiSearchSources(payload);let results;let warning='';
+    try{results=parseStructuredWebResults(payload,sources,limit);}
+    catch(error){
+      if(!sources.length||!['OpenAI returned no text','OpenAI returned invalid structured web search output'].includes(error.message))throw error;
+      // Search actually ran: retain discovered URLs without inventing summaries or dates.
+      results=sources.slice(0,limit).map(source=>({url:source.url,title:source.title||new URL(source.url).hostname,description:'',date:''}));
+      warning='OpenAI discovered source URLs but returned no usable structured summary. Source pages require extraction.';
+    }
+    return {provider:'openai',model:options.model,results,sources,...(warning?{warning}:{}),usage:usage(payload?.usage?.input_tokens,payload?.usage?.output_tokens)};
   }catch(error){
     const message=String(error?.message||'');
     if(/request failed \(\d+\)/.test(message)||/^(AI provider API key is required|AI provider model is invalid|AI prompt is required)$/.test(message))throw error;
+    if(error?.name==='AbortError'||error?.name==='TimeoutError'||signal?.aborted)throw new Error('OpenAI web search timed out or was cancelled');
+    if(message==='OpenAI returned no text')throw new Error('OpenAI web search returned no answer text');
+    if(message==='OpenAI returned invalid structured web search output')throw new Error('OpenAI web search returned invalid structured output');
+    if(error instanceof TypeError)throw new Error('OpenAI network error while requesting web search');
     throw new Error('OpenAI request failed (502)');
   }
 }

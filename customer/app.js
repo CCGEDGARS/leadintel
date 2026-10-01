@@ -5,7 +5,7 @@ import './business-identity.js?v=20260924-workspace-profile-english-v1';
 import './evidence-view.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&reference-interface=20260923&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&map-activation-guide=1&reference-discovery=5&reference-similarity=20260930-v1&reference-activation=6&company-workflow=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1&actual-themes=20261001-v1&adaptive-context=20261001-v1';
 import './profile-approval-ui.js?v=20260924-friendly-workflow-labels-v1';
 import './workspace-persistence.js?v=20260928-sync-timeout-v1&refresh-protection=1&auto-save=1';
-import {withOpenAiRetry,cleanOpenAiResearchQuery,describePartialCoverage} from './market-research-provider-resilience.js?v=20260916-latency-fix-v2';
+import {withOpenAiRetry,cleanOpenAiResearchQuery,describePartialCoverage} from './market-research-provider-resilience.js?v=20260916-latency-fix-v2&diagnostics=20261001-v1';
 
 const STORAGE_KEY="leadintel_customer_v2_state";
 const FIRECRAWL_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
@@ -478,7 +478,8 @@ async function searchOpenAiWeb(queryMeta,maxResults=5,signal){
   if(!bridge?.session?.authenticated||!workspace?.id)return {available:false,reason:"Sign in to use OpenAI signal discovery",results:[]};
   const query=cleanOpenAiResearchQuery(queryMeta.query);
   const response=await fetch(`${LEADINTEL_API}/api/ai/web-search?workspace_id=${encodeURIComponent(workspace.id)}`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({query,max_results:maxResults}),signal});
-  const payload=await response.json().catch(()=>({}));
+  const payload=await response.json().catch(()=>{throw new Error(`OpenAI discovery returned an unreadable response (${response.status})`);});
+  if(payload.warning)state.market.researchErrors.push({provider:"OpenAI",query,message:String(payload.warning).slice(0,240)});
   if(response.status===409&&payload.error==="OpenAI integration is required for web search")return {available:false,reason:"OpenAI integration is required for web search",results:[]};
   if(!response.ok)throw new Error(payload.error||`OpenAI signal discovery returned ${response.status}`);
   return {available:true,reason:"",results:LeadIntelMarket.normalizeSearchResults({results:payload.results},{...queryMeta,query},"openai")};
@@ -735,7 +736,7 @@ async function retryOpenAiDiscovery(){
   }finally{
     stopOpenAiCountdown();
     state.market.researchResults=LeadIntelMarket.mergeResearchResults(preservedResults,state.market.researchResults).slice(0,limits.maxStoredResults);
-    delete state.market.openAiRetryProgress;saveState();renderMarketStrategy();
+    delete state.market.openAiRetryProgress;saveState();renderMarketStrategy();researchReportUi?.capture();
   }
   showToast(failures?"Firecrawl results preserved — OpenAI still unavailable":"Research complete — OpenAI and Firecrawl succeeded");
 }
@@ -921,7 +922,7 @@ function renderResearchStatus(){
     else if(completedWithEvidence){
       const warning=status==="partial"?(sources.openai==="unavailable"||sources.openai==="error"?"OpenAI discovery was unavailable. Saved evidence is preserved.":"Some research checks were unavailable. Saved results are preserved."):"";
       const providerSummary=status==="complete"?`Public-source research checks completed${["deep","intelligence"].includes(state.market.researchMode)&&sources.gemini==="complete"?" · Gemini verification completed":""}.`:"";
-      const retry=status==="partial"&&partialCoverage?`<button type="button" class="secondary-btn research-recovery-action" data-extend-openai>Retry OpenAI</button>`:"";
+      const retry=status==="partial"&&["partial","error","unavailable"].includes(sources.openai)?`<button type="button" class="secondary-btn research-recovery-action" data-extend-openai>Retry OpenAI</button>`:"";
       statusNode.innerHTML=`<span class="research-status-icon" aria-hidden="true">${status==="partial"?"!":"✓"}</span><span class="research-status-copy"><strong>${esc(modeLabel)} ${status==="partial"?"partially complete":"complete"} · ${count} source${count===1?"":"s"} saved</strong><small>${providerSummary?`<span>${esc(providerSummary)}</span>`:""}${warning?`<em>${esc(warning)}</em>`:""}</small></span>${retry}`;
       statusNode.querySelector("[data-extend-openai]")?.addEventListener("click",()=>void retryOpenAiDiscovery());
     }else{

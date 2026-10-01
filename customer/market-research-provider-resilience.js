@@ -33,8 +33,10 @@ async function withOpenAiRetry(operation,{sleep=wait}={}){
     try{return await operation(2);}
     catch(retryError){
       if(!isTransientOpenAiFailure(retryError))throw retryError;
-      const terminal=new Error('OpenAI signal discovery remained unavailable after 2 attempts');
+      const detail=String(retryError?.message||'Unknown request failure').replace(/sk-[A-Za-z0-9_-]+/g,'[redacted]').replace(/Bearer\s+\S+/gi,'Bearer [redacted]').replace(/\s+/g,' ').slice(0,160);
+      const terminal=new Error(`OpenAI signal discovery remained unavailable after 2 attempts · Last error: ${detail}`);
       terminal.cause=retryError;
+      terminal.attempts=2;
       throw terminal;
     }
   }

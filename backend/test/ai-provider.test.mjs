@@ -87,6 +87,18 @@ test('OpenAI web search sanitizes upstream errors and never leaks provider secre
   });
 });
 
+test('web search retains actual discovered sources when structured summary is malformed',async()=>{
+  let calls=0;const fetchImpl=async()=>{calls++;return new Response(JSON.stringify({output:[{type:'web_search_call',action:{sources:[{url:'https://buyer.example/project',title:'Buyer project'}]}},{type:'message',content:[{type:'output_text',text:'not valid JSON'}]}]}));};
+  const result=await searchWeb({apiKey:'sk-test',query:'buyer expansion',fetchImpl});
+  assert.equal(calls,1);assert.equal(result.results[0].url,'https://buyer.example/project');assert.equal(result.results[0].description,'');assert.equal(result.results[0].date,'');assert.match(result.warning,/require extraction/);
+});
+test('web search preserves safe failure categories without upstream secrets',async()=>{
+  const params={apiKey:'sk-test',query:'buyer expansion'};
+  await assert.rejects(()=>searchWeb({...params,fetchImpl:async()=>{throw new DOMException('private details','AbortError');}}),/timed out or was cancelled/);
+  await assert.rejects(()=>searchWeb({...params,fetchImpl:async()=>{throw new TypeError('private details sk-secret');}}),/OpenAI network error while requesting web search/);
+  await assert.rejects(()=>searchWeb({...params,fetchImpl:async()=>new Response(JSON.stringify({output:[]}))}),/returned no answer text/);
+  await assert.rejects(()=>searchWeb({...params,fetchImpl:async()=>new Response(JSON.stringify({output_text:'not JSON'}))}),/returned invalid structured output/);
+});
 test('OpenAI web search forwards the caller abort signal to the upstream request',async()=>{
   const controller=new AbortController();let requestSignal;
   const fetchImpl=async(url,options)=>{
