@@ -142,8 +142,9 @@
     const triggerText=clean(input?.answers?.buying_triggers||input?.profile?.buyingTriggers);
     const ids=[];const add=id=>{if(SIGNALS[id]&&!ids.includes(id))ids.push(id);};
     if(classification.businessType==="professional-services"){
-      add("sales-leadership-change");add("sales-team-hiring");add("sales-transformation");
-      if(classification.offerCategories.includes("ai-consulting")||/\b(ai|crm|sales tech|automation|automatiz)/i.test(text))add("ai-sales-tech");
+      const salesOffer=classification.offerCategories.includes("sales-training");
+      if(salesOffer){add("sales-leadership-change");add("sales-team-hiring");add("sales-transformation");}
+      if(salesOffer&&(classification.offerCategories.includes("ai-consulting")||/\b(ai|crm|sales tech|automation|automatiz)/i.test(text)))add("ai-sales-tech");
       if(/leadership|coaching|vadītāj|kouč/i.test(text))add("leadership-development");
       if(/new market|market entry|export|international expansion|jaun\w* tirg|eksport/i.test(triggerText))add("market-entry");
       if(/launch|new product|new service|jaun\w* produkt|jaun\w* pakalpoj/i.test(triggerText))add("product-launch");

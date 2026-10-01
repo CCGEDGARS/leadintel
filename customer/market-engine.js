@@ -194,7 +194,7 @@
     const active=(signals||[]).filter(item=>item.active!==false).filter(item=>!isTenderSignal(item)||filterResearchSourceTypes(input.sourceTypes||[],signals).includes("tenders")).sort((a,b)=>Number(b.weight)-Number(a.weight));
     const sourceTypes=filterResearchSourceTypes(input.sourceTypes||["news"],signals);
     const sources=sourceTypes.length?sourceTypes:["news"];
-    const intents=["company announcement", "new project", "supplier opportunity", "contract award", "facility investment", "production expansion", "project pipeline", "official company update"];
+    const intents=["company announcement", "new project", "supplier opportunity", "contract award", "investment announcement", "business expansion", "project pipeline", "official company update"];
     const planned=[];
     for(let index=0;index<count;index++){
       const signal=active[index%Math.max(active.length,1)];
