@@ -30,7 +30,7 @@ test('provider resilience is loaded before research starts and wraps the OpenAI 
   const evidenceView=fs.readFileSync(evidenceViewPath,'utf8');
   const app=fs.readFileSync(appPath,'utf8');
   assert.match(evidenceView,/market-research-provider-resilience\.js\?v=20260916-latency-fix-v2/);
-  assert.match(app,/import\s*{\s*withOpenAiRetry\s*,\s*cleanOpenAiResearchQuery\s*,\s*describePartialCoverage\s*}\s*from\s*['"]\.\/market-research-provider-resilience\.js\?v=20260916-latency-fix-v2&diagnostics=20261001-v1['"]/);
+  assert.match(app,/import\s*{\s*withOpenAiRetry\s*,\s*cleanOpenAiResearchQuery\s*,\s*describePartialCoverage\s*}\s*from\s*['"]\.\/market-research-provider-resilience\.js\?v=20260916-latency-fix-v2&diagnostics=20261001-v1&timing=20261001-v1['"]/);
   assert.match(app,/withOpenAiRetry\(\(\)=>LeadIntelMarket\.withTimeout\(/);
   assert.match(app,/describePartialCoverage\(/);
 });
@@ -69,6 +69,18 @@ test('OpenAI research queries are concise, deduplicated and use one language',as
   const cleaned=resilience.cleanOpenAiResearchQuery('Sweden Drawing development and mechanical engineering Swedish industrial manufacturers, Swedish industrial manufacturers, engineering Facility expansion ziņas paziņojums paplašināšanās');
   assert.equal(cleaned,'Sweden Drawing development and mechanical engineering Swedish industrial manufacturers engineering Facility expansion');
   assert.ok(cleaned.length<=180);
+});
+test('market search does not restart a timed out paid request',async()=>{
+ const resilience=await loadResilienceModule();let calls=0;
+ await assert.rejects(()=>resilience.withOpenAiRetry(async()=>{calls++;throw new Error('OpenAI search timed out');},{retryTimeouts:false,sleep:async()=>{throw new Error('Unexpected retry');}}),error=>error.message==='OpenAI search timed out'&&error.attempts===1);
+ assert.equal(calls,1);
+});
+test('all OpenAI market search paths use provider budget and avoid timeout retries',()=>{
+ const app=fs.readFileSync(appPath,'utf8');
+ assert.equal((app.match(/runtime\.openAiTimeoutMs,"OpenAI (?:search|follow-up)"/g)||[]).length,3);
+ assert.equal((app.match(/retryTimeouts:false/g)||[]).length,3);
+ assert.doesNotMatch(app,/runtime\.requestTimeoutMs,"OpenAI (?:search|follow-up)"/);
+ assert.match(app,/runtime\.requestTimeoutMs,"Firecrawl search"/);
 });
 
 test('OpenAI discovery does not retry configuration or validation failures',async()=>{

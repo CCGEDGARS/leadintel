@@ -5,7 +5,7 @@ import './business-identity.js?v=20260924-workspace-profile-english-v1';
 import './evidence-view.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&reference-interface=20260923&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&map-activation-guide=1&reference-discovery=5&reference-similarity=20260930-v1&reference-activation=6&company-workflow=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1&actual-themes=20261001-v1&adaptive-context=20261001-v1';
 import './profile-approval-ui.js?v=20260924-friendly-workflow-labels-v1';
 import './workspace-persistence.js?v=20260928-sync-timeout-v1&refresh-protection=1&auto-save=1';
-import {withOpenAiRetry,cleanOpenAiResearchQuery,describePartialCoverage} from './market-research-provider-resilience.js?v=20260916-latency-fix-v2&diagnostics=20261001-v1';
+import {withOpenAiRetry,cleanOpenAiResearchQuery,describePartialCoverage} from './market-research-provider-resilience.js?v=20260916-latency-fix-v2&diagnostics=20261001-v1&timing=20261001-v1';
 
 const STORAGE_KEY="leadintel_customer_v2_state";
 const FIRECRAWL_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
@@ -627,7 +627,7 @@ async function runMarketResearch(modeOverride=""){
   const updateProgress=completed=>{state.market.researchProgress={completed,total:totalJobs};taskCentre?.update(taskId,{completed,total:totalJobs,stage:'Checking market evidence',resultCount:state.market.researchResults.length});saveState();renderResearchStatus();};
   try{
     const queryResults=await LeadIntelMarket.mapWithConcurrency(queries,async query=>{
-      const openAiJob=openAiAvailable?withOpenAiRetry(()=>LeadIntelMarket.withTimeout(signal=>searchOpenAiWeb(query,limits.resultsPerQuery,signal),runtime.requestTimeoutMs,"OpenAI search")).then(found=>({found}),error=>({error})):Promise.resolve({skipped:true});
+      const openAiJob=openAiAvailable?withOpenAiRetry(()=>LeadIntelMarket.withTimeout(signal=>searchOpenAiWeb(query,limits.resultsPerQuery,signal),runtime.openAiTimeoutMs,"OpenAI search"),{retryTimeouts:false}).then(found=>({found}),error=>({error})):Promise.resolve({skipped:true});
       const firecrawlJob=LeadIntelMarket.withTimeout(signal=>searchMarket(query,limits.resultsPerQuery,signal),runtime.requestTimeoutMs,"Firecrawl search").then(results=>({results}),error=>({error}));
       const [openAi,firecrawl]=await Promise.all([openAiJob,firecrawlJob]);
       let openAiResults=[],firecrawlResults=[];
@@ -653,7 +653,7 @@ async function runMarketResearch(modeOverride=""){
       totalJobs+=adaptive.queries.length;state.market.researchProgress.total=totalJobs;state.market.researchQueries=[...queries,...adaptive.queries];state.market.researchPhase="following";renderResearchStatus();
       const followUps=await LeadIntelMarket.mapWithConcurrency(adaptive.queries,async query=>{
         const [openAi,firecrawl]=await Promise.all([
-          openAiAvailable?withOpenAiRetry(()=>LeadIntelMarket.withTimeout(signal=>searchOpenAiWeb(query,limits.resultsPerQuery,signal),runtime.requestTimeoutMs,"OpenAI follow-up")).catch(error=>{recordResearchError("OpenAI","Adaptive follow-up",error);return {available:false,results:[]};}):Promise.resolve({available:false,results:[]}),
+          openAiAvailable?withOpenAiRetry(()=>LeadIntelMarket.withTimeout(signal=>searchOpenAiWeb(query,limits.resultsPerQuery,signal),runtime.openAiTimeoutMs,"OpenAI follow-up"),{retryTimeouts:false}).catch(error=>{recordResearchError("OpenAI","Adaptive follow-up",error);return {available:false,results:[]};}):Promise.resolve({available:false,results:[]}),
           LeadIntelMarket.withTimeout(signal=>searchMarket(query,limits.resultsPerQuery,signal),runtime.requestTimeoutMs,"Firecrawl follow-up").catch(error=>{recordResearchError("Firecrawl","Adaptive follow-up",error);return [];})
         ]);
         return LeadIntelMarket.mergeResearchResults(openAi.results||[],firecrawl);
@@ -711,21 +711,21 @@ async function retryOpenAiDiscovery(){
   const runtime=LeadIntelMarket.researchRuntimePolicy(state.market.researchMode);
   const priorErrors=[...(state.market.researchErrors||[])].filter(item=>String(item.provider).toLowerCase()!=="openai");
   let successes=0,failures=0;const startedAt=Date.now();
-  state.market.researchStatus="running";state.market.researchSourceStatus.openai="running";state.market.openAiRetryProgress={completed:0,total:queries.length,attempt:1,startedAt,deadlineAt:Date.now()+runtime.requestTimeoutMs};state.market.researchErrors=priorErrors;saveState();startOpenAiCountdown();renderMarketStrategy();
+  state.market.researchStatus="running";state.market.researchSourceStatus.openai="running";state.market.openAiRetryProgress={completed:0,total:queries.length,attempt:1,startedAt,deadlineAt:Date.now()+runtime.openAiTimeoutMs};state.market.researchErrors=priorErrors;saveState();startOpenAiCountdown();renderMarketStrategy();
   try{
     const retried=await LeadIntelMarket.mapWithConcurrency(queries,async(query,index)=>{
       const attemptStarted=Date.now();
       try{
         const found=await withOpenAiRetry(attempt=>{
-          state.market.openAiRetryProgress={completed:index,total:queries.length,attempt,startedAt,deadlineAt:Date.now()+runtime.requestTimeoutMs};renderResearchStatus();
-          return LeadIntelMarket.withTimeout(signal=>searchOpenAiWeb(query,limits.resultsPerQuery,signal),runtime.requestTimeoutMs,"OpenAI search");
-        });
+          state.market.openAiRetryProgress={completed:index,total:queries.length,attempt,startedAt,deadlineAt:Date.now()+runtime.openAiTimeoutMs};renderResearchStatus();
+          return LeadIntelMarket.withTimeout(signal=>searchOpenAiWeb(query,limits.resultsPerQuery,signal),runtime.openAiTimeoutMs,"OpenAI search");
+        },{retryTimeouts:false});
         if(!found.available)throw new Error(found.reason||"OpenAI discovery unavailable");
         successes++;return found.results;
       }catch(error){
-        failures++;state.market.researchErrors.push({provider:"OpenAI",query:String(query.query||"").slice(0,180),message:String(error?.message||error).slice(0,240),attempts:2,responseTimeMs:Date.now()-attemptStarted,failureReason:String(error?.cause?.message||error?.message||error).slice(0,240)});return [];
+        failures++;state.market.researchErrors.push({provider:"OpenAI",query:String(query.query||"").slice(0,180),message:String(error?.message||error).slice(0,240),attempts:error?.attempts||1,responseTimeMs:Date.now()-attemptStarted,failureReason:String(error?.cause?.message||error?.message||error).slice(0,240)});return [];
       }
-    },{concurrency:runtime.concurrency,onProgress:progress=>{state.market.openAiRetryProgress={...state.market.openAiRetryProgress,...progress,deadlineAt:Date.now()+runtime.requestTimeoutMs};saveState();renderResearchStatus();}});
+    },{concurrency:runtime.concurrency,onProgress:progress=>{state.market.openAiRetryProgress={...state.market.openAiRetryProgress,...progress,deadlineAt:Date.now()+runtime.openAiTimeoutMs};saveState();renderResearchStatus();}});
     for(const results of retried)state.market.researchResults=LeadIntelMarket.mergeResearchResults(state.market.researchResults,results).slice(0,limits.maxStoredResults);
     state.market.researchSourceStatus.openai=failures===0?"complete":successes?"partial":"error";
     state.market.researchQuality=globalThis.LeadIntelMarketConditions?.buildQualityGate(state.market.researchResults,{mode:state.market.researchMode})||null;

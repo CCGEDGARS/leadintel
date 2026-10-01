@@ -25,13 +25,16 @@ function cleanOpenAiResearchQuery(value){
   return words.join(' ').slice(0,180).trim();
 }
 
-async function withOpenAiRetry(operation,{sleep=wait}={}){
+async function withOpenAiRetry(operation,{sleep=wait,retryTimeouts=true}={}){
   try{return await operation(1);}
   catch(error){
+    error.attempts=1;
     if(!isTransientOpenAiFailure(error))throw error;
+    if(!retryTimeouts&&/timed out|timeout|abort(?:ed|error)?/i.test(String(error?.message||error)))throw error;
     await sleep(OPENAI_RETRY_DELAY_MS);
     try{return await operation(2);}
     catch(retryError){
+      retryError.attempts=2;
       if(!isTransientOpenAiFailure(retryError))throw retryError;
       const detail=String(retryError?.message||'Unknown request failure').replace(/sk-[A-Za-z0-9_-]+/g,'[redacted]').replace(/Bearer\s+\S+/gi,'Bearer [redacted]').replace(/\s+/g,' ').slice(0,160);
       const terminal=new Error(`OpenAI signal discovery remained unavailable after 2 attempts · Last error: ${detail}`);

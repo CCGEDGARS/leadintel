@@ -285,9 +285,9 @@ test('research work runs with bounded concurrency and reports progress',async()=
 });
 
 test('market research latency policy gives OpenAI enough time while keeping concurrency bounded',()=>{
-  assert.deepEqual(Market.researchRuntimePolicy('quick'),{requestTimeoutMs:30000,concurrency:3});
-  assert.deepEqual(Market.researchRuntimePolicy('deep'),{requestTimeoutMs:35000,concurrency:3});
-  assert.deepEqual(Market.researchRuntimePolicy('intelligence'),{requestTimeoutMs:45000,concurrency:3});
+  assert.deepEqual(Market.researchRuntimePolicy('quick'),{requestTimeoutMs:30000,openAiTimeoutMs:120000,concurrency:3});
+  assert.deepEqual(Market.researchRuntimePolicy('deep'),{requestTimeoutMs:35000,openAiTimeoutMs:120000,concurrency:3});
+  assert.deepEqual(Market.researchRuntimePolicy('intelligence'),{requestTimeoutMs:45000,openAiTimeoutMs:120000,concurrency:3});
 });
 
 test('normalizing a strategy preserves a stale research-context gate',()=>{

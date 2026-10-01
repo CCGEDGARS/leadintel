@@ -16,7 +16,8 @@
     intelligence:Object.freeze({maxQueries:24,resultsPerQuery:10,maxStoredResults:200})
   });
   function researchRuntimePolicy(mode="quick"){
-    return mode==="intelligence"?{requestTimeoutMs:45000,concurrency:3}:mode==="deep"?{requestTimeoutMs:35000,concurrency:3}:{requestTimeoutMs:30000,concurrency:3};
+    const requestTimeoutMs=mode==="intelligence"?45000:mode==="deep"?35000:30000;
+    return {requestTimeoutMs,openAiTimeoutMs:120000,concurrency:3};
   }
   const SOURCE_TYPES=Object.freeze({
     news:"news announcement expansion relocation modernisation",
