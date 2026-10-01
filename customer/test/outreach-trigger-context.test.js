@@ -5,7 +5,7 @@ test('reviewed company trigger connects scripts to buyer and retains historical 
  const reviewed=E.reviewTrigger(item,item.dossier.evidence[0].url,'2026-10-01T06:01:00Z');
  const drafts=E.buildOutreachDrafts(reviewed.dossier,item.dossier.people[0],{priorityOffers:'Metal fabrication'},'brief','en');
  assert.match(drafts.emailBody,/Factory expansion announced \(2024-03-01\)/);
- assert.equal(drafts.scriptContext.buyerId,'p1');assert.equal(drafts.scriptContext.trigger.companyDomain,'maker.se');
+ assert.match(drafts.emailBody,/For your role as Operations Director/);assert.match(drafts.callOpener,/Operations Director/);assert.equal(drafts.scriptContext.buyerId,'p1');assert.equal(drafts.scriptContext.trigger.companyDomain,'maker.se');
  assert.equal(reviewed.approved,false);assert.equal(drafts.scriptContext.trigger.detectedAt,item.researchAt);
  const restored=E.restoreCrmScriptSnapshot(E.buildCrmScriptSnapshot({...reviewed,drafts}),'maker.se');
  assert.equal(restored.dossier.selectedTrigger.sourceDate,'2024-03-01');assert.equal(restored.drafts.emailBody,drafts.emailBody);

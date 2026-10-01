@@ -5,7 +5,7 @@ function restoreHarness(overrides={}){
  const status={textContent:''},calls=[],saved=[];
  const bridge={session:{authenticated:true},workspace:{id:'w1'},getCrmCompany:async()=>({ok:true,activities:[],activity_next_cursor:'older'}),getCrmActivities:async(id,filters)=>{calls.push(filters);return {ok:true,activities:[{metadata:{script_package:E.buildCrmScriptSnapshot({domain:'maker.se',drafts:{emailBody:'Saved text'}})}}]};}};
  Object.assign(bridge,overrides.bridge||{});
- const context={LeadIntelOutreach:E,scriptRestoreRequest:0,outreach:{selectedDomain:'maker.se'},selectedCandidate:()=>({domain:'maker.se'}),crmAuthenticated:()=>true,crmBridge:()=>bridge,durableCompany:async(candidate,options)=>{assert.equal(options.create,false);return {ok:true,company:{id:'c1'}};},q:()=>status,upsertItem:item=>saved.push(item),renderDossier:()=>{},Set};
+ const context={LeadIntelOutreach:E,scriptRestoreRequest:0,scriptGenerationRequest:0,outreach:{selectedDomain:'maker.se'},selectedCandidate:()=>({domain:'maker.se'}),crmAuthenticated:()=>true,crmBridge:()=>bridge,durableCompany:async(candidate,options)=>{assert.equal(options.create,false);return {ok:true,company:{id:'c1'}};},q:()=>status,upsertItem:item=>saved.push(item),renderDossier:()=>{},Set};
  Object.assign(context,overrides.context||{});vm.createContext(context);
  vm.runInContext(ui.slice(ui.indexOf('async function restoreScriptPackage()'),ui.indexOf('async function loadTriggerAlerts()')),context);
  return {context,bridge,status,calls,saved};

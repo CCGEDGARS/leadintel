@@ -5,6 +5,17 @@ const ContentLanguage=require('../content-language.js');
 
 const baseDrafts={tone:'consultative',emailSubject:'NordHaus — discussion',emailBody:'Hello Anna',linkedinMessage:'Hello Anna',callOpener:'Hello Anna',followUp:'Following up.',objectionReply:'Understood.',resolvedLanguage:'de',languageSource:'market',languageConfidence:'high',languageRequiresConfirmation:false,requiresAiLocalization:true};
 
+test('Swedish localization receives selected buyer role and reviewed company source',async()=>{
+  const trigger={url:'https://maker.se/news/factory',sourceDate:'2024-03-01',verification:'user_reviewed',excerpt:'Factory expansion'};
+  const drafts={...baseDrafts,resolvedLanguage:'sv',scriptContext:{buyerName:'Anna Berg',buyerRole:'Operations Director',trigger}};
+  const languageService={...ContentLanguage,async localizeCampaignPackage(root,workspace,language,source,context){
+    assert.equal(language,'sv');assert.equal(context.buyerRole,'Operations Director');assert.equal(context.selectedBuyer,'Anna Berg');assert.deepEqual(context.reviewedTrigger,trigger);
+    return {drafts:{...source,emailBody:'Hej Anna'},language:'sv',provider:'openai',model:'configured-provider'};
+  }};
+  const result=await Localization.prepareCampaignDrafts({root:{},workspace:'w1',drafts,scenario:{buyerRole:'Generic purchasing role'},candidate:{domain:'maker.se',market:'Sweden'},dossier:{},languageService});
+  assert.equal(result.drafts.scriptContext.trigger.sourceDate,'2024-03-01');assert.equal(result.drafts.scriptContext.buyerRole,'Operations Director');assert.equal(result.approvalBlocked,false);
+});
+
 test('localizes a non-template campaign with the secured AI language service and keeps provenance',async()=>{
   let called=0;
   const languageService={...ContentLanguage,async localizeCampaignPackage(root,workspace,language,drafts,context){called++;assert.equal(workspace,'w1');assert.equal(language,'de');assert.equal(context.company,'NordHaus');return {drafts:{...drafts,emailBody:'Guten Tag Anna'},language:'de',provider:'anthropic',model:'claude-sonnet-4-6'};}};

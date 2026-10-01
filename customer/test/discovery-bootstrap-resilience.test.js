@@ -10,7 +10,7 @@ const discoveryUi = fs.readFileSync(path.join(root, 'discovery-ui.js'), 'utf8');
 test('Company Discovery bootstrap is not blocked by a module dependency graph', () => {
   assert.match(
     html,
-    /<script defer src="discovery-ui\.js\?v=20260930-contact-suppression-v1&revisit-results=1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&opportunity-context=1&opportunity-map=1&target-research=1&public-buyer-crm=1&apollo-labels=1&delivery-modes=2&target-status=1&selected-amount=20260930-v2&trigger-script-crm=20261001-v1"><\/script>/,
+    /<script defer src="discovery-ui\.js\?v=20260930-contact-suppression-v1&revisit-results=1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&opportunity-context=1&opportunity-map=1&target-research=1&public-buyer-crm=1&apollo-labels=1&delivery-modes=2&target-status=1&selected-amount=20260930-v2&trigger-script-crm=20261001-v2"><\/script>/,
     'Discovery must load as an independent deferred script'
   );
   assert.doesNotMatch(
@@ -30,6 +30,6 @@ test('Discovery shell cache keys match the runtime asset version', () => {
   assert.ok(runtimeVersion, 'Discovery must declare an asset version');
   for (const asset of ['discovery-engine.js', 'discovery-ui.js']) {
     const assetVersion=asset==='discovery-ui.js'?runtimeVersion.replace('20260930-contact-suppression-v1','20260930-contact-suppression-v1&revisit-results=1'):runtimeVersion;
-    assert.ok(html.includes(`<script defer src="${asset}?v=${assetVersion}${asset==='discovery-ui.js'?'&opportunity-context=1&opportunity-map=1&target-research=1&public-buyer-crm=1&apollo-labels=1&delivery-modes=2&target-status=1&selected-amount=20260930-v2&trigger-script-crm=20261001-v1':''}"></script>`), `${asset} must load the current Discovery release`);
+    assert.ok(html.includes(`<script defer src="${asset}?v=${assetVersion}${asset==='discovery-ui.js'?'&opportunity-context=1&opportunity-map=1&target-research=1&public-buyer-crm=1&apollo-labels=1&delivery-modes=2&target-status=1&selected-amount=20260930-v2&trigger-script-crm=20261001-v2':''}"></script>`), `${asset} must load the current Discovery release`);
   }
 });
