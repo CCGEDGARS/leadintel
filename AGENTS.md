@@ -27,3 +27,7 @@ The user agreements recorded in `docs/project-state/2026-09-30-leadintel-checkpo
 ## Customer portability is mandatory
 
 LeadIntel is a multi-customer SaaS. Ercon and CCGROUP are test fixtures, never runtime defaults or special-case routing. All research plans, signal candidates, preview themes, company matching, buyer qualification and message context must derive from the active workspace\u2019s seller profile, confirmed offers, selected markets and activated reference models. Reference customers are separate from the seller identity. Do not copy one customer\u2019s industries, sales signals, buyer roles or scripts into another workspace. Unknown context must stay unknown or request input. Add cross-industry and name-invariance regression checks for changes in shared personalization logic. Protect workspace isolation and retain evidence gates.
+
+## Report lifecycle and prevention checks
+
+Apply the recurring-error controls in `docs/project-state/2026-10-01-report-deletion-and-prevention.md`. Authorized fixes require action, not acknowledgement-only responses. For saved artifacts inspect view, save/reload, export/print, individual/bulk deletion, cancellation and empty-state behavior. Deleting snapshots must preserve downstream source evidence and must not be undone by initialization or migration.

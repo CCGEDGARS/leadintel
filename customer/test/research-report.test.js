@@ -8,3 +8,17 @@ test('snapshot is independent, bounded and excludes credentials',()=>{const main
 test('dated report history survives state reload and retains separate runs',()=>{const one=Report.snapshot(fixture,'one'),two=Report.snapshot(fixture,'two');const state=Market.normalizeMarketState({researchReports:Report.append([one],two)});assert.deepEqual(state.researchReports.map(x=>x.id),['two','one']);assert.equal(state.researchReports[1].sources[0].url,fixture.market.researchResults[0].url);assert.equal(Report.append([one],one).length,1);assert.equal(Report.normalize(Array.from({length:15},(_,i)=>({...one,id:String(i)}))).length,10);});
 test('portable report includes citations, caveats and print styles without unsafe markup',()=>{const r=Report.snapshot(fixture);r.company='<script>alert(1)</script>';r.sources.push({url:'javascript:alert(1)',title:'<img onerror=alert(1)>'});const html=Report.documentHtml(r);assert.ok(html.includes('href="#source-1"'));assert.ok(html.includes('Partial or unverified coverage'));assert.ok(html.includes('OpenAI: Unavailable'));assert.ok(html.includes('@media print'));assert.ok(!html.includes('<script>'));assert.ok(!html.includes('href="javascript:'));assert.ok(html.includes('&lt;img'));assert.ok(html.includes('Review in Strategy'));});
 test('quick and deeper templates only display collected conditions',()=>{const quick=Report.body(Report.snapshot(fixture));assert.ok(!quick.includes('<h3>funding</h3>'));const main=structuredClone(fixture);main.market.researchMode='deep';main.market.marketConditions={funding:{summary:'No active funding verified'}};assert.ok(Report.body(Report.snapshot(main)).includes('No active funding verified'));});
+
+test('delete one or all reports persists without changing Strategy evidence',()=>{
+ const main=structuredClone(fixture);const evidence=structuredClone(main.market.researchResults);
+ main.market.researchReports=[Report.snapshot(main,'one'),Report.snapshot(main,'two')];
+ assert.equal(Report.deleteSaved(main.market,'one'),1);
+ assert.deepEqual(main.market.researchReports.map(x=>x.id),['two']);
+ assert.equal(Report.deleteSaved(main.market,null),1);
+ const reloaded=Market.normalizeMarketState(JSON.parse(JSON.stringify(main.market)));
+ assert.deepEqual(reloaded.researchReports,[]);
+ assert.equal(reloaded.researchReportsInitialized,true);
+ assert.deepEqual(main.market.researchResults,evidence);
+ main.market.researchReports=Report.append(reloaded.researchReports,Report.snapshot(main,'new'));
+ assert.deepEqual(main.market.researchReports.map(x=>x.id),['new']);
+});

@@ -7,6 +7,12 @@
   function snapshot(main={},id=`report-${Date.now()}`){const m=main.market||{};return clone({id,createdAt:new Date().toISOString(),researchedAt:m.lastResearchAt||'',company:main.profile?.companyName||'Your company',website:main.profile?.website||main.website||'',markets:main.profile?.targetMarkets||'',offers:main.profile?.priorityOffers||'',customer:main.profile?.idealCustomer||'',mode:m.researchMode||'quick',status:m.researchStatus||'idle',stale:m.researchContextStale===true,quality:m.researchQuality||null,providers:m.researchSourceStatus||{},errors:m.researchErrors||[],verification:m.researchVerification||{},sources:m.researchResults||[],opportunities:m.opportunities||[],conditions:m.marketConditions||null,signals:(m.signals||[]).filter(x=>x.active!==false).map(x=>({name:x.name,keywords:x.keywords}))});}
   function normalize(history){return (Array.isArray(history)?history:[]).filter(x=>x&&typeof x.id==='string'&&Array.isArray(x.sources)).slice(0,10).map(clone);}
   function append(history,report){return normalize([report,...normalize(history).filter(x=>x.id!==report.id)]);}
+  function deleteSaved(market,id){
+    const history=normalize(market.researchReports);
+    market.researchReports=id===null?[]:history.filter(report=>report.id!==id);
+    market.researchReportsInitialized=true;
+    return history.length-market.researchReports.length;
+  }
   const css=`*{box-sizing:border-box}body{margin:0;background:#f1f4f2;color:#172d27;font:15px/1.65 Arial,sans-serif}.report{max-width:1000px;margin:24px auto;background:white;padding:48px;border-radius:16px}header{border-bottom:3px solid #12614f;padding-bottom:24px}.eyebrow{color:#12614f;letter-spacing:2px;font-size:12px;text-transform:uppercase}h1{font-size:34px;line-height:1.2}h2{margin-top:32px;font-size:22px}h3{font-size:17px}small,.muted{color:#596b65}.metrics{display:flex;gap:24px;flex-wrap:wrap;margin:24px 0}.metrics strong{display:block;font-size:23px}.notice{padding:14px;background:#fff6df;border-left:4px solid #ac812d}article{border:1px solid #dbe4df;border-radius:10px;padding:18px;margin:12px 0}a{color:#12614f;overflow-wrap:anywhere}li{margin-bottom:8px}.source{break-inside:avoid}.source p{white-space:pre-wrap}.toolbar{position:sticky;top:0;background:white;border-bottom:1px solid #dbe4df;padding:12px;display:flex;gap:8px;flex-wrap:wrap}button{padding:10px 16px;border:1px solid #12614f;border-radius:8px;background:white;color:#12614f;cursor:pointer}.primary{background:#12614f;color:white}footer{border-top:1px solid #dbe4df;margin-top:32px;padding-top:20px}@page{size:A4;margin:16mm}@media print{body{background:white;font-size:10pt}.report{margin:0;padding:0;max-width:none;border-radius:0}.toolbar{display:none}h1{font-size:25pt}h2,h3{break-after:avoid}article{break-inside:avoid}a{color:#172d27}a.source-link:after{content:' (' attr(href) ')';font-size:9pt}.source p{max-height:none}}@media(max-width:650px){.report{margin:0;padding:24px}h1{font-size:27px}}`;
   function body(r){const sources=r.sources||[];const citation=s=>{const index=sources.findIndex(x=>x.url===s.url);return index>=0?`<a href="#source-${index+1}">[${index+1}]</a>`:'';};
     const gaps=[...(r.quality?.gaps||[]),...(r.errors||[]).map(x=>`${x.provider||'Source'}: ${x.message||'Unavailable'}`),...(r.verification?.status==='unavailable'?[`Verification: ${r.verification.reason||'Unavailable'}`]:[]),...(r.stale?['This report retains earlier evidence. Context needs review before reuse.']:[])];
@@ -22,8 +28,28 @@
     dialog.querySelector('[data-report-print]').onclick=()=>{frame.contentWindow.focus();frame.contentWindow.print();};
     dialog.querySelector('[data-report-download]').onclick=()=>{const blob=new Blob([documentHtml(current)],{type:'text/html'});const link=d.createElement('a');const objectUrl=URL.createObjectURL(blob);link.href=objectUrl;link.download=`LeadIntel-${String(current.company).replace(/[^a-z0-9-]/gi,'-')}-${current.id}.html`;link.click();setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);};
     dialog.querySelector('[data-report-strategy]').onclick=()=>{dialog.close();onStrategy();};
-    function render(){const m=getState().market||{};const history=normalize(m.researchReports);const latest=history[0]||(m.researchResults?.length?snapshot(getState(),'legacy-current'):null);for(const host of d.querySelectorAll('[data-research-reports]')){host.innerHTML=latest?'<button type="button" data-report-latest>View report</button><details><summary>Saved reports ('+history.length+')</summary>'+history.map((r,i)=>`<p><button type="button" data-report-index="${i}">${esc(modes[r.mode]||r.mode)} · ${esc(r.researchedAt||r.createdAt)} · ${esc(r.status)} · ${r.sources.length} sources</button></p>`).join('')+'</details><small>Saved with your workspace · Print / Save PDF or download to share</small>':'';host.querySelector('[data-report-latest]')?.addEventListener('click',()=>open(latest));host.querySelectorAll('[data-report-index]').forEach(button=>button.onclick=()=>open(history[Number(button.dataset.reportIndex)]));}}
-    return {render,capture(){const main=getState();const report=snapshot(main);main.market.researchReports=append(main.market.researchReports,report);save();render();},openLatest(){const m=getState().market||{};open(normalize(m.researchReports)[0]||snapshot(getState()));}};
+    function remove(id){
+      const main=getState();const history=normalize(main.market.researchReports);
+      if(id!==null&&!history.some(report=>report.id===id))return;
+      if(!history.length)return;
+      const message=id===null?'Delete all saved reports? Research evidence used by Strategy will be kept.':'Delete this saved report? Research evidence used by Strategy will be kept.';
+      if(!globalThis.confirm(message))return;
+      deleteSaved(main.market,id);save();
+      if(dialog.open&&(id===null||current?.id===id))dialog.close();
+      render();
+    }
+    function render(){
+      const m=getState().market||{};const history=normalize(m.researchReports);
+      const latest=history[0]||(!m.researchReportsInitialized&&m.researchResults?.length?snapshot(getState(),'legacy-current'):null);
+      for(const host of d.querySelectorAll('[data-research-reports]')){
+        host.innerHTML=latest?'<button type="button" data-report-latest>View report</button><details><summary>Saved reports ('+history.length+')</summary>'+history.map((r,i)=>`<p class="saved-report-row"><button type="button" data-report-index="${i}">${esc(modes[r.mode]||r.mode)} · ${esc(r.researchedAt||r.createdAt)} · ${esc(r.status)} · ${r.sources.length} sources</button> <button type="button" data-report-delete="${i}" aria-label="Delete ${esc(modes[r.mode]||r.mode)} report from ${esc(r.createdAt)}">Delete</button></p>`).join('')+(history.length?'<button type="button" data-report-delete-all>Delete all saved reports</button>':'')+'</details><small>Saved with your workspace · Print / Save PDF or download to share</small>':'<small>No saved reports. Your research evidence remains available in Strategy.</small>';
+        host.querySelector('[data-report-latest]')?.addEventListener('click',()=>open(latest));
+        host.querySelectorAll('[data-report-index]').forEach(button=>button.onclick=()=>open(history[Number(button.dataset.reportIndex)]));
+        host.querySelectorAll('[data-report-delete]').forEach(button=>button.onclick=()=>remove(history[Number(button.dataset.reportDelete)]?.id));
+        host.querySelector('[data-report-delete-all]')?.addEventListener('click',()=>remove(null));
+      }
+    }
+    return {render,capture(){const main=getState();const report=snapshot(main);main.market.researchReports=append(main.market.researchReports,report);main.market.researchReportsInitialized=true;save();render();},openLatest(){const m=getState().market||{};open(normalize(m.researchReports)[0]||snapshot(getState()));}};
   }
-  return {snapshot,normalize,append,body,documentHtml,install};
+  return {snapshot,normalize,append,deleteSaved,body,documentHtml,install};
 });
