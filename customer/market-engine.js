@@ -387,7 +387,8 @@
         evidence:Math.min(20,6+evidence.length*4)
       }:{fit:0,intent:0,timing:0,value:0,evidence:0};
       score.total=score.fit+score.intent+score.timing+score.value+score.evidence;
-      const confidence=evidence.length>=2&&score.total>=75?"High":evidence.length>=1||score.total>=55?"Medium":"Low";
+      const domains=new Set(evidence.map(item=>{try{return new URL(item.url).hostname.replace(/^www\./,"");}catch{return "";}}).filter(Boolean));
+      const confidence=evidence.filter(item=>item.extractedAt).length>=2&&domains.size>=2&&score.total>=75?"High":evidence.length>=1||score.total>=55?"Medium":"Low";
       return {
         id:`opp-${slug(market)}`,market,title:`${market}: ${offer}`,
         hypothesis:lv?`Prioritizēt ${clean(profile.idealCustomer)||"augstas atbilstības uzņēmumus"} tirgū ${market}, kuros ${clean(profile.buyingTriggers)||"atbilstošs pirkšanas signāls"} rada savlaicīgu pamatu izvērtēt piedāvājumu: ${offer}.`:`Prioritize ${clean(profile.idealCustomer)||"high-fit companies"} in ${market} where ${clean(profile.buyingTriggers)||"a relevant buying signal"} creates a timely reason to evaluate ${offer}.`,
@@ -455,9 +456,9 @@
     const researchVerification={status:sourceAllowed.has(rawVerification.status)?rawVerification.status:"idle",provider:"gemini",role:"verification",webSearch:false,reason:clean(rawVerification.reason).slice(0,300),summary:clean(rawVerification.summary).slice(0,1000),disagreements:(Array.isArray(rawVerification.disagreements)?rawVerification.disagreements:[]).map(clean).filter(Boolean).slice(0,12),missingEvidence:(Array.isArray(rawVerification.missingEvidence)?rawVerification.missingEvidence:[]).map(clean).filter(Boolean).slice(0,12),verifiedAt:clean(rawVerification.verifiedAt)};
     const rawProgress=input.researchProgress&&typeof input.researchProgress==="object"?input.researchProgress:{};
     const researchProgress={completed:Math.max(0,Number(rawProgress.completed)||0),total:Math.max(0,Number(rawProgress.total)||0)};
-    const researchErrors=(Array.isArray(input.researchErrors)?input.researchErrors:[]).slice(0,12).map(item=>({provider:clean(item?.provider).slice(0,40),query:clean(item?.query).slice(0,180),message:clean(item?.message).slice(0,240)})).filter(item=>item.provider||item.message);
+    const researchErrors=(Array.isArray(input.researchErrors)?input.researchErrors:[]).slice(0,12).map(item=>({provider:clean(item?.provider).slice(0,40),query:clean(item?.query).slice(0,180),message:clean(item?.message).slice(0,240),attempts:Math.max(0,Number(item?.attempts)||0),responseTimeMs:Math.max(0,Number(item?.responseTimeMs)||0),failureReason:clean(item?.failureReason).slice(0,240)})).filter(item=>item.provider||item.message);
     return {
-      ...DEFAULT_MARKET_STATE,icps,signals,researchQueries,researchResults,opportunities,researchSourceStatus,researchVerification,researchProgress,researchErrors,
+      ...DEFAULT_MARKET_STATE,icps,signals,researchQueries,researchResults,opportunities:opportunities.map(item=>input.researchQuality?.passed===false&&item.confidence==="High"?{...item,confidence:"Medium"}:item),researchSourceStatus,researchVerification,researchProgress,researchErrors,
       researchReports:typeof globalThis.LeadIntelResearchReport?.normalize==='function'?globalThis.LeadIntelResearchReport.normalize(input.researchReports):(Array.isArray(input.researchReports)?input.researchReports:[]).slice(0,10),
       researchStatus:allowed.has(input.researchStatus)?input.researchStatus:"idle",researchMode,researchSourceTypes:researchSourceTypes.length?researchSourceTypes:defaultResearchSources,researchSourceTypesCustomized:input.researchSourceTypesCustomized===true,researchCustomSources,researchInstructions,
       researchHistory:(Array.isArray(input.researchHistory)?input.researchHistory:[]).slice(0,20).map(item=>({id:clean(item?.id),mode:RESEARCH_MODES[item?.mode]?item.mode:"quick",status:clean(item?.status),sourceCount:Math.max(0,Number(item?.sourceCount)||0),queryCount:Math.max(0,Number(item?.queryCount)||0),completedAt:clean(item?.completedAt)})).filter(item=>item.id),monitoring:normalizeMonitoring(input.monitoring),

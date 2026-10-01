@@ -56,6 +56,9 @@ test('OpenAI web search uses hosted search, source inclusion and strict structur
   assert.equal(request.body.store,false);
   assert.deepEqual(request.body.tools,[{type:'web_search'}]);
   assert.equal(request.body.tool_choice,'required');
+  assert.equal(request.body.max_tool_calls,2);
+  assert.equal(request.body.max_output_tokens,4000);
+  assert.deepEqual(request.body.reasoning,{effort:'low'});
   assert.deepEqual(request.body.include,['web_search_call.action.sources']);
   assert.equal(request.body.text.format.type,'json_schema');
   assert.equal(request.body.text.format.strict,true);

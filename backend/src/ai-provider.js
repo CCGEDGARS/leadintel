@@ -125,6 +125,9 @@ export async function searchWeb({apiKey,model,query,maxResults=5,purpose='genera
       headers:{'Content-Type':'application/json','Accept':'application/json',Authorization:`Bearer ${options.apiKey}`},
       body:JSON.stringify({
         model:options.model,
+        max_tool_calls:purpose==='general'?2:4,
+        max_output_tokens:4000,
+        ...(/^gpt-[56]/.test(options.model)?{reasoning:{effort:'low'}}:{}),
         instructions:sourceAccessAudit
           ?'Audit the named website or data provider using current primary sources. Find the official service/API pages, data-field documentation, pricing or account requirements when published, terms of use, robots or automation restrictions, privacy/copyright limits, and contact or commercial-access instructions. Distinguish public webpage visibility from authenticated database access and authorised API access. Return only sources actually found, use each source URL exactly, prefer the provider own pages, and do not invent capabilities, access, prices, or URLs.'
           :purpose==='contact_research'

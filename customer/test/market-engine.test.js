@@ -259,7 +259,7 @@ test('research failures are normalized, bounded and preserved for an actionable 
   const errors=Array.from({length:20},(_,index)=>({provider:index%2?'firecrawl':'openai',query:`Query ${index}`,message:index===0?'Request timed out':'Provider unavailable'}));
   const state=Market.normalizeMarketState({researchStatus:'error',researchErrors:errors});
   assert.equal(state.researchErrors.length,12);
-  assert.deepEqual(state.researchErrors[0],{provider:'openai',query:'Query 0',message:'Request timed out'});
+  assert.deepEqual(state.researchErrors[0],{provider:'openai',query:'Query 0',message:'Request timed out',attempts:0,responseTimeMs:0,failureReason:''});
 });
 
 test('timed research operations abort and reject instead of hanging forever',async()=>{
@@ -295,3 +295,9 @@ test('normalizing a strategy preserves a stale research-context gate',()=>{
   assert.equal(state.researchContextStale,true);
   assert.equal(Market.normalizeMarketState(state).researchContextStale,true);
 });
+
+ test('search snippets cannot produce high confidence even with strong profile fit',()=>{
+ const results=[1,2,3].map(i=>({market:'Germany',url:`https://source${i}.example/news`,title:'Expansion investment automation',description:'New project announced',date:new Date().toISOString()}));
+ const opportunities=Market.buildMarketOpportunities(profile,[],[],results);
+ assert.notEqual(opportunities.find(x=>x.market==='Germany').confidence,'High');
+ });

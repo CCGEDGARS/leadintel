@@ -726,7 +726,8 @@ async function retryOpenAiDiscovery(){
         failures++;state.market.researchErrors.push({provider:"OpenAI",query:String(query.query||"").slice(0,180),message:String(error?.message||error).slice(0,240),attempts:error?.attempts||1,responseTimeMs:Date.now()-attemptStarted,failureReason:String(error?.cause?.message||error?.message||error).slice(0,240)});return [];
       }
     },{concurrency:runtime.concurrency,onProgress:progress=>{state.market.openAiRetryProgress={...state.market.openAiRetryProgress,...progress,deadlineAt:Date.now()+runtime.openAiTimeoutMs};saveState();renderResearchStatus();}});
-    for(const results of retried)state.market.researchResults=LeadIntelMarket.mergeResearchResults(state.market.researchResults,results).slice(0,limits.maxStoredResults);
+    for(const results of retried)state.market.researchResults=LeadIntelMarket.mergeResearchResults(state.market.researchResults,results);
+    state.market.researchResults=(globalThis.LeadIntelMarketConditions?.assessEvidence(state.market.researchResults,{profile:researchProfile()}).results||state.market.researchResults).slice(0,limits.maxStoredResults);
     state.market.researchSourceStatus.openai=failures===0?"complete":successes?"partial":"error";
     state.market.researchQuality=globalThis.LeadIntelMarketConditions?.buildQualityGate(state.market.researchResults,{mode:state.market.researchMode})||null;
     const incomplete=failures>0||state.market.researchErrors.length>0||state.market.researchQuality?.passed===false||state.market.researchContextStale||(["deep","intelligence"].includes(state.market.researchMode)&&state.market.researchSourceStatus.gemini!=="complete");
@@ -735,10 +736,11 @@ async function retryOpenAiDiscovery(){
     state.market.lastOpenAiRetry={attempts:queries.length+failures,responseTimeMs:Date.now()-startedAt,status:state.market.researchSourceStatus.openai,failureReason:failures?"One or more OpenAI queries remained unavailable":""};
   }finally{
     stopOpenAiCountdown();
-    state.market.researchResults=LeadIntelMarket.mergeResearchResults(preservedResults,state.market.researchResults).slice(0,limits.maxStoredResults);
+    const recovered=LeadIntelMarket.mergeResearchResults(state.market.researchResults,preservedResults);
+    state.market.researchResults=(globalThis.LeadIntelMarketConditions?.assessEvidence(recovered,{profile:researchProfile()}).results||recovered).slice(0,limits.maxStoredResults);
     delete state.market.openAiRetryProgress;saveState();renderMarketStrategy();researchReportUi?.capture();
   }
-  showToast(failures?"Firecrawl results preserved — OpenAI still unavailable":"Research complete — OpenAI and Firecrawl succeeded");
+  showToast(failures?"Firecrawl results preserved — OpenAI still unavailable":"OpenAI discovery finished — review evidence coverage");
 }
 function scoreCell(label,value){return `<div><span>${label}</span><strong>${value}/20</strong><i style="--score:${value}"></i></div>`;}
 function marketConditionSources(items=[]){
@@ -768,7 +770,7 @@ function renderMarketOpportunities(){
     <div class="opportunity-top"><label class="market-toggle"><input type="checkbox" data-opportunity-active="${index}" ${opp.active?"checked":""}><span></span></label><div><span class="opportunity-market">Selected market</span><h4 lang="${contentLanguage()}">${esc(opp.title)}</h4><span class="not-researched-label" data-research-running="${state.market.researchStatus==="running"?"true":"false"}">${state.market.researchStatus==="running"?"Research in progress":"Not researched yet"}</span></div><div class="opportunity-total"><strong>${opp.score.total}</strong><span>/100</span></div></div>
   </article>`:`<article class="opportunity-card ${opp.active?"active":""}">
     <div class="opportunity-top"><label class="market-toggle"><input type="checkbox" data-opportunity-active="${index}" ${opp.active?"checked":""}><span></span></label><div><span class="opportunity-market">${esc(opp.marketLabel||opp.market)}</span><h4 lang="${contentLanguage()}">${esc(opp.title)}</h4></div><div class="opportunity-total"><strong>${opp.score.total}</strong><span>/100</span></div></div>
-    <div class="opportunity-meta"><span class="confidence ${opp.confidence.toLowerCase()}">${opp.confidence} confidence</span><span>${opp.evidence.length} evidence source${opp.evidence.length===1?"":"s"}</span></div>
+    <div class="opportunity-meta"><span class="confidence ${(state.market.researchQuality?.passed===false&&opp.confidence==="High"?"Medium":opp.confidence).toLowerCase()}">${state.market.researchQuality?.passed===false&&opp.confidence==="High"?"Medium":opp.confidence} confidence</span><span>${opp.evidence.length} evidence source${opp.evidence.length===1?"":"s"}</span></div>
     <details class="opportunity-analysis"><summary>View detailed analysis</summary>
       <p class="opportunity-hypothesis" lang="${contentLanguage()}">${esc(opp.hypothesis)}</p>
       <div class="score-grid">${scoreCell("Fit",opp.score.fit)}${scoreCell("Intent",opp.score.intent)}${scoreCell("Timing",opp.score.timing)}${scoreCell("Value",opp.score.value)}${scoreCell("Evidence",opp.score.evidence)}</div>
