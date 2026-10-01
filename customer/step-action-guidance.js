@@ -4,7 +4,7 @@
   const guidance={
     1:['Add your company website and target market','Enter your website, select the market where you want to find customers, then continue to Profile.'],
     3:['Review and approve your company profile','Check the evidence and commercial answers, make any corrections, then approve the profile to continue.'],
-    4:['Review your strategy and choose research depth','Check the recommended customers and buying signals, run the market research you need, then activate your strategy.'],
+    4:['Choose your customers and buying signals','Review market findings from Profile, select customer segments and buying signals, then save your strategy and continue to Companies.'],
     6:['Prepare and approve a relevant message','Choose a saved opportunity, build its dossier, review the draft, and approve the message before delivery.'],
     7:['Send the approved message and record the outcome','Choose an approved opportunity, confirm delivery yourself, then record replies and real sales progress.']
   };
@@ -20,7 +20,7 @@
       const complete=research.dataset.researchState==='complete';
       if(complete){
         const step2=document.getElementById('step-2');
-        insert(step2,'Review your answers and add customer context','Check the AI suggestions, then add past buyers or chosen target companies if you have them. Press Review your Profile at the end of this page.');
+        insert(step2,'Review your profile, add customer examples and explore your market','Check the AI suggestions, add reference companies if available, and explore your selected market. Then review your Profile to continue.');
         const banner=step2.querySelector(':scope > .step-action-guidance');
         if(banner&&!banner.querySelector('.step-guidance-jump')){
           const button=document.createElement('button');button.type='button';button.className='secondary-btn step-guidance-jump';button.textContent='Review draft answers ↓';
@@ -29,6 +29,9 @@
         if(banner&&!banner.querySelector('.step-guidance-customers')){
           const button=document.createElement('button');button.type='button';button.className='secondary-btn step-guidance-jump step-guidance-customers';button.textContent='Add Customers →';
           button.addEventListener('click',()=>step2.querySelector('[data-reference-customers-manage]')?.click());banner.append(button);
+        }
+        if(banner&&!banner.querySelector('.step-guidance-market')){
+          const button=document.createElement('button');button.type='button';button.className='secondary-btn step-guidance-jump step-guidance-market';button.textContent='Explore market →';button.setAttribute('data-open-profile-market','');banner.append(button);
         }
         research.classList.remove('step-action-research');
         if(profileHero.nextElementSibling!==research)profileHero.after(research);

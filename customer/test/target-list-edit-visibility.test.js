@@ -7,7 +7,7 @@ const read=name=>fs.readFileSync(path.join(__dirname,'..',name),'utf8');
 
 test('target list exposes its saved rows and editing controls',()=>{
   const ui=read('reference-customer-ui.js');
-  assert.match(ui,/Target Companies · \$\{items\.length\}/);
+  assert.match(ui,/Known Companies · \$\{items\.length\}/);
   assert.match(ui,/data-edit-target/);
   assert.match(ui,/function editTarget\(index\)/);
   assert.match(ui,/function cancelTargetEdit\(\)/);

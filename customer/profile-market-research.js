@@ -17,7 +17,7 @@
   async function open(root=environment){
     if(!root)return false;root.LeadIntelCustomerNavigation?.setStep?.(2);
     try{
-      if(!root.LeadIntelReferenceCustomerLauncher?.open)await import('./reference-customer-launcher.js?v=20261001-profile-market-v1&company-workflow=20261001-v2&profile-market=20261001-v1');
+      if(!root.LeadIntelReferenceCustomerLauncher?.open)await import('./reference-customer-launcher.js?v=20261001-profile-market-v1&company-workflow=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1');
       return Boolean(await root.LeadIntelReferenceCustomerLauncher?.open?.('market'));
     }catch(error){root.console?.error?.('Market research could not open',error);const toast=root.document?.getElementById('toast');if(toast){toast.textContent='Market research could not open. Reload the workspace and try again.';toast.classList.add('show');}return false;}
   }

@@ -22,3 +22,7 @@ Tests cover actual node reuse, prerequisite visibility, navigation without start
 ## Verification boundary
 
 Required before completion: full customer test suite, static artifact build, CI for exact published SHA and production release-integrity PROVEN verdict. Browser checks cover visible tabs, prerequisite, navigation and layout using the separate browser fixture. They do not certify the user's authenticated workspace or a new paid research run. Previously deferred evidence gaps remain deferred to final review; no provider/research-engine expansion in this interface change.
+
+## Guidance copy follow-up
+
+The user approved Continue to strategy as the market handoff label. Profile now provides a direct Explore market action beside Add Customers. Its banner describes reference examples and market exploration rather than known targets. Strategy guidance focuses on decisions using findings gathered in Profile. Reference activation instructions correctly say Opportunity Map is optional. Known-company editor/import headings use the current naming. Full 1,315-test suite and static deployment build pass; publication requires the same exact-SHA proof gates.
