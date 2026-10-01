@@ -22,6 +22,7 @@ test('commercial journey derives completed substeps from real workspace outcomes
     market:{icps:[{active:true}],signals:[{active:true}],lastResearchAt:'2026-09-17T00:00:00Z',researchStatus:'complete',opportunities:[{active:true}],strategyApproved:true},
     campaignStudio:{coreScenario:{status:'approved'}}
   };
+  main.targetingConfirmation=require('../targeting-policy.js').confirm(main);
   const discovery={status:'complete',candidates:[{company:'Buyer AB',domain:'buyer.example',people:[{name:'Buyer'}]}],pipeline:[{domain:'buyer.example'}]};
   const outreach={selectedDomain:'buyer.example',items:[{domain:'buyer.example',dossier:{company:'Buyer'},drafts:{emailSubject:'Subject',emailBody:'Body'},localizationStatus:'complete',approved:true}]};
   const delivery={selectedDomain:'buyer.example',activity:[{type:'message.sent'},{type:'reply.received'},{type:'outcome.recorded'}],opportunities:[{domain:'buyer.example',sentAt:'2026-09-17T00:00:00Z',replies:[{text:'Yes'}],outcomeStage:'Meeting'}]};
@@ -58,10 +59,12 @@ test('an empty current stage is labelled not started until real progress exists'
   assert.equal(Journey.stageStatusLabel(started),'In progress');
 });
 
-test('skipped optional profile context is distinguished from completed work',()=>{
+test('required targeting cannot be reported as skipped optional profile context',()=>{
   const model=Journey.buildJourneyModel({main:{answers:{}},currentStep:4,availability:{1:true,2:true,3:true,4:true}});
-  assert.equal(model[1].status,'skipped');
+  assert.equal(model[1].status,'available');
   assert.equal(model[1].completed,0);
+  assert.equal(model[1].steps.find(step=>step.id==='offer-customer').optional,false);
+  assert.equal(model[1].steps.find(step=>step.id==='decision-fit').optional,false);
 });
 
 test('customer shell contains seven permanent sidebar destinations and the active-stage guide',()=>{

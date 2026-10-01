@@ -15,6 +15,7 @@
     {id:7,name:'Delivery',subtitle:'Send, record outcomes and learn'}
   ]);
 
+  const Targeting=globalThis.LeadIntelTargeting||(typeof require==='function'?require('./targeting-policy.js'):null);
   const filled=value=>Boolean(String(value??'').trim());
   const list=value=>Array.isArray(value)?value:[];
   const activeItems=value=>list(value).filter(item=>item&&item.active!==false);
@@ -45,8 +46,8 @@
         step('evidence','Supporting evidence added',list(main.documents).length>0||list(main.additionalLinks).some(filled),{optional:true,action:'Add supporting files or links'})
       ],
       2:[
-        step('offer-customer','Priority offers and best-fit customers',everyField(answers,['priority_offers','ideal_customer']),{optional:true,action:'Describe the customers you help and outcomes they need'}),
-        step('decision-fit','Buyer roles and exclusions',everyField(answers,['buyer_roles','exclusions']),{optional:true,action:'Confirm buyer roles and exclusions'}),
+        step('offer-customer','Priority offers and best-fit customers',everyField(answers,['priority_offers','ideal_customer']),{action:'Describe the customers you help and outcomes they need'}),
+        step('decision-fit','Buyer roles, exclusions and targeting confirmed',everyField(answers,['buyer_roles','exclusions'])&&Targeting?.isConfirmed(main),{action:'Complete buyer roles and exclusions, then confirm targeting'}),
         step('demand-signals','Demand and buying signals',everyField(answers,['buying_outcomes','buying_triggers']),{optional:true,action:'Describe the outcomes and events that create demand'}),
         step('message-proof','Value, proof and objections',everyField(answers,['value_proposition','differentiation','proof_points','objections']),{optional:true,action:'Add value, proof and common objections'})
       ],
@@ -117,7 +118,7 @@
       let status=definition.id===activeJourneyStage?'current':requiredComplete?'complete':available?'available':'locked';
       const answers=input.main?.answers&&typeof input.main.answers==='object'?input.main.answers:{};
       const profile=input.main?.profile;
-      if(definition.id===2&&activeJourneyStage>2&&!profile&&!Object.values(answers).some(filled))status='skipped';
+
       const next=steps.find(item=>!item.complete&&!item.optional)||steps.find(item=>!item.complete);
       return {...definition,steps,total:steps.length,completed,requiredTotal:required.length,requiredCompleted,available,status,nextAction:next?.action||'Stage complete'};
     });
