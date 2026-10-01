@@ -2,6 +2,7 @@
 'use strict';
 const ID='outreach-automation-panel';
 let policy=null,status=null,approvedPackage=null,busy=false,suppressedContacts=[];
+let policyLoadError='',policyWorkspace='',refreshRequest=0;
 const days=[['1','Mon'],['2','Tue'],['3','Wed'],['4','Thu'],['5','Fri'],['6','Sat'],['0','Sun']];
 function bridge(){return root.LeadIntelServerBridge||null;}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -40,14 +41,16 @@ function updateSetupBadge(card,active,dirty=false){
 function renderSetup(){
   const brand=document.getElementById('brand-identity');if(!brand)return;
   let card=document.getElementById('delivery-setup');if(!card){card=document.createElement('section');card.id='delivery-setup';card.className='panel brand-identity-panel delivery-setup';brand.after(card);}
-  const p=serverPolicy(),ready=Boolean(policy),owner=isOwner(),preferred=p.preferredMode||p.mode||'manual';
+  const authenticated=Boolean(bridge()?.session?.authenticated&&bridge()?.workspace?.id);
+  const p=serverPolicy(),ready=authenticated&&Boolean(policy)&&policyWorkspace===bridge()?.workspace?.id,owner=isOwner(),preferred=p.preferredMode||p.mode||'manual';
   const limit=Number(p.workspaceDailyLimit||5),preset=[5,10,20].includes(limit)?String(limit):'custom';
   const active=p.automaticDelivery==='enabled'&&p.mode==='automatic'&&p.enabled;
   const initialBadge=setupBadge(preferred,active);
   card.innerHTML=`<div class="delivery-setup-header"><div><span class="eyebrow">Step 1 · Delivery preference</span><h3>How should messages be delivered?</h3><p>Save the way you want this workspace to operate. Choose the daily limit for a future automatic flow.</p></div><span class="brand-identity-status delivery-setup-badge" id="delivery-setup-badge" role="status" aria-live="polite"><strong>${initialBadge.title}</strong><small>${initialBadge.detail}</small></span></div>
     <fieldset class="delivery-mode-options" ${!ready||!owner?'disabled':''}><legend>Delivery mode</legend><label class="delivery-mode-option"><input type="radio" name="delivery-setup-mode" value="manual" ${preferred!=='automatic'?'checked':''}><span><strong>Manual</strong><small>Review and send each approved message yourself.</small></span></label><label class="delivery-mode-option"><input type="radio" name="delivery-setup-mode" value="automatic" ${preferred==='automatic'?'checked':''}><span><strong>Automatic plan</strong><small>Save the preference now. Sending stays off until activation in Delivery.</small></span></label></fieldset>
     <div class="delivery-setup-controls"><label for="delivery-setup-limit">Daily email limit</label><select id="delivery-setup-limit" ${!ready||!owner?'disabled':''}><option value="5" ${preset==='5'?'selected':''}>5 emails</option><option value="10" ${preset==='10'?'selected':''}>10 emails</option><option value="20" ${preset==='20'?'selected':''}>20 emails</option><option value="custom" ${preset==='custom'?'selected':''}>Custom</option></select><input id="delivery-setup-custom" type="number" min="1" max="500" value="${esc(limit)}" aria-label="Custom daily email limit" ${preset==='custom'?'':'hidden'} ${!ready||!owner?'disabled':''}><button id="delivery-setup-save" class="primary-btn" type="button" ${!ready||!owner?'disabled':''}>Save preference</button></div>
-    <p class="delivery-setup-note">${!ready?'Sign in to save this preference to your workspace.':!owner?'Only the workspace owner can change delivery settings.':active?'Automatic sending is active. Manage its schedule, pause and stop controls in Delivery.':'Saving a limit will not send email. Automatic sending requires a connected mailbox, approved messages and a separate activation in Delivery.'}</p><p id="delivery-setup-message" role="status" aria-live="polite"></p>`;
+    <p class="delivery-setup-note">${!authenticated?'Sign in to save this preference to your workspace.':!ready?esc(policyLoadError||'Loading delivery settings…'):!owner?'Only the workspace owner can change delivery settings.':active?'Automatic sending is active. Manage its schedule, pause and stop controls in Delivery.':'Saving a limit will not send email. Automatic sending requires a connected mailbox, approved messages and a separate activation in Delivery.'}</p><p id="delivery-setup-message" role="status" aria-live="polite">${esc(policyLoadError)}</p>${authenticated&&(!ready||policyLoadError)?'<button id="delivery-setup-retry" class="secondary-btn" type="button">Retry delivery settings</button>':''}`;
+  card.querySelector('#delivery-setup-retry')?.addEventListener('click',()=>refresh());
   const choice=card.querySelector('#delivery-setup-limit'),custom=card.querySelector('#delivery-setup-custom');
   choice.addEventListener('change',()=>{custom.hidden=choice.value!=='custom';updateSetupBadge(card,active,true);});
   custom.addEventListener('input',()=>updateSetupBadge(card,active,true));
@@ -116,7 +119,18 @@ function render(){
 }
 function message(text,error=false){const el=document.getElementById('oa-message');if(el){el.textContent=text||'';el.dataset.error=error?'1':'0';}}
 function readPolicy(){const el=document.getElementById(ID);const limitChoice=el.querySelector('#oa-workspace-limit').value;const limit=limitChoice==='custom'?Number(el.querySelector('#oa-custom-limit').value):Number(limitChoice);return {mode:el.querySelector('#oa-mode').value,enabled:el.querySelector('#oa-enabled').checked,paused:Boolean(serverPolicy().paused),emergencyStop:Boolean(serverPolicy().emergencyStop),workspaceDailyLimit:limit,mailboxDailyLimit:Number(el.querySelector('#oa-mailbox-limit').value),workingDays:[...el.querySelectorAll('[data-oa-day]:checked')].map(x=>Number(x.dataset.oaDay)),timezone:el.querySelector('#oa-timezone').value.trim(),sendWindowStart:el.querySelector('#oa-window-start').value,sendWindowEnd:el.querySelector('#oa-window-end').value,minDelayMinutes:Number(el.querySelector('#oa-delay-min').value),maxDelayMinutes:Number(el.querySelector('#oa-delay-max').value),maxFollowups:Number(el.querySelector('#oa-followups').value),followupDelaysDays:el.querySelector('#oa-followup-days').value.split(',').map(x=>Number(x.trim())).filter(Number.isFinite),replyPollIntervalMinutes:Number(el.querySelector('#oa-reply-poll').value)};}
-async function refresh(){const b=bridge();if(!b?.getOutreachAutomationPolicy||!b?.getOutreachAutomationStatus)return;const [p,s,blocked]=await Promise.all([b.getOutreachAutomationPolicy(),b.getOutreachAutomationStatus(),b.listSuppressedContacts?.()||Promise.resolve({ok:false})]);if(!p.ok||!s.ok){message(p.error||s.error||'Unable to load automation status',true);return;}policy=p;status=s;if(blocked?.ok)suppressedContacts=blocked.contacts||[];render();}
+async function refresh(){
+  const b=bridge(),workspace=b?.workspace?.id,request=++refreshRequest;
+  if(!b?.session?.authenticated||!workspace){policy=null;status=null;policyWorkspace='';policyLoadError='';render();return;}
+  if(policyWorkspace!==workspace){policy=null;status=null;suppressedContacts=[];policyWorkspace='';}
+  if(!b.getOutreachAutomationPolicy||!b.getOutreachAutomationStatus){policyLoadError='Delivery settings connection is not ready. Retry in a moment.';render();return;}
+  policyLoadError='';render();
+  const results=await Promise.allSettled([b.getOutreachAutomationPolicy(),b.getOutreachAutomationStatus(),b.listSuppressedContacts?.()||Promise.resolve({ok:false})]);
+  if(request!==refreshRequest||workspace!==bridge()?.workspace?.id||!bridge()?.session?.authenticated)return;
+  const [p,s,blocked]=results.map(result=>result.status==='fulfilled'?result.value:{ok:false,error:String(result.reason?.message||'Delivery settings request failed')});
+  if(!p.ok){policyLoadError=p.error||'Delivery settings could not load. Retry to reconnect.';render();message(policyLoadError,true);return;}
+  policy=p;policyWorkspace=workspace;if(s.ok)status=s;if(blocked?.ok)suppressedContacts=blocked.contacts||[];render();if(!s.ok)message(s.error||'Live delivery status unavailable; saved preferences loaded.',true);
+}
 async function mutate(next,success){const b=bridge();if(!b?.saveOutreachAutomationPolicy)return;const wasAutomatic=serverPolicy().mode==='automatic'&&serverPolicy().enabled;busy=true;render();const result=await b.saveOutreachAutomationPolicy(next);busy=false;if(!result.ok){render();message(result.error||'Settings were not saved',true);return;}await refresh();if(!wasAutomatic&&next.mode==='automatic'&&next.enabled)await queueApprovedPackages();message(success||'Automation settings saved.');}
 async function save(){const next=readPolicy();if(next.mode==='automatic'&&next.enabled){const ok=window.confirm('Activate Automatic outreach? Approved contacts may be emailed without per-message confirmation. Server limits, send windows, pause, emergency stop, suppression and reply-stop rules remain enforced.');if(!ok)return;}await mutate(next,'Automation settings saved.');}
 function bind(el){
