@@ -29,19 +29,11 @@ test('fit score and explanation survive saved shortlist reload',()=>{
 });
 const fs=require('node:fs');
 const vm=require('node:vm');
-test('new company search validates count and dispatches general full research without changing targets',()=>{
+test('Step 2 opens Companies without another search or a duplicated count control',()=>{
  const source=fs.readFileSync(require.resolve('../reference-customer-ui.js'),'utf8');
- const handler=source.match(/querySelector\('#targets-find-new'\)\?\.addEventListener\('click',\(\)=>\{([\s\S]*?)\n    \}\);/)[1];
- const fields={'#targets-find-count':{value:'20'},'#targets-find-custom':{value:'10',focus(){}},'#target-company-status':{textContent:''}};
- const data={};const events=[];let closed=0;
- const main={targetMarkets:['Sweden'],targetCompanies:[{companyName:'Sandvik'}]};
- const context={modal:{querySelector:s=>fields[s]},readState:()=>main,localStorage:{getItem:k=>data[k]||null,setItem:(k,v)=>data[k]=v},root:{dispatchEvent:e=>events.push(e)},CustomEvent:class{constructor(type,options){this.type=type;this.detail=options?.detail}},close:()=>closed++};
- vm.runInNewContext(`(()=>{${handler}})()`,context);
- assert.equal(JSON.parse(data.leadintel_customer_v2_discovery_meta).targetCount,20);
- assert.equal(events.at(-1).detail.source,'target-discovery');assert.equal(events.at(-1).detail.savingMode,false);
- assert.equal(main.targetCompanies.length,1);assert.equal(closed,1);
- fields['#targets-find-count'].value='custom';fields['#targets-find-custom'].value='0';
- vm.runInNewContext(`(()=>{${handler}})()`,context);assert.equal(closed,1);assert.match(fields['#target-company-status'].textContent,/whole number/);
+ assert.doesNotMatch(source,/targets-find-new|targets-find-count|startResearch:true/);
+ assert.match(source,/targets-open-companies/);
+ assert.match(source,/focus:'companies',source:'target-companies'/);
 });
 test('discovery controls restore a saved preset or custom count on mount',()=>{
  const source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');

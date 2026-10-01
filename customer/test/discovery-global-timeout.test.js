@@ -25,7 +25,7 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
     .replace(runMargin?.[0], `const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=${testRunMargin};`)
     .replace(extractionTimeout?.[0], `const COMPANY_EXTRACTION_TIMEOUT_MS=${testExtractionTimeout};`)
     .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\nglobalThis.__setDiscovery = value => { discovery = LeadIntelDiscovery.normalizeDiscoveryState({...value,qualityVersion:value.qualityVersion??LeadIntelDiscovery.DISCOVERY_QUALITY_VERSION}); };\nglobalThis.__renderStatus = renderStatus;\nglobalThis.__setDiscoveryProgress=value=>{discoveryProgress=value;};\nglobalThis.__renderCandidates = renderCandidates;\n')
-    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__confirmBuyerContact = confirmBuyerContact;\nglobalThis.__toggleBuyerContactFlow = toggleBuyerContactFlow;\nglobalThis.__enrichSelectedProspect = enrichSelectedProspect;\nglobalThis.__enrichContact = enrichContact;\nglobalThis.__scheduleSavedBuyerPublicChecks = scheduleSavedBuyerPublicChecks;\nglobalThis.__findPublicProspectContacts = findPublicProspectContacts;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__savePotentialProspect = savePotentialProspect;\nglobalThis.__addSelectedProspectToPipeline = addSelectedProspectToPipeline;\nglobalThis.__setCrmCompanies = companies => { crmCompanies = companies; };\nglobalThis.__renderPipeline = renderPipeline;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;\nglobalThis.__potentialBuyerResultsHtml = potentialBuyerResultsHtml;');
+    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__mergeWorkflowCompanies = mergeWorkflowCompanies;\nglobalThis.__existingCompanyResearchTargets = existingCompanyResearchTargets;\nglobalThis.__selectQualifiedForBuyers = selectQualifiedForBuyers;\nglobalThis.__selectTargetForBuyers = selectTargetForBuyers;\nglobalThis.__confirmBuyerContact = confirmBuyerContact;\nglobalThis.__toggleBuyerContactFlow = toggleBuyerContactFlow;\nglobalThis.__enrichSelectedProspect = enrichSelectedProspect;\nglobalThis.__enrichContact = enrichContact;\nglobalThis.__scheduleSavedBuyerPublicChecks = scheduleSavedBuyerPublicChecks;\nglobalThis.__findPublicProspectContacts = findPublicProspectContacts;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__savePotentialProspect = savePotentialProspect;\nglobalThis.__addSelectedProspectToPipeline = addSelectedProspectToPipeline;\nglobalThis.__setCrmCompanies = companies => { crmCompanies = companies; };\nglobalThis.__renderPipeline = renderPipeline;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;\nglobalThis.__potentialBuyerResultsHtml = potentialBuyerResultsHtml;');
   const mainState = {
     website: 'https://acme.example/',
     profile: {
@@ -1008,3 +1008,42 @@ test('Company Discovery bounds concurrent Firecrawl verification requests', asyn
 });
 
 test('unreadable company website blocks buyer lookup before Apollo is called',async()=>{let apolloCalls=0;const context=loadDiscoveryRunner({requestTimeout:1000,bridgeImpl:{session:{authenticated:true},workspace:{id:'ws'},searchApolloPeople:async()=>{apolloCalls++;return {ok:true,people:[]};}}});context.__setDiscovery({checkedCompanyDomains:['northstar.com'],potentialMatches:[{company:'Northstar',domain:'northstar.com',website:'https://northstar.com/',market:'Latvia',marketVerified:true,fitVerified:true,qualificationGaps:['No active buying signal was confirmed'],evidence:[{url:'https://northstar.com/about',text:'Latvian industrial manufacturer.'}]}]});context.LeadIntelFirstPartyResearch.collectWebsiteEvidence=async()=>{throw new Error('Insufficient readable company evidence');};await context.__findPotentialDecisionMakers('northstar.com');assert.equal(apolloCalls,0);assert.equal(context.__discoveryState().potentialMatches[0].peopleStatus,'error');});
+
+
+test('find-more merges domains without losing saved buyers or duplicating companies',()=>{
+ const ctx=loadDiscoveryRunner();
+ const old={company:'North',domain:'north.example',saved:true,people:[{name:'Anna'}],peopleStatus:'complete'};
+ const merged=ctx.__mergeWorkflowCompanies([old,{company:'South',domain:'south.example'}],[{company:'North renewed',domain:'www.north.example',people:[]},{company:'East',domain:'east.example'}]);
+ assert.equal(merged.length,3);assert.equal(merged[0].company,'North renewed');assert.equal(merged[0].people[0].name,'Anna');assert.equal(merged[0].saved,true);
+ const rechecked=ctx.__mergeWorkflowCompanies([old],[{company:'East',domain:'east.example'}],{replaceDomains:['north.example']});
+ assert.equal(rechecked.length,1);assert.equal(rechecked[0].domain,'east.example');
+});
+test('recheck target pool is limited to known domains and deduplicates the shortlist',()=>{
+ const ctx=loadDiscoveryRunner();
+ ctx.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify({website:'acme.example',targetCompanies:[{companyName:'North',domain:'north.example',website:'https://north.example'}]}));
+ ctx.__setDiscovery({selectedProspects:[{company:'North',domain:'north.example',buyerSearchMode:'user_selected_target'},{company:'South',domain:'south.example',buyerSearchMode:'user_selected_target'}]});
+ const pool=ctx.__existingCompanyResearchTargets();assert.equal(pool.length,2);assert.deepEqual(Array.from(pool,item=>item.domain),['north.example','south.example']);
+});
+test('qualified company selection survives normalization and enables Buyers without Pipeline',async()=>{
+ const ctx=loadDiscoveryRunner({renderNodes:true});
+ const candidate={company:'Modvion',domain:'modvion.com',website:'https://modvion.com/',market:'Sweden',score:{total:86},confidence:'High',qualified:true,marketVerified:true,buyerVerified:true,matchedSignals:[{id:'launch',name:'Product launch',matchedTerms:['launch']}],evidence:[{url:'https://modvion.com/news/launch',title:'Modvion unveils a turbine tower'}]};
+ ctx.__setDiscovery({candidates:[candidate]});
+ assert.equal(await ctx.__selectQualifiedForBuyers(0),true);
+ const restored=Discovery.normalizeDiscoveryState(JSON.parse(ctx.localStorage.getItem('leadintel_customer_v2_discovery')));
+ assert.equal(restored.selectedProspects.length,1);assert.equal(restored.selectedProspects[0].qualified,true);assert.equal(restored.selectedProspects[0].buyerSearchMode,'user_selected_qualified');
+ assert.equal(restored.pipeline.length,0);ctx.__renderPipeline();assert.equal(ctx.__elements.get('continue-company-buyers').disabled,false);
+ restored.selectedProspects[0].buyerRoles='CEO; Procurement Director';
+ assert.equal(Discovery.normalizeDiscoveryState(restored).selectedProspects[0].buyerRoles,'CEO; Procurement Director');
+});
+test('a failed provider run preserves previous potential companies and checked domains',async()=>{
+ const ctx=loadDiscoveryRunner();
+ const potential={company:'Northstar',domain:'northstar.com',website:'https://northstar.com/',market:'Latvia',marketVerified:true,fitVerified:true,buyerSearchMode:'user_selected_without_signal',qualificationGaps:['Buying signal unconfirmed'],evidence:[{url:'https://northstar.com/',title:'Northstar manufacturer in Latvia'}]};
+ ctx.__setDiscovery({status:'no_results',potentialMatches:[potential],checkedCompanyDomains:['northstar.com']});
+ await ctx.__runDiscovery();assert.equal(ctx.__discoveryState().potentialMatches[0].domain,'northstar.com');assert.ok(ctx.__discoveryState().checkedCompanyDomains.includes('northstar.com'));
+});
+test('paused Lookalike does not call the reference model while known targets remain searchable',async()=>{
+ const ctx=loadDiscoveryRunner();let calls=0;
+ ctx.LeadIntelReferenceCustomerPortfolio={getCombinedActiveModel(){calls++;return {dna:{referenceProfiles:[]}}}};
+ const main=JSON.parse(ctx.localStorage.getItem('leadintel_customer_v2_state'));main.market.icps=[{id:'icp-lookalike',type:'lookalike',active:false}];main.targetCompanies=[{companyName:'North',domain:'north.example',website:'https://north.example'}];ctx.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(main));
+ await ctx.__runDiscovery({recheckOnly:true});assert.equal(calls,0);assert.ok(ctx.__discoveryState().queries.some(q=>q.query.includes('North')));
+});

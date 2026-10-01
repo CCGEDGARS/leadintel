@@ -6,7 +6,7 @@ if(typeof window!=="undefined"){
     .then(()=>import('./intelligence-profile-ui.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1'))
     .then(()=>import('./lookalike-discovery.js?v=20260930-core-buyer-roles-v2&reference-discovery=5&reference-similarity=20260930-v1&reference-activation=6'))
     .then(()=>import('./reference-customer-ui.js?v=20260927-opportunity-map-durable-v1&opportunity-context=1&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&inline-activate=1&target-research=1&saving-mode=1&map-activation-guide=1&target-controls=1&target-save=1&target-status=1&reference-discovery=5&reference-similarity=20260930-v1&reference-activation=6'))
-    .then(()=>import('./intelligence-profile-runtime.js?v=20260924-friendly-workflow-labels-v1&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&inline-activate=1&target-research=1&saving-mode=1&reference-discovery=5'))
+    .then(()=>import('./intelligence-profile-runtime.js?v=20260924-friendly-workflow-labels-v1&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&inline-activate=1&target-research=1&saving-mode=1&reference-discovery=5&company-workflow=20261001-v1'))
     .catch(error=>console.error('LeadIntel intelligence runtime failed to load',error));
   void import('./opportunity-led-icp.js?v=20260907-opportunity-led-v1');
   void import('./market-research-ux.js?v=20260915-research-source-text-v1');

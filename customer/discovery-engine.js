@@ -1004,7 +1004,7 @@
         message:clean(extraction.message).slice(0,300)
       },
       potentialMatches:(needsRefresh?[]:(Array.isArray(input.potentialMatches)?input.potentialMatches:[])).slice(0,50).map(safePotentialCandidate).filter(item=>item.domain&&item.evidence.length&&item.qualificationGaps.length),
-      selectedProspects:(Array.isArray(input.selectedProspects)?input.selectedProspects:[]).slice(0,50).map(safePotentialCandidate).filter(item=>item.domain&&(item.buyerSearchMode==="user_selected_target"||item.evidence.length&&isPotentialBuyerSearchAllowed(item))),
+      selectedProspects:(Array.isArray(input.selectedProspects)?input.selectedProspects:[]).slice(0,50).map(item=>item.buyerSearchMode==="user_selected_qualified"?{...safePotentialCandidate(item),...safeCandidate(item),buyerSearchMode:"user_selected_qualified"}:safePotentialCandidate(item)).filter(item=>item.domain&&(item.buyerSearchMode==="user_selected_qualified"?isActionableCandidate(item):item.buyerSearchMode==="user_selected_target"||item.evidence.length&&isPotentialBuyerSearchAllowed(item))),
       funnel:normalizeDiscoveryFunnel(clearOldResults?{}:input.funnel),
       pipeline:(Array.isArray(input.pipeline)?input.pipeline:[]).slice(0,50).map(normalizePipelineItem).filter(item=>item.domain),
       lastRunAt:clearOldResults?"":clean(input.lastRunAt),

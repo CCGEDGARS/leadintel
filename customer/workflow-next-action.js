@@ -8,7 +8,7 @@
   function count(value){return Math.max(0,Number(value)||0);}
   function forStage(stage,state={}){
     if(Number(stage)===5){
-      if(count(state.pipelineCount)===0)return {label:"Save a Company First",enabled:false,visible:false,journeyStage:5};
+      if(count(state.pipelineCount)+count(state.prospectCount)===0)return {label:"Save a Company First",enabled:false,visible:false,journeyStage:5};
       return count(state.buyerCount)>0
         ?{label:"Continue to Messages →",enabled:true,visible:true,journeyStage:6}
         :{label:"Continue to Buyers →",enabled:true,visible:true,journeyStage:5};

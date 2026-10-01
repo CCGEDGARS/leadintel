@@ -93,3 +93,8 @@ test('the workflow footer CSS respects the hidden state',()=>{
   const css=fs.readFileSync(path.join(__dirname,'..','styles.css'),'utf8');
   assert.match(css,/\.workflow-next-action\[hidden\]\s*\{\s*display:none!important\s*\}/);
 });
+
+
+test('selected Buyers companies reach Scripts without a Pipeline opportunity',()=>{
+ assert.deepEqual(NextAction.forStage(5,{pipelineCount:0,prospectCount:1,buyerCount:1}),{label:'Continue to Messages →',enabled:true,visible:true,journeyStage:6});
+});

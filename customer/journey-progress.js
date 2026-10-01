@@ -32,7 +32,7 @@
     const market=main.market&&typeof main.market==='object'?main.market:{};
     const profile=main.profile&&typeof main.profile==='object'?main.profile:null;
     const campaign=main.campaignStudio&&typeof main.campaignStudio==='object'?main.campaignStudio:{};
-    const candidates=list(discovery.candidates),pipeline=list(discovery.pipeline),items=list(outreach.items),opportunities=list(delivery.opportunities);
+    const candidates=list(discovery.candidates),pipeline=list(discovery.pipeline),prospects=list(discovery.selectedProspects),items=list(outreach.items),opportunities=list(delivery.opportunities);
     const selectedItem=items.find(item=>item?.domain===outreach.selectedDomain)||items[0]||null;
     const selectedDelivery=opportunities.find(item=>item?.domain===delivery.selectedDomain)||opportunities[0]||null;
     const drafts=selectedItem?.drafts||{};
@@ -66,12 +66,12 @@
         step('scope','Discovery amount selected',Boolean(discovery.targetCount||discovery.queries?.length||candidates.length),{action:'Choose how many companies to find'}),
         step('companies',discovery.status==='no_results'?'No qualified companies found':'Companies found and verified',['complete','partial'].includes(discovery.status)&&candidates.length>0,{action:discovery.status==='no_results'?'Review the strategy, then broaden the search':'Find and verify matching companies'}),
         step('review','Qualified companies reviewed',candidates.some(item=>item?.company&&item?.domain),{action:'Review qualified companies'}),
-        step('pipeline','Opportunity saved to pipeline',pipeline.length>0,{action:'Save at least one opportunity to the pipeline'}),
-        step('people','Relevant buyers identified',candidates.some(item=>list(item?.people).length>0)||pipeline.some(item=>list(item?.people).length>0),{action:'Find and qualify buyers for a selected company'})
+        step('pipeline','Companies selected for Buyers',pipeline.length+prospects.length>0,{action:'Select at least one company for Buyers'}),
+        step('people','Relevant buyers identified',candidates.some(item=>list(item?.people).length>0)||pipeline.some(item=>list(item?.people).length>0)||prospects.some(item=>list(item?.people).length>0),{action:'Find and qualify buyers for a selected company'})
       ],
       6:[
         step('scenario','Core message approach approved',campaign.coreScenario?.status==='approved',{action:'Review and save the core message approach'}),
-        step('company','Pipeline company selected',Boolean(selectedItem),{action:'Choose a saved pipeline company'}),
+        step('company','Company selected',Boolean(selectedItem),{action:'Choose a company selected for Buyers'}),
         step('dossier','Opportunity dossier built',Boolean(selectedItem?.dossier),{action:'Build the opportunity dossier'}),
         step('scripts','Messages prepared and localized',filled(drafts.emailSubject)&&filled(drafts.emailBody)&&localized,{action:'Create and localize the message scripts'}),
         step('approval','Message package approved',Boolean(selectedItem?.approved),{action:'Review and approve the message package'})
