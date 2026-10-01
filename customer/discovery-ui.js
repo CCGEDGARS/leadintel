@@ -15,7 +15,7 @@ const MAX_DISCOVERY_COMPANY_CHECKS=30;
 const SAVING_SEARCH_RESULT_LIMIT=4;
 const SAVING_COMPANY_CHECK_LIMIT=3;
 const SAVING_FIRECRAWL_CALL_LIMIT=10;
-const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261001-v2";
+const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261001-v3";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20261001-trigger-script-crm-v3&company-workflow=20261001-v2";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -1399,7 +1399,7 @@ function renderPipeline(){
   const selection=$("companies-selection-status");if(selection)selection.textContent=rows.length+prospects.length?`${rows.length+prospects.length} companies selected for Buyers`:'Select companies to continue.';
   const buyerCount=[...rows,...prospects].filter(item=>Array.isArray(item.people)&&item.people.length>0).length;
   const hasPeople=[...rows,...prospects].some(item=>Array.isArray(item.people)&&item.people.length>0);
-  const guide=$("discovery-buyers-guide");if(guide)guide.hidden=hasPeople;
+  const guide=$("discovery-buyers-guide");if(guide)guide.hidden=focus!=="buyers"||hasPeople;
   if(focus==="buyers"){const title=$("pipeline-stage-title"),description=$("pipeline-stage-description");if(title)title.textContent=hasPeople?"Review decision-makers at saved companies":"Find decision-makers at saved companies";if(description)description.textContent=hasPeople?"Review the suggested roles and confirm each person’s identity before writing.":"Select Find buyers to search for relevant roles, then review the results before continuing to Scripts.";}
   const guideDescription=$("discovery-buyers-description");
   if(guideDescription)guideDescription.textContent=rows.length||prospects.length

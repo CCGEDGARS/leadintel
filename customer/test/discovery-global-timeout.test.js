@@ -1052,3 +1052,8 @@ test('paused Lookalike does not call the reference model while known targets rem
 test('a known target without a website keeps its origin after domain resolution',()=>{
  const ctx=loadDiscoveryRunner();ctx.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify({website:'seller.example',targetCompanies:[{companyName:'North Steel',website:''}]}));assert.equal(ctx.__companyOrigin({company:'North Steel',domain:'north.example'}),'Added by you');assert.equal(ctx.__companyOrigin({company:'New Company',domain:'new.example'}),'Found by LeadIntel');
 });
+
+
+test('a late company render keeps the Buyers guide out of the Companies stage',()=>{
+ const ctx=loadDiscoveryRunner({renderNodes:true});ctx.__renderPipeline();assert.equal(ctx.__elements.get('discovery-buyers-guide').hidden,true);ctx.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5}));ctx.__renderPipeline();assert.equal(ctx.__elements.get('discovery-buyers-guide').hidden,false);
+});
