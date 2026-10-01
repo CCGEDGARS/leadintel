@@ -691,6 +691,7 @@ async function runMarketResearch(modeOverride=""){
     clearInterval(researchElapsedTimer);researchElapsedTimer=null;state.market.researchPhase="complete";
     state.market.researchProgress={completed:totalJobs,total:totalJobs};
     state.market.lastResearchAt=retainedPrevious?previousResearch.lastResearchAt:new Date().toISOString();state.market.researchHistory=LeadIntelMarket.appendResearchHistory(state.market.researchHistory,{id:`manual-${Date.now()}`,mode:state.market.researchMode,status:state.market.researchStatus,sourceCount:state.market.researchResults.length,queryCount:queries.length,completedAt:state.market.lastResearchAt});saveState();renderMarketStrategy();
+    researchReportUi?.capture();
     researchButtons.forEach(button=>{button.disabled=false;});
   }
   const sourceNote=` · Discovery: ${state.market.researchSourceStatus.openai==="unavailable"?"OpenAI unavailable":"OpenAI"} · Extraction: Firecrawl${requestsGemini?` · Verification: ${state.market.researchSourceStatus.gemini==="complete"?"Gemini":"Gemini unavailable"}`:""}`;
@@ -1017,6 +1018,7 @@ async function saveMonitoringConfig(){if(!state.market.strategyApproved){showToa
 async function runMonitoringNow(){monitoringBusy=true;renderMonitoringControls();try{readMonitoringEdits();const result=await monitoringApi('/api/market-monitoring/run',{method:'POST',body:'{}'});showToast(`Monitoring complete · ${result.run.sourceCount} sources · ${result.run.alertCount} new alerts`);await loadMonitoringServerState(true);}catch(error){showToast(error.message);}finally{monitoringBusy=false;renderMonitoringControls();}}
 async function markMonitoringAlertRead(id){try{await monitoringApi(`/api/market-monitoring/alerts/${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify({status:'read'})});await loadMonitoringServerState(true);}catch(error){showToast(error.message);}}
 function renderMarketStrategy(){
+  renderResearchReports();
   if(!state.profile)return;
   ensureMarketStrategySeeded();
   $("strategy-company-name").textContent=state.profile.companyName||"Company";
@@ -1026,6 +1028,16 @@ function renderMarketStrategy(){
   $("strategy-status").textContent=state.market.strategyApproved?"Active":state.approved?"Draft":"Provisional";$("strategy-status").classList.toggle("approved",state.market.strategyApproved);
   $("strategy-activation-card").classList.toggle("approved",state.market.strategyApproved);
   renderIcps();renderSignalDesigner();renderResearchControls();renderResearchStatus();renderResearchHistory();renderMarketConditions();renderMarketOpportunities();renderMonitoringControls();renderMarketJourney();loadMonitoringServerState();
+}
+let researchReportUi;
+function renderResearchReports(){
+  if(!globalThis.LeadIntelResearchReport)return;
+  if(!state.market.researchReports?.length&&state.market.researchResults?.length&&state.market.researchStatus!=="running"){
+    state.market.researchReports=[globalThis.LeadIntelResearchReport.snapshot(state,'imported-current')];
+    saveState();
+  }
+  researchReportUi ||= globalThis.LeadIntelResearchReport.install({getState:()=>state,save:saveState,onStrategy:()=>window.dispatchEvent(new CustomEvent('leadintel:open-market-strategy'))});
+  researchReportUi.render();
 }
 function setActivationFeedback(message,tone){
   const target=$("strategy-activation-feedback");

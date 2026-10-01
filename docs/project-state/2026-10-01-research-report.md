@@ -1,0 +1,9 @@
+# Same-page research reports
+
+Research results can be reopened immediately in the Market Research workbench and in Strategy. A dated snapshot is captured after each run (including failures and retained previous evidence); ten recent snapshots are preserved through market-state normalization and existing workspace saving/sync. Existing saved research migrates to an initial snapshot without requiring a paid rerun. Reports are read-only; opening an old report never replaces active Strategy.
+
+Report template: seller/market/offer brief, source excerpts with numbered citations, evidence-backed AI hypotheses clearly marked as hypotheses, available deeper market conditions, active signals, provider failures and quality gaps, source provenance and original evidence dates, and Strategy handoff. Text is escaped and only HTTP(S) source links are allowed. Report snapshots exclude account settings and credentials and bound evidence excerpts to 900 characters. Sharing still requires review because commercial content itself can be confidential.
+
+View report opens an accessible native dialog on the same page. Print / Save PDF invokes the browser print dialog, where PDF destination is selected; this is not a direct PDF download. Download to share exports a standalone HTML report with embedded styles and citations; recipients can open and print it without app access. No public links, automatic recipients or outreach are created. Print template uses A4 margins, clean typography, print-friendly source URLs and hidden controls. Save remains the existing workspace save mechanism.
+
+Validation includes snapshot independence, history reload/deduplication/cap, credential omission, HTML and URL injection resistance, citations, partial-coverage labeling, print styles and evidence-conditional sections. Browser print destination is controlled by the user's browser; physical printing and the user's authenticated workspace are not claimed tested by code tests.
