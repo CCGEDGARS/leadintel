@@ -163,7 +163,7 @@ test('domain verification keeps evidence only from the company being checked',()
 
 test('mergeCompanyCandidates deduplicates domains and builds transparent five-part scores',()=>{
   const raw=[
-    {queryId:'q1',market:'Sweden',url:'https://nordicmachines.se/about',domain:'nordicmachines.se',company:'Nordic Machines',title:'Industrial Automation',description:'manufacturer',text:'manufacturer industrial automation new facility capacity expansion procurement',date:'2026-08-20'},
+    {queryId:'q1',market:'Sweden',url:'https://nordicmachines.se/about',domain:'nordicmachines.se',company:'Nordic Machines',title:'Industrial Automation',description:'manufacturer',text:'manufacturer industrial automation new facility capacity expansion procurement. Project budget €50,000.',date:'2026-08-20'},
     {queryId:'q2',market:'Sweden',url:'https://nordicmachines.se/news',domain:'nordicmachines.se',company:'Nordic Machines',title:'Expansion',description:'new factory',text:'new factory automation investment',date:'2026-08-21'},
     {queryId:'q3',market:'Finland',url:'https://finnfab.fi/',domain:'finnfab.fi',company:'FinnFab',title:'FinnFab manufacturing',description:'production systems',text:'manufacturing equipment',date:''}
   ];
@@ -205,10 +205,12 @@ test('potential company matches show missing proof but can never become actionab
   const plainbuyer=potential.find(item=>item.domain==='plainbuyer.se');
   assert.ok(northstar.qualificationGaps.includes('Target market evidence is missing'));
   assert.ok(plainbuyer.qualificationGaps.includes('No active buying signal was confirmed'));
+  assert.ok(plainbuyer.qualificationGaps.some(gap=>gap.startsWith('Exclusion rule needs verification:')));
+  assert.equal(Discovery.isPotentialBuyerSearchAllowed({...plainbuyer,fitVerified:true}),false,'unknown deal size must not silently pass qualification');
   assert.equal(northstar.marketVerified,false);
   assert.equal(plainbuyer.marketVerified,true,'potential matches retain the checks they did pass');
   assert.equal(typeof Discovery.isPotentialBuyerSearchAllowed,'function');
-  assert.equal(Discovery.isPotentialBuyerSearchAllowed({...plainbuyer,fitVerified:true,qualificationGaps:plainbuyer.qualificationGaps.filter(gap=>gap!=="Target customer fit is not evidenced")}),true,'market and ICP fit can be user-approved for buyer discovery even without a public signal');
+  assert.equal(Discovery.isPotentialBuyerSearchAllowed({...plainbuyer,fitVerified:true,qualificationGaps:plainbuyer.qualificationGaps.filter(gap=>gap!=="Target customer fit is not evidenced"&&!gap.startsWith("Exclusion rule needs verification:"))}),true,'market and ICP fit can be user-approved for buyer discovery even without a public signal');
   assert.equal(Discovery.isPotentialBuyerSearchAllowed(northstar),false,'missing market proof must still block buyer discovery');
   assert.ok(potential.every(item=>item.qualified===false&&item.buyerVerified===false));
   assert.ok(potential.every(item=>!Discovery.isActionableCandidate(item)));

@@ -207,7 +207,18 @@ function confirmTargeting(){
   if(state.profile){Object.assign(state.profile,LeadIntelTargeting.profileFields(state));for(const key of Object.values(LeadIntelTargeting.fields)){const record=state.profile.canonical?.fields?.[key];if(record)Object.assign(record,{value:state.profile[key],status:"user_confirmed",provenance:"user",confidence:"high"});}}
   saveState();showToast("Targeting confirmed and saved");return true;
 }
-function readAnswers(){document.querySelectorAll("[data-question]").forEach(el=>{state.answers[el.dataset.question]=el.value.trim();});saveState();}
+function readAnswers(){
+  const changed=[];document.querySelectorAll('[data-question]').forEach(el=>{const id=el.dataset.question,value=el.value.trim();if(state.answers[id]!==value)changed.push(id);state.answers[id]=value;});
+  if(changed.length){
+    state=globalThis.LeadIntelStep2Brief?.applyAnswers?.(state,changed)||state;
+    for(const id of changed)state.answerStatus[id]='accepted';
+    if(state.profile&&globalThis.LeadIntelCompanyBrain?.classifyCompany)state.profile.companyClassification=LeadIntelCompanyBrain.classifyCompany(state);
+    try{const key='leadintel_customer_v2_outreach',data=JSON.parse(localStorage.getItem(key)||'{}');data.items=(data.items||[]).map(item=>({...item,approved:false,approvedAt:'',contextNeedsRefresh:true}));localStorage.setItem(key,JSON.stringify(data));}catch{}
+    if(changed.includes('buying_triggers')&&state.profile){state.profile.recommendedSignals=LeadIntelCompanyBrain.recommendSignals({profile:state.profile,answers:state.answers});state.market.signals=LeadIntelMarket.normalizeSignals(state.profile.recommendedSignals,[]);}
+    try{const key='leadintel_customer_v2_discovery',data=JSON.parse(localStorage.getItem(key)||'{}');data.needsRefresh=true;localStorage.setItem(key,JSON.stringify(data));}catch{}
+  }
+  saveState();if(changed.length&&typeof CustomEvent!=='undefined')globalThis.window?.dispatchEvent?.(new CustomEvent('leadintel:commercial-context-changed',{detail:{fields:changed}}));
+}
 function validateStep1(){
   readSources();
   if(!state.website){$("step1-error").textContent="Enter a valid company website.";return false;}

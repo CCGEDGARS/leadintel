@@ -62,5 +62,14 @@
     };
   }
 
-  return {SCHEMA_VERSION,GROUPS,FIELD_IDS,migrateState,profileFields};
+  function applyAnswers(state={},changed=FIELD_IDS){
+    if(!state.profile||!changed.length)return state;
+    const mapped=profileFields(state.answers||{}), changedFields=profileFields(Object.fromEntries(changed.map(id=>[id,'changed']))),keys=Object.keys(changedFields).filter(key=>changedFields[key]);
+    const profile={...state.profile,canonical:state.profile.canonical?JSON.parse(JSON.stringify(state.profile.canonical)):undefined};
+    for(const key of keys){profile[key]=mapped[key];if(profile.canonical?.fields?.[key])Object.assign(profile.canonical.fields[key],{value:mapped[key],status:mapped[key]?'user_confirmed':'unknown',provenance:'user',confidence:mapped[key]?'high':'low'});}
+    if(changed.includes('buying_outcomes'))profile.customerPainPointsStatus='User confirmed';
+    const icps=(state.market?.icps||[]).map(icp=>icp.type==='core'||icp.id==='icp-core'?{...icp,...(changed.includes('ideal_customer')?{description:profile.idealCustomer}:{}),...(changed.includes('priority_offers')?{offers:profile.priorityOffers}:{}),...(changed.includes('buyer_roles')?{buyerRoles:profile.decisionMakers}:{}),...(changed.includes('exclusions')?{exclusions:profile.exclusions}:{})}:icp);
+    return {...state,profile,approved:false,market:{...(state.market||{}),icps,strategyApproved:false,strategyApprovedAt:''}};
+  }
+  return {applyAnswers,SCHEMA_VERSION,GROUPS,FIELD_IDS,migrateState,profileFields};
 });
