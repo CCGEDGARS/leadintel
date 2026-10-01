@@ -9,9 +9,9 @@ test('customer lists explain what is active, mapped, and saved for research',()=
   assert.match(ui,/aria-label="What LeadIntel will use"/);
   assert.match(ui,/activeCustomers\.join/);
   assert.match(ui,/map\.analysisAt===reference\.analyzedAt|opportunityMap\.analysisAt===reference\.analyzedAt/);
-  assert.match(ui,/Target Companies<\/strong>/);
+  assert.match(ui,/Known companies · Step 4<\/strong>/);
   assert.match(ui,/targetCount\} saved/);
-  assert.match(ui,/Manage Target Companies/);
+  assert.match(ui,/Manage known companies in Step 4/);
   assert.match(ui,/targetCount&&\(!saved\|\|activeModels\)/);
   assert.doesNotMatch(ui,/throw new Error\('Build the Opportunity Map/);
   assert.match(ui,/Opportunity Map is optional/);

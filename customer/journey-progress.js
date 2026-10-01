@@ -53,12 +53,12 @@
       3:[
         step('profile','Intelligence profile generated',Boolean(profile),{action:'Generate the intelligence profile'}),
         step('review','Evidence reviewed and gaps corrected',Boolean(profile&&main.approved),{action:'Review evidence and correct missing information'}),
-        step('approval','Intelligence profile approved',Boolean(main.approved),{action:'Approve the intelligence profile'})
+        step('approval','Intelligence profile approved',Boolean(main.approved),{action:'Approve the intelligence profile'}),
+        step('research',market.researchStatus==='running'?'Market research in progress':filled(market.lastResearchAt)&&['complete','partial'].includes(market.researchStatus)?'Market research completed':'Market research not run',filled(market.lastResearchAt)&&['complete','partial'].includes(market.researchStatus),{action:market.researchStatus==='running'?'Wait for market research to finish':'Run market research'})
       ],
       4:[
         step('icps','Ideal customer profiles reviewed',activeItems(market.icps).length>0,{action:'Review and activate at least one ICP'}),
         step('signals','Buying signals activated',activeItems(market.signals).length>0,{action:'Activate at least one buying signal'}),
-        step('research',market.researchStatus==='running'?'Market research in progress':filled(market.lastResearchAt)&&['complete','partial'].includes(market.researchStatus)?'Market research completed':'Market research not run',filled(market.lastResearchAt)&&['complete','partial'].includes(market.researchStatus),{action:market.researchStatus==='running'?'Wait for market research to finish':'Run market research'}),
         step('opportunities','Market opportunities selected',activeItems(market.opportunities).length>0,{action:'Select at least one market opportunity'}),
         step('strategy','Strategy approved',Boolean(market.strategyApproved),{action:'Review and approve the strategy'})
       ],

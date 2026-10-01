@@ -6,7 +6,7 @@ const read=name=>fs.readFileSync(path.join(__dirname,'..',name),'utf8');
 
 test('target tab hides the customer workflow and preserves separate customer data',()=>{
   const ui=read('reference-customer-ui.js'),css=read('reference-customers.css');
-  assert.match(ui,/querySelector\('\.reference-customer-dialog'\)\.classList\.toggle\('show-targets',targets\)/);
+  assert.match(ui,/dialog\.classList\.toggle\('show-targets',targets\)/);
   assert.match(css,/\.reference-customer-dialog\.show-targets>\*:not\(header\):not\(\.reference-segment-tabs\):not\(\.target-companies-panel\)\{display:none!important\}/);
   assert.doesNotMatch(ui,/target-test-choice|targets-research|targets-copy-note/);
   assert.doesNotMatch(ui,/modal\.classList\.toggle\('show-targets',targets\)/);

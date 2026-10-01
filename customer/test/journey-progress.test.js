@@ -29,7 +29,7 @@ test('commercial journey derives completed substeps from real workspace outcomes
 
   const model=Journey.buildJourneyModel({main,discovery,outreach,delivery,currentStep:7,availability,websiteActivated:true});
 
-  assert.deepEqual(model.map(stage=>[stage.completed,stage.total]),[[4,4],[7,7],[5,5],[4,4],[1,1],[5,5],[5,5]]);
+  assert.deepEqual(model.map(stage=>[stage.completed,stage.total]),[[4,4],[8,8],[4,4],[4,4],[1,1],[5,5],[5,5]]);
   assert.equal(model[6].status,'current');
   assert.equal(model[6].nextAction,'Stage complete');
 });

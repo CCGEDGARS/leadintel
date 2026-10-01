@@ -957,7 +957,7 @@
       : "Return to Companies, return to 10 companies, and run it again. Increase the amount only after qualified results appear.";
     const quickMode=clean(researchMode)==="quick";
     const steps=[signalStep,"Confirm that at least one active ICP describes the intended buyers, rather than companies that merely resemble your own supplier profile."];
-    if(quickMode)steps.unshift("Quick Overview uses a smaller market evidence set. Run Market Research in Strategy, then run the Companies search again.");
+    if(quickMode)steps.unshift("Quick Overview uses a smaller market evidence set. Run Market Research in Profile, then run the Companies search again.");
     if(Number(adaptiveFollowUpSearches)>0)steps.push(`LeadIntel already broadened the search with ${Number(adaptiveFollowUpSearches)} follow-up searches. Public evidence may still be too limited to verify a qualified company.`);
     steps.push(amountStep);
     return {primaryAction:quickMode?"review_research":"review_strategy",primaryLabel:quickMode?"Review Market Research":"Review Strategy",summary:`${evidence} evidence results were checked. No company passed every active market and buying-signal check. A zero-result run can be a valid finding when qualifying public evidence is unavailable.`,steps};

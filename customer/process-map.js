@@ -56,7 +56,7 @@ function ensureReferenceCustomerTool(){
   const step=document.getElementById("step-2");if(!step||step.querySelector("[data-reference-intelligence-card]"))return;
   const actions=step.querySelector(".step-actions");if(!actions)return;
   const card=document.createElement("section");card.className="panel brand-identity-panel reference-customer-core-card";card.dataset.referenceIntelligenceCard="true";card.style.marginTop="16px";
-  card.innerHTML='<div class="brand-identity-summary"><div class="brand-identity-intro"><span class="eyebrow">Customer and prospect intelligence</span><h3>Define your company inputs</h3><p class="reference-value-lead">Add optional company context here. Search, research and shortlist selection take place in Step 4 · Companies.</p><div class="reference-value-points"><div><strong>Reference Companies</strong><span>Customers or ideal examples. Analyze and activate them to guide similarity when Lookalike ICP is active.</span></div><div><strong>Target Companies</strong><span>Specific prospects you already know. Add manually or import a list; they work independently of Lookalike.</span></div></div><p class="reference-value-note">Use either list, both, or neither. Adding a target does not qualify it or add it to Pipeline.</p><span class="brand-identity-status">Optional company context</span></div><button class="brand-identity-toggle lookalike-build-btn" type="button" data-reference-customers-manage><span>Manage companies</span><span aria-hidden="true">→</span></button></div>';
+  card.innerHTML='<div class="brand-identity-summary"><div class="brand-identity-intro"><span class="eyebrow">Customers &amp; Market Intelligence</span><h3>Define your ideal customers and understand your market.</h3><p class="reference-value-lead">Add customer examples to guide similarity matching, then research your selected market to understand demand, competitors and opportunities.</p><div class="reference-value-points"><div><strong>Reference Companies</strong><span>Customers or ideal examples. Analyze and activate them to guide similarity when Lookalike ICP is active.</span></div><div><strong>Market Research</strong><span>Explore customer segments, competitors, demand, buying triggers and barriers using Quick Overview, Market Research or Deep Analysis.</span></div></div><p class="reference-value-note">Your customer examples and market findings guide Strategy. Step 4 finds the companies to pursue.</p></div><button class="brand-identity-toggle lookalike-build-btn" type="button" data-reference-customers-manage><span>Explore customers &amp; market</span><span aria-hidden="true">→</span></button></div>';
   actions.parentNode.insertBefore(card,actions);
 }
 function patchMarketLookalikeIsolation(){
@@ -231,6 +231,7 @@ function openProcessStep(stageId){
   setTimeout(syncProcessMap,0);
 }
 function reviewMiniStep(stageId,itemId){
+  if(stageId===2&&itemId==='research'){void window.LeadIntelProfileMarket?.open?.();return;}
   const profileGroups={'offer-customer':'priority_offers','decision-fit':'buyer_roles','demand-signals':'buying_outcomes','message-proof':'value_proposition'};
   if(stageId===2&&profileGroups[itemId]){
     window.dispatchEvent(new CustomEvent('leadintel:open-module',{detail:{step:2,journeyStage:2}}));

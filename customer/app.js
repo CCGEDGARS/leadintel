@@ -2,7 +2,7 @@ import './company-brain.js?v=20260928-buyer-role-repair-v2';
 import './content-language.js?v=20260924-workspace-content-english-v1';
 import './content-variants.js?v=20260929-public-first-email-v1';
 import './business-identity.js?v=20260924-workspace-profile-english-v1';
-import './evidence-view.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&reference-interface=20260923&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&map-activation-guide=1&reference-discovery=5&reference-similarity=20260930-v1&reference-activation=6&company-workflow=20261001-v2';
+import './evidence-view.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&reference-interface=20260923&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&map-activation-guide=1&reference-discovery=5&reference-similarity=20260930-v1&reference-activation=6&company-workflow=20261001-v2&profile-market=20261001-v1';
 import './profile-approval-ui.js?v=20260924-friendly-workflow-labels-v1';
 import './workspace-persistence.js?v=20260928-sync-timeout-v1&refresh-protection=1&auto-save=1';
 import {withOpenAiRetry,cleanOpenAiResearchQuery,describePartialCoverage} from './market-research-provider-resilience.js?v=20260916-latency-fix-v2';
@@ -357,7 +357,7 @@ async function openModule(step){
 function icpActivationRequirement(icp={}){
   if(icp.type==="opportunity-led"){
     const available=(state.market.opportunities||[]).some(item=>item?.active!==false&&item?.profileOnly!==true&&Array.isArray(item?.evidence)&&item.evidence.length>0);
-    return {available,reason:"Run Market Research below, then select an opportunity with a public evidence source.",action:"Go to Market Research",target:"run-market-research"};
+    return {available,reason:"Run Market Research in Profile, then select an opportunity with a public evidence source.",action:"Go to Market Research",target:"run-market-research"};
   }
   if(icp.type==="lookalike-led"||icp.id==="icp-reference-lookalike"){
     // Reference Customers saves independently of this module's in-memory state.
@@ -903,7 +903,7 @@ function renderResearchStatus(){
     else feedback.innerHTML="";
   }
   const actions=[["run-market-research","Quick Overview","Retry Quick Overview"],["run-detailed-research","Market Research","Retry Market Research"],["run-market-intelligence","Deep Analysis","Retry Deep Analysis"]];
-  actions.forEach(([id,label,retryLabel])=>{const button=$(id);if(!button)return;button.textContent=status==="running"?"Researching…":status==="error"?retryLabel:`Review ${label}`;button.disabled=status==="running";});
+  actions.forEach(([id,label,retryLabel])=>{const button=$(id);if(!button)return;button.textContent=status==="running"?"Researching…":status==="error"?retryLabel:`Review ${label}`;button.disabled=status==="running"||!state.profile;});
 }
 function renderMarketJourney(){
   const view=LeadIntelMarket.getMarketJourneyState(state.market);
@@ -915,7 +915,7 @@ function renderMarketJourney(){
     if(depthTitle)depthTitle.textContent="Choose a research depth or run it again.";
     if(depthDescription)depthDescription.textContent="Quick Overview, Market Research and Deep Analysis stay available. Choose any option to review and start another market research run.";
   }else{
-    if(depthEyebrow)depthEyebrow.textContent="Strategy · Choose research depth";
+    if(depthEyebrow)depthEyebrow.textContent="Profile · Market research";
     if(depthTitle)depthTitle.textContent="How deeply should LeadIntel research this market?";
     if(depthDescription)depthDescription.textContent="Select one option to review the research plan before starting.";
   }
@@ -1269,7 +1269,7 @@ function bind(){
   [$("icp-list"),$("market-opportunities")].forEach(container=>{container.addEventListener("change",()=>readMarketEdits());});
   $("icp-list").addEventListener("click",event=>{
     const button=event.target.closest("[data-icp-unlock]");if(!button)return;
-    if(button.dataset.icpUnlock==="run-market-research"){$("run-market-research")?.scrollIntoView({behavior:"smooth",block:"center"});$("run-market-research")?.focus({preventScroll:true});return;}
+    if(button.dataset.icpUnlock==="run-market-research"){void window.LeadIntelProfileMarket?.open?.();return;}
     if(button.dataset.icpUnlock==="reference-customers"){
       window.dispatchEvent(new CustomEvent("leadintel:open-module",{detail:{step:2,journeyStage:2}}));
       setTimeout(()=>document.querySelector("[data-reference-customers-manage]")?.click(),80);
@@ -1283,7 +1283,9 @@ function bind(){
   $("factory-reset-confirmation").addEventListener("input",event=>{$("factory-reset-leadintel").disabled=event.target.value.trim()!=="RESET";resetCenterStatus("");});
   $("factory-reset-leadintel").addEventListener("click",factoryResetLeadIntel);
   window.addEventListener("leadintel:server-ready",()=>{void resumePendingMarketResearchAfterAuth();});
-  window.addEventListener("leadintel:review-market-research",()=>openResearchPreview("deep"));
+  window.addEventListener("leadintel:review-market-research",()=>{void window.LeadIntelProfileMarket?.open?.().then(()=>{if(state.profile)openResearchPreview("deep");});});
+  window.addEventListener("leadintel:profile-market-opened",()=>{renderResearchControls();renderResearchStatus();renderMarketJourney();});
+  window.addEventListener("leadintel:open-market-strategy",()=>{if(!state.profile){showToast("Review your company profile first");return;}window.LeadIntelReferenceCustomerUI?.close?.();setStep(4);renderMarketStrategy();});
   window.addEventListener("leadintel:website-activated",()=>{
     state=loadState();editMode=false;syncInputsFromState();updateCompleteness();
     $("analysis-state").hidden=true;$("profile-content").hidden=true;

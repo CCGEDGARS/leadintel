@@ -136,10 +136,10 @@ test('research settings stay collapsed until the user opens the disclosure',()=>
   assert.match(html,/class="research-brief" id="research-settings-fields"/);
 });
 
-test('Market Strategy explains its four-step page journey before research',()=>{
-  for(const step of ['Choose research depth','Review findings','Activate strategy','Discover companies'])assert.match(html,new RegExp(step));
+test('Market Strategy explains decisions after research in Profile',()=>{
+  for(const step of ['Review market findings','Choose customers and signals','Activate strategy','Discover companies'])assert.match(html,new RegExp(step));
   assert.match(html,/id="strategy-flow"/);
-  assert.match(html,/Strategy · Choose research depth/);
+  assert.match(html,/Profile · Market research/);
   assert.match(html,/id="research-results-intro" hidden/);
   assert.match(app,/Next step/);
 });

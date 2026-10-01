@@ -17,7 +17,7 @@ const REFERENCE_CUSTOMER_LAUNCH_VERSION='20260927-opportunity-map-durable-v1&opp
 
   async function ensureReferenceCustomerRuntime(){
     await import(`./reference-customers.js?v=${REFERENCE_CUSTOMER_LAUNCH_VERSION}&reference-discovery=5&reference-similarity=20260930-v1&reference-activation=6&reference-save-stability=2`);
-    await import(`./reference-customer-ui.js?v=${REFERENCE_CUSTOMER_LAUNCH_VERSION}&reference-discovery=5&reference-similarity=20260930-v1&reference-activation=6&reference-save-stability=2&company-workflow=20261001-v2`);
+    await import(`./reference-customer-ui.js?v=${REFERENCE_CUSTOMER_LAUNCH_VERSION}&reference-discovery=5&reference-similarity=20260930-v1&reference-activation=6&reference-save-stability=2&company-workflow=20261001-v2&profile-market=20261001-v1`);
     return root.LeadIntelReferenceCustomerUI||null;
   }
 

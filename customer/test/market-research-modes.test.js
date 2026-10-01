@@ -37,7 +37,7 @@ test('research preview explains how each market mode relates to separate company
   assert.match(app,/Deep Analysis adds broad strategic context/);
   assert.match(app,/textContent=modeUi\.discoveryNote/);
   assert.match(discovery,/dispatchEvent\(new CustomEvent\("leadintel:review-market-research"\)\)/);
-  assert.match(app,/addEventListener\("leadintel:review-market-research",\(\)=>openResearchPreview\("deep"\)\)/);
+  assert.match(app,/addEventListener\("leadintel:review-market-research",[\s\S]*?LeadIntelProfileMarket\?\.open\?\.\(\)\.then\([\s\S]*?openResearchPreview\("deep"\)/);
 });
 
 test('market intelligence creates a wider set of unique searches than market research',()=>{

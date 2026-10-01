@@ -16,14 +16,14 @@ test('legacy lookalike recovery is no longer bootstrapped', () => {
   assert.doesNotMatch(source, /scheduleRepairs|ensureReferenceQuestion/);
 });
 
-test('past customers and chosen targets are explained as separate lists', () => {
-  assert.match(source, /Customer and prospect intelligence/);
-  assert.match(source, /Define your company inputs/);
-  assert.match(source, /Specific prospects you already know/);
+test('customer examples and market research explain their separate roles', () => {
+  assert.match(source, /Customers &amp; Market Intelligence/);
+  assert.match(source, /Define your ideal customers and understand your market/);
+  assert.match(source, /Market Research/);
   assert.match(source, /data-reference-customers-manage/);
   assert.match(source, /brand-identity-panel reference-customer-core-card/, 'Customer and target lists use the existing feature panel');
   assert.match(source, /brand-identity-summary/);
-  assert.match(source, /brand-identity-status/);
+  assert.doesNotMatch(source, /Optional company context/);
   assert.match(source, /brand-identity-toggle/);
   assert.doesNotMatch(source, /Optional advanced tool/);
 });
