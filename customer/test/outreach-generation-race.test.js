@@ -31,3 +31,11 @@ test('buyer selection regenerates and editing retains the source context',async(
  context.currentItem=()=>({...item,drafts:{...item.drafts,scriptContext:{buyerId:'p1',trigger:{url:'https://maker.se/news'}}}});context.q=id=>({value:fields[id]});
  const start=source.indexOf('function readDraftEdits()');vm.runInContext(source.slice(start,source.indexOf('\n',start)),context);const edited=context.readDraftEdits();assert.equal(edited.drafts.emailBody,'Edited');assert.equal(edited.drafts.scriptContext.trigger.url,'https://maker.se/news');
 });
+
+test('reload recovers abandoned generation and retains existing scripts',()=>{
+ const E=require('../outreach-engine.js'),stored={selectedDomain:'maker.se',items:[{...item,localizationStatus:'running',researchStatus:'running',campaignScenario:{language:'sv'}}]};
+ const context={LeadIntelOutreach:E,readJson:()=>stored,OUTREACH_STORAGE_KEY:'test'};vm.createContext(context);
+ const start=source.indexOf('function loadOutreach(');vm.runInContext(source.slice(start,source.indexOf('\n',start)),context);
+ const recovered=context.loadOutreach({recoverInterrupted:true}).items[0];assert.equal(recovered.localizationStatus,'error');assert.equal(recovered.researchStatus,'error');assert.equal(recovered.localizationApprovalBlocked,true);assert.equal(recovered.drafts.emailBody,'Original');assert.match(recovered.localizationMessage,/reload/);
+ assert.equal(context.loadOutreach().items[0].localizationStatus,'running','normal state reads must not cancel an active request');
+});

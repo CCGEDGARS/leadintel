@@ -10,7 +10,7 @@ const ASSET_VERSION="20261001-trigger-script-crm-v1";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const q=id=>document.getElementById(id);
-let outreach=loadOutreach();
+let outreach=loadOutreach({recoverInterrupted:true});
 let scriptRestoreRequest=0;
 let scriptGenerationRequest=0;
 function contentLanguage(){return LeadIntelContentLanguage.workspaceContentLanguage();}
@@ -29,7 +29,7 @@ function persistMainStep(step){
 }
 function discoveryState(){return LeadIntelDiscovery.normalizeDiscoveryState(readJson(DISCOVERY_STORAGE_KEY));}
 function saveDiscovery(value){localStorage.setItem(DISCOVERY_STORAGE_KEY,JSON.stringify(LeadIntelDiscovery.normalizeDiscoveryState(value)));}
-function loadOutreach(){return LeadIntelOutreach.normalizeOutreachState(readJson(OUTREACH_STORAGE_KEY));}
+function loadOutreach({recoverInterrupted=false}={}){const state=LeadIntelOutreach.normalizeOutreachState(readJson(OUTREACH_STORAGE_KEY));if(recoverInterrupted)for(const item of state.items){if(['running','checking'].includes(item.localizationStatus)){item.localizationStatus='error';item.localizationApprovalBlocked=true;item.localizationMessage='Generation was interrupted by a reload. Regenerate this package before approval.';}if(item.researchStatus==='running')item.researchStatus='error';}return state;}
 function saveOutreach(){outreach=LeadIntelOutreach.normalizeOutreachState(outreach);localStorage.setItem(OUTREACH_STORAGE_KEY,JSON.stringify(outreach));window.LeadIntelJourney?.refresh?.();}
 function toast(message){const el=q("toast");if(!el)return;el.textContent=message;el.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove("show"),2600);}
 function pipeline(){const shared=window.LeadIntelDiscoveryUI?.getPipeline?.();return Array.isArray(shared)?shared:(discoveryState().pipeline||[]);}
@@ -160,7 +160,7 @@ function cancelPendingScriptGeneration(){
   scriptGenerationRequest++;const current=currentItem();if(current?.localizationStatus==='running'){upsertItem({...current,localizationStatus:'error',localizationApprovalBlocked:true,localizationMessage:'Generation was interrupted by a selection change. Regenerate this package before approval.'});}
 }
 async function prepareLocalizedItem(item,campaign,candidate){
-  const request=++scriptGenerationRequest,domain=item.domain,bridge=crmBridge(),workspace=bridge?.session?.authenticated?bridge?.workspace?.id:'';if(domain!==outreach.selectedDomain)return null;const pending={...item,localizationStatus:item.drafts?.requiresAiLocalization?'running':'checking',localizationApprovalBlocked:true,localizationMessage:'Resolving recipient language…'};upsertItem(pending);renderDossier();
+  const request=++scriptGenerationRequest,domain=item.domain,bridge=crmBridge(),workspace=bridge?.session?.authenticated?bridge?.workspace?.id:'';if(domain!==outreach.selectedDomain)return null;if(item.researchStatus==='running')item={...item,researchStatus:item.dossier?.evidence?.length?'partial':'error'};const pending={...item,localizationStatus:item.drafts?.requiresAiLocalization?'running':'checking',localizationApprovalBlocked:true,localizationMessage:'Resolving recipient language…'};upsertItem(pending);renderDossier();
   const result=await LeadIntelOutreachLocalization.prepareCampaignDrafts({root:window,workspace,drafts:item.drafts,scenario:campaign,candidate:candidate||{},dossier:item.dossier||{},languageService:LeadIntelContentLanguage});
   if(request!==scriptGenerationRequest||domain!==outreach.selectedDomain||workspace!==(crmBridge()?.session?.authenticated?crmBridge()?.workspace?.id:''))return null;
   return {...item,drafts:result.drafts,campaignScenario:{...campaign,resolvedLanguage:result.provenance.language,languageSource:result.provenance.selectionSource},localizationStatus:result.status,localizationApprovalBlocked:result.approvalBlocked,localizationMessage:result.message,localizationProvenance:result.provenance};
