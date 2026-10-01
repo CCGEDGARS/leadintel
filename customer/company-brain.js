@@ -19,7 +19,7 @@
   }
 
   const OFFER_CATEGORIES=[
-    ["industrial-projects",/\b(industrial project|industrial engineering|project delivery|industrial installation|metal fabrication|metālapstrād|rūpniecisk\w* projekt|iekārtu uzstādīšan)/i],
+    ["industrial-projects",/\b(engineering drawings?|drawing development|serial production|custom metal|industrial project|industrial engineering|project delivery|industrial installation|metal fabrication|metālapstrād|rūpniecisk\w* projekt|iekārtu uzstādīšan)/i],
     ["sales-training",/\b(sales training|sales coach|sales coaching|sales methodology|pārdošanas apmāc|pārdošanas trener|pārdošanas kouč)/i],
     ["coaching",/\b(coaching|business coach|business coaching|koučing|koučs|mentor(?:ing)?|mentoring|mentorings)\b/i],
     ["leadership-development",/\b(leadership|vadīb(?:a|as)|manager training|vadītāju apmāc)/i],
@@ -238,5 +238,19 @@
     const roles="Project Director; Operations Director; Production Director; Engineering Director; Procurement Director; CEO/Owner";
     return {...state,profile:{...profile,decisionMakers:roles},market:{...state.market,icps:icps.map(icp=>({...icp,buyerRoles:roles})),strategyApproved:false,strategyApprovedAt:""}};
   }
-  return {claim,classifyCompany,derivePainPoints,deriveFrameworks,recommendSignals,unrelatedSignals,unrelatedBuyerRoles,repairIndustrialBuyerRoles,install};
+  function strategyConflicts(profile={},signals=[]){
+    const exclusions=clean(profile.exclusions);
+    const tenderActive=signals.some(s=>s.active!==false&&/tender|procurement|iepirkum/i.test(`${s.id} ${s.name} ${s.keywords}`));
+    if(!tenderActive||!/tender|procurement|iepirkum/i.test(exclusions))return [];
+    const priceOnly=/lowest price|price.only|cheapest|zemāk.*cen/i.test(exclusions);
+    return [{blocking:!priceOnly,message:priceOnly?'Tender signals are active, but lowest-price tenders are excluded. Qualify procurement opportunities against this exclusion before pursuing them.':'Tender signals conflict with your exclusions. Switch off tender signals or revise the exclusion before approving.'}];
+  }
+  function repairLegacyStrategy(state={}){
+    const profile=state.profile||{};
+    if(clean(state.answers?.buyer_roles)||classifyCompany({profile}).businessType!=='industrial-services')return state;
+    const legacy=/^CEO\/Owner;\s*Sales\/Commercial Leadership(?:;\s*HR\/L&D;\s*Team Leadership)?$/i;
+    if(!legacy.test(clean(profile.decisionMakers)))return state;
+    return repairIndustrialBuyerRoles(state);
+  }
+  return {claim,classifyCompany,derivePainPoints,deriveFrameworks,recommendSignals,unrelatedSignals,unrelatedBuyerRoles,repairIndustrialBuyerRoles,strategyConflicts,repairLegacyStrategy,install};
 });

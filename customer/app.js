@@ -1,4 +1,4 @@
-import './company-brain.js?v=20261001-adaptive-business-context-v1';
+import './company-brain.js?v=20261001-adaptive-business-context-v1&strategy=20261001-v2';
 import './content-language.js?v=20260924-workspace-content-english-v1';
 import './content-variants.js?v=20260929-public-first-email-v1';
 import './business-identity.js?v=20260924-workspace-profile-english-v1';
@@ -422,7 +422,7 @@ function syncResearchSourcesToSignals(){
 }
 function renderIcps(){
   enforceIcpActivationRequirements();
-  $("icp-list").innerHTML=state.market.icps.map((icp,index)=>{
+  const cards=state.market.icps.map((icp,index)=>{
     const requirement=icpActivationRequirement(icp);
     return `<article class="icp-card ${icp.active?"active":""} ${requirement.available?"":"unavailable"}">
     <div class="icp-card-head"><label class="market-toggle" ${requirement.available?"":`title="${esc(requirement.reason)}"`}><input type="checkbox" data-icp-field="active" data-index="${index}" ${icp.active?"checked":""} ${requirement.available?"":"disabled"}><span></span></label><div><span class="icp-type">${esc(icp.type)}</span><input class="market-inline-title" data-icp-field="name" data-index="${index}" value="${esc(icp.name)}"></div></div>
@@ -433,7 +433,8 @@ function renderIcps(){
     <label>Exclusions<input data-icp-field="exclusions" data-index="${index}" value="${esc(icp.exclusions)}"></label>
     <p>${esc(icp.rationale)}</p>
   </article>`;
-  }).join("");
+  });
+  $("icp-list").innerHTML=cards.filter((_,i)=>state.market.icps[i].type==="core").join("")+`<details class="strategy-matching-options"><summary>Optional matching criteria · reference similarity and buying signals</summary><p>These refine the main customer definition. They do not replace offer fit or your exclusions.</p><div class="icp-list">${cards.filter((_,i)=>state.market.icps[i].type!=="core").join("")}</div></details>`;
 }
 function renderSignalDesigner(){
   $("signal-designer").innerHTML=state.market.signals.map((signal,index)=>`<div class="signal-config-row ${signal.active?"active":""}">
@@ -769,7 +770,8 @@ function renderMarketOpportunities(){
   target.innerHTML=state.market.opportunities.map((opp,index)=>opp.profileOnly?`<article class="opportunity-card unresearched ${opp.active?"active":""}">
     <div class="opportunity-top"><label class="market-toggle"><input type="checkbox" data-opportunity-active="${index}" ${opp.active?"checked":""}><span></span></label><div><span class="opportunity-market">Selected market</span><h4 lang="${contentLanguage()}">${esc(opp.title)}</h4><span class="not-researched-label" data-research-running="${state.market.researchStatus==="running"?"true":"false"}">${state.market.researchStatus==="running"?"Research in progress":"Not researched yet"}</span></div><div class="opportunity-total"><strong>${opp.score.total}</strong><span>/100</span></div></div>
   </article>`:`<article class="opportunity-card ${opp.active?"active":""}">
-    <div class="opportunity-top"><label class="market-toggle"><input type="checkbox" data-opportunity-active="${index}" ${opp.active?"checked":""}><span></span></label><div><span class="opportunity-market">${esc(opp.marketLabel||opp.market)}</span><h4 lang="${contentLanguage()}">${esc(opp.title)}</h4></div><div class="opportunity-total"><strong>${opp.score.total}</strong><span>/100</span></div></div>
+    <div class="opportunity-top"><label class="market-toggle"><input type="checkbox" data-opportunity-active="${index}" ${opp.active?"checked":""}><span></span></label><div><span class="opportunity-market">${esc(opp.marketLabel||opp.market)}</span><h4 lang="${contentLanguage()}">${esc(opp.title)}</h4></div><div class="opportunity-total"><strong>${opp.score.total}</strong><span>/100 priority score</span></div></div>
+    <p class="opportunity-score-note">Relative search priority, not a probability of demand. Buying intent requires company-level evidence.</p>
     <div class="opportunity-meta"><span class="confidence ${(state.market.researchQuality?.passed===false&&opp.confidence==="High"?"Medium":opp.confidence).toLowerCase()}">${state.market.researchQuality?.passed===false&&opp.confidence==="High"?"Medium":opp.confidence} confidence</span><span>${opp.evidence.length} evidence source${opp.evidence.length===1?"":"s"}</span></div>
     <details class="opportunity-analysis"><summary>View detailed analysis</summary>
       <p class="opportunity-hypothesis" lang="${contentLanguage()}">${esc(opp.hypothesis)}</p>
@@ -1024,6 +1026,12 @@ function renderMarketStrategy(){
   renderResearchReports();
   if(!state.profile)return;
   ensureMarketStrategySeeded();
+  const repaired=globalThis.LeadIntelCompanyBrain?.repairLegacyStrategy?.(state);
+  if(repaired&&repaired!==state){state=repaired;saveState();}
+  const conflicts=globalThis.LeadIntelCompanyBrain?.strategyConflicts?.(state.profile,state.market.signals)||[];
+  const roleIssues=globalThis.LeadIntelCompanyBrain?.unrelatedBuyerRoles?.(state.profile,state.market.icps)||[];
+  if(roleIssues.length)conflicts.push({message:"Buyer roles need review: sales/HR roles are selected for an industrial offer. Review the buyer roles in your customer definition or use the industrial-role repair in the approval review."});
+  const note=$("strategy-conflict-note");if(note){note.hidden=!conflicts.length;note.textContent=conflicts.map(item=>item.message).join(" ");}
   $("strategy-company-name").textContent=state.profile.companyName||"Company";
   const marketSummary=LeadIntelMarket.splitList(state.profile.targetMarkets).join(" · ")||LeadIntelMarket.splitList(state.profile.currentMarkets).join(" · ")||"Provisional market";
   $("strategy-market-summary").textContent=marketSummary;
@@ -1067,9 +1075,10 @@ function strategyHandoffModel(){
   if(state.market.researchContextStale)blockers.push("Saved market research used buying signals from another company context. Run market research again for the Step 1 company before finding companies.");
   if(!icps.length)blockers.push("No active ICP");
   if(!signals.length)blockers.push("No active buying signal — required before companies can be ranked for purchase intent.");
-  if(!opportunities.length)blockers.push("No active market opportunity");
-  if(!state.market.lastResearchAt||!evidence.length)blockers.push("Market research has not completed");
-  const warnings=[];
+  const conflicts=globalThis.LeadIntelCompanyBrain?.strategyConflicts?.(state.profile,signals)||[];
+  blockers.push(...conflicts.filter(item=>item.blocking).map(item=>item.message));
+  const warnings=conflicts.filter(item=>!item.blocking).map(item=>item.message);
+  if(!evidence.length)warnings.push("Market research is optional. Company discovery will start from your customer definition, offers, markets and signals, then verify individual companies.");
   if(signals.length===1)warnings.push("Only one active buying signal. Companies can be found, but ranking will be narrow. At least 3 active signals are recommended.");
   else if(signals.length===2)warnings.push("Only 2 active buying signals. Companies can be found, but at least 3 active signals are recommended.");
   if(lowEvidenceCoverage)warnings.push("Fewer than 3 evidence sources were saved. Discovery confidence may be limited.");

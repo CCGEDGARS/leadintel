@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css?v=20260922-hidden-workflow-cta-v1&reset-center=1">
-  <link rel="stylesheet" href="market.css?v=20260924-completion-status-space-v1&icp-data-gates=1&quick-insights=1&icp-unlock-guide=1&research-repair=20261001-v2&reports=20261001-v2&report-library=20261001-v3">
+  <link rel="stylesheet" href="market.css?v=20260924-completion-status-space-v1&icp-data-gates=1&quick-insights=1&icp-unlock-guide=1&research-repair=20261001-v2&reports=20261001-v2&report-library=20261001-v3&strategy=20261001-v2">
   <link rel="stylesheet" href="premium.css?v=20260920-tasks-below-settings-v1&editable-steps=1&expanded-sidebar=1">
   <link rel="stylesheet" href="step-action-guidance.css?v=20261001-profile-market-guide-v1">
   <link rel="stylesheet" href="market-selector.css?v=20260826-target-market-v1">
@@ -404,7 +404,7 @@
 
         <section class="step-view" id="step-4" data-step="4">
           <div class="profile-header strategy-header">
-            <div><span class="eyebrow">Step 3 · Strategy</span><h1>Turn company context into market decisions.</h1><p>LeadIntel combines company evidence and your input to recommend ideal customers, active buying signals and market opportunities.</p></div>
+            <div><span class="eyebrow">Step 3 · Strategy</span><h1>Choose who to pursue and what to watch for.</h1><p>Confirm your customer definition, buyer roles and buying signals. These guide company discovery.</p></div>
             <div class="profile-header-actions"><span class="profile-status" id="strategy-status">Draft</span><button class="secondary-btn small" id="back-to-profile" type="button">← Profile</button></div>
           </div>
 
@@ -423,13 +423,13 @@
           </div>
 
           <section class="panel strategy-panel">
-            <div class="section-title"><span class="eyebrow">ICP Engine</span><h3>Who LeadIntel should prioritize</h3><p>Generated from the current profile. Activate the ICPs you want Discovery to use and adjust the details where needed.</p></div>
+            <div class="section-title"><span class="eyebrow">Your customers</span><h3>Your main customer definition</h3><p>Review the markets, buyer roles, offers and exclusions. Optional matching criteria refine this definition.</p></div>
             <div class="icp-list" id="icp-list"></div>
           </section>
 
           <section class="panel strategy-panel">
             <div class="section-title"><span class="eyebrow">Recommended buying signals</span><h3>What LeadIntel should watch for</h3><p>LeadIntel suggests these from your company profile and research context. Active signals are used in research and Discovery. Edit the keywords or switch signals off when they are not relevant.</p></div>
-            <div class="signal-designer" id="signal-designer"></div>
+            <p id="strategy-conflict-note" class="strategy-conflict-note" role="status" hidden></p><div class="signal-designer" id="signal-designer"></div>
             <div class="custom-signal-form" role="group" aria-labelledby="custom-signal-title">
               <div class="custom-signal-intro">
                 <span class="eyebrow">Customer-defined signal</span>
@@ -447,7 +447,7 @@
           </section>
 
           <section class="panel strategy-panel research-panel">
-            <div class="strategy-research-location"><h3>Use your market findings to choose a strategy</h3><p>Review the evidence below, choose customer segments and buying signals, then continue to Companies.</p><button class="secondary-btn" type="button" data-open-profile-market>Update market research →</button></div>
+            <div class="strategy-research-location"><h3>Research support <small>Optional</small></h3><p>Use saved findings to refine your priorities. Company discovery separately checks each company.</p><button class="secondary-btn" type="button" data-open-profile-market>Update market research →</button></div>
             <div class="research-results-intro" id="research-results-intro" hidden><span class="eyebrow">Strategy · Review findings</span><h3>Review what LeadIntel found</h3><p>Check the opportunities, buying signals and supporting evidence before activating the strategy.</p></div>
             <section class="market-conditions" id="market-conditions" hidden aria-labelledby="market-conditions-title">
               <div class="market-conditions-head"><span class="eyebrow">Market conditions</span><h3 id="market-conditions-title">What the evidence means commercially</h3><p>Concise guidance built only from the sources collected in this research run.</p></div>
@@ -462,7 +462,7 @@
             </details>
           </section>
 
-          <section class="panel strategy-panel monitoring-panel" id="monitoring-panel" hidden>
+          <details class="panel strategy-panel monitoring-panel" id="monitoring-panel" hidden><summary>Optional: automatic monitoring</summary>
             <div class="market-research-head"><div class="section-title"><span class="eyebrow">Strategy · Optional monitoring</span><h3>Watch for new opportunities automatically</h3><p>Use the recommended settings below, or open advanced settings when you need more control.</p></div><label class="monitoring-master"><input id="monitoring-enabled" type="checkbox"><span>Enable monitoring</span></label></div>
             <div class="monitoring-grid">
               <label><span>Frequency</span><select id="monitoring-frequency"><option value="daily">Daily</option><option value="weekly" selected>Weekly</option><option value="monthly">Monthly</option></select></label>
@@ -476,7 +476,7 @@
               <div class="monitoring-selection"><div><strong>Signals to monitor</strong><div id="monitoring-signals" class="monitoring-chips"></div></div><div><strong>Source categories</strong><div id="monitoring-sources" class="monitoring-chips"></div></div></div>
               <div class="monitoring-results"><div><h4>New opportunity alerts</h4><div id="monitoring-alerts" class="monitoring-list"><div class="market-empty">No monitoring alerts yet.</div></div></div><div><h4>Monitoring history</h4><div id="monitoring-history" class="monitoring-list"><div class="market-empty">No automatic runs yet.</div></div></div></div>
             </details>
-          </section>
+          </details>
 
           <div class="approval-card strategy-activation" id="strategy-activation-card">
             <div><span class="eyebrow" id="strategy-activation-step">Final step</span><h3 id="strategy-activation-title">Ready to find matching companies</h3><p id="strategy-activation-description">Review the active strategy before finding companies.</p><p class="strategy-activation-feedback" id="strategy-activation-feedback" role="status" aria-live="polite" hidden></p></div>
@@ -558,14 +558,14 @@
   <script defer src="server-bridge.js?v=20260925-apollo-buyer-search-v1&delivery-policy-recovery=1" data-server-bridge="true"></script>
   <script defer src="brand-identity.js?v=20260916-brand-timestamp-v1"></script>
   <script defer src="brand-identity-ui.js?v=20260916-browser-logo-copy-v2"></script>
-  <script defer src="journey-progress.js?v=20260924-friendly-workflow-labels-v1&confirm-targeting=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1&actual-themes=20261001-v1&adaptive-context=20261001-v1&editable-steps=1&saved-work-navigation=1&reference-discovery=5&company-workflow=20261001-v2"></script>
+  <script defer src="journey-progress.js?v=20260924-friendly-workflow-labels-v1&confirm-targeting=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1&actual-themes=20261001-v1&adaptive-context=20261001-v1&editable-steps=1&saved-work-navigation=1&reference-discovery=5&company-workflow=20261001-v2&strategy=20261001-v2"></script>
   <script defer src="process-map.js?v=20260924-friendly-workflow-labels-v1&revisit-results=1&visible-actions=1&customer-target-copy=1&value-copy=1&editable-steps=1&expanded-sidebar=2&saved-work-navigation=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&individual-profiles=6&company-workflow=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1&actual-themes=20261001-v1&adaptive-context=20261001-v1"></script>
   <script defer src="attention-centre-model.js?v=20260928-all-provider-credit-health-v1"></script>
   <script defer src="attention-centre.js?v=20260928-all-provider-credit-health-v1"></script>
-  <script type="module" src="app.js?v=20260928-signal-research-plan-v1&icp-data-gates=1&reset-center=1&quick-insights=1&adaptive-evidence=1&strategy-handoff-copy=1&profile-overview-hygiene=1&workspace-content-english=1&sidebar-preservation=1&visible-save=1&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&inline-activate=1&target-research=1&saving-mode=1&map-activation-guide=1&icp-unlock-guide=1&reference-save-preservation=1&refresh-protection=1&auto-save=1&sync-timeout=1&saved-work-navigation=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&reference-activation=6&monitoring-refresh=20261001-v1&company-workflow=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1&actual-themes=20261001-v1&adaptive-context=20261001-v1&confirm-targeting=20261001-v2&step2-context=20261001-v1&research-repair=20261001-v2&reports=20261001-v2&openai-diagnostics=20261001-v1&openai-timing=20261001-v1&report-delete=20261001-v1"></script>
+  <script type="module" src="app.js?v=20260928-signal-research-plan-v1&icp-data-gates=1&reset-center=1&quick-insights=1&adaptive-evidence=1&strategy-handoff-copy=1&profile-overview-hygiene=1&workspace-content-english=1&sidebar-preservation=1&visible-save=1&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&inline-activate=1&target-research=1&saving-mode=1&map-activation-guide=1&icp-unlock-guide=1&reference-save-preservation=1&refresh-protection=1&auto-save=1&sync-timeout=1&saved-work-navigation=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&reference-activation=6&monitoring-refresh=20261001-v1&company-workflow=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1&actual-themes=20261001-v1&adaptive-context=20261001-v1&confirm-targeting=20261001-v2&step2-context=20261001-v1&research-repair=20261001-v2&reports=20261001-v2&openai-diagnostics=20261001-v1&openai-timing=20261001-v1&report-delete=20261001-v1&strategy=20261001-v2"></script>
   <script type="module" src="ai-settings.js?v=20260930-openai-gpt-6-1-sol-v1"></script>
   <script type="module" src="copilot-loader.js?v=20260924-friendly-workflow-labels-v1"></script>
-  <script type="module" src="shell-support-loader.js?v=20260930-setup-badge-v3&reset-center=1&opportunity-context=1&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&inline-activate=1&target-research=1&flow-summary=1&saving-mode=1&map-activation-guide=1&balanced-saving=1&crm-buyer-recovery=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&individual-profiles=6&delivery-policy-recovery=1&reference-save-stability=2&company-workflow=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1&actual-themes=20261001-v1&adaptive-context=20261001-v1"></script>
+  <script type="module" src="shell-support-loader.js?v=20260930-setup-badge-v3&reset-center=1&opportunity-context=1&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&inline-activate=1&target-research=1&flow-summary=1&saving-mode=1&map-activation-guide=1&balanced-saving=1&crm-buyer-recovery=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&individual-profiles=6&delivery-policy-recovery=1&reference-save-stability=2&company-workflow=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1&actual-themes=20261001-v1&adaptive-context=20261001-v1&strategy=20261001-v2"></script>
   <script defer src="first-party-research.js?v=20260930-research-pipeline-v1"></script>
   <script defer src="discovery-ui.js?v=20260930-contact-suppression-v1&revisit-results=1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&opportunity-context=1&opportunity-map=1&target-research=1&public-buyer-crm=1&apollo-labels=1&delivery-modes=2&target-status=1&selected-amount=20260930-v2&trigger-script-crm=20261001-v3&company-workflow=20261001-v3&profile-market=20261001-v1&guidance-copy=20261001-v1&actual-themes=20261001-v1&adaptive-context=20261001-v1&confirm-targeting=20261001-v2&step2-context=20261001-v1"></script>
 </body>

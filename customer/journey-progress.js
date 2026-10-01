@@ -58,9 +58,9 @@
         step('research',market.researchStatus==='running'?'Market research in progress':filled(market.lastResearchAt)&&['complete','partial'].includes(market.researchStatus)?'Market research completed':'Market research not run',filled(market.lastResearchAt)&&['complete','partial'].includes(market.researchStatus),{action:market.researchStatus==='running'?'Wait for market research to finish':'Run market research'})
       ],
       4:[
-        step('icps','Ideal customer profiles reviewed',activeItems(market.icps).length>0,{action:'Review and activate at least one ICP'}),
+        step('icps','Customer definition configured',activeItems(market.icps).length>0,{action:'Review and activate at least one ICP'}),
         step('signals','Buying signals activated',activeItems(market.signals).length>0,{action:'Activate at least one buying signal'}),
-        step('opportunities','Market opportunities selected',activeItems(market.opportunities).length>0,{action:'Select at least one market opportunity'}),
+        step('opportunities','Target markets configured',filled(main.profile?.targetMarkets)||filled(main.profile?.currentMarkets)||filled(main.targetMarkets),{action:'Choose a target market'}),
         step('strategy','Strategy approved',Boolean(market.strategyApproved),{action:'Review and approve the strategy'})
       ],
       5:[

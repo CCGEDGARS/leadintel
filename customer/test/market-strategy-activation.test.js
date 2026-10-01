@@ -29,8 +29,8 @@ test("Company Discovery handoff has a review dialog with explicit blockers and w
   assert.match(app, /This one-time company search will still run normally/);
   assert.match(app, /No active ICP/);
   assert.match(app, /No active buying signal/);
-  assert.match(app, /No active market opportunity/);
-  assert.match(app, /Market research has not completed/);
+  assert.match(app, /Market research is optional/);
+  assert.doesNotMatch(app, /blockers.push\("Market research has not completed/);
 });
 
 test("pre-flight explains weak signal coverage and provides direct repair actions", () => {
@@ -100,4 +100,17 @@ test('buyer-role mismatch offers a no-research repair directly in the review dia
   assert.match(app,/state=repair\(state\)/);
   assert.match(app,/renderStrategyHandoff\(\);\s*const saved=await window\.LeadIntelWorkspacePersistence\?\.saveWorkspace\?\.\(\)/);
   assert.match(app,/repairRoles\.hidden=!model\.actions\.includes\("repair-buyer-roles"\)/);
+});
+
+test('company handoff accepts configured strategy without optional market research',async()=>{
+ const vm=await import('node:vm');
+ const start=app.indexOf('function strategyHandoffModel(){');
+ const end=app.indexOf('function renderStrategyHandoff',start);
+ const fn=app.slice(start,end);
+ const state={profile:{companyName:'Legal firm',priorityOffers:'Legal support'},market:{icps:[{active:true,name:'Business customers'}],signals:[{active:true,name:'Legal dispute'}],opportunities:[],researchResults:[],researchSourceStatus:{},researchStatus:'idle',monitoring:{}}};
+ const context={state,LeadIntelMarket:{normalizeMonitoring:()=>({enabled:false})},globalThis:{}};
+ const result=vm.runInNewContext(fn+';strategyHandoffModel()',context);
+ assert.equal(result.blockers.length,0);assert.ok(result.warnings.some(x=>x.includes('Market research is optional')));
+ state.market.signals=[];
+ assert.ok(vm.runInNewContext(fn+';strategyHandoffModel()',context).blockers.some(x=>x.includes('No active buying signal')));
 });

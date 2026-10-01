@@ -147,3 +147,19 @@ test('buyer-role repair keeps market evidence, opportunities, signals, and the a
   assert.equal(fixed.market.strategyApproved,false);
   assert.equal(original.profile.decisionMakers,'CEO/Owner; Sales Director');
 });
+
+test('legacy industrial roles repaired only without explicit user answers',()=>{
+ const state={profile:{priorityOffers:'Drawing development; serial production; custom metal manufacturing',decisionMakers:'CEO/Owner; Sales/Commercial Leadership'},answers:{},market:{icps:[{buyerRoles:'CEO/Owner; Sales/Commercial Leadership',active:true}]}};
+ const repaired=Brain.repairLegacyStrategy(state);
+ assert.match(repaired.profile.decisionMakers,/Engineering Director/);
+ assert.equal(repaired.market.icps[0].buyerRoles,repaired.profile.decisionMakers);
+ assert.equal(Brain.repairLegacyStrategy({...state,answers:{buyer_roles:'Sales Director'}}).profile.decisionMakers,state.profile.decisionMakers);
+ const legal={...state,profile:{...state.profile,priorityOffers:'Legal advice'}};
+ assert.equal(Brain.repairLegacyStrategy(legal),legal);
+});
+test('tender exclusion conflicts distinguish price qualification from broad exclusions',()=>{
+ const signals=[{id:'tender',name:'Tender procurement',active:true}];
+ assert.equal(Brain.strategyConflicts({exclusions:'lowest price in tender'},signals)[0].blocking,false);
+ assert.equal(Brain.strategyConflicts({exclusions:'No tenders'},signals)[0].blocking,true);
+ assert.deepEqual(Brain.strategyConflicts({exclusions:'No tenders'},[{...signals[0],active:false}]),[]);
+});

@@ -331,3 +331,14 @@
 .report-delete-dialog::backdrop{background:rgba(8,28,22,.5)}.report-delete-content{padding:28px}.report-delete-eyebrow{font:700 11px "DM Sans",sans-serif;letter-spacing:1.4px;color:#718076}.report-delete-content h2{font:700 24px "DM Sans",sans-serif;margin:12px 0}.report-delete-content p{font:400 14px/1.6 "DM Sans",sans-serif;color:#61716b}.report-delete-note{background:#f2f7f4;border-radius:8px;padding:12px}.report-delete-dialog-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:24px}.report-delete-dialog-actions button{font:600 14px "DM Sans",sans-serif;border:1px solid #cadbd1;background:white;color:#31594a;padding:11px 16px;border-radius:8px;cursor:pointer}.report-delete-dialog-actions [data-delete-confirm]{background:#a74336;border-color:#a74336;color:white}
 .research-report-access button:focus-visible,.report-delete-dialog button:focus-visible,.report-library-history summary:focus-visible{outline:3px solid #83bbaa;outline-offset:3px}
 @media(max-width:640px){.research-report-access{padding:18px}.report-library-heading{align-items:flex-start;flex-direction:column}.saved-report-row{align-items:flex-start;flex-direction:column;gap:12px}.saved-report-actions{align-self:flex-end}.report-library-footer{align-items:flex-start;flex-direction:column}.report-delete-content{padding:22px}}
+
+/* Strategy keeps one primary decision path. */
+#step-4 .strategy-flow,#step-4 .research-results-intro{display:none!important}
+#step-4>.strategy-banner{margin-top:24px}
+#step-4 #icp-list{display:block}#step-4 #icp-list>.icp-card{width:100%;margin-bottom:16px}
+.strategy-matching-options>summary,.source-intel-panel>summary,.monitoring-panel>summary{cursor:pointer;font-weight:700;color:#31594a;padding:12px 0;line-height:1.5}
+.strategy-matching-options>p{color:#61716b;font-size:14px}.strategy-matching-options .icp-list{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:16px}
+.source-intel-panel:not([open]){padding:14px 24px;box-shadow:none;border:1px solid #d8e4dd}
+.strategy-conflict-note{padding:16px;background:#fff6e3;border:1px solid #e7cc92;border-radius:10px;color:#72521b;line-height:1.6}
+.opportunity-score-note{font-size:13px;color:#65756b;line-height:1.5}.strategy-research-location small{font-size:12px;font-weight:500;color:#687c70}
+@media(max-width:700px){.strategy-matching-options .icp-list{grid-template-columns:1fr}}
