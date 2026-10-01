@@ -1331,7 +1331,7 @@ function bind(){
   $("factory-reset-leadintel").addEventListener("click",factoryResetLeadIntel);
   window.addEventListener("leadintel:server-ready",()=>{void resumePendingMarketResearchAfterAuth();});
   window.addEventListener("leadintel:review-market-research",()=>{void window.LeadIntelProfileMarket?.open?.().then(()=>{if(state.profile)openResearchPreview("deep");});});
-  window.addEventListener("leadintel:profile-market-opened",()=>{renderResearchControls();renderResearchStatus();renderMarketJourney();});
+  window.addEventListener("leadintel:profile-market-opened",()=>{renderResearchReports();renderResearchControls();renderResearchStatus();renderMarketJourney();});
   window.addEventListener("leadintel:open-market-strategy",()=>{if(!state.profile){showToast("Review your company profile first");return;}window.LeadIntelReferenceCustomerUI?.close?.();setStep(4);renderMarketStrategy();});
   window.addEventListener("leadintel:website-activated",()=>{
     state=loadState();editMode=false;syncInputsFromState();updateCompleteness();

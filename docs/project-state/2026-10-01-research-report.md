@@ -1,5 +1,7 @@
 # Same-page research reports
 
+Follow-up: authenticated customer screenshot showed no View report control after reopening Market Research. Root cause: the workbench-open event refreshed controls/status/journey but did not initialize the report UI, which had only been initialized through Strategy rendering. The workbench-open callback now initializes reports first, including migration of existing saved research. Regression executes this callback and checks report initialization independently of Strategy.
+
 Research results can be reopened immediately in the Market Research workbench and in Strategy. A dated snapshot is captured after each run (including failures and retained previous evidence); ten recent snapshots are preserved through market-state normalization and existing workspace saving/sync. Existing saved research migrates to an initial snapshot without requiring a paid rerun. Reports are read-only; opening an old report never replaces active Strategy.
 
 Report template: seller/market/offer brief, source excerpts with numbered citations, evidence-backed AI hypotheses clearly marked as hypotheses, available deeper market conditions, active signals, provider failures and quality gaps, source provenance and original evidence dates, and Strategy handoff. Text is escaped and only HTTP(S) source links are allowed. Report snapshots exclude account settings and credentials and bound evidence excerpts to 900 characters. Sharing still requires review because commercial content itself can be confidential.
