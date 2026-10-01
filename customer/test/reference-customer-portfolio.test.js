@@ -126,3 +126,15 @@ test('active model aggregation preserves per-list models and creates usable comb
   assert.equal(combined.dna.activeCount,6);
   assert.deepEqual(combined.dna.dimensions.map(d=>d.key).sort(),['industry','sizeBand']);
 });
+
+ test('saved analyzed active reference stays clean across normalization, reload and clock changes',()=>{
+ const Ref=require('../reference-customers.js');
+ let reference=Ref.normalizeReferenceState(referenceState({active:false}));reference.activated=true;reference.activeIds=reference.rows.map(row=>row.id);reference.analyses=Object.fromEntries(reference.rows.map(row=>[row.id,{industry:'Machinery',productsServices:['Steel components'],confidence:'high'}]));
+ let state=Portfolio.saveCurrentList({referenceCustomers:reference},{name:'Ercon references'});
+ state=JSON.parse(JSON.stringify(state));state.referenceCustomers.dna.builtAt='2030-01-01T00:00:00.000Z';
+ assert.equal(Portfolio.hasUnsavedCurrentListDraft(state),false);
+ assert.deepEqual(Ref.normalizeReferenceState(state.referenceCustomers),Ref.normalizeReferenceState(Ref.normalizeReferenceState(state.referenceCustomers)));
+ state.referenceCustomers.rows[0].notes='A real customer edit';assert.equal(Portfolio.hasUnsavedCurrentListDraft(state),true);
+ state=Portfolio.saveCurrentList(state,{name:'Ercon references'});assert.equal(Portfolio.hasUnsavedCurrentListDraft(state),false);
+ state.referenceCustomers.analyses[state.referenceCustomers.rows[0].id].industry='Construction';assert.equal(Portfolio.hasUnsavedCurrentListDraft(state),true);
+ });

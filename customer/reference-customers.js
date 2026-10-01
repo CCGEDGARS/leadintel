@@ -146,7 +146,7 @@
       updatedAt:clean(map.updatedAt),analysisAt:clean(map.analysisAt)
     }:null;
     const normalized={version:2,source:value.source&&typeof value.source==='object'?{type:clean(value.source.type),name:clean(value.source.name)}:{type:'',name:''},rows,analyses,segments,segmentationMeaningful:Boolean(value.segmentationMeaningful&&segments.length>1),activeSegmentIds,activeIds,activated,fingerprint:activated?clean(value.fingerprint)||fingerprint(activeIds):'',dna:value.dna&&typeof value.dna==='object'?value.dna:null,activatedAt:activated?clean(value.activatedAt):'',analyzedAt:clean(value.analyzedAt),opportunityMap};
-    if(activated&&activeIds.some(id=>hasAnalysisFacts(analyses[id])))normalized.dna=buildReferenceDnaFromState(normalized,analyses);
+    if(activated&&activeIds.some(id=>hasAnalysisFacts(analyses[id]))){normalized.dna=buildReferenceDnaFromState(normalized,analyses);if(normalized.dna)normalized.dna.builtAt=clean(value.dna?.builtAt)||normalized.activatedAt||normalized.analyzedAt;}
     return normalized;
   }
   function activateReferenceCustomers(state={},ids=[]){

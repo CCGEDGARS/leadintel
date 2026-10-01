@@ -15,7 +15,7 @@
     if(value&&typeof value==='object')return `{${Object.keys(value).sort().map(key=>`${JSON.stringify(key)}:${stableSerialize(value[key])}`).join(',')}}`;
     return JSON.stringify(value);
   }
-  function comparableReference(value){const reference=normalizeReference(value);if(reference&&typeof reference==='object')delete reference.updatedAt;return reference;}
+  function comparableReference(value){const reference=normalizeReference(value);if(reference&&typeof reference==='object')delete reference.updatedAt;if(reference?.dna)delete reference.dna.builtAt;if(reference?.publishedModel?.dna)delete reference.publishedModel.dna.builtAt;return reference;}
   function emptyReference(){return normalizeReference({rows:[],analyses:{},segments:[],activeSegmentIds:[],activeIds:[],activated:false,fingerprint:'',dna:null,publishedModel:null,draftDirty:false});}
   function normalizeList(value={}){
     const reference=normalizeReference(value.reference||value.referenceCustomers||{});
