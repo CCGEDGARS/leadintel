@@ -36,9 +36,9 @@ test('buildIcpCandidates creates core, lookalike and trigger-led ICPs from appro
   assert.match(icps[2].rationale,/new facility/i);
 });
 
-test('buildIcpCandidates omits lookalike ICP when no anchors are supplied',()=>{
+test('buildIcpCandidates keeps lookalike ICP disabled when no anchors are supplied',()=>{
   const icps=Market.buildIcpCandidates({...profile,lookalikeCustomers:''});
-  assert.deepEqual(icps.map(x=>x.type),['core','trigger-led']);
+  assert.deepEqual(icps.map(x=>x.type),['core','lookalike','trigger-led']);
 });
 
 test('normalizeSignals seeds recommended signals and preserves customer edits',()=>{

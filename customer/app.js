@@ -424,6 +424,8 @@ function syncResearchSourcesToSignals(){
   if(state.market.monitoring)state.market.monitoring.sourceTypes=LeadIntelMarket.filterResearchSourceTypes(state.market.monitoring.sourceTypes||[],state.market.signals||[]);
 }
 function renderIcps(){
+  const candidates=LeadIntelMarket.buildIcpCandidates(state.profile,state.market.contentLanguage||"en");
+  for(const candidate of candidates){if(!state.market.icps.some(item=>item.type===candidate.type||(candidate.type==="lookalike"&&item.type==="lookalike-led")))state.market.icps.push({...candidate,active:false});}
   enforceIcpActivationRequirements();
   const cards=state.market.icps.map((icp,index)=>{
     const requirement=icpActivationRequirement(icp);
@@ -437,7 +439,7 @@ function renderIcps(){
     <p>${esc(icp.rationale)}</p>
   </article>`;
   });
-  $("icp-list").innerHTML=cards.filter((_,i)=>state.market.icps[i].type==="core").join("")+`<details class="strategy-matching-options"><summary>Optional matching criteria · reference similarity and buying signals</summary><p>These refine the main customer definition. They do not replace offer fit or your exclusions.</p><div class="icp-list">${cards.filter((_,i)=>state.market.icps[i].type!=="core").join("")}</div></details>`;
+  $("icp-list").innerHTML=cards.join("");
 }
 function renderSignalDesigner(){
   $("signal-designer").innerHTML=state.market.signals.map((signal,index)=>`<div class="signal-config-row ${signal.active?"active":""}">

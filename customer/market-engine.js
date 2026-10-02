@@ -87,9 +87,9 @@
       description:clean(profile.idealCustomer)||(lv?"Uzņēmumi, kas atbilst apstiprinātajai ideālā klienta definīcijai.":"Companies matching the approved ideal-customer definition."),
       rationale:lv?`Tieši atspoguļo apstiprināto ideālā klienta profilu, pircēju lomas, prioritāros piedāvājumus un komerciālo vērtību tirgos: ${targetMarkets}.`:`Directly reflects the approved ideal customer, buying roles, priority offers and commercial value for ${targetMarkets}.`
     }];
-    if(clean(profile.lookalikeCustomers))result.push({
-      id:"icp-lookalike",type:"lookalike",name:lv?"Līdzīgo uzņēmumu profils":"Lookalike ICP",...common,
-      description:lv?`Uzņēmumi ar līdzīgām darbības pazīmēm kā ${clean(profile.lookalikeCustomers)}.`:`Companies with business characteristics similar to ${clean(profile.lookalikeCustomers)}.`,
+    result.push({
+      id:"icp-lookalike",type:"lookalike",name:lv?"Līdzīgo uzņēmumu profils":"Lookalike ICP",...common,active:Boolean(clean(profile.lookalikeCustomers)),
+      description:!clean(profile.lookalikeCustomers)?(lv?"Pievienojiet un aktivizējiet atsauces klientu, lai meklētu līdzīgus uzņēmumus.":"Add and activate a reference customer to find similar companies."):lv?`Uzņēmumi ar līdzīgām darbības pazīmēm kā ${clean(profile.lookalikeCustomers)}.`:`Companies with business characteristics similar to ${clean(profile.lookalikeCustomers)}.`,
       rationale:lv?`Izmantot ${clean(profile.lookalikeCustomers)} kā komerciālos atskaites punktus un meklēt līdzīgas organizācijas tirgos: ${targetMarkets}.`:`Use ${clean(profile.lookalikeCustomers)} as commercial anchors, then look for similar organizations in ${targetMarkets}.`
     });
     result.push({

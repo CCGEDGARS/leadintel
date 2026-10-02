@@ -69,5 +69,5 @@ test('four ICPs survive normalization, reload and language localization',()=>{
 test('opportunity-led remains available even when no lookalike anchors exist',()=>{
   const api=Opportunity.install(Market);
   const icps=api.buildIcpCandidates({...profile,lookalikeCustomers:''},'en');
-  assert.deepEqual(icps.map(item=>item.type),['core','trigger-led','opportunity-led']);
+  assert.deepEqual(icps.map(item=>item.type),['core','lookalike','trigger-led','opportunity-led']);
 });
