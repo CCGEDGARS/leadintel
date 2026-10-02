@@ -7,7 +7,7 @@ const source=fs.readFileSync(path.join(__dirname,'..','discovery-ui.js'),'utf8')
 test('Discovery labels CRM save and pipeline actions separately',()=>{
   assert.match(source,/data-action="save-crm"/);
   assert.doesNotMatch(source,/data-action="add-pipeline"/);
-  assert.match(source,/data-add-prospect-pipeline/);
+  assert.doesNotMatch(source,/data-add-prospect-pipeline/);
   assert.match(source,/"Save in CRM"/);
   assert.match(source,/Saved in CRM ✓/);
   assert.match(source,/pipeline-crm-status/);

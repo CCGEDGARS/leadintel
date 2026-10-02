@@ -10,4 +10,6 @@ All thresholds retain identity, target market, commercial fit, readable official
 
 Regression coverage includes route-specific qualification, threshold boundaries, cached verification, suppression, cross-industry and seller-name invariance, workspace isolation, save/reload, approval invalidation, and the full lookalike path through verified buyers and sourced message generation. Provider calls and sending are mocked in tests. Production release checks do not constitute authenticated customer acceptance.
 
-Company discovery cards offer Select for Buyers and Save in CRM. Add to Pipeline remains in the subsequent buyer/sales workflow and CRM; it is not a prerequisite for buyer research. Existing pipeline records are preserved.
+Company discovery cards offer Select for Buyers and Save in CRM. Add to Pipeline remains in CRM; it is not a prerequisite for buyer research. Existing pipeline records are preserved.
+
+The selected-company buyer view used a separate pipeline button, which is now also removed. Both company discovery and selected-company rendering are checked; buyer research and existing CRM pipeline management remain available.
