@@ -15,15 +15,32 @@
   function cut(value,max){const text=String(value||"");return text.length>max?text.slice(0,max):text;}
   function compactMain(main={},webChars=8000,pdfChars=12000){
     const next={...main};
-    if(Array.isArray(main.scrapedSources))next.scrapedSources=main.scrapedSources.slice(0,12).map(source=>({...source,text:cut(source?.text,webChars)}));
-    if(Array.isArray(main.documents))next.documents=main.documents.slice(0,5).map(doc=>({...doc,text:cut(doc?.text,pdfChars)}));
+    if(Array.isArray(main.scrapedSources))next.scrapedSources=main.scrapedSources.map(source=>({...source,text:cut(source?.text,webChars)}));
+    if(Array.isArray(main.documents))next.documents=main.documents.map(doc=>({...doc,text:cut(doc?.text,pdfChars)}));
+    return next;
+  }
+  // Only extracted research bodies are disposable copies. Business records and source provenance stay intact.
+  function compactEvidenceCopies(value,max,key=''){
+    if(Array.isArray(value))return value.map(row=>compactEvidenceCopies(row,max,key));
+    if(!value||typeof value!=='object')return value;
+    const evidenceRow=['evidence','rawResults','researchResults','sources'].includes(key)&&Boolean(value.url);
+    const next={};let truncated=false;
+    for(const [field,item] of Object.entries(value)){
+      if(evidenceRow&&['text','markdown','content','description'].includes(field)&&typeof item==='string'){
+        next[field]=cut(item,max);truncated ||= next[field]!==item;
+      }else next[field]=compactEvidenceCopies(item,max,field);
+    }
+    if(truncated)next.evidenceTextTruncated=true;
     return next;
   }
   function compactBundle(input={}){
     const original=clone(input);let payload=clone(input);
     payload.main=compactMain(payload.main||{},8000,12000);
-    if(bytes(payload)>TARGET_SYNC_BYTES)payload.main=compactMain(payload.main||{},4000,6000);
-    if(bytes(payload)>TARGET_SYNC_BYTES)payload.main=compactMain(payload.main||{},1500,2500);
+    for(const [webChars,pdfChars,evidenceChars] of [[4000,6000,1800],[1500,2500,900],[1500,2500,450]]){
+      if(bytes(payload)<=TARGET_SYNC_BYTES)break;
+      payload.main=compactMain(payload.main||{},webChars,pdfChars);
+      payload=compactEvidenceCopies(payload,evidenceChars);
+    }
     return {payload,bytes:bytes(payload),compacted:JSON.stringify(payload)!==JSON.stringify(original)};
   }
   function prepareForSync(input={}){
@@ -32,7 +49,7 @@
     return result;
   }
   function compactMainStorageValue(value){
-    try{const parsed=JSON.parse(String(value||"{}"));return JSON.stringify(compactBundle({main:parsed}).payload.main);}catch{return value;}
+    try{const parsed=JSON.parse(String(value||"{}"));return JSON.stringify(compactMain(parsed));}catch{return value;}
   }
   function installStorageGuard(){
     if(!root||typeof root.Storage==="undefined"||!root.localStorage||root.Storage.prototype.__leadintelStateBudgetPatched)return;

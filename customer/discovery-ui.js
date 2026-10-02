@@ -209,7 +209,8 @@ async function scrapeCompanyWebsiteForVerification(queryMeta,runSignal){
 }
 async function firecrawlCompanySearch(queryMeta,runSignal){
   const websiteEvidence=await scrapeCompanyWebsiteForVerification(queryMeta,runSignal);
-  if(websiteEvidence.length)return websiteEvidence;
+  // Identity/fit pages do not replace the event search.
+
   let lastError=null;
   let fallbackAttempted=false;
   for(let attempt=0;attempt<=(activeDiscoverySavingMode?0:DISCOVERY_PROVIDER_RETRIES);attempt++){
@@ -224,7 +225,7 @@ async function firecrawlCompanySearch(queryMeta,runSignal){
       const response=await fetch(`${INTELLIGENCE_PROXY}/firecrawl-search`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),signal:controller.signal});
       const payload=await response.json().catch(()=>({}));
       if(!response.ok){const error=new Error("Company search provider request failed");error.status=response.status;throw error;}
-      return LeadIntelDiscovery.normalizeCompanySearchResults(payload,queryMeta);
+      return [...websiteEvidence,...LeadIntelDiscovery.normalizeCompanySearchResults(payload,queryMeta)];
     }catch(error){
       if(runSignal?.aborted)throw error;
       lastError=error;
@@ -233,13 +234,14 @@ async function firecrawlCompanySearch(queryMeta,runSignal){
         fallbackAttempted=true;
         const fallback=await openAiCompanySearch(queryMeta,runSignal);
         if(runSignal?.aborted)throwIfDiscoveryRunAborted(runSignal);
-        if(fallback.length){discovery.funnel.openAiFallbackSearches=(Number(discovery.funnel.openAiFallbackSearches)||0)+1;discovery.providerFallbacks.push({queryId:queryMeta.id,status:Number(lastError.status)||0});return fallback;}
+        if(fallback.length){discovery.funnel.openAiFallbackSearches=(Number(discovery.funnel.openAiFallbackSearches)||0)+1;discovery.providerFallbacks.push({queryId:queryMeta.id,status:Number(lastError.status)||0});return [...websiteEvidence,...fallback];}
       }
       if(retryableDiscoveryFailure(lastError)){
+        if(websiteEvidence.length){discovery.providerFallbacks.push({queryId:queryMeta.id,reason:"Event search unavailable; retained company website evidence"});return websiteEvidence.map(source=>({...source,eventSearchUnavailable:true}));}
         const website=await scrapeCompanyWebsiteForVerification(queryMeta,runSignal);
         if(website.length)return website;
       }
-      if(attempt>=(activeDiscoverySavingMode?0:DISCOVERY_PROVIDER_RETRIES)||!retryableDiscoveryFailure(lastError))throw lastError;
+      if(attempt>=(activeDiscoverySavingMode?0:DISCOVERY_PROVIDER_RETRIES)||!retryableDiscoveryFailure(lastError)){if(websiteEvidence.length){discovery.providerFallbacks.push({queryId:queryMeta.id,reason:"Event search unavailable; retained company website evidence"});return websiteEvidence.map(source=>({...source,eventSearchUnavailable:true}));}throw lastError;}
     }finally{
       clearTimeout(timeout);
     }
@@ -254,14 +256,14 @@ async function runDiscoverySearchBatch(items,phase,runSignal,searches=Array(item
     while(nextIndex<items.length){
       if(runSignal?.aborted)break;
       const index=nextIndex++;
-      try{if(runSignal?.aborted)throw new Error("Company search timed out");searches[index]={results:await firecrawlCompanySearch(items[index],runSignal),error:null,phase,queryMeta:items[index]};}
+      try{if(runSignal?.aborted)throw new Error("Company search timed out");const results=await firecrawlCompanySearch(items[index],runSignal);searches[index]={results,error:results.some(source=>source.eventSearchUnavailable)?new Error("Company website checked; event search unavailable"):null,phase,queryMeta:items[index]};}
       catch(error){searches[index]={results:[],error,phase,queryMeta:items[index]};}
       finally{if(!runSignal?.aborted){
         const completed=searches[index];
         for(const result of completed?.results||[]){if(result.url)discoveryEvidenceUrls.add(result.url);}
         discovery.funnel.evidencePages=discoveryEvidenceUrls.size;
         if(!retryOnly&&(phase==="searching"||phase==="following")){discovery.funnel.marketSearchesCompleted+=1;}
-        else if(phase==="verifying"&&!completed?.error&&(completed?.results||[]).some(row=>canonicalDomain(row.url)===canonicalDomain(items[index].domain)&&window.LeadIntelFirstPartyResearch.usableText(row.markdown||row.content||row.text))){if(items[index].domain)discoveryCheckedCompanyDomains.add(items[index].domain);discovery.checkedCompanyDomains=[...discoveryCheckedCompanyDomains];discovery.funnel.companySitesChecked=discoveryCheckedCompanyDomains.size;}
+        else if(phase==="verifying"&&(completed?.results||[]).some(row=>canonicalDomain(row.url)===canonicalDomain(items[index].domain)&&window.LeadIntelFirstPartyResearch.usableText(row.markdown||row.content||row.text))){if(items[index].domain)discoveryCheckedCompanyDomains.add(items[index].domain);discovery.checkedCompanyDomains=[...discoveryCheckedCompanyDomains];discovery.funnel.companySitesChecked=discoveryCheckedCompanyDomains.size;}
         discoveryProgress.completed+=1;window.LeadIntelTaskCentre?.update(activeDiscoveryTaskId,{completed:discoveryProgress.completed,total:Math.max(discoveryProgress.total,1),resultCount:discovery.latestRunCandidateCount});renderDiscoverySafely();
       }}
     }
@@ -803,9 +805,9 @@ function renderCandidates(){const target=$("company-candidates");if(!target)retu
 }const desired=selectedDiscoveryTarget();const shortfall=discovery.status==="complete"&&discovery.candidates.length<desired?`<div class="discovery-retained-results" role="status"><strong>${discovery.candidates.length} of ${desired} qualified companies found so far.</strong> Search finished, but the target is not met. Find more companies will try new searches and keep these verified results. Companies without a confirmed signal are listed below for your review.</div>`:"";target.innerHTML=`${recovery}${shortfall}${previousNotice}<p class="discovery-pipeline-instruction">Select companies for Buyers to continue. Save in CRM preserves their records; Add to Pipeline starts sales tracking.</p>${discovery.candidates.map((c,index)=>{const crm=candidateCrmMeta(c);const crmLabel=crm.suppressed?"Suppressed":crm.company?"Saved in CRM ✓":"Save in CRM";const pipelineLabel=crm.suppressed?"Suppressed":crm.inPipeline?`In Pipeline ✓ · ${crm.company.pipeline_stage}`:"Add to Pipeline";const crmDisabled=!crmAuthenticated()||crm.suppressed;const pipelineDisabled=crm.suppressed;return `<article class="company-card ${crm.inPipeline||c.saved?"saved":""}" data-company-index="${index}">
     <div class="company-card-top"><div><span class="opportunity-market">${esc(c.market||"Target market")} · ${esc(companyOrigin(c))}${selectedTargets().some(item=>item.domain&&item.domain===canonicalDomain(c.domain)||item.companyName.toLowerCase()===String(c.company).toLowerCase())?' · Your target':''}</span><h4>${esc(c.company)}</h4><a href="${esc(c.website)}" target="_blank" rel="noopener">${esc(c.domain)} ↗</a></div><div class="company-total"><strong>${c.score.total}</strong><span>/100</span></div></div>
     <p class="candidate-fit-summary"><strong>Fit ${esc(c.fitScore??(Number.isFinite(c.score.fit)?Math.round(c.score.fit/24*100):'not scored'))}/100</strong> · ${esc(c.fitDescription||c.fitReasons?.join(', ')||'Review supporting evidence.')}</p><div class="company-score-grid">${scoreCell("Fit",c.score.fit,30)}${scoreCell("Signal",c.score.signal,25)}${scoreCell("Evidence",c.score.evidence,20)}${scoreCell("Timing",c.score.timing,15)}${scoreCell("Value",c.score.value,10)}</div>
-    <div class="candidate-meta"><span class="confidence ${String(c.confidence).toLowerCase()}">${esc(c.confidence)} confidence</span><span>${c.evidence.length} source${c.evidence.length===1?"":"s"}</span><span>${c.matchedSignals.length} matched signal${c.matchedSignals.length===1?"":"s"}</span>${c.lookalikeMatch?.active?`<span>Reference similarity ${esc(c.lookalikeMatch.total)}/100${c.lookalikeMatch.referenceCompany?` · ${esc(c.lookalikeMatch.referenceCompany)}`:''}</span>`:""}${crm.company?`<span>${esc(crmLabel)}</span>`:""}</div>
+    <div class="candidate-meta"><span class="confidence ${String(c.confidence).toLowerCase()}">${esc(c.confidence)} confidence</span><span>${c.evidence.length} evidence page${c.evidence.length===1?"":"s"} · ${new Set(c.evidence.map(e=>canonicalDomain(e.url))).size} source domain${new Set(c.evidence.map(e=>canonicalDomain(e.url))).size===1?"":"s"}</span><span>${c.matchedSignals.length} matched signal${c.matchedSignals.length===1?"":"s"}</span>${c.lookalikeMatch?.active?`<span>Reference similarity ${esc(c.lookalikeMatch.total)}/100${c.lookalikeMatch.referenceCompany?` · ${esc(c.lookalikeMatch.referenceCompany)}`:''}</span>`:""}${crm.company?`<span>${esc(crmLabel)}</span>`:""}</div>
     <p class="candidate-narrative"><strong>Why this opportunity:</strong> ${esc(c.market||"Target market")} presence${c.fitReasons?.length?` · offer and buyer fit in evidence: ${esc(c.fitReasons.join(", "))}`:""} · ${c.matchedSignals?.length?`public signal: ${esc(c.matchedSignals.map(s=>s.name).join(", "))}`:"signal not confirmed"}${c.lookalikeMatch?.reasons?.length?` · past customer context: ${esc(c.lookalikeMatch.reasons.slice(0,2).join("; "))}`:""}. Verify the source and supplier need before contacting buyers; public signals do not confirm a purchase.</p>
-    <div class="matched-signals">${c.matchedSignals.length?c.matchedSignals.map(s=>`<span><strong>${esc(s.name)}</strong> · ${esc(s.matchedTerms.join(", "))}</span>`).join(""):'<span class="muted-signal">No active signal term found in the returned company evidence.</span>'}</div>
+    <div class="matched-signals">${c.matchedSignals.length?c.matchedSignals.map(s=>`<span><strong>${esc(s.name)}</strong> · ${esc((s.matchedTerms||[]).join(", "))}${s.evidence?.length?` · ${esc(s.evidence[0].date||"Event date unverified")}<br><small>${esc(s.evidence[0].quote)}</small>`:""}</span>`).join(""):'<span class="muted-signal">No active signal term found in the returned company evidence.</span>'}</div>
     <p class="candidate-narrative" lang="${contentLanguage()}">${esc(LeadIntelDiscovery.buildCandidateNarrative(c,contentLanguage()))}</p>
     <div class="candidate-evidence">${c.evidence.map(e=>`<a href="${esc(e.url)}" target="_blank" rel="noopener"><strong>${esc(e.title||c.domain)}</strong><small>${esc(e.description||e.text).slice(0,190)}${LeadIntelDiscovery.isLowQualityDiscoveryEvidence?.(e)?'<em>Generic listing · excluded from fit, signal and evidence scoring</em>':''}</small></a>`).join("")}</div>
     <details class="decision-makers"><summary>Buyer research</summary><div class="decision-head"><strong>Potential buyers</strong><button class="secondary-btn small" type="button" data-action="find-decision-makers" data-company-index="${index}" ${c.peopleStatus==="loading"?"disabled":""}>${c.people?.length?"Refresh buyers":"Find buyers"}</button></div>${peopleHtml(c,index)}</details>

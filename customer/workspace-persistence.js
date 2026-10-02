@@ -66,7 +66,7 @@
   }
   function captureWorkspaceSnapshot(){const snapshot={schema_version:1,server_synced:false,saved_at:new Date().toISOString(),data:currentWorkspaceData()};root.localStorage?.setItem(SNAPSHOT_KEY,JSON.stringify(snapshot));return snapshot;}
   function sameWorkspaceData(a,b){const left=isObject(a)?a:{};const right=isObject(b)?b:{};const keys=[...new Set([...Object.keys(left),...Object.keys(right)])].sort();return keys.every(key=>String(left[key]??"")===String(right[key]??""));}
-  function hasLocalChangesSinceSnapshot(){const snapshot=readSnapshot();if(!snapshot)return false;const key="leadintel_customer_v2_discovery";const current=safeJson(root.localStorage?.getItem(key)||"{}",{});const saved=safeJson(snapshot.data[key]||"{}",{});return JSON.stringify(current)!==JSON.stringify(saved);}
+  function hasLocalChangesSinceSnapshot(){const snapshot=readSnapshot();return Boolean(snapshot&&!sameWorkspaceData(currentWorkspaceData(),snapshot.data));}
   function protectLocalChanges(){
     const workspaceId=String(root.localStorage?.getItem(WORKSPACE_KEY)||"");
     if(!workspaceId||root.localStorage?.getItem(DIRTY_KEY))return;
@@ -116,7 +116,7 @@
     if(isObject(payload.delivery))data["leadintel_customer_v2_delivery"]=JSON.stringify(payload.delivery);
     if(isObject(payload.meta?.discovery))data["leadintel_customer_v2_discovery_meta"]=JSON.stringify(payload.meta.discovery);
     const activation=buildActivationRecord(payload.main||{});if(activation)data["leadintel_customer_v2_website_activation_v1"]=JSON.stringify(activation);
-    const snapshot={schema_version:1,server_synced:true,saved_at:new Date().toISOString(),data};root.localStorage?.setItem(SNAPSHOT_KEY,JSON.stringify(snapshot));markExplicitlySaved();dirtySinceSave=typeof options.dirty==='boolean'?options.dirty:!sameWorkspaceData(currentWorkspaceData(),data);return snapshot;
+    const snapshot={schema_version:1,server_synced:true,saved_at:new Date().toISOString(),data:options.localData||data};root.localStorage?.setItem(SNAPSHOT_KEY,JSON.stringify(snapshot));markExplicitlySaved();dirtySinceSave=typeof options.dirty==='boolean'?options.dirty:!sameWorkspaceData(currentWorkspaceData(),data);return snapshot;
   }
 
   function jsonResponse(payload,status=200){return new Response(JSON.stringify(payload),{status,headers:{"Content-Type":"application/json"}});}
@@ -151,7 +151,11 @@
           dirtySinceSave=true;protectLocalChanges();root.setTimeout?.(renderPersistenceStatus,0);
           return response;
         }
-        if(body?.payload?.meta?.persistence?.explicit_saved===true){snapshotFromServerPayload(body.payload);return response;}
+        if(body?.payload?.meta?.persistence?.explicit_saved===true){
+          const versions=safeJson(root.localStorage?.getItem(VERSION_KEY)||'{}',{});
+          const sameRevision=isExplicitlySaved()&&readSnapshot()?.server_synced===true&&Number(versions[workspaceId])===Number(body.version);
+          snapshotFromServerPayload(body.payload,sameRevision?{localData:currentWorkspaceData(),dirty:false}:{});return response;
+        }
         const version=Math.max(0,Number(body?.version)||0);if(workspaceId)root.sessionStorage?.setItem(HYDRATION_KEY,`${workspaceId}:${version}`);
         if(isExplicitlySaved())return jsonResponse({...body,payload:payloadFromSnapshot()},response.status);
         return jsonResponse({...body,payload:{}},response.status);
@@ -160,8 +164,9 @@
         const forceReset=root.sessionStorage?.getItem(FORCE_RESET_KEY)==="1"||resetIntentMatchesUrl(url);const saveIntent=leadintelSaveIntent===true;const explicitSave=leadintelExplicitSave===true;const parsed=safeJson(typeof requestInit?.body==="string"?requestInit.body:"{}",{});const localDataAtPutStart=currentWorkspaceData();
         if(!saveIntent&&!forceReset){root.setTimeout?.(renderPersistenceStatus,0);return jsonResponse({version:Math.max(0,Number(parsed?.version)||0),saved:false},200);}
         const next=withPersistenceMetadata(parsed,!forceReset&&(explicitSave||isExplicitlySaved()));if(forceReset)next.payload.meta.persistence={explicit_saved:false};
+        if(root.LeadIntelStateBudget?.prepareForSync)next.payload=root.LeadIntelStateBudget.prepareForSync(next.payload).payload;
         const response=await nativeFetch(input,{...requestInit,body:JSON.stringify(next)});const result=await response.clone().json().catch(()=>({}));const persisted=response.ok&&result?.saved!==false;
-        if(persisted){if(forceReset){root.sessionStorage?.removeItem(FORCE_RESET_KEY);root.localStorage?.removeItem(RESET_PENDING_KEY);root.setTimeout?.(renderPersistenceStatus,0);}else if(explicitSave||(saveIntent&&isExplicitlySaved()))snapshotFromServerPayload(next.payload,{dirty:!sameWorkspaceData(currentWorkspaceData(),localDataAtPutStart)});}
+        if(persisted){if(forceReset){root.sessionStorage?.removeItem(FORCE_RESET_KEY);root.localStorage?.removeItem(RESET_PENDING_KEY);root.setTimeout?.(renderPersistenceStatus,0);}else if(explicitSave||(saveIntent&&isExplicitlySaved()))snapshotFromServerPayload(next.payload,{localData:localDataAtPutStart,dirty:!sameWorkspaceData(currentWorkspaceData(),localDataAtPutStart)});}
         return response;
       }
       return nativeFetch(input,requestInit);
@@ -188,7 +193,7 @@
   async function saveWorkspace({automatic=false}={}){
     if(saveBusy)return false;saveBusy=true;renderPersistenceStatus();
     try{const bridge=await waitForBridge();if(bridge?.session?.authenticated&&bridge?.workspace){const result=await withTimeout(()=>bridge.conflict?bridge.resolveConflictKeepLocal?.():bridge.saveNow?.({saveIntent:true,explicitSave:true}),SAVE_REQUEST_TIMEOUT_MS);if(!result?.saved)throw new Error(result?.conflict?"conflict":"Workspace could not be saved to LeadIntel");if(!automatic)toast("Workspace saved");}else{captureWorkspaceSnapshot();markExplicitlySaved();dirtySinceSave=false;if(!automatic)toast("Workspace saved in this browser");}saveError="";return true;}
-    catch(error){dirtySinceSave=true;const detail=String(error?.message||"");saveError=root.LeadIntelServerBridge?.conflict||detail==="conflict"?"Sync conflict · keep your local changes":/timed out|timeout/i.test(detail)?"Sync timed out · retry save":/failed to fetch|network/i.test(detail)?"Could not reach LeadIntel · retry save":"Sync failed · retry save";if(!automatic)toast(saveError);return false;}
+    catch(error){dirtySinceSave=true;const detail=String(error?.message||"");saveError=root.LeadIntelServerBridge?.conflict||detail==="conflict"?"Sync conflict · keep your local changes":/timed out|timeout/i.test(detail)?"Sync timed out · retry save":/500 KB|sync limit/i.test(detail)?"Workspace exceeds sync limit · data preserved":/failed to fetch|network/i.test(detail)?"Could not reach LeadIntel · retry save":"Sync failed · retry save";if(!automatic)toast(saveError);return false;}
     finally{saveBusy=false;renderPersistenceStatus();if(!saveError&&hasUnsavedChanges())scheduleAutoSave();}
   }
   function scheduleAutoSave(){if(root.localStorage?.getItem(RESET_PENDING_KEY)||!hasMeaningfulWorkspaceData())return;root.clearTimeout?.(autoSaveTimer);autoSaveTimer=root.setTimeout?.(()=>{autoSaveTimer=null;if(saveBusy){scheduleAutoSave();return;}if(hasUnsavedChanges()||(isBrowserOnlySnapshot()&&root.LeadIntelServerBridge?.session?.authenticated&&root.LeadIntelServerBridge?.workspace))void saveWorkspace({automatic:true});},AUTOSAVE_DEBOUNCE_MS);renderPersistenceStatus();}

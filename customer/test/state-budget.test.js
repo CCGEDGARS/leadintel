@@ -42,3 +42,21 @@ test('non-research workspace overflow is rejected rather than silently deleting 
   const input={main:{website:'https://example.com/'},discovery:{criticalNotes:'x'.repeat(520*1024)},outreach:{},delivery:{},meta:{}};
   assert.throws(()=>budget.prepareForSync(input),/500 KB sync limit/);
 });
+test('combined market reports and discovery evidence fit the budget without deleting records or provenance',()=>{
+ const source=i=>({url:`https://evidence.example/${i}`,title:`Evidence ${i}`,date:'2026-10-01',text:'industrial evidence '.repeat(900),verification:{relevance:'high'}});
+ const sources=Array.from({length:20},(_,i)=>source(i));
+ const input={main:{profile:{companyName:'Seller'},answers:{priority_offers:'automation'},market:{researchResults:sources,researchReports:Array.from({length:10},(_,i)=>({id:`report-${i}`,sources}))},referenceCustomers:{rows:[{companyName:'Reference',website:'https://reference.example/'}]}},discovery:{rawResults:Array.from({length:50},(_,i)=>source(i)),candidates:Array.from({length:50},(_,i)=>({company:`Company ${i}`,domain:`company${i}.se`,evidence:sources.slice(0,5),matchedSignals:[{name:'Investment',evidence:[{url:source(i).url,quote:'Company announces a factory investment',date:'2026-10-01'}]}],people:[{name:'Buyer',linkedin_url:'https://linkedin.com/in/buyer'}]})),pipeline:[{company:'Saved company',notes:'Keep all business notes'}]},outreach:{scripts:[{text:'Keep this approved script'}]},delivery:{},meta:{persistence:{explicit_saved:true}}};
+ const before=JSON.stringify(input),result=budget.prepareForSync(input);
+ assert.ok(result.bytes<=budget.MAX_SYNC_BYTES);
+ assert.equal(result.payload.main.market.researchReports.length,10);
+ assert.equal(result.payload.main.market.researchResults.length,20);
+ assert.equal(result.payload.discovery.candidates.length,50);
+ assert.equal(result.payload.discovery.candidates[0].evidence.length,5);
+ assert.equal(result.payload.discovery.candidates[0].evidence[0].url,sources[0].url);
+ assert.equal(result.payload.discovery.candidates[0].matchedSignals[0].evidence[0].quote,'Company announces a factory investment');
+ assert.equal(result.payload.discovery.candidates[0].people[0].name,'Buyer');
+ assert.deepEqual(result.payload.discovery.pipeline,input.discovery.pipeline);
+ assert.deepEqual(result.payload.outreach,input.outreach);
+ assert.equal(JSON.stringify(input),before,'cloud compaction must not mutate local research');
+ assert.equal(result.payload.main.market.researchReports[0].sources[0].evidenceTextTruncated,true);
+});

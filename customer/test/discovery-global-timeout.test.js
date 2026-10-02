@@ -632,7 +632,7 @@ test('a timed-out company website check can recover with grounded official-domai
   assert.equal(context.__discoveryState().funnel.openAiFallbackSearches,1);
 });
 
-test('Saving Mode verifies a saved target domain without repeating resolution and recovers via one website scrape',async()=>{
+test('Saving Mode verifies a saved target domain without repeating resolution and checks event evidence and recovers without repeating the website scrape',async()=>{
   const requests=[];
   const context=loadDiscoveryRunner({requestTimeout:1000,scaleProductionRunTimeout:1000,fetchImpl:async(url,options)=>{
     requests.push({url,body:JSON.parse(options.body)});
@@ -646,11 +646,11 @@ test('Saving Mode verifies a saved target domain without repeating resolution an
   context.localStorage.setItem('leadintel_customer_v2_state',JSON.stringify(state));
   await context.__runDiscovery({targetOnly:true,savingMode:true,targetDomain:'sodra.com'});
   assert.equal(requests.some(item=>item.body.query?.includes('official company website')),false);
-  assert.equal(requests.filter(item=>item.url.includes('/firecrawl-search')).length,1);
+  assert.equal(requests.filter(item=>item.url.includes('/firecrawl-search')).length,2);
   assert.equal(requests.filter(item=>item.url.includes('/firecrawl-scrape')).length,1);
   assert.equal(context.__discoveryState().savingMode,true);
   assert.equal(context.__discoveryState().funnel.companySitesChecked,1);
-  assert.equal(context.__discoveryState().searchFailures.length,0);
+  assert.equal(context.__discoveryState().searchFailures.length,1);
 });
 
 test('retry of a failed saved-target lookup uses the known domain and preserves Saving Mode',async()=>{
