@@ -23,3 +23,23 @@ test('public discovery adapts to legal buyer roles without seller-specific routi
  const rows=[{url:'https://linkedin.com/in/legal',title:'Anna Lind – General Counsel at Other Industries'},{url:'https://linkedin.com/in/plant',title:'Erik Lind – Plant Manager at Other Industries'}];
  assert.deepEqual(D.discoverPublicBuyers(rows,'Other Industries',{decisionMakers:'General Counsel'}).map(p=>p.name),['Anna Lind']);
 });
+test('refresh merges twenty candidates, keeps pinned buyers and never erases sourced details',()=>{
+ const profile={decisionMakers:'Procurement Director'};
+ const prior=[{id:'original',name:'Anna Buyer',title:'Procurement Director',publicLinkedinUrl:'https://linkedin.com/in/anna',publicEmail:'anna@example.com',publicEmailUrl:'https://example.com/team',kept:true,keptAt:'2026-10-02',patternFindings:[{email:'anna@gmail.com',url:'https://association.test'}]}];
+ const incoming=Array.from({length:25},(_,i)=>({id:`new${i}`,name:`Buyer Person ${i}`,title:'Procurement Director',publicLinkedinUrl:`https://linkedin.com/in/buyer-${i}`}));
+ incoming.push({name:'Anna Buyer',title:'Procurement Director',publicLinkedinUrl:'https://linkedin.com/in/anna',publicEmail:''});
+ const pool=D.mergeBuyerPool(prior,incoming,profile);
+ assert.equal(pool.length,20);assert.equal(pool[0].id,'original');assert.equal(pool[0].publicEmail,'anna@example.com');assert.equal(pool[0].patternFindings[0].email,'anna@gmail.com');
+ const visible=D.recommendedBuyers(pool,profile);assert.equal(visible.length,6);assert.equal(visible[0].kept,true);
+ const saved=D.normalizeDiscoveryState({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',people:visible,buyerDiscovery:{pool,found:20}}]}).selectedProspects[0];
+ assert.equal(saved.people[0].kept,true);assert.equal(saved.buyerDiscovery.pool[0].publicEmail,'anna@example.com');assert.equal(saved.buyerDiscovery.pool[0].patternFindings[0].email,'anna@gmail.com');
+});
+test('saved irrelevant roles remain retained but are ineligible for automatic recommendations',()=>{
+ const person={name:'Anna Creative',title:'Content Production Manager',kept:true};
+ const profile={decisionMakers:'Production Manager'};
+ const pool=D.mergeBuyerPool([person],[],profile);assert.equal(pool.length,1);assert.equal(D.recommendedBuyers(pool,profile).length,0);
+});
+test('first-name-only unpinned records cannot displace sourced full identities',()=>{
+ const pool=D.mergeBuyerPool([{name:'Jon',title:'Production Manager'}],[{name:'Erik Buyer',title:'Production Manager',publicLinkedinUrl:'https://linkedin.com/in/erik'}],{decisionMakers:'Production Manager'});
+ assert.deepEqual(pool.map(p=>p.name),['Erik Buyer']);
+});

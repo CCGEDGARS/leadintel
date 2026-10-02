@@ -26,7 +26,7 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
     .replace(runMargin?.[0], `const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=${testRunMargin};`)
     .replace(extractionTimeout?.[0], `const COMPANY_EXTRACTION_TIMEOUT_MS=${testExtractionTimeout};`)
     .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\nglobalThis.__setDiscovery = value => { discovery = LeadIntelDiscovery.normalizeDiscoveryState({...value,qualityVersion:value.qualityVersion??LeadIntelDiscovery.DISCOVERY_QUALITY_VERSION}); };\nglobalThis.__renderStatus = renderStatus;\nglobalThis.__setDiscoveryProgress=value=>{discoveryProgress=value;};\nglobalThis.__renderCandidates = renderCandidates;\n')
-    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__companyOrigin = companyOrigin;\nglobalThis.__mergeWorkflowCompanies = mergeWorkflowCompanies;\nglobalThis.__existingCompanyResearchTargets = existingCompanyResearchTargets;\nglobalThis.__selectQualifiedForBuyers = selectQualifiedForBuyers;\nglobalThis.__selectTargetForBuyers = selectTargetForBuyers;\nglobalThis.__confirmBuyerContact = confirmBuyerContact;\nglobalThis.__toggleBuyerContactFlow = toggleBuyerContactFlow;\nglobalThis.__enrichSelectedProspect = enrichSelectedProspect;\nglobalThis.__enrichContact = enrichContact;\nglobalThis.__scheduleSavedBuyerPublicChecks = scheduleSavedBuyerPublicChecks;\nglobalThis.__findPublicProspectContacts = findPublicProspectContacts;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__savePotentialProspect = savePotentialProspect;\nglobalThis.__addSelectedProspectToPipeline = addSelectedProspectToPipeline;\nglobalThis.__setCrmCompanies = companies => { crmCompanies = companies; };\nglobalThis.__renderPipeline = renderPipeline;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;\nglobalThis.__potentialBuyerResultsHtml = potentialBuyerResultsHtml;');
+    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__companyOrigin = companyOrigin;\nglobalThis.__mergeWorkflowCompanies = mergeWorkflowCompanies;\nglobalThis.__existingCompanyResearchTargets = existingCompanyResearchTargets;\nglobalThis.__selectQualifiedForBuyers = selectQualifiedForBuyers;\nglobalThis.__selectTargetForBuyers = selectTargetForBuyers;\nglobalThis.__confirmBuyerContact = confirmBuyerContact;\nglobalThis.__keepBuyer = keepBuyer;\nglobalThis.__toggleBuyerContactFlow = toggleBuyerContactFlow;\nglobalThis.__enrichSelectedProspect = enrichSelectedProspect;\nglobalThis.__enrichContact = enrichContact;\nglobalThis.__scheduleSavedBuyerPublicChecks = scheduleSavedBuyerPublicChecks;\nglobalThis.__findPublicProspectContacts = findPublicProspectContacts;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__savePotentialProspect = savePotentialProspect;\nglobalThis.__addSelectedProspectToPipeline = addSelectedProspectToPipeline;\nglobalThis.__setCrmCompanies = companies => { crmCompanies = companies; };\nglobalThis.__renderPipeline = renderPipeline;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;\nglobalThis.__potentialBuyerResultsHtml = potentialBuyerResultsHtml;');
   const mainState = {
     website: 'https://acme.example/',
     profile: {
@@ -460,7 +460,7 @@ test('a saved first-name buyer can gain a sourced full name from a unique public
   assert.equal(requests,7);
   const person=context.__discoveryState().selectedProspects[0].people[0];
   assert.equal(person.publicName,'Jacob Jonstoij');
-  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v13-public-first');
+  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v14-kept-pool');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Jacob Jonstoij/);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/View profile ↗<\/a> · Public match/);
   context.__scheduleSavedBuyerPublicChecks();
@@ -1061,4 +1061,28 @@ test('a known target without a website keeps its origin after domain resolution'
 
 test('a late company render keeps the Buyers guide out of the Companies stage',()=>{
  const ctx=loadDiscoveryRunner({renderNodes:true});ctx.__renderPipeline();assert.equal(ctx.__elements.get('discovery-buyers-guide').hidden,true);ctx.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5}));ctx.__renderPipeline();assert.equal(ctx.__elements.get('discovery-buyers-guide').hidden,false);
+});
+test('Keep candidate saves in CRM, survives reload, and Unsave preserves CRM history',async()=>{
+ let saved=0;
+ const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'},saveNow:async()=>({saved:true}),saveCrmCompany:async()=>({ok:true,company:{id:'c1'}}),saveCrmContacts:async()=>{saved++;return {ok:true};}}});
+ context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};
+ context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',people:[{id:'public-anna',name:'Anna Buyer',title:'Procurement Director'}]}]});
+ assert.equal(await context.__keepBuyer('example.com',0),true);assert.equal(saved,1);
+ const restored=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
+ assert.equal(restored.selectedProspects[0].people[0].kept,true);assert.equal(restored.selectedProspects[0].buyerDiscovery.pool[0].kept,true);
+ context.__renderPipeline();const html=context.__elements.get('customer-pipeline').innerHTML;
+ assert.match(html,/Saved ✓ · Unsave/);assert.ok(html.indexOf('data-find-prospect-buyers')<html.indexOf('selected-prospect-people'));
+ assert.equal(await context.__keepBuyer('example.com',0),true);assert.equal(saved,1);assert.equal(context.__discoveryState().selectedProspects[0].people[0].kept,false);
+});
+test('Keep candidate fails closed when CRM save fails',async()=>{
+ const context=loadDiscoveryRunner({renderNodes:true,bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'},saveCrmCompany:async()=>({ok:true,company:{id:'c1'}}),saveCrmContacts:async()=>({ok:false,error:'Save failed'})}});
+ context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};
+ context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',people:[{id:'public-anna',name:'Anna Buyer',title:'Procurement Director'}]}]});
+ assert.equal(await context.__keepBuyer('example.com',0),false);assert.equal(context.__discoveryState().selectedProspects[0].people[0].kept,false);
+});
+test('Keep candidate does not claim Saved when server preference sync fails',async()=>{
+ const context=loadDiscoveryRunner({renderNodes:true,bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'},saveNow:async()=>({saved:false}),saveCrmCompany:async()=>({ok:true,company:{id:'c1'}}),saveCrmContacts:async()=>({ok:true})}});
+ context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};
+ context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',people:[{id:'public-anna',name:'Anna Buyer',title:'Procurement Director'}]}]});
+ assert.equal(await context.__keepBuyer('example.com',0),false);assert.equal(context.__discoveryState().selectedProspects[0].people[0].kept,false);
 });

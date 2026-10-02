@@ -57,3 +57,24 @@ test('Lookalike first admits verified fit without a buying signal through compan
   for(const stage of ['buyers','triggers','messages'])result=await executeWorkflowStage(stage,{env,row:{workspace_id:'w1'},context,config,result,guard});assert.equal(result.candidates.length,1);assert.match(result.candidates[0].message.body,/Alex/);assert.match(result.candidates[0].message.body,/https:\/\/nordic.se/);
  }finally{globalThis.fetch=original;}
 });
+test('automatic buyers research a public pool and prioritize kept verified buyers in the same workspace',async()=>{
+ const env=await fixture();
+ env.DB.raw.exec("INSERT INTO crm_companies(id,workspace_id,normalized_domain,company_name,lifecycle_status,first_seen_at,last_seen_at,created_at,updated_at) VALUES('c1','w1','example.com','Example','prospect',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);INSERT INTO crm_contacts(id,workspace_id,company_id,name,title,normalized_email,email_status,linkedin_url,created_at,updated_at) VALUES('a','w1','c1','First Buyer','COO','first@example.com','verified','https://linkedin.com/in/first',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),('b','w1','c1','Saved Buyer','COO','saved@example.com','verified','https://linkedin.com/in/saved',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");
+ const payload={main,discovery:{selectedProspects:[{domain:'example.com',people:[{name:'Saved Buyer',title:'COO',publicLinkedinUrl:'https://linkedin.com/in/saved',kept:true}]}]}};
+ env.DB.raw.prepare('UPDATE customer_workspace_state SET payload_json=? WHERE workspace_id=?').run(JSON.stringify(payload),'w1');
+ const oldFetch=globalThis.fetch;let apollo=0,publicSearches=0;
+ globalThis.fetch=async(url)=>{if(String(url).includes('apollo.io')){apollo++;throw new Error('Unexpected enrichment');}publicSearches++;return new Response(JSON.stringify({data:Array.from({length:20},(_,i)=>({url:`https://linkedin.com/in/person-${i}`,title:`Anna Buyer${String.fromCharCode(65+i)} – COO at Example`}))}),{status:200});};
+ try{
+  const result=await executeWorkflowStage('buyers',{env,row:{workspace_id:'w1'},context:approvedContext(main),config,result:{candidates:[{company:'Example',domain:'example.com'}]},guard:async()=>{}});
+  assert.equal(result.candidates[0].contact.name,'Saved Buyer');assert.equal(result.candidates[0].buyerDiscovery.pool.length,20);assert.equal(result.candidates[0].people.length,6);assert.equal(apollo,0);assert.ok(publicSearches>0);
+ }finally{globalThis.fetch=oldFetch;}
+});
+test('automatic buyers retain public suggestions for review without approved enrichment or verified emails',async()=>{
+ const env=await fixture(),oldFetch=globalThis.fetch;let apollo=0;
+ globalThis.fetch=async(url)=>{if(String(url).includes('apollo.io'))apollo++;return new Response(JSON.stringify({data:[{url:'https://linkedin.com/in/anna',title:'Anna Buyer – COO at Example'}]}),{status:200});};
+ try{
+  const manualConfig=normalizeWorkflowConfig({...config,buyers:{roles:['COO'],enrich:false}});
+  const result=await executeWorkflowStage('buyers',{env,row:{workspace_id:'w1'},context:approvedContext(main),config:manualConfig,result:{candidates:[{company:'Example',domain:'example.com'}]},guard:async()=>{}});
+  assert.equal(result.candidates.length,0);assert.equal(result.reviewBuyers.length,1);assert.equal(result.reviewBuyers[0].people[0].name,'Anna Buyer');assert.equal(apollo,0);
+ }finally{globalThis.fetch=oldFetch;}
+});

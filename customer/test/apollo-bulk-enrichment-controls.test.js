@@ -32,7 +32,7 @@ test('selection identity changes when the rendered contact changes at the same r
 
 test('discovery labels distinguish free people search from credit-consuming enrichment',()=>{
   const source=fs.readFileSync(path.join(root,'discovery-ui.js'),'utf8');
-  assert.match(source,/Apollo People Search does not reveal email addresses/i);
+  assert.match(source,/Buyer research checks public professional evidence first/i);
   const controls=fs.readFileSync(modulePath,'utf8');
   assert.match(controls,/Find work email/i);
   assert.match(controls,/Find phone with Apollo/i);

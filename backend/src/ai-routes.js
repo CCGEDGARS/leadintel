@@ -238,3 +238,13 @@ export async function handleAiRoute(request,env,cors={}){
 
   return error('Method not allowed',405,cors);
 }
+
+// Server-side approved research uses the same encrypted workspace OpenAI connection.
+export async function searchWorkspaceWeb(env,workspaceId,query){
+  if(!encryptionConfigured(env))return {results:[],status:'unavailable'};
+  const integration=await openAiIntegration(env,workspaceId);if(!integration)return {results:[],status:'unavailable'};
+  const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY),apiKey=await decryptSecret(integration.encrypted_api_key,key);
+  const result=await searchWeb({apiKey,model:integration.model,query,maxResults:8,purpose:'contact_research',signal:AbortSignal.timeout(25000)});
+  await env.DB.prepare('UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?').bind(workspaceId,'openai').run();
+  return {...result,status:'complete'};
+}
