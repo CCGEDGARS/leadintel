@@ -989,7 +989,7 @@
       market:clean(candidate.market),score:candidate.score&&typeof candidate.score==="object"?candidate.score:{total:0},confidence:["High","Medium","Low"].includes(candidate.confidence)?candidate.confidence:"Low",
       priorityScore:clamp(Number(candidate.priorityScore??candidate.score?.total)||0,0,100,0),lookalikeMatch:candidate.lookalikeMatch?.active===true?{active:true,total:clamp(Number(candidate.lookalikeMatch.total)||0,0,100,0),method:clean(candidate.lookalikeMatch.method),referenceCompany:clean(candidate.lookalikeMatch.referenceCompany),reasons:(Array.isArray(candidate.lookalikeMatch.reasons)?candidate.lookalikeMatch.reasons:[]).map(clean).slice(0,4)}:null,
       matchedSignals:(Array.isArray(candidate.matchedSignals)?candidate.matchedSignals:[]).slice(0,12),evidence:(Array.isArray(candidate.evidence)?candidate.evidence:[]).slice(0,5),
-      exclusionCheck:candidate.exclusionCheck,qualificationGaps:(candidate.qualificationGaps||[]).slice(0,20),qualified:candidate.qualified===true,marketVerified:candidate.marketVerified===true,buyerVerified:candidate.buyerVerified===true,
+      needsRecheck:candidate.needsRecheck===true,exclusionCheck:candidate.exclusionCheck,qualificationGaps:(candidate.qualificationGaps||[]).slice(0,20),qualified:candidate.qualified===true,marketVerified:candidate.marketVerified===true,buyerVerified:candidate.buyerVerified===true,
       people,peopleStatus:["idle","loading","complete","empty","error"].includes(candidate.peopleStatus)?candidate.peopleStatus:"idle",publicContacts,publicResearch,publicContactStatus:["idle","loading","complete","empty","error"].includes(candidate.publicContactStatus)?candidate.publicContactStatus:"idle",publicContactVersion:clean(candidate.publicContactVersion).slice(0,40),saved:Boolean(candidate.saved)
     };
   }
@@ -1035,7 +1035,7 @@
   }
 
   function isActionableCandidate(candidate={}){
-    return !candidate.qualificationGaps?.some(gap=>String(gap).startsWith('Exclusion rule needs verification:'))&&candidate.qualified===true&&candidate.marketVerified===true&&candidate.buyerVerified===true
+    return candidate.needsRecheck!==true&&!candidate.qualificationGaps?.some(gap=>String(gap).startsWith('Exclusion rule needs verification:'))&&candidate.qualified===true&&candidate.marketVerified===true&&candidate.buyerVerified===true
       &&Array.isArray(candidate.matchedSignals)&&candidate.matchedSignals.length>0
       &&Array.isArray(candidate.evidence)&&candidate.evidence.length>0;
   }
@@ -1123,9 +1123,8 @@
       ||(Array.isArray(input.potentialMatches)&&input.potentialMatches.length)
     );
     const needsRefresh=Number(input.qualityVersion||0)<DISCOVERY_QUALITY_VERSION&&hadSearchResults;
-    const preserveInterruptedEvidence=input.status==="running"&&needsRefresh&&Array.isArray(input.rawResults)&&input.rawResults.length>0;
-    const clearOldResults=needsRefresh&&!preserveInterruptedEvidence;
-    const safeCandidates=(needsRefresh?[]:(Array.isArray(input.candidates)?input.candidates:[])).slice(0,50).map(safeCandidate).filter(item=>item.domain&&isActionableCandidate(item));
+    const clearOldResults=false; // Version changes mark evidence stale; never delete saved research.
+    const safeCandidates=(Array.isArray(input.candidates)?input.candidates:[]).slice(0,50).map(item=>safeCandidate({...item,needsRecheck:needsRefresh||item.needsRecheck===true})).filter(item=>item.domain&&isActionableCandidate({...item,needsRecheck:false}));
     const extraction=input.extraction&&typeof input.extraction==="object"?input.extraction:{};
     return {
       ...DEFAULT_DISCOVERY_STATE,
@@ -1138,15 +1137,15 @@
       searchFailures:(Array.isArray(input.searchFailures)?input.searchFailures:[]).slice(0,MAX_DISCOVERY_COMPANY_CHECKS*2).map(safeSearchFailure),
       providerFallbacks:(Array.isArray(input.providerFallbacks)?input.providerFallbacks:[]).slice(0,MAX_DISCOVERY_COMPANY_CHECKS*2).map(item=>({queryId:clean(item?.queryId).slice(0,100),status:Number(item?.status)||0})).filter(item=>item.queryId),
       checkedCompanyDomains:[...new Set((Array.isArray(input.checkedCompanyDomains)?input.checkedCompanyDomains:[]).map(canonicalDomain).filter(Boolean))].slice(0,MAX_DISCOVERY_COMPANY_CHECKS),
-      lastSuccessfulRunAt:needsRefresh?"":clean(input.lastSuccessfulRunAt||(safeCandidates.length&&["complete","partial"].includes(input.status)?input.lastRunAt:"")),
+      lastSuccessfulRunAt:clean(input.lastSuccessfulRunAt||(safeCandidates.length&&["complete","partial"].includes(input.status)?input.lastRunAt:"")),
       latestRunCandidateCount:clamp(Math.floor(Number(input.latestRunCandidateCount??(safeCandidates.length?safeCandidates.length:0))||0),0,50,0),
-      retainedLastSuccessfulResults:input.retainedLastSuccessfulResults===true&&!needsRefresh,
+      retainedLastSuccessfulResults:input.retainedLastSuccessfulResults===true,
       extraction:{
         status:["idle","pending","ai","fallback","targets"].includes(extraction.status)?extraction.status:"idle",
         method:["AI","Text fallback","Target list"].includes(extraction.method)?extraction.method:"",
         message:clean(extraction.message).slice(0,300)
       },
-      potentialMatches:(needsRefresh?[]:(Array.isArray(input.potentialMatches)?input.potentialMatches:[])).slice(0,50).map(safePotentialCandidate).filter(item=>item.domain&&item.evidence.length&&item.qualificationGaps.length),
+      potentialMatches:(Array.isArray(input.potentialMatches)?input.potentialMatches:[]).slice(0,50).map(safePotentialCandidate).filter(item=>item.domain&&item.evidence.length&&item.qualificationGaps.length),
       selectedProspects:(Array.isArray(input.selectedProspects)?input.selectedProspects:[]).slice(0,50).map(item=>item.buyerSearchMode==="user_selected_qualified"?{...safePotentialCandidate(item),...safeCandidate(item),buyerSearchMode:"user_selected_qualified"}:safePotentialCandidate(item)).filter(item=>item.domain&&(item.buyerSearchMode==="user_selected_qualified"?isActionableCandidate(item):item.buyerSearchMode==="user_selected_target"||item.evidence.length&&isPotentialBuyerSearchAllowed(item))),
       funnel:normalizeDiscoveryFunnel(clearOldResults?{}:input.funnel),
       pipeline:(Array.isArray(input.pipeline)?input.pipeline:[]).slice(0,50).map(normalizePipelineItem).filter(item=>item.domain),
@@ -1158,7 +1157,7 @@
 
   function retainLastSuccessfulDiscoveryCandidates(state={},currentCandidates=[],completedAt=""){
     const current=(Array.isArray(currentCandidates)?currentCandidates:[]).slice(0,50).map(safeCandidate).filter(item=>item.domain&&isActionableCandidate(item));
-    const previous=(Array.isArray(state.candidates)?state.candidates:[]).slice(0,50).map(safeCandidate).filter(item=>item.domain&&isActionableCandidate(item));
+    const previous=(Array.isArray(state.candidates)?state.candidates:[]).slice(0,50).map(safeCandidate).filter(item=>item.domain&&isActionableCandidate({...item,needsRecheck:false}));
     const retained=current.length===0&&previous.length>0;
     const byDomain=new Map(previous.map(item=>[item.domain,item]));
     for(const item of current)byDomain.set(item.domain,item);

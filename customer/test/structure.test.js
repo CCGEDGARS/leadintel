@@ -123,7 +123,8 @@ test('customer shell owns Stage 5 while discovery UI injects its workspace contr
   assert.match(ui,/id="step-5"/);
   assert.match(ui,/id="run-company-discovery"/);
   assert.match(ui,/id="company-candidates"/);
-  assert.match(ui,/data-action="find-decision-makers"/);
+  assert.match(ui,/data-find-prospect-buyers/);
+  assert.doesNotMatch(ui,/<details class="decision-makers"><summary>Buyer research/);
   assert.match(ui,/data-action="save-crm"/);
   assert.doesNotMatch(ui,/data-action="add-pipeline"/);
   assert.match(ui,/id="customer-pipeline"/);

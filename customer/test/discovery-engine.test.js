@@ -386,7 +386,7 @@ test('find more retains earlier qualified companies and ranks new matches with t
   assert.equal(updated.latestRunCandidateCount,0);
 });
 
-test('results from the previous scoring rules are cleared for review while the saved pipeline is retained',()=>{
+test('results from previous scoring rules survive migration and stay blocked until rechecked',()=>{
   const state=Discovery.normalizeDiscoveryState({
     qualityVersion:Discovery.DISCOVERY_QUALITY_VERSION-1,status:'complete',lastRunAt:'2026-09-24T12:00:00.000Z',
     queries:[{id:'q1',query:'Sweden product launch'}],rawResults:[{url:'https://example.se/news',domain:'example.se'}],
@@ -394,13 +394,16 @@ test('results from the previous scoring rules are cleared for review while the s
     potentialMatches:[{company:'Other AB',domain:'other.se',website:'https://other.se/',qualificationGaps:['Needs review'],evidence:[{url:'https://other.se/news'}]}],
     pipeline:[{company:'Saved AB',domain:'saved.se',website:'https://saved.se/',stage:'Qualified'}]
   });
-  assert.equal(state.status,'idle');
+  assert.equal(state.status,'complete');
   assert.equal(state.needsRefresh,true);
-  assert.deepEqual(state.queries,[]);
-  assert.deepEqual(state.rawResults,[]);
-  assert.deepEqual(state.candidates,[]);
-  assert.deepEqual(state.potentialMatches,[]);
-  assert.equal(state.lastRunAt,'');
+  assert.equal(state.queries.length,1);
+  assert.equal(state.rawResults.length,1);
+  assert.equal(state.candidates.length,1);
+  assert.equal(state.candidates[0].needsRecheck,true);
+  assert.equal(Discovery.isActionableCandidate(state.candidates[0]),false);
+  assert.equal(Discovery.normalizeDiscoveryState(state).candidates.length,1);
+  assert.equal(state.potentialMatches.length,1);
+  assert.equal(state.lastRunAt,'2026-09-24T12:00:00.000Z');
   assert.equal(state.pipeline.length,1);
   assert.equal(state.pipeline[0].domain,'saved.se');
 });

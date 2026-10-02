@@ -44,7 +44,7 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
   };
   mainState.answers={priority_offers:mainState.profile.priorityOffers,ideal_customer:mainState.profile.idealCustomer,buyer_roles:mainState.profile.decisionMakers,exclusions:'No specific exclusions'};
   mainState.targetingConfirmation=Targeting.confirm(mainState);
-  const storage = new Map([['leadintel_customer_v2_state', JSON.stringify(mainState)]]);
+  const storage = new Map([['leadintel_customer_v2_state', JSON.stringify(mainState)],['leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5})]]);
   const elements = new Map();
   const getElementById = id => {
     if (renderFails && id === 'discovery-status') return { textContent: '' };
@@ -430,7 +430,7 @@ test('a saved first-name-only buyer receives one automatic public check when Buy
     return {ok:true,json:async()=>({data:[{url:'https://boliden.com/management',title:'Leadership',markdown:'Mikael Example — President & CEO'}]})};
   }});
   context.__setDiscovery({selectedProspects:[{company:'Boliden',domain:'boliden.com',buyerSearchMode:'user_selected_target',people:[{id:'p1',name:'Mikael',title:'President & CEO'}]}]});
-  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:4,visibleStep:5}));
+  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5,visibleStep:5}));
   context.__scheduleSavedBuyerPublicChecks();
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,30));
@@ -454,7 +454,7 @@ test('a saved first-name buyer can gain a sourced full name from a unique public
     return {ok:true,json:async()=>({data:[{url:'https://se.linkedin.com/in/jacob-jonstoij',title:'Jacob Jonstoij – Södra | LinkedIn',description:'Teamledare at Södra'}]})};
   }});
   context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',publicContactStatus:'complete',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
-  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:4,visibleStep:5}));
+  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5,visibleStep:5}));
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,30));
   assert.equal(requests,7);
@@ -479,7 +479,7 @@ test('a focused LinkedIn lookup resolves a buyer missed by the combined search',
     return {ok:true,json:async()=>({data:[{url:'https://se.linkedin.com/in/jacob-jonstoij-3bb486222',title:'Jacob Jonstoij – Team Leader | LinkedIn',description:'Team Leader at Södra'}]})};
   }});
   context.__setDiscovery({selectedProspects:[{company:'Södra',domain:'sodra.com',buyerSearchMode:'user_selected_target',people:[{id:'p-jacob',name:'Jacob',title:'Team Leader'}]}]});
-  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:4,visibleStep:5}));
+  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5,visibleStep:5}));
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,30));
   assert.equal(requests,8);
@@ -803,8 +803,8 @@ test('saved results from older scoring rules require a fresh company search',()=
   context.__renderStatus();
   context.__renderCandidates();
   assert.equal(context.__discoveryState().needsRefresh,true);
-  assert.match(context.__elements.get('company-discovery-status').textContent,/scoring has been improved/i);
-  assert.match(context.__elements.get('company-candidates').innerHTML,/refresh saved results before acting/i);
+  assert.match(context.__elements.get('company-discovery-status').textContent,/scores need rechecking/i);
+  assert.match(context.__elements.get('company-candidates').innerHTML,/No retained company shortlist/i);
   assert.match(context.__elements.get('run-company-discovery').innerHTML,/Refresh company results/i);
 });
 
@@ -1060,7 +1060,7 @@ test('a known target without a website keeps its origin after domain resolution'
 
 
 test('a late company render keeps the Buyers guide out of the Companies stage',()=>{
- const ctx=loadDiscoveryRunner({renderNodes:true});ctx.__renderPipeline();assert.equal(ctx.__elements.get('discovery-buyers-guide').hidden,true);ctx.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5}));ctx.__renderPipeline();assert.equal(ctx.__elements.get('discovery-buyers-guide').hidden,false);
+ const ctx=loadDiscoveryRunner({renderNodes:true});ctx.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:4}));ctx.__renderPipeline();assert.equal(ctx.__elements.get('discovery-buyers-guide').hidden,true);ctx.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5}));ctx.__renderPipeline();assert.equal(ctx.__elements.get('discovery-buyers-guide').hidden,false);
 });
 test('Keep candidate saves in CRM, survives reload, and Unsave preserves CRM history',async()=>{
  let saved=0;
@@ -1086,3 +1086,5 @@ test('Keep candidate does not claim Saved when server preference sync fails',asy
  context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',people:[{id:'public-anna',name:'Anna Buyer',title:'Procurement Director'}]}]});
  assert.equal(await context.__keepBuyer('example.com',0),false);assert.equal(context.__discoveryState().selectedProspects[0].people[0].kept,false);
 });
+
+test('Companies does not render saved buyer cards; switching to Buyers preserves them',()=>{const c=loadDiscoveryRunner({renderNodes:true});c.__setDiscovery({selectedProspects:[{company:'Target',domain:'target.se',buyerSearchMode:'user_selected_target',people:[{id:'p1',name:'Alex Buyer',title:'Director',kept:true}]}]});c.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:4}));c.__renderPipeline();assert.equal(c.__elements.get('customer-pipeline').innerHTML,'');assert.equal(c.__discoveryState().selectedProspects[0].people[0].kept,true);c.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5}));c.__renderPipeline();assert.match(c.__elements.get('customer-pipeline').innerHTML,/Alex Buyer/);});
