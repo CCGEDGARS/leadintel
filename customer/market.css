@@ -335,7 +335,8 @@
 /* Strategy keeps one primary decision path. */
 #step-4 .strategy-flow,#step-4 .research-results-intro{display:none!important}
 #step-4>.strategy-banner{margin-top:24px}
-#step-4 #icp-list{display:block}#step-4 #icp-list>.icp-card{width:100%;margin-bottom:16px}
+#step-4 #icp-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}#step-4 #icp-list>.icp-card{width:100%;margin-bottom:0}
+@media(max-width:700px){#step-4 #icp-list{grid-template-columns:1fr}}
 .strategy-matching-options>summary,.source-intel-panel>summary,.monitoring-panel>summary{cursor:pointer;font-weight:700;color:#31594a;padding:12px 0;line-height:1.5}
 .strategy-matching-options>p{color:#61716b;font-size:14px}.strategy-matching-options .icp-list{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:16px}
 .source-intel-panel:not([open]){padding:14px 24px;box-shadow:none;border:1px solid #d8e4dd}
