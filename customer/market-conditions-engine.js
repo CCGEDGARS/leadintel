@@ -29,12 +29,21 @@
       const item={...raw};const url=clean(item.url);const baseFingerprint=fingerprint(item);const family=clean(item.indicatorFamily||item.researchCategory);const fp=baseFingerprint?`${item.official===true||officialHost(url)?"official":"other"}:${family}:${baseFingerprint}`:"";
       if(!url||seenUrls.has(url)||(fp&&seenFingerprints.has(fp))){duplicatesRemoved++;continue;}
       seenUrls.add(url);if(fp)seenFingerprints.add(fp);
-      ranked.push({...item,qualityScore:scoreEvidence(item,now),sourceClass:item.official===true||officialHost(url)?"official":/news|press|media/i.test(`${item.researchCategory} ${host(url)}`)?"media":"industry"});
+      ranked.push({...item,qualityScore:scoreEvidence(item,now),sourceClass:item.official===true||officialHost(url)?"official":/\/(news|newsroom|press|media)(\/|[?#]|$)|news|reuters|bloomberg/i.test(url)?"media":/\/(jobs|careers|vacancies)(\/|[?#]|$)/i.test(url)?"jobs":"industry"});
     }
     const terms=unique(String(options.profile?.priorityOffers||"").toLowerCase().split(/[^a-z0-9]+/).filter(term=>term.length>3));
     const relevance=item=>{const text=clean(`${item.title} ${item.description} ${item.text}`).toLowerCase();return Math.min(20,terms.filter(term=>text.includes(term)).length*5);};
     ranked.sort((a,b)=>(b.qualityScore+relevance(b))-(a.qualityScore+relevance(a)));
     return {results:ranked,duplicatesRemoved,organisations:unique(ranked.map(organisation)),domains:unique(ranked.map(item=>host(item.url))),sourceClasses:unique(ranked.map(item=>item.sourceClass))};
+  }
+
+  function selectDiverseEvidence(results=[],limit=20,options={}){
+    const ranked=assessEvidence(results,options).results,selected=[],seen=new Set();
+    for(const item of ranked){const key=item.sourceClass;if(!seen.has(key)){selected.push(item);seen.add(key);if(selected.length>=limit)return selected;}}
+    const domains=new Set(selected.map(x=>host(x.url)));
+    for(const item of ranked){if(!domains.has(host(item.url))&&!selected.includes(item)){selected.push(item);domains.add(host(item.url));if(selected.length>=limit)return selected;}}
+    for(const item of ranked){if(!selected.includes(item)){selected.push(item);if(selected.length>=limit)break;}}
+    return selected;
   }
 
   function extractStructuredEvidence(results=[]){
@@ -68,7 +77,13 @@
   }
 
   function buildAdaptivePlan(input={}){
-    const mode=input.mode||"quick";if(mode==="quick")return {queries:[],gaps:[]};
+    const mode=input.mode||"quick";
+    if(mode==="quick"){
+      const results=input.results||[];const quality=buildQualityGate(results,{mode});
+      if(!results.length||!quality.gaps.includes("source diversity"))return {queries:[],gaps:[]};
+      const market=clean(input.market)||"target market",offer=clean(input.offer)||"priority offer";
+      return {gaps:["source diversity"],queries:[{id:"adaptive-primary",market,offer,sourceType:"companies",researchCategory:"commercial",query:`${market} ${offer} company newsroom current project announcement`},{id:"adaptive-independent",market,offer,sourceType:"news",researchCategory:"commercial",query:`${market} ${offer} industry news investment production project`} ]};
+    }
     const results=Array.isArray(input.results)?input.results:[];const categories=new Set(results.map(item=>clean(item.researchCategory)));const gaps=[];
     for(const category of ["direction","competition","funding","pricing","commercial"])if(!categories.has(category)||results.filter(item=>clean(item.researchCategory)===category).length<2)gaps.push(category);
     const intents={direction:"official statistics sector output orders employment latest",competition:"competitor landscape market share supplier positioning",funding:"official EU and national funding open calls eligibility deadline",pricing:"public pricing hourly rate contract value comparable examples",commercial:"current buyer projects investments tenders and demand signals"};
@@ -157,5 +172,5 @@
     };
   }
   function normalizePack(value){return value&&(value.version===1||value.version===2)?value:null;}
-  return {buildPack,normalizePack,classifyDirection,classifyFunding,classifyPricing,assessEvidence,extractStructuredEvidence,buildQualityGate,buildAdaptivePlan,scoreEvidence};
+  return {buildPack,normalizePack,classifyDirection,classifyFunding,classifyPricing,assessEvidence,selectDiverseEvidence,extractStructuredEvidence,buildQualityGate,buildAdaptivePlan,scoreEvidence};
 });

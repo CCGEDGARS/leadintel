@@ -31,7 +31,7 @@ test('provider resilience is loaded before research starts and wraps the OpenAI 
   const app=fs.readFileSync(appPath,'utf8');
   assert.match(evidenceView,/market-research-provider-resilience\.js\?v=20260916-latency-fix-v2/);
   assert.match(app,/import\s*{\s*withOpenAiRetry\s*,\s*cleanOpenAiResearchQuery\s*,\s*describePartialCoverage\s*}\s*from\s*['"]\.\/market-research-provider-resilience\.js\?v=20260916-latency-fix-v2&diagnostics=20261001-v1&timing=20261001-v1['"]/);
-  assert.match(app,/withOpenAiRetry\(\(\)=>LeadIntelMarket\.withTimeout\(/);
+  assert.match(app,/withOpenAiRetry\(attempt=>LeadIntelMarket\.withTimeout\(/);
   assert.match(app,/describePartialCoverage\(/);
 });
 
@@ -75,10 +75,10 @@ test('market search does not restart a timed out paid request',async()=>{
  await assert.rejects(()=>resilience.withOpenAiRetry(async()=>{calls++;throw new Error('OpenAI search timed out');},{retryTimeouts:false,sleep:async()=>{throw new Error('Unexpected retry');}}),error=>error.message==='OpenAI search timed out'&&error.attempts===1);
  assert.equal(calls,1);
 });
-test('all OpenAI market search paths use provider budget and avoid timeout retries',()=>{
+test('all OpenAI market search paths use provider budget and bounded timeout retries',()=>{
  const app=fs.readFileSync(appPath,'utf8');
  assert.equal((app.match(/runtime\.openAiTimeoutMs,"OpenAI (?:search|follow-up)"/g)||[]).length,3);
- assert.equal((app.match(/retryTimeouts:false/g)||[]).length,3);
+ assert.equal((app.match(/retryTimeouts:true/g)||[]).length,3);
  assert.doesNotMatch(app,/runtime\.requestTimeoutMs,"OpenAI (?:search|follow-up)"/);
  assert.match(app,/runtime\.requestTimeoutMs,"Firecrawl search"/);
 });
@@ -153,14 +153,14 @@ test('partial coverage offers an OpenAI-only recovery that preserves Firecrawl e
   assert.match(app,/const preservedResults=\[\.\.\.state\.market\.researchResults\]/);
   assert.match(app,/const recovered=LeadIntelMarket\.mergeResearchResults\(state\.market\.researchResults,preservedResults/);
   assert.match(app,/data-extend-openai/);
-  assert.match(app,/Retry OpenAI/);
+  assert.match(app,/Retry incomplete checks/);
   assert.match(app,/openAiRetryStatus/);
 });
 
 
 test('partial research offers one inline OpenAI extension action with live countdown progress',()=>{
   const app=fs.readFileSync(appPath,'utf8');
-  assert.match(app,/Retry OpenAI/);
+  assert.match(app,/Retry incomplete checks/);
   assert.match(app,/data-extend-openai/);
   assert.match(app,/function openAiRetryStatus/);
   assert.match(app,/s remaining/);
