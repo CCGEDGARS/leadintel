@@ -1,6 +1,6 @@
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
-const PUBLIC_NAME_CHECK_VERSION="buyer-contacts-v11-focused-email-evidence";
+const PUBLIC_NAME_CHECK_VERSION="buyer-contacts-v12-complete-public-research";
 const CONTACT_CONFIRM_VERSION="buyer-contacts-v10-pattern-search";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
 const DELIVERY_STORAGE_KEY="leadintel_customer_v2_delivery";
@@ -920,11 +920,14 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     }
     renderAll();
     showToast(!candidate.people.length?'No relevant decision-makers returned':candidate.people.length<3?`Only ${candidate.people.length} relevant decision-maker${candidate.people.length===1?"":"s"} found`:`${candidate.people.length} relevant decision-makers found`);
-    taskCentre?.complete(taskId,{stage:'Decision-maker search complete',resultCount:candidate.people.length});
     if(candidate.people.length&&candidate.publicContactVersion!==PUBLIC_NAME_CHECK_VERSION){
-      // One bounded public search after the Apollo suggestions; no paid Apollo enrichment.
-      void findPublicProspectContacts(candidate.domain);
+      taskCentre?.update(taskId,{stage:'Researching public buyer identities and contact evidence'});
+      clearTimeout(timeout);
+      await findPublicProspectContacts(candidate.domain,{signal:controller.signal});
+      if(controller.signal.aborted)throw Object.assign(new Error('Buyer research canceled'),{name:'AbortError'});
+      persist();
     }
+    taskCentre?.complete(taskId,{stage:candidate.publicContactStatus==='error'?'Buyer suggestions found · public verification incomplete':'Buyer research complete',resultCount:candidate.people.length});
     return true;
   }catch(error){
     candidate.peopleStatus="error";persist();
@@ -1070,16 +1073,25 @@ function prospectContactControls(candidate,person){
   const index=candidate.people.indexOf(person),phone=result?.contact?.phone_number;
   return `<div class="selected-prospect-contact-actions"><strong class="contact-confirm-heading">Clarify data</strong><div class="contact-confirm-row"><button class="secondary-btn small" type="button" data-prospect-enrich-email="${esc(candidate.domain)}" data-person-index="${index}" ${!crmAuthenticated()||pending?'disabled':''}>${pending?'Confirming…':'Confirm email'}</button>${contactFlowControls(candidate,person,index,"selected")[0]}</div><div class="contact-confirm-row"><button class="secondary-btn small" type="button" data-prospect-enrich-phone="${esc(candidate.domain)}" data-person-index="${index}" ${!crmAuthenticated()||pending||phone?'disabled':''}>${phone?'Phone confirmed ✓':pending?'Confirming…':'Confirm phone'}</button>${contactFlowControls(candidate,person,index,"selected")[1]}</div></div>`;
 }
-async function findPublicProspectContacts(domain){
+async function findPublicProspectContacts(domain,options={}){
   const key=canonicalDomain(domain);
   if(publicContactPromises.has(key))return publicContactPromises.get(key);
-  const promise=runPublicProspectContacts(key);
+  const promise=runPublicProspectContacts(key,options);
   publicContactPromises.set(key,promise);
   try{return await promise;}finally{publicContactPromises.delete(key);}
 }
 function publicSearchRows(payload={}){return Array.isArray(payload.data)?payload.data:Array.isArray(payload.data?.web)?payload.data.web:Array.isArray(payload.web)?payload.web:Array.isArray(payload.results)?payload.results:[];}
+async function fetchBuyerResearch(url,options={}){
+  const controller=new AbortController(),parent=options.signal;
+  let timer,rejectAbort;const aborted=new Promise((_,reject)=>{rejectAbort=reject;});
+  const cancel=()=>{controller.abort();rejectAbort(Object.assign(new Error('Public buyer research timed out or was canceled'),{name:'AbortError'}));};
+  timer=setTimeout(cancel,DISCOVERY_REQUEST_TIMEOUT_MS);parent?.addEventListener?.('abort',cancel,{once:true});
+  if(parent?.aborted)cancel();
+  try{return await Promise.race([fetch(url,{...options,signal:controller.signal}),aborted]);}
+  finally{clearTimeout(timer);parent?.removeEventListener?.('abort',cancel);}
+}
 async function searchBuyerPublicPages(query,limit,signal){
-  const response=await fetch(`${INTELLIGENCE_PROXY}/firecrawl-search`,{method:'POST',headers:{'Content-Type':'application/json','X-LeadIntel-Research-Mode':'full'},body:JSON.stringify({query,limit,scrapeOptions:{formats:['markdown'],onlyMainContent:true}}),signal});
+  const response=await fetchBuyerResearch(`${INTELLIGENCE_PROXY}/firecrawl-search`,{method:'POST',headers:{'Content-Type':'application/json','X-LeadIntel-Research-Mode':'full'},body:JSON.stringify({query,limit,scrapeOptions:{formats:['markdown'],onlyMainContent:true}}),signal});
   if(!response.ok)throw new Error(`Public search failed (${response.status})`);
   return publicSearchRows(await response.json());
 }
@@ -1129,7 +1141,7 @@ async function searchBuyerEmailPatterns(candidate,existingRows,signal){
         if(!person.patternFindings.some(item=>item.email===email)&&crmAuthenticated()&&bridge()?.workspace?.id){
           searches++;
           try{
-            const response=await fetch(`${LEADINTEL_API}/api/ai/web-search?workspace_id=${encodeURIComponent(bridge().workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({query,max_results:5,purpose:'contact_research'}),signal});
+            const response=await fetchBuyerResearch(`${LEADINTEL_API}/api/ai/web-search?workspace_id=${encodeURIComponent(bridge().workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({query,max_results:5,purpose:'contact_research'}),signal});
             if(!response.ok)throw new Error(`Grounded search failed (${response.status})`);
             const payload=await response.json();
             person.patternFindings=patternListings(person,candidate.domain,[...rows,...(payload.results||[])]);
@@ -1145,7 +1157,7 @@ async function groundedBuyerFollowUp(candidate,signal){
   const names=(candidate.people||[]).map(person=>person.publicName||person.name).filter(Boolean).slice(0,4);
   const query=`Find publicly sourced professional work email, direct business phone, and current LinkedIn profile evidence for ${names.map(name=>`"${name}"`).join(', ')} at ${candidate.company} (${candidate.domain}). Prefer official company pages. Give exact source URLs; never infer an email pattern or personal phone.`;
   try{
-    const response=await fetch(`${LEADINTEL_API}/api/ai/web-search?workspace_id=${encodeURIComponent(workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({query,max_results:6,purpose:'contact_research'}),signal});
+    const response=await fetchBuyerResearch(`${LEADINTEL_API}/api/ai/web-search?workspace_id=${encodeURIComponent(workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({query,max_results:6,purpose:'contact_research'}),signal});
     if(!response.ok)return {status:'unavailable',rows:[],reason:`Grounded follow-up unavailable (${response.status})`};
     const payload=await response.json();return {status:'complete',rows:(payload.results||[]).filter(row=>row?.url&&[canonicalDomain(candidate.domain),'linkedin.com'].some(domain=>canonicalDomain(row.url)===domain||canonicalDomain(row.url).endsWith(`.${domain}`))).slice(0,6)};
   }catch(error){if(error?.name==='AbortError')throw error;return {status:'unavailable',rows:[],reason:'Grounded follow-up unavailable'};}
@@ -1155,7 +1167,7 @@ async function groundedPersonFollowUp(candidate,person,signal){
   const name=person.publicName||person.name;
   const query=`Find the direct public LinkedIn profile and official work contact page for "${name}" (${person.title}) at ${candidate.company} (${candidate.domain}). Give exact source URLs. Do not infer email addresses or phone numbers.`;
   try{
-    const response=await fetch(`${LEADINTEL_API}/api/ai/web-search?workspace_id=${encodeURIComponent(workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({query,max_results:5,purpose:'contact_research'}),signal});
+    const response=await fetchBuyerResearch(`${LEADINTEL_API}/api/ai/web-search?workspace_id=${encodeURIComponent(workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({query,max_results:5,purpose:'contact_research'}),signal});
     if(!response.ok)return {status:'unavailable',rows:[]};
     const payload=await response.json();return {status:'complete',rows:(payload.results||[]).filter(row=>row?.url&&(canonicalDomain(row.url)===canonicalDomain(candidate.domain)||LeadIntelDiscovery.normalizeLinkedInUrl(row.url))).slice(0,5)};
   }catch(error){if(error?.name==='AbortError')throw error;return {status:'unavailable',rows:[]};}
@@ -1163,7 +1175,7 @@ async function groundedPersonFollowUp(candidate,person,signal){
 async function groundedGeminiPersonSearch(candidate,person,signal){
   const workspace=bridge()?.workspace;if(!crmAuthenticated()||!workspace?.id)return {status:'unavailable',results:[]};
   try{
-    const response=await fetch(`${LEADINTEL_API}/api/ai/grounded-contact-search?workspace_id=${encodeURIComponent(workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({company:candidate.company,domain:candidate.domain,person:{name:person.publicName||person.name,title:person.title}}),signal});
+    const response=await fetchBuyerResearch(`${LEADINTEL_API}/api/ai/grounded-contact-search?workspace_id=${encodeURIComponent(workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({company:candidate.company,domain:candidate.domain,person:{name:person.publicName||person.name,title:person.title}}),signal});
     return response.ok?await response.json():{status:'unavailable',results:[]};
   }catch(error){if(error?.name==='AbortError')throw error;return {status:'unavailable',results:[]};}
 }
@@ -1177,7 +1189,7 @@ function officialLinksFromMarkdown(markdown,source,domain){
   return links.sort((a,b)=>Number(/contact|kontakt/i.test(b))-Number(/contact|kontakt/i.test(a))||Number(/leadership|management|organisation|organization|ledning/i.test(b))-Number(/leadership|management|organisation|organization|ledning/i.test(a))).slice(0,3);
 }
 async function scrapeOfficialContactPage(url,domain,signal){
-  const response=await fetch(`${INTELLIGENCE_PROXY}/firecrawl-scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,formats:['markdown'],onlyMainContent:false}),signal});
+  const response=await fetchBuyerResearch(`${INTELLIGENCE_PROXY}/firecrawl-scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,formats:['markdown'],onlyMainContent:false}),signal});
   if(!response.ok)return null;
   const payload=await response.json(),page=payload.data||payload,source=page.metadata?.sourceURL||url;
   if(canonicalDomain(source)!==domain||!page.markdown&&!page.content)return null;
@@ -1186,14 +1198,15 @@ async function scrapeOfficialContactPage(url,domain,signal){
 async function reviewBuyerPublicEvidence(candidate,rows,signal){
   const workspace=bridge()?.workspace;if(!crmAuthenticated()||!workspace?.id||!rows.length)return {status:'unavailable',conflicts:[]};
   try{
-    const response=await fetch(`${LEADINTEL_API}/api/ai/contact-evidence-review?workspace_id=${encodeURIComponent(workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({company:candidate.company,people:(candidate.people||[]).map(person=>({id:person.id,name:person.publicName||person.name,role:person.title})),evidence:rows.slice(0,12).map(row=>({url:row.url,title:row.title,excerpt:String(row.description||row.markdown||row.content||'').slice(0,600)}))}),signal});
+    const response=await fetchBuyerResearch(`${LEADINTEL_API}/api/ai/contact-evidence-review?workspace_id=${encodeURIComponent(workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({company:candidate.company,people:(candidate.people||[]).map(person=>({id:person.id,name:person.publicName||person.name,role:person.title})),evidence:rows.slice(0,12).map(row=>({url:row.url,title:row.title,excerpt:String(row.description||row.markdown||row.content||'').slice(0,600)}))}),signal});
     return response.ok?await response.json():{status:'unavailable',conflicts:[]};
   }catch(error){if(error?.name==='AbortError')throw error;return {status:'unavailable',conflicts:[]};}
 }
-async function runPublicProspectContacts(domain){
+async function runPublicProspectContacts(domain,{signal}={}){
   const candidate=[...(discovery.selectedProspects||[]),...(discovery.candidates||[])].find(item=>canonicalDomain(item.domain)===canonicalDomain(domain));if(!candidate||candidate.publicContactStatus==="loading")return false;
   candidate.publicContactStatus="loading";saveDiscovery();renderPipeline();renderCandidates();
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS*9);
+  const cancel=()=>controller.abort();if(signal?.aborted)cancel();else signal?.addEventListener('abort',cancel,{once:true});
   try{
     const research={firecrawl:'complete',openai:'unavailable',gemini:'unavailable',geminiSearch:'unavailable',officialPages:0,profileResults:0,openaiResults:0,geminiResults:0,checkedAt:'',issues:[],conflicts:[],sources:[]};
     const firstNames=[...new Set((candidate.people||[]).map(person=>String(person.name||'').trim().split(/\s+/)[0]).filter(name=>/^[\p{L}'’-]{2,40}$/u.test(name)))].slice(0,4);
@@ -1257,7 +1270,7 @@ async function runPublicProspectContacts(domain){
     if(groundedProfiles.length)candidate.people=LeadIntelDiscovery.matchPublicLinkedInProfiles(candidate.people,groundedProfiles,candidate.company);
     for(const row of uniqueGrounded.filter(row=>canonicalDomain(row.url)===domain&&!results.some(item=>item.url===row.url)).slice(0,3)){
       try{
-        const response=await fetch(`${INTELLIGENCE_PROXY}/firecrawl-scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:row.url,formats:['markdown'],onlyMainContent:true}),signal:controller.signal});
+        const response=await fetchBuyerResearch(`${INTELLIGENCE_PROXY}/firecrawl-scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:row.url,formats:['markdown'],onlyMainContent:true}),signal:controller.signal});
         if(!response.ok)continue;
         const payload=await response.json();const page=payload.data||payload;
         if(!page?.markdown&&!page?.content)continue;
@@ -1294,7 +1307,7 @@ async function runPublicProspectContacts(domain){
     for(let index=0;index<candidate.people.length;index++)void runBuyerContactFlow(candidate,index,(discovery.selectedProspects||[]).includes(candidate)?'selected':'company');
     return true;
   }catch(error){candidate.publicContactStatus="error";showToast(error.name==="AbortError"?"Public contact search timed out":error.message);return false;}
-  finally{clearTimeout(timeout);saveDiscovery();renderPipeline();renderCandidates();}
+  finally{clearTimeout(timeout);signal?.removeEventListener('abort',cancel);saveDiscovery();renderPipeline();renderCandidates();}
 }
 function scheduleSavedBuyerPublicChecks(){
   for(const candidate of [...selectedProspects(),...(discovery.candidates||[])]){

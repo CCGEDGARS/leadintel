@@ -171,23 +171,23 @@
         const title=clean(row?.title);
         let candidateName=clean(title.split(/\s+[–—|·-]\s*|\s*\|\s*/u)[0]);
         if(!candidateName||candidateName.split(/\s+/)[0].toLowerCase()!==first){
-          const excerpt=clean(row?.description||row?.content,600);
+          const excerpt=clean(row?.description||row?.markdown||row?.content,600);
           const names=[...excerpt.matchAll(new RegExp(`(?:^|[^\\p{L}])(${first.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\s+[\\p{Lu}][\\p{L}'’.-]{2,})(?=$|[^\\p{L}'’.-])`,'giu'))].map(match=>match[1]);
           if(new Set(names.map(value=>value.toLowerCase())).size!==1)continue;
           candidateName=names[0];
         }
-        if(!candidateName||candidateName.split(/\s+/).length!==2||candidateName.split(/\s+/)[0].toLowerCase()!==first)continue;
+        if(!candidateName||(candidateName.split(/\s+/).length<2||candidateName.split(/\s+/).length>5||!/^[\p{L}'’. -]+$/u.test(candidateName))||candidateName.split(/\s+/)[0].toLowerCase()!==first)continue;
         const nameMatches=candidateName.toLowerCase()===name.toLowerCase();
         const extendsTruncatedName=sourcedName&&candidateName.toLowerCase().startsWith(name.toLowerCase())&&candidateName.length>name.length;
         if(sourcedName&&!nameMatches&&!extendsTruncatedName)continue;
-        const text=[row?.title,row?.description,row?.content].map(clean).join(' ').toLowerCase();
+        const text=[row?.title,row?.description,row?.markdown,row?.content].map(clean).join(' ').toLowerCase();
         if(!text.includes(company))continue;
         if(!sourcedName||extendsTruncatedName){
           const role=clean(person.title).toLowerCase();
           const roleWords=role.split(/[^\p{L}]+/u).filter(word=>word.length>=4&&!['team','chief','head','vice'].includes(word));
           const titleRole=/team\s+lead(?:er)?/i.test(role)&&/teamledare|team\s+lead(?:er)?/i.test(title)
             ||roleWords.some(word=>title.toLowerCase().includes(word));
-          const description=clean(row?.description||row?.content).toLowerCase();
+          const description=clean(row?.description||row?.markdown||row?.content).toLowerCase();
           const explicitEmployment=new RegExp(`(?:teamledare|team\\s+lead(?:er)?)\\s+(?:at|hos|på)\\s+${company.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}`,'i').test(description);
           const snippetRole=roleWords.some(word=>description.includes(word))&&description.includes(candidateName.toLowerCase());
           if(!titleRole&&!explicitEmployment&&!snippetRole)continue;
@@ -892,6 +892,10 @@
       const wanted=new Set(roleSpecificTokens(role));const actual=new Set(roleSpecificTokens(title));
       const overlap=[...wanted].filter(token=>actual.has(token)).length;
       if(!exact&&!overlap)return;
+      // Shared words such as production do not establish the same buying function.
+      const media=/\b(content|video|film|editorial|creative|media)\b/i;
+      if(media.test(normalizedRole)&&!media.test(title))return;
+      if(media.test(title)&&!media.test(normalizedRole)&&/\b(production|operations|manufacturing|engineering|plant)\b/i.test(normalizedRole))return;
       const base=exact?100-index*10:80-index*10;
       const score=base+Math.min(10,overlap*4)+(SENIORITY_SCORE[clean(person?.seniority).toLowerCase()]||0);
       if(!best||score>best.score)best={score,role,index,exact};

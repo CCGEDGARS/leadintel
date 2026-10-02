@@ -47,6 +47,7 @@ test('focused grounded search can recover a name and address from a public assoc
   const focusedContext={...context,crmAuthenticated:()=>true,bridge:()=>({workspace:{id:'workspace-1'}}),LEADINTEL_API:'https://api.test',
     searchBuyerPublicPages:async query=>{candidates.push(query);return [];},
     fetch:async(_url,options)=>{const body=JSON.parse(options.body);assert.match(body.query,/"lotta.lyra@sodra.com" "Lotta Lyrå"/);return {ok:true,json:async()=>({results:[{url:'https://association.test/annual-report.pdf',description:'Lotta Lyrå · E-mail: lotta.lyra@sodra.com · Board member'}]})};}};
+  focusedContext.fetchBuyerResearch=focusedContext.fetch;
   const searchStart=source.indexOf('async function searchBuyerEmailPatterns('),searchEnd=source.indexOf('async function groundedBuyerFollowUp(',searchStart);
   vm.runInNewContext(`${source.slice(searchStart,searchEnd)};globalThis.search=searchBuyerEmailPatterns;`,focusedContext);
   const candidate={domain:'sodra.com',people:[{publicName:'Lotta Lyrå'}]};
