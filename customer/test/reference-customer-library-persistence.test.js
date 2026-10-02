@@ -84,7 +84,7 @@ test('legacy activated models migrate to a persistent published model',()=>{
 test('Reference Customer library UI exposes persistent active-model and pending-update states',()=>{
   const ui=fs.readFileSync(path.join(__dirname,'..','reference-customer-library-ui.js'),'utf8');
   const runtime=fs.readFileSync(path.join(__dirname,'..','reference-customer-library.js'),'utf8');
-  assert.match(ui,/Customer List/);
+  assert.match(ui,/Reference Companies/);
   assert.match(ui,/model changes waiting to be saved or activated|candidateReady/);
   assert.match(ui,/Save & Activate Model/);
   assert.match(ui,/Update Active Model/);
@@ -103,7 +103,7 @@ test('saved-list activation supports individual evidenced reference profiles',()
 
 test('Reference Customer library presents a simple list-first workflow and hides advanced metadata by default',()=>{
   const ui=fs.readFileSync(path.join(__dirname,'..','reference-customer-library-ui.js'),'utf8');
-  assert.match(ui,/Customer List/);
+  assert.match(ui,/Reference Companies/);
   assert.match(ui,/1\s*·\s*List/);
   assert.match(ui,/2\s*·\s*Analyze/);
   assert.match(ui,/3\s*·\s*Review/);

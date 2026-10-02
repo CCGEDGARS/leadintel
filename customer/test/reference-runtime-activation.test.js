@@ -60,3 +60,30 @@ test('actual profile UI survives duplicate base load, publishes new evidence, an
   assert.match(reload.nodes.get('reference-segments').innerHTML,/checked/);
   assert.match(reload.nodes.get('reference-segments').innerHTML,/Active in company discovery/);
 });
+
+test('saving an existing list with a blank name retains its name instead of inventing Customer List 2',async()=>{
+  const r=runtime();for(const file of ['reference-customers.js','reference-customer-library.js','reference-customer-portfolio.js','reference-customer-library-ui.js'])r.load(file);
+  const P=r.sandbox.LeadIntelReferenceCustomerPortfolio,Ref=r.sandbox.LeadIntelReferenceCustomers;
+  const rows=Ref.normalizeImportedRows([{Company:'Acme',Website:'https://acme.example'}]);
+  const saved=P.saveCurrentList({referenceCustomers:{rows}},{name:'My best customers'});
+  r.storage.set('leadintel_customer_v2_state',JSON.stringify(saved));
+  r.nodes.set('reference-list-name',{value:''});
+  await r.sandbox.LeadIntelReferenceCustomerLibraryUI.saveList();
+  const next=JSON.parse(r.storage.get('leadintel_customer_v2_state'));
+  assert.equal(next.referenceCustomerPortfolio.lists.length,1);
+  assert.equal(next.referenceCustomerPortfolio.lists[0].id,saved.referenceCustomerPortfolio.selectedListId);
+  assert.equal(next.referenceCustomerPortfolio.lists[0].name,'My best customers');
+});
+
+test('saving an unnamed new draft uses company context and does not create it merely on render',async()=>{
+  const r=runtime();for(const file of ['reference-customers.js','reference-customer-library.js','reference-customer-portfolio.js','reference-customer-library-ui.js'])r.load(file);
+  const Ref=r.sandbox.LeadIntelReferenceCustomers;
+  const rows=Ref.normalizeImportedRows([{Company:'Acme',Website:'https://acme.example'}]);
+  r.storage.set('leadintel_customer_v2_state',JSON.stringify({referenceCustomers:{rows},referenceCustomerPortfolio:{version:1,selectedListId:'',lists:[]}}));
+  r.sandbox.LeadIntelReferenceCustomerLibraryUI.sync();
+  assert.equal(JSON.parse(r.storage.get('leadintel_customer_v2_state')).referenceCustomerPortfolio.lists.length,0);
+  await r.sandbox.LeadIntelReferenceCustomerLibraryUI.saveList();
+  const next=JSON.parse(r.storage.get('leadintel_customer_v2_state'));
+  assert.equal(next.referenceCustomerPortfolio.lists.length,1);
+  assert.equal(next.referenceCustomerPortfolio.lists[0].name,'Reference Companies · Acme');
+});

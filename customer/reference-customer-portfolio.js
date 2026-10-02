@@ -124,7 +124,8 @@
     return {active:true,fingerprint,activeCount,confidence,models,dna:{active:true,activeCount,confidence,fingerprint,dimensions:mergeDimensions(models),referenceProfiles:models.flatMap(model=>model.dna?.referenceProfiles||[])}};
   }
   function migrateLegacy(state={}){
-    let next=ensurePortfolio(state);if(next.referenceCustomerPortfolio.lists.length)return next;
+    // An existing library, including an intentionally empty one, is not legacy data.
+    let next=ensurePortfolio(state);if(Array.isArray(state.referenceCustomerPortfolio?.lists))return next;
     const reference=next.referenceCustomers;if(!reference?.rows?.length&&!reference?.publishedModel?.active)return next;
     next=saveCurrentList(next,{name:'Reference Customers',markets:next.targetMarkets||[],purpose:'Legacy reference customer model'});
     const id=next.referenceCustomerPortfolio.selectedListId;if(reference?.publishedModel?.active)next=setListActive(next,id,true);return next;

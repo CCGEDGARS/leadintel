@@ -34,3 +34,27 @@ test('deleting an active list removes its model from active model collection',()
   const next=Portfolio.deleteList(state,'one');
   assert.deepEqual(Portfolio.getActiveModels(next),[]);
 });
+
+
+test('deleting a different saved list preserves the unsaved working draft through reload',()=>{
+  const state={referenceCustomers:ref('unsaved'),referenceCustomerPortfolio:{version:1,selectedListId:'one',lists:[{id:'one',name:'One',reference:ref('one')},{id:'two',name:'Two',reference:ref('two')}]}};
+  const next=Portfolio.deleteList(state,'two');
+  assert.equal(next.referenceCustomers.rows[0].companyName,'unsaved');
+  const reload=Portfolio.migrateLegacy(JSON.parse(JSON.stringify(next)));
+  assert.deepEqual(reload.referenceCustomerPortfolio.lists.map(x=>x.id),['one']);
+  assert.equal(reload.referenceCustomers.rows[0].companyName,'unsaved');
+});
+
+test('an intentionally empty library never migrates an unsaved draft into a new saved list',()=>{
+  const state={referenceCustomers:ref('unsaved'),referenceCustomerPortfolio:{version:1,selectedListId:'',lists:[]}};
+  const reload=Portfolio.migrateLegacy(JSON.parse(JSON.stringify(state)));
+  assert.equal(reload.referenceCustomerPortfolio.lists.length,0);
+  assert.equal(reload.referenceCustomers.rows.length,1);
+});
+
+test('true legacy references still migrate once and remain stable after reload',()=>{
+  const state=Portfolio.migrateLegacy({referenceCustomers:ref('legacy')});
+  assert.equal(state.referenceCustomerPortfolio.lists.length,1);
+  const reload=Portfolio.migrateLegacy(JSON.parse(JSON.stringify(state)));
+  assert.equal(reload.referenceCustomerPortfolio.lists[0].id,state.referenceCustomerPortfolio.lists[0].id);
+});
