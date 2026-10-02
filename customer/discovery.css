@@ -347,3 +347,8 @@
 .potential-match-card h4{font-size:16px}
 .potential-match-card>div:first-child>a,.potential-match-gaps strong,.potential-match-gaps ul,.potential-match-evidence strong,.potential-match-evidence small{font-size:12px;line-height:1.5;overflow-wrap:anywhere}
 @media(max-width:700px){.potential-match-card{grid-template-columns:1fr}.potential-match-card>div:first-child,.potential-match-gaps,.potential-match-evidence{grid-column:1;grid-row:auto}}
+
+.qualification-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 16px;margin-bottom:16px;border:1px solid #d5e7df;border-radius:10px;background:#f4faf7;font-size:13px;color:#29483c}
+[data-qualification-settings]{margin-top:16px;padding-top:12px;border-top:1px solid #dce6e1}
+[data-qualification-settings] p{font-size:12px;line-height:1.5;color:#5e7066}
+[data-qualification-settings] select{min-width:140px}

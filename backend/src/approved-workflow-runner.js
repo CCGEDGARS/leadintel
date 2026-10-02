@@ -19,7 +19,7 @@ async function search(env,workspaceId,query,guard){
   const payload=await providerJson(url,{method:'POST',headers,body:JSON.stringify({query:query.query,limit:5,scrapeOptions:{formats:['markdown']}})});await guard();
   // Snippets without an extracted page are insufficient for automatic qualification.
   const raw=Array.isArray(payload.data)?payload.data:payload.data?.web||payload.web||[];
-  return discovery.normalizeCompanySearchResults({data:raw.filter(item=>String(item.markdown||item.content||item.text||'').trim().length>=120)},query);
+  return discovery.normalizeCompanySearchResults({data:raw.filter(item=>String(item.markdown||item.content||item.text||'').trim().length>=120)},query).map(item=>({...item,verifiedAt:new Date().toISOString()}));
 }
 async function buyer(env,workspaceId,candidate,config,guard){
   const company=await findCrmCompanyByDomain(env.DB,workspaceId,candidate.domain);
@@ -35,7 +35,7 @@ async function buyer(env,workspaceId,candidate,config,guard){
   const email=provenBusinessEmail(person,candidate.domain);return email?{...person,email,email_status:'verified',source:'apollo',external_person_id:person.id}:null;
 }
 export async function executeWorkflowStage(stage,{env,row,run,result,context,config,guard}){
-  await guard();const profile={...context.profile,decisionMakers:config.buyers.roles.join('; ')},market={icps:context.icps,signals:context.signals};
+  await guard();const profile={...context.profile,discoveryPriority:config.companies.researchPriority,decisionMakers:config.buyers.roles.join('; ')},market={icps:context.icps,signals:context.signals};
   if(stage==='profile'||stage==='strategy')return {...result,contextValidated:true};
   if(stage==='companies'){
     const baseQueries=discovery.buildDiscoveryQueries(profile,market,config.companies.queries);
@@ -45,25 +45,38 @@ export async function executeWorkflowStage(stage,{env,row,run,result,context,con
     const results=(context.knownEvidence||[]).flatMap(item=>discovery.normalizeCompanySearchResults({data:[item]},{id:'approved-research',market:item.market||profile.targetMarkets.split(/[,;]/)[0]}));if(!queries.length)throw new Error('Approved targeting did not produce research queries');
     for(const query of queries)results.push(...await search(env,row.workspace_id,query,guard));
     // Follow up at company level before the automatic evidence/fit gate.
-    const provisional=discovery.mergeCompanyCandidates(results,profile,market,config.companies.limit);
-    for(const candidate of provisional){const query={id:`verify-${candidate.domain}`,kind:'verification',domain:candidate.domain,company:candidate.company,market:candidate.market,query:`site:${candidate.domain} ${profile.priorityOffers} ${context.signals.filter(s=>s.active).map(s=>s.name).join(' ')}`};results.push(...await search(env,row.workspace_id,query,guard));}
-    const candidates=discovery.mergeCompanyCandidates(results,profile,market,config.companies.limit).filter(candidate=>!profile.referenceDomains?.includes(candidate.domain)&&discovery.isActionableCandidate(candidate)&&Number(candidate.score?.total)>=config.triggers.minimumScore&&freshEvidence(candidate,config.triggers.maxEvidenceAgeDays).length);
-    return {...result,queries,candidates,researchedAt:new Date().toISOString(),sourceCount:new Set(results.map(r=>r.url)).size};
+    const mentions=results.flatMap(item=>discovery.extractCompanyMentions([item],2)).slice(0,30);
+    const resolutions=[];
+    for(const query of discovery.buildCompanyResolutionQueries(mentions,profile,Math.min(10,config.companies.limit*2)))resolutions.push(...await search(env,row.workspace_id,query,guard));
+    const linked=discovery.attachSourceEvidenceToResolvedCompanies(resolutions,mentions,results);results.unshift(...linked);
+    const initialQualified=discovery.mergeCompanyCandidates(results,profile,market,30);
+    const provisional=[...initialQualified,...discovery.buildPotentialCompanyCandidates(results,profile,market,initialQualified,30)];
+    for(const query of discovery.buildCandidateVerificationQueries(provisional,profile,market,Math.min(10,config.companies.limit*2)))results.push(...await search(env,row.workspace_id,query,guard));
+    const signalCandidates=discovery.mergeCompanyCandidates(results,profile,market,30);
+    const pool=[...signalCandidates,...discovery.buildPotentialCompanyCandidates(results,profile,market,signalCandidates,30)];
+    const researchedAt=new Date().toISOString();
+    const assessed=pool.map(candidate=>({...candidate,qualification:discovery.assessAutomaticQualification(candidate,profile,market,{...config.companies,...config.triggers,researchedAt})}));
+    const candidates=[];
+    for(const candidate of assessed.filter(c=>c.qualification.eligible).sort((a,b)=>Number(b.qualification.route==='both')-Number(a.qualification.route==='both')||b.qualification.score-a.qualification.score)){
+      const saved=await findCrmCompanyByDomain(env.DB,row.workspace_id,candidate.domain);if(saved&&saved.lifecycle_status!=='prospect')continue;
+      candidates.push({...candidate,matchedSignals:candidate.qualification.matchedSignals});if(candidates.length>=config.companies.limit)break;
+    }
+    return {...result,queries,candidates,reviewCompanies:assessed.filter(c=>!c.qualification.eligible),researchedAt,sourceCount:new Set(results.map(r=>r.url)).size};
   }
   if(stage==='buyers'){
     const candidates=[];for(const candidate of result.candidates||[]){await guard();const contact=await buyer(env,row.workspace_id,candidate,config,guard);if(contact)candidates.push({...candidate,contact});}
     return {...result,candidates,skippedWithoutVerifiedBuyer:(result.candidates||[]).length-candidates.length};
   }
-  if(stage==='triggers')return {...result,candidates:(result.candidates||[]).filter(c=>discovery.isActionableCandidate(c)&&freshEvidence(c,config.triggers.maxEvidenceAgeDays).length)};
+  if(stage==='triggers')return {...result,candidates:(result.candidates||[]).filter(c=>discovery.assessAutomaticQualification(c,profile,market,{...config.companies,...config.triggers,researchedAt:result.researchedAt}).eligible)};
   if(stage==='messages'){
-    const candidates=(result.candidates||[]).map(candidate=>{const evidence=freshEvidence(candidate,config.triggers.maxEvidenceAgeDays)[0],values={firstName:candidate.contact.first_name||String(candidate.contact.name||'').split(' ')[0],company:candidate.company,sender:profile.companyName,offer:profile.priorityOffers,evidenceUrl:evidence?.url};return {...candidate,message:{subject:renderWorkflowMessage(config.messages.subject,values),body:renderWorkflowMessage(config.messages.body,values),followup_body:renderWorkflowMessage(config.messages.followup,values)}};});return {...result,candidates};
+    const candidates=(result.candidates||[]).map(candidate=>{const evidence=candidate.qualification?.route==='lookalike'?candidate.evidence.find(e=>discovery.companyIdentityDomain(e.url)===candidate.domain):freshEvidence(candidate,config.triggers.maxEvidenceAgeDays)[0],values={firstName:candidate.contact.first_name||String(candidate.contact.name||'').split(' ')[0],company:candidate.company,sender:profile.companyName,offer:profile.priorityOffers,evidenceUrl:evidence?.url};return {...candidate,message:{subject:renderWorkflowMessage(config.messages.subject,values),body:renderWorkflowMessage(config.messages.body,values),followup_body:renderWorkflowMessage(config.messages.followup,values)}};});return {...result,candidates};
   }
   const crmContext={workspaceId:row.workspace_id,userId:row.approved_by,role:'owner'};
   if(stage==='crm'){
     const candidates=[];for(const candidate of result.candidates||[]){await guard();const old=await findCrmCompanyByDomain(env.DB,row.workspace_id,candidate.domain);if(old&&old.lifecycle_status!=='prospect')continue;
       const saved=await upsertCrmCompany(env.DB,crmContext,{...candidate,pipeline_stage:'Ready for Outreach',source:'approved_workflow'});await guard();
       const contacts=await upsertCrmContacts(env.DB,crmContext,saved.company.id,[{...candidate.contact,work_email:candidate.contact.email,email_status:'verified'}]);await guard();
-      await upsertCrmIntelligence(env.DB,crmContext,saved.company.id,{matched_signals:candidate.matchedSignals,evidence:candidate.evidence,score_breakdown:candidate.score,confidence:candidate.confidence,research_snapshot:{runId:run.id,revision:row.revision,researchAt:result.researchedAt}});await guard();
+      await upsertCrmIntelligence(env.DB,crmContext,saved.company.id,{matched_signals:candidate.matchedSignals,evidence:candidate.evidence,score_breakdown:{...candidate.score,qualification:candidate.qualification},confidence:candidate.confidence,research_snapshot:{runId:run.id,revision:row.revision,researchAt:result.researchedAt}});await guard();
       await appendCrmActivity(env.DB,crmContext,{id:`workflow-message-${run.id}-${saved.company.id}`,companyId:saved.company.id,type:'dossier.built',summary:'Message generated under approved workflow template',metadata:{run_id:run.id,revision:row.revision,subject:candidate.message.subject,body:candidate.message.body,approval:'workflow_template',script_package:{version:1,savedAt:new Date().toISOString(),item:{domain:candidate.domain,company:candidate.company,researchStatus:'complete',researchAt:result.researchedAt,selectedPersonId:contacts[0]?.id||candidate.contact.id,approved:false,dossier:{company:candidate.company,domain:candidate.domain,website:candidate.website,market:candidate.market,recommendedOffer:profile.priorityOffers,buyerRoles:config.buyers.roles,evidence:candidate.evidence,matchedSignals:candidate.matchedSignals,people:[{...candidate.contact,id:contacts[0]?.id||candidate.contact.id}]},drafts:{emailSubject:candidate.message.subject,emailBody:candidate.message.body,followUp:candidate.message.followup_body}}}}});
       candidates.push({...candidate,crmId:saved.company.id});}return {...result,candidates};
   }

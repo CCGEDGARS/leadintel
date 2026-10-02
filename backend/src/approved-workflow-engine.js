@@ -10,7 +10,7 @@ function canonical(value){if(Array.isArray(value))return value.map(canonical);if
 export const fingerprint=value=>sha256(JSON.stringify(canonical(value)));
 export function approvedContext(main={}){
   const market=main.market||{},confirmed=globalThis.LeadIntelTargeting?.profileFields?.(main)||{};
-  const lookalike=market.icps?.find(item=>item.type==='lookalike'||item.id==='icp-lookalike');
+  const lookalike=market.icps?.find(item=>item.type==='lookalike'||item.type==='lookalike-led'||item.id==='icp-lookalike'||item.id==='icp-reference-lookalike');
   const referenceSimilarityModel=lookalike?.active===false?null:globalThis.LeadIntelReferenceCustomerPortfolio?.getCombinedActiveModel?.(main)||globalThis.LeadIntelReferenceCustomers?.getActiveReferenceModel?.(main.referenceCustomers||{})||null;
   const referenceDomains=[...(main.referenceCustomers?.rows||[]),...(referenceSimilarityModel?.activeRows||[]),...(referenceSimilarityModel?.models||[]).flatMap(model=>model.activeRows||[])].map(item=>globalThis.LeadIntelReferenceCustomers.domain(item.website||item.domain)).filter(Boolean);
   const profile={...(main.profile||{}),...Object.fromEntries(Object.entries(confirmed).filter(([,value])=>value)),referenceSimilarityModel,referenceDomains};
@@ -22,8 +22,10 @@ export function approvedContext(main={}){
 }
 export function normalizeWorkflowConfig(input={}){
   const integer=(v,d,min,max)=>{const n=v===undefined?d:Number(v);if(!Number.isInteger(n)||n<min||n>max)throw new Error(`Choose a whole number from ${min} to ${max}`);return n;};
-  const config={companies:{limit:integer(input.companies?.limit,3,1,10),queries:integer(input.companies?.queries,4,1,8)},
-    buyers:{roles:list(input.buyers?.roles),enrich:input.buyers?.enrich===true},triggers:{minimumScore:integer(input.triggers?.minimumScore,70,50,100),maxEvidenceAgeDays:integer(input.triggers?.maxEvidenceAgeDays,90,1,365)},
+  const priority=input.companies?.researchPriority||'balanced';if(!['lookalike','signals','balanced'].includes(priority))throw new Error('Choose Lookalike first, Signals first or Balanced');
+  const minimum=input.qualificationVersion===2?Number(input.triggers?.minimumScore??80):[70,80,90].includes(Number(input.triggers?.minimumScore))?Number(input.triggers.minimumScore):80;if(![70,80,90].includes(minimum))throw new Error('Choose a minimum qualification score of 70, 80 or 90');
+  const config={qualificationVersion:2,companies:{researchPriority:priority,limit:integer(input.companies?.limit,3,1,10),queries:integer(input.companies?.queries,4,1,8)},
+    buyers:{roles:list(input.buyers?.roles),enrich:input.buyers?.enrich===true},triggers:{minimumScore:minimum,maxEvidenceAgeDays:integer(input.triggers?.maxEvidenceAgeDays,90,1,365)},
     messages:{subject:text(input.messages?.subject,500),body:text(input.messages?.body,12000),followup:text(input.messages?.followup,6000)},
     crm:{saveQualified:true},delivery:{dailyLimit:integer(input.delivery?.dailyLimit,5,1,50),frequency:input.delivery?.frequency==='weekly'?'weekly':'daily',timezone:text(input.delivery?.timezone||'UTC',80),sendWindowStart:text(input.delivery?.sendWindowStart||'09:00',5),sendWindowEnd:text(input.delivery?.sendWindowEnd||'17:00',5),workingDays:[1,2,3,4,5],maxFollowups:input.messages?.followup?1:0}};
   try{new Intl.DateTimeFormat('en',{timeZone:config.delivery.timezone});}catch{throw new Error('Choose a valid timezone');}
@@ -34,7 +36,7 @@ export function normalizeWorkflowConfig(input={}){
 }
 export function stageSnapshot(stage,context,config){
   const index=WORKFLOW_STAGES.indexOf(stage);if(index<0)throw new Error('Unknown workflow stage');
-  return {stage,context,settings:Object.fromEntries(WORKFLOW_STAGES.slice(0,index+1).filter(k=>config[k]).map(k=>[k,config[k]]))};
+  return {stage,context,...(index>=2?{qualification:{version:config.qualificationVersion,priority:config.companies.researchPriority,...config.triggers}}:{}),settings:Object.fromEntries(WORKFLOW_STAGES.slice(0,index+1).filter(k=>config[k]).map(k=>[k,config[k]]))};
 }
 export async function approvalStatus(context,config,approvals={}){
   const stages=[];for(const stage of WORKFLOW_STAGES){const hash=await fingerprint(stageSnapshot(stage,context,config));stages.push({stage,approved:approvals[stage]?.hash===hash,hash,approvedAt:approvals[stage]?.at||null});}return stages;
@@ -42,7 +44,8 @@ export async function approvalStatus(context,config,approvals={}){
 export function setupBlockers(context,config){
   const gaps=[];if(!context.profileApproved)gaps.push('Approve the company profile');if(!context.strategyApproved)gaps.push('Approve the market strategy');
   if(!text(context.profile?.companyName)||!text(context.profile?.priorityOffers)||!text(context.profile?.targetMarkets))gaps.push('Complete company name, priority offer and target markets');
-  if(!context.signals.some(x=>x.active===true))gaps.push('Activate at least one buying signal');
+  if(config.companies.researchPriority!=='lookalike'&&!context.signals.some(x=>x.active===true))gaps.push('Activate at least one buying signal');
+  if(config.companies.researchPriority==='lookalike'&&!context.profile?.referenceSimilarityModel)gaps.push('Activate an evidence-backed reference customer model for Lookalike first');
   if(!config.buyers.roles.length)gaps.push('Choose buyer roles');
   const brain=globalThis.LeadIntelCompanyBrain;
   const conflicts=brain?.strategyConflicts?.(context.profile,context.signals)||[];
