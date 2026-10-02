@@ -1,3 +1,4 @@
+import EvidencePolicy from '../../customer/evidence-policy.js';
 const uuid=()=>crypto.randomUUID();
 const now=()=>new Date().toISOString();
 
@@ -13,7 +14,7 @@ function validActivityId(value){return /^[A-Za-z0-9._:-]{8,128}$/.test(String(va
 function isContactUniqueConstraint(error){const message=String(error?.message||'');return message.includes('UNIQUE constraint failed: crm_contacts.')&&/normalized_email|external_person_id/.test(message);}
 function safeUrl(value){const raw=clean(value,2000);if(!raw)return '';try{const candidate=/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)?raw:`https://${raw}`;const url=new URL(candidate);return ['http:','https:'].includes(url.protocol)?url.href:'';}catch{return '';}}
 
-export function normalizeDomain(value){const raw=clean(value,2000);if(!raw||/\s/.test(raw))return '';try{const candidate=/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)?raw:`https://${raw}`;const url=new URL(candidate);let host=String(url.hostname||'').toLowerCase().replace(/\.$/,'').replace(/^www\./,'');if(!host||host==='localhost'||!host.includes('.'))return '';return host.slice(0,253);}catch{return '';}}
+export function normalizeDomain(value){const raw=clean(value,2000);if(!raw||/\s/.test(raw))return '';try{const candidate=/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)?raw:`https://${raw}`;const url=new URL(candidate);let host=String(url.hostname||'').toLowerCase().replace(/\.$/,'').replace(/^www\./,'');if(!host||host==='localhost'||!host.includes('.'))return '';return EvidencePolicy.companyDomain(host).slice(0,253);}catch{return '';}}
 export function normalizeEmail(value){const email=clean(value,320).toLowerCase();if(!email||/\s/.test(email)||!(/^[^@]+@[^@]+\.[^@]+$/.test(email)))return '';return email;}
 export function validateLifecycle(value){const lifecycle=clean(value,32);if(!CRM_LIFECYCLES.includes(lifecycle))throw crmError('CRM_INVALID_LIFECYCLE',`Invalid CRM lifecycle: ${lifecycle||'(empty)'}`);return lifecycle;}
 export function normalizePipelineStage(value,{allowNull=true}={}){if(value===null||value===undefined||value===''){if(allowNull)return null;throw crmError('CRM_INVALID_PIPELINE_STAGE','Pipeline stage is required');}const stage=clean(value,64)==='Contact Found'?'Qualified':clean(value,64);if(!CRM_PIPELINE_STAGES.includes(stage))throw crmError('CRM_INVALID_PIPELINE_STAGE',`Invalid CRM pipeline stage: ${stage}`);return stage;}
@@ -21,7 +22,7 @@ export function nextPipelineStage(current,requested){const next=normalizePipelin
 export function canRestoreSuppressed(role){return clean(role,32).toLowerCase()==='owner';}
 
 async function companyRow(db,workspaceId,id){return db.prepare(`SELECT * FROM crm_companies WHERE id=? AND workspace_id=? AND deleted_at IS NULL`).bind(id,workspaceId).first();}
-export async function findCrmCompanyByDomain(db,workspaceId,value){const domain=normalizeDomain(value);if(!domain)return null;return db.prepare(`SELECT * FROM crm_companies WHERE workspace_id=? AND normalized_domain=? AND deleted_at IS NULL`).bind(workspaceId,domain).first();}
+export async function findCrmCompanyByDomain(db,workspaceId,value){const domain=normalizeDomain(value);if(!domain)return null;const aliases=[domain,...['www','media','investors','investor','newsroom','news','press','ir','en','sv','se','fi','de','fr','lv','lt','ee','pl','es','it'].map(prefix=>`${prefix}.${domain}`).filter(alias=>EvidencePolicy.companyDomain(alias)===domain)];return db.prepare(`SELECT * FROM crm_companies WHERE workspace_id=? AND normalized_domain IN (${aliases.map(()=>'?').join(',')}) AND deleted_at IS NULL ORDER BY CASE WHEN lifecycle_status='suppressed' THEN 0 WHEN normalized_domain=? THEN 1 ELSE 2 END, id LIMIT 1`).bind(workspaceId,...aliases,domain).first();}
 async function companyByDomain(db,workspaceId,domain){return findCrmCompanyByDomain(db,workspaceId,domain);}
 function parseIntelligence(row){if(!row)return null;return {...row,matched_signals:safeJson(row.matched_signals_json,[]),evidence:safeJson(row.evidence_json,[]),score_breakdown:safeJson(row.score_breakdown_json,{}),research_snapshot:safeJson(row.research_snapshot_json,{})};}
 function parseActivity(row){return {...row,metadata:safeJson(row.metadata_json,{})};}

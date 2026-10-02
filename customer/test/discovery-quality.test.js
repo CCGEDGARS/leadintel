@@ -6,7 +6,7 @@ test("discovery excludes the customer website and tender portals when tenders ar
   const results=discovery.mergeCompanyCandidates([
     {url:"https://ajprodukti.lv/levelpath",domain:"ajprodukti.lv",title:"Levelpath – AJ Produkti",description:"AJ Produkti office furniture",text:"AJ Produkti office furniture"},
     {url:"https://eis.gov.lv/EKEIS/Supplier/ViewProcurement",domain:"eis.gov.lv",title:"Public procurement tender",description:"Supplier procurement notice",text:"Tender procurement notice"},
-    {url:"https://buyer.lv/news/new-factory",domain:"buyer.lv",title:"Buyer opens a new factory in Latvia",description:"Expansion announcement",text:"The company opens a new factory and expands capacity in Latvia. It needs office furniture for the new offices."}
+    {date:new Date().toISOString().slice(0,10),url:"https://buyer.lv/news/new-factory",domain:"buyer.lv",title:"Buyer opens a new factory in Latvia",description:"Expansion announcement",text:"The company opens a new factory and expands capacity in Latvia. It needs office furniture for the new offices."}
   ],{website:"https://www.ajprodukti.lv",targetMarkets:"Latvia",priorityOffers:"Office furniture",idealCustomer:"Companies and institutions",exclusions:"Tenders"},{researchSourceTypes:["news"],signals:[{id:"facility-expansion",name:"Facility expansion",active:true,weight:9,keywords:"new factory; expansion"}]});
   assert.deepEqual(results.map(item=>item.domain),["buyer.lv"]);
   assert.deepEqual(results[0].matchedSignals.map(item=>item.name),["Facility expansion"]);
@@ -55,7 +55,7 @@ test("signal matching does not treat substrings or generic product words as buyi
     url:"https://modvion.com/news/wooden-tower",domain:"modvion.com",company:"Modvion",market:"Sweden",
     title:"Modvion introduces a sustainable wooden wind turbine tower",
     description:"Product information is available on the company site.",
-    text:"The company maintains its product information and launches product improvements throughout the year in Sweden."
+    text:"Modvion is headquartered in Sweden. The company maintains its product information and launches product improvements throughout the year."
   }];
   assert.deepEqual(discovery.mergeCompanyCandidates(evidence,profile,market),[]);
   const possible=discovery.buildPotentialCompanyCandidates(evidence,profile,market,[]);
@@ -68,8 +68,8 @@ test("generic company directories do not add fit, signal, evidence or confidence
   const profile={website:"https://ercon.lv",priorityOffers:"metal structures; installation",idealCustomer:"wind energy infrastructure operators"};
   const market={signals:[{id:"expansion",name:"Capacity expansion",active:true,weight:9,keywords:"new factory; capacity expansion"}]};
   const verified=[
-    {url:"https://nordicwind.se/news/factory",domain:"nordicwind.se",sourceDomain:"nordicwind.se",company:"Nordic Wind",market:"Sweden",title:"Nordic Wind plans a new factory",description:"The Swedish company is expanding capacity.",text:"Nordic Wind plans a new factory in Sweden and will install metal structures for its wind-energy infrastructure."},
-    {url:"https://industrynews.se/nordicwind-expansion",domain:"nordicwind.se",sourceDomain:"industrynews.se",company:"Nordic Wind",market:"Sweden",title:"Nordic Wind expands",description:"Nordic Wind plans a new factory and expands capacity.",text:"Nordic Wind plans a new factory in Sweden and expands its production capacity."}
+    {date:new Date().toISOString().slice(0,10),url:"https://nordicwind.se/news/factory",domain:"nordicwind.se",sourceDomain:"nordicwind.se",company:"Nordic Wind",market:"Sweden",title:"Nordic Wind plans a new factory",description:"The Swedish company is expanding capacity.",text:"Nordic Wind plans a new factory in Sweden and will install metal structures for its wind-energy infrastructure."},
+    {date:new Date().toISOString().slice(0,10),url:"https://industrynews.se/nordicwind-expansion",domain:"nordicwind.se",sourceDomain:"industrynews.se",company:"Nordic Wind",market:"Sweden",title:"Nordic Wind expands",description:"Nordic Wind plans a new factory and expands capacity.",text:"Nordic Wind plans a new factory in Sweden and expands its production capacity."}
   ];
   const directory={url:"https://www.f6s.com/nordicwind",domain:"nordicwind.se",sourceDomain:"f6s.com",company:"Nordic Wind",market:"Sweden",title:"63 Top Manufacturing Companies in Sweden · September 2026 – F6S",description:"Company profile, product updates and funding.",text:"Nordic Wind is listed among manufacturing companies in Sweden. Latest product and AI updates."};
   assert.equal(discovery.isLowQualityDiscoveryEvidence(directory),true);
@@ -110,7 +110,7 @@ test("discovery rejects a same-service seller even when its target-market domain
 
 test("a manufacturer that buys automation is not excluded as an automation seller",()=>{
   const results=discovery.mergeCompanyCandidates([{
-    url:"https://steelworks.se/news/expansion",domain:"steelworks.se",company:"Steelworks AB",market:"Sweden",
+    date:new Date().toISOString().slice(0,10),url:"https://steelworks.se/news/expansion",domain:"steelworks.se",company:"Steelworks AB",market:"Sweden",
     title:"Steelworks AB announces production capacity expansion",
     description:"The Swedish steel manufacturer is investing in industrial automation for its own production lines.",
     text:"Steelworks AB, a Swedish steel manufacturer, is investing in industrial automation to improve its own production lines as it expands capacity."
@@ -152,7 +152,7 @@ test("a company branded as the target service manufacturer remains excluded",()=
 
 test("discovery keeps a verified target-market buyer with company-specific signal evidence",()=>{
   const results=discovery.mergeCompanyCandidates([{
-    url:"https://nordicfood.se/news/new-factory",domain:"nordicfood.se",company:"Nordic Food AB",market:"Sweden",
+    date:new Date().toISOString().slice(0,10),url:"https://nordicfood.se/news/new-factory",domain:"nordicfood.se",company:"Nordic Food AB",market:"Sweden",
     title:"Nordic Food opens a new factory",description:"The Swedish food producer is increasing manufacturing capacity.",
     text:"Nordic Food AB is opening a new factory in Sweden and expanding production capacity. The investment includes new production lines and requires outsourced metal fabrication for the new plant."
   }],{
@@ -230,7 +230,7 @@ test("Latvian buying signals search for and match equivalent Swedish evidence",(
   assert.match(verification.query,/ny fabrik|capacity expansion/i);
 
   const candidates=discovery.mergeCompanyCandidates([{
-    url:"https://nordicfood.se/nyheter/ny-fabrik",domain:"nordicfood.se",company:"Nordic Food",market:"Zviedrija",
+    date:new Date().toISOString().slice(0,10),url:"https://nordicfood.se/nyheter/ny-fabrik",domain:"nordicfood.se",company:"Nordic Food",market:"Zviedrija",
     title:"Nordic Food bygger ny fabrik",description:"Bolaget utökar produktionskapaciteten i Sverige.",
     text:"Nordic Food bygger en ny fabrik och utökar produktionskapaciteten i Sverige. The expansion requires metal structures and on-site installation."
   }],profile,market,10);
@@ -363,7 +363,7 @@ test("third-party evidence cannot qualify a company without a resolved official 
   if(typeof discovery.attachSourceEvidenceToResolvedCompanies!=="function")return;
   const sourceUrl="https://industry-news.se/example-expansion";
   const linked=discovery.attachSourceEvidenceToResolvedCompanies([], [{company:"Example AB",market:"Sweden",sourceUrl}], [{
-    url:sourceUrl,domain:"industry-news.se",market:"Sweden",title:"Example AB expands",text:"Example AB opens a new factory in Sweden."
+    date:new Date().toISOString().slice(0,10),url:sourceUrl,domain:"industry-news.se",market:"Sweden",title:"Example AB expands",text:"Example AB opens a new factory in Sweden."
   }]);
   assert.deepEqual(linked,[]);
 });
@@ -374,7 +374,7 @@ test("target market can be verified by the linked evidence country when the offi
     url:"https://example-industries.com/",domain:"example-industries.com",company:"Example Industries",market:"Zviedrija",
     title:"Example Industries",description:"Industrial producer",text:"Official company website"
   }],[{company:"Example Industries",market:"Zviedrija",sourceUrl}],[{
-    url:sourceUrl,domain:"industry-news.se",market:"Zviedrija",title:"Example Industries invests",
+    date:new Date().toISOString().slice(0,10),url:sourceUrl,domain:"industry-news.se",market:"Zviedrija",title:"Example Industries invests",
     description:"Example Industries builds a new facility and expands production capacity in Sweden. The expansion requires custom metal structures for installation.",text:""
   }]);
   const candidates=discovery.mergeCompanyCandidates(linked,{

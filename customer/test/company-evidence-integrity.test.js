@@ -37,13 +37,13 @@ test('only a concrete company event matches a buying signal, not marketing inves
  assert.deepEqual(D.mergeCompanyCandidates([event({date:oldDate})],profile,market),[]);
 });
 
-test('undated concrete events retain explicit date uncertainty and earn no timing points',()=>{
- const candidate=D.mergeCompanyCandidates([event({date:''})],profile,market)[0];
- assert.equal(candidate.confidence,'Low');
- assert.equal(candidate.score.timing,0);
- assert.equal(candidate.matchedSignals[0].evidence[0].recency,'unverified');
- const restored=D.normalizeDiscoveryState({qualityVersion:D.DISCOVERY_QUALITY_VERSION,candidates:[candidate]}).candidates[0];
- assert.deepEqual(restored.matchedSignals[0].evidence,candidate.matchedSignals[0].evidence);
+test('undated concrete events remain potential prospects without opportunity or timing scores',()=>{
+ assert.deepEqual(D.mergeCompanyCandidates([event({date:''})],profile,market),[]);
+ const candidate=D.buildPotentialCompanyCandidates([event({date:''})],profile,market)[0];
+ assert.ok(candidate.qualificationGaps.includes('Buying signal date is unverified'));
+ assert.equal(candidate.score,undefined);
+ const restored=D.normalizeDiscoveryState({qualityVersion:D.DISCOVERY_QUALITY_VERSION,potentialMatches:[candidate]}).potentialMatches[0];
+ assert.deepEqual(restored.qualificationGaps,candidate.qualificationGaps);
 });
 
 test('tracking URLs and syndicated duplicate stories cannot inflate source counts',()=>{

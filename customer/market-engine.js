@@ -4,6 +4,7 @@
   if(root)root.LeadIntelMarket=api;
 })(typeof globalThis!=="undefined"?globalThis:this,function(){
   "use strict";
+  const EvidencePolicy=typeof module==='object'&&module.exports?require('./evidence-policy.js'):globalThis.LeadIntelEvidencePolicy;
 
   const DEFAULT_MARKET_STATE=Object.freeze({
     icps:[],signals:[],researchQueries:[],researchResults:[],opportunities:[],researchQuality:null,
@@ -310,13 +311,13 @@
     const raw=Array.isArray(payload?.data)?payload.data:Array.isArray(payload?.data?.web)?payload.data.web:Array.isArray(payload?.web)?payload.web:Array.isArray(payload?.results)?payload.results:[];
     return raw.slice(0,8).map(item=>{
       const url=canonicalUrl(item?.url||item?.link||"");
-      if(!url)return null;
+      if(!url||(EvidencePolicy&&!EvidencePolicy.usable(item)))return null;
       const description=clean(item?.description||item?.snippet||"");
       const body=clean(item?.markdown||item?.content||item?.text||description);
       return {
         queryId:clean(queryMeta.id),market:clean(queryMeta.market),query:clean(queryMeta.query),researchCategory:clean(queryMeta.researchCategory)||"commercial",
         url,title:clean(item?.title)||new URL(url).hostname,description,
-        text:body.slice(0,5000),date:clean(item?.publishedDate||item?.date||item?.published_at||item?.metadata?.publishedDate),
+        text:body.slice(0,5000),...(EvidencePolicy?.publication(item)||{date:clean(item?.date)}),
         sourceProviders:normalizeProviders([...(Array.isArray(item?.sourceProviders)?item.sourceProviders:[]),sourceProvider]),extractedBy:clean(item?.extractedBy),extractedAt:clean(item?.extractedAt),qualityScore:Math.max(0,Math.min(100,Number(item?.qualityScore)||0)),sourceClass:clean(item?.sourceClass)
       };
     }).filter(Boolean);
@@ -328,7 +329,7 @@
       const url=canonicalUrl(item?.url);if(!url)continue;
       const next={
         queryId:clean(item?.queryId),market:clean(item?.market),query:clean(item?.query),researchCategory:clean(item?.researchCategory)||"commercial",url,
-        title:clean(item?.title),description:clean(item?.description),text:String(item?.text||"").slice(0,12000),date:clean(item?.date),
+        title:clean(item?.title),description:clean(item?.description),text:String(item?.text||"").slice(0,12000),date:clean(item?.date),dateSource:clean(item?.dateSource),
         sourceProviders:normalizeProviders(item?.sourceProviders),extractedBy:clean(item?.extractedBy),extractedAt:clean(item?.extractedAt),qualityScore:Math.max(0,Math.min(100,Number(item?.qualityScore)||0)),sourceClass:clean(item?.sourceClass)
       };
       const current=merged.get(url);
@@ -442,7 +443,7 @@
     const researchInstructions=clean(input.researchInstructions).slice(0,1200);
     const researchQueries=(Array.isArray(input.researchQueries)?input.researchQueries:[]).slice(0,RESEARCH_MODES[researchMode].maxQueries).map(item=>({id:clean(item?.id),market:clean(item?.market),offer:clean(item?.offer),sourceType:clean(item?.sourceType),researchCategory:clean(item?.researchCategory)||"commercial",query:clean(item?.query)})).filter(item=>item.id&&item.query);
     const researchResults=(Array.isArray(input.researchResults)?input.researchResults:[]).slice(0,RESEARCH_MODES[researchMode].maxStoredResults).map(item=>({
-      queryId:clean(item?.queryId),market:clean(item?.market),query:clean(item?.query),researchCategory:clean(item?.researchCategory)||"commercial",url:canonicalUrl(item?.url),title:clean(item?.title),description:clean(item?.description),text:String(item?.text||"").slice(0,12000),date:clean(item?.date),sourceProviders:normalizeProviders(item?.sourceProviders),extractedBy:clean(item?.extractedBy),extractedAt:clean(item?.extractedAt),qualityScore:Math.max(0,Math.min(100,Number(item?.qualityScore)||0)),sourceClass:clean(item?.sourceClass),
+      queryId:clean(item?.queryId),market:clean(item?.market),query:clean(item?.query),researchCategory:clean(item?.researchCategory)||"commercial",url:canonicalUrl(item?.url),title:clean(item?.title),description:clean(item?.description),text:String(item?.text||"").slice(0,12000),date:clean(item?.date),dateSource:clean(item?.dateSource),sourceProviders:normalizeProviders(item?.sourceProviders),extractedBy:clean(item?.extractedBy),extractedAt:clean(item?.extractedAt),qualityScore:Math.max(0,Math.min(100,Number(item?.qualityScore)||0)),sourceClass:clean(item?.sourceClass),
       ...(item?.verification&&typeof item.verification==="object"?{verification:{provider:"gemini",role:"verification",relevance:["strong","moderate","weak","reject"].includes(item.verification.relevance)?item.verification.relevance:"weak",commercialFit:["strong","moderate","weak","unknown"].includes(item.verification.commercialFit)?item.verification.commercialFit:"unknown",contradiction:Boolean(item.verification.contradiction),rationale:clean(item.verification.rationale).slice(0,600),missingEvidence:(Array.isArray(item.verification.missingEvidence)?item.verification.missingEvidence:[]).map(clean).filter(Boolean).slice(0,8)}}:{})
     })).filter(item=>item.url);
     const opportunities=(Array.isArray(input.opportunities)?input.opportunities:[]).slice(0,12).map(item=>{

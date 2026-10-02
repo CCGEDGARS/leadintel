@@ -338,3 +338,12 @@
 .discovery-panel .discovery-control-row .discovery-run-btn{width:100%;min-width:0;margin-top:0}
 .discovery-panel .discovery-target-control small{max-width:none}
 @media(max-width:680px){.discovery-panel .discovery-control-row{grid-template-columns:minmax(0,1fr)}.discovery-panel .discovery-control-row .discovery-run-btn{width:100%;min-width:0}}
+
+/* Give the company assessment and exact source quotations readable space. */
+.potential-match-card{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;padding:16px}
+.potential-match-card>div:first-child{grid-column:1;grid-row:1}
+.potential-match-gaps{grid-column:1;grid-row:2}
+.potential-match-evidence{grid-column:2;grid-row:1 / span 2}
+.potential-match-card h4{font-size:16px}
+.potential-match-card>div:first-child>a,.potential-match-gaps strong,.potential-match-gaps ul,.potential-match-evidence strong,.potential-match-evidence small{font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+@media(max-width:700px){.potential-match-card{grid-template-columns:1fr}.potential-match-card>div:first-child,.potential-match-gaps,.potential-match-evidence{grid-column:1;grid-row:auto}}

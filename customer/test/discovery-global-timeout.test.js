@@ -142,7 +142,7 @@ test('a normal three-stage search is allowed to outlast one provider request win
         const domain = query.match(/^site:([^ ]+)/)?.[1] || 'northsteel.lv';
         const company = companyNames.find(name => name.toLowerCase().replace(/[^a-z]/g, '') === domain.split('.')[0]) || 'North Steel';
         return { ok: true, json: async () => ({ success: true, data: [{
-          url: `https://${domain}/news/new-factory`,
+          date:new Date().toISOString().slice(0,10),url: `https://${domain}/news/new-factory`,
           title: `${company} opens a new factory in Latvia`,
           description: `${company} plans a new factory and expands production capacity in Latvia with new industrial automation.`,
           markdown: `${company} plans a new factory and expands production capacity in Latvia with new industrial automation.`
@@ -197,7 +197,7 @@ test('a successful first pass with no qualified companies gets one bounded follo
     fetchImpl:async (_url,options)=>{
       const query=JSON.parse(options.body).query;
       if(query.startsWith('site:'))return {ok:true,json:async()=>({success:true,data:[{
-        url:'https://northsteel.lv/news/new-factory',title:'North Steel opens a new factory',
+        date:new Date().toISOString().slice(0,10),url:'https://northsteel.lv/news/new-factory',title:'North Steel opens a new factory',
         description:'North Steel plans a new factory in Latvia, expands production capacity and invests in industrial automation.',
         markdown:'North Steel plans a new factory in Latvia, expands production capacity and invests in industrial automation. The new production site supplies manufacturing customers.'
       }]})};
@@ -765,7 +765,7 @@ test('failed company-site checks can be retried without repeating market searche
       const query=JSON.parse(options.body).query;
       assert.match(query,/^site:northstar\.com/);
       return {ok:true,json:async()=>({success:true,data:[{
-        url:'https://northstar.com/news/new-factory',title:'Northstar expands its Latvian production site',
+        date:new Date().toISOString().slice(0,10),url:'https://northstar.com/news/new-factory',title:'Northstar expands its Latvian production site',
         description:'Northstar is a Latvian industrial manufacturer investing in automation and expanding production capacity at a new factory.',
         markdown:'Northstar is a Latvian industrial manufacturer investing in automation and expanding production capacity at a new factory. The company designs and manufactures industrial equipment.'
       }]})};
@@ -883,7 +883,7 @@ test('saved failed official-domain lookups reuse discovered names and market evi
       const query=JSON.parse(options.body).query;
       requests.push({url,query});
       if(url.includes('/api/ai/web-search'))return {ok:true,status:200,json:async()=>({results:[query.startsWith('site:')
-        ?{url:'https://northstar.com/news/new-factory',title:'Northstar invests in a new factory',description:'Northstar invests in a new factory in Latvia for industrial automation.'}
+        ?{date:new Date().toISOString().slice(0,10),url:'https://northstar.com/news/new-factory',title:'Northstar invests in a new factory',description:'Northstar invests in a new factory in Latvia for industrial automation.'}
         :{url:'https://northstar.com/',title:'Northstar official site',description:'Northstar is an industrial automation manufacturer in Latvia.'}
       ]})};
       return {ok:false,status:402,json:async()=>({error:'Credits exhausted'})};
@@ -968,7 +968,7 @@ test('Company Discovery verifies candidate websites before strict qualification'
       return {
         ok:true,
         json:async()=>({success:true,data:[verified?{
-          url:'https://buyer.lv/news/new-factory',title:'Buyer opens a new factory',
+          date:new Date().toISOString().slice(0,10),url:'https://buyer.lv/news/new-factory',title:'Buyer opens a new factory',
           description:'The Latvian industrial manufacturing company is expanding production capacity with new industrial automation.',
           markdown:'Buyer is opening a new factory in Latvia, expanding production capacity and investing in industrial automation.'
         }:{

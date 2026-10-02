@@ -9,7 +9,7 @@
  * import './website-input-sync.js?v=20260901-saved-state-v2';
  * import './custom-market-input-hygiene.js?v=20260903-password-manager-isolation-v5';
  * import './website-activation.js?v=20260916-ercon-context-v1';
- * import './crm-engine.js?v=20260828-master-crm-v1';
+ * import './crm-engine.js?v=20260828-master-crm-v1&commercial-evidence=20261002-v2';
  * import './sync-conflict-hygiene.js?v=20260901-stale-blank-conflict-v1';
  * import './server-bridge.js?v=20260925-apollo-buyer-search-v1';
  * import './crm-presentation.js?v=20260924-crm-evidence-activity-v1';
@@ -36,7 +36,7 @@
  * import './reference-customer-website-enrichment.js?v=20260923-reference-interface-v1&reference-discovery=5';
  * import './reference-customer-ai-runtime.js?v=20260927-opportunity-map-durable-v1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1';
  * import './reference-customer-launcher.js?v=20260927-opportunity-map-durable-v1&reference-discovery=5&reference-similarity=20260930-v1';
- * import './lookalike-discovery.js?v=20260930-contact-suppression-v1&opportunity-context=1&reference-discovery=5&reference-similarity=20260930-v1';
+ * import './lookalike-discovery.js?v=20260930-contact-suppression-v1&opportunity-context=1&reference-discovery=5&reference-similarity=20260930-v1&commercial-evidence=20261002-v2';
  * import './intelligence-sources-ui.js?v=20260915-preferred-sources-v1';
  * import './profile-action-runtime.js?v=20260924-friendly-workflow-labels-v1';
  * import './outreach-automation-loader.js?v=20260930-contact-suppression-v1';

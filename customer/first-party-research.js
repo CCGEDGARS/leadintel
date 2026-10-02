@@ -1,9 +1,10 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;if(root)root.LeadIntelFirstPartyResearch=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
+  const EvidencePolicy=typeof module==='object'&&module.exports?require('./evidence-policy.js'):globalThis.LeadIntelEvidencePolicy;
   const PROXY='https://apollo-proxy.edgars-7e7.workers.dev';
   const clean=value=>String(value||'').replace(/\s+/g,' ').trim();
   function host(url){try{return new URL(url).hostname.toLowerCase().replace(/^www\./,'');}catch{return '';}}
-  function usableText(value){const text=clean(value);return text.length>=120&&!/^(?:access denied|just a moment|verify you are human|checking your browser|enable javascript and cookies)/i.test(text)&&!(/(?:captcha|cloudflare ray id|verify you are human)/i.test(text)&&text.length<1000);}
+  function usableText(value){const text=clean(value);return (!EvidencePolicy||EvidencePolicy.usable({text}))&&text.length>=120&&!/^(?:access denied|just a moment|verify you are human|checking your browser|enable javascript and cookies)/i.test(text)&&!(/(?:captcha|cloudflare ray id|verify you are human)/i.test(text)&&text.length<1000);}
   function selectInternalLinks(page={},website,purpose='company',limit=4){
     const origin=host(website),urls=new Map();
     const matches=[...String(page.text||page.markdown||'').matchAll(/\[([^\]]*)\]\(([^\s)]+)(?:\s+[^)]*)?\)/g)].map(m=>({url:m[2],title:m[1]}));
@@ -35,8 +36,8 @@
         const data=payload.data||payload,actual=data.metadata?.sourceURL||data.metadata?.url||url;
         if(host(actual)!==domain)throw new Error('Website redirected outside the company domain');
         const text=String(data.markdown||data.content||'').trim().slice(0,60000);
-        if(!usableText(text))throw new Error('Insufficient readable company evidence');
-        return {url:actual,title:clean(data.metadata?.title||data.title)||domain,text,links:data.links||[],provider:response.headers?.get?.('X-LeadIntel-Extractor')||data.metadata?.source||'firecrawl',fetchedAt:new Date().toISOString()};
+        if((EvidencePolicy&&!EvidencePolicy.usable(data))||!usableText(text))throw new Error('Insufficient readable company evidence');
+        return {url:actual,title:clean(data.metadata?.title||data.title)||domain,text,...(EvidencePolicy?.publication(data)||{}),statusCode:Number(data.metadata?.statusCode)||200,links:data.links||[],provider:response.headers?.get?.('X-LeadIntel-Extractor')||data.metadata?.source||'firecrawl',fetchedAt:new Date().toISOString()};
       }finally{clearTimeout(timer);controller.signal.removeEventListener('abort',stop);signal?.removeEventListener('abort',abort);}
     }
     const home=await read(website);pages.push(home);
@@ -59,7 +60,7 @@
   }
   function boundedSources(pages=[],budget=12000){
     const usable=pages.filter(page=>page.url&&usableText(page.text));const perPage=Math.floor(budget/Math.max(1,usable.length));
-    return usable.map(page=>({url:page.url,title:page.title,text:selectEvidenceText(page.text,perPage),provider:page.provider,fetchedAt:page.fetchedAt}));
+    return usable.map(page=>({url:page.url,title:page.title,text:selectEvidenceText(page.text,perPage),provider:page.provider,date:page.date||'',dateSource:page.dateSource||'unknown',fetchedAt:page.fetchedAt}));
   }
   function parseQueryPlan(text,markets=[],limit=8){
     let raw;try{raw=JSON.parse(String(text).replace(/^```(?:json)?\s*/i,'').replace(/```\s*$/,''));}catch{return [];}

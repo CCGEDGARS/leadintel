@@ -258,3 +258,19 @@ sqliteTest('CRM search matches company fields and contact name/email',async()=>{
   assert.equal((await listCrmCompanies(db,ctx(),{q:'Anna Buyer'})).companies.length,1);
   assert.equal((await listCrmCompanies(db,ctx(),{q:'not-there'})).companies.length,0);
 });
+
+sqliteTest('corporate newsroom and investor aliases reuse saved CRM identity and preserve contact and pipeline history',async()=>{
+ const db=new D1Db();const original=await upsertCrmCompany(db,ctx(),candidate('polestar.com'));
+ await setCrmPipelineStage(db,ctx(),original.company.id,'Meeting');
+ // Simulate an existing legacy record saved before canonical company-domain support.
+ db.raw.prepare('UPDATE crm_companies SET normalized_domain=? WHERE id=?').run('media.polestar.com',original.company.id);
+ const refreshed=await upsertCrmCompany(db,ctx(),{...candidate('investors.polestar.com'),contacts:[]});
+ assert.equal(refreshed.company.id,original.company.id);
+ const detail=await getCrmCompany(db,ctx(),original.company.id);
+ assert.equal(detail.company.pipeline_stage,'Meeting');assert.equal(detail.contacts.length,1);
+ assert.equal((await listCrmCompanies(db,ctx())).companies.length,1);
+ await suppressCrmCompany(db,ctx(),original.company.id);
+ const suppressed=await upsertCrmCompany(db,ctx(),candidate('polestar.com'));assert.equal(suppressed.company.lifecycle_status,'suppressed');assert.equal(suppressed.company.id,original.company.id);
+ await assert.rejects(upsertCrmCompany(db,ctx(),{company:{...candidate('polestar.com').company,pipeline_stage:'Qualified'}}),error=>error.code==='CRM_COMPANY_SUPPRESSED');
+ const other=await upsertCrmCompany(db,ctx('w2'),candidate('media.polestar.com'));assert.notEqual(other.company.id,original.company.id);
+});
