@@ -2,10 +2,10 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const source=fs.readFileSync(require.resolve('../outreach-automation-ui.js'),'utf8');
 function harness(overrides={}){
  const listeners={},control={value:'5',addEventListener:()=>{}};
- const card={innerHTML:'',querySelector(selector){if(selector==='#delivery-setup-retry')return this.innerHTML.includes('id="delivery-setup-retry"')?{addEventListener:(event,fn)=>{listeners.retry=fn}}:null;return control;},querySelectorAll:()=>[]};
+ const card={appendChild(){},innerHTML:'',querySelector(selector){if(selector==='#delivery-setup-retry')return this.innerHTML.includes('id="delivery-setup-retry"')?{addEventListener:(event,fn)=>{listeners.retry=fn}}:null;return control;},querySelectorAll:()=>[]};
  const bridge={session:{authenticated:true},workspace:{id:'w1'},getOutreachAutomationPolicy:async()=>({ok:true,role:'owner',policy:{mode:'manual',workspaceDailyLimit:5}}),getOutreachAutomationStatus:async()=>({ok:true,role:'owner'}),...overrides};
  const context={LeadIntelServerBridge:bridge};vm.createContext(context);vm.runInContext(source,context);
- context.document={getElementById:id=>id==='brand-identity'?{}:id==='delivery-setup'?card:null,querySelector:()=>null};
+ context.document={createElement:()=>({appendChild(){}}),getElementById:id=>id==='brand-identity'?{}:id==='delivery-setup'?card:null,querySelector:()=>null};
  return {context,bridge,card,listeners,refresh:context.LeadIntelOutreachAutomationUI.refresh};
 }
 test('signed-in policy failure shows its error and retry instead of false sign-in message',async()=>{

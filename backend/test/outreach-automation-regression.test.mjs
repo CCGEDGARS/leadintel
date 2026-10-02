@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {runOutreachAutomation} from '../src/outreach-automation-runner.js';
+import {runOutreachAutomation as runWithVerification} from '../src/outreach-automation-runner.js';
 import {pollOutreachReplies} from '../src/outreach-automation-replies.js';
 
 let DatabaseSync=null;try{({DatabaseSync}=await import('node:sqlite'));}catch{}
@@ -28,3 +28,5 @@ sqliteTest('approved snapshot sends once, queues followups, inbound reply stops 
 });
 
 sqliteTest('emergency stop between enqueue and run blocks Gmail until owner policy is cleared and rescheduled item becomes due',async()=>{const DBx=new DB();seedPolicy(DBx,{emergency:1});seedSequence(DBx);const env={DB:DBx,AUTOMATIC_GMAIL_DELIVERY_MODE:'enabled'};let calls=0;const sendMessage=async()=>{calls++;return {id:'gm',threadId:'th'};};await runOutreachAutomation(env,{now:new Date('2026-09-08T08:30:00Z'),sendMessage,onSent:noCrm});assert.equal(calls,0);const blocked=DBx.raw.prepare(`SELECT status,scheduled_send_at,last_error_code FROM outreach_automation_queue WHERE id='q0'`).get();assert.notEqual(blocked.status,'sent');assert.equal(blocked.last_error_code,'emergency_stop');DBx.raw.prepare(`UPDATE outreach_automation_policies SET emergency_stop=0 WHERE workspace_id='w1'`).run();const tooEarly=await runOutreachAutomation(env,{now:new Date('2026-09-08T08:31:00Z'),sendMessage,onSent:noCrm});assert.equal(tooEarly.sent,0);assert.equal(calls,0);const resumed=await runOutreachAutomation(env,{now:new Date('2026-09-08T09:31:00Z'),sendMessage,onSent:noCrm});assert.equal(resumed.sent,1);assert.equal(calls,1);});
+
+function runOutreachAutomation(env,options={}){return runWithVerification(env,{verifyEmail:async()=>({verified:true,provider:'test'}),...options});}

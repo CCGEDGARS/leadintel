@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {runOutreachAutomation} from '../src/outreach-automation-runner.js';
+import {runOutreachAutomation as runWithVerification} from '../src/outreach-automation-runner.js';
 
 let DatabaseSync=null;try{({DatabaseSync}=await import('node:sqlite'));}catch{}
 const sqliteTest=(name,fn)=>test(name,{skip:DatabaseSync?false:'requires Node sqlite'},fn);
@@ -67,3 +67,13 @@ sqliteTest('contact suppression added after queueing prevents scheduled send',as
   assert.equal(sends,0);assert.equal(result.skipped,1);
   assert.deepEqual({...env.DB.raw.prepare(`SELECT status,last_error_code FROM outreach_automation_queue WHERE id='q1'`).get()},{status:'skipped',last_error_code:'contact_suppressed'});
 });
+
+function runOutreachAutomation(env,options={}){return runWithVerification(env,{verifyEmail:async()=>({verified:true,provider:'test'}),...options});}
+
+sqliteTest('fresh verification failure holds recipient without Gmail and can be retried',async()=>{
+ const env=fixture();let sends=0;const sendMessage=async()=>{sends++;return {id:'gm',threadId:'th'};};
+ const result=await runOutreachAutomation(env,{now,verifyEmail:async()=>({verified:false,reason:'Needs review'}),sendMessage,onSent:noCrm});assert.equal(result.sent,0);assert.equal(sends,0);assert.equal(env.DB.raw.prepare("SELECT last_error_code FROM outreach_automation_queue WHERE id='q1'").get().last_error_code,'email_verification_required');
+ await runOutreachAutomation(env,{now,sendMessage,onSent:noCrm});assert.equal(sends,0);
+ env.DB.raw.prepare("UPDATE outreach_automation_queue SET status='queued',last_error_code=NULL WHERE id='q1'").run();await runOutreachAutomation(env,{now,sendMessage,onSent:noCrm});assert.equal(sends,1);
+});
+sqliteTest('pause during verification prevents Gmail send',async()=>{const env=fixture();let sends=0;await runOutreachAutomation(env,{now,verifyEmail:async()=>{env.DB.raw.prepare("UPDATE outreach_automation_policies SET paused=1 WHERE workspace_id='w1'").run();return {verified:true};},sendMessage:async()=>{sends++;},onSent:noCrm});assert.equal(sends,0);});

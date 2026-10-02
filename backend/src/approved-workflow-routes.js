@@ -13,6 +13,7 @@ async function view(env,workspaceId){
   const blockers=setupBlockers(context,config);const gmail=await env.DB.prepare("SELECT status FROM gmail_connections WHERE workspace_id=? AND status='connected'").bind(workspaceId).first();
   if(!gmail)blockers.push('Connect Gmail for automatic delivery');if(!automaticGmailDeliveryEnabled(env)&&env.APPROVED_WORKFLOW_DELIVERY_MODE!=='enabled')blockers.push('Automatic delivery is disabled on the server');
   if(config.buyers.enrich&&!(await resolveWorkspaceServiceCredential(env,workspaceId,'apollo')).configured)blockers.push('Connect Apollo for automatic buyer enrichment');
+  if(!(await resolveWorkspaceServiceCredential(env,workspaceId,'hunter')).configured)blockers.push('Connect Hunter for mandatory automatic email verification');
   const {results:runs=[]}=await env.DB.prepare('SELECT id,revision,status,stage_index,error_message,created_at,updated_at,result_json FROM approved_workflow_runs WHERE workspace_id=? ORDER BY created_at DESC LIMIT 10').bind(workspaceId).all();
   return {status:row?.status||'manual',revision:row?.revision||0,config,context,stages,blockers,runs:runs.map(run=>({...run,result:parse(run.result_json),result_json:undefined})),approvedAt:row?.approved_at||null,nextRunAt:row?.next_run_at||null};
 }

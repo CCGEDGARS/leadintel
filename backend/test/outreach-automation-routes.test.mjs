@@ -95,3 +95,12 @@ sqliteTest('owner suppression is workspace-wide, idempotent, and blocks automati
   assert.deepEqual((await response.json()).contacts.map(c=>c.email),['buyer@example.com']);
   const sales=await fixture('sales');response=await handleOutreachAutomationRoute(request('/api/outreach-automation/suppression?workspace_id=w1',{method:'POST',token:sales.token,body:{email:'buyer@example.com'}}),sales.env,{});assert.equal(response.status,403);
 });
+sqliteTest('verification retry is owner-only and scoped to held active sequences',async()=>{
+ const {env,token,db}=await fixture();
+ db.raw.prepare("INSERT INTO outreach_automation_sequences(id,workspace_id,gmail_connection_workspace_id,source_package_key,domain,recipient,approved_at,initial_subject,initial_body,status,created_by) VALUES('s','w1','w1','pkg','example.com','buyer@example.com','2026-09-08','Subject','Body','active','u1')").run();
+ db.raw.prepare("INSERT INTO outreach_automation_queue(id,workspace_id,sequence_id,gmail_connection_workspace_id,step_index,recipient,subject,body,status,earliest_send_at,scheduled_send_at,idempotency_key,last_error_code) VALUES('q','w1','s','w1',0,'buyer@example.com','Subject','Body','failed','2026-09-08','2026-09-08','unique','email_verification_required')").run();
+ const url='/api/outreach-automation/retry-verification?workspace_id=w1';
+ let response=await handleOutreachAutomationRoute(request(url,{method:'POST',token,body:{id:'other'}}),env,{});assert.equal((await response.json()).retried,false);
+ db.raw.prepare("UPDATE workspace_members SET role='sales'").run();response=await handleOutreachAutomationRoute(request(url,{method:'POST',token,body:{id:'q'}}),env,{});assert.equal(response.status,403);
+ db.raw.prepare("UPDATE workspace_members SET role='owner'").run();response=await handleOutreachAutomationRoute(request(url,{method:'POST',token,body:{id:'q'}}),env,{});assert.equal((await response.json()).retried,true);assert.equal(db.raw.prepare("SELECT status FROM outreach_automation_queue WHERE id='q'").get().status,'queued');
+});

@@ -1,0 +1,7 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {verifyAutomaticEmail} from '../src/automatic-email-verification.js';
+const credential=async()=>({source:'customer',apiKey:'fixture-key'});
+const verify=(data,status=200)=>verifyAutomaticEmail({},'w1','alex@example.com',{resolveCredential:credential,fetcher:async(url,opts)=>{assert.match(url,/alex%40example.com/);assert.equal(opts.headers['X-API-KEY'],'fixture-key');return new Response(JSON.stringify({data}),{status});}});
+test('automatic verifier requires exact address, valid result and non-catch-all mailbox',async()=>{assert.equal((await verify({email:'alex@example.com',status:'valid'})).verified,true);for(const data of [{email:'wrong@example.com',status:'valid'},{email:'alex@example.com',status:'accept_all'},{email:'alex@example.com',status:'valid',accept_all:true},{email:'alex@example.com',status:'valid',block:true},{email:'alex@example.com',status:'invalid'},{email:'alex@example.com',status:'unknown'}])assert.equal((await verify(data)).verified,false);});
+test('missing credential, quota, pending and provider errors hold email for review',async()=>{for(const status of [202,222,401,429,503])assert.equal((await verify({},status)).verified,false);assert.equal((await verifyAutomaticEmail({},'w1','alex@example.com',{resolveCredential:async()=>({source:'none'})})).verified,false);assert.equal((await verifyAutomaticEmail({},'w1','alex@example.com',{resolveCredential:credential,fetcher:async()=>{throw new Error('network');}})).verified,false);});

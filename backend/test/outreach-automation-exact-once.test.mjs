@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {runOutreachAutomation} from '../src/outreach-automation-runner.js';
+import {runOutreachAutomation as runWithVerification} from '../src/outreach-automation-runner.js';
 
 let DatabaseSync=null;try{({DatabaseSync}=await import('node:sqlite'));}catch{}
 const sqliteTest=(name,fn)=>test(name,{skip:DatabaseSync?false:'requires Node sqlite'},fn);
@@ -25,3 +25,5 @@ sqliteTest('CRM side-effect failure after Gmail confirmation never reopens an al
   assert.equal(gmailCalls,1);assert.equal(first.sent,1);const queue=env.DB.raw.prepare(`SELECT status,gmail_message_id FROM outreach_automation_queue WHERE id='q1'`).get();const message=env.DB.raw.prepare(`SELECT status,gmail_message_id FROM gmail_messages WHERE idempotency_key='auto-q1'`).get();assert.equal(queue.status,'sent');assert.equal(queue.gmail_message_id,'gm-1');assert.equal(message.status,'sent');assert.equal(message.gmail_message_id,'gm-1');
   const second=await runOutreachAutomation(env,{now:new Date('2026-09-08T09:30:00.000Z'),sendMessage,onSent:async()=>{}});assert.equal(second.sent,0);assert.equal(gmailCalls,1);
 });
+
+function runOutreachAutomation(env,options={}){return runWithVerification(env,{verifyEmail:async()=>({verified:true,provider:'test'}),...options});}
