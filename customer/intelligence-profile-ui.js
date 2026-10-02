@@ -16,7 +16,7 @@
   function renderAttention(profile={},market={}){
     const issues=(profile.canonical?.diagnostics||[]).filter(item=>item.state!=='known').map(item=>`${LABELS[item.field]||item.field}: ${item.state==='missing'?'not yet provided':'needs your confirmation'}`);
     const roles=globalThis.LeadIntelCompanyBrain?.unrelatedBuyerRoles?.(profile,[])||[];
-    if(roles.length)issues.push('Buyer roles may not match your industrial offer. Review sales/HR roles before approval.');
+    if(roles.length)issues.push('Some buyer roles do not match the active offer. Review the suggested buying functions before approval.');
     const conflicts=globalThis.LeadIntelCompanyBrain?.strategyConflicts?.(profile,profile.recommendedSignals||[])||[];
     issues.push(...conflicts.map(item=>item.message));
     const research=market.researchResults?.length?`<p class="intel-research-linked">Research available: ${market.researchResults.length} saved sources · ${market.researchStatus==='complete'?'complete':'partial'} coverage. <button type="button" class="secondary-btn small" data-open-profile-market>Review research</button></p>`:'';

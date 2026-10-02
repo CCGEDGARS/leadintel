@@ -171,6 +171,10 @@
       profile.commercialObjective=clean(input.workspaceGoals?.successOutcome);
       profile.informationGaps=informationGaps(verified.answers,input.scrapedSources||[],input.documents||[]);
       profile.completeness=getReadinessSummary(input,root).score;
+      if(profile.canonical?.fields&&root?.LeadIntelCanonicalIntelligence){
+        for(const [key,record] of Object.entries(profile.canonical.fields))profile[key]=record.value;
+        root.LeadIntelCanonicalIntelligence.finalizeProfileQuality(profile,input);
+      }
       return profile;
     };
     engine.__step2ReadinessPatched=true;return engine;
@@ -289,7 +293,7 @@
     if(score&&score.textContent!==`${summary.score}%`)score.textContent=`${summary.score}%`;if(ring)ring.style.setProperty("--p",summary.score);
     if(caption){let text=!clean(state.website)?"Add your website to begin.":!(state.targetMarkets||[]).length?"Choose at least one target market.":`${summary.coreConfirmed}/${summary.coreTotal} core inputs confirmed${summary.needsMore?` · ${summary.needsMore} need${summary.needsMore===1?"s":""} more detail`:""}${summary.drafts?` · ${summary.drafts} draft${summary.drafts===1?"":"s"} to review`:""}${summary.missing?` · ${summary.missing} missing`:""}.`;if(caption.textContent!==text)caption.textContent=text;}
     const button=document.getElementById("analyze-company");if(button){const text="Review your Profile";if(!button.textContent.includes(text))button.innerHTML=`${text} <span aria-hidden="true">→</span>`;}
-    const profileLabel=document.querySelector("#profile-completeness")?.parentElement?.querySelector("small");if(profileLabel&&profileLabel.textContent!=="Information completeness")profileLabel.textContent="Information completeness";
+    const profileLabel=document.querySelector("#profile-completeness")?.parentElement?.querySelector("small");if(profileLabel&&profileLabel.textContent!=="Profile review completeness")profileLabel.textContent="Profile review completeness";
     renderBriefProgress(root,summary.statuses);renderAllAnswerFeedback(root);
   }
   function renderBuyingOutcomesProfileField(root){

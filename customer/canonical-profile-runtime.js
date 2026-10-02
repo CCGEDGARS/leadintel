@@ -37,19 +37,25 @@ const CANONICAL_MIGRATION_KEY='leadintel_canonical_profile_v1_migrated';
     merged.informationGaps=gapsFromDiagnostics(merged.canonical?.diagnostics||[]);
     return merged;
   }
-  function patchedBuild(input={}){return {...applyCanonical(originalBuild(input),input),generatedContextVersion:2};}
+  function patchedBuild(input={}){return {...applyCanonical(originalBuild(input),input),generatedContextVersion:3};}
   function preserveConfirmedFields(current,rebuilt){
     const fields=current?.canonical?.fields||{};
     for(const [key,record] of Object.entries(fields)){
       if(record?.status!=='user_confirmed'||!String(record.value||'').trim())continue;
       rebuilt.canonical.fields[key]={...record,updatedAt:record.updatedAt||new Date().toISOString()};rebuilt[key]=record.value;
     }
-    rebuilt.canonical.diagnostics=Canonical.diagnoseCanonicalProfile(rebuilt);rebuilt.informationGaps=gapsFromDiagnostics(rebuilt.canonical.diagnostics);return rebuilt;
+    Canonical.finalizeProfileQuality(rebuilt);rebuilt.canonical.diagnostics=Canonical.diagnoseCanonicalProfile(rebuilt);rebuilt.informationGaps=gapsFromDiagnostics(rebuilt.canonical.diagnostics);return rebuilt;
   }
   function patchedNormalize(value={}){
     const normalized=originalNormalize(value);normalized.answerStatus=value.answerStatus&&typeof value.answerStatus==='object'?{...value.answerStatus}:{};
-    if(Refs){let referenceState=value.referenceCustomers||{};if(!referenceState.rows?.length&&value.answers?.lookalike_customers){referenceState={rows:Refs.migrateLegacyLookalikes(value.answers.lookalike_customers)};}normalized.referenceCustomers=Refs.normalizeReferenceState(referenceState);}
+    if(Refs){let referenceState=value.referenceCustomers||{};if(!referenceState.rows?.length&&!Array.isArray(value.referenceCustomerPortfolio?.lists)&&value.answers?.lookalike_customers){referenceState={rows:Refs.migrateLegacyLookalikes(value.answers.lookalike_customers)};}normalized.referenceCustomers=Refs.normalizeReferenceState(referenceState);}
     if(normalized.profile&&normalized.website){const rebuilt=patchedBuild({...normalized,answerStatus:normalized.answerStatus,researchMeta:readResearchMeta(normalized)});normalized.profile=preserveConfirmedFields(value.profile,{...normalized.profile,...rebuilt});}
+    const repair=normalized.profile?.canonical?.buyerRoleRepair;
+    if(repair){
+      normalized.answers.buyer_roles=normalized.profile.decisionMakers;
+      normalized.answerStatus.buyer_roles='hypothesis_draft';normalized.approved=false;
+      normalized.market={...(value.market||{}),...(normalized.market||{}),strategyApproved:false,strategyApprovedAt:'',icps:(normalized.market?.icps||value.market?.icps||[]).map(icp=>({...icp,buyerRoles:normalized.profile.decisionMakers}))};
+    }
     return normalized;
   }
   Profile.buildCompanyIntelligenceProfile=patchedBuild;Profile.normalizeSavedState=patchedNormalize;Profile.__canonicalRuntimeInstalled=true;
@@ -58,10 +64,10 @@ const CANONICAL_MIGRATION_KEY='leadintel_canonical_profile_v1_migrated';
   function writeState(state){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
   function migrateCurrentWorkspace(){
     if(typeof localStorage==='undefined')return false;const raw=readState();if(!raw.website)return false;
-    const needsProfileMigration=raw.profile&&(Number(raw.profile?.canonical?.version)!==Canonical.VERSION||raw.profile.generatedContextVersion!==2);const needsReferenceMigration=Refs&&raw.answers?.lookalike_customers&&!raw.referenceCustomers?.rows?.length;
+    const needsProfileMigration=raw.profile&&(Number(raw.profile?.canonical?.version)!==Canonical.VERSION||raw.profile.generatedContextVersion!==3);const needsReferenceMigration=Refs&&raw.answers?.lookalike_customers&&!raw.referenceCustomers?.rows?.length;
     if(!needsProfileMigration&&!needsReferenceMigration)return false;
     const normalized=patchedNormalize({...raw,researchMeta:readResearchMeta(raw)});
-    const merged={...raw,approved:needsProfileMigration?false:raw.approved,profile:normalized.profile,referenceCustomers:normalized.referenceCustomers||raw.referenceCustomers,answerStatus:normalized.answerStatus||raw.answerStatus,scrapedSources:normalized.scrapedSources||raw.scrapedSources,documents:normalized.documents||raw.documents,targetMarkets:normalized.targetMarkets||raw.targetMarkets,additionalLinks:normalized.additionalLinks||raw.additionalLinks};writeState(merged);return true;
+    const merged={...raw,approved:needsProfileMigration?false:raw.approved,profile:normalized.profile,referenceCustomers:normalized.referenceCustomers||raw.referenceCustomers,answers:normalized.answers||raw.answers,answerStatus:normalized.answerStatus||raw.answerStatus,workspaceGoals:normalized.workspaceGoals||raw.workspaceGoals,market:normalized.market||raw.market,scrapedSources:normalized.scrapedSources||raw.scrapedSources,documents:normalized.documents||raw.documents,targetMarkets:normalized.targetMarkets||raw.targetMarkets,additionalLinks:normalized.additionalLinks||raw.additionalLinks};writeState(merged);return true;
   }
   function promoteEdits(preserveApproval=false){
     const state=readState();if(!state.profile?.canonical?.fields)return;let changed=false;
@@ -69,7 +75,7 @@ const CANONICAL_MIGRATION_KEY='leadintel_canonical_profile_v1_migrated';
     if(!changed)return;state.profile.canonical.diagnostics=Canonical.diagnoseCanonicalProfile(state.profile);state.profile.informationGaps=gapsFromDiagnostics(state.profile.canonical.diagnostics);if(!preserveApproval)state.approved=false;writeState(state);root.LeadIntelServerBridge?.saveNow?.().catch(()=>null);
   }
   if(typeof document!=='undefined'){
-    const migrated=migrateCurrentWorkspace();if(migrated&&typeof sessionStorage!=='undefined'&&!sessionStorage.getItem(CANONICAL_MIGRATION_KEY)){sessionStorage.setItem(CANONICAL_MIGRATION_KEY,'1');setTimeout(()=>location.reload(),30);return;}
+    const migrated=migrateCurrentWorkspace();if(migrated&&typeof sessionStorage!=='undefined'&&sessionStorage.getItem(CANONICAL_MIGRATION_KEY)!=='3'){sessionStorage.setItem(CANONICAL_MIGRATION_KEY,'3');setTimeout(()=>location.reload(),30);return;}
     document.addEventListener('click',event=>{
       if(event.target.closest('#approve-profile'))queueMicrotask(()=>promoteEdits(true));
       else if(event.target.closest('#edit-profile'))queueMicrotask(()=>promoteEdits(false));

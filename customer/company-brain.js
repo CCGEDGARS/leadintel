@@ -233,8 +233,15 @@
   }
   function unrelatedBuyerRoles(profile={},icps=[]){
     if(classifyCompany({profile}).businessType!=="industrial-services")return [];
-    const roles=[clean(profile.decisionMakers),...(icps||[]).filter(item=>item.active!==false).map(item=>clean(item.buyerRoles))].filter(Boolean);
-    return unique(roles.filter(value=>/\b(sales|commercial director|hr|human resources|learning and development)\b/i.test(value)));
+    const workforce=/\b(workforce|staffing|recruitment|personnel|labor|labour)\b/i.test(clean(profile.priorityOffers));
+    const roles=[clean(profile.decisionMakers),...(icps||[]).filter(item=>item.active!==false).map(item=>clean(item.buyerRoles))].flatMap(value=>value.split(/[;|,\n]+/)).map(clean).filter(Boolean);
+    return unique(roles.filter(value=>/\b(sales|commercial director|learning and development|l&d)\b/i.test(value)||(!workforce&&/\b(hr|human resources)\b/i.test(value))));
+  }
+  function suggestedBuyerRoles(profile={}){
+    const unrelated=unrelatedBuyerRoles(profile,[]);if(!unrelated.length)return null;
+    const retained=clean(profile.decisionMakers).split(/[;|,\n]+/).map(clean).filter(value=>value&&!unrelated.includes(value));
+    const roles=unique([...retained,...classifyCompany({profile}).likelyBuyerFunctions,'Engineering Director']);
+    return {value:roles.join('; '),replaced:unrelated,previous:clean(profile.decisionMakers)};
   }
   function repairIndustrialBuyerRoles(state={}){
     const profile=state.profile||{},icps=state.market?.icps||[];
@@ -256,5 +263,5 @@
     if(!legacy.test(clean(profile.decisionMakers)))return state;
     return repairIndustrialBuyerRoles(state);
   }
-  return {claim,classifyCompany,derivePainPoints,deriveFrameworks,recommendSignals,unrelatedSignals,unrelatedBuyerRoles,repairIndustrialBuyerRoles,strategyConflicts,repairLegacyStrategy,install};
+  return {claim,classifyCompany,derivePainPoints,deriveFrameworks,recommendSignals,unrelatedSignals,unrelatedBuyerRoles,suggestedBuyerRoles,repairIndustrialBuyerRoles,strategyConflicts,repairLegacyStrategy,install};
 });

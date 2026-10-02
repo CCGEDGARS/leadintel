@@ -7,7 +7,7 @@
 
   const VERSION=1;
   const FIELD_MAP=Object.freeze({
-    priorityOffers:'priority_offers',idealCustomer:'ideal_customer',buyingTriggers:'buying_triggers',
+    priorityOffers:'priority_offers',idealCustomer:'ideal_customer',buyingTriggers:'buying_triggers',customerPainPoints:'buying_outcomes',
     decisionMakers:'buyer_roles',differentiation:'differentiation',commercialObjective:'success_outcome',
     exclusions:'exclusions',opportunityValue:'opportunity_value',marketFocus:'growth_markets'
   });
@@ -76,11 +76,11 @@
   }
   function answerCandidate(input,fieldKey){
     const answerKey=FIELD_MAP[fieldKey];if(!answerKey)return null;
-    const value=clean(input?.answers?.[answerKey]);if(!value)return null;
+    const value=clean(fieldKey==='commercialObjective'?(input?.workspaceGoals?.successOutcome||input?.answers?.[answerKey]):input?.answers?.[answerKey]);if(!value)return null;
     const meta=input?.researchMeta?.fields?.[answerKey]||{};
     const marker=clean(input?.answerStatus?.[answerKey]||meta.origin).toLowerCase();
     if(marker==='user')return {value,provenance:'user',status:'user_confirmed',confidence:'high',sourceIds:[`U:${answerKey}`]};
-    if(['accepted','draft','research','ai','inferred'].includes(marker)||clean(meta.origin).toLowerCase()==='research'){
+    if(['accepted','draft','evidence_draft','hypothesis_draft','research','ai','inferred'].includes(marker)||clean(meta.origin).toLowerCase()==='research'){
       const provenance=researchProvenance(meta);const reviewed=Boolean(meta.reviewed||marker==='accepted');const sourceIds=uniq(meta.sourceIds||meta.source_ids||[]);
       return {value,provenance,status:reviewed&&provenance!=='ai_inference'?'first_party_evidence':'needs_confirmation',confidence:confidence(meta.confidence,provenance==='document'?'high':'medium'),sourceIds:sourceIds.length?sourceIds:[`AI:${answerKey}`]};
     }
@@ -90,7 +90,7 @@
     return (input?.documents||[]).flatMap((doc,index)=>{const value=clean(doc?.claims?.[fieldKey]||doc?.fields?.[fieldKey]);return value?[{value,provenance:'document',status:'first_party_evidence',confidence:'high',sourceIds:[clean(doc.id)||`D${index+1}`]}]:[];});
   }
   function websiteCandidate(input,fieldKey,derived){
-    if(fieldKey==='customerPainPoints'&&derived?.customerPainPoints)return null;
+    if(fieldKey==='commercialObjective'||fieldKey==='customerPainPoints'&&derived?.customerPainPoints)return null;
     const value=clean(derived?.websiteFields?.[fieldKey]||input?.baseProfile?.[fieldKey]);if(!value)return null;
     const ids=partitionSources(input?.scrapedSources||[],input.website).firstParty.filter(s=>clean(s.text)).slice(0,5).map((s,index)=>clean(s.id)||`W${index+1}`);
     return {value,provenance:'website',status:'first_party_evidence',confidence:ids.length?'medium':'low',sourceIds:ids};
@@ -108,6 +108,43 @@
       const website=websiteCandidate(input,fieldKey,derived);if(website)candidates.push(website);const inferred=derivedCandidate(derived,fieldKey);if(inferred)candidates.push(inferred);fields[fieldKey]=reconcileField(fieldKey,candidates);
     }
     const profile={canonical:{version:VERSION,fields,diagnostics:[],contradictions:[],generatedAt:new Date().toISOString()}};for(const [key,record] of Object.entries(fields))profile[key]=record.value;profile.canonical.diagnostics=diagnoseCanonicalProfile(profile);return profile;
+  }
+
+  function finalizeProfileQuality(profile={},input={}){
+    const fields=profile.canonical?.fields;if(!fields)return profile;
+    const Brain=globalThis.LeadIntelCompanyBrain;
+    const repair=Brain?.suggestedBuyerRoles?.(profile);
+    if(repair){
+      profile.canonical.buyerRoleRepair={...repair,reason:'Suggested buying functions derived from the active offer; review before approval.'};
+      fields.decisionMakers=fieldRecord(repair.value,{status:'needs_confirmation',provenance:'ai_inference',sourceIds:['CONFIG:priorityOffers'],confidence:'medium'});
+      profile.decisionMakers=repair.value;
+    }
+    if(!clean(fields.commercialObjective?.value)){
+      const markets=clean(profile.targetMarkets||input.targetMarkets?.join?.('; '));
+      const value=`Find qualified B2B opportunities${markets?' in '+markets:''}, identify relevant buyers and prepare outreach for review.`;
+      fields.commercialObjective=fieldRecord(value,{status:'needs_confirmation',provenance:'ai_inference',sourceIds:['CONFIG:workflow'],confidence:'medium'});
+      profile.commercialObjective=value;
+    }
+    profile.canonical.diagnostics=diagnoseCanonicalProfile(profile);
+    profile.completeness=Math.round(profile.canonical.diagnostics.filter(item=>item.state==='known').length/DIAGNOSTIC_FIELDS.length*100);
+    return profile;
+  }
+
+  function confirmProfileContext(state={}){
+    const profile=state.profile;if(!profile?.canonical?.fields)return state;
+    finalizeProfileQuality(profile,state);
+    state.answers={...(state.answers||{})};state.answerStatus={...(state.answerStatus||{})};
+    for(const key of DIAGNOSTIC_FIELDS){
+      const record=profile.canonical.fields[key];if(!record?.value)continue;
+      if(!['known'].includes(profile.canonical.diagnostics.find(item=>item.field===key)?.state)){
+        profile.canonical.fields[key]={...record,status:'user_confirmed',provenance:'user',sourceIds:uniq([...(record.sourceIds||[]),'U:profile-approval']),approvedAs:'targeting_context'};
+      }
+      const answerKey=FIELD_MAP[key];
+      if(key==='commercialObjective')state.workspaceGoals={...(state.workspaceGoals||{}),successOutcome:record.value};
+      else if(answerKey){state.answers[answerKey]=record.value;state.answerStatus[answerKey]='user';}
+    }
+    delete profile.canonical.buyerRoleRepair;
+    finalizeProfileQuality(profile,state);return state;
   }
 
   function diagnoseCanonicalProfile(profile={}){
@@ -129,9 +166,9 @@
     out.externalValidationSources=partition.external.map(externalValidationRecord);
     out.canonical.contradictions=compareExternalEvidence(out,partition.external);
     out.canonical.diagnostics=diagnoseCanonicalProfile(out);
-    return out;
+    return finalizeProfileQuality(out,input);
   }
   function activeFirstPartySources(input={}){const web=partitionSources(input.scrapedSources||[],input.website).firstParty.filter(source=>clean(source.text));const docs=(input.documents||[]).filter(doc=>clean(doc?.text)||clean(doc?.name)).map((doc,index)=>({...doc,id:clean(doc.id)||`D${index+1}`,type:'document'}));return [...web,...docs];}
 
-  return {VERSION,DIAGNOSTIC_FIELDS,classifySource,partitionSources,reconcileField,buildCanonicalProfile,diagnoseCanonicalProfile,compareExternalEvidence,normalizeCanonicalProfile,activeFirstPartySources,fieldRecord};
+  return {VERSION,DIAGNOSTIC_FIELDS,FIELD_MAP,finalizeProfileQuality,confirmProfileContext,classifySource,partitionSources,reconcileField,buildCanonicalProfile,diagnoseCanonicalProfile,compareExternalEvidence,normalizeCanonicalProfile,activeFirstPartySources,fieldRecord};
 });

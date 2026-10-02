@@ -1,8 +1,8 @@
-import './company-brain.js?v=20261001-adaptive-business-context-v1&strategy=20261001-v2&profile-review=20261001-v2';
+import './company-brain.js?v=20261001-adaptive-business-context-v1&strategy=20261001-v2&profile-review=20261001-v2&profile-repair=20261002-v1';
 import './content-language.js?v=20260924-workspace-content-english-v1';
 import './content-variants.js?v=20260929-public-first-email-v1';
 import './business-identity.js?v=20260924-workspace-profile-english-v1';
-import './evidence-view.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&reference-interface=20260923&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&map-activation-guide=1&reference-discovery=5&reference-similarity=20260930-v1&reference-activation=6&company-workflow=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1&actual-themes=20261001-v1&adaptive-context=20261001-v1&profile-review=20261001-v2';
+import './evidence-view.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&reference-interface=20260923&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&map-activation-guide=1&reference-discovery=5&reference-similarity=20260930-v1&reference-activation=6&company-workflow=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1&actual-themes=20261001-v1&adaptive-context=20261001-v1&profile-review=20261001-v2&profile-repair=20261002-v1';
 import './profile-approval-ui.js?v=20260924-friendly-workflow-labels-v1';
 import './workspace-persistence.js?v=20260928-sync-timeout-v1&refresh-protection=1&auto-save=1';
 import {withOpenAiRetry,cleanOpenAiResearchQuery,describePartialCoverage} from './market-research-provider-resilience.js?v=20260916-latency-fix-v2&diagnostics=20261001-v1&timing=20261001-v1';
@@ -340,7 +340,7 @@ function seedMarketStrategy(){
   state.market=LeadIntelMarket.normalizeMarketState({...previous,icps,signals,opportunities:previous.researchResults?.length?LeadIntelMarket.buildMarketOpportunities(state.profile,icps,signals,previous.researchResults,language):opportunities,researchStatus:previous.researchStatus||"idle",strategyApproved:false,contentLanguage:language});
 }
 function approveProfile(){
-  saveProfileEdits();state.approved=true;state.profile.approvedAt=new Date().toISOString();seedMarketStrategy();saveState();editMode=false;updateApprovalUI();
+  saveProfileEdits();globalThis.LeadIntelCanonicalIntelligence?.confirmProfileContext?.(state);state.approved=true;state.profile.approvedAt=new Date().toISOString();seedMarketStrategy();saveState();editMode=false;updateApprovalUI();
   window.dispatchEvent(new CustomEvent("leadintel:workspace-changed",{detail:{source:"profile-approval"}}));
   showToast("Profile approved");
 }
@@ -1033,7 +1033,7 @@ function renderMarketStrategy(){
   if(repaired&&repaired!==state){state=repaired;saveState();}
   const conflicts=globalThis.LeadIntelCompanyBrain?.strategyConflicts?.(state.profile,state.market.signals)||[];
   const roleIssues=globalThis.LeadIntelCompanyBrain?.unrelatedBuyerRoles?.(state.profile,state.market.icps)||[];
-  if(roleIssues.length)conflicts.push({message:"Buyer roles need review: sales/HR roles are selected for an industrial offer. Review the buyer roles in your customer definition or use the industrial-role repair in the approval review."});
+  if(roleIssues.length)conflicts.push({message:"Buyer roles need review: some selected functions do not match the active offer. Review the suggested buyer functions before approval."});
   const note=$("strategy-conflict-note");if(note){note.hidden=!conflicts.length;note.textContent=conflicts.map(item=>item.message).join(" ");}
   $("strategy-company-name").textContent=state.profile.companyName||"Company";
   const marketSummary=LeadIntelMarket.splitList(state.profile.targetMarkets).join(" · ")||LeadIntelMarket.splitList(state.profile.currentMarkets).join(" · ")||"Provisional market";
