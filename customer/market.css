@@ -358,3 +358,5 @@
 #research-run-feedback .research-check-details summary{cursor:pointer;color:#31594a;font:600 14px "DM Sans",sans-serif}
 #research-run-feedback .research-check-details ul{margin-top:14px}
 @media(max-width:700px){#market-research-status .research-status-copy{flex-basis:calc(100% - 48px)}#market-research-status .secondary-btn{flex:1 1 100%}}
+
+.required-action-notice{padding:14px 16px;margin:12px 0;border:1px solid #d5b46e;border-radius:10px;background:#fff8e9;color:#73551b;font:600 14px/1.5 "DM Sans",sans-serif}.required-action-focus{outline:3px solid #b88a2a!important;outline-offset:4px;scroll-margin:120px}

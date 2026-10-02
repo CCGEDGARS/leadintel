@@ -89,6 +89,7 @@ function observeNavigation(){
   observer.observe(steps,{childList:true});
 }
 function setStep(step){
+  if(Number(step)>=4&&!LeadIntelTargeting.isConfirmed(state)){LeadIntelTargeting.focusRequired(window,state);return false;}
   state.step=step;saveState();
   document.querySelectorAll(".step-view").forEach(el=>el.classList.toggle("active",Number(el.dataset.step)===step));
   document.querySelectorAll("[data-step-marker]").forEach(el=>{const n=Number(el.dataset.stepMarker);el.classList.toggle("active",n===step);el.classList.toggle("complete",n<step);});
@@ -339,15 +340,19 @@ function seedMarketStrategy(){
   const opportunities=LeadIntelMarket.buildMarketOpportunities(state.profile,icps,signals,[],language);
   state.market=LeadIntelMarket.normalizeMarketState({...previous,icps,signals,opportunities:previous.researchResults?.length?LeadIntelMarket.buildMarketOpportunities(state.profile,icps,signals,previous.researchResults,language):opportunities,researchStatus:previous.researchStatus||"idle",strategyApproved:false,contentLanguage:language});
 }
+function requireConfirmedTargeting(){
+  if(LeadIntelTargeting.isConfirmed(state))return true;
+  closeStrategyHandoff();LeadIntelTargeting.focusRequired(window,state);return false;
+}
 function approveProfile(){
-  saveProfileEdits();globalThis.LeadIntelCanonicalIntelligence?.confirmProfileContext?.(state);state.approved=true;state.profile.approvedAt=new Date().toISOString();seedMarketStrategy();saveState();editMode=false;updateApprovalUI();
+  saveProfileEdits();if(!requireConfirmedTargeting())return false;globalThis.LeadIntelCanonicalIntelligence?.confirmProfileContext?.(state);state.approved=true;state.profile.approvedAt=new Date().toISOString();seedMarketStrategy();saveState();editMode=false;updateApprovalUI();
   window.dispatchEvent(new CustomEvent("leadintel:workspace-changed",{detail:{source:"profile-approval"}}));
   showToast("Profile approved");
 }
 function updateApprovalUI(){
   globalThis.LeadIntelProfileApprovalUI?.updateProfileApprovalUI(document,state.approved);
 }
-function openMarketStrategy(){if(!state.profile){openModule(4);return;}if(!state.approved){setStep(3);showToast("Approve the profile before continuing to Strategy");return;}ensureMarketStrategySeeded();setStep(4);}
+function openMarketStrategy(){if(!requireConfirmedTargeting())return false;if(!state.profile){openModule(4);return;}if(!state.approved){LeadIntelTargeting.focusControl(window,{step:3,id:"approve-profile",message:"Approve your reviewed profile before continuing to Strategy."});return false;}ensureMarketStrategySeeded();setStep(4);}
 function ensureMarketStrategySeeded(){
   if(!state.profile)return;
   const language=contentLanguage();
@@ -371,7 +376,8 @@ function ensureMarketStrategySeeded(){
 }
 async function openModule(step){
   const target=Number(step)||1;readSources();
-  if(!LeadIntelProfile.canAccessModule(state,target)){showToast("Add your company website and target market first");setStep(1);return false;}
+  if(target>=4&&!requireConfirmedTargeting())return false;
+  if(!LeadIntelProfile.canAccessModule(state,target)){LeadIntelTargeting.focusControl(window,{step:1,id:state.website?"custom-target-market":"company-website",message:state.website?"Choose a target market before continuing.":"Add your company website before continuing."});return false;}
   if(target<=2){setStep(target);return true;}
   if(!state.profile)return analyzeCompany(Math.min(target,3));
   if(target>=5&&!state.approved){setStep(3);showToast("Approve the profile before continuing");return false;}
@@ -1167,9 +1173,13 @@ function retrySignalRecommendationsFromHandoff(){
   showToast(`${state.market.signals.length} buying signal recommendations are ready for review`);
 }
 function openStrategyHandoff(){
+  if(!requireConfirmedTargeting())return false;
   readMarketEdits(false);
   renderMarketStrategy();
-  renderStrategyHandoff();
+  const model=renderStrategyHandoff();
+  if(state.market.researchContextStale){returnToProfileResearch();return false;}
+  const activeIcps=(state.market.icps||[]).some(x=>x.active!==false),activeSignals=(state.market.signals||[]).some(x=>x.active!==false);
+  if(!activeIcps||!activeSignals){LeadIntelTargeting.focusControl(window,{step:4,selector:activeIcps?'[data-signal-field="active"]':'[data-icp-field="active"]',message:activeIcps?'Enable at least one buying signal before continuing.':'Enable at least one customer profile before continuing.'});return false;}
   const dialog=$("strategy-handoff-dialog");
   if(typeof dialog.showModal==="function")dialog.showModal();else dialog.setAttribute("open","");
 }
@@ -1197,11 +1207,18 @@ async function openDiscoveryAfterActivation(){
   return opened;
 }
 async function activateMarketStrategy(){
+  if(!requireConfirmedTargeting())return false;
   const button=$("activate-market-strategy");
   const confirm=$("confirm-strategy-handoff");
   if(button?.dataset.activationBusy==="true")return;
   const model=strategyHandoffModel();
-  if(model.blockers.length){renderStrategyHandoff();return;}
+  if(model.blockers.length){
+    renderStrategyHandoff();
+    if(state.market.researchContextStale){returnToProfileResearch();return false;}
+    const activeIcps=(state.market.icps||[]).some(x=>x.active!==false),activeSignals=(state.market.signals||[]).some(x=>x.active!==false);
+    if(!activeIcps||!activeSignals){closeStrategyHandoff();LeadIntelTargeting.focusControl(window,{step:4,selector:activeIcps?'[data-signal-field="active"]':'[data-icp-field="active"]',message:activeIcps?'Enable at least one buying signal before continuing.':'Enable at least one customer profile before continuing.'});}
+    return false;
+  }
   if(button){button.disabled=true;button.dataset.activationBusy="true";button.textContent="Opening Companies…";}
   if(confirm){confirm.disabled=true;confirm.textContent="Opening Companies…";}
   setActivationFeedback(state.market.strategyApproved?"Strategy is active · opening Companies…":"Saving your strategy and opening Companies…","running");

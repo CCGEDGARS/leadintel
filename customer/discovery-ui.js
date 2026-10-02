@@ -314,8 +314,7 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
   const main=mainState();
   if(!(main?.profile?.website||main?.website)){showToast("Add your company website first");return;}
   if(!window.LeadIntelTargeting?.isConfirmed(main)){
-    window.LeadIntelCustomerNavigation?.setStep?.(2);
-    document.querySelector('[data-question="priority_offers"]')?.focus();
+    window.LeadIntelTargeting?.focusRequired?.(window,main);
     showToast("Confirm the four required targeting answers in Profile before searching for companies");return false;
   }
   syncStrategyFingerprint();
