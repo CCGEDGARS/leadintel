@@ -38,11 +38,12 @@ test('Buyers focus shows a distinct saved-company list and supports buyer search
   assert.match(source,/Find buyers/);
 });
 
-test('buyer search uses the authenticated workspace Apollo integration',()=>{
+test('buyer discovery uses public research without Apollo enrichment',()=>{
   const start=source.indexOf('async function searchDecisionMakers(');
   const end=source.indexOf('function saveLocalPipeline',start);
   const search=source.slice(start,end);
-  assert.match(search,/searchApolloPeople/);
+  assert.match(search,/searchBuyerPublicPages/);
+  assert.doesNotMatch(search,/searchApolloPeople/);
   assert.doesNotMatch(search,/fetch\(`\$\{INTELLIGENCE_PROXY\}/);
 });
 

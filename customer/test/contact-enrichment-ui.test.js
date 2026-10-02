@@ -4,8 +4,11 @@ const fs=require('node:fs');
 const path=require('node:path');
 const ui=fs.readFileSync(path.join(__dirname,'..','discovery-ui.js'),'utf8');
 
-test('Discovery applies decision-maker ranking before persisting Apollo people',()=>{
-  assert.match(ui,/LeadIntelDiscovery\.selectDecisionMakers\(\s*LeadIntelDiscovery\.normalizeApolloPeople\([^)]*\)\s*,\s*buyerProfile\s*,\s*4\s*\)/s);
+test('Discovery ranks a wider public pool and displays at most six before enrichment',()=>{
+ const search=ui.slice(ui.indexOf('async function searchDecisionMakers('),ui.indexOf('function saveLocalPipeline'));
+ assert.match(search,/selectDecisionMakers\(pool,buyerProfile,20\)/);
+ assert.match(search,/candidate.people=ranked.slice\(0,6\)/);
+ assert.doesNotMatch(search,/searchApolloPeople/);
 });
 
 test('Discovery makes a shortage explicit instead of implying four contacts were found',()=>{

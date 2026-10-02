@@ -55,7 +55,7 @@ test('local planning uses existing authenticated AI connection and does not requ
 });
 test('buyer search verifies live company content before Apollo and does not manufacture buying intent',()=>{
  const source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');const start=source.indexOf('async function searchDecisionMakers'),end=source.indexOf('function personKey',start);const block=source.slice(start,end<0?undefined:end);
- assert.ok(block.indexOf('collectWebsiteEvidence')<block.indexOf('searchApolloPeople'));assert.match(block,/purpose:'buyers'/);assert.doesNotMatch(block,/candidate\.qualified\s*=\s*true/);
+ assert.ok(block.indexOf('collectWebsiteEvidence')<block.indexOf('searchBuyerPublicPages'));assert.match(block,/purpose:'buyers'/);assert.doesNotMatch(block,/candidate\.qualified\s*=\s*true/);
 });
 test('country selector follows a discovered English page to product evidence within budget',async()=>{
  const seen=[];const result=await R.collectWebsiteEvidence({website:'https://equipment.example/',maxPages:3,fetchImpl:async(_,options)=>{const {url}=JSON.parse(options.body);seen.push(url);const locale=url.endsWith('/en');return {ok:true,json:async()=>({data:{markdown:url.endsWith('/products')?evidence:'Choose your country and regional customer contacts. '.repeat(4),links:url.endsWith('.example/')?['/en','/en/contact']:locale?['/en/products']:[],metadata:{sourceURL:url}}})};}});

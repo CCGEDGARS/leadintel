@@ -1,6 +1,6 @@
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
-const PUBLIC_NAME_CHECK_VERSION="buyer-contacts-v12-complete-public-research";
+const PUBLIC_NAME_CHECK_VERSION="buyer-contacts-v13-public-first";
 const CONTACT_CONFIRM_VERSION="buyer-contacts-v10-pattern-search";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
 const DELIVERY_STORAGE_KEY="leadintel_customer_v2_delivery";
@@ -654,15 +654,15 @@ function buyerContactRows(person={},candidate={},result={}){
   if(person.publicEmail&&!found.some(item=>item.email===person.publicEmail.toLowerCase()))found.unshift({email:person.publicEmail.toLowerCase(),url:person.publicEmailUrl,status:'public_unverified'});
   const renderEmails=type=>{
     const domain=type==='gmail'?'gmail.com':canonicalDomain(candidate.domain);
-    const addresses=[...new Set([...(contact.work_email&&type==='company'?[contact.work_email]:[]),...(person.hunterFound&&type==='company'?[person.hunterFound]:[]),...found.map(item=>item.email),...Object.keys(person.hunterChecks||{})].filter(email=>String(email).toLowerCase().endsWith(`@${domain}`)))];
-    if(!addresses.length)return type==='gmail'?'No Gmail address found':'No company email found';
+    const addresses=[...new Set([...(contact.work_email&&type==='company'?[contact.work_email]:[]),...(person.hunterFound&&type==='company'?[person.hunterFound]:[]),...found.map(item=>item.email),...Object.keys(person.hunterChecks||{}).filter(email=>type!=='gmail'||found.some(item=>item.email===email))].filter(email=>String(email).toLowerCase().endsWith(`@${domain}`)))];
+    if(!addresses.length)return type==='gmail'?'Not found':'No company email found';
     return addresses.map(email=>{
       const check=person.hunterChecks?.[email],publicRow=found.find(item=>item.email===email);
       const label=contact.work_email===email?'Apollo verified · primary for flow':check?hunterStatusLabel(check,email):publicRow?'Public listing':'Hunter suggested · unconfirmed';
-      return `<span class="buyer-email-result">${esc(email)} · ${esc(label)}${source(publicRow?.url)}</span>`;
+      return type==='gmail'?`<span class="buyer-email-result">${esc(email)}</span>`:`<span class="buyer-email-result">${esc(email)} · ${esc(label)}${source(publicRow?.url)}</span>`;
     }).join('');
   };
-  return `<div class="buyer-contact-fields" aria-label="Contact details"><div><strong>LinkedIn</strong><span>${profile?`<a href="${esc(profile)}" target="_blank" rel="noopener noreferrer">View profile ↗</a> · ${profileSource?"Public match":"Apollo profile"}`:"No direct profile matched"}</span></div><div><strong>Phone</strong><span>${phone?`${esc(phone)} · Apollo${contact.phone_status==="Verified"?" verified":""}`:person.publicPhone?`${esc(person.publicPhone)} · Public · unverified${source(person.publicPhoneUrl)}`:"No direct phone"}</span></div><div><strong>Company email</strong><span>${renderEmails('company')}</span></div><div><strong>Gmail</strong><span>${renderEmails('gmail')}</span></div><small class="people-note">Automatic flow uses a verified company email as primary. Gmail findings need manual identity review.</small></div>`;
+  return `<div class="buyer-contact-fields" aria-label="Contact details"><div><strong>LinkedIn</strong><span>${profile?`<a href="${esc(profile)}" target="_blank" rel="noopener noreferrer">View profile ↗</a> · ${profileSource?"Public match":"Apollo profile"}`:"No direct profile matched"}</span></div><div><strong>Phone</strong><span>${phone?`${esc(phone)} · Apollo${contact.phone_status==="Verified"?" verified":""}`:person.publicPhone?`${esc(person.publicPhone)} · Public · unverified${source(person.publicPhoneUrl)}`:"No direct phone"}</span></div><div><strong>Company email</strong><span>${renderEmails('company')}</span></div><div><strong>Gmail</strong><span>${renderEmails('gmail')}</span></div><small class="people-note">Automatic flow uses a verified company email as primary. </small></div>`;
 }
 function emailPatternCandidates(person={},domain=''){
   const full=String(person.publicName||person.name||'').trim().replace(/\s+/g,' ').split(' ');
@@ -701,7 +701,7 @@ function peopleHtml(candidate,candidateIndex){
   if(!candidate.people?.length)return '<div class="people-note">People search is optional. Apollo People Search does not reveal email addresses; it identifies likely roles. Contact details stay hidden until you verify a work email.</div>';
   const shortage=candidate.people.length<3?`<div class="people-note warning">Only ${candidate.people.length} relevant decision-maker${candidate.people.length===1?"":"s"} found. LeadIntel did not fill the shortlist with unrelated roles.</div>`:"";
   const research=candidate.publicResearch,report=research?.checkedAt?`<div class="people-note">Public research · ${Number(research.officialPages)||0} official pages read · ${Number(research.openaiResults)||0} OpenAI and ${Number(research.geminiResults)||0} Gemini source results</div>`:"";
-  return `${shortage}${report}<div class="people-list">${candidate.people.map((person,personIndex)=>{
+  return `${shortage}${report}<div class="people-list">${candidate.people.slice(0,6).map((person,personIndex)=>{
     const key=personKey(candidate,person);
     const result=enrichmentResults.get(key);
     const pending=enrichmentPending.has(key);
@@ -751,7 +751,7 @@ function potentialBuyerResultsHtml(candidate,savedProspect){
   if(candidate.peopleStatus==="error")return '<div class="potential-match-buyers-status warning">Buyer search failed. You can retry this company.</div>';
   if(candidate.peopleStatus==="empty")return '<div class="potential-match-buyers-status">Apollo returned no matching decision-makers for the configured buyer roles.</div>';
   if(!candidate.people?.length)return "";
-  const cards=candidate.people.map((person,index)=>{const name=String(person.name||'').trim(),firstNameOnly=name&&!/\s/.test(name);const linkedIn=LeadIntelDiscovery.normalizeLinkedInUrl?.(person.linkedin_url);return `<article class="potential-match-person"><span class="potential-match-person-number">${index+1}</span><div><strong>${esc(name||'Name unavailable')}</strong>${firstNameOnly?'<small>First name only · confirm identity</small>':''}<p>${esc(person.title||'Role not provided')}</p></div>${linkedIn?`<a href="${esc(linkedIn)}" target="_blank" rel="noopener noreferrer">LinkedIn ↗</a>`:''}</article>`;}).join('');
+  const cards=candidate.people.slice(0,6).map((person,index)=>{const name=String(person.name||'').trim(),firstNameOnly=name&&!/\s/.test(name);const linkedIn=LeadIntelDiscovery.normalizeLinkedInUrl?.(person.linkedin_url);return `<article class="potential-match-person"><span class="potential-match-person-number">${index+1}</span><div><strong>${esc(name||'Name unavailable')}</strong>${firstNameOnly?'<small>First name only · confirm identity</small>':''}<p>${esc(person.title||'Role not provided')}</p></div>${linkedIn?`<a href="${esc(linkedIn)}" target="_blank" rel="noopener noreferrer">LinkedIn ↗</a>`:''}</article>`;}).join('');
   const status=savedProspect?'<strong>Saved in CRM as a prospect ✓</strong> Buyer names need identity and role checks. No buying signal is confirmed; this company is outside Pipeline.':'These names are in this search result. Select the company for Buyers and save your workspace to keep the work.';
   return `<section class="potential-match-people" aria-label="Suggested decision-makers"><h5>Suggested decision-makers · ${candidate.people.length}</h5><div class="potential-match-person-list">${cards}</div><p class="potential-match-user-selection">${status}</p></section>`;
 }
@@ -893,7 +893,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
   candidate.peopleStatus="loading";persist();
   const controller=new AbortController();
   const taskCentre=window.LeadIntelTaskCentre;const taskId=`decision-maker-search:${candidate.domain||candidate.id||"company"}:${Date.now()}`;
-  taskCentre?.start({id:taskId,type:'decision-maker-search',title:`Buyer search · ${candidate.company}`,stage:'Searching Apollo people',total:1,completed:0,canCancel:true,canRetry:true});
+  taskCentre?.start({id:taskId,type:'decision-maker-search',title:`Buyer search · ${candidate.company}`,stage:'Researching public buyer candidates',total:1,completed:0,canCancel:true,canRetry:true});
   taskCentre?.registerActions(taskId,{cancel:()=>controller.abort(),retry:retry||(()=>false)});
   const timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS*3);
   try{
@@ -902,14 +902,27 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     candidate.evidence=LeadIntelDiscovery.normalizeCompanySearchResults({results:[...(candidate.evidence||[]),...verified.pages.map(page=>({url:page.url,title:page.title,markdown:page.text,verifiedAt:page.fetchedAt,date:page.date,dateSource:page.dateSource,metadata:{statusCode:page.statusCode}}))]}, {kind:'verification',domain:candidate.domain,company:candidate.company,market:candidate.market}).slice(0,12);
     discovery.checkedCompanyDomains=[...new Set([...(discovery.checkedCompanyDomains||[]),candidate.domain])];
     taskCentre?.update(taskId,{stage:'Searching relevant buyers'});
-    const data=await bridge()?.searchApolloPeople?.(payload,{signal:controller.signal,timeoutMs:DISCOVERY_REQUEST_TIMEOUT_MS});
-    if(!data?.ok)throw Object.assign(new Error(data?.error||"Apollo people search is unavailable"),{code:data?.code,status:data?.status});
-    const priorPeople=new Map((candidate.people||[]).filter(person=>person.id).map(person=>[person.id,person]));
-    candidate.people=LeadIntelDiscovery.selectDecisionMakers(LeadIntelDiscovery.normalizeApolloPeople(data),buyerProfile,4).map(person=>{
-      const prior=priorPeople.get(person.id);
-      return prior&&String(prior.name||'').split(/\s+/)[0].toLowerCase()===String(person.name||'').split(/\s+/)[0].toLowerCase()
-        ?{...person,publicName:prior.publicName,publicNameUrl:prior.publicNameUrl,publicEmail:prior.publicEmail,publicEmailUrl:prior.publicEmailUrl,publicPhone:prior.publicPhone,publicPhoneUrl:prior.publicPhoneUrl,publicLinkedinUrl:prior.publicLinkedinUrl,hunterChecks:prior.hunterChecks,patternFindings:prior.patternFindings,hunterFound:prior.hunterFound,flowConfirmEmail:prior.flowConfirmEmail,flowConfirmPhone:prior.flowConfirmPhone,flowEmailCompletedFor:prior.flowEmailCompletedFor,flowPhoneCompletedFor:prior.flowPhoneCompletedFor}:person;
-    });
+    const rows=[],issues=[];
+    const roles=String(buyerProfile.decisionMakers||'').split(/[;,\n]/).map(value=>value.trim()).filter(Boolean).slice(0,10);
+    for(const role of roles){
+      if(controller.signal.aborted)throw Object.assign(new Error('Buyer research canceled'),{name:'AbortError'});
+      try{rows.push(...await searchBuyerPublicPages(`site:linkedin.com/in/ "${candidate.company}" "${role}"`,10,controller.signal));}
+      catch(error){if(error?.name==='AbortError')throw error;issues.push(`Search unavailable: ${role}`);}
+    }
+    if(crmAuthenticated()&&bridge()?.workspace?.id){
+      try{
+        const response=await fetchBuyerResearch(`${LEADINTEL_API}/api/ai/web-search?workspace_id=${encodeURIComponent(bridge().workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({query:`Find up to 20 current professionals at ${candidate.company} (${candidate.domain}) in these buyer roles: ${roles.join('; ')}. Search company leadership pages, industry associations, interviews, news and publicly indexed LinkedIn profiles. Return public LinkedIn profile URLs with full names and explicit current role at the company in each source excerpt. Exclude former staff and unrelated departments.`,max_results:20,purpose:'contact_research'}),signal:controller.signal});
+        if(response.ok)rows.push(...((await response.json()).results||[]));else issues.push('Grounded buyer discovery unavailable');
+      }catch(error){if(error?.name==='AbortError')throw error;issues.push('Grounded buyer discovery unavailable');}
+    }
+    if(!rows.length&&issues.length)throw new Error('Public buyer discovery unavailable. Retry when research services are available.');
+    const publicPeople=LeadIntelDiscovery.discoverPublicBuyers(rows,candidate.company,buyerProfile);
+    const previous=(candidate.people||[]).filter(person=>String(person.publicName||person.name||'').trim().split(/\s+/).length>1);
+    const pool=[...new Map([...publicPeople,...previous].map(person=>[LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url)||String(person.publicName||person.name).toLowerCase(),person])).values()];
+    const ranked=LeadIntelDiscovery.selectDecisionMakers(pool,buyerProfile,20);
+    candidate.buyerDiscovery={target:20,found:ranked.length,sourceResults:rows.length,issues,pool:ranked,checkedAt:new Date().toISOString()};
+    candidate.people=ranked.slice(0,6);
+    candidate.publicContactVersion='';
     candidate.peopleStatus=candidate.people.length?"complete":"empty";candidate.buyerRolesChanged=false;
     persist();
     if(allowCrmSync&&crmAuthenticated()&&crmCompanyByDomain(candidate.domain)){
@@ -931,7 +944,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     return true;
   }catch(error){
     candidate.peopleStatus="error";persist();
-    showToast(error?.name==="AbortError"?"Apollo people search timed out":error.message||"Apollo people search unavailable");
+    showToast(error?.name==="AbortError"?"Buyer research timed out or was canceled":error.message||"Apollo people search unavailable");
     if(taskCentre?.get(taskId)?.status!=='canceled')taskCentre?.fail(taskId,error,{canRetry:true});
     return false;
   }finally{
@@ -963,6 +976,19 @@ async function findPublicCandidateEmail(candidate,person){
     return true;
   }finally{clearTimeout(timeout);}
 }
+async function resolveApolloBuyer(candidate,person){
+  let apolloPerson=person;
+  if(String(person.id).startsWith('public-')||String(person.id).startsWith('person-')){
+    const response=await bridge().searchApolloPeople(LeadIntelDiscovery.buildApolloPeopleSearchPayload(candidate,{decisionMakers:person.title}));
+    if(!response?.ok)throw new Error(response?.error||'Apollo identity search unavailable');
+    const expected=String(person.publicName||person.name).trim().toLowerCase();
+    const profile=LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url);
+    const matches=LeadIntelDiscovery.normalizeApolloPeople(response).filter(item=>profile&&LeadIntelDiscovery.normalizeLinkedInUrl(item.linkedin_url)===profile||String(item.name).trim().toLowerCase()===expected);
+    if(matches.length!==1)throw new Error('No unique Apollo identity matched this public buyer');
+    apolloPerson={...person,id:matches[0].id,name:person.publicName||person.name};
+  }
+  return apolloPerson;
+}
 async function confirmBuyerContact(candidate,index,{scope='selected',kind='email',both=false,automatic=false}={}){
   const person=candidate?.people?.[index];if(!person||!crmAuthenticated())return false;
   const key=personKey(candidate,person);if(enrichmentPending.has(key))return false;
@@ -975,10 +1001,10 @@ async function confirmBuyerContact(candidate,index,{scope='selected',kind='email
     const payload=await response.json().catch(()=>({}));if(!response.ok)throw new Error(payload.error||`Hunter ${path} failed`);return payload;
   };
   const apollo=async phoneLookup=>{
-    if(!person.id||String(person.id).startsWith('person-')){issues.push('Apollo person identity unavailable');return;}
+    if(!person.id){issues.push('Apollo person identity unavailable');return;}
     try{
       const company=await ensureCrmCompany(candidate);
-      const result=await bridge().enrichCrmContact(company.id,person,{phoneLookup,allowPersonalEmail:false});
+      const result=await bridge().enrichCrmContact(company.id,await resolveApolloBuyer(candidate,person),{phoneLookup,allowPersonalEmail:false});
       if(!result.ok)throw new Error(result.error||'Apollo confirmation failed');
       const previous=enrichmentResults.get(key)||{};
       enrichmentResults.set(key,{...previous,...result,contact:{...(previous.contact||{}),...(result.contact||{})}});
@@ -1062,7 +1088,7 @@ async function enrichContact(companyIndex,personIndex,{phoneLookup=false,confirm
   }
   return enrichContactWithApollo(companyIndex,personIndex,{phoneLookup});
 }
-async function enrichContactWithApollo(companyIndex,personIndex,{phoneLookup=false}={}){const candidate=discovery.candidates[companyIndex];const person=candidate?.people?.[personIndex];if(!candidate||!person)return false;if(!person.id){showToast("Apollo person identity is missing · refresh decision-makers");return false;}if(!crmAuthenticated()){showToast("Sign in to enrich contacts with Apollo");return false;}const key=personKey(candidate,person);if(enrichmentPending.has(key))return false;const taskCentre=window.LeadIntelTaskCentre;const taskId=`apollo-enrichment:${person.id}:${phoneLookup?'phone':'email'}:${Date.now()}`;taskCentre?.start({id:taskId,type:'apollo-enrichment',title:`Apollo ${phoneLookup?'phone':'email'} · ${person.name}`,stage:'Preparing CRM contact',total:2,completed:0,canRetry:true});taskCentre?.registerActions(taskId,{retry:()=>enrichContact(companyIndex,personIndex,{phoneLookup})});enrichmentPending.add(key);renderCandidates();try{const company=await ensureCrmCompany(candidate);taskCentre?.update(taskId,{stage:'Verifying contact with Apollo',completed:1});const result=await bridge().enrichCrmContact(company.id,person,{phoneLookup,allowPersonalEmail:false});if(!result.ok)throw Object.assign(new Error(result.error||"Apollo contact enrichment failed"),{code:result.code});enrichmentResults.set(key,result);await refreshCrmState({render:false});renderAll();window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company_id:company.id,contact_id:result.contact?.id||null}}));taskCentre?.complete(taskId,{stage:'Apollo enrichment complete',resultCount:Number(Boolean(result.contact?.work_email))+Number(Boolean(result.contact?.phone_number))});if(phoneLookup)showToast(result.contact?.phone_number?`${person.name} · verified phone saved to Master CRM`:`${person.name} · phone lookup requested · use Refresh phone to check`);else showToast(result.contact?.work_email?`${person.name} · verified email saved to Master CRM`:`${person.name} · no verified company email returned`);return true;}catch(error){taskCentre?.fail(taskId,error,{canRetry:true});enrichmentResults.set(key,{error:error.code==="CRM_APOLLO_CREDIT_LIMIT"?"Apollo credit limit reached":error.message||"Apollo contact enrichment failed"});showToast(error.code==="CRM_APOLLO_CREDIT_LIMIT"?"Apollo credit limit reached":error.message||"Apollo contact enrichment failed");return false;}finally{enrichmentPending.delete(key);renderCandidates();}}
+async function enrichContactWithApollo(companyIndex,personIndex,{phoneLookup=false}={}){const candidate=discovery.candidates[companyIndex];const person=candidate?.people?.[personIndex];if(!candidate||!person)return false;if(!person.id){showToast("Apollo person identity is missing · refresh decision-makers");return false;}if(!crmAuthenticated()){showToast("Sign in to enrich contacts with Apollo");return false;}const key=personKey(candidate,person);if(enrichmentPending.has(key))return false;const taskCentre=window.LeadIntelTaskCentre;const taskId=`apollo-enrichment:${person.id}:${phoneLookup?'phone':'email'}:${Date.now()}`;taskCentre?.start({id:taskId,type:'apollo-enrichment',title:`Apollo ${phoneLookup?'phone':'email'} · ${person.name}`,stage:'Preparing CRM contact',total:2,completed:0,canRetry:true});taskCentre?.registerActions(taskId,{retry:()=>enrichContact(companyIndex,personIndex,{phoneLookup})});enrichmentPending.add(key);renderCandidates();try{const company=await ensureCrmCompany(candidate);taskCentre?.update(taskId,{stage:'Verifying contact with Apollo',completed:1});const result=await bridge().enrichCrmContact(company.id,await resolveApolloBuyer(candidate,person),{phoneLookup,allowPersonalEmail:false});if(!result.ok)throw Object.assign(new Error(result.error||"Apollo contact enrichment failed"),{code:result.code});enrichmentResults.set(key,result);await refreshCrmState({render:false});renderAll();window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company_id:company.id,contact_id:result.contact?.id||null}}));taskCentre?.complete(taskId,{stage:'Apollo enrichment complete',resultCount:Number(Boolean(result.contact?.work_email))+Number(Boolean(result.contact?.phone_number))});if(phoneLookup)showToast(result.contact?.phone_number?`${person.name} · verified phone saved to Master CRM`:`${person.name} · phone lookup requested · use Refresh phone to check`);else showToast(result.contact?.work_email?`${person.name} · verified email saved to Master CRM`:`${person.name} · no verified company email returned`);return true;}catch(error){taskCentre?.fail(taskId,error,{canRetry:true});enrichmentResults.set(key,{error:error.code==="CRM_APOLLO_CREDIT_LIMIT"?"Apollo credit limit reached":error.message||"Apollo contact enrichment failed"});showToast(error.code==="CRM_APOLLO_CREDIT_LIMIT"?"Apollo credit limit reached":error.message||"Apollo contact enrichment failed");return false;}finally{enrichmentPending.delete(key);renderCandidates();}}
 async function refreshEnrichedContact(companyIndex,personIndex){const candidate=discovery.candidates[companyIndex];const person=candidate?.people?.[personIndex];if(!candidate||!person?.id)return false;if(!crmAuthenticated()){showToast("Sign in to refresh Apollo contact status");return false;}const company=crmCompanyByDomain(candidate.domain||candidate.website);if(!company){showToast("Save this company to Master CRM before refreshing the phone");return false;}const key=personKey(candidate,person);if(enrichmentPending.has(key))return false;enrichmentPending.add(key);renderCandidates();try{const detail=await bridge().getCrmCompany(company.id);if(!detail.ok)throw new Error(detail.error||"Unable to refresh CRM contact");const contact=(detail.contacts||[]).find(item=>String(item.external_person_id||"")===String(person.id))||null;const previous=enrichmentResults.get(key)||{};const result={...previous,request:{...(previous.request||{}),status:contact?.phone_number?"verified":"pending_phone"},contact:contact||previous.contact||null};enrichmentResults.set(key,result);renderCandidates();showToast(contact?.phone_number?`${person.name} · verified phone loaded from Master CRM`:`${person.name} · phone lookup is still pending`);return Boolean(contact?.phone_number);}catch(error){showToast(error.message||"Unable to refresh phone status");return false;}finally{enrichmentPending.delete(key);renderCandidates();}}
 async function saveCandidate(index,{pipeline=false}={}){const candidate=discovery.candidates[index];if(!candidate)return false;if(!candidateIsActionable(candidate)){showToast("Company qualification is incomplete · run Discovery again");return false;}if(!crmAuthenticated()){if(pipeline){saveLocalPipeline(candidate);renderAll();showToast(`${candidate.company} saved to local Pipeline · sign in for durable CRM`);return true;}showToast("Sign in with Google to save this company to Master CRM");return false;}const existing=crmCompanyByDomain(candidate.domain||candidate.website);if(existing?.lifecycle_status==="suppressed"){showToast("Suppressed companies must be restored in CRM before pipeline activation");return false;}const mapped=window.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate);const saved=await bridge().saveCrmCompany(mapped);if(!saved.ok){showToast(saved.code==="CRM_COMPANY_SUPPRESSED"?"Suppressed companies must be restored in CRM first":saved.error||"CRM save failed");return false;}const company=saved.company;if(pipeline){const activated=await bridge().addCrmToPipeline(company.id,"Discovered");if(!activated.ok){showToast(activated.code==="CRM_COMPANY_SUPPRESSED"?"Suppressed companies must be restored in CRM first":activated.error||"Pipeline update failed");return false;}saveLocalPipeline(candidate);}await refreshCrmState({render:false});renderAll();window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company}}));showToast(pipeline?`${candidate.company} added to durable Pipeline`:`${candidate.company} saved to Master CRM`);return true;}
 function pipelineRows(){return crmAvailable?currentWorkspaceCrmPipeline().map(crmToLocalPipeline):discovery.pipeline;}
@@ -1127,7 +1153,27 @@ async function searchBuyerEmailPatterns(candidate,existingRows,signal){
       try{rows.push(...await searchBuyerPublicPages(group.map(item=>`"${item.email}"`).join(' OR '),5,signal));}
       catch(error){if(error?.name==='AbortError')throw error;failed++;}
     }
-    person.patternFindings=patternListings(person,candidate.domain,rows);
+    const fullName=String(person.publicName||person.name||'').trim();
+    if(fullName.split(/\s+/).length>1){
+      searches++;
+      try{
+        const gmailRows=await searchBuyerPublicPages(`"${fullName}" "${candidate.company}" "@gmail.com"`,5,signal);
+        rows.push(...gmailRows);
+        person.patternFindings=patternListings(person,candidate.domain,rows);
+        for(const row of gmailRows){
+          const body=[row.title,row.description,row.markdown,row.content].filter(Boolean).join(' ');
+          let source;try{source=new URL(row.url);}catch{continue;}
+          if(!['https:','http:'].includes(source.protocol)||source.username||source.password)continue;
+          for(const match of body.matchAll(/[A-Z0-9._%+-]+@gmail\.com/gi)){
+            const nearby=body.slice(Math.max(0,match.index-220),match.index+match[0].length+220).toLowerCase();
+            if(!nearby.includes(fullName.toLowerCase())||!nearby.includes(String(candidate.company).toLowerCase())||/guessed|predicted|email pattern/i.test(nearby))continue;
+            const email=match[0].toLowerCase();
+            if(!person.patternFindings.some(item=>item.email===email))person.patternFindings.push({email,url:source.href,status:'public_unverified'});
+          }
+        }
+      }catch(error){if(error?.name==='AbortError')throw error;failed++;}
+    }
+    person.patternFindings=[...new Map([...(person.patternFindings||[]),...patternListings(person,candidate.domain,rows)].map(item=>[item.email,item])).values()];
     // Grouped OR searches can bury exact matches, especially in association PDFs.
     // Check the most likely address with the full name in a focused query.
     if(!person.patternFindings.some(item=>item.email.endsWith(`@${canonicalDomain(candidate.domain)}`))){
@@ -1136,7 +1182,7 @@ async function searchBuyerEmailPatterns(candidate,existingRows,signal){
       if(email&&name){
         const query=`"${email}" "${name}"`;
         searches++;
-        try{person.patternFindings=patternListings(person,candidate.domain,[...rows,...await searchBuyerPublicPages(query,5,signal)]);}
+        try{person.patternFindings=[...(person.patternFindings||[]),...patternListings(person,candidate.domain,[...rows,...await searchBuyerPublicPages(query,5,signal)])];}
         catch(error){if(error?.name==='AbortError')throw error;failed++;}
         if(!person.patternFindings.some(item=>item.email===email)&&crmAuthenticated()&&bridge()?.workspace?.id){
           searches++;
@@ -1144,7 +1190,7 @@ async function searchBuyerEmailPatterns(candidate,existingRows,signal){
             const response=await fetchBuyerResearch(`${LEADINTEL_API}/api/ai/web-search?workspace_id=${encodeURIComponent(bridge().workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({query,max_results:5,purpose:'contact_research'}),signal});
             if(!response.ok)throw new Error(`Grounded search failed (${response.status})`);
             const payload=await response.json();
-            person.patternFindings=patternListings(person,candidate.domain,[...rows,...(payload.results||[])]);
+            person.patternFindings=[...(person.patternFindings||[]),...patternListings(person,candidate.domain,[...rows,...(payload.results||[])])];
           }catch(error){if(error?.name==='AbortError')throw error;failed++;}
         }
       }
@@ -1154,7 +1200,7 @@ async function searchBuyerEmailPatterns(candidate,existingRows,signal){
 }
 async function groundedBuyerFollowUp(candidate,signal){
   const workspace=bridge()?.workspace;if(!crmAuthenticated()||!workspace?.id)return {status:'unavailable',rows:[],reason:'Sign in to enable grounded follow-up'};
-  const names=(candidate.people||[]).map(person=>person.publicName||person.name).filter(Boolean).slice(0,4);
+  const names=(candidate.people||[]).map(person=>person.publicName||person.name).filter(Boolean).slice(0,6);
   const query=`Find publicly sourced professional work email, direct business phone, and current LinkedIn profile evidence for ${names.map(name=>`"${name}"`).join(', ')} at ${candidate.company} (${candidate.domain}). Prefer official company pages. Give exact source URLs; never infer an email pattern or personal phone.`;
   try{
     const response=await fetchBuyerResearch(`${LEADINTEL_API}/api/ai/web-search?workspace_id=${encodeURIComponent(workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({query,max_results:6,purpose:'contact_research'}),signal});
@@ -1203,13 +1249,13 @@ async function reviewBuyerPublicEvidence(candidate,rows,signal){
   }catch(error){if(error?.name==='AbortError')throw error;return {status:'unavailable',conflicts:[]};}
 }
 async function runPublicProspectContacts(domain,{signal}={}){
-  const candidate=[...(discovery.selectedProspects||[]),...(discovery.candidates||[])].find(item=>canonicalDomain(item.domain)===canonicalDomain(domain));if(!candidate||candidate.publicContactStatus==="loading")return false;
+  const candidate=[...(discovery.selectedProspects||[]),...(discovery.candidates||[]),...(discovery.potentialMatches||[]),...(discovery.pipeline||[])].find(item=>canonicalDomain(item.domain)===canonicalDomain(domain));if(!candidate||candidate.publicContactStatus==="loading")return false;
   candidate.publicContactStatus="loading";saveDiscovery();renderPipeline();renderCandidates();
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS*9);
   const cancel=()=>controller.abort();if(signal?.aborted)cancel();else signal?.addEventListener('abort',cancel,{once:true});
   try{
     const research={firecrawl:'complete',openai:'unavailable',gemini:'unavailable',geminiSearch:'unavailable',officialPages:0,profileResults:0,openaiResults:0,geminiResults:0,checkedAt:'',issues:[],conflicts:[],sources:[]};
-    const firstNames=[...new Set((candidate.people||[]).map(person=>String(person.name||'').trim().split(/\s+/)[0]).filter(name=>/^[\p{L}'’-]{2,40}$/u.test(name)))].slice(0,4);
+    const firstNames=[...new Set((candidate.people||[]).map(person=>String(person.name||'').trim().split(/\s+/)[0]).filter(name=>/^[\p{L}'’-]{2,40}$/u.test(name)))].slice(0,6);
     const query=firstNames.length
       ?`site:${canonicalDomain(domain)} (${firstNames.map(name=>`"${name}"`).join(' OR ')}) (CEO OR leadership OR management OR contact OR email)`
       :`site:${canonicalDomain(domain)} (team OR leadership OR management OR contact OR contacts OR email)`;
@@ -1352,7 +1398,7 @@ async function enrichSelectedProspect(domain,personIndex,{phoneLookup=false,conf
   enrichmentPending.add(key);renderPipeline();
   try{
     const company=await ensureCrmCompany(candidate);
-    const result=await bridge().enrichCrmContact(company.id,person,{phoneLookup,allowPersonalEmail:false});
+    const result=await bridge().enrichCrmContact(company.id,await resolveApolloBuyer(candidate,person),{phoneLookup,allowPersonalEmail:false});
     if(!result.ok)throw new Error(result.error||"Apollo verification failed");
     enrichmentResults.set(key,result);await refreshCrmState({render:false});renderAll();
     showToast(result.contact?.work_email||result.contact?.phone_number?"Contact saved in CRM · verify identity before outreach":result.request?.status==="pending_phone"?"Phone lookup pending":"Apollo returned no verified work email");
@@ -1380,8 +1426,8 @@ function renderSelectedProspects(prospects){
   if(!prospects.length)return "";
   const cards=prospects.map(candidate=>{
     const domain=canonicalDomain(candidate.domain);
-    const people=candidate.buyerRolesChanged?[]:(Array.isArray(candidate.people)?candidate.people:[]);
-    const peopleHtml=people.length?`<section class="selected-prospect-buyers" aria-label="Suggested people for ${esc(candidate.company||domain)}"><div class="selected-prospect-buyers-heading"><strong>${people.length} suggested person${people.length===1?"":"s"}</strong><span>Apollo suggestions · buyer authority and contact details unverified</span></div><ol class="selected-prospect-people">${people.map((person,index)=>{
+    const people=candidate.buyerRolesChanged?[]:(Array.isArray(candidate.people)?candidate.people:[]).slice(0,6);
+    const peopleHtml=people.length?`<section class="selected-prospect-buyers" aria-label="Suggested people for ${esc(candidate.company||domain)}"><div class="selected-prospect-buyers-heading"><strong>${people.length} recommended buyer${people.length===1?"":"s"}</strong><span>Public research suggestions · confirm current role and buying authority</span></div><ol class="selected-prospect-people">${people.map((person,index)=>{
       const verifiedName=enrichmentResults.get(personKey(candidate,person))?.contact?.name;
       const publicName=person.publicName&&person.publicNameUrl?person.publicName:"";
       const name=String(verifiedName||publicName||person.name||"").trim();
@@ -1401,7 +1447,7 @@ function renderSelectedProspects(prospects){
     const research=candidate.publicResearch||{};
     const publicResearchNote=research.checkedAt?`<div class="selected-prospect-research-report"><p><strong>${esc(publicResearchOutcome(candidate))}</strong></p><p>Research activity · ${Number(research.officialPages)||0} official pages read · ${Number(research.profileResults)||0} Firecrawl profile results · ${Number(research.openaiResults)||0} OpenAI source results · ${Number(research.geminiResults)||0} grounded Gemini source results · ${Number(research.patternSearches)||0} email evidence searches. ${Number(research.conflicts?.length)||0?`${research.conflicts.length} identity conflict${research.conflicts.length===1?"":"s"} need review. `:""}Generated addresses, public listings and provider checks retain separate status. Mailbox deliverability alone does not confirm the person.</p>${research.sources?.length||research.issues?.length?`<details><summary>Research sources and gaps</summary>${research.sources?.length?`<ul>${research.sources.map(url=>`<li><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a></li>`).join("")}</ul>`:""}${research.issues?.length?`<p>${research.issues.map(esc).join(" · ")}</p>`:""}</details>`:""}</div>`:"";
     const batchCount=people.filter(person=>selectedBuyerEnrichment.has(selectedBuyerKey(candidate,person))).length;
-    return `<article class="selected-prospect-row"><header class="selected-prospect-company"><div><span class="eyebrow">${esc(candidate.market||"Target market")} · Selected target</span><h4>${esc(candidate.company||domain)}</h4><a href="${esc(candidate.website||`https://${domain}/`)}" target="_blank" rel="noopener noreferrer">${esc(domain)} ↗</a></div><span class="selected-prospect-signal">${candidate.buyerSearchMode==="user_selected_qualified"?"Qualified opportunity":candidate.buyerSearchMode==="user_selected_target"?"Opportunity unverified":"Buying signal unconfirmed"}</span></header>${candidate.buyerSearchMode==="user_selected_target"?'<p class="selected-prospect-context">You chose this company. LeadIntel has not confirmed that it needs your service. Find relevant people to evaluate the opportunity.</p>':""}<label class="selected-prospect-roles">Buyer roles for this company<input type="text" data-prospect-buyer-roles="${esc(domain)}" value="${esc(LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate)||"")}" placeholder="Procurement Director; Operations Director; Plant Manager"><small>Separate roles with semicolons. Changes apply to the next buyer search and do not rerun company discovery.</small></label>${candidate.buyerRolesChanged?'<p class="selected-prospect-roles-warning">Buyer roles corrected. Previous buyer suggestions are hidden; search again for these roles.</p>':""}${peopleHtml}<section class="selected-prospect-public"><strong>Public names &amp; company contacts</strong><p>${candidate.publicContactStatus==="loading"?"Checking official company pages for names, emails, phones, and profiles…":"LeadIntel checks official company pages and matching public LinkedIn profiles once for saved buyers. Public details remain unverified; refresh here when needed."}</p>${publicResearchNote}${publicContacts?`<ul>${publicContacts}</ul>`:candidate.publicContactStatus==="empty"?'<small>No public names or company contacts found in this search.</small>':""}<button class="secondary-btn small" type="button" data-find-public-contacts="${esc(domain)}" ${candidate.publicContactStatus==="loading"?"disabled":""}>${candidate.publicContactStatus==="loading"?"Checking public pages…":candidate.publicContactStatus==="complete"?"Refresh public contacts":"Find public contacts"}</button></section>${batchCount?`<div class="selected-prospect-batch"><strong>${batchCount} selected · confirm Apollo lookup</strong><button class="secondary-btn small" type="button" data-prospect-batch-email="${esc(domain)}">Check selected emails with Apollo</button><button class="secondary-btn small" type="button" data-prospect-batch-phone="${esc(domain)}">Find selected phones with Apollo</button></div>`:""}<div class="selected-prospect-actions"><button class="${people.length?"secondary-btn":"primary-btn"} small" type="button" data-find-prospect-buyers="${esc(domain)}" ${candidate.peopleStatus==="loading"?"disabled":""}>${people.length?"Refresh buyers":candidate.peopleStatus==="loading"?"Searching…":"Find decision-makers →"}</button></div></article>`;
+    return `<article class="selected-prospect-row"><header class="selected-prospect-company"><div><span class="eyebrow">${esc(candidate.market||"Target market")} · Selected target</span><h4>${esc(candidate.company||domain)}</h4><a href="${esc(candidate.website||`https://${domain}/`)}" target="_blank" rel="noopener noreferrer">${esc(domain)} ↗</a></div><span class="selected-prospect-signal">${candidate.buyerSearchMode==="user_selected_qualified"?"Qualified opportunity":candidate.buyerSearchMode==="user_selected_target"?"Opportunity unverified":"Buying signal unconfirmed"}</span></header>${candidate.buyerSearchMode==="user_selected_target"?'<p class="selected-prospect-context">You chose this company. LeadIntel has not confirmed that it needs your service. Find relevant people to evaluate the opportunity.</p>':""}<label class="selected-prospect-roles">Buyer roles for this company<input type="text" data-prospect-buyer-roles="${esc(domain)}" value="${esc(LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate)||"")}" placeholder="Procurement Director; Operations Director; Plant Manager"><small>Separate roles with semicolons. Changes apply to the next buyer search and do not rerun company discovery.</small></label>${candidate.buyerRolesChanged?'<p class="selected-prospect-roles-warning">Buyer roles corrected. Previous buyer suggestions are hidden; search again for these roles.</p>':""}${candidate.buyerDiscovery?.checkedAt?`<p class="people-note">${Number(candidate.buyerDiscovery.found)||0} relevant candidates reviewed · up to 6 recommended · research target 20${candidate.buyerDiscovery.issues?.length?" · Some discovery searches were unavailable":""}</p>`:""}${peopleHtml}<section class="selected-prospect-public"><strong>Public names &amp; company contacts</strong><p>${candidate.publicContactStatus==="loading"?"Checking official company pages for names, emails, phones, and profiles…":"LeadIntel checks official company pages and matching public LinkedIn profiles once for saved buyers. Public details remain unverified; refresh here when needed."}</p>${publicResearchNote}${publicContacts?`<ul>${publicContacts}</ul>`:candidate.publicContactStatus==="empty"?'<small>No public names or company contacts found in this search.</small>':""}<button class="secondary-btn small" type="button" data-find-public-contacts="${esc(domain)}" ${candidate.publicContactStatus==="loading"?"disabled":""}>${candidate.publicContactStatus==="loading"?"Checking public pages…":candidate.publicContactStatus==="complete"?"Refresh public contacts":"Find public contacts"}</button></section>${batchCount?`<div class="selected-prospect-batch"><strong>${batchCount} selected · confirm Apollo lookup</strong><button class="secondary-btn small" type="button" data-prospect-batch-email="${esc(domain)}">Check selected emails with Apollo</button><button class="secondary-btn small" type="button" data-prospect-batch-phone="${esc(domain)}">Find selected phones with Apollo</button></div>`:""}<div class="selected-prospect-actions"><button class="${people.length?"secondary-btn":"primary-btn"} small" type="button" data-find-prospect-buyers="${esc(domain)}" ${candidate.peopleStatus==="loading"?"disabled":""}>${people.length?"Refresh buyers":candidate.peopleStatus==="loading"?"Searching…":"Find decision-makers →"}</button></div></article>`;
   }).join("");
   const hasPeople=prospects.some(item=>Array.isArray(item.people)&&item.people.length);
   return `<section class="selected-prospect-list"><span class="eyebrow">${hasPeople?"Review people":"Your next step"}</span><h3>${hasPeople?"Confirm the suggested buyers":"Find the people behind your selected companies"}</h3><p>${hasPeople?"Check each person's identity, current role, and company before outreach. A LinkedIn search is a search result, not a verified profile.":"Select Find decision-makers for a company. An unverified target stays outside the qualified opportunity list and Pipeline."}</p>${cards}</section>`;

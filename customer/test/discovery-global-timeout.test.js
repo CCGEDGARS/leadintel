@@ -335,7 +335,7 @@ test('a user-selected fit-and-market verified potential match can display Apollo
     requestTimeout:1000,
     scaleProductionRunTimeout:1000,
     bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},searchApolloPeople:async()=>({ok:true,people:[{id:'p1',name:'Pat Example',title:'Chief Operating Officer',linkedin_url:'https://www.linkedin.com/in/pat-example'}]}),saveCrmCompany:async()=>{crmSaves+=1;return {ok:true};}},
-    fetchImpl:async()=>({ok:true,json:async()=>({success:true,data:[]})})
+    fetchImpl:async()=>({ok:true,json:async()=>({success:true,data:[{url:'https://www.linkedin.com/in/pat-example',title:'Pat Example – Chief Operating Officer at Northstar',description:'Chief Operating Officer at Northstar'}]})})
   });
   context.__setDiscovery({
     status:'no_results',checkedCompanyDomains:['northstar.com'],
@@ -354,6 +354,7 @@ test('selected prospect buyer names persist and render as separate review cards'
   const context=loadDiscoveryRunner({
     renderNodes:true,
     requestTimeout:1000,
+    fetchImpl:async()=>({ok:true,json:async()=>({data:[{url:'https://linkedin.com/in/johan-example',title:'Johan Example – Chief Operating Officer at Northstar'},{url:'https://linkedin.com/in/mika-example',title:'Mika Example – Procurement Director at Northstar'}]})}),
     bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},searchApolloPeople:async()=>({ok:true,people:[
       {id:'p1',name:'Johan',title:'Chief Operating Officer'},
       {id:'p2',name:'Mika',title:'Procurement Director',linkedin_url:'https://www.linkedin.com/in/mika-example'}
@@ -364,12 +365,12 @@ test('selected prospect buyer names persist and render as separate review cards'
   context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5}));
   assert.equal(await context.__findPotentialDecisionMakers('northstar.com'),true);
   const restored=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
-  assert.deepEqual(restored.selectedProspects[0].people.map(person=>person.name),['Johan','Mika']);
+  assert.deepEqual(restored.selectedProspects[0].people.map(person=>person.name),['Johan Example','Mika Example']);
   assert.equal(restored.pipeline.length,0);
   context.__renderPipeline();
   const html=context.__elements.get('customer-pipeline').innerHTML;
   assert.equal((html.match(/class="selected-prospect-person"/g)||[]).length,2);
-  assert.match(html,/First name only/);
+  assert.doesNotMatch(html,/First name only/);
   assert.match(html,/linkedin\.com\/in\/mika-example/);
   assert.equal(context.__elements.get('discovery-status').textContent,'1 saved company');
 });
@@ -411,10 +412,10 @@ test('a first-name-only buyer triggers one public source check and renders a sou
       assert.match(JSON.parse(options.body).query,/site:linkedin\.com\/in\//);
       return {ok:true,json:async()=>({data:[{url:'https://www.linkedin.com/in/mikael-example',title:'Mikael Example – Boliden | LinkedIn',description:'President and CEO at Boliden'}]})};
     }});
-  context.__setDiscovery({status:'no_results',selectedProspects:[{company:'Boliden',domain:'boliden.com',market:'Sweden',buyerSearchMode:'user_selected_target',buyerRoles:'CEO'}]});
-  assert.equal(await context.__findPotentialDecisionMakers('boliden.com'),true);
+  context.__setDiscovery({status:'no_results',selectedProspects:[{company:'Boliden',domain:'boliden.com',market:'Sweden',buyerSearchMode:'user_selected_target',buyerRoles:'CEO',people:[{id:'p1',name:'Mikael',title:'President & CEO'}]}]});
+  await context.__findPublicProspectContacts('boliden.com');
   await new Promise(resolve=>setTimeout(resolve,15));
-  assert.equal(publicSearches,5); // Two additional grouped company and Gmail pattern searches.
+  assert.equal(publicSearches,6); // Two additional grouped company and Gmail pattern searches.
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Mikael Example');
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicLinkedinUrl,'https://www.linkedin.com/in/mikael-example');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/mikael\.example@boliden\.com · Public listing/);
@@ -433,12 +434,12 @@ test('a saved first-name-only buyer receives one automatic public check when Buy
   context.__scheduleSavedBuyerPublicChecks();
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,30));
-  assert.equal(requests,8); // Official pages, profiles, grouped patterns, and one focused email search.
+  assert.equal(requests,9); // Official pages, profiles, grouped patterns, and one focused email search.
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Mikael Example');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Mikael Example/);
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,5));
-  assert.equal(requests,8);
+  assert.equal(requests,9);
 });
 
 test('a saved first-name buyer can gain a sourced full name from a unique public LinkedIn result',async()=>{
@@ -456,15 +457,15 @@ test('a saved first-name buyer can gain a sourced full name from a unique public
   context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:4,visibleStep:5}));
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,30));
-  assert.equal(requests,6);
+  assert.equal(requests,7);
   const person=context.__discoveryState().selectedProspects[0].people[0];
   assert.equal(person.publicName,'Jacob Jonstoij');
-  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v12-complete-public-research');
+  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v13-public-first');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Jacob Jonstoij/);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/View profile ↗<\/a> · Public match/);
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,5));
-  assert.equal(requests,6);
+  assert.equal(requests,7);
 });
 
 test('a focused LinkedIn lookup resolves a buyer missed by the combined search',async()=>{
@@ -481,7 +482,7 @@ test('a focused LinkedIn lookup resolves a buyer missed by the combined search',
   context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:4,visibleStep:5}));
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,30));
-  assert.equal(requests,7);
+  assert.equal(requests,8);
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Jacob Jonstoij');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Jacob Jonstoij/);
 });

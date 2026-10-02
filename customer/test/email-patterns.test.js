@@ -52,9 +52,28 @@ test('focused grounded search can recover a name and address from a public assoc
   vm.runInNewContext(`${source.slice(searchStart,searchEnd)};globalThis.search=searchBuyerEmailPatterns;`,focusedContext);
   const candidate={domain:'sodra.com',people:[{publicName:'Lotta Lyrå'}]};
   const research=await focusedContext.search(candidate,[],new AbortController().signal);
-  assert.equal(research.searches,4);
+  assert.equal(research.searches,5);
   assert.equal(research.failed,0);
   assert.equal(candidate.people[0].patternFindings[0].email,'lotta.lyra@sodra.com');
   assert.equal(candidate.people[0].patternFindings[0].url,'https://association.test/annual-report.pdf');
-  assert.match(candidates[2],/lotta.lyra@sodra.com/);
+  assert.match(candidates[3],/lotta.lyra@sodra.com/);
+});
+test('Gmail discovery searches full name and company and accepts a sourced non-pattern address',async()=>{
+ const queries=[];
+ const ctx={...context,crmAuthenticated:()=>false,bridge:()=>null,searchBuyerPublicPages:async query=>{queries.push(query);return query.includes('"@gmail.com"')?[{url:'https://association.test/team',markdown:'Marta Berzina at Example: contact bluebird42@gmail.com'},{url:'https://association.test/other',markdown:'Other Person at Example: stranger@gmail.com'}]:[];}};
+ const start=source.indexOf('async function searchBuyerEmailPatterns('),end=source.indexOf('async function groundedBuyerFollowUp(',start);
+ vm.runInNewContext(`${source.slice(start,end)};globalThis.search=searchBuyerEmailPatterns;`,ctx);
+ const candidate={company:'Example',domain:'example.lv',people:[{name:'Marta Berzina'}]};
+ await ctx.search(candidate,[],new AbortController().signal);
+ assert.ok(queries.some(query=>query==='"Marta Berzina" "Example" "@gmail.com"'));
+ assert.deepEqual(Array.from(candidate.people[0].patternFindings,p=>p.email),['bluebird42@gmail.com']);
+});
+test('Gmail display uses Not found and never displays guessed Hunter addresses',()=>{
+ const ctx={...context,LeadIntelDiscovery:{normalizeLinkedInUrl:()=>''},esc:value=>String(value)};
+ const start=source.indexOf('function buyerContactRows('),end=source.indexOf('function emailPatternCandidates(',start);
+ vm.runInNewContext(`${source.slice(start,end)};globalThis.render=buyerContactRows;`,ctx);
+ const absent=ctx.render({hunterChecks:{'guess@gmail.com':{status:'invalid'}}},{domain:'example.lv'});
+ assert.match(absent,/<strong>Gmail<\/strong><span>Not found/);assert.doesNotMatch(absent,/guess@gmail/);
+ const found=ctx.render({patternFindings:[{email:'bluebird42@gmail.com',url:'https://association.test'}]},{domain:'example.lv'});
+ assert.match(found,/<strong>Gmail<\/strong><span><span class="buyer-email-result">bluebird42@gmail.com<\/span>/);
 });
