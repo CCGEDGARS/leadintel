@@ -1061,7 +1061,11 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
         const response=await fetchBuyerResearch(`${LEADINTEL_API}/api/ai/web-search?workspace_id=${encodeURIComponent(bridge().workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({query:plan.followUp,max_results:20,purpose:'contact_research'}),signal:controller.signal});
         if(response.ok){const grounded=((await response.json()).results||[]);rows.push(...grounded);providerStatus.grounded={status:"complete",results:grounded.length};}
         else{providerStatus.grounded.status="unavailable";issues.push('Grounded buyer discovery unavailable');}
-      }catch(error){if(error?.name==='AbortError')throw error;providerStatus.grounded.status="failed";issues.push('Grounded buyer discovery unavailable');}
+      }catch(error){
+        if(controller.signal.aborted)throw error;
+        providerStatus.grounded.status=error?.name==="AbortError"?"timeout":"failed";
+        issues.push(error?.name==="AbortError"?'Grounded buyer discovery timed out':'Grounded buyer discovery unavailable');
+      }
     }else providerStatus.grounded.status="not_configured";
     // Zero public rows is not terminal. Identity-directory discovery is the designed fallback.
     candidate.buyerResearchProgress={...candidate.buyerResearchProgress,phase:"people",label:"Identifying and ranking relevant people",step:3,total:5};persist();
@@ -1110,8 +1114,10 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     return true;
   }catch(error){
     candidate.peopleStatus="error";
-    candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),target:30,opportunityRoles:candidate.buyerRoles||candidate.buyerDiscovery?.opportunityRoles||[],expandedRoles:candidate.buyerRoleAliases||candidate.buyerDiscovery?.expandedRoles||[],opportunityTerms:candidate.buyerOpportunityTerms||candidate.buyerDiscovery?.opportunityTerms||[],issues:[...(candidate.buyerDiscovery?.issues||[]),error?.message||"Buyer research failed"].slice(-30),checkedAt:new Date().toISOString()};
-    candidate.buyerResearchProgress={...(candidate.buyerResearchProgress||{}),phase:"error",label:error?.name==="AbortError"?"Research timed out or was stopped":"Buyer research needs attention"};persist();
+    const previousDiscovery=candidate.buyerDiscovery||{};
+    const persistedProviderStatus=typeof providerStatus!=="undefined"?providerStatus:previousDiscovery.providerStatus;
+    candidate.buyerDiscovery={...previousDiscovery,target:30,providerStatus:persistedProviderStatus,opportunityRoles:candidate.buyerRoles||previousDiscovery.opportunityRoles||[],expandedRoles:candidate.buyerRoleAliases||previousDiscovery.expandedRoles||[],opportunityTerms:candidate.buyerOpportunityTerms||previousDiscovery.opportunityTerms||[],issues:[...(previousDiscovery.issues||[]),error?.message||"Buyer research failed"].slice(-30),lastError:{name:error?.name||"Error",message:String(error?.message||"Buyer research failed").slice(0,300),phase:candidate.buyerResearchProgress?.phase||"unknown"},checkedAt:new Date().toISOString()};
+    candidate.buyerResearchProgress={...(candidate.buyerResearchProgress||{}),phase:"error",label:controller.signal.aborted?"Research timed out or was stopped":"Buyer research needs attention"};persist();
     showToast(error?.name==="AbortError"?"Buyer research timed out or was canceled":error.message||"Apollo people search unavailable");
     if(taskCentre?.get(taskId)?.status!=='canceled')taskCentre?.fail(taskId,error,{canRetry:true});
     return false;
@@ -1716,7 +1722,7 @@ function renderSelectedProspects(prospects){
       return `<li class="selected-prospect-person"><span class="selected-prospect-rank">${index+1}</span><div class="selected-prospect-person-details"><div class="selected-prospect-person-name"><strong>${esc(name||"Name unavailable")}</strong>${person.buyerRelevanceScore?`<span class="buyer-relevance-score">Buyer relevance ${Number(person.buyerRelevanceScore)}/100</span>`:""}${name&&!/\s/.test(name)?'<small>First name only</small>':publicName&&!verifiedName?`<small>Public name · <a href="${esc(person.publicNameUrl)}" target="_blank" rel="noopener noreferrer">Source ↗</a></small>`:""}</div><p>${esc(person.title||"Role not provided")}${person.matchedBuyerRole?` · matched to ${esc(person.matchedBuyerRole)}`:""}</p>${location?`<small class="selected-prospect-person-location">${esc(location)}</small>`:""}${buyerContactRows(person,candidate,enrichmentResults.get(personKey(candidate,person)))}${enrichmentResultHtml(enrichmentResults.get(personKey(candidate,person)))}</div>${!direct?`<a href="${esc(linkedIn)}" target="_blank" rel="noopener noreferrer">Search LinkedIn ↗</a>`:""}${prospectContactControls(candidate,person)}</li>`;
     }).join("")}</ol><p class="selected-prospect-people-note">Confirm each person’s identity and role before outreach. LeadIntel checks public contact evidence automatically for saved buyers.</p></section>`:
       candidate.peopleStatus==="loading"?buyerResearchProgressHtml(candidate):
-      candidate.peopleStatus==="error"?'<p class="selected-prospect-people-state" role="status">Buyer search failed. You can retry below.</p>':
+      candidate.peopleStatus==="error"?`<div class="selected-prospect-people-state warning" role="status"><strong>Buyer search needs attention.</strong><span>${esc(candidate.buyerDiscovery?.lastError?.message||"A research provider failed before completion.")}</span><small>Phase: ${esc(candidate.buyerDiscovery?.lastError?.phase||"unknown")} · Retry will preserve completed research.</small></div>`:
       candidate.buyerRolesChanged?'<p class="selected-prospect-people-state">Search for decision-makers using the corrected roles.</p>':
       candidate.peopleStatus==="empty"?'<p class="selected-prospect-people-state">No matching buyer roles were found. You can refresh the search.</p>':
       '<p class="selected-prospect-people-state">Find decision-makers to see relevant people here.</p>';
