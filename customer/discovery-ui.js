@@ -945,10 +945,16 @@ async function findDecisionMakers(index){
   return searchDecisionMakers(candidate,{pipeline:Boolean(candidate.saved),retry:()=>findDecisionMakers(index)});
 }
 async function findPotentialDecisionMakers(domain){
-  const selected=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain||item.website)===canonicalDomain(domain));
-  const candidate=selected||discovery.potentialMatches.find(item=>canonicalDomain(item.domain||item.website)===canonicalDomain(domain));
-  if(!candidate||(candidate.buyerSearchMode!=="user_selected_target"&&!candidateIsActionable(candidate)&&!LeadIntelDiscovery.isPotentialBuyerSearchAllowed?.(candidate))){showToast("Buyer search needs a selected target or verified market and customer fit");return false;}
-  if(!selected&&!(discovery.checkedCompanyDomains||[]).some(checked=>canonicalDomain(checked)===canonicalDomain(candidate.domain))){showToast("Verify the company website before searching decision-makers");return false;}
+  const canonical=canonicalDomain(domain);
+  const selected=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain||item.website)===canonical);
+  const currentHandoff=buyerSelectionRows().find(item=>canonicalDomain(item.domain||item.website)===canonical);
+  const currentQualified=(discovery.candidates||[]).find(item=>canonicalDomain(item.domain||item.website)===canonical&&candidateIsActionable(item));
+  const candidate=selected||currentHandoff||currentQualified||discovery.potentialMatches.find(item=>canonicalDomain(item.domain||item.website)===canonical);
+  const authoritativeQualifiedHandoff=Boolean(currentHandoff&&currentQualified);
+  const explicitSelectedTarget=Boolean(currentHandoff&&(currentHandoff.buyerSearchMode==="user_selected_target"||currentHandoff.buyerSearchMode==="user_selected_without_signal"));
+  if(!candidate||(!authoritativeQualifiedHandoff&&!explicitSelectedTarget&&candidate.buyerSearchMode!=="user_selected_target"&&!candidateIsActionable(candidate)&&!LeadIntelDiscovery.isPotentialBuyerSearchAllowed?.(candidate))){showToast("Buyer search needs a company selected in the current Companies step");return false;}
+  if(!currentHandoff&&!selected&&!(discovery.checkedCompanyDomains||[]).some(checked=>canonicalDomain(checked)===canonicalDomain(candidate.domain))){showToast("Verify the company website before searching decision-makers");return false;}
+  if(authoritativeQualifiedHandoff){candidate.buyerSearchMode="user_selected_qualified";candidate.qualified=true;candidate.needsRecheck=false;}
   if(candidate.peopleStatus==="loading")return false;
   const roles=String(LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate)||"").trim();
   if(!roles){showToast("Add buyer roles to your company profile before searching");return false;}
