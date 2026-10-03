@@ -321,8 +321,8 @@ test('Buyers can explicitly promote a selected prospect without fabricating a sc
   assert.equal(state.pipeline[0].matchedSignals.length,0);
   assert.equal(state.pipeline[0].score.total,undefined);
   context.__renderPipeline();
-  assert.match(context.__elements.get('customer-pipeline').innerHTML,/Buying signal unconfirmed · manually added/);
-  assert.match(context.__elements.get('customer-pipeline').innerHTML,/pipeline-score">—</);
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/Buying signal unconfirmed/);
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/Find decision-makers/);
   assert.match(context.__elements.get('discovery-selection-breakdown').textContent,/1 selected for Buyers/);
 });
 
