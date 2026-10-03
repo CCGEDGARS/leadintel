@@ -1015,7 +1015,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     else if((discovery.potentialMatches||[]).some(item=>canonicalDomain(item.domain)===domain))discovery.potentialMatches=discovery.potentialMatches.map(item=>canonicalDomain(item.domain)===domain?candidate:item);
     saveDiscovery();renderAll();
   };
-  candidate.peopleStatus="loading";persist();
+  candidate.peopleStatus="loading";candidate.buyerResearchProgress={phase:"company",label:"Verifying company",step:1,total:5,startedAt:new Date().toISOString()};persist();
   const controller=new AbortController();
   const taskCentre=window.LeadIntelTaskCentre;const taskId=`decision-maker-search:${candidate.domain||candidate.id||"company"}:${Date.now()}`;
   taskCentre?.start({id:taskId,type:'decision-maker-search',title:`Buyer search · ${candidate.company}`,stage:'Researching public buyer candidates',total:1,completed:0,canCancel:true,canRetry:true});
@@ -1026,9 +1026,10 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     const verified=await window.LeadIntelFirstPartyResearch.collectWebsiteEvidence({website:candidate.website||`https://${candidate.domain}/`,purpose:'buyers',maxPages:3,signal:controller.signal});
     candidate.evidence=LeadIntelDiscovery.normalizeCompanySearchResults({results:[...(candidate.evidence||[]),...verified.pages.map(page=>({url:page.url,title:page.title,markdown:page.text,verifiedAt:page.fetchedAt,date:page.date,dateSource:page.dateSource,metadata:{statusCode:page.statusCode}}))]}, {kind:'verification',domain:candidate.domain,company:candidate.company,market:candidate.market}).slice(0,12);
     discovery.checkedCompanyDomains=[...new Set([...(discovery.checkedCompanyDomains||[]),candidate.domain])];
-    taskCentre?.update(taskId,{stage:'Searching relevant buyers'});
     const rows=[],issues=[];
     const plan=LeadIntelDiscovery.buyerResearchPlan(candidate,buyerProfile),roles=plan.roles;
+    candidate.buyerResearchProgress={...candidate.buyerResearchProgress,phase:"roles",label:`Searching ${roles.length} buyer-role categories`,step:2,total:5};persist();
+    taskCentre?.update(taskId,{stage:'Searching relevant buyers'});
     for(const role of roles){
       if(controller.signal.aborted)throw Object.assign(new Error('Buyer research canceled'),{name:'AbortError'});
       try{rows.push(...await searchBuyerPublicPages(`site:linkedin.com/in/ "${candidate.company}" "${role}"`,10,controller.signal));}
@@ -1041,6 +1042,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
       }catch(error){if(error?.name==='AbortError')throw error;issues.push('Grounded buyer discovery unavailable');}
     }
     if(!rows.length&&issues.length)throw new Error('Public buyer discovery unavailable. Retry when research services are available.');
+    candidate.buyerResearchProgress={...candidate.buyerResearchProgress,phase:"people",label:"Identifying and ranking relevant people",step:3,total:5};persist();
     const publicPeople=LeadIntelDiscovery.discoverPublicBuyers(rows,candidate.company,buyerProfile);
     const previous=[...(candidate.buyerDiscovery?.pool||[]),...(candidate.people||[])];
     const pool=LeadIntelDiscovery.mergeBuyerPool(previous,publicPeople,buyerProfile);
@@ -1059,16 +1061,18 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     renderAll();
     showToast(!candidate.people.length?'No relevant decision-makers returned':candidate.people.length<3?`Only ${candidate.people.length} relevant decision-maker${candidate.people.length===1?"":"s"} found`:`${candidate.people.length} relevant decision-makers found`);
     if(candidate.publicContactVersion!==PUBLIC_NAME_CHECK_VERSION){
+      candidate.buyerResearchProgress={...candidate.buyerResearchProgress,phase:"identity",label:"Verifying identities and current roles",step:4,total:5};persist();
       taskCentre?.update(taskId,{stage:'Researching public buyer identities and contact evidence'});
       clearTimeout(timeout);
       await findPublicProspectContacts(candidate.domain,{signal:controller.signal});
       if(controller.signal.aborted)throw Object.assign(new Error('Buyer research canceled'),{name:'AbortError'});
-      persist();
+      candidate.buyerResearchProgress={...candidate.buyerResearchProgress,phase:"contacts",label:"Finalizing public contact evidence",step:5,total:5};persist();
     }
+    candidate.buyerResearchProgress={phase:"complete",label:"Buyer research complete",step:5,total:5,completedAt:new Date().toISOString()};persist();
     taskCentre?.complete(taskId,{stage:candidate.publicContactStatus==='error'?'Buyer suggestions found · public verification incomplete':'Buyer research complete',resultCount:candidate.people.length});
     return true;
   }catch(error){
-    candidate.peopleStatus="error";persist();
+    candidate.peopleStatus="error";candidate.buyerResearchProgress={...(candidate.buyerResearchProgress||{}),phase:"error",label:error?.name==="AbortError"?"Research stopped":"Buyer research needs attention"};persist();
     showToast(error?.name==="AbortError"?"Buyer research timed out or was canceled":error.message||"Apollo people search unavailable");
     if(taskCentre?.get(taskId)?.status!=='canceled')taskCentre?.fail(taskId,error,{canRetry:true});
     return false;
@@ -1639,6 +1643,18 @@ function publicResearchOutcome(candidate){
   const phones=people.filter(person=>person.publicPhone&&person.publicPhoneUrl).length;
   return `${people.length} people suggested · ${named} public full names · ${profiles} direct profiles · ${emails} public email listings · ${phones} phone listings near names. Company contacts below are general routes, not personal contacts.`;
 }
+function buyerResearchProgressHtml(candidate){
+  const progress=candidate.buyerResearchProgress||{phase:"company",label:"Verifying company",step:1,total:5};
+  const phases=[
+    ["company","Verify company"],
+    ["roles","Search relevant roles"],
+    ["people","Identify people"],
+    ["identity","Verify identities"],
+    ["contacts","Contact evidence"]
+  ];
+  const active=Math.max(1,Math.min(phases.length,Number(progress.step)||1));
+  return `<section class="buyer-research-progress" role="status" aria-live="polite"><div class="buyer-research-progress-head"><span class="buyer-research-spinner" aria-hidden="true"></span><div><strong>Researching decision-makers…</strong><span>${esc(progress.label||"Research in progress")}</span></div><b>${active}/${phases.length}</b></div><div class="buyer-research-progress-bar"><span style="width:${Math.round(active/phases.length*100)}%"></span></div><ol>${phases.map(([key,label],index)=>`<li class="${index+1<active?"done":index+1===active?"active":""}"><span>${index+1<active?"✓":index+1}</span>${label}</li>`).join("")}</ol><p>Still working — verified results will appear here automatically.</p></section>`;
+}
 function renderSelectedProspects(prospects){
   if(!prospects.length)return "";
   const cards=prospects.map(candidate=>{
@@ -1655,7 +1671,7 @@ function renderSelectedProspects(prospects){
       const linkedIn=direct||linkedInSearchUrl(person,candidate);
       return `<li class="selected-prospect-person"><span class="selected-prospect-rank">${index+1}</span><div class="selected-prospect-person-details"><div class="selected-prospect-person-name"><strong>${esc(name||"Name unavailable")}</strong>${name&&!/\s/.test(name)?'<small>First name only</small>':publicName&&!verifiedName?`<small>Public name · <a href="${esc(person.publicNameUrl)}" target="_blank" rel="noopener noreferrer">Source ↗</a></small>`:""}</div><p>${esc(person.title||"Role not provided")}</p>${location?`<small class="selected-prospect-person-location">${esc(location)}</small>`:""}${buyerContactRows(person,candidate,enrichmentResults.get(personKey(candidate,person)))}${enrichmentResultHtml(enrichmentResults.get(personKey(candidate,person)))}</div>${!direct?`<a href="${esc(linkedIn)}" target="_blank" rel="noopener noreferrer">Search LinkedIn ↗</a>`:""}${prospectContactControls(candidate,person)}</li>`;
     }).join("")}</ol><p class="selected-prospect-people-note">Confirm each person’s identity and role before outreach. LeadIntel checks public contact evidence automatically for saved buyers.</p></section>`:
-      candidate.peopleStatus==="loading"?'<p class="selected-prospect-people-state" role="status">Searching for decision-makers…</p>':
+      candidate.peopleStatus==="loading"?buyerResearchProgressHtml(candidate):
       candidate.peopleStatus==="error"?'<p class="selected-prospect-people-state" role="status">Buyer search failed. You can retry below.</p>':
       candidate.buyerRolesChanged?'<p class="selected-prospect-people-state">Search for decision-makers using the corrected roles.</p>':
       candidate.peopleStatus==="empty"?'<p class="selected-prospect-people-state">No matching buyer roles were found. You can refresh the search.</p>':
@@ -1664,7 +1680,7 @@ function renderSelectedProspects(prospects){
     const research=candidate.publicResearch||{};
     const publicResearchNote=research.checkedAt?`<div class="selected-prospect-research-report"><p><strong>${esc(publicResearchOutcome(candidate))}</strong></p><p>Research activity · ${Number(research.officialPages)||0} official pages read · ${Number(research.profileResults)||0} Firecrawl profile results · ${Number(research.openaiResults)||0} OpenAI source results · ${Number(research.geminiResults)||0} grounded Gemini source results · ${Number(research.patternSearches)||0} email evidence searches. ${Number(research.conflicts?.length)||0?`${research.conflicts.length} identity conflict${research.conflicts.length===1?"":"s"} need review. `:""}Generated addresses, public listings and provider checks retain separate status. Mailbox deliverability alone does not confirm the person.</p>${research.sources?.length||research.issues?.length?`<details><summary>Research sources and gaps</summary>${research.sources?.length?`<ul>${research.sources.map(url=>`<li><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a></li>`).join("")}</ul>`:""}${research.issues?.length?`<p>${research.issues.map(esc).join(" · ")}</p>`:""}</details>`:""}</div>`:"";
     const batchCount=people.filter(person=>selectedBuyerEnrichment.has(selectedBuyerKey(candidate,person))).length;
-    return `<article class="selected-prospect-row"><header class="selected-prospect-company"><div><span class="eyebrow">${esc(candidate.market||"Target market")} · Selected target</span><h4>${esc(candidate.company||domain)}</h4><a href="${esc(candidate.website||`https://${domain}/`)}" target="_blank" rel="noopener noreferrer">${esc(domain)} ↗</a></div><span class="selected-prospect-signal">${candidate.buyerSearchMode==="user_selected_qualified"?"Qualified opportunity":candidate.buyerSearchMode==="user_selected_target"?"Opportunity unverified":"Buying signal unconfirmed"}</span></header>${candidate.buyerSearchMode==="user_selected_target"?'<p class="selected-prospect-context">You chose this company. LeadIntel has not confirmed that it needs your service. Find relevant people to evaluate the opportunity.</p>':""}<div class="selected-prospect-actions"><button class="${people.length?"secondary-btn":"primary-btn"} small" type="button" data-find-prospect-buyers="${esc(domain)}" ${candidate.peopleStatus==="loading"?"disabled":""}>${people.length?"Refresh buyers":candidate.peopleStatus==="loading"?"Searching…":"Find decision-makers →"}</button></div><label class="selected-prospect-roles">Buyer roles for this company<input type="text" data-prospect-buyer-roles="${esc(domain)}" value="${esc(LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate)||"")}" placeholder="Procurement Director; Operations Director; Plant Manager"><small>Separate roles with semicolons. Changes apply to the next buyer search and do not rerun company discovery.</small></label>${candidate.buyerRolesChanged?'<p class="selected-prospect-roles-warning">Buyer roles corrected. Previous buyer suggestions are hidden; search again for these roles.</p>':""}<p class="people-note">Refresh updates the existing pool. Saved candidates and sourced details stay protected.</p>${candidate.buyerDiscovery?.checkedAt?`<p class="people-note">${Number(candidate.buyerDiscovery.found)||0} relevant candidates reviewed · up to 6 recommended · research target 20${candidate.buyerDiscovery.issues?.length?" · Some discovery searches were unavailable":""}</p>`:""}${peopleHtml}<section class="selected-prospect-public"><strong>Public contact evidence</strong><p>${candidate.publicContactStatus==="loading"?"Checking official company pages for names, emails, phones, and profiles…":"Public contact evidence is collected as part of decision-maker research. Refresh only when you need to update existing evidence."}</p>${publicResearchNote}${publicContacts?`<ul>${publicContacts}</ul>`:candidate.publicContactStatus==="empty"?'<small>No additional public contact evidence was found.</small>':""}${candidate.publicContactStatus==="complete"?`<button class="secondary-btn small" type="button" data-find-public-contacts="${esc(domain)}">Refresh public evidence</button>`:""}</section>${batchCount?`<div class="selected-prospect-batch"><strong>${batchCount} selected · confirm Apollo lookup</strong><button class="secondary-btn small" type="button" data-prospect-batch-email="${esc(domain)}">Check selected emails with Apollo</button><button class="secondary-btn small" type="button" data-prospect-batch-phone="${esc(domain)}">Find selected phones with Apollo</button></div>`:""}</article>`;
+    return `<article class="selected-prospect-row"><header class="selected-prospect-company"><div><span class="eyebrow">${esc(candidate.market||"Target market")} · Selected target</span><h4>${esc(candidate.company||domain)}</h4><a href="${esc(candidate.website||`https://${domain}/`)}" target="_blank" rel="noopener noreferrer">${esc(domain)} ↗</a></div><span class="selected-prospect-signal">${candidate.buyerSearchMode==="user_selected_qualified"?"Qualified opportunity":candidate.buyerSearchMode==="user_selected_target"?"Opportunity unverified":"Buying signal unconfirmed"}</span></header>${candidate.buyerSearchMode==="user_selected_target"?'<p class="selected-prospect-context">You chose this company. LeadIntel has not confirmed that it needs your service. Find relevant people to evaluate the opportunity.</p>':""}<div class="selected-prospect-actions"><button class="${people.length?"secondary-btn":"primary-btn"} small" type="button" data-find-prospect-buyers="${esc(domain)}" ${candidate.peopleStatus==="loading"?"disabled":""}>${people.length?"Refresh buyers":candidate.peopleStatus==="loading"?"Researching decision-makers…":"Find decision-makers →"}</button></div><label class="selected-prospect-roles">Buyer roles for this company<input type="text" data-prospect-buyer-roles="${esc(domain)}" value="${esc(LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate)||"")}" placeholder="Procurement Director; Operations Director; Plant Manager"><small>Separate roles with semicolons. Changes apply to the next buyer search and do not rerun company discovery.</small></label>${candidate.buyerRolesChanged?'<p class="selected-prospect-roles-warning">Buyer roles corrected. Previous buyer suggestions are hidden; search again for these roles.</p>':""}<p class="people-note">Refresh updates the existing pool. Saved candidates and sourced details stay protected.</p>${candidate.buyerDiscovery?.checkedAt?`<p class="people-note">${Number(candidate.buyerDiscovery.found)||0} relevant candidates reviewed · up to 6 recommended · research target 20${candidate.buyerDiscovery.issues?.length?" · Some discovery searches were unavailable":""}</p>`:""}${peopleHtml}<section class="selected-prospect-public"><strong>Public contact evidence</strong><p>${candidate.publicContactStatus==="loading"?"Checking official company pages for names, emails, phones, and profiles…":"Public contact evidence is collected as part of decision-maker research. Refresh only when you need to update existing evidence."}</p>${publicResearchNote}${publicContacts?`<ul>${publicContacts}</ul>`:candidate.publicContactStatus==="empty"?'<small>No additional public contact evidence was found.</small>':""}${candidate.publicContactStatus==="complete"?`<button class="secondary-btn small" type="button" data-find-public-contacts="${esc(domain)}">Refresh public evidence</button>`:""}</section>${batchCount?`<div class="selected-prospect-batch"><strong>${batchCount} selected · confirm Apollo lookup</strong><button class="secondary-btn small" type="button" data-prospect-batch-email="${esc(domain)}">Check selected emails with Apollo</button><button class="secondary-btn small" type="button" data-prospect-batch-phone="${esc(domain)}">Find selected phones with Apollo</button></div>`:""}</article>`;
   }).join("");
   const hasPeople=prospects.some(item=>Array.isArray(item.people)&&item.people.length);
   return `<section class="selected-prospect-list">${hasPeople?`<div class="buyer-review-heading"><span class="eyebrow">Review buyers</span><h3>Confirm the decision-makers</h3><p>Verify identity, current role and company before continuing to Messages.</p></div>`:""}${cards}</section>`;

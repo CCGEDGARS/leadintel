@@ -524,3 +524,26 @@
 .candidate-evidence-details[open]>summary::before{content:"▾"}
 .candidate-evidence-details .candidate-evidence{margin-top:10px}
 @media(max-width:760px){.opportunity-brief{grid-template-columns:1fr}}
+
+
+/* Buyer intelligence live research progress */
+.buyer-research-progress{margin:18px 0;padding:16px 18px;border:1px solid #cfe2d9;border-radius:14px;background:#f5faf7}
+.buyer-research-progress-head{display:grid;grid-template-columns:auto 1fr auto;gap:11px;align-items:center}
+.buyer-research-progress-head>div{display:grid;gap:2px}
+.buyer-research-progress-head strong{font-size:13px;color:#173d32}
+.buyer-research-progress-head span:not(.buyer-research-spinner){font-size:11px;color:#61736b}
+.buyer-research-progress-head b{font:600 10px "IBM Plex Mono",monospace;color:#4e6a60}
+.buyer-research-spinner{width:18px;height:18px;border:2px solid #c7d9d1;border-top-color:#116552;border-radius:50%;animation:buyerResearchSpin .8s linear infinite}
+.buyer-research-progress-bar{height:4px;margin:13px 0 12px;border-radius:999px;background:#dfe9e4;overflow:hidden}
+.buyer-research-progress-bar>span{display:block;height:100%;border-radius:inherit;background:#126652;transition:width .25s ease}
+.buyer-research-progress ol{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;margin:0;padding:0;list-style:none}
+.buyer-research-progress li{display:flex;align-items:center;gap:6px;color:#839089;font-size:9.5px;line-height:1.25}
+.buyer-research-progress li>span{display:grid;place-items:center;flex:0 0 18px;width:18px;height:18px;border:1px solid #d5dfda;border-radius:50%;background:#fff;font:600 9px "IBM Plex Mono",monospace}
+.buyer-research-progress li.active{color:#174c3d;font-weight:700}
+.buyer-research-progress li.active>span{border-color:#19715b;background:#e9f5ef;color:#125d4b}
+.buyer-research-progress li.done{color:#45675b}
+.buyer-research-progress li.done>span{border-color:#bad6ca;background:#e8f4ee;color:#12604d}
+.buyer-research-progress>p{margin:12px 0 0;color:#718079;font-size:10.5px}
+@keyframes buyerResearchSpin{to{transform:rotate(360deg)}}
+@media(max-width:760px){.buyer-research-progress ol{grid-template-columns:1fr 1fr}.buyer-research-progress li:last-child{grid-column:1/-1}}
+@media(prefers-reduced-motion:reduce){.buyer-research-spinner{animation:none}}
