@@ -323,7 +323,7 @@ test('Buyers can explicitly promote a selected prospect without fabricating a sc
   context.__renderPipeline();
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Buying signal unconfirmed · manually added/);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/pipeline-score">—</);
-  assert.match(context.__elements.get('discovery-selection-breakdown').textContent,/1 in Pipeline · 0 prospects/);
+  assert.match(context.__elements.get('discovery-selection-breakdown').textContent,/1 selected for Buyers/);
 });
 
 test('a user-selected fit-and-market verified potential match can display Apollo decision-makers without CRM promotion',async()=>{
