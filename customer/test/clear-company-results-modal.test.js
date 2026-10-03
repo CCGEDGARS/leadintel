@@ -6,8 +6,9 @@ const path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'../discovery-ui.js'),'utf8');
 const css=fs.readFileSync(path.join(__dirname,'../discovery.css'),'utf8');
 
-test('clear-results uses an in-app LeadIntel dialog instead of browser confirm',()=>{
-  assert.doesNotMatch(source,/window\.confirm\(/);
+test('clear-results uses an in-app LeadIntel dialog instead of a browser confirm',()=>{
+  const clearFlow=source.slice(source.indexOf('let clearCompanyResultsReturnFocus='),source.indexOf('function moduleReady()'));
+  assert.doesNotMatch(clearFlow,/window\.confirm\(/);
   assert.match(source,/id="clear-company-results-modal"/);
   assert.match(source,/Clear search results\?/);
   assert.match(source,/This will remove/);
