@@ -103,7 +103,9 @@
         "Take over manually",
         "Approve and start automatic workflow",
         "data-wf-final",
-        "if(body&&workspace!==id)"
+        "if(body&&workspace!==id)",
+        "References describe buyers, not your own business.",
+        "Total score determines ranking."
       ]
     },
     {
