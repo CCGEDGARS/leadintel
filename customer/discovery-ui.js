@@ -1027,6 +1027,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
   taskCentre?.start({id:taskId,type:'decision-maker-search',title:`Buyer search · ${candidate.company}`,stage:'Researching public buyer candidates',total:1,completed:0,canCancel:true,canRetry:true});
   taskCentre?.registerActions(taskId,{cancel:()=>controller.abort(),retry:retry||(()=>false)});
   const timeout=setTimeout(()=>controller.abort(),Math.max(DISCOVERY_REQUEST_TIMEOUT_MS*8,120000));
+  let providerStatus=null;
   try{
     taskCentre?.update(taskId,{stage:'Verifying company before buyer search'});
     const verified=await window.LeadIntelFirstPartyResearch.collectWebsiteEvidence({website:candidate.website||`https://${candidate.domain}/`,purpose:'buyers',maxPages:3,signal:controller.signal});
@@ -1034,7 +1035,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     discovery.checkedCompanyDomains=[...new Set([...(discovery.checkedCompanyDomains||[]),candidate.domain])];
     const rows=[],issues=[];
     const plan=LeadIntelDiscovery.buyerResearchPlan(candidate,buyerProfile),roles=plan.roles;
-    const providerStatus={firecrawl:{status:"pending",results:0,queries:plan.queries.length},grounded:{status:"pending",results:0},identity:{status:"pending",results:0}};
+    providerStatus={firecrawl:{status:"pending",results:0,queries:plan.queries.length},grounded:{status:"pending",results:0},identity:{status:"pending",results:0}};
     candidate.buyerRoles=plan.roles;candidate.buyerRoleAliases=plan.expandedRoles;candidate.buyerOpportunityTerms=plan.opportunityTerms;
     candidate.buyerResearchProgress={...candidate.buyerResearchProgress,phase:"roles",label:`Searching ${roles.length} buyer-role categories`,step:2,total:5};persist();
     taskCentre?.update(taskId,{stage:'Searching relevant buyers'});
@@ -1115,7 +1116,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
   }catch(error){
     candidate.peopleStatus="error";
     const previousDiscovery=candidate.buyerDiscovery||{};
-    const persistedProviderStatus=typeof providerStatus!=="undefined"?providerStatus:previousDiscovery.providerStatus;
+    const persistedProviderStatus=providerStatus||previousDiscovery.providerStatus||null;
     candidate.buyerDiscovery={...previousDiscovery,target:30,providerStatus:persistedProviderStatus,opportunityRoles:candidate.buyerRoles||previousDiscovery.opportunityRoles||[],expandedRoles:candidate.buyerRoleAliases||previousDiscovery.expandedRoles||[],opportunityTerms:candidate.buyerOpportunityTerms||previousDiscovery.opportunityTerms||[],issues:[...(previousDiscovery.issues||[]),error?.message||"Buyer research failed"].slice(-30),lastError:{name:error?.name||"Error",message:String(error?.message||"Buyer research failed").slice(0,300),phase:candidate.buyerResearchProgress?.phase||"unknown"},checkedAt:new Date().toISOString()};
     candidate.buyerResearchProgress={...(candidate.buyerResearchProgress||{}),phase:"error",label:controller.signal.aborted?"Research timed out or was stopped":"Buyer research needs attention"};persist();
     showToast(error?.name==="AbortError"?"Buyer research timed out or was canceled":error.message||"Apollo people search unavailable");
