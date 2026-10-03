@@ -15,7 +15,7 @@ const MAX_DISCOVERY_COMPANY_CHECKS=30;
 const SAVING_SEARCH_RESULT_LIMIT=4;
 const SAVING_COMPANY_CHECK_LIMIT=3;
 const SAVING_FIRECRAWL_CALL_LIMIT=10;
-const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1";
+const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20261002-buyer-handoff-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -79,13 +79,28 @@ function loadDiscovery(){try{const normalized=LeadIntelDiscovery.normalizeDiscov
       if(roles&&roles!==candidate.buyerRoles){candidate.buyerRoles=roles;if(candidate.people?.length)candidate.buyerRolesChanged=true;}
     }return recovered;}catch{return LeadIntelDiscovery.normalizeDiscoveryState({});}}
 function saveDiscovery(){localStorage.setItem(DISCOVERY_STORAGE_KEY,JSON.stringify(discovery));window.dispatchEvent?.(new CustomEvent("leadintel:workspace-dirty"));window.LeadIntelJourney?.refresh?.();}
-function clearCompanySearchResults(){
+let clearCompanyResultsReturnFocus=null;
+function openClearCompanyResultsModal(){
   if(discovery.status==='running'){showToast("Wait for the company search to finish before clearing results.");return false;}
-  if(!window.confirm("Clear all company search results, research checks and unsaved Buyers selections? Your profile, reference companies, known companies and saved CRM records will be kept."))return false;
+  const modal=$("clear-company-results-modal");if(!modal){showToast("Clear-results confirmation is unavailable. Refresh and try again.");return false;}
+  clearCompanyResultsReturnFocus=document.activeElement;
+  modal.hidden=false;document.body.classList.add("clear-company-modal-open");
+  $("cancel-clear-company-results")?.focus?.();
+  return true;
+}
+function closeClearCompanyResultsModal(){
+  const modal=$("clear-company-results-modal");if(!modal||modal.hidden)return false;
+  modal.hidden=true;document.body.classList.remove("clear-company-modal-open");
+  const returnFocus=clearCompanyResultsReturnFocus;clearCompanyResultsReturnFocus=null;returnFocus?.focus?.();
+  return true;
+}
+function clearCompanySearchResults(){
+  if(discovery.status==='running'){closeClearCompanyResultsModal();showToast("Wait for the company search to finish before clearing results.");return false;}
   discovery=LeadIntelDiscovery.normalizeDiscoveryState({pipeline:discovery.pipeline});
   const meta=loadMeta();delete meta.lastCompanyRun;saveMeta(meta);
   enrichmentResults.clear();enrichmentPending.clear();selectedBuyerEnrichment.clear();automaticPublicChecks.clear();
   discoveryProgress={phase:"idle",completed:0,total:0};recoveredInterruptedRun=false;
+  closeClearCompanyResultsModal();
   saveDiscovery();renderAll();showToast("Search results cleared · saved CRM records kept");return true;
 }
 function moduleReady(){const main=mainState();return Boolean(main?.profile?.website||main?.website);}
@@ -166,6 +181,22 @@ function injectDiscoveryUI(){
       
       <details class="company-search-details"><summary>Search details</summary><div class="discovery-funnel" id="discovery-funnel" hidden></div></details>
       <div class="research-status" id="company-discovery-status" role="status" aria-live="polite" aria-atomic="true">Your company and market context are ready. Find and review matching companies to begin.</div><div class="company-candidates" id="company-candidates"></div><section class="potential-matches" id="discovery-potential-matches" aria-labelledby="potential-matches-title" hidden></section><div class="company-next-action"><span id="companies-selection-status" role="status">Select companies to continue.</span><button class="primary-btn" id="continue-company-buyers" type="button" disabled>Continue to Buyers →</button></div></section>
+    <section class="clear-company-modal" id="clear-company-results-modal" hidden role="dialog" aria-modal="true" aria-labelledby="clear-company-modal-title" aria-describedby="clear-company-modal-description">
+      <button class="clear-company-modal-backdrop" type="button" data-clear-company-cancel aria-label="Cancel clearing search results"></button>
+      <div class="clear-company-modal-dialog" role="document">
+        <span class="eyebrow">Company search</span>
+        <h2 id="clear-company-modal-title">Clear search results?</h2>
+        <p id="clear-company-modal-description">Start the Companies step fresh without touching your saved commercial records.</p>
+        <div class="clear-company-modal-impact">
+          <div><strong>This will remove</strong><span>Company search results</span><span>Research checks</span><span>Unsaved Buyers selections</span></div>
+          <div class="is-kept"><strong>This will stay</strong><span>Profile and strategy</span><span>Reference companies</span><span>Saved CRM records</span></div>
+        </div>
+        <footer>
+          <button class="secondary-btn" id="cancel-clear-company-results" type="button">Cancel</button>
+          <button class="primary-btn" id="confirm-clear-company-results" type="button">Clear results</button>
+        </footer>
+      </div>
+    </section>
     <section class="buyers-focus-guide" id="discovery-buyers-guide" hidden aria-labelledby="discovery-buyers-title"><span class="eyebrow">Step 5 · Buyers</span><h3 id="discovery-buyers-title">Find the people who own the decision.</h3><p id="discovery-buyers-description">Choose a saved company below and select <strong>Find buyers</strong>. Review the suggested decision-makers before continuing to Scripts.</p></section>
     <section class="panel strategy-panel pipeline-panel" hidden><div class="section-title"><span class="eyebrow" id="pipeline-stage-kicker">Saved companies</span><h3 id="pipeline-stage-title">Companies selected for follow-up</h3><p id="pipeline-stage-description">Save a good match here, identify its buyers, then prepare a relevant message.</p></div><div class="customer-pipeline" id="customer-pipeline"></div></section>
   </section>`);
@@ -1606,7 +1637,11 @@ function bindDiscovery(){
   window.addEventListener('leadintel:commercial-context-changed',()=>{if(discoveryMounted){syncStrategyFingerprint();renderAll();}});
   $("discovery-target-list")?.addEventListener("click",event=>{const button=event.target.closest("[data-select-target-buyers]");if(button)selectTargetForBuyers(button.dataset.selectTargetBuyers);});
   $("recheck-company-results")?.addEventListener("click",()=>{void runCompanyDiscovery({recheckOnly:true,savingMode:false});});
-  $("clear-company-results")?.addEventListener("click",clearCompanySearchResults);
+  $("clear-company-results")?.addEventListener("click",openClearCompanyResultsModal);
+  $("cancel-clear-company-results")?.addEventListener("click",closeClearCompanyResultsModal);
+  $("confirm-clear-company-results")?.addEventListener("click",clearCompanySearchResults);
+  document.querySelector("[data-clear-company-cancel]")?.addEventListener("click",closeClearCompanyResultsModal);
+  document.addEventListener("keydown",event=>{if(event.key==="Escape"&&!$("clear-company-results-modal")?.hidden)closeClearCompanyResultsModal();});
   $("review-company-strategy")?.addEventListener("click",showStrategyStep);
   $("manage-known-companies")?.addEventListener("click",()=>{void window.LeadIntelReferenceCustomerLauncher?.open?.('targets');});
   $("manage-company-inputs")?.addEventListener("click",()=>{void window.LeadIntelReferenceCustomerLauncher?.open?.('customers');});
