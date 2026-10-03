@@ -10,7 +10,7 @@ test('research checks use compact neutral qualification copy',()=>{
   assert.match(ui,/research-checks-compact/);
   assert.match(ui,/Research checks/);
   assert.match(ui,/excluded/);
-  assert.match(ui,/did not qualify for your shortlist based on the current strategy and evidence/);
+  assert.match(ui,/excluded from the qualified list and automatic flow because they did not meet the current strategy and evidence requirements/);
   assert.doesNotMatch(ui,/Research checks · \$\{rows\.length\} companies did not qualify/);
 });
 
