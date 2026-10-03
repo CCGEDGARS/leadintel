@@ -34,3 +34,5 @@ test('obfuscated Apollo surname stays pending and stable without invented last n
 });
 
 test('a subsidiary is not silently treated as the exact target employer',()=>{const t=D.traceIdentityBuyers({people:[{name:'Anna Andersson',title:'Procurement Manager',organization_name:'LKAB Minerals'}]},{company:'LKAB'},profile);assert.equal(t.people.length,0);assert.equal(t.diagnostics[0].companyVerification,'rejected');});
+
+test('directory title adornments do not discard a sourced current procurement identity',()=>{const result=D.tracePublicBuyers([{url:'https://rocketreach.co/robert-palo-email_67988071',title:'Robert Palo Email & Phone Number | LKAB Inköpschef Affärsområde ...',description:'Robert Palo, based in Luleå, SE, is currently a Inköpschef Affärsområde Järnmalm and Head of Procurement Business Area Iron Ore at LKAB. Robert Palo brings experience from previous roles at LKAB.'}],'LKAB',profile);assert.equal(result.people.length,1);assert.equal(result.people[0].name,'Robert Palo');assert.match(result.people[0].title,/^Inköpschef/);});

@@ -1,0 +1,78 @@
+{
+  "scope": "Managed Firecrawl public check, not authenticated full LKAB Buyer run",
+  "checkedAt": "2026-10-03T19:36:10.842Z",
+  "httpStatus": 200,
+  "query": "\"LKAB\" \"Inköpschef\"",
+  "people": [
+    {
+      "id": "public-https-rocketreach-co-robert-palo-email-67988071",
+      "name": "Robert Palo",
+      "title": "Inköpschef Affärsområde Järnmalm and Head of Procurement Business Area Iron Ore",
+      "organization": "LKAB",
+      "publicName": "Robert Palo",
+      "publicNameUrl": "https://rocketreach.co/robert-palo-email_67988071",
+      "publicLinkedinUrl": "",
+      "buyerRelevanceScore": 100,
+      "matchedBuyerRole": "Procurement Manager"
+    }
+  ],
+  "diagnostics": [
+    {
+      "index": 0,
+      "source": "public",
+      "url": "https://rocketreach.co/robert-palo-email_67988071",
+      "title": "Robert Palo Email & Phone Number | LKAB Inköpschef Affärsområde ...",
+      "parsedName": "Robert Palo",
+      "parsedTitle": "Inköpschef Affärsområde Järnmalm and Head of Procurement Business Area Iron Ore",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "complete",
+      "accepted": true,
+      "rejectionReason": "",
+      "matchedBuyerRole": "Procurement Manager"
+    },
+    {
+      "index": 1,
+      "source": "public",
+      "url": "https://lkab.com/nyheter/ny-inkopschef-pa-lkab/",
+      "title": "Ny inköpschef på LKAB",
+      "parsedName": "Ny inköpschef på LKAB",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "rejected",
+      "companyVerification": "pending",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "No full person name could be parsed from the result title"
+    },
+    {
+      "index": 2,
+      "source": "public",
+      "url": "https://lkab.com/nyheter/mycket-stort-intresse-for-lkabs-leverantorsdag/",
+      "title": "Mycket stort intresse för LKAB:s leverantörsdag",
+      "parsedName": "Mycket stort intresse för LKAB:s leverantörsdag",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "rejected",
+      "companyVerification": "pending",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "No full person name could be parsed from the result title"
+    },
+    {
+      "index": 3,
+      "source": "public",
+      "url": "https://lkab.com/nyheter/ny-version-av-lkabs-leverantorshandbok-ar-ute/",
+      "title": "Ny version av LKAB:s leverantörshandbok är ute",
+      "parsedName": "Ny version av LKAB:s leverantörshandbok är ute",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "rejected",
+      "companyVerification": "pending",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "No full person name could be parsed from the result title"
+    }
+  ]
+}

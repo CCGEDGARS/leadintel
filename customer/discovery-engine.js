@@ -978,7 +978,7 @@
     const employmentPattern=new RegExp('([^.!?\\n|]{2,160}?)\\s+(?:at|hos|på)\\s+'+escaped+'(?=$|[\\s,.|–—])','iu');
     for(const [index,row] of rows.entries()){
       const rawUrl=normalizeUrl(row.url||row.metadata?.sourceURL),linkedIn=normalizeLinkedInUrl(rawUrl),title=clean(row.title);
-      const parts=title.split(/\s+[–—|·-]\s*|\s*\|\s*/u),description=clean(row.description||row.markdown||row.content,3000),name=clean(parts[0]);
+      const parts=title.split(/\s+[–—|·-]\s*|\s*\|\s*/u),description=clean(row.description||row.markdown||row.content,3000),name=clean(parts[0]).replace(/\s+(?:Email(?:\s*&\s*Phone Number)?|Phone Number|Contact (?:Info|Information|Details))(?:\s*\.{3})?$/iu,'').trim();
       const diagnostic={index,source:'public',url:rawUrl,title,parsedName:name,parsedTitle:'',parsedCompany:'',parsing:'pending',companyVerification:'pending',roleMatching:'pending',accepted:false,rejectionReason:''};diagnostics.push(diagnostic);
       const reject=(stage,reason)=>{diagnostic[stage]='rejected';diagnostic.rejectionReason=reason;};
       if(name.split(/\s+/).length<2||name.split(/\s+/).length>5||!/^[\p{L}'’. -]+$/u.test(name)||companyPattern.test(name)){reject('parsing','No full person name could be parsed from the result title');continue;}
@@ -993,6 +993,7 @@
       if(formerPattern.test(parts.slice(1).join(' | '))||(!companyPattern.test(parts.slice(1).join(' | '))&&formerPattern.test(description))){reject('companyVerification','Target-company role is explicitly former or previous');continue;}
       let role=clean(parts.find(part=>part!==name&&!companyNameMatches(part,companyText)&&!/^LinkedIn$/i.test(part))||'');
       if(employment?.[1])role=clean(employment[1]).replace(new RegExp('^'+name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s+(?:is|är)\\s+','iu'),'');
+      role=role.replace(/^.*?\b(?:is currently|currently is|currently)\s+(?:an?\s+)?/iu,'');
       diagnostic.parsedCompany=companyText;diagnostic.companyVerification='complete';diagnostic.parsedTitle=role;
       const relevance=roleRelevance({title:role},splitList(profile.decisionMakers));
       if(!role||!relevance){reject('roleMatching',role?'Parsed role does not match any requested buying function':'No current job title could be parsed');continue;}
