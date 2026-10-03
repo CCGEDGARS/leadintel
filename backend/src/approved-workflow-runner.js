@@ -6,7 +6,7 @@ import {parse,workflowMain,workflowAuthorized} from './approved-workflow-store.j
 import {resolveWorkspaceServiceCredential} from './service-integrations.js';
 import {provenBusinessEmail,APOLLO_PEOPLE_SEARCH_URL,APOLLO_PEOPLE_MATCH_URL,apolloSearchBody} from './enrichment.js';
 import {upsertCrmCompany,upsertCrmContacts,upsertCrmIntelligence,appendCrmActivity,findCrmCompanyByDomain} from './crm.js';
-import {searchWorkspaceWeb} from './ai-routes.js';
+import {searchWorkspaceWeb,generateWorkspaceResearch} from './ai-routes.js';
 import {enqueueApprovedSequence} from './outreach-automation-routes.js';
 const discovery=globalThis.LeadIntelDiscovery;
 const stop=()=>{throw new Error('Workflow paused, stopped, changed or approval no longer valid');};
@@ -73,10 +73,11 @@ async function buyer(env,workspaceId,candidate,config,guard){
   }
   return null;
 }
-export async function executeWorkflowStage(stage,{env,row,run,result,context,config,guard}){
+export async function executeWorkflowStage(stage,{env,row,run,result,context,config,guard,generateResearch=generateWorkspaceResearch}){
   await guard();const profile={...context.profile,discoveryPriority:config.companies.researchPriority,decisionMakers:config.buyers.roles.join('; ')},market={icps:context.icps,signals:context.signals};
   if(stage==='profile'||stage==='strategy')return {...result,contextValidated:true};
   if(stage==='companies'){
+    if(config.companies.researchPriority==='signals')profile.referenceSimilarityModel=null;
     const baseQueries=discovery.buildDiscoveryQueries(profile,market,config.companies.queries);
     const customSources=(context.researchCustomSources||[]).map(item=>{try{return new URL(typeof item==='string'?item:item.url).hostname;}catch{return '';}}).filter(Boolean).slice(0,3);
     const sourceTerms={news:'news announcement',jobs:'careers hiring',investments:'investment expansion',company:'company newsroom',registries:'business registry'};
@@ -91,16 +92,28 @@ export async function executeWorkflowStage(stage,{env,row,run,result,context,con
     const initialQualified=discovery.mergeCompanyCandidates(results,profile,market,30);
     const provisional=[...initialQualified,...discovery.buildPotentialCompanyCandidates(results,profile,market,initialQualified,30)];
     for(const query of discovery.buildCandidateVerificationQueries(provisional,profile,market,Math.min(10,config.companies.limit*2)))results.push(...await search(env,row.workspace_id,query,guard));
+    // Research additional candidates when the first pass cannot meet the requested qualified count.
+    const firstPass=discovery.mergeCompanyCandidates(results,profile,market,30);
+    if(firstPass.filter(c=>discovery.assessAutomaticQualification(c,profile,market,{...config.companies,...config.triggers,researchedAt:new Date().toISOString()}).eligible).length<config.companies.limit){
+      const adaptive=discovery.buildDiscoveryFollowUpQueries(profile,market,queries,4);queries.push(...adaptive);
+      const extra=[];for(const query of adaptive)extra.push(...await search(env,row.workspace_id,query,guard));
+      const names=extra.flatMap(item=>discovery.extractCompanyMentions([item],2)).slice(0,10),resolved=[];
+      for(const query of discovery.buildCompanyResolutionQueries(names,profile,10))resolved.push(...await search(env,row.workspace_id,query,guard));
+      results.push(...discovery.attachSourceEvidenceToResolvedCompanies(resolved,names,extra),...extra);
+      for(const query of discovery.buildCandidateVerificationQueries(resolved,profile,market,10))results.push(...await search(env,row.workspace_id,query,guard));
+    }
     const signalCandidates=discovery.mergeCompanyCandidates(results,profile,market,30);
-    const pool=[...signalCandidates,...discovery.buildPotentialCompanyCandidates(results,profile,market,signalCandidates,30)];
+    let pool=[...signalCandidates,...discovery.buildPotentialCompanyCandidates(results,profile,market,signalCandidates,30)];
+    if(profile.referenceSimilarityModel)pool=await discovery.researchEvidenceSimilarity({candidates:pool,model:profile.referenceSimilarityModel,workspaceId:row.workspace_id,fetchImpl:async(url,options)=>{await guard();const body=JSON.parse(options.body),text=await generateResearch(env,row.workspace_id,body.prompt);await guard();return {ok:true,json:async()=>({text})};}});
+    pool=await discovery.researchBuyerFit(pool,profile,async prompt=>{await guard();const text=await generateResearch(env,row.workspace_id,prompt);await guard();return text;});
     const researchedAt=new Date().toISOString();
     const assessed=pool.map(candidate=>({...candidate,qualification:discovery.assessAutomaticQualification(candidate,profile,market,{...config.companies,...config.triggers,researchedAt})}));
     const candidates=[];
-    for(const candidate of assessed.filter(c=>c.qualification.eligible).sort((a,b)=>Number(b.qualification.route==='both')-Number(a.qualification.route==='both')||b.qualification.score-a.qualification.score)){
+    for(const candidate of discovery.rankQualifiedCompanies(assessed.filter(c=>c.qualification.eligible))){
       const saved=await findCrmCompanyByDomain(env.DB,row.workspace_id,candidate.domain);if(saved&&saved.lifecycle_status!=='prospect')continue;
-      candidates.push({...candidate,matchedSignals:candidate.qualification.matchedSignals});if(candidates.length>=config.companies.limit)break;
+      candidates.push({...candidate,qualified:true,buyerVerified:true,qualificationGaps:[],score:{total:candidate.qualification.score,fit:candidate.qualification.buyerFitPoints,signal:candidate.qualification.signalPoints},matchedSignals:candidate.qualification.matchedSignals});if(candidates.length>=config.companies.limit)break;
     }
-    return {...result,queries,candidates,reviewCompanies:assessed.filter(c=>!c.qualification.eligible),researchedAt,sourceCount:new Set(results.map(r=>r.url)).size};
+    return {...result,requestedCount:config.companies.limit,qualifiedCount:candidates.length,shortfall:Math.max(0,config.companies.limit-candidates.length),queries,candidates,reviewCompanies:assessed.filter(c=>!c.qualification.eligible),researchedAt,sourceCount:new Set(results.map(r=>r.url)).size};
   }
   if(stage==='buyers'){
     const candidates=[],reviewBuyers=[];for(const candidate of result.candidates||[]){await guard();const contact=await buyer(env,row.workspace_id,candidate,config,guard);if(contact)candidates.push({...candidate,contact});else reviewBuyers.push({...candidate,reason:'No verified eligible business contact'});}
@@ -115,7 +128,7 @@ export async function executeWorkflowStage(stage,{env,row,run,result,context,con
     const candidates=[];for(const candidate of result.candidates||[]){await guard();const old=await findCrmCompanyByDomain(env.DB,row.workspace_id,candidate.domain);if(old&&old.lifecycle_status!=='prospect')continue;
       const saved=await upsertCrmCompany(env.DB,crmContext,{...candidate,pipeline_stage:'Ready for Outreach',source:'approved_workflow'});await guard();
       const contacts=await upsertCrmContacts(env.DB,crmContext,saved.company.id,[{...candidate.contact,work_email:candidate.contact.email,email_status:'verified'}]);await guard();
-      await upsertCrmIntelligence(env.DB,crmContext,saved.company.id,{matched_signals:candidate.matchedSignals,evidence:candidate.evidence,score_breakdown:{...candidate.score,qualification:candidate.qualification},confidence:candidate.confidence,research_snapshot:{runId:run.id,revision:row.revision,researchAt:result.researchedAt}});await guard();
+      await upsertCrmIntelligence(env.DB,crmContext,saved.company.id,{matched_signals:candidate.matchedSignals,evidence:candidate.evidence,score_breakdown:{...candidate.score,qualification:candidate.qualification},confidence:candidate.confidence,research_snapshot:{runId:run.id,revision:row.revision,researchAt:result.researchedAt,buyerFit:candidate.buyerFit,qualification:candidate.qualification}});await guard();
       await appendCrmActivity(env.DB,crmContext,{id:`workflow-message-${run.id}-${saved.company.id}`,companyId:saved.company.id,type:'dossier.built',summary:'Message generated under approved workflow template',metadata:{run_id:run.id,revision:row.revision,subject:candidate.message.subject,body:candidate.message.body,approval:'workflow_template',script_package:{version:1,savedAt:new Date().toISOString(),item:{domain:candidate.domain,company:candidate.company,researchStatus:'complete',researchAt:result.researchedAt,selectedPersonId:contacts[0]?.id||candidate.contact.id,approved:false,dossier:{company:candidate.company,domain:candidate.domain,website:candidate.website,market:candidate.market,recommendedOffer:profile.priorityOffers,buyerRoles:config.buyers.roles,evidence:candidate.evidence,matchedSignals:candidate.matchedSignals,people:[{...candidate.contact,id:contacts[0]?.id||candidate.contact.id}]},drafts:{emailSubject:candidate.message.subject,emailBody:candidate.message.body,followUp:candidate.message.followup_body}}}}});
       candidates.push({...candidate,crmId:saved.company.id});}return {...result,candidates};
   }

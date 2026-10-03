@@ -37,6 +37,7 @@ function productionFetch({ customerHtml, discoveryUi }) {
     }
     if (parsed.pathname === '/customer/approved-workflow-ui.js') { return response({text:fs.readFileSync(path.join(root,'customer/approved-workflow-ui.js'),'utf8')}); }
     if (parsed.pathname === '/customer/first-party-research.js') { return response({text:fs.readFileSync(path.join(root,'customer/first-party-research.js'),'utf8')}); }
+    if (parsed.pathname === '/customer/discovery-engine.js') { return response({text:fs.readFileSync(path.join(root,'customer/discovery-engine.js'),'utf8')}); }
     if (parsed.pathname === '/customer/discovery-ui.js') {
       return response({ text: discoveryUi });
     }

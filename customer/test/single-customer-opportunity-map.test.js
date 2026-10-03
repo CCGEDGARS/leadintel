@@ -61,5 +61,5 @@ test('fresh opportunity hypotheses add bounded evidence searches to Company Disc
   assert.match(ui,/function opportunityHypothesisQueries\(main,market\)/);
   assert.match(ui,/map\.analysisAt!==reference\.analyzedAt/);
   assert.match(ui,/map\.hypotheses\.slice\(0,2\)/);
-  assert.match(ui,/\.\.\.opportunityHypothesisQueries\(main,targetMarket\)/);
+  assert.match(ui,/discoveryMode==='lookalike'\?\[\]:opportunityHypothesisQueries\(main,targetMarket\)/);
 });

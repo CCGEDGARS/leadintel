@@ -90,7 +90,7 @@ test('a permanently pending provider cannot leave Company Discovery running', as
   const context = loadDiscoveryRunner();
   const completed = await Promise.race([
     context.__runDiscovery().then(() => true),
-    new Promise(resolve => setTimeout(() => resolve(false), 60))
+    new Promise(resolve => setTimeout(() => resolve(false), 250))
   ]);
   assert.equal(completed, true);
   assert.notEqual(context.__discoveryState().status, 'running');
@@ -174,7 +174,7 @@ test('a normal three-stage search is allowed to outlast one provider request win
   await context.__runDiscovery();
 
   assert.deepEqual([...phases].sort(), ['market_search', 'resolution', 'verification']);
-  assert.equal(requestCounts.market_search,6,'a full target does not trigger adaptive searches');
+  assert.equal(requestCounts.market_search,10,'unverified buyer applications trigger bounded additional research');
   assert.ok(requestCounts.resolution > 4, 'the pipeline should have enough time to process multiple company resolutions');
   assert.ok(requestCounts.verification > 4, 'the pipeline should have enough time to verify multiple company websites');
   assert.notEqual(context.__discoveryState().status, 'error');
@@ -182,9 +182,9 @@ test('a normal three-stage search is allowed to outlast one provider request win
 
 test('the run deadline covers the worst-case bounded search stages at each supported target size', () => {
   const context=loadDiscoveryRunner({requestTimeout:25,scaleProductionRunTimeout:1000});
-  assert.equal(context.__discoveryRunTimeoutMs(10,4),658);
-  assert.equal(context.__discoveryRunTimeoutMs(25,8),683);
-  assert.equal(context.__discoveryRunTimeoutMs(50,10),708);
+  assert.equal(context.__discoveryRunTimeoutMs(10,4),1408);
+  assert.equal(context.__discoveryRunTimeoutMs(25,8),1433);
+  assert.equal(context.__discoveryRunTimeoutMs(50,10),1458);
 });
 
 test('a successful first pass with no qualified companies gets one bounded follow-up pass',async()=>{
@@ -220,16 +220,15 @@ test('a successful first pass with no qualified companies gets one bounded follo
   const result=context.__discoveryState();
   assert.equal(initialResults,6);
   assert.equal(followUpResults,4,'the second pass has a strict four-search cap');
-  assert.equal(result.status,'complete');
-  assert.equal(result.candidates.length,1);
-  assert.equal(result.candidates[0].domain,'northsteel.lv');
+  assert.equal(result.status,'no_results');
+  assert.equal(result.candidates.length,0,'without commercial application research the company remains unqualified');
   assert.equal(result.funnel.marketSearchesCompleted,10);
   assert.equal(result.funnel.marketSearchesTotal,10);
   assert.equal(result.funnel.evidencePages,3,'repeated URLs count once in the funnel');
   assert.equal(result.funnel.companiesIdentified,1);
   assert.equal(result.funnel.officialDomainsResolved,1);
   assert.equal(result.funnel.companySitesChecked,1);
-  assert.equal(result.funnel.qualifiedCompanies,1);
+  assert.equal(result.funnel.qualifiedCompanies,0);
   assert.equal(result.funnel.adaptiveFollowUpSearches,4);
 });
 
@@ -250,13 +249,13 @@ test('a completed zero-result run renders the search funnel and unqualified matc
   assert.match(context.__elements.get('discovery-funnel').innerHTML,/8 of 8/);
   assert.match(context.__elements.get('company-candidates').innerHTML,/Review Market Research/);
   assert.match(context.__elements.get('company-candidates').innerHTML,/valid finding/i);
-  assert.match(context.__elements.get('discovery-potential-matches').innerHTML,/Ranked companies to review/i);
-  assert.match(context.__elements.get('discovery-potential-matches').innerHTML,/buying signal unconfirmed/i);
-  assert.match(context.__elements.get('discovery-potential-matches').innerHTML,/Target market evidence is missing/);
+  assert.match(context.__elements.get('discovery-potential-matches').innerHTML,/Research checks/i);
+  assert.match(context.__elements.get('discovery-potential-matches').innerHTML,/excluded from the qualified list/i);
+  assert.match(context.__elements.get('discovery-potential-matches').innerHTML,/Verify company identity/);
   assert.doesNotMatch(context.__elements.get('discovery-potential-matches').innerHTML,/Save to CRM|Add to Pipeline/);
 });
 
-test('only fit-and-market verified potential companies offer a clearly flagged buyer search',()=>{
+test('unqualified research checks do not expose automatic buyer actions',()=>{
   const context=loadDiscoveryRunner({renderNodes:true});
   context.__setDiscovery({
     status:'no_results',checkedCompanyDomains:['northstar.com'],
@@ -267,11 +266,10 @@ test('only fit-and-market verified potential companies offer a clearly flagged b
   });
   context.__renderPotentialMatches();
   const html=context.__elements.get('discovery-potential-matches').innerHTML;
-  assert.equal((html.match(/data-action="find-potential-buyers"/g)||[]).length,1);
-  assert.equal((html.match(/data-action="save-potential-prospect"/g)||[]).length,1);
-  assert.match(html,/Find buyers/);
-  assert.match(html,/No active buying signal was confirmed/);
-  assert.match(html,/outside the qualified opportunity list and Pipeline/);
+  assert.equal((html.match(/data-action="find-potential-buyers"/g)||[]).length,0);
+  assert.equal((html.match(/data-action="save-potential-prospect"/g)||[]).length,0);
+  assert.match(html,/excluded from the qualified list and automatic flow/);
+  assert.match(html,/No recent verified buying signal/);
   assert.doesNotMatch(html,/Save to CRM|Add to Pipeline/);
 });
 
@@ -982,8 +980,7 @@ test('Company Discovery verifies candidate websites before strict qualification'
   await context.__runDiscovery();
 
   assert.ok(requests.some(body=>/site:buyer\.lv/i.test(body.query)),'a direct domain verification request must run');
-  assert.equal(context.__discoveryState().candidates.length,1);
-  assert.equal(context.__discoveryState().candidates[0].domain,'buyer.lv');
+  assert.equal(context.__discoveryState().candidates.length,0,'site verification without a purchasing application cannot qualify');
 });
 
 test('Company Discovery bounds concurrent Firecrawl verification requests', async () => {
@@ -1031,8 +1028,12 @@ test('recheck target pool is limited to known domains and deduplicates the short
 });
 test('qualified company selection survives normalization and enables Buyers without Pipeline',async()=>{
  const ctx=loadDiscoveryRunner({renderNodes:true});
- const candidate={company:'Modvion',domain:'modvion.com',website:'https://modvion.com/',market:'Sweden',score:{total:86},confidence:'High',qualified:true,marketVerified:true,buyerVerified:true,matchedSignals:[{id:'launch',name:'Product launch',matchedTerms:['launch']}],evidence:[{url:'https://modvion.com/news/launch',title:'Modvion unveils a turbine tower'}]};
- ctx.__setDiscovery({candidates:[candidate]});
+ const researchedAt=new Date().toISOString(),date=researchedAt.slice(0,10);
+ const evidence=[{verifiedAt:researchedAt,url:'https://modvion.com/about',text:'Modvion operates industrial manufacturing equipment in Latvia and uses industrial automation to assemble its products for manufacturers.'},{verifiedAt:researchedAt,date,url:'https://modvion.com/news/factory',text:'Modvion announces a new factory in Latvia with industrial automation and expands manufacturing capacity.'},{date,url:'https://journal.example/modvion',text:'Modvion announces expansion of manufacturing at a new factory in Latvia with industrial automation.'}];
+ const main=JSON.parse(ctx.localStorage.getItem('leadintel_customer_v2_state')),profile={...main.profile,...Targeting.profileFields(main)};
+ let candidate={company:'Modvion',domain:'modvion.com',website:'https://modvion.com/',market:'Latvia',score:{total:95},confidence:'High',qualified:true,marketVerified:true,buyerVerified:true,evidence,matchedSignals:[{evidence:[{url:evidence[1].url},{url:evidence[2].url}]}]};
+ candidate=Discovery.parseBuyerFit(JSON.stringify({companies:[{domain:candidate.domain,fit:100,purchase:'industrial automation',buyerRole:'manufacturer',reason:'Factory assembly uses automation equipment.',relevantSignalUrls:[evidence[1].url,evidence[2].url],evidence:[{url:evidence[0].url,quote:evidence[0].text}]}]}),[candidate],profile)[0];
+ ctx.__setDiscovery({candidates:[candidate],lastRunAt:researchedAt});
  assert.equal(await ctx.__selectQualifiedForBuyers(0),true);
  const restored=Discovery.normalizeDiscoveryState(JSON.parse(ctx.localStorage.getItem('leadintel_customer_v2_discovery')));
  assert.equal(restored.selectedProspects.length,1);assert.equal(restored.selectedProspects[0].qualified,true);assert.equal(restored.selectedProspects[0].buyerSearchMode,'user_selected_qualified');

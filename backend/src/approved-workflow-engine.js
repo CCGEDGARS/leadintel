@@ -16,15 +16,15 @@ export function approvedContext(main={}){
   const profile={...(main.profile||{}),...Object.fromEntries(Object.entries(confirmed).filter(([,value])=>value)),referenceSimilarityModel,referenceDomains};
   if(main.targetMarkets?.length)profile.targetMarkets=main.targetMarkets.join('; ');
   const referenceTraits=(referenceSimilarityModel?.dna?.referenceProfiles||[]).flatMap(ref=>ref.dimensions||[]).filter(d=>['industry','broadIndustry','productionModel','capabilities'].includes(d.key)).flatMap(d=>d.values||[]);
-  if(referenceTraits.length)profile.idealCustomer=[profile.idealCustomer,...new Set(referenceTraits)].filter(Boolean).join('; ');
+
   return {website:main.website||'',answers:main.answers||{},profile,profileApproved:main.approved===true,strategyApproved:market.strategyApproved===true,
     icps:market.icps||[],signals:market.signals||[],researchSourceTypes:market.researchSourceTypes||[],researchCustomSources:market.researchCustomSources||[],researchInstructions:market.researchInstructions||'',knownEvidence:(market.researchResults||[]).slice(0,20).map(item=>({url:item.url||item.link||'',title:item.title||'',description:item.description||'',text:String(item.text||item.markdown||'').slice(0,4000),date:item.date||item.publishedDate||'',market:item.market||''}))};
 }
 export function normalizeWorkflowConfig(input={}){
   const integer=(v,d,min,max)=>{const n=v===undefined?d:Number(v);if(!Number.isInteger(n)||n<min||n>max)throw new Error(`Choose a whole number from ${min} to ${max}`);return n;};
-  const priority=input.companies?.researchPriority||'balanced';if(!['lookalike','signals','balanced'].includes(priority))throw new Error('Choose Lookalike first, Signals first or Balanced');
-  const minimum=input.qualificationVersion===2?Number(input.triggers?.minimumScore??80):[70,80,90].includes(Number(input.triggers?.minimumScore))?Number(input.triggers.minimumScore):80;if(![70,80,90].includes(minimum))throw new Error('Choose a minimum qualification score of 70, 80 or 90');
-  const config={qualificationVersion:2,companies:{researchPriority:priority,limit:integer(input.companies?.limit,3,1,10),queries:integer(input.companies?.queries,4,1,8)},
+  const priority=input.companies?.researchPriority||'balanced';if(!['lookalike','signals','balanced'].includes(priority))throw new Error('Choose Lookalike, Signals or Balanced');
+  const minimum=Number(input.qualificationVersion)>=2?Number(input.triggers?.minimumScore??80):[70,80,90].includes(Number(input.triggers?.minimumScore))?Number(input.triggers.minimumScore):80;if(![70,80,90].includes(minimum))throw new Error('Choose a minimum qualification score of 70, 80 or 90');
+  const config={qualificationVersion:3,companies:{researchPriority:priority,limit:integer(input.companies?.limit,3,1,10),queries:integer(input.companies?.queries,4,1,8)},
     buyers:{roles:list(input.buyers?.roles),enrich:input.buyers?.enrich===true},triggers:{minimumScore:minimum,maxEvidenceAgeDays:integer(input.triggers?.maxEvidenceAgeDays,90,1,365)},
     messages:{subject:text(input.messages?.subject,500),body:text(input.messages?.body,12000),followup:text(input.messages?.followup,6000)},
     crm:{saveQualified:true},delivery:{verifyEmails:true,dailyLimit:integer(input.delivery?.dailyLimit,5,1,50),frequency:input.delivery?.frequency==='weekly'?'weekly':'daily',timezone:text(input.delivery?.timezone||'UTC',80),sendWindowStart:text(input.delivery?.sendWindowStart||'09:00',5),sendWindowEnd:text(input.delivery?.sendWindowEnd||'17:00',5),workingDays:[1,2,3,4,5],maxFollowups:input.messages?.followup?1:0}};
@@ -45,7 +45,7 @@ export function setupBlockers(context,config){
   const gaps=[];if(!context.profileApproved)gaps.push('Approve the company profile');if(!context.strategyApproved)gaps.push('Approve the market strategy');
   if(!text(context.profile?.companyName)||!text(context.profile?.priorityOffers)||!text(context.profile?.targetMarkets))gaps.push('Complete company name, priority offer and target markets');
   if(config.companies.researchPriority!=='lookalike'&&!context.signals.some(x=>x.active===true))gaps.push('Activate at least one buying signal');
-  if(config.companies.researchPriority==='lookalike'&&!context.profile?.referenceSimilarityModel)gaps.push('Activate an evidence-backed reference customer model for Lookalike first');
+  if(config.companies.researchPriority==='lookalike'&&!context.profile?.referenceSimilarityModel)gaps.push('Activate an evidence-backed reference customer model for Lookalike');
   if(!config.buyers.roles.length)gaps.push('Choose buyer roles');
   const brain=globalThis.LeadIntelCompanyBrain;
   const conflicts=brain?.strategyConflicts?.(context.profile,context.signals)||[];

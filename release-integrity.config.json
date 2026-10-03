@@ -105,6 +105,18 @@
         "data-wf-final",
         "if(body&&workspace!==id)"
       ]
+    },
+    {
+      "id": "qualified-company-list",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "researchBuyerFit",
+        "rankQualifiedCompanies",
+        "Buyer fit below the mandatory 50/70 minimum",
+        "No recent verified buying signal"
+      ]
     }
   ],
   "retry": {
