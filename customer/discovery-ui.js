@@ -1026,7 +1026,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
   const taskCentre=window.LeadIntelTaskCentre;const taskId=`decision-maker-search:${candidate.domain||candidate.id||"company"}:${Date.now()}`;
   taskCentre?.start({id:taskId,type:'decision-maker-search',title:`Buyer search · ${candidate.company}`,stage:'Researching public buyer candidates',total:1,completed:0,canCancel:true,canRetry:true});
   taskCentre?.registerActions(taskId,{cancel:()=>controller.abort(),retry:retry||(()=>false)});
-  const timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS*3);
+  const timeout=setTimeout(()=>controller.abort(),Math.max(DISCOVERY_REQUEST_TIMEOUT_MS*8,120000));
   try{
     taskCentre?.update(taskId,{stage:'Verifying company before buyer search'});
     const verified=await window.LeadIntelFirstPartyResearch.collectWebsiteEvidence({website:candidate.website||`https://${candidate.domain}/`,purpose:'buyers',maxPages:3,signal:controller.signal});
@@ -1039,11 +1039,22 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     candidate.buyerResearchProgress={...candidate.buyerResearchProgress,phase:"roles",label:`Searching ${roles.length} buyer-role categories`,step:2,total:5};persist();
     taskCentre?.update(taskId,{stage:'Searching relevant buyers'});
     let firecrawlSuccess=0,firecrawlFailed=0;
-    for(const query of plan.queries){
+    // V2 can generate ~30 multilingual queries. Running them serially exceeded the global
+    // Buyer timeout before identity fallback could run. Execute bounded batches instead.
+    const publicQueries=plan.queries.slice(0,18);
+    for(let offset=0;offset<publicQueries.length;offset+=4){
       if(controller.signal.aborted)throw Object.assign(new Error('Buyer research canceled'),{name:'AbortError'});
-      try{const found=await searchBuyerPublicPages(query,10,controller.signal);rows.push(...found);firecrawlSuccess++;providerStatus.firecrawl.results+=found.length;}
-      catch(error){if(error?.name==='AbortError')throw error;firecrawlFailed++;issues.push(`Search unavailable: ${query.slice(0,80)}`);}
+      const batch=publicQueries.slice(offset,offset+4);
+      const settled=await Promise.allSettled(batch.map(query=>searchBuyerPublicPages(query,8,controller.signal)));
+      settled.forEach((result,index)=>{
+        if(result.status==="fulfilled"){rows.push(...result.value);firecrawlSuccess++;providerStatus.firecrawl.results+=result.value.length;}
+        else{firecrawlFailed++;issues.push(`Search unavailable: ${batch[index].slice(0,80)}`);}
+      });
+      candidate.buyerResearchProgress={...candidate.buyerResearchProgress,label:`Searching buyer evidence · ${Math.min(offset+batch.length,publicQueries.length)}/${publicQueries.length} queries`};persist();
+      // Enough raw evidence: move on to extraction/fallback instead of paying latency for every variant.
+      if(rows.length>=24)break;
     }
+    providerStatus.firecrawl.queries=Math.min(publicQueries.length,firecrawlSuccess+firecrawlFailed);
     providerStatus.firecrawl.status=firecrawlSuccess?(firecrawlFailed?"partial":"complete"):"unavailable";
     if(crmAuthenticated()&&bridge()?.workspace?.id){
       try{
@@ -1052,7 +1063,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
         else{providerStatus.grounded.status="unavailable";issues.push('Grounded buyer discovery unavailable');}
       }catch(error){if(error?.name==='AbortError')throw error;providerStatus.grounded.status="failed";issues.push('Grounded buyer discovery unavailable');}
     }else providerStatus.grounded.status="not_configured";
-    if(!rows.length&&issues.length)throw new Error('Public buyer discovery unavailable. Retry when research services are available.');
+    // Zero public rows is not terminal. Identity-directory discovery is the designed fallback.
     candidate.buyerResearchProgress={...candidate.buyerResearchProgress,phase:"people",label:"Identifying and ranking relevant people",step:3,total:5};persist();
     let publicPeople=LeadIntelDiscovery.discoverPublicBuyers(rows,candidate.company,{...buyerProfile,decisionMakers:plan.roles.join('; ')});
     let apolloDiscoveryCount=0;
@@ -1098,7 +1109,9 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     taskCentre?.complete(taskId,{stage:candidate.publicContactStatus==='error'?'Buyer suggestions found · public verification incomplete':'Buyer research complete',resultCount:candidate.people.length});
     return true;
   }catch(error){
-    candidate.peopleStatus="error";candidate.buyerResearchProgress={...(candidate.buyerResearchProgress||{}),phase:"error",label:error?.name==="AbortError"?"Research stopped":"Buyer research needs attention"};persist();
+    candidate.peopleStatus="error";
+    candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),target:30,opportunityRoles:candidate.buyerRoles||candidate.buyerDiscovery?.opportunityRoles||[],expandedRoles:candidate.buyerRoleAliases||candidate.buyerDiscovery?.expandedRoles||[],opportunityTerms:candidate.buyerOpportunityTerms||candidate.buyerDiscovery?.opportunityTerms||[],issues:[...(candidate.buyerDiscovery?.issues||[]),error?.message||"Buyer research failed"].slice(-30),checkedAt:new Date().toISOString()};
+    candidate.buyerResearchProgress={...(candidate.buyerResearchProgress||{}),phase:"error",label:error?.name==="AbortError"?"Research timed out or was stopped":"Buyer research needs attention"};persist();
     showToast(error?.name==="AbortError"?"Buyer research timed out or was canceled":error.message||"Apollo people search unavailable");
     if(taskCentre?.get(taskId)?.status!=='canceled')taskCentre?.fail(taskId,error,{canRetry:true});
     return false;
