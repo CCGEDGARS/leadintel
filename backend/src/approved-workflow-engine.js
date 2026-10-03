@@ -46,7 +46,7 @@ export function setupBlockers(context,config){
   if(!text(context.profile?.companyName)||!text(context.profile?.priorityOffers)||!text(context.profile?.targetMarkets))gaps.push('Complete company name, priority offer and target markets');
   if(config.companies.researchPriority!=='lookalike'&&!context.signals.some(x=>x.active===true))gaps.push('Activate at least one buying signal');
   if(config.companies.researchPriority==='lookalike'&&!context.profile?.referenceSimilarityModel)gaps.push('Activate an evidence-backed reference customer model for Lookalike');
-  if(!config.buyers.roles.length)gaps.push('Choose buyer roles');if(!config.buyers.confirmContacts)gaps.push('Approve automatic email and phone confirmation for the automatic workflow');
+  if(!config.buyers.roles.length)gaps.push('Choose buyer roles');
   const brain=globalThis.LeadIntelCompanyBrain;
   const conflicts=brain?.strategyConflicts?.(context.profile,context.signals)||[];
   if(conflicts.length)gaps.push('Resolve conflicting strategy exclusions and signals');
