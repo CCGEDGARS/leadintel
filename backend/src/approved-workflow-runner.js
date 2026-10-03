@@ -52,6 +52,21 @@ async function buyer(env,workspaceId,candidate,config,guard){
   const pool=discovery.mergeBuyerPool([...(prior?.buyerDiscovery?.pool||[]),...(prior?.people||[])],research.people,profile);
   candidate.buyerDiscovery={target:20,found:pool.length,pool,sourceResults:research.sourceResults,issues:research.issues,checkedAt:new Date().toISOString()};
   candidate.people=discovery.recommendedBuyers(pool,profile);
+  // Identity discovery is allowed before paid/contact confirmation. Use Apollo people search
+  // only as an identity fallback; no email/phone reveal or waterfall flags are requested here.
+  if(candidate.people.length<3){
+    try{
+      await guard();const identityCredential=await resolveWorkspaceServiceCredential(env,workspaceId,'apollo');
+      if(identityCredential.configured){
+        const identityHeaders={'Content-Type':'application/json','X-Api-Key':identityCredential.apiKey,Accept:'application/json'};
+        const identityPayload=await providerJson(APOLLO_PEOPLE_SEARCH_URL,{method:'POST',headers:identityHeaders,body:JSON.stringify(apolloSearchBody({domain:candidate.domain,roles:discovery.opportunityBuyerRoles?.(candidate,profile)||config.buyers.roles}))});await guard();
+        const identityPeople=discovery.selectDecisionMakers(discovery.normalizeApolloPeople(identityPayload),profile,20);
+        const expanded=discovery.mergeBuyerPool(pool,identityPeople,profile);
+        candidate.buyerDiscovery={...candidate.buyerDiscovery,found:expanded.length,pool:expanded,identityFallback:'apollo_search'};
+        candidate.people=discovery.recommendedBuyers(expanded,profile);
+      }
+    }catch(error){candidate.buyerDiscovery.issues=[...(candidate.buyerDiscovery.issues||[]),'Identity-provider discovery unavailable'];}
+  }
   const verified=company?(await env.DB.prepare("SELECT * FROM crm_contacts WHERE workspace_id=? AND company_id=? AND LOWER(email_status)='verified' AND archived_at IS NULL").bind(workspaceId,company.id).all()).results||[]:[];
   // Explicitly kept buyers rank first, but saving alone never bypasses role/email gates.
   const eligible=discovery.selectDecisionMakers(verified,profile,20).filter(p=>String(p.name||'').trim().split(/\s+/).length>=2&&provenBusinessEmail({email:p.normalized_email,email_status:p.email_status},candidate.domain));
