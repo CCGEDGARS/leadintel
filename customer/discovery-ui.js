@@ -819,7 +819,7 @@ function renderPotentialMatches(){
     const reasons=(q.gaps||[]).filter(Boolean).slice(0,4);
     return `<article class="research-check-row"><div><strong>${esc(c.company)}</strong><span>${q.buyerFitPoints>=50?'Strong fit · more evidence needed':'Did not meet qualification criteria'}</span></div><div class="research-check-tags">${reasons.map(reason=>`<span>${esc(reason)}</span>`).join('')}</div></article>`;
   }).join('');
-  target.innerHTML=`<details class="research-checks-compact"><summary><span class="research-checks-title">Research checks</span><span class="research-checks-count">${rows.length} excluded</span><span class="research-checks-chevron" aria-hidden="true">⌄</span></summary><div class="research-checks-body"><p>These companies did not qualify for your shortlist based on the current strategy and evidence.</p><div class="research-check-list">${details}</div></div></details>`;
+  target.innerHTML=`<details class="research-checks-compact"><summary><span class="research-checks-title">Research checks</span><span class="research-checks-count">${rows.length} excluded</span><span class="research-checks-chevron" aria-hidden="true">⌄</span></summary><div class="research-checks-body"><p>These companies are excluded from the qualified list and automatic flow because they did not meet the current strategy and evidence requirements.</p><div class="research-check-list">${details}</div></div></details>`;
 }
 
 function renderTargetList(){
