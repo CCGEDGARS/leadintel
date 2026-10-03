@@ -1218,7 +1218,7 @@ function buyerSelectionRows(){
   const currentDomains=new Set([
     ...(discovery.candidates||[]).filter(candidate=>qualificationAssessment(candidate).eligible&&!candidate.needsRecheck).map(item=>canonicalDomain(item.domain||item.website)),
     ...selectedTargets().map(item=>canonicalDomain(item.domain||item.website)),
-    ...(discovery.selectedProspects||[]).filter(item=>item.buyerSearchMode==="user_selected_target"||item.buyerSearchMode==="user_selected_without_signal").map(item=>canonicalDomain(item.domain||item.website))
+    ...(discovery.selectedProspects||[]).filter(item=>item.buyerSearchMode!=="user_selected_qualified").map(item=>canonicalDomain(item.domain||item.website))
   ].filter(Boolean));
   // Only explicit selections that still belong to the current Companies workspace count.
   // Old selections remain preserved in CRM/history, but cannot silently enter a new Buyers run.
