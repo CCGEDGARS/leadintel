@@ -1217,9 +1217,12 @@ function buyerSelectionRows(){
   const byDomain=new Map();
   // Buyer selection is explicit. CRM/Pipeline membership alone must never make a company
   // appear selected on Companies; otherwise stale CRM opportunities inflate the counter
-  // and silently enter the next Buyers run.
-  for(const item of selectedProspects()){
+  // and silently enter the next Buyers run. Use the persisted explicit selection itself,
+  // because moving that same company into Pipeline must not erase its Buyers selection.
+  for(const item of discovery.selectedProspects||[]){
+    if(!/^user_selected_/.test(String(item.buyerSearchMode||''))&&!item.buyerSearchMode)continue;
     const domain=canonicalDomain(item.domain||item.website);if(!domain)continue;
+    const company=crmCompanyByDomain(domain);if(company?.lifecycle_status==="suppressed")continue;
     byDomain.set(domain,item);
   }
   return [...byDomain.values()];
