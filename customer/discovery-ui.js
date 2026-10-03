@@ -810,19 +810,55 @@ function potentialBuyerResultsHtml(candidate,savedProspect){
   const status=savedProspect?'<strong>Saved in CRM as a prospect ✓</strong> Buyer names need identity and role checks. No buying signal is confirmed; this company is outside Pipeline.':'These names are in this search result. Select the company for Buyers and save your workspace to keep the work.';
   return `<section class="potential-match-people" aria-label="Suggested decision-makers"><h5>Suggested decision-makers · ${candidate.people.length}</h5><div class="potential-match-person-list">${cards}</div><p class="potential-match-user-selection">${status}</p></section>`;
 }
+function researchReviewKey(candidate){const domain=canonicalDomain(candidate.domain||candidate.website);return domain||`name:${String(candidate.company||candidate.companyName||'').trim().toLowerCase()}`;}
+function researchReviewRows(){
+  const rows=mergeWorkflowCompanies(discovery.potentialMatches||[],discovery.candidates.filter(c=>!qualificationAssessment(c).eligible));
+  const byKey=new Map();
+  for(const candidate of rows){const key=researchReviewKey(candidate);if(!key)continue;const previous=byKey.get(key);if(!previous||(candidate.evidence?.length||0)>(previous.evidence?.length||0))byKey.set(key,candidate);}
+  return [...byKey.values()];
+}
+function researchReviewStatus(candidate){
+  const q=qualificationAssessment(candidate);
+  const gaps=(q.gaps||[]).filter(Boolean);
+  const hardFailure=gaps.some(reason=>/buyer fit below|outside (?:the )?target market|excluded|suppressed|wrong market|does not match (?:the )?target|not (?:a )?target/i.test(reason));
+  return {q,gaps,status:hardFailure?'not-qualified':'needs-evidence'};
+}
+function removeResearchReviewCompany(key){
+  const keep=item=>researchReviewKey(item)!==key;
+  discovery.potentialMatches=(discovery.potentialMatches||[]).filter(keep);
+  discovery.candidates=(discovery.candidates||[]).filter(item=>qualificationAssessment(item).eligible||keep(item));
+  saveDiscovery();renderAll();showToast("Removed from Research review · CRM records unchanged");return true;
+}
+function clearResearchReview(){
+  const reviewKeys=new Set(researchReviewRows().map(researchReviewKey));
+  discovery.potentialMatches=[];
+  discovery.candidates=(discovery.candidates||[]).filter(item=>!reviewKeys.has(researchReviewKey(item))||qualificationAssessment(item).eligible);
+  saveDiscovery();renderAll();showToast("Research review cleared · CRM records unchanged");return true;
+}
+function selectResearchReviewForBuyers(key){
+  const candidate=researchReviewRows().find(item=>researchReviewKey(item)===key);if(!candidate)return false;
+  const domain=canonicalDomain(candidate.domain||candidate.website);if(!domain){showToast("Verify the company website before selecting it for Buyers");return false;}
+  const copy={...candidate,buyerSearchMode:"user_selected_without_signal",qualified:false};
+  discovery.selectedProspects=[...(discovery.selectedProspects||[]).filter(item=>canonicalDomain(item.domain||item.website)!==domain),copy];
+  saveDiscovery();renderAll();showToast(`${candidate.company} selected for Buyers · qualification still unverified`);return true;
+}
 function renderPotentialMatches(){
   const target=$('discovery-potential-matches');if(!target)return;
-  const rows=mergeWorkflowCompanies(discovery.potentialMatches||[],discovery.candidates.filter(c=>!qualificationAssessment(c).eligible));target.hidden=!rows.length;
+  const rows=researchReviewRows();target.hidden=!rows.length;
   if(!rows.length){target.innerHTML='';return;}
-  const details=rows.map(c=>{
-    const q=qualificationAssessment(c);
-    const allReasons=(q.gaps||[]).filter(Boolean);
-    const buyingSignalReason=allReasons.find(reason=>/buying signal/i.test(reason));
-    const reasons=allReasons.filter(reason=>reason!==buyingSignalReason).slice(0,buyingSignalReason?3:4);
+  const classified=rows.map(candidate=>({candidate,...researchReviewStatus(candidate)}));
+  const needsEvidence=classified.filter(item=>item.status==='needs-evidence').length;
+  const notQualified=classified.length-needsEvidence;
+  const details=classified.map(({candidate:c,q,gaps,status})=>{
+    const buyingSignalReason=gaps.find(reason=>/buying signal/i.test(reason));
+    const reasons=gaps.filter(reason=>reason!==buyingSignalReason).slice(0,buyingSignalReason?3:4);
     if(buyingSignalReason)reasons.push(buyingSignalReason);
-    return `<article class="research-check-row"><div><strong>${esc(c.company)}</strong><span>${q.buyerFitPoints>=50?'Strong fit · more evidence needed':'Did not meet qualification criteria'}</span></div><div class="research-check-tags">${reasons.map(reason=>`<span>${esc(reason)}</span>`).join('')}</div></article>`;
+    const key=researchReviewKey(c);
+    const selected=(discovery.selectedProspects||[]).some(item=>canonicalDomain(item.domain||item.website)===canonicalDomain(c.domain||c.website));
+    return `<article class="research-check-row" data-review-status="${status}"><div class="research-check-company"><strong>${esc(c.company)}</strong><span class="research-review-status ${status}">${status==='needs-evidence'?'Needs more evidence':'Not qualified'}</span></div><div class="research-check-tags">${reasons.map(reason=>`<span>${esc(reason)}</span>`).join('')}</div><div class="research-review-actions"><button class="secondary-btn small" type="button" data-review-action="recheck" data-review-key="${esc(key)}">Recheck</button><button class="secondary-btn small" type="button" data-review-action="buyers" data-review-key="${esc(key)}" ${selected?'disabled':''}>${selected?'Selected for Buyers ✓':'Move to Buyers'}</button><button class="text-btn research-review-remove" type="button" data-review-action="remove" data-review-key="${esc(key)}">Remove</button></div></article>`;
   }).join('');
-  target.innerHTML=`<details class="research-checks-compact"><summary><span class="research-checks-title">Research checks</span><span class="research-checks-count">${rows.length} excluded</span><span class="research-checks-chevron" aria-hidden="true">⌄</span></summary><div class="research-checks-body"><p>These companies are excluded from the qualified list and automatic flow because they did not meet the current strategy and evidence requirements.</p><div class="research-check-list">${details}</div></div></details>`;
+  const counts=[needsEvidence?`<span class="research-checks-count needs-evidence">${needsEvidence} need evidence</span>`:'',notQualified?`<span class="research-checks-count not-qualified">${notQualified} not qualified</span>`:''].join('');
+  target.innerHTML=`<details class="research-checks-compact"><summary><span class="research-checks-title">Research review</span>${counts}<span class="research-checks-chevron" aria-hidden="true">⌄</span></summary><div class="research-checks-body"><div class="research-review-intro"><p><strong>Needs more evidence</strong> means LeadIntel has not verified enough to qualify or reject the company. <strong>Not qualified</strong> means a verified hard criterion failed.</p><div class="research-review-bulk"><button class="secondary-btn small" type="button" data-review-action="recheck-all">Recheck all</button><button class="text-btn" type="button" data-review-action="clear">Clear review list</button></div></div><div class="research-check-list">${details}</div></div></details>`;
 }
 
 function renderTargetList(){
@@ -1659,7 +1695,7 @@ function bindDiscovery(){
   $("company-candidates")?.addEventListener("change",event=>{const box=event.target.closest("[data-flow-confirm]");if(box)toggleBuyerContactFlow(box);});
   $("company-candidates")?.addEventListener("click",event=>{const next=event.target.closest("[data-buyer-next]");if(next){void addBuyerToFlow(next.dataset.buyerNext,Number(next.dataset.personIndex),{scope:next.dataset.buyerScope,button:next});return;}const btn=event.target.closest("[data-action]");if(!btn)return;if(btn.dataset.action==="keep-buyer"){void keepBuyer(btn.dataset.domain,Number(btn.dataset.personIndex),{scope:"company"});return;}if(btn.dataset.action==="review-strategy"){showStrategyStep();return;}if(btn.dataset.action==="review-research"){reviewMarketResearch();return;}if(btn.dataset.action==="open-ai-settings"){document.getElementById("open-settings")?.click();return;}const index=Number(btn.dataset.companyIndex);const personIndex=Number(btn.dataset.personIndex);if(btn.dataset.action==="find-decision-makers"){setJourneyFocus("buyers",{scroll:false});findDecisionMakers(index);}if(btn.dataset.action==="enrich-contact")void confirmBuyerContact(discovery.candidates[index],personIndex,{scope:"company",kind:"email"});if(btn.dataset.action==="find-phone")void confirmBuyerContact(discovery.candidates[index],personIndex,{scope:"company",kind:"phone"});if(btn.dataset.action==="refresh-phone")refreshEnrichedContact(index,personIndex);if(btn.dataset.action==="select-qualified-buyers")void selectQualifiedForBuyers(index);if(btn.dataset.action==="save-crm")saveCandidate(index,{pipeline:false});});
   $("discovery-funnel")?.addEventListener("click",event=>{if(event.target.closest('[data-action="open-provider-settings"]')){document.getElementById("open-settings")?.click();return;}const btn=event.target.closest('[data-action="retry-failed-checks"]');if(btn)retryFailedDiscoveryChecks();});
-  $("discovery-potential-matches")?.addEventListener("click",event=>{const next=event.target.closest("[data-buyer-next]");if(next){void addBuyerToFlow(next.dataset.buyerNext,Number(next.dataset.personIndex),{scope:next.dataset.buyerScope,button:next});return;}const btn=event.target.closest("[data-action]");if(!btn)return;if(btn.dataset.action==="find-potential-buyers")findPotentialDecisionMakers(btn.dataset.domain);if(btn.dataset.action==="save-potential-prospect")savePotentialProspect(btn.dataset.domain);if(btn.dataset.action==="keep-buyer"){void keepBuyer(btn.dataset.domain,Number(btn.dataset.personIndex),{scope:"company"});return;}if(btn.dataset.action==="review-strategy")showStrategyStep();});
+  $("discovery-potential-matches")?.addEventListener("click",event=>{const review=event.target.closest("[data-review-action]");if(review){const action=review.dataset.reviewAction,key=review.dataset.reviewKey;if(action==="recheck"){void runCompanyDiscovery({recheckOnly:true,savingMode:false});return;}if(action==="recheck-all"){void runCompanyDiscovery({recheckOnly:true,savingMode:false});return;}if(action==="buyers"){selectResearchReviewForBuyers(key);return;}if(action==="remove"){removeResearchReviewCompany(key);return;}if(action==="clear"){clearResearchReview();return;}}const next=event.target.closest("[data-buyer-next]");if(next){void addBuyerToFlow(next.dataset.buyerNext,Number(next.dataset.personIndex),{scope:next.dataset.buyerScope,button:next});return;}const btn=event.target.closest("[data-action]");if(!btn)return;if(btn.dataset.action==="find-potential-buyers")findPotentialDecisionMakers(btn.dataset.domain);if(btn.dataset.action==="save-potential-prospect")savePotentialProspect(btn.dataset.domain);if(btn.dataset.action==="keep-buyer"){void keepBuyer(btn.dataset.domain,Number(btn.dataset.personIndex),{scope:"company"});return;}if(btn.dataset.action==="review-strategy")showStrategyStep();});
   $("customer-pipeline")?.addEventListener("change",event=>{const box=event.target.closest("[data-flow-confirm]");if(box){toggleBuyerContactFlow(box);return;}const select=event.target.closest("[data-pipeline-stage]");if(select){changePipelineStage(select);return;}const roles=event.target.closest("[data-prospect-buyer-roles]");if(roles){const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(roles.dataset.prospectBuyerRoles));if(candidate){candidate.buyerRoles=roles.value.split(/[;\n]/).map(value=>value.trim()).filter(Boolean).slice(0,10).join("; ");candidate.buyerRolesChanged=true;selectedBuyerEnrichment.clear();saveDiscovery();renderPipeline();showToast("Buyer roles saved · refresh buyers to apply them");}return;}const check=event.target.closest("[data-select-prospect-person]");if(check){if(check.checked)selectedBuyerEnrichment.add(check.dataset.selectProspectPerson);else selectedBuyerEnrichment.delete(check.dataset.selectProspectPerson);renderPipeline();}});
   $("customer-pipeline")?.addEventListener("click",event=>{const button=event.target.closest("button");if(button?.dataset.buyerNext){void addBuyerToFlow(button.dataset.buyerNext,Number(button.dataset.personIndex),{scope:button.dataset.buyerScope,button});return;}if(button?.dataset.keepBuyer){void keepBuyer(button.dataset.keepBuyer,Number(button.dataset.personIndex));return;}if(button?.dataset.findPublicContacts){findPublicProspectContacts(button.dataset.findPublicContacts);return;}if(button?.dataset.prospectEnrichEmail){const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(button.dataset.prospectEnrichEmail));void confirmBuyerContact(candidate,Number(button.dataset.personIndex),{kind:"email"});return;}if(button?.dataset.prospectEnrichPhone){const candidate=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain)===canonicalDomain(button.dataset.prospectEnrichPhone));void confirmBuyerContact(candidate,Number(button.dataset.personIndex),{kind:"phone"});return;}if(button?.dataset.prospectBatchEmail){enrichSelectedProspectBatch(button.dataset.prospectBatchEmail);return;}if(button?.dataset.prospectBatchPhone){enrichSelectedProspectBatch(button.dataset.prospectBatchPhone,true);return;}const prospect=event.target.closest("[data-find-prospect-buyers]");if(prospect){findPotentialDecisionMakers(prospect.dataset.findProspectBuyers);return;}const buyer=event.target.closest("[data-find-pipeline-buyers]");if(buyer){findPipelineDecisionMakers(buyer.dataset.findPipelineBuyers);return;}const remove=event.target.closest("[data-pipeline-remove]");if(remove){removePipelineCompany(remove.dataset.pipelineRemove,remove.dataset.domain);return;}const open=event.target.closest("[data-open-crm-company]");if(open)document.getElementById("open-crm")?.click();});
   $("reset-workspace")?.addEventListener("click",()=>setTimeout(()=>{if(!localStorage.getItem(MAIN_STORAGE_KEY)){localStorage.removeItem(DISCOVERY_STORAGE_KEY);localStorage.removeItem(`${DISCOVERY_STORAGE_KEY}_meta`);discovery=LeadIntelDiscovery.normalizeDiscoveryState({});crmCompanies=[];crmPipeline=[];crmAvailable=false;enrichmentResults.clear();enrichmentPending.clear();}},0));
