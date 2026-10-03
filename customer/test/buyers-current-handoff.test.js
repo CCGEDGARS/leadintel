@@ -15,7 +15,7 @@ test('Buyers renders exactly the current Companies handoff rather than CRM Pipel
 
 test('Buyers copy has one clear decision-maker research task',()=>{
  assert.match(ui,/Find decision-makers/);
- assert.match(ui,/Run decision-maker research for each selected company/);
+ assert.match(ui,/Research the people most relevant to each selected opportunity/);
  assert.match(ui,/continuing to Messages/);
 });
 
