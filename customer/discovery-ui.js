@@ -1049,7 +1049,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     }
     renderAll();
     showToast(!candidate.people.length?'No relevant decision-makers returned':candidate.people.length<3?`Only ${candidate.people.length} relevant decision-maker${candidate.people.length===1?"":"s"} found`:`${candidate.people.length} relevant decision-makers found`);
-    if(candidate.people.length&&candidate.publicContactVersion!==PUBLIC_NAME_CHECK_VERSION){
+    if(candidate.publicContactVersion!==PUBLIC_NAME_CHECK_VERSION){
       taskCentre?.update(taskId,{stage:'Researching public buyer identities and contact evidence'});
       clearTimeout(timeout);
       await findPublicProspectContacts(candidate.domain,{signal:controller.signal});
