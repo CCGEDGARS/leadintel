@@ -312,7 +312,7 @@ test('Buyers can explicitly promote a selected prospect without fabricating a sc
   context.__renderPipeline();
   assert.doesNotMatch(context.__elements.get('customer-pipeline').innerHTML,/Add to Pipeline/);
   assert.equal(context.__elements.get('discovery-pipeline-count').textContent,'1');
-  assert.match(context.__elements.get('discovery-selection-breakdown').textContent,/0 in Pipeline · 1 prospect/);
+  assert.match(context.__elements.get('discovery-selection-breakdown').textContent,/1 selected for Buyers/);
   assert.equal(await context.__addSelectedProspectToPipeline('northstar.com'),true);
   assert.deepEqual(additions,[{id:'crm-1',stage:'Discovered'}]);
   const state=context.__discoveryState();
@@ -370,7 +370,7 @@ test('selected prospect buyer names persist and render as separate review cards'
   assert.equal((html.match(/class="selected-prospect-person"/g)||[]).length,2);
   assert.doesNotMatch(html,/First name only/);
   assert.match(html,/linkedin\.com\/in\/mika-example/);
-  assert.equal(context.__elements.get('discovery-status').textContent,'1 saved company');
+  assert.equal(context.__elements.get('discovery-status').textContent,'1 selected company');
 });
 
 test('opted-in confirmation runs Hunter finder and verifier plus Apollo email and phone once',async()=>{
