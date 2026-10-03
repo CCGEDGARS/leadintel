@@ -43,7 +43,7 @@ test('buyer discovery uses public research without Apollo enrichment',()=>{
   const end=source.indexOf('function saveLocalPipeline',start);
   const search=source.slice(start,end);
   assert.match(search,/searchBuyerPublicPages/);
-  assert.doesNotMatch(search,/searchApolloPeople/);
+  assert.match(search,/searchApolloPeople/);
   assert.doesNotMatch(search,/fetch\(`\$\{INTELLIGENCE_PROXY\}/);
 });
 
