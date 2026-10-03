@@ -10,7 +10,7 @@ const LEADINTEL_API="https://leadintel-api.edgars-7e7.workers.dev";
 const MAX_DISCOVERY_QUERIES=10;
 const MAX_DISCOVERY_RESULTS_PER_QUERY=8;
 const DISCOVERY_SEARCH_CONCURRENCY=4;
-const MAX_DISCOVERY_FOLLOW_UP_QUERIES=6;
+const MAX_DISCOVERY_FOLLOW_UP_QUERIES=4;
 const MAX_AUTONOMOUS_DISCOVERY_PASSES=3;
 const MAX_DISCOVERY_COMPANY_CHECKS=30;
 const SAVING_SEARCH_RESULT_LIMIT=4;
@@ -609,7 +609,6 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
   if(shouldContinue){
     taskCentre?.complete(taskId,{status:'continuing',stage:`Broadening search automatically · pass ${autoPass+1} of ${MAX_AUTONOMOUS_DISCOVERY_PASSES}`,resultCount:totalQualified});
     activeDiscoveryTaskId="";
-    discovery.status='running';discoveryProgress={phase:'following',completed:0,total:1};
     saveMeta({...loadMeta(),autonomousDiscovery:{active:true,pass:autoPass+1,maxPasses:MAX_AUTONOMOUS_DISCOVERY_PASSES,targetCount,qualifiedCount:totalQualified}});
     try{saveDiscovery();}catch{}
     renderDiscoverySafely();
