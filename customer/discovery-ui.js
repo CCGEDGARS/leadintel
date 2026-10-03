@@ -1220,7 +1220,6 @@ function buyerSelectionRows(){
   // and silently enter the next Buyers run. Use the persisted explicit selection itself,
   // because moving that same company into Pipeline must not erase its Buyers selection.
   for(const item of discovery.selectedProspects||[]){
-    if(!/^user_selected_/.test(String(item.buyerSearchMode||''))&&!item.buyerSearchMode)continue;
     const domain=canonicalDomain(item.domain||item.website);if(!domain)continue;
     const company=crmCompanyByDomain(domain);if(company?.lifecycle_status==="suppressed")continue;
     byDomain.set(domain,item);
