@@ -44,15 +44,15 @@ test('Step 5 hides the empty pipeline and continuation control until an opportun
   NextAction.applyStageVisibility(document,5,{pipelineCount:1,buyerCount:0,focus:'companies'});
   assert.equal(pipeline.hidden,false);
   assert.equal(footer.hidden,true);
-  assert.equal(gate.textContent,'Continue to Buyers →');
+  assert.equal(gate.textContent,'Find and Select a Buyer First');
   assert.equal(gate.disabled,true);
   assert.equal(gate.attributes['aria-disabled'],'true');
   assert.equal(gate.dataset.journeyStage,'5');
   NextAction.applyStageVisibility(document,5,{pipelineCount:1,buyerCount:1,focus:'companies'});
   assert.equal(footer.hidden,true);
   assert.equal(gate.disabled,true);
-  assert.equal(gate.textContent,'Continue to Messages →');
-  assert.equal(gate.dataset.journeyStage,'6');
+  assert.equal(gate.textContent,'Continue to Buyers →');
+  assert.equal(gate.dataset.journeyStage,'5');
 });
 
 test('Buyers keeps saved companies visible and only offers Messages after a buyer is found',()=>{
