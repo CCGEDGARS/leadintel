@@ -486,3 +486,24 @@
   .research-checks-compact>summary{padding:0 12px}
   .research-checks-body{padding:0 12px 12px}
 }
+
+
+/* Research review status and controls */
+.research-check-row{grid-template-columns:minmax(180px,.65fr) minmax(260px,1.35fr) auto;align-items:center}
+.research-check-company{display:grid;gap:7px}
+.research-review-status{width:max-content;padding:4px 8px;border-radius:999px;font:600 9.5px "IBM Plex Mono",monospace;line-height:1.2}
+.research-review-status.needs-evidence,.research-checks-count.needs-evidence{background:#eef4f1;color:#41675a}
+.research-review-status.not-qualified,.research-checks-count.not-qualified{background:#f5eeee;color:#80554d}
+.research-review-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap}
+.research-review-actions .secondary-btn{padding:7px 9px;font-size:10.5px}
+.research-review-remove{color:#7b625c;font-size:10.5px}
+.research-review-intro{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:12px 0}
+.research-review-intro>p{margin:0;max-width:780px;color:#64736c;font-size:12px;line-height:1.5}
+.research-review-bulk{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+.research-review-bulk .text-btn{font-size:11px;color:#6f615d}
+@media(max-width:900px){
+  .research-check-row{grid-template-columns:1fr}
+  .research-review-actions{justify-content:flex-start}
+  .research-review-intro{display:grid}
+  .research-review-bulk{justify-content:flex-start}
+}
