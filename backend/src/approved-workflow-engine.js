@@ -25,7 +25,7 @@ export function normalizeWorkflowConfig(input={}){
   const priority=input.companies?.researchPriority||'balanced';if(!['lookalike','signals','balanced'].includes(priority))throw new Error('Choose Lookalike, Signals or Balanced');
   const minimum=Number(input.qualificationVersion)>=2?Number(input.triggers?.minimumScore??80):[70,80,90].includes(Number(input.triggers?.minimumScore))?Number(input.triggers.minimumScore):80;if(![70,80,90].includes(minimum))throw new Error('Choose a minimum qualification score of 70, 80 or 90');
   const config={qualificationVersion:3,companies:{researchPriority:priority,limit:integer(input.companies?.limit,3,1,10),queries:integer(input.companies?.queries,4,1,8)},
-    buyers:{roles:list(input.buyers?.roles),enrich:input.buyers?.enrich===true},triggers:{minimumScore:minimum,maxEvidenceAgeDays:integer(input.triggers?.maxEvidenceAgeDays,90,1,365)},
+    buyers:{roles:list(input.buyers?.roles),confirmContacts:input.buyers?.confirmContacts===true,enrich:input.buyers?.confirmContacts===true},triggers:{minimumScore:minimum,maxEvidenceAgeDays:integer(input.triggers?.maxEvidenceAgeDays,90,1,365)},
     messages:{subject:text(input.messages?.subject,500),body:text(input.messages?.body,12000),followup:text(input.messages?.followup,6000)},
     crm:{saveQualified:true},delivery:{verifyEmails:true,dailyLimit:integer(input.delivery?.dailyLimit,5,1,50),frequency:input.delivery?.frequency==='weekly'?'weekly':'daily',timezone:text(input.delivery?.timezone||'UTC',80),sendWindowStart:text(input.delivery?.sendWindowStart||'09:00',5),sendWindowEnd:text(input.delivery?.sendWindowEnd||'17:00',5),workingDays:[1,2,3,4,5],maxFollowups:input.messages?.followup?1:0}};
   try{new Intl.DateTimeFormat('en',{timeZone:config.delivery.timezone});}catch{throw new Error('Choose a valid timezone');}
@@ -46,7 +46,7 @@ export function setupBlockers(context,config){
   if(!text(context.profile?.companyName)||!text(context.profile?.priorityOffers)||!text(context.profile?.targetMarkets))gaps.push('Complete company name, priority offer and target markets');
   if(config.companies.researchPriority!=='lookalike'&&!context.signals.some(x=>x.active===true))gaps.push('Activate at least one buying signal');
   if(config.companies.researchPriority==='lookalike'&&!context.profile?.referenceSimilarityModel)gaps.push('Activate an evidence-backed reference customer model for Lookalike');
-  if(!config.buyers.roles.length)gaps.push('Choose buyer roles');
+  if(!config.buyers.roles.length)gaps.push('Choose buyer roles');if(!config.buyers.confirmContacts)gaps.push('Approve automatic email and phone confirmation for the automatic workflow');
   const brain=globalThis.LeadIntelCompanyBrain;
   const conflicts=brain?.strategyConflicts?.(context.profile,context.signals)||[];
   if(conflicts.length)gaps.push('Resolve conflicting strategy exclusions and signals');
