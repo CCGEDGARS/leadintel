@@ -1641,7 +1641,7 @@ function bindDiscovery(){
   $("cancel-clear-company-results")?.addEventListener("click",closeClearCompanyResultsModal);
   $("confirm-clear-company-results")?.addEventListener("click",clearCompanySearchResults);
   document.querySelector("[data-clear-company-cancel]")?.addEventListener("click",closeClearCompanyResultsModal);
-  document.addEventListener("keydown",event=>{if(event.key==="Escape"&&!$("clear-company-results-modal")?.hidden)closeClearCompanyResultsModal();});
+  document.addEventListener?.("keydown",event=>{if(event.key==="Escape"&&!$("clear-company-results-modal")?.hidden)closeClearCompanyResultsModal();});
   $("review-company-strategy")?.addEventListener("click",showStrategyStep);
   $("manage-known-companies")?.addEventListener("click",()=>{void window.LeadIntelReferenceCustomerLauncher?.open?.('targets');});
   $("manage-company-inputs")?.addEventListener("click",()=>{void window.LeadIntelReferenceCustomerLauncher?.open?.('customers');});
