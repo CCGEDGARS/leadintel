@@ -963,26 +963,26 @@
     return [...ranked.filter(person=>person.kept),...ranked.filter(person=>!person.kept)].slice(0,6);
   }
   function normalizeBuyerDiscovery(value={},domain=""){
-    const safeProvider=row=>({status:['pending','complete','partial','unavailable','failed','not_configured','not_needed','not_authenticated'].includes(clean(row?.status))?clean(row.status):'pending',results:clamp(Number(row?.results)||0,0,200,0),queries:clamp(Number(row?.queries)||0,0,50,0)});
-    return {target:clamp(Number(value.target)||30,1,30,30),found:clamp(Number(value.found)||0,0,30,0),sourceResults:clamp(Number(value.sourceResults)||0,0,500,0),apolloDiscoveryCount:clamp(Number(value.apolloDiscoveryCount)||0,0,30,0),providerStatus:value.providerStatus?{firecrawl:safeProvider(value.providerStatus.firecrawl),grounded:safeProvider(value.providerStatus.grounded),identity:safeProvider(value.providerStatus.identity)}:null,opportunityRoles:(value.opportunityRoles||[]).map(clean).filter(Boolean).slice(0,12),expandedRoles:(value.expandedRoles||[]).map(clean).filter(Boolean).slice(0,40),opportunityTerms:(value.opportunityTerms||[]).map(clean).filter(Boolean).slice(0,10),checkedAt:clean(value.checkedAt).slice(0,40),issues:(value.issues||[]).map(clean).slice(0,30),pool:(value.pool||[]).slice(0,30).map(person=>safeBuyer(person,domain))};
+    const safeProvider=row=>({status:['pending','complete','partial','unavailable','failed','timeout','not_configured','not_needed','not_authenticated'].includes(clean(row?.status))?clean(row.status):'pending',results:clamp(Number(row?.results)||0,0,200,0),queries:clamp(Number(row?.queries)||0,0,50,0)});
+    return {target:clamp(Number(value.target)||30,1,30,30),found:clamp(Number(value.found)||0,0,30,0),sourceResults:clamp(Number(value.sourceResults)||0,0,500,0),apolloDiscoveryCount:clamp(Number(value.apolloDiscoveryCount)||0,0,30,0),providerStatus:value.providerStatus?{firecrawl:safeProvider(value.providerStatus.firecrawl),grounded:safeProvider(value.providerStatus.grounded),identity:safeProvider(value.providerStatus.identity)}:null,lastError:value.lastError&&typeof value.lastError==='object'?{name:clean(value.lastError.name).slice(0,80),message:clean(value.lastError.message).slice(0,300),phase:clean(value.lastError.phase).slice(0,80)}:null,opportunityRoles:(value.opportunityRoles||[]).map(clean).filter(Boolean).slice(0,12),expandedRoles:(value.expandedRoles||[]).map(clean).filter(Boolean).slice(0,40),opportunityTerms:(value.opportunityTerms||[]).map(clean).filter(Boolean).slice(0,10),checkedAt:clean(value.checkedAt).slice(0,40),issues:(value.issues||[]).map(clean).slice(0,30),pool:(value.pool||[]).slice(0,30).map(person=>safeBuyer(person,domain))};
   }
   function discoverPublicBuyers(rows=[],company='',profile={}){
-    const people=[],seen=new Set();
+    const people=[],seen=new Set(),companyText=clean(company),companyLower=clean(company).toLowerCase();
     for(const row of rows){
-      const url=normalizeLinkedInUrl(row.url);if(!url)continue;
-      const title=clean(row.title),parts=title.split(/\s+[–—|·-]\s*|\s*\|\s*/u);
+      const rawUrl=normalizeUrl(row.url||row.metadata?.sourceURL),linkedIn=normalizeLinkedInUrl(rawUrl);
+      const title=clean(row.title),parts=title.split(/\s+[–—|·-]\s*|\s*\|\s*/u),description=clean(row.description||row.markdown||row.content,3000);
       const name=clean(parts[0]);
       if(name.split(/\s+/).length<2||name.split(/\s+/).length>5||!/^[\p{L}'’. -]+$/u.test(name))continue;
-      const description=clean(row.description||row.markdown||row.content,2000);
-      const escaped=clean(company).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-      // Require explicit employment attribution; a company mention alone can be past employment.
-      const employment=new RegExp(`([^.!?\\n]{2,160}?)\\s+(?:at|hos|på)\\s+${escaped}(?=$|[\\s,.|–—])`,'iu').exec([parts.slice(1).join(' '),description].join('\n'));
-      if(!employment||/\b(former|previous|past|ex-|was|worked)\b/i.test(employment[0]))continue;
-      const role=employment[1].replace(new RegExp('^'+name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s+(?:is\\s+)?','i'),'').trim();
-      if(seen.has(url))continue;seen.add(url);
-      people.push({id:`public-${slug(url)}`,name,title:role,organization:company,publicName:name,publicNameUrl:url,publicLinkedinUrl:url});
+      const context=[parts.slice(1).join(' | '),description].join('\n'),contextLower=context.toLowerCase();
+      if(!contextLower.includes(companyLower)||/\b(former|previous|past|ex-|formerly|worked at|tidigare)\b/i.test(context))continue;
+      let role=clean(parts.find(part=>part!==name&&part.toLowerCase()!==companyLower)||'');
+      const employment=new RegExp('([^.!?\\n|]{2,160}?)\\s+(?:at|hos|på)\\s+'+companyText.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?=$|[\\s,.|–—])','iu').exec(context);
+      if(employment?.[1])role=clean(employment[1]);
+      if(!role||!roleRelevance({title:role},splitList(profile.decisionMakers)))continue;
+      const identity=linkedIn||rawUrl||(name.toLowerCase()+'|'+role.toLowerCase());if(seen.has(identity))continue;seen.add(identity);
+      people.push({id:'public-'+slug(identity),name,title:role,organization:company,publicName:name,publicNameUrl:rawUrl||linkedIn,publicLinkedinUrl:linkedIn||''});
     }
-    return selectDecisionMakers(people,profile,20);
+    return selectDecisionMakers(people,profile,30);
   }
   function safeHunterChecks(value,domain){
     if(!value||typeof value!=='object'||Array.isArray(value))return {};
