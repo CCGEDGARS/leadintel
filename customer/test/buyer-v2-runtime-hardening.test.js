@@ -18,8 +18,11 @@ test('Buyer discovery accepts common pipe-separated current-role search results'
 });
 
 test('Buyer diagnostics preserve timeout and exact failure context through normalization',()=>{
-  const state=Discovery.normalizeDiscoveryState({candidates:[{
-    company:'LKAB',domain:'lkab.com',buyerDiscovery:{
+  const state=Discovery.normalizeDiscoveryState({qualityVersion:Discovery.DISCOVERY_QUALITY_VERSION,candidates:[{
+    company:'LKAB',domain:'lkab.com',website:'https://lkab.com/',qualified:true,marketVerified:true,buyerVerified:true,
+    matchedSignals:[{name:'Investment',evidence:[{url:'https://lkab.com/news',date:'2026-09-01'}]}],
+    evidence:[{url:'https://lkab.com/news',title:'Investment',description:'LKAB investment project',text:'LKAB investment project evidence',verifiedAt:'2026-10-03T10:00:00Z'}],
+    buyerDiscovery:{
       target:30,
       providerStatus:{firecrawl:{status:'partial',results:2,queries:12},grounded:{status:'timeout',results:0},identity:{status:'not_configured',results:0}},
       lastError:{name:'AbortError',message:'Grounded buyer discovery timed out',phase:'roles'}
