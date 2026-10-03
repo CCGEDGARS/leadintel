@@ -8,7 +8,7 @@ test('Discovery ranks a wider public pool and displays at most six before enrich
  const search=ui.slice(ui.indexOf('async function searchDecisionMakers('),ui.indexOf('function saveLocalPipeline'));
  assert.match(search,/mergeBuyerPool\(previous,publicPeople,buyerProfile\)/);
  assert.match(search,/candidate.people=.*slice\(0,6\)/);
- assert.doesNotMatch(search,/searchApolloPeople/);
+ assert.match(search,/searchApolloPeople/);
 });
 
 test('Discovery makes a shortage explicit instead of implying four contacts were found',()=>{
