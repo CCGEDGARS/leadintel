@@ -352,3 +352,31 @@
 [data-qualification-settings]{margin-top:16px;padding-top:12px;border-top:1px solid #dce6e1}
 [data-qualification-settings] p{font-size:12px;line-height:1.5;color:#5e7066}
 [data-qualification-settings] select{min-width:140px}
+
+
+/* LeadIntel confirmation for clearing temporary company research. */
+.clear-company-modal[hidden]{display:none!important}
+.clear-company-modal{position:fixed;inset:0;z-index:1700;display:grid;place-items:center;padding:22px}
+.clear-company-modal-backdrop{position:absolute;inset:0;width:100%;height:100%;border:0;background:rgba(10,24,19,.64);backdrop-filter:blur(4px);cursor:default}
+.clear-company-modal-dialog{position:relative;width:min(620px,100%);padding:30px;background:#fff;border:1px solid var(--line,#d8e1dc);border-radius:22px;box-shadow:0 28px 80px rgba(10,24,19,.26)}
+.clear-company-modal-dialog h2{margin:8px 0 9px;font-size:30px;line-height:1.12;color:var(--ink,#13201c)}
+.clear-company-modal-dialog>p{margin:0;color:var(--muted,#697770);font-size:15px;line-height:1.55}
+.clear-company-modal-impact{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:24px 0}
+.clear-company-modal-impact>div{display:grid;gap:7px;padding:17px;border:1px solid #ead8d4;border-radius:14px;background:#fff8f7}
+.clear-company-modal-impact>div.is-kept{border-color:#c8ddd3;background:#f4faf7}
+.clear-company-modal-impact strong{margin-bottom:3px;font-size:13px;color:#6d3d35}
+.clear-company-modal-impact .is-kept strong{color:#155e4e}
+.clear-company-modal-impact span{position:relative;padding-left:17px;color:#485750;font-size:13px;line-height:1.35}
+.clear-company-modal-impact span::before{content:"–";position:absolute;left:0;color:#8d9a94}
+.clear-company-modal-dialog footer{display:flex;justify-content:flex-end;gap:10px;padding-top:4px}
+.clear-company-modal-dialog footer .primary-btn{min-width:140px;background:var(--accent2,#0d5d4f)}
+.clear-company-modal-open{overflow:hidden}
+@media(max-width:620px){
+  .clear-company-modal{padding:12px}
+  .clear-company-modal-dialog{padding:22px;border-radius:17px}
+  .clear-company-modal-dialog h2{font-size:25px}
+  .clear-company-modal-impact{grid-template-columns:1fr}
+  .clear-company-modal-dialog footer{display:grid;grid-template-columns:1fr}
+  .clear-company-modal-dialog footer .primary-btn,.clear-company-modal-dialog footer .secondary-btn{width:100%}
+}
+@media(prefers-reduced-motion:reduce){.clear-company-modal-backdrop{backdrop-filter:none}}
