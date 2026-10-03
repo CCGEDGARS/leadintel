@@ -8,7 +8,7 @@ test('Companies Buyers count is driven only by explicit current selections, neve
  const start=ui.indexOf('function buyerSelectionRows(){');
  const end=ui.indexOf('function currentJourneyFocus()',start);
  const block=ui.slice(start,end);
- assert.match(block,/for\(const item of selectedProspects\(\)\)/);
+ assert.match(block,/for\(const item of discovery\.selectedProspects\|\|\[\]\)/);
  assert.doesNotMatch(block,/pipelineRows\(\)/);
  assert.match(block,/byDomain\.set\(domain,item\)/);
 });
