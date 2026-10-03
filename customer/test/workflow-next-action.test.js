@@ -5,9 +5,9 @@ const assert=require('node:assert/strict');
 const NextAction=require('../workflow-next-action.js');
 
 test('Companies routes through Buyers before Messages',()=>{
-  assert.deepEqual(NextAction.forStage(5,{pipelineCount:0}),{label:'Save a Company First',enabled:false,visible:false,journeyStage:5});
-  assert.deepEqual(NextAction.forStage(5,{pipelineCount:1,buyerCount:0}),{label:'Continue to Buyers →',enabled:true,visible:true,journeyStage:5});
-  assert.deepEqual(NextAction.forStage(5,{pipelineCount:1,buyerCount:1}),{label:'Continue to Messages →',enabled:true,visible:true,journeyStage:6});
+  assert.deepEqual(NextAction.forStage(5,{pipelineCount:0}),{label:'Select a Company First',enabled:false,visible:false,journeyStage:5});
+  assert.deepEqual(NextAction.forStage(5,{pipelineCount:1,buyerCount:0,focus:'companies'}),{label:'Continue to Buyers →',enabled:true,visible:true,journeyStage:5});
+  assert.deepEqual(NextAction.forStage(5,{pipelineCount:1,buyerCount:1,focus:'buyers'}),{label:'Continue to Messages →',enabled:true,visible:true,journeyStage:6});
 });
 
 test('Messages blocks Delivery until one message package is approved',()=>{
@@ -28,7 +28,7 @@ test('Step 5 hides the empty pipeline and continuation control until an opportun
 
   const pipeline={hidden:false};
   const footer={hidden:false};
-  const gate={dataset:{},textContent:'Save a Company First',disabled:false,attributes:{},setAttribute(name,value){this.attributes[name]=value;},closest:()=>footer};
+  const gate={dataset:{},textContent:'Select a Company First',disabled:false,attributes:{},setAttribute(name,value){this.attributes[name]=value;},closest:()=>footer};
   const document={
     querySelector(selector){return selector==='.pipeline-panel'?pipeline:null;},
     getElementById(id){return id==='continue-to-outreach'?gate:null;}
@@ -37,7 +37,7 @@ test('Step 5 hides the empty pipeline and continuation control until an opportun
   NextAction.applyStageVisibility(document,5,{pipelineCount:0,buyerCount:0});
   assert.equal(pipeline.hidden,true);
   assert.equal(footer.hidden,true);
-  assert.equal(gate.textContent,'Save a Company First');
+  assert.equal(gate.textContent,'Select a Company First');
   assert.equal(gate.disabled,true);
   assert.equal(gate.attributes['aria-disabled'],'true');
 
@@ -98,5 +98,5 @@ test('the workflow footer CSS respects the hidden state',()=>{
 
 
 test('selected Buyers companies reach Scripts without a Pipeline opportunity',()=>{
- assert.deepEqual(NextAction.forStage(5,{pipelineCount:0,prospectCount:1,buyerCount:1}),{label:'Continue to Messages →',enabled:true,visible:true,journeyStage:6});
+ assert.deepEqual(NextAction.forStage(5,{pipelineCount:0,prospectCount:1,buyerCount:1,focus:'buyers'}),{label:'Continue to Messages →',enabled:true,visible:true,journeyStage:6});
 });
