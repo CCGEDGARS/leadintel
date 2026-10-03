@@ -18,7 +18,7 @@ test('attention model prioritizes current required gaps and ignores optional gap
     ]
   }]});
   assert.deepEqual(items.map(item=>item.id),['stage-1-website']);
-  assert.equal(items[0].severity,'error');
+  assert.equal(items[0].severity,'recommendation');
   assert.equal(items[0].target.type,'stage');
 });
 
@@ -41,7 +41,7 @@ test('attention model surfaces failed and stalled work automatically',()=>{
   ]});
   assert.deepEqual(items.map(item=>item.id),['task-failed','task-stalled']);
   assert.ok(items.every(item=>item.target.type==='tasks'));
-  assert.ok(items.every(item=>item.severity==='error'));
+  assert.ok(items.every(item=>item.severity==='recommendation'));
 });
 
 test('attention model includes unsaved work and bounded runtime failures',()=>{
@@ -61,8 +61,8 @@ test('customer shell exposes an automatic Attention control and drawer runtime',
   assert.match(html,/data-attention-count/);
   assert.match(html,/attention-centre-model\.js\?v=/);
   assert.match(html,/attention-centre\.js\?v=/);
-  assert.match(html,/attention-centre-model\.js\?v=20260928-all-provider-credit-health-v1/);
-  assert.match(html,/attention-centre\.js\?v=20260928-all-provider-credit-health-v1/);
+  assert.match(html,/attention-centre-model\.js\?v=20261003-workspace-status-v1/);
+  assert.match(html,/attention-centre\.js\?v=20261003-workspace-status-v1/);
 });
 
 test('confirmed reset refreshes Attention and clears transient runtime errors',()=>{
@@ -110,7 +110,7 @@ test('Workspace Health polls provider status and clears recovered credit alerts'
   const trigger=makeElement(),list=makeElement();trigger.querySelector=selector=>selector==='[data-attention-count]'?makeElement():selector==='[data-attention-summary]'?makeElement():null;
   const document={readyState:'complete',documentElement:{appendChild(){}},getElementById:id=>id==='workspace-attention'?trigger:null,createElement(){const node=makeElement();node.querySelector=()=>list;return node;},addEventListener(){},querySelector(){return null;}};
   let exhausted=true;
-  const handlers={};const window={document,LeadIntelAttentionModel:Attention,LeadIntelServerBridge:{workspace:{id:'workspace-1'},session:{authenticated:true}},localStorage:{getItem(){return null;}},LeadIntelJourney:{getModel(){return [];}},LeadIntelTaskCentre:{list(){return [];}},addEventListener(name,fn){handlers[name]=fn;},setInterval(){},fetch:async url=>({ok:true,json:async()=>url.includes('/ai/status')?{providers:[{provider:'gemini',configured:true,credit_issue:exhausted?{code:'credits_exhausted',source:'customer'}:null}]}:{providers:[]}})};
+  const handlers={};const window={document,LeadIntelAttentionModel:Attention,LeadIntelServerBridge:{workspace:{id:'workspace-1'},session:{authenticated:true}},localStorage:{getItem(key){return key==='leadintel_customer_v2_discovery'?JSON.stringify({searchFailures:[{status:402}]}):null;}},LeadIntelJourney:{getModel(){return [];}},LeadIntelTaskCentre:{list(){return [];}},addEventListener(name,fn){handlers[name]=fn;},setInterval(){},fetch:async url=>({ok:true,json:async()=>url.includes('/ai/status')?{providers:[{provider:'gemini',configured:true,credit_issue:exhausted?{code:'credits_exhausted',source:'customer'}:null}]}:{providers:[]}})};
   vm.runInNewContext(source,{window,setTimeout,clearTimeout,Date,Promise});
   await new Promise(resolve=>setImmediate(resolve));
   assert.ok(window.LeadIntelAttention.list().some(item=>item.title==='Google Gemini credit or billing issue'));
@@ -118,7 +118,8 @@ test('Workspace Health polls provider status and clears recovered credit alerts'
   // A different signed-in workspace must never inherit the previous workspace's alert.
   window.LeadIntelServerBridge.workspace.id='workspace-2';
   handlers['leadintel:server-ready']();await new Promise(resolve=>setImmediate(resolve));
-  assert.ok(!window.LeadIntelAttention.list().some(item=>item.title==='Google Gemini credit or billing issue'));
+  assert.ok(!window.LeadIntelAttention.list().some(item=>item.severity==='error'));
+  await window.LeadIntelAttention.recheck();assert.ok(!window.LeadIntelAttention.list().some(item=>item.provider==='firecrawl'||item.severity==='error'));
 });
 
 test('workspace health identifies exhausted OpenAI API credits and clears after successful synthesis',()=>{
@@ -195,3 +196,6 @@ test('workspace health renders the saved credit failure, opens billing and clear
   assert.equal(count.hidden,true);
   assert.equal(summary.textContent,'Workspace healthy');
 });
+
+test('billing alone is red; transient failures and unfinished work are yellow',()=>{const items=Attention.buildAttentionItems({tasks:[{id:'timeout',status:'error',error:'HTTP 429 rate limit'}],runtimeErrors:[{message:'Unexpected failure'}],unsaved:true,providerIssues:[{provider:'firecrawl',name:'Firecrawl',source:'customer'}]});assert.equal(items.filter(i=>i.severity==='error').length,1);assert.match(items[0].id,/provider-firecrawl/);assert.equal(Attention.healthSummary(items).status,'error');const rest=items.filter(i=>i.severity!=='error');assert.equal(Attention.healthSummary(rest).status,'recommendation');assert.doesNotMatch(Attention.healthSummary(rest).text,/errors?/);assert.equal(Attention.healthSummary([]).status,'healthy');});
+test('optional missing tools stay neutral, configured broken tools need attention, and managed billing is detected',()=>{assert.deepEqual(Attention.providerConnectionIssues({services:{providers:[{provider:'apollo',configured:false,state:'bad',source:'none'}]}}),[]);assert.equal(Attention.providerConnectionIssues({requiredProviders:['hunter'],services:{providers:[{provider:'hunter',configured:false,source:'none',state:'neutral'}]}})[0].severity,'recommendation');assert.equal(Attention.providerConnectionIssues({services:{providers:[{provider:'hunter',configured:true,state:'bad',metadata:{error:'Expired credential'}}]}})[0].severity,'recommendation');assert.equal(Attention.providerCreditIssues({services:{providers:[{provider:'firecrawl',configured:false,source:'managed',credit_issue:{code:'credits_exhausted',source:'managed'}}]}}).length,1);});

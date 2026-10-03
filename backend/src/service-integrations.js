@@ -1,7 +1,7 @@
 import {sha256,cookieValue} from './security.js';
 import {importAesKey,encryptSecret,decryptSecret} from './oauth.js';
 import {APOLLO_PEOPLE_SEARCH_URL,normalizeDomain as normalizeApolloDomain} from './enrichment.js';
-import {creditFailure,recordProviderCredit,providerCreditIssue} from './provider-credit-health.js';
+import {creditFailure,recordProviderCredit,providerCreditIssue,verifiedCreditBalance} from './provider-credit-health.js';
 
 const PROVIDERS=Object.freeze(['apollo','firecrawl','hunter']);
 const PROVIDER_NAMES=Object.freeze({apollo:'Apollo.io',firecrawl:'Firecrawl',hunter:'Hunter'});
@@ -47,7 +47,7 @@ async function verifyApollo(apiKey){
 async function verifyFirecrawl(apiKey){
   const response=await fetch('https://api.firecrawl.dev/v2/team/credit-usage',{method:'GET',headers:{Accept:'application/json',Authorization:`Bearer ${apiKey}`}});
   const payload=await response.json().catch(()=>({}));if(!response.ok||payload.success===false)throw new Error(payload.error||`Firecrawl verification failed (${response.status})`);
-  const data=payload.data||{};return {remaining_credits:Number(data.remainingCredits)||0,plan_credits:Number(data.planCredits)||0,billing_period_end:data.billingPeriodEnd||null};
+  const data=payload.data||{};return {remaining_credits:data.remainingCredits!=null&&Number.isFinite(Number(data.remainingCredits))?Number(data.remainingCredits):null,plan_credits:Number(data.planCredits)||0,billing_period_end:data.billingPeriodEnd||null};
 }
 async function verifyHunter(apiKey){
   const response=await fetch('https://api.hunter.io/v2/account',{method:'GET',headers:{Accept:'application/json','X-API-KEY':apiKey}});
@@ -150,8 +150,8 @@ async function providerStatus(env,workspaceId,provider,{verify=false}={}){
     let metadata={};try{metadata=JSON.parse(row.metadata_json||'{}')||{};}catch{}
     let state='good',label='Connected';
     if(verify){
-      try{const apiKey=await decryptRow(env,row);metadata=await verifyCredential(provider,apiKey);await env.DB.prepare(`UPDATE workspace_service_integrations SET metadata_json=?,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(JSON.stringify(metadata),workspaceId,provider).run();}
-      catch(cause){state='bad';label='Connection error';metadata={...metadata,error:clean(cause?.message||cause,180)};}
+      try{const apiKey=await decryptRow(env,row);metadata=await verifyCredential(provider,apiKey);const balance=verifiedCreditBalance(provider,metadata);if(balance)await recordProviderCredit(env,{workspaceId,provider,kind:balance,source:'customer'});await env.DB.prepare(`UPDATE workspace_service_integrations SET metadata_json=?,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(JSON.stringify(metadata),workspaceId,provider).run();}
+      catch(cause){if(creditFailure(0,cause?.message)||/\(402\)/.test(String(cause?.message)))await recordProviderCredit(env,{workspaceId,provider,kind:'failed',source:'customer'});state='bad';label='Connection error';metadata={...metadata,error:clean(cause?.message||cause,180)};}
     }
     return {provider,name:PROVIDER_NAMES[provider],configured:true,source:'customer',state,label,key_hint:row.key_hint||'',verified_at:row.verified_at||null,last_used_at:row.last_used_at||null,metadata};
   }

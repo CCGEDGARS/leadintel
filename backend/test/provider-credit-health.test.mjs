@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {creditFailure,recordProviderCredit,providerCreditIssue} from '../src/provider-credit-health.js';
+import {creditFailure,recordProviderCredit,providerCreditIssue,verifiedCreditBalance} from '../src/provider-credit-health.js';
 
 test('credit failures distinguish exhausted billing from a temporary 429',()=>{
   assert.equal(creditFailure(402,''),true);
@@ -23,3 +23,5 @@ test('a provider credit alert persists per workspace and clears after its own su
   assert.deepEqual(await providerCreditIssue(env,'w1','gemini'),{code:'credits_exhausted',source:'customer'});
   assert.deepEqual(await providerCreditIssue(env,'w2','openai'),{code:'credits_exhausted',source:'customer'});
 });
+
+test('only a verified Firecrawl balance can clear its billing alert; missing balance is unknown',()=>{assert.equal(verifiedCreditBalance('firecrawl',{remaining_credits:100}),'recovered');assert.equal(verifiedCreditBalance('firecrawl',{remaining_credits:0}),'failed');assert.equal(verifiedCreditBalance('firecrawl',{}),null);assert.equal(verifiedCreditBalance('firecrawl',{remaining_credits:null}),null);assert.equal(verifiedCreditBalance('apollo',{healthy:true}),null);});

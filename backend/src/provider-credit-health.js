@@ -5,7 +5,7 @@ export function creditFailure(status, detail=''){
   return /(?:insufficient|exhausted|no|out of|zero)\s+(?:available\s+)?(?:credits?|quota|balance)|(?:credits?|quota|balance)\s+(?:is\s+)?(?:exhausted|depleted)/.test(value);
 }
 
-export async function recordProviderCredit(env,{workspaceId,userId,provider,kind,source='customer'}){
+export async function recordProviderCredit(env,{workspaceId,userId=null,provider,kind,source='customer'}){
   // A health write must never break the user's original provider request.
   try{await env.DB.prepare(`INSERT INTO audit_events(id,workspace_id,user_id,event_type,entity_type,entity_id,metadata_json) VALUES(?,?,?,?,?,?,?)`)
     .bind(crypto.randomUUID(),workspaceId,userId,kind==='failed'?'provider.credit_exhausted':'provider.credit_recovered','provider_credit',provider,JSON.stringify({source})).run();}catch{}
@@ -19,3 +19,5 @@ export async function providerCreditIssue(env,workspaceId,provider){
     return {code:'credits_exhausted',source:metadata.source==='managed'?'managed':'customer'};
   }catch{return null;}
 }
+
+export function verifiedCreditBalance(provider,metadata={}){if(provider!=='firecrawl'||metadata.remaining_credits==null||!Number.isFinite(Number(metadata.remaining_credits)))return null;return Number(metadata.remaining_credits)>0?'recovered':'failed';}
