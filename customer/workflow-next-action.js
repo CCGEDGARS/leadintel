@@ -32,9 +32,10 @@
     if(pipeline)pipeline.hidden=pipelineEmpty;
     const gate=document?.getElementById?.("continue-to-outreach");
     const footer=gate?.closest?.(".workflow-next-action");
-    if(footer)footer.hidden=pipelineEmpty||(state.focus==="buyers"&&count(state.buyerCount)===0);
+    const onBuyersStage=state.focus==="buyers";
+    if(footer)footer.hidden=pipelineEmpty||!onBuyersStage||count(state.buyerCount)===0;
     if(gate){
-      const blocked=!action.enabled||(state.focus==="buyers"&&count(state.buyerCount)===0);
+      const blocked=!action.enabled||!onBuyersStage||count(state.buyerCount)===0;
       gate.textContent=action.label;
       gate.disabled=blocked;
       gate.setAttribute?.("aria-disabled",String(blocked));
