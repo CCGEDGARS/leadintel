@@ -249,8 +249,8 @@ test('a completed zero-result run renders the search funnel and unqualified matc
   assert.match(context.__elements.get('discovery-funnel').innerHTML,/8 of 8/);
   assert.match(context.__elements.get('company-candidates').innerHTML,/Review Market Research/);
   assert.match(context.__elements.get('company-candidates').innerHTML,/valid finding/i);
-  assert.match(context.__elements.get('discovery-potential-matches').innerHTML,/Research checks/i);
-  assert.match(context.__elements.get('discovery-potential-matches').innerHTML,/excluded from the qualified list/i);
+  assert.match(context.__elements.get('discovery-potential-matches').innerHTML,/Research review/i);
+  assert.match(context.__elements.get('discovery-potential-matches').innerHTML,/Needs more evidence|Not qualified/i);
   assert.match(context.__elements.get('discovery-potential-matches').innerHTML,/Verify company identity/);
   assert.doesNotMatch(context.__elements.get('discovery-potential-matches').innerHTML,/Save to CRM|Add to Pipeline/);
 });
@@ -268,7 +268,7 @@ test('unqualified research checks do not expose automatic buyer actions',()=>{
   const html=context.__elements.get('discovery-potential-matches').innerHTML;
   assert.equal((html.match(/data-action="find-potential-buyers"/g)||[]).length,0);
   assert.equal((html.match(/data-action="save-potential-prospect"/g)||[]).length,0);
-  assert.match(html,/excluded from the qualified list and automatic flow/);
+  assert.match(html,/Needs more evidence|Not qualified/);
   assert.match(html,/No recent verified buying signal/);
   assert.doesNotMatch(html,/Save to CRM|Add to Pipeline/);
 });
