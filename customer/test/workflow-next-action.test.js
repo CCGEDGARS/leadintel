@@ -41,14 +41,16 @@ test('Step 5 hides the empty pipeline and continuation control until an opportun
   assert.equal(gate.disabled,true);
   assert.equal(gate.attributes['aria-disabled'],'true');
 
-  NextAction.applyStageVisibility(document,5,{pipelineCount:1,buyerCount:0});
+  NextAction.applyStageVisibility(document,5,{pipelineCount:1,buyerCount:0,focus:'companies'});
   assert.equal(pipeline.hidden,false);
-  assert.equal(footer.hidden,false);
+  assert.equal(footer.hidden,true);
   assert.equal(gate.textContent,'Continue to Buyers →');
-  assert.equal(gate.disabled,false);
-  assert.equal(gate.attributes['aria-disabled'],'false');
+  assert.equal(gate.disabled,true);
+  assert.equal(gate.attributes['aria-disabled'],'true');
   assert.equal(gate.dataset.journeyStage,'5');
-  NextAction.applyStageVisibility(document,5,{pipelineCount:1,buyerCount:1});
+  NextAction.applyStageVisibility(document,5,{pipelineCount:1,buyerCount:1,focus:'companies'});
+  assert.equal(footer.hidden,true);
+  assert.equal(gate.disabled,true);
   assert.equal(gate.textContent,'Continue to Messages →');
   assert.equal(gate.dataset.journeyStage,'6');
 });
