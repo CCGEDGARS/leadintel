@@ -28,6 +28,6 @@ test('failed research persists V2 target and opportunity diagnostics rather than
  const start=ui.indexOf('async function searchDecisionMakers');
  const end=ui.indexOf('async function selectTargetForBuyers',start);
  const block=ui.slice(start,end);
- assert.match(block,/candidate\.buyerDiscovery=\{\.\.\.\(candidate\.buyerDiscovery\|\|\{\}\),target:30/);
+ assert.match(block,/candidate\.buyerDiscovery=\{\.\.\.previousDiscovery,target:30/);
  assert.match(block,/Research timed out or was stopped/);
 });
