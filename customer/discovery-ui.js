@@ -1215,12 +1215,14 @@ function pipelineRows(){return crmAvailable?currentWorkspaceCrmPipeline().map(cr
 function selectedProspects(){return (discovery.selectedProspects||[]).filter(item=>{const company=crmCompanyByDomain(item.domain);const inLocalPipeline=(discovery.pipeline||[]).some(row=>canonicalDomain(row.domain||row.website)===canonicalDomain(item.domain));return !inLocalPipeline&&company?.lifecycle_status!=="suppressed"&&(item.buyerSearchMode==="user_selected_target"||item.buyerSearchMode==="user_selected_qualified"||item.buyerSearchMode==="user_selected_without_signal"||!crmAvailable||Boolean(company&&!company.pipeline_stage));});}
 function buyerSelectionRows(){
   const byDomain=new Map();
-  // Buyer selection is explicit. CRM/Pipeline membership alone must never make a company
-  // appear selected on Companies; otherwise stale CRM opportunities inflate the counter
-  // and silently enter the next Buyers run. Use the persisted explicit selection itself,
-  // because moving that same company into Pipeline must not erase its Buyers selection.
+  const currentDomains=new Set([
+    ...(discovery.candidates||[]).filter(candidate=>qualificationAssessment(candidate).eligible&&!candidate.needsRecheck).map(item=>canonicalDomain(item.domain||item.website)),
+    ...selectedTargets().map(item=>canonicalDomain(item.domain||item.website))
+  ].filter(Boolean));
+  // Only explicit selections that still belong to the current Companies workspace count.
+  // Old selections remain preserved in CRM/history, but cannot silently enter a new Buyers run.
   for(const item of discovery.selectedProspects||[]){
-    const domain=canonicalDomain(item.domain||item.website);if(!domain)continue;
+    const domain=canonicalDomain(item.domain||item.website);if(!domain||!currentDomains.has(domain))continue;
     const company=crmCompanyByDomain(domain);if(company?.lifecycle_status==="suppressed")continue;
     byDomain.set(domain,item);
   }
