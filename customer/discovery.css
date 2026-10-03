@@ -380,3 +380,109 @@
   .clear-company-modal-dialog footer .primary-btn,.clear-company-modal-dialog footer .secondary-btn{width:100%}
 }
 @media(prefers-reduced-motion:reduce){.clear-company-modal-backdrop{backdrop-filter:none}}
+
+
+/* Compact research-checks qualification panel */
+#discovery-potential-matches.potential-matches{
+  margin-top:16px;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+}
+.research-checks-compact{
+  border:1px solid #dce5e0;
+  border-radius:12px;
+  background:#f8faf9;
+  overflow:hidden;
+}
+.research-checks-compact>summary{
+  list-style:none;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-height:48px;
+  padding:0 15px;
+  cursor:pointer;
+  color:#31463e;
+  user-select:none;
+}
+.research-checks-compact>summary::-webkit-details-marker{display:none}
+.research-checks-title{
+  font-size:13px;
+  font-weight:700;
+  color:#263b33;
+}
+.research-checks-count{
+  padding:4px 8px;
+  border-radius:999px;
+  background:#edf2ef;
+  color:#61716a;
+  font:600 10px "IBM Plex Mono",monospace;
+  letter-spacing:.02em;
+}
+.research-checks-chevron{
+  margin-left:auto;
+  color:#788780;
+  font-size:17px;
+  line-height:1;
+  transform:rotate(0deg);
+  transition:transform .15s ease;
+}
+.research-checks-compact[open] .research-checks-chevron{transform:rotate(180deg)}
+.research-checks-body{
+  padding:0 15px 14px;
+  border-top:1px solid #e7ece9;
+}
+.research-checks-body>p{
+  margin:12px 0;
+  color:#6a7771;
+  font-size:12px;
+  line-height:1.5;
+}
+.research-check-list{
+  display:grid;
+  gap:8px;
+}
+.research-check-row{
+  display:grid;
+  grid-template-columns:minmax(180px,.8fr) minmax(0,1.2fr);
+  gap:14px;
+  align-items:start;
+  padding:11px 12px;
+  border:1px solid #e5ebe8;
+  border-radius:10px;
+  background:#fff;
+}
+.research-check-row>div:first-child{
+  display:grid;
+  gap:3px;
+}
+.research-check-row strong{
+  color:#20342c;
+  font-size:12.5px;
+  line-height:1.35;
+}
+.research-check-row>div:first-child span{
+  color:#738078;
+  font-size:10.5px;
+  line-height:1.35;
+}
+.research-check-tags{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.research-check-tags>span{
+  padding:4px 7px;
+  border-radius:999px;
+  background:#f2f5f3;
+  color:#607069;
+  font-size:9.5px;
+  line-height:1.2;
+}
+@media(max-width:700px){
+  .research-check-row{grid-template-columns:1fr}
+  .research-checks-compact>summary{padding:0 12px}
+  .research-checks-body{padding:0 12px 12px}
+}
