@@ -113,6 +113,19 @@ export async function executeWorkflowStage(stage,{env,row,run,result,context,con
       const saved=await findCrmCompanyByDomain(env.DB,row.workspace_id,candidate.domain);if(saved&&saved.lifecycle_status!=='prospect')continue;
       candidates.push({...candidate,qualified:true,buyerVerified:true,qualificationGaps:[],score:{total:candidate.qualification.score,fit:candidate.qualification.buyerFitPoints,signal:candidate.qualification.signalPoints},matchedSignals:candidate.qualification.matchedSignals});if(candidates.length>=config.companies.limit)break;
     }
+    // Automatic mode owns the qualified-company handoff: every candidate here has already
+    // passed score >= approved minimum plus every mandatory evidence/identity/fit gate.
+    // Persist it immediately so a later buyer/provider failure cannot lose a qualified opportunity.
+    if(config.crm.saveQualified){
+      const crmContext={workspaceId:row.workspace_id,userId:row.approved_by,role:'owner'};
+      for(const candidate of candidates){
+        await guard();
+        const existing=await findCrmCompanyByDomain(env.DB,row.workspace_id,candidate.domain);
+        if(existing&&existing.lifecycle_status!=='prospect')continue;
+        const saved=await upsertCrmCompany(env.DB,crmContext,{...candidate,pipeline_stage:'Discovered',source:'approved_workflow_qualified'});
+        await upsertCrmIntelligence(env.DB,crmContext,saved.company.id,{matched_signals:candidate.matchedSignals,evidence:candidate.evidence,score_breakdown:{...candidate.score,qualification:candidate.qualification},confidence:candidate.qualification?.confidence||candidate.confidence,research_snapshot:{runId:run.id,revision:row.revision,researchAt:researchedAt,buyerFit:candidate.buyerFit,qualification:candidate.qualification,automaticQualifiedSave:true}});
+      }
+    }
     return {...result,requestedCount:config.companies.limit,qualifiedCount:candidates.length,shortfall:Math.max(0,config.companies.limit-candidates.length),queries,candidates,reviewCompanies:assessed.filter(c=>!c.qualification.eligible),researchedAt,sourceCount:new Set(results.map(r=>r.url)).size};
   }
   if(stage==='buyers'){
