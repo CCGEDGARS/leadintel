@@ -1215,10 +1215,12 @@ function pipelineRows(){return crmAvailable?currentWorkspaceCrmPipeline().map(cr
 function selectedProspects(){return (discovery.selectedProspects||[]).filter(item=>{const company=crmCompanyByDomain(item.domain);const inLocalPipeline=(discovery.pipeline||[]).some(row=>canonicalDomain(row.domain||row.website)===canonicalDomain(item.domain));return !inLocalPipeline&&company?.lifecycle_status!=="suppressed"&&(item.buyerSearchMode==="user_selected_target"||item.buyerSearchMode==="user_selected_qualified"||!crmAvailable||Boolean(company&&!company.pipeline_stage));});}
 function buyerSelectionRows(){
   const byDomain=new Map();
-  for(const item of [...pipelineRows(),...selectedProspects()]){
+  // Buyer selection is explicit. CRM/Pipeline membership alone must never make a company
+  // appear selected on Companies; otherwise stale CRM opportunities inflate the counter
+  // and silently enter the next Buyers run.
+  for(const item of selectedProspects()){
     const domain=canonicalDomain(item.domain||item.website);if(!domain)continue;
-    const selected=(discovery.selectedProspects||[]).find(row=>canonicalDomain(row.domain||row.website)===domain);
-    byDomain.set(domain,{...item,...(selected||{})});
+    byDomain.set(domain,item);
   }
   return [...byDomain.values()];
 }
