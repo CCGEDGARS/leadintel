@@ -507,3 +507,20 @@
   .research-review-intro{display:grid}
   .research-review-bulk{justify-content:flex-start}
 }
+
+
+/* Autonomous discovery opportunity brief */
+.opportunity-trust-strip{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 12px}
+.opportunity-trust-strip>span{padding:7px 10px;border:1px solid #dfe7e3;border-radius:999px;background:#f7faf8;color:#56665f;font-size:11px}
+.opportunity-trust-strip strong{color:#20372f}
+.opportunity-brief{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0 14px}
+.opportunity-brief>div{display:grid;gap:5px;padding:12px 13px;border:1px solid #e1e8e4;border-radius:11px;background:#fbfcfb}
+.opportunity-brief span{font:600 9px "IBM Plex Mono",monospace;letter-spacing:.06em;color:#718078}
+.opportunity-brief strong{font-size:12px;line-height:1.4;color:#20342c}
+.candidate-evidence-details{margin-top:14px;border-top:1px solid #e4eae7;padding-top:10px}
+.candidate-evidence-details>summary{cursor:pointer;color:#315f50;font-size:11px;font-weight:700;list-style:none}
+.candidate-evidence-details>summary::-webkit-details-marker{display:none}
+.candidate-evidence-details>summary::before{content:"▸";display:inline-block;margin-right:6px}
+.candidate-evidence-details[open]>summary::before{content:"▾"}
+.candidate-evidence-details .candidate-evidence{margin-top:10px}
+@media(max-width:760px){.opportunity-brief{grid-template-columns:1fr}}
