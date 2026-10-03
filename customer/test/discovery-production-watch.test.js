@@ -57,6 +57,10 @@ const boundedDiscoveryRuntime = [
   'const DISCOVERY_RUN_TIMEOUT_MIN_MS=120000;',
   'function discoveryRunTimeoutMs(',
   'function ensureDiscoveryMounted(){}',
+  'id="clear-company-results">Clear search results',
+  'function clearCompanySearchResults(){}',
+  'pipeline:discovery.pipeline',
+  'delete meta.lastCompanyRun',
   'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};',
   'initDiscoveryWhenReady();'
 ].join('\n');
