@@ -21,5 +21,5 @@ export async function fetchWithScrapling(env={},targetUrl){
   const markdown=String(payload?.data?.markdown||'').trim();const metadata=payload?.data?.metadata||{};
   if(payload?.success!==true||!markdown||metadata.source!=='scrapling-fallback')throw new Error('Invalid Scrapling response');
   let sourceUrl='';try{sourceUrl=new URL(String(metadata.sourceURL||metadata.url||target.href)).href;}catch{throw new Error('Invalid Scrapling response');}
-  return {success:true,data:{markdown:markdown.slice(0,60000),metadata:{...metadata,title:clean(metadata.title||new URL(sourceUrl).hostname,180),sourceURL:sourceUrl,url:sourceUrl,statusCode:Number(metadata.statusCode)||200,source:'scrapling-fallback',fetchedAt:clean(metadata.fetchedAt||new Date().toISOString(),80)}}};
+  return {success:true,data:{markdown:markdown.slice(0,60000),links:Array.isArray(payload?.data?.links)?payload.data.links.filter(link=>typeof link==='string').slice(0,200):[],metadata:{...metadata,title:clean(metadata.title||new URL(sourceUrl).hostname,180),sourceURL:sourceUrl,url:sourceUrl,statusCode:Number(metadata.statusCode)||200,source:'scrapling-fallback',fetchedAt:clean(metadata.fetchedAt||new Date().toISOString(),80)}}};
 }

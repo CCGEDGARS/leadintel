@@ -233,3 +233,20 @@ sqliteTest('direct website fallback refuses local or private-network targets',as
     assert.equal(calls.length,0,'private-network URL must be rejected before any outbound request');
   }finally{globalThis.fetch=originalFetch;}
 });
+
+sqliteTest('billing failure falls through direct extraction to Scrapling and records actual provenance',async()=>{
+  const {env,token,DB}=await fixture('owner');env.SCRAPLING_SERVICE_URL='https://scrapling.example/api/scrapling';env.SCRAPLING_SERVICE_TOKEN='protected';
+  const original=globalThis.fetch;const calls=[];
+  globalThis.fetch=async(url,options={})=>{
+    calls.push(String(url));
+    if(String(url).includes('firecrawl-scrape'))return new Response(JSON.stringify({error:'Credits exhausted'}),{status:402});
+    if(String(url)==='https://company.se/')return new Response('Blocked',{status:403});
+    assert.equal(options.headers.Authorization,'Bearer protected');
+    return new Response(JSON.stringify({success:true,data:{markdown:'Verified company evidence '.repeat(10),links:['https://company.se/team'],metadata:{source:'scrapling-fallback',sourceURL:'https://company.se/',statusCode:200}}}));
+  };
+  try{
+    const response=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/scrape?workspace_id=w1',{method:'POST',token,body:{url:'https://company.se/'}}),env,{});
+    assert.equal(response.status,200);const result=await payload(response);assert.equal(result.data.metadata.source,'scrapling-fallback');assert.deepEqual(result.data.links,['https://company.se/team']);assert.equal(calls.length,3);
+    const events=DB.raw.prepare('SELECT metadata_json FROM audit_events WHERE event_type=?').all('service.firecrawl_scrape');assert.ok(events.some(row=>JSON.parse(row.metadata_json).source==='scrapling-fallback'));
+  }finally{globalThis.fetch=original;}
+});

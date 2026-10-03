@@ -34,7 +34,7 @@ async function weakScrapeResponse(response,kind){
   if(kind!=='scrape'||!response.ok)return false;
   try{const payload=await response.clone().json();const data=payload.data||payload;const text=String(data.markdown||data.content||'').replace(/\s+/g,' ').trim();return text.length<120||(/captcha|verify you are human|cloudflare ray id|access denied/i.test(text)&&text.length<1000);}catch{return true;}
 }
-function retryableStatus(status){return status===404||status===408||status===429||status>=500;}
+function retryableStatus(status){return status===402||status===404||status===408||status===429||status>=500;}
 function scraplingTarget(kind){
   if(kind!=='scrape')return '';
   const {authenticated,workspace}=workspaceContext();if(!authenticated)return '';

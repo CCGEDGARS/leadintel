@@ -49,6 +49,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+      - name: Test Scrapling extraction safety and response contract
+        run: python -m unittest discover -s ../api/tests
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:

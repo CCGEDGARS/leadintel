@@ -1,8 +1,9 @@
 import ipaddress
 import os
+import re
 import socket
 from datetime import datetime, timezone
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
@@ -19,7 +20,7 @@ class ScrapeRequest(BaseModel):
 def _authorized(authorization: str | None) -> bool:
     token = os.getenv("SCRAPLING_SERVICE_TOKEN", "").strip()
     if not token:
-        return True
+        return False
     return authorization == f"Bearer {token}"
 
 
@@ -61,7 +62,7 @@ def _title(page) -> str:
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "leadintel-scrapling"}
+    return {"status": "ok", "service": "leadintel-scrapling", "revision": os.getenv("RENDER_GIT_COMMIT", "unknown"), "protected": bool(os.getenv("SCRAPLING_SERVICE_TOKEN", "").strip())}
 
 
 @app.post("/api/scrapling")
@@ -70,16 +71,30 @@ def scrape(payload: ScrapeRequest, authorization: str | None = Header(default=No
         raise HTTPException(status_code=401, detail="Unauthorized")
     url = _public_url(payload.url)
     try:
-        page = Fetcher.get(url, stealthy_headers=True, impersonate="chrome", timeout=30000)
+        current = url
+        for hop in range(5):
+            current = _public_url(current)
+            page = Fetcher.get(current, stealthy_headers=True, impersonate="chrome", timeout=25, allow_redirects=False)
+            status = int(getattr(page, "status", 200) or 200)
+            if status not in {301, 302, 303, 307, 308}:
+                break
+            location = page.headers.get("location") or page.headers.get("Location")
+            if not location or hop == 4:
+                raise HTTPException(status_code=422, detail="Invalid or excessive redirects")
+            current = urljoin(current, location)
+        if status < 200 or status >= 300:
+            raise HTTPException(status_code=422, detail="Target page did not return successful content")
         text = str(page.get_all_text(separator="\n", strip=True) or "").strip()
-        if not text:
+        if len(text) < 120 or (len(text) < 1000 and re.search(r"captcha|verify you are human|cloudflare ray id|access denied", text, re.I)):
             raise HTTPException(status_code=422, detail="No readable page content was returned")
         status = int(getattr(page, "status", 200) or 200)
-        final_url = str(getattr(page, "url", url) or url)
+        final_url = _public_url(str(getattr(page, "url", current) or current))
+        links = list(dict.fromkeys(urljoin(final_url, str(link)) for link in page.css("a::attr(href)").getall() if str(link).strip()))[:200]
         return {
             "success": True,
             "data": {
                 "markdown": text[:MAX_TEXT_CHARS],
+                "links": links,
                 "metadata": {
                     "title": _title(page) or urlparse(final_url).hostname,
                     "sourceURL": final_url,

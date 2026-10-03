@@ -1,3 +1,4 @@
+import {fetchWithScrapling,scraplingConfigured} from './scrapling.js';
 import {sha256,cookieValue} from './security.js';
 import {importAesKey,encryptSecret,decryptSecret} from './oauth.js';
 import {APOLLO_PEOPLE_SEARCH_URL,normalizeDomain as normalizeApolloDomain} from './enrichment.js';
@@ -119,7 +120,7 @@ async function fetchDirectPublicPage(value){
   }
   throw new Error('Website redirected too many times');
 }
-function retryableFirecrawlStatus(status,{managed=false}={}){return status===408||status===429||status>=500||(managed&&status===404);}
+function retryableFirecrawlStatus(status,{managed=false}={}){return status===402||status===408||status===429||status>=500||(managed&&status===404);}
 
 export async function resolveWorkspaceServiceCredential(env,workspaceId,provider){
   const normalized=normalizeProvider(provider);if(!normalized||!workspaceId)return {provider:normalized,apiKey:'',source:'none',configured:false,row:null};
@@ -166,6 +167,12 @@ async function providerStatus(env,workspaceId,provider,{verify=false}={}){
 }
 
 function workspaceIdFrom(url){return clean(url.searchParams.get('workspace_id')||'',120);}
+async function extractionFallback(env,url,access,workspaceId,credential,status){
+  const auditResult=async result=>{await audit(env,{workspaceId,userId:access.user.id,type:'service.firecrawl_scrape',provider:'firecrawl',metadata:{source:result.data.metadata.source,upstream_source:credential.source,upstream_status:status}});return result;};
+  try{const direct=await fetchDirectPublicPage(url);const text=direct.data.markdown;if(scraplingConfigured(env)&&(text.length<120||(/captcha|verify you are human|cloudflare ray id|access denied/i.test(text)&&text.length<1000)))throw new Error('Weak direct extraction');return await auditResult(direct);}catch{}
+  if(scraplingConfigured(env))return auditResult(await fetchWithScrapling(env,url));
+  throw new Error('No extraction fallback available');
+}
 async function forwardFirecrawl(request,env,cors,workspaceId,kind){
   const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
   const body=await request.json().catch(()=>null);if(!body||typeof body!=='object')return error('Firecrawl request payload is required',400,cors);
@@ -185,7 +192,7 @@ async function forwardFirecrawl(request,env,cors,workspaceId,kind){
   const headers={'Content-Type':'application/json',Accept:'application/json'};if(credential.source==='customer')headers.Authorization=`Bearer ${credential.apiKey}`;
   let response;try{response=await fetch(target,{method:'POST',headers,body:JSON.stringify(payload)});}catch(cause){
     if(kind==='scrape'&&researchUrl){
-      try{const direct=await fetchDirectPublicPage(researchUrl.href);await audit(env,{workspaceId,userId:access.user.id,type:'service.firecrawl_scrape',provider:'firecrawl',metadata:{source:'direct-fallback',upstream_source:credential.source,upstream_status:0}});return json(direct,200,cors);}catch{}
+      try{const direct=await extractionFallback(env,researchUrl.href,access,workspaceId,credential,0);return json(direct,200,cors);}catch{}
     }
     return error(`Firecrawl ${kind} is temporarily unavailable`,502,cors);
   }
@@ -194,9 +201,15 @@ async function forwardFirecrawl(request,env,cors,workspaceId,kind){
     if(creditFailure(response.status,upstream?.error||upstream?.message))await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'firecrawl',kind:'failed',source:credential.source});
     const canFallback=kind==='scrape'&&researchUrl&&retryableFirecrawlStatus(response.status,{managed:credential.source==='managed'});
     if(canFallback){
-      try{const direct=await fetchDirectPublicPage(researchUrl.href);await audit(env,{workspaceId,userId:access.user.id,type:'service.firecrawl_scrape',provider:'firecrawl',metadata:{source:'direct-fallback',upstream_source:credential.source,upstream_status:response.status}});return json(direct,200,cors);}catch{}
+      try{const direct=await extractionFallback(env,researchUrl.href,access,workspaceId,credential,response.status);return json(direct,200,cors);}catch{}
     }
     return error(upstream.error||`Firecrawl ${kind} failed (${response.status})`,response.status>=400&&response.status<600?response.status:502,cors);
+  }
+  if(kind==='scrape'&&scraplingConfigured(env)){
+    const text=String(upstream?.data?.markdown||'').trim();
+    if(upstream?.success===false||text.length<120||(/captcha|verify you are human|cloudflare ray id|access denied/i.test(text)&&text.length<1000)){
+      try{return json(await extractionFallback(env,researchUrl.href,access,workspaceId,credential,response.status),200,cors);}catch{return error('No usable website evidence was returned',422,cors);}
+    }
   }
   await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'firecrawl',kind:'recovered',source:credential.source});
   if(credential.source==='customer')await env.DB.prepare(`UPDATE workspace_service_integrations SET last_used_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider='firecrawl'`).bind(workspaceId).run();

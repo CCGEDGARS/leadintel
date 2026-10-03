@@ -35,6 +35,7 @@ test('weak HTTP 200 extraction invokes Scrapling while authentication failures r
  const context={Headers,Response,URL,console,window:{location:{href:'https://leadintel.ccgroup.lv/customer/'},LeadIntelServerBridge:{session:{authenticated:true},workspace:{id:'ws'}},fetch:async(url)=>{requests.push(url);return new Response(JSON.stringify({data:{markdown:String(url).includes('/scrapling/')?evidence:'Verify you are human'}}),{status:String(url).includes('/scrapling/')?200:primaryStatus});}}};
  vm.runInNewContext(source,context);const options={method:'POST',body:JSON.stringify({url:'https://company.se/'})};
  const recovered=await context.window.fetch('https://apollo-proxy.edgars-7e7.workers.dev/firecrawl-scrape',options);assert.equal(recovered.headers.get('X-LeadIntel-Extractor'),'scrapling');assert.equal(requests.length,2);
+ requests.length=0;primaryStatus=402;const billed=await context.window.fetch('https://apollo-proxy.edgars-7e7.workers.dev/firecrawl-scrape',options);assert.equal(billed.headers.get('X-LeadIntel-Extractor'),'scrapling');assert.equal(requests.length,2);
  requests.length=0;primaryStatus=401;const denied=await context.window.fetch('https://apollo-proxy.edgars-7e7.workers.dev/firecrawl-scrape',options);assert.equal(denied.status,401);assert.equal(requests.length,1);
 });
 test('reference prompt contains multiple pages and validates quote against its precise source',()=>{
