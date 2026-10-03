@@ -905,7 +905,7 @@
   function selectDecisionMakers(people=[],profile={},limit=4){
     const roles=splitList(profile.decisionMakers).slice(0,10);if(!roles.length)return [];
     const cap=Math.max(1,Math.min(20,Number(limit)||4));
-    return (Array.isArray(people)?people:[]).map((person,index)=>({person,relevance:roleRelevance(person,roles),index})).filter(item=>item.relevance).sort((a,b)=>b.relevance.score-a.relevance.score||a.index-b.index).slice(0,cap).map(item=>item.person);
+    return (Array.isArray(people)?people:[]).map((person,index)=>({person,relevance:roleRelevance(person,roles),index})).filter(item=>item.relevance).sort((a,b)=>b.relevance.score-a.relevance.score||a.index-b.index).slice(0,cap).map(item=>({...item.person,buyerRelevanceScore:Math.max(1,Math.min(100,Math.round(item.relevance.score))),matchedBuyerRole:item.relevance.role}));
   }
 
 
@@ -939,7 +939,7 @@
   }
   function safeBuyer(person={},domain=""){
     const url=normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url||person.url);
-    return {id:clean(person.id)||`public-${slug(url||person.name)}`,name:clean(person.name),title:clean(person.title),organization:clean(person.organization),publicName:clean(person.publicName),publicNameUrl:normalizeUrl(person.publicNameUrl),publicLinkedinUrl:url,linkedin_url:normalizeLinkedInUrl(person.linkedin_url),publicEmail:clean(person.publicEmail),publicEmailUrl:normalizeUrl(person.publicEmailUrl),publicPhone:clean(person.publicPhone),publicPhoneUrl:normalizeUrl(person.publicPhoneUrl),flowSelected:person.flowSelected===true,kept:person.kept===true,keptAt:clean(person.keptAt).slice(0,40),patternFindings:safePatternFindings(person.patternFindings,domain),hunterChecks:safeHunterChecks(person.hunterChecks,domain),seniority:clean(person.seniority),city:clean(person.city),country:clean(person.country),flowConfirmEmail:person.flowConfirmEmail===true,flowConfirmPhone:person.flowConfirmPhone===true,flowEmailCompletedFor:clean(person.flowEmailCompletedFor),flowPhoneCompletedFor:clean(person.flowPhoneCompletedFor),hunterFound:clean(person.hunterFound).endsWith(`@${domain}`)?clean(person.hunterFound):""};
+    return {id:clean(person.id)||`public-${slug(url||person.name)}`,name:clean(person.name),title:clean(person.title),organization:clean(person.organization),publicName:clean(person.publicName),publicNameUrl:normalizeUrl(person.publicNameUrl),publicLinkedinUrl:url,linkedin_url:normalizeLinkedInUrl(person.linkedin_url),publicEmail:clean(person.publicEmail),publicEmailUrl:normalizeUrl(person.publicEmailUrl),publicPhone:clean(person.publicPhone),publicPhoneUrl:normalizeUrl(person.publicPhoneUrl),flowSelected:person.flowSelected===true,kept:person.kept===true,keptAt:clean(person.keptAt).slice(0,40),patternFindings:safePatternFindings(person.patternFindings,domain),hunterChecks:safeHunterChecks(person.hunterChecks,domain),seniority:clean(person.seniority),city:clean(person.city),country:clean(person.country),flowConfirmEmail:person.flowConfirmEmail===true,flowConfirmPhone:person.flowConfirmPhone===true,flowEmailCompletedFor:clean(person.flowEmailCompletedFor),flowPhoneCompletedFor:clean(person.flowPhoneCompletedFor),buyerRelevanceScore:clamp(Number(person.buyerRelevanceScore)||0,0,100,0),matchedBuyerRole:clean(person.matchedBuyerRole),hunterFound:clean(person.hunterFound).endsWith(`@${domain}`)?clean(person.hunterFound):""};
   }
   function mergeBuyerPool(previous=[],incoming=[],profile={}){
     const merged=new Map();
@@ -963,7 +963,8 @@
     return [...ranked.filter(person=>person.kept),...ranked.filter(person=>!person.kept)].slice(0,6);
   }
   function normalizeBuyerDiscovery(value={},domain=""){
-    return {target:20,found:clamp(Number(value.found)||0,0,20,0),sourceResults:clamp(Number(value.sourceResults)||0,0,200,0),checkedAt:clean(value.checkedAt).slice(0,40),issues:(value.issues||[]).map(clean).slice(0,10),pool:(value.pool||[]).slice(0,20).map(person=>safeBuyer(person,domain))};
+    const safeProvider=row=>({status:['pending','complete','partial','unavailable','failed','not_configured','not_needed','not_authenticated'].includes(clean(row?.status))?clean(row.status):'pending',results:clamp(Number(row?.results)||0,0,200,0),queries:clamp(Number(row?.queries)||0,0,50,0)});
+    return {target:clamp(Number(value.target)||30,1,30,30),found:clamp(Number(value.found)||0,0,30,0),sourceResults:clamp(Number(value.sourceResults)||0,0,500,0),apolloDiscoveryCount:clamp(Number(value.apolloDiscoveryCount)||0,0,30,0),providerStatus:value.providerStatus?{firecrawl:safeProvider(value.providerStatus.firecrawl),grounded:safeProvider(value.providerStatus.grounded),identity:safeProvider(value.providerStatus.identity)}:null,opportunityRoles:(value.opportunityRoles||[]).map(clean).filter(Boolean).slice(0,12),expandedRoles:(value.expandedRoles||[]).map(clean).filter(Boolean).slice(0,40),opportunityTerms:(value.opportunityTerms||[]).map(clean).filter(Boolean).slice(0,10),checkedAt:clean(value.checkedAt).slice(0,40),issues:(value.issues||[]).map(clean).slice(0,30),pool:(value.pool||[]).slice(0,30).map(person=>safeBuyer(person,domain))};
   }
   function discoverPublicBuyers(rows=[],company='',profile={}){
     const people=[],seen=new Set();
