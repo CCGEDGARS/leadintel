@@ -18,14 +18,14 @@ test('Buyer discovery accepts common pipe-separated current-role search results'
 });
 
 test('Buyer diagnostics preserve timeout and exact failure context through normalization',()=>{
-  const state=Discovery.normalizeDiscoveryState({selectedProspects:[{
+  const state=Discovery.normalizeDiscoveryState({candidates:[{
     company:'LKAB',domain:'lkab.com',buyerDiscovery:{
       target:30,
       providerStatus:{firecrawl:{status:'partial',results:2,queries:12},grounded:{status:'timeout',results:0},identity:{status:'not_configured',results:0}},
       lastError:{name:'AbortError',message:'Grounded buyer discovery timed out',phase:'roles'}
     }
   }]});
-  const buyer=state.selectedProspects[0].buyerDiscovery;
+  const buyer=state.candidates[0].buyerDiscovery;
   assert.equal(buyer.target,30);
   assert.equal(buyer.providerStatus.grounded.status,'timeout');
   assert.equal(buyer.lastError.message,'Grounded buyer discovery timed out');
