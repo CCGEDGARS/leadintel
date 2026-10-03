@@ -119,6 +119,18 @@
         "Buyer fit below the mandatory 50/70 minimum",
         "No recent verified buying signal"
       ]
+    },
+    {
+      "id": "clear-company-results",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "id=\"clear-company-results\">Clear search results",
+        "function clearCompanySearchResults()",
+        "pipeline:discovery.pipeline",
+        "delete meta.lastCompanyRun"
+      ]
     }
   ],
   "retry": {
