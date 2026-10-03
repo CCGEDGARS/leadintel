@@ -87,3 +87,20 @@ test('automatic buyers retain public suggestions for review without approved enr
 });
 
 function runOutreachAutomation(env,options={}){return runWithVerification(env,{verifyEmail:async()=>({verified:true,provider:'test'}),...options});}
+
+
+test('automatic companies stage persists only gate-passing qualified candidates to CRM before Buyers',async()=>{
+  const source=fs.readFileSync(new URL('../src/approved-workflow-runner.js',import.meta.url),'utf8');
+  const companiesBlock=source.slice(source.indexOf("if(stage==='companies')"),source.indexOf("if(stage==='buyers')"));
+  assert.match(companiesBlock,/assessed\.filter\(c=>c\.qualification\.eligible\)/);
+  assert.match(companiesBlock,/config\.crm\.saveQualified/);
+  assert.match(companiesBlock,/source:'approved_workflow_qualified'/);
+  assert.match(companiesBlock,/automaticQualifiedSave:true/);
+  assert.ok(companiesBlock.indexOf("assessed.filter(c=>c.qualification.eligible)")<companiesBlock.indexOf("source:'approved_workflow_qualified'"));
+});
+
+test('automatic CRM save contract defaults on and minimum qualification remains 80 unless explicitly approved otherwise',()=>{
+  const defaults=normalizeWorkflowConfig({companies:{researchPriority:'balanced'},buyers:{roles:['COO']},messages:{subject:'Hi {{company}}',body:'Hi {{firstName}} {{evidenceUrl}}'}});
+  assert.equal(defaults.triggers.minimumScore,80);
+  assert.equal(defaults.crm.saveQualified,true);
+});
