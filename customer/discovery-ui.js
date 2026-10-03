@@ -813,7 +813,13 @@ function potentialBuyerResultsHtml(candidate,savedProspect){
 function renderPotentialMatches(){
   const target=$('discovery-potential-matches');if(!target)return;
   const rows=mergeWorkflowCompanies(discovery.potentialMatches||[],discovery.candidates.filter(c=>!qualificationAssessment(c).eligible));target.hidden=!rows.length;
-  target.innerHTML=rows.length?`<details class="potential-matches-head"><summary>Research checks · ${rows.length} companies did not qualify</summary><p>These companies are excluded from the qualified list and automatic flow. Strong fits can be monitored; missing evidence never becomes a positive score.</p>${rows.map(c=>{const q=qualificationAssessment(c);return `<p><strong>${esc(c.company)}</strong> · ${q.buyerFitPoints>=50?'Strong fit—monitor':'Needs verification'} · ${esc(q.gaps.join(' · '))}</p>`;}).join('')}</details>`:'';
+  if(!rows.length){target.innerHTML='';return;}
+  const details=rows.map(c=>{
+    const q=qualificationAssessment(c);
+    const reasons=(q.gaps||[]).filter(Boolean).slice(0,4);
+    return `<article class="research-check-row"><div><strong>${esc(c.company)}</strong><span>${q.buyerFitPoints>=50?'Strong fit · more evidence needed':'Did not meet qualification criteria'}</span></div><div class="research-check-tags">${reasons.map(reason=>`<span>${esc(reason)}</span>`).join('')}</div></article>`;
+  }).join('');
+  target.innerHTML=`<details class="research-checks-compact"><summary><span class="research-checks-title">Research checks</span><span class="research-checks-count">${rows.length} excluded</span><span class="research-checks-chevron" aria-hidden="true">⌄</span></summary><div class="research-checks-body"><p>These companies did not qualify for your shortlist based on the current strategy and evidence.</p><div class="research-check-list">${details}</div></div></details>`;
 }
 
 function renderTargetList(){
