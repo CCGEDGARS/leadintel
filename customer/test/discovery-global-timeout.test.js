@@ -1222,7 +1222,7 @@ test('a company-level completed check does not conceal an unresearched individua
 test('a stale role shows its actual hold reason beside a disabled proceed action',()=>{
  const context=loadDiscoveryRunner({renderNodes:true});
  const html=context.__renderSelectedProspects([{company:'Example',domain:'example.com',people:[{id:'old',name:'Anna Buyer',title:'Project Director',organization:'Example',publicNameUrl:'https://example.com/team',identityEvidenceDate:'2013-05-01'}],buyerRoles:['Project Director']}]);
- assert.match(html,/Review buyer qualification before continuing: Current role requires review/);
+ assert.match(html,/On hold · Current role requires review/);assert.match(html,/Review buyer qualification before continuing: Current role requires review/);
  assert.match(html,/data-keep-buyer="example.com"[^>]*disabled/);assert.doesNotMatch(html,/Recommended · researched match/);
 });
 
