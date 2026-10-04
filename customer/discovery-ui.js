@@ -1,6 +1,6 @@
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
-const PUBLIC_NAME_CHECK_VERSION="buyer-contacts-v17-attributed-phones";
+const PUBLIC_NAME_CHECK_VERSION="buyer-contacts-v18-profile-scope";
 const BUYER_RESEARCH_VERSION="20261004-qualified-buyers-v4";
 const CONTACT_CONFIRM_VERSION="buyer-contacts-v11-optional-hunter";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
@@ -1576,7 +1576,7 @@ async function searchBuyerEmailPatterns(candidate,existingRows,signal){
     }catch(error){if(error?.name==='AbortError'&&signal?.aborted)throw error;failed++;personFailed++;}
     searches++;personSearches++;
     try{
-      const identityRows=await searchBuyerPublicPages(`"${fullName}" "${candidate.company}"`,5,signal);
+      const identityRows=await searchBuyerPublicPages(`site:linkedin.com/in/ "${fullName}" "${candidate.company}"`,5,signal);
       rows.push(...identityRows);
       if(LeadIntelDiscovery.matchPublicBuyerDetails)Object.assign(person,LeadIntelDiscovery.matchPublicBuyerDetails([person],identityRows,candidate.domain)[0]);
       if(LeadIntelDiscovery.matchBuyerScopeEvidence)Object.assign(person,LeadIntelDiscovery.matchBuyerScopeEvidence(person,identityRows,candidate));

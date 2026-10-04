@@ -99,3 +99,9 @@ test('foreign-country and subsidiary buyers remain reviewable but cannot enter t
  assert.equal(reloaded.opportunityScope.status,'review_required');
  const unrelated=D.matchBuyerScopeEvidence(foreign,[{url:'https://linkedin.com/in/other',title:'Anna Buyer - Example Minerals | LinkedIn'}],candidate);assert.equal(unrelated.opportunityScope,undefined);
 });
+
+test('subsidiary scope review accepts employer after a role in the exact profile title',()=>{
+ const person={name:'Jane Buyer',title:'Operations Manager',linkedin_url:'https://linkedin.com/in/jane-buyer'};
+ const result=D.matchBuyerScopeEvidence(person,[{url:person.linkedin_url,title:'Jane Buyer - Operations Manager - Example Minerals | LinkedIn'}],{company:'Example',market:'Sweden'});
+ assert.equal(result.opportunityScope.status,'review_required');
+});

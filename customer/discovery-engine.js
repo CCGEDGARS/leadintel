@@ -236,10 +236,10 @@
     const profile=normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url),name=clean(person.publicName||person.name).toLowerCase(),target=clean(candidate.company).toLowerCase();
     if(!profile||!name||!target)return person;
     for(const row of rows){
-      if(normalizeLinkedInUrl(row.url)!==profile)continue;
-      const parts=clean(row.title).split(/\s+[–—|·-]\s*|\s*\|\s*/u);
+      if(normalizeLinkedInUrl(row.url||row.metadata?.sourceURL)!==profile)continue;
+      const parts=clean(row.title||row.metadata?.title).split(/\s+[–—|·-]\s*|\s*\|\s*/u);
       if(clean(parts[0]).toLowerCase()!==name)continue;
-      const employer=clean(parts[1]);
+      const employer=parts.slice(1).map(value=>clean(value)).find(value=>value.toLowerCase().startsWith(target+' ')&&!/linkedin/i.test(value))||'';
       if(employer.toLowerCase().startsWith(target+' ')&&!companyNameMatches(employer,candidate.company)&&!/linkedin/i.test(employer)){
         return {...person,opportunityScope:{status:'review_required',reason:'Public profile identifies a different subsidiary: '+employer,url:normalizeUrl(row.url),checkedAt:new Date().toISOString()}};
       }
