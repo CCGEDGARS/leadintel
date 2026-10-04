@@ -56,26 +56,14 @@ export async function researchBuyerContacts(candidate,search,guard){
     await Promise.all(candidate.people.slice(offset,offset+2).map(async person=>{
       const name=String(person.publicName||person.name||'').trim();
       if(name.split(/\s+/).length<2||person.identityStatus==='pending'){person.emailResearch={status:'not_searched',searches:0,failed:0,checkedAt:''};return;}
-      const queries=[`"${name}" "${candidate.company}" (email OR phone OR kontakt)`,`"${name}" "${candidate.company}" "@${candidate.domain}"`,`"${name}" "${candidate.company}" "@gmail.com"`];
+      const guesses=discovery.rankedEmailGuesses(person,candidate.domain,candidate.people).slice(0,3);
+      const emailTerms=[`"@${candidate.domain}"`,...guesses.map(item=>`"${item.email}"`)].join(" OR ");
+      const queries=[`"${name}" "${candidate.company}" (email OR phone OR kontakt)`,`"${name}" "${candidate.company}" (${emailTerms})`,`"${name}" "${candidate.company}" "@gmail.com"`];
       const settled=await Promise.allSettled(queries.map(query=>search(query)));
       const rows=settled.flatMap(row=>row.status==='fulfilled'?row.value:[]),failed=settled.filter(row=>row.status==='rejected').length;
       const matched=discovery.matchPublicBuyerDetails([person],rows,candidate.domain)[0];Object.assign(person,matched);
-      for(const row of rows){
-        const text=[row.title,row.description,row.markdown,row.content].filter(Boolean).join(' ');
-        let source;try{source=new URL(row.url);}catch{continue;}
-        if(!['http:','https:'].includes(source.protocol)||source.username||source.password)continue;
-        for(const match of text.matchAll(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)){
-          const email=match[0].toLowerCase(),near=text.slice(Math.max(0,match.index-220),match.index+match[0].length+220).toLowerCase();
-          if(!email.endsWith('@'+candidate.domain)&&!email.endsWith('@gmail.com'))continue;
-          if(!near.includes(name.toLowerCase())||!near.includes(candidate.company.toLowerCase())||/predicted|guessed|email pattern/i.test(near))continue;
-          if(email.endsWith('@gmail.com')){
-            const escape=value=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-            const attribution=new RegExp(escape(name)+'(?:\\s+(?:at|hos|på)\\s+|\\s*[,|·]\\s*)'+escape(candidate.company)+'[\\s:·,|-][^\\n]{0,100}'+escape(match[0]),'iu');
-            if(!attribution.test(near))continue;
-          }
-          person.patternFindings=[...(person.patternFindings||[]).filter(item=>item.email!==email),{email,url:source.href,status:'public_unverified'}];
-        }
-      }
+      const findings=discovery.sourcedBuyerEmails(person,candidate.domain,rows,candidate.company);
+      if(findings.length)person.patternFindings=[...new Map([...(person.patternFindings||[]),...findings].map(item=>[item.email,item])).values()];
       person.emailResearch={status:failed===queries.length?'unavailable':failed?'partial':'complete',searches:queries.length,failed,checkedAt:new Date().toISOString()};
     }));
     await guard();

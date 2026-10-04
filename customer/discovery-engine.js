@@ -121,6 +121,82 @@
     }
     return contacts;
   }
+  // Research hypotheses only: no pattern, name match or public listing verifies delivery.
+  function emailNameParts(person={}){
+    const raw=clean(person.publicName||person.name);
+    if(!hasFullBuyerName(raw)||/\d|@|\b(?:unknown|unnamed|pending|not found)\b/i.test(raw))return null;
+    const parts=raw.split(/\s+/);
+    const latin=value=>value.toLowerCase().replace(/ł/g,'l').replace(/ø/g,'o').replace(/ß/g,'ss').replace(/æ/g,'ae').replace(/œ/g,'oe').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[’']/g,'').replace(/[^a-z-]/g,'');
+    const first=latin(parts[0]),last=latin(parts[parts.length-1]);
+    return first.replace(/-/g,'').length>=2&&last.replace(/-/g,'').length>=2?{first,last}:null;
+  }
+  function validResearchEmail(value,domain){
+    const email=clean(value).toLowerCase(),host=companyIdentityDomain(domain);
+    if(email.length>254||!host||!host.includes('.')||!host.split('.').every(label=>/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))||!email.endsWith('@'+host))return false;
+    const local=email.slice(0,email.indexOf('@'));
+    return local.length<=64&&/^[a-z0-9]+(?:[._+-][a-z0-9]+)*$/.test(local)&&! /^(?:info|sales|support|contact|office|admin|hello|team|noreply|no-reply|privacy|careers|jobs|hr|press|procurement|purchasing|accounts|billing|reception)(?:[._+-]|$)/.test(local);
+  }
+  function emailLocalPatterns(person={}){
+    const name=emailNameParts(person);if(!name)return [];
+    const variants=[name,{first:name.first.replace(/-/g,''),last:name.last.replace(/-/g,'')}],seen=new Set(),results=[];
+    for(const {first,last} of variants){
+      for(const [format,local] of [['first.last',`${first}.${last}`],['firstlast',first+last],['f.last',`${first[0]}.${last}`],['flast',first[0]+last],['last.first',`${last}.${first}`],['lastfirst',last+first],['last.f',`${last}.${first[0]}`],['first_last',`${first}_${last}`]]){
+        if(!seen.has(local)){seen.add(local);results.push({format,local});}
+      }
+    }
+    return results;
+  }
+  function rankedEmailGuesses(person={},domain='',people=[]){
+    const host=companyIdentityDomain(domain);
+    if(!host||!host.includes('.')||['gmail.com','googlemail.com','outlook.com','hotmail.com','yahoo.com'].includes(host)||!/^[a-z0-9.-]+$/.test(host))return [];
+    const evidence=new Map();
+    for(const sample of people){
+      if(clean(sample.publicName||sample.name).toLowerCase()===clean(person.publicName||person.name).toLowerCase())continue;
+      const sources=[...(sample.patternFindings||[]),...(sample.publicEmail?[{email:sample.publicEmail,url:sample.publicEmailUrl}]:[])];
+      for(const source of sources){
+        if(!validResearchEmail(source.email,host)||companyIdentityDomain(source.url)!==host||!normalizeUrl(source.url))continue;
+        const pattern=emailLocalPatterns(sample).find(item=>item.local===clean(source.email).toLowerCase().split('@')[0]);
+        if(!pattern)continue;
+        if(!evidence.has(pattern.format))evidence.set(pattern.format,new Set());
+        evidence.get(pattern.format).add(clean(sample.publicName||sample.name).toLowerCase());
+      }
+    }
+    const rejected=new Set(Object.entries(person.hunterChecks||{}).filter(([,check])=>{const checked=Date.parse(check.checked_at||check.checkedAt||'');return Number.isFinite(checked)&&Date.now()-checked>=0&&Date.now()-checked<30*86400000&&(check.deliverability==='undeliverable'||check.status==='invalid');}).map(([email])=>email.toLowerCase()));
+    for(const sample of people){
+      if(clean(sample.publicName||sample.name).toLowerCase()===clean(person.publicName||person.name).toLowerCase())continue;
+      for(const email of [sample.publicEmail,...(sample.patternFindings||[]).map(item=>item.email)].filter(Boolean))rejected.add(clean(email).toLowerCase());
+    }
+    return emailLocalPatterns(person).map((item,index)=>({email:`${item.local}@${host}`,type:'Company',format:item.format,status:'guessed',supportingContacts:evidence.get(item.format)?.size||0,priority:item.local.includes('-')?index: index>=8?index-7.5:index})).filter(item=>validResearchEmail(item.email,host)&&!rejected.has(item.email)).sort((a,b)=>b.supportingContacts-a.supportingContacts||a.priority-b.priority).slice(0,8).map(({priority,...item})=>({...item,reason:item.supportingContacts?`Format seen for ${item.supportingContacts} other named company contact${item.supportingContacts===1?'':'s'}`:'Name-based pattern only'}));
+  }
+  function sourcedBuyerEmails(person={},domain='',rows=[],company=''){
+    const name=clean(person.publicName||person.name),host=companyIdentityDomain(domain),findings=[];
+    if(!emailNameParts(person)||!host)return findings;
+    const escape=value=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    const named=new RegExp('(?<![\\p{L}])'+escape(name).replace(/\s+/g,'\\s+')+'(?![\\p{L}])','iu');
+    for(const row of rows){
+      let url;try{url=new URL(row.url||row.metadata?.sourceURL);}catch{continue;}
+      if(!['http:','https:'].includes(url.protocol)||url.username||url.password)continue;
+      const text=[row.title,row.description,row.markdown,row.content].filter(Boolean).join('\n');
+      for(const match of text.matchAll(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)){
+        const email=match[0].toLowerCase(),gmail=email.endsWith('@gmail.com');
+        if(!validResearchEmail(email,gmail?'gmail.com':host)||findings.some(item=>item.email===email))continue;
+        const near=text.slice(Math.max(0,match.index-160),match.index+email.length+100);
+        if(!named.test(near)||/email formats? and examples?|email pattern|guessed|predicted|generated email/i.test(near))continue;
+        // Generic first-name aliases and unrelated addresses in multi-person directories are ambiguous.
+        if(!gmail&&!emailLocalPatterns(person).some(item=>item.local===email.split('@')[0])){
+          const explicit=new RegExp(escape(name)+'\\s*(?:[|·,:-]\\s*)?(?:e-?mail\\s*:?\\s*)?'+escape(email),'iu');
+          if(!explicit.test(near))continue;
+        }
+        if(gmail){
+          if(!company)continue;
+          const attribution=new RegExp(escape(name)+'(?:\\s+(?:at|hos|på)\\s+|\\s*[,|·]\\s*)'+escape(company)+'[\\s:·,|-][^\\n]{0,100}'+escape(email),'iu');
+          if(!attribution.test(near))continue;
+        }
+        findings.push({email,url:url.href,status:'public_unverified'});
+      }
+    }
+    return findings.slice(0,12);
+  }
   function matchPublicBuyerDetails(people=[],results=[],companyDomain=""){
     const domain=companyIdentityDomain(companyDomain);
     const generic=new Set(["contact","contacts","team","group","company","leadership","management","director","manager","president","chief","owner","email","phone","about","welcome","privacy","policy","sales"]);
@@ -140,8 +216,7 @@
           if(generic.has(last.toLowerCase())||fullName&&name.toLowerCase()!==clean(person.name).toLowerCase())continue;
           const nearby=text.slice(Math.max(0,match.index-90),Math.min(text.length,match.index+name.length+130));
           const roleWords=clean(person.title).toLowerCase().split(/[^\p{L}]+/u).filter(word=>word.length>=3);
-          const emails=nearby.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)||[];
-          const personal=emails.find(email=>email.toLowerCase().endsWith(`@${domain}`)&&email.toLowerCase().split("@")[0].includes(first.toLowerCase())&&email.toLowerCase().split("@")[0].includes(last.toLowerCase()));
+          const personal=sourcedBuyerEmails({name},domain,[{url,content:nearby}])[0]?.email;
           const directPhone=(nearby.match(/(?:\+\d{1,3}[\s().-]*)?(?:\d[\s().-]*){8,15}/g)||[]).find(value=>value.replace(/\D/g,'').length>=9&&value.replace(/\D/g,'').length<=15&&/[+\s()-]/.test(value))||'';
           if(!roleWords.some(word=>nearby.toLowerCase().includes(word))&&!personal)continue;
           matches.push({name,url,email:personal||"",phone:directPhone.trim()});
@@ -1493,5 +1568,5 @@
     const route=rules.researchPriority==='signals'?'signal':lookalikePass?signals.length?'both':'lookalike':'signal';
     return {version:2,score,buyerFitPoints,signalPoints,opportunityScore:signals.length?score:null,lookalikeScore:referenceScore,referenceMatch:reference,route,eligible:!gaps.length,confidence:independent>=2&&official.length>=2?'High':'Medium',gaps,minimumScore:rules.minimumScore,researchPriority:rules.researchPriority,researchedAt:settings.researchedAt||candidate.researchedAt||'',matchedSignals:signals,evidenceSources:independent,commercial};
   }
-  return {qualifyBuyer,buyerCoveragePlan,buyerFunction,buyerFitContext,buyerFitPrompt,parseBuyerFit,researchBuyerFit,verifiedBuyerFit,rankQualifiedCompanies,qualificationRules,verifiedReferenceMatch,assessAutomaticQualification,companyIdentityDomain,evidenceDate,commercialFit,currentSignals,domainMatchesCompany,matchedSignalsForEvidence,dedupeCompanyEvidence,evaluateExclusions,companyFitSummary,CRM_STAGES,DEFAULT_DISCOVERY_STATE,DISCOVERY_QUALITY_VERSION,discoveryLimits,buyerRolesForTarget,buildDiscoveryQueries,buildDiscoveryFollowUpQueries,extractCompanyMentions,extractPublicContacts,matchPublicBuyerDetails,matchPublicLinkedInProfiles,parseCompanyExtraction,describeCompanyExtractionOutcome,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildPotentialCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,hasFullBuyerName,selectDecisionMakers,discoverPublicBuyers,tracePublicBuyers,traceIdentityBuyers,opportunityBuyerRoles,localBuyerRoleAliases,buyerOpportunityTerms,buyerResearchPlan,buyerIdentity,resolvePendingBuyerIdentities,mergeBuyerPool,recommendedBuyers,rankedBuyerShortlist,upsertPipelineItem,normalizeDiscoveryState,retainLastSuccessfulDiscoveryCandidates,recoverInterruptedDiscoveryState,discoveryOutcomeStatus,zeroResultGuidance,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,isLowQualityDiscoveryEvidence,hasActiveSignals,isActionableCandidate,isPotentialBuyerSearchAllowed};
+  return {rankedEmailGuesses,sourcedBuyerEmails,validResearchEmail,qualifyBuyer,buyerCoveragePlan,buyerFunction,buyerFitContext,buyerFitPrompt,parseBuyerFit,researchBuyerFit,verifiedBuyerFit,rankQualifiedCompanies,qualificationRules,verifiedReferenceMatch,assessAutomaticQualification,companyIdentityDomain,evidenceDate,commercialFit,currentSignals,domainMatchesCompany,matchedSignalsForEvidence,dedupeCompanyEvidence,evaluateExclusions,companyFitSummary,CRM_STAGES,DEFAULT_DISCOVERY_STATE,DISCOVERY_QUALITY_VERSION,discoveryLimits,buyerRolesForTarget,buildDiscoveryQueries,buildDiscoveryFollowUpQueries,extractCompanyMentions,extractPublicContacts,matchPublicBuyerDetails,matchPublicLinkedInProfiles,parseCompanyExtraction,describeCompanyExtractionOutcome,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildPotentialCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,hasFullBuyerName,selectDecisionMakers,discoverPublicBuyers,tracePublicBuyers,traceIdentityBuyers,opportunityBuyerRoles,localBuyerRoleAliases,buyerOpportunityTerms,buyerResearchPlan,buyerIdentity,resolvePendingBuyerIdentities,mergeBuyerPool,recommendedBuyers,rankedBuyerShortlist,upsertPipelineItem,normalizeDiscoveryState,retainLastSuccessfulDiscoveryCandidates,recoverInterruptedDiscoveryState,discoveryOutcomeStatus,zeroResultGuidance,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,isLowQualityDiscoveryEvidence,hasActiveSignals,isActionableCandidate,isPotentialBuyerSearchAllowed};
 });
