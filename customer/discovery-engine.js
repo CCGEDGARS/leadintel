@@ -915,6 +915,9 @@
     const ranked=(Array.isArray(people)?people:[]).map((person,index)=>({person,relevance:roleRelevance(person,roles),priority:cap>=20?(qualifyBuyer(person,profile,{}).total||0):0,index})).filter(item=>item.relevance).sort((a,b)=>b.priority-a.priority||b.relevance.score-a.relevance.score||a.index-b.index);
     const diverse=[],families=new Set();
     if(cap>=20)for(const item of ranked){const family=buyerFunction(item.relevance.role);if(!families.has(family)){diverse.push(item);families.add(family);}}
+    // Keep a supported dated lead for each function as well as its authority lead.
+    // Higher seniority must not erase the evidence needed to assess the opportunity.
+    if(cap>=20)for(const family of families){const fresh=ranked.find(item=>buyerFunction(item.relevance.role)===family&&qualifyBuyer(item.person,profile,{}).breakdown.freshness.points>0&&item.priority>0);if(fresh&&!diverse.includes(fresh))diverse.push(fresh);}
     const selected=diverse.length?[...diverse,...ranked.filter(item=>!diverse.includes(item))]:ranked;
     return selected.slice(0,cap).map(item=>({...item.person,buyerRelevanceScore:Math.max(1,Math.min(100,Math.round(item.relevance.score))),matchedBuyerRole:item.relevance.role}));
   }
@@ -931,8 +934,12 @@
   }
   function localBuyerRoleAliases(role='',market=''){
     const value=clean(role),aliases=[value],swedish=/sweden|svensk|gällivare|malmberget|kiruna|stockholm/i.test(clean(market));
+    // Equivalent functional leadership titles share role fit in every market.
+    const director=value.match(/^(.+?) director$/i),head=value.match(/^head of (.+)$/i);
+    if(director)aliases.push('Head of '+director[1], 'Director of '+director[1], director[1]+' Head');
+    if(head)aliases.push(head[1]+' Director', 'Director of '+head[1]);
     if(swedish){const map=[[/procurement director|purchasing director/i,['Inköpschef']],[/procurement manager|purchasing manager/i,['Inköpschef','Inköpsansvarig']],[/^(?:procurement|purchasing)$/i,['Inköpschef','Inköpsansvarig','Inköpare','Strategiskt inköp']],[/strategic sourcing/i,['Strategisk inköpare','Strategiskt inköp']],[/project director/i,['Projektchef']],[/project manager/i,['Projektledare','Projektansvarig']],[/engineering director|technical director/i,['Teknisk chef','Ingenjörschef']],[/engineering manager|technical manager/i,['Teknisk chef','Ingenjörschef','Teknisk projektledare']],[/^(?:engineering|technical)$/i,['Teknisk chef','Ingenjörschef','Teknisk projektledare']],[/operations|plant/i,['Driftchef','Anläggningschef']],[/production/i,['Produktionschef']],[/maintenance/i,['Underhållschef']],[/capex|investment/i,['Investeringschef','Investeringsprojektledare']]];for(const [pattern,values] of map)if(pattern.test(value))aliases.push(...values);}
-    return [...new Set(aliases)].slice(0,5);
+    return [...new Set(aliases)].slice(0,8);
   }
   function buyerOpportunityTerms(candidate={}){
     const value=clean([candidate.buyerFit?.purchase,candidate.buyerFit?.reason,candidate.fitDescription,...(candidate.fitReasons||[]),...(candidate.matchedSignals||[]).map(s=>s.name)].join(' ')),terms=[];
@@ -959,10 +966,10 @@
   }
   function safeEmailResearch(value){return {status:['running','complete','partial','unavailable'].includes(value?.status)?value.status:'not_searched',searches:clamp(Number(value?.searches)||0,0,50,0),failed:clamp(Number(value?.failed)||0,0,50,0),checkedAt:clean(value?.checkedAt).slice(0,40)};}
   function safeBuyerQualification(value){
-    if(!value||value.version!==1||!value.breakdown)return null;
-    const maxima={role:35,authority:15,identity:15,employer:15,source:10,freshness:10},breakdown={};
+    if(!value||![1,2].includes(value.version)||!value.breakdown)return null;
+    const maxima={role:value.version===2?25:35,authority:value.version===2?25:15,identity:15,employer:15,source:10,freshness:10},breakdown={};
     for(const [key,max] of Object.entries(maxima)){const row=value.breakdown[key];if(!row)return null;breakdown[key]={points:clamp(Number(row.points)||0,0,max,0),max,basis:clean(row.basis).slice(0,600)};}
-    return {version:1,eligible:value.eligible===true,total:value.eligible===true?Object.values(breakdown).reduce((sum,row)=>sum+row.points,0):null,breakdown,gaps:(value.gaps||[]).map(clean).slice(0,12),matchedRole:clean(value.matchedRole),assessedAt:clean(value.assessedAt).slice(0,40)};
+    return {version:value.version,eligible:value.eligible===true,total:value.eligible===true?Object.values(breakdown).reduce((sum,row)=>sum+row.points,0):null,breakdown,gaps:(value.gaps||[]).map(clean).slice(0,12),matchedRole:clean(value.matchedRole),assessedAt:clean(value.assessedAt).slice(0,40)};
   }
   function safeBuyer(person={},domain=""){
     const url=normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url||person.url);
@@ -1083,17 +1090,19 @@
     if(candidate.buyerRolesChanged)blocked.push('Buying roles changed; research again');
     if((candidate.publicResearch?.conflicts||[]).some(row=>String(row.person_id)===String(person.id)))blocked.push('Identity or employment conflict');
     const now=Date.parse(options.now||new Date().toISOString()),date=Date.parse(person.identityEvidenceDate||''),age=Number.isFinite(date)?(now-date)/86400000:null;
-    const authority=/director|chief|head of|\bceo\b|\bowner\b|chef|counsel/i.test(person.title)?15:/manager|sourcing|inköpare|projektledare|ansvarig/i.test(person.title)?9:4;
+    const leadership=/director|chief|head of|\bceo\b|\bowner\b|chef|counsel/i.test(person.title);
+    const subordinate=/\b(deputy|assistant|associate|vice head)\b/i.test(person.title);
+    const authority=leadership?(subordinate?16:25):/manager|sourcing|inköpare|projektledare|ansvarig/i.test(person.title)?12:4;
     const breakdown={
-      role:{points:match?Math.round((match.exact?1:.65)*35):0,max:35,basis:match?`Matches ${match.role}`:'No supported role match'},
-      authority:{points:match?authority:0,max:15,basis:'Responsibility inferred from title; purchasing authority unconfirmed'},
+      role:{points:match?Math.round((match.exact?1:.65)*25):0,max:25,basis:match?`Matches ${match.role}`:'No supported role match'},
+      authority:{points:match?authority:0,max:25,basis:'Relevant responsibility inferred from title; purchasing authority unconfirmed'},
       identity:{points:full&&(source||directory)?15:0,max:15,basis:full?'Full name supported by identity source':'Incomplete name'},
       employer:{points:employer&&(source||directory)?15:0,max:15,basis:employer?'Target employer matched in identity evidence':'Employer not matched'},
       source:{points:source&&domain&&companyIdentityDomain(source)===domain?10:directory?8:source?6:0,max:10,basis:source|| (directory?'Authenticated identity directory':'No identity source')},
       freshness:{points:age!==null&&age>=0&&age<=180?10:age!==null&&age>=0&&age<=365?5:0,max:10,basis:age===null?'Identity source date unknown':age<0?'Future source date rejected':`${Math.floor(age)} days since dated identity evidence`}
     };
     const gaps=[...blocked];if(age===null)gaps.push('Identity source date unknown');else if(age>365||age<0)gaps.push('Identity source requires a freshness check');gaps.push('Actual purchasing authority unconfirmed','Responsibility for the specific opportunity and location unconfirmed');
-    return {version:1,eligible:!blocked.length,total:blocked.length?null:Object.values(breakdown).reduce((sum,row)=>sum+row.points,0),breakdown,gaps,matchedRole:match?.role||'',assessedAt:new Date(now).toISOString()};
+    return {version:2,eligible:!blocked.length,total:blocked.length?null:Object.values(breakdown).reduce((sum,row)=>sum+row.points,0),breakdown,gaps,matchedRole:match?.role||'',assessedAt:new Date(now).toISOString()};
   }
   function buyerCoveragePlan(pool=[],profile={},candidate={}){
     const roles=splitList(profile.decisionMakers).slice(0,12),wanted=[...new Set(roles.map(buyerFunction))],covered=new Set(pool.filter(person=>qualifyBuyer(person,profile,candidate).eligible).map(person=>buyerFunction(roleRelevance(person,roles)?.role||person.title))),missing=wanted.filter(family=>!covered.has(family)),queries=[];

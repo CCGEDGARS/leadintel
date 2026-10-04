@@ -17,7 +17,7 @@ const MAX_DISCOVERY_COMPANY_CHECKS=30;
 const SAVING_SEARCH_RESULT_LIMIT=4;
 const SAVING_COMPANY_CHECK_LIMIT=3;
 const SAVING_FIRECRAWL_CALL_LIMIT=10;
-const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261004-v4&ranked-buyers=20261004-v9";
+const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261004-v4&ranked-buyers=20261004-v10";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20261004-qualified-buyers-v4";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -1374,7 +1374,7 @@ async function saveBuyerResearch(domain){
   const workspaceId=bridge()?.workspace?.id;
   try{
     const profile={decisionMakers:candidate.buyerDiscovery?.opportunityRoles||candidate.buyerRoles||LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate)};
-    candidate.people=(candidate.people||[]).map(person=>({...person,buyerQualification:LeadIntelDiscovery.qualifyBuyer(person,profile,candidate)}));
+    candidate.people=LeadIntelDiscovery.rankedBuyerShortlist(candidate.people||[],profile,candidate).people;
     const mapped=window.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate);
     // Contact verification has its own write path. Preserve those records here.
     const saved=await bridge().saveCrmCompany({...mapped,contacts:[]});
@@ -1871,8 +1871,11 @@ function renderSelectedProspects(prospects){
   if(!prospects.length)return "";
   const cards=prospects.map(candidate=>{
     const domain=canonicalDomain(candidate.domain);
-    const people=candidate.buyerRolesChanged?[]:(Array.isArray(candidate.people)?candidate.people:[]).filter(person=>LeadIntelDiscovery.hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending').slice(0,10);
-    const recommendations=new Set(LeadIntelDiscovery.rankedBuyerShortlist(people,{decisionMakers:candidate.buyerDiscovery?.opportunityRoles||candidate.buyerRoles||LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate)},candidate).recommendedIds);
+    let people=candidate.buyerRolesChanged?[]:(Array.isArray(candidate.people)?candidate.people:[]).filter(person=>LeadIntelDiscovery.hasFullBuyerName(person.publicName||person.name)&&person.identityStatus!=='pending').slice(0,10);
+    const ranked=LeadIntelDiscovery.rankedBuyerShortlist(people,{decisionMakers:candidate.buyerDiscovery?.opportunityRoles||candidate.buyerRoles||LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate)},candidate);
+    const recommendations=new Set(ranked.recommendedIds);
+    const rankedIds=new Set(ranked.people.map(person=>LeadIntelDiscovery.buyerIdentity(person)));
+    people=[...ranked.people,...people.filter(person=>!rankedIds.has(LeadIntelDiscovery.buyerIdentity(person)))].slice(0,10);
     const peopleHtml=people.length?`<section class="selected-prospect-buyers" aria-label="Suggested people for ${esc(candidate.company||domain)}"><div class="selected-prospect-buyers-heading"><strong>${people.length} researched buyer${people.length===1?"":"s"}</strong><span>Up to 10 buyers · strongest 4 highlighted · confirm role and company email</span></div><ol class="selected-prospect-people">${people.map((person,index)=>{
       const verifiedName=enrichmentResults.get(personKey(candidate,person))?.contact?.name;
       const publicName=person.publicName&&person.publicNameUrl?person.publicName:"";
