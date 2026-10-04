@@ -37,3 +37,9 @@ test('direct confirmation refuses a company page redirected to another public do
  globalThis.fetch=async(url)=>String(url)===input.source_url?new Response('',{status:302,headers:{Location:'https://other.example/team'}}):new Response('<html><body>Anna Andersson anna.andersson@example.com</body></html>',{headers:{'Content-Type':'text/html'}});
  try{await assert.rejects(confirmPublicWorkEmail(env,context,company.id,input),/redirected outside/);assert.equal((await getCrmCompany(env.DB,context,company.id)).contacts.length,0);}finally{globalThis.fetch=original;}
 });
+
+test('a removed official page cannot be promoted from a provider cached copy',async()=>{
+ const {env,company}=await fixture(),original=globalThis.fetch,calls=[];
+ globalThis.fetch=async(url)=>{calls.push(String(url));assert.equal(String(url),input.source_url);return new Response('Not found',{status:404,headers:{'Content-Type':'text/html'}});};
+ try{await assert.rejects(confirmPublicWorkEmail(env,context,company.id,input),error=>error.status===409&&/no longer available/.test(error.message));assert.deepEqual(calls,[input.source_url]);assert.equal((await getCrmCompany(env.DB,context,company.id)).contacts.length,0);}finally{globalThis.fetch=original;}
+});

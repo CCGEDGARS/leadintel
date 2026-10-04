@@ -17,7 +17,7 @@ export async function confirmPublicWorkEmail(env,context,companyId,input={}, {lo
   };
   let row,sourceMethod='public_scrape';
   if(loadPage)row=await loadPage(source);else{
-    try{row=(await fetchDirectPublicPage(source)).data;sourceMethod='direct_public_html';}catch{}
+    try{row=(await fetchDirectPublicPage(source)).data;sourceMethod='direct_public_html';}catch(cause){if([404,410].includes(cause?.status))throw Object.assign(new Error('The official email-source page is no longer available; find a current source'),{status:409,code:'PUBLIC_EMAIL_NOT_ATTRIBUTED'});}
     if(row&&!policy.publicSource(email,name,row.metadata?.sourceURL||row.metadata?.url||source,company.normalized_domain))throw Object.assign(new Error('The official page redirected outside the company source'),{status:409,code:'PUBLIC_EMAIL_NOT_ATTRIBUTED'});
     if(!attributable(row)){
       sourceMethod='public_scrape';
