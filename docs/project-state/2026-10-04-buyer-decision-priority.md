@@ -37,3 +37,5 @@ Production b9506ad87f4e8297bc21bcb2c457bc90bbb90000 returned PROVEN (CI 37229750
 Legacy snapshots cannot recover aggregate candidate/provider counts. Recovery clears obsolete provider diagnostics from the prior run, reports that the total is unavailable, and derives only retained individual email-attempt counts. New snapshots preserve those aggregate diagnostics.
 
 Snapshot recovery replaces obsolete unresolved identities from the prior run; explicitly kept records remain protected. This prevents old first-name candidates from inflating the newer snapshot's unresolved count.
+
+When legacy provider totals are absent, explicit unavailable provider rows keep the unresolved-identity and incomplete-coverage UI visible. Unknown provenance is not silently promoted; recomputed qualification may be lower than historical scores when the old snapshot lacks provider identity evidence.
