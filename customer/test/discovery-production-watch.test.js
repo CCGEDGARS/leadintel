@@ -23,9 +23,11 @@ function response({ status = 200, json, text } = {}) {
   };
 }
 
-function productionFetch({ customerHtml, discoveryUi }) {
+function productionFetch({ customerHtml, discoveryUi, sessionStatus=401 }) {
   return async url => {
     const parsed = new URL(String(url));
+    if (parsed.pathname === '/api/session') return response({status:sessionStatus,json:{authenticated:false}});
+    if (parsed.pathname === '/customer/api-transport.js') return response({text:fs.readFileSync(path.join(root,'customer/api-transport.js'),'utf8')});
     if (parsed.pathname === '/release.json') {
       return response({ json: { service: 'leadintel-customer', commit: SHA, ref: 'main' } });
     }
@@ -151,4 +153,10 @@ test('release integrity re-verifies production automatically every fifteen minut
   assert.match(workflow, /id:\s*scheduled_ci/);
   assert.match(workflow, /github\.event_name == 'schedule'/);
   assert.match(workflow, /actions\/workflows\/customer-ci\.yml\/runs/);
+});
+
+ test('production proof blocks a missing first-party session proxy',async()=>{
+  const {verifyRelease,VERDICTS}=await loadCore();
+  const proof=await verifyRelease({config,expectedSha:SHA,ciConclusion:'success',ciRunId:'201',fetchImpl:productionFetch({customerHtml:`${shell}<script defer src="discovery-ui.js?v=current"></script>`,discoveryUi:boundedDiscoveryRuntime,sessionStatus:404}),nonce:'missing-session-proxy'});
+  assert.notEqual(proof.verdict,VERDICTS.PROVEN);assert.ok(proof.failures.some(f=>f.includes('first-party-api-session')));
 });

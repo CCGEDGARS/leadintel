@@ -10,14 +10,14 @@ const renderRuntimePath=path.join(repoRoot,'api/scrapling.py');
 const renderRequirementsPath=path.join(repoRoot,'requirements.txt');
 const renderBlueprintPath=path.join(repoRoot,'render.yaml');
 
-test('configured Vercel customer root remains static while Render owns Scrapling runtime',()=>{
+test('configured Vercel customer root allows only the session proxy while Render owns Scrapling',()=>{
   assert.equal(fs.existsSync(configPath),true,'customer/vercel.json must govern the configured Vercel Root Directory');
   assert.equal(fs.existsSync(path.join(customerRoot,'api/scrapling.py')),false,'customer Vercel must not package Scrapling runtime');
   assert.equal(fs.existsSync(path.join(customerRoot,'requirements.txt')),false,'customer Vercel must not install Scrapling dependencies');
   const config=JSON.parse(fs.readFileSync(configPath,'utf8'));
   assert.equal(config.buildCommand,'bash scripts/build-vercel-static.sh');
   assert.equal(config.outputDirectory,'.vercel-static');
-  assert.equal(config.functions,undefined);
+  assert.deepEqual(Object.keys(config.functions||{}),['api/backend.mjs']);
   assert.equal(fs.existsSync(renderRuntimePath),true,'Render Scrapling runtime must remain at repository root');
   assert.equal(fs.existsSync(renderRequirementsPath),true,'Render dependencies must remain at repository root');
   assert.equal(fs.existsSync(renderBlueprintPath),true,'Render blueprint must remain configured');
