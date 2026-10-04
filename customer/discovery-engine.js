@@ -1182,6 +1182,7 @@
     const researched=shortlist.filter(person=>buyerResearchAssessment(person).status==='complete');
     for(const person of researched){const family=buyerFunction(person.matchedBuyerRole||person.title);if(strongest.length<4&&!covered.has(family)){strongest.push(person);covered.add(family);}}
     for(const person of researched)if(strongest.length<4&&!strongest.includes(person))strongest.push(person);
+    strongest.sort((a,b)=>ranked.indexOf(a)-ranked.indexOf(b));
     const ids=new Set(strongest.map(buyerIdentity));
     const people=[...strongest,...shortlist.filter(person=>!ids.has(buyerIdentity(person)))].slice(0,10);
     return {people,recommendedIds:strongest.map(person=>person.id||buyerIdentity(person))};
@@ -1203,6 +1204,7 @@
     if(candidate.buyerRolesChanged)blocked.push('Buying roles changed; research again');
     if((candidate.publicResearch?.conflicts||[]).some(row=>String(row.person_id)===String(person.id)))blocked.push('Identity or employment conflict');
     const now=Date.parse(options.now||new Date().toISOString()),date=Date.parse(person.identityEvidenceDate||''),age=Number.isFinite(date)?(now-date)/86400000:null;
+    if(age!==null&&(age<0||age>365))blocked.push('Current role requires review; identity source is stale or future-dated');
     const leadership=/director|chief|head of|\bceo\b|\bowner\b|chef|counsel/i.test(person.title);
     const subordinate=/\b(deputy|assistant|associate|vice head)\b/i.test(person.title);
     const functionName=buyerFunction(match?.role||person.title);

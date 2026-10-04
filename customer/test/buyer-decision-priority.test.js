@@ -14,7 +14,7 @@ test('department purchasing leadership outranks equivalent project delivery lead
 test('unresearched, failed, stale and future-dated buyers remain visible without recommendation',()=>{
  const rows=[buyer('done','Project Director'),buyer('none','Procurement Director',{emailResearch:null}),buyer('partial','Operations Director',{emailResearch:{status:'partial',searches:3,failed:1,checkedAt:now}}),buyer('old','Engineering Manager',{identityEvidenceDate:'2013-01-01'}),buyer('future','Procurement Director',{identityEvidenceDate:'2099-01-01'}),buyer('fake','Procurement Director',{emailResearch:{status:'complete',searches:0,checkedAt:now}})];
  const result=D.rankedBuyerShortlist(rows,profile,company);
- assert.equal(result.people.length,6);assert.deepEqual(result.recommendedIds,['done']);
+ assert.equal(result.people.length,4);assert.deepEqual(result.recommendedIds,['done']);
  assert.equal(D.buyerResearchAssessment(rows[1]).status,'not_researched');assert.equal(D.buyerResearchAssessment(rows[2]).status,'incomplete');assert.equal(D.buyerResearchAssessment(rows[3]).status,'review_required');
 });
 test('researched function coverage survives a larger unresearched project pool',()=>{
@@ -45,4 +45,12 @@ test('contact-only pages retain the role identity source, while dated role evide
  assert.equal(retained.publicEmailUrl,contact.url);assert.equal(retained.publicNameUrl,person.publicNameUrl);assert.equal(retained.identityEvidenceDate,person.identityEvidenceDate);
  const dated={url:'https://example.com/old-project',metadata:{publishedTime:'2013-05-01'},markdown:'Anna Buyerproject, Project Director, anna.buyerproject@example.com'};
  const old=D.matchPublicBuyerDetails([person],[dated],company.domain)[0];assert.equal(old.identityEvidenceDate,'2013-05-01');assert.equal(D.buyerResearchAssessment(old).status,'review_required');
+});
+
+test('recommendations remain ordered by score after reserving buying-function coverage',()=>{
+ const result=D.rankedBuyerShortlist([buyer('chief','Chief Procurement Officer'),buyer('head','Head of Procurement'),buyer('project','Project Director'),buyer('manager','Project Manager')],profile,company);
+ assert.equal(result.recommendedIds.length,4);assert.ok(result.people.slice(0,4).every((p,i,rows)=>!i||rows[i-1].buyerQualification.total>=p.buyerQualification.total));
+});
+test('known stale and future identity evidence cannot qualify even when a company email is verified',()=>{
+ for(const identityEvidenceDate of ['2013-05-01','2099-01-01'])assert.equal(D.qualifyBuyer(buyer('old','Project Director',{identityEvidenceDate,email_status:'verified',work_email:'old@example.com'}),profile,company).eligible,false);
 });
