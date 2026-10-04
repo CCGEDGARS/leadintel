@@ -48,3 +48,11 @@ test('contact verification outcomes and buyer evidence scores persist in durable
  const snapshot=C.mapDiscoveryCandidateToCrm(stored).intelligence.research_snapshot.buyerResearch;
  assert.deepEqual(snapshot.buyers[0].qualification,person.buyerQualification);assert.equal(snapshot.buyers[0].contactVerification.status,'not_verified');assert.equal(snapshot.coverageFollowUp.queries,3);
 });
+test('accepted external identity evidence survives repeated reloads; unsupported sources are rejected',()=>{
+ const source='https://supplier.example/news/customer-project',person={id:'public-anna',name:'Anna Andersson',publicName:'Anna Andersson',publicNameUrl:source,title:'Project Manager',organization:'Example',identityEvidenceDate:'2026-10-01'};
+ const candidate={company:'Example',domain:'example.com',people:[person],buyerDiscovery:{opportunityRoles:['Project Manager'],pool:[person],resultDiagnostics:[{parsedName:person.name,parsedCompany:'Example',parsedTitle:person.title,url:source,accepted:true,companyVerification:'complete',roleMatching:'complete'}]}};
+ let state=D.normalizeDiscoveryState({pipeline:[candidate]});state=D.normalizeDiscoveryState(state);
+ assert.equal(state.pipeline[0].people[0].publicNameUrl,source);assert.equal(D.qualifyBuyer(state.pipeline[0].people[0],{decisionMakers:'Project Manager'},candidate).eligible,true);
+ const legacy={...candidate,people:[{...person,publicName:'',publicNameUrl:''}]};assert.equal(D.normalizeDiscoveryState({pipeline:[legacy]}).pipeline[0].people[0].publicNameUrl,source);
+ const unsupported={...candidate,buyerDiscovery:{pool:[person],resultDiagnostics:[]}};assert.equal(D.normalizeDiscoveryState({pipeline:[unsupported]}).pipeline[0].people[0].publicNameUrl,'');
+});
