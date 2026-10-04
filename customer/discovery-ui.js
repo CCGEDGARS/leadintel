@@ -1027,13 +1027,19 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
   taskCentre?.start({id:taskId,type:'decision-maker-search',title:`Buyer search · ${candidate.company}`,stage:'Researching public buyer candidates',total:1,completed:0,canCancel:true,canRetry:true});
   taskCentre?.registerActions(taskId,{cancel:()=>controller.abort(),retry:retry||(()=>false)});
   const timeout=setTimeout(()=>controller.abort(),Math.max(DISCOVERY_REQUEST_TIMEOUT_MS*14,350000));
-  let providerStatus=null,resultDiagnostics=[];
+  let providerStatus=null,resultDiagnostics=[],companyResearchIncomplete=false;
+  const rows=[],issues=[];
   try{
     taskCentre?.update(taskId,{stage:'Verifying company before buyer search'});
-    const verified=await window.LeadIntelFirstPartyResearch.collectWebsiteEvidence({website:candidate.website||`https://${candidate.domain}/`,purpose:'buyers',maxPages:3,signal:controller.signal});
-    candidate.evidence=LeadIntelDiscovery.normalizeCompanySearchResults({results:[...(candidate.evidence||[]),...verified.pages.map(page=>({url:page.url,title:page.title,markdown:page.text,verifiedAt:page.fetchedAt,date:page.date,dateSource:page.dateSource,metadata:{statusCode:page.statusCode}}))]}, {kind:'verification',domain:candidate.domain,company:candidate.company,market:candidate.market}).slice(0,12);
-    discovery.checkedCompanyDomains=[...new Set([...(discovery.checkedCompanyDomains||[]),candidate.domain])];
-    const rows=[],issues=[];
+    try{
+      const verified=await window.LeadIntelFirstPartyResearch.collectWebsiteEvidence({website:candidate.website||`https://${candidate.domain}/`,purpose:'buyers',maxPages:3,signal:controller.signal});
+      candidate.evidence=LeadIntelDiscovery.normalizeCompanySearchResults({results:[...(candidate.evidence||[]),...verified.pages.map(page=>({url:page.url,title:page.title,markdown:page.text,verifiedAt:page.fetchedAt,date:page.date,dateSource:page.dateSource,metadata:{statusCode:page.statusCode}}))]}, {kind:'verification',domain:candidate.domain,company:candidate.company,market:candidate.market}).slice(0,12);
+      discovery.checkedCompanyDomains=[...new Set([...(discovery.checkedCompanyDomains||[]),candidate.domain])];
+    }catch(error){
+      if(controller.signal.aborted||/insufficient readable company evidence/i.test(error.message||""))throw error;
+      companyResearchIncomplete=true;
+      issues.push(`Company website verification: ${error.message||"extraction unavailable"}`);
+    }
     const plan=LeadIntelDiscovery.buyerResearchPlan(candidate,buyerProfile),roles=plan.roles;
     const researchProfile={...buyerProfile,decisionMakers:plan.roles.join("; "),companyDomain:candidate.domain};
     providerStatus={firecrawl:{status:"pending",results:0,queries:plan.queries.length},grounded:{status:"pending",results:0},identity:{status:"pending",results:0}};
@@ -1092,17 +1098,11 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     const pool=LeadIntelDiscovery.mergeBuyerPool(previous,publicPeople,researchProfile);
     for(const diagnostic of resultDiagnostics){if(!diagnostic.accepted)continue;const person=pool.find(person=>person.name===diagnostic.parsedName&&person.title===diagnostic.parsedTitle);diagnostic.poolSelection=person?"retained":"excluded";if(!person){diagnostic.accepted=false;diagnostic.rejectionReason="Not retained after deduplication or pool limit";}}
     const ranked=LeadIntelDiscovery.recommendedBuyers(pool,researchProfile);
-    candidate.buyerDiscovery={target:30,found:pool.length,sourceResults:rows.length,apolloDiscoveryCount,providerStatus,resultDiagnostics,researchIncomplete:buyerResearchIncomplete(providerStatus)||pool.some(person=>person.identityStatus==='pending'),opportunityRoles:plan.roles,expandedRoles:plan.expandedRoles,opportunityTerms:plan.opportunityTerms,issues,pool,checkedAt:new Date().toISOString()};
+    candidate.buyerDiscovery={target:30,found:pool.length,sourceResults:rows.length,apolloDiscoveryCount,providerStatus,resultDiagnostics,researchIncomplete:companyResearchIncomplete||buyerResearchIncomplete(providerStatus)||pool.some(person=>person.identityStatus==='pending'),opportunityRoles:plan.roles,expandedRoles:plan.expandedRoles,opportunityTerms:plan.opportunityTerms,issues,pool,checkedAt:new Date().toISOString()};
     candidate.people=[...pool.filter(person=>person.kept),...ranked.filter(person=>!person.kept)].slice(0,6);
     candidate.publicContactVersion='';
     candidate.peopleStatus=candidate.people.length?"complete":"empty";candidate.buyerRolesChanged=false;
     persist();
-    if(allowCrmSync&&crmAuthenticated()&&crmCompanyByDomain(candidate.domain)){
-      const mapped=window.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate);
-      const saved=await bridge().saveCrmCompany(mapped);
-      if(!saved.ok)showToast(saved.error||"CRM contact update failed");
-      else await refreshCrmState({render:false});
-    }
     renderAll();
     showToast(candidate.buyerDiscovery.researchIncomplete?'Research incomplete · provider checks did not finish':!candidate.people.length?'No relevant decision-makers returned in completed checks':candidate.people.length<3?`Only ${candidate.people.length} relevant decision-maker${candidate.people.length===1?"":"s"} found`:`${candidate.people.length} relevant decision-makers found`);
     if(candidate.people.length&&candidate.publicContactVersion!==PUBLIC_NAME_CHECK_VERSION){
@@ -1113,8 +1113,16 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
       if(controller.signal.aborted)throw Object.assign(new Error('Buyer research canceled'),{name:'AbortError'});
       candidate.buyerResearchProgress={...candidate.buyerResearchProgress,phase:"contacts",label:"Finalizing public contact evidence",step:5,total:5};persist();
     }
-    candidate.buyerDiscovery.researchIncomplete=buyerResearchIncomplete(providerStatus)||pool.some(person=>person.identityStatus==='pending')||candidate.publicContactStatus==='error';
+    candidate.buyerDiscovery.researchIncomplete=companyResearchIncomplete||buyerResearchIncomplete(providerStatus)||pool.some(person=>person.identityStatus==='pending')||candidate.publicContactStatus==='error';
     candidate.buyerResearchProgress={phase:"complete",label:candidate.buyerDiscovery.researchIncomplete?"Research incomplete":"Buyer research complete",step:5,total:5,completedAt:new Date().toISOString()};persist();
+    if(allowCrmSync&&crmAuthenticated()&&crmCompanyByDomain(candidate.domain)){
+      try{
+        const mapped=window.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate);
+        const saved=await bridge().saveCrmCompany(mapped);
+        if(!saved.ok)showToast(saved.error||"CRM contact update failed");
+        else await refreshCrmState({render:false});
+      }catch(error){showToast(`Buyer research saved locally · ${error.message||"CRM synchronization unavailable"}`);}
+    }
     taskCentre?.complete(taskId,{stage:candidate.buyerDiscovery.researchIncomplete?'Research incomplete':'Buyer research complete',resultCount:candidate.people.length});
     return true;
   }catch(error){

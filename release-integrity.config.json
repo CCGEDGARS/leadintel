@@ -131,6 +131,18 @@
         "pipeline:discovery.pipeline",
         "delete meta.lastCompanyRun"
       ]
+    },
+    {
+      "id": "buyer-failure-recovery",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "companyResearchIncomplete=true;",
+        "Research incomplete",
+        "Buyer research saved locally",
+        "Company website verification:"
+      ]
     }
   ],
   "retry": {

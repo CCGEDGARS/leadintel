@@ -62,7 +62,11 @@ const boundedDiscoveryRuntime = [
   'pipeline:discovery.pipeline',
   'delete meta.lastCompanyRun',
   'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};',
-  'initDiscoveryWhenReady();'
+  'initDiscoveryWhenReady();',
+  'companyResearchIncomplete=true;',
+  'Research incomplete',
+  'Buyer research saved locally',
+  'Company website verification:'
 ].join('\n');
 
 test('production proof accepts the bounded staged Discovery runtime', async () => {
