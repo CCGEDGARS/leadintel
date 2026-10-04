@@ -33,6 +33,37 @@
     if(truncated)next.evidenceTextTruncated=true;
     return next;
   }
+  const TRACE_FORMAT='leadintel-buyer-trace-v1';
+  function packBuyerTraces(value,key=''){
+    if(key==='resultDiagnostics'&&Array.isArray(value)&&value.length>=20&&value.every(row=>row&&typeof row==='object'&&!Array.isArray(row))){
+      const columns=[...new Set(value.flatMap(row=>Object.keys(row)))],values=[],dictionary=new Map();
+      const rows=value.map(row=>columns.map(column=>{
+        if(!Object.prototype.hasOwnProperty.call(row,column))return -1;
+        const item=row[column],identity=JSON.stringify(item);
+        if(!dictionary.has(identity)){dictionary.set(identity,values.length);values.push(item);}
+        return dictionary.get(identity);
+      }));
+      const packed={format:TRACE_FORMAT,columns,values,rows};
+      return bytes(packed)<bytes(value)?packed:value;
+    }
+    if(Array.isArray(value))return value.map(row=>packBuyerTraces(row));
+    if(!value||typeof value!=='object')return value;
+    return Object.fromEntries(Object.entries(value).map(([field,item])=>[field,packBuyerTraces(item,field)]));
+  }
+  function restoreFromSync(value,key=''){
+    if(key==='resultDiagnostics'&&value?.format===TRACE_FORMAT){
+      const {columns,values,rows}=value;
+      if(!Array.isArray(columns)||columns.length>100||!columns.every(column=>typeof column==='string')||!Array.isArray(values)||!Array.isArray(rows)||rows.length>500)throw new Error('Invalid stored buyer research trace');
+      return rows.map(row=>{
+        if(!Array.isArray(row)||row.length!==columns.length||!row.every(index=>Number.isInteger(index)&&index>=-1&&index<values.length))throw new Error('Invalid stored buyer research trace');
+        return Object.fromEntries(columns.flatMap((column,index)=>row[index]===-1?[]:[[column,cloneValue(values[row[index]])]]));
+      });
+    }
+    if(Array.isArray(value))return value.map(row=>restoreFromSync(row));
+    if(!value||typeof value!=='object')return value;
+    return Object.fromEntries(Object.entries(value).map(([field,item])=>[field,restoreFromSync(item,field)]));
+  }
+  function cloneValue(value){return JSON.parse(JSON.stringify(value));}
   function compactBundle(input={}){
     const original=clone(input);let payload=clone(input);
     payload.main=compactMain(payload.main||{},8000,12000);
@@ -41,6 +72,7 @@
       payload.main=compactMain(payload.main||{},webChars,pdfChars);
       payload=compactEvidenceCopies(payload,evidenceChars);
     }
+    if(bytes(payload)>TARGET_SYNC_BYTES)payload=packBuyerTraces(payload);
     return {payload,bytes:bytes(payload),compacted:JSON.stringify(payload)!==JSON.stringify(original)};
   }
   function prepareForSync(input={}){
@@ -62,5 +94,5 @@
   }
 
   installStorageGuard();
-  return {MAX_SYNC_BYTES,TARGET_SYNC_BYTES,bytes,compactBundle,prepareForSync,compactMainStorageValue,installStorageGuard};
+  return {MAX_SYNC_BYTES,TARGET_SYNC_BYTES,bytes,compactBundle,restoreFromSync,prepareForSync,compactMainStorageValue,installStorageGuard};
 });
