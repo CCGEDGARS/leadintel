@@ -16,7 +16,7 @@ const extensionCss=fs.existsSync(extensionCssPath)?fs.readFileSync(extensionCssP
 
 test('Customer V2 loads the proven AI Settings plus the customer-owned Apollo and Firecrawl extension',()=>{
   assert.match(processMap,/import ['"]\.\/ai-settings\.js\?v=20260915-model-choice-v1['"]/);
-  assert.match(processMap,/import ['"]\.\/service-settings-extension\.js\?v=20260925-provider-credit-health-v1['"]/);
+  assert.match(processMap,/import ['"]\.\/service-settings-extension\.js\?v=20260925-provider-credit-health-v1&optional-hunter=20261004-v1['"]/);
   assert.equal(fs.existsSync(jsPath),true,'ai-settings.js must exist');
   assert.equal(fs.existsSync(extensionPath),true,'service-settings-extension.js must exist');
   assert.match(js,/id="open-settings"/);

@@ -18,7 +18,7 @@ test('Discovery makes a shortage explicit instead of implying four contacts were
 });
 
 test('Discovery exposes a separate authenticated paid enrichment action for selected people',()=>{
-  assert.match(ui,/Confirm email with Hunter and Apollo/);
+  assert.match(ui,/Confirm company email/);
   assert.match(ui,/data-action="enrich-contact"/);
   assert.match(ui,/bridge\(\)\.enrichCrmContact/);
   assert.match(ui,/person_id|person\.id/);

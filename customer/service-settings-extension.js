@@ -4,7 +4,7 @@ const DEFAULT_CALENDLY_URL='https://calendly.com/edgars-7go/strategy-call-2';
 const SERVICE_PROVIDERS=Object.freeze([
   {provider:'apollo',name:'Apollo.io',placeholder:'Apollo API key',purpose:'Company, decision-maker, email and phone enrichment'},
   {provider:'firecrawl',name:'Firecrawl',placeholder:'fc-…',purpose:'Website scraping, public research and evidence collection'},
-  {provider:'hunter',name:'Hunter',placeholder:'Hunter API key',purpose:'Email verification for candidate addresses'}
+  {provider:'hunter',name:'Hunter',placeholder:'Hunter API key',purpose:'Optional additional email verification using your paid Hunter credits'}
 ]);
 let serviceStatus={role:'',providers:[],checked_at:null};
 let calendlyStatus={role:'',configured:false,connected:false,scheduling_url:DEFAULT_CALENDLY_URL,status:'not_connected'};
@@ -37,6 +37,7 @@ function serviceControls(config,row){
   const meta=configured?`Saved key ${esc(row.key_hint||'')} · ${sourceLabel(row)}`:sourceLabel(row);
   return `<div class="service-provider-controls service-provider-card" data-service-extension="1" data-service-provider="${config.provider}">
     <div class="service-source-row"><span class="service-source ${row?.source==='customer'?'customer':'managed'}">${esc(sourceLabel(row))}</span><span>${esc(meta)}</span></div>
+    ${config.provider==='hunter'?`<label class="ai-settings-field"><input type="checkbox" data-hunter-enabled ${row?.metadata?.additional_verification_enabled===true?'checked':''} ${disabled||!configured||busy==='hunter'?'disabled':''}>Enable additional Hunter verification (uses credits)</label><small>Off by default. Public research and Apollo work without Hunter. Enabling adds a delivery check; no provider guarantees 100% accuracy.</small>`:''}
     <label class="ai-settings-field">API key<input data-service-key="${config.provider}" type="password" autocomplete="new-password" spellcheck="false" data-form-type="other" data-lpignore="true" data-1p-ignore="true" autocapitalize="none" placeholder="${esc(config.placeholder)}" ${disabled?'disabled':''}></label>
     <div class="ai-provider-error" data-service-error="${config.provider}" role="alert" ${error?'':'hidden'}>${esc(error)}</div>
     <div class="ai-provider-actions">
@@ -110,10 +111,11 @@ function decorateCards(){
 }
 function queueDecorate(force=false){if(!settingsDrawerOpen())return;if(!force&&!needsDecoration())return;if(renderQueued)return;renderQueued=true;queueMicrotask(()=>{renderQueued=false;decorateCards();});}
 async function refreshServiceStatus(verify=false){
+  const requestedWorkspace=workspace()?.id;
   if(!signedIn()){serviceStatus={role:'',providers:[],checked_at:null};calendlyStatus={role:'',configured:false,connected:false,scheduling_url:DEFAULT_CALENDLY_URL,status:'not_connected'};queueDecorate(true);return serviceStatus;}
   try{
     const [services,calendly]=await Promise.all([api(`/api/integrations/services/status${verify?'?verify=1':''}`),api('/api/integrations/calendly/status')]);
-    if(!services.response.ok)throw new Error(services.payload.error||'Unable to load service integrations');serviceStatus=services.payload;
+    if(workspace()?.id!==requestedWorkspace)return serviceStatus;if(!services.response.ok)throw new Error(services.payload.error||'Unable to load service integrations');serviceStatus={...services.payload,workspace_id:requestedWorkspace};
     if(calendly.response.ok)calendlyStatus=calendly.payload;else errors.calendly=calendly.payload.error||'Unable to load Calendly status';
     queueDecorate(true);return serviceStatus;
   }catch(cause){console.warn('LeadIntel service integrations:',cause);queueDecorate(true);return serviceStatus;}
@@ -146,6 +148,12 @@ async function disconnectService(provider){
   busy=provider;queueDecorate(true);
   try{const {response,payload}=await api('/api/integrations/services/provider',{method:'DELETE',body:JSON.stringify({provider})});if(!response.ok)throw new Error(payload.error||'Unable to disconnect provider');errors[provider]='';await refreshServiceStatus(false);}catch(cause){errors[provider]=String(cause?.message||cause);}finally{busy='';queueDecorate(true);}
 }
+async function saveHunterPolicy(enabled){
+  const workspaceId=workspace()?.id;busy='hunter';errors.hunter='';queueDecorate(true);
+  try{const {response,payload}=await api('/api/integrations/services/hunter/settings',{method:'PUT',body:JSON.stringify({enabled})});if(!response.ok)throw new Error(payload.error||'Could not save Hunter preference');if(workspace()?.id!==workspaceId)return;await refreshServiceStatus(false);window.dispatchEvent(new CustomEvent('leadintel:service-settings-changed'));}
+  catch(error){errors.hunter=String(error.message||error);}finally{busy='';queueDecorate(true);}
+}
+window.LeadIntelServiceSettings={hunterEnabled:()=>serviceStatus.workspace_id===workspace()?.id&&providerState('hunter')?.metadata?.additional_verification_enabled===true};
 function handleClick(event){
   const button=event.target.closest('[data-service-action]');if(!button)return;
   if(button.dataset.serviceAction==='google-signin'){connectGoogle();return;}
@@ -155,7 +163,7 @@ function handleClick(event){
   if(button.dataset.serviceAction==='save')saveService(provider,button);else if(button.dataset.serviceAction==='disconnect')disconnectService(provider);
 }
 function bind(){
-  if(installed)return;installed=true;injectCss();document.addEventListener('click',handleClick);
+  if(installed)return;installed=true;injectCss();document.addEventListener('click',handleClick);document.addEventListener('change',event=>{if(event.target.matches?.('[data-hunter-enabled]'))void saveHunterPolicy(event.target.checked);});
   const observer=new MutationObserver(()=>{if(needsDecoration())queueDecorate();});observer.observe(document.body,{childList:true,subtree:true});
   window.addEventListener('leadintel:server-ready',()=>refreshServiceStatus(false));
   document.addEventListener('click',event=>{if(event.target.closest('#open-settings'))setTimeout(()=>refreshServiceStatus(false),0);if(event.target.closest('#test-all-integrations'))setTimeout(()=>refreshServiceStatus(true),0);});

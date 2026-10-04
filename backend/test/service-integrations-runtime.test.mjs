@@ -127,8 +127,9 @@ sqliteTest('Hunter verifies one requested pattern without claiming a Gmail ident
   };
   try{
     const before=await handleServiceIntegrationRoute(req('/api/integrations/services/hunter/verify-email?workspace_id=w1',{method:'POST',token,body:{email:'marta.buyer@gmail.com'}}),env,{});
-    assert.equal(before.status,503);assert.equal(calls.length,0);
+    assert.equal(before.status,409);assert.equal(calls.length,0);
     const saved=await handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'PUT',token,body:{provider:'hunter',api_key:'hunter-secret-WXYZ'}}),env,{});assert.equal(saved.status,200);
+    await handleServiceIntegrationRoute(req('/api/integrations/services/hunter/settings?workspace_id=w1',{method:'PUT',token,body:{enabled:true}}),env,{});
     const response=await handleServiceIntegrationRoute(req('/api/integrations/services/hunter/verify-email?workspace_id=w1',{method:'POST',token,body:{email:'marta.buyer@gmail.com'}}),env,{});
     assert.equal(response.status,200);const result=await payload(response);
     assert.equal(result.status,'webmail');assert.equal(result.deliverability,'inconclusive');assert.equal(result.identity_confirmed,false);
@@ -143,6 +144,7 @@ sqliteTest('Hunter finder is scoped to a company domain and returns only a safe 
   try{
     const save=await handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'PUT',token,body:{provider:'hunter',api_key:'hunter-secret-WXYZ'}}),env,{});assert.equal(save.status,200);
     const invalid=await handleServiceIntegrationRoute(req('/api/integrations/services/hunter/find-email?workspace_id=w1',{method:'POST',token,body:{domain:'localhost',first_name:'Marta',last_name:'Berzina'}}),env,{});assert.equal(invalid.status,400);
+    await handleServiceIntegrationRoute(req('/api/integrations/services/hunter/settings?workspace_id=w1',{method:'PUT',token,body:{enabled:true}}),env,{});
     const response=await handleServiceIntegrationRoute(req('/api/integrations/services/hunter/find-email?workspace_id=w1',{method:'POST',token,body:{domain:'example.lv',first_name:'Marta',last_name:'Berzina'}}),env,{});
     assert.equal(response.status,200);const result=await payload(response);
     assert.equal(result.email,'marta.berzina@example.lv');assert.equal(result.source,'https://example.lv/team');assert.equal(result.identity_confirmed,false);
@@ -249,4 +251,18 @@ sqliteTest('billing failure falls through direct extraction to Scrapling and rec
     assert.equal(response.status,200);const result=await payload(response);assert.equal(result.data.metadata.source,'scrapling-fallback');assert.deepEqual(result.data.links,['https://company.se/team']);assert.equal(calls.length,3);
     const events=DB.raw.prepare('SELECT metadata_json FROM audit_events WHERE event_type=?').all('service.firecrawl_scrape');assert.ok(events.some(row=>JSON.parse(row.metadata_json).source==='scrapling-fallback'));
   }finally{globalThis.fetch=original;}
+});
+sqliteTest('Hunter remains off after connecting and explicit owner opt-in survives connection checks',async()=>{
+ const {env,token,DB}=await fixture();const original=globalThis.fetch;let verifications=0;
+ globalThis.fetch=async url=>{if(String(url).includes('email-verifier'))verifications++;return new Response(JSON.stringify({data:{email:'marta@example.com',status:'valid',requests:{verifications:{available:100,used:0}}}}));};
+ try{
+  await handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'PUT',token,body:{provider:'hunter',api_key:'hunter-test-secret'}}),env,{});
+  const blocked=await handleServiceIntegrationRoute(req('/api/integrations/services/hunter/verify-email?workspace_id=w1',{method:'POST',token,body:{email:'marta@example.com'}}),env,{});
+  assert.equal(blocked.status,409);assert.equal(verifications,0);
+  assert.equal((await handleServiceIntegrationRoute(req('/api/integrations/services/hunter/settings?workspace_id=w1',{method:'PUT',token,body:{enabled:true}}),env,{})).status,200);
+  await handleServiceIntegrationRoute(req('/api/integrations/services/status?workspace_id=w1&verify=1',{token}),env,{});
+  assert.equal(JSON.parse(DB.raw.prepare("SELECT metadata_json FROM workspace_service_integrations WHERE workspace_id='w1' AND provider='hunter'").get().metadata_json).additional_verification_enabled,true);
+  assert.equal((await handleServiceIntegrationRoute(req('/api/integrations/services/hunter/verify-email?workspace_id=w1',{method:'POST',token,body:{email:'marta@example.com'}}),env,{})).status,200);assert.equal(verifications,1);
+  DB.raw.exec("UPDATE workspace_members SET role='sales' WHERE workspace_id='w1'");assert.equal((await handleServiceIntegrationRoute(req('/api/integrations/services/hunter/settings?workspace_id=w1',{method:'PUT',token,body:{enabled:false}}),env,{})).status,403);
+ }finally{globalThis.fetch=original;}
 });

@@ -4,7 +4,7 @@ const SUPPORT_MODULES=[
   './custom-market-input-hygiene.js?v=20260903-password-manager-isolation-v5',
   './crm-engine.js?v=20260828-master-crm-v1&commercial-evidence=20261002-v2&buyer-quality=20261002-v5&buyer-research=20261004-v1',
   './sync-conflict-hygiene.js?v=20260901-stale-blank-conflict-v1',
-  './service-settings-extension.js?v=20260925-provider-credit-health-v1',
+  './service-settings-extension.js?v=20260925-provider-credit-health-v1&optional-hunter=20261004-v1',
   './step2-readiness-engine.js?v=20260924-friendly-workflow-labels-v1&profile-review=20261001-v2&profile-repair=20261002-v1',
   './company-brain.js?v=20261001-adaptive-business-context-v1&profile-review=20261001-v2&profile-repair=20261002-v1',
   './step2-first-party-intelligence.js?v=20260909-first-party-step2-v1',

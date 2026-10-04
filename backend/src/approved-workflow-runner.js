@@ -7,6 +7,7 @@ import {resolveWorkspaceServiceCredential} from './service-integrations.js';
 import {provenBusinessEmail,APOLLO_PEOPLE_SEARCH_URL,apolloSearchBody} from './enrichment.js';
 import {upsertCrmCompany,upsertCrmContacts,upsertCrmIntelligence,appendCrmActivity,findCrmCompanyByDomain} from './crm.js';
 import {searchWorkspaceWeb,generateWorkspaceResearch} from './ai-routes.js';
+import {enrichCrmContact} from './crm-routes.js';
 import {enqueueApprovedSequence} from './outreach-automation-routes.js';
 const discovery=globalThis.LeadIntelDiscovery;
 const stop=()=>{throw new Error('Workflow paused, stopped, changed or approval no longer valid');};
@@ -80,7 +81,7 @@ export async function researchBuyerContacts(candidate,search,guard){
     await guard();
   }
 }
-async function buyer(env,workspaceId,candidate,config,guard){
+async function buyer(env,workspaceId,candidate,config,guard,userId){
   const company=await findCrmCompanyByDomain(env.DB,workspaceId,candidate.domain);
   if(company&&company.lifecycle_status!=='prospect')return null;
   const state=await env.DB.prepare('SELECT payload_json FROM customer_workspace_state WHERE workspace_id=?').bind(workspaceId).first();
@@ -93,6 +94,7 @@ async function buyer(env,workspaceId,candidate,config,guard){
   candidate.people=discovery.recommendedBuyers(pool,profile);
   // Identity discovery is allowed before paid/contact confirmation. Use Apollo people search
   // alongside public research; no email/phone reveal or waterfall flags are requested here.
+  let directoryPeople=[];
   {
     try{
       await guard();const identityCredential=await resolveWorkspaceServiceCredential(env,workspaceId,'apollo');
@@ -100,7 +102,7 @@ async function buyer(env,workspaceId,candidate,config,guard){
         const identityHeaders={'Content-Type':'application/json','X-Api-Key':identityCredential.apiKey,Accept:'application/json'};
         const identityPayload=await providerJson(APOLLO_PEOPLE_SEARCH_URL,{method:'POST',headers:identityHeaders,body:JSON.stringify(apolloSearchBody({domain:candidate.domain,roles:discovery.opportunityBuyerRoles?.(candidate,profile)||config.buyers.roles}))});await guard();
         const identityTrace=discovery.traceIdentityBuyers(identityPayload,candidate,profile);
-        const identityPeople=identityTrace.people;
+        const identityPeople=identityTrace.people;directoryPeople=identityPeople;
         const expanded=discovery.mergeBuyerPool(pool,identityPeople,profile);
         pool=expanded;candidate.buyerDiscovery={...candidate.buyerDiscovery,found:expanded.length,pool:expanded,identityFallback:'apollo_search',resultDiagnostics:[...candidate.buyerDiscovery.resultDiagnostics,...identityTrace.diagnostics]};candidate.buyerDiscovery.providerStatus.identity={status:'complete',results:identityTrace.diagnostics.length,accepted:identityPeople.length};
         candidate.people=discovery.recommendedBuyers(expanded,profile);
@@ -125,7 +127,34 @@ async function buyer(env,workspaceId,candidate,config,guard){
   const pinned=new Set(candidate.people.filter(p=>p.kept).map(discovery.buyerIdentity));
   eligible.sort((a,b)=>Number(pinned.has(discovery.buyerIdentity(b)))-Number(pinned.has(discovery.buyerIdentity(a))));
   if(eligible[0])return {...eligible[0],email:eligible[0].normalized_email};
-  // Automatic research cannot grant per-contact paid enrichment approval.
+  // Owner-approved automatic confirmation uses the same cache and credit
+  // policy as manual Apollo enrichment. Never reveal phones or personal email.
+  if(config.buyers.confirmContacts===true){
+    const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'apollo');
+    if(credential.configured){
+      const crmContext={workspaceId,userId,role:'owner'};
+      const target=company||(await upsertCrmCompany(env.DB,crmContext,{...candidate,source:'approved_workflow_qualified'})).company;
+      await env.DB.prepare('INSERT OR IGNORE INTO enrichment_policies(workspace_id) VALUES(?)').bind(workspaceId).run();
+      const runtime=Object.create(env);runtime.APOLLO_API_KEY=credential.apiKey;
+      for(const person of candidate.people.slice(0,6)){
+        await guard();
+        if(person.identityStatus==='pending'||!discovery.hasFullBuyerName(person.publicName||person.name))continue;
+        // Public-derived IDs cannot be sent to Apollo. Resolve an attributable
+        // directory identity first using the existing identity trace.
+        const matches=directoryPeople.filter(item=>String(item.publicName||item.name).trim().toLowerCase()===String(person.publicName||person.name).trim().toLowerCase()||Boolean(person.publicLinkedinUrl&&item.linkedin_url===person.publicLinkedinUrl));
+        const publicId=/^(public-|person-)/.test(String(person.id));
+        const personId=publicId?(matches.length===1?matches[0].id:null):person.id;
+        if(!personId||String(personId).startsWith('public-'))continue;
+        const request=new Request('https://leadintel.invalid/internal-enrich',{method:'POST',body:JSON.stringify({person_id:personId,name:person.publicName||person.name,title:person.title,phone_lookup:false,allow_personal_email:false})});
+        const response=await enrichCrmContact(request,runtime,{}, {context:crmContext},target.id);await guard();
+        const value=await response.json();
+        const email=provenBusinessEmail({email:value.contact?.normalized_email,email_status:value.contact?.email_status},candidate.domain);
+        if(response.ok&&email){candidate.buyerDiscovery.contactConfirmationRequired=false;return {...value.contact,email};}
+        candidate.buyerDiscovery.issues.push(value.error||'Apollo did not return an attributable verified company email');
+        if(response.status===429)break;
+      }
+    }
+  }
   candidate.buyerDiscovery.contactConfirmationRequired=true;
 
   return null;
@@ -186,7 +215,7 @@ export async function executeWorkflowStage(stage,{env,row,run,result,context,con
     return {...result,requestedCount:config.companies.limit,qualifiedCount:candidates.length,shortfall:Math.max(0,config.companies.limit-candidates.length),queries,candidates,reviewCompanies:assessed.filter(c=>!c.qualification.eligible),researchedAt,sourceCount:new Set(results.map(r=>r.url)).size};
   }
   if(stage==='buyers'){
-    const candidates=[],reviewBuyers=[];for(const candidate of result.candidates||[]){await guard();const contact=await buyer(env,row.workspace_id,candidate,config,guard);if(contact)candidates.push({...candidate,contact});else reviewBuyers.push({...candidate,reason:'No verified eligible business contact'});}
+    const candidates=[],reviewBuyers=[];for(const candidate of result.candidates||[]){await guard();const contact=await buyer(env,row.workspace_id,candidate,config,guard,row.approved_by);if(contact)candidates.push({...candidate,contact});else reviewBuyers.push({...candidate,reason:'No verified eligible business contact'});}
     return {...result,candidates,reviewBuyers,skippedWithoutVerifiedBuyer:reviewBuyers.length};
   }
   if(stage==='triggers')return {...result,candidates:(result.candidates||[]).filter(c=>discovery.assessAutomaticQualification(c,profile,market,{...config.companies,...config.triggers,researchedAt:result.researchedAt}).eligible)};
