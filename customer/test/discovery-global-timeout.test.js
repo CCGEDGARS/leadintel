@@ -1247,3 +1247,11 @@ test('newer same-company CRM research restores the shortlist, sources and local 
  detail.intelligence.research_snapshot.buyerResearch.checkedAt='2026-10-03T00:00:00Z';detail.company.normalized_domain='other.example';assert.equal(context.__restoreNewerBuyerResearch(candidate,detail),false);
  detail.company.normalized_domain='example.com';candidate.peopleStatus='loading';assert.equal(context.__restoreNewerBuyerResearch(candidate,detail),false);
 });
+
+
+test('restored legacy research keeps unresolved identities and incomplete coverage visible',()=>{
+ const context=loadDiscoveryRunner({renderNodes:true});
+ const candidate={domain:'example.com',company:'Example',buyerSearchMode:'user_selected_target',buyerRoles:['Procurement Director'],people:[],buyerDiscovery:{}};
+ context.__restoreNewerBuyerResearch(candidate,{company:{normalized_domain:'example.com'},intelligence:{research_snapshot:{buyerResearch:{version:1,checkedAt:'2026-10-02T00:00:00Z',researchIncomplete:true,unresolved:[{id:'pending',name:'John',title:'Procurement Director'}],buyers:[{id:'p1',name:'Anna Buyer',title:'Procurement Director',organization:'Example',identitySourceUrl:'https://example.com/team',emailResearch:{status:'complete',searches:3,failed:0,checkedAt:new Date().toISOString()}}]}}}});
+ const html=context.__renderSelectedProspects([candidate]);assert.match(html,/1 unresolved identities/);assert.match(html,/Research incomplete/);assert.match(html,/Aggregate provider activity was not retained/);assert.match(html,/3 email evidence searches/);
+});
