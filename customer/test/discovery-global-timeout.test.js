@@ -1091,17 +1091,25 @@ test('Save buyer does not claim Saved when server preference sync fails',async()
 
 test('Companies does not render saved buyer cards; switching to Buyers preserves them',()=>{const c=loadDiscoveryRunner({renderNodes:true});c.__setDiscovery({selectedProspects:[{company:'Target',domain:'target.se',buyerSearchMode:'user_selected_target',people:[{id:'p1',name:'Alex Buyer',title:'Director',kept:true}]}]});c.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:4}));c.__renderPipeline();assert.equal(c.__elements.get('customer-pipeline').innerHTML,'');assert.equal(c.__discoveryState().selectedProspects[0].people[0].kept,true);c.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5}));c.__renderPipeline();assert.match(c.__elements.get('customer-pipeline').innerHTML,/Alex Buyer/);});
 test('optional contact-review timeout preserves completed email checks and exposes a focused retry',async()=>{
+ const snapshots=[];
  const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:30,
-  bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'}},
+  bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},saveCrmContacts:async()=>({ok:true}),saveCrmCompany:async payload=>{snapshots.push(payload);return {ok:true};}},
   fetchImpl:async url=>{
    if(String(url).includes('contact-evidence-review'))return new Promise(()=>{});
    if(String(url).includes('web-search'))return {ok:true,json:async()=>({results:[]})};
    return {ok:true,json:async()=>({data:[{url:'https://example.com/team',markdown:'Anna Buyer COO contact team'}]})};
   }});
- context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',people:[{id:'anna',name:'Anna Buyer',title:'COO',organization:'Example',publicName:'Anna Buyer',publicNameUrl:'https://example.com/team',publicLinkedinUrl:'https://linkedin.com/in/anna'}]}]});
+ context.LeadIntelCrm=require('../crm-engine.js');
+ context.__setCrmCompanies([{id:'crm-example',normalized_domain:'example.com'}]);
+ context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',market:'Sweden',buyerSearchMode:'user_selected_target',people:[{id:'anna',name:'Anna Buyer',title:'COO',country:'United Kingdom',organization:'Example',publicName:'Anna Buyer',publicNameUrl:'https://example.com/team',publicLinkedinUrl:'https://linkedin.com/in/anna'}]}]});
  assert.equal(await context.__findPublicProspectContacts('example.com'),false);
  const candidate=context.__discoveryState().selectedProspects[0];
  assert.equal(candidate.people[0].emailResearch.status,'complete');assert.ok(candidate.publicResearch.patternSearches>0);
+ assert.equal(candidate.people[0].buyerQualification.eligible,false);
+ assert.equal(snapshots.length,1);
+ const snapshot=JSON.parse(JSON.stringify(snapshots[0].intelligence.research_snapshot));
+ assert.equal(snapshot.buyerResearch.buyers[0].qualification.eligible,false);
+ assert.equal(snapshot.buyerResearch.buyers[0].emailResearch.status,'complete');
  assert.equal(candidate.publicContactStatus,'error');assert.ok(candidate.publicResearch.issues.some(issue=>issue.includes('completed identity and email evidence preserved')));
  assert.match(context.__elements.get('customer-pipeline').innerHTML,/data-find-public-contacts="example.com"/);
 });

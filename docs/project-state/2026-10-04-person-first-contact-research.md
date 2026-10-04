@@ -21,3 +21,7 @@ Public contact refresh also writes the CRM company research snapshot. That snaps
 - Failed searches remain incomplete; guesses remain unverified.
 
 Local checks and exact-SHA production proof are separate from authenticated customer acceptance. No sending is authorized by this change.
+
+## Authenticated refresh follow-up
+
+The authenticated LKAB public refresh on 4 October executed 36 email evidence searches with Apollo email/phone and Hunter disabled, then hit an optional contact follow-up timeout. The timeout path preserved local discoveries but skipped qualification recomputation and the CRM snapshot write. Finalization now always recomputes qualification, marks partial research incomplete, merges the evidence pool and attempts the existing CRM contacts/snapshot save. It preserves the error/retry state and never upgrades a partial provider run to complete. Regression coverage forces an optional review timeout with a foreign-market contact and verifies the scope hold plus completed email-research evidence in the durable CRM payload.
