@@ -17,7 +17,7 @@ const MAX_DISCOVERY_COMPANY_CHECKS=30;
 const SAVING_SEARCH_RESULT_LIMIT=4;
 const SAVING_COMPANY_CHECK_LIMIT=3;
 const SAVING_FIRECRAWL_CALL_LIMIT=10;
-const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261004-v4&ranked-buyers=20261004-v15";
+const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261004-v4&ranked-buyers=20261004-v16";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20261004-contact-policy-v3";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -1420,11 +1420,23 @@ async function saveBuyerLinkedInReview(candidate,person,profile,workspaceId=brid
     renderAll();return true;
   }catch(error){current.linkedinConfirmedUrl=old.url;current.linkedinConfirmedAt=old.at;candidate.buyerDiscovery.pool=old.pool||[];saveDiscovery();throw error;}
 }
+async function holdBuyerForOpportunityReview(domain,index,reason){
+  const candidate=(discovery.selectedProspects||[]).find(row=>canonicalDomain(row.domain)===canonicalDomain(domain)),person=candidate?.people?.[index];
+  if(!person||!crmAuthenticated()||!String(reason||'').trim())return false;
+  person.opportunityScope={status:'review_required',reason:String(reason).trim().slice(0,300),url:LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url)||person.publicNameUrl||'',checkedAt:new Date().toISOString()};
+  person.buyerQualification=LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:candidate.buyerDiscovery?.opportunityRoles||candidate.buyerRoles||person.title},candidate);
+  candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),pool:LeadIntelDiscovery.mergeBuyerPool(candidate.buyerDiscovery?.pool||[],candidate.people||[],{decisionMakers:candidate.buyerDiscovery?.opportunityRoles||candidate.buyerRoles||person.title})};
+  saveDiscovery();renderAll();
+  if(!await saveBuyerResearch(domain))return false;
+  const synced=await bridge().saveNow({saveIntent:true,explicitSave:true});
+  return Boolean(synced?.saved);
+}
 function reviewBuyerLinkedIn(domain,index){
   const candidate=(discovery.selectedProspects||[]).find(row=>canonicalDomain(row.domain)===canonicalDomain(domain)),person=candidate?.people?.[index];if(!person)return;
   const profile=LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url);
   const workspaceId=bridge()?.workspace?.id;
-  const dialog=buyerReviewDialog('Review LinkedIn match',`<p><strong>${esc(person.publicName||person.name)}</strong><br>${esc(person.title)} · ${esc(candidate.company)}</p><p>${profile?`<a href="${esc(profile)}" target="_blank" rel="noopener noreferrer">Open LinkedIn profile ↗</a>`:`<a href="${esc(linkedInSearchUrl(person,candidate))}" target="_blank" rel="noopener noreferrer">Search LinkedIn ↗</a>`}</p><p>Check that the profile belongs to this person and shows the correct employer and role. Opening it does not confirm the match.</p><p data-review-status role="status"></p><button class="primary-btn" type="button" data-review-confirm ${!profile||!crmAuthenticated()?'disabled':''}>Confirm this profile</button>`);
+  const dialog=buyerReviewDialog('Review LinkedIn match',`<p><strong>${esc(person.publicName||person.name)}</strong><br>${esc(person.title)} · ${esc(candidate.company)}</p><p>${profile?`<a href="${esc(profile)}" target="_blank" rel="noopener noreferrer">Open LinkedIn profile ↗</a>`:`<a href="${esc(linkedInSearchUrl(person,candidate))}" target="_blank" rel="noopener noreferrer">Search LinkedIn ↗</a>`}</p><p>Check that the profile belongs to this person and shows the correct employer and role. Opening it does not confirm the match.</p><p data-review-status role="status"></p><button class="primary-btn" type="button" data-review-confirm ${!profile||!crmAuthenticated()?'disabled':''}>Confirm this profile</button><label>Opportunity review reason<textarea data-scope-review-reason>Opportunity responsibility requires review</textarea></label><button class="secondary-btn" type="button" data-scope-review ${!crmAuthenticated()?'disabled':''}>Hold for opportunity review</button>`);
+  dialog.querySelector('[data-scope-review]').addEventListener('click',async event=>{event.target.disabled=true;try{const saved=await holdBuyerForOpportunityReview(domain,index,dialog.querySelector('[data-scope-review-reason]').value);if(!saved)throw new Error('Review hold could not be synced. Retry saving.');dialog.close();showToast('Buyer held for opportunity review · excluded from recommendations and automation');}catch(error){dialog.querySelector('[data-review-status]').textContent=error.message;event.target.disabled=false;}});
   dialog.querySelector('[data-review-confirm]').addEventListener('click',async event=>{event.target.disabled=true;try{await saveBuyerLinkedInReview(candidate,person,profile,workspaceId);dialog.close();showToast('LinkedIn match confirmed and saved');}catch(error){dialog.querySelector('[data-review-status]').textContent=error.message;event.target.disabled=false;}});
 }
 function continueBuyerMessages(){

@@ -7,8 +7,8 @@ User request: show the four chosen buyers before potential candidates, equalize 
 - Render ranked recommendations first, additional full-name candidates second, and unresolved identities afterwards in a collapsed disclosure. Research coverage stays accessible below the buyers; warnings remain visible.
 - Use equal-width two-column cards with equal grid row heights and bottom-aligned contact actions on desktop. Mobile uses a single column with natural heights. All four action controls use matching sizing and centered labels.
 - Remove the extra per-card Save buyer button. Save & proceed remains the single per-buyer save action: it requires an accepted company email, saves first, and proceeds only after successful persistence. Whole-company Save buyer research in CRM remains distinct because it preserves the entire research snapshot.
-- Fix original-contact indexing for ranked display copies by matching stable buyer identity rather than object reference. Ranking clones previously produced index -1 for contact controls.
-- Invalidate the discovery JS/CSS asset boundary with ranked-buyers v15.
+- Preserve the concurrently merged original-contact indexing fix for ranked display copies by matching stable buyer identity rather than object reference. Ranking clones previously produced index -1 for contact controls.
+- Invalidate the discovery JS/CSS asset boundary with ranked-buyers v16.
 
 ## Validation
 
