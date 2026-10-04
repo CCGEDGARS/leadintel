@@ -568,3 +568,8 @@
 .buyer-review-dialog h3{margin:0}.buyer-review-dialog p{line-height:1.6}
 .buyer-message-choices{display:grid;gap:10px}.buyer-message-choices button{display:grid;gap:4px;text-align:left;padding:12px}
 @media(max-width:720px){.buyer-four-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.buyer-review-dialog [data-review-close]{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;min-width:44px;min-height:44px;padding:9px 16px;border:1px solid #d7e5dd;border-radius:12px;background:#f5f9f6;color:#203b30;font-family:inherit;font-size:14px;font-weight:600;line-height:1.2;cursor:pointer;transition:background .15s,border-color .15s}
+.buyer-review-dialog [data-review-close]:hover{background:#e8f1eb;border-color:#a9c4b3}
+.buyer-review-dialog [data-review-close]:focus-visible{outline:3px solid #167363;outline-offset:3px}
+.buyer-review-dialog [data-review-close]:active{background:#dcebe1}
