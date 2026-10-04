@@ -56,3 +56,11 @@ test('official contact-page body can resolve a name when the page title is gener
  assert.equal(result.people[0].name,'Anna Andersson');assert.equal(result.people[0].publicNameUrl,'https://lkab.com/contact');
  const former=await D.resolvePendingBuyerIdentities([person],[],candidate,profile,async()=>[{title:'Contacts',url:'https://lkab.com/contact',markdown:'Anna Andersson — former Procurement Director at LKAB.'}]);assert.equal(former.people[0].identityStatus,'pending');
 });
+test('one request timeout keeps identities pending and continues remaining identity checks',async()=>{
+ const people=[pending,{...pending,id:'bob',name:'Bob',firstName:'Bob'}];let calls=0;
+ const result=await D.resolvePendingBuyerIdentities(people,[],candidate,profile,async()=>{calls++;throw Object.assign(new Error('request timed out'),{name:'AbortError',code:'BUYER_REQUEST_TIMEOUT'});});
+ assert.equal(calls,4);assert.equal(result.people.length,2);assert.ok(result.people.every(p=>p.identityStatus==='pending'));assert.equal(result.issues.length,4);assert.equal(result.diagnostics.length,2);
+});
+test('explicit research cancellation still stops identity resolution',async()=>{
+ await assert.rejects(D.resolvePendingBuyerIdentities([pending],[],candidate,profile,async()=>{throw Object.assign(new Error('canceled'),{name:'AbortError',code:'BUYER_RESEARCH_CANCELED'});}),/canceled/);
+});
