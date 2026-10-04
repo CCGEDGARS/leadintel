@@ -4,6 +4,7 @@ The customer app and Worker had unrelated site origins. OAuth completed on the W
 
 ## Resolution
 
+- The Vercel project uses `/customer` as its root. Its own `vercel.json` must register the API route and function; editing only repository-root deployment config produces a successful static build with a missing API. Keep a root compatibility entry point, and exclude `customer/api` from the public static artifact.
 - Serve authenticated API traffic through a fixed Vercel proxy at the customer origin. Preserve raw request bodies, Origin, CSRF headers, idempotency keys and host-only HttpOnly cookies; never follow upstream redirects or cache private responses.
 - Before consuming Google/Microsoft login state, bounce the registered Worker callback to the fixed customer-origin callback. The proxy marks its upstream request, preventing a bounce loop. Token exchange still uses the original registered Worker redirect URI; provider console configuration does not change.
 - Install the transport before integration scripts. Existing modules use first-party requests through one compatibility boundary, while external provider requests remain unchanged.

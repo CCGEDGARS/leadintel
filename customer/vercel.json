@@ -1,5 +1,16 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "bash scripts/build-vercel-static.sh",
-  "outputDirectory": ".vercel-static"
+  "outputDirectory": ".vercel-static",
+  "rewrites": [
+    {
+      "source": "/api/:route*",
+      "destination": "/api/backend?route=:route*"
+    }
+  ],
+  "functions": {
+    "api/backend.mjs": {
+      "maxDuration": 300
+    }
+  }
 }
