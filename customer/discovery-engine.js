@@ -216,20 +216,22 @@
           if(generic.has(last.toLowerCase())||fullName&&name.toLowerCase()!==clean(person.name).toLowerCase())continue;
           const nearby=text.slice(Math.max(0,match.index-90),Math.min(text.length,match.index+name.length+130));
           const roleWords=clean(person.title).toLowerCase().split(/[^\p{L}]+/u).filter(word=>word.length>=3);
+          const roleSupported=roleWords.some(word=>new RegExp('(?:^|[^\\p{L}])'+word+'(?:$|[^\\p{L}])','iu').test(nearby));
           const personal=sourcedBuyerEmails({name},domain,[{url,content:nearby}])[0]?.email;
           const phoneParagraph=text.slice(match.index+name.length,match.index+name.length+130).split(/\n\s*\n|\n[-*#]|\b(?:Fackliga|Unionen|SACO|Ledarna)\b/i)[0];
           const directPhone=(phoneParagraph.match(/(?:\+\d{1,3}[\s().-]*)?(?:\d[\s().-]*){8,15}/g)||[]).find(value=>value.replace(/\D/g,'').length>=9&&value.replace(/\D/g,'').length<=15&&/[+\s()-]/.test(value))||'';
-          if(!roleWords.some(word=>nearby.toLowerCase().includes(word))&&!personal)continue;
-          matches.push({name,url,email:personal||"",phone:directPhone.trim().replace(/[.,;]+$/,'')});
+          if(!roleSupported&&!personal)continue;
+          matches.push({name,url,date:evidenceDate(row),roleSupported,email:personal||"",phone:directPhone.trim().replace(/[.,;]+$/,'')});
         }
       }
       const names=[...new Set(matches.map(match=>match.name.toLowerCase()))];
       if(names.length!==1)return person;
       const match=matches.find(item=>item.email||item.phone)||matches[0];
+      const identityMatch=matches.find(item=>item.roleSupported)||(!person.publicNameUrl?match:null);
       const phoneMatch=matches.find(item=>item.phone),previousPhoneRechecked=matches.some(item=>item.url===person.publicPhoneUrl);
       const previous=clean(person.publicName);
       if(previous&&previous.toLowerCase()!==match.name.toLowerCase()&&!match.name.toLowerCase().startsWith(previous.toLowerCase()))return person;
-      return {...person,identityStatus:'confirmed',nameVerification:'confirmed',publicName:match.name,publicNameUrl:match.url,publicEmail:match.email||person.publicEmail||"",publicEmailUrl:match.email?match.url:person.publicEmailUrl||"",publicPhone:phoneMatch?.phone||(previousPhoneRechecked?'':person.publicPhone||''),publicPhoneUrl:phoneMatch?.url||(previousPhoneRechecked?'':person.publicPhoneUrl||'')};
+      return {...person,identityStatus:'confirmed',nameVerification:'confirmed',publicName:match.name,publicNameUrl:identityMatch?.url||person.publicNameUrl||match.url,identityEvidenceDate:identityMatch?(identityMatch.date||(identityMatch.url===person.publicNameUrl?person.identityEvidenceDate||'':'')):person.identityEvidenceDate||'',publicEmail:match.email||person.publicEmail||"",publicEmailUrl:match.email?match.url:person.publicEmailUrl||"",publicPhone:phoneMatch?.phone||(previousPhoneRechecked?'':person.publicPhone||''),publicPhoneUrl:phoneMatch?.url||(previousPhoneRechecked?'':person.publicPhoneUrl||'')};
     });
   }
   function matchBuyerScopeEvidence(person={},rows=[],candidate={}){
@@ -1038,7 +1040,7 @@
     const value=clean(role),aliases=[value],swedish=/sweden|svensk|gällivare|malmberget|kiruna|stockholm/i.test(clean(market));
     // Equivalent functional leadership titles share role fit in every market.
     const director=value.match(/^(.+?) director$/i),head=value.match(/^head of (.+)$/i);
-    if(director)aliases.push('Head of '+director[1], 'Director of '+director[1], director[1]+' Head');
+    if(director)aliases.push('Head of '+director[1], 'Director of '+director[1], director[1]+' Head', 'Chief '+director[1]+' Officer');
     if(head)aliases.push(head[1]+' Director', 'Director of '+head[1]);
     if(swedish){const map=[[/procurement director|purchasing director/i,['Inköpschef']],[/procurement manager|purchasing manager/i,['Inköpschef','Inköpsansvarig']],[/^(?:procurement|purchasing)$/i,['Inköpschef','Inköpsansvarig','Inköpare','Strategiskt inköp']],[/strategic sourcing/i,['Strategisk inköpare','Strategiskt inköp']],[/project director/i,['Projektchef']],[/project manager/i,['Projektledare','Projektansvarig']],[/engineering director|technical director/i,['Teknisk chef','Ingenjörschef']],[/engineering manager|technical manager/i,['Teknisk chef','Ingenjörschef','Teknisk projektledare']],[/^(?:engineering|technical)$/i,['Teknisk chef','Ingenjörschef','Teknisk projektledare']],[/operations|plant/i,['Driftchef','Anläggningschef']],[/production/i,['Produktionschef']],[/maintenance/i,['Underhållschef']],[/capex|investment/i,['Investeringschef','Investeringsprojektledare']]];for(const [pattern,values] of map)if(pattern.test(value))aliases.push(...values);}
     return [...new Set(aliases)].slice(0,8);
@@ -1205,7 +1207,7 @@
     const subordinate=/\b(deputy|assistant|associate|vice head)\b/i.test(person.title);
     const functionName=buyerFunction(match?.role||person.title);
     const departmentHead=/head of|avdelningschef|chief|\bceo\b|\bowner\b|counsel/i.test(person.title);
-    const authority=leadership?(subordinate?16:departmentHead||functionName==='Procurement / sourcing'?25:22):/manager|sourcing|inköpare|projektledare|ansvarig/i.test(person.title)?12:4;
+    const authority=leadership?(subordinate?16:departmentHead||functionName==='Procurement / sourcing'?25:functionName==='Projects'?20:22):/manager|sourcing|inköpare|projektledare|ansvarig/i.test(person.title)?12:4;
     const breakdown={
       role:{points:match?Math.round((match.exact?1:.65)*25):0,max:25,basis:match?`Matches ${match.role}`:'No supported role match'},
       authority:{points:match?authority:0,max:25,basis:`${functionName} responsibility inferred from title; purchasing authority unconfirmed`},
@@ -1277,7 +1279,7 @@
       if(!role||!relevance){reject('roleMatching',role?'Parsed role does not match any requested buying function':'No current job title could be parsed');continue;}
       diagnostic.roleMatching='complete';diagnostic.matchedBuyerRole=relevance.role;
       const identity=linkedIn||rawUrl||(name.toLowerCase()+'|'+role.toLowerCase());if(seen.has(identity)){diagnostic.rejectionReason='Duplicate person or source identity';continue;}seen.add(identity);
-      diagnostic.accepted=true;people.push({id:'public-'+slug(identity),name,title:role,organization:company,publicName:name,publicNameUrl:rawUrl||linkedIn,publicLinkedinUrl:linkedIn||'',identityEvidenceDate:clean(row.date||row.publishedAt).slice(0,40)});
+      diagnostic.accepted=true;people.push({id:'public-'+slug(identity),name,title:role,organization:company,publicName:name,publicNameUrl:rawUrl||linkedIn,publicLinkedinUrl:linkedIn||'',identityEvidenceDate:clean(evidenceDate({...row,date:row.date||row.publishedAt})).slice(0,40)});
     }
     return {people:selectDecisionMakers(people,profile,30),diagnostics};
   }

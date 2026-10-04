@@ -30,3 +30,19 @@ test('decision role, score version and research evidence survive normalization a
  const saved=C.mapDiscoveryCandidateToCrm(restored).intelligence.research_snapshot.buyerResearch.buyers[0];
  assert.equal(saved.qualification.version,3);assert.equal(saved.emailResearch.searches,3);
 });
+test('functional chief officers receive full role fit and purchasing responsibility outweighs a source-quality gap',()=>{
+ for(const [functionName,decisionRole] of [['Procurement','Procurement Director'],['Engineering','Engineering Director'],['Marketing','Marketing Director']]){
+  const q=D.qualifyBuyer(buyer('chief',`Chief ${functionName} Officer`),{decisionMakers:decisionRole},company);
+  assert.equal(q.breakdown.role.points,25);
+ }
+ const chief=buyer('chief','Chief Procurement Officer',{publicNameUrl:'https://linkedin.com/in/chief'}),project=buyer('project','Projektchef');
+ assert.ok(D.qualifyBuyer(chief,profile,company).total>D.qualifyBuyer(project,profile,company).total);
+});
+test('contact-only pages retain the role identity source, while dated role evidence controls freshness',()=>{
+ const person=buyer('project','Project Director',{publicName:'Anna Buyerproject',publicNameUrl:'https://linkedin.com/in/anna',identityEvidenceDate:'2026-09-01'});
+ const contact={url:'https://example.com/contact',markdown:'Anna Buyerproject anna.buyerproject@example.com'};
+ const retained=D.matchPublicBuyerDetails([person],[contact],company.domain)[0];
+ assert.equal(retained.publicEmailUrl,contact.url);assert.equal(retained.publicNameUrl,person.publicNameUrl);assert.equal(retained.identityEvidenceDate,person.identityEvidenceDate);
+ const dated={url:'https://example.com/old-project',metadata:{publishedTime:'2013-05-01'},markdown:'Anna Buyerproject, Project Director, anna.buyerproject@example.com'};
+ const old=D.matchPublicBuyerDetails([person],[dated],company.domain)[0];assert.equal(old.identityEvidenceDate,'2013-05-01');assert.equal(D.buyerResearchAssessment(old).status,'review_required');
+});
