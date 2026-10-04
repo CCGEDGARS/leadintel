@@ -37,3 +37,9 @@ test('localized current employer snippets and title suffixes resolve without acc
  const trace=D.tracePublicBuyers(rows,'LKAB',{decisionMakers:'Project Manager'});
  assert.deepEqual(trace.people.map(p=>p.name).sort(),['Helena Oja','Ulrik Gren']);assert.equal(trace.diagnostics[2].accepted,false);assert.equal(trace.diagnostics[3].accepted,false);
 });
+
+test('role coverage reports missing buying functions instead of treating project-only results as complete coverage',()=>{
+ const ctx={};vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('function buyerRoleCoverage('),source.indexOf('function buyerProviderStatusHtml(')),ctx);
+ const coverage=ctx.buyerRoleCoverage({buyerDiscovery:{opportunityRoles:['Procurement Director','Project Manager','Engineering Director'],pool:[{name:'Anna Andersson',title:'Projektchef'}]}});
+ assert.deepEqual(Array.from(coverage.missing),['Procurement / sourcing','Engineering']);assert.deepEqual(Array.from(coverage.covered),['Projects']);
+});
