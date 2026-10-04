@@ -1,3 +1,4 @@
+import {apolloCreditUsage} from './apollo-credit-policy.js';
 import {apolloCapabilities} from './service-integrations.js';
 import {allowedOrigin,corsHeaders,sha256,randomToken,constantTimeEqual,cookieValue,sessionCookie,clearSessionCookie} from "./security.js";
 import {canonicalSnapshot,ingestCanonicalSnapshot} from "./canonical.js";
@@ -146,8 +147,7 @@ async function router(request,env) {
   }
   if(url.pathname==="/api/enrichment-policy"&&request.method==="GET") {
     const policy=await env.DB.prepare("SELECT provider,minimum_score,daily_credit_limit,monthly_credit_limit,retry_after_days,allow_personal_email,phone_lookup_mode FROM enrichment_policies WHERE workspace_id=?").bind(workspaceId).first();
-    const daily=await env.DB.prepare("SELECT COALESCE(SUM(credits_reserved),0) value FROM enrichment_requests WHERE workspace_id=? AND created_at>=date('now') AND status!='cancelled'").bind(workspaceId).first();
-    const monthly=await env.DB.prepare("SELECT COALESCE(SUM(credits_reserved),0) value FROM enrichment_requests WHERE workspace_id=? AND created_at>=date('now','start of month') AND status!='cancelled'").bind(workspaceId).first();
+    const usage=await apolloCreditUsage(env.DB,workspaceId);const daily={value:usage.daily},monthly={value:usage.monthly};
     return json({policy,usage:{daily:Number(daily?.value)||0,monthly:Number(monthly?.value)||0},configured:Boolean(env.APOLLO_API_KEY),personal_email_mode:policy?.allow_personal_email?"owner_approval":"disabled",personal_email_default:false,phone_numbers:false,phone_lookup_mode:policy?.phone_lookup_mode||"on_request"},200,cors);
   }
   const enrichmentMatch=url.pathname.match(/^\/api\/opportunities\/([^/]+)\/enrich$/);
@@ -164,8 +164,7 @@ async function router(request,env) {
     if(body.allow_personal_email&&membership.role!=="owner")return error("Only the workspace owner can approve a personal-email exception",403,cors);
     const recent=await env.DB.prepare("SELECT id,status,personal_email_requested,created_at FROM enrichment_requests WHERE opportunity_id=? AND created_at>=datetime('now',?) ORDER BY created_at DESC LIMIT 1")
       .bind(opportunityId,`-${Number(policy.retry_after_days)||30} days`).first();
-    const daily=await env.DB.prepare("SELECT COALESCE(SUM(credits_reserved),0) value FROM enrichment_requests WHERE workspace_id=? AND created_at>=date('now') AND status!='cancelled'").bind(workspaceId).first();
-    const monthly=await env.DB.prepare("SELECT COALESCE(SUM(credits_reserved),0) value FROM enrichment_requests WHERE workspace_id=? AND created_at>=date('now','start of month') AND status!='cancelled'").bind(workspaceId).first();
+    const usage=await apolloCreditUsage(env.DB,workspaceId);const daily={value:usage.daily},monthly={value:usage.monthly};
     const domain=normalizeDomain(record.domain||record.website_url);
     const recentBlocks=recent&&!(personalApproved&&recent.status==="not_found"&&!recent.personal_email_requested);
     const decision=enrichmentDecision({score:record.score_10,evidenceCount:record.evidence_count,verifiedContact:Number(record.verified_contacts)>0,domain,recentRequest:recentBlocks?recent:null,dailyReserved:daily?.value,monthlyReserved:monthly?.value,policy});
