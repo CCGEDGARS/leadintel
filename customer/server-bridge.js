@@ -60,7 +60,7 @@
     return {...value,brandIdentity:safeBrandIdentity(value.brandIdentity)};
   }
   function bundle(){return {main:safeMainState(parse(KEYS.main)),discovery:parse(KEYS.discovery),outreach:parse(KEYS.outreach),delivery:parse(KEYS.delivery),meta:{discovery:parse(KEYS.meta)}};}
-  function sameWorkspacePayload(left,right){try{return JSON.stringify(left)===JSON.stringify(right);}catch{return false;}}
+  function sameWorkspacePayload(left,right){try{return root.LeadIntelWorkspaceSync?.equal?.(left,right)??JSON.stringify(left)===JSON.stringify(right);}catch{return false;}}
   function isEmptyObject(value){return !value||typeof value!=='object'||Object.keys(value).length===0;}
   function hasLocalData(value=bundle()){return ['main','discovery','outreach','delivery'].some(key=>!isEmptyObject(value[key]));}
   function readVersionMap(){try{const value=JSON.parse(localStorage.getItem(VERSION_KEY)||'{}');return value&&typeof value==='object'&&!Array.isArray(value)?value:{};}catch{return {};}}
@@ -123,7 +123,7 @@
   async function fetchWorkspaceState(){if(!bridge.workspace)return null;const {response,payload}=await api(`/api/customer/state?workspace_id=${encodeURIComponent(bridge.workspace.id)}`);if(!response.ok)throw new Error(payload.error||'Unable to load workspace state');bridge.stateVersion=Number(payload.version)||0;return payload;}
   function pickWorkspace(){const preferred=localStorage.getItem(WORKSPACE_KEY);const dirty=readDirtyLocalState();const dirtyWorkspace=dirty?.workspace_id?bridge.workspaces.find(item=>item.id===dirty.workspace_id):null;bridge.workspace=dirtyWorkspace||bridge.workspaces.find(item=>item.id===preferred)||bridge.workspaces[0]||null;if(bridge.workspace)localStorage.setItem(WORKSPACE_KEY,bridge.workspace.id);}
   function enterConflict(state,message){bridge.conflict=true;bridge.conflictState=state&&typeof state==='object'?state:null;renderConflictActions();setStatus('Sync conflict · local changes preserved','error');root.dispatchEvent(new CustomEvent('leadintel:server-conflict'));showToast(message||'Server state changed in another session. Your local changes are still safe in this browser.');}
-  async function hydrateAuthenticated(){const persistence=root.LeadIntelWorkspacePersistence;if(hasDirtyLocalState()&&persistence?.isExplicitlySaved?.()&&persistence.hasUnsavedChanges?.()===false)clearDirtyLocalState();const state=await fetchWorkspaceState();const marker=`${bridge.workspace.id}:${state.version}`;const dirty=readDirtyLocalState();if(hasDirtyLocalState()){if(!dirty.workspace_id&&Number(state.version)===0)rebaseDirtyLocalState();else if(Number(dirty.base_version)!==Number(state.version)){enterConflict(state,'LeadIntel preserved your local changes because the server workspace changed in another session.');return true;}setStatus('Unsynced changes · retrying','saving');scheduleSave();return true;}if(state.version>0&&sessionStorage.getItem(HYDRATION_KEY)!==marker){applyPayload(state.payload);clearDirtyLocalState();rememberServerVersion(bridge.workspace.id,state.version);sessionStorage.setItem(HYDRATION_KEY,marker);setStatus('Synced to LeadIntel','synced');location.reload();return false;}if(state.version===0&&hasLocalData()){markDirtyLocalState();setStatus('Unsynced changes · saving','saving');scheduleSave();return true;}rememberServerVersion(bridge.workspace.id,state.version);setStatus('Synced to LeadIntel','synced');return true;}
+  async function hydrateAuthenticated(){const persistence=root.LeadIntelWorkspacePersistence;if(hasDirtyLocalState()&&persistence?.isExplicitlySaved?.()&&persistence.hasUnsavedChanges?.()===false)clearDirtyLocalState();const base=persistence?.syncedBase?.(bridge.workspace.id);const state=await fetchWorkspaceState();const marker=`${bridge.workspace.id}:${state.version}`;const dirty=readDirtyLocalState();if(hasDirtyLocalState()){if(!dirty.workspace_id&&Number(state.version)===0)rebaseDirtyLocalState();else if(Number(dirty.base_version)!==Number(state.version)){if(await reconcileServerState(state,base)){location.reload();return false;}enterConflict(state,'LeadIntel preserved your local changes because the server workspace changed in another session.');return true;}setStatus('Unsynced changes · retrying','saving');scheduleSave();return true;}if(state.version>0&&sessionStorage.getItem(HYDRATION_KEY)!==marker){applyPayload(state.payload);clearDirtyLocalState();rememberServerVersion(bridge.workspace.id,state.version);sessionStorage.setItem(HYDRATION_KEY,marker);setStatus('Synced to LeadIntel','synced');location.reload();return false;}if(state.version===0&&hasLocalData()){markDirtyLocalState();setStatus('Unsynced changes · saving','saving');scheduleSave();return true;}rememberServerVersion(bridge.workspace.id,state.version);setStatus('Synced to LeadIntel','synced');return true;}
   async function init(){if(initialized)return;initialized=true;injectCss();injectAccountUi();patchStorage();const conflictNote=sessionStorage.getItem(CONFLICT_KEY);if(conflictNote){sessionStorage.removeItem(CONFLICT_KEY);showToast(conflictNote);}
     try{await fetchSession();if(!bridge.session?.authenticated){const returnedFromSignIn=/[?&]auth=success(?:&|$)/.test(root.location?.search||'');setStatus(returnedFromSignIn?'Sign-in session unavailable · Workspace not loaded':'Local workspace · Sign in to sync',returnedFromSignIn?'error':'local');renderAccount();root.dispatchEvent(new CustomEvent('leadintel:server-ready',{detail:bridge}));return;}await fetchWorkspaces();pickWorkspace();renderAccount();if(!bridge.workspace){setStatus('Signed in · No workspace','error');return;}const stay=await hydrateAuthenticated();if(!stay)return;const migration=await migrateLocalPipeline();if(!migration.ok)console.warn('LeadIntel CRM migration:',migration.error||'migration unavailable');await flushBrandAssetCleanup();await Promise.all([refreshGmailStatus(),refreshMicrosoftMailStatus()]);root.dispatchEvent(new CustomEvent('leadintel:server-ready',{detail:bridge}));}catch(cause){console.warn('LeadIntel server bridge:',cause);setStatus('Local cache · Server unavailable','error');renderAccount();root.dispatchEvent(new CustomEvent('leadintel:server-ready',{detail:bridge}));}
   }
@@ -135,9 +135,35 @@
       clearTimeout(saveTimer);const saved=await persistence.saveWorkspace({automatic:true});return {saved:Boolean(saved),version:bridge.stateVersion};
     }
     clearTimeout(saveTimer);const context={workspaceId:bridge.workspace.id,saveIntent:options?.saveIntent===true,explicitSave:options?.explicitSave===true};return runWorkspaceSave(context,()=>saveWorkspaceState(context));}
-  async function saveWorkspaceState(context){if(!bridge.session?.authenticated||!bridge.workspace||bridge.workspace.id!==context.workspaceId||bridge.conflict)return {saved:false};markDirtyLocalState();setStatus('Saving to LeadIntel…','saving');const localPayload=bundle();const syncPayload=root.LeadIntelStateBudget?.prepareForSync?.(localPayload)?.payload||localPayload;const payload={schema_version:1,version:bridge.stateVersion,payload:syncPayload};const {response,payload:result}=await api(`/api/customer/state?workspace_id=${encodeURIComponent(context.workspaceId)}`,{method:'PUT',body:JSON.stringify(payload),leadintelSaveIntent:context.saveIntent,leadintelExplicitSave:context.explicitSave});
-    if(response.status===409){bridge.stateVersion=Number(result.current?.version)||bridge.stateVersion;sessionStorage.setItem(CONFLICT_KEY,'Server state changed in another session. Your local changes were preserved and were not overwritten.');enterConflict(result.current);return {saved:false,conflict:true};}
+  async function saveWorkspaceState(context){if(!bridge.session?.authenticated||!bridge.workspace||bridge.workspace.id!==context.workspaceId||bridge.conflict)return {saved:false};markDirtyLocalState();setStatus('Saving to LeadIntel…','saving');const localPayload=bundle();const base=root.LeadIntelWorkspacePersistence?.syncedBase?.(context.workspaceId);const syncPayload=root.LeadIntelStateBudget?.prepareForSync?.(localPayload)?.payload||localPayload;const payload={schema_version:1,version:bridge.stateVersion,payload:syncPayload};const {response,payload:result}=await api(`/api/customer/state?workspace_id=${encodeURIComponent(context.workspaceId)}`,{method:'PUT',body:JSON.stringify(payload),leadintelSaveIntent:context.saveIntent,leadintelExplicitSave:context.explicitSave});
+    if(response.status===409){if(!context.reconciled&&!resetRecordMatchesWorkspace(SERVER_RESET_PENDING_KEY,context.workspaceId)&&await reconcileServerState(result.current,base)){if(!hasDirtyLocalState()){location.reload();return {saved:true,version:bridge.stateVersion};}const retried=await saveWorkspaceState({...context,reconciled:true});if(retried.saved&&!retried.dirty)location.reload();return retried;}bridge.stateVersion=Number(result.current?.version)||bridge.stateVersion;sessionStorage.setItem(CONFLICT_KEY,'Server state changed in another session. Your local changes were preserved and were not overwritten.');enterConflict(result.current);return {saved:false,conflict:true};}
     if(!response.ok){setStatus('Sync failed · Local cache safe','error');throw new Error(result.error||'Workspace save failed');}if(result?.saved===false){setStatus('Sync skipped · Local cache safe','error');return {saved:false,version:bridge.stateVersion};}const savedWorkspaceId=context.workspaceId;bridge.stateVersion=Number(result.version)||bridge.stateVersion+1;rememberServerVersion(savedWorkspaceId,bridge.stateVersion);sessionStorage.setItem(HYDRATION_KEY,`${savedWorkspaceId}:${bridge.stateVersion}`);const hasNewerLocalState=!sameWorkspacePayload(bundle(),localPayload);if(hasNewerLocalState)rebaseDirtyLocalState();else clearDirtyLocalState();bridge.conflict=false;bridge.conflictState=null;renderConflictActions();setStatus(hasNewerLocalState?'Unsaved changes · click Save workspace':'Synced to LeadIntel',hasNewerLocalState?'saving':'synced');const afterSave=root.LeadIntelWorkspaceResetHygiene?.afterWorkspaceSaved;if(typeof afterSave==='function')void Promise.resolve(afterSave(savedWorkspaceId)).catch(cause=>console.warn('LeadIntel brand asset reset cleanup:',cause));root.dispatchEvent(new CustomEvent('leadintel:server-synced'));return {saved:true,version:bridge.stateVersion,dirty:hasNewerLocalState};
+  }
+  async function reconcileServerState(state,base){
+    const sync=root.LeadIntelWorkspaceSync,workspaceId=bridge.workspace?.id;
+    if(!sync||!workspaceId||!state?.payload||!Number.isSafeInteger(Number(state.version)))return false;
+    const local=bundle(),server=root.LeadIntelStateBudget?.restoreFromSync?.(state.payload)||state.payload;
+    const identical=sync.equal(sync.project(local),sync.project(server));
+    const result=identical?{safe:true,payload:local}:base?.workspaceId===workspaceId&&base.version===Number(readDirtyLocalState()?.base_version??bridge.stateVersion)?sync.merge(base.payload,local,server):null;
+    if(!result?.safe)return false;
+    // Keep both sides before applying even a conflict-free merge. Quota/network failures
+    // must retain the local draft and leave the review gate closed.
+    try{preserveSyncRecovery(state,'safe_merge');}catch{return false;}
+    try{applyPayload(result.payload);}catch{
+      try{applyPayload(local);}catch{}return false;
+    }
+    bridge.stateVersion=Number(state.version);
+    rememberServerVersion(workspaceId,bridge.stateVersion);bridge.conflict=false;bridge.conflictState=null;
+    sessionStorage.removeItem(CONFLICT_KEY);
+    if(sync.equal(sync.project(result.payload),sync.project(server))){
+      clearDirtyLocalState();sessionStorage.setItem(HYDRATION_KEY,`${workspaceId}:${bridge.stateVersion}`);
+      root.LeadIntelWorkspacePersistence?.snapshotFromServerPayload?.(state.payload,{workspaceId,version:bridge.stateVersion,localData:root.LeadIntelWorkspacePersistence.currentWorkspaceData(),dirty:false});
+      renderConflictActions();setStatus('Synced to LeadIntel','synced');root.dispatchEvent(new CustomEvent('leadintel:server-synced'));
+    }else{
+      root.LeadIntelWorkspacePersistence?.snapshotFromServerPayload?.(server,{workspaceId,version:bridge.stateVersion});
+      rebaseDirtyLocalState();setStatus('Combining non-overlapping changes…','saving');scheduleSave();
+    }
+    return true;
   }
   function preserveSyncRecovery(state,source){
     // A resolution must never erase the only copy of either side. Fail closed
@@ -157,6 +183,7 @@
   async function resolveSyncConflict(source){
     if(!bridge.workspace||!bridge.conflictState)return {resolved:false};
     const workspaceId=bridge.workspace.id;let latestState=bridge.conflictState;
+    clearTimeout(saveTimer);setConflictBusy(true);setStatus('Resolving sync conflict…','saving');
     try{
       for(let attempt=0;attempt<3;attempt++){
         const state=await fetchWorkspaceState();
@@ -167,20 +194,21 @@
           rememberServerVersion(workspaceId,bridge.stateVersion);clearDirtyLocalState();
           bridge.conflict=false;bridge.conflictState=null;sessionStorage.removeItem(CONFLICT_KEY);
           sessionStorage.setItem(HYDRATION_KEY,`${workspaceId}:${bridge.stateVersion}`);
-          root.LeadIntelWorkspacePersistence?.snapshotFromServerPayload?.(state.payload,{localData:root.LeadIntelWorkspacePersistence.currentWorkspaceData(),dirty:false});
+          root.LeadIntelWorkspacePersistence?.snapshotFromServerPayload?.(state.payload,{workspaceId,version:bridge.stateVersion,localData:root.LeadIntelWorkspacePersistence.currentWorkspaceData(),dirty:false});
           renderConflictActions();setStatus('Synced to LeadIntel','synced');root.dispatchEvent(new CustomEvent('leadintel:server-synced'));location.reload();return {resolved:true,source};
         }
         bridge.conflict=false;bridge.conflictState=null;sessionStorage.removeItem(CONFLICT_KEY);
         rebaseDirtyLocalState();renderConflictActions();setStatus('Saving local changes…','saving');
         const result=await saveNow({saveIntent:true,explicitSave:true});
         if(result.saved){showToast('Your local changes are now saved. A recovery copy of both versions is available.');return {resolved:true,source,...result};}
-        if(!result.conflict)return {resolved:false,source,...result};
+        if(!result.conflict)throw new Error('Workspace save was not completed; retry recovery');
       }
       return {resolved:false,source,saved:false,conflict:true};
     }catch(cause){
-      bridge.conflict=true;bridge.conflictState=bridge.conflictState||latestState;renderConflictActions();setStatus('Recovery failed · local changes preserved','error');showToast('Could not safely resolve the conflict. Your local changes are preserved.');return {resolved:false,source,saved:false,error:String(cause?.message||cause)};
-    }
+      bridge.conflict=true;bridge.conflictState=bridge.conflictState||latestState;renderConflictActions();setStatus('Recovery failed · local changes preserved','error');showToast(`Could not resolve sync: ${String(cause?.message||'Request failed').slice(0,180)}. Both versions are preserved.`);return {resolved:false,source,saved:false,error:String(cause?.message||cause)};
+    }finally{setConflictBusy(false);}
   }
+  function setConflictBusy(busy){for(const id of ['server-use-server','server-keep-local']){const button=document.getElementById(id);if(button)button.disabled=busy;}document.getElementById('server-conflict-actions')?.setAttribute('aria-busy',String(busy));}
   function resolveConflictUseServer(){if(!conflictResolution)conflictResolution=resolveSyncConflict('server').finally(()=>{conflictResolution=null;});return conflictResolution;}
   function resolveConflictKeepLocal(){if(!conflictResolution)conflictResolution=resolveSyncConflict('local').finally(()=>{conflictResolution=null;});return conflictResolution;}
 

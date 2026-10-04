@@ -8,8 +8,9 @@ function load(fetchImpl,{withBridge=false,quota=false}={}){
  const storage={getItem:key=>values.get(key)??null,setItem(key,value){if(quota&&key===RECOVERY)throw new Error('Quota exceeded');values.set(key,String(value));},removeItem:key=>values.delete(key)};
  const root={console,URL,Request,Response,Headers,FormData,Blob,Date,Promise,localStorage:storage,sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}},location:{href:'https://leadintel.ccgroup.lv/customer/',reload(){events.push('reload');}},fetch:fetchImpl,document:{readyState:'loading',getElementById:()=>null,querySelector:()=>null,addEventListener(){}},addEventListener(){},dispatchEvent:e=>events.push(e.type),setTimeout(fn){timers.set(++id,fn);return id;},clearTimeout:id=>timers.delete(id),CustomEvent:class{constructor(type){this.type=type;}}};
  root.window=root;root.globalThis=root;
+ vm.runInNewContext(fs.readFileSync(require.resolve('../workspace-sync.js'),'utf8'),root);
  vm.runInNewContext(persistence,root);
- if(withBridge){vm.runInNewContext(bridgeSource,root);Object.assign(root.LeadIntelServerBridge,{session:{authenticated:true},workspace:{id:'w1'},stateVersion:3,conflict:true,conflictState:{version:3,payload:{main:{website:'old.example'}}}});}
+ if(withBridge){vm.runInNewContext(bridgeSource.replace('root.LeadIntelServerBridge=bridge;', 'root.__hydrate=hydrateAuthenticated;root.LeadIntelServerBridge=bridge;'),root);Object.assign(root.LeadIntelServerBridge,{session:{authenticated:true},workspace:{id:'w1'},stateVersion:3,conflict:true,conflictState:{version:3,payload:{main:{website:'old.example'}}}});}
  return {root,values,events};
 }
 const endpoint='https://leadintel.ccgroup.lv/api/customer/state?workspace_id=w1';
@@ -64,4 +65,67 @@ test('a previous workspace recovery copy is never included in another workspace 
  values.set(RECOVERY,JSON.stringify({workspace_id:'other-workspace',original:{local:{private:'Other seller'}}}));
  assert.equal((await root.LeadIntelServerBridge.resolveConflictKeepLocal()).resolved,true);
  assert.equal(JSON.parse(values.get(RECOVERY)).workspace_id,'w1');assert.doesNotMatch(values.get(RECOVERY),/Other seller/);
+});
+
+function establishBase(root,values,version=3){
+ const payload={main:JSON.parse(values.get(MAIN)),discovery:{},outreach:{},delivery:{},meta:{discovery:{}}};
+ root.LeadIntelWorkspacePersistence.snapshotFromServerPayload(payload,{workspaceId:'w1',version,localData:root.LeadIntelWorkspacePersistence.currentWorkspaceData(),dirty:false});
+ values.set('leadintel_customer_v2_server_dirty',JSON.stringify({workspace_id:'w1',base_version:version}));
+ return payload;
+}
+test('409 with disjoint changes preserves server research and local edits before one bounded retry',async()=>{
+ const puts=[];let server;
+ const {root,values}=load(async(input,options)=>{
+  if(options.method==='PUT'){puts.push(JSON.parse(options.body));return puts.length===1?new Response(JSON.stringify({current:server}),{status:409}):new Response(JSON.stringify({saved:true,version:5}));}
+  return new Response(JSON.stringify(server));
+ },{withBridge:true});
+ const base=establishBase(root,values);server={version:4,payload:{...base,discovery:{buyers:[{name:'New buyer',source:'https://buyer.example/team'}]}}};
+ values.set(MAIN,JSON.stringify({...base.main,answers:{offer:'New local offer'}}));
+ Object.assign(root.LeadIntelServerBridge,{conflict:false,conflictState:null});
+ const result=await root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});
+ assert.equal(result.saved,true);assert.equal(puts.length,2);assert.equal(puts[1].version,4);assert.equal(puts[1].payload.main.answers.offer,'New local offer');assert.equal(puts[1].payload.discovery.buyers[0].name,'New buyer');
+ const recovery=JSON.parse(values.get(RECOVERY));assert.equal(recovery.local.main.answers.offer,'New local offer');assert.equal(recovery.server.payload.discovery.buyers[0].name,'New buyer');
+ assert.equal(root.LeadIntelServerBridge.conflict,false);
+});
+test('409 with overlapping edits, missing baseline or wrong workspace never overwrites server',async()=>{
+ for(const mode of ['overlap','missing','other-workspace']){
+  let server,writes=0;const {root,values}=load(async()=>{writes++;return new Response(JSON.stringify({current:server}),{status:409});},{withBridge:true});
+  const base=establishBase(root,values);server={version:4,payload:{...base,main:{...base.main,answers:{offer:'Remote edit'}}}};
+  values.set(MAIN,JSON.stringify({...base.main,answers:{offer:'Local edit'}}));
+  if(mode==='missing')values.delete('leadintel_customer_v2_workspace_saved_snapshot_v1');
+  if(mode==='other-workspace'){const key='leadintel_customer_v2_workspace_saved_snapshot_v1',snapshot=JSON.parse(values.get(key));snapshot.workspace_id='w2';values.set(key,JSON.stringify(snapshot));}
+  Object.assign(root.LeadIntelServerBridge,{conflict:false,conflictState:null});
+  const result=await root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});
+  assert.equal(result.conflict,true);assert.equal(writes,1);assert.equal(JSON.parse(values.get(MAIN)).answers.offer,'Local edit');
+ }
+});
+test('quota failure blocks automatic merge before replacing local evidence',async()=>{
+ let writes=0,server;const {root,values}=load(async()=>{writes++;return new Response(JSON.stringify({current:server}),{status:409});},{withBridge:true,quota:true});
+ const base=establishBase(root,values);server={version:4,payload:{...base,discovery:{buyers:[{name:'Remote buyer'}]}}};values.set(MAIN,JSON.stringify({...base.main,answers:{offer:'Local edit'}}));
+ Object.assign(root.LeadIntelServerBridge,{conflict:false,conflictState:null});
+ assert.equal((await root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true})).conflict,true);assert.equal(writes,1);assert.equal(JSON.parse(values.get(MAIN)).answers.offer,'Local edit');
+});
+
+test('reload safely reconciles navigation changes with newer researched buyers using the trusted baseline',async()=>{
+ let server;const {root,values,events}=load(async()=>new Response(JSON.stringify(server)),{withBridge:true});
+ const base=establishBase(root,values);server={version:4,payload:{...base,discovery:{buyers:[{name:'New buyer'}]}}};
+ values.set('leadintel_customer_v2_discovery_meta',JSON.stringify({stage:5}));
+ Object.assign(root.LeadIntelServerBridge,{conflict:false,conflictState:null});
+ assert.equal(await root.__hydrate(),false);
+ assert.equal(JSON.parse(values.get('leadintel_customer_v2_discovery')).buyers[0].name,'New buyer');
+ assert.equal(JSON.parse(values.get('leadintel_customer_v2_discovery_meta')).stage,5);
+ assert.equal(root.LeadIntelServerBridge.conflict,false);assert.ok(events.includes('reload'));
+ assert.equal(root.LeadIntelWorkspacePersistence.syncedBase('w1').version,4);
+});
+test('identical payload with a newer server version clears false conflict without writing',async()=>{
+ let writes=0,server;const {root,values}=load(async(input,options)=>{writes++;return new Response(JSON.stringify({current:server}),{status:409});},{withBridge:true});
+ server={version:4,payload:establishBase(root,values)};
+ Object.assign(root.LeadIntelServerBridge,{conflict:false,conflictState:null});
+ const result=await root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});
+ assert.equal(result.saved,true);assert.equal(writes,1);assert.equal(root.LeadIntelServerBridge.conflict,false);
+});
+test('unsaved recovery response restores review state and retains the local draft',async()=>{
+ const {root,values}=load(async(input,options)=>new Response(JSON.stringify(options.method==='PUT'?{saved:false,version:4}:{version:4,payload:{main:{website:'Remote'}}})),{withBridge:true});
+ const result=await root.LeadIntelServerBridge.resolveConflictKeepLocal();
+ assert.equal(result.resolved,false);assert.equal(root.LeadIntelServerBridge.conflict,true);assert.equal(JSON.parse(values.get(MAIN)).answers.offer,'Local offer');assert.match(result.error,/not completed/);
 });
