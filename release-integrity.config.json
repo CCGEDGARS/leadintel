@@ -240,6 +240,30 @@
         "Purchasing / supplier selection",
         "version:3,decisionRole"
       ]
+    },
+    {
+      "id": "top-four-selective-research",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "topFourResearchCandidates",
+        "data-research-buyer",
+        "data-research-remaining",
+        "Guessed Gmail candidates \u00b7 unconfirmed"
+      ]
+    },
+    {
+      "id": "linkedin-direct-message-handoff",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "choice.channel==='linkedin'",
+        "confirmedLinkedInBuyer",
+        "await buildDossier()",
+        "LinkedIn direct message \u00b7 draft only"
+      ]
     }
   ],
   "retry": {

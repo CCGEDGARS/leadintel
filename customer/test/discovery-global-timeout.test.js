@@ -1255,3 +1255,37 @@ test('restored legacy research keeps unresolved identities and incomplete covera
  context.__restoreNewerBuyerResearch(candidate,{company:{normalized_domain:'example.com'},intelligence:{research_snapshot:{buyerResearch:{version:1,checkedAt:'2026-10-02T00:00:00Z',researchIncomplete:true,unresolved:[{id:'pending',name:'John',title:'Procurement Director'}],buyers:[{id:'p1',name:'Anna Buyer',title:'Procurement Director',organization:'Example',identitySourceUrl:'https://example.com/team',emailResearch:{status:'complete',searches:3,failed:0,checkedAt:new Date().toISOString()}}]}}}});
  const html=context.__renderSelectedProspects([candidate]);assert.match(html,/1 unresolved identities/);assert.match(html,/Research incomplete/);assert.match(html,/Aggregate provider activity was not retained/);assert.match(html,/3 email evidence searches/);
 });
+
+test('default contact research touches four people and preserves the compact six; individual research adds one',async()=>{
+ const queries=[],savedSnapshots=[];
+ const bridgeImpl={session:{authenticated:true},workspace:{id:'w1'},listCrmCompanies:async()=>({ok:true,companies:[{id:'c1',normalized_domain:'example.com'}]}),saveCrmContacts:async()=>({ok:true}),saveCrmCompany:async row=>{savedSnapshots.push(row);return {ok:true};}};
+ const context=loadDiscoveryRunner({requestTimeout:1000,bridgeImpl,fetchImpl:async(url,options)=>{
+  if(/firecrawl(?:-search|\/search)/.test(String(url)))queries.push(JSON.parse(options.body).query);
+  return {ok:true,json:async()=>({data:[]})};
+ }});
+ context.LeadIntelCrm=require('../crm-engine.js');
+ const people=Array.from({length:10},(_,i)=>({id:'p'+i,name:'Anna '+['Alpha','Bravo','Charlie','Delta','Echo','Foxtrot','Golf','Hotel','India','Juliet'][i],publicName:'Anna '+['Alpha','Bravo','Charlie','Delta','Echo','Foxtrot','Golf','Hotel','India','Juliet'][i],organization:'Example',title:i<4?'Head of Procurement':'Procurement Manager',publicNameUrl:'https://example.com/team/'+i,linkedin_url:'https://linkedin.com/in/anna-buyer'+i}));
+ context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',buyerRoles:['Procurement Director','Procurement Manager'],people}]});
+ assert.equal(await context.__findPublicProspectContacts('example.com'),true);
+ let c=context.__discoveryState().selectedProspects[0];assert.equal(c.people.length,10);assert.equal(c.people.filter(p=>p.emailResearch.status==='complete').length,4);
+ assert.ok(c.people.slice(4).every(p=>p.emailResearch.status==='not_searched'));assert.ok(!queries.some(q=>/Echo|Foxtrot|Golf|Hotel|India|Juliet/.test(q)));
+ assert.equal(savedSnapshots.at(-1).intelligence.research_snapshot.buyerResearch.buyers.length,10);
+ const roundtrip=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery'))).selectedProspects[0];assert.equal(roundtrip.publicResearch.researchedPersonIds.length,4);assert.equal(roundtrip.people[0].gmailCandidates.length,3);
+ queries.length=0;assert.equal(await context.__findPublicProspectContacts('example.com',{personIds:['p7']}),true);
+ c=context.__discoveryState().selectedProspects[0];assert.equal(c.people.filter(p=>p.emailResearch.status==='complete').length,5);assert.ok(queries.some(q=>q.includes('Anna Hotel')));assert.ok(!queries.some(q=>/Alpha|Bravo|Charlie|Delta|Echo|Foxtrot|Golf|India|Juliet/.test(q)));
+ const before=queries.length;context.__scheduleSavedBuyerPublicChecks();await new Promise(r=>setTimeout(r,5));assert.equal(queries.length,before);
+});
+
+test('evidence-disqualified top pick is replaced by the next buyer, within ten candidates',async()=>{
+ const context=loadDiscoveryRunner({requestTimeout:1000,bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'}},fetchImpl:async(url,options)=>{
+  if(String(url).includes('/contact-evidence-review')){const people=JSON.parse(options.body).people;return {ok:true,json:async()=>({status:'complete',conflicts:people.some(p=>p.id==='p0')?[{person_id:'p0',reason:'Different employer'}]:[]})};}
+  if(/firecrawl(?:-search|\/search)/.test(String(url)))return {ok:true,json:async()=>({data:[{url:'https://example.com/team',markdown:'Example leadership team and business contacts.'}]})};
+  return {ok:true,json:async()=>({data:[]})};
+ }});
+ const people=['Alpha','Bravo','Charlie','Delta','Echo','Foxtrot','Golf','Hotel','India','Juliet'].map((last,i)=>({id:'p'+i,name:'Anna '+last,publicName:'Anna '+last,organization:'Example',title:'Procurement Director',publicNameUrl:'https://example.com/team/'+i,linkedin_url:'https://linkedin.com/in/anna-'+last.toLowerCase()}));
+ context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',buyerRoles:['Procurement Director'],people}]});
+ assert.equal(await context.__findPublicProspectContacts('example.com'),true);
+ const c=context.__discoveryState().selectedProspects[0],ranked=Discovery.rankedBuyerShortlist(c.people,{decisionMakers:'Procurement Director'},c);
+ assert.deepEqual(Array.from(ranked.recommendedIds),['p1','p2','p3','p4']);assert.equal(c.people.filter(p=>p.emailResearch.status==='complete').length,5);
+ assert.ok(c.publicResearch.conflicts.some(row=>row.person_id==='p0'));assert.ok(c.people.slice(5).every(p=>p.emailResearch.status==='not_searched'));
+});
