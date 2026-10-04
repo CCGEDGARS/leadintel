@@ -17,7 +17,7 @@ const MAX_DISCOVERY_COMPANY_CHECKS=30;
 const SAVING_SEARCH_RESULT_LIMIT=4;
 const SAVING_COMPANY_CHECK_LIMIT=3;
 const SAVING_FIRECRAWL_CALL_LIMIT=10;
-const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261004-v4&ranked-buyers=20261004-v24";
+const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261004-v4&ranked-buyers=20261004-v25";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20261004-contact-policy-v3";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -163,7 +163,8 @@ function restoreNewerBuyerResearch(candidate,detail){
   const saved=detail?.intelligence?.research_snapshot?.buyerResearch;
   const stamp=Date.parse(saved?.checkedAt||'');
   const localStamp=Date.parse(candidate.buyerDiscovery?.checkedAt||'')||0;
-  const legacyRepair=stamp===localStamp&&saved?.version!==2&&!candidate.publicResearch?.issues?.includes('Aggregate provider activity was not retained in this legacy CRM snapshot');
+  const obsoletePending=candidate.buyerDiscovery?.pool?.some(p=>p.identityStatus==='pending'&&!p.kept&&!(saved?.unresolved||[]).some(row=>String(row.id)===String(p.id)));
+  const legacyRepair=stamp===localStamp&&saved?.version!==2&&(!candidate.publicResearch?.issues?.includes('Aggregate provider activity was not retained in this legacy CRM snapshot')||obsoletePending);
   if(!Number.isFinite(stamp)||(stamp<=localStamp&&!legacyRepair)||stamp>Date.now()||!saved?.buyers?.length||candidate.peopleStatus==='loading'||candidate.publicContactStatus==='loading')return false;
   if(canonicalDomain(detail.company?.normalized_domain||detail.company?.website)!==canonicalDomain(candidate.domain))return false;
   const previous=candidate.people||[];
@@ -175,7 +176,7 @@ function restoreNewerBuyerResearch(candidate,detail){
     for(const key of ['kept','keptAt','flowSelected','linkedinConfirmedUrl','linkedinConfirmedAt','publicEmailSourceCheck'])if(local?.[key]!==undefined)restored[key]=local[key];
     return restored;
   });
-  candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),...(saved.discovery||{}),found:saved.discovery?.found||0,providerStatus:saved.discovery?.providerStatus||null,resultDiagnostics:saved.discovery?.resultDiagnostics||[],checkedAt:saved.checkedAt,researchVersion:BUYER_RESEARCH_VERSION,researchIncomplete:saved.researchIncomplete===true,coverageFollowUp:saved.coverageFollowUp,pool:LeadIntelDiscovery.mergeBuyerPool(candidate.buyerDiscovery?.pool||[],[...candidate.people,...(saved.unresolved||[]).map(p=>({...p,identityStatus:'pending'}))],{decisionMakers:candidate.buyerRoles})};
+  candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),...(saved.discovery||{}),found:saved.discovery?.found||0,providerStatus:saved.discovery?.providerStatus||null,resultDiagnostics:saved.discovery?.resultDiagnostics||[],checkedAt:saved.checkedAt,researchVersion:BUYER_RESEARCH_VERSION,researchIncomplete:saved.researchIncomplete===true,coverageFollowUp:saved.coverageFollowUp,pool:LeadIntelDiscovery.mergeBuyerPool((candidate.buyerDiscovery?.pool||[]).filter(p=>p.kept),[...candidate.people,...(saved.unresolved||[]).map(p=>({...p,identityStatus:'pending'}))],{decisionMakers:candidate.buyerRoles})};
   candidate.publicResearch=saved.publicResearch||{checkedAt:saved.checkedAt,firecrawl:'unavailable',openai:'unavailable',gemini:'unavailable',patternSearches:candidate.people.reduce((n,p)=>n+(p.emailResearch?.searches||0),0),sources:[...new Set(candidate.people.flatMap(p=>[p.publicNameUrl,p.publicEmailUrl,p.publicPhoneUrl]).filter(Boolean))],issues:['Aggregate provider activity was not retained in this legacy CRM snapshot']};
   candidate.peopleStatus='complete';candidate.publicContactStatus='complete';candidate.publicContactVersion=PUBLIC_NAME_CHECK_VERSION;
   candidate.people=candidate.people.map(p=>({...p,buyerQualification:LeadIntelDiscovery.qualifyBuyer(p,{decisionMakers:candidate.buyerDiscovery.opportunityRoles||candidate.buyerRoles},candidate)}));
