@@ -209,6 +209,26 @@
         "name=\"confirmPhone\"",
         "Public confirmation verifies the identity link, not mailbox delivery."
       ]
+    },
+    {
+      "id": "safe-workspace-sync",
+      "type": "text",
+      "url": "/customer/workspace-sync.js",
+      "status": 200,
+      "contains": [
+        "function merge(base,local,server)",
+        "Arrays are indivisible"
+      ]
+    },
+    {
+      "id": "workspace-sync-recovery",
+      "type": "text",
+      "url": "/customer/server-bridge.js",
+      "status": 200,
+      "contains": [
+        "async function reconcileServerState(state,base)",
+        "setConflictBusy(true)"
+      ]
     }
   ],
   "retry": {
