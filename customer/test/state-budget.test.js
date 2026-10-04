@@ -60,3 +60,31 @@ test('combined market reports and discovery evidence fit the budget without dele
  assert.equal(JSON.stringify(input),before,'cloud compaction must not mutate local research');
  assert.equal(result.payload.main.market.researchReports[0].sources[0].evidenceTextTruncated,true);
 });
+test('expanded buyer traces sync losslessly while preserving ten buyers, URLs and decisions',()=>{
+ const diagnostics=Array.from({length:166},(_,i)=>({index:i,source:i<10?'identity':'firecrawl',url:`https://linkedin.com/in/buyer-${i%20}`,title:'Anna Buyer – Procurement Director at Example Company with an expanded opportunity title '.repeat(4),parsedName:'Anna Buyer',parsedTitle:'Procurement Director',parsedCompany:'Example Company',parsing:'complete',companyVerification:'complete',roleMatching:'complete',accepted:i%3===0,rejectionReason:i%3===0?'':'Duplicate person or source identity'}));
+ diagnostics[0].customEvidence={confirmed:true};diagnostics[1].nullable=null;
+ const company={domain:'example.com',people:Array.from({length:10},(_,i)=>({id:`buyer-${i}`,name:'Anna Buyer',emailResearch:{status:'complete'},flowSelected:i===0})),buyerDiscovery:{resultDiagnostics:diagnostics,pool:[],researchIncomplete:true}};
+ const input={main:{profile:{companyName:'Seller'},answers:{importantNotes:'x'.repeat(240*1024)}},discovery:{candidates:[company],selectedProspects:[company],pipeline:[company]},meta:{discovery:{scriptBuyer:{personId:'buyer-0',contactId:'verified-contact'}}}};
+ const before=JSON.stringify(input);assert.ok(budget.bytes(input)>budget.MAX_SYNC_BYTES);
+ const result=budget.prepareForSync(input);assert.ok(result.bytes<=budget.MAX_SYNC_BYTES);
+ const restored=budget.restoreFromSync(JSON.parse(JSON.stringify(result.payload)));
+ assert.deepEqual(restored,input);assert.equal(JSON.stringify(input),before);
+ assert.equal(restored.discovery.selectedProspects[0].people.length,10);assert.equal(restored.meta.discovery.scriptBuyer.contactId,'verified-contact');
+});
+test('legacy trace arrays remain unchanged and malformed packed traces fail without deleting data',()=>{
+ const legacy={discovery:{buyerDiscovery:{resultDiagnostics:[{url:'https://example.com',accepted:true}]}}};
+ assert.deepEqual(budget.restoreFromSync(legacy),legacy);
+ assert.throws(()=>budget.restoreFromSync({resultDiagnostics:{format:'leadintel-buyer-trace-v1',columns:['url'],values:['https://example.com'],rows:[[5]]}}),/Invalid stored buyer research trace/);
+});
+test('server hydration restores packed buyer decisions before writing local application state',()=>{
+ const vm=require('node:vm'),source=fs.readFileSync(path.join(__dirname,'../server-bridge.js'),'utf8');
+ const rows=Array.from({length:30},(_,i)=>({index:i,url:'https://example.com/team',title:'Repeated sourced title '.repeat(30),accepted:i%2===0}));
+ const payload=budget.prepareForSync({main:{importantNotes:'x'.repeat(450*1024)},discovery:{buyerDiscovery:{resultDiagnostics:rows}},meta:{discovery:{scriptBuyer:{personId:'buyer-9'}}}}).payload;
+ assert.equal(payload.discovery.buyerDiscovery.resultDiagnostics.format,'leadintel-buyer-trace-v1');
+ const storage=new Map(),context={root:{LeadIntelStateBudget:budget},suppress:false,KEYS:{main:'main',discovery:'discovery',outreach:'outreach',delivery:'delivery',meta:'meta'},localStorage:{setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)}};
+ vm.createContext(context);vm.runInContext(source.slice(source.indexOf('  function applyPayload('),source.indexOf('  async function fetchSession(')),context);context.applyPayload(payload);
+ assert.deepEqual(JSON.parse(storage.get('discovery')).buyerDiscovery.resultDiagnostics,rows);
+ assert.equal(JSON.parse(storage.get('meta')).scriptBuyer.personId,'buyer-9');
+ const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
+ assert.ok(html.indexOf('<script defer src="state-budget.js?')<html.indexOf('<script defer src="server-bridge.js?'));
+});
