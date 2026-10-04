@@ -1374,7 +1374,9 @@ async function saveBuyerResearch(domain){
   const workspaceId=bridge()?.workspace?.id;
   try{
     const profile={decisionMakers:candidate.buyerDiscovery?.opportunityRoles||candidate.buyerRoles||LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate)};
-    candidate.people=LeadIntelDiscovery.rankedBuyerShortlist(candidate.people||[],profile,candidate).people;
+    const existing=candidate.people||[],ranked=LeadIntelDiscovery.rankedBuyerShortlist(existing,profile,candidate).people;
+    const ids=new Set(ranked.map(person=>LeadIntelDiscovery.buyerIdentity(person)));
+    candidate.people=[...ranked,...existing.filter(person=>!ids.has(LeadIntelDiscovery.buyerIdentity(person)))].map(person=>({...person,buyerQualification:LeadIntelDiscovery.qualifyBuyer(person,profile,candidate)}));
     const mapped=window.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate);
     // Contact verification has its own write path. Preserve those records here.
     const saved=await bridge().saveCrmCompany({...mapped,contacts:[]});
