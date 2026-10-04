@@ -459,7 +459,7 @@ test('a saved first-name buyer can gain a sourced full name from a unique public
   assert.equal(requests,8);
   const person=context.__discoveryState().selectedProspects[0].people[0];
   assert.equal(person.publicName,'Jacob Jonstoij');
-  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v17-attributed-phones');
+  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v18-profile-scope');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Jacob Jonstoij/);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/<strong>LinkedIn<\/strong><span>Public match/);
   context.__scheduleSavedBuyerPublicChecks();
@@ -1122,4 +1122,17 @@ test('completed public evidence is synced to CRM when an optional grounded follo
   assert.ok(candidate.publicResearch.patternSearches>0);
   assert.equal(savedContacts,1);
   assert.equal(snapshots,1);
+});
+
+test('known full identities receive contact evidence searches before optional profile follow-ups',async()=>{
+ const queries=[];
+ const context=loadDiscoveryRunner({requestTimeout:1000,fetchImpl:async(url,options)=>{
+  if(String(url).includes('/firecrawl-search'))queries.push(JSON.parse(options.body).query);
+  return {ok:true,json:async()=>({data:[]})};
+ }});
+ context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',market:'Sweden',buyerSearchMode:'user_selected_target',people:[{id:'p1',name:'Jane Example',title:'Head of Procurement'}]}]});
+ await context.__findPublicProspectContacts('example.com');
+ const contact=queries.indexOf('site:example.com "Jane Example"');
+ const profiles=queries.findIndex(query=>query.startsWith('site:linkedin.com/in/ ('));
+ assert.ok(contact>=0&&profiles>contact);
 });
