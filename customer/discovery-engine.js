@@ -930,7 +930,16 @@
   }
   function buyerResearchPlan(candidate={},profile={}){
     const roles=opportunityBuyerRoles(candidate,profile),company=clean(candidate.company),domain=companyIdentityDomain(candidate.domain),terms=buyerOpportunityTerms(candidate),expanded=[...new Set(roles.flatMap(role=>localBuyerRoleAliases(role,candidate.market)))],queries=[];
-    for(const role of expanded.slice(0,20)){queries.push('site:linkedin.com/in/ "'+company+'" "'+role+'"');queries.push(('"'+company+'" "'+role+'" '+terms.slice(0,2).map(term=>'"'+term+'"').join(' ')).trim());}
+    // Give every planned role a first pass before spending the budget on variants.
+    // Include local aliases in that pass so later roles are not English-only.
+    for(const role of roles){
+      const titles=localBuyerRoleAliases(role,candidate.market).map(alias=>'"'+alias+'"').join(' OR ');
+      queries.push('site:linkedin.com/in/ "'+company+'" ('+titles+')');
+    }
+    for(const role of roles){
+      const titles=localBuyerRoleAliases(role,candidate.market).map(alias=>'"'+alias+'"').join(' OR ');
+      queries.push(('"'+company+'" ('+titles+') '+terms.slice(0,2).map(term=>'"'+term+'"').join(' ')).trim());
+    }
     for(const term of terms.slice(0,3))queries.push('"'+company+'" "'+term+'" (project OR procurement OR engineering OR operations OR inköp OR projektchef OR projektledare)');
     return {target:30,roles,expandedRoles:expanded,opportunityTerms:terms,queries:[...new Set(queries)].slice(0,30),followUp:'Find current professionals at '+company+' ('+domain+') relevant to this specific opportunity: '+clean(candidate.buyerFit?.purchase||candidate.buyerFit?.reason||candidate.fitDescription||'current commercial opportunity')+'. Prioritize: '+roles.join('; ')+'. Opportunity/location terms: '+(terms.join('; ')||'none identified')+'. Search official company/project pages, news, procurement documents, associations, interviews and publicly indexed professional profiles. Return full names, current titles, source URLs and evidence of current employment. Include local-language title variants. Exclude former staff and unrelated departments.'};
   }
