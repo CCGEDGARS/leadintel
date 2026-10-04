@@ -8,7 +8,7 @@ function runtime(automatic=false){
 }
 test('manual buyer card presents four actions and no per-card next action',()=>{
  const {context,person,candidate}=runtime(),html=context.prospectContactControls(candidate,person);
- assert.equal((html.match(/<button /g)||[]).length,4);for(const label of ['Confirm email','Confirm phone','Confirm LinkedIn','Save buyer'])assert.ok(html.includes(label));
+ assert.equal((html.match(/<button /g)||[]).length,4);for(const label of ['Confirm email','Confirm phone','Confirm LinkedIn','Save &amp; proceed'])assert.ok(html.includes(label));
  assert.ok(!html.includes('data-buyer-next'));assert.ok(!html.includes('Clarify data'));
 });
 test('automatic email confirmation is selected and locked without claiming mailbox verification',()=>{
@@ -33,4 +33,22 @@ test('stale workspace/profile review cannot confirm a changed match',async()=>{
  const {context,person,candidate}=runtime();context.bridge=()=>({workspace:{id:'w2'}});
  await assert.rejects(context.saveBuyerLinkedInReview(candidate,person,person.publicLinkedinUrl,'w1'),/Workspace changed/);
  await assert.rejects(context.saveBuyerLinkedInReview(candidate,person,'https://linkedin.com/in/other','w2'),/Profile changed/);
+});
+
+test('save and proceed stays disabled until verified company email exists',()=>{
+ const {context,person,candidate}=runtime();
+ assert.match(context.prospectContactControls(candidate,person),/data-keep-buyer[^>]*disabled>Save &amp; proceed/);
+ context.enrichmentResults.set(person.id,{contact:{work_email:'anna@example.com',email_status:'verified'}});
+ assert.doesNotMatch(context.prospectContactControls(candidate,person),/data-keep-buyer[^>]*disabled/);
+ context.enrichmentResults.set(person.id,{contact:{work_email:'anna@gmail.com',email_status:'verified'}});
+ assert.match(context.prospectContactControls(candidate,person),/data-keep-buyer[^>]*disabled/);
+});
+test('save and proceed awaits save, stops on failure and never toggles an already saved buyer',async()=>{
+ for(const kept of [false,true])for(const saved of [false,true]){
+  const {context,person,candidate}=runtime();person.kept=kept;const calls=[];
+  Object.assign(context,{discovery:{selectedProspects:[candidate]},showToast(){},renderAll(){},keepBuyer:async()=>{calls.push('save');return saved;},addBuyerToFlow:async()=>{calls.push('proceed');return true;}});
+  context.enrichmentResults.set(person.id,{contact:{work_email:'anna@example.com',email_status:'verified'}});
+  const result=await context.saveBuyerAndProceed('example.com',0);
+  assert.deepEqual(calls,kept?['proceed']:saved?['save','proceed']:['save']);assert.equal(result,kept||saved);
+ }
 });
