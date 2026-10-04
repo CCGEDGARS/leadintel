@@ -8,7 +8,7 @@ const SERVICE_PROVIDERS=Object.freeze([
 ]);
 let serviceStatus={role:'',providers:[],checked_at:null};
 let calendlyStatus={role:'',configured:false,connected:false,scheduling_url:DEFAULT_CALENDLY_URL,status:'not_connected'};
-let confirmationLevel='provider_verified',apolloBudget={daily_credit_limit:3,monthly_credit_limit:30};
+let confirmationLevel='provider_verified',apolloBudget={daily_credit_limit:3,monthly_credit_limit:30},apolloUsage={daily:0,monthly:0};
 let busy='';
 let installed=false;
 let renderQueued=false;
@@ -58,6 +58,7 @@ function calendlyCard(){
   </div></article>`;
 }
 function serviceDetail(config,row,current){
+  if(config.provider==='apollo')return `${row?.source==='customer'?'Your Apollo account':'Managed Apollo discovery'} · credit reservations ${apolloUsage.daily}/${Number(apolloBudget.daily_credit_limit)||0} today · ${apolloUsage.monthly}/${Number(apolloBudget.monthly_credit_limit)||0} this month`;
   if(row?.source!=='customer')return current;
   if(config.provider==='firecrawl'&&Number.isFinite(Number(row?.metadata?.remaining_credits)))return `Customer-owned credential · ${Number(row.metadata.remaining_credits)} Firecrawl credits remaining${row.last_used_at?` · last used ${shortDate(row.last_used_at)}`:''}`;
   if(config.provider==='hunter')return `Customer-owned credential${Number.isFinite(Number(row?.metadata?.remaining_verifications))&&row.metadata.remaining_verifications!==null?` · ${Number(row.metadata.remaining_verifications)} verifications remaining`:''}${row.verified_at?` · checked ${shortDate(row.verified_at)}`:''}`;
@@ -105,7 +106,7 @@ function decorateCards(){
     card.classList.add('customer-service-card');
     const purpose=card.querySelector('.integration-purpose');if(purpose)purpose.textContent=`${config.purpose}. ${config.provider==='hunter'?'Connect your own key.':'Add your own key or use the managed fallback.'}`;
     const badge=card.querySelector('.integration-status');if(badge){badge.textContent=observed?.label||statusLabel(row);badge.className=`integration-status ${observed?.state|| (row?.state==='bad'?'bad':row?.source?'good':'neutral')}`;}
-    const meta=card.querySelector('.integration-meta');if(meta)meta.textContent=observed?.detail||serviceDetail(config,row,meta.textContent);
+    const meta=card.querySelector('.integration-meta');if(meta)meta.textContent=observed?.detail||serviceDetail(config,row,meta.textContent);if(meta&&config.provider==='apollo')meta.textContent=serviceDetail(config,row,meta.textContent);
     const existing=card.querySelector('[data-service-extension="1"]');const html=serviceControls(config,row);if(existing)existing.outerHTML=html;else card.insertAdjacentHTML('beforeend',html);
   }
   const communication=document.getElementById('integration-communication-grid');if(communication){const current=communication.querySelector('[data-integration="calendly"]');const html=calendlyCard();if(current)current.outerHTML=html;else communication.insertAdjacentHTML('beforeend',html);}
@@ -119,7 +120,7 @@ async function refreshServiceStatus(verify=false){
     const [services,calendly,workflow,budget]=await Promise.all([api(`/api/integrations/services/status${verify?'?verify=1':''}`),api('/api/integrations/calendly/status'),api('/api/approved-workflow'),api('/api/enrichment-policy')]);
     if(workspace()?.id!==requestedWorkspace)return serviceStatus;if(!services.response.ok)throw new Error(services.payload.error||'Unable to load service integrations');serviceStatus={...services.payload,workspace_id:requestedWorkspace};
     if(workflow.response.ok)confirmationLevel=workflow.payload.config?.buyers?.confirmationLevel||'provider_verified';
-    if(budget.response.ok&&budget.payload.policy)apolloBudget=budget.payload.policy;
+    if(budget.response.ok&&budget.payload.policy){apolloBudget=budget.payload.policy;apolloUsage=budget.payload.usage||{daily:0,monthly:0};}
     window.dispatchEvent(new CustomEvent('leadintel:contact-policy-changed'));
     if(calendly.response.ok)calendlyStatus=calendly.payload;else errors.calendly=calendly.payload.error||'Unable to load Calendly status';
     queueDecorate(true);return serviceStatus;

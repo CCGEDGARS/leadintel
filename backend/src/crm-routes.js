@@ -1,3 +1,4 @@
+import {apolloCreditUsage} from './apollo-credit-policy.js';
 import {apolloCapabilities} from './service-integrations.js';
 import {confirmPublicWorkEmail} from './public-email-confirmation.js';
 import {sha256,cookieValue} from './security.js';
@@ -29,7 +30,7 @@ const WRITER_ROLES=['owner','researcher','sales'];
 const CLIENT_ACTIVITY_TYPES=new Set(['dossier.built','content.approved','email.sent','email.reply_received','meeting.recorded','proposal.recorded','deal.won','deal.lost']);
 
 function isHttpsUrl(value){try{return new URL(String(value||'')).protocol==='https:';}catch{return false;}}
-async function crmEnrichmentUsage(db,workspaceId){const daily=await db.prepare(`SELECT COALESCE(SUM(credits_reserved),0) value FROM crm_enrichment_requests WHERE workspace_id=? AND created_at>=date('now') AND status NOT IN ('cancelled','failed')`).bind(workspaceId).first();const monthly=await db.prepare(`SELECT COALESCE(SUM(credits_reserved),0) value FROM crm_enrichment_requests WHERE workspace_id=? AND created_at>=date('now','start of month') AND status NOT IN ('cancelled','failed')`).bind(workspaceId).first();return {daily:Number(daily?.value)||0,monthly:Number(monthly?.value)||0};}
+const crmEnrichmentUsage=apolloCreditUsage;
 function immediateApolloCredits(person){return person&&clean(person.id||person.person_id,180)?1:0;}
 
 export async function enrichCrmContact(request,env,cors,access,companyId){

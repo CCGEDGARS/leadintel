@@ -47,3 +47,4 @@ test('a recorded identity conflict blocks a verified-email handoff until resolve
  const h=harness();h.candidate.publicResearch={conflicts:[{person_id:h.person.id,reason:'Employer attribution conflict'}]};
  assert.equal(await h.ctx.addBuyerToFlow('example.com',0,{button:h.ctx.button}),false);assert.equal(h.events.length,0);
 });
+test('a legacy verified label without attributable provider evidence cannot open Messages',async()=>{const h=harness();h.ctx.window.LeadIntelContactPolicy=require('../contact-confirmation-policy.js');const legacy={name:h.person.name,work_email:'anna@example.com',email_status:'verified',source:'public_research'};assert.equal(h.ctx.verifiedBuyerEmail(h.candidate,h.person,legacy),'');assert.equal(h.ctx.verifiedBuyerEmail(h.candidate,h.person,{...legacy,verification_provider:'Apollo'}),'anna@example.com');assert.equal(await h.ctx.addBuyerToFlow('example.com',0),false);assert.equal(h.events.length,0);});
