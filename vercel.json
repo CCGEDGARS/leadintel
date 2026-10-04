@@ -12,12 +12,20 @@
     {
       "src": "api/scrapling.py",
       "use": "@vercel/python"
+    },
+    {
+      "src": "api/backend.mjs",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
     {
       "src": "/api/scrapling",
       "dest": "/api/scrapling.py"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/backend.mjs?route=$1"
     },
     {
       "src": "/(.*)",

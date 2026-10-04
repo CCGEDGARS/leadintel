@@ -71,7 +71,7 @@
   function rebaseDirtyLocalState(){if(!bridge.workspace)return;localStorage.setItem(DIRTY_KEY,JSON.stringify({workspace_id:bridge.workspace.id,base_version:bridge.stateVersion,updated_at:Date.now()}));}
   function clearDirtyLocalState(){const current=readDirtyLocalState();if(!current||!bridge.workspace||current.workspace_id===bridge.workspace.id||!current.workspace_id)localStorage.removeItem(DIRTY_KEY);}
   function clearCustomerCache(){suppress=true;try{for(const key of Object.values(KEYS))localStorage.removeItem(key);}finally{suppress=false;}}
-  function endpoint(path){return `${API_BASE}${path}`;}
+  function endpoint(path){const legacy=`${API_BASE}${path}`;return root.LeadIntelApiTransport?.firstPartyUrl(legacy)||legacy;}
   async function api(path,options={}){
     const {headers={},body,signal:externalSignal,timeoutMs,...rest}=options;
     const multipart=typeof FormData!=='undefined'&&body instanceof FormData;

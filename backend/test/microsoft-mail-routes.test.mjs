@@ -43,7 +43,7 @@ async function fixture(){
   DB.raw.prepare(`INSERT INTO sessions VALUES(?,?,datetime('now','+1 day'))`).run(tokenHash,'u1');
   return {DB,token,env:{DB,APP_ORIGIN:'https://leadintel.ccgroup.lv',CUSTOMER_APP_URL:'https://leadintel.ccgroup.lv/customer/',GOOGLE_OAUTH_CLIENT_ID:'google-client',GOOGLE_OAUTH_CLIENT_SECRET:'google-secret',GMAIL_OAUTH_REDIRECT_URI:'https://api.example.test/api/integrations/gmail/callback',MICROSOFT_OAUTH_CLIENT_ID:'microsoft-client',MICROSOFT_OAUTH_CLIENT_SECRET:'microsoft-secret',MICROSOFT_OAUTH_REDIRECT_URI:'https://api.example.test/api/auth/microsoft/callback',MICROSOFT_MAIL_OAUTH_REDIRECT_URI:'https://api.example.test/api/integrations/microsoft-mail/callback',OAUTH_TOKEN_ENCRYPTION_KEY:encryption}};
 }
-function req(path,{method='GET',token,body,idempotencyKey}={}){return new Request(`https://api.example.test${path}`,{method,headers:{...(token?{Cookie:`leadintel_session=${token}`}:{}) ,...(body?{'Content-Type':'application/json'}:{}),...(idempotencyKey?{'Idempotency-Key':idempotencyKey}:{})},body:body?JSON.stringify(body):undefined});}
+function req(path,{method='GET',token,body,idempotencyKey}={}){return new Request(`https://api.example.test${path}`,{method,headers:{'x-leadintel-first-party':'1',...(token?{Cookie:`leadintel_session=${token}`}:{}) ,...(body?{'Content-Type':'application/json'}:{}),...(idempotencyKey?{'Idempotency-Key':idempotencyKey}:{})},body:body?JSON.stringify(body):undefined});}
 
 test('owner can begin Microsoft mailbox consent with PKCE and least-privilege scopes',async()=>{
   const {env,DB,token}=await fixture();
@@ -64,7 +64,7 @@ test('Microsoft send is idempotent, rotates refresh tokens, and records a provid
   const {env,DB,token}=await fixture();const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const encrypted=await encryptSecret('refresh-1',key);
   DB.raw.prepare(`INSERT INTO microsoft_mail_connections(workspace_id,user_id,microsoft_email,encrypted_refresh_token,scopes,status) VALUES('w1','u1','owner@example.com',?,?,'connected')`).run(encrypted,'openid offline_access https://graph.microsoft.com/User.Read https://graph.microsoft.com/Mail.Send');
   const originalFetch=globalThis.fetch;const calls=[];
-  globalThis.fetch=async(url,init={})=>{calls.push({url:String(url),init});if(String(url).includes('/oauth2/v2.0/token'))return new Response(JSON.stringify({access_token:'access-2',refresh_token:'refresh-2',expires_in:3600,scope:'Mail.Send'}),{status:200,headers:{'content-type':'application/json'}});if(String(url)==='https://graph.microsoft.com/v1.0/me/sendMail')return new Response(null,{status:202});throw new Error(`Unexpected fetch ${url}`);};
+  globalThis.fetch=async(url,init={})=>{calls.push({url:String(url),init});if(String(url).includes('/oauth2/v2.0/token'))return new Response(JSON.stringify({access_token:'access-2',refresh_token:'refresh-2',expires_in:3600,scope:'Mail.Send'}),{status:200,headers:{'x-leadintel-first-party':'1','content-type':'application/json'}});if(String(url)==='https://graph.microsoft.com/v1.0/me/sendMail')return new Response(null,{status:202});throw new Error(`Unexpected fetch ${url}`);};
   try{
     const body={domain:'example.com',recipient:'buyer@example.com',subject:'Tailored subject',body:'Tailored body',idempotency_key:'microsoft-idempotency-1234'};
     let response=await handleSaasRoute(req('/api/integrations/microsoft-mail/send?workspace_id=w1',{method:'POST',token,body,idempotencyKey:body.idempotency_key}),env,{});
@@ -85,9 +85,9 @@ test('manual Gmail and Microsoft routes deliver validated branded HTML without c
   const originalFetch=globalThis.fetch;const sends=[];
   globalThis.fetch=async(url,init={})=>{
     const target=String(url);
-    if(target.includes('oauth2.googleapis.com/token'))return new Response(JSON.stringify({access_token:'google-access'}),{status:200,headers:{'content-type':'application/json'}});
-    if(target.includes('login.microsoftonline.com/'))return new Response(JSON.stringify({access_token:'microsoft-access',refresh_token:'refresh-1'}),{status:200,headers:{'content-type':'application/json'}});
-    if(target.includes('gmail.googleapis.com/')){sends.push({provider:'gmail',payload:JSON.parse(init.body)});return new Response(JSON.stringify({id:'gmail-1',threadId:'thread-1'}),{status:200,headers:{'content-type':'application/json'}});}
+    if(target.includes('oauth2.googleapis.com/token'))return new Response(JSON.stringify({access_token:'google-access'}),{status:200,headers:{'x-leadintel-first-party':'1','content-type':'application/json'}});
+    if(target.includes('login.microsoftonline.com/'))return new Response(JSON.stringify({access_token:'microsoft-access',refresh_token:'refresh-1'}),{status:200,headers:{'x-leadintel-first-party':'1','content-type':'application/json'}});
+    if(target.includes('gmail.googleapis.com/')){sends.push({provider:'gmail',payload:JSON.parse(init.body)});return new Response(JSON.stringify({id:'gmail-1',threadId:'thread-1'}),{status:200,headers:{'x-leadintel-first-party':'1','content-type':'application/json'}});}
     if(target.includes('graph.microsoft.com/')){sends.push({provider:'microsoft',payload:JSON.parse(init.body)});return new Response(null,{status:202});}
     throw new Error('Unexpected fetch '+target);
   };
@@ -149,7 +149,7 @@ test('manual Gmail and Microsoft sends block a contact on the do-not-contact lis
   const {env,token}=await fixture();
   env.DB.raw.prepare(`INSERT INTO outreach_contact_suppression(workspace_id,email,reason,source) VALUES('w1','buyer@example.com','manual','test')`).run();
   for(const provider of ['gmail','microsoft-mail']){
-    const response=await handleSaasRoute(new Request(`https://api.example.test/api/integrations/${provider}/send?workspace_id=w1`,{method:'POST',headers:{Cookie:`leadintel_session=${token}`,'Content-Type':'application/json','Idempotency-Key':`blocked-contact-${provider}-12345`},body:JSON.stringify({domain:'example.com',recipient:'buyer@example.com',subject:'Hello',body:'Hello buyer'})}),env,{});
+    const response=await handleSaasRoute(new Request(`https://api.example.test/api/integrations/${provider}/send?workspace_id=w1`,{method:'POST',headers:{'x-leadintel-first-party':'1',Cookie:`leadintel_session=${token}`,'Content-Type':'application/json','Idempotency-Key':`blocked-contact-${provider}-12345`},body:JSON.stringify({domain:'example.com',recipient:'buyer@example.com',subject:'Hello',body:'Hello buyer'})}),env,{});
     assert.equal(response.status,409);assert.equal((await response.json()).code,'CONTACT_SUPPRESSED');
   }
 });

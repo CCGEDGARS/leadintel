@@ -143,6 +143,25 @@
         "Buyer research saved locally",
         "Company website verification:"
       ]
+    },
+    {
+      "id": "first-party-api-session",
+      "type": "text",
+      "url": "/api/session",
+      "status": 401,
+      "contains": [
+        "\"authenticated\":false"
+      ]
+    },
+    {
+      "id": "first-party-api-transport",
+      "type": "text",
+      "url": "/customer/api-transport.js",
+      "status": 200,
+      "contains": [
+        "firstPartyUrl",
+        "LeadIntelApiTransport"
+      ]
     }
   ],
   "retry": {

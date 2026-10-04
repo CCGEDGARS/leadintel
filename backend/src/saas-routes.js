@@ -50,6 +50,15 @@ export async function handleSaasRoute(request,env,corsOverride){
   const url=new URL(request.url);const cors=corsOverride??corsHeaders(allowedOrigin(request,env.APP_ORIGIN));const path=url.pathname;
   const known=path.startsWith('/api/auth/google/')||path.startsWith('/api/auth/microsoft/')||path==='/api/workspaces'||path==='/api/customer/state'||path.startsWith('/api/customer/projects')||path==='/api/customer/activity'||path.startsWith('/api/integrations/gmail/')||path.startsWith('/api/integrations/microsoft-mail/');if(!known)return null;
 
+  // OAuth provider redirect URIs remain registered at the Worker. Bounce the
+  // callback to the first-party API before consuming state or setting a cookie.
+  // The fixed proxy sets this header; no user-supplied destination is accepted.
+  if(request.method==='GET'&&['/api/auth/google/callback','/api/auth/microsoft/callback'].includes(path)&&request.headers.get('x-leadintel-first-party')!=='1'){
+    const customer=configuredCustomerReturn(env,null);if(!customer)return error('Invalid customer app configuration',503,cors);
+    const callback=new URL(path,new URL(customer).origin);callback.search=url.search;
+    return redirect(callback.toString(),{...cors,'Referrer-Policy':'no-referrer'});
+  }
+
   if(path==='/api/auth/google/start'&&request.method==='GET'){
     if(!configReady(env,['GOOGLE_OAUTH_CLIENT_ID','GOOGLE_OAUTH_CLIENT_SECRET','GOOGLE_OAUTH_REDIRECT_URI','CUSTOMER_APP_URL']))return error('Google sign-in is not configured',503,cors);
     const returnTo=configuredCustomerReturn(env,url.searchParams.get('return_to'));if(!returnTo)return error('Invalid return URL',400,cors);
