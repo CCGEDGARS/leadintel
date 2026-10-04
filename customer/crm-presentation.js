@@ -63,11 +63,21 @@
     const more=records.length>5?`<small class="crm-evidence-count">Showing 5 of ${records.length} evidence sources.</small>`:"";
     return `<div class="crm-evidence-list">${cards}</div>${more}`;
   }
+  function buyerResearchHtml(research){
+    if(!research||!Array.isArray(research.buyers))return '';
+    const unresolved=Array.isArray(research.unresolved)?research.unresolved.length:0,coverage=research.coverageFollowUp;
+    const buyers=research.buyers.slice(0,10).map(person=>{
+      const q=person.qualification||{},score=q.eligible===true&&Number.isFinite(q.total)?Math.max(0,Math.min(100,q.total))+'/100':'Unqualified';
+      const rows=Object.entries(q.breakdown||{}).slice(0,6).map(([key,row])=>`<li>${esc(key)} ${esc(row.points)}/${esc(row.max)} · ${esc(row.basis)}</li>`).join('');
+      return `<details><summary>${esc(person.name)} · Buyer qualification ${score}</summary><p>${esc(person.title)}</p><ul>${rows}</ul><p>${(q.gaps||[]).map(esc).join(' · ')}</p>${person.contactVerification?`<p>Contact check: ${esc(person.contactVerification.status)} · ${esc(person.contactVerification.checkedAt)}</p>`:''}</details>`;
+    }).join('');
+    return `<h5 class="crm-subheading">Saved buyer research</h5><p>Checked ${esc(research.checkedAt||'Date unavailable')} · ${unresolved} unresolved identities · ${research.researchIncomplete?'Research incomplete':'Completed checks'}</p>${coverage?`<p>${Number(coverage.queries)||0} targeted coverage searches · Searched functions: ${(coverage.missing||[]).map(esc).join(' · ')||'None missing at the start of the follow-up'}</p>`:''}${buyers}`;
+  }
   function intelligenceHtml(intelligence){
     if(!intelligence)return '<div class="crm-detail-empty">No durable intelligence snapshot yet.</div>';
     const signals=Array.isArray(intelligence.matched_signals)?intelligence.matched_signals:[];
     const evidence=Array.isArray(intelligence.evidence)?intelligence.evidence:[];
-    return `<div class="crm-intel-block"><p>${esc(intelligence.opportunity_hypothesis||"No opportunity hypothesis saved.")}</p><div class="crm-chip-list">${signals.length?signals.slice(0,8).map(item=>`<span>${esc(item.name||item.id||"Signal")}</span>`).join(""):"<span>No matched signals</span>"}</div><small>${evidence.length} evidence source${evidence.length===1?"":"s"} · ${esc(intelligence.confidence||"Unrated")} confidence</small><h5 class="crm-subheading">Score breakdown</h5>${scoreBreakdownHtml(intelligence.score_breakdown)}<h5 class="crm-subheading">Evidence</h5>${evidenceHtml(evidence)}</div>`;
+    return `<div class="crm-intel-block"><p>${esc(intelligence.opportunity_hypothesis||"No opportunity hypothesis saved.")}</p><div class="crm-chip-list">${signals.length?signals.slice(0,8).map(item=>`<span>${esc(item.name||item.id||"Signal")}</span>`).join(""):"<span>No matched signals</span>"}</div><small>${evidence.length} evidence source${evidence.length===1?"":"s"} · ${esc(intelligence.confidence||"Unrated")} confidence</small><h5 class="crm-subheading">Score breakdown</h5>${scoreBreakdownHtml(intelligence.score_breakdown)}<h5 class="crm-subheading">Evidence</h5>${evidenceHtml(evidence)}${buyerResearchHtml(intelligence.research_snapshot?.buyerResearch)}</div>`;
   }
   function sourceLabel(value){
     const source=clean(value,80);
