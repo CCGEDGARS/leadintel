@@ -402,7 +402,7 @@ test('a first-name-only buyer triggers one public source check and renders a sou
   const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,
     bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},searchApolloPeople:async()=>({ok:true,people:[{id:'p1',name:'Mikael',title:'President & CEO'}]})},
     fetchImpl:async(url,options)=>{
-      if(!String(url).includes('/firecrawl-search'))throw new Error('Unexpected request');
+      if(!(/\/firecrawl(?:-search|\/search)/.test(String(url))))throw new Error('Unexpected request');
       publicSearches++;
       if(publicSearches===1){assert.match(JSON.parse(options.body).query,/"Mikael"/);return {ok:true,json:async()=>({data:[{url:'https://boliden.com/management',title:'Management',markdown:'Mikael Example — President & CEO. mikael.example@boliden.com'}]})};}
       if(publicSearches===2)return {ok:true,json:async()=>({data:[]})};
@@ -492,9 +492,9 @@ test('grounded follow-up extracts an official person email and keeps company pho
     fetchImpl:async(url,options)=>{
       const target=String(url);
       if(target.includes('/api/ai/web-search')){openAiCalls++;return {ok:true,json:async()=>({results:[{url:'https://sodra.com/team',title:'Södra team',description:'Jacob Jonstoij — Team Leader'}]})};}
-      if(target.includes('/firecrawl-scrape')){scrapes++;const targetUrl=JSON.parse(options.body).url;return {ok:true,json:async()=>({data:targetUrl.endsWith('/team')?{metadata:{sourceURL:targetUrl},title:'Södra team',markdown:'Jacob Jonstoij — Team Leader. jacob.jonstoij@sodra.com'}:{metadata:{sourceURL:targetUrl},markdown:'Contact Södra: info@sodra.com · +46 470 890 00'}})};}
+      if((/\/firecrawl(?:-scrape|\/scrape)/.test(target))){scrapes++;const targetUrl=JSON.parse(options.body).url;return {ok:true,json:async()=>({data:targetUrl.endsWith('/team')?{metadata:{sourceURL:targetUrl},title:'Södra team',markdown:'Jacob Jonstoij — Team Leader. jacob.jonstoij@sodra.com'}:{metadata:{sourceURL:targetUrl},markdown:'Contact Södra: info@sodra.com · +46 470 890 00'}})};}
       if(target.includes('/api/ai/contact-evidence-review')){geminiCalls++;return {ok:true,json:async()=>({status:'complete',provider:'gemini',web_search:false,conflicts:[]})};}
-      if(target.includes('/firecrawl-search')){
+      if((/\/firecrawl(?:-search|\/search)/.test(target))){
         const query=JSON.parse(options.body).query;
         if(query.includes('(contact OR contacts'))return {ok:true,json:async()=>({data:[{url:'https://sodra.com/contact',title:'Contact',markdown:'info@sodra.com · +46 470 890 00'}]})};
         return {ok:true,json:async()=>({data:[]})};
@@ -517,7 +517,7 @@ test('grounded follow-up extracts an official person email and keeps company pho
 test('refresh repairs a truncated name, matches LinkedIn, and shows official company contacts separately',async()=>{
   const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,fetchImpl:async(url,options)=>{
     const target=String(url);
-    if(target.includes('/firecrawl-scrape'))return {ok:true,json:async()=>({data:{metadata:{sourceURL:'https://sodra.com/en/global/'},markdown:'Contact us. Phone: +46 470 890 00. Email: info@sodra.com'}})};
+    if((/\/firecrawl(?:-scrape|\/scrape)/.test(target)))return {ok:true,json:async()=>({data:{metadata:{sourceURL:'https://sodra.com/en/global/'},markdown:'Contact us. Phone: +46 470 890 00. Email: info@sodra.com'}})};
     const query=JSON.parse(options.body).query;
     if(query.includes('site:linkedin.com/in/')&&query.includes('"Lotta"'))return {ok:true,json:async()=>({data:[{url:'https://se.linkedin.com/in/lottalyra',title:'Lotta Lyrå – CEO & President på Södra | LinkedIn',description:'CEO & President på Södra'}]})};
     if(query.includes('site:linkedin.com/in/'))return {ok:true,json:async()=>({data:[]})};
@@ -545,7 +545,7 @@ test('independent grounded Gemini source resolves a profile missed by Firecrawl 
       if(target.includes('/api/ai/grounded-contact-search'))return {ok:true,json:async()=>({status:'complete',web_search:true,results:[{url:'https://se.linkedin.com/in/lottalyra',title:'Lotta Lyrå – CEO & President på Södra | LinkedIn',description:'CEO & President på Södra'}]})};
       if(target.includes('/api/ai/web-search'))return {ok:true,json:async()=>({results:[]})};
       if(target.includes('/api/ai/contact-evidence-review'))return {ok:true,json:async()=>({status:'complete',conflicts:[]})};
-      if(target.includes('/firecrawl-scrape'))return {ok:true,json:async()=>({data:{metadata:{sourceURL:'https://sodra.com/'},markdown:'[Contact](https://sodra.com/en/global/contact/)'}})};
+      if((/\/firecrawl(?:-scrape|\/scrape)/.test(target)))return {ok:true,json:async()=>({data:{metadata:{sourceURL:'https://sodra.com/'},markdown:'[Contact](https://sodra.com/en/global/contact/)'}})};
       return {ok:true,json:async()=>({data:[]})};
     }
   });
