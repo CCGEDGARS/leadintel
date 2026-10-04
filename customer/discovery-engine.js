@@ -912,7 +912,11 @@
   function selectDecisionMakers(people=[],profile={},limit=4){
     const roles=splitList(profile.decisionMakers).slice(0,12);if(!roles.length)return [];
     const cap=Math.max(1,Math.min(20,Number(limit)||4));
-    return (Array.isArray(people)?people:[]).map((person,index)=>({person,relevance:roleRelevance(person,roles),index})).filter(item=>item.relevance).sort((a,b)=>b.relevance.score-a.relevance.score||a.index-b.index).slice(0,cap).map(item=>({...item.person,buyerRelevanceScore:Math.max(1,Math.min(100,Math.round(item.relevance.score))),matchedBuyerRole:item.relevance.role}));
+    const ranked=(Array.isArray(people)?people:[]).map((person,index)=>({person,relevance:roleRelevance(person,roles),index})).filter(item=>item.relevance).sort((a,b)=>b.relevance.score-a.relevance.score||a.index-b.index);
+    const diverse=[],families=new Set();
+    if(cap>=20)for(const item of ranked){const family=buyerFunction(item.relevance.role);if(!families.has(family)){diverse.push(item);families.add(family);}}
+    const selected=diverse.length?[...diverse,...ranked.filter(item=>!diverse.includes(item))]:ranked;
+    return selected.slice(0,cap).map(item=>({...item.person,buyerRelevanceScore:Math.max(1,Math.min(100,Math.round(item.relevance.score))),matchedBuyerRole:item.relevance.role}));
   }
 
 
@@ -1088,7 +1092,7 @@
       source:{points:source&&domain&&companyIdentityDomain(source)===domain?10:directory?8:source?6:0,max:10,basis:source|| (directory?'Authenticated identity directory':'No identity source')},
       freshness:{points:age!==null&&age>=0&&age<=180?10:age!==null&&age>=0&&age<=365?5:0,max:10,basis:age===null?'Identity source date unknown':age<0?'Future source date rejected':`${Math.floor(age)} days since dated identity evidence`}
     };
-    const gaps=[...blocked];if(age===null)gaps.push('Identity source date unknown');else if(age>365||age<0)gaps.push('Identity source requires a freshness check');gaps.push('Actual purchasing authority unconfirmed');
+    const gaps=[...blocked];if(age===null)gaps.push('Identity source date unknown');else if(age>365||age<0)gaps.push('Identity source requires a freshness check');gaps.push('Actual purchasing authority unconfirmed','Responsibility for the specific opportunity and location unconfirmed');
     return {version:1,eligible:!blocked.length,total:blocked.length?null:Object.values(breakdown).reduce((sum,row)=>sum+row.points,0),breakdown,gaps,matchedRole:match?.role||'',assessedAt:new Date(now).toISOString()};
   }
   function buyerCoveragePlan(pool=[],profile={},candidate={}){
