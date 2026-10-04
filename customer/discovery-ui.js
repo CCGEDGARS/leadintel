@@ -17,7 +17,7 @@ const MAX_DISCOVERY_COMPANY_CHECKS=30;
 const SAVING_SEARCH_RESULT_LIMIT=4;
 const SAVING_COMPANY_CHECK_LIMIT=3;
 const SAVING_FIRECRAWL_CALL_LIMIT=10;
-const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261004-v4&ranked-buyers=20261004-v22";
+const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261004-v4&ranked-buyers=20261004-v23";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20261004-contact-policy-v3";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -159,18 +159,39 @@ function currentWorkspaceCrmPipeline(){
   const domains=new Set((Array.isArray(discovery.pipeline)?discovery.pipeline:[]).map(item=>canonicalDomain(item.domain||item.website)).filter(Boolean));
   return crmPipeline.filter(company=>domains.has(canonicalDomain(company.normalized_domain||company.website)));
 }
+function restoreNewerBuyerResearch(candidate,detail){
+  const saved=detail?.intelligence?.research_snapshot?.buyerResearch;
+  const stamp=Date.parse(saved?.checkedAt||'');
+  const localStamp=Date.parse(candidate.buyerDiscovery?.checkedAt||'')||0;
+  if(!Number.isFinite(stamp)||stamp<=localStamp||stamp>Date.now()||!saved?.buyers?.length||candidate.peopleStatus==='loading'||candidate.publicContactStatus==='loading')return false;
+  if(canonicalDomain(detail.company?.normalized_domain||detail.company?.website)!==canonicalDomain(candidate.domain))return false;
+  const previous=candidate.people||[];
+  candidate.people=saved.buyers.map(row=>{
+    const local=previous.find(p=>String(p.id)===String(row.id));
+    const evidence=row.contactEvidence||{};
+    const restored={...row,publicName:row.name,publicNameUrl:row.identitySourceUrl||row.publicNameUrl,publicEmail:evidence.email||row.publicEmail,publicEmailUrl:evidence.emailUrl||row.publicEmailUrl,publicPhone:evidence.phone||row.publicPhone,publicPhoneUrl:evidence.phoneUrl||row.publicPhoneUrl,patternFindings:evidence.patternFindings||row.patternFindings};
+    for(const key of ['kept','keptAt','flowSelected','linkedinConfirmedUrl','linkedinConfirmedAt','publicEmailSourceCheck'])if(local?.[key]!==undefined)restored[key]=local[key];
+    return restored;
+  });
+  candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),...(saved.discovery||{}),checkedAt:saved.checkedAt,researchVersion:BUYER_RESEARCH_VERSION,researchIncomplete:saved.researchIncomplete===true,coverageFollowUp:saved.coverageFollowUp,pool:LeadIntelDiscovery.mergeBuyerPool(candidate.buyerDiscovery?.pool||[],[...candidate.people,...(saved.unresolved||[]).map(p=>({...p,identityStatus:'pending'}))],{decisionMakers:candidate.buyerRoles})};
+  candidate.publicResearch=saved.publicResearch||candidate.publicResearch;
+  candidate.peopleStatus='complete';candidate.publicContactStatus='complete';candidate.publicContactVersion=PUBLIC_NAME_CHECK_VERSION;
+  candidate.people=candidate.people.map(p=>({...p,buyerQualification:LeadIntelDiscovery.qualifyBuyer(p,{decisionMakers:candidate.buyerDiscovery.opportunityRoles||candidate.buyerRoles},candidate)}));
+  return true;
+}
 function hydrateLocalPipelineFromCrm(){if(!crmAvailable)return;const scoped=currentWorkspaceCrmPipeline();discovery.pipeline=LeadIntelDiscovery.normalizeDiscoveryState({pipeline:scoped.map(crmToLocalPipeline)}).pipeline;for(const candidate of discovery.candidates)candidate.saved=Boolean(scoped.some(company=>canonicalDomain(company.normalized_domain||company.website)===canonicalDomain(candidate.domain||candidate.website)));saveDiscovery();}
-async function refreshCrmState({render=true}={}){if(!discoveryMounted||crmRefreshing)return false;if(!crmAuthenticated()){crmAvailable=false;crmCompanies=[];crmPipeline=[];if(render)renderAll();return false;}const b=bridge();crmRefreshing=true;try{const [allResult,pipelineResult]=await Promise.all([b.listCrmCompanies({limit:100}),b.listCrmCompanies({pipeline_stage:"active",limit:100})]);if(!allResult.ok||!pipelineResult.ok){crmAvailable=false;if(render)renderAll();return false;}crmAvailable=true;crmCompanies=Array.isArray(allResult.companies)?allResult.companies:[];crmPipeline=Array.isArray(pipelineResult.companies)?pipelineResult.companies:[];hydrateLocalPipelineFromCrm();
+async function refreshCrmState({render=true}={}){if(!discoveryMounted||crmRefreshing)return false;if(!crmAuthenticated()){crmAvailable=false;crmCompanies=[];crmPipeline=[];if(render)renderAll();return false;}const b=bridge(),workspaceId=b.workspace.id;crmRefreshing=true;try{const [allResult,pipelineResult]=await Promise.all([b.listCrmCompanies({limit:100}),b.listCrmCompanies({pipeline_stage:"active",limit:100})]);if(b.workspace?.id!==workspaceId)return false;if(!allResult.ok||!pipelineResult.ok){crmAvailable=false;if(render)renderAll();return false;}crmAvailable=true;crmCompanies=Array.isArray(allResult.companies)?allResult.companies:[];crmPipeline=Array.isArray(pipelineResult.companies)?pipelineResult.companies:[];hydrateLocalPipelineFromCrm();
   const selected=(discovery.selectedProspects||[]).filter(item=>item.people?.length&&crmCompanyByDomain(item.domain)).slice(0,10);
   await Promise.all(selected.map(async candidate=>{
     const company=crmCompanyByDomain(candidate.domain);
-    try{const detail=await b.getCrmCompany(company.id);if(!detail.ok)return;
+    try{const detail=await b.getCrmCompany(company.id);if(!detail.ok||b.workspace?.id!==workspaceId)return;
+      if(restoreNewerBuyerResearch(candidate,detail))saveDiscovery();
       for(const person of candidate.people){const contact=(detail.contacts||[]).find(row=>String(row.external_person_id||"")===String(person.id));if(!contact)continue;
         enrichmentResults.set(personKey(candidate,person),{contact,request:{status:contact.phone_status==="pending"?"pending_phone":"verified"}});
       }
     }catch{ /* CRM history remains available even if this display refresh fails. */ }
   }));
-  if(render)renderAll();return true;}finally{crmRefreshing=false;}}
+  if(render)renderAll();return true;}finally{crmRefreshing=false;scheduleSavedBuyerPublicChecks();}}
 
 function injectDiscoveryUI(){
   if(!document.querySelector('link[data-leadintel-asset="discovery-css"]')){const link=document.createElement("link");link.rel="stylesheet";link.href=asset("discovery.css");link.dataset.leadintelAsset="discovery-css";document.head.appendChild(link);}
@@ -1811,12 +1832,13 @@ async function runPublicProspectContacts(domain,{signal}={}){
     candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),pool:LeadIntelDiscovery.mergeBuyerPool(candidate.buyerDiscovery?.pool||[],candidate.people||[],{decisionMakers:(candidate.buyerDiscovery?.opportunityRoles||[]).join('; ')||LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate)})};saveDiscovery();renderPipeline();renderCandidates();}
 }
 function scheduleSavedBuyerPublicChecks(){
-  if(currentJourneyFocus()!=="buyers")return;
+  if(currentJourneyFocus()!=="buyers"||!crmAuthenticated()||crmRefreshing||bridge()?.conflict)return;
   for(const candidate of [...selectedProspects(),...(discovery.candidates||[])]){
     const domain=canonicalDomain(candidate.domain);
     if(!domain||automaticPublicChecks.has(domain)||!candidate.people?.length)continue;
     // A completed or failed lookup is a real attempt. Do not spend requests on every visit.
-    if(candidate.publicContactStatus==='loading'||candidate.publicContactStatus==='error')continue;
+    if(candidate.peopleStatus==='loading'||candidate.publicContactStatus==='loading')continue;
+    if(candidate.publicContactStatus==='error'&&candidate.people.some(person=>(person.emailResearch?.searches||0)>0))continue;
     if(candidate.publicContactStatus&&candidate.publicContactStatus!=='idle'&&candidate.publicContactVersion===PUBLIC_NAME_CHECK_VERSION&&!candidate.people.some(person=>!person.emailResearch||person.emailResearch.status==='not_searched'))continue;
     automaticPublicChecks.add(domain);
     if(crmAuthenticated()&&candidate.buyerDiscovery?.checkedAt&&candidate.buyerDiscovery.researchVersion!==BUYER_RESEARCH_VERSION&&candidate.peopleStatus!=='loading'){
@@ -2039,7 +2061,7 @@ function bindDiscovery(){
     syncStrategyFingerprint();
     renderAll();
   });
-  window.addEventListener("leadintel:server-ready",()=>refreshCrmState());
+  window.addEventListener("leadintel:server-ready",()=>{void refreshCrmState();});
   window.addEventListener("leadintel:crm-migrated",()=>refreshCrmState());
   window.addEventListener("leadintel:crm-changed",()=>refreshCrmState());
   window.addEventListener('leadintel:target-companies-updated',()=>renderAll());
@@ -2049,6 +2071,6 @@ function openDiscoveryFromHandoff(options={}){if(!moduleReady())return false;sho
 window.addEventListener?.('leadintel:service-settings-changed',()=>{if(discoveryMounted)renderAll();});
 window.addEventListener?.('leadintel:qualification-settings-changed',()=>{if(discoveryMounted){syncStrategyFingerprint();renderAll();}});
 function ensureDiscoveryMounted(){if(discoveryMounted)return;discovery=loadDiscovery();discoveryMounted=true;syncStrategyFingerprint();renderAll();if(recoveredInterruptedRun){saveDiscovery();setTimeout(()=>showToast("Previous company search was interrupted. You can run it again."),0);}if(crmAuthenticated())refreshCrmState();loadOutreachModules();}
-function initDiscovery(){if(window.LeadIntelDiscoveryUI?.open)return;injectDiscoveryUI();bindDiscovery();window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};window.LeadIntelDiscoveryUI.getPipeline=pipelineRows;window.LeadIntelDiscoveryUI.continueToMessages=continueBuyerMessages;window.LeadIntelDiscoveryUI.readyBuyerCount=readyBuyerCount;window.LeadIntelDiscoveryUI.getSelectedCompanies=()=>[...pipelineRows(),...selectedProspects()];window.LeadIntelDiscoveryUI.firecrawlHealth=()=>{const state=discovery||loadDiscovery();return {lastRunAt:state.lastRunAt||"",blocked:[...(state.searchFailures||[]),...(state.providerFallbacks||[])].some(item=>Number(item.status)===402),usedFallback:Number(state.funnel?.openAiFallbackSearches)||0};};if(window.__leadIntelPendingDiscoveryOpen&&openDiscoveryFromHandoff())window.__leadIntelPendingDiscoveryOpen=false;else if(mainState().step===5&&moduleReady())showDiscoveryStep();else if(loadMeta().visibleStep===5&&moduleReady())showDiscoveryStep();}
+function initDiscovery(){if(window.LeadIntelDiscoveryUI?.open)return;injectDiscoveryUI();bindDiscovery();window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};window.LeadIntelDiscoveryUI.getPipeline=pipelineRows;window.LeadIntelDiscoveryUI.continueToMessages=continueBuyerMessages;window.LeadIntelDiscoveryUI.readyBuyerCount=readyBuyerCount;window.LeadIntelDiscoveryUI.getSelectedCompanies=()=>[...pipelineRows(),...selectedProspects()];window.LeadIntelDiscoveryUI.firecrawlHealth=()=>{const state=discovery||loadDiscovery();return {lastRunAt:state.lastRunAt||"",blocked:[...(state.searchFailures||[]),...(state.providerFallbacks||[])].some(item=>Number(item.status)===402),usedFallback:Number(state.funnel?.openAiFallbackSearches)||0};};if(window.__leadIntelPendingDiscoveryOpen&&openDiscoveryFromHandoff())window.__leadIntelPendingDiscoveryOpen=false;else if(mainState().step===5&&moduleReady())showDiscoveryStep(currentJourneyFocus());else if(loadMeta().visibleStep===5&&moduleReady())showDiscoveryStep(currentJourneyFocus());}
 function initDiscoveryWhenReady(attempt=0){if(!window.LeadIntelDiscovery){if(attempt<400)setTimeout(()=>initDiscoveryWhenReady(attempt+1),25);return;}initDiscovery();}
 initDiscoveryWhenReady();
