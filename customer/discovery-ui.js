@@ -742,16 +742,12 @@ function buyerContactRows(person={},candidate={},result={}){
       return type==='gmail'?`<span class="buyer-email-result">${esc(email)}</span>`:`<span class="buyer-email-result">${esc(email)} · ${esc(label)}${source(publicRow?.url)}</span>`;
     }).join('');
   };
-  return `<div class="buyer-contact-fields" aria-label="Contact details"><div><strong>LinkedIn</strong><span>${profile&&profile===person.linkedinConfirmedUrl?"Confirmed by you":profile?"Public match":"Needs confirmation"}</span></div><div><strong>Phone</strong><span>${phone?`${esc(phone)} · Apollo${contact.phone_status==="Verified"?" verified":""}`:person.publicPhone?`${esc(person.publicPhone)} · Public · unverified${source(person.publicPhoneUrl)}`:person.emailResearch?.status==='complete'?"No direct phone found in public searches":"Not researched yet"}</span></div><div><strong>Company email</strong><span>${renderEmails('company')}</span></div><div><strong>Gmail</strong><span>${renderEmails('gmail')}</span></div><small class="people-note">Automatic flow uses a verified company email as primary. </small></div>`;
+  const guesses=!contact.work_email&&!found.some(item=>item.email.endsWith('@'+canonicalDomain(candidate.domain)))&&person.emailResearch?.checkedAt?emailPatternCandidates(person,candidate.domain,candidate.people||[]).slice(0,3):[];
+  const guessNote=guesses.length?`<details class="people-note"><summary>Research guesses · unverified · excluded from automatic sending</summary>${guesses.map(item=>`<div>${esc(item.email)} · ${esc(item.reason)}</div>`).join('')}</details>`:'';
+  return `<div class="buyer-contact-fields" aria-label="Contact details"><div><strong>LinkedIn</strong><span>${profile&&profile===person.linkedinConfirmedUrl?"Confirmed by you":profile?"Public match":"Needs confirmation"}</span></div><div><strong>Phone</strong><span>${phone?`${esc(phone)} · Apollo${contact.phone_status==="Verified"?" verified":""}`:person.publicPhone?`${esc(person.publicPhone)} · Public · unverified${source(person.publicPhoneUrl)}`:person.emailResearch?.status==='complete'?"No direct phone found in public searches":"Not researched yet"}</span></div><div><strong>Company email</strong><span>${renderEmails('company')}</span></div><div><strong>Gmail</strong><span>${renderEmails('gmail')}</span></div><small class="people-note">Automatic flow uses a verified company email as primary. </small>${guessNote}</div>`;
 }
-function emailPatternCandidates(person={},domain=''){
-  const full=String(person.publicName||person.name||'').trim().replace(/\s+/g,' ').split(' ');
-  if(full.length<2)return [];
-  const latin=value=>String(value).toLowerCase().replace(/[āáàâä]/g,'a').replace(/[čć]/g,'c').replace(/[ēéèêë]/g,'e').replace(/[ģ]/g,'g').replace(/[īíìîï]/g,'i').replace(/[ķ]/g,'k').replace(/[ļł]/g,'l').replace(/[ņń]/g,'n').replace(/[šś]/g,'s').replace(/[ūúùûü]/g,'u').replace(/[žźż]/g,'z').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z]/g,'');
-  const first=latin(full[0]),last=latin(full[full.length-1]);if(first.length<2||last.length<2)return [];
-  const locals=[`${first}.${last}`,`${first}${last}`,`${first[0]}.${last}`,`${first[0]}${last}`,first,`${last}.${first}`,`${last}${first}`,`${last}.${first[0]}`,`${last}${first[0]}`,`${first}_${last}`];
-  const companyDomain=canonicalDomain(domain);if(!companyDomain||companyDomain==='gmail.com')return [];
-  return [companyDomain,'gmail.com'].flatMap(target=>[...new Set(locals)].map(local=>({email:`${local}@${target}`,type:target==='gmail.com'?'Gmail':'Company'})));
+function emailPatternCandidates(person={},domain='',people=[]){
+  return LeadIntelDiscovery.rankedEmailGuesses(person,domain,people);
 }
 function hunterStatusLabel(check,email){
   if(!check)return 'Pattern only · unconfirmed';
@@ -1521,65 +1517,37 @@ async function searchBuyerPublicPages(query,limit,signal){
   if(!response.ok)throw Object.assign(new Error((await buyerResponseFailure(response)).message),{status:response.status});
   const payload=await response.json();if(payload.success===false)throw Object.assign(new Error(String(payload.error||payload.message||"Public search returned a failure payload")),{status:response.status,code:payload.code});return publicSearchRows(payload);
 }
-function patternListings(person,domain,rows){
-  const choices=new Set(emailPatternCandidates(person,domain).map(item=>item.email));
-  const name=String(person.publicName||person.name||'').toLowerCase().trim();
-  const findings=[];
-  for(const row of rows){
-    let url;try{url=new URL(row.url||row.metadata?.sourceURL);}catch{continue;}
-    if(!['https:','http:'].includes(url.protocol)||url.username||url.password)continue;
-    const body=[row.title,row.description,row.markdown,row.content].filter(Boolean).join(' ').toLowerCase();
-    for(const email of choices){
-      if(!body.includes(email)||findings.some(item=>item.email===email))continue;
-      const at=body.indexOf(email),nearby=body.slice(Math.max(0,at-220),Math.min(body.length,at+email.length+220));
-      if((email.endsWith('@gmail.com')||canonicalDomain(url.href)!==domain)&&!nearby.includes(name))continue;
-      if(/email formats? and examples?|email pattern|guessed email|predicted email/i.test(nearby))continue;
-      findings.push({email,url:url.href,status:'public_unverified'});
-    }
-  }
-  return findings.slice(0,12);
+function patternListings(person,domain,rows,company=''){
+  return LeadIntelDiscovery.sourcedBuyerEmails(person,domain,rows,company);
 }
 async function searchBuyerEmailPatterns(candidate,existingRows,signal){
   let searches=0,failed=0;
   const people=Array.isArray(candidate.people)?candidate.people:[];
+  // Learn the company format from the acquired pages before launching parallel lookups.
+  for(const person of people){
+    const sourced=patternListings(person,candidate.domain,existingRows,candidate.company);
+    person.patternFindings=[...new Map([...(person.patternFindings||[]),...sourced].map(item=>[item.email,item])).values()];
+  }
   await Promise.all(people.map(async person=>{
     let personSearches=0,personFailed=0,finished=false;
     person.emailResearch={status:'running',searches:0,failed:0,checkedAt:''};
     try{
-    const patterns=emailPatternCandidates(person,candidate.domain);
+    const patterns=emailPatternCandidates(person,candidate.domain,people);
     if(!patterns.length)return;
     const rows=[...existingRows];
-    for(const type of ['Company','Gmail']){
-      const group=patterns.filter(item=>item.type===type);
-      if(!group.length)continue;
-      searches++;personSearches++;
-      try{rows.push(...await searchBuyerPublicPages(group.map(item=>`"${item.email}"`).join(' OR '),5,signal));}
-      catch(error){if(error?.name==='AbortError')throw error;failed++;personFailed++;}
-    }
+    searches++;personSearches++;
+    try{rows.push(...await searchBuyerPublicPages(patterns.map(item=>`"${item.email}"`).join(' OR '),5,signal));}
+    catch(error){if(error?.name==='AbortError')throw error;failed++;personFailed++;}
     const fullName=String(person.publicName||person.name||'').trim();
     if(fullName.split(/\s+/).length>1){
       searches++;personSearches++;
       try{
         const gmailRows=await searchBuyerPublicPages(`"${fullName}" "${candidate.company}" "@gmail.com"`,5,signal);
         rows.push(...gmailRows);
-        person.patternFindings=[...new Map([...(person.patternFindings||[]),...patternListings(person,candidate.domain,rows)].map(item=>[item.email,item])).values()];
-        for(const row of gmailRows){
-          const body=[row.title,row.description,row.markdown,row.content].filter(Boolean).join(' ');
-          let source;try{source=new URL(row.url);}catch{continue;}
-          if(!['https:','http:'].includes(source.protocol)||source.username||source.password)continue;
-          for(const match of body.matchAll(/[A-Z0-9._%+-]+@gmail\.com/gi)){
-            const nearby=body.slice(Math.max(0,match.index-220),match.index+match[0].length+220).toLowerCase();
-            if(!nearby.includes(fullName.toLowerCase())||!nearby.includes(String(candidate.company).toLowerCase())||/guessed|predicted|email pattern/i.test(nearby))continue;
-            const escapedName=fullName.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),escapedCompany=String(candidate.company).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-            const attribution=new RegExp(escapedName+'(?:\\s+(?:at|hos|på)\\s+|\\s*[,|·]\\s*)'+escapedCompany+'[\\s:·,|-][^\\n]{0,100}'+match[0].replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'iu');
-            if(!attribution.test(nearby))continue;
-            const email=match[0].toLowerCase();
-            if(!person.patternFindings.some(item=>item.email===email))person.patternFindings.push({email,url:source.href,status:'public_unverified'});
-          }
-        }
+        person.patternFindings=[...new Map([...(person.patternFindings||[]),...patternListings(person,candidate.domain,rows,candidate.company)].map(item=>[item.email,item])).values()];
       }catch(error){if(error?.name==='AbortError')throw error;failed++;personFailed++;}
     }
-    person.patternFindings=[...new Map([...(person.patternFindings||[]),...patternListings(person,candidate.domain,rows)].map(item=>[item.email,item])).values()];
+    person.patternFindings=[...new Map([...(person.patternFindings||[]),...patternListings(person,candidate.domain,rows,candidate.company)].map(item=>[item.email,item])).values()];
     // Grouped OR searches can bury exact matches, especially in association PDFs.
     // Check the most likely address with the full name in a focused query.
     if(!person.patternFindings.some(item=>item.email.endsWith(`@${canonicalDomain(candidate.domain)}`))){
@@ -1588,7 +1556,7 @@ async function searchBuyerEmailPatterns(candidate,existingRows,signal){
       if(email&&name){
         const query=`"${email}" "${name}"`;
         searches++;personSearches++;
-        try{person.patternFindings=[...(person.patternFindings||[]),...patternListings(person,candidate.domain,[...rows,...await searchBuyerPublicPages(query,5,signal)])];}
+        try{person.patternFindings=[...(person.patternFindings||[]),...patternListings(person,candidate.domain,[...rows,...await searchBuyerPublicPages(query,5,signal)],candidate.company)];}
         catch(error){if(error?.name==='AbortError')throw error;failed++;personFailed++;}
         if(!person.patternFindings.some(item=>item.email===email)&&crmAuthenticated()&&bridge()?.workspace?.id){
           searches++;personSearches++;
@@ -1596,11 +1564,12 @@ async function searchBuyerEmailPatterns(candidate,existingRows,signal){
             const response=await fetchBuyerResearch(`${LEADINTEL_API}/api/ai/web-search?workspace_id=${encodeURIComponent(bridge().workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({query,max_results:5,purpose:'contact_research'}),signal});
             if(!response.ok)throw new Error(`Grounded search failed (${response.status})`);
             const payload=await response.json();
-            person.patternFindings=[...(person.patternFindings||[]),...patternListings(person,candidate.domain,[...rows,...(payload.results||[])])];
+            person.patternFindings=[...(person.patternFindings||[]),...patternListings(person,candidate.domain,[...rows,...(payload.results||[])],candidate.company)];
           }catch(error){if(error?.name==='AbortError')throw error;failed++;personFailed++;}
         }
       }
     }
+    person.patternFindings=[...new Map((person.patternFindings||[]).map(item=>[item.email,item])).values()];
     finished=true;
     }finally{person.emailResearch={status:!personSearches?'not_searched':!finished||personFailed?(personFailed>=personSearches?'unavailable':'partial'):'complete',searches:personSearches,failed:personFailed,checkedAt:new Date().toISOString()};}
   }));

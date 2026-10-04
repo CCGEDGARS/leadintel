@@ -162,6 +162,18 @@
         "firstPartyUrl",
         "LeadIntelApiTransport"
       ]
+    },
+    {
+      "id": "email-guess-quality",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "function rankedEmailGuesses(",
+        "function sourcedBuyerEmails(",
+        "supportingContacts",
+        "status:'guessed'"
+      ]
     }
   ],
   "retry": {

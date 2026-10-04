@@ -15,10 +15,10 @@ test('per buyer completed and incomplete email research survives selected, pool 
 test('email research distinguishes attempted partial, completed and skipped identities',async()=>{
  for(const fail of [false,true]){
  const person={name:'Anna Andersson'},candidate={company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',people:[person]};
- const context={Date,URL,canonicalDomain:D.canonicalDomain,crmAuthenticated:()=>false,searchBuyerPublicPages:async()=>{if(fail)throw new Error('provider unavailable');return [];}};
+ const context={LeadIntelDiscovery:D,Date,URL,canonicalDomain:D.canonicalDomain,crmAuthenticated:()=>false,searchBuyerPublicPages:async()=>{if(fail)throw new Error('provider unavailable');return [];}};
  vm.createContext(context);vm.runInContext(source.slice(source.indexOf('function emailPatternCandidates('),source.indexOf('function hunterStatusLabel('))+source.slice(source.indexOf('function patternListings('),source.indexOf('async function groundedBuyerFollowUp(')),context);
  await context.searchBuyerEmailPatterns(candidate,[],new AbortController().signal);
- assert.equal(person.emailResearch.status,fail?'unavailable':'complete');assert.equal(person.emailResearch.searches,4);assert.equal(person.emailResearch.failed,fail?4:0);
+ assert.equal(person.emailResearch.status,fail?'unavailable':'complete');assert.equal(person.emailResearch.searches,3);assert.equal(person.emailResearch.failed,fail?3:0);
  candidate.people=[{name:'Anna'}];await context.searchBuyerEmailPatterns(candidate,[],new AbortController().signal);assert.equal(candidate.people[0].emailResearch.status,'not_searched');
  }
 });
