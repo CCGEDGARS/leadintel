@@ -1700,6 +1700,8 @@ async function runPublicProspectContacts(domain,{signal}={}){
       }
     }catch(error){if(error?.name==='AbortError'&&controller.signal.aborted)throw error;research.issues.push('Official homepage unavailable');}
     candidate.people=LeadIntelDiscovery.matchPublicBuyerDetails(candidate.people||[],results,domain);
+    let patternResearch=null;
+    if(candidate.people.length&&candidate.people.every(person=>LeadIntelDiscovery.hasFullBuyerName(person.publicName||person.name)))patternResearch=await searchBuyerEmailPatterns(candidate,results,controller.signal);
     const profileNames=candidate.people.filter(person=>!LeadIntelDiscovery.normalizeLinkedInUrl(person.linkedin_url)&&!person.publicLinkedinUrl).map(person=>person.publicNameUrl?person.publicName:person.name).filter(Boolean).slice(0,4);
     let profileIssue='';
     if(profileNames.length){
@@ -1720,7 +1722,7 @@ async function runPublicProspectContacts(domain,{signal}={}){
         }
       }catch(error){profileIssue=error?.name==='AbortError'?'Public profile search timed out':error.message||'Public profile search failed';}
     }
-    const patternResearch=await searchBuyerEmailPatterns(candidate,results,controller.signal);
+    patternResearch=patternResearch||await searchBuyerEmailPatterns(candidate,results,controller.signal);
     research.patternSearches=patternResearch.searches;
     renderPipeline();renderCandidates();
     research.checkedAt=new Date().toISOString();
