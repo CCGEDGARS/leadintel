@@ -956,7 +956,8 @@
     for(let offset=0;offset<pending.length;offset+=2){
       const outcomes=await Promise.all(pending.slice(offset,offset+2).map(async person=>{
         const first=clean(person.firstName||person.name).split(/\s+/)[0],role=clean(person.title);
-        const query='"'+first+'" "'+clean(candidate.company)+'" "'+role+'"';
+        const titles=localBuyerRoleAliases(role,candidate.market).map(alias=>'"'+alias+'"').join(' OR ');
+        const query='"'+first+'" "'+clean(candidate.company)+'" ('+titles+')';
         const searches=await Promise.allSettled([search('site:linkedin.com/in/ '+query),search(query)]);
         const failures=searches.filter(row=>row.status==='rejected');
         const aborted=failures.find(row=>row.reason?.name==='AbortError');if(aborted)throw aborted.reason;

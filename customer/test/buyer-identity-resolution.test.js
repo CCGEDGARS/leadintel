@@ -46,3 +46,7 @@ test('refresh with obfuscated directory identity preserves an already sourced fu
  const pool=D.mergeBuyerPool([old],[pending],profile);assert.equal(pool.length,1);assert.equal(pool[0].name,'Anna Andersson');assert.equal(pool[0].identityStatus,'confirmed');assert.equal(pool[0].kept,true);
  assert.equal(D.recommendedBuyers([{...old,identityStatus:'pending'}],profile).length,0);
 });
+test('surname research uses local title aliases when the directory title is English',async()=>{
+ const queries=[];await D.resolvePendingBuyerIdentities([{...pending,title:'Project Manager'}],[],candidate,profile,async query=>{queries.push(query);return [];});
+ assert.ok(queries.every(query=>query.includes('Project Manager')&&query.includes('Projektledare')));
+});
