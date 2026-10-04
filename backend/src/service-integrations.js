@@ -110,7 +110,7 @@ export async function fetchDirectPublicPage(value,{signal=AbortSignal.timeout(10
       const next=publicResearchUrl(location,current.href);if(!next)throw new Error('Website redirected to a non-public URL');
       current=next;continue;
     }
-    if(!response.ok)throw new Error(`Website returned ${response.status}`);
+    if(!response.ok)throw Object.assign(new Error(`Website returned ${response.status}`),{status:response.status});
     const contentType=(response.headers.get('content-type')||'').toLowerCase();
     if(contentType&&!contentType.includes('text/html')&&!contentType.includes('application/xhtml+xml')&&!contentType.includes('text/plain'))throw new Error('Website did not return readable text');
     const declared=Number(response.headers.get('content-length')||0);if(declared>MAX_DIRECT_PAGE_BYTES)throw new Error('Website page is too large to read safely');
