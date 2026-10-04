@@ -2,7 +2,7 @@ import {cookieValue,sha256} from './security.js';
 import {WORKFLOW_STAGES,approvedContext,normalizeWorkflowConfig,approvalStatus,fingerprint,setupBlockers} from './approved-workflow-engine.js';
 import {parse,workflowMain,workflowRow} from './approved-workflow-store.js';
 import {automaticGmailDeliveryEnabled} from './outreach-automation.js';
-import {resolveWorkspaceServiceCredential} from './service-integrations.js';
+import {resolveWorkspaceServiceCredential,hunterVerificationPolicy} from './service-integrations.js';
 import {runApprovedWorkflows} from './approved-workflow-runner.js';
 const json=(v,status=200,cors={})=>new Response(JSON.stringify(v),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...cors}});
 async function access(request,env,workspaceId){const token=cookieValue(request,'leadintel_session');if(!token)return null;const user=await env.DB.prepare("SELECT users.id FROM sessions JOIN users ON users.id=sessions.user_id WHERE sessions.token_hash=? AND sessions.expires_at>datetime('now')").bind(await sha256(token)).first();if(!user)return null;const member=await env.DB.prepare('SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?').bind(workspaceId,user.id).first();return member?{user,member}:null;}
@@ -12,7 +12,7 @@ async function view(env,workspaceId){
   const config=normalizeWorkflowConfig(parse(row?.config_json)),stages=await approvalStatus(context,config,parse(row?.approvals_json));
   const blockers=setupBlockers(context,config);const gmail=await env.DB.prepare("SELECT status FROM gmail_connections WHERE workspace_id=? AND status='connected'").bind(workspaceId).first();
   if(!gmail)blockers.push('Connect Gmail for automatic delivery');if(!automaticGmailDeliveryEnabled(env)&&env.APPROVED_WORKFLOW_DELIVERY_MODE!=='enabled')blockers.push('Automatic delivery is disabled on the server');
-  if(!(await resolveWorkspaceServiceCredential(env,workspaceId,'hunter')).configured)blockers.push('Connect Hunter for mandatory automatic email verification');
+  const hunter=await hunterVerificationPolicy(env,workspaceId);if(hunter.enabled&&!(await resolveWorkspaceServiceCredential(env,workspaceId,'hunter')).configured)blockers.push('Additional Hunter verification is enabled but its connection is unavailable');
   const {results:runs=[]}=await env.DB.prepare('SELECT id,revision,status,stage_index,error_message,created_at,updated_at,result_json FROM approved_workflow_runs WHERE workspace_id=? ORDER BY created_at DESC LIMIT 10').bind(workspaceId).all();
   return {status:row?.status||'manual',revision:row?.revision||0,config,context,stages,blockers,runs:runs.map(run=>({...run,result:parse(run.result_json),result_json:undefined})),approvedAt:row?.approved_at||null,nextRunAt:row?.next_run_at||null};
 }

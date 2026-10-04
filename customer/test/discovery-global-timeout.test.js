@@ -373,12 +373,13 @@ test('selected prospect buyer names persist and render as separate review cards'
   assert.equal(context.__elements.get('discovery-status').textContent,'1 selected company');
 });
 
-test('automatic confirmation runs available verification and holds paid email and phone enrichment',async()=>{
+test('unapproved automatic confirmation holds paid enrichment and never invokes optional Hunter',async()=>{
   const calls=[];
   const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,
     bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},enrichCrmContact:async (_company,person,options)=>{calls.push(options.phoneLookup?'apollo-phone':'apollo-email');return {ok:true,contact:{name:person.name,...(options.phoneLookup?{phone_number:'+371 2000 0000'}:{work_email:'marta.berzina@example.lv'})}};}},
     fetchImpl:async(url)=>{
-      const target=String(url);calls.push(target.includes('/status?')?'hunter-status':target.includes('find-email')?'hunter-finder':'hunter-verifier');
+      const target=String(url);calls.push(target.includes('approved-workflow')?'approval':target.includes('/status?')?'hunter-status':target.includes('find-email')?'hunter-finder':'hunter-verifier');
+      if(target.includes('approved-workflow'))return {ok:true,json:async()=>({status:'manual',config:{buyers:{confirmContacts:false}}})};
       if(target.includes('/status?'))return {ok:true,json:async()=>({providers:[{provider:'hunter',source:'customer'}]})};
       if(target.includes('find-email'))return {ok:true,json:async()=>({email:'marta.berzina@example.lv'})};
       return {ok:true,json:async()=>({email:'marta.berzina@example.lv',status:'valid',deliverability:'deliverable',checked_at:new Date().toISOString()})};
@@ -391,10 +392,10 @@ test('automatic confirmation runs available verification and holds paid email an
   context.__toggleBuyerContactFlow(emailBox);
   context.__toggleBuyerContactFlow(phoneBox);
   await new Promise(resolve=>setTimeout(resolve,30));
-  assert.deepEqual(calls,['hunter-status','hunter-finder','hunter-verifier']);
-  assert.equal(candidate.people[0].hunterChecks['marta.berzina@example.lv'].deliverability,'deliverable');
-  assert.equal(candidate.people[0].flowEmailCompletedFor,'apollo-12345:buyer-contacts-v10-pattern-search');
-  assert.equal(candidate.people[0].flowPhoneCompletedFor,'apollo-12345:buyer-contacts-v10-pattern-search');
+  assert.deepEqual(calls,['approval','hunter-status','approval']);
+  assert.equal(Object.keys(candidate.people[0].hunterChecks||{}).length,0);
+  assert.equal(candidate.people[0].flowEmailCompletedFor,'apollo-12345:buyer-contacts-v11-optional-hunter');
+  assert.equal(candidate.people[0].flowPhoneCompletedFor,'apollo-12345:buyer-contacts-v11-optional-hunter');
 });
 
 test('a first-name-only buyer triggers one public source check and renders a sourced full name without Apollo enrichment',async()=>{

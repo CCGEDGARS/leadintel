@@ -10,7 +10,7 @@ import {executeWorkflowStage,runApprovedWorkflows} from '../src/approved-workflo
 import {workflowAuthorized,workflowDeliveryAuthorized} from '../src/approved-workflow-store.js';
 import {runOutreachAutomation as runWithVerification} from '../src/outreach-automation-runner.js';
 class Statement{constructor(db,sql){this.db=db;this.sql=sql;this.args=[];}bind(...a){this.args=a;return this;}async first(){return this.db.prepare(this.sql).get(...this.args)||null;}async all(){return {results:this.db.prepare(this.sql).all(...this.args)};}async run(){const result=this.db.prepare(this.sql).run(...this.args);return {meta:{changes:Number(result.changes)}};}}
-class DB{constructor(){this.raw=new DatabaseSync(':memory:');for(const file of ['0001_initial.sql','0009_customer_saas.sql','0011_master_crm.sql','0013_workspace_service_integrations.sql','0023_hunter_service_integration.sql','0015_outreach_automation.sql','0022_crm_public_contact_sources.sql','0024_automation_brand_html.sql','0025_contact_suppression.sql','0027_approved_workflow.sql'])this.raw.exec(fs.readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));}prepare(sql){return new Statement(this.raw,sql);}async batch(statements){this.raw.exec('BEGIN');try{const results=[];for(const s of statements)results.push(await s.run());this.raw.exec('COMMIT');return results;}catch(e){this.raw.exec('ROLLBACK');throw e;}}}
+class DB{constructor(){this.raw=new DatabaseSync(':memory:');this.raw.exec("CREATE TABLE enrichment_policies(workspace_id TEXT PRIMARY KEY,daily_credit_limit INTEGER NOT NULL DEFAULT 3,monthly_credit_limit INTEGER NOT NULL DEFAULT 30,retry_after_days INTEGER NOT NULL DEFAULT 30,allow_personal_email INTEGER NOT NULL DEFAULT 0,phone_lookup_mode TEXT NOT NULL DEFAULT 'on_request')");for(const file of ['0001_initial.sql','0009_customer_saas.sql','0011_master_crm.sql','0012_crm_contact_enrichment.sql','0013_workspace_service_integrations.sql','0023_hunter_service_integration.sql','0015_outreach_automation.sql','0022_crm_public_contact_sources.sql','0024_automation_brand_html.sql','0025_contact_suppression.sql','0027_approved_workflow.sql'])this.raw.exec(fs.readFileSync(new URL('../migrations/'+file,import.meta.url),'utf8'));}prepare(sql){return new Statement(this.raw,sql);}async batch(statements){this.raw.exec('BEGIN');try{const results=[];for(const s of statements)results.push(await s.run());this.raw.exec('COMMIT');return results;}catch(e){this.raw.exec('ROLLBACK');throw e;}}}
 const main={website:'https://seller.example/',approved:true,profile:{companyName:'Fixture Industrial',priorityOffers:'industrial automation; custom machinery',idealCustomer:'manufacturers',decisionMakers:'COO',targetMarkets:'Sweden',exclusions:'',opportunityValue:'€50,000',customerPainPoints:'production flow downtime'},market:{strategyApproved:true,icps:[{id:'core',description:'manufacturers',active:true}],signals:[{id:'expansion',name:'Facility expansion',active:true,weight:10,keywords:'new factory; capacity expansion'},{id:'modernization',name:'Modernization',active:true,weight:9,keywords:'automation investment; equipment upgrade'}]}};
 const config=normalizeWorkflowConfig({companies:{limit:1,queries:1},buyers:{roles:['COO'],confirmContacts:true},triggers:{minimumScore:50,maxEvidenceAgeDays:90},messages:{subject:'Hello {{company}}',body:'Hello {{firstName}}, {{sender}} offers {{offer}}. Source: {{evidenceUrl}}'},delivery:{timezone:'UTC',dailyLimit:5,sendWindowStart:'09:00',sendWindowEnd:'17:00'}});
 async function fixture(){const db=new DB();db.raw.exec("INSERT INTO users(id,email,display_name) VALUES('u1','owner@fixture.test','Owner');INSERT INTO workspaces(id,name,market,owner_user_id) VALUES('w1','First','SE','u1'),('w2','Second','FI','u1');INSERT INTO workspace_members(workspace_id,user_id,role) VALUES('w1','u1','owner');INSERT INTO gmail_connections(workspace_id,user_id,google_email,status) VALUES('w1','u1','owner@fixture.test','connected');");db.raw.prepare("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES(?,'u1',datetime('now','+1 day'))").run(await sha256('token'));db.raw.prepare("INSERT INTO customer_workspace_state(workspace_id,payload_json) VALUES('w1',?)").run(JSON.stringify({main}));const key=btoa(String.fromCharCode(...new Uint8Array(32).fill(7)));db.raw.prepare("INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint) VALUES('w1','hunter',?,'test')").run(await encryptSecret('test-hunter',await importAesKey(key)));return {OAUTH_TOKEN_ENCRYPTION_KEY:key,DB:db,AUTOMATIC_GMAIL_DELIVERY_MODE:'manual_only',APPROVED_WORKFLOW_DELIVERY_MODE:'enabled'};}
@@ -58,7 +58,7 @@ test('Lookalike without buying signals stays outside automatic buyer and message
  const independent={url:'https://industry.example/nordic',title:'Nordic renewable energy equipment',markdown:'Nordic manufactures modular components and steel structures for renewable energy projects in Sweden, according to its industry association listing. The company supplies wind energy manufacturers.'};
  const original=globalThis.fetch;globalThis.fetch=async()=>new Response(JSON.stringify({data:[official,independent]}),{status:200});
  try{
-  const result=await executeWorkflowStage('companies',{env,row:{workspace_id:'w1'},context,config,result:{},guard,generateResearch});
+  const result=await executeWorkflowStage('companies',{env,row:{workspace_id:'w1',approved_by:'u1'},context,config,result:{},guard,generateResearch});
   assert.equal(result.candidates.length,0);assert.ok(result.reviewCompanies.length);assert.equal(result.shortfall,1);
   assert.ok(result.reviewCompanies.every(c=>!c.qualification.eligible));
   assert.ok(result.reviewCompanies.some(c=>c.qualification.gaps.includes('No recent verified buying signal')));
@@ -72,7 +72,7 @@ test('automatic buyers research a public pool and prioritize kept verified buyer
  const oldFetch=globalThis.fetch;let apollo=0,publicSearches=0;
  globalThis.fetch=async(url)=>{if(String(url).includes('apollo.io')){apollo++;throw new Error('Unexpected enrichment');}publicSearches++;return new Response(JSON.stringify({data:Array.from({length:20},(_,i)=>({url:`https://linkedin.com/in/person-${i}`,title:`Anna Buyer${String.fromCharCode(65+i)} – COO at Example`}))}),{status:200});};
  try{
-  const result=await executeWorkflowStage('buyers',{env,row:{workspace_id:'w1'},context:approvedContext(main),config,result:{candidates:[{company:'Example',domain:'example.com'}]},guard:async()=>{}});
+  const result=await executeWorkflowStage('buyers',{env,row:{workspace_id:'w1',approved_by:'u1'},context:approvedContext(main),config,result:{candidates:[{company:'Example',domain:'example.com'}]},guard:async()=>{}});
   assert.equal(result.candidates[0].contact.name,'Saved Buyer');assert.equal(result.candidates[0].buyerDiscovery.pool.length,20);assert.equal(result.candidates[0].people.length,6);assert.equal(apollo,0);assert.ok(publicSearches>0);
  }finally{globalThis.fetch=oldFetch;}
 });
@@ -81,7 +81,7 @@ test('automatic buyers retain public suggestions for review without approved enr
  globalThis.fetch=async(url)=>{if(String(url).includes('apollo.io'))apollo++;return new Response(JSON.stringify({data:[{url:'https://linkedin.com/in/anna',title:'Anna Buyer – COO at Example'}]}),{status:200});};
  try{
   const manualConfig=normalizeWorkflowConfig({...config,buyers:{roles:['COO'],enrich:false}});
-  const result=await executeWorkflowStage('buyers',{env,row:{workspace_id:'w1'},context:approvedContext(main),config:manualConfig,result:{candidates:[{company:'Example',domain:'example.com'}]},guard:async()=>{}});
+  const result=await executeWorkflowStage('buyers',{env,row:{workspace_id:'w1',approved_by:'u1'},context:approvedContext(main),config:manualConfig,result:{candidates:[{company:'Example',domain:'example.com'}]},guard:async()=>{}});
   assert.equal(result.candidates.length,0);assert.equal(result.reviewBuyers.length,1);assert.equal(result.reviewBuyers[0].people[0].name,'Anna Buyer');assert.equal(apollo,0);
  }finally{globalThis.fetch=oldFetch;}
 });
@@ -116,7 +116,7 @@ test('automatic Buyers combine directory discovery with four public buyers and r
   return new Response(JSON.stringify({data:rows}));
  };
  try{
-  const output=await executeWorkflowStage('buyers',{env,row:{workspace_id:'w1'},result:{candidates:[{company:'Nordic Machines',domain:'nordicmachines.se',market:'Sweden'}]},context:approvedContext(main),config:normalizeWorkflowConfig({buyers:{roles:['Project Director','Procurement Director'],confirmContacts:false}}),guard:async()=>{}});
+  const output=await executeWorkflowStage('buyers',{env,row:{workspace_id:'w1',approved_by:'u1'},result:{candidates:[{company:'Nordic Machines',domain:'nordicmachines.se',market:'Sweden'}]},context:approvedContext(main),config:normalizeWorkflowConfig({buyers:{roles:['Project Director','Procurement Director'],confirmContacts:false}}),guard:async()=>{}});
   const candidate=output.reviewBuyers[0];assert.equal(candidate.people.length,5);
   const anna=candidate.people.find(p=>p.name==='Anna Andersson');assert.ok(anna);assert.equal(anna.id,'anna-directory');assert.equal(anna.identityStatus,'confirmed');
   assert.equal(requests.filter(url=>url.includes('api_search')).length,1);assert.equal(requests.some(url=>url.includes('people/match')),false);
@@ -125,8 +125,12 @@ test('automatic Buyers combine directory discovery with four public buyers and r
 });
 
 
-test('automatic buyer confirmation setting does not authorize paid contact reveal',async()=>{
+test('automatic buyer confirmation uses approved Apollo reveal within workspace limits',async()=>{
  const env=await fixture();env.DB.raw.prepare("INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint) VALUES('w1','apollo',?,'test')").run(await encryptSecret('test-apollo',await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY)));
- const oldFetch=globalThis.fetch,requests=[];globalThis.fetch=async url=>{requests.push(String(url));return new Response(JSON.stringify(String(url).includes('api_search')?{people:[{id:'anna',name:'Anna Andersson',title:'COO',organization:{name:'Example'}}]}:{data:[]}));};
- try{const output=await executeWorkflowStage('buyers',{env,row:{workspace_id:'w1'},result:{candidates:[{company:'Example',domain:'example.com'}]},context:approvedContext(main),config:normalizeWorkflowConfig({buyers:{roles:['COO'],confirmContacts:true}}),guard:async()=>{}});assert.equal(output.reviewBuyers[0].buyerDiscovery.contactConfirmationRequired,true);assert.equal(requests.some(url=>url.includes('people/match')),false);}finally{globalThis.fetch=oldFetch;}
+ const oldFetch=globalThis.fetch,requests=[];globalThis.fetch=async url=>{requests.push(String(url));return new Response(JSON.stringify(String(url).includes('api_search')?{people:[{id:'anna',name:'Anna Andersson',title:'COO',organization:{name:'Example'}}]}:String(url).includes('people/match')?{person:{id:'anna',name:'Anna Andersson',title:'COO',email:'anna@example.com',email_status:'verified',organization:{name:'Example',primary_domain:'example.com'}}}:{data:[]}));};
+ try{const output=await executeWorkflowStage('buyers',{env,row:{workspace_id:'w1',approved_by:'u1'},result:{candidates:[{company:'Example',domain:'example.com'}]},context:approvedContext(main),config:normalizeWorkflowConfig({buyers:{roles:['COO'],confirmContacts:true}}),guard:async()=>{}});assert.equal(output.candidates[0].contact.email,'anna@example.com');assert.equal(requests.some(url=>url.includes('people/match')),true);assert.equal(requests.some(url=>url.includes('hunter.io')),false);}finally{globalThis.fetch=oldFetch;}
+});
+test('workflow activation and stage approval work without any Hunter integration',async()=>{
+ const env=await fixture();env.DB.raw.exec("DELETE FROM workspace_service_integrations WHERE provider='hunter'");
+ const data=await approve(env);assert.equal(data.status,'automatic');assert.equal(data.blockers.some(reason=>/hunter/i.test(reason)),false);
 });

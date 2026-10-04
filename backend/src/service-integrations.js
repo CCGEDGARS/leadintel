@@ -122,6 +122,14 @@ async function fetchDirectPublicPage(value){
 }
 function retryableFirecrawlStatus(status,{managed=false}={}){return status===402||status===408||status===429||status>=500||(managed&&status===404);}
 
+export function hunterVerificationEnabled(row){
+  try{return JSON.parse(row?.metadata_json||'{}')?.additional_verification_enabled===true;}catch{return false;}
+}
+export async function hunterVerificationPolicy(env,workspaceId){
+  const row=await integrationRow(env,workspaceId,'hunter');
+  return {enabled:hunterVerificationEnabled(row),configured:Boolean(row)};
+}
+
 export async function resolveWorkspaceServiceCredential(env,workspaceId,provider){
   const normalized=normalizeProvider(provider);if(!normalized||!workspaceId)return {provider:normalized,apiKey:'',source:'none',configured:false,row:null};
   try{
@@ -151,7 +159,7 @@ async function providerStatus(env,workspaceId,provider,{verify=false}={}){
     let metadata={};try{metadata=JSON.parse(row.metadata_json||'{}')||{};}catch{}
     let state='good',label='Connected';
     if(verify){
-      try{const apiKey=await decryptRow(env,row);metadata=await verifyCredential(provider,apiKey);const balance=verifiedCreditBalance(provider,metadata);if(balance)await recordProviderCredit(env,{workspaceId,provider,kind:balance,source:'customer'});await env.DB.prepare(`UPDATE workspace_service_integrations SET metadata_json=?,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(JSON.stringify(metadata),workspaceId,provider).run();}
+      try{const apiKey=await decryptRow(env,row);metadata={...metadata,...await verifyCredential(provider,apiKey)};const balance=verifiedCreditBalance(provider,metadata);if(balance)await recordProviderCredit(env,{workspaceId,provider,kind:balance,source:'customer'});await env.DB.prepare(`UPDATE workspace_service_integrations SET metadata_json=CASE WHEN provider='hunter' THEN json_set(?, '$.additional_verification_enabled', json(CASE WHEN json_extract(metadata_json,'$.additional_verification_enabled')=1 THEN 'true' ELSE 'false' END)) ELSE ? END,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(JSON.stringify(metadata),JSON.stringify(metadata),workspaceId,provider).run();}
       catch(cause){if(creditFailure(0,cause?.message)||/\(402\)/.test(String(cause?.message)))await recordProviderCredit(env,{workspaceId,provider,kind:'failed',source:'customer'});state='bad';label='Connection error';metadata={...metadata,error:clean(cause?.message||cause,180)};}
     }
     return {provider,name:PROVIDER_NAMES[provider],configured:true,source:'customer',state,label,key_hint:row.key_hint||'',verified_at:row.verified_at||null,last_used_at:row.last_used_at||null,metadata};
@@ -281,15 +289,26 @@ export async function handleServiceIntegrationRoute(request,env,cors={}){
     return json({role:access.member.role,providers,checked_at:new Date().toISOString()},200,cors);
   }
 
+  if(path==='/api/integrations/services/hunter/settings'&&request.method==='PUT'){
+    const access=await requireMember(request,env,workspaceId,['owner']);if(access.error)return error(access.error,access.status,cors);
+    const body=await request.json().catch(()=>null);if(typeof body?.enabled!=='boolean')return error('An enabled boolean is required',400,cors);
+    const row=await integrationRow(env,workspaceId,'hunter');if(!row)return error('Connect your Hunter key before enabling additional verification',409,cors);
+    let metadata={};try{metadata=JSON.parse(row.metadata_json||'{}');}catch{}
+    metadata.additional_verification_enabled=body.enabled;
+    await env.DB.prepare("UPDATE workspace_service_integrations SET metadata_json=json_set(metadata_json, '$.additional_verification_enabled', json(?)),updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider='hunter'").bind(JSON.stringify(body.enabled),workspaceId).run();
+    await audit(env,{workspaceId,userId:access.user.id,type:'service.hunter_policy_changed',provider:'hunter',metadata:{enabled:body.enabled}});
+    return json({saved:true,enabled:body.enabled},200,cors);
+  }
+
   if(path==='/api/integrations/services/provider'&&request.method==='PUT'){
     const access=await requireMember(request,env,workspaceId,['owner']);if(access.error)return error(access.error,access.status,cors);
     if(!encryptionConfigured(env))return error('Credential encryption is not configured',503,cors);
     const body=await request.json().catch(()=>null);const provider=normalizeProvider(body?.provider);if(!provider)return error('Unsupported service provider',400,cors);
     let apiKey;try{apiKey=validateApiKey(body.api_key);}catch(cause){return error(cause.message,400,cors);}
-    let metadata;try{metadata=await verifyCredential(provider,apiKey);}catch(cause){return error(clean(cause?.message||'Provider verification failed',180),422,cors);}
+    let metadata;try{metadata=await verifyCredential(provider,apiKey);if(provider==='hunter')metadata.additional_verification_enabled=hunterVerificationEnabled(await integrationRow(env,workspaceId,provider));}catch(cause){return error(clean(cause?.message||'Provider verification failed',180),422,cors);}
     try{
       const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const encrypted=await encryptSecret(apiKey,key);
-      await env.DB.prepare(`INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint,metadata_json,verified_at,created_at,updated_at) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(workspace_id,provider) DO UPDATE SET encrypted_api_key=excluded.encrypted_api_key,key_hint=excluded.key_hint,metadata_json=excluded.metadata_json,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP`).bind(workspaceId,provider,encrypted,keyHint(apiKey),JSON.stringify(metadata)).run();
+      await env.DB.prepare(`INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint,metadata_json,verified_at,created_at,updated_at) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(workspace_id,provider) DO UPDATE SET encrypted_api_key=excluded.encrypted_api_key,key_hint=excluded.key_hint,metadata_json=CASE WHEN provider='hunter' THEN json_set(excluded.metadata_json, '$.additional_verification_enabled', json(CASE WHEN json_extract(workspace_service_integrations.metadata_json,'$.additional_verification_enabled')=1 THEN 'true' ELSE 'false' END)) ELSE excluded.metadata_json END,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP`).bind(workspaceId,provider,encrypted,keyHint(apiKey),JSON.stringify(metadata)).run();
       await audit(env,{workspaceId,userId:access.user.id,type:'service.provider_saved',provider,metadata:{source:'customer'}});
       return json({saved:true,provider,name:PROVIDER_NAMES[provider],configured:true,source:'customer',key_hint:keyHint(apiKey),verified_at:new Date().toISOString(),metadata},200,cors);
     }catch{return error('Unable to save service provider configuration',500,cors);}
@@ -307,6 +326,7 @@ export async function handleServiceIntegrationRoute(request,env,cors={}){
     const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
     const body=await request.json().catch(()=>null);const email=clean(body?.email,320).toLowerCase();
     if(!/^[a-z0-9][a-z0-9._%+-]{0,63}@[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?\.[a-z]{2,}$/i.test(email)||email.includes('..'))return error('A valid email address is required',400,cors);
+    if(!(await hunterVerificationPolicy(env,workspaceId)).enabled)return error('Hunter is optional and disabled. Enable additional verification in Settings to use credits.',409,cors,'SERVICE_HUNTER_DISABLED');
     const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'hunter');
     if(credential.source!=='customer'||!credential.apiKey)return error('Connect Hunter in Settings before checking an email',503,cors,'SERVICE_HUNTER_NOT_CONFIGURED');
     let response;try{response=await fetch(`https://api.hunter.io/v2/email-verifier?email=${encodeURIComponent(email)}`,{method:'GET',headers:{Accept:'application/json','X-API-KEY':credential.apiKey}});}catch{return error('Hunter is temporarily unavailable',502,cors);}
@@ -326,6 +346,7 @@ export async function handleServiceIntegrationRoute(request,env,cors={}){
     const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
     const body=await request.json().catch(()=>null),domain=clean(body?.domain,253).toLowerCase(),first=clean(body?.first_name,80),last=clean(body?.last_name,80);
     if(!DNS_DOMAIN.test(domain)||!first||!last||!/^[-\p{L}'’ ]{2,80}$/u.test(first)||!/^[-\p{L}'’ ]{2,80}$/u.test(last))return error('Company domain and full name are required',400,cors);
+    if(!(await hunterVerificationPolicy(env,workspaceId)).enabled)return error('Hunter is optional and disabled. Enable additional verification in Settings to use credits.',409,cors,'SERVICE_HUNTER_DISABLED');
     const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'hunter');
     if(credential.source!=='customer'||!credential.apiKey)return error('Connect Hunter in Settings before confirming email',503,cors,'SERVICE_HUNTER_NOT_CONFIGURED');
     const params=new URLSearchParams({domain,first_name:first,last_name:last});

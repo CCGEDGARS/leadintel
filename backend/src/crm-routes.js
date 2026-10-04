@@ -30,7 +30,7 @@ function isHttpsUrl(value){try{return new URL(String(value||'')).protocol==='htt
 async function crmEnrichmentUsage(db,workspaceId){const daily=await db.prepare(`SELECT COALESCE(SUM(credits_reserved),0) value FROM crm_enrichment_requests WHERE workspace_id=? AND created_at>=date('now') AND status NOT IN ('cancelled','failed')`).bind(workspaceId).first();const monthly=await db.prepare(`SELECT COALESCE(SUM(credits_reserved),0) value FROM crm_enrichment_requests WHERE workspace_id=? AND created_at>=date('now','start of month') AND status NOT IN ('cancelled','failed')`).bind(workspaceId).first();return {daily:Number(daily?.value)||0,monthly:Number(monthly?.value)||0};}
 function immediateApolloCredits(person){return person&&clean(person.id||person.person_id,180)?1:0;}
 
-async function enrichCrmContact(request,env,cors,access,companyId){
+export async function enrichCrmContact(request,env,cors,access,companyId){
   const body=await request.json().catch(()=>null);if(!body||typeof body!=='object')return error('Apollo person selection is required',400,cors,'CRM_ENRICHMENT_PAYLOAD_REQUIRED');
   const detail=await getCrmCompany(env.DB,access.context,companyId);const company=detail.company;
   if(company.lifecycle_status==='suppressed')return error('Suppressed companies cannot be enriched',409,cors,'CRM_COMPANY_SUPPRESSED');
