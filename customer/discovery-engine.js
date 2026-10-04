@@ -974,7 +974,7 @@
         const query='"'+first+'" "'+clean(candidate.company)+'" ('+titles+')';
         const searches=await Promise.allSettled([search('site:linkedin.com/in/ '+query),search(query)]);
         const failures=searches.filter(row=>row.status==='rejected');
-        const aborted=failures.find(row=>row.reason?.name==='AbortError');if(aborted)throw aborted.reason;
+        const aborted=failures.find(row=>row.reason?.name==='AbortError'&&row.reason?.code!=='BUYER_REQUEST_TIMEOUT');if(aborted)throw aborted.reason;
         failures.forEach(row=>issues.push('Identity '+first+': '+clean(row.reason?.message||'public search unavailable')));
         const rows=[...sourceRows,...searches.flatMap(row=>row.status==='fulfilled'?row.value:[])];
         // Official team/contact pages often have a generic page title. Extract only

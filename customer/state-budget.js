@@ -34,6 +34,31 @@
     return next;
   }
   const TRACE_FORMAT='leadintel-buyer-trace-v1';
+  const REFERENCE_FORMAT='leadintel-discovery-refs-v1';
+  // Workflow views repeat the same company, buyer pool and provider evidence.
+  // Share equal copies on the wire without deleting any record or audit field.
+  function packRepeatedDiscovery(value){
+    if(!value||typeof value!=='object')return value;
+    const counts=new Map(),identities=new WeakMap();
+    function count(item){
+      if(!item||typeof item!=='object')return;
+      const identity=JSON.stringify(item);identities.set(item,identity);
+      if(identity.length>=512)counts.set(identity,(counts.get(identity)||0)+1);
+      Object.values(item).forEach(count);
+    }
+    count(value);const values=[],indices=new Map();
+    function encode(item){
+      if(!item||typeof item!=='object')return item;
+      const identity=identities.get(item);
+      if(counts.get(identity)>1){
+        if(!indices.has(identity)){indices.set(identity,values.length);values.push(item);}
+        return {leadintelResearchRef:indices.get(identity)};
+      }
+      return Array.isArray(item)?item.map(encode):Object.fromEntries(Object.entries(item).map(([key,child])=>[key,encode(child)]));
+    }
+    const packed={format:REFERENCE_FORMAT,value:encode(value),values};
+    return values.length&&bytes(packed)<bytes(value)?packed:value;
+  }
   function packBuyerTraces(value,key=''){
     if(key==='resultDiagnostics'&&Array.isArray(value)&&value.length>=20&&value.every(row=>row&&typeof row==='object'&&!Array.isArray(row))){
       const columns=[...new Set(value.flatMap(row=>Object.keys(row)))],values=[],dictionary=new Map();
@@ -51,6 +76,19 @@
     return Object.fromEntries(Object.entries(value).map(([field,item])=>[field,packBuyerTraces(item,field)]));
   }
   function restoreFromSync(value,key=''){
+    if(key==='discovery'&&value?.format===REFERENCE_FORMAT){
+      if(!Array.isArray(value.values)||value.values.length>5000||!value.value||typeof value.value!=='object')throw new Error('Invalid stored discovery research references');
+      function expand(item){
+        if(!item||typeof item!=='object')return item;
+        if(Object.keys(item).length===1&&Object.prototype.hasOwnProperty.call(item,'leadintelResearchRef')){
+          const index=item.leadintelResearchRef;
+          if(!Number.isInteger(index)||index<0||index>=value.values.length)throw new Error('Invalid stored discovery research references');
+          return cloneValue(value.values[index]);
+        }
+        return Array.isArray(item)?item.map(expand):Object.fromEntries(Object.entries(item).map(([field,child])=>[field,expand(child)]));
+      }
+      return restoreFromSync(expand(value.value),key);
+    }
     if(key==='resultDiagnostics'&&value?.format===TRACE_FORMAT){
       const {columns,values,rows}=value;
       if(!Array.isArray(columns)||columns.length>100||!columns.every(column=>typeof column==='string')||!Array.isArray(values)||!Array.isArray(rows)||rows.length>500)throw new Error('Invalid stored buyer research trace');
@@ -73,6 +111,7 @@
       payload=compactEvidenceCopies(payload,evidenceChars);
     }
     if(bytes(payload)>TARGET_SYNC_BYTES)payload=packBuyerTraces(payload);
+    if(bytes(payload)>TARGET_SYNC_BYTES)payload.discovery=packRepeatedDiscovery(payload.discovery);
     return {payload,bytes:bytes(payload),compacted:JSON.stringify(payload)!==JSON.stringify(original)};
   }
   function prepareForSync(input={}){

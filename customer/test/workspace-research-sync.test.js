@@ -53,3 +53,12 @@ test('oversized business data fails before the network and remains available loc
  assert.equal(requests,0);assert.equal(JSON.parse(values.get(KEYS.discovery)).businessNotes.length,520*1024);
  assert.equal(root.LeadIntelWorkspacePersistence.isExplicitlySaved(),false);
 });
+test('repeated discovery references survive the real save and hydration boundary',async()=>{
+ const company={domain:'example.com',people:Array.from({length:30},(_,i)=>({name:'Buyer '+i,notes:'Sourced role evidence '.repeat(100)}))};
+ const payload={main:{notes:'x'.repeat(360*1024)},discovery:{candidates:[company],selectedProspects:[company],pipeline:[company]},outreach:{},delivery:{},meta:{discovery:{}}};
+ let saved;const values=localValues(payload),root=load(values,async(input,options)=>{if(options.method==='PUT'){saved=JSON.parse(options.body);return new Response(JSON.stringify({saved:true,version:8}));}return new Response(JSON.stringify({version:8,payload:saved.payload}));});
+ await root.fetch(endpoint,{method:'PUT',body:JSON.stringify({payload}),leadintelSaveIntent:true,leadintelExplicitSave:true});
+ assert.equal(saved.payload.discovery.format,'leadintel-discovery-refs-v1');assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),false);
+ values.set('leadintel_customer_v2_server_versions',JSON.stringify({w1:8}));await root.fetch(endpoint,{method:'GET'});assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),false);
+ assert.deepEqual(budget.restoreFromSync(saved.payload).discovery,payload.discovery);
+});
