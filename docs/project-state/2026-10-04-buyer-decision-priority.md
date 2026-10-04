@@ -20,3 +20,14 @@ The fresh LKAB run exposed Chief Procurement Officer as a partial director match
 Final dated-source recheck found historical role evidence for Tomas, Thomas, Björn and Mari. Known stale/future identity evidence now invalidates qualification and the Messages email gate, so an accepted email cannot rescue an outdated role. Recommended buyers are sorted by total priority after reserving function coverage. Historical contacts/evidence remain saved for review. These observed handoff and ordering failures have meaningful regression coverage.
 
 Blocked controls now display the actual qualification hold beside Save & proceed and in its tooltip, rather than asking for another email confirmation when employment evidence is the blocker. A runtime card regression verifies the visible stale-role reason and disabled handoff.
+
+
+## Saved research recovery after the 22:40 customer screenshot
+
+The customer still saw the old 14-candidate/four-name record, with no individual contact attempts. Deployment freshness does not establish workspace data freshness. Two startup paths could preserve that state: automatic public checks consumed their per-visit slot before the authenticated workspace was ready, and CRM refresh read durable contacts but never restored a newer durable buyer research snapshot.
+
+Buyers now waits for authentication and CRM refresh. It restores a strictly newer same-company research snapshot, retains local kept/flow/LinkedIn/source confirmations for matching identities, recalculates qualification, and saves the recovered workflow state. It never replaces an active research run or uses a future-dated, older, or other-company snapshot. Missing individual attempts can recover from a legacy error; actual attempted failures remain bounded. Existing incomplete-research and stale-role holds remain visible. CRM snapshot v2 carries the buyer fields and provider diagnostics needed for faithful reopening; v1 snapshots remain readable. No paid contact enrichment or outreach is enabled.
+
+Regression coverage exercises delayed authentication, one bounded follow-up, same-company snapshot recovery, evidence/confirmation retention, and rejection of older, other-company or active-run replacement. Production proof and authenticated reload evidence must be recorded separately before completion.
+
+Authenticated reload also exposed a navigation gap: discovery initialization always reopened Companies, overwriting the saved Buyers focus before scheduling checks. Startup now restores the persisted Companies/Buyers focus.
