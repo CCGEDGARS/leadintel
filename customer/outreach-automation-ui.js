@@ -19,7 +19,7 @@ async function queueApprovedPackages(domain=''){
     const key=String(item.domain||'').toLowerCase(),personId=String(item.selectedPersonId||'');if(!key||!personId){skipped++;continue;}
     const list=await b.listCrmCompanies({q:key,limit:20});const company=list.ok?(list.companies||[]).find(row=>String(row.normalized_domain||'').toLowerCase()===key):null;if(!company){skipped++;continue;}
     const detail=await b.getCrmCompany(company.id);if(!detail.ok||detail.company?.lifecycle_status==='suppressed'){skipped++;continue;}
-    const contact=(detail.contacts||[]).find(row=>(String(row.id)===personId||String(row.external_person_id||'')===personId)&&(String(row.email_status||'').toLowerCase()==='verified'||root.LeadIntelContactPolicy?.accepted(row,key,root.LeadIntelBuyerConfirmationPolicy?.level?.()||root.LeadIntelServiceSettings?.confirmationLevel?.()))&&String(row.normalized_email||'').toLowerCase().endsWith(`@${key}`));
+    const contact=(detail.contacts||[]).find(row=>(String(row.id)===personId||String(row.external_person_id||'')===personId)&&(!root.LeadIntelContactPolicy&&String(row.email_status||'').toLowerCase()==='verified'||root.LeadIntelContactPolicy?.accepted(row,key,root.LeadIntelBuyerConfirmationPolicy?.level?.()||root.LeadIntelServiceSettings?.confirmationLevel?.()))&&String(row.normalized_email||'').toLowerCase().endsWith(`@${key}`));
     if(!contact){skipped++;continue;}
     const payload=root.LeadIntelOutreachAutomationDeliveryHandoff?.buildApprovedAutomationPackage?.(item,contact.normalized_email);if(!payload){skipped++;continue;}
     const result=await b.enqueueOutreachAutomation(payload);if(result.ok){if(!result.duplicate)queued++;}else skipped++;
