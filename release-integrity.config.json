@@ -229,6 +229,17 @@
         "async function reconcileServerState(state,base)",
         "setConflictBusy(true)"
       ]
+    },
+    {
+      "id": "buyer-decision-priority",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "function buyerResearchAssessment(person={},options={})",
+        "Purchasing / supplier selection",
+        "version:3,decisionRole"
+      ]
     }
   ],
   "retry": {

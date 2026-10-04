@@ -1163,7 +1163,7 @@ test('manual opportunity review holds persist without paid contact enrichment',a
 
 test('recommended buyers precede potential buyers and unresolved research with correct action targets',()=>{
  const context=loadDiscoveryRunner({renderNodes:true});
- const people=Array.from({length:6},(_,i)=>({id:`person-${i}`,name:`Anna Buyer${i}`,publicName:`Anna Buyer${i}`,title:'Procurement Director',organization:'Example',publicNameUrl:`https://example.com/team/${i}`}));
+ const people=Array.from({length:6},(_,i)=>({id:`person-${i}`,name:`Anna Buyer${i}`,publicName:`Anna Buyer${i}`,title:'Procurement Director',organization:'Example',publicNameUrl:`https://example.com/team/${i}`,emailResearch:{status:"complete",searches:3,failed:0,checkedAt:new Date().toISOString()}}));
  const html=context.__renderSelectedProspects([{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',people,buyerDiscovery:{pool:[...people,{name:'Unresolved',title:'Procurement Director',identityStatus:'pending'}],providerStatus:{firecrawl:{status:'complete'}},researchIncomplete:true}}]);
  assert.ok(html.indexOf('4 recommended buyers')>=0,html);assert.ok(html.indexOf('4 recommended buyers')<html.indexOf('2 other potential buyers'),html);
  assert.ok(html.indexOf('2 other potential buyers')<html.indexOf('1 unresolved identities'));
@@ -1188,4 +1188,23 @@ test('a rejected official source persists and stops a cached listing from showin
  assert.match(html,/data-keep-buyer="example.com"[^>]*disabled/);
  const restored=Discovery.normalizeDiscoveryState(JSON.parse(ctx.localStorage.getItem('leadintel_customer_v2_discovery')));
  assert.equal(restored.selectedProspects[0].people[0].publicEmailSourceCheck.status,'failed');
+});
+
+test('buyers with incomplete research have visible reasons and cannot occupy the researched recommendation group',()=>{
+ const context=loadDiscoveryRunner({renderNodes:true});
+ const people=Array.from({length:11},(_,i)=>({id:`person-${i}`,name:`Anna Buyer${i}`,title:i===10?'Head of Procurement':'Project Director',organization:'Example',publicNameUrl:`https://example.com/team/${i}`,emailResearch:i===10?{status:'complete',searches:3,failed:0,checkedAt:new Date().toISOString()}:{status:'partial',searches:1,failed:1,checkedAt:new Date().toISOString()}}));
+ const html=context.__renderSelectedProspects([{company:'Example',domain:'example.com',people,buyerRoles:['Project Director','Procurement Director']}]);
+ assert.match(html,/1 recommended buyers/);assert.ok(html.indexOf('Anna Buyer10')<html.indexOf('other potential buyers'));
+ assert.match(html,/Purchasing \/ supplier selection/);assert.match(html,/purchasing authority unconfirmed/);assert.match(html,/Research: incomplete/);assert.match(html,/Search incomplete/);
+});
+
+test('a company-level completed check does not conceal an unresearched individual and follow-up runs only once',async()=>{
+ let requests=0;
+ const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,fetchImpl:async()=>{requests++;return {ok:true,json:async()=>({data:[]})};}});
+ context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',publicContactStatus:'complete',publicContactVersion:'buyer-contacts-v18-profile-scope',people:[{id:'p1',name:'Anna Buyer',title:'Procurement Director',organization:'Example',publicNameUrl:'https://example.com/team'}]}]});
+ context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5,visibleStep:5}));
+ context.__scheduleSavedBuyerPublicChecks();context.__scheduleSavedBuyerPublicChecks();
+ await new Promise(resolve=>setTimeout(resolve,50));
+ assert.ok(requests>0);assert.ok(context.__discoveryState().selectedProspects[0].people[0].emailResearch.searches>0);
+ const completed=requests;context.__scheduleSavedBuyerPublicChecks();await new Promise(resolve=>setTimeout(resolve,5));assert.equal(requests,completed);
 });

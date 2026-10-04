@@ -86,8 +86,8 @@ test('equivalent procurement leadership titles outrank managers on comparable ev
 test('authority-weighted scores preserve their model version and component limits through reload and CRM',()=>{
  const C=require('../crm-engine.js'),p={decisionMakers:'Procurement Director'},person=buyer({title:'Head of Procurement'});person.buyerQualification=D.qualifyBuyer(person,p,company);
  const saved=D.normalizeDiscoveryState({selectedProspects:[{...company,buyerSearchMode:'user_selected_target',people:[person]}]}).selectedProspects[0];
- assert.deepEqual(saved.people[0].buyerQualification,person.buyerQualification);assert.equal(saved.people[0].buyerQualification.version,2);
- assert.equal(saved.people[0].buyerQualification.breakdown.authority.max,25);assert.equal(C.mapDiscoveryCandidateToCrm(saved).intelligence.research_snapshot.buyerResearch.buyers[0].qualification.version,2);
+ assert.deepEqual(saved.people[0].buyerQualification,person.buyerQualification);assert.equal(saved.people[0].buyerQualification.version,3);
+ assert.equal(saved.people[0].buyerQualification.breakdown.authority.max,25);assert.equal(C.mapDiscoveryCandidateToCrm(saved).intelligence.research_snapshot.buyerResearch.buyers[0].qualification.version,3);
 });
 test('foreign-country and subsidiary buyers remain reviewable but cannot enter the highlighted opportunity shortlist',()=>{
  const candidate={company:'Example',domain:'example.com',market:'Sweden'},profile={decisionMakers:'Engineering Manager; Operations Director'};

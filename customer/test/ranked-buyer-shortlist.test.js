@@ -1,6 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict'),D=require('../discovery-engine.js');
 const profile={decisionMakers:'Project Director; Project Manager; CAPEX Manager; Investment Project Manager; Procurement Director; Procurement Manager; Strategic Sourcing Manager; Purchasing Manager; Engineering Director; Engineering Manager; Technical Manager; Operations Director'};
-const buyer=(id,title='Project Manager',extra={})=>({id,name:`Anna Buyer${id}`,title,organization:'Example',publicNameUrl:`https://example.com/team/${id}`,...extra});
+const buyer=(id,title='Project Manager',extra={})=>({id,name:`Anna Buyer${id}`,title,organization:'Example',publicNameUrl:`https://example.com/team/${id}`,emailResearch:{status:'complete',searches:3,failed:0,checkedAt:new Date().toISOString()},...extra});
 test('ten qualified buyers contain four highlighted recommendations and cover all twelve committee roles',()=>{
  const pool=Array.from({length:15},(_,i)=>buyer(String(i)));
  pool.push(buyer('buying','Procurement Director'),buyer('technical','Technical Manager'),buyer('ops','Operations Director'));
