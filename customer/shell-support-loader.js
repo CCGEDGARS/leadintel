@@ -2,7 +2,7 @@ const SUPPORT_MODULES=[
   './state-budget.js?v=20261004-buyer-trace-sync-v1',
   './website-input-sync.js?v=20260930-setup-focus-v1',
   './custom-market-input-hygiene.js?v=20260903-password-manager-isolation-v5',
-  './crm-engine.js?v=20260828-master-crm-v1&commercial-evidence=20261002-v2&buyer-quality=20261002-v5&buyer-research=20261004-v2&public-contacts=20261004-v2',
+  './crm-engine.js?v=20260828-master-crm-v1&commercial-evidence=20261002-v2&buyer-quality=20261002-v5&buyer-research=20261004-v3&public-contacts=20261004-v2',
   './sync-conflict-hygiene.js?v=20260901-stale-blank-conflict-v1',
   './service-settings-extension.js?v=20260925-provider-credit-health-v1&optional-hunter=20261004-v1&contact-policy=20261004-v3',
   './step2-readiness-engine.js?v=20260924-friendly-workflow-labels-v1&profile-review=20261001-v2&profile-repair=20261002-v1',
@@ -30,7 +30,7 @@ const SUPPORT_MODULES=[
 
 async function loadSupportModules(){
   const crmResults=[];
-  try{await import('./crm-presentation.js?v=20260924-crm-evidence-activity-v1&buyer-research=20261004-v2&public-contacts=20261004-v2');crmResults.push({status:'fulfilled'});}
+  try{await import('./crm-presentation.js?v=20260924-crm-evidence-activity-v1&buyer-research=20261004-v3&public-contacts=20261004-v2');crmResults.push({status:'fulfilled'});}
   catch(reason){crmResults.push({status:'rejected',reason});}
   try{await import('./crm-ui.js?v=20260928-crm-buyer-recovery-v1');crmResults.push({status:'fulfilled'});}
   catch(reason){crmResults.push({status:'rejected',reason});}

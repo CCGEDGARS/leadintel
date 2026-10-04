@@ -31,3 +31,7 @@ Buyers now waits for authentication and CRM refresh. It restores a strictly newe
 Regression coverage exercises delayed authentication, one bounded follow-up, same-company snapshot recovery, evidence/confirmation retention, and rejection of older, other-company or active-run replacement. Production proof and authenticated reload evidence must be recorded separately before completion.
 
 Authenticated reload also exposed a navigation gap: discovery initialization always reopened Companies, overwriting the saved Buyers focus before scheduling checks. Startup now restores the persisted Companies/Buyers focus.
+
+Production b9506ad87f4e8297bc21bcb2c457bc90bbb90000 returned PROVEN (CI 37229750085, integrity 37229778023, 19 smokes). Authenticated reopening recovered the ten-person research from the same old four-person record. It revealed that v1 snapshots omitted LinkedIn URLs; matching CRM contacts now restore those profile URLs by exact external person ID and qualification is recalculated. Missing URLs are repaired on ordinary CRM refresh even if research timestamps match.
+
+Legacy snapshots cannot recover aggregate candidate/provider counts. Recovery clears obsolete provider diagnostics from the prior run, reports that the total is unavailable, and derives only retained individual email-attempt counts. New snapshots preserve those aggregate diagnostics.
