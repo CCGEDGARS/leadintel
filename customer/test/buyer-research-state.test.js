@@ -18,7 +18,7 @@ test('email research distinguishes attempted partial, completed and skipped iden
  const context={LeadIntelDiscovery:D,Date,URL,canonicalDomain:D.canonicalDomain,crmAuthenticated:()=>false,searchBuyerPublicPages:async()=>{if(fail)throw new Error('provider unavailable');return [];}};
  vm.createContext(context);vm.runInContext(source.slice(source.indexOf('function emailPatternCandidates('),source.indexOf('function hunterStatusLabel('))+source.slice(source.indexOf('function patternListings('),source.indexOf('async function groundedBuyerFollowUp(')),context);
  await context.searchBuyerEmailPatterns(candidate,[],new AbortController().signal);
- assert.equal(person.emailResearch.status,fail?'unavailable':'complete');assert.equal(person.emailResearch.searches,3);assert.equal(person.emailResearch.failed,fail?3:0);
+ assert.equal(person.emailResearch.status,fail?'unavailable':'complete');assert.equal(person.emailResearch.searches,5);assert.equal(person.emailResearch.failed,fail?5:0);
  candidate.people=[{name:'Anna'}];await context.searchBuyerEmailPatterns(candidate,[],new AbortController().signal);assert.equal(candidate.people[0].emailResearch.status,'not_searched');
  }
 });

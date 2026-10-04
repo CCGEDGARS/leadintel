@@ -89,3 +89,13 @@ test('authority-weighted scores preserve their model version and component limit
  assert.deepEqual(saved.people[0].buyerQualification,person.buyerQualification);assert.equal(saved.people[0].buyerQualification.version,2);
  assert.equal(saved.people[0].buyerQualification.breakdown.authority.max,25);assert.equal(C.mapDiscoveryCandidateToCrm(saved).intelligence.research_snapshot.buyerResearch.buyers[0].qualification.version,2);
 });
+test('foreign-country and subsidiary buyers remain reviewable but cannot enter the highlighted opportunity shortlist',()=>{
+ const candidate={company:'Example',domain:'example.com',market:'Sweden'},profile={decisionMakers:'Engineering Manager; Operations Director'};
+ const foreign={id:'uk',name:'Anna Buyer',title:'UK Engineering Manager',organization:'Example',publicLinkedinUrl:'https://linkedin.com/in/anna'};
+ const subsidiary=D.matchBuyerScopeEvidence({id:'sub',name:'Bob Buyer',title:'Operations Director',organization:'Example',publicLinkedinUrl:'https://linkedin.com/in/bob'},[{url:'https://linkedin.com/in/bob',title:'Bob Buyer - Example Minerals | LinkedIn'}],candidate);
+ assert.equal(D.qualifyBuyer(foreign,profile,candidate).eligible,false);assert.equal(D.qualifyBuyer(subsidiary,profile,candidate).eligible,false);
+ assert.equal(D.rankedBuyerShortlist([foreign,subsidiary],profile,candidate).recommendedIds.length,0);
+ const reloaded=D.normalizeDiscoveryState({selectedProspects:[{...candidate,buyerSearchMode:'user_selected_target',people:[subsidiary]}]}).selectedProspects[0].people[0];
+ assert.equal(reloaded.opportunityScope.status,'review_required');
+ const unrelated=D.matchBuyerScopeEvidence(foreign,[{url:'https://linkedin.com/in/other',title:'Anna Buyer - Example Minerals | LinkedIn'}],candidate);assert.equal(unrelated.opportunityScope,undefined);
+});

@@ -46,3 +46,8 @@ test('suppressed CRM companies are never considered normal outreach targets',()=
   assert.equal(crm.isSuppressed({lifecycle_status:'suppressed'}),true);
   assert.equal(crm.isSuppressed({lifecycle_status:'prospect'}),false);
 });
+test('CRM research snapshot preserves public phone provenance and buyer scope holds without claiming verification',()=>{
+ const payload=crm.mapDiscoveryCandidateToCrm({company:'Example',domain:'example.com',people:[{name:'Anna Buyer',publicPhone:'+46 70 235 51 61',publicPhoneUrl:'https://example.com/jobs',publicEmail:'anna@example.com',publicEmailUrl:'https://example.com/jobs',opportunityScope:{status:'review_required',reason:'Subsidiary responsibility unknown',url:'https://linkedin.com/in/anna'}}]});
+ const saved=JSON.parse(JSON.stringify(payload)).intelligence.research_snapshot.buyerResearch.buyers[0];
+ assert.equal(saved.contactEvidence.phone,'+46 70 235 51 61');assert.equal(saved.contactEvidence.phoneUrl,'https://example.com/jobs');assert.equal(saved.contactEvidence.phoneStatus,'public_unverified');assert.equal(saved.opportunityScope.status,'review_required');
+});

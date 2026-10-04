@@ -1,6 +1,6 @@
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
-const PUBLIC_NAME_CHECK_VERSION="buyer-contacts-v15-search-state";
+const PUBLIC_NAME_CHECK_VERSION="buyer-contacts-v16-person-first";
 const BUYER_RESEARCH_VERSION="20261004-qualified-buyers-v4";
 const CONTACT_CONFIRM_VERSION="buyer-contacts-v11-optional-hunter";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
@@ -1456,6 +1456,7 @@ window.addEventListener?.('leadintel:contact-policy-changed',()=>{void refreshBu
 window.addEventListener?.('leadintel:service-settings-changed',()=>{void refreshBuyerConfirmationPolicy();});
 if(window.addEventListener&&crmAuthenticated())void refreshBuyerConfirmationPolicy();
 function verifiedBuyerEmail(candidate,person,contact={},options={}){
+  if(person.opportunityScope?.status==='review_required'||LeadIntelDiscovery.qualifyBuyer&&LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:person.matchedBuyerRole||person.title},candidate).gaps.some(gap=>gap.startsWith('Buyer country differs')))return '';
   const minimum=typeof acceptedBuyerConfirmationLevel==='function'?acceptedBuyerConfirmationLevel():'provider_verified';
   const domain=canonicalDomain(candidate.domain),source=minimum==='public_confirmed'?publicBuyerSource(candidate,person):null,email=String(contact.work_email||contact.normalized_email||source?.email||'').trim().toLowerCase();
   if(!options.skipAdditional&&typeof window!=='undefined'&&window.LeadIntelServiceSettings?.hunterEnabled?.()){
@@ -1559,10 +1560,30 @@ async function searchBuyerEmailPatterns(candidate,existingRows,signal){
     const patterns=emailPatternCandidates(person,candidate.domain,people);
     if(!patterns.length)return;
     const rows=[...existingRows];
+    // Search the actual person before guessed addresses. Official recruitment
+    // pages often publish both email and direct phone without a contact title.
+    const fullName=String(person.publicName||person.name||'').trim();
+    const officialQuery=`site:${canonicalDomain(candidate.domain)} "${fullName}"`;
+    searches++;personSearches++;
+    try{
+      const official=await searchBuyerPublicPages(officialQuery,5,signal);
+      rows.push(...official);
+      if(LeadIntelDiscovery.matchPublicBuyerDetails){
+        const matched=LeadIntelDiscovery.matchPublicBuyerDetails([person],official,candidate.domain)[0];
+        Object.assign(person,matched);
+      }
+      person.patternFindings=[...new Map([...(person.patternFindings||[]),...patternListings(person,candidate.domain,rows,candidate.company)].map(item=>[item.email,item])).values()];
+    }catch(error){if(error?.name==='AbortError')throw error;failed++;personFailed++;}
+    searches++;personSearches++;
+    try{
+      const identityRows=await searchBuyerPublicPages(`"${fullName}" "${candidate.company}"`,5,signal);
+      rows.push(...identityRows);
+      if(LeadIntelDiscovery.matchPublicBuyerDetails)Object.assign(person,LeadIntelDiscovery.matchPublicBuyerDetails([person],identityRows,candidate.domain)[0]);
+      if(LeadIntelDiscovery.matchBuyerScopeEvidence)Object.assign(person,LeadIntelDiscovery.matchBuyerScopeEvidence(person,identityRows,candidate));
+    }catch(error){if(error?.name==='AbortError')throw error;failed++;personFailed++;}
     searches++;personSearches++;
     try{rows.push(...await searchBuyerPublicPages(patterns.map(item=>`"${item.email}"`).join(' OR '),5,signal));}
     catch(error){if(error?.name==='AbortError')throw error;failed++;personFailed++;}
-    const fullName=String(person.publicName||person.name||'').trim();
     if(fullName.split(/\s+/).length>1){
       searches++;personSearches++;
       try{
@@ -1744,6 +1765,7 @@ async function runPublicProspectContacts(domain,{signal}={}){
     const totalNamed=candidate.people.filter(person=>person.publicNameUrl).length;
     candidate.publicContactStatus=candidate.publicContacts.length||totalNamed||candidate.people.some(person=>person.patternFindings?.length)?"complete":"empty";
     candidate.publicContactVersion=PUBLIC_NAME_CHECK_VERSION;
+    candidate.people=candidate.people.map(person=>({...person,buyerQualification:LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:candidate.buyerDiscovery?.opportunityRoles||candidate.buyerRoles||person.title},candidate)}));
     if(crmAuthenticated()&&candidate.people.some(person=>person.publicNameUrl||person.publicEmailUrl||person.publicLinkedinUrl)){
       try{
         let company=crmCompanyByDomain(domain);
@@ -1752,7 +1774,13 @@ async function runPublicProspectContacts(domain,{signal}={}){
           const contacts=window.LeadIntelCrm.mapContacts(candidate.people.filter(person=>person.publicNameUrl||person.publicEmailUrl||person.publicLinkedinUrl));
           const saved=await bridge().saveCrmContacts(company.id,contacts);
           if(!saved?.ok)showToast(saved?.error||"Public buyer details could not be saved to CRM");
-          else window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company}}));
+          else {
+            if(bridge().saveCrmCompany&&window.LeadIntelCrm.mapDiscoveryCandidateToCrm){
+              const snapshot=await bridge().saveCrmCompany({...window.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate),contacts:[]});
+              if(!snapshot?.ok)research.issues.push('Public evidence snapshot could not be saved to CRM');
+            }
+            window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company}}));
+          }
         }
       }catch{showToast("Public buyer details found, but CRM sync failed. Retry from this card.");}
     }

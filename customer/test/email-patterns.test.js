@@ -52,11 +52,11 @@ test('focused grounded search can recover a name and address from a public assoc
   vm.runInNewContext(`${source.slice(searchStart,searchEnd)};globalThis.search=searchBuyerEmailPatterns;`,focusedContext);
   const candidate={domain:'sodra.com',people:[{publicName:'Lotta Lyrå'}]};
   const research=await focusedContext.search(candidate,[],new AbortController().signal);
-  assert.equal(research.searches,4);
+  assert.equal(research.searches,6);
   assert.equal(research.failed,0);
   assert.equal(candidate.people[0].patternFindings[0].email,'lotta.lyra@sodra.com');
   assert.equal(candidate.people[0].patternFindings[0].url,'https://association.test/annual-report.pdf');
-  assert.match(candidates[2],/lotta.lyra@sodra.com/);
+  assert.match(candidates[4],/lotta.lyra@sodra.com/);
 });
 test('Gmail discovery searches full name and company and accepts a sourced non-pattern address',async()=>{
  const queries=[];
@@ -76,4 +76,14 @@ test('Gmail display uses Not found and never displays guessed Hunter addresses',
  assert.match(absent,/<strong>Gmail<\/strong><span>Not searched yet/);assert.doesNotMatch(absent,/guess@gmail/);
  const found=ctx.render({patternFindings:[{email:'bluebird42@gmail.com',url:'https://association.test'}]},{domain:'example.lv'});
  assert.match(found,/<strong>Gmail<\/strong><span><span class="buyer-email-result">bluebird42@gmail.com<\/span>/);
+});
+test('person-first official research recovers a published email and phone even when guesses return nothing',async()=>{
+ const queries=[],ctx={...context,crmAuthenticated:()=>false,searchBuyerPublicPages:async query=>{queries.push(query);return query==='site:example.lv "Marta Berzina"'?[{url:'https://example.lv/jobs/engineering',markdown:'Contact manager Marta Berzina, marta.berzina@example.lv, +371 2000 1234.'}]:[];}};
+ const start=source.indexOf('async function searchBuyerEmailPatterns('),end=source.indexOf('async function groundedBuyerFollowUp(',start);
+ vm.runInNewContext(`${source.slice(start,end)};globalThis.search=searchBuyerEmailPatterns;`,ctx);
+ const candidate={company:'Example',domain:'example.lv',people:[{name:'Marta Berzina',title:'Engineering Manager'}]};
+ await ctx.search(candidate,[],new AbortController().signal);
+ assert.equal(queries[0],'site:example.lv "Marta Berzina"');
+ assert.equal(candidate.people[0].publicEmail,'marta.berzina@example.lv');assert.equal(candidate.people[0].publicPhone,'+371 2000 1234');
+ assert.equal(candidate.people[0].publicPhoneUrl,'https://example.lv/jobs/engineering');assert.equal(candidate.people[0].emailResearch.status,'complete');
 });

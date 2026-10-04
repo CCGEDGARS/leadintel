@@ -6,7 +6,7 @@ import {importAesKey,encryptSecret} from '../src/oauth.js';
 import {sha256} from '../src/security.js';
 import {WORKFLOW_STAGES,approvedContext,normalizeWorkflowConfig,approvalStatus,fingerprint,renderWorkflowMessage,freshEvidence} from '../src/approved-workflow-engine.js';
 import {handleApprovedWorkflowRoute} from '../src/approved-workflow-routes.js';
-import {executeWorkflowStage,runApprovedWorkflows} from '../src/approved-workflow-runner.js';
+import {executeWorkflowStage,runApprovedWorkflows,researchBuyerContacts} from '../src/approved-workflow-runner.js';
 import {workflowAuthorized,workflowDeliveryAuthorized} from '../src/approved-workflow-store.js';
 import {runOutreachAutomation as runWithVerification} from '../src/outreach-automation-runner.js';
 class Statement{constructor(db,sql){this.db=db;this.sql=sql;this.args=[];}bind(...a){this.args=a;return this;}async first(){return this.db.prepare(this.sql).get(...this.args)||null;}async all(){return {results:this.db.prepare(this.sql).all(...this.args)};}async run(){const result=this.db.prepare(this.sql).run(...this.args);return {meta:{changes:Number(result.changes)}};}}
@@ -136,3 +136,9 @@ test('workflow activation and stage approval work without any Hunter integration
 });
 
 test('public confirmation workflow can be approved without paid email, phone or Hunter opt-ins',async()=>{const env=await fixture();env.DB.raw.exec("DELETE FROM workspace_service_integrations WHERE provider='hunter';UPDATE workspace_service_integrations SET metadata_json='{}' WHERE provider='apollo'");const selected=normalizeWorkflowConfig({...config,buyers:{roles:['COO'],confirmationLevel:'public_confirmed',confirmContacts:false,confirmPhone:false}});const result=await approve(env,selected);assert.equal(result.status,'automatic');assert.equal(result.config.buyers.confirmationLevel,'public_confirmed');assert.equal(result.config.buyers.confirmContacts,false);assert.equal(result.config.buyers.confirmPhone,false);});
+
+test('automatic contact research discovers official name-linked email and phone without enrichment',async()=>{
+ const queries=[],candidate={company:'Fixture Legal',domain:'legal.example',market:'Sweden',people:[{name:'Anna Lind',title:'Managing Director',organization:'Fixture Legal'}]};
+ await researchBuyerContacts(candidate,async query=>{queries.push(query);return query==='site:legal.example "Anna Lind"'?[{url:'https://legal.example/team',markdown:'Managing Director Anna Lind: anna.lind@legal.example, +46 70 235 51 61.'}]:[];},async()=>{});
+ assert.equal(queries[0],'site:legal.example "Anna Lind"');assert.equal(candidate.people[0].publicEmail,'anna.lind@legal.example');assert.equal(candidate.people[0].publicPhone,'+46 70 235 51 61');assert.equal(candidate.people[0].emailResearch.status,'complete');assert.equal(candidate.people[0].emailResearch.searches,4);
+});
