@@ -35,3 +35,5 @@ Authenticated reload also exposed a navigation gap: discovery initialization alw
 Production b9506ad87f4e8297bc21bcb2c457bc90bbb90000 returned PROVEN (CI 37229750085, integrity 37229778023, 19 smokes). Authenticated reopening recovered the ten-person research from the same old four-person record. It revealed that v1 snapshots omitted LinkedIn URLs; matching CRM contacts now restore those profile URLs by exact external person ID and qualification is recalculated. Missing URLs are repaired on ordinary CRM refresh even if research timestamps match.
 
 Legacy snapshots cannot recover aggregate candidate/provider counts. Recovery clears obsolete provider diagnostics from the prior run, reports that the total is unavailable, and derives only retained individual email-attempt counts. New snapshots preserve those aggregate diagnostics.
+
+Snapshot recovery replaces obsolete unresolved identities from the prior run; explicitly kept records remain protected. This prevents old first-name candidates from inflating the newer snapshot's unresolved count.
