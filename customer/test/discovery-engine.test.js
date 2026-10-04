@@ -591,3 +591,15 @@ test('automatic confirmation choice and sourced contact findings survive a reloa
   assert.equal(person.patternFindings[0].email,'marta.berzina@gmail.com');
   assert.equal(person.publicPhone,'+371 2000 0000');
 });
+
+
+test('company card presents one assessed reference score and buyer-research readiness',()=>{
+  const candidate={company:'Nordic',market:'Sweden',lookalikeMatch:{active:true,total:30,referenceCompany:'Old Reference'}};
+  const weak=Discovery.companyQualificationPresentation(candidate,{eligible:true,route:'both',lookalikeScore:30,referenceMatch:{referenceCompany:'Reference'},matchedSignals:[{name:'Factory investment'}]});
+  assert.equal(weak.routeLabel,'Signals');assert.equal(weak.referenceScore,30);
+  assert.equal(weak.readiness,'Company qualified · Ready for buyer research');
+  assert.doesNotMatch(weak.explanation,/Old Reference|Men faktum|Close/);
+  const strong=Discovery.companyQualificationPresentation(candidate,{eligible:true,route:'both',lookalikeScore:85,referenceMatch:{referenceCompany:'Verified Reference'},matchedSignals:[{name:'Factory investment'}]});
+  assert.equal(strong.routeLabel,'Lookalike + Signals');assert.equal(strong.referenceScore,85);assert.equal(strong.referenceCompany,'Verified Reference');
+  const paused=Discovery.companyQualificationPresentation(candidate,{eligible:true,route:'signal',lookalikeScore:null,matchedSignals:[]});assert.equal(paused.referenceScore,null);assert.equal(paused.routeLabel,'Signals');
+});
