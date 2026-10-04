@@ -1068,10 +1068,10 @@
   }
   function safeEmailResearch(value){return {status:['running','complete','partial','unavailable'].includes(value?.status)?value.status:'not_searched',searches:clamp(Number(value?.searches)||0,0,50,0),failed:clamp(Number(value?.failed)||0,0,50,0),checkedAt:clean(value?.checkedAt).slice(0,40)};}
   function safeBuyerQualification(value){
-    if(!value||![1,2].includes(value.version)||!value.breakdown)return null;
-    const maxima={role:value.version===2?25:35,authority:value.version===2?25:15,identity:15,employer:15,source:10,freshness:10},breakdown={};
+    if(!value||![1,2,3].includes(value.version)||!value.breakdown)return null;
+    const maxima={role:value.version>=2?25:35,authority:value.version>=2?25:15,identity:15,employer:15,source:10,freshness:10},breakdown={};
     for(const [key,max] of Object.entries(maxima)){const row=value.breakdown[key];if(!row)return null;breakdown[key]={points:clamp(Number(row.points)||0,0,max,0),max,basis:clean(row.basis).slice(0,600)};}
-    return {version:value.version,eligible:value.eligible===true,total:value.eligible===true?Object.values(breakdown).reduce((sum,row)=>sum+row.points,0):null,breakdown,gaps:(value.gaps||[]).map(clean).slice(0,12),matchedRole:clean(value.matchedRole),assessedAt:clean(value.assessedAt).slice(0,40)};
+    return {version:value.version,eligible:value.eligible===true,total:value.eligible===true?Object.values(breakdown).reduce((sum,row)=>sum+row.points,0):null,breakdown,gaps:(value.gaps||[]).map(clean).slice(0,12),matchedRole:clean(value.matchedRole),assessedAt:clean(value.assessedAt).slice(0,40),decisionRole:clean(value.decisionRole).slice(0,120)};
   }
   function safeBuyer(person={},domain=""){
     const url=normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url||person.url);
@@ -1173,10 +1173,15 @@
     // Buying-function coverage breaks ties in priority: recommendations are always
     // members of this one shortlist, never a second unrelated set of people.
     const strongest=[],covered=new Set();
-    for(const person of ranked){const family=buyerFunction(person.matchedBuyerRole||person.title);if(strongest.length<4&&!covered.has(family)){strongest.push(person);covered.add(family);}}
-    for(const person of ranked)if(strongest.length<4&&!strongest.includes(person))strongest.push(person);
+    const shortlist=[],families=new Set();
+    for(const person of ranked){const family=buyerFunction(person.matchedBuyerRole||person.title);if(shortlist.length<10&&!families.has(family)){shortlist.push(person);families.add(family);}}
+    for(const person of ranked)if(shortlist.length<10&&!shortlist.includes(person))shortlist.push(person);
+    shortlist.sort((a,b)=>ranked.indexOf(a)-ranked.indexOf(b));
+    const researched=shortlist.filter(person=>buyerResearchAssessment(person).status==='complete');
+    for(const person of researched){const family=buyerFunction(person.matchedBuyerRole||person.title);if(strongest.length<4&&!covered.has(family)){strongest.push(person);covered.add(family);}}
+    for(const person of researched)if(strongest.length<4&&!strongest.includes(person))strongest.push(person);
     const ids=new Set(strongest.map(buyerIdentity));
-    const people=[...strongest,...ranked.filter(person=>!ids.has(buyerIdentity(person)))].slice(0,10);
+    const people=[...strongest,...shortlist.filter(person=>!ids.has(buyerIdentity(person)))].slice(0,10);
     return {people,recommendedIds:strongest.map(person=>person.id||buyerIdentity(person))};
   }
   function buyerFunction(role=''){
@@ -1198,17 +1203,27 @@
     const now=Date.parse(options.now||new Date().toISOString()),date=Date.parse(person.identityEvidenceDate||''),age=Number.isFinite(date)?(now-date)/86400000:null;
     const leadership=/director|chief|head of|\bceo\b|\bowner\b|chef|counsel/i.test(person.title);
     const subordinate=/\b(deputy|assistant|associate|vice head)\b/i.test(person.title);
-    const authority=leadership?(subordinate?16:25):/manager|sourcing|inköpare|projektledare|ansvarig/i.test(person.title)?12:4;
+    const functionName=buyerFunction(match?.role||person.title);
+    const departmentHead=/head of|avdelningschef|chief|\bceo\b|\bowner\b|counsel/i.test(person.title);
+    const authority=leadership?(subordinate?16:departmentHead||functionName==='Procurement / sourcing'?25:22):/manager|sourcing|inköpare|projektledare|ansvarig/i.test(person.title)?12:4;
     const breakdown={
       role:{points:match?Math.round((match.exact?1:.65)*25):0,max:25,basis:match?`Matches ${match.role}`:'No supported role match'},
-      authority:{points:match?authority:0,max:25,basis:'Relevant responsibility inferred from title; purchasing authority unconfirmed'},
+      authority:{points:match?authority:0,max:25,basis:`${functionName} responsibility inferred from title; purchasing authority unconfirmed`},
       identity:{points:full&&(source||directory)?15:0,max:15,basis:full?'Full name supported by identity source':'Incomplete name'},
       employer:{points:employer&&(source||directory)?15:0,max:15,basis:employer?'Target employer matched in identity evidence':'Employer not matched'},
       source:{points:source&&domain&&companyIdentityDomain(source)===domain?10:directory?8:source?6:0,max:10,basis:source|| (directory?'Authenticated identity directory':'No identity source')},
       freshness:{points:age!==null&&age>=0&&age<=180?10:age!==null&&age>=0&&age<=365?5:0,max:10,basis:age===null?'Identity source date unknown':age<0?'Future source date rejected':`${Math.floor(age)} days since dated identity evidence`}
     };
     const gaps=[...blocked];if(age===null)gaps.push('Identity source date unknown');else if(age>365||age<0)gaps.push('Identity source requires a freshness check');gaps.push('Actual purchasing authority unconfirmed','Responsibility for the specific opportunity and location unconfirmed');
-    return {version:2,eligible:!blocked.length,total:blocked.length?null:Object.values(breakdown).reduce((sum,row)=>sum+row.points,0),breakdown,gaps,matchedRole:match?.role||'',assessedAt:new Date(now).toISOString()};
+    return {version:3,decisionRole:functionName==='Procurement / sourcing'?'Purchasing / supplier selection':functionName==='Projects'?'Project leadership / delivery':functionName==='Engineering'?'Technical evaluation':functionName==='Operations'?'Operational requirements':functionName==='Executive'?'Executive leadership':functionName,eligible:!blocked.length,total:blocked.length?null:Object.values(breakdown).reduce((sum,row)=>sum+row.points,0),breakdown,gaps,matchedRole:match?.role||'',assessedAt:new Date(now).toISOString()};
+  }
+  function buyerResearchAssessment(person={},options={}){
+    const check=person.emailResearch||{},now=Date.parse(options.now||new Date().toISOString()),checked=Date.parse(check.checkedAt||''),dated=Date.parse(person.identityEvidenceDate||'');
+    if(Number.isFinite(dated)&&(dated>now||(now-dated)/86400000>365))return {status:'review_required',reason:'Current role needs rechecking; identity evidence is stale or future-dated'};
+    if(check.status==='complete'&&Number(check.searches)>0&&!Number(check.failed)&&Number.isFinite(checked)&&checked<=now&&(now-checked)/86400000<=30)return {status:'complete',reason:'Public contact research completed; contact confirmation remains separate'};
+    if(check.status==='complete'&&Number(check.searches)>0&&Number.isFinite(checked)&&(now-checked)/86400000>30)return {status:'review_required',reason:'Contact research is older than 30 days; refresh before recommending'};
+    if(['partial','unavailable','running'].includes(check.status))return {status:'incomplete',reason:check.status==='running'?'Contact research in progress':'Contact research incomplete; completed evidence is preserved'};
+    return {status:'not_researched',reason:'Public contact research not completed; excluded from recommendations'};
   }
   function buyerCoveragePlan(pool=[],profile={},candidate={}){
     const roles=splitList(profile.decisionMakers).slice(0,12),wanted=[...new Set(roles.map(buyerFunction))],covered=new Set(pool.filter(person=>qualifyBuyer(person,profile,candidate).eligible).map(person=>buyerFunction(roleRelevance(person,roles)?.role||person.title))),missing=wanted.filter(family=>!covered.has(family)),queries=[];
@@ -1599,5 +1614,5 @@
     const route=rules.researchPriority==='signals'?'signal':lookalikePass?signals.length?'both':'lookalike':'signal';
     return {version:2,score,buyerFitPoints,signalPoints,opportunityScore:signals.length?score:null,lookalikeScore:referenceScore,referenceMatch:reference,route,eligible:!gaps.length,confidence:independent>=2&&official.length>=2?'High':'Medium',gaps,minimumScore:rules.minimumScore,researchPriority:rules.researchPriority,researchedAt:settings.researchedAt||candidate.researchedAt||'',matchedSignals:signals,evidenceSources:independent,commercial};
   }
-  return {companyQualificationPresentation,matchBuyerScopeEvidence,rankedEmailGuesses,sourcedBuyerEmails,validResearchEmail,qualifyBuyer,buyerCoveragePlan,buyerFunction,buyerFitContext,buyerFitPrompt,parseBuyerFit,researchBuyerFit,verifiedBuyerFit,rankQualifiedCompanies,qualificationRules,verifiedReferenceMatch,assessAutomaticQualification,companyIdentityDomain,evidenceDate,commercialFit,currentSignals,domainMatchesCompany,matchedSignalsForEvidence,dedupeCompanyEvidence,evaluateExclusions,companyFitSummary,CRM_STAGES,DEFAULT_DISCOVERY_STATE,DISCOVERY_QUALITY_VERSION,discoveryLimits,buyerRolesForTarget,buildDiscoveryQueries,buildDiscoveryFollowUpQueries,extractCompanyMentions,extractPublicContacts,matchPublicBuyerDetails,matchPublicLinkedInProfiles,parseCompanyExtraction,describeCompanyExtractionOutcome,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildPotentialCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,hasFullBuyerName,selectDecisionMakers,discoverPublicBuyers,tracePublicBuyers,traceIdentityBuyers,opportunityBuyerRoles,localBuyerRoleAliases,buyerOpportunityTerms,buyerResearchPlan,buyerIdentity,resolvePendingBuyerIdentities,mergeBuyerPool,recommendedBuyers,rankedBuyerShortlist,upsertPipelineItem,normalizeDiscoveryState,retainLastSuccessfulDiscoveryCandidates,recoverInterruptedDiscoveryState,discoveryOutcomeStatus,zeroResultGuidance,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,isLowQualityDiscoveryEvidence,hasActiveSignals,isActionableCandidate,isPotentialBuyerSearchAllowed};
+  return {companyQualificationPresentation,matchBuyerScopeEvidence,rankedEmailGuesses,sourcedBuyerEmails,validResearchEmail,buyerResearchAssessment,qualifyBuyer,buyerCoveragePlan,buyerFunction,buyerFitContext,buyerFitPrompt,parseBuyerFit,researchBuyerFit,verifiedBuyerFit,rankQualifiedCompanies,qualificationRules,verifiedReferenceMatch,assessAutomaticQualification,companyIdentityDomain,evidenceDate,commercialFit,currentSignals,domainMatchesCompany,matchedSignalsForEvidence,dedupeCompanyEvidence,evaluateExclusions,companyFitSummary,CRM_STAGES,DEFAULT_DISCOVERY_STATE,DISCOVERY_QUALITY_VERSION,discoveryLimits,buyerRolesForTarget,buildDiscoveryQueries,buildDiscoveryFollowUpQueries,extractCompanyMentions,extractPublicContacts,matchPublicBuyerDetails,matchPublicLinkedInProfiles,parseCompanyExtraction,describeCompanyExtractionOutcome,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildPotentialCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,hasFullBuyerName,selectDecisionMakers,discoverPublicBuyers,tracePublicBuyers,traceIdentityBuyers,opportunityBuyerRoles,localBuyerRoleAliases,buyerOpportunityTerms,buyerResearchPlan,buyerIdentity,resolvePendingBuyerIdentities,mergeBuyerPool,recommendedBuyers,rankedBuyerShortlist,upsertPipelineItem,normalizeDiscoveryState,retainLastSuccessfulDiscoveryCandidates,recoverInterruptedDiscoveryState,discoveryOutcomeStatus,zeroResultGuidance,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,isLowQualityDiscoveryEvidence,hasActiveSignals,isActionableCandidate,isPotentialBuyerSearchAllowed};
 });

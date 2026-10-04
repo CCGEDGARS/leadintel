@@ -1,0 +1,14 @@
+# Buyer decision priority and research recommendation gate
+
+## Root causes
+The prior model gives all director/chef titles maximum inferred authority, making project delivery leads indistinguishable from purchasing department heads when their other evidence is equal. Recommendations depend on identity/role fit but omit per-person contact research completion. A company-level completed public check also skips individual buyers that have never been searched. Rendering truncates people before ranking, so a later leadership candidate cannot enter the visible shortlist.
+
+## Changes
+Model v3 retains the 25 role / 25 authority / 15 identity / 15 employer / 10 source / 10 freshness contract. Relevant department heads and purchasing leadership receive 25 inferred authority points; other director/project leadership gets 22, deputies 16, managers 12 and support roles 4. Actual budget, purchase decision and responsibility for the specific opportunity remain explicitly unconfirmed. Purchasing, project delivery, technical and operational decision roles are visible outside the score disclosure. Legacy v1/v2 scores remain readable.
+
+Only buyers with a dated, completed public contact research attempt within 30 days, positive search count and zero failed searches can be highlighted. Known stale/future identity evidence also requires review. Failed, missing and old research remains visible as potential buyers with a reason. Contact availability and verified company-email readiness remain separate; successful searches can find no email, and verified emails cannot override identity/scope restrictions. Equal evidence may still produce equal scores and is explained without fabricated distinctions.
+
+Rank all saved identities before the ten-card cap. Reserve buying-function coverage independently from contact readiness so unresearched project titles cannot crowd out engineering or purchasing. Company-level completion cannot conceal never-searched individuals; schedule one bounded public follow-up, retaining existing no-repeat and failed-provider controls. Partial phone searches are labelled incomplete, and contact values are displayed once rather than repeated under the information rows.
+
+## Prevention and validation
+Meaningful regressions cover cross-industry authority ordering, unknown purchasing authority, unresearched/partial/zero-query/stale/future recommendation exclusion, larger-pool coverage, late-card ranking, per-person automatic follow-up, and normalization/CRM persistence. Verify the exact merged release separately, then inspect authenticated LKAB scores, research state, CRM save and reload. No paid Apollo contact enrichment, Hunter or outreach is authorized by this repair.
