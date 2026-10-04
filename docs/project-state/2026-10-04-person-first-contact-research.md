@@ -21,3 +21,7 @@ Public contact refresh also writes the CRM company research snapshot. That snaps
 - Failed searches remain incomplete; guesses remain unverified.
 
 Local checks and exact-SHA production proof are separate from authenticated customer acceptance. No sending is authorized by this change.
+
+## Authenticated refresh follow-up
+
+The first live refresh recovered Joakim’s official email and direct phone, but exposed two additional defects: a per-request timeout aborted the whole contact flow, and collapsed paragraph boundaries let a later union representative’s phone be attributed to an earlier named buyer. The follow-up preserves source paragraphs, stops phone attribution at the next section, clears a wrong stored phone when its source is rechecked, continues after individual request timeouts, and persists completed evidence to CRM even when optional follow-ups fail. Regression coverage checks both phone attribution and continuation after a request timeout. Public phone listings remain unverified for deliverability.

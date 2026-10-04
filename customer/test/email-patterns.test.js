@@ -87,3 +87,15 @@ test('person-first official research recovers a published email and phone even w
  assert.equal(candidate.people[0].publicEmail,'marta.berzina@example.lv');assert.equal(candidate.people[0].publicPhone,'+371 2000 1234');
  assert.equal(candidate.people[0].publicPhoneUrl,'https://example.lv/jobs/engineering');assert.equal(candidate.people[0].emailResearch.status,'complete');
 });
+test('phone attribution stops at another contact section and clears a rechecked wrong number',()=>{
+ const person={name:'Robert Buyer',title:'Head of Procurement',publicPhone:'0980-725 08',publicPhoneUrl:'https://example.com/jobs'};
+ const rows=[{url:'https://example.com/jobs',markdown:'Contact Head of Procurement Robert Buyer, robert.buyer@example.com\n\nFackliga kontakter:\nSakari Other, Unionen 0980-725 08'}];
+ const result=D.matchPublicBuyerDetails([person],rows,'example.com')[0];assert.equal(result.publicEmail,'robert.buyer@example.com');assert.equal(result.publicPhone,'');assert.equal(result.publicPhoneUrl,'');
+ const direct=D.matchPublicBuyerDetails([person],[{url:'https://example.com/jobs',markdown:'Contact Robert Buyer, robert.buyer@example.com, +46 920 38029.\n\nOther Person +46 980 72508'}],'example.com')[0];assert.equal(direct.publicPhone,'+46 920 38029');
+});
+test('individual request timeout is recorded without stopping another buyer or later search stages',async()=>{
+ const queries=[],ctx={...context,crmAuthenticated:()=>false,searchBuyerPublicPages:async query=>{queries.push(query);if(query==='site:example.lv "Marta Berzina"')throw Object.assign(new Error('request timed out'),{name:'AbortError',code:'BUYER_REQUEST_TIMEOUT'});return query==='site:example.lv "Anna Lind"'?[{url:'https://example.lv/team',markdown:'Anna Lind anna.lind@example.lv +371 2000 1234'}]:[];}};
+ const start=source.indexOf('async function searchBuyerEmailPatterns('),end=source.indexOf('async function groundedBuyerFollowUp(',start);vm.runInNewContext(`${source.slice(start,end)};globalThis.search=searchBuyerEmailPatterns;`,ctx);
+ const candidate={company:'Example',domain:'example.lv',people:[{name:'Marta Berzina'},{name:'Anna Lind'}]};await ctx.search(candidate,[],new AbortController().signal);
+ assert.equal(candidate.people[0].emailResearch.status,'partial');assert.equal(candidate.people[0].emailResearch.failed,1);assert.equal(candidate.people[1].publicEmail,'anna.lind@example.lv');assert.ok(queries.some(q=>q.includes('"Marta Berzina" "Example"')));
+});

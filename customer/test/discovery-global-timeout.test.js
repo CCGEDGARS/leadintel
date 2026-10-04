@@ -459,7 +459,7 @@ test('a saved first-name buyer can gain a sourced full name from a unique public
   assert.equal(requests,8);
   const person=context.__discoveryState().selectedProspects[0].people[0];
   assert.equal(person.publicName,'Jacob Jonstoij');
-  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v16-person-first');
+  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v17-attributed-phones');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Jacob Jonstoij/);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/<strong>LinkedIn<\/strong><span>Public match/);
   context.__scheduleSavedBuyerPublicChecks();
@@ -1104,4 +1104,22 @@ test('optional contact-review timeout preserves completed email checks and expos
  assert.equal(candidate.people[0].emailResearch.status,'complete');assert.ok(candidate.publicResearch.patternSearches>0);
  assert.equal(candidate.publicContactStatus,'error');assert.ok(candidate.publicResearch.issues.some(issue=>issue.includes('completed identity and email evidence preserved')));
  assert.match(context.__elements.get('customer-pipeline').innerHTML,/data-find-public-contacts="example.com"/);
+});
+
+test('completed public evidence is synced to CRM when an optional grounded follow-up times out',async()=>{
+  let snapshots=0,savedContacts=0;
+  const context=loadDiscoveryRunner({requestTimeout:1000,bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'},saveCrmContacts:async()=>{savedContacts++;return {ok:true};},saveCrmCompany:async()=>{snapshots++;return {ok:true};}},fetchImpl:async(url)=>{
+    if(String(url).includes('/ai/web-search'))throw Object.assign(new Error('Request timed out'),{name:'AbortError'});
+    return {ok:true,json:async()=>({data:[{url:'https://example.com/team',title:'Leadership',markdown:'Jane Example — Head of Procurement\njane.example@example.com +46 70 235 51 61'}]})};
+  }});
+  context.LeadIntelCrm=require('../crm-engine.js');
+  context.__setCrmCompanies([{id:'c1',normalized_domain:'example.com'}]);
+  context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',market:'Sweden',buyerSearchMode:'user_selected_target',people:[{id:'p1',name:'Jane Example',title:'Head of Procurement',linkedin_url:'https://linkedin.com/in/jane-example'}]}]});
+  await context.__findPublicProspectContacts('example.com');
+  const candidate=context.__discoveryState().selectedProspects[0];
+  assert.equal(candidate.publicContactStatus,'error');
+  assert.equal(candidate.people[0].publicEmail,'jane.example@example.com');
+  assert.ok(candidate.publicResearch.patternSearches>0);
+  assert.equal(savedContacts,1);
+  assert.equal(snapshots,1);
 });

@@ -209,7 +209,7 @@
       for(const row of results.slice(0,20)){
         const url=normalizeUrl(row?.url||row?.metadata?.sourceURL||row?.metadata?.url);
         if(!url||canonicalDomain(url)!==domain&&!(fullName&&/(^|\.)linkedin\.com$/.test(canonicalDomain(url))&&new URL(url).pathname.startsWith('/jobs/')))continue;
-        const text=publicPageText(row);
+        const text=[row.title,row.description,row.markdown,row.content].filter(Boolean).join('\n').slice(0,64000);
         const pattern=new RegExp(`\\b${first.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}\\s+([\\p{Lu}][\\p{L}'’.-]{2,})(?=$|[^\\p{L}'’.-])`,"giu");
         for(const match of text.matchAll(pattern)){
           const last=match[1],name=`${first} ${last}`;
@@ -217,7 +217,8 @@
           const nearby=text.slice(Math.max(0,match.index-90),Math.min(text.length,match.index+name.length+130));
           const roleWords=clean(person.title).toLowerCase().split(/[^\p{L}]+/u).filter(word=>word.length>=3);
           const personal=sourcedBuyerEmails({name},domain,[{url,content:nearby}])[0]?.email;
-          const directPhone=(nearby.match(/(?:\+\d{1,3}[\s().-]*)?(?:\d[\s().-]*){8,15}/g)||[]).find(value=>value.replace(/\D/g,'').length>=9&&value.replace(/\D/g,'').length<=15&&/[+\s()-]/.test(value))||'';
+          const phoneParagraph=text.slice(match.index+name.length,match.index+name.length+130).split(/\n\s*\n|\n[-*#]|\b(?:Fackliga|Unionen|SACO|Ledarna)\b/i)[0];
+          const directPhone=(phoneParagraph.match(/(?:\+\d{1,3}[\s().-]*)?(?:\d[\s().-]*){8,15}/g)||[]).find(value=>value.replace(/\D/g,'').length>=9&&value.replace(/\D/g,'').length<=15&&/[+\s()-]/.test(value))||'';
           if(!roleWords.some(word=>nearby.toLowerCase().includes(word))&&!personal)continue;
           matches.push({name,url,email:personal||"",phone:directPhone.trim().replace(/[.,;]+$/,'')});
         }
@@ -225,10 +226,10 @@
       const names=[...new Set(matches.map(match=>match.name.toLowerCase()))];
       if(names.length!==1)return person;
       const match=matches.find(item=>item.email||item.phone)||matches[0];
-      const phoneMatch=matches.find(item=>item.phone);
+      const phoneMatch=matches.find(item=>item.phone),previousPhoneRechecked=matches.some(item=>item.url===person.publicPhoneUrl);
       const previous=clean(person.publicName);
       if(previous&&previous.toLowerCase()!==match.name.toLowerCase()&&!match.name.toLowerCase().startsWith(previous.toLowerCase()))return person;
-      return {...person,identityStatus:'confirmed',nameVerification:'confirmed',publicName:match.name,publicNameUrl:match.url,publicEmail:match.email||person.publicEmail||"",publicEmailUrl:match.email?match.url:person.publicEmailUrl||"",publicPhone:phoneMatch?.phone||person.publicPhone||'',publicPhoneUrl:phoneMatch?.url||person.publicPhoneUrl||''};
+      return {...person,identityStatus:'confirmed',nameVerification:'confirmed',publicName:match.name,publicNameUrl:match.url,publicEmail:match.email||person.publicEmail||"",publicEmailUrl:match.email?match.url:person.publicEmailUrl||"",publicPhone:phoneMatch?.phone||(previousPhoneRechecked?'':person.publicPhone||''),publicPhoneUrl:phoneMatch?.url||(previousPhoneRechecked?'':person.publicPhoneUrl||'')};
     });
   }
   function matchBuyerScopeEvidence(person={},rows=[],candidate={}){
