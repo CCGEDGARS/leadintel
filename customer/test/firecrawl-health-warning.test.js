@@ -23,7 +23,7 @@ function health({provider,observed={},status=200}={}){
 test('managed Firecrawl HTTP 402 tells the user whose credits need attention',async()=>{
   const result=await health({provider:{source:'managed',state:'good',metadata:{proxy_status:200}},observed:{blocked:true,lastRunAt:'2026-09-25T17:22:00.000Z'}});
   assert.equal(result.state,'bad');assert.equal(result.source,'managed');
-  assert.match(result.detail,/LeadIntel must restore managed Firecrawl credits or billing/);
+  assert.match(result.detail,/LeadIntel must check the managed service/);
   assert.match(result.detail,/you do not need to top up your own account/);
 });
 
@@ -50,4 +50,17 @@ test('Health reads saved Discovery HTTP 402 and keeps extension badges from hidi
   assert.match(extension,/badge\.textContent=observed\?\.label\|\|statusLabel\(row\)/);
   assert.match(extension,/Firecrawl needs attention/);
   assert.match(source,/window\.LeadIntelIntegrationHealth=\{apollo,firecrawl\}/);
+});
+
+test('ordinary OpenAI fallback is not evidence of exhausted Firecrawl credits',async()=>{
+  const result=await health({provider:{source:'customer',state:'good',metadata:{remaining_credits:97915}},observed:{usedFallback:2,blocked:false,lastRunAt:'2026-10-03T17:00:00Z'}});
+  assert.equal(result.state,'good');assert.match(result.detail,/97915/);
+});
+test('unknown Firecrawl balance is not zero credits',async()=>{
+  const result=await health({provider:{source:'customer',state:'good',metadata:{remaining_credits:null}}});
+  assert.equal(result.state,'warn');assert.equal(result.label,'Balance unknown');
+});
+test('fresh positive customer balance supersedes a historical local HTTP 402',async()=>{
+  const result=await health({provider:{source:'customer',state:'good',metadata:{remaining_credits:97915}},observed:{blocked:true,lastRunAt:'2026-10-03T17:00:00Z'}});
+  assert.equal(result.state,'good');assert.match(result.detail,/97915/);
 });

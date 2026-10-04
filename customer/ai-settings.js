@@ -263,14 +263,15 @@ async function checkFirecrawlStatus(){
     if(provider.credit_issue?.code==='credits_exhausted'&&provider.credit_issue.source===source)return {state:'bad',label:'Credits exhausted',creditIssue:true,source,detail:`${owner} reported exhausted credits or a billing limit during a real request. ${source==='customer'?'Check your Firecrawl plan and billing.':'LeadIntel must restore managed Firecrawl service.'}`};
     const observed=window.LeadIntelDiscoveryUI?.firecrawlHealth?.()||{};
     const latest=observed.lastRunAt?`Last company search ${formatDateTime(observed.lastRunAt)}. `:'';
-    if(observed.blocked||observed.usedFallback)return {state:'bad',label:'Credit or billing issue',creditIssue:true,source,detail:`${owner}: ${latest}HTTP 402 blocked ${observed.blocked?'one or more checks':'Firecrawl checks; OpenAI supplied fallback results'}. ${source==='customer'?'Check your Firecrawl credits and spending limit.':'LeadIntel must restore managed Firecrawl credits or billing; you do not need to top up your own account.'}`};
     if(provider.state==='bad')return {state:'bad',label:'Connection error',source,detail:`${owner}: ${provider.metadata?.error||provider.label||'Credential verification failed'}`};
     if(source==='customer'){
-      const credits=Number(provider.metadata?.remaining_credits);
+      const rawCredits=provider.metadata?.remaining_credits;
+      const credits=rawCredits==null||String(rawCredits).trim()===''?NaN:Number(rawCredits);
       if(Number.isFinite(credits)&&credits<=0)return {state:'bad',label:'No Firecrawl credits',creditIssue:true,source,detail:'Your Firecrawl account reports zero remaining credits. Check your plan, billing or spending limit.'};
       if(Number.isFinite(credits))return {state:'good',label:'Credits available',source,detail:`Your Firecrawl account reports ${credits} remaining credits. This checks the balance, not a paid search.`};
       return {state:'warn',label:'Balance unknown',source,detail:'Your Firecrawl key is connected, but the remaining credit balance could not be confirmed.'};
     }
+    if(observed.blocked)return {state:'bad',label:'Historical billing failure',creditIssue:true,source,detail:`${owner}: ${latest}A saved research request returned HTTP 402. Current managed search credits remain unverified; LeadIntel must check the managed service, you do not need to top up your own account.`};
     return {state:'warn',label:'Credits unverified',source,detail:'LeadIntel managed proxy is reachable. A connection check cannot confirm its search credits; the next research request will test availability.'};
   }catch(error){return {state:'bad',label:'Unavailable',detail:`Research status check failed · ${String(error.message||error).slice(0,120)}`};}
 }
