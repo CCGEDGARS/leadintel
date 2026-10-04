@@ -13,8 +13,9 @@ function runtime({identity,firecrawlError=true,groundedError=true,websiteError=f
 test('failed providers still trace all ten identity rows and report incomplete without losing pending buyers',async()=>{
  const identity={ok:true,people:Array.from({length:10},(_,i)=>({id:'apollo-'+i,name:'Anna',title:'Inköpschef',organization_name:'LKAB'}))};
  const {context,candidate}=runtime({identity});assert.equal(await context.run(candidate,{allowCrmSync:false}),true);
- assert.equal(candidate.buyerDiscovery.providerStatus.firecrawl.failures.length,18);
+ assert.equal(candidate.buyerDiscovery.providerStatus.firecrawl.failures.length,26);
  assert.equal(candidate.buyerDiscovery.providerStatus.firecrawl.failures[0].status,502);
+ assert.equal(candidate.buyerDiscovery.coverageFollowUp.queries,8);assert.equal(candidate.buyerDiscovery.coverageFollowUp.status,'partial');
  assert.equal(candidate.buyerDiscovery.providerStatus.grounded.status,'timeout');
  assert.equal(candidate.buyerDiscovery.resultDiagnostics.filter(d=>d.source==='identity').length,10);
  assert.equal(candidate.buyerDiscovery.researchIncomplete,true);
@@ -26,6 +27,15 @@ test('opportunity roles remain consistent through parsing and ranking, even when
  const {context,candidate}=runtime({identity:{ok:true,people:[{id:'one',name:'Anna Andersson',title:'Inköpschef',organization_name:'LKAB'}]}});
  assert.equal(await context.run(candidate,{allowCrmSync:false}),true);
  assert.equal(candidate.people.length,1);assert.equal(candidate.people[0].title,'Inköpschef');
+});
+test('uncovered-function follow-up actually acquires an engineering identity and retains the source decision',async()=>{
+ const {context,candidate}=runtime({identity:{ok:true,people:[]},firecrawlError:false,groundedError:false});
+ context.searchBuyerPublicPages=async query=>query.includes('site:lkab.com')&&query.includes('Teknisk chef')?[{title:'Anna Andersson | Teknisk chef | LKAB',url:'https://lkab.com/team/anna',date:'2026-09-01'}]:[];
+ assert.equal(await context.run(candidate,{allowCrmSync:false}),true);
+ assert.equal(candidate.buyerDiscovery.coverageFollowUp.status,'complete');
+ assert.equal(candidate.people[0].name,'Anna Andersson');assert.equal(candidate.people[0].buyerQualification.eligible,true);
+ assert.ok(candidate.buyerDiscovery.resultDiagnostics.some(row=>row.accepted&&row.parsedName==='Anna Andersson'));
+ assert.equal(D.buyerCoveragePlan(candidate.people,{decisionMakers:candidate.buyerRoles.join('; ')},candidate).missing.includes('Engineering'),false);
 });
 test('only fully completed providers permit a completed empty-result state',()=>{
  const context={};vm.createContext(context);vm.runInContext(ui.slice(ui.indexOf('function buyerResearchIncomplete('),ui.indexOf('function buyerProviderFailure('))+'\nthis.check=buyerResearchIncomplete;',context);

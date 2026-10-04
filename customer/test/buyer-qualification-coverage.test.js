@@ -1,0 +1,50 @@
+const test=require('node:test'),assert=require('node:assert/strict'),D=require('../discovery-engine.js');
+const profile={decisionMakers:'Project Director; Project Manager; Strategic Sourcing Manager; Engineering Director; Engineering Manager; Operations Director'};
+const company={company:'Example',domain:'example.com',market:'Sweden'};
+const buyer=(extra={})=>({id:'a',name:'Anna Lind',title:'Projektchef',organization:'Example',publicNameUrl:'https://example.com/team/anna',...extra});
+test('buyer qualification has transparent bounded components; an email cannot make a wrong identity qualify',()=>{
+ const q=D.qualifyBuyer(buyer(),profile,company,{now:'2026-10-04'});
+ assert.equal(q.eligible,true);assert.equal(q.total,Object.values(q.breakdown).reduce((sum,row)=>sum+row.points,0));assert.ok(q.total<100);assert.ok(q.gaps.includes('Identity source date unknown'));
+ const bad=D.qualifyBuyer(buyer({organization:'Other',email_status:'verified',work_email:'anna@example.com'}),profile,company);
+ assert.equal(bad.eligible,false);assert.equal(bad.total,null);
+ assert.equal(D.qualifyBuyer(buyer({name:'Anna L.'}),profile,company).eligible,false);
+});
+test('qualification uses dated identity evidence, marks title authority as inferred and preserves scores after reload',()=>{
+ const dated=buyer({identityEvidenceDate:'2026-09-01'}),old=buyer({identityEvidenceDate:'2020-01-01'});
+ assert.ok(D.qualifyBuyer(dated,profile,company,{now:'2026-10-04'}).total>D.qualifyBuyer(old,profile,company,{now:'2026-10-04'}).total);
+ const ranked=D.rankedBuyerShortlist([dated],profile,company).people;
+ assert.match(ranked[0].buyerQualification.breakdown.authority.basis,/inferred.*title/i);
+ const saved=D.normalizeDiscoveryState({selectedProspects:[{...company,buyerSearchMode:'user_selected_target',people:ranked}]}).selectedProspects[0].people[0];
+ assert.deepEqual(saved.buyerQualification,ranked[0].buyerQualification);assert.equal(saved.identityEvidenceDate,dated.identityEvidenceDate);
+});
+test('adaptive coverage targets missing functions with diverse sources and does not equate many project buyers with complete coverage',()=>{
+ const plan=D.buyerCoveragePlan(Array.from({length:10},(_,i)=>buyer({id:String(i)})),profile,company);
+ assert.deepEqual(plan.missing,['Procurement / sourcing','Engineering','Operations']);
+ assert.ok(plan.queries.some(q=>q.includes('site:example.com')&&q.includes('Teknisk chef')));
+ assert.ok(plan.queries.some(q=>q.includes('linkedin.com/in/')));assert.ok(plan.queries.length<=8);
+ const complete=D.buyerCoveragePlan([buyer(),buyer({title:'Strategisk inköpare'}),buyer({title:'Teknisk chef'}),buyer({title:'Driftchef'})],profile,company);
+ assert.deepEqual(complete.missing,[]);assert.deepEqual(complete.queries,[]);
+});
+test('pending identities are not duplicated into the full-name pool or lost when saving a buyer in a twenty-person pool',()=>{
+ const pool=Array.from({length:20},(_,i)=>buyer({id:String(i),name:`Anna Buyer${i}`}));
+ const pending=buyer({id:'pending',name:'Åsa G.',identityStatus:'pending'});
+ const merged=D.mergeBuyerPool(pool,[pending],profile);
+ assert.equal(merged.length,21);assert.equal(merged.filter(p=>p.id==='pending').length,1);assert.equal(merged.filter(p=>p.identityStatus==='pending').length,1);
+});
+test('qualification remains portable across legal and retail workspaces and never scores unsupported employment',()=>{
+ for(const [name,role] of [['Law Company','General Counsel'],['Furniture Company','Retail Director']]){
+  const p={decisionMakers:role},c={company:name,domain:'other.example'};
+  assert.equal(D.qualifyBuyer(buyer({title:role,organization:name,publicNameUrl:'https://other.example/team'}),p,c).eligible,true);
+  assert.equal(D.qualifyBuyer(buyer(),p,c).eligible,false);
+ }
+});
+test('contact verification outcomes and buyer evidence scores persist in durable CRM intelligence',()=>{
+ const C=require('../crm-engine.js');
+ const person=buyer({contactVerification:{status:'not_verified',checkedAt:'2026-10-04T12:00:00Z',issues:['Provider did not confirm an attributable company email']}});
+ person.buyerQualification=D.qualifyBuyer(person,profile,company);
+ const candidate={...company,people:[person],buyerDiscovery:{coverageFollowUp:{status:'complete',queries:3,results:12}}};
+ const stored=D.normalizeDiscoveryState({selectedProspects:[{...candidate,buyerSearchMode:'user_selected_target'}]}).selectedProspects[0];
+ assert.deepEqual(stored.people[0].contactVerification,person.contactVerification);
+ const snapshot=C.mapDiscoveryCandidateToCrm(stored).intelligence.research_snapshot.buyerResearch;
+ assert.deepEqual(snapshot.buyers[0].qualification,person.buyerQualification);assert.equal(snapshot.buyers[0].contactVerification.status,'not_verified');assert.equal(snapshot.coverageFollowUp.queries,3);
+});
