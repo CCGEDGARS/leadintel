@@ -1072,7 +1072,7 @@ test('Save buyer saves in CRM, survives reload, and Unsave preserves CRM history
  const restored=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
  assert.equal(restored.selectedProspects[0].people[0].kept,true);assert.equal(restored.selectedProspects[0].buyerDiscovery.pool[0].kept,true);
  context.__renderPipeline();const html=context.__elements.get('customer-pipeline').innerHTML;
- assert.match(html,/Saved ✓/);assert.ok(html.indexOf('data-find-prospect-buyers')<html.indexOf('selected-prospect-people'));
+ assert.match(html,/data-keep-buyer[^>]*aria-pressed="true"/);assert.match(html,/Save &amp; proceed/);assert.ok(html.indexOf('data-find-prospect-buyers')<html.indexOf('selected-prospect-people'));
  assert.equal(await context.__keepBuyer('example.com',0),true);assert.equal(saved,1);assert.equal(context.__discoveryState().selectedProspects[0].people[0].kept,false);
 });
 test('Save buyer fails closed when CRM save fails',async()=>{
