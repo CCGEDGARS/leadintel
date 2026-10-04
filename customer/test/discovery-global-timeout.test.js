@@ -1203,6 +1203,9 @@ test('a company-level completed check does not conceal an unresearched individua
  const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,fetchImpl:async()=>{requests++;return {ok:true,json:async()=>({data:[]})};}});
  context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',publicContactStatus:'complete',publicContactVersion:'buyer-contacts-v18-profile-scope',people:[{id:'p1',name:'Anna Buyer',title:'Procurement Director',organization:'Example',publicNameUrl:'https://example.com/team'}]}]});
  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5,visibleStep:5}));
+ context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:4,visibleStep:4}));
+ context.__scheduleSavedBuyerPublicChecks();await new Promise(resolve=>setTimeout(resolve,5));assert.equal(requests,0);
+ context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5,visibleStep:5}));
  context.__scheduleSavedBuyerPublicChecks();context.__scheduleSavedBuyerPublicChecks();
  await new Promise(resolve=>setTimeout(resolve,50));
  assert.ok(requests>0);assert.ok(context.__discoveryState().selectedProspects[0].people[0].emailResearch.searches>0);

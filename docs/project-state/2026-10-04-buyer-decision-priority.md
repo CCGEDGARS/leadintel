@@ -12,3 +12,5 @@ Rank all saved identities before the ten-card cap. Reserve buying-function cover
 
 ## Prevention and validation
 Meaningful regressions cover cross-industry authority ordering, unknown purchasing authority, unresearched/partial/zero-query/stale/future recommendation exclusion, larger-pool coverage, late-card ranking, per-person automatic follow-up, and normalization/CRM persistence. Verify the exact merged release separately, then inspect authenticated LKAB scores, research state, CRM save and reload. No paid Apollo contact enrichment, Hunter or outreach is authorized by this repair.
+
+Authenticated validation exposed an additional ordering error: automatic checks could reserve their once-per-visit marker while Companies was open, then the timer was canceled by stage visibility. Restrict scheduling to the active Buyers stage so its later visit still starts the missing research. The runtime regression now opens Companies first, proves no request/marker consumption, then opens Buyers and proves one completed follow-up.
