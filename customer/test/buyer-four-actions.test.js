@@ -8,8 +8,8 @@ function runtime(automatic=false){
 }
 test('manual buyer card presents four actions and no per-card next action',()=>{
  const {context,person,candidate}=runtime(),html=context.prospectContactControls(candidate,person);
- assert.equal((html.match(/<button /g)||[]).length,5);for(const label of ['Confirm email','Confirm phone','Confirm LinkedIn','Save &amp; proceed'])assert.ok(html.includes(label));
- assert.ok(!html.includes('data-buyer-next'));assert.ok(!html.includes('Clarify data'));
+ assert.equal((html.match(/<button /g)||[]).length,4);for(const label of ['Confirm email','Confirm phone','Confirm LinkedIn','Save &amp; proceed'])assert.ok(html.includes(label));
+ assert.ok(!html.includes('data-save-buyer-only'));assert.ok(!html.includes('data-buyer-next'));assert.ok(!html.includes('Clarify data'));
 });
 test('automatic email confirmation is selected and locked without claiming mailbox verification',()=>{
  const {context,person,candidate}=runtime(true),html=context.prospectContactControls(candidate,person);assert.match(html,/aria-pressed="true"[^>]*disabled[^>]*>Confirm email ✓/);assert.match(html,/verification is required/);
@@ -56,4 +56,12 @@ test('save and proceed awaits save, stops on failure and never toggles an alread
 test('explicit automatic selection overrides a retained manual policy for email controls',()=>{
  const {context,person,candidate}=runtime(false);context.document.querySelector=()=>({value:'automatic'});
  assert.match(context.prospectContactControls(candidate,person),/aria-pressed="true"[^>]*disabled[^>]*>Confirm email ✓/);
+});
+
+test('ranked display copies keep actions attached to the original buyer index',()=>{
+ const {context,person,candidate}=runtime();
+ candidate.people.unshift({id:'other',name:'Other Buyer'});
+ const html=context.prospectContactControls(candidate,{...person,buyerRelevanceScore:100});
+ assert.equal((html.match(/data-person-index="1"/g)||[]).length,4);
+ assert.doesNotMatch(html,/data-person-index="-1"/);
 });

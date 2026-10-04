@@ -190,10 +190,10 @@
 .selected-prospect-buyers-heading{display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin-bottom:12px}
 .selected-prospect-buyers-heading strong{font-size:16px;color:#20362e}
 .selected-prospect-buyers-heading span{font-size:12px;color:#697b72}
-.selected-prospect-people{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;list-style:none;padding:0;margin:0}
-.selected-prospect-person{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:12px;align-items:start;min-width:0;padding:15px;border:1px solid #dce8e1;border-radius:11px;background:#fbfdfb}
+.selected-prospect-people{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:1fr;gap:12px;list-style:none;padding:0;margin:0}
+.selected-prospect-person{display:grid;grid-template-columns:28px minmax(0,1fr);grid-template-rows:1fr auto;gap:12px;align-items:start;min-width:0;padding:15px;border:1px solid #dce8e1;border-radius:11px;background:#fbfdfb}
 .selected-prospect-rank{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:#e3f0ea;color:#116551;font:700 12px "IBM Plex Mono",monospace}
-.selected-prospect-person-details{min-width:0}
+.selected-prospect-person-details{min-width:0;grid-column:2}
 .selected-prospect-person-name{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .selected-prospect-person-name strong{font-size:17px;line-height:1.35;color:#162820}
 .selected-prospect-person-name small{padding:3px 6px;border-radius:5px;background:#fff3dc;color:#765c24;font-size:11px;font-weight:700}
@@ -228,7 +228,7 @@
 .selected-prospect-people-note{margin:12px 0 0!important;color:#64746c;font-size:12px;line-height:1.5}
 .selected-prospect-people-state{margin:0;color:#53665e;font-size:14px;line-height:1.5}
 .selected-prospect-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;align-items:center;padding-top:16px;border-top:1px solid #e3ece7}
-@media(max-width:920px){.selected-prospect-people{grid-template-columns:1fr}}
+@media(max-width:920px){.selected-prospect-people{grid-template-columns:1fr;grid-auto-rows:auto}}
 @media(max-width:620px){.selected-prospect-list{padding:16px}.selected-prospect-row{padding:16px}.selected-prospect-company,.selected-prospect-buyers-heading{display:grid}.selected-prospect-signal{justify-self:start}.selected-prospect-person{grid-template-columns:28px minmax(0,1fr)}.selected-prospect-person>a{grid-column:2}.selected-prospect-actions{justify-content:stretch}.selected-prospect-actions button{width:100%}}
 #discovery-selection-breakdown{display:block;margin-top:4px;color:#60736a;font-size:11px}
 .discovery-pipeline-instruction{margin:0 0 13px;padding:12px 14px;border:1px solid #cbded5;border-radius:10px;background:#f4faf6;color:#274c3d;font-size:12px;line-height:1.5}
@@ -558,7 +558,7 @@
 @media(max-width:760px){.buyer-provider-status ul{grid-template-columns:1fr}}
 
 .buyer-four-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
-.buyer-four-actions button{width:100%;min-width:0;min-height:52px;height:100%;margin:0;padding:10px 8px;white-space:normal;text-align:center}
+.buyer-four-actions button{display:flex;align-items:center;justify-content:center;box-sizing:border-box;width:100%;min-width:0;min-height:52px;height:100%;margin:0;padding:10px 8px;white-space:normal;text-align:center}
 .buyer-four-actions button[aria-pressed="true"]{border-color:#0d6453;background:#e7f2ec;color:#0d6453}
 .buyer-four-actions .primary-btn{background:#0d6453;color:#fff;border-color:#0d6453}
 .buyer-four-actions .primary-btn[aria-pressed="true"]{background:#0d6453;color:#fff}
@@ -573,3 +573,6 @@
 .buyer-review-dialog [data-review-close]:hover{background:#e8f1eb;border-color:#a9c4b3}
 .buyer-review-dialog [data-review-close]:focus-visible{outline:3px solid #167363;outline-offset:3px}
 .buyer-review-dialog [data-review-close]:active{background:#dcebe1}
+
+.buyer-shortlist-group+.buyer-shortlist-group{margin-top:24px}
+.buyer-pending-identities summary{cursor:pointer;font-weight:700}
