@@ -1,7 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),D=require('../discovery-engine.js');
 const source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');
 function harness({kept=true,verified=true,synced=true}={}){
- const person={id:'public-second',name:'Anna Buyer',title:'COO',kept,publicLinkedinUrl:'https://linkedin.com/in/anna'};
+ const person={id:'public-second',name:'Anna Buyer',organization:'Example',title:'COO',kept,publicLinkedinUrl:'https://linkedin.com/in/anna'};
  const candidate={company:'Example',domain:'example.com',people:[person]};let meta={},events=[],checks=0,focused=0;
  const ctx={LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,esc:String,enrichmentResults:new Map(),enrichmentPending:new Set(),personKey:()=>person.id,discovery:{selectedProspects:[candidate]},crmAuthenticated:()=>true,crmCompanyByDomain:()=>({id:'c1'}),bridge:()=>({workspace:{id:'w1'},getCrmCompany:async()=>{checks++;return {ok:true,contacts:[{id:'contact-other',name:'Other Buyer',email_status:'verified',work_email:'other@example.com'},{id:'contact-anna',external_person_id:person.id,name:person.name,linkedin_url:person.publicLinkedinUrl,email_status:verified?'verified':'public_unverified',work_email:'anna@example.com'}]};},saveNow:async()=>({saved:synced})}),loadMeta:()=>meta,saveMeta:value=>{meta=value;},saveDiscovery(){},renderAll(){},loadOutreachModules(){},showToast(){},window:{dispatchEvent:event=>events.push(event)},CustomEvent:class{constructor(type,data){this.type=type;this.detail=data.detail;}},button:{closest:()=>({querySelector:()=>({scrollIntoView(){},focus(){focused++;}})})}};
  vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('function verifiedBuyerEmail('),source.indexOf('function prospectContactControls(')),ctx);
@@ -48,3 +48,11 @@ test('a recorded identity conflict blocks a verified-email handoff until resolve
  assert.equal(await h.ctx.addBuyerToFlow('example.com',0,{button:h.ctx.button}),false);assert.equal(h.events.length,0);
 });
 test('a legacy verified label without attributable provider evidence cannot open Messages',async()=>{const h=harness();h.ctx.window.LeadIntelContactPolicy=require('../contact-confirmation-policy.js');const legacy={name:h.person.name,work_email:'anna@example.com',email_status:'verified',source:'public_research'};assert.equal(h.ctx.verifiedBuyerEmail(h.candidate,h.person,legacy),'');assert.equal(h.ctx.verifiedBuyerEmail(h.candidate,h.person,{...legacy,verification_provider:'Apollo'}),'anna@example.com');assert.equal(await h.ctx.addBuyerToFlow('example.com',0),false);assert.equal(h.events.length,0);});
+
+test('stale/future employment and wrong employers cannot proceed on a verified email',async()=>{
+ for(const update of [{identityEvidenceDate:'2013-05-01'},{identityEvidenceDate:'2099-01-01'},{organization:'Other'}]){
+  const h=harness();Object.assign(h.person,update);
+  assert.equal(h.ctx.verifiedBuyerEmail(h.candidate,h.person,{work_email:'anna@example.com',email_status:'verified'}),'');
+  assert.equal(await h.ctx.addBuyerToFlow('example.com',0),false);assert.equal(h.events.length,0);assert.notEqual(h.person.flowSelected,true);
+ }
+});
