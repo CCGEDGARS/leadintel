@@ -1026,7 +1026,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
   const taskCentre=window.LeadIntelTaskCentre;const taskId=`decision-maker-search:${candidate.domain||candidate.id||"company"}:${Date.now()}`;
   taskCentre?.start({id:taskId,type:'decision-maker-search',title:`Buyer search · ${candidate.company}`,stage:'Researching public buyer candidates',total:1,completed:0,canCancel:true,canRetry:true});
   taskCentre?.registerActions(taskId,{cancel:()=>controller.abort(),retry:retry||(()=>false)});
-  const timeout=setTimeout(()=>controller.abort(),Math.max(DISCOVERY_REQUEST_TIMEOUT_MS*14,350000));
+  const timeout=setTimeout(()=>controller.abort(),Math.max(DISCOVERY_REQUEST_TIMEOUT_MS*18,450000));
   let providerStatus=null,resultDiagnostics=[],companyResearchIncomplete=false;
   const rows=[],issues=[];
   try{
@@ -1080,7 +1080,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     const publicTrace=LeadIntelDiscovery.tracePublicBuyers(rows,candidate.company,researchProfile);
     resultDiagnostics=publicTrace.diagnostics;let publicPeople=publicTrace.people;
     let apolloDiscoveryCount=0;
-    if(publicPeople.length<3&&crmAuthenticated()){
+    if(crmAuthenticated()){
       try{
         const searchIdentity=bridge()?.searchApolloPeople;
         if(typeof searchIdentity!=="function"){providerStatus.identity.status="not_configured";issues.push('Identity-provider discovery is not connected');}
@@ -1093,13 +1093,20 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
           }else{providerStatus.identity.status="failed";providerStatus.identity.failures=[buyerProviderFailure({message:apollo?.error||'Identity-provider discovery failed',status:apollo?.status,code:apollo?.code})];issues.push(apollo?.error||'Identity-provider discovery failed');}
         }
       }catch(error){providerStatus.identity.status="failed";providerStatus.identity.failures=[buyerProviderFailure(error)];issues.push(error.message||'Identity-provider discovery unavailable');}
-    }else providerStatus.identity.status=publicPeople.length>=3?"not_needed":"not_authenticated";
+    }else providerStatus.identity.status="not_authenticated";
     const previous=[...(candidate.buyerDiscovery?.pool||[]),...(candidate.people||[])];
-    const pool=LeadIntelDiscovery.mergeBuyerPool(previous,publicPeople,researchProfile);
+    let pool=LeadIntelDiscovery.mergeBuyerPool(previous,publicPeople,researchProfile);
+    if(pool.some(person=>person.identityStatus==='pending')){
+      candidate.buyerResearchProgress={...candidate.buyerResearchProgress,phase:'identity',label:'Resolving first names against employer and role evidence',step:4,total:5};persist();
+      const resolved=await LeadIntelDiscovery.resolvePendingBuyerIdentities(pool,rows,candidate,researchProfile,query=>searchBuyerPublicPages(query,8,controller.signal));
+      issues.push(...resolved.issues);resultDiagnostics.push(...resolved.diagnostics);
+      pool=LeadIntelDiscovery.mergeBuyerPool([],resolved.people,researchProfile);
+      if(resolved.issues.length)providerStatus.firecrawl.status='partial';
+    }
     for(const diagnostic of resultDiagnostics){if(!diagnostic.accepted)continue;const person=pool.find(person=>person.name===diagnostic.parsedName&&person.title===diagnostic.parsedTitle);diagnostic.poolSelection=person?"retained":"excluded";if(!person){diagnostic.accepted=false;diagnostic.rejectionReason="Not retained after deduplication or pool limit";}}
     const ranked=LeadIntelDiscovery.recommendedBuyers(pool,researchProfile);
     candidate.buyerDiscovery={target:30,found:pool.length,sourceResults:rows.length,apolloDiscoveryCount,providerStatus,resultDiagnostics,researchIncomplete:companyResearchIncomplete||buyerResearchIncomplete(providerStatus)||pool.some(person=>person.identityStatus==='pending'),opportunityRoles:plan.roles,expandedRoles:plan.expandedRoles,opportunityTerms:plan.opportunityTerms,issues,pool,checkedAt:new Date().toISOString()};
-    candidate.people=[...pool.filter(person=>person.kept),...ranked.filter(person=>!person.kept)].slice(0,6);
+    candidate.people=[...pool.filter(person=>person.kept&&person.identityStatus!=='pending'&&String(person.publicName||person.name).trim().split(/\s+/).length>=2),...ranked.filter(person=>!person.kept)].slice(0,6);
     candidate.publicContactVersion='';
     candidate.peopleStatus=candidate.people.length?"complete":"empty";candidate.buyerRolesChanged=false;
     persist();
@@ -1113,7 +1120,8 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
       if(controller.signal.aborted)throw Object.assign(new Error('Buyer research canceled'),{name:'AbortError'});
       candidate.buyerResearchProgress={...candidate.buyerResearchProgress,phase:"contacts",label:"Finalizing public contact evidence",step:5,total:5};persist();
     }
-    candidate.buyerDiscovery.researchIncomplete=companyResearchIncomplete||buyerResearchIncomplete(providerStatus)||pool.some(person=>person.identityStatus==='pending')||candidate.publicContactStatus==='error';
+    candidate.buyerDiscovery.pool=LeadIntelDiscovery.mergeBuyerPool(candidate.buyerDiscovery.pool,candidate.people,researchProfile);
+    candidate.buyerDiscovery.researchIncomplete=companyResearchIncomplete||buyerResearchIncomplete(providerStatus)||candidate.buyerDiscovery.pool.some(person=>person.identityStatus==='pending')||candidate.publicContactStatus==='error';
     candidate.buyerResearchProgress={phase:"complete",label:candidate.buyerDiscovery.researchIncomplete?"Research incomplete":"Buyer research complete",step:5,total:5,completedAt:new Date().toISOString()};persist();
     if(allowCrmSync&&crmAuthenticated()&&crmCompanyByDomain(candidate.domain)){
       try{
@@ -1714,7 +1722,7 @@ function buyerProviderStatusHtml(candidate){
   const label=(name,row)=>`<li><strong>${name}</strong><span>${esc(row?.status||"unknown")} · ${Number(row?.results)||0} source results${row?.accepted!=null?` · ${Number(row.accepted)} accepted`:''}</span>${(row?.failures||[]).slice(0,18).map(f=>`<small>${f.status?`HTTP ${Number(f.status)} · `:''}${esc(f.message)}${f.query?` · ${esc(f.query)}`:''}</small>`).join('')}</li>`;
   const diagnostics=candidate.buyerDiscovery?.resultDiagnostics||[];
   const pending=(candidate.buyerDiscovery?.pool||[]).filter(person=>person.identityStatus==='pending');
-  return `${pending.length?`<section class="buyer-pending-identities"><strong>${pending.length} potential buyers · identity verification pending</strong><ul>${pending.map(person=>`<li>${esc(person.name)} · ${esc(person.title)} · ${esc(person.organization)}<small>Directory provided a first name only. Full identity must be verified before outreach.</small></li>`).join('')}</ul></section>`:''}${candidate.buyerDiscovery?.researchIncomplete?'<p class="selected-prospect-people-state warning" role="status"><strong>Research incomplete</strong> · Some provider or identity checks did not finish. These results do not establish that no matching buyers exist.</p>':''}<details class="buyer-provider-status" open><summary>Research coverage</summary><ul>${label("Public web / Firecrawl",status.firecrawl)}${label("Grounded web research",status.grounded)}${label("Identity directory fallback",status.identity)}</ul>${candidate.buyerDiscovery?.opportunityTerms?.length?`<p><strong>Opportunity context:</strong> ${esc(candidate.buyerDiscovery.opportunityTerms.join(" · "))}</p>`:""}</details>${diagnostics.length?`<details class="buyer-result-trace"><summary>Result decisions (${diagnostics.length})</summary><ul>${diagnostics.map(d=>`<li><strong>${esc(d.parsedName||d.title||'Unnamed result')}</strong> · ${esc(d.parsedTitle)} · ${esc(d.parsedCompany)}<small>${esc(d.source)} #${Number(d.index)+1} · parsing: ${esc(d.parsing)} · company: ${esc(d.companyVerification)} · role: ${esc(d.roleMatching)} · ${d.accepted?'Accepted':esc(d.rejectionReason||'Not selected')}</small></li>`).join('')}</ul></details>`:''}`;
+  return `${pending.length?`<section class="buyer-pending-identities"><strong>${pending.length} potential buyers · identity verification pending</strong><ul>${pending.map(person=>`<li>${esc(person.name)} · ${esc(person.title)} · ${esc(person.organization)}<small>Directory provided a first name only. Full identity must be verified before outreach.</small></li>`).join('')}</ul></section>`:''}${candidate.buyerDiscovery?.researchIncomplete?'<p class="selected-prospect-people-state warning" role="status"><strong>Research incomplete</strong> · Some provider or identity checks did not finish. These results do not establish that no matching buyers exist.</p>':''}<details class="buyer-provider-status" open><summary>Research coverage</summary><ul>${label("Public web / Firecrawl",status.firecrawl)}${label("Grounded web research",status.grounded)}${label("Identity directory discovery",status.identity)}</ul>${candidate.buyerDiscovery?.opportunityTerms?.length?`<p><strong>Opportunity context:</strong> ${esc(candidate.buyerDiscovery.opportunityTerms.join(" · "))}</p>`:""}</details>${diagnostics.length?`<details class="buyer-result-trace"><summary>Result decisions (${diagnostics.length})</summary><ul>${diagnostics.map(d=>`<li><strong>${esc(d.parsedName||d.title||'Unnamed result')}</strong> · ${esc(d.parsedTitle)} · ${esc(d.parsedCompany)}<small>${esc(d.source)} #${Number(d.index)+1} · parsing: ${esc(d.parsing)} · company: ${esc(d.companyVerification)} · role: ${esc(d.roleMatching)} · ${d.accepted?'Accepted':esc(d.rejectionReason||'Not selected')}</small></li>`).join('')}</ul></details>`:''}`;
 }
 function buyerResearchProgressHtml(candidate){
   const progress=candidate.buyerResearchProgress||{phase:"company",label:"Verifying company",step:1,total:5};

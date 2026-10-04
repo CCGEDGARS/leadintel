@@ -18,11 +18,11 @@ test('zero public results continue to identity fallback instead of failing early
  const end=ui.indexOf('async function selectTargetForBuyers',start);
  const block=ui.slice(start,end);
  assert.doesNotMatch(block,/if\(!rows\.length&&issues\.length\)throw/);
- assert.match(block,/publicPeople\.length<3/);
+ assert.doesNotMatch(block,/publicPeople\.length<3/);
  assert.match(block,/searchApolloPeople/);
 });
 test('Buyer V2 timeout budget covers bounded multi-source research',()=>{
- assert.match(ui,/Math\.max\(DISCOVERY_REQUEST_TIMEOUT_MS\*14,350000\)/);
+ assert.match(ui,/Math\.max\(DISCOVERY_REQUEST_TIMEOUT_MS\*18,450000\)/);
 });
 test('failed research persists V2 target and opportunity diagnostics rather than stale V1 target 20',()=>{
  const start=ui.indexOf('async function searchDecisionMakers');

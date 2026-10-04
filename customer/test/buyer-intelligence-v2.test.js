@@ -25,7 +25,7 @@ test('Buyer Intelligence V2 searches opportunity context beyond exact LinkedIn t
 
 test('manual Buyer Intelligence uses identity provider fallback without provider-branded confirmation buttons',()=>{
  assert.match(ui,/searchApolloPeople/);
- assert.match(ui,/publicPeople\.length<3/);
+ assert.doesNotMatch(ui,/publicPeople\.length<3/);
  assert.match(ui,/Confirm email/);
  assert.match(ui,/Confirm phone/);
  assert.doesNotMatch(ui,/>Confirm email with Apollo</);

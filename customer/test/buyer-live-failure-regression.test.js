@@ -53,3 +53,20 @@ test('CRM receives the final verified buyer state and CRM outage preserves resea
  assert.equal(snapshots[0].buyerResearchProgress.phase,'complete');
  assert.equal(candidate.peopleStatus,'complete');
 });
+
+test('four public names no longer skip directory discovery',async()=>{
+ const {context,candidate}=runtime({firecrawlError:false,groundedError:false,identity:{ok:true,people:[]}});let calls=0;
+ context.bridge=()=>({workspace:{id:'workspace'},searchApolloPeople:async()=>{calls++;return {ok:true,people:[]};}});
+ context.searchBuyerPublicPages=async()=>['Anna Andersson','Bertil Berg','Carl Carlson','Dora Dahl'].map(name=>({title:`${name} | Inköpschef | LKAB`,url:'https://linkedin.com/in/'+name.replace(/ /g,'-')}));
+ assert.equal(await context.run(candidate,{allowCrmSync:false}),true);assert.equal(calls,1);assert.equal(candidate.people.length,4);assert.equal(candidate.buyerDiscovery.providerStatus.identity.status,'complete');
+});
+test('previous pending identities are researched even with a populated public shortlist and survive reload resolved',async()=>{
+ const {context,candidate}=runtime({firecrawlError:false,groundedError:false,identity:{ok:true,people:[]}});
+ candidate.buyerDiscovery={pool:[{id:'old-markus',name:'Markus',firstName:'Markus',title:'Projektchef',organization:'LKAB',identityStatus:'pending'}]};const queries=[];
+ context.searchBuyerPublicPages=async query=>{queries.push(query);return query.includes('"Markus"')?[{title:'Markus Andersson | Projektchef | LKAB',url:'https://linkedin.com/in/markus-andersson'}]:[];};
+ assert.equal(await context.run(candidate,{allowCrmSync:false}),true);
+ assert.equal(queries.filter(q=>q.includes('"Markus"')).length,2);assert.equal(candidate.people[0].name,'Markus Andersson');assert.equal(candidate.people[0].id,'old-markus');
+ assert.equal(candidate.buyerDiscovery.pool.some(p=>p.identityStatus==='pending'),false);
+ const restored=D.normalizeDiscoveryState({selectedProspects:[{...candidate,buyerSearchMode:'user_selected_target'}]});assert.equal(restored.selectedProspects[0].buyerDiscovery.pool[0].name,'Markus Andersson');
+ assert.equal(restored.selectedProspects[0].buyerDiscovery.resultDiagnostics.find(d=>d.source==='identity_resolution').accepted,true);
+});
