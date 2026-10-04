@@ -1136,3 +1136,12 @@ test('known full identities receive contact evidence searches before optional pr
  const profiles=queries.findIndex(query=>query.startsWith('site:linkedin.com/in/ ('));
  assert.ok(contact>=0&&profiles>contact);
 });
+
+test('ranked buyer controls retain the original candidate index after ranking clones the people',()=>{
+ const ctx=loadDiscoveryRunner({renderNodes:true,bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'}}});
+ ctx.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',market:'Sweden',buyerSearchMode:'user_selected_target',people:[{id:'p1',name:'Jane Buyer',title:'Procurement Director',organization:'Example',publicNameUrl:'https://example.com/team/jane'}]}]});
+ ctx.__renderPipeline();
+ const html=ctx.__elements.get('customer-pipeline').innerHTML;
+ assert.match(html,/data-review-linkedin="example.com" data-person-index="0"/);
+ assert.doesNotMatch(html,/data-person-index="-1"/);
+});
