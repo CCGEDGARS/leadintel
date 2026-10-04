@@ -1,0 +1,36 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),D=require('../discovery-engine.js');
+const source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');
+function runtime(automatic=false){
+ const person={id:'public-anna',name:'Anna Andersson',title:'COO',publicLinkedinUrl:'https://linkedin.com/in/anna'},candidate={domain:'example.com',people:[person]};
+ const context={window:{LeadIntelOutreachAutomationUI:{getPolicy:()=>({preferredMode:automatic?'automatic':'manual'})}},document:{querySelector:()=>null},LeadIntelDiscovery:D,selectedBuyerKey:()=>person.id,personKey:()=>person.id,enrichmentResults:new Map(),enrichmentPending:new Set(),esc:String,crmAuthenticated:()=>true,canonicalDomain:D.canonicalDomain};
+ vm.createContext(context);const start=source.indexOf('function buyerAutomaticMode('),end=source.indexOf('async function findPublicProspectContacts(',start);vm.runInContext(source.slice(start,end),context);
+ return {context,person,candidate};
+}
+test('manual buyer card presents four actions and no per-card next action',()=>{
+ const {context,person,candidate}=runtime(),html=context.prospectContactControls(candidate,person);
+ assert.equal((html.match(/<button /g)||[]).length,4);for(const label of ['Confirm email','Confirm phone','Confirm LinkedIn','Save buyer'])assert.ok(html.includes(label));
+ assert.ok(!html.includes('data-buyer-next'));assert.ok(!html.includes('Clarify data'));
+});
+test('automatic email confirmation is selected and locked without claiming mailbox verification',()=>{
+ const {context,person,candidate}=runtime(true),html=context.prospectContactControls(candidate,person);assert.match(html,/aria-pressed="true"[^>]*disabled[^>]*>Confirm email ✓/);assert.match(html,/verification is required/);
+});
+test('LinkedIn confirmation applies only to the reviewed exact profile',()=>{
+ const {context,person}=runtime();person.linkedinConfirmedUrl=person.publicLinkedinUrl;assert.equal(context.buyerLinkedInStatus(person),'Confirmed by you');person.publicLinkedinUrl='https://linkedin.com/in/another';assert.equal(context.buyerLinkedInStatus(person),'Public match');
+});
+test('LinkedIn review confirmation survives workspace state normalization',()=>{
+ const value=D.normalizeDiscoveryState({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',people:[{name:'Anna Andersson',linkedinConfirmedUrl:'https://linkedin.com/in/anna',linkedinConfirmedAt:'2026-10-04T08:00:00Z'}]}]});assert.equal(value.selectedProspects[0].people[0].linkedinConfirmedUrl,'https://linkedin.com/in/anna');
+});
+test('LinkedIn confirmation records CRM evidence and rolls back the UI state on failed sync',async()=>{
+ for(const synced of [true,false]){
+  const {context,person,candidate}=runtime();const activities=[];
+  Object.assign(context,{Date,ensureCrmCompany:async()=>({id:'company'}),bridge:()=>({workspace:{id:'w1'},saveCrmContacts:async()=>({ok:true}),recordCrmActivity:async(_,activity)=>{activities.push(activity);return {ok:true};},saveNow:async()=>({saved:synced})}),saveDiscovery(){},renderAll(){}});context.window.LeadIntelCrm={mapContacts:()=>[]};
+  if(synced){assert.equal(await context.saveBuyerLinkedInReview(candidate,person,person.publicLinkedinUrl,'w1'),true);assert.equal(person.linkedinConfirmedUrl,person.publicLinkedinUrl);}
+  else{await assert.rejects(context.saveBuyerLinkedInReview(candidate,person,person.publicLinkedinUrl,'w1'),/could not be synced/);assert.equal(person.linkedinConfirmedUrl,undefined);}
+  assert.equal(activities[0].metadata.linkedin_url,person.publicLinkedinUrl);
+ }
+});
+test('stale workspace/profile review cannot confirm a changed match',async()=>{
+ const {context,person,candidate}=runtime();context.bridge=()=>({workspace:{id:'w2'}});
+ await assert.rejects(context.saveBuyerLinkedInReview(candidate,person,person.publicLinkedinUrl,'w1'),/Workspace changed/);
+ await assert.rejects(context.saveBuyerLinkedInReview(candidate,person,'https://linkedin.com/in/other','w2'),/Profile changed/);
+});

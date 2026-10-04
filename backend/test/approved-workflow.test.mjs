@@ -123,3 +123,10 @@ test('automatic Buyers combine directory discovery with four public buyers and r
   assert.equal(candidate.buyerDiscovery.pool.some(p=>p.identityStatus==='pending'),false);
  }finally{globalThis.fetch=oldFetch;}
 });
+
+
+test('automatic buyer confirmation setting does not authorize paid contact reveal',async()=>{
+ const env=await fixture();env.DB.raw.prepare("INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint) VALUES('w1','apollo',?,'test')").run(await encryptSecret('test-apollo',await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY)));
+ const oldFetch=globalThis.fetch,requests=[];globalThis.fetch=async url=>{requests.push(String(url));return new Response(JSON.stringify(String(url).includes('api_search')?{people:[{id:'anna',name:'Anna Andersson',title:'COO',organization:{name:'Example'}}]}:{data:[]}));};
+ try{const output=await executeWorkflowStage('buyers',{env,row:{workspace_id:'w1'},result:{candidates:[{company:'Example',domain:'example.com'}]},context:approvedContext(main),config:normalizeWorkflowConfig({buyers:{roles:['COO'],confirmContacts:true}}),guard:async()=>{}});assert.equal(output.reviewBuyers[0].buyerDiscovery.contactConfirmationRequired,true);assert.equal(requests.some(url=>url.includes('people/match')),false);}finally{globalThis.fetch=oldFetch;}
+});
