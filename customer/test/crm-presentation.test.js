@@ -50,3 +50,7 @@ test('CRM contact detail shows email status and Apollo LinkedIn identity provena
   assert.doesNotMatch(html,/href="javascript:/);
   assert.doesNotMatch(html,/href="https:\/\/evil\.example/);
 });
+test('CRM shows saved buyer qualification evidence and unresolved coverage without claiming authority',()=>{
+ const html=CrmPresentation.intelligenceHtml({research_snapshot:{buyerResearch:{checkedAt:'2026-10-04',researchIncomplete:true,coverageFollowUp:{queries:3,missing:['Engineering']},unresolved:[{name:'Markus'}],buyers:[{name:'Mikael <Buyer>',title:'Project Manager',qualification:{eligible:true,total:90,breakdown:{authority:{points:9,max:15,basis:'Purchasing authority unconfirmed'}},gaps:['Actual purchasing authority unconfirmed']},contactVerification:{status:'verified'}}]}}});
+ assert.match(html,/Buyer qualification 90\/100/);assert.match(html,/Mikael &lt;Buyer&gt;/);assert.match(html,/Purchasing authority unconfirmed/);assert.match(html,/1 unresolved/);assert.match(html,/Engineering/);
+});

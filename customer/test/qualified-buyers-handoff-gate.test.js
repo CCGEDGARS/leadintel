@@ -18,7 +18,8 @@ test('Buyer research does not let stale CRM membership bypass the current handof
  const start=ui.indexOf('async function findPotentialDecisionMakers');
  const end=ui.indexOf('async function selectTargetForBuyers',start);
  const block=ui.slice(start,end);
- assert.doesNotMatch(block,/crmCompanyByDomain/);
+ assert.doesNotMatch(block.slice(0,block.indexOf('return searchDecisionMakers')),/crmCompanyByDomain/);
+ assert.match(block,/allowCrmSync:Boolean\(crmCompanyByDomain\(domain\)\)/);
  assert.match(block,/Buyer search needs a company selected in the current Companies step/);
 });
 
