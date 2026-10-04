@@ -1,6 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict'),D=require('../discovery-engine.js');
 const profile={decisionMakers:'Project Director; Project Manager; CAPEX Manager; Investment Project Manager; Procurement Director; Procurement Manager; Strategic Sourcing Manager; Purchasing Manager; Engineering Director; Engineering Manager; Technical Manager; Operations Director'};
-const buyer=(id,title='Project Manager',extra={})=>({id,name:`Anna Buyer ${id}`,title,organization:'Example',publicNameUrl:`https://example.com/team/${id}`,...extra});
+const buyer=(id,title='Project Manager',extra={})=>({id,name:`Anna Buyer${id}`,title,organization:'Example',publicNameUrl:`https://example.com/team/${id}`,...extra});
 test('ten qualified buyers contain four highlighted recommendations and cover all twelve committee roles',()=>{
  const pool=Array.from({length:15},(_,i)=>buyer(String(i)));
  pool.push(buyer('buying','Procurement Director'),buyer('technical','Technical Manager'),buyer('ops','Operations Director'));
@@ -26,4 +26,17 @@ test('shortlist qualification follows legal and retail roles without customer-sp
   const result=D.rankedBuyerShortlist([buyer('fit',role,{organization:company}),buyer('wrong-role','Project Manager',{organization:company})],{decisionMakers:role},{company});
   assert.deepEqual(result.people.map(p=>p.id),['fit']);
  }
+});
+test('surname initials never qualify as full identities or supply contact-name patterns',()=>{
+ const partial=buyer('initial','Project Manager',{name:'Åsa G.'});
+ assert.equal(D.hasFullBuyerName(partial.name),false);assert.equal(D.hasFullBuyerName('Anna M. Lind'),true);
+ assert.equal(D.rankedBuyerShortlist([partial],profile,{company:'Example'}).people.length,0);
+ assert.equal(D.normalizeApolloPeople({people:[partial]})[0].identityStatus,'pending');
+});
+test('local titles preserve manager/director distinctions and prefer specific technical roles',()=>{
+ const people=D.selectDecisionMakers([buyer('manager','Projektledare'),buyer('director','Projektchef'),buyer('technical','Teknisk projektledare'),buyer('sourcing','Strategisk inköpare')],profile,10);
+ assert.equal(people.find(p=>p.id==='manager').matchedBuyerRole,'Project Manager');
+ assert.equal(people.find(p=>p.id==='director').matchedBuyerRole,'Project Director');
+ assert.equal(people.find(p=>p.id==='technical').matchedBuyerRole,'Engineering Manager');
+ assert.equal(people.find(p=>p.id==='sourcing').matchedBuyerRole,'Strategic Sourcing Manager');
 });

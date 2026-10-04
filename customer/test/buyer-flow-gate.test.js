@@ -43,3 +43,7 @@ test('navigation enables Messages only for a saved buyer with a verified company
  h.ctx.enrichmentResults.set(h.person.id,{contact:{work_email:'anna@example.com',email_status:'verified'}});assert.equal(h.ctx.readyBuyerCount([h.candidate]),1);
  h.person.kept=false;assert.equal(h.ctx.readyBuyerCount([h.candidate]),0);
 });
+test('a recorded identity conflict blocks a verified-email handoff until resolved',async()=>{
+ const h=harness();h.candidate.publicResearch={conflicts:[{person_id:h.person.id,reason:'Employer attribution conflict'}]};
+ assert.equal(await h.ctx.addBuyerToFlow('example.com',0,{button:h.ctx.button}),false);assert.equal(h.events.length,0);
+});
