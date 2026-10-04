@@ -12,7 +12,7 @@ test('Buyer V2 records explicit provider outcomes instead of silent zero results
  assert.match(ui,/Research coverage/);
  assert.match(ui,/Public web \/ Firecrawl/);
  assert.match(ui,/Grounded web research/);
- assert.match(ui,/Identity directory fallback/);
+ assert.match(ui,/Identity directory discovery/);
 });
 test('Buyer V2 generated buying committee and diagnostics survive state normalization',()=>{
  assert.match(engine,/opportunityRoles:/);

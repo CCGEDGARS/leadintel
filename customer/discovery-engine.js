@@ -916,7 +916,7 @@
     if(/procure|purchas|supplier|sourcing|equipment|material|contract/i.test(context))add('Procurement Director','Procurement Manager','Strategic Sourcing Manager','Purchasing Manager');
     if(/engineer|technical|equipment|installation|plant|facility|metal|manufactur/i.test(context))add('Engineering Director','Engineering Manager','Technical Manager');
     if(/production|operations|plant|mine|mining|factory|manufactur/i.test(context))add('Operations Director','Plant Manager','Production Manager','Maintenance Manager');
-    add(...base);return roles.slice(0,12);
+    add(...base);return [...base,...roles.filter(role=>!base.includes(role))].slice(0,12);
   }
   function localBuyerRoleAliases(role='',market=''){
     const value=clean(role),aliases=[value],swedish=/sweden|svensk|gällivare|malmberget|kiruna|stockholm/i.test(clean(market));
@@ -950,12 +950,64 @@
     const url=normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url||person.url);
     return {id:clean(person.id)||`public-${slug(url||person.name)}`,name:clean(person.name),firstName:clean(person.firstName),identityStatus:person.identityStatus==='pending'?'pending':'confirmed',nameVerification:person.nameVerification==='pending'?'pending':'confirmed',title:clean(person.title),organization:clean(person.organization),publicName:clean(person.publicName),publicNameUrl:normalizeUrl(person.publicNameUrl),publicLinkedinUrl:url,linkedin_url:normalizeLinkedInUrl(person.linkedin_url),publicEmail:clean(person.publicEmail),publicEmailUrl:normalizeUrl(person.publicEmailUrl),publicPhone:clean(person.publicPhone),publicPhoneUrl:normalizeUrl(person.publicPhoneUrl),flowSelected:person.flowSelected===true,kept:person.kept===true,keptAt:clean(person.keptAt).slice(0,40),patternFindings:safePatternFindings(person.patternFindings,domain),hunterChecks:safeHunterChecks(person.hunterChecks,domain),seniority:clean(person.seniority),city:clean(person.city),country:clean(person.country),flowConfirmEmail:person.flowConfirmEmail===true,flowConfirmPhone:person.flowConfirmPhone===true,flowEmailCompletedFor:clean(person.flowEmailCompletedFor),flowPhoneCompletedFor:clean(person.flowPhoneCompletedFor),buyerRelevanceScore:clamp(Number(person.buyerRelevanceScore)||0,0,100,0),matchedBuyerRole:clean(person.matchedBuyerRole),hunterFound:clean(person.hunterFound).endsWith(`@${domain}`)?clean(person.hunterFound):""};
   }
+  async function resolvePendingBuyerIdentities(people=[],sourceRows=[],candidate={},profile={},search){
+    const pending=people.filter(person=>person.identityStatus==='pending').slice(0,10),decisions=[],issues=[];
+    // Bounded pairs of names; each name gets a profile and an open-web check.
+    for(let offset=0;offset<pending.length;offset+=2){
+      const outcomes=await Promise.all(pending.slice(offset,offset+2).map(async person=>{
+        const first=clean(person.firstName||person.name).split(/\s+/)[0],role=clean(person.title);
+        const titles=localBuyerRoleAliases(role,candidate.market).map(alias=>'"'+alias+'"').join(' OR ');
+        const query='"'+first+'" "'+clean(candidate.company)+'" ('+titles+')';
+        const searches=await Promise.allSettled([search('site:linkedin.com/in/ '+query),search(query)]);
+        const failures=searches.filter(row=>row.status==='rejected');
+        const aborted=failures.find(row=>row.reason?.name==='AbortError');if(aborted)throw aborted.reason;
+        failures.forEach(row=>issues.push('Identity '+first+': '+clean(row.reason?.message||'public search unavailable')));
+        const rows=[...sourceRows,...searches.flatMap(row=>row.status==='fulfilled'?row.value:[])];
+        // Official team/contact pages often have a generic page title. Extract only
+        // names with a nearby actual role alias; feed that evidence through the same gate.
+        const official=[];
+        for(const row of rows){
+          const url=normalizeUrl(row.url||row.metadata?.sourceURL);
+          if(!url||companyIdentityDomain(url)!==companyIdentityDomain(candidate.domain))continue;
+          const detail=matchPublicBuyerDetails([person],[row],candidate.domain)[0];
+          if(!detail.publicName||detail.publicName===first||!detail.publicNameUrl)continue;
+          const text=publicPageText(row),index=text.toLowerCase().indexOf(detail.publicName.toLowerCase());
+          if(index<0)continue;
+          const nearby=text.slice(Math.max(0,index-90),index+detail.publicName.length+130);
+          const actualRole=localBuyerRoleAliases(role,candidate.market).find(alias=>nearby.toLowerCase().includes(alias.toLowerCase()));
+          if(!actualRole||/\b(former|formerly|previous|past|tidigare|worked at)\b/i.test(nearby))continue;
+          official.push({url,title:detail.publicName+' | '+actualRole+' | '+candidate.company,description:nearby});
+        }
+        const trace=tracePublicBuyers([...rows,...official],candidate.company,{...profile,decisionMakers:role});
+        const matches=new Map(trace.people.filter(item=>clean(item.name).split(/\s+/)[0].toLowerCase()===first.toLowerCase()).map(item=>[clean(item.name).toLowerCase(),item]));
+        const profiles=new Set(trace.people.filter(item=>clean(item.name).split(/\s+/)[0].toLowerCase()===first.toLowerCase()).map(item=>normalizeLinkedInUrl(item.publicLinkedinUrl||item.linkedin_url)).filter(Boolean));
+        const match=matches.size===1&&profiles.size<=1&&!failures.length?[...matches.values()][0]:null;
+        return {person,match,reason:failures.length?'Identity search incomplete':matches.size>1||profiles.size>1?'Ambiguous full-name matches':!match?'No supported current employer and role match':''};
+      }));decisions.push(...outcomes);
+    }
+    const claims=new Map();for(const decision of decisions)if(decision.match){const key=clean(decision.match.name).toLowerCase();claims.set(key,(claims.get(key)||0)+1);}
+    const resolved=new Map(),diagnostics=[];
+    for(const decision of decisions){
+      const {person}=decision,match=decision.match&&claims.get(clean(decision.match.name).toLowerCase())===1?decision.match:null;
+      if(match)resolved.set(person.id,{...person,...match,id:person.id,name:match.name,publicName:match.name,identityStatus:'confirmed',nameVerification:'confirmed',kept:person.kept===true,keptAt:person.keptAt,flowSelected:person.flowSelected===true});
+      diagnostics.push({source:'identity_resolution',title:person.name+' | '+person.title,parsedName:match?.name||person.name,parsedTitle:match?.title||person.title,parsedCompany:candidate.company,url:match?.publicNameUrl||'',parsing:match?'complete':'pending',companyVerification:match?'complete':'pending',roleMatching:match?'complete':'pending',accepted:Boolean(match),identityStatus:match?'confirmed':'pending',rejectionReason:match?'':decision.reason||'Multiple directory identities share this public match'});
+    }
+    return {people:people.map(person=>resolved.get(person.id)||person),diagnostics,issues};
+  }
   function mergeBuyerPool(previous=[],incoming=[],profile={}){
     const merged=new Map();
     for(const person of [...previous,...incoming]){
-      const key=buyerIdentity(person);if(!key)continue;
+      let key=buyerIdentity(person);if(!key)continue;
+      const full=clean(person.publicName||person.name).toLowerCase(),url=normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url);
+      const same=[...merged.entries()].filter(([,old])=>{
+        if(person.id&&old.id===person.id)return true;
+        const oldUrl=normalizeLinkedInUrl(old.publicLinkedinUrl||old.linkedin_url);
+        return full.split(/\s+/).length>=2&&full===clean(old.publicName||old.name).toLowerCase()&&(!url||!oldUrl||url===oldUrl)&&(!person.organization||!old.organization||companyNameMatches(person.organization,old.organization))&&(url&&oldUrl&&url===oldUrl||!person.title||!old.title||Boolean(roleRelevance(person,[old.title])));
+      });
+      if(same.length===1)key=same[0][0];
       const old=merged.get(key)||{};
       const next={...old,...person,id:old.id||person.id,kept:old.kept===true||person.kept===true,keptAt:old.keptAt||person.keptAt};
+      if(person.identityStatus==='pending'&&old.identityStatus!=='pending'&&clean(old.publicName||old.name).split(/\s+/).length>=2&&old.publicNameUrl){next.name=old.publicName||old.name;next.identityStatus='confirmed';next.nameVerification=old.nameVerification||'confirmed';}
       for(const field of ['publicName','publicNameUrl','publicEmail','publicEmailUrl','publicPhone','publicPhoneUrl','publicLinkedinUrl','linkedin_url'])if(!next[field]&&old[field])next[field]=old[field];
       next.patternFindings=[...new Map([...(old.patternFindings||[]),...(person.patternFindings||[])].map(item=>[item.email,item])).values()];
       next.hunterChecks={...(old.hunterChecks||{}),...(person.hunterChecks||{})};
@@ -969,8 +1021,20 @@
     return [...[...kept,...relevant].slice(0,20),...pending.slice(0,10)];
   }
   function recommendedBuyers(pool=[],profile={}){
-    const ranked=selectDecisionMakers(pool.filter(person=>clean(person.publicName||person.name).split(/\s+/).length>=2),profile,20);
-    return [...ranked.filter(person=>person.kept),...ranked.filter(person=>!person.kept)].slice(0,6);
+    const ranked=selectDecisionMakers(pool.filter(person=>person.identityStatus!=='pending'&&clean(person.publicName||person.name).split(/\s+/).length>=2),profile,20);
+    const selected=ranked.filter(person=>person.kept).slice(0,6),remaining=ranked.filter(person=>!person.kept);
+    const family=person=>{
+      const role=clean(person.matchedBuyerRole||person.title).toLowerCase();
+      if(/procure|purchas|sourcing|inköp/.test(role))return 'procurement';
+      if(/project|capex|investment|projekt|investering/.test(role))return 'project';
+      if(/engineer|technical|teknisk/.test(role))return 'engineering';
+      if(/operation|plant|production|maintenance|drift|underhåll/.test(role))return 'operations';
+      return role;
+    };
+    const covered=new Set(selected.map(family));
+    for(const person of remaining)if(selected.length<6&&!covered.has(family(person))){selected.push(person);covered.add(family(person));}
+    for(const person of remaining)if(selected.length<6&&!selected.includes(person))selected.push(person);
+    return selected;
   }
   function normalizeBuyerDiscovery(value={},domain=""){
     const safeProvider=row=>({status:['pending','complete','partial','unavailable','failed','timeout','not_configured','not_needed','not_authenticated'].includes(clean(row?.status))?clean(row.status):'pending',results:clamp(Number(row?.results)||0,0,200,0),queries:clamp(Number(row?.queries)||0,0,50,0),accepted:clamp(Number(row?.accepted)||0,0,200,0),failures:(Array.isArray(row?.failures)?row.failures:[]).slice(0,50).map(failure=>({status:clean(failure.status).slice(0,80),code:clean(failure.code).slice(0,120),message:clean(failure.message).slice(0,1000),query:clean(failure.query).slice(0,500)}))});
@@ -1336,5 +1400,5 @@
     const route=rules.researchPriority==='signals'?'signal':lookalikePass?signals.length?'both':'lookalike':'signal';
     return {version:2,score,buyerFitPoints,signalPoints,opportunityScore:signals.length?score:null,lookalikeScore:referenceScore,referenceMatch:reference,route,eligible:!gaps.length,confidence:independent>=2&&official.length>=2?'High':'Medium',gaps,minimumScore:rules.minimumScore,researchPriority:rules.researchPriority,researchedAt:settings.researchedAt||candidate.researchedAt||'',matchedSignals:signals,evidenceSources:independent,commercial};
   }
-  return {buyerFitContext,buyerFitPrompt,parseBuyerFit,researchBuyerFit,verifiedBuyerFit,rankQualifiedCompanies,qualificationRules,verifiedReferenceMatch,assessAutomaticQualification,companyIdentityDomain,evidenceDate,commercialFit,currentSignals,domainMatchesCompany,matchedSignalsForEvidence,dedupeCompanyEvidence,evaluateExclusions,companyFitSummary,CRM_STAGES,DEFAULT_DISCOVERY_STATE,DISCOVERY_QUALITY_VERSION,discoveryLimits,buyerRolesForTarget,buildDiscoveryQueries,buildDiscoveryFollowUpQueries,extractCompanyMentions,extractPublicContacts,matchPublicBuyerDetails,matchPublicLinkedInProfiles,parseCompanyExtraction,describeCompanyExtractionOutcome,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildPotentialCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,discoverPublicBuyers,tracePublicBuyers,traceIdentityBuyers,opportunityBuyerRoles,localBuyerRoleAliases,buyerOpportunityTerms,buyerResearchPlan,buyerIdentity,mergeBuyerPool,recommendedBuyers,upsertPipelineItem,normalizeDiscoveryState,retainLastSuccessfulDiscoveryCandidates,recoverInterruptedDiscoveryState,discoveryOutcomeStatus,zeroResultGuidance,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,isLowQualityDiscoveryEvidence,hasActiveSignals,isActionableCandidate,isPotentialBuyerSearchAllowed};
+  return {buyerFitContext,buyerFitPrompt,parseBuyerFit,researchBuyerFit,verifiedBuyerFit,rankQualifiedCompanies,qualificationRules,verifiedReferenceMatch,assessAutomaticQualification,companyIdentityDomain,evidenceDate,commercialFit,currentSignals,domainMatchesCompany,matchedSignalsForEvidence,dedupeCompanyEvidence,evaluateExclusions,companyFitSummary,CRM_STAGES,DEFAULT_DISCOVERY_STATE,DISCOVERY_QUALITY_VERSION,discoveryLimits,buyerRolesForTarget,buildDiscoveryQueries,buildDiscoveryFollowUpQueries,extractCompanyMentions,extractPublicContacts,matchPublicBuyerDetails,matchPublicLinkedInProfiles,parseCompanyExtraction,describeCompanyExtractionOutcome,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildPotentialCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,selectDecisionMakers,discoverPublicBuyers,tracePublicBuyers,traceIdentityBuyers,opportunityBuyerRoles,localBuyerRoleAliases,buyerOpportunityTerms,buyerResearchPlan,buyerIdentity,resolvePendingBuyerIdentities,mergeBuyerPool,recommendedBuyers,upsertPipelineItem,normalizeDiscoveryState,retainLastSuccessfulDiscoveryCandidates,recoverInterruptedDiscoveryState,discoveryOutcomeStatus,zeroResultGuidance,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,isLowQualityDiscoveryEvidence,hasActiveSignals,isActionableCandidate,isPotentialBuyerSearchAllowed};
 });

@@ -104,3 +104,22 @@ test('automatic CRM save contract defaults on and minimum qualification remains 
   assert.equal(defaults.triggers.minimumScore,80);
   assert.equal(defaults.crm.saveQualified,true);
 });
+
+test('automatic Buyers combine directory discovery with four public buyers and resolve pending names without paid enrichment',async()=>{
+ const env=await fixture();
+ env.DB.raw.prepare("INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint) VALUES('w1','apollo',?,'test')").run(await encryptSecret('test-apollo',await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY)));
+ const oldFetch=globalThis.fetch,requests=[];globalThis.fetch=async(url,options={})=>{
+  requests.push(String(url));
+  if(String(url).includes('api_search'))return new Response(JSON.stringify({people:[{id:'anna-directory',first_name:'Anna',last_name_obfuscated:'A****',title:'Procurement Director',organization:{name:'Nordic Machines'}}]}));
+  const query=JSON.parse(options.body||'{}').query||'';
+  const rows=query.includes('"Anna"')?[{title:'Anna Andersson | Procurement Director | Nordic Machines',url:'https://linkedin.com/in/anna-andersson'}]:['Bertil Berg','Carl Carlson','Dora Dahl','Erik Ek'].map(name=>({title:`${name} | Project Director | Nordic Machines`,url:'https://linkedin.com/in/'+name.replace(/ /g,'-')}));
+  return new Response(JSON.stringify({data:rows}));
+ };
+ try{
+  const output=await executeWorkflowStage('buyers',{env,row:{workspace_id:'w1'},result:{candidates:[{company:'Nordic Machines',domain:'nordicmachines.se',market:'Sweden'}]},context:approvedContext(main),config:normalizeWorkflowConfig({buyers:{roles:['Project Director','Procurement Director'],confirmContacts:false}}),guard:async()=>{}});
+  const candidate=output.reviewBuyers[0];assert.equal(candidate.people.length,5);
+  const anna=candidate.people.find(p=>p.name==='Anna Andersson');assert.ok(anna);assert.equal(anna.id,'anna-directory');assert.equal(anna.identityStatus,'confirmed');
+  assert.equal(requests.filter(url=>url.includes('api_search')).length,1);assert.equal(requests.some(url=>url.includes('people/match')),false);
+  assert.equal(candidate.buyerDiscovery.pool.some(p=>p.identityStatus==='pending'),false);
+ }finally{globalThis.fetch=oldFetch;}
+});

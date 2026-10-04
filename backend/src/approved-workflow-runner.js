@@ -39,7 +39,12 @@ async function searchBuyerProfiles(env,workspaceId,candidate,roles,guard){
   await guard();
   try{const grounded=await searchWorkspaceWeb(env,workspaceId,plan.followUp);rows.push(...(grounded.results||[]));if(grounded.status!=='complete')issues.push('Grounded buyer discovery unavailable');}catch{issues.push('Grounded buyer discovery unavailable');}
   await guard();
-  return {people:discovery.discoverPublicBuyers(rows,candidate.company,{decisionMakers:roles.join('; ')}),sourceResults:rows.length,issues};
+  const searchIdentityRows=async query=>{
+    await guard();
+    const payload=await providerJson(url,{method:'POST',headers,body:JSON.stringify({query,limit:8,scrapeOptions:{formats:['markdown']}})});
+    await guard();return Array.isArray(payload.data)?payload.data:payload.data?.web||payload.web||[];
+  };
+  return {people:discovery.discoverPublicBuyers(rows,candidate.company,{decisionMakers:plan.roles.join('; '),companyDomain:candidate.domain}),rows,searchIdentityRows,roles:plan.roles,sourceResults:rows.length,issues};
 }
 async function buyer(env,workspaceId,candidate,config,guard){
   const company=await findCrmCompanyByDomain(env.DB,workspaceId,candidate.domain);
@@ -48,25 +53,33 @@ async function buyer(env,workspaceId,candidate,config,guard){
   const saved=parse(state?.payload_json).discovery||{};
   const prior=[...(saved.selectedProspects||[]),...(saved.candidates||[]),...(saved.pipeline||[])].find(item=>discovery.canonicalDomain(item.domain)===candidate.domain);
   const research=await searchBuyerProfiles(env,workspaceId,candidate,config.buyers.roles,guard);
-  const profile={decisionMakers:config.buyers.roles.join('; ')};
-  const pool=discovery.mergeBuyerPool([...(prior?.buyerDiscovery?.pool||[]),...(prior?.people||[])],research.people,profile);
+  const profile={decisionMakers:research.roles.join('; '),companyDomain:candidate.domain};
+  let pool=discovery.mergeBuyerPool([...(prior?.buyerDiscovery?.pool||[]),...(prior?.people||[])],research.people,profile);
   candidate.buyerDiscovery={target:20,found:pool.length,pool,sourceResults:research.sourceResults,issues:research.issues,checkedAt:new Date().toISOString()};
   candidate.people=discovery.recommendedBuyers(pool,profile);
   // Identity discovery is allowed before paid/contact confirmation. Use Apollo people search
-  // only as an identity fallback; no email/phone reveal or waterfall flags are requested here.
-  if(candidate.people.length<3){
+  // alongside public research; no email/phone reveal or waterfall flags are requested here.
+  {
     try{
       await guard();const identityCredential=await resolveWorkspaceServiceCredential(env,workspaceId,'apollo');
       if(identityCredential.configured){
         const identityHeaders={'Content-Type':'application/json','X-Api-Key':identityCredential.apiKey,Accept:'application/json'};
         const identityPayload=await providerJson(APOLLO_PEOPLE_SEARCH_URL,{method:'POST',headers:identityHeaders,body:JSON.stringify(apolloSearchBody({domain:candidate.domain,roles:discovery.opportunityBuyerRoles?.(candidate,profile)||config.buyers.roles}))});await guard();
-        const identityPeople=discovery.selectDecisionMakers(discovery.normalizeApolloPeople(identityPayload),profile,20);
+        const identityTrace=discovery.traceIdentityBuyers(identityPayload,candidate,profile);
+        const identityPeople=identityTrace.people;
         const expanded=discovery.mergeBuyerPool(pool,identityPeople,profile);
-        candidate.buyerDiscovery={...candidate.buyerDiscovery,found:expanded.length,pool:expanded,identityFallback:'apollo_search'};
+        pool=expanded;candidate.buyerDiscovery={...candidate.buyerDiscovery,found:expanded.length,pool:expanded,identityFallback:'apollo_search',resultDiagnostics:identityTrace.diagnostics};
         candidate.people=discovery.recommendedBuyers(expanded,profile);
-      }
+      }else candidate.buyerDiscovery.issues.push('Identity-provider discovery not configured');
     }catch(error){candidate.buyerDiscovery.issues=[...(candidate.buyerDiscovery.issues||[]),'Identity-provider discovery unavailable'];}
   }
+  if(pool.some(person=>person.identityStatus==='pending')){
+    const resolved=await discovery.resolvePendingBuyerIdentities(pool,research.rows,candidate,profile,research.searchIdentityRows);
+    pool=discovery.mergeBuyerPool([],resolved.people,profile);
+    candidate.buyerDiscovery={...candidate.buyerDiscovery,pool,found:pool.length,resultDiagnostics:[...(candidate.buyerDiscovery.resultDiagnostics||[]),...resolved.diagnostics],issues:[...candidate.buyerDiscovery.issues,...resolved.issues]};
+    candidate.people=discovery.recommendedBuyers(pool,profile);
+  }
+  candidate.buyerDiscovery.researchIncomplete=candidate.buyerDiscovery.issues.length>0||pool.some(person=>person.identityStatus==='pending');
   const verified=company?(await env.DB.prepare("SELECT * FROM crm_contacts WHERE workspace_id=? AND company_id=? AND LOWER(email_status)='verified' AND archived_at IS NULL").bind(workspaceId,company.id).all()).results||[]:[];
   // Explicitly kept buyers rank first, but saving alone never bypasses role/email gates.
   const eligible=discovery.selectDecisionMakers(verified,profile,20).filter(p=>String(p.name||'').trim().split(/\s+/).length>=2&&provenBusinessEmail({email:p.normalized_email,email_status:p.email_status},candidate.domain));
