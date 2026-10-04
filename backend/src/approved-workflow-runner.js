@@ -1,9 +1,11 @@
+import {confirmPublicWorkEmail} from './public-email-confirmation.js';
+import '../../customer/contact-confirmation-policy.js';
 // Reuse the same evidence, exclusion and role qualification engine as the customer journey.
 import '../../customer/discovery-engine.js';
 import '../../customer/lookalike-discovery.js';
 import {WORKFLOW_STAGES,approvedContext,normalizeWorkflowConfig,freshEvidence,renderWorkflowMessage} from './approved-workflow-engine.js';
 import {parse,workflowMain,workflowAuthorized} from './approved-workflow-store.js';
-import {resolveWorkspaceServiceCredential} from './service-integrations.js';
+import {resolveWorkspaceServiceCredential,apolloCapabilities} from './service-integrations.js';
 import {provenBusinessEmail,APOLLO_PEOPLE_SEARCH_URL,apolloSearchBody} from './enrichment.js';
 import {upsertCrmCompany,upsertCrmContacts,upsertCrmIntelligence,appendCrmActivity,findCrmCompanyByDomain} from './crm.js';
 import {searchWorkspaceWeb,generateWorkspaceResearch} from './ai-routes.js';
@@ -86,7 +88,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId){
   {
     try{
       await guard();const identityCredential=await resolveWorkspaceServiceCredential(env,workspaceId,'apollo');
-      if(identityCredential.configured){
+      if(identityCredential.configured&&(await apolloCapabilities(env,workspaceId)).discovery){
         const identityHeaders={'Content-Type':'application/json','X-Api-Key':identityCredential.apiKey,Accept:'application/json'};
         const identityPayload=await providerJson(APOLLO_PEOPLE_SEARCH_URL,{method:'POST',headers:identityHeaders,body:JSON.stringify(apolloSearchBody({domain:candidate.domain,roles:discovery.opportunityBuyerRoles?.(candidate,profile)||config.buyers.roles}))});await guard();
         const identityTrace=discovery.traceIdentityBuyers(identityPayload,candidate,profile);
@@ -109,15 +111,34 @@ async function buyer(env,workspaceId,candidate,config,guard,userId){
   pool=discovery.mergeBuyerPool(pool,candidate.people,profile);candidate.buyerDiscovery.pool=pool;
   if(candidate.people.some(person=>['partial','unavailable'].includes(person.emailResearch?.status)))candidate.buyerDiscovery.issues.push('Public email evidence searches incomplete');
   candidate.buyerDiscovery.researchIncomplete=candidate.buyerDiscovery.issues.length>0||pool.some(person=>person.identityStatus==='pending');
-  const verified=company?(await env.DB.prepare("SELECT * FROM crm_contacts WHERE workspace_id=? AND company_id=? AND LOWER(email_status)='verified' AND archived_at IS NULL").bind(workspaceId,company.id).all()).results||[]:[];
+  const verified=company?(await env.DB.prepare("SELECT * FROM crm_contacts WHERE workspace_id=? AND company_id=? AND LOWER(email_status) IN ('verified','public_confirmed') AND archived_at IS NULL").bind(workspaceId,company.id).all()).results||[]:[];
   // Explicitly kept buyers rank first, but saving alone never bypasses role/email gates.
-  const eligible=discovery.selectDecisionMakers(verified,profile,20).filter(p=>String(p.name||'').trim().split(/\s+/).length>=2&&provenBusinessEmail({email:p.normalized_email,email_status:p.email_status},candidate.domain));
+  const eligible=discovery.selectDecisionMakers(verified,profile,20).filter(p=>String(p.name||'').trim().split(/\s+/).length>=2&&globalThis.LeadIntelContactPolicy.accepted(p,candidate.domain,config.buyers.confirmationLevel));
   const pinned=new Set(candidate.people.filter(p=>p.kept).map(discovery.buyerIdentity));
   eligible.sort((a,b)=>Number(pinned.has(discovery.buyerIdentity(b)))-Number(pinned.has(discovery.buyerIdentity(a))));
-  if(eligible[0])return {...eligible[0],email:eligible[0].normalized_email};
+  const crmContext={workspaceId,userId,role:'owner'};
+  const complete=async contact=>{
+    if(config.buyers.confirmPhone===true&&!(contact.phone_number&&String(contact.phone_status).toLowerCase()==='verified')){
+      const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'apollo');
+      const runtime=Object.create(env);runtime.APOLLO_API_KEY=credential.apiKey;
+      const personId=contact.external_person_id;
+      if(personId&&!/^(public-|person-)/.test(String(personId))){await guard();const response=await enrichCrmContact(new Request('https://leadintel.invalid/internal-phone',{method:'POST',body:JSON.stringify({person_id:personId,name:contact.name,title:contact.title,phone_lookup:true})}),runtime,{}, {context:crmContext},contact.company_id);await guard();const payload=await response.json();if(response.ok)contact={...contact,...payload.contact};else candidate.buyerDiscovery.issues.push(payload.error||'Optional phone enrichment unavailable');}
+    }
+    return {...contact,email:contact.normalized_email||contact.work_email};
+  };
+  if(eligible[0])return complete(eligible[0]);
+  if(config.buyers.confirmationLevel==='public_confirmed'){
+    const target=company||(await upsertCrmCompany(env.DB,crmContext,{...candidate,source:'approved_workflow_qualified'})).company;
+    for(const person of candidate.people.slice(0,6)){
+      await guard();
+      const findings=[...(person.patternFindings||[]),...(person.publicEmail?[{email:person.publicEmail,url:person.publicEmailUrl}]:[])];
+      const source=findings.find(item=>globalThis.LeadIntelContactPolicy.publicSource(item.email,person.publicName||person.name,item.url,candidate.domain));if(!source)continue;
+      try{const contact=await confirmPublicWorkEmail(env,crmContext,target.id,{name:person.publicName||person.name,title:person.title,person_id:person.id,email:source.email,source_url:source.url});await guard();if(globalThis.LeadIntelContactPolicy.accepted(contact,candidate.domain,config.buyers.confirmationLevel))return complete(contact);}catch(error){candidate.buyerDiscovery.issues.push(error.message);}
+    }
+  }
   // Owner-approved automatic confirmation uses the same cache and credit
-  // policy as manual Apollo enrichment. Never reveal phones or personal email.
-  if(config.buyers.confirmContacts===true){
+  // policy as manual Apollo enrichment. Phone requires its own approval; personal email remains excluded.
+  if(config.buyers.confirmContacts===true&&(await apolloCapabilities(env,workspaceId)).email){
     const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'apollo');
     if(credential.configured){
       const crmContext={workspaceId,userId,role:'owner'};
@@ -137,7 +158,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId){
         const response=await enrichCrmContact(request,runtime,{}, {context:crmContext},target.id);await guard();
         const value=await response.json();
         const email=provenBusinessEmail({email:value.contact?.normalized_email,email_status:value.contact?.email_status},candidate.domain);
-        if(response.ok&&email){candidate.buyerDiscovery.contactConfirmationRequired=false;return {...value.contact,email};}
+        if(response.ok&&email){candidate.buyerDiscovery.contactConfirmationRequired=false;return complete(value.contact);}
         candidate.buyerDiscovery.issues.push(value.error||'Apollo did not return an attributable verified company email');
         if(response.status===429)break;
       }

@@ -2,13 +2,13 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');
 function runtime(automatic=false){
  const person={id:'public-anna',name:'Anna Andersson',title:'COO',publicLinkedinUrl:'https://linkedin.com/in/anna'},candidate={domain:'example.com',people:[person]};
- const context={window:{LeadIntelOutreachAutomationUI:{getPolicy:()=>({preferredMode:automatic?'automatic':'manual'})}},document:{querySelector:()=>null},LeadIntelDiscovery:D,selectedBuyerKey:()=>person.id,personKey:()=>person.id,enrichmentResults:new Map(),enrichmentPending:new Set(),esc:String,crmAuthenticated:()=>true,canonicalDomain:D.canonicalDomain};
+ const context={window:{LeadIntelOutreachAutomationUI:{getPolicy:()=>({preferredMode:automatic?'automatic':'manual'})}},document:{querySelector:()=>null},LeadIntelDiscovery:D,selectedBuyerKey:()=>person.id,personKey:()=>person.id,enrichmentResults:new Map(),enrichmentPending:new Set(),esc:String,crmAuthenticated:()=>true,canonicalDomain:D.canonicalDomain,bridge:()=>({workspace:{id:'w1'}})};
  vm.createContext(context);const start=source.indexOf('function buyerAutomaticMode('),end=source.indexOf('async function findPublicProspectContacts(',start);vm.runInContext(source.slice(start,end),context);
  return {context,person,candidate};
 }
 test('manual buyer card presents four actions and no per-card next action',()=>{
  const {context,person,candidate}=runtime(),html=context.prospectContactControls(candidate,person);
- assert.equal((html.match(/<button /g)||[]).length,4);for(const label of ['Confirm email','Confirm phone','Confirm LinkedIn','Save &amp; proceed'])assert.ok(html.includes(label));
+ assert.equal((html.match(/<button /g)||[]).length,5);for(const label of ['Confirm email','Confirm phone','Confirm LinkedIn','Save &amp; proceed'])assert.ok(html.includes(label));
  assert.ok(!html.includes('data-buyer-next'));assert.ok(!html.includes('Clarify data'));
 });
 test('automatic email confirmation is selected and locked without claiming mailbox verification',()=>{

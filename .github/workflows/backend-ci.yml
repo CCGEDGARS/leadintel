@@ -9,6 +9,7 @@ on:
     paths:
       - 'backend/**'
       - 'customer/discovery-engine.js'
+      - 'customer/contact-confirmation-policy.js'
       - 'customer/lookalike-discovery.js'
       - 'customer/targeting-policy.js'
       - 'customer/reference-*.js'
@@ -24,6 +25,7 @@ on:
     paths:
       - 'backend/**'
       - 'customer/discovery-engine.js'
+      - 'customer/contact-confirmation-policy.js'
       - 'customer/lookalike-discovery.js'
       - 'customer/targeting-policy.js'
       - 'customer/reference-*.js'

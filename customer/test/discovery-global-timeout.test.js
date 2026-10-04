@@ -394,8 +394,8 @@ test('unapproved automatic confirmation holds paid enrichment and never invokes 
   await new Promise(resolve=>setTimeout(resolve,30));
   assert.deepEqual(calls,['approval','hunter-status','approval']);
   assert.equal(Object.keys(candidate.people[0].hunterChecks||{}).length,0);
-  assert.equal(candidate.people[0].flowEmailCompletedFor,'apollo-12345:buyer-contacts-v11-optional-hunter');
-  assert.equal(candidate.people[0].flowPhoneCompletedFor,'apollo-12345:buyer-contacts-v11-optional-hunter');
+  assert.equal(candidate.people[0].flowEmailCompletedFor,'');
+  assert.equal(candidate.people[0].flowPhoneCompletedFor,'');
 });
 
 test('a first-name-only buyer triggers one public source check and renders a sourced full name without Apollo enrichment',async()=>{

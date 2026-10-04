@@ -255,7 +255,7 @@ async function openBuyerScripts(choice){
  let contacts=[];
  if(candidate.crmId){const detail=await crmBridge().getCrmCompany(candidate.crmId);contacts=detail?.ok?detail.contacts:[];}
  if(!candidate.crmId){const result=await crmBridge().listCrmCompanies({q:choice.domain,limit:20});const company=(result.companies||[]).find(c=>c.normalized_domain===choice.domain);if(company){const record=await crmBridge().getCrmCompany(company.id);contacts=record.ok?record.contacts:[];}}
- const contact=(contacts||[]).find(c=>c.id===choice.contactId&&String(c.email_status||'').toLowerCase()==='verified'&&String(c.work_email||c.normalized_email||'').toLowerCase().endsWith('@'+choice.domain));if(!contact)return false;
+ const contact=(contacts||[]).find(c=>c.id===choice.contactId&&(String(c.email_status||'').toLowerCase()==='verified'||window.LeadIntelContactPolicy?.accepted(c,choice.domain,window.LeadIntelBuyerConfirmationPolicy?.level?.()||window.LeadIntelServiceSettings?.confirmationLevel?.()))&&String(c.work_email||c.normalized_email||'').toLowerCase().endsWith('@'+choice.domain));if(!contact)return false;
  cancelPendingScriptGeneration();outreach.selectedDomain=choice.domain;
  const old=currentItem();if(old&&old.selectedPersonId!==choice.personId)upsertItem(LeadIntelOutreach.invalidateOutreachApproval({...old,selectedPersonId:choice.personId,dossier:null,drafts:{},researchStatus:'idle'}));
  handoffContact={domain:choice.domain,personId:choice.personId,contact};saveOutreach();showOutreachStep();return true;

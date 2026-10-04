@@ -19,6 +19,7 @@ class D1Db{
     this.raw.exec(`CREATE TABLE users(id TEXT PRIMARY KEY,email TEXT,display_name TEXT,role TEXT);CREATE TABLE sessions(token_hash TEXT PRIMARY KEY,user_id TEXT,expires_at TEXT);CREATE TABLE workspace_members(workspace_id TEXT,user_id TEXT,role TEXT,PRIMARY KEY(workspace_id,user_id));CREATE TABLE enrichment_policies(workspace_id TEXT PRIMARY KEY,minimum_score REAL NOT NULL DEFAULT 7,daily_credit_limit INTEGER NOT NULL DEFAULT 30,monthly_credit_limit INTEGER NOT NULL DEFAULT 300,retry_after_days INTEGER NOT NULL DEFAULT 30,allow_personal_email INTEGER NOT NULL DEFAULT 0,phone_lookup_mode TEXT NOT NULL DEFAULT 'on_request');`);
     this.raw.exec(fs.readFileSync(path.join(__dirname,'..','migrations','0011_master_crm.sql'),'utf8'));this.raw.exec(fs.readFileSync(new URL('../migrations/0022_crm_public_contact_sources.sql',import.meta.url),'utf8'));
     this.raw.exec(fs.readFileSync(migrationPath,'utf8'));
+    this.raw.exec("CREATE TABLE workspace_service_integrations(workspace_id TEXT,provider TEXT,encrypted_api_key TEXT,metadata_json TEXT,key_hint TEXT,verified_at TEXT,last_used_at TEXT,status TEXT,PRIMARY KEY(workspace_id,provider)); INSERT INTO workspace_service_integrations VALUES('w1','apollo','fixture','{\"discovery_enabled\":true,\"email_enrichment_enabled\":true,\"phone_enrichment_enabled\":true}',NULL,NULL,NULL,'connected');");
   }
   prepare(sql){return new D1Statement(this.raw,sql);}
   async batch(statements){const out=[];for(const s of statements)out.push(await s.run());return out;}
