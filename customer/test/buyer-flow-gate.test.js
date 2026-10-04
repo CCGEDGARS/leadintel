@@ -26,6 +26,6 @@ test('unsaved and failed-sync selections cannot open the next step',async()=>{
 });
 test('rendered contact controls have one next action and no enrichment checkboxes',()=>{
  const block=source.slice(source.indexOf('function prospectContactControls('),source.indexOf('async function findPublicProspectContacts('));
- assert.match(block,/buyerNextAction/);assert.doesNotMatch(block,/contactFlowControls/);assert.match(block,/Phone verification is optional/);
+ assert.match(block,/buyer-four-actions/);assert.doesNotMatch(block,/buyerNextAction/);assert.doesNotMatch(block,/contactFlowControls/);assert.match(block,/Phone and LinkedIn confirmation are optional/);
  const outreach=fs.readFileSync(require.resolve('../outreach-ui.js'),'utf8');assert.match(outreach,/find\(p=>p.id===choice\?\.personId\)/);assert.match(outreach,/if\(crmAuthenticated\(\)&&\(!handoffContact/);
 });

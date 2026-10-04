@@ -373,7 +373,7 @@ test('selected prospect buyer names persist and render as separate review cards'
   assert.equal(context.__elements.get('discovery-status').textContent,'1 selected company');
 });
 
-test('opted-in confirmation runs Hunter finder and verifier plus Apollo email and phone once',async()=>{
+test('automatic confirmation runs available verification and holds paid email and phone enrichment',async()=>{
   const calls=[];
   const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,
     bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'},enrichCrmContact:async (_company,person,options)=>{calls.push(options.phoneLookup?'apollo-phone':'apollo-email');return {ok:true,contact:{name:person.name,...(options.phoneLookup?{phone_number:'+371 2000 0000'}:{work_email:'marta.berzina@example.lv'})}};}},
@@ -391,7 +391,7 @@ test('opted-in confirmation runs Hunter finder and verifier plus Apollo email an
   context.__toggleBuyerContactFlow(emailBox);
   context.__toggleBuyerContactFlow(phoneBox);
   await new Promise(resolve=>setTimeout(resolve,30));
-  assert.deepEqual(calls,['hunter-status','hunter-finder','hunter-verifier','apollo-email','apollo-phone']);
+  assert.deepEqual(calls,['hunter-status','hunter-finder','hunter-verifier']);
   assert.equal(candidate.people[0].hunterChecks['marta.berzina@example.lv'].deliverability,'deliverable');
   assert.equal(candidate.people[0].flowEmailCompletedFor,'apollo-12345:buyer-contacts-v10-pattern-search');
   assert.equal(candidate.people[0].flowPhoneCompletedFor,'apollo-12345:buyer-contacts-v10-pattern-search');
@@ -417,7 +417,7 @@ test('a first-name-only buyer triggers one public source check and renders a sou
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Mikael Example');
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicLinkedinUrl,'https://www.linkedin.com/in/mikael-example');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/mikael\.example@boliden\.com · Public listing/);
-  assert.match(context.__elements.get('customer-pipeline').innerHTML,/View profile ↗<\/a> · Public match/);
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/<strong>LinkedIn<\/strong><span>Public match/);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/mikael\.example@boliden\.com/);
 });
 
@@ -460,7 +460,7 @@ test('a saved first-name buyer can gain a sourced full name from a unique public
   assert.equal(person.publicName,'Jacob Jonstoij');
   assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v14-kept-pool');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Jacob Jonstoij/);
-  assert.match(context.__elements.get('customer-pipeline').innerHTML,/View profile ↗<\/a> · Public match/);
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/<strong>LinkedIn<\/strong><span>Public match/);
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,5));
   assert.equal(requests,7);
@@ -1063,7 +1063,7 @@ test('a known target without a website keeps its origin after domain resolution'
 test('a late company render keeps the Buyers guide out of the Companies stage',()=>{
  const ctx=loadDiscoveryRunner({renderNodes:true});ctx.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:4}));ctx.__renderPipeline();assert.equal(ctx.__elements.get('discovery-buyers-guide').hidden,true);ctx.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5}));ctx.__renderPipeline();assert.equal(ctx.__elements.get('discovery-buyers-guide').hidden,false);
 });
-test('Keep candidate saves in CRM, survives reload, and Unsave preserves CRM history',async()=>{
+test('Save buyer saves in CRM, survives reload, and Unsave preserves CRM history',async()=>{
  let saved=0;
  const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'},saveNow:async()=>({saved:true}),saveCrmCompany:async()=>({ok:true,company:{id:'c1'}}),saveCrmContacts:async()=>{saved++;return {ok:true};}}});
  context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};
@@ -1072,16 +1072,16 @@ test('Keep candidate saves in CRM, survives reload, and Unsave preserves CRM his
  const restored=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
  assert.equal(restored.selectedProspects[0].people[0].kept,true);assert.equal(restored.selectedProspects[0].buyerDiscovery.pool[0].kept,true);
  context.__renderPipeline();const html=context.__elements.get('customer-pipeline').innerHTML;
- assert.match(html,/Saved ✓ · Unsave/);assert.ok(html.indexOf('data-find-prospect-buyers')<html.indexOf('selected-prospect-people'));
+ assert.match(html,/Saved ✓/);assert.ok(html.indexOf('data-find-prospect-buyers')<html.indexOf('selected-prospect-people'));
  assert.equal(await context.__keepBuyer('example.com',0),true);assert.equal(saved,1);assert.equal(context.__discoveryState().selectedProspects[0].people[0].kept,false);
 });
-test('Keep candidate fails closed when CRM save fails',async()=>{
+test('Save buyer fails closed when CRM save fails',async()=>{
  const context=loadDiscoveryRunner({renderNodes:true,bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'},saveCrmCompany:async()=>({ok:true,company:{id:'c1'}}),saveCrmContacts:async()=>({ok:false,error:'Save failed'})}});
  context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};
  context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',people:[{id:'public-anna',name:'Anna Buyer',title:'Procurement Director'}]}]});
  assert.equal(await context.__keepBuyer('example.com',0),false);assert.equal(context.__discoveryState().selectedProspects[0].people[0].kept,false);
 });
-test('Keep candidate does not claim Saved when server preference sync fails',async()=>{
+test('Save buyer does not claim Saved when server preference sync fails',async()=>{
  const context=loadDiscoveryRunner({renderNodes:true,bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'},saveNow:async()=>({saved:false}),saveCrmCompany:async()=>({ok:true,company:{id:'c1'}}),saveCrmContacts:async()=>({ok:true})}});
  context.LeadIntelCrm=require('../crm-engine.js');context.dispatchEvent=()=>{};
  context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',people:[{id:'public-anna',name:'Anna Buyer',title:'Procurement Director'}]}]});

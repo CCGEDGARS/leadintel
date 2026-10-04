@@ -4,7 +4,7 @@ import '../../customer/lookalike-discovery.js';
 import {WORKFLOW_STAGES,approvedContext,normalizeWorkflowConfig,freshEvidence,renderWorkflowMessage} from './approved-workflow-engine.js';
 import {parse,workflowMain,workflowAuthorized} from './approved-workflow-store.js';
 import {resolveWorkspaceServiceCredential} from './service-integrations.js';
-import {provenBusinessEmail,APOLLO_PEOPLE_SEARCH_URL,APOLLO_PEOPLE_MATCH_URL,apolloSearchBody} from './enrichment.js';
+import {provenBusinessEmail,APOLLO_PEOPLE_SEARCH_URL,apolloSearchBody} from './enrichment.js';
 import {upsertCrmCompany,upsertCrmContacts,upsertCrmIntelligence,appendCrmActivity,findCrmCompanyByDomain} from './crm.js';
 import {searchWorkspaceWeb,generateWorkspaceResearch} from './ai-routes.js';
 import {enqueueApprovedSequence} from './outreach-automation-routes.js';
@@ -86,19 +86,9 @@ async function buyer(env,workspaceId,candidate,config,guard){
   const pinned=new Set(candidate.people.filter(p=>p.kept).map(discovery.buyerIdentity));
   eligible.sort((a,b)=>Number(pinned.has(discovery.buyerIdentity(b)))-Number(pinned.has(discovery.buyerIdentity(a))));
   if(eligible[0])return {...eligible[0],email:eligible[0].normalized_email};
-  if(!config.buyers.enrich||!candidate.people.length)return null;
-  await guard();const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'apollo');if(!credential.configured)throw new Error('Apollo is not connected');
-  const headers={'Content-Type':'application/json','X-Api-Key':credential.apiKey,Accept:'application/json'};
-  const payload=await providerJson(APOLLO_PEOPLE_SEARCH_URL,{method:'POST',headers,body:JSON.stringify(apolloSearchBody({domain:candidate.domain,roles:config.buyers.roles}))});await guard();
-  for(const selected of candidate.people){
-    const profileUrl=discovery.normalizeLinkedInUrl(selected.publicLinkedinUrl||selected.linkedin_url),name=String(selected.publicName||selected.name||'').trim().toLowerCase();
-    const matches=(payload.people||[]).filter(person=>profileUrl&&discovery.normalizeLinkedInUrl(person.linkedin_url)===profileUrl||String(person.name||'').trim().toLowerCase()===name);
-    if(matches.length!==1||!matches[0].id)continue;
-    const match=matches[0],url=new URL(APOLLO_PEOPLE_MATCH_URL);url.searchParams.set('id',match.id);url.searchParams.set('reveal_personal_emails','false');url.searchParams.set('reveal_phone_number','false');url.searchParams.set('run_waterfall_email','false');url.searchParams.set('run_waterfall_phone','false');
-    const enriched=await providerJson(url,{method:'POST',headers});await guard();const person=enriched.person||{};
-    if(String(person.id||'')!==String(match.id)||!discovery.selectDecisionMakers([person],profile,1).length)continue;
-    const email=provenBusinessEmail(person,candidate.domain);if(email)return {...person,email,email_status:'verified',source:'apollo',external_person_id:person.id};
-  }
+  // Automatic research cannot grant per-contact paid enrichment approval.
+  candidate.buyerDiscovery.contactConfirmationRequired=true;
+
   return null;
 }
 export async function executeWorkflowStage(stage,{env,row,run,result,context,config,guard,generateResearch=generateWorkspaceResearch}){

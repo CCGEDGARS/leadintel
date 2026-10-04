@@ -140,6 +140,7 @@ function showStep(step){persistMainStep(step);document.querySelectorAll(".step-v
 function showOutreachStep(){ensureSelection();renderAll();showStep(6);}
 function continueFromCompanies(){
   const stage=Number(q("continue-to-outreach")?.dataset.journeyStage)||5;
+  if(stage===6&&window.LeadIntelDiscoveryUI?.continueToMessages){window.LeadIntelDiscoveryUI.continueToMessages();return;}
   if(window.LeadIntelJourney?.openWorkflowStage){window.LeadIntelJourney.openWorkflowStage(stage);return;}
   if(stage===5){window.LeadIntelDiscoveryUI?.open?.({focus:"buyers"});return;}
   showOutreachStep();
