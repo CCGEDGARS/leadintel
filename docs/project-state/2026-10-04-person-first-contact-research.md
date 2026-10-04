@@ -29,3 +29,5 @@ The first live refresh recovered Joakim’s official email and direct phone, but
 A subsequent refresh showed that public profile titles can include the role before the employer. Scope matching now reads every employer-position title segment on the exact profile URL (including provider metadata titles), and identity queries are restricted to direct public LinkedIn profiles. This prevents role-bearing titles from hiding a subsidiary conflict.
 
 The downstream check found ranked buyer controls using object-reference lookup against the original people array. Ranking copies records, so every ranked control could receive index -1. Controls now resolve the original index by stable buyer identity; regression coverage verifies the actual rendered action attributes.
+
+Public scope checks can be incomplete. The existing LinkedIn review dialog now lets an operator record an opportunity-review hold with a source-linked reason. The hold persists in the workspace and CRM research snapshot, removes the buyer from recommendations and automation, and does not reveal paid contact data. Regression coverage verifies persistence and qualification rejection.

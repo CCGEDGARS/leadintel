@@ -26,7 +26,7 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
     .replace(runMargin?.[0], `const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=${testRunMargin};`)
     .replace(extractionTimeout?.[0], `const COMPANY_EXTRACTION_TIMEOUT_MS=${testExtractionTimeout};`)
     .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\nglobalThis.__setDiscovery = value => { discovery = LeadIntelDiscovery.normalizeDiscoveryState({...value,qualityVersion:value.qualityVersion??LeadIntelDiscovery.DISCOVERY_QUALITY_VERSION}); };\nglobalThis.__renderStatus = renderStatus;\nglobalThis.__setDiscoveryProgress=value=>{discoveryProgress=value;};\nglobalThis.__renderCandidates = renderCandidates;\n')
-    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__companyOrigin = companyOrigin;\nglobalThis.__mergeWorkflowCompanies = mergeWorkflowCompanies;\nglobalThis.__existingCompanyResearchTargets = existingCompanyResearchTargets;\nglobalThis.__selectQualifiedForBuyers = selectQualifiedForBuyers;\nglobalThis.__selectTargetForBuyers = selectTargetForBuyers;\nglobalThis.__confirmBuyerContact = confirmBuyerContact;\nglobalThis.__keepBuyer = keepBuyer;\nglobalThis.__toggleBuyerContactFlow = toggleBuyerContactFlow;\nglobalThis.__enrichSelectedProspect = enrichSelectedProspect;\nglobalThis.__enrichContact = enrichContact;\nglobalThis.__scheduleSavedBuyerPublicChecks = scheduleSavedBuyerPublicChecks;\nglobalThis.__findPublicProspectContacts = findPublicProspectContacts;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__savePotentialProspect = savePotentialProspect;\nglobalThis.__addSelectedProspectToPipeline = addSelectedProspectToPipeline;\nglobalThis.__setCrmCompanies = companies => { crmCompanies = companies; };\nglobalThis.__renderPipeline = renderPipeline;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;\nglobalThis.__potentialBuyerResultsHtml = potentialBuyerResultsHtml;');
+    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__companyOrigin = companyOrigin;\nglobalThis.__mergeWorkflowCompanies = mergeWorkflowCompanies;\nglobalThis.__existingCompanyResearchTargets = existingCompanyResearchTargets;\nglobalThis.__selectQualifiedForBuyers = selectQualifiedForBuyers;\nglobalThis.__selectTargetForBuyers = selectTargetForBuyers;\nglobalThis.__confirmBuyerContact = confirmBuyerContact;\nglobalThis.__keepBuyer = keepBuyer;\nglobalThis.__holdBuyerForOpportunityReview = holdBuyerForOpportunityReview;\nglobalThis.__toggleBuyerContactFlow = toggleBuyerContactFlow;\nglobalThis.__enrichSelectedProspect = enrichSelectedProspect;\nglobalThis.__enrichContact = enrichContact;\nglobalThis.__scheduleSavedBuyerPublicChecks = scheduleSavedBuyerPublicChecks;\nglobalThis.__findPublicProspectContacts = findPublicProspectContacts;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__savePotentialProspect = savePotentialProspect;\nglobalThis.__addSelectedProspectToPipeline = addSelectedProspectToPipeline;\nglobalThis.__setCrmCompanies = companies => { crmCompanies = companies; };\nglobalThis.__renderPipeline = renderPipeline;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;\nglobalThis.__potentialBuyerResultsHtml = potentialBuyerResultsHtml;');
   const mainState = {
     website: 'https://acme.example/',
     profile: {
@@ -1144,4 +1144,19 @@ test('ranked buyer controls retain the original candidate index after ranking cl
  const html=ctx.__elements.get('customer-pipeline').innerHTML;
  assert.match(html,/data-review-linkedin="example.com" data-person-index="0"/);
  assert.doesNotMatch(html,/data-person-index="-1"/);
+});
+
+test('manual opportunity review holds persist without paid contact enrichment',async()=>{
+ let snapshots=0;
+ const ctx=loadDiscoveryRunner({bridgeImpl:{session:{authenticated:true},workspace:{id:'w1'},saveNow:async()=>({saved:true}),saveCrmCompany:async()=>{snapshots++;return {ok:true};}}});
+ ctx.LeadIntelCrm=require('../crm-engine.js');
+ ctx.__setCrmCompanies([{id:'c1',normalized_domain:'example.com'}]);
+ ctx.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',market:'Sweden',buyerSearchMode:'user_selected_target',people:[{id:'p1',name:'Jane Buyer',title:'Operations Manager',organization:'Example',linkedin_url:'https://linkedin.com/in/jane-buyer'}]}]});
+ assert.equal(await ctx.__holdBuyerForOpportunityReview('example.com',0,'Public profile identifies a different subsidiary; project responsibility unconfirmed'),true);
+ const person=ctx.__discoveryState().selectedProspects[0].people[0];
+ assert.equal(person.opportunityScope.status,'review_required');
+ assert.equal(person.buyerQualification.eligible,false);
+ assert.equal(snapshots,1);
+ const restored=Discovery.normalizeDiscoveryState(JSON.parse(ctx.localStorage.getItem('leadintel_customer_v2_discovery')));
+ assert.equal(restored.selectedProspects[0].people[0].opportunityScope.status,'review_required');
 });
