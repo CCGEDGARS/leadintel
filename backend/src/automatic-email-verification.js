@@ -20,6 +20,7 @@ export async function verifyAutomaticEmail(env,workspaceId,email,{fetcher=fetch,
     if(companyDomain){
       const cached=await env.DB.prepare("SELECT name,email_status,public_email_url,verification_provider,verified_at FROM crm_contacts WHERE workspace_id=? AND normalized_email=? AND LOWER(email_status) IN ('verified','public_confirmed') AND archived_at IS NULL AND company_id IN (SELECT id FROM crm_companies WHERE workspace_id=? AND normalized_domain=? AND deleted_at IS NULL AND lifecycle_status!='suppressed') LIMIT 1").bind(workspaceId,address,workspaceId,String(companyDomain).toLowerCase()).first();
       if(String(cached?.name||'').trim().split(/\s+/).length<2)return {verified:false,status:'needs_review',reason:'Confirmed buyer identity is required',provider:'CRM'};
+      if(cached.email_status==='public_confirmed'&&!globalThis.LeadIntelContactPolicy.accepted({...cached,normalized_email:address},companyDomain,'public_confirmed'))return {verified:false,status:'needs_review',reason:'Recheck the official buyer–email source before mailbox verification',provider:'CRM'};
       const age=Date.now()-Date.parse(cached?.verified_at||'');
       if(cached?.verification_provider==='Hunter'&&age>=0&&age<30*24*60*60*1000)return {verified:true,status:'verified',provider:'Hunter',cached:true};
     }
