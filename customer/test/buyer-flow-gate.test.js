@@ -29,3 +29,17 @@ test('rendered contact controls have one next action and no enrichment checkboxe
  assert.match(block,/buyer-four-actions/);assert.doesNotMatch(block,/buyerNextAction/);assert.doesNotMatch(block,/contactFlowControls/);assert.match(block,/Phone and LinkedIn confirmation are optional/);
  const outreach=fs.readFileSync(require.resolve('../outreach-ui.js'),'utf8');assert.match(outreach,/find\(p=>p.id===choice\?\.personId\)/);assert.match(outreach,/if\(crmAuthenticated\(\)&&\(!handoffContact/);
 });
+test('pending identity and changed buying roles cannot open Messages even with a verified email',async()=>{
+ for(const state of ['identity','roles']){
+  const h=harness();if(state==='identity')h.person.identityStatus='pending';else h.candidate.buyerRolesChanged=true;
+  assert.equal(h.ctx.verifiedBuyerEmail(h.candidate,h.person,{work_email:'anna@example.com',email_status:'verified'}),'');
+  assert.equal(await h.ctx.addBuyerToFlow('example.com',0,{button:h.ctx.button}),false);assert.equal(h.events.length,0);
+ }
+});
+test('navigation enables Messages only for a saved buyer with a verified company email',()=>{
+ const h=harness();vm.runInContext(source.slice(source.indexOf('function readyBuyerCount('),source.indexOf('function syncBuyerStageNavigation(')),h.ctx);
+ assert.equal(h.ctx.readyBuyerCount([h.candidate]),0);
+ h.ctx.enrichmentResults.set(h.person.id,{contact:{work_email:'anna@gmail.com',email_status:'verified'}});assert.equal(h.ctx.readyBuyerCount([h.candidate]),0);
+ h.ctx.enrichmentResults.set(h.person.id,{contact:{work_email:'anna@example.com',email_status:'verified'}});assert.equal(h.ctx.readyBuyerCount([h.candidate]),1);
+ h.person.kept=false;assert.equal(h.ctx.readyBuyerCount([h.candidate]),0);
+});

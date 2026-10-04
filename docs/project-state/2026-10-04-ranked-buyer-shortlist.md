@@ -1,0 +1,11 @@
+# Ranked buyer shortlist and downstream readiness
+
+The customer saw ten unresolved directory identities followed by four different public buyers. These were separate portions of a fourteen-record research pool, not ten candidates from which four had been selected. Six-record persistence/display limits also prevented a ten-person shortlist, and a ten-role matching limit discarded Technical/Operations roles in a twelve-role committee.
+
+The research pool remains separate from one ranked shortlist of up to ten named, employer-matched, relevant buyers. Its strongest four are highlighted in that same list, with buying-function coverage included in priority. Pending, former, wrong-employer, irrelevant and unsupported identities cannot pad the shortlist. Authenticated accepted Apollo identities retain directory provenance even without a public profile. Ten buyers and their identity, relevance, source and email-search states survive normalization and downstream dossier persistence. Saved candidates remain in the research pool even if no longer recommended.
+
+Identity directory research remains mandatory on authenticated runs; public identity resolution and contact research run before final research completion. Any per-buyer email-search state other than complete keeps the overall run incomplete. Generated addresses and public listings remain unverified. Contact enrichment is explicitly confirmed, including automatic-mode confirmation policy; no outreach is sent by these changes.
+
+Messages navigation requires a saved full identity and verified company email. Pending identities and changed buyer roles fail closed. CRM verification is rechecked on handoff, and selection must synchronize before Messages opens. CRM hydration restores verified contacts from all research providers rather than only Apollo.
+
+Regression coverage: ten/four membership, twelve-role coverage, unsupported identity exclusion, shortages, legal/retail portability, ten-record save/reload, provider failure preservation, exact-contact durable handoff, email/identity gates. Production and authenticated LKAB evidence must be recorded separately after release verification; passing tests alone does not establish a usable buyer email.
