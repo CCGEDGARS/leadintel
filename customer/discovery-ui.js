@@ -1147,7 +1147,7 @@ async function findPublicCandidateEmail(candidate,person){
   const query=`site:${domain} "${first}" (${String(person.title||'').slice(0,70)} OR team OR contact) email`;
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),DISCOVERY_REQUEST_TIMEOUT_MS);
   try{
-    const response=await fetch(`${INTELLIGENCE_PROXY}/firecrawl-search`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query,limit:5,scrapeOptions:{formats:['markdown'],onlyMainContent:true}}),signal:controller.signal});
+    const response=await fetchFirecrawlBuyerResearch('search',{query,limit:5,scrapeOptions:{formats:['markdown'],onlyMainContent:true}},{signal:controller.signal});
     if(!response.ok)throw new Error(`Public email search failed (${response.status})`);
     const payload=await response.json();
     const results=Array.isArray(payload.data)?payload.data:Array.isArray(payload.data?.web)?payload.data.web:Array.isArray(payload.web)?payload.web:Array.isArray(payload.results)?payload.results:[];
@@ -1395,8 +1395,13 @@ async function fetchBuyerResearch(url,options={}){
   try{return await Promise.race([fetch(url,{...options,signal:controller.signal}),aborted]);}
   finally{clearTimeout(timer);parent?.removeEventListener?.('abort',cancel);}
 }
+async function fetchFirecrawlBuyerResearch(kind,body,{signal,timeoutMs}={}){
+  const workspaceId=crmAuthenticated()?bridge()?.workspace?.id:'';
+  const url=workspaceId?`${LEADINTEL_API}/api/integrations/services/firecrawl/${kind}?workspace_id=${encodeURIComponent(workspaceId)}`:`${INTELLIGENCE_PROXY}/firecrawl-${kind}`;
+  return fetchBuyerResearch(url,{method:'POST',...(workspaceId?{credentials:'include'}:{}),headers:{'Content-Type':'application/json',...(!workspaceId?{'X-LeadIntel-Research-Mode':'full'}:{})},body:JSON.stringify(body),signal,...(timeoutMs?{timeoutMs}:{})});
+}
 async function searchBuyerPublicPages(query,limit,signal){
-  const response=await fetchBuyerResearch(`${INTELLIGENCE_PROXY}/firecrawl-search`,{method:'POST',headers:{'Content-Type':'application/json','X-LeadIntel-Research-Mode':'full'},body:JSON.stringify({query,limit,scrapeOptions:{formats:['markdown'],onlyMainContent:true}}),signal});
+  const response=await fetchFirecrawlBuyerResearch('search',{query,limit,scrapeOptions:{formats:['markdown'],onlyMainContent:true}},{signal});
   if(!response.ok)throw Object.assign(new Error((await buyerResponseFailure(response)).message),{status:response.status});
   const payload=await response.json();if(payload.success===false)throw Object.assign(new Error(String(payload.error||payload.message||"Public search returned a failure payload")),{status:response.status,code:payload.code});return publicSearchRows(payload);
 }
@@ -1514,7 +1519,7 @@ function officialLinksFromMarkdown(markdown,source,domain){
   return links.sort((a,b)=>Number(/contact|kontakt/i.test(b))-Number(/contact|kontakt/i.test(a))||Number(/leadership|management|organisation|organization|ledning/i.test(b))-Number(/leadership|management|organisation|organization|ledning/i.test(a))).slice(0,3);
 }
 async function scrapeOfficialContactPage(url,domain,signal){
-  const response=await fetchBuyerResearch(`${INTELLIGENCE_PROXY}/firecrawl-scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,formats:['markdown'],onlyMainContent:false}),signal});
+  const response=await fetchFirecrawlBuyerResearch('scrape',{url,formats:['markdown'],onlyMainContent:false},{signal});
   if(!response.ok)return null;
   const payload=await response.json(),page=payload.data||payload,source=page.metadata?.sourceURL||url;
   if(canonicalDomain(source)!==domain||!page.markdown&&!page.content)return null;
@@ -1595,7 +1600,7 @@ async function runPublicProspectContacts(domain,{signal}={}){
     if(groundedProfiles.length)candidate.people=LeadIntelDiscovery.matchPublicLinkedInProfiles(candidate.people,groundedProfiles,candidate.company);
     for(const row of uniqueGrounded.filter(row=>canonicalDomain(row.url)===domain&&!results.some(item=>item.url===row.url)).slice(0,3)){
       try{
-        const response=await fetchBuyerResearch(`${INTELLIGENCE_PROXY}/firecrawl-scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:row.url,formats:['markdown'],onlyMainContent:true}),signal:controller.signal});
+        const response=await fetchFirecrawlBuyerResearch('scrape',{url:row.url,formats:['markdown'],onlyMainContent:true},{signal:controller.signal});
         if(!response.ok)continue;
         const payload=await response.json();const page=payload.data||payload;
         if(!page?.markdown&&!page?.content)continue;
