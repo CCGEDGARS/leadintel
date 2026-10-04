@@ -1,6 +1,6 @@
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
-const PUBLIC_NAME_CHECK_VERSION="buyer-contacts-v16-person-first";
+const PUBLIC_NAME_CHECK_VERSION="buyer-contacts-v17-attributed-phones";
 const BUYER_RESEARCH_VERSION="20261004-qualified-buyers-v4";
 const CONTACT_CONFIRM_VERSION="buyer-contacts-v11-optional-hunter";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
@@ -1573,24 +1573,24 @@ async function searchBuyerEmailPatterns(candidate,existingRows,signal){
         Object.assign(person,matched);
       }
       person.patternFindings=[...new Map([...(person.patternFindings||[]),...patternListings(person,candidate.domain,rows,candidate.company)].map(item=>[item.email,item])).values()];
-    }catch(error){if(error?.name==='AbortError')throw error;failed++;personFailed++;}
+    }catch(error){if(error?.name==='AbortError'&&signal?.aborted)throw error;failed++;personFailed++;}
     searches++;personSearches++;
     try{
       const identityRows=await searchBuyerPublicPages(`"${fullName}" "${candidate.company}"`,5,signal);
       rows.push(...identityRows);
       if(LeadIntelDiscovery.matchPublicBuyerDetails)Object.assign(person,LeadIntelDiscovery.matchPublicBuyerDetails([person],identityRows,candidate.domain)[0]);
       if(LeadIntelDiscovery.matchBuyerScopeEvidence)Object.assign(person,LeadIntelDiscovery.matchBuyerScopeEvidence(person,identityRows,candidate));
-    }catch(error){if(error?.name==='AbortError')throw error;failed++;personFailed++;}
+    }catch(error){if(error?.name==='AbortError'&&signal?.aborted)throw error;failed++;personFailed++;}
     searches++;personSearches++;
     try{rows.push(...await searchBuyerPublicPages(patterns.map(item=>`"${item.email}"`).join(' OR '),5,signal));}
-    catch(error){if(error?.name==='AbortError')throw error;failed++;personFailed++;}
+    catch(error){if(error?.name==='AbortError'&&signal?.aborted)throw error;failed++;personFailed++;}
     if(fullName.split(/\s+/).length>1){
       searches++;personSearches++;
       try{
         const gmailRows=await searchBuyerPublicPages(`"${fullName}" "${candidate.company}" "@gmail.com"`,5,signal);
         rows.push(...gmailRows);
         person.patternFindings=[...new Map([...(person.patternFindings||[]),...patternListings(person,candidate.domain,rows,candidate.company)].map(item=>[item.email,item])).values()];
-      }catch(error){if(error?.name==='AbortError')throw error;failed++;personFailed++;}
+      }catch(error){if(error?.name==='AbortError'&&signal?.aborted)throw error;failed++;personFailed++;}
     }
     person.patternFindings=[...new Map([...(person.patternFindings||[]),...patternListings(person,candidate.domain,rows,candidate.company)].map(item=>[item.email,item])).values()];
     // Grouped OR searches can bury exact matches, especially in association PDFs.
@@ -1602,7 +1602,7 @@ async function searchBuyerEmailPatterns(candidate,existingRows,signal){
         const query=`"${email}" "${name}"`;
         searches++;personSearches++;
         try{person.patternFindings=[...(person.patternFindings||[]),...patternListings(person,candidate.domain,[...rows,...await searchBuyerPublicPages(query,5,signal)],candidate.company)];}
-        catch(error){if(error?.name==='AbortError')throw error;failed++;personFailed++;}
+        catch(error){if(error?.name==='AbortError'&&signal?.aborted)throw error;failed++;personFailed++;}
         if(!person.patternFindings.some(item=>item.email===email)&&crmAuthenticated()&&bridge()?.workspace?.id){
           searches++;personSearches++;
           try{
@@ -1610,7 +1610,7 @@ async function searchBuyerEmailPatterns(candidate,existingRows,signal){
             if(!response.ok)throw new Error(`Grounded search failed (${response.status})`);
             const payload=await response.json();
             person.patternFindings=[...(person.patternFindings||[]),...patternListings(person,candidate.domain,[...rows,...(payload.results||[])],candidate.company)];
-          }catch(error){if(error?.name==='AbortError')throw error;failed++;personFailed++;}
+          }catch(error){if(error?.name==='AbortError'&&signal?.aborted)throw error;failed++;personFailed++;}
         }
       }
     }
@@ -1683,7 +1683,7 @@ async function runPublicProspectContacts(domain,{signal}={}){
       ?`site:${canonicalDomain(domain)} (${firstNames.map(name=>`"${name}"`).join(' OR ')}) (CEO OR leadership OR management OR contact OR email)`
       :`site:${canonicalDomain(domain)} (team OR leadership OR management OR contact OR contacts OR email)`;
     let primary=[];
-    try{primary=await searchBuyerPublicPages(query,5,controller.signal);}catch(error){if(error?.name==='AbortError')throw error;research.firecrawl='unavailable';research.issues.push('Official people-page search unavailable');}
+    try{primary=await searchBuyerPublicPages(query,5,controller.signal);}catch(error){if(error?.name==='AbortError'&&controller.signal.aborted)throw error;research.firecrawl='unavailable';research.issues.push('Official people-page search unavailable');}
     let contacts=[];
     try{contacts=await searchBuyerPublicPages(`site:${domain} (contact OR contacts OR team) (email OR phone OR tel)`,4,controller.signal);}catch{research.issues.push('Official contact-page search unavailable');}
     const results=[...primary,...contacts].filter((row,index,list)=>list.findIndex(item=>item.url===row.url)===index).slice(0,12);
@@ -1698,7 +1698,7 @@ async function runPublicProspectContacts(domain,{signal}={}){
         for(const outcome of pages)if(outcome.status==='fulfilled'&&outcome.value){results.push(outcome.value);research.officialPages++;}
         candidate.publicContacts=LeadIntelDiscovery.extractPublicContacts(results,domain);
       }
-    }catch(error){if(error?.name==='AbortError')throw error;research.issues.push('Official homepage unavailable');}
+    }catch(error){if(error?.name==='AbortError'&&controller.signal.aborted)throw error;research.issues.push('Official homepage unavailable');}
     candidate.people=LeadIntelDiscovery.matchPublicBuyerDetails(candidate.people||[],results,domain);
     const profileNames=candidate.people.filter(person=>!LeadIntelDiscovery.normalizeLinkedInUrl(person.linkedin_url)&&!person.publicLinkedinUrl).map(person=>person.publicNameUrl?person.publicName:person.name).filter(Boolean).slice(0,4);
     let profileIssue='';
@@ -1716,12 +1716,13 @@ async function runPublicProspectContacts(domain,{signal}={}){
           try{const focusedResults=await searchBuyerPublicPages(focusedQuery,5,controller.signal);
             research.profileResults+=focusedResults.length;
             candidate.people=LeadIntelDiscovery.matchPublicLinkedInProfiles(candidate.people,focusedResults,candidate.company);
-          }catch(error){if(error?.name==='AbortError')throw error;}
+          }catch(error){if(error?.name==='AbortError'&&controller.signal.aborted)throw error;}
         }
       }catch(error){profileIssue=error?.name==='AbortError'?'Public profile search timed out':error.message||'Public profile search failed';}
     }
     const patternResearch=await searchBuyerEmailPatterns(candidate,results,controller.signal);
     research.patternSearches=patternResearch.searches;
+    renderPipeline();renderCandidates();
     research.checkedAt=new Date().toISOString();
     research.sources=[...new Set(results.filter(row=>canonicalDomain(row.url)===domain&&(row.markdown||row.content)).map(row=>row.url))].slice(0,8);
     saveDiscovery();
@@ -1751,7 +1752,7 @@ async function runPublicProspectContacts(domain,{signal}={}){
         const payload=await response.json();const page=payload.data||payload;
         if(!page?.markdown&&!page?.content)continue;
         results.push({url:row.url,title:page.title||row.title,markdown:page.markdown||page.content});research.officialPages++;
-      }catch(error){if(error?.name==='AbortError')throw error;}
+      }catch(error){if(error?.name==='AbortError'&&controller.signal.aborted)throw error;}
     }
     candidate.people=LeadIntelDiscovery.matchPublicBuyerDetails(candidate.people||[],results,domain);
     candidate.publicContacts=LeadIntelDiscovery.extractPublicContacts(results,domain);
@@ -1766,6 +1767,12 @@ async function runPublicProspectContacts(domain,{signal}={}){
     candidate.publicContactStatus=candidate.publicContacts.length||totalNamed||candidate.people.some(person=>person.patternFindings?.length)?"complete":"empty";
     candidate.publicContactVersion=PUBLIC_NAME_CHECK_VERSION;
     candidate.people=candidate.people.map(person=>({...person,buyerQualification:LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:candidate.buyerDiscovery?.opportunityRoles||candidate.buyerRoles||person.title},candidate)}));
+    showToast(profileIssue|| (totalNamed?`${totalNamed} public full name${totalNamed===1?"":"s"} found · check source before outreach`:candidate.publicContacts.length?`${candidate.publicContacts.length} public company contact${candidate.publicContacts.length===1?"":"s"} found · unverified`:"No public buyer names or company contacts found in this search"));
+
+    return true;
+  }catch(error){candidate.publicContactStatus="error";candidate.publicResearch.patternSearches=(candidate.people||[]).reduce((n,p)=>n+(p.emailResearch?.searches||0),0);candidate.publicResearch={...(candidate.publicResearch||{}),checkedAt:new Date().toISOString(),issues:[...(candidate.publicResearch?.issues||[]),error.name==="AbortError"?"Contact follow-up timed out; completed identity and email evidence preserved":String(error.message||"Contact research failed")].slice(-8)};showToast(error.name==="AbortError"?"Contact follow-up timed out · completed email checks preserved":error.message);return false;}
+  finally{clearTimeout(timeout);signal?.removeEventListener('abort',cancel);
+    candidate.people=(candidate.people||[]).map(person=>({...person,buyerQualification:LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:candidate.buyerDiscovery?.opportunityRoles||candidate.buyerRoles||person.title},candidate)}));
     if(crmAuthenticated()&&candidate.people.some(person=>person.publicNameUrl||person.publicEmailUrl||person.publicLinkedinUrl)){
       try{
         let company=crmCompanyByDomain(domain);
@@ -1777,18 +1784,14 @@ async function runPublicProspectContacts(domain,{signal}={}){
           else {
             if(bridge().saveCrmCompany&&window.LeadIntelCrm.mapDiscoveryCandidateToCrm){
               const snapshot=await bridge().saveCrmCompany({...window.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate),contacts:[]});
-              if(!snapshot?.ok)research.issues.push('Public evidence snapshot could not be saved to CRM');
+              if(!snapshot?.ok)candidate.publicResearch.issues.push('Public evidence snapshot could not be saved to CRM');
             }
             window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company}}));
           }
         }
       }catch{showToast("Public buyer details found, but CRM sync failed. Retry from this card.");}
     }
-    showToast(profileIssue|| (totalNamed?`${totalNamed} public full name${totalNamed===1?"":"s"} found · check source before outreach`:candidate.publicContacts.length?`${candidate.publicContacts.length} public company contact${candidate.publicContacts.length===1?"":"s"} found · unverified`:"No public buyer names or company contacts found in this search"));
-
-    return true;
-  }catch(error){candidate.publicContactStatus="error";candidate.publicResearch={...(candidate.publicResearch||{}),checkedAt:new Date().toISOString(),issues:[...(candidate.publicResearch?.issues||[]),error.name==="AbortError"?"Contact follow-up timed out; completed identity and email evidence preserved":String(error.message||"Contact research failed")].slice(-8)};showToast(error.name==="AbortError"?"Contact follow-up timed out · completed email checks preserved":error.message);return false;}
-  finally{clearTimeout(timeout);signal?.removeEventListener('abort',cancel);candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),pool:LeadIntelDiscovery.mergeBuyerPool(candidate.buyerDiscovery?.pool||[],candidate.people||[],{decisionMakers:(candidate.buyerDiscovery?.opportunityRoles||[]).join('; ')||LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate)})};saveDiscovery();renderPipeline();renderCandidates();}
+    candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),pool:LeadIntelDiscovery.mergeBuyerPool(candidate.buyerDiscovery?.pool||[],candidate.people||[],{decisionMakers:(candidate.buyerDiscovery?.opportunityRoles||[]).join('; ')||LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate)})};saveDiscovery();renderPipeline();renderCandidates();}
 }
 function scheduleSavedBuyerPublicChecks(){
   for(const candidate of [...selectedProspects(),...(discovery.candidates||[])]){
