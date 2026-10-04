@@ -1,3 +1,4 @@
+import {apolloCapabilities} from './service-integrations.js';
 import {allowedOrigin,corsHeaders,sha256,randomToken,constantTimeEqual,cookieValue,sessionCookie,clearSessionCookie} from "./security.js";
 import {canonicalSnapshot,ingestCanonicalSnapshot} from "./canonical.js";
 import {assessCandidate,compileQueries} from "./quality.js";
@@ -170,6 +171,7 @@ async function router(request,env) {
     const decision=enrichmentDecision({score:record.score_10,evidenceCount:record.evidence_count,verifiedContact:Number(record.verified_contacts)>0,domain,recentRequest:recentBlocks?recent:null,dailyReserved:daily?.value,monthlyReserved:monthly?.value,policy});
     if(body.validate)return json({decision,configured:Boolean(env.APOLLO_API_KEY),company:record.canonical_name,domain,role:record.decision_maker_role||"Commercial Director",personal_email_requested:personalApproved,personal_email_mode:policy.allow_personal_email?"owner_approval":"disabled",phone_numbers:false},200,cors);
     if(!decision.allowed)return json({error:"Enrichment blocked by quality or credit controls",code:decision.reason},409,cors);
+    if(!(await apolloCapabilities(env,workspaceId)).email)return json({error:'Enable Apollo email enrichment in Settings before using credits',code:'apollo_email_disabled'},409,cors);
     if(!env.APOLLO_API_KEY)return json({error:"Apollo API connection is not configured",code:"apollo_not_configured"},503,cors);
     const requestId=`ENR-${uuid()}`;const role=record.decision_maker_role||"Commercial Director";
     await env.DB.prepare(`INSERT INTO enrichment_requests(id,workspace_id,opportunity_id,company_id,status,role_requested,requested_by,personal_email_requested)

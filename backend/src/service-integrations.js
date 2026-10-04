@@ -1,3 +1,4 @@
+import {loadConfirmationLevel} from './contact-confirmation-policy.js';
 import {fetchWithScrapling,scraplingConfigured} from './scrapling.js';
 import {sha256,cookieValue} from './security.js';
 import {importAesKey,encryptSecret,decryptSecret} from './oauth.js';
@@ -140,6 +141,11 @@ export async function resolveWorkspaceServiceCredential(env,workspaceId,provider
   return {provider:normalized,apiKey:'',source:normalized==='firecrawl'?'managed':'none',configured:normalized==='firecrawl',row:null};
 }
 
+export async function apolloCapabilities(env,workspaceId){
+  let row=null;try{row=await integrationRow(env,workspaceId,'apollo');}catch{}let metadata={};try{metadata=JSON.parse(row?.metadata_json||'{}');}catch{}
+  return {discovery:metadata.discovery_enabled!==false,email:metadata.email_enrichment_enabled===true,phone:metadata.phone_enrichment_enabled===true};
+}
+
 export async function withWorkspaceServiceCredentials(request,env){
   try{
     const url=new URL(request.url);const workspaceId=clean(url.searchParams.get('workspace_id')||'',120);if(!workspaceId)return env;
@@ -159,7 +165,7 @@ async function providerStatus(env,workspaceId,provider,{verify=false}={}){
     let metadata={};try{metadata=JSON.parse(row.metadata_json||'{}')||{};}catch{}
     let state='good',label='Connected';
     if(verify){
-      try{const apiKey=await decryptRow(env,row);metadata={...metadata,...await verifyCredential(provider,apiKey)};const balance=verifiedCreditBalance(provider,metadata);if(balance)await recordProviderCredit(env,{workspaceId,provider,kind:balance,source:'customer'});await env.DB.prepare(`UPDATE workspace_service_integrations SET metadata_json=CASE WHEN provider='hunter' THEN json_set(?, '$.additional_verification_enabled', json(CASE WHEN json_extract(metadata_json,'$.additional_verification_enabled')=1 THEN 'true' ELSE 'false' END)) ELSE ? END,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(JSON.stringify(metadata),JSON.stringify(metadata),workspaceId,provider).run();}
+      try{const apiKey=await decryptRow(env,row);metadata={...metadata,...await verifyCredential(provider,apiKey)};const balance=verifiedCreditBalance(provider,metadata);if(balance)await recordProviderCredit(env,{workspaceId,provider,kind:balance,source:'customer'});await env.DB.prepare(`UPDATE workspace_service_integrations SET metadata_json=CASE WHEN provider='hunter' THEN json_set(?, '$.additional_verification_enabled', json(CASE WHEN json_extract(metadata_json,'$.additional_verification_enabled')=1 THEN 'true' ELSE 'false' END)) ELSE json_patch(?,CASE WHEN provider='apollo' THEN json_object('discovery_enabled',json(CASE WHEN json_extract(metadata_json,'$.discovery_enabled')=0 THEN 'false' ELSE 'true' END),'email_enrichment_enabled',json(CASE WHEN json_extract(metadata_json,'$.email_enrichment_enabled')=1 THEN 'true' ELSE 'false' END),'phone_enrichment_enabled',json(CASE WHEN json_extract(metadata_json,'$.phone_enrichment_enabled')=1 THEN 'true' ELSE 'false' END)) ELSE json('{}') END) END,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(JSON.stringify(metadata),JSON.stringify(metadata),workspaceId,provider).run();}
       catch(cause){if(creditFailure(0,cause?.message)||/\(402\)/.test(String(cause?.message)))await recordProviderCredit(env,{workspaceId,provider,kind:'failed',source:'customer'});state='bad';label='Connection error';metadata={...metadata,error:clean(cause?.message||cause,180)};}
     }
     return {provider,name:PROVIDER_NAMES[provider],configured:true,source:'customer',state,label,key_hint:row.key_hint||'',verified_at:row.verified_at||null,last_used_at:row.last_used_at||null,metadata};
@@ -252,6 +258,7 @@ async function forwardApolloPeopleSearch(request,env,cors,workspaceId){
   const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
   const body=await request.json().catch(()=>null);if(!body||typeof body!=='object'||Array.isArray(body))return error('Apollo buyer-search payload is required',400,cors,'SERVICE_APOLLO_PAYLOAD_REQUIRED');
   const normalized=normalizeApolloPeopleSearch(body);if(normalized.error)return error(normalized.error,400,cors,'SERVICE_APOLLO_DOMAIN_INVALID');
+  if(!(await apolloCapabilities(env,workspaceId)).discovery)return error('Apollo people discovery is disabled in Settings',409,cors,'SERVICE_APOLLO_DISCOVERY_DISABLED');
   const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'apollo');
   if(!credential.configured||!credential.apiKey)return error('Apollo is not connected for this workspace. Connect it in Settings.',503,cors,'SERVICE_APOLLO_NOT_CONFIGURED');
   let response;
@@ -277,6 +284,11 @@ export async function handleServiceIntegrationRoute(request,env,cors={}){
   const known=path.startsWith('/api/integrations/services/');if(!known)return null;
   const workspaceId=workspaceIdFrom(url);if(!workspaceId)return error('workspace_id is required',400,cors);
 
+  if(path==='/api/integrations/services/contact-policy'&&request.method==='GET'){
+    const access=await requireMember(request,env,workspaceId);if(access.error)return error(access.error,access.status,cors);
+    return json({confirmationLevel:await loadConfirmationLevel(env,workspaceId),apollo:await apolloCapabilities(env,workspaceId)},200,cors);
+  }
+
   if(path==='/api/integrations/services/status'&&request.method==='GET'){
     const access=await requireMember(request,env,workspaceId);if(access.error)return error(access.error,access.status,cors);
     const verify=url.searchParams.get('verify')==='1';
@@ -289,7 +301,18 @@ export async function handleServiceIntegrationRoute(request,env,cors={}){
     return json({role:access.member.role,providers,checked_at:new Date().toISOString()},200,cors);
   }
 
-  if(path==='/api/integrations/services/hunter/settings'&&request.method==='PUT'){
+  if(path==='/api/integrations/services/apollo/settings'&&request.method==='PUT'){
+    const access=await requireMember(request,env,workspaceId,['owner']);if(access.error)return error(access.error,access.status,cors);
+    const body=await request.json().catch(()=>null);
+    if(!body||['discovery','email','phone'].some(key=>typeof body[key]!=='boolean')||!Number.isInteger(body.daily_limit)||body.daily_limit<0||body.daily_limit>1000||!Number.isInteger(body.monthly_limit)||body.monthly_limit<0||body.monthly_limit>10000)return error('Choose Apollo capabilities and valid daily/monthly credit limits',400,cors);
+    const row=await integrationRow(env,workspaceId,'apollo');if(!row)return error('Connect your Apollo account before enabling credit-consuming enrichment',409,cors);
+    await env.DB.batch([env.DB.prepare("UPDATE workspace_service_integrations SET metadata_json=json_set(metadata_json,'$.discovery_enabled',json(?),'$.email_enrichment_enabled',json(?),'$.phone_enrichment_enabled',json(?)),updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider='apollo'").bind(JSON.stringify(body.discovery),JSON.stringify(body.email),JSON.stringify(body.phone),workspaceId),
+      env.DB.prepare('INSERT INTO enrichment_policies(workspace_id,daily_credit_limit,monthly_credit_limit) VALUES(?,?,?) ON CONFLICT(workspace_id) DO UPDATE SET daily_credit_limit=excluded.daily_credit_limit,monthly_credit_limit=excluded.monthly_credit_limit').bind(workspaceId,body.daily_limit,body.monthly_limit)]);
+    await audit(env,{workspaceId,userId:access.user.id,type:'service.apollo_policy_changed',provider:'apollo',metadata:{discovery:body.discovery,email:body.email,phone:body.phone,daily_limit:body.daily_limit,monthly_limit:body.monthly_limit}});
+    return json({saved:true,capabilities:body},200,cors);
+  }
+
+  if(path==='/api/integrations/services/hunter/settings' &&request.method==='PUT'){
     const access=await requireMember(request,env,workspaceId,['owner']);if(access.error)return error(access.error,access.status,cors);
     const body=await request.json().catch(()=>null);if(typeof body?.enabled!=='boolean')return error('An enabled boolean is required',400,cors);
     const row=await integrationRow(env,workspaceId,'hunter');if(!row)return error('Connect your Hunter key before enabling additional verification',409,cors);
@@ -305,10 +328,10 @@ export async function handleServiceIntegrationRoute(request,env,cors={}){
     if(!encryptionConfigured(env))return error('Credential encryption is not configured',503,cors);
     const body=await request.json().catch(()=>null);const provider=normalizeProvider(body?.provider);if(!provider)return error('Unsupported service provider',400,cors);
     let apiKey;try{apiKey=validateApiKey(body.api_key);}catch(cause){return error(cause.message,400,cors);}
-    let metadata;try{metadata=await verifyCredential(provider,apiKey);if(provider==='hunter')metadata.additional_verification_enabled=hunterVerificationEnabled(await integrationRow(env,workspaceId,provider));}catch(cause){return error(clean(cause?.message||'Provider verification failed',180),422,cors);}
+    let metadata;try{metadata=await verifyCredential(provider,apiKey);if(provider==='apollo'){let prior={};try{prior=JSON.parse((await integrationRow(env,workspaceId,provider))?.metadata_json||'{}');}catch{}for(const key of ['discovery_enabled','email_enrichment_enabled','phone_enrichment_enabled'])metadata[key]=prior[key]??(key==='discovery_enabled');}if(provider==='hunter')metadata.additional_verification_enabled=hunterVerificationEnabled(await integrationRow(env,workspaceId,provider));}catch(cause){return error(clean(cause?.message||'Provider verification failed',180),422,cors);}
     try{
       const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const encrypted=await encryptSecret(apiKey,key);
-      await env.DB.prepare(`INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint,metadata_json,verified_at,created_at,updated_at) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(workspace_id,provider) DO UPDATE SET encrypted_api_key=excluded.encrypted_api_key,key_hint=excluded.key_hint,metadata_json=CASE WHEN provider='hunter' THEN json_set(excluded.metadata_json, '$.additional_verification_enabled', json(CASE WHEN json_extract(workspace_service_integrations.metadata_json,'$.additional_verification_enabled')=1 THEN 'true' ELSE 'false' END)) ELSE excluded.metadata_json END,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP`).bind(workspaceId,provider,encrypted,keyHint(apiKey),JSON.stringify(metadata)).run();
+      await env.DB.prepare(`INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint,metadata_json,verified_at,created_at,updated_at) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(workspace_id,provider) DO UPDATE SET encrypted_api_key=excluded.encrypted_api_key,key_hint=excluded.key_hint,metadata_json=CASE WHEN provider='hunter' THEN json_set(excluded.metadata_json, '$.additional_verification_enabled', json(CASE WHEN json_extract(workspace_service_integrations.metadata_json,'$.additional_verification_enabled')=1 THEN 'true' ELSE 'false' END)) WHEN provider='apollo' THEN json_patch(excluded.metadata_json,json_object('discovery_enabled',json(CASE WHEN json_extract(workspace_service_integrations.metadata_json,'$.discovery_enabled')=0 THEN 'false' ELSE 'true' END),'email_enrichment_enabled',json(CASE WHEN json_extract(workspace_service_integrations.metadata_json,'$.email_enrichment_enabled')=1 THEN 'true' ELSE 'false' END),'phone_enrichment_enabled',json(CASE WHEN json_extract(workspace_service_integrations.metadata_json,'$.phone_enrichment_enabled')=1 THEN 'true' ELSE 'false' END))) ELSE excluded.metadata_json END,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP`).bind(workspaceId,provider,encrypted,keyHint(apiKey),JSON.stringify(metadata)).run();
       await audit(env,{workspaceId,userId:access.user.id,type:'service.provider_saved',provider,metadata:{source:'customer'}});
       return json({saved:true,provider,name:PROVIDER_NAMES[provider],configured:true,source:'customer',key_hint:keyHint(apiKey),verified_at:new Date().toISOString(),metadata},200,cors);
     }catch{return error('Unable to save service provider configuration',500,cors);}

@@ -174,6 +174,40 @@
         "supportingContacts",
         "status:'guessed'"
       ]
+    },
+    {
+      "id": "contact-confirmation-policy",
+      "type": "text",
+      "url": "/customer/contact-confirmation-policy.js",
+      "status": 200,
+      "contains": [
+        "public_confirmed",
+        "verification_provider==='Public source'",
+        "age<30*86400000"
+      ]
+    },
+    {
+      "id": "separate-apollo-capabilities",
+      "type": "text",
+      "url": "/customer/service-settings-extension.js",
+      "status": 200,
+      "contains": [
+        "data-apollo-discovery",
+        "data-apollo-email",
+        "data-apollo-phone",
+        "Save Apollo permissions & limits"
+      ]
+    },
+    {
+      "id": "public-confirmation-workflow",
+      "type": "text",
+      "url": "/customer/approved-workflow-ui.js",
+      "status": 200,
+      "contains": [
+        "name=\"confirmationLevel\"",
+        "name=\"confirmPhone\"",
+        "Public confirmation verifies the identity link, not mailbox delivery."
+      ]
     }
   ],
   "retry": {

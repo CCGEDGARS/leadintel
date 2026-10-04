@@ -34,6 +34,6 @@ test('manual Buyer Intelligence uses identity provider fallback without provider
 
 test('automatic workflow requires explicit provider-neutral contact confirmation consent',()=>{
  assert.match(workflow,/name="confirmContacts"/);
- assert.match(workflow,/I approve automatic email and phone confirmation when needed/);
+ assert.match(workflow,/Allow automatic Apollo email enrichment/);
  assert.doesNotMatch(workflow,/Find and enrich buyers with Apollo/);
 });

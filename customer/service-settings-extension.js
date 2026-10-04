@@ -1,5 +1,5 @@
 const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
-const SETTINGS_VERSION='20260919-calendly-v1';
+const SETTINGS_VERSION='20261004-contact-policy-v1';
 const DEFAULT_CALENDLY_URL='https://calendly.com/edgars-7go/strategy-call-2';
 const SERVICE_PROVIDERS=Object.freeze([
   {provider:'apollo',name:'Apollo.io',placeholder:'Apollo API key',purpose:'Company, decision-maker, email and phone enrichment'},
@@ -8,6 +8,7 @@ const SERVICE_PROVIDERS=Object.freeze([
 ]);
 let serviceStatus={role:'',providers:[],checked_at:null};
 let calendlyStatus={role:'',configured:false,connected:false,scheduling_url:DEFAULT_CALENDLY_URL,status:'not_connected'};
+let confirmationLevel='provider_verified',apolloBudget={daily_credit_limit:3,monthly_credit_limit:30};
 let busy='';
 let installed=false;
 let renderQueued=false;
@@ -37,6 +38,7 @@ function serviceControls(config,row){
   const meta=configured?`Saved key ${esc(row.key_hint||'')} · ${sourceLabel(row)}`:sourceLabel(row);
   return `<div class="service-provider-controls service-provider-card" data-service-extension="1" data-service-provider="${config.provider}">
     <div class="service-source-row"><span class="service-source ${row?.source==='customer'?'customer':'managed'}">${esc(sourceLabel(row))}</span><span>${esc(meta)}</span></div>
+    ${config.provider==='apollo'?`<div data-apollo-capabilities><label><input type="checkbox" data-apollo-discovery ${row?.metadata?.discovery_enabled!==false?'checked':''} ${disabled||!configured?'disabled':''}>People discovery · 0 API credits</label><label><input type="checkbox" data-apollo-email ${row?.metadata?.email_enrichment_enabled===true?'checked':''} ${disabled||!configured?'disabled':''}>Enable email enrichment · uses Apollo credits</label><label><input type="checkbox" data-apollo-phone ${row?.metadata?.phone_enrichment_enabled===true?'checked':''} ${disabled||!configured?'disabled':''}>Enable phone enrichment · uses Apollo credits</label><label>Daily Apollo credit limit<input type="number" min="0" max="1000" data-apollo-daily value="${Number(apolloBudget.daily_credit_limit)||0}" ${disabled?'disabled':''}></label><label>Monthly Apollo credit limit<input type="number" min="0" max="10000" data-apollo-monthly value="${Number(apolloBudget.monthly_credit_limit)||0}" ${disabled?'disabled':''}></label><button type="button" class="ai-settings-btn" data-service-action="apollo-policy" ${disabled||!configured||busy==='apollo'?'disabled':''}>Save Apollo permissions & limits</button><small>Connecting a key does not enable credit-consuming enrichment. Automatic use also requires workflow approval. A phone request can reserve up to 9 credits.</small><a href="https://app.apollo.io/" target="_blank" rel="noopener noreferrer">Open your Apollo account ↗</a></div>`:''}
     ${config.provider==='hunter'?`<label class="ai-settings-field"><input type="checkbox" data-hunter-enabled ${row?.metadata?.additional_verification_enabled===true?'checked':''} ${disabled||!configured||busy==='hunter'?'disabled':''}>Enable additional Hunter verification (uses credits)</label><small>Off by default. Public research and Apollo work without Hunter. Enabling adds a delivery check; no provider guarantees 100% accuracy.</small>`:''}
     <label class="ai-settings-field">API key<input data-service-key="${config.provider}" type="password" autocomplete="new-password" spellcheck="false" data-form-type="other" data-lpignore="true" data-1p-ignore="true" autocapitalize="none" placeholder="${esc(config.placeholder)}" ${disabled?'disabled':''}></label>
     <div class="ai-provider-error" data-service-error="${config.provider}" role="alert" ${error?'':'hidden'}>${esc(error)}</div>
@@ -114,8 +116,11 @@ async function refreshServiceStatus(verify=false){
   const requestedWorkspace=workspace()?.id;
   if(!signedIn()){serviceStatus={role:'',providers:[],checked_at:null};calendlyStatus={role:'',configured:false,connected:false,scheduling_url:DEFAULT_CALENDLY_URL,status:'not_connected'};queueDecorate(true);return serviceStatus;}
   try{
-    const [services,calendly]=await Promise.all([api(`/api/integrations/services/status${verify?'?verify=1':''}`),api('/api/integrations/calendly/status')]);
+    const [services,calendly,workflow,budget]=await Promise.all([api(`/api/integrations/services/status${verify?'?verify=1':''}`),api('/api/integrations/calendly/status'),api('/api/approved-workflow'),api('/api/enrichment-policy')]);
     if(workspace()?.id!==requestedWorkspace)return serviceStatus;if(!services.response.ok)throw new Error(services.payload.error||'Unable to load service integrations');serviceStatus={...services.payload,workspace_id:requestedWorkspace};
+    if(workflow.response.ok)confirmationLevel=workflow.payload.config?.buyers?.confirmationLevel||'provider_verified';
+    if(budget.response.ok&&budget.payload.policy)apolloBudget=budget.payload.policy;
+    window.dispatchEvent(new CustomEvent('leadintel:contact-policy-changed'));
     if(calendly.response.ok)calendlyStatus=calendly.payload;else errors.calendly=calendly.payload.error||'Unable to load Calendly status';
     queueDecorate(true);return serviceStatus;
   }catch(cause){console.warn('LeadIntel service integrations:',cause);queueDecorate(true);return serviceStatus;}
@@ -153,9 +158,13 @@ async function saveHunterPolicy(enabled){
   try{const {response,payload}=await api('/api/integrations/services/hunter/settings',{method:'PUT',body:JSON.stringify({enabled})});if(!response.ok)throw new Error(payload.error||'Could not save Hunter preference');if(workspace()?.id!==workspaceId)return;await refreshServiceStatus(false);window.dispatchEvent(new CustomEvent('leadintel:service-settings-changed'));}
   catch(error){errors.hunter=String(error.message||error);}finally{busy='';queueDecorate(true);}
 }
-window.LeadIntelServiceSettings={hunterEnabled:()=>serviceStatus.workspace_id===workspace()?.id&&providerState('hunter')?.metadata?.additional_verification_enabled===true};
+window.LeadIntelServiceSettings={refresh:refreshServiceStatus,confirmationLevel:()=>serviceStatus.workspace_id===workspace()?.id?confirmationLevel:'provider_verified',apolloEnabled:kind=>serviceStatus.workspace_id===workspace()?.id&&providerState('apollo')?.metadata?.[kind==='phone'?'phone_enrichment_enabled':'email_enrichment_enabled']===true,hunterEnabled:()=>serviceStatus.workspace_id===workspace()?.id&&providerState('hunter')?.metadata?.additional_verification_enabled===true};
 function handleClick(event){
   const button=event.target.closest('[data-service-action]');if(!button)return;
+  if(button.dataset.serviceAction==='apollo-policy'){
+    const card=button.closest('[data-service-provider="apollo"]');busy='apollo';button.disabled=true;
+    void api('/api/integrations/services/apollo/settings',{method:'PUT',body:JSON.stringify({discovery:card.querySelector('[data-apollo-discovery]').checked,email:card.querySelector('[data-apollo-email]').checked,phone:card.querySelector('[data-apollo-phone]').checked,daily_limit:Number(card.querySelector('[data-apollo-daily]').value),monthly_limit:Number(card.querySelector('[data-apollo-monthly]').value)})}).then(async({response,payload})=>{if(!response.ok)throw new Error(payload.error);await refreshServiceStatus(false);window.dispatchEvent(new CustomEvent('leadintel:service-settings-changed'));}).catch(error=>{errors.apollo=error.message;}).finally(()=>{busy='';queueDecorate(true);});return;
+  }
   if(button.dataset.serviceAction==='google-signin'){connectGoogle();return;}
   if(button.dataset.serviceAction==='calendly-save'){saveCalendly(button);return;}
   if(button.dataset.serviceAction==='calendly-disconnect'){disconnectCalendly();return;}

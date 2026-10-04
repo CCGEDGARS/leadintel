@@ -1,3 +1,5 @@
+import {loadConfirmationLevel} from './public-email-confirmation.js';
+import '../../customer/contact-confirmation-policy.js';
 import {allowedOrigin,corsHeaders,sha256,cookieValue} from './security.js';
 import {normalizeEmail} from './gmail.js';
 import {isContactSuppressed,suppressContact} from './contact-suppression.js';
@@ -52,8 +54,8 @@ export async function enqueueApprovedSequence(env,cors,workspaceId,access,body,w
   const company=await env.DB.prepare(`SELECT id,lifecycle_status FROM crm_companies WHERE workspace_id=? AND normalized_domain=? AND deleted_at IS NULL LIMIT 1`).bind(workspaceId,domain).first();if(company?.lifecycle_status==='suppressed')return error('Suppressed companies cannot receive automated outreach',409,cors,{code:'CRM_COMPANY_SUPPRESSED'});
   if(!company)return error('Save the target company in CRM before automatic delivery',409,cors,{code:'CRM_COMPANY_REQUIRED'});
   if(await isContactSuppressed(env.DB,workspaceId,recipient))return error('Contact is on the do-not-contact list',409,cors,{code:'CONTACT_SUPPRESSED'});
-  const verified=await env.DB.prepare(`SELECT id FROM crm_contacts WHERE workspace_id=? AND company_id=? AND normalized_email=? AND LOWER(email_status)='verified' AND archived_at IS NULL LIMIT 1`).bind(workspaceId,company.id,recipient).first();
-  if(!verified)return error('Automatic delivery requires a verified work email on this CRM company',409,cors,{code:'CRM_EMAIL_NOT_VERIFIED'});
+  const verified=await env.DB.prepare(`SELECT * FROM crm_contacts WHERE workspace_id=? AND company_id=? AND normalized_email=? AND LOWER(email_status) IN ('verified','public_confirmed') AND archived_at IS NULL LIMIT 1`).bind(workspaceId,company.id,recipient).first();
+  if(!verified||!globalThis.LeadIntelContactPolicy.accepted(verified,domain,await loadConfirmationLevel(env,workspaceId)))return error('Automatic delivery requires a verified work email on this CRM company',409,cors,{code:'CRM_EMAIL_NOT_VERIFIED'});
   const sourcePackageKey=await sha256(`${workspaceId}|${domain}|${recipient}|${approvedAt}`);const sequenceId=`auto-seq-${sourcePackageKey.slice(0,24)}`;const queueId=`auto-q-${sourcePackageKey.slice(0,24)}-0`;const idempotencyKey=`auto-${sourcePackageKey}-0`;
   const existing=await env.DB.prepare(`SELECT * FROM outreach_automation_sequences WHERE workspace_id=? AND source_package_key=?`).bind(workspaceId,sourcePackageKey).first();
   if(existing){const {results=[]}=await env.DB.prepare(`SELECT * FROM outreach_automation_queue WHERE sequence_id=? ORDER BY step_index`).bind(existing.id).all();return json({sequence:existing,queue_items:results,duplicate:true},200,cors);}

@@ -57,7 +57,7 @@ export async function upsertCrmContacts(db,context,companyId,contacts=[]){
     const name=clean(input?.name,180)||null;
     const title=clean(input?.title,180)||null;
     const workEmail=email?clean(input?.work_email||input?.email,320):null;
-    const emailStatus=clean(input?.email_status,64)||null;
+    const emailStatus=input?.email_status==='public_confirmed'?'public_unverified':clean(input?.email_status,64)||null;
     const linkedin=clean(input?.linkedin_url,1000)||null;
     const publicNameUrl=clean(input?.public_name_url,2000)||null;
     const publicEmailUrl=clean(input?.public_email_url,2000)||null;
@@ -78,7 +78,7 @@ export async function upsertCrmContacts(db,context,companyId,contacts=[]){
       if(!existing)throw crmError('CRM_CONTACT_SAVE_CONFLICT','Contact changed while it was being saved',409);
     }
     const stamp=now();
-    const verified=String(existing.email_status||'').toLowerCase()==='verified'&&emailStatus==='public_unverified';
+    const verified=['verified','public_confirmed'].includes(String(existing.email_status||'').toLowerCase())&&emailStatus==='public_unverified';
     const update=db.prepare(`UPDATE crm_contacts SET name=?,title=?,work_email=?,normalized_email=?,external_person_id=?,email_status=?,linkedin_url=?,source=?,public_name_url=?,public_email_url=?,public_linkedin_url=?,updated_at=? WHERE id=? AND workspace_id=?`).bind(verified?existing.name:name||existing.name,title||existing.title,verified?existing.work_email:workEmail||existing.work_email,verified?existing.normalized_email:email||existing.normalized_email,externalId||existing.external_person_id,verified?existing.email_status:emailStatus||existing.email_status,linkedin||existing.linkedin_url,source||existing.source,publicNameUrl||existing.public_name_url,publicEmailUrl||existing.public_email_url,publicLinkedinUrl||existing.public_linkedin_url,stamp,existing.id,workspaceId);
     try{
       await writeWithActivity(db,context,{companyId,contactId:existing.id,type:'contact.updated',summary:name||email||'Contact updated',metadata:{source}},[update]);

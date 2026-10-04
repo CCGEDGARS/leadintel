@@ -1,3 +1,5 @@
+import {apolloCapabilities} from './service-integrations.js';
+import {confirmPublicWorkEmail} from './public-email-confirmation.js';
 import {sha256,cookieValue} from './security.js';
 import {buildApolloMatchUrl,provenBusinessEmail,publicPersonSummary,strongPersonalEmail} from './enrichment.js';
 import {apolloWebhookSigningSecret,buildApolloCrmWebhookUrl,handleApolloCrmWebhook} from './apollo-crm-webhook.js';
@@ -21,7 +23,7 @@ async function membership(env,workspaceId,userId){return env.DB.prepare('SELECT 
 async function requireMember(request,env,workspaceId,roles=[]){const user=await sessionUser(request,env);if(!user)return {error:'Authentication required',status:401};const member=await membership(env,workspaceId,user.id);if(!member)return {error:'Workspace access denied',status:403};if(roles.length&&!roles.includes(member.role))return {error:'Workspace role is not permitted',status:403};return {user,member,context:{workspaceId,userId:user.id,role:member.role}};}
 function routeError(cause,cors){const status=Number(cause?.status)||500;const safeStatus=status>=400&&status<600?status:500;return error(safeStatus===500?'Internal server error':String(cause?.message||'CRM request failed'),safeStatus,cors,cause?.code);}
 function workspace(url){return String(url.searchParams.get('workspace_id')||'').trim();}
-function parseCompanyPath(path){const match=path.match(/^\/api\/crm\/companies\/([^/]+)(?:\/(pipeline|archive|restore|suppress|mark-customer|contacts|activities|enrich-contact))?$/);return match?{id:decodeURIComponent(match[1]),action:match[2]||''}:null;}
+function parseCompanyPath(path){const match=path.match(/^\/api\/crm\/companies\/([^/]+)(?:\/(pipeline|archive|restore|suppress|mark-customer|contacts|activities|enrich-contact|confirm-public-email))?$/);return match?{id:decodeURIComponent(match[1]),action:match[2]||''}:null;}
 function parseContactPath(path){const match=path.match(/^\/api\/crm\/contacts\/([^/]+)$/);return match?{id:decodeURIComponent(match[1])}:null;}
 const WRITER_ROLES=['owner','researcher','sales'];
 const CLIENT_ACTIVITY_TYPES=new Set(['dossier.built','content.approved','email.sent','email.reply_received','meeting.recorded','proposal.recorded','deal.won','deal.lost']);
@@ -48,9 +50,11 @@ export async function enrichCrmContact(request,env,cors,access,companyId){
   const webhookSecret=apolloWebhookSigningSecret(env);
   if(phoneRequested&&!webhookSecret)return error('Apollo phone enrichment requires server signing material',409,cors,'CRM_APOLLO_WEBHOOK_SECRET_REQUIRED');
 
-  const existing=await env.DB.prepare(`SELECT * FROM crm_contacts WHERE workspace_id=? AND company_id=? AND source='apollo' AND external_person_id=? AND archived_at IS NULL AND normalized_email IS NOT NULL`).bind(access.context.workspaceId,companyId,personId).first();
+  const existing=await env.DB.prepare(`SELECT * FROM crm_contacts WHERE workspace_id=? AND company_id=? AND source='apollo' AND external_person_id=? AND LOWER(email_status)='verified' AND archived_at IS NULL AND normalized_email IS NOT NULL`).bind(access.context.workspaceId,companyId,personId).first();
   if(existing&&!phoneRequested)return json({request:{status:'already_verified',credits_used:0},contact:existing,duplicate:true},200,cors);
 
+  const capabilities=await apolloCapabilities(env,access.context.workspaceId);
+  if(phoneRequested?!capabilities.phone:!capabilities.email)return error('Enable Apollo '+(phoneRequested?'phone':'email')+' enrichment in Settings before using credits',409,cors,'CRM_APOLLO_CAPABILITY_DISABLED');
   const reserved=phoneRequested?9:1;const usage=await crmEnrichmentUsage(env.DB,access.context.workspaceId);
   if(usage.daily+reserved>Number(policy.daily_credit_limit)||usage.monthly+reserved>Number(policy.monthly_credit_limit))return error('Apollo enrichment blocked by workspace credit limit',429,cors,'CRM_APOLLO_CREDIT_LIMIT');
 
@@ -116,6 +120,7 @@ export async function handleCrmRoute(request,env,corsOverride={}){
       if(company.action==='restore'&&request.method==='POST')return json({company:await restoreCrmCompany(env.DB,access.context,company.id)},200,cors);
       if(company.action==='suppress'&&request.method==='POST')return json({company:await suppressCrmCompany(env.DB,access.context,company.id)},200,cors);
       if(company.action==='mark-customer'&&request.method==='POST')return json({company:await markCrmCustomer(env.DB,access.context,company.id)},200,cors);
+      if(company.action==='confirm-public-email'&&request.method==='POST'){return json({contact:await confirmPublicWorkEmail(env,access.context,company.id,await request.json())},200,cors);}
       if(company.action==='enrich-contact'){
         if(request.method==='POST')return enrichCrmContact(request,env,cors,access,company.id);
         return error('Method not allowed',405,cors);
