@@ -60,10 +60,10 @@ export async function researchBuyerContacts(candidate,search,guard){
       if(name.split(/\s+/).length<2||person.identityStatus==='pending'){person.emailResearch={status:'not_searched',searches:0,failed:0,checkedAt:''};return;}
       const guesses=discovery.rankedEmailGuesses(person,candidate.domain,candidate.people).slice(0,3);
       const emailTerms=[`"@${candidate.domain}"`,...guesses.map(item=>`"${item.email}"`)].join(" OR ");
-      const queries=[`"${name}" "${candidate.company}" (email OR phone OR kontakt)`,`"${name}" "${candidate.company}" (${emailTerms})`,`"${name}" "${candidate.company}" "@gmail.com"`];
+      const queries=[`site:${candidate.domain} "${name}"`,`"${name}" "${candidate.company}" (email OR phone OR kontakt)`,`"${name}" "${candidate.company}" (${emailTerms})`,`"${name}" "${candidate.company}" "@gmail.com"`];
       const settled=await Promise.allSettled(queries.map(query=>search(query)));
       const rows=settled.flatMap(row=>row.status==='fulfilled'?row.value:[]),failed=settled.filter(row=>row.status==='rejected').length;
-      const matched=discovery.matchPublicBuyerDetails([person],rows,candidate.domain)[0];Object.assign(person,matched);
+      const matched=discovery.matchPublicBuyerDetails([person],rows,candidate.domain)[0];Object.assign(person,matched,discovery.matchBuyerScopeEvidence(matched,rows,candidate));
       const findings=discovery.sourcedBuyerEmails(person,candidate.domain,rows,candidate.company);
       if(findings.length)person.patternFindings=[...new Map([...(person.patternFindings||[]),...findings].map(item=>[item.email,item])).values()];
       person.emailResearch={status:failed===queries.length?'unavailable':failed?'partial':'complete',searches:queries.length,failed,checkedAt:new Date().toISOString()};
@@ -113,7 +113,7 @@ async function buyer(env,workspaceId,candidate,config,guard,userId){
   candidate.buyerDiscovery.researchIncomplete=candidate.buyerDiscovery.issues.length>0||pool.some(person=>person.identityStatus==='pending');
   const verified=company?(await env.DB.prepare("SELECT * FROM crm_contacts WHERE workspace_id=? AND company_id=? AND LOWER(email_status) IN ('verified','public_confirmed') AND archived_at IS NULL").bind(workspaceId,company.id).all()).results||[]:[];
   // Explicitly kept buyers rank first, but saving alone never bypasses role/email gates.
-  const eligible=discovery.selectDecisionMakers(verified,profile,20).filter(p=>String(p.name||'').trim().split(/\s+/).length>=2&&globalThis.LeadIntelContactPolicy.accepted(p,candidate.domain,config.buyers.confirmationLevel));
+  const eligible=discovery.selectDecisionMakers(verified,profile,20).filter(p=>String(p.name||'').trim().split(/\s+/).length>=2&&globalThis.LeadIntelContactPolicy.accepted(p,candidate.domain,config.buyers.confirmationLevel)&&!candidate.people.some(person=>String(person.name||'').toLowerCase()===String(p.name||'').toLowerCase()&&(person.opportunityScope?.status==='review_required'||discovery.qualifyBuyer(person,profile,candidate).gaps.some(gap=>gap.startsWith('Buyer country differs')))));
   const pinned=new Set(candidate.people.filter(p=>p.kept).map(discovery.buyerIdentity));
   eligible.sort((a,b)=>Number(pinned.has(discovery.buyerIdentity(b)))-Number(pinned.has(discovery.buyerIdentity(a))));
   const crmContext={workspaceId,userId,role:'owner'};
