@@ -52,3 +52,8 @@ test('save and proceed awaits save, stops on failure and never toggles an alread
   assert.deepEqual(calls,kept?['proceed']:saved?['save','proceed']:['save']);assert.equal(result,kept||saved);
  }
 });
+
+test('explicit automatic selection overrides a retained manual policy for email controls',()=>{
+ const {context,person,candidate}=runtime(false);context.document.querySelector=()=>({value:'automatic'});
+ assert.match(context.prospectContactControls(candidate,person),/aria-pressed="true"[^>]*disabled[^>]*>Confirm email ✓/);
+});

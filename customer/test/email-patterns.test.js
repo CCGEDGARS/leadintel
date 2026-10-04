@@ -60,7 +60,7 @@ test('focused grounded search can recover a name and address from a public assoc
 });
 test('Gmail discovery searches full name and company and accepts a sourced non-pattern address',async()=>{
  const queries=[];
- const ctx={...context,crmAuthenticated:()=>false,bridge:()=>null,searchBuyerPublicPages:async query=>{queries.push(query);return query.includes('"@gmail.com"')?[{url:'https://association.test/team',markdown:'Marta Berzina at Example: contact bluebird42@gmail.com'},{url:'https://association.test/other',markdown:'Other Person at Example: stranger@gmail.com'}]:[];}};
+ const ctx={...context,crmAuthenticated:()=>false,bridge:()=>null,searchBuyerPublicPages:async query=>{queries.push(query);return query.includes('"@gmail.com"')?[{url:'https://association.test/team',markdown:'Marta Berzina at Example: contact bluebird42@gmail.com'},{url:'https://association.test/other',markdown:'Other Person at Example: stranger@gmail.com'},{url:'https://club.test',markdown:'Marta Berzina supports Example. Club contact: clubteam@gmail.com'}]:[];}};
  const start=source.indexOf('async function searchBuyerEmailPatterns('),end=source.indexOf('async function groundedBuyerFollowUp(',start);
  vm.runInNewContext(`${source.slice(start,end)};globalThis.search=searchBuyerEmailPatterns;`,ctx);
  const candidate={company:'Example',domain:'example.lv',people:[{name:'Marta Berzina'}]};
@@ -73,7 +73,7 @@ test('Gmail display uses Not found and never displays guessed Hunter addresses',
  const start=source.indexOf('function buyerContactRows('),end=source.indexOf('function emailPatternCandidates(',start);
  vm.runInNewContext(`${source.slice(start,end)};globalThis.render=buyerContactRows;`,ctx);
  const absent=ctx.render({hunterChecks:{'guess@gmail.com':{status:'invalid'}}},{domain:'example.lv'});
- assert.match(absent,/<strong>Gmail<\/strong><span>Not found/);assert.doesNotMatch(absent,/guess@gmail/);
+ assert.match(absent,/<strong>Gmail<\/strong><span>Not searched yet/);assert.doesNotMatch(absent,/guess@gmail/);
  const found=ctx.render({patternFindings:[{email:'bluebird42@gmail.com',url:'https://association.test'}]},{domain:'example.lv'});
  assert.match(found,/<strong>Gmail<\/strong><span><span class="buyer-email-result">bluebird42@gmail.com<\/span>/);
 });

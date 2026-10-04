@@ -1,6 +1,7 @@
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
-const PUBLIC_NAME_CHECK_VERSION="buyer-contacts-v14-kept-pool";
+const PUBLIC_NAME_CHECK_VERSION="buyer-contacts-v15-search-state";
+const BUYER_RESEARCH_VERSION="20261004-research-state-v1";
 const CONTACT_CONFIRM_VERSION="buyer-contacts-v10-pattern-search";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
 const DELIVERY_STORAGE_KEY="leadintel_customer_v2_delivery";
@@ -16,7 +17,7 @@ const MAX_DISCOVERY_COMPANY_CHECKS=30;
 const SAVING_SEARCH_RESULT_LIMIT=4;
 const SAVING_COMPANY_CHECK_LIMIT=3;
 const SAVING_FIRECRAWL_CALL_LIMIT=10;
-const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261004-v3";
+const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261004-v4";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20261004-buyer-four-actions-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -734,14 +735,14 @@ function buyerContactRows(person={},candidate={},result={}){
   const renderEmails=type=>{
     const domain=type==='gmail'?'gmail.com':canonicalDomain(candidate.domain);
     const addresses=[...new Set([...(contact.work_email&&type==='company'?[contact.work_email]:[]),...(person.hunterFound&&type==='company'?[person.hunterFound]:[]),...found.map(item=>item.email),...Object.keys(person.hunterChecks||{}).filter(email=>type!=='gmail'||found.some(item=>item.email===email))].filter(email=>String(email).toLowerCase().endsWith(`@${domain}`)))];
-    if(!addresses.length)return type==='gmail'?'Not found':'No company email found';
+    if(!addresses.length){const status=person.emailResearch?.status;return status==='complete'?(type==='gmail'?'Not found in completed searches':'No company email found in completed searches'):status==='partial'||status==='unavailable'?'Search incomplete':status==='running'?'Searching…':'Not searched yet';}
     return addresses.map(email=>{
       const check=person.hunterChecks?.[email],publicRow=found.find(item=>item.email===email);
       const label=contact.work_email===email?'Apollo verified · primary for flow':check?hunterStatusLabel(check,email):publicRow?'Public listing':'Hunter suggested · unconfirmed';
       return type==='gmail'?`<span class="buyer-email-result">${esc(email)}</span>`:`<span class="buyer-email-result">${esc(email)} · ${esc(label)}${source(publicRow?.url)}</span>`;
     }).join('');
   };
-  return `<div class="buyer-contact-fields" aria-label="Contact details"><div><strong>LinkedIn</strong><span>${profile&&profile===person.linkedinConfirmedUrl?"Confirmed by you":profile?"Public match":"Needs confirmation"}</span></div><div><strong>Phone</strong><span>${phone?`${esc(phone)} · Apollo${contact.phone_status==="Verified"?" verified":""}`:person.publicPhone?`${esc(person.publicPhone)} · Public · unverified${source(person.publicPhoneUrl)}`:"No direct phone"}</span></div><div><strong>Company email</strong><span>${renderEmails('company')}</span></div><div><strong>Gmail</strong><span>${renderEmails('gmail')}</span></div><small class="people-note">Automatic flow uses a verified company email as primary. </small></div>`;
+  return `<div class="buyer-contact-fields" aria-label="Contact details"><div><strong>LinkedIn</strong><span>${profile&&profile===person.linkedinConfirmedUrl?"Confirmed by you":profile?"Public match":"Needs confirmation"}</span></div><div><strong>Phone</strong><span>${phone?`${esc(phone)} · Apollo${contact.phone_status==="Verified"?" verified":""}`:person.publicPhone?`${esc(person.publicPhone)} · Public · unverified${source(person.publicPhoneUrl)}`:person.emailResearch?.status==='complete'?"No direct phone found in public searches":"Not researched yet"}</span></div><div><strong>Company email</strong><span>${renderEmails('company')}</span></div><div><strong>Gmail</strong><span>${renderEmails('gmail')}</span></div><small class="people-note">Automatic flow uses a verified company email as primary. </small></div>`;
 }
 function emailPatternCandidates(person={},domain=''){
   const full=String(person.publicName||person.name||'').trim().replace(/\s+/g,' ').split(' ');
@@ -1055,7 +1056,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
       const batch=publicQueries.slice(offset,offset+4);
       const settled=await Promise.allSettled(batch.map(query=>searchBuyerPublicPages(query,8,controller.signal)));
       settled.forEach((result,index)=>{
-        if(result.status==="fulfilled"){rows.push(...result.value);firecrawlSuccess++;providerStatus.firecrawl.results+=result.value.length;}
+        if(result.status==="fulfilled"){rows.push(...result.value.map(row=>({...row,buyerSource:"firecrawl"})));firecrawlSuccess++;providerStatus.firecrawl.results+=result.value.length;}
         else{firecrawlFailed++;const failure=buyerProviderFailure(result.reason,batch[index]);providerStatus.firecrawl.failures=[...(providerStatus.firecrawl.failures||[]),failure];issues.push(`Firecrawl: ${failure.message}`);}
       });
       candidate.buyerResearchProgress={...candidate.buyerResearchProgress,label:`Searching buyer evidence · ${Math.min(offset+batch.length,publicQueries.length)}/${publicQueries.length} queries`};persist();
@@ -1067,7 +1068,7 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
     if(crmAuthenticated()&&bridge()?.workspace?.id){
       try{
         const response=await fetchBuyerResearch(`${LEADINTEL_API}/api/ai/web-search?workspace_id=${encodeURIComponent(bridge().workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({query:plan.followUp,max_results:8,purpose:'contact_research'}),timeoutMs:60000,signal:controller.signal});
-        if(response.ok){const grounded=((await response.json()).results||[]);rows.push(...grounded);providerStatus.grounded={status:"complete",results:grounded.length};}
+        if(response.ok){const grounded=((await response.json()).results||[]);rows.push(...grounded.map(row=>({...row,buyerSource:"grounded"})));providerStatus.grounded={status:"complete",results:grounded.length};}
         else{const failure=await buyerResponseFailure(response);providerStatus.grounded={status:'failed',results:0,failures:[failure]};issues.push(`Grounded research: ${failure.message}`);}
       }catch(error){
         if(controller.signal.aborted)throw error;
@@ -1104,8 +1105,9 @@ async function searchDecisionMakers(candidate,{pipeline=false,retry,allowCrmSync
       if(resolved.issues.length)providerStatus.firecrawl.status='partial';
     }
     for(const diagnostic of resultDiagnostics){if(!diagnostic.accepted)continue;const person=pool.find(person=>person.name===diagnostic.parsedName&&person.title===diagnostic.parsedTitle);diagnostic.poolSelection=person?"retained":"excluded";if(!person){diagnostic.accepted=false;diagnostic.rejectionReason="Not retained after deduplication or pool limit";}}
+    for(const source of ['firecrawl','grounded'])providerStatus[source].accepted=new Set(resultDiagnostics.filter(row=>row.source===source&&row.accepted).map(row=>row.parsedName)).size;
     const ranked=LeadIntelDiscovery.recommendedBuyers(pool,researchProfile);
-    candidate.buyerDiscovery={target:30,found:pool.length,sourceResults:rows.length,apolloDiscoveryCount,providerStatus,resultDiagnostics,researchIncomplete:companyResearchIncomplete||buyerResearchIncomplete(providerStatus)||pool.some(person=>person.identityStatus==='pending'),opportunityRoles:plan.roles,expandedRoles:plan.expandedRoles,opportunityTerms:plan.opportunityTerms,issues,pool,checkedAt:new Date().toISOString()};
+    candidate.buyerDiscovery={researchVersion:BUYER_RESEARCH_VERSION,target:30,found:pool.length,sourceResults:rows.length,apolloDiscoveryCount,providerStatus,resultDiagnostics,researchIncomplete:companyResearchIncomplete||buyerResearchIncomplete(providerStatus)||pool.some(person=>person.identityStatus==='pending'),opportunityRoles:plan.roles,expandedRoles:plan.expandedRoles,opportunityTerms:plan.opportunityTerms,issues,pool,checkedAt:new Date().toISOString()};
     candidate.people=[...pool.filter(person=>person.kept&&person.identityStatus!=='pending'&&String(person.publicName||person.name).trim().split(/\s+/).length>=2),...ranked.filter(person=>!person.kept)].slice(0,6);
     candidate.publicContactVersion='';
     candidate.peopleStatus=candidate.people.length?"complete":"empty";candidate.buyerRolesChanged=false;
@@ -1347,6 +1349,8 @@ async function keepBuyer(domain,index,{scope="selected"}={}){
 }
 function buyerAutomaticMode(){
   const policy=window.LeadIntelOutreachAutomationUI?.getPolicy?.()||{};
+  const selectedMode=typeof document!=='undefined'?document.querySelector?.('[name="delivery-setup-mode"]:checked')?.value:'';
+  if(selectedMode)return selectedMode==='automatic';
   const workflow=policy.approvedWorkflow?.status||window.LeadIntelQualificationSettings?.get?.().status;
   if(policy.approvedWorkflow?.status)return policy.approvedWorkflow.status==='automatic';
   if(workflow&&workflow!=='manual')return workflow==='automatic';
@@ -1497,19 +1501,22 @@ async function searchBuyerEmailPatterns(candidate,existingRows,signal){
   let searches=0,failed=0;
   const people=Array.isArray(candidate.people)?candidate.people:[];
   await Promise.all(people.map(async person=>{
+    let personSearches=0,personFailed=0,finished=false;
+    person.emailResearch={status:'running',searches:0,failed:0,checkedAt:''};
+    try{
     const patterns=emailPatternCandidates(person,candidate.domain);
     if(!patterns.length)return;
     const rows=[...existingRows];
     for(const type of ['Company','Gmail']){
       const group=patterns.filter(item=>item.type===type);
       if(!group.length)continue;
-      searches++;
+      searches++;personSearches++;
       try{rows.push(...await searchBuyerPublicPages(group.map(item=>`"${item.email}"`).join(' OR '),5,signal));}
-      catch(error){if(error?.name==='AbortError')throw error;failed++;}
+      catch(error){if(error?.name==='AbortError')throw error;failed++;personFailed++;}
     }
     const fullName=String(person.publicName||person.name||'').trim();
     if(fullName.split(/\s+/).length>1){
-      searches++;
+      searches++;personSearches++;
       try{
         const gmailRows=await searchBuyerPublicPages(`"${fullName}" "${candidate.company}" "@gmail.com"`,5,signal);
         rows.push(...gmailRows);
@@ -1521,11 +1528,14 @@ async function searchBuyerEmailPatterns(candidate,existingRows,signal){
           for(const match of body.matchAll(/[A-Z0-9._%+-]+@gmail\.com/gi)){
             const nearby=body.slice(Math.max(0,match.index-220),match.index+match[0].length+220).toLowerCase();
             if(!nearby.includes(fullName.toLowerCase())||!nearby.includes(String(candidate.company).toLowerCase())||/guessed|predicted|email pattern/i.test(nearby))continue;
+            const escapedName=fullName.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),escapedCompany=String(candidate.company).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+            const attribution=new RegExp(escapedName+'(?:\\s+(?:at|hos|på)\\s+|\\s*[,|·]\\s*)'+escapedCompany+'[\\s:·,|-][^\\n]{0,100}'+match[0].replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'iu');
+            if(!attribution.test(nearby))continue;
             const email=match[0].toLowerCase();
             if(!person.patternFindings.some(item=>item.email===email))person.patternFindings.push({email,url:source.href,status:'public_unverified'});
           }
         }
-      }catch(error){if(error?.name==='AbortError')throw error;failed++;}
+      }catch(error){if(error?.name==='AbortError')throw error;failed++;personFailed++;}
     }
     person.patternFindings=[...new Map([...(person.patternFindings||[]),...patternListings(person,candidate.domain,rows)].map(item=>[item.email,item])).values()];
     // Grouped OR searches can bury exact matches, especially in association PDFs.
@@ -1535,20 +1545,22 @@ async function searchBuyerEmailPatterns(candidate,existingRows,signal){
       const name=String(person.publicName||person.name||'').trim();
       if(email&&name){
         const query=`"${email}" "${name}"`;
-        searches++;
+        searches++;personSearches++;
         try{person.patternFindings=[...(person.patternFindings||[]),...patternListings(person,candidate.domain,[...rows,...await searchBuyerPublicPages(query,5,signal)])];}
-        catch(error){if(error?.name==='AbortError')throw error;failed++;}
+        catch(error){if(error?.name==='AbortError')throw error;failed++;personFailed++;}
         if(!person.patternFindings.some(item=>item.email===email)&&crmAuthenticated()&&bridge()?.workspace?.id){
-          searches++;
+          searches++;personSearches++;
           try{
             const response=await fetchBuyerResearch(`${LEADINTEL_API}/api/ai/web-search?workspace_id=${encodeURIComponent(bridge().workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({query,max_results:5,purpose:'contact_research'}),signal});
             if(!response.ok)throw new Error(`Grounded search failed (${response.status})`);
             const payload=await response.json();
             person.patternFindings=[...(person.patternFindings||[]),...patternListings(person,candidate.domain,[...rows,...(payload.results||[])])];
-          }catch(error){if(error?.name==='AbortError')throw error;failed++;}
+          }catch(error){if(error?.name==='AbortError')throw error;failed++;personFailed++;}
         }
       }
     }
+    finished=true;
+    }finally{person.emailResearch={status:!personSearches?'not_searched':!finished||personFailed?(personFailed>=personSearches?'unavailable':'partial'):'complete',searches:personSearches,failed:personFailed,checkedAt:new Date().toISOString()};}
   }));
   return {searches,failed};
 }
@@ -1651,6 +1663,10 @@ async function runPublicProspectContacts(domain,{signal}={}){
         }
       }catch(error){profileIssue=error?.name==='AbortError'?'Public profile search timed out':error.message||'Public profile search failed';}
     }
+    const patternResearch=await searchBuyerEmailPatterns(candidate,results,controller.signal);
+    research.patternSearches=patternResearch.searches;
+    if(patternResearch.failed)research.issues.push(`${patternResearch.failed} email evidence searches unavailable`);
+    candidate.publicResearch={...research,checkedAt:new Date().toISOString()};saveDiscovery();
     const followUp=await groundedBuyerFollowUp(candidate,controller.signal);
     research.openai=followUp.status;if(followUp.reason)research.issues.push(followUp.reason);
     const groundedRows=[...followUp.rows];
@@ -1679,9 +1695,7 @@ async function runPublicProspectContacts(domain,{signal}={}){
     }
     candidate.people=LeadIntelDiscovery.matchPublicBuyerDetails(candidate.people||[],results,domain);
     candidate.publicContacts=LeadIntelDiscovery.extractPublicContacts(results,domain);
-    const patternResearch=await searchBuyerEmailPatterns(candidate,results,controller.signal);
-    research.patternSearches=patternResearch.searches;
-    if(patternResearch.failed)research.issues.push(`${patternResearch.failed} email evidence searches unavailable`);
+
     const review=await reviewBuyerPublicEvidence(candidate,[...results,...groundedProfiles],controller.signal);
     research.gemini=review.status==='complete'?'complete':'unavailable';research.conflicts=(review.conflicts||[]).slice(0,4);
     research.sources=[...new Set(results.filter(row=>canonicalDomain(row.url)===domain&&(row.markdown||row.content)).map(row=>row.url))].slice(0,8);
@@ -1717,6 +1731,9 @@ function scheduleSavedBuyerPublicChecks(){
     if(candidate.publicContactStatus==='loading'||candidate.publicContactStatus==='error')continue;
     if(candidate.publicContactStatus&&candidate.publicContactStatus!=='idle'&&candidate.publicContactVersion===PUBLIC_NAME_CHECK_VERSION)continue;
     automaticPublicChecks.add(domain);
+    if(crmAuthenticated()&&candidate.buyerDiscovery?.checkedAt&&candidate.buyerDiscovery.researchVersion!==BUYER_RESEARCH_VERSION&&candidate.peopleStatus!=='loading'){
+      setTimeout(()=>{if(loadMeta().visibleStep===5)void searchDecisionMakers(candidate,{allowCrmSync:true});},0);continue;
+    }
     setTimeout(()=>{if(loadMeta().visibleStep===5)void findPublicProspectContacts(domain);},0);
   }
 }
@@ -1781,10 +1798,11 @@ function buyerProviderFailure(error={},query=''){return {status:Number(error.sta
 async function buyerResponseFailure(response){const body=await response.json().catch(()=>({}));return buyerProviderFailure({status:response.status,code:body.code,message:body.error||body.message||`Provider failed (HTTP ${response.status})`});}
 function buyerProviderStatusHtml(candidate){
   const status=candidate.buyerDiscovery?.providerStatus;if(!status)return "";
+  const stale=Boolean(candidate.buyerDiscovery?.checkedAt&&candidate.buyerDiscovery.researchVersion!==BUYER_RESEARCH_VERSION);
   const label=(name,row)=>`<li><strong>${name}</strong><span>${esc(row?.status||"unknown")} · ${Number(row?.results)||0} source results${row?.accepted!=null?` · ${Number(row.accepted)} accepted`:''}</span>${(row?.failures||[]).slice(0,18).map(f=>`<small>${f.status?`HTTP ${Number(f.status)} · `:''}${esc(f.message)}${f.query?` · ${esc(f.query)}`:''}</small>`).join('')}</li>`;
   const diagnostics=candidate.buyerDiscovery?.resultDiagnostics||[];
   const pending=(candidate.buyerDiscovery?.pool||[]).filter(person=>person.identityStatus==='pending');
-  return `${pending.length?`<section class="buyer-pending-identities"><strong>${pending.length} potential buyers · identity verification pending</strong><ul>${pending.map(person=>`<li>${esc(person.name)} · ${esc(person.title)} · ${esc(person.organization)}<small>Directory provided a first name only. Full identity must be verified before outreach.</small></li>`).join('')}</ul></section>`:''}${candidate.buyerDiscovery?.researchIncomplete?'<p class="selected-prospect-people-state warning" role="status"><strong>Research incomplete</strong> · Some provider or identity checks did not finish. These results do not establish that no matching buyers exist.</p>':''}<details class="buyer-provider-status" open><summary>Research coverage</summary><ul>${label("Public web / Firecrawl",status.firecrawl)}${label("Grounded web research",status.grounded)}${label("Identity directory discovery",status.identity)}</ul>${candidate.buyerDiscovery?.opportunityTerms?.length?`<p><strong>Opportunity context:</strong> ${esc(candidate.buyerDiscovery.opportunityTerms.join(" · "))}</p>`:""}</details>${diagnostics.length?`<details class="buyer-result-trace"><summary>Result decisions (${diagnostics.length})</summary><ul>${diagnostics.map(d=>`<li><strong>${esc(d.parsedName||d.title||'Unnamed result')}</strong> · ${esc(d.parsedTitle)} · ${esc(d.parsedCompany)}<small>${esc(d.source)} #${Number(d.index)+1} · parsing: ${esc(d.parsing)} · company: ${esc(d.companyVerification)} · role: ${esc(d.roleMatching)} · ${d.accepted?'Accepted':esc(d.rejectionReason||'Not selected')}</small></li>`).join('')}</ul></details>`:''}`;
+  return `${stale?'<p class="selected-prospect-people-state warning" role="status"><strong>Earlier research run</strong> · Updating identity and contact checks. Saved evidence stays protected.</p>':''}${candidate.buyerDiscovery?.checkedAt?`<p class="people-note">Research checked: ${esc(candidate.buyerDiscovery.checkedAt)}</p>`:''}${pending.length?`<section class="buyer-pending-identities"><strong>${pending.length} potential buyers · identity verification pending</strong><ul>${pending.map(person=>`<li>${esc(person.name)} · ${esc(person.title)} · ${esc(person.organization)}<small>Directory provided a first name only. Full identity must be verified before outreach.</small></li>`).join('')}</ul></section>`:''}${candidate.buyerDiscovery?.researchIncomplete?'<p class="selected-prospect-people-state warning" role="status"><strong>Research incomplete</strong> · Some provider or identity checks did not finish. These results do not establish that no matching buyers exist.</p>':''}<details class="buyer-provider-status" open><summary>Research coverage</summary><ul>${label("Public web / Firecrawl",status.firecrawl)}${label("Grounded web research",status.grounded)}${label("Identity directory discovery",status.identity)}</ul>${candidate.buyerDiscovery?.opportunityTerms?.length?`<p><strong>Opportunity context:</strong> ${esc(candidate.buyerDiscovery.opportunityTerms.join(" · "))}</p>`:""}</details>${diagnostics.length?`<details class="buyer-result-trace"><summary>Result decisions (${diagnostics.length})</summary><ul>${diagnostics.map(d=>`<li><strong>${esc(d.parsedName||d.title||'Unnamed result')}</strong> · ${esc(d.parsedTitle)} · ${esc(d.parsedCompany)}<small>${esc(d.source)} #${Number(d.index)+1} · parsing: ${esc(d.parsing)} · company: ${esc(d.companyVerification)} · role: ${esc(d.roleMatching)} · ${d.accepted?'Accepted':esc(d.rejectionReason||'Not selected')}</small></li>`).join('')}</ul></details>`:''}`;
 }
 function buyerResearchProgressHtml(candidate){
   const progress=candidate.buyerResearchProgress||{phase:"company",label:"Verifying company",step:1,total:5};

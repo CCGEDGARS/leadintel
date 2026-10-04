@@ -23,7 +23,7 @@ async function search(env,workspaceId,query,guard){
   return discovery.normalizeCompanySearchResults({data:raw.filter(item=>String(item.markdown||item.content||item.text||'').trim().length>=120)},query).map(item=>({...item,verifiedAt:new Date().toISOString()}));
 }
 async function searchBuyerProfiles(env,workspaceId,candidate,roles,guard){
-  const rows=[],issues=[];
+  const rows=[],issues=[],providerStatus={firecrawl:{status:'pending',results:0,queries:0,failures:[]},grounded:{status:'pending',results:0},identity:{status:'pending',results:0}};
   const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'firecrawl');
   const url=credential.source==='customer'?'https://api.firecrawl.dev/v2/search':`${env.FIRECRAWL_PROXY_URL||'https://apollo-proxy.edgars-7e7.workers.dev'}/firecrawl-search`;
   const headers={'Content-Type':'application/json',Accept:'application/json'};if(credential.source==='customer')headers.Authorization=`Bearer ${credential.apiKey}`;
@@ -32,19 +32,53 @@ async function searchBuyerProfiles(env,workspaceId,candidate,roles,guard){
     await guard();
     try{
       const payload=await providerJson(url,{method:'POST',headers,body:JSON.stringify({query,limit:10,scrapeOptions:{formats:['markdown']}})});
-      rows.push(...(Array.isArray(payload.data)?payload.data:payload.data?.web||payload.web||[]));
-    }catch(error){issues.push(error.message);}
-    await guard();
+      const found=Array.isArray(payload.data)?payload.data:payload.data?.web||payload.web||[];rows.push(...found.map(row=>({...row,buyerSource:'firecrawl'})));providerStatus.firecrawl.results+=found.length;
+    }catch(error){issues.push(error.message);providerStatus.firecrawl.failures.push({message:error.message,query});}
+    providerStatus.firecrawl.queries++;await guard();
   }
   await guard();
-  try{const grounded=await searchWorkspaceWeb(env,workspaceId,plan.followUp);rows.push(...(grounded.results||[]));if(grounded.status!=='complete')issues.push('Grounded buyer discovery unavailable');}catch{issues.push('Grounded buyer discovery unavailable');}
+  providerStatus.firecrawl.status=providerStatus.firecrawl.failures.length===plan.queries.length?'unavailable':providerStatus.firecrawl.failures.length?'partial':'complete';
+  try{const grounded=await searchWorkspaceWeb(env,workspaceId,plan.followUp);rows.push(...(grounded.results||[]).map(row=>({...row,buyerSource:'grounded'})));providerStatus.grounded={status:grounded.status==='complete'?'complete':'unavailable',results:(grounded.results||[]).length};if(grounded.status!=='complete')issues.push('Grounded buyer discovery unavailable');}catch(error){issues.push('Grounded buyer discovery unavailable');providerStatus.grounded={status:'failed',results:0,failures:[{message:error.message}]};}
   await guard();
   const searchIdentityRows=async query=>{
     await guard();
     const payload=await providerJson(url,{method:'POST',headers,body:JSON.stringify({query,limit:8,scrapeOptions:{formats:['markdown']}})});
     await guard();return Array.isArray(payload.data)?payload.data:payload.data?.web||payload.web||[];
   };
-  return {people:discovery.discoverPublicBuyers(rows,candidate.company,{decisionMakers:plan.roles.join('; '),companyDomain:candidate.domain}),rows,searchIdentityRows,roles:plan.roles,sourceResults:rows.length,issues};
+  const trace=discovery.tracePublicBuyers(rows,candidate.company,{decisionMakers:plan.roles.join('; '),companyDomain:candidate.domain});
+  for(const source of ['firecrawl','grounded'])providerStatus[source].accepted=new Set(trace.diagnostics.filter(row=>row.source===source&&row.accepted).map(row=>row.parsedName)).size;
+  return {people:trace.people,resultDiagnostics:trace.diagnostics,providerStatus,rows,searchIdentityRows,roles:plan.roles,sourceResults:rows.length,issues};
+}
+export async function researchBuyerContacts(candidate,search,guard){
+  for(let offset=0;offset<candidate.people.length;offset+=2){
+    await guard();
+    await Promise.all(candidate.people.slice(offset,offset+2).map(async person=>{
+      const name=String(person.publicName||person.name||'').trim();
+      if(name.split(/\s+/).length<2||person.identityStatus==='pending'){person.emailResearch={status:'not_searched',searches:0,failed:0,checkedAt:''};return;}
+      const queries=[`"${name}" "${candidate.company}" (email OR phone OR kontakt)`,`"${name}" "${candidate.company}" "@${candidate.domain}"`,`"${name}" "${candidate.company}" "@gmail.com"`];
+      const settled=await Promise.allSettled(queries.map(query=>search(query)));
+      const rows=settled.flatMap(row=>row.status==='fulfilled'?row.value:[]),failed=settled.filter(row=>row.status==='rejected').length;
+      const matched=discovery.matchPublicBuyerDetails([person],rows,candidate.domain)[0];Object.assign(person,matched);
+      for(const row of rows){
+        const text=[row.title,row.description,row.markdown,row.content].filter(Boolean).join(' ');
+        let source;try{source=new URL(row.url);}catch{continue;}
+        if(!['http:','https:'].includes(source.protocol)||source.username||source.password)continue;
+        for(const match of text.matchAll(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)){
+          const email=match[0].toLowerCase(),near=text.slice(Math.max(0,match.index-220),match.index+match[0].length+220).toLowerCase();
+          if(!email.endsWith('@'+candidate.domain)&&!email.endsWith('@gmail.com'))continue;
+          if(!near.includes(name.toLowerCase())||!near.includes(candidate.company.toLowerCase())||/predicted|guessed|email pattern/i.test(near))continue;
+          if(email.endsWith('@gmail.com')){
+            const escape=value=>value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+            const attribution=new RegExp(escape(name)+'(?:\\s+(?:at|hos|på)\\s+|\\s*[,|·]\\s*)'+escape(candidate.company)+'[\\s:·,|-][^\\n]{0,100}'+escape(match[0]),'iu');
+            if(!attribution.test(near))continue;
+          }
+          person.patternFindings=[...(person.patternFindings||[]).filter(item=>item.email!==email),{email,url:source.href,status:'public_unverified'}];
+        }
+      }
+      person.emailResearch={status:failed===queries.length?'unavailable':failed?'partial':'complete',searches:queries.length,failed,checkedAt:new Date().toISOString()};
+    }));
+    await guard();
+  }
 }
 async function buyer(env,workspaceId,candidate,config,guard){
   const company=await findCrmCompanyByDomain(env.DB,workspaceId,candidate.domain);
@@ -55,7 +89,7 @@ async function buyer(env,workspaceId,candidate,config,guard){
   const research=await searchBuyerProfiles(env,workspaceId,candidate,config.buyers.roles,guard);
   const profile={decisionMakers:research.roles.join('; '),companyDomain:candidate.domain};
   let pool=discovery.mergeBuyerPool([...(prior?.buyerDiscovery?.pool||[]),...(prior?.people||[])],research.people,profile);
-  candidate.buyerDiscovery={target:20,found:pool.length,pool,sourceResults:research.sourceResults,issues:research.issues,checkedAt:new Date().toISOString()};
+  candidate.buyerDiscovery={researchVersion:"20261004-research-state-v1",target:20,found:pool.length,pool,providerStatus:research.providerStatus,resultDiagnostics:research.resultDiagnostics,sourceResults:research.sourceResults,issues:research.issues,checkedAt:new Date().toISOString()};
   candidate.people=discovery.recommendedBuyers(pool,profile);
   // Identity discovery is allowed before paid/contact confirmation. Use Apollo people search
   // alongside public research; no email/phone reveal or waterfall flags are requested here.
@@ -68,10 +102,10 @@ async function buyer(env,workspaceId,candidate,config,guard){
         const identityTrace=discovery.traceIdentityBuyers(identityPayload,candidate,profile);
         const identityPeople=identityTrace.people;
         const expanded=discovery.mergeBuyerPool(pool,identityPeople,profile);
-        pool=expanded;candidate.buyerDiscovery={...candidate.buyerDiscovery,found:expanded.length,pool:expanded,identityFallback:'apollo_search',resultDiagnostics:identityTrace.diagnostics};
+        pool=expanded;candidate.buyerDiscovery={...candidate.buyerDiscovery,found:expanded.length,pool:expanded,identityFallback:'apollo_search',resultDiagnostics:[...candidate.buyerDiscovery.resultDiagnostics,...identityTrace.diagnostics]};candidate.buyerDiscovery.providerStatus.identity={status:'complete',results:identityTrace.diagnostics.length,accepted:identityPeople.length};
         candidate.people=discovery.recommendedBuyers(expanded,profile);
-      }else candidate.buyerDiscovery.issues.push('Identity-provider discovery not configured');
-    }catch(error){candidate.buyerDiscovery.issues=[...(candidate.buyerDiscovery.issues||[]),'Identity-provider discovery unavailable'];}
+      }else{candidate.buyerDiscovery.issues.push('Identity-provider discovery not configured');candidate.buyerDiscovery.providerStatus.identity.status='not_configured';}
+    }catch(error){candidate.buyerDiscovery.issues=[...(candidate.buyerDiscovery.issues||[]),'Identity-provider discovery unavailable'];candidate.buyerDiscovery.providerStatus.identity={status:'failed',results:0,failures:[{message:error.message}]};}
   }
   if(pool.some(person=>person.identityStatus==='pending')){
     const resolved=await discovery.resolvePendingBuyerIdentities(pool,research.rows,candidate,profile,research.searchIdentityRows);
@@ -79,6 +113,11 @@ async function buyer(env,workspaceId,candidate,config,guard){
     candidate.buyerDiscovery={...candidate.buyerDiscovery,pool,found:pool.length,resultDiagnostics:[...(candidate.buyerDiscovery.resultDiagnostics||[]),...resolved.diagnostics],issues:[...candidate.buyerDiscovery.issues,...resolved.issues]};
     candidate.people=discovery.recommendedBuyers(pool,profile);
   }
+  await researchBuyerContacts(candidate,research.searchIdentityRows,guard);
+  candidate.publicResearch={checkedAt:new Date().toISOString(),patternSearches:candidate.people.reduce((count,person)=>count+(person.emailResearch?.searches||0),0),issues:candidate.people.some(person=>person.emailResearch?.failed)?['Public email evidence searches incomplete']:[]};
+  candidate.publicContactStatus=candidate.people.some(person=>person.emailResearch?.failed)?'error':'complete';
+  pool=discovery.mergeBuyerPool(pool,candidate.people,profile);candidate.buyerDiscovery.pool=pool;
+  if(candidate.people.some(person=>['partial','unavailable'].includes(person.emailResearch?.status)))candidate.buyerDiscovery.issues.push('Public email evidence searches incomplete');
   candidate.buyerDiscovery.researchIncomplete=candidate.buyerDiscovery.issues.length>0||pool.some(person=>person.identityStatus==='pending');
   const verified=company?(await env.DB.prepare("SELECT * FROM crm_contacts WHERE workspace_id=? AND company_id=? AND LOWER(email_status)='verified' AND archived_at IS NULL").bind(workspaceId,company.id).all()).results||[]:[];
   // Explicitly kept buyers rank first, but saving alone never bypasses role/email gates.

@@ -1,0 +1,1156 @@
+{
+  "checkedAt": "2026-10-04T09:38:29.426Z",
+  "scope": "Managed public Firecrawl only; no authenticated Apollo, Hunter or customer workspace",
+  "roleQueries": [
+    "site:linkedin.com/in/ \"LKAB\" (\"Procurement Director\" OR \"Inköpschef\" OR \"Inköpsansvarig\" OR \"Inköpare\" OR \"Strategiskt inköp\")",
+    "site:linkedin.com/in/ \"LKAB\" (\"Procurement Manager\" OR \"Inköpschef\" OR \"Inköpsansvarig\" OR \"Inköpare\" OR \"Strategiskt inköp\")",
+    "site:linkedin.com/in/ \"LKAB\" (\"Strategic Sourcing Manager\" OR \"Strategisk inköpare\" OR \"Strategiskt inköp\")",
+    "site:linkedin.com/in/ \"LKAB\" (\"Project Director\" OR \"Projektchef\" OR \"Projektledare\" OR \"Projektansvarig\")",
+    "site:linkedin.com/in/ \"LKAB\" (\"Engineering Director\" OR \"Teknisk chef\" OR \"Ingenjörschef\" OR \"Teknisk projektledare\")",
+    "site:linkedin.com/in/ \"LKAB\" (\"Operations Director\" OR \"Driftchef\" OR \"Anläggningschef\")"
+  ],
+  "sourceResults": 48,
+  "trace": [
+    {
+      "index": 0,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/robert-palo-a779a536",
+      "title": "Robert Palo – Inköpschef Affärsområde Järnmalm / Head of ...",
+      "parsedName": "Robert Palo",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "complete",
+      "companyVerification": "rejected",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "Result has no exact target-company employment evidence"
+    },
+    {
+      "index": 1,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/malin-barsk-207bb4158",
+      "title": "Malin Barsk – Strategisk inköpare på LKAB | LinkedIn",
+      "parsedName": "Malin Barsk",
+      "parsedTitle": "Strategisk inköpare",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "complete",
+      "accepted": true,
+      "rejectionReason": "",
+      "matchedBuyerRole": "Procurement Director"
+    },
+    {
+      "index": 2,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/kalle-m%C3%A5g%C3%A5rd-68b1a0136",
+      "title": "Kalle Mågård – Strategisk inköpare på LKAB | LinkedIn",
+      "parsedName": "Kalle Mågård",
+      "parsedTitle": "Strategisk inköpare",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "complete",
+      "accepted": true,
+      "rejectionReason": "",
+      "matchedBuyerRole": "Procurement Director"
+    },
+    {
+      "index": 3,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/jens-pers%C3%A4ter-606a5a40",
+      "title": "Jens Persäter – strategisk inköpare på LKAB - LinkedIn",
+      "parsedName": "Jens Persäter",
+      "parsedTitle": "strategisk inköpare",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "complete",
+      "accepted": true,
+      "rejectionReason": "",
+      "matchedBuyerRole": "Procurement Director"
+    },
+    {
+      "index": 4,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/tore-mett%C3%A4vainio-87499768",
+      "title": "Tore Mettävainio – Inköpare Projekt på LKAB | LinkedIn",
+      "parsedName": "Tore Mettävainio",
+      "parsedTitle": "Inköpare Projekt",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "complete",
+      "accepted": true,
+      "rejectionReason": "",
+      "matchedBuyerRole": "Procurement Director"
+    },
+    {
+      "index": 5,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/peter-olsson-820284a8",
+      "title": "Peter Olsson – Inköpschef Projekt och Samhällsomvandling / Purchasing ...",
+      "parsedName": "Peter Olsson",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "complete",
+      "companyVerification": "rejected",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "Result has no exact target-company employment evidence"
+    },
+    {
+      "index": 6,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/patric-jonsson-3973a017",
+      "title": "Patric Jonsson – Senior Project Purchaser, LKAB ... - LinkedIn",
+      "parsedName": "Patric Jonsson",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "complete",
+      "companyVerification": "rejected",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "Result has no exact target-company employment evidence"
+    },
+    {
+      "index": 7,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/johanna-laine-3a35b414",
+      "title": "Johanna Laine – Strategisk inköpare, Projekt och samhällsomvandling",
+      "parsedName": "Johanna Laine",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "complete",
+      "companyVerification": "rejected",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "Result has no exact target-company employment evidence"
+    },
+    {
+      "index": 8,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/robert-palo-a779a536",
+      "title": "Robert Palo – Inköpschef Affärsområde Järnmalm / Head of ...",
+      "parsedName": "Robert Palo",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "complete",
+      "companyVerification": "rejected",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "Result has no exact target-company employment evidence"
+    },
+    {
+      "index": 9,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/malin-barsk-207bb4158",
+      "title": "Malin Barsk – Strategisk inköpare på LKAB | LinkedIn",
+      "parsedName": "Malin Barsk",
+      "parsedTitle": "Strategisk inköpare",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "complete",
+      "accepted": false,
+      "rejectionReason": "Duplicate person or source identity",
+      "matchedBuyerRole": "Procurement Director"
+    },
+    {
+      "index": 10,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/johanna-laine-3a35b414",
+      "title": "Johanna Laine – Strategisk inköpare, Projekt och samhällsomvandling",
+      "parsedName": "Johanna Laine",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "complete",
+      "companyVerification": "rejected",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "Result has no exact target-company employment evidence"
+    },
+    {
+      "index": 11,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/kalle-m%C3%A5g%C3%A5rd-68b1a0136",
+      "title": "Kalle Mågård – Strategisk inköpare på LKAB | LinkedIn",
+      "parsedName": "Kalle Mågård",
+      "parsedTitle": "Strategisk inköpare",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "complete",
+      "accepted": false,
+      "rejectionReason": "Duplicate person or source identity",
+      "matchedBuyerRole": "Procurement Director"
+    },
+    {
+      "index": 12,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/mikael-fess%C3%A9-016057106",
+      "title": "Mikael Fessé – Inköpare på LKAB - LinkedIn",
+      "parsedName": "Mikael Fessé",
+      "parsedTitle": "Inköpare",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "complete",
+      "accepted": true,
+      "rejectionReason": "",
+      "matchedBuyerRole": "Procurement Director"
+    },
+    {
+      "index": 13,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/sara-r-88231a26?trk=public_post_main-feed-card_reshare-text",
+      "title": "Sara R. – Gruppchef | Operational Purchasing Manager | LKAB",
+      "parsedName": "Sara R.",
+      "parsedTitle": "Gruppchef",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "rejected",
+      "accepted": false,
+      "rejectionReason": "Parsed role does not match any requested buying function"
+    },
+    {
+      "index": 14,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/peter-olsson-820284a8",
+      "title": "Peter Olsson – Inköpschef Projekt och Samhällsomvandling / Purchasing ...",
+      "parsedName": "Peter Olsson",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "complete",
+      "companyVerification": "rejected",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "Result has no exact target-company employment evidence"
+    },
+    {
+      "index": 15,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/patrikstridh",
+      "title": "Patrik Stridh – Strategic Procurement Manager at Swedish ... - LinkedIn",
+      "parsedName": "Patrik Stridh",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "complete",
+      "companyVerification": "rejected",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "Result has no exact target-company employment evidence"
+    },
+    {
+      "index": 16,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/malin-barsk-207bb4158",
+      "title": "Malin Barsk – Strategisk inköpare på LKAB | LinkedIn",
+      "parsedName": "Malin Barsk",
+      "parsedTitle": "Strategisk inköpare",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "complete",
+      "accepted": false,
+      "rejectionReason": "Duplicate person or source identity",
+      "matchedBuyerRole": "Procurement Director"
+    },
+    {
+      "index": 17,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/kalle-m%C3%A5g%C3%A5rd-68b1a0136",
+      "title": "Kalle Mågård – Strategisk inköpare på LKAB | LinkedIn",
+      "parsedName": "Kalle Mågård",
+      "parsedTitle": "Strategisk inköpare",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "complete",
+      "accepted": false,
+      "rejectionReason": "Duplicate person or source identity",
+      "matchedBuyerRole": "Procurement Director"
+    },
+    {
+      "index": 18,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/johanna-laine-3a35b414",
+      "title": "Johanna Laine – Strategisk inköpare, Projekt och samhällsomvandling",
+      "parsedName": "Johanna Laine",
+      "parsedTitle": "Strategisk inköpare, Projekt och samhällsomvandling",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "complete",
+      "accepted": true,
+      "rejectionReason": "",
+      "matchedBuyerRole": "Procurement Director"
+    },
+    {
+      "index": 19,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/jens-pers%C3%A4ter-606a5a40",
+      "title": "Jens Persäter – strategisk inköpare på LKAB - LinkedIn",
+      "parsedName": "Jens Persäter",
+      "parsedTitle": "strategisk inköpare",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "complete",
+      "accepted": false,
+      "rejectionReason": "Duplicate person or source identity",
+      "matchedBuyerRole": "Procurement Director"
+    },
+    {
+      "index": 20,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/lisa-dantoft-72185579",
+      "title": "Lisa Dantoft – Strategisk inköpare på LKAB - LinkedIn",
+      "parsedName": "Lisa Dantoft",
+      "parsedTitle": "Strategisk inköpare",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "complete",
+      "accepted": true,
+      "rejectionReason": "",
+      "matchedBuyerRole": "Procurement Director"
+    },
+    {
+      "index": 21,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/erik-kling-89aab760",
+      "title": "Erik Kling – Strategisk inköpare (energi) | LinkedIn",
+      "parsedName": "Erik Kling",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "complete",
+      "companyVerification": "rejected",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "Result has no exact target-company employment evidence"
+    },
+    {
+      "index": 22,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/magnus-alcazar",
+      "title": "Magnus Alcazar – Strategisk IT-inköpare | Digitala lösningar • SaaS",
+      "parsedName": "Magnus Alcazar",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "complete",
+      "companyVerification": "rejected",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "Result has no exact target-company employment evidence"
+    },
+    {
+      "index": 23,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/sandra-lindqvist-1a161814b",
+      "title": "Sandra Lindqvist – Strategisk inköpare - LinkedIn",
+      "parsedName": "Sandra Lindqvist",
+      "parsedTitle": "Strategisk inköpare",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "complete",
+      "accepted": true,
+      "rejectionReason": "",
+      "matchedBuyerRole": "Procurement Director"
+    },
+    {
+      "index": 24,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/h%C3%A5kan-wiss-56275116",
+      "title": "Håkan Wiss – Projektchef LKAB Svappavaara - LinkedIn",
+      "parsedName": "Håkan Wiss",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "complete",
+      "companyVerification": "rejected",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "Result has no exact target-company employment evidence"
+    },
+    {
+      "index": 25,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/jockes",
+      "title": "Joakim Sandberg – Head of Digital Workplace @ LKAB - LinkedIn",
+      "parsedName": "Joakim Sandberg",
+      "parsedTitle": "Head of Digital Workplace @",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "rejected",
+      "accepted": false,
+      "rejectionReason": "Parsed role does not match any requested buying function"
+    },
+    {
+      "index": 26,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/mattias-selberg-193a602",
+      "title": "Mattias Selberg - LKAB Projektledare - LinkedIn",
+      "parsedName": "Mattias Selberg",
+      "parsedTitle": "LKAB Projektledare",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "complete",
+      "accepted": true,
+      "rejectionReason": "",
+      "matchedBuyerRole": "Project Director"
+    },
+    {
+      "index": 27,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/atif2",
+      "title": "Atif Waheed – Section Manager - Mining Development - LinkedIn",
+      "parsedName": "Atif Waheed",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "complete",
+      "companyVerification": "rejected",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "Result has no exact target-company employment evidence"
+    },
+    {
+      "index": 28,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/herman-thal%C3%A9n-822975197",
+      "title": "Herman Thalén – Projektledare | LKAB Minerals - LinkedIn",
+      "parsedName": "Herman Thalén",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "complete",
+      "companyVerification": "rejected",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "Result has no exact target-company employment evidence"
+    },
+    {
+      "index": 29,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/jesper-moberg",
+      "title": "Jesper Moberg – Research Engineer - LKAB || M.Sc. - Earth Science",
+      "parsedName": "Jesper Moberg",
+      "parsedTitle": "Research Engineer",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "rejected",
+      "accepted": false,
+      "rejectionReason": "Parsed role does not match any requested buying function"
+    },
+    {
+      "index": 30,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/mikael-thorberg-8170495b",
+      "title": "Mikael Thorberg – Director Strategy & Technology, Business Area Iron ...",
+      "parsedName": "Mikael Thorberg",
+      "parsedTitle": "I lead Strategy and Technology for Business Area Iron Ore",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "rejected",
+      "accepted": false,
+      "rejectionReason": "Parsed role does not match any requested buying function"
+    },
+    {
+      "index": 31,
+      "source": "public",
+      "url": "https://www.linkedin.com/in/jenny-hyde",
+      "title": "Jenny Hyde - Interim Group Sustainability Controller at LKAB + ...",
+      "parsedName": "Jenny Hyde",
+      "parsedTitle": "Interim Group Sustainability Controller",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "rejected",
+      "accepted": false,
+      "rejectionReason": "Parsed role does not match any requested buying function"
+    },
+    {
+      "index": 32,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/p%C3%A4r-jons%C3%A9n-95a5931b",
+      "title": "Pär Jonsén – Chief Technology Officer at LKAB Business Area Special ...",
+      "parsedName": "Pär Jonsén",
+      "parsedTitle": "Chief Technology Officer",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "rejected",
+      "accepted": false,
+      "rejectionReason": "Parsed role does not match any requested buying function"
+    },
+    {
+      "index": 33,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/robysyuhada",
+      "title": "Roby S. – Senior Mining Systems Engineer | Deswik MDM - LinkedIn",
+      "parsedName": "Roby S.",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "complete",
+      "companyVerification": "rejected",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "Result has no exact target-company employment evidence"
+    },
+    {
+      "index": 34,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/pari-dokht-zamanian-0979a91b7/en?trk=public_profile_locale-url",
+      "title": "Pari Dokht Zamanian - Technical Project Manager - Scania - LinkedIn",
+      "parsedName": "Pari Dokht Zamanian",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "complete",
+      "companyVerification": "rejected",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "Result has no exact target-company employment evidence"
+    },
+    {
+      "index": 35,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/klaus-wiegel-gallivare",
+      "title": "Klaus Wiegel – Specialist Design of Experiments, LKAB - LinkedIn",
+      "parsedName": "Klaus Wiegel",
+      "parsedTitle": "Specialist Design of Experiments,",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "rejected",
+      "accepted": false,
+      "rejectionReason": "Parsed role does not match any requested buying function"
+    },
+    {
+      "index": 36,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/christelemoller",
+      "title": "Christel Elmqvist Möller – Product Engineering Director at SWEP ...",
+      "parsedName": "Christel Elmqvist Möller",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "complete",
+      "companyVerification": "rejected",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "Result has no exact target-company employment evidence"
+    },
+    {
+      "index": 37,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/niclas-gr%C3%A4ns-3aa79428",
+      "title": "Niclas Gräns – Head of HVDC Project Management Office, PMO | LinkedIn",
+      "parsedName": "Niclas Gräns",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "complete",
+      "companyVerification": "rejected",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "Result has no exact target-company employment evidence"
+    },
+    {
+      "index": 38,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/jimmie-widing-69065619b",
+      "title": "Jimmie Widing – Strategic Business & Technology Development | LinkedIn",
+      "parsedName": "Jimmie Widing",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "complete",
+      "companyVerification": "rejected",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "Result has no exact target-company employment evidence"
+    },
+    {
+      "index": 39,
+      "source": "public",
+      "url": "https://se.linkedin.com/in/asagustafsson",
+      "title": "Åsa G. – Projektledare Verksamhetsutvecklare LKAB",
+      "parsedName": "Åsa G.",
+      "parsedTitle": "Projektledare Verksamhetsutvecklare",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "complete",
+      "accepted": true,
+      "rejectionReason": "",
+      "matchedBuyerRole": "Project Director"
+    },
+    {
+      "index": 40,
+      "source": "public",
+      "url": "https://uk.linkedin.com/in/james-jeffcott-77a93355",
+      "title": "James Jeffcott - Operations Director LKAB Minerals - UK - LinkedIn",
+      "parsedName": "James Jeffcott",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "complete",
+      "companyVerification": "rejected",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "Result has no exact target-company employment evidence"
+    },
+    {
+      "index": 41,
+      "source": "public",
+      "url": "https://uk.linkedin.com/in/daniel-legge-707ab2101",
+      "title": "Daniel Legge - Technical manager at LKAB - LinkedIn",
+      "parsedName": "Daniel Legge",
+      "parsedTitle": "Technical manager",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "rejected",
+      "accepted": false,
+      "rejectionReason": "Parsed role does not match any requested buying function"
+    },
+    {
+      "index": 42,
+      "source": "public",
+      "url": "https://uk.linkedin.com/in/samantha-bucknall-2a262b19",
+      "title": "Samantha Bucknall - HR Director - LKAB Industrial Minerals - LinkedIn",
+      "parsedName": "Samantha Bucknall",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "complete",
+      "companyVerification": "rejected",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "Result has no exact target-company employment evidence"
+    },
+    {
+      "index": 43,
+      "source": "public",
+      "url": "https://uk.linkedin.com/in/adam-emerson-779522196",
+      "title": "Adam Emerson - Group Operations Manager at LKAB Minerals - LinkedIn",
+      "parsedName": "Adam Emerson",
+      "parsedTitle": "Group Operations Manager",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "complete",
+      "accepted": true,
+      "rejectionReason": "",
+      "matchedBuyerRole": "Operations Director"
+    },
+    {
+      "index": 44,
+      "source": "public",
+      "url": "https://uk.linkedin.com/in/lee-connor-977894145",
+      "title": "Lee Connor - Operations Director at Richmond Reclamation Ltd - LinkedIn",
+      "parsedName": "Lee Connor",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "complete",
+      "companyVerification": "rejected",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "Result has no exact target-company employment evidence"
+    },
+    {
+      "index": 45,
+      "source": "public",
+      "url": "https://uk.linkedin.com/in/emma-margaret-burke",
+      "title": "Emma Burke - Continuous Improvement Engineer - LinkedIn",
+      "parsedName": "Emma Burke",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "complete",
+      "companyVerification": "rejected",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "Result has no exact target-company employment evidence"
+    },
+    {
+      "index": 46,
+      "source": "public",
+      "url": "https://uk.linkedin.com/in/rebecca-cocking-78553914",
+      "title": "Rebecca Cocking - SHEQ Manager at LKAB Minerals - LinkedIn",
+      "parsedName": "Rebecca Cocking",
+      "parsedTitle": "SHEQ Manager",
+      "parsedCompany": "LKAB",
+      "parsing": "complete",
+      "companyVerification": "complete",
+      "roleMatching": "rejected",
+      "accepted": false,
+      "rejectionReason": "Parsed role does not match any requested buying function"
+    },
+    {
+      "index": 47,
+      "source": "public",
+      "url": "https://uk.linkedin.com/in/alan-wells-4119a070",
+      "title": "Alan Wells - Operations Director at Roydale Ltd T/a AIREconcrete ...",
+      "parsedName": "Alan Wells",
+      "parsedTitle": "",
+      "parsedCompany": "",
+      "parsing": "complete",
+      "companyVerification": "rejected",
+      "roleMatching": "pending",
+      "accepted": false,
+      "rejectionReason": "Result has no exact target-company employment evidence"
+    }
+  ],
+  "buyers": [
+    {
+      "id": "public-https-se-linkedin-com-in-malin-barsk-207bb4158",
+      "name": "Malin Barsk",
+      "title": "Strategisk inköpare",
+      "organization": "LKAB",
+      "publicName": "Malin Barsk",
+      "publicNameUrl": "https://se.linkedin.com/in/malin-barsk-207bb4158",
+      "publicLinkedinUrl": "https://se.linkedin.com/in/malin-barsk-207bb4158",
+      "buyerRelevanceScore": 100,
+      "matchedBuyerRole": "Procurement Director",
+      "kept": false,
+      "patternFindings": [],
+      "hunterChecks": {},
+      "emailResearch": {
+        "status": "complete",
+        "searches": 4,
+        "failed": 0,
+        "checkedAt": "2026-10-04T09:38:13.106Z"
+      }
+    },
+    {
+      "id": "public-https-se-linkedin-com-in-mattias-selberg-193a602",
+      "name": "Mattias Selberg",
+      "title": "LKAB Projektledare",
+      "organization": "LKAB",
+      "publicName": "Mattias Selberg",
+      "publicNameUrl": "https://se.linkedin.com/in/mattias-selberg-193a602",
+      "publicLinkedinUrl": "https://se.linkedin.com/in/mattias-selberg-193a602",
+      "buyerRelevanceScore": 70,
+      "matchedBuyerRole": "Project Director",
+      "kept": false,
+      "patternFindings": [],
+      "hunterChecks": {},
+      "emailResearch": {
+        "status": "complete",
+        "searches": 4,
+        "failed": 0,
+        "checkedAt": "2026-10-04T09:38:15.691Z"
+      }
+    },
+    {
+      "id": "public-https-uk-linkedin-com-in-adam-emerson-779522196",
+      "name": "Adam Emerson",
+      "title": "Group Operations Manager",
+      "organization": "LKAB",
+      "publicName": "Adam Emerson",
+      "publicNameUrl": "https://uk.linkedin.com/in/adam-emerson-779522196",
+      "publicLinkedinUrl": "https://uk.linkedin.com/in/adam-emerson-779522196",
+      "buyerRelevanceScore": 34,
+      "matchedBuyerRole": "Operations Director",
+      "kept": false,
+      "patternFindings": [],
+      "hunterChecks": {},
+      "emailResearch": {
+        "status": "complete",
+        "searches": 4,
+        "failed": 0,
+        "checkedAt": "2026-10-04T09:38:25.635Z"
+      }
+    },
+    {
+      "id": "public-https-se-linkedin-com-in-kalle-m-c3-a5g-c3-a5rd-68b1a0136",
+      "name": "Kalle Mågård",
+      "title": "Strategisk inköpare",
+      "organization": "LKAB",
+      "publicName": "Kalle Mågård",
+      "publicNameUrl": "https://se.linkedin.com/in/kalle-m%C3%A5g%C3%A5rd-68b1a0136",
+      "publicLinkedinUrl": "https://se.linkedin.com/in/kalle-m%C3%A5g%C3%A5rd-68b1a0136",
+      "buyerRelevanceScore": 100,
+      "matchedBuyerRole": "Procurement Director",
+      "kept": false,
+      "patternFindings": [],
+      "hunterChecks": {},
+      "emailResearch": {
+        "status": "complete",
+        "searches": 4,
+        "failed": 0,
+        "checkedAt": "2026-10-04T09:38:24.072Z"
+      }
+    },
+    {
+      "id": "public-https-se-linkedin-com-in-jens-pers-c3-a4ter-606a5a40",
+      "name": "Jens Persäter",
+      "title": "strategisk inköpare",
+      "organization": "LKAB",
+      "publicName": "Jens Persäter",
+      "publicNameUrl": "https://se.linkedin.com/in/jens-pers%C3%A4ter-606a5a40",
+      "publicLinkedinUrl": "https://se.linkedin.com/in/jens-pers%C3%A4ter-606a5a40",
+      "buyerRelevanceScore": 100,
+      "matchedBuyerRole": "Procurement Director",
+      "kept": false,
+      "patternFindings": [],
+      "hunterChecks": {},
+      "emailResearch": {
+        "status": "complete",
+        "searches": 4,
+        "failed": 0,
+        "checkedAt": "2026-10-04T09:38:29.426Z"
+      }
+    },
+    {
+      "id": "public-https-se-linkedin-com-in-tore-mett-c3-a4vainio-87499768",
+      "name": "Tore Mettävainio",
+      "title": "Inköpare Projekt",
+      "organization": "LKAB",
+      "publicName": "Tore Mettävainio",
+      "publicNameUrl": "https://se.linkedin.com/in/tore-mett%C3%A4vainio-87499768",
+      "publicLinkedinUrl": "https://se.linkedin.com/in/tore-mett%C3%A4vainio-87499768",
+      "buyerRelevanceScore": 100,
+      "matchedBuyerRole": "Procurement Director",
+      "kept": false,
+      "patternFindings": [],
+      "hunterChecks": {},
+      "emailResearch": {
+        "status": "complete",
+        "searches": 4,
+        "failed": 0,
+        "checkedAt": "2026-10-04T09:38:16.246Z"
+      }
+    }
+  ],
+  "emailResearch": {
+    "searches": 24,
+    "failed": 0
+  },
+  "queries": [
+    {
+      "query": "site:linkedin.com/in/ \"LKAB\" (\"Strategic Sourcing Manager\" OR \"Strategisk inköpare\" OR \"Strategiskt inköp\")",
+      "sourceResults": 8,
+      "sourceUrls": [
+        "https://se.linkedin.com/in/malin-barsk-207bb4158",
+        "https://se.linkedin.com/in/kalle-m%C3%A5g%C3%A5rd-68b1a0136",
+        "https://se.linkedin.com/in/johanna-laine-3a35b414",
+        "https://se.linkedin.com/in/jens-pers%C3%A4ter-606a5a40",
+        "https://se.linkedin.com/in/lisa-dantoft-72185579",
+        "https://se.linkedin.com/in/erik-kling-89aab760",
+        "https://se.linkedin.com/in/magnus-alcazar",
+        "https://se.linkedin.com/in/sandra-lindqvist-1a161814b"
+      ]
+    },
+    {
+      "query": "site:linkedin.com/in/ \"LKAB\" (\"Procurement Director\" OR \"Inköpschef\" OR \"Inköpsansvarig\" OR \"Inköpare\" OR \"Strategiskt inköp\")",
+      "sourceResults": 8,
+      "sourceUrls": [
+        "https://se.linkedin.com/in/robert-palo-a779a536",
+        "https://se.linkedin.com/in/malin-barsk-207bb4158",
+        "https://se.linkedin.com/in/kalle-m%C3%A5g%C3%A5rd-68b1a0136",
+        "https://se.linkedin.com/in/jens-pers%C3%A4ter-606a5a40",
+        "https://se.linkedin.com/in/tore-mett%C3%A4vainio-87499768",
+        "https://se.linkedin.com/in/peter-olsson-820284a8",
+        "https://se.linkedin.com/in/patric-jonsson-3973a017",
+        "https://se.linkedin.com/in/johanna-laine-3a35b414"
+      ]
+    },
+    {
+      "query": "site:linkedin.com/in/ \"LKAB\" (\"Procurement Manager\" OR \"Inköpschef\" OR \"Inköpsansvarig\" OR \"Inköpare\" OR \"Strategiskt inköp\")",
+      "sourceResults": 8,
+      "sourceUrls": [
+        "https://se.linkedin.com/in/robert-palo-a779a536",
+        "https://se.linkedin.com/in/malin-barsk-207bb4158",
+        "https://se.linkedin.com/in/johanna-laine-3a35b414",
+        "https://se.linkedin.com/in/kalle-m%C3%A5g%C3%A5rd-68b1a0136",
+        "https://se.linkedin.com/in/mikael-fess%C3%A9-016057106",
+        "https://se.linkedin.com/in/sara-r-88231a26?trk=public_post_main-feed-card_reshare-text",
+        "https://se.linkedin.com/in/peter-olsson-820284a8",
+        "https://se.linkedin.com/in/patrikstridh"
+      ]
+    },
+    {
+      "query": "site:linkedin.com/in/ \"LKAB\" (\"Project Director\" OR \"Projektchef\" OR \"Projektledare\" OR \"Projektansvarig\")",
+      "sourceResults": 8,
+      "sourceUrls": [
+        "https://se.linkedin.com/in/h%C3%A5kan-wiss-56275116",
+        "https://se.linkedin.com/in/jockes",
+        "https://se.linkedin.com/in/mattias-selberg-193a602",
+        "https://se.linkedin.com/in/atif2",
+        "https://se.linkedin.com/in/herman-thal%C3%A9n-822975197",
+        "https://se.linkedin.com/in/jesper-moberg",
+        "https://se.linkedin.com/in/mikael-thorberg-8170495b",
+        "https://www.linkedin.com/in/jenny-hyde"
+      ]
+    },
+    {
+      "query": "site:linkedin.com/in/ \"LKAB\" (\"Operations Director\" OR \"Driftchef\" OR \"Anläggningschef\")",
+      "sourceResults": 8,
+      "sourceUrls": [
+        "https://uk.linkedin.com/in/james-jeffcott-77a93355",
+        "https://uk.linkedin.com/in/daniel-legge-707ab2101",
+        "https://uk.linkedin.com/in/samantha-bucknall-2a262b19",
+        "https://uk.linkedin.com/in/adam-emerson-779522196",
+        "https://uk.linkedin.com/in/lee-connor-977894145",
+        "https://uk.linkedin.com/in/emma-margaret-burke",
+        "https://uk.linkedin.com/in/rebecca-cocking-78553914",
+        "https://uk.linkedin.com/in/alan-wells-4119a070"
+      ]
+    },
+    {
+      "query": "site:linkedin.com/in/ \"LKAB\" (\"Engineering Director\" OR \"Teknisk chef\" OR \"Ingenjörschef\" OR \"Teknisk projektledare\")",
+      "sourceResults": 8,
+      "sourceUrls": [
+        "https://se.linkedin.com/in/p%C3%A4r-jons%C3%A9n-95a5931b",
+        "https://se.linkedin.com/in/robysyuhada",
+        "https://se.linkedin.com/in/pari-dokht-zamanian-0979a91b7/en?trk=public_profile_locale-url",
+        "https://se.linkedin.com/in/klaus-wiegel-gallivare",
+        "https://se.linkedin.com/in/christelemoller",
+        "https://se.linkedin.com/in/niclas-gr%C3%A4ns-3aa79428",
+        "https://se.linkedin.com/in/jimmie-widing-69065619b",
+        "https://se.linkedin.com/in/asagustafsson"
+      ]
+    },
+    {
+      "query": "\"malin.barsk@lkab.com\" OR \"malinbarsk@lkab.com\" OR \"m.barsk@lkab.com\" OR \"mbarsk@lkab.com\" OR \"malin@lkab.com\" OR \"barsk.malin@lkab.com\" OR \"barskmalin@lkab.com\" OR \"barsk.m@lkab.com\" OR \"barskm@lkab.com\" OR \"malin_barsk@lkab.com\"",
+      "sourceResults": 5,
+      "sourceUrls": [
+        "https://www.lkabminerals.com/about/",
+        "https://lkab.com/en/",
+        "https://lkab.com/en/contact-us/purchasing/",
+        "https://en.wikipedia.org/wiki/LKAB",
+        "https://lkab.com/en/contact-us/sales-and-support/"
+      ]
+    },
+    {
+      "query": "\"mattias.selberg@lkab.com\" OR \"mattiasselberg@lkab.com\" OR \"m.selberg@lkab.com\" OR \"mselberg@lkab.com\" OR \"mattias@lkab.com\" OR \"selberg.mattias@lkab.com\" OR \"selbergmattias@lkab.com\" OR \"selberg.m@lkab.com\" OR \"selbergm@lkab.com\" OR \"mattias_selberg@lkab.com\"",
+      "sourceResults": 4,
+      "sourceUrls": [
+        "https://lkab.com/en/articles/lkab-can-increase-europes-self-sufficiency-of-critical-minerals/",
+        "https://rocketreach.co/mattias-selberg-email_212787020",
+        "https://lkab.com/en/who-we-are/our-organisation/management/",
+        "https://lkab.com/en/what-we-do/we-welcome-challenges/"
+      ]
+    },
+    {
+      "query": "\"mattias.selberg@gmail.com\" OR \"mattiasselberg@gmail.com\" OR \"m.selberg@gmail.com\" OR \"mselberg@gmail.com\" OR \"mattias@gmail.com\" OR \"selberg.mattias@gmail.com\" OR \"selbergmattias@gmail.com\" OR \"selberg.m@gmail.com\" OR \"selbergm@gmail.com\" OR \"mattias_selberg@gmail.com\"",
+      "sourceResults": 3,
+      "sourceUrls": [
+        "https://groups.google.com/g/skia-discuss/c/e9J2YKHQiMQ",
+        "https://discore.io/user/4229/",
+        "https://www.sayhito-atlas.com/article/mattias-sellden"
+      ]
+    },
+    {
+      "query": "\"adam.emerson@lkab.com\" OR \"adamemerson@lkab.com\" OR \"a.emerson@lkab.com\" OR \"aemerson@lkab.com\" OR \"adam@lkab.com\" OR \"emerson.adam@lkab.com\" OR \"emersonadam@lkab.com\" OR \"emerson.a@lkab.com\" OR \"emersona@lkab.com\" OR \"adam_emerson@lkab.com\"",
+      "sourceResults": 5,
+      "sourceUrls": [
+        "https://www.legistorm.com/person/bio/601682/Adam_Emerson.html",
+        "https://www.berkshirecc.edu/about-bcc/spotlights/staff-spotlights/adam_emerson.php",
+        "https://www.youtube.com/watch?v=QgxmC3ICrxg",
+        "https://www.rottentomatoes.com/celebrity/adam_emerson",
+        "https://www.dnb.com/contact-directory/contact-profile.adam_emerson.79628355ed62046757e4d4e65af60d5e.html"
+      ]
+    },
+    {
+      "query": "\"malin.barsk@gmail.com\" OR \"malinbarsk@gmail.com\" OR \"m.barsk@gmail.com\" OR \"mbarsk@gmail.com\" OR \"malin@gmail.com\" OR \"barsk.malin@gmail.com\" OR \"barskmalin@gmail.com\" OR \"barsk.m@gmail.com\" OR \"barskm@gmail.com\" OR \"malin_barsk@gmail.com\"",
+      "sourceResults": 3,
+      "sourceUrls": [
+        "https://katiemalin.squarespace.com/contact",
+        "https://www.paypal.com/donate/?hosted_button_id=2TAJM4N7RL6WL",
+        "https://katiemalin.squarespace.com/narrative-design-gameplay-examples/v/john-mcenroe-does-voice-over-now-zpk5h-tc9nt-62mah"
+      ]
+    },
+    {
+      "query": "\"Malin Barsk\" \"LKAB\" \"@gmail.com\"",
+      "sourceResults": 3,
+      "sourceUrls": [
+        "https://rocketreach.co/malin-barsk-email_753438544",
+        "https://lkab.com/en/contact-us/purchasing/",
+        "https://lkab.com/en/news/culture-is-our-behaviour/"
+      ]
+    },
+    {
+      "query": "\"Mattias Selberg\" \"LKAB\" \"@gmail.com\"",
+      "sourceResults": 1,
+      "sourceUrls": [
+        "https://www.laget.se/kirunahkf14/News/5715330/SAMMANDRAG-NORRFJARDEN"
+      ]
+    },
+    {
+      "query": "\"kalle.magard@lkab.com\" OR \"kallemagard@lkab.com\" OR \"k.magard@lkab.com\" OR \"kmagard@lkab.com\" OR \"kalle@lkab.com\" OR \"magard.kalle@lkab.com\" OR \"magardkalle@lkab.com\" OR \"magard.k@lkab.com\" OR \"magardk@lkab.com\" OR \"kalle_magard@lkab.com\"",
+      "sourceResults": 5,
+      "sourceUrls": [
+        "https://lkab.com/en/who-we-are/our-organisation/",
+        "https://lkab.com/en/suppliers/being-supplier/",
+        "https://lkab.com/en/what-we-do/we-welcome-challenges/",
+        "https://lkab.com/en/",
+        "https://lkab.com/en/press/page/22/"
+      ]
+    },
+    {
+      "query": "\"tore.mettavainio@lkab.com\" OR \"toremettavainio@lkab.com\" OR \"t.mettavainio@lkab.com\" OR \"tmettavainio@lkab.com\" OR \"tore@lkab.com\" OR \"mettavainio.tore@lkab.com\" OR \"mettavainiotore@lkab.com\" OR \"mettavainio.t@lkab.com\" OR \"mettavainiot@lkab.com\" OR \"tore_mettavainio@lkab.com\"",
+      "sourceResults": 4,
+      "sourceUrls": [
+        "https://lkab.com/en/community-development/",
+        "https://lkab.com/en/suppliers/being-supplier/",
+        "https://lkab.com/en/press/mine-meets-town/",
+        "https://lkab.com/en/"
+      ]
+    },
+    {
+      "query": "\"malin.barsk@lkab.com\" \"Malin Barsk\"",
+      "sourceResults": 3,
+      "sourceUrls": [
+        "https://lkab.com/en/contact-us/purchasing/",
+        "https://lkab.com/en/news/culture-is-our-behaviour/",
+        "https://lkab.com/en/who-we-are/our-organisation/management/"
+      ]
+    },
+    {
+      "query": "\"tore.mettavainio@gmail.com\" OR \"toremettavainio@gmail.com\" OR \"t.mettavainio@gmail.com\" OR \"tmettavainio@gmail.com\" OR \"tore@gmail.com\" OR \"mettavainio.tore@gmail.com\" OR \"mettavainiotore@gmail.com\" OR \"mettavainio.t@gmail.com\" OR \"mettavainiot@gmail.com\" OR \"tore_mettavainio@gmail.com\"",
+      "sourceResults": 3,
+      "sourceUrls": [
+        "https://www.emailsherlock.com/email-reverse-search/fossdal.tore@gmail.com/",
+        "https://www.doximity.com/onboarding/registration/default/account_already_exists/82066c60-d5f8-4ae6-aa7e-718d71f2ac57",
+        "https://groups.google.com/g/native-client-discuss/c/TlBJ4AkWNQo"
+      ]
+    },
+    {
+      "query": "\"adam.emerson@gmail.com\" OR \"adamemerson@gmail.com\" OR \"a.emerson@gmail.com\" OR \"aemerson@gmail.com\" OR \"adam@gmail.com\" OR \"emerson.adam@gmail.com\" OR \"emersonadam@gmail.com\" OR \"emerson.a@gmail.com\" OR \"emersona@gmail.com\" OR \"adam_emerson@gmail.com\"",
+      "sourceResults": 3,
+      "sourceUrls": [
+        "https://support.google.com/mail/thread/21104886/jacs-adam-gmail-com-is-my-email-address-at-least-since-2013-and-i-cant-get-in-says-doesnt-exist?hl=en",
+        "https://www.adamgurczak.com/",
+        "https://adamberguem.com/contact"
+      ]
+    },
+    {
+      "query": "\"Tore Mettävainio\" \"LKAB\" \"@gmail.com\"",
+      "sourceResults": 4,
+      "sourceUrls": [
+        "https://lkab.com/en/press/mine-meets-town/",
+        "https://lkab.com/en/",
+        "https://lkab.com/en/contact-us/communications/",
+        "https://lkab.com/en/contact-us/"
+      ]
+    },
+    {
+      "query": "\"kalle.magard@gmail.com\" OR \"kallemagard@gmail.com\" OR \"k.magard@gmail.com\" OR \"kmagard@gmail.com\" OR \"kalle@gmail.com\" OR \"magard.kalle@gmail.com\" OR \"magardkalle@gmail.com\" OR \"magard.k@gmail.com\" OR \"magardk@gmail.com\" OR \"kalle_magard@gmail.com\"",
+      "sourceResults": 3,
+      "sourceUrls": [
+        "http://www.kallevainio.com/contact.asp",
+        "https://regia.ee/en/entity/11862905-kalle-koppel-music",
+        "https://x.com/tejaswinikalle"
+      ]
+    },
+    {
+      "query": "\"mattias.selberg@lkab.com\" \"Mattias Selberg\"",
+      "sourceResults": 3,
+      "sourceUrls": [
+        "https://www.hitta.se/mattias+selberg/personer/2",
+        "https://x.com/theelectricmine/status/1207215454525304834",
+        "https://www.nsd.se/nyheter/kiruna/artikel/selberg-nojd-med-lkabs-nya-besked/r484o05l"
+      ]
+    },
+    {
+      "query": "\"tore.mettavainio@lkab.com\" \"Tore Mettävainio\"",
+      "sourceResults": 5,
+      "sourceUrls": [
+        "https://se.linkedin.com/in/tore-mett%C3%A4vainio-87499768",
+        "https://www.linkedin.com/pub/dir/+/Mettavainio",
+        "https://www.linkedin.com/pub/dir/+/Mett%C3%A4vainio",
+        "https://lu.linkedin.com/pub/dir/+/Mett%C3%A4vainio",
+        "https://cz.linkedin.com/pub/dir/+/Mett%C3%A4vainio"
+      ]
+    },
+    {
+      "query": "\"jens.persater@lkab.com\" OR \"jenspersater@lkab.com\" OR \"j.persater@lkab.com\" OR \"jpersater@lkab.com\" OR \"jens@lkab.com\" OR \"persater.jens@lkab.com\" OR \"persaterjens@lkab.com\" OR \"persater.j@lkab.com\" OR \"persaterj@lkab.com\" OR \"jens_persater@lkab.com\"",
+      "sourceResults": 5,
+      "sourceUrls": [
+        "https://www.cotton.senate.gov/wp-content/uploads/media/doc/9325ieiletter.pdf",
+        "https://find-and-update.company-information.service.gov.uk/officers/FmdIizlYHG0i7ThPP9Vwedsgxho/appointments",
+        "https://www.amazon.com/Jens-Peters/e/B004563IZO",
+        "https://www.regjeringen.no/en/dep/aid/contact/press-centre-for-the-ministry-of-labour-and-social-affairs/id168/",
+        "https://www.naturalsciences.be/jean-marc.herpers"
+      ]
+    },
+    {
+      "query": "\"Kalle Mågård\" \"LKAB\" \"@gmail.com\"",
+      "sourceResults": 4,
+      "sourceUrls": [
+        "https://lkab.com/en/press/lkab-publishes-annual-and-sustainability-report-for-2025/",
+        "https://lkab.com/en/suppliers/being-supplier/",
+        "https://www.lkabminerals.com/thank-you/",
+        "https://lkab.com/en/"
+      ]
+    },
+    {
+      "query": "\"Adam Emerson\" \"LKAB\" \"@gmail.com\"",
+      "sourceResults": 3,
+      "sourceUrls": [
+        "https://rocketreach.co/adam-emerson-email_23267006",
+        "https://www.whitepages.com/name/Adam-Emerson/TX",
+        "https://fordhaminstitute.org/about/fordham-staff/adam-emerson"
+      ]
+    },
+    {
+      "query": "\"jens.persater@gmail.com\" OR \"jenspersater@gmail.com\" OR \"j.persater@gmail.com\" OR \"jpersater@gmail.com\" OR \"jens@gmail.com\" OR \"persater.jens@gmail.com\" OR \"persaterjens@gmail.com\" OR \"persater.j@gmail.com\" OR \"persaterj@gmail.com\" OR \"jens_persater@gmail.com\"",
+      "sourceResults": 5,
+      "sourceUrls": [
+        "https://ficpi.org/user/8423",
+        "https://groups.google.com/g/jmeter-plugins/c/r1VcRyF7NzM",
+        "https://mareikejens.com/imprint.html",
+        "https://www.quickscores.com/Orgs/ResultsDisplay.php?OrgDir=springville&LeagueID=1510493&TeamID=13157735",
+        "https://discore.io/user/12929/"
+      ]
+    },
+    {
+      "query": "\"kalle.magard@lkab.com\" \"Kalle Mågård\"",
+      "sourceResults": 2,
+      "sourceUrls": [
+        "https://lkab.com/nyheter/samordnad-transport-en-riktig-succe/",
+        "https://www.nsd.se/familj/gallivare/artikel/hem-igen-till-gallivare/jno4904r"
+      ]
+    },
+    {
+      "query": "\"adam.emerson@lkab.com\" \"Adam Emerson\"",
+      "sourceResults": 4,
+      "sourceUrls": [
+        "https://www.cnusports.com/sports/baseball/roster/adam-emerson/6825",
+        "https://bowserffh.com/obituaries/adam-emerson",
+        "https://www.whitepages.com/name/Adam-Emerson",
+        "https://www.berkshirecc.edu/about-bcc/spotlights/staff-spotlights/adam_emerson.php"
+      ]
+    },
+    {
+      "query": "\"Jens Persäter\" \"LKAB\" \"@gmail.com\"",
+      "sourceResults": 4,
+      "sourceUrls": [
+        "https://lkab.com/en/contact-us/purchasing/",
+        "https://lkab.com/en/suppliers/being-supplier/",
+        "https://lkab.com/en/press/lkab-issues-green-bond/",
+        "https://www.reuters.com/business/energy/swedish-miner-lkab-gets-permit-fossil-free-iron-sponge-plant-2026-06-15/"
+      ]
+    },
+    {
+      "query": "\"jens.persater@lkab.com\" \"Jens Persäter\"",
+      "sourceResults": 3,
+      "sourceUrls": [
+        "https://lkab.com/en/contact-us/purchasing/",
+        "https://lkab.com/en/press/lkab-issues-green-bond/",
+        "https://lkab.com/en/press/"
+      ]
+    }
+  ],
+  "rejectedContactEvidence": [
+    {
+      "buyer": "Mattias Selberg",
+      "email": "kirunahandboll0910@gmail.com",
+      "url": "https://www.laget.se/kirunahkf14/News/5715330/SAMMANDRAG-NORRFJARDEN",
+      "status": "rejected",
+      "reason": "Sports-club route; proximity does not establish personal ownership. Found by previous attribution rule and withdrawn during review."
+    }
+  ],
+  "contactReview": "All contact candidates reviewed. One false positive withdrawn; no verified company emails produced. Actual source responses were collected before the final attribution fix; targeted regression validates rejection."
+}

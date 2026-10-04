@@ -458,7 +458,7 @@ test('a saved first-name buyer can gain a sourced full name from a unique public
   assert.equal(requests,7);
   const person=context.__discoveryState().selectedProspects[0].people[0];
   assert.equal(person.publicName,'Jacob Jonstoij');
-  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v14-kept-pool');
+  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v15-search-state');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Jacob Jonstoij/);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/<strong>LinkedIn<\/strong><span>Public match/);
   context.__scheduleSavedBuyerPublicChecks();
@@ -533,7 +533,7 @@ test('refresh repairs a truncated name, matches LinkedIn, and shows official com
   assert.ok(candidate.publicContacts.some(row=>row.value==='info@sodra.com'));
   assert.ok(candidate.publicContacts.some(row=>row.value.includes('+46 470')));
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Lotta Lyrå/);
-  assert.match(context.__elements.get('customer-pipeline').innerHTML,/<strong>Phone<\/strong><span>No direct phone<\/span>/);
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/<strong>Phone<\/strong><span>No direct phone found in public searches<\/span>/);
   assert.doesNotMatch(context.__elements.get('customer-pipeline').innerHTML,/<strong>\+46 470 890 00<\/strong> · Public listing/);
 });
 
