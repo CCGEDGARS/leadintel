@@ -1140,7 +1140,7 @@ test('known full identities receive contact evidence searches before optional pr
  await context.__findPublicProspectContacts('example.com');
  const contact=queries.indexOf('site:example.com "Jane Example"');
  const profiles=queries.findIndex(query=>query.startsWith('site:linkedin.com/in/ ('));
- assert.ok(contact>=0&&profiles>contact);
+ assert.equal(contact,0);assert.ok(profiles>contact);
 });
 
 test('ranked buyer controls retain the original candidate index after ranking clones the people',()=>{
