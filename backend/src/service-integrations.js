@@ -101,10 +101,10 @@ function htmlMeta(html,name){
   }
   return '';
 }
-async function fetchDirectPublicPage(value){
+export async function fetchDirectPublicPage(value,{signal=AbortSignal.timeout(10000)}={}){
   let current=publicResearchUrl(value);if(!current)throw new Error('A valid public research URL is required');
   for(let redirects=0;redirects<=MAX_DIRECT_REDIRECTS;redirects++){
-    const response=await fetch(current.href,{method:'GET',headers:{Accept:'text/html,application/xhtml+xml,text/plain;q=0.8,*/*;q=0.1','User-Agent':'LeadIntel/1.0 (+https://leadintel.ccgroup.lv)'},redirect:'manual'});
+    const response=await fetch(current.href,{method:'GET',headers:{Accept:'text/html,application/xhtml+xml,text/plain;q=0.8,*/*;q=0.1','User-Agent':'LeadIntel/1.0 (+https://leadintel.ccgroup.lv)'},redirect:'manual',signal});
     if(response.status>=300&&response.status<400){
       const location=response.headers.get('location');if(!location)throw new Error(`Website redirect failed (${response.status})`);
       const next=publicResearchUrl(location,current.href);if(!next)throw new Error('Website redirected to a non-public URL');
