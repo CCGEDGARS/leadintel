@@ -65,7 +65,7 @@ test('Gmail discovery searches full name and company and accepts a sourced non-p
  vm.runInNewContext(`${source.slice(start,end)};globalThis.search=searchBuyerEmailPatterns;`,ctx);
  const candidate={company:'Example',domain:'example.lv',people:[{name:'Marta Berzina'}]};
  await ctx.search(candidate,[],new AbortController().signal);
- assert.ok(queries.some(query=>query==='"Marta Berzina" "Example" "@gmail.com"'));
+ assert.ok(queries.some(query=>query.startsWith('"Marta Berzina" "Example" ("@gmail.com" OR')));
  assert.deepEqual(Array.from(candidate.people[0].patternFindings,p=>p.email),['bluebird42@gmail.com']);
 });
 test('Gmail display uses Not found and never displays guessed Hunter addresses',()=>{
@@ -75,7 +75,7 @@ test('Gmail display uses Not found and never displays guessed Hunter addresses',
  const absent=ctx.render({hunterChecks:{'guess@gmail.com':{status:'invalid'}}},{domain:'example.lv'});
  assert.match(absent,/<strong>Gmail<\/strong><span>Not searched yet/);assert.doesNotMatch(absent,/guess@gmail/);
  const found=ctx.render({patternFindings:[{email:'bluebird42@gmail.com',url:'https://association.test'}]},{domain:'example.lv'});
- assert.match(found,/<strong>Gmail<\/strong><span><span class="buyer-email-result">bluebird42@gmail.com<\/span>/);
+ assert.match(found,/<strong>Gmail<\/strong><span><span class="buyer-email-result">bluebird42@gmail.com · Publicly sourced · unconfirmed/);
 });
 test('person-first official research recovers a published email and phone even when guesses return nothing',async()=>{
  const queries=[],ctx={...context,crmAuthenticated:()=>false,searchBuyerPublicPages:async query=>{queries.push(query);return query==='site:example.lv "Marta Berzina"'?[{url:'https://example.lv/jobs/engineering',markdown:'Contact manager Marta Berzina, marta.berzina@example.lv, +371 2000 1234.'}]:[];}};

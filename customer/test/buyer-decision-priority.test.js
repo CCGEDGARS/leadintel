@@ -17,11 +17,11 @@ test('unresearched, failed, stale and future-dated buyers remain visible without
  assert.equal(result.people.length,4);assert.deepEqual(result.recommendedIds,['done']);
  assert.equal(D.buyerResearchAssessment(rows[1]).status,'not_researched');assert.equal(D.buyerResearchAssessment(rows[2]).status,'incomplete');assert.equal(D.buyerResearchAssessment(rows[3]).status,'review_required');
 });
-test('researched function coverage survives a larger unresearched project pool',()=>{
+test('the ten highest priority buyers retain their score order without reserving lower-ranked functions',()=>{
  const projects=Array.from({length:15},(_,i)=>buyer(String(i),'Project Director',{emailResearch:null}));
  const head=buyer('head','Head of Procurement'),eng=buyer('eng','Engineering Manager');
  const result=D.rankedBuyerShortlist([...projects,head,eng],profile,company);
- assert.equal(result.people.length,10);assert.deepEqual(result.recommendedIds,['head','eng']);
+ assert.equal(result.people.length,10);assert.deepEqual(result.recommendedIds,['head']);assert.ok(!result.people.some(p=>p.id==='eng'));
 });
 test('decision role, score version and research evidence survive normalization and CRM snapshot',()=>{
  const person=buyer('head','Head of Procurement');person.buyerQualification=D.qualifyBuyer(person,profile,company);
@@ -53,4 +53,27 @@ test('recommendations remain ordered by score after reserving buying-function co
 });
 test('known stale and future identity evidence cannot qualify even when a company email is verified',()=>{
  for(const identityEvidenceDate of ['2013-05-01','2099-01-01'])assert.equal(D.qualifyBuyer(buyer('old','Project Director',{identityEvidenceDate,email_status:'verified',work_email:'old@example.com'}),profile,company).eligible,false);
+});
+
+test('default research takes four highest priorities, independent of easy contact data and customer names',()=>{
+ for(const [companyName,role] of [['Factory Example','Procurement Director'],['Retail Example','Marketing Director'],['Legal Example','Finance Director']]){
+  const context={company:companyName,domain:'example.com'},profile={decisionMakers:role+'; Project Director; Project Manager'};
+  const rows=Array.from({length:10},(_,i)=>buyer(String(i),i<5?'Project Manager':role,{organization:companyName,emailResearch:null}));
+  rows[0].work_email='easy@example.com';rows[0].email_status='verified';
+  const chosen=D.topFourResearchCandidates(rows,profile,context);
+  assert.equal(chosen.length,4);assert.ok(chosen.every(p=>p.title===role));
+  const renamed=rows.map(p=>({...p,name:'Different Person'+p.id,publicName:'Different Person'+p.id}));
+  assert.deepEqual(D.topFourResearchCandidates(renamed,profile,context).map(p=>p.id),chosen.map(p=>p.id));
+ }
+});
+test('four recommendations use the highest scores without reserving a weaker function',()=>{
+ const rows=[...Array.from({length:4},(_,i)=>buyer('head'+i,'Head of Procurement')),buyer('manager','Engineering Manager')];
+ assert.deepEqual(D.rankedBuyerShortlist(rows,profile,company).recommendedIds,['head0','head1','head2','head3']);
+});
+test('Gmail guesses persist as candidates, without becoming public contact evidence',()=>{
+ const p=buyer('anna','Head of Procurement',{name:'Anna Smith',publicName:'Anna Smith',gmailCandidates:D.gmailGuessCandidates({name:'Anna Smith'})});
+ assert.equal(p.gmailCandidates.length,3);assert.ok(p.gmailCandidates.every(row=>row.status==='guessed'));
+ const saved=D.normalizeDiscoveryState({selectedProspects:[{...company,buyerSearchMode:'user_selected_target',people:[p]}]}).selectedProspects[0];
+ assert.equal(saved.people[0].gmailCandidates.length,3);assert.equal(saved.people[0].patternFindings.length,0);assert.equal(saved.people[0].publicEmail,'');
+ const snapshot=C.mapDiscoveryCandidateToCrm(saved).intelligence.research_snapshot.buyerResearch.buyers[0];assert.equal(snapshot.gmailCandidates.length,3);
 });

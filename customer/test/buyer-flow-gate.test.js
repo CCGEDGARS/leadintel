@@ -56,3 +56,27 @@ test('stale/future employment and wrong employers cannot proceed on a verified e
   assert.equal(await h.ctx.addBuyerToFlow('example.com',0),false);assert.equal(h.events.length,0);assert.notEqual(h.person.flowSelected,true);
  }
 });
+
+test('LinkedIn handoff needs exact profile confirmation and qualification, but no email',async()=>{
+ const h=harness({verified:false});h.person.linkedinConfirmedUrl=h.person.publicLinkedinUrl;
+ h.ctx.ensureCrmCompany=async()=>({id:'c1'});
+ assert.equal(await h.ctx.startLinkedInBuyerMessage('example.com',0),true);
+ assert.equal(h.meta.scriptBuyer.channel,'linkedin');assert.equal(h.meta.scriptBuyer.personId,h.person.id);assert.equal(h.meta.scriptBuyer.linkedinUrl,h.person.publicLinkedinUrl);
+ assert.equal(h.events.length,1);assert.equal(h.events[0].type,'leadintel:buyer-for-scripts');
+});
+test('LinkedIn profile changes, holds and failed persistence stop message creation',async()=>{
+ for(const mode of ['changed','hold','stale','failed-sync']){
+  const h=harness({verified:false,synced:mode!=='failed-sync'});h.person.linkedinConfirmedUrl=h.person.publicLinkedinUrl;h.ctx.ensureCrmCompany=async()=>({id:'c1'});
+  if(mode==='changed')h.person.publicLinkedinUrl='https://linkedin.com/in/different-person';
+  if(mode==='hold')h.person.opportunityScope={status:'review_required',reason:'Different subsidiary'};
+  if(mode==='stale')h.person.identityEvidenceDate='2013-01-01';
+  assert.equal(await h.ctx.startLinkedInBuyerMessage('example.com',0),false);assert.equal(h.events.length,0);
+ }
+});
+test('LinkedIn selection cannot cross workspaces or enter email delivery',()=>{
+ const h=harness({verified:false});h.person.linkedinConfirmedUrl=h.person.publicLinkedinUrl;
+ const choice={domain:h.candidate.domain,personId:h.person.id,linkedinUrl:h.person.linkedinConfirmedUrl,workspaceId:'w1'};
+ assert.equal(D.confirmedLinkedInBuyer(h.person,h.candidate,choice,'w1'),true);assert.equal(D.confirmedLinkedInBuyer(h.person,h.candidate,choice,'w2'),false);
+ const O=require('../outreach-engine.js');const saved=O.normalizeOutreachState({items:[{domain:'example.com',channel:'linkedin',selectedPersonId:h.person.id,drafts:{linkedinMessage:'Hello Anna'}}]}).items[0];assert.equal(saved.channel,'linkedin');assert.equal(saved.selectedPersonId,h.person.id);
+ assert.equal(O.buildApprovedSendPayload({...saved,approved:true}),null);assert.equal(O.approveOutreachItem(saved,{}).approved,false);
+});

@@ -56,13 +56,13 @@ test('accepted external identity evidence survives repeated reloads; unsupported
  const legacy={...candidate,people:[{...person,publicName:'',publicNameUrl:''}]};assert.equal(D.normalizeDiscoveryState({pipeline:[legacy]}).pipeline[0].people[0].publicNameUrl,source);
  const unsupported={...candidate,buyerDiscovery:{pool:[person],resultDiagnostics:[]}};assert.equal(D.normalizeDiscoveryState({pipeline:[unsupported]}).pipeline[0].people[0].publicNameUrl,'');
 });
-test('a populated project pool cannot crowd out engineering, operations or pending identities',()=>{
+test('the discovery pool preserves function coverage while the shortlist follows priority',()=>{
  const projects=Array.from({length:52},(_,i)=>buyer({id:'p'+i,name:'Project Buyer '+String.fromCharCode(65+i)+'sson',title:'Project Director'}));
  const extra=[buyer({id:'eng',name:'Anna Engineer',title:'Engineering Manager'}),buyer({id:'ops',name:'Anna Operations',title:'Operations Director'})];
  const pending=Array.from({length:4},(_,i)=>({id:'pending'+i,name:'Anna',firstName:'Anna',title:'Project Manager',organization:'Example',identityStatus:'pending'}));
  const pool=D.mergeBuyerPool([], [...projects,...extra,...pending],profile);
  assert.ok(pool.some(p=>p.id==='eng'));assert.ok(pool.some(p=>p.id==='ops'));assert.equal(pool.filter(p=>p.identityStatus==='pending').length,4);
- const shortlist=D.rankedBuyerShortlist(pool,profile,company);assert.ok(shortlist.people.some(p=>p.id==='eng'));assert.ok(shortlist.people.some(p=>p.id==='ops'));
+ const shortlist=D.rankedBuyerShortlist(pool,profile,company);assert.equal(shortlist.people.length,10);assert.ok(shortlist.people.some(p=>p.id==='ops'));assert.ok(shortlist.people.every((p,i,rows)=>!i||rows[i-1].buyerQualification.total>=p.buyerQualification.total));
 });
 test('dated high-qualification evidence survives the pool cap ahead of undated project titles',()=>{
  const projects=Array.from({length:52},(_,i)=>buyer({id:'p'+i,name:'Project Buyer '+String.fromCharCode(65+i)+'sson',title:'Project Director',publicNameUrl:'https://linkedin.com/in/director'+i}));

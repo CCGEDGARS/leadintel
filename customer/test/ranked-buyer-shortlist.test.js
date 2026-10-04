@@ -1,13 +1,13 @@
 const test=require('node:test'),assert=require('node:assert/strict'),D=require('../discovery-engine.js');
 const profile={decisionMakers:'Project Director; Project Manager; CAPEX Manager; Investment Project Manager; Procurement Director; Procurement Manager; Strategic Sourcing Manager; Purchasing Manager; Engineering Director; Engineering Manager; Technical Manager; Operations Director'};
 const buyer=(id,title='Project Manager',extra={})=>({id,name:`Anna Buyer${id}`,title,organization:'Example',publicNameUrl:`https://example.com/team/${id}`,emailResearch:{status:'complete',searches:3,failed:0,checkedAt:new Date().toISOString()},...extra});
-test('ten qualified buyers contain four highlighted recommendations and cover all twelve committee roles',()=>{
+test('ten qualified buyers contain the four highest-score recommendations',()=>{
  const pool=Array.from({length:15},(_,i)=>buyer(String(i)));
  pool.push(buyer('buying','Procurement Director'),buyer('technical','Technical Manager'),buyer('ops','Operations Director'));
  const result=D.rankedBuyerShortlist(pool,profile,{company:'Example'});
  assert.equal(result.people.length,10);assert.equal(result.recommendedIds.length,4);
  assert.ok(result.recommendedIds.every(id=>result.people.some(p=>p.id===id)));
- assert.deepEqual(new Set(result.people.slice(0,4).map(p=>p.id)),new Set(['0','buying','technical','ops']));
+ assert.deepEqual(new Set(result.people.slice(0,4).map(p=>p.id)),new Set(['buying','ops','0','1']));
 });
 test('unresolved, wrong employer, former, unsourced and irrelevant pinned buyers cannot fill the ten',()=>{
  const pool=[buyer('good'),buyer('pending','Project Manager',{identityStatus:'pending'}),buyer('one','Project Manager',{name:'Anna'}),buyer('wrong','Project Manager',{organization:'Other'}),buyer('former','Former Project Manager'),buyer('unsourced','Project Manager',{publicNameUrl:''}),buyer('creative','Content Production Manager',{kept:true})];
