@@ -65,8 +65,27 @@ test('a populated project pool cannot crowd out engineering, operations or pendi
  const shortlist=D.rankedBuyerShortlist(pool,profile,company);assert.ok(shortlist.people.some(p=>p.id==='eng'));assert.ok(shortlist.people.some(p=>p.id==='ops'));
 });
 test('dated high-qualification evidence survives the pool cap ahead of undated project titles',()=>{
- const projects=Array.from({length:52},(_,i)=>buyer({id:'p'+i,name:'Project Buyer '+String.fromCharCode(65+i)+'sson',title:'Project Director'}));
+ const projects=Array.from({length:52},(_,i)=>buyer({id:'p'+i,name:'Project Buyer '+String.fromCharCode(65+i)+'sson',title:'Project Director',publicNameUrl:'https://linkedin.com/in/director'+i}));
  const fresh=buyer({id:'fresh',name:'Anna Project',title:'Project Manager',identityEvidenceDate:new Date().toISOString()});
  const pool=D.mergeBuyerPool([], [...projects,fresh],profile);
  assert.ok(pool.some(p=>p.id==='fresh'));assert.ok(D.rankedBuyerShortlist(pool,profile,company).people.some(p=>p.id==='fresh'));
+});
+
+test('equivalent procurement leadership titles outrank managers on comparable evidence across workspaces',()=>{
+ for(const organization of ['Industrial Seller Target','Legal Customer','Furniture Buyer']){
+  const c={company:organization,domain:'example.com'},p={decisionMakers:'Project Manager; Procurement Director; Engineering Director'};
+  const rows=['Project Manager','Head of Procurement','Procurement Director','Head of Engineering'].map((title,i)=>buyer({id:String(i),name:'Anna Buyer '+String.fromCharCode(65+i)+'sson',title,organization,identityEvidenceDate:'2026-10-01'}));
+  const scores=rows.map(row=>D.qualifyBuyer(row,p,c,{now:'2026-10-04'}));
+  assert.equal(scores[1].breakdown.role.points,25);assert.equal(scores[1].total,scores[2].total);assert.ok(scores[1].total>scores[0].total);assert.ok(scores[3].total>scores[0].total);
+  assert.match(scores[1].breakdown.authority.basis,/inferred.*unconfirmed/);assert.ok(scores[1].gaps.includes('Actual purchasing authority unconfirmed'));
+  assert.equal(D.rankedBuyerShortlist(rows,p,c).people[0].title,'Head of Procurement');
+  const deputy=D.qualifyBuyer({...rows[1],title:'Deputy Head of Procurement'},p,c,{now:'2026-10-04'});assert.ok(deputy.total<scores[1].total);
+  assert.equal(D.qualifyBuyer({...rows[1],organization:'Other'},p,c).total,null);
+ }
+});
+test('authority-weighted scores preserve their model version and component limits through reload and CRM',()=>{
+ const C=require('../crm-engine.js'),p={decisionMakers:'Procurement Director'},person=buyer({title:'Head of Procurement'});person.buyerQualification=D.qualifyBuyer(person,p,company);
+ const saved=D.normalizeDiscoveryState({selectedProspects:[{...company,buyerSearchMode:'user_selected_target',people:[person]}]}).selectedProspects[0];
+ assert.deepEqual(saved.people[0].buyerQualification,person.buyerQualification);assert.equal(saved.people[0].buyerQualification.version,2);
+ assert.equal(saved.people[0].buyerQualification.breakdown.authority.max,25);assert.equal(C.mapDiscoveryCandidateToCrm(saved).intelligence.research_snapshot.buyerResearch.buyers[0].qualification.version,2);
 });
