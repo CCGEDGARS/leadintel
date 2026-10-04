@@ -1123,3 +1123,16 @@ test('completed public evidence is synced to CRM when an optional grounded follo
   assert.equal(savedContacts,1);
   assert.equal(snapshots,1);
 });
+
+test('known full identities receive contact evidence searches before optional profile follow-ups',async()=>{
+ const queries=[];
+ const context=loadDiscoveryRunner({requestTimeout:1000,fetchImpl:async(url,options)=>{
+  if(String(url).includes('/firecrawl-search'))queries.push(JSON.parse(options.body).query);
+  return {ok:true,json:async()=>({data:[]})};
+ }});
+ context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',market:'Sweden',buyerSearchMode:'user_selected_target',people:[{id:'p1',name:'Jane Example',title:'Head of Procurement'}]}]});
+ await context.__findPublicProspectContacts('example.com');
+ const contact=queries.indexOf('site:example.com "Jane Example"');
+ const profiles=queries.findIndex(query=>query.startsWith('site:linkedin.com/in/ ('));
+ assert.ok(contact>=0&&profiles>contact);
+});
