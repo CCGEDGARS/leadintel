@@ -363,7 +363,7 @@ test('selected prospect buyer names persist and render as separate review cards'
   context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5}));
   assert.equal(await context.__findPotentialDecisionMakers('northstar.com'),true);
   const restored=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
-  assert.deepEqual(restored.selectedProspects[0].people.map(person=>person.name),['Johan Example','Mika Example']);
+  assert.deepEqual(restored.selectedProspects[0].people.map(person=>person.name),['Mika Example','Johan Example']);
   assert.equal(restored.pipeline.length,0);
   context.__renderPipeline();
   const html=context.__elements.get('customer-pipeline').innerHTML;
@@ -1089,3 +1089,18 @@ test('Save buyer does not claim Saved when server preference sync fails',async()
 });
 
 test('Companies does not render saved buyer cards; switching to Buyers preserves them',()=>{const c=loadDiscoveryRunner({renderNodes:true});c.__setDiscovery({selectedProspects:[{company:'Target',domain:'target.se',buyerSearchMode:'user_selected_target',people:[{id:'p1',name:'Alex Buyer',title:'Director',kept:true}]}]});c.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:4}));c.__renderPipeline();assert.equal(c.__elements.get('customer-pipeline').innerHTML,'');assert.equal(c.__discoveryState().selectedProspects[0].people[0].kept,true);c.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5}));c.__renderPipeline();assert.match(c.__elements.get('customer-pipeline').innerHTML,/Alex Buyer/);});
+test('optional contact-review timeout preserves completed email checks and exposes a focused retry',async()=>{
+ const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:30,
+  bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'}},
+  fetchImpl:async url=>{
+   if(String(url).includes('contact-evidence-review'))return new Promise(()=>{});
+   if(String(url).includes('web-search'))return {ok:true,json:async()=>({results:[]})};
+   return {ok:true,json:async()=>({data:[{url:'https://example.com/team',markdown:'Anna Buyer COO contact team'}]})};
+  }});
+ context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',people:[{id:'anna',name:'Anna Buyer',title:'COO',organization:'Example',publicName:'Anna Buyer',publicNameUrl:'https://example.com/team',publicLinkedinUrl:'https://linkedin.com/in/anna'}]}]});
+ assert.equal(await context.__findPublicProspectContacts('example.com'),false);
+ const candidate=context.__discoveryState().selectedProspects[0];
+ assert.equal(candidate.people[0].emailResearch.status,'complete');assert.ok(candidate.publicResearch.patternSearches>0);
+ assert.equal(candidate.publicContactStatus,'error');assert.ok(candidate.publicResearch.issues.some(issue=>issue.includes('completed identity and email evidence preserved')));
+ assert.match(context.__elements.get('customer-pipeline').innerHTML,/data-find-public-contacts="example.com"/);
+});
