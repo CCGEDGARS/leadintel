@@ -163,7 +163,8 @@ function restoreNewerBuyerResearch(candidate,detail){
   const saved=detail?.intelligence?.research_snapshot?.buyerResearch;
   const stamp=Date.parse(saved?.checkedAt||'');
   const localStamp=Date.parse(candidate.buyerDiscovery?.checkedAt||'')||0;
-  const legacyRepair=stamp===localStamp&&saved?.version!==2&&!candidate.publicResearch?.issues?.includes('Aggregate provider activity was not retained in this legacy CRM snapshot');
+  const obsoletePending=candidate.buyerDiscovery?.pool?.some(p=>p.identityStatus==='pending'&&!p.kept&&!(saved?.unresolved||[]).some(row=>String(row.id)===String(p.id)));
+  const legacyRepair=stamp===localStamp&&saved?.version!==2&&(!candidate.publicResearch?.issues?.includes('Aggregate provider activity was not retained in this legacy CRM snapshot')||obsoletePending);
   if(!Number.isFinite(stamp)||(stamp<=localStamp&&!legacyRepair)||stamp>Date.now()||!saved?.buyers?.length||candidate.peopleStatus==='loading'||candidate.publicContactStatus==='loading')return false;
   if(canonicalDomain(detail.company?.normalized_domain||detail.company?.website)!==canonicalDomain(candidate.domain))return false;
   const previous=candidate.people||[];

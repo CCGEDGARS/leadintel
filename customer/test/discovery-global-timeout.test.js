@@ -1243,6 +1243,7 @@ test('newer same-company CRM research restores the shortlist, sources and local 
  assert.equal(context.__restoreNewerBuyerResearch(candidate,detail),true);
  const person=candidate.people[0];assert.equal(person.linkedin_url,'https://www.linkedin.com/in/anna-buyer');assert.equal(person.publicLinkedinUrl,'https://www.linkedin.com/in/anna-buyer');assert.equal(person.publicEmailUrl,'https://example.com/contact');assert.equal(person.publicPhone,'+371 12345678');assert.equal(person.kept,true);assert.equal(person.flowSelected,true);assert.equal(person.emailResearch.searches,3);assert.equal(candidate.buyerDiscovery.researchIncomplete,true);assert.equal(candidate.buyerDiscovery.pool.some(p=>p.identityStatus==='pending'),true);assert.equal(candidate.buyerDiscovery.pool.some(p=>p.id==='obsolete'),false);
  assert.equal(context.__restoreNewerBuyerResearch(candidate,detail),false);
+ candidate.buyerDiscovery.pool.push({id:'obsolete-again',name:'Old',title:'Procurement Director',identityStatus:'pending'});assert.equal(context.__restoreNewerBuyerResearch(candidate,detail),true);assert.equal(candidate.buyerDiscovery.pool.some(p=>p.id==='obsolete-again'),false);
  detail.intelligence.research_snapshot.buyerResearch.checkedAt='2026-10-03T00:00:00Z';detail.company.normalized_domain='other.example';assert.equal(context.__restoreNewerBuyerResearch(candidate,detail),false);
  detail.company.normalized_domain='example.com';candidate.peopleStatus='loading';assert.equal(context.__restoreNewerBuyerResearch(candidate,detail),false);
 });
