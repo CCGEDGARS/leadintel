@@ -1765,6 +1765,7 @@ async function runPublicProspectContacts(domain,{signal}={}){
     const totalNamed=candidate.people.filter(person=>person.publicNameUrl).length;
     candidate.publicContactStatus=candidate.publicContacts.length||totalNamed||candidate.people.some(person=>person.patternFindings?.length)?"complete":"empty";
     candidate.publicContactVersion=PUBLIC_NAME_CHECK_VERSION;
+    candidate.people=candidate.people.map(person=>({...person,buyerQualification:LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:candidate.buyerDiscovery?.opportunityRoles||candidate.buyerRoles||person.title},candidate)}));
     if(crmAuthenticated()&&candidate.people.some(person=>person.publicNameUrl||person.publicEmailUrl||person.publicLinkedinUrl)){
       try{
         let company=crmCompanyByDomain(domain);
@@ -1773,7 +1774,13 @@ async function runPublicProspectContacts(domain,{signal}={}){
           const contacts=window.LeadIntelCrm.mapContacts(candidate.people.filter(person=>person.publicNameUrl||person.publicEmailUrl||person.publicLinkedinUrl));
           const saved=await bridge().saveCrmContacts(company.id,contacts);
           if(!saved?.ok)showToast(saved?.error||"Public buyer details could not be saved to CRM");
-          else window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company}}));
+          else {
+            if(bridge().saveCrmCompany&&window.LeadIntelCrm.mapDiscoveryCandidateToCrm){
+              const snapshot=await bridge().saveCrmCompany({...window.LeadIntelCrm.mapDiscoveryCandidateToCrm(candidate),contacts:[]});
+              if(!snapshot?.ok)research.issues.push('Public evidence snapshot could not be saved to CRM');
+            }
+            window.dispatchEvent(new CustomEvent("leadintel:crm-changed",{detail:{company}}));
+          }
         }
       }catch{showToast("Public buyer details found, but CRM sync failed. Retry from this card.");}
     }

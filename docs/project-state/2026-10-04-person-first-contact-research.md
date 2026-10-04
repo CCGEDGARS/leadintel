@@ -10,6 +10,8 @@ Public employment parsing previously accepted a target-company name followed by 
 
 Named public phone extraction retains official pages and LinkedIn job adverts with exact full-name attribution; it does not unlock private directories or mark numbers provider-verified. A historical phone listing remains unverified. Public-source email acceptance still requires the existing server-side official-page recheck and selected confirmation policy.
 
+Public contact refresh also writes the CRM company research snapshot. That snapshot now retains public email/phone details, their source URLs, unverified phone status, country/employer context and sourced scope holds. Direct contact records retain the existing email-verification protections.
+
 ## Regression coverage
 
 - Person-first search recovers email and phone from a generic official recruitment page when guesses return no results.
