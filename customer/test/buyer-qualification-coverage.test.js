@@ -64,3 +64,9 @@ test('a populated project pool cannot crowd out engineering, operations or pendi
  assert.ok(pool.some(p=>p.id==='eng'));assert.ok(pool.some(p=>p.id==='ops'));assert.equal(pool.filter(p=>p.identityStatus==='pending').length,4);
  const shortlist=D.rankedBuyerShortlist(pool,profile,company);assert.ok(shortlist.people.some(p=>p.id==='eng'));assert.ok(shortlist.people.some(p=>p.id==='ops'));
 });
+test('dated high-qualification evidence survives the pool cap ahead of undated project titles',()=>{
+ const projects=Array.from({length:52},(_,i)=>buyer({id:'p'+i,name:'Project Buyer '+String.fromCharCode(65+i)+'sson',title:'Project Director'}));
+ const fresh=buyer({id:'fresh',name:'Anna Project',title:'Project Manager',identityEvidenceDate:new Date().toISOString()});
+ const pool=D.mergeBuyerPool([], [...projects,fresh],profile);
+ assert.ok(pool.some(p=>p.id==='fresh'));assert.ok(D.rankedBuyerShortlist(pool,profile,company).people.some(p=>p.id==='fresh'));
+});

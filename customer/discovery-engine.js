@@ -912,7 +912,7 @@
   function selectDecisionMakers(people=[],profile={},limit=4){
     const roles=splitList(profile.decisionMakers).slice(0,12);if(!roles.length)return [];
     const cap=Math.max(1,Math.min(20,Number(limit)||4));
-    const ranked=(Array.isArray(people)?people:[]).map((person,index)=>({person,relevance:roleRelevance(person,roles),index})).filter(item=>item.relevance).sort((a,b)=>b.relevance.score-a.relevance.score||a.index-b.index);
+    const ranked=(Array.isArray(people)?people:[]).map((person,index)=>({person,relevance:roleRelevance(person,roles),priority:cap>=20?(qualifyBuyer(person,profile,{}).total||0):0,index})).filter(item=>item.relevance).sort((a,b)=>b.priority-a.priority||b.relevance.score-a.relevance.score||a.index-b.index);
     const diverse=[],families=new Set();
     if(cap>=20)for(const item of ranked){const family=buyerFunction(item.relevance.role);if(!families.has(family)){diverse.push(item);families.add(family);}}
     const selected=diverse.length?[...diverse,...ranked.filter(item=>!diverse.includes(item))]:ranked;
