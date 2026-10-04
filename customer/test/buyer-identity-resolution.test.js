@@ -50,3 +50,9 @@ test('surname research uses local title aliases when the directory title is Engl
  const queries=[];await D.resolvePendingBuyerIdentities([{...pending,title:'Project Manager'}],[],candidate,profile,async query=>{queries.push(query);return [];});
  assert.ok(queries.every(query=>query.includes('Project Manager')&&query.includes('Projektledare')));
 });
+test('official contact-page body can resolve a name when the page title is generic',async()=>{
+ const person={...pending,title:'Procurement Director'};
+ const result=await D.resolvePendingBuyerIdentities([person],[],candidate,profile,async()=>[{title:'Contacts',url:'https://lkab.com/contact',markdown:'Anna Andersson — Procurement Director. LKAB contact details.'}]);
+ assert.equal(result.people[0].name,'Anna Andersson');assert.equal(result.people[0].publicNameUrl,'https://lkab.com/contact');
+ const former=await D.resolvePendingBuyerIdentities([person],[],candidate,profile,async()=>[{title:'Contacts',url:'https://lkab.com/contact',markdown:'Anna Andersson — former Procurement Director at LKAB.'}]);assert.equal(former.people[0].identityStatus,'pending');
+});

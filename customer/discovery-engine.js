@@ -963,7 +963,22 @@
         const aborted=failures.find(row=>row.reason?.name==='AbortError');if(aborted)throw aborted.reason;
         failures.forEach(row=>issues.push('Identity '+first+': '+clean(row.reason?.message||'public search unavailable')));
         const rows=[...sourceRows,...searches.flatMap(row=>row.status==='fulfilled'?row.value:[])];
-        const trace=tracePublicBuyers(rows,candidate.company,{...profile,decisionMakers:role});
+        // Official team/contact pages often have a generic page title. Extract only
+        // names with a nearby actual role alias; feed that evidence through the same gate.
+        const official=[];
+        for(const row of rows){
+          const url=normalizeUrl(row.url||row.metadata?.sourceURL);
+          if(!url||companyIdentityDomain(url)!==companyIdentityDomain(candidate.domain))continue;
+          const detail=matchPublicBuyerDetails([person],[row],candidate.domain)[0];
+          if(!detail.publicName||detail.publicName===first||!detail.publicNameUrl)continue;
+          const text=publicPageText(row),index=text.toLowerCase().indexOf(detail.publicName.toLowerCase());
+          if(index<0)continue;
+          const nearby=text.slice(Math.max(0,index-90),index+detail.publicName.length+130);
+          const actualRole=localBuyerRoleAliases(role,candidate.market).find(alias=>nearby.toLowerCase().includes(alias.toLowerCase()));
+          if(!actualRole||/\b(former|formerly|previous|past|tidigare|worked at)\b/i.test(nearby))continue;
+          official.push({url,title:detail.publicName+' | '+actualRole+' | '+candidate.company,description:nearby});
+        }
+        const trace=tracePublicBuyers([...rows,...official],candidate.company,{...profile,decisionMakers:role});
         const matches=new Map(trace.people.filter(item=>clean(item.name).split(/\s+/)[0].toLowerCase()===first.toLowerCase()).map(item=>[clean(item.name).toLowerCase(),item]));
         const profiles=new Set(trace.people.filter(item=>clean(item.name).split(/\s+/)[0].toLowerCase()===first.toLowerCase()).map(item=>normalizeLinkedInUrl(item.publicLinkedinUrl||item.linkedin_url)).filter(Boolean));
         const match=matches.size===1&&profiles.size<=1&&!failures.length?[...matches.values()][0]:null;
