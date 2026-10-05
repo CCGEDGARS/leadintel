@@ -318,7 +318,7 @@
       "contains": [
         "function isExecutiveBuyer(",
         "executiveCoverage:",
-        "const executive=ranked.find(person=>isExecutiveBuyer(person)&&"
+        "committeeCoverage:"
       ]
     },
     {
@@ -327,10 +327,10 @@
       "url": "/customer/discovery-ui.js",
       "status": 200,
       "contains": [
-        "Executive coverage incomplete",
-        "Executive leadership represented",
+        "Buying committee coverage incomplete",
+        "2 + 2 buying committee represented",
         "data-research-executive",
-        "20261005-executive-slot-v1"
+        "20261005-committee-2plus2-v1"
       ]
     }
   ],

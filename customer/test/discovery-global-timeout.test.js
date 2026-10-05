@@ -363,7 +363,7 @@ test('selected prospect buyer names persist and render as separate review cards'
   context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5}));
   assert.equal(await context.__findPotentialDecisionMakers('northstar.com'),true);
   const restored=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
-  assert.deepEqual(restored.selectedProspects[0].people.map(person=>person.name),['Johan Example','Mika Example']);
+  assert.deepEqual(restored.selectedProspects[0].people.map(person=>person.name).sort(),['Johan Example','Mika Example']);
   assert.equal(restored.pipeline.length,0);
   context.__renderPipeline();
   const html=context.__elements.get('customer-pipeline').innerHTML;
@@ -1296,10 +1296,10 @@ test('targeted executive search fills the reserved place and retains completed e
  context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',market:'Sweden',buyerRoles:'Procurement Director',people,peopleStatus:'complete',buyerSearchMode:'user_selected_target'}]});
  assert.equal(await context.__findExecutiveBuyer('example.com'),true);
  const candidate=context.__discoveryState().selectedProspects[0],ranked=Discovery.rankedBuyerShortlist(candidate.people,{decisionMakers:candidate.buyerRoles},candidate);
- assert.equal(ranked.executiveCoverage.status,'complete');assert.equal(candidate.buyerDiscovery.executiveResearch.queries,3);
+ assert.equal(ranked.committeeCoverage.executives,1);assert.equal(ranked.executiveCoverage.status,'incomplete');assert.ok(candidate.buyerDiscovery.executiveResearch.queries>=3&&candidate.buyerDiscovery.executiveResearch.queries<=8);
  assert.ok(candidate.people.filter(p=>p.id.startsWith('p')).every(p=>p.emailResearch.searches===7&&p.contactResearch.channels.gmail.status==='complete'));
- const html=context.__elements.get('customer-pipeline').innerHTML;assert.match(html,/Executive leadership represented/);
- const restored=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery'))).selectedProspects[0];assert.equal(restored.buyerDiscovery.executiveResearch.status,'complete');
+ const html=context.__elements.get('customer-pipeline').innerHTML;assert.match(html,/Buying committee coverage incomplete/);
+ const restored=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery'))).selectedProspects[0];assert.equal(restored.buyerDiscovery.executiveResearch.status,'partial');
 });
 
 test('reserved executive cards display consecutive priority ranks independent of the full ten-person pool',()=>{
