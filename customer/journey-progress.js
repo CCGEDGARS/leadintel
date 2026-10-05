@@ -38,6 +38,8 @@
     const selectedDelivery=opportunities.find(item=>item?.domain===delivery.selectedDomain)||opportunities[0]||null;
     const drafts=selectedItem?.drafts||{};
     const localized=['native','complete'].includes(selectedItem?.localizationStatus);
+    const studio=outreach.messageStudio;
+    const studioReady=studio&&everyField(studio.essentials,['offer','target','value','sender','company','meetingValue','calendly']);
     return {
       1:[
         step('website','Website activated',websiteActivated||filled(main.website),{action:'Activate the main company website'}),
@@ -71,7 +73,7 @@
         step('people','Relevant buyers identified',candidates.some(item=>list(item?.people).length>0)||pipeline.some(item=>list(item?.people).length>0)||prospects.some(item=>list(item?.people).length>0),{action:'Find and qualify buyers for a selected company'})
       ],
       6:[
-        step('scenario','Core message approach approved',campaign.coreScenario?.status==='approved',{action:'Review and save the core message approach'}),
+        step('scenario',studio?'Core information and Calendly configured':'Core message approach approved',studio?studioReady:campaign.coreScenario?.status==='approved',{action:studio?'Review core information and add your Calendly link':'Review and save the core message approach'}),
         step('company','Company selected',Boolean(selectedItem),{action:'Choose a company selected for Buyers'}),
         step('dossier','Opportunity dossier built',Boolean(selectedItem?.dossier),{action:'Build the opportunity dossier'}),
         step('scripts','Messages prepared and localized',filled(drafts.emailSubject)&&filled(drafts.emailBody)&&localized,{action:'Create and localize the message scripts'}),
