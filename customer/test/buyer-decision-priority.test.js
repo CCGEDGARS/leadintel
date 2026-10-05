@@ -55,20 +55,20 @@ test('known stale and future identity evidence cannot qualify even when a compan
  for(const identityEvidenceDate of ['2013-05-01','2099-01-01'])assert.equal(D.qualifyBuyer(buyer('old','Project Director',{identityEvidenceDate,email_status:'verified',work_email:'old@example.com'}),profile,company).eligible,false);
 });
 
-test('default research takes four highest priorities, independent of easy contact data and customer names',()=>{
+test('default research reserves relevant functional coverage, independent of easy contact data and customer names',()=>{
  for(const [companyName,role] of [['Factory Example','Procurement Director'],['Retail Example','Marketing Director'],['Legal Example','Finance Director']]){
   const context={company:companyName,domain:'example.com'},profile={decisionMakers:role+'; Project Director; Project Manager'};
   const rows=Array.from({length:10},(_,i)=>buyer(String(i),i<5?'Project Manager':role,{organization:companyName,emailResearch:null}));
   rows[0].work_email='easy@example.com';rows[0].email_status='verified';
   const chosen=D.topFourResearchCandidates(rows,profile,context);
-  assert.equal(chosen.length,4);assert.ok(chosen.every(p=>p.title===role));
+  assert.equal(chosen.length,4);assert.ok(chosen.some(p=>p.title===role));if(role==='Procurement Director')assert.ok(chosen.some(p=>p.title==='Project Manager'));assert.ok(chosen.every((p,i)=>!i||chosen[i-1].buyerQualification.total>=p.buyerQualification.total));
   const renamed=rows.map(p=>({...p,name:'Different Person'+p.id,publicName:'Different Person'+p.id}));
   assert.deepEqual(D.topFourResearchCandidates(renamed,profile,context).map(p=>p.id),chosen.map(p=>p.id));
  }
 });
-test('four recommendations use the highest scores without reserving a weaker function',()=>{
+test('four recommendations protect an operational buyer even below purchasing scores',()=>{
  const rows=[...Array.from({length:4},(_,i)=>buyer('head'+i,'Head of Procurement')),buyer('manager','Engineering Manager')];
- assert.deepEqual(D.rankedBuyerShortlist(rows,profile,company).recommendedIds,['head0','head1','head2','head3']);
+ assert.deepEqual(D.rankedBuyerShortlist(rows,profile,company).recommendedIds,['head0','head1','head2','manager']);
 });
 test('partial contact refresh keeps the four highest-priority identities visible ahead of completed weaker buyers',()=>{
  const leaders=[buyer('chief','Chief Procurement Officer'),buyer('head','Head of Procurement'),buyer('director','Project Director'),buyer('manager','Project Manager')];

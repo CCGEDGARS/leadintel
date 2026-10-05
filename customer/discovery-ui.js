@@ -1,7 +1,7 @@
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
 const PUBLIC_NAME_CHECK_VERSION="buyer-contacts-v19-independent-checks";
-const BUYER_RESEARCH_VERSION="20261005-executive-slot-v1";
+const BUYER_RESEARCH_VERSION="20261005-committee-2plus2-v1";
 const CONTACT_CONFIRM_VERSION="buyer-contacts-v11-optional-hunter";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
 const DELIVERY_STORAGE_KEY="leadintel_customer_v2_delivery";
@@ -17,7 +17,7 @@ const MAX_DISCOVERY_COMPANY_CHECKS=30;
 const SAVING_SEARCH_RESULT_LIMIT=4;
 const SAVING_COMPANY_CHECK_LIMIT=3;
 const SAVING_FIRECRAWL_CALL_LIMIT=10;
-const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261004-v4&ranked-buyers=20261005-v38";
+const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261004-v4&ranked-buyers=20261005-v39";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20261005-buyer-evidence-v3";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -2052,7 +2052,9 @@ async function findExecutiveBuyer(domain){
   const profile={decisionMakers:roles,companyDomain:candidate.domain},executiveProfile={decisionMakers:'Executive leadership',companyDomain:candidate.domain};
   const titles=LeadIntelDiscovery.localBuyerRoleAliases('Executive leadership',candidate.market).map(role=>`"${role}"`).join(' OR ');
   const queries=[`site:${canonicalDomain(candidate.domain)} (${titles}) (leadership OR management OR team OR ledning)`,`site:linkedin.com/in/ "${candidate.company}" (${titles})`,`"${candidate.company}" (${titles}) (appointed OR current OR president OR management OR utsedd)`];
-  candidate.peopleStatus='loading';candidate.buyerResearchProgress={phase:'people',label:'Finding current executive leadership',step:3,total:5};saveDiscovery();renderAll();
+  const gapPlan=LeadIntelDiscovery.buyerCoveragePlan(candidate.people||[],profile,candidate);
+  queries.push(...gapPlan.queries.filter(query=>!queries.includes(query)).slice(0,5));
+  candidate.peopleStatus='loading';candidate.buyerResearchProgress={phase:'people',label:'Completing the 2 + 2 buying committee',step:3,total:5};saveDiscovery();renderAll();
   try{
     const outcomes=await Promise.allSettled(queries.map(query=>searchBuyerPublicPages(query,8,controller.signal)));
     if(workspaceId!==bridge()?.workspace?.id)return false;
@@ -2061,22 +2063,23 @@ async function findExecutiveBuyer(domain){
     const pages=await Promise.allSettled(leadershipPages.map(url=>scrapeOfficialContactPage(url,candidate.domain,controller.signal)));
     rows.push(...pages.filter(row=>row.status==='fulfilled'&&row.value).map(row=>row.value));
     issues.push(...pages.filter(row=>row.status==='rejected').map(()=> 'Official leadership page extraction unavailable'));
-    let trace=LeadIntelDiscovery.tracePublicBuyers(rows,candidate.company,executiveProfile),found=trace.people.filter(LeadIntelDiscovery.isExecutiveBuyer),identityStatus='not_needed';
-    if(!found.some(person=>LeadIntelDiscovery.qualifyBuyer(person,profile,candidate).eligible)&&typeof bridge()?.searchApolloPeople==='function'){
-      const result=await bridge().searchApolloPeople(LeadIntelDiscovery.buildApolloPeopleSearchPayload(candidate,executiveProfile),{signal:controller.signal,timeoutMs:25000});
+    let trace=LeadIntelDiscovery.tracePublicBuyers(rows,candidate.company,profile),found=trace.people,identityStatus='not_needed';
+    if(LeadIntelDiscovery.rankedBuyerShortlist(found,profile,candidate).executiveCoverage.personIds.length<2&&typeof bridge()?.searchApolloPeople==='function'){
+      const result=await bridge().searchApolloPeople({...LeadIntelDiscovery.buildApolloPeopleSearchPayload(candidate,executiveProfile),person_titles:LeadIntelDiscovery.localBuyerRoleAliases('Executive leadership',candidate.market)},{signal:controller.signal,timeoutMs:25000});
       if(workspaceId!==bridge()?.workspace?.id)return false;
       identityStatus=result?.ok?'complete':'failed';
       if(result?.ok){const identity=LeadIntelDiscovery.traceIdentityBuyers(result,candidate,executiveProfile);found.push(...identity.people.filter(LeadIntelDiscovery.isExecutiveBuyer));trace.diagnostics.push(...identity.diagnostics);}else issues.push(result?.error||'Executive identity discovery unavailable');
     }
     const pool=LeadIntelDiscovery.mergeBuyerPool([...(candidate.buyerDiscovery?.pool||[]),...(candidate.people||[])],found,profile),ranked=LeadIntelDiscovery.rankedBuyerShortlist(pool,profile,candidate);
-    candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),pool,opportunityRoles:roles,researchVersion:BUYER_RESEARCH_VERSION,checkedAt:new Date().toISOString(),resultDiagnostics:[...(candidate.buyerDiscovery?.resultDiagnostics||[]),...trace.diagnostics],executiveResearch:{status:ranked.executiveCoverage.status==='complete'?'complete':issues.length?'partial':'empty',checkedAt:new Date().toISOString(),queries:queries.length,results:rows.length,identityStatus,issues}};
+    candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),pool,opportunityRoles:roles,researchVersion:BUYER_RESEARCH_VERSION,checkedAt:new Date().toISOString(),resultDiagnostics:[...(candidate.buyerDiscovery?.resultDiagnostics||[]),...trace.diagnostics],executiveResearch:{status:ranked.committeeCoverage.status==='complete'?'complete':ranked.committeeCoverage.executives||issues.length?'partial':'empty',checkedAt:new Date().toISOString(),queries:queries.length,results:rows.length,identityStatus,issues}};
     candidate.people=[...ranked.people,...(candidate.people||[]).filter(person=>!ranked.people.some(row=>LeadIntelDiscovery.buyerIdentity(row)===LeadIntelDiscovery.buyerIdentity(person)))].slice(0,10);
     candidate.peopleStatus='complete';candidate.buyerResearchProgress=null;saveDiscovery();renderAll();
     const executive=candidate.people.find(person=>person.id===ranked.executiveCoverage.personId);
-    if(executive&&executive.emailResearch?.status!=='complete')await findPublicProspectContacts(candidate.domain,{personIds:[String(executive.id)]});
+    const unresearched=candidate.people.filter(person=>ranked.priorityIds.includes(person.id)&&person.emailResearch?.status!=='complete');
+    if(unresearched.length)await findPublicProspectContacts(candidate.domain,{personIds:unresearched.map(person=>String(person.id))});
     saveDiscovery();renderAll();
     if(crmCompanyByDomain(candidate.domain))await saveBuyerResearch(candidate.domain);
-    showToast(executive?'Executive added to the top four':'Executive coverage incomplete · existing buyers preserved');return Boolean(executive);
+    showToast(ranked.committeeCoverage.status==='complete'?'2 + 2 buying committee saved':'Buying committee updated · remaining coverage gaps shown');return Boolean(executive);
   }catch(error){if(workspaceId===bridge()?.workspace?.id)candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),executiveResearch:{status:'partial',checkedAt:new Date().toISOString(),queries:queries.length,results:0,identityStatus:'unknown',issues:[error.message||'Source unavailable']}};showToast('Executive research incomplete · '+(error.message||'source unavailable'));return false;}
   finally{clearTimeout(timeout);if(workspaceId===bridge()?.workspace?.id){candidate.peopleStatus=candidate.people?.length?'complete':previousStatus==='loading'?'empty':previousStatus||'empty';candidate.buyerResearchProgress=null;saveDiscovery();renderAll();}}
 }
@@ -2088,7 +2091,8 @@ function renderSelectedProspects(prospects){
     const ranked=LeadIntelDiscovery.rankedBuyerShortlist(people,{decisionMakers:(candidate.buyerDiscovery?.opportunityRoles?.length?candidate.buyerDiscovery.opportunityRoles:candidate.buyerRoles?.length?candidate.buyerRoles:LeadIntelDiscovery.buyerRolesForTarget(mainState(),candidate))},candidate);
     const recommendations=new Set(ranked.recommendedIds);
     const executiveCoverage=ranked.executiveCoverage;
-    const executiveNote=executiveCoverage?.status==='complete'?'<p class="people-note"><strong>Executive leadership represented</strong> · One of four places reserved for a qualified executive; all four remain sorted by priority score.</p>':`<p class="people-note" role="status"><strong>Executive coverage incomplete</strong> · No suitable current executive is verified. The next qualified buyer fills the place temporarily. <button class="secondary-btn small" type="button" data-research-executive="${esc(domain)}" ${!crmAuthenticated()||candidate.peopleStatus==='loading'?'disabled':''}>Find executive leadership</button></p>`;
+    const coverage=ranked.committeeCoverage;
+    const executiveNote=`<p class="people-note" role="status"><strong>${coverage.status==='complete'?'2 + 2 buying committee represented':'Buying committee coverage incomplete'}</strong> · Two relevant senior leaders, one purchasing leader and one operational or technical buyer; all four sorted by priority score.${coverage.gaps.length?` Missing: ${coverage.gaps.map(esc).join(' · ')}. The strongest qualified functional buyers fill available places temporarily. <button class="secondary-btn small" type="button" data-research-executive="${esc(domain)}" ${!crmAuthenticated()||candidate.peopleStatus==='loading'?'disabled':''}>Complete buying committee</button>`:''}</p>`;
     const priorities=new Set(ranked.priorityIds);
     const rankedIds=new Set(ranked.people.map(person=>LeadIntelDiscovery.buyerIdentity(person)));
     people=[...ranked.people,...people.filter(person=>!rankedIds.has(LeadIntelDiscovery.buyerIdentity(person)))].slice(0,10);
@@ -2108,7 +2112,7 @@ function renderSelectedProspects(prospects){
     }).join("");
     const compactBuyersHtml=potentialPeople.length?`<section class="buyer-shortlist-group"><div class="selected-prospect-buyers-heading"><strong>${potentialPeople.length} other potential buyers</strong><span>Names and roles first · detailed research on request</span><button class="secondary-btn small" type="button" data-research-remaining="${esc(domain)}" ${candidate.publicContactStatus==='loading'?'disabled':''}>Research these ${potentialPeople.length} buyers</button></div><ol class="buyer-potential-list">${potentialPeople.map(person=>{const qualification=LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:person.matchedBuyerRole||person.title},candidate),complete=LeadIntelDiscovery.buyerResearchAssessment(person).status==='complete';return `<li><details><summary><strong>${esc(person.publicName||person.name)}</strong><span>${esc(LeadIntelDiscovery.buyerDisplayTitle(person.title))}</span><small>${qualification.eligible===false?`On hold · ${esc('Current role needs verification')}`:`${complete?'Researched':'Provisional'} priority ${Number(qualification.total)||0}/100`}</small></summary>${!complete?`<p>${esc(LeadIntelDiscovery.buyerResearchAssessment(person).reason)} Decision authority remains unconfirmed.</p>`:''}<ol class="selected-prospect-people">${buyerCardsHtml([person])}</ol><button class="secondary-btn small" type="button" data-research-buyer="${esc(domain)}" data-person-id="${esc(person.id)}" ${candidate.publicContactStatus==='loading'?'disabled':''}>${complete?'Refresh this buyer':'Research this buyer'}</button></details></li>`;}).join('')}</ol></section>`:'';
     const buyerGroupHtml=(list,label,note)=>list.length?`<section class="buyer-shortlist-group"><div class="selected-prospect-buyers-heading"><strong>${list.length} ${label}</strong><span>${note}</span></div><ol class="selected-prospect-people">${buyerCardsHtml(list)}</ol></section>`:"";
-    const peopleHtml=people.length?`<section class="selected-prospect-buyers" aria-label="Suggested people for ${esc(candidate.company||domain)}">${executiveNote}${buyerGroupHtml(recommendedPeople,'priority buyers','Highest scores first · decision authority inferred; contact readiness assessed separately')}${compactBuyersHtml}<p class="selected-prospect-people-note">Confirm each person’s identity and role before outreach. LeadIntel researches one qualified executive plus the three highest-priority other buyers by default. Other candidates are researched only when requested or when a top pick is disqualified.</p></section>`:
+    const peopleHtml=people.length?`<section class="selected-prospect-buyers" aria-label="Suggested people for ${esc(candidate.company||domain)}">${executiveNote}${buyerGroupHtml(recommendedPeople,'priority buyers','Highest scores first · decision authority inferred; contact readiness assessed separately')}${compactBuyersHtml}<p class="selected-prospect-people-note">Confirm each person’s identity and role before outreach. LeadIntel researches two relevant senior leaders, one purchasing leader and one operational or technical buyer by default. Other candidates are researched only when requested or when a top pick is disqualified.</p></section>`:
       candidate.peopleStatus==="loading"?buyerResearchProgressHtml(candidate):
       candidate.peopleStatus==="error"?`<div class="selected-prospect-people-state warning" role="status"><strong>Buyer search needs attention.</strong><span>${esc(candidate.buyerDiscovery?.lastError?.message||"A research provider failed before completion.")}</span><small>Phase: ${esc(candidate.buyerDiscovery?.lastError?.phase||"unknown")} · Retry will preserve completed research.</small></div>`:
       candidate.buyerRolesChanged?'<p class="selected-prospect-people-state">Search for decision-makers using the corrected roles.</p>':

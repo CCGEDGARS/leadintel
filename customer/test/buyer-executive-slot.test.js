@@ -4,7 +4,7 @@ const buyer=(id,title,extra={})=>({id,name:'Anna Buyer'+id,publicName:'Anna Buye
 test('reserves one qualified executive even below the ten highest scores; top four stay score sorted',()=>{
  const rows=[...Array.from({length:11},(_,i)=>buyer('p'+i,'Head of Procurement')),buyer('ceo','CEO',{publicNameUrl:'https://linkedin.com/in/anna-ceo'})];
  const result=D.rankedBuyerShortlist(rows,profile,company),top=D.topFourResearchCandidates(rows,profile,company);
- assert.equal(result.people.length,10);assert.ok(result.people.some(p=>p.id==='ceo'));assert.equal(top.length,4);assert.ok(top.some(p=>p.id==='ceo'));assert.equal(result.executiveCoverage.status,'complete');
+ assert.equal(result.people.length,10);assert.ok(result.people.some(p=>p.id==='ceo'));assert.equal(top.length,4);assert.ok(top.some(p=>p.id==='ceo'));assert.equal(result.executiveCoverage.status,'incomplete');assert.equal(result.committeeCoverage.executives,1);
  assert.deepEqual(top.map(p=>p.id),result.priorityIds);assert.ok(top.every((p,i)=>!i||top[i-1].buyerQualification.total>=p.buyerQualification.total));
 });
 test('missing, stale, held, assistant and wrong-employer executives never fill the slot',()=>{
@@ -22,9 +22,9 @@ test('executive discovery is planned first, across industries, with official and
   assert.equal(D.buildApolloPeopleSearchPayload(company,profile).person_titles.includes('CEO'),true);
  }
 });
-test('only one executive is reserved; other places remain available to higher scoring relevant buyers',()=>{
+test('two executives are reserved with functional fallback and name-invariant ranking',()=>{
  const rows=[buyer('ceo','CEO',{identityEvidenceDate:''}),buyer('coo','COO',{identityEvidenceDate:''}),...Array.from({length:4},(_,i)=>buyer('p'+i,'Head of Procurement'))];
- const top=D.topFourResearchCandidates(rows,profile,company);assert.equal(top.filter(D.isExecutiveBuyer).length,1);assert.equal(top.filter(p=>p.title==='Head of Procurement').length,3);
+ const top=D.topFourResearchCandidates(rows,profile,company);assert.equal(top.filter(D.isExecutiveBuyer).length,2);assert.equal(top.filter(p=>p.title==='Head of Procurement').length,2);
  const renamed=rows.map(p=>({...p,name:'Different Name'+p.id,publicName:'Different Name'+p.id}));assert.deepEqual(D.topFourResearchCandidates(renamed,profile,company).map(p=>p.id),top.map(p=>p.id));
 });
 
@@ -33,9 +33,9 @@ test('small company owners and professional-firm managing partners can fill the 
  assert.equal(D.isExecutiveBuyer({title:'Product Owner'}),false);assert.equal(D.isExecutiveBuyer({title:'Executive Assistant'}),false);
 });
 
-test('one executive plus three functional buyers even when executives score higher',()=>{
+test('two executives plus two functional buyers even when executives score higher',()=>{
  const rows=[buyer('ceo','CEO'),buyer('coo','COO'),buyer('md','Managing Director'),...Array.from({length:4},(_,i)=>buyer('p'+i,'Project Manager'))];
- const top=D.topFourResearchCandidates(rows,profile,company);assert.equal(top.length,4);assert.equal(top.filter(D.isExecutiveBuyer).length,1);assert.equal(top.filter(p=>p.title==='Project Manager').length,3);
+ const top=D.topFourResearchCandidates(rows,profile,company);assert.equal(top.length,4);assert.equal(top.filter(D.isExecutiveBuyer).length,2);assert.equal(top.filter(p=>p.title==='Project Manager').length,2);
 });
 test('undated executive profiles need current employer corroboration; official management statements supply it',()=>{
  const uncertain=buyer('unknown','Managing Director',{identityEvidenceDate:'',publicNameUrl:'https://linkedin.com/in/anna-manager'});
@@ -43,4 +43,18 @@ test('undated executive profiles need current employer corroboration; official m
  const trace=D.tracePublicBuyers([{url:'https://example.com/management/',title:'Management',description:'Eva Johansson is the President and CEO of Example since 2026.'}],company.company,{...profile,companyDomain:company.domain});
  assert.equal(trace.people.length,1);assert.equal(trace.people[0].name,'Eva Johansson');assert.match(trace.people[0].title,/President and CEO/);assert.equal(D.qualifyBuyer(trace.people[0],profile,company).eligible,true);
  const unrelated=D.tracePublicBuyers([{url:'https://other.com/team/',title:'Management',description:'Eva Johansson is the President and CEO of Example since 2026.'}],company.company,{...profile,companyDomain:company.domain});assert.equal(unrelated.people.length,0);
+});
+
+test('2 + 2 protects low-scored purchasing and operational buyers from ten-person truncation',()=>{
+ const rows=[...Array.from({length:11},(_,i)=>buyer('exec'+i,'CEO')),buyer('purchase','Procurement Manager',{publicNameUrl:'https://linkedin.com/in/purchase',identityEvidenceDate:''}),buyer('project','Project Manager',{publicNameUrl:'https://linkedin.com/in/project',identityEvidenceDate:''})];
+ const result=D.rankedBuyerShortlist(rows,profile,company),top=D.topFourResearchCandidates(rows,profile,company);
+ assert.equal(result.people.length,10);assert.equal(result.committeeCoverage.status,'complete');assert.equal(top.filter(D.isExecutiveBuyer).length,2);assert.ok(top.some(p=>p.id==='purchase'));assert.ok(top.some(p=>p.id==='project'));assert.ok(top.every((p,i)=>!i||top[i-1].buyerQualification.total>=p.buyerQualification.total));
+});
+test('official management headings identify distinct current senior leaders on one page',()=>{
+ const rows=[{url:'https://example.com/management/',title:'Management',markdown:'### Eva Johansson\n\nPresident and CEO\n\n### Per Andersson\n\nSenior Vice President, Business Area Iron Ore'}];
+ const trace=D.tracePublicBuyers(rows,company.company,{...profile,companyDomain:company.domain});assert.equal(trace.people.length,2);assert.equal(new Set(trace.people.map(p=>p.id)).size,2);assert.ok(trace.people.every(D.isExecutiveBuyer));
+});
+
+test('duplicate source identities cannot fill both senior leadership places',()=>{
+ const first=buyer('ceo','CEO'),duplicate={...first,id:'other-source',publicNameUrl:'https://example.com/news/leader'};const result=D.rankedBuyerShortlist([first,duplicate,buyer('p','Procurement Director'),buyer('o','Project Director')],profile,company);assert.equal(result.committeeCoverage.executives,1);assert.equal(result.priorityIds.length,3);
 });
