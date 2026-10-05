@@ -10,7 +10,7 @@
   function project(payload={}){return {main:payload.main||{},discovery:payload.discovery||{},outreach:payload.outreach||{},delivery:payload.delivery||{},meta:{discovery:payload.meta?.discovery||{}}};}
   const RECORD_LISTS=new Set(['people','pool','buyers','selectedProspects','candidates','pipeline','items','companies','reports','documents','signals','icps']);
   const BUYER_GROUPS=[
-    ['name','firstName','organization','title','publicName','publicNameUrl','publicLinkedinUrl','linkedin_url','identityEvidenceDate','identitySource','identityStatus','nameVerification','linkedinConfirmedUrl','linkedinConfirmedAt','opportunityScope'],
+    ['name','firstName','organization','title','publicName','publicNameUrl','publicLinkedinUrl','linkedin_url','identityEvidenceDate','identitySource','identityStatus','nameVerification','linkedinConfirmedUrl','linkedinConfirmedAt','linkedinConfirmationMethod','linkedinIdentityEvidence','opportunityScope'],
     ['publicEmail','publicEmailUrl','publicEmailSourceCheck','patternFindings','hunterChecks','hunterFound','flowEmailCompletedFor'],
     ['publicPhone','publicPhoneUrl','flowPhoneCompletedFor']
   ];
