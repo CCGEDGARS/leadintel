@@ -15,6 +15,9 @@
     ['publicPhone','publicPhoneUrl','flowPhoneCompletedFor']
   ];
   const ATOMIC_FIELDS=new Set(['selectedEmailBuyer','scriptBuyer','contactVerification','publicEmailSourceCheck','messageStudioDraft']);
+  // These fields remember the page a tab is viewing, not commercial progress.
+  // Concurrent navigation should keep this tab's view and merge business data.
+  const NAVIGATION_PATHS=new Set(['main.step','meta.discovery.visibleStep','meta.discovery.activeJourneyStage']);
   function subset(value,keys){return Object.fromEntries(keys.filter(key=>Object.prototype.hasOwnProperty.call(value||{},key)).map(key=>[key,value[key]]));}
   function recordMaps(arrays,path){
     if(!RECORD_LISTS.has(path.split('.').at(-1))||!arrays.every(Array.isArray))return null;
@@ -32,6 +35,7 @@
       // browser research body and a cloud excerpt are not competing user edits.
       if(equal(r,br))return l;
       if(equal(l,bl))return r;
+      if(NAVIGATION_PATHS.has(path))return l;
       const field=path.split('.').at(-1);
       if(field==='buyerQualification')return undefined; // Recomputed from preserved buyer evidence.
       if(ATOMIC_FIELDS.has(field)){conflicts.push(path);return l;}

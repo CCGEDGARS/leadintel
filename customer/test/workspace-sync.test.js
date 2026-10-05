@@ -1,5 +1,24 @@
 const test=require('node:test'),assert=require('node:assert/strict'),Sync=require('../workspace-sync.js');
 const base=()=>({main:{website:'seller.example',answers:{offer:'Original',market:'Sweden'}},discovery:{people:[{id:'a',email:'a@buyer.example',source:'https://buyer.example/team'}]},outreach:{},delivery:{},meta:{discovery:{stage:4}}});
+test('two tabs navigating to different stages do not create a business-data conflict',()=>{
+ const b=base();b.main.step=4;Object.assign(b.meta.discovery,{activeJourneyStage:3,visibleStep:4});
+ const l=structuredClone(b),r=structuredClone(b);
+ l.main.step=6;Object.assign(l.meta.discovery,{activeJourneyStage:6,visibleStep:6});
+ r.main.step=5;Object.assign(r.meta.discovery,{activeJourneyStage:5,visibleStep:5});
+ r.discovery.people.push({id:'b',name:'New researched buyer'});
+ const result=Sync.merge(b,l,r);assert.equal(result.safe,true);
+ assert.equal(result.payload.main.step,6);assert.equal(result.payload.meta.discovery.visibleStep,6);
+ assert.equal(result.payload.meta.discovery.activeJourneyStage,6);assert.equal(result.payload.discovery.people.length,2);
+});
+test('navigation preference never resolves a competing selected recipient or business field',()=>{
+ const b=base();b.main.step=4;const l=structuredClone(b),r=structuredClone(b);
+ l.main.step=6;r.main.step=5;
+ l.meta.discovery.scriptBuyer={personId:'a',domain:'buyer.example',channel:'email'};
+ r.meta.discovery.scriptBuyer={personId:'b',domain:'buyer.example',channel:'linkedin'};
+ l.main.answers.offer='Local offer';r.main.answers.offer='Remote offer';
+ const result=Sync.merge(b,l,r);assert.equal(result.safe,false);
+ assert.deepEqual(result.conflicts.sort(),['main.answers.offer','meta.discovery.scriptBuyer']);
+});
 test('disjoint local navigation and remote buyer evidence merge without dropping either',()=>{
  const b=base(),l=base(),r=base();l.meta.discovery.stage=5;r.discovery.people.push({id:'b',source:'https://buyer.example/b'});
  const result=Sync.merge(b,l,r);assert.equal(result.safe,true);assert.equal(result.payload.meta.discovery.stage,5);assert.deepEqual(result.payload.discovery.people,r.discovery.people);assert.deepEqual(b,base());
