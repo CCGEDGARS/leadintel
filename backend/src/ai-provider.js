@@ -148,6 +148,7 @@ export async function searchWeb({apiKey,model,query,maxResults=5,purpose='genera
       results=sources.slice(0,limit).map(source=>({url:source.url,title:source.title||new URL(source.url).hostname,description:'',date:''}));
       warning='OpenAI discovered source URLs but returned no usable structured summary. Source pages require extraction.';
     }
+    if(purpose==='contact_research')results=results.map(row=>({...row,evidenceKind:'model_summary'}));
     return {provider:'openai',model:options.model,results,sources,...(warning?{warning}:{}),usage:usage(payload?.usage?.input_tokens,payload?.usage?.output_tokens)};
   }catch(error){
     const message=String(error?.message||'');

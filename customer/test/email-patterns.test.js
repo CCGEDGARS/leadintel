@@ -42,6 +42,39 @@ test('format examples are not mistaken for a sourced buyer email',()=>{
   assert.equal(result.length,0);
 });
 
+test('published middle-initial address before a labelled contact name is preserved exactly',()=>{
+ const rows=[{url:'https://association.test/member',markdown:'Bransch: Industry\nWebb: example.com\nE-post: mats.o.stalnacke@example.com\nKontakt: Mats Stålnacke'}];
+ const findings=D.sourcedBuyerEmails({name:'Mats Stålnacke'},'example.com',rows,'Example');
+ assert.deepEqual(findings.map(row=>row.email),['mats.o.stalnacke@example.com']);
+ assert.equal(D.sourcedBuyerEmails({name:'Anna Smith'},'example.com',rows,'Example').length,0);
+});
+test('model-written contact summaries cannot turn guessed addresses into public listings',()=>{
+ const person={name:'Anna Smith'};
+ const row={url:'https://example.com/team',title:'Team',description:'Anna Smith anna.smith@example.com',evidenceKind:'model_summary'};
+ assert.equal(D.sourcedBuyerEmails(person,'example.com',[row]).length,0);
+ assert.equal(D.sourcedBuyerEmails(person,'example.com',[{...row,markdown:'Anna Smith: a.smith@example.com'}])[0].email,'a.smith@example.com');
+});
+test('rechecking source text replaces a wrong saved address and retains the exact rejection',async()=>{
+ const ctx={...context,fetchFirecrawlBuyerResearch:async()=>({ok:true,json:async()=>({data:{markdown:'E-post: mats.o.stalnacke@example.com\nKontakt: Mats Stålnacke'}})})};
+ const start=source.indexOf('async function recheckBuyerEmailSources('),end=source.indexOf('async function searchBuyerEmailPatterns(',start);
+ vm.runInNewContext(source.slice(start,end)+';globalThis.recheck=recheckBuyerEmailSources;',ctx);
+ const url='https://association.test/member',person={name:'Mats Stålnacke',publicEmail:'mats.stalnacke@example.com',publicEmailUrl:url,patternFindings:[{email:'mats.stalnacke@example.com',url}]};
+ const checks=await ctx.recheck(person,{company:'Example',domain:'example.com'},new AbortController().signal);
+ assert.equal(person.publicEmail,'mats.o.stalnacke@example.com');
+ assert.deepEqual(Array.from(person.patternFindings,row=>row.email),['mats.o.stalnacke@example.com']);
+ assert.deepEqual(Array.from(checks[0].rejected),['mats.stalnacke@example.com']);
+ const normalized=D.normalizeDiscoveryState({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',people:[{...person,emailResearch:{status:'complete',sourceRechecks:checks}}]}]});
+ assert.equal(normalized.selectedProspects[0].people[0].emailResearch.sourceRechecks[0].rejected[0],'mats.stalnacke@example.com');
+});
+test('source failures preserve evidence and are reported as unavailable, never a negative finding',async()=>{
+ const ctx={...context,fetchFirecrawlBuyerResearch:async()=>({ok:false})};
+ const start=source.indexOf('async function recheckBuyerEmailSources('),end=source.indexOf('async function searchBuyerEmailPatterns(',start);
+ vm.runInNewContext(source.slice(start,end)+';globalThis.recheck=recheckBuyerEmailSources;',ctx);
+ const person={name:'Anna Smith',patternFindings:[{email:'anna.smith@example.com',url:'https://example.com/team'}]};
+ const checks=await ctx.recheck(person,{company:'Example',domain:'example.com'},new AbortController().signal);
+ assert.equal(checks[0].status,'unavailable');assert.equal(person.patternFindings.length,1);assert.equal(checks[0].rejected.length,0);
+});
+
 test('focused grounded search can recover a name and address from a public association PDF',async()=>{
   const candidates=[];
   const focusedContext={...context,crmAuthenticated:()=>true,bridge:()=>({workspace:{id:'workspace-1'}}),LEADINTEL_API:'https://api.test',
