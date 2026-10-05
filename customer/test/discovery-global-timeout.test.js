@@ -1301,3 +1301,12 @@ test('targeted executive search fills the reserved place and retains completed e
  const html=context.__elements.get('customer-pipeline').innerHTML;assert.match(html,/Executive leadership represented/);
  const restored=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery'))).selectedProspects[0];assert.equal(restored.buyerDiscovery.executiveResearch.status,'complete');
 });
+
+test('reserved executive cards display consecutive priority ranks independent of the full ten-person pool',()=>{
+ const context=loadDiscoveryRunner({renderNodes:true});
+ const people=['CEO','COO','Managing Director','Project Manager','Project Manager','Project Manager','Project Manager'].map((title,i)=>({id:'person'+i,name:'Qualified Person'+i,title,organization:'Northstar',publicNameUrl:'https://northstar.com/team/'+i,identityEvidenceDate:new Date().toISOString()}));
+ const candidate={company:'Northstar',domain:'northstar.com',buyerRoles:['Project Manager'],people,peopleStatus:'complete'};
+ const html=context.__renderSelectedProspects([candidate]);
+ const ranks=[...html.matchAll(/selected-prospect-rank">(\d+)</g)].slice(0,4).map(m=>Number(m[1]));
+ assert.deepEqual(ranks,[1,2,3,4]);assert.match(html,/4 priority buyers/);
+});
