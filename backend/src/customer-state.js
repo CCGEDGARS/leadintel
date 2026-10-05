@@ -30,5 +30,6 @@ export async function putCustomerState(env,{workspaceId,userId,expectedVersion,s
     result=await env.DB.prepare(`UPDATE customer_workspace_state SET schema_version=?,version=version+1,payload_json=?,updated_by=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND version=?`).bind(next.schema_version,JSON.stringify(next.payload),userId,workspaceId,current.version).run();
   }
   if(Number(result?.meta?.changes||0)<1)return {conflict:true,current:await getCustomerState(env,workspaceId)};
-  return {conflict:false,state:await getCustomerState(env,workspaceId)};
+  // Return the revision this CAS committed, never a later writer's payload.
+  return {conflict:false,state:{workspace_id:workspaceId,...next,updated_at:null}};
 }

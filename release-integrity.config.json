@@ -216,8 +216,8 @@
       "url": "/customer/workspace-sync.js",
       "status": 200,
       "contains": [
-        "function merge(base,local,server)",
-        "Arrays are indivisible"
+        "function merge(base,local,server,options={})",
+        "Unknown or duplicate identities"
       ]
     },
     {
@@ -383,6 +383,17 @@
       "contains": [
         "window.LeadIntelOutreachUI={openBuyerScripts}",
         "The selected recipient could not be opened."
+      ]
+    },
+    {
+      "id": "workspace-sync-baselines",
+      "type": "text",
+      "url": "/customer/workspace-persistence.js",
+      "status": 200,
+      "contains": [
+        "server_payload:serverPayload",
+        "previous.server_version>options.version",
+        "Workspace is still loading; retry save"
       ]
     }
   ],

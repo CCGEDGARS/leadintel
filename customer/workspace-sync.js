@@ -8,24 +8,62 @@
     const keys=Object.keys(a);return keys.length===Object.keys(b).length&&keys.every(k=>Object.prototype.hasOwnProperty.call(b,k)&&equal(a[k],b[k]));
   }
   function project(payload={}){return {main:payload.main||{},discovery:payload.discovery||{},outreach:payload.outreach||{},delivery:payload.delivery||{},meta:{discovery:payload.meta?.discovery||{}}};}
-  function merge(base,local,server){
+  const RECORD_LISTS=new Set(['people','pool','buyers','selectedProspects','candidates','pipeline','items','companies','reports','documents','signals','icps']);
+  const BUYER_GROUPS=[
+    ['name','firstName','organization','title','publicName','publicNameUrl','publicLinkedinUrl','linkedin_url','identityEvidenceDate','identitySource','identityStatus','nameVerification','linkedinConfirmedUrl','linkedinConfirmedAt','opportunityScope'],
+    ['publicEmail','publicEmailUrl','publicEmailSourceCheck','patternFindings','hunterChecks','hunterFound','flowEmailCompletedFor'],
+    ['publicPhone','publicPhoneUrl','flowPhoneCompletedFor']
+  ];
+  const ATOMIC_FIELDS=new Set(['selectedEmailBuyer','scriptBuyer','contactVerification','publicEmailSourceCheck']);
+  function subset(value,keys){return Object.fromEntries(keys.filter(key=>Object.prototype.hasOwnProperty.call(value||{},key)).map(key=>[key,value[key]]));}
+  function recordMaps(arrays,path){
+    if(!RECORD_LISTS.has(path.split('.').at(-1))||!arrays.every(Array.isArray))return null;
+    const rows=arrays.flat();if(!rows.length||!rows.every(object))return null;
+    const field=rows.every(row=>typeof row.id==='string'&&row.id.trim())?'id':rows.every(row=>typeof row.domain==='string'&&row.domain.trim())?'domain':null;
+    if(!field)return null;
+    const maps=arrays.map(rows=>new Map(rows.map(row=>[field==='domain'?row.domain.trim().toLowerCase().replace(/^www\./,''):row.id,row])));
+    return maps.every((map,i)=>map.size===arrays[i].length)?maps:null;
+  }
+  function merge(base,local,server,options={}){
     const conflicts=[];
-    function visit(b,l,r,path){
+    function visit(bl,l,br,r,path){
       if(equal(l,r))return l;
-      if(equal(l,b))return r;
-      if(equal(r,b))return l;
-      // Arrays are indivisible: never guess which buyer, evidence, or deletion wins.
-      if(object(b)&&object(l)&&object(r)){
-        const output={};
-        for(const key of new Set([...Object.keys(b),...Object.keys(l),...Object.keys(r)])){
-          const value=visit(b[key],l[key],r[key],path?`${path}.${key}`:key);
+      // Compare each representation to its own acknowledged baseline. A full
+      // browser research body and a cloud excerpt are not competing user edits.
+      if(equal(r,br))return l;
+      if(equal(l,bl))return r;
+      const field=path.split('.').at(-1);
+      if(field==='buyerQualification')return undefined; // Recomputed from preserved buyer evidence.
+      if(ATOMIC_FIELDS.has(field)){conflicts.push(path);return l;}
+      const maps=recordMaps([bl,l,br,r],path);
+      if(maps){
+        const [bm,lm,sm,rm]=maps,output=[];
+        for(const key of new Set([...lm.keys(),...rm.keys(),...bm.keys(),...sm.keys()])){
+          const value=visit(bm.get(key),lm.get(key),sm.get(key),rm.get(key),path+'['+key+']');
+          if(value!==undefined)output.push(value);
+        }
+        return output;
+      }
+      // Unknown or duplicate identities and unkeyed evidence stay indivisible.
+      // A deletion versus an edit to the same record must still require review.
+      if((object(bl)||bl===undefined)&&(object(br)||br===undefined)&&object(l)&&object(r)){
+        const output={},grouped=new Set();
+        if(/(?:people|pool|buyers)\[[^\]]+\]$/.test(path))for(const keys of BUYER_GROUPS){
+          keys.forEach(key=>grouped.add(key));
+          const bv=subset(bl,keys),lv=subset(l,keys),sv=subset(br,keys),rv=subset(r,keys);
+          const chosen=equal(lv,rv)||equal(rv,sv)?lv:equal(lv,bv)?rv:null;
+          if(chosen)Object.assign(output,chosen);else{conflicts.push(path+'.'+(keys.includes('publicEmail')?'emailEvidence':keys.includes('publicPhone')?'phoneEvidence':'identityEvidence'));Object.assign(output,lv);}
+        }
+        for(const key of new Set([...Object.keys(bl||{}),...Object.keys(l),...Object.keys(br||{}),...Object.keys(r)])){
+          if(grouped.has(key))continue;
+          const value=visit(bl?.[key],l[key],br?.[key],r[key],path?`${path}.${key}`:key);
           if(value!==undefined)Object.defineProperty(output,key,{value,enumerable:true,configurable:true,writable:true});
         }
         return output;
       }
       conflicts.push(path);return l;
     }
-    const payload=visit(project(base),project(local),project(server),'');
+    const payload=visit(project(options.localBase||base),project(local),project(base),project(server),'');
     return {safe:conflicts.length===0,payload,conflicts};
   }
   return {equal,project,merge};

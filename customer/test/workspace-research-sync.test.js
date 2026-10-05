@@ -62,3 +62,21 @@ test('repeated discovery references survive the real save and hydration boundary
  values.set('leadintel_customer_v2_server_versions',JSON.stringify({w1:8}));await root.fetch(endpoint,{method:'GET'});assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),false);
  assert.deepEqual(budget.restoreFromSync(saved.payload).discovery,payload.discovery);
 });
+
+test('cloud baseline remains the acknowledged compact payload while browser baseline keeps full evidence',async()=>{
+ const payload={main:{website:'seller.example'},discovery:{rawResults:[{url:'https://buyer.example/news',text:'Evidence '.repeat(90000)}],selectedProspects:[{domain:'buyer.example',people:[{id:'a',name:'Anna Buyer'}]}]},outreach:{},delivery:{},meta:{discovery:{}}};
+ const values=localValues(payload);let wire;
+ const root=load(values,async(input,options)=>{wire=JSON.parse(options.body).payload;return new Response(JSON.stringify({version:8,payload:wire}));});
+ await root.fetch(endpoint,{method:'PUT',body:JSON.stringify({version:7,payload}),leadintelSaveIntent:true,leadintelExplicitSave:true});
+ const base=root.LeadIntelWorkspacePersistence.syncedBase('w1');
+ assert.deepEqual(JSON.parse(JSON.stringify(base.payload.discovery)),budget.restoreFromSync(wire).discovery);
+ assert.equal(base.localPayload.discovery.rawResults[0].text.length,810000);
+ assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),false);
+});
+
+test('a late older response cannot replace a newer acknowledged cloud baseline',async()=>{
+ const payload={main:{website:'seller.example'},discovery:{},outreach:{},delivery:{},meta:{discovery:{}}},values=localValues(payload),root=load(values,async()=>new Response('{}'));
+ root.LeadIntelWorkspacePersistence.snapshotFromServerPayload({...payload,main:{website:'newer.example'}},{workspaceId:'w1',version:9});
+ root.LeadIntelWorkspacePersistence.snapshotFromServerPayload(payload,{workspaceId:'w1',version:8});
+ const base=root.LeadIntelWorkspacePersistence.syncedBase('w1');assert.equal(base.version,9);assert.equal(base.payload.main.website,'newer.example');
+});

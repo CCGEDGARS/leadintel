@@ -62,6 +62,7 @@ function loadBridge(fetchImpl, initialStorage = {}, workspaceId = WORKSPACE_ID) 
   sandbox.globalThis = sandbox;
   vm.runInNewContext(bridgeSource, sandbox, {filename: 'server-bridge.js'});
   const bridge = sandbox.LeadIntelServerBridge;
+  bridge.ready = true;
   bridge.session = {authenticated: true};
   bridge.workspace = {id: workspaceId};
   return {bridge, localStorage, sandbox, events};
