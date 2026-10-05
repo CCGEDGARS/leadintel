@@ -3,8 +3,8 @@ const source=fs.readFileSync(require.resolve('../discovery-ui.js'),'utf8');
 function harness({kept=true,verified=true,synced=true}={}){
  const person={id:'public-second',name:'Anna Buyer',organization:'Example',title:'COO',kept,publicLinkedinUrl:'https://linkedin.com/in/anna'};
  const candidate={company:'Example',domain:'example.com',people:[person]};let meta={},events=[],checks=0,focused=0;
- const ctx={LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,esc:String,enrichmentResults:new Map(),enrichmentPending:new Set(),personKey:()=>person.id,discovery:{selectedProspects:[candidate]},crmAuthenticated:()=>true,crmCompanyByDomain:()=>({id:'c1'}),bridge:()=>({workspace:{id:'w1'},getCrmCompany:async()=>{checks++;return {ok:true,contacts:[{id:'contact-other',name:'Other Buyer',email_status:'verified',work_email:'other@example.com'},{id:'contact-anna',external_person_id:person.id,name:person.name,linkedin_url:person.publicLinkedinUrl,email_status:verified?'verified':'public_unverified',work_email:'anna@example.com'}]};},saveNow:async()=>({saved:synced})}),loadMeta:()=>meta,saveMeta:value=>{meta=value;},saveDiscovery(){},renderAll(){},loadOutreachModules(){},showToast(){},window:{dispatchEvent:event=>events.push(event)},CustomEvent:class{constructor(type,data){this.type=type;this.detail=data.detail;}},button:{closest:()=>({querySelector:()=>({scrollIntoView(){},focus(){focused++;}})})}};
- vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('function verifiedBuyerEmail('),source.indexOf('function prospectContactControls(')),ctx);
+ const ctx={LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,esc:String,enrichmentResults:new Map(),enrichmentPending:new Set(),buyerSelectionPending:new Set(),$:()=>null,buyerSelectionRows:()=>[candidate],currentJourneyFocus:()=>'buyers',personKey:()=>person.id,discovery:{selectedProspects:[candidate]},crmAuthenticated:()=>true,crmCompanyByDomain:()=>({id:'c1'}),bridge:()=>({workspace:{id:'w1'},getCrmCompany:async()=>{checks++;return {ok:true,contacts:[{id:'contact-other',name:'Other Buyer',email_status:'verified',work_email:'other@example.com'},{id:'contact-anna',external_person_id:person.id,name:person.name,linkedin_url:person.publicLinkedinUrl,email_status:verified?'verified':'public_unverified',work_email:'anna@example.com'}]};},saveNow:async()=>({saved:synced})}),loadMeta:()=>meta,saveMeta:value=>{meta=value;},saveDiscovery(){},renderAll(){},loadOutreachModules(){},showToast(){},window:{dispatchEvent:event=>events.push(event)},CustomEvent:class{constructor(type,data){this.type=type;this.detail=data.detail;}},button:{closest:()=>({querySelector:()=>({scrollIntoView(){},focus(){focused++;}})})}};
+ vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('function selectedEmailBuyer('),source.indexOf('let buyerConfirmationLevel=')),ctx);vm.runInContext(source.slice(source.indexOf('function verifiedBuyerEmail('),source.indexOf('function prospectContactControls(')),ctx);
  return {ctx,person,candidate,get meta(){return meta;},get events(){return events;},get checks(){return checks;},get focused(){return focused;}};
 }
 test('single next action requires save and a verified business email, not public listings or Gmail',()=>{
@@ -79,4 +79,46 @@ test('LinkedIn selection cannot cross workspaces or enter email delivery',()=>{
  assert.equal(D.confirmedLinkedInBuyer(h.person,h.candidate,choice,'w1'),true);assert.equal(D.confirmedLinkedInBuyer(h.person,h.candidate,choice,'w2'),false);
  const O=require('../outreach-engine.js');const saved=O.normalizeOutreachState({items:[{domain:'example.com',channel:'linkedin',selectedPersonId:h.person.id,drafts:{linkedinMessage:'Hello Anna'}}]}).items[0];assert.equal(saved.channel,'linkedin');assert.equal(saved.selectedPersonId,h.person.id);
  assert.equal(O.buildApprovedSendPayload({...saved,approved:true}),null);assert.equal(O.approveOutreachItem(saved,{}).approved,false);
+});
+
+test('Select & proceed saves the exact email recipient without opening Content Creation',async()=>{
+ const h=harness();h.ctx.enrichmentResults.set(h.person.id,{contact:{work_email:'anna@example.com',email_status:'verified'}});
+ assert.equal(await h.ctx.saveBuyerAndProceed('example.com',0),true);
+ assert.equal(h.meta.selectedEmailBuyer.personId,h.person.id);assert.equal(h.meta.selectedEmailBuyer.contactId,'contact-anna');
+ assert.equal(h.meta.selectedEmailBuyer.email,'anna@example.com');assert.equal(h.meta.activeJourneyStage,5);assert.equal(h.meta.scriptBuyer,undefined);assert.equal(h.events.length,0);
+ assert.equal(h.ctx.enrichmentPending.size,0);assert.equal(h.ctx.buyerSelectionPending.size,0);
+});
+test('selecting a second recipient clears the first active flag while keeping both contacts',async()=>{
+ const h=harness();const other={...h.person,id:'first',name:'Previous Buyer',kept:true,flowSelected:true};h.candidate.people.push(other);
+ assert.equal(await h.ctx.addBuyerToFlow('example.com',0,{selectOnly:true}),true);
+ assert.equal(other.flowSelected,false);assert.equal(other.kept,true);assert.equal(h.person.flowSelected,true);
+});
+test('failed selection restores the previous recipient and never advances the stage',async()=>{
+ const h=harness({synced:false});h.ctx.saveMeta({selectedEmailBuyer:{personId:'previous'},activeJourneyStage:5});
+ assert.equal(await h.ctx.addBuyerToFlow('example.com',0,{selectOnly:true}),false);
+ assert.equal(h.meta.selectedEmailBuyer.personId,'previous');assert.equal(h.meta.activeJourneyStage,5);assert.equal(h.events.length,0);
+});
+test('sync conflicts block selection before any CRM lookup or progress handoff',async()=>{
+ const h=harness(),original=h.ctx.bridge;h.ctx.bridge=()=>({...original(),conflict:true});
+ assert.equal(await h.ctx.saveBuyerAndProceed('example.com',0),false);assert.equal(h.checks,0);assert.equal(h.events.length,0);assert.equal(h.meta.selectedEmailBuyer,undefined);
+});
+test('opening Content Creation waits until its listener has loaded',async()=>{
+ const h=harness();let release;h.ctx.loadOutreachModules=()=>new Promise(resolve=>{release=resolve;});
+ const running=h.ctx.addBuyerToFlow('example.com',0);await new Promise(resolve=>setImmediate(resolve));assert.equal(h.events.length,0);release();assert.equal(await running,true);assert.equal(h.events.length,1);
+});
+test('selected recipient is invalidated by a workspace change or revoked email',async()=>{
+ const h=harness();await h.ctx.addBuyerToFlow('example.com',0,{selectOnly:true});assert.equal(h.ctx.selectedEmailBuyer().person.id,h.person.id);
+ h.ctx.enrichmentResults.clear();assert.equal(h.ctx.selectedEmailBuyer(),null);
+});
+
+test('Continue to messages revalidates and opens only the explicitly selected contact',async()=>{
+ const h=harness();await h.ctx.addBuyerToFlow('example.com',0,{selectOnly:true});
+ assert.equal(h.events.length,0);assert.equal(await h.ctx.continueBuyerMessages(),true);
+ assert.equal(h.events.length,1);assert.equal(h.events[0].detail.personId,h.person.id);assert.equal(h.events[0].detail.contactId,'contact-anna');
+});
+test('selection bridge scrolls and focuses the highlighted footer with the recipient email',async()=>{
+ const h=harness();await h.ctx.addBuyerToFlow('example.com',0,{selectOnly:true});let scrolls=0,focus=0;
+ const footer={hidden:true},status={},gate={dataset:{},setAttribute(){},classList:{toggle(){}},closest:()=>footer,scrollIntoView(){scrolls++;},focus(){focus++;}};
+ h.ctx.$=id=>id==='continue-to-outreach'?gate:id==='selected-email-recipient'?status:null;
+ h.ctx.renderSelectedEmailBuyer({scroll:true});assert.equal(gate.disabled,false);assert.equal(footer.hidden,false);assert.match(status.textContent,/Anna Buyer.*anna@example.com/);assert.equal(scrolls,1);assert.equal(focus,1);
 });
