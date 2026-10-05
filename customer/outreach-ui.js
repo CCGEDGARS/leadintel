@@ -12,6 +12,7 @@ const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const q=id=>document.getElementById(id);
 let handoffContact=null;
+let buyerHandoffRequest=0;
 let outreach=loadOutreach({recoverInterrupted:true});
 let scriptRestoreRequest=0;
 let scriptGenerationRequest=0;
@@ -326,11 +327,13 @@ window.addEventListener('leadintel:commercial-context-changed',()=>{cancelPendin
 
 async function openBuyerScripts(choice){
  if(!choice||choice.workspaceId!==crmBridge()?.workspace?.id)return false;
+ const handoffRequest=++buyerHandoffRequest;
  const candidate=pipeline().find(p=>p.domain===choice.domain);if(!candidate)return false;
  const person=candidate.people?.find(p=>p.id===choice.personId);if(!person?.kept)return false;
  let contacts=[],companyRecord=null;
  if(candidate.crmId){const detail=await crmBridge().getCrmCompany(candidate.crmId);companyRecord=detail;contacts=detail?.ok?detail.contacts:[];}
  if(!candidate.crmId){const result=await crmBridge().listCrmCompanies({q:choice.domain,limit:20});const company=(result.companies||[]).find(c=>c.normalized_domain===choice.domain);if(company){const record=await crmBridge().getCrmCompany(company.id);companyRecord=record;contacts=record.ok?record.contacts:[];}}
+ if(handoffRequest!==buyerHandoffRequest||choice.workspaceId!==crmBridge()?.workspace?.id)return false;
  if(choice.channel==='linkedin'){
    if(!window.LeadIntelDiscovery?.confirmedLinkedInBuyer(person,candidate,choice,crmBridge()?.workspace?.id))return false;
    if(!companyRecord?.ok||['suppressed','archived'].includes(companyRecord.company?.lifecycle_status))return false;
