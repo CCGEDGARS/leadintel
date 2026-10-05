@@ -290,7 +290,7 @@ test('selectDecisionMakers returns no more than four role-relevant people in pri
   ];
   const selected=Discovery.selectDecisionMakers(people,profile,4);
   assert.equal(selected.length,4);
-  assert.deepEqual(selected.map(person=>person.id),['p4','p2','p1','p3']);
+  assert.deepEqual(selected.map(person=>person.id),['p2','p4','p1','p3']);
   assert.ok(selected.every(person=>!['p6','p7'].includes(person.id)));
 });
 

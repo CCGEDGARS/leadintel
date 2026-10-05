@@ -41,5 +41,5 @@ test('localized current employer snippets and title suffixes resolve without acc
 test('role coverage reports missing buying functions instead of treating project-only results as complete coverage',()=>{
  const ctx={LeadIntelDiscovery:D};vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('function buyerRoleCoverage('),source.indexOf('function buyerProviderStatusHtml(')),ctx);
  const coverage=ctx.buyerRoleCoverage({buyerDiscovery:{opportunityRoles:['Procurement Director','Project Manager','Engineering Director'],pool:[{name:'Anna Andersson',title:'Projektledare',publicNameUrl:'https://example.com/team/anna'}]}});
- assert.deepEqual(Array.from(coverage.missing),['Procurement / sourcing','Engineering']);assert.deepEqual(Array.from(coverage.covered),['Projects']);
+ assert.deepEqual(Array.from(coverage.missing),['Executive','Procurement / sourcing','Engineering']);assert.deepEqual(Array.from(coverage.covered),['Projects']);
 });

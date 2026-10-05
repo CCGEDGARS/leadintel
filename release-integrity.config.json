@@ -309,6 +309,29 @@
         "function linkedInDraftPrompt(",
         "function parseLinkedInDraft("
       ]
+    },
+    {
+      "id": "executive-top-four-policy",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "function isExecutiveBuyer(",
+        "executiveCoverage:",
+        "const executive=ranked.find(isExecutiveBuyer);"
+      ]
+    },
+    {
+      "id": "executive-coverage-controls",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "Executive coverage incomplete",
+        "Executive leadership represented",
+        "data-research-executive",
+        "20261005-executive-slot-v1"
+      ]
     }
   ],
   "retry": {

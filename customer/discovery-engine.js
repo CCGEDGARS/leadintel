@@ -960,7 +960,7 @@
 
   function buildApolloPeopleSearchPayload(candidate={},profile={}){
     const domain=companyIdentityDomain(candidate.domain||candidate.website);
-    const titles=splitList(profile.decisionMakers).slice(0,12);
+    const titles=[...new Set(buyerSelectionRoles(profile).flatMap(role=>role==='Executive leadership'?localBuyerRoleAliases(role,candidate.market):[role]))].slice(0,24);
     return {
       q_organization_domains_list:domain?[domain]:[],
       person_titles:titles,
@@ -998,10 +998,19 @@
   function roleSpecificTokens(value){
     return clean(value).toLowerCase().replace(/[^a-z0-9āčēģīķļņšūžäöåüß\s-]/g," ").split(/\s+/).filter(token=>token.length>=3&&!ROLE_GENERIC_WORDS.has(token));
   }
+  function isExecutiveBuyer(person={}){
+    const title=clean(person.title);
+    if(/\b(assistant|associate|advisor|adviser|former|previous|past|tidigare)\b|assistant to|executive assistant/i.test(title))return false;
+    return /\b(?:CEO|COO|chief executive officer|chief operating officer|managing director|division head|divisional director|head of (?:a |the )?(?:division|business area)|business area (?:head|director)|verkställande direktör|koncernchef|affärsområdeschef)\b/i.test(title)||/^(?:owner|business owner|managing partner|founder\s*(?:&|and)\s*(?:owner|CEO))$/i.test(title)||/^(?:group |company )?president(?:\s*(?:&|and)\s*CEO)?$/i.test(title);
+  }
+  function buyerSelectionRoles(profile={}){
+    return [...new Set(['Executive leadership',...splitList(profile.decisionMakers)])].slice(0,16);
+  }
   function roleRelevance(person,roles){
     const title=clean(person?.title).toLowerCase();if(!title)return null;
     let best=null;
     roles.forEach((role,index)=>{
+      if(role==='Executive leadership'&&!isExecutiveBuyer(person))return;
       const normalizedRole=clean(role).toLowerCase();const aliases=localBuyerRoleAliases(role,"Sweden").map(value=>value.toLowerCase());const exact=aliases.some(alias=>title===alias||title.includes(alias))||roleAliasMatch(title,role);
       const wanted=new Set(roleSpecificTokens(role));const actual=new Set(roleSpecificTokens(title));
       const overlap=[...wanted].filter(token=>actual.has(token)).length;
@@ -1017,7 +1026,7 @@
     return best;
   }
   function selectDecisionMakers(people=[],profile={},limit=4){
-    const roles=splitList(profile.decisionMakers).slice(0,12);if(!roles.length)return [];
+    const roles=buyerSelectionRoles(profile);
     const cap=Math.max(1,Math.min(20,Number(limit)||4));
     const ranked=(Array.isArray(people)?people:[]).map((person,index)=>({person,relevance:roleRelevance(person,roles),priority:cap>=20?(qualifyBuyer(person,profile,{}).total||0):0,index})).filter(item=>item.relevance).sort((a,b)=>b.priority-a.priority||b.relevance.score-a.relevance.score||a.index-b.index);
     const diverse=[],families=new Set();
@@ -1031,15 +1040,16 @@
 
 
   function opportunityBuyerRoles(candidate={},profile={}){
-    const base=splitList(profile.decisionMakers).slice(0,12),context=clean([candidate.buyerFit?.purchase,candidate.buyerFit?.reason,candidate.fitDescription,...(candidate.fitReasons||[]),...(candidate.matchedSignals||[]).map(s=>s.name)].join(' ')).toLowerCase(),roles=[];
+    const base=buyerSelectionRoles(profile),context=clean([candidate.buyerFit?.purchase,candidate.buyerFit?.reason,candidate.fitDescription,...(candidate.fitReasons||[]),...(candidate.matchedSignals||[]).map(s=>s.name)].join(' ')).toLowerCase(),roles=[];
     const add=(...values)=>values.forEach(value=>{if(value&&!roles.includes(value))roles.push(value);});
     if(/project|investment|capex|construction|expansion|plant|facility|installation|modern/i.test(context))add('Project Director','Project Manager','CAPEX Manager','Investment Project Manager');
     if(/procure|purchas|supplier|sourcing|equipment|material|contract/i.test(context))add('Procurement Director','Procurement Manager','Strategic Sourcing Manager','Purchasing Manager');
     if(/engineer|technical|equipment|installation|plant|facility|metal|manufactur/i.test(context))add('Engineering Director','Engineering Manager','Technical Manager');
     if(/production|operations|plant|mine|mining|factory|manufactur/i.test(context))add('Operations Director','Plant Manager','Production Manager','Maintenance Manager');
-    add(...base);return [...base,...roles.filter(role=>!base.includes(role))].slice(0,12);
+    add(...base);return [...base,...roles.filter(role=>!base.includes(role))].slice(0,16);
   }
   function localBuyerRoleAliases(role='',market=''){
+    if(role==='Executive leadership')return ['CEO','Chief Executive Officer','COO','Chief Operating Officer','Managing Director','Division Head','Head of Business Area','Business Area Director','President','Owner','Managing Partner',...(/sweden|svensk/i.test(clean(market))?['Verkställande direktör','Koncernchef','Affärsområdeschef']:[])];
     const value=clean(role),aliases=[value],swedish=/sweden|svensk|gällivare|malmberget|kiruna|stockholm/i.test(clean(market));
     // Equivalent functional leadership titles share role fit in every market.
     const director=value.match(/^(.+?) director$/i),head=value.match(/^head of (.+)$/i);
@@ -1055,6 +1065,7 @@
   }
   function buyerResearchPlan(candidate={},profile={}){
     const roles=opportunityBuyerRoles(candidate,profile),company=clean(candidate.company),domain=companyIdentityDomain(candidate.domain),terms=buyerOpportunityTerms(candidate),expanded=[...new Set(roles.flatMap(role=>localBuyerRoleAliases(role,candidate.market)))],queries=[];
+    if(domain)queries.push('site:'+domain+' (CEO OR \"Chief Executive Officer\" OR COO OR \"Managing Director\" OR \"Verkställande direktör\") (leadership OR management OR team OR ledning)');
     // Give every planned role a first pass before spending the budget on variants.
     // Include local aliases in that pass so later roles are not English-only.
     for(const role of roles){
@@ -1174,16 +1185,17 @@
       &&Boolean(person.identitySource==='apollo'||normalizeUrl(person.publicNameUrl)||normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url))
       &&(!candidate.company||companyNameMatches(person.organization,candidate.company))
       &&!/\b(former|formerly|previous|past|tidigare)\b/i.test(clean(person.title)));
-    const ranked=eligible.map(person=>{const match=roleRelevance(person,splitList(profile.decisionMakers));return match?{...person,buyerRelevanceScore:Math.max(1,Math.min(100,Math.round(match.score))),matchedBuyerRole:match.role,buyerQualification:qualifyBuyer(person,profile,candidate)}:null;}).filter(Boolean).filter(person=>person.buyerQualification.eligible).sort((a,b)=>b.buyerQualification.total-a.buyerQualification.total||b.buyerRelevanceScore-a.buyerRelevanceScore);
+    const ranked=eligible.map(person=>{const match=roleRelevance(person,buyerSelectionRoles(profile));return match?{...person,buyerRelevanceScore:Math.max(1,Math.min(100,Math.round(match.score))),matchedBuyerRole:match.role,buyerQualification:qualifyBuyer(person,profile,candidate)}:null;}).filter(Boolean).filter(person=>person.buyerQualification.eligible).sort((a,b)=>b.buyerQualification.total-a.buyerQualification.total||b.buyerRelevanceScore-a.buyerRelevanceScore);
+    const executive=ranked.find(isExecutiveBuyer);
     const shortlist=ranked.slice(0,10);
-    const priority=shortlist.slice(0,4);
+    if(executive&&!shortlist.includes(executive)){shortlist[shortlist.length-1]=executive;shortlist.sort((a,b)=>b.buyerQualification.total-a.buyerQualification.total||b.buyerRelevanceScore-a.buyerRelevanceScore);}
+    const priority=executive?[executive,...ranked.filter(person=>person!==executive).slice(0,3)].sort((a,b)=>b.buyerQualification.total-a.buyerQualification.total||b.buyerRelevanceScore-a.buyerRelevanceScore):shortlist.slice(0,4);
     const strongest=priority.filter(person=>buyerResearchAssessment(person).status==='complete');
-    return {people:shortlist,priorityIds:priority.map(person=>person.id||buyerIdentity(person)),recommendedIds:strongest.map(person=>person.id||buyerIdentity(person))};
+    return {executiveCoverage:{status:executive?'complete':'incomplete',personId:executive?.id||'',reason:executive?'Qualified executive reserved in top four':'Executive coverage incomplete · no supported current executive'},people:shortlist,priorityIds:priority.map(person=>person.id||buyerIdentity(person)),recommendedIds:strongest.map(person=>person.id||buyerIdentity(person))};
   }
   function topFourResearchCandidates(pool=[],profile={},candidate={}){
-    const eligible=rankedBuyerShortlist(pool,profile,candidate).people
-      .sort((a,b)=>b.buyerQualification.total-a.buyerQualification.total||b.buyerRelevanceScore-a.buyerRelevanceScore);
-    if(eligible.length)return eligible.slice(0,4);
+    const shortlist=rankedBuyerShortlist(pool,profile,candidate);
+    if(shortlist.people.length){const priorities=new Set(shortlist.priorityIds);return shortlist.people.filter(person=>priorities.has(person.id||buyerIdentity(person)));}
     // Legacy or unresolved pools still need identity acquisition. These records
     // remain on hold until evidence resolves the qualification gaps.
     const matched=selectDecisionMakers(pool,profile,10);return (matched.length?matched:pool).slice(0,4);
@@ -1219,10 +1231,11 @@
   }
   function buyerFunction(role=''){
     const value=clean(role);
+    if(value==='Executive leadership'||isExecutiveBuyer({title:value}))return 'Executive';
     return /procure|purchas|sourc|inköp|inkop|buyer/i.test(value)?'Procurement / sourcing':/engineer|technical|tekn|ingenjör/i.test(value)?'Engineering':/operations|plant|production|maintenance|drift|anlägg|produktion|underhåll/i.test(value)?'Operations':/project|projekt|capex|investment/i.test(value)?'Projects':/ceo|chief executive|managing director|verkställande/i.test(value)?'Executive':value;
   }
   function qualifyBuyer(person={},profile={},candidate={},options={}){
-    const roles=splitList(profile.decisionMakers).slice(0,12),match=roleRelevance(person,roles),source=normalizeUrl(person.publicNameUrl)||normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url),domain=companyIdentityDomain(candidate.domain),full=hasFullBuyerName(person.publicName||person.name),employer=!candidate.company||companyNameMatches(person.organization,candidate.company),directory=person.identitySource==='apollo';
+    const roles=buyerSelectionRoles(profile),match=roleRelevance(person,roles),source=normalizeUrl(person.publicNameUrl)||normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url),domain=companyIdentityDomain(candidate.domain),full=hasFullBuyerName(person.publicName||person.name),employer=!candidate.company||companyNameMatches(person.organization,candidate.company),directory=person.identitySource==='apollo';
     const blocked=[];
     if(!full||person.identityStatus==='pending'||person.nameVerification==='pending')blocked.push('Full identity unresolved');
     if(person.opportunityScope?.status==='review_required')blocked.push(person.opportunityScope.reason||'Opportunity responsibility requires review');
@@ -1235,10 +1248,10 @@
     if((candidate.publicResearch?.conflicts||[]).some(row=>String(row.person_id)===String(person.id)))blocked.push('Identity or employment conflict');
     const now=Date.parse(options.now||new Date().toISOString()),date=Date.parse(person.identityEvidenceDate||''),age=Number.isFinite(date)?(now-date)/86400000:null;
     if(age!==null&&(age<0||age>365))blocked.push('Current role requires review; identity source is stale or future-dated');
-    const leadership=/director|chief|head of|\bceo\b|\bowner\b|chef|counsel/i.test(person.title);
+    const leadership=isExecutiveBuyer(person)||/director|chief|head of|\bceo\b|\bowner\b|chef|counsel/i.test(person.title);
     const subordinate=/\b(deputy|assistant|associate|vice head)\b/i.test(person.title);
     const functionName=buyerFunction(match?.role||person.title);
-    const departmentHead=/head of|avdelningschef|chief|\bceo\b|\bowner\b|counsel/i.test(person.title);
+    const departmentHead=isExecutiveBuyer(person)||/head of|avdelningschef|chief|\bceo\b|\bowner\b|counsel/i.test(person.title);
     const authority=leadership?(subordinate?16:departmentHead||functionName==='Procurement / sourcing'?25:functionName==='Projects'?20:22):/manager|sourcing|inköpare|projektledare|ansvarig/i.test(person.title)?12:4;
     const breakdown={
       role:{points:match?Math.round((match.exact?1:.65)*25):0,max:25,basis:match?`Matches ${match.role}`:'No supported role match'},
@@ -1260,21 +1273,21 @@
     return {status:'not_researched',reason:'Public contact research not completed; excluded from recommendations'};
   }
   function buyerCoveragePlan(pool=[],profile={},candidate={}){
-    const roles=splitList(profile.decisionMakers).slice(0,12),wanted=[...new Set(roles.map(buyerFunction))],covered=new Set(pool.filter(person=>qualifyBuyer(person,profile,candidate).eligible).map(person=>buyerFunction(roleRelevance(person,roles)?.role||person.title))),missing=wanted.filter(family=>!covered.has(family)),queries=[];
+    const roles=buyerSelectionRoles(profile),wanted=[...new Set(roles.map(buyerFunction))],covered=new Set(pool.filter(person=>qualifyBuyer(person,profile,candidate).eligible).map(person=>buyerFunction(roleRelevance(person,roles)?.role||person.title))),missing=wanted.filter(family=>!covered.has(family)),queries=[];
     for(const family of missing){
       const titles=roles.filter(role=>buyerFunction(role)===family).flatMap(role=>localBuyerRoleAliases(role,candidate.market));
       const aliases=[...new Set(titles)].map(title=>'"'+title+'"').join(' OR '),company='"'+clean(candidate.company)+'"';
       if(candidate.domain)queries.push(`site:${companyIdentityDomain(candidate.domain)} (${aliases}) (contact OR kontakt OR team OR project OR projekt)`);
-      queries.push(`${company} (${aliases}) (interview OR project OR appointment OR kontakt OR projekt)`);
+      queries.push(`site:linkedin.com/in/ ${company} (${aliases})`);
     }
-    for(const family of missing){const titles=roles.filter(role=>buyerFunction(role)===family).flatMap(role=>localBuyerRoleAliases(role,candidate.market));queries.push(`site:linkedin.com/in/ "${clean(candidate.company)}" (${[...new Set(titles)].map(title=>'"'+title+'"').join(' OR ')})`);}
+    for(const family of missing){const titles=roles.filter(role=>buyerFunction(role)===family).flatMap(role=>localBuyerRoleAliases(role,candidate.market));queries.push(` "${clean(candidate.company)}" (${[...new Set(titles)].map(title=>'"'+title+'"').join(' OR ')}) (interview OR appointment OR management)`);}
     // Source breadth before optional location refinements. Missing functions get
     // an equal chance; a large number of project profiles is not a stop condition.
     return {wanted,covered:wanted.filter(family=>covered.has(family)),missing,queries:[...new Set(queries)].slice(0,8)};
   }
   function normalizeBuyerDiscovery(value={},domain=""){
     const safeProvider=row=>({status:['pending','complete','partial','unavailable','failed','timeout','not_configured','not_needed','not_authenticated'].includes(clean(row?.status))?clean(row.status):'pending',results:clamp(Number(row?.results)||0,0,200,0),queries:clamp(Number(row?.queries)||0,0,50,0),accepted:row?.accepted!=null?clamp(Number(row.accepted)||0,0,200,0):null,failures:(Array.isArray(row?.failures)?row.failures:[]).slice(0,50).map(failure=>({status:clean(failure.status).slice(0,80),code:clean(failure.code).slice(0,120),message:clean(failure.message).slice(0,1000),query:clean(failure.query).slice(0,500)}))});
-    return {coverageFollowUp:value.coverageFollowUp?{status:clean(value.coverageFollowUp.status),queries:clamp(Number(value.coverageFollowUp.queries)||0,0,8,0),results:clamp(Number(value.coverageFollowUp.results)||0,0,100,0),missing:(value.coverageFollowUp.missing||[]).map(clean).slice(0,12),checkedAt:clean(value.coverageFollowUp.checkedAt).slice(0,40)}:null,researchVersion:clean(value.researchVersion).slice(0,80),researchIncomplete:value.researchIncomplete===true,target:clamp(Number(value.target)||30,1,30,30),found:clamp(Number(value.found)||0,0,30,0),sourceResults:clamp(Number(value.sourceResults)||0,0,500,0),apolloDiscoveryCount:clamp(Number(value.apolloDiscoveryCount)||0,0,30,0),providerStatus:value.providerStatus?{firecrawl:safeProvider(value.providerStatus.firecrawl),grounded:safeProvider(value.providerStatus.grounded),identity:safeProvider(value.providerStatus.identity)}:null,lastError:value.lastError&&typeof value.lastError==='object'?{name:clean(value.lastError.name).slice(0,80),message:clean(value.lastError.message).slice(0,300),phase:clean(value.lastError.phase).slice(0,80)}:null,opportunityRoles:(value.opportunityRoles||[]).map(clean).filter(Boolean).slice(0,12),expandedRoles:(value.expandedRoles||[]).map(clean).filter(Boolean).slice(0,40),opportunityTerms:(value.opportunityTerms||[]).map(clean).filter(Boolean).slice(0,10),checkedAt:clean(value.checkedAt).slice(0,40),issues:(value.issues||[]).map(clean).slice(0,30),resultDiagnostics:[...(value.resultDiagnostics||[]).filter(row=>row.source==='identity'),...(value.resultDiagnostics||[]).filter(row=>row.source!=='identity')].slice(0,500).map(row=>({index:Number(row.index)||0,source:clean(row.source),url:normalizeUrl(row.url),title:clean(row.title).slice(0,500),parsedName:clean(row.parsedName),parsedTitle:clean(row.parsedTitle),parsedCompany:clean(row.parsedCompany),parsing:clean(row.parsing),companyVerification:clean(row.companyVerification),roleMatching:clean(row.roleMatching),matchedBuyerRole:clean(row.matchedBuyerRole),accepted:row.accepted===true,identityStatus:clean(row.identityStatus),poolSelection:clean(row.poolSelection).slice(0,30),rejectionReason:clean(row.rejectionReason).slice(0,500)})),pool:(value.pool||[]).slice(0,30).map(person=>safeBuyer(person,domain))};
+    return {executiveResearch:value.executiveResearch?{status:clean(value.executiveResearch.status),checkedAt:clean(value.executiveResearch.checkedAt),queries:clamp(Number(value.executiveResearch.queries)||0,0,8,0),results:clamp(Number(value.executiveResearch.results)||0,0,50,0),identityStatus:clean(value.executiveResearch.identityStatus),issues:(value.executiveResearch.issues||[]).map(clean).slice(0,8)}:null,coverageFollowUp:value.coverageFollowUp?{status:clean(value.coverageFollowUp.status),queries:clamp(Number(value.coverageFollowUp.queries)||0,0,8,0),results:clamp(Number(value.coverageFollowUp.results)||0,0,100,0),missing:(value.coverageFollowUp.missing||[]).map(clean).slice(0,12),checkedAt:clean(value.coverageFollowUp.checkedAt).slice(0,40)}:null,researchVersion:clean(value.researchVersion).slice(0,80),researchIncomplete:value.researchIncomplete===true,target:clamp(Number(value.target)||30,1,30,30),found:clamp(Number(value.found)||0,0,30,0),sourceResults:clamp(Number(value.sourceResults)||0,0,500,0),apolloDiscoveryCount:clamp(Number(value.apolloDiscoveryCount)||0,0,30,0),providerStatus:value.providerStatus?{firecrawl:safeProvider(value.providerStatus.firecrawl),grounded:safeProvider(value.providerStatus.grounded),identity:safeProvider(value.providerStatus.identity)}:null,lastError:value.lastError&&typeof value.lastError==='object'?{name:clean(value.lastError.name).slice(0,80),message:clean(value.lastError.message).slice(0,300),phase:clean(value.lastError.phase).slice(0,80)}:null,opportunityRoles:(value.opportunityRoles||[]).map(clean).filter(Boolean).slice(0,16),expandedRoles:(value.expandedRoles||[]).map(clean).filter(Boolean).slice(0,40),opportunityTerms:(value.opportunityTerms||[]).map(clean).filter(Boolean).slice(0,10),checkedAt:clean(value.checkedAt).slice(0,40),issues:(value.issues||[]).map(clean).slice(0,30),resultDiagnostics:[...(value.resultDiagnostics||[]).filter(row=>row.source==='identity'),...(value.resultDiagnostics||[]).filter(row=>row.source!=='identity')].slice(0,500).map(row=>({index:Number(row.index)||0,source:clean(row.source),url:normalizeUrl(row.url),title:clean(row.title).slice(0,500),parsedName:clean(row.parsedName),parsedTitle:clean(row.parsedTitle),parsedCompany:clean(row.parsedCompany),parsing:clean(row.parsing),companyVerification:clean(row.companyVerification),roleMatching:clean(row.roleMatching),matchedBuyerRole:clean(row.matchedBuyerRole),accepted:row.accepted===true,identityStatus:clean(row.identityStatus),poolSelection:clean(row.poolSelection).slice(0,30),rejectionReason:clean(row.rejectionReason).slice(0,500)})),pool:(value.pool||[]).slice(0,30).map(person=>safeBuyer(person,domain))};
   }
   function companyNameMatches(actual,expected){
     const normalize=value=>clean(value).toLowerCase().replace(/\b(?:ab|aktiebolag|inc|ltd|limited|plc|group)\b/g,' ').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
@@ -1307,7 +1320,7 @@
       if(employment?.[1])role=clean(employment[1]).replace(new RegExp('^'+name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s+(?:is|är)\\s+','iu'),'');
       role=role.replace(/^.*?\b(?:is currently|currently is|currently)\s+(?:an?\s+)?/iu,'');
       diagnostic.parsedCompany=companyText;diagnostic.companyVerification='complete';diagnostic.parsedTitle=role;
-      const relevance=roleRelevance({title:role},splitList(profile.decisionMakers));
+      const relevance=roleRelevance({title:role},buyerSelectionRoles(profile));
       if(!role||!relevance){reject('roleMatching',role?'Parsed role does not match any requested buying function':'No current job title could be parsed');continue;}
       diagnostic.roleMatching='complete';diagnostic.matchedBuyerRole=relevance.role;
       const identity=linkedIn||rawUrl||(name.toLowerCase()+'|'+role.toLowerCase());if(seen.has(identity)){diagnostic.rejectionReason='Duplicate person or source identity';continue;}seen.add(identity);
@@ -1324,7 +1337,7 @@
       const diagnostic={index,source:'identity',url:person.linkedin_url,title:person.title,parsedName:person.name,parsedTitle:person.title,parsedCompany:person.organization,parsing:'complete',companyVerification:'pending',roleMatching:'pending',accepted:false,rejectionReason:''};diagnostics.push(diagnostic);
       if(person.name==='Unknown person'||(person.name.split(/\s+/).length<2&&!clean(row.id||row.person_id))){diagnostic.parsing='rejected';diagnostic.rejectionReason='Identity result does not provide a full person name';continue;}
       if(!companyNameMatches(person.organization,candidate.company)){diagnostic.companyVerification='rejected';diagnostic.rejectionReason=person.organization?'Identity current organization does not match the target company':'Identity result does not provide current target-company employment evidence';continue;}
-      diagnostic.companyVerification='complete';const relevance=roleRelevance(person,splitList(profile.decisionMakers));
+      diagnostic.companyVerification='complete';const relevance=roleRelevance(person,buyerSelectionRoles(profile));
       if(!relevance){diagnostic.roleMatching='rejected';diagnostic.rejectionReason='Identity title does not match any requested buying function';continue;}
       diagnostic.roleMatching='complete';diagnostic.matchedBuyerRole=relevance.role;diagnostic.accepted=true;diagnostic.identityStatus=person.identityStatus;people.push({...person,identitySource:'apollo'});
     }
@@ -1648,5 +1661,5 @@
     const route=rules.researchPriority==='signals'?'signal':lookalikePass?signals.length?'both':'lookalike':'signal';
     return {version:2,score,buyerFitPoints,signalPoints,opportunityScore:signals.length?score:null,lookalikeScore:referenceScore,referenceMatch:reference,route,eligible:!gaps.length,confidence:independent>=2&&official.length>=2?'High':'Medium',gaps,minimumScore:rules.minimumScore,researchPriority:rules.researchPriority,researchedAt:settings.researchedAt||candidate.researchedAt||'',matchedSignals:signals,evidenceSources:independent,commercial};
   }
-  return {linkedInVerification,buyerDisplayTitle,confirmedLinkedInBuyer,topFourResearchCandidates,gmailGuessCandidates,companyQualificationPresentation,matchBuyerScopeEvidence,rankedEmailGuesses,sourcedBuyerEmails,validResearchEmail,buyerResearchAssessment,qualifyBuyer,buyerCoveragePlan,buyerFunction,buyerFitContext,buyerFitPrompt,parseBuyerFit,researchBuyerFit,verifiedBuyerFit,rankQualifiedCompanies,qualificationRules,verifiedReferenceMatch,assessAutomaticQualification,companyIdentityDomain,evidenceDate,commercialFit,currentSignals,domainMatchesCompany,matchedSignalsForEvidence,dedupeCompanyEvidence,evaluateExclusions,companyFitSummary,CRM_STAGES,DEFAULT_DISCOVERY_STATE,DISCOVERY_QUALITY_VERSION,discoveryLimits,buyerRolesForTarget,buildDiscoveryQueries,buildDiscoveryFollowUpQueries,extractCompanyMentions,extractPublicContacts,matchPublicBuyerDetails,matchPublicLinkedInProfiles,parseCompanyExtraction,describeCompanyExtractionOutcome,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildPotentialCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,hasFullBuyerName,selectDecisionMakers,discoverPublicBuyers,tracePublicBuyers,traceIdentityBuyers,opportunityBuyerRoles,localBuyerRoleAliases,buyerOpportunityTerms,buyerResearchPlan,buyerIdentity,resolvePendingBuyerIdentities,mergeBuyerPool,recommendedBuyers,rankedBuyerShortlist,upsertPipelineItem,normalizeDiscoveryState,retainLastSuccessfulDiscoveryCandidates,recoverInterruptedDiscoveryState,discoveryOutcomeStatus,zeroResultGuidance,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,isLowQualityDiscoveryEvidence,hasActiveSignals,isActionableCandidate,isPotentialBuyerSearchAllowed};
+  return {isExecutiveBuyer,buyerSelectionRoles,linkedInVerification,buyerDisplayTitle,confirmedLinkedInBuyer,topFourResearchCandidates,gmailGuessCandidates,companyQualificationPresentation,matchBuyerScopeEvidence,rankedEmailGuesses,sourcedBuyerEmails,validResearchEmail,buyerResearchAssessment,qualifyBuyer,buyerCoveragePlan,buyerFunction,buyerFitContext,buyerFitPrompt,parseBuyerFit,researchBuyerFit,verifiedBuyerFit,rankQualifiedCompanies,qualificationRules,verifiedReferenceMatch,assessAutomaticQualification,companyIdentityDomain,evidenceDate,commercialFit,currentSignals,domainMatchesCompany,matchedSignalsForEvidence,dedupeCompanyEvidence,evaluateExclusions,companyFitSummary,CRM_STAGES,DEFAULT_DISCOVERY_STATE,DISCOVERY_QUALITY_VERSION,discoveryLimits,buyerRolesForTarget,buildDiscoveryQueries,buildDiscoveryFollowUpQueries,extractCompanyMentions,extractPublicContacts,matchPublicBuyerDetails,matchPublicLinkedInProfiles,parseCompanyExtraction,describeCompanyExtractionOutcome,buildCompanyResolutionQueries,buildCandidateVerificationQueries,buildCandidateNarrative,normalizeCompanySearchResults,attachSourceEvidenceToResolvedCompanies,mergeCompanyCandidates,buildPotentialCompanyCandidates,buildApolloPeopleSearchPayload,normalizeApolloPeople,hasFullBuyerName,selectDecisionMakers,discoverPublicBuyers,tracePublicBuyers,traceIdentityBuyers,opportunityBuyerRoles,localBuyerRoleAliases,buyerOpportunityTerms,buyerResearchPlan,buyerIdentity,resolvePendingBuyerIdentities,mergeBuyerPool,recommendedBuyers,rankedBuyerShortlist,upsertPipelineItem,normalizeDiscoveryState,retainLastSuccessfulDiscoveryCandidates,recoverInterruptedDiscoveryState,discoveryOutcomeStatus,zeroResultGuidance,canonicalDomain,normalizeLinkedInUrl,isBlockedDomain,isLowQualityDiscoveryEvidence,hasActiveSignals,isActionableCandidate,isPotentialBuyerSearchAllowed};
 });
