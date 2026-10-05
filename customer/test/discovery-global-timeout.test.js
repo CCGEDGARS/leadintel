@@ -1291,7 +1291,7 @@ test('evidence-disqualified top pick is replaced by the next buyer, within ten c
 });
 
 test('targeted executive search fills the reserved place and retains completed existing contact checks',async()=>{
- const context=loadDiscoveryRunner({requestTimeout:1000,renderNodes:true,fetchImpl:async()=>({ok:true,json:async()=>({data:[{url:'https://linkedin.com/in/anna-executive',title:'Anna Executive | CEO | Example',description:'Anna Executive is CEO at Example'}]})}),bridgeImpl:{session:{authenticated:true},workspace:{id:'test'},saveNow:async()=>({saved:true})}});
+ const context=loadDiscoveryRunner({requestTimeout:1000,renderNodes:true,fetchImpl:async()=>({ok:true,json:async()=>({data:[{url:'https://example.com/team/anna-executive',title:'Anna Executive | CEO | Example',description:'Anna Executive is CEO at Example'}]})}),bridgeImpl:{session:{authenticated:true},workspace:{id:'test'},saveNow:async()=>({saved:true})}});
  const people=Array.from({length:5},(_,i)=>({id:'p'+i,name:'Person Buyer'+i,title:'Procurement Director',organization:'Example',publicNameUrl:'https://example.com/team/'+i,emailResearch:{status:'complete',searches:7,failed:0,checkedAt:new Date().toISOString()},contactResearch:{version:1,identityKey:'existing',checks:{gmail:{status:'complete',checkedAt:new Date().toISOString()}},channels:{gmail:{status:'complete'}}}}));
  context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',market:'Sweden',buyerRoles:'Procurement Director',people,peopleStatus:'complete',buyerSearchMode:'user_selected_target'}]});
  assert.equal(await context.__findExecutiveBuyer('example.com'),true);

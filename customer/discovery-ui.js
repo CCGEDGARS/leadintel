@@ -17,7 +17,7 @@ const MAX_DISCOVERY_COMPANY_CHECKS=30;
 const SAVING_SEARCH_RESULT_LIMIT=4;
 const SAVING_COMPANY_CHECK_LIMIT=3;
 const SAVING_FIRECRAWL_CALL_LIMIT=10;
-const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261004-v4&ranked-buyers=20261005-v36";
+const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261004-v4&ranked-buyers=20261005-v37";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20261005-buyer-evidence-v3";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -2057,6 +2057,10 @@ async function findExecutiveBuyer(domain){
     const outcomes=await Promise.allSettled(queries.map(query=>searchBuyerPublicPages(query,8,controller.signal)));
     if(workspaceId!==bridge()?.workspace?.id)return false;
     let rows=outcomes.flatMap(row=>row.status==='fulfilled'?row.value:[]),issues=outcomes.filter(row=>row.status==='rejected').map(row=>String(row.reason?.message||'Executive search unavailable'));
+    const leadershipPages=[...new Set(rows.filter(row=>canonicalDomain(row.url)===canonicalDomain(candidate.domain)&&/(management|leadership|ledning|team)/i.test(row.url)).map(row=>row.url))].slice(0,2);
+    const pages=await Promise.allSettled(leadershipPages.map(url=>scrapeOfficialContactPage(url,candidate.domain,controller.signal)));
+    rows.push(...pages.filter(row=>row.status==='fulfilled'&&row.value).map(row=>row.value));
+    issues.push(...pages.filter(row=>row.status==='rejected').map(()=> 'Official leadership page extraction unavailable'));
     let trace=LeadIntelDiscovery.tracePublicBuyers(rows,candidate.company,executiveProfile),found=trace.people.filter(LeadIntelDiscovery.isExecutiveBuyer),identityStatus='not_needed';
     if(!found.some(person=>LeadIntelDiscovery.qualifyBuyer(person,profile,candidate).eligible)&&typeof bridge()?.searchApolloPeople==='function'){
       const result=await bridge().searchApolloPeople(LeadIntelDiscovery.buildApolloPeopleSearchPayload(candidate,executiveProfile),{signal:controller.signal,timeoutMs:25000});
