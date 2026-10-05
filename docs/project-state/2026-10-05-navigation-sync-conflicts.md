@@ -17,7 +17,7 @@ answers, deletions versus edits, and missing trusted baselines still require
 review. No automatic whole-workspace overwrite was introduced.
 
 Genuine overlapping conflicts now expose the exact field paths in the sync
-status and preserve a recovery copy immediately. The recovery record includes
+status tooltip and preserve a recovery copy immediately. The recovery record includes
 the reason and version numbers, enabling diagnosis without choosing a side
 first. Storage failure still blocks overwriting either live version.
 
@@ -33,3 +33,10 @@ then synced automatically. It did not reproduce the customer's reported banner.
 Navigation is a confirmed remaining failure path, not an asserted diagnosis
 of the customer's separate browser. Exact-SHA production proof and browser
 save/reload evidence must be reported separately.
+
+## Toolbar correction
+
+The first diagnostic banner printed full record paths inline, pushing recovery
+controls outside the viewport. Keep the banner short, retain exact paths in its
+tooltip and recovery JSON, and bound/wrap the account controls. This restores
+access to Download recovery copy without choosing either conflicting version.
