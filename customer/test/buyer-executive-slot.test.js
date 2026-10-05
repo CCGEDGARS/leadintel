@@ -58,3 +58,13 @@ test('official management headings identify distinct current senior leaders on o
 test('duplicate source identities cannot fill both senior leadership places',()=>{
  const first=buyer('ceo','CEO'),duplicate={...first,id:'other-source',publicNameUrl:'https://example.com/news/leader'};const result=D.rankedBuyerShortlist([first,duplicate,buyer('p','Procurement Director'),buyer('o','Project Director')],profile,company);assert.equal(result.committeeCoverage.executives,1);assert.equal(result.priorityIds.length,3);
 });
+
+test('official navigation controls do not become part of an executive name',()=>{
+ const trace=D.tracePublicBuyers([{url:'https://example.com/management/',title:'Management',markdown:'Close\n\nJohan Andersson is President and CEO of Example since 2026.\n\n### Johan Andersson\n\nPresident and CEO'}],company.company,{...profile,companyDomain:company.domain});assert.deepEqual(trace.people.map(p=>p.name),['Johan Andersson']);
+ assert.equal(D.qualifyBuyer(buyer('bad','CEO',{name:'Close Johan Andersson',publicName:'Close Johan Andersson'}),profile,company).eligible,false);
+});
+
+test('executive sponsor survives higher-scored division heads in the two leadership places',()=>{
+ const rows=[buyer('division','Division Head'),buyer('division2','Business Area Director'),buyer('ceo','CEO',{publicNameUrl:'https://linkedin.com/in/anna-ceo',identityEvidenceDate:'' ,identitySource:'apollo'}),buyer('purchase','Procurement Director'),buyer('operation','Project Director')];
+ const result=D.rankedBuyerShortlist(rows,profile,company);assert.ok(result.priorityIds.includes('ceo'));assert.ok(result.priorityIds.includes('division'));assert.ok(!result.priorityIds.includes('division2'));assert.equal(result.committeeCoverage.status,'complete');
+});
