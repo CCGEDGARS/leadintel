@@ -172,3 +172,29 @@ test('an older save acknowledgement cannot roll back a newer shared revision or 
  assert.equal(root.LeadIntelServerBridge.stateVersion,9);assert.equal(root.LeadIntelWorkspacePersistence.syncedBase('w1').version,9);
  assert.equal(JSON.parse(values.get('leadintel_customer_v2_server_dirty')).base_version,9);
 });
+test('an actual conflict records the exact competing field and preserves both versions immediately',async()=>{
+ let server;const {root,values}=load(async()=>new Response(JSON.stringify({current:server}),{status:409}),{withBridge:true});
+ const base=establishBase(root,values);server={version:4,payload:{...base,main:{...base.main,answers:{offer:'Remote offer'}}}};
+ values.set(MAIN,JSON.stringify({...base.main,answers:{offer:'New local offer'}}));
+ Object.assign(root.LeadIntelServerBridge,{conflict:false,conflictState:null});
+ assert.equal((await root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true})).conflict,true);
+ assert.deepEqual(Array.from(root.LeadIntelServerBridge.conflictDetails.paths),['main.answers.offer']);
+ const recovery=JSON.parse(values.get(RECOVERY));assert.equal(recovery.local.main.answers.offer,'New local offer');assert.equal(recovery.server.payload.main.answers.offer,'Remote offer');
+ assert.equal(recovery.conflict.reason,'overlapping_changes');
+});
+test('409 from concurrent stage navigation retries safely and reloads with remote buyer research intact',async()=>{
+ const puts=[];let server;const {root,values,events}=load(async(input,options)=>{
+  puts.push(JSON.parse(options.body));return puts.length===1?new Response(JSON.stringify({current:server}),{status:409}):new Response(JSON.stringify({saved:true,version:5}));
+ },{withBridge:true});
+ const base=establishBase(root,values);base.main.step=4;
+ base.meta.discovery={activeJourneyStage:3,visibleStep:4};
+ values.set(MAIN,JSON.stringify(base.main));values.set('leadintel_customer_v2_discovery_meta',JSON.stringify(base.meta.discovery));
+ root.LeadIntelWorkspacePersistence.snapshotFromServerPayload(base,{workspaceId:'w1',version:3,localData:root.LeadIntelWorkspacePersistence.currentWorkspaceData(),dirty:false});
+ values.set(MAIN,JSON.stringify({...base.main,step:6}));values.set('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:6,visibleStep:6}));
+ server={version:4,payload:{...base,main:{...base.main,step:5},meta:{discovery:{activeJourneyStage:5,visibleStep:5}},discovery:{people:[{id:'a',name:'Remote researched buyer'}]}}};
+ Object.assign(root.LeadIntelServerBridge,{conflict:false,conflictState:null});
+ assert.equal((await root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true})).saved,true);
+ assert.equal(puts.length,2);assert.equal(puts[1].payload.main.step,6);assert.equal(puts[1].payload.meta.discovery.visibleStep,6);
+ assert.equal(puts[1].payload.discovery.people[0].name,'Remote researched buyer');assert.ok(events.includes('reload'));
+ assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),false);assert.equal(root.LeadIntelServerBridge.conflict,false);
+});
