@@ -70,7 +70,8 @@ const boundedDiscoveryRuntime = [
   'Research incomplete',
   'Buyer research saved locally',
   'Company website verification:',
-  'topFourResearchCandidates data-research-buyer data-research-remaining Guessed Gmail candidates · unconfirmed'
+  'topFourResearchCandidates data-research-buyer data-research-remaining Guessed Gmail candidates · unconfirmed',
+  "type:'contact.linkedin_confirmed' channel:'linkedin' async function recheckBuyerEmailSources("
 ].join('\n');
 
 test('production proof accepts the bounded staged Discovery runtime', async () => {
