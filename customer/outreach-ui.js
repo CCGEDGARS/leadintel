@@ -6,7 +6,7 @@ const DISCOVERY_META_KEY="leadintel_customer_v2_discovery_meta";
 const INTELLIGENCE_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
 const MAX_DOSSIER_SEARCH_QUERIES=2;
 const MAX_DOSSIER_RESULTS_PER_QUERY=5;
-const ASSET_VERSION="20261004-linkedin-message-v1";
+const ASSET_VERSION="20261005-linkedin-message-v2";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const q=id=>document.getElementById(id);
@@ -162,7 +162,25 @@ function cancelPendingScriptGeneration(){
   scriptGenerationRequest++;const current=currentItem();if(current?.localizationStatus==='running'){upsertItem({...current,localizationStatus:'error',localizationApprovalBlocked:true,localizationMessage:'Generation was interrupted by a selection change. Regenerate this package before approval.'});}
 }
 async function prepareLocalizedItem(item,campaign,candidate){
-  if(item.channel==='linkedin')return {...item,localizationStatus:'not_required',localizationApprovalBlocked:false,localizationMessage:'LinkedIn direct-message draft · review and edit before copying'};
+  if(item.channel==='linkedin'){
+    const request=++scriptGenerationRequest,domain=item.domain,bridge=crmBridge(),workspace=bridge?.session?.authenticated?bridge.workspace?.id:'';
+    if(domain!==outreach.selectedDomain)return null;
+    const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),30000);
+    upsertItem({...item,localizationStatus:'running',localizationApprovalBlocked:true,localizationMessage:'Writing an evidence-based LinkedIn draft…'});renderDossier();
+    let next;
+    try{
+      if(!workspace)throw new Error('Sign in to generate an AI draft');
+      const contact=item.dossier?.people?.find(person=>person.id===item.selectedPersonId)||{},main=mainState();
+      const prompt=LeadIntelOutreach.linkedInDraftPrompt(item.dossier,contact,main.profile||{},campaign,contentLanguage());
+      const response=await fetch(`https://leadintel-api.edgars-7e7.workers.dev/api/ai/generate?workspace_id=${encodeURIComponent(workspace)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({...prompt,task:'outreach-generation',max_output_tokens:600}),signal:controller.signal});
+      const result=await response.json();if(!response.ok)throw new Error(result.error||'AI generation unavailable');
+      const draft=LeadIntelOutreach.parseLinkedInDraft(result.text,item.dossier);
+      next={...item,drafts:{...item.drafts,linkedinMessage:draft.message,scriptContext:{...item.drafts.scriptContext,eventSourceUrl:draft.eventSourceUrl}},localizationStatus:'complete',localizationApprovalBlocked:false,localizationMessage:'AI draft based on company evidence · review before copying'};
+    }catch(error){next={...item,localizationStatus:'error',localizationApprovalBlocked:false,localizationMessage:'Source-based template shown; AI generation incomplete: '+(error.name==='AbortError'?'Request timed out':error.message)};}
+    finally{clearTimeout(timeout);}
+    if(request!==scriptGenerationRequest||domain!==outreach.selectedDomain||workspace!==(crmBridge()?.session?.authenticated?crmBridge()?.workspace?.id:''))return null;
+    return next;
+  }
   const request=++scriptGenerationRequest,domain=item.domain,bridge=crmBridge(),workspace=bridge?.session?.authenticated?bridge?.workspace?.id:'';if(domain!==outreach.selectedDomain)return null;if(item.researchStatus==='running')item={...item,researchStatus:item.dossier?.evidence?.length?'partial':'error'};const pending={...item,localizationStatus:item.drafts?.requiresAiLocalization?'running':'checking',localizationApprovalBlocked:true,localizationMessage:'Resolving recipient language…'};upsertItem(pending);renderDossier();
   const result=await LeadIntelOutreachLocalization.prepareCampaignDrafts({root:window,workspace,drafts:item.drafts,scenario:campaign,candidate:candidate||{},dossier:item.dossier||{},languageService:LeadIntelContentLanguage});
   if(request!==scriptGenerationRequest||domain!==outreach.selectedDomain||workspace!==(crmBridge()?.session?.authenticated?crmBridge()?.workspace?.id:''))return null;
@@ -224,9 +242,9 @@ function renderDossier(){const item=currentItem();const workspace=q("dossier-wor
   q("outreach-approval-label").textContent=item.localizationApprovalBlocked?"Email language must be resolved before approval":item.reapprovalRequired?"Reapproval required — branded email changed or could not be verified":item.contactedAt?`Contacted · ${new Date(item.contactedAt).toLocaleString()}`:item.approved?`Approved · ${new Date(item.approvedAt).toLocaleString()}`:"Draft not approved";q("outreach-approval-help").textContent=item.localizationApprovalBlocked?(item.localizationMessage||"Confirm the local email language and regenerate the message."):item.localizationProvenance?.language?`${item.localizationMessage||'Language ready'} Approval freezes this ${LeadIntelContentLanguage.EMAIL_LANGUAGES?.[item.localizationProvenance.language]||item.localizationProvenance.language} version and moves the opportunity to Ready for Outreach.`:item.reapprovalRequired?"Sending is blocked. Regenerate this package, review the new email, then approve it again.":"Approval freezes the current email identity and moves the opportunity to Ready for Outreach. Sending remains a separate explicit action in Delivery.";q("outreach-status").textContent=item.localizationStatus==='running'?"Localizing":item.localizationStatus==='error'?"Localization required":item.localizationStatus==='confirmation_required'?"Confirm language":item.reapprovalRequired?"Reapproval required":item.contactedAt?"Contacted":item.approved?"Approved":"Draft";q("outreach-status").classList.toggle("approved",Boolean(item.approved));
   document.querySelectorAll('#dossier-workspace .script-card').forEach(card=>{card.hidden=item.channel==='linkedin'&&!card.querySelector('#outreach-linkedin');});
   if(item.channel==='linkedin'){
-    q('outreach-status').textContent='LinkedIn draft';q('regenerate-outreach').textContent='Regenerate LinkedIn draft';
+    q('outreach-status').textContent=item.localizationStatus==='running'?'Writing LinkedIn draft…':'LinkedIn draft';q('regenerate-outreach').textContent='Regenerate LinkedIn draft';
     q('approve-outreach').disabled=true;q('approve-outreach').textContent='LinkedIn draft · review & copy';
-    q('outreach-approval-label').textContent='LinkedIn direct message · draft only';q('outreach-approval-help').textContent='Review and edit the LinkedIn message, then copy it. Email verification is not required. No message is sent from this step.';
+    q('outreach-approval-label').textContent='LinkedIn direct message · draft only';q('outreach-approval-help').textContent=(item.localizationMessage||'Review and edit the LinkedIn message before copying.')+' No message is sent from this step.';
   }
 
 }

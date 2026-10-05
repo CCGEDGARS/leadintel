@@ -1,0 +1,9 @@
+# Buyer evidence and LinkedIn handoff
+
+Authorized scope: automatic clear LinkedIn identity verification; visible filtered email candidates; independent contact research; shorter buyer cards; corrected coverage; event-based LinkedIn drafts. No outreach sending authorized.
+
+Root causes: the aggregate email research result was reused for independent channels, retries discarded completed checks, LinkedIn required manual confirmation despite a qualified exact provider match, and role coverage read the stale buyer pool. LinkedIn generation returned a template rather than requesting a grounded message.
+
+Changes: qualified exact employer/name/profile identity can verify automatically; ambiguous, held, stale and conflicting identities still require review. Automatic and manual provenance persists to CRM. Save & proceed supports LinkedIn without email. Likely email/Gmail candidates and evidence labels appear directly; mailbox ownership stays unconfirmed. A bounded per-person ledger persists individual checks and channel reasons, resumes unfinished checks and supports a deliberate fresh refresh. Phone has its own query. Display titles and holds are short while original title and qualification detail remain available. Coverage merges current buyers. LinkedIn AI generation uses workspace offer, actual source event and buyer role, validates its source URL, and explains a template fallback if generation fails. Edited drafts remain CRM-backed.
+
+Validation: buyer evidence regressions include automatic/ambiguous/held identity, invalid-candidate suppression, independent Gmail/phone statuses and one-check retry, cross-industry messages, source URL constraints and CRM provenance. Full customer suite and exact-SHA release verification are required before production claims; authenticated customer acceptance is recorded separately after deployment.

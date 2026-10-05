@@ -40,7 +40,7 @@ function productionFetch({ customerHtml, discoveryUi, sessionStatus=401 }) {
     if (parsed.pathname === '/customer/approved-workflow-ui.js') { return response({text:fs.readFileSync(path.join(root,'customer/approved-workflow-ui.js'),'utf8')}); }
     if (parsed.pathname === '/customer/first-party-research.js') { return response({text:fs.readFileSync(path.join(root,'customer/first-party-research.js'),'utf8')}); }
     if (parsed.pathname === '/customer/discovery-engine.js') { return response({text:fs.readFileSync(path.join(root,'customer/discovery-engine.js'),'utf8')}); }
-    if (['/customer/outreach-ui.js','/customer/contact-confirmation-policy.js','/customer/service-settings-extension.js','/customer/workspace-sync.js','/customer/server-bridge.js'].includes(parsed.pathname)) return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
+    if (['/customer/outreach-engine.js','/customer/outreach-ui.js','/customer/contact-confirmation-policy.js','/customer/service-settings-extension.js','/customer/workspace-sync.js','/customer/server-bridge.js'].includes(parsed.pathname)) return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
     if (parsed.pathname === '/customer/discovery-ui.js') {
       return response({ text: discoveryUi });
     }
@@ -70,7 +70,8 @@ const boundedDiscoveryRuntime = [
   'Research incomplete',
   'Buyer research saved locally',
   'Company website verification:',
-  'topFourResearchCandidates data-research-buyer data-research-remaining Guessed Gmail candidates · unconfirmed',
+  'buyer-contacts-v19-independent-checks Resume incomplete checks Identity discovery',
+  'topFourResearchCandidates data-research-buyer data-research-remaining Likely email · ownership unconfirmed',
   "type:'contact.linkedin_confirmed' channel:'linkedin' async function recheckBuyerEmailSources("
 ].join('\n');
 
