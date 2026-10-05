@@ -343,6 +343,22 @@
         "function packNestedDiscovery(",
         "function restoreNestedDiscovery("
       ]
+    },
+    {
+      "id": "independent-email-proceed-gate",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "buyer-actions=20261005-email-gate-v1",
+        "buyer-confirm-needed",
+        "buyer-proceed-ready",
+        "Select &amp; proceed",
+        "LinkedIn messages are created inside Confirm LinkedIn."
+      ],
+      "notContains": [
+        "!verified&&!linkedinReady"
+      ]
     }
   ],
   "retry": {

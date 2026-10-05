@@ -8,11 +8,11 @@ function runtime(automatic=false){
 }
 test('manual buyer card presents four actions and no per-card next action',()=>{
  const {context,person,candidate}=runtime(),html=context.prospectContactControls(candidate,person);
- assert.equal((html.match(/<button /g)||[]).length,4);for(const label of ['Confirm email','Confirm phone','Review LinkedIn','Save &amp; proceed'])assert.ok(html.includes(label));
+ assert.equal((html.match(/<button /g)||[]).length,4);for(const label of ['Confirm email','Confirm phone','Confirm LinkedIn','Select &amp; proceed'])assert.ok(html.includes(label));
  assert.ok(!html.includes('data-save-buyer-only'));assert.ok(!html.includes('data-buyer-next'));assert.ok(!html.includes('Clarify data'));
 });
 test('automatic email confirmation is selected and locked without claiming mailbox verification',()=>{
- const {context,person,candidate}=runtime(true),html=context.prospectContactControls(candidate,person);assert.match(html,/aria-pressed="true"[^>]*disabled[^>]*>Confirm email ✓/);assert.match(html,/verification is required/);
+ const {context,person,candidate}=runtime(true),html=context.prospectContactControls(candidate,person);assert.match(html,/aria-pressed="false"[^>]*disabled[^>]*>Confirm email/);assert.match(html,/verification is required/);
 });
 test('LinkedIn confirmation applies only to the reviewed exact profile',()=>{
  const {context,person}=runtime();person.linkedinConfirmedUrl=person.publicLinkedinUrl;assert.equal(context.buyerLinkedInStatus(person),'Manually reviewed');person.publicLinkedinUrl='https://linkedin.com/in/another';assert.equal(context.buyerLinkedInStatus(person),'Public match');
@@ -37,7 +37,7 @@ test('stale workspace/profile review cannot confirm a changed match',async()=>{
 
 test('save and proceed stays disabled until verified company email exists',()=>{
  const {context,person,candidate}=runtime();
- assert.match(context.prospectContactControls(candidate,person),/data-keep-buyer[^>]*disabled>Save &amp; proceed/);
+ assert.match(context.prospectContactControls(candidate,person),/data-keep-buyer[^>]*disabled>Select &amp; proceed/);
  context.enrichmentResults.set(person.id,{contact:{work_email:'anna@example.com',email_status:'verified'}});
  assert.doesNotMatch(context.prospectContactControls(candidate,person),/data-keep-buyer[^>]*disabled/);
  context.enrichmentResults.set(person.id,{contact:{work_email:'anna@gmail.com',email_status:'verified'}});
@@ -55,7 +55,7 @@ test('save and proceed awaits save, stops on failure and never toggles an alread
 
 test('explicit automatic selection overrides a retained manual policy for email controls',()=>{
  const {context,person,candidate}=runtime(false);context.document.querySelector=()=>({value:'automatic'});
- assert.match(context.prospectContactControls(candidate,person),/aria-pressed="true"[^>]*disabled[^>]*>Confirm email ✓/);
+ assert.match(context.prospectContactControls(candidate,person),/aria-pressed="false"[^>]*disabled[^>]*>Confirm email/);
 });
 
 test('ranked display copies keep actions attached to the original buyer index',()=>{
@@ -64,4 +64,30 @@ test('ranked display copies keep actions attached to the original buyer index',(
  const html=context.prospectContactControls(candidate,{...person,buyerRelevanceScore:100});
  assert.equal((html.match(/data-person-index="1"/g)||[]).length,4);
  assert.doesNotMatch(html,/data-person-index="-1"/);
+});
+
+test('confirmed LinkedIn never unlocks the email proceed button or email/phone confirmation',async()=>{
+ const {context,person,candidate}=runtime();person.linkedinConfirmedUrl=person.publicLinkedinUrl;
+ const html=context.prospectContactControls(candidate,person);
+ assert.match(html,/data-keep-buyer[^>]*disabled>Select &amp; proceed/);
+ assert.match(html,/class="secondary-btn small buyer-confirm-needed"[^>]*data-prospect-enrich-email/);
+ assert.doesNotMatch(html,/data-prospect-enrich-email[^>]*aria-pressed="true"/);
+ Object.assign(context,{discovery:{selectedProspects:[candidate]},showToast(){},renderAll(){},saveBuyerLinkedInReview:async()=>{throw Error('LinkedIn must stay separate');},startLinkedInBuyerMessage:async()=>{throw Error('LinkedIn must stay separate');}});
+ assert.equal(await context.saveBuyerAndProceed('example.com',0),false);
+});
+test('only an eligible email makes proceed green; pending and phone do not',()=>{
+ const {context,person,candidate}=runtime();
+ context.enrichmentResults.set(person.id,{contact:{work_email:'anna@example.com',email_status:'verified',phone_number:'+37112345678'}});
+ assert.match(context.prospectContactControls(candidate,person),/class="primary-btn small buyer-proceed-ready"[^>]*data-keep-buyer/);
+ context.enrichmentPending.add(person.id);
+ assert.match(context.prospectContactControls(candidate,person),/data-keep-buyer[^>]*disabled/);
+ context.enrichmentResults.set(person.id,{contact:{phone_number:'+37112345678'}});context.enrichmentPending.clear();
+ assert.match(context.prospectContactControls(candidate,person),/data-keep-buyer[^>]*disabled/);
+});
+
+test('unconfirmed public listing cannot unlock proceed even under public confirmation policy',()=>{
+ const {context,person,candidate}=runtime();context.window.LeadIntelContactPolicy=require('../contact-confirmation-policy.js');
+ vm.runInContext("buyerConfirmationLevel='public_confirmed';confirmationPolicyWorkspace='w1';",context);
+ person.publicEmail='anna@example.com';person.publicEmailUrl='https://example.com/team';
+ assert.match(context.prospectContactControls(candidate,person),/data-keep-buyer[^>]*disabled/);
 });
