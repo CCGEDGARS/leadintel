@@ -197,7 +197,7 @@
       const text=clean(row.text||row.description).replace(/!\[[^\]]*\]\([^)]*\)/g,'').replace(/[#*]/g,'');
       const sentences=text.split(/(?<=[.!?])\s+|\n+/).map(clean);
       const event=sentences.find(value=>value.length>=35&&value.length<=500&&/invest|expan|build|launch|open|appoint|acquir|modernis|moderniz|funding|satsar|bygger|jaun|ieguld|paplašin/i.test(value));
-      if(event)return {url:row.url,event:event.slice(0,400),date:row.date||''};
+      if(event)return {url:row.url,event:event.slice(0,400),date:new URL(row.url).pathname==='/'?'':row.date||''};
     }return null;
   }
   function evidenceHook(dossier,language='en'){
