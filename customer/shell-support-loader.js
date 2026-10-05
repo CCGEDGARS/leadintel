@@ -1,5 +1,5 @@
 const SUPPORT_MODULES=[
-  './state-budget.js?v=20261004-buyer-trace-sync-v1',
+  './state-budget.js?v=20261005-nested-research-sync-v3',
   './website-input-sync.js?v=20260930-setup-focus-v1',
   './custom-market-input-hygiene.js?v=20260903-password-manager-isolation-v5',
   './crm-engine.js?v=20260828-master-crm-v1&commercial-evidence=20261002-v2&buyer-quality=20261002-v5&buyer-research=20261004-v3&public-contacts=20261004-v2',

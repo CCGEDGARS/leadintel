@@ -35,6 +35,7 @@
   }
   const TRACE_FORMAT='leadintel-buyer-trace-v1';
   const REFERENCE_FORMAT='leadintel-discovery-refs-v1';
+  const NESTED_FORMAT='leadintel-discovery-refs-v2';
   // Workflow views repeat the same company, buyer pool and provider evidence.
   // Share equal copies on the wire without deleting any record or audit field.
   function packRepeatedDiscovery(value){
@@ -59,6 +60,69 @@
     const packed={format:REFERENCE_FORMAT,value:encode(value),values};
     return values.length&&bytes(packed)<bytes(value)?packed:value;
   }
+  // Nested copies must also share their children. A key dictionary keeps the
+  // many unique contact/audit rows compact without removing a single field.
+  // Tagged arrays make literal user objects and reference-like keys unambiguous.
+  function packNestedDiscovery(value){
+    if(!value||typeof value!=='object')return value;
+    const counts=new Map(),identities=new WeakMap(),keys=[],keyIds=new Map();
+    function identity(item){return typeof item==='string'?'s:'+item:identities.get(item);}
+    function count(item){
+      if(typeof item==='string'){if(item.length>=16){const id=identity(item);counts.set(id,(counts.get(id)||0)+1);}return;}
+      if(!item||typeof item!=='object')return;
+      const id='o:'+JSON.stringify(item);identities.set(item,id);
+      if(id.length>=256)counts.set(id,(counts.get(id)||0)+1);
+      Object.values(item).forEach(count);
+    }
+    count(value);const values=[],indices=new Map();
+    function body(item){
+      if(!item||typeof item!=='object')return item;
+      if(Array.isArray(item))return [2,...item.map(encode)];
+      const result=[1];
+      for(const [key,child] of Object.entries(item)){
+        if(!keyIds.has(key)){keyIds.set(key,keys.length);keys.push(key);}
+        result.push(keyIds.get(key),encode(child));
+      }
+      return result;
+    }
+    function encode(item){
+      const id=(typeof item==='string'||item&&typeof item==='object')?identity(item):null;
+      if(counts.get(id)>1){
+        if(!indices.has(id)){
+          const index=values.length;indices.set(id,index);values.push(null);
+          values[index]=body(item);
+        }
+        return [0,indices.get(id)];
+      }
+      return body(item);
+    }
+    const packed={format:NESTED_FORMAT,value:encode(value),keys,values};
+    return bytes(packed)<bytes(value)?packed:value;
+  }
+  function restoreNestedDiscovery(value){
+    const invalid=()=>{throw new Error('Invalid stored discovery research references');};
+    if(!Array.isArray(value.keys)||value.keys.length>5000||!value.keys.every(key=>typeof key==='string')||!Array.isArray(value.values)||value.values.length>20000)invalid();
+    const active=new Set();let nodes=0;
+    function expand(item,depth=0){
+      if(++nodes>2000000||depth>150)invalid();
+      if(!Array.isArray(item)){if(item&&typeof item==='object')invalid();return item;}
+      if(item[0]===0&&item.length===2){
+        const index=item[1];
+        if(!Number.isInteger(index)||index<0||index>=value.values.length||active.has(index))invalid();
+        active.add(index);const result=expand(value.values[index],depth+1);active.delete(index);return result;
+      }
+      if(item[0]===2)return item.slice(1).map(child=>expand(child,depth+1));
+      if(item[0]!==1||item.length%2!==1)invalid();
+      const entries=[],seen=new Set();
+      for(let i=1;i<item.length;i+=2){
+        const index=item[i];
+        if(!Number.isInteger(index)||index<0||index>=value.keys.length||seen.has(value.keys[index]))invalid();
+        seen.add(value.keys[index]);entries.push([value.keys[index],expand(item[i+1],depth+1)]);
+      }
+      return Object.fromEntries(entries);
+    }
+    return expand(value.value);
+  }
   function packBuyerTraces(value,key=''){
     if(key==='resultDiagnostics'&&Array.isArray(value)&&value.length>=20&&value.every(row=>row&&typeof row==='object'&&!Array.isArray(row))){
       const columns=[...new Set(value.flatMap(row=>Object.keys(row)))],values=[],dictionary=new Map();
@@ -76,6 +140,7 @@
     return Object.fromEntries(Object.entries(value).map(([field,item])=>[field,packBuyerTraces(item,field)]));
   }
   function restoreFromSync(value,key=''){
+    if(key==='discovery'&&value?.format===NESTED_FORMAT)return restoreFromSync(restoreNestedDiscovery(value),key);
     if(key==='discovery'&&value?.format===REFERENCE_FORMAT){
       if(!Array.isArray(value.values)||value.values.length>5000||!value.value||typeof value.value!=='object')throw new Error('Invalid stored discovery research references');
       function expand(item){
@@ -103,7 +168,7 @@
   }
   function cloneValue(value){return JSON.parse(JSON.stringify(value));}
   function compactBundle(input={}){
-    const original=clone(input);let payload=clone(input);
+    const original=clone(input);let payload=restoreFromSync(clone(input));
     payload.main=compactMain(payload.main||{},8000,12000);
     for(const [webChars,pdfChars,evidenceChars] of [[4000,6000,1800],[1500,2500,900],[1500,2500,450]]){
       if(bytes(payload)<=TARGET_SYNC_BYTES)break;
@@ -111,7 +176,10 @@
       payload=compactEvidenceCopies(payload,evidenceChars);
     }
     if(bytes(payload)>TARGET_SYNC_BYTES)payload=packBuyerTraces(payload);
-    if(bytes(payload)>TARGET_SYNC_BYTES)payload.discovery=packRepeatedDiscovery(payload.discovery);
+    if(bytes(payload)>TARGET_SYNC_BYTES){
+      const repeated=packRepeatedDiscovery(payload.discovery),nested=packNestedDiscovery(payload.discovery);
+      payload.discovery=bytes(nested)<bytes(repeated)?nested:repeated;
+    }
     return {payload,bytes:bytes(payload),compacted:JSON.stringify(payload)!==JSON.stringify(original)};
   }
   function prepareForSync(input={}){

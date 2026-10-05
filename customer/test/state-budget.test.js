@@ -94,3 +94,29 @@ test('repeated buyer pools and contact evidence share one lossless sync copy',()
  const input={main:{notes:'x'.repeat(370*1024)},discovery:{candidates:[company],selectedProspects:[company],pipeline:[company]},meta:{},outreach:{},delivery:{}};
  assert.ok(budget.bytes(input)>budget.MAX_SYNC_BYTES);const result=budget.prepareForSync(input);assert.ok(result.bytes<=budget.MAX_SYNC_BYTES);assert.deepEqual(budget.restoreFromSync(JSON.parse(JSON.stringify(result.payload))),input);
 });
+test('nested company views and unique contact ledgers sync losslessly across repeated save boundaries',()=>{
+ const people=Array.from({length:40},(_,i)=>({id:'buyer-'+i,name:'Buyer '+i,role:i%2?'Operations Director':'Procurement Director',contactResearch:{status:'complete',channels:{gmail:{status:'complete'},companyEmail:{status:'complete'}},checks:Array.from({length:24},(_,j)=>({email:`buyer${i}.${j}@example.com`,status:'unconfirmed',verificationEvidence:{provider:'Public source',reason:'Name and format filters passed; ownership remains unconfirmed',sourceUrl:`https://example.com/team/${i}`,checkedAt:'2026-10-05T09:52:24.804Z'}}))},qualification:{role:{points:25,basis:'Current role documented on the official company website; purchasing authority unconfirmed'},source:{points:10,basis:'Current role documented on the official company website; purchasing authority unconfirmed'}}}));
+ const company={domain:'example.com',people:people.slice(0,10),buyerDiscovery:{pool:people},publicResearch:{people}};
+ const input={main:{notes:'x'.repeat(300*1024)},discovery:{candidates:[{...company,view:'candidate'}],selectedProspects:[{...company,view:'selected'}],pipeline:[{...company,view:'saved',notes:'Preserve business history'}],literal:{leadintelResearchRef:0},array:[0,1,2]},outreach:{approvedDraft:'Preserve approved draft'},delivery:{history:[{status:'sent',messageId:'saved-message'}]},meta:{discovery:{scriptBuyer:{personId:'buyer-3'}}}};
+ const before=JSON.stringify(input);assert.ok(budget.bytes(input)>budget.MAX_SYNC_BYTES);
+ const first=budget.prepareForSync(input);assert.equal(first.payload.discovery.format,'leadintel-discovery-refs-v2');assert.ok(first.bytes<=budget.MAX_SYNC_BYTES);
+ const second=budget.prepareForSync(first.payload);assert.deepEqual(second.payload,first.payload,'the fetch boundary must not nest wire formats');
+ assert.deepEqual(budget.restoreFromSync(JSON.parse(JSON.stringify(second.payload))),input);assert.equal(JSON.stringify(input),before);
+});
+test('nested research decoding rejects cycles, invalid keys and invalid reference indices and reads legacy references',()=>{
+ const packed=value=>({discovery:{format:'leadintel-discovery-refs-v2',keys:['name'],values:[],value}});
+ assert.throws(()=>budget.restoreFromSync(packed([0,2])),/Invalid stored discovery research references/);
+ assert.throws(()=>budget.restoreFromSync(packed([1,5,'Buyer'])),/Invalid stored discovery research references/);
+ assert.throws(()=>budget.restoreFromSync(packed([1,0,'Buyer',0,'Duplicate'])),/Invalid stored discovery research references/);
+ assert.throws(()=>budget.restoreFromSync({discovery:{format:'leadintel-discovery-refs-v2',keys:[],values:[[0,0]],value:[0,0]}}),/Invalid stored discovery research references/);
+ assert.deepEqual(budget.restoreFromSync({discovery:{format:'leadintel-discovery-refs-v1',values:[{name:'Legacy buyer'}],value:{people:[{leadintelResearchRef:0}]}}}),{discovery:{people:[{name:'Legacy buyer'}]}});
+ const literal=JSON.parse('{"__proto__":{"retained":true},"constructor":"Business field"}');
+ assert.deepEqual(budget.restoreFromSync({discovery:{format:'leadintel-discovery-refs-v2',keys:['__proto__','retained','constructor'],values:[],value:[1,0,[1,1,true],2,'Business field']}}).discovery,literal);
+});
+test('saved server snapshots restore wire-packed discovery before creating a merge base',()=>{
+ const vm=require('node:vm'),source=fs.readFileSync(path.join(__dirname,'../workspace-persistence.js'),'utf8');
+ const storage=new Map(),context={root:{LeadIntelStateBudget:budget,localStorage:{setItem:(k,v)=>storage.set(k,v)},LeadIntelServerBridge:{workspace:{id:'workspace-1'}}},isObject:value=>Boolean(value&&typeof value==='object'&&!Array.isArray(value)),buildActivationRecord:()=>null,markExplicitlySaved:()=>true,sameWorkspaceData:()=>true,currentWorkspaceData:()=>({}),dirtySinceSave:false,SNAPSHOT_KEY:'snapshot'};
+ vm.createContext(context);vm.runInContext(source.slice(source.indexOf('  function snapshotFromServerPayload('),source.indexOf('  function jsonResponse(')),context);
+ context.snapshotFromServerPayload({main:{website:'https://seller.example/'},discovery:{format:'leadintel-discovery-refs-v2',keys:['people','name'],values:[],value:[1,0,[2,[1,1,'Buyer']]]}},{version:5});
+ assert.deepEqual(JSON.parse(JSON.parse(storage.get('snapshot')).data.leadintel_customer_v2_discovery),{people:[{name:'Buyer'}]});
+});
