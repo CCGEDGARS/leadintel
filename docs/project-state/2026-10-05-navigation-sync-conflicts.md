@@ -40,3 +40,10 @@ The first diagnostic banner printed full record paths inline, pushing recovery
 controls outside the viewport. Keep the banner short, retain exact paths in its
 tooltip and recovery JSON, and bound/wrap the account controls. This restores
 access to Download recovery copy without choosing either conflicting version.
+
+## Resolved-state toolbar
+
+After customer recovery, show Download recovery copy only during an active
+conflict and only for the matching workspace. Keep the stored recovery JSON
+intact; resolving sync hides the control without deleting either backup.
+Regression coverage exercises visibility during conflict and after resolution.
