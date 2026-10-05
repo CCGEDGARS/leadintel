@@ -14,7 +14,7 @@
     ['publicEmail','publicEmailUrl','publicEmailSourceCheck','patternFindings','hunterChecks','hunterFound','flowEmailCompletedFor'],
     ['publicPhone','publicPhoneUrl','flowPhoneCompletedFor']
   ];
-  const ATOMIC_FIELDS=new Set(['selectedEmailBuyer','scriptBuyer','contactVerification','publicEmailSourceCheck']);
+  const ATOMIC_FIELDS=new Set(['selectedEmailBuyer','scriptBuyer','contactVerification','publicEmailSourceCheck','messageStudioDraft']);
   function subset(value,keys){return Object.fromEntries(keys.filter(key=>Object.prototype.hasOwnProperty.call(value||{},key)).map(key=>[key,value[key]]));}
   function recordMaps(arrays,path){
     if(!RECORD_LISTS.has(path.split('.').at(-1))||!arrays.every(Array.isArray))return null;

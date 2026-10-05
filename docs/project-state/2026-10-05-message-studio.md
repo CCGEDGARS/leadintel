@@ -1,0 +1,9 @@
+# Simplified message workspace — 2026-10-05
+
+The buyer handoff now opens core information, three independently editable saved templates (curiosity, professional, friendly), AI original, and one channel-specific draft. Buyer confirmation and workspace isolation remain required. Opening a buyer does not start research or generation. Existing campaign, source review, dossier and additional-script tools remain under advanced controls.
+
+Core information and templates persist in the outreach workspace state. AI generation requires seller facts and the seller's explicit Calendly event URL; there is no default seller identity or booking link. Optional proof can remain empty. AI receives the selected buyer and the reviewed trigger only, with instructions not to fabricate facts. Generation validates the meeting invitation, rejects unfilled placeholders and unapproved links, preserves old drafts on errors, and rejects late responses after edits, recipient changes or workspace changes. Draft edits do not update the template.
+
+Generated drafts save a CRM script snapshot through the existing durable company activity path. Draft provenance survives normalization and CRM restore. Concurrent draft provenance is atomic during sync. Email approval validates the edited draft and retains the brand snapshot/delivery gates; LinkedIn remains manual review and copy. No outreach sending is introduced.
+
+Validation: model tests cover independent templates, missing facts, booking-link validation, original-mode context, normalization/CRM restore and async generation races. Existing LinkedIn handoff tests now assert empty workspace preparation without unsolicited provider calls. Full customer suite and static build are required before publication; exact-SHA production proof and authenticated UI verification are recorded separately.

@@ -263,7 +263,7 @@
       "contains": [
         "choice.channel==='linkedin'",
         "confirmedLinkedInBuyer",
-        "await buildDossier()",
+        "prepareStudioBuyer(candidate,person)",
         "LinkedIn direct message \u00b7 draft only"
       ]
     },
@@ -394,6 +394,19 @@
         "server_payload:serverPayload",
         "previous.server_version>options.version",
         "Workspace is still loading; retry save"
+      ]
+    },
+    {
+      "id": "message-studio-templates",
+      "type": "text",
+      "url": "/customer/message-studio.js",
+      "status": 200,
+      "contains": [
+        "Curiosity / pattern interrupt",
+        "Warm / friendly",
+        "Professional",
+        "calendly.com",
+        "function parse("
       ]
     }
   ],
