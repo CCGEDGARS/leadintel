@@ -176,7 +176,7 @@
     for(const row of rows.slice().sort((a,b)=>Number(companyIdentityDomain(b.url||b.metadata?.sourceURL)===host)-Number(companyIdentityDomain(a.url||a.metadata?.sourceURL)===host))){
       let url;try{url=new URL(row.url||row.metadata?.sourceURL);}catch{continue;}
       if(!['http:','https:'].includes(url.protocol)||url.username||url.password)continue;
-      const text=[row.title,row.description,row.markdown,row.content].filter(Boolean).join('\n');
+      const text=(row.evidenceKind==='model_summary'?[row.markdown,row.content]:[row.title,row.description,row.markdown,row.content]).filter(Boolean).join('\n');
       for(const match of text.matchAll(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi)){
         const email=match[0].toLowerCase(),gmail=email.endsWith('@gmail.com');
         if(!validResearchEmail(email,gmail?'gmail.com':host)||findings.some(item=>item.email===email))continue;
@@ -185,7 +185,10 @@
         // Generic first-name aliases and unrelated addresses in multi-person directories are ambiguous.
         if(!gmail&&!emailLocalPatterns(person).some(item=>item.local===email.split('@')[0])){
           const explicit=new RegExp(escape(name)+'\\s*(?:[|·,:-]\\s*)?(?:e-?mail\\s*:?\\s*)?'+escape(email),'iu');
-          if(!explicit.test(near))continue;
+          const parts=emailNameParts(person),local=email.split('@')[0];
+          const initialFormat=new RegExp('^'+escape(parts.first)+'[._-](?:[a-z][._-]){1,3}'+escape(parts.last)+'$','i');
+          const labelled=new RegExp('(?:e-?mail|e-post|email)\\s*:\\s*'+escape(email)+'\\s*(?:\\n|[|·,;])\\s*(?:kontakt|contact)\\s*:\\s*'+escape(name)+'(?![\\p{L}])','iu');
+          if(!explicit.test(near)&&!(initialFormat.test(local)&&labelled.test(near)))continue;
         }
         if(gmail){
           if(!company)continue;
@@ -209,7 +212,7 @@
       for(const row of results.slice(0,20)){
         const url=normalizeUrl(row?.url||row?.metadata?.sourceURL||row?.metadata?.url);
         if(!url||canonicalDomain(url)!==domain&&!(fullName&&/(^|\.)linkedin\.com$/.test(canonicalDomain(url))&&new URL(url).pathname.startsWith('/jobs/')))continue;
-        const text=[row.title,row.description,row.markdown,row.content].filter(Boolean).join('\n').slice(0,64000);
+        const text=(row.evidenceKind==='model_summary'?[row.markdown,row.content]:[row.title,row.description,row.markdown,row.content]).filter(Boolean).join('\n').slice(0,64000);
         const pattern=new RegExp(`\\b${first.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}\\s+([\\p{Lu}][\\p{L}'’.-]{2,})(?=$|[^\\p{L}'’.-])`,"giu");
         for(const match of text.matchAll(pattern)){
           const last=match[1],name=`${first} ${last}`;
@@ -1068,7 +1071,7 @@
   function buyerIdentity(person={}){
     return normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url||person.url)||(person.identityStatus==='pending'&&clean(person.id)?'apollo:'+clean(person.id):clean(person.publicName||person.name).toLowerCase());
   }
-  function safeEmailResearch(value){return {status:['running','complete','partial','unavailable'].includes(value?.status)?value.status:'not_searched',searches:clamp(Number(value?.searches)||0,0,50,0),failed:clamp(Number(value?.failed)||0,0,50,0),checkedAt:clean(value?.checkedAt).slice(0,40)};}
+  function safeEmailResearch(value){return {status:['running','complete','partial','unavailable'].includes(value?.status)?value.status:'not_searched',searches:clamp(Number(value?.searches)||0,0,50,0),failed:clamp(Number(value?.failed)||0,0,50,0),checkedAt:clean(value?.checkedAt).slice(0,40),...(Array.isArray(value?.sourceRechecks)?{sourceRechecks:value.sourceRechecks.slice(0,12).map(row=>({url:normalizeUrl(row.url),status:row.status==='checked'?'checked':'unavailable',rejected:(row.rejected||[]).map(clean).slice(0,12)}))}:{})};}
   function safeBuyerQualification(value){
     if(!value||![1,2,3].includes(value.version)||!value.breakdown)return null;
     const maxima={role:value.version>=2?25:35,authority:value.version>=2?25:15,identity:15,employer:15,source:10,freshness:10},breakdown={};

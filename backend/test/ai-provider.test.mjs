@@ -79,6 +79,14 @@ test('source-access audit uses provider, API, terms and automation research inst
   assert.match(request.instructions,/official service\/API pages/i);assert.match(request.instructions,/terms of use/i);assert.match(request.instructions,/public webpage visibility/i);assert.match(request.instructions,/authorised API access/i);
 });
 
+test('contact research labels generated summaries so contact extraction requires source text',async()=>{
+  const url='https://example.com/team';
+  const payload={output:[{type:'web_search_call',action:{sources:[{url,title:'Team'}]}},{type:'message',content:[{type:'output_text',text:JSON.stringify({results:[{title:'Team',url,description:'Anna Smith anna.smith@example.com',date:''}]})}]}]};
+  const result=await searchWeb({apiKey:'sk-test',query:'Find Anna Smith contacts',purpose:'contact_research',fetchImpl:async()=>new Response(JSON.stringify(payload))});
+  assert.equal(result.results[0].evidenceKind,'model_summary');
+  assert.equal(result.results[0].url,url);
+});
+
 test('OpenAI web search sanitizes upstream errors and never leaks provider secrets',async()=>{
   const fetchImpl=async()=>new Response(JSON.stringify({error:{message:'secret details sk-live-do-not-leak',type:'invalid_request_error',code:'invalid_tool'}}),{status:400,headers:{'Content-Type':'application/json'}});
   await assert.rejects(()=>searchWeb({apiKey:'sk-live-do-not-leak',model:'gpt-5.6',query:'office expansion Latvia',fetchImpl}),error=>{

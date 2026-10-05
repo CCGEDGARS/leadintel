@@ -57,6 +57,21 @@ sqliteTest('CRM activity POST is idempotent and cross-workspace company ids do n
   response=await handleCrmRoute(req(`/api/crm/companies/${id}?workspace_id=w2`,{token}),env,{});assert.equal(response.status,404);
 });
 
+sqliteTest('LinkedIn confirmation activity reaches the real CRM route and retains exact reviewed identity',async()=>{
+  const {env,token}=await fixture();
+  let response=await handleCrmRoute(req('/api/crm/companies?workspace_id=w1',{method:'POST',token,body:{company:{company_name:'Example',domain:'example.com'}}}),env,{});
+  const id=(await payload(response)).company.id;
+  const activity={id:'linkedin-confirm-0001',type:'contact.linkedin_confirmed',channel:'linkedin',summary:'LinkedIn profile confirmed by user',metadata:{person_id:'p1',name:'Anna Smith',linkedin_url:'https://linkedin.com/in/anna-smith'}};
+  response=await handleCrmRoute(req(`/api/crm/companies/${id}/activities?workspace_id=w1`,{method:'POST',token,body:activity}),env,{});
+  assert.equal(response.status,200);
+  response=await handleCrmRoute(req(`/api/crm/companies/${id}?workspace_id=w1`,{token}),env,{});
+  const saved=(await payload(response)).activities.find(row=>row.activity_type===activity.type);
+  assert.equal(saved.channel,'linkedin');
+  assert.equal(JSON.parse(saved.metadata_json).linkedin_url,activity.metadata.linkedin_url);
+  response=await handleCrmRoute(req(`/api/crm/companies/${id}/activities?workspace_id=w1`,{method:'POST',token,body:{type:'note'}}),env,{});
+  assert.equal(response.status,400);
+});
+
 sqliteTest('CRM activity route returns stable pages for timelines longer than one page',async()=>{
   const {env,token}=await fixture();
   let response=await handleCrmRoute(req('/api/crm/companies?workspace_id=w1',{method:'POST',token,body:{company:{company_name:'Acme',domain:'acme.example'}}}),env,{});

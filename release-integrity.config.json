@@ -264,6 +264,20 @@
         "await buildDossier()",
         "LinkedIn direct message \u00b7 draft only"
       ]
+    },
+    {
+      "id": "linkedin-review-crm-contract",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "type:'contact.linkedin_confirmed'",
+        "channel:'linkedin'",
+        "async function recheckBuyerEmailSources("
+      ],
+      "notContains": [
+        "type:'note',summary:'LinkedIn profile confirmed by user'"
+      ]
     }
   ],
   "retry": {

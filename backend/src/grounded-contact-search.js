@@ -41,7 +41,7 @@ export async function groundedContactSearch({apiKey,model,company,domain,person,
   for(let index=0;index<chunks.length;index++){
     const chunk=chunks[index]?.web;if(!chunk?.uri)continue;
     const url=await citationUrl(chunk.uri,host,fetchImpl,signal);
-    if(url&&!results.some(row=>row.url===url))results.push({url,title:clean(chunk.title,220),description:supported.get(index)||''});
+    if(url&&!results.some(row=>row.url===url))results.push({url,title:clean(chunk.title,220),description:supported.get(index)||'',evidenceKind:'model_summary'});
   }
   const queries=Array.isArray(metadata.webSearchQueries)?metadata.webSearchQueries.slice(0,5).map(row=>clean(row,200)):[];
   return {status:queries.length||chunks.length?'complete':'unavailable',provider:'gemini',web_search:Boolean(queries.length||chunks.length),results:results.slice(0,8),query_count:queries.length,usage:{input_tokens:Number(payload.usageMetadata?.promptTokenCount)||0,output_tokens:Number(payload.usageMetadata?.candidatesTokenCount)||0}};

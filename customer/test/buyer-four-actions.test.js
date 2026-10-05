@@ -23,7 +23,7 @@ test('LinkedIn review confirmation survives workspace state normalization',()=>{
 test('LinkedIn confirmation records CRM evidence and rolls back the UI state on failed sync',async()=>{
  for(const synced of [true,false]){
   const {context,person,candidate}=runtime();const activities=[];
-  Object.assign(context,{Date,ensureCrmCompany:async()=>({id:'company'}),bridge:()=>({workspace:{id:'w1'},saveCrmContacts:async()=>({ok:true}),recordCrmActivity:async(_,activity)=>{activities.push(activity);return {ok:true};},saveNow:async()=>({saved:synced})}),saveDiscovery(){},renderAll(){}});context.window.LeadIntelCrm={mapContacts:()=>[]};
+  Object.assign(context,{Date,ensureCrmCompany:async()=>({id:'company'}),bridge:()=>({workspace:{id:'w1'},saveCrmContacts:async()=>({ok:true}),recordCrmActivity:async(_,activity)=>{activities.push(activity);return {ok:activity.type==='contact.linkedin_confirmed',error:'Unsupported CRM activity type'};},saveNow:async()=>({saved:synced})}),saveDiscovery(){},renderAll(){}});context.window.LeadIntelCrm={mapContacts:()=>[]};
   if(synced){assert.equal(await context.saveBuyerLinkedInReview(candidate,person,person.publicLinkedinUrl,'w1'),true);assert.equal(person.linkedinConfirmedUrl,person.publicLinkedinUrl);}
   else{await assert.rejects(context.saveBuyerLinkedInReview(candidate,person,person.publicLinkedinUrl,'w1'),/could not be synced/);assert.equal(person.linkedinConfirmedUrl,undefined);}
   assert.equal(activities[0].metadata.linkedin_url,person.publicLinkedinUrl);

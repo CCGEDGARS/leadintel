@@ -17,7 +17,7 @@ const MAX_DISCOVERY_COMPANY_CHECKS=30;
 const SAVING_SEARCH_RESULT_LIMIT=4;
 const SAVING_COMPANY_CHECK_LIMIT=3;
 const SAVING_FIRECRAWL_CALL_LIMIT=10;
-const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261004-v4&ranked-buyers=20261004-v30";
+const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261004-v4&ranked-buyers=20261005-v31";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20261004-contact-policy-v5";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -1440,7 +1440,7 @@ async function saveBuyerLinkedInReview(candidate,person,profile,workspaceId=brid
   const company=await ensureCrmCompany(candidate);checkWorkspace();
   const saved=await bridge().saveCrmContacts(company.id,window.LeadIntelCrm.mapContacts([current]));checkWorkspace();
   if(!saved?.ok)throw new Error(saved?.error||'LinkedIn profile could not be saved to CRM');
-  const activity=await bridge().recordCrmActivity(company.id,{type:'note',summary:'LinkedIn profile confirmed by user',metadata:{person_id:current.id,name:current.publicName||current.name,linkedin_url:profile}});
+  const activity=await bridge().recordCrmActivity(company.id,{type:'contact.linkedin_confirmed',channel:'linkedin',summary:'LinkedIn profile confirmed by user',metadata:{person_id:current.id,name:current.publicName||current.name,linkedin_url:profile}});
   checkWorkspace();if(!activity?.ok)throw new Error(activity?.error||'LinkedIn review could not be recorded');
   try{
     current.linkedinConfirmedUrl=profile;current.linkedinConfirmedAt=new Date().toISOString();
@@ -1629,18 +1629,49 @@ async function searchBuyerPublicPages(query,limit,signal){
 function patternListings(person,domain,rows,company=''){
   return LeadIntelDiscovery.sourcedBuyerEmails(person,domain,rows,company);
 }
+async function recheckBuyerEmailSources(person,candidate,signal,cache=new Map()){
+  const existing=[...(person.patternFindings||[]),...(person.publicEmail&&person.publicEmailUrl?[{email:person.publicEmail,url:person.publicEmailUrl}]:[])];
+  const checks=[];
+  for(const url of [...new Set(existing.map(row=>row.url).filter(Boolean))].slice(0,12)){
+    try{
+      if(!cache.has(url))cache.set(url,(async()=>{
+        const response=await fetchFirecrawlBuyerResearch('scrape',{url,formats:['markdown'],onlyMainContent:false},{signal});
+        if(!response.ok)throw new Error('Source extraction unavailable');
+        const payload=await response.json(),page=payload.data||payload;
+        if(payload.success===false||!page.markdown&&!page.content)throw new Error('Source text unavailable');
+        return {url:page.metadata?.sourceURL||url,markdown:page.markdown||page.content};
+      })());
+      const page=await cache.get(url),findings=patternListings(person,candidate.domain,[page],candidate.company);
+      const confirmed=new Set(findings.map(row=>row.email));
+      const rejected=[...new Set(existing.filter(row=>row.url===url&&!confirmed.has(row.email.toLowerCase())).map(row=>row.email))];
+      person.patternFindings=[...(person.patternFindings||[]).filter(row=>row.url!==url),...findings];
+      if(person.publicEmailUrl===url){person.publicEmail=findings.find(row=>row.email.endsWith('@'+canonicalDomain(candidate.domain)))?.email||'';person.publicEmailUrl=person.publicEmail?page.url:'';}
+      checks.push({url,status:'checked',rejected});
+    }catch(error){
+      if(signal?.aborted)throw error;
+      checks.push({url,status:'unavailable',rejected:[]});
+    }
+  }
+  return checks;
+}
 async function searchBuyerEmailPatterns(candidate,existingRows,signal){
   let searches=0,failed=0;
   const people=Array.isArray(candidate.people)?candidate.people:[];
+  const sourceCache=new Map();
   // Learn the company format from the acquired pages before launching parallel lookups.
   for(const person of people){
     const sourced=patternListings(person,candidate.domain,existingRows,candidate.company);
     person.patternFindings=[...new Map([...(person.patternFindings||[]),...sourced].map(item=>[item.email,item])).values()];
   }
   await Promise.all(people.map(async person=>{
-    let personSearches=0,personFailed=0,finished=false;
+    let personSearches=0,personFailed=0,finished=false,sourceRechecks=[];
     person.emailResearch={status:'running',searches:0,failed:0,checkedAt:''};
     try{
+    if(person.patternFindings?.length||person.publicEmailUrl){
+      sourceRechecks=await recheckBuyerEmailSources(person,candidate,signal,sourceCache);
+      personSearches+=sourceRechecks.length;searches+=sourceRechecks.length;
+      const unavailable=sourceRechecks.filter(row=>row.status==='unavailable').length;personFailed+=unavailable;failed+=unavailable;
+    }
     const patterns=emailPatternCandidates(person,candidate.domain,people);
     if(!patterns.length)return;
     const rows=[...existingRows];
@@ -1694,14 +1725,20 @@ async function searchBuyerEmailPatterns(candidate,existingRows,signal){
             const response=await fetchBuyerResearch(`${LEADINTEL_API}/api/ai/web-search?workspace_id=${encodeURIComponent(bridge().workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({query,max_results:5,purpose:'contact_research'}),signal});
             if(!response.ok)throw new Error(`Grounded search failed (${response.status})`);
             const payload=await response.json();
-            person.patternFindings=[...(person.patternFindings||[]),...patternListings(person,candidate.domain,[...rows,...(payload.results||[])],candidate.company)];
+            const extracted=[];
+            for(const row of (payload.results||[]).slice(0,3)){
+              if(row.evidenceKind!=='model_summary'){extracted.push(row);continue;}
+              try{const pageResponse=await fetchFirecrawlBuyerResearch('scrape',{url:row.url,formats:['markdown'],onlyMainContent:false},{signal});if(!pageResponse.ok)throw new Error('Source extraction unavailable');const value=await pageResponse.json(),page=value.data||value;if(value.success===false||!page.markdown&&!page.content)throw new Error('Source text unavailable');extracted.push({url:page.metadata?.sourceURL||row.url,markdown:page.markdown||page.content});}
+              catch(error){if(signal?.aborted)throw error;personFailed++;failed++;}
+            }
+            person.patternFindings=[...(person.patternFindings||[]),...patternListings(person,candidate.domain,[...rows,...extracted],candidate.company)];
           }catch(error){if(error?.name==='AbortError'&&signal?.aborted)throw error;failed++;personFailed++;}
         }
       }
     }
     person.patternFindings=[...new Map((person.patternFindings||[]).map(item=>[item.email,item])).values()];
     finished=true;
-    }finally{person.emailResearch={status:!personSearches?'not_searched':!finished||personFailed?(personFailed>=personSearches?'unavailable':'partial'):'complete',searches:personSearches,failed:personFailed,checkedAt:new Date().toISOString()};}
+    }finally{person.emailResearch={status:!personSearches?'not_searched':!finished||personFailed?(personFailed>=personSearches?'unavailable':'partial'):'complete',searches:personSearches,failed:personFailed,checkedAt:new Date().toISOString(),sourceRechecks};}
   }));
   return {searches,failed};
 }
