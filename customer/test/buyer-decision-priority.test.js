@@ -26,14 +26,14 @@ test('the ten highest priority buyers retain their score order without reserving
 test('decision role, score version and research evidence survive normalization and CRM snapshot',()=>{
  const person=buyer('head','Head of Procurement');person.buyerQualification=D.qualifyBuyer(person,profile,company);
  const restored=D.normalizeDiscoveryState({selectedProspects:[{...company,buyerSearchMode:'user_selected_target',people:[person]}]}).selectedProspects[0];
- assert.equal(restored.people[0].buyerQualification.version,3);assert.equal(restored.people[0].buyerQualification.decisionRole,person.buyerQualification.decisionRole);
+ assert.equal(restored.people[0].buyerQualification.version,4);assert.equal(restored.people[0].buyerQualification.decisionRole,person.buyerQualification.decisionRole);
  const saved=C.mapDiscoveryCandidateToCrm(restored).intelligence.research_snapshot.buyerResearch.buyers[0];
- assert.equal(saved.qualification.version,3);assert.equal(saved.emailResearch.searches,3);
+ assert.equal(saved.qualification.version,4);assert.equal(saved.emailResearch.searches,3);
 });
 test('functional chief officers receive full role fit and purchasing responsibility outweighs a source-quality gap',()=>{
  for(const [functionName,decisionRole] of [['Procurement','Procurement Director'],['Engineering','Engineering Director'],['Marketing','Marketing Director']]){
   const q=D.qualifyBuyer(buyer('chief',`Chief ${functionName} Officer`),{decisionMakers:decisionRole},company);
-  assert.equal(q.breakdown.role.points,25);
+  assert.equal(q.breakdown.role.points,20);
  }
  const chief=buyer('chief','Chief Procurement Officer',{publicNameUrl:'https://linkedin.com/in/chief'}),project=buyer('project','Projektchef');
  assert.ok(D.qualifyBuyer(chief,profile,company).total>D.qualifyBuyer(project,profile,company).total);
@@ -85,4 +85,54 @@ test('Gmail guesses persist as candidates, without becoming public contact evide
  const saved=D.normalizeDiscoveryState({selectedProspects:[{...company,buyerSearchMode:'user_selected_target',people:[p]}]}).selectedProspects[0];
  assert.equal(saved.people[0].gmailCandidates.length,3);assert.equal(saved.people[0].patternFindings.length,0);assert.equal(saved.people[0].publicEmail,'');
  const snapshot=C.mapDiscoveryCandidateToCrm(saved).intelligence.research_snapshot.buyerResearch.buyers[0];assert.equal(snapshot.gmailCandidates.length,3);
+});
+
+test('v4 distinguishes seniority and purchasing remit without inventing budget authority',()=>{
+ const rows=['CEO','Senior Vice President, Business Area','Head of Procurement','Project Director','Senior Project Manager','Project Manager'].map((title,i)=>buyer(String(i),title));
+ const scores=rows.map(person=>D.qualifyBuyer(person,profile,company));
+ assert.equal(new Set(scores.map(q=>q.breakdown.authority.points)).size,6);
+ assert.ok(scores[2].total>scores[0].total&&scores[0].total>scores[1].total);
+ assert.ok(scores[3].total>scores[4].total&&scores[4].total>scores[5].total);
+ assert.ok(scores.every(q=>q.gaps.includes('Actual purchasing authority unconfirmed')));
+ assert.equal(D.isExecutiveBuyer({title:'Head of Strategy Logistics, CEO Staff'}),false);
+});
+test('dated official responsibility for the named opportunity changes ranking and survives reload and CRM',()=>{
+ for(const [organization,purchase] of [['Industrial Customer','sorting plant expansion'],['Retail Customer','store renovation'],['Legal Customer','document automation']]){
+  const candidate={...company,company:organization,buyerFit:{purchase}},person=buyer('lead','Senior Project Manager',{organization,name:'Anna Smith'});
+  const row={url:'https://example.com/news/opportunity',metadata:{publishedTime:now},content:`Anna Smith leads the ${purchase} and is responsible for supplier selection`};
+  const linked=D.matchBuyerDecisionEvidence(person,[row],candidate),q=D.qualifyBuyer(linked,profile,candidate);
+  assert.equal(q.breakdown.opportunity.points,15);assert.ok(q.total>D.qualifyBuyer(person,profile,candidate).total);
+  assert.equal(q.gaps.includes('Responsibility for the specific opportunity and location unconfirmed'),false);
+  linked.buyerQualification=q;
+  const saved=D.normalizeDiscoveryState({selectedProspects:[{...candidate,buyerSearchMode:'user_selected_target',people:[linked]}]}).selectedProspects[0];
+  assert.deepEqual(saved.people[0].decisionEvidence,linked.decisionEvidence);
+  assert.equal(D.qualifyBuyer(saved.people[0],profile,saved).breakdown.opportunity.points,15);
+  assert.equal(C.mapDiscoveryCandidateToCrm(saved).intelligence.research_snapshot.buyerResearch.buyers[0].decisionEvidence[0].url,row.url);
+ }
+});
+test('unattributed, unrelated, stale, future, generated and third-party signals give no personal priority bonus',()=>{
+ const candidate={...company,buyerFit:{purchase:'store renovation'}},person=buyer('lead','Project Manager',{name:'Anna Smith'});
+ for(const row of [
+  {content:'The company plans a store renovation led by Other Buyer'},
+  {content:'Anna Smith is responsible for payroll'},
+  {content:'Anna Smith works here. Other Buyer leads the store renovation'},
+  {content:'Anna Smith is no longer responsible for the store renovation'},
+  {content:'Anna Smith leads the store renovation',date:'2013-01-01'},
+  {content:'Anna Smith leads the store renovation',date:'2099-01-01'},
+  {content:'Anna Smith leads the store renovation',url:'https://unrelated.com/project'},
+  {content:'Anna Smith leads the store renovation',evidenceKind:'model_summary'},
+  {content:'Anna Smithsonian leads the store renovation'}
+ ]){
+  const enriched=D.matchBuyerDecisionEvidence(person,[{url:'https://example.com/project',date:now,...row}],candidate);
+  assert.equal(D.qualifyBuyer(enriched,profile,candidate).breakdown.opportunity.points,0,JSON.stringify(row));
+ }
+ const tied=D.matchBuyerDecisionEvidence(person,[{url:'https://example.com/project',date:now,content:'Anna Smith leads the store renovation'}],candidate);
+ assert.equal(D.qualifyBuyer({...tied,organization:'Other'},profile,candidate).total,null);
+});
+
+test('purchasing responsibility belonging to a different person cannot increase the named project lead bonus',()=>{
+ const candidate={...company,buyerFit:{purchase:'store renovation'}},person=buyer('lead','Project Manager',{name:'Anna Smith'});
+ const linked=D.matchBuyerDecisionEvidence(person,[{url:'https://example.com/news',date:now,content:'Anna Smith leads the store renovation. Other Buyer is responsible for procurement and supplier selection.'}],candidate);
+ assert.equal(D.qualifyBuyer(linked,profile,candidate).breakdown.opportunity.points,12);
+ assert.doesNotMatch(linked.decisionEvidence[0].quote,/Other Buyer/);
 });

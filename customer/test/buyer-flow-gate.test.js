@@ -122,3 +122,14 @@ test('selection bridge scrolls and focuses the highlighted footer with the recip
  h.ctx.$=id=>id==='continue-to-outreach'?gate:id==='selected-email-recipient'?status:null;
  h.ctx.renderSelectedEmailBuyer({scroll:true});assert.equal(gate.disabled,false);assert.equal(footer.hidden,false);assert.match(status.textContent,/Anna Buyer.*anna@example.com/);assert.equal(scrolls,1);assert.equal(focus,1);
 });
+
+test('confirmed email stays green during a sync conflict while selection and Continue remain blocked',async()=>{
+ const h=harness(),original=h.ctx.bridge;h.ctx.bridge=()=>({...original(),conflict:true});
+ h.ctx.selectedBuyerKey=()=>h.person.id;h.ctx.buyerAutomaticMode=()=>false;
+ h.ctx.enrichmentResults.set(h.person.id,{contact:{work_email:'anna@example.com',email_status:'verified'}});
+ vm.runInContext(source.slice(source.indexOf('function prospectContactControls('),source.indexOf('async function findPublicProspectContacts(')),h.ctx);
+ const html=h.ctx.prospectContactControls(h.candidate,h.person);
+ assert.match(html,/primary-btn small buyer-proceed-ready/);assert.match(html,/Company email is ready.*synchronization conflict/);
+ const proceed=html.match(/<button[^>]*data-keep-buyer[^>]*>/)[0];assert.doesNotMatch(proceed,/disabled/);
+ assert.equal(await h.ctx.saveBuyerAndProceed('example.com',0),false);assert.equal(h.ctx.selectedEmailBuyer(),null);assert.equal(h.checks,0);assert.equal(h.events.length,0);
+});
