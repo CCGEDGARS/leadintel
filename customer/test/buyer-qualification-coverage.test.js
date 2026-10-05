@@ -19,10 +19,10 @@ test('qualification uses dated identity evidence, marks title authority as infer
 });
 test('adaptive coverage targets missing functions with diverse sources and does not equate many project buyers with complete coverage',()=>{
  const plan=D.buyerCoveragePlan(Array.from({length:10},(_,i)=>buyer({id:String(i)})),profile,company);
- assert.deepEqual(plan.missing,['Procurement / sourcing','Engineering','Operations']);
+ assert.deepEqual(plan.missing,['Executive','Procurement / sourcing','Engineering','Operations']);
  assert.ok(plan.queries.some(q=>q.includes('site:example.com')&&q.includes('Teknisk chef')));
  assert.ok(plan.queries.some(q=>q.includes('linkedin.com/in/')));assert.ok(plan.queries.length<=8);
- const complete=D.buyerCoveragePlan([buyer(),buyer({title:'Strategisk inköpare'}),buyer({title:'Teknisk chef'}),buyer({title:'Driftchef'})],profile,company);
+ const complete=D.buyerCoveragePlan([buyer({title:'CEO'}),buyer(),buyer({title:'Strategisk inköpare'}),buyer({title:'Teknisk chef'}),buyer({title:'Driftchef'})],profile,company);
  assert.deepEqual(complete.missing,[]);assert.deepEqual(complete.queries,[]);
 });
 test('pending identities are not duplicated into the full-name pool or lost when saving a buyer in a twenty-person pool',()=>{

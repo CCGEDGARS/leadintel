@@ -71,6 +71,7 @@ const boundedDiscoveryRuntime = [
   'Buyer research saved locally',
   'Company website verification:',
   'buyer-contacts-v19-independent-checks Resume incomplete checks Identity discovery',
+  'Executive coverage incomplete Executive leadership represented data-research-executive 20261005-executive-slot-v1',
   'topFourResearchCandidates data-research-buyer data-research-remaining Likely email · ownership unconfirmed',
   "type:'contact.linkedin_confirmed' channel:'linkedin' async function recheckBuyerEmailSources("
 ].join('\n');
