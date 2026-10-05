@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),D=require('
 const company={company:'Example',domain:'example.com',market:'Sweden'},profile={decisionMakers:'Procurement Director; Project Director; Project Manager'};
 const buyer=(id,title,extra={})=>({id,name:'Anna Buyer'+id,publicName:'Anna Buyer'+id,title,organization:'Example',publicNameUrl:'https://example.com/team/'+id,identityEvidenceDate:new Date().toISOString(),...extra});
 test('reserves one qualified executive even below the ten highest scores; top four stay score sorted',()=>{
- const rows=[...Array.from({length:11},(_,i)=>buyer('p'+i,'Head of Procurement')),buyer('ceo','CEO',{identityEvidenceDate:'',publicNameUrl:'https://linkedin.com/in/anna-ceo'})];
+ const rows=[...Array.from({length:11},(_,i)=>buyer('p'+i,'Head of Procurement')),buyer('ceo','CEO',{publicNameUrl:'https://linkedin.com/in/anna-ceo'})];
  const result=D.rankedBuyerShortlist(rows,profile,company),top=D.topFourResearchCandidates(rows,profile,company);
  assert.equal(result.people.length,10);assert.ok(result.people.some(p=>p.id==='ceo'));assert.equal(top.length,4);assert.ok(top.some(p=>p.id==='ceo'));assert.equal(result.executiveCoverage.status,'complete');
  assert.deepEqual(top.map(p=>p.id),result.priorityIds);assert.ok(top.every((p,i)=>!i||top[i-1].buyerQualification.total>=p.buyerQualification.total));
@@ -31,4 +31,16 @@ test('only one executive is reserved; other places remain available to higher sc
 test('small company owners and professional-firm managing partners can fill the executive place',()=>{
  for(const title of ['Owner','Managing Partner']){const rows=[buyer('leader',title),buyer('p','Procurement Director')];const result=D.rankedBuyerShortlist(rows,profile,company);assert.equal(result.executiveCoverage.personId,'leader');}
  assert.equal(D.isExecutiveBuyer({title:'Product Owner'}),false);assert.equal(D.isExecutiveBuyer({title:'Executive Assistant'}),false);
+});
+
+test('one executive plus three functional buyers even when executives score higher',()=>{
+ const rows=[buyer('ceo','CEO'),buyer('coo','COO'),buyer('md','Managing Director'),...Array.from({length:4},(_,i)=>buyer('p'+i,'Project Manager'))];
+ const top=D.topFourResearchCandidates(rows,profile,company);assert.equal(top.length,4);assert.equal(top.filter(D.isExecutiveBuyer).length,1);assert.equal(top.filter(p=>p.title==='Project Manager').length,3);
+});
+test('undated executive profiles need current employer corroboration; official management statements supply it',()=>{
+ const uncertain=buyer('unknown','Managing Director',{identityEvidenceDate:'',publicNameUrl:'https://linkedin.com/in/anna-manager'});
+ assert.equal(D.rankedBuyerShortlist([uncertain],profile,company).executiveCoverage.status,'incomplete');
+ const trace=D.tracePublicBuyers([{url:'https://example.com/management/',title:'Management',description:'Eva Johansson is the President and CEO of Example since 2026.'}],company.company,{...profile,companyDomain:company.domain});
+ assert.equal(trace.people.length,1);assert.equal(trace.people[0].name,'Eva Johansson');assert.match(trace.people[0].title,/President and CEO/);assert.equal(D.qualifyBuyer(trace.people[0],profile,company).eligible,true);
+ const unrelated=D.tracePublicBuyers([{url:'https://other.com/team/',title:'Management',description:'Eva Johansson is the President and CEO of Example since 2026.'}],company.company,{...profile,companyDomain:company.domain});assert.equal(unrelated.people.length,0);
 });

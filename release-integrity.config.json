@@ -318,7 +318,7 @@
       "contains": [
         "function isExecutiveBuyer(",
         "executiveCoverage:",
-        "const executive=ranked.find(isExecutiveBuyer);"
+        "const executive=ranked.find(person=>isExecutiveBuyer(person)&&"
       ]
     },
     {

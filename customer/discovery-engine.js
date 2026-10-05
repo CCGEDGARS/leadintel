@@ -1186,10 +1186,10 @@
       &&(!candidate.company||companyNameMatches(person.organization,candidate.company))
       &&!/\b(former|formerly|previous|past|tidigare)\b/i.test(clean(person.title)));
     const ranked=eligible.map(person=>{const match=roleRelevance(person,buyerSelectionRoles(profile));return match?{...person,buyerRelevanceScore:Math.max(1,Math.min(100,Math.round(match.score))),matchedBuyerRole:match.role,buyerQualification:qualifyBuyer(person,profile,candidate)}:null;}).filter(Boolean).filter(person=>person.buyerQualification.eligible).sort((a,b)=>b.buyerQualification.total-a.buyerQualification.total||b.buyerRelevanceScore-a.buyerRelevanceScore);
-    const executive=ranked.find(isExecutiveBuyer);
+    const executive=ranked.find(person=>isExecutiveBuyer(person)&&(person.identitySource==='apollo'||person.identityEvidenceDate||candidate.domain&&companyIdentityDomain(person.publicNameUrl)===companyIdentityDomain(candidate.domain)));
     const shortlist=ranked.slice(0,10);
     if(executive&&!shortlist.includes(executive)){shortlist[shortlist.length-1]=executive;shortlist.sort((a,b)=>b.buyerQualification.total-a.buyerQualification.total||b.buyerRelevanceScore-a.buyerRelevanceScore);}
-    const priority=executive?[executive,...ranked.filter(person=>person!==executive).slice(0,3)].sort((a,b)=>b.buyerQualification.total-a.buyerQualification.total||b.buyerRelevanceScore-a.buyerRelevanceScore):shortlist.slice(0,4);
+    const priority=executive?[executive,...ranked.filter(person=>!isExecutiveBuyer(person)).slice(0,3)].sort((a,b)=>b.buyerQualification.total-a.buyerQualification.total||b.buyerRelevanceScore-a.buyerRelevanceScore):shortlist.filter(person=>!isExecutiveBuyer(person)).slice(0,4);
     const strongest=priority.filter(person=>buyerResearchAssessment(person).status==='complete');
     return {executiveCoverage:{status:executive?'complete':'incomplete',personId:executive?.id||'',reason:executive?'Qualified executive reserved in top four':'Executive coverage incomplete · no supported current executive'},people:shortlist,priorityIds:priority.map(person=>person.id||buyerIdentity(person)),recommendedIds:strongest.map(person=>person.id||buyerIdentity(person))};
   }
@@ -1298,7 +1298,15 @@
     const escaped=companyText.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
     const companyPattern=new RegExp('(?:^|[^\\p{L}\\p{N}])'+escaped+'(?=$|[^\\p{L}\\p{N}])','iu');
     const employmentPattern=new RegExp('([^.!?\\n|]{2,160}?)\\s+(?:at|hos|på)\\s+'+escaped+'(?=\\s*(?:$|[,.|–—]))','iu');
-    for(const [index,row] of rows.entries()){
+    const officialClaims=[];
+    for(const row of rows){
+      const url=normalizeUrl(row.url||row.metadata?.sourceURL);
+      if(!profile.companyDomain||companyIdentityDomain(url)!==companyIdentityDomain(profile.companyDomain))continue;
+      const text=clean(row.markdown||row.content||row.description,10000);
+      const claim=new RegExp("([\\p{Lu}][\\p{L}’'-]+(?:\\s+[\\p{Lu}][\\p{L}’'-]+){1,3})\\s+(?:is|är)\\s+([^.!?\\n]{2,100}?)\\s+(?:of|for|at|för|på|av)\\s+"+escaped+"(?=\\s*(?:since|sedan|[,.]|$))",'gu');
+      for(const match of text.matchAll(claim))if(isExecutiveBuyer({title:match[2]}))officialClaims.push({...row,title:match[1]+' | '+match[2].replace(/^the /,'')+' | '+companyText,description:match[0]});
+    }
+    for(const [index,row] of [...officialClaims,...rows].entries()){
       const rawUrl=normalizeUrl(row.url||row.metadata?.sourceURL),linkedIn=normalizeLinkedInUrl(rawUrl),title=clean(row.title);
       const parts=title.split(/\s+[–—|·-]\s*|\s*\|\s*/u),description=clean(row.description||row.markdown||row.content,3000),name=clean(parts[0]).replace(/\s+(?:Email(?:\s*&\s*Phone Number)?|Phone Number|Contact (?:Info|Information|Details))(?:\s*\.{3})?$/iu,'').trim();
       const diagnostic={index,source:['firecrawl','grounded'].includes(row.buyerSource)?row.buyerSource:'public',url:rawUrl,title,parsedName:name,parsedTitle:'',parsedCompany:'',parsing:'pending',companyVerification:'pending',roleMatching:'pending',accepted:false,rejectionReason:''};diagnostics.push(diagnostic);
