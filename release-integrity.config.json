@@ -359,6 +359,29 @@
       "notContains": [
         "!verified&&!linkedinReady"
       ]
+    },
+    {
+      "id": "selected-email-recipient-bridge",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "buyer-selection=20261005-bridge-v1",
+        "function selectedEmailBuyer(",
+        "Synchronization conflict: recipient selection was not saved.",
+        "selectOnly:true",
+        "await loadOutreachModules();"
+      ]
+    },
+    {
+      "id": "recipient-handoff-error-feedback",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "window.LeadIntelOutreachUI={openBuyerScripts}",
+        "The selected recipient could not be opened."
+      ]
     }
   ],
   "retry": {

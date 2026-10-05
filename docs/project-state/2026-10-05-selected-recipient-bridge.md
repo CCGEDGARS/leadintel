@@ -1,0 +1,9 @@
+# Selected email recipient bridge — 5 October 2026
+
+Select & proceed verifies the exact CRM contact, saves one active email recipient, stays on Buyers and scrolls/focuses the highlighted Continue to Messages footer. The footer displays the selected name and email. Continue revalidates that recipient against current CRM evidence and opens Content Creation; it does not send. Selecting another contact clears prior active flags but preserves saved contacts. Failed persistence rolls back selection and does not highlight the next action. Workspace changes and revoked email evidence invalidate selection.
+
+Confirmed failure paths in code: saveNow returns an unsuccessful save while a sync conflict is active; readiness formerly did not consider the conflict. Candidate saving also used the enrichment loading set, making email and phone appear to be checking. The old handoff dispatched an event without awaiting asynchronous script loading; outreach returned false silently when CRM/context eligibility did not match. These are code-level findings, not proof of the customer's exact authenticated incident.
+
+Selection loading now has a separate state. A sync conflict disables progression, surfaces the reason and preserves both versions through the existing recovery controls. No automatic local/server overwrite is performed. A customer's existing conflict cannot be resolved without inspecting their authenticated local/server versions; release verification does not establish that it has been cleared.
+
+Outreach script loading is awaited before dispatching handoff events, and rejected handoffs show an actionable message. Regression tests cover exact selected contact, the two-stage transition, scroll/focus, replacement, failed-save rollback, sync conflicts, revoked evidence and delayed module loading. Production smoke checks cover bridge code and handoff feedback.
