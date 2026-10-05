@@ -72,6 +72,7 @@ const boundedDiscoveryRuntime = [
   'Company website verification:',
   'buyer-contacts-v19-independent-checks Resume incomplete checks Identity discovery',
   'Buying committee coverage incomplete 2 + 2 buying committee represented data-research-executive 20261005-committee-2plus2-v1',
+  'buyer-actions=20261005-email-gate-v1 buyer-confirm-needed buyer-proceed-ready Select &amp; proceed LinkedIn messages are created inside Confirm LinkedIn.',
   'topFourResearchCandidates data-research-buyer data-research-remaining Likely email · ownership unconfirmed',
   "type:'contact.linkedin_confirmed' channel:'linkedin' async function recheckBuyerEmailSources("
 ].join('\n');

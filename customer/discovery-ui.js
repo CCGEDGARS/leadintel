@@ -17,7 +17,7 @@ const MAX_DISCOVERY_COMPANY_CHECKS=30;
 const SAVING_SEARCH_RESULT_LIMIT=4;
 const SAVING_COMPANY_CHECK_LIMIT=3;
 const SAVING_FIRECRAWL_CALL_LIMIT=10;
-const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261004-v4&ranked-buyers=20261005-v40";
+const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261005-email-gate-v1&ranked-buyers=20261005-v40";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20261005-buyer-evidence-v3";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -1260,10 +1260,21 @@ async function confirmBuyerContact(candidate,index,{scope='selected',kind='email
   try{
     if((kind==='email'||both)&&buyerAutomaticMode()&&!automatic){showToast('Automatic email verification is required. Use workflow controls to take manual control.');return false;}
     if(kind==='email'||both){
+      const qualification=LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:person.matchedBuyerRole||person.title},candidate);
+      if(!qualification.eligible){showToast('Review buyer qualification before email confirmation: '+qualification.gaps[0]);return false;}
+      const company=crmCompanyByDomain(candidate.domain);
+      if(company?.id){
+        const detail=await bridge().getCrmCompany(company.id);
+        if(!detail?.ok)throw new Error(detail?.error||'Saved contact evidence could not be checked');
+        if(['suppressed','archived'].includes(detail.company?.lifecycle_status))throw new Error('This company is blocked in CRM');
+        if(bridge()?.workspace?.id!==workspaceId)throw new Error('Workspace changed; retry in the current workspace');
+        const matches=(detail.contacts||[]).filter(row=>String(row.external_person_id||'')===String(person.id));
+        const accepted=matches.filter(row=>verifiedBuyerEmail(candidate,person,row,{skipAdditional:true}));
+        if(accepted.length===1)enrichmentResults.set(key,{...(enrichmentResults.get(key)||{}),contact:accepted[0]});
+      }
       // Existing verified contacts are reused before any paid lookup.
-      const cached=enrichmentResults.get(key)?.contact||{};
-      if(automatic&&typeof acceptedBuyerConfirmationLevel==='function'&&acceptedBuyerConfirmationLevel()==='public_confirmed'&&publicBuyerSource(candidate,person)){try{await confirmPublicBuyerSource(candidate,person);}catch(error){issues.push(error.message);}}
-      if(!(window.LeadIntelContactPolicy?window.LeadIntelContactPolicy.accepted(cached,candidate.domain,'provider_verified'):cached.email_status==='verified')&&(!automatic||!verifiedBuyerEmail(candidate,person,enrichmentResults.get(key)?.contact||{},{skipAdditional:true})))await apollo(false);
+      if(typeof publicBuyerSource==='function'&&publicBuyerSource(candidate,person)&&!verifiedBuyerEmail(candidate,person,enrichmentResults.get(key)?.contact||{},{skipAdditional:true})){try{await confirmPublicBuyerSource(candidate,person,{evidenceOnly:true});}catch(error){issues.push(error.message);}}
+      if(!verifiedBuyerEmail(candidate,person,enrichmentResults.get(key)?.contact||{},{skipAdditional:true}))await apollo(false);
       let hunterReady=false;
       try{const status=await fetch(`${LEADINTEL_API}/api/integrations/services/status?workspace_id=${encodeURIComponent(workspaceId)}`,{credentials:'include'});const payload=await status.json();const hunter=payload.providers?.find(row=>row.provider==='hunter');hunterReady=hunter?.source==='customer'&&hunter?.metadata?.additional_verification_enabled===true;}catch{}
       if(hunterReady){
@@ -1297,6 +1308,9 @@ async function confirmBuyerContact(candidate,index,{scope='selected',kind='email
     saveDiscovery();await refreshCrmState({render:false});renderAll();
     showToast(issues.length?`${person.publicName||person.name} · ${issues.join(' · ')}`:`${person.publicName||person.name} · confirmation results updated`);
     return !issues.length;
+  }catch(error){
+    if(kind==='email'||both)person.contactVerification={status:'error',checkedAt:new Date().toISOString(),issues:[error.message||'Email confirmation failed']};
+    saveDiscovery();showToast(error.message||'Contact confirmation failed');return false;
   }finally{enrichmentPending.delete(key);renderAll();}
 }
 const contactFlowPromises=new Map();
@@ -1499,8 +1513,8 @@ function publicBuyerSource(candidate,person,{includeRejected=false}={}){
   const sources=[...(person.patternFindings||[]),...(person.publicEmail?[{email:person.publicEmail,url:person.publicEmailUrl}]:[])];
   return sources.find(row=>(includeRejected||person.publicEmailSourceCheck?.status!=='failed'||String(row.email).toLowerCase()!==String(person.publicEmailSourceCheck.email).toLowerCase()||row.url!==person.publicEmailSourceCheck.url)&&window.LeadIntelContactPolicy?.publicSource(row.email,person.publicName||person.name,row.url,candidate.domain));
 }
-async function confirmPublicBuyerSource(candidate,person,{retryRejected=false}={}){
-  const source=publicBuyerSource(candidate,person,{includeRejected:retryRejected});if(!source||acceptedBuyerConfirmationLevel()!=='public_confirmed')return false;
+async function confirmPublicBuyerSource(candidate,person,{retryRejected=false,evidenceOnly=false}={}){
+  const source=publicBuyerSource(candidate,person,{includeRejected:retryRejected});if(!source||!evidenceOnly&&acceptedBuyerConfirmationLevel()!=='public_confirmed')return false;
   const company=await ensureCrmCompany(candidate);
   const response=await fetch(`${LEADINTEL_API}/api/crm/companies/${encodeURIComponent(company.id)}/confirm-public-email?workspace_id=${encodeURIComponent(bridge().workspace.id)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({name:person.publicName||person.name,title:person.title,person_id:person.id,email:source.email,source_url:source.url})});
   const value=await response.json();if(!response.ok){if(response.status===409){person.publicEmailSourceCheck={status:'failed',email:source.email,url:source.url,checkedAt:new Date().toISOString(),reason:value.error||'Official source no longer confirms the person and email'};saveDiscovery();renderAll();}throw new Error(value.error||'Official source confirmation failed');}person.publicEmailSourceCheck={status:'confirmed',email:source.email,url:source.url,checkedAt:new Date().toISOString(),reason:''};enrichmentResults.set(personKey(candidate,person),{contact:value.contact});saveDiscovery();return true;
@@ -1518,7 +1532,7 @@ function verifiedBuyerEmail(candidate,person,contact={},options={}){
     const check=person.hunterChecks?.[email],age=Date.now()-Date.parse(check?.checked_at||'');
     if(check?.status!=='valid'||check?.deliverability!=='deliverable'||!Number.isFinite(age)||age<0||age>30*24*60*60*1000)return '';
   }
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)&&person.identityStatus!=='pending'&&person.nameVerification!=='pending'&&!candidate.buyerRolesChanged&&LeadIntelDiscovery.hasFullBuyerName(person.publicName||person.name)&&!(candidate.publicResearch?.conflicts||[]).some(row=>String(row.person_id)===String(person.id))&&(String(contact.email_status||'').toLowerCase()==='verified'&&(!window.LeadIntelContactPolicy||window.LeadIntelContactPolicy.accepted(contact,domain,'provider_verified'))||minimum==='public_confirmed'&&(window.LeadIntelContactPolicy?.accepted(contact,domain,'public_confirmed')||source?.email===email))&&email.endsWith(`@${domain}`)?email:'';
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)&&person.identityStatus!=='pending'&&person.nameVerification!=='pending'&&!candidate.buyerRolesChanged&&LeadIntelDiscovery.hasFullBuyerName(person.publicName||person.name)&&!(candidate.publicResearch?.conflicts||[]).some(row=>String(row.person_id)===String(person.id))&&(String(contact.email_status||'').toLowerCase()==='verified'&&(!window.LeadIntelContactPolicy||window.LeadIntelContactPolicy.accepted(contact,domain,'provider_verified'))||minimum==='public_confirmed'&&(window.LeadIntelContactPolicy?.accepted(contact,domain,'public_confirmed')))&&email.endsWith(`@${domain}`)?email:'';
 }
 function buyerNextAction(candidate,person,index,scope){
   const contact=enrichmentResults.get(personKey(candidate,person))?.contact||{};
@@ -1579,11 +1593,7 @@ async function saveBuyerAndProceed(domain,index,{button}={}){
   if(button)button.disabled=true;
   try{
     if(!verifiedBuyerEmail(candidate,person,enrichmentResults.get(personKey(candidate,person))?.contact||{})){
-      if(['automatic','manual'].includes(LeadIntelDiscovery.linkedInVerification(person,candidate).status)){
-        if(!await saveBuyerLinkedInReview(candidate,person,LeadIntelDiscovery.normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url)))return false;
-        return await startLinkedInBuyerMessage(domain,index);
-      }
-      showToast('Verify a company email or review LinkedIn to continue.');return false;
+      showToast('Confirm this buyer’s company email before continuing. LinkedIn messages are created inside Confirm LinkedIn.');return false;
     }
     if(!person.kept&&!await keepBuyer(domain,index))return false;
     return await addBuyerToFlow(domain,index,{button});
@@ -1595,7 +1605,8 @@ function prospectContactControls(candidate,person){
   const key=selectedBuyerKey(candidate,person),result=enrichmentResults.get(key),pending=enrichmentPending.has(key),automatic=buyerAutomaticMode();
   const index=candidate.people.findIndex(item=>LeadIntelDiscovery.buyerIdentity(item)===LeadIntelDiscovery.buyerIdentity(person)),phone=result?.contact?.phone_number,verified=Boolean(verifiedBuyerEmail(candidate,person,result?.contact||{})),linkedinReady=['automatic','manual'].includes(LeadIntelDiscovery.linkedInVerification(person,candidate).status);
   const qualification=LeadIntelDiscovery.qualifyBuyer(person,{decisionMakers:person.matchedBuyerRole||person.title},candidate),hold=!qualification.eligible?'Review buyer qualification before continuing: '+qualification.gaps[0]:'';
-  return `<div class="selected-prospect-contact-actions">${person.publicEmailSourceCheck?.status==='failed'?`<p class="people-note">Official email source needs rechecking: ${esc(person.publicEmailSourceCheck.reason)}</p><button class="secondary-btn small" type="button" data-recheck-public-email="${esc(candidate.domain)}" data-person-index="${index}">Recheck public source</button>`:''}<p class="people-note">${hold?esc(hold):automatic?'Automatic email verification is required.':verified?typeof acceptedBuyerConfirmationLevel==='function'&&acceptedBuyerConfirmationLevel()==='public_confirmed'?'Company email meets your accepted confirmation level.':'Verified company email ready.':linkedinReady?'LinkedIn ready for a direct-message draft.':'Verify email or review LinkedIn to create a message.'} Phone is optional.</p><div class="buyer-four-actions"><button class="secondary-btn small" type="button" data-prospect-enrich-email="${esc(candidate.domain)}" data-person-index="${index}" aria-pressed="${automatic||verified}" ${automatic||!crmAuthenticated()||pending?'disabled':''}>${automatic?'Confirm email ✓':verified&&result?.contact?.email_status==='verified'?'Email confirmed ✓':pending?'Confirming…':'Confirm email'}</button><button class="secondary-btn small" type="button" data-prospect-enrich-phone="${esc(candidate.domain)}" data-person-index="${index}" ${!crmAuthenticated()||pending||phone?'disabled':''}>${phone?'Phone confirmed ✓':pending?'Confirming…':'Confirm phone'}</button><button class="secondary-btn small" type="button" data-review-linkedin="${esc(candidate.domain)}" data-person-index="${index}">${linkedinReady?'Create LinkedIn message':'Review LinkedIn'}</button><button class="primary-btn small" type="button" data-keep-buyer="${esc(candidate.domain)}" data-person-index="${index}" aria-pressed="${person.kept===true}" title="${hold?esc(hold):verified||linkedinReady?'Save this buyer and open Messages':'Verify a contact channel to continue'}" ${!verified&&!linkedinReady||!crmAuthenticated()||pending?'disabled':''}>Save &amp; proceed</button></div></div>`;
+  const ready=verified&&crmAuthenticated()&&!pending;
+  return `<div class="selected-prospect-contact-actions">${person.publicEmailSourceCheck?.status==='failed'?`<p class="people-note">Official email source needs rechecking: ${esc(person.publicEmailSourceCheck.reason)}</p><button class="secondary-btn small" type="button" data-recheck-public-email="${esc(candidate.domain)}" data-person-index="${index}">Recheck public source</button>`:''}<p class="people-note">${hold?esc(hold):pending?'Checking contact details…':verified?'Company email meets your sending requirements.':automatic?'Automatic email verification is required.':'Confirm email before continuing to content creation.'} Phone is optional. LinkedIn messages are created inside Confirm LinkedIn.</p><div class="buyer-four-actions"><button class="secondary-btn small${!verified&&!pending&&!hold?' buyer-confirm-needed':''}" type="button" data-prospect-enrich-email="${esc(candidate.domain)}" data-person-index="${index}" aria-pressed="${verified}" title="Recheck saved and public evidence first; Apollo and enabled Hunter are fallbacks within your credit limits" ${automatic||verified||!crmAuthenticated()||pending||hold?'disabled':''}>${pending?'Checking…':verified?'Confirm email ✓':'Confirm email'}</button><button class="secondary-btn small" type="button" data-prospect-enrich-phone="${esc(candidate.domain)}" data-person-index="${index}" ${!crmAuthenticated()||pending||phone?'disabled':''}>${phone?'Confirm phone ✓':pending?'Checking…':'Confirm phone'}</button><button class="secondary-btn small" type="button" data-review-linkedin="${esc(candidate.domain)}" data-person-index="${index}" ${!crmAuthenticated()||pending?'disabled':''}>${linkedinReady?'Confirm LinkedIn ✓':'Confirm LinkedIn'}</button><button class="${ready?'primary-btn small buyer-proceed-ready':'secondary-btn small'}" type="button" data-keep-buyer="${esc(candidate.domain)}" data-person-index="${index}" aria-pressed="${person.flowSelected===true}" title="${hold?esc(hold):verified?'Select this buyer and open Content Creation':'Confirm email to continue'}" ${!ready?'disabled':''}>Select &amp; proceed</button></div></div>`;
 }
 async function findPublicProspectContacts(domain,options={}){
   const key=canonicalDomain(domain);

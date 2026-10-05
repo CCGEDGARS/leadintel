@@ -392,7 +392,7 @@ test('unapproved automatic confirmation holds paid enrichment and never invokes 
   context.__toggleBuyerContactFlow(emailBox);
   context.__toggleBuyerContactFlow(phoneBox);
   await new Promise(resolve=>setTimeout(resolve,30));
-  assert.deepEqual(calls,['approval','hunter-status','approval']);
+  assert.deepEqual(calls,['approval']); // Unqualified email holds before enrichment; phone still checks approval.
   assert.equal(Object.keys(candidate.people[0].hunterChecks||{}).length,0);
   assert.equal(candidate.people[0].flowEmailCompletedFor,'');
   assert.equal(candidate.people[0].flowPhoneCompletedFor,'');
@@ -1079,7 +1079,7 @@ test('Save buyer saves in CRM, survives reload, and Unsave preserves CRM history
  const restored=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
  assert.equal(restored.selectedProspects[0].people[0].kept,true);assert.equal(restored.selectedProspects[0].buyerDiscovery.pool[0].kept,true);
  context.__renderPipeline();const html=context.__elements.get('customer-pipeline').innerHTML;
- assert.match(html,/data-keep-buyer[^>]*aria-pressed="true"/);assert.match(html,/Save &amp; proceed/);assert.ok(html.indexOf('data-find-prospect-buyers')<html.indexOf('selected-prospect-people'));
+ assert.match(html,/data-keep-buyer[^>]*aria-pressed="false"[^>]*disabled/);assert.match(html,/Select &amp; proceed/);assert.ok(html.indexOf('data-find-prospect-buyers')<html.indexOf('selected-prospect-people'));
  assert.equal(await context.__keepBuyer('example.com',0),true);assert.equal(saved,1);assert.equal(context.__discoveryState().selectedProspects[0].people[0].kept,false);
 });
 test('Save buyer fails closed when CRM save fails',async()=>{

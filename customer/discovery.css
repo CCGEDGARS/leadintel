@@ -581,3 +581,7 @@
 
 /* Compact candidates follow the four detailed recommendations. */
 .buyer-potential-list{list-style:none;padding:0;margin:0;display:grid;gap:8px}.buyer-potential-list>li{border:1px solid var(--border,#dedfe4);border-radius:12px;padding:12px}.buyer-potential-list summary{display:flex;gap:12px;align-items:center;flex-wrap:wrap;cursor:pointer}.buyer-potential-list summary strong{min-width:160px}.buyer-potential-list summary small{margin-left:auto}.buyer-potential-list details>button{margin-top:10px}.buyer-contact-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.buyer-contact-fields>div{min-width:0;overflow-wrap:anywhere;grid-template-columns:1fr;align-content:start;border:1px solid #e0e8e3;border-radius:8px;padding:10px;min-height:100px}.buyer-contact-fields>small,.buyer-contact-fields>details{grid-column:1/-1}@media(max-width:700px){.buyer-contact-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.buyer-four-actions .buyer-confirm-needed{background:#fff3d4;border-color:#b77b12;color:#754b00;box-shadow:0 0 0 2px #e5b95740}
+.buyer-four-actions button:disabled{background:#edf0ef;color:#77817c;border-color:#d6ded9;box-shadow:none;cursor:not-allowed;opacity:1}
+.buyer-four-actions .buyer-proceed-ready{background:#0d6453;color:#fff;border-color:#0d6453}
