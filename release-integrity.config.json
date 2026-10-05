@@ -250,7 +250,7 @@
         "topFourResearchCandidates",
         "data-research-buyer",
         "data-research-remaining",
-        "Guessed Gmail candidates \u00b7 unconfirmed"
+        "Likely email \u00b7 ownership unconfirmed"
       ]
     },
     {
@@ -277,6 +277,37 @@
       ],
       "notContains": [
         "type:'note',summary:'LinkedIn profile confirmed by user'"
+      ]
+    },
+    {
+      "id": "independent-contact-checks",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "buyer-contacts-v19-independent-checks",
+        "Resume incomplete checks",
+        "Identity discovery"
+      ]
+    },
+    {
+      "id": "automatic-linkedin-identity",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "function linkedInVerification(",
+        "function buyerDisplayTitle("
+      ]
+    },
+    {
+      "id": "evidence-based-linkedin-drafts",
+      "type": "text",
+      "url": "/customer/outreach-engine.js",
+      "status": 200,
+      "contains": [
+        "function linkedInDraftPrompt(",
+        "function parseLinkedInDraft("
       ]
     }
   ],

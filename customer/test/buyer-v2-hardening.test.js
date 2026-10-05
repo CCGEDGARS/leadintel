@@ -25,7 +25,7 @@ test('Buyer V2 generated buying committee and diagnostics survive state normaliz
 test('Buyer recommendations carry a visible relevance score and matched buying function',()=>{
  assert.match(engine,/buyerRelevanceScore:/);
  assert.match(engine,/matchedBuyerRole:/);
- assert.match(ui,/Role match/);
+ assert.match(ui,/Priority/);
  assert.match(ui,/matched to/);
 });
 test('generic company contacts are not rendered as person buyer evidence',()=>{

@@ -414,11 +414,11 @@ test('a first-name-only buyer triggers one public source check and renders a sou
   context.__setDiscovery({status:'no_results',selectedProspects:[{company:'Boliden',domain:'boliden.com',market:'Sweden',buyerSearchMode:'user_selected_target',buyerRoles:'CEO',people:[{id:'p1',name:'Mikael',title:'President & CEO'}]}]});
   await context.__findPublicProspectContacts('boliden.com');
   await new Promise(resolve=>setTimeout(resolve,15));
-  assert.equal(publicSearches,7); // Company patterns only; Gmail is searched by full name and company.
+  assert.equal(publicSearches,8); // Company patterns only; Gmail is searched by full name and company.
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicName,'Mikael Example');
   assert.equal(context.__discoveryState().selectedProspects[0].people[0].publicLinkedinUrl,'https://www.linkedin.com/in/mikael-example');
-  assert.match(context.__elements.get('customer-pipeline').innerHTML,/mikael\.example@boliden\.com · Public listing/);
-  assert.match(context.__elements.get('customer-pipeline').innerHTML,/<strong>LinkedIn<\/strong><span>Public match/);
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/mikael\.example@boliden\.com · Publicly listed · unverified/);
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/<strong>LinkedIn<\/strong><span>Review required/);
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/mikael\.example@boliden\.com/);
 });
 
@@ -463,9 +463,9 @@ test('a saved first-name buyer can gain a sourced full name from a unique public
   const finishedRequests=requests;
   const person=context.__discoveryState().selectedProspects[0].people[0];
   assert.equal(person.publicName,'Jacob Jonstoij');
-  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v18-profile-scope');
+  assert.equal(context.__discoveryState().selectedProspects[0].publicContactVersion,'buyer-contacts-v19-independent-checks');
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Jacob Jonstoij/);
-  assert.match(context.__elements.get('customer-pipeline').innerHTML,/<strong>LinkedIn<\/strong><span>Public match/);
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/<strong>LinkedIn<\/strong><span>Verified automatically/);
   context.__scheduleSavedBuyerPublicChecks();
   await new Promise(resolve=>setTimeout(resolve,5));
   assert.equal(requests,finishedRequests);
@@ -540,7 +540,7 @@ test('refresh repairs a truncated name, matches LinkedIn, and shows official com
   assert.ok(candidate.publicContacts.some(row=>row.value==='info@sodra.com'));
   assert.ok(candidate.publicContacts.some(row=>row.value.includes('+46 470')));
   assert.match(context.__elements.get('customer-pipeline').innerHTML,/Lotta Lyrå/);
-  assert.match(context.__elements.get('customer-pipeline').innerHTML,/<strong>Phone<\/strong><span>No direct phone found in public searches<\/span>/);
+  assert.match(context.__elements.get('customer-pipeline').innerHTML,/<strong>Phone<\/strong><span>No direct phone found in completed searches<\/span>/);
   assert.doesNotMatch(context.__elements.get('customer-pipeline').innerHTML,/<strong>\+46 470 890 00<\/strong> · Public listing/);
 });
 
@@ -1201,14 +1201,14 @@ test('buyers with incomplete research have visible reasons and cannot occupy the
  const people=Array.from({length:11},(_,i)=>({id:`person-${i}`,name:`Anna Buyer${i}`,title:i===10?'Head of Procurement':'Project Director',organization:'Example',publicNameUrl:`https://example.com/team/${i}`,emailResearch:i===10?{status:'complete',searches:3,failed:0,checkedAt:new Date().toISOString()}:{status:'partial',searches:1,failed:1,checkedAt:new Date().toISOString()}}));
  const html=context.__renderSelectedProspects([{company:'Example',domain:'example.com',people,buyerRoles:['Project Director','Procurement Director']}]);
  assert.match(html,/4 priority buyers/);assert.equal((html.match(/Recommended · researched match/g)||[]).length,1);assert.ok(html.indexOf('Anna Buyer10')<html.indexOf('other potential buyers'));
- assert.match(html,/Purchasing \/ supplier selection/);assert.match(html,/purchasing authority unconfirmed/);assert.match(html,/Research: incomplete/);assert.match(html,/Search incomplete/);
+ assert.match(html,/Purchasing \/ supplier selection/);assert.match(html,/purchasing authority unconfirmed/);assert.match(html,/Research: incomplete/);assert.match(html,/Checks incomplete/);
 });
 
 test('a company-level completed check does not conceal an unresearched individual and follow-up runs only once',async()=>{
  let requests=0;
  const context=loadDiscoveryRunner({renderNodes:true,requestTimeout:1000,fetchImpl:async()=>{requests++;return {ok:true,json:async()=>({data:[]})};}});
  context.LeadIntelServerBridge={session:{authenticated:true},workspace:{id:'test'}};
-  context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',publicContactStatus:'complete',publicContactVersion:'buyer-contacts-v18-profile-scope',people:[{id:'p1',name:'Anna Buyer',title:'Procurement Director',organization:'Example',publicNameUrl:'https://example.com/team'}]}]});
+  context.__setDiscovery({selectedProspects:[{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',publicContactStatus:'complete',publicContactVersion:'buyer-contacts-v19-independent-checks',people:[{id:'p1',name:'Anna Buyer',title:'Procurement Director',organization:'Example',publicNameUrl:'https://example.com/team'}]}]});
  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:5,visibleStep:5}));
  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({activeJourneyStage:4,visibleStep:4}));
  context.__scheduleSavedBuyerPublicChecks();await new Promise(resolve=>setTimeout(resolve,5));assert.equal(requests,0);
@@ -1222,7 +1222,7 @@ test('a company-level completed check does not conceal an unresearched individua
 test('a stale role shows its actual hold reason beside a disabled proceed action',()=>{
  const context=loadDiscoveryRunner({renderNodes:true});
  const html=context.__renderSelectedProspects([{company:'Example',domain:'example.com',people:[{id:'old',name:'Anna Buyer',title:'Project Director',organization:'Example',publicNameUrl:'https://example.com/team',identityEvidenceDate:'2013-05-01'}],buyerRoles:['Project Director']}]);
- assert.match(html,/On hold · Current role requires review/);assert.match(html,/Review buyer qualification before continuing: Current role requires review/);
+ assert.match(html,/On hold · Current role needs verification/);assert.match(html,/Review buyer qualification before continuing: Current role requires review/);
  assert.match(html,/data-keep-buyer="example.com"[^>]*disabled/);assert.doesNotMatch(html,/Recommended · researched match/);
 });
 
