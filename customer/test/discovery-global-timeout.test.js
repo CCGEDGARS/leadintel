@@ -1171,7 +1171,7 @@ test('recommended buyers precede potential buyers and unresolved research with c
  const context=loadDiscoveryRunner({renderNodes:true});
  const people=Array.from({length:6},(_,i)=>({id:`person-${i}`,name:`Anna Buyer${i}`,publicName:`Anna Buyer${i}`,title:'Procurement Director',organization:'Example',publicNameUrl:`https://example.com/team/${i}`,emailResearch:{status:"complete",searches:3,failed:0,checkedAt:new Date().toISOString()}}));
  const html=context.__renderSelectedProspects([{company:'Example',domain:'example.com',buyerSearchMode:'user_selected_target',people,buyerDiscovery:{pool:[...people,{name:'Unresolved',title:'Procurement Director',identityStatus:'pending'}],providerStatus:{firecrawl:{status:'complete'}},researchIncomplete:true}}]);
- assert.ok(html.indexOf('4 recommended buyers')>=0,html);assert.ok(html.indexOf('4 recommended buyers')<html.indexOf('2 other potential buyers'),html);
+ assert.ok(html.indexOf('4 priority buyers')>=0,html);assert.ok(html.indexOf('4 priority buyers')<html.indexOf('2 other potential buyers'),html);
  assert.ok(html.indexOf('2 other potential buyers')<html.indexOf('1 unresolved identities'));
  assert.match(html,/<details class="buyer-pending-identities"><summary>/);
  assert.match(html,/<details class="buyer-provider-status"><summary>/);
@@ -1200,7 +1200,7 @@ test('buyers with incomplete research have visible reasons and cannot occupy the
  const context=loadDiscoveryRunner({renderNodes:true});
  const people=Array.from({length:11},(_,i)=>({id:`person-${i}`,name:`Anna Buyer${i}`,title:i===10?'Head of Procurement':'Project Director',organization:'Example',publicNameUrl:`https://example.com/team/${i}`,emailResearch:i===10?{status:'complete',searches:3,failed:0,checkedAt:new Date().toISOString()}:{status:'partial',searches:1,failed:1,checkedAt:new Date().toISOString()}}));
  const html=context.__renderSelectedProspects([{company:'Example',domain:'example.com',people,buyerRoles:['Project Director','Procurement Director']}]);
- assert.match(html,/1 recommended buyers/);assert.ok(html.indexOf('Anna Buyer10')<html.indexOf('other potential buyers'));
+ assert.match(html,/4 priority buyers/);assert.equal((html.match(/Recommended · researched match/g)||[]).length,1);assert.ok(html.indexOf('Anna Buyer10')<html.indexOf('other potential buyers'));
  assert.match(html,/Purchasing \/ supplier selection/);assert.match(html,/purchasing authority unconfirmed/);assert.match(html,/Research: incomplete/);assert.match(html,/Search incomplete/);
 });
 

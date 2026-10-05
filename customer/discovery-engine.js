@@ -1176,10 +1176,9 @@
       &&!/\b(former|formerly|previous|past|tidigare)\b/i.test(clean(person.title)));
     const ranked=eligible.map(person=>{const match=roleRelevance(person,splitList(profile.decisionMakers));return match?{...person,buyerRelevanceScore:Math.max(1,Math.min(100,Math.round(match.score))),matchedBuyerRole:match.role,buyerQualification:qualifyBuyer(person,profile,candidate)}:null;}).filter(Boolean).filter(person=>person.buyerQualification.eligible).sort((a,b)=>b.buyerQualification.total-a.buyerQualification.total||b.buyerRelevanceScore-a.buyerRelevanceScore);
     const shortlist=ranked.slice(0,10);
-    const strongest=shortlist.filter(person=>buyerResearchAssessment(person).status==='complete').slice(0,4);
-    const ids=new Set(strongest.map(buyerIdentity));
-    const people=[...strongest,...shortlist.filter(person=>!ids.has(buyerIdentity(person)))].slice(0,10);
-    return {people,recommendedIds:strongest.map(person=>person.id||buyerIdentity(person))};
+    const priority=shortlist.slice(0,4);
+    const strongest=priority.filter(person=>buyerResearchAssessment(person).status==='complete');
+    return {people:shortlist,priorityIds:priority.map(person=>person.id||buyerIdentity(person)),recommendedIds:strongest.map(person=>person.id||buyerIdentity(person))};
   }
   function topFourResearchCandidates(pool=[],profile={},candidate={}){
     const eligible=rankedBuyerShortlist(pool,profile,candidate).people

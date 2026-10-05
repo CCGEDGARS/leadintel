@@ -70,6 +70,15 @@ test('four recommendations use the highest scores without reserving a weaker fun
  const rows=[...Array.from({length:4},(_,i)=>buyer('head'+i,'Head of Procurement')),buyer('manager','Engineering Manager')];
  assert.deepEqual(D.rankedBuyerShortlist(rows,profile,company).recommendedIds,['head0','head1','head2','head3']);
 });
+test('partial contact refresh keeps the four highest-priority identities visible ahead of completed weaker buyers',()=>{
+ const leaders=[buyer('chief','Chief Procurement Officer'),buyer('head','Head of Procurement'),buyer('director','Project Director'),buyer('manager','Project Manager')];
+ const rows=[...leaders,buyer('easy1','Project Manager'),buyer('easy2','Project Manager')];
+ for(const person of leaders.slice(0,3))person.emailResearch={status:'partial',searches:4,failed:1,checkedAt:now};
+ const result=D.rankedBuyerShortlist(rows,profile,company);
+ assert.deepEqual(result.people.slice(0,4).map(p=>p.id),leaders.map(p=>p.id));
+ assert.deepEqual(result.priorityIds,leaders.map(p=>p.id));
+ assert.deepEqual(result.recommendedIds,['manager']);
+});
 test('Gmail guesses persist as candidates, without becoming public contact evidence',()=>{
  const p=buyer('anna','Head of Procurement',{name:'Anna Smith',publicName:'Anna Smith',gmailCandidates:D.gmailGuessCandidates({name:'Anna Smith'})});
  assert.equal(p.gmailCandidates.length,3);assert.ok(p.gmailCandidates.every(row=>row.status==='guessed'));

@@ -17,3 +17,10 @@ Tests establish the CRM activity contract, email extraction, source-recheck beha
 ## Prevention
 
 For connected actions, test the frontend payload against the actual backend allowlist rather than a success-only mock. A cited AI answer is a discovery lead; extract the cited source before representing its email/phone as publicly listed. Preserve exact source addresses, including initials, and record failed source checks as unavailable rather than absence.
+
+## Authenticated production follow-up
+
+- Confirming Larisa's reviewed LinkedIn profile opened Messages and generated an editable direct-message draft. No email was needed and no message was sent.
+- Public contact refresh preserved completed checks but timed out. The partial email status moved higher-priority procurement identities into the compact group behind completed project-manager checks. A regression reproduced this score-order inversion.
+- Keep the four highest-priority eligible identities in the detailed group independently of contact research completion. Recommendations still require completed research within that group. Incomplete checks retain their visible status and do not become recommendations.
+- A live CRM save/reopen check is still required after this follow-up release. Generated draft quality remains a separate concern.
