@@ -17,7 +17,7 @@ const MAX_DISCOVERY_COMPANY_CHECKS=30;
 const SAVING_SEARCH_RESULT_LIMIT=4;
 const SAVING_COMPANY_CHECK_LIMIT=3;
 const SAVING_FIRECRAWL_CALL_LIMIT=10;
-const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261004-v4&ranked-buyers=20261005-v33";
+const ASSET_VERSION="20260930-contact-suppression-v1&sidebar-preservation=1&target-segments=1&target-quality=1&saving-mode=1&known-target-recovery=1&balanced-saving=1&buyer-cards=1&refresh-protection=1&shortlist-buyer-cards=1&target-buyers=1&buyers-ux=1&buyers-contacts=1&linkedin-firstname=1&public-first-email=1&separate-contact-flow=1&clarify-contact-layout=1&phone-row=1&focused-email-evidence=1&compact-contact-labels=1&reference-discovery=5&reference-similarity=20260930-v1&research-pipeline=20260930-v1&company-workflow=20261003-qualified-v2&profile-market=20261001-v1&commercial-evidence=20261002-v2&qualification=20261003-qualified-v2&shortlist-preservation=20261002-v1&clear-results-modal=20261003-v1&buyer-actions=20261004-v4&ranked-buyers=20261005-v34";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const OUTREACH_ASSET_VERSION="20261005-buyer-evidence-v3";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
@@ -173,7 +173,7 @@ function restoreNewerBuyerResearch(candidate,detail){
     const evidence=row.contactEvidence||{};
     const contact=(detail.contacts||[]).find(p=>String(p.external_person_id||'')===String(row.id));
     const restored={...local,...row,linkedin_url:row.linkedin_url||local?.linkedin_url||LeadIntelDiscovery.normalizeLinkedInUrl(contact?.linkedin_url),publicLinkedinUrl:row.publicLinkedinUrl||local?.publicLinkedinUrl||LeadIntelDiscovery.normalizeLinkedInUrl(contact?.public_linkedin_url),publicName:row.name,publicNameUrl:row.identitySourceUrl||row.publicNameUrl,publicEmail:evidence.email||row.publicEmail,publicEmailUrl:evidence.emailUrl||row.publicEmailUrl,publicPhone:evidence.phone||row.publicPhone,publicPhoneUrl:evidence.phoneUrl||row.publicPhoneUrl,patternFindings:evidence.patternFindings||row.patternFindings};
-    for(const key of ['kept','keptAt','flowSelected','linkedinConfirmedUrl','linkedinConfirmedAt','publicEmailSourceCheck'])if(local?.[key]!==undefined)restored[key]=local[key];
+    for(const key of ['kept','keptAt','flowSelected','linkedinConfirmedUrl','linkedinConfirmedAt','linkedinConfirmationMethod','contactResearch','publicEmailSourceCheck'])if(local?.[key]!==undefined)restored[key]=local[key];
     return restored;
   });
   candidate.buyerDiscovery={...(candidate.buyerDiscovery||{}),...(saved.discovery||{}),found:saved.discovery?.found||0,providerStatus:saved.discovery?.providerStatus||{firecrawl:{status:'unavailable'},grounded:{status:'unavailable'},identity:{status:'unavailable'}},resultDiagnostics:saved.discovery?.resultDiagnostics||[],checkedAt:saved.checkedAt,researchVersion:BUYER_RESEARCH_VERSION,researchIncomplete:saved.researchIncomplete===true,coverageFollowUp:saved.coverageFollowUp,pool:LeadIntelDiscovery.mergeBuyerPool((candidate.buyerDiscovery?.pool||[]).filter(p=>p.kept),[...candidate.people,...(saved.unresolved||[]).map(p=>({...p,identityStatus:'pending'}))],{decisionMakers:candidate.buyerRoles})};
@@ -774,7 +774,7 @@ function buyerContactRows(person={},candidate={},result={}){
     });
     const extra=rows.length>1?`<details><summary>${rows.length-1} alternative candidate${rows.length>2?'s':''}</summary>${rows.slice(1,4).join('')}</details>`:'';
     const incomplete=['partial','unavailable'].includes(state(type).status)?`<small>${esc('Additional checks incomplete'+(state(type).reason?' · '+state(type).reason:''))}</small>`:'';
-    return rows[0]+extra+incomplete;
+    return rows[0]+extra+incomplete+(state(type).status==='complete'?'<small>Search completed · ownership confirmation separate</small>':'');
   };
   const phone=contact.phone_number?`${esc(contact.phone_number)} · ${contact.phone_status==='Verified'?'Apollo verified':'Provider listing · unverified'}`:person.publicPhone?`${esc(person.publicPhone)} · Publicly listed · unverified${source(person.publicPhoneUrl)}`:esc(statusText('phone'));
   return `<div class="buyer-contact-fields" aria-label="Contact details"><div><strong>LinkedIn</strong><span>${esc(linkedInLabel)}</span></div><div><strong>Phone</strong><span>${phone}</span></div><div><strong>Company email</strong><span>${renderEmails('company')}</span></div><div><strong>Gmail</strong><span>${renderEmails('gmail')}</span></div><small class="people-note">Likely addresses pass name and format filters; ownership remains unconfirmed. Automatic sending requires an accepted verified company email.</small></div>`;
@@ -1705,7 +1705,7 @@ async function searchBuyerEmailPatterns(candidate,existingRows,signal,{force=fal
     };
     try{
       collect(existingRows);
-      if(person.patternFindings?.length||person.publicEmailUrl){await run('sources',async()=>{sourceRechecks=await recheckBuyerEmailSources(person,candidate,signal,sourceCache);if(sourceRechecks.some(row=>row.status==='unavailable'))throw new Error('Published email source could not be rechecked');return [];});}else notNeeded('sources');
+      if(person.patternFindings?.length||person.publicEmailUrl){await run('sources',async()=>{sourceRechecks=await recheckBuyerEmailSources(person,candidate,signal,sourceCache);const unavailable=sourceRechecks.find(row=>row.status==='unavailable');if(unavailable)throw new Error('Published email source could not be rechecked'+(unavailable.reason?' · '+unavailable.reason:''));return [];});}else notNeeded('sources');
       const patterns=emailPatternCandidates(person,candidate.domain,people);person.gmailCandidates=LeadIntelDiscovery.gmailGuessCandidates(person);
       if(!patterns.length){for(const key of ['official','patterns','focused','grounded','gmail','phone','linkedin'])notNeeded(key);return;}
       collect(await run('official',()=>searchBuyerPublicPages(`site:${canonicalDomain(candidate.domain)} "${name}"`,5,signal)));

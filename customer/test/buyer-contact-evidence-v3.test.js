@@ -43,3 +43,8 @@ test('AI event provenance and edited draft survive CRM package save/reload',()=>
  const restored=O.restoreCrmScriptSnapshot(O.buildCrmScriptSnapshot(item),'example.com');
  assert.equal(restored.drafts.linkedinMessage,item.drafts.linkedinMessage);assert.equal(restored.drafts.scriptContext.eventSourceUrl,dossier.evidence[0].url);
 });
+
+test('homepage capture date is not presented as a company event date',()=>{
+ const event=O.specificEventEvidence({evidence:[{url:'https://example.com/',date:'2026-10-05',text:'Example is investing six billion in a new sorting plant.'}]});
+ assert.equal(event.date,'');assert.match(event.event,/new sorting plant/);
+});
