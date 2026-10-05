@@ -51,6 +51,17 @@ test('use-server fetches the current research and preserves the local draft befo
  assert.equal(JSON.parse(values.get(MAIN)).website,'server.example');assert.equal(JSON.parse(values.get(RECOVERY)).local.main.answers.offer,'Local offer');assert.ok(events.includes('reload'));
  assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),false);
 });
+test('recovery download appears during conflict and hides after resolution without deleting the backup',async()=>{
+ const {root,values}=load(async()=>new Response(JSON.stringify({version:12,payload:{main:{website:'server.example'}}})),{withBridge:true});
+ const visibility=[];let hidden=true;
+ const recovery={get hidden(){return hidden;},set hidden(value){hidden=value;visibility.push(value);}},actions={hidden:true,setAttribute(){}};
+ root.document.getElementById=id=>id==='server-sync-recovery'?recovery:id==='server-conflict-actions'?actions:null;
+ values.set(RECOVERY,JSON.stringify({workspace_id:'w1',local:{main:{website:'local.example'}}}));
+ assert.equal((await root.LeadIntelServerBridge.resolveConflictUseServer()).resolved,true);
+ assert.equal(recovery.hidden,true,'resolved conflicts must not clutter the toolbar');
+ assert.ok(visibility.includes(false),'recovery remains available while conflicting');
+ assert.equal(JSON.parse(values.get(RECOVERY)).local.main.answers.offer,'Local offer','backup remains intact');
+});
 test('recovery storage failure prevents an overwrite and allows a safe retry',async()=>{
  let writes=0;const {root,values}=load(async(input,options)=>{if(options.method==='PUT')writes++;return new Response(JSON.stringify({version:9,payload:{main:{website:'server.example'}}}));},{withBridge:true,quota:true});
  assert.equal((await root.LeadIntelServerBridge.resolveConflictKeepLocal()).resolved,false);assert.equal(writes,0);assert.equal(root.LeadIntelServerBridge.conflict,true);assert.equal(root.LeadIntelServerBridge.conflictState.version,3);assert.equal(JSON.parse(values.get(MAIN)).answers.offer,'Local offer');
