@@ -103,14 +103,16 @@ function stageAvailability(){
   const savedTargets=Array.isArray(current.targetCompanies)&&current.targetCompanies.length>0;
   const pipeline=hasPipelineOpportunity();
   const content=hasOutreachContent();
+  const handoff=Boolean(window.LeadIntelWorkspaceIsolation?.hasSavedMessageHandoff?.(localStorage,current,window.LeadIntelServerBridge?.workspace?.id));
+  const approvedHandoff=Boolean(window.LeadIntelWorkspaceIsolation?.hasSavedMessageHandoff?.(localStorage,current,window.LeadIntelServerBridge?.workspace?.id,true));
   return {
     1:true,
     2:ready,
     3:ready,
     4:ready&&profile,
     5:ready&&(savedTargets||previousDiscovery||profile&&approved&&strategy),
-    6:ready&&profile&&approved&&strategy&&pipeline,
-    7:ready&&profile&&approved&&strategy&&pipeline&&content
+    6:ready&&profile&&approved&&(strategy||handoff)&&pipeline,
+    7:ready&&profile&&approved&&(strategy||approvedHandoff)&&pipeline&&content
   };
 }
 function currentProcessStep(){

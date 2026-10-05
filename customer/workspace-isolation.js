@@ -92,6 +92,16 @@
     const discovery=read(storage,DISCOVERY_KEY);
     return ["rawResults","candidates","potentialMatches","pipeline","selectedProspects"].some(key=>Array.isArray(discovery[key])&&discovery[key].length>0);
   }
+  function hasSavedMessageHandoff(storage,main={},workspaceId='',requireApproval=false){
+    if(!hasPreviousDiscovery(storage,main))return false;
+    const choice=read(storage,DISCOVERY_META_KEY).scriptBuyer;
+    if(!choice?.workspaceId||workspaceId&&choice.workspaceId!==workspaceId||!choice.personId||!['email','linkedin'].includes(choice.channel))return false;
+    const discovery=read(storage,DISCOVERY_KEY),domain=canonicalDomain(choice.domain);
+    const company=[...(discovery.pipeline||[]),...(discovery.selectedProspects||[])].find(row=>canonicalDomain(row.domain)===domain);
+    if(!company?.people?.some(person=>person.id===choice.personId&&person.kept))return false;
+    const item=(read(storage,OUTREACH_KEY).items||[]).find(row=>canonicalDomain(row.domain)===domain);
+    return Boolean(item?.messageStudioDraft&&item.dossier&&item.selectedPersonId===choice.personId&&item.channel===choice.channel&&(!requireApproval||item.approved&&!item.reapprovalRequired&&item.channel==='email'));
+  }
   function safeStep(storage,main={},requested=1){
     const target=normalizedStep(requested);
     const website=websiteFromMain(main);
@@ -99,10 +109,11 @@
     if(!website||!markets.length)return 1;
     if(!main.profile)return Math.min(target,2);
     if(!main.approved)return Math.min(target,3);
+    if(target>=6&&hasSavedMessageHandoff(storage,main))return target===7&&hasSavedMessageHandoff(storage,main,'',true)?7:6;
     if(!main.market?.strategyApproved)return target>=5&&hasPreviousDiscovery(storage,main)?5:Math.min(target,4);
     if(target<=5)return target;
     const discovery=read(storage,DISCOVERY_KEY);
-    const hasPipeline=Array.isArray(discovery.pipeline)&&discovery.pipeline.length>0;
+    const hasPipeline=Array.isArray(discovery.pipeline)&&discovery.pipeline.length>0||Array.isArray(discovery.selectedProspects)&&discovery.selectedProspects.length>0;
     if(!hasPipeline)return 5;
     if(target===6)return 6;
     const outreach=read(storage,OUTREACH_KEY);
@@ -129,7 +140,7 @@
     MAIN_KEY,DISCOVERY_KEY,OUTREACH_KEY,DELIVERY_KEY,DISCOVERY_META_KEY,
     RESEARCH_META_KEY,MARKET_RESEARCH_RESUME_KEY,DIRTY_KEY,DERIVED_KEYS,
     clean,normalizeUrl,canonicalDomain,websiteFromMain,websiteFromMeta,
-    hasMeaningfulDerivedData,clearDerivedWorkspaceData,reconcileLocalWorkspace,hasPreviousDiscovery,safeStep,
+    hasMeaningfulDerivedData,clearDerivedWorkspaceData,reconcileLocalWorkspace,hasPreviousDiscovery,hasSavedMessageHandoff,safeStep,
     filterPipelineForWorkspace,pipelineScopeNeedsReset
   };
 });

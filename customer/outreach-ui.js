@@ -1,4 +1,4 @@
-import './message-studio.js?v=20261005-message-studio-v2';
+import './message-studio.js?v=20261005-message-studio-v3';
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
@@ -7,7 +7,7 @@ const DISCOVERY_META_KEY="leadintel_customer_v2_discovery_meta";
 const INTELLIGENCE_PROXY="https://apollo-proxy.edgars-7e7.workers.dev";
 const MAX_DOSSIER_SEARCH_QUERIES=2;
 const MAX_DOSSIER_RESULTS_PER_QUERY=5;
-const ASSET_VERSION="20261005-message-studio-v2";
+const ASSET_VERSION="20261005-message-studio-v3";
 const LANGUAGE_ASSET_VERSION="20260924-workspace-content-english-v1";
 const asset=path=>`${path}?v=${ASSET_VERSION}`;
 const q=id=>document.getElementById(id);
@@ -268,7 +268,7 @@ function bindOutreach(){
 function loadDeliveryModules(){
   if(document.querySelector('script[data-delivery-engine]'))return;
   const engine=document.createElement("script");engine.src=`delivery-engine.js?v=${LANGUAGE_ASSET_VERSION}`;engine.dataset.deliveryEngine="true";
-  engine.addEventListener("load",()=>{if(document.querySelector('script[data-delivery-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src=`delivery-ui.js?v=${LANGUAGE_ASSET_VERSION}&delivery-modes=2&message-studio=20261005-v2`;ui.dataset.deliveryUi="true";document.body.appendChild(ui);});
+  engine.addEventListener("load",()=>{if(document.querySelector('script[data-delivery-ui]'))return;const ui=document.createElement("script");ui.type="module";ui.src=`delivery-ui.js?v=${LANGUAGE_ASSET_VERSION}&delivery-modes=2&message-studio=20261005-v3`;ui.dataset.deliveryUi="true";document.body.appendChild(ui);});
   document.body.appendChild(engine);
 }
 function studioState(){return LeadIntelMessageStudio.normalize(outreach.messageStudio||{},LeadIntelMessageStudio.seed(mainState(),activeCampaignScenario(),crmBridge()?.session?.user?.name||''));}
@@ -297,7 +297,7 @@ function renderMessageStudio(){if(!q('message-studio'))return;const studio=studi
  const missing=LeadIntelMessageStudio.missing(studio.essentials);q('message-generation-status').textContent=item?.messageStudioDraft?.status|| (missing.filter(k=>k!=='calendly').length?'Complete before generating: '+missing.filter(k=>k!=='calendly').join(', '):missing.includes('calendly')?'You can generate a preview now. Add your Calendly event link before approval.':'Core information ready. Choose an approach and generate.');
  const trigger=item?.dossier?.selectedTrigger;q('message-evidence').textContent=trigger?`Reviewed trigger: ${trigger.title||trigger.url}. Only this reviewed event is available to the AI.`:'Company and buyer context inherited. No reviewed trigger selected; the message will not claim a specific event.';
  document.querySelectorAll('#dossier-workspace .script-card').forEach(card=>{card.classList.toggle('script-card-wide',Boolean(card.querySelector('#outreach-email-body')||card.querySelector('#outreach-linkedin')));card.hidden=card.querySelector('#outreach-email-body')?item?.channel==='linkedin':card.querySelector('#outreach-linkedin')?item?.channel!=='linkedin':false;});
- if(item?.messageStudioDraft&&item.channel!=='linkedin'){q('approve-outreach').textContent=item.approved?'Approved ✓':'Approve message';q('approve-outreach').disabled=Boolean(item.approved)||Boolean(item.localizationApprovalBlocked)||missing.length>0;}
+ if(item?.messageStudioDraft&&item.channel!=='linkedin'){if(!item.approved){q('outreach-approval-label').textContent=missing.includes('calendly')?'Add your Calendly link before approval':item.localizationApprovalBlocked?'Generate a message before approval':'Review your draft before approval';q('outreach-approval-help').textContent=item.localizationMessage||'Sending is a separate action in Delivery.';}q('approve-outreach').textContent=item.approved?'Approved ✓':'Approve message';q('approve-outreach').disabled=Boolean(item.approved)||Boolean(item.localizationApprovalBlocked)||missing.length>0;}
 }
 function prepareStudioBuyer(candidate,person){const old=currentItem();if(old?.dossier&&old.selectedPersonId===person.id&&old.channel===handoffContact.channel){renderAll();return;}
  const dossierCandidate={...candidate,people:[{...person,...handoffContact.contact,id:person.id,name:person.publicName||person.name,email:handoffContact.contact.work_email||handoffContact.contact.normalized_email||''}]};
