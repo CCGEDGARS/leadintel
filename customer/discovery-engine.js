@@ -1188,7 +1188,8 @@
     const identities=new Set();
     const ranked=eligible.map(person=>{const match=roleRelevance(person,buyerSelectionRoles(profile));return match?{...person,buyerRelevanceScore:Math.max(1,Math.min(100,Math.round(match.score))),matchedBuyerRole:match.role,buyerQualification:qualifyBuyer(person,profile,candidate)}:null;}).filter(Boolean).filter(person=>person.buyerQualification.eligible).sort((a,b)=>b.buyerQualification.total-a.buyerQualification.total||b.buyerRelevanceScore-a.buyerRelevanceScore).filter(person=>{const key=clean(person.publicName||person.name).toLowerCase()+'|'+clean(person.organization).toLowerCase();if(identities.has(key))return false;identities.add(key);return true;});
     const supportedExecutive=person=>isExecutiveBuyer(person)&&(person.identitySource==='apollo'||person.identityEvidenceDate||candidate.domain&&companyIdentityDomain(person.publicNameUrl)===companyIdentityDomain(candidate.domain));
-    const executives=ranked.filter(supportedExecutive).slice(0,2);
+    const leaders=ranked.filter(supportedExecutive),sponsor=leaders.find(person=>/\bCEO\b|chief executive|managing director|koncernchef|verkställande direktör|^(?:owner|business owner|managing partner)$/i.test(person.title))||leaders[0];
+    const executives=[sponsor,...leaders.filter(person=>person!==sponsor)].filter(Boolean).slice(0,2);
     const functional=ranked.filter(person=>!isExecutiveBuyer(person));
     const purchasing=functional.find(person=>buyerFunction(person.matchedBuyerRole||person.title)==='Procurement / sourcing');
     const operational=functional.find(person=>person!==purchasing&&buyerFunction(person.matchedBuyerRole||person.title)!=='Procurement / sourcing');
@@ -1244,6 +1245,7 @@
   function qualifyBuyer(person={},profile={},candidate={},options={}){
     const roles=buyerSelectionRoles(profile),match=roleRelevance(person,roles),source=normalizeUrl(person.publicNameUrl)||normalizeLinkedInUrl(person.publicLinkedinUrl||person.linkedin_url),domain=companyIdentityDomain(candidate.domain),full=hasFullBuyerName(person.publicName||person.name),employer=!candidate.company||companyNameMatches(person.organization,candidate.company),directory=person.identitySource==='apollo';
     const blocked=[];
+    if(/^(?:Close|Menu|Management|Leadership|Read more|Stäng|Läs mer|Koncernledning)\s/iu.test(clean(person.publicName||person.name)))blocked.push('Identity contains a website control label; research again');
     if(!full||person.identityStatus==='pending'||person.nameVerification==='pending')blocked.push('Full identity unresolved');
     if(person.opportunityScope?.status==='review_required')blocked.push(person.opportunityScope.reason||'Opportunity responsibility requires review');
     const normalizeMarket=value=>clean(value).toLowerCase().replace(/^(?:uk|great britain|england|scotland|wales)$/,'united kingdom').replace(/^sverige$/,'sweden');
@@ -1309,9 +1311,9 @@
     for(const row of rows){
       const url=normalizeUrl(row.url||row.metadata?.sourceURL);
       if(!profile.companyDomain||companyIdentityDomain(url)!==companyIdentityDomain(profile.companyDomain))continue;
-      const text=clean(row.markdown||row.content||row.description,10000);
-      const claim=new RegExp("([\\p{Lu}][\\p{L}’'-]+(?:\\s+[\\p{Lu}][\\p{L}’'-]+){1,3})\\s+(?:is|är)\\s+([^.!?\\n]{2,100}?)\\s+(?:of|for|at|för|på|av)\\s+"+escaped+"(?=\\s*(?:since|sedan|[,.]|$))",'gu');
-      for(const match of text.matchAll(claim))if(isExecutiveBuyer({title:match[2]}))officialClaims.push({...row,title:match[1]+' | '+match[2].replace(/^the /,'')+' | '+companyText,description:match[0]});
+      const text=String(row.markdown||row.content||row.description||'').slice(0,10000).replace(/[*_]/g,'');
+      const claim=new RegExp("(?:^|[.!?\\n])\\s*([\\p{Lu}][\\p{L}’'-]+(?:\\s+[\\p{Lu}][\\p{L}’'-]+){1,3})\\s+(?:is|är)\\s+([^.!?\\n]{2,100}?)\\s+(?:of|for|at|för|på|av)\\s+"+escaped+"(?=\\s*(?:since|sedan|[,.]|$))",'gu');
+      for(const match of text.matchAll(claim))if(isExecutiveBuyer({title:match[2]}))officialClaims.push({...row,title:match[1].replace(/^(?:(?:Close|Menu|Management|Leadership|Koncernledning|Stäng)\s+)+/u,'')+' | '+match[2].replace(/^the /,'')+' | '+companyText,description:match[0]});
       if(/management|leadership|koncernledning|ledning/i.test(url))for(const match of String(row.markdown||row.content||'').matchAll(/#{2,4}\s+([\p{Lu}][\p{L}’'-]+(?:[ \t]+[\p{Lu}][\p{L}’'-]+){1,3})[ \t]*\n+[ \t]*([^\n]{3,120})/gu))if(isExecutiveBuyer({title:match[2]}))officialClaims.push({...row,title:match[1]+' | '+match[2]+' | '+companyText,description:match[1]+' is '+match[2]+' at '+companyText});
     }
     for(const [index,row] of [...officialClaims,...rows].entries()){
