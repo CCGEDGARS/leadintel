@@ -5,7 +5,7 @@
     1:['Add your company website and target market','Enter your website, select the market where you want to find customers, then continue to Profile.'],
     3:['Review and approve your company profile','Check the evidence and commercial answers, make any corrections, then approve the profile to continue.'],
     4:['Choose your customers and buying signals','Review market findings from Profile, select customer segments and buying signals, then save your strategy and continue to Companies.'],
-    6:['Prepare and approve a relevant message','Choose a saved opportunity, build its dossier, review the draft, and approve the message before delivery.'],
+    6:['Prepare and approve a relevant message','Review the selected buyer and core information, choose a writing approach, then generate and edit your message.'],
     7:['Send the approved message and record the outcome','Choose an approved opportunity, confirm delivery yourself, then record replies and real sales progress.']
   };
   function insert(section,title,detail){
