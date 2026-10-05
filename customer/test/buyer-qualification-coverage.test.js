@@ -76,7 +76,7 @@ test('equivalent procurement leadership titles outrank managers on comparable ev
   const c={company:organization,domain:'example.com'},p={decisionMakers:'Project Manager; Procurement Director; Engineering Director'};
   const rows=['Project Manager','Head of Procurement','Procurement Director','Head of Engineering'].map((title,i)=>buyer({id:String(i),name:'Anna Buyer '+String.fromCharCode(65+i)+'sson',title,organization,identityEvidenceDate:'2026-10-01'}));
   const scores=rows.map(row=>D.qualifyBuyer(row,p,c,{now:'2026-10-04'}));
-  assert.equal(scores[1].breakdown.role.points,25);assert.equal(scores[1].total,scores[2].total);assert.ok(scores[1].total>scores[0].total);assert.ok(scores[3].total>scores[0].total);
+  assert.equal(scores[1].breakdown.role.points,20);assert.equal(scores[1].total,scores[2].total);assert.ok(scores[1].total>scores[0].total);assert.ok(scores[3].total>scores[0].total);
   assert.match(scores[1].breakdown.authority.basis,/inferred.*unconfirmed/);assert.ok(scores[1].gaps.includes('Actual purchasing authority unconfirmed'));
   assert.equal(D.rankedBuyerShortlist(rows,p,c).people[0].title,'Head of Procurement');
   const deputy=D.qualifyBuyer({...rows[1],title:'Deputy Head of Procurement'},p,c,{now:'2026-10-04'});assert.ok(deputy.total<scores[1].total);
@@ -86,8 +86,8 @@ test('equivalent procurement leadership titles outrank managers on comparable ev
 test('authority-weighted scores preserve their model version and component limits through reload and CRM',()=>{
  const C=require('../crm-engine.js'),p={decisionMakers:'Procurement Director'},person=buyer({title:'Head of Procurement'});person.buyerQualification=D.qualifyBuyer(person,p,company);
  const saved=D.normalizeDiscoveryState({selectedProspects:[{...company,buyerSearchMode:'user_selected_target',people:[person]}]}).selectedProspects[0];
- assert.deepEqual(saved.people[0].buyerQualification,person.buyerQualification);assert.equal(saved.people[0].buyerQualification.version,3);
- assert.equal(saved.people[0].buyerQualification.breakdown.authority.max,25);assert.equal(C.mapDiscoveryCandidateToCrm(saved).intelligence.research_snapshot.buyerResearch.buyers[0].qualification.version,3);
+ assert.deepEqual(saved.people[0].buyerQualification,person.buyerQualification);assert.equal(saved.people[0].buyerQualification.version,4);
+ assert.equal(saved.people[0].buyerQualification.breakdown.authority.max,25);assert.equal(C.mapDiscoveryCandidateToCrm(saved).intelligence.research_snapshot.buyerResearch.buyers[0].qualification.version,4);
 });
 test('foreign-country and subsidiary buyers remain reviewable but cannot enter the highlighted opportunity shortlist',()=>{
  const candidate={company:'Example',domain:'example.com',market:'Sweden'},profile={decisionMakers:'Engineering Manager; Operations Director'};

@@ -238,7 +238,9 @@
       "contains": [
         "function buyerResearchAssessment(person={},options={})",
         "Purchasing / supplier selection",
-        "version:3,decisionRole"
+        "version:4,decisionRole",
+        "function buyerDecisionEvidence(person={},candidate={},options={})",
+        "decisionEvidence:safeDecisionEvidence(person.decisionEvidence)"
       ]
     },
     {
