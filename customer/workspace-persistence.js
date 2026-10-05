@@ -114,7 +114,7 @@
     return {status:"active",url:activation.url,title:activation.title||source.title||"",description:activation.description||"",activatedAt:activation.activatedAt||"",contentChars:Number(activation.contentChars)||String(source.text||"").length,source:{type:"website",url:activation.url,title:activation.title||source.title||"",text:String(source.text||""),status:"ready"}};
   }
   function snapshotFromServerPayload(payload={},options={}){
-    if(!isObject(payload))return null;const data={};
+    if(!isObject(payload))return null;payload=root.LeadIntelStateBudget?.restoreFromSync?.(payload)||payload;const data={};
     if(isObject(payload.main))data["leadintel_customer_v2_state"]=JSON.stringify(payload.main);
     if(isObject(payload.discovery))data["leadintel_customer_v2_discovery"]=JSON.stringify(payload.discovery);
     if(isObject(payload.outreach))data["leadintel_customer_v2_outreach"]=JSON.stringify(payload.outreach);

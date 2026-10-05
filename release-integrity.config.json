@@ -332,6 +332,17 @@
         "data-research-executive",
         "20261005-committee-2plus2-v1"
       ]
+    },
+    {
+      "id": "nested-research-state-sync",
+      "type": "text",
+      "url": "/customer/state-budget.js",
+      "status": 200,
+      "contains": [
+        "leadintel-discovery-refs-v2",
+        "function packNestedDiscovery(",
+        "function restoreNestedDiscovery("
+      ]
     }
   ],
   "retry": {

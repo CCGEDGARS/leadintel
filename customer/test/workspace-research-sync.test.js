@@ -58,7 +58,7 @@ test('repeated discovery references survive the real save and hydration boundary
  const payload={main:{notes:'x'.repeat(360*1024)},discovery:{candidates:[company],selectedProspects:[company],pipeline:[company]},outreach:{},delivery:{},meta:{discovery:{}}};
  let saved;const values=localValues(payload),root=load(values,async(input,options)=>{if(options.method==='PUT'){saved=JSON.parse(options.body);return new Response(JSON.stringify({saved:true,version:8}));}return new Response(JSON.stringify({version:8,payload:saved.payload}));});
  await root.fetch(endpoint,{method:'PUT',body:JSON.stringify({payload}),leadintelSaveIntent:true,leadintelExplicitSave:true});
- assert.equal(saved.payload.discovery.format,'leadintel-discovery-refs-v1');assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),false);
+ assert.equal(saved.payload.discovery.format,'leadintel-discovery-refs-v2');assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),false);
  values.set('leadintel_customer_v2_server_versions',JSON.stringify({w1:8}));await root.fetch(endpoint,{method:'GET'});assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),false);
  assert.deepEqual(budget.restoreFromSync(saved.payload).discovery,payload.discovery);
 });
