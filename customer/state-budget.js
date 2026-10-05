@@ -121,7 +121,9 @@
       }
       return Object.fromEntries(entries);
     }
-    return expand(value.value);
+    const restored=expand(value.value);
+    if(!restored||typeof restored!=='object'||Array.isArray(restored))invalid();
+    return restored;
   }
   function packBuyerTraces(value,key=''){
     if(key==='resultDiagnostics'&&Array.isArray(value)&&value.length>=20&&value.every(row=>row&&typeof row==='object'&&!Array.isArray(row))){

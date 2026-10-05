@@ -105,6 +105,8 @@ test('nested company views and unique contact ledgers sync losslessly across rep
 });
 test('nested research decoding rejects cycles, invalid keys and invalid reference indices and reads legacy references',()=>{
  const packed=value=>({discovery:{format:'leadintel-discovery-refs-v2',keys:['name'],values:[],value}});
+ assert.throws(()=>budget.restoreFromSync(packed(undefined)),/Invalid stored discovery research references/);
+ assert.throws(()=>budget.restoreFromSync(packed('invalid root')),/Invalid stored discovery research references/);
  assert.throws(()=>budget.restoreFromSync(packed([0,2])),/Invalid stored discovery research references/);
  assert.throws(()=>budget.restoreFromSync(packed([1,5,'Buyer'])),/Invalid stored discovery research references/);
  assert.throws(()=>budget.restoreFromSync(packed([1,0,'Buyer',0,'Duplicate'])),/Invalid stored discovery research references/);
