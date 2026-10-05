@@ -81,7 +81,7 @@ test('server hydration restores packed buyer decisions before writing local appl
  const rows=Array.from({length:30},(_,i)=>({index:i,url:'https://example.com/team',title:'Repeated sourced title '.repeat(30),accepted:i%2===0}));
  const payload=budget.prepareForSync({main:{importantNotes:'x'.repeat(450*1024)},discovery:{buyerDiscovery:{resultDiagnostics:rows}},meta:{discovery:{scriptBuyer:{personId:'buyer-9'}}}}).payload;
  assert.equal(payload.discovery.buyerDiscovery.resultDiagnostics.format,'leadintel-buyer-trace-v1');
- const storage=new Map(),context={root:{LeadIntelStateBudget:budget},suppress:false,KEYS:{main:'main',discovery:'discovery',outreach:'outreach',delivery:'delivery',meta:'meta'},localStorage:{setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)}};
+ const storage=new Map(),context={readSnapshot:()=>null,root:{LeadIntelStateBudget:budget},suppress:false,KEYS:{main:'main',discovery:'discovery',outreach:'outreach',delivery:'delivery',meta:'meta'},localStorage:{setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)}};
  vm.createContext(context);vm.runInContext(source.slice(source.indexOf('  function applyPayload('),source.indexOf('  async function fetchSession(')),context);context.applyPayload(payload);
  assert.deepEqual(JSON.parse(storage.get('discovery')).buyerDiscovery.resultDiagnostics,rows);
  assert.equal(JSON.parse(storage.get('meta')).scriptBuyer.personId,'buyer-9');
@@ -117,7 +117,7 @@ test('nested research decoding rejects cycles, invalid keys and invalid referenc
 });
 test('saved server snapshots restore wire-packed discovery before creating a merge base',()=>{
  const vm=require('node:vm'),source=fs.readFileSync(path.join(__dirname,'../workspace-persistence.js'),'utf8');
- const storage=new Map(),context={root:{LeadIntelStateBudget:budget,localStorage:{setItem:(k,v)=>storage.set(k,v)},LeadIntelServerBridge:{workspace:{id:'workspace-1'}}},isObject:value=>Boolean(value&&typeof value==='object'&&!Array.isArray(value)),buildActivationRecord:()=>null,markExplicitlySaved:()=>true,sameWorkspaceData:()=>true,currentWorkspaceData:()=>({}),dirtySinceSave:false,SNAPSHOT_KEY:'snapshot'};
+ const storage=new Map(),context={readSnapshot:()=>null,root:{LeadIntelStateBudget:budget,localStorage:{setItem:(k,v)=>storage.set(k,v)},LeadIntelServerBridge:{workspace:{id:'workspace-1'}}},isObject:value=>Boolean(value&&typeof value==='object'&&!Array.isArray(value)),buildActivationRecord:()=>null,markExplicitlySaved:()=>true,sameWorkspaceData:()=>true,currentWorkspaceData:()=>({}),dirtySinceSave:false,SNAPSHOT_KEY:'snapshot'};
  vm.createContext(context);vm.runInContext(source.slice(source.indexOf('  function snapshotFromServerPayload('),source.indexOf('  function jsonResponse(')),context);
  context.snapshotFromServerPayload({main:{website:'https://seller.example/'},discovery:{format:'leadintel-discovery-refs-v2',keys:['people','name'],values:[],value:[1,0,[2,[1,1,'Buyer']]]}},{version:5});
  assert.deepEqual(JSON.parse(JSON.parse(storage.get('snapshot')).data.leadintel_customer_v2_discovery),{people:[{name:'Buyer'}]});

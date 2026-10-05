@@ -10,7 +10,7 @@ function load(fetchImpl,{withBridge=false,quota=false}={}){
  root.window=root;root.globalThis=root;
  vm.runInNewContext(fs.readFileSync(require.resolve('../workspace-sync.js'),'utf8'),root);
  vm.runInNewContext(persistence,root);
- if(withBridge){vm.runInNewContext(bridgeSource.replace('root.LeadIntelServerBridge=bridge;', 'root.__hydrate=hydrateAuthenticated;root.LeadIntelServerBridge=bridge;'),root);Object.assign(root.LeadIntelServerBridge,{session:{authenticated:true},workspace:{id:'w1'},stateVersion:3,conflict:true,conflictState:{version:3,payload:{main:{website:'old.example'}}}});}
+ if(withBridge){vm.runInNewContext(bridgeSource.replace('root.LeadIntelServerBridge=bridge;', 'root.__hydrate=hydrateAuthenticated;root.LeadIntelServerBridge=bridge;'),root);Object.assign(root.LeadIntelServerBridge,{ready:true,session:{authenticated:true},workspace:{id:'w1'},stateVersion:3,conflict:true,conflictState:{version:3,payload:{main:{website:'old.example'}}}});}
  return {root,values,events};
 }
 const endpoint='https://leadintel.ccgroup.lv/api/customer/state?workspace_id=w1';
@@ -128,4 +128,47 @@ test('unsaved recovery response restores review state and retains the local draf
  const {root,values}=load(async(input,options)=>new Response(JSON.stringify(options.method==='PUT'?{saved:false,version:4}:{version:4,payload:{main:{website:'Remote'}}})),{withBridge:true});
  const result=await root.LeadIntelServerBridge.resolveConflictKeepLocal();
  assert.equal(result.resolved,false);assert.equal(root.LeadIntelServerBridge.conflict,true);assert.equal(JSON.parse(values.get(MAIN)).answers.offer,'Local offer');assert.match(result.error,/not completed/);
+});
+
+test('a save in a second tab uses the shared acknowledged version instead of creating a false 409',async()=>{
+ const puts=[];const {root,values}=load(async(input,options)=>{const body=JSON.parse(options.body);puts.push(body);return new Response(JSON.stringify({version:5,payload:body.payload}));},{withBridge:true});
+ const base=establishBase(root,values,4);values.set('leadintel_customer_v2_server_versions',JSON.stringify({w1:4}));
+ values.set(MAIN,JSON.stringify({...base.main,answers:{offer:'Next tab edit'}}));Object.assign(root.LeadIntelServerBridge,{stateVersion:3,conflict:false});
+ assert.equal((await root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true})).saved,true);assert.equal(puts[0].version,4);
+});
+test('safe reload merge tolerates legacy compacted research without erasing newer cloud buyers',async()=>{
+ const budget=require('../state-budget.js');let server;const {root,values}=load(async()=>new Response(JSON.stringify(server)),{withBridge:true});root.LeadIntelStateBudget=budget;
+ const base=establishBase(root,values);base.discovery={rawResults:[{url:'https://buyer.example/news',text:'Evidence '.repeat(90000)}],people:[{id:'a',name:'Anna Buyer'}]};
+ values.set('leadintel_customer_v2_discovery',JSON.stringify(base.discovery));root.LeadIntelWorkspacePersistence.snapshotFromServerPayload(budget.prepareForSync(base).payload,{workspaceId:'w1',version:3,localData:root.LeadIntelWorkspacePersistence.currentWorkspaceData(),dirty:false});
+ // Simulate an already-saved pre-fix snapshot: it contained only full local data.
+ const key='leadintel_customer_v2_workspace_saved_snapshot_v1',old=JSON.parse(values.get(key));delete old.server_payload;values.set(key,JSON.stringify(old));
+ server={version:4,payload:budget.prepareForSync(base).payload};server.payload.discovery.people.push({id:'b',name:'New Buyer'});
+ values.set('leadintel_customer_v2_discovery_meta',JSON.stringify({stage:5}));Object.assign(root.LeadIntelServerBridge,{conflict:false});
+ assert.equal(await root.__hydrate(),false);assert.equal(root.LeadIntelServerBridge.conflict,false);
+ assert.equal(JSON.parse(values.get('leadintel_customer_v2_discovery')).people.length,2);assert.equal(JSON.parse(values.get('leadintel_customer_v2_discovery_meta')).stage,5);
+});
+
+test('autosave during authenticated startup retains the existing cloud baseline until hydration is ready',async()=>{
+ const {root,values}=load(async()=>new Response('{}'));const base=establishBase(root,values),key='leadintel_customer_v2_workspace_saved_snapshot_v1',snapshot=values.get(key);
+ let timeout;root.setTimeout=(fn,ms)=>{if(ms===1800)timeout=fn;return 1;};root.LeadIntelServerBridge={session:{authenticated:true},workspace:null,ready:false};
+ values.set(MAIN,JSON.stringify({...base.main,answers:{offer:'New draft during slow startup'}}));
+ const saving=root.LeadIntelWorkspacePersistence.saveWorkspace({automatic:true});await new Promise(resolve=>setImmediate(resolve));timeout?.();
+ assert.equal(await saving,false);assert.equal(values.get(key),snapshot,'startup must not replace a cloud baseline with a browser-only snapshot');
+ assert.equal(root.LeadIntelWorkspacePersistence.syncedBase('w1').version,3);
+});
+
+test('a late hydration read cannot replace data already acknowledged at a newer shared revision',async()=>{
+ const {root,values}=load(async()=>new Response(JSON.stringify({version:8,payload:{main:{website:'old.example'}}})),{withBridge:true});
+ establishBase(root,values,9);values.set('leadintel_customer_v2_server_versions',JSON.stringify({w1:9}));values.delete('leadintel_customer_v2_server_dirty');Object.assign(root.LeadIntelServerBridge,{stateVersion:9,conflict:false});
+ assert.equal(await root.__hydrate(),true);assert.equal(JSON.parse(values.get(MAIN)).website,'https://seller.example');assert.equal(root.LeadIntelServerBridge.stateVersion,9);
+});
+test('an older save acknowledgement cannot roll back a newer shared revision or its dirty baseline',async()=>{
+ let finish;const {root,values}=load(()=>new Promise(resolve=>finish=()=>resolve(new Response(JSON.stringify({version:4,saved:true})))),{withBridge:true});
+ const base=establishBase(root,values);Object.assign(root.LeadIntelServerBridge,{stateVersion:3,conflict:false});
+ const saving=root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});await new Promise(resolve=>setImmediate(resolve));
+ values.set(MAIN,JSON.stringify({...base.main,answers:{offer:'Latest acknowledged edit'}}));
+ root.LeadIntelWorkspacePersistence.snapshotFromServerPayload({...base,main:JSON.parse(values.get(MAIN))},{workspaceId:'w1',version:9,localData:root.LeadIntelWorkspacePersistence.currentWorkspaceData(),dirty:false});
+ values.set('leadintel_customer_v2_server_versions',JSON.stringify({w1:9}));finish();await saving;
+ assert.equal(root.LeadIntelServerBridge.stateVersion,9);assert.equal(root.LeadIntelWorkspacePersistence.syncedBase('w1').version,9);
+ assert.equal(JSON.parse(values.get('leadintel_customer_v2_server_dirty')).base_version,9);
 });

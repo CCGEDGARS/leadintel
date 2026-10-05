@@ -25,3 +25,9 @@ test('customer state enforces the 500 KB cap',()=>{
   assert.ok(customerStateSize(payload)>MAX_CUSTOMER_STATE_BYTES);
   assert.throws(()=>validateCustomerStateWrite(emptyCustomerState('ws'),{expectedVersion:0,schemaVersion:1,payload}),/500 KB/);
 });
+test('a save acknowledges its own committed revision even if another session writes before the response',async()=>{
+ const {putCustomerState}=await import('../src/customer-state.js');let reads=0;
+ const env={DB:{prepare(sql){return {bind(...args){return {async first(){reads++;return reads===1?{workspace_id:'w1',schema_version:1,version:3,payload_json:'{"main":{"offer":"Base"}}'}:{workspace_id:'w1',schema_version:1,version:5,payload_json:'{"main":{"offer":"Later other session"}}'};},async run(){assert.match(sql,/WHERE workspace_id=\? AND version=\?/);assert.equal(args.at(-1),3);return {meta:{changes:1}};}};}};}}};
+ const result=await putCustomerState(env,{workspaceId:'w1',userId:'u1',expectedVersion:3,schemaVersion:1,payload:{main:{offer:'My committed edit'}}});
+ assert.equal(result.conflict,false);assert.equal(result.state.version,4);assert.equal(result.state.payload.main.offer,'My committed edit');
+});
