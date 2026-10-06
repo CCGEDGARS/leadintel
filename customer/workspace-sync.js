@@ -38,7 +38,7 @@
       if(NAVIGATION_PATHS.has(path))return l;
       const field=path.split('.').at(-1);
       if(field==='buyerQualification')return undefined; // Recomputed from preserved buyer evidence.
-      if(ATOMIC_FIELDS.has(field)){conflicts.push(path);return l;}
+      if(ATOMIC_FIELDS.has(field)||/^template-[1-5]$/.test(field)){conflicts.push(path);return l;}
       const maps=recordMaps([bl,l,br,r],path);
       if(maps){
         const [bm,lm,sm,rm]=maps,output=[];
