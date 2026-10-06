@@ -1,6 +1,6 @@
 const SUPPORT_MODULES=[
   './state-budget.js?v=20261005-nested-research-sync-v3',
-  './website-input-sync.js?v=20260930-setup-focus-v1',
+  './website-input-sync.js?v=20261006-sender-identity-v1',
   './custom-market-input-hygiene.js?v=20260903-password-manager-isolation-v5',
   './crm-engine.js?v=20260828-master-crm-v1&commercial-evidence=20261002-v2&buyer-quality=20261002-v5&buyer-research=20261004-v3&public-contacts=20261004-v2',
   './sync-conflict-hygiene.js?v=20260901-stale-blank-conflict-v1',
@@ -25,7 +25,7 @@ const SUPPORT_MODULES=[
   './lookalike-discovery.js?v=20260930-contact-suppression-v1&opportunity-context=1&reference-discovery=5&reference-similarity=20260930-v1&company-evidence=20261002-v1&commercial-evidence=20261002-v2&buyer-quality=20261002-v5&qualification=20261003-qualified-v2',
   './intelligence-sources-ui.js?v=20260924-friendly-workflow-labels-v1&reset-center=1&strategy=20261001-v2',
   './profile-action-runtime.js?v=20260924-friendly-workflow-labels-v1',
-  './outreach-automation-loader.js?v=20261002-settings-v5&delivery-policy-recovery=1&approved-workflow=20261001-v1&qualification=20261003-qualified-v2&contact-policy=20261004-v3'
+  './outreach-automation-loader.js?v=20261002-settings-v5&delivery-policy-recovery=1&approved-workflow=20261001-v1&qualification=20261003-qualified-v2&contact-policy=20261004-v3&sender-identity=20261006-v2'
 ];
 
 async function loadSupportModules(){
