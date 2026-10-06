@@ -53,7 +53,7 @@ test('profile fields map the brief to one downstream contract',()=>{
 
 test('Step 2 entry point loads the versioned canonical schema first',()=>{
   const html=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');
-  assert.match(html,/step2-brief-schema\.js\?foundation=20261006-v1&v=20260916-commercial-brief-v1/);
+  assert.match(html,/step2-brief-schema\.js\?foundation=20261006-v2&v=20260916-commercial-brief-v1/);
   assert.ok(html.indexOf('step2-brief-schema.js')<html.indexOf('profile-engine.js'));
 });
 
