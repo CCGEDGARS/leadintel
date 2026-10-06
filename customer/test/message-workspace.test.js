@@ -32,3 +32,9 @@ test('channel changes show only the matching editor and actions; a draft is neve
 test('style cards drive the canonical select with a change event and accessible selected state',()=>{
  const {document,w}=mounted();let changes=0;const select=document.getElementById('message-mode');select.addEventListener('change',()=>changes++);w.LeadIntelMessageWorkspace.paintStyles(document);document.querySelector('[data-writing-style="friendly"]').click();assert.equal(select.value,'friendly');assert.equal(changes,1);assert.equal(document.querySelector('[data-writing-style="friendly"]').getAttribute('aria-pressed'),'true');
 });
+
+test('subject previews use recipient and sender values while unknown events stay explicit',()=>{
+ assert.equal(Workspace.subjectPreview('{{sender}}. {{company}}',{sender:'Alex',senderCompany:'Legal practice'}),'Alex. Legal practice');
+ assert.equal(Workspace.subjectPreview('Regarding {{development}}',{}),'Regarding [select a company fact]');
+ assert.equal(Workspace.subjectPreview('A practical idea for {{buyerCompany}}',{company:'Manufacturing team'}),'A practical idea for Manufacturing team');
+});

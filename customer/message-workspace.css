@@ -118,3 +118,13 @@ body:has(#step-6.active) .journey-stage-guide,body:has(#step-6.active) .stage-mi
 #message-studio .mw-reference-panel summary{color:#315d4c}
 #message-studio #linkedin-manual-actions>.primary-btn{margin-right:8px;font-size:13px}
 #message-studio .mw-styles .mw-style span{color:#718276}
+
+/* Keep the message above the fold; the sidebar already supplies stage navigation. */
+body:has(#step-6.active) .journey-dots{display:none}
+body:has(#step-6.active) .progress-head{display:none}
+body:has(#step-6.active) .steps{margin-top:0}
+body:has(#step-6.active) .steps li p{display:none}
+body:has(#step-6.active) .progress-panel{padding-top:24px}
+body:has(#step-6.active) .journey-compact{gap:8px}
+body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
+@media(max-width:720px){body:has(#step-6.active) .progress-panel{padding-top:12px;padding-bottom:12px}body:has(#step-6.active) .steps li{padding:8px;min-width:105px}body:has(#step-6.active) .steps li em,body:has(#step-6.active) .steps li button{display:none}body:has(#step-6.active) .process-map{display:none}}
