@@ -2281,7 +2281,7 @@ function loadOutreachModules(){
   });
   outreachLoading=load('outreach-engine',`outreach-engine.js?v=${OUTREACH_ASSET_VERSION}`)
     .then(()=>load('outreach-localization',`outreach-localization.js?v=${OUTREACH_ASSET_VERSION}`))
-    .then(()=>load('outreach-ui',`outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&delivery-modes=2&foundation=20261006-v1`,true))
+    .then(()=>load('outreach-ui',`outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&delivery-modes=2&foundation=20261006-v2`,true))
     .catch(error=>{outreachLoading=null;showToast(error.message);throw error;});
   return outreachLoading;
 }
