@@ -371,7 +371,8 @@
         "buyer-selection=20261005-bridge-v1",
         "function selectedEmailBuyer(",
         "Synchronization conflict: recipient selection was not saved.",
-        "selectOnly:true",
+        "scriptBuyer:choice,activeJourneyStage:6,visibleStep:6",
+        "data-buyer-selection-check",
         "await loadOutreachModules();"
       ]
     },
