@@ -44,7 +44,6 @@
       1:[
         step('website','Website activated',websiteActivated||filled(main.website),{action:'Activate the main company website'}),
         step('markets','Target markets selected',list(main.targetMarkets).some(filled),{action:'Select at least one target market'}),
-        step('brand','Brand and email identity configured',main.brandIdentity?.status==='ready',{optional:true,action:'Configure brand and email identity'}),
         step('evidence','Supporting evidence added',list(main.documents).length>0||list(main.additionalLinks).some(filled),{optional:true,action:'Add supporting files or links'})
       ],
       2:[
@@ -73,6 +72,7 @@
         step('people','Relevant buyers identified',candidates.some(item=>list(item?.people).length>0)||pipeline.some(item=>list(item?.people).length>0)||prospects.some(item=>list(item?.people).length>0),{action:'Find and qualify buyers for a selected company'})
       ],
       6:[
+        step('brand','Sender identity configured',main.brandIdentity?.status==='ready',{optional:true,action:'Configure sender identity in Messages'}),
         step('scenario',studio?'Core information and Calendly configured':'Core message approach approved',studio?studioReady:campaign.coreScenario?.status==='approved',{action:studio?'Review core information and add your Calendly link':'Review and save the core message approach'}),
         step('company','Company selected',Boolean(selectedItem),{action:'Choose a company selected for Buyers'}),
         step('dossier','Opportunity dossier built',Boolean(selectedItem?.dossier),{action:'Build the opportunity dossier'}),

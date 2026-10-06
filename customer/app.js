@@ -53,6 +53,7 @@ function loadState(){
     const base=LeadIntelProfile.normalizeSavedState(source);
     base.market=LeadIntelMarket.recoverInterruptedResearch(source.market||{});
     base.brandIdentity=globalThis.LeadIntelBrandIdentity?.normalize?.(source.brandIdentity||{})||null;
+    base.senderIdentityVersion=source.senderIdentityVersion===1?1:0;
     base.step=window.LeadIntelWorkspaceIsolation?.safeStep
       ?window.LeadIntelWorkspaceIsolation.safeStep(localStorage,base,source.step)
       :([1,2,3,4,5,6,7].includes(Number(source.step))?Number(source.step):base.step);
@@ -179,8 +180,14 @@ function initBrandIdentity(){
       state.brandIdentity=globalThis.LeadIntelBrandIdentity.normalize(identity);
       if(detail.persist===false){updateCompleteness();updateNavigationAvailability();return;}
       saveState();
+      window.dispatchEvent(new CustomEvent('leadintel:sender-identity-changed'));
     }
   });
+  globalThis.LeadIntelSenderIdentity={initialize(essentials){
+    if(!globalThis.LeadIntelSenderIdentityLocation?.migrate(state,essentials))return;
+    state.brandIdentity=globalThis.LeadIntelBrandIdentity.normalize(state.brandIdentity);
+    brandIdentityUI?.sync?.(state.brandIdentity);saveState();
+  }};
 }
 function readSources(){
   const previousWebsite=state.website;const enteredWebsite=LeadIntelProfile.normalizeUrl($("company-website").value);

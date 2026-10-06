@@ -42,7 +42,7 @@ function managedAsset(id = 'p'.repeat(43)) {
   };
 }
 
-test('Brand & Email Identity is collapsed immediately after Main company website with versioned dependencies', () => {
+test('Sender identity is staged outside Setup with versioned dependencies', () => {
   const websitePanel = html.indexOf('<h3>Main company website</h3>');
   const identityModule = html.indexOf('id="brand-identity"');
   const targetMarket = html.indexOf('id="target-market-selector"');
@@ -51,7 +51,7 @@ test('Brand & Email Identity is collapsed immediately after Main company website
   const uiScript = html.indexOf('brand-identity-ui.js?v=20260916-browser-logo-copy-v2');
   const appScript = html.indexOf('app.js?v=20260928-signal-research-plan-v1');
 
-  assert.ok(websitePanel >= 0 && websitePanel < identityModule && identityModule < targetMarket);
+  assert.ok(websitePanel >= 0 && websitePanel < targetMarket && targetMarket < identityModule);
   assert.match(html, /Add your logo and sender details so outreach emails look consistent and personal\./);
   assert.match(html, /id="brand-identity-toggle"[^>]*aria-expanded="false"/);
   assert.match(html, /id="brand-identity-body"[^>]*hidden/);
@@ -87,7 +87,7 @@ test('expanded markup keeps every identity and asset control visibly labelled', 
   assert.match(html, /accept="image\/png,image\/jpeg,image\/webp"/);
   assert.match(html, /Extract from website/);
   assert.match(html, /Preview email/);
-  assert.match(html, /Save brand identity/);
+  assert.match(html, /Save sender identity/);
 });
 
 test('controller reports Not configured, Draft, and Ready without affecting Step 1 eligibility', () => {
