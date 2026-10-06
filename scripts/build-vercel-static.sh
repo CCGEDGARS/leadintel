@@ -11,6 +11,9 @@ cp LeadIntel.html .vercel-static/LeadIntel.html
 cp -R v2/. .vercel-static/v2/
 cp -R customer/. .vercel-static/customer/
 cp -R demo/. .vercel-static/demo/
+if [[ -f customer/writing-reference-extractor.js ]]; then
+  node scripts/bundle-writing-reference-pdf.mjs
+fi
 
 # Test and server-runtime files are useful in the repository but must never be part of the public static artifact.
 rm -rf .vercel-static/customer/test

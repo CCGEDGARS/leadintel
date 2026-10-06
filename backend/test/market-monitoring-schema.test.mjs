@@ -16,6 +16,6 @@ test('market monitoring has durable configuration, run, evidence and alert ledge
 });
 
 test('Cloudflare schedule invokes due market monitoring',()=>{
-  assert.match(wrangler,/\[triggers\][\s\S]*crons\s*=\s*\["0 \* \* \* \*"\]/);
+  assert.match(wrangler,/\[triggers\][\s\S]*crons\s*=\s*\[[^\]]*"0 \* \* \* \*"/);
   assert.match(app,/async scheduled\([^)]*\)[\s\S]*runDueMarketMonitoring/);
 });

@@ -1,0 +1,4 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';
+import {validateWritingReference} from '../src/writing-reference-validation.js';
+test('recomputes text instead of trusting browser-supplied claims',async()=>{const bytes=new TextEncoder().encode('Ask one useful question.');const r=await validateWritingReference({bytes,mime:'text/plain',filename:'guide.txt',extracted:{sections:[{text:'invented results'}]}});assert.equal(r.extracted.sections[0].text,'Ask one useful question.');assert.match(r.sha256,/^[a-f0-9]{64}$/);assert.equal(r.bytes,bytes);});
+test('rejects executable filenames, MIME mismatches and empty guidance',async()=>{await assert.rejects(validateWritingReference({bytes:new TextEncoder().encode('x'),mime:'text/plain',filename:'guide.exe'}),/filename/i);await assert.rejects(validateWritingReference({bytes:new TextEncoder().encode(''),mime:'text/plain',filename:'guide.txt'}),/empty/i);});

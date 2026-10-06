@@ -36,7 +36,7 @@ test('production Worker declares its public Apollo callback URL and never stores
   assert.match(wrangler,/APOLLO_WEBHOOK_URL\s*=\s*"https:\/\/leadintel-api\.edgars-7e7\.workers\.dev\/api\/webhooks\/apollo\/crm-contact"/);
   assert.doesNotMatch(wrangler,/APOLLO_WEBHOOK_SECRET\s*=/);
   assert.doesNotMatch(wrangler,/BRAND_ASSET_IMPORT_HOSTS/,'disabled remote imports must not retain a misleading allowlist setting');
-  assert.doesNotMatch(wrangler,/\[\[r2_buckets\]\]/,'brand assets use the existing D1 deployment and must not require account-level R2 activation');
+  assert.doesNotMatch(wrangler,/binding\s*=\s*"BRAND_ASSETS_BUCKET"/,'brand assets stay on D1; writing references have their own private R2 binding');
 });
 
 test('Backend CI syntax-checks the signed Apollo webhook module and protects deployment workflow changes',()=>{
