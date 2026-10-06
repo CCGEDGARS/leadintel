@@ -5,11 +5,11 @@
 })(typeof globalThis!=="undefined"?globalThis:this,function(){
   "use strict";
 
-  const SCHEMA_VERSION=3;
+  const SCHEMA_VERSION=4;
   const GROUPS=Object.freeze([
     Object.freeze({id:"targeting",label:"Targeting",fields:Object.freeze(["priority_offers","ideal_customer","buyer_roles","exclusions"])}),
     Object.freeze({id:"signals",label:"Buying Signals",fields:Object.freeze(["buying_outcomes","buying_triggers"])}),
-    Object.freeze({id:"message",label:"Commercial Message",fields:Object.freeze(["value_proposition","differentiation","proof_points","objections"])})
+    Object.freeze({id:"message",label:"Commercial Message",fields:Object.freeze(["value_proposition","differentiation","proof_points","objections","delivery_approach","meeting_value"])})
   ]);
   const FIELD_IDS=Object.freeze(GROUPS.flatMap(group=>group.fields));
 
@@ -58,7 +58,9 @@
       valueProposition:clean(answers.value_proposition),
       differentiation:clean(answers.differentiation),
       proofPoints:clean(answers.proof_points),
-      commonObjections:clean(answers.objections)
+      commonObjections:clean(answers.objections),
+      deliveryApproach:clean(answers.delivery_approach),
+      meetingValue:clean(answers.meeting_value)
     };
   }
 
@@ -71,5 +73,6 @@
     const icps=(state.market?.icps||[]).map(icp=>icp.type==='core'||icp.id==='icp-core'?{...icp,...(changed.includes('ideal_customer')?{description:profile.idealCustomer}:{}),...(changed.includes('priority_offers')?{offers:profile.priorityOffers}:{}),...(changed.includes('buyer_roles')?{buyerRoles:profile.decisionMakers}:{}),...(changed.includes('exclusions')?{exclusions:profile.exclusions}:{})}:icp);
     return {...state,profile,approved:false,market:{...(state.market||{}),icps,strategyApproved:false,strategyApprovedAt:''}};
   }
-  return {applyAnswers,SCHEMA_VERSION,GROUPS,FIELD_IDS,migrateState,profileFields};
+  function confirmationMissing(state={},scope="message"){const migrated=migrateState(state);return FIELD_IDS.slice(0,scope==="research"?6:12).filter(id=>!migrated.answers[id]||!["user","accepted"].includes(migrated.answerStatus[id]));}
+  return {confirmationMissing,applyAnswers,SCHEMA_VERSION,GROUPS,FIELD_IDS,migrateState,profileFields};
 });
