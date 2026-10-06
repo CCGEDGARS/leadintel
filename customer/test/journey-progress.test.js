@@ -30,7 +30,7 @@ test('commercial journey derives completed substeps from real workspace outcomes
 
   const model=Journey.buildJourneyModel({main,discovery,outreach,delivery,currentStep:7,availability,websiteActivated:true});
 
-  assert.deepEqual(model.map(stage=>[stage.completed,stage.total]),[[4,4],[8,8],[4,4],[4,4],[1,1],[5,5],[5,5]]);
+  assert.deepEqual(model.map(stage=>[stage.completed,stage.total]),[[3,3],[8,8],[4,4],[4,4],[1,1],[6,6],[5,5]]);
   assert.equal(model[6].status,'current');
   assert.equal(model[6].nextAction,'Stage complete');
 });
@@ -44,7 +44,7 @@ test('current stage names the next required action without blocking on optional 
   assert.equal(model[0].nextAction,'Select at least one target market');
   assert.equal(model[0].requiredCompleted,1);
   assert.equal(model[0].requiredTotal,2);
-  assert.equal(model[0].steps.find(step=>step.id==='brand').optional,true);
+  assert.equal(model[5].steps.find(step=>step.id==='brand').optional,true);
 });
 
 test('an empty current stage is labelled not started until real progress exists',()=>{
