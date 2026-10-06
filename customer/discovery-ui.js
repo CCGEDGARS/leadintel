@@ -396,6 +396,7 @@ async function runCompanyDiscovery({targetOnly=false,savingMode=false,targetDoma
   if(recheckOnly)targetOnly=true;
   const main=mainState();
   if(!(main?.profile?.website||main?.website)){showToast("Add your company website first");return;}
+  if(window.LeadIntelStep2Brief?.confirmationMissing(main,'research').length){showToast('Review and confirm questions 1–6 in Profile before searching for companies');return false;}
   if(!window.LeadIntelTargeting?.isConfirmed(main)){
     window.LeadIntelTargeting?.focusRequired?.(window,main);
     showToast("Confirm the four required targeting answers in Profile before searching for companies");return false;
@@ -2280,7 +2281,7 @@ function loadOutreachModules(){
   });
   outreachLoading=load('outreach-engine',`outreach-engine.js?v=${OUTREACH_ASSET_VERSION}`)
     .then(()=>load('outreach-localization',`outreach-localization.js?v=${OUTREACH_ASSET_VERSION}`))
-    .then(()=>load('outreach-ui',`outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&delivery-modes=2&elevator-pitch=20261005-v2`,true))
+    .then(()=>load('outreach-ui',`outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&delivery-modes=2&foundation=20261006-v1`,true))
     .catch(error=>{outreachLoading=null;showToast(error.message);throw error;});
   return outreachLoading;
 }

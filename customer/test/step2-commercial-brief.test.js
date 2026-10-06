@@ -5,15 +5,15 @@ const path=require('node:path');
 
 const ROOT=path.join(__dirname,'..');
 
-test('Commercial Intelligence Brief exposes ten fields in three groups',()=>{
+test('Commercial Intelligence Brief exposes twelve fields in three groups',()=>{
   const Brief=require('../step2-brief-schema.js');
   assert.deepEqual(Brief.GROUPS.map(group=>[group.id,group.fields.length]),[
-    ['targeting',4],['signals',2],['message',4]
+    ['targeting',4],['signals',2],['message',6]
   ]);
   assert.deepEqual(Brief.FIELD_IDS,[
     'priority_offers','ideal_customer','buyer_roles','exclusions',
     'buying_outcomes','buying_triggers','value_proposition',
-    'differentiation','proof_points','objections'
+    'differentiation','proof_points','objections','delivery_approach','meeting_value'
   ]);
 });
 
@@ -47,13 +47,13 @@ test('profile fields map the brief to one downstream contract',()=>{
     priorityOffers:'Installation',idealCustomer:'Manufacturers',decisionMakers:'Operations Director',
     exclusions:'Private consumers',customerPainPoints:'Reduce downtime',buyingOutcomes:'Reduce downtime',
     buyingTriggers:'New production line',valueProposition:'Fast installation',differentiation:'Certified specialists',
-    proofPoints:'ISO 9001',commonObjections:'Implementation downtime'
+    proofPoints:'ISO 9001',commonObjections:'Implementation downtime',deliveryApproach:'',meetingValue:''
   });
 });
 
 test('Step 2 entry point loads the versioned canonical schema first',()=>{
   const html=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');
-  assert.match(html,/step2-brief-schema\.js\?v=20260916-commercial-brief-v1/);
+  assert.match(html,/step2-brief-schema\.js\?foundation=20261006-v1&v=20260916-commercial-brief-v1/);
   assert.ok(html.indexOf('step2-brief-schema.js')<html.indexOf('profile-engine.js'));
 });
 
@@ -77,7 +77,7 @@ test('each brief group exposes a reviewed progress counter',()=>{
   const html=fs.readFileSync(path.join(ROOT,'index.html'),'utf8');
   assert.match(html,/data-brief-progress="targeting">0\/4 reviewed/);
   assert.match(html,/data-brief-progress="signals">0\/2 reviewed/);
-  assert.match(html,/data-brief-progress="message">0\/4 reviewed/);
+  assert.match(html,/data-brief-progress="message">0\/6 reviewed/);
   const readiness=fs.readFileSync(path.join(ROOT,'step2-readiness-engine.js'),'utf8');
   assert.match(readiness,/data-brief-progress/);
   assert.match(readiness,/group\.fields\.filter/);

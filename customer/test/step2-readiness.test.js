@@ -25,15 +25,16 @@ const answers={
   value_proposition:'Improve sales execution with a practical implementation system',
   differentiation:'Practical sales systems combined with AI coaching',
   proof_points:'Three published sales books and established enterprise clients',
-  objections:'Time commitment and uncertainty about implementation'
+  objections:'Time commitment and uncertainty about implementation',
+  delivery_approach:'Training followed by supported implementation',meeting_value:'Review actual sales process data'
 };
 const confirmed=Object.fromEntries(Object.keys(answers).map(id=>[id,'user']));
 const evidence=[{type:'website',url:'https://example.com/',title:'Example',text:'Readable official company evidence.'}];
 
-test('Step 2 uses the ten commercial decisions LeadIntel needs downstream',()=>{
+test('Step 2 uses the twelve commercial decisions LeadIntel needs downstream',()=>{
   assert.deepEqual(readiness.QUESTION_IDS,[
     'priority_offers','ideal_customer','buyer_roles','exclusions','buying_outcomes',
-    'buying_triggers','value_proposition','differentiation','proof_points','objections'
+    'buying_triggers','value_proposition','differentiation','proof_points','objections','delivery_approach','meeting_value'
   ]);
   assert.deepEqual(profile.QUESTION_IDS,readiness.QUESTION_IDS);
   assert.deepEqual(research.QUESTION_IDS,readiness.QUESTION_IDS);
@@ -46,9 +47,9 @@ test('Step 2 uses the ten commercial decisions LeadIntel needs downstream',()=>{
 test('profile readiness counts only confirmed strategic answers and has transparent weights',()=>{
   const answerStatus={...confirmed,buying_triggers:'draft',objections:'draft'};
   const summary=readiness.getReadinessSummary({website:'https://example.com/',targetMarkets:['Latvia'],answers,answerStatus,scrapedSources:evidence});
-  assert.equal(summary.score,90);
-  assert.equal(summary.coreConfirmed,8);
-  assert.equal(summary.coreTotal,10);
+  assert.equal(summary.score,89);
+  assert.equal(summary.coreConfirmed,10);
+  assert.equal(summary.coreTotal,12);
   assert.equal(summary.drafts,2);
   assert.equal(summary.missing,0);
 });
@@ -57,8 +58,8 @@ test('missing core inputs reduce readiness even when unaccepted AI text is visib
   const partial={...answers,exclusions:'',proof_points:''};
   const answerStatus={...confirmed,buying_triggers:'draft',objections:'draft',exclusions:'missing',proof_points:'missing'};
   const summary=readiness.getReadinessSummary({website:'https://example.com/',targetMarkets:['Latvia'],answers:partial,answerStatus,scrapedSources:evidence});
-  assert.equal(summary.score,76);
-  assert.equal(summary.coreConfirmed,6);
+  assert.equal(summary.score,78);
+  assert.equal(summary.coreConfirmed,8);
   assert.equal(summary.drafts,2);
   assert.equal(summary.missing,2);
 });
@@ -185,9 +186,9 @@ test('question-specific sufficiency distinguishes useful answers from placeholde
 test('confirmed but insufficient answers do not inflate profile readiness',()=>{
   const weak={...answers,buying_outcomes:'sales',objections:'price'};
   const summary=readiness.getReadinessSummary({website:'https://example.com/',targetMarkets:['Latvia'],answers:weak,answerStatus:confirmed,scrapedSources:evidence});
-  assert.equal(summary.coreConfirmed,8);
+  assert.equal(summary.coreConfirmed,10);
   assert.equal(summary.needsMore,2);
-  assert.equal(summary.score,90);
+  assert.equal(summary.score,89);
 });
 
 test('Step 2 tells the user both whether an answer is enough and whether it has synced',()=>{
