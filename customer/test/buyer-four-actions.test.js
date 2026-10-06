@@ -85,6 +85,20 @@ test('only an eligible email makes proceed green; pending and phone do not',()=>
  assert.match(context.prospectContactControls(candidate,person),/data-keep-buyer[^>]*disabled/);
 });
 
+test('proceed keeps its label through ready, selecting and selected states with a separate check',()=>{
+ const {context,person,candidate}=runtime();
+ context.enrichmentResults.set(person.id,{contact:{work_email:'anna@example.com',email_status:'verified'}});
+ for(const state of ['ready','selecting','selected']){
+  context.buyerSelectionPending.clear();
+  context.loadMeta=()=>state==='selected'?{selectedEmailBuyer:{workspaceId:'w1',domain:candidate.domain,personId:person.id}}:{};
+  if(state==='selecting')context.buyerSelectionPending.add(person.id);
+  const html=context.prospectContactControls(candidate,person);
+  assert.match(html,/data-keep-buyer[^>]*>Select &amp; proceed/);
+  assert.doesNotMatch(html,/Selected ✓ · Continue below|Selecting…/);
+  if(state==='selected')assert.match(html,/data-buyer-selection-check/);
+ }
+});
+
 test('unconfirmed public listing cannot unlock proceed even under public confirmation policy',()=>{
  const {context,person,candidate}=runtime();context.window.LeadIntelContactPolicy=require('../contact-confirmation-policy.js');
  vm.runInContext("buyerConfirmationLevel='public_confirmed';confirmationPolicyWorkspace='w1';",context);
