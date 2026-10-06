@@ -21,7 +21,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "LeadIntel — Build Your Commercial Intelligence Strategy",
+        "LeadIntel \u2014 Build Your Commercial Intelligence Strategy",
         "id=\"company-website\""
       ]
     },
@@ -252,7 +252,7 @@
         "topFourResearchCandidates",
         "data-research-buyer",
         "data-research-remaining",
-        "Likely email · ownership unconfirmed"
+        "Likely email \u00b7 ownership unconfirmed"
       ]
     },
     {
@@ -264,7 +264,7 @@
         "choice.channel==='linkedin'",
         "confirmedLinkedInBuyer",
         "prepareStudioBuyer(candidate,person)",
-        "LinkedIn direct message · draft only"
+        "LinkedIn direct message \u00b7 draft only"
       ]
     },
     {
@@ -416,7 +416,7 @@
       "url": "/customer/outreach-ui.js",
       "status": 200,
       "contains": [
-        "My LinkedIn Templates · up to 3",
+        "My LinkedIn Templates \u00b7 up to 3",
         "savedLinkedInCrmDraft",
         "Record as sent in CRM",
         "contact.linkedin_message_sent"
@@ -448,7 +448,33 @@
       "type": "text",
       "url": "/api/writing-references?workspace_id=edgars-latvia",
       "status": 401,
-      "contains": ["Authentication required"]
+      "contains": [
+        "Authentication required"
+      ]
+    },
+    {
+      "id": "focused-message-workspace",
+      "type": "text",
+      "url": "/customer/message-workspace.js",
+      "status": 200,
+      "contains": [
+        "Make it personal",
+        "Choose your style",
+        "Your email",
+        "Review Profile answers",
+        "Approve & continue"
+      ]
+    },
+    {
+      "id": "focused-message-responsive-layout",
+      "type": "text",
+      "url": "/customer/message-workspace.css",
+      "status": 200,
+      "contains": [
+        ".mw-layout",
+        "@media(max-width:720px)",
+        "[hidden]{display:none!important}"
+      ]
     }
   ],
   "retry": {
