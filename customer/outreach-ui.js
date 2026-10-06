@@ -1,4 +1,4 @@
-import './message-workspace.js?v=20261006-v1';
+import './message-workspace.js?v=20261006-v2';
 import './personal-template-library.js?foundation=20261006-v12';
 import './message-studio.js?v=20261006-sender-identity-v1&foundation=20261006-v12';
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
@@ -116,7 +116,7 @@ async function useReviewedTrigger(){
 }
 
 function injectOutreachUI(){
- if(!document.querySelector('link[data-message-workspace]')){const link=document.createElement('link');link.rel='stylesheet';link.href='message-workspace.css?v=20261006-v1';link.dataset.messageWorkspace='true';document.head.append(link);}
+ if(!document.querySelector('link[data-message-workspace]')){const link=document.createElement('link');link.rel='stylesheet';link.href='message-workspace.css?v=20261006-v2';link.dataset.messageWorkspace='true';document.head.append(link);}
   if(!document.querySelector('link[data-leadintel-asset="outreach-css"]')){const link=document.createElement("link");link.rel="stylesheet";link.href=asset("outreach.css");link.dataset.leadintelAsset="outreach-css";document.head.appendChild(link);}
   const pipelinePanel=document.querySelector("#step-5 .pipeline-panel");
   if(pipelinePanel&&!q("continue-to-outreach"))pipelinePanel.insertAdjacentHTML("afterend",'<div class="outreach-entry workflow-next-action" hidden><div><span class="eyebrow">Next step</span><strong>Identify the buyers at a saved company, then prepare a relevant message.</strong></div><button class="primary-btn stage-next-action" id="continue-to-outreach" type="button" disabled aria-disabled="true">Continue to Buyers →</button></div>');
@@ -344,7 +344,7 @@ function renderMessageWorkspace(){
  if(!window.LeadIntelMessageWorkspace)return;
  const item=currentItem(),candidate=selectedCandidate(),studio=studioState(),person=selectedContact(item),choice=readJson(DISCOVERY_META_KEY).scriptBuyer;
  const ready=Boolean(handoffContact&&choice?.workspaceId===crmBridge()?.workspace?.id&&choice?.personId===handoffContact.personId&&choice?.channel===handoffContact.channel&&handoffContact.domain===candidate?.domain&&handoffContact.personId===item?.selectedPersonId&&item?.channel===handoffContact.channel&&item?.dossier);
- return window.LeadIntelMessageWorkspace?.render(document,{ready,pending:buyerHandoffPending,authenticated:crmAuthenticated(),missing:LeadIntelMessageStudio.missing(studio.essentials),invalidCalendly:Boolean(studio.essentials.calendly)&&LeadIntelMessageStudio.missing(studio.essentials).includes('calendly'),unconfirmed:globalThis.LeadIntelStep2Brief?.confirmationMissing(mainState())||[],hasDraft:Boolean((item?.channel==='linkedin'?item?.drafts?.linkedinMessage:item?.drafts?.emailBody)?.trim()),approved:Boolean(item?.approved),busy:studioGenerationBusy,channel:item?.channel||choice?.channel,person,company:candidate?.company,contact:handoffContact?.contact,trigger:item?.dossier?.selectedTrigger,generationError:studioGenerationError,onResolve:action=>action==='buyer'?backToDiscovery():showStep(2)});
+ return window.LeadIntelMessageWorkspace?.render(document,{ready,pending:buyerHandoffPending,authenticated:crmAuthenticated(),missing:LeadIntelMessageStudio.missing(studio.essentials),invalidCalendly:Boolean(studio.essentials.calendly)&&LeadIntelMessageStudio.missing(studio.essentials).includes('calendly'),unconfirmed:globalThis.LeadIntelStep2Brief?.confirmationMissing(mainState())||[],hasDraft:Boolean((item?.channel==='linkedin'?item?.drafts?.linkedinMessage:item?.drafts?.emailBody)?.trim()),approved:Boolean(item?.approved),busy:studioGenerationBusy,channel:item?.channel||choice?.channel,person,company:candidate?.company,contact:handoffContact?.contact,sender:studio.essentials.sender,senderCompany:studio.essentials.company,value:studio.essentials.value,trigger:item?.dossier?.selectedTrigger,generationError:studioGenerationError,onResolve:action=>action==='buyer'?backToDiscovery():showStep(2)});
 }
 function prepareStudioBuyer(candidate,person){const cached=LeadIntelOutreach.savedBuyerDraft(outreach,candidate.domain,person.id,handoffContact.channel);const old=currentItem();if(cached?.dossier&&!(old?.dossier&&old.selectedPersonId===person.id&&old.channel===handoffContact.channel)){upsertItem(cached);renderAll();return;}if(old?.dossier&&old.selectedPersonId===person.id&&old.channel===handoffContact.channel){renderAll();return;}if(q('message-personal-review'))closePersonalReview();
  const dossierCandidate={...candidate,people:[{...person,...handoffContact.contact,id:person.id,name:person.publicName||person.name,email:handoffContact.contact.work_email||handoffContact.contact.normalized_email||''}]};

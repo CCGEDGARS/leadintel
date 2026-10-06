@@ -55,10 +55,13 @@
   return true;
  }
  function paintStyles(document){const select=document.getElementById('message-mode'),host=document.getElementById('mw-style-options');if(!select||!host)return;host.replaceChildren();for(const option of select.options){const info=styles.find(s=>s[0]===option.value),button=document.createElement('button');button.type='button';button.className='mw-style';button.dataset.writingStyle=option.value;button.setAttribute('aria-pressed',String(select.value===option.value));const title=document.createElement('strong'),description=document.createElement('span');title.textContent=info?.[1]||option.textContent;description.textContent=info?.[2]||'Your saved template';button.append(title,description);host.append(button);}}
+ function subjectPreview(pattern,context={}){const values={buyerCompany:context.company,sender:context.sender,company:context.senderCompany,development:context.trigger?.title,value:context.value};const fallback={development:'select a company fact',value:'your business outcome',buyerCompany:'recipient company',sender:'sender name',company:'sender company'};return String(pattern).replace(/\{\{(\w+)\}\}/g,(_,key)=>values[key]||'['+(fallback[key]||key)+']');}
  function render(document,context){if(!document.getElementById('mw-readiness-text'))return;const q=id=>document.getElementById(id),view=state(context),linkedin=context.channel==='linkedin',person=context.person;
   const name=person?.publicName||person?.name||context.contact?.name||'No recipient selected';q('message-recipient').textContent=name;q('mw-recipient-detail').textContent=[context.company,person?.title].filter(Boolean).join(' · ');q('mw-channel').textContent=linkedin?'LinkedIn · manual':'Email';q('mw-editor-title').textContent=linkedin?'Your LinkedIn message':'Your email';q('mw-draft-badge').textContent=context.approved?'Approved':context.hasDraft?'Draft':'Not generated';
   q('mw-readiness-text').textContent=view.text;q('mw-readiness-detail').textContent=view.detail||'';q('mw-readiness').dataset.state=view.kind;
   q('message-generate').disabled=!view.canGenerate;q('message-generate').textContent=context.busy?'Writing…':context.hasDraft?'Regenerate message ✦':'Generate message ✦';
+  q('message-improve').disabled=!view.canGenerate||!context.hasDraft;
+  for(const option of q('message-subject-choice').options)if(option.value)option.textContent=subjectPreview(option.textContent,context);
   const resolve=q('mw-resolve');resolve.hidden=!view.action;resolve.textContent=view.action==='profile'?'Review Profile answers →':view.action==='settings'?'Complete sender & settings':'Return to Buyers';resolve.onclick=()=>{if(view.action==='settings'){q('mw-settings').open=true;q('mw-settings').scrollIntoView({block:'center',behavior:'smooth'});}else context.onResolve?.(view.action);};
   q('mw-copy-email').hidden=linkedin;q('mw-empty').hidden=context.hasDraft;const grid=q('step-6').querySelector('.outreach-drafts .script-grid');grid.hidden=!context.hasDraft;q('mw-draft-toolbar').hidden=!context.hasDraft;
   const approval=q('step-6').querySelector('.outreach-approval');approval.hidden=linkedin||!context.hasDraft;q('approve-outreach').textContent=context.approved?'Approved ✓':'Approve & continue →';
@@ -68,5 +71,5 @@
   const delivery=q('continue-to-delivery')?.closest('.delivery-entry');if(delivery)delivery.hidden=linkedin||!context.approved;
   paintStyles(document);return view;
  }
- const api=Object.freeze({mount,render,state,paintStyles});if(typeof module==='object'&&module.exports)module.exports=api;else root.LeadIntelMessageWorkspace=api;
+ const api=Object.freeze({mount,render,state,paintStyles,subjectPreview});if(typeof module==='object'&&module.exports)module.exports=api;else root.LeadIntelMessageWorkspace=api;
 })(typeof window==='object'?window:globalThis);
