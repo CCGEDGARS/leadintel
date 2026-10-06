@@ -81,11 +81,11 @@ test('LinkedIn selection cannot cross workspaces or enter email delivery',()=>{
  assert.equal(O.buildApprovedSendPayload({...saved,approved:true}),null);assert.equal(O.approveOutreachItem(saved,{}).approved,false);
 });
 
-test('Select & proceed saves the exact email recipient without opening Content Creation',async()=>{
+test('Select & proceed saves the exact email recipient and opens Content Creation immediately',async()=>{
  const h=harness();h.ctx.enrichmentResults.set(h.person.id,{contact:{work_email:'anna@example.com',email_status:'verified'}});
  assert.equal(await h.ctx.saveBuyerAndProceed('example.com',0),true);
  assert.equal(h.meta.selectedEmailBuyer.personId,h.person.id);assert.equal(h.meta.selectedEmailBuyer.contactId,'contact-anna');
- assert.equal(h.meta.selectedEmailBuyer.email,'anna@example.com');assert.equal(h.meta.activeJourneyStage,5);assert.equal(h.meta.scriptBuyer,undefined);assert.equal(h.events.length,0);
+ assert.equal(h.meta.selectedEmailBuyer.email,'anna@example.com');assert.equal(h.meta.activeJourneyStage,6);assert.equal(h.meta.scriptBuyer.personId,h.person.id);assert.equal(h.events.length,1);
  assert.equal(h.ctx.enrichmentPending.size,0);assert.equal(h.ctx.buyerSelectionPending.size,0);
 });
 test('selecting a second recipient clears the first active flag while keeping both contacts',async()=>{
@@ -123,13 +123,13 @@ test('selection bridge scrolls and focuses the highlighted footer with the recip
  h.ctx.renderSelectedEmailBuyer({scroll:true});assert.equal(gate.disabled,false);assert.equal(footer.hidden,false);assert.match(status.textContent,/Anna Buyer.*anna@example.com/);assert.equal(scrolls,1);assert.equal(focus,1);
 });
 
-test('confirmed email stays green during a sync conflict while selection and Continue remain blocked',async()=>{
+test('sync conflict keeps confirmed email evidence but disables proceed until ready',async()=>{
  const h=harness(),original=h.ctx.bridge;h.ctx.bridge=()=>({...original(),conflict:true});
  h.ctx.selectedBuyerKey=()=>h.person.id;h.ctx.buyerAutomaticMode=()=>false;
  h.ctx.enrichmentResults.set(h.person.id,{contact:{work_email:'anna@example.com',email_status:'verified'}});
  vm.runInContext(source.slice(source.indexOf('function prospectContactControls('),source.indexOf('async function findPublicProspectContacts(')),h.ctx);
  const html=h.ctx.prospectContactControls(h.candidate,h.person);
- assert.match(html,/primary-btn small buyer-proceed-ready/);assert.match(html,/Company email is ready.*synchronization conflict/);
- const proceed=html.match(/<button[^>]*data-keep-buyer[^>]*>/)[0];assert.doesNotMatch(proceed,/disabled/);
+ assert.doesNotMatch(html,/primary-btn small buyer-proceed-ready/);assert.match(html,/Company email is ready.*synchronization conflict/);
+ const proceed=html.match(/<button[^>]*data-keep-buyer[^>]*>/)[0];assert.match(proceed,/disabled/);
  assert.equal(await h.ctx.saveBuyerAndProceed('example.com',0),false);assert.equal(h.ctx.selectedEmailBuyer(),null);assert.equal(h.checks,0);assert.equal(h.events.length,0);
 });
