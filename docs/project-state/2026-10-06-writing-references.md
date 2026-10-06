@@ -37,3 +37,9 @@ Exact-main Customer CI 37494418526 and Backend CI 37494418531 succeeded. Backend
 Authenticated acceptance: a purpose-made non-sensitive 6,306,978-byte PDF uploaded through the direct authorization path, reached Processing then Ready, and produced two page-attributed techniques with uses, cautions and adapted patterns. Activation saved and AI Generated mode displayed Using 1 writing reference; deactivation saved and removed that influence. The prior LinkedIn template selection was restored and its draft retained. Browser checkbox actions reported transient errors during rerender, but fresh UI state confirmed the requested saved state in both cases.
 
 Live message generation remains correctly blocked by the two unreviewed Step 2 answers delivery_approach and meeting_value. Calendly is also empty, so approval/booking cannot be validated. No sender information or booking URL was invented, and no message was sent. Full real-provider message generation remains an uncompleted acceptance check pending those genuine inputs. The test PDF is retained inactive pending action-time confirmation for permanent deletion; production deletion is not claimed as tested. Broader user-owned storage/billing remains deferred. This record and proof are saved on a documentation branch without changing the proven production revision.
+
+## Acceptance follow-up — 6 October 2026
+
+The user confirmed that slots should start empty. The inactive purpose-made test PDF was permanently deleted through the production UI; the operation completed and all three cards visibly returned to Empty. Existing drafts were retained. Production deletion acceptance is now verified.
+
+The user supplied https://calendly.com/edgars-7go/strategy-call. It was saved in Message settings and the source information displayed this exact booking URL. The remaining generation prerequisites are the reviewed delivery_approach and meeting_value answers. No outreach was sent.
