@@ -408,6 +408,28 @@
         "calendly.com",
         "function parse("
       ]
+    },
+    {
+      "id": "linkedin-message-studio",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "My LinkedIn Templates \u00b7 up to 3",
+        "savedLinkedInCrmDraft",
+        "Record as sent in CRM",
+        "contact.linkedin_message_sent"
+      ]
+    },
+    {
+      "id": "linkedin-template-library",
+      "type": "text",
+      "url": "/customer/personal-template-library.js",
+      "status": 200,
+      "contains": [
+        "channelLibrary(3,'linkedin-template-')",
+        "LinkedIn Template"
+      ]
     }
   ],
   "retry": {
