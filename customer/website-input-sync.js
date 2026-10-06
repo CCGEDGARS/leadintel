@@ -56,10 +56,8 @@
     const companyMaterials=[...step.querySelectorAll(".panel.source-panel")].find(panel=>panel.querySelector("h3")?.textContent.trim()==="Company materials");
     const materialsNumber=companyMaterials?.querySelector(".panel-number");
     if(materialsNumber)materialsNumber.textContent="03";
-    const brand=document.getElementById("brand-identity");
-    if(companyMaterials&&brand&&companyMaterials.nextElementSibling!==brand)companyMaterials.after(brand);
     const hero=step.querySelector(".hero-copy > p");
-    if(hero)hero.textContent="Activate your website, choose where to find customers, then continue to Profile. Materials and email identity can be added when you are ready.";
+    if(hero)hero.textContent="Activate your website, choose where to find customers, then continue to Profile. Supporting materials are optional. Add your sender details later in Messages.";
     const progressSmall=document.querySelector('[data-step-marker="1"] small');
     if(progressSmall)progressSmall.textContent="Website, target markets";
     return true;

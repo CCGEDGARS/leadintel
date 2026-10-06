@@ -24,6 +24,25 @@ test('sender identity is absent from Setup and mounted once into Messages withou
  assert.equal(inputCalls,1);
 });
 
+test('website lifecycle simplification never moves the Messages identity back to Setup',()=>{
+ const dom=new JSDOM(file('index.html'),{runScripts:'outside-only'});
+ const doc=dom.window.document,destination=doc.createElement('section');
+ destination.id='message-sender-identity';doc.body.append(destination);
+ dom.window.eval(file('sender-identity-location.js'));
+ dom.window.LeadIntelSenderIdentityLocation.mount(doc);
+ dom.window.eval(file('website-input-sync.js'));
+ dom.window.LeadIntelWebsiteInputSync.simplifyStepOne();
+ assert.equal(doc.querySelector('#brand-identity').parentElement,destination);
+ assert.equal(doc.querySelector('#step-1 #brand-identity'),null);
+});
+
+test('workflow settings remain visible in Setup when sender identity is staged elsewhere',async()=>{
+ const dom=new JSDOM(file('index.html'),{runScripts:'outside-only',url:'https://example.com/customer/'});
+ dom.window.eval(file('outreach-automation-ui.js'));
+ await dom.window.LeadIntelOutreachAutomationUI.refresh();
+ assert.ok(dom.window.document.querySelector('#step-1 #delivery-setup'));
+});
+
 test('linked identity overrides stale message sender details, including deliberate clearing',()=>{
  for(const company of ['Law practice','Manufacturing team']){
   const main={senderIdentityVersion:1,brandIdentity:{senderName:'New sender',senderTitle:'Partner',companyDisplayName:company}};

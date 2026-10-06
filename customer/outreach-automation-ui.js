@@ -39,7 +39,7 @@ function updateSetupBadge(card,active,dirty=false){
   const value=setupBadge(mode,active,dirty);badge.querySelector('strong').textContent=value.title;badge.querySelector('small').textContent=value.detail;
 }
 function renderSetup(){
-  const brand=document.getElementById('brand-identity');if(!brand)return;
+  const brand=document.getElementById('target-market-selector')||document.getElementById('brand-identity');if(!brand)return;
   let card=document.getElementById('delivery-setup');if(!card){card=document.createElement('section');card.id='delivery-setup';card.className='panel brand-identity-panel delivery-setup';brand.after(card);}
   const authenticated=Boolean(bridge()?.session?.authenticated&&bridge()?.workspace?.id);
   const p=serverPolicy(),ready=authenticated&&Boolean(policy)&&policyWorkspace===bridge()?.workspace?.id,owner=isOwner(),preferred=p.preferredMode||p.mode||'manual';
