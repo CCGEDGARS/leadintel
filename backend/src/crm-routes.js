@@ -27,7 +27,7 @@ function workspace(url){return String(url.searchParams.get('workspace_id')||'').
 function parseCompanyPath(path){const match=path.match(/^\/api\/crm\/companies\/([^/]+)(?:\/(pipeline|archive|restore|suppress|mark-customer|contacts|activities|enrich-contact|confirm-public-email))?$/);return match?{id:decodeURIComponent(match[1]),action:match[2]||''}:null;}
 function parseContactPath(path){const match=path.match(/^\/api\/crm\/contacts\/([^/]+)$/);return match?{id:decodeURIComponent(match[1])}:null;}
 const WRITER_ROLES=['owner','researcher','sales'];
-const CLIENT_ACTIVITY_TYPES=new Set(['dossier.built','content.approved','email.sent','email.reply_received','meeting.recorded','proposal.recorded','deal.won','deal.lost','contact.linkedin_confirmed']);
+const CLIENT_ACTIVITY_TYPES=new Set(['dossier.built','content.approved','email.sent','email.reply_received','meeting.recorded','proposal.recorded','deal.won','deal.lost','contact.linkedin_confirmed','contact.linkedin_message_sent']);
 
 function isHttpsUrl(value){try{return new URL(String(value||'')).protocol==='https:';}catch{return false;}}
 const crmEnrichmentUsage=apolloCreditUsage;

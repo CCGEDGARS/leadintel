@@ -105,3 +105,10 @@ sqliteTest('production app delegates CRM routes before SaaS and core routers',()
   const saasIndex=source.indexOf('handleSaasRoute(request');
   assert.ok(crmIndex>=0&&saasIndex>crmIndex);
 });
+
+sqliteTest('manual LinkedIn message activity preserves buyer draft and remains idempotent without email send',async()=>{
+ const {env,token}=await fixture();let response=await handleCrmRoute(req('/api/crm/companies?workspace_id=w1',{method:'POST',token,body:{company:{company_name:'Example',domain:'example.com'}}}),env,{});const id=(await payload(response)).company.id;
+ const activity={id:'linkedin-manual-0001',type:'contact.linkedin_message_sent',channel:'linkedin',summary:'LinkedIn message manually sent',metadata:{selected_person_id:'p1',manual:true,script_package:{version:1,item:{domain:'example.com',channel:'linkedin',selectedPersonId:'p1',drafts:{linkedinMessage:'Reviewed manual message'}}}}};
+ for(let i=0;i<2;i++){response=await handleCrmRoute(req(`/api/crm/companies/${id}/activities?workspace_id=w1`,{method:'POST',token,body:activity}),env,{});assert.equal(response.status,200);}
+ response=await handleCrmRoute(req(`/api/crm/companies/${id}?workspace_id=w1`,{token}),env,{});const rows=(await payload(response)).activities;assert.equal(rows.filter(row=>row.id===activity.id).length,1);const saved=rows.find(row=>row.id===activity.id);assert.equal(saved.channel,'linkedin');assert.equal(JSON.parse(saved.metadata_json).script_package.item.drafts.linkedinMessage,'Reviewed manual message');assert.equal(rows.some(row=>row.activity_type==='email.sent'),false);
+});
