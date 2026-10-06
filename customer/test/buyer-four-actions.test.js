@@ -91,3 +91,8 @@ test('unconfirmed public listing cannot unlock proceed even under public confirm
  person.publicEmail='anna@example.com';person.publicEmailUrl='https://example.com/team';
  assert.match(context.prospectContactControls(candidate,person),/data-keep-buyer[^>]*disabled/);
 });
+
+test('Confirm LinkedIn opens review even for an already verified buyer and waits for Proceed',async()=>{
+ const person={id:'p1',name:'Sam Buyer',organization:'Example',title:'Procurement Director',linkedin_url:'https://linkedin.com/in/sam',linkedinConfirmedUrl:'https://linkedin.com/in/sam'},candidate={domain:'example.com',company:'Example',people:[person]};let dialogs=0,starts=0;const handlers={};const dialog={querySelector:selector=>({addEventListener:(_,f)=>{handlers[selector]=f;},value:'',textContent:''}),close(){}};
+ const ctx={discovery:{selectedProspects:[candidate]},LeadIntelDiscovery:D,canonicalDomain:D.canonicalDomain,bridge:()=>({workspace:{id:'w1'}}),buyerReviewDialog:()=>{dialogs++;return dialog;},esc:String,crmAuthenticated:()=>true,saveBuyerLinkedInReview:async()=>true,startLinkedInBuyerMessage:async()=>{starts++;return true;},showToast(){}};vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('async function reviewBuyerLinkedIn('),source.indexOf('function selectedEmailBuyer(')),ctx);await ctx.reviewBuyerLinkedIn(candidate.domain,0);assert.equal(dialogs,1);assert.equal(starts,0);await handlers['[data-review-message]']({target:{disabled:false}});assert.equal(starts,1);
+});
