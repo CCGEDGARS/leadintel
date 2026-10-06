@@ -4,5 +4,11 @@
   "version": "1.0.0",
   "scripts": {
     "build": "bash scripts/build-vercel-static.sh"
+  },
+  "dependencies": {
+    "pdfjs-dist": "6.4.299"
+  },
+  "devDependencies": {
+    "jsdom": "26.1.0"
   }
 }

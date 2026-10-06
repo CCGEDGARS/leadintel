@@ -21,7 +21,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "LeadIntel \u2014 Build Your Commercial Intelligence Strategy",
+        "LeadIntel — Build Your Commercial Intelligence Strategy",
         "id=\"company-website\""
       ]
     },
@@ -252,7 +252,7 @@
         "topFourResearchCandidates",
         "data-research-buyer",
         "data-research-remaining",
-        "Likely email \u00b7 ownership unconfirmed"
+        "Likely email · ownership unconfirmed"
       ]
     },
     {
@@ -264,7 +264,7 @@
         "choice.channel==='linkedin'",
         "confirmedLinkedInBuyer",
         "prepareStudioBuyer(candidate,person)",
-        "LinkedIn direct message \u00b7 draft only"
+        "LinkedIn direct message · draft only"
       ]
     },
     {
@@ -415,7 +415,7 @@
       "url": "/customer/outreach-ui.js",
       "status": 200,
       "contains": [
-        "My LinkedIn Templates \u00b7 up to 3",
+        "My LinkedIn Templates · up to 3",
         "savedLinkedInCrmDraft",
         "Record as sent in CRM",
         "contact.linkedin_message_sent"
@@ -430,6 +430,24 @@
         "channelLibrary(3,'linkedin-template-')",
         "LinkedIn Template"
       ]
+    },
+    {
+      "id": "writing-reference-interface",
+      "type": "text",
+      "url": "/customer/writing-references-ui.js",
+      "status": 200,
+      "contains": [
+        "Writing References",
+        "What AI learned",
+        "Retry analysis"
+      ]
+    },
+    {
+      "id": "writing-reference-api-private",
+      "type": "text",
+      "url": "/api/writing-references?workspace_id=edgars-latvia",
+      "status": 401,
+      "contains": ["Authentication required"]
     }
   ],
   "retry": {

@@ -1,5 +1,6 @@
 .tools/
 .wrangler/
 backend/node_modules/
+node_modules/
 backend/.dev.vars
 release-proof.json

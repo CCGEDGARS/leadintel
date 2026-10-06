@@ -16,9 +16,11 @@ import {handleIntelligenceSourceRoute,runDueSourceHealthChecks} from './intellig
 import {handleCopilotRoute} from './copilot-routes.js';
 import {handleBrandAssetRoute} from './brand-assets.js';
 import {handleCalendlyWebhook,handleCalendlyIntegrationRoute} from './calendly-integration.js';
+import {handleWritingReferenceRoute} from './writing-reference-routes.js';
+import {runWritingReferenceJobs} from './writing-reference-runner.js';
 
 export default {
-  async fetch(request,env){
+  async fetch(request,env,ctx){
     const url=new URL(request.url);
     if(url.pathname.startsWith('/api/webhooks/calendly/')){
       try{return await handleCalendlyWebhook(request,env);}catch(cause){console.error(cause);return new Response(JSON.stringify({error:'Internal server error'}),{status:500,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});}
@@ -53,6 +55,7 @@ export default {
       });
     }
     try{
+      const writing=await handleWritingReferenceRoute(request,env,cors,ctx);if(writing)return writing;
       const brandAsset=await handleBrandAssetRoute(request,env,cors);if(brandAsset)return brandAsset;
       const ai=await handleAiRoute(request,env,cors);if(ai)return ai;
       const copilot=await handleCopilotRoute(request,env,cors);if(copilot)return copilot;
@@ -73,6 +76,7 @@ export default {
   },
   async scheduled(controller,env,ctx){
     const now=new Date(controller.scheduledTime||Date.now());
+    if(controller.cron==='* * * * *'){ctx.waitUntil(runWritingReferenceJobs(env,{now:now.getTime()}));return;}
     const outreachCycle=runApprovedWorkflows(env,{now}).catch(cause=>console.error('Approved workflow cycle failed',cause)).then(()=>pollOutreachReplies(env,{now}).then(()=>runOutreachAutomation(env,{now})));
     ctx.waitUntil(Promise.allSettled([
       runDueMarketMonitoring(env,now),

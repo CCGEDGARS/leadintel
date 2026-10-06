@@ -27,6 +27,8 @@ function productionFetch({ customerHtml, discoveryUi, sessionStatus=401 }) {
   return async url => {
     const parsed = new URL(String(url));
     if (parsed.pathname === '/api/session') return response({status:sessionStatus,json:{authenticated:false}});
+    if (parsed.pathname === '/api/writing-references') return response({status:401,json:{error:'Authentication required'}});
+    if (parsed.pathname === '/customer/writing-references-ui.js') return response({text:fs.readFileSync(path.join(root,'customer/writing-references-ui.js'),'utf8')});
     if (parsed.pathname === '/customer/api-transport.js') return response({text:fs.readFileSync(path.join(root,'customer/api-transport.js'),'utf8')});
     if (parsed.pathname === '/release.json') {
       return response({ json: { service: 'leadintel-customer', commit: SHA, ref: 'main' } });

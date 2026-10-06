@@ -3,6 +3,7 @@ main = "src/app.js"
 compatibility_date = "2026-07-20"
 
 [vars]
+WRITING_REFERENCES_ALLOWED_WORKSPACES = "edgars-latvia"
 AUTOMATIC_GMAIL_DELIVERY_MODE = "manual_only"
 APPROVED_WORKFLOW_DELIVERY_MODE = "enabled"
 APP_ORIGIN = "https://ccgedgars.github.io,https://leadintel.ccgroup.lv,https://leadintel-api.edgars-7e7.workers.dev"
@@ -36,5 +37,9 @@ database_name = "leadintel"
 database_id = "79f8c0fb-82f9-4ff8-9ab7-38bf5742fc50"
 migrations_dir = "migrations"
 
+[[r2_buckets]]
+binding = "WRITING_REFERENCES_BUCKET"
+bucket_name = "leadintel-writing-reference"
+
 [triggers]
-crons = ["0 * * * *"]
+crons = ["0 * * * *", "* * * * *"]
