@@ -118,6 +118,13 @@ body:has(#step-6.active) .journey-stage-guide,body:has(#step-6.active) .stage-mi
 #message-studio .mw-reference-panel summary{color:#315d4c}
 #message-studio #linkedin-manual-actions>.primary-btn{margin-right:8px;font-size:13px}
 #message-studio .mw-styles .mw-style span{color:#718276}
+#message-studio .mw-linkedin-actions{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:12px}
+#message-studio .mw-linkedin-actions > *{margin:0}
+#message-studio .mw-fact-help,#message-studio #message-fact-status{font-size:12px;line-height:1.6;color:#52685c}
+#message-studio #message-update-opening,#message-studio #message-find-fact{width:100%;margin-top:12px}
+#message-studio #trigger-source-preview{font-size:12px;line-height:1.6;overflow-wrap:anywhere}
+#message-studio .mw-value-proof{margin:0 0 18px;padding:12px 16px;border:1px solid #dbe4de;border-radius:10px;background:#f7faf8;font-size:12px;line-height:1.6}
+#message-studio .mw-value-proof summary{font-weight:600;cursor:pointer}
 
 /* Keep the message above the fold; the sidebar already supplies stage navigation. */
 body:has(#step-6.active) .journey-dots{display:none}

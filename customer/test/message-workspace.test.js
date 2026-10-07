@@ -3,7 +3,7 @@ const {JSDOM}=require('jsdom'),Workspace=require('../message-workspace.js'),Stud
 const read=name=>fs.readFileSync(path.join(__dirname,'..',name),'utf8');
 function mounted(){
  const dom=new JSDOM(read('index.html'),{url:'https://example.com/customer/',runScripts:'outside-only'}),w=dom.window;
- w.LeadIntelMessageStudio=Studio;w.eval(read('message-workspace.js'));w.eval(read('sender-identity-location.js'));
+ w.LeadIntelMessageStudio=Studio;w.LeadIntelMessageFacts=require('../message-facts.js');w.eval(read('message-workspace.js'));w.eval(read('sender-identity-location.js'));
  w.eval("var scriptGenerationRequest=0;var readDraftEdits=()=>null;var q=id=>document.getElementById(id);var asset=p=>p;var esc=v=>String(v);var studioState=()=>({essentials:{}});var readStudio=()=>({});var persistStudio=()=>{};var invalidateStudioDraft=()=>{};var renderMessageStudio=()=>{};var renderPersonalSaveButton=()=>{};var closePersonalReview=()=>{};var currentItem=()=>null;var toast=()=>{};");
  const src=read('outreach-ui.js');w.eval(src.slice(src.indexOf('function injectOutreachUI(){'),src.indexOf('function showStep(step)')));w.eval(src.slice(src.indexOf('function installMessageStudio(){'),src.indexOf("let personalChannel='email'")));
  w.eval('injectOutreachUI();installMessageStudio();');return {dom,document:w.document,w};
@@ -42,4 +42,20 @@ test('subject previews use recipient and sender values while unknown events stay
 test('a sync conflict takes priority over apparent missing Profile answers and blocks generation',()=>{
  const view=Workspace.state({ready:true,authenticated:true,syncConflict:true,unconfirmed:['meeting_value'],hasDraft:true});
  assert.equal(view.canGenerate,false);assert.equal(view.action,'sync');assert.match(view.text,/sync conflict/i);
+});
+
+test('template generation is distinct from original AI generation and retains protected originals',()=>{
+ const {document,w}=mounted(),base={ready:true,authenticated:true,hasDraft:true,channel:'linkedin'};
+ w.LeadIntelMessageWorkspace.render(document,{...base,templateSelected:true});assert.match(document.getElementById('message-generate').textContent,/from this template/i);
+ w.LeadIntelMessageWorkspace.render(document,{...base,templateSelected:false});assert.match(document.getElementById('message-generate').textContent,/Regenerate AI/i);
+ assert.ok(document.getElementById('message-template-body').readOnly);
+});
+test('opening-only update is available only with a reviewed event and an unapproved draft',()=>{
+ const {document,w}=mounted(),base={ready:true,authenticated:true,hasDraft:true,channel:'linkedin'};
+ w.LeadIntelMessageWorkspace.render(document,base);assert.equal(document.getElementById('message-update-opening').disabled,true);
+ w.LeadIntelMessageWorkspace.render(document,{...base,trigger:{verification:'user_reviewed',excerpt:'Acme is opening a new factory in Sweden in 2028.'}});assert.equal(document.getElementById('message-update-opening').disabled,false);
+ w.LeadIntelMessageWorkspace.render(document,{...base,approved:true,trigger:{verification:'user_reviewed',excerpt:'Acme is opening a new factory in Sweden in 2028.'}});assert.equal(document.getElementById('message-update-opening').disabled,true);
+});
+test('manual LinkedIn copy and profile actions are grouped together',()=>{
+ const {document}=mounted();const group=document.querySelector('.mw-linkedin-actions');assert.ok(group.querySelector('[data-copy-field="linkedin"]'));assert.ok(group.querySelector('#linkedin-open-profile'));assert.match(document.querySelector('#linkedin-manual-actions > p').textContent,/record/i);
 });

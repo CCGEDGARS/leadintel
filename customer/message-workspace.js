@@ -30,6 +30,10 @@
   trigger.querySelector('h3').hidden=true;trigger.querySelector(':scope > p').hidden=true;trigger.querySelector(':scope > small').hidden=true;
   const triggerTools=node('details','mw-extra-tools');triggerTools.innerHTML='<summary>More research tools</summary>';for(const id of ['load-trigger-alerts','save-trigger-scripts','restore-trigger-scripts','trigger-monitoring-alerts'])triggerTools.append(q(id));step.querySelector('.message-advanced').append(triggerTools);
   q('use-reviewed-trigger').textContent='Use this fact';
+  const findFact=node('button','secondary-btn small','Find a stronger fact ✦');findFact.id='message-find-fact';findFact.type='button';preparation.append(findFact);
+  const factStatus=node('p','','');factStatus.id='message-fact-status';factStatus.setAttribute('role','status');preparation.append(factStatus);
+  const opening=node('button','secondary-btn small','Update opening only');opening.id='message-update-opening';opening.type='button';opening.disabled=true;preparation.append(opening);
+  const openingHelp=node('p','mw-fact-help','Changes only the opening. Your introduction, benefits, links and closing stay intact.');preparation.append(openingHelp);
   const styleSection=node('section','mw-section');styleSection.innerHTML='<div class="mw-section-heading"><span class="mw-step-number">2</span><div><h3>Choose your style</h3><p id="mw-style-help">A proven template or an original AI draft.</p></div></div><div id="mw-style-options" class="mw-styles" role="group" aria-label="Writing style"></div>';
   styleSection.append(q('message-mode-label'),q('message-template-editor'),q('message-my-templates'));rail.append(styleSection);
   const references=node('details','mw-section mw-reference-panel');references.id='mw-writing-references';references.innerHTML='<summary>Writing references <span id="mw-reference-count">Optional · 3 slots</span></summary><div id="mw-writing-reference-host"></div>';rail.append(references,settings);
@@ -40,6 +44,7 @@
   const generateBar=node('div','mw-generate-bar');generateBar.append(q('message-language').closest('label'),q('message-generate'));drafts.querySelector('.script-grid').before(generateBar);
   const notice=node('div','mw-readiness');notice.id='mw-readiness';notice.innerHTML='<p id="mw-readiness-text" role="status"></p><p id="mw-readiness-detail"></p><button id="mw-resolve" class="secondary-btn small" type="button" hidden></button>';generateBar.after(notice);notice.append(q('message-generation-status'));
   const empty=node('div','mw-empty');empty.id='mw-empty';empty.innerHTML='<span aria-hidden="true">✦</span><h4>A good conversation starts here.</h4><p>Choose a style and generate a message tailored to this recipient. Your draft will appear here.</p>';drafts.querySelector('.script-grid').before(empty);
+  const valueProof=node('details','mw-value-proof');valueProof.innerHTML='<summary>Business value & proof</summary><p id="mw-business-value"></p><p id="mw-proof-value"></p><small>Assess earning more, saving costs and simplifying work. Include only supported benefits; numbers need approved results and a timeframe.</small>';drafts.querySelector('.script-grid').before(valueProof);
   const toolbar=node('div','mw-draft-toolbar');toolbar.id='mw-draft-toolbar';toolbar.append(q('message-improve'),q('message-save-draft'),q('message-save-as-template'));drafts.querySelector('.outreach-approval').before(toolbar);
   editor.append(q('message-personal-review'));
   const copyEmail=drafts.querySelector('[data-copy-field="email"]');toolbar.prepend(copyEmail);copyEmail.className='secondary-btn';copyEmail.id='mw-copy-email';
@@ -50,6 +55,7 @@
   const evidence=step.querySelector('.message-advanced');evidence.querySelector('summary').textContent='Research & campaign tools';evidence.open=false;rail.append(evidence);
   const linkActions=q('linkedin-manual-actions');const recording=node('details','mw-recording');recording.innerHTML='<summary>Record a message you sent</summary>';recording.append(q('linkedin-sent-confirm').closest('label'),q('linkedin-record-sent'),q('linkedin-manual-status'));linkActions.querySelector('p').textContent='Copy the draft, then paste and send it inside LinkedIn.';linkActions.append(recording);
   q('linkedin-open-profile').textContent='Open LinkedIn profile ↗';
+  const manualButtons=node('div','mw-linkedin-actions');manualButtons.append(copyLinkedIn,q('linkedin-open-profile'));linkActions.prepend(manualButtons);linkActions.querySelector(':scope > p').textContent='Paste and send manually inside LinkedIn. Then record the outcome below.';
   for(const id of ['mark-contacted','preview-approved-email'])step.querySelector('.message-advanced').append(q(id));
   q('message-mode').addEventListener('change',()=>paintStyles(document));
   q('mw-style-options').addEventListener('click',event=>{const button=event.target.closest('[data-writing-style]');if(!button)return;const select=q('message-mode');select.value=button.dataset.writingStyle;select.dispatchEvent(new document.defaultView.Event('change',{bubbles:true}));});
@@ -60,15 +66,19 @@
  function render(document,context){if(!document.getElementById('mw-readiness-text'))return;const q=id=>document.getElementById(id),view=state(context),linkedin=context.channel==='linkedin',person=context.person;
   const name=person?.publicName||person?.name||context.contact?.name||'No recipient selected';q('message-recipient').textContent=name;q('mw-recipient-detail').textContent=[context.company,person?.title].filter(Boolean).join(' · ');q('mw-channel').textContent=linkedin?'LinkedIn · manual':'Email';q('mw-editor-title').textContent=linkedin?'Your LinkedIn message':'Your email';q('mw-draft-badge').textContent=context.approved?'Approved':context.hasDraft?'Draft':'Not generated';
   q('mw-readiness-text').textContent=view.text;q('mw-readiness-detail').textContent=view.detail||'';q('mw-readiness').dataset.state=view.kind;
-  q('message-generate').disabled=!view.canGenerate;q('message-generate').textContent=context.busy?'Writing…':context.hasDraft?'Regenerate message ✦':'Generate message ✦';
-  q('message-improve').disabled=!view.canGenerate||!context.hasDraft;
+  q('message-generate').disabled=!view.canGenerate||context.factResearchBusy;q('message-generate').textContent=context.busy?'Writing…':context.templateSelected?'Generate from this template ✦':context.hasDraft?'Regenerate AI message ✦':'Generate AI message ✦';
+  q('message-update-opening').disabled=!view.canGenerate||!context.hasDraft||context.trigger?.verification!=='user_reviewed'||!root.LeadIntelMessageFacts?.event(context.trigger?.excerpt);
+  q('message-find-fact').disabled=!context.authenticated||!context.ready||context.syncConflict||context.busy||context.factResearchBusy;
+  q('message-improve').disabled=!view.canGenerate||!context.hasDraft||context.factResearchBusy;
+  q('mw-business-value').textContent=context.value?'Reviewed business outcome: '+context.value:'No approved business outcome supplied. Review your Profile answers.';
+  q('mw-proof-value').textContent=context.proof?'Approved proof: '+context.proof:'No approved measured results supplied. Use your website for capabilities, not as proof of invented savings.';
   for(const option of q('message-subject-choice').options)if(option.value)option.textContent=subjectPreview(option.textContent,context);
   const resolve=q('mw-resolve');resolve.hidden=!view.action;resolve.textContent=view.action==='sync'?'Review sync choices ↑':view.action==='profile'?'Review Profile answers →':view.action==='settings'?'Complete sender & settings':'Return to Buyers';resolve.onclick=()=>{if(view.action==='settings'){q('mw-settings').open=true;q('mw-settings').scrollIntoView({block:'center',behavior:'smooth'});}else context.onResolve?.(view.action);};
   q('mw-copy-email').hidden=linkedin;q('mw-empty').hidden=context.hasDraft;const grid=q('step-6').querySelector('.outreach-drafts .script-grid');grid.hidden=!context.hasDraft;q('mw-draft-toolbar').hidden=!context.hasDraft;
   const approval=q('step-6').querySelector('.outreach-approval');approval.hidden=linkedin||!context.hasDraft;q('approve-outreach').textContent=context.approved?'Approved ✓':'Approve & continue →';
   q('message-generation-status').hidden=!context.busy&&!context.generationError;
-  q('mw-trigger-summary').textContent=context.trigger?'Using: '+(context.trigger.title||context.trigger.url):'No fact selected. Your draft will use the confirmed company and buyer context.';
-  q('mw-style-help').textContent=linkedin?'An editable AI message or one of your saved templates.':'A proven template or an original AI draft.';
+  q('mw-trigger-summary').textContent=context.trigger?'Reviewed: '+(root.LeadIntelMessageFacts?.event(context.trigger.excerpt)||context.trigger.title||context.trigger.url):'No reviewed event selected. Find and check a specific development for a stronger opening.';
+  q('mw-style-help').textContent=(linkedin?'An editable AI message or your saved template.':'A protected core template or original AI draft.')+' Generation never changes the saved original.';
   const delivery=q('continue-to-delivery')?.closest('.delivery-entry');if(delivery)delivery.hidden=linkedin||!context.approved;
   paintStyles(document);return view;
  }
