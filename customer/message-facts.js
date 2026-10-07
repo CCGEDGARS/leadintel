@@ -1,20 +1,21 @@
 (function(root){
  'use strict';
- const clean=v=>String(v||'').replace(/!\[[^\]]*\]\([^)]*\)/g,'').replace(/[#*]/g,'').replace(/\s+/g,' ').trim();
+ const clean=v=>String(v||'').replace(/!\[[^\]]*\]\([^)]*\)/g,'').replace(/\[([^\]]+)\]\([^)]*\)/g,'$1').replace(/(?:^|\s)(?:Close|Stäng|Menu|Accept cookies)(?=\s|$)/gi,' ').replace(/[#*]/g,'').replace(/\s+/g,' ').trim();
  const unsafe=/ignore (?:all |previous )?instructions|system prompt|pretend|fabricate/i;
  function sentences(text){return String(text||'').split(/(?<=[.!?])\s+|\n+/).map(clean).filter(s=>s.length>=35&&s.length<=400&&!unsafe.test(s));}
  function event(text){return sentences(text).find(s=>! /^(?:if|what if|we help|we support|our (?:services|solutions|investment services))\b/i.test(s)&&! /\b(?:could|might|hypothetical)\b/i.test(s)&&/\b(?:(?:is|are|will|has|have|announced|plans|started|began)\b.{0,70}\b(?:invest\w*|expand\w*|expansion|opening|launch\w*|appoint\w*|acquir\w*|modernis\w*|moderniz\w*|construction|building|award\w*)|invested|invests|expanded|opens|opened|launched|appointed|acquired|awarded|satsar|bygger|ieguld\w*|paplašin\w*)\b/i.test(s))||'';}
+ function eventIdentity(summary,company){const topic=/sorting|sorterings/i.test(summary)?'sorting':/factory|fabrik|ražotn/i.test(summary)?'factory':/award|\bpris|balv/i.test(summary)?'award':'';const action=/opening|opens|opened|öppn|atvēr/i.test(summary)?'open':/invest|satsar|ieguld/i.test(summary)?'invest':/construction|bygg|būv/i.test(summary)?'build':'';const years=(summary.match(/\b20\d{2}\b/g)||[]).sort();const names=(summary.match(/\b[A-ZÀ-Ž][a-zà-ž]{3,}\b/g)||[]).filter(n=>!String(company||'').includes(n)&&!['This','That','Plans','Sweden','Latvia','Latvian','Swedish','Company'].includes(n)).map(n=>n.toLowerCase()).sort();return topic&&action&&years.length&&names.length?[topic,action,...years,...names].join('|'):'';}
  function candidates(evidence=[],context={}){
   const now=Date.parse(context.now||new Date().toISOString()),rows=[];
   for(const source of evidence){let u;try{u=new URL(source.url);if(!['https:','http:'].includes(u.protocol)||u.username||u.password)continue;}catch{continue;}
-   const excerpt=clean(source.text||source.description);if(unsafe.test(excerpt))continue;
+   const excerpt=clean(source.text||source.description);const company=String(context.company||'').trim().toLowerCase(),domain=String(context.domain||'').replace(/^www\./,'');const official=u.hostname.replace(/^www\./,'')===domain;if(company&&!official&&!(clean(source.title)+' '+excerpt).toLowerCase().includes(company))continue;if(!excerpt||unsafe.test(excerpt))continue;
    const summary=event(source.text||source.description)||sentences(source.text||source.description)[0]||'';
    const kind=event(source.text||source.description)?'event':'context';
    const date=u.pathname!=='/'&&/^\d{4}-\d{2}-\d{2}$/.test(source.date||'')&&Number.isFinite(Date.parse(source.date))?source.date:'';
-   const age=date?(now-Date.parse(date))/86400000:Infinity,official=u.hostname.replace(/^www\./,'')===String(context.domain||'').replace(/^www\./,'');
+   const age=date?(now-Date.parse(date))/86400000:Infinity;
    rows.push({...source,url:u.href,summary,date,kind,reviewed:false,score:(kind==='event'?100:0)+(official?20:0)+(age>=0&&age<=180?15:0),recommended:false});
   }
-  rows.sort((a,b)=>b.score-a.score||a.url.localeCompare(b.url));const seen=new Set(),unique=rows.filter(r=>{const key=r.summary?r.summary.toLowerCase():r.url;if(seen.has(key))return false;seen.add(key);return true;});
+  rows.sort((a,b)=>b.score-a.score||a.url.localeCompare(b.url));const seen=new Set(),unique=rows.filter(r=>{const key=r.url.replace(/\/(?:en|sv|lv)(?=\/)/g,'/language').replace(/\?.*$/,'').replace(/\/$/,'');const summaryKey=eventIdentity(r.summary,context.company)||r.summary.toLowerCase();if(seen.has(summaryKey))return false;seen.add(summaryKey);if(seen.has(key))return false;seen.add(key);return true;});
   const best=unique.find(r=>r.kind==='event');if(best)best.recommended=true;return unique;
  }
  function queries(candidate={},essentials={}){
@@ -38,5 +39,5 @@
  }
  function generationPrompt(prompt){return {...prompt,system:prompt.system+' Include a concise supported business outcome and approved proof when supplied. Assess earning more, saving costs and simplifying work without forcing unsupported benefits. Use exact approved customer results, figures and timeframes only; omit missing metrics. When proof is absent, the supplied website is a capabilities link, not evidence of savings or success. For a saved template, preserve its reusable structure but omit unsupported factual claims. Use the reviewed trigger summary and excerpt, not the source page title, as the opening evidence.'};}
  function openingContextReady(item,essentials){const previous=item?.messageStudioDraft?.essentials;if(!previous||!['native','complete'].includes(item.localizationStatus)||item.localizationProvenance?.language!==essentials.language)return false;const keys=new Set([...Object.keys(previous),...Object.keys(essentials)]);return [...keys].every(key=>previous[key]===essentials[key]);}
- const api=Object.freeze({candidates,mergeEvidence,queries,event,updateOpening,generationPrompt,openingContextReady});if(typeof module==='object'&&module.exports)module.exports=api;else root.LeadIntelMessageFacts=api;
+ const api=Object.freeze({clean,candidates,mergeEvidence,queries,event,updateOpening,generationPrompt,openingContextReady});if(typeof module==='object'&&module.exports)module.exports=api;else root.LeadIntelMessageFacts=api;
 })(typeof window==='object'?window:globalThis);

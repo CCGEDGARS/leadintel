@@ -64,10 +64,12 @@
   }
   function clearDerivedWorkspaceData(storage){
     if(!storage)return 0;
+    const originals=read(storage,OUTREACH_KEY).messageStudio?.originalScripts;
     let removed=0;
     for(const key of DERIVED_KEYS){
       if(storage.getItem(key)!==null){storage.removeItem(key);removed++;}
     }
+    if(originals&&Object.keys(originals).length)storage.setItem(OUTREACH_KEY,JSON.stringify({messageStudio:{originalScripts:originals}}));
     return removed;
   }
   function reconcileLocalWorkspace(storage,main={}){

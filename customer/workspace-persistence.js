@@ -136,7 +136,7 @@
   function customerStateUrl(input){try{const raw=typeof input==="string"?input:input?.url;const url=new URL(raw,root.location?.href||API_BASE);const siteOrigin=new URL(root.location?.href||API_BASE).origin;return (url.origin===API_BASE||url.origin===siteOrigin)&&url.pathname==="/api/customer/state"?url:null;}catch{return null;}}
   function requestMethod(input,init={}){return String(init?.method||(typeof Request!=="undefined"&&input instanceof Request?input.method:"GET")||"GET").toUpperCase();}
   function withPersistenceMetadata(body,explicitSaved){const next=isObject(body)?{...body}:{};const payload=isObject(next.payload)?{...next.payload}:{};const meta=isObject(payload.meta)?{...payload.meta}:{};meta.persistence={explicit_saved:Boolean(explicitSaved)};payload.meta=meta;next.payload=payload;return next;}
-  function blankServerPayload(){return {main:{},discovery:{},outreach:{},delivery:{},meta:{discovery:{},persistence:{explicit_saved:false}}};}
+  function blankServerPayload(originalScripts={}){return {main:{},discovery:{},outreach:Object.keys(originalScripts).length?{messageStudio:{originalScripts}}:{},delivery:{},meta:{discovery:{},persistence:{explicit_saved:false}}};}
   function readResetIntent(){const raw=root.localStorage?.getItem(RESET_PENDING_KEY);if(!raw)return null;if(raw==="1")return {workspace_id:""};const parsed=safeJson(raw,null);return isObject(parsed)?parsed:null;}
   function resetIntentMatchesUrl(url){const intent=readResetIntent();if(!intent)return false;const intended=String(intent.workspace_id||"");const actual=String(url?.searchParams?.get?.("workspace_id")||"");return !intended||!actual||intended===actual;}
   function recordResetIntent(){
@@ -147,10 +147,10 @@
 
   async function clearPendingServerReset(url,stateResponse){
     const workspaceId=url.searchParams.get("workspace_id")||"";const currentVersion=Math.max(0,Number(stateResponse?.version)||0);
-    const response=await nativeFetch(url.toString(),{method:"PUT",credentials:"include",headers:{"Accept":"application/json","Content-Type":"application/json"},body:JSON.stringify({schema_version:1,version:currentVersion,payload:blankServerPayload()})});
+    const response=await nativeFetch(url.toString(),{method:"PUT",credentials:"include",headers:{"Accept":"application/json","Content-Type":"application/json"},body:JSON.stringify({schema_version:1,version:currentVersion,payload:blankServerPayload(stateResponse?.payload?.outreach?.messageStudio?.originalScripts||{})})});
     const result=await response.clone().json().catch(()=>({}));
-    if(response.ok){root.localStorage?.removeItem(RESET_PENDING_KEY);root.sessionStorage?.removeItem(FORCE_RESET_KEY);const version=Math.max(0,Number(result.version)||currentVersion);if(workspaceId)root.sessionStorage?.setItem(HYDRATION_KEY,`${workspaceId}:${version}`);return {version,payload:{}};}
-    return {version:currentVersion,payload:{}};
+    if(response.ok){root.localStorage?.removeItem(RESET_PENDING_KEY);root.sessionStorage?.removeItem(FORCE_RESET_KEY);const version=Math.max(0,Number(result.version)||currentVersion);if(workspaceId)root.sessionStorage?.setItem(HYDRATION_KEY,`${workspaceId}:${version}`);return {version,payload:blankServerPayload(stateResponse?.payload?.outreach?.messageStudio?.originalScripts||{})};}
+    return {version:currentVersion,payload:stateResponse?.payload||{}};
   }
 
   function installFetchBoundary(){

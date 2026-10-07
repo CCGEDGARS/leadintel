@@ -52,3 +52,4 @@ test('opening update refuses abbreviation boundaries and embedded proof',()=>{
   assert.throws(()=>Facts.updateOpening(draft,trigger,{}),/preserve|safely|manually/i);
  }
 });
+test('bilingual copies of the same named project deduplicate but distinct milestones remain separate',()=>{const rows=Facts.candidates([{url:'https://company.example/en/news/plant',text:'Acme is investing in a new sorting plant in Riverside for 2028.'},{url:'https://company.example/sv/nyheter/verk',text:'Acme satsar på ett nytt sorteringsverk i Riverside för 2028.'},{url:'https://company.example/news/opening',text:'Acme is opening a sorting plant in Riverside in 2028.'}],{company:'Acme',domain:'company.example'});assert.equal(rows.length,2);});

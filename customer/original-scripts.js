@@ -1,0 +1,12 @@
+(function(root){
+ 'use strict';
+ const clone=v=>JSON.parse(JSON.stringify(v));
+ const key=(channel,style,language)=>{if(!['email','linkedin'].includes(channel)||!['professional','curiosity','friendly',...(channel==='email'?['brutal']:[])].includes(style)||! /^[a-z]{2}$/.test(language))throw Error('Choose a core style and supported language');return `${channel}:${style}:${language}`;};
+ function normalize(value={}){const out={};for(const [id,r] of Object.entries(value||{})){try{const [channel,style,language]=id.split(':');if(key(channel,style,language)!==id||language==='en'||typeof r.body!=='string'||!r.body.trim()||r.body.length>12000)continue;out[id]={body:r.body,locked:r.locked!==false,revision:Math.max(1,Number(r.revision)||1),updatedAt:String(r.updatedAt||''),history:Array.isArray(r.history)?clone(r.history):[]};}catch{}}return out;}
+ function get(value,channel,style,language){return normalize(value)[key(channel,style,language)]||null;}
+ function owner(options){if(options?.role!=='owner')throw Error('Only the workspace owner can manage original scripts');}
+ function save(value,channel,style,language,body,options={}){owner(options);const id=key(channel,style,language);if(language==='en')throw Error('The English core original is protected');const out=normalize(value),old=out[id];if(old?.locked)throw Error('Original script is locked. Unlock deliberately before revising.');body=String(body||'').trim();if(!body||body.length>12000)throw Error('Add an original script of up to 12,000 characters');out[id]={body,locked:true,revision:(old?.revision||0)+1,updatedAt:new Date().toISOString(),history:old?[...old.history,{body:old.body,revision:old.revision,updatedAt:old.updatedAt}]:[]};return out;}
+ function unlock(value,channel,style,language,options={}){owner(options);const out=normalize(value),id=key(channel,style,language);if(!out[id])throw Error('No original to unlock');out[id].locked=false;return out;}
+ function restore(value,channel,style,language,revision,options={}){owner(options);const old=get(value,channel,style,language),previous=old?.history.find(r=>r.revision===revision);if(!previous)throw Error('Previous version unavailable');return save(unlock(value,channel,style,language,options),channel,style,language,previous.body,options);}
+ const api={normalize,get,save,unlock,restore};if(typeof module==='object'&&module.exports)module.exports=api;else root.LeadIntelOriginalScripts=api;
+})(typeof window==='object'?window:globalThis);

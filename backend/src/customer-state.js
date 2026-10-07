@@ -1,3 +1,4 @@
+import {validateOriginalScriptsWrite} from './original-scripts-policy.js';
 export const MAX_CUSTOMER_STATE_BYTES=500*1024;
 const ALLOWED_KEYS=new Set(['main','discovery','outreach','delivery','meta']);
 const encoder=new TextEncoder();
@@ -21,8 +22,9 @@ export async function getCustomerState(env,workspaceId){
   let payload={};try{payload=normalizeCustomerPayload(JSON.parse(row.payload_json||'{}'));}catch{}
   return {workspace_id:row.workspace_id,schema_version:Number(row.schema_version)||1,version:Number(row.version)||1,payload,updated_at:row.updated_at||null};
 }
-export async function putCustomerState(env,{workspaceId,userId,expectedVersion,schemaVersion,payload}){
+export async function putCustomerState(env,{workspaceId,userId,expectedVersion,schemaVersion,payload,role}){
   const current=await getCustomerState(env,workspaceId);const decision=validateCustomerStateWrite(current,{expectedVersion,schemaVersion,payload});if(decision.conflict)return decision;
+  const before=current.payload?.outreach?.messageStudio?.originalScripts||{},after=payload?.outreach?.messageStudio?.originalScripts||{};if(JSON.stringify(before)!==JSON.stringify(after)){const member=role?{role}:await env.DB.prepare('SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?').bind(workspaceId,userId).first();validateOriginalScriptsWrite(current.payload,payload,member?.role);}
   const next=decision.next;let result;
   if(current.version===0){
     result=await env.DB.prepare(`INSERT OR IGNORE INTO customer_workspace_state(workspace_id,schema_version,version,payload_json,updated_by,updated_at) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)`).bind(workspaceId,next.schema_version,next.version,JSON.stringify(next.payload),userId).run();
