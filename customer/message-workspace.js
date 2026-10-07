@@ -73,7 +73,8 @@
   q('mw-business-value').textContent=context.value?'Reviewed business outcome: '+context.value:'No approved business outcome supplied. Review your Profile answers.';
   q('mw-proof-value').textContent=context.proof?'Approved proof: '+context.proof:'No approved measured results supplied. Use your website for capabilities, not as proof of invented savings.';
   for(const option of q('message-subject-choice').options)if(option.value)option.textContent=subjectPreview(option.textContent,context);
-  const resolve=q('mw-resolve');resolve.hidden=!view.action;resolve.textContent=view.action==='sync'?'Review sync choices ↑':view.action==='profile'?'Review Profile answers →':view.action==='settings'?'Complete sender & settings':'Return to Buyers';resolve.onclick=()=>{if(view.action==='settings'){q('mw-settings').open=true;q('mw-settings').scrollIntoView({block:'center',behavior:'smooth'});}else context.onResolve?.(view.action);};
+  const resolve=q('mw-resolve');resolve.hidden=!view.action;resolve.textContent=view.action==='sync'?'Review sync choices ↑':view.action==='profile'?'Review Profile answers →':view.action==='settings'?'Complete sender & settings':'Return to Buyers';resolve.onclick=()=>{if(view.action==='sync'){showSyncChoices(document);}else if(view.action==='settings'){q('mw-settings').open=true;q('mw-settings').scrollIntoView({block:'center',behavior:'smooth'});}else context.onResolve?.(view.action);};
+  if(!context.syncConflict)restoreSyncChoices(document);
   q('mw-copy-email').hidden=linkedin;q('mw-empty').hidden=context.hasDraft;const grid=q('step-6').querySelector('.outreach-drafts .script-grid');grid.hidden=!context.hasDraft;q('mw-draft-toolbar').hidden=!context.hasDraft;
   const approval=q('step-6').querySelector('.outreach-approval');approval.hidden=linkedin||!context.hasDraft;q('approve-outreach').textContent=context.approved?'Approved ✓':'Approve & continue →';
   q('message-generation-status').hidden=!context.busy&&!context.generationError;
@@ -82,5 +83,12 @@
   const delivery=q('continue-to-delivery')?.closest('.delivery-entry');if(delivery)delivery.hidden=linkedin||!context.approved;
   paintStyles(document);return view;
  }
+ function showSyncChoices(document){
+  const notice=document.getElementById('mw-readiness');let panel=document.getElementById('mw-sync-choices');if(!panel){panel=document.createElement('section');panel.id='mw-sync-choices';panel.className='mw-sync-choices';panel.setAttribute('aria-label','Workspace sync choices');panel.innerHTML='<strong>Choose which workspace version to keep</strong><p>Keep my local changes saves this browser’s workspace. Use server version loads the saved workspace. Review your draft before choosing; neither option is selected automatically.</p>';notice.append(panel);}
+  const actions=document.getElementById('server-conflict-actions');if(!actions){panel.textContent='Sync recovery controls are still loading. Your local changes are preserved.';panel.hidden=false;return;}
+  for(const control of [actions,document.getElementById('server-sync-recovery')]){if(!control||panel.contains(control))continue;const marker=document.createComment('sync control origin');control.before(marker);control._mwSyncOrigin=marker;panel.append(control);}
+  actions.hidden=false;panel.hidden=false;panel.scrollIntoView?.({block:'nearest',behavior:'smooth'});actions.querySelector('button:not(:disabled)')?.focus();
+ }
+ function restoreSyncChoices(document){const panel=document.getElementById('mw-sync-choices');if(!panel)return;for(const control of [...panel.querySelectorAll('#server-conflict-actions,#server-sync-recovery')]){const marker=control._mwSyncOrigin;if(marker?.parentNode){marker.before(control);marker.remove();delete control._mwSyncOrigin;}}panel.hidden=true;}
  const api=Object.freeze({mount,render,state,paintStyles,subjectPreview});if(typeof module==='object'&&module.exports)module.exports=api;else root.LeadIntelMessageWorkspace=api;
 })(typeof window==='object'?window:globalThis);
