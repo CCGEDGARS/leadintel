@@ -20,3 +20,8 @@ test('approved fit aliases use only the real current score and active sender',()
  assert.doesNotMatch(JSON.stringify(p),/Malmberget|ERCON|Edgars/);
  assert.match(M.prompt(s).system,/Preserve all literal wording and punctuation/);
 });
+
+test('missing score and missing sender identity cannot admit an invented score',()=>{
+ const e={sender:'',company:'',calendly:'https://calendly.com/example/meeting'},s=M.chooseSubject(M.normalize({mode:'brutal'},e),'brutal','fit');
+ assert.throws(()=>M.parse(JSON.stringify({subject:'BuyerCo — fit: 98/100',message:'30-minute Zoom '+e.calendly}),e,{studio:s,context:{buyerCompany:'BuyerCo',fitScore:null}}),/Add sender details/);
+});
