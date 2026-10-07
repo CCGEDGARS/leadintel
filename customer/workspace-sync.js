@@ -40,7 +40,7 @@
       if(NAVIGATION_PATHS.has(path))return l;
       const field=path.split('.').at(-1);
       if(field==='buyerQualification')return undefined; // Recomputed from preserved buyer evidence.
-      if(ATOMIC_FIELDS.has(field)||/^(?:template-[1-5]|linkedin-template-[1-3]|buyer-draft:.*)$/.test(field))return choose(path,l,r);
+      if(ATOMIC_FIELDS.has(field)||/^(?:template-[1-5]|linkedin-template-[1-3]|buyer-draft:.*|(?:email|linkedin):(?:professional|curiosity|friendly|brutal):[a-z]{2})$/.test(field))return choose(path,l,r);
       const maps=recordMaps([bl,l,br,r],path);
       if(maps){
         const [bm,lm,sm,rm]=maps,output=[];

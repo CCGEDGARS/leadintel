@@ -46,8 +46,8 @@ test('a sync conflict takes priority over apparent missing Profile answers and b
 
 test('template generation is distinct from original AI generation and retains protected originals',()=>{
  const {document,w}=mounted(),base={ready:true,authenticated:true,hasDraft:true,channel:'linkedin'};
- w.LeadIntelMessageWorkspace.render(document,{...base,templateSelected:true});assert.match(document.getElementById('message-generate').textContent,/from this template/i);
- w.LeadIntelMessageWorkspace.render(document,{...base,templateSelected:false});assert.match(document.getElementById('message-generate').textContent,/Regenerate AI/i);
+ w.LeadIntelMessageWorkspace.render(document,{...base,templateSelected:true});assert.match(document.getElementById('message-generate').textContent,/Apply selected style/i);
+ w.LeadIntelMessageWorkspace.render(document,{...base,templateSelected:false});assert.match(document.getElementById('message-generate').textContent,/Apply selected style/i);
  assert.ok(document.getElementById('message-template-body').readOnly);
 });
 test('opening-only update is available only with a reviewed event and an unapproved draft',()=>{

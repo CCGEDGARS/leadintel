@@ -1,10 +1,10 @@
 (function(root,factory){
   const brandIdentity=root?.LeadIntelBrandIdentity||(typeof module!=="undefined"&&module.exports?require("./brand-identity.js"):null);
   const contentLanguage=root?.LeadIntelContentLanguage||(typeof module!=="undefined"&&module.exports?require("./content-language.js"):null);
-  const api=factory(brandIdentity,contentLanguage);
+  const api=factory(brandIdentity,contentLanguage,()=>root?.LeadIntelMessageFacts||(typeof module!=='undefined'&&module.exports?require('./message-facts.js'):null));
   if(typeof module!=="undefined"&&module.exports)module.exports=api;
   if(root)root.LeadIntelOutreach=api;
-})(typeof globalThis!=="undefined"?globalThis:this,function(BrandIdentity,ContentLanguage){
+})(typeof globalThis!=="undefined"?globalThis:this,function(BrandIdentity,ContentLanguage,MessageFacts){
   "use strict";
 
   const DEFAULT_OUTREACH_STATE=Object.freeze({selectedDomain:"",items:[]});
@@ -167,7 +167,7 @@
     const companyDomain=domainOf(`https://${clean(dossier.domain)}`),url=normalizeUrl(value.url);
     const evidence=(dossier.evidence||[]).find(item=>normalizeUrl(item.url)===url);
     if(!companyDomain||companyDomain!==clean(value.companyDomain)||!evidence)return null;
-    const sourceText=clean(evidence.text||evidence.description),plainText=sourceText.replace(/!\[[^\]]*\]\([^)]*\)/g,'').replace(/[#*]/g,'');
+    const sourceText=clean(evidence.text||evidence.description),plainText=MessageFacts()?.clean(sourceText)||sourceText.replace(/!\[[^\]]*\]\([^)]*\)/g,'').replace(/[#*]/g,'');
     const excerpt=clean(value.excerpt).slice(0,900);
     if(!excerpt||!(sourceText.includes(excerpt)||plainText.includes(excerpt)))return null;
     return {id:url,companyDomain,url,title:clean(evidence.title)||url,excerpt,sourceDate:new URL(url).pathname==='/'?'':clean(evidence.date),detectedAt:clean(value.detectedAt),reviewedAt:clean(value.reviewedAt),verification:'user_reviewed',tracked:true};

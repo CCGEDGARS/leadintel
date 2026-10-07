@@ -1277,8 +1277,11 @@ async function saveResetStateToServer(){
     if(!result.saved)throw new Error("Server reset was not saved");
   }
 }
-function clearResetLocalKeys(keys=[]){keys.forEach(key=>localStorage.removeItem(key));}
+function protectedOriginalsForReset(){try{return JSON.parse(localStorage.getItem('leadintel_customer_v2_outreach')||'{}').messageStudio?.originalScripts||{};}catch{return {};}}
+function retainResetOriginals(originalScripts){if(Object.keys(originalScripts).length)localStorage.setItem('leadintel_customer_v2_outreach',JSON.stringify({messageStudio:{originalScripts}}));}
+function clearResetLocalKeys(keys=[]){const originals=protectedOriginalsForReset();keys.forEach(key=>localStorage.removeItem(key));if(keys.includes('leadintel_customer_v2_outreach'))retainResetOriginals(originals);}
 async function resetWorkspace(){
+  const protectedOriginals=protectedOriginalsForReset();
   window.LeadIntelWorkspaceResetHygiene?.prepareWorkspaceReset?.();
   await window.LeadIntelIntelligenceSources?.clearAll?.();
   const persistence=window.LeadIntelWorkspacePersistence;
@@ -1286,6 +1289,7 @@ async function resetWorkspace(){
   window.LeadIntelWorkspaceResetHygiene?.clearBrowserWorkspaceResidue?.();
   state=defaultState();editMode=false;saveState();
   clearResetLocalKeys(["leadintel_customer_v2_discovery","leadintel_customer_v2_outreach","leadintel_customer_v2_delivery","leadintel_customer_v2_discovery_meta","leadintel_customer_v2_website_activation_v1","leadintel_customer_v2_research_meta_v1","leadintel_customer_v2_workspace_saved_snapshot_v1"]);
+  retainResetOriginals(protectedOriginals);
   syncInputsFromState();restoreResetLanding();
   window.dispatchEvent(new CustomEvent("leadintel:workspace-reset",{detail:{scope:"company"}}));
   setTimeout(restoreResetLanding,0);
