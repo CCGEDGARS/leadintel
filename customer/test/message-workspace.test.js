@@ -82,3 +82,13 @@ test('LinkedIn editor renders protected core styles with body-only preview and m
  assert.deepEqual(Array.from(document.getElementById('message-mode').options,o=>o.value),['professional','curiosity','friendly','original']);assert.equal(document.getElementById('message-template-editor').hidden,false);assert.match(document.getElementById('message-template-origin').textContent,/Protected/);assert.equal(document.getElementById('message-template-body').readOnly,true);assert.equal(document.getElementById('message-template-subject').closest('label').hidden,true);assert.equal(document.getElementById('message-subject-choice-label').hidden,true);assert.match(document.getElementById('mw-channel').textContent,/LinkedIn · manual/);assert.equal(document.querySelector('[data-writing-style="brutal"]'),null);
  studio=Studio.normalize({...studio,linkedinMode:'original'});w.renderMessageStudio();assert.equal(document.getElementById('message-template-editor').hidden,true);assert.ok(Object.isFrozen(Studio.linkedinDefaults[2]));
 });
+
+test('approved subject aliases display current workspace facts and only a real score, including zero',()=>{
+ const c={sender:'Alex Smith',senderCompany:'LegalCo',company:'ClientCo',value:'simplify contract review',trigger:{title:'New branch'},fitScore:0};
+ assert.equal(Workspace.subjectPreview('{{senderFullName}}. {{senderCompany}}',c),'Alex Smith. LegalCo');
+ assert.equal(Workspace.subjectPreview('{{recipientCompany}} — fit: {{fitScore}}/100',c),'ClientCo — fit: 0/100');
+ assert.equal(Workspace.subjectPreview('Regarding {{verifiedProjectOrExpansion}}',c),'Regarding New branch');
+ assert.equal(Workspace.subjectPreview('An opportunity to {{supportedBenefit}}',c),'An opportunity to simplify contract review');
+ assert.equal(Workspace.subjectPreview('{{senderName}} will join the call.',c),'Alex Smith will join the call.');
+ assert.equal(Workspace.subjectPreview('{{recipientCompany}} — fit: {{fitScore}}/100',{...c,fitScore:null}),'ClientCo — fit: [real research score required]/100');
+});
