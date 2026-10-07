@@ -149,6 +149,13 @@ function renderStageGuide(stage){
   list.replaceChildren(...nodes);
 }
 function renderSidebarSteps(marker,stage,expanded){
+  if(stage.id===6){
+    let channels=marker.querySelector('[data-message-channels]');if(!channels){channels=document.createElement('ol');channels.className='sidebar-substeps message-channel-nav';channels.dataset.messageChannels='true';channels.setAttribute('aria-label','Message channels');marker.append(channels);}
+    const choice=readStageJson(DISCOVERY_STORAGE_KEY+'_meta').scriptBuyer,workspace=window.LeadIntelServerBridge?.workspace?.id;
+    const active=stage.status==='current'&&currentProcessStep()===6&&workspace&&choice?.workspaceId===workspace?choice.channel:'';
+    channels.replaceChildren(...['email','linkedin'].map(channel=>{const row=document.createElement('li'),button=document.createElement('button');button.type='button';button.dataset.messageChannel=channel;button.textContent=channel==='email'?'Email':'LinkedIn';button.disabled=!stage.available&&stage.status!=='current';if(active===channel)button.setAttribute('aria-current','page');row.append(button);return row;}));
+  }
+
   let toggle=marker.querySelector('[data-sidebar-expand]');
   if(!toggle){
     toggle=document.createElement('button');toggle.type='button';toggle.className='sidebar-expand';toggle.dataset.sidebarExpand='true';
@@ -251,12 +258,13 @@ if(processMap){
   processMap.addEventListener("click",event=>{const substep=event.target.closest("[data-stage-mini-step]");if(substep){reviewMiniStep(Number(substep.dataset.stageId),substep.dataset.stageMiniStep);return;}const button=event.target.closest("[data-process-step]");if(button)openProcessStep(button.dataset.processStep);});
   const steps=document.querySelector(".steps");
   steps?.addEventListener('click',event=>{
+    const channel=event.target.closest('[data-message-channel]');if(channel){event.preventDefault();event.stopPropagation();const open=window.LeadIntelDiscoveryUI?.openMessageChannel||window.LeadIntelOutreachUI?.openMessageChannel;if(open)void open(channel.dataset.messageChannel).catch(()=>processToast('Unable to reopen the message. Your drafts are preserved.'));else{openProcessStep(5);processToast('Select a recipient in Buyers first.');}return;}
     const toggle=event.target.closest('[data-sidebar-expand]');
     if(toggle){event.preventDefault();event.stopPropagation();const id=Number(toggle.closest('[data-workflow-stage]')?.dataset.workflowStage);expandedSidebarStage=expandedSidebarStage===id?0:id;syncProcessMap();return;}
     const substep=event.target.closest('[data-sidebar-substep]');
     if(substep){event.preventDefault();event.stopPropagation();reviewMiniStep(Number(substep.dataset.stageId),substep.dataset.sidebarSubstep);}
   },true);
-  steps?.addEventListener("keydown",event=>{if(event.target.closest('[data-sidebar-expand],[data-sidebar-substep]'))return;const marker=event.target.closest("[data-workflow-stage]");if(!marker||!["Enter"," "].includes(event.key))return;event.preventDefault();openProcessStep(marker.dataset.workflowStage);});
+  steps?.addEventListener("keydown",event=>{if(event.target.closest('[data-sidebar-expand],[data-sidebar-substep],[data-message-channel]'))return;const marker=event.target.closest("[data-workflow-stage]");if(!marker||!["Enter"," "].includes(event.key))return;event.preventDefault();openProcessStep(marker.dataset.workflowStage);});
   document.getElementById("company-website")?.addEventListener("input",()=>setTimeout(syncProcessMap,0));
   document.getElementById("target-market-selector")?.addEventListener("click",()=>setTimeout(syncProcessMap,0));
   window.addEventListener("leadintel:website-synced",syncProcessMap);
