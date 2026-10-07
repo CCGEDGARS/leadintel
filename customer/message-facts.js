@@ -11,11 +11,11 @@
    const excerpt=clean(source.text||source.description);const company=String(context.company||'').trim().toLowerCase(),domain=String(context.domain||'').replace(/^www\./,'');const official=u.hostname.replace(/^www\./,'')===domain;if(company&&!official&&!(clean(source.title)+' '+excerpt).toLowerCase().includes(company))continue;if(!excerpt||unsafe.test(excerpt))continue;
    const summary=event(source.text||source.description)||sentences(source.text||source.description)[0]||'';
    const kind=event(source.text||source.description)?'event':'context';
-   const date=u.pathname!=='/'&&/^\d{4}-\d{2}-\d{2}$/.test(source.date||'')&&Number.isFinite(Date.parse(source.date))?source.date:'';
+   const date=!/^\/(?:en|sv|lv)?\/?$/.test(u.pathname)&&/^\d{4}-\d{2}-\d{2}$/.test(source.date||'')&&Number.isFinite(Date.parse(source.date))?source.date:'';
    const age=date?(now-Date.parse(date))/86400000:Infinity;
    rows.push({...source,url:u.href,summary,date,kind,reviewed:false,score:(kind==='event'?100:0)+(official?20:0)+(age>=0&&age<=180?15:0),recommended:false});
   }
-  rows.sort((a,b)=>b.score-a.score||a.url.localeCompare(b.url));const seen=new Set(),unique=rows.filter(r=>{const key=r.url.replace(/\/(?:en|sv|lv)(?=\/)/g,'/language').replace(/\?.*$/,'').replace(/\/$/,'');const summaryKey=eventIdentity(r.summary,context.company)||r.summary.toLowerCase();if(seen.has(summaryKey))return false;seen.add(summaryKey);if(seen.has(key))return false;seen.add(key);return true;});
+  rows.sort((a,b)=>b.score-a.score||a.url.localeCompare(b.url));const seen=new Set(),unique=rows.filter(r=>{const key=r.url.replace(/\/(?:en|sv|lv)(?=\/)/g,'').replace(/\?.*$/,'').replace(/\/$/,'');const summaryKey=eventIdentity(r.summary,context.company)||r.summary.toLowerCase();if(seen.has(summaryKey))return false;seen.add(summaryKey);if(seen.has(key))return false;seen.add(key);return true;});
   const best=unique.find(r=>r.kind==='event');if(best)best.recommended=true;return unique;
  }
  function queries(candidate={},essentials={}){
