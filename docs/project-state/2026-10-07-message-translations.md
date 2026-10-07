@@ -1,0 +1,7 @@
+# Independent message language versions
+
+English is the original for new message generation. Users search supported language names (native or English), select a target, then Translate to create an independent editable version. Save draft stores the active copy and the language book in the existing CRM script snapshot. English changes mark prior translations as needing an update; copies are retained. Legacy originals retain their real language until the user generates an English original.
+
+Both email and LinkedIn use this flow. Translation uses the authenticated workspace AI endpoint with task outreach-translation. Activated writing references are not applied again during translation. The original and current edits are saved before translation starts; late results cannot replace another workspace, buyer, channel or changed draft. Switching context aborts translation and unlocks the next editor. Approval rejects stale translations and rechecks protected names, numbers, percentages, currencies, URLs and placeholders. AI translation remains a reviewable draft; these checks do not establish semantic fidelity.
+
+Validation: 1,887 customer tests passed; static build passed; independent code review cleared all Critical and Important findings. Added CRM round-trip, native-name search, stale versions, active translation regeneration, protected figure association, provenance restoration and late-response regression coverage. No outreach sent.
