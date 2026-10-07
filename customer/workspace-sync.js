@@ -14,7 +14,7 @@
     ['publicEmail','publicEmailUrl','publicEmailSourceCheck','patternFindings','hunterChecks','hunterFound','flowEmailCompletedFor'],
     ['publicPhone','publicPhoneUrl','flowPhoneCompletedFor']
   ];
-  const ATOMIC_FIELDS=new Set(['selectedEmailBuyer','scriptBuyer','contactVerification','publicEmailSourceCheck','messageStudioDraft']);
+  const ATOMIC_FIELDS=new Set(['selectedEmailBuyer','selectedLinkedInBuyer','scriptBuyer','contactVerification','publicEmailSourceCheck','messageStudioDraft']);
   // These fields remember the page a tab is viewing, not commercial progress.
   // Concurrent navigation should keep this tab's view and merge business data.
   const NAVIGATION_PATHS=new Set(['main.step','meta.discovery.visibleStep','meta.discovery.activeJourneyStage']);
