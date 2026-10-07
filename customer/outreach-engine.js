@@ -167,14 +167,15 @@
     const companyDomain=domainOf(`https://${clean(dossier.domain)}`),url=normalizeUrl(value.url);
     const evidence=(dossier.evidence||[]).find(item=>normalizeUrl(item.url)===url);
     if(!companyDomain||companyDomain!==clean(value.companyDomain)||!evidence)return null;
-    const excerpt=clean(evidence.text||evidence.description).slice(0,900);
-    if(!excerpt||clean(value.excerpt)!==excerpt)return null;
+    const sourceText=clean(evidence.text||evidence.description),plainText=sourceText.replace(/!\[[^\]]*\]\([^)]*\)/g,'').replace(/[#*]/g,'');
+    const excerpt=clean(value.excerpt).slice(0,900);
+    if(!excerpt||!(sourceText.includes(excerpt)||plainText.includes(excerpt)))return null;
     return {id:url,companyDomain,url,title:clean(evidence.title)||url,excerpt,sourceDate:new URL(url).pathname==='/'?'':clean(evidence.date),detectedAt:clean(value.detectedAt),reviewedAt:clean(value.reviewedAt),verification:'user_reviewed',tracked:true};
   }
-  function reviewTrigger(item={},url='',reviewedAt=new Date().toISOString()){
+  function reviewTrigger(item={},url='',reviewedAt=new Date().toISOString(),reviewedExcerpt=''){
     const dossier=item.dossier||{},evidence=(dossier.evidence||[]).find(row=>normalizeUrl(row.url)===normalizeUrl(url));
     if(!evidence)throw new Error('Choose a source from this company dossier');
-    const selectedTrigger=normalizeSelectedTrigger({url:evidence.url,companyDomain:domainOf(`https://${dossier.domain}`),excerpt:clean(evidence.text||evidence.description).slice(0,900),detectedAt:evidence.detectedAt||item.researchAt||reviewedAt,reviewedAt,verification:'user_reviewed'},dossier);
+    const selectedTrigger=normalizeSelectedTrigger({url:evidence.url,companyDomain:domainOf(`https://${dossier.domain}`),excerpt:reviewedExcerpt||clean(evidence.text||evidence.description).slice(0,900),detectedAt:evidence.detectedAt||item.researchAt||reviewedAt,reviewedAt,verification:'user_reviewed'},dossier);
     if(!selectedTrigger)throw new Error('This source has no usable excerpt. Research the company before selecting a trigger.');
     return invalidateOutreachApproval({...item,dossier:{...dossier,selectedTrigger}});
   }
