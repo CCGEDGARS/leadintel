@@ -447,3 +447,5 @@ if(readJson(DISCOVERY_META_KEY).scriptBuyer&&(mainState().step===6||readJson(DIS
 window.addEventListener('leadintel:server-ready',()=>{const choice=readJson(DISCOVERY_META_KEY).scriptBuyer;if(choice&&(mainState().step===6||readJson(DISCOVERY_META_KEY).visibleStep===6))void openBuyerScripts(choice).catch(()=>toast('Saved LinkedIn selection needs review.'));});
 
 for(const event of ['leadintel:server-conflict','leadintel:sync-resolving'])window.addEventListener(event,()=>{cancelPendingScriptGeneration();renderMessageWorkspace();});
+window.addEventListener('leadintel:sync-settled',()=>renderMessageWorkspace());
+window.addEventListener('leadintel:server-synced',()=>{if(!crmBridge()?.resolvingSync)renderMessageWorkspace();});
