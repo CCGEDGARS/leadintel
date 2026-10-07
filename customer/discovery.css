@@ -589,3 +589,7 @@
 .buyer-review-actions{display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin:18px 0}
 .buyer-review-actions > button{margin:0}
 @media(max-width:600px){.buyer-review-actions{flex-direction:column;align-items:stretch}.buyer-review-actions > button{width:100%}}
+
+.buyer-review-dialog label:has([data-scope-review-reason]){display:grid;gap:12px;margin-top:24px}
+.buyer-review-dialog [data-scope-review-reason]{min-height:112px;line-height:1.6;padding:14px;resize:vertical}
+.buyer-review-dialog [data-scope-review]{margin-top:16px}
