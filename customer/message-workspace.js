@@ -2,11 +2,12 @@
  'use strict';
  const styles=[['professional','Professional','Clear & credible'],['curiosity','NLP','Curiosity & relevance'],['friendly','Friendly','Warm & personal'],['brutal','Brutal Honesty','Transparent AI introduction'],['original','AI Generated','An original, editable draft']];
  const labels={delivery_approach:'How you deliver your service',meeting_value:'What the meeting will offer',sender:'Sender name',company:'Sender company',offer:'Your offer',target:'Who you help',problem:'The problem you solve',value:'The outcome you deliver',meetingValue:'The value of the meeting',nextAction:'Your invitation'};
- function state({ready=false,pending=false,authenticated=false,missing=[],unconfirmed=[],hasDraft=false,approved=false,busy=false,invalidCalendly=false}={}){
+ function state({ready=false,pending=false,authenticated=false,missing=[],unconfirmed=[],hasDraft=false,approved=false,busy=false,invalidCalendly=false,syncConflict=false}={}){
   const required=missing.filter(k=>k!=='calendly');
   if(busy)return {kind:'busy',canGenerate:false,text:'Writing your message…'};
   if(pending)return {kind:'loading',canGenerate:false,text:'Checking your selected recipient…'};
   if(!authenticated)return {kind:'blocked',canGenerate:false,text:'Sign in to load your saved recipient and message.',action:'buyer'};
+  if(syncConflict)return {kind:'blocked',canGenerate:false,text:'Resolve the workspace sync conflict before generating.',detail:'Your local changes and the saved server version are preserved.',action:'sync'};
   if(!ready)return {kind:'blocked',canGenerate:false,text:'Confirm a recipient in Buyers to start.',action:'buyer'};
   if(invalidCalendly)return {kind:'blocked',canGenerate:false,text:'Check your booking link.',detail:'Use a valid Calendly event URL in Sender & settings.',action:'settings'};
   if(unconfirmed.length)return {kind:'blocked',canGenerate:false,text:'Review '+unconfirmed.length+' Profile answer'+(unconfirmed.length===1?'':'s')+' before generating.',detail:unconfirmed.map(k=>labels[k]||k.replaceAll('_',' ')).join(' · '),action:'profile'};
@@ -62,7 +63,7 @@
   q('message-generate').disabled=!view.canGenerate;q('message-generate').textContent=context.busy?'Writing…':context.hasDraft?'Regenerate message ✦':'Generate message ✦';
   q('message-improve').disabled=!view.canGenerate||!context.hasDraft;
   for(const option of q('message-subject-choice').options)if(option.value)option.textContent=subjectPreview(option.textContent,context);
-  const resolve=q('mw-resolve');resolve.hidden=!view.action;resolve.textContent=view.action==='profile'?'Review Profile answers →':view.action==='settings'?'Complete sender & settings':'Return to Buyers';resolve.onclick=()=>{if(view.action==='settings'){q('mw-settings').open=true;q('mw-settings').scrollIntoView({block:'center',behavior:'smooth'});}else context.onResolve?.(view.action);};
+  const resolve=q('mw-resolve');resolve.hidden=!view.action;resolve.textContent=view.action==='sync'?'Review sync choices ↑':view.action==='profile'?'Review Profile answers →':view.action==='settings'?'Complete sender & settings':'Return to Buyers';resolve.onclick=()=>{if(view.action==='settings'){q('mw-settings').open=true;q('mw-settings').scrollIntoView({block:'center',behavior:'smooth'});}else context.onResolve?.(view.action);};
   q('mw-copy-email').hidden=linkedin;q('mw-empty').hidden=context.hasDraft;const grid=q('step-6').querySelector('.outreach-drafts .script-grid');grid.hidden=!context.hasDraft;q('mw-draft-toolbar').hidden=!context.hasDraft;
   const approval=q('step-6').querySelector('.outreach-approval');approval.hidden=linkedin||!context.hasDraft;q('approve-outreach').textContent=context.approved?'Approved ✓':'Approve & continue →';
   q('message-generation-status').hidden=!context.busy&&!context.generationError;

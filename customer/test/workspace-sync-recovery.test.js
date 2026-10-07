@@ -209,3 +209,31 @@ test('409 from concurrent stage navigation retries safely and reloads with remot
  assert.equal(puts[1].payload.discovery.people[0].name,'Remote researched buyer');assert.ok(events.includes('reload'));
  assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),false);assert.equal(root.LeadIntelServerBridge.conflict,false);
 });
+
+test('keep-local resolves only conflicting fields and retains newer server Profile answers and Calendly',async()=>{
+ let put;const {root,values,events}=load(async(input,options)=>{if(options.method==='PUT'){put=JSON.parse(options.body);return new Response(JSON.stringify({saved:true,version:10}));}return new Response(JSON.stringify(server));},{withBridge:true});
+ const base=establishBase(root,values),server=structuredClone(base);server.main.answers.offer='Remote competing offer';server.main.answers.delivery_approach='Single partner';server.main.answers.meeting_value='Real data';server.outreach.messageStudio={essentials:{calendly:'https://calendly.com/remote/meeting'}};
+ const local=JSON.parse(values.get(MAIN));local.answers.offer='Chosen local offer';values.set(MAIN,JSON.stringify(local));
+ server.version=9;server.payload=structuredClone(server);delete server.payload.version;delete server.payload.payload;
+ assert.equal((await root.LeadIntelServerBridge.resolveConflictKeepLocal()).resolved,true);
+ assert.equal(put.payload.main.answers.offer,'Chosen local offer');assert.equal(put.payload.main.answers.meeting_value,'Real data');
+ assert.equal(put.payload.outreach.messageStudio.essentials.calendly,'https://calendly.com/remote/meeting');
+ assert.ok(events.includes('reload'),'merged storage must replace stale in-memory modules');
+});
+
+test('conflict recovery retains edits made while the server refresh is pending',async()=>{
+ let finish,put;const {root,values}=load(async(input,options)=>{if(options.method==='PUT'){put=JSON.parse(options.body);return new Response(JSON.stringify({saved:true,version:10}));}return new Promise(resolve=>finish=resolve);},{withBridge:true});
+ const base=establishBase(root,values),server={version:9,payload:structuredClone(base)};server.payload.main.answers.offer='Remote offer';
+ const resolving=root.LeadIntelServerBridge.resolveConflictKeepLocal();await new Promise(resolve=>setImmediate(resolve));
+ values.set(MAIN,JSON.stringify({...base.main,answers:{...base.main.answers,offer:'Latest local edit'}}));
+ finish(new Response(JSON.stringify(server)));assert.equal((await resolving).resolved,true);assert.equal(put.payload.main.answers.offer,'Latest local edit');
+});
+
+test('conflict resolution locks editing during the merged save and reloads canonical module state',async()=>{
+ let finish,put;const {root,values,events}=load(async(input,options)=>{if(options.method==='PUT'){put=JSON.parse(options.body);return new Promise(resolve=>finish=resolve);}return new Response(JSON.stringify(server));},{withBridge:true});
+ const editable={inert:false,dataset:{}};root.document.querySelectorAll=()=>[editable];
+ const base=establishBase(root,values),server={version:9,payload:structuredClone(base)};server.payload.outreach.messageStudio={essentials:{calendly:'https://calendly.com/legal/consultation'}};
+ const resolving=root.LeadIntelServerBridge.resolveConflictKeepLocal();await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(editable.inert,true);assert.equal(root.LeadIntelServerBridge.resolvingSync,true);assert.equal(put.payload.outreach.messageStudio.essentials.calendly,'https://calendly.com/legal/consultation');
+ finish(new Response(JSON.stringify({saved:true,version:10})));assert.equal((await resolving).resolved,true);assert.ok(events.includes('reload'));assert.equal(editable.inert,false);
+});
