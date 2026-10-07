@@ -135,3 +135,4 @@ body:has(#step-6.active) .progress-panel{padding-top:24px}
 body:has(#step-6.active) .journey-compact{gap:8px}
 body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 @media(max-width:720px){body:has(#step-6.active) .progress-panel{padding-top:12px;padding-bottom:12px}body:has(#step-6.active) .steps li{padding:8px;min-width:105px}body:has(#step-6.active) .steps li em,body:has(#step-6.active) .steps li button{display:none}body:has(#step-6.active) .process-map{display:none}}
+.mw-sync-choices{margin-top:16px;padding-top:16px;border-top:1px solid #e7cc92;line-height:1.6}.mw-sync-choices .server-conflict-actions{display:flex;flex-wrap:wrap;gap:12px;margin:12px 0}.mw-sync-choices button{white-space:normal}.mw-sync-choices[hidden]{display:none!important}

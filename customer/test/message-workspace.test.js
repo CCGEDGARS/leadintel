@@ -59,3 +59,12 @@ test('opening-only update is available only with a reviewed event and an unappro
 test('manual LinkedIn copy and profile actions are grouped together',()=>{
  const {document}=mounted();const group=document.querySelector('.mw-linkedin-actions');assert.ok(group.querySelector('[data-copy-field="linkedin"]'));assert.ok(group.querySelector('#linkedin-open-profile'));assert.match(document.querySelector('#linkedin-manual-actions > p').textContent,/record/i);
 });
+test('sync review reveals canonical recovery buttons beside the warning and preserves their handlers',()=>{
+ const {document,w}=mounted(),header=document.createElement('div');
+ header.innerHTML='<div id="server-conflict-actions"><button id="server-use-server">Use server version</button><button id="server-keep-local">Keep my local changes</button></div><button id="server-sync-recovery">Download recovery copy</button>';document.body.prepend(header);
+ let kept=0;const keep=document.getElementById('server-keep-local');keep.onclick=()=>kept++;
+ w.LeadIntelMessageWorkspace.render(document,{ready:true,authenticated:true,syncConflict:true,hasDraft:true});document.getElementById('mw-resolve').click();
+ const panel=document.getElementById('mw-sync-choices');assert.ok(panel);assert.equal(panel.hidden,false);assert.ok(panel.contains(keep));assert.ok(panel.contains(document.getElementById('server-sync-recovery')));assert.equal(document.querySelectorAll('#server-keep-local').length,1);assert.equal(kept,0);keep.click();assert.equal(kept,1);
+ document.getElementById('mw-resolve').click();w.LeadIntelMessageWorkspace.render(document,{ready:true,authenticated:true,syncConflict:true});assert.equal(panel.hidden,false);assert.equal(document.querySelectorAll('#server-keep-local').length,1);
+ w.LeadIntelMessageWorkspace.render(document,{ready:true,authenticated:true,syncConflict:false});assert.equal(panel.hidden,true);assert.equal(document.getElementById('server-conflict-actions').parentElement,header);assert.equal(document.getElementById('server-sync-recovery').parentElement,header);assert.deepEqual([...header.children].map(el=>el.id),['server-conflict-actions','server-sync-recovery']);
+});

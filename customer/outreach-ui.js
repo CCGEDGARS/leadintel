@@ -1,4 +1,4 @@
-import './message-workspace.js?v=20261007-v2';
+import './message-workspace.js?v=20261007-v3';
 import './message-facts.js?v=20261007-v1';
 import './personal-template-library.js?foundation=20261006-v12';
 import './message-studio.js?v=20261006-sender-identity-v1&foundation=20261006-v12&booking-recovery=20261007-v1';
@@ -142,7 +142,7 @@ function updateMessageOpening(){
 }
 
 function injectOutreachUI(){
- if(!document.querySelector('link[data-message-workspace]')){const link=document.createElement('link');link.rel='stylesheet';link.href='message-workspace.css?v=20261007-v1';link.dataset.messageWorkspace='true';document.head.append(link);}
+ if(!document.querySelector('link[data-message-workspace]')){const link=document.createElement('link');link.rel='stylesheet';link.href='message-workspace.css?v=20261007-v2';link.dataset.messageWorkspace='true';document.head.append(link);}
   if(!document.querySelector('link[data-leadintel-asset="outreach-css"]')){const link=document.createElement("link");link.rel="stylesheet";link.href=asset("outreach.css");link.dataset.leadintelAsset="outreach-css";document.head.appendChild(link);}
   const pipelinePanel=document.querySelector("#step-5 .pipeline-panel");
   if(pipelinePanel&&!q("continue-to-outreach"))pipelinePanel.insertAdjacentHTML("afterend",'<div class="outreach-entry workflow-next-action" hidden><div><span class="eyebrow">Next step</span><strong>Identify the buyers at a saved company, then prepare a relevant message.</strong></div><button class="primary-btn stage-next-action" id="continue-to-outreach" type="button" disabled aria-disabled="true">Continue to Buyers →</button></div>');
