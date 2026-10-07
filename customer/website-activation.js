@@ -181,6 +181,9 @@
     finally{running=false;render();}
   }
   function guardProtectedNavigation(event){
+    // Message shortcuts validate the saved recipient and workspace themselves.
+    // They are actions nested inside a stage marker, not entry into Setup.
+    if(event.target?.closest?.('.steps [data-workflow-stage="6"] [data-message-channel]'))return;
     const target=event.target?.closest?.("#to-questionnaire,[data-step-marker],[data-process-step]");if(!target)return;
     const step=target.id==="to-questionnaire"?2:Number(target.dataset.stepMarker||target.dataset.processStep)||1;if(step<=1)return;
     if(!isCurrentWebsiteActive()){event.preventDefault();event.stopImmediatePropagation();setStatus("error","Activate your website first. LeadIntel must successfully read it before continuing.");return;}
