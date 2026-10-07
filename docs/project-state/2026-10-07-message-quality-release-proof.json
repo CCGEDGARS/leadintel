@@ -1,0 +1,309 @@
+{
+  "schemaVersion": 1,
+  "application": "LeadIntel",
+  "environment": "production",
+  "verifiedAt": "2026-10-07T19:34:45.829Z",
+  "expected": {
+    "sha": "3a57572893d49bc645725ca8595b8df186835d11",
+    "ref": "main"
+  },
+  "ci": {
+    "runId": "37675433866",
+    "conclusion": "success",
+    "passed": true
+  },
+  "manifest": {
+    "url": "https://leadintel.ccgroup.lv/release.json?verify=d148db83-eb5a-42f0-9cf0-ec37029caf86",
+    "status": 200,
+    "commit": "3a57572893d49bc645725ca8595b8df186835d11",
+    "ref": "main",
+    "service": "leadintel-customer",
+    "passed": true
+  },
+  "backend": {
+    "url": "https://leadintel-api.edgars-7e7.workers.dev/api/health",
+    "status": 200,
+    "passed": true
+  },
+  "smokeChecks": [
+    {
+      "id": "customer-shell",
+      "url": "https://leadintel.ccgroup.lv/customer/",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "website-input-normalization",
+      "url": "https://leadintel.ccgroup.lv/customer/website-input-sync.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "discovery-bootstrap",
+      "url": "https://leadintel.ccgroup.lv/customer/",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "discovery-runtime",
+      "url": "https://leadintel.ccgroup.lv/customer/discovery-ui.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "production-entry",
+      "url": "https://leadintel.ccgroup.lv/",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "first-party-research",
+      "url": "https://leadintel.ccgroup.lv/customer/first-party-research.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "approved-workflow-controls",
+      "url": "https://leadintel.ccgroup.lv/customer/approved-workflow-ui.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "qualified-company-list",
+      "url": "https://leadintel.ccgroup.lv/customer/discovery-engine.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "clear-company-results",
+      "url": "https://leadintel.ccgroup.lv/customer/discovery-ui.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "buyer-failure-recovery",
+      "url": "https://leadintel.ccgroup.lv/customer/discovery-ui.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "first-party-api-session",
+      "url": "https://leadintel.ccgroup.lv/api/session",
+      "status": 401,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "first-party-api-transport",
+      "url": "https://leadintel.ccgroup.lv/customer/api-transport.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "email-guess-quality",
+      "url": "https://leadintel.ccgroup.lv/customer/discovery-engine.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "contact-confirmation-policy",
+      "url": "https://leadintel.ccgroup.lv/customer/contact-confirmation-policy.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "separate-apollo-capabilities",
+      "url": "https://leadintel.ccgroup.lv/customer/service-settings-extension.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "public-confirmation-workflow",
+      "url": "https://leadintel.ccgroup.lv/customer/approved-workflow-ui.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "safe-workspace-sync",
+      "url": "https://leadintel.ccgroup.lv/customer/workspace-sync.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "workspace-sync-recovery",
+      "url": "https://leadintel.ccgroup.lv/customer/server-bridge.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "buyer-decision-priority",
+      "url": "https://leadintel.ccgroup.lv/customer/discovery-engine.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "top-four-selective-research",
+      "url": "https://leadintel.ccgroup.lv/customer/discovery-ui.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "linkedin-direct-message-handoff",
+      "url": "https://leadintel.ccgroup.lv/customer/outreach-ui.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "linkedin-review-crm-contract",
+      "url": "https://leadintel.ccgroup.lv/customer/discovery-ui.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "independent-contact-checks",
+      "url": "https://leadintel.ccgroup.lv/customer/discovery-ui.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "automatic-linkedin-identity",
+      "url": "https://leadintel.ccgroup.lv/customer/discovery-engine.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "evidence-based-linkedin-drafts",
+      "url": "https://leadintel.ccgroup.lv/customer/outreach-engine.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "executive-top-four-policy",
+      "url": "https://leadintel.ccgroup.lv/customer/discovery-engine.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "executive-coverage-controls",
+      "url": "https://leadintel.ccgroup.lv/customer/discovery-ui.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "nested-research-state-sync",
+      "url": "https://leadintel.ccgroup.lv/customer/state-budget.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "independent-email-proceed-gate",
+      "url": "https://leadintel.ccgroup.lv/customer/discovery-ui.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "selected-email-recipient-bridge",
+      "url": "https://leadintel.ccgroup.lv/customer/discovery-ui.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "recipient-handoff-error-feedback",
+      "url": "https://leadintel.ccgroup.lv/customer/outreach-ui.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "workspace-sync-baselines",
+      "url": "https://leadintel.ccgroup.lv/customer/workspace-persistence.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "message-studio-templates",
+      "url": "https://leadintel.ccgroup.lv/customer/message-studio.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "linkedin-message-studio",
+      "url": "https://leadintel.ccgroup.lv/customer/outreach-ui.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "linkedin-template-library",
+      "url": "https://leadintel.ccgroup.lv/customer/personal-template-library.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "writing-reference-interface",
+      "url": "https://leadintel.ccgroup.lv/customer/writing-references-ui.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "writing-reference-api-private",
+      "url": "https://leadintel.ccgroup.lv/api/writing-references?workspace_id=edgars-latvia",
+      "status": 401,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "focused-message-workspace",
+      "url": "https://leadintel.ccgroup.lv/customer/message-workspace.js",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "focused-message-responsive-layout",
+      "url": "https://leadintel.ccgroup.lv/customer/message-workspace.css",
+      "status": 200,
+      "passed": true,
+      "failures": []
+    }
+  ],
+  "deployment": {
+    "required": false,
+    "passed": null
+  },
+  "verdict": "PROVEN",
+  "failures": []
+}
