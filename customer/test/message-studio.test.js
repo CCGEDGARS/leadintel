@@ -26,3 +26,10 @@ test('all default styles place a single action after meeting value and expose pr
  const s=M.normalize({},essentials);for(const t of s.templates){assert.ok(t.body.includes(t.id==='professional'?'{{roleQuestion}}':t.id==='curiosity'?'{{deliveryChallenge}}':t.id==='friendly'?'{{friendlyBenefit}}':'{{honestBenefit}}'));assert.ok(t.body.indexOf('{{nextAction}}')>t.body.lastIndexOf('{{meetingValue}}'));}
  const p=M.prompt(s);assert.match(p.system,/hypothesis/i);assert.match(p.system,/immediately after/i);
 });
+
+test('restored booking placeholders use only the active workspace valid event link',()=>{
+ const text='Hi Sam, 30-minute Zoom? [Add your Calendly link]';
+ assert.equal(M.resolveBookingPlaceholder(text,'https://calendly.com/legal/advice'),'Hi Sam, 30-minute Zoom? https://calendly.com/legal/advice');
+ for(const url of ['', 'https://calendly.com/', 'https://evil.example/meeting', 'javascript:alert(1)'])assert.equal(M.resolveBookingPlaceholder(text,url),text);
+ const existing='Use https://calendly.com/another/meeting';assert.equal(M.resolveBookingPlaceholder(existing,'https://calendly.com/sender/meeting'),existing);
+});

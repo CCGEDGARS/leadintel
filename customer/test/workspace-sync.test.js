@@ -79,3 +79,19 @@ test('ambiguous record identities remain blocked and simultaneous qualification 
  const result=Sync.merge(b,l,r);assert.equal(result.safe,true);assert.equal(result.payload.discovery.people[0].buyerQualification,undefined);
  l.discovery.people.push({...l.discovery.people[0]});assert.equal(Sync.merge(b,l,r).safe,false);
 });
+
+test('an explicit conflict choice preserves independent Profile, booking and template edits from both sessions',()=>{
+ const b=base(),l=structuredClone(b),r=structuredClone(b);
+ l.main.answers.offer='Local offer';r.main.answers.offer='Remote offer';
+ l.outreach.messageStudio={linkedinTemplates:{'linkedin-template-1':{id:'linkedin-template-1',body:'My draft'}}};
+ r.main.answers.delivery_approach='One accountable partner';r.main.answers.meeting_value='Compare requirements and data';
+ r.outreach.messageStudio={essentials:{calendly:'https://calendly.com/sender/strategy-call'}};
+ for(const conflictPreference of ['local','server']){
+ const result=Sync.merge(b,l,r,{conflictPreference});assert.equal(result.safe,true);
+ assert.equal(result.payload.main.answers.offer,conflictPreference==='local'?'Local offer':'Remote offer');
+ assert.equal(result.payload.main.answers.delivery_approach,r.main.answers.delivery_approach);
+ assert.equal(result.payload.outreach.messageStudio.essentials.calendly,r.outreach.messageStudio.essentials.calendly);
+ assert.equal(result.payload.outreach.messageStudio.linkedinTemplates['linkedin-template-1'].body,'My draft');
+ }
+ assert.equal(Sync.merge(b,l,r).safe,false,'automatic merging still blocks a real same-field conflict');
+});

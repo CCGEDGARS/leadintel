@@ -585,3 +585,7 @@
 .buyer-four-actions .buyer-confirm-needed{background:#fff3d4;border-color:#b77b12;color:#754b00;box-shadow:0 0 0 2px #e5b95740}
 .buyer-four-actions button:disabled{background:#edf0ef;color:#77817c;border-color:#d6ded9;box-shadow:none;cursor:not-allowed;opacity:1}
 .buyer-four-actions .buyer-proceed-ready{background:#0d6453;color:#fff;border-color:#0d6453}
+
+.buyer-review-actions{display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin:18px 0}
+.buyer-review-actions > button{margin:0}
+@media(max-width:600px){.buyer-review-actions{flex-direction:column;align-items:stretch}.buyer-review-actions > button{width:100%}}

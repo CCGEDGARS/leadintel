@@ -189,9 +189,26 @@
     clearTimeout(saveTimer);setConflictBusy(true);setStatus('Resolving sync conflict…','saving');
     try{
       for(let attempt=0;attempt<3;attempt++){
+        const base=root.LeadIntelWorkspacePersistence?.syncedBase?.(workspaceId);
+        const baseVersion=Number(readDirtyLocalState()?.base_version??bridge.stateVersion);
         const state=await fetchWorkspaceState();
         if(bridge.workspace?.id!==workspaceId)return {resolved:false};
+        const local=bundle();
         latestState=state;preserveSyncRecovery(state,source);
+        // A conflict choice applies only to overlapping edits. Keep unrelated
+        // Profile answers, settings, drafts and templates from both sessions.
+        if(base?.workspaceId===workspaceId&&base.version===baseVersion&&root.LeadIntelWorkspaceSync&&state.payload){
+          const server=root.LeadIntelStateBudget?.restoreFromSync?.(state.payload)||state.payload;
+          const combined=root.LeadIntelWorkspaceSync.merge(base.payload,local,server,{localBase:base.localPayload||base.payload,conflictPreference:source});
+          try{applyPayload(combined.payload);}catch(cause){try{applyPayload(local);}catch{}throw cause;}
+          root.LeadIntelWorkspacePersistence?.snapshotFromServerPayload?.(state.payload,{workspaceId,version:Number(state.version),dirty:true});
+          bridge.conflict=false;bridge.conflictState=null;bridge.conflictDetails=null;sessionStorage.removeItem(CONFLICT_KEY);
+          rebaseDirtyLocalState();renderConflictActions();setStatus('Saving combined changes…','saving');
+          const result=await saveNow({saveIntent:true,explicitSave:true});
+          if(result.saved){location.reload();return {resolved:true,source,combined:true,...result};}
+          if(!result.conflict)throw new Error('Combined changes could not be saved; retry recovery');
+          continue;
+        }
         if(source==='server'){
           applyPayload(state.payload);bridge.stateVersion=Number(state.version)||0;
           rememberServerVersion(workspaceId,bridge.stateVersion);clearDirtyLocalState();
@@ -211,7 +228,7 @@
       bridge.conflict=true;bridge.conflictState=bridge.conflictState||latestState;renderConflictActions();setStatus('Recovery failed · local changes preserved','error');showToast(`Could not resolve sync: ${String(cause?.message||'Request failed').slice(0,180)}. Both versions are preserved.`);return {resolved:false,source,saved:false,error:String(cause?.message||cause)};
     }finally{setConflictBusy(false);}
   }
-  function setConflictBusy(busy){for(const id of ['server-use-server','server-keep-local']){const button=document.getElementById(id);if(button)button.disabled=busy;}document.getElementById('server-conflict-actions')?.setAttribute('aria-busy',String(busy));}
+  function setConflictBusy(busy){bridge.resolvingSync=busy;for(const element of document.querySelectorAll?.('.step-view, .sidebar, [role=dialog]')||[]){if(busy){element.dataset.syncWasInert=String(element.inert);element.inert=true;}else if(element.dataset.syncWasInert!==undefined){element.inert=element.dataset.syncWasInert==='true';delete element.dataset.syncWasInert;}}if(busy)root.dispatchEvent(new CustomEvent('leadintel:sync-resolving'));for(const id of ['server-use-server','server-keep-local']){const button=document.getElementById(id);if(button)button.disabled=busy;}document.getElementById('server-conflict-actions')?.setAttribute('aria-busy',String(busy));}
   function resolveConflictUseServer(){if(!conflictResolution)conflictResolution=resolveSyncConflict('server').finally(()=>{conflictResolution=null;});return conflictResolution;}
   function resolveConflictKeepLocal(){if(!conflictResolution)conflictResolution=resolveSyncConflict('local').finally(()=>{conflictResolution=null;});return conflictResolution;}
 

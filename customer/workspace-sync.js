@@ -29,6 +29,8 @@
   }
   function merge(base,local,server,options={}){
     const conflicts=[];
+    const preference=['local','server'].includes(options.conflictPreference)?options.conflictPreference:null;
+    function choose(path,l,r){conflicts.push(path);return preference==='server'?r:l;}
     function visit(bl,l,br,r,path){
       if(equal(l,r))return l;
       // Compare each representation to its own acknowledged baseline. A full
@@ -38,7 +40,7 @@
       if(NAVIGATION_PATHS.has(path))return l;
       const field=path.split('.').at(-1);
       if(field==='buyerQualification')return undefined; // Recomputed from preserved buyer evidence.
-      if(ATOMIC_FIELDS.has(field)||/^(?:template-[1-5]|linkedin-template-[1-3]|buyer-draft:.*)$/.test(field)){conflicts.push(path);return l;}
+      if(ATOMIC_FIELDS.has(field)||/^(?:template-[1-5]|linkedin-template-[1-3]|buyer-draft:.*)$/.test(field))return choose(path,l,r);
       const maps=recordMaps([bl,l,br,r],path);
       if(maps){
         const [bm,lm,sm,rm]=maps,output=[];
@@ -56,7 +58,7 @@
           keys.forEach(key=>grouped.add(key));
           const bv=subset(bl,keys),lv=subset(l,keys),sv=subset(br,keys),rv=subset(r,keys);
           const chosen=equal(lv,rv)||equal(rv,sv)?lv:equal(lv,bv)?rv:null;
-          if(chosen)Object.assign(output,chosen);else{conflicts.push(path+'.'+(keys.includes('publicEmail')?'emailEvidence':keys.includes('publicPhone')?'phoneEvidence':'identityEvidence'));Object.assign(output,lv);}
+          if(chosen)Object.assign(output,chosen);else Object.assign(output,choose(path+'.'+(keys.includes('publicEmail')?'emailEvidence':keys.includes('publicPhone')?'phoneEvidence':'identityEvidence'),lv,rv));
         }
         for(const key of new Set([...Object.keys(bl||{}),...Object.keys(l),...Object.keys(br||{}),...Object.keys(r)])){
           if(grouped.has(key))continue;
@@ -65,10 +67,10 @@
         }
         return output;
       }
-      conflicts.push(path);return l;
+      return choose(path,l,r);
     }
     const payload=visit(project(options.localBase||base),project(local),project(base),project(server),'');
-    return {safe:conflicts.length===0,payload,conflicts};
+    return {safe:conflicts.length===0||Boolean(preference),payload,conflicts};
   }
   return {equal,project,merge};
 });

@@ -38,3 +38,8 @@ test('subject previews use recipient and sender values while unknown events stay
  assert.equal(Workspace.subjectPreview('Regarding {{development}}',{}),'Regarding [select a company fact]');
  assert.equal(Workspace.subjectPreview('A practical idea for {{buyerCompany}}',{company:'Manufacturing team'}),'A practical idea for Manufacturing team');
 });
+
+test('a sync conflict takes priority over apparent missing Profile answers and blocks generation',()=>{
+ const view=Workspace.state({ready:true,authenticated:true,syncConflict:true,unconfirmed:['meeting_value'],hasDraft:true});
+ assert.equal(view.canGenerate,false);assert.equal(view.action,'sync');assert.match(view.text,/sync conflict/i);
+});
