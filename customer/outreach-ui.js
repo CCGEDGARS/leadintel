@@ -119,9 +119,16 @@ async function loadTriggerAlerts(){
 }
 function rankedBuyingTriggers(item=currentItem()){
  const rows=messageFactCandidates(item).filter(r=>r.kind==='event');
- const official=rows.filter(r=>{try{return new URL(r.url).hostname.replace(/^www\./,'')===String(item?.domain||'').replace(/^www\./,'');}catch{return false;}});
- // Only company-owned source pages can be automatically selected without human review.
- return [...official,...rows.filter(r=>!official.includes(r))].slice(0,3);
+ const essentials=studioState().essentials;
+ const terms=String([essentials.offer,selectedContact(item)?.title,essentials.target].filter(Boolean).join(' ')).toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(t=>t.length>=5&&!['their','company','business','services','project','manager'].includes(t));
+ const domain=String(item?.domain||'').replace(/^www\./,'');
+ const score=row=>{
+  let host='';try{host=new URL(row.url).hostname.replace(/^www\./,'');}catch{}
+  const content=String([row.summary,row.title].join(' ')).toLowerCase();
+  const relevance=[...new Set(terms)].filter(t=>content.includes(t)).length;
+  return Number(row.score||0)+Math.min(30,relevance*10)+(host===domain?25:0);
+ };
+ return rows.slice().sort((a,b)=>score(b)-score(a)||a.url.localeCompare(b.url)).slice(0,3);
 }
 function sourceBackedTrigger(item,source){
  if(!item?.dossier||!source||source.kind!=='event')return null;
@@ -169,7 +176,7 @@ function previewSelectedTrigger(){const url=q('outreach-trigger-select')?.value,
 async function useReviewedTrigger(){
   const current=readDraftEdits();if(!current?.dossier||!messageWorkspaceUsable())return;
   if(!q('trigger-source-confirm').checked){toast('Confirm that you checked the source, company and event first');return;}
-  try{const source=messageFactCandidates(current).find(r=>r.url===q('outreach-trigger-select').value);const item=LeadIntelOutreach.reviewTrigger(current,q('outreach-trigger-select').value,new Date().toISOString(),source?.summary||'');cancelPendingScriptGeneration();upsertItem(item);invalidateStudioDraft();renderAll();q('trigger-script-status').textContent='Fact reviewed and selected. Regenerating the email from this verified event.';if(item.channel==='email')await generateStudioMessage(false);q('mw-trigger-summary')?.scrollIntoView?.({block:'nearest'});}catch(error){toast(error.message);}
+  try{const source=messageFactCandidates(current).find(r=>r.url===q('outreach-trigger-select').value);const item=LeadIntelOutreach.reviewTrigger(current,q('outreach-trigger-select').value,new Date().toISOString(),source?.summary||'');const history=(current.messageStudioDraft?.triggerDraftHistory||[]).slice(-4);history.push({drafts:{emailSubject:current.drafts?.emailSubject||'',emailBody:current.drafts?.emailBody||''},trigger:current.dossier?.selectedTrigger||null,savedAt:new Date().toISOString()});item.messageStudioDraft={...current.messageStudioDraft,triggerDraftHistory:history};cancelPendingScriptGeneration();upsertItem(item);invalidateStudioDraft();renderAll();q('trigger-script-status').textContent='Fact reviewed and selected. Regenerating the email from this verified event.';if(item.channel==='email')await generateStudioMessage(false);q('mw-trigger-summary')?.scrollIntoView?.({block:'nearest'});}catch(error){toast(error.message);}
 }
 
 let messageFactResearchRequest=0,messageFactResearchBusy=false,messageFactResearchController=null,messageFactScope='';
