@@ -58,6 +58,14 @@
   const libraryContent=node('div','mw-tools-content');libraryTools.append(libraryContent);
   libraryContent.append(q('mw-value-proof'),q('message-template-editor'),q('message-my-templates'),references,settings,evidence);
   editor.append(libraryTools);
+  const shortcuts=node('nav','mw-library-shortcuts');shortcuts.setAttribute('aria-label','Email tools');
+  const quick=[['Templates','message-my-templates'],['Writing references','mw-writing-references'],['Sender settings','mw-settings'],['Advanced','message-advanced']];
+  for(const [label,id] of quick){const button=node('button','secondary-btn small',label);button.type='button';button.dataset.openTool=id;shortcuts.append(button);}
+  editor.append(shortcuts);
+  shortcuts.addEventListener('click',event=>{const button=event.target.closest('[data-open-tool]');if(!button)return;
+   const target=button.dataset.openTool==='message-advanced'?evidence:q(button.dataset.openTool);if(!target)return;
+   libraryTools.open=true;target.open=true;target.scrollIntoView?.({block:'nearest',behavior:'smooth'});});
+
   q('mw-edit-sender').addEventListener('click',()=>{libraryTools.open=true;settings.open=true;settings.scrollIntoView?.({block:'nearest',behavior:'smooth'});q('brand-sender-name')?.focus?.();});
   const linkActions=q('linkedin-manual-actions');const recording=node('details','mw-recording');recording.innerHTML='<summary>Record a message you sent</summary>';recording.append(q('linkedin-sent-confirm').closest('label'),q('linkedin-record-sent'),q('linkedin-manual-status'));linkActions.querySelector('p').textContent='Copy the draft, then paste and send it inside LinkedIn.';linkActions.append(recording);
   q('linkedin-open-profile').textContent='Open LinkedIn profile ↗';
