@@ -28,3 +28,6 @@ test('analysis failures identify confirmed quota, rate limits, timeout and inval
   ['private document text sk-secret-value',/unexpected error/]
  ]){const {env}=await fixture();await runner.runWritingReferenceJobs(env,{generate:async()=>{throw Error(message);}});const row=(await listWritingReferences(env,scope))[0];assert.match(row.error_code,expected);assert.ok(!row.error_code.includes('sk-secret-value'));assert.ok(!row.error_code.includes('private document'));}
 });
+test('source snapshots report completed analysis sections for long books',async()=>{
+ const {env}=await fixture();await runner.runWritingReferenceJobs(env,{maxChunks:1,generate});const {writingReferenceProgress}=await import('../src/writing-reference-runner.js');const row=(await listWritingReferences(env,scope))[0];assert.deepEqual(await writingReferenceProgress(env,scope,row.id),{completed:1,total:2});
+});

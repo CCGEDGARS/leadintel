@@ -36,14 +36,17 @@ export async function putWritingReference(env,scope,{slot,expectedRevision,expec
  if(prior.source_id)await cleanupWritingReference(env,scope,prior.source_id).catch(()=>null);
  return getWritingReference(env,scope,id);
 }
-export async function patchWritingReference(env,scope,{id,expectedRevision,active,instruction}){
+export async function patchWritingReference(env,scope,{id,expectedRevision,active,instruction,acknowledgePartial}){
  const row=await getWritingReference(env,scope,id);if(row.revision!==Number(expectedRevision))fail('Source changed. Refresh and try again.');
- if(row.status==='Deleting')fail('Source is being deleted');if(active===true&&row.status!=='Ready')fail('Only Ready sources can activate');
+ if(row.status==='Deleting')fail('Source is being deleted');
+ if(acknowledgePartial!==undefined&&acknowledgePartial!==true)fail('Partial coverage acknowledgement must be true',400);
+ if(acknowledgePartial&&(row.status!=='Needs attention'||!row.catalogue_key||!row.techniques.length||!row.coverage.readable))fail('Partial coverage requires completed analysis with readable guidance');
+ const nextStatus=acknowledgePartial?'Ready':row.status,nextCoverage=acknowledgePartial?{...row.coverage,partialAccepted:true}:row.coverage;if(active===true&&row.status!=='Ready')fail('Only Ready sources can activate');
  if(active!==undefined&&typeof active!=='boolean')fail('Activation must be a boolean',400);
  if(instruction!==undefined&&(typeof instruction!=='string'||instruction.length>500))fail('Source instruction is too long',400);
  const nextActive=active===undefined?row.active:active,nextInstruction=instruction===undefined?row.instruction:instruction;
  const result=await env.DB.batch([
-  stmt(env,`UPDATE writing_reference_sources SET active=?,instruction=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND revision=? AND status<>'Deleting'`,nextActive?1:0,nextInstruction,id,scope.workspaceId,expectedRevision),
+  stmt(env,`UPDATE writing_reference_sources SET active=?,instruction=?,status=?,coverage_json=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=? AND revision=? AND status<>'Deleting'`,nextActive?1:0,nextInstruction,nextStatus,JSON.stringify(nextCoverage),id,scope.workspaceId,expectedRevision),
   stmt(env,`UPDATE writing_reference_slots SET revision=revision+1 WHERE source_id=? AND EXISTS(SELECT 1 FROM writing_reference_sources WHERE id=? AND revision=?)`,id,id,expectedRevision+1),
   stmt(env,`UPDATE writing_reference_workspaces SET revision=revision+1 WHERE workspace_id=? AND EXISTS(SELECT 1 FROM writing_reference_sources WHERE id=? AND revision=?)`,scope.workspaceId,id,expectedRevision+1)
  ]);if(!result[0].meta.changes)fail('Source changed. Refresh and try again.');return getWritingReference(env,scope,id);

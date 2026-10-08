@@ -108,7 +108,7 @@ async function openAiRequest(options,fetchImpl){
     method:'POST',
     signal:options.signal,
     headers:{'Content-Type':'application/json','Accept':'application/json',Authorization:`Bearer ${options.apiKey}`},
-    body:JSON.stringify({model:options.model,instructions:options.system||undefined,input:options.prompt,max_output_tokens:options.maxOutputTokens,store:false})
+    body:JSON.stringify({model:options.model,instructions:options.system||undefined,input:options.prompt,max_output_tokens:options.maxOutputTokens,...(options.reasoningEffort?{reasoning:{effort:options.reasoningEffort}}:{}),store:false})
   });
   const payload=await parseJson(response);if(!response.ok)throw sanitizedUpstreamError('openai',response.status,payload);
   const text=textFromOpenAi(payload);if(!text)throw new Error('OpenAI returned no text');
@@ -221,8 +221,9 @@ async function verifyGeminiCredential(options,fetchImpl){
   return {provider:'gemini',model:options.model,text};
 }
 
-export async function generateText({provider,apiKey,model,system='',prompt,maxOutputTokens=1200,signal,fetchImpl=fetch}){
+export async function generateText({provider,apiKey,model,system='',prompt,maxOutputTokens=1200,signal,reasoningEffort,fetchImpl=fetch}){
   const options=validatedOptions({provider,apiKey,model,system,prompt,maxOutputTokens,signal});
+  if(reasoningEffort==='low'&&/^gpt-[56]/.test(options.model))options.reasoningEffort='low';
   try{
     if(options.provider==='openai')return await openAiRequest(options,fetchImpl);
     if(options.provider==='anthropic')return await anthropicRequest(options,fetchImpl);
