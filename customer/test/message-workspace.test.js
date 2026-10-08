@@ -120,3 +120,26 @@ test('buying triggers are visible before collapsed legacy source review and unpe
  assert.match(document.getElementById('mw-readiness-text').textContent,/personalize before approval/i);
  assert.equal(document.getElementById('approve-outreach').disabled,true);
 });
+
+test('Outreach Studio v2 puts decisions left, email composition right, and tools in one drawer',()=>{
+ const {document}=mounted();
+ const rail=document.querySelector('.mw-rail'),editor=document.querySelector('.mw-editor');
+ assert.ok(rail.querySelector('#mw-trigger-options'));
+ assert.ok(rail.querySelector('#mw-style-options'));
+ assert.equal(rail.querySelector('#message-subject-choice'),null);
+ assert.ok(editor.querySelector('#message-subject-choice'));
+ assert.ok(editor.querySelector('#outreach-email-subject'));
+ assert.ok(editor.querySelector('#outreach-email-body'));
+ assert.ok(editor.querySelector('#message-generate'));
+ const options=editor.querySelector('.mw-subject-options');
+ const generate=editor.querySelector('.mw-generate-bar');
+ assert.ok(options.compareDocumentPosition(generate)&4);
+ assert.ok(generate.compareDocumentPosition(editor.querySelector('.script-grid'))&4);
+ const tools=editor.querySelector('#mw-tools-drawer');
+ assert.equal(tools.open,false);
+ for(const id of ['mw-settings','message-template-editor','message-my-templates','mw-writing-references'])
+   assert.equal(tools.querySelectorAll('#'+id).length,1,id);
+ assert.equal(document.querySelectorAll('#message-generate').length,1);
+ assert.equal(document.querySelectorAll('#outreach-email-subject').length,1);
+ assert.equal(document.querySelectorAll('#outreach-email-body').length,1);
+});
