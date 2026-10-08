@@ -46,8 +46,8 @@ test('a sync conflict takes priority over apparent missing Profile answers and b
 
 test('template generation is distinct from original AI generation and retains protected originals',()=>{
  const {document,w}=mounted(),base={ready:true,authenticated:true,hasDraft:true,channel:'linkedin'};
- w.LeadIntelMessageWorkspace.render(document,{...base,templateSelected:true});assert.match(document.getElementById('message-generate').textContent,/Apply selected style/i);
- w.LeadIntelMessageWorkspace.render(document,{...base,templateSelected:false});assert.match(document.getElementById('message-generate').textContent,/Apply selected style/i);
+ w.LeadIntelMessageWorkspace.render(document,{...base,templateSelected:true});assert.match(document.getElementById('message-generate').textContent,/Personalize Email/i);
+ w.LeadIntelMessageWorkspace.render(document,{...base,templateSelected:false});assert.match(document.getElementById('message-generate').textContent,/Personalize Email/i);
  assert.ok(document.getElementById('message-template-body').readOnly);
 });
 test('opening-only update is available only with a reviewed event and an unapproved draft',()=>{
@@ -91,4 +91,22 @@ test('approved subject aliases display current workspace facts and only a real s
  assert.equal(Workspace.subjectPreview('An opportunity to {{supportedBenefit}}',c),'An opportunity to [your business outcome]');
  assert.equal(Workspace.subjectPreview('{{senderName}} will join the call.',c),'Alex Smith will join the call.');
  assert.equal(Workspace.subjectPreview('{{recipientCompany}} — fit: {{fitScore}}/100',{...c,fitScore:null}),'ClientCo — fit: [real research score required]/100');
+});
+
+test('Outreach Studio presents trigger, style and subject before personalization and review',()=>{
+ const {document,w}=mounted();
+ const rail=document.querySelector('.mw-rail');
+ const trigger=rail.querySelector('#mw-trigger-options');
+ const styles=rail.querySelector('#mw-style-options');
+ const subject=rail.querySelector('#message-subject-choice');
+ const personalize=rail.querySelector('#message-generate');
+ assert.ok(trigger&&styles&&subject&&personalize);
+ assert.ok(trigger.compareDocumentPosition(styles)&4);
+ assert.ok(styles.compareDocumentPosition(subject)&4);
+ assert.ok(subject.compareDocumentPosition(personalize)&4);
+ const view=w.LeadIntelMessageWorkspace.render(document,{ready:true,authenticated:true,hasDraft:true,channel:'email',pendingSelections:true});
+ assert.equal(view.canGenerate,true);
+ assert.match(document.getElementById('mw-readiness-text').textContent,/Changes pending/);
+ assert.equal(document.getElementById('approve-outreach').disabled,true);
+ assert.ok(document.querySelector('[data-restore-email-version]'));
 });
