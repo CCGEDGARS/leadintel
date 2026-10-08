@@ -17,15 +17,24 @@ function analysisFailure(error){
  return 'Analysis stopped because of an unexpected error. Completed sections are saved; retry to continue.';
 }
 const stmt=(env,sql,...values)=>env.DB.prepare(sql).bind(...values);
+export async function writingReferenceProgress(env,scope,id){
+ const source=await getWritingReference(env,scope,id);
+ const object=await env.WRITING_REFERENCES_BUCKET.get(source.text_key);
+ if(!object)return {completed:0,total:0};
+ const total=chunkWritingReference(JSON.parse(await object.text())).length;
+ const row=await stmt(env,"SELECT count(*) AS completed FROM writing_reference_chunks WHERE source_id=? AND status='Complete'",id).first();
+ return {completed:Number(row.completed),total};
+}
+
 const guard=`EXISTS(SELECT 1 FROM writing_reference_jobs j JOIN writing_reference_sources s ON s.id=j.source_id JOIN writing_reference_slots p ON p.source_id=s.id WHERE j.source_id=? AND j.lease_id=? AND s.status='Processing')`;
 export async function claimWritingReferenceJob(env,{now=Date.now(),leaseId=crypto.randomUUID()}={}){
- return stmt(env,`UPDATE writing_reference_jobs SET state='Running',lease_id=?,lease_until=?,attempts=attempts+1 WHERE source_id=(SELECT j.source_id FROM writing_reference_jobs j JOIN writing_reference_sources s ON s.id=j.source_id WHERE s.status='Processing' AND j.state IN ('Pending','Running') AND j.lease_until<? AND j.next_at<=? ORDER BY j.next_at LIMIT 1) AND lease_until<? RETURNING *`,leaseId,now+90000,now,now,now).first();
+ return stmt(env,`UPDATE writing_reference_jobs SET state='Running',lease_id=?,lease_until=?,attempts=attempts+1 WHERE source_id=(SELECT j.source_id FROM writing_reference_jobs j JOIN writing_reference_sources s ON s.id=j.source_id WHERE s.status='Processing' AND j.state IN ('Pending','Running') AND j.lease_until<? AND j.next_at<=? ORDER BY j.next_at LIMIT 1) AND lease_until<? RETURNING *`,leaseId,now+150000,now,now,now).first();
 }
 async function workspaceGenerate(env,workspaceId){
  const row=await stmt(env,'SELECT provider,model,encrypted_api_key FROM workspace_ai_integrations WHERE workspace_id=? AND active=1 LIMIT 1',workspaceId).first();
  if(!row||!env.OAUTH_TOKEN_ENCRYPTION_KEY)throw Error('Connect an active AI provider in Settings');
  const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY),apiKey=await decryptSecret(row.encrypted_api_key,key);
- return input=>generateText({provider:row.provider,model:row.model,apiKey,...input,signal:AbortSignal.timeout(12000)});
+ return input=>generateText({provider:row.provider,model:row.model,apiKey,...input,reasoningEffort:'low',signal:AbortSignal.timeout(60000)});
 }
 export async function retryWritingReference(env,scope,{id,expectedRevision}){
  const row=await getWritingReference(env,scope,id);if(row.revision!==Number(expectedRevision)||row.status!=='Failed')throw Object.assign(Error('Source changed or cannot be retried'),{status:409});

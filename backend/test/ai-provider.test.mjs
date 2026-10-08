@@ -224,3 +224,6 @@ test('Gemini credential verification uses a minimal GenerateContent request with
 test('text-generation timeouts retain their cause instead of reporting an upstream 502',async()=>{
  for(const provider of AI_PROVIDERS)await assert.rejects(generateText({provider,apiKey:'fixture',prompt:'Read this section',fetchImpl:async()=>{throw new DOMException('expired','TimeoutError');}}),/request timed out/);
 });
+test('writing analysis can request low reasoning without changing normal generation',async()=>{
+ let body;await generateText({provider:'openai',apiKey:'fixture',model:'gpt-6.1-sol',prompt:'Analyse source',reasoningEffort:'low',fetchImpl:async(url,options)=>{body=JSON.parse(options.body);return Response.json({output_text:'ok'});}});assert.deepEqual(body.reasoning,{effort:'low'});
+});
