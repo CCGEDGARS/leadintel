@@ -56,7 +56,7 @@
   const evidence=step.querySelector('.message-advanced');evidence.querySelector('summary').textContent='Research & campaign tools';evidence.open=false;
   const libraryTools=node('details','mw-tools-drawer');libraryTools.id='mw-tools-drawer';libraryTools.innerHTML='<summary>Library & settings <span>Manage originals, templates, references and sender details</span></summary>';
   const libraryContent=node('div','mw-tools-content');libraryTools.append(libraryContent);
-  libraryContent.append(q('message-template-editor'),q('message-my-templates'),references,settings,evidence);
+  libraryContent.append(q('mw-value-proof'),q('message-template-editor'),q('message-my-templates'),references,settings,evidence);
   editor.append(libraryTools);
   const linkActions=q('linkedin-manual-actions');const recording=node('details','mw-recording');recording.innerHTML='<summary>Record a message you sent</summary>';recording.append(q('linkedin-sent-confirm').closest('label'),q('linkedin-record-sent'),q('linkedin-manual-status'));linkActions.querySelector('p').textContent='Copy the draft, then paste and send it inside LinkedIn.';linkActions.append(recording);
   q('linkedin-open-profile').textContent='Open LinkedIn profile ↗';
