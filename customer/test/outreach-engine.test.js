@@ -121,3 +121,17 @@ test('localizeGeneratedItem switches generated dossier and drafts but preserves 
   assert.equal(localized.contentLanguage,'lv');
   assert.equal(localized.contentVariants.drafts.lv.emailBody,localized.drafts.emailBody);
 });
+
+test('official company source can be used automatically without claiming human review',()=>{
+ const evidence={url:'https://acme.example/news/new-plant',title:'New plant',date:'2026-10-01',text:'Acme has announced construction of a new manufacturing plant in Sweden.'};
+ const dossier={domain:'acme.example',company:'Acme',evidence:[evidence]};
+ const source={url:evidence.url,companyDomain:'acme.example',excerpt:evidence.text,verification:'source_verified'};
+ const normalized=Outreach.normalizeSelectedTrigger(source,dossier);
+ assert.equal(normalized.verification,'source_verified');
+ assert.equal(normalized.reviewedAt,'');
+ assert.equal(normalized.url,evidence.url);
+ assert.equal(Outreach.normalizeSelectedTrigger({...source,url:'https://external.example/news/new-plant'},dossier),null);
+ const externalDossier={...dossier,evidence:[{...evidence,url:'https://external.example/news/new-plant'}]};
+ assert.equal(Outreach.normalizeSelectedTrigger({...source,url:'https://external.example/news/new-plant'},externalDossier),null);
+ assert.equal(Outreach.normalizeSelectedTrigger({...source,excerpt:'Invented event that is absent from evidence'},dossier),null);
+});
