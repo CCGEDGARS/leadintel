@@ -56,14 +56,14 @@
   q('message-evidence').hidden=true;
   const oldBar=q('message-generation-status').parentElement===notice?studio.querySelector(':scope > .draft-controls'):null;if(oldBar)oldBar.remove();
   const evidence=step.querySelector('.message-advanced');evidence.querySelector('summary').textContent='Research & campaign tools';evidence.open=false;
-  const libraryTools=node('details','mw-tools-drawer');libraryTools.id='mw-tools-drawer';libraryTools.innerHTML='<summary>Library & settings <span>Manage originals, templates, references and sender details</span></summary>';
+  const libraryTools=node('details','mw-tools-drawer');libraryTools.id='mw-tools-drawer';libraryTools.innerHTML='<summary>Outreach Tools <span>Approved originals, personal versions, books and settings</span></summary>';
   const libraryContent=node('div','mw-tools-content');libraryTools.append(libraryContent);
   const styleManager=node('details','mw-style-manager');styleManager.id='mw-style-manager';styleManager.innerHTML='<summary>My writing style versions</summary><p>Edit one personal version per approved style. Your system originals remain protected.</p><label>Style <select id="mw-style-edit-choice"><option value="professional">Professional</option><option value="curiosity">NLP</option><option value="friendly">Friendly</option><option value="brutal">Brutal Honesty</option></select></label><label>Reusable subject <input id="mw-style-edit-subject" maxlength="500"></label><label>Reusable message <textarea id="mw-style-edit-body" rows="13" maxlength="12000"></textarea></label><div class="mw-draft-toolbar"><button id="mw-style-load-draft" type="button" class="secondary-btn small">Copy current email to editor</button><button id="mw-style-save" type="button" class="secondary-btn">Save & activate my version</button><button id="mw-style-restore" type="button" class="secondary-btn small">Restore previous revision</button></div><p id="mw-style-save-status" role="status"></p>';
 
-  libraryContent.append(styleManager,q('mw-value-proof'),q('message-template-editor'),q('message-my-templates'),references,settings,evidence);
+  libraryContent.append(originalPeek,styleManager,q('mw-value-proof'),q('message-template-editor'),q('message-my-templates'),references,settings,evidence);
   editor.append(libraryTools);
   const shortcuts=node('nav','mw-library-shortcuts');shortcuts.setAttribute('aria-label','Email tools');
-  const quick=[['Templates','message-my-templates'],['Writing references','mw-writing-references'],['Sender settings','mw-settings'],['Advanced','message-advanced']];
+  const quick=[['My versions','mw-style-manager'],['Books','mw-writing-references'],['Sender','mw-settings']];
   for(const [label,id] of quick){const button=node('button','secondary-btn small',label);button.type='button';button.dataset.openTool=id;shortcuts.append(button);}
   editor.append(shortcuts);
   shortcuts.addEventListener('click',event=>{const button=event.target.closest('[data-open-tool]');if(!button)return;
