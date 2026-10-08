@@ -98,8 +98,8 @@ test('Outreach Studio presents trigger, style and subject before personalization
  const rail=document.querySelector('.mw-rail');
  const trigger=rail.querySelector('#mw-trigger-options');
  const styles=rail.querySelector('#mw-style-options');
- const subject=rail.querySelector('#message-subject-choice');
- const personalize=rail.querySelector('#message-generate');
+ const subject=document.querySelector('.mw-editor #message-subject-choice');
+ const personalize=document.querySelector('.mw-editor #message-generate');
  assert.ok(trigger&&styles&&subject&&personalize);
  assert.ok(trigger.compareDocumentPosition(styles)&4);
  assert.ok(styles.compareDocumentPosition(subject)&4);
@@ -146,5 +146,26 @@ test('Outreach Studio v2 puts decisions left, email composition right, and tools
  assert.ok(document.querySelector('#mw-sender-line'));
  document.getElementById('mw-edit-sender').click();
  assert.equal(tools.open,true);
+ assert.equal(document.getElementById('mw-settings').open,true);
+});
+
+test('single strongest buying trigger replaces multi-option picker without losing style buttons',()=>{
+ const {document,w}=mounted();
+ w.LeadIntelMessageWorkspace.render(document,{ready:true,authenticated:true,channel:'email',hasDraft:true,selectedStyle:'professional',senderIdentityReady:true,company:'LKAB',triggers:[
+ {url:'https://lkab.com/one',kind:'event',summary:'LKAB has announced a sorting plant investment.'},
+ {url:'https://lkab.com/two',kind:'event',summary:'LKAB has announced another investment.'}]});
+ assert.equal(document.querySelectorAll('#mw-trigger-options .mw-trigger-choice').length,1);
+ assert.equal(document.querySelectorAll('#mw-style-options .mw-style').length,5);
+ assert.ok(document.getElementById('mw-subject-options'));
+ assert.ok(document.getElementById('mw-original-peek'));
+ assert.ok(document.getElementById('mw-value-proof'));
+ assert.equal(document.getElementById('outreach-email-body').closest('.script-grid')!==null,true);
+});
+test('working drawer retains easy access to library and sender and language tools are not in main generation area',()=>{
+ const {document}=mounted();
+ const links=[...document.querySelectorAll('.mw-library-shortcuts [data-open-tool]')];
+ assert.equal(links.length,4);
+ links.find(x=>x.dataset.openTool==='mw-settings').click();
+ assert.equal(document.getElementById('mw-tools-drawer').open,true);
  assert.equal(document.getElementById('mw-settings').open,true);
 });
