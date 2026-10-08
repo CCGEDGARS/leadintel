@@ -1,7 +1,7 @@
 import './approved-reference-scripts.js?v=20261008-verbatim-v1';
 import './original-scripts-ui.js?v=20261008-brutal-approved-v1';
 import './original-scripts.js?v=20261007-quality-v1';
-import './message-workspace.js?v=20261008-auto-original-v7&approved-subjects=20261007-v2&brutal-approved=20261008-v1';
+import './message-workspace.js?v=20261008-exact-original-v8&approved-subjects=20261007-v2&brutal-approved=20261008-v1';
 import './message-facts.js?v=20261007-quality-v2';
 import './message-translations.js?v=20261007-quality-v1';
 import './message-translation-ui.js?v=20261007-quality-v1';
@@ -340,7 +340,7 @@ function installMessageStudio(){
  q('message-calendly')?.addEventListener('change',()=>{invalidateStudioDraft();persistStudio(readStudio());});
  q('brand-save')?.addEventListener('click',()=>{persistStudio(readStudio());renderMessageStudio();});
  q('message-save-core').onclick=()=>{invalidateStudioDraft();persistStudio(readStudio());renderMessageStudio();q('mw-settings').open=false;toast('Message settings saved');};
- q('message-mode').onchange=()=>{closePersonalReview();invalidateStudioDraft();const studio=readStudio();persistStudio(studio);renderMessageStudio();if(currentItem()?.channel==='email'&&globalThis.LeadIntelApprovedReferences?.records?.[studio.mode])void selectMandatoryEmailStyle(studio.mode);};
+ q('message-mode').onchange=()=>{closePersonalReview();invalidateStudioDraft();const studio=readStudio();persistStudio(studio);renderMessageStudio();if(currentItem()?.channel==='email'&&globalThis.LeadIntelApprovedReferences?.records?.[studio.mode])selectMandatoryEmailStyle(studio.mode);};
  q('message-subject-choice').onchange=()=>{const id=q('message-subject-choice').value;if(!id)return;const edited=readDraftEdits(),studio=LeadIntelMessageStudio.chooseSubject(readStudio(),readStudio().mode,id);scriptGenerationRequest++;studioGenerationBusy=false;persistStudio(studio);const subject=LeadIntelMessageStudio.resolveApprovedSubject(studio,studioMessageContext(edited),studio.essentials);if(edited&&subject){const next={...LeadIntelOutreach.invalidateOutreachApproval(edited),drafts:{...edited.drafts,emailSubject:subject}};upsertItem(globalThis.LeadIntelMessageTranslations?.capture(next)||next);renderAll();toast('Approved subject applied. Your message body is unchanged.');}else {invalidateStudioDraft();renderMessageStudio();toast('Subject pattern selected. Apply selected style to fill its facts.');}};
  q('message-copy-template').onclick=()=>{const studio=readStudio(),t=currentItem()?.channel==='linkedin'?LeadIntelMessageStudio.linkedinTemplate(studio):studio.templates.find(t=>t.id===studio.mode);if(t)openPersonalReview(t.subject,t.body,t.isPersonal?t.id:'',t.name,t.sourceStyle||t.id);};
  q('message-save-as-template').onclick=()=>{try{const prepared=LeadIntelMessageStudio.Library.fromDraft(readDraftEdits()||{},readStudio(),studioMessageContext());openPersonalReview(prepared.subject,prepared.body,'','',prepared.sourceStyle);void preparePersonalReview();}catch(error){toast(error.message);}};
@@ -362,44 +362,29 @@ function installMessageStudio(){
 let personalChannel='email',personalSourceStyle='',personalPreparing=false,personalPreparationRequest=0,personalPreparationController=null;
 function studioMessageContext(item=currentItem(),candidate=selectedCandidate()){const person=selectedContact(item),reviewed=LeadIntelOutreach.normalizeSelectedTrigger(item?.dossier?.selectedTrigger,item?.dossier),trigger=reviewed&&LeadIntelMessageFacts.event(reviewed.excerpt)?{...reviewed,summary:LeadIntelMessageFacts.event(reviewed.excerpt)}:null;return {channel:item?.channel,buyerName:person?.name,firstName:person?.name?.split(' ')[0],buyerRole:person?.title,buyerCompany:candidate?.company,fitScore:candidate?.fitScore??null,senderLinkedInUrl:mainState().brandIdentity?.linkedinUrl||'',sellerWebsite:mainState().website||mainState().profile?.website||'',trigger,sellerAnswers:mainState().answers||{},buyerEvidence:item?.dossier?.company||candidate?.companyEvidence||null};}
 function senderLinkedInFooter(body){const raw=String(mainState()?.brandIdentity?.linkedinUrl||'').trim();const valid=LeadIntelMessageStudio.approvedSenderLinkedIn(raw);if(!valid)return String(body||'');const cleaned=String(body||'').trimEnd();if(cleaned.endsWith(valid))return cleaned;return cleaned+'\n\n'+valid;}
-function approvedScriptEmail(studio,item,candidate){
- const style=studio.mode,api=globalThis.LeadIntelApprovedReferences;
- if(!api?.records?.[style]||item?.channel!=='email')throw Error('Choose an approved email style first.');
- const buyer=selectedContact(item);const name=String(buyer?.publicName||buyer?.name||'').trim();
- const company=String(candidate?.company||'').trim();
- // The approved originals describe a specific LKAB/Malmberget case; never copy those statements to other prospects.
- if(!/\bLKAB\b/i.test(company)||!/^Joakim\b/i.test(name))throw Error('This verbatim example contains LKAB/Malmberget facts. For another buyer, use Apply selected style to generate a verified personalized version.');
- let body=api.originalText(style).replace(/^Subject: [^\n]+\n/,'');
- const sender=String(studio.essentials.sender||'').trim(),calendly=String(studio.essentials.calendly||'').trim();
- if(sender){body=body.replaceAll('(First name Second name)',sender).replaceAll('( First name Second name )',sender);}
- if(calendly)body=body.replace(/\[Calendly link\]|\[Calendly\]/g,calendly);
- body=body.replace(/^Hi Joakim,/,'Hi '+name.split(/\s+/)[0]+',');
- if(style==='curiosity')body=body.replace('Link to Linkedin profile', '').trimEnd();
- if(style==='brutal')body=body.replace('(Edgars linkedin profile)','').trimEnd();
- return senderLinkedInFooter(body);
-}
 function seedMandatoryEmail(style,{replace=false}={}){
  const item=readDraftEdits(),studio=readStudio(),api=globalThis.LeadIntelApprovedReferences;
  if(!item?.dossier||item.channel!=='email'||!api?.records?.[style])return false;
  if(!replace&&String(item.drafts?.emailBody||'').trim())return false;
- // Stage the protected original first. An unverified example must never become send-ready.
- const raw=api.originalText(style),record=api.records[style];
- const body=senderLinkedInFooter(raw.replace(/^Subject: [^\n]*\n/,'').trim());
+ // Source of truth: the read-only original and editable body are EXACTLY equal at initialization.
+ // Do not append signatures, LinkedIn URLs, booking links or AI content until the user edits or personalizes.
+ const body=api.originalText(style);
+ const record=api.records[style];
  const subject=record.subject||record.subjects[0]||'';
  const next={...LeadIntelOutreach.invalidateOutreachApproval(item),
    drafts:{...item.drafts,emailSubject:subject,emailBody:body},
    localizationApprovalBlocked:true,
-   localizationMessage:'Protected original loaded. Personalization against verified recipient evidence is pending.',
+   localizationMessage:'Exact approved original copied to email. Example buyer claims require verification before sending.',
    messageStudioDraft:{...item.messageStudioDraft,mode:style,referenceVersion:'20261008',
-     status:'Approved original copied to the editor. Personalization pending — do not send.',
+     status:'Exact approved original copied. Edit it or select Personalize email to use verified buyer facts.',
      generatedAt:'',essentials:studio.essentials}};
  upsertItem(next);renderAll();return true;
 }
-async function selectMandatoryEmailStyle(style){
+function selectMandatoryEmailStyle(style){
  if(!globalThis.LeadIntelApprovedReferences?.records?.[style])return;
- // Changing styles is an explicit replacement; save the previous edit in the existing draft store first.
+ // Selecting another style explicitly replaces the editable draft with that style's exact original.
+ // It does not run AI or modify the protected original.
  seedMandatoryEmail(style,{replace:true});
- await generateStudioMessage(false);
 }
 function personalSlots(studio){return (personalChannel==='linkedin'?studio.linkedinTemplates:studio.myTemplates)||{};}
 function personalLibrary(){return personalChannel==='linkedin'?LeadIntelMessageStudio.Library.LinkedIn:LeadIntelMessageStudio.Library;}
@@ -529,7 +514,7 @@ async function openVerifiedBuyerScripts(choice){
  }
  const contact=(contacts||[]).find(c=>c.id===choice.contactId&&(!window.LeadIntelContactPolicy&&String(c.email_status||'').toLowerCase()==='verified'||window.LeadIntelContactPolicy?.accepted(c,choice.domain,window.LeadIntelBuyerConfirmationPolicy?.level?.()||window.LeadIntelServiceSettings?.confirmationLevel?.()))&&String(c.work_email||c.normalized_email||'').toLowerCase().endsWith('@'+choice.domain));if(!contact)return false;
  if(!active())return false;cancelPendingScriptGeneration();const old=currentItem();if(old)outreach=LeadIntelOutreach.rememberBuyerDraft(outreach,old);outreach.selectedDomain=choice.domain;
- handoffContact={domain:choice.domain,personId:choice.personId,channel:'email',contact};saveOutreach();prepareStudioBuyer(candidate,person);showOutreachStep();if(!String(currentItem()?.drafts?.emailBody||'').trim()){const style=studioState().mode;if(globalThis.LeadIntelApprovedReferences?.records?.[style]){seedMandatoryEmail(style);await generateStudioMessage(false);}}return true;
+ handoffContact={domain:choice.domain,personId:choice.personId,channel:'email',contact};saveOutreach();prepareStudioBuyer(candidate,person);showOutreachStep();if(!String(currentItem()?.drafts?.emailBody||'').trim()){const style=studioState().mode;if(globalThis.LeadIntelApprovedReferences?.records?.[style])seedMandatoryEmail(style);}return true;
 }
 window.LeadIntelOutreachUI={openBuyerScripts};window.LeadIntelOutreachUI.openMessageChannel=openMessageChannel;
 window.addEventListener('leadintel:buyer-for-scripts',event=>{messageChannelNavigationRequest++;messageChannelNavigationBaseline=null;void openBuyerScripts(event.detail).then(opened=>{if(!opened)toast('The selected recipient could not be opened. Check email confirmation and workspace synchronization, then retry.');}).catch(()=>toast('Unable to load the selected CRM contact.'));});
