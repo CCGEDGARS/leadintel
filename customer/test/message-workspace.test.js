@@ -142,4 +142,9 @@ test('Outreach Studio v2 puts decisions left, email composition right, and tools
  assert.equal(document.querySelectorAll('#message-generate').length,1);
  assert.equal(document.querySelectorAll('#outreach-email-subject').length,1);
  assert.equal(document.querySelectorAll('#outreach-email-body').length,1);
+ assert.ok(tools.querySelector('#mw-value-proof'));
+ assert.ok(document.querySelector('#mw-sender-line'));
+ document.getElementById('mw-edit-sender').click();
+ assert.equal(tools.open,true);
+ assert.equal(document.getElementById('mw-settings').open,true);
 });
