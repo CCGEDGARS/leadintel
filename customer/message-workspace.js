@@ -94,7 +94,7 @@
   const approval=q('step-6').querySelector('.outreach-approval');approval.hidden=linkedin||!context.hasDraft;q('approve-outreach').textContent=context.approved?'Approved ✓':'Approve & continue →';if(context.outdatedDraft)q('approve-outreach').disabled=true;
   q('message-generation-status').hidden=!context.busy&&!context.generationError;
   q('mw-trigger-summary').textContent=context.trigger?'Reviewed: '+(root.LeadIntelMessageFacts?.event(context.trigger.excerpt)||context.trigger.title||context.trigger.url):'No reviewed event selected. Find and check a specific development for a stronger opening.';
-  q('mw-style-help').textContent=(linkedin?'A protected LinkedIn template, an original AI draft or your saved template.':'A protected core template or original AI draft.')+' Generation never changes the saved original.';
+  q('mw-style-help').textContent=linkedin?'A protected LinkedIn template or an editable AI draft.':'Selecting a mandatory style automatically copies its original into your email and personalizes it with reviewed buyer facts. The original never changes.';
   if(context.hasDraft&&context.selectedStyle!==context.appliedStyle)q('mw-style-help').textContent='Selected style is being prepared. Existing drafts remain protected until explicitly changed.';
   const delivery=q('continue-to-delivery')?.closest('.delivery-entry');if(delivery)delivery.hidden=linkedin||!context.approved;
   paintStyles(document);return view;
