@@ -221,3 +221,6 @@ test('Gemini credential verification uses a minimal GenerateContent request with
   assert.equal(request.options.headers['x-goog-api-key'],'AIza-test');
   assert.deepEqual(request.body,{contents:[{role:'user',parts:[{text:'Reply with exactly OK.'}]}]});
 });
+test('text-generation timeouts retain their cause instead of reporting an upstream 502',async()=>{
+ for(const provider of AI_PROVIDERS)await assert.rejects(generateText({provider,apiKey:'fixture',prompt:'Read this section',fetchImpl:async()=>{throw new DOMException('expired','TimeoutError');}}),/request timed out/);
+});
