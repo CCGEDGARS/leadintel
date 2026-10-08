@@ -35,7 +35,7 @@
   const opening=node('button','secondary-btn small','Apply fact to opening');opening.id='message-update-opening';opening.type='button';opening.disabled=true;review.append(opening);
   const openingHelp=node('p','mw-fact-help','Changes only the opening. Your introduction, benefits, links and closing stay intact.');review.append(openingHelp);
   const styleSection=node('section','mw-section');styleSection.innerHTML='<div class="mw-section-heading"><span class="mw-step-number">2</span><div><h3>Choose your style</h3><p id="mw-style-help">A proven template or an original AI draft.</p></div></div><div id="mw-style-options" class="mw-styles" role="group" aria-label="Writing style"></div>';
-  const mandatory=node('section','mw-approved-library');mandatory.id='mw-approved-library';mandatory.setAttribute('aria-label','Mandatory approved scripts');mandatory.innerHTML='<h4>Mandatory approved scripts</h4><p>Four protected English originals · 20-minute Zoom invitation. Select a script to read its exact reference and approved subject patterns. Applying a style generates a new personalized draft; the original stays unchanged.</p><div id="mw-approved-library-items"></div>';styleSection.append(mandatory);const applyOriginal=document.createElement('button');applyOriginal.id='mw-use-approved-email';applyOriginal.type='button';applyOriginal.className='secondary-btn';applyOriginal.textContent='Use approved script in email';applyOriginal.title='Insert the protected LKAB reference into the editable email field; not ready to send';styleSection.append(applyOriginal);
+  const mandatory=node('section','mw-approved-library');mandatory.id='mw-approved-library';mandatory.setAttribute('aria-label','Mandatory approved scripts');mandatory.innerHTML='<h4>Mandatory approved scripts</h4><p>Four protected English originals · 20-minute Zoom invitation. Select a script to read its exact reference and approved subject patterns. Applying a style generates a new personalized draft; the original stays unchanged.</p><div id="mw-approved-library-items"></div>';styleSection.append(mandatory);
   styleSection.append(q('message-mode-label'),q('message-template-editor'),q('message-my-templates'));rail.append(styleSection);
   const references=node('details','mw-section mw-reference-panel');references.id='mw-writing-references';references.innerHTML='<summary>Writing references <span id="mw-reference-count">Optional · 3 slots</span></summary><div id="mw-writing-reference-host"></div>';rail.append(references,settings);
   const drafts=step.querySelector('.outreach-drafts');editor.append(drafts);drafts.querySelector('.draft-head').hidden=true;
@@ -68,7 +68,7 @@
   const host=document.getElementById('mw-approved-library-items');if(!host)return;
   if(context.channel==='linkedin'){document.getElementById('mw-approved-library').hidden=true;return;}
   document.getElementById('mw-approved-library').hidden=false;
-  const button=document.getElementById('mw-use-approved-email');if(button){button.hidden=!['professional','curiosity','friendly','brutal'].includes(context.selectedStyle);button.disabled=!context.ready||context.busy;}
+
   const api=globalThis.LeadIntelApprovedReferences;if(!api?.records){host.textContent='Approved originals are unavailable. Refresh this page before generating.';return;}
   const ids=['professional','curiosity','friendly','brutal'];const names={professional:'Professional',curiosity:'NLP',friendly:'Friendly',brutal:'Brutal Honesty'};
   // Keep each original visible and readable on the main interface; never alter protected text.
@@ -80,7 +80,7 @@
   const name=person?.publicName||person?.name||context.contact?.name||'No recipient selected';q('message-recipient').textContent=name;q('mw-recipient-detail').textContent=[context.company,person?.title].filter(Boolean).join(' · ');q('mw-channel').textContent=linkedin?'LinkedIn · manual':'Email';q('mw-editor-title').textContent=linkedin?'Your LinkedIn message':'Your email';q('mw-draft-badge').textContent=context.approved?'Approved':context.hasDraft?'Draft':'Not generated';
   q('mw-readiness-text').textContent=view.text;q('mw-readiness-detail').textContent=view.detail||'';q('mw-readiness').dataset.state=view.kind;
   if(context.outdatedDraft){q('mw-readiness-text').textContent='Outdated draft — regenerate from the approved 20-minute script.';q('mw-readiness-detail').textContent='Your previous draft is preserved, but its 30-minute meeting invitation no longer matches the mandatory originals. Choose a style and press Apply selected style.';q('mw-readiness').dataset.state='blocked';}
-  q('message-generate').disabled=!view.canGenerate||context.factResearchBusy;q('message-generate').textContent=context.busy?'Writing…':context.hasDraft?'Apply selected style':'Create message';
+  q('message-generate').disabled=!view.canGenerate||context.factResearchBusy;q('message-generate').textContent=context.busy?'Personalizing…':context.hasDraft?'Refresh personalization':'Personalize email';
   q('message-update-opening').disabled=!view.canGenerate||!context.hasDraft||context.trigger?.verification!=='user_reviewed'||!root.LeadIntelMessageFacts?.event(context.trigger?.excerpt);
   q('message-update-opening').hidden=!context.hasDraft||context.trigger?.verification!=='user_reviewed';
   q('message-find-fact').disabled=!context.authenticated||!context.ready||context.syncConflict||context.busy||context.factResearchBusy;
@@ -95,7 +95,7 @@
   q('message-generation-status').hidden=!context.busy&&!context.generationError;
   q('mw-trigger-summary').textContent=context.trigger?'Reviewed: '+(root.LeadIntelMessageFacts?.event(context.trigger.excerpt)||context.trigger.title||context.trigger.url):'No reviewed event selected. Find and check a specific development for a stronger opening.';
   q('mw-style-help').textContent=(linkedin?'A protected LinkedIn template, an original AI draft or your saved template.':'A protected core template or original AI draft.')+' Generation never changes the saved original.';
-  if(context.hasDraft&&context.selectedStyle!==context.appliedStyle)q('mw-style-help').textContent=(styles.find(s=>s[0]===context.selectedStyle)?.[1]||'My template')+' selected · not applied yet. Apply selected style to create a new draft.';
+  if(context.hasDraft&&context.selectedStyle!==context.appliedStyle)q('mw-style-help').textContent='Selected style is being prepared. Existing drafts remain protected until explicitly changed.';
   const delivery=q('continue-to-delivery')?.closest('.delivery-entry');if(delivery)delivery.hidden=linkedin||!context.approved;
   paintStyles(document);return view;
  }
