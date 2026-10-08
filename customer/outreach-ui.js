@@ -1,7 +1,7 @@
 import './approved-reference-scripts.js?v=20261008-verbatim-v1';
 import './original-scripts-ui.js?v=20261008-brutal-approved-v1';
 import './original-scripts.js?v=20261007-quality-v1';
-import './message-workspace.js?v=20261008-exact-original-v9&approved-subjects=20261007-v2&brutal-approved=20261008-v1';
+import './message-workspace.js?v=20261008-triggers-v1&approved-subjects=20261007-v2&brutal-approved=20261008-v1';
 import './message-facts.js?v=20261007-quality-v2';
 import './message-translations.js?v=20261007-quality-v1';
 import './message-translation-ui.js?v=20261007-quality-v1';
@@ -116,6 +116,50 @@ async function loadTriggerAlerts(){
     q('trigger-monitoring-alerts').innerHTML=(result.alerts||[]).map(alert=>`<article><a href="${esc(alert.source_url)}" target="_blank" rel="noopener">${esc(alert.title)}</a><p>${esc(alert.summary)}</p><small>Detected: ${esc(alert.created_at)} · source date unknown · company association needs review</small><button class="secondary-btn small" type="button" data-add-trigger-alert="${esc(alert.id)}">Review for ${esc(candidate.company)}</button></article>`).join('')||'<p>No monitoring alerts yet.</p>';
     q('trigger-monitoring-alerts').onclick=event=>{const button=event.target.closest('[data-add-trigger-alert]');if(!button||domain!==outreach.selectedDomain||workspaceId!==crmBridge()?.workspace?.id)return;const alert=(result.alerts||[]).find(row=>row.id===button.dataset.addTriggerAlert);if(!alert)return;const current=currentItem();if(!current?.dossier)return;const evidence={url:alert.source_url,title:alert.title,description:alert.summary,text:alert.summary,date:'',detectedAt:alert.created_at,sourceType:'Public'};current.dossier.evidence=[...(current.dossier.evidence||[]).filter(row=>row.url!==alert.source_url),evidence].slice(-15);upsertItem(current);renderDossier();q('outreach-trigger-select').value=alert.source_url;previewSelectedTrigger();};
   }catch(error){q('trigger-script-status').textContent=error.message;}
+}
+function rankedBuyingTriggers(item=currentItem()){
+ const rows=messageFactCandidates(item).filter(r=>r.kind==='event');
+ const official=rows.filter(r=>{try{return new URL(r.url).hostname.replace(/^www\./,'')===String(item?.domain||'').replace(/^www\./,'');}catch{return false;}});
+ // Only company-owned source pages can be automatically selected without human review.
+ return [...official,...rows.filter(r=>!official.includes(r))].slice(0,3);
+}
+function sourceBackedTrigger(item,source){
+ if(!item?.dossier||!source||source.kind!=='event')return null;
+ try{const host=new URL(source.url).hostname.replace(/^www\./,'');if(host!==item.domain.replace(/^www\./,''))return null;}catch{return null;}
+ const summary=LeadIntelMessageFacts.event(source.text||source.description);
+ if(!summary)return null;
+ return LeadIntelOutreach.normalizeSelectedTrigger({url:source.url,companyDomain:item.domain,excerpt:String(source.text||source.description||'').slice(0,900),verification:'source_verified'},item.dossier);
+}
+function automaticallySelectBuyingTrigger(){
+ const item=currentItem();if(!item?.dossier||item.channel!=='email'||item.dossier.selectedTrigger)return false;
+ const first=rankedBuyingTriggers(item).find(r=>sourceBackedTrigger(item,r));
+ if(!first)return false;
+ const trigger=sourceBackedTrigger(item,first);
+ upsertItem({...LeadIntelOutreach.invalidateOutreachApproval(item),dossier:{...item.dossier,selectedTrigger:trigger}});
+ return true;
+}
+let triggerDraftArchive=[];
+async function chooseBuyingTrigger(url){
+ if(studioGenerationBusy||messageTranslationBusy||messageFactResearchBusy)return;
+ const item=readDraftEdits(),source=rankedBuyingTriggers(item).find(r=>r.url===url);
+ if(!item?.dossier||!source)return;
+ const previous=item.dossier.selectedTrigger,trigger=sourceBackedTrigger(item,source);
+ if(!trigger){q('outreach-trigger-select').value=url;previewSelectedTrigger();q('mw-trigger-review').open=true;toast('This source needs human review before it can be used.');return;}
+ if(previous?.url===url)return;
+ const edited=Boolean(item.drafts?.emailBody?.trim());
+ if(edited&&!window.confirm('Switching triggers will replace your current email with a newly generated version. Your previous draft will be preserved for restoration. Continue?'))return;
+ triggerDraftArchive.push({workspace:crmBridge()?.workspace?.id,domain:item.domain,person:item.selectedPersonId,channel:item.channel,drafts:{...item.drafts},messageStudioDraft:item.messageStudioDraft});
+ triggerDraftArchive=triggerDraftArchive.slice(-8);
+ cancelPendingScriptGeneration();
+ upsertItem({...LeadIntelOutreach.invalidateOutreachApproval(item),dossier:{...item.dossier,selectedTrigger:trigger},localizationApprovalBlocked:true,localizationMessage:'Regenerating from selected source-backed event.'});
+ renderAll();await generateStudioMessage(false);
+}
+function restorePreviousTriggerDraft(){
+ const item=currentItem(),workspace=crmBridge()?.workspace?.id;
+ const index=triggerDraftArchive.findLastIndex(x=>x.workspace===workspace&&x.domain===item?.domain&&x.person===item?.selectedPersonId&&x.channel===item?.channel);
+ if(index<0)return;
+ const old=triggerDraftArchive.splice(index,1)[0];
+ upsertItem({...LeadIntelOutreach.invalidateOutreachApproval(item),drafts:old.drafts,messageStudioDraft:old.messageStudioDraft,localizationApprovalBlocked:true,localizationMessage:'Restored a previous draft. Review and approve again.'});renderAll();
 }
 function messageFactCandidates(item=currentItem()){return LeadIntelMessageFacts.candidates(item?.dossier?.evidence||[],{domain:item?.domain,company:item?.company});}
 function renderFactCards(facts){let host=q('message-fact-cards');if(!host){host=document.createElement('div');host.id='message-fact-cards';q('outreach-trigger-select').closest('label').before(host);q('outreach-trigger-select').closest('label').hidden=true;}host.replaceChildren();const events=facts.filter(f=>f.kind==='event'),background=facts.filter(f=>f.kind!=='event');if(!events.length){const empty=document.createElement('p');empty.textContent='No specific event found. An honest introduction is ready to use.';host.append(empty);}for(const [i,source] of [...events,...background].entries()){let container=host;if(i>=3){let more=host.querySelector('details');if(!more){more=document.createElement('details');const summary=document.createElement('summary');summary.textContent='More sources & background';more.append(summary);host.append(more);}container=more;}const card=document.createElement('article');card.className='mw-fact-card';const label=document.createElement('small'),text=document.createElement('p'),meta=document.createElement('small'),link=document.createElement('a'),button=document.createElement('button');label.textContent=source.kind==='event'?(source.recommended?'Recommended · needs review':'Event · needs review'):'Company background';text.textContent=source.summary;meta.textContent=new URL(source.url).hostname+' · '+(source.date||'Date not supplied');link.textContent='View source ↗';link.href=source.url;link.target='_blank';link.rel='noopener';button.type='button';button.className='secondary-btn small';button.textContent='Review this fact';button.onclick=()=>{q('outreach-trigger-select').value=source.url;previewSelectedTrigger();q('trigger-source-preview').scrollIntoView?.({block:'nearest'});};const actions=document.createElement('div');actions.className='mw-fact-actions';actions.append(link,button);card.append(label,text,meta,actions);container.append(card);}}
@@ -375,7 +419,7 @@ function installMessageStudio(){
  for(const key of LeadIntelMessageStudio.settingFields)q('message-'+key)?.addEventListener('input',()=>{invalidateStudioDraft();q('message-pitch-preview').textContent=LeadIntelMessageStudio.preview(readStudio().essentials);q('message-generation-status').textContent='Message settings changed. Generate to apply it.';});
  window.LeadIntelMessageWorkspace?.mount(document);
  window.LeadIntelOriginalScriptsUI?.mount(document,{render:renderMessageStudio,save:(language,body)=>manageOriginalScript('save',language,body),unlock:language=>manageOriginalScript('unlock',language),restore:(language,revision)=>manageOriginalScript('restore',language,revision),retry:()=>manageOriginalScript('retry')});
- q('message-find-fact').onclick=()=>void refreshMessageFacts();q('message-update-opening').onclick=()=>updateMessageOpening();
+ q('message-find-fact').onclick=()=>void refreshMessageFacts();q('mw-trigger-options')?.addEventListener('click',event=>{const trigger=event.target.closest('[data-buying-trigger]');if(trigger)void chooseBuyingTrigger(trigger.dataset.buyingTrigger);if(event.target.closest('[data-restore-trigger-draft]'))restorePreviousTriggerDraft();});q('message-update-opening').onclick=()=>updateMessageOpening();
  window.LeadIntelMessageTranslationUI?.mount(document,{save:()=>void saveMessageLanguage(),target:()=>{if(messageTranslationBusy)return;messageTranslationError='';renderMessageWorkspace();},activate:language=>activateMessageLanguage(language),restore:(language,index)=>{if(!messageWorkspaceUsable()||messageTranslationBusy||studioGenerationBusy||currentItem()?.approved)return;upsertItem(LeadIntelOutreach.invalidateOutreachApproval(globalThis.LeadIntelMessageTranslations.restorePrevious(readDraftEdits(),language,index)));renderAll();},translate:language=>void translateMessageLanguage(language)});
  for(const id of ['outreach-email-subject','outreach-email-body','outreach-linkedin'])q(id).addEventListener('input',()=>{if(id==='outreach-email-subject'){q('message-ai-subject-choice').value='';const select=q('message-subject-choice');if(select){if(!select.querySelector('option[value="custom"]'))select.insertAdjacentHTML('afterbegin','<option value="custom">Custom subject · editable below</option>');select.value='custom';}}scriptGenerationRequest++;studioGenerationBusy=false;messageTranslationError='';const item=readDraftEdits();if(item){upsertItem({...LeadIntelOutreach.invalidateOutreachApproval(item),...(id==='outreach-linkedin'?{linkedinSentAt:''}:{})});q('approve-outreach').disabled=item.channel==='linkedin'||item.localizationApprovalBlocked;if(id==='outreach-linkedin')renderMessageStudio();else renderMessageWorkspace();}});
 }
@@ -434,7 +478,7 @@ function renderMessageWorkspace(){
  const ready=Boolean(handoffContact&&choice?.workspaceId===crmBridge()?.workspace?.id&&choice?.personId===handoffContact.personId&&choice?.channel===handoffContact.channel&&handoffContact.domain===candidate?.domain&&handoffContact.personId===item?.selectedPersonId&&item?.channel===handoffContact.channel&&item?.dossier);
  window.LeadIntelMessageTranslationUI?.render(document,item,{usable:messageWorkspaceUsable(),busy:messageTranslationBusy||studioGenerationBusy,error:messageTranslationError});
  window.LeadIntelOriginalScriptsUI?.render(document,{studio,channel:item?.channel||'email',style:item?.channel==='linkedin'?studio.linkedinMode:studio.mode,role:crmBridge()?.workspace?.role,workspaceId:crmBridge()?.workspace?.id,blocked:originalScriptBusy||!messageWorkspaceUsable()||messageTranslationBusy||studioGenerationBusy});
- const view=window.LeadIntelMessageWorkspace?.render(document,{ready,selectedStyle:item?.channel==='linkedin'?studio.linkedinMode:studio.mode,appliedStyle:item?.messageStudioDraft?.mode,templateSelected:(item?.channel==='linkedin'?studio.linkedinMode:studio.mode)!=='original',factResearchBusy:messageFactResearchBusy,proof:studio.essentials.proof,syncConflict:Boolean(crmBridge()?.conflict),pending:buyerHandoffPending,authenticated:crmAuthenticated(),missing:LeadIntelMessageStudio.missing(studio.essentials),invalidCalendly:Boolean(studio.essentials.calendly)&&LeadIntelMessageStudio.missing(studio.essentials).includes('calendly'),unconfirmed:globalThis.LeadIntelStep2Brief?.confirmationMissing(mainState())||[],hasDraft:Boolean((item?.channel==='linkedin'?item?.drafts?.linkedinMessage:item?.drafts?.emailBody)?.trim()),approved:Boolean(item?.approved),busy:studioGenerationBusy||messageTranslationBusy,channel:item?.channel||choice?.channel,person,company:candidate?.company,contact:handoffContact?.contact,fitScore:candidate?.fitScore??null,sender:studio.essentials.sender,senderCompany:studio.essentials.company,value:studio.essentials.value,trigger:item?.dossier?.selectedTrigger,generationError:studioGenerationError,outdatedDraft:item?.channel!=='linkedin'&&/\b30[ -]minute\b/i.test(item?.drafts?.emailBody||''),onResolve:action=>action==='sync'?document.getElementById('server-conflict-actions')?.scrollIntoView({block:'center',behavior:'smooth'}):action==='buyer'?backToDiscovery():showStep(2)});
+ const view=window.LeadIntelMessageWorkspace?.render(document,{triggers:rankedBuyingTriggers(item),onTriggerSelect:chooseBuyingTrigger,ready,selectedStyle:item?.channel==='linkedin'?studio.linkedinMode:studio.mode,appliedStyle:item?.messageStudioDraft?.mode,templateSelected:(item?.channel==='linkedin'?studio.linkedinMode:studio.mode)!=='original',factResearchBusy:messageFactResearchBusy,proof:studio.essentials.proof,syncConflict:Boolean(crmBridge()?.conflict),pending:buyerHandoffPending,authenticated:crmAuthenticated(),missing:LeadIntelMessageStudio.missing(studio.essentials),invalidCalendly:Boolean(studio.essentials.calendly)&&LeadIntelMessageStudio.missing(studio.essentials).includes('calendly'),unconfirmed:globalThis.LeadIntelStep2Brief?.confirmationMissing(mainState())||[],hasDraft:Boolean((item?.channel==='linkedin'?item?.drafts?.linkedinMessage:item?.drafts?.emailBody)?.trim()),approved:Boolean(item?.approved),busy:studioGenerationBusy||messageTranslationBusy,channel:item?.channel||choice?.channel,person,company:candidate?.company,contact:handoffContact?.contact,fitScore:candidate?.fitScore??null,sender:studio.essentials.sender,senderCompany:studio.essentials.company,value:studio.essentials.value,trigger:item?.dossier?.selectedTrigger,generationError:studioGenerationError,outdatedDraft:item?.channel!=='linkedin'&&/\b30[ -]minute\b/i.test(item?.drafts?.emailBody||''),onResolve:action=>action==='sync'?document.getElementById('server-conflict-actions')?.scrollIntoView({block:'center',behavior:'smooth'}):action==='buyer'?backToDiscovery():showStep(2)});
  if(globalThis.LeadIntelMessageTranslations&&item){const b=globalThis.LeadIntelMessageTranslations.book(item);if(b.originalLanguage==='en'&&b.activeLanguage!=='en'){q('message-generate').disabled=!view?.canGenerate;q('message-generate').textContent=messageTranslationBusy?'Translating…':'Open English original';q('mw-style-help').textContent='Update the English original first, then translate again. Your saved translation stays available.';q('message-improve').disabled=true;q('message-update-opening').disabled=true;q('message-subject-choice').disabled=true;q('message-ai-subject-choice').disabled=true;}else {q('message-subject-choice').disabled=false;q('message-ai-subject-choice').disabled=false;q('message-generate').textContent=messageTranslationBusy?'Translating…':studioGenerationBusy?'Personalizing…':'Personalize email ✦';}}return view;
 }
 function prepareStudioBuyer(candidate,person){const cached=LeadIntelOutreach.savedBuyerDraft(outreach,candidate.domain,person.id,handoffContact.channel);const old=currentItem();if(cached?.dossier&&!(old?.dossier&&old.selectedPersonId===person.id&&old.channel===handoffContact.channel)){upsertItem(cached);renderAll();return;}if(old?.dossier&&old.selectedPersonId===person.id&&old.channel===handoffContact.channel){renderAll();return;}if(q('message-personal-review'))closePersonalReview();
