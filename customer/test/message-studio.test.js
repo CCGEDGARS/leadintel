@@ -58,3 +58,26 @@ test('generated email rejects unfilled sender and booking reference placeholders
   assert.throws(()=>M.parse(JSON.stringify({subject:'Alex. StockCo',message}),e),/unfilled sender|unfilled fields/i);
  }
 });
+
+test('personal styles preserve protected originals, activate independently and survive workspace reload',()=>{
+ const base=M.normalize({},essentials);
+ const custom=M.savePersonalStyle(base,'professional',{subject:'{{sender}}. {{company}}',body:'Hi {{firstName}},\n\nOur 20-minute Zoom meeting: {{calendly}}'});
+ assert.equal(custom.personalStyles.professional.active,true);
+ assert.equal(custom.personalStyles.professional.revision,1);
+ assert.match(M.prompt(custom,{buyerCompany:'RetailCo'}).prompt,/activePersonalStyle/);
+ assert.match(M.prompt(custom,{buyerCompany:'RetailCo'}).prompt,/Our 20-minute Zoom/);
+ assert.match(M.originalText('professional'),/Hi Joakim/);
+ const disabled=M.activatePersonalStyle(custom,'professional',false);
+ assert.equal(disabled.personalStyles.professional.active,false);
+ const stored=M.storageState(custom);
+ assert.equal(M.normalize(JSON.parse(JSON.stringify(stored))).personalStyles.professional.body,custom.personalStyles.professional.body);
+ const revised=M.savePersonalStyle(custom,'professional',{subject:'A different subject',body:'Hi {{firstName}}, revised structure.'});
+ assert.equal(revised.personalStyles.professional.revision,2);
+ assert.equal(M.restorePersonalStyle(revised,'professional').personalStyles.professional.revision,1);
+});
+test('AI length choices only apply to AI Generated',()=>{
+ const ai=M.normalize({mode:'original',aiLength:'short'},essentials);
+ assert.equal(JSON.parse(M.prompt(ai,{buyerCompany:'RetailCo'}).prompt).aiLength,'short');
+ const mandatory=M.normalize({...ai,mode:'friendly'},essentials);
+ assert.equal(JSON.parse(M.prompt(mandatory,{buyerCompany:'RetailCo'}).prompt).aiLength,null);
+});
