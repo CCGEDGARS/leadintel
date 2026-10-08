@@ -33,3 +33,15 @@ test('restored booking placeholders use only the active workspace valid event li
  for(const url of ['', 'https://calendly.com/', 'https://evil.example/meeting', 'javascript:alert(1)'])assert.equal(M.resolveBookingPlaceholder(text,url),text);
  const existing='Use https://calendly.com/another/meeting';assert.equal(M.resolveBookingPlaceholder(existing,'https://calendly.com/sender/meeting'),existing);
 });
+
+test('five universal suggested subjects are distinct and preserve the approved original reference',()=>{
+ const patterns=M.universalSubjects.map(x=>x.pattern);
+ assert.deepEqual(patterns,['{{offer}} for {{verifiedProject}}','{{sender}}. {{company}}','Room for one more {{partnerType}}?','Are you in charge?','{{verifiedProject}}: {{technicalOptionA}} or {{technicalOptionB}}?']);
+ assert.equal(M.originalText('professional','email').includes('Hi Joakim,'),true);
+ for(const id of ['professional','curiosity','friendly','brutal'])assert.equal(M.subjectsFor(id).length,5);
+ const base=M.normalize({},essentials);
+ const selected=M.chooseSubject(base,'professional','authority');
+ assert.equal(M.resolveApprovedSubject(selected,{buyerCompany:'LKAB'},essentials),'Are you in charge?');
+ assert.equal(M.resolveApprovedSubject(M.chooseSubject(base,'professional','partner'),{},essentials),'Room for one more partner?');
+ assert.throws(()=>M.resolveApprovedSubject(M.chooseSubject(base,'professional','technical'),{buyerCompany:'LKAB'},essentials),/requires approved/);
+});
