@@ -128,7 +128,7 @@ function sourceBackedTrigger(item,source){
  try{const host=new URL(source.url).hostname.replace(/^www\./,'');if(host!==item.domain.replace(/^www\./,''))return null;}catch{return null;}
  const summary=LeadIntelMessageFacts.event(source.text||source.description);
  if(!summary)return null;
- return LeadIntelOutreach.normalizeSelectedTrigger({url:source.url,companyDomain:item.domain,excerpt:String(source.text||source.description||'').slice(0,900),verification:'source_verified'},item.dossier);
+ return LeadIntelOutreach.normalizeSelectedTrigger({url:source.url,companyDomain:item.domain,excerpt:LeadIntelMessageFacts.clean(source.text||source.description||'').slice(0,900),verification:'source_verified'},item.dossier);
 }
 function automaticallySelectBuyingTrigger(){
  const item=currentItem();if(!item?.dossier||item.channel!=='email'||item.dossier.selectedTrigger)return false;
