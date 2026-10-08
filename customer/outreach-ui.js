@@ -138,7 +138,7 @@ function automaticallySelectBuyingTrigger(){
  upsertItem({...LeadIntelOutreach.invalidateOutreachApproval(item),dossier:{...item.dossier,selectedTrigger:trigger}});
  return true;
 }
-let triggerDraftArchive=[];
+// Prior drafts are retained on the CRM-synchronized message item, not only in memory.
 async function chooseBuyingTrigger(url){
  if(studioGenerationBusy||messageTranslationBusy||messageFactResearchBusy)return;
  const item=readDraftEdits(),source=rankedBuyingTriggers(item).find(r=>r.url===url);
@@ -148,18 +148,20 @@ async function chooseBuyingTrigger(url){
  if(previous?.url===url)return;
  const edited=Boolean(item.drafts?.emailBody?.trim());
  if(edited&&!window.confirm('Switching triggers will replace your current email with a newly generated version. Your previous draft will be preserved for restoration. Continue?'))return;
- triggerDraftArchive.push({workspace:crmBridge()?.workspace?.id,domain:item.domain,person:item.selectedPersonId,channel:item.channel,drafts:{...item.drafts},messageStudioDraft:item.messageStudioDraft});
- triggerDraftArchive=triggerDraftArchive.slice(-8);
+ const history=(item.messageStudioDraft?.triggerDraftHistory||[]).slice(-4);
+ history.push({drafts:{emailSubject:item.drafts?.emailSubject||'',emailBody:item.drafts?.emailBody||''},trigger:item.dossier?.selectedTrigger||null,savedAt:new Date().toISOString()});
  cancelPendingScriptGeneration();
- upsertItem({...LeadIntelOutreach.invalidateOutreachApproval(item),dossier:{...item.dossier,selectedTrigger:trigger},localizationApprovalBlocked:true,localizationMessage:'Regenerating from selected source-backed event.'});
+ upsertItem({...LeadIntelOutreach.invalidateOutreachApproval(item),dossier:{...item.dossier,selectedTrigger:trigger},messageStudioDraft:{...item.messageStudioDraft,triggerDraftHistory:history},localizationApprovalBlocked:true,localizationMessage:'Regenerating from selected source-backed event.'});
  renderAll();await generateStudioMessage(false);
 }
 function restorePreviousTriggerDraft(){
- const item=currentItem(),workspace=crmBridge()?.workspace?.id;
- const index=triggerDraftArchive.findLastIndex(x=>x.workspace===workspace&&x.domain===item?.domain&&x.person===item?.selectedPersonId&&x.channel===item?.channel);
- if(index<0)return;
- const old=triggerDraftArchive.splice(index,1)[0];
- upsertItem({...LeadIntelOutreach.invalidateOutreachApproval(item),drafts:old.drafts,messageStudioDraft:old.messageStudioDraft,localizationApprovalBlocked:true,localizationMessage:'Restored a previous draft. Review and approve again.'});renderAll();
+ const item=readDraftEdits();if(!item||item.approved)return;
+ const history=item.messageStudioDraft?.triggerDraftHistory||[];
+ if(!history.length){toast('No previous trigger draft is available.');return;}
+ const prior=history[history.length-1];
+ cancelPendingScriptGeneration();
+ upsertItem({...LeadIntelOutreach.invalidateOutreachApproval(item),drafts:{...item.drafts,...prior.drafts},dossier:{...item.dossier,selectedTrigger:prior.trigger},messageStudioDraft:{...item.messageStudioDraft,triggerDraftHistory:history.slice(0,-1)},localizationApprovalBlocked:true,localizationMessage:'Previous draft restored. Review before approval.'});
+ renderAll();
 }
 function messageFactCandidates(item=currentItem()){return LeadIntelMessageFacts.candidates(item?.dossier?.evidence||[],{domain:item?.domain,company:item?.company});}
 function renderFactCards(facts){let host=q('message-fact-cards');if(!host){host=document.createElement('div');host.id='message-fact-cards';q('outreach-trigger-select').closest('label').before(host);q('outreach-trigger-select').closest('label').hidden=true;}host.replaceChildren();const events=facts.filter(f=>f.kind==='event'),background=facts.filter(f=>f.kind!=='event');if(!events.length){const empty=document.createElement('p');empty.textContent='No specific event found. An honest introduction is ready to use.';host.append(empty);}for(const [i,source] of [...events,...background].entries()){let container=host;if(i>=3){let more=host.querySelector('details');if(!more){more=document.createElement('details');const summary=document.createElement('summary');summary.textContent='More sources & background';more.append(summary);host.append(more);}container=more;}const card=document.createElement('article');card.className='mw-fact-card';const label=document.createElement('small'),text=document.createElement('p'),meta=document.createElement('small'),link=document.createElement('a'),button=document.createElement('button');label.textContent=source.kind==='event'?(source.recommended?'Recommended · needs review':'Event · needs review'):'Company background';text.textContent=source.summary;meta.textContent=new URL(source.url).hostname+' · '+(source.date||'Date not supplied');link.textContent='View source ↗';link.href=source.url;link.target='_blank';link.rel='noopener';button.type='button';button.className='secondary-btn small';button.textContent='Review this fact';button.onclick=()=>{q('outreach-trigger-select').value=source.url;previewSelectedTrigger();q('trigger-source-preview').scrollIntoView?.({block:'nearest'});};const actions=document.createElement('div');actions.className='mw-fact-actions';actions.append(link,button);card.append(label,text,meta,actions);container.append(card);}}
