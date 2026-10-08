@@ -169,7 +169,7 @@ function previewSelectedTrigger(){const url=q('outreach-trigger-select')?.value,
 async function useReviewedTrigger(){
   const current=readDraftEdits();if(!current?.dossier||!messageWorkspaceUsable())return;
   if(!q('trigger-source-confirm').checked){toast('Confirm that you checked the source, company and event first');return;}
-  try{const source=messageFactCandidates(current).find(r=>r.url===q('outreach-trigger-select').value);const item=LeadIntelOutreach.reviewTrigger(current,q('outreach-trigger-select').value,new Date().toISOString(),source?.summary||'');cancelPendingScriptGeneration();upsertItem(item);invalidateStudioDraft();renderAll();q('trigger-script-status').textContent='Fact reviewed. Update the opening only, or generate a new draft. Your existing text is unchanged.';q('mw-trigger-summary')?.scrollIntoView?.({block:'nearest'});}catch(error){toast(error.message);}
+  try{const source=messageFactCandidates(current).find(r=>r.url===q('outreach-trigger-select').value);const item=LeadIntelOutreach.reviewTrigger(current,q('outreach-trigger-select').value,new Date().toISOString(),source?.summary||'');cancelPendingScriptGeneration();upsertItem(item);invalidateStudioDraft();renderAll();q('trigger-script-status').textContent='Fact reviewed and selected. Regenerating the email from this verified event.';if(item.channel==='email')await generateStudioMessage(false);q('mw-trigger-summary')?.scrollIntoView?.({block:'nearest'});}catch(error){toast(error.message);}
 }
 
 let messageFactResearchRequest=0,messageFactResearchBusy=false,messageFactResearchController=null,messageFactScope='';
