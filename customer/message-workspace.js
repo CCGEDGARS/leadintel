@@ -25,13 +25,13 @@
   const settings=studio.querySelector('details');settings.id='mw-settings';settings.open=false;settings.querySelector('summary').textContent='Sender & settings';settings.prepend(q('message-sender-identity'));settings.insertBefore(settings.querySelector('summary'),settings.firstChild);
   const source=q('message-pitch-preview').closest('details');source.querySelector('summary').textContent='Your reviewed business information';settings.append(source);
   const layout=node('div','mw-layout'),rail=node('aside','mw-rail'),editor=node('div','mw-editor');rail.setAttribute('aria-label','Message preparation');layout.append(rail,editor);studio.append(layout);
-  const preparation=node('section','mw-section');preparation.innerHTML='<div class="mw-section-heading"><span class="mw-step-number">1</span><div><h3>Review Buying Triggers</h3><p>The strongest supported trigger is preselected when available. Choose your trigger, style and subject, then personalize the email.</p></div></div><p id="mw-trigger-summary"></p>';
+  const preparation=node('section','mw-section');preparation.innerHTML='<div class="mw-section-heading"><span class="mw-step-number">1</span><div><h3>Strongest Buying Trigger</h3><p>LeadIntel selects the strongest supported event. Review the evidence below, then choose your style and subject.</p></div></div><p id="mw-trigger-summary"></p>';
   const triggerList=node('div','mw-trigger-options');triggerList.id='mw-trigger-options';preparation.append(triggerList);
   const trigger=step.querySelector('.trigger-script-panel');const review=node('details','mw-trigger-review');review.innerHTML='<summary>Review external source · optional</summary>';review.open=false;review.append(trigger);preparation.append(review);rail.append(preparation);
   trigger.querySelector('h3').hidden=true;trigger.querySelector(':scope > p').hidden=true;trigger.querySelector(':scope > small').hidden=true;
   const triggerTools=node('details','mw-extra-tools');triggerTools.innerHTML='<summary>More research tools</summary>';for(const id of ['load-trigger-alerts','save-trigger-scripts','restore-trigger-scripts','trigger-monitoring-alerts'])triggerTools.append(q(id));step.querySelector('.message-advanced').append(triggerTools);
   q('use-reviewed-trigger').textContent='Use this fact';
-  const findFact=node('button','secondary-btn small','Research more triggers');findFact.id='message-find-fact';findFact.type='button';preparation.append(findFact);
+  const findFact=node('button','secondary-btn small','Research stronger evidence');findFact.id='message-find-fact';findFact.type='button';preparation.append(findFact);
   const factStatus=node('p','','');factStatus.id='message-fact-status';factStatus.setAttribute('role','status');preparation.append(factStatus);
   const opening=node('button','secondary-btn small','Apply fact to opening');opening.id='message-update-opening';opening.type='button';opening.disabled=true;review.append(opening);
   const openingHelp=node('p','mw-fact-help','Changes only the opening. Your introduction, benefits, links and closing stay intact.');review.append(openingHelp);
@@ -102,9 +102,28 @@
   const approval=q('step-6').querySelector('.outreach-approval');approval.hidden=linkedin||!context.hasDraft;q('approve-outreach').textContent=context.approved?'Approved ✓':'Approve & continue →';if(context.outdatedDraft||context.pendingSelections||context.unpersonalizedDraft||!context.senderIdentityReady)q('approve-outreach').disabled=true;
   q('message-generation-status').hidden=!context.busy&&!context.generationError;
   paintStyles(document);
-  const list=q('mw-trigger-options');if(list){list.replaceChildren();const triggers=(context.triggers||[]).filter(t=>t.kind==='event').slice(0,3);if(!triggers.length){const p=document.createElement('p');p.textContent='No verified buying triggers available.';list.append(p);}for(const source of triggers){const entry=document.createElement('article');entry.className='mw-trigger-choice';const sentence=document.createElement('p');sentence.textContent=root.LeadIntelTriggerPreview?.summary(source,context.company)||String(source.summary||source.title||'');const actions=document.createElement('div');actions.className='mw-trigger-actions';const selected=source.url===context.trigger?.url;const apply=document.createElement('button');apply.type='button';apply.className='secondary-btn small';apply.dataset.buyingTrigger=source.url;apply.textContent=selected?'Applied ✓':'Apply';apply.disabled=selected||!context.ready||context.busy;const link=document.createElement('a');link.href=source.url;link.target='_blank';link.rel='noopener';link.textContent='Source ↗';actions.append(apply,link);entry.append(sentence,actions);list.append(entry);}if(triggers.length<3){const note=document.createElement('small');note.textContent=triggers.length+' supported buying trigger(s) found; no others invented.';list.append(note);}}
-    q('mw-trigger-summary').textContent=context.trigger?(context.appliedTriggerUrl===context.trigger.url?'Trigger used in email.':'Trigger selected. Click Personalize Email to update it.'):'Choose a trigger, or continue without one.';
-  q('mw-style-help').textContent=linkedin?'Choose a writing style for your LinkedIn message.':'Choose a style; the original stays protected. Your draft changes only when you click Personalize Email.';
+  const list=q('mw-trigger-options');if(list){
+    list.replaceChildren();
+    const rows=(context.triggers||[]).filter(t=>t.kind==='event');
+    const active=rows.find(t=>t.url===context.trigger?.url);
+    const source=active||rows[0]||null;
+    if(source){
+      const card=document.createElement('article');card.className='mw-trigger-choice mw-single-trigger';
+      const text=document.createElement('p');text.textContent=root.LeadIntelTriggerPreview?.summary(source,context.company)||String(source.summary||source.title||'');
+      const tools=document.createElement('div');tools.className='mw-trigger-actions';
+      const status=document.createElement('small');
+      const isSelected=source.url===context.trigger?.url;
+      status.textContent=isSelected?'Selected automatically':'Source needs review';
+      const link=document.createElement('a');link.href=source.url;link.target='_blank';link.rel='noopener noreferrer';link.textContent='View source ↗';
+      tools.append(status,link);
+      if(!isSelected){const check=document.createElement('button');check.type='button';check.className='secondary-btn small';check.dataset.buyingTrigger=source.url;check.textContent='Review source';check.disabled=!context.ready||context.busy;tools.append(check);}
+      card.append(text,tools);list.append(card);
+    }else{
+      const empty=document.createElement('p');empty.textContent='No supported buying trigger yet. Your email can use an honest introduction.';list.append(empty);
+    }
+  }
+  q('mw-trigger-summary').textContent=context.trigger?(context.appliedTriggerUrl===context.trigger.url?'Applied in the email.':'Selected for the next personalization.'):'';
+    q('mw-style-help').textContent=linkedin?'Choose a writing style for your LinkedIn message.':'Choose a style; the original stays protected. Your draft changes only when you click Personalize Email.';
   if(context.hasDraft&&context.selectedStyle!==context.appliedStyle)q('mw-style-help').textContent='Style selection changed. Click Personalize Email to update the draft.';
   const delivery=q('continue-to-delivery')?.closest('.delivery-entry');if(delivery)delivery.hidden=linkedin||!context.approved;
   paintStyles(document);return view;
