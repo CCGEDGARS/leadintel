@@ -216,3 +216,6 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #message-studio .mw-ai-length select{width:100%;box-sizing:border-box;border:1px solid #d1e0d4;border-radius:8px;padding:9px;background:#fff;color:#294837;font:inherit}
 #message-studio #mw-style-manager .mw-draft-toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 #message-studio #mw-style-manager #mw-style-save{background:#102e23;color:#fff}
+
+#message-studio .mw-style-manager .mw-style-reviewed{display:flex;align-items:flex-start;gap:8px;margin:12px 0;padding:9px;background:#f3f8f4;border-radius:8px;line-height:1.55}
+#message-studio .mw-style-reviewed input{width:16px;height:16px;flex:0 0 auto;margin-top:2px;accent-color:#2e7852}
