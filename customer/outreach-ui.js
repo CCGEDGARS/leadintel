@@ -139,7 +139,7 @@ function sourceBackedTrigger(item,source){
  return LeadIntelOutreach.normalizeSelectedTrigger({url:source.url,companyDomain:item.domain,excerpt:LeadIntelMessageFacts.clean(source.text||source.description||'').slice(0,900),verification:'source_verified'},item.dossier);
 }
 function automaticallySelectBuyingTrigger(){
- const item=currentItem();if(!item?.dossier||item.channel!=='email'||item.dossier.selectedTrigger)return false;
+ const item=currentItem();if(!item?.dossier||item.channel!=='email'||item.approved||item.dossier.selectedTrigger)return false;
  const first=rankedBuyingTriggers(item).find(r=>sourceBackedTrigger(item,r));
  if(!first)return false;
  const trigger=sourceBackedTrigger(item,first);
@@ -609,7 +609,7 @@ async function openVerifiedBuyerScripts(choice){
  }
  const contact=(contacts||[]).find(c=>c.id===choice.contactId&&(!window.LeadIntelContactPolicy&&String(c.email_status||'').toLowerCase()==='verified'||window.LeadIntelContactPolicy?.accepted(c,choice.domain,window.LeadIntelBuyerConfirmationPolicy?.level?.()||window.LeadIntelServiceSettings?.confirmationLevel?.()))&&String(c.work_email||c.normalized_email||'').toLowerCase().endsWith('@'+choice.domain));if(!contact)return false;
  if(!active())return false;cancelPendingScriptGeneration();const old=currentItem();if(old)outreach=LeadIntelOutreach.rememberBuyerDraft(outreach,old);outreach.selectedDomain=choice.domain;
- handoffContact={domain:choice.domain,personId:choice.personId,channel:'email',contact};saveOutreach();prepareStudioBuyer(candidate,person);showOutreachStep();if(!String(currentItem()?.drafts?.emailBody||'').trim()){const style=studioState().mode;if(globalThis.LeadIntelApprovedReferences?.records?.[style])seedMandatoryEmail(style);automaticallySelectBuyingTrigger();}return true;
+ handoffContact={domain:choice.domain,personId:choice.personId,channel:'email',contact};saveOutreach();prepareStudioBuyer(candidate,person);showOutreachStep();const triggerPreselected=automaticallySelectBuyingTrigger();if(!String(currentItem()?.drafts?.emailBody||'').trim()){const style=studioState().mode;if(globalThis.LeadIntelApprovedReferences?.records?.[style])seedMandatoryEmail(style);}else if(triggerPreselected)renderAll();return true;
 }
 window.LeadIntelOutreachUI={openBuyerScripts};window.LeadIntelOutreachUI.openMessageChannel=openMessageChannel;
 window.addEventListener('leadintel:buyer-for-scripts',event=>{messageChannelNavigationRequest++;messageChannelNavigationBaseline=null;void openBuyerScripts(event.detail).then(opened=>{if(!opened)toast('The selected recipient could not be opened. Check email confirmation and workspace synchronization, then retry.');}).catch(()=>toast('Unable to load the selected CRM contact.'));});
