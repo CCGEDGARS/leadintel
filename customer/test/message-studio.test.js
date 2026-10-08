@@ -34,14 +34,19 @@ test('restored booking placeholders use only the active workspace valid event li
  const existing='Use https://calendly.com/another/meeting';assert.equal(M.resolveBookingPlaceholder(existing,'https://calendly.com/sender/meeting'),existing);
 });
 
-test('five universal suggested subjects are distinct and preserve the approved original reference',()=>{
- const patterns=M.universalSubjects.map(x=>x.pattern);
- assert.deepEqual(patterns,['{{offer}} for {{verifiedProject}}','{{sender}}. {{company}}','Room for one more {{partnerType}}?','Are you in charge?','{{verifiedProject}}: {{technicalOptionA}} or {{technicalOptionB}}?']);
+test('four styles have separate five-subject collections with a common sender-company default',()=>{
+ const groups=['professional','curiosity','friendly','brutal'].map(style=>M.subjectsFor(style));
+ for(const group of groups){assert.equal(group.length,5);assert.equal(group[0].id,'sender');assert.equal(group[0].pattern,'{{sender}}. {{company}}');assert.ok(group.every(x=>x.id!=='introduction'));}
+ assert.equal(new Set(groups.map(g=>g[1].pattern)).size,4);
  assert.equal(M.originalText('professional','email').includes('Hi Joakim,'),true);
- for(const id of ['professional','curiosity','friendly','brutal'])assert.equal(M.subjectsFor(id).length,5);
  const base=M.normalize({},essentials);
- const selected=M.chooseSubject(base,'professional','authority');
- assert.equal(M.resolveApprovedSubject(selected,{buyerCompany:'LKAB'},essentials),'Are you in charge?');
- assert.equal(M.resolveApprovedSubject(M.chooseSubject(base,'professional','partner'),{},essentials),'Room for one more partner?');
- assert.throws(()=>M.resolveApprovedSubject(M.chooseSubject(base,'professional','technical'),{buyerCompany:'LKAB'},essentials),/requires approved/);
+ for(const style of ['professional','curiosity','friendly','brutal']){
+   const selected=M.normalize({...base,mode:style},essentials);
+   assert.equal(selected.subjectChoices[style],'sender');
+   assert.equal(M.resolveApprovedSubject(selected,{buyerCompany:'LKAB'},essentials),'Alex. StockCo');
+ }
+ assert.equal(M.resolveApprovedSubject(M.chooseSubject({...base,mode:'curiosity'},'curiosity','role'),{},essentials),'Are you in charge?');
+ assert.equal(M.resolveApprovedSubject(M.chooseSubject({...base,mode:'friendly'},'friendly','together'),{},essentials),'What could we build together?');
+ assert.equal(M.resolveApprovedSubject(M.chooseSubject({...base,mode:'professional'},'professional','project'),{buyerCompany:'LKAB'},essentials),'A practical idea for LKAB');
+ assert.equal(M.resolveApprovedSubject(M.chooseSubject({...base,mode:'professional'},'professional','project'),{buyerCompany:'LKAB',trigger:{title:'Malmberget',verification:'source_verified'}},essentials),'Regarding Malmberget');
 });
