@@ -2,6 +2,20 @@ import {chunkWritingReference,analyseWritingReferenceChunk,aggregateWritingRefer
 import {getWritingReference,cleanupWritingReference,recoverWritingReferenceUploads} from './writing-reference-store.js';
 import {importAesKey,decryptSecret} from './oauth.js';
 import {generateText} from './ai-provider.js';
+import {creditFailure} from './provider-credit-health.js';
+function analysisFailure(error){
+ const message=String(error?.message||''),http=message.match(/request failed \((\d+)\)/),status=Number(http?.[1]||0);
+ if(creditFailure(status,message))return 'Analysis stopped: the AI provider reported exhausted credits or billing quota. Check billing for your active AI provider, then retry.';
+ if(error?.name==='TimeoutError'||error?.name==='AbortError'||/timed out/i.test(message))return 'Analysis timed out. Completed sections are saved; retry to continue.';
+ if(status===429)return 'Analysis paused by the AI provider rate limit. Wait briefly, then retry; this does not confirm exhausted credits.';
+ if(status===401||status===403)return 'Analysis stopped: the AI provider rejected access. Check your active AI connection in Settings, then retry.';
+ if(status===400||status===404)return 'Analysis stopped: the AI provider rejected the model or request. Check your active model in Settings, then retry.';
+ if(status)return `Analysis stopped: AI provider request failed (${status}). Completed sections are saved; retry to continue.`;
+ if(message==='Connect an active AI provider in Settings')return message;
+ if(/^(Technique response must be valid JSON|Invalid technique|Invalid technique response)/.test(message))return 'The AI provider returned invalid analysis output. Completed sections are saved; retry to continue.';
+ if(message==='Extracted source is unavailable')return 'The extracted source is unavailable. Upload the source again.';
+ return 'Analysis stopped because of an unexpected error. Completed sections are saved; retry to continue.';
+}
 const stmt=(env,sql,...values)=>env.DB.prepare(sql).bind(...values);
 const guard=`EXISTS(SELECT 1 FROM writing_reference_jobs j JOIN writing_reference_sources s ON s.id=j.source_id JOIN writing_reference_slots p ON p.source_id=s.id WHERE j.source_id=? AND j.lease_id=? AND s.status='Processing')`;
 export async function claimWritingReferenceJob(env,{now=Date.now(),leaseId=crypto.randomUUID()}={}){
@@ -58,10 +72,10 @@ export async function runWritingReferenceJobs(env,{now=Date.now(),maxJobs=1,maxC
    }else{
     await stmt(env,`UPDATE writing_reference_jobs SET state='Pending',lease_until=0,next_at=? WHERE source_id=? AND lease_id=?`,now+30000,source.id,job.lease_id).run();results.push({id:source.id,status:'Processing',calls});
    }
-  }catch{
-   // Never log provider text or document contents; expose only an actionable fixed message.
+  }catch(error){
+   // Only allowlisted diagnostics may leave the worker; never expose raw source/provider text.
    await env.DB.batch([
-    stmt(env,`UPDATE writing_reference_sources SET status='Failed',active=0,error_code='Analysis failed. Check your AI connection or quota, then retry.',revision=revision+1 WHERE id=? AND ${guard}`,job.source_id,job.source_id,job.lease_id),
+    stmt(env,`UPDATE writing_reference_sources SET status='Failed',active=0,error_code=?,revision=revision+1 WHERE id=? AND ${guard}`,analysisFailure(error),job.source_id,job.source_id,job.lease_id),
     stmt(env,`UPDATE writing_reference_jobs SET state='Failed',lease_until=0 WHERE source_id=? AND lease_id=?`,job.source_id,job.lease_id)
    ]);results.push({id:job.source_id,status:'Failed',calls});
   }

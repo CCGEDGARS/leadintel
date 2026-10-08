@@ -228,6 +228,7 @@ export async function generateText({provider,apiKey,model,system='',prompt,maxOu
     if(options.provider==='anthropic')return await anthropicRequest(options,fetchImpl);
     return await geminiRequest(options,fetchImpl);
   }catch(error){
+    if(error?.name==='AbortError'||error?.name==='TimeoutError'||signal?.aborted)throw new Error(`${PROVIDER_LABELS[options.provider]} request timed out`);
     if(/request failed \(\d+\)/.test(String(error?.message||''))||/returned no text$/.test(String(error?.message||''))||/^(Unsupported AI provider|AI provider API key is required|AI provider model is invalid|AI prompt is required)$/.test(String(error?.message||'')))throw error;
     throw new Error(`${PROVIDER_LABELS[options.provider]} request failed (502)`);
   }
