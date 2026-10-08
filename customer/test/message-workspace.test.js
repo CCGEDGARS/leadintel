@@ -88,7 +88,7 @@ test('approved subject aliases display current workspace facts and only a real s
  assert.equal(Workspace.subjectPreview('{{senderFullName}}. {{senderCompany}}',c),'Alex Smith. LegalCo');
  assert.equal(Workspace.subjectPreview('{{recipientCompany}} — fit: {{fitScore}}/100',c),'ClientCo — fit: 0/100');
  assert.equal(Workspace.subjectPreview('Regarding {{verifiedProjectOrExpansion}}',c),'Regarding New branch');
- assert.equal(Workspace.subjectPreview('An opportunity to {{supportedBenefit}}',c),'An opportunity to simplify contract review');
+ assert.equal(Workspace.subjectPreview('An opportunity to {{supportedBenefit}}',c),'An opportunity to [your business outcome]');
  assert.equal(Workspace.subjectPreview('{{senderName}} will join the call.',c),'Alex Smith will join the call.');
  assert.equal(Workspace.subjectPreview('{{recipientCompany}} — fit: {{fitScore}}/100',{...c,fitScore:null}),'ClientCo — fit: [real research score required]/100');
 });
