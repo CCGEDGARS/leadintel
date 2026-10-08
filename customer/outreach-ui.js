@@ -2,7 +2,7 @@ import './approved-reference-scripts.js?v=20261008-verbatim-v1';
 import './original-scripts-ui.js?v=20261008-brutal-approved-v1';
 import './original-scripts.js?v=20261007-quality-v1';
 import './trigger-preview.js?v=20261008-english-v1';
-import './message-workspace.js?v=20261008-trigger-sender-fix-v9&approved-subjects=20261007-v2&brutal-approved=20261008-v1';
+import './message-workspace.js?v=20261008-studio-layout-v10&approved-subjects=20261007-v2&brutal-approved=20261008-v1';
 import './message-facts.js?v=20261007-quality-v2';
 import './message-translations.js?v=20261007-quality-v1';
 import './message-translation-ui.js?v=20261007-quality-v1';
@@ -207,7 +207,7 @@ function updateMessageOpening(){
 }
 
 function injectOutreachUI(){
- if(!document.querySelector('link[data-message-workspace]')){const link=document.createElement('link');link.rel='stylesheet';link.href='message-workspace.css?v=20261007-quality-v1';link.dataset.messageWorkspace='true';document.head.append(link);}
+ if(!document.querySelector('link[data-message-workspace]')){const link=document.createElement('link');link.rel='stylesheet';link.href='message-workspace.css?v=20261008-studio-layout-v10';link.dataset.messageWorkspace='true';document.head.append(link);}
   if(!document.querySelector('link[data-leadintel-asset="outreach-css"]')){const link=document.createElement("link");link.rel="stylesheet";link.href=asset("outreach.css");link.dataset.leadintelAsset="outreach-css";document.head.appendChild(link);}
   const pipelinePanel=document.querySelector("#step-5 .pipeline-panel");
   if(pipelinePanel&&!q("continue-to-outreach"))pipelinePanel.insertAdjacentHTML("afterend",'<div class="outreach-entry workflow-next-action" hidden><div><span class="eyebrow">Next step</span><strong>Identify the buyers at a saved company, then prepare a relevant message.</strong></div><button class="primary-btn stage-next-action" id="continue-to-outreach" type="button" disabled aria-disabled="true">Continue to Buyers →</button></div>');
