@@ -169,3 +169,10 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 @media(min-width:1550px){#message-studio .mw-layout{grid-template-columns:minmax(265px,28%) minmax(0,1fr);gap:24px}}
 @media(max-width:1150px){#message-studio .mw-layout{grid-template-columns:minmax(215px,32%) minmax(0,1fr);gap:14px}#message-studio .mw-editor .outreach-drafts{padding:18px}}
 @media(max-width:720px){#message-studio .mw-layout{grid-template-columns:1fr}#message-studio .mw-editor .mw-generate-bar{align-items:stretch}#message-studio .mw-generate-bar #message-generate{width:100%}}
+
+#message-studio #mw-sender-line{display:block;font-size:12px;color:#62776c;margin-top:5px}
+#message-studio #mw-edit-sender{font-size:11px;padding:8px 10px;white-space:nowrap;margin-left:4px}
+#message-studio .mw-recipient{flex-wrap:wrap}
+#message-studio .mw-recipient>div{flex:1 1 260px;min-width:0}
+#message-studio .mw-tools-content .mw-value-proof{margin:0 0 12px;background:#fafcfb}
+@media(max-width:720px){#message-studio #mw-edit-sender{margin-left:0}#message-studio .mw-recipient>.mw-channel{margin-left:0}}
