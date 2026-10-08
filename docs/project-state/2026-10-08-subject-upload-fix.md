@@ -1,0 +1,7 @@
+# Approved subjects and writing reference upload repair
+
+The selected approved subject was stored as a style preference but did not change the existing draft. The chooser now applies complete fixed/name patterns directly, preserves the body, invalidates approval and captures the English translation version. Generation enforces the approved subject structure instead of accepting arbitrary AI subject replacements. Only the five agreed subjects per core style are shown; personal and AI Original subjects remain editable. Business-outcome previews no longer display the entire seller benefit paragraph.
+
+Returning from the native file chooser caused a window-focus list refresh to rerender and detach the file input before its change event submitted the selected file. A failing real-loader regression reproduced this race. Pending selections and chooser interaction now prevent refresh replacement. Each slot retains its selected File until explicit Upload succeeds; upload errors retain it for Retry. Invalid and oversized selections are rejected before networking. New sources remain inactive until the user activates them.
+
+Validation: focus-race regression, explicit-upload/retry/File-preservation and size tests, approved subject parser and direct onchange/body/translation regression, full customer suite, static build and independent review. Exact production proof and authenticated acceptance are recorded separately after release. No outreach is sent.
