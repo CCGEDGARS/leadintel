@@ -163,14 +163,18 @@
   }
 
   function normalizeSelectedTrigger(value,dossier={}){
-    if(!value||value.verification!=='user_reviewed')return null;
+    if(!value||!['user_reviewed','source_verified'].includes(value.verification))return null;
     const companyDomain=domainOf(`https://${clean(dossier.domain)}`),url=normalizeUrl(value.url);
     const evidence=(dossier.evidence||[]).find(item=>normalizeUrl(item.url)===url);
     if(!companyDomain||companyDomain!==clean(value.companyDomain)||!evidence)return null;
     const sourceText=clean(evidence.text||evidence.description),plainText=MessageFacts()?.clean(sourceText)||sourceText.replace(/!\[[^\]]*\]\([^)]*\)/g,'').replace(/[#*]/g,'');
     const excerpt=clean(value.excerpt).slice(0,900);
     if(!excerpt||!(sourceText.includes(excerpt)||plainText.includes(excerpt)))return null;
-    return {id:url,companyDomain,url,title:clean(evidence.title)||url,excerpt,sourceDate: /^\/(?:en|sv|lv)?\/?$/.test(new URL(url).pathname)?'':clean(evidence.date),detectedAt:clean(value.detectedAt),reviewedAt:clean(value.reviewedAt),verification:'user_reviewed',tracked:true};
+    if(value.verification==='source_verified'){
+      const official=new URL(url).hostname.replace(/^www\./,'')===companyDomain;
+      if(!official||!MessageFacts()?.event(excerpt))return null;
+    }
+    return {id:url,companyDomain,url,title:clean(evidence.title)||url,excerpt,sourceDate:/^\/(?:en|sv|lv)?\/?$/.test(new URL(url).pathname)?'':clean(evidence.date),detectedAt:clean(value.detectedAt),reviewedAt:value.verification==='user_reviewed'?clean(value.reviewedAt):'',verification:value.verification,tracked:true};
   }
   function reviewTrigger(item={},url='',reviewedAt=new Date().toISOString(),reviewedExcerpt=''){
     const dossier=item.dossier||{},evidence=(dossier.evidence||[]).find(row=>normalizeUrl(row.url)===normalizeUrl(url));
