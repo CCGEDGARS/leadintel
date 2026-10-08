@@ -96,7 +96,7 @@
   for(const option of q('message-subject-choice').options)if(option.value)option.textContent=subjectPreview(option.textContent,context);
   const resolve=q('mw-resolve');resolve.hidden=!view.action;resolve.textContent=view.action==='sync'?'Review sync choices ↑':view.action==='profile'?'Review Profile answers →':view.action==='settings'?'Complete sender & settings':'Return to Buyers';resolve.onclick=()=>{if(view.action==='sync'){showSyncChoices(document);}else if(view.action==='settings'){q('mw-settings').open=true;q('mw-settings').scrollIntoView({block:'center',behavior:'smooth'});}else context.onResolve?.(view.action);};
   if(!context.syncConflict)restoreSyncChoices(document);
-  q('mw-subject-options').hidden=linkedin;
+  q('mw-subject-options').hidden=linkedin;const originalPeek=q('mw-original-peek');if(originalPeek)originalPeek.hidden=linkedin;
   q('mw-copy-email').hidden=linkedin;q('mw-empty').hidden=context.hasDraft;const grid=q('step-6').querySelector('.outreach-drafts .script-grid');grid.hidden=!context.hasDraft;q('mw-draft-toolbar').hidden=!context.hasDraft;const restoreEmail=q('mw-draft-toolbar').querySelector('[data-restore-email-version]');if(restoreEmail)restoreEmail.hidden=!context.hasEmailVersions;
   const approval=q('step-6').querySelector('.outreach-approval');approval.hidden=linkedin||!context.hasDraft;q('approve-outreach').textContent=context.approved?'Approved ✓':'Approve & continue →';if(context.outdatedDraft||context.pendingSelections||context.unpersonalizedDraft||!context.senderIdentityReady)q('approve-outreach').disabled=true;
   q('message-generation-status').hidden=!context.busy&&!context.generationError;
