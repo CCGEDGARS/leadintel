@@ -110,3 +110,13 @@ test('Outreach Studio presents trigger, style and subject before personalization
  assert.equal(document.getElementById('approve-outreach').disabled,true);
  assert.ok(document.querySelector('[data-restore-email-version]'));
 });
+
+test('buying triggers are visible before collapsed legacy source review and unpersonalized emails cannot be approved',()=>{
+ const {document,w}=mounted();
+ const list=document.getElementById('mw-trigger-options'),review=document.getElementById('mw-trigger-review');
+ assert.ok(list.compareDocumentPosition(review)&4);
+ assert.equal(review.open,false);
+ w.LeadIntelMessageWorkspace.render(document,{ready:true,authenticated:true,channel:'email',hasDraft:true,unpersonalizedDraft:true});
+ assert.match(document.getElementById('mw-readiness-text').textContent,/personalize before approval/i);
+ assert.equal(document.getElementById('approve-outreach').disabled,true);
+});
