@@ -39,6 +39,7 @@
     const drafts=selectedItem?.drafts||{};
     const localized=['native','complete'].includes(selectedItem?.localizationStatus);
     const studio=outreach.messageStudio;
+    const retainedCompanies=candidates.length+pipeline.length+prospects.length>0;
     const studioReady=studio&&everyField(studio.essentials,['offer','target','value','sender','company','meetingValue','calendly']);
     return {
       1:[
@@ -66,7 +67,7 @@
       ],
       5:[
         step('scope','Discovery amount selected',Boolean(discovery.targetCount||discovery.queries?.length||candidates.length),{action:'Choose how many companies to find'}),
-        step('companies',discovery.status==='no_results'?'No qualified companies found':'Companies found and verified',['complete','partial'].includes(discovery.status)&&candidates.length>0,{action:discovery.status==='no_results'?'Review the strategy, then broaden the search':'Find and verify matching companies'}),
+        step('companies',discovery.status==='no_results'?(retainedCompanies?'No new qualified companies · saved companies retained':'No qualified companies found'):'Companies found and verified',['complete','partial'].includes(discovery.status)&&candidates.length>0,{action:discovery.status==='no_results'?(retainedCompanies?'Review saved companies or broaden the search':'Review the strategy, then broaden the search'):'Find and verify matching companies'}),
         step('review','Qualified companies reviewed',candidates.some(item=>item?.company&&item?.domain),{action:'Review qualified companies'}),
         step('pipeline','Companies selected for Buyers',pipeline.length+prospects.length>0,{action:'Select at least one company for Buyers'}),
         step('people','Relevant buyers identified',candidates.some(item=>list(item?.people).length>0)||pipeline.some(item=>list(item?.people).length>0)||prospects.some(item=>list(item?.people).length>0),{action:'Find and qualify buyers for a selected company'})

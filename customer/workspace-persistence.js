@@ -177,7 +177,7 @@
         const forceReset=root.sessionStorage?.getItem(FORCE_RESET_KEY)==="1"||resetIntentMatchesUrl(url);const saveIntent=leadintelSaveIntent===true;const explicitSave=leadintelExplicitSave===true;const parsed=safeJson(typeof requestInit?.body==="string"?requestInit.body:"{}",{});const localDataAtPutStart=currentWorkspaceData();
         if(!saveIntent&&!forceReset){root.setTimeout?.(renderPersistenceStatus,0);return jsonResponse({version:Math.max(0,Number(parsed?.version)||0),saved:false},200);}
         const next=withPersistenceMetadata(parsed,!forceReset&&(explicitSave||isExplicitlySaved()));if(forceReset)next.payload.meta.persistence={explicit_saved:false};
-        if(root.LeadIntelStateBudget?.prepareForSync)next.payload=root.LeadIntelStateBudget.prepareForSync(next.payload).payload;
+        if(root.LeadIntelStateBudget?.prepareForSync)next.payload=root.LeadIntelStateBudget.prepareForSync(next.payload,{allowSectionPacking:root.LeadIntelServerBridge?.workspaceStateCodec==='workspace-sections-v1'}).payload;
         const response=await nativeFetch(input,{...requestInit,body:JSON.stringify(next)});const result=await response.clone().json().catch(()=>({}));const persisted=response.ok&&result?.saved!==false;
         if(persisted){if(forceReset){root.sessionStorage?.removeItem(FORCE_RESET_KEY);root.localStorage?.removeItem(RESET_PENDING_KEY);root.setTimeout?.(renderPersistenceStatus,0);}else if(explicitSave||(saveIntent&&isExplicitlySaved()))snapshotFromServerPayload(next.payload,{workspaceId:url.searchParams.get("workspace_id"),version:Number(result.version),localData:localDataAtPutStart,dirty:!sameWorkspaceData(currentWorkspaceData(),localDataAtPutStart)});}
         return response;

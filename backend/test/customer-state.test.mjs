@@ -31,3 +31,15 @@ test('a save acknowledges its own committed revision even if another session wri
  const result=await putCustomerState(env,{workspaceId:'w1',userId:'u1',expectedVersion:3,schemaVersion:1,payload:{main:{offer:'My committed edit'}}});
  assert.equal(result.conflict,false);assert.equal(result.state.version,4);assert.equal(result.state.payload.main.offer,'My committed edit');
 });
+
+test('server reads packed research as business records and applies original-script authorization to packed drafts',async()=>{
+ const {default:budget}=await import('../../customer/state-budget.js');const {getCustomerState,putCustomerState}=await import('../src/customer-state.js');
+ const report={summary:'Evidence-backed commercial context '.repeat(1800)};
+ const original={main:{market:{researchReports:Array.from({length:15},(_,i)=>({...report,id:'report-'+i}))}},outreach:{messageStudio:{originalScripts:{professional:{body:'Protected original'}}}}};
+ const wire=budget.prepareForSync(original).payload;
+ assert.ok(budget.bytes(wire)<=MAX_CUSTOMER_STATE_BYTES);
+ let writes=0;const env={DB:{prepare(sql){return {bind(){return {async first(){return {workspace_id:'w1',version:3,schema_version:1,payload_json:JSON.stringify(wire)};},async run(){writes++;return {meta:{changes:1}};}};}};}}};
+ const read=await getCustomerState(env,'w1');assert.deepEqual(read.payload,original);
+ const changed=structuredClone(original);changed.outreach.messageStudio.originalScripts.professional.body='Changed';
+ await assert.rejects(putCustomerState(env,{workspaceId:'w1',userId:'member',role:'member',expectedVersion:3,payload:budget.prepareForSync(changed).payload}),/owner|original/i);assert.equal(writes,0);
+});

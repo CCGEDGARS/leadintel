@@ -170,3 +170,9 @@ test('zero-result discovery guides the user without claiming companies were veri
   assert.equal(companies.action,'Review the strategy, then broaden the search');
   assert.equal(stage.nextAction,'Review the strategy, then broaden the search');
 });
+
+test('an empty latest search acknowledges previously saved companies without claiming new qualification',()=>{
+ const stage=Journey.buildJourneyModel({currentStep:5,availability:{5:true},discovery:{status:'no_results',targetCount:5,selectedProspects:[{domain:'buyer.example',company:'Saved buyer'}]}})[3];
+ const companies=stage.steps.find(step=>step.id==='companies');
+ assert.equal(companies.complete,false);assert.equal(companies.label,'No new qualified companies · saved companies retained');assert.equal(companies.action,'Review saved companies or broaden the search');
+});

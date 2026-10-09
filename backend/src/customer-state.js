@@ -1,4 +1,5 @@
 import {validateOriginalScriptsWrite} from './original-scripts-policy.js';
+import stateBudget from '../../customer/state-budget.js';
 export const MAX_CUSTOMER_STATE_BYTES=500*1024;
 const ALLOWED_KEYS=new Set(['main','discovery','outreach','delivery','meta']);
 const encoder=new TextEncoder();
@@ -13,18 +14,20 @@ export function customerStateSize(payload){return encoder.encode(JSON.stringify(
 export function emptyCustomerState(workspaceId){return {workspace_id:String(workspaceId||''),schema_version:1,version:0,payload:{},updated_at:null};}
 export function validateCustomerStateWrite(current,{expectedVersion,schemaVersion,payload}){
   const normalized=normalizeCustomerPayload(payload);const size=customerStateSize(normalized);if(size>MAX_CUSTOMER_STATE_BYTES)throw new Error('Customer state exceeds 500 KB limit');
+  stateBudget.restoreFromSync(normalized); // Reject malformed references before persisting them.
   const actual=Number(current?.version)||0;const expected=Number(expectedVersion)||0;if(actual!==expected)return {conflict:true,current};
   return {conflict:false,next:{schema_version:Math.max(1,Number(schemaVersion)||1),version:actual+1,payload:normalized}};
 }
 export async function getCustomerState(env,workspaceId){
   const row=await env.DB.prepare('SELECT workspace_id,schema_version,version,payload_json,updated_at FROM customer_workspace_state WHERE workspace_id=?').bind(workspaceId).first();
-  if(!row)return emptyCustomerState(workspaceId);
-  let payload={};try{payload=normalizeCustomerPayload(JSON.parse(row.payload_json||'{}'));}catch{}
-  return {workspace_id:row.workspace_id,schema_version:Number(row.schema_version)||1,version:Number(row.version)||1,payload,updated_at:row.updated_at||null};
+  if(!row)return {...emptyCustomerState(workspaceId),state_codec:'workspace-sections-v1'};
+  const payload=stateBudget.restoreFromSync(normalizeCustomerPayload(JSON.parse(row.payload_json||'{}')));
+  return {workspace_id:row.workspace_id,schema_version:Number(row.schema_version)||1,version:Number(row.version)||1,payload,updated_at:row.updated_at||null,state_codec:'workspace-sections-v1'};
 }
 export async function putCustomerState(env,{workspaceId,userId,expectedVersion,schemaVersion,payload,role}){
   const current=await getCustomerState(env,workspaceId);const decision=validateCustomerStateWrite(current,{expectedVersion,schemaVersion,payload});if(decision.conflict)return decision;
-  const before=current.payload?.outreach?.messageStudio?.originalScripts||{},after=payload?.outreach?.messageStudio?.originalScripts||{};if(JSON.stringify(before)!==JSON.stringify(after)){const member=role?{role}:await env.DB.prepare('SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?').bind(workspaceId,userId).first();validateOriginalScriptsWrite(current.payload,payload,member?.role);}
+  const restored=stateBudget.restoreFromSync(decision.next.payload);
+  const before=current.payload?.outreach?.messageStudio?.originalScripts||{},after=restored?.outreach?.messageStudio?.originalScripts||{};if(JSON.stringify(before)!==JSON.stringify(after)){const member=role?{role}:await env.DB.prepare('SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?').bind(workspaceId,userId).first();validateOriginalScriptsWrite(current.payload,restored,member?.role);}
   const next=decision.next;let result;
   if(current.version===0){
     result=await env.DB.prepare(`INSERT OR IGNORE INTO customer_workspace_state(workspace_id,schema_version,version,payload_json,updated_by,updated_at) VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)`).bind(workspaceId,next.schema_version,next.version,JSON.stringify(next.payload),userId).run();
