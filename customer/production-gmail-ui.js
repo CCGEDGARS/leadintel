@@ -46,9 +46,9 @@
       const record=d.confirmSend(d.normalizeDeliveryState(read(DELIVERY)),pkg,email,new Date().toISOString());
       if(record.error)return {ok:false,error:'Provider sent the email, but CRM delivery recording needs attention: '+record.error};
       write(DELIVERY,record.state);updatePipeline(domain,'Contacted');
-      await b.saveNow?.();
+      const syncResult=await b.saveNow?.();
       root.dispatchEvent(new root.CustomEvent('leadintel:outreach-sent',{detail:{domain,recipient:email,provider}}));
-      return {ok:true,duplicate:Boolean(result.duplicate),provider,recipient:email};
+      return {ok:true,duplicate:Boolean(result.duplicate),provider,recipient:email,crmSynced:Boolean(syncResult?.saved)};
     }catch(error){return {ok:false,error:String(error?.message||error)};}
     finally{messageSendBusy=false;}
   }
