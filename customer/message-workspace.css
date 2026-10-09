@@ -260,3 +260,24 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #mw-subject-options{padding-bottom:16px;margin-bottom:0}#mw-subject-options label{margin-bottom:8px}.mw-editor-head .mw-step-number{display:none}
 #mw-flow-planner{display:none}.mw-editor-status{font-size:13px;line-height:1.6}.mw-saved-template .draft-controls{flex-wrap:wrap}
 @media(max-width:720px){.mw-default-template{align-items:flex-start;flex-direction:column;padding:14px}.mw-editor-actions #mw-add-flow{margin-left:0}.mw-editor-actions button{flex:1 1 auto}}
+
+/* Balanced Messages workspace: settings right, reusable tools left, event across both. */
+#message-studio .mw-layout{grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start}
+#message-studio .mw-rail,#message-studio .mw-editor{min-width:0}
+#message-studio .mw-rail>.mw-section,#message-studio .mw-tools-drawer,#message-studio .mw-sender-card,#message-studio .mw-editor .outreach-drafts{padding:18px;box-sizing:border-box}
+#message-studio .mw-tools-drawer{margin:0 0 18px}
+#message-studio .mw-tools-content>.mw-library-shortcuts{margin:0 0 14px}
+#message-studio .mw-styles{grid-template-columns:repeat(2,minmax(0,1fr))}
+#message-studio .mw-style:last-child{grid-column:1/-1}
+#message-studio .mw-sender-card>.mw-language-tools{margin:12px 0 0}
+#message-studio .mw-sender-card .mw-language-tools>summary span{display:block;margin:5px 0 0;line-height:1.5}
+#message-studio .mw-default-template{flex-wrap:wrap;padding:16px 18px;gap:12px}
+#message-studio .mw-default-template>div:first-child{flex:1 1 180px;min-width:0}
+#message-studio .mw-editor-actions{gap:4px}
+#message-studio .mw-editor-actions button{font-size:11px;padding:10px 6px}
+#message-studio>#event-message-panel{width:100%;box-sizing:border-box;margin:20px 0 0;padding:20px}
+#event-message-panel>summary span{display:block;margin:7px 0 0;font-size:13px;line-height:1.6;max-width:760px}
+#event-message-panel .event-message-guide{font-size:13px;line-height:1.65;color:#52675b;border-top:1px solid #d8e7df;margin-top:15px;padding-top:10px}
+#event-message-panel .event-message-guide ol{padding-left:20px}
+#event-message-panel .event-message-guide li{margin:9px 0}
+@media(max-width:720px){#message-studio .mw-layout{grid-template-columns:1fr;gap:0}#message-studio .mw-editor-actions button{font-size:12px;padding:10px 12px}#message-studio>#event-message-panel{padding:16px}}
