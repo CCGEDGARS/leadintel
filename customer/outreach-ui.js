@@ -2,13 +2,13 @@ import './approved-reference-scripts.js?v=20261009-subject-correction-v2';
 import './original-scripts-ui.js?v=20261008-brutal-approved-v1';
 import './original-scripts.js?v=20261007-quality-v1';
 import './trigger-preview.js?v=20261008-english-v1';
-import './message-workspace.js?v=20261009-auto-message-v6&meeting-platform=20261009-v1&approved-subjects=20261007-v2&brutal-approved=20261008-v1';
+import './message-workspace.js?v=20261009-subject-error-v7&meeting-platform=20261009-v1&approved-subjects=20261007-v2&brutal-approved=20261008-v1';
 import './message-facts.js?v=20261007-quality-v2';
 import './message-translations.js?v=20261009-event-campaign-v1';
 import './message-translation-ui.js?v=20261008-compact-languages-v2';
 import './personal-template-library.js?templates=20261009-v20&foundation=20261006-v12&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1';
-import './message-studio.js?v=20261009-auto-message-v6&meeting-platform=20261009-v1&foundation=20261006-v12&booking-recovery=20261007-v1&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1';
-import './message-editor.js?v=20261009-auto-message-v6&meeting-platform=20261009-v1';
+import './message-studio.js?v=20261009-subject-error-v7&meeting-platform=20261009-v1&foundation=20261006-v12&booking-recovery=20261007-v1&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1';
+import './message-editor.js?v=20261009-subject-error-v7&meeting-platform=20261009-v1';
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
@@ -502,7 +502,7 @@ async function prepareApprovedTemplateFields(studio,context,key,options={}){
  const result=await response.json();if(!response.ok)throw Error(result.error||'Field preparation unavailable');
  const prepared=LeadIntelMessageEditor.parsePrepared(result.text,studio,context);if(!current())return false;
  return applyApprovedTemplate(currentItem(),studio,LeadIntelMessageEditor.preparedContext(studio,context,prepared),key,{...result,...options});
- }catch(error){if(current()){studioGenerationError=true;toast('Your draft and approved original stay unchanged. '+(error.name==='AbortError'?'Field preparation timed out; retry.':error.message));}return false;
+ }catch(error){if(current()){studioGenerationError=true;const message='Your draft and approved original stay unchanged. '+(error.name==='AbortError'?'Field preparation timed out; retry.':error.message);q('message-generation-status').textContent=message;toast(message);}return false;
  }finally{clearTimeout(timeout);if(approvedFieldController===controller)approvedFieldController=null;if(request===scriptGenerationRequest&&workspace===crmBridge()?.workspace?.id){studioGenerationBusy=false;renderMessageWorkspace();}}
 }
 function messageRecipientReady(){

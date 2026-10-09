@@ -75,3 +75,13 @@ test('an active saved translation is preserved and a new English template is pro
  h.item.drafts.emailSubject='Svenskt ämne';h.item.drafts.emailBody='Min svenska text';h.studio=S.normalize({mode:'friendly',essentials:e});h.c.automaticallyPrepareMessage();
  assert.equal(h.item.drafts.emailBody,'Min svenska text');assert.equal(h.item.messageStudioDraft.languageVersions.versions.sv.message,'Min svenska text');assert.match(h.item.messageStudioDraft.pendingTemplateUpdate.draft.message,/20-minute/);
 });
+
+test('failed field preparation replaces busy text with the actual error and preserves the current draft',async()=>{
+ const h=harness();h.c.automaticallySelectBuyingTrigger();h.item.drafts.emailBody='My unchanged email';
+ const ctx=h.c.studioMessageContext(h.item),key=E.scope('w1',h.item,h.studio,{...ctx,eventCampaign:null});
+ const pending=h.c.prepareApprovedTemplateFields(h.studio,ctx,key,{automatic:true});
+ h.requests.at(-1).resolve({ok:false,json:async()=>({error:'AI integration is unavailable'})});await pending;
+ assert.equal(h.c.studioGenerationBusy,false);assert.equal(h.c.studioGenerationError,true);
+ assert.match(h.q('message-generation-status').textContent,/AI integration is unavailable/);assert.doesNotMatch(h.q('message-generation-status').textContent,/Preparing/);
+ assert.equal(h.item.drafts.emailBody,'My unchanged email');
+});

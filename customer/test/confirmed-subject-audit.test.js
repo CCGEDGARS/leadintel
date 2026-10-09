@@ -49,3 +49,13 @@ test('real selector context resolves project with an article and uses approved f
  assert.equal(resolve('development',other,compact),'Northport steel – who should I ask?');
  assert.equal(resolve('development',{...ctx,trigger:{...ctx.trigger,verification:'unreviewed'}},compact),null);
 });
+
+ test('verified event project outranks article dateline and long approved capability lists resolve NLP subjects',()=>{
+ const ctx={trigger:{verification:'source_verified',positive:true,title:'Investment in Gällivare',summary:'LKAB announced an investment in a new sorting plant at Malmberget.',excerpt:'LKAB announced an investment in a new sorting plant at Malmberget.'}};
+ const essentials={...e,offer:'engineering, prototyping, serial production, custom manufacturing, surface treatment and installation',difference:''};
+ const studio=S.normalize({mode:'curiosity'},essentials);
+ assert.equal(S.resolvedSubject(S.chooseSubject(studio,'curiosity','project'),{...ctx,strictSubjectChoice:true},essentials),'Malmberget: engineering');
+ assert.equal(S.resolvedSubject(S.chooseSubject(studio,'curiosity','success'),{...ctx,strictSubjectChoice:true},essentials),'Malmberget: another success story?');
+ const other={...ctx,trigger:{...ctx.trigger,title:'Expansion in Oldtown',summary:'A new facility at Riverport.'}};
+ assert.equal(S.resolvedSubject(S.chooseSubject(studio,'curiosity','project'),{...other,strictSubjectChoice:true},essentials),'Riverport: engineering');
+ });

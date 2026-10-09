@@ -70,14 +70,17 @@
  const professionalSubjectTranslations=Object.fromEntries(Object.entries(professionalSubjectLocale).map(([language,[forWord,room,ask]])=>[language,{relevance:"{{subjectOffer}} "+forWord+" {{subjectProject}}",curiosity:room+" {{supplierType}}?",development:"{{subjectProject}} {{subjectMaterial}} – "+ask+"?",benefit:"{{subjectProject}}: {{technicalQuestion}}?"}]));
  function professionalSubjectFacts(context={},e={},language='en'){
   const t=context.trigger,reviewed=['user_reviewed','source_verified'].includes(t?.verification);
-  const source=reviewed?[t.projectName,t.locationName,t.subject,t.title,t.summary,t.excerpt].filter(Boolean).join(' '):'';
-  const location=source.match(/\b(?:in|at|i|vid)\s+(?:(?:the|a|an)\s+)?([\p{Lu}][\p{L}\d'-]+)(?=\s|[.,;:]|$)/u)?.[1];
-  const subjectProject=reviewed?(subjectFact(t.projectName,22)||subjectFact(t.locationName,22)||subjectFact(location,22)||subjectFact(t.subject,22)||subjectFact(t.title,22)||subjectFact(t.summary,22)):'';
+  // Event evidence outranks article metadata or a newsroom dateline.
+  const eventSources=reviewed?[t.summary,t.excerpt,t.subject,t.title].filter(Boolean):[];
+  const location=eventSources.map(source=>source.match(/\b(?:in|at|i|vid)\s+(?:(?:the|a|an)\s+)?([\p{Lu}][\p{L}\d'-]+)(?=\s|[.,;:]|$)/u)?.[1]).find(Boolean);
+  const subjectProject=reviewed?(subjectFact(t.projectName,22)||subjectFact(location,22)||subjectFact(t.locationName,22)||eventSources.map(source=>subjectFact(source,22)).find(Boolean)||''):'';
   const approvedSellerFields=['priority_offers','differentiation','proof_points','delivery_approach'].filter(key=>['user','accepted'].includes(context.sellerAnswerStatus?.[key])).map(key=>context.sellerAnswers?.[key]);
   const seller=[e.offer,e.difference,e.proof,e.approach,...approvedSellerFields].filter(Boolean).join(' '),steel=/\bsteel\b/i.test(seller),installation=/\binstallation\b/i.test(seller);
   const locale=professionalSubjectLocale[language],steelWords=locale?[locale[3],locale[4],locale[5],'EXC2 '+locale[6]+' EXC3']:null;
   const sameLanguage=(context.subjectFactsLanguage||e.language||'en')===language;
-  const offer=sameLanguage?(subjectFact(e.subjectOffer,26)||subjectFact(e.offer,26)):'';
+  const offerSources=[e.offer,...(['user','accepted'].includes(context.sellerAnswerStatus?.priority_offers)?[context.sellerAnswers?.priority_offers]:[])].filter(Boolean);
+  const capability=offerSources.flatMap(source=>String(source).split(/[,;]|\s+and\s+/i)).map(part=>subjectFact(part.trim().replace(/^(?:we provide|our offering spans)\s+/i,''),26)).find(Boolean);
+  const offer=sameLanguage?(subjectFact(e.subjectOffer,26)||subjectFact(e.offer,26)||capability||''):'';
   return {subjectProject,subjectOffer:steel&&installation&&steelWords?steelWords[0]:offer,supplierType:steel&&steelWords?steelWords[1]:language==='en'&&offer?offer.toLowerCase()+' provider':'',subjectMaterial:steel&&steelWords?steelWords[2]:'',technicalQuestion:steel&&steelWords?steelWords[3]:sameLanguage?subjectFact(e.subjectTechnicalQuestion,26):''};
  }
  function professionalSubject(studio,context,e,language){
