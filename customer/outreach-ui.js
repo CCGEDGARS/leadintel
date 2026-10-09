@@ -544,7 +544,7 @@ async function saveFlowPlan(){
  const item=currentItem();if(!item?.approved||item.channel!=='email')return;
  const name=q('mw-flow-name').value.trim(),date=q('mw-flow-date').value,time=q('mw-flow-time').value,zone=q('mw-flow-timezone').value.trim(),delay=Number(q('mw-flow-delay').value);
  const status=q('mw-flow-status');
- if(!name||!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)||!/^\\d{2}:\\d{2}$/.test(time)||!Number.isInteger(delay)||delay<1||delay>60){status.textContent='Enter a flow name, valid date, local time and follow-up delay.';return;}
+ if(!name||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date)||!/^[0-9]{2}:[0-9]{2}$/.test(time)||!Number.isInteger(delay)||delay<1||delay>60){status.textContent='Enter a flow name, valid date, local time and follow-up delay.';return;}
  try{new Intl.DateTimeFormat('en',{timeZone:zone}).format(new Date());}catch{status.textContent='Enter a valid recipient timezone, for example Europe/Stockholm.';return;}
  const info=item.messageStudioDraft||{},plans=Array.isArray(info.flowPlans)?info.flowPlans.slice(-19):[];
  const id='flow-'+Date.now().toString(36);
