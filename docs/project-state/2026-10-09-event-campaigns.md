@@ -1,0 +1,9 @@
+# Optional event campaigns
+
+Event campaigns are a closed, highlighted panel in Companies. Saving does not activate them. Activation supplies event/audience directory-query context alongside normal company discovery and relevant roles alongside workspace buyer roles. The existing qualification, evidence, exclusions and buyer gates remain in force. Exhibitor listings are research leads, not proof that a person will attend. Directory searches run within the existing research budget; this does not guarantee exhaustive directory ingestion.
+
+The closed Event invitation panel in Messages previews an English original for the current confirmed buyer. Applying requires an unchanged workspace/buyer/channel/source stamp and active event revision. Cancel preserves the draft. Campaign details and the previous working draft are retained in CRM script metadata, independently of the seller Profile. Existing Save, Edit, Rewrite, Restore original and translation controls operate on the event draft. Business templates explicitly clear event draft context. Merely opening or activating a campaign never replaces a message.
+
+Event drafts preserve names, dates, meeting location and sender. Subjects are compact and clean. Recipient attendance remains conditional. Approval freezes an event snapshot; expired events fail approval and delivery payload construction. Campaign activation, saving and message generation do not send outreach.
+
+Verification: event model, activation/archive reload, cross-workspace UI reset, unchanged profile preservation, preview cancellation and stale buyer context, event fact/attendance approval gates, frozen snapshots and expiry delivery gate have automated coverage. The complete customer suite and static build are required before publication. Production status requires an exact-SHA release proof. These checks do not constitute authenticated customer acceptance or a completed external research run.

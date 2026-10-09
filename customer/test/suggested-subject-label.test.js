@@ -9,7 +9,7 @@ test('all core styles use the agreed Suggested subjects chooser label',()=>{
 
 test('each approved dropdown has exactly five options and preserves a manual working subject',()=>{
  const {JSDOM}=require('jsdom'),S=require('../message-studio.js');
- const source=fs.readFileSync(require.resolve('../outreach-ui.js'),'utf8'),start=source.indexOf('const subjectOptions=linkedin?[]:');
+ const source=fs.readFileSync(require.resolve('../outreach-ui.js'),'utf8'),start=source.indexOf('const subjectOptions=linkedin||item?.messageStudioDraft?.eventSnapshot?[]:');
  const block=source.slice(start,source.indexOf("q('message-pitch-preview').textContent",start));
  const render=new Function('q','studio','item','candidate','LeadIntelMessageStudio','workingSuggestedSubject','esc','linkedin',block);
  for(const mode of ['professional','curiosity','friendly','brutal']){

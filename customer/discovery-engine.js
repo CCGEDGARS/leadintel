@@ -70,10 +70,12 @@
     const coreRoles=splitList(core?.buyerRoles).slice(0,12).join('; ');
     const profileRoles=splitList(main.profile?.decisionMakers).slice(0,12).join('; ');
     const stored=splitList(candidate.buyerRoles).slice(0,12).join('; ');
-    if(!coreRoles)return stored||profileRoles;
+    const event=(main.eventCampaigns?.campaigns||[]).find(c=>c.id===main.eventCampaigns?.activeId&&!c.archived);
+    const withEvent=roles=>[...new Set([...splitList(roles),...splitList(event?.roles)])].slice(0,16).join('; ');
+    if(!coreRoles)return withEvent(stored||profileRoles);
     const industrial=/industrial|metalwork|fabricat|production|installation|manufactur/i.test(String(main.profile?.priorityOffers||''));
     const unrelated=industrial&&/\b(sales|commercial leadership|hr|learning and development|team leadership)\b/i.test(stored);
-    return !stored||stored===profileRoles||unrelated?coreRoles:stored;
+    return withEvent(!stored||stored===profileRoles||unrelated?coreRoles:stored);
   }
   function slug(value){return clean(value).toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")||"item";}
   function normalizeUrl(value){try{const u=new URL(clean(value));return ["http:","https:"].includes(u.protocol)?u.href:"";}catch{return "";}}
