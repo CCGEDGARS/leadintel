@@ -4,7 +4,7 @@ const read=name=>fs.readFileSync(path.join(__dirname,'..',name),'utf8');
 function mounted(){
  const dom=new JSDOM(read('index.html'),{url:'https://example.com/customer/',runScripts:'outside-only'}),w=dom.window;
  w.LeadIntelMessageStudio=Studio;w.LeadIntelMessageFacts=require('../message-facts.js');w.eval(read('message-workspace.js'));w.eval(read('sender-identity-location.js'));
- w.eval("var scriptGenerationRequest=0;var readDraftEdits=()=>null;var q=id=>document.getElementById(id);var asset=p=>p;var esc=v=>String(v);var studioState=()=>({essentials:{}});var readStudio=()=>({});var persistStudio=()=>{};var invalidateStudioDraft=()=>{};var renderMessageStudio=()=>{};var renderPersonalSaveButton=()=>{};var closePersonalReview=()=>{};var currentItem=()=>null;var toast=()=>{};");
+ w.eval("var scriptGenerationRequest=0;var readDraftEdits=()=>null;var q=id=>document.getElementById(id);var asset=p=>p;var esc=v=>String(v);var studioState=()=>({essentials:{}});var readStudio=()=>({});var persistStudio=()=>{};var invalidateStudioDraft=()=>{};var renderMessageStudio=()=>{};var renderPersonalSaveButton=()=>{};var renderPersonalStyleEditor=()=>{};var closePersonalReview=()=>{};var currentItem=()=>null;var toast=()=>{};");
  const src=read('outreach-ui.js');w.eval(src.slice(src.indexOf('function injectOutreachUI(){'),src.indexOf('function showStep(step)')));w.eval(src.slice(src.indexOf('function installMessageStudio(){'),src.indexOf("let personalChannel='email'")));
  w.eval('injectOutreachUI();installMessageStudio();');return {dom,document:w.document,w};
 }
@@ -188,4 +188,9 @@ test('email action centre shows one named Save as Template and gates direct send
  w.LeadIntelMessageWorkspace.render(document,{channel:'email',ready:true,authenticated:true,hasDraft:true,approved:true,sentAlready:true});
  assert.equal(document.getElementById('mw-send-now').disabled,true);
  assert.equal(document.getElementById('mw-add-flow').disabled,false);
+});
+
+test('composer mounts the saved-draft control without querying it while its toolbar is detached',()=>{
+ const {document}=mounted();const button=document.getElementById('message-save-draft');
+ assert.ok(button?.isConnected);assert.equal(button.hidden,true);assert.equal(button.parentElement.id,'mw-draft-toolbar');assert.equal(typeof button.onclick,'function');assert.ok(!button.parentElement.textContent.includes('null'));
 });

@@ -133,3 +133,8 @@ test('sync conflict keeps confirmed email evidence but disables proceed until re
  const proceed=html.match(/<button[^>]*data-keep-buyer[^>]*>/)[0];assert.match(proceed,/disabled/);
  assert.equal(await h.ctx.saveBuyerAndProceed('example.com',0),false);assert.equal(h.ctx.selectedEmailBuyer(),null);assert.equal(h.checks,0);assert.equal(h.events.length,0);
 });
+
+test('failed Messages initialization restores Buyers while preserving the saved recipient',async()=>{
+ const h=harness();let focus;h.ctx.renderDiscoveryFocus=value=>{focus=value;};h.ctx.loadOutreachModules=async()=>{throw Error('Messages did not initialize');};
+ assert.equal(await h.ctx.addBuyerToFlow('example.com',0),false);assert.equal(h.meta.activeJourneyStage,5);assert.equal(h.meta.visibleStep,5);assert.equal(focus,'buyers');assert.equal(h.meta.selectedEmailBuyer.personId,h.person.id);assert.equal(h.person.flowSelected,true);assert.equal(h.events.length,0);
+});

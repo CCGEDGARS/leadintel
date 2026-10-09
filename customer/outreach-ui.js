@@ -2,7 +2,7 @@ import './approved-reference-scripts.js?v=20261008-verbatim-v1';
 import './original-scripts-ui.js?v=20261008-brutal-approved-v1';
 import './original-scripts.js?v=20261007-quality-v1';
 import './trigger-preview.js?v=20261008-english-v1';
-import './message-workspace.js?v=20261009-action-centre-v1&approved-subjects=20261007-v2&brutal-approved=20261008-v1';
+import './message-workspace.js?v=20261009-mount-repair-v1&approved-subjects=20261007-v2&brutal-approved=20261008-v1';
 import './message-facts.js?v=20261007-quality-v2';
 import './message-translations.js?v=20261007-quality-v1';
 import './message-translation-ui.js?v=20261008-compact-languages-v2';

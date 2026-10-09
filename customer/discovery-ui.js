@@ -1596,7 +1596,7 @@ async function addBuyerToFlow(domain,index,{scope='selected',button,selectOnly=f
   let synced;try{synced=await bridge().saveNow({saveIntent:true,explicitSave:true});}catch{synced={saved:false};}
   if(!synced?.saved||bridge()?.workspace?.id!==workspaceId){for(const [buyer,selected] of flags)buyer.flowSelected=selected;saveDiscovery();saveMeta(meta);showToast(bridge()?.conflict?'Synchronization conflict: recipient selection was not saved. Resolve the versions above; your local changes are preserved.':'Contact selection could not be saved. Retry.');return false;}
   if(selectOnly){renderAll();renderSelectedEmailBuyer({scroll:true});showToast(`${person.publicName||person.name} selected · Continue to Messages when ready`);return true;}
-  await loadOutreachModules();
+  try{await loadOutreachModules();}catch(error){saveMeta({...loadMeta(),activeJourneyStage:5,visibleStep:5});renderAll();renderDiscoveryFocus('buyers');showToast(error.message||'Messages could not load. Your recipient is saved; refresh and retry.');return false;}
   window.dispatchEvent(new CustomEvent('leadintel:buyer-for-scripts',{detail:choice}));
   renderAll();return true;
 }
@@ -2278,7 +2278,8 @@ function loadOutreachModules(){
   });
   outreachLoading=load('outreach-engine',`outreach-engine.js?v=${OUTREACH_ASSET_VERSION}`)
     .then(()=>load('outreach-localization',`outreach-localization.js?v=${OUTREACH_ASSET_VERSION}`))
-    .then(()=>load('outreach-ui',`outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&delivery-modes=2&foundation=20261006-v12`,true))
+    .then(()=>load('outreach-ui',`outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&delivery-modes=2&foundation=20261006-v12&message-mount=20261009-v1`,true))
+    .then(()=>{if(!window.LeadIntelOutreachUI?.openBuyerScripts)throw new Error('Messages could not initialize. Your recipient is saved; refresh and retry.');})
     .catch(error=>{outreachLoading=null;showToast(error.message);throw error;});
   return outreachLoading;
 }
