@@ -65,3 +65,12 @@ test('missing project references retain the approved reference line without inve
  assert.match(draft.message,/Here are some of the projects we are proud of: \[link\]\./);
  assert.doesNotMatch(draft.message,/ercon\.lv|invented/);
 });
+
+test('translation of one field cannot paraphrase other already-valid approved factual fields',()=>{
+ const e={...essentials,offer:'drawing development, metal manufacturing, installation and qualified workforce solutions',difference:'Our team brings more than 30 years of metalworking experience, including international projects in Scandinavia.'};
+ const ctx={...context,trigger:{...context.trigger,summary:'LKAB satsar sex miljarder på ett nytt sovringsverk vid Malmbergsgruvan.'}},studio=S.normalize({mode:'professional',essentials:e});
+ const result=E.preparedResponse({triggerSummary:'LKAB’s investment in the new sorting plant in Malmberget',offer:'custom manufacturing and installation',difference:'Our team has international experience.',value:'',approach:'',meetingValue:''},studio,ctx);
+ assert.equal(result.fields.offer,e.offer);assert.equal(result.fields.difference,e.difference);
+ const draft=E.tailor(studio,E.preparedContext(studio,ctx,result));assert.match(draft.message,/Scandinavia/);assert.match(draft.message,/qualified workforce solutions/);assert.doesNotMatch(draft.message,/Our team has international experience/);
+ assert.throws(()=>E.preparedResponse({...result.fields,message:'Unapproved entire body'},studio,ctx),/unapproved field/);
+});

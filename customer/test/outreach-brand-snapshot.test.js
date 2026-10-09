@@ -279,7 +279,7 @@ test('outreach UI snapshots Step 1 identity, preserves edit detection and invali
   assert.match(source,/Regenerate & reapprove/);
   assert.match(source,/Sending is blocked/);
   assert.doesNotMatch(source,/\.sendGmail\(|\.sendMicrosoftMail\(/,'Task 5 must not create an automatic delivery path');
-  assert.match(discovery,/const OUTREACH_ASSET_VERSION="20261009-professional-master-v9";/);
+  assert.match(discovery,/const OUTREACH_ASSET_VERSION="20261009-professional-facts-v10";/);
   assert.match(discovery,/outreach-engine\.js\?v=\$\{OUTREACH_ASSET_VERSION\}/);
   assert.match(discovery,/outreach-localization\.js\?v=\$\{OUTREACH_ASSET_VERSION\}/);
   assert.match(discovery,/outreach-ui\.js\?v=\$\{OUTREACH_ASSET_VERSION\}/);
