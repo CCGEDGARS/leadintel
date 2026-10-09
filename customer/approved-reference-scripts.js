@@ -86,5 +86,22 @@
   return body;
  }
  function originalText(style){const item=records[style];return item?(item.subject?'Subject: '+item.subject+'\n':'')+item.paragraphs.join('\n\n'):'';}
- return Object.freeze({records:Object.freeze(records),originalText,professionalPattern});
+ // Policy metadata is separate from the verbatim source. Never edit source wording to fit policy.
+ const paragraphRoles={
+  professional:['greeting','verified observation','role question','sender introduction','experience and offer','quality/cost/delivery focus','project references','meeting invitation','meeting goal','meeting material and comparison','booking action','signature'],
+  curiosity:['greeting','verified development and execution context','sender introduction','partnership invitation','experience/offer/outcome','keep-what-works comparison','project references','meeting proposal','meeting material and decision','final meeting invitation','booking action','signature','sender LinkedIn profile'],
+  friendly:['greeting','verified milestone','sender introduction and website','experience','buyer-may-be-covered acknowledgment and conditional benefit','project references','coffee and meeting invitation','meeting material and format','booking action','conditional referral','signature'],
+  brutal:['greeting','LeadIntel AI disclosure','sender commission','researched development and buyer-may-be-covered acknowledgment','experience and offer','project references','meeting invitation with human sender','meeting material and conditional value','AI introduction and human handoff','booking action','LeadIntel/on-behalf-of signature','sender LinkedIn profile']
+ };
+ const coreContracts=Object.freeze(Object.fromEntries(Object.entries(records).map(([style,record])=>[style,Object.freeze({
+  version:'core-template-rules-v1',style,channel:'email',aiAuthority:'designated-fields-only',
+  paragraphRoles:Object.freeze(paragraphRoles[style]),paragraphSeparator:'\n\n',signatureSeparator:'\n',
+  maximumMessageWords:record.paragraphs.join(' ').trim().split(/\s+/).length,meetingMinutes:20,
+  literalWording:'verbatim outside declared slots',unsupportedFacts:'declared omission or fallback only; never guess',
+  aiFields:Object.freeze(['triggerSummary','offer','value','difference','approach','meetingValue']),
+  sourcePolicy:'current workspace approved seller facts and reviewed/source-verified buyer evidence only',
+  rewritePolicy:'explicit alternative preview; never modify the master or first tailored original'
+ })])));
+ function coreContract(style){return coreContracts[style]||null;}
+ return Object.freeze({records:Object.freeze(records),originalText,professionalPattern,coreContract});
 });

@@ -1,5 +1,9 @@
 # LeadIntel Repository Operating Rules
 
+## Core message templates are governed
+
+For any AI work involving core outreach templates, factual field preparation, subjects, translation, rewriting or message length/spacing, read `docs/policies/core-template-ai-rules.md`. The approved text in `customer/approved-reference-scripts.js` is the canonical source, not a copywriting suggestion. Preserve every literal outside the declared slots, each style's own sequence and spacing, and its measured body word ceiling. Core AI may prepare designated fields only. Explicit Rewrite is a separate working alternative and cannot redefine the master or first tailored original. Unknown evidence permits only a declared omission/fallback; it never permits guessed facts or a new sentence. Personal templates, AI Original, LinkedIn and translated copies have separate authority. Changes to approved wording or new variable/omission permissions require explicit user approval; do not reinterpret a request to improve personalization as that approval. Verify master preservation, invalid AI responses, save/reload and context-race protection when changing these paths.
+
 ## Market intelligence research is governed
 
 For any work involving market research, market intelligence, buying-signal discovery, source selection, source diversification, evidence validation, opportunity scoring, adaptive follow-up research, or the behavior of Market Scan / Market Research / Market Intelligence, use `.agents/skills/leadintel-market-intelligence/SKILL.md`.
