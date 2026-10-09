@@ -35,3 +35,17 @@ test('chooser never reveals placeholders when evidence is missing and keeps manu
  render(q,studio,item,{},S,missing,v=>String(v),false);assert.equal(q('message-subject-choice').options.length,5);assert.doesNotMatch(q('message-subject-choice').textContent,/\{\{|\}\}/);
  assert.equal(item.drafts.emailSubject,'My exact manual subject');assert.equal(item.drafts.emailBody,'My exact manual body');assert.equal(q('message-subject-choice').selectedIndex,-1);dom.window.close();
 });
+
+test('real selector context resolves project with an article and uses approved full seller answers',()=>{
+ const ctx={...context,trigger:{...context.trigger,summary:'LKAB is investing six billion in a new sorting plant at the Malmberget mine to secure stable, efficient production.'},sellerAnswers:{priority_offers:'Steel structures, equipment manufacturing and installation'},sellerAnswerStatus:{priority_offers:'accepted'}};
+ const compact={...e,offer:'Integrated manufacturing services'};
+ assert.deepEqual(S.professionalSubjects.map(t=>resolve(t.id,ctx,compact)),exact);
+ for(const status of ['draft','evidence_draft','hypothesis_draft','missing']){
+  const unapproved={...ctx,sellerAnswerStatus:{priority_offers:status}};
+  assert.equal(resolve('curiosity',unapproved,compact),null);
+  assert.equal(resolve('benefit',unapproved,compact),null);
+ }
+ const other={...ctx,trigger:{...ctx.trigger,summary:'Buyer is investing in a new sorting plant at the Northport mine.'}};
+ assert.equal(resolve('development',other,compact),'Northport steel – who should I ask?');
+ assert.equal(resolve('development',{...ctx,trigger:{...ctx.trigger,verification:'unreviewed'}},compact),null);
+});

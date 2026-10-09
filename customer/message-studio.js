@@ -71,9 +71,10 @@
  function professionalSubjectFacts(context={},e={},language='en'){
   const t=context.trigger,reviewed=['user_reviewed','source_verified'].includes(t?.verification);
   const source=reviewed?[t.projectName,t.locationName,t.subject,t.title,t.summary,t.excerpt].filter(Boolean).join(' '):'';
-  const location=source.match(/\b(?:in|at|i|vid)\s+([\p{Lu}][\p{L}\d'-]+)(?=\s|[.,;:]|$)/u)?.[1];
+  const location=source.match(/\b(?:in|at|i|vid)\s+(?:(?:the|a|an)\s+)?([\p{Lu}][\p{L}\d'-]+)(?=\s|[.,;:]|$)/u)?.[1];
   const subjectProject=reviewed?(subjectFact(t.projectName,22)||subjectFact(t.locationName,22)||subjectFact(location,22)||subjectFact(t.subject,22)||subjectFact(t.title,22)||subjectFact(t.summary,22)):'';
-  const seller=[e.offer,e.difference,e.proof,e.approach].filter(Boolean).join(' '),steel=/\bsteel\b/i.test(seller),installation=/\binstallation\b/i.test(seller);
+  const approvedSellerFields=['priority_offers','differentiation','proof_points','delivery_approach'].filter(key=>['user','accepted'].includes(context.sellerAnswerStatus?.[key])).map(key=>context.sellerAnswers?.[key]);
+  const seller=[e.offer,e.difference,e.proof,e.approach,...approvedSellerFields].filter(Boolean).join(' '),steel=/\bsteel\b/i.test(seller),installation=/\binstallation\b/i.test(seller);
   const locale=professionalSubjectLocale[language],steelWords=locale?[locale[3],locale[4],locale[5],'EXC2 '+locale[6]+' EXC3']:null;
   const sameLanguage=(context.subjectFactsLanguage||e.language||'en')===language;
   const offer=sameLanguage?(subjectFact(e.subjectOffer,26)||subjectFact(e.offer,26)):'';
