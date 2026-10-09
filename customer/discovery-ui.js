@@ -1374,11 +1374,13 @@ function selectedProspects(){return (discovery.selectedProspects||[]).filter(ite
 function buyerSelectionRows(){
   const byDomain=new Map();
   const currentDomains=new Set([
-    ...(discovery.candidates||[]).filter(candidate=>qualificationAssessment(candidate).eligible&&!candidate.needsRecheck).map(item=>canonicalDomain(item.domain||item.website)),
+    ...(discovery.candidates||[]).map(item=>canonicalDomain(item.domain||item.website)),
+    ...(discovery.potentialMatches||[]).map(item=>canonicalDomain(item.domain||item.website)),
     ...selectedTargets().map(item=>canonicalDomain(item.domain||item.website)),
     ...(discovery.selectedProspects||[]).filter(item=>item.buyerSearchMode!=="user_selected_qualified").map(item=>canonicalDomain(item.domain||item.website))
   ].filter(Boolean));
   // Only explicit selections that still belong to the current Companies workspace count.
+  // A recheck can move a company into review; that does not undo the user's selection.
   // Old selections remain preserved in CRM/history, but cannot silently enter a new Buyers run.
   for(const item of discovery.selectedProspects||[]){
     const domain=canonicalDomain(item.domain||item.website);if(!domain||!currentDomains.has(domain))continue;
