@@ -57,6 +57,13 @@ function injectUi(){
         <div class="ai-section-title"><div><span class="eyebrow">Communication</span><h3 id="communication-integration-heading">Account & delivery connections</h3><p>Choose Google or Microsoft for workspace access, then connect the mailbox you want LeadIntel to use for approved outreach.</p></div></div>
         <div class="integration-grid" id="integration-communication-grid"></div>
       </section>
+      <section class="ai-settings-section" aria-labelledby="meeting-platform-heading">
+        <div class="ai-section-title"><div><span class="eyebrow">Meetings</span><h3 id="meeting-platform-heading">Meeting platform</h3><p>Choose the platform named in your invitations.</p></div></div>
+        <label class="ai-settings-field" for="meeting-platform">Video meeting platform<select id="meeting-platform"><option value="zoom">Zoom</option><option value="teams">Microsoft Teams</option><option value="google_meet">Google Meet</option></select></label>
+        <p id="meeting-platform-status" role="status" aria-live="polite"></p>
+        <small>Set the same platform as the location of your Calendly event. Calendly generates the meeting link after booking. This preference updates future drafts; approved originals stay unchanged.</small>
+        <a class="ai-settings-btn" href="https://calendly.com/integrations" target="_blank" rel="noopener noreferrer">Configure conferencing in Calendly ↗</a>
+      </section>
       <section class="ai-settings-section" aria-labelledby="personal-linkedin-heading">
         <div class="ai-section-title"><div><span class="eyebrow">Your professional profile</span><h3 id="personal-linkedin-heading">Personal LinkedIn</h3><p>Save your profile for sender identity and open LinkedIn directly from LeadIntel.</p></div></div>
         <article class="integration-card" data-integration="personal-linkedin">
@@ -75,11 +82,21 @@ function injectUi(){
   document.getElementById('ai-provider-grid')?.addEventListener('click',handleProviderAction);
   document.getElementById('ai-provider-grid')?.addEventListener('change',handleModelModeChange);
   document.getElementById('ai-settings-drawer')?.addEventListener('click',handleCommunicationAction);
+  document.getElementById('meeting-platform')?.addEventListener('change',saveMeetingPlatform);
   document.getElementById('personal-linkedin-save')?.addEventListener('click',()=>savePersonalLinkedIn(false));
   document.getElementById('personal-linkedin-remove')?.addEventListener('click',()=>savePersonalLinkedIn(true));
   document.getElementById('test-all-integrations')?.addEventListener('click',testAllIntegrations);
   document.addEventListener('keydown',event=>{if(event.key==='Escape')closeDrawer();});
   render();
+}
+function renderMeetingPlatform(){
+  const select=document.getElementById('meeting-platform');if(!select)return;
+  select.value=window.LeadIntelSenderIdentity?.get?.().meetingPlatform||'zoom';
+  document.getElementById('meeting-platform-status').textContent='';
+}
+function saveMeetingPlatform(){
+  try{if(!window.LeadIntelSenderIdentity?.setMeetingPlatform)throw Error('Sender profile is still loading. Please retry.');window.LeadIntelSenderIdentity.setMeetingPlatform(document.getElementById('meeting-platform').value);document.getElementById('meeting-platform-status').textContent='Saved. Match this platform in your Calendly event settings.';}
+  catch(error){renderMeetingPlatform();document.getElementById('meeting-platform-status').textContent=error.message;}
 }
 function renderPersonalLinkedIn(){
   const input=document.getElementById('personal-linkedin-url');if(!input)return;
@@ -96,8 +113,8 @@ function savePersonalLinkedIn(remove){
   try{window.LeadIntelPersonalLinkedIn.save(window.LeadIntelSenderIdentity,remove?'':input.value);renderPersonalLinkedIn();message.textContent=remove?'Profile removed.':'Profile saved to your sender identity.';}
   catch(error){message.textContent=error.message;input.setAttribute('aria-invalid','true');}
 }
-window.addEventListener('leadintel:sender-identity-changed',()=>{if(settingsDrawerOpen())renderPersonalLinkedIn();});
-window.addEventListener('leadintel:workspace-changed',renderPersonalLinkedIn);
+window.addEventListener('leadintel:sender-identity-changed',()=>{if(settingsDrawerOpen()){renderPersonalLinkedIn();renderMeetingPlatform();}});
+window.addEventListener('leadintel:workspace-changed',()=>{renderPersonalLinkedIn();renderMeetingPlatform();});
 function providerState(id){return status.providers.find(item=>item.provider===id)||null;}
 function isOwner(){return status.role==='owner'||workspace()?.role==='owner';}
 function signInFromSettings(provider='google'){
@@ -257,7 +274,7 @@ function clearProviderError(provider){
 function openDrawer(){
   injectUi();const drawer=document.getElementById('ai-settings-drawer'),backdrop=document.getElementById('ai-settings-backdrop');
   if(drawer)drawer.hidden=false;if(backdrop)backdrop.hidden=false;document.body.classList.add('ai-settings-opened');
-  render();renderPersonalLinkedIn();refreshAllStatus();setTimeout(()=>document.getElementById('close-settings')?.focus(),0);
+  render();renderPersonalLinkedIn();renderMeetingPlatform();refreshAllStatus();setTimeout(()=>document.getElementById('close-settings')?.focus(),0);
 }
 function closeDrawer(){const drawer=document.getElementById('ai-settings-drawer'),backdrop=document.getElementById('ai-settings-backdrop');if(drawer)drawer.hidden=true;if(backdrop)backdrop.hidden=true;unmountCredentialControls();document.body.classList.remove('ai-settings-opened');}
 function shouldOpenSettingsFromUrl(){return new URLSearchParams(window.location.search).get('settings')==='ai';}

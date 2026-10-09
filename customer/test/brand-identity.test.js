@@ -58,6 +58,7 @@ test('normalize returns the literal version 1 identity state without retaining u
     phone: '',
     email: '',
     linkedinUrl: '',
+    meetingPlatform: 'zoom',
     primaryColor: '#0f6557',
     signatureText: '',
     legalFooter: '',

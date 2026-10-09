@@ -186,6 +186,15 @@ function initBrandIdentity(){
   });
   globalThis.LeadIntelSenderIdentity={
     get:()=>({...state.brandIdentity}),
+    setMeetingPlatform(platform){
+      if(!['zoom','teams','google_meet'].includes(platform))throw Error('Choose Zoom, Microsoft Teams or Google Meet.');
+      const previous=state.brandIdentity;
+      state.brandIdentity=globalThis.LeadIntelBrandIdentity.normalize({...previous,meetingPlatform:platform});
+      try{saveState();}catch(error){state.brandIdentity=previous;throw error;}
+      brandIdentityUI?.sync?.(state.brandIdentity);
+      window.dispatchEvent(new CustomEvent('leadintel:sender-identity-changed'));
+      return {...state.brandIdentity};
+    },
     setLinkedIn(url){
       const previous=state.brandIdentity;
       state.brandIdentity=globalThis.LeadIntelBrandIdentity.normalize({...previous,linkedinUrl:url});

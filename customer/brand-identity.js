@@ -79,6 +79,7 @@
       phone: stringValue(input.phone, FIELD_LIMITS.phone),
       email: stringValue(input.email, FIELD_LIMITS.email),
       linkedinUrl: stringValue(input.linkedinUrl, FIELD_LIMITS.linkedinUrl),
+      meetingPlatform: ['zoom','teams','google_meet'].includes(input.meetingPlatform) ? input.meetingPlatform : 'zoom',
       primaryColor: color ? color.toLowerCase() : DEFAULT_COLOR,
       signatureText: stringValue(input.signatureText, FIELD_LIMITS.signatureText),
       legalFooter: stringValue(input.legalFooter, FIELD_LIMITS.legalFooter),

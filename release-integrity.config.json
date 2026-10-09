@@ -540,6 +540,30 @@
         "function normalize(value)",
         "function save(sender,value)"
       ]
+    },
+    {
+      "id": "meeting-platform-options",
+      "type": "text",
+      "url": "/customer/ai-settings.js",
+      "status": 200,
+      "contains": [
+        "id=\"meeting-platform\"",
+        "value=\"zoom\"",
+        "value=\"teams\"",
+        "value=\"google_meet\"",
+        "Set the same platform as the location of your Calendly event"
+      ]
+    },
+    {
+      "id": "meeting-platform-drafts",
+      "type": "text",
+      "url": "/customer/message-studio.js",
+      "status": 200,
+      "contains": [
+        "function meetingLabel(",
+        "function adaptMeetingInvitation(",
+        "function platformPresent("
+      ]
     }
   ],
   "retry": {
