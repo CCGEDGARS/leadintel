@@ -219,3 +219,22 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 
 #message-studio .mw-style-manager .mw-style-reviewed{display:flex;align-items:flex-start;gap:8px;margin:12px 0;padding:9px;background:#f3f8f4;border-radius:8px;line-height:1.55}
 #message-studio .mw-style-reviewed input{width:16px;height:16px;flex:0 0 auto;margin-top:2px;accent-color:#2e7852}
+
+/* Unified editorial actions, approval-gated immediate sending and flow planning */
+#message-studio .mw-send-flow-actions{margin-top:18px;padding:16px;border:1px solid #d6e6da;border-radius:12px;background:#f5faf6}
+#message-studio .mw-send-flow-actions h4,#message-studio .mw-flow-planner h4{font-size:15px;color:#1c402e;margin:0 0 5px}
+#message-studio .mw-send-flow-actions p,#message-studio .mw-flow-planner p{font-size:12px;line-height:1.5;color:#627469;margin:0 0 10px}
+#message-studio .mw-send-flow-buttons{display:flex;flex-wrap:wrap;gap:10px}
+#message-studio .mw-send-flow-buttons button{flex:1 1 150px;min-height:44px}
+#message-studio #mw-send-status:not(:empty),#message-studio #mw-flow-status:not(:empty){margin:9px 0 0;color:#305a43;font-size:12px}
+#message-studio .mw-flow-planner{padding:18px;margin:14px 0;border:1px solid #ceded4;border-radius:12px;background:#fafcfb}
+#message-studio .mw-flow-planner>label{display:grid;gap:6px;font-size:12px;margin:10px 0}
+#message-studio .mw-flow-planner input{width:100%;box-sizing:border-box;padding:10px;font:inherit;border-radius:8px;border:1px solid #c9d8d0;background:#fff}
+#message-studio .mw-flow-fields{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+#message-studio .mw-flow-fields>label{display:grid;gap:6px;flex:1 1 145px;font-size:12px}
+#message-studio .mw-flow-fields>button{flex:1 1 145px}
+#message-studio .mw-saved-template{padding:11px;border-bottom:1px solid #e2eae4;display:grid;gap:5px}
+#message-studio .mw-saved-template strong{font-size:13px}
+#message-studio .mw-saved-template small{font-size:11px;color:#68776e;overflow-wrap:anywhere}
+#message-studio .mw-saved-template .draft-controls{display:flex;gap:7px;flex-wrap:wrap}
+@media(max-width:720px){#message-studio .mw-send-flow-buttons{display:grid;grid-template-columns:1fr}#message-studio .mw-flow-fields{display:grid;grid-template-columns:1fr}}
