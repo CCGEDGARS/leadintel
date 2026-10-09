@@ -15,6 +15,7 @@
     senderTitle: 160,
     website: 2048,
     phone: 32,
+    email: 254,
     linkedinUrl: 2048,
     primaryColor: 7,
     signatureText: 2000,
@@ -76,6 +77,7 @@
       senderTitle: stringValue(input.senderTitle, FIELD_LIMITS.senderTitle),
       website: stringValue(input.website, FIELD_LIMITS.website),
       phone: stringValue(input.phone, FIELD_LIMITS.phone),
+      email: stringValue(input.email, FIELD_LIMITS.email),
       linkedinUrl: stringValue(input.linkedinUrl, FIELD_LIMITS.linkedinUrl),
       primaryColor: color ? color.toLowerCase() : DEFAULT_COLOR,
       signatureText: stringValue(input.signatureText, FIELD_LIMITS.signatureText),
@@ -114,6 +116,7 @@
     if (!errors.website && identity.website && !safeHttpsUrl(identity.website)) {
       errors.website = 'Website must be a valid HTTPS URL.';
     }
+    if (!errors.email && identity.email && !/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(identity.email)) errors.email = 'Enter a valid email address.';
     if (!errors.phone && identity.phone && !validPhone(identity.phone)) {
       errors.phone = 'Phone number is invalid.';
     }
@@ -167,6 +170,7 @@
       identity.senderName,
       identity.senderTitle,
       identity.companyDisplayName,
+      identity.email,
       identity.phone,
       identity.website,
       identity.linkedinUrl ? 'LinkedIn: ' + identity.linkedinUrl : '',
@@ -218,6 +222,9 @@
     parts.push('<div><strong style="color:#1f2933;">' + escapeHtml(identity.senderName) + '</strong></div>');
     if (identity.senderTitle) parts.push('<div>' + escapeHtml(identity.senderTitle) + '</div>');
     parts.push('<div>' + escapeHtml(identity.companyDisplayName) + '</div>');
+    if (identity.email) {
+      parts.push('<div><a href="mailto:' + escapeHtml(identity.email) + '" style="color:' + escapeHtml(identity.primaryColor) + ';text-decoration:underline;">' + escapeHtml(identity.email) + '</a></div>');
+    }
     if (identity.phone) {
       parts.push('<div><a href="' + escapeHtml(phoneHref) + '" style="color:' + escapeHtml(identity.primaryColor) + ';text-decoration:underline;">' + escapeHtml(identity.phone) + '</a></div>');
     }
@@ -304,6 +311,7 @@
       senderName: 'Sender name',
       senderTitle: 'Sender job title',
       website: 'Website',
+      email: 'Email address',
       phone: 'Phone number',
       linkedinUrl: 'LinkedIn URL',
       primaryColor: 'Primary brand colour',

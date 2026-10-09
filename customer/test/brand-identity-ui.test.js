@@ -46,9 +46,9 @@ test('Sender identity is staged outside Setup with versioned dependencies', () =
   const websitePanel = html.indexOf('<h3>Main company website</h3>');
   const identityModule = html.indexOf('id="brand-identity"');
   const targetMarket = html.indexOf('id="target-market-selector"');
-  const modelScript = html.indexOf('brand-identity.js?v=20260916-brand-timestamp-v1');
+  const modelScript = html.indexOf('brand-identity.js?v=20261009-sender-card-v1');
   const profileScript = html.indexOf('profile-engine.js?v=20260922-step3-signal-backfill-v1');
-  const uiScript = html.indexOf('brand-identity-ui.js?v=20260916-browser-logo-copy-v2');
+  const uiScript = html.indexOf('brand-identity-ui.js?v=20261009-sender-card-v1');
   const appScript = html.indexOf('app.js?v=20260928-signal-research-plan-v1');
 
   assert.ok(websitePanel >= 0 && websitePanel < targetMarket && targetMarket < identityModule);

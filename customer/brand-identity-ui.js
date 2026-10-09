@@ -12,7 +12,7 @@
   const ASSET_KINDS = ['logo', 'headshot', 'banner'];
   const ASSET_LABELS = Object.freeze({logo: 'Logo', headshot: 'Headshot', banner: 'Banner'});
   const FIELD_KEYS = [
-    'companyDisplayName', 'senderName', 'senderTitle', 'website', 'phone',
+    'companyDisplayName', 'senderName', 'senderTitle', 'website', 'phone', 'email',
     'linkedinUrl', 'primaryColor', 'signatureText', 'legalFooter', 'postalAddress'
   ];
 
@@ -340,7 +340,7 @@
       const value = controller.identity();
       const fieldIds = {
         companyDisplayName: 'brand-company-name', senderName: 'brand-sender-name',
-        senderTitle: 'brand-sender-title', website: 'brand-website', phone: 'brand-phone',
+        senderTitle: 'brand-sender-title', website: 'brand-website', phone: 'brand-phone', email: 'brand-email',
         linkedinUrl: 'brand-linkedin', primaryColor: 'brand-primary-color-hex',
         signatureText: 'brand-signature', legalFooter: 'brand-legal-footer', postalAddress: 'brand-postal-address'
       };
@@ -575,7 +575,7 @@
   }
 
   function fieldLabel(key) {
-    return ({companyDisplayName: 'Company name', senderName: 'Sender name', senderTitle: 'Sender title', website: 'Website', phone: 'Phone', linkedinUrl: 'LinkedIn', primaryColor: 'Brand colour', signatureText: 'Signature', legalFooter: 'Footer', postalAddress: 'Address'})[key] || key;
+    return ({companyDisplayName: 'Company name', senderName: 'Sender name', senderTitle: 'Sender title', website: 'Website', phone: 'Phone', email: 'Email', linkedinUrl: 'LinkedIn', primaryColor: 'Brand colour', signatureText: 'Signature', legalFooter: 'Footer', postalAddress: 'Address'})[key] || key;
   }
 
   function escapeHtml(value) {

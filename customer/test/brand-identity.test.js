@@ -56,6 +56,7 @@ test('normalize returns the literal version 1 identity state without retaining u
     senderTitle: '',
     website: '',
     phone: '',
+    email: '',
     linkedinUrl: '',
     primaryColor: '#0f6557',
     signatureText: '',
@@ -129,6 +130,7 @@ test('model rejects oversized payload fields and constrains restored values to p
     senderTitle: 160,
     website: 2048,
     phone: 32,
+    email: 254,
     linkedinUrl: 2048,
     primaryColor: 7,
     signatureText: 2000,
@@ -326,4 +328,14 @@ test('module exposes the same API through the browser global', () => {
     Object.keys(context.globalThis.LeadIntelBrandIdentity).sort(),
     ['FIELD_LIMITS', 'normalize', 'renderEmail', 'safeAssetReference', 'snapshot', 'validate']
   );
+});
+
+test('sender email survives save/reload snapshot, validates and renders in both signature formats',()=>{
+ const value={...readyIdentity,email:'marta@example.com',phone:'+123456789'};
+ const restored=BrandIdentity.normalize(JSON.parse(JSON.stringify(BrandIdentity.snapshot(value))));
+ assert.equal(restored.email,value.email);assert.equal(restored.phone,value.phone);
+ assert.equal(BrandIdentity.validate(value).valid,true);
+ assert.match(BrandIdentity.validate({...value,email:'invalid'}).errors.email,/valid email/);
+ const rendered=BrandIdentity.renderEmail({subject:'Hello',bodyText:'Message',brandSnapshot:restored});
+ assert.match(rendered.textBody,/marta@example.com/);assert.match(rendered.htmlBody,/mailto:marta@example.com/);
 });

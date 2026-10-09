@@ -137,7 +137,7 @@ test('Outreach Studio v2 puts decisions left, email composition right, and tools
  assert.ok(generate.compareDocumentPosition(editor.querySelector('.script-grid'))&4);
  const tools=editor.querySelector('#mw-tools-drawer');
  assert.equal(tools.open,false);
- for(const id of ['mw-settings','message-template-editor','message-my-templates','mw-writing-references'])
+ for(const id of ['message-template-editor','message-my-templates','mw-writing-references'])
    assert.equal(tools.querySelectorAll('#'+id).length,1,id);
  assert.equal(document.querySelectorAll('#message-generate').length,1);
  assert.equal(document.querySelectorAll('#outreach-email-subject').length,1);
@@ -145,7 +145,8 @@ test('Outreach Studio v2 puts decisions left, email composition right, and tools
  assert.ok(tools.querySelector('#mw-value-proof'));
  assert.ok(document.querySelector('#mw-sender-line'));
  document.getElementById('mw-edit-sender').click();
- assert.equal(tools.open,true);
+ assert.equal(tools.open,false);
+ assert.ok(document.querySelector('#mw-sender-card #mw-settings'));
  assert.equal(document.getElementById('mw-settings').open,true);
 });
 
@@ -193,4 +194,29 @@ test('email action centre shows one named Save as Template and gates direct send
 test('composer mounts the saved-draft control without querying it while its toolbar is detached',()=>{
  const {document}=mounted();const button=document.getElementById('message-save-draft');
  assert.ok(button?.isConnected);assert.equal(button.hidden,true);assert.equal(button.parentElement.id,'mw-draft-toolbar');assert.equal(typeof button.onclick,'function');assert.ok(!button.parentElement.textContent.includes('null'));
+});
+
+test('sender card shows saved contact details before the draft and clears previous workspace values',()=>{
+ const {document,w}=mounted(),base={ready:true,authenticated:true,channel:'email',senderIdentityReady:true};
+ w.LeadIntelMessageWorkspace.render(document,{...base,senderIdentity:{senderName:'Marta Kalna',senderTitle:'Partner',companyDisplayName:'North Legal',email:'marta@example.com',phone:'+123456789',linkedinUrl:'https://linkedin.com/in/marta'},calendly:'https://calendly.com/north/call'});
+ const card=document.getElementById('mw-sender-card');assert.ok(card.compareDocumentPosition(document.getElementById('outreach-email-body'))&4);
+ for(const text of ['Marta Kalna','Partner','North Legal','marta@example.com','+123456789','https://linkedin.com/in/marta','https://calendly.com/north/call'])assert.ok(card.textContent.includes(text),text);
+ assert.equal(document.querySelector('#mw-tools-drawer #brand-identity'),null);
+ assert.equal(document.querySelectorAll('#brand-email').length,1);
+ w.LeadIntelMessageWorkspace.render(document,{...base,senderIdentity:{}});
+ assert.doesNotMatch(document.getElementById('mw-sender-details').textContent,/Marta|North|marta@example/);
+ assert.equal(document.querySelectorAll('#mw-sender-details [data-missing=true]').length,7);
+});
+
+test('Edit sender details opens canonical controls and saves email and phone through the existing identity controller',()=>{
+ const {document,w}=mounted();w.eval(read('brand-identity.js'));w.eval(read('brand-identity-ui.js'));
+ let identity={senderName:'Alex Smith',companyDisplayName:'South Services'};
+ w.LeadIntelBrandIdentityUI.mount({getIdentity:()=>identity,setIdentity:next=>{identity=next}});
+ document.getElementById('mw-edit-sender').click();
+ assert.equal(document.getElementById('brand-identity-body').hidden,false);
+ assert.equal(document.activeElement.id,'brand-sender-name');
+ for(const [id,value] of [['brand-email','alex@example.com'],['brand-phone','+123456789']]){document.getElementById(id).value=value;document.getElementById(id).dispatchEvent(new w.Event('input',{bubbles:true}));}
+ document.getElementById('brand-save').click();
+ assert.equal(identity.status,'ready');assert.equal(identity.email,'alex@example.com');assert.equal(identity.phone,'+123456789');
+ const restored=w.LeadIntelBrandIdentity.normalize(JSON.parse(JSON.stringify(identity)));assert.equal(restored.email,identity.email);
 });
