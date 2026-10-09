@@ -1,6 +1,7 @@
+import stateBudget from '../../customer/state-budget.js';
 import {approvedContext,fingerprint} from './approved-workflow-engine.js';
 export const parse=(s,f={})=>{try{return JSON.parse(s||'')??f;}catch{return f;}};
-export async function workflowMain(env,workspaceId){const state=await env.DB.prepare('SELECT payload_json FROM customer_workspace_state WHERE workspace_id=?').bind(workspaceId).first();return parse(state?.payload_json).main||{};}
+export async function workflowMain(env,workspaceId){const state=await env.DB.prepare('SELECT payload_json FROM customer_workspace_state WHERE workspace_id=?').bind(workspaceId).first();const payload=stateBudget.restoreFromSync(parse(state?.payload_json));return {...payload.main,messageStudio:payload.outreach?.messageStudio};}
 export async function workflowRow(env,workspaceId){return env.DB.prepare('SELECT * FROM approved_workflows WHERE workspace_id=?').bind(workspaceId).first();}
 export async function workflowAuthorized(env,workspaceId,revision){
   const row=await workflowRow(env,workspaceId);if(!row||row.status!=='automatic'||Number(row.revision)!==Number(revision)||!row.approved_by)return false;

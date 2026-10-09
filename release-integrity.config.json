@@ -462,11 +462,19 @@
         "mw-edit-message",
         "mw-rewrite-message",
         "mw-restore-original",
-        "mw-preview-use",
         "Choose your style",
         "Your email",
         "Review Profile answers",
-        "Approve & continue"
+        "mw-default-template",
+        "mw-mark-default",
+        "mw-save-required",
+        "Add to library",
+        "Reset"
+      ],
+      "notContains": [
+        "mw-auto-update",
+        "mw-update-use",
+        "mw-rewrite-preview"
       ]
     },
     {
@@ -661,6 +669,19 @@
         "leadintel-sync-recovery-refs-v1",
         "function packRecoveryRecord(",
         "function restoreRecoveryRecord("
+      ]
+    },
+    {
+      "id": "single-editor-save-default-contract",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "inlineRewrite:true",
+        "async function addCurrentMessageToFlow()",
+        "async function markCurrentTemplateDefault",
+        "savedDraft:LeadIntelMessageEditor.savedDraft",
+        "20261009-single-editor-v1"
       ]
     }
   ],

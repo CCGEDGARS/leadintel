@@ -3,7 +3,7 @@ import '../../customer/contact-confirmation-policy.js';
 // Reuse the same evidence, exclusion and role qualification engine as the customer journey.
 import '../../customer/discovery-engine.js';
 import '../../customer/lookalike-discovery.js';
-import {WORKFLOW_STAGES,approvedContext,normalizeWorkflowConfig,freshEvidence,renderWorkflowMessage} from './approved-workflow-engine.js';
+import {WORKFLOW_STAGES,approvedContext,normalizeWorkflowConfig,freshEvidence,renderWorkflowMessage,renderDefaultWorkflowMessage} from './approved-workflow-engine.js';
 import {parse,workflowMain,workflowAuthorized} from './approved-workflow-store.js';
 import {resolveWorkspaceServiceCredential,apolloCapabilities} from './service-integrations.js';
 import {provenBusinessEmail,APOLLO_PEOPLE_SEARCH_URL,apolloSearchBody} from './enrichment.js';
@@ -229,7 +229,7 @@ export async function executeWorkflowStage(stage,{env,row,run,result,context,con
   }
   if(stage==='triggers')return {...result,candidates:(result.candidates||[]).filter(c=>discovery.assessAutomaticQualification(c,profile,market,{...config.companies,...config.triggers,researchedAt:result.researchedAt}).eligible)};
   if(stage==='messages'){
-    const candidates=(result.candidates||[]).map(candidate=>{const evidence=candidate.qualification?.route==='lookalike'?candidate.evidence.find(e=>discovery.companyIdentityDomain(e.url)===candidate.domain):freshEvidence(candidate,config.triggers.maxEvidenceAgeDays)[0],values={firstName:candidate.contact.first_name||String(candidate.contact.name||'').split(' ')[0],company:candidate.company,sender:profile.companyName,offer:profile.priorityOffers,evidenceUrl:evidence?.url};return {...candidate,message:{subject:renderWorkflowMessage(config.messages.subject,values),body:renderWorkflowMessage(config.messages.body,values),followup_body:renderWorkflowMessage(config.messages.followup,values)}};});return {...result,candidates};
+    const reviewMessages=[];const candidates=(result.candidates||[]).flatMap(candidate=>{if(context.outreachDefault){try{return [{...candidate,message:{...renderDefaultWorkflowMessage(context,candidate),followup_body:''}}];}catch(error){reviewMessages.push({domain:candidate.domain,reason:error.message});return [];}}const evidence=candidate.qualification?.route==='lookalike'?candidate.evidence.find(e=>discovery.companyIdentityDomain(e.url)===candidate.domain):freshEvidence(candidate,config.triggers.maxEvidenceAgeDays)[0],values={firstName:candidate.contact.first_name||String(candidate.contact.name||'').split(' ')[0],company:candidate.company,sender:profile.companyName,offer:profile.priorityOffers,evidenceUrl:evidence?.url};return [{...candidate,message:{subject:renderWorkflowMessage(config.messages.subject,values),body:renderWorkflowMessage(config.messages.body,values),followup_body:renderWorkflowMessage(config.messages.followup,values)}}];});return {...result,candidates,reviewMessages};
   }
   const crmContext={workspaceId:row.workspace_id,userId:row.approved_by,role:'owner'};
   if(stage==='crm'){
@@ -258,7 +258,7 @@ export async function runApprovedWorkflows(env,{workspaceId='',maxWorkspaces=3,e
     const token=crypto.randomUUID(),claim=await env.DB.prepare("UPDATE approved_workflow_runs SET lease_token=?,lease_until=? WHERE id=? AND status='running' AND lease_token IS NULL").bind(token,new Date(now.getTime()+15*60000).toISOString(),run.id).run();if(!claim.meta?.changes){summary.skipped++;continue;}
     const guard=async()=>{if(!await workflowAuthorized(env,row.workspace_id,row.revision))stop();const lease=await env.DB.prepare('SELECT status,lease_token FROM approved_workflow_runs WHERE id=?').bind(run.id).first();if(lease?.status!=='running'||lease?.lease_token!==token)stop();};
     let result=parse(run.result_json);try{
-      const context=approvedContext(await workflowMain(env,row.workspace_id)),config=normalizeWorkflowConfig(parse(row.config_json));
+      const context=approvedContext(await workflowMain(env,row.workspace_id)),config=normalizeWorkflowConfig(parse(row.config_json),context);
       for(let index=run.stage_index;index<WORKFLOW_STAGES.length;index++){
         result=await execute(WORKFLOW_STAGES[index],{env,row,run,result,context,config,guard});await guard();
         await env.DB.prepare('UPDATE approved_workflow_runs SET stage_index=?,result_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=?').bind(index+1,JSON.stringify(result),run.id,token).run();

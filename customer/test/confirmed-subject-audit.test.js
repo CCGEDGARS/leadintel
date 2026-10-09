@@ -32,8 +32,8 @@ test('chooser never reveals placeholders when evidence is missing and keeps manu
  const dom=new JSDOM('<div id="message-approved-subjects"></div><pre id="message-approved-subjects-copy"></pre><label id="message-subject-choice-label"><span id="message-subject-choice-title"></span><select id="message-subject-choice"></select></label>'),q=id=>dom.window.document.getElementById(id);
  const item=JSON.parse(JSON.stringify({drafts:{emailSubject:'My exact manual subject',emailBody:'My exact manual body'}})),studio=S.normalize({mode:'professional'},e);
  const missing=(s,i,c,strict)=>S.resolvedSubject(s,{strictSubjectChoice:strict},e);
- render(q,studio,item,{},S,missing,v=>String(v),false);assert.equal(q('message-subject-choice').options.length,5);assert.doesNotMatch(q('message-subject-choice').textContent,/\{\{|\}\}/);
- assert.equal(item.drafts.emailSubject,'My exact manual subject');assert.equal(item.drafts.emailBody,'My exact manual body');assert.equal(q('message-subject-choice').selectedIndex,-1);dom.window.close();
+ render(q,studio,item,{},S,missing,v=>String(v),false);assert.equal(q('message-subject-choice').options.length,6);assert.doesNotMatch(q('message-subject-choice').textContent,/\{\{|\}\}/);
+ assert.equal(item.drafts.emailSubject,'My exact manual subject');assert.equal(item.drafts.emailBody,'My exact manual body');assert.equal(q('message-subject-choice').value,'custom');dom.window.close();
 });
 
 test('real selector context resolves project with an article and uses approved full seller answers',()=>{

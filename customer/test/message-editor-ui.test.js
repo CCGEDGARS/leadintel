@@ -24,12 +24,12 @@ test('top actions mount once; Edit unlocks fields, Save persists exact text, Can
  assert.equal(saved.length,0);assert.equal(item().drafts.emailBody,'Existing working message');q('mw-save-message').click();await settle();assert.equal(saved.length,1);assert.equal(saved[0].drafts.emailBody,'  Exact message\n\nTrailing spaces  ');assert.equal(saved[0].drafts.emailSubject,'  Subject spacing  ');assert.equal(q('outreach-email-body').readOnly,true);assert.equal(q('approve-outreach').disabled,false);
  q('mw-edit-message').click();q('outreach-email-body').value='Discard';q('mw-cancel-edit').click();assert.equal(q('outreach-email-body').value,'  Exact message\n\nTrailing spaces  ');assert.equal(saved.length,1);
 });
-test('Rewrite is shown as a cancellable preview and accepted only on Use this version',async()=>{
+test('explicit Rewrite uses the single editor, preserves subject, allows Undo and requires Save',async()=>{
  const {w,document,item,saved}=mounted(),q=id=>document.getElementById(id);let calls=0;
  w.fetch=async()=>({ok:true,json:async()=>({text:JSON.stringify({subject:'AI unwanted subject',message:'Fresh alternative '+(++calls)+'\nMarta Kalna'})})});
- q('mw-rewrite-message').click();await settle();assert.equal(q('mw-rewrite-preview').hidden,false);assert.equal(q('mw-preview-body').value,'Fresh alternative 1\nMarta Kalna');assert.equal(item().drafts.emailBody,'Existing working message');assert.equal(saved.length,0);
- q('mw-preview-another').click();await settle();assert.equal(q('mw-preview-body').value,'Fresh alternative 2\nMarta Kalna');q('mw-preview-cancel').click();assert.equal(item().drafts.emailBody,'Existing working message');assert.equal(q('mw-rewrite-preview').hidden,true);
- q('mw-rewrite-message').click();await settle();q('mw-preview-use').click();assert.equal(item().drafts.emailBody,'Fresh alternative 3\nMarta Kalna');assert.equal(item().drafts.emailSubject,'Hello Alex');assert.equal(saved.length,0);q('mw-save-message').click();await settle();assert.equal(saved.length,1);
+ q('mw-rewrite-message').click();await settle();assert.equal(q('mw-rewrite-preview'),null);assert.equal(item().drafts.emailBody,'Fresh alternative 1\nMarta Kalna');assert.equal(item().drafts.emailSubject,'Hello Alex');assert.equal(saved.length,0);
+ q('mw-undo-rewrite').click();assert.equal(item().drafts.emailBody,'Existing working message');assert.equal(saved.length,0);
+ q('mw-rewrite-message').click();await settle();assert.equal(item().drafts.emailBody,'Fresh alternative 2\nMarta Kalna');q('mw-save-message').click();await settle();assert.equal(saved.length,1);
 });
 test('Restore original replaces edits with initial tailored snapshot and does not use latest history or master sample',()=>{
  const {w,document,studio,item}=mounted();const context=w.studioMessageContext(),key=E.scope('w1',item(),studio,context),original=E.tailor(studio,context);

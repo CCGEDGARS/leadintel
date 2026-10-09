@@ -1,3 +1,6 @@
+import Studio from '../../customer/message-studio.js';
+import MessageEditor from '../../customer/message-editor.js';
+import MessageFacts from '../../customer/message-facts.js';
 import '../../customer/company-brain.js';
 import '../../customer/targeting-policy.js';
 import '../../customer/reference-customers.js';
@@ -17,21 +20,23 @@ export function approvedContext(main={}){
   if(main.targetMarkets?.length)profile.targetMarkets=main.targetMarkets.join('; ');
   const referenceTraits=(referenceSimilarityModel?.dna?.referenceProfiles||[]).flatMap(ref=>ref.dimensions||[]).filter(d=>['industry','broadIndustry','productionModel','capabilities'].includes(d.key)).flatMap(d=>d.values||[]);
 
-  return {website:main.website||'',answers:main.answers||{},profile,profileApproved:main.approved===true,strategyApproved:market.strategyApproved===true,
+  const outreachDefault=Studio.defaultTemplate(main.messageStudio||{});
+  return {...(outreachDefault?{outreachDefault,messageEssentials:Studio.normalize(main.messageStudio).essentials,senderLinkedInUrl:main.brandIdentity?.linkedinUrl||''}:{}),website:main.website||'',answers:main.answers||{},profile,profileApproved:main.approved===true,strategyApproved:market.strategyApproved===true,
     icps:market.icps||[],signals:market.signals||[],researchSourceTypes:market.researchSourceTypes||[],researchCustomSources:market.researchCustomSources||[],researchInstructions:market.researchInstructions||'',knownEvidence:(market.researchResults||[]).slice(0,20).map(item=>({url:item.url||item.link||'',title:item.title||'',description:item.description||'',text:String(item.text||item.markdown||'').slice(0,4000),date:item.date||item.publishedDate||'',market:item.market||''}))};
 }
-export function normalizeWorkflowConfig(input={}){
+export function normalizeWorkflowConfig(input={},context=null){
   const integer=(v,d,min,max)=>{const n=v===undefined?d:Number(v);if(!Number.isInteger(n)||n<min||n>max)throw new Error(`Choose a whole number from ${min} to ${max}`);return n;};
   const priority=input.companies?.researchPriority||'balanced';if(!['lookalike','signals','balanced'].includes(priority))throw new Error('Choose Lookalike, Signals or Balanced');
   const minimum=Number(input.qualificationVersion)>=2?Number(input.triggers?.minimumScore??80):[70,80,90].includes(Number(input.triggers?.minimumScore))?Number(input.triggers.minimumScore):80;if(![70,80,90].includes(minimum))throw new Error('Choose a minimum qualification score of 70, 80 or 90');
   if(input.buyers?.confirmationLevel&&!['public_confirmed','provider_verified'].includes(input.buyers.confirmationLevel))throw new Error('Choose a valid email confirmation level');
+  const messageInput=context?.outreachDefault||input.messages;
   const config={qualificationVersion:3,companies:{researchPriority:priority,limit:integer(input.companies?.limit,3,1,10),queries:integer(input.companies?.queries,4,1,8)},
     buyers:{roles:list(input.buyers?.roles),confirmationLevel:input.buyers?.confirmationLevel==='public_confirmed'||!input.buyers?'public_confirmed':'provider_verified',confirmContacts:input.buyers?.confirmContacts===true,confirmPhone:input.buyers?.confirmPhone===true,enrich:input.buyers?.confirmContacts===true},triggers:{minimumScore:minimum,maxEvidenceAgeDays:integer(input.triggers?.maxEvidenceAgeDays,90,1,365)},
-    messages:{subject:text(input.messages?.subject,500),body:text(input.messages?.body,12000),followup:text(input.messages?.followup,6000)},
+    messages:{subject:text(messageInput?.subject,500),body:text(messageInput?.body,12000),followup:text(input.messages?.followup,6000)},
     crm:{saveQualified:true},delivery:{verifyEmails:true,dailyLimit:integer(input.delivery?.dailyLimit,5,1,50),frequency:input.delivery?.frequency==='weekly'?'weekly':'daily',timezone:text(input.delivery?.timezone||'UTC',80),sendWindowStart:text(input.delivery?.sendWindowStart||'09:00',5),sendWindowEnd:text(input.delivery?.sendWindowEnd||'17:00',5),workingDays:[1,2,3,4,5],maxFollowups:input.messages?.followup?1:0}};
   try{new Intl.DateTimeFormat('en',{timeZone:config.delivery.timezone});}catch{throw new Error('Choose a valid timezone');}
   if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(config.delivery.sendWindowStart)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(config.delivery.sendWindowEnd)||config.delivery.sendWindowStart>=config.delivery.sendWindowEnd)throw new Error('Choose a sending window with end after start');
-  const allowed=new Set(['firstName','company','sender','offer','evidenceUrl']);
+  const allowed=new Set(['firstName','company','sender','offer','evidenceUrl',...(context?.outreachDefault?defaultMessageFields:[])]);
   for(const value of Object.values(config.messages))for(const match of value.matchAll(/\{\{([^}]+)\}\}/g))if(!allowed.has(match[1]))throw new Error(`Unknown message placeholder: ${match[1]}`);
   return config;
 }
@@ -58,6 +63,20 @@ export function setupBlockers(context,config){
 }
 export function renderWorkflowMessage(template,values){
   return template.replace(/\{\{(firstName|company|sender|offer|evidenceUrl)\}\}/g,(_,key)=>{const value=text(values[key],2000);if(!value)throw new Error(`Missing message value: ${key}`);return value;});
+}
+const defaultMessageFields=['buyerName','buyerCompany','buyerRole','sellerWebsite','senderLinkedInUrl','senderFullName','senderFirstName','senderName','senderCompany','recipientCompany','verifiedProjectOrExpansion','supportedBenefit','fitScore','calendly','development','verifiedProject','verifiedMilestone','projectMilestone','subjectProject','difference','approach','proof','meetingValue','nextAction','target','problem','value','developmentContext','roleQuestion','milestoneContext','deliveryChallenge','experienceAndApproach','serviceOutcome','referenceInvitation','friendlyOpening','friendlyExperience','friendlyBenefit','friendlyReferences','meetingFormat','referral','honestResearchOpening','honestBenefit','honestExperience','honestReferences','partnerType','serviceFocus','deliveryAngle','referenceUrl','planType','meetingData','outcomeSummary','senderRole'];
+export function renderDefaultWorkflowMessage(context,candidate){
+ const template=context.outreachDefault;if(!template)throw Error('No saved default template');
+ const known=new Set([...defaultMessageFields,'firstName','company','sender','offer']);
+ for(const pattern of [template.subject,template.body])for(const match of pattern.matchAll(/\{\{([^}]+)\}\}/g))if(!known.has(match[1]))throw Error('Unknown default template field: '+match[1]);
+ const events=freshEvidence(candidate,365).map(e=>({e,event:MessageFacts.event(e.text||e.description||e.title)})).filter(row=>row.event);
+ const event=events[0],trigger=event?{url:event.e.url,verification:'source_verified',title:event.e.title||'',summary:event.event,excerpt:event.event}:null;
+ if(!trigger&&/\{\{(?:verifiedProject|verifiedMilestone|verifiedProjectOrExpansion|development|projectMilestone|milestoneContext|subjectProject)\}\}/.test(template.subject+' '+template.body))throw Error('Default template requires a verified event for this contact.');
+ const studio=Studio.normalize({mode:template.id,myTemplates:{[template.id]:template},essentials:context.messageEssentials});
+ const draft=MessageEditor.tailor(studio,{channel:'email',requireTemplateValues:true,buyerCompany:candidate.company,buyerName:candidate.contact.name,firstName:candidate.contact.first_name||String(candidate.contact.name||'').split(' ')[0],buyerRole:candidate.contact.title||'',fitScore:candidate.fitScore??candidate.score?.total,sellerWebsite:context.website,senderLinkedInUrl:context.senderLinkedInUrl,trigger});
+ if(/\{\{|\[(?:Add |link|reference)/i.test(draft.subject+' '+draft.message))throw Error('Complete default template fields before delivery.');
+ if(!Studio.validSubject(draft.subject))throw Error('Default subject must be at most 60 characters.');
+ return {subject:draft.subject,body:draft.message,templateId:template.id,templateSavedAt:template.savedAt};
 }
 export function freshEvidence(candidate,days,now=new Date()){
   return (candidate.evidence||[]).filter(item=>{const date=new Date(item.date);const age=now-date;return Number.isFinite(date.getTime())&&age>=0&&age<=days*86400000&&/^https?:\/\//.test(item.url||'');});

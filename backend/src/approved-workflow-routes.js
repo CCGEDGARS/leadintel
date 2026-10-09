@@ -9,7 +9,7 @@ async function access(request,env,workspaceId){const token=cookieValue(request,'
 async function cancelStoppedWorkflowQueue(env,workspaceId){await env.DB.prepare("UPDATE outreach_automation_queue SET status='skipped',last_error_code='workflow_cancelled',last_error_message='The workflow was stopped or changed',updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND status IN ('queued','waiting_window','blocked_limit','failed') AND sequence_id IN (SELECT id FROM outreach_automation_sequences WHERE workspace_id=? AND workflow_run_id IS NOT NULL AND status='cancelled')").bind(workspaceId,workspaceId).run();}
 async function view(env,workspaceId){
   const row=await workflowRow(env,workspaceId),context=approvedContext(await workflowMain(env,workspaceId));
-  const config=normalizeWorkflowConfig(parse(row?.config_json)),stages=await approvalStatus(context,config,parse(row?.approvals_json));
+  const config=normalizeWorkflowConfig(parse(row?.config_json),context),stages=await approvalStatus(context,config,parse(row?.approvals_json));
   const blockers=setupBlockers(context,config);const gmail=await env.DB.prepare("SELECT status FROM gmail_connections WHERE workspace_id=? AND status='connected'").bind(workspaceId).first();
   if(!gmail)blockers.push('Connect Gmail for automatic delivery');if(!automaticGmailDeliveryEnabled(env)&&env.APPROVED_WORKFLOW_DELIVERY_MODE!=='enabled')blockers.push('Automatic delivery is disabled on the server');
   const apollo=await apolloCapabilities(env,workspaceId);
@@ -31,9 +31,9 @@ export async function handleApprovedWorkflowRoute(request,env,cors={}){
   const action=body.action;
   try{
     if(action==='save'){
-      const config=normalizeWorkflowConfig(body.config),context=approvedContext(await workflowMain(env,workspaceId)),old=await approvalStatus(context,config,parse(row?.approvals_json));
+      const context=approvedContext(await workflowMain(env,workspaceId)),config=normalizeWorkflowConfig(body.config,context),old=await approvalStatus(context,config,parse(row?.approvals_json));
       const approvals=Object.fromEntries(old.filter(s=>s.approved).map(s=>[s.stage,parse(row?.approvals_json)[s.stage]]));
-      if(row&&await fingerprint(config)===await fingerprint(normalizeWorkflowConfig(parse(row.config_json))))return json({...await view(env,workspaceId),role:auth.member.role},200,cors);
+      if(row&&await fingerprint(config)===await fingerprint(normalizeWorkflowConfig(parse(row.config_json),context)))return json({...await view(env,workspaceId),role:auth.member.role},200,cors);
       const writes=await env.DB.batch([env.DB.prepare("INSERT INTO approved_workflows(workspace_id,revision,status,config_json,approvals_json,context_hash) VALUES(?,1,'manual',?,?,?) ON CONFLICT(workspace_id) DO UPDATE SET revision=approved_workflows.revision+1,status='needs_review',config_json=excluded.config_json,approvals_json=excluded.approvals_json,context_hash=excluded.context_hash,approved_at=NULL,updated_at=CURRENT_TIMESTAMP WHERE approved_workflows.revision=?").bind(workspaceId,JSON.stringify(config),JSON.stringify(approvals),await fingerprint(context),Number(row?.revision||0)),env.DB.prepare("UPDATE approved_workflow_runs SET status='stopped',lease_token=NULL,lease_until=NULL WHERE workspace_id=? AND status IN ('running','blocked') AND revision<? AND EXISTS (SELECT 1 FROM approved_workflows WHERE workspace_id=? AND revision=? AND config_json=?)").bind(workspaceId,Number(row?.revision||0)+1,workspaceId,Number(row?.revision||0)+1,JSON.stringify(config))]);
       if(!writes[0]?.meta?.changes)return json({error:'Workflow changed. Refresh before saving.'},409,cors);
       await env.DB.prepare("UPDATE outreach_automation_sequences SET status='cancelled',stop_reason='workflow_settings_changed' WHERE workspace_id=? AND workflow_run_id IS NOT NULL AND workflow_revision<? AND status='active'").bind(workspaceId,Number(row?.revision||0)+1).run();
