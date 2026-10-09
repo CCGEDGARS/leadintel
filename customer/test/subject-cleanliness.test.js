@@ -37,7 +37,7 @@ test('generated and translated subjects reject paragraphs, prefixes and overlong
   assert.throws(()=>M.parse(JSON.stringify({subject,message}),e),/Subject must/);
   assert.throws(()=>T.validate({subject:'Hello',message},{subject,message}),/length limit/);
  }
- const s=M.normalize({mode:'professional'},e);assert.ok(M.validSubject(E.tailor(s,{...context,channel:'email'}).subject));
+ const s=M.normalize({mode:'professional'},e),ctx={...context,channel:'email'};assert.throws(()=>E.tailor(s,ctx),/Prepare concise English/);const prepared=E.parsePrepared({triggerSummary:'A long research paragraph',offer:e.offer,value:'reduce admin time',difference:'',approach:'',meetingValue:''},s,ctx);assert.ok(M.validSubject(E.tailor(s,E.preparedContext(s,ctx,prepared)).subject));
 });
 
 test('oversized generated subjects repair once with history while manual and approved drafts stay exact',()=>{

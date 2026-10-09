@@ -8,7 +8,7 @@ import './message-translations.js?v=20261009-event-campaign-v1';
 import './message-translation-ui.js?v=20261008-compact-languages-v2';
 import './personal-template-library.js?templates=20261009-v20&foundation=20261006-v12&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1';
 import './message-studio.js?v=20261009-event-campaign-v1&meeting-platform=20261009-v1&foundation=20261006-v12&booking-recovery=20261007-v1&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1';
-import './message-editor.js?v=20261009-event-campaign-v1&meeting-platform=20261009-v1';
+import './message-editor.js?v=20261009-approved-fields-v2&meeting-platform=20261009-v1';
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
@@ -26,6 +26,7 @@ let buyerHandoffRequest=0;
 let originalScriptBusy=false;
 let messageChannelNavigationRequest=0,messageChannelNavigationBaseline=null;
 let buyerHandoffPending=false,studioGenerationBusy=false,studioGenerationError=false;
+let approvedFieldController=null;
 let outreach=loadOutreach({recoverInterrupted:true});
 let scriptRestoreRequest=0;
 let scriptGenerationRequest=0;
@@ -258,6 +259,7 @@ async function dossierSearch(meta){
   return LeadIntelOutreach.normalizeDossierResearchResults(payload,{domain:meta.domain,sourceType:"search"});
 }
 function cancelPendingScriptGeneration(){
+  approvedFieldController?.abort();approvedFieldController=null;
   scriptGenerationRequest++;if(typeof studioGenerationBusy!=='undefined')studioGenerationBusy=false;const current=currentItem();if(current?.localizationStatus==='running'){upsertItem({...current,localizationStatus:'error',localizationApprovalBlocked:true,localizationMessage:'Generation was interrupted by a selection change. Regenerate this package before approval.'});}
 }
 async function prepareLocalizedItem(item,campaign,candidate){
@@ -308,7 +310,7 @@ function workingSuggestedSubject(studio,item,candidate,strictSubjectChoice=false
 }
 function stripEmailSubjectHeader(body){return String(body||'').replace(/^\uFEFF?\s*Subject\s*:[^\r\n]*(?:\r?\n){1,2}/i,'').replace(/^\uFEFF?\s*Subject\s*:[^\r\n]*$/i,'');}
 function readDraftEdits(){const item=currentItem();if(!item)return null;const edited={...item,drafts:{...item.drafts,tone:q("outreach-tone").value,emailSubject:q("outreach-email-subject").value,emailBody:q("outreach-email-body").value,linkedinMessage:q("outreach-linkedin").value,callOpener:q("outreach-call-opener").value,followUp:q("outreach-follow-up").value,objectionReply:q("outreach-objection-reply").value}};return globalThis.LeadIntelMessageTranslations?.capture(edited)||edited;}
-async function approveOutreach(){const sourceDraft=currentItem()?.messageStudioDraft;if(sourceDraft?.essentials&&JSON.stringify(sourceDraft.essentials)!==JSON.stringify(studioState().essentials)){toast('Source information or settings changed. Generate a fresh draft before approval.');return;}if(globalThis.LeadIntelStep2Brief?.confirmationMissing(mainState()).length){toast('Review all 12 Step 2 answers before approval');return;}const source=currentItem(),edited=readDraftEdits();if(source?.channel==='linkedin'){toast('Review, edit and copy the LinkedIn draft. Sending is separate.');return;}if(!source?.dossier||!edited){toast("Build the dossier first");return;}if(source.localizationApprovalBlocked){toast(source.localizationMessage||"Confirm the email language before approval");return;}if(unresolvedEmailMarkers(edited.drafts.emailBody)){toast('Complete sender name, booking and reference placeholders before approval.');return;}if(source.messageStudioDraft){try{if(!source.messageStudioDraft.eventSnapshot&&LeadIntelMessageStudio.missing(studioState().essentials).length)throw Error('Complete core information first');const T=globalThis.LeadIntelMessageTranslations,b=T?.book(edited);if(T&&b.activeLanguage!==b.originalLanguage){if(T.stale(edited,b.activeLanguage))throw Error('Original changed. Update this translation before approval.');T.validate(T.source(edited),{subject:edited.drafts.emailSubject,message:edited.drafts.emailBody},{channel:edited.channel,protectedTerms:T.protectedTerms(edited,studioState().essentials)});}else if(source.messageStudioDraft.eventSnapshot)LeadIntelEventCampaigns.validateDraft(source.messageStudioDraft.eventSnapshot,{subject:edited.drafts.emailSubject,message:edited.drafts.emailBody},studioState().essentials);else LeadIntelMessageStudio.parse(JSON.stringify({subject:edited.drafts.emailSubject,message:edited.drafts.emailBody}),studioState().essentials,{context:studioMessageContext(edited)});}catch(error){toast(error.message);return;}}const campaign=source.campaignScenario||activeCampaignScenario();const item=LeadIntelOutreach.approveOutreachItem(source,edited.drafts,new Date().toISOString(),{brandIdentity:mainState().brandIdentity,campaignScenario:campaign});upsertItem(item);if(!item.approved){toast(item.error);renderDossier();return;}updatePipelineStage(item.domain,"Ready for Outreach");const candidate=selectedCandidate()||{domain:item.domain,company:item.company,stage:"Ready for Outreach"};const crm=await syncCrmActivity(candidate,{activity:{id:crmActivityId("content-approved",item.domain,item.approvedAt),type:"content.approved",summary:"Campaign scripts approved",occurred_at:item.approvedAt,metadata:{script_package:LeadIntelOutreach.buildCrmScriptSnapshot(item),selected_trigger:item.dossier?.selectedTrigger||null,tone:item.drafts?.tone||"",selected_person_id:item.selectedPersonId||"",brand_revision:item.brandSnapshot?.revision||null,campaign_id:edited.messageStudioDraft?.eventSnapshot?.id||campaign.id||"core",campaign_segment:campaign.segment||"",email_language:item.localizationProvenance?.language||"",localization_provider:item.localizationProvenance?.provider||""}},stage:"Ready for Outreach"});renderDossier();renderMessageStudio();window.dispatchEvent(new CustomEvent("leadintel:outreach-approved",{detail:{domain:item.domain,email:LeadIntelOutreach.buildApprovedSendPayload(item)}}));toast(crm.ok?"Campaign approved · Pipeline is Ready for Outreach":"Campaign approved locally · CRM sync unavailable");}
+async function approveOutreach(){const active=currentItem(),ctx=studioMessageContext();if(active?.messageStudioDraft?.editorOrigin==='tailored'&&!active.messageStudioDraft.eventSnapshot&&LeadIntelMessageEditor.needsPreparation(studioState(),ctx)&&active.messageStudioDraft.tailoringVersion!==2){toast('Apply the approved template again to correct legacy personalization before approval. Your original is preserved.');return;}const sourceDraft=currentItem()?.messageStudioDraft;if(sourceDraft?.essentials&&JSON.stringify(sourceDraft.essentials)!==JSON.stringify(studioState().essentials)){toast('Source information or settings changed. Generate a fresh draft before approval.');return;}if(globalThis.LeadIntelStep2Brief?.confirmationMissing(mainState()).length){toast('Review all 12 Step 2 answers before approval');return;}const source=currentItem(),edited=readDraftEdits();if(source?.channel==='linkedin'){toast('Review, edit and copy the LinkedIn draft. Sending is separate.');return;}if(!source?.dossier||!edited){toast("Build the dossier first");return;}if(source.localizationApprovalBlocked){toast(source.localizationMessage||"Confirm the email language before approval");return;}if(unresolvedEmailMarkers(edited.drafts.emailBody)){toast('Complete sender name, booking and reference placeholders before approval.');return;}if(source.messageStudioDraft){try{if(!source.messageStudioDraft.eventSnapshot&&LeadIntelMessageStudio.missing(studioState().essentials).length)throw Error('Complete core information first');const T=globalThis.LeadIntelMessageTranslations,b=T?.book(edited);if(T&&b.activeLanguage!==b.originalLanguage){if(T.stale(edited,b.activeLanguage))throw Error('Original changed. Update this translation before approval.');T.validate(T.source(edited),{subject:edited.drafts.emailSubject,message:edited.drafts.emailBody},{channel:edited.channel,protectedTerms:T.protectedTerms(edited,studioState().essentials)});}else if(source.messageStudioDraft.eventSnapshot)LeadIntelEventCampaigns.validateDraft(source.messageStudioDraft.eventSnapshot,{subject:edited.drafts.emailSubject,message:edited.drafts.emailBody},studioState().essentials);else LeadIntelMessageStudio.parse(JSON.stringify({subject:edited.drafts.emailSubject,message:edited.drafts.emailBody}),studioState().essentials,{context:studioMessageContext(edited)});}catch(error){toast(error.message);return;}}const campaign=source.campaignScenario||activeCampaignScenario();const item=LeadIntelOutreach.approveOutreachItem(source,edited.drafts,new Date().toISOString(),{brandIdentity:mainState().brandIdentity,campaignScenario:campaign});upsertItem(item);if(!item.approved){toast(item.error);renderDossier();return;}updatePipelineStage(item.domain,"Ready for Outreach");const candidate=selectedCandidate()||{domain:item.domain,company:item.company,stage:"Ready for Outreach"};const crm=await syncCrmActivity(candidate,{activity:{id:crmActivityId("content-approved",item.domain,item.approvedAt),type:"content.approved",summary:"Campaign scripts approved",occurred_at:item.approvedAt,metadata:{script_package:LeadIntelOutreach.buildCrmScriptSnapshot(item),selected_trigger:item.dossier?.selectedTrigger||null,tone:item.drafts?.tone||"",selected_person_id:item.selectedPersonId||"",brand_revision:item.brandSnapshot?.revision||null,campaign_id:edited.messageStudioDraft?.eventSnapshot?.id||campaign.id||"core",campaign_segment:campaign.segment||"",email_language:item.localizationProvenance?.language||"",localization_provider:item.localizationProvenance?.provider||""}},stage:"Ready for Outreach"});renderDossier();renderMessageStudio();window.dispatchEvent(new CustomEvent("leadintel:outreach-approved",{detail:{domain:item.domain,email:LeadIntelOutreach.buildApprovedSendPayload(item)}}));toast(crm.ok?"Campaign approved · Pipeline is Ready for Outreach":"Campaign approved locally · CRM sync unavailable");}
 
 function renderApprovedPreview(mode="html"){
   const item=currentItem(),email=LeadIntelOutreach.renderApprovedEmail(item);if(!email){toast("Approve the campaign package before previewing it");return;}
@@ -463,13 +465,38 @@ function unresolvedEmailMarkers(text){
 function seedMandatoryEmail(style,{replace=false}={}){
  const item=currentItem(),studio=readStudio();
  if(!item?.dossier||item.channel!=='email'||style==='original'||(!replace&&item.messageStudioDraft?.eventSnapshot))return false;
+ // Existing drafts and originals are never overwritten by rendering, rehydration or selection.
+ if(!replace&&String(item.drafts?.emailBody||'').trim())return false;
  const context={...studioMessageContext(item,selectedCandidate()),eventCampaign:null},key=LeadIntelMessageEditor.scope(crmBridge()?.workspace?.id,item,studio,context);
- let draft;try{draft=LeadIntelMessageEditor.tailor(studio,context);}catch(error){toast(error.message);return false;}
- if(!replace&&String(item.drafts?.emailBody||'').trim()){
-  if(!LeadIntelMessageEditor.original(item,key))upsertItem({...item,messageStudioDraft:{...item.messageStudioDraft,tailoredOriginal:{key,draft}}});
-  return false;
+ if(LeadIntelMessageEditor.needsPreparation(studio,context)){
+  const cached=item.messageStudioDraft?.preparedTemplateFields;
+  if(cached){try{return applyApprovedTemplate(item,studio,LeadIntelMessageEditor.preparedContext(studio,context,cached),key);}catch{/* Changed source must be prepared again. */}}
+  void prepareApprovedTemplateFields(studio,context,key);return true;
  }
- upsertItem(LeadIntelMessageEditor.apply(item,draft,{original:true,key,style,essentials:studio.essentials,triggerUrl:context.trigger?.url||'',origin:'tailored',clearEvent:true,blocked:LeadIntelMessageStudio.missing(studio.essentials).length>0}));renderAll();return true;
+ return applyApprovedTemplate(item,studio,context,key);
+}
+function applyApprovedTemplate(item,studio,context,key,metadata={}){
+ try{const draft=LeadIntelMessageEditor.tailor(studio,context);
+ let next=LeadIntelMessageEditor.apply(item,draft,{original:true,key,style:studio.mode,essentials:studio.essentials,triggerUrl:context.trigger?.url||'',origin:'tailored',clearEvent:true,blocked:LeadIntelMessageStudio.missing(studio.essentials).length>0});
+ next.messageStudioDraft.preparedTemplateFields=context.preparedFields||null;
+ next.messageStudioDraft.tailoringVersion=2;
+ next.localizationProvenance={provider:metadata.provider||'approved-template',model:metadata.model||'protected-fields-v2',language:'en',selectionSource:'manual'};
+ next.campaignScenario={...next.campaignScenario,language:'en',resolvedLanguage:'en',languageSource:'manual'};
+ upsertItem(globalThis.LeadIntelMessageTranslations?.generated(next,draft)||next);renderAll();return true;
+ }catch(error){toast(error.message);return false;}
+}
+async function prepareApprovedTemplateFields(studio,context,key){
+ if(!messageWorkspaceUsable())return false;
+ cancelPendingScriptGeneration();const request=++scriptGenerationRequest,workspace=crmBridge()?.workspace?.id,item=currentItem(),sourceDraft=JSON.stringify(editorDraft());
+ const controller=new AbortController();approvedFieldController=controller;const timeout=setTimeout(()=>controller.abort(),45000);
+ const current=()=>request===scriptGenerationRequest&&workspace===crmBridge()?.workspace?.id&&messageWorkspaceUsable()&&key===LeadIntelMessageEditor.scope(workspace,currentItem(),studioState(),{...studioMessageContext(),eventCampaign:null})&&sourceDraft===JSON.stringify(editorDraft());
+ studioGenerationBusy=true;studioGenerationError=false;renderMessageWorkspace();q('message-generation-status').textContent='Preparing concise English fields for your approved template…';
+ try{const prompt=LeadIntelMessageEditor.preparationPrompt(studio,context),response=await fetch(`https://leadintel-api.edgars-7e7.workers.dev/api/ai/generate?workspace_id=${encodeURIComponent(workspace)}`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({...prompt,task:'outreach-generation',max_output_tokens:1000}),signal:controller.signal});
+ const result=await response.json();if(!response.ok)throw Error(result.error||'Field preparation unavailable');
+ const prepared=LeadIntelMessageEditor.parsePrepared(result.text,studio,context);if(!current())return false;
+ return applyApprovedTemplate(currentItem(),studio,LeadIntelMessageEditor.preparedContext(studio,context,prepared),key,result);
+ }catch(error){if(current()){studioGenerationError=true;toast('Your draft and approved original stay unchanged. '+(error.name==='AbortError'?'Field preparation timed out; retry.':error.message));}return false;
+ }finally{clearTimeout(timeout);if(approvedFieldController===controller)approvedFieldController=null;if(request===scriptGenerationRequest&&workspace===crmBridge()?.workspace?.id){studioGenerationBusy=false;renderMessageWorkspace();}}
 }
 function selectMandatoryEmailStyle(style){seedMandatoryEmail(style,{replace:true});}
 function personalSlots(studio){return (personalChannel==='linkedin'?studio.linkedinTemplates:studio.myTemplates)||{};}
