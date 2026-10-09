@@ -74,3 +74,15 @@ test('translation of one field cannot paraphrase other already-valid approved fa
  const draft=E.tailor(studio,E.preparedContext(studio,ctx,result));assert.match(draft.message,/Scandinavia/);assert.match(draft.message,/qualified workforce solutions/);assert.doesNotMatch(draft.message,/Our team has international experience/);
  assert.throws(()=>E.preparedResponse({...result.fields,message:'Unapproved entire body'},studio,ctx),/unapproved field/);
 });
+
+
+test('Professional preparation shares the actual remaining word budget across factual fields',()=>{
+ const e={...essentials,sender:'Edgars Untāls',company:'ERCON',difference:'Our team brings more than 30 years of metalworking experience, including international projects in Scandinavia.',offer:'Drawing development, prototyping, serial production, custom manufacturing, metal structures and equipment installation, surface treatment, welded-joint testing, delivery and qualified workforce solutions'};
+ const ctx={...context,firstName:'Joakim',buyerCompany:'LKAB',trigger:{...context.trigger,summary:'LKAB satsar sex miljarder på ett nytt sovringsverk vid Malmbergsgruvan.',subjectSummary:'LKAB announced an investment in a new sorting plant at Malmberget.'}},studio=S.normalize({mode:'professional',essentials:e});
+ const limits=E.preparationWordLimits(studio,ctx),prompt=JSON.parse(E.preparationPrompt(studio,ctx).prompt);
+ assert.deepEqual(prompt.wordLimits,limits);assert.equal(limits.difference,e.difference.split(/\s+/).length);assert.ok(limits.offer<12);assert.ok(limits.triggerSummary<14);
+ const fields={triggerSummary:'LKAB’s investment in a new Malmberget sorting plant',offer:'drawing development, metal manufacturing, installation and qualified workforce solutions',difference:'Our team has international experience.',value:'',approach:'',meetingValue:''};
+ const prepared=E.preparedResponse(fields,studio,ctx),draft=E.tailor(studio,E.preparedContext(studio,ctx,prepared));
+ assert.match(draft.message,/Scandinavia/);E.validateFrame(draft.message,'professional');
+ assert.throws(()=>E.parsePrepared({...prepared.fields,triggerSummary:'word '.repeat(limits.triggerSummary+1).trim()},studio,ctx),/concise English fields/);
+});
