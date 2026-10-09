@@ -899,7 +899,7 @@ function selectResearchReviewForBuyers(key){
   const domain=canonicalDomain(candidate.domain||candidate.website);if(!domain){showToast("Verify the company website before selecting it for Buyers");return false;}
   const existing=(discovery.selectedProspects||[]).find(item=>canonicalDomain(item.domain||item.website)===domain);
   const merged=mergeWorkflowCompanies(existing?[existing]:[],[candidate])[0];
-  const copy={...existing,...merged,buyerDiscovery:existing?.buyerDiscovery||merged.buyerDiscovery,buyerSearchMode:"user_selected_without_signal",qualified:false};
+  const copy={...existing,...merged,buyerDiscovery:existing?.buyerDiscovery||merged.buyerDiscovery,buyerSearchMode:"user_selected_target",qualified:false};
   discovery.selectedProspects=[...(discovery.selectedProspects||[]).filter(item=>canonicalDomain(item.domain||item.website)!==domain),copy];
   saveDiscovery();renderAll();showToast(`${candidate.company} selected for Buyers · qualification still unverified`);return true;
 }
