@@ -681,7 +681,7 @@
         "async function addCurrentMessageToFlow()",
         "async function markCurrentTemplateDefault",
         "savedDraft:LeadIntelMessageEditor.savedDraft",
-        "20261009-single-editor-v1"
+        "20261009-single-editor-v2"
       ]
     }
   ],
