@@ -255,7 +255,7 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 /* Single saved message and its reusable default. */
 .mw-default-template{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:16px 20px;background:#eef7f1;border:1px solid #c9ded0;border-radius:14px;margin:0 0 18px}
 .mw-default-template strong{display:block;margin:5px 0;font-size:16px}.mw-default-template p{margin:0;font-size:12px;line-height:1.55;color:#536b5d;max-width:640px}
-.mw-default-actions{display:flex;gap:8px;flex-shrink:0}.mw-editor-actions{display:flex;flex-wrap:wrap;gap:9px;margin:14px 0}.mw-editor-actions #mw-add-flow{margin-left:auto}
+.mw-default-actions{display:flex;gap:8px;flex-shrink:0}.mw-editor-actions{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0}.mw-editor-actions button{font-size:12px;padding:10px 12px;white-space:nowrap;min-height:40px}.mw-editor-actions #mw-add-flow{margin-left:auto}
 .mw-save-required{font-size:13px;color:#785020;background:#fff7e9;padding:10px 13px;border-radius:9px}.mw-text-button{border:0;background:transparent;color:#126747;text-decoration:underline;cursor:pointer;font:inherit;font-weight:600;padding:0 4px}
 #mw-subject-options{padding-bottom:16px;margin-bottom:0}#mw-subject-options label{margin-bottom:8px}.mw-editor-head .mw-step-number{display:none}
 #mw-flow-planner{display:none}.mw-editor-status{font-size:13px;line-height:1.6}.mw-saved-template .draft-controls{flex-wrap:wrap}
