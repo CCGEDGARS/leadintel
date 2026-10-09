@@ -27,7 +27,7 @@ test('channel changes show only the matching editor and actions; a draft is neve
  const {document,w}=mounted();const base={ready:true,authenticated:true,hasDraft:true,person:{name:'Sam Buyer',title:'Partner'},company:'Legal practice'};
  w.LeadIntelMessageWorkspace.render(document,{...base,channel:'linkedin'});assert.equal(document.querySelector('.outreach-approval').hidden,true);assert.equal(document.getElementById('mw-copy-email').hidden,true);assert.equal(document.getElementById('mw-empty').hidden,true);assert.match(document.getElementById('mw-readiness-text').textContent,/draft/);assert.equal(document.getElementById('message-recipient').textContent,'Sam Buyer');
  w.LeadIntelMessageWorkspace.render(document,{...base,channel:'email'});assert.equal(document.querySelector('.outreach-approval').hidden,false);assert.equal(document.getElementById('mw-copy-email').hidden,false);assert.equal(document.getElementById('approve-outreach').textContent,'Approve & continue →');
- w.LeadIntelMessageWorkspace.render(document,{...base,hasDraft:false});assert.equal(document.getElementById('mw-empty').hidden,true);assert.equal(document.querySelector('.script-grid').hidden,false);assert.match(document.getElementById('outreach-email-body').placeholder,/personalized email/);
+ w.LeadIntelMessageWorkspace.render(document,{...base,hasDraft:false});assert.equal(document.getElementById('mw-empty').hidden,true);assert.equal(document.querySelector('.script-grid').hidden,false);assert.match(document.getElementById('outreach-email-body').placeholder,/prepared automatically/);
 });
 test('style cards drive the canonical select with a change event and accessible selected state',()=>{
  const {document,w}=mounted();let changes=0;const select=document.getElementById('message-mode');select.addEventListener('change',()=>changes++);w.LeadIntelMessageWorkspace.paintStyles(document);document.querySelector('[data-writing-style="friendly"]').click();assert.equal(select.value,'friendly');assert.equal(changes,1);assert.equal(document.querySelector('[data-writing-style="friendly"]').getAttribute('aria-pressed'),'true');
@@ -46,7 +46,7 @@ test('a sync conflict takes priority over apparent missing Profile answers and b
 
 test('template generation is distinct from original AI generation and retains protected originals',()=>{
  const {document,w}=mounted(),base={ready:true,authenticated:true,hasDraft:true,channel:'linkedin'};
- w.LeadIntelMessageWorkspace.render(document,{...base,templateSelected:true});assert.match(document.getElementById('message-generate').textContent,/Apply selected settings/i);
+ w.LeadIntelMessageWorkspace.render(document,{...base,templateSelected:true});assert.match(document.getElementById('message-generate').textContent,/Prepare updated version/i);
  w.LeadIntelMessageWorkspace.render(document,{...base,templateSelected:false});assert.match(document.getElementById('message-generate').textContent,/Generate message/i);
  assert.ok(document.getElementById('message-template-body').readOnly);
 });
@@ -106,7 +106,7 @@ test('Outreach Studio presents trigger, style and subject before personalization
  assert.ok(subject.compareDocumentPosition(personalize)&4);
  const view=w.LeadIntelMessageWorkspace.render(document,{ready:true,authenticated:true,hasDraft:true,channel:'email',pendingSelections:true,senderIdentityReady:true});
  assert.equal(view.canGenerate,true);
- assert.match(document.getElementById('mw-readiness-text').textContent,/Changes pending/);
+ assert.match(document.getElementById('mw-readiness-text').textContent,/current message is preserved/);
  assert.equal(document.getElementById('approve-outreach').disabled,true);
  assert.ok(document.querySelector('[data-restore-email-version]'));
 });
@@ -219,4 +219,15 @@ test('Edit sender details opens canonical controls and saves email and phone thr
  document.getElementById('brand-save').click();
  assert.equal(identity.status,'ready');assert.equal(identity.email,'alex@example.com');assert.equal(identity.phone,'+123456789');
  const restored=w.LeadIntelBrandIdentity.normalize(JSON.parse(JSON.stringify(identity)));assert.equal(restored.email,identity.email);
+});
+
+test('automatic preparation hides the extra apply button and shows a protected proposal without changing the working draft',()=>{
+ const {document,w}=mounted(),base={ready:true,authenticated:true,hasDraft:true,channel:'email',templateSelected:true,senderIdentityReady:true};
+ document.getElementById('outreach-email-body').value='My saved exact text';
+ w.LeadIntelMessageWorkspace.render(document,base);assert.equal(document.getElementById('message-generate').hidden,true);assert.equal(document.getElementById('mw-auto-update').hidden,true);
+ const proposal={draft:{subject:'Northport steel',message:'Updated facts and approved wording'}};
+ w.LeadIntelMessageWorkspace.render(document,{...base,pendingSelections:true,automaticUpdate:proposal});
+ assert.equal(document.getElementById('mw-auto-update').hidden,false);assert.equal(document.getElementById('mw-update-body').value,proposal.draft.message);assert.equal(document.getElementById('outreach-email-body').value,'My saved exact text');assert.equal(document.getElementById('approve-outreach').disabled,true);
+ w.LeadIntelMessageWorkspace.render(document,{...base,pendingSelections:true,automaticUpdate:proposal,editorState:{editing:true}});assert.equal(document.getElementById('mw-update-use').disabled,true);
+ w.LeadIntelMessageWorkspace.render(document,{...base,pendingSelections:true,generationError:true});assert.equal(document.getElementById('message-generate').hidden,false);assert.equal(document.getElementById('message-generate').textContent,'Retry preparation');
 });

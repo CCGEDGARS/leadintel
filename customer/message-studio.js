@@ -103,10 +103,10 @@
  function resolvedSubject(studio,context={},essentials={}){
   const language=context.subjectLanguage||essentials.language||'en';
   if(studio?.mode==='professional')return professionalSubject(studio,context,essentials,language);
-  const trigger=context.trigger;let conciseTrigger=trigger;
-  if(trigger){const project=subjectFact(trigger.projectName)||subjectFact(trigger.subject)||subjectFact(trigger.title)||subjectFact(trigger.summary)||subjectFact(trigger.excerpt);conciseTrigger=project&&(!trigger.language||trigger.language===language)?{...trigger,summary:project,title:project,excerpt:project}:null;}
+  const trigger=context.trigger;let conciseTrigger=trigger;const compact=professionalSubjectFacts(context,essentials,language);
+  if(trigger){const project=subjectFact(trigger.projectName)||compact.subjectProject||subjectFact(trigger.subject)||subjectFact(trigger.title)||subjectFact(trigger.summary)||subjectFact(trigger.excerpt);conciseTrigger=project&&(!trigger.language||trigger.language===language)?{...trigger,summary:project,title:project,excerpt:project}:null;}
   const factsLanguage=context.subjectFactsLanguage||essentials.language||'en';
-  const value=factsLanguage===language?(subjectFact(essentials.subjectBenefit)||subjectFact(essentials.value)):'',offer=factsLanguage===language?(subjectFact(essentials.subjectOffer)||subjectFact(essentials.offer)):'';
+  const value=factsLanguage===language?(subjectFact(essentials.subjectBenefit)||subjectFact(essentials.value)):'',offer=compact.subjectOffer||(factsLanguage===language?(subjectFact(essentials.subjectOffer)||subjectFact(essentials.offer)):'');
   const result=rawResolvedSubject(studio,{...context,trigger:conciseTrigger},{...essentials,value,offer});
   if(!result)return result;
   if(context.strictSubjectChoice){const t=subjectsFor(studio.mode).find(t=>t.id===canonicalChoice(studio.mode,studio.subjectChoices?.[studio.mode]));if(t){const regex=new RegExp('^'+t.pattern.split(/(\{\{\w+\}\})/).map(part=>part.startsWith('{{')?'(.+?)':part.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('')+'$');if(!regex.test(result))return null;}}
