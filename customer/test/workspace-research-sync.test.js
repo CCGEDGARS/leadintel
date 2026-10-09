@@ -7,7 +7,7 @@ const persistenceSource=fs.readFileSync(require.resolve('../workspace-persistenc
 const KEYS={main:'leadintel_customer_v2_state',discovery:'leadintel_customer_v2_discovery',outreach:'leadintel_customer_v2_outreach',delivery:'leadintel_customer_v2_delivery',meta:'leadintel_customer_v2_discovery_meta'};
 function load(values,nativeFetch){
  const timers=new Map();let timer=0;
- const root={console,URL,Request,Response,Date,Promise,LeadIntelStateBudget:budget,LeadIntelServerBridge:{session:{authenticated:true},workspace:{id:'w1'}},localStorage:{getItem:key=>values.get(key)||null,setItem:(key,value)=>values.set(key,String(value)),removeItem:key=>values.delete(key)},sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}},location:{href:'https://leadintel.ccgroup.lv/customer/'},fetch:nativeFetch,document:{readyState:'loading',querySelector:()=>null,getElementById:()=>null,addEventListener(){}},addEventListener(){},removeEventListener(){},setTimeout(fn){const id=++timer;timers.set(id,fn);return id;},clearTimeout(id){timers.delete(id);}};
+ const root={console,URL,Request,Response,Date,Promise,LeadIntelStateBudget:budget,LeadIntelServerBridge:{workspaceStateCodec:'workspace-sections-v1',session:{authenticated:true},workspace:{id:'w1'}},localStorage:{getItem:key=>values.get(key)||null,setItem:(key,value)=>values.set(key,String(value)),removeItem:key=>values.delete(key)},sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}},location:{href:'https://leadintel.ccgroup.lv/customer/'},fetch:nativeFetch,document:{readyState:'loading',querySelector:()=>null,getElementById:()=>null,addEventListener(){}},addEventListener(){},removeEventListener(){},setTimeout(fn){const id=++timer;timers.set(id,fn);return id;},clearTimeout(id){timers.delete(id);}};
  root.globalThis=root;vm.runInNewContext(persistenceSource,root);return root;
 }
 function localValues(payload){return new Map(Object.entries(KEYS).map(([key,storageKey])=>[storageKey,JSON.stringify(key==='meta'?payload.meta.discovery:payload[key]||{})]));}
@@ -79,4 +79,15 @@ test('a late older response cannot replace a newer acknowledged cloud baseline',
  root.LeadIntelWorkspacePersistence.snapshotFromServerPayload({...payload,main:{website:'newer.example'}},{workspaceId:'w1',version:9});
  root.LeadIntelWorkspacePersistence.snapshotFromServerPayload(payload,{workspaceId:'w1',version:8});
  const base=root.LeadIntelWorkspacePersistence.syncedBase('w1');assert.equal(base.version,9);assert.equal(base.payload.main.website,'newer.example');
+});
+
+test('profile and approved messages round-trip through the real persistence boundary with a clean cloud baseline',async()=>{
+ const report={summary:'Commercial evidence '.repeat(1800)};const message={body:'Approved paragraph '.repeat(1500),approved:true};
+ const payload={main:{website:'https://seller.example',market:{researchReports:Array.from({length:15},(_,i)=>({...report,id:'r'+i}))}},discovery:{selectedProspects:[{domain:'buyer.example',people:[{id:'p1',name:'Buyer One'}]}]},outreach:{items:Array.from({length:12},(_,i)=>({...message,id:'m'+i})),messageStudio:{originalScripts:{professional:{body:'Protected master'}}}},delivery:{},meta:{discovery:{scriptBuyer:{personId:'p1'}}}};
+ let wire;const values=localValues(payload),root=load(values,async(input,options)=>{if(options.method==='PUT'){wire=JSON.parse(options.body).payload;return new Response(JSON.stringify({saved:true,version:8}));}return new Response(JSON.stringify({version:8,payload:wire}));});
+ await root.fetch(endpoint,{method:'PUT',body:JSON.stringify({version:7,payload}),leadintelSaveIntent:true,leadintelExplicitSave:true});
+ assert.ok(budget.bytes(wire)<=budget.MAX_SYNC_BYTES);assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),false);
+ const base=root.LeadIntelWorkspacePersistence.syncedBase('w1');assert.deepEqual(JSON.parse(JSON.stringify(base.payload.main)),payload.main);assert.deepEqual(JSON.parse(JSON.stringify(base.payload.outreach)),payload.outreach);
+ const freshValues=new Map(),fresh=load(freshValues,async()=>new Response(JSON.stringify({version:8,payload:wire})));await fresh.fetch(endpoint,{method:'GET'});fresh.LeadIntelWorkspacePersistence.prepareForLoad();
+ assert.deepEqual(JSON.parse(freshValues.get(KEYS.main)),payload.main);assert.deepEqual(JSON.parse(freshValues.get(KEYS.outreach)),payload.outreach);
 });

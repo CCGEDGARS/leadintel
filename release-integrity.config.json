@@ -564,6 +564,37 @@
         "function adaptMeetingInvitation(",
         "function platformPresent("
       ]
+    },
+    {
+      "id": "workspace-section-sync",
+      "type": "text",
+      "url": "/customer/state-budget.js",
+      "status": 200,
+      "contains": [
+        "leadintel-workspace-section-refs-v1",
+        "allowSectionPacking",
+        "MAX_RESTORED_SECTION_BYTES"
+      ]
+    },
+    {
+      "id": "workspace-section-rollout-guard",
+      "type": "text",
+      "url": "/customer/server-bridge.js",
+      "status": 200,
+      "contains": [
+        "bridge.workspaceStateCodec=payload.state_codec||''",
+        "Workspace exceeds sync limit \u00b7 local changes preserved"
+      ]
+    },
+    {
+      "id": "retained-company-status",
+      "type": "text",
+      "url": "/customer/journey-progress.js",
+      "status": 200,
+      "contains": [
+        "No new qualified companies \u00b7 saved companies retained",
+        "Review saved companies or broaden the search"
+      ]
     }
   ],
   "retry": {

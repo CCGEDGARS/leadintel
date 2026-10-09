@@ -122,3 +122,46 @@ test('saved server snapshots restore wire-packed discovery before creating a mer
  context.snapshotFromServerPayload({main:{website:'https://seller.example/'},discovery:{format:'leadintel-discovery-refs-v2',keys:['people','name'],values:[],value:[1,0,[2,[1,1,'Buyer']]]}},{version:5});
  assert.deepEqual(JSON.parse(JSON.parse(storage.get('snapshot')).data.leadintel_customer_v2_discovery),{people:[{name:'Buyer'}]});
 });
+
+test('repeated profile reports and approved draft history sync losslessly outside Discovery',()=>{
+ const report={id:'research-report',summary:'Verified commercial context '.repeat(1200),signals:[{url:'https://buyer.example/news',quote:'Factory expansion',date:'2026-10-09'}]};
+ const message={subject:'A project conversation',body:'Approved message paragraph '.repeat(1000),approved:true};
+ const input={main:{website:'https://seller.example',profile:{companyName:'Seller'},market:{researchReports:Array.from({length:14},(_,i)=>({...report,id:'report-'+i}))}},discovery:{selectedProspects:[{domain:'buyer.example',people:[{id:'b1',name:'Buyer One'}]}]},outreach:{messageStudio:{originalScripts:{professional:message}},items:Array.from({length:12},(_,i)=>({...message,id:'draft-'+i}))},delivery:{},meta:{discovery:{scriptBuyer:{personId:'b1'}},persistence:{explicit_saved:true}}};
+ const before=JSON.stringify(input);assert.ok(budget.bytes(input)>budget.MAX_SYNC_BYTES);
+ const first=budget.prepareForSync(input);assert.ok(first.bytes<=budget.MAX_SYNC_BYTES);
+ assert.deepEqual(budget.restoreFromSync(JSON.parse(JSON.stringify(first.payload))),input);
+ assert.deepEqual(budget.prepareForSync(first.payload).payload,first.payload);
+ assert.equal(JSON.stringify(input),before);
+});
+
+test('capacity failure ends the saving indicator and preserves the dirty local workspace',async()=>{
+ const vm=require('node:vm'),source=fs.readFileSync(path.join(__dirname,'../server-bridge.js'),'utf8');let status='',dirty=false;
+ const context={bridge:{session:{authenticated:true},workspace:{id:'w1'},stateVersion:3},root:{LeadIntelStateBudget:budget},readRememberedVersion:()=>3,markDirtyLocalState:()=>dirty=true,setStatus:(text,kind)=>status=kind,bundle:()=>({main:{notes:'x'.repeat(520*1024)}})};
+ vm.createContext(context);vm.runInContext(source.slice(source.indexOf('  async function saveWorkspaceState('),source.indexOf('  async function reconcileServerState(')),context);
+ await assert.rejects(context.saveWorkspaceState({workspaceId:'w1'}),/500 KB sync limit/);assert.equal(status,'error');assert.equal(dirty,true);
+});
+
+test('compact references cannot expand into an unbounded workspace payload',()=>{
+ const payload={main:{format:'leadintel-workspace-section-refs-v1',keys:['reports'],values:['x'.repeat(200000)],value:[1,0,[2,...Array.from({length:60},()=>[0,0])]]}};
+ assert.throws(()=>budget.restoreFromSync(payload),/safe restore limit/);
+});
+
+test('legacy discovery and buyer trace references enforce the safe restore limit too',()=>{
+ const large='x'.repeat(200000);
+ assert.throws(()=>budget.restoreFromSync({discovery:{format:'leadintel-discovery-refs-v1',values:[{notes:large}],value:{rows:Array.from({length:60},()=>({leadintelResearchRef:0}))}}}),/safe restore limit/);
+ assert.throws(()=>budget.restoreFromSync({resultDiagnostics:{format:'leadintel-buyer-trace-v1',columns:['notes'],values:[large],rows:Array.from({length:60},()=>[0])}}),/safe restore limit/);
+});
+
+test('new section packing waits for the server capability during rollout',()=>{
+ const report={summary:'Commercial evidence '.repeat(1800)};
+ const input={main:{market:{researchReports:Array.from({length:15},(_,i)=>({...report,id:'r'+i}))}}};
+ assert.throws(()=>budget.prepareForSync(input,{allowSectionPacking:false}),/500 KB sync limit/);
+ assert.ok(budget.prepareForSync(input,{allowSectionPacking:true}).bytes<=budget.MAX_SYNC_BYTES);
+});
+
+test('save-boundary failures end the saving indicator too',async()=>{
+ const vm=require('node:vm'),source=fs.readFileSync(path.join(__dirname,'../server-bridge.js'),'utf8');let status='',dirty=false;
+ const context={bridge:{session:{authenticated:true},workspace:{id:'w1'},stateVersion:3},root:{LeadIntelStateBudget:budget},readRememberedVersion:()=>3,markDirtyLocalState:()=>dirty=true,setStatus:(text,kind)=>status=kind,bundle:()=>({main:{website:'seller.example'}}),api:async()=>{throw new Error('500 KB sync limit at the metadata boundary');}};
+ vm.createContext(context);vm.runInContext(source.slice(source.indexOf('  async function saveWorkspaceState('),source.indexOf('  async function reconcileServerState(')),context);
+ await assert.rejects(context.saveWorkspaceState({workspaceId:'w1'}),/500 KB sync limit/);assert.equal(status,'error');assert.equal(dirty,true);
+});
