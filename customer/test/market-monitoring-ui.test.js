@@ -110,14 +110,14 @@ test('market strategy progressively reveals research results, activation and mon
   assert.match(html,/id="research-results-details"/);
   assert.match(html,/id="strategy-activation-card"/);
   assert.doesNotMatch(html,/id="strategy-activation-card"[^>]*hidden/);
-  assert.match(html,/id="monitoring-panel"[^>]*hidden/);
+  assert.doesNotMatch(html,/id="monitoring-panel"[^>]*hidden/);
   assert.match(app,/getMarketJourneyState/);
   assert.match(app,/research-results-details/);
   assert.match(app,/view\.showActivation/);
-  assert.match(app,/view\.showMonitoring/);
+  assert.match(app,/\$\("monitoring-panel"\)\.hidden=false/);
 });
 
-test('monitoring keeps advanced sources, signals and history behind disclosure',()=>{
+test('monitoring keeps only detailed signal and source settings behind disclosure',()=>{
   assert.match(html,/id="monitoring-advanced"/);
   assert.match(html,/Advanced monitoring settings/);
   assert.match(html,/id="monitoring-custom-sources"/);
@@ -142,4 +142,18 @@ test('Market Strategy explains decisions after research in Profile',()=>{
   assert.match(html,/Profile · Market research/);
   assert.match(html,/id="research-results-intro" hidden/);
   assert.match(app,/Next step/);
+});
+
+
+test('website monitoring is upfront and expanded, with website entry and results outside advanced settings',()=>{
+ const {JSDOM}=require('jsdom'),document=new JSDOM(html).window.document;
+ const panel=document.getElementById('monitoring-panel'),advanced=document.getElementById('monitoring-advanced');
+ assert.equal(panel.open,true);assert.equal(panel.hidden,false);
+ assert.equal(advanced.open,false);
+ for(const id of ['monitoring-custom-sources','monitoring-frequency','save-monitoring','run-monitoring-now','monitoring-alerts','monitoring-history']){assert.ok(panel.contains(document.getElementById(id)));assert.equal(advanced.contains(document.getElementById(id)),false);}
+ assert.ok(advanced.contains(document.getElementById('monitoring-signals')));
+ assert.equal(document.querySelectorAll('#monitoring-custom-sources').length,1);
+ assert.ok(panel.compareDocumentPosition(document.getElementById('icp-list'))&4);
+ assert.match(app,/monitoring-summary-status/);
+ assert.match(app,/const locked=!state\.market\.strategyApproved/);
 });

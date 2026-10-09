@@ -12,7 +12,7 @@ test("Step 4 places optional monitoring before the final Company Discovery hando
   const activation = index.indexOf('id="strategy-activation-card"');
   assert.ok(monitoring >= 0, "monitoring panel is present");
   assert.ok(activation > monitoring, "final handoff follows monitoring");
-  assert.match(index, /Strategy · Optional monitoring/);
+  assert.match(index, /Strategy · Website monitoring/);
   assert.match(index, /id="activate-market-strategy"[^>]*>Review & Continue to Companies →<\/button>/);
 });
 

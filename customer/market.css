@@ -360,3 +360,14 @@
 @media(max-width:700px){#market-research-status .research-status-copy{flex-basis:calc(100% - 48px)}#market-research-status .secondary-btn{flex:1 1 100%}}
 
 .required-action-notice{padding:14px 16px;margin:12px 0;border:1px solid #d5b46e;border-radius:10px;background:#fff8e9;color:#73551b;font:600 14px/1.5 "DM Sans",sans-serif}.required-action-focus{outline:3px solid #b88a2a!important;outline-offset:4px;scroll-margin:120px}
+
+/* Website monitoring stays visible as a primary Strategy tool. */
+#monitoring-panel{border:1px solid #93c8b4;border-left:5px solid #17684f;background:#f3faf6;box-shadow:0 4px 16px rgba(23,104,79,.07);margin:20px 0;scroll-margin-top:24px}
+#monitoring-panel>summary{display:list-item;font-size:19px;color:#164c3b;padding:6px 0 16px}
+.monitoring-summary-status{display:inline-block;margin-left:14px;padding:4px 10px;border-radius:999px;background:#dfefe6;color:#244f3d;font-size:12px;vertical-align:middle}
+#monitoring-panel .monitoring-custom{display:grid;gap:8px;margin-top:18px;font-weight:600}
+#monitoring-panel .monitoring-custom textarea{width:100%;box-sizing:border-box;border:1px solid #a9cabc;border-radius:9px;padding:12px;background:#fff;color:#183c2d;font:inherit;resize:vertical}
+.monitoring-websites-help{font-size:13px;color:#526c5e;margin:8px 0 18px}
+#monitoring-panel .monitoring-grid{margin-bottom:16px}
+#monitoring-panel .monitoring-results{margin-top:18px}
+@media(max-width:640px){#monitoring-panel .market-research-head{align-items:stretch;flex-direction:column}.monitoring-summary-status{margin-left:8px}#monitoring-panel>summary{font-size:17px}}
