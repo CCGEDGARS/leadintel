@@ -71,7 +71,7 @@
  function professionalSubjectFacts(context={},e={},language='en'){
   const t=context.trigger,reviewed=['user_reviewed','source_verified'].includes(t?.verification);
   // Event evidence outranks article metadata or a newsroom dateline.
-  const eventSources=reviewed?[t.summary,t.excerpt,t.subject,t.title].filter(Boolean):[];
+  const eventSources=reviewed?[t.subjectSummary,t.summary,t.excerpt,t.subject,t.title].filter(Boolean):[];
   const location=eventSources.map(source=>source.match(/\b(?:in|at|i|vid)\s+(?:(?:the|a|an)\s+)?([\p{Lu}][\p{L}\d'-]+)(?=\s|[.,;:]|$)/u)?.[1]).find(Boolean);
   const subjectProject=reviewed?(subjectFact(t.projectName,22)||subjectFact(location,22)||subjectFact(t.locationName,22)||eventSources.map(source=>subjectFact(source,22)).find(Boolean)||''):'';
   const approvedSellerFields=['priority_offers','differentiation','proof_points','delivery_approach'].filter(key=>['user','accepted'].includes(context.sellerAnswerStatus?.[key])).map(key=>context.sellerAnswers?.[key]);

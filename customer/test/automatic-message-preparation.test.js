@@ -6,10 +6,10 @@ function harness(){
  let item={domain:'buyer.example',company:'Buyer',channel:'email',selectedPersonId:'sam',drafts:{emailSubject:'',emailBody:'',linkedinMessage:'Other channel preserved'},dossier:{domain:'buyer.example',company:'Buyer',selectedTrigger:null,people:[{id:'sam',name:'Sam Buyer',title:'Operations Director'}],evidence:[{url:'https://buyer.example/news',title:'Buyer announces a major new sorting plant investment',text:'Buyer is investing in a new sorting plant at the Northport mine.'}]}};
  let studio=S.normalize({mode:'professional',essentials:e}),workspace='w1',requests=[],renders=0,usable=true;
  const nodes=new Map(),q=id=>{if(!nodes.has(id))nodes.set(id,{textContent:'',disabled:false});return nodes.get(id);};
- const c={URL,AbortController,setTimeout,clearTimeout,LeadIntelMessageStudio:S,LeadIntelMessageEditor:E,LeadIntelOutreach:O,LeadIntelMessageFacts:F,LeadIntelMessageWorkspace:W,scriptGenerationRequest:0,studioGenerationBusy:false,messageTranslationBusy:false,messageFactResearchBusy:false,studioGenerationError:false,approvedFieldController:null,messageEditor:null,
+ const c={URL,AbortController,setTimeout,clearTimeout,LeadIntelMessageStudio:S,LeadIntelMessageEditor:E,LeadIntelOutreach:O,LeadIntelMessageFacts:F,LeadIntelMessageWorkspace:W,LeadIntelTriggerPreview:require('../trigger-preview.js'),scriptGenerationRequest:0,studioGenerationBusy:false,messageTranslationBusy:false,messageFactResearchBusy:false,studioGenerationError:false,approvedFieldController:null,messageEditor:null,
  DISCOVERY_META_KEY:'meta',handoffContact:{domain:'buyer.example',personId:'sam',channel:'email'},readJson:()=>({scriptBuyer:{workspaceId:workspace,domain:'buyer.example',personId:'sam',channel:'email'}}),currentItem:()=>item,readDraftEdits:()=>item,upsertItem:v=>{item=O.normalizeOutreachState({items:[v]}).items[0];},selectedCandidate:()=>({domain:item.domain,company:'Buyer'}),selectedContact:()=>item.dossier.people[0],readStudio:()=>studio,studioState:()=>studio,mainState:()=>({answers:{},answerStatus:{}}),crmBridge:()=>({workspace:{id:workspace}}),crmAuthenticated:()=>true,messageWorkspaceUsable:()=>usable,rankedBuyingTriggers:()=>F.candidates(item.dossier.evidence,{domain:item.domain,company:'Buyer'}),editorDraft:()=>E.workingDraft(item),renderAll:()=>renders++,renderMessageWorkspace(){},previewSelectedTrigger(){},cancelPendingScriptGeneration:()=>{c.scriptGenerationRequest++;c.approvedFieldController?.abort();},pendingMessageSelections:()=>false,q,toast(){},fetch:async(url,opts)=>new Promise(resolve=>requests.push({url,opts,resolve}))};
  vm.createContext(c);
- for(const [start,end] of [['function sourceBackedTrigger','// Prior drafts'],['async function chooseBuyingTrigger','function restorePreviousTriggerDraft'],['function studioMessageContext','function senderLinkedInFooter'],['function seedMandatoryEmail','function personalSlots']])vm.runInContext(source.slice(source.indexOf(start),source.indexOf(end)),c);
+ for(const [start,end] of [['function sourceBackedTrigger','// Prior drafts'],['async function chooseBuyingTrigger','function restorePreviousTriggerDraft'],['function studioMessageContext','function senderLinkedInFooter'],['function workingSuggestedSubject','function stripEmailSubjectHeader'],['function seedMandatoryEmail','function personalSlots']])vm.runInContext(source.slice(source.indexOf(start),source.indexOf(end)),c);
  return {c,q,requests,get item(){return item;},set item(v){item=v;},get studio(){return studio;},set studio(v){studio=v;},set workspace(v){workspace=v;},set usable(v){usable=v;},get renders(){return renders;},finish(fields){requests.at(-1).resolve({ok:true,json:async()=>({text:JSON.stringify(fields),provider:'test-provider'})});}};
 }
 test('selecting a verified official signal automatically prepares subject/body and does not save or send',async()=>{
@@ -84,4 +84,17 @@ test('failed field preparation replaces busy text with the actual error and pres
  assert.equal(h.c.studioGenerationBusy,false);assert.equal(h.c.studioGenerationError,true);
  assert.match(h.q('message-generation-status').textContent,/AI integration is unavailable/);assert.doesNotMatch(h.q('message-generation-status').textContent,/Preparing/);
  assert.equal(h.item.drafts.emailBody,'My unchanged email');
+});
+
+test('real combined Swedish heading and mine excerpt use the same project as the English trigger card',()=>{
+ const h=harness(),raw='Nytt sovringsverk framtidssäkrar produktionen i Gällivare LKAB satsar sex miljarder på ett nytt sovringsverk vid Malmbergsgruvan – en investering för att säkra stabil och effektiv produktion.';
+ h.item.dossier.evidence[0]={url:'https://buyer.example/news',title:'LKAB',text:raw};h.c.automaticallySelectBuyingTrigger();
+ const ctx=h.c.studioMessageContext(h.item);assert.match(ctx.trigger.summary,/Gällivare/);assert.match(ctx.trigger.excerpt,/Malmbergsgruvan/);assert.match(ctx.trigger.subjectSummary,/Malmberget/);
+ h.studio=S.normalize({mode:'curiosity',essentials:{...e,offer:'Drawing development, serial production manufacturing and installation'}});
+ for(const [mode,id] of [['curiosity','project'],['curiosity','success'],['friendly','hello'],['brutal','project'],['professional','relevance']]){
+ const studio=S.chooseSubject(S.normalize({mode,essentials:h.studio.essentials}),mode,id),subject=h.c.workingSuggestedSubject(studio,h.item,{company:'Buyer'},true);
+ assert.match(subject,/Malmberget/,mode+'/'+id);assert.doesNotMatch(subject,/Gällivare/,mode+'/'+id);
+ }
+ const snapshot=O.restoreCrmScriptSnapshot(O.buildCrmScriptSnapshot(h.item),'buyer.example');assert.equal(h.c.studioMessageContext(snapshot).trigger.subjectSummary,ctx.trigger.subjectSummary);assert.equal(snapshot.dossier.selectedTrigger.excerpt,h.item.dossier.selectedTrigger.excerpt);
+ const changed={...ctx,trigger:{...ctx.trigger,subjectSummary:'A new sorting plant at Riverport.'}};assert.notEqual(E.scope('w1',h.item,h.studio,ctx),E.scope('w1',h.item,h.studio,changed));
 });

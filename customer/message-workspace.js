@@ -133,7 +133,7 @@
     const source=active||rows[0]||null;
     if(source){
       const card=document.createElement('article');card.className='mw-trigger-choice mw-single-trigger';
-      const text=document.createElement('p');text.textContent=root.LeadIntelTriggerPreview?.summary(source,context.company)||String(source.summary||source.title||'');
+      const text=document.createElement('p');text.textContent=(source.url===context.trigger?.url&&context.trigger.subjectSummary)||root.LeadIntelTriggerPreview?.summary(source,context.company)||String(source.summary||source.title||'');
       const tools=document.createElement('div');tools.className='mw-trigger-actions';
       const status=document.createElement('small');
       const isSelected=source.url===context.trigger?.url;
