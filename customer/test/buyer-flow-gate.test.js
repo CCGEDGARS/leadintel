@@ -138,3 +138,13 @@ test('failed Messages initialization restores Buyers while preserving the saved 
  const h=harness();let focus;h.ctx.renderDiscoveryFocus=value=>{focus=value;};h.ctx.loadOutreachModules=async()=>{throw Error('Messages did not initialize');};
  assert.equal(await h.ctx.addBuyerToFlow('example.com',0),false);assert.equal(h.meta.activeJourneyStage,5);assert.equal(h.meta.visibleStep,5);assert.equal(focus,'buyers');assert.equal(h.meta.selectedEmailBuyer.personId,h.person.id);assert.equal(h.person.flowSelected,true);assert.equal(h.events.length,0);
 });
+
+
+test('a capacity failure can reopen only the exact previously saved and freshly verified email message',async()=>{
+ const h=harness();assert.equal(await h.ctx.addBuyerToFlow('example.com',0),true);const previous={...h.meta.scriptBuyer};const original=h.ctx.bridge;h.ctx.bridge=()=>({...original(),saveNow:async()=>{throw Error('Workspace exceeds 500 KB sync limit');}});
+ assert.equal(await h.ctx.continueBuyerMessages(),true);assert.deepEqual({...h.meta.scriptBuyer},previous);assert.equal(h.events.length,2);assert.equal(h.meta.activeJourneyStage,6);
+});
+test('capacity failures still block new recipients, select-only changes and revoked confirmations',async()=>{
+ for(const mode of ['new','select-only','revoked']){const h=harness();if(mode!=='new')await h.ctx.addBuyerToFlow('example.com',0);const original=h.ctx.bridge;h.ctx.bridge=()=>({...original(),saveNow:async()=>{throw Error('Workspace exceeds 500 KB sync limit');},...(mode==='revoked'?{getCrmCompany:async()=>({ok:true,contacts:[]})}:{})});const before=h.events.length;assert.equal(await h.ctx.addBuyerToFlow('example.com',0,{selectOnly:mode==='select-only'}),false);assert.equal(h.events.length,before);}
+});
+test('ordinary failed sync never reopens a previously saved message',async()=>{const h=harness();await h.ctx.addBuyerToFlow('example.com',0);const original=h.ctx.bridge;h.ctx.bridge=()=>({...original(),saveNow:async()=>{throw Error('Network request failed');}});assert.equal(await h.ctx.continueBuyerMessages(),false);assert.equal(h.events.length,1);});

@@ -1604,12 +1604,14 @@ async function addBuyerToFlow(domain,index,{scope='selected',button,selectOnly=f
   person.flowSelected=true;saveDiscovery();
   const choice={domain:canonicalDomain(domain),personId:person.id,contactId:contact.id,workspaceId,channel:'email',email:verifiedBuyerEmail(candidate,person,contact)};
   saveMeta(selectOnly?{...meta,selectedEmailBuyer:choice,activeJourneyStage:5,visibleStep:5}:{...meta,selectedEmailBuyer:choice,scriptBuyer:choice,activeJourneyStage:6,visibleStep:6});
-  let synced;try{synced=await bridge().saveNow({saveIntent:true,explicitSave:true});}catch{synced={saved:false};}
-  if(!synced?.saved||bridge()?.workspace?.id!==workspaceId){for(const [buyer,selected] of flags)buyer.flowSelected=selected;saveDiscovery();saveMeta(meta);showToast(bridge()?.conflict?'Synchronization conflict: recipient selection was not saved. Resolve the versions above; your local changes are preserved.':'Contact selection could not be saved. Retry.');return false;}
+  let synced;try{synced=await bridge().saveNow({saveIntent:true,explicitSave:true});}catch(error){synced={saved:false,error:String(error?.message||error)};}
+  const prior=meta.scriptBuyer;
+  const reopenExisting=!selectOnly&&!bridge()?.conflict&&bridge()?.workspace?.id===workspaceId&&/500 KB|sync limit/i.test(synced?.error||'')&&prior&&['domain','personId','contactId','workspaceId','channel','email'].every(key=>String(prior[key]||'')===String(choice[key]||''));
+  if((!synced?.saved&&!reopenExisting)||bridge()?.workspace?.id!==workspaceId){for(const [buyer,selected] of flags)buyer.flowSelected=selected;saveDiscovery();saveMeta(meta);showToast(bridge()?.conflict?'Synchronization conflict: recipient selection was not saved. Resolve the versions above; your local changes are preserved.':'Contact selection could not be saved. Retry.');return false;}
   if(selectOnly){renderAll();renderSelectedEmailBuyer({scroll:true});showToast(`${person.publicName||person.name} selected · Continue to Messages when ready`);return true;}
   try{await loadOutreachModules();}catch(error){saveMeta({...loadMeta(),activeJourneyStage:5,visibleStep:5});renderAll();renderDiscoveryFocus('buyers');showToast(error.message||'Messages could not load. Your recipient is saved; refresh and retry.');return false;}
   window.dispatchEvent(new CustomEvent('leadintel:buyer-for-scripts',{detail:choice}));
-  renderAll();return true;
+  renderAll();if(reopenExisting)showToast('Existing message opened locally · workspace sync remains blocked');return true;
 }
 async function startLinkedInBuyerMessage(domain,index){
   const workspaceId=bridge()?.workspace?.id,candidate=(discovery.selectedProspects||[]).find(row=>canonicalDomain(row.domain)===canonicalDomain(domain)),person=candidate?.people?.[index];
