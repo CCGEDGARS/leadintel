@@ -22,3 +22,14 @@ test('cancelled previews and late requests leave the working text untouched',asy
 test('a text change while rewriting invalidates the pending proposal',async()=>{const h=controllerHarness(),p=h.c.rewrite();h.draft={subject:'Subject',message:'New manual edit'};h.pending[0].resolve({subject:'Subject',message:'Stale'});await p;assert.equal(h.c.state().preview,null);assert.equal(h.draft.message,'New manual edit');});
 test('a preview cannot replace working text that changed after generation',async()=>{const h=controllerHarness(),p=h.c.rewrite();h.pending[0].resolve({subject:'Subject',message:'Preview version'});await p;h.draft={subject:'Subject',message:'Later local edit'};assert.equal(h.c.accept(),false);assert.equal(h.draft.message,'Later local edit');assert.equal(h.c.state().preview,null);});
 test('a failed CRM Save retains editing and reports failure without calling AI',async()=>{let draft={subject:'Exact',message:'Local draft'},calls=0;const c=E.createController({scope:()=> 'w1',read:()=>draft,usable:()=>true,apply:d=>{draft=d},save:async()=>({ok:true,localOnly:true}),rewrite:async()=>{calls++}});c.edit();assert.equal(await c.save(),false);assert.equal(c.state().editing,true);assert.match(c.state().error,/CRM save failed/);assert.equal(calls,0);});
+
+test('subject assistance changes only the subject and supports the existing undo boundary',async()=>{
+ let draft={subject:'Old subject',message:'Keep this exact body'},sent;
+ const c=E.createController({inlineRewrite:true,scope:()=> 'workspace|buyer|materials-v1',read:()=>draft,usable:()=>true,apply:d=>{draft=d},rewrite:async input=>{sent=input;return {subject:'New subject',message:input.source.message}}});
+ await c.rewrite('subject');assert.equal(sent.action,'subject');assert.deepEqual(draft,{subject:'New subject',message:'Keep this exact body'});assert.equal(c.state().canUndo,true);c.undo();assert.equal(draft.subject,'Old subject');
+});
+test('writing-assistant prompts distinguish shortening and subject-only authority without changing the original',()=>{
+ const original=A.originalText('professional'),source={subject:'Subject',message:'Working body'};
+ const subject=E.rewritePrompt(studio(),context,{source,action:'subject',attempt:1,avoid:[]});assert.match(subject.system,/Improve ONLY the subject/);assert.match(subject.system,/master or first tailored original/);
+ const shorter=E.rewritePrompt(studio(),context,{source,action:'shorten',attempt:1,avoid:[]});assert.match(shorter.system,/Shorten the current body/);assert.equal(A.originalText('professional'),original);
+});

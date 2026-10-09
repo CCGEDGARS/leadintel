@@ -281,3 +281,44 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #event-message-panel .event-message-guide ol{padding-left:20px}
 #event-message-panel .event-message-guide li{margin:9px 0}
 @media(max-width:720px){#message-studio .mw-layout{grid-template-columns:1fr;gap:0}#message-studio .mw-editor-actions button{font-size:12px;padding:10px 12px}#message-studio>#event-message-panel{padding:16px}}
+
+/* Practical writing workspace: a compact preparation rail and a readable editor. */
+#message-studio .mw-layout{grid-template-columns:minmax(260px,34%) minmax(0,1fr);gap:20px}
+#message-studio .mw-styles{grid-template-columns:1fr}
+#message-studio .mw-style:last-child{grid-column:auto}
+#message-studio .mw-style-manager{margin-top:14px;border-top:1px solid #e0e8e2;padding-top:12px;font-size:12px}
+#message-studio .mw-style-manager>summary{font-size:12px;font-weight:600;cursor:pointer;color:#315d4c}
+#message-studio .mw-writing-assistant{background:linear-gradient(135deg,#f1f7f3,#fff);border-color:#cddfd3}
+#message-studio .mw-writing-assistant .mw-section-heading{margin-bottom:12px}
+#message-studio .mw-writing-assistant small{display:block;font-size:11px;line-height:1.6;color:#687c6e;margin-top:12px}
+.mw-assistant-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#message-studio .mw-assistant-actions button{font-size:12px;padding:10px 8px;white-space:normal;min-height:40px}
+#message-studio .mw-assistant-actions #mw-rewrite-message{grid-column:1/-1;background:#2b6950;border-color:#2b6950;color:#fff}
+#message-studio .mw-tools-content>details{padding:12px;margin:0 0 9px}
+#message-studio .mw-tools-content>details:last-child{margin-bottom:0}
+#message-studio #mw-content-count{display:block;font-size:11px;font-weight:400;color:#718276;margin:5px 0 0 15px}
+#message-studio .mw-tool-help,.mw-content-empty{font-size:12px;line-height:1.65;color:#66786c;margin:12px 0}
+.mw-content-controls{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0}
+#message-studio .mw-content-controls button{font-size:11px;padding:7px 10px;min-height:32px}
+.mw-content-card{padding:12px;background:#fff;border:1px solid #dce6df;border-radius:9px;margin-top:10px;overflow-wrap:anywhere}
+#message-studio .mw-content-select{display:flex;gap:9px;align-items:flex-start;margin:0;cursor:pointer}
+.mw-content-select input{width:16px;height:16px;flex:none;margin-top:3px;accent-color:#2b6950}
+.mw-content-select strong{display:block;font-size:12px;line-height:1.5;color:#284b38}
+.mw-content-select small{display:block;font-size:10px;line-height:1.5;color:#76857b;margin-top:3px}
+.mw-content-card p{font-size:11px;line-height:1.6;color:#64756b;margin:9px 0}
+.mw-content-card .mw-content-controls{margin-bottom:0}
+#mw-content-form{margin-top:14px;padding-top:12px;border-top:1px solid #dce6df}
+#mw-content-form h4{font-size:13px;margin:0 0 12px}
+#message-studio #mw-content-form label{display:grid;gap:6px;font-size:12px;margin:10px 0}
+#message-studio #mw-content-form input,#message-studio #mw-content-form select,#message-studio #mw-content-form textarea{width:100%;box-sizing:border-box;border:1px solid #cddbd1;border-radius:7px;padding:9px;font:inherit;font-size:12px;background:#fff}
+#message-studio #mw-content-form textarea{resize:vertical;line-height:1.6}
+#mw-content-form small,#mw-content-status{font-size:11px;line-height:1.65;color:#5d7265;overflow-wrap:anywhere}
+.mw-content-delete{padding:10px;background:#fff6ef;border-radius:8px;margin-top:10px;font-size:11px;display:flex;gap:7px;flex-wrap:wrap}
+#message-studio #mw-settings .mw-value-proof{margin:12px 0 0;padding:12px}
+#step-6.message-workspace>#message-studio+.message-advanced{margin-top:20px;padding:15px 18px;background:#fafcfb;border:1px solid #dce5df;border-radius:12px;font-size:12px}
+#step-6.message-workspace>#message-studio+.message-advanced>summary{font-size:12px;font-weight:600;color:#52695a;cursor:pointer}
+#message-studio .mw-editor-actions{flex-wrap:nowrap;gap:5px}
+#message-studio .mw-editor-actions button{font-size:11px;padding:10px 7px}
+#message-studio #mw-approved-library .mw-approved-original pre{max-height:260px;overflow:auto}
+@media(min-width:1550px){#message-studio .mw-layout{grid-template-columns:minmax(280px,32%) minmax(0,1fr)}}
+@media(max-width:720px){#message-studio .mw-layout{grid-template-columns:1fr;gap:0}#message-studio .mw-editor-actions{flex-wrap:wrap}#message-studio .mw-editor-actions button{padding:10px 9px}.mw-assistant-actions{grid-template-columns:1fr 1fr}}

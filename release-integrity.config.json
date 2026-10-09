@@ -683,6 +683,48 @@
         "savedDraft:LeadIntelMessageEditor.savedDraft",
         "20261009-single-editor-v4"
       ]
+    },
+    {
+      "id": "practical-message-tools",
+      "type": "text",
+      "url": "/customer/message-workspace.js",
+      "status": 200,
+      "contains": [
+        "AI Writing Assistant",
+        "My content",
+        "Approved originals",
+        "Writing references",
+        "Add template",
+        "Custom style settings",
+        "mw-shorten-message",
+        "mw-improve-subject"
+      ],
+      "notContains": [
+        "mw-library-shortcuts",
+        "My writing style versions"
+      ]
+    },
+    {
+      "id": "content-materials-interface",
+      "type": "text",
+      "url": "/customer/content-materials.js",
+      "status": 200,
+      "contains": [
+        "/api/content-materials",
+        "expectedRevision",
+        "Use for this message",
+        "Selected content changed",
+        "Sign in to save and use your content"
+      ]
+    },
+    {
+      "id": "content-materials-private-storage",
+      "type": "text",
+      "url": "/api/content-materials?workspace_id=edgars-latvia",
+      "status": 401,
+      "contains": [
+        "Authentication required"
+      ]
     }
   ],
   "retry": {
