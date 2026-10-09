@@ -15,13 +15,13 @@ No AI instruction, research excerpt, generic copywriting heuristic, brand voice 
 | Core email personalization | Prepare only the six declared factual fields; deterministic code fills the pattern | Approved literals, order and first tailored original |
 | Subject selection | Use the existing selected approved subject pattern and supported variables | Literal wording and punctuation of the selected pattern |
 | Translation and editorial review | Natural grammar/idiom inside the corresponding source paragraph | English source, paragraph order/boundaries, signature layout, names, quantities and links |
-| Explicit Rewrite | Create a separate alternative preview only after the user invokes Rewrite | Master and first tailored original; working text until Use this version |
+| Explicit Rewrite | Replace the single working draft only after the user invokes Rewrite; provide Undo | Master, first tailored original and undo history; Save remains explicit |
 | Manual Edit | Preserve exactly what the user types in the working copy | Master and recoverable original/history |
 | AI Original | Compose freely within its separately selected length and fact/meeting rules | Core templates are unaffected |
 | Personal templates/styles | Use the deliberately selected personal pattern; its example claims still require evidence | System originals and workspace isolation |
 | LinkedIn | Use its own channel templates and limits | Do not compress an email original or import Brutal Honesty automatically |
 
-The Rewrite alternative may change wording and paragraph structure under the existing explicit-preview agreement. It is never a newly approved core template. Accepting it changes the working copy; Save, approval and sending remain separate actions. No template action authorizes sending.
+The user approved a single visible working script on 9 October 2026. Explicit Rewrite may change wording and paragraph structure in that working copy, with Undo available. It is never a newly approved core template. Save, approval and sending remain separate actions. No template action authorizes sending.
 
 ## Exact sequences and lengths
 
@@ -77,7 +77,7 @@ The core conversation is 20 minutes. The selected Zoom, Microsoft Teams or Googl
 
 ## Persistence, validation and limitations
 
-Master wording and the first tailored original are immutable. Manual edits, accepted rewrite previews and translated copies are separate working versions. Preserve original history and the selected trigger/source association through CRM save/reopen, synchronization and serialization. Source/workspace/buyer/style changes invalidate prepared-field fingerprints; a late AI response must not overwrite a manual edit or another context. Rendering, selecting a style or reloading must not silently replace an existing draft.
+Master wording and the first tailored original are immutable. Manual edits, explicit rewrites and translated copies are separate working versions. Preserve original history and the selected trigger/source association through CRM save/reopen, synchronization and serialization. Source/workspace/buyer/style changes invalidate prepared-field fingerprints; a late AI response must not overwrite a manual edit or another context. Rendering, selecting a style or reloading must not silently replace an existing draft.
 
 Deterministic checks enforce source assembly, fields/schema, numeric additions, approved links, body ceilings, translation layout and protected tokens in corresponding paragraphs. Prompts state the semantic rules. These checks do not prove that an arbitrary paraphrase has identical meaning or that every plain-text claim is true. Human review remains necessary; report that limitation instead of calling a numeric/layout check a semantic guarantee.
 
