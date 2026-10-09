@@ -45,7 +45,7 @@ test('four styles retain approved five-subject collections and legacy sender sel
  assert.equal(M.resolveApprovedSubject(M.chooseSubject(M.normalize({mode:'curiosity'},essentials),'curiosity','interrupt'),{},essentials),'If everything is on track, why talk?');
  assert.equal(M.resolveApprovedSubject(M.chooseSubject(M.normalize({mode:'friendly'},essentials),'friendly','together'),{},essentials),'What could we build together?');
  const project=M.chooseSubject(M.normalize({mode:'professional'},essentials),'professional','development');
- assert.equal(M.resolveApprovedSubject(project,{buyerCompany:'LKAB'},essentials),'A practical idea for LKAB');assert.equal(M.resolveApprovedSubject(project,{buyerCompany:'LKAB',trigger:{title:'Malmberget',verification:'source_verified'}},essentials),'Regarding Malmberget');
+ assert.equal(M.resolveApprovedSubject(project,{buyerCompany:'LKAB'},essentials),'Alex. StockCo');assert.equal(M.resolveApprovedSubject(project,{buyerCompany:'LKAB',trigger:{title:'Malmberget',verification:'source_verified'}},essentials),'Alex. StockCo');
 });
 
 test('generated email rejects unfilled sender and booking reference placeholders',()=>{

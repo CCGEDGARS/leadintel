@@ -19,7 +19,8 @@
    'Please choose a suitable time here: [Calendly link].',
    'Best regards,\nEdgars'
   ],
-  subjects:['A practical idea for {{buyerCompany}}','Regarding {{development}}','An opportunity to {{value}}','Could this help {{buyerCompany}}?','{{sender}}. {{company}}']
+  // Explicit user correction, 2026-10-09. Body paragraphs remain verbatim.
+  subjects:['Steel and installation for Malmberget','Edgars Untals. Ercon','Room for one more steel supplier?','Malmberget steel – who should I ask?','Malmberget: EXC2 or EXC3?']
  },
  curiosity:{
   subject:'Malmberget 2028: the steel behind the schedule',

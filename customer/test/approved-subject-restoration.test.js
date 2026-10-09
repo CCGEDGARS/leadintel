@@ -1,7 +1,7 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const M=require('../message-studio.js');
 test('original approval wording is visible separately from reusable NLP evidence fields',()=>{
  assert.equal(M.approvedSubjectsText('curiosity'),'1. Malmberget 2028: the steel behind the schedule\n2. Keep what works. Compare what’s possible.\n3. {{senderFullName}}. {{senderCompany}}\n4. If everything is on track, why talk?\n5. Malmberget 2028: another success story?');
- assert.deepEqual(M.professionalSubjects.map(t=>t.pattern),['A practical idea for {{buyerCompany}}','Regarding {{verifiedProjectOrExpansion}}','An opportunity to {{supportedBenefit}}','Could this help {{buyerCompany}}?','{{senderFullName}}. {{senderCompany}}']);
+ assert.deepEqual(M.professionalSubjects.map(t=>t.pattern),['{{subjectOffer}} for {{subjectProject}}','{{senderFullName}}. {{senderCompany}}','Room for one more {{supplierType}}?','{{subjectProject}} {{subjectMaterial}} – who should I ask?','{{subjectProject}}: {{technicalQuestion}}?']);
 });
 test('older approved selections migrate without consuming a personal slot, personal subjects stay intact',()=>{
  for(const [mode,id,subject] of [['professional','development','Regarding {{development}}'],['professional','benefit','An opportunity to {{value}}'],['friendly','partnership','{{company}}. A long-term partnership?'],['brutal','fit','{{buyerCompany}} — fit: {{fitScore}}/100']]){

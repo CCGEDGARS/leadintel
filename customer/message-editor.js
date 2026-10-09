@@ -95,6 +95,7 @@
   Object.assign(values,{referenceUrl,outcomeSummary:outcomeSummary(values.value),difference:style==='brutal'?String(e.difference||'').replace(/^Our team\b/,'Their team'):String(e.difference||'').replace(/^Their team\b/,'Our team'),meetingFormat:/\bNo slides\b/i.test(raw.meetingValue||'')?'No slides, no pressure.':''});
   // Optional evidence blocks are removed as complete paragraphs, never completed with example facts.
   if(protectedCore){
+   if(!trigger)body=body.replace('If this is relevant for {{development}}, would you be open','Would you be open');
    if(!trigger)body=body.split(/\n\n/).filter(p=>!p.includes('{{development}}')&&!p.includes('{{friendlyOpening}}')&&!p.startsWith('Does your role')).join('\n\n');
    if(!referenceUrl)body=body.split(/\n\n/).filter(p=>!p.includes('{{referenceUrl}}')).join('\n\n');
    if(!website)body=body.replace(' ( {{sellerWebsite}} )','');

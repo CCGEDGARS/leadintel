@@ -12,11 +12,11 @@ test('every approved generated subject is one clean line within 60 characters ac
 });
 test('approved English wording remains exact and source paragraphs never become subject facts',()=>{
  const s=M.chooseSubject(M.normalize({mode:'professional'},e),'professional','development');
- assert.equal(M.resolvedSubject(s,context,e),'Regarding Project Alpha');
- assert.equal(M.resolvedSubject(s,{...context,trigger:{...context.trigger,title:'A long source title '.repeat(10)}},e),'A practical idea for ClientCo');
+ assert.equal(M.resolvedSubject(s,context,e),'Alex Smith. LegalCo');
+ assert.equal(M.resolvedSubject(s,{...context,trigger:{...context.trigger,title:'A long source title '.repeat(10)}},e),'Alex Smith. LegalCo');
  const b=M.chooseSubject(s,'professional','benefit');
- assert.equal(M.resolvedSubject(b,context,e),'An opportunity to Reduce admin time');
- assert.equal(M.resolvedSubject(b,context,{...e,value:'We provide many services and reduce coordination burden across projects. '.repeat(5)}),'A practical idea for ClientCo');
+ assert.equal(M.resolvedSubject(b,context,e),'Alex Smith. LegalCo');
+ assert.equal(M.resolvedSubject(b,context,{...e,value:'We provide many services and reduce coordination burden across projects. '.repeat(5)}),'Alex Smith. LegalCo');
  for(const text of ['Error: provider unavailable','undefined','Subject: Something','{"error":"failed"}','A title\nProvider error'])assert.equal(M.subjectFact(text),'');
 });
 test('localized fixed wording preserves literal names and real scores, without importing English benefit prose',()=>{
@@ -24,12 +24,12 @@ test('localized fixed wording preserves literal names and real scores, without i
  assert.equal(M.resolvedSubject(s,{...context,subjectLanguage:'sv'},e),'Alex Smith deltar i samtalet.');
  s=M.chooseSubject(s,'brutal','fit');assert.equal(M.resolvedSubject(s,{...context,subjectLanguage:'lv'},e),'ClientCo — atbilstība: 87/100');
  const b=M.chooseSubject(M.normalize({mode:'professional'},e),'professional','benefit');
- assert.equal(M.resolvedSubject(b,{...context,subjectLanguage:'sv'},e),'En praktisk idé för ClientCo');
+ assert.equal(M.resolvedSubject(b,{...context,subjectLanguage:'sv'},e),'Alex Smith. LegalCo');
 });
 test('evidence-specific options can be disabled without substituting a different approved pattern',()=>{
  const s=M.chooseSubject(M.normalize({mode:'professional'},e),'professional','development');
  assert.equal(M.resolvedSubject(s,{buyerCompany:'ClientCo',strictSubjectChoice:true},e),null);
- assert.equal(M.subjectPattern('professional','development','sv'),'Angående {{verifiedProjectOrExpansion}}');
+ assert.equal(M.subjectPattern('professional','development','sv'),'{{subjectProject}} {{subjectMaterial}} – vem ska jag fråga?');
 });
 test('generated and translated subjects reject paragraphs, prefixes and overlong output before applying it',()=>{
  const message='Would you be open to a 20-minute Zoom conversation? '+e.calendly;
@@ -43,7 +43,7 @@ test('generated and translated subjects reject paragraphs, prefixes and overlong
 test('oversized generated subjects repair once with history while manual and approved drafts stay exact',()=>{
  const s=M.chooseSubject(M.normalize({mode:'professional'},e),'professional','development');
  const bad='Regarding '+context.trigger.summary,item={channel:'email',drafts:{emailSubject:bad,emailBody:'Exact body'},messageStudioDraft:{mode:'professional',editorOrigin:'tailored',selectedSubject:bad,essentials:s.essentials}};
- const repaired=E.repairSubject(item,s,context);assert.equal(repaired.drafts.emailSubject,'Regarding Project Alpha');assert.equal(repaired.drafts.emailBody,'Exact body');assert.equal(repaired.messageStudioDraft.subjectCorrections[0].subject,bad);
+ const repaired=E.repairSubject(item,s,context);assert.equal(repaired.drafts.emailSubject,'Alex Smith. LegalCo');assert.equal(repaired.drafts.emailBody,'Exact body');assert.equal(repaired.messageStudioDraft.subjectCorrections[0].subject,bad);
  assert.equal(E.repairSubject(repaired,s,context),repaired);
  const restored=JSON.parse(JSON.stringify(repaired));assert.equal(restored.messageStudioDraft.subjectCorrections[0].subject,bad);
  for(const preserved of [{...item,approved:true},{...item,messageStudioDraft:{...item.messageStudioDraft,editorOrigin:'manual'}},{...item,drafts:{...item.drafts,emailSubject:'My manual subject'}},{...item,messageStudioDraft:{...item.messageStudioDraft,essentials:{...s.essentials,company:'Previous workspace'}}}])assert.equal(E.repairSubject(preserved,s,context),preserved);
