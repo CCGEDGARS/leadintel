@@ -492,6 +492,33 @@
         "CRM save failed",
         "AI repeated an earlier version"
       ]
+    },
+    {
+      "id": "support-no-attachments",
+      "type": "text",
+      "url": "/customer/copilot-loader.js",
+      "status": 200,
+      "contains": [
+        "Support & Insights",
+        "20261009-support-readonly-v1"
+      ],
+      "notContains": [
+        "copilot-file-intelligence.js"
+      ]
+    },
+    {
+      "id": "support-read-only-ui",
+      "type": "text",
+      "url": "/customer/copilot-ui.js",
+      "status": 200,
+      "contains": [
+        "Support is read-only",
+        "Attachments are disabled"
+      ],
+      "notContains": [
+        "confirmCopilotAction",
+        "Confirm change"
+      ]
     }
   ],
   "retry": {

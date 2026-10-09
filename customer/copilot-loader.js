@@ -1,7 +1,7 @@
 function ensureEntryCss(){if(document.querySelector('link[data-leadintel-asset="copilot-css"]'))return;const link=document.createElement('link');link.rel='stylesheet';link.href='./copilot.css?v=20260909-file-intelligence-v1';link.dataset.leadintelAsset='copilot-css';document.head.appendChild(link);}
 function ensureEntry(){
   ensureEntryCss();let entry=document.getElementById('leadintel-copilot-entry');if(entry)return entry;const metric=document.querySelector('.progress-metric');if(!metric)return null;
-  entry=document.createElement('button');entry.type='button';entry.id='leadintel-copilot-entry';entry.className='leadintel-copilot-entry';entry.setAttribute('aria-haspopup','dialog');entry.innerHTML='<span class="copilot-entry-copy"><strong class="copilot-entry-title">Ask LeadIntel ✦</strong><small class="copilot-entry-subtitle">AI Commercial Copilot</small></span><span class="copilot-entry-badge" data-copilot-badge aria-live="polite"></span>';metric.after(entry);return entry;
+  entry=document.createElement('button');entry.type='button';entry.id='leadintel-copilot-entry';entry.className='leadintel-copilot-entry';entry.setAttribute('aria-haspopup','dialog');entry.innerHTML='<span class="copilot-entry-copy"><strong class="copilot-entry-title">Ask LeadIntel ✦</strong><small class="copilot-entry-subtitle">Support & Insights</small></span><span class="copilot-entry-badge" data-copilot-badge aria-live="polite"></span>';metric.after(entry);return entry;
 }
 function setStatus(message){const entry=ensureEntry();const badge=entry?.querySelector('[data-copilot-badge]');if(badge){badge.textContent=String(message||'').slice(0,80);badge.hidden=!badge.textContent;}}
 
@@ -18,8 +18,8 @@ export function createCopilotController({loadModules,open,onBusy=()=>{},onError=
   };
 }
 const openCopilot=createCopilotController({
-  loadModules:async()=>{const [api,context,ui,fileIntelligence]=await Promise.all([import('./copilot-api.js?v=20260908-copilot-polish-v1'),import('./copilot-context.js?v=20260924-friendly-workflow-labels-v1'),import('./copilot-ui.js?v=20260911-copilot-freshness-v1'),import('./copilot-file-intelligence.js?v=20260909-customer-file-intelligence-v1')]);return {api,context,ui,fileIntelligence};},
-  open:async({api,context,ui,fileIntelligence})=>{setStatus('');await ui.openCopilot?.({api,context});fileIntelligence.installCopilotFileIntelligence?.();},
+  loadModules:async()=>{const [api,context,ui]=await Promise.all([import('./copilot-api.js?v=20260908-copilot-polish-v1'),import('./copilot-context.js?v=20260924-friendly-workflow-labels-v1'),import('./copilot-ui.js?v=20261009-support-readonly-v1')]);return {api,context,ui};},
+  open:async({api,context,ui})=>{setStatus('');await ui.openCopilot?.({api,context});},
   onBusy:busy=>{const entry=ensureEntry();if(entry)entry.disabled=busy;},
   onError:cause=>{console.warn('Ask LeadIntel unavailable:',cause);setStatus('Copilot unavailable');}
 });

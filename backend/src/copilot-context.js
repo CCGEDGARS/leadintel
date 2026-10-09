@@ -1,3 +1,4 @@
+import {providerCreditIssue} from './provider-credit-health.js';
 import {getCustomerState} from './customer-state.js';
 import {assertModelSafe,redactProtectedData,sanitizeClientScreenContext} from './copilot-security.js';
 
@@ -54,6 +55,13 @@ async function integrationStatus(env,workspaceId){
   return items;
 }
 
+async function supportUsage(env,workspaceId){
+ const consumption=await allSafe(env,`SELECT entity_id AS provider,json_extract(metadata_json,'$.model') AS model,COUNT(*) AS requests,SUM(COALESCE(json_extract(metadata_json,'$.input_tokens'),0)) AS input_tokens,SUM(COALESCE(json_extract(metadata_json,'$.output_tokens'),0)) AS output_tokens FROM audit_events WHERE workspace_id=? AND event_type IN ('ai.generation_completed','ai.web_search_completed') AND created_at>=datetime('now','-30 days') GROUP BY entity_id,json_extract(metadata_json,'$.model') LIMIT 20`,workspaceId);
+ const rows=await allSafe(env,`SELECT provider,json_extract(metadata_json,'$.remaining_credits') AS remaining_credits,verified_at FROM workspace_service_integrations WHERE workspace_id=?`,workspaceId);
+ const issues=await Promise.all(['openai','anthropic','firecrawl','apollo','hunter'].map(async provider=>({provider,issue:await providerCreditIssue(env,workspaceId,provider)})));
+ return {period:'last 30 days',coverage:'Recorded AI generation/search only; incomplete total spend. Copilot tokens are recorded in message metadata. Subscriptions, enrichment, retries and currency conversion need separate evidence.',consumption:consumption.map(row=>({provider:clean(row.provider,80),model:clean(row.model,120),requests:safeNumber(row.requests),inputTokens:safeNumber(row.input_tokens),outputTokens:safeNumber(row.output_tokens)})),balances:rows.map(row=>({provider:clean(row.provider,80),remainingCredits:row.remaining_credits!=null&&Number.isFinite(Number(row.remaining_credits))?Number(row.remaining_credits):null,verifiedAt:clean(row.verified_at,80),live:false})),creditIssues:issues.filter(row=>row.issue),pricesVerified:false};
+}
+
 function discoverySummary(payload){
   const discovery=object(payload.discovery);const companies=Array.isArray(discovery.companies)?discovery.companies:[];
   const scores=companies.map(item=>safeNumber(item?.score?.total??item?.score)).filter(n=>n>0);
@@ -90,6 +98,7 @@ export async function buildCopilotWorkspaceContext(env,{workspaceId,currentScree
     crmSummary:await crmSummary(env,id),
     outreachSummary:outreachSummary(payload),
     integrationStatus:await integrationStatus(env,id),
+    supportUsage:await supportUsage(env,id),
     readiness:readiness(main,{icps,signals,markets})
   };
   const sanitized=redactProtectedData(context);

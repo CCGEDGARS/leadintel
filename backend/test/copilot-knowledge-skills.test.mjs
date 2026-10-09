@@ -20,7 +20,7 @@ test('technical knowledge covers current integrations and marks changing provide
   const current=technicalGuidanceFor('openai api key location');
   assert.equal(current.freshness,'verify');
   const future=technicalGuidanceFor('calendly zoom');
-  assert.match(future.summary,/planned|future|not yet|when available/i);
+  assert.match(future.summary,/supports Calendly connection/i);
   assert.equal(future.freshness,'verify');
   const serialized=JSON.stringify([current,future]);
   assert.doesNotMatch(serialized,/OAUTH_TOKEN_ENCRYPTION_KEY|APOLLO_API_KEY|SELECT .* FROM|\/api\/integrations/i);

@@ -11,7 +11,8 @@ export const COPILOT_SKILLS=Object.freeze([
   {id:'crm_pipeline',name:'CRM & Pipeline Coach',instruction:'Diagnose pipeline health, prioritization, stalled opportunities and next actions while respecting CRM lifecycle and suppression safeguards.'},
   {id:'performance',name:'Performance Analyst',instruction:'Interpret available reply, meeting and conversion outcomes and connect learning back to ICP, signal and messaging decisions.'},
   {id:'troubleshooting',name:'Troubleshooting',instruction:'Diagnose product and integration problems structurally. Separate observed facts from hypotheses and avoid guessing when current evidence is insufficient.'},
-  {id:'action_safety',name:'Action Safety',instruction:'Classify output as advice, recommendation, safe action proposal or prohibited action. Never execute a workspace mutation without an allowlisted proposal and explicit confirmation.'}
+  {id:'cost_planning',name:'Credits & Cost Planning',instruction:'Distinguish customer-owned billing from managed-provider issues and rate limits. Use supplied usage evidence; unknown or dated balances are not live balances. Verify official pricing, include clickable official billing links, and calculate scenarios with explicit workload, units, currency, subscriptions, token/search/enrichment costs and retry assumptions. Never invent remaining credits or exact spend.'},
+  {id:'action_safety',name:'Action Safety',instruction:'Provide advice only. Never propose executable actions, code, configuration changes, exports or app duplication; support is read-only.'}
 ]);
 
 const KNOWN=new Map(COPILOT_SKILLS.map(skill=>[skill.id,skill]));
@@ -30,6 +31,7 @@ export function routeCopilotSkills(question,context={}){
   if(/outreach|email|message|follow.?up|objection|personalization/.test(q))add(selected,'outreach');
   if(/crm|pipeline|stalled|stage|opportunity/.test(q))add(selected,'crm_pipeline');
   if(/performance|conversion|reply rate|meeting rate|results/.test(q))add(selected,'performance');
+  if(/credits?|billing|balance|cost|expenses?|budget|forecast|predict|top.?up/.test(q))add(selected,'cost_planning','technical_setup','troubleshooting');
   if(/error|failed|not working|problem|why can.?t|diagnose/.test(q))add(selected,'troubleshooting');
   if(/add|update|apply|change|edit|set|remove|execute/.test(q))add(selected,'action_safety');
   if(!selected.size)add(selected,Number(context?.screen?.step)>=4?'workspace_diagnostic':'product_help');

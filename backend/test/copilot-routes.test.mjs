@@ -45,3 +45,20 @@ sqliteTest('chat persists bounded conversation and returns normalized safe answe
   assert.equal(body.answer,'Safe answer');assert.ok(body.conversation_id);assert.equal(db.raw.prepare(`SELECT COUNT(*) AS n FROM copilot_messages WHERE workspace_id='w1' AND conversation_id=?`).get(body.conversation_id).n,2);
   assert.doesNotMatch(JSON.stringify(body),/system prompt|encrypted_api_key|SECRET/i);
 });
+
+sqliteTest('support blocks stale action confirmations and file payloads server-side',async()=>{
+ const {env,token}=await fixture();
+ let response=await handleCopilotRoute(req('/api/copilot/actions/old/confirm?workspace_id=w1',{method:'POST',token,body:{}}),env,{});
+ assert.equal(response.status,403);assert.equal((await response.json()).code,'SUPPORT_READ_ONLY');
+ response=await handleCopilotRoute(req('/api/copilot/chat?workspace_id=w1',{method:'POST',token,body:{message:'hello',files:[{name:'secret.csv'}]}}),env,{});
+ assert.equal(response.status,400);
+ response=await handleCopilotRoute(new Request('https://example.com/api/copilot/chat?workspace_id=w1',{method:'POST',headers:{Cookie:`leadintel_session=${token}`,'Content-Type':'multipart/form-data; boundary=x'},body:'file'}),env,{});
+ assert.equal(response.status,415);
+});
+
+sqliteTest('support limits paid reasoning before writing another chat request',async()=>{
+ const {env,token,db}=await fixture();db.raw.prepare(`INSERT INTO copilot_conversations(id,workspace_id,title) VALUES('busy','w1','Support')`).run();
+ for(let i=0;i<10;i++)db.raw.prepare(`INSERT INTO copilot_messages(id,workspace_id,conversation_id,user_id,role,content) VALUES(?,'w1','busy','u1','user','Help')`).run(`m-${i}`);
+ const response=await handleCopilotRoute(req('/api/copilot/chat?workspace_id=w1',{method:'POST',token,body:{message:'Help'}}),env,{});
+ assert.equal(response.status,429);assert.equal(db.raw.prepare('SELECT COUNT(*) AS n FROM copilot_messages').get().n,10);
+});

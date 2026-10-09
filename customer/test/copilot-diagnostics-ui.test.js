@@ -10,10 +10,9 @@ test('diagnostics expose Info Improve and Important without auto-opening the dra
   assert.doesNotMatch(source,/unreadImportant[^\n]{0,120}openCopilot\s*\(/);
 });
 
-test('proposal preview visibly separates before and after state',()=>{
-  assert.match(source,/Before/);
-  assert.match(source,/After/);
-  assert.match(source,/preview/);
+test('support clears proposals without displaying mutation controls',()=>{
+ assert.match(source,/function renderProposals\(\)/);
+ assert.doesNotMatch(source,/Confirm change|confirmCopilotAction|preview\?\.after/);
 });
 
 test('important diagnostics can update the entry badge without forcing model work',()=>{

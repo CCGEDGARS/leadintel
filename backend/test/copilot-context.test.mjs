@@ -42,7 +42,7 @@ test('context uses authoritative server workspace state and ignores injected cli
   assert.equal(context.company.website,'https://safe.example');
   assert.notEqual(context.profile.company,'Injected Co');
   assert.equal(context.screen.step,4);assert.equal(context.screen.label,'Market Strategy');
-  assert.deepEqual(Object.keys(context).sort(),['company','crmSummary','discoverySummary','icps','integrationStatus','markets','outreachSummary','profile','readiness','research','screen','signals','workspace'].sort());
+  assert.deepEqual(Object.keys(context).sort(),['company','crmSummary','discoverySummary','icps','integrationStatus','markets','outreachSummary','profile','readiness','research','screen','signals','supportUsage','workspace'].sort());
 });
 
 test('context summarizes CRM/discovery/outreach instead of dumping contact or message bodies',async()=>{

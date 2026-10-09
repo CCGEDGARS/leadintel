@@ -1,4 +1,4 @@
-export const COPILOT_KNOWLEDGE_VERSION='2026-09-08-v1';
+export const COPILOT_KNOWLEDGE_VERSION='2026-10-09-support-v2';
 
 const STEPS=Object.freeze({
   1:{step:1,title:'Step 1 · Company & Market',freshness:'stable',summary:'Define the company LeadIntel is analyzing and the geographic or commercial markets where opportunities should be found.',guidance:['Use the public company website as primary evidence.','Select at least one target market before moving into commercial intelligence.','Additional links and company materials improve precision but are optional.']},
@@ -15,7 +15,7 @@ const TECH=Object.freeze({
   apollo:{topic:'Apollo',freshness:'stable',summary:'Apollo supports decision-maker discovery and paid contact enrichment. LeadIntel keeps enrichment deliberate so credits are spent only after qualification and user-selected actions.',guidance:['Configure credentials only in the supported integration settings.','Company and role matching should be established before paid enrichment.','Current Apollo account screens, credit rules and API-key locations should be freshly verified when needed.']},
   firecrawl:{topic:'Firecrawl',freshness:'stable',summary:'Firecrawl is a web-research and extraction provider used by LeadIntel for public-source intelligence, with customer-owned credentials or the supported managed fallback where configured.',guidance:['Research requests are bounded and workspace scoped.','Use public sources and preserve source provenance.','Current provider limits and dashboard locations should be freshly verified when asked.']},
   gmail:{topic:'Gmail',freshness:'stable',summary:'Gmail connects through Google authorization so LeadIntel can send approved outreach and read relevant replies under the workspace delivery safeguards.',guidance:['The workspace owner controls connection and disconnection.','LeadIntel does not expose OAuth refresh tokens to the browser or Copilot.','Automatic delivery remains subject to send limits, windows, pause and emergency-stop controls.']},
-  calendly_zoom:{topic:'Calendly / Zoom',freshness:'verify',summary:'Calendly and Zoom are planned/future meeting-flow integrations in the current LeadIntel roadmap; treat exact connection steps and availability as current-state information that must be verified before promising functionality.',guidance:['Do not claim the integration is active unless the workspace shows it as connected.','When implemented, meeting actions must follow explicit permissions and existing outreach safeguards.']}
+  calendly_zoom:{topic:'Calendly / Zoom',freshness:'verify',summary:'LeadIntel supports Calendly connection and booking-event synchronization. Zoom meeting availability depends on the user’s Calendly event setup; do not claim a direct Zoom connection. Verify the workspace connection before promising functionality.',guidance:['Do not claim the integration is active unless the workspace shows it as connected.','When implemented, meeting actions must follow explicit permissions and existing outreach safeguards.']}
 });
 
 export function productKnowledgeFor({step,topic}={}){
@@ -38,3 +38,23 @@ export function technicalGuidanceFor(topic){
   const changing=/api\s*key.*(?:where|location|create|get)|pricing|price|limit|quota|dashboard|current|latest/.test(q);
   return {...entry,freshness:changing?'verify':entry.freshness,guidance:[...entry.guidance]};
 }
+
+export function supportKnowledge(){return {
+ version:COPILOT_KNOWLEDGE_VERSION, steps:Object.values(STEPS), integrations:Object.values(TECH),
+ rules:[
+ 'Profile → Companies → Buyers → Triggers → Messages → CRM is a connected workflow. Reference customers describe buyers, not the seller.',
+ 'Buyer research presents a candidate pool and four detailed recommendations, targeting two executive and two purchasing/project decision-makers where evidence supports them. Unknown names or contact details stay unknown.',
+ 'Confirm LinkedIn lets the user check a profile before proceeding to a LinkedIn message. Guessed emails remain unverified; do not describe them as safe verified addresses.',
+ 'Messages use the seller profile, selected company, buyer and sourced trigger. A trigger supports relevance, not proof of buying intent.',
+ 'Save retains a draft; Edit permits manual changes; Rewrite requests a different AI version; Restore original returns to the tailored original. Subject choices use the approved short subjects in the selected language.',
+ 'Sender identity, credentials, phone and email belong to the active workspace. Never substitute another customer’s details.',
+ 'CRM preserves history when a company is removed from the active pipeline. Archive is reversible; suppression blocks outbound eligibility. Script approval is not permission to send.',
+ 'Save workspace before asking for personalized diagnostics; unsaved changes may not match the server snapshot.',
+ 'No attachments, code execution, configuration changes, exports or database access through support. Unknown errors need a sanitized support reference.',
+ 'Use only supplied integration evidence for active capabilities. Current pricing and plan limits require fresh official verification.'
+ ],links:[
+ {provider:'openai',title:'OpenAI API billing',url:'https://platform.openai.com/settings/organization/billing/overview'},
+ {provider:'firecrawl',title:'Firecrawl account and credits',url:'https://www.firecrawl.dev/app'},
+ {provider:'apollo',title:'Apollo account and billing',url:'https://app.apollo.io/'},
+ {provider:'openai',title:'OpenAI service status',url:'https://status.openai.com/'}
+ ]};}

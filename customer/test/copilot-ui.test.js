@@ -34,9 +34,9 @@ test('chat uses safe screen context without preset prompt chips',()=>{
 });
 
 test('copilot introduces itself before workspace checks',()=>{
-  assert.match(source,/Your AI commercial copilot\./);
+  assert.match(source,/Your support and insights assistant\./);
   assert.match(source,/understands your LeadIntel workspace/i);
-  assert.match(source,/nothing is changed without your confirmation/i);
+  assert.match(source,/Support is read-only/i);
   const introIndex=source.indexOf('copilot-intro');
   const diagnosticsIndex=source.indexOf('copilot-diagnostics');
   assert.ok(introIndex>=0&&diagnosticsIndex>=0&&introIndex<diagnosticsIndex,'intro must be created before diagnostics');
@@ -49,29 +49,36 @@ test('composer is a full-width vertical layout with send below the textarea',()=
 });
 
 test('sidebar entry is a premium branded copilot control',()=>{
-  assert.match(loader,/AI Commercial Copilot/);
+  assert.match(loader,/Support & Insights/);
   assert.match(css,/\.leadintel-copilot-entry\{[^}]*border-radius\s*:\s*(1[4-9]|[2-9][0-9])px/s);
   assert.match(css,/\.leadintel-copilot-entry\{[^}]*background\s*:\s*(linear-gradient|radial-gradient)/s);
   assert.match(css,/\.leadintel-copilot-entry\{[^}]*box-shadow/s);
 });
 
-test('action proposals require explicit confirm or reject and use a fresh idempotency key',()=>{
-  assert.match(source,/Confirm change/);
-  assert.match(source,/Reject/);
-  assert.match(source,/crypto\.randomUUID/);
-  assert.match(source,/confirmCopilotAction/);
-  assert.match(source,/rejectCopilotAction/);
-  assert.doesNotMatch(source,/confirmCopilotAction\([^)]*\)\s*;?\s*$/m);
-});
-
-test('successful confirmed actions refresh authoritative workspace state and conflicts remain visible',()=>{
-  assert.match(source,/leadintel:copilot-action-confirmed/);
-  assert.match(source,/location\.reload|fetchWorkspaceState|saveNow/);
-  assert.match(source,/409|conflict/i);
+test('support never renders or invokes configuration actions',()=>{
+ assert.doesNotMatch(source,/Confirm change|confirmCopilotAction|rejectCopilotAction|location\.reload/);
+ assert.match(source,/Attachments are disabled/);
+ assert.match(source,/event\.preventDefault/);
 });
 
 test('copilot CSS is responsive without taking over the main workspace',()=>{
   assert.match(css,/width\s*:\s*min\(/);
   assert.match(css,/@media\s*\(max-width/);
   assert.match(css,/z-index/);
+});
+
+test('support drawer blocks file paste and ignores malicious action proposals at runtime',async()=>{
+ const {JSDOM}=await import('jsdom');
+ const dom=new JSDOM('<button id="leadintel-copilot-entry"></button>');
+ const prior={window:globalThis.window,document:globalThis.document};globalThis.window=dom.window;globalThis.document=dom.window.document;
+ try{
+  const ui=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+  let mutations=0;
+  const panel=await ui.openCopilot({context:{currentCopilotScreenContext:()=>({step:6})},api:{sendCopilotMessage:async()=>({answer:'Safe help',sources:[{title:'Billing',url:'https://platform.openai.com/settings/organization/billing/overview'},{title:'Bad',url:'javascript:alert(1)'}],action_proposals:[{id:'evil',action_type:'signal.update'}]}),confirmCopilotAction:async()=>{mutations++;}}});
+  assert.equal(panel.querySelector('input[type=file]'),null);
+  const event=new dom.window.Event('paste',{bubbles:true,cancelable:true});Object.defineProperty(event,'clipboardData',{value:{files:[{name:'secret.csv'}]}});panel.dispatchEvent(event);assert.equal(event.defaultPrevented,true);
+  panel.querySelector('textarea').value='Help with credits';panel.querySelector('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(mutations,0);assert.equal(panel.querySelector('.copilot-confirm'),null);assert.equal(panel.querySelectorAll('.copilot-source').length,1);assert.equal(panel.querySelector('.copilot-source').rel,'noopener noreferrer');
+ }finally{globalThis.window=prior.window;globalThis.document=prior.document;dom.window.close();}
 });
