@@ -61,6 +61,7 @@ const boundedDiscoveryRuntime = [
   'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
   'const DISCOVERY_RUN_TIMEOUT_MIN_MS=120000;',
   'function discoveryRunTimeoutMs(',
+  'async function withDiscoveryDeadline( const firstPool= const fitCache=new Map(); Checking purchasing fit maxDurationMs:DISCOVERY_REQUEST_TIMEOUT_MS*2 Completed evidence was kept.',
   'function ensureDiscoveryMounted(){}',
   'id="clear-company-results">Clear search results',
   'function clearCompanySearchResults(){}',
@@ -146,6 +147,7 @@ test('production proof blocks a Discovery runtime that performs hidden-stage sta
         'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
         'const DISCOVERY_RUN_TIMEOUT_MIN_MS=120000;',
         'function discoveryRunTimeoutMs(',
+  'async function withDiscoveryDeadline( const firstPool= const fitCache=new Map(); Checking purchasing fit maxDurationMs:DISCOVERY_REQUEST_TIMEOUT_MS*2 Completed evidence was kept.',
         'window.LeadIntelDiscoveryUI={open:openDiscoveryFromHandoff};',
         'initDiscoveryWhenReady();'
       ].join('\n')

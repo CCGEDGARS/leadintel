@@ -23,16 +23,21 @@
     }
     return [...urls.values()].sort((a,b)=>b.score-a.score||a.url.localeCompare(b.url)).slice(0,Math.max(0,Math.min(6,limit))).map(x=>x.url);
   }
-  async function collectWebsiteEvidence({website,purpose='company',maxPages=5,fetchImpl=globalThis.fetch,signal}={}){
+  async function collectWebsiteEvidence({website,purpose='company',maxPages=5,fetchImpl=globalThis.fetch,signal,maxDurationMs=0}={}){
     const domain=host(website);if(!domain)throw new Error('A company website is required');if(signal?.aborted)throw signal.reason||Object.assign(new Error('Research cancelled'),{name:'AbortError'});
+    const parentSignal=signal,budgetController=new AbortController();
+    const abortParent=()=>budgetController.abort(parentSignal.reason);if(parentSignal?.aborted)abortParent();else parentSignal?.addEventListener('abort',abortParent,{once:true});
+    const budgetTimer=maxDurationMs>0?setTimeout(()=>budgetController.abort(new DOMException('Company website check deadline reached','TimeoutError')),maxDurationMs):null;
+    signal=budgetController.signal;
     const pages=[],issues=[];
+    try{
     async function read(url){
       const controller=new AbortController(),abort=()=>controller.abort(signal?.reason);
       if(signal?.aborted)abort();else signal?.addEventListener('abort',abort,{once:true});
       const timer=setTimeout(()=>controller.abort(),25000);let stop;const cancelled=new Promise((_,reject)=>{stop=()=>reject(controller.signal.reason||Object.assign(new Error('Research cancelled'),{name:'AbortError'}));if(controller.signal.aborted)stop();else controller.signal.addEventListener('abort',stop,{once:true});});
       try{
         const response=await Promise.race([fetchImpl(`${PROXY}/firecrawl-scrape`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,formats:['markdown','links'],onlyMainContent:purpose!=='buyers',timeout:25000}),signal:controller.signal}),cancelled]);
-        const payload=await Promise.race([response.json().catch(()=>({})),cancelled]);if(!response.ok)throw new Error(`Website extraction failed (${response.status})`);
+        const payload=await Promise.race([response.json().catch(()=>({})),cancelled]);if(!response.ok)throw Object.assign(new Error(`Website extraction failed (${response.status})`),{status:response.status});
         const data=payload.data||payload,actual=data.metadata?.sourceURL||data.metadata?.url||url;
         if(host(actual)!==domain)throw new Error('Website redirected outside the company domain');
         const text=String(data.markdown||data.content||'').trim().slice(0,60000);
@@ -44,14 +49,16 @@
     const pageLimit=Math.max(1,Math.min(8,Number(maxPages)||5));
     const visited=new Set([home.url.replace(/\/$/,'')]),queue=selectInternalLinks(home,home.url,purpose,6).map(url=>({url,depth:1}));
     while(queue.length&&pages.length<pageLimit&&visited.size<pageLimit+3){
-      if(signal?.aborted)throw signal.reason||Object.assign(new Error('Research cancelled'),{name:'AbortError'});
+      if(signal?.aborted)break;
       const next=queue.shift(),key=next.url.replace(/\/$/,'');if(visited.has(key))continue;visited.add(key);
       try{const page=await read(next.url);pages.push(page);
         if(next.depth<2){const links=selectInternalLinks(page,page.url,purpose,6).filter(url=>!visited.has(url.replace(/\/$/,'')));queue.unshift(...links.map(url=>({url,depth:next.depth+1})));}
       }catch(error){issues.push({url:next.url,reason:clean(error.message)});}
     }
-    if(signal?.aborted)throw signal.reason||Object.assign(new Error('Research cancelled'),{name:'AbortError'});
+    if(parentSignal?.aborted)throw parentSignal.reason||Object.assign(new Error('Research cancelled'),{name:'AbortError'});
+    if(signal.aborted&&!issues.length)issues.push({url:website,reason:'Company website check deadline reached'});
     return {domain,pages,issues,coverage:{pagesRead:pages.length,pagesPlanned:visited.size,partial:issues.length>0}};
+    }finally{clearTimeout(budgetTimer);parentSignal?.removeEventListener('abort',abortParent);}
   }
   function selectEvidenceText(text,budget){
     const blocks=String(text||'').split(/\n+/).map(clean).filter(Boolean);

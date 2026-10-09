@@ -616,6 +616,41 @@
         "Translation changed paragraph structure or signature spacing",
         "Translation moved protected facts between paragraphs"
       ]
+    },
+    {
+      "id": "company-research-deadlines",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "async function withDiscoveryDeadline(",
+        "const firstPool=",
+        "const fitCache=new Map();",
+        "Checking purchasing fit",
+        "maxDurationMs:DISCOVERY_REQUEST_TIMEOUT_MS*2",
+        "Completed evidence was kept."
+      ]
+    },
+    {
+      "id": "company-fit-batch-preservation",
+      "type": "text",
+      "url": "/customer/discovery-engine.js",
+      "status": 200,
+      "contains": [
+        "async function researchBuyerFit(candidates=[],profile={},generate,{signal,onProgress,onFailure,concurrency=2}={})",
+        "out[index]=batch.map(candidate=>({...candidate,buyerFit:undefined}))"
+      ]
+    },
+    {
+      "id": "company-website-duration",
+      "type": "text",
+      "url": "/customer/first-party-research.js",
+      "status": 200,
+      "contains": [
+        "maxDurationMs=0",
+        "Company website check deadline reached",
+        "if(parentSignal?.aborted)throw parentSignal.reason"
+      ]
     }
   ],
   "retry": {

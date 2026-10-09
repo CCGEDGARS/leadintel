@@ -63,3 +63,11 @@ test('country selector follows a discovered English page to product evidence wit
  assert.ok(seen.includes('https://equipment.example/en/products'));assert.equal(result.pages.length,3);assert.equal(new Set(seen).size,seen.length);
 });
 test('product evidence beyond long navigation survives the bounded prompt budget',()=>{const text=Array.from({length:100},(_,i)=>`[Country ${i}](/region-${i})`).join('\n')+'\nWe manufacture hydraulic cranes and welded steel assemblies for industrial machinery.';const bounded=R.boundedSources([{url:'https://example.com/products',text}],180);assert.match(bounded[0].text,/manufacture hydraulic cranes/);assert.ok(bounded[0].text.length<=180);});
+
+test('a bounded website check retains its readable home when an internal page never resolves',async()=>{
+ const seen=[];const result=await R.collectWebsiteEvidence({website:'https://company.se/',purpose:'verification',maxPages:3,maxDurationMs:15,fetchImpl:async(_,options)=>{
+  const url=JSON.parse(options.body).url;seen.push(url);if(url!=='https://company.se/')return new Promise(()=>{});
+  return {ok:true,json:async()=>({data:{markdown:evidence,links:['/products','/contact'],metadata:{sourceURL:url}}})};
+ }});
+ assert.equal(result.pages.length,1);assert.equal(result.pages[0].url,'https://company.se/');assert.equal(result.coverage.partial,true);assert.equal(seen.length,2);
+});
