@@ -11,7 +11,7 @@ test('English original UI renders the exact approved original read-only',()=>{
  const body=w.document.getElementById('original-script-body');assert.equal(body.value,M.originalText('brutal'));assert.equal(body.readOnly,true);assert.equal(w.document.getElementById('original-script-save').hidden,true);assert.equal(w.document.getElementById('original-script-unlock').hidden,true);dom.window.close();
 });
 test('protected Brutal original exactly preserves the supplied script, separate from reusable generation',()=>{
- const exact=fs.readFileSync(require.resolve('../../docs/templates/brutal-honesty-approved-2026-10-08.txt'),'utf8').trimEnd();
+ const exact=require('../approved-reference-scripts.js').originalText('brutal');assert.match(exact,/20-minute Zoom/);
  assert.equal(M.originalText('brutal','email'),exact);
  const s=M.normalize({mode:'brutal'},e),t=s.templates.find(t=>t.id==='brutal');
  assert.equal(t.subject,'LeadIntel. On behalf of {{sender}}');assert.match(t.body,/\{\{senderLinkedInUrl\}\}/);
@@ -22,8 +22,8 @@ test('protected Brutal original exactly preserves the supplied script, separate 
 });
 test('sender LinkedIn profile is supplied from current context and arbitrary links stay blocked',()=>{
  const url='https://www.linkedin.com/in/alex-lane/',s=M.normalize({mode:'brutal'},e);
- const draft={subject:'LeadIntel. On behalf of Alex Lane',message:'30-minute Zoom '+e.calendly+' '+url};
+ const draft={subject:'LeadIntel. On behalf of Alex Lane',message:'20-minute Zoom '+e.calendly+' '+url};
  assert.equal(M.parse(JSON.stringify(draft),e,{studio:s,context:{senderLinkedInUrl:url}}).message,draft.message);
- for(const unsafe of ['https://linkedin.com.evil.test/in/alex/','javascript:alert(1)','https://www.linkedin.com/in/someone-else/'])assert.throws(()=>M.parse(JSON.stringify({...draft,message:'30-minute Zoom '+e.calendly+' '+unsafe}),e,{studio:s,context:{senderLinkedInUrl:url}}));
+ for(const unsafe of ['https://linkedin.com.evil.test/in/alex/','javascript:alert(1)','https://www.linkedin.com/in/someone-else/'])assert.throws(()=>M.parse(JSON.stringify({...draft,message:'20-minute Zoom '+e.calendly+' '+unsafe}),e,{studio:s,context:{senderLinkedInUrl:url}}));
  assert.equal(JSON.parse(M.prompt(s,{senderLinkedInUrl:'https://evil.test/in/alex/'}).prompt).context.senderLinkedInUrl,'');
 });

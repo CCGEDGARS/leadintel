@@ -171,5 +171,5 @@ test('outreach UI uses one official scrape and two-search hard cap without auto-
   assert.match(ui,/firecrawl-scrape/);
   assert.match(ui,/firecrawl-search/);
   assert.match(ui,/LeadIntelOutreach/);
-  assert.doesNotMatch(ui,/gmail|sendEmail|send-message|linkedin.*post/i);
+  assert.match(ui,/q\('mw-send-now'\)\?\.addEventListener\('click'/);assert.match(ui,/if\(!item\?\.approved\|\|item.channel!=='email'\)/);assert.doesNotMatch(ui,/function initOutreach\(\)[^\n]*sendCurrentApprovedEmail\(\)/);
 });

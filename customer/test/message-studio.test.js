@@ -34,21 +34,18 @@ test('restored booking placeholders use only the active workspace valid event li
  const existing='Use https://calendly.com/another/meeting';assert.equal(M.resolveBookingPlaceholder(existing,'https://calendly.com/sender/meeting'),existing);
 });
 
-test('four styles have separate five-subject collections with a common sender-company default',()=>{
+test('four styles retain approved five-subject collections and legacy sender selections migrate',()=>{
  const groups=['professional','curiosity','friendly','brutal'].map(style=>M.subjectsFor(style));
- for(const group of groups){assert.equal(group.length,5);assert.equal(group[0].id,'sender');assert.equal(group[0].pattern,'{{sender}}. {{company}}');assert.ok(group.every(x=>x.id!=='introduction'));}
- assert.equal(new Set(groups.map(g=>g[1].pattern)).size,4);
- assert.equal(M.originalText('professional','email').includes('Hi Joakim,'),true);
- const base=M.normalize({},essentials);
+ for(const group of groups){assert.equal(group.length,5);assert.ok(group.every(Object.isFrozen));assert.equal(group.find(x=>x.id==='introduction').pattern,'{{senderFullName}}. {{senderCompany}}');}
+ assert.equal(new Set(groups.map(g=>g[0].pattern)).size,4);
+ assert.ok(M.originalText('professional','email').includes('Hi Joakim,'));
  for(const style of ['professional','curiosity','friendly','brutal']){
-   const selected=M.normalize({...base,mode:style},essentials);
-   assert.equal(selected.subjectChoices[style],'sender');
-   assert.equal(M.resolveApprovedSubject(selected,{buyerCompany:'LKAB'},essentials),'Alex. StockCo');
+  const selected=M.normalize({mode:style,subjectChoices:{[style]:'sender'}},essentials);assert.equal(selected.subjectChoices[style],'introduction');assert.equal(M.resolveApprovedSubject(selected,{buyerCompany:'LKAB'},essentials),'Alex. StockCo');
  }
- assert.equal(M.resolveApprovedSubject(M.chooseSubject({...base,mode:'curiosity'},'curiosity','role'),{},essentials),'Are you in charge?');
- assert.equal(M.resolveApprovedSubject(M.chooseSubject({...base,mode:'friendly'},'friendly','together'),{},essentials),'What could we build together?');
- assert.equal(M.resolveApprovedSubject(M.chooseSubject({...base,mode:'professional'},'professional','project'),{buyerCompany:'LKAB'},essentials),'A practical idea for LKAB');
- assert.equal(M.resolveApprovedSubject(M.chooseSubject({...base,mode:'professional'},'professional','project'),{buyerCompany:'LKAB',trigger:{title:'Malmberget',verification:'source_verified'}},essentials),'Regarding Malmberget');
+ assert.equal(M.resolveApprovedSubject(M.chooseSubject(M.normalize({mode:'curiosity'},essentials),'curiosity','interrupt'),{},essentials),'If everything is on track, why talk?');
+ assert.equal(M.resolveApprovedSubject(M.chooseSubject(M.normalize({mode:'friendly'},essentials),'friendly','together'),{},essentials),'What could we build together?');
+ const project=M.chooseSubject(M.normalize({mode:'professional'},essentials),'professional','development');
+ assert.equal(M.resolveApprovedSubject(project,{buyerCompany:'LKAB'},essentials),'A practical idea for LKAB');assert.equal(M.resolveApprovedSubject(project,{buyerCompany:'LKAB',trigger:{title:'Malmberget',verification:'source_verified'}},essentials),'Regarding Malmberget');
 });
 
 test('generated email rejects unfilled sender and booking reference placeholders',()=>{

@@ -64,7 +64,7 @@ test('Sender identity is staged outside Setup with versioned dependencies', () =
 test('expanded markup keeps every identity and asset control visibly labelled', () => {
   const labels = [
     ['brand-company-name', 'Company display name'],
-    ['brand-sender-name', 'Sender name'],
+    ['brand-sender-name', 'Sender full name'],
     ['brand-sender-title', 'Sender job title'],
     ['brand-website', 'Company website'],
     ['brand-phone', 'Phone number'],

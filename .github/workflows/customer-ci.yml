@@ -107,6 +107,9 @@ jobs:
           node --check customer/market-research-verification.js
           node --check customer/linkedin-signals.js
           node --check customer/discovery-engine.js
+          node --check customer/message-editor.js
+          node --check customer/message-studio.js
+          node --check customer/message-workspace.js
           node --check customer/outreach-engine.js
           node --check customer/delivery-engine.js
           node --check customer/company-research-engine.js

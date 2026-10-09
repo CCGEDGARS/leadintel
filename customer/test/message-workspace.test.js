@@ -4,7 +4,7 @@ const read=name=>fs.readFileSync(path.join(__dirname,'..',name),'utf8');
 function mounted(){
  const dom=new JSDOM(read('index.html'),{url:'https://example.com/customer/',runScripts:'outside-only'}),w=dom.window;
  w.LeadIntelMessageStudio=Studio;w.LeadIntelMessageFacts=require('../message-facts.js');w.eval(read('message-workspace.js'));w.eval(read('sender-identity-location.js'));
- w.eval("var scriptGenerationRequest=0;var readDraftEdits=()=>null;var q=id=>document.getElementById(id);var asset=p=>p;var esc=v=>String(v);var studioState=()=>({essentials:{}});var readStudio=()=>({});var persistStudio=()=>{};var invalidateStudioDraft=()=>{};var renderMessageStudio=()=>{};var renderPersonalSaveButton=()=>{};var renderPersonalStyleEditor=()=>{};var closePersonalReview=()=>{};var currentItem=()=>null;var toast=()=>{};");
+ w.eval("var repairLegacyEmailIdentity=()=>false;var scriptGenerationRequest=0;var readDraftEdits=()=>null;var q=id=>document.getElementById(id);var asset=p=>p;var esc=v=>String(v);var studioState=()=>({essentials:{}});var readStudio=()=>({});var persistStudio=()=>{};var invalidateStudioDraft=()=>{};var renderMessageStudio=()=>{};var renderPersonalSaveButton=()=>{};var renderPersonalStyleEditor=()=>{};var closePersonalReview=()=>{};var currentItem=()=>null;var toast=()=>{};");
  const src=read('outreach-ui.js');w.eval(src.slice(src.indexOf('function injectOutreachUI(){'),src.indexOf('function showStep(step)')));w.eval(src.slice(src.indexOf('function installMessageStudio(){'),src.indexOf("let personalChannel='email'")));
  w.eval('injectOutreachUI();installMessageStudio();');return {dom,document:w.document,w};
 }
@@ -27,7 +27,7 @@ test('channel changes show only the matching editor and actions; a draft is neve
  const {document,w}=mounted();const base={ready:true,authenticated:true,hasDraft:true,person:{name:'Sam Buyer',title:'Partner'},company:'Legal practice'};
  w.LeadIntelMessageWorkspace.render(document,{...base,channel:'linkedin'});assert.equal(document.querySelector('.outreach-approval').hidden,true);assert.equal(document.getElementById('mw-copy-email').hidden,true);assert.equal(document.getElementById('mw-empty').hidden,true);assert.match(document.getElementById('mw-readiness-text').textContent,/draft/);assert.equal(document.getElementById('message-recipient').textContent,'Sam Buyer');
  w.LeadIntelMessageWorkspace.render(document,{...base,channel:'email'});assert.equal(document.querySelector('.outreach-approval').hidden,false);assert.equal(document.getElementById('mw-copy-email').hidden,false);assert.equal(document.getElementById('approve-outreach').textContent,'Approve & continue →');
- w.LeadIntelMessageWorkspace.render(document,{...base,hasDraft:false});assert.equal(document.getElementById('mw-empty').hidden,false);assert.equal(document.querySelector('.script-grid').hidden,true);
+ w.LeadIntelMessageWorkspace.render(document,{...base,hasDraft:false});assert.equal(document.getElementById('mw-empty').hidden,true);assert.equal(document.querySelector('.script-grid').hidden,false);assert.match(document.getElementById('outreach-email-body').placeholder,/personalized email/);
 });
 test('style cards drive the canonical select with a change event and accessible selected state',()=>{
  const {document,w}=mounted();let changes=0;const select=document.getElementById('message-mode');select.addEventListener('change',()=>changes++);w.LeadIntelMessageWorkspace.paintStyles(document);document.querySelector('[data-writing-style="friendly"]').click();assert.equal(select.value,'friendly');assert.equal(changes,1);assert.equal(document.querySelector('[data-writing-style="friendly"]').getAttribute('aria-pressed'),'true');
@@ -104,7 +104,7 @@ test('Outreach Studio presents trigger, style and subject before personalization
  assert.ok(trigger.compareDocumentPosition(styles)&4);
  assert.ok(styles.compareDocumentPosition(subject)&4);
  assert.ok(subject.compareDocumentPosition(personalize)&4);
- const view=w.LeadIntelMessageWorkspace.render(document,{ready:true,authenticated:true,hasDraft:true,channel:'email',pendingSelections:true});
+ const view=w.LeadIntelMessageWorkspace.render(document,{ready:true,authenticated:true,hasDraft:true,channel:'email',pendingSelections:true,senderIdentityReady:true});
  assert.equal(view.canGenerate,true);
  assert.match(document.getElementById('mw-readiness-text').textContent,/Changes pending/);
  assert.equal(document.getElementById('approve-outreach').disabled,true);
@@ -113,10 +113,10 @@ test('Outreach Studio presents trigger, style and subject before personalization
 
 test('buying triggers are visible before collapsed legacy source review and unpersonalized emails cannot be approved',()=>{
  const {document,w}=mounted();
- const list=document.getElementById('mw-trigger-options'),review=document.getElementById('mw-trigger-review');
- assert.ok(list.compareDocumentPosition(review)&4);
+ const list=document.getElementById('mw-trigger-options'),review=document.getElementById('mw-source-editor')||document.querySelector('.mw-rail details');
+ assert.ok(list&&review);assert.equal(document.querySelectorAll('#mw-trigger-options').length,1);
  assert.equal(review.open,false);
- w.LeadIntelMessageWorkspace.render(document,{ready:true,authenticated:true,channel:'email',hasDraft:true,unpersonalizedDraft:true});
+ w.LeadIntelMessageWorkspace.render(document,{ready:true,authenticated:true,channel:'email',hasDraft:true,unpersonalizedDraft:true,senderIdentityReady:true});
  assert.match(document.getElementById('mw-readiness-text').textContent,/personalize before approval/i);
  assert.equal(document.getElementById('approve-outreach').disabled,true);
 });
@@ -164,7 +164,7 @@ test('single strongest buying trigger replaces multi-option picker without losin
 test('working drawer retains easy access to library and sender and language tools are not in main generation area',()=>{
  const {document}=mounted();
  const links=[...document.querySelectorAll('.mw-library-shortcuts [data-open-tool]')];
- assert.equal(links.length,4);
+ assert.deepEqual(links.map(x=>x.dataset.openTool),['mw-style-manager','mw-writing-references','mw-settings']);
  links.find(x=>x.dataset.openTool==='mw-settings').click();
  assert.equal(document.getElementById('mw-tools-drawer').open,true);
  assert.equal(document.getElementById('mw-settings').open,true);

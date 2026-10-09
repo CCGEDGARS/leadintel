@@ -416,7 +416,7 @@
       "url": "/customer/outreach-ui.js",
       "status": 200,
       "contains": [
-        "My LinkedIn Templates \u00b7 up to 3",
+        "My LinkedIn Templates \u00b7 ",
         "savedLinkedInCrmDraft",
         "Record as sent in CRM",
         "contact.linkedin_message_sent"
@@ -458,7 +458,11 @@
       "url": "/customer/message-workspace.js",
       "status": 200,
       "contains": [
-        "Make it personal",
+        "mw-save-message",
+        "mw-edit-message",
+        "mw-rewrite-message",
+        "mw-restore-original",
+        "mw-preview-use",
         "Choose your style",
         "Your email",
         "Review Profile answers",
@@ -474,6 +478,19 @@
         ".mw-layout",
         "@media(max-width:720px)",
         "[hidden]{display:none!important}"
+      ]
+    },
+    {
+      "id": "controlled-message-editor",
+      "type": "text",
+      "url": "/customer/message-editor.js",
+      "status": 200,
+      "contains": [
+        "function tailor(",
+        "function createController(",
+        "tailoredOriginal",
+        "CRM save failed",
+        "AI repeated an earlier version"
       ]
     }
   ],
