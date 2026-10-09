@@ -595,6 +595,27 @@
         "No new qualified companies \u00b7 saved companies retained",
         "Review saved companies or broaden the search"
       ]
+    },
+    {
+      "id": "core-template-ai-authority",
+      "type": "text",
+      "url": "/customer/message-editor.js",
+      "status": 200,
+      "contains": [
+        "Do not change literal wording, punctuation, paragraph order or spacing",
+        "coreContract:A.coreContract(studio.mode)",
+        "exactly six string fields"
+      ]
+    },
+    {
+      "id": "translation-template-structure",
+      "type": "text",
+      "url": "/customer/message-translations.js",
+      "status": 200,
+      "contains": [
+        "Translation changed paragraph structure or signature spacing",
+        "Translation moved protected facts between paragraphs"
+      ]
     }
   ],
   "retry": {

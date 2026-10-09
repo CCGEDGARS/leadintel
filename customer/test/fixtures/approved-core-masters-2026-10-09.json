@@ -1,0 +1,94 @@
+{
+  "professional": {
+    "subject": "",
+    "paragraphs": [
+      "Hi Joakim,",
+      "I noticed LKAB’s investment in the new sorting plant in Malmberget. Keeping a project of that scale running smoothly can take considerable time and effort. ",
+      "Does your role involve finding trusted partners and managing suppliers for this project?",
+      "By the way, I'm (First name Second name) from ERCON. ",
+      "Our team brings more than 30 years of metalworking experience, including international projects in Scandinavia. We provide drawing development, metal manufacturing, installation and qualified workforce solutions.",
+      "ERCON focus is straightforward: consistent quality, controlled costs and reliable delivery. ",
+      "Here are some of the projects we are proud of: [link].",
+      "If this is relevant for the Malmberget project, would you be open to a 20-minute Zoom call?",
+      "The goal is to explore whether our approach could help your team reduce costs, simplify project management and keep production plans on track.",
+      "I’d like to share relevant production data and lessons from previous projects, then compare your requirements with what we can offer. Together, we can identify where our cooperation could bring the most value to your team.",
+      "Please choose a suitable time here: [Calendly link].",
+      "Best regards,\nEdgars"
+    ],
+    "subjects": [
+      "Steel and installation for Malmberget",
+      "Edgars Untals. Ercon",
+      "Room for one more steel supplier?",
+      "Malmberget steel – who should I ask?",
+      "Malmberget: EXC2 or EXC3?"
+    ]
+  },
+  "curiosity": {
+    "subject": "Malmberget 2028: the steel behind the schedule",
+    "paragraphs": [
+      "Hi Joakim,",
+      "As we know, foundation work in Malmberget is under way. The new sorting plant has to be running in 2028. And between those two dates, every steel structure has to arrive on time and fit the first time. Right?",
+      "I'm (First name Second name) from ERCON. ",
+      "And by the way, this is not another sales pitch but an open invitation to a long-term partnership.",
+      "For more than 30 years our team has taken steel from drawing to installed structure: drawing development, manufacturing, installation and the qualified people to do it. That means one reliable partner, consistent quality and controlled costs.",
+      "I'm not suggesting you change anything that works. Simply compare your current workflow with the opportunities we can provide.",
+      "As you look through our approved project references here [ https://www.ercon.lv ], you may notice how close some of them are to what you are building now.",
+      "My proposal: let's meet for a 20-minute Zoom call and see whether there is a fit.",
+      "I bring our latest production data and lessons from comparable projects, you bring your requirements, and you will be ready to decide whether it is worth continuing.",
+      "Would you be open to a 20-minute Zoom conversation this week or next? ",
+      "Please choose a suitable time here: [Calendly link].",
+      "Best regards,\nEdgars",
+      "Link to Linkedin profile"
+    ],
+    "subjects": [
+      "{{projectMilestone}}: {{deliveryAngle}}",
+      "Keep what works. Compare what’s possible.",
+      "{{sender}}. {{company}}",
+      "If everything is on track, why talk?",
+      "{{projectMilestone}}: another success story?"
+    ]
+  },
+  "friendly": {
+    "subject": "A friendly hello about Malmberget",
+    "paragraphs": [
+      "Hi Joakim,",
+      "Congratulations on the start of foundation work in Malmberget. One of the largest buildings in LKAB's history, north of the Arctic Circle, ready by 2028: that is no small job.",
+      "I'm Edgars from ERCON ( https://www.ercon.lv ).",
+      "We are a metalworking team that has spent more than 30 years on the less glamorous part of projects like yours: turning drawings into steel that shows up on time and fits.",
+      "I don't know yet whether you need us. You may be fully covered, and if so, good. But if an extra pair of reliable hands for drawings, manufacturing, installation or qualified workforce would make the next two years calmer and help protect your margins, I'd enjoy a conversation.",
+      "Here are some of the projects we are proud of: [link].",
+      "Have a look when you have a coffee in hand. If something catches your eye, I'd enjoy a 20-minute Zoom conversation.",
+      "I'll bring real numbers and a few lessons we learned the hard way, and you can share what your team needs. No slides, no pressure.",
+      "Choose a suitable time here: [Calendly].",
+      "And if steelwork sits with someone else, I'd appreciate a pointer in the right direction.",
+      "Warm regards,\nEdgars"
+    ],
+    "subjects": [
+      "A friendly hello about {{verifiedProject}}",
+      "{{company}}. A long-term partnership?",
+      "{{sender}}. {{company}}",
+      "What could we build together?",
+      "Congratulations on {{verifiedMilestone}}"
+    ]
+  },
+  "brutal": {
+    "subject": "LeadIntel. On behalf of Edgars",
+    "paragraphs": [
+      "Hi Joakim,",
+      "I should say this first: I’m LeadIntel, an AI-powered system. ",
+      "( First name Second name ) at ERCON asked me to research potential business partners and write to relevant people on his behalf.",
+      "A research brought me to LKAB’s new sorting plant in Malmberget. I don’t know whether you need another steel partner. You may be fully covered. But if additional capabilities could help keep the project running smoothly, this may be worth a conversation.",
+      "For more than 30 years ERCON have taken steel from drawing to installed structure: development, manufacturing, installation and the qualified people to do it. That means – a reliable partner, consistent quality and controlled costs. https://www.ercon.lv/",
+      "Here are some projects they are proud of: [reference link].",
+      "If something catches your eye, would you be open to a 20-minute Zoom conversation with Edgars?",
+      "He’ll bring relevant production data and lessons from previous projects. You can share your requirements and explore how ERCON could help simplify delivery, protect your margins and support Malmberget and future projects.",
+      "I’m writing the introduction. Edgars will be there for the conversation.",
+      "Choose a suitable time here: [Calendly link].",
+      "Warm regards,\nLeadIntel. On behalf of Edgars. ",
+      "(Edgars linkedin profile)"
+    ],
+    "subjects": [
+      "LeadIntel. On behalf of Edgars"
+    ]
+  }
+}

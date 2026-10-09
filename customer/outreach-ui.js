@@ -1,14 +1,14 @@
-import './approved-reference-scripts.js?v=20261009-professional-budget-v11';
+import './approved-reference-scripts.js?v=20261009-professional-budget-v11&core-rules=1';
 import './original-scripts-ui.js?v=20261008-brutal-approved-v1';
 import './original-scripts.js?v=20261007-quality-v1';
 import './trigger-preview.js?v=20261008-english-v1';
 import './message-workspace.js?v=20261009-professional-budget-v11&meeting-platform=20261009-v1&approved-subjects=20261007-v2&brutal-approved=20261008-v1';
 import './message-facts.js?v=20261007-quality-v2';
-import './message-translations.js?v=20261009-event-campaign-v1';
+import './message-translations.js?v=20261009-event-campaign-v1&core-rules=1';
 import './message-translation-ui.js?v=20261008-compact-languages-v2';
 import './personal-template-library.js?templates=20261009-v20&foundation=20261006-v12&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1';
 import './message-studio.js?v=20261009-professional-budget-v11&meeting-platform=20261009-v1&foundation=20261006-v12&booking-recovery=20261007-v1&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1';
-import './message-editor.js?v=20261009-professional-budget-v11&meeting-platform=20261009-v1';
+import './message-editor.js?v=20261009-professional-budget-v11&meeting-platform=20261009-v1&core-rules=1';
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
