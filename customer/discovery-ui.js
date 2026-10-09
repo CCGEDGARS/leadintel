@@ -185,7 +185,7 @@ function restoreNewerBuyerResearch(candidate,detail){
 }
 function hydrateLocalPipelineFromCrm(){if(!crmAvailable)return;const scoped=currentWorkspaceCrmPipeline();discovery.pipeline=LeadIntelDiscovery.normalizeDiscoveryState({pipeline:scoped.map(crmToLocalPipeline)}).pipeline;for(const candidate of discovery.candidates)candidate.saved=Boolean(scoped.some(company=>canonicalDomain(company.normalized_domain||company.website)===canonicalDomain(candidate.domain||candidate.website)));saveDiscovery();}
 async function refreshCrmState({render=true}={}){if(!discoveryMounted||crmRefreshing)return false;if(!crmAuthenticated()){crmAvailable=false;crmCompanies=[];crmPipeline=[];if(render)renderAll();return false;}const b=bridge(),workspaceId=b.workspace.id;crmRefreshing=true;try{const [allResult,pipelineResult]=await Promise.all([b.listCrmCompanies({limit:100}),b.listCrmCompanies({pipeline_stage:"active",limit:100})]);if(b.workspace?.id!==workspaceId)return false;if(!allResult.ok||!pipelineResult.ok){crmAvailable=false;if(render)renderAll();return false;}crmAvailable=true;crmCompanies=Array.isArray(allResult.companies)?allResult.companies:[];crmPipeline=Array.isArray(pipelineResult.companies)?pipelineResult.companies:[];hydrateLocalPipelineFromCrm();
-  const selected=(discovery.selectedProspects||[]).filter(item=>item.people?.length&&crmCompanyByDomain(item.domain)).slice(0,10);
+  const selected=(discovery.selectedProspects||[]).filter(item=>crmCompanyByDomain(item.domain)).slice(0,10);
   await Promise.all(selected.map(async candidate=>{
     const company=crmCompanyByDomain(candidate.domain);
     try{const detail=await b.getCrmCompany(company.id);if(!detail.ok||b.workspace?.id!==workspaceId)return;
