@@ -651,6 +651,17 @@
         "Company website check deadline reached",
         "if(parentSignal?.aborted)throw parentSignal.reason"
       ]
+    },
+    {
+      "id": "company-recovery-quota",
+      "type": "text",
+      "url": "/customer/state-budget.js",
+      "status": 200,
+      "contains": [
+        "leadintel-sync-recovery-refs-v1",
+        "function packRecoveryRecord(",
+        "function restoreRecoveryRecord("
+      ]
     }
   ],
   "retry": {
