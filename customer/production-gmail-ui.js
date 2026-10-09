@@ -29,7 +29,7 @@
     const expected=(sourcePerson?.email||sourcePerson?.work_email||sourcePerson?.normalized_email||'').trim().toLowerCase();
     if(expected&&expected!==email.toLowerCase())return {ok:false,error:'Recipient no longer matches the approved buyer.'};
     const previous=d.normalizeDeliveryState(read(DELIVERY)).opportunities.find(x=>x.domain===domain);
-    if(previous?.sentAt&&Date.parse(previous.sentAt)>=Date.parse(pkg.approvedAt))return {ok:false,error:'This approved email has already been recorded as sent.'};
+    if(previous?.sentAt)return {ok:false,error:'This company already has a recorded send. Review Delivery before another direct email.'};
     const provider=b.gmail?.connected?'gmail':b.microsoftMail?.connected?'microsoft':null;
     if(!provider)return {ok:false,error:'Connect Gmail or Microsoft in Delivery settings first.'};
     const connection=provider==='gmail'?b.gmail:b.microsoftMail;
