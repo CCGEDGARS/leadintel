@@ -26,7 +26,7 @@ function loadDiscoveryRunner({ renderFails = false, renderNodes = false, fetchIm
     .replace(runMargin?.[0], `const DISCOVERY_RUN_TIMEOUT_MARGIN_MS=${testRunMargin};`)
     .replace(extractionTimeout?.[0], `const COMPANY_EXTRACTION_TIMEOUT_MS=${testExtractionTimeout};`)
     .replace(/\ninitDiscoveryWhenReady\(\);\s*$/, '\ndiscovery=LeadIntelDiscovery.normalizeDiscoveryState({});\nglobalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__discoveryState = () => discovery;\nglobalThis.__setDiscovery = value => { discovery = LeadIntelDiscovery.normalizeDiscoveryState({...value,qualityVersion:value.qualityVersion??LeadIntelDiscovery.DISCOVERY_QUALITY_VERSION}); };\nglobalThis.__renderStatus = renderStatus;\nglobalThis.__setDiscoveryProgress=value=>{discoveryProgress=value;};\nglobalThis.__renderCandidates = renderCandidates;\n')
-    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__restoreNewerBuyerResearch=restoreNewerBuyerResearch;globalThis.__findExecutiveBuyer=findExecutiveBuyer;\nglobalThis.__companyOrigin = companyOrigin;\nglobalThis.__mergeWorkflowCompanies = mergeWorkflowCompanies;\nglobalThis.__existingCompanyResearchTargets = existingCompanyResearchTargets;\nglobalThis.__selectQualifiedForBuyers = selectQualifiedForBuyers;\nglobalThis.__selectTargetForBuyers = selectTargetForBuyers;\nglobalThis.__confirmBuyerContact = confirmBuyerContact;\nglobalThis.__keepBuyer = keepBuyer;\nglobalThis.__confirmPublicBuyerSource=confirmPublicBuyerSource;\nglobalThis.__publicBuyerSource=publicBuyerSource;\nglobalThis.__acceptedBuyerConfirmationLevel=acceptedBuyerConfirmationLevel;\nglobalThis.__setBuyerConfirmationPolicy=()=>{buyerConfirmationLevel="public_confirmed";confirmationPolicyWorkspace=bridge()?.workspace?.id;};\nglobalThis.__holdBuyerForOpportunityReview = holdBuyerForOpportunityReview;\nglobalThis.__toggleBuyerContactFlow = toggleBuyerContactFlow;\nglobalThis.__enrichSelectedProspect = enrichSelectedProspect;\nglobalThis.__enrichContact = enrichContact;\nglobalThis.__scheduleSavedBuyerPublicChecks = scheduleSavedBuyerPublicChecks;\nglobalThis.__findPublicProspectContacts = findPublicProspectContacts;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__savePotentialProspect = savePotentialProspect;\nglobalThis.__addSelectedProspectToPipeline = addSelectedProspectToPipeline;\nglobalThis.__setCrmCompanies = companies => { crmCompanies = companies; };\nglobalThis.__renderPipeline = renderPipeline;\nglobalThis.__renderSelectedProspects = renderSelectedProspects;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;\nglobalThis.__potentialBuyerResultsHtml = potentialBuyerResultsHtml;');
+    .replace('globalThis.__runDiscovery = runCompanyDiscovery;', 'globalThis.__runDiscovery = runCompanyDiscovery;\nglobalThis.__restoreNewerBuyerResearch=restoreNewerBuyerResearch;globalThis.__findExecutiveBuyer=findExecutiveBuyer;\nglobalThis.__companyOrigin = companyOrigin;\nglobalThis.__mergeWorkflowCompanies = mergeWorkflowCompanies;\nglobalThis.__existingCompanyResearchTargets = existingCompanyResearchTargets;\nglobalThis.__selectQualifiedForBuyers = selectQualifiedForBuyers;\nglobalThis.__selectTargetForBuyers = selectTargetForBuyers;\nglobalThis.__confirmBuyerContact = confirmBuyerContact;\nglobalThis.__keepBuyer = keepBuyer;\nglobalThis.__confirmPublicBuyerSource=confirmPublicBuyerSource;\nglobalThis.__publicBuyerSource=publicBuyerSource;\nglobalThis.__acceptedBuyerConfirmationLevel=acceptedBuyerConfirmationLevel;\nglobalThis.__setBuyerConfirmationPolicy=()=>{buyerConfirmationLevel="public_confirmed";confirmationPolicyWorkspace=bridge()?.workspace?.id;};\nglobalThis.__holdBuyerForOpportunityReview = holdBuyerForOpportunityReview;\nglobalThis.__toggleBuyerContactFlow = toggleBuyerContactFlow;\nglobalThis.__enrichSelectedProspect = enrichSelectedProspect;\nglobalThis.__enrichContact = enrichContact;\nglobalThis.__scheduleSavedBuyerPublicChecks = scheduleSavedBuyerPublicChecks;\nglobalThis.__findPublicProspectContacts = findPublicProspectContacts;\nglobalThis.__retryFailedDiscoveryChecks = retryFailedDiscoveryChecks;\nglobalThis.__findPotentialDecisionMakers = findPotentialDecisionMakers;\nglobalThis.__savePotentialProspect = savePotentialProspect;\nglobalThis.__addSelectedProspectToPipeline = addSelectedProspectToPipeline;\nglobalThis.__setCrmCompanies = companies => { crmCompanies = companies; };\nglobalThis.__renderPipeline = renderPipeline;\nglobalThis.__renderSelectedProspects = renderSelectedProspects;\nglobalThis.__firecrawlCompanySearch = firecrawlCompanySearch;\nglobalThis.__withDiscoveryDeadline = withDiscoveryDeadline;\nglobalThis.__discoveryRunTimeoutMs = discoveryRunTimeoutMs;\nglobalThis.__renderDiscoveryFunnel = renderDiscoveryFunnel;\nglobalThis.__renderPotentialMatches = renderPotentialMatches;\nglobalThis.__potentialBuyerResultsHtml = potentialBuyerResultsHtml;');
   const mainState = {
     website: 'https://acme.example/',
     profile: {
@@ -135,6 +135,7 @@ test('a normal three-stage search is allowed to outlast one provider request win
     requestTimeout: 1000,
     scaleProductionRunTimeout: 1000,
     fetchImpl: async (_url, options) => {
+      if(JSON.parse(options.body).task==='buyer-fit')return {ok:true,json:async()=>({text:'{"companies":[]}'})};
       const query = JSON.parse(options.body).query;
       await new Promise(resolve => setTimeout(resolve, 8));
       if (query.startsWith('site:')) {
@@ -196,6 +197,7 @@ test('a successful first pass with no qualified companies gets one bounded follo
     requestTimeout:1000,
     scaleProductionRunTimeout:1000,
     fetchImpl:async (_url,options)=>{
+      if(JSON.parse(options.body).task==='buyer-fit')return {ok:true,json:async()=>({text:'{"companies":[]}'})};
       const query=JSON.parse(options.body).query;
       if(query.startsWith('site:'))return {ok:true,json:async()=>({success:true,data:[{
         date:new Date().toISOString().slice(0,10),url:'https://northsteel.lv/news/new-factory',title:'North Steel opens a new factory',
@@ -646,6 +648,7 @@ test('Saving Mode verifies a saved target domain without repeating resolution an
     if(url.includes('/firecrawl-scrape'))return {ok:true,json:async()=>({data:{markdown:'Södra is a Swedish manufacturer expanding its new factory and investing in industrial automation. The company produces industrial materials for manufacturing customers.',metadata:{sourceURL:'https://sodra.com/',title:'Södra expansion in Sweden'}}})};
     if(url.includes('/firecrawl-search')&&requests.filter(item=>item.url.includes('/firecrawl-search')).length===1)return {ok:true,json:async()=>({data:[{url:'https://sodra.com/',title:'Södra',description:'Södra is a Swedish manufacturer.'}]})};
     if(url.includes('/firecrawl-search'))throw new TypeError('Connection failed');
+    if(JSON.parse(options.body).task==='buyer-fit')return {ok:true,json:async()=>({text:'{"companies":[]}'})};
     throw new Error('Unexpected request');
   }});
   const state=JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state'));
@@ -663,6 +666,7 @@ test('Saving Mode verifies a saved target domain without repeating resolution an
 test('retry of a failed saved-target lookup uses the known domain and preserves Saving Mode',async()=>{
   const requests=[];
   const context=loadDiscoveryRunner({requestTimeout:1000,scaleProductionRunTimeout:1000,fetchImpl:async(url,options)=>{
+    if(JSON.parse(options.body).task==='buyer-fit')return {ok:true,json:async()=>({text:'{"companies":[]}'})};
     requests.push({url,body:JSON.parse(options.body)});
     if(url.includes('/firecrawl-search'))return {ok:true,json:async()=>({data:[{url:'https://sodra.com/news/new-factory',title:'Södra new factory',description:'Södra expands production in Sweden with a new factory.'}]})};
     throw new Error('Unexpected request');
@@ -735,6 +739,8 @@ test('an aborted resolution stage does not start company verification', async ()
 
   assert.ok(phases.includes('Resolving official company domains'));
   assert.equal(phases.includes('Verifying company websites'),false);
+  assert.equal(context.__discoveryState().status,'partial');assert.equal(context.__discoveryState().searchFailures.length,0);
+  assert.equal(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery_meta')).lastCompanyRun.canceled,true);
 });
 
 test('an errored search is not presented as a confirmed no-match and offers retry', () => {
@@ -768,6 +774,7 @@ test('failed company-site checks can be retried without repeating market searche
     renderNodes:true,
     requestTimeout:1000,
     fetchImpl:async(_url,options)=>{
+      if(JSON.parse(options.body).task==='buyer-fit')return {ok:true,json:async()=>({text:JSON.stringify({companies:[{domain:'northstar.com',fit:100,purchase:'industrial automation',reason:'Latvian production capacity requires industrial automation.',buyerRole:'manufacturer',relevantSignalUrls:['https://northstar.com/news/new-factory'],evidence:[{url:'https://northstar.com/news/new-factory',quote:'Northstar is a Latvian industrial manufacturer investing in automation and expanding production capacity at a new factory.'}]}]})})};
       requests+=1;
       const query=JSON.parse(options.body).query;
       assert.match(query,/^site:northstar\.com/);
@@ -887,6 +894,7 @@ test('saved failed official-domain lookups reuse discovered names and market evi
     renderNodes:true,requestTimeout:100,
     bridgeImpl:{session:{authenticated:true},workspace:{id:'workspace-1'}},
     fetchImpl:async(url,options)=>{
+      if(JSON.parse(options.body).task==='buyer-fit')return {ok:true,json:async()=>({text:'{"companies":[]}'})};
       const query=JSON.parse(options.body).query;
       requests.push({url,query});
       if(url.includes('/api/ai/web-search'))return {ok:true,status:200,json:async()=>({results:[query.startsWith('site:')
@@ -1310,4 +1318,55 @@ test('reserved executive cards display consecutive priority ranks independent of
  const html=context.__renderSelectedProspects([candidate]);
  const ranks=[...html.matchAll(/selected-prospect-rank">(\d+)</g)].slice(0,4).map(m=>Number(m[1]));
  assert.deepEqual(ranks,[1,2,3,4]);assert.match(html,/4 priority buyers/);
+});
+
+
+test('a stalled fit response body times out independently and aborts its request',async()=>{
+  const context=loadDiscoveryRunner();let requestSignal;
+  await assert.rejects(context.__withDiscoveryDeadline(async signal=>{requestSignal=signal;return new Promise(()=>{});},undefined,12),error=>error.status===408&&error.code==='DISCOVERY_SEARCH_TIMEOUT');
+  assert.equal(requestSignal.aborted,true);
+});
+test('failed company scrapes are attempted once per domain even when event searches retry',async()=>{
+  let scrapes=0,searches=0;
+  const context=loadDiscoveryRunner({requestTimeout:1000,fetchImpl:async(url)=>{
+    if(url.includes('firecrawl-scrape')){scrapes++;return {ok:false,status:503,json:async()=>({})};}
+    if(url.includes('firecrawl-search')){searches++;return {ok:false,status:503,json:async()=>({})};}
+    throw new Error('Unexpected request');
+  }});
+  await assert.rejects(context.__firecrawlCompanySearch({id:'v1',kind:'verification',domain:'test.example',query:'site:test.example manufacturing'}));
+  await assert.rejects(context.__firecrawlCompanySearch({id:'v2',kind:'verification',domain:'test.example',query:'site:test.example expansion'}));
+  assert.equal(scrapes,1);assert.equal(searches,4);
+});
+test('domain lookup uses search snippets without scraping every search result',async()=>{
+  let body;const context=loadDiscoveryRunner({requestTimeout:1000,fetchImpl:async(_,options)=>{body=JSON.parse(options.body);return {ok:true,json:async()=>({data:[{url:'https://northsteel.lv/',title:'North Steel official website',description:'North Steel manufactures industrial products in Latvia. '.repeat(4)}]})};}});
+  const results=await context.__firecrawlCompanySearch({id:'r1',kind:'resolution',company:'North Steel',query:'"Buyer" official company website'});
+  assert.equal(body.limit,3);assert.equal(body.scrapeOptions,undefined);assert.equal(results[0].verifiedAt,'');
+});
+test('purchasing-fit progress and failures survive rendering and reload without a false no-match',()=>{
+  const context=loadDiscoveryRunner({renderNodes:true});
+  context.__setDiscovery({status:'running'});context.__setDiscoveryProgress({phase:'buyer-fit',completed:1,total:3});context.__renderStatus();context.__renderDiscoveryFunnel();
+  assert.match(context.__elements.get('company-discovery-status').textContent,/Checking purchasing fit · 1\/3/);
+  assert.match(context.__elements.get('discovery-funnel').innerHTML,/Checking purchasing fit/);
+  context.__setDiscovery({status:'error',searchFailures:[{phase:'buyer-fit',company:'Buyer',domain:'buyer.example',status:408,reason:'timeout'}]});context.__renderDiscoveryFunnel();
+  assert.equal(context.__discoveryState().searchFailures[0].phase,'buyer-fit');assert.match(context.__elements.get('discovery-funnel').innerHTML,/Purchasing fit/);assert.match(context.__elements.get('discovery-funnel').innerHTML,/Recheck companies/);
+});
+
+test('a qualified first pass checks purchasing fit before broadening and does not repeat completed fit batches',async()=>{
+  let marketCalls=0,fitCalls=0;
+  const text='North Steel manufactures industrial equipment in Latvia and purchases industrial automation for its production lines. The company operates a new factory with automated manufacturing equipment.';
+  const date=new Date().toISOString().slice(0,10),verifiedAt=new Date().toISOString();
+  const candidate={company:'North Steel',domain:'northsteel.lv',market:'Latvia',evidence:[{url:'https://northsteel.lv/products',text,verifiedAt},{url:'https://northsteel.lv/news/new-factory',text,date,verifiedAt},{url:'https://industrynews.lv/north-steel',text,date,verifiedAt}],matchedSignals:[{id:'expansion',name:'Expansion',matchedTerms:['new factory'],evidence:[{url:'https://northsteel.lv/news/new-factory'},{url:'https://industrynews.lv/north-steel'}]}]};
+  const context=loadDiscoveryRunner({requestTimeout:1000,scaleProductionRunTimeout:1000,fetchImpl:async(_,options)=>{
+    const body=JSON.parse(options.body);
+    if(body.task==='buyer-fit'){fitCalls++;return {ok:true,json:async()=>({text:JSON.stringify({companies:[{domain:candidate.domain,fit:100,purchase:'industrial automation',reason:'Production lines use purchased industrial automation.',buyerRole:'manufacturer',relevantSignalUrls:candidate.matchedSignals[0].evidence.map(e=>e.url),evidence:[{url:candidate.evidence[0].url,quote:text}]}]})})};}
+    marketCalls++;return {ok:true,json:async()=>({data:[]})};
+  }});
+  context.LeadIntelQualificationSettings={get:()=>({researchPriority:'signals',minimumScore:80})};
+  context.LeadIntelDiscovery={...Discovery,mergeCompanyCandidates:()=>[candidate],buildPotentialCompanyCandidates:()=>[]};
+  context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({targetCount:1}));
+  await context.__runDiscovery({autoPass:3});
+  const result=context.__discoveryState();
+  assert.equal(result.funnel.qualifiedCompanies,1);assert.equal(result.funnel.adaptiveFollowUpSearches,0);assert.equal(fitCalls,1);assert.equal(marketCalls,6);
+  const restored=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
+  assert.equal(restored.candidates[0].domain,candidate.domain);assert.ok(Discovery.verifiedBuyerFit(restored.candidates[0],{...JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state')).profile,...Targeting.profileFields(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state')))}));
 });

@@ -178,14 +178,16 @@
     // A resolution must never erase the only copy of either side. Fail closed
     // if browser storage cannot hold the recovery record.
     const workspaceId=bridge.workspace.id;
-    let previous=null;try{previous=JSON.parse(localStorage.getItem(RECOVERY_KEY)||'null');}catch{}
+    let previous=null;try{const stored=JSON.parse(localStorage.getItem(RECOVERY_KEY)||'null');if(stored?.workspace_id===workspaceId)previous=root.LeadIntelStateBudget?.restoreRecoveryRecord?.(stored)||stored;}catch{}
     const original=previous?.workspace_id===workspaceId?previous.original:null;
-    localStorage.setItem(RECOVERY_KEY,JSON.stringify({schema_version:1,workspace_id:workspaceId,created_at:new Date().toISOString(),source,conflict:bridge.conflictDetails||null,original:original||{local:bundle(),server:state},local:bundle(),server:state}));
+    const local=bundle(),record={schema_version:1,workspace_id:workspaceId,created_at:new Date().toISOString(),source,conflict:bridge.conflictDetails||null,original:original||{local,server:state},local,server:state};
+    localStorage.setItem(RECOVERY_KEY,JSON.stringify(root.LeadIntelStateBudget?.packRecoveryRecord?.(record)||record));
     renderConflictActions();
   }
   function downloadSyncRecovery(){
     let recovery=null;try{recovery=JSON.parse(localStorage.getItem(RECOVERY_KEY)||'null');}catch{}
     if(!bridge.workspace||recovery?.workspace_id!==bridge.workspace.id)return false;
+    recovery=root.LeadIntelStateBudget?.restoreRecoveryRecord?.(recovery)||recovery;
     const url=URL.createObjectURL(new Blob([JSON.stringify(recovery,null,2)],{type:'application/json'}));
     const link=document.createElement('a');link.href=url;link.download='leadintel-sync-recovery.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);return true;
   }

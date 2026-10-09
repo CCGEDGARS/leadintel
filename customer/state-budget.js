@@ -101,7 +101,7 @@
     const packed={format:NESTED_FORMAT,value:encode(value),keys,values};
     return bytes(packed)<bytes(value)?packed:value;
   }
-  function restoreNestedDiscovery(value){
+  function restoreNestedDiscovery(value,maxBytes=MAX_RESTORED_SECTION_BYTES){
     const invalid=()=>{throw new Error('Invalid stored discovery research references');};
     if(!Array.isArray(value.keys)||value.keys.length>5000||!value.keys.every(key=>typeof key==='string')||!Array.isArray(value.values)||value.values.length>20000)invalid();
     const active=new Set(),stringSizes=new Map();let nodes=0,expandedBytes=0;
@@ -112,7 +112,7 @@
         size=stringSizes.get(value);
       }
       expandedBytes+=size+1;
-      if(expandedBytes>MAX_RESTORED_SECTION_BYTES)throw new Error('Stored workspace research exceeds safe restore limit');
+      if(expandedBytes>maxBytes)throw new Error('Stored workspace research exceeds safe restore limit');
     }
     function expand(item,depth=0){
       if(++nodes>2000000||depth>150)invalid();
@@ -134,6 +134,18 @@
     }
     const restored=expand(value.value);
     if(!restored||typeof restored!=='object'||Array.isArray(restored))invalid();
+    return restored;
+  }
+  const RECOVERY_FORMAT='leadintel-sync-recovery-refs-v1';
+  function packRecoveryRecord(record){
+    if(!record||bytes(record)<65536)return record;
+    const data=packNestedDiscovery(record);
+    return data?.format===NESTED_FORMAT?{format:RECOVERY_FORMAT,workspace_id:record.workspace_id,data}:record;
+  }
+  function restoreRecoveryRecord(record){
+    if(record?.format!==RECOVERY_FORMAT)return record;
+    const restored=restoreNestedDiscovery(record.data,32*1024*1024);
+    if(restored.workspace_id!==record.workspace_id)throw new Error('Stored recovery workspace does not match');
     return restored;
   }
   function packBuyerTraces(value,key=''){
@@ -228,5 +240,5 @@
   }
 
   installStorageGuard();
-  return {MAX_SYNC_BYTES,TARGET_SYNC_BYTES,bytes,compactBundle,restoreFromSync,prepareForSync,compactMainStorageValue,installStorageGuard};
+  return {packRecoveryRecord,restoreRecoveryRecord,MAX_SYNC_BYTES,TARGET_SYNC_BYTES,bytes,compactBundle,restoreFromSync,prepareForSync,compactMainStorageValue,installStorageGuard};
 });

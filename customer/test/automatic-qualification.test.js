@@ -34,3 +34,19 @@ test('commercial assessment survives reload but changed seller offers invalidate
  assert.equal(assess(restored).eligible,true);assert.equal(assess(restored,'balanced',80,{...profile,priorityOffers:'legal services'}).eligible,false);
  assert.deepEqual(assess(candidate,'balanced',80,{...profile,companyName:'First'}),assess(candidate,'balanced',80,{...profile,companyName:'Second'}));
 });
+
+test('independent fit batches preserve successful evidence when another batch fails, across seller industries and names',async()=>{
+ for(const offers of ['welded frames','financial reporting']){
+  for(const companyName of ['Ercon','Unrelated Seller']){
+   const p={...profile,companyName,priorityOffers:offers},companies=Array.from({length:12},(_,i)=>({...raw,domain:`buyer${i}.example`,evidence:[{url:`https://buyer${i}.example/products`,text:`We purchase ${offers} for our operations in Sweden.`,verifiedAt:researchedAt}]}));
+   let active=0,peak=0;const failures=[],progress=[];
+   const result=await D.researchBuyerFit(companies,p,async(_,batch)=>{
+    active++;peak=Math.max(peak,active);await new Promise(resolve=>setTimeout(resolve,2));active--;
+    if(batch[0].domain==='buyer4.example')throw Object.assign(new Error('Unavailable'),{status:503});
+    return JSON.stringify({companies:batch.map(c=>({domain:c.domain,fit:90,purchase:offers,reason:'Supplied operating evidence identifies a purchasing application.',buyerRole:'operating buyer',evidence:[{url:c.evidence[0].url,quote:c.evidence[0].text}]}))});
+   },{onFailure:(error,batch)=>failures.push(...batch),onProgress:p=>progress.push(p.completed)});
+   assert.equal(peak,2);assert.equal(result.length,12);assert.equal(failures.length,4);assert.equal(result.filter(c=>D.verifiedBuyerFit(c,p)).length,8);assert.deepEqual(progress,[1,2,3]);
+   for(const c of result.slice(4,8))assert.equal(D.assessAutomaticQualification(c,p,market,{minimumScore:70}).eligible,false);
+  }
+ }
+});

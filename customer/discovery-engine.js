@@ -1476,7 +1476,7 @@
   }
 
   function safeSearchFailure(failure={}){
-    const phase=["searching","following","resolving","verifying"].includes(clean(failure.phase))?clean(failure.phase):"searching";
+    const phase=["searching","following","resolving","verifying","buyer-fit"].includes(clean(failure.phase))?clean(failure.phase):"searching";
     const query=failure.queryMeta&&typeof failure.queryMeta==="object"?failure.queryMeta:{};
     const queryMeta={
       id:clean(query.id).slice(0,100),market:clean(query.market).slice(0,100),query:clean(query.query).slice(0,1000),
@@ -1645,9 +1645,19 @@
       return {...candidate,buyerFit:{version:2,fit:Math.round(row.fit),purchase:offer,reason:clean(row.reason).slice(0,700),buyerRole:clean(row.buyerRole).slice(0,120),relevantSignalUrls:(Array.isArray(row.relevantSignalUrls)?row.relevantSignalUrls:[]).filter(url=>(candidate.matchedSignals||[]).some(s=>(s.evidence||[]).some(e=>e.url===url))).slice(0,12),needStatus:row.needStatus==='evidenced'?'evidenced':'inferred',evidence:quotes,context:buyerFitContext(profile)}};
     });
   }
-  async function researchBuyerFit(candidates=[],profile={},generate){
-    if(typeof generate!=='function')throw new Error('Commercial buyer research is unavailable');const out=[];
-    for(let i=0;i<candidates.length;i+=4){const batch=candidates.slice(i,i+4);out.push(...parseBuyerFit(await generate(buyerFitPrompt(batch,profile)),batch,profile));}return out;
+  async function researchBuyerFit(candidates=[],profile={},generate,{signal,onProgress,onFailure,concurrency=2}={}){
+    if(typeof generate!=='function')throw new Error('Commercial buyer research is unavailable');
+    const batches=Array.from({length:Math.ceil(candidates.length/4)},(_,i)=>candidates.slice(i*4,i*4+4)),out=Array(batches.length);let next=0,completed=0;
+    await Promise.all(Array.from({length:Math.min(batches.length,Math.max(1,Math.min(2,Number(concurrency)||2)))},async()=>{
+      while(next<batches.length){
+        if(signal?.aborted)throw signal.reason||Object.assign(new Error('Research cancelled'),{name:'AbortError'});
+        const index=next++,batch=batches[index];
+        try{out[index]=parseBuyerFit(await generate(buyerFitPrompt(batch,profile),batch),batch,profile);}
+        catch(error){if(signal?.aborted)throw error;if(!onFailure)throw error;out[index]=batch.map(candidate=>({...candidate,buyerFit:undefined}));onFailure(error,batch);}
+        completed++;onProgress?.({completed,total:batches.length,candidates:out.filter(Boolean).flat()});
+      }
+    }));
+    return out.flat();
   }
   function verifiedBuyerFit(candidate={},profile={}){
     const assessment=candidate.buyerFit;if(assessment?.version!==2||assessment.context!==buyerFitContext(profile))return null;

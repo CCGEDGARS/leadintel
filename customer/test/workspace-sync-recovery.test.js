@@ -2,11 +2,12 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const persistence=fs.readFileSync(require.resolve('../workspace-persistence.js'),'utf8');
 const bridgeSource=fs.readFileSync(require.resolve('../server-bridge.js'),'utf8');
 const MAIN='leadintel_customer_v2_state',RECOVERY='leadintel_customer_v2_sync_recovery_v1';
-function load(fetchImpl,{withBridge=false,quota=false}={}){
+function load(fetchImpl,{withBridge=false,quota=false,recoveryLimit=Infinity,withBudget=false}={}){
  const values=new Map([[MAIN,JSON.stringify({website:'https://seller.example',answers:{offer:'Local offer'}})],['leadintel_customer_v2_workspace','w1']]);
  const events=[],timers=new Map();let id=0;
- const storage={getItem:key=>values.get(key)??null,setItem(key,value){if(quota&&key===RECOVERY)throw new Error('Quota exceeded');values.set(key,String(value));},removeItem:key=>values.delete(key)};
+ const storage={getItem:key=>values.get(key)??null,setItem(key,value){if(key===RECOVERY&&(quota||Buffer.byteLength(String(value))>recoveryLimit))throw new Error('Quota exceeded');values.set(key,String(value));},removeItem:key=>values.delete(key)};
  const root={console,URL,Request,Response,Headers,FormData,Blob,Date,Promise,localStorage:storage,sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}},location:{href:'https://leadintel.ccgroup.lv/customer/',reload(){events.push('reload');}},fetch:fetchImpl,document:{readyState:'loading',getElementById:()=>null,querySelector:()=>null,addEventListener(){}},addEventListener(){},dispatchEvent:e=>events.push(e.type),setTimeout(fn){timers.set(++id,fn);return id;},clearTimeout:id=>timers.delete(id),CustomEvent:class{constructor(type){this.type=type;}}};
+ if(withBudget)root.LeadIntelStateBudget=require('../state-budget.js');
  root.window=root;root.globalThis=root;
  vm.runInNewContext(fs.readFileSync(require.resolve('../workspace-sync.js'),'utf8'),root);
  vm.runInNewContext(persistence,root);
@@ -236,4 +237,23 @@ test('conflict resolution locks editing during the merged save and reloads canon
  const resolving=root.LeadIntelServerBridge.resolveConflictKeepLocal();await new Promise(resolve=>setImmediate(resolve));
  assert.equal(editable.inert,true);assert.equal(root.LeadIntelServerBridge.resolvingSync,true);assert.equal(put.payload.outreach.messageStudio.essentials.calendly,'https://calendly.com/legal/consultation');
  finish(new Response(JSON.stringify({saved:true,version:10})));assert.equal((await resolving).resolved,true);assert.ok(events.includes('reload'));assert.equal(editable.inert,false);
+});
+
+
+test('large overlapping research recovery stays below browser quota and preserves every original and latest source',async()=>{
+ const Budget=require('../state-budget.js'),text='Exact original research evidence. '.repeat(4000);
+ const local={main:{website:'local.example',answers:{offer:'Protected local offer'}},discovery:{rawResults:Array.from({length:30},(_,i)=>({url:`https://buyer${i}.se/news`,text})),selectedProspects:[{domain:'buyer0.se',people:[{name:'Saved Buyer'}]}]},outreach:{messageStudio:{originalScripts:{professional:{body:'Protected original message'}}}},delivery:{},meta:{discovery:{}}};
+ const server={version:9,payload:{...local,main:{website:'server.example',answers:{offer:'Protected server offer'}}}};
+ const {root,values}=load(async(_,options)=>options?.method==='PUT'?new Response(JSON.stringify({saved:true,version:10})):new Response(JSON.stringify(server)),{withBridge:true,withBudget:true,recoveryLimit:900000});
+ for(const [key,value] of Object.entries(local))values.set(`leadintel_customer_v2_${key==='main'?'state':key}`,JSON.stringify(value));
+ assert.ok(Buffer.byteLength(JSON.stringify({local,server}))>900000);
+ const result=await root.LeadIntelServerBridge.resolveConflictUseServer();assert.equal(result.resolved,true);
+ const stored=JSON.parse(values.get(RECOVERY));assert.equal(stored.format,'leadintel-sync-recovery-refs-v1');assert.ok(Buffer.byteLength(values.get(RECOVERY))<900000);
+ const recovery=Budget.restoreRecoveryRecord(stored);assert.deepEqual(recovery.local,local);assert.deepEqual(recovery.server,server);assert.deepEqual(recovery.original.local,local);
+ assert.equal(recovery.local.outreach.messageStudio.originalScripts.professional.body,'Protected original message');assert.equal(recovery.local.discovery.selectedProspects[0].people[0].name,'Saved Buyer');
+});
+test('lossless recovery migrates legacy records and rejects mismatched workspace envelopes',()=>{
+ const B=require('../state-budget.js'),legacy={workspace_id:'w1',original:{notes:'Legacy evidence '.repeat(10000)}};const record={...legacy,local:legacy.original,server:{notes:legacy.original.notes}};
+ const packed=B.packRecoveryRecord(record);assert.deepEqual(B.restoreRecoveryRecord(packed),record);assert.equal(B.restoreRecoveryRecord(legacy),legacy);
+ assert.throws(()=>B.restoreRecoveryRecord({...packed,workspace_id:'other'}),/workspace does not match/);
 });
