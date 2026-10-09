@@ -1,10 +1,10 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.LeadIntelPersonalTemplates=api;})(typeof globalThis==='object'?globalThis:this,function(){
  'use strict';
- const ids=Object.freeze(Array.from({length:5},(_,i)=>'template-'+(i+1)));
+ const ids=Object.freeze(Array.from({length:20},(_,i)=>'template-'+(i+1)));
  const text=(v,n)=>String(v??'').trim().slice(0,n);
  function normalize(value={}){return Object.fromEntries(ids.flatMap(id=>{const t=value[id];if(!t||typeof t!=='object')return [];const subject=text(t.subject,500),body=text(t.body,12000);return subject&&body?[[id,{id,name:text(t.name,80)||'Template '+id.slice(-1),subject,body,sourceStyle:text(t.sourceStyle,30),deleted:t.deleted===true}]]:[];}));}
  function nextSlot(value){const slots=normalize(value);return ids.find(id=>!slots[id]||slots[id].deleted)||'';}
- function save(value,id,input={},replace=false){if(!ids.includes(id))throw Error('Choose Template 1–5');const slots=normalize(value);if(slots[id]&&!slots[id].deleted&&!replace)throw Error('This slot is occupied. Review and replace it explicitly.');if(!text(input.subject,500)||!text(input.body,12000))throw Error('Enter a subject and message pattern');return normalize({...slots,[id]:{...input,id,deleted:false}});}
+ function save(value,id,input={},replace=false){if(!ids.includes(id))throw Error('Choose Template 1–20');const slots=normalize(value);if(slots[id]&&!slots[id].deleted&&!replace)throw Error('This slot is occupied. Review and replace it explicitly.');if(!text(input.subject,500)||!text(input.body,12000))throw Error('Enter a subject and message pattern');return normalize({...slots,[id]:{...input,id,deleted:false}});}
  function remove(value,id){const slots=normalize(value);if(!slots[id]||slots[id].deleted)throw Error('Choose a saved template');return {...slots,[id]:{...slots[id],deleted:true}};}
  function restore(value,id){const slots=normalize(value);if(!slots[id]?.deleted)throw Error('No deleted template in this slot');return {...slots,[id]:{...slots[id],deleted:false}};}
  function reusable(subject,body,context={},essentials={}){
