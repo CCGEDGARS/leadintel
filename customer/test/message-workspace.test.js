@@ -231,3 +231,11 @@ test('automatic preparation hides the extra apply button and shows a protected p
  w.LeadIntelMessageWorkspace.render(document,{...base,pendingSelections:true,automaticUpdate:proposal,editorState:{editing:true}});assert.equal(document.getElementById('mw-update-use').disabled,true);
  w.LeadIntelMessageWorkspace.render(document,{...base,pendingSelections:true,generationError:true});assert.equal(document.getElementById('message-generate').hidden,false);assert.equal(document.getElementById('message-generate').textContent,'Retry preparation');
 });
+
+test('a failed style change identifies the displayed draft rather than claiming selected NLP is applied',()=>{
+ const {document,w}=mounted();document.getElementById('outreach-email-body').value='Earlier Professional email';
+ const base={ready:true,authenticated:true,hasDraft:true,channel:'email',senderIdentityReady:true,selectedStyle:'curiosity',appliedStyle:'professional',pendingSelections:true};
+ w.LeadIntelMessageWorkspace.render(document,{...base,generationError:true});
+ assert.equal(document.getElementById('mw-applied-style').textContent,'Displayed email: Professional');assert.match(document.getElementById('mw-style-help').textContent,/NLP has not been applied/);assert.match(document.getElementById('mw-style-help').textContent,/Preparation failed/);assert.doesNotMatch(document.getElementById('mw-style-help').textContent,/is preparing/);assert.equal(document.getElementById('outreach-email-body').value,'Earlier Professional email');
+ w.LeadIntelMessageWorkspace.render(document,{...base,busy:true});assert.match(document.getElementById('mw-style-help').textContent,/Preparing NLP/);
+});

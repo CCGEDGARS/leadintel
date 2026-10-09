@@ -78,6 +78,13 @@
  }
  };
  for(const item of Object.values(records)){Object.freeze(item.paragraphs);Object.freeze(item.subjects);Object.freeze(item);}
+ // Professional wording has one source; only these factual slots may vary.
+ function professionalPattern(){
+  let body=records.professional.paragraphs.join('\n\n');
+  const slots=[['Hi Joakim,','Hi {{firstName}},'],['LKAB’s investment in the new sorting plant in Malmberget','{{development}}'],['(First name Second name)','{{sender}}'],['ERCON','{{company}}'],['Our team brings more than 30 years of metalworking experience, including international projects in Scandinavia.','{{difference}}'],['drawing development, metal manufacturing, installation and qualified workforce solutions','{{offer}}'],['the Malmberget project','the {{subjectProject}} project'],['production plans','{{planType}} plans'],['production data','{{meetingData}} data'],['[link]','{{referenceUrl}}'],['[Calendly link]','{{calendly}}'],['Best regards,\nEdgars','Best regards,\n{{senderFirstName}}']];
+  for(const [from,to] of slots){if(!body.includes(from))throw Error('Approved Professional factual slot changed');body=body.split(from).join(to);}
+  return body;
+ }
  function originalText(style){const item=records[style];return item?(item.subject?'Subject: '+item.subject+'\n':'')+item.paragraphs.join('\n\n'):'';}
- return Object.freeze({records:Object.freeze(records),originalText});
+ return Object.freeze({records:Object.freeze(records),originalText,professionalPattern});
 });

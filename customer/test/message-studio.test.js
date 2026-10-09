@@ -23,7 +23,7 @@ test('seller differentiation and proof remain separate without assuming a buyer 
  assert.equal(seed.proof,'Approved case study');assert.equal(seed.difference,'One accountable partner');assert.equal(seed.problem,'');assert.equal(seed.company,company);}
 });
 test('all default styles place a single action after meeting value and expose problem as a hypothesis',()=>{
- const s=M.normalize({},essentials);for(const t of s.templates){assert.ok(t.body.includes(t.id==='professional'?'{{roleQuestion}}':t.id==='curiosity'?'{{deliveryChallenge}}':t.id==='friendly'?'{{friendlyBenefit}}':'{{honestBenefit}}'));assert.ok(t.body.indexOf('{{nextAction}}')>t.body.lastIndexOf('{{meetingValue}}'));}
+ const s=M.normalize({},essentials);for(const t of s.templates){assert.ok(t.body.includes(t.id==='professional'?'Does your role involve finding trusted partners and managing suppliers for this project?':t.id==='curiosity'?'{{deliveryChallenge}}':t.id==='friendly'?'{{friendlyBenefit}}':'{{honestBenefit}}'));assert.ok(t.body.indexOf(t.id==='professional'?'{{calendly}}':'{{nextAction}}')>t.body.lastIndexOf('{{meetingValue}}'));}
  const p=M.prompt(s);assert.match(p.system,/hypothesis/i);assert.match(p.system,/immediately after/i);
 });
 
