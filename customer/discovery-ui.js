@@ -2288,6 +2288,7 @@ let messagesStageLoading=null;
 function ensureMessagesStageLoaded(){
  if(messagesStageLoading)return messagesStageLoading;
  messagesStageLoading=loadOutreachModules().then(()=>{
+  if(!window.LeadIntelOutreachUI?.openBuyerScripts)throw Error('Messages initialization failed. Reopen Messages to retry.');
   const page=document.getElementById('step-6');
   if(!page)throw Error('Messages did not initialize. Reopen Messages to retry.');
   const selected=Number(JSON.parse(localStorage.getItem('leadintel_customer_v2_state')||'{}').step)===6;
