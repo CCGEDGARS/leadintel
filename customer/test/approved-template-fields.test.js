@@ -17,3 +17,11 @@ function runtime(){let item={domain:'buyer.test',channel:'email',dossier:{},draf
 }
 test('late field preparation cannot replace a manual edit or another buyer',async()=>{const h=runtime(),run=h.runtime.prepareApprovedTemplateFields(studio(),h.context,h.key);h.edit();h.resolve();assert.equal(await run,false);assert.equal(h.item.drafts.emailBody,'Original text');const b=runtime(),other=b.runtime.prepareApprovedTemplateFields(studio(),b.context,b.key);b.item.selectedPersonId='other';b.resolve();assert.equal(await other,false);assert.equal(b.item.drafts.emailBody,'Original text');});
 test('field preparation applies only after complete validation with unchanged context',async()=>{const h=runtime(),run=h.runtime.prepareApprovedTemplateFields(studio(),h.context,h.key);assert.equal(h.item.drafts.emailBody,'Original text');h.resolve();assert.equal(await run,true);assert.equal(h.item.drafts.emailBody,'Corrected');});
+
+test('Swedish spelled quantities translate to equivalent digits while different numbers remain rejected',()=>{
+ const s=studio(),prepared={...fields,triggerSummary:'BuyerCo’s six billion investment in a new sorting plant'};
+ assert.doesNotThrow(()=>E.parsePrepared(prepared,s,ctx));
+ assert.doesNotThrow(()=>E.parsePrepared({...prepared,triggerSummary:'BuyerCo’s 6 billion investment in a new sorting plant'},s,ctx));
+ for(const triggerSummary of ['BuyerCo’s seven billion investment in a new sorting plant','BuyerCo’s 7 billion investment in a new sorting plant'])assert.throws(()=>E.parsePrepared({...prepared,triggerSummary},s,ctx),/unsupported number in triggerSummary/);
+ assert.throws(()=>E.parsePrepared({...fields,difference:'Their team has 99 years of experience.'},s,ctx),/unsupported number/);
+});
