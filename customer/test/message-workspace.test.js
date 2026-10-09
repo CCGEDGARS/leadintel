@@ -169,3 +169,23 @@ test('working drawer retains easy access to library and sender and language tool
  assert.equal(document.getElementById('mw-tools-drawer').open,true);
  assert.equal(document.getElementById('mw-settings').open,true);
 });
+
+test('email action centre shows one named Save as Template and gates direct send and flow by approval',()=>{
+ const {document,w}=mounted();
+ assert.ok(document.getElementById('message-save-as-template'));
+ assert.equal(document.getElementById('message-save-draft').hidden,true);
+ assert.ok(document.getElementById('mw-send-now'));
+ assert.ok(document.getElementById('mw-add-flow'));
+ assert.ok(document.getElementById('mw-flow-date'));
+ assert.ok(document.getElementById('mw-flow-time'));
+ assert.ok(document.getElementById('mw-flow-timezone'));
+ assert.equal(Studio.Library.ids.length,20);
+ w.LeadIntelMessageWorkspace.render(document,{channel:'email',ready:true,authenticated:true,hasDraft:true,approved:false});
+ assert.equal(document.getElementById('mw-send-flow-actions').hidden,true);
+ w.LeadIntelMessageWorkspace.render(document,{channel:'email',ready:true,authenticated:true,hasDraft:true,approved:true});
+ assert.equal(document.getElementById('mw-send-flow-actions').hidden,false);
+ assert.equal(document.getElementById('mw-flow-planner').hidden,true);
+ w.LeadIntelMessageWorkspace.render(document,{channel:'email',ready:true,authenticated:true,hasDraft:true,approved:true,sentAlready:true});
+ assert.equal(document.getElementById('mw-send-now').disabled,true);
+ assert.equal(document.getElementById('mw-add-flow').disabled,false);
+});
