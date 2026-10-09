@@ -24,5 +24,9 @@ test('each approved dropdown keeps five approved options and visibly labels a cu
   studio.subjectChoices[mode]=S.subjectsFor(mode)[0].id;item.drafts.emailSubject=resolve(studio);
   render(q,studio,item,{},S,resolve,s=>s,false);
   assert.equal(q('message-subject-choice').value,studio.subjectChoices[mode]);
+  studio.subjectChoices[mode]='';item.drafts.emailSubject='Default subject';
+  render(q,studio,item,{},S,resolve,s=>s,false);
+  assert.equal(q('message-subject-choice').value,'custom','a matching fallback subject without an explicit choice must stay visible');
+  assert.equal(item.drafts.emailSubject,'Default subject');
  }
 });
