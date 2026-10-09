@@ -1,3 +1,4 @@
+import './personal-linkedin.js?v=20261009-personal-profile-v1';
 const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
 const SETTINGS_VERSION='20260930-openai-gpt-6-1-sol-v1';
 const PROVIDERS=Object.freeze([
@@ -56,6 +57,16 @@ function injectUi(){
         <div class="ai-section-title"><div><span class="eyebrow">Communication</span><h3 id="communication-integration-heading">Account & delivery connections</h3><p>Choose Google or Microsoft for workspace access, then connect the mailbox you want LeadIntel to use for approved outreach.</p></div></div>
         <div class="integration-grid" id="integration-communication-grid"></div>
       </section>
+      <section class="ai-settings-section" aria-labelledby="personal-linkedin-heading">
+        <div class="ai-section-title"><div><span class="eyebrow">Your professional profile</span><h3 id="personal-linkedin-heading">Personal LinkedIn</h3><p>Save your profile for sender identity and open LinkedIn directly from LeadIntel.</p></div></div>
+        <article class="integration-card" data-integration="personal-linkedin">
+          <div class="integration-card-head"><strong>Your LinkedIn profile</strong><span class="integration-status neutral" id="personal-linkedin-status">No profile saved</span></div>
+          <label class="ai-settings-field" for="personal-linkedin-url">Personal profile URL<input id="personal-linkedin-url" type="text" inputmode="url" maxlength="2048" autocomplete="url" placeholder="https://www.linkedin.com/in/your-name/" aria-describedby="personal-linkedin-error personal-linkedin-note"></label>
+          <div class="ai-provider-actions"><button class="ai-settings-btn primary" id="personal-linkedin-save" type="button">Save profile</button><a class="ai-settings-btn" id="personal-linkedin-open" target="_blank" rel="noopener noreferrer" hidden>Open my LinkedIn</a><button class="ai-settings-btn danger" id="personal-linkedin-remove" type="button" hidden>Remove profile</button></div>
+          <p id="personal-linkedin-error" role="status" aria-live="polite"></p>
+          <small id="personal-linkedin-note">Profile link only. No LinkedIn sign-in or automatic sending. LinkedIn opens in a new tab.</small>
+        </article>
+      </section>
       <div class="ai-security-note"><strong>Credential security</strong><span>Customer API keys are sent directly to LeadIntel's authenticated backend, encrypted before database storage and never added to browser workspace data. Platform-managed credentials are not returned to the customer interface.</span></div>
     </aside>`);
   document.getElementById('open-settings')?.addEventListener('click',openDrawer);
@@ -64,10 +75,29 @@ function injectUi(){
   document.getElementById('ai-provider-grid')?.addEventListener('click',handleProviderAction);
   document.getElementById('ai-provider-grid')?.addEventListener('change',handleModelModeChange);
   document.getElementById('ai-settings-drawer')?.addEventListener('click',handleCommunicationAction);
+  document.getElementById('personal-linkedin-save')?.addEventListener('click',()=>savePersonalLinkedIn(false));
+  document.getElementById('personal-linkedin-remove')?.addEventListener('click',()=>savePersonalLinkedIn(true));
   document.getElementById('test-all-integrations')?.addEventListener('click',testAllIntegrations);
   document.addEventListener('keydown',event=>{if(event.key==='Escape')closeDrawer();});
   render();
 }
+function renderPersonalLinkedIn(){
+  const input=document.getElementById('personal-linkedin-url');if(!input)return;
+  const raw=window.LeadIntelSenderIdentity?.get?.().linkedinUrl||'';
+  const url=window.LeadIntelPersonalLinkedIn.normalize(raw);
+  input.value=raw;
+  const link=document.getElementById('personal-linkedin-open');link.hidden=!url;if(url)link.href=url;else link.removeAttribute('href');
+  document.getElementById('personal-linkedin-remove').hidden=!raw;
+  const badge=document.getElementById('personal-linkedin-status');badge.textContent=url?'Profile linked':'No personal profile saved';badge.className='integration-status '+(url?'good':'neutral');
+  input.setAttribute('aria-invalid','false');document.getElementById('personal-linkedin-error').textContent='';
+}
+function savePersonalLinkedIn(remove){
+  const input=document.getElementById('personal-linkedin-url'),message=document.getElementById('personal-linkedin-error');
+  try{window.LeadIntelPersonalLinkedIn.save(window.LeadIntelSenderIdentity,remove?'':input.value);renderPersonalLinkedIn();message.textContent=remove?'Profile removed.':'Profile saved to your sender identity.';}
+  catch(error){message.textContent=error.message;input.setAttribute('aria-invalid','true');}
+}
+window.addEventListener('leadintel:sender-identity-changed',()=>{if(settingsDrawerOpen())renderPersonalLinkedIn();});
+window.addEventListener('leadintel:workspace-changed',renderPersonalLinkedIn);
 function providerState(id){return status.providers.find(item=>item.provider===id)||null;}
 function isOwner(){return status.role==='owner'||workspace()?.role==='owner';}
 function signInFromSettings(provider='google'){
@@ -227,7 +257,7 @@ function clearProviderError(provider){
 function openDrawer(){
   injectUi();const drawer=document.getElementById('ai-settings-drawer'),backdrop=document.getElementById('ai-settings-backdrop');
   if(drawer)drawer.hidden=false;if(backdrop)backdrop.hidden=false;document.body.classList.add('ai-settings-opened');
-  render();refreshAllStatus();setTimeout(()=>document.getElementById('close-settings')?.focus(),0);
+  render();renderPersonalLinkedIn();refreshAllStatus();setTimeout(()=>document.getElementById('close-settings')?.focus(),0);
 }
 function closeDrawer(){const drawer=document.getElementById('ai-settings-drawer'),backdrop=document.getElementById('ai-settings-backdrop');if(drawer)drawer.hidden=true;if(backdrop)backdrop.hidden=true;unmountCredentialControls();document.body.classList.remove('ai-settings-opened');}
 function shouldOpenSettingsFromUrl(){return new URLSearchParams(window.location.search).get('settings')==='ai';}

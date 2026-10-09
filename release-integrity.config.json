@@ -519,6 +519,27 @@
         "confirmCopilotAction",
         "Confirm change"
       ]
+    },
+    {
+      "id": "personal-linkedin-settings",
+      "type": "text",
+      "url": "/customer/ai-settings.js",
+      "status": 200,
+      "contains": [
+        "id=\"personal-linkedin-url\"",
+        "Open my LinkedIn",
+        "No LinkedIn sign-in or automatic sending"
+      ]
+    },
+    {
+      "id": "personal-linkedin-validation",
+      "type": "text",
+      "url": "/customer/personal-linkedin.js",
+      "status": 200,
+      "contains": [
+        "function normalize(value)",
+        "function save(sender,value)"
+      ]
     }
   ],
   "retry": {

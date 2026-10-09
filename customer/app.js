@@ -184,7 +184,17 @@ function initBrandIdentity(){
       window.dispatchEvent(new CustomEvent('leadintel:sender-identity-changed'));
     }
   });
-  globalThis.LeadIntelSenderIdentity={initialize(essentials){
+  globalThis.LeadIntelSenderIdentity={
+    get:()=>({...state.brandIdentity}),
+    setLinkedIn(url){
+      const previous=state.brandIdentity;
+      state.brandIdentity=globalThis.LeadIntelBrandIdentity.normalize({...previous,linkedinUrl:url});
+      try{saveState();}catch(error){state.brandIdentity=previous;throw error;}
+      brandIdentityUI?.sync?.(state.brandIdentity);
+      window.dispatchEvent(new CustomEvent('leadintel:sender-identity-changed'));
+      return {...state.brandIdentity};
+    },
+    initialize(essentials){
     if(!globalThis.LeadIntelSenderIdentityLocation?.migrate(state,essentials))return;
     state.brandIdentity=globalThis.LeadIntelBrandIdentity.normalize(state.brandIdentity);
     brandIdentityUI?.sync?.(state.brandIdentity);saveState();
