@@ -16,6 +16,7 @@ import {handleIntelligenceSourceRoute,runDueSourceHealthChecks} from './intellig
 import {handleCopilotRoute} from './copilot-routes.js';
 import {handleBrandAssetRoute} from './brand-assets.js';
 import {handleCalendlyWebhook,handleCalendlyIntegrationRoute} from './calendly-integration.js';
+import {handleContentMaterialsRoute} from './content-materials.js';
 import {handleWritingReferenceRoute} from './writing-reference-routes.js';
 import {runWritingReferenceJobs} from './writing-reference-runner.js';
 
@@ -55,6 +56,7 @@ export default {
       });
     }
     try{
+      const materials=await handleContentMaterialsRoute(request,env,cors);if(materials)return materials;
       const writing=await handleWritingReferenceRoute(request,env,cors,ctx);if(writing)return writing;
       const brandAsset=await handleBrandAssetRoute(request,env,cors);if(brandAsset)return brandAsset;
       const ai=await handleAiRoute(request,env,cors);if(ai)return ai;

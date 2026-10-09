@@ -16,7 +16,7 @@ test('single composer has subject immediately before body, one full message and 
  assert.ok(q('mw-subject-options').compareDocumentPosition(q('outreach-email-body'))&w.Node.DOCUMENT_POSITION_FOLLOWING);
  assert.equal(q('mw-default-template').hidden,false);
  for(const id of ['mw-save-message','mw-edit-message','mw-rewrite-message','mw-restore-original','message-save-as-template','mw-mark-default','mw-add-flow'])assert.equal(document.querySelectorAll('#'+id).length,1);
- assert.equal(q('mw-restore-original').textContent,'Reset');assert.equal(q('message-save-as-template').textContent,'Library');
+ assert.equal(q('mw-restore-original').textContent,'Reset');assert.equal(q('message-save-as-template').textContent,'Add template');
  assert.equal(q('mw-update-use'),null);assert.equal(q('mw-update-keep'),null);
 });
 test('flow and library actions stay disabled until exact current draft is durably saved; Save link is available',()=>{

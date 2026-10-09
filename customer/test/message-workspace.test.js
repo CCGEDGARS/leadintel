@@ -4,7 +4,7 @@ const read=name=>fs.readFileSync(path.join(__dirname,'..',name),'utf8');
 function mounted(){
  const dom=new JSDOM(read('index.html'),{url:'https://example.com/customer/',runScripts:'outside-only'}),w=dom.window;
  w.LeadIntelMessageStudio=Studio;w.LeadIntelMessageFacts=require('../message-facts.js');w.eval(read('message-workspace.js'));w.eval(read('sender-identity-location.js'));
- w.eval("var repairLegacyEmailIdentity=()=>false;var scriptGenerationRequest=0;var readDraftEdits=()=>null;var q=id=>document.getElementById(id);var asset=p=>p;var esc=v=>String(v);var studioState=()=>({essentials:{}});var readStudio=()=>({});var persistStudio=()=>{};var invalidateStudioDraft=()=>{};var renderMessageStudio=()=>{};var renderPersonalSaveButton=()=>{};var renderPersonalStyleEditor=()=>{};var closePersonalReview=()=>{};var currentItem=()=>null;var toast=()=>{};");
+ w.eval("var repairLegacyEmailIdentity=()=>false;var scriptGenerationRequest=0;var readDraftEdits=()=>null;var q=id=>document.getElementById(id);var asset=p=>p;var esc=v=>String(v);var studioState=()=>({essentials:{}});var readStudio=()=>LeadIntelMessageStudio.normalize({});var persistStudio=()=>{};var invalidateStudioDraft=()=>{};var renderMessageStudio=()=>{};var renderPersonalSaveButton=()=>{};var renderPersonalStyleEditor=()=>{};var closePersonalReview=()=>{};var currentItem=()=>null;var toast=()=>{};");
  const src=read('outreach-ui.js');w.eval(src.slice(src.indexOf('function injectOutreachUI(){'),src.indexOf('function showStep(step)')));w.eval(src.slice(src.indexOf('function installMessageStudio(){'),src.indexOf("let personalChannel='email'")));
  w.eval('injectOutreachUI();installMessageStudio();');return {dom,document:w.document,w};
 }
@@ -79,7 +79,7 @@ test('LinkedIn editor renders protected core styles with body-only preview and m
  const {document,w}=mounted();let studio=Studio.normalize({linkedinMode:'friendly'},{});const item={channel:'linkedin',domain:'buyer.example',selectedPersonId:'p1',dossier:{},drafts:{linkedinMessage:'Saved draft'}};
  w.studioState=()=>studio;w.currentItem=()=>item;w.selectedCandidate=()=>({company:'BuyerCo',domain:'buyer.example'});w.selectedContact=()=>({name:'Sam',title:'Partner'});w.handoffContact={domain:'buyer.example',personId:'p1',channel:'linkedin',contact:{name:'Sam'}};w.renderPersonalSlots=()=>{};w.mainState=()=>({});w.renderMessageWorkspace=()=>w.LeadIntelMessageWorkspace.render(document,{ready:true,authenticated:true,channel:'linkedin',hasDraft:true,person:{name:'Sam'},company:'BuyerCo'});
  const ui=read('outreach-ui.js');w.eval(ui.slice(ui.indexOf('function renderMessageStudio(){'),ui.indexOf('function renderMessageWorkspace(){')));w.renderMessageStudio();
- assert.deepEqual(Array.from(document.getElementById('message-mode').options,o=>o.value),['professional','curiosity','friendly','original']);assert.equal(document.getElementById('message-template-editor').hidden,false);assert.match(document.getElementById('message-template-origin').textContent,/Protected/);assert.equal(document.getElementById('message-template-body').readOnly,true);assert.equal(document.getElementById('message-template-subject').closest('label').hidden,true);assert.equal(document.getElementById('message-subject-choice-label').hidden,true);assert.match(document.getElementById('mw-channel').textContent,/LinkedIn · manual/);assert.equal(document.querySelector('[data-writing-style="brutal"]'),null);
+ assert.deepEqual(Array.from(document.getElementById('message-mode').options,o=>o.value),['professional','curiosity','friendly','original']);assert.equal(document.getElementById('message-template-editor').hidden,true);assert.match(document.getElementById('message-template-origin').textContent,/Protected/);assert.equal(document.getElementById('message-template-body').readOnly,true);assert.equal(document.getElementById('message-template-subject').closest('label').hidden,true);assert.equal(document.getElementById('message-subject-choice-label').hidden,true);assert.match(document.getElementById('mw-channel').textContent,/LinkedIn · manual/);assert.equal(document.querySelector('[data-writing-style="brutal"]'),null);
  studio=Studio.normalize({...studio,linkedinMode:'original'});w.renderMessageStudio();assert.equal(document.getElementById('message-template-editor').hidden,true);assert.ok(Object.isFrozen(Studio.linkedinDefaults[2]));
 });
 
@@ -142,7 +142,7 @@ test('balanced workspace puts style decisions and reusable tools left, email com
  assert.equal(document.querySelectorAll('#message-generate').length,1);
  assert.equal(document.querySelectorAll('#outreach-email-subject').length,1);
  assert.equal(document.querySelectorAll('#outreach-email-body').length,1);
- assert.ok(tools.querySelector('#mw-value-proof'));
+ assert.ok(document.querySelector('#mw-settings #mw-value-proof'));assert.equal(tools.querySelector('#mw-value-proof'),null);
  assert.ok(document.querySelector('#mw-sender-line'));
  document.getElementById('mw-edit-sender').click();
  assert.equal(tools.open,true);
@@ -162,17 +162,16 @@ test('single strongest buying trigger replaces multi-option picker without losin
  assert.ok(document.getElementById('mw-value-proof'));
  assert.equal(document.getElementById('outreach-email-body').closest('.script-grid')!==null,true);
 });
-test('left tools card reuses My versions and links to the library, books and originals',()=>{
- const {document}=mounted();
- const links=[...document.querySelectorAll('.mw-library-shortcuts [data-open-tool]')];
- assert.deepEqual(links.map(x=>x.dataset.openTool),['mw-style-manager','message-my-templates','mw-writing-references','mw-original-peek']);
- assert.equal(document.querySelectorAll('[data-open-tool="mw-style-manager"]').length,1);
- assert.equal(document.getElementById('mw-edit-my-style'),null);
- assert.ok(document.querySelector('#mw-style-manager #mw-use-my-style'));
- assert.equal(document.querySelector('#mw-style-options + .mw-personal-style'),null);
- links.find(x=>x.dataset.openTool==='message-my-templates').click();
- assert.equal(document.getElementById('mw-tools-drawer').open,true);
- assert.equal(document.getElementById('message-my-templates').open,true);
+test('tools have four direct sections without duplicated shortcuts; custom styles live under style settings',()=>{
+ const {document}=mounted(),tools=document.getElementById('mw-tools-drawer');
+ assert.equal(document.querySelector('.mw-library-shortcuts'),null);
+ assert.deepEqual([...tools.querySelector('.mw-tools-content').children].map(e=>e.id),['message-my-templates','mw-content-materials','mw-original-peek','mw-writing-references']);
+ assert.ok(document.querySelector('#mw-style-options').closest('.mw-section').querySelector('#mw-style-manager #mw-use-my-style'));
+ assert.ok(document.querySelector('#mw-writing-assistant #mw-rewrite-message'));
+ assert.ok(document.querySelector('#mw-writing-assistant #mw-shorten-message'));
+ assert.ok(document.querySelector('#mw-writing-assistant #mw-improve-subject'));
+ assert.equal(document.querySelector('.mw-editor-actions #mw-rewrite-message'),null);
+ assert.equal(tools.querySelector('.message-advanced'),null);
 });
 
 test('email action centre shows one named Save as Template and gates direct send and flow by approval',()=>{

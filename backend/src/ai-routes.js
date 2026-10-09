@@ -1,3 +1,4 @@
+import {prepareContentGeneration,resolveContentMaterials} from './content-materials.js';
 import {sha256,cookieValue} from './security.js';
 import {importAesKey,encryptSecret,decryptSecret} from './oauth.js';
 import {AI_PROVIDERS,normalizeAiProvider,defaultAiModel,generateText,verifyProviderCredential,searchWeb} from './ai-provider.js';
@@ -196,7 +197,8 @@ export async function handleAiRoute(request,env,cors={}){
     if(!integration)return error(companyExtraction?'OpenAI integration is required for company extraction':'No active AI provider is configured for this workspace',409,cors,companyExtraction?{provider:'openai',fallback:{status:'not_used',used:false}}:{});
     try{
       const writing=await prepareWritingReferenceGeneration(env,{workspaceId,userId:access.user.id},{...body,system,prompt});
-      const extractionRequest={system:writing.system,prompt:writing.prompt,maxOutputTokens:body.max_output_tokens};
+      const materials=await prepareContentGeneration(env,workspaceId,{...body,system:writing.system,prompt:writing.prompt});
+      const extractionRequest={system:materials.system,prompt:materials.prompt,maxOutputTokens:body.max_output_tokens};
       const runProvider=async(providerIntegration,input)=>{
         const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const apiKey=await decryptSecret(providerIntegration.encrypted_api_key,key);
         let controller=null,timer=null,timedOut=false,onRequestAbort=null;let signal=request.signal;
@@ -232,11 +234,12 @@ export async function handleAiRoute(request,env,cors={}){
         return error(message,502,cors,metadata);
       }
       try{await assertWritingContextCurrent(writingReferenceRuntime(env),{workspaceId},writing.context);}catch{return error('Writing references changed. Regenerate the message.',409,cors);}
-      const result=writing.context?{...attempt.result,writing_references:{referenceRevision:writing.context.referenceRevision,sourceRefs:writing.context.sourceRefs,techniqueIds:writing.context.techniques.map(row=>({sourceId:row.sourceId,techniqueId:row.id}))}}:attempt.result;const usedProvider=result.provider||integration.provider;
+      if(materials.refs.length)await resolveContentMaterials(env,workspaceId,materials.refs);
+      const result=writing.context?{...attempt.result,writing_references:{referenceRevision:writing.context.referenceRevision,sourceRefs:writing.context.sourceRefs,techniqueIds:writing.context.techniques.map(row=>({sourceId:row.sourceId,techniqueId:row.id}))}}:attempt.result;if(materials.refs.length)result.content_materials=materials.refs;const usedProvider=result.provider||integration.provider;
       await env.DB.prepare(`UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(workspaceId,usedProvider).run();
       await audit(env,{workspaceId,userId:access.user.id,type:'ai.generation_completed',provider:usedProvider,metadata:{model:result.model||integration.model,input_tokens:result.usage?.input_tokens||0,output_tokens:result.usage?.output_tokens||0,fallback_used:Boolean(attempt.fallback.used),fallback_from:attempt.fallback.used?'openai':undefined}});
       return json(body.task==='company-extraction'?{...result,fallback:attempt.fallback}:result,200,cors);
-    }catch(cause){return error(String(cause?.message||'AI provider request failed').slice(0,180),502,cors);}
+    }catch(cause){return error(String(cause?.message||'AI provider request failed').slice(0,180),cause.status||502,cors);}
   }
 
   return error('Method not allowed',405,cors);
