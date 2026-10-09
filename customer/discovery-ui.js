@@ -2282,6 +2282,23 @@ function loadOutreachModules(){
     .catch(error=>{outreachLoading=null;showToast(error.message);throw error;});
   return outreachLoading;
 }
+// Messages can be opened directly from the stage navigation, without a Buyers handoff.
+// Load the module first and then activate the dynamically created Step 6 view.
+let messagesStageLoading=null;
+function ensureMessagesStageLoaded(){
+ if(messagesStageLoading)return messagesStageLoading;
+ messagesStageLoading=loadOutreachModules().then(()=>{
+  const page=document.getElementById('step-6');
+  if(!page)throw Error('Messages did not initialize. Reopen Messages to retry.');
+  const selected=Number(JSON.parse(localStorage.getItem('leadintel_customer_v2_state')||'{}').step)===6;
+  if(selected){for(const view of document.querySelectorAll('.step-view'))view.classList.toggle('active',view===page);window.LeadIntelJourney?.refresh?.();}
+  return true;
+ }).catch(error=>{showToast(error.message||'Messages could not load. Please retry.');return false;}).finally(()=>{messagesStageLoading=null;});
+ return messagesStageLoading;
+}
+window.addEventListener('leadintel:module-opened',event=>{if(Number(event.detail?.step)===6)void ensureMessagesStageLoaded();});
+const initialStage=()=>{try{return Number(JSON.parse(localStorage.getItem('leadintel_customer_v2_state')||'{}').step)}catch{return 0;}};
+if(initialStage()===6)void ensureMessagesStageLoaded();
 function openDiscoveryFromHandoff(options={}){if(!moduleReady())return false;showDiscoveryStep(options.focus||"companies");return Boolean($("step-5")?.classList.contains("active"));}
 window.addEventListener?.('leadintel:server-conflict',()=>{if(discoveryMounted){renderAll();renderSelectedEmailBuyer();}});
 window.addEventListener?.('leadintel:server-synced',()=>{if(discoveryMounted){renderAll();renderSelectedEmailBuyer();}});
