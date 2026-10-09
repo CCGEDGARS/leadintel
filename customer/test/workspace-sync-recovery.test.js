@@ -14,6 +14,25 @@ function load(fetchImpl,{withBridge=false,quota=false}={}){
  return {root,values,events};
 }
 const endpoint='https://leadintel.ccgroup.lv/api/customer/state?workspace_id=w1';
+test('workspace recovery export retains unsynced buyers without overwriting the cloud baseline',async()=>{
+ const {root,values}=load(async()=>new Response('{}'));
+ establishBase(root,values);const baseline=values.get('leadintel_customer_v2_workspace_saved_snapshot_v1');
+ values.set('leadintel_customer_v2_discovery',JSON.stringify({selectedProspects:[{domain:'buyer.example',people:[{id:'b',kept:true}]}]}));
+ let exported,clicked=false;root.Blob=class{constructor(parts){exported=parts.join('');}};
+ root.URL={createObjectURL:()=> 'blob:recovery',revokeObjectURL(){}};
+ root.document.createElement=()=>({click(){clicked=true;}});
+ assert.equal(root.LeadIntelWorkspacePersistence.downloadWorkspaceRecovery(),true);
+ const result=JSON.parse(exported);assert.equal(clicked,true);assert.equal(result.workspace_id,'w1');
+ assert.equal(JSON.parse(result.data.leadintel_customer_v2_discovery).selectedProspects[0].people[0].kept,true);
+ assert.equal(values.get('leadintel_customer_v2_workspace_saved_snapshot_v1'),baseline);
+});
+test('workspace recovery export excludes another workspace baseline and unrelated stored credentials',()=>{
+ const {root,values}=load(async()=>new Response('{}'));
+ values.set('leadintel_customer_v2_workspace_saved_snapshot_v1',JSON.stringify({workspace_id:'w2',server_synced:true,data:{private:'other company'}}));
+ values.set('provider_api_key','secret');let exported;root.Blob=class{constructor(parts){exported=parts.join('');}};
+ root.URL={createObjectURL:()=> 'blob:recovery',revokeObjectURL(){}};root.document.createElement=()=>({click(){}});
+ root.LeadIntelWorkspacePersistence.downloadWorkspaceRecovery();assert.doesNotMatch(exported,/other company|provider_api_key|secret/);
+});
 test('first-party saves update the baseline and do not repeatedly autosave an unsaved draft',async()=>{
  let put;const {root}=load(async(input,options)=>{put=JSON.parse(options.body);return new Response(JSON.stringify({saved:true,version:4}));});
  const payload={main:{website:'https://seller.example'},discovery:{},outreach:{},delivery:{},meta:{}};
