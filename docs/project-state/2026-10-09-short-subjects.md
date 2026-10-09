@@ -1,0 +1,11 @@
+# Clean, compact approved subjects — 9 October 2026
+
+The user confirmed the five approved patterns and concise subjects: target 3–8 words, ideally under 50 characters, maximum 60. Protected English collections and original scripts remain verbatim.
+
+Root cause: resolvedSubject used entire trigger summaries and seller-value/offer paragraphs as subject variables. The workspace renderer could also refill a disabled subject pattern from raw research after the studio rendered it. Subjects now accept only concise evidence labels (up to 30 characters and six words), prefer explicit project/name/title fields, reject errors/paragraphs/URLs/JSON, and return an approved fallback when a clean subject cannot be resolved. The dropdown retains exactly five patterns; unavailable evidence-specific choices are disabled, without appended diagnostic text. The workspace never refills these choices from raw research.
+
+Fixed approved wording has deterministic translations for the 24 message languages. Active language versions drive subject choice language. Names and company identities remain literal. Evidence explicitly marked in a different language is excluded; English benefit/offer text is not reused in a non-English subject. No new AI call or guessed fact is introduced for dropdown rendering.
+
+Generated AI-original choices and translated subjects are validated before application: one clean line, at most 60 Unicode characters. Translation prompts preserve approved meaning and request the same compact limits. Oversized identities are never clipped. Existing oversized generated subjects are repaired only when their stored source/settings and selected subject still match; the old subject is retained in correction history. Manual, approved, or changed-context drafts are preserved. Exact manual Save and protected originals remain unchanged; no outreach sent.
+
+Regression coverage checks all four core styles and all supported language codes, exact English wording, real fit scores, name preservation, source-paragraph/error rejection, unavailable evidence choices and generated/translated subject validation. Full customer tests, syntax and static build precede exact-SHA CI, production manifest, backend health and smoke proof. These checks do not establish authenticated customer CRM reload acceptance.

@@ -117,7 +117,7 @@
   q('message-improve').disabled=!view.canGenerate||!context.hasDraft||context.factResearchBusy;
   q('mw-business-value').textContent=context.value?'Reviewed business outcome: '+context.value:'No approved business outcome supplied. Review your Profile answers.';
   q('mw-proof-value').textContent=context.proof?'Approved proof: '+context.proof:'No approved measured results supplied. Use your website for capabilities, not as proof of invented savings.';
-  for(const option of q('message-subject-choice').options)if(option.value)option.textContent=subjectPreview(option.textContent,context);
+  // The studio resolves approved options; raw research must never refill subject placeholders here.
   const resolve=q('mw-resolve');resolve.hidden=!view.action;resolve.textContent=view.action==='sync'?'Review sync choices ↑':view.action==='profile'?'Review Profile answers →':view.action==='settings'?'Complete sender & settings':'Return to Buyers';resolve.onclick=()=>{if(view.action==='sync'){showSyncChoices(document);}else if(view.action==='settings'){q('mw-settings').open=true;q('mw-settings').scrollIntoView({block:'center',behavior:'smooth'});}else context.onResolve?.(view.action);};
   if(!context.syncConflict)restoreSyncChoices(document);
   const emailSubjectSection=q('mw-subject-options');if(emailSubjectSection)emailSubjectSection.hidden=linkedin;const originalPeek=q('mw-original-peek');if(originalPeek)originalPeek.hidden=linkedin;
