@@ -121,7 +121,7 @@ test('buying triggers are visible before collapsed legacy source review and unpe
  assert.equal(document.getElementById('approve-outreach').disabled,true);
 });
 
-test('Outreach Studio v2 puts decisions left, email composition right, and tools in one drawer',()=>{
+test('balanced workspace puts style decisions and reusable tools left, email composition right',()=>{
  const {document}=mounted();
  const rail=document.querySelector('.mw-rail'),editor=document.querySelector('.mw-editor');
  assert.ok(rail.querySelector('#mw-trigger-options'));
@@ -135,8 +135,8 @@ test('Outreach Studio v2 puts decisions left, email composition right, and tools
  const generate=editor.querySelector('.mw-generate-bar');
  assert.ok(generate.compareDocumentPosition(options)&4);
  assert.ok(generate.compareDocumentPosition(editor.querySelector('.script-grid'))&4);
- const tools=editor.querySelector('#mw-tools-drawer');
- assert.equal(tools.open,false);
+ const tools=rail.querySelector('#mw-tools-drawer');
+ assert.equal(tools.open,true);
  for(const id of ['message-template-editor','message-my-templates','mw-writing-references'])
    assert.equal(tools.querySelectorAll('#'+id).length,1,id);
  assert.equal(document.querySelectorAll('#message-generate').length,1);
@@ -145,7 +145,7 @@ test('Outreach Studio v2 puts decisions left, email composition right, and tools
  assert.ok(tools.querySelector('#mw-value-proof'));
  assert.ok(document.querySelector('#mw-sender-line'));
  document.getElementById('mw-edit-sender').click();
- assert.equal(tools.open,false);
+ assert.equal(tools.open,true);
  assert.ok(document.querySelector('#mw-sender-card #mw-settings'));
  assert.equal(document.getElementById('mw-settings').open,true);
 });
@@ -162,13 +162,17 @@ test('single strongest buying trigger replaces multi-option picker without losin
  assert.ok(document.getElementById('mw-value-proof'));
  assert.equal(document.getElementById('outreach-email-body').closest('.script-grid')!==null,true);
 });
-test('working drawer retains easy access to library and sender and language tools are not in main generation area',()=>{
+test('left tools card reuses My versions and links to the library, books and originals',()=>{
  const {document}=mounted();
  const links=[...document.querySelectorAll('.mw-library-shortcuts [data-open-tool]')];
- assert.deepEqual(links.map(x=>x.dataset.openTool),['mw-style-manager','mw-writing-references','mw-settings']);
- links.find(x=>x.dataset.openTool==='mw-settings').click();
+ assert.deepEqual(links.map(x=>x.dataset.openTool),['mw-style-manager','message-my-templates','mw-writing-references','mw-original-peek']);
+ assert.equal(document.querySelectorAll('[data-open-tool="mw-style-manager"]').length,1);
+ assert.equal(document.getElementById('mw-edit-my-style'),null);
+ assert.ok(document.querySelector('#mw-style-manager #mw-use-my-style'));
+ assert.equal(document.querySelector('#mw-style-options + .mw-personal-style'),null);
+ links.find(x=>x.dataset.openTool==='message-my-templates').click();
  assert.equal(document.getElementById('mw-tools-drawer').open,true);
- assert.equal(document.getElementById('mw-settings').open,true);
+ assert.equal(document.getElementById('message-my-templates').open,true);
 });
 
 test('email action centre shows one named Save as Template and gates direct send and flow by approval',()=>{
@@ -237,4 +241,14 @@ test('a failed style change identifies the displayed draft rather than claiming 
  w.LeadIntelMessageWorkspace.render(document,{...base,generationError:true});
  assert.equal(document.getElementById('mw-applied-style').textContent,'Displayed email: Professional');assert.match(document.getElementById('mw-style-help').textContent,/NLP has not been applied/);assert.match(document.getElementById('mw-style-help').textContent,/Preparation failed/);assert.doesNotMatch(document.getElementById('mw-style-help').textContent,/is preparing/);assert.equal(document.getElementById('outreach-email-body').value,'Earlier Professional email');
  w.LeadIntelMessageWorkspace.render(document,{...base,busy:true});assert.match(document.getElementById('mw-style-help').textContent,/Preparing NLP/);
+});
+
+test('moving language tools below sender settings retains one editor and language control listeners',()=>{
+ const {document,w}=mounted();w.LeadIntelMessageTranslations=require('../message-translations.js');w.eval(read('message-translation-ui.js'));
+ let saves=0;w.LeadIntelMessageTranslationUI.mount(document,{save:()=>saves++,target(){},activate(){},restore(){},translate(){}});
+ const settings=document.getElementById('mw-settings'),languages=document.getElementById('mw-language-tools');
+ assert.equal(settings.nextElementSibling,languages);assert.equal(languages.parentElement.id,'mw-sender-card');
+ document.getElementById('message-save-language').click();assert.equal(saves,1);
+ w.LeadIntelMessageTranslationUI.mount(document,{});assert.equal(document.querySelectorAll('#mw-language-tools').length,1);
+ assert.equal(document.querySelectorAll('#outreach-email-body').length,1);
 });

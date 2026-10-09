@@ -1,14 +1,14 @@
-import './approved-reference-scripts.js?v=20261009-professional-budget-v11&core-rules=1&single-editor=20261009-v3';
+import './approved-reference-scripts.js?v=20261009-professional-budget-v11&core-rules=1&single-editor=20261009-v4';
 import './original-scripts-ui.js?v=20261008-brutal-approved-v1';
 import './original-scripts.js?v=20261007-quality-v1';
 import './trigger-preview.js?v=20261008-english-v1';
-import './message-workspace.js?single-editor=20261009-v3&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&approved-subjects=20261007-v2&brutal-approved=20261008-v1';
+import './message-workspace.js?single-editor=20261009-v4&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&approved-subjects=20261007-v2&brutal-approved=20261008-v1';
 import './message-facts.js?v=20261007-quality-v2';
-import './message-translations.js?v=20261009-event-campaign-v1&core-rules=1&single-editor=20261009-v3';
-import './message-translation-ui.js?v=20261008-compact-languages-v2';
-import './personal-template-library.js?single-editor=20261009-v3&templates=20261009-v20&foundation=20261006-v12&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1';
-import './message-studio.js?single-editor=20261009-v3&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&foundation=20261006-v12&booking-recovery=20261007-v1&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1';
-import './message-editor.js?v=20261009-professional-budget-v11&meeting-platform=20261009-v1&core-rules=1&single-editor=20261009-v3';
+import './message-translations.js?v=20261009-event-campaign-v1&core-rules=1&single-editor=20261009-v4';
+import './message-translation-ui.js?v=20261009-balanced-workspace-v1';
+import './personal-template-library.js?single-editor=20261009-v4&templates=20261009-v20&foundation=20261006-v12&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1';
+import './message-studio.js?single-editor=20261009-v4&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&foundation=20261006-v12&booking-recovery=20261007-v1&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1';
+import './message-editor.js?v=20261009-professional-budget-v11&meeting-platform=20261009-v1&core-rules=1&single-editor=20261009-v4';
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
@@ -212,7 +212,7 @@ function updateMessageOpening(){
 }
 
 function injectOutreachUI(){
- if(!document.querySelector('link[data-message-workspace]')){const link=document.createElement('link');link.rel='stylesheet';link.href='message-workspace.css?v=20261009-single-editor-v3';link.dataset.messageWorkspace='true';document.head.append(link);}
+ if(!document.querySelector('link[data-message-workspace]')){const link=document.createElement('link');link.rel='stylesheet';link.href='message-workspace.css?v=20261009-single-editor-v4';link.dataset.messageWorkspace='true';document.head.append(link);}
   if(!document.querySelector('link[data-leadintel-asset="outreach-css"]')){const link=document.createElement("link");link.rel="stylesheet";link.href=asset("outreach.css");link.dataset.leadintelAsset="outreach-css";document.head.appendChild(link);}
   const pipelinePanel=document.querySelector("#step-5 .pipeline-panel");
   if(pipelinePanel&&!q("continue-to-outreach"))pipelinePanel.insertAdjacentHTML("afterend",'<div class="outreach-entry workflow-next-action" hidden><div><span class="eyebrow">Next step</span><strong>Identify the buyers at a saved company, then prepare a relevant message.</strong></div><button class="primary-btn stage-next-action" id="continue-to-outreach" type="button" disabled aria-disabled="true">Continue to Buyers →</button></div>');
@@ -433,7 +433,6 @@ function installMessageStudio(){
  q('mw-style-edit-choice')?.addEventListener('change',renderPersonalStyleEditor);
  q('mw-ai-length')?.addEventListener('change',()=>{const studio=readStudio();studio.aiLength=q('mw-ai-length').value;persistStudio(studio);invalidateStudioDraft();renderMessageStudio();});
 
- q('mw-edit-my-style')?.addEventListener('click',()=>{q('mw-style-edit-choice').value=readStudio().mode;q('mw-tools-drawer').open=true;q('mw-style-manager').open=true;renderPersonalStyleEditor();q('mw-style-manager').scrollIntoView?.({block:'nearest',behavior:'smooth'});});
  q('mw-use-my-style')?.addEventListener('change',()=>{try{const studio=readStudio(),next=LeadIntelMessageStudio.activatePersonalStyle(studio,studio.mode,q('mw-use-my-style').checked);persistStudio(next);invalidateStudioDraft();renderMessageStudio();automaticallyPrepareMessage();}catch(error){toast(error.message);renderMessageStudio();}});
  q('mw-style-load-draft')?.addEventListener('click',()=>{try{const item=readDraftEdits(),style=q('mw-style-edit-choice').value;const reusable=LeadIntelMessageStudio.Library.fromDraft({...item,messageStudioDraft:{mode:style}},readStudio(),studioMessageContext(item,selectedCandidate()));q('mw-style-edit-subject').value=reusable.subject;q('mw-style-edit-body').value=reusable.body;q('mw-style-save-status').textContent='Working email copied into the editor as a reusable pattern. Review names, projects and references before saving.';}catch(error){q('mw-style-save-status').textContent=error.message;}});
  q('mw-style-save')?.addEventListener('click',()=>{try{if(!q('mw-style-review-confirm').checked)throw Error('Review the reusable content and confirm before activating your version.');const studio=readStudio(),style=q('mw-style-edit-choice').value,subject=q('mw-style-edit-subject').value,body=q('mw-style-edit-body').value;const next=LeadIntelMessageStudio.savePersonalStyle(studio,style,{subject,body});persistStudio(next);invalidateStudioDraft();renderMessageStudio();renderPersonalStyleEditor();toast('Personal style revision saved and activated. Original preserved.');}catch(error){q('mw-style-save-status').textContent=error.message;}});
