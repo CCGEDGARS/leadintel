@@ -28,7 +28,7 @@ test('explicit Professional to NLP selection applies the NLP body even for saved
   assert.equal(h.item.messageStudioDraft.mode,'curiosity');assert.match(h.item.drafts.emailBody,/this is not another sales pitch/);E.validateFrame(h.item.drafts.emailBody,'curiosity');
   assert.equal(h.item.messageStudioDraft.pendingTemplateUpdate,undefined);assert.equal(h.item.approved,false);assert.equal(E.savedDraft(h.item),false);assert.equal(A.originalText('curiosity'),master);assert.equal(h.requests.length,0);
   const restored=O.restoreCrmScriptSnapshot(O.buildCrmScriptSnapshot(h.item),'buyer.example');assert.deepEqual(E.updateUndo(restored),before);assert.deepEqual(E.workingDraft(E.undoTemplateUpdate(restored)),before);
-  if(protection==='translated'){assert.equal(h.c.LeadIntelMessageTranslations.book(h.item).activeLanguage,'en');assert.equal(h.c.LeadIntelMessageTranslations.book(h.item).versions.sv.message,'Min svenska text');}
+  if(protection==='translated'){const T=h.c.LeadIntelMessageTranslations;assert.equal(T.book(h.item).activeLanguage,'en');assert.equal(T.book(h.item).versions.sv.message,'Min svenska text');const undone=T.capture(E.undoTemplateUpdate(restored));assert.equal(T.book(undone).activeLanguage,'sv');assert.match(T.source(undone).message,/Does your role involve/);assert.equal(T.book(undone).versions.sv.message,before.message);assert.equal(undone.localizationProvenance.language,'sv');}
  }
 });
 test('opening Messages selects evidence before rendering and automatically prepares every approved style and its factual subjects',()=>{

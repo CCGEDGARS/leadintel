@@ -191,7 +191,7 @@
   const info={...(item.messageStudioDraft||{})};
   if(options.templateUpdate){
    const before=item.channel==='linkedin'?{subject:'',message:item.drafts?.linkedinMessage||''}:workingDraft(item);
-   info.templateUpdateUndo={draft:copy(before),appliedDraft:{subject:draft.subject||'',message:draft.message||''},context:copy(Object.fromEntries(['eventSnapshot','eventStyle','mode','essentials','triggerSourceUrl','appliedTriggerSnapshot'].filter(k=>info[k]!==undefined).map(k=>[k,info[k]])))};
+   info.templateUpdateUndo={draft:copy(before),appliedDraft:{subject:draft.subject||'',message:draft.message||''},context:copy(Object.fromEntries(['eventSnapshot','eventStyle','mode','essentials','triggerSourceUrl','appliedTriggerSnapshot','languageVersions'].filter(k=>k==='languageVersions'||info[k]!==undefined).map(k=>[k,info[k]??null]))),localizationProvenance:copy(item.localizationProvenance||{}),campaignScenario:copy(item.campaignScenario||{})};
    info.previousDrafts=[...(info.previousDrafts||[]).slice(-4),{emailSubject:before.subject,emailBody:before.message,savedAt:new Date().toISOString()}];
    delete info.scriptSavedAt;delete info.savedDraft;
   }
@@ -215,7 +215,8 @@
  function undoTemplateUpdate(item){
   const draft=updateUndo(item);if(!draft)throw Error('Message changed since the template update. Your current text is preserved.');
   const next=apply(item,draft,{origin:'manual'}),context=item.messageStudioDraft.templateUpdateUndo.context||{};
-  for(const key of ['eventSnapshot','eventStyle','mode','essentials','triggerSourceUrl','appliedTriggerSnapshot']){delete next.messageStudioDraft[key];if(context[key]!==undefined)next.messageStudioDraft[key]=copy(context[key]);}
+  for(const key of ['eventSnapshot','eventStyle','mode','essentials','triggerSourceUrl','appliedTriggerSnapshot','languageVersions']){if(key==='languageVersions'&&!Object.prototype.hasOwnProperty.call(context,key))continue;delete next.messageStudioDraft[key];if(context[key]!=null)next.messageStudioDraft[key]=copy(context[key]);}
+  const undo=item.messageStudioDraft.templateUpdateUndo;if(undo.localizationProvenance)next.localizationProvenance=copy(undo.localizationProvenance);if(undo.campaignScenario)next.campaignScenario=copy(undo.campaignScenario);
   delete next.messageStudioDraft.templateUpdateUndo;return next;
  }
  function createController(deps){
