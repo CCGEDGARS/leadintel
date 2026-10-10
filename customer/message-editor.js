@@ -191,7 +191,7 @@
   const info={...(item.messageStudioDraft||{})};
   if(options.templateUpdate){
    const before=item.channel==='linkedin'?{subject:'',message:item.drafts?.linkedinMessage||''}:workingDraft(item);
-   info.templateUpdateUndo={draft:copy(before),appliedDraft:copy(draft),context:copy(Object.fromEntries(['eventSnapshot','eventStyle','mode','essentials','triggerSourceUrl','appliedTriggerSnapshot'].filter(k=>info[k]!==undefined).map(k=>[k,info[k]])))};
+   info.templateUpdateUndo={draft:copy(before),appliedDraft:{subject:draft.subject||'',message:draft.message||''},context:copy(Object.fromEntries(['eventSnapshot','eventStyle','mode','essentials','triggerSourceUrl','appliedTriggerSnapshot'].filter(k=>info[k]!==undefined).map(k=>[k,info[k]])))};
    info.previousDrafts=[...(info.previousDrafts||[]).slice(-4),{emailSubject:before.subject,emailBody:before.message,savedAt:new Date().toISOString()}];
    delete info.scriptSavedAt;delete info.savedDraft;
   }

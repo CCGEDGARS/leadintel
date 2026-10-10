@@ -12,6 +12,33 @@ function harness(){
  for(const [start,end] of [['function sourceBackedTrigger','// Prior drafts'],['async function chooseBuyingTrigger','function restorePreviousTriggerDraft'],['function studioMessageContext','function senderLinkedInFooter'],['function workingSuggestedSubject','function stripEmailSubjectHeader'],['function seedMandatoryEmail','function personalSlots'],['function updateMessageFromTemplate','function pendingMessageSelections']])vm.runInContext(source.slice(source.indexOf(start),source.indexOf(end)),c);
  return {c,q,requests,get item(){return item;},set item(v){item=v;},get studio(){return studio;},set studio(v){studio=v;},set workspace(v){workspace=v;},set usable(v){usable=v;},get renders(){return renders;},finish(fields){requests.at(-1).resolve({ok:true,json:async()=>({text:JSON.stringify(fields),provider:'test-provider'})});}};
 }
+test('Update message preserves an applied event invitation and refreshes current saved event details within its own frame',()=>{
+ const h=harness(),Events=require('../event-campaigns.js'),campaign={id:'expo',name:'Industry Forum',startDate:'2099-10-10',endDate:'2099-10-12',location:'Berlin',stand:'B12',visitValue:'Compare our industrial services.'};
+ h.c.LeadIntelEventCampaigns=Events;h.item.messageStudioDraft={eventSnapshot:campaign,eventStyle:'friendly',mode:'professional'};h.item.drafts.emailBody='My edited event invitation';
+ h.studio=S.markDefault(S.saveMyTemplate(h.studio,'template-1',{name:'Business default',subject:'Business',body:'A regular business message'}),'template-1');
+ const current=Events.save({}, {...campaign,name:'Updated Industry Forum',stand:'C30',location:'Hamburg',startDate:'2099-11-01',endDate:'2099-11-03'});
+ h.c.mainState=()=>({eventCampaigns:current,brandIdentity:{email:'robin@north.example',phone:'+371 12345678'}});
+ h.c.updateMessageFromTemplate();
+ const updated=h.item;assert.match(updated.drafts.emailBody,/Updated Industry Forum/);assert.match(updated.drafts.emailBody,/C30/);assert.match(updated.drafts.emailBody,/Hamburg/);assert.match(updated.drafts.emailBody,/2099-11-01/);assert.match(updated.drafts.emailBody,/If you’re planning/);assert.match(updated.drafts.emailBody,/Hi Sam/);assert.match(updated.drafts.emailBody,/robin@north.example/);assert.doesNotMatch(updated.drafts.emailBody,/B12|Berlin|regular business message/);
+ assert.equal(updated.messageStudioDraft.eventSnapshot.stand,'C30');assert.equal(updated.messageStudioDraft.eventStyle,'friendly');assert.equal(updated.drafts.emailSubject,'Meet at Updated Industry Forum');assert.equal(E.savedDraft(updated),false);assert.equal(updated.approved,false);assert.equal(h.requests.length,0);Events.validateDraft(updated.messageStudioDraft.eventSnapshot,E.workingDraft(updated),e);
+ const restored=O.restoreCrmScriptSnapshot(O.buildCrmScriptSnapshot(updated),'buyer.example'),undone=E.undoTemplateUpdate(restored);assert.equal(undone.drafts.emailBody,'My edited event invitation');assert.equal(undone.messageStudioDraft.eventSnapshot.stand,'B12');
+});
+test('an expired or archived event fails closed and preserves the entire working invitation',()=>{
+ for(const patch of [{endDate:'2020-01-01'},{archived:true}]){
+  const h=harness(),Events=require('../event-campaigns.js'),campaign={id:'expo',name:'Industry Forum',startDate:'2099-10-10',endDate:'2099-10-12',location:'Berlin',stand:'B12',visitValue:'Compare services.'};h.c.LeadIntelEventCampaigns=Events;
+  h.item.messageStudioDraft={eventSnapshot:campaign,eventStyle:'professional'};h.item.drafts.emailBody='Keep my exact invitation';const before=JSON.stringify(h.item);
+  h.c.mainState=()=>({eventCampaigns:{campaigns:[{...campaign,...patch}]}});h.c.updateMessageFromTemplate();assert.equal(JSON.stringify(h.item),before);
+ }
+});
+test('Update message uses a newly confirmed buying event and tailors matching subjects for every protected style',async()=>{
+ for(const mode of ['professional','curiosity','friendly','brutal']){
+  const h=harness();h.studio=S.normalize({mode,essentials:e});h.c.automaticallySelectBuyingTrigger();h.c.automaticallyPrepareMessage();
+  h.item.messageStudioDraft.scriptSavedAt='today';h.item.drafts.emailBody='Saved manual message';h.item.messageStudioDraft.editorOrigin='manual';
+  const url='https://buyer.example/new-factory';h.item.dossier.evidence.push({url,title:'Buyer announces a new manufacturing plant at Riverport',text:'Buyer is investing in a new manufacturing plant at Riverport.'});await h.c.chooseBuyingTrigger(url);
+  assert.equal(h.item.drafts.emailBody,'Saved manual message');h.c.updateMessageFromTemplate();assert.match(h.item.drafts.emailBody,/Riverport/);assert.doesNotMatch(h.item.drafts.emailBody,/Northport/);assert.equal(h.item.messageStudioDraft.triggerSourceUrl,url);E.validateFrame(h.item.drafts.emailBody,mode);
+  const ctx=h.c.studioMessageContext(h.item);for(const option of S.subjectsFor(mode)){const selected=S.chooseSubject(h.studio,mode,option.id),subject=S.resolveApprovedSubject(selected,{...ctx,strictSubjectChoice:true},e);if(subject){assert.ok(S.validSubject(subject));assert.doesNotMatch(subject,/Northport|LKAB|ERCON/);}}
+ }
+});
 test('Update message repairs modified core wording deterministically and preserves immutable originals plus durable Undo',()=>{
  for(const mode of ['professional','curiosity','friendly','brutal']){
   const h=harness();h.studio=S.normalize({mode,essentials:e});h.c.automaticallySelectBuyingTrigger();h.c.automaticallyPrepareMessage();
