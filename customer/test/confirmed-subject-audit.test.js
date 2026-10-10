@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs');
 const S=require('../message-studio.js'),A=require('../approved-reference-scripts.js'),T=require('../message-translations.js');
 const exact=['Steel and installation for Malmberget','Edgars Untals. Ercon','Room for one more steel supplier?','Malmberget steel – who should I ask?','Malmberget: EXC2 or EXC3?'];
-const e={sender:'Edgars Untals',company:'Ercon',offer:'steel manufacturing and installation',approach:'Manufacturing to EN 1090.',language:'en'};
+const e={sender:'Edgars Untals',company:'Ercon',offer:'steel manufacturing and installation',approach:'Manufacturing to EN 1090 with EXC2 and EXC3 project options.',language:'en'};
 const context={buyerCompany:'LKAB',trigger:{summary:'LKAB is investing in a new sorting plant at Malmberget mine.',verification:'source_verified',url:'https://buyer.test/update'}};
 const resolve=(id,ctx=context,essentials=e)=>S.resolvedSubject(S.chooseSubject(S.normalize({mode:'professional'},essentials),'professional',id),{...ctx,strictSubjectChoice:true},essentials);
 test('user-confirmed five subjects are exact, ordered and shared by reference and working chooser',()=>{
@@ -19,9 +19,10 @@ test('approved subject wording localizes in every supported language and never i
  assert.equal(resolve('benefit',{...context,subjectLanguage:'lv'}),'Malmberget: EXC2 vai EXC3?');
 });
 test('unreviewed evidence, unrelated sellers and missing facts never inherit steel or previous project details',()=>{
- for(const id of ['relevance','development','benefit'])assert.equal(resolve(id,{...context,trigger:{...context.trigger,verification:'unreviewed'}}),null);
+ for(const id of ['relevance','development'])assert.equal(resolve(id,{...context,trigger:{...context.trigger,verification:'unreviewed'}}),null);
+ assert.doesNotMatch(resolve('benefit',{...context,trigger:{...context.trigger,verification:'unreviewed'}}),/Malmberget/);
  const legal={...e,sender:'Robin Lane',company:'LawCo',offer:'Contract review',approach:''};
- for(const id of ['development','benefit'])assert.equal(resolve(id,context,legal),null);
+ assert.equal(resolve('development',context,legal),null);assert.equal(resolve('benefit',context,legal),'Malmberget: compare now or later?');
  assert.equal(resolve('relevance',{trigger:{title:'Project Alpha',verification:'user_reviewed'}},legal),'Contract review for Project Alpha');
  assert.equal(resolve('introduction',{},legal),'Robin Lane. LawCo');
  assert.doesNotMatch(resolve('relevance',{trigger:{title:'Project Alpha',verification:'user_reviewed'}},legal),/Ercon|Malmberget|steel/i);
@@ -43,7 +44,7 @@ test('real selector context resolves project with an article and uses approved f
  for(const status of ['draft','evidence_draft','hypothesis_draft','missing']){
   const unapproved={...ctx,sellerAnswerStatus:{priority_offers:status}};
   assert.equal(resolve('curiosity',unapproved,compact),null);
-  assert.equal(resolve('benefit',unapproved,compact),null);
+  assert.doesNotMatch(resolve('benefit',unapproved,{...compact,approach:''}),/EXC/);
  }
  const other={...ctx,trigger:{...ctx.trigger,summary:'Buyer is investing in a new sorting plant at the Northport mine.'}};
  assert.equal(resolve('development',other,compact),'Northport steel – who should I ask?');

@@ -14,14 +14,16 @@
       url.hash='';if(url.search||/\.(?:jpg|jpeg|png|gif|svg|zip|mp4|pdf|docx?)$/i.test(url.pathname)||/privacy|cookie|terms|login|signin|cart|checkout/i.test(url.pathname))continue;
       const normalized=url.href.replace(/\/$/,'');if(normalized===String(website).replace(/\/$/,''))continue;
       let path=url.pathname;try{path=decodeURI(path);}catch{}const label=path+' '+clean(item?.title||'');
-      const company=/product|service|capabilit|manufactur|production|solution|project|case|customer|about|produkt|tjänst|tjanst|tillverk|lösning|losning|referens|om-oss/i.test(label);
+      const company=/quality|standard|certific|specification|kvalit|sertifik|product|service|capabilit|manufactur|production|solution|project|case|customer|about|produkt|tjänst|tjanst|tillverk|lösning|losning|referens|om-oss/i.test(label);
       const people=/contact|kontakt|team|people|leadership|management|ledning|organisation|organization|about|om-oss/i.test(label);
       const locale=/^\/(?:en(?:[-_][a-z]{2})?|english)(?:\/|$)/i.test(path);
       const commercial=/product|capabilit|manufactur|production|produkt|tillverk/i.test(label);
       const score=(purpose==='buyers'?people?10:company?2:0:purpose==='verification'?/contact|kontakt/i.test(label)?11:company?10:people?3:0:commercial?16:company?12:locale?10:people?1:0);
-      if(score)urls.set(normalized,{url:url.href,score});
+      const evidenceArea=/project|case|reference|referens|portfolio/i.test(label)?'reference':/quality|standard|certific|specification|kvalit|sertifik/i.test(label)?'technical':commercial?'offer':'';
+      if(score)urls.set(normalized,{url:url.href,score,area:evidenceArea});
     }
-    return [...urls.values()].sort((a,b)=>b.score-a.score||a.url.localeCompare(b.url)).slice(0,Math.max(0,Math.min(6,limit))).map(x=>x.url);
+    const ranked=[...urls.values()].sort((a,b)=>b.score-a.score||a.url.localeCompare(b.url)),coverage=purpose==='company'?['offer','reference','technical'].map(area=>ranked.find(row=>row.area===area)).filter(Boolean):[];
+    return [...coverage,...ranked.filter(row=>!coverage.includes(row))].slice(0,Math.max(0,Math.min(6,limit))).map(x=>x.url);
   }
   async function collectWebsiteEvidence({website,purpose='company',maxPages=5,fetchImpl=globalThis.fetch,signal,maxDurationMs=0}={}){
     const domain=host(website);if(!domain)throw new Error('A company website is required');if(signal?.aborted)throw signal.reason||Object.assign(new Error('Research cancelled'),{name:'AbortError'});
@@ -62,7 +64,7 @@
   }
   function selectEvidenceText(text,budget){
     const blocks=String(text||'').split(/\n+/).map(clean).filter(Boolean);
-    const substantive=blocks.filter(block=>/(manufactur|produc|equipment|machin|develop|capabilit|steel|metal|weld|assembly|mining|construction|harvest|forestry|crane|lift|tillverk|produkt)/i.test(block)&&block.replace(/\[[^\]]*\]\([^)]*\)/g,'').length>=40);
+    const substantive=blocks.filter(block=>/(certific|standard|specification|experience|installation|completed|delivered|20\d{2}|manufactur|produc|equipment|machin|develop|capabilit|steel|metal|weld|assembly|mining|construction|harvest|forestry|crane|lift|tillverk|produkt)/i.test(block)&&block.replace(/\[[^\]]*\]\([^)]*\)/g,'').length>=40);
     return clean([...substantive,...blocks.filter(block=>!substantive.includes(block))].join(' ')).slice(0,budget);
   }
   function boundedSources(pages=[],budget=12000){
