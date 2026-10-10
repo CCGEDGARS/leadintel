@@ -150,6 +150,18 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #message-studio .mw-original-peek .mw-approved-library details{padding:8px}
 #message-studio .mw-editor .mw-subject-options{border:0;box-shadow:none;background:transparent;padding:0;margin:0 0 13px}
 #message-studio .mw-subject-options .mw-section-heading{margin-bottom:8px}
+
+/* One action row; updates use the existing canonical action and a quiet status line. */
+#message-studio .mw-editor-actions button{font-size:11px;padding:10px 7px}
+#message-studio .mw-editor-actions #message-generate{width:auto;min-width:0;flex:0 1 auto;margin:0;background:#fff;color:#243d30;border:1px solid #dce5df;box-shadow:none}
+#message-studio .mw-editor-actions #message-generate:disabled{opacity:.5;cursor:not-allowed}
+#message-studio .mw-update-status{margin:0 0 12px;padding:0;border:0;background:transparent}
+#message-studio .mw-update-status>.mw-readiness{padding:0;margin:0;background:transparent;border:0;font-size:12px}
+#message-studio .mw-update-status #mw-readiness-text{font-size:12px;font-weight:400}
+#message-studio .mw-update-status #mw-readiness-detail{margin-top:4px}
+#message-studio .mw-update-status .mw-readiness[data-state=blocked]{color:#785020}
+#message-studio .mw-update-status #mw-resolve{margin-top:6px}
+#message-studio .mw-default-template .mw-caption{text-transform:none;letter-spacing:0;font-size:12px}
 #message-studio .mw-subject-options #message-subject-choice-label{display:grid;gap:6px;margin:0 0 10px}
 #message-studio .mw-subject-options #message-subject-choice{width:100%;box-sizing:border-box}
 #message-studio .mw-subject-options .draft-label{margin:7px 0 0;font-size:12px}
