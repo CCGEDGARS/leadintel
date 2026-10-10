@@ -407,7 +407,10 @@
         "Warm / friendly",
         "Professional",
         "calendly.com",
-        "function parse("
+        "function parse(",
+        "subjectAudit",
+        "subjectResearchPlan",
+        "subject-evidence-v1"
       ]
     },
     {
@@ -461,7 +464,11 @@
         "function prepareMessageOnOpen()",
         "automaticallySelectBuyingTrigger({refresh:true});",
         "person.publicName||person.name||saved.name",
-        "showOutreachStep();prepareMessageOnOpen();return true;"
+        "showOutreachStep();prepareMessageOnOpen();return true;",
+        "async function prepareSubjectEvidence",
+        "Five mandatory subjects prepared",
+        "Selected subject within 60 characters",
+        "subjectResearch:{key"
       ]
     },
     {
@@ -483,7 +490,10 @@
         "Add to templates",
         "Reset",
         "mw-subject-picker",
-        "Choose subject"
+        "Choose subject",
+        "mw-subject-status",
+        "mw-subject-research",
+        "mw-subject-count"
       ],
       "notContains": [
         "mw-auto-update",
@@ -500,7 +510,8 @@
         ".mw-layout",
         "@media(max-width:720px)",
         "[hidden]{display:none!important}",
-        ".mw-subject-picker>summary:focus-visible"
+        ".mw-subject-picker>summary:focus-visible",
+        ".mw-subject-picker .mw-subject-status"
       ]
     },
     {

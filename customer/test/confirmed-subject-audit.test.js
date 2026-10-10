@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs');
 const S=require('../message-studio.js'),A=require('../approved-reference-scripts.js'),T=require('../message-translations.js');
 const exact=['Steel and installation for Malmberget','Edgars Untals. Ercon','Room for one more steel supplier?','Malmberget steel – who should I ask?','Malmberget: EXC2 or EXC3?'];
-const e={sender:'Edgars Untals',company:'Ercon',offer:'steel manufacturing and installation',language:'en'};
+const e={sender:'Edgars Untals',company:'Ercon',offer:'steel manufacturing and installation',approach:'Manufacturing to EN 1090.',language:'en'};
 const context={buyerCompany:'LKAB',trigger:{summary:'LKAB is investing in a new sorting plant at Malmberget mine.',verification:'source_verified',url:'https://buyer.test/update'}};
 const resolve=(id,ctx=context,essentials=e)=>S.resolvedSubject(S.chooseSubject(S.normalize({mode:'professional'},essentials),'professional',id),{...ctx,strictSubjectChoice:true},essentials);
 test('user-confirmed five subjects are exact, ordered and shared by reference and working chooser',()=>{
@@ -20,7 +20,7 @@ test('approved subject wording localizes in every supported language and never i
 });
 test('unreviewed evidence, unrelated sellers and missing facts never inherit steel or previous project details',()=>{
  for(const id of ['relevance','development','benefit'])assert.equal(resolve(id,{...context,trigger:{...context.trigger,verification:'unreviewed'}}),null);
- const legal={...e,sender:'Robin Lane',company:'LawCo',offer:'Contract review'};
+ const legal={...e,sender:'Robin Lane',company:'LawCo',offer:'Contract review',approach:''};
  for(const id of ['development','benefit'])assert.equal(resolve(id,context,legal),null);
  assert.equal(resolve('relevance',{trigger:{title:'Project Alpha',verification:'user_reviewed'}},legal),'Contract review for Project Alpha');
  assert.equal(resolve('introduction',{},legal),'Robin Lane. LawCo');
@@ -28,11 +28,11 @@ test('unreviewed evidence, unrelated sellers and missing facts never inherit ste
 });
 test('chooser never reveals placeholders when evidence is missing and keeps manual subject/body on reload',()=>{
  const {JSDOM}=require('jsdom'),source=fs.readFileSync(require.resolve('../outreach-ui.js'),'utf8'),start=source.indexOf('const subjectOptions=linkedin||item?.messageStudioDraft?.eventSnapshot?[]:');
- const render=new Function('q','studio','item','candidate','LeadIntelMessageStudio','workingSuggestedSubject','esc','linkedin',source.slice(start,source.indexOf("q('message-pitch-preview').textContent",start)));
+ const render=new Function('q','studio','item','candidate','LeadIntelMessageStudio','workingSuggestedSubject','esc','linkedin','studioMessageContext',source.slice(start,source.indexOf("q('message-pitch-preview').textContent",start)));
  const dom=new JSDOM('<div id="message-approved-subjects"></div><pre id="message-approved-subjects-copy"></pre><label id="message-subject-choice-label"><span id="message-subject-choice-title"></span><select id="message-subject-choice"></select></label>'),q=id=>dom.window.document.getElementById(id);
  const item=JSON.parse(JSON.stringify({drafts:{emailSubject:'My exact manual subject',emailBody:'My exact manual body'}})),studio=S.normalize({mode:'professional'},e);
  const missing=(s,i,c,strict)=>S.resolvedSubject(s,{strictSubjectChoice:strict},e);
- render(q,studio,item,{},S,missing,v=>String(v),false);assert.equal(q('message-subject-choice').options.length,6);assert.doesNotMatch(q('message-subject-choice').textContent,/\{\{|\}\}/);
+ render(q,studio,item,{},S,missing,v=>String(v),false,()=>({}));assert.equal(q('message-subject-choice').options.length,6);assert.doesNotMatch(q('message-subject-choice').textContent,/\{\{|\}\}/);
  assert.equal(item.drafts.emailSubject,'My exact manual subject');assert.equal(item.drafts.emailBody,'My exact manual body');assert.equal(q('message-subject-choice').value,'custom');dom.window.close();
 });
 
