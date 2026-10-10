@@ -828,7 +828,8 @@ test('provider failures fail the Discovery task and cannot be reported as comple
   const context=loadDiscoveryRunner({
     renderNodes:true,
     requestTimeout:1,
-    scaleProductionRunTimeout:500,
+    // This case verifies provider retry classification, not the separate global deadline.
+    scaleProductionRunTimeout:50,
     fetchImpl:async()=>{requests+=1;return {ok:false,status:503,json:async()=>({error:'Provider unavailable'})};}
   });
   context.LeadIntelTaskCentre={

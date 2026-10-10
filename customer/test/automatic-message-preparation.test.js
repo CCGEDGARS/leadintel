@@ -25,6 +25,24 @@ test('opening Messages selects evidence before rendering and automatically prepa
   const before=JSON.stringify(h.item);onOpen({detail:{step:6}});assert.equal(JSON.stringify(h.item),before);assert.equal(h.requests.length,0);
  }
 });
+test('the page quality contract checks actual core assembly, accepts deliberate edits and preserves Save intent',()=>{
+ const Q=require('../page-quality.js'),h=harness();h.c.window={LeadIntelPageQuality:Q};h.c.buyerHandoffPending=false;h.c.LeadIntelStep2Brief={confirmationMissing:()=>[]};
+ vm.runInContext(source.slice(source.indexOf('function unresolvedEmailMarkers'),source.indexOf('function seedMandatoryEmail')),h.c);
+ vm.runInContext(source.slice(source.indexOf('function messageQualityContext'),source.indexOf('async function prepareMessagePageQuality')),h.c);
+ h.studio=S.normalize({mode:'friendly',essentials:e});h.c.prepareMessageOnOpen();
+ const session={ready:true,authenticated:true,workspaceId:'w1'},report=()=>Q.inspect('messages',{...h.c.messageQualityContext(),session});
+ assert.equal(Q.allowed(report(),'approve'),true);assert.equal(Q.allowed(report(),'flow'),false);const before=JSON.stringify(h.item);
+ h.item.drafts.emailBody='Tampered automatically generated body';assert.equal(report().checks.find(row=>row.id==='template-context').status,'fail');assert.equal(Q.allowed(report(),'approve'),false);
+ h.item.messageStudioDraft.editorOrigin='manual';assert.equal(Q.allowed(report(),'approve'),true);assert.equal(h.item.drafts.emailBody,'Tampered automatically generated body');
+ h.item.messageStudioDraft.scriptSavedAt='today';h.item.messageStudioDraft.savedDraft=E.workingDraft(h.item);assert.equal(Q.allowed(report(),'flow'),true);
+ h.studio.essentials.sender='New Sender';assert.equal(Q.allowed(report(),'flow'),false);assert.equal(h.item.drafts.emailBody,'Tampered automatically generated body');assert.notEqual(JSON.stringify(h.item),before);
+});
+test('a page check cannot confirm a recipient from another workspace or an unverified selected event',()=>{
+ const Q=require('../page-quality.js'),h=harness();h.c.window={LeadIntelPageQuality:Q};h.c.buyerHandoffPending=false;h.c.LeadIntelStep2Brief={confirmationMissing:()=>[]};
+ vm.runInContext(source.slice(source.indexOf('function unresolvedEmailMarkers'),source.indexOf('function seedMandatoryEmail')),h.c);vm.runInContext(source.slice(source.indexOf('function messageQualityContext'),source.indexOf('async function prepareMessagePageQuality')),h.c);
+ h.c.prepareMessageOnOpen();h.workspace='another';h.c.handoffContact.personId='wrong';const report=Q.inspect('messages',{...h.c.messageQualityContext(),session:{ready:true,authenticated:true,workspaceId:'another'}});assert.equal(Q.allowed(report,'approve'),false);assert.equal(report.checks.find(row=>row.id==='recipient-confirmed').status,'fail');
+ h.workspace='w1';h.c.handoffContact.personId='sam';h.item.messageStudioDraft.editorOrigin='manual';h.item.dossier.selectedTrigger.verification='unverified';const unchecked=Q.inspect('messages',{...h.c.messageQualityContext(),session:{ready:true,authenticated:true,workspaceId:'w1'}});assert.equal(unchecked.checks.find(row=>row.id==='trigger-verified').status,'fail');assert.equal(Q.allowed(unchecked,'approve'),false);
+});
 test('opening Messages renders the selected trigger even when Profile confirmation blocks text preparation',()=>{
  const h=harness();h.c.LeadIntelStep2Brief={confirmationMissing:()=>['offer']};assert.equal(h.c.prepareMessageOnOpen(),false);
  assert.equal(h.item.dossier.selectedTrigger.url,'https://buyer.example/news');assert.equal(h.renders,1);assert.equal(h.item.drafts.emailBody,'');assert.equal(h.requests.length,0);
@@ -204,4 +222,12 @@ test('real combined Swedish heading and mine excerpt use the same project as the
  }
  const snapshot=O.restoreCrmScriptSnapshot(O.buildCrmScriptSnapshot(h.item),'buyer.example');assert.equal(h.c.studioMessageContext(snapshot).trigger.subjectSummary,ctx.trigger.subjectSummary);assert.equal(snapshot.dossier.selectedTrigger.excerpt,h.item.dossier.selectedTrigger.excerpt);
  const changed={...ctx,trigger:{...ctx.trigger,subjectSummary:'A new sorting plant at Riverport.'}};assert.notEqual(E.scope('w1',h.item,h.studio,ctx),E.scope('w1',h.item,h.studio,changed));
+});
+
+test('saved event changes require Update even when the name, dates and stand stay the same',()=>{
+ const Q=require('../page-quality.js'),Events=require('../event-campaigns.js'),h=harness();h.c.window={LeadIntelPageQuality:Q};h.c.buyerHandoffPending=false;h.c.LeadIntelStep2Brief={confirmationMissing:()=>[]};h.c.LeadIntelEventCampaigns=Events;
+ vm.runInContext(source.slice(source.indexOf('function unresolvedEmailMarkers'),source.indexOf('function seedMandatoryEmail')),h.c);vm.runInContext(source.slice(source.indexOf('function messageQualityContext'),source.indexOf('async function prepareMessagePageQuality')),h.c);
+ const event=Events.normalizeCampaign({id:'expo',name:'Industry Forum',startDate:'2099-10-10',endDate:'2099-10-12',location:'Berlin',stand:'B12',visitValue:'Compare services.'}),draft=Events.draft(event,e,{firstName:'Sam'});h.item.drafts={emailSubject:draft.subject,emailBody:draft.message};h.item.messageStudioDraft={eventSnapshot:event,essentials:h.studio.essentials};let saved=event;h.c.mainState=()=>({eventCampaigns:{campaigns:[saved]}});
+ const report=()=>Q.inspect('messages',{...h.c.messageQualityContext(),session:{ready:true,authenticated:true,workspaceId:'w1'}});assert.equal(Q.allowed(report(),'approve'),true);const before=JSON.stringify(h.item);
+ for(const patch of [{location:'Hamburg'},{visitValue:'A different reason to visit.'},{availability:'Tuesday afternoon'}]){saved={...event,...patch};assert.equal(Q.allowed(report(),'approve'),false);assert.equal(report().checks.find(row=>row.id==='template-context').status,'fail');assert.equal(JSON.stringify(h.item),before);}
 });
