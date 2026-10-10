@@ -379,3 +379,8 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #message-studio .mw-subject-picker>summary:focus-visible{outline:2px solid #71937b;outline-offset:3px;border-radius:3px}
 #message-studio .mw-subject-picker .mw-subject-choices{margin:8px 0 0}
 #message-studio .mw-subject-picker:not([open])>.mw-subject-choices{display:none}
+
+#message-studio .mw-subject-count{font-size:12px;font-weight:400;color:#63786a}
+#message-studio .mw-subject-picker .mw-subject-status{display:block;margin:8px 0;color:#63786a;font-size:12px;line-height:1.45}
+#message-studio .mw-subject-picker .mw-subject-status[hidden],#message-studio .mw-subject-picker:not([open])>.mw-subject-status,#message-studio .mw-subject-picker:not([open])>#mw-subject-research{display:none}
+#message-studio #mw-subject-research[hidden]{display:none}
