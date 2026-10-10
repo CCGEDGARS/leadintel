@@ -453,6 +453,18 @@
       ]
     },
     {
+      "id": "message-opening-current-context",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "function prepareMessageOnOpen()",
+        "automaticallySelectBuyingTrigger({refresh:true});",
+        "person.publicName||person.name||saved.name",
+        "showOutreachStep();prepareMessageOnOpen();return true;"
+      ]
+    },
+    {
       "id": "focused-message-workspace",
       "type": "text",
       "url": "/customer/message-workspace.js",

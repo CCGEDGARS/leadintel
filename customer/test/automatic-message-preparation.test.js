@@ -7,11 +7,52 @@ function harness(){
  let studio=S.normalize({mode:'professional',essentials:e}),workspace='w1',requests=[],renders=0,usable=true;
  const nodes=new Map(),q=id=>{if(!nodes.has(id))nodes.set(id,{textContent:'',disabled:false});return nodes.get(id);};
  const c={URL,AbortController,setTimeout,clearTimeout,LeadIntelMessageStudio:S,LeadIntelMessageEditor:E,LeadIntelOutreach:O,LeadIntelMessageFacts:F,LeadIntelMessageWorkspace:W,LeadIntelTriggerPreview:require('../trigger-preview.js'),scriptGenerationRequest:0,studioGenerationBusy:false,messageTranslationBusy:false,messageFactResearchBusy:false,studioGenerationError:false,approvedFieldController:null,messageEditor:null,
- DISCOVERY_META_KEY:'meta',handoffContact:{domain:'buyer.example',personId:'sam',channel:'email'},readJson:()=>({scriptBuyer:{workspaceId:workspace,domain:'buyer.example',personId:'sam',channel:'email'}}),currentItem:()=>item,readDraftEdits:()=>item,upsertItem:v=>{item=O.normalizeOutreachState({items:[v]}).items[0];},selectedCandidate:()=>({domain:item.domain,company:'Buyer'}),selectedContact:()=>item.dossier.people[0],readStudio:()=>studio,persistStudio:value=>{studio=value;},studioState:()=>studio,renderMessageStudio(){},mainState:()=>({answers:{},answerStatus:{}}),crmBridge:()=>({workspace:{id:workspace}}),crmAuthenticated:()=>true,messageWorkspaceUsable:()=>usable,rankedBuyingTriggers:()=>F.candidates(item.dossier.evidence,{domain:item.domain,company:'Buyer'}),editorDraft:()=>E.workingDraft(item),renderAll:()=>renders++,renderMessageWorkspace(){},previewSelectedTrigger(){},cancelPendingScriptGeneration:()=>{c.scriptGenerationRequest++;c.approvedFieldController?.abort();},pendingMessageSelections:()=>false,q,toast(){},fetch:async(url,opts)=>new Promise(resolve=>requests.push({url,opts,resolve}))};
+ DISCOVERY_META_KEY:'meta',handoffContact:{domain:'buyer.example',personId:'sam',channel:'email'},readJson:()=>({scriptBuyer:{workspaceId:workspace,domain:'buyer.example',personId:'sam',channel:'email'}}),currentItem:()=>item,readDraftEdits:()=>item,upsertItem:v=>{item=O.normalizeOutreachState({items:[v]}).items[0];},selectedCandidate:()=>({domain:item.domain,company:'Buyer'}),selectedContact:()=>item.dossier.people[0],readStudio:()=>studio,persistStudio:value=>{studio=value;},studioState:()=>studio,renderMessageStudio(){},mainState:()=>({answers:{},answerStatus:{}}),crmBridge:()=>({workspace:{id:workspace}}),crmAuthenticated:()=>true,messageWorkspaceUsable:()=>usable,rankedBuyingTriggers:()=>F.candidates(item.dossier.evidence,{domain:item.domain,company:'Buyer'}),editorDraft:()=>E.workingDraft(item),renderAll:()=>renders++,renderMessageWorkspace(){},ensureSelection(){},previewSelectedTrigger(){},cancelPendingScriptGeneration:()=>{c.scriptGenerationRequest++;c.approvedFieldController?.abort();},pendingMessageSelections:()=>false,q,toast(){},fetch:async(url,opts)=>new Promise(resolve=>requests.push({url,opts,resolve}))};
  vm.createContext(c);
  for(const [start,end] of [['function sourceBackedTrigger','// Prior drafts'],['async function chooseBuyingTrigger','function restorePreviousTriggerDraft'],['function studioMessageContext','function senderLinkedInFooter'],['function workingSuggestedSubject','function stripEmailSubjectHeader'],['function seedMandatoryEmail','function personalSlots'],['function updateMessageFromTemplate','function pendingMessageSelections']])vm.runInContext(source.slice(source.indexOf(start),source.indexOf(end)),c);
  return {c,q,requests,get item(){return item;},set item(v){item=v;},get studio(){return studio;},set studio(v){studio=v;},set workspace(v){workspace=v;},set usable(v){usable=v;},get renders(){return renders;},finish(fields){requests.at(-1).resolve({ok:true,json:async()=>({text:JSON.stringify(fields),provider:'test-provider'})});}};
 }
+test('opening Messages selects evidence before rendering and automatically prepares every approved style and its factual subjects',()=>{
+ for(const mode of ['professional','curiosity','friendly','brutal']){
+  const h=harness();h.studio=S.normalize({mode,essentials:e});let onOpen;
+  h.c.window={addEventListener:(name,fn)=>{assert.equal(name,'leadintel:module-opened');onOpen=fn;}};
+  vm.runInContext(source.split('\n').find(line=>line.includes('window.addEventListener("leadintel:module-opened"')),h.c);
+  const rendered=[];h.c.renderAll=()=>rendered.push(h.item.dossier.selectedTrigger?.url);
+  onOpen({detail:{step:5}});assert.equal(rendered.length,0);onOpen({detail:{step:6}});
+  assert.equal(rendered[0],'https://buyer.example/news');assert.match(h.item.drafts.emailBody,/Hi Sam/);assert.match(h.item.drafts.emailBody,/Northport/);assert.match(h.item.drafts.emailBody,/Robin Lane/);E.validateFrame(h.item.drafts.emailBody,mode);
+  const subjects=S.subjectsFor(mode).map(option=>h.c.workingSuggestedSubject(S.chooseSubject(h.studio,mode,option.id),h.item,h.c.selectedCandidate(),true)).filter(Boolean);
+  assert.ok(subjects.some(subject=>/Northport/.test(subject)),mode);assert.ok(subjects.every(subject=>S.validSubject(subject)&&!/LKAB|ERCON/.test(subject)));assert.equal(h.item.approved,false);assert.equal(h.item.messageStudioDraft.scriptSavedAt,undefined);
+  const before=JSON.stringify(h.item);onOpen({detail:{step:6}});assert.equal(JSON.stringify(h.item),before);assert.equal(h.requests.length,0);
+ }
+});
+test('opening Messages renders the selected trigger even when Profile confirmation blocks text preparation',()=>{
+ const h=harness();h.c.LeadIntelStep2Brief={confirmationMissing:()=>['offer']};assert.equal(h.c.prepareMessageOnOpen(),false);
+ assert.equal(h.item.dossier.selectedTrigger.url,'https://buyer.example/news');assert.equal(h.renders,1);assert.equal(h.item.drafts.emailBody,'');assert.equal(h.requests.length,0);
+ h.c.LeadIntelStep2Brief.confirmationMissing=()=>[];h.c.prepareMessageOnOpen();assert.match(h.item.drafts.emailBody,/Northport/);
+});
+test('reopening refreshes automatic evidence choices while preserving reviewed choices and saved drafts',()=>{
+ const h=harness();h.c.prepareMessageOnOpen();h.item.messageStudioDraft.scriptSavedAt='today';const before=E.workingDraft(h.item);
+ const url='https://buyer.example/riverport';h.item.dossier.evidence.push({url,title:'Buyer announces a new manufacturing plant at Riverport',text:'Buyer is investing in a new manufacturing plant at Riverport.'});
+ const rows=F.candidates(h.item.dossier.evidence,{domain:h.item.domain,company:h.item.company});h.c.rankedBuyingTriggers=()=>[rows.find(row=>row.url===url),...rows.filter(row=>row.url!==url)];h.c.prepareMessageOnOpen();
+ assert.equal(h.item.dossier.selectedTrigger.url,url);assert.deepEqual(E.workingDraft(h.item),before);assert.match(h.item.messageStudioDraft.pendingTemplateUpdate.draft.message,/Riverport/);
+ h.item.dossier.selectedTrigger.verification='user_reviewed';h.c.rankedBuyingTriggers=()=>rows;h.c.prepareMessageOnOpen();assert.equal(h.item.dossier.selectedTrigger.url,url);
+});
+test('trigger ranking and message context use the current kept buyer and workspace seller instead of cached recipient details',()=>{
+ const h=harness();vm.runInContext(source.slice(source.indexOf('function selectedContact'),source.indexOf('async function regenerateDrafts')),h.c);
+ h.c.messageFactCandidates=()=>F.candidates(h.item.dossier.evidence,{domain:h.item.domain,company:h.item.company});vm.runInContext(source.slice(source.indexOf('function rankedBuyingTriggers'),source.indexOf('function sourceBackedTrigger')),h.c);
+ let candidate={domain:'buyer.example',company:'Buyer',people:[{id:'sam',name:'Taylor Current',title:'Manufacturing Director',kept:true,email:'unverified@other.example'}]};h.c.selectedCandidate=()=>candidate;h.item.dossier.people[0].email='verified@buyer.example';assert.equal(h.c.selectedContact(h.item).email,'verified@buyer.example');
+ h.item.dossier.evidence=[{url:'https://buyer.example/a',text:'Buyer is investing in a new sorting plant at Northport.'},{url:'https://buyer.example/b',text:'Buyer is investing in a new manufacturing plant at Riverport.'}];
+ h.studio=S.normalize({mode:'professional',essentials:{...e,offer:'manufacturing services'}});h.c.prepareMessageOnOpen();assert.equal(h.item.dossier.selectedTrigger.url,'https://buyer.example/b');assert.match(h.item.drafts.emailBody,/Hi Taylor/);assert.match(h.item.drafts.emailBody,/Riverport/);assert.doesNotMatch(h.item.drafts.emailBody,/Hi Sam/);
+ candidate={domain:'other.example',company:'Other',people:[{id:'sam',name:'Wrong Workspace',title:'Other',kept:true}]};assert.equal(h.c.selectedContact(h.item).name,'Sam Buyer');
+ candidate={domain:'buyer.example',people:[{id:'sam',name:'Unconfirmed',kept:false}]};assert.equal(h.c.selectedContact(h.item).name,'Sam Buyer');
+});
+test('opening another confirmed buyer uses that recipient and seller context without carrying previous message facts',()=>{
+ const h=harness();h.c.prepareMessageOnOpen();
+ h.item={domain:'clinic.example',company:'Clinic',channel:'email',selectedPersonId:'alex',drafts:{},dossier:{domain:'clinic.example',company:'Clinic',people:[{id:'alex',name:'Alex Health',title:'Clinical Director'}],evidence:[{url:'https://clinic.example/news',text:'Clinic is opening a new diagnostic centre at Eastport.'}]}};
+ h.c.handoffContact={domain:'clinic.example',personId:'alex',channel:'email'};h.c.readJson=()=>({scriptBuyer:{workspaceId:'w1',domain:'clinic.example',personId:'alex',channel:'email'}});h.c.selectedCandidate=()=>({domain:'clinic.example',company:'Clinic'});h.c.rankedBuyingTriggers=()=>F.candidates(h.item.dossier.evidence,{domain:h.item.domain,company:'Clinic'});
+ h.studio=S.normalize({mode:'friendly',essentials:{...e,sender:'Morgan Health',company:'Health Systems',offer:'diagnostic equipment',difference:'Our team supports healthcare projects.'}});h.c.prepareMessageOnOpen();
+ assert.match(h.item.drafts.emailBody,/Hi Alex/);assert.match(h.item.drafts.emailBody,/Morgan Health/);assert.match(h.item.drafts.emailBody,/Eastport/);assert.doesNotMatch(h.item.drafts.emailBody,/Northport|Robin Lane|North Works|Sam Buyer/);E.validateFrame(h.item.drafts.emailBody,'friendly');
+});
 test('Update message preserves an applied event invitation and refreshes current saved event details within its own frame',()=>{
  const h=harness(),Events=require('../event-campaigns.js'),campaign={id:'expo',name:'Industry Forum',startDate:'2099-10-10',endDate:'2099-10-12',location:'Berlin',stand:'B12',visitValue:'Compare our industrial services.'};
  h.c.LeadIntelEventCampaigns=Events;h.item.messageStudioDraft={eventSnapshot:campaign,eventStyle:'friendly',mode:'professional'};h.item.drafts.emailBody='My edited event invitation';
