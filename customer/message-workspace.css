@@ -371,8 +371,8 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #message-studio .mw-subject-choice span{overflow-wrap:anywhere}
 @media(max-width:720px){#message-studio .mw-editor-head{align-items:flex-start}#message-studio .mw-header-actions button{padding:10px 12px}}
 
-#message-studio .mw-subject-picker{margin:0 0 12px;padding:0;border:0;background:transparent}
-#message-studio .mw-subject-picker>summary{display:flex;align-items:center;gap:7px;width:fit-content;list-style:none;cursor:pointer;color:#315b42;font-size:13px;font-weight:600;padding:4px 0}
+#message-studio .mw-subject-picker{margin:12px 0 20px;padding:0;border:0;background:transparent}
+#message-studio .mw-subject-picker>summary{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;width:100%;list-style:none;cursor:pointer;color:#315b42;font-size:14px;font-weight:600;padding:10px 0}
 #message-studio .mw-subject-picker>summary::-webkit-details-marker{display:none}
 #message-studio .mw-subject-picker>summary::before{content:'›';font-size:18px;line-height:1;transition:transform .15s}
 #message-studio .mw-subject-picker[open]>summary::before{transform:rotate(90deg)}
@@ -380,6 +380,7 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #message-studio .mw-subject-picker .mw-subject-choices{margin:8px 0 0}
 #message-studio .mw-subject-picker:not([open])>.mw-subject-choices{display:none}
 
+#message-studio .mw-subject-label{white-space:nowrap}
 #message-studio .mw-subject-count{font-size:12px;font-weight:400;color:#63786a}
 #message-studio .mw-subject-picker .mw-subject-status{display:block;margin:8px 0;color:#63786a;font-size:12px;line-height:1.45}
 #message-studio .mw-subject-picker .mw-subject-status[hidden],#message-studio .mw-subject-picker:not([open])>.mw-subject-status,#message-studio .mw-subject-picker:not([open])>#mw-subject-research{display:none}
