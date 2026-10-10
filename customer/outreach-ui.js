@@ -9,7 +9,7 @@ import './message-facts.js?v=20261007-quality-v2&message-evidence=20261010-v1';
 import './message-translations.js?language-controls=20261010-v2&v=20261009-event-campaign-v1&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1';
 import './message-translation-ui.js?language-controls=20261010-v2&v=20261009-balanced-workspace-v1';
 import './personal-template-library.js?single-editor=20261009-v4&practical-tools=20261009-v1&templates=20261009-v20&foundation=20261006-v12&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1';
-import './message-studio.js?language-controls=20261010-v2&single-editor=20261009-v4&practical-tools=20261009-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&foundation=20261006-v12&booking-recovery=20261007-v1&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1&subject-evidence=20261010-v5';
+import './message-studio.js?language-controls=20261010-v2&single-editor=20261009-v4&practical-tools=20261009-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&foundation=20261006-v12&booking-recovery=20261007-v1&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1&subject-evidence=20261010-v5&style-recovery=20261010-v1';
 import './message-editor.js?template-restore=20261010-v1&sender-reference=20261010-v2&event-update=20261010-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1&subject-evidence=20261010-v5';
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
@@ -516,7 +516,7 @@ function installMessageStudio(){
  q('message-calendly')?.addEventListener('change',()=>{invalidateStudioDraft();persistStudio(readStudio());});
  q('brand-save')?.addEventListener('click',()=>{persistStudio(readStudio());renderMessageStudio();});
  q('message-save-core').onclick=()=>{invalidateStudioDraft();persistStudio(readStudio());if(currentItem()?.channel==='email'&&readStudio().mode!=='original')automaticallyPrepareMessage();renderMessageStudio();q('mw-settings').open=false;toast('Message settings saved');};
- q('message-mode').onchange=()=>{const previous=studioState(),studio=readStudio(),channel=currentItem()?.channel||'email',modeKey=channel==='linkedin'?'linkedinMode':'mode';if(studio[modeKey]===previous[modeKey])return;delete studio.defaultSelection[channel];persistStudio(studio);closePersonalReview();invalidateStudioDraft();persistStudio(readStudio());renderMessageStudio();if(channel==='email'&&studio.mode!=='original')selectMandatoryEmailStyle(studio.mode);};
+ q('message-mode').onchange=()=>{const previous=studioState(),studio=readStudio(),channel=currentItem()?.channel||'email',modeKey=channel==='linkedin'?'linkedinMode':'mode';if(studio[modeKey]===previous[modeKey]&&(channel!=='email'||studio.mode==='original'||studio.mode===currentItem()?.messageStudioDraft?.mode))return;delete studio.defaultSelection[channel];persistStudio(studio);closePersonalReview();invalidateStudioDraft();persistStudio(readStudio());renderMessageStudio();if(channel==='email'&&studio.mode!=='original')selectMandatoryEmailStyle(studio.mode);};
  q('message-subject-choice').onchange=()=>{const id=q('message-subject-choice').value;if(!id||id==='custom')return;const edited=readDraftEdits(),studio=LeadIntelMessageStudio.chooseSubject(readStudio(),readStudio().mode,id);scriptGenerationRequest++;studioGenerationBusy=false;persistStudio(studio);const subject=workingSuggestedSubject(studio,edited,selectedCandidate());if(edited&&subject){const next={...LeadIntelOutreach.invalidateOutreachApproval(edited),drafts:{...edited.drafts,emailSubject:subject}};const subjectOnlyScope=LeadIntelMessageEditor.scope(crmBridge()?.workspace?.id,next,studio,{...studioMessageContext(next,selectedCandidate()),eventCampaign:null});upsertItem(globalThis.LeadIntelMessageTranslations?.capture({...next,messageStudioDraft:{...next.messageStudioDraft,selectedSubject:subject,subjectOnlyScope}})||{...next,messageStudioDraft:{...next.messageStudioDraft,selectedSubject:subject,subjectOnlyScope}});renderAll();toast('Subject updated. The email body and saved templates are unchanged.');}else{renderMessageStudio();toast('This subject requires verified project or technical details. Choose another subject or edit the Email subject directly.');}};
  q('message-copy-template').onclick=()=>{const studio=readStudio(),t=currentItem()?.channel==='linkedin'?LeadIntelMessageStudio.linkedinTemplate(studio):studio.templates.find(t=>t.id===studio.mode);if(t)openPersonalReview(t.subject,t.body,t.isPersonal?t.id:'',t.name,t.sourceStyle||t.id);};
  q('mw-send-now')?.addEventListener('click',()=>void sendCurrentApprovedEmail());
@@ -651,6 +651,9 @@ function selectMandatoryEmailStyle(style){
  // A deliberate template choice is an explicit update, not a background refresh.
  // Keep the replaced working text in persistent Undo and require a new Save.
  cancelPendingScriptGeneration();
+ // Research owns the old style's evidence scope. Cancel it before the update guard;
+ // otherwise the selected style is persisted but its body is silently skipped.
+ if(messageFactResearchBusy){messageFactResearchRequest++;messageFactResearchController?.abort();messageFactResearchController=null;messageFactResearchBusy=false;if(q('message-fact-status'))q('message-fact-status').textContent='';}
  return updateMessageFromTemplate({selectedStyle:true});
 }
 function personalSlots(studio){return (personalChannel==='linkedin'?studio.linkedinTemplates:studio.myTemplates)||{};}
@@ -848,7 +851,7 @@ function updateMessageFromTemplate({selectedStyle=false}={}){
  // Never trust a previously prepared whole-message proposal as the compliance authority.
  const next=selectedStyle?studio:LeadIntelMessageStudio.applyDefault(studio,'email'),preserveSubject=!selectedStyle&&next.mode===studio.mode&&q('message-subject-choice')?.value==='custom'?item.drafts?.emailSubject||'':'';persistStudio(next);renderMessageStudio();
  const prepared=seedMandatoryEmail(next.mode,{replace:true,automatic:false,templateUpdate:true,preserveSubject});
- if(typeof prepareSubjectEvidence==='function')void prepareSubjectEvidence({retry:true});
+ if(typeof prepareSubjectEvidence==='function')void prepareSubjectEvidence({retry:!selectedStyle});
  return prepared;
 }
 function updateEventInvitation(item,studio){

@@ -715,6 +715,8 @@
         "async function markCurrentTemplateDefault",
         "function updateEventInvitation(",
         "updateMessageFromTemplate({selectedStyle:true})",
+        "studio.mode===currentItem()?.messageStudioDraft?.mode",
+        "messageFactResearchRequest++;messageFactResearchController?.abort()",
         "savedDraft:LeadIntelMessageEditor.savedDraft",
         "20261009-single-editor-v4"
       ]
