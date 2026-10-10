@@ -1,0 +1,22 @@
+import {WORKFLOW_STAGES,approvedContext,normalizeWorkflowConfig} from './approved-workflow-engine.js';
+import {parse,savedFlowPayload,savedFlowAuthorized} from './saved-flow-store.js';
+import {executeWorkflowStage} from './approved-workflow-runner.js';
+export async function runSavedFlows(env,{workspaceId='',flowId='',maxFlows=6,execute=executeWorkflowStage,now=new Date()}={}){
+ const where=["status='automatic'"];const args=[];if(workspaceId){where.push('workspace_id=?');args.push(workspaceId);}if(flowId){where.push('id=?');args.push(flowId);}args.push(Math.max(1,Math.min(20,maxFlows)));
+ const {results:rows=[]}=await env.DB.prepare('SELECT * FROM saved_flows WHERE '+where.join(' AND ')+' ORDER BY next_run_at,id LIMIT ?').bind(...args).all(),summary={completed:0,blocked:0,skipped:0};
+ for(const row of rows){
+  if(!await savedFlowAuthorized(env,row.workspace_id,row.revision,row.id)){summary.skipped++;continue;}
+  let run=await env.DB.prepare("SELECT * FROM approved_workflow_runs WHERE workspace_id=? AND flow_id=? AND revision=? AND status IN ('running','blocked') ORDER BY created_at DESC LIMIT 1").bind(row.workspace_id,row.id,row.revision).first();
+  if(run?.status==='blocked'){summary.skipped++;continue;}
+  if(!run){const seedPayload=await savedFlowPayload(env,row),seedContext=approvedContext({...seedPayload.main,messageStudio:seedPayload.outreach?.messageStudio});const settingsSnapshot={revision:row.revision,context:seedContext,config:normalizeWorkflowConfig(parse(row.config_json),seedContext)};if(row.next_run_at&&new Date(row.next_run_at)>now){summary.skipped++;continue;}const id=crypto.randomUUID();await env.DB.prepare("INSERT OR IGNORE INTO approved_workflow_runs(id,workspace_id,flow_id,revision,status,result_json) VALUES(?,?,?,?,'running',?)").bind(id,row.workspace_id,row.id,row.revision,JSON.stringify({flowId:row.id,flowName:row.name,settingsSnapshot})).run();run=await env.DB.prepare('SELECT * FROM approved_workflow_runs WHERE id=?').bind(id).first();if(!run){summary.skipped++;continue;}}
+  if(run.lease_token){if(new Date(run.lease_until)>now){summary.skipped++;continue;}await env.DB.prepare("UPDATE approved_workflow_runs SET status='blocked',error_message='Execution interrupted. Review before retrying; provider usage may have occurred.',lease_token=NULL,lease_until=NULL WHERE id=? AND lease_token=? AND lease_until<=?").bind(run.id,run.lease_token,now.toISOString()).run();summary.blocked++;continue;}
+  const token=crypto.randomUUID(),claim=await env.DB.prepare("UPDATE approved_workflow_runs SET lease_token=?,lease_until=? WHERE id=? AND status='running' AND lease_token IS NULL").bind(token,new Date(now.getTime()+15*60000).toISOString(),run.id).run();if(!claim.meta?.changes){summary.skipped++;continue;}
+  const guard=async()=>{if(!await savedFlowAuthorized(env,row.workspace_id,row.revision,row.id))throw Error('Flow paused or changed');const lease=await env.DB.prepare('SELECT status,lease_token FROM approved_workflow_runs WHERE id=?').bind(run.id).first();if(lease?.status!=='running'||lease.lease_token!==token)throw Error('Flow execution interrupted');};
+  let result=parse(run.result_json);try{
+   const payload=await savedFlowPayload(env,row),context=approvedContext({...payload.main,messageStudio:payload.outreach?.messageStudio}),config=normalizeWorkflowConfig(parse(row.config_json),context);
+   for(let index=run.stage_index;index<WORKFLOW_STAGES.length;index++){result=await execute(WORKFLOW_STAGES[index],{env,row,run,result,context,config,guard});await guard();await env.DB.prepare('UPDATE approved_workflow_runs SET stage_index=?,result_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=?').bind(index+1,JSON.stringify(result),run.id,token).run();}
+   await guard();await env.DB.batch([env.DB.prepare("UPDATE approved_workflow_runs SET status='completed',lease_token=NULL,lease_until=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=?").bind(run.id,token),env.DB.prepare('UPDATE saved_flows SET next_run_at=?,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND id=? AND revision=?').bind(new Date(now.getTime()+(config.delivery.frequency==='weekly'?7:1)*86400000).toISOString(),row.workspace_id,row.id,row.revision)]);summary.completed++;
+  }catch(cause){await env.DB.prepare("UPDATE approved_workflow_runs SET status='blocked',error_message=?,lease_token=NULL,lease_until=NULL,updated_at=CURRENT_TIMESTAMP WHERE id=? AND lease_token=?").bind(String(cause.message||'Execution failed').slice(0,500),run.id,token).run();summary.blocked++;}
+ }
+ return summary;
+}

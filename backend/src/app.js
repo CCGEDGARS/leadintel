@@ -1,3 +1,5 @@
+import {handleSavedFlowRoute} from './saved-flow-routes.js';
+import {runSavedFlows} from './saved-flow-runner.js';
 import {handleApprovedWorkflowRoute} from './approved-workflow-routes.js';
 import {runApprovedWorkflows} from './approved-workflow-runner.js';
 import core from './index.js';
@@ -56,6 +58,7 @@ export default {
       });
     }
     try{
+      const flows=await handleSavedFlowRoute(request,env,cors);if(flows)return flows;
       const materials=await handleContentMaterialsRoute(request,env,cors);if(materials)return materials;
       const writing=await handleWritingReferenceRoute(request,env,cors,ctx);if(writing)return writing;
       const brandAsset=await handleBrandAssetRoute(request,env,cors);if(brandAsset)return brandAsset;
@@ -79,7 +82,7 @@ export default {
   async scheduled(controller,env,ctx){
     const now=new Date(controller.scheduledTime||Date.now());
     if(controller.cron==='* * * * *'){ctx.waitUntil(runWritingReferenceJobs(env,{now:now.getTime()}));return;}
-    const outreachCycle=runApprovedWorkflows(env,{now}).catch(cause=>console.error('Approved workflow cycle failed',cause)).then(()=>pollOutreachReplies(env,{now}).then(()=>runOutreachAutomation(env,{now})));
+    const outreachCycle=runSavedFlows(env,{now}).then(()=>runApprovedWorkflows(env,{now})).catch(cause=>console.error('Approved workflow cycle failed',cause)).then(()=>pollOutreachReplies(env,{now}).then(()=>runOutreachAutomation(env,{now})));
     ctx.waitUntil(Promise.allSettled([
       runDueMarketMonitoring(env,now),
       runDueSourceHealthChecks(env,now),
