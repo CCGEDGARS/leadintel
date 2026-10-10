@@ -1,0 +1,11 @@
+# Sending as reference and reusable style placement — 10 October 2026
+
+User authorization: Sending as is the reference for the user's name in the subject and message body. Custom style settings belong in Outreach Tools, immediately below Template library, titled My style templates and collapsed by default.
+
+Root cause: identity events refreshed the sender card but proposed a complete template update for saved drafts. In addition, readStudio copied obsolete hidden sender fields over the canonical identity. Sender spelling/diacritics could therefore differ between the reference card and the existing message.
+
+Implementation: canonical identity fields retain authority over hidden legacy controls. Sender-name events capture unsaved text, cancel earlier AI requests, and synchronize recorded sender tokens deterministically without AI regeneration. Page render repairs known legacy spelling variants. Subject, introduction, signature, active language copies, archived translations and source stamps remain connected. Changes clear exact-text approval and saved-draft state; Review and Save remain necessary. Existing unrelated localization/evidence blockers remain intact. Empty identities and overlong subjects still fail the existing readiness gates.
+
+Only known sender values/aliases and declared placeholders may change. Names are derived from the active item's applied sender or the actual prior identity event, never a customer/example default. Recipient greetings, URL/email tokens, unrelated text, core masters, tailored originals and historical translation text remain protected. Previously sent/contacted items remain historical. Restored translation copies can reconnect their recorded sender identity. Sender identity is shared workspace information; no bulk rewrite of other saved flows or CRM historical activities is performed.
+
+Prevention: regression exercises actual identity-event routing, current unsaved draft capture, stale hidden fields, diacritic variants, repeated renders, full and first names, clearing/restoring identity, LinkedIn, AI disclosure, translated version/source stamps, CRM roundtrip, immutable originals and sent-history preservation. Reusable style placement is checked through the mounted composer. Exact-SHA release proof and signed-in save/reload acceptance are required in addition to tests.

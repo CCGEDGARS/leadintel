@@ -178,10 +178,11 @@ function initBrandIdentity(){
     getWebsite:()=>state.website,
     getPublicEvidence:brandIdentityPublicEvidence,
     setIdentity:(identity, detail={})=>{
+      const previousSender=state.brandIdentity?.senderName||'';
       state.brandIdentity=globalThis.LeadIntelBrandIdentity.normalize(identity);
       if(detail.persist===false){updateCompleteness();updateNavigationAvailability();return;}
       saveState();
-      window.dispatchEvent(new CustomEvent('leadintel:sender-identity-changed'));
+      window.dispatchEvent(new CustomEvent('leadintel:sender-identity-changed',{detail:{previousSender,senderChanged:previousSender!==state.brandIdentity.senderName}}));
     }
   });
   globalThis.LeadIntelSenderIdentity={
