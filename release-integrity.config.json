@@ -694,7 +694,10 @@
         "My content",
         "Approved originals",
         "Writing references",
-        "Add template",
+        "Add to library",
+        "Set default",
+        "Add to flow",
+        "mw-browse-templates",
         "Custom style settings",
         "mw-shorten-message",
         "mw-improve-subject"
