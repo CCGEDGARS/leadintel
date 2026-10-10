@@ -11,7 +11,8 @@
     "json": {
       "status": "ok",
       "service": "leadintel-api",
-      "workflow_version": "approved-workflow-v1"
+      "workflow_version": "approved-workflow-v1",
+      "saved_flows_version": "my-flows-v1"
     }
   },
   "smokeChecks": [
@@ -99,7 +100,7 @@
       "url": "/customer/approved-workflow-ui.js",
       "status": 200,
       "contains": [
-        "Workflow automation",
+        "My Flows",
         "Take over manually",
         "Approve and start automatic workflow",
         "data-wf-final",
@@ -877,6 +878,39 @@
       "contains": [
         "message-evidence.js?v=20261010-evidence-v3",
         "subject-evidence=20261010-v5"
+      ]
+    },
+    {
+      "id": "saved-flow-library",
+      "type": "text",
+      "url": "/customer/my-flows-ui.js",
+      "status": 200,
+      "contains": [
+        "My Flows",
+        "Duplicate",
+        "Review required",
+        "providerConfirmedSent",
+        "openSavedFlow"
+      ]
+    },
+    {
+      "id": "saved-flow-state",
+      "type": "text",
+      "url": "/customer/my-flows.js",
+      "status": 200,
+      "contains": [
+        "MAX_SAVED_FLOWS=10,MAX_ACTIVE_FLOWS=2",
+        "function composePayload",
+        "function duplicatePayload"
+      ]
+    },
+    {
+      "id": "saved-flow-api-private",
+      "type": "text",
+      "url": "/api/flows?workspace_id=edgars-latvia",
+      "status": 401,
+      "contains": [
+        "Authenticated workspace membership required"
       ]
     }
   ],

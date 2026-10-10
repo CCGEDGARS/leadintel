@@ -3,17 +3,20 @@
   const API='https://leadintel-api.edgars-7e7.workers.dev';
   const labels={profile:'Company profile',strategy:'Market strategy',companies:'Company discovery',buyers:'Buyer selection',triggers:'Buying signals',messages:'Message template',crm:'CRM records',delivery:'Delivery and follow-up'};
   const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  let data=null,workspace='',busy=false,dirty=false,dialog,timer;
+  let automationFlowId=null,data=null,workspace='',busy=false,dirty=false,dialog,timer;
   const bridge=()=>root.LeadIntelServerBridge;
   function notice(message){dialog.querySelector('[data-wf-notice]').textContent=message;}
   async function api(body){
-    const id=bridge()?.workspace?.id;
+    const id=bridge()?.workspace?.id,requestedFlow=automationFlowId;
     if(!bridge()?.session?.authenticated||!id)throw new Error('Sign in to configure automatic execution.');
     if(body&&workspace!==id)throw new Error('Workspace changed. Refresh the workflow before changing settings.');
     if(workspace&&workspace!==id){data=null;dirty=false;}
     workspace=id;
-    const response=await fetch(API+'/api/approved-workflow?workspace_id='+encodeURIComponent(id),{method:body?'POST':'GET',credentials:'include',headers:{Accept:'application/json','Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
+    const path=(automationFlowId?'/api/flows/'+encodeURIComponent(automationFlowId):'/api/approved-workflow')+'?workspace_id='+encodeURIComponent(id);
+    const url=root.LeadIntelApiTransport?.firstPartyUrl?.(API+path)||API+path;
+    const response=await fetch(url,{method:body?'POST':'GET',credentials:'include',headers:{Accept:'application/json','Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
     const value=await response.json().catch(()=>({}));
+    if(requestedFlow!==automationFlowId)throw new Error('Flow changed. Refresh its automation settings.');
     if(bridge()?.workspace?.id!==id)throw new Error('Workspace changed. Refresh the workflow before continuing.');
     if(!response.ok)throw new Error(value.error||'Could not load the workflow.');
     return value;
@@ -37,7 +40,7 @@
   function render(){
     const c=data.config,owner=data.role==='owner',active=data.status==='automatic',stagesApproved=data.stages.every(x=>x.approved),approved=stagesApproved;
     dirty=false;
-    let html='<div class="wf-status"><strong>'+esc({manual:'Manual control',automatic:'Automatic workflow approved',paused:'Paused',stopped:'Stopped',needs_review:'Changes need review'}[data.status]||data.status)+'</strong><span>'+(data.approvedAt?'Approved '+esc(new Date(data.approvedAt).toLocaleString()):'Automatic execution is off')+'</span></div>';
+    let html=(data.name?'<h3>'+esc(data.name)+'</h3>':'')+'<div class="wf-status"><strong>'+esc({manual:'Manual control',automatic:'Automatic workflow approved',paused:'Paused',stopped:'Stopped',needs_review:'Changes need review'}[data.status]||data.status)+'</strong><span>'+(data.approvedAt?'Approved '+esc(new Date(data.approvedAt).toLocaleString()):'Automatic execution is off')+'</span></div>';
     html+='<p>Configure and review every stage. Final approval lets the server run the workflow while this page is closed. You can pause or take over at any time.</p><form data-wf-form><div class="wf-grid">';
     html+=field('companies','Companies per cycle',c.companies.limit,'number','min="1" max="10" required')+field('queries','Market queries per cycle',c.companies.queries,'number','min="1" max="8" required')+field('roles','Buyer roles',c.buyers.roles.join(', '),'text','placeholder="Enter the roles you want to contact" required');
     html+='<label>Accepted email confirmation<select name="confirmationLevel"><option value="public_confirmed" '+(c.buyers.confirmationLevel==='public_confirmed'?'selected':'')+'>Publicly confirmed · exact person–email link on an official company source</option><option value="provider_verified" '+(c.buyers.confirmationLevel!=='public_confirmed'?'selected':'')+'>Provider-verified company email</option></select></label><p>Public confirmation verifies the identity link, not mailbox delivery. Guesses never qualify. Optional Hunter verification is controlled separately in Hunter Settings.</p>';
@@ -73,14 +76,14 @@
     catch(error){notice(error.message);}finally{busy=false;}
   }
   function open(){
-    if(!dialog){dialog=document.createElement('dialog');dialog.className='wf-dialog';dialog.innerHTML='<header><div><span class="eyebrow">Workflow controls</span><h2>Review once. Run automatically.</h2></div><button data-wf-close aria-label="Close workflow controls">Close</button></header><p data-wf-notice role="status" aria-live="polite"></p><div data-wf-content></div>';document.body.append(dialog);dialog.querySelector('[data-wf-close]').addEventListener('click',()=>dialog.close());dialog.addEventListener('close',()=>clearInterval(timer));}
+    if(!dialog){dialog=document.createElement('dialog');dialog.className='wf-dialog';dialog.innerHTML='<header><div><span class="eyebrow">Workflow controls</span><h2>Flow automation settings</h2></div><button data-wf-close aria-label="Close workflow controls">Close</button></header><p data-wf-notice role="status" aria-live="polite"></p><div data-wf-content></div>';document.body.append(dialog);dialog.querySelector('[data-wf-close]').addEventListener('click',()=>dialog.close());dialog.addEventListener('close',()=>clearInterval(timer));}
     dialog.showModal();load();clearInterval(timer);timer=setInterval(()=>{if(dialog.open&&!busy&&!dirty)load();},15000);
   }
   function init(){
-    const style=document.createElement('link');style.rel='stylesheet';style.href='approved-workflow.css?v=20261001-v1';document.head.append(style);
-    const button=document.createElement('button');button.className='wf-open';button.textContent='Workflow automation';button.type='button';button.addEventListener('click',open);
+    const style=document.createElement('link');style.rel='stylesheet';style.href='approved-workflow.css?v=20261010-my-flows-v1';document.head.append(style);
+    const button=document.createElement('button');button.className='wf-open';button.textContent='My Flows';button.type='button';button.addEventListener('click',()=>root.LeadIntelMyFlows?.open?root.LeadIntelMyFlows.open():open());
     const anchor=document.querySelector('.sidebar')||document.querySelector('.app-sidebar')||document.querySelector('aside');(anchor||document.body).append(button);
-    root.LeadIntelApprovedWorkflow={open,refresh:load,contactConfirmationApproved:()=>workspace===bridge()?.workspace?.id&&data?.status==='automatic'&&data?.config?.buyers?.confirmContacts===true};
+    root.LeadIntelApprovedWorkflow={open:()=>root.LeadIntelMyFlows?.open?root.LeadIntelMyFlows.open():open(),openAutomation:(id)=>{automationFlowId=id;data=null;dirty=false;open();},refresh:load,contactConfirmationApproved:()=> (!automationFlowId||automationFlowId===root.LeadIntelMyFlows?.currentId?.())&&workspace===bridge()?.workspace?.id&&data?.status==='automatic'&&data?.config?.buyers?.confirmContacts===true};
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })(window);

@@ -370,6 +370,7 @@
       profile.sourceSummary=sourceSummary(scrapedSources,docs);
     }
     return {
+      ...(value.myFlow&&typeof value.myFlow.id==='string'&&/^[a-zA-Z0-9_.-]{1,160}$/.test(value.myFlow.id)?{myFlow:{id:value.myFlow.id,name:clean(value.myFlow.name).slice(0,100),stateVersion:Number(value.myFlow.stateVersion)||1}}:{}),
       step:[1,2,3,4,5,6,7].includes(Number(value.step))?Number(value.step):1,
       website:normalizeUrl(value.website),
       targetMarkets,
