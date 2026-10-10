@@ -4,7 +4,7 @@ const read=name=>fs.readFileSync(path.join(__dirname,'..',name),'utf8');
 function mounted(){
  const dom=new JSDOM(read('index.html'),{url:'https://example.com/customer/',runScripts:'outside-only'}),w=dom.window;
  w.LeadIntelMessageStudio=Studio;w.LeadIntelMessageFacts=require('../message-facts.js');w.eval(read('message-workspace.js'));w.eval(read('sender-identity-location.js'));
- w.eval("var repairLegacyEmailIdentity=()=>false;var scriptGenerationRequest=0;var readDraftEdits=()=>null;var q=id=>document.getElementById(id);var asset=p=>p;var esc=v=>String(v);var studioState=()=>({essentials:{}});var readStudio=()=>LeadIntelMessageStudio.normalize({});var persistStudio=()=>{};var invalidateStudioDraft=()=>{};var renderMessageStudio=()=>{};var renderPersonalSaveButton=()=>{};var renderPersonalStyleEditor=()=>{};var closePersonalReview=()=>{};var currentItem=()=>null;var workingSuggestedSubject=()=>'';var selectedCandidate=()=>null;var toast=()=>{};");
+ w.eval("var repairLegacyEmailIdentity=()=>false;var synchronizeMessageSender=()=>false;var scriptGenerationRequest=0;var readDraftEdits=()=>null;var q=id=>document.getElementById(id);var asset=p=>p;var esc=v=>String(v);var studioState=()=>({essentials:{}});var readStudio=()=>LeadIntelMessageStudio.normalize({});var persistStudio=()=>{};var invalidateStudioDraft=()=>{};var renderMessageStudio=()=>{};var renderPersonalSaveButton=()=>{};var renderPersonalStyleEditor=()=>{};var closePersonalReview=()=>{};var currentItem=()=>null;var workingSuggestedSubject=()=>'';var selectedCandidate=()=>null;var toast=()=>{};");
  const src=read('outreach-ui.js');w.eval(src.slice(src.indexOf('function injectOutreachUI(){'),src.indexOf('function showStep(step)')));w.eval(src.slice(src.indexOf('function installMessageStudio(){'),src.indexOf("let personalChannel='email'")));
  w.eval('injectOutreachUI();installMessageStudio();');return {dom,document:w.document,w};
 }
@@ -162,11 +162,11 @@ test('single strongest buying trigger replaces multi-option picker without losin
  assert.ok(document.getElementById('mw-value-proof'));
  assert.equal(document.getElementById('outreach-email-body').closest('.script-grid')!==null,true);
 });
-test('tools have four direct sections without duplicated shortcuts; custom styles live under style settings',()=>{
+test('tools group reusable custom styles below the library without duplicated shortcuts',()=>{
  const {document}=mounted(),tools=document.getElementById('mw-tools-drawer');
  assert.equal(document.querySelector('.mw-library-shortcuts'),null);
- assert.deepEqual([...tools.querySelector('.mw-tools-content').children].map(e=>e.id),['message-my-templates','mw-content-materials','mw-original-peek','mw-writing-references']);
- assert.ok(document.querySelector('#mw-style-options').closest('.mw-section').querySelector('#mw-style-manager #mw-use-my-style'));
+ assert.deepEqual([...tools.querySelector('.mw-tools-content').children].map(e=>e.id),['message-my-templates','mw-style-manager','mw-content-materials','mw-original-peek','mw-writing-references']);
+ assert.ok(tools.querySelector('#mw-style-manager #mw-use-my-style'));
  assert.ok(document.querySelector('#mw-writing-assistant #mw-rewrite-message'));
  assert.ok(document.querySelector('#mw-writing-assistant #mw-shorten-message'));
  assert.ok(document.querySelector('#mw-writing-assistant #mw-improve-subject'));
