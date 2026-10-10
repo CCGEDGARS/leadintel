@@ -863,7 +863,7 @@ function acceptAutomaticMessageUpdate(){return updateMessageFromTemplate();}
 function undoMessageTemplateUpdate(){
  const editor=messageEditor?.state();if(!messageWorkspaceUsable()||editor?.editing||editor?.busy||editor?.saving||studioGenerationBusy||messageTranslationBusy)return false;
  if(editor?.canUndo)return messageEditor.undo();
- try{cancelPendingScriptGeneration();upsertItem(LeadIntelMessageEditor.undoTemplateUpdate(readDraftEdits()));renderAll();toast('Previous message restored. Review and Save.');return true;}catch(error){toast(error.message);return false;}
+ try{cancelPendingScriptGeneration();const restored=LeadIntelMessageEditor.undoTemplateUpdate(readDraftEdits()),studio=studioState(),style=restored.messageStudioDraft?.mode,modeKey=restored.channel==='linkedin'?'linkedinMode':'mode';if(style&&studio[modeKey]!==style){studio[modeKey]=style;delete studio.defaultSelection[restored.channel||'email'];persistStudio(studio);}upsertItem(restored);renderAll();toast('Previous message restored. Review and Save.');return true;}catch(error){toast(error.message);return false;}
 }
 function pendingMessageSelections(item=currentItem(),studio=studioState()){
  if(!item||item.channel==='linkedin'||item.messageStudioDraft?.eventSnapshot)return false;
