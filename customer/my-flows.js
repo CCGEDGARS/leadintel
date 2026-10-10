@@ -31,7 +31,7 @@
     main.market.researchResults=[];
     out.discovery={};out.delivery={};out.meta={discovery:{},persistence:{explicit_saved:true}};
     const studio=out.outreach?.messageStudio||{};
-    out.outreach={messageStudio:Object.fromEntries(['mode','essentials','originalScripts','myTemplates','linkedinTemplates','defaultTemplates','defaultSelection','personalStyles','subjectChoices','linkedinMode','aiLength'].filter(k=>studio[k]!==undefined).map(k=>[k,studio[k]]))};
+    out.outreach={messageStudio:Object.fromEntries(['mode','essentials','languageSettings','originalScripts','myTemplates','linkedinTemplates','defaultTemplates','defaultSelection','personalStyles','subjectChoices','linkedinMode','aiLength'].filter(k=>studio[k]!==undefined).map(k=>[k,studio[k]]))};
     return out;
   }
   function reviewChecklist(payload={}){
@@ -39,7 +39,7 @@
   }
   function summary(payload={},config={}){
     const main=payload.main||{},studio=payload.outreach?.messageStudio||{},market=main.market||{},pipeline=payload.discovery?.pipeline||[];
-    return {markets:main.targetMarkets?.length?main.targetMarkets:main.profile?.targetMarkets?[main.profile.targetMarkets]:[],triggers:(market.signals||[]).filter(s=>s.active).map(s=>s.name||s.id),roles:config.buyers?.roles?.length?config.buyers.roles:String(main.answers?.buyer_roles||main.profile?.decisionMakers||'').split(/[,;\n]/).filter(Boolean),template:studio.mode||'Not selected',language:studio.essentials?.language||studio.language||studio.contentLanguage||'Not selected',sources:(market.researchCustomSources||[]).map(s=>typeof s==='string'?s:s.url||s.website||s.name).filter(Boolean),companies:pipeline.length,buyers:pipeline.reduce((n,c)=>n+(c.people||c.buyers||[]).length,0),dailyLimit:config.delivery?.dailyLimit||null};
+    return {markets:main.targetMarkets?.length?main.targetMarkets:main.profile?.targetMarkets?[main.profile.targetMarkets]:[],triggers:(market.signals||[]).filter(s=>s.active).map(s=>s.name||s.id),roles:config.buyers?.roles?.length?config.buyers.roles:String(main.answers?.buyer_roles||main.profile?.decisionMakers||'').split(/[,;\n]/).filter(Boolean),template:studio.mode||'Not selected',language:studio.languageSettings?.defaultLanguage||studio.essentials?.language||studio.language||studio.contentLanguage||'Not selected',sources:(market.researchCustomSources||[]).map(s=>typeof s==='string'?s:s.url||s.website||s.name).filter(Boolean),companies:pipeline.length,buyers:pipeline.reduce((n,c)=>n+(c.people||c.buyers||[]).length,0),dailyLimit:config.delivery?.dailyLimit||null};
   }
   function rate(n,d){return d>0?`${Math.round(n/d*1000)/10}%`:'—';}
   return {MAX_SAVED_FLOWS,MAX_ACTIVE_FLOWS,sharedBusiness,composePayload,duplicatePayload,reviewChecklist,summary,rate,flowMainKeys,flowAnswers};
