@@ -50,7 +50,7 @@
   const defaultButton=node('button','secondary-btn','Set as default');defaultButton.id='mw-mark-default';defaultButton.type='button';defaultButton.title='Mark this saved library template as the default for qualified contacts';defaultButton.setAttribute('aria-label','Set as default');editorActions.append(defaultButton);
   const undoButton=node('button','secondary-btn small','Undo');undoButton.id='mw-undo-rewrite';undoButton.type='button';undoButton.hidden=true;editorActions.append(undoButton);
   const saveRequired=node('p','mw-save-required');saveRequired.id='mw-save-required';saveRequired.innerHTML='Save your changes before adding to templates or flow. <button id="mw-save-required-action" type="button" class="mw-text-button">Save message</button>';editorStatus.after(saveRequired);
-  const options=node('section','mw-section mw-subject-options');options.id='mw-subject-options';options.innerHTML='<div class="mw-section-heading"><div><h3>Subject line</h3></div></div>';for(const id of ['message-subject-choice-label','message-ai-subject-label'])options.append(q(id));const subjectChoices=node('div','mw-subject-choices');subjectChoices.id='mw-subject-choices';subjectChoices.setAttribute('role','radiogroup');subjectChoices.setAttribute('aria-label','Choose a subject line');options.append(subjectChoices);options.append(q('outreach-email-subject').closest('label'));drafts.querySelector('.script-grid').before(options);
+  const options=node('section','mw-section mw-subject-options');options.id='mw-subject-options';options.innerHTML='<div class="mw-section-heading"><div><h3>Subject line</h3></div></div>';options.append(q('outreach-email-subject').closest('label'));const subjectPicker=node('details','mw-subject-picker');subjectPicker.id='mw-subject-picker';subjectPicker.innerHTML='<summary>Choose subject</summary>';for(const id of ['message-subject-choice-label','message-ai-subject-label'])subjectPicker.append(q(id));const subjectChoices=node('div','mw-subject-choices');subjectChoices.id='mw-subject-choices';subjectChoices.setAttribute('role','radiogroup');subjectChoices.setAttribute('aria-label','Choose a subject line');subjectPicker.append(subjectChoices);options.append(subjectPicker);drafts.querySelector('.script-grid').before(options);
   const generateBar=node('div','mw-update-status');generateBar.id='mw-auto-settings';generateBar.append(q('message-language').closest('label'));editorActions.prepend(q('mw-edit-message'),q('message-generate'),q('mw-save-message'));q('message-generate').className='secondary-btn';drafts.querySelector('.script-grid').before(generateBar);
   const notice=node('div','mw-readiness');notice.id='mw-readiness';notice.innerHTML='<p id="mw-readiness-text" role="status"></p><p id="mw-readiness-detail"></p><button id="mw-resolve" class="secondary-btn small" type="button" hidden></button>';generateBar.prepend(notice);notice.append(q('message-generation-status'));
   const empty=node('div','mw-empty');empty.id='mw-empty';empty.innerHTML='<span aria-hidden="true">✦</span><h4>A good conversation starts here.</h4><p>Choose a style and generate a message tailored to this recipient. Your draft will appear here.</p>';drafts.querySelector('.script-grid').before(empty);
@@ -199,6 +199,7 @@
   const source=ai&&!ai.hidden&&q('message-ai-subject-choice')?.options.length>1?q('message-ai-subject-choice'):!core?.hidden?q('message-subject-choice'):null;
   for(const label of [core,ai])if(label){label.style.display='none';label.setAttribute('aria-hidden','true');}
   host.replaceChildren();host.hidden=!source;
+  const picker=q('mw-subject-picker');if(picker)picker.hidden=!source;
   if(!source)return;
   for(const option of source.options){
    if(!option.value||option.value==='custom')continue;
@@ -206,10 +207,10 @@
    const input=document.createElement('input');input.type='radio';input.name='mw-subject-choice';input.value=option.value;input.checked=source.value===option.value;input.disabled=source.disabled||option.disabled;
    const text=document.createElement('span');text.textContent=option.textContent;
    label.append(input,text);label.dataset.unavailable=String(option.disabled);
-   input.addEventListener('change',()=>{if(!input.checked||input.disabled)return;source.value=option.value;source.dispatchEvent(new document.defaultView.Event('change',{bubbles:true}));});
+   input.addEventListener('change',()=>{if(!input.checked||input.disabled)return;source.value=option.value;source.dispatchEvent(new document.defaultView.Event('change',{bubbles:true}));if(picker)picker.open=false;});
    host.append(label);
   }
-  host.hidden=!host.children.length;
+  host.hidden=!host.children.length;if(picker)picker.hidden=host.hidden;
  }
  function showSyncChoices(document){
   const notice=document.getElementById('mw-readiness');let panel=document.getElementById('mw-sync-choices');if(!panel){panel=document.createElement('section');panel.id='mw-sync-choices';panel.className='mw-sync-choices';panel.setAttribute('aria-label','Workspace sync choices');panel.innerHTML='<strong>Choose which workspace version to keep</strong><p>Keep my local changes saves this browser’s workspace. Use server version loads the saved workspace. Review your draft before choosing; neither option is selected automatically.</p>';notice.append(panel);}

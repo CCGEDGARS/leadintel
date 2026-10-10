@@ -481,7 +481,9 @@
         "mw-mark-default",
         "mw-save-required",
         "Add to templates",
-        "Reset"
+        "Reset",
+        "mw-subject-picker",
+        "Choose subject"
       ],
       "notContains": [
         "mw-auto-update",
@@ -497,7 +499,8 @@
       "contains": [
         ".mw-layout",
         "@media(max-width:720px)",
-        "[hidden]{display:none!important}"
+        "[hidden]{display:none!important}",
+        ".mw-subject-picker>summary:focus-visible"
       ]
     },
     {
