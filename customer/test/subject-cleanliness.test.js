@@ -15,8 +15,8 @@ test('approved English wording remains exact and source paragraphs never become 
  assert.equal(M.resolvedSubject(s,context,e),'Alex Smith. LegalCo');
  assert.equal(M.resolvedSubject(s,{...context,trigger:{...context.trigger,title:'A long source title '.repeat(10)}},e),'Alex Smith. LegalCo');
  const b=M.chooseSubject(s,'professional','benefit');
- assert.equal(M.resolvedSubject(b,context,e),'Alex Smith. LegalCo');
- assert.equal(M.resolvedSubject(b,context,{...e,value:'We provide many services and reduce coordination burden across projects. '.repeat(5)}),'Alex Smith. LegalCo');
+ assert.equal(M.resolvedSubject(b,context,e),'Project Alpha: compare now or later?');
+ assert.equal(M.resolvedSubject(b,context,{...e,value:'We provide many services and reduce coordination burden across projects. '.repeat(5)}),'Project Alpha: compare now or later?');
  for(const text of ['Error: provider unavailable','undefined','Subject: Something','{"error":"failed"}','A title\nProvider error'])assert.equal(M.subjectFact(text),'');
 });
 test('localized fixed wording preserves literal names and real scores, without importing English benefit prose',()=>{
@@ -24,7 +24,7 @@ test('localized fixed wording preserves literal names and real scores, without i
  assert.equal(M.resolvedSubject(s,{...context,subjectLanguage:'sv'},e),'Alex Smith deltar i samtalet.');
  s=M.chooseSubject(s,'brutal','fit');assert.equal(M.resolvedSubject(s,{...context,subjectLanguage:'lv'},e),'ClientCo — atbilstība: 87/100');
  const b=M.chooseSubject(M.normalize({mode:'professional'},e),'professional','benefit');
- assert.equal(M.resolvedSubject(b,{...context,subjectLanguage:'sv'},e),'Alex Smith. LegalCo');
+ assert.equal(M.resolvedSubject(b,{...context,subjectLanguage:'sv'},e),'Project Alpha: jämföra nu eller senare?');
 });
 test('evidence-specific options can be disabled without substituting a different approved pattern',()=>{
  const s=M.chooseSubject(M.normalize({mode:'professional'},e),'professional','development');

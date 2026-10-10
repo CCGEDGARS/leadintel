@@ -1,4 +1,5 @@
-import './company-research-engine.js?v=20260918-translation-fidelity-v3';
+import './message-evidence.js?v=20261010-evidence-v1';
+import './company-research-engine.js?v=20260918-translation-fidelity-v3&message-evidence=20261010-v1';
 
 const engine=window.LeadIntelCompanyResearch;
 const MAX_AI_WEB_CHARS=3200;

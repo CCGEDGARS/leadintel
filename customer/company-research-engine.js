@@ -5,13 +5,15 @@
 })(typeof globalThis!=="undefined"?globalThis:this,function(){
   "use strict";
 
+  const MessageEvidence=typeof module==='object'&&module.exports?require('./message-evidence.js'):globalThis.LeadIntelMessageEvidence;
+
   const Brief=(typeof globalThis!=="undefined"&&globalThis.LeadIntelStep2Brief)||(typeof require==="function"?require("./step2-brief-schema.js"):null);
   const QUESTION_IDS=Brief?.FIELD_IDS||["priority_offers","ideal_customer","buyer_roles","exclusions","buying_outcomes","buying_triggers","value_proposition","differentiation","proof_points","objections"];
   const DRAFT_ORIGINS=new Set(["research","evidence_draft","hypothesis_draft"]);
   const CONFIDENCE=new Set(["high","medium","low"]);
   const MAX_PUBLIC_QUERIES=3;
   const MAX_SOURCES=25;
-  const AUTHORITATIVE_CATEGORIES=Object.freeze(["company","offers","proof","delivery","contact"]);
+  const AUTHORITATIVE_CATEGORIES=Object.freeze(["company","offers","proof","delivery","contact","technical"]);
 
   function clean(value){return String(value??"").replace(/\s+/g," ").trim();}
   function truncate(value,max=1200){const text=clean(value);return text.length>max?`${text.slice(0,max-1)}…`:text;}
@@ -49,14 +51,19 @@
   function buildAuthoritativePageQueries(input={}){
     const domain=hostname(input.website);if(!domain)return [];
     const company=clean(input.companyName).slice(0,100);const identity=company?`"${company}" `:"";
-    return [
+    const rows=[
       {id:"official-company",categories:["company","contact"],query:`site:${domain} ${identity}about company contact`},
       {id:"official-offer",categories:["offers","delivery"],query:`site:${domain} ${identity}products services solutions delivery installation warranty`},
-      {id:"official-proof",categories:["proof"],query:`site:${domain} ${identity}projects references case studies customers`}
+      {id:"official-proof",categories:["proof"],query:`site:${domain} projects references`},
+      {id:"official-technical",categories:["technical"],query:`site:${domain} quality specifications certification`}
     ];
+    const gaps=MessageEvidence.plan({essentials:{offer:input.offer||''},context:{sellerWebsite:input.website,sellerEvidence:input.sources||[]}});
+    for(const row of rows){const field=row.id==='official-proof'?'reference':row.id==='official-technical'?'technical':row.id==='official-offer'?'offer':'';row.fields=field?[field]:['seller'];const query=gaps.find(gap=>gap.fields.includes(field));if(query)row.query=query.query;}
+    return rows;
   }
 
   const PAGE_CATEGORY_PATTERNS=Object.freeze({
+    technical:/\b(quality|standards?|certific\w*|specifications?|compliance|kvalitāte|sertifikācija|qualit[aä]t|kvalitet)\b/i,
     contact:/\b(contact|contacts|kontakt|kontakti|sazin(?:āties|ieties)|rekvizīti|locations?|offices?)\b/i,
     proof:/\b(case[- ]?stud(?:y|ies)|projects?|references?|customers?|clients?|projekti|realizētie|atsauksmes|klienti)\b/i,
     delivery:/\b(delivery|installation|service|support|warranty|shipping|piegāde|uzstādīšana|serviss|garantija|apkalpošana)\b/i,
@@ -68,7 +75,7 @@
     const url=canonicalUrl(source.url);if(url&&url===canonicalUrl(website))return "company";
     let path="";try{path=decodeURIComponent(new URL(url).pathname).replace(/[\/_-]+/g," ");}catch{}
     const signal=clean(`${path} ${source.title||""}`);
-    for(const category of ["contact","proof","delivery","offers","company"]){if(PAGE_CATEGORY_PATTERNS[category].test(signal))return category;}
+    for(const category of ["contact","technical","proof","delivery","offers","company"]){if(PAGE_CATEGORY_PATTERNS[category].test(signal))return category;}
     return "other";
   }
   function selectAuthoritativePageCandidates(rows=[],website="",requestedLimit=8){
@@ -99,7 +106,8 @@
     const rawText=row.markdown||row.content||row.description||row.snippet||row.text||"";
     const max=type==="public"?16000:30000;
     const text=String(rawText||"").replace(/\u0000/g,"").trim().slice(0,max);
-    return {type:["website","link","public"].includes(type)?type:"public",url,title,text,query:truncate(query,500),status:"ready",pageCategory:AUTHORITATIVE_CATEGORIES.includes(row.pageCategory)?row.pageCategory:""};
+    const extracted=typeof row.extracted==="boolean"?row.extracted:Boolean(row.markdown||row.content||type!=="public"&&row.text);
+    return {type:["website","link","public"].includes(type)?type:"public",extracted,url,title,text,query:truncate(query,500),status:"ready",pageCategory:AUTHORITATIVE_CATEGORIES.includes(row.pageCategory)?row.pageCategory:""};
   }
   function assignIds(rows){return rows.map((row,index)=>({...row,id:`S${index+1}`}));}
   function normalizeSearchResults(payload,queryMeta={}){
@@ -136,8 +144,8 @@
       if(!item.text.trim()){excluded.push({...item,reason:"No readable text returned."});continue;}
       if(chars+item.text.length>limits.maxChars){excluded.push({...item,reason:`Research character limit reached (${limits.maxChars}).`});continue;}
       chars+=item.text.length;
-      if(sameDomain(item.url,website)&&primary.length<limits.maxPages)primary.push({...item,role:"primary"});
-      else if(!sameDomain(item.url,website))supporting.push({...item,role:"supporting"});
+      if(sameDomain(item.url,website)&&item.extracted!==false&&primary.length<limits.maxPages)primary.push({...item,role:"primary"});
+      else if(!sameDomain(item.url,website)||item.extracted===false)supporting.push({...item,role:"supporting"});
       else excluded.push({...item,reason:`Research page limit reached (${limits.maxPages}).`});
     }
     const primaryWithIds=assignIds(primary);const supportingWithIds=assignIds(supporting.slice(0,MAX_SOURCES)).map((row,index)=>({...row,id:`S${primaryWithIds.length+index+1}`}));return {primary:primaryWithIds,supporting:supportingWithIds,excluded,limits,characters:chars};
@@ -154,10 +162,11 @@
       supportingSeparated:supporting.every(source=>!sameDomain(source?.url,website)||source?.role!=="primary"),
       failures:Number(input.failures)||0
     };
-    const categories=unique(primary.map(source=>classifyPageCategory(source,website)).filter(category=>AUTHORITATIVE_CATEGORIES.includes(category)));
-    const missing=AUTHORITATIVE_CATEGORIES.filter(category=>!categories.includes(category));
+    const commercialCategories=AUTHORITATIVE_CATEGORIES.filter(category=>category!=="technical");
+    const categories=unique(primary.map(source=>classifyPageCategory(source,website)).filter(category=>commercialCategories.includes(category)));
+    const missing=commercialCategories.filter(category=>!categories.includes(category));
     const minimumMet=categories.includes("company")&&categories.includes("offers")&&(categories.includes("proof")||categories.includes("delivery"));
-    const coverage={categories,missing,score:Math.round(categories.length/AUTHORITATIVE_CATEGORIES.length*100),minimumMet,total:AUTHORITATIVE_CATEGORIES.length};
+    const coverage={categories,missing,score:Math.round(categories.length/commercialCategories.length*100),minimumMet,total:commercialCategories.length,technicalEvidence:primary.some(source=>classifyPageCategory(source,website)==="technical")};
     const issues=[];const warnings=[];if(!checks.websiteProvided)issues.push("Company website is missing.");
     if(!checks.primaryDomainMatch)issues.push("Primary website evidence is missing.");
     if(!checks.readablePrimaryEvidence)issues.push("No readable primary evidence was collected.");

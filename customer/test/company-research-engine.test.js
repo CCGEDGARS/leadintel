@@ -18,11 +18,11 @@ test('company research queries are domain-grounded and capped at three',()=>{
   assert.deepEqual(queries.map(item=>item.id),[...new Set(queries.map(item=>item.id))]);
 });
 
-test('authoritative page discovery covers the five company evidence areas with bounded domain queries',()=>{
+test('authoritative page discovery covers company evidence and optional technical specifics with bounded domain queries',()=>{
   const queries=engine.buildAuthoritativePageQueries({website:'https://www.acme-industrial.com/',companyName:'Acme Industrial'});
-  assert.equal(queries.length,3);
+  assert.equal(queries.length,4);
   assert.ok(queries.every(item=>item.query.includes('site:acme-industrial.com')));
-  assert.deepEqual([...new Set(queries.flatMap(item=>item.categories))].sort(),['company','contact','delivery','offers','proof']);
+  assert.deepEqual([...new Set(queries.flatMap(item=>item.categories))].sort(),['company','contact','delivery','offers','proof','technical']);
 });
 
 test('authoritative page candidates stay on the verified domain and retain one best page per evidence area',()=>{

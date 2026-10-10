@@ -1,5 +1,6 @@
-import './first-party-research.js?v=20260930-research-pipeline-v1';
-import './company-research-engine.js?v=20260918-translation-fidelity-v3';
+import './message-evidence.js?v=20261010-evidence-v1';
+import './first-party-research.js?v=20260930-research-pipeline-v1&message-evidence=20261010-v1';
+import './company-research-engine.js?v=20260918-translation-fidelity-v3&message-evidence=20261010-v1';
 
 const MAIN_STORAGE_KEY='leadintel_customer_v2_state';
 const RESEARCH_META_KEY='leadintel_customer_v2_research_meta_v1';
@@ -249,9 +250,9 @@ async function runCompanyResearch({rerun=false}={}){
     const settled=await Promise.allSettled(sourceRequests.map(source=>scrapeSource(source.url,source.type,source.pageCategory,runController.signal)));
     settled.forEach(result=>{if(result.status==='fulfilled')official.push(result.value);else failures++;});
     const companyName=researchEngine.deriveCompanyName(official,website);
-    setProgress('Discovering authoritative company pages…','Finding company, offer, project, delivery and contact pages on the verified domain.');
+    setProgress('Discovering authoritative company pages…','Finding service, project reference, technical, delivery and contact pages on the verified domain.');
     taskCentre?.update(taskId,{stage:'Discovering authoritative pages',completed:1,resultCount:official.length});
-    const authoritativeRows=official.flatMap(page=>window.LeadIntelFirstPartyResearch.selectInternalLinks(page,website,'company',5).map(url=>({url,title:url})));const authoritativeQueries=researchEngine.buildAuthoritativePageQueries({website,companyName});
+    const authoritativeRows=official.flatMap(page=>window.LeadIntelFirstPartyResearch.selectInternalLinks(page,website,'company',5).map(url=>({url,title:url})));const authoritativeQueries=researchEngine.buildAuthoritativePageQueries({website,companyName,offer:state.answers?.priority_offers,sources:official});
     const authoritativeSearchSettled=await Promise.allSettled(authoritativeQueries.map(query=>searchPublic(query,runController.signal)));
     authoritativeSearchSettled.forEach(result=>{if(result.status==='fulfilled')authoritativeRows.push(...result.value);else failures++;});
     const existingUrls=new Set(official.map(source=>researchEngine.safeUrl(source.url)));const authoritativeCandidates=researchEngine.selectAuthoritativePageCandidates(authoritativeRows,website,8).filter(source=>!existingUrls.has(researchEngine.safeUrl(source.url)));
@@ -273,7 +274,7 @@ async function runCompanyResearch({rerun=false}={}){
     const fallback=researchEngine.buildEvidenceDraft({sources:research.primary,targetMarkets:markets,uiLanguage:researchLanguage});const ai=await aiDraftFor({website,targetMarkets:markets,sources:research.primary,documents:state.documents||[],uiLanguage:researchLanguage},runController.signal);const draft=researchEngine.capDraftConfidence(combineDrafts(fallback,ai.draft),quality.coverage);const merged=researchEngine.mergeDraft(state.answers||{},draft,readMeta().fields||{});
     const latest=readState();if(JSON.stringify(latest.answers||{})!==JSON.stringify(state.answers||{})||latest.website!==state.website)throw new Error('Workspace changed during research. Your edits were preserved; rerun when ready.');
     const next={...state};next.uiLanguage='en';next.website=website;next.targetMarkets=markets;next.additionalLinks=additionalLinks;next.answers=merged.answers;
-    next.scrapedSources=sources.map(source=>({type:source.type==='public'?'link':source.type,url:source.url,title:source.title,text:source.text,status:'ready',role:source.role||'supporting',pageCategory:source.pageCategory||researchEngine.classifyPageCategory(source,website)}));
+    next.scrapedSources=sources.map(source=>({type:source.type==='public'?'link':source.type,url:source.url,title:source.title,text:source.text,extracted:source.extracted,status:'ready',role:source.role||'supporting',pageCategory:source.pageCategory||researchEngine.classifyPageCategory(source,website)}));
     next.answerStatus={...(state.answerStatus||{})};for(const [id,row] of Object.entries(merged.meta)){next.answerStatus[id]=row.origin==='user'?'user':row.reviewed?'accepted':merged.answers[id]?'draft':'missing';}
     next.profile=null;next.approved=false;next.market={};next.step=2;writeState(next);
     const fields={};for(const id of researchEngine.QUESTION_IDS){const row=merged.meta[id]||{};fields[id]={...row,reviewed:Boolean(row.reviewed||row.origin==='user'),draftMode:ai.mode};}

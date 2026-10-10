@@ -10,6 +10,13 @@ test('the compact status uses one expandable set of actual checks and never dupl
  const h=harness();h.api.refresh('setup');const panel=h.w.document.querySelector('[data-page-quality]');assert.match(panel.textContent,/Page check: Ready/);assert.equal(panel.open,false);assert.equal(panel.querySelectorAll('li').length,h.api.getReport('setup').checks.length);
  for(let i=0;i<5;i++)h.api.refresh('setup');assert.equal(h.w.document.querySelectorAll('[data-page-quality]').length,1);assert.equal(panel.querySelector('[data-quality-resolve]').hidden,true);h.close();
 });
+test('Messages quality status remains visible when the general journey guidance is hidden',async()=>{
+ const h=harness(),d=h.w.document;d.getElementById('journey-stage-guide').hidden=true;
+ const messages=d.createElement('section');messages.id='step-6';messages.dataset.step='6';messages.className='step-view active';messages.innerHTML='<div id="message-studio"></div>';d.querySelector('.step-view.active').classList.remove('active');d.body.append(messages);
+ h.api.register('messages',{read:()=>({loaded:true,checks:[h.api.check('subjects','All subjects prepared',false,'3/5 subjects ready.',{actions:[]})]})});await h.api.open('messages');
+ const panel=messages.querySelector('[data-page-quality]');assert.ok(panel);assert.equal(panel.closest('[hidden]'),null);assert.match(panel.textContent,/3\/5 subjects ready/);
+ h.close();
+});
 test('missing confirmations block an actual approval click and give the next required action',()=>{
  const h=harness();h.missing=['proof_points'];let approvals=0;const button=h.w.document.getElementById('approve-profile');button.addEventListener('click',()=>approvals++);button.click();assert.equal(approvals,0);assert.match(h.w.document.getElementById('toast').textContent,/Review and confirm/);
  h.missing=[];button.click();assert.equal(approvals,1);h.w.LeadIntelServerBridge.conflict=true;button.click();assert.equal(approvals,1);h.close();

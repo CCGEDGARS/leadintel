@@ -1,4 +1,5 @@
 (function(root){
+ const MessageEvidence=typeof module==='object'&&module.exports?require('./message-evidence.js'):root.LeadIntelMessageEvidence;
  'use strict';
  const clean=v=>String(v||'').replace(/!\[[^\]]*\]\([^)]*\)/g,'').replace(/\[([^\]]+)\]\([^)]*\)/g,'$1').replace(/(?:^|\s)(?:Close|Stäng|Menu|Accept cookies)(?=\s|$)/gi,' ').replace(/[#*]/g,'').replace(/\s+/g,' ').trim();
  const unsafe=/ignore (?:all |previous )?instructions|system prompt|pretend|fabricate/i;
@@ -18,10 +19,12 @@
   rows.sort((a,b)=>b.score-a.score||a.url.localeCompare(b.url));const seen=new Set(),unique=rows.filter(r=>{const key=r.url.replace(/\/(?:en|sv|lv)(?=\/)/g,'').replace(/\?.*$/,'').replace(/\/$/,'');const summaryKey=eventIdentity(r.summary,context.company)||r.summary.toLowerCase();if(seen.has(summaryKey))return false;seen.add(summaryKey);if(seen.has(key))return false;seen.add(key);return true;});
   const best=unique.find(r=>r.kind==='event');if(best)best.recommended=true;return unique;
  }
- function queries(candidate={},essentials={}){
+ function queries(candidate={},essentials={},context={}){
   const company=clean(candidate.company).replace(/["\\]/g,''),offer=clean(essentials.offer).slice(0,180),problem=clean(essentials.problem).slice(0,180);
   if(!company||!candidate.domain)return [];
-  return [{domain:candidate.domain,query:`"${company}" investment expansion opening project appointment award news`},{domain:candidate.domain,query:`"${company}" ${offer} ${problem} project news industry`}];
+  const base=[{domain:candidate.domain,query:`"${company}" investment expansion opening project appointment award news`},{domain:candidate.domain,query:`"${company}" ${offer} ${problem} project news industry`}];
+  const t=context.trigger;if(['user_reviewed','source_verified'].includes(t?.verification)&&t.url){const project=clean(MessageEvidence.projectLabel({trigger:t},60)).replace(/[\"\\]/g,'').slice(0,80);if(project)base[1]={domain:candidate.domain,query:`site:${candidate.domain} \"${project}\" schedule specifications`};}
+  return base;
  }
  function mergeEvidence(existing=[],incoming=[],context={}){const selected=existing.find(r=>r.url===context.selectedUrl),ranked=candidates([...incoming,...existing],context).filter(r=>r.url!==selected?.url);return [...(selected?[selected]:[]),...ranked].slice(0,15);}
  function updateOpening(draft,trigger,options={}){

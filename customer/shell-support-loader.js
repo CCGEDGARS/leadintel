@@ -11,7 +11,7 @@ const SUPPORT_MODULES=[
   './firecrawl-workspace-router.js?v=20260914-spinner-hard-stop-v1&adaptive-evidence=1&saving-mode=1&balanced-saving=1&research-pipeline=20260930-v1&scrapling-fallback=20261003-v1',
   './linkedin-signals.js?v=20260907-public-index-v1',
   './company-research-security.js?v=20260916-latency-fix-v2',
-  './company-research-ui.js?v=20260926-guidance-status-v3&research-pipeline=20260930-v1&scrapling-fallback=20261003-v1',
+  './company-research-ui.js?v=20260926-guidance-status-v3&message-evidence=20261010-v1&research-pipeline=20260930-v1&scrapling-fallback=20261003-v1',
   './company-profile-handoff.js?v=20260924-friendly-workflow-labels-v1',
   './reference-customers.js?v=20260927-opportunity-map-durable-v1&target-segments=1&target-status=1&reference-discovery=5&reference-similarity=20260930-v1&research-quality=6&reference-save-stability=2',
   './reference-customer-table-detection.js?v=20260911-reference-missing-info-v1',
