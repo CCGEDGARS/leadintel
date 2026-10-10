@@ -496,6 +496,8 @@
       "contains": [
         "function tailor(",
         "function createController(",
+        "templateUpdateUndo",
+        "function undoTemplateUpdate(",
         "tailoredOriginal",
         "CRM save failed",
         "AI repeated an earlier version"
@@ -695,9 +697,12 @@
         "Approved originals",
         "Writing references",
         "Add to templates",
-        "Choose as default",
+        "Set as default",
         "Add to flow",
         "mw-browse-templates",
+        "Update message",
+        "mw-subject-choices",
+        "mw-header-actions",
         "Custom style settings",
         "mw-shorten-message",
         "mw-improve-subject"

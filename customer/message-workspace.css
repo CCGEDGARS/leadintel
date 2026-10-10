@@ -356,3 +356,17 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 @media(max-width:720px){#message-studio .mw-default-actions{flex-wrap:wrap}#message-studio .mw-editor-actions button{flex:0 1 auto}#message-studio .mw-generate-bar>.mw-readiness{flex-basis:100%}}
 @media(min-width:1550px){#message-studio .mw-layout{grid-template-columns:minmax(280px,32%) minmax(0,1fr)}}
 @media(max-width:720px){#message-studio .mw-layout{grid-template-columns:1fr;gap:0}#message-studio .mw-editor-actions{flex-wrap:wrap}#message-studio .mw-editor-actions button{padding:10px 9px}.mw-assistant-actions{grid-template-columns:1fr 1fr}}
+
+/* The ready action lives in the header; five subjects are directly selectable. */
+#message-studio .mw-editor-head{align-items:center;gap:16px}
+#message-studio .mw-editor-head h3{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+#message-studio .mw-save-state{font-size:12px;font-weight:500;line-height:1.4;color:#61766b}
+#message-studio .mw-header-actions{flex:0 0 auto}
+#message-studio .mw-header-actions button{white-space:nowrap;font-size:12px;padding:12px 16px}
+#message-studio .mw-subject-choices{display:grid;gap:6px;margin-bottom:12px}
+#message-studio .mw-subject-choice{display:flex;align-items:center;gap:10px;margin:0;padding:9px 12px;border:1px solid #dde7e0;border-radius:9px;background:#fff;color:#243d30;font-size:13px;line-height:1.4;cursor:pointer}
+#message-studio .mw-subject-choice:has(input:checked){background:#eef5f0;border-color:#91aa9a}
+#message-studio .mw-subject-choice[data-unavailable="true"]{color:#75847b;cursor:default}
+#message-studio .mw-subject-choice input{width:16px;height:16px;margin:0;accent-color:#315b42;flex:0 0 auto}
+#message-studio .mw-subject-choice span{overflow-wrap:anywhere}
+@media(max-width:720px){#message-studio .mw-editor-head{align-items:flex-start}#message-studio .mw-header-actions button{padding:10px 12px}}

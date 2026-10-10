@@ -227,11 +227,11 @@ test('Edit sender details opens canonical controls and saves email and phone thr
 test('automatic preparation preserves the single script and exposes an inline Update action',()=>{
  const {document,w}=mounted(),base={ready:true,authenticated:true,hasDraft:true,channel:'email',templateSelected:true,senderIdentityReady:true};
  document.getElementById('outreach-email-body').value='My saved exact text';
- w.LeadIntelMessageWorkspace.render(document,base);assert.equal(document.getElementById('message-generate').disabled,true);assert.equal(document.getElementById('mw-auto-update'),null);
+ w.LeadIntelMessageWorkspace.render(document,base);assert.equal(document.getElementById('message-generate').disabled,false);assert.equal(document.getElementById('mw-auto-update'),null);
  const proposal={draft:{subject:'Northport steel',message:'Updated facts and approved wording'}};
  w.LeadIntelMessageWorkspace.render(document,{...base,pendingSelections:true,automaticUpdate:proposal});
  assert.equal(document.getElementById('mw-auto-update'),null);assert.equal(document.getElementById('outreach-email-body').value,'My saved exact text');assert.equal(document.getElementById('mw-add-flow').disabled,true);assert.equal(document.getElementById('message-generate').hidden,false);
- w.LeadIntelMessageWorkspace.render(document,{...base,pendingSelections:true,generationError:true});assert.equal(document.getElementById('message-generate').hidden,false);assert.equal(document.getElementById('message-generate').textContent,'Update');
+ w.LeadIntelMessageWorkspace.render(document,{...base,pendingSelections:true,generationError:true});assert.equal(document.getElementById('message-generate').hidden,false);assert.equal(document.getElementById('message-generate').textContent,'Update message');
 });
 
 test('a failed style change identifies the displayed draft rather than claiming selected NLP is applied',()=>{
