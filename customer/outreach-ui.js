@@ -1,16 +1,16 @@
-import './message-evidence.js?v=20261010-evidence-v2';
+import './message-evidence.js?v=20261010-evidence-v3';
 import './content-materials.js?v=20261009-practical-tools-v1';
 import './approved-reference-scripts.js?v=20261009-professional-budget-v11&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1';
 import './original-scripts-ui.js?v=20261008-brutal-approved-v1&practical-tools=20261009-v1';
 import './original-scripts.js?v=20261007-quality-v1';
 import './trigger-preview.js?v=20261008-english-v1';
-import './message-workspace.js?single-editor=20261009-v4&practical-tools=20261009-v1&matching-settings=20261010-v1&clear-composer=20261010-v2&inline-actions=20261010-v1&template-restore=20261010-v1&event-update=20261010-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&approved-subjects=20261007-v2&brutal-approved=20261008-v1&compact-subjects=20261010-v1&subject-evidence=20261010-v4';
+import './message-workspace.js?single-editor=20261009-v4&practical-tools=20261009-v1&matching-settings=20261010-v1&clear-composer=20261010-v2&inline-actions=20261010-v1&template-restore=20261010-v1&event-update=20261010-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&approved-subjects=20261007-v2&brutal-approved=20261008-v1&compact-subjects=20261010-v1&subject-evidence=20261010-v5';
 import './message-facts.js?v=20261007-quality-v2&message-evidence=20261010-v1';
 import './message-translations.js?v=20261009-event-campaign-v1&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1';
 import './message-translation-ui.js?v=20261009-balanced-workspace-v1';
 import './personal-template-library.js?single-editor=20261009-v4&practical-tools=20261009-v1&templates=20261009-v20&foundation=20261006-v12&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1';
-import './message-studio.js?single-editor=20261009-v4&practical-tools=20261009-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&foundation=20261006-v12&booking-recovery=20261007-v1&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1&subject-evidence=20261010-v4';
-import './message-editor.js?template-restore=20261010-v1&event-update=20261010-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1&subject-evidence=20261010-v4';
+import './message-studio.js?single-editor=20261009-v4&practical-tools=20261009-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&foundation=20261006-v12&booking-recovery=20261007-v1&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1&subject-evidence=20261010-v5';
+import './message-editor.js?template-restore=20261010-v1&event-update=20261010-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1&subject-evidence=20261010-v5';
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
@@ -234,11 +234,17 @@ async function prepareSubjectEvidence({retry=false}={}){
  messageFactResearchController=controller;messageFactResearchBusy=true;renderMessageWorkspace();q('message-fact-status').textContent='Checking missing subject details…';
  try{
   for(let index=0;index<Math.min(plan.length,3)&&!controller.signal.aborted;index++){
-   const meta=plan[index];let payload;
-   try{payload=await service('search',{query:meta.query,limit:3,scrapeOptions:{formats:['markdown']}});}catch(error){errors.push(error.name==='AbortError'?'Subject research timed out.':String(error.message).slice(0,180));if(/credits?|unauthorized|forbidden|API key|sign in/i.test(error.message))break;continue;}
+   const meta=plan[index],direct=[];let payload;
+   for(const url of (meta.urls||[]).filter(url=>LeadIntelMessageStudio.subjectDomain(url)===meta.domain).slice(0,1)){
+    try{const page=await service('scrape',{url,formats:['markdown'],onlyMainContent:true,timeout:15000}),markdown=String(page.data?.markdown||page.markdown||'');if(markdown.trim().length>=40)direct.push({url,markdown});}catch(error){errors.push(String(error.message).slice(0,180));}
+   }
+   if(!current())return false;
+   const directContext={...context,sellerEvidence:[...context.sellerEvidence,...sources.filter(row=>row.owner==='seller'),...direct.map(row=>({url:row.url,text:row.markdown}))]};
+   if(direct.length&&LeadIntelMessageStudio.subjectAudit(studio,directContext).complete&&LeadIntelMessageStudio.messageEvidenceAudit(studio,directContext).complete)payload={data:[]};
+   else try{payload=await service('search',{query:meta.query,limit:3,scrapeOptions:{formats:['markdown']}});}catch(error){errors.push(error.name==='AbortError'?'Subject research timed out.':String(error.message).slice(0,180));if(/credits?|unauthorized|forbidden|API key|sign in/i.test(error.message))break;if(!direct.length)continue;payload={data:[]};}
    if(!current())return false;
    const raw=Array.isArray(payload.data)?payload.data:payload.data?.web||payload.results||[];
-   const official=raw.filter(row=>LeadIntelMessageStudio.subjectDomain(row.url||row.metadata?.sourceURL)===meta.domain).slice(0,2);
+   const official=[...direct,...raw].filter(row=>LeadIntelMessageStudio.subjectDomain(row.url||row.metadata?.sourceURL)===meta.domain).filter((row,index,all)=>all.findIndex(other=>(other.url||other.metadata?.sourceURL)===(row.url||row.metadata?.sourceURL))===index).slice(0,2);
    for(const row of official){
     const url=row.url||row.metadata?.sourceURL;let text=String(row.markdown||row.content||row.text||'');
     if(text.trim().length<40){try{const extracted=await service('scrape',{url,formats:['markdown'],onlyMainContent:true,timeout:15000});text=String(extracted.data?.markdown||extracted.markdown||'');}catch(error){errors.push(String(error.message).slice(0,180));continue;}}
@@ -270,7 +276,7 @@ function updateMessageOpening(){
 }
 
 function injectOutreachUI(){
- if(!document.querySelector('link[data-message-workspace]')){const link=document.createElement('link');link.rel='stylesheet';link.href='message-workspace.css?v=20261009-single-editor-v4&practical-tools=20261009-v1&matching-settings=20261010-v1&clear-composer=20261010-v2&inline-actions=20261010-v1&template-restore=20261010-v1&event-update=20261010-v1&compact-subjects=20261010-v1&subject-evidence=20261010-v4';link.dataset.messageWorkspace='true';document.head.append(link);}
+ if(!document.querySelector('link[data-message-workspace]')){const link=document.createElement('link');link.rel='stylesheet';link.href='message-workspace.css?v=20261009-single-editor-v4&practical-tools=20261009-v1&matching-settings=20261010-v1&clear-composer=20261010-v2&inline-actions=20261010-v1&template-restore=20261010-v1&event-update=20261010-v1&compact-subjects=20261010-v1&subject-evidence=20261010-v5';link.dataset.messageWorkspace='true';document.head.append(link);}
   if(!document.querySelector('link[data-leadintel-asset="outreach-css"]')){const link=document.createElement("link");link.rel="stylesheet";link.href=asset("outreach.css");link.dataset.leadintelAsset="outreach-css";document.head.appendChild(link);}
   const pipelinePanel=document.querySelector("#step-5 .pipeline-panel");
   if(pipelinePanel&&!q("continue-to-outreach"))pipelinePanel.insertAdjacentHTML("afterend",'<div class="outreach-entry workflow-next-action" hidden><div><span class="eyebrow">Next step</span><strong>Identify the buyers at a saved company, then prepare a relevant message.</strong></div><button class="primary-btn stage-next-action" id="continue-to-outreach" type="button" disabled aria-disabled="true">Continue to Buyers →</button></div>');

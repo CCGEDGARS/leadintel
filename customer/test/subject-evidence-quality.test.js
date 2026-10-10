@@ -106,6 +106,14 @@ test('real page navigation cannot crowd material and specification facts out of 
  assert.match(h.item.messageStudioDraft.subjectResearch.sources[0].text,/EN 1090 EXC2/);
  assert.doesNotMatch(h.item.messageStudioDraft.subjectResearch.sources[0].text,/manufacturing 0/);
 });
+test('a known official project is reread when an older excerpt omitted its material',async()=>{
+ const old={owner:'seller',url:'https://seller.example/project/tower',text:'Manufacturing, delivery and installation on site. Manufacturing was done according to EN 1090.',verification:'source_verified'};
+ const h=harness({sources:[old]});h.c.fetch=async(url,opts)=>{h.requests.push({url,opts});return {ok:true,json:async()=>url.includes('/scrape?')?{success:true,data:{markdown:'Construction steel. Manufacturing and installation according to EN 1090 EXC2 standard.'}}:{success:true,data:[]}};};
+ await h.c.prepareSubjectEvidence();
+ assert.equal(S.subjectAudit(studio(),h.c.studioMessageContext()).ready,5);
+ assert.ok(h.requests.some(row=>JSON.parse(row.opts.body).url===old.url));
+ assert.equal(h.item.drafts.emailBody,'My exact saved message');
+});
 test('provider failure remains incomplete, bounded on reopen and explicitly retryable without changing saved drafts',async()=>{
  const h=harness({fail:true}),before=JSON.stringify(E.workingDraft(h.item));await h.c.prepareSubjectEvidence();assert.equal(h.item.messageStudioDraft.subjectResearch.status,'incomplete');assert.match(h.item.messageStudioDraft.subjectResearch.errors[0],/credits/);assert.equal(S.subjectAudit(studio(),h.c.studioMessageContext()).complete,false);assert.equal(JSON.stringify(E.workingDraft(h.item)),before);await h.c.prepareSubjectEvidence();assert.equal(h.requests.length,1);await h.c.prepareSubjectEvidence({retry:true});assert.equal(h.requests.length,2);
 });
