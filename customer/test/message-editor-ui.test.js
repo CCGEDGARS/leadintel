@@ -35,3 +35,18 @@ test('Restore original replaces edits with initial tailored snapshot and does no
  const {w,document,studio,item}=mounted();const context=w.studioMessageContext(),key=E.scope('w1',item(),studio,context),original=E.tailor(studio,context);
  w.upsertItem(E.apply(item(),original,{key,original:true,style:'friendly',origin:'tailored'}));w.upsertItem(E.apply(item(),{subject:'Edited subject',message:'Manual edit'},{origin:'manual'}));w.renderAll();document.getElementById('mw-restore-original').click();assert.equal(item().drafts.emailBody,original.message);assert.equal(item().drafts.emailSubject,original.subject);assert.equal(item().approved,false);assert.doesNotMatch(item().drafts.emailBody,/Joakim|LKAB|ERCON/);
 });
+test('clicking the visible NLP style replaces the saved Professional text in the single editor',()=>{
+ const {w,document,studio,item,saved}=mounted(),q=id=>document.getElementById(id),src=read('outreach-ui.js');
+ studio.mode='professional';Object.assign(studio.essentials,{target:'Operations teams',problem:'Project handoffs',nextAction:'Choose a suitable time here: {{calendly}}'});w.studioState=()=>S.normalize(studio);w.readStudio=()=>S.normalize({...studio,mode:q('message-mode').value});w.persistStudio=next=>Object.assign(studio,next);
+ w.mainState=()=>({brandIdentity:{senderName:studio.essentials.sender},answers:{}});w.crmAuthenticated=()=>true;w.messageRecipientReady=()=>true;
+ w.LeadIntelMessageTranslations=require('../message-translations.js');
+ w.eval(src.slice(src.indexOf('function seedMandatoryEmail'),src.indexOf('function personalSlots')));
+ w.messageRecipientReady=()=>true;
+ w.renderMessageStudio=()=>{q('message-mode').value=studio.mode;};
+ w.renderMessageWorkspace=()=>w.LeadIntelMessageWorkspace.render(document,{ready:true,authenticated:true,hasDraft:true,senderIdentityReady:true,channel:'email',templateSelected:true,selectedStyle:studio.mode,appliedStyle:item().messageStudioDraft?.mode,editorState:w.eval('messageEditor?.state()'),originalAvailable:true});
+ const draft=E.tailor(studio,w.studioMessageContext()),key=E.scope('w1',item(),studio,w.studioMessageContext()),first=E.apply(item(),draft,{original:true,key,style:'professional',essentials:studio.essentials,origin:'tailored'});
+ first.messageStudioDraft.scriptSavedAt='today';first.messageStudioDraft.savedDraft=E.workingDraft(first);w.upsertItem(first);w.renderMessageStudio();w.renderAll();
+ document.querySelector('[data-writing-style="curiosity"]').click();
+ assert.equal(q('message-mode').value,'curiosity');assert.equal(item().messageStudioDraft.mode,'curiosity',JSON.stringify({error:q('message-generation-status').textContent,missing:S.missing(studio.essentials),busy:w.eval('studioGenerationBusy'),editor:w.eval('messageEditor?.state()')}));assert.match(q('outreach-email-body').value,/this is not another sales pitch/);assert.equal(q('outreach-email-body').value,item().drafts.emailBody);assert.equal(E.savedDraft(item()),false);assert.deepEqual(E.updateUndo(item()),draft);assert.equal(saved.length,0);
+ const edited=E.apply(item(),{subject:'My custom subject',message:'My exact NLP edit'},{origin:'manual'});w.upsertItem(edited);w.renderAll();document.querySelector('[data-writing-style="curiosity"]').click();assert.equal(q('outreach-email-body').value,'My exact NLP edit');assert.equal(saved.length,0);
+});
