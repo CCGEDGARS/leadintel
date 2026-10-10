@@ -682,6 +682,7 @@
         "inlineRewrite:true",
         "async function addCurrentMessageToFlow()",
         "async function markCurrentTemplateDefault",
+        "function updateEventInvitation(",
         "savedDraft:LeadIntelMessageEditor.savedDraft",
         "20261009-single-editor-v4"
       ]
