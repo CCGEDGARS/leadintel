@@ -4,13 +4,13 @@ import './approved-reference-scripts.js?v=20261009-professional-budget-v11&core-
 import './original-scripts-ui.js?v=20261008-brutal-approved-v1&practical-tools=20261009-v1';
 import './original-scripts.js?v=20261007-quality-v1';
 import './trigger-preview.js?v=20261008-english-v1';
-import './message-workspace.js?single-editor=20261009-v4&sender-reference=20261010-v1&practical-tools=20261009-v1&matching-settings=20261010-v1&clear-composer=20261010-v2&inline-actions=20261010-v1&template-restore=20261010-v1&event-update=20261010-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&approved-subjects=20261007-v2&brutal-approved=20261008-v1&compact-subjects=20261010-v2&subject-evidence=20261010-v5&style-selection=20261010-v1';
+import './message-workspace.js?single-editor=20261009-v4&sender-reference=20261010-v2&practical-tools=20261009-v1&matching-settings=20261010-v1&clear-composer=20261010-v2&inline-actions=20261010-v1&template-restore=20261010-v1&event-update=20261010-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&approved-subjects=20261007-v2&brutal-approved=20261008-v1&compact-subjects=20261010-v2&subject-evidence=20261010-v5&style-selection=20261010-v1';
 import './message-facts.js?v=20261007-quality-v2&message-evidence=20261010-v1';
 import './message-translations.js?language-controls=20261010-v2&v=20261009-event-campaign-v1&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1';
 import './message-translation-ui.js?language-controls=20261010-v2&v=20261009-balanced-workspace-v1';
 import './personal-template-library.js?single-editor=20261009-v4&practical-tools=20261009-v1&templates=20261009-v20&foundation=20261006-v12&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1';
 import './message-studio.js?language-controls=20261010-v2&single-editor=20261009-v4&practical-tools=20261009-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&foundation=20261006-v12&booking-recovery=20261007-v1&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1&subject-evidence=20261010-v5';
-import './message-editor.js?template-restore=20261010-v1&sender-reference=20261010-v1&event-update=20261010-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1&subject-evidence=20261010-v5';
+import './message-editor.js?template-restore=20261010-v1&sender-reference=20261010-v2&event-update=20261010-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1&subject-evidence=20261010-v5';
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
@@ -476,7 +476,7 @@ async function prepareMessagePageQuality(){
  return prepareMessageOnOpen();
 }
 function bindOutreach(){
- window.addEventListener('leadintel:sender-identity-changed',event=>{const edited=readDraftEdits();cancelPendingScriptGeneration();if(event.detail?.senderChanged){synchronizeMessageSender(event.detail.previousSender,edited);persistStudio(studioState());renderMessageStudio();return;}invalidateStudioDraft();persistStudio(readStudio());renderMessageStudio();automaticallyPrepareMessage();});
+ window.addEventListener('leadintel:sender-identity-changed',event=>{const edited=readDraftEdits();cancelPendingScriptGeneration();if(event.detail?.senderChanged||event.detail?.messageFieldsChanged===false){if(!event.detail.senderChanged&&edited&&!edited.contactedAt&&!edited.linkedinSentAt)upsertItem(LeadIntelOutreach.invalidateOutreachApproval(edited));synchronizeMessageSender(event.detail.previousSender,edited);persistStudio(studioState());renderMessageStudio();return;}invalidateStudioDraft();persistStudio(readStudio());renderMessageStudio();automaticallyPrepareMessage();});
   q('outreach-trigger-select')?.addEventListener('change',previewSelectedTrigger);q('use-reviewed-trigger')?.addEventListener('click',useReviewedTrigger);q('load-trigger-alerts')?.addEventListener('click',loadTriggerAlerts);q('save-trigger-scripts')?.addEventListener('click',()=>void saveScriptPackage().catch(error=>toast(error.message)));q('restore-trigger-scripts')?.addEventListener('click',()=>void restoreScriptPackage().catch(error=>toast(error.message)));
 
   q("outreach-contact-select")?.addEventListener("change",()=>void regenerateDrafts().catch(error=>toast(error.message)));
