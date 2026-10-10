@@ -4,6 +4,12 @@
  const clean=value=>String(value||'').replace(/\s+/g,' ').trim();
  function domain(value){try{const u=new URL(value);return /^https?:$/.test(u.protocol)&&!u.username&&!u.password?u.hostname.toLowerCase().replace(/^www\./,''):'';}catch{return '';}}
  function statements(text){return String(text||'').split(/(?<=[.!?])\s+|\n+/).map(clean).filter(value=>value&&!/ignore (?:all |previous )?instructions|system prompt|pretend|fabricate|\b(?:no|not|never|without|cannot|can't|do not|don't)\b/i.test(value));}
+ function selectExcerpt(text){
+  const lines=String(text||'').split(/(?<=[.!?])\s+|\n+/).map(value=>value.trim()).filter(value=>value&&value.length<=1200&&!/^\s*(?:[-*]\s*)?\[[^\]]+\]\([^)]*\)\s*$/.test(value));
+  const rank=value=>/\b(?:steel|stål|stahl|tēraud\w*|aluminium|aluminum|concrete|timber|wood|plastic|EN\s*1090|EXC\s*[1-4]|specifications?|standards?|certific\w*)\b/i.test(value)?0:/\b(?:manufactur\w*|installation|installed|delivered|completed|experience|services?|capabilities|design\w*)\b/i.test(value)?1:/\b(?:invest\w*|expand\w*|plant|factory|20\d{2}|schedule|milestone)\b/i.test(value)?2:3;
+  const relevant=lines.map((value,index)=>({value,index,rank:rank(value)})).filter(row=>row.rank<3).sort((a,b)=>a.rank-b.rank||a.index-b.index).slice(0,16).sort((a,b)=>a.index-b.index);
+  return (relevant.length?relevant.map(row=>row.value):lines.slice(0,8)).join('\n').slice(0,6000);
+ }
  function sources(context={}){const host=domain(context.sellerWebsite);return host?(context.sellerEvidence||[]).filter(row=>domain(row?.url)===host&&row.extracted!==false&&!/error|failed|pending/i.test(row.status||'')).map(row=>({...row,text:String(row.text||row.excerpt||'').slice(0,12000)})).filter(row=>row.text.trim().length>=35&&!/ignore (?:all |previous )?instructions|system prompt|pretend|fabricate/i.test(row.text)):[];}
  function reference(context={}){return sources(context).find(row=>/\/(?:projects?|case-stud(?:y|ies)|references?|portfolio|gallery)(?:\/|[-_]|$)/i.test(new URL(row.url).pathname)&&statements(row.text).some(text=>/\b(?:manufactur\w*|installation|installed|delivered|production|completed|designed|developed)\b/i.test(text)))||null;}
  const fields=Object.freeze([
@@ -84,5 +90,5 @@
   if((context.subjectFactsLanguage||essentials.language||'en')===language){const offers=[...new Set(statements(essentials.offer).flatMap(value=>value.split(/[,;]|\s+and\s+/i)).map(clean).filter(value=>value&&value.split(/\s+/).length<=4&&!/https?:|\d/.test(value)))].sort((a,b)=>a.length-b.length);for(let i=0;i<offers.length;i++)for(let j=i+1;j<offers.length;j++){const question=offers[i]+' '+orWord+' '+offers[j];if(fits(question))return {text:question,kind:'services',verification:'user_supplied'};}}
   return {text:timing[language]||timing.en,kind:'timing',verification:'open_question'};
  }
- return Object.freeze({VERSION,fields,styleFields,neutralContext,projectLabel,domain,statements,sources,reference,assess,plan,meetingDates,comparison,timing});
+ return Object.freeze({VERSION,fields,styleFields,neutralContext,projectLabel,domain,statements,selectExcerpt,sources,reference,assess,plan,meetingDates,comparison,timing});
 });
