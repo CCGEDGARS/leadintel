@@ -9,3 +9,7 @@ Root causes: the previous target existed only in a DOM dataset, tabs selected a 
 Manual Add to flow requires a reviewed saved version in the configured default language. Existing server automatic template generation is English-only; a non-English preference invalidates approval and blocks automatic template generation instead of silently sending English. This change does not implement unattended multilingual AI generation or authorize any sends.
 
 Regression coverage includes five added languages, explicit defaults and source preservation, closed-panel Translate targets, recoverable removal/history, actual CRM roundtrip, saved-flow composition/duplication/isolation, automatic language gates, and existing translation context-race rejection. Exact release proof and authenticated production evidence are recorded separately after publication.
+
+## Authenticated rendering correction
+
+The first signed-in production check caught a new temporal-dead-zone error: translation controls referenced the local `editorState` before its declaration in `renderMessageWorkspace`. Initialize that state before the language panel call and guard editor busy/saving as well as edit/preview. A regression executes the actual composer renderer with the real language UI for idle, editing, preview, busy and saving states; isolated module tests did not cover this caller ordering. Production acceptance must include the signed-in assembled composer, not only static assets and individual module tests.
