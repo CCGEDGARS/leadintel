@@ -269,8 +269,10 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #message-studio .mw-tools-content>.mw-library-shortcuts{margin:0 0 14px}
 #message-studio .mw-styles{grid-template-columns:repeat(2,minmax(0,1fr))}
 #message-studio .mw-style:last-child{grid-column:1/-1}
-#message-studio .mw-sender-card>.mw-language-tools{margin:12px 0 0}
-#message-studio .mw-sender-card .mw-language-tools>summary span{display:block;margin:5px 0 0;line-height:1.5}
+#message-studio .mw-sender-card>#mw-settings,#message-studio .mw-sender-card>.mw-language-tools{width:100%;box-sizing:border-box;min-width:0;margin:0;padding:10px 14px;border:1px solid #dce5df;border-radius:11px;background:#fafcfb}
+#message-studio .mw-sender-card>.mw-language-tools{margin-top:12px}
+#message-studio .mw-sender-card>#mw-settings>summary,#message-studio .mw-sender-card>.mw-language-tools>summary{padding:0;font-size:13px;font-weight:700;line-height:1.5;color:#305944;cursor:pointer}
+#message-studio .mw-sender-card>#mw-settings>summary span,#message-studio .mw-sender-card>.mw-language-tools>summary span{display:block;margin:5px 0 0;font-size:11px;font-weight:400;color:#77867d;line-height:1.5}
 #message-studio .mw-default-template{flex-wrap:wrap;padding:16px 18px;gap:12px}
 #message-studio .mw-default-template>div:first-child{flex:1 1 180px;min-width:0}
 #message-studio .mw-editor-actions{gap:4px}
