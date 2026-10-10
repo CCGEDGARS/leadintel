@@ -468,7 +468,7 @@
         "mw-default-template",
         "mw-mark-default",
         "mw-save-required",
-        "Add to library",
+        "Add to templates",
         "Reset"
       ],
       "notContains": [
@@ -694,8 +694,8 @@
         "My content",
         "Approved originals",
         "Writing references",
-        "Add to library",
-        "Set default",
+        "Add to templates",
+        "Choose as default",
         "Add to flow",
         "mw-browse-templates",
         "Custom style settings",

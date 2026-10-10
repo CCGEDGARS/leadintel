@@ -46,8 +46,8 @@ test('a sync conflict takes priority over apparent missing Profile answers and b
 
 test('template generation is distinct from original AI generation and retains protected originals',()=>{
  const {document,w}=mounted(),base={ready:true,authenticated:true,hasDraft:true,channel:'linkedin'};
- w.LeadIntelMessageWorkspace.render(document,{...base,templateSelected:true});assert.match(document.getElementById('message-generate').textContent,/Apply updated facts/i);
- w.LeadIntelMessageWorkspace.render(document,{...base,templateSelected:false});assert.match(document.getElementById('message-generate').textContent,/Generate message/i);
+ w.LeadIntelMessageWorkspace.render(document,{...base,templateSelected:true});assert.match(document.getElementById('message-generate').textContent,/Update/i);
+ w.LeadIntelMessageWorkspace.render(document,{...base,templateSelected:false});assert.match(document.getElementById('message-generate').textContent,/Generate/i);
  assert.ok(document.getElementById('message-template-body').readOnly);
 });
 test('opening-only update is available only with a reviewed event and an unapproved draft',()=>{
@@ -132,7 +132,7 @@ test('balanced workspace puts style decisions and reusable tools left, email com
  assert.ok(editor.querySelector('#outreach-email-body'));
  assert.ok(editor.querySelector('#message-generate'));
  const options=editor.querySelector('.mw-subject-options');
- const generate=editor.querySelector('.mw-generate-bar');
+ const generate=editor.querySelector('.mw-update-status');
  assert.ok(generate.compareDocumentPosition(options)&4);
  assert.ok(generate.compareDocumentPosition(editor.querySelector('.script-grid'))&4);
  const tools=rail.querySelector('#mw-tools-drawer');
@@ -224,14 +224,14 @@ test('Edit sender details opens canonical controls and saves email and phone thr
  const restored=w.LeadIntelBrandIdentity.normalize(JSON.parse(JSON.stringify(identity)));assert.equal(restored.email,identity.email);
 });
 
-test('automatic preparation preserves the single script and exposes explicit Apply updated facts',()=>{
+test('automatic preparation preserves the single script and exposes an inline Update action',()=>{
  const {document,w}=mounted(),base={ready:true,authenticated:true,hasDraft:true,channel:'email',templateSelected:true,senderIdentityReady:true};
  document.getElementById('outreach-email-body').value='My saved exact text';
- w.LeadIntelMessageWorkspace.render(document,base);assert.equal(document.getElementById('message-generate').hidden,true);assert.equal(document.getElementById('mw-auto-update'),null);
+ w.LeadIntelMessageWorkspace.render(document,base);assert.equal(document.getElementById('message-generate').disabled,true);assert.equal(document.getElementById('mw-auto-update'),null);
  const proposal={draft:{subject:'Northport steel',message:'Updated facts and approved wording'}};
  w.LeadIntelMessageWorkspace.render(document,{...base,pendingSelections:true,automaticUpdate:proposal});
  assert.equal(document.getElementById('mw-auto-update'),null);assert.equal(document.getElementById('outreach-email-body').value,'My saved exact text');assert.equal(document.getElementById('mw-add-flow').disabled,true);assert.equal(document.getElementById('message-generate').hidden,false);
- w.LeadIntelMessageWorkspace.render(document,{...base,pendingSelections:true,generationError:true});assert.equal(document.getElementById('message-generate').hidden,false);assert.equal(document.getElementById('message-generate').textContent,'Retry preparation');
+ w.LeadIntelMessageWorkspace.render(document,{...base,pendingSelections:true,generationError:true});assert.equal(document.getElementById('message-generate').hidden,false);assert.equal(document.getElementById('message-generate').textContent,'Update');
 });
 
 test('a failed style change identifies the displayed draft rather than claiming selected NLP is applied',()=>{

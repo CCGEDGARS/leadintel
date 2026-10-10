@@ -16,7 +16,7 @@ test('single composer has subject immediately before body, one full message and 
  assert.ok(q('mw-subject-options').compareDocumentPosition(q('outreach-email-body'))&w.Node.DOCUMENT_POSITION_FOLLOWING);
  assert.equal(q('mw-default-template').hidden,false);
  for(const id of ['mw-save-message','mw-edit-message','mw-rewrite-message','mw-restore-original','message-save-as-template','mw-mark-default','mw-add-flow'])assert.equal(document.querySelectorAll('#'+id).length,1);
- assert.equal(q('mw-restore-original').textContent,'Reset');assert.equal(q('message-save-as-template').textContent,'Add to library');
+ assert.equal(q('mw-restore-original').textContent,'Reset');assert.equal(q('message-save-as-template').textContent,'Add to templates');
  assert.equal(q('mw-update-use'),null);assert.equal(q('mw-update-keep'),null);
 });
 test('flow and library actions stay disabled until exact current draft is durably saved; Save link is available',()=>{
@@ -57,7 +57,7 @@ test('empty default offers library navigation without replacing the saved workin
 test('pending update has one notice and cannot apply over a manual edit; completed setup stays quiet',()=>{
  const {document,w}=mounted(),q=id=>document.getElementById(id);q('outreach-email-body').value='My manual text';
  w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true,pendingSelections:true,automaticUpdate:{draft:{}},editorState:{editing:true}});
- assert.equal(q('mw-auto-settings').hidden,false);assert.equal(q('mw-auto-settings').contains(q('mw-readiness')),true);assert.equal(q('message-generate').disabled,true);
+ assert.equal(q('mw-auto-settings').hidden,true);assert.equal(q('mw-auto-settings').contains(q('mw-readiness')),true);assert.equal(q('message-generate').disabled,true);
  assert.equal(q('outreach-email-body').readOnly,false);assert.equal(q('outreach-email-body').value,'My manual text');assert.equal(q('mw-save-message').disabled,false);
  w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true,pendingSelections:true,automaticUpdate:{draft:{}}});
  assert.equal(q('message-generate').disabled,false);assert.equal(q('mw-save-message').disabled,true);
@@ -70,9 +70,9 @@ test('pending update has one notice and cannot apply over a manual edit; complet
 test('default requires a saved library template and action labels explain their destinations',()=>{
  const {document,w}=mounted(),q=id=>document.getElementById(id);
  w.LeadIntelMessageWorkspace.render(document,{...ready,selectedLibraryId:'template-1',savedDraft:false});assert.equal(q('mw-mark-default').disabled,true);
- w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true});assert.equal(q('mw-mark-default').disabled,true);assert.match(q('mw-mark-default').title,/library first/);
+ w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true});assert.equal(q('mw-mark-default').disabled,true);assert.match(q('mw-mark-default').title,/templates first/);
  w.LeadIntelMessageWorkspace.render(document,{...ready,selectedLibraryId:'template-1',savedDraft:true});assert.equal(q('mw-mark-default').disabled,false);
- assert.equal(q('message-save-as-template').textContent,'Add to library');assert.equal(q('mw-mark-default').textContent,'Set default');assert.equal(q('mw-add-flow').textContent,'Add to flow');
+ assert.equal(q('message-save-as-template').textContent,'Add to templates');assert.equal(q('mw-mark-default').textContent,'Choose as default');assert.equal(q('mw-add-flow').textContent,'Add to flow');
  w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true,readinessError:'Replace [link] before adding to flow.',editorState:{error:'Save failed. Try again.'}});
  assert.equal(q('mw-editor-status').textContent,'Save failed. Try again.');assert.equal(q('mw-add-flow').disabled,true);
 });
@@ -102,8 +102,30 @@ test('saved drafts retain booking and Profile readiness guidance when flow is un
  const {document,w}=mounted(),q=id=>document.getElementById(id);
  w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true,missing:['calendly']});
  assert.equal(q('mw-auto-settings').hidden,false);assert.equal(q('mw-readiness').hidden,false);assert.match(q('mw-readiness-detail').textContent,/booking link/);
- assert.equal(q('message-generate').hidden,true);assert.equal(q('mw-add-flow').disabled,true);assert.match(q('mw-add-flow').title,/booking link/);
+ assert.equal(q('message-generate').disabled,true);assert.equal(q('mw-add-flow').disabled,true);assert.match(q('mw-add-flow').title,/booking link/);
  w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true,unconfirmed:['meeting_value']});
  assert.equal(q('mw-auto-settings').hidden,false);assert.equal(q('mw-resolve').hidden,false);assert.match(q('mw-resolve').textContent,/Profile/);assert.equal(q('mw-add-flow').disabled,true);
  w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true,pendingSelections:true});assert.match(q('mw-add-flow').title,/Apply the update/);
+});
+
+test('inline Update retains its listener and changes only the working draft when explicitly invoked',()=>{
+ const {document,w}=mounted(),q=id=>document.getElementById(id);let calls=0;
+ w.currentItem=()=>({channel:'email',messageStudioDraft:{}});w.readStudio=()=>({mode:'professional'});w.seedMandatoryEmail=(style,options)=>{assert.equal(style,'professional');assert.equal(options.replace,true);calls++;q('outreach-email-body').value='Explicitly updated draft';};const handler=q('message-generate').onclick;q('outreach-email-body').value='Saved exact text';
+ w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true});
+ assert.deepEqual([...document.querySelector('.mw-editor-actions').children].filter(e=>!e.hidden).map(e=>e.id),['mw-edit-message','message-generate','mw-save-message','mw-restore-original','message-save-as-template','mw-mark-default','mw-add-flow']);
+ assert.equal(document.querySelector('.mw-generate-bar'),null);assert.equal(document.querySelectorAll('#message-generate').length,1);assert.equal(q('message-generate').hidden,false);assert.equal(q('message-generate').disabled,true);
+ q('message-generate').click();assert.equal(calls,0);assert.equal(q('outreach-email-body').value,'Saved exact text');
+ w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true,pendingSelections:true,automaticUpdate:{draft:{}}});
+ assert.equal(q('message-generate').textContent,'Update');assert.equal(q('message-generate').disabled,false);assert.equal(q('mw-auto-settings').hidden,false);assert.equal(q('mw-readiness-detail').hidden,true);
+ assert.equal(q('message-generate').onclick,handler);q('message-generate').click();assert.equal(calls,1);assert.equal(q('outreach-email-body').value,'Explicitly updated draft');
+ w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:false});assert.equal(q('mw-save-message').disabled,false);assert.equal(q('mw-add-flow').disabled,true);
+});
+
+test('default is visibly optional and placeholder warnings take priority over a duplicate update hint',()=>{
+ const {document,w}=mounted(),q=id=>document.getElementById(id);
+ w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true,pendingSelections:true,readinessError:'Click Edit and replace [link] before adding to flow.'});
+ assert.equal(q('mw-default-template').hidden,false);assert.equal(q('mw-default-name').hidden,true);assert.match(q('mw-default-preview').textContent,/Continue with the current message/);
+ assert.equal(q('mw-editor-status').hidden,false);assert.match(q('mw-editor-status').textContent,/replace \[link\]/);assert.equal(q('mw-auto-settings').hidden,true);assert.equal(q('message-generate').disabled,false);
+ w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true,defaultTemplate:{id:'template-1',name:'My default',body:'Original'}});
+ assert.equal(q('mw-default-name').hidden,false);assert.equal(q('mw-default-name').textContent,'My default');
 });
