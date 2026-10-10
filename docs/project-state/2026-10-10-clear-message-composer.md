@@ -24,3 +24,5 @@ The production smoke contract still expected the obsolete Add template label. Up
 Run the complete customer suite, static build and exact-SHA CI/release proof on the final revision. Regression coverage includes empty-default navigation without draft replacement, default save/library gates, one notice, sync visibility, manual edit protection, actionable placeholder guidance and custom-subject flow readiness. No core template wording, persistence schema or sending behavior changes.
 
 Authenticated visual verification remains unconfirmed: the existing LKAB tab was not reloaded. Local Chromium installation was attempted for an isolated render; the available network returned a non-ZIP download, so no visual render is claimed. The uploaded screenshot supplies the before-state evidence.
+
+Final review: keep booking-link readiness guidance visible even when generation is allowed and the saved message needs no update. Disabled flow controls also explain pending updates and missing Profile/sender details. This prevents quiet-state compression from hiding the reason a message cannot proceed.
