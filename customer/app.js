@@ -72,7 +72,7 @@ function saveState(){
   }catch{}
   if(state.targetingConfirmation&&!LeadIntelTargeting.isConfirmed(state))state.targetingConfirmation=null;
   if(typeof renderTargetingConfirmation==="function")renderTargetingConfirmation();
-  localStorage.setItem(STORAGE_KEY,JSON.stringify(state));updateCompleteness();updateNavigationAvailability();window.LeadIntelJourney?.refresh?.();
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(state));updateCompleteness();updateNavigationAvailability();window.LeadIntelJourney?.refresh?.();window.LeadIntelPageQuality?.refresh?.();
 }
 function esc(value){return String(value??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));}
 function showToast(message){const el=$("toast");if(!el)return;el.textContent=message;el.classList.add("show");clearTimeout(showToast.t);showToast.t=setTimeout(()=>el.classList.remove("show"),2400);}
@@ -373,7 +373,7 @@ function requireConfirmedTargeting(){
   closeStrategyHandoff();LeadIntelTargeting.focusRequired(window,state);return false;
 }
 function approveProfile(){
-  saveProfileEdits();if(!requireConfirmedTargeting())return false;globalThis.LeadIntelCanonicalIntelligence?.confirmProfileContext?.(state);state.approved=true;state.profile.approvedAt=new Date().toISOString();seedMarketStrategy();saveState();editMode=false;updateApprovalUI();
+  saveProfileEdits();if(globalThis.LeadIntelPageQuality&&!globalThis.LeadIntelPageQuality.require('profile','approve'))return showToast(globalThis.LeadIntelPageQuality.getReport('profile').message);if(!requireConfirmedTargeting())return false;globalThis.LeadIntelCanonicalIntelligence?.confirmProfileContext?.(state);state.approved=true;state.profile.approvedAt=new Date().toISOString();seedMarketStrategy();saveState();editMode=false;updateApprovalUI();
   window.dispatchEvent(new CustomEvent("leadintel:workspace-changed",{detail:{source:"profile-approval"}}));
   showToast("Profile approved");
 }
@@ -1107,6 +1107,7 @@ function setActivationFeedback(message,tone){
   target.dataset.state=tone||"";
   target.hidden=!message;
 }
+window.LeadIntelPageProcedures={strategyBlockers:()=>strategyHandoffModel().blockers};
 function strategyHandoffModel(){
   const icps=(state.market.icps||[]).filter(item=>item.active);
   const signals=(state.market.signals||[]).filter(item=>item.active);

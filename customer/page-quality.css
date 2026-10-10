@@ -1,0 +1,15 @@
+.page-quality{margin-top:12px;border-top:1px solid #e2e7ef;padding-top:10px;font-size:13px;color:#42516a}
+.page-quality summary{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;cursor:pointer;list-style:none}
+.page-quality summary::-webkit-details-marker{display:none}
+.page-quality summary:focus-visible{outline:2px solid #667eea;outline-offset:4px;border-radius:4px}
+.page-quality [data-quality-indicator]{width:8px;height:8px;flex:0 0 8px;border-radius:50%;background:#2b8b69}
+.page-quality[data-state=review] [data-quality-indicator]{background:#b7791f}
+.page-quality[data-state=blocked] [data-quality-indicator]{background:#b84a4a}
+.page-quality[data-state=preparing] [data-quality-indicator]{background:#526ec3}
+.page-quality [data-quality-label]{color:#293b56;font-size:13px;font-weight:600}
+.page-quality [data-quality-message]{flex:1 1 220px;line-height:1.45}
+.page-quality ul{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 20px;margin:12px 0;padding:0;list-style:none}
+.page-quality li{line-height:1.4}.page-quality li[data-status=pass]{color:#34735c}
+.page-quality [hidden]{display:none!important}
+.crm-shell>.page-quality{margin:0 20px 12px}
+@media(max-width:720px){.page-quality ul{grid-template-columns:1fr}.page-quality [data-quality-message]{flex-basis:100%}}

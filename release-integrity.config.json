@@ -746,6 +746,84 @@
       "contains": [
         "Authentication required"
       ]
+    },
+    {
+      "id": "mandatory-page-checks-bootstrap",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "page-quality.js?v=20261010-v1",
+        "page-quality-ui.js?v=20261010-v1",
+        "page-procedures=20261010-v1"
+      ]
+    },
+    {
+      "id": "mandatory-page-checks-engine",
+      "type": "text",
+      "url": "/customer/page-quality.js",
+      "status": 200,
+      "contains": [
+        "page-procedures-20261010-v1",
+        "openingFailures",
+        "tickets=new WeakMap()",
+        "getAuditTrail"
+      ]
+    },
+    {
+      "id": "mandatory-page-checks-guidance",
+      "type": "text",
+      "url": "/customer/page-quality-ui.js",
+      "status": 200,
+      "contains": [
+        "Page check: ",
+        "Review required information",
+        "'to-questionnaire':['setup','advance']"
+      ]
+    },
+    {
+      "id": "mandatory-page-checks-layout",
+      "type": "text",
+      "url": "/customer/page-quality.css",
+      "status": 200,
+      "contains": [
+        "summary:focus-visible",
+        "@media(max-width:720px)"
+      ]
+    },
+    {
+      "id": "mandatory-message-context-checks",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "function messageQualityContext()",
+        "trigger-verified",
+        "Event details changed",
+        "async function prepareMessagePageQuality()"
+      ]
+    },
+    {
+      "id": "mandatory-send-context-checks",
+      "type": "text",
+      "url": "/customer/production-gmail-ui.js",
+      "status": 200,
+      "contains": [
+        "capture('delivery','send')",
+        "capture('messages','send')",
+        "quality.current(ticket)"
+      ]
+    },
+    {
+      "id": "mandatory-crm-context-checks",
+      "type": "text",
+      "url": "/customer/crm-ui.js",
+      "status": 200,
+      "contains": [
+        "register('crm'",
+        "loadedWorkspace=workspaceId",
+        "workspaceId!==bridge()?.workspace?.id"
+      ]
     }
   ],
   "retry": {

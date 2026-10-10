@@ -66,3 +66,10 @@ test('saved CRM prospect finds and persists buyer roles without company rediscov
   assert.equal(h.state.detail.contacts.length,1);
   assert.equal(company.pipeline_stage,null);
 });
+
+test('a CRM workspace switch clears the prior records before awaiting the new workspace list',async()=>{
+ let finish;const b={session:{authenticated:true},workspace:{id:'one'},listCrmCompanies:async()=>({ok:true,companies:[{id:'old'}]})},h=harness(b);await h.loadCompanies();h.state.selectedId='old';h.state.detail={company:{id:'old'}};b.workspace.id='two';b.listCrmCompanies=()=>new Promise(resolve=>finish=resolve);const pending=h.loadCompanies();assert.equal(h.state.companies.length,0);assert.equal(h.state.detail,null);assert.equal(h.state.selectedId,'');finish({ok:true,companies:[{id:'new'}]});await pending;assert.equal(h.state.companies[0].id,'new');
+});
+test('a late buyer search cannot save contacts after the same bridge object switches workspace',async()=>{
+ let finish,saves=0;const b={workspace:{id:'one'},searchApolloPeople:()=>new Promise(resolve=>finish=resolve),saveCrmContacts:async()=>{saves++;return {ok:true};}},h=harness(b,{LeadIntelCrm:{canonicalDomain:x=>x},LeadIntelDiscovery:{buildApolloPeopleSearchPayload:()=>({person_titles:['Director']}),normalizeApolloPeople:x=>x.people,selectDecisionMakers:x=>x},localStorage:{getItem:()=>'{"profile":{}}'}});h.state.selectedId='old';h.state.detail={company:{id:'old',normalized_domain:'old.example'}};const pending=h.findBuyersForSavedCompany();b.workspace.id='two';finish({ok:true,people:[{id:'person',name:'Person'}]});assert.equal(await pending,false);assert.equal(saves,0);
+});

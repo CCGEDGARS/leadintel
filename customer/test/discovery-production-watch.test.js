@@ -42,7 +42,7 @@ function productionFetch({ customerHtml, discoveryUi, sessionStatus=401 }) {
     if (parsed.pathname === '/customer/approved-workflow-ui.js') { return response({text:fs.readFileSync(path.join(root,'customer/approved-workflow-ui.js'),'utf8')}); }
     if (parsed.pathname === '/customer/first-party-research.js') { return response({text:fs.readFileSync(path.join(root,'customer/first-party-research.js'),'utf8')}); }
     if (parsed.pathname === '/customer/discovery-engine.js') { return response({text:fs.readFileSync(path.join(root,'customer/discovery-engine.js'),'utf8')}); }
-    if (['/customer/content-materials.js','/customer/ai-settings.js','/customer/personal-linkedin.js','/customer/copilot-loader.js','/customer/copilot-ui.js','/customer/message-editor.js','/customer/message-translations.js','/customer/message-workspace.js','/customer/message-workspace.css','/customer/personal-template-library.js','/customer/message-studio.js','/customer/state-budget.js','/customer/journey-progress.js','/customer/outreach-engine.js','/customer/outreach-ui.js','/customer/contact-confirmation-policy.js','/customer/service-settings-extension.js','/customer/workspace-sync.js','/customer/workspace-persistence.js','/customer/server-bridge.js'].includes(parsed.pathname)) return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
+    if (['/customer/page-quality.js','/customer/page-quality-ui.js','/customer/page-quality.css','/customer/production-gmail-ui.js','/customer/crm-ui.js','/customer/content-materials.js','/customer/ai-settings.js','/customer/personal-linkedin.js','/customer/copilot-loader.js','/customer/copilot-ui.js','/customer/message-editor.js','/customer/message-translations.js','/customer/message-workspace.js','/customer/message-workspace.css','/customer/personal-template-library.js','/customer/message-studio.js','/customer/state-budget.js','/customer/journey-progress.js','/customer/outreach-engine.js','/customer/outreach-ui.js','/customer/contact-confirmation-policy.js','/customer/service-settings-extension.js','/customer/workspace-sync.js','/customer/workspace-persistence.js','/customer/server-bridge.js'].includes(parsed.pathname)) return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
     if (parsed.pathname === '/customer/discovery-ui.js') {
       return response({ text: discoveryUi });
     }
@@ -56,7 +56,7 @@ function productionFetch({ customerHtml, discoveryUi, sessionStatus=401 }) {
   };
 }
 
-const shell = 'LeadIntel — Build Your Commercial Intelligence Strategy id="company-website"';
+const shell = 'LeadIntel — Build Your Commercial Intelligence Strategy id="company-website" <script defer src="page-quality.js?v=20261010-v1"></script><script defer src="page-quality-ui.js?v=20261010-v1"></script> page-procedures=20261010-v1';
 const boundedDiscoveryRuntime = [
   'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
   'const DISCOVERY_RUN_TIMEOUT_MIN_MS=120000;',
@@ -176,4 +176,8 @@ test('production proof blocks a missing controlled message editor asset',async()
  const {verifyRelease,VERDICTS}=await loadCore(),base=productionFetch({customerHtml:`${shell}<script defer src="discovery-ui.js?v=current"></script>`,discoveryUi:boundedDiscoveryRuntime});
  const proof=await verifyRelease({config,expectedSha:SHA,ciConclusion:'success',ciRunId:'203',fetchImpl:url=>new URL(url).pathname==='/customer/message-editor.js'?Promise.resolve(response({status:404,text:'missing'})):base(url),nonce:'missing-editor'});
  assert.equal(proof.verdict,VERDICTS.BLOCKED_SMOKE_CHECK);assert.match(proof.failures.join(' '),/controlled-message-editor/);
+});
+
+test('production proof blocks a missing mandatory page-check engine',async()=>{
+ const {verifyRelease,VERDICTS}=await loadCore(),normal=productionFetch({customerHtml:`${shell}<script defer src="discovery-ui.js?v=current"></script>`,discoveryUi:boundedDiscoveryRuntime});const proof=await verifyRelease({config,expectedSha:SHA,ciConclusion:'success',ciRunId:'201',fetchImpl:async url=>new URL(String(url)).pathname==='/customer/page-quality.js'?response({status:404,text:'missing'}):normal(url),nonce:'page-check-missing'});assert.equal(proof.verdict,VERDICTS.BLOCKED_SMOKE_CHECK);assert.ok(proof.failures.some(message=>message.includes('mandatory-page-checks-engine')));
 });
