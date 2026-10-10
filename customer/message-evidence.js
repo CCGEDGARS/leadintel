@@ -66,7 +66,7 @@
   const shortTopic=topic.replace(/["\\]/g,'').split(/\s+/).slice(0,3).join(' ');
   if(gaps.has('reference'))out.push({owner:'seller',domain:host,fields:['reference','experience'],query:`site:${host} ${shortTopic?shortTopic+' ':''}projects`});
   if(gaps.has('offer')||gaps.has('experience'))out.push({owner:'seller',domain:host,fields:['offer','experience'],query:`site:${host} services capabilities experience`});
-  if(style==='professional'&&gaps.has('materials'))out.push({owner:'seller',domain:host,fields:['materials'],query:`site:${host} ${shortTopic?shortTopic+' ':''}materials installation`});
+  if(style==='professional'&&gaps.has('materials'))out.push({owner:'seller',domain:host,fields:['materials'],urls:[reference(context)?.url].filter(Boolean),query:`site:${host} materials manufacturing installation`});
   if(gaps.has('technical'))out.push({owner:'seller',domain:host,fields:['technical'],query:`site:${host} ${/steel|metal|fabricat/i.test(shortTopic)?'"EN 1090"':'specifications certification'}`});
   if(/steel|metal|fabricat/i.test(shortTopic)&&gaps.has('technical')&&out.length<3)out.push({owner:'seller',domain:host,fields:['technical','offer'],query:`site:${host} steel installation projects`});
   return out.slice(0,3);

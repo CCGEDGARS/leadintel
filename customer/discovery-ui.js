@@ -2370,7 +2370,7 @@ function loadOutreachModules(){
   });
   outreachLoading=load('outreach-engine',`outreach-engine.js?v=${OUTREACH_ASSET_VERSION}`)
     .then(()=>load('outreach-localization',`outreach-localization.js?v=${OUTREACH_ASSET_VERSION}`))
-    .then(()=>load('outreach-ui',`outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&compact-subjects=20261010-v1&subject-evidence=20261010-v4&practical-tools=20261009-v1&matching-settings=20261010-v1&clear-composer=20261010-v2&inline-actions=20261010-v1&template-restore=20261010-v1&event-update=20261010-v1&open-context=20261010-v1&page-procedures=20261010-v1&delivery-modes=2&foundation=20261006-v12&message-mount=20261009-v1&meeting-platform=20261009-v1&core-rules=1`,true))
+    .then(()=>load('outreach-ui',`outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&compact-subjects=20261010-v1&subject-evidence=20261010-v5&practical-tools=20261009-v1&matching-settings=20261010-v1&clear-composer=20261010-v2&inline-actions=20261010-v1&template-restore=20261010-v1&event-update=20261010-v1&open-context=20261010-v1&page-procedures=20261010-v1&delivery-modes=2&foundation=20261006-v12&message-mount=20261009-v1&meeting-platform=20261009-v1&core-rules=1`,true))
     .then(()=>{if(!window.LeadIntelOutreachUI?.openBuyerScripts)throw new Error('Messages could not initialize. Your recipient is saved; refresh and retry.');})
     .catch(error=>{outreachLoading=null;showToast(error.message);throw error;});
   return outreachLoading;

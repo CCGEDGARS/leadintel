@@ -1,4 +1,4 @@
-import './message-evidence.js?v=20261010-evidence-v2';
+import './message-evidence.js?v=20261010-evidence-v3';
 import './company-research-engine.js?v=20260918-translation-fidelity-v3&message-evidence=20261010-v1';
 
 const engine=window.LeadIntelCompanyResearch;
