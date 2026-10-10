@@ -714,6 +714,7 @@
         "async function addCurrentMessageToFlow()",
         "async function markCurrentTemplateDefault",
         "function updateEventInvitation(",
+        "updateMessageFromTemplate({selectedStyle:true})",
         "savedDraft:LeadIntelMessageEditor.savedDraft",
         "20261009-single-editor-v4"
       ]

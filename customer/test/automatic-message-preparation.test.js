@@ -7,11 +7,30 @@ function harness(){
  let studio=S.normalize({mode:'professional',essentials:e}),workspace='w1',requests=[],renders=0,usable=true;
  const nodes=new Map(),q=id=>{if(!nodes.has(id))nodes.set(id,{textContent:'',disabled:false});return nodes.get(id);};
  const c={URL,AbortController,setTimeout,clearTimeout,LeadIntelMessageStudio:S,LeadIntelMessageEditor:E,LeadIntelOutreach:O,LeadIntelMessageFacts:F,LeadIntelMessageWorkspace:W,LeadIntelTriggerPreview:require('../trigger-preview.js'),scriptGenerationRequest:0,studioGenerationBusy:false,messageTranslationBusy:false,messageFactResearchBusy:false,studioGenerationError:false,approvedFieldController:null,messageEditor:null,
- DISCOVERY_META_KEY:'meta',handoffContact:{domain:'buyer.example',personId:'sam',channel:'email'},readJson:()=>({scriptBuyer:{workspaceId:workspace,domain:'buyer.example',personId:'sam',channel:'email'}}),currentItem:()=>item,readDraftEdits:()=>item,upsertItem:v=>{item=O.normalizeOutreachState({items:[v]}).items[0];},selectedCandidate:()=>({domain:item.domain,company:'Buyer'}),selectedContact:()=>item.dossier.people[0],readStudio:()=>studio,persistStudio:value=>{studio=value;},studioState:()=>studio,renderMessageStudio(){},mainState:()=>({answers:{},answerStatus:{}}),crmBridge:()=>({workspace:{id:workspace}}),crmAuthenticated:()=>true,messageWorkspaceUsable:()=>usable,rankedBuyingTriggers:()=>F.candidates(item.dossier.evidence,{domain:item.domain,company:'Buyer'}),editorDraft:()=>E.workingDraft(item),renderAll:()=>renders++,renderMessageWorkspace(){},ensureSelection(){},previewSelectedTrigger(){},cancelPendingScriptGeneration:()=>{c.scriptGenerationRequest++;c.approvedFieldController?.abort();},pendingMessageSelections:()=>false,q,toast(){},fetch:async(url,opts)=>new Promise(resolve=>requests.push({url,opts,resolve}))};
+ DISCOVERY_META_KEY:'meta',handoffContact:{domain:'buyer.example',personId:'sam',channel:'email'},readJson:()=>({scriptBuyer:{workspaceId:workspace,domain:'buyer.example',personId:'sam',channel:'email'}}),currentItem:()=>item,readDraftEdits:()=>item,upsertItem:v=>{item=O.normalizeOutreachState({items:[v]}).items[0];},selectedCandidate:()=>({domain:item.domain,company:'Buyer'}),selectedContact:()=>item.dossier.people[0],readStudio:()=>studio,persistStudio:value=>{studio=value;},studioState:()=>studio,renderMessageStudio(){},mainState:()=>({answers:{},answerStatus:{}}),crmBridge:()=>({workspace:{id:workspace}}),crmAuthenticated:()=>true,messageWorkspaceUsable:()=>usable,rankedBuyingTriggers:()=>F.candidates(item.dossier.evidence,{domain:item.domain,company:'Buyer'}),editorDraft:()=>E.workingDraft(item),renderAll:()=>renders++,renderMessageWorkspace(){},ensureSelection(){},previewSelectedTrigger(){},cancelPendingScriptGeneration:()=>{c.scriptGenerationRequest++;c.studioGenerationBusy=false;c.approvedFieldController?.abort();},pendingMessageSelections:()=>false,q,toast(){},fetch:async(url,opts)=>new Promise(resolve=>requests.push({url,opts,resolve}))};
  vm.createContext(c);
  for(const [start,end] of [['function sourceBackedTrigger','// Prior drafts'],['async function chooseBuyingTrigger','function restorePreviousTriggerDraft'],['function studioMessageContext','function senderLinkedInFooter'],['function workingSuggestedSubject','function stripEmailSubjectHeader'],['function seedMandatoryEmail','function personalSlots'],['function updateMessageFromTemplate','function pendingMessageSelections']])vm.runInContext(source.slice(source.indexOf(start),source.indexOf(end)),c);
  return {c,q,requests,get item(){return item;},set item(v){item=v;},get studio(){return studio;},set studio(v){studio=v;},set workspace(v){workspace=v;},set usable(v){usable=v;},get renders(){return renders;},finish(fields){requests.at(-1).resolve({ok:true,json:async()=>({text:JSON.stringify(fields),provider:'test-provider'})});}};
 }
+test('explicit Professional to NLP selection applies the NLP body even for saved or edited messages, with durable Undo',()=>{
+ for(const protection of ['saved','manual','approved','translated']){
+  const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.automaticallyPrepareMessage();
+  if(protection==='manual')h.item.drafts.emailBody='  My exact professional edit\n\nKeep spacing.  ';
+  if(protection==='approved')h.item.approved=true;
+  if(protection==='translated'){h.c.LeadIntelMessageTranslations=require('../message-translations.js');h.item=h.c.LeadIntelMessageTranslations.translated(h.item,'sv',{subject:'Svenskt ämne',message:'Min svenska text'});}
+  h.item.messageStudioDraft.scriptSavedAt='today';h.item.messageStudioDraft.savedDraft=E.workingDraft(h.item);
+  const before=E.workingDraft(h.item),master=A.originalText('curiosity');
+  h.studio=S.markDefault(S.saveMyTemplate(h.studio,'template-1',{name:'Saved default',subject:'Saved default',body:'Keep the default for future recipients'}),'template-1');h.studio.mode='professional';
+  h.c.readStudio=()=>S.normalize({...h.studio,mode:h.q('message-mode').value});h.c.renderMessageStudio=()=>{h.q('message-mode').value=h.studio.mode;};h.c.closePersonalReview=()=>{};
+  vm.runInContext(source.slice(source.indexOf('function invalidateStudioDraft'),source.indexOf('function installMessageStudio')),h.c);
+  vm.runInContext(source.split('\n').find(line=>line.includes("q('message-mode').onchange=")),h.c);
+  h.q('message-mode').value='curiosity';h.q('message-mode').onchange();
+  assert.equal(h.item.messageStudioDraft.mode,'curiosity');assert.match(h.item.drafts.emailBody,/this is not another sales pitch/);E.validateFrame(h.item.drafts.emailBody,'curiosity');
+  assert.equal(h.item.messageStudioDraft.pendingTemplateUpdate,undefined);assert.equal(h.item.approved,false);assert.equal(E.savedDraft(h.item),false);assert.equal(A.originalText('curiosity'),master);assert.equal(h.requests.length,0);
+  const restored=O.restoreCrmScriptSnapshot(O.buildCrmScriptSnapshot(h.item),'buyer.example');assert.deepEqual(E.updateUndo(restored),before);assert.deepEqual(E.workingDraft(E.undoTemplateUpdate(restored)),before);
+  if(protection==='translated'){const T=h.c.LeadIntelMessageTranslations;assert.equal(T.book(h.item).activeLanguage,'en');assert.equal(T.book(h.item).versions.sv.message,'Min svenska text');const undone=T.capture(E.undoTemplateUpdate(restored));assert.equal(T.book(undone).activeLanguage,'sv');assert.match(T.source(undone).message,/Does your role involve/);assert.equal(T.book(undone).versions.sv.message,before.message);assert.equal(undone.localizationProvenance.language,'sv');}
+ }
+});
 test('opening Messages selects evidence before rendering and automatically prepares every approved style and its factual subjects',()=>{
  for(const mode of ['professional','curiosity','friendly','brutal']){
   const h=harness();h.studio=S.normalize({mode,essentials:e});let onOpen;
@@ -24,6 +43,23 @@ test('opening Messages selects evidence before rendering and automatically prepa
   assert.ok(subjects.some(subject=>/Northport/.test(subject)),mode);assert.ok(subjects.every(subject=>S.validSubject(subject)&&!/LKAB|ERCON/.test(subject)));assert.equal(h.item.approved,false);assert.equal(h.item.messageStudioDraft.scriptSavedAt,undefined);
   const before=JSON.stringify(h.item);onOpen({detail:{step:6}});assert.equal(JSON.stringify(h.item),before);assert.equal(h.requests.length,0);
  }
+});
+test('late field preparation for a previously selected style cannot overwrite the latest explicit style',async()=>{
+ const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.automaticallyPrepareMessage();const before=E.workingDraft(h.item);
+ const essentials={...e,offer:'steel manufacturing and installation '.repeat(8)};
+ h.studio=S.normalize({mode:'curiosity',essentials});h.c.selectMandatoryEmailStyle('curiosity');assert.equal(h.requests.length,1);
+ h.studio=S.normalize({mode:'friendly',essentials});h.c.selectMandatoryEmailStyle('friendly');assert.equal(h.requests.length,2);
+ const fields={triggerSummary:'Buyer is investing in a new sorting plant at Northport.',offer:e.offer,value:e.value,difference:e.difference,approach:e.approach,meetingValue:e.meetingValue};
+ h.requests[0].resolve({ok:true,json:async()=>({text:JSON.stringify(fields)})});await new Promise(r=>setImmediate(r));assert.deepEqual(E.workingDraft(h.item),before);
+ h.finish(fields);await new Promise(r=>setImmediate(r));assert.equal(h.item.messageStudioDraft.mode,'friendly');E.validateFrame(h.item.drafts.emailBody,'friendly');assert.deepEqual(E.updateUndo(h.item),before);assert.equal(E.savedDraft(h.item),false);
+});
+test('Use on a saved template applies that template instead of keeping the previous draft or default',()=>{
+ const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.automaticallyPrepareMessage();const before=E.workingDraft(h.item);h.item.messageStudioDraft.scriptSavedAt='today';
+ let studio=S.saveMyTemplate(h.studio,'template-1',{name:'Prior default',subject:'Prior default',body:'Prior default body'});studio=S.markDefault(studio,'template-1');h.studio=S.saveMyTemplate(studio,'template-2',{name:'Chosen template',subject:'For {{buyerCompany}}',body:'Hi {{firstName}},\n\nChosen pattern: {{offer}}\n\n{{calendly}}'});
+ h.c.personalSlots=s=>s.myTemplates;vm.runInContext(source.slice(source.indexOf('function invalidateStudioDraft'),source.indexOf('function installMessageStudio')),h.c);
+ vm.runInContext(source.split('\n').find(line=>line.includes("q('message-template-slots').onclick=")),h.c);
+ h.q('message-template-slots').onclick({target:{closest:()=>({dataset:{templateId:'template-2',templateAction:'use'}})}});
+ assert.equal(h.item.drafts.emailBody,'Hi Sam,\n\nChosen pattern: steel and installation\n\nhttps://calendly.com/north/intro');assert.equal(h.item.messageStudioDraft.mode,'template-2');assert.equal(h.studio.defaultSelection.email,undefined);assert.deepEqual(E.updateUndo(h.item),before);assert.equal(E.savedDraft(h.item),false);
 });
 test('the page quality contract checks actual core assembly, accepts deliberate edits and preserves Save intent',()=>{
  const Q=require('../page-quality.js'),h=harness();h.c.window={LeadIntelPageQuality:Q};h.c.buyerHandoffPending=false;h.c.LeadIntelStep2Brief={confirmationMissing:()=>[]};
