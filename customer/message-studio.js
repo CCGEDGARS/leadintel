@@ -109,7 +109,7 @@
  function messageEvidenceAudit(studio,context={}){return {...Evidence.assess({style:studio.mode,essentials:studio.essentials,context}),subjects:subjectAudit(studio,context)};}
  function subjectResearchKey(studio,context={}){
   const profile=subjectEvidenceSources({...context,sellerEvidence:context.profileEvidence||[]}).map(row=>{let hash=2166136261;for(const char of row.text){hash^=char.charCodeAt(0);hash=Math.imul(hash,16777619);}return [row.url,row.text.length,(hash>>>0).toString(16)];});
-  return JSON.stringify(['subject-evidence-v3',studio.mode,studio.essentials,context.sellerWebsite,context.sellerAnswers,context.sellerAnswerStatus,profile,context.trigger?.url,context.trigger?.excerpt,context.buyerName,context.buyerCompany,context.buyerRole]);
+  return JSON.stringify(['subject-evidence-v4',studio.mode,studio.essentials,context.sellerWebsite,context.sellerAnswers,context.sellerAnswerStatus,profile,context.trigger?.url,context.trigger?.excerpt,context.buyerName,context.buyerCompany,context.buyerRole]);
  }
  function subjectResearchPlan(studio,context={}){return defaults.some(row=>row.id===studio.mode)?Evidence.plan({style:studio.mode,essentials:studio.essentials,context}):[];}
  function professionalSubject(studio,context,e,language){
