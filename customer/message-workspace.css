@@ -322,5 +322,25 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #message-studio .mw-editor-actions{flex-wrap:nowrap;gap:5px}
 #message-studio .mw-editor-actions button{font-size:11px;padding:10px 7px}
 #message-studio #mw-approved-library .mw-approved-original pre{max-height:260px;overflow:auto}
+
+/* Clear composer: compact setup, explicit actions and one update notice. */
+#message-studio .mw-default-template{padding:12px 16px;margin-bottom:14px;gap:12px}
+#message-studio .mw-default-template[data-empty=true]{background:#fafcfb;border-color:#dce5df}
+#message-studio .mw-default-template strong{font-size:14px;margin:3px 0}
+#message-studio .mw-editor-head{align-items:center;margin-bottom:10px}
+#message-studio .mw-editor-head .mw-caption{display:none}
+#message-studio #mw-applied-style{font-size:12px;margin:5px 0 0;color:#687c6e}
+#message-studio .mw-editor-actions{flex-wrap:wrap;gap:6px;margin:12px 0}
+#message-studio .mw-editor-actions button{padding:9px 10px;font-size:12px}
+#message-studio .mw-editor .mw-generate-bar{background:#f4f7f4;border:1px solid #dce5df;border-radius:10px;padding:12px;margin:0 0 14px;align-items:center}
+#message-studio .mw-editor .mw-generate-bar:has(.mw-readiness[data-state=blocked]){background:#fff8e9;border-color:#f0e2c2}
+#message-studio .mw-generate-bar>.mw-readiness{flex:1 1 240px;min-width:0;margin:0;padding:0;background:transparent;border:0}
+#message-studio .mw-generate-bar #message-generate{min-width:0;font-size:12px;padding:10px 12px}
+#message-studio #mw-readiness-text{font-size:13px;font-weight:600}
+#message-studio #mw-readiness-detail{font-size:12px;margin-top:4px}
+#message-studio #mw-sender-details{gap:10px 20px;margin:12px 0}
+#message-studio #mw-sender-details dd{font-size:13px}
+#message-studio .mw-subject-options .mw-section-heading{margin-bottom:8px}
+@media(max-width:720px){#message-studio .mw-default-actions{flex-wrap:wrap}#message-studio .mw-editor-actions button{flex:0 1 auto}#message-studio .mw-generate-bar>.mw-readiness{flex-basis:100%}}
 @media(min-width:1550px){#message-studio .mw-layout{grid-template-columns:minmax(280px,32%) minmax(0,1fr)}}
 @media(max-width:720px){#message-studio .mw-layout{grid-template-columns:1fr;gap:0}#message-studio .mw-editor-actions{flex-wrap:wrap}#message-studio .mw-editor-actions button{padding:10px 9px}.mw-assistant-actions{grid-template-columns:1fr 1fr}}

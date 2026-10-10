@@ -199,16 +199,16 @@ test('composer mounts the saved-draft control without querying it while its tool
  assert.ok(button?.isConnected);assert.equal(button.hidden,true);assert.equal(button.parentElement.id,'mw-draft-toolbar');assert.equal(typeof button.onclick,'function');assert.ok(!button.parentElement.textContent.includes('null'));
 });
 
-test('sender card shows saved contact details before the draft and clears previous workspace values',()=>{
+test('compact sender summary shows essential details and clears previous workspace values',()=>{
  const {document,w}=mounted(),base={ready:true,authenticated:true,channel:'email',senderIdentityReady:true};
  w.LeadIntelMessageWorkspace.render(document,{...base,senderIdentity:{senderName:'Marta Kalna',senderTitle:'Partner',companyDisplayName:'North Legal',email:'marta@example.com',phone:'+123456789',linkedinUrl:'https://linkedin.com/in/marta'},calendly:'https://calendly.com/north/call'});
  const card=document.getElementById('mw-sender-card');assert.ok(card.compareDocumentPosition(document.getElementById('outreach-email-body'))&4);
- for(const text of ['Marta Kalna','Partner','North Legal','marta@example.com','+123456789','https://linkedin.com/in/marta','https://calendly.com/north/call'])assert.ok(card.textContent.includes(text),text);
+ for(const text of ['Marta Kalna','North Legal','https://calendly.com/north/call'])assert.ok(card.textContent.includes(text),text);
  assert.equal(document.querySelector('#mw-tools-drawer #brand-identity'),null);
  assert.equal(document.querySelectorAll('#brand-email').length,1);
  w.LeadIntelMessageWorkspace.render(document,{...base,senderIdentity:{}});
  assert.doesNotMatch(document.getElementById('mw-sender-details').textContent,/Marta|North|marta@example/);
- assert.equal(document.querySelectorAll('#mw-sender-details [data-missing=true]').length,7);
+ assert.equal(document.querySelectorAll('#mw-sender-details [data-missing=true]').length,3);
 });
 
 test('Edit sender details opens canonical controls and saves email and phone through the existing identity controller',()=>{
@@ -238,7 +238,7 @@ test('a failed style change identifies the displayed draft rather than claiming 
  const {document,w}=mounted();document.getElementById('outreach-email-body').value='Earlier Professional email';
  const base={ready:true,authenticated:true,hasDraft:true,channel:'email',senderIdentityReady:true,selectedStyle:'curiosity',appliedStyle:'professional',pendingSelections:true};
  w.LeadIntelMessageWorkspace.render(document,{...base,generationError:true});
- assert.equal(document.getElementById('mw-applied-style').textContent,'Displayed email: Professional');assert.match(document.getElementById('mw-style-help').textContent,/NLP has not been applied/);assert.match(document.getElementById('mw-style-help').textContent,/Preparation failed/);assert.doesNotMatch(document.getElementById('mw-style-help').textContent,/is preparing/);assert.equal(document.getElementById('outreach-email-body').value,'Earlier Professional email');
+ assert.equal(document.getElementById('mw-applied-style').textContent,'Style: Professional');assert.match(document.getElementById('mw-style-help').textContent,/NLP has not been applied/);assert.match(document.getElementById('mw-style-help').textContent,/Preparation failed/);assert.doesNotMatch(document.getElementById('mw-style-help').textContent,/is preparing/);assert.equal(document.getElementById('outreach-email-body').value,'Earlier Professional email');
  w.LeadIntelMessageWorkspace.render(document,{...base,busy:true});assert.match(document.getElementById('mw-style-help').textContent,/Preparing NLP/);
 });
 
