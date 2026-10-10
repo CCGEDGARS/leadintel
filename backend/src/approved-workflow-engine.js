@@ -21,7 +21,8 @@ export function approvedContext(main={}){
   const referenceTraits=(referenceSimilarityModel?.dna?.referenceProfiles||[]).flatMap(ref=>ref.dimensions||[]).filter(d=>['industry','broadIndustry','productionModel','capabilities'].includes(d.key)).flatMap(d=>d.values||[]);
 
   const outreachDefault=Studio.defaultTemplate(main.messageStudio||{});
-  return {...(outreachDefault?{outreachDefault,messageEssentials:Studio.normalize(main.messageStudio).essentials,senderLinkedInUrl:main.brandIdentity?.linkedinUrl||''}:{}),website:main.website||'',answers:main.answers||{},profile,profileApproved:main.approved===true,strategyApproved:market.strategyApproved===true,
+  const outreachLanguage=Studio.normalize(main.messageStudio||{}).languageSettings?.defaultLanguage||'en';
+  return {...(outreachLanguage!=='en'?{outreachLanguage}:{}),...(outreachDefault?{outreachDefault,messageEssentials:Studio.normalize(main.messageStudio).essentials,senderLinkedInUrl:main.brandIdentity?.linkedinUrl||''}:{}),website:main.website||'',answers:main.answers||{},profile,profileApproved:main.approved===true,strategyApproved:market.strategyApproved===true,
     icps:market.icps||[],signals:market.signals||[],researchSourceTypes:market.researchSourceTypes||[],researchCustomSources:market.researchCustomSources||[],researchInstructions:market.researchInstructions||'',knownEvidence:(market.researchResults||[]).slice(0,20).map(item=>({url:item.url||item.link||'',title:item.title||'',description:item.description||'',text:String(item.text||item.markdown||'').slice(0,4000),date:item.date||item.publishedDate||'',market:item.market||''}))};
 }
 export function normalizeWorkflowConfig(input={},context=null){
@@ -48,7 +49,7 @@ export async function approvalStatus(context,config,approvals={}){
   const stages=[];for(const stage of WORKFLOW_STAGES){const hash=await fingerprint(stageSnapshot(stage,context,config));stages.push({stage,approved:approvals[stage]?.hash===hash,hash,approvedAt:approvals[stage]?.at||null});}return stages;
 }
 export function setupBlockers(context,config){
-  const gaps=[];if(!context.profileApproved)gaps.push('Approve the company profile');if(!context.strategyApproved)gaps.push('Approve the market strategy');
+  const gaps=[];if(context.outreachLanguage&&context.outreachLanguage!=='en')gaps.push('Automatic template generation currently uses English. Use reviewed translated messages in a manual flow, or choose English before approving automatic generation.');if(!context.profileApproved)gaps.push('Approve the company profile');if(!context.strategyApproved)gaps.push('Approve the market strategy');
   if(!text(context.profile?.companyName)||!text(context.profile?.priorityOffers)||!text(context.profile?.targetMarkets))gaps.push('Complete company name, priority offer and target markets');
   if(config.companies.researchPriority!=='lookalike'&&!context.signals.some(x=>x.active===true))gaps.push('Activate at least one buying signal');
   if(config.companies.researchPriority==='lookalike'&&!context.profile?.referenceSimilarityModel)gaps.push('Activate an evidence-backed reference customer model for Lookalike');
@@ -66,6 +67,7 @@ export function renderWorkflowMessage(template,values){
 }
 const defaultMessageFields=['buyerName','buyerCompany','buyerRole','sellerWebsite','senderLinkedInUrl','senderFullName','senderFirstName','senderName','senderCompany','recipientCompany','verifiedProjectOrExpansion','supportedBenefit','fitScore','calendly','development','verifiedProject','verifiedMilestone','projectMilestone','subjectProject','difference','approach','proof','meetingValue','nextAction','target','problem','value','developmentContext','roleQuestion','milestoneContext','deliveryChallenge','experienceAndApproach','serviceOutcome','referenceInvitation','friendlyOpening','friendlyExperience','friendlyBenefit','friendlyReferences','meetingFormat','referral','honestResearchOpening','honestBenefit','honestExperience','honestReferences','partnerType','serviceFocus','deliveryAngle','referenceUrl','planType','meetingData','outcomeSummary','senderRole'];
 export function renderDefaultWorkflowMessage(context,candidate){
+ if(context.outreachLanguage&&context.outreachLanguage!=='en')throw Error('Translate and review this message before manual delivery; automatic generation requires English.');
  const template=context.outreachDefault;if(!template)throw Error('No saved default template');
  const known=new Set([...defaultMessageFields,'firstName','company','sender','offer']);
  for(const pattern of [template.subject,template.body])for(const match of pattern.matchAll(/\{\{([^}]+)\}\}/g))if(!known.has(match[1]))throw Error('Unknown default template field: '+match[1]);

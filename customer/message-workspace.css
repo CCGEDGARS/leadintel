@@ -385,3 +385,11 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #message-studio .mw-subject-picker .mw-subject-status{display:block;margin:8px 0;color:#63786a;font-size:12px;line-height:1.45}
 #message-studio .mw-subject-picker .mw-subject-status[hidden],#message-studio .mw-subject-picker:not([open])>.mw-subject-status,#message-studio .mw-subject-picker:not([open])>#mw-subject-research{display:none}
 #message-studio #mw-subject-research[hidden]{display:none}
+
+/* Language settings collapse independently of the explicit translation action. */
+#message-studio .mw-language-quick{width:100%;box-sizing:border-box;padding:12px 0 0}
+.mw-language-quick p{font-size:12px;line-height:1.6;color:#65746c;margin:8px 0 0}
+#message-language-tabs{display:grid;gap:10px;width:100%}
+.mw-language-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid #e5ece7}
+.mw-language-row>button:first-child{flex:1;min-width:150px;text-align:left}
+#message-language-removed{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}

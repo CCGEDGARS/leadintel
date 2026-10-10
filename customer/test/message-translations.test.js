@@ -10,3 +10,26 @@ test('translation prompt uses chosen language and preserves an empty LinkedIn su
 test('percentage and currency figures keep their associations',()=>{const source={subject:'',message:'30 minutes, 50% savings, $200 or 300€'};for(const message of ['30 minutes, 50 savings, $200 or 300€','50 minutes, 30% savings, $200 or 300€','30 minutes, 50% savings, $300 or 200€'])assert.throws(()=>T.validate(source,{subject:'',message}));assert.doesNotThrow(()=>T.validate(source,{subject:'',message:'30 minūtes, 50 % ietaupījums, $200 vai 300 €'}));});
 test('regeneration preserves a translated edit and activation restores provider and campaign metadata',()=>{let i=T.translated({...item,localizationProvenance:{language:'en',provider:'english-provider',model:'english-model'}},'lv',lv,{provider:'translation-provider',model:'translation-model'});assert.equal(i.localizationProvenance.provider,'translation-provider');assert.equal(i.campaignScenario.resolvedLanguage,'lv');i=T.capture({...i,drafts:{...i.drafts,emailBody:lv.message+' Paldies.'}});i=T.generated(i,{subject:'New English',message:'New English original'});assert.ok(T.book(i).versions.lv.message.endsWith('Paldies.'));i=T.activate(i,'lv');assert.equal(i.localizationProvenance.model,'translation-model');assert.equal(i.campaignScenario.language,'lv');});
 test('protected names are checked again after translation edits',()=>{const terms=T.protectedTerms(item,{sender:'Alex Smith',company:'Seller'});assert.ok(terms.includes('Sam'));assert.throws(()=>T.validate(T.source(item),{...lv,message:lv.message.replace('Sam','Other')},{protectedTerms:terms}),/protected name/);});
+
+test('adding five languages and setting a default leaves the source and current message unchanged after CRM reload',()=>{
+ let settings=T.settings({},item);for(const code of ['lv','sv','de','fr','fi'])settings=T.changeSettings(settings,'add',code,item);
+ settings=T.changeSettings(settings,'default','sv',item);
+ const studio=require('../message-studio.js').storageState({languageSettings:settings});
+ const state=O.normalizeOutreachState(JSON.parse(JSON.stringify({messageStudio:studio,items:[item]})));
+ assert.equal(state.messageStudio.languageSettings.defaultLanguage,'sv');assert.equal(state.messageStudio.languageSettings.targetLanguage,'sv');assert.equal(state.messageStudio.languageSettings.languages.length,6);
+ assert.equal(state.items[0].drafts.emailBody,item.drafts.emailBody);assert.equal(T.book(state.items[0]).activeLanguage,'en');assert.deepEqual(T.source(state.items[0]),T.source(item));
+ const independent=require('../message-studio.js').storageState({languageSettings:T.settings({languages:['en','de'],defaultLanguage:'de'})});assert.equal(independent.languageSettings.defaultLanguage,'de');assert.equal(studio.languageSettings.defaultLanguage,'sv');
+});
+test('removing the active default archives edited translation and history, falls back to English, and Undo survives CRM serialization',()=>{
+ let translated=T.translated(item,'lv',lv);translated=T.translated(translated,'lv',{...lv,message:lv.message+' Paldies.'});
+ const prefs=T.changeSettings(T.settings({},translated),'default','lv',translated);
+ const removed=T.removeLanguage(translated,'lv'),settings=T.changeSettings(prefs,'remove','lv',translated);
+ assert.equal(settings.defaultLanguage,'en');assert.equal(settings.targetLanguage,'en');assert.equal(T.book(removed).activeLanguage,'en');assert.equal(removed.drafts.emailBody,item.drafts.emailBody);assert.equal(T.book(removed).versions.lv,undefined);
+ const reopened=O.restoreCrmScriptSnapshot(O.buildCrmScriptSnapshot(removed),item.domain),restored=T.restoreLanguage(reopened,'lv');
+ assert.equal(T.book(restored).versions.lv.message,lv.message+' Paldies.');assert.equal(T.book(restored).versions.lv.history.length,1);assert.equal(T.source(restored).message,item.drafts.emailBody);assert.equal(T.book(restored).activeLanguage,'en');
+ assert.throws(()=>T.removeLanguage(restored,'en'),/cannot be removed/);assert.throws(()=>T.changeSettings(settings,'remove','en',restored),/cannot be removed/);
+});
+test('removing an inactive language preserves the exact displayed draft, and legacy originals remain protected',()=>{
+ const translated=T.activate(T.translated(item,'lv',lv),'en'),removed=T.removeLanguage(translated,'lv');assert.deepEqual(removed.drafts,translated.drafts);
+ const legacy={...item,localizationProvenance:{language:'lv'}};assert.throws(()=>T.removeLanguage(legacy,'lv'),/cannot be removed/);assert.throws(()=>T.changeSettings({},'default','xx',item),/supported language/);
+});

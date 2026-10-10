@@ -7,3 +7,20 @@ test('language search suggests native and English names, tabs reflect stale inde
  w.LeadIntelMessageTranslationUI.render(w.document,translated,{usable:true});assert.equal(w.document.getElementById('message-translate').textContent,'Translate into Latvian');assert.match(w.document.getElementById('message-language-tabs').textContent,/Latvian · needs update/);
  w.LeadIntelMessageTranslationUI.render(w.document,translated,{usable:false});assert.equal(w.document.getElementById('message-translate').disabled,true);assert.equal(w.document.getElementById('message-save-language').disabled,true);
 });
+
+test('default and remove controls identify each language; Translate stays visible outside closed settings after reload',()=>{
+ const w=new JSDOM('<div class="mw-generate-bar"><label>Language<select id="message-language"></select></label></div>',{runScripts:'outside-only'}).window;w.LeadIntelMessageTranslations=T;w.eval(fs.readFileSync(require.resolve('../message-translation-ui.js'),'utf8'));
+ const item={channel:'email',drafts:{emailSubject:'Acme',emailBody:'English original'},localizationProvenance:{language:'en'}};
+ let prefs=T.settings({},item),actions=[];w.LeadIntelMessageTranslationUI.mount(w.document,{save(){},translate(code){actions.push(['translate',code]);},activate(){},manage(action,code){actions.push([action,code]);}});
+ for(const code of ['lv','sv','de'])prefs=T.changeSettings(prefs,'add',code,item);prefs=T.changeSettings(prefs,'default','sv',item);
+ w.LeadIntelMessageTranslationUI.render(w.document,item,{usable:true,languageSettings:JSON.parse(JSON.stringify(prefs))});
+ const tools=w.document.getElementById('mw-language-tools'),translate=w.document.getElementById('message-translate');assert.equal(tools.open,false);assert.equal(tools.contains(translate),false);assert.equal(translate.textContent,'Translate into Swedish');assert.equal(translate.disabled,false);translate.click();assert.deepEqual(actions.pop(),['translate','sv']);
+ assert.match(w.document.getElementById('message-language-tabs').textContent,/Swedish · not translated/);assert.match(w.document.getElementById('message-language-default-summary').textContent,/Default: Swedish/);
+ w.document.querySelector('[data-language="lv"][data-language-action="default"]').click();assert.deepEqual(actions.pop(),['default','lv']);w.document.querySelector('[data-language="sv"][data-language-action="remove"]').click();assert.deepEqual(actions.pop(),['remove','sv']);assert.equal(w.document.querySelector('[data-language="en"][data-language-action="remove"]'),null);
+ w.LeadIntelMessageTranslationUI.render(w.document,item,{usable:true,busy:true,languageSettings:prefs});assert.equal(translate.disabled,true);assert.ok([...w.document.querySelectorAll('#message-language-tabs button')].every(b=>b.disabled));w.close();
+});
+test('removing a translation offers Undo and does not resurrect a removed language in the visible list',()=>{
+ const w=new JSDOM('<div class="mw-generate-bar"><label>Language<select id="message-language"></select></label></div>',{runScripts:'outside-only'}).window;w.LeadIntelMessageTranslations=T;w.eval(fs.readFileSync(require.resolve('../message-translation-ui.js'),'utf8'));
+ let undo='',item=T.translated({channel:'linkedin',drafts:{linkedinMessage:'Hello'},localizationProvenance:{language:'en'}},'lv',{subject:'',message:'Sveiki'}),prefs=T.settings({},item);prefs=T.changeSettings(prefs,'remove','lv',item);item=T.removeLanguage(item,'lv');
+ w.LeadIntelMessageTranslationUI.mount(w.document,{manage(action,code){undo=action+':'+code;}});w.LeadIntelMessageTranslationUI.render(w.document,item,{usable:true,languageSettings:prefs});assert.equal(w.document.querySelector('#message-language-tabs [data-language="lv"]'),null);w.document.querySelector('[data-language-undo="lv"]').click();assert.equal(undo,'add:lv');assert.equal(w.document.getElementById('message-translate').textContent,'Open English original');w.close();
+});
