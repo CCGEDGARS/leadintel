@@ -97,3 +97,13 @@ test('manual subject edits do not masquerade as changed facts or prevent a saved
  const {document,w}=mounted();w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true,pendingSelections:pending(item,{mode:'professional'})});
  assert.equal(document.getElementById('mw-auto-settings').hidden,true);assert.equal(document.getElementById('mw-add-flow').disabled,false);
 });
+
+test('saved drafts retain booking and Profile readiness guidance when flow is unavailable',()=>{
+ const {document,w}=mounted(),q=id=>document.getElementById(id);
+ w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true,missing:['calendly']});
+ assert.equal(q('mw-auto-settings').hidden,false);assert.equal(q('mw-readiness').hidden,false);assert.match(q('mw-readiness-detail').textContent,/booking link/);
+ assert.equal(q('message-generate').hidden,true);assert.equal(q('mw-add-flow').disabled,true);assert.match(q('mw-add-flow').title,/booking link/);
+ w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true,unconfirmed:['meeting_value']});
+ assert.equal(q('mw-auto-settings').hidden,false);assert.equal(q('mw-resolve').hidden,false);assert.match(q('mw-resolve').textContent,/Profile/);assert.equal(q('mw-add-flow').disabled,true);
+ w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true,pendingSelections:true});assert.match(q('mw-add-flow').title,/Apply the update/);
+});
