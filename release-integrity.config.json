@@ -1388,6 +1388,36 @@
       "contains": [
         "blank-preparation=20261011-v1"
       ]
+    },
+    {
+      "id": "step6-recipient-safe-recovery",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "async function savedBuyerCrmDraft(",
+        "channel:'email',current:active,strict:true",
+        "function restoreAppliedMessageStyle(",
+        "stamp===JSON.stringify(editorDraft())"
+      ]
+    },
+    {
+      "id": "step6-recovery-cache-chain",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "step6-recovery=20261011-v1"
+      ]
+    },
+    {
+      "id": "step6-recovery-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "step6-recovery=20261011-v1"
+      ]
     }
   ],
   "retry": {
