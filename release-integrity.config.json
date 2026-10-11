@@ -1357,6 +1357,37 @@
         "'leadintel:service-status'",
         "health.classList.contains('credit-alert')||health.classList.contains('connection-alert')"
       ]
+    },
+    {
+      "id": "blank-style-preparation-view",
+      "type": "text",
+      "url": "/customer/message-workspace.js",
+      "status": 200,
+      "contains": [
+        "mw-preparing-editor",
+        "preparing=Boolean(context.messagePreparing&&!linkedin)",
+        "grid.hidden=preparing"
+      ]
+    },
+    {
+      "id": "blank-style-preparation-runtime",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "studioGenerationAutomatic=Boolean(options.automatic)",
+        "messagePreparing:studioGenerationBusy",
+        "blank-preparation=20261011-v1"
+      ]
+    },
+    {
+      "id": "blank-style-preparation-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "blank-preparation=20261011-v1"
+      ]
     }
   ],
   "retry": {
