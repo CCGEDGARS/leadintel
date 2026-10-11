@@ -22,7 +22,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "LeadIntel \u2014 Build Your Commercial Intelligence Strategy",
+        "LeadIntel — Build Your Commercial Intelligence Strategy",
         "id=\"company-website\""
       ]
     },
@@ -258,7 +258,7 @@
         "topFourResearchCandidates",
         "data-research-buyer",
         "data-research-remaining",
-        "Likely email \u00b7 ownership unconfirmed"
+        "Likely email · ownership unconfirmed"
       ]
     },
     {
@@ -270,7 +270,7 @@
         "choice.channel==='linkedin'",
         "confirmedLinkedInBuyer",
         "prepareStudioBuyer(candidate,person)",
-        "LinkedIn direct message \u00b7 draft only"
+        "LinkedIn direct message · draft only"
       ]
     },
     {
@@ -427,7 +427,7 @@
       "url": "/customer/outreach-ui.js",
       "status": 200,
       "contains": [
-        "My LinkedIn Templates \u00b7 ",
+        "My LinkedIn Templates · ",
         "savedLinkedInCrmDraft",
         "Record as sent in CRM",
         "contact.linkedin_message_sent"
@@ -634,7 +634,7 @@
       "status": 200,
       "contains": [
         "bridge.workspaceStateCodec=payload.state_codec||''",
-        "Workspace exceeds sync limit \u00b7 local changes preserved"
+        "Workspace exceeds sync limit · local changes preserved"
       ]
     },
     {
@@ -643,7 +643,7 @@
       "url": "/customer/journey-progress.js",
       "status": 200,
       "contains": [
-        "No new qualified companies \u00b7 saved companies retained",
+        "No new qualified companies · saved companies retained",
         "Review saved companies or broaden the search"
       ]
     },
@@ -737,7 +737,7 @@
       "url": "/customer/message-workspace.js",
       "status": 200,
       "contains": [
-        "AI Writing Assistant",
+        "Message editor",
         "My content",
         "Approved originals",
         "Writing references",
@@ -745,7 +745,7 @@
         "Set as default",
         "Add to flow",
         "mw-browse-templates",
-        "Update message",
+        "Adjust message",
         "mw-subject-choices",
         "mw-header-actions",
         "Custom style settings",
@@ -905,7 +905,7 @@
         "providerConfirmedSent",
         "openSavedFlow",
         "function refreshSummary(",
-        "active \u00b7 ",
+        "active · ",
         "saved"
       ]
     },
@@ -1033,6 +1033,32 @@
         ".meeting-platform-note{display:block;width:100%",
         ".tool-account-links{display:flex;flex-wrap:wrap",
         ".integration-grid>[data-integration=\"calendly\"]{grid-column:1 / -1}"
+      ]
+    },
+    {
+      "id": "message-length-adjustment",
+      "type": "text",
+      "url": "/customer/message-editor.js",
+      "status": 200,
+      "contains": [
+        "function lengthPlan(",
+        "function validateAdjustment(",
+        "adjust-message-length",
+        "adjustmentSource",
+        "Essential content exceeds the selected length"
+      ]
+    },
+    {
+      "id": "message-length-editor",
+      "type": "text",
+      "url": "/customer/message-workspace.js",
+      "status": 200,
+      "contains": [
+        "mw-message-length",
+        "Very short · about 50%",
+        "Short · about 75%",
+        "editorActions.before(assistant)",
+        "Adjust message"
       ]
     }
   ],
