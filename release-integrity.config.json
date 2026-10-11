@@ -1320,7 +1320,7 @@
       "url": "/customer/account-cache.js",
       "status": 200,
       "contains": [
-        "function failed(){verified=false;"
+        "function failed(cause){verified=false;"
       ]
     },
     {
@@ -1506,6 +1506,61 @@
       "status": 200,
       "contains": [
         "codec-loader=20261011-v1&snapshot-quota=20261011-v1"
+      ]
+    },
+    {
+      "id": "quota-safe-account-backups",
+      "type": "text",
+      "url": "/customer/account-cache.js",
+      "status": 200,
+      "contains": [
+        "function saveRecoverySnapshot(",
+        "function readRecoverySnapshot(",
+        "tx.oncomplete=()=>finish()",
+        "root.indexedDB&&hasLegacyArchives()"
+      ]
+    },
+    {
+      "id": "quota-safe-indexed-snapshot",
+      "type": "text",
+      "url": "/customer/workspace-persistence.js",
+      "status": 200,
+      "contains": [
+        "leadintel-indexed-workspace-snapshot-v1",
+        "saveRecoverySnapshot(snapshot).then",
+        "await snapshotFromServerPayload",
+        "const ready=loadStoredSnapshot()"
+      ]
+    },
+    {
+      "id": "quota-safe-account-startup",
+      "type": "text",
+      "url": "/customer/server-bridge.js",
+      "status": 200,
+      "contains": [
+        "await root.LeadIntelAccountCache?.pending",
+        "await root.LeadIntelWorkspacePersistence?.ready",
+        "const cache=await root.LeadIntelAccountCache?.activate"
+      ]
+    },
+    {
+      "id": "quota-safe-account-cache-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "archive-storage=20261011-v2",
+        "indexed-snapshot=20261011-v1",
+        "id=\"account-recovery-message\""
+      ]
+    },
+    {
+      "id": "quota-safe-indexed-loader",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "snapshot-quota=20261011-v1&indexed-snapshot=20261011-v1"
       ]
     }
   ],

@@ -1,13 +1,13 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const MAIN='leadintel_customer_v2_state',WS='leadintel_customer_v2_workspace',SNAP='leadintel_customer_v2_workspace_saved_snapshot_v1';
 const modulePath=require.resolve('../server-bridge.js').replace('server-bridge.js','account-cache.js');
-function load(values=new Map(),{account='b',workspace='wb',search='',failArchive=false,fetchImpl}={}){
+function load(values=new Map(),{account='b',workspace='wb',search='',failArchive=false,fetchImpl,indexedDB,localQuota=Infinity}={}){
  const session=new Map(),events=[],timers=new Map(),attrs=new Map();let timer=0;
- class Storage{constructor(map){this.values=map;}get length(){return this.values.size;}key(i){return [...this.values.keys()][i]??null;}getItem(k){return this.values.get(String(k))??null;}setItem(k,v){if(failArchive&&String(k).startsWith('leadintel_account_cache_v1:'))throw Error('Quota exceeded');this.values.set(String(k),String(v));}removeItem(k){this.values.delete(String(k));}clear(){this.values.clear();}}
+ class Storage{constructor(map){this.values=map;}get length(){return this.values.size;}key(i){return [...this.values.keys()][i]??null;}getItem(k){return this.values.get(String(k))??null;}setItem(k,v){if(failArchive&&String(k).startsWith('leadintel_account_cache_v1:'))throw Error('Quota exceeded');const next=new Map(this.values);next.set(String(k),String(v));if(this.values===values&&[...next].reduce((size,[key,value])=>size+2*(key.length+value.length),0)>localQuota)throw Object.assign(Error('Browser storage quota exceeded'),{name:'QuotaExceededError'});this.values.set(String(k),String(v));}removeItem(k){this.values.delete(String(k));}clear(){this.values.clear();}}
  Storage.prototype.__leadintelServerPatched=true;
  const storage=new Storage(values),sessionStorage=new Storage(session),requests=[],listeners=new Map();
  const root={console,URL,URLSearchParams,Request,Response,Headers,FormData,Blob,Date,Promise,Math,Storage,localStorage:storage,sessionStorage,location:{href:'https://leadintel.ccgroup.lv/customer/'+search,search,origin:'https://leadintel.ccgroup.lv',reload(){events.push('reload');}},document:{readyState:'loading',documentElement:{setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k)},head:{appendChild(){}},createElement:()=>({dataset:{},textContent:''}),getElementById:()=>null,querySelector:()=>null,querySelectorAll:()=>[],addEventListener(){}},addEventListener(name,fn){listeners.set(name,fn);},dispatchEvent:e=>events.push(e.type),setTimeout(fn,ms){if(ms===350||ms===700)queueMicrotask(fn);else timers.set(++timer,fn);return timer;},clearTimeout:id=>timers.delete(id),CustomEvent:class{constructor(type){this.type=type;}},fetch:async(input,options={})=>{const url=new URL(input);requests.push({url:url.pathname,options});if(fetchImpl)return fetchImpl(input,options);if(url.pathname==='/api/session')return new Response(JSON.stringify({authenticated:true,user:{id:account,email:account+'@example.com'}}));if(url.pathname==='/api/workspaces')return new Response(JSON.stringify({workspaces:[{id:workspace,name:workspace,role:'owner'}]}));if(url.pathname==='/api/customer/state')return new Response(JSON.stringify({version:workspace==='wa'?3:0,payload:workspace==='wa'?{main:{website:'https://ccgroup.lv',answers:{offer:'CCGROUP private offer'}}}:{}}));return new Response('{}');}};
- root.window=root;root.globalThis=root;
+ root.indexedDB=indexedDB;root.window=root;root.globalThis=root;
  if(fs.existsSync(modulePath))vm.runInNewContext(fs.readFileSync(modulePath,'utf8'),root);
  vm.runInNewContext(fs.readFileSync(require.resolve('../workspace-sync.js'),'utf8'),root);
  vm.runInNewContext(fs.readFileSync(require.resolve('../workspace-persistence.js'),'utf8'),root);
@@ -178,4 +178,99 @@ test('cached background work cannot start paid workspace requests before session
  await assert.rejects(runtime.root.fetch('https://leadintel.ccgroup.lv/api/ai/generate?workspace_id=wa',{method:'POST',body:'{}'}),/Verify the signed-in account/);
  assert.equal(runtime.requests.length,0);await runtime.root.__init();
  await runtime.root.fetch('https://leadintel.ccgroup.lv/api/ai/generate?workspace_id=wa',{method:'POST',body:'{}'});assert.ok(runtime.requests.some(x=>x.url==='/api/ai/generate'));
+});
+
+function quotaFor(values){return [...values].reduce((size,[key,value])=>size+2*(key.length+value.length),0)+64;}
+test('expired HTTP 401 sessions preserve full browser cache outside localStorage before detaching',async()=>{
+ const {IDBFactory}=require('fake-indexeddb'),indexedDB=new IDBFactory(),values=seed();
+ const original=new Map(values),runtime=load(values,{indexedDB,localQuota:quotaFor(values),fetchImpl:()=>new Response('{}',{status:401})});
+ assert.throws(()=>runtime.storage.setItem('leadintel_account_cache_v1:wa',JSON.stringify(Object.fromEntries(values))),{name:'QuotaExceededError'});
+ await runtime.root.__init();assert.equal(values.has(MAIN),false);assert.equal(values.has(SNAP),false);assert.ok(runtime.events.includes('reload'));assert.equal(runtime.attrs.get('data-account-check'),'pending');
+ const back=load(values,{indexedDB,account:'a',workspace:'wa'});await back.root.__init();
+ for(const [key,value] of original)assert.equal(values.get(key),value,key);
+ assert.equal(back.requests.some(request=>request.options.method==='PUT'),false);
+});
+test('legacy archives migrate only after a committed backup and remain isolated across account switches',async()=>{
+ const {IDBFactory}=require('fake-indexeddb'),indexedDB=new IDBFactory(),values=seed();
+ const archiveKey='leadintel_account_cache_v1:wb',legacy=JSON.stringify({schemaVersion:1,workspaceId:'wb',userId:'b',data:{[MAIN]:JSON.stringify({website:'https://ercon.lv',answers:{offer:'Unsynced ERCON edit'}})},sessionData:{leadintel_delivery_draft:'ERCON draft'}});
+ values.set(archiveKey,legacy);const runtime=load(values,{indexedDB,localQuota:quotaFor(values),account:'a',workspace:'wa'});
+ await runtime.root.LeadIntelAccountCache.detach();assert.equal(values.has(archiveKey),false);assert.equal(values.has(MAIN),false);
+ const next=load(values,{indexedDB,account:'b',workspace:'wb'});await next.root.__init();assert.equal(JSON.parse(values.get(MAIN)).answers.offer,'Unsynced ERCON edit');assert.equal(next.session.get('leadintel_delivery_draft'),'ERCON draft');
+ await next.root.LeadIntelAccountCache.detach();const back=load(values,{indexedDB,account:'a',workspace:'wa'});await back.root.__init();assert.equal(JSON.parse(values.get(MAIN)).answers.offer,'CCGROUP private offer');assert.equal(back.session.has('leadintel_delivery_draft'),false);
+});
+test('unavailable archive database keeps all drafts and existing archives and does not sign out',async()=>{
+ const values=seed(),legacyKey='leadintel_account_cache_v1:other';values.set(legacyKey,'existing recovery copy');const original=new Map(values);
+ const runtime=load(values,{indexedDB:{open(){throw Error('Archive database unavailable');}},account:'a',workspace:'wa',localQuota:quotaFor(values)});
+ Object.assign(runtime.root.LeadIntelServerBridge,{workspace:{id:'wa'},session:{authenticated:true,user:{id:'a'}}});
+ await runtime.root.LeadIntelServerBridge.signOut();assert.deepEqual(values,original);assert.equal(runtime.requests.some(request=>request.url==='/api/logout'),false);assert.equal(runtime.events.includes('reload'),false);
+});
+
+test('asynchronous login-callback preservation completes before mandatory session verification',async()=>{
+ const {IDBFactory}=require('fake-indexeddb'),indexedDB=new IDBFactory(),runtime=load(seed(),{indexedDB,search:'?auth=success&workspace_id=wb'});
+ assert.equal(runtime.requests.length,0);await runtime.root.__init();assert.equal(runtime.values.has(MAIN),false);assert.equal(runtime.root.LeadIntelServerBridge.workspace.id,'wb');assert.ok(runtime.events.includes('reload'));assert.equal(runtime.requests.some(request=>request.options.method==='PUT'),false);
+});
+
+test('a put success followed by transaction abort never retires local archives or active drafts',async()=>{
+ const {IDBFactory}=require('fake-indexeddb'),indexedDB=new IDBFactory(),open=indexedDB.open.bind(indexedDB);
+ indexedDB.open=(...args)=>{const request=open(...args);request.addEventListener('success',()=>{const db=request.result,transaction=db.transaction.bind(db);db.transaction=(...args)=>{const tx=transaction(...args);if(args[1]==='readwrite'){const objectStore=tx.objectStore.bind(tx);tx.objectStore=name=>{const store=objectStore(name),put=store.put.bind(store);store.put=(...values)=>{const result=put(...values);result.addEventListener('success',()=>tx.abort(),{once:true});return result;};return store;};}return tx;};});return request;};
+ const values=seed();values.set('leadintel_account_cache_v1:old','untouched archive');const original=new Map(values),runtime=load(values,{indexedDB});
+ await assert.rejects(runtime.root.LeadIntelAccountCache.detach(),/safely preserve/);assert.deepEqual(values,original);assert.equal(runtime.events.includes('reload'),false);
+});
+test('account changes during an asynchronous archive cannot clear or restore the new active account',async()=>{
+ const {IDBFactory}=require('fake-indexeddb'),values=seed(),runtime=load(values,{indexedDB:new IDBFactory()});
+ const pending=runtime.root.LeadIntelAccountCache.detach();assert.throws(()=>runtime.storage.setItem(MAIN,'late edit'),/preserving/);
+ values.set('leadintel_account_context_v1',JSON.stringify({workspaceId:'wb',userId:'b',epoch:'other-tab'}));values.set(MAIN,'new account work');
+ await assert.rejects(pending,/account changed/);assert.equal(values.get(MAIN),'new account work');
+});
+test('native browser Storage quota permits archival and exact restoration without a duplicate local copy',async()=>{
+ const {JSDOM}=require('jsdom'),{IDBFactory}=require('fake-indexeddb'),dom=new JSDOM('<html><body></body></html>',{url:'https://leadintel.ccgroup.lv/customer/',runScripts:'outside-only',storageQuota:10000}),root=dom.window;
+ try{
+  const original=seed();original.set('leadintel_large_unsynced_draft','x'.repeat(5500));for(const [key,value] of original)root.localStorage.setItem(key,value);
+  assert.throws(()=>root.localStorage.setItem('leadintel_account_cache_v1:wa',JSON.stringify({data:Object.fromEntries(original)})),{name:'QuotaExceededError'});
+  root.indexedDB=new IDBFactory();root.eval(fs.readFileSync(modulePath,'utf8'));await root.LeadIntelAccountCache.detach();assert.equal(root.localStorage.getItem(MAIN),null);
+  await root.LeadIntelAccountCache.activate({workspaceId:'wa',userId:'a'});for(const [key,value] of original)assert.equal(root.localStorage.getItem(key),value,key);
+  assert.equal(root.localStorage.getItem('leadintel_account_cache_v1:wa'),null);
+ }finally{root.close();}
+});
+test('quota-safe archives preserve drafts through sign-out, provider and workspace changes',async()=>{
+ const {IDBFactory}=require('fake-indexeddb');
+ for(const action of ['signOut','switchProvider','selectWorkspace']){
+  const values=startupSeed(),indexedDB=new IDBFactory(),runtime=load(values,{indexedDB,account:'a',workspace:'wa'});runtime.session.set('leadintel_customer_v2_server_hydration','wa:3');await runtime.root.__init();
+  values.set(MAIN,JSON.stringify({website:'https://ccgroup.lv',answers:{offer:'Preserved '+action}}));runtime.root.LeadIntelServerBridge.workspaces.push({id:'wb'});
+  if(action==='selectWorkspace')await runtime.root.LeadIntelServerBridge.selectWorkspace('wb');else await runtime.root.LeadIntelServerBridge[action]('microsoft');
+  assert.equal(values.has(MAIN),false);const back=load(values,{indexedDB,account:'a',workspace:'wa'});await back.root.__init();assert.equal(JSON.parse(values.get(MAIN)).answers.offer,'Preserved '+action);
+ }
+});
+
+test('verified same-account startup retires legacy backup duplicates only after preserving every draft',async()=>{
+ const {IDBFactory}=require('fake-indexeddb'),values=startupSeed(),indexedDB=new IDBFactory(),key='leadintel_account_cache_v1:other';
+ const archived=JSON.stringify({schemaVersion:1,workspaceId:'other',userId:'other-user',data:{[MAIN]:'Other private draft'},sessionData:{}});values.set(key,archived);
+ const runtime=load(values,{indexedDB,account:'a',workspace:'wa',localQuota:quotaFor(values)});await runtime.root.__init();
+ assert.equal(values.has(key),false);assert.equal(JSON.parse(values.get(MAIN)).website,'https://ccgroup.lv');
+ await runtime.root.LeadIntelAccountCache.detach();await runtime.root.LeadIntelAccountCache.activate({workspaceId:'other',userId:'other-user'});assert.equal(values.get(MAIN),'Other private draft');
+});
+
+test('full active local storage hydrates and reopens an exact cloud baseline through committed IndexedDB snapshots',async()=>{
+ const {IDBFactory}=require('fake-indexeddb'),indexedDB=new IDBFactory(),values=startupSeed();
+ const main={website:'https://ccgroup.lv',answers:{offer:'Exact saved offer'},research:'Verified reference. '.repeat(12000)};
+ values.set(MAIN,JSON.stringify(main));const snapshot=JSON.parse(values.get(SNAP));snapshot.data[MAIN]=values.get(MAIN);values.set(SNAP,JSON.stringify(snapshot));
+ const payload={main,discovery:{},outreach:{},delivery:{},meta:{discovery:{}}},backend=async(input)=>{
+  const path=new URL(input).pathname;
+  if(path==='/api/customer/state')return new Response(JSON.stringify({version:3,payload}));
+  return startupBackend()(input);
+ };
+ const limit=quotaFor(values)+4096,runtime=load(values,{indexedDB,account:'a',workspace:'wa',localQuota:limit,fetchImpl:backend});runtime.session.set('leadintel_customer_v2_server_hydration','wa:3');
+ await runtime.root.__init();assert.equal(runtime.root.LeadIntelServerBridge.ready,true);assert.equal(runtime.attrs.has('data-account-check'),false);
+ assert.equal(JSON.parse(values.get(SNAP)).format,'leadintel-indexed-workspace-snapshot-v1');assert.equal(values.get(MAIN),JSON.stringify(main));
+ assert.deepEqual(JSON.parse(JSON.stringify(runtime.root.LeadIntelWorkspacePersistence.syncedBase('wa').payload)),payload);
+ const reopened=load(values,{indexedDB,account:'a',workspace:'wa',localQuota:limit,fetchImpl:backend});reopened.session.set('leadintel_customer_v2_server_hydration','wa:3');await reopened.root.__init();
+ assert.equal(reopened.root.LeadIntelServerBridge.ready,true);assert.deepEqual(JSON.parse(JSON.stringify(reopened.root.LeadIntelWorkspacePersistence.syncedBase('wa').payload)),payload);
+ values.set(MAIN,JSON.stringify({...main,answers:{offer:'Unsynced working edit'}}));assert.equal(reopened.root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),true);
+});
+
+test('failed durable snapshot commit keeps the prior baseline and active working records behind recovery',async()=>{
+ const {IDBFactory}=require('fake-indexeddb'),values=startupSeed(),before=new Map(values),runtime=load(values,{indexedDB:new IDBFactory(),account:'a',workspace:'wa',localQuota:quotaFor(values)+4096,fetchImpl:async input=>new URL(input).pathname==='/api/customer/state'?new Response(JSON.stringify({version:3,payload:{main:{website:'https://ccgroup.lv',notes:'Research '.repeat(12000)}}})):startupBackend()(input)});
+ runtime.root.LeadIntelAccountCache.saveRecoverySnapshot=async()=>{throw Error('Durable snapshot unavailable');};await runtime.root.__init();
+ assert.equal(runtime.root.LeadIntelServerBridge.ready,false);assert.equal(runtime.attrs.get('data-account-check'),'error');
+ assert.equal(values.get(SNAP),before.get(SNAP));assert.equal(values.get(MAIN),before.get(MAIN));assert.equal(runtime.requests.some(x=>x.options.method==='PUT'),false);
 });
