@@ -5,9 +5,9 @@ const vm=require('node:vm');
 const budget=require('../state-budget.js');
 const persistenceSource=fs.readFileSync(require.resolve('../workspace-persistence.js'),'utf8');
 const KEYS={main:'leadintel_customer_v2_state',discovery:'leadintel_customer_v2_discovery',outreach:'leadintel_customer_v2_outreach',delivery:'leadintel_customer_v2_delivery',meta:'leadintel_customer_v2_discovery_meta'};
-function load(values,nativeFetch){
+function load(values,nativeFetch,{snapshotLimit=Infinity}={}){
  const timers=new Map();let timer=0;
- const root={console,URL,Request,Response,Date,Promise,LeadIntelStateBudget:budget,LeadIntelServerBridge:{workspaceStateCodec:'workspace-sections-v1',session:{authenticated:true},workspace:{id:'w1'}},localStorage:{getItem:key=>values.get(key)||null,setItem:(key,value)=>values.set(key,String(value)),removeItem:key=>values.delete(key)},sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}},location:{href:'https://leadintel.ccgroup.lv/customer/'},fetch:nativeFetch,document:{readyState:'loading',querySelector:()=>null,getElementById:()=>null,addEventListener(){}},addEventListener(){},removeEventListener(){},setTimeout(fn){const id=++timer;timers.set(id,fn);return id;},clearTimeout(id){timers.delete(id);}};
+ const root={console,URL,Request,Response,Date,Promise,LeadIntelStateBudget:budget,LeadIntelServerBridge:{workspaceStateCodec:'workspace-sections-v1',session:{authenticated:true},workspace:{id:'w1'}},localStorage:{getItem:key=>values.get(key)||null,setItem:(key,value)=>{if(key==='leadintel_customer_v2_workspace_saved_snapshot_v1'&&String(value).length>snapshotLimit)throw Object.assign(new Error('Storage quota exceeded'),{name:'QuotaExceededError'});values.set(key,String(value));},removeItem:key=>values.delete(key)},sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}},location:{href:'https://leadintel.ccgroup.lv/customer/'},fetch:nativeFetch,document:{readyState:'loading',querySelector:()=>null,getElementById:()=>null,addEventListener(){}},addEventListener(){},removeEventListener(){},setTimeout(fn){const id=++timer;timers.set(id,fn);return id;},clearTimeout(id){timers.delete(id);}};
  root.globalThis=root;vm.runInNewContext(persistenceSource,root);return root;
 }
 function localValues(payload){return new Map(Object.entries(KEYS).map(([key,storageKey])=>[storageKey,JSON.stringify(key==='meta'?payload.meta.discovery:payload[key]||{})]));}
@@ -102,4 +102,29 @@ test('profile and approved messages round-trip through the real persistence boun
  const base=root.LeadIntelWorkspacePersistence.syncedBase('w1');assert.deepEqual(JSON.parse(JSON.stringify(base.payload.main)),payload.main);assert.deepEqual(JSON.parse(JSON.stringify(base.payload.outreach)),payload.outreach);
  const freshValues=new Map(),fresh=load(freshValues,async()=>new Response(JSON.stringify({version:8,payload:wire})));await fresh.fetch(endpoint,{method:'GET'});fresh.LeadIntelWorkspacePersistence.prepareForLoad();
  assert.deepEqual(JSON.parse(freshValues.get(KEYS.main)),payload.main);assert.deepEqual(JSON.parse(freshValues.get(KEYS.outreach)),payload.outreach);
+});
+
+for(const seller of ['Metal Works','Legal Partners'])test(`quota-limited snapshot hydration retains exact ${seller} research and messages`,async()=>{
+ const payload={main:{website:'seller.example',profile:{companyName:seller}},discovery:{rawResults:[{url:'https://buyer.example/news',text:'Verified project evidence. '.repeat(35000)}]},outreach:{items:[{selectedPersonId:'buyer-1',channel:'email',drafts:{emailBody:'Exact saved copy — '+seller}}]},delivery:{},meta:{discovery:{}}};
+ const values=new Map(),root=load(values,async()=>new Response(JSON.stringify({version:8,payload})),{snapshotLimit:128*1024});
+ const response=await root.fetch(endpoint,{method:'GET'});assert.equal(response.status,200);
+ assert.ok(values.get('leadintel_customer_v2_workspace_saved_snapshot_v1').length<128*1024);
+ assert.deepEqual(JSON.parse(JSON.stringify(root.LeadIntelWorkspacePersistence.syncedBase('w1').payload)),payload);
+ assert.equal(root.LeadIntelWorkspacePersistence.prepareForLoad(),true);
+ assert.equal(JSON.parse(values.get(KEYS.discovery)).rawResults[0].text,payload.discovery.rawResults[0].text);
+ assert.equal(JSON.parse(values.get(KEYS.outreach)).items[0].drafts.emailBody,payload.outreach.items[0].drafts.emailBody);
+ assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),false);
+ const reopened=load(values,async()=>new Response('{}'),{snapshotLimit:128*1024});
+ assert.deepEqual(JSON.parse(JSON.stringify(reopened.LeadIntelWorkspacePersistence.syncedBase('w1').payload)),payload);
+ values.set(KEYS.outreach,JSON.stringify({...payload.outreach,items:[]}));assert.equal(reopened.LeadIntelWorkspacePersistence.hasUnsavedChanges(),true);
+});
+
+test('local-only recovery snapshots compress without losing full unsynced working text',()=>{
+ const payload={main:{website:'seller.example'},discovery:{notes:'Saved notes. '.repeat(90000)},outreach:{items:[{drafts:{emailBody:'Unsynced text'}}]},delivery:{},meta:{discovery:{}}};
+ const values=localValues(payload),root=load(values,async()=>new Response('{}'),{snapshotLimit:128*1024});
+ root.LeadIntelWorkspacePersistence.captureWorkspaceSnapshot();root.LeadIntelWorkspacePersistence.markExplicitlySaved();
+ const saved=values.get('leadintel_customer_v2_workspace_saved_snapshot_v1');assert.ok(saved.length<128*1024);
+ values.delete(KEYS.discovery);values.delete(KEYS.outreach);root.LeadIntelWorkspacePersistence.restoreSavedSnapshot();
+ assert.equal(JSON.parse(values.get(KEYS.discovery)).notes,payload.discovery.notes);assert.equal(JSON.parse(values.get(KEYS.outreach)).items[0].drafts.emailBody,'Unsynced text');
+ assert.equal(root.LeadIntelWorkspacePersistence.syncedBase('w1'),null);
 });

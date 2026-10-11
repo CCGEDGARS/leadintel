@@ -25,6 +25,7 @@
     "leadintel_customer_v2_research_meta_v1"
   ]);
 
+  let snapshotEncoded=null,snapshotDecoded=null;
   let nativeFetch=null;
   let dirtySinceSave=false;
   let saveBusy=false;
@@ -33,7 +34,7 @@
 
   function safeJson(value,fallback=null){try{return JSON.parse(value);}catch{return fallback;}}
   function isObject(value){return Boolean(value&&typeof value==="object"&&!Array.isArray(value));}
-  function readSnapshot(){const parsed=safeJson(root.localStorage?.getItem(SNAPSHOT_KEY)||"",null);return isObject(parsed)&&isObject(parsed.data)?parsed:null;}
+  function readSnapshot(){const raw=root.localStorage?.getItem(SNAPSHOT_KEY)||"";if(raw===snapshotEncoded)return snapshotDecoded;const stored=safeJson(raw,null),parsed=root.LeadIntelStateBudget?.restoreWorkspaceSnapshot?.(stored)||stored;snapshotDecoded=isObject(parsed)&&isObject(parsed.data)?parsed:null;snapshotEncoded=raw;return snapshotDecoded;}
   function isBrowserOnlySnapshot(){return readSnapshot()?.server_synced===false;}
   function isExplicitlySaved(){return root.localStorage?.getItem(EXPLICIT_SAVE_KEY)==="1"&&Boolean(readSnapshot());}
   function markExplicitlySaved(){root.localStorage?.setItem(EXPLICIT_SAVE_KEY,"1");return true;}
@@ -64,7 +65,7 @@
     }
     return ["leadintel_customer_v2_discovery_meta","leadintel_customer_v2_website_activation_v1","leadintel_customer_v2_research_meta_v1"].some(key=>hasText(data[key]));
   }
-  function captureWorkspaceSnapshot(){const snapshot={schema_version:1,server_synced:false,saved_at:new Date().toISOString(),data:currentWorkspaceData()};root.localStorage?.setItem(SNAPSHOT_KEY,JSON.stringify(snapshot));return snapshot;}
+  function captureWorkspaceSnapshot(){const snapshot={schema_version:1,server_synced:false,saved_at:new Date().toISOString(),data:currentWorkspaceData()};root.localStorage?.setItem(SNAPSHOT_KEY,JSON.stringify(root.LeadIntelStateBudget?.packWorkspaceSnapshot?.(snapshot)||snapshot));return snapshot;}
   function sameWorkspaceData(a,b){const left=isObject(a)?a:{};const right=isObject(b)?b:{};const keys=[...new Set([...Object.keys(left),...Object.keys(right)])].sort();return keys.every(key=>String(left[key]??"")===String(right[key]??""));}
   function hasLocalChangesSinceSnapshot(){const snapshot=readSnapshot();return Boolean(snapshot&&!sameWorkspaceData(currentWorkspaceData(),snapshot.data));}
   function protectLocalChanges(){
@@ -78,7 +79,7 @@
     const snapshot=readSnapshot();if(!snapshot)return false;const current=currentWorkspaceData();if(sameWorkspaceData(current,snapshot.data))return false;
     for(const key of WORKSPACE_DATA_KEYS)root.localStorage?.removeItem(key);
     for(const [key,value] of Object.entries(snapshot.data)){if(WORKSPACE_DATA_KEYS.includes(key)&&typeof value==="string")root.localStorage?.setItem(key,value);}
-    root.localStorage?.removeItem(DIRTY_KEY);return true;
+    root.localStorage?.removeItem(DIRTY_KEY);dirtySinceSave=false;return true;
   }
   function clearWorkspaceData(){
     let changed=false;
@@ -129,7 +130,7 @@
     if(isObject(payload.delivery))data["leadintel_customer_v2_delivery"]=JSON.stringify(payload.delivery);
     if(isObject(payload.meta?.discovery))data["leadintel_customer_v2_discovery_meta"]=JSON.stringify(payload.meta.discovery);
     const activation=buildActivationRecord(payload.main||{});if(activation)data["leadintel_customer_v2_website_activation_v1"]=JSON.stringify(activation);
-    const snapshot={schema_version:1,server_synced:true,workspace_id:options.workspaceId||root.LeadIntelServerBridge?.workspace?.id||"",server_version:Number.isSafeInteger(options.version)?options.version:null,saved_at:new Date().toISOString(),server_payload:serverPayload,data:options.localData||data};root.localStorage?.setItem(SNAPSHOT_KEY,JSON.stringify(snapshot));markExplicitlySaved();dirtySinceSave=typeof options.dirty==='boolean'?options.dirty:!sameWorkspaceData(currentWorkspaceData(),data);return snapshot;
+    const snapshot={schema_version:1,server_synced:true,workspace_id:options.workspaceId||root.LeadIntelServerBridge?.workspace?.id||"",server_version:Number.isSafeInteger(options.version)?options.version:null,saved_at:new Date().toISOString(),server_payload:serverPayload,data:options.localData||data};root.localStorage?.setItem(SNAPSHOT_KEY,JSON.stringify(root.LeadIntelStateBudget?.packWorkspaceSnapshot?.(snapshot)||snapshot));markExplicitlySaved();dirtySinceSave=typeof options.dirty==='boolean'?options.dirty:!sameWorkspaceData(currentWorkspaceData(),data);return snapshot;
   }
 
   function jsonResponse(payload,status=200){return new Response(JSON.stringify(payload),{status,headers:{"Content-Type":"application/json"}});}
