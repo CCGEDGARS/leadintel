@@ -33,13 +33,13 @@ test('chat uses safe screen context without preset prompt chips',()=>{
   assert.doesNotMatch(source,/localStorage|sessionStorage/);
 });
 
-test('copilot introduces itself before workspace checks',()=>{
+test('copilot introduces itself before the conversation',()=>{
   assert.match(source,/Your support and insights assistant\./);
   assert.match(source,/understands your LeadIntel workspace/i);
   assert.match(source,/Support is read-only/i);
   const introIndex=source.indexOf('copilot-intro');
-  const diagnosticsIndex=source.indexOf('copilot-diagnostics');
-  assert.ok(introIndex>=0&&diagnosticsIndex>=0&&introIndex<diagnosticsIndex,'intro must be created before diagnostics');
+  const messagesIndex=source.indexOf('copilot-messages');
+  assert.ok(introIndex>=0&&messagesIndex>=0&&introIndex<messagesIndex,'intro must be created before messages');
 });
 
 test('composer is a full-width vertical layout with send below the textarea',()=>{
@@ -57,7 +57,7 @@ test('sidebar entry is a premium branded copilot control',()=>{
 
 test('support never renders or invokes configuration actions',()=>{
  assert.doesNotMatch(source,/Confirm change|confirmCopilotAction|rejectCopilotAction|location\.reload/);
- assert.match(source,/Attachments are disabled/);
+ assert.doesNotMatch(source,/attachments are disabled/i);
  assert.match(source,/event\.preventDefault/);
 });
 
@@ -72,13 +72,16 @@ test('support drawer blocks file paste and ignores malicious action proposals at
  const dom=new JSDOM('<button id="leadintel-copilot-entry"></button>');
  const prior={window:globalThis.window,document:globalThis.document};globalThis.window=dom.window;globalThis.document=dom.window.document;
  try{
+  dom.window.LeadIntelWorkspacePersistence={isExplicitlySaved:()=>true,hasUnsavedChanges:()=>false};
   const ui=await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
   let mutations=0;
-  const panel=await ui.openCopilot({context:{currentCopilotScreenContext:()=>({step:6})},api:{sendCopilotMessage:async()=>({answer:'Safe help',sources:[{title:'Billing',url:'https://platform.openai.com/settings/organization/billing/overview'},{title:'Bad',url:'javascript:alert(1)'}],action_proposals:[{id:'evil',action_type:'signal.update'}]}),confirmCopilotAction:async()=>{mutations++;}}});
+  const panel=await ui.openCopilot({context:{currentCopilotScreenContext:()=>({step:6})},api:{bootstrapCopilot:async()=>({ai:{configured:true},diagnostics:[{severity:'important',title:'Hidden workspace check'}],unreadImportant:1}),sendCopilotMessage:async()=>({diagnostics:[{severity:'important',title:'Hidden chat check'}],answer:'Safe help',sources:[{title:'Billing',url:'https://platform.openai.com/settings/organization/billing/overview'},{title:'Bad',url:'javascript:alert(1)'}],action_proposals:[{id:'evil',action_type:'signal.update'}]}),confirmCopilotAction:async()=>{mutations++;}}});
   assert.equal(panel.querySelector('input[type=file]'),null);
+  assert.equal(panel.querySelector('[data-copilot-diagnostics]'),null);assert.doesNotMatch(panel.textContent,/Hidden workspace check|attachments are disabled/i);
   const event=new dom.window.Event('paste',{bubbles:true,cancelable:true});Object.defineProperty(event,'clipboardData',{value:{files:[{name:'secret.csv'}]}});panel.dispatchEvent(event);assert.equal(event.defaultPrevented,true);
   panel.querySelector('textarea').value='Help with credits';panel.querySelector('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));
   await new Promise(resolve=>setImmediate(resolve));
+  assert.doesNotMatch(panel.textContent,/Hidden chat check|attachments are disabled/i);
   assert.equal(mutations,0);assert.equal(panel.querySelector('.copilot-confirm'),null);assert.equal(panel.querySelectorAll('.copilot-source').length,1);assert.equal(panel.querySelector('.copilot-source').rel,'noopener noreferrer');
  }finally{globalThis.window=prior.window;globalThis.document=prior.document;dom.window.close();}
 });

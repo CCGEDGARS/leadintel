@@ -18,7 +18,7 @@ export function createCopilotController({loadModules,open,onBusy=()=>{},onError=
   };
 }
 const openCopilot=createCopilotController({
-  loadModules:async()=>{const [api,context,ui]=await Promise.all([import('./copilot-api.js?v=20260908-copilot-polish-v1'),import('./copilot-context.js?v=20260924-friendly-workflow-labels-v1'),import('./copilot-ui.js?v=20261009-support-readonly-v1')]);return {api,context,ui};},
+  loadModules:async()=>{const [api,context,ui]=await Promise.all([import('./copilot-api.js?v=20260908-copilot-polish-v1'),import('./copilot-context.js?v=20260924-friendly-workflow-labels-v1'),import('./copilot-ui.js?v=20261009-support-readonly-v1&panel-cleanup=20261011-v1')]);return {api,context,ui};},
   open:async({api,context,ui})=>{setStatus('');await ui.openCopilot?.({api,context});},
   onBusy:busy=>{const entry=ensureEntry();if(entry)entry.disabled=busy;},
   onError:cause=>{console.warn('Ask LeadIntel unavailable:',cause);setStatus('Copilot unavailable');}

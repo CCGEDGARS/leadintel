@@ -541,7 +541,8 @@
       "status": 200,
       "contains": [
         "Support & Insights",
-        "20261009-support-readonly-v1"
+        "20261009-support-readonly-v1",
+        "panel-cleanup=20261011-v1"
       ],
       "notContains": [
         "copilot-file-intelligence.js"
@@ -554,11 +555,15 @@
       "status": 200,
       "contains": [
         "Support is read-only",
-        "Attachments are disabled"
+        "Please describe the problem in text."
       ],
       "notContains": [
         "confirmCopilotAction",
-        "Confirm change"
+        "Confirm change",
+        "Workspace checks",
+        "copilot-diagnostics",
+        "attachments are disabled",
+        "Attachments are disabled"
       ]
     },
     {
