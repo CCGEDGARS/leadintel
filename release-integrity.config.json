@@ -980,6 +980,27 @@
         "mw-subject-category",
         "prefers-reduced-motion"
       ]
+    },
+    {
+      "id": "core-style-application-recovery",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "(currentItem()?.channel==='linkedin'?studio.linkedinMode:studio.mode)!=='original'",
+        "approvedTemplatePreparationStatus",
+        "if(studioGenerationError)return false;",
+        "Facts or draft changed during preparation. Your text is preserved; retry Update message."
+      ]
+    },
+    {
+      "id": "core-style-application-loader",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&style-application=20261011-v1&"
+      ]
     }
   ],
   "retry": {
