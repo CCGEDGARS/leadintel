@@ -4,7 +4,7 @@ const read=name=>fs.readFileSync(path.join(__dirname,'..',name),'utf8');
 function mounted(){
  const dom=new JSDOM(read('index.html'),{url:'https://example.com/customer/',runScripts:'outside-only'}),w=dom.window;
  w.LeadIntelMessageStudio=Studio;w.LeadIntelMessageFacts=require('../message-facts.js');w.eval(read('message-workspace.js'));w.eval(read('sender-identity-location.js'));
- w.eval("var repairLegacyEmailIdentity=()=>false;var synchronizeMessageSender=()=>false;var scriptGenerationRequest=0;var readDraftEdits=()=>null;var q=id=>document.getElementById(id);var asset=p=>p;var esc=v=>String(v);var studioState=()=>({essentials:{}});var readStudio=()=>LeadIntelMessageStudio.normalize({});var persistStudio=()=>{};var invalidateStudioDraft=()=>{};var renderMessageStudio=()=>{};var renderPersonalSaveButton=()=>{};var renderPersonalStyleEditor=()=>{};var closePersonalReview=()=>{};var selectMandatoryEmailStyle=()=>false;var currentItem=()=>null;var workingSuggestedSubject=()=>'';var selectedCandidate=()=>null;var toast=()=>{};");
+ w.eval("var messageEditor=null,subjectEditing=false,subjectBusy=false,messageTranslationBusy=false;var messageWorkspaceUsable=()=>true;var messageRecipientReady=()=>true;var crmBridge=()=>({});var renderMessageWorkspace=()=>{};var cancelPendingScriptGeneration=()=>{};var generateStudioMessage=()=>{};var repairLegacyEmailIdentity=()=>false;var synchronizeMessageSender=()=>false;var scriptGenerationRequest=0;var readDraftEdits=()=>null;var q=id=>document.getElementById(id);var asset=p=>p;var esc=v=>String(v);var studioState=()=>({essentials:{}});var readStudio=()=>LeadIntelMessageStudio.normalize({});var persistStudio=()=>{};var invalidateStudioDraft=()=>{};var renderMessageStudio=()=>{};var renderPersonalSaveButton=()=>{};var renderPersonalStyleEditor=()=>{};var closePersonalReview=()=>{};var selectMandatoryEmailStyle=()=>false;var currentItem=()=>null;var workingSuggestedSubject=()=>'';var selectedCandidate=()=>null;var toast=()=>{};");
  const src=read('outreach-ui.js');w.eval(src.slice(src.indexOf('function injectOutreachUI(){'),src.indexOf('function showStep(step)')));w.eval(src.slice(src.indexOf('function installMessageStudio(){'),src.indexOf("let personalChannel='email'")));
  w.eval('injectOutreachUI();installMessageStudio();');return {dom,document:w.document,w};
 }
@@ -27,7 +27,7 @@ test('channel changes show only the matching editor and actions; a draft is neve
  const {document,w}=mounted();const base={ready:true,authenticated:true,hasDraft:true,person:{name:'Sam Buyer',title:'Partner'},company:'Legal practice'};
  w.LeadIntelMessageWorkspace.render(document,{...base,channel:'linkedin'});assert.equal(document.querySelector('.outreach-approval').hidden,true);assert.equal(document.getElementById('mw-copy-email').hidden,true);assert.equal(document.getElementById('mw-empty').hidden,true);assert.match(document.getElementById('mw-readiness-text').textContent,/draft/);assert.equal(document.getElementById('message-recipient').textContent,'Sam Buyer');
  w.LeadIntelMessageWorkspace.render(document,{...base,channel:'email'});assert.equal(document.querySelector('.outreach-approval').hidden,true);assert.equal(document.getElementById('mw-copy-email').hidden,false);assert.equal(document.getElementById('approve-outreach').textContent,'Approve & continue →');
- w.LeadIntelMessageWorkspace.render(document,{...base,hasDraft:false});assert.equal(document.getElementById('mw-empty').hidden,true);assert.equal(document.querySelector('.script-grid').hidden,false);assert.match(document.getElementById('outreach-email-body').placeholder,/prepared automatically/);
+ w.LeadIntelMessageWorkspace.render(document,{...base,hasDraft:false});assert.equal(document.getElementById('mw-empty').hidden,false);assert.equal(document.querySelector('.script-grid').hidden,false);assert.match(document.getElementById('outreach-email-body').placeholder,/Choose a style/);
 });
 test('style cards drive the canonical select with a change event and accessible selected state',()=>{
  const {document,w}=mounted();let changes=0;const select=document.getElementById('message-mode');select.addEventListener('change',()=>changes++);w.LeadIntelMessageWorkspace.paintStyles(document);document.querySelector('[data-writing-style="friendly"]').click();assert.equal(select.value,'friendly');assert.equal(changes,1);assert.equal(document.querySelector('[data-writing-style="friendly"]').getAttribute('aria-pressed'),'true');
@@ -41,13 +41,13 @@ test('subject previews use recipient and sender values while unknown events stay
 
 test('a sync conflict takes priority over apparent missing Profile answers and blocks generation',()=>{
  const view=Workspace.state({ready:true,authenticated:true,syncConflict:true,unconfirmed:['meeting_value'],hasDraft:true});
- assert.equal(view.canGenerate,false);assert.equal(view.action,'sync');assert.match(view.text,/sync conflict/i);
+ assert.equal(view.canGenerate,false);assert.equal(view.action,'sync');assert.match(view.text,/two versions/i);
 });
 
 test('template generation is distinct from original AI generation and retains protected originals',()=>{
  const {document,w}=mounted(),base={ready:true,authenticated:true,hasDraft:true,channel:'linkedin'};
  w.LeadIntelMessageWorkspace.render(document,{...base,templateSelected:true});assert.match(document.getElementById('message-generate').textContent,/Update/i);
- w.LeadIntelMessageWorkspace.render(document,{...base,templateSelected:false});assert.match(document.getElementById('message-generate').textContent,/Generate/i);
+ w.LeadIntelMessageWorkspace.render(document,{...base,templateSelected:false});assert.match(document.getElementById('message-generate').textContent,/Update message/i);
  assert.ok(document.getElementById('message-template-body').readOnly);
 });
 test('opening-only update is available only with a reviewed event and an unapproved draft',()=>{

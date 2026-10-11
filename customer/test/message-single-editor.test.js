@@ -19,9 +19,9 @@ test('single composer has subject immediately before body, one full message and 
  assert.equal(q('mw-restore-original').textContent,'Reset');assert.equal(q('message-save-as-template').textContent,'Add to templates');
  assert.equal(q('mw-update-use'),null);assert.equal(q('mw-update-keep'),null);
 });
-test('flow and library actions stay disabled until exact current draft is durably saved; Save link is available',()=>{
+test('flow and library actions stay disabled until exact current draft is durably saved; the Save button remains available',()=>{
  const {document,w}=mounted(),q=id=>document.getElementById(id);
- w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:false});assert.equal(q('mw-add-flow').disabled,true);assert.equal(q('message-save-as-template').disabled,true);assert.equal(q('mw-save-required').hidden,false);
+ w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:false});assert.equal(q('mw-add-flow').disabled,true);assert.equal(q('message-save-as-template').disabled,true);assert.equal(q('mw-save-required').hidden,true);assert.equal(q('mw-save-message').disabled,false);
  w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true});assert.equal(q('mw-add-flow').disabled,false);assert.equal(q('message-save-as-template').disabled,false);assert.equal(q('mw-save-required').hidden,true);
  w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true,editorState:{editing:true}});assert.equal(q('mw-add-flow').disabled,true);assert.equal(q('message-save-as-template').disabled,true);
  w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true,approvalBlocked:true});assert.equal(q('mw-add-flow').disabled,true);
@@ -112,8 +112,8 @@ test('inline Update retains its listener and changes only the working draft when
  const {document,w}=mounted(),q=id=>document.getElementById(id);let calls=0;
  w.currentItem=()=>({channel:'email',messageStudioDraft:{}});w.readStudio=()=>({mode:'professional'});w.updateMessageFromTemplate=()=>{calls++;q('outreach-email-body').value='Explicitly updated draft';};w.seedMandatoryEmail=(style,options)=>{assert.equal(style,'professional');assert.equal(options.replace,true);calls++;q('outreach-email-body').value='Explicitly updated draft';};const handler=q('message-generate').onclick;q('outreach-email-body').value='Saved exact text';
  w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true});
- assert.deepEqual([...document.querySelector('.mw-editor-actions').children].filter(e=>!e.hidden).map(e=>e.id),['mw-edit-message','message-generate','mw-save-message','mw-restore-original','message-save-as-template','mw-mark-default']);
- assert.equal(document.querySelector('.mw-generate-bar'),null);assert.equal(document.querySelectorAll('#message-generate').length,1);assert.equal(q('message-generate').hidden,false);assert.equal(q('message-generate').disabled,false);assert.equal(q('mw-header-actions').contains(q('mw-add-flow')),true);assert.equal(q('mw-editor-title').contains(q('mw-draft-badge')),true);
+ assert.deepEqual([...document.querySelector('.mw-editor-actions').children].filter(e=>!e.hidden).map(e=>e.id),['mw-edit-message','mw-save-message','mw-restore-original','message-save-as-template','mw-mark-default']);
+ assert.equal(q('mw-header-actions').contains(q('message-generate')),true);assert.equal(document.querySelector('.mw-generate-bar'),null);assert.equal(document.querySelectorAll('#message-generate').length,1);assert.equal(q('message-generate').hidden,false);assert.equal(q('message-generate').disabled,false);assert.equal(q('mw-header-actions').contains(q('mw-add-flow')),true);assert.equal(q('mw-editor-title').contains(q('mw-draft-badge')),true);
  q('message-generate').click();assert.equal(calls,1);assert.equal(q('outreach-email-body').value,'Explicitly updated draft');
  w.LeadIntelMessageWorkspace.render(document,{...ready,savedDraft:true,pendingSelections:true,automaticUpdate:{draft:{}}});
  assert.equal(q('message-generate').textContent,'Update message');assert.equal(q('message-generate').disabled,false);assert.equal(q('mw-auto-settings').hidden,false);assert.equal(q('mw-readiness-detail').hidden,true);

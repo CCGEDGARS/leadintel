@@ -6,7 +6,7 @@ function harness(){
  let item={domain:'buyer.example',company:'Buyer',channel:'email',selectedPersonId:'sam',drafts:{emailSubject:'',emailBody:'',linkedinMessage:'Other channel preserved'},dossier:{domain:'buyer.example',company:'Buyer',selectedTrigger:null,people:[{id:'sam',name:'Sam Buyer',title:'Operations Director'}],evidence:[{url:'https://buyer.example/news',title:'Buyer announces a major new sorting plant investment',text:'Buyer is investing in a new sorting plant at the Northport mine.'}]}};
  let studio=S.normalize({mode:'professional',essentials:e}),workspace='w1',requests=[],renders=0,usable=true;
  const nodes=new Map(),q=id=>{if(!nodes.has(id))nodes.set(id,{textContent:'',disabled:false});return nodes.get(id);};
- const c={URL,AbortController,setTimeout,clearTimeout,LeadIntelMessageStudio:S,LeadIntelMessageEditor:E,LeadIntelOutreach:O,LeadIntelMessageFacts:F,LeadIntelMessageWorkspace:W,LeadIntelTriggerPreview:require('../trigger-preview.js'),scriptGenerationRequest:0,studioGenerationBusy:false,messageTranslationBusy:false,messageFactResearchBusy:false,studioGenerationError:false,approvedFieldController:null,messageEditor:null,
+ const c={URL,AbortController,setTimeout,clearTimeout,LeadIntelMessageStudio:S,LeadIntelMessageEditor:E,LeadIntelOutreach:O,LeadIntelMessageFacts:F,LeadIntelMessageWorkspace:W,LeadIntelTriggerPreview:require('../trigger-preview.js'),scriptGenerationRequest:0,studioGenerationBusy:false,messageTranslationBusy:false,messageFactResearchBusy:false,studioGenerationError:false,approvedFieldController:null,messageEditor:null,subjectEditing:false,subjectBusy:false,
  DISCOVERY_META_KEY:'meta',handoffContact:{domain:'buyer.example',personId:'sam',channel:'email'},readJson:()=>({scriptBuyer:{workspaceId:workspace,domain:'buyer.example',personId:'sam',channel:'email'}}),currentItem:()=>item,readDraftEdits:()=>item,upsertItem:v=>{item=O.normalizeOutreachState({items:[v]}).items[0];},selectedCandidate:()=>({domain:item.domain,company:'Buyer',fitScore:80}),selectedContact:()=>item.dossier.people[0],readStudio:()=>studio,persistStudio:value=>{studio=value;},studioState:()=>studio,renderMessageStudio(){},mainState:()=>({answers:{},answerStatus:{}}),crmBridge:()=>({workspace:{id:workspace}}),crmAuthenticated:()=>true,messageWorkspaceUsable:()=>usable,rankedBuyingTriggers:()=>F.candidates(item.dossier.evidence,{domain:item.domain,company:'Buyer'}),editorDraft:()=>E.workingDraft(item),renderAll:()=>renders++,renderMessageWorkspace(){},ensureSelection(){},previewSelectedTrigger(){},cancelPendingScriptGeneration:()=>{c.scriptGenerationRequest++;c.studioGenerationBusy=false;c.approvedFieldController?.abort();},pendingMessageSelections:()=>false,q,toast(){},fetch:async(url,opts)=>new Promise(resolve=>requests.push({url,opts,resolve}))};
  vm.createContext(c);
  for(const [start,end] of [['function sourceBackedTrigger','// Prior drafts'],['async function chooseBuyingTrigger','function restorePreviousTriggerDraft'],['function studioMessageContext','function senderLinkedInFooter'],['function workingSuggestedSubject','function stripEmailSubjectHeader'],['function seedMandatoryEmail','function personalSlots'],['function updateMessageFromTemplate','function pendingMessageSelections']])vm.runInContext(source.slice(source.indexOf(start),source.indexOf(end)),c);
@@ -14,7 +14,7 @@ function harness(){
 }
 test('explicit Professional to NLP selection applies the NLP body even for saved or edited messages, with durable Undo',()=>{
  for(const protection of ['saved','manual','approved','translated']){
-  const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.automaticallyPrepareMessage();
+  const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.selectMandatoryEmailStyle(h.studio.mode);
   if(protection==='manual')h.item.drafts.emailBody='  My exact professional edit\n\nKeep spacing.  ';
   if(protection==='approved')h.item.approved=true;
   if(protection==='translated'){h.c.LeadIntelMessageTranslations=require('../message-translations.js');h.item=h.c.LeadIntelMessageTranslations.translated(h.item,'sv',{subject:'Svenskt ämne',message:'Min svenska text'});}
@@ -31,21 +31,21 @@ test('explicit Professional to NLP selection applies the NLP body even for saved
   if(protection==='translated'){const T=h.c.LeadIntelMessageTranslations;assert.equal(T.book(h.item).activeLanguage,'en');assert.equal(T.book(h.item).versions.sv.message,'Min svenska text');const undone=T.capture(E.undoTemplateUpdate(restored));assert.equal(T.book(undone).activeLanguage,'sv');assert.match(T.source(undone).message,/Does your role involve/);assert.equal(T.book(undone).versions.sv.message,before.message);assert.equal(undone.localizationProvenance.language,'sv');}
  }
 });
-test('opening Messages selects evidence before rendering and automatically prepares every approved style and its factual subjects',()=>{
+test('opening Messages selects evidence before rendering but waits for explicit style creation',()=>{
  for(const mode of ['professional','curiosity','friendly','brutal']){
   const h=harness();h.studio=S.normalize({mode,essentials:e});let onOpen;
   h.c.window={addEventListener:(name,fn)=>{assert.equal(name,'leadintel:module-opened');onOpen=fn;}};
   vm.runInContext(source.split('\n').find(line=>line.includes('window.addEventListener("leadintel:module-opened"')),h.c);
   const rendered=[];h.c.renderAll=()=>rendered.push(h.item.dossier.selectedTrigger?.url);
   onOpen({detail:{step:5}});assert.equal(rendered.length,0);onOpen({detail:{step:6}});
-  assert.equal(rendered[0],'https://buyer.example/news');assert.match(h.item.drafts.emailBody,/Hi Sam/);assert.match(h.item.drafts.emailBody,/Northport/);assert.match(h.item.drafts.emailBody,/Robin Lane/);E.validateFrame(h.item.drafts.emailBody,mode);
+  assert.equal(rendered[0],'https://buyer.example/news');assert.equal(h.item.drafts.emailBody,'');assert.equal(h.item.drafts.emailSubject,'');h.c.selectMandatoryEmailStyle(mode);assert.match(h.item.drafts.emailBody,/Hi Sam/);assert.match(h.item.drafts.emailBody,/Northport/);assert.match(h.item.drafts.emailBody,/Robin Lane/);E.validateFrame(h.item.drafts.emailBody,mode);
   const subjects=S.subjectsFor(mode).map(option=>h.c.workingSuggestedSubject(S.chooseSubject(h.studio,mode,option.id),h.item,h.c.selectedCandidate(),true)).filter(Boolean);
   assert.ok(subjects.some(subject=>/Northport/.test(subject)),mode);assert.ok(subjects.every(subject=>S.validSubject(subject)&&!/LKAB|ERCON/.test(subject)));assert.equal(h.item.approved,false);assert.equal(h.item.messageStudioDraft.scriptSavedAt,undefined);
   const before=JSON.stringify(h.item);onOpen({detail:{step:6}});assert.equal(JSON.stringify(h.item),before);assert.equal(h.requests.length,0);
  }
 });
 test('late field preparation for a previously selected style cannot overwrite the latest explicit style',async()=>{
- const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.automaticallyPrepareMessage();const before=E.workingDraft(h.item);
+ const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.selectMandatoryEmailStyle(h.studio.mode);const before=E.workingDraft(h.item);
  const essentials={...e,offer:'steel manufacturing and installation '.repeat(8)};
  h.studio=S.normalize({mode:'curiosity',essentials});h.c.selectMandatoryEmailStyle('curiosity');assert.equal(h.requests.length,1);
  h.studio=S.normalize({mode:'friendly',essentials});h.c.selectMandatoryEmailStyle('friendly');assert.equal(h.requests.length,2);
@@ -54,7 +54,7 @@ test('late field preparation for a previously selected style cannot overwrite th
  h.finish(fields);await new Promise(r=>setImmediate(r));assert.equal(h.item.messageStudioDraft.mode,'friendly');E.validateFrame(h.item.drafts.emailBody,'friendly');assert.deepEqual(E.updateUndo(h.item),before);assert.equal(E.savedDraft(h.item),false);
 });
 test('Use on a saved template applies that template instead of keeping the previous draft or default',()=>{
- const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.automaticallyPrepareMessage();const before=E.workingDraft(h.item);h.item.messageStudioDraft.scriptSavedAt='today';
+ const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.selectMandatoryEmailStyle(h.studio.mode);const before=E.workingDraft(h.item);h.item.messageStudioDraft.scriptSavedAt='today';
  let studio=S.saveMyTemplate(h.studio,'template-1',{name:'Prior default',subject:'Prior default',body:'Prior default body'});studio=S.markDefault(studio,'template-1');h.studio=S.saveMyTemplate(studio,'template-2',{name:'Chosen template',subject:'For {{buyerCompany}}',body:'Hi {{firstName}},\n\nChosen pattern: {{offer}}\n\n{{calendly}}'});
  h.c.personalSlots=s=>s.myTemplates;vm.runInContext(source.slice(source.indexOf('function invalidateStudioDraft'),source.indexOf('function installMessageStudio')),h.c);
  vm.runInContext(source.split('\n').find(line=>line.includes("q('message-template-slots').onclick=")),h.c);
@@ -65,7 +65,7 @@ test('the page quality contract checks actual core assembly, accepts deliberate 
  const Q=require('../page-quality.js'),h=harness();h.c.window={LeadIntelPageQuality:Q};h.c.buyerHandoffPending=false;h.c.LeadIntelStep2Brief={confirmationMissing:()=>[]};
  vm.runInContext(source.slice(source.indexOf('function unresolvedEmailMarkers'),source.indexOf('function seedMandatoryEmail')),h.c);
  vm.runInContext(source.slice(source.indexOf('function messageQualityContext'),source.indexOf('async function prepareMessagePageQuality')),h.c);
- h.studio=S.normalize({mode:'friendly',essentials:e});h.c.prepareMessageOnOpen();
+ h.studio=S.normalize({mode:'friendly',essentials:e});h.c.prepareMessageOnOpen();h.c.selectMandatoryEmailStyle(h.studio.mode);
  const session={ready:true,authenticated:true,workspaceId:'w1'},report=()=>Q.inspect('messages',{...h.c.messageQualityContext(),session});
  assert.equal(Q.allowed(report(),'approve'),true);assert.equal(Q.allowed(report(),'flow'),false);const before=JSON.stringify(h.item);
  h.item.drafts.emailBody='Tampered automatically generated body';assert.equal(report().checks.find(row=>row.id==='template-context').status,'fail');assert.equal(Q.allowed(report(),'approve'),false);
@@ -76,16 +76,16 @@ test('the page quality contract checks actual core assembly, accepts deliberate 
 test('a page check cannot confirm a recipient from another workspace or an unverified selected event',()=>{
  const Q=require('../page-quality.js'),h=harness();h.c.window={LeadIntelPageQuality:Q};h.c.buyerHandoffPending=false;h.c.LeadIntelStep2Brief={confirmationMissing:()=>[]};
  vm.runInContext(source.slice(source.indexOf('function unresolvedEmailMarkers'),source.indexOf('function seedMandatoryEmail')),h.c);vm.runInContext(source.slice(source.indexOf('function messageQualityContext'),source.indexOf('async function prepareMessagePageQuality')),h.c);
- h.c.prepareMessageOnOpen();h.workspace='another';h.c.handoffContact.personId='wrong';const report=Q.inspect('messages',{...h.c.messageQualityContext(),session:{ready:true,authenticated:true,workspaceId:'another'}});assert.equal(Q.allowed(report,'approve'),false);assert.equal(report.checks.find(row=>row.id==='recipient-confirmed').status,'fail');
+ h.c.prepareMessageOnOpen();h.c.selectMandatoryEmailStyle(h.studio.mode);h.workspace='another';h.c.handoffContact.personId='wrong';const report=Q.inspect('messages',{...h.c.messageQualityContext(),session:{ready:true,authenticated:true,workspaceId:'another'}});assert.equal(Q.allowed(report,'approve'),false);assert.equal(report.checks.find(row=>row.id==='recipient-confirmed').status,'fail');
  h.workspace='w1';h.c.handoffContact.personId='sam';h.item.messageStudioDraft.editorOrigin='manual';h.item.dossier.selectedTrigger.verification='unverified';const unchecked=Q.inspect('messages',{...h.c.messageQualityContext(),session:{ready:true,authenticated:true,workspaceId:'w1'}});assert.equal(unchecked.checks.find(row=>row.id==='trigger-verified').status,'fail');assert.equal(Q.allowed(unchecked,'approve'),false);
 });
 test('opening Messages renders the selected trigger even when Profile confirmation blocks text preparation',()=>{
  const h=harness();h.c.LeadIntelStep2Brief={confirmationMissing:()=>['offer']};assert.equal(h.c.prepareMessageOnOpen(),false);
  assert.equal(h.item.dossier.selectedTrigger.url,'https://buyer.example/news');assert.equal(h.renders,1);assert.equal(h.item.drafts.emailBody,'');assert.equal(h.requests.length,0);
- h.c.LeadIntelStep2Brief.confirmationMissing=()=>[];h.c.prepareMessageOnOpen();assert.match(h.item.drafts.emailBody,/Northport/);
+ h.c.LeadIntelStep2Brief.confirmationMissing=()=>[];h.c.prepareMessageOnOpen();h.c.selectMandatoryEmailStyle(h.studio.mode);assert.match(h.item.drafts.emailBody,/Northport/);
 });
 test('reopening refreshes automatic evidence choices while preserving reviewed choices and saved drafts',()=>{
- const h=harness();h.c.prepareMessageOnOpen();h.item.messageStudioDraft.scriptSavedAt='today';const before=E.workingDraft(h.item);
+ const h=harness();h.c.prepareMessageOnOpen();h.c.selectMandatoryEmailStyle(h.studio.mode);h.item.messageStudioDraft.scriptSavedAt='today';const before=E.workingDraft(h.item);
  const url='https://buyer.example/riverport';h.item.dossier.evidence.push({url,title:'Buyer announces a new manufacturing plant at Riverport',text:'Buyer is investing in a new manufacturing plant at Riverport.'});
  const rows=F.candidates(h.item.dossier.evidence,{domain:h.item.domain,company:h.item.company});h.c.rankedBuyingTriggers=()=>[rows.find(row=>row.url===url),...rows.filter(row=>row.url!==url)];h.c.prepareMessageOnOpen();
  assert.equal(h.item.dossier.selectedTrigger.url,url);assert.deepEqual(E.workingDraft(h.item),before);assert.match(h.item.messageStudioDraft.pendingTemplateUpdate.draft.message,/Riverport/);
@@ -96,15 +96,15 @@ test('trigger ranking and message context use the current kept buyer and workspa
  h.c.messageFactCandidates=()=>F.candidates(h.item.dossier.evidence,{domain:h.item.domain,company:h.item.company});vm.runInContext(source.slice(source.indexOf('function rankedBuyingTriggers'),source.indexOf('function sourceBackedTrigger')),h.c);
  let candidate={domain:'buyer.example',company:'Buyer',people:[{id:'sam',name:'Taylor Current',title:'Manufacturing Director',kept:true,email:'unverified@other.example'}]};h.c.selectedCandidate=()=>candidate;h.item.dossier.people[0].email='verified@buyer.example';assert.equal(h.c.selectedContact(h.item).email,'verified@buyer.example');
  h.item.dossier.evidence=[{url:'https://buyer.example/a',text:'Buyer is investing in a new sorting plant at Northport.'},{url:'https://buyer.example/b',text:'Buyer is investing in a new manufacturing plant at Riverport.'}];
- h.studio=S.normalize({mode:'professional',essentials:{...e,offer:'steel manufacturing'}});h.c.prepareMessageOnOpen();assert.equal(h.item.dossier.selectedTrigger.url,'https://buyer.example/b');assert.match(h.item.drafts.emailBody,/Hi Taylor/);assert.match(h.item.drafts.emailBody,/Riverport/);assert.doesNotMatch(h.item.drafts.emailBody,/Hi Sam/);
+ h.studio=S.normalize({mode:'professional',essentials:{...e,offer:'steel manufacturing'}});h.c.prepareMessageOnOpen();h.c.selectMandatoryEmailStyle(h.studio.mode);assert.equal(h.item.dossier.selectedTrigger.url,'https://buyer.example/b');assert.match(h.item.drafts.emailBody,/Hi Taylor/);assert.match(h.item.drafts.emailBody,/Riverport/);assert.doesNotMatch(h.item.drafts.emailBody,/Hi Sam/);
  candidate={domain:'other.example',company:'Other',people:[{id:'sam',name:'Wrong Workspace',title:'Other',kept:true}]};assert.equal(h.c.selectedContact(h.item).name,'Sam Buyer');
  candidate={domain:'buyer.example',people:[{id:'sam',name:'Unconfirmed',kept:false}]};assert.equal(h.c.selectedContact(h.item).name,'Sam Buyer');
 });
 test('opening another confirmed buyer uses that recipient and seller context without carrying previous message facts',()=>{
- const h=harness();h.c.prepareMessageOnOpen();
+ const h=harness();h.c.prepareMessageOnOpen();h.c.selectMandatoryEmailStyle(h.studio.mode);
  h.item={domain:'clinic.example',company:'Clinic',channel:'email',selectedPersonId:'alex',drafts:{},dossier:{domain:'clinic.example',company:'Clinic',people:[{id:'alex',name:'Alex Health',title:'Clinical Director'}],evidence:[{url:'https://clinic.example/news',text:'Clinic is opening a new diagnostic centre at Eastport.'}]}};
  h.c.handoffContact={domain:'clinic.example',personId:'alex',channel:'email'};h.c.readJson=()=>({scriptBuyer:{workspaceId:'w1',domain:'clinic.example',personId:'alex',channel:'email'}});h.c.selectedCandidate=()=>({domain:'clinic.example',company:'Clinic'});h.c.rankedBuyingTriggers=()=>F.candidates(h.item.dossier.evidence,{domain:h.item.domain,company:'Clinic'});
- h.studio=S.normalize({mode:'friendly',essentials:{...e,sender:'Morgan Health',company:'Health Systems',offer:'diagnostic equipment',difference:'Our team supports healthcare projects.'}});h.c.prepareMessageOnOpen();
+ h.studio=S.normalize({mode:'friendly',essentials:{...e,sender:'Morgan Health',company:'Health Systems',offer:'diagnostic equipment',difference:'Our team supports healthcare projects.'}});h.c.prepareMessageOnOpen();h.c.selectMandatoryEmailStyle(h.studio.mode);
  assert.match(h.item.drafts.emailBody,/Hi Alex/);assert.match(h.item.drafts.emailBody,/Morgan Health/);assert.match(h.item.drafts.emailBody,/Eastport/);assert.doesNotMatch(h.item.drafts.emailBody,/Northport|Robin Lane|North Works|Sam Buyer/);E.validateFrame(h.item.drafts.emailBody,'friendly');
 });
 test('Update message preserves an applied event invitation and refreshes current saved event details within its own frame',()=>{
@@ -127,7 +127,7 @@ test('an expired or archived event fails closed and preserves the entire working
 });
 test('Update message uses a newly confirmed buying event and tailors matching subjects for every protected style',async()=>{
  for(const mode of ['professional','curiosity','friendly','brutal']){
-  const h=harness();h.studio=S.normalize({mode,essentials:e});h.c.automaticallySelectBuyingTrigger();h.c.automaticallyPrepareMessage();
+  const h=harness();h.studio=S.normalize({mode,essentials:e});h.c.automaticallySelectBuyingTrigger();h.c.selectMandatoryEmailStyle(h.studio.mode);
   h.item.messageStudioDraft.scriptSavedAt='today';h.item.drafts.emailBody='Saved manual message';h.item.messageStudioDraft.editorOrigin='manual';
   const url='https://buyer.example/new-factory';h.item.dossier.evidence.push({url,title:'Buyer announces a new manufacturing plant at Riverport',text:'Buyer is investing in a new manufacturing plant at Riverport.'});await h.c.chooseBuyingTrigger(url);
   assert.equal(h.item.drafts.emailBody,'Saved manual message');h.c.updateMessageFromTemplate();assert.match(h.item.drafts.emailBody,/Riverport/);assert.doesNotMatch(h.item.drafts.emailBody,/Northport/);assert.equal(h.item.messageStudioDraft.triggerSourceUrl,url);E.validateFrame(h.item.drafts.emailBody,mode);
@@ -136,7 +136,7 @@ test('Update message uses a newly confirmed buying event and tailors matching su
 });
 test('Update message repairs modified core wording deterministically and preserves immutable originals plus durable Undo',()=>{
  for(const mode of ['professional','curiosity','friendly','brutal']){
-  const h=harness();h.studio=S.normalize({mode,essentials:e});h.c.automaticallySelectBuyingTrigger();h.c.automaticallyPrepareMessage();
+  const h=harness();h.studio=S.normalize({mode,essentials:e});h.c.automaticallySelectBuyingTrigger();h.c.selectMandatoryEmailStyle(h.studio.mode);
   const first=JSON.parse(JSON.stringify(h.item.messageStudioDraft.tailoredOriginal)),master=A.originalText(mode),expected=h.item.drafts.emailBody;
   h.item.drafts.emailBody='Wrong wording\n\nWrong order';h.item.messageStudioDraft.editorOrigin='manual';h.item.messageStudioDraft.scriptSavedAt='2026-10-10';h.item.messageStudioDraft.savedDraft=E.workingDraft(h.item);
   const before=E.workingDraft(h.item);h.c.updateMessageFromTemplate();
@@ -145,36 +145,36 @@ test('Update message repairs modified core wording deterministically and preserv
   const changed={...restored,drafts:{...restored.drafts,emailBody:'Later manual edit'}};assert.throws(()=>E.undoTemplateUpdate(changed),/changed/);
  }
 });
-test('Update message restores the exact saved default snapshot even after library edits and a different style selection',()=>{
+test('Update uses the selected style; an explicitly applied default keeps its saved snapshot after library edits',()=>{
  const h=harness();let studio=S.saveMyTemplate(h.studio,'template-1',{name:'Default invitation',subject:'For {{buyerCompany}}',body:'Hi {{firstName}},\n\nOur approved service: {{offer}}\n\n{{calendly}}'});
  studio=S.markDefault(studio,'template-1');studio=S.saveMyTemplate(studio,'template-1',{name:'Later edit',subject:'Other',body:'Wrong newer library version'},true);studio.mode='friendly';h.studio=studio;
- h.item.drafts.emailBody='My working draft';h.c.updateMessageFromTemplate();
+ h.item.drafts.emailBody='My working draft';h.c.automaticallySelectBuyingTrigger();h.c.updateMessageFromTemplate();assert.equal(h.studio.mode,'friendly');E.validateFrame(h.item.drafts.emailBody,'friendly');assert.doesNotMatch(h.item.drafts.emailBody,/Our approved service|Wrong newer library version/);h.studio=S.applyDefault(h.studio,'email');h.item.drafts.emailBody='My working draft';h.c.updateMessageFromTemplate();
  assert.equal(h.studio.mode,'template-1');assert.equal(h.item.drafts.emailBody,'Hi Sam,\n\nOur approved service: steel and installation\n\nhttps://calendly.com/north/intro');assert.equal(h.item.drafts.emailSubject,'For Buyer');assert.equal(E.updateUndo(h.item).message,'My working draft');assert.equal(E.savedDraft(h.item),false);
 });
 test('a tampered pending message cannot redefine the approved template on explicit Update message',()=>{
- const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.automaticallyPrepareMessage();const expected=h.item.drafts.emailBody;
+ const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.selectMandatoryEmailStyle(h.studio.mode);const expected=h.item.drafts.emailBody;
  h.item.messageStudioDraft.pendingTemplateUpdate={draft:{subject:'Invented',message:'Tampered proposal'},key:'invalid'};h.item.drafts.emailBody='My edit';h.c.updateMessageFromTemplate();
  assert.equal(h.item.drafts.emailBody,expected);assert.equal(h.item.messageStudioDraft.pendingTemplateUpdate,undefined);assert.equal(E.updateUndo(h.item).message,'My edit');
 });
 test('explicit Update preserves a deliberate custom subject and first original while refreshing the body',()=>{
- const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.automaticallyPrepareMessage();const first=JSON.stringify(h.item.messageStudioDraft.tailoredOriginal);
+ const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.selectMandatoryEmailStyle(h.studio.mode);const first=JSON.stringify(h.item.messageStudioDraft.tailoredOriginal);
  h.item.drafts.emailSubject='My own valid subject';h.item.drafts.emailBody='Changed body';h.q('message-subject-choice').value='custom';h.c.updateMessageFromTemplate();
  assert.equal(h.item.drafts.emailSubject,'My own valid subject');assert.match(h.item.drafts.emailBody,/Northport/);assert.equal(JSON.stringify(h.item.messageStudioDraft.tailoredOriginal),first);
 });
 test('Update with identical compliant text still requires an explicit Save and respects editor/session guards',()=>{
- const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.automaticallyPrepareMessage();const before=JSON.stringify(h.item.drafts);
+ const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.selectMandatoryEmailStyle(h.studio.mode);const before=JSON.stringify(h.item.drafts);
  h.item.messageStudioDraft.scriptSavedAt='today';h.item.messageStudioDraft.savedDraft=E.workingDraft(h.item);h.c.updateMessageFromTemplate();assert.equal(JSON.stringify(h.item.drafts),before);assert.equal(E.savedDraft(h.item),false);
  h.c.messageEditor={state:()=>({editing:true})};assert.equal(h.c.updateMessageFromTemplate(),false);assert.equal(JSON.stringify(h.item.drafts),before);
  h.c.messageEditor=null;h.usable=false;assert.equal(h.c.updateMessageFromTemplate(),false);
 });
 test('canonical subject selection changes no body and does not create a pending body update on reopen',()=>{
- const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.automaticallyPrepareMessage();h.item.messageStudioDraft.scriptSavedAt='today';const before=h.item.drafts.emailBody;
+ const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.selectMandatoryEmailStyle(h.studio.mode);h.item.messageStudioDraft.scriptSavedAt='today';const before=h.item.drafts.emailBody;
  const line=source.split('\n').find(line=>line.includes("q('message-subject-choice').onchange="));vm.runInContext(line,h.c);
  h.q('message-subject-choice').value='relevance';h.q('message-subject-choice').onchange();
  assert.equal(h.item.drafts.emailBody,before);assert.match(h.item.drafts.emailSubject,/Northport/);assert.equal(h.requests.length,0);assert.equal(h.c.automaticallyPrepareMessage(),false);assert.equal(h.item.messageStudioDraft.pendingTemplateUpdate,undefined);
 });
-test('selecting a verified official signal automatically prepares subject/body and does not save or send',async()=>{
- const h=harness();await h.c.chooseBuyingTrigger('https://buyer.example/news');
+test('selecting a verified official signal preserves a blank draft until explicit Update and does not save or send',async()=>{
+ const h=harness();await h.c.chooseBuyingTrigger('https://buyer.example/news');assert.equal(h.item.drafts.emailBody,'');assert.equal(h.item.drafts.emailSubject,'');h.c.updateMessageFromTemplate();
  assert.equal(h.requests.length,0);assert.equal(h.item.messageStudioDraft.editorOrigin,'tailored');assert.equal(h.item.messageStudioDraft.triggerSourceUrl,'https://buyer.example/news');assert.match(h.item.drafts.emailBody,/Northport/);assert.match(h.item.drafts.emailBody,/20-minute Zoom/);assert.equal(h.item.drafts.linkedinMessage,'Other channel preserved');assert.equal(h.item.approved,false);assert.equal(h.item.messageStudioDraft.scriptSavedAt,undefined);
  const before=JSON.stringify(h.item);assert.equal(h.c.automaticallyPrepareMessage(),false);assert.equal(JSON.stringify(h.item),before);
 });
@@ -183,9 +183,9 @@ test('third-party evidence requires review and cannot automatically enter a draf
  await h.c.chooseBuyingTrigger('https://press.example/news');assert.equal(h.item.drafts.emailBody,'');assert.equal(h.item.dossier.selectedTrigger,null);assert.equal(h.q('mw-trigger-review').open,true);
 });
 test('all approved styles use the same compact verified project without changing originals or importing source paragraphs',()=>{
- const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.automaticallyPrepareMessage();
+ const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.selectMandatoryEmailStyle(h.studio.mode);
  for(const mode of ['professional','curiosity','friendly','brutal']){
-  const before=A.originalText(mode);h.studio=S.normalize({mode,essentials:e});h.c.automaticallyPrepareMessage();
+  const before=A.originalText(mode);h.studio=S.normalize({mode,essentials:e});h.c.selectMandatoryEmailStyle(mode);
   assert.equal(h.item.messageStudioDraft.mode,mode);assert.match(h.item.drafts.emailBody,/Northport/);assert.match(h.item.drafts.emailBody,/20-minute/);assert.equal(A.originalText(mode),before);E.validateFrame(h.item.drafts.emailBody,mode);
   const ctx=h.c.studioMessageContext(h.item);const ids=mode==='curiosity'?['project','success']:mode==='friendly'?['hello']:mode==='brutal'?['project']:['relevance','development','benefit'];
   for(const id of ids){const subject=S.resolvedSubject(S.chooseSubject(h.studio,mode,id),{...ctx,strictSubjectChoice:true},e);assert.ok(S.validSubject(subject),mode+'/'+id);assert.match(subject,/Northport/);assert.doesNotMatch(subject,/investing|mine\./);}
@@ -193,7 +193,7 @@ test('all approved styles use the same compact verified project without changing
 });
 test('manual, saved, approved and rewritten messages survive automatic preparation exactly and proposals persist through CRM reload',()=>{
  for(const protection of ['manual','saved','approved','rewrite']){
-  const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.automaticallyPrepareMessage();const original=h.item.messageStudioDraft.tailoredOriginal;
+  const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.selectMandatoryEmailStyle(h.studio.mode);const original=h.item.messageStudioDraft.tailoredOriginal;
   if(protection==='manual'||protection==='rewrite'){h.item.drafts.emailBody='  My exact\n\nworking text.\n';h.item.messageStudioDraft.editorOrigin=protection;}
   if(protection==='saved')h.item.messageStudioDraft.scriptSavedAt='2026-10-09';if(protection==='approved')h.item.approved=true;
   const before=JSON.stringify(h.item.drafts);h.studio=S.normalize({mode:'curiosity',essentials:e});h.c.automaticallyPrepareMessage();
@@ -223,7 +223,7 @@ test('unknown seller context and blocked workspace cannot run automatic preparat
 
 test('an official event beyond the first 900 characters selects its exact event rather than page background',()=>{
  const h=harness(),event=h.item.dossier.evidence[0].text;h.item.dossier.evidence[0].text='Buyer serves industrial clients internationally. '.repeat(30)+event;
- assert.equal(h.c.automaticallySelectBuyingTrigger(),true);assert.equal(h.item.dossier.selectedTrigger.excerpt,event);h.c.automaticallyPrepareMessage();assert.match(h.item.drafts.emailBody,/Northport/);assert.doesNotMatch(h.item.drafts.emailBody,/serves industrial clients/);
+ assert.equal(h.c.automaticallySelectBuyingTrigger(),true);assert.equal(h.item.dossier.selectedTrigger.excerpt,event);h.c.selectMandatoryEmailStyle(h.studio.mode);assert.match(h.item.drafts.emailBody,/Northport/);assert.doesNotMatch(h.item.drafts.emailBody,/serves industrial clients/);
 });
 test('a confirmed handoff is required and changing its recipient invalidates in-flight preparation',async()=>{
  const h=harness();h.c.handoffContact.personId='other';assert.equal(h.c.automaticallyPrepareMessage(),false);assert.equal(h.requests.length,0);
@@ -232,7 +232,7 @@ test('a confirmed handoff is required and changing its recipient invalidates in-
 });
 
 test('an active saved translation is preserved and a new English template is proposed separately',()=>{
- const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.automaticallyPrepareMessage();h.item.messageStudioDraft.languageVersions={originalLanguage:'en',activeLanguage:'sv',versions:{en:{subject:h.item.drafts.emailSubject,message:h.item.drafts.emailBody},sv:{subject:'Svenskt ämne',message:'Min svenska text'}}};
+ const h=harness();h.c.automaticallySelectBuyingTrigger();h.c.selectMandatoryEmailStyle(h.studio.mode);h.item.messageStudioDraft.languageVersions={originalLanguage:'en',activeLanguage:'sv',versions:{en:{subject:h.item.drafts.emailSubject,message:h.item.drafts.emailBody},sv:{subject:'Svenskt ämne',message:'Min svenska text'}}};
  h.item.drafts.emailSubject='Svenskt ämne';h.item.drafts.emailBody='Min svenska text';h.studio=S.normalize({mode:'friendly',essentials:e});h.c.automaticallyPrepareMessage();
  assert.equal(h.item.drafts.emailBody,'Min svenska text');assert.equal(h.item.messageStudioDraft.languageVersions.versions.sv.message,'Min svenska text');assert.match(h.item.messageStudioDraft.pendingTemplateUpdate.draft.message,/20-minute/);
 });
