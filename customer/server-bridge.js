@@ -156,7 +156,7 @@
     if(acknowledged?.version===remembered&&remembered>bridge.stateVersion)bridge.stateVersion=remembered;
     markDirtyLocalState();setStatus('Saving to LeadIntel…','saving');const localPayload=bundle();const base=root.LeadIntelWorkspacePersistence?.syncedBase?.(context.workspaceId);let response,result;
     try{
-      const syncPayload=root.LeadIntelStateBudget?.prepareForSync?.(localPayload,{allowSectionPacking:bridge.workspaceStateCodec==='workspace-sections-v1',allowBundlePacking:bridge.workspaceBundleCodec==='workspace-bundle-v1',allowCompressionPacking:bridge.workspaceCompressionCodec==='workspace-lzw-v1'})?.payload||localPayload;
+      const syncPayload=root.LeadIntelStateBudget?.prepareForSync?.(localPayload,{allowSectionPacking:bridge.workspaceStateCodec==='workspace-sections-v1',allowBundlePacking:bridge.workspaceBundleCodec==='workspace-bundle-v1',allowCompressionPacking:bridge.workspaceCompressionCodec==='workspace-lzw-v2'})?.payload||localPayload;
       const payload={schema_version:1,version:bridge.stateVersion,payload:syncPayload};
       const request=await api(`/api/customer/state?workspace_id=${encodeURIComponent(context.workspaceId)}`,{method:'PUT',body:JSON.stringify(payload),leadintelSaveIntent:context.saveIntent,leadintelExplicitSave:context.explicitSave});response=request.response;result=request.payload;
     }

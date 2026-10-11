@@ -39,14 +39,14 @@
   const NESTED_FORMAT='leadintel-discovery-refs-v2';
   const SECTION_FORMAT='leadintel-workspace-section-refs-v1';
   const BUNDLE_FORMAT='leadintel-workspace-bundle-refs-v1';
-  const TEXT_ENCODING='lzw16-base64-v1';
+  const TEXT_ENCODING='lzw16-refs-base64-v2',LEGACY_TEXT_ENCODING='lzw16-base64-v1';
   const MAX_RESTORED_BUNDLE_BYTES=MAX_RESTORED_SECTION_BYTES*4;
   function base64Encode(raw){return typeof btoa==='function'?btoa(raw):Buffer.from(raw,'binary').toString('base64');}
   // Fixed-width byte codes avoid dependencies and remain synchronous at every save boundary.
   // The dictionary freezes at 65536 entries; both encoding and decoding use the same bound.
   function compressWorkspace(value){
     if(bytes(value)>MAX_RESTORED_BUNDLE_BYTES||Object.values(value).some(section=>bytes(section)>MAX_RESTORED_SECTION_BYTES))return null;
-    const input=new TextEncoder().encode(JSON.stringify(value)),dictionary=new Map(),codes=[];let next=256,word='';
+    const input=new TextEncoder().encode(JSON.stringify(packNestedDiscovery(value))),dictionary=new Map(),codes=[];let next=256,word='';
     for(const byte of input){const char=String.fromCharCode(byte),joined=word+char;if(joined.length===1||dictionary.has(joined)){word=joined;continue;}codes.push(word.length===1?word.charCodeAt(0):dictionary.get(word));if(next<65536)dictionary.set(joined,next++);word=char;}
     if(word)codes.push(word.length===1?word.charCodeAt(0):dictionary.get(word));
     let raw='';for(const code of codes)raw+=String.fromCharCode(code>>>8,code&255);
@@ -56,12 +56,12 @@
   }
   function restoreCompressedWorkspace(value){
     const invalid=()=>{throw new Error('Invalid stored compressed workspace');};
-    if(value.encoding!==TEXT_ENCODING||typeof value.data!=='string'||value.data.length>MAX_SYNC_BYTES||value.data.length%4||!value.data.length||! /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value.data))invalid();
+    if(![TEXT_ENCODING,LEGACY_TEXT_ENCODING].includes(value.encoding)||typeof value.data!=='string'||value.data.length>MAX_SYNC_BYTES||value.data.length%4||!value.data.length||! /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value.data))invalid();
     let raw;try{raw=typeof atob==='function'?atob(value.data):Buffer.from(value.data,'base64').toString('binary');}catch{invalid();}
     if(raw.length%2||base64Encode(raw)!==value.data)invalid();
     const dictionary=Array.from({length:256},(_,i)=>String.fromCharCode(i));let next=256,previous='',size=0;const chunks=[];
     for(let i=0;i<raw.length;i+=2){const code=(raw.charCodeAt(i)<<8)|raw.charCodeAt(i+1);let word=dictionary[code];if(word===undefined){if(!previous||code!==next||next>=65536)invalid();word=previous+previous[0];}size+=word.length;if(size>MAX_RESTORED_BUNDLE_BYTES)throw new Error('Stored workspace research exceeds safe restore limit');chunks.push(word);if(previous&&next<65536)dictionary[next++]=previous+word[0];previous=word;}
-    try{const text=chunks.join(''),decoded=new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(text,char=>char.charCodeAt(0)));const restored=JSON.parse(decoded);if(!restored||typeof restored!=='object'||Array.isArray(restored))invalid();return restored;}catch{invalid();}
+    try{const text=chunks.join(''),decoded=new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(text,char=>char.charCodeAt(0)));const restored=JSON.parse(decoded);if(!restored||typeof restored!=='object'||Array.isArray(restored))invalid();return value.encoding===TEXT_ENCODING&&restored.format===NESTED_FORMAT?restoreNestedDiscovery(restored,MAX_RESTORED_BUNDLE_BYTES):restored;}catch{invalid();}
   }
   // Workflow views repeat the same company, buyer pool and provider evidence.
   // Share equal copies on the wire without deleting any record or audit field.
@@ -284,5 +284,5 @@
   }
 
   installStorageGuard();
-  return {syncCodecVersion:'workspace-lzw-v1',packRecoveryRecord,restoreRecoveryRecord,MAX_SYNC_BYTES,TARGET_SYNC_BYTES,bytes,compactBundle,restoreFromSync,prepareForSync,compactMainStorageValue,installStorageGuard};
+  return {syncCodecVersion:'workspace-lzw-v2',packRecoveryRecord,restoreRecoveryRecord,MAX_SYNC_BYTES,TARGET_SYNC_BYTES,bytes,compactBundle,restoreFromSync,prepareForSync,compactMainStorageValue,installStorageGuard};
 });
