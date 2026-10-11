@@ -50,6 +50,7 @@ test('composer is a full-width vertical layout with send below the textarea',()=
 
 test('sidebar entry is a premium branded copilot control',()=>{
   assert.match(loader,/Business & Research/);
+  assert.match(fs.readFileSync(new URL('../index.html',import.meta.url),'utf8'),/copilot-entry-subtitle">Business & Research/);
   assert.match(css,/\.leadintel-copilot-entry\{[^}]*border-radius\s*:\s*(1[4-9]|[2-9][0-9])px/s);
   assert.match(css,/\.leadintel-copilot-entry\{[^}]*background\s*:\s*(linear-gradient|radial-gradient)/s);
   assert.match(css,/\.leadintel-copilot-entry\{[^}]*box-shadow/s);
