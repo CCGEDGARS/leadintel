@@ -235,8 +235,8 @@
   }
   function cloneValue(value){return JSON.parse(JSON.stringify(value));}
   function compactBundle(input={},options={}){
-    const original=clone(input);let payload=restoreFromSync(clone(input));
-    if(options.allowCompressionPacking===true){const compressed=compressWorkspace(payload);if(compressed&&bytes(compressed)<=MAX_SYNC_BYTES)return {payload:compressed,bytes:bytes(compressed),compacted:true};}
+    const original=clone(input);let payload=restoreFromSync(clone(input));let compressionBytes=null;
+    if(options.allowCompressionPacking===true){const compressed=compressWorkspace(payload);compressionBytes=compressed?bytes(compressed):null;if(compressed&&bytes(compressed)<=MAX_SYNC_BYTES)return {payload:compressed,bytes:bytes(compressed),compacted:true};}
     payload.main=compactMain(payload.main||{},8000,12000);
     for(const [webChars,pdfChars,evidenceChars] of [[4000,6000,1800],[1500,2500,900],[1500,2500,450]]){
       if(bytes(payload)<=TARGET_SYNC_BYTES)break;
@@ -262,12 +262,12 @@
         if(bytes(shared)<bytes(payload))payload=shared;
       }
     }
-    if(options.allowCompressionPacking===true&&bytes(payload)>TARGET_SYNC_BYTES){const compressed=compressWorkspace(restoreFromSync(payload));if(compressed&&bytes(compressed)<bytes(payload))payload=compressed;}
-    return {payload,bytes:bytes(payload),compacted:JSON.stringify(payload)!==JSON.stringify(original)};
+    if(options.allowCompressionPacking===true&&bytes(payload)>TARGET_SYNC_BYTES){const compressed=compressWorkspace(restoreFromSync(payload));compressionBytes=compressed?bytes(compressed):null;if(compressed&&bytes(compressed)<bytes(payload))payload=compressed;}
+    return {payload,bytes:bytes(payload),compacted:JSON.stringify(payload)!==JSON.stringify(original),compressionBytes};
   }
   function prepareForSync(input={},options={}){
     const result=compactBundle(input,options);
-    if(result.bytes>MAX_SYNC_BYTES){const sizes=Object.entries(result.payload).map(([key,value])=>`${key}: ${Math.ceil(bytes(value)/1024)} KB`).join(', ');throw new Error(`Workspace state is ${Math.ceil(result.bytes/1024)} KB after evidence compaction and cannot be synced because the 500 KB sync limit is a hard safety ceiling. Section sizes: ${sizes}.`);}
+    if(result.bytes>MAX_SYNC_BYTES){const sizes=Object.entries(result.payload).map(([key,value])=>`${key}: ${Math.ceil(bytes(value)/1024)} KB`).join(', ');throw new Error(`Workspace state is ${Math.ceil(result.bytes/1024)} KB after evidence compaction and cannot be synced because the 500 KB sync limit is a hard safety ceiling. Section sizes: ${sizes}. Compression permitted: ${options.allowCompressionPacking===true}; candidate: ${result.compressionBytes==null?'unavailable':Math.ceil(result.compressionBytes/1024)+' KB'}.`);}
     return result;
   }
   function compactMainStorageValue(value){
@@ -284,5 +284,5 @@
   }
 
   installStorageGuard();
-  return {packRecoveryRecord,restoreRecoveryRecord,MAX_SYNC_BYTES,TARGET_SYNC_BYTES,bytes,compactBundle,restoreFromSync,prepareForSync,compactMainStorageValue,installStorageGuard};
+  return {syncCodecVersion:'workspace-lzw-v1',packRecoveryRecord,restoreRecoveryRecord,MAX_SYNC_BYTES,TARGET_SYNC_BYTES,bytes,compactBundle,restoreFromSync,prepareForSync,compactMainStorageValue,installStorageGuard};
 });
