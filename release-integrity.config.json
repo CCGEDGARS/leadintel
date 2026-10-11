@@ -1197,7 +1197,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "text-compression=20261011-v1"
+        "text-compression=20261011-v2"
       ]
     },
     {

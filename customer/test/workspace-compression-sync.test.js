@@ -1,7 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),B=require('../state-budget.js');
 const uniqueWorkspace=require('./helpers/workspace-distinct-capacity.js');
 test('distinct research records compress losslessly even when reference sharing cannot fit',()=>{
- const input=uniqueWorkspace();assert.throws(()=>B.prepareForSync(input,{allowBundlePacking:true}),/500 KB sync limit/);
+ const input=uniqueWorkspace();assert.throws(()=>B.prepareForSync(input,{allowBundlePacking:true}),/Compression permitted: false; candidate: unavailable/);
  const result=B.prepareForSync(input,{allowBundlePacking:true,allowCompressionPacking:true});assert.ok(result.bytes<=B.MAX_SYNC_BYTES);assert.equal(result.payload.main.encoding,'lzw16-base64-v1');assert.deepEqual(B.restoreFromSync(result.payload),input);
  const wire=JSON.parse(JSON.stringify(result.payload));wire.meta.persistence.explicit_saved=false;assert.deepEqual(B.restoreFromSync(wire),{...input,meta:{...input.meta,persistence:{explicit_saved:false}}});
  assert.deepEqual(B.prepareForSync(result.payload,{allowCompressionPacking:true}).payload,result.payload);
