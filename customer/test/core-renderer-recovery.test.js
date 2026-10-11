@@ -138,3 +138,10 @@ test('source fingerprints retain rendering facts without duplicating official pa
  const nonSteel=S.normalize({mode:'friendly',essentials:{...essentials,offer:'drawing development, metal manufacturing, installation and qualified workforce'}});
  assert.notEqual(E.scope('w1',{},nonSteel,ctx),E.scope('w1',{},nonSteel,changed));
 });
+
+test('Professional combined budget can shorten one otherwise-valid field for a grammatical investment quantity',()=>{
+ const studio=S.normalize({mode:'professional',essentials:{...essentials,sender:'Edgars Untals',company:'ERCON',offer:'drawing development, metal manufacturing, installation and qualified workforce solutions',difference:'Our team brings more than 30 years of metalworking experience, including international projects in Scandinavia.'}}),ctx={...context(),firstName:'Joakim',buyerName:'Joakim Winsa',trigger:{...context().trigger,summary:'LKAB is investing six billion kronor in a new sorting plant at Malmberget.'}};
+ assert.equal(E.needsPreparation(studio,ctx),true);const limits=E.preparationWordLimits(studio,ctx);assert.ok(limits.difference<15);
+ const sources=E.fieldSources(studio,ctx),prepared=E.preparedResponse({...sources,difference:'Our team brings more than 30 years of metalworking experience, including projects in Scandinavia.'},studio,ctx),draft=E.tailor(studio,E.preparedContext(studio,ctx,prepared));
+ assert.match(draft.message,/investment of six billion kronor/);assert.ok(draft.message.split(/\s+/).length<=185);assert.equal(prepared.fields.offer,sources.offer);assert.equal(prepared.fields.triggerSummary,sources.triggerSummary.replace(/[.!?]+$/,''));
+});

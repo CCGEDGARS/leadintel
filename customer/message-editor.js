@@ -114,6 +114,10 @@
   let remaining=words(A.records.professional.paragraphs.join(' '))-words(base)+keys.length;
   const limits=Object.fromEntries(Object.keys(fieldWords).map(key=>[key,0])),variable=[];
   for(const key of keys){if(preservesField(key,sources[key],studio,context)){limits[key]=words(sources[key]);remaining-=limits[key];}else variable.push(key);}
+  // Individually concise fields may still exceed the combined frame (for
+  // example a grammatical quantity adds one word). Reserve actual room before
+  // preserving English fields, rather than requesting an impossible result.
+  while(remaining<variable.length){const key=keys.filter(k=>limits[k]>1).sort((a,b)=>limits[b]-limits[a])[0];if(!key)throw Error('Required facts exceed the approved original budget');limits[key]--;remaining++;}
   for(let i=0;i<variable.length;i++){const key=variable[i];limits[key]=Math.max(0,Math.min(fieldWords[key],Math.floor(remaining/(variable.length-i))));remaining-=limits[key];}
   return limits;
  }
