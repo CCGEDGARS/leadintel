@@ -101,7 +101,7 @@
   const rows=subjectsFor(studio.mode).map(option=>{
    const pattern=subjectPattern(studio.mode,option.id,language),missing=studio.mode==='professional'?[...new Set([...pattern.matchAll(/\{\{(\w+)\}\}/g)].map(m=>m[1]).filter(key=>!facts[key]))]:[];
    const subject=resolvedSubject({...studio,subjectChoices:{...studio.subjectChoices,[studio.mode]:option.id}},{...context,strictSubjectChoice:true},e);
-   const reason=subject?'':missing.length?'Needs '+missing.map(key=>labels[key]||key).join(' and '):'Needs a supported detail or shorter confirmed name; maximum 60 characters';
+   const reason=subject?'':studio.mode==='friendly'&&option.id==='congratulations'&&context.trigger?.positive!==true?'Needs a reviewed positive business milestone':missing.length?'Needs '+missing.map(key=>labels[key]||key).join(' and '):'Needs a supported detail or shorter confirmed name; maximum 60 characters';
    return {id:option.id,subject:subject||'',ready:Boolean(subject),missing:subject?[]:missing,reason};
   });
   return {complete:rows.length>0&&rows.every(row=>row.ready),ready:rows.filter(row=>row.ready).length,total:rows.length,rows,sources:subjectSellerFacts(context,e).sources};

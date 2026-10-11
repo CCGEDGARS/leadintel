@@ -174,7 +174,7 @@
       const official=new URL(url).hostname.replace(/^www\./,'')===companyDomain;
       if(!official||!MessageFacts()?.event(excerpt))return null;
     }
-    return {id:url,companyDomain,url,title:clean(evidence.title)||url,excerpt,sourceDate:/^\/(?:en|sv|lv)?\/?$/.test(new URL(url).pathname)?'':clean(evidence.date),detectedAt:clean(value.detectedAt),reviewedAt:value.verification==='user_reviewed'?clean(value.reviewedAt):'',verification:value.verification,tracked:true};
+    return {id:url,companyDomain,url,title:clean(evidence.title)||url,excerpt,sourceDate:/^\/(?:en|sv|lv)?\/?$/.test(new URL(url).pathname)?'':clean(evidence.date),detectedAt:clean(value.detectedAt),reviewedAt:value.verification==='user_reviewed'?clean(value.reviewedAt):'',verification:value.verification,positive:MessageFacts()?.positiveEvent(excerpt)===true,tracked:true};
   }
   function reviewTrigger(item={},url='',reviewedAt=new Date().toISOString(),reviewedExcerpt=''){
     const dossier=item.dossier||{},evidence=(dossier.evidence||[]).find(row=>normalizeUrl(row.url)===normalizeUrl(url));
