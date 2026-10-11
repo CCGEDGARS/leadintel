@@ -6,6 +6,7 @@ test('credit failures distinguish exhausted billing from a temporary 429',()=>{
   assert.equal(creditFailure(402,''),true);
   assert.equal(creditFailure(429,'code: insufficient_quota'),true);
   assert.equal(creditFailure(429,'code: credit_balance_exhausted'),true);
+  assert.equal(creditFailure(403,'code: not_enough_credits'),true);
   assert.equal(creditFailure(429,'rate_limit_exceeded'),false);
   assert.equal(creditFailure(503,'overloaded'),false);
 });
@@ -25,3 +26,14 @@ test('a provider credit alert persists per workspace and clears after its own su
 });
 
 test('only a verified Firecrawl balance can clear its billing alert; missing balance is unknown',()=>{assert.equal(verifiedCreditBalance('firecrawl',{remaining_credits:100}),'recovered');assert.equal(verifiedCreditBalance('firecrawl',{remaining_credits:0}),'failed');assert.equal(verifiedCreditBalance('firecrawl',{}),null);assert.equal(verifiedCreditBalance('firecrawl',{remaining_credits:null}),null);assert.equal(verifiedCreditBalance('apollo',{healthy:true}),null);});
+
+test('Hunter verified balance differentiates exhausted credits from unknown balance',()=>{
+ assert.equal(verifiedCreditBalance('hunter',{remaining_verifications:0}),'failed');
+ assert.equal(verifiedCreditBalance('hunter',{remaining_verifications:20}),'recovered');
+ for(const value of [null,undefined,'',NaN])assert.equal(verifiedCreditBalance('hunter',{remaining_verifications:value}),null);
+});
+
+test('explicit payment failures are red evidence while expired credentials and rate limits are not',()=>{
+ for(const detail of ['payment failed','subscription expired','billing limit reached'])assert.equal(creditFailure(403,detail),true,detail);
+ for(const detail of ['API token expired','invalid API key','rate_limit_exceeded','connection timeout'])assert.equal(creditFailure(429,detail),false,detail);
+});

@@ -42,7 +42,7 @@ function serviceControls(config,row){
     ${config.provider==='apollo'?`<div data-apollo-capabilities><label><input type="checkbox" data-apollo-discovery ${row?.metadata?.discovery_enabled!==false?'checked':''} ${disabled||!configured?'disabled':''}>People discovery · 0 API credits</label><label><input type="checkbox" data-apollo-email ${row?.metadata?.email_enrichment_enabled===true?'checked':''} ${disabled||!configured?'disabled':''}>Enable email enrichment · uses Apollo credits</label><label><input type="checkbox" data-apollo-phone ${row?.metadata?.phone_enrichment_enabled===true?'checked':''} ${disabled||!configured?'disabled':''}>Enable phone enrichment · uses Apollo credits</label><label>Daily Apollo credit limit<input type="number" min="0" max="1000" data-apollo-daily value="${Number(apolloBudget.daily_credit_limit)||0}" ${disabled?'disabled':''}></label><label>Monthly Apollo credit limit<input type="number" min="0" max="10000" data-apollo-monthly value="${Number(apolloBudget.monthly_credit_limit)||0}" ${disabled?'disabled':''}></label><button type="button" class="ai-settings-btn" data-service-action="apollo-policy" ${disabled||!configured||busy==='apollo'?'disabled':''}>Save Apollo permissions & limits</button><small>Connecting a key does not enable credit-consuming enrichment. Automatic use also requires workflow approval. A phone request can reserve up to 9 credits.</small><a href="https://app.apollo.io/" target="_blank" rel="noopener noreferrer">Open your Apollo account ↗</a></div>`:''}
     ${config.provider==='hunter'?`<label class="ai-settings-field"><input type="checkbox" data-hunter-enabled ${row?.metadata?.additional_verification_enabled===true?'checked':''} ${disabled||!configured||busy==='hunter'?'disabled':''}>Enable additional Hunter verification (uses credits)</label><small>Off by default. Public research and Apollo work without Hunter. Enabling adds a delivery check; no provider guarantees 100% accuracy.</small>`:''}
     <label class="ai-settings-field">API key<input data-service-key="${config.provider}" type="password" autocomplete="new-password" spellcheck="false" data-form-type="other" data-lpignore="true" data-1p-ignore="true" autocapitalize="none" placeholder="${esc(config.placeholder)}" ${disabled?'disabled':''}></label>
-    <div class="ai-provider-error" data-service-error="${config.provider}" role="alert" ${error?'':'hidden'}>${esc(error)}</div>
+    <div class="ai-provider-error" data-payment-error="${Boolean(window.LeadIntelPaymentError?.(error))}" data-service-error="${config.provider}" role="alert" ${error?'':'hidden'}>${esc(error)}</div>
     <div class="ai-provider-actions">
       <button class="ai-settings-btn primary" data-service-action="save" data-provider="${config.provider}" type="button" ${disabled||busy===config.provider?'disabled':''}>${busy===config.provider?'Testing…':configured?'Replace key':'Test & save'}</button>
       <button class="ai-settings-btn danger" data-service-action="disconnect" data-provider="${config.provider}" type="button" ${disabled||!configured||busy===config.provider?'disabled':''}>Disconnect</button>
@@ -54,7 +54,7 @@ function calendlyCard(){
   return `<article class="integration-card customer-service-card" data-integration="calendly"><div class="integration-card-head"><div><strong>Calendly</strong><small>Strategy-call booking conversion</small></div><span class="integration-status ${configured?'good':'neutral'}">${configured?'Connected':'Not connected'}</span></div><p class="integration-purpose">A confirmed booking stops follow-ups and advances the matching CRM company to Meeting.</p><div class="integration-meta">${configured?`Webhook active · token ${esc(calendlyStatus.token_hint||'saved')}${calendlyStatus.last_event_at?` · last event ${shortDate(calendlyStatus.last_event_at)}`:''}`:'Connect a Calendly personal access token once to activate booking detection.'}</div><div class="service-provider-controls service-provider-card" data-service-extension="1">
     <label class="ai-settings-field">Strategy-call URL<input data-calendly-url type="url" autocomplete="url" spellcheck="false" placeholder="https://calendly.com/your-business/meeting" value="${esc(calendlyStatus.scheduling_url||DEFAULT_CALENDLY_URL)}" ${disabled?'disabled':''}></label>
     <label class="ai-settings-field">Personal access token<input data-calendly-token type="password" autocomplete="new-password" spellcheck="false" data-form-type="other" data-lpignore="true" data-1p-ignore="true" placeholder="${configured?'Enter a new token only to reconnect':'Calendly personal access token'}" ${disabled?'disabled':''}></label>
-    <div class="ai-provider-error" data-service-error="calendly" role="alert" ${error?'':'hidden'}>${esc(error)}</div>
+    <div class="ai-provider-error" data-payment-error="${Boolean(window.LeadIntelPaymentError?.(error))}" data-service-error="calendly" role="alert" ${error?'':'hidden'}>${esc(error)}</div>
     <div class="ai-provider-actions"><button class="ai-settings-btn primary" data-service-action="calendly-save" type="button" ${disabled||busy==='calendly'?'disabled':''}>${busy==='calendly'?'Connecting…':configured?'Reconnect':'Connect Calendly'}</button><button class="ai-settings-btn danger" data-service-action="calendly-disconnect" type="button" ${disabled||!configured||busy==='calendly'?'disabled':''}>Disconnect</button></div>
   </div>${window.LeadIntelToolAccountLinks?.html('calendly')||''}</article>`;
 }
@@ -81,6 +81,7 @@ function decorateReadiness(){
   const health=document.getElementById('integration-health-summary');if(!health)return;
   if(!health.querySelector('.service-readiness-note'))health.insertAdjacentHTML('beforeend','<div class="service-readiness-note"><strong>LeadIntel readiness</strong><span>Google or Microsoft identity + customer-owned provider controls</span></div>');
   const summary=health.querySelector('.integration-summary-copy strong');if(!summary)return;
+  if(health.classList.contains('credit-alert')||health.classList.contains('connection-alert'))return;
   if(!signedIn()){summary.textContent='Connect with Google or Microsoft to configure LeadIntel';return;}
   const aiReady=Boolean(document.querySelector('.ai-provider-card.active'));
   const deliveryReady=Boolean(document.querySelector('#integration-communication-grid [data-integration="gmail"] .integration-status.good, #integration-communication-grid [data-integration="microsoft-mail"] .integration-status.good'));
@@ -106,7 +107,9 @@ function decorateCards(){
     const observed=window.LeadIntelIntegrationHealth?.[config.provider];
     card.classList.add('customer-service-card');
     const purpose=card.querySelector('.integration-purpose');if(purpose)purpose.textContent=`${config.purpose}. ${config.provider==='hunter'?'Connect your own key.':'Add your own key or use the managed fallback.'}`;
-    const badge=card.querySelector('.integration-status');if(badge){badge.textContent=observed?.label||statusLabel(row);badge.className=`integration-status ${observed?.state|| (row?.state==='bad'?'bad':row?.source?'good':'neutral')}`;}
+    const payment=Boolean(observed?.creditIssue||(row?.credit_issue?.code==='credits_exhausted'&&row.credit_issue.source===row.source));
+    const tone=payment?'bad':observed?.state==='bad'||row?.state==='bad'?'warn':observed?.state|| (row?.source&&row.source!=='none'?'good':'neutral');
+    const badge=card.querySelector('.integration-status');if(badge){badge.textContent=payment?'Credits exhausted':observed?.label||statusLabel(row);badge.className=`integration-status ${tone}`;}
     const meta=card.querySelector('.integration-meta');if(meta)meta.textContent=observed?.detail||serviceDetail(config,row,meta.textContent);if(meta&&config.provider==='apollo')meta.textContent=serviceDetail(config,row,meta.textContent);
     const existing=card.querySelector('[data-service-extension="1"]');const html=serviceControls(config,row);if(existing)existing.outerHTML=html;else card.insertAdjacentHTML('beforeend',html);
   }
@@ -116,10 +119,10 @@ function decorateCards(){
 function queueDecorate(force=false){if(!settingsDrawerOpen())return;if(!force&&!needsDecoration())return;if(renderQueued)return;renderQueued=true;queueMicrotask(()=>{renderQueued=false;decorateCards();});}
 async function refreshServiceStatus(verify=false){
   const requestedWorkspace=workspace()?.id;
-  if(!signedIn()){serviceStatus={role:'',providers:[],checked_at:null};calendlyStatus={role:'',configured:false,connected:false,scheduling_url:DEFAULT_CALENDLY_URL,status:'not_connected'};queueDecorate(true);return serviceStatus;}
+  if(!signedIn()){serviceStatus={role:'',providers:[],checked_at:null};calendlyStatus={role:'',configured:false,connected:false,scheduling_url:DEFAULT_CALENDLY_URL,status:'not_connected'};window.LeadIntelServiceIntegrationStatus=null;queueDecorate(true);return serviceStatus;}
   try{
     const [services,calendly,workflow,budget]=await Promise.all([api(`/api/integrations/services/status${verify?'?verify=1':''}`),api('/api/integrations/calendly/status'),api('/api/approved-workflow'),api('/api/enrichment-policy')]);
-    if(workspace()?.id!==requestedWorkspace)return serviceStatus;if(!services.response.ok)throw new Error(services.payload.error||'Unable to load service integrations');serviceStatus={...services.payload,workspace_id:requestedWorkspace};
+    if(workspace()?.id!==requestedWorkspace)return serviceStatus;if(!services.response.ok)throw new Error(services.payload.error||'Unable to load service integrations');serviceStatus={...services.payload,workspace_id:requestedWorkspace};window.LeadIntelServiceIntegrationStatus=serviceStatus;window.dispatchEvent(new CustomEvent('leadintel:service-status'));
     if(workflow.response.ok)confirmationLevel=workflow.payload.config?.buyers?.confirmationLevel||'provider_verified';
     if(budget.response.ok&&budget.payload.policy){apolloBudget=budget.payload.policy;apolloUsage=budget.payload.usage||{daily:0,monthly:0};}
     window.dispatchEvent(new CustomEvent('leadintel:contact-policy-changed'));
@@ -133,7 +136,7 @@ async function saveService(provider,button){
   try{
     const {response,payload}=await api('/api/integrations/services/provider',{method:'PUT',body:JSON.stringify({provider,api_key:apiKey})});
     if(!response.ok)throw new Error(payload.error||'Provider verification failed');if(input)input.value='';await refreshServiceStatus(false);
-  }catch(cause){errors[provider]=String(cause?.message||cause);busy='';if(button){button.disabled=false;button.textContent=providerState(provider)?.configured?'Replace key':'Test & save';}const node=document.querySelector(`[data-service-error="${provider}"]`);if(node){node.hidden=false;node.textContent=errors[provider];}return;}
+  }catch(cause){errors[provider]=String(cause?.message||cause);busy='';if(button){button.disabled=false;button.textContent=providerState(provider)?.configured?'Replace key':'Test & save';}const node=document.querySelector(`[data-service-error="${provider}"]`);if(node){node.hidden=false;node.dataset.paymentError=String(Boolean(window.LeadIntelPaymentError?.(errors[provider])));node.textContent=errors[provider];}return;}
   busy='';queueDecorate(true);
 }
 async function saveCalendly(button){
@@ -141,7 +144,7 @@ async function saveCalendly(button){
   if(!token){errors.calendly='Enter a Calendly personal access token first.';queueDecorate(true);return;}
   busy='calendly';errors.calendly='';if(button){button.disabled=true;button.textContent='Connecting…';}
   try{const {response,payload}=await api('/api/integrations/calendly/connect',{method:'PUT',body:JSON.stringify({personal_access_token:token,scheduling_url:schedulingUrl})});if(!response.ok)throw new Error(payload.error||'Calendly connection failed');calendlyStatus=payload;queueDecorate(true);}
-  catch(cause){errors.calendly=String(cause?.message||cause);const node=document.querySelector('[data-service-error="calendly"]');if(node){node.hidden=false;node.textContent=errors.calendly;}}
+  catch(cause){errors.calendly=String(cause?.message||cause);const node=document.querySelector('[data-service-error="calendly"]');if(node){node.hidden=false;node.dataset.paymentError=String(Boolean(window.LeadIntelPaymentError?.(errors.calendly)));node.textContent=errors.calendly;}}
   finally{busy='';queueDecorate(true);}
 }
 async function disconnectCalendly(){

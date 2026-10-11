@@ -12,7 +12,8 @@
       "status": "ok",
       "service": "leadintel-api",
       "workflow_version": "approved-workflow-v1",
-      "saved_flows_version": "my-flows-v1"
+      "saved_flows_version": "my-flows-v1",
+      "payment_alerts_version": "payment-connection-v1"
     }
   },
   "smokeChecks": [
@@ -1320,6 +1321,41 @@
       "status": 200,
       "contains": [
         "function failed(){verified=false;"
+      ]
+    },
+    {
+      "id": "payment-connection-alert-classifier",
+      "type": "text",
+      "url": "/customer/ai-settings.js",
+      "status": 200,
+      "contains": [
+        "function integrationTone(check={})",
+        "check.state==='bad'?'warn'",
+        "Payment alert:",
+        "...(hunterPayment?['Hunter']:[])"
+      ]
+    },
+    {
+      "id": "payment-connection-alert-colours",
+      "type": "text",
+      "url": "/customer/ai-settings.css",
+      "status": 200,
+      "contains": [
+        ".integration-health-summary.connection-alert",
+        ".ai-provider-error[data-payment-error=\"true\"]",
+        ".integration-status.warn",
+        ".integration-status.bad"
+      ]
+    },
+    {
+      "id": "hunter-payment-summary-preserved",
+      "type": "text",
+      "url": "/customer/service-settings-extension.js",
+      "status": 200,
+      "contains": [
+        "payment?'bad'",
+        "'leadintel:service-status'",
+        "health.classList.contains('credit-alert')||health.classList.contains('connection-alert')"
       ]
     }
   ],

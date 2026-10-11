@@ -46,6 +46,45 @@ async function fixture(role='owner'){
   return {DB,token,env:{DB,OAUTH_TOKEN_ENCRYPTION_KEY:encryption,APOLLO_API_KEY:'managed-apollo-key',APOLLO_WEBHOOK_SECRET:'stable-webhook-secret',FIRECRAWL_PROXY_URL:'https://managed.example.test'}};
 }
 function req(pathname,{method='GET',token,body}={}){return new Request(`https://api.example.test${pathname}`,{method,headers:{...(token?{Cookie:`leadintel_session=${token}`}:{...{}}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});}
+
+sqliteTest('Hunter zero balances flag payment and fresh positive balances clear it without consuming credits',async()=>{
+ const {env,token}=await fixture(),original=globalThis.fetch;let remaining=0,calls=[];
+ globalThis.fetch=async url=>{calls.push(String(url));return new Response(JSON.stringify({data:{requests:{credits:{remaining},verifications:{remaining:30},searches:{remaining:20}}}}));};
+ try{
+  await handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'PUT',token,body:{provider:'hunter',api_key:'hunter-test-secret'}}),env,{});
+  const status=async verify=>{const response=await handleServiceIntegrationRoute(req('/api/integrations/services/status?workspace_id=w1'+(verify?'&verify=1':''),{token}),env,{});return (await response.json()).providers.find(row=>row.provider==='hunter');};
+  assert.equal((await status(false)).credit_issue.code,'credits_exhausted');assert.equal((await status(true)).state,'bad');
+  remaining=10;assert.equal((await status(true)).credit_issue,null);assert.equal((await status(false)).state,'good');
+  assert.equal(calls.some(url=>/email-verifier|email-finder/.test(url)),false);
+ }finally{globalThis.fetch=original;}
+});
+
+sqliteTest('Hunter real-request payment failures persist across status reload and clear after recovery',async()=>{
+ const {env,token,DB}=await fixture(),original=globalThis.fetch;let statusCode=402;
+ globalThis.fetch=async url=>String(url).includes('/account')?new Response(JSON.stringify({data:{requests:{verifications:{remaining:42}}}})):new Response(JSON.stringify(statusCode===200?{data:{email:'marta@example.com',status:'valid'}}:{errors:[{id:'not_enough_credits'}]}),{status:statusCode});
+ try{
+  await handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'PUT',token,body:{provider:'hunter',api_key:'hunter-test-secret'}}),env,{});
+  await handleServiceIntegrationRoute(req('/api/integrations/services/hunter/settings?workspace_id=w1',{method:'PUT',token,body:{enabled:true}}),env,{});
+  const check=async()=>{const r=await handleServiceIntegrationRoute(req('/api/integrations/services/status?workspace_id=w1',{token}),env,{});return (await r.json()).providers.find(row=>row.provider==='hunter');};
+  for(const [route,body] of [['verify-email',{email:'marta@example.com'}],['find-email',{domain:'example.com',first_name:'Marta',last_name:'Smith'}]]){
+   statusCode=route==='verify-email'?402:403;const failed=await handleServiceIntegrationRoute(req('/api/integrations/services/hunter/'+route+'?workspace_id=w1',{method:'POST',token,body}),env,{});assert.equal(failed.status,statusCode);assert.match((await failed.json()).error,/credits exhausted or payment/);assert.equal((await check()).credit_issue.code,'credits_exhausted');
+   statusCode=200;await handleServiceIntegrationRoute(req('/api/integrations/services/hunter/verify-email?workspace_id=w1',{method:'POST',token,body:{email:'marta@example.com'}}),env,{});assert.equal((await check()).credit_issue,null);
+  }
+  assert.ok(DB.raw.prepare("SELECT count(*) AS count FROM audit_events WHERE entity_id='hunter' AND event_type='provider.credit_exhausted'").get().count>=2);
+ }finally{globalThis.fetch=original;}
+});
+
+sqliteTest('Hunter authentication failures and ordinary rate limits do not become payment alerts',async()=>{
+ const {env,token}=await fixture(),original=globalThis.fetch;let failure=0;
+ globalThis.fetch=async url=>String(url).includes('/account')?new Response(JSON.stringify({data:{requests:{verifications:{remaining:null,available:0,used:0}}}})):new Response(JSON.stringify({errors:[{id:failure===429?'rate_limit_exceeded':'invalid_api_key'}]}),{status:failure});
+ try{
+  await handleServiceIntegrationRoute(req('/api/integrations/services/provider?workspace_id=w1',{method:'PUT',token,body:{provider:'hunter',api_key:'hunter-test-secret'}}),env,{});await handleServiceIntegrationRoute(req('/api/integrations/services/hunter/settings?workspace_id=w1',{method:'PUT',token,body:{enabled:true}}),env,{});
+  for(failure of [401,403,429]){
+   const r=await handleServiceIntegrationRoute(req('/api/integrations/services/hunter/verify-email?workspace_id=w1',{method:'POST',token,body:{email:'marta@example.com'}}),env,{});assert.equal(r.status,failure);
+   const status=await handleServiceIntegrationRoute(req('/api/integrations/services/status?workspace_id=w1',{token}),env,{});assert.equal((await status.json()).providers.find(row=>row.provider==='hunter').credit_issue,null);
+  }
+ }finally{globalThis.fetch=original;}
+});
 async function payload(response){return response.json();}
 
 sqliteTest('owner save encrypts Apollo key, returns only a hint, and authenticated runtime receives the customer credential',async()=>{

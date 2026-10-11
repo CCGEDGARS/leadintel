@@ -29,10 +29,19 @@ test('confirmed upstream Apollo billing failures identify who must restore credi
 });
 
 test('each connected AI provider with a confirmed credit failure gets its own red card',()=>{
-  const context={isOwner:()=>true,signedIn:()=>true,providerErrors:{},busy:'',esc:value=>String(value),formatDate:()=>'-',formatDateTime:()=>'-'};
+  const context={isOwner:()=>true,signedIn:()=>true,providerErrors:{},busy:'',esc:value=>String(value),formatDate:()=>'-',formatDateTime:()=>'-',paymentError:()=>false};
   vm.runInNewContext(`${cardFunction}\nglobalThis.run=providerCard`,context);
   const config={provider:'gemini',name:'Google Gemini',model:'gemini-test',hint:'AI',placeholder:'key'};
   const card=context.run(config,{configured:true,active:true,credit_issue:{code:'credits_exhausted',source:'customer'}});
   assert.match(card,/ai-provider-card active credit-alert/);assert.match(card,/ai-provider-status credit-alert">Credits exhausted/);
   assert.match(card,/Google Gemini reported exhausted credits/);
+});
+
+test('connection failures are yellow while confirmed payment failures remain red',()=>{
+ const start=source.indexOf('function integrationTone('),end=source.indexOf('function providerCard(');
+ assert.ok(start>=0,'integration alert tone classifier is required');
+ const context={};vm.runInNewContext(source.slice(start,end)+'\nglobalThis.run=integrationTone',context);
+ assert.equal(context.run({state:'bad',label:'Connection error'}),'warn');
+ assert.equal(context.run({state:'bad',creditIssue:true}),'bad');
+ assert.equal(context.run({state:'good'}),'good');
 });

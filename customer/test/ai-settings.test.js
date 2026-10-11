@@ -107,7 +107,7 @@ test('settings assets are cache-busted and controls have individual borders and 
   assert.match(js,/SETTINGS_VERSION='20260930-openai-gpt-6-1-sol-v1'/);
   assert.match(js,/provider:'openai',name:'OpenAI',model:'gpt-6\.1-sol'/);
   assert.match(extension,/SETTINGS_VERSION='20261004-contact-policy-v1'/);
-  assert.match(js,/link\.href=`ai-settings\.css\?v=\$\{SETTINGS_VERSION\}&tool-links=20261011-v1`/);
+  assert.match(js,/link\.href=`ai-settings\.css\?v=\$\{SETTINGS_VERSION\}&tool-links=20261011-v1&alert-colours=20261011-v1`/);
   assert.match(extension,/link\.href=`service-settings-extension\.css\?v=\$\{SETTINGS_VERSION\}`/);
   assert.equal(fs.existsSync(cssPath),true,'ai-settings.css must exist');
   assert.equal(fs.existsSync(extensionCssPath),true,'service-settings-extension.css must exist');

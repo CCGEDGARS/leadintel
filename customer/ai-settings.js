@@ -29,7 +29,7 @@ async function api(path,options={}){
 function toast(message){const node=document.getElementById('toast');if(!node)return;node.textContent=message;node.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>node.classList.remove('show'),2800);}
 function injectCss(){
   if(document.querySelector('link[data-leadintel-asset="ai-settings-css"]'))return;
-  const link=document.createElement('link');link.rel='stylesheet';link.href=`ai-settings.css?v=${SETTINGS_VERSION}&tool-links=20261011-v1`;link.dataset.leadintelAsset='ai-settings-css';document.head.appendChild(link);
+  const link=document.createElement('link');link.rel='stylesheet';link.href=`ai-settings.css?v=${SETTINGS_VERSION}&tool-links=20261011-v1&alert-colours=20261011-v1`;link.dataset.leadintelAsset='ai-settings-css';document.head.appendChild(link);
 }
 function injectUi(){
   injectCss();
@@ -183,6 +183,8 @@ function handleModelModeChange(event){
   if(custom)custom.hidden=select.value!=='advanced';
   if(select.value==='advanced')custom?.querySelector('input')?.focus();
 }
+function integrationTone(check={}){return check.creditIssue?'bad':check.state==='bad'?'warn':check.state||'neutral';}
+function paymentError(value=''){return /(?:\b402\b|insufficient_quota|credit_balance_exhausted|billing_hard_limit_reached|payment_required|not_enough_credits|out_of_credits|credits_exhausted|(?:insufficient|exhausted|no|out of|zero)\s+(?:available\s+)?(?:credits?|quota|balance)|(?:credits?|quota|balance)\s+(?:is\s+)?(?:exhausted|depleted)|(?:payment|billing)\s+(?:failed|required|declined|limit)|subscription\s+(?:expired|unpaid))/i.test(String(value));}
 function providerCard(config,current){
   const configured=Boolean(current?.configured);const active=Boolean(current?.active);const owner=isOwner();const disabled=!signedIn()||!owner;
   const outOfCredits=configured&&current?.credit_issue?.code==='credits_exhausted';
@@ -198,7 +200,7 @@ function providerCard(config,current){
     <label class="ai-settings-field ai-custom-model" data-ai-custom-model="${config.provider}" ${mode==='advanced'?'':'hidden'}>Custom model ID<input data-ai-model="${config.provider}" type="text" value="${mode==='advanced'?esc(model):''}" autocomplete="off" spellcheck="false" placeholder="Enter the exact provider model ID" ${disabled?'disabled':''}></label>
     <div class="ai-model-note">Recommended is maintained by LeadIntel. Advanced accepts an exact model ID supported by your provider account.</div>
     <div class="ai-key-meta">${configured?`Saved key ${esc(current.key_hint||'')} · API key verified ${esc(formatDate(current.verified_at))}${usageMeta}`:'No credential stored yet.'}</div>
-    <div class="ai-provider-error" data-ai-error="${config.provider}" role="alert" ${providerError?'':'hidden'}>${esc(providerError)}</div>
+    <div class="ai-provider-error" data-payment-error="${paymentError(providerError)}" data-ai-error="${config.provider}" role="alert" ${providerError?'':'hidden'}>${esc(providerError)}</div>
     <div class="ai-provider-actions">
       <button class="ai-settings-btn primary" data-ai-action="save" data-provider="${config.provider}" type="button" ${disabled||busy===config.provider?'disabled':''}>${busy===config.provider?'Testing…':configured?'Save & test model':'Test & save'}</button>
       <button class="ai-settings-btn" data-ai-action="activate" data-provider="${config.provider}" type="button" ${disabled||!configured||active||busy===config.provider?'disabled':''}>${active?'Active provider ✓':'Set as active'}</button>
@@ -238,21 +240,25 @@ function renderIntegrationMonitoring(){
   if(!platform||!communication||!health)return;
   const apollo=integrationState(integrationStatus.apollo),firecrawl=integrationState(integrationStatus.firecrawl),googleAccount=workspaceProviderStatus('google'),microsoftAccount=workspaceProviderStatus('microsoft'),gmail=integrationState(integrationStatus.gmail),microsoftMail=integrationState(integrationStatus.microsoftMail);
   const checkedSuffix=integrationStatus.checkedAt?` · checked ${formatDateTime(integrationStatus.checkedAt)}`:'';
-  platform.innerHTML=`<article class="integration-card" data-integration="apollo"><div class="integration-card-head"><div><strong>Apollo.io</strong><small>Decision-maker and contact enrichment</small></div><span class="integration-status ${esc(apollo.state)}">${esc(apollo.label)}</span></div><p class="integration-purpose">Platform managed · LeadIntel never exposes the platform credential.</p><div class="integration-meta">${esc(apollo.detail+checkedSuffix)}</div></article>
-    <article class="integration-card" data-integration="firecrawl"><div class="integration-card-head"><div><strong>Firecrawl</strong><small>Website research and evidence verification</small></div><span class="integration-status ${esc(firecrawl.state)}">${esc(firecrawl.label)}</span></div><p class="integration-purpose">${firecrawl.source==='customer'?'Your Firecrawl key':'LeadIntel managed Firecrawl'}</p><div class="integration-meta">${esc(firecrawl.detail+checkedSuffix)}</div></article>
+  platform.innerHTML=`<article class="integration-card" data-integration="apollo"><div class="integration-card-head"><div><strong>Apollo.io</strong><small>Decision-maker and contact enrichment</small></div><span class="integration-status ${esc(integrationTone(apollo))}">${esc(apollo.label)}</span></div><p class="integration-purpose">Platform managed · LeadIntel never exposes the platform credential.</p><div class="integration-meta">${esc(apollo.detail+checkedSuffix)}</div></article>
+    <article class="integration-card" data-integration="firecrawl"><div class="integration-card-head"><div><strong>Firecrawl</strong><small>Website research and evidence verification</small></div><span class="integration-status ${esc(integrationTone(firecrawl))}">${esc(firecrawl.label)}</span></div><p class="integration-purpose">${firecrawl.source==='customer'?'Your Firecrawl key':'LeadIntel managed Firecrawl'}</p><div class="integration-meta">${esc(firecrawl.detail+checkedSuffix)}</div></article>
     <article class="integration-card" data-integration="hunter"><div class="integration-card-head"><div><strong>Hunter</strong><small>Email verification</small></div><span class="integration-status neutral">Not connected</span></div><p class="integration-purpose">Connect your Hunter account for email verification.</p><div class="integration-meta">Optional customer-owned integration</div></article>`;
-  communication.innerHTML=`<article class="integration-card workspace-provider-card" data-integration="google"><div class="integration-card-head"><div><strong>Google Account</strong><small>Optional workspace sign-in</small></div><span class="integration-status ${esc(googleAccount.state)}">${esc(googleAccount.label)}</span></div><p class="integration-purpose">Choose Google only if you want to use a Google account for LeadIntel workspace access. Gmail is connected separately.</p><div class="integration-meta">${esc(googleAccount.detail+checkedSuffix)}</div>${workspaceProviderAction('google')}</article>
-    <article class="integration-card workspace-provider-card" data-integration="microsoft-account"><div class="integration-card-head"><div><strong>Microsoft Account</strong><small>Optional workspace sign-in</small></div><span class="integration-status ${esc(microsoftAccount.state)}">${esc(microsoftAccount.label)}</span></div><p class="integration-purpose">Choose Microsoft only if you want to use a Microsoft account for LeadIntel workspace access. Microsoft 365 Mail is connected separately.</p><div class="integration-meta">${esc(microsoftAccount.detail+checkedSuffix)}</div>${workspaceProviderAction('microsoft')}</article>
-    <article class="integration-card" data-integration="gmail"><div class="integration-card-head"><div><strong>Gmail</strong><small>Optional outbound delivery and reply synchronization</small></div><span class="integration-status ${esc(gmail.state)}">${esc(gmail.label)}</span></div><p class="integration-purpose">Mailbox connection is optional and separate from workspace sign-in.</p><div class="integration-meta">${esc(gmail.detail+checkedSuffix)}</div></article>
-    <article class="integration-card microsoft-mail-card" data-integration="microsoft-mail"><div class="integration-card-head"><div><strong>Microsoft 365 Mail</strong><small>Optional human-approved outbound delivery</small></div><span class="integration-status ${esc(microsoftMail.state)}">${esc(microsoftMail.label)}</span></div><p class="integration-purpose">Microsoft Graph · send-only access. LeadIntel cannot read your inbox.</p><div class="integration-meta">${esc(microsoftMail.detail+checkedSuffix)}</div>${microsoftMailActions(microsoftMail)}</article>`;
+  communication.innerHTML=`<article class="integration-card workspace-provider-card" data-integration="google"><div class="integration-card-head"><div><strong>Google Account</strong><small>Optional workspace sign-in</small></div><span class="integration-status ${esc(integrationTone(googleAccount))}">${esc(googleAccount.label)}</span></div><p class="integration-purpose">Choose Google only if you want to use a Google account for LeadIntel workspace access. Gmail is connected separately.</p><div class="integration-meta">${esc(googleAccount.detail+checkedSuffix)}</div>${workspaceProviderAction('google')}</article>
+    <article class="integration-card workspace-provider-card" data-integration="microsoft-account"><div class="integration-card-head"><div><strong>Microsoft Account</strong><small>Optional workspace sign-in</small></div><span class="integration-status ${esc(integrationTone(microsoftAccount))}">${esc(microsoftAccount.label)}</span></div><p class="integration-purpose">Choose Microsoft only if you want to use a Microsoft account for LeadIntel workspace access. Microsoft 365 Mail is connected separately.</p><div class="integration-meta">${esc(microsoftAccount.detail+checkedSuffix)}</div>${workspaceProviderAction('microsoft')}</article>
+    <article class="integration-card" data-integration="gmail"><div class="integration-card-head"><div><strong>Gmail</strong><small>Optional outbound delivery and reply synchronization</small></div><span class="integration-status ${esc(integrationTone(gmail))}">${esc(gmail.label)}</span></div><p class="integration-purpose">Mailbox connection is optional and separate from workspace sign-in.</p><div class="integration-meta">${esc(gmail.detail+checkedSuffix)}</div></article>
+    <article class="integration-card microsoft-mail-card" data-integration="microsoft-mail"><div class="integration-card-head"><div><strong>Microsoft 365 Mail</strong><small>Optional human-approved outbound delivery</small></div><span class="integration-status ${esc(integrationTone(microsoftMail))}">${esc(microsoftMail.label)}</span></div><p class="integration-purpose">Microsoft Graph · send-only access. LeadIntel cannot read your inbox.</p><div class="integration-meta">${esc(microsoftMail.detail+checkedSuffix)}</div>${microsoftMailActions(microsoftMail)}</article>`;
   for(const card of [...platform.querySelectorAll('[data-integration]'),...communication.querySelectorAll('[data-integration]')])card.insertAdjacentHTML('beforeend',globalThis.LeadIntelToolAccountLinks?.html(card.dataset.integration)||'');
   const activeAi=Boolean(status.providers.find(item=>item.active&&item.configured));
   const deliveryReady=gmail.state==='good'||microsoftMail.state==='good';
   const critical=[activeAi,signedIn(),deliveryReady,apollo.state==='good',firecrawl.state==='good'];const healthy=critical.filter(Boolean).length;
-  const creditAlerts=[...status.providers.filter(item=>item.configured&&item.credit_issue?.code==='credits_exhausted').map(item=>item.name),...(apollo.creditIssue?['Apollo.io']:[]),...(firecrawl.creditIssue?['Firecrawl']:[])];
+  const serviceRows=signedIn()&&window.LeadIntelServiceIntegrationStatus?.workspace_id===workspace()?.id?window.LeadIntelServiceIntegrationStatus?.providers||[]:[];
+  const hunter=serviceRows.find(row=>row.provider==='hunter');
+  const hunterPayment=hunter?.credit_issue?.code==='credits_exhausted'&&hunter.credit_issue.source===hunter.source;
+  const creditAlerts=[...status.providers.filter(item=>item.configured&&item.credit_issue?.code==='credits_exhausted').map(item=>item.name),...(apollo.creditIssue?['Apollo.io']:[]),...(firecrawl.creditIssue?['Firecrawl']:[]),...(hunterPayment?['Hunter']:[])];
   const checked=integrationStatus.checkedAt?`Last checked ${formatDateTime(integrationStatus.checkedAt)}`:'Run diagnostics to check all critical integrations.';
-  health.classList.toggle('credit-alert',creditAlerts.length>0);
-  health.querySelector('.integration-summary-copy').innerHTML=`<span>System health</span><strong>${creditAlerts.length?`Credit alert: ${esc(creditAlerts.join(', '))}`:signedIn()?`${healthy}/5 critical checks passing`:'Sign in to run workspace diagnostics'}</strong><small>${esc(checked)}</small>`;
+  const connectionAlerts=[apollo,firecrawl,gmail,microsoftMail].some(check=>check.state==='bad'&&!check.creditIssue)||serviceRows.some(row=>row.state==='bad'&&row.credit_issue?.code!=='credits_exhausted');
+  health.classList.toggle('credit-alert',creditAlerts.length>0);health.classList.toggle('connection-alert',creditAlerts.length===0&&connectionAlerts);
+  health.querySelector('.integration-summary-copy').innerHTML=`<span>System health</span><strong>${creditAlerts.length?`Payment alert: ${esc(creditAlerts.join(', '))}`:signedIn()?`${connectionAlerts?'Connection needs attention · ':''}${healthy}/5 critical checks passing`:'Sign in to run workspace diagnostics'}</strong><small>${esc(checked)}</small>`;
   const button=document.getElementById('test-all-integrations');if(button){button.disabled=!signedIn()||integrationStatus.checking;button.textContent=integrationStatus.checking?'Testing…':'Test all integrations';}
 }
 async function handleCommunicationAction(event){
@@ -303,6 +309,7 @@ async function checkApolloStatus(){
     const configured=Boolean(payload.configured||apollo?.configured);
     if(configured&&((dailyLimit>0&&daily>=dailyLimit)||(monthlyLimit>0&&monthly>=monthlyLimit)))return {state:'bad',label:'Credit limit reached',creditIssue:true,detail:`Workspace Apollo credit limit reached: ${daily}/${dailyLimit} today · ${monthly}/${monthlyLimit} this month. Ask the workspace owner to review the enrichment policy.`};
     if(apollo?.credit_issue?.code==='credits_exhausted'&&apollo.credit_issue.source===apollo.source)return {state:'bad',label:'Credits exhausted',creditIssue:true,detail:apollo.source==='managed'?'LeadIntel managed Apollo reported exhausted credits or a billing limit. LeadIntel must restore service.':'Your Apollo account reported exhausted credits or a billing limit. Check your Apollo plan and billing.'};
+    if(!service.response.ok||apollo?.state==='bad')return {state:'bad',label:'Connection error',detail:apollo?.metadata?.error||service.payload?.error||'Apollo connection could not be verified.'};
     return configured?{state:'good',label:'Operational',detail:`Platform managed · usage ${daily}${dailyLimit?`/${dailyLimit}`:''} today · ${monthly}${monthlyLimit?`/${monthlyLimit}`:''} this month`}:{state:'bad',label:'Not configured',detail:'LeadIntel enrichment service is not configured.'};
   }catch(error){return {state:'bad',label:'Unavailable',detail:`Apollo status check failed · ${String(error.message||error).slice(0,120)}`};}
 }
@@ -380,7 +387,7 @@ async function saveProvider(provider){
     await refreshAllStatus();window.dispatchEvent(new CustomEvent('leadintel:ai-provider-changed',{detail:{provider:payload.provider,model:payload.model}}));
   }catch(error){
     providerErrors[provider]=error.message;
-    const errorNode=document.querySelector(`[data-ai-error="${provider}"]`);if(errorNode){errorNode.textContent=error.message;errorNode.hidden=false;}
+    const errorNode=document.querySelector(`[data-ai-error="${provider}"]`);if(errorNode){errorNode.textContent=error.message;errorNode.dataset.paymentError=String(paymentError(error.message));errorNode.hidden=false;}
     toast(error.message);
   }finally{if(busy===provider)busy='';setProviderSaveBusy(provider,false);}
 }
@@ -397,7 +404,9 @@ async function disconnectProvider(provider){
   }catch(error){toast(error.message);}finally{busy='';render();}
 }
 
+window.LeadIntelIntegrationAlertTone=integrationTone;window.LeadIntelPaymentError=paymentError;
 injectUi();
+window.addEventListener('leadintel:service-status',()=>renderIntegrationMonitoring());
 window.addEventListener('leadintel:server-ready',()=>refreshAllStatus());
 window.addEventListener('leadintel:workspace-changed',()=>refreshAllStatus());
 window.addEventListener('leadintel:microsoft-mail-status',()=>{integrationStatus.microsoftMail=microsoftMailStatus();renderIntegrationMonitoring();});

@@ -47,7 +47,7 @@ test('a confirmed customer balance is distinguished from a paid search check',as
 test('Health reads saved Discovery HTTP 402 and keeps extension badges from hiding it',()=>{
   assert.match(discovery,/window\.LeadIntelDiscoveryUI\.firecrawlHealth=/);
   assert.match(extension,/window\.LeadIntelIntegrationHealth\?\.firecrawl/);
-  assert.match(extension,/badge\.textContent=observed\?\.label\|\|statusLabel\(row\)/);
+  assert.match(extension,/badge\.textContent=payment\?'Credits exhausted':observed\?\.label\|\|statusLabel\(row\)/);
   assert.match(extension,/Firecrawl needs attention/);
   assert.match(source,/window\.LeadIntelIntegrationHealth=\{apollo,firecrawl\}/);
 });
