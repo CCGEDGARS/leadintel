@@ -9,7 +9,7 @@ const OPERATING_ROLES=new Set(['owner','researcher','sales']);
 const uuid=()=>crypto.randomUUID();
 const json=(value,status=200,headers={})=>new Response(JSON.stringify(redactProtectedData(value)),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...headers}});
 const error=(message,status,headers,extra={})=>json({error:message,...extra},status,headers);
-function clean(value,max=8000){return String(value??'').replace(/[\u0000-\u001f\u007f]+/g,' ').trim().slice(0,max);}
+function clean(value,max=8000){return String(value??'').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]+/g,' ').trim().slice(0,max);}
 async function sessionUser(request,env){const token=cookieValue(request,'leadintel_session');if(!token)return null;const tokenHash=await sha256(token);return env.DB.prepare(`SELECT users.id,users.email,users.display_name,users.role FROM sessions JOIN users ON users.id=sessions.user_id WHERE sessions.token_hash=? AND sessions.expires_at>datetime('now')`).bind(tokenHash).first();}
 async function requireMember(request,env,workspaceId){if(!workspaceId)return {error:'workspace_id is required',status:400};const user=await sessionUser(request,env);if(!user)return {error:'Authentication required',status:401};const member=await env.DB.prepare(`SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?`).bind(workspaceId,user.id).first();if(!member)return {error:'Workspace access denied',status:403};if(!OPERATING_ROLES.has(String(member.role||'').toLowerCase()))return {error:'Workspace role is not permitted',status:403};return {user,member};}
 async function conversation(env,workspaceId,id){return env.DB.prepare(`SELECT id,workspace_id,title,created_at,updated_at FROM copilot_conversations WHERE id=? AND workspace_id=?`).bind(id,workspaceId).first();}
@@ -44,10 +44,18 @@ export async function handleCopilotRoute(request,env,cors={}){
     const recent=await env.DB.prepare(`SELECT COUNT(*) AS count FROM copilot_messages WHERE workspace_id=? AND user_id=? AND role='user' AND created_at>=datetime('now','-10 minutes')`).bind(workspaceId,access.user.id).first();if(Number(recent?.count)>=10)return error('Support request limit reached. Wait a few minutes; official billing links remain available.',429,cors,{code:'SUPPORT_RATE_LIMIT'});
     let conversationId=clean(body.conversation_id,180);let convo=null;if(conversationId){convo=await conversation(env,workspaceId,conversationId);if(!convo)return error('Copilot conversation not found',404,cors);}else{conversationId=uuid();await env.DB.prepare(`INSERT INTO copilot_conversations(id,workspace_id,created_by,title) VALUES(?,?,?,?)`).bind(conversationId,workspaceId,access.user.id,clean(redactProtectedData(message),120)).run();convo=await conversation(env,workspaceId,conversationId);}
     const prior=await messages(env,workspaceId,conversationId);await env.DB.prepare(`INSERT INTO copilot_messages(id,workspace_id,conversation_id,user_id,role,content,metadata_json) VALUES(?,?,?,?, 'user',?, '{}')`).bind(uuid(),workspaceId,conversationId,access.user.id,clean(redactProtectedData(message),8000)).run();
-    const turn=await runCopilotTurn(env,{workspaceId,userId:access.user.id,role:access.member.role,conversation:prior,question:message,currentScreen:screen});await persistDiagnosticSnapshot(env,{workspaceId,diagnostics:turn.diagnostics||[]}).catch(()=>{});
-    const proposals=[],savedMemories=[];
-    const metadata={skill_ids:turn.skill_ids||[],sources:turn.sources||[],action_proposal_ids:proposals.map(item=>item.id),research_used:Boolean(turn.research_used),provider:turn.provider||{},usage:turn.usage||{}};await env.DB.prepare(`INSERT INTO copilot_messages(id,workspace_id,conversation_id,user_id,role,content,metadata_json) VALUES(?,?,?,?, 'assistant',?,?)`).bind(uuid(),workspaceId,conversationId,null,clean(turn.answer,12000),JSON.stringify(redactProtectedData(metadata))).run();await env.DB.prepare(`UPDATE copilot_conversations SET updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?`).bind(conversationId,workspaceId).run();
-    return json({...turn,action_proposals:proposals,memory_candidates:savedMemories,conversation_id:conversationId},200,cors);
+    const execute=async(onProgress=()=>{})=>{
+      const turn=await runCopilotTurn(env,{workspaceId,userId:access.user.id,role:access.member.role,conversation:prior,question:message,currentScreen:screen,onProgress});await persistDiagnosticSnapshot(env,{workspaceId,diagnostics:turn.diagnostics||[]}).catch(()=>{});
+      const proposals=[],savedMemories=[];
+      const metadata={skill_ids:turn.skill_ids||[],sources:turn.sources||[],action_proposal_ids:[],research_used:Boolean(turn.research_used),research_status:turn.research_status||'not_needed',research_passes:turn.research_passes||0,provider:turn.provider||{},usage:turn.usage||{}};await env.DB.prepare(`INSERT INTO copilot_messages(id,workspace_id,conversation_id,user_id,role,content,metadata_json) VALUES(?,?,?,?, 'assistant',?,?)`).bind(uuid(),workspaceId,conversationId,null,clean(turn.answer,12000),JSON.stringify(redactProtectedData(metadata))).run();await env.DB.prepare(`UPDATE copilot_conversations SET updated_at=CURRENT_TIMESTAMP WHERE id=? AND workspace_id=?`).bind(conversationId,workspaceId).run();
+      return {...turn,action_proposals:proposals,memory_candidates:savedMemories,conversation_id:conversationId};
+    };
+    if(request.headers.get('Accept')?.includes('text/event-stream')){
+      let closed=false;const encoder=new TextEncoder();
+      const stream=new ReadableStream({async start(controller){const emit=(type,data)=>{if(!closed)controller.enqueue(encoder.encode(`event: ${type}\ndata: ${JSON.stringify(redactProtectedData(data))}\n\n`));};try{const result=await execute(progress=>emit('progress',{phase:progress.phase}));emit('result',result);}catch{emit('error',{error:'Ask LeadIntel could not complete this request. Please try again.'});}finally{if(!closed){closed=true;controller.close();}}},cancel(){closed=true;}});
+      return new Response(stream,{headers:{...cors,'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
+    }
+    return json(await execute(),200,cors);
   }
 
   const actionMatch=path.match(/^\/api\/copilot\/actions\/([^/]+)\/(confirm|reject)$/);

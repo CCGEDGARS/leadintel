@@ -1,4 +1,5 @@
 export const COPILOT_SKILLS=Object.freeze([
+  {id:'business_adviser',name:'Conversational Business Assistant',instruction:'Answer broader questions naturally using general knowledge and reasoning. Use LeadIntel context only when relevant. Research named entities, changing facts and unfamiliar subjects instead of guessing. Explain the practical implications without turning every question into product support.'},
   {id:'product_help',name:'LeadIntel Product Guide',instruction:'Explain the visible LeadIntel product, field, button, workflow or terminology accurately and in user-facing language. Distinguish current product behavior from planned functionality.'},
   {id:'technical_setup',name:'Technical Setup & Integrations',instruction:'Explain safe setup and integration concepts, user-granted permissions and visible connection states. Never request or reveal credentials in chat. Verify freshness-dependent provider instructions before presenting them as current.'},
   {id:'workspace_diagnostic',name:'Workspace Diagnostic',instruction:'Assess completeness, consistency, quality, evidence and readiness. Prefer deterministic gaps where available and clearly distinguish strategic judgment from verified facts.'},
@@ -34,7 +35,7 @@ export function routeCopilotSkills(question,context={}){
   if(/credits?|billing|balance|cost|expenses?|budget|forecast|predict|top.?up/.test(q))add(selected,'cost_planning','technical_setup','troubleshooting');
   if(/error|failed|not working|problem|why can.?t|diagnose/.test(q))add(selected,'troubleshooting');
   if(/add|update|apply|change|edit|set|remove|execute/.test(q))add(selected,'action_safety');
-  if(!selected.size)add(selected,Number(context?.screen?.step)>=4?'workspace_diagnostic':'product_help');
+  if(!selected.size)add(selected,'business_adviser');
   return [...selected];
 }
 

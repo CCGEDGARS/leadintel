@@ -87,6 +87,13 @@ test('contact research labels generated summaries so contact extraction requires
   assert.equal(result.results[0].url,url);
 });
 
+test('business assistant research uses general primary-source evidence rather than buying-signal instructions',async()=>{
+ let request;const url='https://company.example/project';
+ const payload={output:[{type:'web_search_call',action:{sources:[{url}]}},{type:'message',content:[{type:'output_text',text:JSON.stringify({results:[{title:'Project',url,description:'Official details',date:''}]})}]}]};
+ await searchWeb({apiKey:'sk-test',query:'Explain this public project',purpose:'assistant_research',fetchImpl:async(_url,options)=>{request=JSON.parse(options.body);return new Response(JSON.stringify(payload));}});
+ assert.match(request.instructions,/general facts|official documentation/);assert.match(request.instructions,/Inspect underlying sources/);assert.equal(request.max_tool_calls,4);assert.equal(request.tool_choice,'required');
+});
+
 test('OpenAI web search sanitizes upstream errors and never leaks provider secrets',async()=>{
   const fetchImpl=async()=>new Response(JSON.stringify({error:{message:'secret details sk-live-do-not-leak',type:'invalid_request_error',code:'invalid_tool'}}),{status:400,headers:{'Content-Type':'application/json'}});
   await assert.rejects(()=>searchWeb({apiKey:'sk-live-do-not-leak',model:'gpt-5.6',query:'office expansion Latvia',fetchImpl}),error=>{
