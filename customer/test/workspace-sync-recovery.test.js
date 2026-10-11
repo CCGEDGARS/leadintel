@@ -2,8 +2,8 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const persistence=fs.readFileSync(require.resolve('../workspace-persistence.js'),'utf8');
 const bridgeSource=fs.readFileSync(require.resolve('../server-bridge.js'),'utf8');
 const MAIN='leadintel_customer_v2_state',RECOVERY='leadintel_customer_v2_sync_recovery_v1';
-function load(fetchImpl,{withBridge=false,quota=false,recoveryLimit=Infinity,withBudget=false}={}){
- const values=new Map([[MAIN,JSON.stringify({website:'https://seller.example',answers:{offer:'Local offer'}})],['leadintel_customer_v2_workspace','w1']]);
+function load(fetchImpl,{withBridge=false,quota=false,recoveryLimit=Infinity,withBudget=false,sharedValues}={}){
+ const values=sharedValues||new Map([[MAIN,JSON.stringify({website:'https://seller.example',answers:{offer:'Local offer'}})],['leadintel_customer_v2_workspace','w1']]);
  const events=[],timers=new Map();let id=0;
  const storage={getItem:key=>values.get(key)??null,setItem(key,value){if(key===RECOVERY&&(quota||Buffer.byteLength(String(value))>recoveryLimit))throw new Error('Quota exceeded');values.set(key,String(value));},removeItem:key=>values.delete(key)};
  const root={console,URL,Request,Response,Headers,FormData,Blob,Date,Promise,localStorage:storage,sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}},location:{href:'https://leadintel.ccgroup.lv/customer/',reload(){events.push('reload');}},fetch:fetchImpl,document:{readyState:'loading',getElementById:()=>null,querySelector:()=>null,addEventListener(){}},addEventListener(){},dispatchEvent:e=>events.push(e.type),setTimeout(fn){timers.set(++id,fn);return id;},clearTimeout:id=>timers.delete(id),CustomEvent:class{constructor(type){this.type=type;}}};
@@ -12,7 +12,7 @@ function load(fetchImpl,{withBridge=false,quota=false,recoveryLimit=Infinity,wit
  vm.runInNewContext(fs.readFileSync(require.resolve('../workspace-sync.js'),'utf8'),root);
  vm.runInNewContext(persistence,root);
  if(withBridge){vm.runInNewContext(bridgeSource.replace('root.LeadIntelServerBridge=bridge;', 'root.__hydrate=hydrateAuthenticated;root.LeadIntelServerBridge=bridge;'),root);Object.assign(root.LeadIntelServerBridge,{ready:true,session:{authenticated:true},workspace:{id:'w1'},stateVersion:3,conflict:true,conflictState:{version:3,payload:{main:{website:'old.example'}}}});}
- return {root,values,events};
+ return {root,values,events,timers};
 }
 const endpoint='https://leadintel.ccgroup.lv/api/customer/state?workspace_id=w1';
 test('first-party saves update the baseline and do not repeatedly autosave an unsaved draft',async()=>{
@@ -256,4 +256,57 @@ test('lossless recovery migrates legacy records and rejects mismatched workspace
  const B=require('../state-budget.js'),legacy={workspace_id:'w1',original:{notes:'Legacy evidence '.repeat(10000)}};const record={...legacy,local:legacy.original,server:{notes:legacy.original.notes}};
  const packed=B.packRecoveryRecord(record);assert.deepEqual(B.restoreRecoveryRecord(packed),record);assert.equal(B.restoreRecoveryRecord(legacy),legacy);
  assert.throws(()=>B.restoreRecoveryRecord({...packed,workspace_id:'other'}),/workspace does not match/);
+});
+
+test('multiple harmless save collisions reconcile every revision and preserve all local and server evidence',async()=>{
+ const puts=[];let server;
+ const {root,values}=load(async(input,options)=>{
+  const put=JSON.parse(options.body);puts.push(put);
+  if(puts.length<=2){server={version:3+puts.length,payload:{...server.payload,discovery:{people:[...(server.payload.discovery.people||[]),{id:'buyer-'+puts.length,name:'Remote buyer '+puts.length}]}}};return new Response(JSON.stringify({current:server}),{status:409});}
+  return new Response(JSON.stringify({saved:true,version:6}));
+ },{withBridge:true});
+ const base=establishBase(root,values);server={version:3,payload:base};values.set(MAIN,JSON.stringify({...base.main,answers:{offer:'Keep local edit'}}));Object.assign(root.LeadIntelServerBridge,{conflict:false});
+ const result=await root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});
+ assert.equal(result.saved,true);assert.deepEqual(puts.map(p=>p.version),[3,4,5]);assert.equal(puts[2].payload.main.answers.offer,'Keep local edit');assert.equal(puts[2].payload.discovery.people.length,2);assert.equal(root.LeadIntelServerBridge.conflict,false);assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),false);
+});
+test('continuous safe save collisions stay pending rather than inventing a conflicting edit',async()=>{
+ let version=3,server,writes=0;const {root,values}=load(async()=>{writes++;server={version:++version,payload:{...server.payload,discovery:{people:[{id:'buyer',name:'Remote buyer '+version}]}}};return new Response(JSON.stringify({current:server}),{status:409});},{withBridge:true});
+ const base=establishBase(root,values);server={version:3,payload:base};values.set(MAIN,JSON.stringify({...base.main,answers:{offer:'Keep local edit'}}));Object.assign(root.LeadIntelServerBridge,{conflict:false});
+ const result=await root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});
+ assert.equal(result.saved,false);assert.equal(result.retryable,true);assert.equal(root.LeadIntelServerBridge.conflict,false);assert.ok(writes<=4);assert.equal(JSON.parse(values.get(MAIN)).answers.offer,'Keep local edit');assert.equal(JSON.parse(values.get('leadintel_customer_v2_discovery')).people[0].name,'Remote buyer '+version);assert.ok(values.get(RECOVERY));
+});
+test('overlapping changes on a later collision still preserve both versions and never auto-choose',async()=>{
+ let server,writes=0;const {root,values}=load(async()=>{writes++;server={version:3+writes,payload:{...server.payload,...(writes===1?{discovery:{people:[{id:'remote',name:'Remote buyer'}]}}:{main:{...server.payload.main,answers:{offer:'Real remote competing edit'}}})}};return new Response(JSON.stringify({current:server}),{status:409});},{withBridge:true});
+ const base=establishBase(root,values);server={version:3,payload:base};values.set(MAIN,JSON.stringify({...base.main,answers:{offer:'Local competing edit'}}));Object.assign(root.LeadIntelServerBridge,{conflict:false});
+ assert.equal((await root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true})).conflict,true);assert.equal(writes,2);assert.equal(root.LeadIntelServerBridge.conflictDetails.reason,'overlapping_changes');assert.equal(JSON.parse(values.get(MAIN)).answers.offer,'Local competing edit');assert.equal(JSON.parse(values.get(RECOVERY)).server.payload.main.answers.offer,'Real remote competing edit');
+});
+test('a stale style-selection conflict clears safely on reload with local draft and new remote buyers preserved',async()=>{
+ let server;const {root,values}=load(async()=>new Response(JSON.stringify(server)),{withBridge:true});
+ const base=establishBase(root,values);base.outreach={messageStudio:{mode:'professional'},items:[]};values.set('leadintel_customer_v2_outreach',JSON.stringify(base.outreach));root.LeadIntelWorkspacePersistence.snapshotFromServerPayload(base,{workspaceId:'w1',version:3,localData:root.LeadIntelWorkspacePersistence.currentWorkspaceData(),dirty:false});
+ values.set('leadintel_customer_v2_outreach',JSON.stringify({...base.outreach,messageStudio:{mode:'friendly'}}));server={version:4,payload:{...base,outreach:{...base.outreach,messageStudio:{mode:'curiosity'}},discovery:{people:[{id:'new',name:'New remote buyer'}]}}};Object.assign(root.LeadIntelServerBridge,{conflict:false});
+ assert.equal(await root.__hydrate(),false);assert.equal(root.LeadIntelServerBridge.conflict,false);assert.equal(JSON.parse(values.get('leadintel_customer_v2_outreach')).messageStudio.mode,'friendly');assert.equal(JSON.parse(values.get('leadintel_customer_v2_discovery')).people[0].name,'New remote buyer');
+});
+
+test('same-origin tabs serialize saves and the waiting tab uses the acknowledged version',async()=>{
+ const puts=[],names=[];let releaseFirst,started;
+ const firstStarted=new Promise(resolve=>started=resolve),firstResponse=new Promise(resolve=>releaseFirst=resolve);
+ const fetch=async(input,options)=>{puts.push(JSON.parse(options.body));if(puts.length===1){started();await firstResponse;}return new Response(JSON.stringify({saved:true,version:puts.length+3}));};
+ const first=load(fetch,{withBridge:true}),second=load(fetch,{withBridge:true,sharedValues:first.values});
+ establishBase(first.root,first.values);let tail=Promise.resolve();
+ const locks={request(name,callback){names.push(name);const run=tail.then(callback);tail=run.catch(()=>{});return run;}};
+ for(const runtime of [first,second]){runtime.root.navigator={locks};Object.assign(runtime.root.LeadIntelServerBridge,{conflict:false,conflictState:null});}
+ first.values.set(MAIN,JSON.stringify({website:'https://seller.example',answers:{offer:'Edited offer'}}));
+ const a=first.root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});await firstStarted;
+ const b=second.root.LeadIntelServerBridge.saveNow({saveIntent:true,explicitSave:true});await new Promise(resolve=>setImmediate(resolve));
+ const beforeRelease=puts.length;releaseFirst();assert.equal((await a).saved,true);assert.equal((await b).saved,true);
+ assert.equal(beforeRelease,1,'second tab waits for the first cloud write');assert.deepEqual(puts.map(p=>p.version),[3,4]);assert.deepEqual(names,['leadintel:workspace-save:w1','leadintel:workspace-save:w1']);
+});
+test('safe contention remains pending and persistence schedules its next automatic save',async()=>{
+ const {root,values,timers}=load(async()=>new Response('{}'));establishBase(root,values);let calls=0;
+ values.set(MAIN,JSON.stringify({website:'https://seller.example',answers:{offer:'Edited offer'}}));
+ const status={textContent:''};root.document.getElementById=id=>id==='workspace-save-state'?status:null;
+ root.LeadIntelServerBridge={ready:true,session:{authenticated:true},workspace:{id:'w1'},conflict:false,saveNow:async()=>{calls++;return {saved:false,retryable:true,reason:'concurrent_save'};}};
+ assert.equal(await root.LeadIntelWorkspacePersistence.saveWorkspace({automatic:true}),false);
+ assert.match(status.textContent,/saving shortly/);assert.doesNotMatch(status.textContent,/failed|conflict/);assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),true);
+ assert.equal(timers.size,1,'next automatic attempt remains scheduled');[...timers.values()][0]();await new Promise(resolve=>setImmediate(resolve));assert.equal(calls,2);
 });

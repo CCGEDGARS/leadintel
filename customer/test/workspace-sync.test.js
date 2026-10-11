@@ -95,3 +95,12 @@ test('an explicit conflict choice preserves independent Profile, booking and tem
  }
  assert.equal(Sync.merge(b,l,r).safe,false,'automatic merging still blocks a real same-field conflict');
 });
+
+test('message style and viewed-company choices remain local while actual drafts and defaults stay protected',()=>{
+ const b=base();b.outreach={selectedDomain:'first.example',messageStudio:{mode:'professional',linkedinMode:'professional',defaultTemplates:{email:'professional'}}};
+ const l=structuredClone(b),r=structuredClone(b);l.outreach.selectedDomain='local.example';r.outreach.selectedDomain='remote.example';l.outreach.messageStudio.mode='friendly';r.outreach.messageStudio.mode='curiosity';l.outreach.messageStudio.linkedinMode='friendly';r.outreach.messageStudio.linkedinMode='original';
+ r.discovery.people.push({id:'new',name:'Remote researched buyer'});
+ const merged=Sync.merge(b,l,r);assert.equal(merged.safe,true);assert.equal(merged.payload.outreach.messageStudio.mode,'friendly');assert.equal(merged.payload.outreach.selectedDomain,'local.example');assert.equal(merged.payload.discovery.people.length,2);
+ l.outreach.messageStudio.defaultTemplates.email='friendly';r.outreach.messageStudio.defaultTemplates.email='curiosity';
+ assert.equal(Sync.merge(b,l,r).safe,false,'a saved default is a business setting, not temporary navigation');
+});
