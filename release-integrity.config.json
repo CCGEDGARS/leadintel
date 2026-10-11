@@ -952,7 +952,10 @@
         "mw-subject-update-all",
         "Save subject",
         "mw-updating-notice",
-        "Updating to "
+        "Updating to ",
+        "mw-subject-actions",
+        "Subject line actions",
+        "Update with AI"
       ]
     },
     {
@@ -966,7 +969,8 @@
         "async function updateSubjects",
         "stamp!==subjectStamp()",
         "Subject and current message saved to CRM.",
-        "subjectSetUndo"
+        "subjectSetUndo",
+        "subject-toolbar=20261011-v1"
       ]
     },
     {
@@ -978,7 +982,10 @@
         "mw-text-updating",
         "mw-text-updated",
         "mw-subject-category",
-        "prefers-reduced-motion"
+        "prefers-reduced-motion",
+        "min-height:38px",
+        "mw-subject-update-options",
+        "grid-template-columns:repeat(2,minmax(0,1fr))"
       ]
     },
     {
