@@ -50,6 +50,7 @@ test('composer is a full-width vertical layout with send below the textarea',()=
 
 test('sidebar entry is a premium branded copilot control',()=>{
   assert.match(loader,/Business & Research/);
+  assert.match(fs.readFileSync(new URL('../index.html',import.meta.url),'utf8'),/copilot-entry-subtitle">Business & Research/);
   assert.match(css,/\.leadintel-copilot-entry\{[^}]*border-radius\s*:\s*(1[4-9]|[2-9][0-9])px/s);
   assert.match(css,/\.leadintel-copilot-entry\{[^}]*background\s*:\s*(linear-gradient|radial-gradient)/s);
   assert.match(css,/\.leadintel-copilot-entry\{[^}]*box-shadow/s);
@@ -91,6 +92,6 @@ test('actual drawer displays research progress, prevents duplicate requests and 
  try{
   dom.window.LeadIntelServerBridge={workspace:{id:'w1'}};dom.window.LeadIntelWorkspacePersistence={isExplicitlySaved:()=>true,hasUnsavedChanges:()=>false};const ui=await import(`data:text/javascript;base64,${Buffer.from(source+'\n//progress-test').toString('base64')}`);let finish,calls=0;
   const panel=await ui.openCopilot({context:{currentCopilotScreenContext:()=>({step:6})},api:{bootstrapCopilot:async()=>({ai:{configured:true}}),sendCopilotMessage:async(payload,{onProgress})=>{calls++;onProgress({phase:'researching'});return new Promise(resolve=>finish=resolve);}}});const submit=()=>panel.querySelector('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));panel.querySelector('textarea').value='Research LKAB';submit();assert.equal(panel.querySelector('[data-copilot-status]').textContent,'Researching public sources…');assert.equal(panel.querySelector('.copilot-send').disabled,true);panel.querySelector('textarea').value='duplicate';submit();assert.equal(calls,1);
-  finish({answer:'Fact [1].\n\nPractical implication.',sources:[{title:'Official project',url:'https://company.example/project',date:'2026-10-11'}],research_used:true,research_status:'complete'});await new Promise(resolve=>setImmediate(resolve));assert.match(panel.querySelector('.copilot-message.is-assistant').textContent,/\n\n/);assert.equal(panel.querySelector('.copilot-source').textContent,'[1] Official project');assert.match(panel.querySelector('.copilot-source-date').textContent,/2026-10-11/);assert.equal(panel.querySelector('.copilot-send').disabled,false);
+  finish({answer:'**Fact** [1](https://company.example/project).\n\nPractical implication. [fake](https://invented.example)',sources:[{title:'Official project',url:'https://company.example/project',date:'2026-10-11'}],research_used:true,research_status:'complete'});await new Promise(resolve=>setImmediate(resolve));assert.match(panel.querySelector('.copilot-message.is-assistant').textContent,/Fact \[1\].\n\n/);assert.doesNotMatch(panel.querySelector('.copilot-message.is-assistant .copilot-message-text').textContent,/invented|\*\*/);assert.equal(panel.querySelector('.copilot-source').textContent,'[1] Official project');assert.match(panel.querySelector('.copilot-source-date').textContent,/2026-10-11/);assert.equal(panel.querySelector('.copilot-send').disabled,false);
  }finally{globalThis.window=prior.window;globalThis.document=prior.document;dom.window.close();}
 });

@@ -26,7 +26,8 @@ function ensureDrawer(){
 }
 
 function renderSources(host,sources=[]){const safe=(Array.isArray(sources)?sources:[]).filter(item=>safeUrl(item?.url)).slice(0,8);if(!safe.length)return;const wrap=node('div','copilot-sources');wrap.append(node('strong','','Sources'));for(const [index,item] of safe.entries()){const link=node('a','copilot-source',`[${index+1}] ${item.title||item.url}`);link.href=safeUrl(item.url);link.target='_blank';link.rel='noopener noreferrer';const row=node('div');row.append(link);if(item.date)row.append(node('small','copilot-source-date',' · '+item.date));wrap.appendChild(row);}host.appendChild(wrap);}
-function appendMessage(role,text,sources=[]){const host=drawer.querySelector('[data-copilot-messages]');const card=node('article',`copilot-message is-${role}`);card.append(node('span','copilot-message-role',role==='user'?'You':'LeadIntel'),node('p','copilot-message-text',text));renderSources(card,sources);host.appendChild(card);host.scrollTop=host.scrollHeight;}
+function readableAnswer(text,sources){return String(text||'').replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,(_match,label,url)=>sources.some(source=>safeUrl(source.url)===safeUrl(url))?`[${label}]`:'[unverified link]').replace(/\*\*([^*]+)\*\*/g,'$1');}
+function appendMessage(role,text,sources=[]){const host=drawer.querySelector('[data-copilot-messages]');const card=node('article',`copilot-message is-${role}`);card.append(node('span','copilot-message-role',role==='user'?'You':'LeadIntel'),node('p','copilot-message-text',role==='assistant'?readableAnswer(text,sources):text));renderSources(card,sources);host.appendChild(card);host.scrollTop=host.scrollHeight;}
 function setStatus(text){drawer.querySelector('[data-copilot-status]').textContent=String(text||'');}
 
 function renderProposals(){const host=drawer.querySelector('[data-copilot-proposals]');clear(host);}
