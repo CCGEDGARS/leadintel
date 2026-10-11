@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {runCopilotTurn,buildExternalResearchQuery} from '../src/copilot-service.js';
+import {runCopilotTurn,buildExternalResearchQuery,shouldUseExternalResearch} from '../src/copilot-service.js';
 const context={company:{name:'Seller',website:'https://seller.example'},markets:['Sweden'],crmSummary:{topCompanies:[{name:'PRIVATE-CRM'}]},profile:{private_notes:'PRIVATE-NOTE'},screen:{step:6}};
 const generated=value=>({text:JSON.stringify(value),provider:'test',model:'test',usage:{input_tokens:2,output_tokens:3}});
 const run=(provider,question)=>runCopilotTurn({COPILOT_TEST_CONTEXT:context,COPILOT_TEST_PROVIDER:provider},{workspaceId:'w',question});
@@ -23,5 +23,5 @@ test('empty research results never claim that evidence was verified',async()=>{
 });
 test('explicit no-browse request is respected and unrelated queries exclude seller context',async()=>{
  let searches=0;const result=await run({generate:async()=>generated({answer:'A general explanation.'}),search:async()=>{searches++;}},'Explain pricing strategy without web search');assert.equal(searches,0);assert.equal(result.research_used,false);
- assert.equal(buildExternalResearchQuery({question:'Tell me about LKAB',context}),'Tell me about LKAB');assert.match(buildExternalResearchQuery({question:'Research our market',context}),/Seller|Sweden/);
+ assert.equal(shouldUseExternalResearch({question:'Find one official LKAB source',skillIds:['market_intelligence']}),true);assert.equal(buildExternalResearchQuery({question:'Tell me about LKAB',context}),'Tell me about LKAB');assert.match(buildExternalResearchQuery({question:'Research our market',context}),/Seller|Sweden/);
 });
