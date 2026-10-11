@@ -1080,7 +1080,8 @@
         "verbatim-facts-v7",
         "Repeated slots consume their full weight",
         "function coreSellerFlags(",
-        "'investment of '"
+        "'investment of '",
+        "Required facts exceed the approved original budget"
       ]
     },
     {
@@ -1110,7 +1111,7 @@
       "contains": [
         "LeadIntelMessageEditor.validateCoreDraft(studio,context,draft)",
         "tailoringVersion=7",
-        "core-renderer=20261011-v2"
+        "core-renderer=20261011-v3"
       ]
     }
   ],
