@@ -112,3 +112,14 @@ test('mounted incomplete update cannot overwrite the working copy or report comp
   assert.equal(JSON.stringify(h.item()),before);assert.match(h.q('message-generation-status').textContent,/all five subjects.*positive business milestone/);
  }finally{h.w.close();}
 });
+
+test('restored Brutal wording budgets repeated factual fields before reporting an update ready',()=>{
+ const raw={...essentials,sender:'Edgars Untals',company:'ERCON',offer:'drawing development, metal manufacturing, installation and qualified workforce solutions',difference:'Our team brings more than 30 years of metalworking experience, including international projects in Scandinavia.',value:'reduce coordination burden through one full-service industrial project partner',meetingValue:'relevant production data and lessons from previous projects'};
+ const studio=S.normalize({mode:'brutal',essentials:raw}),c={...context(),sellerEvidence:[{url:'https://north.example/projects/tower',text:'We manufacture steel structures and provide installation for industrial projects.'}],trigger:{...context().trigger,summary:'Buyer is investing six billion kronor in a new sorting plant at Northport.'}};
+ assert.equal(E.needsPreparation(studio,c),true);
+ const limits=E.preparationWordLimits(studio,c);assert.ok(limits.value<E.fieldWords.value);
+ const prepared=E.preparedResponse({triggerSummary:'Buyer’s investment in a sorting plant at Northport',offer:'metal manufacturing and installation',value:'reduce coordination burden',difference:'Our team has more than 30 years of experience.',approach:'Project delivery',meetingValue:'relevant production data and lessons'},studio,c);
+ const ctx=E.preparedContext(studio,c,prepared),draft=E.tailor(studio,ctx);E.validateCoreDraft(studio,ctx,draft);
+ assert.ok(draft.message.split(/\s+/).length<=199);assert.match(draft.message,/For more than 30 years ERCON have taken steel/);
+ assert.equal(prepared.fields.difference,raw.difference);assert.equal(prepared.fields.approach,raw.approach);
+});

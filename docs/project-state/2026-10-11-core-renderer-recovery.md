@@ -9,6 +9,7 @@ The authenticated Friendly update completed with a generic Profile experience se
 - Preserve the approved experience voice when current seller fragments support its facts, and the Friendly conditional wrapper. Preserve cross-industry fallbacks and never default to the reference customer's steel, experience, dates or projects.
 - Derive positive status from the validated event excerpt; caller flags and invented project metadata cannot establish it.
 - Validate the finished current-source body and all five categories before application/proposal. Failure retains the prior draft and reports missing evidence.
+- Repeated factual slots are budgeted against the restored full experience frame before preparation; an otherwise-valid long Brutal draft cannot bypass the ceiling.
 - Version 7 and scoped cache keys reject legacy prepared fields. Saved/manual originals and persistent update Undo remain separate from explicit restoration.
 - Preserve concurrent PR512 source-based length adjustment. Short/Very short remain deliberate working alternatives.
 
