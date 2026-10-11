@@ -3,6 +3,12 @@
 <head>
   <script src="api-transport.js?v=20261004-first-party-session-v1"></script>
   <meta charset="utf-8">
+  <script src="account-cache.js?v=20261011-account-isolation-v1" onerror="document.documentElement.setAttribute('data-account-check','error')"></script>
+  <style>
+    html[data-account-check] body{visibility:hidden;pointer-events:none}
+    html[data-account-check]::after{content:"Loading your workspace…";position:fixed;inset:0;display:grid;place-items:center;background:#f5f7fa;color:#243247;font:16px system-ui;z-index:99999}
+    html[data-account-check="error"]::after{content:"Could not verify your workspace. Your data is preserved. Refresh to retry."}
+  </style>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="LeadIntel Customer Workspace — company intelligence onboarding and market strategy">
   <title>LeadIntel — Build Your Commercial Intelligence Strategy</title>
@@ -485,7 +491,7 @@
 
   <script defer src="workspace-sync.js?v=20261005-navigation-sync-v4&original-scripts=20261007-v1&linkedin-evidence=20261005-v1&conflict-choice=20261007-v1&sync-settled=20261007-v1&message-channels=20261007-v1&sync-contention=20261011-v1"></script>
   <script defer src="state-budget.js?v=20261009-workspace-section-sync-v1&lossless-recovery=20261009-v1&my-flows=20261010-v1&capacity-diagnostics=20261011-v1&bundle-sync=20261011-v1"></script>
-  <script defer src="server-bridge.js?v=20260925-apollo-buyer-search-v1&capacity-feedback=20261009-v1&conflict-choice=20261007-v1&sync-settled=20261007-v1&first-party-session=20261004&sync-recovery=20261004-v2&sync-baseline=20261005-v6&buyer-trace-sync=20261004-v1&delivery-policy-recovery=1&company-evidence=20261002-v1&lossless-recovery=20261009-v1&my-flows=20261010-v1&workspace-activity=20261011-v1&sync-contention=20261011-v1&bundle-sync=20261011-v1" data-server-bridge="true"></script>
+  <script defer src="server-bridge.js?v=20260925-apollo-buyer-search-v1&capacity-feedback=20261009-v1&conflict-choice=20261007-v1&sync-settled=20261007-v1&first-party-session=20261004&sync-recovery=20261004-v2&sync-baseline=20261005-v6&buyer-trace-sync=20261004-v1&delivery-policy-recovery=1&company-evidence=20261002-v1&lossless-recovery=20261009-v1&my-flows=20261010-v1&workspace-activity=20261011-v1&sync-contention=20261011-v1&bundle-sync=20261011-v1&account-isolation=20261011-v1" data-server-bridge="true"></script>
   <script defer src="brand-identity.js?v=20261009-sender-card-v1&meeting-platform=20261009-v1&section-sync=20261009-v1"></script>
   <div id="sender-identity-staging" hidden>
           <section class="panel brand-identity-panel" id="brand-identity" aria-labelledby="brand-identity-title">
