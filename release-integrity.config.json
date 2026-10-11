@@ -1001,6 +1001,32 @@
       "contains": [
         "outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&style-application=20261011-v1&"
       ]
+    },
+    {
+      "id": "settings-tool-account-shortcuts",
+      "type": "text",
+      "url": "/customer/tool-account-links.js",
+      "status": 200,
+      "contains": [
+        "LeadIntelToolAccountLinks",
+        "https://platform.openai.com/api-keys",
+        "https://platform.claude.com/settings/billing",
+        "https://aistudio.google.com/billing",
+        "https://calendly.com/integrations/api_webhooks",
+        "Plans & credits",
+        "rel=\"noopener noreferrer\""
+      ]
+    },
+    {
+      "id": "settings-calendly-room",
+      "type": "text",
+      "url": "/customer/ai-settings.css",
+      "status": 200,
+      "contains": [
+        ".meeting-platform-note{display:block;width:100%",
+        ".tool-account-links{display:flex;flex-wrap:wrap",
+        ".integration-grid>[data-integration=\"calendly\"]{grid-column:1 / -1}"
+      ]
     }
   ],
   "retry": {

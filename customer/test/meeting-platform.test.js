@@ -30,7 +30,7 @@ test('settings selection saves immediately, reopens correctly and follows worksp
  const fs=require('node:fs'),path=require('node:path'),{JSDOM}=require('jsdom');
  const root=path.join(__dirname,'..'),dom=new JSDOM('<div class="top-actions"></div><div id="toast"></div>',{url:'https://example.test/customer/',runScripts:'outside-only'}),w=dom.window;
  let identity={meetingPlatform:'zoom'};w.LeadIntelSenderIdentity={get:()=>identity,setMeetingPlatform:value=>{identity=B.normalize({...identity,meetingPlatform:value});w.localStorage.setItem('identity',JSON.stringify(identity));w.dispatchEvent(new w.CustomEvent('leadintel:sender-identity-changed'));}};
- w.eval(fs.readFileSync(path.join(root,'personal-linkedin.js'),'utf8'));w.eval(fs.readFileSync(path.join(root,'ai-settings.js'),'utf8').replace(/^import .*;\n/,''));const q=id=>w.document.getElementById(id);q('open-settings').click();
+ w.eval(fs.readFileSync(path.join(root,'personal-linkedin.js'),'utf8'));w.eval(fs.readFileSync(path.join(root,'ai-settings.js'),'utf8').replace(/^import .*;\s*$/gm,''));const q=id=>w.document.getElementById(id);q('open-settings').click();
  assert.deepEqual([...q('meeting-platform').options].map(o=>o.value),['zoom','teams','google_meet']);
  for(const value of ['teams','google_meet','zoom']){q('meeting-platform').value=value;q('meeting-platform').dispatchEvent(new w.Event('change',{bubbles:true}));assert.equal(JSON.parse(w.localStorage.getItem('identity')).meetingPlatform,value);q('close-settings').click();q('open-settings').click();assert.equal(q('meeting-platform').value,value);}
  identity={meetingPlatform:'teams'};w.dispatchEvent(new w.CustomEvent('leadintel:workspace-changed'));assert.equal(q('meeting-platform').value,'teams');

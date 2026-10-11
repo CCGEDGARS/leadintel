@@ -1,4 +1,5 @@
 import './personal-linkedin.js?v=20261009-personal-profile-v1';
+import './tool-account-links.js?v=20261011-v1';
 const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
 const SETTINGS_VERSION='20260930-openai-gpt-6-1-sol-v1';
 const PROVIDERS=Object.freeze([
@@ -28,7 +29,7 @@ async function api(path,options={}){
 function toast(message){const node=document.getElementById('toast');if(!node)return;node.textContent=message;node.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>node.classList.remove('show'),2800);}
 function injectCss(){
   if(document.querySelector('link[data-leadintel-asset="ai-settings-css"]'))return;
-  const link=document.createElement('link');link.rel='stylesheet';link.href=`ai-settings.css?v=${SETTINGS_VERSION}`;link.dataset.leadintelAsset='ai-settings-css';document.head.appendChild(link);
+  const link=document.createElement('link');link.rel='stylesheet';link.href=`ai-settings.css?v=${SETTINGS_VERSION}&tool-links=20261011-v1`;link.dataset.leadintelAsset='ai-settings-css';document.head.appendChild(link);
 }
 function injectUi(){
   injectCss();
@@ -61,8 +62,9 @@ function injectUi(){
         <div class="ai-section-title"><div><span class="eyebrow">Meetings</span><h3 id="meeting-platform-heading">Meeting platform</h3><p>Choose the platform named in your invitations.</p></div></div>
         <label class="ai-settings-field" for="meeting-platform">Video meeting platform<select id="meeting-platform"><option value="zoom">Zoom</option><option value="teams">Microsoft Teams</option><option value="google_meet">Google Meet</option></select></label>
         <p id="meeting-platform-status" role="status" aria-live="polite"></p>
-        <small>Set the same platform as the location of your Calendly event. Calendly generates the meeting link after booking. This preference updates future drafts; approved originals stay unchanged.</small>
+        <p class="meeting-platform-note" id="meeting-platform-note">Set the same platform as the location of your Calendly event. Calendly generates the meeting link after booking. This preference updates future drafts; approved originals stay unchanged.</p>
         <a class="ai-settings-btn" href="https://calendly.com/integrations" target="_blank" rel="noopener noreferrer">Configure conferencing in Calendly ↗</a>
+        <div id="meeting-platform-links"></div>
       </section>
       <section class="ai-settings-section" aria-labelledby="personal-linkedin-heading">
         <div class="ai-section-title"><div><span class="eyebrow">Your professional profile</span><h3 id="personal-linkedin-heading">Personal LinkedIn</h3><p>Save your profile for sender identity and open LinkedIn directly from LeadIntel.</p></div></div>
@@ -72,6 +74,7 @@ function injectUi(){
           <div class="ai-provider-actions"><button class="ai-settings-btn primary" id="personal-linkedin-save" type="button">Save profile</button><a class="ai-settings-btn" id="personal-linkedin-open" target="_blank" rel="noopener noreferrer" hidden>Open my LinkedIn</a><button class="ai-settings-btn danger" id="personal-linkedin-remove" type="button" hidden>Remove profile</button></div>
           <p id="personal-linkedin-error" role="status" aria-live="polite"></p>
           <small id="personal-linkedin-note">Profile link only. No LinkedIn sign-in or automatic sending. LinkedIn opens in a new tab.</small>
+          ${globalThis.LeadIntelToolAccountLinks?.html('personal-linkedin')||''}
         </article>
       </section>
       <div class="ai-security-note"><strong>Credential security</strong><span>Customer API keys are sent directly to LeadIntel's authenticated backend, encrypted before database storage and never added to browser workspace data. Platform-managed credentials are not returned to the customer interface.</span></div>
@@ -93,10 +96,13 @@ function renderMeetingPlatform(){
   const select=document.getElementById('meeting-platform');if(!select)return;
   select.value=window.LeadIntelSenderIdentity?.get?.().meetingPlatform||'zoom';
   document.getElementById('meeting-platform-status').textContent='';
+  renderMeetingToolLinks();
 }
+function renderMeetingToolLinks(){const host=document.getElementById('meeting-platform-links');if(host)host.innerHTML=globalThis.LeadIntelToolAccountLinks?.html(document.getElementById('meeting-platform')?.value)||'';}
 function saveMeetingPlatform(){
   try{if(!window.LeadIntelSenderIdentity?.setMeetingPlatform)throw Error('Sender profile is still loading. Please retry.');window.LeadIntelSenderIdentity.setMeetingPlatform(document.getElementById('meeting-platform').value);document.getElementById('meeting-platform-status').textContent='Saved. Match this platform in your Calendly event settings.';}
   catch(error){renderMeetingPlatform();document.getElementById('meeting-platform-status').textContent=error.message;}
+  renderMeetingToolLinks();
 }
 function renderPersonalLinkedIn(){
   const input=document.getElementById('personal-linkedin-url');if(!input)return;
@@ -187,6 +193,7 @@ function providerCard(config,current){
     <div class="ai-provider-head"><div><span class="ai-provider-name">${esc(config.name)}</span><small>${esc(config.hint)} · Your API key · billed by provider</small></div><span class="ai-provider-status ${outOfCredits?'credit-alert':active?'active':configured?'connected':''}">${stateLabel}</span></div>
     ${outOfCredits?`<div class="ai-credit-warning" role="alert">${esc(config.name)} reported exhausted credits or a billing limit during a real request. Check your ${esc(config.name)} balance and spending limit, then retry. A successful request clears this alert.</div>`:''}
     <label class="ai-settings-field">API key<input data-ai-key="${config.provider}" type="password" autocomplete="new-password" spellcheck="false" data-form-type="other" data-lpignore="true" data-1p-ignore="true" autocapitalize="none" placeholder="${esc(config.placeholder)}" ${disabled?'disabled':''}></label>
+    ${globalThis.LeadIntelToolAccountLinks?.html(config.provider)||''}
     <label class="ai-settings-field">Model choice<select data-ai-model-mode="${config.provider}" ${disabled?'disabled':''}><option value="recommended" ${mode==='recommended'?'selected':''}>Recommended · ${esc(config.model)}</option><option value="advanced" ${mode==='advanced'?'selected':''}>Advanced · custom model ID</option></select></label>
     <label class="ai-settings-field ai-custom-model" data-ai-custom-model="${config.provider}" ${mode==='advanced'?'':'hidden'}>Custom model ID<input data-ai-model="${config.provider}" type="text" value="${mode==='advanced'?esc(model):''}" autocomplete="off" spellcheck="false" placeholder="Enter the exact provider model ID" ${disabled?'disabled':''}></label>
     <div class="ai-model-note">Recommended is maintained by LeadIntel. Advanced accepts an exact model ID supported by your provider account.</div>
@@ -238,6 +245,7 @@ function renderIntegrationMonitoring(){
     <article class="integration-card workspace-provider-card" data-integration="microsoft-account"><div class="integration-card-head"><div><strong>Microsoft Account</strong><small>Optional workspace sign-in</small></div><span class="integration-status ${esc(microsoftAccount.state)}">${esc(microsoftAccount.label)}</span></div><p class="integration-purpose">Choose Microsoft only if you want to use a Microsoft account for LeadIntel workspace access. Microsoft 365 Mail is connected separately.</p><div class="integration-meta">${esc(microsoftAccount.detail+checkedSuffix)}</div>${workspaceProviderAction('microsoft')}</article>
     <article class="integration-card" data-integration="gmail"><div class="integration-card-head"><div><strong>Gmail</strong><small>Optional outbound delivery and reply synchronization</small></div><span class="integration-status ${esc(gmail.state)}">${esc(gmail.label)}</span></div><p class="integration-purpose">Mailbox connection is optional and separate from workspace sign-in.</p><div class="integration-meta">${esc(gmail.detail+checkedSuffix)}</div></article>
     <article class="integration-card microsoft-mail-card" data-integration="microsoft-mail"><div class="integration-card-head"><div><strong>Microsoft 365 Mail</strong><small>Optional human-approved outbound delivery</small></div><span class="integration-status ${esc(microsoftMail.state)}">${esc(microsoftMail.label)}</span></div><p class="integration-purpose">Microsoft Graph · send-only access. LeadIntel cannot read your inbox.</p><div class="integration-meta">${esc(microsoftMail.detail+checkedSuffix)}</div>${microsoftMailActions(microsoftMail)}</article>`;
+  for(const card of [...platform.querySelectorAll('[data-integration]'),...communication.querySelectorAll('[data-integration]')])card.insertAdjacentHTML('beforeend',globalThis.LeadIntelToolAccountLinks?.html(card.dataset.integration)||'');
   const activeAi=Boolean(status.providers.find(item=>item.active&&item.configured));
   const deliveryReady=gmail.state==='good'||microsoftMail.state==='good';
   const critical=[activeAi,signedIn(),deliveryReady,apollo.state==='good',firecrawl.state==='good'];const healthy=critical.filter(Boolean).length;
