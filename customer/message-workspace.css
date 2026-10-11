@@ -393,3 +393,19 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 .mw-language-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid #e5ece7}
 .mw-language-row>button:first-child{flex:1;min-width:150px;text-align:left}
 #message-language-removed{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+
+/* Updating feedback stays beside the actual text; reduced motion needs no animation. */
+#message-studio .mw-updating-notice{padding:12px 16px;background:#fff4df;border:1px solid #edce96;border-radius:9px;color:#805722;font-weight:600;margin:12px 0}
+#message-studio .mw-text-updating{background:#fff8ea;border-radius:12px;box-shadow:0 0 0 2px #edce96;padding:12px;transition:background-color .2s}
+#message-studio .mw-text-updating textarea,#message-studio .mw-text-updating input{background:#fffaf1}
+#message-studio .mw-subject-tools{display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px;margin-top:12px}
+#message-studio .mw-subject-tools>p{flex-basis:100%;font-size:12px;line-height:1.5;color:#63786a;margin:3px 0}
+#message-studio #mw-subject-update-menu{padding:0;border:0;margin:0;position:relative}
+#message-studio #mw-subject-update-menu>summary{cursor:pointer;list-style:none;display:block}
+#message-studio #mw-subject-update-menu[open]{display:grid;gap:6px}
+#message-studio .mw-subject-category{font-size:11px;color:#63786a}
+#message-studio .mw-subject-choice:has([data-subject-edit]){flex-wrap:wrap}
+#message-studio .mw-subject-choice input[data-subject-edit]{flex-basis:100%;width:100%;height:auto;padding:10px;box-sizing:border-box;border:1px solid #cbd9cf;border-radius:7px;font:inherit}
+@media(prefers-reduced-motion:reduce){#message-studio .mw-text-updating{transition:none}}
+
+#message-studio .mw-text-updated{box-shadow:0 0 0 2px #87b49a;background:#f0f8f3;border-radius:12px}

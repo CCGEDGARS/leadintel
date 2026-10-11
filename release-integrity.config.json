@@ -920,6 +920,58 @@
       "contains": [
         "Authenticated workspace membership required"
       ]
+    },
+    {
+      "id": "category-subject-variations",
+      "type": "text",
+      "url": "/customer/subject-editor.js",
+      "status": 200,
+      "contains": [
+        "subject-categories-20261011-v1",
+        "AI changed the subject category",
+        "subjectSetUndo",
+        "Never move a subject between categories"
+      ]
+    },
+    {
+      "id": "category-subject-controls",
+      "type": "text",
+      "url": "/customer/message-workspace.js",
+      "status": 200,
+      "contains": [
+        "mw-subject-reset",
+        "mw-subject-edit",
+        "mw-subject-update-all",
+        "Save subject",
+        "mw-updating-notice",
+        "Updating to "
+      ]
+    },
+    {
+      "id": "category-subject-guarded-routing",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "subject-editor=20261011-v1",
+        "function subjectStamp()",
+        "async function updateSubjects",
+        "stamp!==subjectStamp()",
+        "Subject and current message saved to CRM.",
+        "subjectSetUndo"
+      ]
+    },
+    {
+      "id": "category-subject-feedback-layout",
+      "type": "text",
+      "url": "/customer/message-workspace.css",
+      "status": 200,
+      "contains": [
+        "mw-text-updating",
+        "mw-text-updated",
+        "mw-subject-category",
+        "prefers-reduced-motion"
+      ]
     }
   ],
   "retry": {
