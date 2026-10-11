@@ -22,7 +22,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "LeadIntel \u2014 Build Your Commercial Intelligence Strategy",
+        "LeadIntel — Build Your Commercial Intelligence Strategy",
         "id=\"company-website\""
       ]
     },
@@ -258,7 +258,7 @@
         "topFourResearchCandidates",
         "data-research-buyer",
         "data-research-remaining",
-        "Likely email \u00b7 ownership unconfirmed"
+        "Likely email · ownership unconfirmed"
       ]
     },
     {
@@ -270,7 +270,7 @@
         "choice.channel==='linkedin'",
         "confirmedLinkedInBuyer",
         "prepareStudioBuyer(candidate,person)",
-        "LinkedIn direct message \u00b7 draft only"
+        "LinkedIn direct message · draft only"
       ]
     },
     {
@@ -427,7 +427,7 @@
       "url": "/customer/outreach-ui.js",
       "status": 200,
       "contains": [
-        "My LinkedIn Templates \u00b7 ",
+        "My LinkedIn Templates · ",
         "savedLinkedInCrmDraft",
         "Record as sent in CRM",
         "contact.linkedin_message_sent"
@@ -634,7 +634,7 @@
       "status": 200,
       "contains": [
         "bridge.workspaceStateCodec=payload.state_codec||''",
-        "Workspace exceeds sync limit \u00b7 local changes preserved"
+        "Workspace exceeds sync limit · local changes preserved"
       ]
     },
     {
@@ -643,7 +643,7 @@
       "url": "/customer/journey-progress.js",
       "status": 200,
       "contains": [
-        "No new qualified companies \u00b7 saved companies retained",
+        "No new qualified companies · saved companies retained",
         "Review saved companies or broaden the search"
       ]
     },
@@ -905,7 +905,7 @@
         "providerConfirmedSent",
         "openSavedFlow",
         "function refreshSummary(",
-        "active \u00b7 ",
+        "active · ",
         "saved"
       ]
     },
@@ -1049,7 +1049,7 @@
       ],
       "notContains": [
         "mw-message-length",
-        "Very short \u00b7 about 50%",
+        "Very short · about 50%",
         "Message editor</h3>"
       ]
     },
@@ -1078,7 +1078,9 @@
         "function validateCoreDraft(",
         "Update needs all five subjects:",
         "verbatim-facts-v7",
-        "Repeated slots consume their full weight"
+        "Repeated slots consume their full weight",
+        "function coreSellerFlags(",
+        "'investment of '"
       ]
     },
     {
@@ -1108,7 +1110,7 @@
       "contains": [
         "LeadIntelMessageEditor.validateCoreDraft(studio,context,draft)",
         "tailoringVersion=7",
-        "core-renderer=20261011-v1"
+        "core-renderer=20261011-v2"
       ]
     }
   ],

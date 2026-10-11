@@ -5,13 +5,13 @@ import './original-scripts-ui.js?v=20261008-brutal-approved-v1&practical-tools=2
 import './original-scripts.js?v=20261007-quality-v1';
 import './trigger-preview.js?v=20261008-english-v1';
 import './message-workspace.js?adjust-panel=20261011-v1&subject-toolbar=20261011-v1&single-editor=20261009-v4&sender-reference=20261010-v2&subject-editor=20261011-v2&practical-tools=20261009-v1&matching-settings=20261010-v1&clear-composer=20261010-v2&inline-actions=20261010-v1&template-restore=20261010-v1&event-update=20261010-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&approved-subjects=20261007-v2&brutal-approved=20261008-v1&compact-subjects=20261010-v2&subject-evidence=20261010-v5&style-selection=20261010-v1';
-import './message-facts.js?v=20261007-quality-v2&message-evidence=20261010-v1&core-renderer=20261011-v1';
+import './message-facts.js?v=20261007-quality-v2&message-evidence=20261010-v1&core-renderer=20261011-v2';
 import './message-translations.js?language-controls=20261011-v1&v=20261009-event-campaign-v1&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1';
 import './message-translation-ui.js?language-controls=20261011-v1&v=20261009-balanced-workspace-v1';
 import './personal-template-library.js?single-editor=20261009-v4&practical-tools=20261009-v1&templates=20261009-v20&foundation=20261006-v12&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1';
-import './message-studio.js?subject-editor=20261011-v2&language-controls=20261011-v1&single-editor=20261009-v4&practical-tools=20261009-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&foundation=20261006-v12&booking-recovery=20261007-v1&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1&subject-evidence=20261010-v5&style-recovery=20261010-v1&core-renderer=20261011-v1';
+import './message-studio.js?subject-editor=20261011-v2&language-controls=20261011-v1&single-editor=20261009-v4&practical-tools=20261009-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&foundation=20261006-v12&booking-recovery=20261007-v1&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1&subject-evidence=20261010-v5&style-recovery=20261010-v1&core-renderer=20261011-v2';
 import './subject-editor.js?v=20261011-subjects-v1';
-import './message-editor.js?adjust-panel=20261011-v1&template-restore=20261010-v1&sender-reference=20261010-v2&subject-editor=20261011-v2&event-update=20261010-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1&subject-evidence=20261010-v5&core-renderer=20261011-v1';
+import './message-editor.js?adjust-panel=20261011-v1&template-restore=20261010-v1&sender-reference=20261010-v2&subject-editor=20261011-v2&event-update=20261010-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1&subject-evidence=20261010-v5&core-renderer=20261011-v2';
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
 const DISCOVERY_STORAGE_KEY="leadintel_customer_v2_discovery";
 const OUTREACH_STORAGE_KEY="leadintel_customer_v2_outreach";
