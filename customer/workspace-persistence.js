@@ -35,6 +35,25 @@
   function safeJson(value,fallback=null){try{return JSON.parse(value);}catch{return fallback;}}
   function isObject(value){return Boolean(value&&typeof value==="object"&&!Array.isArray(value));}
   function readSnapshot(){const raw=root.localStorage?.getItem(SNAPSHOT_KEY)||"";if(raw===snapshotEncoded)return snapshotDecoded;const stored=safeJson(raw,null),parsed=root.LeadIntelStateBudget?.restoreWorkspaceSnapshot?.(stored)||stored;snapshotDecoded=isObject(parsed)&&isObject(parsed.data)?parsed:null;snapshotEncoded=raw;return snapshotDecoded;}
+  const INDEXED_SNAPSHOT_FORMAT='leadintel-indexed-workspace-snapshot-v1';
+  async function loadStoredSnapshot(){
+    const raw=root.localStorage?.getItem(SNAPSHOT_KEY)||'',pointer=safeJson(raw,null);
+    if(pointer?.format!==INDEXED_SNAPSHOT_FORMAT)return;
+    const snapshot=await root.LeadIntelAccountCache?.readRecoverySnapshot(pointer.key);
+    if(!snapshot?.data||(snapshot.workspace_id||'')!==pointer.workspace_id)throw new Error('Recovery snapshot is unavailable for this workspace.');
+    if(root.localStorage?.getItem(SNAPSHOT_KEY)===raw){snapshotEncoded=raw;snapshotDecoded=snapshot;}
+  }
+  function persistSnapshot(snapshot){
+    try{root.localStorage?.setItem(SNAPSHOT_KEY,JSON.stringify(root.LeadIntelStateBudget?.packWorkspaceSnapshot?.(snapshot)||snapshot));return snapshot;}
+    catch(cause){
+      if(cause?.name!=='QuotaExceededError'||!root.LeadIntelAccountCache?.saveRecoverySnapshot)throw cause;
+      return root.LeadIntelAccountCache.saveRecoverySnapshot(snapshot).then(key=>{
+        const current=readSnapshot();if(current?.server_synced&&current.workspace_id===snapshot.workspace_id&&current.server_version>snapshot.server_version)return current;
+        const pointer=JSON.stringify({format:INDEXED_SNAPSHOT_FORMAT,workspace_id:snapshot.workspace_id||'',key});
+        root.localStorage.setItem(SNAPSHOT_KEY,pointer);snapshotEncoded=pointer;snapshotDecoded=snapshot;return snapshot;
+      });
+    }
+  }
   function isBrowserOnlySnapshot(){return readSnapshot()?.server_synced===false;}
   function isExplicitlySaved(){return root.localStorage?.getItem(EXPLICIT_SAVE_KEY)==="1"&&Boolean(readSnapshot());}
   function markExplicitlySaved(){root.localStorage?.setItem(EXPLICIT_SAVE_KEY,"1");return true;}
@@ -65,7 +84,7 @@
     }
     return ["leadintel_customer_v2_discovery_meta","leadintel_customer_v2_website_activation_v1","leadintel_customer_v2_research_meta_v1"].some(key=>hasText(data[key]));
   }
-  function captureWorkspaceSnapshot(){const snapshot={schema_version:1,server_synced:false,saved_at:new Date().toISOString(),data:currentWorkspaceData()};root.localStorage?.setItem(SNAPSHOT_KEY,JSON.stringify(root.LeadIntelStateBudget?.packWorkspaceSnapshot?.(snapshot)||snapshot));return snapshot;}
+  function captureWorkspaceSnapshot(){const snapshot={schema_version:1,server_synced:false,workspace_id:root.LeadIntelServerBridge?.workspace?.id||root.localStorage?.getItem(WORKSPACE_KEY)||'',saved_at:new Date().toISOString(),data:currentWorkspaceData()};return persistSnapshot(snapshot);}
   function sameWorkspaceData(a,b){const left=isObject(a)?a:{};const right=isObject(b)?b:{};const keys=[...new Set([...Object.keys(left),...Object.keys(right)])].sort();return keys.every(key=>String(left[key]??"")===String(right[key]??""));}
   function hasLocalChangesSinceSnapshot(){const snapshot=readSnapshot();return Boolean(snapshot&&!sameWorkspaceData(currentWorkspaceData(),snapshot.data));}
   function protectLocalChanges(){
@@ -130,7 +149,7 @@
     if(isObject(payload.delivery))data["leadintel_customer_v2_delivery"]=JSON.stringify(payload.delivery);
     if(isObject(payload.meta?.discovery))data["leadintel_customer_v2_discovery_meta"]=JSON.stringify(payload.meta.discovery);
     const activation=buildActivationRecord(payload.main||{});if(activation)data["leadintel_customer_v2_website_activation_v1"]=JSON.stringify(activation);
-    const snapshot={schema_version:1,server_synced:true,workspace_id:options.workspaceId||root.LeadIntelServerBridge?.workspace?.id||"",server_version:Number.isSafeInteger(options.version)?options.version:null,saved_at:new Date().toISOString(),server_payload:serverPayload,data:options.localData||data};root.localStorage?.setItem(SNAPSHOT_KEY,JSON.stringify(root.LeadIntelStateBudget?.packWorkspaceSnapshot?.(snapshot)||snapshot));markExplicitlySaved();dirtySinceSave=typeof options.dirty==='boolean'?options.dirty:!sameWorkspaceData(currentWorkspaceData(),data);return snapshot;
+    const snapshot={schema_version:1,server_synced:true,workspace_id:options.workspaceId||root.LeadIntelServerBridge?.workspace?.id||"",server_version:Number.isSafeInteger(options.version)?options.version:null,saved_at:new Date().toISOString(),server_payload:serverPayload,data:options.localData||data};const finish=()=>{markExplicitlySaved();dirtySinceSave=typeof options.dirty==='boolean'?options.dirty||!sameWorkspaceData(currentWorkspaceData(),snapshot.data):!sameWorkspaceData(currentWorkspaceData(),data);return snapshot;};const saved=persistSnapshot(snapshot);return saved&&typeof saved.then==='function'?saved.then(value=>value===snapshot?finish():value):finish();
   }
 
   function jsonResponse(payload,status=200){return new Response(JSON.stringify(payload),{status,headers:{"Content-Type":"application/json"}});}
@@ -168,7 +187,7 @@
         if(body?.payload?.meta?.persistence?.explicit_saved===true||(Number(body.version)>0&&["main","discovery","outreach","delivery"].some(key=>isObject(body.payload?.[key])&&Object.keys(body.payload[key]).length))){
           const versions=safeJson(root.localStorage?.getItem(VERSION_KEY)||'{}',{});
           const sameRevision=isExplicitlySaved()&&readSnapshot()?.server_synced===true&&Number(versions[workspaceId])===Number(body.version);
-          snapshotFromServerPayload(body.payload,{workspaceId,version:Number(body.version),...(sameRevision?{localData:currentWorkspaceData(),dirty:false}:{})});return response;
+          await snapshotFromServerPayload(body.payload,{workspaceId,version:Number(body.version),...(sameRevision?{localData:currentWorkspaceData(),dirty:false}:{})});return response;
         }
         const version=Math.max(0,Number(body?.version)||0);if(workspaceId)root.sessionStorage?.setItem(HYDRATION_KEY,`${workspaceId}:${version}`);
         if(isExplicitlySaved())return jsonResponse({...body,payload:payloadFromSnapshot()},response.status);
@@ -180,7 +199,7 @@
         const next=withPersistenceMetadata(parsed,!forceReset&&(explicitSave||isExplicitlySaved()));if(forceReset)next.payload.meta.persistence={explicit_saved:false};
         if(root.LeadIntelStateBudget?.prepareForSync)next.payload=root.LeadIntelStateBudget.prepareForSync(next.payload,{allowSectionPacking:root.LeadIntelServerBridge?.workspaceStateCodec==='workspace-sections-v1',allowBundlePacking:root.LeadIntelServerBridge?.workspaceBundleCodec==='workspace-bundle-v1',allowCompressionPacking:root.LeadIntelServerBridge?.workspaceCompressionCodec==='workspace-lzw-v2'}).payload;
         const response=await nativeFetch(input,{...requestInit,body:JSON.stringify(next)});const result=await response.clone().json().catch(()=>({}));const persisted=response.ok&&result?.saved!==false;
-        if(persisted){if(forceReset){root.sessionStorage?.removeItem(FORCE_RESET_KEY);root.localStorage?.removeItem(RESET_PENDING_KEY);root.setTimeout?.(renderPersistenceStatus,0);}else if(explicitSave||(saveIntent&&isExplicitlySaved()))snapshotFromServerPayload(next.payload,{workspaceId:url.searchParams.get("workspace_id"),version:Number(result.version),localData:localDataAtPutStart,dirty:!sameWorkspaceData(currentWorkspaceData(),localDataAtPutStart)});}
+        if(persisted){if(forceReset){root.sessionStorage?.removeItem(FORCE_RESET_KEY);root.localStorage?.removeItem(RESET_PENDING_KEY);root.setTimeout?.(renderPersistenceStatus,0);}else if(explicitSave||(saveIntent&&isExplicitlySaved()))await snapshotFromServerPayload(next.payload,{workspaceId:url.searchParams.get("workspace_id"),version:Number(result.version),localData:localDataAtPutStart,dirty:!sameWorkspaceData(currentWorkspaceData(),localDataAtPutStart)});}
         return response;
       }
       return nativeFetch(input,requestInit);
@@ -206,7 +225,7 @@
 
   async function saveWorkspace({automatic=false}={}){
     if(saveBusy)return false;saveBusy=true;renderPersistenceStatus();
-    try{const bridge=await waitForBridge();if(bridge?.ready===false)throw new Error("Workspace is still loading; retry save");if(automatic&&bridge?.conflict)throw new Error("conflict");if(bridge?.session?.authenticated&&bridge?.workspace){const result=await withTimeout(()=>bridge.conflict?bridge.resolveConflictKeepLocal?.():bridge.saveNow?.({saveIntent:true,explicitSave:true}),SAVE_REQUEST_TIMEOUT_MS);if(result?.retryable){dirtySinceSave=true;saveError="";if(!automatic)toast("Changes kept locally · sync is retrying");return false;}if(!result?.saved)throw new Error(result?.conflict?"conflict":"Workspace could not be saved to LeadIntel");if(!automatic)toast("Workspace saved");}else{captureWorkspaceSnapshot();markExplicitlySaved();dirtySinceSave=false;if(!automatic)toast("Workspace saved in this browser");}saveError="";return true;}
+    try{const bridge=await waitForBridge();if(bridge?.ready===false)throw new Error("Workspace is still loading; retry save");if(automatic&&bridge?.conflict)throw new Error("conflict");if(bridge?.session?.authenticated&&bridge?.workspace){const result=await withTimeout(()=>bridge.conflict?bridge.resolveConflictKeepLocal?.():bridge.saveNow?.({saveIntent:true,explicitSave:true}),SAVE_REQUEST_TIMEOUT_MS);if(result?.retryable){dirtySinceSave=true;saveError="";if(!automatic)toast("Changes kept locally · sync is retrying");return false;}if(!result?.saved)throw new Error(result?.conflict?"conflict":"Workspace could not be saved to LeadIntel");if(!automatic)toast("Workspace saved");}else{await captureWorkspaceSnapshot();markExplicitlySaved();dirtySinceSave=false;if(!automatic)toast("Workspace saved in this browser");}saveError="";return true;}
     catch(error){dirtySinceSave=true;const detail=String(error?.message||"");saveError=root.LeadIntelServerBridge?.conflict||detail==="conflict"?"Sync conflict · keep your local changes":/timed out|timeout/i.test(detail)?"Sync timed out · retry save":/500 KB|sync limit/i.test(detail)?"Workspace exceeds sync limit · data preserved":/failed to fetch|network/i.test(detail)?"Could not reach LeadIntel · retry save":"Sync failed · retry save";const status=root.document?.getElementById?.("workspace-save-state");if(status)status.title=/Section sizes:/.test(detail)?`${detail} Active codec: ${root.LeadIntelStateBudget?.syncCodecVersion||'legacy'}; server compression: ${root.LeadIntelServerBridge?.workspaceCompressionCodec||'none'}.`:"";if(!automatic)toast(saveError);return false;}
     finally{saveBusy=false;renderPersistenceStatus();if(!saveError&&hasUnsavedChanges())scheduleAutoSave();}
   }
@@ -231,5 +250,6 @@
   if(changed&&(explicitlySaved||hadMeaningfulUnsavedData)&&root.location?.reload){root.location.reload();return;}
   if(root.document?.readyState==="loading")root.document.addEventListener("DOMContentLoaded",installUi,{once:true});else installUi();
 
-  root.LeadIntelWorkspacePersistence={EXPLICIT_SAVE_KEY,SNAPSHOT_KEY,FORCE_RESET_KEY,SERVER_RESET_PENDING_KEY,RESET_PENDING_KEY,WORKSPACE_DATA_KEYS,isExplicitlySaved,hasUnsavedChanges,markExplicitlySaved,clearExplicitSave,currentWorkspaceData,hasMeaningfulWorkspaceData,captureWorkspaceSnapshot,restoreSavedSnapshot,clearWorkspaceData,prepareForLoad,snapshotFromServerPayload,syncedBase,saveWorkspace,renderPersistenceStatus,handleResetClick};
+  const ready=loadStoredSnapshot().then(()=>{if(prepareForLoad())root.location?.reload?.();});ready.catch(()=>{});
+  root.LeadIntelWorkspacePersistence={ready,EXPLICIT_SAVE_KEY,SNAPSHOT_KEY,FORCE_RESET_KEY,SERVER_RESET_PENDING_KEY,RESET_PENDING_KEY,WORKSPACE_DATA_KEYS,isExplicitlySaved,hasUnsavedChanges,markExplicitlySaved,clearExplicitSave,currentWorkspaceData,hasMeaningfulWorkspaceData,captureWorkspaceSnapshot,restoreSavedSnapshot,clearWorkspaceData,prepareForLoad,snapshotFromServerPayload,syncedBase,saveWorkspace,renderPersistenceStatus,handleResetClick};
 })(typeof globalThis!=="undefined"?globalThis:this);

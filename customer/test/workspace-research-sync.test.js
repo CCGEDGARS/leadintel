@@ -128,3 +128,13 @@ test('local-only recovery snapshots compress without losing full unsynced workin
  assert.equal(JSON.parse(values.get(KEYS.discovery)).notes,payload.discovery.notes);assert.equal(JSON.parse(values.get(KEYS.outreach)).items[0].drafts.emailBody,'Unsynced text');
  assert.equal(root.LeadIntelWorkspacePersistence.syncedBase('w1'),null);
 });
+
+test('an edit during a delayed durable snapshot commit stays unsaved and does not replace its acknowledged baseline',async()=>{
+ const payload={main:{website:'seller.example',notes:'Verified notes. '.repeat(18000)},discovery:{},outreach:{},delivery:{},meta:{discovery:{}}};
+ const values=localValues(payload),root=load(values,async()=>new Response('{}'),{snapshotLimit:1024});let release;
+ root.LeadIntelAccountCache={saveRecoverySnapshot:()=>new Promise(resolve=>release=resolve)};
+ const saving=root.LeadIntelWorkspacePersistence.snapshotFromServerPayload(payload,{workspaceId:'w1',version:8,localData:root.LeadIntelWorkspacePersistence.currentWorkspaceData(),dirty:false});
+ assert.equal(typeof release,'function');values.set(KEYS.main,JSON.stringify({...payload.main,website:'edited.example'}));release('leadintel_workspace_snapshot_v1:w1:test');await saving;
+ assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),true);
+ assert.equal(root.LeadIntelWorkspacePersistence.syncedBase('w1').payload.main.website,'seller.example');assert.equal(JSON.parse(values.get(KEYS.main)).website,'edited.example');
+});

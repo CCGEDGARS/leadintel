@@ -117,7 +117,7 @@ test('nested research decoding rejects cycles, invalid keys and invalid referenc
 });
 test('saved server snapshots restore wire-packed discovery before creating a merge base',()=>{
  const vm=require('node:vm'),source=fs.readFileSync(path.join(__dirname,'../workspace-persistence.js'),'utf8');
- const storage=new Map(),context={readSnapshot:()=>null,root:{LeadIntelStateBudget:budget,localStorage:{setItem:(k,v)=>storage.set(k,v)},LeadIntelServerBridge:{workspace:{id:'workspace-1'}}},isObject:value=>Boolean(value&&typeof value==='object'&&!Array.isArray(value)),buildActivationRecord:()=>null,markExplicitlySaved:()=>true,sameWorkspaceData:()=>true,currentWorkspaceData:()=>({}),dirtySinceSave:false,SNAPSHOT_KEY:'snapshot'};
+ const storage=new Map(),context={persistSnapshot(snapshot){storage.set('snapshot',JSON.stringify(snapshot));return snapshot;},readSnapshot:()=>null,root:{LeadIntelStateBudget:budget,localStorage:{setItem:(k,v)=>storage.set(k,v)},LeadIntelServerBridge:{workspace:{id:'workspace-1'}}},isObject:value=>Boolean(value&&typeof value==='object'&&!Array.isArray(value)),buildActivationRecord:()=>null,markExplicitlySaved:()=>true,sameWorkspaceData:()=>true,currentWorkspaceData:()=>({}),dirtySinceSave:false,SNAPSHOT_KEY:'snapshot'};
  vm.createContext(context);vm.runInContext(source.slice(source.indexOf('  function snapshotFromServerPayload('),source.indexOf('  function jsonResponse(')),context);
  context.snapshotFromServerPayload({main:{website:'https://seller.example/'},discovery:{format:'leadintel-discovery-refs-v2',keys:['people','name'],values:[],value:[1,0,[2,[1,1,'Buyer']]]}},{version:5});
  assert.deepEqual(JSON.parse(JSON.parse(storage.get('snapshot')).data.leadintel_customer_v2_discovery),{people:[{name:'Buyer'}]});
