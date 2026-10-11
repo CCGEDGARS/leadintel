@@ -446,3 +446,8 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #message-studio .mw-header-actions #message-generate:disabled{background:#2b6950!important;border-color:#2b6950!important;color:#fff!important;opacity:.65}
 @media(max-width:720px){#message-studio .mw-header-actions{flex-basis:100%;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}#message-studio .mw-header-actions button{white-space:normal}}
 #message-studio #mw-undo-rewrite[hidden]{display:none!important}
+
+/* Keep the same field dimensions while a selected style is prepared. */
+#message-studio .mw-preparing-editor[hidden]{display:none}
+#message-studio .mw-preparing-editor label{display:grid;gap:8px}
+#message-studio .mw-preparing-editor input,#message-studio .mw-preparing-editor textarea{width:100%;box-sizing:border-box}
