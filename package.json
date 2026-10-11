@@ -3,7 +3,8 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "build": "bash scripts/build-vercel-static.sh"
+    "build": "bash scripts/build-vercel-static.sh",
+    "check:step6": "node --test customer/test/message*.test.js customer/test/*core-template.test.js customer/test/approved-template-fields.test.js customer/test/verbatim-template-contract.test.js customer/test/core-template-rules.test.js customer/test/subject-editor*.test.js customer/test/trigger-crm-workflow.test.js customer/test/linkedin-studio.test.js customer/test/linkedin-message-handoff.test.js customer/test/outreach-generation-race.test.js customer/test/account-workspace-isolation.test.js"
   },
   "dependencies": {
     "pdfjs-dist": "6.4.299"

@@ -42,7 +42,7 @@ test('CRM recovery finds the exact buyer/channel beyond unrelated recent activit
  const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync(require.resolve('../outreach-ui.js'),'utf8');
  const snapshot=(id,channel)=>O.buildCrmScriptSnapshot({domain:'buyer.example',selectedPersonId:id,channel,drafts:channel==='linkedin'?{linkedinMessage:'Saved '+id}:{emailBody:'Email'}});
  let calls=0;const ctx={LeadIntelOutreach:O,crmBridge:()=>({workspace:{id:'w1'},getCrmActivities:async()=>{calls++;return {ok:true,activities:[{metadata:{script_package:snapshot('p1','email')}},{metadata:{script_package:snapshot('p2','linkedin')}}],next_cursor:null};}})};
- vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('async function savedLinkedInCrmDraft('),source.indexOf('async function openBuyerScripts(')),ctx);
+ vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('async function savedBuyerCrmDraft('),source.indexOf('async function openBuyerScripts(')),ctx);
  const result=await ctx.savedLinkedInCrmDraft({company:{id:'c1'},activities:[{metadata:{script_package:snapshot('p1','linkedin')}}],activity_next_cursor:'page2'},'buyer.example','p2','w1');assert.equal(result.selectedPersonId,'p2');assert.equal(result.drafts.linkedinMessage,'Saved p2');assert.equal(calls,1);
 });
 
