@@ -62,3 +62,11 @@ sqliteTest('support limits paid reasoning before writing another chat request',a
  const response=await handleCopilotRoute(req('/api/copilot/chat?workspace_id=w1',{method:'POST',token,body:{message:'Help'}}),env,{});
  assert.equal(response.status,429);assert.equal(db.raw.prepare('SELECT COUNT(*) AS n FROM copilot_messages').get().n,10);
 });
+
+sqliteTest('authenticated progress stream reports real research and persists the final answer with its sources',async()=>{
+ const {env,token,db}=await fixture();let calls=0;env.COPILOT_TEST_PROVIDER={search:async()=>({results:[{title:'Official fact',url:'https://company.example/fact',date:'2026-10-11'}]}),generate:async()=>({text:JSON.stringify(++calls===1?{research_query:''}:{answer:'Confirmed fact [1].\n\nA practical implication.'})})};
+ const request=req('/api/copilot/chat?workspace_id=w1',{method:'POST',token,body:{message:'Research this company'}});request.headers.set('Accept','text/event-stream');
+ const response=await handleCopilotRoute(request,env,{});assert.match(response.headers.get('Content-Type'),/text\/event-stream/);const stream=await response.text();assert.match(stream,/event: progress\ndata: .*researching/);assert.match(stream,/event: result/);assert.doesNotMatch(stream,/encrypted_api_key|SECRET/);
+ const saved=db.raw.prepare("SELECT content,metadata_json FROM copilot_messages WHERE role='assistant'").get();assert.match(saved.content,/\n\n/);assert.equal(JSON.parse(saved.metadata_json).research_status,'complete');assert.equal(db.raw.prepare('SELECT COUNT(*) AS n FROM copilot_messages').get().n,2);
+ const denied=req('/api/copilot/chat?workspace_id=w1',{method:'POST',body:{message:'Research'}});denied.headers.set('Accept','text/event-stream');assert.equal((await handleCopilotRoute(denied,env,{})).status,401);
+});

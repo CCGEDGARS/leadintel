@@ -31,7 +31,7 @@ test('source-access audit requests wider research and gives the model an explici
 
 test('external research query is minimized and excludes CRM/private context',()=>{
   const query=buildExternalResearchQuery({question:'Latest Apollo limits for buyer@example.com',context,skillIds:['technical_setup']});
-  assert.match(query,/Apollo limits/i);assert.match(query,/Acme|Latvia/i);
+  assert.match(query,/Apollo limits/i);assert.doesNotMatch(query,/Acme|Latvia/i);
   assert.doesNotMatch(query,/Private CRM Co|Do not send this|buyer@example\.com/i);
   assert.ok(query.length<=1000);
 });

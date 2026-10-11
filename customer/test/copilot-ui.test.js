@@ -34,9 +34,9 @@ test('chat uses safe screen context without preset prompt chips',()=>{
 });
 
 test('copilot introduces itself before the conversation',()=>{
-  assert.match(source,/Your support and insights assistant\./);
-  assert.match(source,/understands your LeadIntel workspace/i);
-  assert.match(source,/Support is read-only/i);
+  assert.match(source,/Your AI business assistant\./);
+  assert.match(source,/research public sources/i);
+  assert.match(source,/help you decide your next step/i);
   const introIndex=source.indexOf('copilot-intro');
   const messagesIndex=source.indexOf('copilot-messages');
   assert.ok(introIndex>=0&&messagesIndex>=0&&introIndex<messagesIndex,'intro must be created before messages');
@@ -49,7 +49,7 @@ test('composer is a full-width vertical layout with send below the textarea',()=
 });
 
 test('sidebar entry is a premium branded copilot control',()=>{
-  assert.match(loader,/Support & Insights/);
+  assert.match(loader,/Business & Research/);
   assert.match(css,/\.leadintel-copilot-entry\{[^}]*border-radius\s*:\s*(1[4-9]|[2-9][0-9])px/s);
   assert.match(css,/\.leadintel-copilot-entry\{[^}]*background\s*:\s*(linear-gradient|radial-gradient)/s);
   assert.match(css,/\.leadintel-copilot-entry\{[^}]*box-shadow/s);
@@ -83,5 +83,14 @@ test('support drawer blocks file paste and ignores malicious action proposals at
   await new Promise(resolve=>setImmediate(resolve));
   assert.doesNotMatch(panel.textContent,/Hidden chat check|attachments are disabled/i);
   assert.equal(mutations,0);assert.equal(panel.querySelector('.copilot-confirm'),null);assert.equal(panel.querySelectorAll('.copilot-source').length,1);assert.equal(panel.querySelector('.copilot-source').rel,'noopener noreferrer');
+ }finally{globalThis.window=prior.window;globalThis.document=prior.document;dom.window.close();}
+});
+
+test('actual drawer displays research progress, prevents duplicate requests and renders dated evidence',async()=>{
+ const {JSDOM}=await import('jsdom');const dom=new JSDOM('<button id="leadintel-copilot-entry"></button>');const prior={window:globalThis.window,document:globalThis.document};globalThis.window=dom.window;globalThis.document=dom.window.document;
+ try{
+  dom.window.LeadIntelServerBridge={workspace:{id:'w1'}};dom.window.LeadIntelWorkspacePersistence={isExplicitlySaved:()=>true,hasUnsavedChanges:()=>false};const ui=await import(`data:text/javascript;base64,${Buffer.from(source+'\n//progress-test').toString('base64')}`);let finish,calls=0;
+  const panel=await ui.openCopilot({context:{currentCopilotScreenContext:()=>({step:6})},api:{bootstrapCopilot:async()=>({ai:{configured:true}}),sendCopilotMessage:async(payload,{onProgress})=>{calls++;onProgress({phase:'researching'});return new Promise(resolve=>finish=resolve);}}});const submit=()=>panel.querySelector('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true}));panel.querySelector('textarea').value='Research LKAB';submit();assert.equal(panel.querySelector('[data-copilot-status]').textContent,'Researching public sources…');assert.equal(panel.querySelector('.copilot-send').disabled,true);panel.querySelector('textarea').value='duplicate';submit();assert.equal(calls,1);
+  finish({answer:'Fact [1].\n\nPractical implication.',sources:[{title:'Official project',url:'https://company.example/project',date:'2026-10-11'}],research_used:true,research_status:'complete'});await new Promise(resolve=>setImmediate(resolve));assert.match(panel.querySelector('.copilot-message.is-assistant').textContent,/\n\n/);assert.equal(panel.querySelector('.copilot-source').textContent,'[1] Official project');assert.match(panel.querySelector('.copilot-source-date').textContent,/2026-10-11/);assert.equal(panel.querySelector('.copilot-send').disabled,false);
  }finally{globalThis.window=prior.window;globalThis.document=prior.document;dom.window.close();}
 });
