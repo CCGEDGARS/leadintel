@@ -8,6 +8,7 @@ test('header owns green Update and Add to flow with the exact helper; lower acti
  const h=mounted({selected:'professional'});try{
  assert.deepEqual(visibleButtons(h.q('mw-header-actions')),['Update message','Add to flow']);assert.ok(h.q('message-generate').classList.contains('primary-btn'));
  assert.equal(h.q('mw-update-help').textContent,'Choose the style and update your message.');
+ assert.equal(h.q('mw-update-help').parentElement,h.q('mw-header-actions'));assert.equal(h.q('message-generate').getAttribute('aria-describedby'),'mw-update-help');
  assert.deepEqual(visibleButtons(h.w.document.querySelector('.mw-editor-actions')),['Edit','Save','Reset','Add to templates','Set as default']);assert.equal(h.q('mw-undo-rewrite').hidden,true);
  }finally{h.w.close();}
 });
