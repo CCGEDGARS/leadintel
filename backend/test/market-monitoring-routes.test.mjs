@@ -15,7 +15,7 @@ function request(path,{method='GET',token,body}={}){return new Request(`https://
 
 sqliteTest('monitoring reads the seller markets from a packed workspace',async()=>{
  const {env,token,db}=await fixture(),payload=capacityFixture();payload.main.profile={targetMarkets:'Finland',priorityOffers:'Industrial automation'};payload.main.targetMarkets=['Finland'];
- db.raw.prepare('INSERT INTO customer_workspace_state VALUES(?,1,1,?,NULL,NULL)').run('w1',JSON.stringify(stateBudget.prepareForSync(payload,{allowBundlePacking:true}).payload));
+ db.raw.prepare('INSERT INTO customer_workspace_state VALUES(?,1,1,?,NULL,NULL)').run('w1',JSON.stringify(stateBudget.prepareForSync(payload,{allowBundlePacking:true,allowCompressionPacking:true}).payload));
  await handleMarketMonitoringRoute(request('/api/market-monitoring/config?workspace_id=w1',{method:'PUT',token,body:{enabled:true,source_types:['news']}}),env,{});
  const oldFetch=globalThis.fetch;globalThis.fetch=async()=>new Response(JSON.stringify({data:[]}),{status:200});
  try{const response=await handleMarketMonitoringRoute(request('/api/market-monitoring/run?workspace_id=w1',{method:'POST',token}),env,{});assert.equal(response.status,200);}finally{globalThis.fetch=oldFetch;}

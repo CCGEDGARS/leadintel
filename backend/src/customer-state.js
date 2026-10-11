@@ -21,9 +21,9 @@ export function validateCustomerStateWrite(current,{expectedVersion,schemaVersio
 }
 export async function getCustomerState(env,workspaceId){
   const row=await env.DB.prepare('SELECT workspace_id,schema_version,version,payload_json,updated_at FROM customer_workspace_state WHERE workspace_id=?').bind(workspaceId).first();
-  if(!row)return {...emptyCustomerState(workspaceId),state_codec:'workspace-sections-v1',bundle_codec:'workspace-bundle-v1'};
+  if(!row)return {...emptyCustomerState(workspaceId),state_codec:'workspace-sections-v1',bundle_codec:'workspace-bundle-v1',compression_codec:'workspace-lzw-v1'};
   const payload=stateBudget.restoreFromSync(normalizeCustomerPayload(JSON.parse(row.payload_json||'{}')));
-  return {workspace_id:row.workspace_id,schema_version:Number(row.schema_version)||1,version:Number(row.version)||1,payload,updated_at:row.updated_at||null,state_codec:'workspace-sections-v1',bundle_codec:'workspace-bundle-v1'};
+  return {workspace_id:row.workspace_id,schema_version:Number(row.schema_version)||1,version:Number(row.version)||1,payload,updated_at:row.updated_at||null,state_codec:'workspace-sections-v1',bundle_codec:'workspace-bundle-v1',compression_codec:'workspace-lzw-v1'};
 }
 export async function putCustomerState(env,{workspaceId,userId,expectedVersion,schemaVersion,payload,role,allowFlowSwitch=false}){
   const current=await getCustomerState(env,workspaceId);const decision=validateCustomerStateWrite(current,{expectedVersion,schemaVersion,payload});if(decision.conflict)return decision;
