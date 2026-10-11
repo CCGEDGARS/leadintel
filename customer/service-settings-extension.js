@@ -1,3 +1,4 @@
+import './tool-account-links.js?v=20261011-v1';
 const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
 const SETTINGS_VERSION='20261004-contact-policy-v1';
 const DEFAULT_CALENDLY_URL='https://calendly.com/edgars-7go/strategy-call-2';
@@ -55,7 +56,7 @@ function calendlyCard(){
     <label class="ai-settings-field">Personal access token<input data-calendly-token type="password" autocomplete="new-password" spellcheck="false" data-form-type="other" data-lpignore="true" data-1p-ignore="true" placeholder="${configured?'Enter a new token only to reconnect':'Calendly personal access token'}" ${disabled?'disabled':''}></label>
     <div class="ai-provider-error" data-service-error="calendly" role="alert" ${error?'':'hidden'}>${esc(error)}</div>
     <div class="ai-provider-actions"><button class="ai-settings-btn primary" data-service-action="calendly-save" type="button" ${disabled||busy==='calendly'?'disabled':''}>${busy==='calendly'?'Connecting…':configured?'Reconnect':'Connect Calendly'}</button><button class="ai-settings-btn danger" data-service-action="calendly-disconnect" type="button" ${disabled||!configured||busy==='calendly'?'disabled':''}>Disconnect</button></div>
-  </div></article>`;
+  </div>${window.LeadIntelToolAccountLinks?.html('calendly')||''}</article>`;
 }
 function serviceDetail(config,row,current){
   if(config.provider==='apollo')return `${row?.source==='customer'?'Your Apollo account':'Managed Apollo discovery'} · credit reservations ${apolloUsage.daily}/${Number(apolloBudget.daily_credit_limit)||0} today · ${apolloUsage.monthly}/${Number(apolloBudget.monthly_credit_limit)||0} this month`;

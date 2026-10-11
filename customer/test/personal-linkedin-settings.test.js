@@ -32,7 +32,7 @@ test('settings save/open/remove/reopen and workspace switch reflect canonical id
  let identity={senderName:'Test Person',linkedinUrl:''};
  w.LeadIntelSenderIdentity={get:()=>identity,setLinkedIn:url=>{identity={...identity,linkedinUrl:url};w.localStorage.setItem('identity',JSON.stringify(identity));w.dispatchEvent(new w.CustomEvent('leadintel:sender-identity-changed'));}};
  w.eval(fs.readFileSync(path.join(root,'personal-linkedin.js'),'utf8'));
- w.eval(fs.readFileSync(path.join(root,'ai-settings.js'),'utf8').replace(/^import .*;\n/,''));
+ w.eval(fs.readFileSync(path.join(root,'ai-settings.js'),'utf8').replace(/^import .*;\s*$/gm,''));
  const q=id=>w.document.getElementById(id);q('open-settings').click();
  q('personal-linkedin-url').value='linkedin.com/in/test-person?trk=share';q('personal-linkedin-save').click();
  assert.equal(JSON.parse(w.localStorage.getItem('identity')).linkedinUrl,'https://www.linkedin.com/in/test-person/');

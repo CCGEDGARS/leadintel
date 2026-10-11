@@ -26,6 +26,10 @@ body.ai-settings-opened{overflow:hidden}
 .ai-settings-btn.microsoft{border-color:#2469b2;background:#2469b2;color:#fff}
 .ai-settings-btn.microsoft:hover:not(:disabled){border-color:#185b9f;background:#185b9f}
 .ai-settings-section{margin-top:26px;padding-top:2px}
+.meeting-platform-note{display:block;width:100%;margin:14px 0 18px;color:var(--ai-muted);font-size:var(--type-secondary,14px);line-height:1.65}
+.tool-account-links{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--ai-line)}
+.tool-account-links a{display:inline-flex;align-items:center;justify-content:center;max-width:100%;text-decoration:none;overflow-wrap:anywhere;text-align:center}
+.integration-grid>[data-integration="calendly"]{grid-column:1 / -1}
 .ai-settings-section+.ai-settings-section{padding-top:25px;border-top:1px solid var(--ai-line)}
 .ai-section-title h3{font-size:20px;margin:5px 0 7px;letter-spacing:-.02em}
 .ai-provider-grid{display:grid;gap:14px;margin-top:18px}
