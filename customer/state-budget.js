@@ -39,6 +39,30 @@
   const NESTED_FORMAT='leadintel-discovery-refs-v2';
   const SECTION_FORMAT='leadintel-workspace-section-refs-v1';
   const BUNDLE_FORMAT='leadintel-workspace-bundle-refs-v1';
+  const TEXT_ENCODING='lzw16-base64-v1';
+  const MAX_RESTORED_BUNDLE_BYTES=MAX_RESTORED_SECTION_BYTES*4;
+  function base64Encode(raw){return typeof btoa==='function'?btoa(raw):Buffer.from(raw,'binary').toString('base64');}
+  // Fixed-width byte codes avoid dependencies and remain synchronous at every save boundary.
+  // The dictionary freezes at 65536 entries; both encoding and decoding use the same bound.
+  function compressWorkspace(value){
+    if(bytes(value)>MAX_RESTORED_BUNDLE_BYTES||Object.values(value).some(section=>bytes(section)>MAX_RESTORED_SECTION_BYTES))return null;
+    const input=new TextEncoder().encode(JSON.stringify(value)),dictionary=new Map(),codes=[];let next=256,word='';
+    for(const byte of input){const char=String.fromCharCode(byte),joined=word+char;if(joined.length===1||dictionary.has(joined)){word=joined;continue;}codes.push(word.length===1?word.charCodeAt(0):dictionary.get(word));if(next<65536)dictionary.set(joined,next++);word=char;}
+    if(word)codes.push(word.length===1?word.charCodeAt(0):dictionary.get(word));
+    let raw='';for(const code of codes)raw+=String.fromCharCode(code>>>8,code&255);
+    const shared={main:{format:BUNDLE_FORMAT,encoding:TEXT_ENCODING,data:base64Encode(raw)}};
+    if(value.meta?.persistence)shared.meta={persistence:cloneValue(value.meta.persistence)};
+    return bytes(shared)<bytes(value)?shared:null;
+  }
+  function restoreCompressedWorkspace(value){
+    const invalid=()=>{throw new Error('Invalid stored compressed workspace');};
+    if(value.encoding!==TEXT_ENCODING||typeof value.data!=='string'||value.data.length>MAX_SYNC_BYTES||value.data.length%4||!value.data.length||! /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value.data))invalid();
+    let raw;try{raw=typeof atob==='function'?atob(value.data):Buffer.from(value.data,'base64').toString('binary');}catch{invalid();}
+    if(raw.length%2||base64Encode(raw)!==value.data)invalid();
+    const dictionary=Array.from({length:256},(_,i)=>String.fromCharCode(i));let next=256,previous='',size=0;const chunks=[];
+    for(let i=0;i<raw.length;i+=2){const code=(raw.charCodeAt(i)<<8)|raw.charCodeAt(i+1);let word=dictionary[code];if(word===undefined){if(!previous||code!==next||next>=65536)invalid();word=previous+previous[0];}size+=word.length;if(size>MAX_RESTORED_BUNDLE_BYTES)throw new Error('Stored workspace research exceeds safe restore limit');chunks.push(word);if(previous&&next<65536)dictionary[next++]=previous+word[0];previous=word;}
+    try{const text=chunks.join(''),decoded=new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(text,char=>char.charCodeAt(0)));const restored=JSON.parse(decoded);if(!restored||typeof restored!=='object'||Array.isArray(restored))invalid();return restored;}catch{invalid();}
+  }
   // Workflow views repeat the same company, buyer pool and provider evidence.
   // Share equal copies on the wire without deleting any record or audit field.
   function packRepeatedDiscovery(value){
@@ -169,7 +193,7 @@
     if(key===''&&value?.main?.format===BUNDLE_FORMAT){
       const invalid=()=>{throw new Error('Invalid stored workspace bundle');};
       if(Object.keys(value).some(k=>!['main','meta'].includes(k))||(value.meta!=null&&(typeof value.meta!=='object'||Array.isArray(value.meta)))||Object.keys(value.meta||{}).some(k=>k!=='persistence'))invalid();
-      const restored=restoreNestedDiscovery(value.main,MAX_RESTORED_SECTION_BYTES*4);
+      const restored=value.main.encoding!==undefined?restoreCompressedWorkspace(value.main):restoreNestedDiscovery(value.main,MAX_RESTORED_BUNDLE_BYTES);
       if(Object.keys(restored).some(k=>!['main','discovery','outreach','delivery','meta'].includes(k))||restored.main?.format===BUNDLE_FORMAT)invalid();
       for(const section of Object.values(restored))if(!section||typeof section!=='object'||Array.isArray(section)||bytes(section)>MAX_RESTORED_SECTION_BYTES)invalid();
       if(value.meta?.persistence)restored.meta={...restored.meta,persistence:cloneValue(value.meta.persistence)};
@@ -212,6 +236,7 @@
   function cloneValue(value){return JSON.parse(JSON.stringify(value));}
   function compactBundle(input={},options={}){
     const original=clone(input);let payload=restoreFromSync(clone(input));
+    if(options.allowCompressionPacking===true){const compressed=compressWorkspace(payload);if(compressed&&bytes(compressed)<=MAX_SYNC_BYTES)return {payload:compressed,bytes:bytes(compressed),compacted:true};}
     payload.main=compactMain(payload.main||{},8000,12000);
     for(const [webChars,pdfChars,evidenceChars] of [[4000,6000,1800],[1500,2500,900],[1500,2500,450]]){
       if(bytes(payload)<=TARGET_SYNC_BYTES)break;
@@ -237,6 +262,7 @@
         if(bytes(shared)<bytes(payload))payload=shared;
       }
     }
+    if(options.allowCompressionPacking===true&&bytes(payload)>TARGET_SYNC_BYTES){const compressed=compressWorkspace(restoreFromSync(payload));if(compressed&&bytes(compressed)<bytes(payload))payload=compressed;}
     return {payload,bytes:bytes(payload),compacted:JSON.stringify(payload)!==JSON.stringify(original)};
   }
   function prepareForSync(input={},options={}){

@@ -1168,6 +1168,37 @@
       "contains": [
         "bundle-sync=20261011-v1"
       ]
+    },
+    {
+      "id": "lossless-workspace-compression",
+      "type": "text",
+      "url": "/customer/state-budget.js",
+      "status": 200,
+      "contains": [
+        "lzw16-base64-v1",
+        "function restoreCompressedWorkspace(",
+        "options.allowCompressionPacking===true",
+        "MAX_RESTORED_BUNDLE_BYTES"
+      ]
+    },
+    {
+      "id": "workspace-compression-capability",
+      "type": "text",
+      "url": "/customer/server-bridge.js",
+      "status": 200,
+      "contains": [
+        "bridge.workspaceCompressionCodec=payload.compression_codec",
+        "allowCompressionPacking:bridge.workspaceCompressionCodec==='workspace-lzw-v1'"
+      ]
+    },
+    {
+      "id": "workspace-compression-cache",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "text-compression=20261011-v1"
+      ]
     }
   ],
   "retry": {

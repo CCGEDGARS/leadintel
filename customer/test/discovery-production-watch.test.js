@@ -57,7 +57,7 @@ function productionFetch({ customerHtml, discoveryUi, sessionStatus=401 }) {
   };
 }
 
-const shell = 'bundle-sync=20261011-v1 <script defer src="message-evidence.js?v=20261010-evidence-v3"></script> subject-evidence=20261010-v5 LeadIntel — Build Your Commercial Intelligence Strategy id="company-website" <script defer src="page-quality.js?v=20261010-v1"></script><script defer src="page-quality-ui.js?v=20261010-v1"></script> page-procedures=20261010-v1';
+const shell = 'text-compression=20261011-v1 bundle-sync=20261011-v1 <script defer src="message-evidence.js?v=20261010-evidence-v3"></script> subject-evidence=20261010-v5 LeadIntel — Build Your Commercial Intelligence Strategy id="company-website" <script defer src="page-quality.js?v=20261010-v1"></script><script defer src="page-quality-ui.js?v=20261010-v1"></script> page-procedures=20261010-v1';
 const boundedDiscoveryRuntime = [
   'outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&style-application=20261011-v1&',
   'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
