@@ -194,7 +194,7 @@ test('workspace health renders the saved credit failure, opens billing and clear
   window.LeadIntelAttention.refresh();
   assert.deepEqual(window.LeadIntelAttention.list(),[]);
   assert.equal(count.hidden,true);
-  assert.equal(summary.textContent,'Workspace healthy');
+  assert.equal(summary.textContent,'Local workspace · Ready');
 });
 
 test('billing alone is red; transient failures and unfinished work are yellow',()=>{const items=Attention.buildAttentionItems({tasks:[{id:'timeout',status:'error',error:'HTTP 429 rate limit'}],runtimeErrors:[{message:'Unexpected failure'}],unsaved:true,providerIssues:[{provider:'firecrawl',name:'Firecrawl',source:'customer'}]});assert.equal(items.filter(i=>i.severity==='error').length,1);assert.match(items[0].id,/provider-firecrawl/);assert.equal(Attention.healthSummary(items).status,'error');const rest=items.filter(i=>i.severity!=='error');assert.equal(Attention.healthSummary(rest).status,'recommendation');assert.doesNotMatch(Attention.healthSummary(rest).text,/errors?/);assert.equal(Attention.healthSummary([]).status,'healthy');});

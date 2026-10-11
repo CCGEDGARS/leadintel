@@ -98,7 +98,7 @@
     }
   }
   function returnTo(){const url=new URL(location.href);url.searchParams.delete('auth');url.searchParams.delete('gmail');url.searchParams.delete('microsoft_mail');url.searchParams.delete('reason');url.searchParams.delete('workspace_id');return url.toString();}
-  function setStatus(text,kind=''){bridge.status=kind||text;const existing=document.querySelector('.autosave');if(existing){existing.innerHTML=`<i></i>${text}`;existing.dataset.serverStatus=kind||'';}const status=document.getElementById('server-sync-status');if(status){status.textContent=text;status.dataset.state=kind||'';}}
+  function setStatus(text,kind=''){bridge.status=kind||text;const existing=document.querySelector('.autosave');if(existing){existing.innerHTML=`<i></i>${text}`;existing.dataset.serverStatus=kind||'';}const status=document.getElementById('server-sync-status');if(status){status.textContent=text;status.dataset.state=kind||'';}root.dispatchEvent(new CustomEvent('leadintel:sync-status-changed'));}
   function showToast(message){const el=document.getElementById('toast');if(!el)return;el.textContent=message;el.classList.add('show');clearTimeout(showToast.t);showToast.t=setTimeout(()=>el.classList.remove('show'),3000);}
   function injectCss(){if(document.querySelector('link[data-leadintel-asset="server-css"]'))return;const link=document.createElement('link');link.rel='stylesheet';link.href=asset('server.css')+'&sync-toolbar=20261005-v1';link.dataset.leadintelAsset='server-css';document.head.appendChild(link);}
   function injectAccountUi(){
