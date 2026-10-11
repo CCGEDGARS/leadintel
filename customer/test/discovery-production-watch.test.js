@@ -31,7 +31,7 @@ function productionFetch({ customerHtml, discoveryUi, sessionStatus=401, private
     if (parsed.pathname === '/api/session') return response({status:sessionStatus,json:{authenticated:false}});
     if (['/api/writing-references','/api/content-materials'].includes(parsed.pathname)) return response({status:401,json:{error:'Authentication required'}});
     if (parsed.pathname === '/customer/writing-references-ui.js') return response({text:fs.readFileSync(path.join(root,'customer/writing-references-ui.js'),'utf8')});
-    if (parsed.pathname === '/customer/api-transport.js') return response({text:fs.readFileSync(path.join(root,'customer/api-transport.js'),'utf8')});
+    if (parsed.pathname === '/customer/api-transport.js' || parsed.pathname === '/customer/account-cache.js') return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});
     if (parsed.pathname === '/release.json') {
       return response({ json: { service: 'leadintel-customer', commit: SHA, ref: 'main' } });
     }
@@ -58,7 +58,7 @@ function productionFetch({ customerHtml, discoveryUi, sessionStatus=401, private
   };
 }
 
-const shell = 'placeholder="Your first and last name" sharing-privacy=20261011-v1 codec-loader=20261011-v1 text-compression=20261011-v3 bundle-sync=20261011-v1 <script defer src="message-evidence.js?v=20261010-evidence-v3"></script> subject-evidence=20261010-v5 LeadIntel — Build Your Commercial Intelligence Strategy id="company-website" <script defer src="page-quality.js?v=20261010-v1"></script><script defer src="page-quality-ui.js?v=20261010-v1"></script> page-procedures=20261010-v1';
+const shell = 'id="account-recovery" Try again startup-recovery=20261011-v1 placeholder="Your first and last name" sharing-privacy=20261011-v1 codec-loader=20261011-v1 text-compression=20261011-v3 bundle-sync=20261011-v1 <script defer src="message-evidence.js?v=20261010-evidence-v3"></script> subject-evidence=20261010-v5 LeadIntel — Build Your Commercial Intelligence Strategy id="company-website" <script defer src="page-quality.js?v=20261010-v1"></script><script defer src="page-quality-ui.js?v=20261010-v1"></script> page-procedures=20261010-v1';
 const boundedDiscoveryRuntime = [
   'outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&style-application=20261011-v1&',
   'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',

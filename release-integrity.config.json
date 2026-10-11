@@ -1290,6 +1290,37 @@
         "token_hint",
         "scheduling_url"
       ]
+    },
+    {
+      "id": "workspace-startup-recovery-control",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "id=\"account-recovery\"",
+        "Try again",
+        "startup-recovery=20261011-v1"
+      ]
+    },
+    {
+      "id": "workspace-startup-read-retries",
+      "type": "text",
+      "url": "/customer/server-bridge.js",
+      "status": 200,
+      "contains": [
+        "async function bootstrapRead(",
+        "for(let attempt=0;attempt<3;attempt++)",
+        "const services=await Promise.allSettled("
+      ]
+    },
+    {
+      "id": "workspace-verification-failure-revokes-access",
+      "type": "text",
+      "url": "/customer/account-cache.js",
+      "status": 200,
+      "contains": [
+        "function failed(){verified=false;"
+      ]
     }
   ],
   "retry": {
