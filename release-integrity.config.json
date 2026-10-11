@@ -1065,6 +1065,51 @@
         "updateUndo(currentItem())",
         "editor_action:input.action"
       ]
+    },
+    {
+      "id": "core-renderer-final-contract",
+      "type": "text",
+      "url": "/customer/message-editor.js",
+      "status": 200,
+      "contains": [
+        "function coreExperience(",
+        "less glamorous part of projects like yours",
+        "an extra pair of reliable hands for {{offer}} would {{value}}",
+        "function validateCoreDraft(",
+        "Update needs all five subjects:",
+        "verbatim-facts-v7",
+        "Repeated slots consume their full weight"
+      ]
+    },
+    {
+      "id": "verified-positive-milestone",
+      "type": "text",
+      "url": "/customer/message-facts.js",
+      "status": 200,
+      "contains": [
+        "function positiveEvent(",
+        "queries,event,positiveEvent,updateOpening"
+      ]
+    },
+    {
+      "id": "milestone-normalization",
+      "type": "text",
+      "url": "/customer/outreach-engine.js",
+      "status": 200,
+      "contains": [
+        "positive:MessageFacts()?.positiveEvent(excerpt)===true"
+      ]
+    },
+    {
+      "id": "core-update-final-validation",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "LeadIntelMessageEditor.validateCoreDraft(studio,context,draft)",
+        "tailoringVersion=7",
+        "core-renderer=20261011-v1"
+      ]
     }
   ],
   "retry": {

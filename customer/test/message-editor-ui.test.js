@@ -37,6 +37,7 @@ test('Restore original replaces edits with initial tailored snapshot and does no
 });
 test('clicking the visible NLP style replaces the saved Professional text in the single editor',()=>{
  const {w,document,studio,item,saved}=mounted(),q=id=>document.getElementById(id),src=read('outreach-ui.js');
+ w.studioMessageContext=()=>({channel:'email',buyerName:'Alex Buyer',firstName:'Alex',buyerCompany:'Example',trigger:{url:'https://buyer.example/news',verification:'source_verified',positive:true,summary:'Example is investing in a new factory at Northport.'}});
  studio.mode='professional';Object.assign(studio.essentials,{target:'Operations teams',problem:'Project handoffs',nextAction:'Choose a suitable time here: {{calendly}}'});w.studioState=()=>S.normalize(studio);w.readStudio=()=>S.normalize({...studio,mode:q('message-mode').value});w.persistStudio=next=>Object.assign(studio,next);
  w.mainState=()=>({brandIdentity:{senderName:studio.essentials.sender},answers:{}});w.crmAuthenticated=()=>true;w.messageRecipientReady=()=>true;
  w.LeadIntelMessageTranslations=require('../message-translations.js');
