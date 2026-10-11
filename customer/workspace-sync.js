@@ -17,7 +17,7 @@
   const ATOMIC_FIELDS=new Set(['selectedEmailBuyer','selectedLinkedInBuyer','scriptBuyer','contactVerification','publicEmailSourceCheck','messageStudioDraft']);
   // These fields remember the page a tab is viewing, not commercial progress.
   // Concurrent navigation should keep this tab's view and merge business data.
-  const NAVIGATION_PATHS=new Set(['main.step','meta.discovery.visibleStep','meta.discovery.activeJourneyStage']);
+  const NAVIGATION_PATHS=new Set(['main.step','meta.discovery.visibleStep','meta.discovery.activeJourneyStage','outreach.selectedDomain','outreach.messageStudio.mode','outreach.messageStudio.linkedinMode']);
   function subset(value,keys){return Object.fromEntries(keys.filter(key=>Object.prototype.hasOwnProperty.call(value||{},key)).map(key=>[key,value[key]]));}
   function recordMaps(arrays,path){
     if(!RECORD_LISTS.has(path.split('.').at(-1))||!arrays.every(Array.isArray))return null;
@@ -32,12 +32,12 @@
     const preference=['local','server'].includes(options.conflictPreference)?options.conflictPreference:null;
     function choose(path,l,r){conflicts.push(path);return preference==='server'?r:l;}
     function visit(bl,l,br,r,path){
+      if(NAVIGATION_PATHS.has(path))return l;
       if(equal(l,r))return l;
       // Compare each representation to its own acknowledged baseline. A full
       // browser research body and a cloud excerpt are not competing user edits.
       if(equal(r,br))return l;
       if(equal(l,bl))return r;
-      if(NAVIGATION_PATHS.has(path))return l;
       const field=path.split('.').at(-1);
       if(field==='buyerQualification')return undefined; // Recomputed from preserved buyer evidence.
       if(ATOMIC_FIELDS.has(field)||/^(?:template-[1-5]|linkedin-template-[1-3]|buyer-draft:.*|(?:email|linkedin):(?:professional|curiosity|friendly|brutal):[a-z]{2})$/.test(field))return choose(path,l,r);
