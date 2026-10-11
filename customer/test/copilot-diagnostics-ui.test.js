@@ -4,10 +4,8 @@ import fs from 'node:fs';
 
 const source=fs.readFileSync(new URL('../copilot-ui.js',import.meta.url),'utf8');
 
-test('diagnostics expose Info Improve and Important without auto-opening the drawer',()=>{
-  for(const label of ['Info','Improve','Important'])assert.match(source,new RegExp(label,'i'));
-  assert.match(source,/unreadImportant|diagnostics/);
-  assert.doesNotMatch(source,/unreadImportant[^\n]{0,120}openCopilot\s*\(/);
+test('support keeps workspace checks out of the conversation panel',()=>{
+  assert.doesNotMatch(source,/Workspace checks|copilot-diagnostics|renderDiagnostics|unreadImportant/);
 });
 
 test('support clears proposals without displaying mutation controls',()=>{
@@ -15,7 +13,7 @@ test('support clears proposals without displaying mutation controls',()=>{
  assert.doesNotMatch(source,/Confirm change|confirmCopilotAction|preview\?\.after/);
 });
 
-test('important diagnostics can update the entry badge without forcing model work',()=>{
-  assert.match(source,/data-copilot-badge|leadintel-copilot-entry/);
-  assert.doesNotMatch(source,/diagnostics[^\n]{0,160}sendCopilotMessage\s*\(/);
+test('support preserves the freshness guard for workspace context',()=>{
+  assert.match(source,/copilotWorkspaceSaveState/);
+  assert.match(source,/Save your workspace, then reopen Ask LeadIntel to use the latest context/);
 });
