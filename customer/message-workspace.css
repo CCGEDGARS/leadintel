@@ -409,3 +409,8 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 @media(prefers-reduced-motion:reduce){#message-studio .mw-text-updating{transition:none}}
 
 #message-studio .mw-text-updated{box-shadow:0 0 0 2px #87b49a;background:#f0f8f3;border-radius:12px}
+
+/* Category labels remain visible despite the legacy subject helper-text rule. */
+#message-studio .mw-subject-options .mw-subject-category{display:inline;font-size:11px;color:#63786a}
+#message-studio .mw-editor .mw-subject-options.mw-text-updating{background:#fff8ea;padding:12px}
+#message-studio .mw-editor .mw-subject-options.mw-text-updated{background:#f0f8f3}

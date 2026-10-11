@@ -961,7 +961,7 @@
       "url": "/customer/outreach-ui.js",
       "status": 200,
       "contains": [
-        "subject-editor=20261011-v1",
+        "subject-editor=20261011-v2",
         "function subjectStamp()",
         "async function updateSubjects",
         "stamp!==subjectStamp()",
