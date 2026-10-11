@@ -1,0 +1,9 @@
+# Message length editor — 11 October 2026
+
+User authorized one Message editor with Original length / Short (~75%) / Very short (~50%), a green Adjust message action, and editor review/Undo/Restore original/Save. It replaces the visible separate body assistance controls. Existing subject category editor stays separate.
+
+Previous mismatch: Update restored the default template while Shorten rewrote the current text, making repeated shortening lose the stable source. The unified action uses the full selected/default template plus current confirmed facts. Shorter copies are explicitly authorized working alternatives and never change the immutable approved originals. Field preparation is performed without applying an interim source draft, so failures preserve the current message. Missing required source markers are explained before AI spending. AI Original and events retain separate source/validation rules. Translations remain sourced from English.
+
+Length validation rejects over-budget output, subject changes, changed identity/link/quantity/platform or omitted AI disclosure. AI refusal remains visible. One 45-second deadline covers source preparation and adjustment; an explicit post-response abort check rejects late results even if a transport resolves after cancellation. Workspace/recipient/style/facts/material/default/event/language changes reject stale requests. These checks are structural and evidence association safeguards; human review still assesses meaning and factual suitability.
+
+Length/source metadata and Undo persist through generic CRM script snapshots. Undo restores the previous displayed subject/body and context. Save is separate; sending and flow activation are not part of this change. Regression tests exercise actual assembled controls, full-source repeated adjustments, all four core styles, refusal/failure/timeout/stale replies, original restoration, immutable master preservation and CRM metadata round-trip.
