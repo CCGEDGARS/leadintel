@@ -1199,6 +1199,27 @@
       "contains": [
         "text-compression=20261011-v1"
       ]
+    },
+    {
+      "id": "workspace-codec-no-deferred-downgrade",
+      "type": "text",
+      "url": "/customer/shell-support-loader.js",
+      "status": 200,
+      "contains": [
+        "const SUPPORT_MODULES="
+      ],
+      "notContains": [
+        "./state-budget.js?"
+      ]
+    },
+    {
+      "id": "workspace-codec-loader-cache",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "codec-loader=20261011-v1"
+      ]
     }
   ],
   "retry": {
