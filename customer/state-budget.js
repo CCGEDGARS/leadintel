@@ -38,6 +38,7 @@
   const REFERENCE_FORMAT='leadintel-discovery-refs-v1';
   const NESTED_FORMAT='leadintel-discovery-refs-v2';
   const SECTION_FORMAT='leadintel-workspace-section-refs-v1';
+  const BUNDLE_FORMAT='leadintel-workspace-bundle-refs-v1';
   // Workflow views repeat the same company, buyer pool and provider evidence.
   // Share equal copies on the wire without deleting any record or audit field.
   function packRepeatedDiscovery(value){
@@ -165,6 +166,15 @@
     return Object.fromEntries(Object.entries(value).map(([field,item])=>[field,packBuyerTraces(item,field)]));
   }
   function restoreFromSync(value,key=''){
+    if(key===''&&value?.main?.format===BUNDLE_FORMAT){
+      const invalid=()=>{throw new Error('Invalid stored workspace bundle');};
+      if(Object.keys(value).some(k=>!['main','meta'].includes(k))||(value.meta!=null&&(typeof value.meta!=='object'||Array.isArray(value.meta)))||Object.keys(value.meta||{}).some(k=>k!=='persistence'))invalid();
+      const restored=restoreNestedDiscovery(value.main,MAX_RESTORED_SECTION_BYTES*4);
+      if(Object.keys(restored).some(k=>!['main','discovery','outreach','delivery','meta'].includes(k))||restored.main?.format===BUNDLE_FORMAT)invalid();
+      for(const section of Object.values(restored))if(!section||typeof section!=='object'||Array.isArray(section)||bytes(section)>MAX_RESTORED_SECTION_BYTES)invalid();
+      if(value.meta?.persistence)restored.meta={...restored.meta,persistence:cloneValue(value.meta.persistence)};
+      return restoreFromSync(restored);
+    }
     if(['main','outreach','delivery'].includes(key)&&value?.format===SECTION_FORMAT)return restoreFromSync(restoreNestedDiscovery(value),key);
     if(key==='discovery'&&value?.format===NESTED_FORMAT)return restoreFromSync(restoreNestedDiscovery(value),key);
     if(key==='discovery'&&value?.format===REFERENCE_FORMAT){
@@ -217,6 +227,14 @@
       for(const key of ['main','outreach','delivery']){
         const packed=packNestedDiscovery(payload[key]);
         if(packed?.format===NESTED_FORMAT)payload[key]={...packed,format:SECTION_FORMAT};
+      }
+    }
+    if(bytes(payload)>TARGET_SYNC_BYTES&&options.allowBundlePacking===true){
+      const restored=restoreFromSync(payload),packed=packNestedDiscovery(restored);
+      if(packed?.format===NESTED_FORMAT){
+        const shared={main:{...packed,format:BUNDLE_FORMAT}};
+        if(restored.meta?.persistence)shared.meta={persistence:cloneValue(restored.meta.persistence)};
+        if(bytes(shared)<bytes(payload))payload=shared;
       }
     }
     return {payload,bytes:bytes(payload),compacted:JSON.stringify(payload)!==JSON.stringify(original)};

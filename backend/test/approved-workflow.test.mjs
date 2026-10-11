@@ -1,4 +1,6 @@
 import test from 'node:test';
+import budget from '../../customer/state-budget.js';
+import capacityFixture from '../../customer/test/helpers/workspace-capacity.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {DatabaseSync} from 'node:sqlite';
@@ -67,8 +69,8 @@ test('Lookalike without buying signals stays outside automatic buyer and message
 test('automatic buyers research a public pool and prioritize kept verified buyers in the same workspace',async()=>{
  const env=await fixture();
  env.DB.raw.exec("INSERT INTO crm_companies(id,workspace_id,normalized_domain,company_name,lifecycle_status,first_seen_at,last_seen_at,created_at,updated_at) VALUES('c1','w1','example.com','Example','prospect',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);INSERT INTO crm_contacts(id,workspace_id,company_id,name,title,normalized_email,email_status,source,linkedin_url,created_at,updated_at) VALUES('a','w1','c1','First Buyer','COO','first@example.com','verified','apollo','https://linkedin.com/in/first',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),('b','w1','c1','Saved Buyer','COO','saved@example.com','verified','apollo','https://linkedin.com/in/saved',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");
- const payload={main,discovery:{selectedProspects:[{domain:'example.com',people:[{name:'Saved Buyer',title:'COO',publicLinkedinUrl:'https://linkedin.com/in/saved',kept:true}]}]}};
- env.DB.raw.prepare('UPDATE customer_workspace_state SET payload_json=? WHERE workspace_id=?').run(JSON.stringify(payload),'w1');
+ const payload=capacityFixture();payload.main={...payload.main,...main};payload.discovery.selectedProspects[0]={...payload.discovery.selectedProspects[0],domain:'example.com',people:[{name:'Saved Buyer',title:'COO',publicLinkedinUrl:'https://linkedin.com/in/saved',kept:true}]};
+ env.DB.raw.prepare('UPDATE customer_workspace_state SET payload_json=? WHERE workspace_id=?').run(JSON.stringify(budget.prepareForSync(payload,{allowBundlePacking:true}).payload),'w1');
  const oldFetch=globalThis.fetch;let apollo=0,publicSearches=0;
  globalThis.fetch=async(url)=>{if(String(url).includes('apollo.io')){apollo++;throw new Error('Unexpected enrichment');}publicSearches++;return new Response(JSON.stringify({data:Array.from({length:20},(_,i)=>({url:`https://linkedin.com/in/person-${i}`,title:`Anna Buyer${String.fromCharCode(65+i)} – COO at Example`}))}),{status:200});};
  try{

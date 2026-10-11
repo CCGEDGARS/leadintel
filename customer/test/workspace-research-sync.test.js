@@ -13,6 +13,18 @@ function load(values,nativeFetch){
 function localValues(payload){return new Map(Object.entries(KEYS).map(([key,storageKey])=>[storageKey,JSON.stringify(key==='meta'?payload.meta.discovery:payload[key]||{})]));}
 const endpoint='https://leadintel-api.edgars-7e7.workers.dev/api/customer/state?workspace_id=w1';
 
+test('combined bundle sharing survives real explicit Save and fresh-browser hydration',async()=>{
+ const payload=require('./helpers/workspace-capacity.js')(),values=localValues(payload);let wire;
+ const root=load(values,async(input,options)=>{wire=JSON.parse(options.body).payload;return new Response(JSON.stringify({saved:true,version:8}));});
+ root.LeadIntelServerBridge.workspaceBundleCodec='workspace-bundle-v1';
+ await root.fetch(endpoint,{method:'PUT',body:JSON.stringify({version:7,payload}),leadintelSaveIntent:true,leadintelExplicitSave:true});
+ assert.equal(wire.main.format,'leadintel-workspace-bundle-refs-v1');assert.ok(budget.bytes(wire)<=budget.MAX_SYNC_BYTES);assert.equal(root.LeadIntelWorkspacePersistence.hasUnsavedChanges(),false);
+ assert.deepEqual(JSON.parse(JSON.stringify(root.LeadIntelWorkspacePersistence.syncedBase('w1').payload)),payload);
+ const freshValues=new Map(),fresh=load(freshValues,async()=>new Response(JSON.stringify({version:8,payload:wire})));await fresh.fetch(endpoint,{method:'GET'});fresh.LeadIntelWorkspacePersistence.prepareForLoad();
+ for(const key of ['main','discovery','outreach','delivery'])assert.deepEqual(JSON.parse(freshValues.get(KEYS[key])),payload[key]);
+ assert.deepEqual(JSON.parse(freshValues.get(KEYS.meta)),payload.meta.discovery);
+});
+
 test('real save boundary compacts research and keeps a stable clean local baseline across save and reload',async()=>{
  const evidence=Array.from({length:50},(_,i)=>({url:`https://company${i}.se/news`,title:'Factory news',text:'Manufacturing investment '.repeat(1500),date:'2026-10-01'}));
  const payload={main:{website:'https://seller.example',profile:{companyName:'Seller'}},discovery:{rawResults:evidence,selectedProspects:[{company:'Company',domain:'company.se',notes:'Retain selected buyer'}]},outreach:{},delivery:{},meta:{discovery:{}}};

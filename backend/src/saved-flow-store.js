@@ -5,7 +5,7 @@ import {automaticGmailDeliveryEnabled} from './outreach-automation.js';
 import {apolloCapabilities,hunterVerificationPolicy,resolveWorkspaceServiceCredential} from './service-integrations.js';
 export const parse=(value,fallback={})=>{try{return JSON.parse(value||'')??fallback;}catch{return fallback;}};
 export const decode=row=>stateBudget.restoreFromSync(parse(row?.payload_json));
-export const encode=payload=>JSON.stringify(stateBudget.prepareForSync(payload,{allowSectionPacking:true}).payload);
+export const encode=payload=>JSON.stringify(stateBudget.prepareForSync(payload,{allowSectionPacking:true,allowBundlePacking:true}).payload);
 export async function currentPayload(env,workspaceId){return decode(await env.DB.prepare('SELECT payload_json FROM customer_workspace_state WHERE workspace_id=?').bind(workspaceId).first());}
 export async function savedFlowRow(env,workspaceId,id){return env.DB.prepare('SELECT * FROM saved_flows WHERE workspace_id=? AND id=?').bind(workspaceId,id).first();}
 export async function savedFlowPayload(env,row){const current=await currentPayload(env,row.workspace_id);const saved=row.id==='legacy-'+row.workspace_id&&!current.main?.myFlow?.id?current:decode(row);return FlowState.composePayload(saved,current,row);}

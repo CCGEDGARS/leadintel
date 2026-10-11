@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {sha256} from '../src/security.js';
 import {handleMarketMonitoringRoute} from '../src/market-monitoring.js';
+import capacityFixture from '../../customer/test/helpers/workspace-capacity.js';
+import stateBudget from '../../customer/state-budget.js';
 
 let DatabaseSync=null;try{({DatabaseSync}=await import('node:sqlite'));}catch{}
 const sqliteTest=(name,fn)=>test(name,{skip:DatabaseSync?false:'requires Node sqlite'},fn);
@@ -10,6 +12,15 @@ class Statement{constructor(db,sql){this.db=db;this.sql=sql;this.args=[];}bind(.
 class DB{constructor(){this.raw=new DatabaseSync(':memory:');this.raw.exec(`PRAGMA foreign_keys=ON;CREATE TABLE workspaces(id TEXT PRIMARY KEY);CREATE TABLE users(id TEXT PRIMARY KEY,email TEXT,display_name TEXT,role TEXT);CREATE TABLE sessions(token_hash TEXT PRIMARY KEY,user_id TEXT,expires_at TEXT);CREATE TABLE workspace_members(workspace_id TEXT,user_id TEXT,role TEXT,PRIMARY KEY(workspace_id,user_id));CREATE TABLE customer_workspace_state(workspace_id TEXT PRIMARY KEY,schema_version INTEGER,version INTEGER,payload_json TEXT,updated_by TEXT,updated_at TEXT);CREATE TABLE audit_events(id TEXT PRIMARY KEY,workspace_id TEXT,user_id TEXT,event_type TEXT,entity_type TEXT,entity_id TEXT,metadata_json TEXT);INSERT INTO workspaces VALUES('w1');`);this.raw.exec(fs.readFileSync(new URL('../migrations/0014_market_monitoring.sql',import.meta.url),'utf8'));}prepare(sql){return new Statement(this.raw,sql);}async batch(rows){for(const row of rows)await row.run();}}
 async function fixture(role='owner'){const db=new DB();const token='monitor-token';const hash=await sha256(token);db.raw.prepare('INSERT INTO users VALUES(?,?,?,?)').run('u1','owner@example.com','Owner',role);db.raw.prepare(`INSERT INTO sessions VALUES(?,?,datetime('now','+1 day'))`).run(hash,'u1');db.raw.prepare('INSERT INTO workspace_members VALUES(?,?,?)').run('w1','u1',role);return {env:{DB:db},token,db};}
 function request(path,{method='GET',token,body}={}){return new Request(`https://api.example.test${path}`,{method,headers:{Cookie:`leadintel_session=${token}`,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});}
+
+sqliteTest('monitoring reads the seller markets from a packed workspace',async()=>{
+ const {env,token,db}=await fixture(),payload=capacityFixture();payload.main.profile={targetMarkets:'Finland',priorityOffers:'Industrial automation'};payload.main.targetMarkets=['Finland'];
+ db.raw.prepare('INSERT INTO customer_workspace_state VALUES(?,1,1,?,NULL,NULL)').run('w1',JSON.stringify(stateBudget.prepareForSync(payload,{allowBundlePacking:true}).payload));
+ await handleMarketMonitoringRoute(request('/api/market-monitoring/config?workspace_id=w1',{method:'PUT',token,body:{enabled:true,source_types:['news']}}),env,{});
+ const oldFetch=globalThis.fetch;globalThis.fetch=async()=>new Response(JSON.stringify({data:[]}),{status:200});
+ try{const response=await handleMarketMonitoringRoute(request('/api/market-monitoring/run?workspace_id=w1',{method:'POST',token}),env,{});assert.equal(response.status,200);}finally{globalThis.fetch=oldFetch;}
+ assert.equal(JSON.parse(db.raw.prepare('SELECT snapshot_json FROM market_monitoring_runs').get().snapshot_json).markets,'Finland');
+});
 
 sqliteTest('owner can enable monitoring and retrieve the durable configuration',async()=>{
   const {env,token}=await fixture();
