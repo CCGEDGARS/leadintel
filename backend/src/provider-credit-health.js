@@ -1,7 +1,8 @@
 // Record only confirmed billing/credit failures. A bare 429 can be a transient rate limit.
 export function creditFailure(status, detail=''){
   const value=String(detail||'').toLowerCase();
-  if(Number(status)===402||/\b(?:insufficient_quota|credit_balance_exhausted|billing_hard_limit_reached|payment_required|out_of_credits|credits_exhausted)\b/.test(value))return true;
+  if(Number(status)===402||/\b(?:insufficient_quota|credit_balance_exhausted|billing_hard_limit_reached|payment_required|not_enough_credits|out_of_credits|credits_exhausted)\b/.test(value))return true;
+  if(/\b(?:payment|billing)\s+(?:failed|required|declined|limit)|\bsubscription\s+(?:expired|unpaid)|\bbilling\s+(?:hard\s+)?limit\s+(?:reached|exceeded)/.test(value))return true;
   return /(?:insufficient|exhausted|no|out of|zero)\s+(?:available\s+)?(?:credits?|quota|balance)|(?:credits?|quota|balance)\s+(?:is\s+)?(?:exhausted|depleted)/.test(value);
 }
 
@@ -20,4 +21,9 @@ export async function providerCreditIssue(env,workspaceId,provider){
   }catch{return null;}
 }
 
-export function verifiedCreditBalance(provider,metadata={}){if(provider!=='firecrawl'||metadata.remaining_credits==null||!Number.isFinite(Number(metadata.remaining_credits)))return null;return Number(metadata.remaining_credits)>0?'recovered':'failed';}
+export function verifiedCreditBalance(provider,metadata={}){
+  const keys=provider==='hunter'?['remaining_credits','remaining_searches','remaining_verifications']:provider==='firecrawl'?['remaining_credits']:[];
+  const balances=keys.map(key=>metadata[key]).filter(value=>value!=null&&String(value).trim()!==''&&Number.isFinite(Number(value))).map(Number);
+  if(!balances.length)return null;
+  return balances.some(value=>value<=0)?'failed':'recovered';
+}

@@ -53,10 +53,11 @@ async function verifyFirecrawl(apiKey){
 }
 async function verifyHunter(apiKey){
   const response=await fetch('https://api.hunter.io/v2/account',{method:'GET',headers:{Accept:'application/json','X-API-KEY':apiKey}});
-  if(!response.ok)throw new Error(response.status===401||response.status===403?'Hunter rejected this API key':`Hunter connection check failed (${response.status})`);
   const payload=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(creditFailure(response.status,JSON.stringify(payload))?'Hunter credits exhausted or payment required':response.status===401||response.status===403?'Hunter rejected this API key':`Hunter connection check failed (${response.status})`);
   if(!payload?.data||typeof payload.data!=='object')throw new Error('Hunter account information was unavailable');
-  return {plan:clean(payload.data.plan_name,80),remaining_verifications:Number.isFinite(Number(payload.data.requests?.verifications?.remaining))?Number(payload.data.requests.verifications.remaining):null};
+  const remaining=kind=>{const value=payload.data.requests?.[kind]?.remaining;return value!=null&&String(value).trim()!==''&&Number.isFinite(Number(value))?Number(value):null;};
+  return {plan:clean(payload.data.plan_name,80),remaining_credits:remaining('credits'),remaining_searches:remaining('searches'),remaining_verifications:remaining('verifications')};
 }
 async function verifyCredential(provider,apiKey){if(provider==='apollo')return verifyApollo(apiKey);if(provider==='firecrawl')return verifyFirecrawl(apiKey);return verifyHunter(apiKey);}
 async function verifyManagedFirecrawl(env){
@@ -295,6 +296,7 @@ export async function handleServiceIntegrationRoute(request,env,cors={}){
     const providers=[];for(const provider of PROVIDERS){
       const state=await providerStatus(env,workspaceId,provider,{verify});
       state.credit_issue=await providerCreditIssue(env,workspaceId,provider);
+      if(state.source==='customer'&&verifiedCreditBalance(provider,state.metadata)==='failed')state.credit_issue={code:'credits_exhausted',source:'customer'};
       if(state.credit_issue?.source===state.source){state.state='bad';state.label='Credits exhausted';}
       providers.push(state);
     }
@@ -355,8 +357,10 @@ export async function handleServiceIntegrationRoute(request,env,cors={}){
     let response;try{response=await fetch(`https://api.hunter.io/v2/email-verifier?email=${encodeURIComponent(email)}`,{method:'GET',headers:{Accept:'application/json','X-API-KEY':credential.apiKey}});}catch{return error('Hunter is temporarily unavailable',502,cors);}
     if(response.status===451)return error('Hunter cannot process this address',451,cors,'SERVICE_HUNTER_CLAIMED_EMAIL');
     if(response.status===202||response.status===222)return json({email,status:'unknown',deliverability:'inconclusive',identity_confirmed:false,provider:'Hunter',pending:response.status===202},200,cors);
-    if(!response.ok)return error(response.status===401?'Hunter key was rejected':response.status===403||response.status===429?'Hunter request limit reached':`Hunter verification failed (${response.status})`,response.status>=400&&response.status<500?response.status:502,cors);
-    const payload=await response.json().catch(()=>({}));const data=payload.data||{};
+    const payload=await response.json().catch(()=>({}));
+    if(!response.ok){const payment=creditFailure(response.status,JSON.stringify(payload));if(payment)await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'hunter',kind:'failed',source:'customer'});return error(payment?'Hunter credits exhausted or payment required':response.status===401?'Hunter key was rejected':response.status===403||response.status===429?'Hunter request limit reached':`Hunter verification failed (${response.status})`,response.status>=400&&response.status<500?response.status:502,cors);}
+    await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'hunter',kind:'recovered',source:'customer'});
+    const data=payload.data||{};
     if(String(data.email||'').toLowerCase()!==email)return error('Hunter returned an unexpected email address',502,cors);
     const status=['valid','invalid','accept_all','webmail','disposable','unknown'].includes(data.status)?data.status:'unknown';
     const deliverability=status==='valid'&&!data.accept_all&&!data.block?'deliverable':status==='invalid'?'undeliverable':'inconclusive';
@@ -375,8 +379,10 @@ export async function handleServiceIntegrationRoute(request,env,cors={}){
     const params=new URLSearchParams({domain,first_name:first,last_name:last});
     let response;try{response=await fetch(`https://api.hunter.io/v2/email-finder?${params}`,{method:'GET',headers:{Accept:'application/json','X-API-KEY':credential.apiKey}});}catch{return error('Hunter is temporarily unavailable',502,cors);}
     if(response.status===451)return error('Hunter cannot process this person',451,cors,'SERVICE_HUNTER_CLAIMED_EMAIL');
-    if(!response.ok)return error(response.status===401?'Hunter key was rejected':response.status===403||response.status===429?'Hunter request limit reached':`Hunter email search failed (${response.status})`,response.status>=400&&response.status<500?response.status:502,cors);
-    const payload=await response.json().catch(()=>({})),data=payload.data||{};
+    const payload=await response.json().catch(()=>({}));
+    if(!response.ok){const payment=creditFailure(response.status,JSON.stringify(payload));if(payment)await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'hunter',kind:'failed',source:'customer'});return error(payment?'Hunter credits exhausted or payment required':response.status===401?'Hunter key was rejected':response.status===403||response.status===429?'Hunter request limit reached':`Hunter email search failed (${response.status})`,response.status>=400&&response.status<500?response.status:502,cors);}
+    await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'hunter',kind:'recovered',source:'customer'});
+    const data=payload.data||{};
     const email=clean(data.email,320).toLowerCase();
     if(email&&!email.endsWith(`@${domain}`))return error('Hunter returned an unexpected company domain',502,cors);
     const source=Array.isArray(data.sources)?data.sources.find(item=>{try{const url=new URL(item.uri);return ['http:','https:'].includes(url.protocol)&&!url.username&&!url.password;}catch{return false;}})?.uri||'':'';
