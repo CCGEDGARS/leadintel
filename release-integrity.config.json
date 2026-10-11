@@ -22,7 +22,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "LeadIntel — Build Your Commercial Intelligence Strategy",
+        "LeadIntel \u2014 Build Your Commercial Intelligence Strategy",
         "id=\"company-website\""
       ]
     },
@@ -258,7 +258,7 @@
         "topFourResearchCandidates",
         "data-research-buyer",
         "data-research-remaining",
-        "Likely email · ownership unconfirmed"
+        "Likely email \u00b7 ownership unconfirmed"
       ]
     },
     {
@@ -270,7 +270,7 @@
         "choice.channel==='linkedin'",
         "confirmedLinkedInBuyer",
         "prepareStudioBuyer(candidate,person)",
-        "LinkedIn direct message · draft only"
+        "LinkedIn direct message \u00b7 draft only"
       ]
     },
     {
@@ -427,7 +427,7 @@
       "url": "/customer/outreach-ui.js",
       "status": 200,
       "contains": [
-        "My LinkedIn Templates · ",
+        "My LinkedIn Templates \u00b7 ",
         "savedLinkedInCrmDraft",
         "Record as sent in CRM",
         "contact.linkedin_message_sent"
@@ -634,7 +634,7 @@
       "status": 200,
       "contains": [
         "bridge.workspaceStateCodec=payload.state_codec||''",
-        "Workspace exceeds sync limit · local changes preserved"
+        "Workspace exceeds sync limit \u00b7 local changes preserved"
       ]
     },
     {
@@ -643,7 +643,7 @@
       "url": "/customer/journey-progress.js",
       "status": 200,
       "contains": [
-        "No new qualified companies · saved companies retained",
+        "No new qualified companies \u00b7 saved companies retained",
         "Review saved companies or broaden the search"
       ]
     },
@@ -737,7 +737,7 @@
       "url": "/customer/message-workspace.js",
       "status": 200,
       "contains": [
-        "Message editor",
+        "Adjust message",
         "My content",
         "Approved originals",
         "Writing references",
@@ -745,7 +745,7 @@
         "Set as default",
         "Add to flow",
         "mw-browse-templates",
-        "Adjust message",
+        "Update message",
         "mw-subject-choices",
         "mw-header-actions",
         "Custom style settings",
@@ -905,7 +905,7 @@
         "providerConfirmedSent",
         "openSavedFlow",
         "function refreshSummary(",
-        "active · ",
+        "active \u00b7 ",
         "saved"
       ]
     },
@@ -1036,29 +1036,34 @@
       ]
     },
     {
-      "id": "message-length-adjustment",
-      "type": "text",
-      "url": "/customer/message-editor.js",
-      "status": 200,
-      "contains": [
-        "function lengthPlan(",
-        "function validateAdjustment(",
-        "adjust-message-length",
-        "adjustmentSource",
-        "Essential content exceeds the selected length"
-      ]
-    },
-    {
-      "id": "message-length-editor",
+      "id": "adjust-message-panel",
       "type": "text",
       "url": "/customer/message-workspace.js",
       "status": 200,
       "contains": [
+        "Adjust message",
+        "Create variation",
+        "Shorten",
+        "styleSection.after(assistant)",
+        "editorActions.prepend"
+      ],
+      "notContains": [
         "mw-message-length",
-        "Very short · about 50%",
-        "Short · about 75%",
-        "editorActions.before(assistant)",
-        "Adjust message"
+        "Very short \u00b7 about 50%",
+        "Message editor</h3>"
+      ]
+    },
+    {
+      "id": "adjust-message-guardrails",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "adjust-panel=20261011-v1",
+        "signal:controller.signal",
+        "Adjustment timed out",
+        "updateUndo(currentItem())",
+        "editor_action:input.action"
       ]
     }
   ],
