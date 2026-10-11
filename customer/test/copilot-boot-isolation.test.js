@@ -28,9 +28,9 @@ test('loader preloads scoped copilot styles before the first click',()=>{
   assert.match(source,/stylesheet/);
 });
 
-test('loader provides a lightweight entry beneath the progress metric without replacing main content',()=>{
+test('loader provides a lightweight entry beneath the stage list without replacing main content',()=>{
   const source=read('copilot-loader.js');
-  assert.match(source,/progress-metric/);
+  assert.match(source,/progress-panel \.steps/);
   assert.match(source,/insertAdjacentElement|after\(/);
   assert.match(source,/leadintel-copilot-entry/);
   assert.doesNotMatch(source,/innerHTML\s*=\s*[^;]*<main/i);

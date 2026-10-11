@@ -46,7 +46,9 @@
         "<script defer src=\"discovery-ui.js?"
       ],
       "notContains": [
-        "<script type=\"module\" src=\"discovery-ui.js"
+        "<script type=\"module\" src=\"discovery-ui.js",
+        "id=\"completeness-score\"",
+        "class=\"progress-metric\""
       ]
     },
     {
@@ -106,7 +108,10 @@
         "data-wf-final",
         "if(body&&workspace!==id)",
         "References describe buyers, not your own business.",
-        "Total score determines ranking."
+        "Total score determines ranking.",
+        "data-flow-summary",
+        "mf-entry-icon",
+        "sidebar-flows=20261011-v1"
       ]
     },
     {
@@ -898,7 +903,10 @@
         "Duplicate",
         "Review required",
         "providerConfirmedSent",
-        "openSavedFlow"
+        "openSavedFlow",
+        "function refreshSummary(",
+        "active \u00b7 ",
+        "saved"
       ]
     },
     {
