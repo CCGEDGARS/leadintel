@@ -307,7 +307,7 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #message-studio .mw-writing-assistant small{display:block;font-size:11px;line-height:1.6;color:#687c6e;margin-top:12px}
 .mw-assistant-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 #message-studio .mw-assistant-actions button{font-size:12px;padding:10px 8px;white-space:normal;min-height:40px}
-#message-studio .mw-assistant-actions #mw-rewrite-message{grid-column:1/-1;background:#2b6950;border-color:#2b6950;color:#fff}
+#message-studio .mw-assistant-actions #mw-rewrite-message{background:#2b6950;border-color:#2b6950;color:#fff}
 #message-studio .mw-tools-content>details{padding:12px;margin:0 0 9px}
 #message-studio .mw-tools-content>details:last-child{margin-bottom:0}
 #message-studio #mw-content-count{display:block;font-size:11px;font-weight:400;color:#718276;margin:5px 0 0 15px}
@@ -432,12 +432,3 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #message-studio .mw-subject-options .mw-subject-category{display:inline;font-size:11px;color:#63786a}
 #message-studio .mw-editor .mw-subject-options.mw-text-updating{background:#fff8ea;padding:12px}
 #message-studio .mw-editor .mw-subject-options.mw-text-updated{background:#f0f8f3}
-
-/* One source-based length action inside the working editor. */
-#message-studio .mw-editor .mw-writing-assistant{margin:16px 0;padding:18px 20px}
-#message-studio .mw-assistant-actions{display:flex;align-items:end;gap:12px;flex-wrap:wrap}
-#message-studio .mw-message-length{display:flex;flex-direction:column;gap:6px;flex:1;min-width:180px;font-size:13px;color:#52675a}
-#message-studio .mw-message-length select{width:100%;min-height:44px;padding:10px 12px;background:#fff;border:1px solid #cddfd3;border-radius:10px;color:#193c2c}
-#message-studio .mw-assistant-actions #message-generate{min-height:44px;padding:11px 24px;font-size:14px;background:#2b6950;border-color:#2b6950;color:#fff;white-space:normal}
-#message-studio .mw-assistant-actions [hidden]{display:none!important}
-@media(max-width:720px){#message-studio .mw-assistant-actions #message-generate{flex:1;min-width:180px}}

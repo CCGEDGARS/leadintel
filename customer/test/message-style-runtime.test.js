@@ -20,9 +20,9 @@ test('failed field preparation releases the loading state and clicking selected 
  const key='leadintel_customer_v2_state',main=JSON.parse(h.w.localStorage.getItem(key));main.profile.priorityOffers='steel and installation '.repeat(8);h.w.localStorage.setItem(key,JSON.stringify(main));
  const choose=()=>h.w.document.querySelector('[data-writing-style="curiosity"]').click(),settle=()=>new Promise(resolve=>setImmediate(resolve));
  choose();assert.equal(h.requests.length,1);assert.equal(h.q('message-generate').textContent,'Updating…');
- h.requests[0].resolve({ok:false,json:async()=>({error:'Provider unavailable'})});await settle();assert.equal(h.item().messageStudioDraft.mode,'professional');assert.deepEqual(E.workingDraft(h.item()),h.before);assert.match(h.q('message-generation-status').textContent,/Provider unavailable/);assert.equal(h.q('message-generate').textContent,'Adjust message');
+ h.requests[0].resolve({ok:false,json:async()=>({error:'Provider unavailable'})});await settle();assert.equal(h.item().messageStudioDraft.mode,'professional');assert.deepEqual(E.workingDraft(h.item()),h.before);assert.match(h.q('message-generation-status').textContent,/Provider unavailable/);assert.equal(h.q('message-generate').textContent,'Update message');
  choose();const request=h.requests.findLast(row=>row.url.includes('/api/ai/generate'));assert.notEqual(request,h.requests[0]);request.resolve({ok:true,json:async()=>({text:JSON.stringify({triggerSummary:'Buyer is investing in a new sorting plant at Northport.',offer:'steel and installation',value:'simplify project delivery',difference:'Our team supports industrial projects.',approach:'Project delivery to EN 1090 requirements',meetingValue:'relevant project lessons'})})});await settle();
- assert.equal(h.item().messageStudioDraft.mode,'curiosity');assert.match(h.q('outreach-email-body').value,/this is not another sales pitch/);assert.deepEqual(E.updateUndo(h.item()),h.before);assert.equal(h.q('message-generate').textContent,'Adjust message');
+ assert.equal(h.item().messageStudioDraft.mode,'curiosity');assert.match(h.q('outreach-email-body').value,/this is not another sales pitch/);assert.deepEqual(E.updateUndo(h.item()),h.before);assert.equal(h.q('message-generate').textContent,'Update message');
  }finally{h.w.close();}
 });
 test('clicking an already applied NLP style preserves an already applied manual NLP edit',()=>{
@@ -54,10 +54,10 @@ test('a failed style application keeps its actual failure visible across backgro
 });
 test('changed source facts reject preparation with a visible retry explanation',async()=>{
  const h=mounted();try{requirePreparation(h);h.w.document.querySelector('[data-writing-style="curiosity"]').click();const key='leadintel_customer_v2_state',main=JSON.parse(h.w.localStorage.getItem(key));main.profile.valueProposition='simplify installation';h.w.localStorage.setItem(key,JSON.stringify(main));h.requests[0].resolve({ok:true,json:async()=>({text:JSON.stringify(preparedFacts)})});await settle();h.w.renderAll();
- assert.deepEqual(E.workingDraft(h.item()),h.before);assert.match(h.q('message-generation-status').textContent,/changed.*retry/i);assert.equal(h.q('message-generation-status').hidden,false);assert.equal(h.q('message-generate').textContent,'Adjust message');
+ assert.deepEqual(E.workingDraft(h.item()),h.before);assert.match(h.q('message-generation-status').textContent,/changed.*retry/i);assert.equal(h.q('message-generation-status').hidden,false);assert.equal(h.q('message-generate').textContent,'Update message');
  }finally{h.w.close();}
 });
 test('AI Generated still rejects a response prepared before writing references changed',async()=>{
- const h=mounted();try{h.w.document.querySelector('[data-writing-style="original"]').click();const run=h.w.generateStudioMessage();const request=h.requests.find(row=>row.url.includes('/api/ai/generate'));assert.ok(request);h.w.dispatchEvent(new h.w.CustomEvent('leadintel:writing-references-changed',{detail:{workspaceId:'w1',referenceRevision:2}}));request.resolve({ok:true,json:async()=>({text:JSON.stringify({subject:'Stale generation',message:'Old reference content'})})});await run;assert.deepEqual(E.workingDraft(h.item()),h.before);assert.equal(h.q('message-generate').textContent,'Adjust message');
+ const h=mounted();try{h.w.document.querySelector('[data-writing-style="original"]').click();const run=h.w.generateStudioMessage();const request=h.requests.find(row=>row.url.includes('/api/ai/generate'));assert.ok(request);h.w.dispatchEvent(new h.w.CustomEvent('leadintel:writing-references-changed',{detail:{workspaceId:'w1',referenceRevision:2}}));request.resolve({ok:true,json:async()=>({text:JSON.stringify({subject:'Stale generation',message:'Old reference content'})})});await run;assert.deepEqual(E.workingDraft(h.item()),h.before);assert.equal(h.q('message-generate').textContent,'Generate');
  }finally{h.w.close();}
 });
