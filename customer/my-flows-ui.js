@@ -3,7 +3,7 @@
  const F=root.LeadIntelFlowState,API='https://leadintel-api.edgars-7e7.workers.dev';
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const bridge=()=>root.LeadIntelServerBridge;
- let dialog,data=null,busy=false,workspace='',requestId=0;
+ let dialog,data=null,busy=false,workspace='',requestId=0,summaryRequestId=0;
  const status={automatic:'Active',paused:'Paused',manual:'Manual',stopped:'Stopped',needs_review:'Review required'};
  function notice(text){dialog?.querySelector('[data-flows-notice]')?.replaceChildren(document.createTextNode(text));}
  async function api(id='',body){
@@ -13,7 +13,17 @@
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),20000);
   try{const response=await fetch(url,{credentials:'include',method:body?'POST':'GET',headers:{Accept:'application/json','Content-Type':'application/json'},signal:controller.signal,...(body?{body:JSON.stringify(body)}:{})});const result=await response.json();if(bridge()?.workspace?.id!==ws)throw Error('Workspace changed. Refresh My Flows.');if(!response.ok)throw Error(result.error||'Could not update flow');return result;}finally{clearTimeout(timeout);}
  }
+ function entrySummary(text){for(const node of document.querySelectorAll('.wf-open [data-flow-summary]'))node.textContent=text;}
+ function showSummary(value){++summaryRequestId;entrySummary(value.activeCount+' active · '+value.flows.length+' saved');}
+ async function refreshSummary(){
+  const token=++summaryRequestId,ws=bridge()?.workspace?.id;
+  entrySummary('Loading flow counts…');
+  if(!bridge()?.session?.authenticated||!ws){entrySummary('Sign in to manage flows');return;}
+  try{const next=await api();if(token!==summaryRequestId)return;if(bridge()?.workspace?.id!==ws||!bridge()?.session?.authenticated){entrySummary('Sign in to manage flows');return;}showSummary(next);}
+  catch{if(token===summaryRequestId)entrySummary('Flow counts unavailable');}
+ }
  function render(){
+  showSummary(data);
   const owner=data.role==='owner',content=dialog.querySelector('[data-flows-content]');
   let html='<div class="mf-overview"><strong>'+data.flows.length+' / 10 saved flows</strong><strong>'+data.activeCount+' / 2 active</strong><span>Manual work is available in every flow.</span></div>';
   html+='<p>Your website, business details, sender and connections are shared. Markets, references, signals, templates and progress belong to each flow.</p>';
@@ -49,5 +59,5 @@
  function editor(id,action){if(busy)return;const flow=data.flows.find(f=>f.id===id),host=dialog.querySelector('[data-flows-editor]');host.hidden=false;host.innerHTML='<form data-flow-editor><h3>'+(action==='duplicate'?'Duplicate flow':'Rename flow')+'</h3><label>Flow name<input name="name" maxlength="100" required value="'+esc(flow.name+(action==='duplicate'?' — copy':''))+'"></label>'+(action==='duplicate'?'<label>Target markets (comma-separated)<input name="markets" required value="'+esc(flow.summary.markets.join(', '))+'"></label><p>The copy starts paused with no buyer drafts, outreach queue or inherited performance. Your original flow stays saved.</p>':'')+'<button>Save</button><button type="button" data-editor-cancel>Cancel</button></form>';host.querySelector('[data-editor-cancel]').addEventListener('click',()=>host.hidden=true);host.querySelector('form').addEventListener('submit',event=>{event.preventDefault();const form=new FormData(event.target);mutate(id,{action,name:form.get('name'),...(action==='duplicate'?{markets:String(form.get('markets')).split(',').map(s=>s.trim()).filter(Boolean)}:{})});});host.querySelector('input').focus();host.scrollIntoView?.({block:'nearest'});}
  function open(){if(!dialog){dialog=document.createElement('dialog');dialog.className='wf-dialog mf-dialog';dialog.innerHTML='<header><div><span class="eyebrow">Saved settings and automation</span><h2>My Flows</h2></div><button data-flows-refresh>Refresh</button><button data-flows-close>Close</button></header><p data-flows-notice role="status" aria-live="polite"></p><div data-flows-content></div>';document.body.append(dialog);dialog.querySelector('[data-flows-close]').addEventListener('click',()=>dialog.close());dialog.querySelector('[data-flows-refresh]').addEventListener('click',load);}if(!dialog.open)dialog.showModal();load();}
  function banner(){let main;try{main=JSON.parse(localStorage.getItem('leadintel_customer_v2_state')||'{}');}catch{return;}const flow=main.myFlow;if(!flow?.id)return;const host=document.querySelector('.top-actions')?.parentElement||document.querySelector('main');if(!host)return;const node=document.createElement('div');node.className='mf-workspace-banner';node.innerHTML='<span>Current flow: <strong>'+esc(flow.name)+'</strong></span><button type="button">My Flows</button><small>Website, business and sender settings are shared. Targeting, market strategy and working progress are specific to this flow.</small>';node.querySelector('button').addEventListener('click',open);host.append(node);}
- root.LeadIntelMyFlows={open,refresh:load,currentId:()=>{try{return JSON.parse(localStorage.getItem('leadintel_customer_v2_state')||'{}').myFlow?.id||null;}catch{return null;}}};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',banner,{once:true});else banner();
+ root.LeadIntelMyFlows={open,refresh:load,refreshSummary,currentId:()=>{try{return JSON.parse(localStorage.getItem('leadintel_customer_v2_state')||'{}').myFlow?.id||null;}catch{return null;}}};root.addEventListener('leadintel:server-ready',()=>{void refreshSummary();});root.addEventListener('focus',()=>{void refreshSummary();});if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',banner,{once:true});else banner();
 })(window);

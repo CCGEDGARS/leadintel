@@ -72,7 +72,7 @@
   async function load(){if(workspace&&workspace!==bridge()?.workspace?.id){dirty=false;data=null;}if(busy||dirty)return;busy=true;try{data=await api();render();notice('');}catch(error){notice(error.message);}finally{busy=false;}}
   async function mutate(action,extra={}){
     if((busy&&!['pause','stop','manual'].includes(action))||!data)return;busy=true;notice(action==='run'?'Running the approved workflow…':'Saving…');
-    try{data=await api({action,revision:data.revision,...extra});render();void root.LeadIntelQualificationSettings?.refresh?.();void root.LeadIntelServiceSettings?.refresh?.();notice(action==='activate'?'Workflow approved. The server will start the research cycle automatically.':action==='manual'?'Automatic work paused. Continue using the normal stage controls.':action==='save'?'Settings saved. Review the affected stages.':'Workflow updated.');}
+    try{data=await api({action,revision:data.revision,...extra});render();void root.LeadIntelMyFlows?.refreshSummary?.();void root.LeadIntelQualificationSettings?.refresh?.();void root.LeadIntelServiceSettings?.refresh?.();notice(action==='activate'?'Workflow approved. The server will start the research cycle automatically.':action==='manual'?'Automatic work paused. Continue using the normal stage controls.':action==='save'?'Settings saved. Review the affected stages.':'Workflow updated.');}
     catch(error){notice(error.message);}finally{busy=false;}
   }
   function open(){
@@ -80,9 +80,9 @@
     dialog.showModal();load();clearInterval(timer);timer=setInterval(()=>{if(dialog.open&&!busy&&!dirty)load();},15000);
   }
   function init(){
-    const style=document.createElement('link');style.rel='stylesheet';style.href='approved-workflow.css?v=20261010-my-flows-v1';document.head.append(style);
-    const button=document.createElement('button');button.className='wf-open';button.textContent='My Flows';button.type='button';button.addEventListener('click',()=>root.LeadIntelMyFlows?.open?root.LeadIntelMyFlows.open():open());
-    const anchor=document.querySelector('.sidebar')||document.querySelector('.app-sidebar')||document.querySelector('aside');(anchor||document.body).append(button);
+    const style=document.createElement('link');style.rel='stylesheet';style.href='approved-workflow.css?v=20261010-my-flows-v1&sidebar-flows=20261011-v1';document.head.append(style);
+    const button=document.createElement('button');button.className='wf-open';button.innerHTML='<svg class="mf-entry-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="15" y="15" width="6" height="6" rx="1.5"/><path d="M9 6h6a3 3 0 0 1 3 3v6M6 9v6a3 3 0 0 0 3 3h6"/></svg><span class="mf-entry-copy"><strong>My Flows</strong><small data-flow-summary aria-live="polite">Loading flow counts…</small></span>';button.type='button';button.addEventListener('click',()=>root.LeadIntelMyFlows?.open?root.LeadIntelMyFlows.open():open());
+    const anchor=document.querySelector('.sidebar')||document.querySelector('.app-sidebar')||document.querySelector('aside');(anchor||document.body).append(button);root.LeadIntelMyFlows?.refreshSummary?.();
     root.LeadIntelApprovedWorkflow={open:()=>root.LeadIntelMyFlows?.open?root.LeadIntelMyFlows.open():open(),openAutomation:(id)=>{automationFlowId=id;data=null;dirty=false;open();},refresh:load,contactConfirmationApproved:()=> (!automationFlowId||automationFlowId===root.LeadIntelMyFlows?.currentId?.())&&workspace===bridge()?.workspace?.id&&data?.status==='automatic'&&data?.config?.buyers?.confirmContacts===true};
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
