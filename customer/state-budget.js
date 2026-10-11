@@ -173,6 +173,19 @@
     if(restored.workspace_id!==record.workspace_id)throw new Error('Stored recovery workspace does not match');
     return restored;
   }
+  const SNAPSHOT_FORMAT='leadintel-workspace-snapshot-lzw-v1';
+  function packWorkspaceSnapshot(record){
+    if(!record||bytes(record)<65536)return record;
+    const packed=compressWorkspace({main:record});
+    // The existing bounded decoder accepts at most 500 KB of encoded text.
+    return packed&&packed.main.data.length<=MAX_SYNC_BYTES?{format:SNAPSHOT_FORMAT,workspace_id:record.workspace_id||'',data:packed}:record;
+  }
+  function restoreWorkspaceSnapshot(record){
+    if(record?.format!==SNAPSHOT_FORMAT)return record;
+    const restored=restoreFromSync(record.data).main;
+    if(!restored||!restored.data||(restored.workspace_id||'')!==record.workspace_id)throw new Error('Stored snapshot workspace does not match');
+    return restored;
+  }
   function packBuyerTraces(value,key=''){
     if(key==='resultDiagnostics'&&Array.isArray(value)&&value.length>=20&&value.every(row=>row&&typeof row==='object'&&!Array.isArray(row))){
       const columns=[...new Set(value.flatMap(row=>Object.keys(row)))],values=[],dictionary=new Map();
@@ -284,5 +297,5 @@
   }
 
   installStorageGuard();
-  return {syncCodecVersion:'workspace-lzw-v2',packRecoveryRecord,restoreRecoveryRecord,MAX_SYNC_BYTES,TARGET_SYNC_BYTES,bytes,compactBundle,restoreFromSync,prepareForSync,compactMainStorageValue,installStorageGuard};
+  return {packWorkspaceSnapshot,restoreWorkspaceSnapshot,syncCodecVersion:'workspace-lzw-v2',packRecoveryRecord,restoreRecoveryRecord,MAX_SYNC_BYTES,TARGET_SYNC_BYTES,bytes,compactBundle,restoreFromSync,prepareForSync,compactMainStorageValue,installStorageGuard};
 });

@@ -165,3 +165,12 @@ test('save-boundary failures end the saving indicator too',async()=>{
  vm.createContext(context);vm.runInContext(source.slice(source.indexOf('  async function saveWorkspaceState('),source.indexOf('  async function reconcileServerState(')),context);
  await assert.rejects(context.saveWorkspaceState({workspaceId:'w1'}),/500 KB sync limit/);assert.equal(status,'error');assert.equal(dirty,true);
 });
+
+test('compressed recovery snapshots reject workspace mismatch and damaged encoding while reading legacy snapshots',()=>{
+ const record={workspace_id:'w1',server_synced:true,data:{message:'Exact working text. '.repeat(8000)}};
+ const packed=budget.packWorkspaceSnapshot(record);assert.equal(packed.format,'leadintel-workspace-snapshot-lzw-v1');
+ assert.deepEqual(budget.restoreWorkspaceSnapshot(packed),record);
+ assert.throws(()=>budget.restoreWorkspaceSnapshot({...packed,workspace_id:'w2'}),/workspace does not match/);
+ assert.throws(()=>budget.restoreWorkspaceSnapshot({...packed,data:{main:{...packed.data.main,data:'invalid'}}}),/Invalid stored compressed workspace/);
+ assert.equal(budget.restoreWorkspaceSnapshot(record),record);
+});

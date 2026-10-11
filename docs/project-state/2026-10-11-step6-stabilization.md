@@ -59,7 +59,7 @@ Five additional mandatory smoke checks cover these contracts and their browser c
 | Shorten and Create variation | Distinct working text, retained meeting and links; Reset restored the exact first Friendly body |
 | Latvian translation | Two-stage generation/editorial review completed; 11 paragraphs, protected names/numbers/links retained; exact translated Save/reload and English-source recovery passed |
 | Rejected AI generation | Prior body, style and five-subject catalog restored together |
-| Second buyer / LinkedIn | Existing confirmed profile reached review; Proceed remained disabled without visible status. This gate is unresolved pending investigation/retry; no successful channel-isolation claim |
+| Second buyer / LinkedIn | Existing confirmed profile reached review; a long delay preceded successful opening. Separate LinkedIn draft Save/reload passed; returning to the first buyer restored the exact saved English email. Handoff latency remains an observation, not a diagnosed failure |
 | Templates/defaults/flow | Regression coverage available; authenticated preparation still requires evidence; no outreach activation or sending performed |
 
 Local validation after the second repair: `npm run check:step6` 339/339; full customer suite 2367/2367; production build and diff check passed. Exact release proof and authenticated retries must be recorded separately after publication. Browser outage, account-credit exhaustion and sync-conflict injection are automated failure coverage, not claimed live outages.
@@ -67,3 +67,11 @@ Local validation after the second repair: `npm run check:step6` 339/339; full cu
 ### Exact wording approval hold
 
 The protected Brutal Honesty original contains `A research brought me to`. Proposed replacement: `My research brought me to`. Repository AGENTS requires explicit approval for changes to approved wording; broad engineering authority is not approval of this exact literal. No master edit was made.
+
+## Recovery snapshot quota repair
+
+Release `8caac4849c48be8d05bf861ed63a8ef3438f7f51` has exact-SHA Customer CI, Backend CI/Deploy, matching production manifest, health and 119/119 smoke checks; GitHub Release Integrity proof verdict `PROVEN`. Authenticated final retries exposed a separate reload failure: `QuotaExceededError` writing `leadintel_customer_v2_workspace_saved_snapshot_v1`, making the account verification gate show workspace recovery. Retrying did not cure it. Saved CRM round trips had passed before this reload.
+
+The snapshot duplicated decoded local records and acknowledged server payload without using the existing lossless compression codec. Compress both cloud and browser-only recovery snapshots, read legacy plain snapshots, memoize decoding for repeated status checks, and keep all quota/decode errors fail-closed. Exact snapshot restoration clears its transient dirty flag. No active customer record or archive is deleted. Unrelated uncommitted account-archive/IndexedDB work in the original checkout remains untouched.
+
+Three quota regressions failed before repair; they cover two seller industries and local-only unsynced text, exact cloud merge bases, reload and subsequent edits. This repair needs full CI/build, a new exact release proof, then authenticated workspace loading and both subject/generation retries. Templates remain visibly channel-specific, defaults unchanged, and Add to flow is disabled for saved but unapproved text. Successful flow activation/sending is outside this acceptance run.
