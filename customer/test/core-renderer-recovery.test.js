@@ -123,3 +123,18 @@ test('restored Brutal wording budgets repeated factual fields before reporting a
  assert.ok(draft.message.split(/\s+/).length<=199);assert.match(draft.message,/For more than 30 years ERCON have taken steel/);
  assert.equal(prepared.fields.difference,raw.difference);assert.equal(prepared.fields.approach,raw.approach);
 });
+
+test('investing a supported quantity becomes a grammatical event noun without dropping its facts',()=>{
+ for(const mode of ['professional','friendly','brutal']){
+  const studio=S.normalize({mode,essentials}),ctx={...context(),trigger:{...context().trigger,summary:'Buyer is investing six billion kronor in a plant at Northport.'}};
+  const draft=E.tailor(studio,ctx);assert.match(draft.message,/Buyer’s investment of six billion kronor/);assert.doesNotMatch(draft.message,/investment six/);
+ }
+});
+test('source fingerprints retain rendering facts without duplicating official page corpora in draft history',()=>{
+ const studio=S.normalize({mode:'friendly',essentials}),source={url:'https://north.example/projects/tower',text:'We manufacture steel and provide installation. '+ 'Official project source '.repeat(400)};
+ const ctx={...context(),sellerEvidence:[source]},key=E.scope('w1',{domain:'buyer.example'},studio,ctx);
+ assert.ok(key.length<4000);assert.ok(!key.includes('Official project source'));
+ const changed={...ctx,sellerEvidence:[{...source,text:'We provide business advisory for commercial customers.'}]};
+ const nonSteel=S.normalize({mode:'friendly',essentials:{...essentials,offer:'drawing development, metal manufacturing, installation and qualified workforce'}});
+ assert.notEqual(E.scope('w1',{},nonSteel,ctx),E.scope('w1',{},nonSteel,changed));
+});
