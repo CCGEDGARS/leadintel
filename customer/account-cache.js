@@ -54,7 +54,7 @@
     set(storage,WORKSPACE_KEY,workspaceId);verified=true;return {changed:true};
   }
   function complete(){root.document?.documentElement?.removeAttribute('data-account-check');}
-  function failed(){root.document?.documentElement?.setAttribute('data-account-check','error');}
+  function failed(){verified=false;root.document?.documentElement?.setAttribute('data-account-check','error');}
   const api={checkpoint,detach,activate,current,complete,failed,hasWorkspace:()=>Boolean(context.workspaceId),CONTEXT_KEY,ARCHIVE_PREFIX};
   root.LeadIntelAccountCache=api;
   // Protect delayed work in old tabs, even before a storage event is delivered.

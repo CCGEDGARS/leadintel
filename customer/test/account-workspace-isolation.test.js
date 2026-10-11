@@ -6,7 +6,7 @@ function load(values=new Map(),{account='b',workspace='wb',search='',failArchive
  class Storage{constructor(map){this.values=map;}get length(){return this.values.size;}key(i){return [...this.values.keys()][i]??null;}getItem(k){return this.values.get(String(k))??null;}setItem(k,v){if(failArchive&&String(k).startsWith('leadintel_account_cache_v1:'))throw Error('Quota exceeded');this.values.set(String(k),String(v));}removeItem(k){this.values.delete(String(k));}clear(){this.values.clear();}}
  Storage.prototype.__leadintelServerPatched=true;
  const storage=new Storage(values),sessionStorage=new Storage(session),requests=[],listeners=new Map();
- const root={console,URL,URLSearchParams,Request,Response,Headers,FormData,Blob,Date,Promise,Math,Storage,localStorage:storage,sessionStorage,location:{href:'https://leadintel.ccgroup.lv/customer/'+search,search,origin:'https://leadintel.ccgroup.lv',reload(){events.push('reload');}},document:{readyState:'loading',documentElement:{setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k)},head:{appendChild(){}},createElement:()=>({dataset:{},textContent:''}),getElementById:()=>null,querySelector:()=>null,querySelectorAll:()=>[],addEventListener(){}},addEventListener(name,fn){listeners.set(name,fn);},dispatchEvent:e=>events.push(e.type),setTimeout(fn){timers.set(++timer,fn);return timer;},clearTimeout:id=>timers.delete(id),CustomEvent:class{constructor(type){this.type=type;}},fetch:async(input,options={})=>{const url=new URL(input);requests.push({url:url.pathname,options});if(fetchImpl)return fetchImpl(input,options);if(url.pathname==='/api/session')return new Response(JSON.stringify({authenticated:true,user:{id:account,email:account+'@example.com'}}));if(url.pathname==='/api/workspaces')return new Response(JSON.stringify({workspaces:[{id:workspace,name:workspace,role:'owner'}]}));if(url.pathname==='/api/customer/state')return new Response(JSON.stringify({version:workspace==='wa'?3:0,payload:workspace==='wa'?{main:{website:'https://ccgroup.lv',answers:{offer:'CCGROUP private offer'}}}:{}}));return new Response('{}');}};
+ const root={console,URL,URLSearchParams,Request,Response,Headers,FormData,Blob,Date,Promise,Math,Storage,localStorage:storage,sessionStorage,location:{href:'https://leadintel.ccgroup.lv/customer/'+search,search,origin:'https://leadintel.ccgroup.lv',reload(){events.push('reload');}},document:{readyState:'loading',documentElement:{setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k)},head:{appendChild(){}},createElement:()=>({dataset:{},textContent:''}),getElementById:()=>null,querySelector:()=>null,querySelectorAll:()=>[],addEventListener(){}},addEventListener(name,fn){listeners.set(name,fn);},dispatchEvent:e=>events.push(e.type),setTimeout(fn,ms){if(ms===350||ms===700)queueMicrotask(fn);else timers.set(++timer,fn);return timer;},clearTimeout:id=>timers.delete(id),CustomEvent:class{constructor(type){this.type=type;}},fetch:async(input,options={})=>{const url=new URL(input);requests.push({url:url.pathname,options});if(fetchImpl)return fetchImpl(input,options);if(url.pathname==='/api/session')return new Response(JSON.stringify({authenticated:true,user:{id:account,email:account+'@example.com'}}));if(url.pathname==='/api/workspaces')return new Response(JSON.stringify({workspaces:[{id:workspace,name:workspace,role:'owner'}]}));if(url.pathname==='/api/customer/state')return new Response(JSON.stringify({version:workspace==='wa'?3:0,payload:workspace==='wa'?{main:{website:'https://ccgroup.lv',answers:{offer:'CCGROUP private offer'}}}:{}}));return new Response('{}');}};
  root.window=root;root.globalThis=root;
  if(fs.existsSync(modulePath))vm.runInNewContext(fs.readFileSync(modulePath,'utf8'),root);
  vm.runInNewContext(fs.readFileSync(require.resolve('../workspace-sync.js'),'utf8'),root);
@@ -65,6 +65,96 @@ test('unknown guest data is quarantined, never assigned by a URL, and successive
 });
 test('account cache executes before any customer module can read workspace data',()=>{
  const html=fs.readFileSync(require.resolve('../index.html'),'utf8');assert.ok(html.indexOf('account-cache.js')<html.indexOf('<script defer'));assert.ok(html.indexOf('account-cache.js')<html.indexOf('src="app.js'));assert.match(html,/html\[data-account-check\] body\{visibility:hidden/);
+});
+function startupSeed(){
+ const values=seed(),snapshot=JSON.parse(values.get(SNAP));
+ for(const key of ['leadintel_customer_v2_website_activation_v1','leadintel_customer_v2_research_meta_v1'])snapshot.data[key]=values.get(key);
+ values.set(SNAP,JSON.stringify(snapshot));values.set('leadintel_customer_v2_server_versions',JSON.stringify({wa:3}));return values;
+}
+function startupBackend({failPath='',failures=1,malformedSession=false}={}){
+ let failed=0;
+ return async input=>{
+  const path=new URL(input).pathname;
+  if(path===failPath&&failed++<failures)throw new TypeError('Failed to fetch');
+  if(path==='/api/session')return new Response(malformedSession?'not JSON':JSON.stringify({authenticated:true,user:{id:'a'}}));
+  if(path==='/api/workspaces')return new Response(JSON.stringify({workspaces:[{id:'wa',role:'owner'}]}));
+  if(path==='/api/customer/state')return new Response(JSON.stringify({version:3,payload:{main:{website:'https://ccgroup.lv',answers:{offer:'CCGROUP private offer'}}}}));
+  return new Response('{}');
+ };
+}
+test('optional mail status failures cannot conceal an already verified workspace',async()=>{
+ for(const path of ['/api/integrations/gmail/status','/api/integrations/microsoft-mail/status']){
+  const runtime=load(startupSeed(),{fetchImpl:startupBackend({failPath:path,failures:Infinity})});
+  runtime.session.set('leadintel_customer_v2_server_hydration','wa:3');
+  await runtime.root.__init();
+  assert.equal(runtime.root.LeadIntelServerBridge.ready,true);
+  assert.equal(runtime.attrs.has('data-account-check'),false);
+  assert.equal(JSON.parse(runtime.values.get(MAIN)).website,'https://ccgroup.lv');
+  assert.ok(runtime.events.includes('leadintel:server-ready'));
+ }
+});
+test('each mandatory startup read recovers from transient network failures without losing local work',async()=>{
+ for(const path of ['/api/session','/api/workspaces','/api/customer/state']){
+  const runtime=load(startupSeed(),{fetchImpl:startupBackend({failPath:path,failures:2})});
+  runtime.session.set('leadintel_customer_v2_server_hydration','wa:3');
+  await runtime.root.__init();
+  assert.equal(runtime.requests.filter(request=>request.url===path).length,3);
+  assert.equal(runtime.root.LeadIntelServerBridge.ready,true);
+  assert.equal(runtime.attrs.has('data-account-check'),false);
+  assert.equal(runtime.events.includes('reload'),false);
+  assert.equal(JSON.parse(runtime.values.get(MAIN)).website,'https://ccgroup.lv');
+ }
+});
+test('malformed successful session responses are not treated as a confirmed sign-out',async()=>{
+ const runtime=load(startupSeed(),{fetchImpl:startupBackend({malformedSession:true})});
+ await runtime.root.__init();
+ assert.equal(JSON.parse(runtime.values.get(MAIN)).website,'https://ccgroup.lv');
+ assert.equal(runtime.values.get(WS),'wa');
+ assert.equal(runtime.events.includes('reload'),false);
+ assert.equal(runtime.root.LeadIntelServerBridge.ready,false);
+ assert.equal(runtime.attrs.get('data-account-check'),'error');
+});
+test('permanent verification failure is bounded and keeps private data hidden and intact',async()=>{
+ const runtime=load(startupSeed(),{fetchImpl:startupBackend({failPath:'/api/session',failures:Infinity})});
+ await runtime.root.__init();
+ assert.equal(runtime.requests.length,3);
+ assert.equal(runtime.requests.some(request=>request.options.method==='PUT'),false);
+ assert.equal(JSON.parse(runtime.values.get(MAIN)).website,'https://ccgroup.lv');
+ assert.equal(runtime.attrs.get('data-account-check'),'error');
+ assert.equal(runtime.root.LeadIntelServerBridge.ready,false);
+});
+test('failed workspace reads are retried rather than reported as an empty account',async()=>{
+ let attempts=0;const backend=startupBackend();
+ const runtime=load(startupSeed(),{fetchImpl:async input=>new URL(input).pathname==='/api/workspaces'&&attempts++<2?new Response('{}',{status:503}):backend(input)});
+ runtime.session.set('leadintel_customer_v2_server_hydration','wa:3');await runtime.root.__init();
+ assert.equal(attempts,3);assert.equal(runtime.root.LeadIntelServerBridge.workspace.id,'wa');assert.equal(runtime.root.LeadIntelServerBridge.ready,true);
+});
+test('CRM migration failure leaves the verified workspace accessible and migration data intact',async()=>{
+ const values=startupSeed();values.set('leadintel_customer_v2_discovery',JSON.stringify({pipeline:[{domain:'sample.example'}]}));
+ const runtime=load(values,{fetchImpl:startupBackend({failPath:'/api/crm/companies',failures:Infinity})});
+ runtime.session.set('leadintel_customer_v2_server_hydration','wa:3');
+ runtime.root.LeadIntelCrm={mapLocalPipelineItemToCrm:item=>item};await runtime.root.__init();
+ assert.equal(runtime.root.LeadIntelServerBridge.ready,true);assert.equal(runtime.attrs.has('data-account-check'),false);
+ assert.equal(JSON.parse(runtime.values.get('leadintel_customer_v2_discovery')).pipeline[0].domain,'sample.example');
+ assert.equal(runtime.values.has('leadintel_customer_v2_crm_migrations'),false);
+});
+test('a failed state verification revokes workspace requests without removing local records',async()=>{
+ const runtime=load(startupSeed(),{fetchImpl:startupBackend({failPath:'/api/customer/state',failures:Infinity})});
+ await runtime.root.__init();const count=runtime.requests.length;
+ await assert.rejects(runtime.root.fetch('https://leadintel.ccgroup.lv/api/customer/state?workspace_id=wa',{method:'PUT',leadintelSaveIntent:true,body:JSON.stringify({version:3,payload:{main:{website:'https://ccgroup.lv'}}})}),/Verify the signed-in account/);
+ assert.equal(runtime.requests.length,count);assert.equal(JSON.parse(runtime.values.get(MAIN)).website,'https://ccgroup.lv');
+});
+test('verification errors present a retry control while the private application remains hidden',()=>{
+ const {JSDOM}=require('jsdom');const w=new JSDOM(fs.readFileSync(require.resolve('../index.html'),'utf8'),{url:'https://example.test/customer/',runScripts:'outside-only'}).window;
+ try{
+  const recovery=w.document.getElementById('account-recovery');assert.equal(w.getComputedStyle(recovery).display,'none');
+  w.document.documentElement.setAttribute('data-account-check','error');
+  assert.equal(w.getComputedStyle(w.document.body).visibility,'hidden');
+  assert.equal(w.getComputedStyle(recovery).visibility,'visible');assert.equal(w.getComputedStyle(recovery).pointerEvents,'auto');
+  const button=recovery.querySelector('button');assert.equal(button.textContent,'Try again');assert.equal(button.disabled,false);
+  assert.equal(recovery.querySelectorAll('input,a').length,0);
+  w.document.documentElement.removeAttribute('data-account-check');assert.equal(w.getComputedStyle(recovery).display,'none');
+ }finally{w.close();}
 });
 test('two accounts save and reload their own profiles and research through the real persistence boundary',async()=>{
  const values=seed();values.set('leadintel_customer_v2_server_versions',JSON.stringify({wa:3}));const snapshot=JSON.parse(values.get(SNAP));for(const key of ['leadintel_customer_v2_website_activation_v1','leadintel_customer_v2_research_meta_v1'])snapshot.data[key]=values.get(key);values.set(SNAP,JSON.stringify(snapshot));const cloud=new Map([['wa',{version:3,payload:{main:{website:'https://ccgroup.lv',answers:{offer:'CCGROUP private offer'}},discovery:{buyers:[{id:'cc-buyer',name:'CCGROUP buyer'}]},outreach:{},delivery:{},meta:{discovery:{}}}}]]);
