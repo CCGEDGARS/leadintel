@@ -1,7 +1,7 @@
 import './tool-account-links.js?v=20261011-v1';
 const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
 const SETTINGS_VERSION='20261004-contact-policy-v1';
-const DEFAULT_CALENDLY_URL='https://calendly.com/edgars-7go/strategy-call-2';
+const DEFAULT_CALENDLY_URL='';
 const SERVICE_PROVIDERS=Object.freeze([
   {provider:'apollo',name:'Apollo.io',placeholder:'Apollo API key',purpose:'Company, decision-maker, email and phone enrichment'},
   {provider:'firecrawl',name:'Firecrawl',placeholder:'fc-…',purpose:'Website scraping, public research and evidence collection'},
@@ -52,7 +52,7 @@ function serviceControls(config,row){
 function calendlyCard(){
   const disabled=!signedIn()||!isOwner();const configured=Boolean(calendlyStatus.configured&&calendlyStatus.connected);const error=errors.calendly||'';
   return `<article class="integration-card customer-service-card" data-integration="calendly"><div class="integration-card-head"><div><strong>Calendly</strong><small>Strategy-call booking conversion</small></div><span class="integration-status ${configured?'good':'neutral'}">${configured?'Connected':'Not connected'}</span></div><p class="integration-purpose">A confirmed booking stops follow-ups and advances the matching CRM company to Meeting.</p><div class="integration-meta">${configured?`Webhook active · token ${esc(calendlyStatus.token_hint||'saved')}${calendlyStatus.last_event_at?` · last event ${shortDate(calendlyStatus.last_event_at)}`:''}`:'Connect a Calendly personal access token once to activate booking detection.'}</div><div class="service-provider-controls service-provider-card" data-service-extension="1">
-    <label class="ai-settings-field">Strategy-call URL<input data-calendly-url type="url" autocomplete="url" spellcheck="false" value="${esc(calendlyStatus.scheduling_url||DEFAULT_CALENDLY_URL)}" ${disabled?'disabled':''}></label>
+    <label class="ai-settings-field">Strategy-call URL<input data-calendly-url type="url" autocomplete="url" spellcheck="false" placeholder="https://calendly.com/your-business/meeting" value="${esc(calendlyStatus.scheduling_url||DEFAULT_CALENDLY_URL)}" ${disabled?'disabled':''}></label>
     <label class="ai-settings-field">Personal access token<input data-calendly-token type="password" autocomplete="new-password" spellcheck="false" data-form-type="other" data-lpignore="true" data-1p-ignore="true" placeholder="${configured?'Enter a new token only to reconnect':'Calendly personal access token'}" ${disabled?'disabled':''}></label>
     <div class="ai-provider-error" data-service-error="calendly" role="alert" ${error?'':'hidden'}>${esc(error)}</div>
     <div class="ai-provider-actions"><button class="ai-settings-btn primary" data-service-action="calendly-save" type="button" ${disabled||busy==='calendly'?'disabled':''}>${busy==='calendly'?'Connecting…':configured?'Reconnect':'Connect Calendly'}</button><button class="ai-settings-btn danger" data-service-action="calendly-disconnect" type="button" ${disabled||!configured||busy==='calendly'?'disabled':''}>Disconnect</button></div>

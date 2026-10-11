@@ -1220,6 +1220,76 @@
       "contains": [
         "codec-loader=20261011-v1"
       ]
+    },
+    {
+      "id": "shared-link-private-settings-defaults",
+      "type": "text",
+      "url": "/customer/service-settings-extension.js",
+      "status": 200,
+      "contains": [
+        "const DEFAULT_CALENDLY_URL='';",
+        "https://calendly.com/your-business/meeting"
+      ],
+      "notContains": [
+        "edgars-7go",
+        "Edgars Untāls"
+      ]
+    },
+    {
+      "id": "shared-link-neutral-sender-placeholder",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "placeholder=\"Your first and last name\"",
+        "sharing-privacy=20261011-v1"
+      ],
+      "notContains": [
+        "Edgars Untāls",
+        "edgars-7go"
+      ]
+    },
+    {
+      "id": "shared-link-no-private-outreach-fallback",
+      "type": "text",
+      "url": "/customer/outreach-engine.js",
+      "status": 200,
+      "contains": [
+        "bookingUrl=''",
+        "profile.calendlyUrl||profile.calendly"
+      ],
+      "notContains": [
+        "edgars-7go",
+        "STRATEGY_CALL_URL"
+      ]
+    },
+    {
+      "id": "shared-link-anonymous-state-denied",
+      "type": "text",
+      "url": "https://leadintel-api.edgars-7e7.workers.dev/api/customer/state?workspace_id=sharing-privacy-check",
+      "status": 401,
+      "contains": [
+        "Authentication required"
+      ],
+      "notContains": [
+        "encrypted",
+        "token_hint",
+        "scheduling_url"
+      ]
+    },
+    {
+      "id": "shared-link-anonymous-booking-denied",
+      "type": "text",
+      "url": "https://leadintel-api.edgars-7e7.workers.dev/api/integrations/calendly/status?workspace_id=sharing-privacy-check",
+      "status": 401,
+      "contains": [
+        "Authentication required"
+      ],
+      "notContains": [
+        "encrypted",
+        "token_hint",
+        "scheduling_url"
+      ]
     }
   ],
   "retry": {
