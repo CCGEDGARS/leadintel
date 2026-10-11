@@ -1175,7 +1175,7 @@
       "url": "/customer/state-budget.js",
       "status": 200,
       "contains": [
-        "lzw16-base64-v1",
+        "lzw16-refs-base64-v2",
         "function restoreCompressedWorkspace(",
         "options.allowCompressionPacking===true",
         "MAX_RESTORED_BUNDLE_BYTES"
@@ -1188,7 +1188,7 @@
       "status": 200,
       "contains": [
         "bridge.workspaceCompressionCodec=payload.compression_codec",
-        "allowCompressionPacking:bridge.workspaceCompressionCodec==='workspace-lzw-v1'"
+        "allowCompressionPacking:bridge.workspaceCompressionCodec==='workspace-lzw-v2'"
       ]
     },
     {
@@ -1197,7 +1197,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "text-compression=20261011-v2"
+        "text-compression=20261011-v3"
       ]
     },
     {
