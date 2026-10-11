@@ -23,9 +23,10 @@ function response({ status = 200, json, text } = {}) {
   };
 }
 
-function productionFetch({ customerHtml, discoveryUi, sessionStatus=401 }) {
+function productionFetch({ customerHtml, discoveryUi, sessionStatus=401, privateSettingsStatus=401 }) {
   return async url => {
     const parsed = new URL(String(url));
+    if (['/api/customer/state','/api/integrations/calendly/status'].includes(parsed.pathname)) return response({status:privateSettingsStatus,json:{error:'Authentication required'}});
     if(parsed.pathname==='/api/flows')return response({status:401,json:{error:'Authenticated workspace membership required'}});
     if (parsed.pathname === '/api/session') return response({status:sessionStatus,json:{authenticated:false}});
     if (['/api/writing-references','/api/content-materials'].includes(parsed.pathname)) return response({status:401,json:{error:'Authentication required'}});
@@ -57,7 +58,7 @@ function productionFetch({ customerHtml, discoveryUi, sessionStatus=401 }) {
   };
 }
 
-const shell = 'codec-loader=20261011-v1 text-compression=20261011-v3 bundle-sync=20261011-v1 <script defer src="message-evidence.js?v=20261010-evidence-v3"></script> subject-evidence=20261010-v5 LeadIntel — Build Your Commercial Intelligence Strategy id="company-website" <script defer src="page-quality.js?v=20261010-v1"></script><script defer src="page-quality-ui.js?v=20261010-v1"></script> page-procedures=20261010-v1';
+const shell = 'placeholder="Your first and last name" sharing-privacy=20261011-v1 codec-loader=20261011-v1 text-compression=20261011-v3 bundle-sync=20261011-v1 <script defer src="message-evidence.js?v=20261010-evidence-v3"></script> subject-evidence=20261010-v5 LeadIntel — Build Your Commercial Intelligence Strategy id="company-website" <script defer src="page-quality.js?v=20261010-v1"></script><script defer src="page-quality-ui.js?v=20261010-v1"></script> page-procedures=20261010-v1';
 const boundedDiscoveryRuntime = [
   'outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&style-application=20261011-v1&',
   'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
@@ -98,6 +99,13 @@ test('production proof accepts the bounded staged Discovery runtime', async () =
   });
 
   assert.equal(proof.verdict, VERDICTS.PROVEN, proof.failures.join('\n'));
+});
+
+test('production proof rejects anonymous access to private settings and workspace state',async()=>{
+  const {verifyRelease,VERDICTS}=await loadCore();
+  const proof=await verifyRelease({config,expectedSha:SHA,ciConclusion:'success',ciRunId:'privacy',fetchImpl:productionFetch({customerHtml:`${shell}<script defer src="discovery-ui.js?v=current"></script>`,discoveryUi:boundedDiscoveryRuntime,privateSettingsStatus:200}),nonce:'anonymous-access-regression'});
+  assert.equal(proof.verdict,VERDICTS.BLOCKED_SMOKE_CHECK);
+  for(const id of ['shared-link-anonymous-state-denied','shared-link-anonymous-booking-denied'])assert.equal(proof.smokeChecks.find(check=>check.id===id).passed,false);
 });
 
 test('production proof blocks the former module-graph Discovery bootstrap', async () => {

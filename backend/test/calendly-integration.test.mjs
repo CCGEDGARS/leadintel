@@ -39,6 +39,17 @@ function webhook(event='invitee.created',createdAt='2026-09-19T10:00:00.000Z'){
   return {event,created_at:createdAt,payload:{uri:'https://api.calendly.com/scheduled_events/e1/invitees/i1',email:'buyer@example.com',name:'Buyer',event:'https://api.calendly.com/scheduled_events/e1',status:event==='invitee.created'?'active':'canceled'}};
 }
 
+sqliteTest('sharing a link grants no booking-settings access and a new account inherits no owner details',async()=>{
+  const {DB,loginToken}=await fixture();const env={DB};
+  const status=(workspace,token)=>handleCalendlyIntegrationRoute(new Request(`https://leadintel-api.example/api/integrations/calendly/status?workspace_id=${workspace}`,{headers:token?{Cookie:`leadintel_session=${token}`}:{}}),env);
+  const anonymous=await status('w1');assert.equal(anonymous.status,401);assert.doesNotMatch(await anonymous.text(),/edgars-7go|token_hint|encrypted/);
+  DB.raw.exec("INSERT INTO workspaces VALUES('w2');INSERT INTO users VALUES('u2','new@example.com','New owner','owner');INSERT INTO workspace_members VALUES('w2','u2','owner');");
+  const newToken='new-owner-session';DB.raw.prepare("INSERT INTO sessions VALUES(?,?,datetime('now','+1 day'))").run(await sha256(newToken),'u2');
+  const denied=await status('w1',newToken);assert.equal(denied.status,403);assert.doesNotMatch(await denied.text(),/edgars-7go|token_hint|encrypted/);
+  const fresh=await status('w2',newToken);assert.equal(fresh.status,200);const empty=await fresh.json();assert.equal(empty.scheduling_url,'');assert.equal(empty.token_hint,'');assert.equal(empty.configured,false);assert.equal(empty.connected,false);
+  const own=await status('w1',loginToken);assert.equal(own.status,200);const saved=await own.json();assert.equal(saved.scheduling_url,'https://calendly.com/edgars-7go/strategy-call-2');assert.equal(saved.connected,true);assert.equal(JSON.stringify(saved).includes('encrypted'),false);
+});
+
 test('only valid public Calendly scheduling URLs are accepted',()=>{
   assert.equal(normalizeCalendlyUrl('https://calendly.com/edgars-7go/strategy-call-2'),'https://calendly.com/edgars-7go/strategy-call-2');
   assert.throws(()=>normalizeCalendlyUrl('https://evil.example/strategy-call-2'),/Calendly/);
