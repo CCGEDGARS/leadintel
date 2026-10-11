@@ -223,7 +223,7 @@
   }
   function prepareForSync(input={},options={}){
     const result=compactBundle(input,options);
-    if(result.bytes>MAX_SYNC_BYTES)throw new Error(`Workspace state is ${Math.ceil(result.bytes/1024)} KB after evidence compaction and cannot be synced because the 500 KB sync limit is a hard safety ceiling. Reduce unusually large pipeline/history data before retrying.`);
+    if(result.bytes>MAX_SYNC_BYTES){const sizes=Object.entries(result.payload).map(([key,value])=>`${key}: ${Math.ceil(bytes(value)/1024)} KB`).join(', ');throw new Error(`Workspace state is ${Math.ceil(result.bytes/1024)} KB after evidence compaction and cannot be synced because the 500 KB sync limit is a hard safety ceiling. Section sizes: ${sizes}.`);}
     return result;
   }
   function compactMainStorageValue(value){
