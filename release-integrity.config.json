@@ -23,7 +23,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "LeadIntel — Build Your Commercial Intelligence Strategy",
+        "LeadIntel \u2014 Build Your Commercial Intelligence Strategy",
         "id=\"company-website\""
       ]
     },
@@ -259,7 +259,7 @@
         "topFourResearchCandidates",
         "data-research-buyer",
         "data-research-remaining",
-        "Likely email · ownership unconfirmed"
+        "Likely email \u00b7 ownership unconfirmed"
       ]
     },
     {
@@ -271,7 +271,7 @@
         "choice.channel==='linkedin'",
         "confirmedLinkedInBuyer",
         "prepareStudioBuyer(candidate,person)",
-        "LinkedIn direct message · draft only"
+        "LinkedIn direct message \u00b7 draft only"
       ]
     },
     {
@@ -428,7 +428,7 @@
       "url": "/customer/outreach-ui.js",
       "status": 200,
       "contains": [
-        "My LinkedIn Templates · ",
+        "My LinkedIn Templates \u00b7 ",
         "savedLinkedInCrmDraft",
         "Record as sent in CRM",
         "contact.linkedin_message_sent"
@@ -635,7 +635,7 @@
       "status": 200,
       "contains": [
         "bridge.workspaceStateCodec=payload.state_codec||''",
-        "Workspace exceeds sync limit · local changes preserved"
+        "Workspace exceeds sync limit \u00b7 local changes preserved"
       ]
     },
     {
@@ -644,7 +644,7 @@
       "url": "/customer/journey-progress.js",
       "status": 200,
       "contains": [
-        "No new qualified companies · saved companies retained",
+        "No new qualified companies \u00b7 saved companies retained",
         "Review saved companies or broaden the search"
       ]
     },
@@ -906,7 +906,7 @@
         "providerConfirmedSent",
         "openSavedFlow",
         "function refreshSummary(",
-        "active · ",
+        "active \u00b7 ",
         "saved"
       ]
     },
@@ -1050,7 +1050,7 @@
       ],
       "notContains": [
         "mw-message-length",
-        "Very short · about 50%",
+        "Very short \u00b7 about 50%",
         "Message editor</h3>"
       ]
     },
@@ -1233,7 +1233,7 @@
       ],
       "notContains": [
         "edgars-7go",
-        "Edgars Untāls"
+        "Edgars Unt\u0101ls"
       ]
     },
     {
@@ -1246,7 +1246,7 @@
         "sharing-privacy=20261011-v1"
       ],
       "notContains": [
-        "Edgars Untāls",
+        "Edgars Unt\u0101ls",
         "edgars-7go"
       ]
     },
@@ -1417,6 +1417,54 @@
       "status": 200,
       "contains": [
         "step6-recovery=20261011-v1"
+      ]
+    },
+    {
+      "id": "step6-subject-category-selection",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "const pending=subjectEditing&&rows.some(row=>row.id===subjectSelectedId)",
+        "rows.find(row=>row.subject===editorDraft().subject)?.id"
+      ]
+    },
+    {
+      "id": "step6-subject-category-cache-chain",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "step6-subject=20261011-v1"
+      ]
+    },
+    {
+      "id": "step6-subject-category-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "step6-subject=20261011-v1"
+      ]
+    },
+    {
+      "id": "step6-generated-reference-contract",
+      "type": "text",
+      "url": "/customer/message-studio.js",
+      "status": 200,
+      "contains": [
+        "function allowedDraftLinks(",
+        "payload.allowedLinks=allowedDraftLinks(e,context)",
+        "allowedDraftLinks(e,options.context)"
+      ]
+    },
+    {
+      "id": "step6-generated-reference-cache-chain",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "generated-links=20261011-v1"
       ]
     }
   ],

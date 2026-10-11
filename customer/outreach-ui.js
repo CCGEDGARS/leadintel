@@ -9,7 +9,7 @@ import './message-facts.js?v=20261007-quality-v2&message-evidence=20261010-v1&co
 import './message-translations.js?language-controls=20261011-v1&v=20261009-event-campaign-v1&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1';
 import './message-translation-ui.js?language-controls=20261011-v1&v=20261009-balanced-workspace-v1';
 import './personal-template-library.js?single-editor=20261009-v4&practical-tools=20261009-v1&templates=20261009-v20&foundation=20261006-v12&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1';
-import './message-studio.js?subject-editor=20261011-v2&language-controls=20261011-v1&single-editor=20261009-v4&practical-tools=20261009-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&foundation=20261006-v12&booking-recovery=20261007-v1&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1&subject-evidence=20261010-v5&style-recovery=20261010-v1&core-renderer=20261011-v3';
+import './message-studio.js?generated-links=20261011-v1&subject-editor=20261011-v2&language-controls=20261011-v1&single-editor=20261009-v4&practical-tools=20261009-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&foundation=20261006-v12&booking-recovery=20261007-v1&linkedin-styles=20261007-quality-v1&approved-subjects=20261007-v1&brutal-approved=20261008-v1&subject-evidence=20261010-v5&style-recovery=20261010-v1&core-renderer=20261011-v3';
 import './subject-editor.js?v=20261011-subjects-v1';
 import './message-editor.js?adjust-panel=20261011-v1&template-restore=20261010-v1&sender-reference=20261010-v2&subject-editor=20261011-v2&event-update=20261010-v1&v=20261009-professional-budget-v11&meeting-platform=20261009-v1&core-rules=1&single-editor=20261009-v4&practical-tools=20261009-v1&subject-evidence=20261010-v5&core-renderer=20261011-v3';
 const MAIN_STORAGE_KEY="leadintel_customer_v2_state";
@@ -814,7 +814,11 @@ function renderSubjectEditor(){
  if(!q('mw-subject-tools'))return {editing:false,busy:false};
  const supported=currentItem()?.channel==='email'&&!currentItem()?.messageStudioDraft?.eventSnapshot&&book?.rows.length===5;
  q('mw-subject-tools').hidden=!supported;const rows=supported?globalThis.LeadIntelSubjectEditor.working(currentItem(),book):[];
- const selected=subjectSelectedId||currentItem()?.messageStudioDraft?.subjectSelectedId||currentItem()?.messageStudioDraft?.subjectWorkingSet?.selectedId||studioState().subjectChoices?.[studioState().mode];
+ // A saved category ID can belong to the previous style, and an editing
+ // selection can outlive a later radio choice. The displayed subject owns
+ // ordinary actions; only an active manual edit owns its pending selection.
+ const pending=subjectEditing&&rows.some(row=>row.id===subjectSelectedId)?subjectSelectedId:'';
+ const selected=pending||rows.find(row=>row.subject===editorDraft().subject)?.id||[subjectSelectedId,currentItem()?.messageStudioDraft?.subjectSelectedId,currentItem()?.messageStudioDraft?.subjectWorkingSet?.selectedId,studioState().subjectChoices?.[studioState().mode]].find(id=>rows.some(row=>row.id===id&&row.ready))||rows.find(row=>row.id==='introduction'&&row.ready)?.id||rows.find(row=>row.ready)?.id;
  const usable=subjectUsable(),disabled=!usable||subjectBusy;const host=q('mw-subject-choices');host._subjectState={rows,edits:subjectEdits,editing:subjectEditing,blocked:disabled,keepOpen:subjectEditing,onEdit:(id,text)=>{subjectEdits[id]=text;},onSelect:id=>{subjectSelectedId=id;q('message-subject-choice').value=id;}};
  for(const id of ['mw-subject-reset','mw-subject-edit','mw-subject-update-selected','mw-subject-update-all'])q(id).disabled=disabled||subjectEditing;
  q('mw-subject-update-selected').disabled||=!rows.find(row=>row.id===selected)?.ready;q('mw-subject-update-all').disabled||=rows.some(row=>!row.ready);

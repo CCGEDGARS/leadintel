@@ -39,3 +39,31 @@ Use `npm run check:step6` for the focused acceptance regression set. Full custom
 The intended repair needs exact-SHA Customer CI, matching live release manifest, backend health, all mandatory smoke checks and a `PROVEN` release proof. Three new recovery/cache-chain smoke checks enforce artifact presence; they do not execute authenticated workflows.
 
 Record production SHA and authenticated observations in the completion report. A passing static release proof must never be substituted for actual message quality, CRM persistence or model-output acceptance. No outreach was authorized by this repair.
+
+## Authenticated acceptance pass and second repair
+
+The signed-in customer journey on the first repair (main `5c3fb13d03466fcafd5894cde65c0543f1f19b4f`) reproduced two additional defects:
+
+- A saved Professional subject category survived switching to NLP. Update selected was disabled and Update all five failed with `Unknown subject choice`. The subject editor now resolves the category from the displayed subject, confines stored IDs to ready choices in the current style, and gives a pending category authority only during active manual editing. Two mounted regressions failed before the repair and pass afterward.
+- AI Generated rejected a link while preserving the previous working draft. A deterministic test reproduced the validation gap using the same evidence-qualified official project URL accepted by protected templates: generation/parse allowed only explicit Profile proof URLs. Both now share a bounded list containing that verified reference. Unrelated domains, failed/unextracted pages, weak evidence and instruction injection remain rejected. The exact rejected live model URL was not observed and is not asserted here.
+
+Five additional mandatory smoke checks cover these contracts and their browser cache chains. Approved master literals are untouched.
+
+### Redacted customer evidence
+
+| Check | Observed result on the first repair |
+|---|---|
+| Professional, NLP, Friendly, Brutal Honesty | All four generated complete bodies and five ready subjects; NLP 193 words/13 paragraphs, Friendly 179/11, Brutal 191/12 |
+| Manual subject Save/reload | Edited subject and its category persisted; email body unchanged |
+| Manual body Save/reload | Exact edited working body persisted in CRM |
+| Shorten and Create variation | Distinct working text, retained meeting and links; Reset restored the exact first Friendly body |
+| Latvian translation | Two-stage generation/editorial review completed; 11 paragraphs, protected names/numbers/links retained; exact translated Save/reload and English-source recovery passed |
+| Rejected AI generation | Prior body, style and five-subject catalog restored together |
+| Second buyer / LinkedIn | Existing confirmed profile reached review; Proceed remained disabled without visible status. This gate is unresolved pending investigation/retry; no successful channel-isolation claim |
+| Templates/defaults/flow | Regression coverage available; authenticated preparation still requires evidence; no outreach activation or sending performed |
+
+Local validation after the second repair: `npm run check:step6` 339/339; full customer suite 2367/2367; production build and diff check passed. Exact release proof and authenticated retries must be recorded separately after publication. Browser outage, account-credit exhaustion and sync-conflict injection are automated failure coverage, not claimed live outages.
+
+### Exact wording approval hold
+
+The protected Brutal Honesty original contains `A research brought me to`. Proposed replacement: `My research brought me to`. Repository AGENTS requires explicit approval for changes to approved wording; broad engineering authority is not approval of this exact literal. No master edit was made.

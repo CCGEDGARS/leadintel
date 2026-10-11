@@ -9,3 +9,33 @@ test('invalid AI category output releases updating feedback and preserves all ex
 test('Update all five replaces only category options and selected subject, and invalid manual edits stay unsaved',async()=>{const h=mounted({selected:'professional'});try{complete(h);const body=h.item().drafts.emailBody;h.q('mw-subject-update-all').click();const req=h.requests.find(row=>row.url.includes('/api/ai/generate')),payload=JSON.parse(JSON.parse(req.options.body).prompt);assert.equal(payload.categories.length,5);assert.ok(payload.categories.every(row=>row.allowed.length));req.resolve({ok:true,json:async()=>({text:JSON.stringify({subjects:payload.categories.map(row=>({id:row.id,text:row.allowed[0]}))})})});await settle();assert.equal(h.item().messageStudioDraft.subjectWorkingSet.rows.length,5);assert.equal(h.item().drafts.emailBody,body);const before=E.workingDraft(h.item());h.q('mw-subject-edit').click();const field=h.w.document.querySelector('[data-subject-edit="introduction"]');field.value='Fake Person. North Works';field.dispatchEvent(new h.w.Event('input',{bubbles:true}));h.q('mw-subject-save').click();await settle();assert.deepEqual(E.workingDraft(h.item()),before);assert.match(h.q('mw-subject-action-status').textContent,/verified name|supplied name/);assert.equal(h.q('outreach-email-body').readOnly,true);h.q('mw-subject-cancel').click();assert.equal(h.q('mw-subject-edit').disabled,false);}finally{h.w.close();}});
 
 test('category labels remain visible with the actual composer stylesheet',()=>{const h=mounted({selected:'professional'});try{complete(h);const style=h.w.document.createElement('style');style.textContent=require('node:fs').readFileSync(require.resolve('../message-workspace.css'),'utf8');h.w.document.head.append(style);const labels=[...h.w.document.querySelectorAll('.mw-subject-category')];assert.equal(labels.length,5);for(const label of labels)assert.notEqual(h.w.getComputedStyle(label).display,'none');}finally{h.w.close();}});
+
+test('style switching resolves the displayed subject category before updating all five',async()=>{
+ const h=mounted({selected:'professional'});try{
+  complete(h);h.q('message-subject-choice').value='development';h.q('message-subject-choice').dispatchEvent(new h.w.Event('change',{bubbles:true}));
+  assert.equal(h.item().messageStudioDraft.subjectSelectedId,'development');
+  h.w.document.querySelector('[data-writing-style="curiosity"]').click();
+  assert.equal(h.item().messageStudioDraft.mode,'curiosity');const before=E.workingDraft(h.item());
+  const selected=h.w.renderSubjectEditor().selectedId;
+  assert.equal(selected,h.w.subjectBook().rows.find(row=>row.subject===before.subject)?.id);
+  assert.equal(h.q('mw-subject-update-selected').disabled,false);
+  h.q('mw-subject-update-all').click();const req=h.requests.find(row=>row.url.includes('/api/ai/generate'));assert.ok(req);
+  const payload=JSON.parse(JSON.parse(req.options.body).prompt);
+  req.resolve({ok:true,json:async()=>({text:JSON.stringify({subjects:payload.categories.map(row=>({id:row.id,text:row.allowed[0]}))})})});await settle();
+  assert.equal(h.item().drafts.emailBody,before.message);assert.equal(h.item().messageStudioDraft.subjectWorkingSet.style,'curiosity');
+  assert.equal(h.item().drafts.emailSubject,payload.categories.find(row=>row.id===selected).allowed[0]);
+  assert.doesNotMatch(h.q('mw-subject-action-status').textContent,/Unknown subject choice/);
+ }finally{h.w.close();}
+});
+
+test('after manual subject editing a new radio choice owns Update selected',async()=>{
+ const h=mounted({selected:'professional'});try{
+  complete(h);h.w.saveScriptPackage=async item=>{h.w.upsertItem({...item,messageStudioDraft:{...item.messageStudioDraft,scriptSavedAt:'now',savedDraft:E.workingDraft(item)}});return {ok:true};};
+  h.q('mw-subject-edit').click();h.q('mw-subject-save').click();await settle();
+  const radio=h.w.document.querySelector('#mw-subject-choices input[value="development"]');radio.checked=true;radio.dispatchEvent(new h.w.Event('change',{bubbles:true}));
+  assert.equal(h.w.renderSubjectEditor().selectedId,'development');
+  h.q('mw-subject-update-selected').click();const req=h.requests.find(row=>row.url.includes('/api/ai/generate'));assert.ok(req);
+  const payload=JSON.parse(JSON.parse(req.options.body).prompt);assert.equal(payload.categories[0].id,'development');
+  req.resolve({ok:false,json:async()=>({error:'Test provider unavailable'})});await settle();
+ }finally{h.w.close();}
+});
