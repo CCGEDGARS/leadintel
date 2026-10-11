@@ -5,6 +5,16 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import app from '../src/app.js';
+import capacityFixture from '../../customer/test/helpers/workspace-capacity.js';
+import stateBudget from '../../customer/state-budget.js';
+
+test('packed workspace references still protect an approved brand asset',async()=>{
+ const assetId=randomId('q'),payload=capacityFixture();payload.outreach.items[0].brandSnapshot={assets:{logo:{id:assetId}}};
+ const wire=stateBudget.prepareForSync(payload,{allowBundlePacking:true}).payload,owner=await fixture('owner',wire);
+ owner.env.BRAND_ASSETS.objects.set(brandAssetObjectKey(assetId),{bytes:png(),httpMetadata:{contentType:'image/png'},customMetadata:await validatedMetadataWithDigest(png(),{workspaceId:owner.workspaceId})});owner.events.length=0;
+ const response=await handleBrandAssetRoute(request(`/api/customer/brand-assets/${assetId}?workspace_id=${owner.workspaceId}`,{method:'DELETE',token:owner.token}),owner.env,{});
+ assert.equal(response.status,409);assert.equal(owner.env.BRAND_ASSETS.objects.has(brandAssetObjectKey(assetId)),true);assert.deepEqual(owner.events,[]);
+});
 import {
   brandAssetObjectKey,
   createD1BrandAssetStore,

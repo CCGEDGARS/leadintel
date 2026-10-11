@@ -1138,6 +1138,36 @@
         "sourceStamp!==JSON.stringify(editorDraft())",
         "Facts or draft changed during generation. Retry Update message."
       ]
+    },
+    {
+      "id": "cross-section-workspace-sharing",
+      "type": "text",
+      "url": "/customer/state-budget.js",
+      "status": 200,
+      "contains": [
+        "leadintel-workspace-bundle-refs-v1",
+        "options.allowBundlePacking===true",
+        "Invalid stored workspace bundle"
+      ]
+    },
+    {
+      "id": "workspace-bundle-capability",
+      "type": "text",
+      "url": "/customer/server-bridge.js",
+      "status": 200,
+      "contains": [
+        "bridge.workspaceBundleCodec=payload.bundle_codec",
+        "allowBundlePacking:bridge.workspaceBundleCodec==='workspace-bundle-v1'"
+      ]
+    },
+    {
+      "id": "workspace-bundle-cache",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "bundle-sync=20261011-v1"
+      ]
     }
   ],
   "retry": {

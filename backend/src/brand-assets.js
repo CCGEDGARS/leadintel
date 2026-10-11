@@ -1,3 +1,4 @@
+import stateBudget from '../../customer/state-budget.js';
 import {constantTimeEqual,cookieValue,randomToken,sha256} from './security.js';
 import {decodeImage} from './image-decoders.js';
 
@@ -661,7 +662,7 @@ async function workspaceAssetReferences(env,workspaceId){
   try{row=await env.DB.prepare('SELECT payload_json FROM customer_workspace_state WHERE workspace_id=?').bind(workspaceId).first();}
   catch{throw new BrandAssetError('Workspace state is unavailable',503);}
   if(!row)return new Set();
-  try{return referencedAssetIds(JSON.parse(row.payload_json||'{}'));}
+  try{return referencedAssetIds(stateBudget.restoreFromSync(JSON.parse(row.payload_json||'{}')));}
   catch{throw new BrandAssetError('Workspace state is invalid',503);}
 }
 

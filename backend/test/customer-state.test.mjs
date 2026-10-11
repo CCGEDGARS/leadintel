@@ -1,6 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {MAX_CUSTOMER_STATE_BYTES,normalizeCustomerPayload,customerStateSize,emptyCustomerState,validateCustomerStateWrite} from '../src/customer-state.js';
+import budget from '../../customer/state-budget.js';
+import capacityFixture from '../../customer/test/helpers/workspace-capacity.js';
+
+test('shared bundle persists through CAS and restores protected originals and recipients',async()=>{
+ const {getCustomerState,putCustomerState}=await import('../src/customer-state.js');const original=capacityFixture(),wire=budget.prepareForSync(original,{allowBundlePacking:true}).payload;let stored=null;
+ const env={DB:{prepare(sql){return {bind(...args){return {async first(){return stored;},async run(){stored={workspace_id:'w1',schema_version:1,version:1,payload_json:args[3]};return {meta:{changes:1}};}};}};}}};
+ const saved=await putCustomerState(env,{workspaceId:'w1',userId:'owner',role:'owner',expectedVersion:0,payload:wire});assert.equal(saved.conflict,false);assert.ok(budget.bytes(JSON.parse(stored.payload_json))<=MAX_CUSTOMER_STATE_BYTES);
+ const read=await getCustomerState(env,'w1');assert.deepEqual(read.payload,original);assert.equal(read.bundle_codec,'workspace-bundle-v1');
+ const changed=structuredClone(original);changed.outreach.messageStudio.originalScripts['email:professional:sv'].body='Unauthorized change';
+ await assert.rejects(putCustomerState(env,{workspaceId:'w1',userId:'member',role:'member',expectedVersion:1,payload:budget.prepareForSync(changed,{allowBundlePacking:true}).payload}),/owner|original/i);
+ assert.deepEqual((await getCustomerState(env,'w1')).payload,original);
+});
 
 test('normalizeCustomerPayload keeps only approved namespaces',()=>{
   assert.deepEqual(normalizeCustomerPayload({main:{a:1},discovery:{b:2},outreach:{},delivery:{},meta:{x:1},secret:{token:'no'}}),{main:{a:1},discovery:{b:2},outreach:{},delivery:{},meta:{x:1}});
