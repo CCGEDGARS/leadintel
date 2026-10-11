@@ -46,8 +46,8 @@ test('a sync conflict takes priority over apparent missing Profile answers and b
 
 test('template generation is distinct from original AI generation and retains protected originals',()=>{
  const {document,w}=mounted(),base={ready:true,authenticated:true,hasDraft:true,channel:'linkedin'};
- w.LeadIntelMessageWorkspace.render(document,{...base,templateSelected:true});assert.match(document.getElementById('message-generate').textContent,/Adjust/i);
- w.LeadIntelMessageWorkspace.render(document,{...base,templateSelected:false});assert.match(document.getElementById('message-generate').textContent,/Adjust/i);
+ w.LeadIntelMessageWorkspace.render(document,{...base,templateSelected:true});assert.match(document.getElementById('message-generate').textContent,/Update/i);
+ w.LeadIntelMessageWorkspace.render(document,{...base,templateSelected:false});assert.match(document.getElementById('message-generate').textContent,/Generate/i);
  assert.ok(document.getElementById('message-template-body').readOnly);
 });
 test('opening-only update is available only with a reviewed event and an unapproved draft',()=>{
@@ -231,7 +231,7 @@ test('automatic preparation preserves the single script and exposes an inline Up
  const proposal={draft:{subject:'Northport steel',message:'Updated facts and approved wording'}};
  w.LeadIntelMessageWorkspace.render(document,{...base,pendingSelections:true,automaticUpdate:proposal});
  assert.equal(document.getElementById('mw-auto-update'),null);assert.equal(document.getElementById('outreach-email-body').value,'My saved exact text');assert.equal(document.getElementById('mw-add-flow').disabled,true);assert.equal(document.getElementById('message-generate').hidden,false);
- w.LeadIntelMessageWorkspace.render(document,{...base,pendingSelections:true,generationError:true});assert.equal(document.getElementById('message-generate').hidden,false);assert.equal(document.getElementById('message-generate').textContent,'Adjust message');
+ w.LeadIntelMessageWorkspace.render(document,{...base,pendingSelections:true,generationError:true});assert.equal(document.getElementById('message-generate').hidden,false);assert.equal(document.getElementById('message-generate').textContent,'Update message');
 });
 
 test('a failed style change identifies the displayed draft rather than claiming selected NLP is applied',()=>{

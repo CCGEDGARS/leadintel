@@ -1,0 +1,7 @@
+# Adjust message panel — 11 October 2026
+
+The user rejected the PR512 layout change: restore the entire editor and change only the original assistance panel to Adjust message, with Shorten followed by Create variation. The previous Message editor with three preset lengths is removed. Update message, Edit, Save, subject controls, content tools and original recovery retain their previous locations and authority.
+
+Shorten and variations use the displayed working draft, supported selected content and current workspace facts. Variations explicitly request fresh openings and paragraph flow, avoiding earlier responses. Persistent Undo stores the exact prior body and subject through CRM snapshot/reopen. The restored path retains cancellation/completion protection: changed facts/settings reject late responses, and a 45-second abort checks the signal even when a provider replies after the deadline. Protected masters and first tailored originals remain unchanged; no Save, approval, send or activation is implicit.
+
+Regression coverage mounts the assembled runtime to check layout, exact two-button order, canonical Update/Edit/Save placement, current-draft input, distinct shortening and variation behavior, duplicate/unchanged/late rejection, protected originals, and persistent Undo through CRM serialization. Production status remains governed by exact-SHA release proof and authenticated customer verification.
