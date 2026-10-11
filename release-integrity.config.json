@@ -1072,7 +1072,8 @@
         "an extra pair of reliable hands for {{offer}} would {{value}}",
         "function validateCoreDraft(",
         "Update needs all five subjects:",
-        "verbatim-facts-v7"
+        "verbatim-facts-v7",
+        "Repeated slots consume their full weight"
       ]
     },
     {
