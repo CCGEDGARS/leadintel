@@ -725,7 +725,7 @@
         "async function markCurrentTemplateDefault",
         "function updateEventInvitation(",
         "updateMessageFromTemplate({selectedStyle:true})",
-        "studio.mode===currentItem()?.messageStudioDraft?.mode",
+        "delete studio.defaultSelection[channel]",
         "messageFactResearchRequest++;messageFactResearchController?.abort()",
         "savedDraft:LeadIntelMessageEditor.savedDraft",
         "20261009-single-editor-v4"
@@ -1112,6 +1112,31 @@
         "LeadIntelMessageEditor.validateCoreDraft(studio,context,draft)",
         "tailoringVersion=7",
         "core-renderer=20261011-v3"
+      ]
+    },
+    {
+      "id": "explicit-message-controls",
+      "type": "text",
+      "url": "/customer/message-workspace.js",
+      "status": 200,
+      "contains": [
+        "Choose the style and update your message.",
+        "q('mw-header-actions').append(q('message-generate'))",
+        "q('mw-undo-rewrite').hidden=true",
+        "We found two versions of your workspace."
+      ]
+    },
+    {
+      "id": "explicit-message-creation-and-races",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "explicit-message=20261011-v1",
+        "void generateStudioMessage(false,'',{explicitStyle:true})",
+        "if(!String(item?.drafts?.emailBody||'').trim()",
+        "sourceStamp!==JSON.stringify(editorDraft())",
+        "Facts or draft changed during generation. Retry Update message."
       ]
     }
   ],

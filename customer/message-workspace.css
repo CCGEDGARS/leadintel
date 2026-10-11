@@ -432,3 +432,9 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #message-studio .mw-subject-options .mw-subject-category{display:inline;font-size:11px;color:#63786a}
 #message-studio .mw-editor .mw-subject-options.mw-text-updating{background:#fff8ea;padding:12px}
 #message-studio .mw-editor .mw-subject-options.mw-text-updated{background:#f0f8f3}
+
+/* Explicit creation and compact message actions. */
+#message-studio .mw-editor-head{flex-wrap:wrap}
+#message-studio .mw-update-help{flex-basis:100%;margin:8px 0 0;color:#687c6e;font-size:13px}
+#message-studio .mw-header-actions #message-generate{background:#2b6950;border-color:#2b6950;color:#fff}
+#message-studio #mw-undo-rewrite[hidden]{display:none!important}

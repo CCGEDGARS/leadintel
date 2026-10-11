@@ -1,10 +1,11 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{JSDOM}=require('jsdom');
 const S=require('../../message-studio.js'),E=require('../../message-editor.js'),O=require('../../outreach-engine.js');
 const read=name=>fs.readFileSync(path.join(__dirname,'..','..',name),'utf8');
-function mounted({selected='curiosity',outreachSnapshot=null}={}){
+function mounted({selected='curiosity',outreachSnapshot=null,mainSnapshot=null}={}){
  const w=new JSDOM(read('index.html'),{url:'https://example.test/customer/',runScripts:'outside-only'}).window;
  const essentials={sender:'Robin Lane',company:'North Works',offer:'steel and installation',target:'industrial teams',problem:'supplier handoffs',value:'simplify project delivery',difference:'Our team supports industrial projects.',approach:'Project delivery to EN 1090 requirements',meetingValue:'relevant project lessons',calendly:'https://calendly.com/north/intro',nextAction:'Choose a suitable time here: {{calendly}}'};
  const main={step:1,website:'https://north.example',brandIdentity:{senderName:essentials.sender,companyDisplayName:essentials.company},profile:{companyName:essentials.company,priorityOffers:essentials.offer,idealCustomer:essentials.target,customerProblem:essentials.problem,valueProposition:essentials.value,differentiation:essentials.difference,deliveryApproach:essentials.approach,meetingValue:essentials.meetingValue}};
+ if(mainSnapshot)Object.assign(main,JSON.parse(JSON.stringify(mainSnapshot)));
  const person={id:'p1',name:'Alex Buyer',title:'Operations Director',kept:true,email:'alex@buyer.example'},candidate={domain:'buyer.example',website:'https://buyer.example',company:'Buyer',fitScore:80,people:[person]},trigger={url:'https://buyer.example/news',companyDomain:candidate.domain,excerpt:'Buyer is investing in a new sorting plant at Northport.',verification:'source_verified'};
  const studio=S.foundation(S.normalize({mode:'professional',essentials}),main),context={channel:'email',buyerName:person.name,firstName:'Alex',buyerCompany:candidate.company,buyerRole:person.title,trigger};
  let item=E.apply({domain:candidate.domain,company:candidate.company,selectedPersonId:person.id,channel:'email',drafts:{},dossier:{domain:candidate.domain,company:candidate.company,people:[person],evidence:[{url:trigger.url,text:trigger.excerpt}],selectedTrigger:trigger}},E.tailor(studio,context),{original:true,key:'first',style:'professional',essentials:studio.essentials,origin:'tailored'});

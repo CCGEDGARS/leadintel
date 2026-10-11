@@ -25,8 +25,8 @@ test('failed field preparation releases the loading state and clicking selected 
  assert.equal(h.item().messageStudioDraft.mode,'curiosity');assert.match(h.q('outreach-email-body').value,/this is not another sales pitch/);assert.deepEqual(E.updateUndo(h.item()),h.before);assert.equal(h.q('message-generate').textContent,'Update message');
  }finally{h.w.close();}
 });
-test('clicking an already applied NLP style preserves an already applied manual NLP edit',()=>{
- const h=mounted();try{h.w.document.querySelector('[data-writing-style="curiosity"]').click();const next=E.apply(h.item(),{subject:'My chosen subject',message:'My exact NLP edit'},{style:'curiosity',origin:'manual'});h.w.upsertItem(next);h.w.renderAll();h.w.document.querySelector('[data-writing-style="curiosity"]').click();assert.equal(h.q('outreach-email-body').value,'My exact NLP edit');assert.equal(h.requests.filter(row=>row.url.includes('/api/ai/generate')).length,0);}finally{h.w.close();}
+test('clicking an already applied NLP style deliberately restores the original after a manual edit',()=>{
+ const h=mounted();try{h.w.document.querySelector('[data-writing-style="curiosity"]').click();const next=E.apply(h.item(),{subject:'My chosen subject',message:'My exact NLP edit'},{style:'curiosity',origin:'manual'});h.w.upsertItem(next);h.w.renderAll();h.w.document.querySelector('[data-writing-style="curiosity"]').click();assert.match(h.q('outreach-email-body').value,/this is not another sales pitch/);assert.equal(E.updateUndo(h.item()).message,'My exact NLP edit');assert.equal(h.requests.filter(row=>row.url.includes('/api/ai/generate')).length,0);}finally{h.w.close();}
 });
 const preparedFacts={triggerSummary:'Buyer is investing in a new sorting plant at Northport.',offer:'steel and installation',value:'simplify project delivery',difference:'Our team supports industrial projects.',approach:'Project delivery to EN 1090 requirements',meetingValue:'relevant project lessons'};
 function requirePreparation(h){const key='leadintel_customer_v2_state',main=JSON.parse(h.w.localStorage.getItem(key));main.profile.priorityOffers='steel and installation '.repeat(8);h.w.localStorage.setItem(key,JSON.stringify(main));}
@@ -58,6 +58,6 @@ test('changed source facts reject preparation with a visible retry explanation',
  }finally{h.w.close();}
 });
 test('AI Generated still rejects a response prepared before writing references changed',async()=>{
- const h=mounted();try{h.w.document.querySelector('[data-writing-style="original"]').click();const run=h.w.generateStudioMessage();const request=h.requests.find(row=>row.url.includes('/api/ai/generate'));assert.ok(request);h.w.dispatchEvent(new h.w.CustomEvent('leadintel:writing-references-changed',{detail:{workspaceId:'w1',referenceRevision:2}}));request.resolve({ok:true,json:async()=>({text:JSON.stringify({subject:'Stale generation',message:'Old reference content'})})});await run;assert.deepEqual(E.workingDraft(h.item()),h.before);assert.equal(h.q('message-generate').textContent,'Generate');
+ const h=mounted();try{h.w.document.querySelector('[data-writing-style="original"]').click();const request=h.requests.find(row=>row.url.includes('/api/ai/generate'));assert.ok(request);h.w.dispatchEvent(new h.w.CustomEvent('leadintel:writing-references-changed',{detail:{workspaceId:'w1',referenceRevision:2}}));request.resolve({ok:true,json:async()=>({text:JSON.stringify({subject:'Stale generation',message:'Old reference content'})})});await settle();assert.deepEqual(E.workingDraft(h.item()),h.before);assert.equal(h.q('message-generate').textContent,'Update message');
  }finally{h.w.close();}
 });

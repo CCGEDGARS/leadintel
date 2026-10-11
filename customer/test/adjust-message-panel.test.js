@@ -6,7 +6,7 @@ test('original editor retains Update, Edit and Save; the rail offers exactly Sho
  const h=mounted({selected:'professional'});try{
  const panel=h.q('mw-writing-assistant');assert.ok(panel.closest('.mw-rail'));assert.equal(panel.querySelector('h3').textContent,'Adjust message');
  assert.deepEqual([...panel.querySelectorAll('button')].filter(b=>!b.hidden).map(b=>b.textContent),['Shorten','Create variation']);
- assert.ok(h.q('message-generate').closest('.mw-editor-actions'));assert.equal(h.q('message-generate').textContent,'Update message');
+ assert.ok(h.q('message-generate').closest('.mw-header-actions'));assert.equal(h.q('message-generate').textContent,'Update message');
  for(const id of ['mw-edit-message','mw-save-message'])assert.ok(h.q(id).closest('.mw-editor-actions'));
  assert.equal(h.q('mw-message-length'),null);
  }finally{h.w.close();}
