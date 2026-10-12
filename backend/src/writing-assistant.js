@@ -4,6 +4,7 @@ const fail=(message,status=400)=>{throw Object.assign(Error(message),{status});}
 const object=v=>v&&typeof v==='object'&&!Array.isArray(v);
 const text=(v,max,label)=>{if(typeof v!=='string'||v.length>max)fail(`${label} is invalid or too long`);return v;};
 const links=value=>(String(value).match(/https?:\/\/[^\s<>"\])]+/g)||[]).map(v=>v.replace(/[.,;!?]+$/,''));
+const contextText=value=>typeof value==='string'?value:Array.isArray(value)?value.map(contextText).join('\n'):object(value)?Object.values(value).map(contextText).join('\n'):'';
 const numbers=value=>String(value).match(/\b\d+(?:[.,]\d+)?\b/g)||[];
 export async function prepareAssistantRequest(env,scope,body){
  if(!scope?.workspaceId)fail('Authentication required',401);
@@ -32,7 +33,7 @@ export function validateAssistantReply(raw,prepared){
   if(!object(result.draft)||Object.keys(result.draft).some(k=>!['subject','message'].includes(k)))fail('Invalid draft',502);
   const subject=text(result.draft.subject,120,'Draft subject'),message=text(result.draft.message,12000,'Draft message');
   if([...subject].length>60||/[\r\n]|https?:|^Subject:/i.test(subject)||!message.trim()||/\{\{|\}\}|\[(?:insert|name|company|link)[^\]]*\]/i.test(subject+' '+message))fail('Invalid or unfinished draft',502);
-  const context=prepared.context,original=context.currentDraft.message,known=JSON.stringify({...context,currentDraft:context.currentDraft}),approved=new Set(links(known));
+  const context=prepared.context,original=context.currentDraft.message,known=JSON.stringify({...context,currentDraft:context.currentDraft}),approved=new Set(links(contextText(context)));
   if(context.channel==='linkedin'&&subject)fail('LinkedIn drafts cannot have a subject',502);
   for(const url of links(original))if(!links(message).includes(url))fail('Draft omitted an approved link',502);
   if(links(subject+' '+message).some(url=>!approved.has(url)))fail('Draft added an unapproved link',502);

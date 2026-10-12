@@ -1008,7 +1008,8 @@
       "url": "/customer/discovery-ui.js",
       "status": 200,
       "contains": [
-        "outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&style-application=20261011-v1&"
+        "outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&style-application=20261011-v1&",
+        "writing-assistant=20261012-v1"
       ]
     },
     {
