@@ -37,6 +37,14 @@ test('fresh integration results immediately refresh the active tools summary',as
   await w.probe.refreshIntegrationStatus();const summary=w.document.getElementById('ai-engine-summary').textContent;assert.match(summary,/Apollo.io/);assert.match(summary,/MANAGED/);assert.match(summary,/CREDITS UNVERIFIED/);
  }finally{w.close();}
 });
+test('diagnostic summary refresh preserves an unsaved AI key being entered',async()=>{
+ const w=mount();try{
+  w.document.getElementById('ai-settings-drawer').hidden=false;
+  const grid=w.document.getElementById('ai-provider-grid');grid.innerHTML='<input data-ai-key="openai" value="transient-test-key">';const input=grid.firstChild;
+  w.fetch=async()=>response({providers:[]});await w.probe.refreshIntegrationStatus();
+  assert.equal(grid.firstChild,input);assert.equal(input.value,'transient-test-key');
+ }finally{w.close();}
+});
 test('an in-flight status response from a previous workspace cannot populate the next workspace',async()=>{
  const w=mount();try{
   let resolve;const gate=new Promise(r=>{resolve=r;});w.fetch=async()=>{await gate;return response({configured:true,providers:[{provider:'apollo',configured:true,source:'customer',state:'good'}]});};

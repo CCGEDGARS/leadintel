@@ -31,9 +31,10 @@ workspace. Existing connection failures remain visible in the provider card.
 
 ## Verification
 
-Five behavioral regression tests mount the real Settings module and check managed
+Six behavioral regression tests mount the real Settings module and check managed
 Apollo, customer Apollo, unverified managed Firecrawl, immediate summary refresh,
-and an account switch while diagnostics are in flight. These failed before the
+an account switch while diagnostics are in flight, and preservation of an unsaved
+AI key during the summary refresh. These failed before the
 fix and pass afterward. Existing privacy, provider-credit and settings tests run
 alongside them. Production smoke checks verify the ownership behavior markers
 and cache-busted module entry. Production claims require exact-SHA release proof;

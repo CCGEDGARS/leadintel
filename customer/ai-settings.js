@@ -164,9 +164,8 @@ function activeToolsSummary(active){
   if(!items.length)return '<div class="active-tools-empty">No active tools are ready yet.</div>';
   return `<div class="active-tools-list" role="list" aria-label="Active LeadIntel tools">${items.map(item=>`<div class="active-tool-chip" role="listitem"><div><strong>${esc(item.name)}</strong><small>${esc(item.detail)}</small></div><span>${esc(item.state)}</span></div>`).join('')}</div>`;
 }
-function render(){
-  const grid=document.getElementById('ai-provider-grid');if(!grid)return;
-  if(!settingsDrawerOpen()){unmountCredentialControls();return;}
+function renderActiveToolsSummary(){
+  if(!settingsDrawerOpen())return;
   const active=status.providers.find(item=>item.active);const connectedCount=status.providers.filter(item=>item.configured).length;
   const summary=document.getElementById('ai-engine-summary');
   if(summary){
@@ -176,6 +175,11 @@ function render(){
     else if(active)summary.innerHTML=`<span>Active tools</span><strong class="ai-engine-active-line"><span>Main engine · ${esc(active.name)} · ${esc(active.model)}</span><span class="ai-active-badge" role="status">MAIN ENGINE</span></strong>${activeToolsSummary(active)}<small>${connectedCount} AI provider${connectedCount===1?'':'s'} connected · API key verified ${active.verified_at?esc(formatDate(active.verified_at)):'successfully'}${active.last_used_at?` · last used ${esc(formatDateTime(active.last_used_at))}`:''}. Manage every connection in its card below.</small>`;
     else summary.innerHTML=`<span>Active tools</span><strong>No main AI engine</strong>${activeToolsSummary(null)}<small>${connectedCount?`${connectedCount} AI provider${connectedCount===1?' is':'s are'} connected. Choose one as the main engine below.`:'Test and save an AI provider below to activate AI generation.'} Manage every connection in its card below.</small>`;
   }
+}
+function render(){
+  const grid=document.getElementById('ai-provider-grid');if(!grid)return;
+  if(!settingsDrawerOpen()){unmountCredentialControls();return;}
+  renderActiveToolsSummary();
   grid.innerHTML=PROVIDERS.map(config=>providerCard(config,providerState(config.provider))).join('');
   renderIntegrationMonitoring();
 }
@@ -374,7 +378,7 @@ async function refreshIntegrationStatus(){
   const refreshMicrosoft=Promise.resolve(bridge()?.refreshMicrosoftMailStatus?.()).catch(()=>null);
   const [apollo,firecrawl,gmail]=await Promise.all([checkApolloStatus(),checkFirecrawlStatus(),checkGmailStatus(),refreshMicrosoft]);
   if(!signedIn()||workspace()?.id!==originWorkspace||generation!==integrationStatusGeneration)return integrationStatus;
-  integrationStatus={checkedAt,checking:false,apollo,firecrawl,account:workspaceAccountStatus(),gmail,microsoftMail:microsoftMailStatus()};window.LeadIntelIntegrationHealth={apollo,firecrawl};render();return integrationStatus;
+  integrationStatus={checkedAt,checking:false,apollo,firecrawl,account:workspaceAccountStatus(),gmail,microsoftMail:microsoftMailStatus()};window.LeadIntelIntegrationHealth={apollo,firecrawl};renderActiveToolsSummary();renderIntegrationMonitoring();return integrationStatus;
 }
 async function refreshAllStatus(){
   await refreshStatus();await refreshIntegrationStatus();return {ai:status,integrations:integrationStatus};
