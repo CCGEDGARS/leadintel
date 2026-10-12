@@ -1,9 +1,9 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{JSDOM}=require('jsdom');
 const read=name=>fs.readFileSync(path.join(__dirname,'..',name),'utf8');
-async function mounted(){
+async function mounted(provider="",authenticated=true){
  const w=new JSDOM('<div class="top-actions"></div><div id="toast"></div>',{url:'https://example.test/customer/',runScripts:'outside-only'}).window;
  const observers=[];const Observer=w.MutationObserver;w.MutationObserver=class extends Observer{constructor(callback){super(callback);observers.push(this);}};w.disposeObservers=()=>observers.forEach(observer=>observer.disconnect());
- w.LeadIntelServerBridge={session:{authenticated:true},workspace:{id:'w1',role:'owner'}};
+ w.LeadIntelServerBridge={session:{authenticated,user:{email:"user@example.com"}},authProvider:provider,workspace:{id:'w1',role:'owner'}};
  let identity={meetingPlatform:'zoom'};w.LeadIntelSenderIdentity={get:()=>identity,setMeetingPlatform:meetingPlatform=>{identity={meetingPlatform};}};
  w.fetch=async url=>({ok:true,json:async()=>String(url).includes('/ai/status')?{role:'owner',providers:[]}:{role:'owner',providers:[{provider:'apollo'},{provider:'firecrawl'},{provider:'hunter'}]}});
  w.eval(read('personal-linkedin.js'));
@@ -15,7 +15,7 @@ async function mounted(){
 test('settings provides safe provider-specific setup links through refresh, close and reopen',async()=>{
  const w=await mounted();try{
  const check=()=>{
- for(const id of ['openai','anthropic','gemini','apollo','firecrawl','hunter','google','microsoft-account','gmail','microsoft-mail','calendly','personal-linkedin','zoom']){
+ for(const id of ['openai','anthropic','gemini','apollo','firecrawl','hunter','gmail','microsoft-mail','calendly','personal-linkedin','zoom']){
   const links=[...w.document.querySelectorAll(`[data-tool-links="${id}"] a`)];assert.ok(links.length>=2,`${id} account and setup links missing`);
   for(const link of links){assert.equal(new URL(link.href).protocol,'https:');assert.equal(link.target,'_blank');assert.match(link.rel,/noopener/);assert.match(link.rel,/noreferrer/);assert.match(link.getAttribute('aria-label'),/opens in a new tab/);}
  }
@@ -35,11 +35,22 @@ test('communication sits immediately below System health and account cards share
   assert.equal(health.nextElementSibling.getAttribute('aria-labelledby'),'communication-integration-heading');
   for(const id of ['google','microsoft-account']){
    const card=w.document.querySelector(`[data-integration="${id}"]`);
-   assert.equal(card.children.length,5);
+   assert.equal(card.children.length,4);
    assert.equal(card.children[3].className,'workspace-provider-actions');
-   assert.equal(card.children[4].className,'tool-account-links');
   }
   assert.match(read('ai-settings.css'),/@media\(min-width:681px\)/);
   assert.match(read('ai-settings.css'),/#integration-communication-grid>\.workspace-provider-card\{grid-row:span 5;grid-template-rows:subgrid\}/);
  }finally{w.disposeObservers();w.close();}
+});
+
+test('signed-in workspace cards keep authentication controls inside LeadIntel on reopen',async()=>{
+ for(const provider of ['google','microsoft','']){const w=await mounted(provider);try{
+  const check=()=>{
+   for(const id of ['google','microsoft-account']){const card=w.document.querySelector(`[data-integration="${id}"]`);assert.equal(card.querySelector('a'),null);assert.ok(card.querySelector('[data-settings-signout], [data-settings-switch]'));assert.doesNotMatch(card.textContent,/Create account|Manage account|Session active/);}
+   if(provider){const active=w.document.querySelector(`[data-integration="${provider==='google'?'google':'microsoft-account'}"]`);assert.match(active.textContent,/Selected/);assert.match(active.textContent,/user@example.com/);assert.ok(active.querySelector('[data-settings-signout]'));}
+  };check();w.document.getElementById('close-settings').click();w.document.getElementById('open-settings').click();await new Promise(r=>setTimeout(r,25));check();
+ }finally{w.disposeObservers();w.close();}}
+});
+test('signed-out workspace cards offer app login and explicitly named new-account links',async()=>{
+ const w=await mounted('',false);try{for(const [id,name] of [['google','Google'],['microsoft-account','Microsoft']]){const card=w.document.querySelector(`[data-integration="${id}"]`);assert.ok(card.querySelector('[data-settings-signin]'));assert.match(card.querySelector('nav').textContent,new RegExp(`Create ${name} account`));assert.doesNotMatch(card.textContent,/Manage account/);}}finally{w.disposeObservers();w.close();}
 });

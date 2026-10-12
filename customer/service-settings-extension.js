@@ -1,4 +1,4 @@
-import './tool-account-links.js?v=20261011-v1';
+import './tool-account-links.js?v=20261011-v1&workspace-auth=20261012-v1';
 const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
 const SETTINGS_VERSION='20261012-visible-apollo-key-v1';
 const DEFAULT_CALENDLY_URL='';

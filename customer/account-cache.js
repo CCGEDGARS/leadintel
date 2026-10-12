@@ -17,7 +17,7 @@
   const set=(store,key,value)=>rawSet.call(store,key,value);
   const remove=(store,key)=>rawRemove.call(store,key);
   const parse=value=>{try{return JSON.parse(value||'null');}catch{return null;}};
-  const scopedKey=key=>String(key).startsWith('leadintel_')&&key!==CONTEXT_KEY&&!String(key).startsWith(ARCHIVE_PREFIX)&&key!==LEGACY_CLEANUP_KEY;
+  const scopedKey=key=>String(key).startsWith('leadintel_')&&key!==CONTEXT_KEY&&key!=='leadintel_auth_provider'&&!String(key).startsWith(ARCHIVE_PREFIX)&&key!==LEGACY_CLEANUP_KEY;
   let ticket=get(storage,CONTEXT_KEY);
   let context=parse(ticket)||{workspaceId:get(storage,WORKSPACE_KEY)||parse(get(storage,'leadintel_customer_v2_workspace_saved_snapshot_v1'))?.workspace_id||'',userId:''};
   let invalidated=false,verified=false,transitioning=false,databasePromise=null;
