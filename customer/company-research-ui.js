@@ -301,8 +301,21 @@ async function runCompanyResearch({rerun=false}={}){
   finally{clearTimeout(runTimer);running=false;setResearchButtonBusy(false);if(rerunButton)rerunButton.disabled=false;}
 }
 
+function needsInitialCompanyResearch(){
+  const state=readState(),meta=metaForCurrentState();
+  return companyResearchReady(state)&&Boolean(window.LeadIntelWebsiteActivation?.isCurrentWebsiteActive?.(state.website))&&!meta.generatedAt&&!meta.failureAt;
+}
+function prepareProfileAnswers(event){
+  const target=event.target?.closest?.('#to-questionnaire,[data-step-marker="2"],[data-process-step="2"]');
+  if(!target||!needsInitialCompanyResearch())return;
+  event.preventDefault();event.stopImmediatePropagation();
+  void runCompanyResearch();
+}
 function bind(){
   ensureResearchUi();
+  document.addEventListener('click',prepareProfileAnswers,{capture:true});
+  // The support bundle may finish loading after the customer already opened Profile.
+  if(Number(readState().step)===2&&needsInitialCompanyResearch())void runCompanyResearch();
   document.getElementById('step-2')?.addEventListener('click',handleReviewAction);
   window.addEventListener('leadintel:website-activated',renderResearchReview);
   window.addEventListener('leadintel:module-opened',event=>{if(Number(event.detail?.step)===2){renderResearchReview();}});

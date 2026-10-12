@@ -39,7 +39,7 @@ test('Commercial brief sections use a clearly visible shared outer border',()=>{
   assert.match(css,/\.brief-question-group\{[^}]*border:1\.5px solid #bfd2c8/);
 });
 
-test('Step 2 waits for an explicit research confirmation and explains the next action',()=>{
+test('Continue prepares initial research and explains the next action',()=>{
   assert.match(ui,/Continue to Profile/);
   assert.match(ui,/rerun-company-research/);
   assert.match(ui,/Setup complete — ready for company research/);
@@ -48,7 +48,7 @@ test('Step 2 waits for an explicit research confirmation and explains the next a
   assert.match(ui,/Market required/);
   assert.doesNotMatch(ui,/function scheduleInitialCompanyResearch/);
   assert.doesNotMatch(ui,/LeadIntelWebsiteActivation\?\.isWebsiteActive/);
-  assert.doesNotMatch(ui,/stopImmediatePropagation\(\)/);
+  assert.match(ui,/prepareProfileAnswers/);
   assert.match(ui,/MAX_COMPANY_RESEARCH_QUERIES\s*=\s*3/);
   assert.match(ui,/MAX_RESULTS_PER_QUERY\s*=\s*4/);
   assert.match(ui,/COMPANY_RESEARCH_REQUEST_TIMEOUT_MS\s*=\s*25000/);
