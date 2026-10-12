@@ -15,13 +15,13 @@ test('a style change aborts in-flight subject research and applies the new style
  const restored=O.restoreCrmScriptSnapshot(O.buildCrmScriptSnapshot(h.item()),'buyer.example');assert.deepEqual(E.workingDraft(E.undoTemplateUpdate(restored)),h.before);
  }finally{h.w.close();}
 });
-test('failed field preparation releases the loading state and clicking selected NLP retries it',async()=>{
+test('failed field preparation releases Update message and its retry applies the selected NLP style',async()=>{
  const h=mounted();try{
  const key='leadintel_customer_v2_state',main=JSON.parse(h.w.localStorage.getItem(key));main.profile.priorityOffers='steel and installation '.repeat(8);h.w.localStorage.setItem(key,JSON.stringify(main));
  const choose=()=>h.w.document.querySelector('[data-writing-style="curiosity"]').click(),settle=()=>new Promise(resolve=>setImmediate(resolve));
  choose();assert.equal(h.requests.length,1);assert.equal(h.q('message-generate').textContent,'Updating…');
  h.requests[0].resolve({ok:false,json:async()=>({error:'Provider unavailable'})});await settle();assert.equal(h.item().messageStudioDraft.mode,'professional');assert.deepEqual(E.workingDraft(h.item()),h.before);assert.match(h.q('message-generation-status').textContent,/Provider unavailable/);assert.equal(h.q('message-generate').textContent,'Update message');
- choose();const request=h.requests.findLast(row=>row.url.includes('/api/ai/generate'));assert.notEqual(request,h.requests[0]);request.resolve({ok:true,json:async()=>({text:JSON.stringify({triggerSummary:'Buyer is investing in a new sorting plant at Northport.',offer:'steel and installation',value:'simplify project delivery',difference:'Our team supports industrial projects.',approach:'Project delivery to EN 1090 requirements',meetingValue:'relevant project lessons'})})});await settle();
+ h.q('message-generate').click();const request=h.requests.findLast(row=>row.url.includes('/api/ai/generate'));assert.notEqual(request,h.requests[0]);request.resolve({ok:true,json:async()=>({text:JSON.stringify({triggerSummary:'Buyer is investing in a new sorting plant at Northport.',offer:'steel and installation',value:'simplify project delivery',difference:'Our team supports industrial projects.',approach:'Project delivery to EN 1090 requirements',meetingValue:'relevant project lessons'})})});await settle();
  assert.equal(h.item().messageStudioDraft.mode,'curiosity');assert.match(h.q('outreach-email-body').value,/this is not another sales pitch/);assert.deepEqual(E.updateUndo(h.item()),h.before);assert.equal(h.q('message-generate').textContent,'Update message');
  }finally{h.w.close();}
 });
@@ -46,7 +46,7 @@ for(const style of ['professional','curiosity','friendly','brutal'])test(`writin
 });
 test('a failed style application keeps its actual failure visible across background renders',async()=>{
  const h=mounted();try{requirePreparation(h);h.w.document.querySelector('[data-writing-style="curiosity"]').click();h.requests[0].resolve({ok:false,json:async()=>({error:'Provider unavailable'})});await settle();
- h.w.renderAll();assert.match(h.q('message-generation-status').textContent,/Provider unavailable/);assert.equal(h.q('message-generation-status').hidden,false);assert.match(h.q('mw-style-help').textContent,/Update failed.*preserved/);assert.equal(h.q('message-mode').value,'professional');assert.deepEqual(E.workingDraft(h.item()),h.before);
+ h.w.renderAll();assert.match(h.q('message-generation-status').textContent,/Provider unavailable/);assert.equal(h.q('message-generation-status').hidden,false);assert.match(h.q('mw-style-help').textContent,/Preparation failed.*preserved.*Update message/);assert.equal(h.q('message-mode').value,'curiosity');assert.deepEqual(E.workingDraft(h.item()),h.before);
  for(let i=0;i<h.requests.length;i++){const request=h.requests[i];if(request.url.includes('/firecrawl/')){request.resolve({ok:true,json:async()=>({success:true,data:[]})});await settle();}}
  assert.match(h.q('message-generation-status').textContent,/Provider unavailable/);assert.equal(h.requests.filter(row=>row.url.includes('/api/ai/generate')).length,1);
  h.w.document.querySelector('[data-writing-style="curiosity"]').click();const retry=h.requests.findLast(row=>row.url.includes('/api/ai/generate'));retry.resolve({ok:true,json:async()=>({text:JSON.stringify(preparedFacts)})});await settle();h.w.renderAll();assert.equal(h.item().messageStudioDraft.mode,'curiosity');assert.doesNotMatch(h.q('message-generation-status').textContent,/Provider unavailable/);assert.equal(h.q('message-generation-status').hidden,true);
@@ -59,5 +59,17 @@ test('changed source facts reject preparation with a visible retry explanation',
 });
 test('AI Generated still rejects a response prepared before writing references changed',async()=>{
  const h=mounted();try{h.w.document.querySelector('[data-writing-style="original"]').click();const request=h.requests.find(row=>row.url.includes('/api/ai/generate'));assert.ok(request);h.w.dispatchEvent(new h.w.CustomEvent('leadintel:writing-references-changed',{detail:{workspaceId:'w1',referenceRevision:2}}));request.resolve({ok:true,json:async()=>({text:JSON.stringify({subject:'Stale generation',message:'Old reference content'})})});await settle();assert.deepEqual(E.workingDraft(h.item()),h.before);assert.equal(h.q('message-generate').textContent,'Update message');
+ }finally{h.w.close();}
+});
+
+for(const style of ['professional','curiosity','friendly','brutal','original'])test(`Update message retries failed ${style} selection without replacing the previous draft`,async()=>{
+ const h=mounted();try{
+ requirePreparation(h);h.w.document.querySelector(`[data-writing-style="${style}"]`).click();
+ const first=h.requests.find(row=>row.url.includes('/api/ai/generate'));assert.ok(first);
+ first.resolve({ok:false,json:async()=>({error:'Provider temporarily unavailable'})});await settle();
+ assert.deepEqual(E.workingDraft(h.item()),h.before);assert.equal(h.q('message-mode').value,style);assert.equal(h.q('message-generate').disabled,false);
+ h.q('message-generate').click();const retry=h.requests.findLast(row=>row.url.includes('/api/ai/generate'));assert.notEqual(retry,first);assert.equal(h.q('message-mode').value,style);assert.equal(h.q('message-generate').textContent,'Updating…');
+ // End this second attempt as a failure too: retries must remain possible, without loops or data loss.
+ retry.resolve({ok:false,json:async()=>({error:'Still unavailable'})});await settle();assert.deepEqual(E.workingDraft(h.item()),h.before);assert.equal(h.q('message-generate').disabled,false);assert.equal(h.q('message-mode').value,style);
  }finally{h.w.close();}
 });
