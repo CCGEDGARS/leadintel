@@ -1,3 +1,4 @@
+import {prepareAssistantRequest,validateAssistantReply,assertAssistantCurrent} from './writing-assistant.js';
 import {prepareContentGeneration,resolveContentMaterials} from './content-materials.js';
 import {sha256,cookieValue} from './security.js';
 import {importAesKey,encryptSecret,decryptSecret} from './oauth.js';
@@ -52,7 +53,7 @@ async function geminiIntegration(env,workspaceId){return env.DB.prepare(`SELECT 
 
 export async function handleAiRoute(request,env,cors={}){
   const url=new URL(request.url);const path=url.pathname;
-  const known=path.startsWith('/api/integrations/ai/')||path==='/api/ai/generate'||path==='/api/ai/web-search'||path==='/api/ai/research-verification'||path==='/api/ai/contact-evidence-review'||path==='/api/ai/grounded-contact-search';if(!known)return null;
+  const known=path==='/api/writing-assistant/reply'||path.startsWith('/api/integrations/ai/')||path==='/api/ai/generate'||path==='/api/ai/web-search'||path==='/api/ai/research-verification'||path==='/api/ai/contact-evidence-review'||path==='/api/ai/grounded-contact-search';if(!known)return null;
   const workspaceId=String(url.searchParams.get('workspace_id')||'').trim();if(!workspaceId)return error('workspace_id is required',400,cors);
 
   if(path==='/api/integrations/ai/status'&&request.method==='GET'){
@@ -186,28 +187,30 @@ export async function handleAiRoute(request,env,cors={}){
     }catch(cause){console.error('Gemini grounded contact search unavailable',String(cause?.message||cause).slice(0,160));return unavailable('Grounded contact search unavailable');}
   }
 
-  if(path==='/api/ai/generate'&&request.method==='POST'){
+  if((path==='/api/ai/generate'||path==='/api/writing-assistant/reply')&&request.method==='POST'){
+    const assistant=path==='/api/writing-assistant/reply';
     const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
     if(!encryptionConfigured(env))return error('AI credential encryption is not configured',503,cors);
     const body=await request.json().catch(()=>null);if(!body)return error('AI generation payload is required',400,cors);
     const prompt=String(body.prompt||'').trim(),system=String(body.system||'').trim();
-    if(!prompt||prompt.length>80000||system.length>20000)return error('AI generation prompt is invalid or too large',400,cors);
-    const companyExtraction=body.task==='company-extraction';
+    if(!assistant&&(!prompt||prompt.length>80000||system.length>20000))return error('AI generation prompt is invalid or too large',400,cors);
+    const companyExtraction=!assistant&&body.task==='company-extraction';
     const integration=companyExtraction?await openAiIntegration(env,workspaceId):await activeIntegration(env,workspaceId);
     if(!integration)return error(companyExtraction?'OpenAI integration is required for company extraction':'No active AI provider is configured for this workspace',409,cors,companyExtraction?{provider:'openai',fallback:{status:'not_used',used:false}}:{});
     try{
-      const writing=await prepareWritingReferenceGeneration(env,{workspaceId,userId:access.user.id},{...body,system,prompt});
-      const materials=await prepareContentGeneration(env,workspaceId,{...body,system:writing.system,prompt:writing.prompt});
-      const extractionRequest={system:materials.system,prompt:materials.prompt,maxOutputTokens:body.max_output_tokens};
+      const preparedAssistant=assistant?await prepareAssistantRequest(env,{workspaceId,userId:access.user.id},body):null;
+      const writing=assistant?{system:preparedAssistant.system,prompt:preparedAssistant.prompt,context:null}:await prepareWritingReferenceGeneration(env,{workspaceId,userId:access.user.id},{...body,system,prompt});
+      const materials=assistant?{system:writing.system,prompt:writing.prompt,refs:[]}:await prepareContentGeneration(env,workspaceId,{...body,system:writing.system,prompt:writing.prompt});
+      const extractionRequest={system:materials.system,prompt:materials.prompt,maxOutputTokens:assistant?3500:body.max_output_tokens};
       const runProvider=async(providerIntegration,input)=>{
         const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const apiKey=await decryptSecret(providerIntegration.encrypted_api_key,key);
         let controller=null,timer=null,timedOut=false,onRequestAbort=null;let signal=request.signal;
-        if(body.task==='company-extraction'){
+        if(assistant||body.task==='company-extraction'){
           if(request.signal?.aborted){const canceled=new Error('AI generation was canceled');canceled.name='AbortError';throw canceled;}
           controller=new AbortController();signal=controller.signal;
           onRequestAbort=()=>controller.abort(request.signal.reason);
           request.signal?.addEventListener('abort',onRequestAbort,{once:true});
-          timer=setTimeout(()=>{timedOut=true;controller.abort();},COMPANY_EXTRACTION_PROVIDER_TIMEOUT_MS);
+          timer=setTimeout(()=>{timedOut=true;controller.abort();},assistant?55000:COMPANY_EXTRACTION_PROVIDER_TIMEOUT_MS);
         }
         try{
           const result=await generateText({provider:providerIntegration.provider,apiKey,model:providerIntegration.model,...input,signal});
@@ -225,7 +228,7 @@ export async function handleAiRoute(request,env,cors={}){
         }
       };
       const attempt=await generateCompanyExtraction({
-        task:body.task,fallbackProvider:body.fallback_provider,primaryIntegration:integration,
+        task:assistant?'writing-assistant':body.task,fallbackProvider:assistant?undefined:body.fallback_provider,primaryIntegration:integration,
         getFallbackIntegration:()=>geminiIntegration(env,workspaceId),request:extractionRequest,runProvider
       });
       if(!attempt.ok){
@@ -233,11 +236,14 @@ export async function handleAiRoute(request,env,cors={}){
         const metadata=body.task==='company-extraction'?{provider:integration.provider,fallback:attempt.fallback}:{};
         return error(message,502,cors,metadata);
       }
+      if(assistant)await assertAssistantCurrent(env,{workspaceId},preparedAssistant);
+      const assistantReply=assistant?validateAssistantReply(attempt.result.text,preparedAssistant):null;
       try{await assertWritingContextCurrent(writingReferenceRuntime(env),{workspaceId},writing.context);}catch{return error('Writing references changed. Regenerate the message.',409,cors);}
       if(materials.refs.length)await resolveContentMaterials(env,workspaceId,materials.refs);
       const result=writing.context?{...attempt.result,writing_references:{referenceRevision:writing.context.referenceRevision,sourceRefs:writing.context.sourceRefs,techniqueIds:writing.context.techniques.map(row=>({sourceId:row.sourceId,techniqueId:row.id}))}}:attempt.result;if(materials.refs.length)result.content_materials=materials.refs;const usedProvider=result.provider||integration.provider;
       await env.DB.prepare(`UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(workspaceId,usedProvider).run();
       await audit(env,{workspaceId,userId:access.user.id,type:'ai.generation_completed',provider:usedProvider,metadata:{model:result.model||integration.model,input_tokens:result.usage?.input_tokens||0,output_tokens:result.usage?.output_tokens||0,fallback_used:Boolean(attempt.fallback.used),fallback_from:attempt.fallback.used?'openai':undefined}});
+      if(assistant)return json(assistantReply,200,cors);
       return json(body.task==='company-extraction'?{...result,fallback:attempt.fallback}:result,200,cors);
     }catch(cause){return error(String(cause?.message||'AI provider request failed').slice(0,180),cause.status||502,cors);}
   }

@@ -86,7 +86,7 @@
   libraryContent.append(templateLibrary,styleManager,contentMaterials,originalPeek,references);
   rail.append(libraryTools);
   studio.after(evidence);
-  const assistant=node('section','mw-section mw-writing-assistant');assistant.id='mw-writing-assistant';assistant.innerHTML='<div class="mw-section-heading"><span class="mw-step-number">3</span><div><h3>Adjust message</h3><p>Shorten your draft or create a fresh variation. Review, then save.</p></div></div><div class="mw-assistant-actions"></div><small>Originals stay protected. Review your changes, then save.</small>';
+  const assistant=node('section','mw-section mw-writing-assistant');assistant.id='mw-writing-assistant';assistant.innerHTML='<div class="mw-section-heading"><span class="mw-step-number">3</span><div><h3>Writing Assistant</h3><p>Write with your customer context and sources. Review, then save.</p></div></div><div class="mw-assistant-actions"></div><small>Originals stay protected. Review your changes, then save.</small>';
   const improve=q('mw-rewrite-message');improve.textContent='Rewrite';improve.title='Create a fresh version of this working draft using your selected content';assistant.querySelector('.mw-assistant-actions').append(improve);
   for(const [id,label] of [['mw-shorten-message','Shorten'],['mw-improve-subject','Improve subject']]){const button=node('button','secondary-btn',label);button.id=id;button.type='button';assistant.querySelector('.mw-assistant-actions').append(button);}
   assistant.querySelector('.mw-assistant-actions').append(improve,q('mw-restore-original'));
@@ -169,7 +169,7 @@
   if(context.hasDraft&&context.selectedStyle!==context.appliedStyle)q('mw-style-help').textContent=context.busy?'Preparing '+selectedName+'. Displayed email: '+appliedName+'.':selectedName+' has not been applied. Displayed email: '+appliedName+'. '+(context.generationError?'Preparation failed; your text is preserved. Click Update message to retry.':context.automaticUpdate?'Click Update message to restore the template.':'Your current text is preserved.');
   if(context.generationError&&!context.busy&&context.selectedStyle===context.appliedStyle)q('mw-style-help').textContent='Update failed. Your previous message is preserved. Click Update message to retry the selected style.';
   const delivery=q('continue-to-delivery')?.closest('.delivery-entry');if(delivery)delivery.hidden=linkedin||!context.approved;
-  const editor=context.editorState||{},blocked=!context.ready||!context.authenticated||context.syncConflict||context.busy||context.pending||context.factResearchBusy;
+  const editor=context.editorState||{},blocked=!context.ready||!context.authenticated||context.syncConflict||context.busy||context.assistantBusy||context.pending||context.factResearchBusy;
   for(const id of ['outreach-email-subject','outreach-email-body','outreach-linkedin'])q(id).readOnly=!editor.editing||blocked||editor.saving;
   q('mw-save-message').textContent=editor.saving?'Saving…':editor.editing?'Save changes':'Save';q('mw-save-message').disabled=blocked||!context.hasDraft||editor.busy||editor.saving||Boolean(editor.preview)||context.savedDraft===true&&!editor.editing;
   q('mw-edit-message').disabled=blocked||!context.hasDraft||editor.busy||editor.saving||editor.editing||Boolean(editor.preview);q('mw-rewrite-message').disabled=blocked||!context.hasDraft||editor.editing||editor.saving||editor.busy;
@@ -201,7 +201,7 @@
   if(context.pendingSelections&&!context.busy&&!noticeBlocked)q('mw-readiness-text').textContent='Update available. Your current message is preserved.';
   q('approve-outreach').disabled=Boolean(context.approved||blocked||context.approvalBlocked||context.missing?.length||context.unconfirmed?.length||context.outdatedDraft||context.pendingSelections||context.unpersonalizedDraft||!context.senderIdentityReady||editor.editing||editor.busy||editor.saving||editor.preview);
   for(const id of ['message-mode','message-subject-choice','message-ai-subject-choice'])q(id).disabled=Boolean(blocked||editor.editing||editor.busy||editor.saving||editor.preview);
-  renderSubjects(document);paintStyles(document);for(const button of document.querySelectorAll('[data-writing-style]'))button.disabled=Boolean(editor.editing||editor.busy||editor.saving||editor.preview||!context.authenticated||!context.ready||context.syncConflict||context.pending||context.subjectBusy||context.translationBusy);return view;
+  renderSubjects(document);paintStyles(document);for(const button of document.querySelectorAll('[data-writing-style]'))button.disabled=Boolean(editor.editing||editor.busy||editor.saving||editor.preview||context.assistantBusy||!context.authenticated||!context.ready||context.syncConflict||context.pending||context.subjectBusy||context.translationBusy);return view;
  }
  function renderSubjects(document){
   const q=id=>document.getElementById(id),host=q('mw-subject-choices');if(!host)return;const state=host._subjectState||{},previous=new Map([...host.querySelectorAll('[data-subject-edit]')].map(input=>[input.dataset.subjectEdit,input.value]));
