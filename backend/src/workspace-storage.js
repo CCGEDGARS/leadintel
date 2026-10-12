@@ -1,0 +1,14 @@
+export const STORAGE_PLANS=Object.freeze({included:{key:'included',name:'Included',records:100000000,files:1000000000},plus:{key:'plus',name:'Storage Plus',records:500000000,files:10000000000}});
+export function storageFailure(cause){return /WORKSPACE_STORAGE_FULL/.test(String(cause?.message||cause));}
+export function storageErrorResponse(cause,cors={}){if(!storageFailure(cause))return null;return new Response(JSON.stringify({error:'Workspace storage is full. Your saved data is preserved. Open Settings → Storage to upgrade or reduce stored content.',code:'WORKSPACE_STORAGE_FULL'}),{status:507,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...cors}});}
+export async function storageAccount(env,workspaceId){
+ await env.DB.prepare('INSERT OR IGNORE INTO workspace_storage_accounts(workspace_id) VALUES(?)').bind(workspaceId).run();
+ return env.DB.prepare('SELECT * FROM workspace_storage_accounts WHERE workspace_id=?').bind(workspaceId).first();
+}
+function meter(used,limit,measured=true){const ratio=Number(used)/Number(limit);return {used_bytes:Number(used),limit_bytes:Number(limit),percent:Math.floor(ratio*1000)/10,measured,state:!measured?'calculating':ratio>=1?'full':ratio>=.8?'warning':'available'};}
+export async function getStorageStatus(env,workspaceId,{role='owner',now=Math.floor(Date.now()/1000)}={}){
+ const row=await storageAccount(env,workspaceId),plus=row.plan_key==='plus'&&row.paid_until>now;
+ const pending=await env.DB.prepare("SELECT count(*) n FROM workspace_storage_objects WHERE workspace_id=? AND state='unmeasured'").bind(workspaceId).first();
+ const configured=Boolean(env.STRIPE_RESTRICTED_KEY&&env.STRIPE_WEBHOOK_SECRET&&env.STRIPE_STORAGE_PLUS_PRICE_ID&&env.STRIPE_ACCOUNT_ID&&env.STRIPE_STORAGE_BILLING_ENABLED==='true'&&env.STRIPE_STORAGE_TAX_POLICY_READY==='true'&&['true','false'].includes(env.STRIPE_LIVEMODE)&&['inclusive','exclusive'].includes(env.STRIPE_STORAGE_TAX_BEHAVIOR));
+ return {workspace_id:workspaceId,plan:{key:plus?'plus':'included',name:plus?'Storage Plus':'Included',paid_until:row.paid_until||null},records:meter(row.records_bytes,plus?row.plus_records_limit:row.included_records_limit),files:meter(row.files_bytes,plus?row.plus_files_limit:row.included_files_limit,Number(pending?.n||0)===0),billing:{status:row.billing_status,payment_issue:['past_due','unpaid','payment_failed'].includes(row.billing_status),checkout_ready:configured,can_upgrade:role==='owner'&&configured&&!plus,can_manage:role==='owner'&&configured&&Boolean(row.stripe_customer_id),setup_required:!configured},upgrade:{key:'plus',name:'Storage Plus',records_limit_bytes:row.plus_records_limit,files_limit_bytes:row.plus_files_limit},scope:'workspace',measurement:'logical customer content bytes; platform overhead and credentials excluded'};
+}

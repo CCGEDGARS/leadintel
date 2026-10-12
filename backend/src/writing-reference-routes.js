@@ -1,9 +1,10 @@
+import {storageErrorResponse} from './workspace-storage.js';
 import {sha256,cookieValue,randomToken} from './security.js';
 import {validateWritingReference} from './writing-reference-validation.js';
 import {listWritingReferences,getWritingReference,putWritingReference,patchWritingReference,deleteWritingReference,writingReferenceRevision,writingReferenceSlots} from './writing-reference-store.js';
 import {writingReferenceProgress,retryWritingReference} from './writing-reference-runner.js';
 const json=(value,status,cors)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...cors}});
-export function writingReferencesEnabled(env,workspaceId){return String(env.WRITING_REFERENCES_ALLOWED_WORKSPACES||'').split(',').map(s=>s.trim()).includes(workspaceId);}
+export function writingReferencesEnabled(env,workspaceId){return env.WORKSPACE_STORAGE_ENABLED==='true'||String(env.WRITING_REFERENCES_ALLOWED_WORKSPACES||'').split(',').map(s=>s.trim()).includes(workspaceId);}
 function safeCard(row){return {id:row.id,slot:row.slot,revision:row.revision,filename:row.filename,status:row.status,active:row.active,instruction:row.instruction,coverage:row.coverage,summary:row.summary,techniques:row.techniques,error:row.error_code};}
 async function snapshot(env,scope){const cards=await Promise.all((await listWritingReferences(env,scope)).map(async row=>({...safeCard(row),...(row.status==='Processing'?{progress:await writingReferenceProgress(env,scope,row.id)}:{})})));return {cards,slotRevisions:await writingReferenceSlots(env,scope),referenceRevision:await writingReferenceRevision(env,scope)};}
 async function uploadForm(form,env,scope,settings,cors,ctx){
@@ -22,7 +23,7 @@ export async function handleWritingReferenceRoute(request,env,cors={},ctx){
    const row=await env.DB.prepare('DELETE FROM writing_reference_upload_tickets WHERE token_hash=? AND expires_at>? RETURNING *').bind(await sha256(ticket),Date.now()).first();if(!row)return json({error:'Upload authorization expired. Select the file again.'},401,cors);
    const member=await env.DB.prepare('SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?').bind(row.workspace_id,row.user_id).first();if(member?.role!=='owner'||!writingReferencesEnabled(env,row.workspace_id))return json({error:'Workspace access denied'},403,cors);
    return await uploadForm(form,env,{workspaceId:row.workspace_id,userId:row.user_id},{slot:row.slot,expectedRevision:row.expected_revision,expectedSourceId:row.expected_source_id,expectedSlotRevision:row.expected_slot_revision},cors,ctx);
-  }catch(e){return json({error:e.status?e.message:'Source upload failed. Select the file again.'},e.status||503,cors);}
+  }catch(e){const storageError=storageErrorResponse(e,cors);if(storageError)return storageError;return json({error:e.status?e.message:'Source upload failed. Select the file again.'},e.status||503,cors);}
  }
  if(!url.pathname.startsWith('/api/writing-references'))return null;
  const workspaceId=url.searchParams.get('workspace_id'),token=cookieValue(request,'leadintel_session');
@@ -59,5 +60,5 @@ export async function handleWritingReferenceRoute(request,env,cors={},ctx){
   else if(!action&&request.method==='DELETE')await deleteWritingReference(env,scope,{id,...body});
   else return json({error:'Method not allowed'},405,cors);
   return json(await snapshot(env,scope),200,cors);
- }catch(e){return json({error:e.status?e.message:'Source storage operation failed. Refresh and try again.'},e.status||503,cors);}
+ }catch(e){const storageError=storageErrorResponse(e,cors);if(storageError)return storageError;return json({error:e.status?e.message:'Source storage operation failed. Refresh and try again.'},e.status||503,cors);}
 }

@@ -1,3 +1,4 @@
+import {storageErrorResponse} from './workspace-storage.js';
 import {apolloCreditUsage} from './apollo-credit-policy.js';
 import {apolloCapabilities} from './service-integrations.js';
 import {confirmPublicWorkEmail} from './public-email-confirmation.js';
@@ -22,7 +23,7 @@ const clean=(value,max=1000)=>String(value??'').replace(/\s+/g,' ').trim().slice
 async function sessionUser(request,env){const token=cookieValue(request,'leadintel_session');if(!token)return null;const tokenHash=await sha256(token);return env.DB.prepare(`SELECT users.id,users.email,users.display_name,users.role,sessions.expires_at FROM sessions JOIN users ON users.id=sessions.user_id WHERE sessions.token_hash=? AND sessions.expires_at>datetime('now')`).bind(tokenHash).first();}
 async function membership(env,workspaceId,userId){return env.DB.prepare('SELECT role FROM workspace_members WHERE workspace_id=? AND user_id=?').bind(workspaceId,userId).first();}
 async function requireMember(request,env,workspaceId,roles=[]){const user=await sessionUser(request,env);if(!user)return {error:'Authentication required',status:401};const member=await membership(env,workspaceId,user.id);if(!member)return {error:'Workspace access denied',status:403};if(roles.length&&!roles.includes(member.role))return {error:'Workspace role is not permitted',status:403};return {user,member,context:{workspaceId,userId:user.id,role:member.role}};}
-function routeError(cause,cors){const status=Number(cause?.status)||500;const safeStatus=status>=400&&status<600?status:500;return error(safeStatus===500?'Internal server error':String(cause?.message||'CRM request failed'),safeStatus,cors,cause?.code);}
+function routeError(cause,cors){const storageError=storageErrorResponse(cause,cors);if(storageError)return storageError;const status=Number(cause?.status)||500;const safeStatus=status>=400&&status<600?status:500;return error(safeStatus===500?'Internal server error':String(cause?.message||'CRM request failed'),safeStatus,cors,cause?.code);}
 function workspace(url){return String(url.searchParams.get('workspace_id')||'').trim();}
 function parseCompanyPath(path){const match=path.match(/^\/api\/crm\/companies\/([^/]+)(?:\/(pipeline|archive|restore|suppress|mark-customer|contacts|activities|enrich-contact|confirm-public-email))?$/);return match?{id:decodeURIComponent(match[1]),action:match[2]||''}:null;}
 function parseContactPath(path){const match=path.match(/^\/api\/crm\/contacts\/([^/]+)$/);return match?{id:decodeURIComponent(match[1])}:null;}

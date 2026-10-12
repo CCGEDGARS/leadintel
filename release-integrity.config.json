@@ -1562,6 +1562,96 @@
       "contains": [
         "snapshot-quota=20261011-v1&indexed-snapshot=20261011-v1"
       ]
+    },
+    {
+      "id": "workspace-storage-settings-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "ai-settings.js?v=20261004-firecrawl-health-v1&tool-links=20261011-v1&personal-linkedin=20261009-v1&meeting-platform=20261009-v1&section-sync=20261009-v1&alert-colours=20261011-v1&uniform-actions=20261012-v1&storage=20261012-v1",
+        "attention-centre.js?v=20261003-workspace-status-v1&optional-hunter=20261004-v1&workspace-activity=20261011-v1&storage=20261012-v1",
+        "api-transport.js?v=20261004-first-party-session-v1&storage=20261012-v1"
+      ]
+    },
+    {
+      "id": "workspace-storage-settings-runtime",
+      "type": "text",
+      "url": "/customer/ai-settings.js",
+      "status": 200,
+      "contains": [
+        "workspace-storage-ui.js?v=20261012-v1",
+        "leadintel:settings-opened"
+      ]
+    },
+    {
+      "id": "workspace-storage-meter-runtime",
+      "type": "text",
+      "url": "/customer/workspace-storage-ui.js",
+      "status": 200,
+      "contains": [
+        "One allowance for this workspace",
+        "100 MB",
+        "1 GB",
+        "500000000",
+        "10000000000",
+        "Existing data remains readable",
+        "Billing setup is in progress",
+        "context()!==requested"
+      ]
+    },
+    {
+      "id": "workspace-storage-meter-colours",
+      "type": "text",
+      "url": "/customer/workspace-storage.css",
+      "status": 200,
+      "contains": [
+        "workspace-storage-card.is-error",
+        "workspace-storage-card.is-warning",
+        "#c2413b",
+        "#d99622",
+        "@media(max-width:480px)"
+      ]
+    },
+    {
+      "id": "workspace-storage-private-status",
+      "type": "text",
+      "url": "/api/storage/status?workspace_id=release-check",
+      "status": 401
+    },
+    {
+      "id": "workspace-storage-checkout-method",
+      "type": "text",
+      "url": "/api/storage/checkout?workspace_id=release-check",
+      "status": 405
+    },
+    {
+      "id": "workspace-storage-webhook-registration",
+      "type": "text",
+      "url": "/api/webhooks/stripe/storage",
+      "status": 405
+    },
+    {
+      "id": "workspace-storage-alert-boundary",
+      "type": "text",
+      "url": "/customer/api-transport.js",
+      "status": 200,
+      "contains": [
+        "response.status===507",
+        "leadintel:storage-quota-rejected",
+        "workspaceId:url.searchParams",
+        "return response;"
+      ]
+    },
+    {
+      "id": "workspace-storage-attention-runtime",
+      "type": "text",
+      "url": "/customer/attention-centre.js",
+      "status": 200,
+      "contains": [
+        "LeadIntelStorage?.attentionItems",
+        "leadintel:storage-status-changed"
+      ]
     }
   ],
   "retry": {
