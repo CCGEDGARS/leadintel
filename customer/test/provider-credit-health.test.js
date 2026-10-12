@@ -45,3 +45,28 @@ test('connection failures are yellow while confirmed payment failures remain red
  assert.equal(context.run({state:'bad',creditIssue:true}),'bad');
  assert.equal(context.run({state:'good'}),'good');
 });
+
+test('a failed first AI connection shows a red payment card without claiming a saved credential',()=>{
+ const context={isOwner:()=>true,signedIn:()=>true,providerErrors:{anthropic:'Anthropic request failed (400) · code: credits_exhausted · Open Billing & credits.'},busy:'',esc:value=>String(value),formatDate:()=>'-',formatDateTime:()=>'-'};
+ const classifier=source.slice(source.indexOf('function paymentError('),source.indexOf('function providerCard('));
+ vm.runInNewContext(`${classifier}\n${cardFunction}\nglobalThis.run=providerCard`,context);
+ const config={provider:'anthropic',name:'Anthropic',model:'claude-sonnet-5-5',hint:'AI',placeholder:'key'};
+ const card=context.run(config,{configured:false,active:false});
+ assert.match(card,/ai-provider-card  credit-alert/);assert.match(card,/Payment required/);assert.match(card,/No credential stored yet/);
+ assert.match(card,/data-payment-error="true"/);
+ context.providerErrors.anthropic='Anthropic request failed (400) · code: invalid_parameter';
+ const requestError=context.run(config,{configured:false});assert.doesNotMatch(requestError,/ai-provider-card  credit-alert/);assert.match(requestError,/Not connected/);
+});
+
+test('connection-test payment state updates immediately and clears without rebuilding the key input',()=>{
+ const toggles={};const node={dataset:{},textContent:'',hidden:true};const badge={classList:{toggle:(name,value)=>toggles['badge-'+name]=value},textContent:''};
+ const card={classList:{toggle:(name,value)=>toggles[name]=value},querySelector:()=>badge};
+ let healthUpdates=0;
+ const context={document:{querySelector:selector=>selector.includes('data-ai-error')?node:card},providerErrors:{anthropic:'Anthropic request failed (400) · code: credits_exhausted'},providerState:()=>({configured:false}),renderIntegrationMonitoring:()=>healthUpdates++};
+ const classifier=source.slice(source.indexOf('function paymentError('),source.indexOf('function providerCard('));
+ const helper=source.slice(source.indexOf('function updateProviderErrorUi('),source.indexOf('function openDrawer('));
+ vm.runInNewContext(`${classifier}\n${helper}\nglobalThis.update=updateProviderErrorUi;globalThis.clear=clearProviderError`,context);
+ assert.equal(typeof context.update,'function');context.update('anthropic');
+ assert.equal(toggles['credit-alert'],true);assert.equal(badge.textContent,'Payment required');assert.equal(node.hidden,false);
+ context.clear('anthropic');assert.equal(toggles['credit-alert'],false);assert.equal(badge.textContent,'Not connected');assert.equal(node.hidden,true);assert.equal(healthUpdates,2);
+});

@@ -188,13 +188,15 @@ function integrationTone(check={}){return check.creditIssue?'bad':check.state===
 function paymentError(value=''){return /(?:\b402\b|insufficient_quota|credit_balance_exhausted|billing_hard_limit_reached|payment_required|not_enough_credits|out_of_credits|credits_exhausted|(?:insufficient|exhausted|no|out of|zero)\s+(?:available\s+)?(?:credits?|quota|balance)|(?:credits?|quota|balance)\s+(?:is\s+)?(?:exhausted|depleted)|(?:payment|billing)\s+(?:failed|required|declined|limit)|subscription\s+(?:expired|unpaid))/i.test(String(value));}
 function providerCard(config,current){
   const configured=Boolean(current?.configured);const active=Boolean(current?.active);const owner=isOwner();const disabled=!signedIn()||!owner;
+  const providerError=providerErrors[config.provider]||'';const paymentIssue=paymentError(providerError);
   const outOfCredits=configured&&current?.credit_issue?.code==='credits_exhausted';
   let stateLabel=outOfCredits?'Credits exhausted':active?'Main engine':configured?'Connected · inactive':'Not connected';
-  if(config.provider==='gemini'&&configured&&!active&&!outOfCredits)stateLabel='Connected · specialist';
-  const model=current?.model||config.model;const mode=model===config.model?'recommended':'advanced';const providerError=providerErrors[config.provider]||'';
+  if(paymentIssue)stateLabel='Payment required';
+  if(config.provider==='gemini'&&configured&&!active&&!outOfCredits&&!paymentIssue)stateLabel='Connected · specialist';
+  const model=current?.model||config.model;const mode=model===config.model?'recommended':'advanced';
   const usageMeta=current?.last_used_at?` · last used ${esc(formatDateTime(current.last_used_at))}`:'';
-  return `<article class="ai-provider-card ${active?'active':''} ${outOfCredits?'credit-alert':''}" data-provider-card="${config.provider}">
-    <div class="ai-provider-head"><div><span class="ai-provider-name">${esc(config.name)}</span><small>${esc(config.hint)} · Your API key · billed by provider</small></div><span class="ai-provider-status ${outOfCredits?'credit-alert':active?'active':configured?'connected':''}">${stateLabel}</span></div>
+  return `<article class="ai-provider-card ${active?'active':''} ${outOfCredits||paymentIssue?'credit-alert':''}" data-provider-card="${config.provider}">
+    <div class="ai-provider-head"><div><span class="ai-provider-name">${esc(config.name)}</span><small>${esc(config.hint)} · Your API key · billed by provider</small></div><span class="ai-provider-status ${outOfCredits||paymentIssue?'credit-alert':active?'active':configured?'connected':''}">${stateLabel}</span></div>
     ${outOfCredits?`<div class="ai-credit-warning" role="alert">${esc(config.name)} reported exhausted credits or a billing limit during a real request. Check your ${esc(config.name)} balance and spending limit, then retry. A successful request clears this alert.</div>`:''}
     <label class="ai-settings-field">API key<input data-ai-key="${config.provider}" type="password" autocomplete="new-password" spellcheck="false" data-form-type="other" data-lpignore="true" data-1p-ignore="true" autocapitalize="none" placeholder="${esc(config.placeholder)}" ${disabled?'disabled':''}></label>
     ${globalThis.LeadIntelToolAccountLinks?.html(config.provider)||''}
@@ -256,7 +258,7 @@ function renderIntegrationMonitoring(){
   const serviceRows=signedIn()&&window.LeadIntelServiceIntegrationStatus?.workspace_id===workspace()?.id?window.LeadIntelServiceIntegrationStatus?.providers||[]:[];
   const hunter=serviceRows.find(row=>row.provider==='hunter');
   const hunterPayment=hunter?.credit_issue?.code==='credits_exhausted'&&hunter.credit_issue.source===hunter.source;
-  const creditAlerts=[...status.providers.filter(item=>item.configured&&item.credit_issue?.code==='credits_exhausted').map(item=>item.name),...(apollo.creditIssue?['Apollo.io']:[]),...(firecrawl.creditIssue?['Firecrawl']:[]),...(hunterPayment?['Hunter']:[])];
+  const creditAlerts=[...new Set([...status.providers.filter(item=>item.configured&&item.credit_issue?.code==='credits_exhausted').map(item=>item.name),...PROVIDERS.filter(item=>paymentError(providerErrors[item.provider])).map(item=>item.name)]),...(apollo.creditIssue?['Apollo.io']:[]),...(firecrawl.creditIssue?['Firecrawl']:[]),...(hunterPayment?['Hunter']:[])];
   const checked=integrationStatus.checkedAt?`Last checked ${formatDateTime(integrationStatus.checkedAt)}`:'Run diagnostics to check all critical integrations.';
   const connectionAlerts=[apollo,firecrawl,gmail,microsoftMail].some(check=>check.state==='bad'&&!check.creditIssue)||serviceRows.some(row=>row.state==='bad'&&row.credit_issue?.code!=='credits_exhausted');
   health.classList.toggle('credit-alert',creditAlerts.length>0);health.classList.toggle('connection-alert',creditAlerts.length===0&&connectionAlerts);
@@ -284,8 +286,17 @@ function setProviderSaveBusy(provider,isBusy){
   const button=document.querySelector(`[data-ai-action="save"][data-provider="${provider}"]`);if(!button)return;
   button.disabled=isBusy;button.textContent=isBusy?'Testing…':'Test & save';
 }
+function updateProviderErrorUi(provider){
+  const message=providerErrors[provider]||'';const paymentIssue=paymentError(message);const current=providerState(provider);
+  const node=document.querySelector(`[data-ai-error="${provider}"]`);if(node){node.textContent=message;node.dataset.paymentError=String(paymentIssue);node.hidden=!message;}
+  const card=document.querySelector(`[data-provider-card="${provider}"]`);const badge=card?.querySelector('.ai-provider-status');
+  const creditAlert=paymentIssue||Boolean(current?.configured&&current?.credit_issue?.code==='credits_exhausted');
+  card?.classList.toggle('credit-alert',creditAlert);badge?.classList.toggle('credit-alert',creditAlert);
+  if(badge)badge.textContent=paymentIssue?'Payment required':creditAlert?'Credits exhausted':current?.active?'Main engine':current?.configured?(provider==='gemini'?'Connected · specialist':'Connected · inactive'):'Not connected';
+  renderIntegrationMonitoring();
+}
 function clearProviderError(provider){
-  providerErrors[provider]='';const node=document.querySelector(`[data-ai-error="${provider}"]`);if(node){node.textContent='';node.hidden=true;}
+  providerErrors[provider]='';updateProviderErrorUi(provider);
 }
 function openDrawer(){
   injectUi();const drawer=document.getElementById('ai-settings-drawer'),backdrop=document.getElementById('ai-settings-backdrop');
@@ -397,7 +408,7 @@ async function saveProvider(provider){
   }catch(error){
     if(workspace()?.id!==originWorkspace)return;
     providerErrors[provider]=error.message;
-    const errorNode=document.querySelector(`[data-ai-error="${provider}"]`);if(errorNode){errorNode.textContent=error.message;errorNode.dataset.paymentError=String(paymentError(error.message));errorNode.hidden=false;}
+    updateProviderErrorUi(provider);
     toast(error.message);
   }finally{if(workspace()?.id===originWorkspace){if(busy===provider)busy='';setProviderSaveBusy(provider,false);}}
 }
@@ -423,7 +434,7 @@ window.LeadIntelIntegrationAlertTone=integrationTone;window.LeadIntelPaymentErro
 injectUi();
 window.addEventListener('leadintel:service-status',()=>renderIntegrationMonitoring());
 window.addEventListener('leadintel:server-ready',()=>refreshAllStatus());
-window.addEventListener('leadintel:workspace-changed',()=>{status={role:'',providers:[]};busy='';unmountCredentialControls();refreshAllStatus();});
+window.addEventListener('leadintel:workspace-changed',()=>{status={role:'',providers:[]};for(const provider of Object.keys(providerErrors))delete providerErrors[provider];busy='';unmountCredentialControls();refreshAllStatus();});
 window.addEventListener('leadintel:microsoft-mail-status',()=>{integrationStatus.microsoftMail=microsoftMailStatus();renderIntegrationMonitoring();});
 if(shouldOpenSettingsFromUrl())openDrawer();
 else if(signedIn())refreshAllStatus();
