@@ -2,7 +2,7 @@
  'use strict';
  const M=root.LeadIntelEventCampaigns,KEY='leadintel_customer_v2_state';if(!M)return;
  const labels={name:'Event name',website:'Event website',startDate:'Start date',endDate:'End date',location:'City / venue',stand:'Stand number',meetingPoint:'Meeting point (when attending as a visitor)',audience:'Target companies / industries',objective:'What do you want to achieve at this event?',roles:'Relevant buyer roles',visitValue:'Why should they meet you?',availability:'Meeting availability',bookingUrl:'Booking link (optional)',exhibitorUrl:'Exhibitor / speaker list URL (optional)'};
- let selection='',preview=null,adapter=null,workspaceKey='',openToken='',attendanceContext='',owner=0,controller=null,busy=false;
+ let selection='',preview=null,adapter=null,workspaceKey='',openToken='',attendanceContext='',owner=0,controller=null,busy=false,setupHome=null;
  const el=id=>document.getElementById(id);
  function main(){try{return JSON.parse(root.localStorage.getItem(KEY)||'{}');}catch{return {};}}
  function state(){return M.normalize(main().eventCampaigns);}
@@ -14,10 +14,15 @@
  }
  function form(c={}){const host=el('event-campaign-form');if(!host)return;for(const k of Object.keys(M.fields))host.querySelector('[data-event-field="'+k+'"]').value=c[k]||'';host.querySelector('[data-event-field="role"]').value=c.role||'exhibitor';}
  function read(){const c={id:selection};document.querySelectorAll('#event-campaign-form [data-event-field]').forEach(node=>c[node.dataset.eventField]=node.value);return c;}
- function setup(){const panel=el('event-campaign-panel');if(!panel)return;panel.open=true;root.dispatchEvent(new CustomEvent('leadintel:open-module',{detail:{step:1}}));panel.scrollIntoView?.({block:'center',behavior:'smooth'});panel.querySelector('[data-event-field="name"]')?.focus({preventScroll:true});}
+ function closeSetup(){const dialog=el('event-setup-dialog');if(!dialog)return;const restore=()=>{const panel=el('event-campaign-panel');if(setupHome&&panel){setupHome.parent.insertBefore(panel,setupHome.next?.parentNode===setupHome.parent?setupHome.next:null);setupHome=null;}dialog.remove();};dialog.onclose=restore;if(typeof dialog.close==='function')dialog.close();else restore();}
+ function setup(){
+  const panel=el('event-campaign-panel');if(!panel)return;panel.open=true;
+  if(!el('step-1')?.classList.contains('active')){let dialog=el('event-setup-dialog');if(!dialog){setupHome={parent:panel.parentNode,next:panel.nextSibling};dialog=document.createElement('dialog');dialog.id='event-setup-dialog';dialog.className='event-setup-dialog';dialog.innerHTML='<header><div><h2>Prepare for an event</h2><p>Your current step and messages stay in place.</p></div><button id="event-setup-close" class="secondary-btn" type="button">Close</button></header>';document.body.append(dialog);dialog.append(panel);el('event-setup-close').onclick=closeSetup;dialog.onclose=()=>{if(setupHome){setupHome.parent.insertBefore(panel,setupHome.next?.parentNode===setupHome.parent?setupHome.next:null);setupHome=null;}dialog.remove();};if(typeof dialog.showModal==='function')dialog.showModal();else dialog.setAttribute('open','');}}
+  panel.scrollIntoView?.({block:'center',behavior:'smooth'});panel.querySelector('[data-event-field="name"]')?.focus({preventScroll:true});
+ }
  function refresh(){
   const workspace=root.LeadIntelServerBridge?.workspace?.id||'';
-  if(workspace!==workspaceKey){const first=!workspaceKey;workspaceKey=workspace;selection='';cancel();form();openToken='';if(first){const c=M.active(state());if(c){selection=c.id;form(c);}}for(const id of ['event-attendance-url','event-attendance-excerpt','event-writer-instruction'])if(el(id))el(id).value='';if(el('event-attendance-reviewed'))el('event-attendance-reviewed').checked=false;}
+  if(workspace!==workspaceKey){const first=!workspaceKey;workspaceKey=workspace;selection='';cancel();closeSetup();form();openToken='';if(first){const c=M.active(state());if(c){selection=c.id;form(c);}}for(const id of ['event-attendance-url','event-attendance-excerpt','event-writer-instruction'])if(el(id))el(id).value='';if(el('event-attendance-reviewed'))el('event-attendance-reviewed').checked=false;}
   const s=state(),c=M.active(s),token=workspace+':'+(c?.id||'');
   if(el('event-attendance-status')){const source=adapter?.context?.()||{},identity=JSON.stringify([workspace,c?.id,c?.revision,c?.startDate,source.channel,source.buyer?.id,source.buyer?.name,source.facts?.buyerDomain]);if(identity!==attendanceContext){cancel();el('event-attendance-status').value='unknown';el('event-attendance-url').value='';el('event-attendance-excerpt').value='';el('event-attendance-reviewed').checked=false;el('event-attendance-date').value=new Date().toISOString().slice(0,10);if(attendanceContext)el('event-message-status').textContent='Buyer or event changed. Review attendance for this person and edition.';attendanceContext=identity;}}
 
