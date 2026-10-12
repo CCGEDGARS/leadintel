@@ -1,9 +1,8 @@
 import {sha256,cookieValue} from './security.js';
-import {resolveWorkspaceServiceCredential} from './service-integrations.js';
+import {requireWorkspaceServiceCredential,resolveWorkspaceServiceCredential} from './service-integrations.js';
 import {creditFailure,recordProviderCredit} from './provider-credit-health.js';
 import {normalizeSourceInput,validateSourceUrl,gradeAccessAudit,inferExtractableData} from './intelligence-sources-engine.js';
 
-const MANAGED_FIRECRAWL='https://apollo-proxy.edgars-7e7.workers.dev';
 const json=(value,status=200,headers={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...headers}});
 const error=(message,status,headers)=>json({error:message},status,headers);
 const clean=(value,max=2000)=>String(value??'').replace(/\s+/g,' ').trim().slice(0,max);
@@ -18,13 +17,13 @@ function auditFromRow(row){return {id:row.id,sourceId:row.source_id,accessStatus
 function nextCheck(from=new Date(),frequency='daily'){const d=new Date(from);if(frequency==='monthly')d.setUTCMonth(d.getUTCMonth()+1);else d.setUTCDate(d.getUTCDate()+(frequency==='weekly'?7:1));return d.toISOString();}
 
 async function publicScrape(env,workspaceId,url){
-  const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'firecrawl');
-  const customer=credential.source==='customer';const target=customer?'https://api.firecrawl.dev/v2/scrape':`${clean(env.FIRECRAWL_PROXY_URL||MANAGED_FIRECRAWL,500)}/firecrawl-scrape`;
-  const headers={'Content-Type':'application/json',Accept:'application/json'};if(customer)headers.Authorization=`Bearer ${credential.apiKey}`;
+  const credential=await requireWorkspaceServiceCredential(env,workspaceId,'firecrawl');
+  const target='https://api.firecrawl.dev/v2/scrape';
+  const headers={'Content-Type':'application/json',Accept:'application/json'};headers.Authorization=`Bearer ${credential.apiKey}`;
   const response=await fetch(target,{method:'POST',headers,body:JSON.stringify({url,formats:['markdown'],onlyMainContent:true,timeout:25000})});
-  const payload=await response.json().catch(()=>({}));if(!response.ok){if(creditFailure(response.status,payload?.error||payload?.message))await recordProviderCredit(env,{workspaceId,userId:null,provider:'firecrawl',kind:'failed',source:credential.source});throw Object.assign(new Error(clean(payload?.error||`Firecrawl scrape returned ${response.status}`,500)),{provider:customer?'firecrawl_customer':'firecrawl_managed'});}
+  const payload=await response.json().catch(()=>({}));if(!response.ok){if(creditFailure(response.status,payload?.error||payload?.message))await recordProviderCredit(env,{workspaceId,userId:null,provider:'firecrawl',kind:'failed',source:credential.source});throw Object.assign(new Error(clean(payload?.error||`Firecrawl scrape returned ${response.status}`,500)),{provider:'firecrawl_customer'});}
   await recordProviderCredit(env,{workspaceId,userId:null,provider:'firecrawl',kind:'recovered',source:credential.source});
-  const data=payload?.data||payload;const text=String(data?.markdown||data?.content||'').trim();return {ok:Boolean(text),text,title:clean(data?.metadata?.title||data?.title,300),provider:customer?'firecrawl_customer':'firecrawl_managed',method:'public_scrape'};
+  const data=payload?.data||payload;const text=String(data?.markdown||data?.content||'').trim();return {ok:Boolean(text),text,title:clean(data?.metadata?.title||data?.title,300),provider:'firecrawl_customer',method:'public_scrape'};
 }
 
 async function auditSource(env,row){

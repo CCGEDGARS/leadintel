@@ -55,7 +55,7 @@ test('Apollo and Firecrawl credentials are verified with no-credit account endpo
 
 test('service status distinguishes customer-owned credentials from LeadIntel managed fallback without returning secrets',()=>{
   assert.match(source,/source:\s*['"]customer['"]/);
-  assert.match(source,/source:\s*['"]managed['"]/);
+  assert.match(source,/source:\s*['"]none['"]/);
   assert.match(source,/key_hint/);
   assert.match(source,/verified_at/);
   assert.match(source,/last_used_at/);
@@ -69,7 +69,7 @@ test('request-scoped Apollo override authenticates workspace membership before d
   assert.match(block,/requireMember\(request,env,workspaceId\)/);
   assert.ok(block.indexOf('requireMember(request,env,workspaceId)')<block.indexOf("resolveWorkspaceServiceCredential(env,workspaceId,'apollo')"),'membership must be checked before Apollo credential resolution');
   assert.match(block,/runtime\.APOLLO_API_KEY=apolloCredential\.apiKey/);
-  assert.match(block,/runtime\.APOLLO_WEBHOOK_SECRET=env\.APOLLO_WEBHOOK_SECRET\|\|env\.APOLLO_API_KEY/);
+  assert.match(block,/runtime\.APOLLO_API_KEY=''/);
   assert.match(crmSource,/env\.APOLLO_API_KEY/,'Master CRM must continue reading the request-scoped Apollo credential');
   assert.match(coreSource,/env\.APOLLO_API_KEY/,'legacy opportunity enrichment must continue reading the request-scoped Apollo credential');
 });
@@ -77,7 +77,7 @@ test('request-scoped Apollo override authenticates workspace membership before d
 test('Firecrawl workspace proxy bounds customer requests and supports managed fallback',()=>{
   assert.match(source,/api\.firecrawl\.dev\/v2\/scrape/);
   assert.match(source,/api\.firecrawl\.dev\/v2\/search/);
-  assert.match(source,/FIRECRAWL_PROXY_URL/);
+  assert.match(source,/requireWorkspaceServiceCredential/);assert.doesNotMatch(source,/FIRECRAWL_PROXY_URL|env\.APOLLO_API_KEY/);
   assert.match(source,/Math\.min\(10/);
   assert.match(source,/rawQuery\.length>600/);
   assert.match(source,/last_used_at=CURRENT_TIMESTAMP/);

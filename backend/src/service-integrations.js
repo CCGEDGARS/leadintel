@@ -1,5 +1,4 @@
 import {loadConfirmationLevel} from './contact-confirmation-policy.js';
-import {fetchWithScrapling,scraplingConfigured} from './scrapling.js';
 import {sha256,cookieValue} from './security.js';
 import {importAesKey,encryptSecret,decryptSecret} from './oauth.js';
 import {APOLLO_PEOPLE_SEARCH_URL,normalizeDomain as normalizeApolloDomain} from './enrichment.js';
@@ -7,7 +6,6 @@ import {creditFailure,recordProviderCredit,providerCreditIssue,verifiedCreditBal
 
 const PROVIDERS=Object.freeze(['apollo','firecrawl','hunter']);
 const PROVIDER_NAMES=Object.freeze({apollo:'Apollo.io',firecrawl:'Firecrawl',hunter:'Hunter'});
-const FIRECRAWL_PROXY_URL='https://apollo-proxy.edgars-7e7.workers.dev';
 const MAX_DIRECT_PAGE_BYTES=2_000_000;
 const MAX_DIRECT_PAGE_CHARS=60_000;
 const MAX_DIRECT_REDIRECTS=4;
@@ -60,10 +58,6 @@ async function verifyHunter(apiKey){
   return {plan:clean(payload.data.plan_name,80),remaining_credits:remaining('credits'),remaining_searches:remaining('searches'),remaining_verifications:remaining('verifications')};
 }
 async function verifyCredential(provider,apiKey){if(provider==='apollo')return verifyApollo(apiKey);if(provider==='firecrawl')return verifyFirecrawl(apiKey);return verifyHunter(apiKey);}
-async function verifyManagedFirecrawl(env){
-  const base=clean(env.FIRECRAWL_PROXY_URL||FIRECRAWL_PROXY_URL,500);
-  try{const response=await fetch(base,{method:'OPTIONS'});return {ok:response.ok,status:response.status};}catch{return {ok:false,status:0};}
-}
 
 function privateIpv4(hostname){
   const parts=hostname.split('.');if(parts.length!==4||parts.some(part=>!/^\d+$/.test(part)||Number(part)>255))return false;
@@ -122,7 +116,7 @@ export async function fetchDirectPublicPage(value,{signal=AbortSignal.timeout(10
   }
   throw new Error('Website redirected too many times');
 }
-function retryableFirecrawlStatus(status,{managed=false}={}){return status===402||status===408||status===429||status>=500||(managed&&status===404);}
+function retryableFirecrawlStatus(status){return status===402||status===408||status===429||status>=500;}
 
 export function hunterVerificationEnabled(row){
   try{return JSON.parse(row?.metadata_json||'{}')?.additional_verification_enabled===true;}catch{return false;}
@@ -138,8 +132,7 @@ export async function resolveWorkspaceServiceCredential(env,workspaceId,provider
     const row=await integrationRow(env,workspaceId,normalized);
     if(row){const apiKey=await decryptRow(env,row);if(apiKey)return {provider:normalized,apiKey,source:'customer',configured:true,row};}
   }catch{}
-  if(normalized==='apollo'&&String(env.APOLLO_API_KEY||'').trim())return {provider:normalized,apiKey:String(env.APOLLO_API_KEY).trim(),source:'managed',configured:true,row:null};
-  return {provider:normalized,apiKey:'',source:normalized==='firecrawl'?'managed':'none',configured:normalized==='firecrawl',row:null};
+  return {provider:normalized,apiKey:'',source:'none',configured:false,row:null};
 }
 
 export async function apolloCapabilities(env,workspaceId){
@@ -147,17 +140,22 @@ export async function apolloCapabilities(env,workspaceId){
   return {discovery:metadata.discovery_enabled!==false,email:metadata.email_enrichment_enabled===true,phone:metadata.phone_enrichment_enabled===true};
 }
 
+export async function requireWorkspaceServiceCredential(env,workspaceId,provider){
+  const credential=await resolveWorkspaceServiceCredential(env,workspaceId,provider);
+  if(credential.source!=='customer'||!credential.configured||!credential.apiKey)throw Object.assign(new Error(`Connect your own ${PROVIDER_NAMES[provider]||provider} API key in Settings. Shared provider billing is disabled.`),{status:409,code:'CUSTOMER_SERVICE_KEY_REQUIRED'});
+  return credential;
+}
+
 export async function withWorkspaceServiceCredentials(request,env){
+  const runtime=Object.create(env);runtime.APOLLO_API_KEY='';
+  runtime.APOLLO_WEBHOOK_SECRET=env.APOLLO_WEBHOOK_SECRET||'';
   try{
-    const url=new URL(request.url);const workspaceId=clean(url.searchParams.get('workspace_id')||'',120);if(!workspaceId)return env;
-    const access=await requireMember(request,env,workspaceId);if(access.error)return env;
+    const url=new URL(request.url);const workspaceId=clean(url.searchParams.get('workspace_id')||'',120);if(!workspaceId)return runtime;
+    const access=await requireMember(request,env,workspaceId);if(access.error)return runtime;
     const apolloCredential=await resolveWorkspaceServiceCredential(env,workspaceId,'apollo');
-    if(apolloCredential.source!=='customer'||!apolloCredential.apiKey)return env;
-    const runtime=Object.create(env);
-    runtime.APOLLO_WEBHOOK_SECRET=env.APOLLO_WEBHOOK_SECRET||env.APOLLO_API_KEY||'';
-    runtime.APOLLO_API_KEY=apolloCredential.apiKey;
-    return runtime;
-  }catch{return env;}
+    if(apolloCredential.source==='customer'&&apolloCredential.apiKey)runtime.APOLLO_API_KEY=apolloCredential.apiKey;
+  }catch{}
+  return runtime;
 }
 
 async function providerStatus(env,workspaceId,provider,{verify=false}={}){
@@ -171,38 +169,30 @@ async function providerStatus(env,workspaceId,provider,{verify=false}={}){
     }
     return {provider,name:PROVIDER_NAMES[provider],configured:true,source:'customer',state,label,key_hint:row.key_hint||'',verified_at:row.verified_at||null,last_used_at:row.last_used_at||null,metadata};
   }
-  if(provider==='apollo'){
-    if(!env.APOLLO_API_KEY)return {provider,name:PROVIDER_NAMES[provider],configured:false,source:'none',state:'bad',label:'Not connected',key_hint:'',verified_at:null,last_used_at:null,metadata:{}};
-    if(verify){try{await verifyApollo(env.APOLLO_API_KEY);}catch(cause){return {provider,name:PROVIDER_NAMES[provider],configured:false,source:'managed',state:'bad',label:'Managed fallback error',key_hint:'',verified_at:null,last_used_at:null,metadata:{error:clean(cause?.message||cause,180)}};}}
-    return {provider,name:PROVIDER_NAMES[provider],configured:false,source:'managed',state:'good',label:'LeadIntel managed fallback',key_hint:'',verified_at:null,last_used_at:null,metadata:{}};
-  }
-  if(provider==='hunter')return {provider,name:PROVIDER_NAMES[provider],configured:false,source:'none',state:'neutral',label:'Not connected',key_hint:'',verified_at:null,last_used_at:null,metadata:{}};
-  const check=verify?await verifyManagedFirecrawl(env):{ok:true,status:200};
-  return {provider,name:PROVIDER_NAMES[provider],configured:false,source:'managed',state:check.ok?'good':'bad',label:check.status===402?'Credits exhausted':check.ok?'LeadIntel managed fallback':'Managed fallback unavailable',key_hint:'',verified_at:null,last_used_at:null,metadata:{proxy_status:check.status}};
+  return {provider,name:PROVIDER_NAMES[provider],configured:false,source:'none',state:'neutral',label:'Not connected',key_hint:'',verified_at:null,last_used_at:null,metadata:{billing:'customer_only'}};
 }
 
 function workspaceIdFrom(url){return clean(url.searchParams.get('workspace_id')||'',120);}
 async function extractionFallback(env,url,access,workspaceId,credential,status){
-  const auditResult=async result=>{await audit(env,{workspaceId,userId:access.user.id,type:'service.firecrawl_scrape',provider:'firecrawl',metadata:{source:result.data.metadata.source,upstream_source:credential.source,upstream_status:status}});return result;};
-  try{const direct=await fetchDirectPublicPage(url);const text=direct.data.markdown;if(scraplingConfigured(env)&&(text.length<120||(/captcha|verify you are human|cloudflare ray id|access denied/i.test(text)&&text.length<1000)))throw new Error('Weak direct extraction');return await auditResult(direct);}catch{}
-  if(scraplingConfigured(env))return auditResult(await fetchWithScrapling(env,url));
-  throw new Error('No extraction fallback available');
+  const direct=await fetchDirectPublicPage(url);
+  await audit(env,{workspaceId,userId:access.user.id,type:'service.firecrawl_scrape',provider:'firecrawl',metadata:{source:direct.data.metadata.source,upstream_source:'customer',upstream_status:status}});
+  return direct;
 }
 async function forwardFirecrawl(request,env,cors,workspaceId,kind){
   const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
   const body=await request.json().catch(()=>null);if(!body||typeof body!=='object')return error('Firecrawl request payload is required',400,cors);
-  const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'firecrawl');
+  let credential;try{credential=await requireWorkspaceServiceCredential(env,workspaceId,'firecrawl');}catch(cause){return error(cause.message,cause.status,cors,cause.code);}
   let target='',payload={},researchUrl=null;
   if(kind==='scrape'){
     researchUrl=publicResearchUrl(body.url);if(!researchUrl)return error('A valid public research URL is required',400,cors);
     payload={url:researchUrl.href,formats:Array.isArray(body.formats)&&body.formats.includes('links')?['markdown','links']:['markdown'],onlyMainContent:body.onlyMainContent!==false,timeout:Math.max(5000,Math.min(60000,Number(body.timeout)||30000))};
-    target=credential.source==='customer'?'https://api.firecrawl.dev/v2/scrape':`${clean(env.FIRECRAWL_PROXY_URL||FIRECRAWL_PROXY_URL,500)}/firecrawl-scrape`;
+    target='https://api.firecrawl.dev/v2/scrape';
   }else{
     const rawQuery=String(body.query||'').trim();if(!rawQuery||rawQuery.length>600)return error('Firecrawl search query is invalid',400,cors);const query=clean(rawQuery,600);
     const limit=Math.max(1,Math.min(10,Math.floor(Number(body.limit)||4)));
     const wantsMarkdown=Array.isArray(body.scrapeOptions?.formats)&&body.scrapeOptions.formats.includes('markdown');
     payload={query,limit,...(wantsMarkdown?{scrapeOptions:{formats:['markdown']}}:{})};
-    target=credential.source==='customer'?'https://api.firecrawl.dev/v2/search':`${clean(env.FIRECRAWL_PROXY_URL||FIRECRAWL_PROXY_URL,500)}/firecrawl-search`;
+    target='https://api.firecrawl.dev/v2/search';
   }
   const headers={'Content-Type':'application/json',Accept:'application/json'};if(credential.source==='customer')headers.Authorization=`Bearer ${credential.apiKey}`;
   let response;try{response=await fetch(target,{method:'POST',headers,body:JSON.stringify(payload)});}catch(cause){
@@ -214,17 +204,11 @@ async function forwardFirecrawl(request,env,cors,workspaceId,kind){
   const upstream=await response.json().catch(()=>({}));
   if(!response.ok){
     if(creditFailure(response.status,upstream?.error||upstream?.message))await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'firecrawl',kind:'failed',source:credential.source});
-    const canFallback=kind==='scrape'&&researchUrl&&retryableFirecrawlStatus(response.status,{managed:credential.source==='managed'});
+    const canFallback=kind==='scrape'&&researchUrl&&retryableFirecrawlStatus(response.status);
     if(canFallback){
       try{const direct=await extractionFallback(env,researchUrl.href,access,workspaceId,credential,response.status);return json(direct,200,cors);}catch{}
     }
     return error(upstream.error||`Firecrawl ${kind} failed (${response.status})`,response.status>=400&&response.status<600?response.status:502,cors);
-  }
-  if(kind==='scrape'&&scraplingConfigured(env)){
-    const text=String(upstream?.data?.markdown||'').trim();
-    if(upstream?.success===false||text.length<120||(/captcha|verify you are human|cloudflare ray id|access denied/i.test(text)&&text.length<1000)){
-      try{return json(await extractionFallback(env,researchUrl.href,access,workspaceId,credential,response.status),200,cors);}catch{return error('No usable website evidence was returned',422,cors);}
-    }
   }
   await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'firecrawl',kind:'recovered',source:credential.source});
   if(credential.source==='customer')await env.DB.prepare(`UPDATE workspace_service_integrations SET last_used_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider='firecrawl'`).bind(workspaceId).run();
@@ -295,7 +279,7 @@ export async function handleServiceIntegrationRoute(request,env,cors={}){
     const verify=url.searchParams.get('verify')==='1';
     const providers=[];for(const provider of PROVIDERS){
       const state=await providerStatus(env,workspaceId,provider,{verify});
-      state.credit_issue=await providerCreditIssue(env,workspaceId,provider);
+      state.credit_issue=state.source==='customer'?await providerCreditIssue(env,workspaceId,provider):null;
       if(state.source==='customer'&&verifiedCreditBalance(provider,state.metadata)==='failed')state.credit_issue={code:'credits_exhausted',source:'customer'};
       if(state.credit_issue?.source===state.source){state.state='bad';state.label='Credits exhausted';}
       providers.push(state);
@@ -344,7 +328,7 @@ export async function handleServiceIntegrationRoute(request,env,cors={}){
     const body=await request.json().catch(()=>null);const provider=normalizeProvider(body?.provider);if(!provider)return error('Unsupported service provider',400,cors);
     const result=await env.DB.prepare(`DELETE FROM workspace_service_integrations WHERE workspace_id=? AND provider=?`).bind(workspaceId,provider).run();
     await audit(env,{workspaceId,userId:access.user.id,type:'service.provider_disconnected',provider});
-    return json({disconnected:Number(result?.meta?.changes||0)>0,provider,fallback:provider==='firecrawl'||(provider==='apollo'&&Boolean(env.APOLLO_API_KEY))},200,cors);
+    return json({disconnected:Number(result?.meta?.changes||0)>0,provider,fallback:false},200,cors);
   }
 
   if(path==='/api/integrations/services/hunter/verify-email'&&request.method==='POST'){

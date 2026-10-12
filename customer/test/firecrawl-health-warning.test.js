@@ -12,7 +12,7 @@ const fragment=source.slice(source.indexOf('async function checkFirecrawlStatus(
 
 function health({provider,observed={},status=200}={}){
   const context={
-    api:async()=>({response:{ok:status===200,status},payload:{providers:provider?[{provider:'firecrawl',...provider}]:[]}}),
+    api:async()=>({response:{ok:status===200,status},payload:{providers:provider?[{provider:'firecrawl',configured:provider.source==='customer',...provider}]:[]}}),
     window:{LeadIntelDiscoveryUI:{firecrawlHealth:()=>observed}},
     formatDateTime:()=> '25 Sep 2026, 20:22'
   };
@@ -22,9 +22,7 @@ function health({provider,observed={},status=200}={}){
 
 test('managed Firecrawl HTTP 402 tells the user whose credits need attention',async()=>{
   const result=await health({provider:{source:'managed',state:'good',metadata:{proxy_status:200}},observed:{blocked:true,lastRunAt:'2026-09-25T17:22:00.000Z'}});
-  assert.equal(result.state,'bad');assert.equal(result.source,'managed');
-  assert.match(result.detail,/LeadIntel must check the managed service/);
-  assert.match(result.detail,/you do not need to top up your own account/);
+  assert.equal(result.state,'neutral');assert.equal(result.source,'none');assert.match(result.detail,/Connect your own Firecrawl/);
 });
 
 test('a customer Firecrawl key with no balance gets an actionable warning',async()=>{
@@ -35,7 +33,7 @@ test('a customer Firecrawl key with no balance gets an actionable warning',async
 
 test('proxy reachability alone never confirms managed search credits',async()=>{
   const result=await health({provider:{source:'managed',state:'good',metadata:{proxy_status:200}}});
-  assert.equal(result.state,'warn');assert.equal(result.label,'Credits unverified');
+  assert.equal(result.state,'neutral');assert.equal(result.label,'Not connected');
 });
 
 test('a confirmed customer balance is distinguished from a paid search check',async()=>{

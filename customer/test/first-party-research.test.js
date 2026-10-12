@@ -1,3 +1,5 @@
+const path=require('node:path');
+const vm=require('node:vm');
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const R=require('../first-party-research.js');
@@ -29,15 +31,12 @@ test('cancelled research stops before making another wave of requests',async()=>
 test('cancellation ends research even if an upstream promise ignores its signal',async()=>{
  const controller=new AbortController();const pending=R.collectWebsiteEvidence({website:'https://company.se/',signal:controller.signal,fetchImpl:()=>new Promise(()=>{})});controller.abort();await assert.rejects(pending);
 });
-test('weak HTTP 200 extraction invokes Scrapling while authentication failures remain visible',async()=>{
- const vm=require('node:vm'),source=fs.readFileSync(require.resolve('../firecrawl-workspace-router.js'),'utf8').replace(/^export .*;$/gm,'');
- const requests=[];let primaryStatus=200;
- const context={Headers,Response,URL,console,window:{location:{href:'https://leadintel.ccgroup.lv/customer/'},LeadIntelServerBridge:{session:{authenticated:true},workspace:{id:'ws'}},fetch:async(url)=>{requests.push(url);return new Response(JSON.stringify({data:{markdown:String(url).includes('/scrapling/')?evidence:'Verify you are human'}}),{status:String(url).includes('/scrapling/')?200:primaryStatus});}}};
- vm.runInNewContext(source,context);const options={method:'POST',body:JSON.stringify({url:'https://company.se/'})};
- const recovered=await context.window.fetch('https://apollo-proxy.edgars-7e7.workers.dev/firecrawl-scrape',options);assert.equal(recovered.headers.get('X-LeadIntel-Extractor'),'scrapling');assert.equal(requests.length,2);
- requests.length=0;primaryStatus=402;const billed=await context.window.fetch('https://apollo-proxy.edgars-7e7.workers.dev/firecrawl-scrape',options);assert.equal(billed.headers.get('X-LeadIntel-Extractor'),'scrapling');assert.equal(requests.length,2);
- requests.length=0;primaryStatus=401;const denied=await context.window.fetch('https://apollo-proxy.edgars-7e7.workers.dev/firecrawl-scrape',options);assert.equal(denied.status,401);assert.equal(requests.length,1);
+test('weak extraction and authentication failures never invoke shared Scrapling',async()=>{
+ const calls=[];const window={location:{href:'https://leadintel.ccgroup.lv/customer/'},LeadIntelServerBridge:{session:{authenticated:true},workspace:{id:'w'}},fetch:async url=>{calls.push(String(url));return new Response(JSON.stringify({success:true,data:{markdown:''}}));}};
+ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../firecrawl-workspace-router.js'),'utf8').replace(/^export .*;\s*$/gm,''),{window,URL,Headers,Response});
+ const r=await window.fetch('https://apollo-proxy.edgars-7e7.workers.dev/firecrawl-scrape',{method:'POST',body:JSON.stringify({url:'https://example.com'})});assert.equal(r.status,200);assert.equal(calls.length,1);assert.match(calls[0],/firecrawl\/scrape/);
 });
+
 test('reference prompt contains multiple pages and validates quote against its precise source',()=>{
  const row={id:'a',website:'https://company.se/',text:'Generic home',sources:[{url:'https://company.se/products',text:evidence},{url:'https://company.se/team',text:'Our management team is led by experienced industrial engineers.'}]};
  const prompt=AI.buildReferenceCustomerPrompt([row]);assert.match(prompt,/company.se\/products/);assert.match(prompt,/We manufacture lifting equipment/);

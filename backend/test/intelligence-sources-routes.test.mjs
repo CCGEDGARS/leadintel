@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import {importAesKey,encryptSecret} from '../src/oauth.js';
 import {sha256} from '../src/security.js';
 import {handleIntelligenceSourceRoute} from '../src/intelligence-sources.js';
 
@@ -8,7 +9,7 @@ let DatabaseSync=null;try{({DatabaseSync}=await import('node:sqlite'));}catch{}
 const sqliteTest=(name,fn)=>test(name,{skip:DatabaseSync?false:'requires Node sqlite'},fn);
 class Statement{constructor(db,sql){this.db=db;this.sql=sql;this.args=[];}bind(...args){this.args=args;return this;}async first(){return this.db.prepare(this.sql).get(...this.args)??null;}async all(){return {results:this.db.prepare(this.sql).all(...this.args)};}async run(){const r=this.db.prepare(this.sql).run(...this.args);return {meta:{changes:Number(r.changes||0)}};}}
 class DB{constructor(){this.raw=new DatabaseSync(':memory:');this.raw.exec(`PRAGMA foreign_keys=ON;CREATE TABLE workspaces(id TEXT PRIMARY KEY);CREATE TABLE users(id TEXT PRIMARY KEY,email TEXT,display_name TEXT,role TEXT);CREATE TABLE sessions(token_hash TEXT PRIMARY KEY,user_id TEXT,expires_at TEXT);CREATE TABLE workspace_members(workspace_id TEXT,user_id TEXT,role TEXT,PRIMARY KEY(workspace_id,user_id));INSERT INTO workspaces VALUES('w1');`);this.raw.exec(fs.readFileSync(new URL('../migrations/0017_intelligence_sources.sql',import.meta.url),'utf8'));}prepare(sql){return new Statement(this.raw,sql);}async batch(rows){for(const row of rows)await row.run();}}
-async function fixture(role='owner'){const db=new DB(),token='source-token',hash=await sha256(token);db.raw.prepare('INSERT INTO users VALUES(?,?,?,?)').run('u1','owner@example.com','Owner',role);db.raw.prepare(`INSERT INTO sessions VALUES(?,?,datetime('now','+1 day'))`).run(hash,'u1');db.raw.prepare('INSERT INTO workspace_members VALUES(?,?,?)').run('w1','u1',role);return {env:{DB:db},token,db};}
+async function fixture(role='owner'){const db=new DB(),token='source-token',hash=await sha256(token);db.raw.prepare('INSERT INTO users VALUES(?,?,?,?)').run('u1','owner@example.com','Owner',role);db.raw.prepare(`INSERT INTO sessions VALUES(?,?,datetime('now','+1 day'))`).run(hash,'u1');db.raw.prepare('INSERT INTO workspace_members VALUES(?,?,?)').run('w1','u1',role);db.raw.exec(fs.readFileSync(new URL('../migrations/0013_workspace_service_integrations.sql',import.meta.url),'utf8'));const key=Buffer.alloc(32,7).toString('base64');db.raw.prepare("INSERT INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint) VALUES('w1','firecrawl',?,'test')").run(await encryptSecret('test-firecrawl',await importAesKey(key)));return {env:{DB:db,OAUTH_TOKEN_ENCRYPTION_KEY:key},token,db};}
 function req(path,{method='GET',token='',body}={}){return new Request(`https://api.example.test${path}`,{method,headers:{Cookie:`leadintel_session=${token}`,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});}
 
 sqliteTest('owner can register and update a workspace source without raw credentials',async()=>{

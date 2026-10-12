@@ -2,7 +2,7 @@
 // LeadIntel — Cloudflare Worker
 // Deploy: paste into workers.cloudflare.com dashboard
 // Worker URL: https://apollo-proxy.edgars-7e7.workers.dev/
-// Optional secrets: APOLLO_API_KEY, FIRECRAWL_API_KEY
+// Customer-only billing: platform API secrets are never used.
 //
 // Routes:
 //   POST /                    → Apollo people search   (X-Api-Key)
@@ -51,7 +51,7 @@ function corsHeaders(request) {
 }
 
 function apiKey(env, secretName, request, headerName) {
-  return (env && env[secretName]) || request.headers.get(headerName) || '';
+  return request.headers.get(headerName) || ''; // CUSTOMER_ONLY_BILLING
 }
 
 function corsResponse(request, status, body) {
@@ -74,6 +74,7 @@ export default {
 
     const url = new URL(request.url);
     const path = url.pathname;
+    if(path==='/api/health'&&request.method==='GET')return corsResponse(request,200,{status:'ok',service:'leadintel-legacy-proxy',billing:'customer_only',release_sha:env.BACKEND_RELEASE_SHA||''});
 
     // ─── APOLLO: People Search ────────────────────────────────────────────────
     if (path === '/' && request.method === 'POST') {

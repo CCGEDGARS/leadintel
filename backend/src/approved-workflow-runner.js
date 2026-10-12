@@ -6,7 +6,7 @@ import '../../customer/discovery-engine.js';
 import '../../customer/lookalike-discovery.js';
 import {WORKFLOW_STAGES,approvedContext,normalizeWorkflowConfig,freshEvidence,renderWorkflowMessage,renderDefaultWorkflowMessage} from './approved-workflow-engine.js';
 import {parse,workflowMain,workflowAuthorized} from './approved-workflow-store.js';
-import {resolveWorkspaceServiceCredential,apolloCapabilities} from './service-integrations.js';
+import {requireWorkspaceServiceCredential,resolveWorkspaceServiceCredential,apolloCapabilities} from './service-integrations.js';
 import {provenBusinessEmail,APOLLO_PEOPLE_SEARCH_URL,apolloSearchBody} from './enrichment.js';
 import {upsertCrmCompany,upsertCrmContacts,upsertCrmIntelligence,appendCrmActivity,findCrmCompanyByDomain} from './crm.js';
 import {searchWorkspaceWeb,generateWorkspaceResearch} from './ai-routes.js';
@@ -18,8 +18,8 @@ async function providerJson(url,options={}){
   const response=await fetch(url,{...options,signal:AbortSignal.timeout(60000)});if(!response.ok)throw new Error(`Research/enrichment provider returned ${response.status}. Review the connection or credits before retrying.`);return response.json();
 }
 async function search(env,workspaceId,query,guard){
-  await guard();const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'firecrawl');
-  const url=credential.source==='customer'?'https://api.firecrawl.dev/v2/search':`${env.FIRECRAWL_PROXY_URL||'https://apollo-proxy.edgars-7e7.workers.dev'}/firecrawl-search`;
+  await guard();const credential=await requireWorkspaceServiceCredential(env,workspaceId,'firecrawl');
+  const url='https://api.firecrawl.dev/v2/search';
   const headers={'Content-Type':'application/json',Accept:'application/json'};if(credential.source==='customer')headers.Authorization=`Bearer ${credential.apiKey}`;
   const payload=await providerJson(url,{method:'POST',headers,body:JSON.stringify({query:query.query,limit:5,scrapeOptions:{formats:['markdown']}})});await guard();
   // Snippets without an extracted page are insufficient for automatic qualification.
@@ -28,8 +28,8 @@ async function search(env,workspaceId,query,guard){
 }
 async function searchBuyerProfiles(env,workspaceId,candidate,roles,guard){
   const rows=[],issues=[],providerStatus={firecrawl:{status:'pending',results:0,queries:0,failures:[]},grounded:{status:'pending',results:0},identity:{status:'pending',results:0}};
-  const credential=await resolveWorkspaceServiceCredential(env,workspaceId,'firecrawl');
-  const url=credential.source==='customer'?'https://api.firecrawl.dev/v2/search':`${env.FIRECRAWL_PROXY_URL||'https://apollo-proxy.edgars-7e7.workers.dev'}/firecrawl-search`;
+  const credential=await requireWorkspaceServiceCredential(env,workspaceId,'firecrawl');
+  const url='https://api.firecrawl.dev/v2/search';
   const headers={'Content-Type':'application/json',Accept:'application/json'};if(credential.source==='customer')headers.Authorization=`Bearer ${credential.apiKey}`;
   const plan=discovery.buyerResearchPlan(candidate,{decisionMakers:roles.join('; ')});
   for(const query of plan.queries){
