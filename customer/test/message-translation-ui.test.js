@@ -26,3 +26,23 @@ test('removing a translation offers Undo and does not resurrect a removed langua
  let undo='',item=T.translated({channel:'linkedin',drafts:{linkedinMessage:'Hello'},localizationProvenance:{language:'en'}},'lv',{subject:'',message:'Sveiki'}),prefs=T.settings({},item);prefs=T.changeSettings(prefs,'remove','lv',item);item=T.removeLanguage(item,'lv');
  w.LeadIntelMessageTranslationUI.mount(w.document,{manage(action,code){undo=action+':'+code;}});w.LeadIntelMessageTranslationUI.render(w.document,item,{usable:true,languageSettings:prefs});assert.equal(w.document.querySelector('#message-language-tabs [data-language="lv"]'),null);w.document.querySelector('[data-language-undo="lv"]').click();assert.equal(undo,'add:lv');assert.equal(w.document.getElementById('message-translate').textContent,'Open English original');w.close();
 });
+
+test('outside shortcut follows the saved default independently of preview selection and reload',()=>{
+ const w=new JSDOM('<div class="mw-generate-bar"><label>Language<select id="message-language"></select></label></div>',{runScripts:'outside-only'}).window;
+ w.LeadIntelMessageTranslations=T;w.eval(fs.readFileSync(require.resolve('../message-translation-ui.js'),'utf8'));
+ const item={channel:'email',drafts:{emailSubject:'Subject',emailBody:'English original'},localizationProvenance:{language:'en'}},calls=[];
+ w.LeadIntelMessageTranslationUI.mount(w.document,{translate:code=>calls.push(code),save(){},activate(){},manage(){}});
+ let prefs=T.changeSettings(T.settings({},item),'add','lv',item);
+ w.LeadIntelMessageTranslationUI.render(w.document,item,{usable:true,languageSettings:prefs});
+ const quick=w.document.querySelector('.mw-language-quick');assert.equal(quick.hidden,true,'English default must not advertise the Latvian preview outside');
+ assert.equal(w.document.getElementById('mw-language-tools').contains(w.document.getElementById('message-translate')),true);
+ w.document.getElementById('message-translate').click();assert.equal(calls.pop(),'lv','preview remains translatable inside');
+ prefs=T.changeSettings(prefs,'add','sv',item);prefs=T.changeSettings(prefs,'default','sv',item);prefs=T.changeSettings(prefs,'target','lv',item);
+ for(let i=0;i<2;i++){
+  w.LeadIntelMessageTranslationUI.render(w.document,item,{usable:true,languageSettings:JSON.parse(JSON.stringify(prefs))});
+  assert.equal(quick.hidden,false);assert.equal(w.document.getElementById('message-translate').textContent,'Translate into Swedish');w.document.getElementById('message-translate').click();assert.equal(calls.pop(),'sv');
+  const selected=w.document.getElementById('message-translate-selected');assert.equal(selected.textContent,'Translate into Latvian');selected.click();assert.equal(calls.pop(),'lv');assert.equal(item.drafts.emailBody,'English original');
+ }
+ prefs=T.changeSettings(prefs,'remove','sv',item);w.LeadIntelMessageTranslationUI.render(w.document,item,{usable:true,languageSettings:prefs});assert.equal(quick.hidden,true);
+ w.close();
+});
