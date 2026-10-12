@@ -15,10 +15,11 @@ async function mounted(provider="",authenticated=true){
 test('settings provides safe provider-specific setup links through refresh, close and reopen',async()=>{
  const w=await mounted();try{
  const check=()=>{
- for(const id of ['openai','anthropic','gemini','apollo','firecrawl','hunter','gmail','microsoft-mail','calendly','personal-linkedin','zoom']){
+ for(const id of ['openai','anthropic','gemini','apollo','firecrawl','hunter','calendly','personal-linkedin','zoom']){
   const links=[...w.document.querySelectorAll(`[data-tool-links="${id}"] a`)];assert.ok(links.length>=2,`${id} account and setup links missing`);
   for(const link of links){assert.equal(new URL(link.href).protocol,'https:');assert.equal(link.target,'_blank');assert.match(link.rel,/noopener/);assert.match(link.rel,/noreferrer/);assert.match(link.getAttribute('aria-label'),/opens in a new tab/);}
  }
+ for(const id of ['gmail','microsoft-mail'])assert.equal(w.document.querySelector(`[data-integration="${id}"] a`),null);
  assert.ok(w.document.querySelector('[data-tool-links="openai"] a[href="https://platform.openai.com/settings/organization/billing/overview"]'));
  assert.match(w.document.querySelector('[data-tool-links="calendly"]').textContent,/Get access token/);
  };check();w.dispatchEvent(new w.CustomEvent('leadintel:microsoft-mail-status'));await new Promise(r=>setTimeout(r,25));check();
