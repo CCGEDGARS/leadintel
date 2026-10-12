@@ -55,11 +55,11 @@ test('a late CRM reopen cannot overwrite a new manual edit',async()=>{
   assert.equal(h.item().drafts.emailBody,'New manual text');assert.equal(h.q('outreach-email-body').value,'New manual text');
  }finally{h.w.close();}
 });
-test('failed style preparation restores the applied style and its subject categories together',async()=>{
+test('failed style preparation preserves its retry selection while labelling the previous applied draft',async()=>{
  const h=mounted();try{
   h.w.document.querySelector('[data-writing-style="original"]').click();h.requests.find(row=>row.url.includes('/api/ai/generate')).resolve({ok:false,json:async()=>({error:'Provider unavailable'})});await settle();
-  assert.equal(h.w.studioState().mode,'professional');assert.equal(h.q('message-mode').value,'professional');
-  assert.equal(h.w.document.querySelector('[data-writing-style="professional"]').getAttribute('aria-pressed'),'true');
+  assert.equal(h.w.studioState().mode,'original');assert.equal(h.q('message-mode').value,'original');
+  assert.equal(h.w.document.querySelector('[data-writing-style="original"]').getAttribute('aria-pressed'),'true');
   assert.equal(h.q('mw-applied-style').textContent,'Style: Professional');assert.deepEqual(E.workingDraft(h.item()),h.before);
   assert.match(h.q('message-generation-status').textContent,/Provider unavailable/);
  }finally{h.w.close();}
