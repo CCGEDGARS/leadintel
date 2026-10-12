@@ -18,7 +18,7 @@ test('legacy lookalike recovery is no longer bootstrapped', () => {
 
 test('customer examples and market research explain their separate roles', () => {
   assert.match(source, /Customers &amp; Market Intelligence/);
-  assert.match(source, /Define your ideal customers and understand your market/);
+  assert.match(source, /Find more companies like your best customers/);
   assert.match(source, /Market Research/);
   assert.match(source, /data-reference-customers-manage/);
   assert.match(source, /brand-identity-panel reference-customer-core-card/, 'Customer and target lists use the existing feature panel');

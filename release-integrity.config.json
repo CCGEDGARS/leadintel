@@ -1715,6 +1715,76 @@
         "Customer material",
         "not independently verified"
       ]
+    },
+    {
+      "id": "event-flow-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "event-flow=20261012-v1",
+        "feature-focus monitoring-feature"
+      ]
+    },
+    {
+      "id": "event-flow-ui",
+      "type": "text",
+      "url": "/customer/event-campaign-ui.js",
+      "status": 200,
+      "contains": [
+        "Prepare for an event",
+        "Save & activate event",
+        "Generate tailored invitation",
+        "event-message-reopen",
+        "Create invitation",
+        "event-active"
+      ]
+    },
+    {
+      "id": "event-flow-evidence-and-draft-isolation",
+      "type": "text",
+      "url": "/customer/event-campaigns.js",
+      "status": 200,
+      "contains": [
+        "function attendance(",
+        "function stageDraft(",
+        "function restoreBusinessDraft(",
+        "eventStartDate===c.startDate"
+      ]
+    },
+    {
+      "id": "event-flow-message-adapter",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "restoreBusinessDraft(currentItem())",
+        "savedPreview:campaign=>",
+        "eventPurpose:preview.purpose",
+        "currentDraft:{subject:preview.draft.subject,message:preview.draft.message}"
+      ]
+    },
+    {
+      "id": "event-flow-highlight-styles",
+      "type": "text",
+      "url": "/customer/event-campaigns.css",
+      "status": 200,
+      "contains": [
+        ".feature-focus{",
+        ".event-campaign-panel.event-active",
+        "@media(max-width:720px)"
+      ]
+    },
+    {
+      "id": "reference-feature-benefit-copy",
+      "type": "text",
+      "url": "/customer/process-map.js",
+      "status": 200,
+      "contains": [
+        "Find more companies like your best customers.",
+        "feature-focus",
+        "Start with 3\u20135 companies"
+      ]
     }
   ],
   "retry": {
