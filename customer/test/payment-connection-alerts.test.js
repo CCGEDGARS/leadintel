@@ -43,3 +43,20 @@ for(const [error,payment] of [['API key rejected',false],['Hunter credits exhaus
   }
  }finally{w.close();}
 });
+
+test('Anthropic first-time billing rejection updates card and System Health while retaining the entered key, then clears on workspace change',async()=>{
+ const {w}=await mount({saveError:'Anthropic request failed (400) · code: credits_exhausted · API balance too low. Open Billing & credits, add API credits, then retry.'});
+ try{
+  const input=w.document.querySelector('[data-ai-key="anthropic"]');input.value='sk-ant-fixture';
+  w.document.querySelector('[data-ai-action="save"][data-provider="anthropic"]').click();await settle();
+  assert.equal(w.document.querySelector('[data-ai-key="anthropic"]'),input);assert.equal(input.value,'sk-ant-fixture');
+  assert.ok(w.document.querySelector('[data-provider-card="anthropic"].credit-alert'));
+  assert.equal(w.document.querySelector('[data-provider-card="anthropic"] .ai-provider-status').textContent,'Payment required');
+  assert.match(w.document.querySelector('.integration-summary-copy strong').textContent,/Payment alert: Anthropic/);
+  assert.equal(w.document.querySelector('[data-ai-action="activate"][data-provider="anthropic"]').disabled,true);
+  w.LeadIntelServerBridge.workspace={id:'w2',role:'owner'};w.dispatchEvent(new w.Event('leadintel:workspace-changed'));await settle();
+  assert.equal(w.document.querySelector('[data-provider-card="anthropic"].credit-alert'),null);
+  assert.equal(w.document.querySelector('#integration-health-summary.credit-alert'),null);
+  assert.equal(w.document.querySelector('[data-ai-error="anthropic"]').hidden,true);
+ }finally{w.close();}
+});

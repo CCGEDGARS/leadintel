@@ -47,6 +47,17 @@ function safeDiagnosticToken(value){
 }
 function sanitizedUpstreamError(provider,status,payload={}){
   const detail=payload?.error&&typeof payload.error==='object'?payload.error:{};
+  // Anthropic uses invalid_request_error for billing as well as request errors.
+  // Classify known reasons locally; never expose its raw message (it may contain secrets).
+  if(provider==='anthropic'){
+    const reason=String(detail.message||'');let diagnostic;
+    if(/credit balance (?:is )?too low|insufficient credits?|credits? (?:exhausted|depleted)/i.test(reason))diagnostic=['credits_exhausted','API balance too low. Open Billing & credits, add API credits, then retry.'];
+    else if(/(?:spend|spending|billing) limit/i.test(reason)&&/reach|exceed/i.test(reason))diagnostic=['billing_hard_limit_reached','API spending limit reached. Open Billing & credits, review limits, then retry.'];
+    else if(/model/i.test(reason)&&/not (?:exist|found|available)|no access|do not have access|does not exist/i.test(reason))diagnostic=['model_unavailable','Selected model unavailable. Check model access or use Advanced with an available model ID.'];
+    else if(/thinking|output_config|max_tokens|temperature/i.test(reason))diagnostic=['invalid_parameter','Provider rejected request settings. Contact LeadIntel support.'];
+    else if(Number(status)===400)diagnostic=['invalid_request_error','Provider rejected request settings. Check model access or contact LeadIntel support.'];
+    if(diagnostic)return new Error(`Anthropic request failed (${Number(status)||502}) · code: ${diagnostic[0]} · ${diagnostic[1]}`);
+  }
   const code=safeDiagnosticToken(detail.status||detail.code||detail.type),param=safeDiagnosticToken(detail.param);
   const suffix=[code?`code: ${code}`:'',param?`param: ${param}`:''].filter(Boolean).join(' · ');
   return new Error(`${PROVIDER_LABELS[provider]||'AI provider'} request failed (${Number(status)||502})${suffix?` · ${suffix}`:''}`);
