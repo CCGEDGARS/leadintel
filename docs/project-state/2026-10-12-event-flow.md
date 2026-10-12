@@ -2,7 +2,7 @@
 
 ## User-approved behavior
 
-No Events & Conferences main navigation button. Setup contains an optional Prepare for an event disclosure. Save & activate event opens and highlights connected event disclosures. Inactive event controls remain collapsed and accessible. Late activation from Companies or Messages opens Setup without restarting the flow. Rendering never generates a message.
+No Events & Conferences main navigation button. Setup contains an optional Prepare for an event disclosure. Save & activate event opens and highlights connected event disclosures. Inactive event controls remain collapsed and accessible. Late activation from Companies or Messages opens the same event setup form in a modal without navigating or restarting the flow. Rendering never generates a message.
 
 Reference-company and website-monitoring cards use stronger benefit-led copy and a shared visual accent. Existing reference activation and monitoring schedules remain their respective authorities.
 
@@ -27,3 +27,7 @@ Focused tests cover edition/identity evidence gates, invitation purpose, active/
 ## Pre-merge review corrections
 
 Independent review found that reviewed attendance inputs could be rebound to another buyer or edition, and pending event AI requests did not include all factual/source-filter state in their stamp. Attendance review now resets on workspace, buyer identity/domain, channel, campaign revision or edition changes; editing a source/status/checked date requires fresh review. Event request stamps include the full studio factual context, selected writing-source filter and reference snapshot, alongside draft/identity context. Mounted regressions reproduce both failures and verify correction.
+
+## Production interaction correction
+
+Opening the old late-setup shortcut through the module navigation could re-evaluate website-activation gates and lock an older workspace at Setup. Late setup now moves the single shared event form into a same-page dialog, then restores it to Step 1 on close. It dispatches no journey-navigation event and leaves the existing working message unchanged. A regression verifies no navigation, dialog presence and return of the form to its original location. Release smoke checks require the dialog implementation.
