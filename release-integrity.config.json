@@ -1851,6 +1851,28 @@
         "archive-storage=20261011-v2&workspace-auth=20261012-v1",
         "account-layout=20261012-v1&workspace-auth=20261012-v1"
       ]
+    },
+    {
+      "id": "active-tools-credential-ownership",
+      "type": "text",
+      "url": "/customer/ai-settings.js",
+      "status": 200,
+      "contains": [
+        "label:source==='customer'?'Connected':'Managed access'",
+        "Enrichment \u00b7 LeadIntel managed access",
+        "CREDITS UNVERIFIED",
+        "generation!==integrationStatusGeneration",
+        "window.LeadIntelIntegrationHealth={apollo:null,firecrawl:null}"
+      ]
+    },
+    {
+      "id": "active-tools-ownership-cache",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "tool-ownership=20261012-v1"
+      ]
     }
   ],
   "retry": {
