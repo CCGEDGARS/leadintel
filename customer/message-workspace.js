@@ -173,7 +173,7 @@
   q('mw-save-message').textContent=editor.saving?'Saving…':editor.editing?'Save changes':'Save';q('mw-save-message').disabled=blocked||!context.hasDraft||editor.busy||editor.saving||Boolean(editor.preview)||context.savedDraft===true&&!editor.editing;
   q('mw-edit-message').disabled=blocked||!context.hasDraft||editor.busy||editor.saving||editor.editing||Boolean(editor.preview);q('mw-rewrite-message').disabled=blocked||!context.hasDraft||editor.editing||editor.saving||editor.busy;
   q('mw-rewrite-message').textContent=editor.busy?'Working…':'Create variation';for(const id of ['mw-shorten-message','mw-improve-subject']){q(id).disabled=blocked||!context.hasDraft||editor.editing||editor.saving||editor.busy||(id==='mw-improve-subject'&&linkedin);q(id).hidden=id==='mw-improve-subject';}q('mw-cancel-edit').hidden=!editor.editing;q('mw-cancel-edit').disabled=editor.saving;
-  q('mw-restore-original').hidden=false;q('mw-restore-original').disabled=blocked||editor.busy||editor.saving||!context.originalAvailable;
+  q('mw-restore-original').hidden=true;q('mw-restore-original').disabled=blocked||editor.busy||editor.saving||!context.originalAvailable;
   q('mw-undo-rewrite').textContent='Undo';q('mw-undo-rewrite').hidden=true;q('mw-undo-rewrite').disabled=blocked||editor.busy||editor.saving||editor.editing;
   const defaultTemplate=context.defaultTemplate;
   q('mw-default-name').textContent=defaultTemplate?defaultTemplate.name:'';q('mw-default-name').hidden=!defaultTemplate;
