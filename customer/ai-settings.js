@@ -2,7 +2,7 @@ import './workspace-storage-ui.js?v=20261012-v1';
 import './personal-linkedin.js?v=20261009-personal-profile-v1';
 import './tool-account-links.js?v=20261011-v1&workspace-auth=20261012-v1';
 const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
-const SETTINGS_VERSION='20261012-ai-task-routing-v1';
+const SETTINGS_VERSION='20261012-mailbox-controls-v1';
 const PROVIDERS=Object.freeze([
   {provider:'openai',name:'OpenAI',model:'gpt-6.1-sol',placeholder:'sk-…',hint:'Recommended for commercial reasoning and controlled writing'},
   {provider:'anthropic',name:'Anthropic',model:'claude-sonnet-5-5',placeholder:'sk-ant-…',hint:'Recommended Claude balance for reasoning and writing'},
@@ -230,6 +230,19 @@ function workspaceAccountStatus(){
   if(!signedIn())return {state:'neutral',label:'Available',detail:'Choose Google or Microsoft to create or open your private LeadIntel workspace.'};
   return {state:'good',label:'Workspace active',detail:`Signed in as ${user?.email||user?.name||'workspace user'}`};
 }
+function gmailMailStatus(row=bridge()?.gmail||{}){
+  const current={configured:Boolean(row.configured),connected:Boolean(row.connected),email:String(row.email||''),role:row.role||workspace()?.role||''};
+  if(!signedIn())return {state:'neutral',label:'Sign in first',detail:'Sign in before connecting your Gmail mailbox.',...current,connected:false};
+  if(current.connected)return {state:'good',label:'Connected',detail:`${current.email||'Gmail connected'}${row.connected_at?` · connected ${formatDate(row.connected_at)}`:''}`,...current};
+  if(current.configured)return {state:'warn',label:'Not connected',detail:'Connect your existing Gmail mailbox to send approved messages and synchronize replies.',...current};
+  return {state:'bad',label:'Unavailable',detail:'Gmail integration is not configured on the LeadIntel platform.',...current};
+}
+function gmailMailActions(mail){
+  if(!signedIn())return '';
+  if(mail.connected&&mail.role==='owner')return '<div class="gmail-mail-actions"><button class="ai-settings-btn danger" data-gmail-action="disconnect" type="button">Disconnect Gmail</button></div>';
+  if(mail.connected)return '';
+  return `<div class="gmail-mail-actions"><button class="ai-settings-btn primary" data-gmail-action="connect" type="button" ${mail.configured?'':'disabled'}>Connect Gmail</button></div>`;
+}
 function microsoftMailStatus(){
   const row=bridge()?.microsoftMail||{};
   if(!signedIn())return {state:'neutral',label:'Sign in first',detail:'Workspace sign-in is required before connecting Microsoft 365 mail.',configured:Boolean(row.configured),connected:false,email:'',role:''};
@@ -238,10 +251,10 @@ function microsoftMailStatus(){
   return {state:'bad',label:'Unavailable',detail:'Microsoft mail credentials are not configured on the LeadIntel backend.',...row};
 }
 function microsoftMailActions(mail){
-  if(!signedIn()||!mail.configured)return '';
+  if(!signedIn())return '';
   if(mail.connected&&mail.role==='owner')return '<div class="microsoft-mail-actions"><button class="ai-settings-btn danger" data-microsoft-mail-action="disconnect" type="button">Disconnect Microsoft</button></div>';
   if(mail.connected)return '';
-  return '<div class="microsoft-mail-actions"><button class="ai-settings-btn primary microsoft" data-microsoft-mail-action="connect" type="button">Connect Microsoft 365</button></div>';
+  return `<div class="microsoft-mail-actions"><button class="ai-settings-btn primary microsoft" data-microsoft-mail-action="connect" type="button" ${mail.configured?'':'disabled'}>Connect Microsoft 365</button></div>`;
 }
 function renderIntegrationMonitoring(){
   const platform=document.getElementById('integration-platform-grid');const communication=document.getElementById('integration-communication-grid');const health=document.getElementById('integration-health-summary');
@@ -253,9 +266,9 @@ function renderIntegrationMonitoring(){
     <article class="integration-card" data-integration="hunter"><div class="integration-card-head"><div><strong>Hunter</strong><small>Email verification</small></div><span class="integration-status neutral">Not connected</span></div><p class="integration-purpose">Connect your Hunter account for email verification.</p><div class="integration-meta">Optional customer-owned integration</div></article>`;
   communication.innerHTML=`<article class="integration-card workspace-provider-card" data-integration="google"><div class="integration-card-head"><div><strong>Google Account</strong><small>Optional workspace sign-in</small></div><span class="integration-status ${esc(integrationTone(googleAccount))}">${esc(googleAccount.label)}</span></div><p class="integration-purpose">Choose Google only if you want to use a Google account for LeadIntel workspace access. Gmail is connected separately.</p><div class="integration-meta">${esc(googleAccount.detail+checkedSuffix)}</div>${workspaceProviderAction('google')}</article>
     <article class="integration-card workspace-provider-card" data-integration="microsoft-account"><div class="integration-card-head"><div><strong>Microsoft Account</strong><small>Optional workspace sign-in</small></div><span class="integration-status ${esc(integrationTone(microsoftAccount))}">${esc(microsoftAccount.label)}</span></div><p class="integration-purpose">Choose Microsoft only if you want to use a Microsoft account for LeadIntel workspace access. Microsoft 365 Mail is connected separately.</p><div class="integration-meta">${esc(microsoftAccount.detail+checkedSuffix)}</div>${workspaceProviderAction('microsoft')}</article>
-    <article class="integration-card" data-integration="gmail"><div class="integration-card-head"><div><strong>Gmail</strong><small>Optional outbound delivery and reply synchronization</small></div><span class="integration-status ${esc(integrationTone(gmail))}">${esc(gmail.label)}</span></div><p class="integration-purpose">Mailbox connection is optional and separate from workspace sign-in.</p><div class="integration-meta">${esc(gmail.detail+checkedSuffix)}</div></article>
+    <article class="integration-card" data-integration="gmail"><div class="integration-card-head"><div><strong>Gmail</strong><small>Optional outbound delivery and reply synchronization</small></div><span class="integration-status ${esc(integrationTone(gmail))}">${esc(gmail.label)}</span></div><p class="integration-purpose">Mailbox connection is optional and separate from workspace sign-in.</p><div class="integration-meta">${esc(gmail.detail+checkedSuffix)}</div>${gmailMailActions(gmail)}</article>
     <article class="integration-card microsoft-mail-card" data-integration="microsoft-mail"><div class="integration-card-head"><div><strong>Microsoft 365 Mail</strong><small>Optional human-approved outbound delivery</small></div><span class="integration-status ${esc(integrationTone(microsoftMail))}">${esc(microsoftMail.label)}</span></div><p class="integration-purpose">Microsoft Graph · send-only access. LeadIntel cannot read your inbox.</p><div class="integration-meta">${esc(microsoftMail.detail+checkedSuffix)}</div>${microsoftMailActions(microsoftMail)}</article>`;
-  for(const card of [...platform.querySelectorAll('[data-integration]'),...communication.querySelectorAll('[data-integration]')]){if(signedIn()&&card.classList.contains('workspace-provider-card'))continue;card.insertAdjacentHTML('beforeend',globalThis.LeadIntelToolAccountLinks?.html(card.dataset.integration)||'');}
+  for(const card of [...platform.querySelectorAll('[data-integration]'),...communication.querySelectorAll('[data-integration]')]){if(['gmail','microsoft-mail'].includes(card.dataset.integration)||(signedIn()&&card.classList.contains('workspace-provider-card')))continue;card.insertAdjacentHTML('beforeend',globalThis.LeadIntelToolAccountLinks?.html(card.dataset.integration)||'');}
   const activeAi=Boolean(status.providers.find(item=>item.active&&item.configured));
   const deliveryReady=gmail.state==='good'||microsoftMail.state==='good';
   const critical=[activeAi,signedIn(),deliveryReady,apollo.state==='good',firecrawl.state==='good'];const healthy=critical.filter(Boolean).length;
@@ -276,15 +289,20 @@ async function handleCommunicationAction(event){
   if(signOutButton){bridge()?.signOut?.();return;}
   const switchButton=event.target.closest('[data-settings-switch]');
   if(switchButton){switchButton.disabled=true;bridge()?.switchProvider?.(switchButton.dataset.settingsSwitch);return;}
-  const mailButton=event.target.closest('[data-microsoft-mail-action]');if(!mailButton||mailButton.disabled)return;
-  if(mailButton.dataset.microsoftMailAction==='connect'){bridge()?.connectMicrosoftMail?.();return;}
-  if(mailButton.dataset.microsoftMailAction!=='disconnect'||!window.confirm('Disconnect Microsoft 365 mail from this LeadIntel workspace?'))return;
-  mailButton.disabled=true;
+  const gmailButton=event.target.closest('[data-gmail-action]');
+  const microsoftButton=event.target.closest('[data-microsoft-mail-action]');
+  const mailButton=gmailButton||microsoftButton;if(!mailButton||mailButton.disabled)return;
+  const provider=gmailButton?'gmail':'microsoft',action=gmailButton?mailButton.dataset.gmailAction:mailButton.dataset.microsoftMailAction,label=provider==='gmail'?'Gmail':'Microsoft 365 mail';
+  if(action==='connect'){if(provider==='gmail')bridge()?.connectGmail?.();else bridge()?.connectMicrosoftMail?.();return;}
+  if(action!=='disconnect'||!window.confirm(`Disconnect ${label} from this LeadIntel workspace?`))return;
+  const originWorkspace=workspace()?.id;mailButton.disabled=true;
   try{
-    const result=await bridge()?.disconnectMicrosoftMail?.();
-    if(!result?.ok)throw new Error(result?.error||'Unable to disconnect Microsoft mail');
-    integrationStatus.microsoftMail=microsoftMailStatus();renderIntegrationMonitoring();toast('Microsoft 365 mail disconnected');
-  }catch(error){toast(error.message);}finally{mailButton.disabled=false;}
+    const result=provider==='gmail'?await bridge()?.disconnectGmail?.():await bridge()?.disconnectMicrosoftMail?.();
+    if(workspace()?.id!==originWorkspace)return;
+    if(!result?.ok)throw new Error(result?.error||`Unable to disconnect ${label}`);
+    if(provider==='gmail')integrationStatus.gmail=gmailMailStatus();else integrationStatus.microsoftMail=microsoftMailStatus();
+    renderActiveToolsSummary();renderIntegrationMonitoring();toast(`${label} disconnected`);
+  }catch(error){if(workspace()?.id===originWorkspace)toast(error.message);}finally{mailButton.disabled=false;}
 }
 function setProviderSaveBusy(provider,isBusy){
   const button=document.querySelector(`[data-ai-action="save"][data-provider="${provider}"]`);if(!button)return;
@@ -362,9 +380,7 @@ async function checkGmailStatus(){
   try{
     const {response,payload}=await api('/api/integrations/gmail/status');
     if(!response.ok)throw new Error(payload.error||`Status ${response.status}`);
-    if(payload.connected)return {state:'good',label:'Connected',detail:`${payload.email||'Gmail connected'}${payload.connected_at?` · connected ${formatDate(payload.connected_at)}`:''}`};
-    if(payload.configured)return {state:'warn',label:'Not connected',detail:'Gmail is available for this workspace but has not been connected.'};
-    return {state:'bad',label:'Unavailable',detail:'Gmail integration is not configured on the LeadIntel platform.'};
+    return gmailMailStatus(payload);
   }catch(error){return {state:'bad',label:'Unavailable',detail:`Gmail status check failed · ${String(error.message||error).slice(0,120)}`};}
 }
 let integrationStatusGeneration=0;
@@ -442,6 +458,7 @@ injectUi();
 window.addEventListener('leadintel:service-status',()=>renderIntegrationMonitoring());
 window.addEventListener('leadintel:server-ready',()=>refreshAllStatus());
 window.addEventListener('leadintel:workspace-changed',()=>{++aiStatusGeneration;++integrationStatusGeneration;status={role:'',providers:[]};integrationStatus={checkedAt:null,checking:false,apollo:null,firecrawl:null,account:null,gmail:null,microsoftMail:null};window.LeadIntelIntegrationHealth={apollo:null,firecrawl:null};for(const provider of Object.keys(providerErrors))delete providerErrors[provider];busy='';unmountCredentialControls();refreshAllStatus();});
-window.addEventListener('leadintel:microsoft-mail-status',()=>{integrationStatus.microsoftMail=microsoftMailStatus();renderIntegrationMonitoring();});
+window.addEventListener('leadintel:gmail-status',()=>{integrationStatus.gmail=gmailMailStatus();renderActiveToolsSummary();renderIntegrationMonitoring();});
+window.addEventListener('leadintel:microsoft-mail-status',()=>{integrationStatus.microsoftMail=microsoftMailStatus();renderActiveToolsSummary();renderIntegrationMonitoring();});
 if(shouldOpenSettingsFromUrl())openDrawer();
 else if(signedIn())refreshAllStatus();

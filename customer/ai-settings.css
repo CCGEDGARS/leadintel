@@ -68,8 +68,8 @@ body.ai-settings-opened{overflow:hidden}
 .integration-status.neutral{color:#718078;background:#f5f7f5}
 .integration-purpose{margin:0;color:#40534c;font-size:12px;line-height:1.45}
 .integration-meta{padding-top:9px;border-top:1px solid #edf0ee;color:var(--ai-muted);font-size:11px;line-height:1.45;overflow-wrap:anywhere}
-.microsoft-mail-actions{display:flex;align-items:center;justify-content:flex-start;padding-top:2px}
-.microsoft-mail-actions .ai-settings-btn{width:100%}
+.microsoft-mail-actions,.gmail-mail-actions{display:flex;align-items:center;justify-content:flex-start;padding-top:2px}
+.microsoft-mail-actions .ai-settings-btn,.gmail-mail-actions .ai-settings-btn{width:100%}
 .ai-settings-btn{appearance:none;min-height:38px;padding:8px 11px;border:1px solid #bfc9c4;border-radius:9px;background:#fff;color:#263b33;font:700 11px/1.15 'DM Sans',sans-serif;cursor:pointer;transition:border-color .15s ease,background .15s ease,box-shadow .15s ease,transform .15s ease}
 .ai-settings-btn:hover:not(:disabled){border-color:#779b8f;background:#f4f8f5;transform:translateY(-1px)}
 .ai-settings-btn.primary{border-color:#15352b;background:#15352b;color:#fff}
@@ -98,7 +98,7 @@ body.ai-settings-opened{overflow:hidden}
 .ai-settings-drawer .ai-provider-actions,
 .ai-settings-drawer .workspace-provider-actions,
 .ai-settings-drawer .workspace-signin-options,
-.ai-settings-drawer .microsoft-mail-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--settings-action-width)),var(--settings-action-width)));gap:8px;align-content:start;align-items:start;justify-content:start}
+.ai-settings-drawer .microsoft-mail-actions,.ai-settings-drawer .gmail-mail-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--settings-action-width)),var(--settings-action-width)));gap:8px;align-content:start;align-items:start;justify-content:start}
 .ai-settings-drawer .google-connect-panel .ai-settings-btn{width:min(var(--settings-action-width),100%)}
 .ai-settings-drawer .ai-settings-btn[hidden]{display:none!important}
 

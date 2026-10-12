@@ -1905,6 +1905,28 @@
       "contains": [
         "\"billing\":\"customer_only\""
       ]
+    },
+    {
+      "id": "mailbox-connect-controls",
+      "type": "text",
+      "url": "/customer/ai-settings.js",
+      "status": 200,
+      "contains": [
+        "function gmailMailActions(mail)",
+        "data-gmail-action=\"connect\"",
+        "data-gmail-action=\"disconnect\"",
+        "['gmail','microsoft-mail'].includes(card.dataset.integration)",
+        "leadintel:gmail-status"
+      ]
+    },
+    {
+      "id": "mailbox-controls-cache",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "mailbox-controls=20261012-v1"
+      ]
     }
   ],
   "retry": {
