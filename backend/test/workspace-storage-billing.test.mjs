@@ -67,3 +67,10 @@ test('automatic tax cannot be enabled without active settings, confirmed product
  const response=await f.mod.handleStorageRoute(f.request('checkout'),f.env,{}, {stripe:f.stripe});
  assert.equal(response.status,503);assert.equal(f.calls.some(x=>x.mode==='subscription'),false);
 });
+
+test('webhook body is bounded before signature parsing even without Content-Length',async()=>{
+ const f=await fixture();let canceled=false,parts=0;
+ const stream=new ReadableStream({pull(controller){if(parts++<4)controller.enqueue(new Uint8Array(600000));else controller.close();},cancel(){canceled=true;}});
+ const request=new Request('https://api.test/api/webhooks/stripe/storage',{method:'POST',headers:{'Stripe-Signature':'invalid'},body:stream,duplex:'half'});
+ const response=await f.mod.handleStorageWebhook(request,f.env,{stripe:f.stripe});assert.equal(response.status,413);assert.equal(canceled,true);
+});

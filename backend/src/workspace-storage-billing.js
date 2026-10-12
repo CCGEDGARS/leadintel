@@ -96,17 +96,27 @@ async function applyEvent(env,event,stripe){
  ]);
  return {received:true};
 }
+async function boundedWebhookBody(request){
+ const limit=1048576;
+ if(Number(request.headers.get('Content-Length'))>limit)throw fail('Storage event is too large',413);
+ if(!request.body)return '';
+ const reader=request.body.getReader(),chunks=[];let length=0;
+ try{
+  for(;;){const {done,value}=await reader.read();if(done)break;length+=value.byteLength;if(length>limit){await reader.cancel();throw fail('Storage event is too large',413);}chunks.push(value);}
+ }finally{reader.releaseLock();}
+ const bytes=new Uint8Array(length);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+ return new TextDecoder('utf-8',{fatal:true}).decode(bytes);
+}
 export async function handleStorageWebhook(request,env,options={}){
  if(request.method!=='POST')return json({error:'Method not allowed'},405);
  if(!env.STRIPE_RESTRICTED_KEY||!env.STRIPE_WEBHOOK_SECRET||!env.STRIPE_STORAGE_PLUS_PRICE_ID||env.STRIPE_STORAGE_BILLING_ENABLED!=='true')return json({error:'Storage webhook is not configured'},503);
  let event;
  try{
-  if(Number(request.headers.get('Content-Length'))>1048576)throw Error('too large');
-  const body=await request.text();if(new TextEncoder().encode(body).byteLength>1048576)throw Error('too large');
+  const body=await boundedWebhookBody(request);
   const verifier=client(env);
   event=await verifier.webhooks.constructEventAsync(body,request.headers.get('Stripe-Signature'),env.STRIPE_WEBHOOK_SECRET,300,Stripe.createSubtleCryptoProvider());
   if(event.livemode!==(env.STRIPE_LIVEMODE==='true')||!/^evt_[A-Za-z0-9_-]+$/.test(event.id)||!Number.isSafeInteger(event.created)||event.account)throw Error('invalid event context');
- }catch{return json({error:'Invalid storage webhook signature or context'},400);}
+ }catch(cause){return json({error:cause.status===413?'Storage event is too large':'Invalid storage webhook signature or context'},cause.status===413?413:400);}
  if(!eventTypes.has(event.type))return json({ignored:true});
  try{const stripe=options.stripe||client(env);const account=await stripe.accounts.retrieve();if(account.id!==env.STRIPE_ACCOUNT_ID)throw fail('Invalid storage merchant',400);return json(await applyEvent(env,event,stripe));}
  catch(cause){return json({error:cause.status===400?'Invalid storage event ownership':'Storage event requires retry'},cause.status===400?400:503);}
