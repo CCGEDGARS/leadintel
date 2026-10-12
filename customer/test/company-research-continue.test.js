@@ -4,10 +4,10 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const engine=require('../company-research-engine.js');
 const code=fs.readFileSync(require.resolve('../company-research-ui.js'),'utf8').replace(/^import .*?;\s*/gm,'')+'\nglobalThis.hooks={bind,runCompanyResearch};';
-function runtime({completed=false,active=true,markets=['Germany'],aiFailure=false,step=1}={}){
+function runtime({completed=false,active=true,markets=['Germany'],aiFailure=false,step=1,profile=null}={}){
   const storage=new Map(),listeners=new Map(),calls=[];
   const website='https://sample.example/';
-  storage.set('leadintel_customer_v2_state',JSON.stringify({step,website,targetMarkets:markets,answers:{priority_offers:'Confirmed software offer'},scrapedSources:[],documents:[]}));
+  storage.set('leadintel_customer_v2_state',JSON.stringify({step,profile,website,targetMarkets:markets,answers:{priority_offers:'Confirmed software offer'},scrapedSources:[],documents:[]}));
   if(completed)storage.set('leadintel_customer_v2_research_meta_v1',JSON.stringify({website,generatedAt:'2026-10-12',fields:{}}));
   const document={readyState:'loading',activeElement:null,addEventListener(type,fn){listeners.set(type,fn);},querySelectorAll(){return [];},querySelector(){return {};},getElementById(){return null;}};
   const window={LeadIntelCompanyResearch:engine,LeadIntelWebsiteActivation:{isCurrentWebsiteActive:()=>active},LeadIntelFirstPartyResearch:{selectInternalLinks:()=>[]},LeadIntelServerBridge:{session:{authenticated:true},workspace:{id:'w1'},saveNow:async()=>({})},addEventListener(){},dispatchEvent(){}};
@@ -28,3 +28,5 @@ test('double Continue clicks start only one run',async()=>{const r=runtime();r.c
 test('AI failure saves evidence and its reason without inventing commercial answers',async()=>{const r=runtime({aiFailure:true});r.click();await flush();assert.equal(r.state().answers.value_proposition,'');assert.equal(r.state().scrapedSources.length,1);const meta=JSON.parse(r.storage.get('leadintel_customer_v2_research_meta_v1'));assert.equal(meta.mode,'evidence');assert.ok(meta.reason);});
 
 test('late support-module loading still prepares a fresh already-opened Profile',async()=>{const r=runtime({step:2});await flush();assert.equal(r.state().answers.value_proposition,'Help operations teams streamline inventory work');assert.equal(r.calls.filter(url=>url.includes('/api/ai/generate')).length,1);});
+
+test("an existing saved profile opens without rerunning research when browser research metadata is missing",async()=>{const r=runtime({profile:{website:"https://sample.example/",companyName:"Saved company"},step:2});assert.equal(r.click(),false);await flush();assert.equal(r.calls.length,0);assert.equal(r.state().profile.companyName,"Saved company");});

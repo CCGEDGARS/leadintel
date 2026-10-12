@@ -89,7 +89,17 @@
   function readJson(key,fallback={}){try{const parsed=JSON.parse(root.localStorage.getItem(key)||"null");return parsed&&typeof parsed==="object"&&!Array.isArray(parsed)?parsed:fallback;}catch{return fallback;}}
   function readState(){return readJson(STORAGE_KEY,{});}
   function writeState(value){root.localStorage.setItem(STORAGE_KEY,JSON.stringify(value));}
-  function readActivationRecord(){return readJson(ACTIVATION_KEY,{});}
+  function readActivationRecord(){
+    const state=readState(),record=readJson(ACTIVATION_KEY,{}),website=normalizeUrl(state.website);
+    if(isActivationRecordActive(record,record.url)&&(!website||sameCompanyWebsite(record.url,website)))return record;
+    const source=getActivatedSource(state,website);if(!source)return {};
+    const saved=state.websiteActivation||{};
+    const explicit=saved.status==='active'&&sameUrl(saved.url,website);
+    const researched=state.profile&&sameCompanyWebsite(state.profile.website,website);
+    if(!explicit&&!researched)return {};
+    // Recover the navigation proof only. Never rerun activation or reset research.
+    return buildActivationRecord(source,saved.activatedAt||state.profile?.approvedAt||'');
+  }
   function writeActivationRecord(value){root.localStorage.setItem(ACTIVATION_KEY,JSON.stringify(value));}
   function visibleWebsite(){return normalizeUrl(root?.document?.getElementById("company-website")?.value||"");}
   function isCurrentWebsiteActive(website=visibleWebsite()){return isActivationRecordActive(readActivationRecord(),website);}
@@ -194,7 +204,7 @@
     if(root.__leadintelWebsiteActivationInstalled)return;root.__leadintelWebsiteActivationInstalled=true;
     const bind=()=>{ensureActivationUi();const button=root.document.getElementById("activate-website"),input=root.document.getElementById("company-website");button?.addEventListener("click",activateWebsite);input?.addEventListener("input",clearErrorAndRender);input?.addEventListener("change",clearErrorAndRender);root.document.addEventListener("click",guardProtectedNavigation,true);render();};
     if(root.document.readyState==="loading")root.document.addEventListener("DOMContentLoaded",bind,{once:true});else bind();
-    root.addEventListener("pageshow",render);root.addEventListener("leadintel:website-synced",clearErrorAndRender);root.addEventListener("leadintel:website-activated",render);
+    root.addEventListener("leadintel:server-ready",render);root.addEventListener("leadintel:workspace-changed",render);root.addEventListener("pageshow",render);root.addEventListener("leadintel:website-synced",clearErrorAndRender);root.addEventListener("leadintel:website-activated",render);
   }
 
   return {STORAGE_KEY,ACTIVATION_KEY,RESEARCH_META_KEY,DISCOVERY_META_KEY,normalizeUrl,getActivatedSource,isWebsiteActive,buildActivatedState,buildActivationRecord,isActivationRecordActive,activationMarkup,readActivationRecord,isCurrentWebsiteActive,ensureActivationUi,syncActivationIntoWorkspace,clearDerivedWorkspaceData,returnToWebsiteStep,scrapeWebsite,activateWebsite,render,install};

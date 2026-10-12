@@ -370,6 +370,7 @@
       profile.sourceSummary=sourceSummary(scrapedSources,docs);
     }
     return {
+      ...(value.websiteActivation?.status==='active'&&normalizeUrl(value.websiteActivation.url)===normalizeUrl(value.website)&&scrapedSources.some(source=>source.type==='website'&&source.url===normalizeUrl(value.website)&&source.text.trim())?{websiteActivation:{status:'active',url:normalizeUrl(value.websiteActivation.url),activatedAt:clean(value.websiteActivation.activatedAt),title:clean(value.websiteActivation.title),description:clean(value.websiteActivation.description),contentChars:Number(value.websiteActivation.contentChars)||0}}:{}),
       ...(value.myFlow&&typeof value.myFlow.id==='string'&&/^[a-zA-Z0-9_.-]{1,160}$/.test(value.myFlow.id)?{myFlow:{id:value.myFlow.id,name:clean(value.myFlow.name).slice(0,100),stateVersion:Number(value.myFlow.stateVersion)||1}}:{}),
       step:[1,2,3,4,5,6,7].includes(Number(value.step))?Number(value.step):1,
       website:normalizeUrl(value.website),
