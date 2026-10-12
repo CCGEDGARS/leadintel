@@ -13,7 +13,8 @@
       "service": "leadintel-api",
       "workflow_version": "approved-workflow-v1",
       "saved_flows_version": "my-flows-v1",
-      "payment_alerts_version": "payment-connection-v1"
+      "payment_alerts_version": "payment-connection-v1",
+      "writing_assistant_version": "writing-assistant-v1"
     }
   },
   "smokeChecks": [
@@ -738,7 +739,7 @@
       "url": "/customer/message-workspace.js",
       "status": 200,
       "contains": [
-        "Adjust message",
+        "Writing Assistant",
         "My content",
         "Approved originals",
         "Writing references",
@@ -1042,13 +1043,13 @@
       "url": "/customer/message-workspace.js",
       "status": 200,
       "contains": [
-        "Adjust message",
+        "Writing Assistant",
         "Rewrite",
         "Shorten",
         "styleSection.after(assistant)",
         "append(improve,q('mw-restore-original'))",
         "editor.busyAction==='shorten'",
-        "Shortening…",
+        "Shortening\u2026",
         "editorActions.prepend"
       ],
       "notContains": [
@@ -1654,6 +1655,64 @@
       "contains": [
         "LeadIntelStorage?.attentionItems",
         "leadintel:storage-status-changed"
+      ]
+    },
+    {
+      "id": "writing-assistant-controller",
+      "type": "text",
+      "url": "/customer/writing-assistant.js",
+      "status": 200,
+      "contains": [
+        "createWritingAssistant",
+        "applyPreview",
+        "syncContext",
+        "AbortController"
+      ]
+    },
+    {
+      "id": "writing-assistant-view",
+      "type": "text",
+      "url": "/customer/writing-assistant-ui.js",
+      "status": 200,
+      "contains": [
+        "data-wa-instruction",
+        "data-wa-preview",
+        "data-wa-source",
+        "textContent",
+        "showModal"
+      ]
+    },
+    {
+      "id": "writing-assistant-context",
+      "type": "text",
+      "url": "/customer/writing-assistant-context.js",
+      "status": 200,
+      "contains": [
+        "captureWritingContext",
+        "currentDraft",
+        "referenceRevision"
+      ]
+    },
+    {
+      "id": "writing-assistant-styles",
+      "type": "text",
+      "url": "/customer/writing-assistant.css",
+      "status": 200,
+      "contains": [
+        ".wa-dialog",
+        ".wa-preview"
+      ]
+    },
+    {
+      "id": "writing-source-roles",
+      "type": "text",
+      "url": "/customer/writing-references-ui.js",
+      "status": 200,
+      "contains": [
+        "data-role",
+        "Seller material",
+        "Customer material",
+        "not independently verified"
       ]
     }
   ],

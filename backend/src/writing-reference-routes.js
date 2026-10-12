@@ -5,7 +5,7 @@ import {listWritingReferences,getWritingReference,putWritingReference,patchWriti
 import {writingReferenceProgress,retryWritingReference} from './writing-reference-runner.js';
 const json=(value,status,cors)=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store',...cors}});
 export function writingReferencesEnabled(env,workspaceId){return env.WORKSPACE_STORAGE_ENABLED==='true'||String(env.WRITING_REFERENCES_ALLOWED_WORKSPACES||'').split(',').map(s=>s.trim()).includes(workspaceId);}
-function safeCard(row){return {id:row.id,slot:row.slot,revision:row.revision,filename:row.filename,status:row.status,active:row.active,instruction:row.instruction,coverage:row.coverage,summary:row.summary,techniques:row.techniques,error:row.error_code};}
+function safeCard(row){return {id:row.id,slot:row.slot,revision:row.revision,filename:row.filename,status:row.status,active:row.active,instruction:row.instruction,role:row.role||'guidance',coverage:row.coverage,summary:row.summary,techniques:row.techniques,error:row.error_code};}
 async function snapshot(env,scope){const cards=await Promise.all((await listWritingReferences(env,scope)).map(async row=>({...safeCard(row),...(row.status==='Processing'?{progress:await writingReferenceProgress(env,scope,row.id)}:{})})));return {cards,slotRevisions:await writingReferenceSlots(env,scope),referenceRevision:await writingReferenceRevision(env,scope)};}
 async function uploadForm(form,env,scope,settings,cors,ctx){
  const file=form.get('file');if(!file||typeof file.arrayBuffer!=='function')return json({error:'A source file is required'},400,cors);
