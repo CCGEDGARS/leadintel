@@ -88,3 +88,15 @@ body.ai-settings-opened{overflow:hidden}
 
 .integration-health-summary.connection-alert{border-color:#e4d6ad;background:#fff8e6;color:var(--ai-warn)}
 .ai-provider-error[data-payment-error="true"]{border-color:#e2c1bd;background:#fff5f3;color:var(--ai-danger)}
+
+/* Shared settings action geometry; grid rows must never stretch buttons. */
+.ai-settings-drawer{--settings-action-width:240px;--settings-action-height:48px}
+.ai-settings-drawer .integration-card{align-content:start}
+.ai-settings-drawer .ai-settings-btn:not(.ai-settings-icon){box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:6px;width:min(var(--settings-action-width),100%);max-width:100%;height:var(--settings-action-height);min-height:var(--settings-action-height);padding:8px 12px;border-radius:10px;line-height:1.2;text-align:center;text-decoration:none;white-space:normal;overflow-wrap:anywhere;justify-self:start;align-self:start;flex:0 1 var(--settings-action-width)}
+.ai-settings-drawer .tool-account-links,
+.ai-settings-drawer .ai-provider-actions,
+.ai-settings-drawer .workspace-provider-actions,
+.ai-settings-drawer .workspace-signin-options,
+.ai-settings-drawer .microsoft-mail-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--settings-action-width)),var(--settings-action-width)));gap:8px;align-content:start;align-items:start;justify-content:start}
+.ai-settings-drawer .google-connect-panel .ai-settings-btn{width:min(var(--settings-action-width),100%)}
+.ai-settings-drawer .ai-settings-btn[hidden]{display:none!important}

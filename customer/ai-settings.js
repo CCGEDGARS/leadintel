@@ -29,7 +29,7 @@ async function api(path,options={}){
 function toast(message){const node=document.getElementById('toast');if(!node)return;node.textContent=message;node.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>node.classList.remove('show'),2800);}
 function injectCss(){
   if(document.querySelector('link[data-leadintel-asset="ai-settings-css"]'))return;
-  const link=document.createElement('link');link.rel='stylesheet';link.href=`ai-settings.css?v=${SETTINGS_VERSION}&tool-links=20261011-v1&alert-colours=20261011-v1`;link.dataset.leadintelAsset='ai-settings-css';document.head.appendChild(link);
+  const link=document.createElement('link');link.rel='stylesheet';link.href=`ai-settings.css?v=${SETTINGS_VERSION}&tool-links=20261011-v1&alert-colours=20261011-v1&uniform-actions=20261012-v1`;link.dataset.leadintelAsset='ai-settings-css';document.head.appendChild(link);
 }
 function injectUi(){
   injectCss();
