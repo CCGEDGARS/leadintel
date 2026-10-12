@@ -1,6 +1,6 @@
 import './workspace-storage-ui.js?v=20261012-v1';
 import './personal-linkedin.js?v=20261009-personal-profile-v1';
-import './tool-account-links.js?v=20261011-v1';
+import './tool-account-links.js?v=20261011-v1&workspace-auth=20261012-v1';
 const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
 const SETTINGS_VERSION='20261012-ai-task-routing-v1';
 const PROVIDERS=Object.freeze([
@@ -140,14 +140,14 @@ function workspaceProviderStatus(provider){
   if(!signedIn())return {state:'neutral',label:'Available',detail:`Sign in with ${providerLabel(provider)} to create or open your private LeadIntel workspace.`};
   if(selected===provider)return {state:'good',label:'Selected',detail:`Signed in as ${identity}`};
   if(selected)return {state:'neutral',label:'Available',detail:`Switch to ${providerLabel(provider)} if this is the account you want to use.`};
-  return {state:'neutral',label:'Session active',detail:'A workspace session is active. The current sign-in provider is not identified.'};
+  return {state:'neutral',label:'Not identified',detail:`Signed in as ${identity}. The sign-in provider is unavailable for this existing session. You can sign out or switch accounts below.`};
 }
 function workspaceProviderAction(provider){
   if(!signedIn())return `<div class="workspace-provider-actions"><button class="ai-settings-btn primary ${provider==='microsoft'?'microsoft':''}" data-settings-signin="${provider}" type="button">Continue with ${providerLabel(provider)}</button></div>`;
   const selected=authProvider();
   if(selected===provider)return '<div class="workspace-provider-actions"><button class="ai-settings-btn danger" data-settings-signout type="button">Sign out</button></div>';
   if(selected)return `<div class="workspace-provider-actions"><button class="ai-settings-btn" data-settings-switch="${provider}" type="button">Switch to ${providerLabel(provider)}</button></div>`;
-  return '<div class="workspace-provider-actions"></div>';
+  return `<div class="workspace-provider-actions"><button class="ai-settings-btn" data-settings-switch="${provider}" type="button">Switch to ${providerLabel(provider)}</button><button class="ai-settings-btn danger" data-settings-signout type="button">Sign out</button></div>`;
 }
 function activeToolItems(active){
   const items=[];
@@ -251,7 +251,7 @@ function renderIntegrationMonitoring(){
     <article class="integration-card workspace-provider-card" data-integration="microsoft-account"><div class="integration-card-head"><div><strong>Microsoft Account</strong><small>Optional workspace sign-in</small></div><span class="integration-status ${esc(integrationTone(microsoftAccount))}">${esc(microsoftAccount.label)}</span></div><p class="integration-purpose">Choose Microsoft only if you want to use a Microsoft account for LeadIntel workspace access. Microsoft 365 Mail is connected separately.</p><div class="integration-meta">${esc(microsoftAccount.detail+checkedSuffix)}</div>${workspaceProviderAction('microsoft')}</article>
     <article class="integration-card" data-integration="gmail"><div class="integration-card-head"><div><strong>Gmail</strong><small>Optional outbound delivery and reply synchronization</small></div><span class="integration-status ${esc(integrationTone(gmail))}">${esc(gmail.label)}</span></div><p class="integration-purpose">Mailbox connection is optional and separate from workspace sign-in.</p><div class="integration-meta">${esc(gmail.detail+checkedSuffix)}</div></article>
     <article class="integration-card microsoft-mail-card" data-integration="microsoft-mail"><div class="integration-card-head"><div><strong>Microsoft 365 Mail</strong><small>Optional human-approved outbound delivery</small></div><span class="integration-status ${esc(integrationTone(microsoftMail))}">${esc(microsoftMail.label)}</span></div><p class="integration-purpose">Microsoft Graph · send-only access. LeadIntel cannot read your inbox.</p><div class="integration-meta">${esc(microsoftMail.detail+checkedSuffix)}</div>${microsoftMailActions(microsoftMail)}</article>`;
-  for(const card of [...platform.querySelectorAll('[data-integration]'),...communication.querySelectorAll('[data-integration]')])card.insertAdjacentHTML('beforeend',globalThis.LeadIntelToolAccountLinks?.html(card.dataset.integration)||'');
+  for(const card of [...platform.querySelectorAll('[data-integration]'),...communication.querySelectorAll('[data-integration]')]){if(signedIn()&&card.classList.contains('workspace-provider-card'))continue;card.insertAdjacentHTML('beforeend',globalThis.LeadIntelToolAccountLinks?.html(card.dataset.integration)||'');}
   const activeAi=Boolean(status.providers.find(item=>item.active&&item.configured));
   const deliveryReady=gmail.state==='good'||microsoftMail.state==='good';
   const critical=[activeAi,signedIn(),deliveryReady,apollo.state==='good',firecrawl.state==='good'];const healthy=critical.filter(Boolean).length;

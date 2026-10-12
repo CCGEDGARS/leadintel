@@ -1821,6 +1821,36 @@
         "acknowledgeExtraction:true",
         "Confirm reviewed extraction"
       ]
+    },
+    {
+      "id": "workspace-login-controls",
+      "type": "text",
+      "url": "/customer/ai-settings.js",
+      "status": 200,
+      "contains": [
+        "signedIn()&&card.classList.contains('workspace-provider-card')",
+        "label:'Not identified'",
+        "data-settings-switch"
+      ]
+    },
+    {
+      "id": "workspace-login-provider-cache",
+      "type": "text",
+      "url": "/customer/account-cache.js",
+      "status": 200,
+      "contains": [
+        "key!=='leadintel_auth_provider'"
+      ]
+    },
+    {
+      "id": "workspace-login-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "archive-storage=20261011-v2&workspace-auth=20261012-v1",
+        "account-layout=20261012-v1&workspace-auth=20261012-v1"
+      ]
     }
   ],
   "retry": {

@@ -274,3 +274,20 @@ test('failed durable snapshot commit keeps the prior baseline and active working
  assert.equal(runtime.root.LeadIntelServerBridge.ready,false);assert.equal(runtime.attrs.get('data-account-check'),'error');
  assert.equal(values.get(SNAP),before.get(SNAP));assert.equal(values.get(MAIN),before.get(MAIN));assert.equal(runtime.requests.some(x=>x.options.method==='PUT'),false);
 });
+
+test('login provider survives callback cleanup, workspace activation and reload but clears on sign-out',async()=>{
+ const values=seed();values.set('leadintel_auth_provider','google');
+ const callback=load(values,{search:'?auth=success&workspace_id=wb'});
+ assert.equal(values.get('leadintel_auth_provider'),'google');
+ await callback.root.__init();assert.equal(values.get('leadintel_auth_provider'),'google');
+ const reloaded=load(values);assert.equal(reloaded.root.LeadIntelServerBridge.authProvider,'google');
+ await reloaded.root.__init();await reloaded.root.LeadIntelServerBridge.signOut();
+ assert.equal(values.has('leadintel_auth_provider'),false);
+});
+test('restoring an old workspace cannot overwrite the current login provider',async()=>{
+ const values=seed();values.set('leadintel_account_context_v1',JSON.stringify({workspaceId:'wa',userId:'a'}));
+ const runtime=load(values,{account:'a',workspace:'wa'});values.set('leadintel_auth_provider','google');await runtime.root.LeadIntelAccountCache.checkpoint();
+ await runtime.root.LeadIntelAccountCache.detach();values.set('leadintel_auth_provider','microsoft');
+ await runtime.root.LeadIntelAccountCache.activate({workspaceId:'wa',userId:'a'});
+ assert.equal(values.get('leadintel_auth_provider'),'microsoft');
+});
