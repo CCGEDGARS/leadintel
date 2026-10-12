@@ -14,8 +14,8 @@ test('supports exactly the three customer AI providers',()=>{
 
 test('provides editable production defaults for all three providers',()=>{
   assert.equal(defaultAiModel('openai'),'gpt-6.1-sol');
-  assert.equal(defaultAiModel('anthropic'),'claude-sonnet-4-6');
-  assert.equal(defaultAiModel('gemini'),'gemini-3.7-flash');
+  assert.equal(defaultAiModel('anthropic'),'claude-sonnet-5-5');
+  assert.equal(defaultAiModel('gemini'),'gemini-3.8-flash');
 });
 
 test('OpenAI adapter uses Responses API without server-side response storage',async()=>{
@@ -130,7 +130,7 @@ test('OpenAI web search forwards the caller abort signal to the upstream request
 
 test('web-search route forwards the incoming request abort signal',()=>{
   const routes=fs.readFileSync(new URL('../src/ai-routes.js',import.meta.url),'utf8');
-  assert.match(routes,/searchWeb\(\{apiKey,model:integration\.model,query,maxResults,purpose:body\.purpose===.*contact_research.*signal:request\.signal\}\)/);
+  assert.match(routes,/searchWorkspaceResearch\(env,workspaceId,\{query,maxResults,purpose:body\.purpose===.*contact_research.*signal:request\.signal\}\)/);
 });
 
 test('Anthropic adapter uses Messages API and extracts text',async()=>{

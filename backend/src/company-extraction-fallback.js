@@ -1,7 +1,7 @@
 function retryReason(error){
   const message=String(error?.message||error||'');
   if(/timed? out|timeout/i.test(message))return 'timeout';
-  const match=message.match(/(?:OpenAI )?(?:request failed|returned) \(?([0-9]{3})\)?/i);
+  const match=message.match(/(?:(?:OpenAI|Anthropic|Gemini) )?(?:request failed|returned) \(?([0-9]{3})\)?/i);
   if(!match)return '';
   const status=Number(match[1]);
   if(status===408)return 'timeout';
@@ -20,7 +20,7 @@ export async function generateCompanyExtraction({
     const reason=retryReason(primaryError);
     const isEligible=task==='company-extraction'
       &&fallbackProvider==='gemini'
-      &&primaryIntegration?.provider==='openai'
+      &&['openai','anthropic'].includes(primaryIntegration?.provider)
       &&Boolean(reason);
     if(!isEligible)return {ok:false,error:primaryError,fallback:{status:'not_used',used:false}};
 
@@ -33,9 +33,9 @@ export async function generateCompanyExtraction({
 
     try{
       const result=await runProvider(fallbackIntegration,request);
-      return {ok:true,result,fallback:{status:'used',used:true,from:'openai',provider:'gemini',reason}};
+      return {ok:true,result,fallback:{status:'used',used:true,from:primaryIntegration.provider,provider:'gemini',reason}};
     }catch(error){
-      return {ok:false,error,fallback:{status:'failed',used:false,from:'openai',provider:'gemini',reason}};
+      return {ok:false,error,fallback:{status:'failed',used:false,from:primaryIntegration.provider,provider:'gemini',reason}};
     }
   }
 }

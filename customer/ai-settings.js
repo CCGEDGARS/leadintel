@@ -2,11 +2,11 @@ import './workspace-storage-ui.js?v=20261012-v1';
 import './personal-linkedin.js?v=20261009-personal-profile-v1';
 import './tool-account-links.js?v=20261011-v1';
 const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
-const SETTINGS_VERSION='20260930-openai-gpt-6-1-sol-v1';
+const SETTINGS_VERSION='20261012-ai-task-routing-v1';
 const PROVIDERS=Object.freeze([
-  {provider:'openai',name:'OpenAI',model:'gpt-6.1-sol',placeholder:'sk-…',hint:'Responses API'},
-  {provider:'anthropic',name:'Anthropic',model:'claude-sonnet-4-6',placeholder:'sk-ant-…',hint:'Messages API'},
-  {provider:'gemini',name:'Google Gemini',model:'gemini-3.7-flash',placeholder:'AIza…',hint:'GenerateContent API'}
+  {provider:'openai',name:'OpenAI',model:'gpt-6.1-sol',placeholder:'sk-…',hint:'Recommended for commercial reasoning and controlled writing'},
+  {provider:'anthropic',name:'Anthropic',model:'claude-sonnet-5-5',placeholder:'sk-ant-…',hint:'Recommended Claude balance for reasoning and writing'},
+  {provider:'gemini',name:'Google Gemini',model:'gemini-3.8-flash',placeholder:'AIza…',hint:'Recommended for grounded research and native PDF recovery'}
 ]);
 let status={role:'',providers:[]};
 let integrationStatus={checkedAt:null,checking:false,apollo:null,firecrawl:null,account:null,gmail:null,microsoftMail:null};
@@ -48,7 +48,7 @@ function injectUi(){
       </div>
       <div class="ai-engine-summary" id="ai-engine-summary"><span>AI engine</span><strong>No provider configured</strong><small>Connect one of the three supported providers below.</small></div>
       <section class="ai-settings-section" aria-labelledby="ai-provider-heading">
-        <div class="ai-section-title"><div><span class="eyebrow">AI providers</span><h3 id="ai-provider-heading">Customer-owned intelligence engines</h3><p>Add your own API key and choose the model. Connected means the API key is verified. Active means LeadIntel is currently using that provider for normal AI generation.</p></div></div>
+        <div class="ai-section-title"><div><span class="eyebrow">AI providers</span><h3 id="ai-provider-heading">Customer-owned intelligence engines</h3><p>Add your own API key and choose the model. Connected means the API key is verified. Main engine means LeadIntel uses that provider for normal AI generation. Connected Gemini can separately review research/contact evidence, supply grounded search when primary evidence is missing, and read sparse or scanned source PDFs. Specialist use consumes that provider’s API credits.</p></div></div>
         <div class="ai-provider-grid" id="ai-provider-grid"></div>
       </section>
       <section class="ai-settings-section" aria-labelledby="platform-integration-heading">
@@ -172,8 +172,8 @@ function render(){
     if(!signedIn()){
       summary.innerHTML='<span>Workspace access</span><strong>Sign in to configure LeadIntel</strong><small>Use your existing Google or Microsoft account. Mailbox permissions are connected separately.</small><div class="workspace-signin-options" id="ai-settings-signin"><button class="ai-settings-btn primary" data-settings-signin="google" type="button">Continue with Google</button><button class="ai-settings-btn microsoft" data-settings-signin="microsoft" type="button">Continue with Microsoft</button></div>';
     }
-    else if(active)summary.innerHTML=`<span>Active tools</span><strong class="ai-engine-active-line"><span>Active provider · ${esc(active.name)} · ${esc(active.model)}</span><span class="ai-active-badge" role="status">ACTIVE</span></strong>${activeToolsSummary(active)}<small>${connectedCount} AI provider${connectedCount===1?'':'s'} connected · API key verified ${active.verified_at?esc(formatDate(active.verified_at)):'successfully'}${active.last_used_at?` · last used ${esc(formatDateTime(active.last_used_at))}`:''}. Manage every connection in its card below.</small>`;
-    else summary.innerHTML=`<span>Active tools</span><strong>No active AI provider</strong>${activeToolsSummary(null)}<small>${connectedCount?`${connectedCount} AI provider${connectedCount===1?' is':'s are'} connected. Set one as active below.`:'Test and save an AI provider below to activate AI generation.'} Manage every connection in its card below.</small>`;
+    else if(active)summary.innerHTML=`<span>Active tools</span><strong class="ai-engine-active-line"><span>Main engine · ${esc(active.name)} · ${esc(active.model)}</span><span class="ai-active-badge" role="status">MAIN ENGINE</span></strong>${activeToolsSummary(active)}<small>${connectedCount} AI provider${connectedCount===1?'':'s'} connected · API key verified ${active.verified_at?esc(formatDate(active.verified_at)):'successfully'}${active.last_used_at?` · last used ${esc(formatDateTime(active.last_used_at))}`:''}. Manage every connection in its card below.</small>`;
+    else summary.innerHTML=`<span>Active tools</span><strong>No main AI engine</strong>${activeToolsSummary(null)}<small>${connectedCount?`${connectedCount} AI provider${connectedCount===1?' is':'s are'} connected. Choose one as the main engine below.`:'Test and save an AI provider below to activate AI generation.'} Manage every connection in its card below.</small>`;
   }
   grid.innerHTML=PROVIDERS.map(config=>providerCard(config,providerState(config.provider))).join('');
   renderIntegrationMonitoring();
@@ -189,7 +189,8 @@ function paymentError(value=''){return /(?:\b402\b|insufficient_quota|credit_bal
 function providerCard(config,current){
   const configured=Boolean(current?.configured);const active=Boolean(current?.active);const owner=isOwner();const disabled=!signedIn()||!owner;
   const outOfCredits=configured&&current?.credit_issue?.code==='credits_exhausted';
-  const stateLabel=outOfCredits?'Credits exhausted':active?'Active':configured?'Connected':'Not connected';
+  let stateLabel=outOfCredits?'Credits exhausted':active?'Main engine':configured?'Connected · inactive':'Not connected';
+  if(config.provider==='gemini'&&configured&&!active&&!outOfCredits)stateLabel='Connected · specialist';
   const model=current?.model||config.model;const mode=model===config.model?'recommended':'advanced';const providerError=providerErrors[config.provider]||'';
   const usageMeta=current?.last_used_at?` · last used ${esc(formatDateTime(current.last_used_at))}`:'';
   return `<article class="ai-provider-card ${active?'active':''} ${outOfCredits?'credit-alert':''}" data-provider-card="${config.provider}">
@@ -199,12 +200,12 @@ function providerCard(config,current){
     ${globalThis.LeadIntelToolAccountLinks?.html(config.provider)||''}
     <label class="ai-settings-field">Model choice<select data-ai-model-mode="${config.provider}" ${disabled?'disabled':''}><option value="recommended" ${mode==='recommended'?'selected':''}>Recommended · ${esc(config.model)}</option><option value="advanced" ${mode==='advanced'?'selected':''}>Advanced · custom model ID</option></select></label>
     <label class="ai-settings-field ai-custom-model" data-ai-custom-model="${config.provider}" ${mode==='advanced'?'':'hidden'}>Custom model ID<input data-ai-model="${config.provider}" type="text" value="${mode==='advanced'?esc(model):''}" autocomplete="off" spellcheck="false" placeholder="Enter the exact provider model ID" ${disabled?'disabled':''}></label>
-    <div class="ai-model-note">Recommended is maintained by LeadIntel. Advanced accepts an exact model ID supported by your provider account.</div>
+    <div class="ai-model-note">Recommended balances quality, speed and cost for LeadIntel. Existing saved models stay unchanged until you Test &amp; save. Advanced accepts an exact model ID supported by your account.</div><div class="ai-model-confirmed" role="status">${configured?`Confirmed model: <strong>${esc(model)}</strong> · tested ${esc(formatDate(current.verified_at))}`:'No model confirmed. Test &amp; save before use.'}</div>${config.provider==='gemini'?'<p class="ai-model-note">Specialist when connected: research/contact evidence review, grounded search fallback and native source-PDF extraction (up to 8 MiB / 60 pages). Main-engine tasks use the provider selected above.</p>':''}
     <div class="ai-key-meta">${configured?`Saved key ${esc(current.key_hint||'')} · API key verified ${esc(formatDate(current.verified_at))}${usageMeta}`:'No credential stored yet.'}</div>
     <div class="ai-provider-error" data-payment-error="${paymentError(providerError)}" data-ai-error="${config.provider}" role="alert" ${providerError?'':'hidden'}>${esc(providerError)}</div>
     <div class="ai-provider-actions">
       <button class="ai-settings-btn primary" data-ai-action="save" data-provider="${config.provider}" type="button" ${disabled||busy===config.provider?'disabled':''}>${busy===config.provider?'Testing…':configured?'Save & test model':'Test & save'}</button>
-      <button class="ai-settings-btn" data-ai-action="activate" data-provider="${config.provider}" type="button" ${disabled||!configured||active||busy===config.provider?'disabled':''}>${active?'Active provider ✓':'Set as active'}</button>
+      <button class="ai-settings-btn" data-ai-action="activate" data-provider="${config.provider}" type="button" ${disabled||!configured||active||busy===config.provider?'disabled':''}>${active?'Main engine ✓':'Make main engine'}</button>
       <button class="ai-settings-btn danger" data-ai-action="disconnect" data-provider="${config.provider}" type="button" ${disabled||!configured||busy===config.provider?'disabled':''}>Disconnect</button>
     </div>
   </article>`;
@@ -293,12 +294,16 @@ function openDrawer(){
 }
 function closeDrawer(){const drawer=document.getElementById('ai-settings-drawer'),backdrop=document.getElementById('ai-settings-backdrop');if(drawer)drawer.hidden=true;if(backdrop)backdrop.hidden=true;unmountCredentialControls();document.body.classList.remove('ai-settings-opened');}
 function shouldOpenSettingsFromUrl(){return new URLSearchParams(window.location.search).get('settings')==='ai';}
+let aiStatusGeneration=0;
 async function refreshStatus(){
+  const generation=++aiStatusGeneration;
   if(!signedIn()){status={role:'',providers:[]};render();return status;}
+  const originWorkspace=workspace()?.id;
   try{
     const {response,payload}=await api('/api/integrations/ai/status');
+    if(workspace()?.id!==originWorkspace||generation!==aiStatusGeneration)return status;
     if(!response.ok)throw new Error(payload.error||'Unable to load AI settings');status=payload;render();return status;
-  }catch(error){status={role:workspace()?.role||'',providers:[]};render();toast(error.message);return status;}
+  }catch(error){if(workspace()?.id!==originWorkspace||generation!==aiStatusGeneration)return status;status={role:workspace()?.role||'',providers:[]};render();toast(error.message);return status;}
 }
 async function checkApolloStatus(){
   try{
@@ -378,38 +383,47 @@ async function saveProvider(provider){
   const apiKey=String(input?.value||'').trim();const mode=modeInput?.value==='advanced'?'advanced':'recommended';const model=mode==='recommended'?String(config?.model||'').trim():String(modelInput?.value||'').trim();
   if(mode==='advanced'&&!model){toast('Enter the exact model ID');modelInput?.focus();return;}
   if(!apiKey&&!configured){toast('Enter your provider API key first');input?.focus();return;}
+  if(!window.confirm(`Test and save ${config.name} model ${model}? This makes a small paid API request. ${configured?'The saved model changes only if the test succeeds.':'An existing main engine stays selected.'}`))return;
+  const originWorkspace=workspace()?.id;
   clearProviderError(provider);busy=provider;setProviderSaveBusy(provider,true);
   try{
     const updatingModel=configured&&!apiKey;
-    const {response,payload}=await api('/api/integrations/ai/provider',{method:updatingModel?'PATCH':'PUT',body:JSON.stringify(updatingModel?{provider,model}:{provider,api_key:apiKey,model,make_active:true})});
+    const {response,payload}=await api('/api/integrations/ai/provider',{method:updatingModel?'PATCH':'PUT',body:JSON.stringify(updatingModel?{provider,model}:{provider,api_key:apiKey,model,make_active:Boolean(providerState(provider)?.active)||!status.providers.some(p=>p.active)})});
     if(!response.ok)throw new Error(payload.error||'Provider verification failed');
+    if(workspace()?.id!==originWorkspace)return;
     if(input)input.value='';providerErrors[provider]='';busy='';
-    toast(updatingModel?'AI model verified and saved':`${payload.provider==='gemini'?'Google Gemini':payload.provider==='anthropic'?'Anthropic':'OpenAI'} verified and active`);
-    await refreshAllStatus();window.dispatchEvent(new CustomEvent('leadintel:ai-provider-changed',{detail:{provider:payload.provider,model:payload.model}}));
+    toast(`${config.name} · ${payload.model} confirmed${payload.active?' · Main engine':''}`);
+    await refreshAllStatus();if(workspace()?.id!==originWorkspace)return;window.dispatchEvent(new CustomEvent('leadintel:ai-provider-changed',{detail:{provider:payload.provider,model:payload.model}}));
   }catch(error){
+    if(workspace()?.id!==originWorkspace)return;
     providerErrors[provider]=error.message;
     const errorNode=document.querySelector(`[data-ai-error="${provider}"]`);if(errorNode){errorNode.textContent=error.message;errorNode.dataset.paymentError=String(paymentError(error.message));errorNode.hidden=false;}
     toast(error.message);
-  }finally{if(busy===provider)busy='';setProviderSaveBusy(provider,false);}
+  }finally{if(workspace()?.id===originWorkspace){if(busy===provider)busy='';setProviderSaveBusy(provider,false);}}
 }
 async function activateProvider(provider){
+  const current=providerState(provider);if(!current?.configured)return;
+  if(!window.confirm(`Make ${current.name} · ${current.model} the main AI engine? Normal profile, strategy, extraction and writing tasks will use this model. Connected specialists keep their separate research/document roles.`))return;
+  const originWorkspace=workspace()?.id;
   busy=provider;render();try{
-    const {response,payload}=await api('/api/integrations/ai/activate',{method:'POST',body:JSON.stringify({provider})});if(!response.ok)throw new Error(payload.error||'Unable to activate provider');
-    await refreshAllStatus();toast('AI provider activated');window.dispatchEvent(new CustomEvent('leadintel:ai-provider-changed',{detail:{provider:payload.provider,model:payload.model}}));
-  }catch(error){toast(error.message);}finally{busy='';render();}
+    const {response,payload}=await api('/api/integrations/ai/activate',{method:'POST',body:JSON.stringify({provider,confirmed_model:current.model})});if(!response.ok)throw new Error(payload.error||'Unable to activate provider');
+    if(workspace()?.id!==originWorkspace)return;
+    await refreshAllStatus();if(workspace()?.id!==originWorkspace)return;toast(`${payload.model} confirmed as main engine`);window.dispatchEvent(new CustomEvent('leadintel:ai-provider-changed',{detail:{provider:payload.provider,model:payload.model}}));
+  }catch(error){if(workspace()?.id===originWorkspace)toast(error.message);}finally{if(workspace()?.id===originWorkspace){busy='';render();}}
 }
 async function disconnectProvider(provider){
+  const originWorkspace=workspace()?.id;
   busy=provider;render();try{
     const {response,payload}=await api('/api/integrations/ai/provider',{method:'DELETE',body:JSON.stringify({provider})});if(!response.ok)throw new Error(payload.error||'Unable to disconnect provider');
-    await refreshAllStatus();toast('AI provider disconnected');window.dispatchEvent(new CustomEvent('leadintel:ai-provider-changed',{detail:{provider,disconnected:true}}));
-  }catch(error){toast(error.message);}finally{busy='';render();}
+    if(workspace()?.id!==originWorkspace)return;await refreshAllStatus();if(workspace()?.id!==originWorkspace)return;toast('AI provider disconnected');window.dispatchEvent(new CustomEvent('leadintel:ai-provider-changed',{detail:{provider,disconnected:true}}));
+  }catch(error){if(workspace()?.id===originWorkspace)toast(error.message);}finally{if(workspace()?.id===originWorkspace){busy='';render();}}
 }
 
 window.LeadIntelIntegrationAlertTone=integrationTone;window.LeadIntelPaymentError=paymentError;
 injectUi();
 window.addEventListener('leadintel:service-status',()=>renderIntegrationMonitoring());
 window.addEventListener('leadintel:server-ready',()=>refreshAllStatus());
-window.addEventListener('leadintel:workspace-changed',()=>refreshAllStatus());
+window.addEventListener('leadintel:workspace-changed',()=>{status={role:'',providers:[]};busy='';unmountCredentialControls();refreshAllStatus();});
 window.addEventListener('leadintel:microsoft-mail-status',()=>{integrationStatus.microsoftMail=microsoftMailStatus();renderIntegrationMonitoring();});
 if(shouldOpenSettingsFromUrl())openDrawer();
 else if(signedIn())refreshAllStatus();

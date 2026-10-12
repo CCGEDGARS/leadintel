@@ -14,7 +14,8 @@
       "workflow_version": "approved-workflow-v1",
       "saved_flows_version": "my-flows-v1",
       "payment_alerts_version": "payment-connection-v1",
-      "writing_assistant_version": "writing-assistant-v1"
+      "writing_assistant_version": "writing-assistant-v1",
+      "ai_task_routing_version": "ai-task-routing-v1"
     }
   },
   "smokeChecks": [
@@ -1786,6 +1787,39 @@
         "Find more companies like your best customers.",
         "feature-focus",
         "Start with 3\u20135 companies"
+      ]
+    },
+    {
+      "id": "ai-routing-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "ai-routing=20261012-v1"
+      ]
+    },
+    {
+      "id": "ai-main-engine-settings",
+      "type": "text",
+      "url": "/customer/ai-settings.js",
+      "status": 200,
+      "contains": [
+        "Main engine",
+        "Confirmed model",
+        "confirmed_model:current.model",
+        "claude-sonnet-5-5",
+        "gemini-3.8-flash"
+      ]
+    },
+    {
+      "id": "native-pdf-review",
+      "type": "text",
+      "url": "/customer/writing-references-ui.js",
+      "status": 200,
+      "contains": [
+        "data-review-extraction",
+        "acknowledgeExtraction:true",
+        "Confirm reviewed extraction"
       ]
     }
   ],

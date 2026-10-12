@@ -36,12 +36,13 @@ export async function putWritingReference(env,scope,{slot,expectedRevision,expec
  if(prior.source_id)await cleanupWritingReference(env,scope,prior.source_id).catch(()=>null);
  return getWritingReference(env,scope,id);
 }
-export async function patchWritingReference(env,scope,{id,expectedRevision,active,instruction,role,acknowledgePartial}){
+export async function patchWritingReference(env,scope,{id,expectedRevision,active,instruction,role,acknowledgePartial,acknowledgeExtraction}){
  const row=await getWritingReference(env,scope,id);if(row.revision!==Number(expectedRevision))fail('Source changed. Refresh and try again.');
  if(row.status==='Deleting')fail('Source is being deleted');
  if(acknowledgePartial!==undefined&&acknowledgePartial!==true)fail('Partial coverage acknowledgement must be true',400);
+ if(acknowledgePartial&&row.coverage.requiresReview&&acknowledgeExtraction!==true)fail('Review the original and Gemini extraction before accepting this source',400);
  if(acknowledgePartial&&(row.status!=='Needs attention'||!row.catalogue_key||!row.techniques.length||!row.coverage.readable))fail('Partial coverage requires completed analysis with readable guidance');
- const nextStatus=acknowledgePartial?'Ready':row.status,nextCoverage=acknowledgePartial?{...row.coverage,partialAccepted:true}:row.coverage;if(active===true&&row.status!=='Ready')fail('Only Ready sources can activate');
+ const nextStatus=acknowledgePartial?'Ready':row.status,nextCoverage=acknowledgePartial?{...row.coverage,partialAccepted:true,...(row.coverage.requiresReview?{reviewAccepted:true}:{})}:row.coverage;if(active===true&&row.status!=='Ready')fail('Only Ready sources can activate');
  if(active!==undefined&&typeof active!=='boolean')fail('Activation must be a boolean',400);
  if(instruction!==undefined&&(typeof instruction!=='string'||instruction.length>500))fail('Source instruction is too long',400);
  if(role!==undefined&&!['guidance','seller','customer'].includes(role))fail('Invalid source role',400);

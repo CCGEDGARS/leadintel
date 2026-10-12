@@ -2,8 +2,8 @@ export const AI_PROVIDERS=Object.freeze(['openai','anthropic','gemini']);
 
 const DEFAULT_MODELS=Object.freeze({
   openai:'gpt-6.1-sol',
-  anthropic:'claude-sonnet-4-6',
-  gemini:'gemini-3.7-flash'
+  anthropic:'claude-sonnet-5-5',
+  gemini:'gemini-3.8-flash'
 });
 const PROVIDER_LABELS=Object.freeze({openai:'OpenAI',anthropic:'Anthropic',gemini:'Gemini'});
 
@@ -175,7 +175,7 @@ async function verifyOpenAiCredential(options,fetchImpl){
 }
 
 async function anthropicRequest(options,fetchImpl){
-  const body={model:options.model,max_tokens:options.maxOutputTokens,messages:[{role:'user',content:options.prompt}]};if(options.system)body.system=options.system;
+  const body={model:options.model,max_tokens:options.maxOutputTokens,messages:[{role:'user',content:options.prompt}]};if(options.system)body.system=options.system;if(/^claude-(sonnet|opus|fable)-5/.test(options.model)){body.thinking={type:'adaptive'};body.output_config={effort:'low'};}
   const response=await fetchImpl('https://api.anthropic.com/v1/messages',{
     method:'POST',
     signal:options.signal,
@@ -191,7 +191,7 @@ async function verifyAnthropicCredential(options,fetchImpl){
   const response=await fetchImpl('https://api.anthropic.com/v1/messages',{
     method:'POST',
     headers:{'Content-Type':'application/json','Accept':'application/json','x-api-key':options.apiKey,'anthropic-version':'2023-06-01'},
-    body:JSON.stringify({model:options.model,max_tokens:64,messages:[{role:'user',content:'Reply with exactly OK.'}]})
+    body:JSON.stringify({model:options.model,max_tokens:/^claude-(sonnet|opus|fable)-5/.test(options.model)?512:64,messages:[{role:'user',content:'Reply with exactly OK.'}],...(/^claude-(sonnet|opus|fable)-5/.test(options.model)?{thinking:{type:'adaptive'},output_config:{effort:'low'}}:{})})
   });
   const payload=await parseJson(response);if(!response.ok)throw sanitizedUpstreamError('anthropic',response.status,payload);
   const text=textFromAnthropic(payload);if(!text)throw new Error('Anthropic returned no text');
