@@ -42,12 +42,12 @@ test('configured providers can verify and change models without resubmitting the
   assert.doesNotMatch(source,/json\([^\n]*encrypted_api_key/);
 });
 
-test('OpenAI web search uses the stored workspace OpenAI integration even when another provider is active',()=>{
-  assert.match(source,/import \{[^}]*searchWeb[^}]*\} from '\.\/ai-provider\.js'/);
-  assert.match(source,/workspace_ai_integrations WHERE workspace_id=\? AND provider='openai' LIMIT 1/);
-  assert.match(source,/decryptSecret\(integration\.encrypted_api_key,key\)/);
-  assert.match(source,/searchWeb\(\{apiKey,model:integration\.model,query,maxResults/);
-  assert.match(source,/OpenAI integration is required for web search/);
+test('web research routes through workspace-scoped OpenAI and Gemini specialist policy',()=>{
+  assert.match(source,/searchWorkspaceResearch\(env,workspaceId/);
+  const routing=fs.readFileSync(path.join(process.cwd(),'src','ai-task-routing.js'),'utf8');
+  assert.match(routing,/workspaceCredential\(env,workspaceId,'openai'\)/);
+  assert.match(routing,/workspaceCredential\(env,workspaceId,'gemini'\)/);
+  assert.doesNotMatch(source,/json\([^\n]*encrypted_api_key/);
 });
 
 test('OpenAI web search bounds input, records usage and never returns stored key material',()=>{

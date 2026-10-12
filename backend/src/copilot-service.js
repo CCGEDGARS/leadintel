@@ -1,4 +1,5 @@
 import {importAesKey,decryptSecret} from './oauth.js';
+import {searchWorkspaceResearch} from './ai-task-routing.js';
 import {generateText,searchWeb} from './ai-provider.js';
 import {creditFailure,recordProviderCredit} from './provider-credit-health.js';
 import {buildCopilotWorkspaceContext} from './copilot-context.js';
@@ -54,7 +55,7 @@ async function productionProvider(env,workspaceId){
   };
   return {
     async generate(options){if(deadline<=Date.now())throw new Error('Assistant turn timed out');return observe(active.provider,()=>generateText({...active,...options,fetchImpl:boundedFetch(fetchImpl,Math.min(REASONING_TIMEOUT_MS,deadline-Date.now()))}));},
-    async search(options){const openai=active.provider==='openai'?active:await providerCredential(env,workspaceId,{openAiOnly:true});if(!openai)throw new Error('OpenAI web search is not configured');if(deadline<=Date.now())throw new Error('Assistant turn timed out');return observe('openai',()=>searchWeb({apiKey:openai.apiKey,model:openai.model,query:options.query,purpose:options.purpose,maxResults:options.maxResults||5,fetchImpl:boundedFetch(fetchImpl,Math.min(SEARCH_TIMEOUT_MS,deadline-Date.now()))}));}
+    async search(options){if(deadline<=Date.now())throw new Error('Assistant turn timed out');return searchWorkspaceResearch(env,workspaceId,{query:options.query,purpose:options.purpose,maxResults:options.maxResults||5,fetchImpl:boundedFetch(fetchImpl,Math.min(SEARCH_TIMEOUT_MS,deadline-Date.now()))});}
   };
 }
 function selectedKnowledge(question,screen){return technicalGuidanceFor(question)||productKnowledgeFor({step:screen?.step||1,topic:question});}

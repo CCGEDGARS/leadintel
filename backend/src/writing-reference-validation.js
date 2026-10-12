@@ -1,5 +1,5 @@
 import {getDocumentProxy} from 'unpdf';
-async function extractServer(bytes,mime){
+export async function extractServer(bytes,mime){
  if(!bytes.byteLength)throw Error('Document is empty');if(bytes.byteLength>20*1024*1024)throw Error('Maximum document size is 20 MiB');
  const sections=[];let total=0,readable=0,characters=0;
  const add=(text,location)=>{characters+=text.length;if(characters>2000000)throw Error('Maximum extracted text is 2 million characters');if(text.trim()){sections.push({location,text});readable++;}};
@@ -13,11 +13,27 @@ async function extractServer(bytes,mime){
  }
  return {sections,coverage:{total,readable,unreadable:total-readable},characters};
 }
-export async function validateWritingReference({bytes,mime,filename}){
+export function mergeNativeExtraction(extracted,native){
+ const byPage=new Map(extracted.sections.map(section=>[section.location,section]));
+ for(const section of native.sections)if(!byPage.has(section.location)||byPage.get(section.location).text.length<120)byPage.set(section.location,section);
+ const sections=[...byPage.values()].sort((a,b)=>Number(a.location.split(':')[1])-Number(b.location.split(':')[1]));
+ const characters=sections.reduce((n,s)=>n+s.text.length,0);
+ if(characters>2000000)throw Error('Maximum extracted text is 2 million characters');
+ return {sections,characters,coverage:{total:extracted.coverage.total,readable:sections.length,unreadable:extracted.coverage.total-sections.length,extractionProvider:'gemini',requiresReview:true}};
+}
+export async function validateWritingReference({bytes,mime,filename,nativeExtractor,signal}){
  const normalized=String(mime||'').split(';')[0].trim().toLowerCase();
  const extensions={'application/pdf':/\.pdf$/i,'text/plain':/\.txt$/i,'text/markdown':/\.(md|markdown)$/i};
  if(!extensions[normalized]||!extensions[normalized].test(String(filename||''))||/[\x00-\x1f/\\]/.test(filename)||filename.length>180)throw Error('Invalid document filename or MIME type');
- const extracted=await extractServer(bytes,normalized);
+ signal?.throwIfAborted();
+ let extracted=await extractServer(bytes,normalized);
+ signal?.throwIfAborted();
+ if(normalized==='application/pdf'&&nativeExtractor&&bytes.length<=8*1024*1024&&extracted.coverage.total<=60&&(extracted.coverage.unreadable>0||extracted.characters<extracted.coverage.total*120)){
+  try{const native=await nativeExtractor({bytes,pages:extracted.coverage.total,signal});
+   extracted=mergeNativeExtraction(extracted,native);
+  }catch(e){signal?.throwIfAborted();if(e?.name==='AbortError')throw e;extracted.coverage.nativeExtractionUnavailable=true;}
+ }
+ signal?.throwIfAborted();
  if(!extracted.characters)throw Error('Document has no readable text');
  const digest=await crypto.subtle.digest('SHA-256',bytes);
  const sha256=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('');

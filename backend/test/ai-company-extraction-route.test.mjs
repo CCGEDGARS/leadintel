@@ -93,21 +93,21 @@ test('AI generation does not spend on Gemini when OpenAI returns a valid empty c
   }finally{globalThis.fetch=originalFetch;}
 });
 
-test('company extraction uses OpenAI first even when another provider is active for general AI generation',async()=>{
+test('company extraction uses the selected Claude main engine',async()=>{
   const originalFetch=globalThis.fetch;const calls=[];
   const env=await makeEnv('anthropic');
   globalThis.fetch=async url=>{
     calls.push(String(url));
-    return new Response(JSON.stringify({output:[{type:'message',content:[{type:'output_text',text:'{"companies":[]}'}]}]}),{status:200,headers:{'Content-Type':'application/json'}});
+    return new Response(JSON.stringify({content:[{type:'text',text:'{"companies":[]}'}]}),{status:200,headers:{'Content-Type':'application/json'}});
   };
   try{
     const response=await handleAiRoute(generationRequest(),env,{});
     const payload=await response.json();
     assert.equal(response.status,200);
-    assert.equal(payload.provider,'openai');
+    assert.equal(payload.provider,'anthropic');
     assert.equal(payload.fallback.used,false);
     assert.equal(calls.length,1);
-    assert.match(calls[0],/api\.openai\.com/);
-    assert.deepEqual(env.DB.lastUsed,['openai']);
+    assert.match(calls[0],/api\.anthropic\.com/);
+    assert.deepEqual(env.DB.lastUsed,['anthropic']);
   }finally{globalThis.fetch=originalFetch;}
 });

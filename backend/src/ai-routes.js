@@ -1,3 +1,4 @@
+import {searchWorkspaceResearch} from './ai-task-routing.js';
 import {prepareAssistantRequest,validateAssistantReply,assertAssistantCurrent} from './writing-assistant.js';
 import {prepareContentGeneration,resolveContentMaterials} from './content-materials.js';
 import {sha256,cookieValue} from './security.js';
@@ -73,10 +74,10 @@ export async function handleAiRoute(request,env,cors={}){
     let apiKey,model;try{apiKey=validateApiKey(body.api_key);model=validateModel(provider,body.model);}catch(cause){return error(cause.message,400,cors);}
     try{await verifyProviderCredential({provider,apiKey,model});}catch(cause){return error(String(cause?.message||'AI provider verification failed').slice(0,180),422,cors);}
     try{
-      const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const encrypted=await encryptSecret(apiKey,key);const makeActive=body.make_active!==false;
-      const statements=[];if(makeActive)statements.push(env.DB.prepare(`UPDATE workspace_ai_integrations SET active=0,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=?`).bind(workspaceId));
-      statements.push(env.DB.prepare(`INSERT INTO workspace_ai_integrations(workspace_id,provider,encrypted_api_key,key_hint,model,active,verified_at,created_at,updated_at) VALUES(?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(workspace_id,provider) DO UPDATE SET encrypted_api_key=excluded.encrypted_api_key,key_hint=excluded.key_hint,model=excluded.model,active=excluded.active,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP`).bind(workspaceId,provider,encrypted,keyHint(apiKey),model,makeActive?1:0));
-      await env.DB.batch(statements);await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider,kind:'recovered'});await audit(env,{workspaceId,userId:access.user.id,type:'ai.provider_saved',provider,metadata:{model,active:makeActive}});
+      const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const encrypted=await encryptSecret(apiKey,key);
+      const statements=[];
+      statements.push(env.DB.prepare(`INSERT INTO workspace_ai_integrations(workspace_id,provider,encrypted_api_key,key_hint,model,active,verified_at,created_at,updated_at) VALUES(?,?,?,?,?,CASE WHEN ?=1 AND NOT EXISTS(SELECT 1 FROM workspace_ai_integrations WHERE workspace_id=? AND active=1) THEN 1 ELSE 0 END,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT(workspace_id,provider) DO UPDATE SET encrypted_api_key=excluded.encrypted_api_key,key_hint=excluded.key_hint,model=excluded.model,verified_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP`).bind(workspaceId,provider,encrypted,keyHint(apiKey),model,body.make_active!==false?1:0,workspaceId));
+      await env.DB.batch(statements);const makeActive=Boolean((await activeIntegration(env,workspaceId))?.provider===provider);await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider,kind:'recovered'});await audit(env,{workspaceId,userId:access.user.id,type:'ai.provider_saved',provider,metadata:{model,active:makeActive}});
       return json({saved:true,provider,model,active:makeActive,key_hint:keyHint(apiKey),verified_at:new Date().toISOString()},200,cors);
     }catch{return error('Unable to save AI provider configuration',500,cors);}
   }
@@ -105,7 +106,9 @@ export async function handleAiRoute(request,env,cors={}){
     const access=await requireMember(request,env,workspaceId,['owner']);if(access.error)return error(access.error,access.status,cors);
     const body=await request.json().catch(()=>null);const provider=normalizeAiProvider(body?.provider);if(!provider)return error('Unsupported AI provider',400,cors);
     const existing=await env.DB.prepare(`SELECT model FROM workspace_ai_integrations WHERE workspace_id=? AND provider=?`).bind(workspaceId,provider).first();if(!existing)return error('Configure this AI provider before activating it',409,cors);
-    await env.DB.batch([env.DB.prepare(`UPDATE workspace_ai_integrations SET active=0,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=?`).bind(workspaceId),env.DB.prepare(`UPDATE workspace_ai_integrations SET active=1,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(workspaceId,provider)]);
+    if(body.confirmed_model!==existing.model)return error('Saved model changed. Refresh Settings before confirming the main engine.',409,cors);
+    const activated=await env.DB.batch([env.DB.prepare(`UPDATE workspace_ai_integrations SET active=0,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND EXISTS(SELECT 1 FROM workspace_ai_integrations WHERE workspace_id=? AND provider=? AND model=?)`).bind(workspaceId,workspaceId,provider,existing.model),env.DB.prepare(`UPDATE workspace_ai_integrations SET active=1,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=? AND model=?`).bind(workspaceId,provider,existing.model)]);
+    if(!activated[1]?.meta?.changes)return error('Saved model changed. Refresh Settings before confirming the main engine.',409,cors);
     await audit(env,{workspaceId,userId:access.user.id,type:'ai.provider_activated',provider,metadata:{model:existing.model}});return json({active:true,provider,model:existing.model},200,cors);
   }
 
@@ -122,15 +125,11 @@ export async function handleAiRoute(request,env,cors={}){
     const body=await request.json().catch(()=>null);if(!body)return error('Web search payload is required',400,cors);
     const query=String(body.query||'').trim();if(!query||query.length>4000)return error('Web search query is invalid or too large',400,cors);
     const maxResults=Math.max(1,Math.min(8,Math.floor(Number(body.max_results)||5)));
-    const integration=await openAiIntegration(env,workspaceId);if(!integration)return error('OpenAI integration is required for web search',409,cors);
     try{
-      const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY);const apiKey=await decryptSecret(integration.encrypted_api_key,key);
-      const result=await searchWeb({apiKey,model:integration.model,query,maxResults,purpose:body.purpose==='contact_research'?'contact_research':'general',signal:request.signal});
-      await env.DB.prepare(`UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(workspaceId,'openai').run();
-      await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'openai',kind:'recovered'});
-      await audit(env,{workspaceId,userId:access.user.id,type:'ai.web_search_completed',provider:'openai',metadata:{model:integration.model,input_tokens:result.usage.input_tokens,output_tokens:result.usage.output_tokens,result_count:result.results.length}});
+      const result=await searchWorkspaceResearch(env,workspaceId,{query,maxResults,purpose:body.purpose==='contact_research'?'contact_research':'general',signal:request.signal});
+      await audit(env,{workspaceId,userId:access.user.id,type:'ai.web_search_completed',provider:result.provider,metadata:{model:result.model,input_tokens:result.usage?.input_tokens||0,output_tokens:result.usage?.output_tokens||0,result_count:result.results.length,routing:result.routing||null}});
       return json(result,200,cors);
-    }catch(cause){if(creditFailure(0,cause?.message))await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'openai',kind:'failed'});return error(String(cause?.message||'OpenAI web search failed').slice(0,180),502,cors);}
+    }catch(cause){return error(String(cause?.message||'Web search failed').slice(0,180),502,cors);}
   }
 
   if(path==='/api/ai/research-verification'&&request.method==='POST'){
@@ -195,8 +194,8 @@ export async function handleAiRoute(request,env,cors={}){
     const prompt=String(body.prompt||'').trim(),system=String(body.system||'').trim();
     if(!assistant&&(!prompt||prompt.length>80000||system.length>20000))return error('AI generation prompt is invalid or too large',400,cors);
     const companyExtraction=!assistant&&body.task==='company-extraction';
-    const integration=companyExtraction?await openAiIntegration(env,workspaceId):await activeIntegration(env,workspaceId);
-    if(!integration)return error(companyExtraction?'OpenAI integration is required for company extraction':'No active AI provider is configured for this workspace',409,cors,companyExtraction?{provider:'openai',fallback:{status:'not_used',used:false}}:{});
+    const integration=await activeIntegration(env,workspaceId);
+    if(!integration)return error('No active AI provider is configured for this workspace',409,cors,companyExtraction?{provider:'main',fallback:{status:'not_used',used:false}}:{});
     try{
       const preparedAssistant=assistant?await prepareAssistantRequest(env,{workspaceId,userId:access.user.id},body):null;
       const writing=assistant?{system:preparedAssistant.system,prompt:preparedAssistant.prompt,context:null}:await prepareWritingReferenceGeneration(env,{workspaceId,userId:access.user.id},{...body,system,prompt});
@@ -232,7 +231,7 @@ export async function handleAiRoute(request,env,cors={}){
         getFallbackIntegration:()=>geminiIntegration(env,workspaceId),request:extractionRequest,runProvider
       });
       if(!attempt.ok){
-        const message=attempt.fallback.status==='failed'?'OpenAI extraction failed and Gemini fallback also failed':String(attempt.error?.message||'AI provider request failed').slice(0,180);
+        const message=attempt.fallback.status==='failed'?'Main-engine extraction failed and Gemini fallback also failed':String(attempt.error?.message||'AI provider request failed').slice(0,180);
         const metadata=body.task==='company-extraction'?{provider:integration.provider,fallback:attempt.fallback}:{};
         return error(message,502,cors,metadata);
       }
@@ -242,7 +241,7 @@ export async function handleAiRoute(request,env,cors={}){
       if(materials.refs.length)await resolveContentMaterials(env,workspaceId,materials.refs);
       const result=writing.context?{...attempt.result,writing_references:{referenceRevision:writing.context.referenceRevision,sourceRefs:writing.context.sourceRefs,techniqueIds:writing.context.techniques.map(row=>({sourceId:row.sourceId,techniqueId:row.id}))}}:attempt.result;if(materials.refs.length)result.content_materials=materials.refs;const usedProvider=result.provider||integration.provider;
       await env.DB.prepare(`UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?`).bind(workspaceId,usedProvider).run();
-      await audit(env,{workspaceId,userId:access.user.id,type:'ai.generation_completed',provider:usedProvider,metadata:{model:result.model||integration.model,input_tokens:result.usage?.input_tokens||0,output_tokens:result.usage?.output_tokens||0,fallback_used:Boolean(attempt.fallback.used),fallback_from:attempt.fallback.used?'openai':undefined}});
+      await audit(env,{workspaceId,userId:access.user.id,type:'ai.generation_completed',provider:usedProvider,metadata:{model:result.model||integration.model,input_tokens:result.usage?.input_tokens||0,output_tokens:result.usage?.output_tokens||0,fallback_used:Boolean(attempt.fallback.used),fallback_from:attempt.fallback.used?attempt.fallback.from:undefined}});
       if(assistant)return json(assistantReply,200,cors);
       return json(body.task==='company-extraction'?{...result,fallback:attempt.fallback}:result,200,cors);
     }catch(cause){return error(String(cause?.message||'AI provider request failed').slice(0,180),cause.status||502,cors);}
@@ -254,10 +253,7 @@ export async function handleAiRoute(request,env,cors={}){
 // Server-side approved research uses the same encrypted workspace OpenAI connection.
 export async function searchWorkspaceWeb(env,workspaceId,query){
   if(!encryptionConfigured(env))return {results:[],status:'unavailable'};
-  const integration=await openAiIntegration(env,workspaceId);if(!integration)return {results:[],status:'unavailable'};
-  const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY),apiKey=await decryptSecret(integration.encrypted_api_key,key);
-  const result=await searchWeb({apiKey,model:integration.model,query,maxResults:8,purpose:'contact_research',signal:AbortSignal.timeout(25000)});
-  await env.DB.prepare('UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?').bind(workspaceId,'openai').run();
+  const result=await searchWorkspaceResearch(env,workspaceId,{query,maxResults:8,purpose:'contact_research',signal:AbortSignal.timeout(25000)});
   return {...result,status:'complete'};
 }
 

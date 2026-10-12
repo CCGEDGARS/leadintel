@@ -33,14 +33,14 @@ test('AI Settings supports status, test-and-save, activation and disconnect thro
   assert.match(js,/method:'POST'/);
   assert.match(js,/method:'DELETE'/);
   assert.match(js,/Test & save/);
-  assert.match(js,/Set as active/);
+  assert.match(js,/Make main engine/);
   assert.match(js,/Disconnect/);
 });
 
 test('AI engine summary exposes a prominent active status badge',()=>{
   assert.match(js,/ai-engine-active-line/);
   assert.match(js,/ai-active-badge/);
-  assert.match(js,/>ACTIVE</);
+  assert.match(js,/>MAIN ENGINE</);
   assert.match(css,/ai-active-badge/);
 });
 
@@ -70,10 +70,10 @@ test('model selection offers only Recommended and Advanced modes',()=>{
 
 test('AI provider status clearly separates a connected credential from the active provider',()=>{
   assert.match(js,/Connected means the API key is verified/i,'settings copy must define connected');
-  assert.match(js,/Active means LeadIntel is currently using that provider/i,'settings copy must define active');
-  assert.match(js,/configured\?'Connected':'Not connected'/,'configured non-active providers must be labelled Connected, not Verified');
-  assert.match(js,/Set as active/,'activation control must describe the state change explicitly');
-  assert.match(js,/Active provider/,'summary or button must name the active-provider concept explicitly');
+  assert.match(js,/Main engine means LeadIntel uses that provider/i,'settings copy must define active');
+  assert.match(js,/configured\?'Connected · inactive':'Not connected'/,'configured non-active providers must be labelled Connected, not Verified');
+  assert.match(js,/Make main engine/,'activation control must describe the state change explicitly');
+  assert.match(js,/Main engine/,'summary or button must name the active-provider concept explicitly');
   assert.doesNotMatch(js,/configured\?'Verified':'Not connected'/,'Verified must not be used as the card state for a merely connected provider');
   assert.match(css,/\.ai-provider-status\.connected/,'connected providers must have a distinct badge treatment');
 });
@@ -104,7 +104,7 @@ test('raw API keys are transient browser values and never persisted by either se
 });
 
 test('settings assets are cache-busted and controls have individual borders and focus treatment',()=>{
-  assert.match(js,/SETTINGS_VERSION='20260930-openai-gpt-6-1-sol-v1'/);
+  assert.match(js,/SETTINGS_VERSION='20261012-ai-task-routing-v1'/);
   assert.match(js,/provider:'openai',name:'OpenAI',model:'gpt-6\.1-sol'/);
   assert.match(extension,/SETTINGS_VERSION='20261004-contact-policy-v1'/);
   assert.match(js,/link\.href=`ai-settings\.css\?v=\$\{SETTINGS_VERSION\}&tool-links=20261011-v1&alert-colours=20261011-v1&uniform-actions=20261012-v1`/);
