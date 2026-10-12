@@ -27,3 +27,9 @@ Shared D1 physical capacity, indexes and backups remain operator costs. Per-work
 ## Verification
 
 See completion response for exact final suite/build counts and release proof. Local tests include actual Workers D1 migration/authorization/quota execution, plus real SQLite concurrent writes/rollback/Unicode/cascade, private R2 failure/recovery and Stripe signed events. Customer tests cover public-link privacy, stale workspace responses, disabled billing setup and red/yellow alerts. Exact-SHA production proof and authenticated Settings observation are additional gates.
+
+## Production migration transport correction
+
+The first main release3e87dbaf764b563c5af990fdb759e7906426f293 passed both CI suites, but Backend Deploy38209696089 failed before Worker deployment: Cloudflare query endpoint returned incomplete input: SQLITE_ERROR. The complete SQL and all186 queries split by Wrangler4.132.0 execute successfully in SQLite; actual Workers D1 prepared-statement tests also pass. This locates the observed failure in the remote migration transport, rather than establishing a precise server-parser defect. Do not credit that release with a working storage API.
+
+Use Cloudflare's documented wrangler d1 execute --remote --file import for pending migrations. Read the existing standard migration ledger, keep original SQL unchanged, include the completion INSERT in the same imported file, confirm the ledger after success and stop deployment on any failure. Native file imports restore their original database state on failure. Nothing exports customer records or removes business data. A migration regression executes the real SQL/ledger, skips applied migrations and verifies the file-import route. Exact main CI/deploy/release proof remains mandatory after the correction.

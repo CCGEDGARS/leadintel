@@ -6,7 +6,7 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "db:local": "wrangler d1 migrations apply leadintel --local",
-    "db:remote": "wrangler d1 migrations apply leadintel --remote",
+    "db:remote": "node scripts/migrate-d1-files.mjs",
     "test": "node --import ./test/register-wasm-loader.mjs --test test/*.test.js test/*.test.mjs"
   },
   "dependencies": {
