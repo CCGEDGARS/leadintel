@@ -23,3 +23,7 @@ Public attendee coverage depends on available sources; no private attendee datab
 ## Verification
 
 Focused tests cover edition/identity evidence gates, invitation purpose, active/optional disclosure behavior, late setup, explicit generation, stale AI replies, independently edited save/reopen, serialized business restoration and the mounted Messages apply/restore path. Run the complete customer suite and static build on final source. Production status must be proven for the exact merged SHA through the repository release-integrity system. Local fixtures do not establish authenticated production acceptance or real event-search quality.
+
+## Pre-merge review corrections
+
+Independent review found that reviewed attendance inputs could be rebound to another buyer or edition, and pending event AI requests did not include all factual/source-filter state in their stamp. Attendance review now resets on workspace, buyer identity/domain, channel, campaign revision or edition changes; editing a source/status/checked date requires fresh review. Event request stamps include the full studio factual context, selected writing-source filter and reference snapshot, alongside draft/identity context. Mounted regressions reproduce both failures and verify correction.
