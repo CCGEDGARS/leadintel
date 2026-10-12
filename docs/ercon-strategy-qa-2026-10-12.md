@@ -30,3 +30,9 @@ Scope: screenshots of Stage 3 Strategy following confirmed saved ERCON profile. 
 2. Add deterministic UI test: hidden/collapsed by default, status remains accurate, expanded settings persist, disabling only through explicit toggle.
 3. Check duplicate control surfaces, progress labels and horizontal overflow.
 4. Run customer regression suite and preview acceptance; do not merge/deploy without tests.
+
+## Final UX decision — 2026-10-12
+- **One Lookalike Customers card only.** Merge the customer-facing 'Lookalike ICP' and 'Lookalike-led/Past Customer Context' descriptions into one understandable capability. Maintain reference-company evidence, legacy state compatibility, and existing scoring/Discovery behavior; do not simply remove backend logic.
+- **Preferred Sources and Website Monitoring are separate capabilities, not two full editors.** Preferred Sources stores selected URLs and their source intelligence; monitoring schedules checks and alerts. Existing `customer/intelligence-sources-ui.js` has an authenticated workspace API, source list, monitoringEnabled and settings UI. Verify actual live status and exact monitoring handler before declaring end-to-end activation.
+- Strategy navigation should have compact expandable 'Sources & Monitoring' with separate subcontrols and clear On/Off states, default collapsed; no duplicates and no auto paid research.
+- Test preexisting active Epiroc reference: one Lookalike display should show the reference without silently changing targeting enabled choice.
