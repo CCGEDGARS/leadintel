@@ -68,3 +68,19 @@ test('a saved draft reopens exactly; a newly confirmed recipient starts with an 
  h.w.eval("handoffContact={domain:'buyer.example',personId:'new-person',channel:'email',contact:{work_email:'new@buyer.example'}}");h.w.prepareStudioBuyer({domain:'buyer.example',company:'Buyer',people:[]},{id:'new-person',name:'New Buyer'});assert.deepEqual(E.workingDraft(h.item()),{subject:'',message:''});assert.equal(h.item().selectedPersonId,'new-person');assert.equal(h.q('mw-empty').hidden,false);
  }finally{h.w.close();}
 });
+
+test('Adjust message has three one-word actions and Reset is outside the editor toolbar',()=>{
+ const h=mounted();try{
+ assert.deepEqual(visibleButtons(h.w.document.querySelector('.mw-assistant-actions')),['Shorten','Rewrite','Reset']);
+ for(const id of ['mw-shorten-message','mw-rewrite-message','mw-restore-original'])assert.ok(h.q(id).title);
+ assert.equal(h.w.document.querySelector('.mw-editor-actions').contains(h.q('mw-restore-original')),false);
+ }finally{h.w.close();}
+});
+for(const [id,action,label] of [['mw-shorten-message','shorten','Shortening…'],['mw-rewrite-message','improve','Rewriting…']])test(`${action} only shows progress on its own adjustment action`,async()=>{
+ const h=mounted();try{
+ const before=E.workingDraft(h.item());h.q(id).click();const requests=h.requests.filter(r=>r.url.includes('/api/ai/generate'));assert.equal(requests.length,1);assert.equal(JSON.parse(requests[0].options.body).editor_action,action);
+ assert.equal(h.q(id).textContent,label);assert.equal(h.q(id==='mw-shorten-message'?'mw-rewrite-message':'mw-shorten-message').textContent,id==='mw-shorten-message'?'Rewrite':'Shorten');
+ assert.equal(h.q('message-generate').textContent,'Update message');assert.equal(h.q('message-generate').disabled,true);assert.equal(h.q('mw-restore-original').disabled,true);assert.equal(h.q('mw-subject-options').classList.contains('mw-text-updating'),false);assert.deepEqual(E.workingDraft(h.item()),before);
+ requests[0].resolve({ok:false,json:async()=>({error:'Provider unavailable'})});await settle();assert.equal(h.q('message-generate').disabled,false);assert.deepEqual(E.workingDraft(h.item()),before);
+ }finally{h.w.close();}
+});

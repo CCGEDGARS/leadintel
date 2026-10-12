@@ -305,7 +305,7 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #message-studio .mw-writing-assistant{background:linear-gradient(135deg,#f1f7f3,#fff);border-color:#cddfd3}
 #message-studio .mw-writing-assistant .mw-section-heading{margin-bottom:12px}
 #message-studio .mw-writing-assistant small{display:block;font-size:11px;line-height:1.6;color:#687c6e;margin-top:12px}
-.mw-assistant-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mw-assistant-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 #message-studio .mw-assistant-actions button{font-size:12px;padding:10px 8px;white-space:normal;min-height:40px}
 #message-studio .mw-assistant-actions #mw-rewrite-message{background:#2b6950;border-color:#2b6950;color:#fff}
 #message-studio .mw-tools-content>details{padding:12px;margin:0 0 9px}
@@ -355,7 +355,7 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #message-studio .mw-subject-options .mw-section-heading{margin-bottom:8px}
 @media(max-width:720px){#message-studio .mw-default-actions{flex-wrap:wrap}#message-studio .mw-editor-actions button{flex:0 1 auto}#message-studio .mw-generate-bar>.mw-readiness{flex-basis:100%}}
 @media(min-width:1550px){#message-studio .mw-layout{grid-template-columns:minmax(280px,32%) minmax(0,1fr)}}
-@media(max-width:720px){#message-studio .mw-layout{grid-template-columns:1fr;gap:0}#message-studio .mw-editor-actions{flex-wrap:wrap}#message-studio .mw-editor-actions button{padding:10px 9px}.mw-assistant-actions{grid-template-columns:1fr 1fr}}
+@media(max-width:720px){#message-studio .mw-layout{grid-template-columns:1fr;gap:0}#message-studio .mw-editor-actions{flex-wrap:wrap}#message-studio .mw-editor-actions button{padding:10px 9px}.mw-assistant-actions{grid-template-columns:repeat(3,minmax(0,1fr))}}
 
 /* The ready action lives in the header; five subjects are directly selectable. */
 #message-studio .mw-editor-head{align-items:center;gap:16px}
