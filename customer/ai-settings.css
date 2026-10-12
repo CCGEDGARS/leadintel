@@ -101,3 +101,10 @@ body.ai-settings-opened{overflow:hidden}
 .ai-settings-drawer .microsoft-mail-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,var(--settings-action-width)),var(--settings-action-width)));gap:8px;align-content:start;align-items:start;justify-content:start}
 .ai-settings-drawer .google-connect-panel .ai-settings-btn{width:min(var(--settings-action-width),100%)}
 .ai-settings-drawer .ai-settings-btn[hidden]{display:none!important}
+
+/* Share account card rows so headings, status copy and action buttons line up. */
+@media(min-width:681px){
+  @supports(grid-template-rows:subgrid){
+    #integration-communication-grid>.workspace-provider-card{grid-row:span 5;grid-template-rows:subgrid}
+  }
+}

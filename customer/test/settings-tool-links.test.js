@@ -2,6 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const read=name=>fs.readFileSync(path.join(__dirname,'..',name),'utf8');
 async function mounted(){
  const w=new JSDOM('<div class="top-actions"></div><div id="toast"></div>',{url:'https://example.test/customer/',runScripts:'outside-only'}).window;
+ const observers=[];const Observer=w.MutationObserver;w.MutationObserver=class extends Observer{constructor(callback){super(callback);observers.push(this);}};w.disposeObservers=()=>observers.forEach(observer=>observer.disconnect());
  w.LeadIntelServerBridge={session:{authenticated:true},workspace:{id:'w1',role:'owner'}};
  let identity={meetingPlatform:'zoom'};w.LeadIntelSenderIdentity={get:()=>identity,setMeetingPlatform:meetingPlatform=>{identity={meetingPlatform};}};
  w.fetch=async url=>({ok:true,json:async()=>String(url).includes('/ai/status')?{role:'owner',providers:[]}:{role:'owner',providers:[{provider:'apollo'},{provider:'firecrawl'},{provider:'hunter'}]}});
@@ -22,8 +23,23 @@ test('settings provides safe provider-specific setup links through refresh, clos
  assert.match(w.document.querySelector('[data-tool-links="calendly"]').textContent,/Get access token/);
  };check();w.dispatchEvent(new w.CustomEvent('leadintel:microsoft-mail-status'));await new Promise(r=>setTimeout(r,25));check();
  w.document.getElementById('close-settings').click();w.document.getElementById('open-settings').click();await new Promise(r=>setTimeout(r,25));check();
- }finally{w.close();}
+ }finally{w.disposeObservers();w.close();}
 });
 test('meeting setup shortcuts follow the selected conferencing platform',async()=>{
- const w=await mounted();try{for(const [value,id] of [['teams','teams'],['google_meet','google_meet'],['zoom','zoom']]){const select=w.document.getElementById('meeting-platform');select.value=value;select.dispatchEvent(new w.Event('change',{bubbles:true}));assert.ok(w.document.querySelector(`#meeting-platform-links [data-tool-links="${id}"]`));}assert.ok(w.document.querySelector('#meeting-platform-note'));}finally{w.close();}
+ const w=await mounted();try{for(const [value,id] of [['teams','teams'],['google_meet','google_meet'],['zoom','zoom']]){const select=w.document.getElementById('meeting-platform');select.value=value;select.dispatchEvent(new w.Event('change',{bubbles:true}));assert.ok(w.document.querySelector(`#meeting-platform-links [data-tool-links="${id}"]`));}assert.ok(w.document.querySelector('#meeting-platform-note'));}finally{w.disposeObservers();w.close();}
+});
+
+test('communication sits immediately below System health and account cards share action rows',async()=>{
+ const w=await mounted();try{
+  const health=w.document.getElementById('integration-health-summary');
+  assert.equal(health.nextElementSibling.getAttribute('aria-labelledby'),'communication-integration-heading');
+  for(const id of ['google','microsoft-account']){
+   const card=w.document.querySelector(`[data-integration="${id}"]`);
+   assert.equal(card.children.length,5);
+   assert.equal(card.children[3].className,'workspace-provider-actions');
+   assert.equal(card.children[4].className,'tool-account-links');
+  }
+  assert.match(read('ai-settings.css'),/@media\(min-width:681px\)/);
+  assert.match(read('ai-settings.css'),/#integration-communication-grid>\.workspace-provider-card\{grid-row:span 5;grid-template-rows:subgrid\}/);
+ }finally{w.disposeObservers();w.close();}
 });

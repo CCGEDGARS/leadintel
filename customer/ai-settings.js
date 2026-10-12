@@ -30,7 +30,7 @@ async function api(path,options={}){
 function toast(message){const node=document.getElementById('toast');if(!node)return;node.textContent=message;node.classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>node.classList.remove('show'),2800);}
 function injectCss(){
   if(document.querySelector('link[data-leadintel-asset="ai-settings-css"]'))return;
-  const link=document.createElement('link');link.rel='stylesheet';link.href=`ai-settings.css?v=${SETTINGS_VERSION}&tool-links=20261011-v1&alert-colours=20261011-v1&uniform-actions=20261012-v1`;link.dataset.leadintelAsset='ai-settings-css';document.head.appendChild(link);
+  const link=document.createElement('link');link.rel='stylesheet';link.href=`ai-settings.css?v=${SETTINGS_VERSION}&tool-links=20261011-v1&alert-colours=20261011-v1&uniform-actions=20261012-v1&account-layout=20261012-v1`;link.dataset.leadintelAsset='ai-settings-css';document.head.appendChild(link);
 }
 function injectUi(){
   injectCss();
@@ -46,6 +46,10 @@ function injectUi(){
         <div class="integration-summary-copy"><span>System health</span><strong>Checking integrations…</strong><small>Connection checks do not run paid research or enrichment.</small></div>
         <button class="ai-settings-btn primary" id="test-all-integrations" type="button">Test all integrations</button>
       </div>
+      <section class="ai-settings-section" aria-labelledby="communication-integration-heading">
+        <div class="ai-section-title"><div><span class="eyebrow">Communication</span><h3 id="communication-integration-heading">Account & delivery connections</h3><p>Choose Google or Microsoft for workspace access, then connect the mailbox you want LeadIntel to use for approved outreach.</p></div></div>
+        <div class="integration-grid" id="integration-communication-grid"></div>
+      </section>
       <div class="ai-engine-summary" id="ai-engine-summary"><span>AI engine</span><strong>No provider configured</strong><small>Connect one of the three supported providers below.</small></div>
       <section class="ai-settings-section" aria-labelledby="ai-provider-heading">
         <div class="ai-section-title"><div><span class="eyebrow">AI providers</span><h3 id="ai-provider-heading">Customer-owned intelligence engines</h3><p>Add your own API key and choose the model. Connected means the API key is verified. Main engine means LeadIntel uses that provider for normal AI generation. Connected Gemini can separately review research/contact evidence, supply grounded search when primary evidence is missing, and read sparse or scanned source PDFs. Specialist use consumes that provider’s API credits.</p></div></div>
@@ -54,10 +58,6 @@ function injectUi(){
       <section class="ai-settings-section" aria-labelledby="platform-integration-heading">
         <div class="ai-section-title"><div><span class="eyebrow">Data & intelligence</span><h3 id="platform-integration-heading">Platform integrations</h3><p>LeadIntel-managed research and enrichment services. You can monitor status and usage, but platform secrets never enter the browser.</p></div></div>
         <div class="integration-grid" id="integration-platform-grid"></div>
-      </section>
-      <section class="ai-settings-section" aria-labelledby="communication-integration-heading">
-        <div class="ai-section-title"><div><span class="eyebrow">Communication</span><h3 id="communication-integration-heading">Account & delivery connections</h3><p>Choose Google or Microsoft for workspace access, then connect the mailbox you want LeadIntel to use for approved outreach.</p></div></div>
-        <div class="integration-grid" id="integration-communication-grid"></div>
       </section>
       <section class="ai-settings-section" aria-labelledby="meeting-platform-heading">
         <div class="ai-section-title"><div><span class="eyebrow">Meetings</span><h3 id="meeting-platform-heading">Meeting platform</h3><p>Choose the platform named in your invitations.</p></div></div>
@@ -147,7 +147,7 @@ function workspaceProviderAction(provider){
   const selected=authProvider();
   if(selected===provider)return '<div class="workspace-provider-actions"><button class="ai-settings-btn danger" data-settings-signout type="button">Sign out</button></div>';
   if(selected)return `<div class="workspace-provider-actions"><button class="ai-settings-btn" data-settings-switch="${provider}" type="button">Switch to ${providerLabel(provider)}</button></div>`;
-  return '';
+  return '<div class="workspace-provider-actions"></div>';
 }
 function activeToolItems(active){
   const items=[];
