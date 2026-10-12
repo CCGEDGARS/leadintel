@@ -1,3 +1,4 @@
+import {storageErrorResponse} from './workspace-storage.js';
 import {apolloCreditUsage} from './apollo-credit-policy.js';
 import {apolloCapabilities} from './service-integrations.js';
 import {allowedOrigin,corsHeaders,sha256,randomToken,constantTimeEqual,cookieValue,sessionCookie,clearSessionCookie} from "./security.js";
@@ -247,4 +248,4 @@ async function router(request,env) {
   return error("Not found",404,cors);
 }
 
-export default {fetch(request,env){return router(request,env).catch(cause=>{console.error(cause);return error("Internal server error",500,corsHeaders(allowedOrigin(request,env.APP_ORIGIN)));});}};
+export default {fetch(request,env){return router(request,env).catch(cause=>{const storageError=storageErrorResponse(cause,corsHeaders(allowedOrigin(request,env.APP_ORIGIN)));if(storageError)return storageError;console.error(cause);return error("Internal server error",500,corsHeaders(allowedOrigin(request,env.APP_ORIGIN)));});}};

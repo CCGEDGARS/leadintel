@@ -1,3 +1,4 @@
+import './workspace-storage-ui.js?v=20261012-v1';
 import './personal-linkedin.js?v=20261009-personal-profile-v1';
 import './tool-account-links.js?v=20261011-v1';
 const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
@@ -288,7 +289,7 @@ function clearProviderError(provider){
 function openDrawer(){
   injectUi();const drawer=document.getElementById('ai-settings-drawer'),backdrop=document.getElementById('ai-settings-backdrop');
   if(drawer)drawer.hidden=false;if(backdrop)backdrop.hidden=false;document.body.classList.add('ai-settings-opened');
-  render();renderPersonalLinkedIn();renderMeetingPlatform();refreshAllStatus();setTimeout(()=>document.getElementById('close-settings')?.focus(),0);
+  render();renderPersonalLinkedIn();renderMeetingPlatform();window.dispatchEvent(new CustomEvent('leadintel:settings-opened'));refreshAllStatus();setTimeout(()=>document.getElementById('close-settings')?.focus(),0);
 }
 function closeDrawer(){const drawer=document.getElementById('ai-settings-drawer'),backdrop=document.getElementById('ai-settings-backdrop');if(drawer)drawer.hidden=true;if(backdrop)backdrop.hidden=true;unmountCredentialControls();document.body.classList.remove('ai-settings-opened');}
 function shouldOpenSettingsFromUrl(){return new URLSearchParams(window.location.search).get('settings')==='ai';}

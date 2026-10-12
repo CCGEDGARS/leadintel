@@ -1,3 +1,4 @@
+import {storageErrorResponse} from './workspace-storage.js';
 import {cookieValue,sha256} from './security.js';
 
 const categories=new Set(['draft','offer','case_study','story','faq','resource']);
@@ -42,7 +43,7 @@ export async function handleContentMaterialsRoute(request,env,cors={}){
   else throw failure('Method not allowed',405);
   if(!result.meta.changes)throw failure('Content changed or was removed. Refresh before editing.',409);
   return json({cards:await listContentMaterials(env,workspace),savedId:request.method==='PATCH'?id:null},200,cors);
- }catch(e){return json({error:e.status?e.message:'Content storage failed. Retry without discarding your text.'},e.status||503,cors);}
+ }catch(e){const storageError=storageErrorResponse(e,cors);if(storageError)return storageError;return json({error:e.status?e.message:'Content storage failed. Retry without discarding your text.'},e.status||503,cors);}
 }
 export async function resolveContentMaterials(env,workspaceId,refs){
  if(!Array.isArray(refs)||refs.length>5)throw failure('Select up to five content items',400);

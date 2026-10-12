@@ -1,3 +1,4 @@
+import {storageErrorResponse} from './workspace-storage.js';
 import {cookieValue,sha256} from './security.js';
 import {WORKFLOW_STAGES,approvedContext,normalizeWorkflowConfig,approvalStatus,fingerprint,setupBlockers} from './approved-workflow-engine.js';
 import {parse,workflowMain,workflowRow} from './approved-workflow-store.js';
@@ -79,5 +80,5 @@ export async function handleApprovedWorkflowRoute(request,env,cors={}){
     }else return json({error:'Unknown workflow action'},400,cors);
     if(action!=='run')await env.DB.prepare('INSERT INTO audit_events(id,workspace_id,user_id,event_type,entity_type,entity_id,metadata_json) VALUES(?,?,?,?,?,?,?)').bind(crypto.randomUUID(),workspaceId,auth.user.id,`approved_workflow.${action}`,'approved_workflow',workspaceId,JSON.stringify({stage:body.stage||null,revision:row?.revision||0})).run();
     return json({...await view(env,workspaceId),role:auth.member.role},200,cors);
-  }catch(cause){return json({error:String(cause.message||'Could not update workflow')},409,cors);}
+  }catch(cause){const storageError=storageErrorResponse(cause,cors);if(storageError)return storageError;return json({error:String(cause.message||'Could not update workflow')},409,cors);}
 }

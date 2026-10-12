@@ -1,3 +1,6 @@
+import {storageErrorResponse} from './workspace-storage.js';
+import {withWorkspaceStorage,reconcileStorageObjects} from './workspace-storage-objects.js';
+import {handleStorageRoute,handleStorageWebhook} from './workspace-storage-billing.js';
 import {handleSavedFlowRoute} from './saved-flow-routes.js';
 import {runSavedFlows} from './saved-flow-runner.js';
 import {handleApprovedWorkflowRoute} from './approved-workflow-routes.js';
@@ -25,6 +28,8 @@ import {runWritingReferenceJobs} from './writing-reference-runner.js';
 export default {
   async fetch(request,env,ctx){
     const url=new URL(request.url);
+    if(url.pathname==='/api/webhooks/stripe/storage')return handleStorageWebhook(request,env);
+    env=withWorkspaceStorage(env);
     if(url.pathname.startsWith('/api/webhooks/calendly/')){
       try{return await handleCalendlyWebhook(request,env);}catch(cause){console.error(cause);return new Response(JSON.stringify({error:'Internal server error'}),{status:500,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}});}
     }
@@ -58,6 +63,7 @@ export default {
       });
     }
     try{
+      const storage=await handleStorageRoute(request,env,cors);if(storage)return storage;
       const flows=await handleSavedFlowRoute(request,env,cors);if(flows)return flows;
       const materials=await handleContentMaterialsRoute(request,env,cors);if(materials)return materials;
       const writing=await handleWritingReferenceRoute(request,env,cors,ctx);if(writing)return writing;
@@ -76,11 +82,13 @@ export default {
       const saas=await handleSaasRoute(request,runtimeEnv,cors);if(saas)return saas;
       return core.fetch(request,runtimeEnv);
     }catch(cause){
-      console.error(cause);return new Response(JSON.stringify({error:'Internal server error'}),{status:500,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...cors}});
+      const storageError=storageErrorResponse(cause,cors);if(storageError)return storageError;console.error(cause);return new Response(JSON.stringify({error:'Internal server error'}),{status:500,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...cors}});
     }
   },
   async scheduled(controller,env,ctx){
     const now=new Date(controller.scheduledTime||Date.now());
+    const storageEnv=env;env=withWorkspaceStorage(env);
+    if(storageEnv.WORKSPACE_STORAGE_ENABLED==='true')ctx.waitUntil(reconcileStorageObjects(storageEnv).catch(()=>console.warn('Workspace file accounting needs a retry')));
     if(controller.cron==='* * * * *'){ctx.waitUntil(runWritingReferenceJobs(env,{now:now.getTime()}));return;}
     const outreachCycle=runSavedFlows(env,{now}).then(()=>runApprovedWorkflows(env,{now})).catch(cause=>console.error('Approved workflow cycle failed',cause)).then(()=>pollOutreachReplies(env,{now}).then(()=>runOutreachAutomation(env,{now})));
     ctx.waitUntil(Promise.allSettled([

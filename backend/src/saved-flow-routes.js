@@ -1,3 +1,4 @@
+import {storageErrorResponse} from './workspace-storage.js';
 import FlowState from '../../customer/my-flows.js';
 import {cookieValue,sha256} from './security.js';
 import {WORKFLOW_STAGES,approvedContext,normalizeWorkflowConfig,approvalStatus,fingerprint} from './approved-workflow-engine.js';
@@ -104,5 +105,5 @@ export async function handleSavedFlowRoute(request,env,cors={}){
    if(row.status!=='automatic')throw Error('Resume this flow first');await env.DB.prepare("UPDATE approved_workflow_runs SET status='running',error_message=NULL,lease_token=NULL,lease_until=NULL,updated_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND flow_id=? AND id=? AND revision=? AND status='blocked'").bind(workspaceId,id,String(body.runId||''),row.revision).run();
   }else return json({error:'Unknown flow action'},400,cors);
   await audit(env,workspaceId,auth.user.id,action,id);row=await savedFlowRow(env,workspaceId,id);return json({...await savedFlowView(env,row),role:auth.member.role},200,cors);
- }catch(cause){return json({error:String(cause.message||'Could not update flow')},409,cors);}
+ }catch(cause){const storageError=storageErrorResponse(cause,cors);if(storageError)return storageError;return json({error:String(cause.message||'Could not update flow')},409,cors);}
 }
