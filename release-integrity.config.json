@@ -1043,9 +1043,12 @@
       "status": 200,
       "contains": [
         "Adjust message",
-        "Create variation",
+        "Rewrite",
         "Shorten",
         "styleSection.after(assistant)",
+        "append(improve,q('mw-restore-original'))",
+        "editor.busyAction==='shorten'",
+        "Shortening…",
         "editorActions.prepend"
       ],
       "notContains": [
