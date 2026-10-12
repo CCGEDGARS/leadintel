@@ -37,6 +37,7 @@ function createRuntime({fetchImpl}={}){
   controls.set('#synthesize-company-research',makeControl());
   controls.set('#refresh-company-research',makeControl());
   const document={
+    addEventListener(){},
     getElementById(id){if(id==='research-summary')return summary;if(id==='open-settings')return settingsButton;return null;},
     querySelectorAll(){return [];},
     querySelector(){return null;},
