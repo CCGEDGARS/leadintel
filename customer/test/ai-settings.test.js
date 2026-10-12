@@ -106,7 +106,7 @@ test('raw API keys are transient browser values and never persisted by either se
 test('settings assets are cache-busted and controls have individual borders and focus treatment',()=>{
   assert.match(js,/SETTINGS_VERSION='20261012-ai-task-routing-v1'/);
   assert.match(js,/provider:'openai',name:'OpenAI',model:'gpt-6\.1-sol'/);
-  assert.match(extension,/SETTINGS_VERSION='20261012-compact-apollo-v1'/);
+  assert.match(extension,/SETTINGS_VERSION='20261012-visible-apollo-key-v1'/);
   assert.match(js,/link\.href=`ai-settings\.css\?v=\$\{SETTINGS_VERSION\}&tool-links=20261011-v1&alert-colours=20261011-v1&uniform-actions=20261012-v1`/);
   assert.match(extension,/link\.href=`service-settings-extension\.css\?v=\$\{SETTINGS_VERSION\}`/);
   assert.equal(fs.existsSync(cssPath),true,'ai-settings.css must exist');
@@ -215,4 +215,15 @@ test('Integration Control Centre offers Microsoft workspace access and Microsoft
   assert.match(js,/send-only/i,'Settings must explain that Microsoft cannot read the inbox');
   assert.match(css,/\.workspace-signin-options/,'the two sign-in choices must have responsive layout styling');
   assert.match(css,/\.microsoft-mail-actions/,'Microsoft mail controls must have dedicated layout styling');
+});
+
+
+test('Apollo key and connection actions remain outside collapsed advanced settings',()=>{
+  const controls=extension.slice(extension.indexOf('function serviceControls('),extension.indexOf('function calendlyCard('));
+  const advanced=controls.indexOf('<details class="apollo-settings-details"');
+  for(const selector of ['data-service-key=', 'data-service-action="save"', 'data-service-action="disconnect"']){
+    assert.ok(controls.indexOf(selector)>=0 && controls.indexOf(selector)<advanced, `${selector} must stay visible`);
+  }
+  assert.match(extensionCss,/grid-template-rows:subgrid/);
+  assert.match(extensionCss,/grid-row:span 5/);
 });

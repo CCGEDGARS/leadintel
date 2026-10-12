@@ -3,3 +3,14 @@
 [data-apollo-capabilities]{display:grid;gap:10px;margin:12px 0}[data-apollo-capabilities] label{display:flex;gap:8px;align-items:center;font-size:13px}[data-apollo-capabilities] input[type="checkbox"],.customer-service-card input[data-hunter-enabled]{width:16px;height:16px;min-height:16px;flex:none}[data-apollo-capabilities] input[type="number"]{width:80px;margin-left:auto}[data-apollo-capabilities] small{line-height:1.5}
 
 .apollo-settings-details{min-width:0}.apollo-settings-details summary{cursor:pointer;font-size:13px;font-weight:600;padding:8px 0;color:var(--ai-ink,#10231d)}.apollo-settings-body{display:grid;gap:10px;padding-top:8px}
+
+/* Share content rows so Apollo and Firecrawl controls align despite different copy lengths. */
+@supports (grid-template-rows:subgrid){
+  #integration-platform-grid>[data-integration="apollo"],
+  #integration-platform-grid>[data-integration="firecrawl"]{grid-row:span 5;grid-template-rows:subgrid}
+}
+#integration-platform-grid .service-provider-controls{align-content:start}
+@media(max-width:760px){
+  #integration-platform-grid>[data-integration="apollo"],
+  #integration-platform-grid>[data-integration="firecrawl"]{grid-row:auto;grid-template-rows:none}
+}
