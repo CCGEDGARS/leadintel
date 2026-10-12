@@ -65,7 +65,7 @@
   const drawer=document.getElementById('ai-settings-drawer');if(!drawer||document.getElementById('workspace-storage-card'))return;
   if(!document.querySelector('[data-workspace-storage-css]')){const css=document.createElement('link');css.rel='stylesheet';css.href='workspace-storage.css?v=20261012-v1';css.dataset.workspaceStorageCss='1';document.head.appendChild(css);}
   const card=document.createElement('section');card.id='workspace-storage-card';card.setAttribute('aria-label','Workspace storage');
-  const anchor=document.getElementById('ai-engine-summary');if(anchor)anchor.insertAdjacentElement('afterend',card);else drawer.appendChild(card);
+  const anchor=document.getElementById('communication-integration-heading')?.closest('section')||document.getElementById('ai-engine-summary');if(anchor)anchor.insertAdjacentElement('afterend',card);else drawer.appendChild(card);
   card.addEventListener('click',event=>{const button=event.target.closest('[data-storage-action]');if(button)void action(button.dataset.storageAction);});render();
  }
  function scheduleRefresh(){clearTimeout(refreshTimer);refreshTimer=root.setTimeout(()=>void refresh(),500);}

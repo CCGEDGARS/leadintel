@@ -30,10 +30,11 @@ test('meeting setup shortcuts follow the selected conferencing platform',async()
  const w=await mounted();try{for(const [value,id] of [['teams','teams'],['google_meet','google_meet'],['zoom','zoom']]){const select=w.document.getElementById('meeting-platform');select.value=value;select.dispatchEvent(new w.Event('change',{bubbles:true}));assert.ok(w.document.querySelector(`#meeting-platform-links [data-tool-links="${id}"]`));}assert.ok(w.document.querySelector('#meeting-platform-note'));}finally{w.disposeObservers();w.close();}
 });
 
-test('communication sits immediately below System health and account cards share action rows',async()=>{
+test('Active tools follows System health, followed by communication and aligned account actions',async()=>{
  const w=await mounted();try{
   const health=w.document.getElementById('integration-health-summary');
-  assert.equal(health.nextElementSibling.getAttribute('aria-labelledby'),'communication-integration-heading');
+  assert.equal(health.nextElementSibling.id,'ai-engine-summary');
+  assert.equal(health.nextElementSibling.nextElementSibling.getAttribute('aria-labelledby'),'communication-integration-heading');
   for(const id of ['google','microsoft-account']){
    const card=w.document.querySelector(`[data-integration="${id}"]`);
    assert.equal(card.children.length,4);

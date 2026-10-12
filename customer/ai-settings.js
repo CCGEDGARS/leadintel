@@ -1,4 +1,4 @@
-import './workspace-storage-ui.js?v=20261012-v1';
+import './workspace-storage-ui.js?v=20261012-v1&active-tools-order=20261012-v1';
 import './personal-linkedin.js?v=20261009-personal-profile-v1';
 import './tool-account-links.js?v=20261011-v1&workspace-auth=20261012-v1';
 const API_BASE='https://leadintel-api.edgars-7e7.workers.dev';
@@ -46,11 +46,11 @@ function injectUi(){
         <div class="integration-summary-copy"><span>System health</span><strong>Checking integrations…</strong><small>Connection checks do not run paid research or enrichment.</small></div>
         <button class="ai-settings-btn primary" id="test-all-integrations" type="button">Test all integrations</button>
       </div>
+      <div class="ai-engine-summary" id="ai-engine-summary"><span>AI engine</span><strong>No provider configured</strong><small>Connect one of the three supported providers below.</small></div>
       <section class="ai-settings-section" aria-labelledby="communication-integration-heading">
         <div class="ai-section-title"><div><span class="eyebrow">Communication</span><h3 id="communication-integration-heading">Account & delivery connections</h3><p>Choose Google or Microsoft for workspace access, then connect the mailbox you want LeadIntel to use for approved outreach.</p></div></div>
         <div class="integration-grid" id="integration-communication-grid"></div>
       </section>
-      <div class="ai-engine-summary" id="ai-engine-summary"><span>AI engine</span><strong>No provider configured</strong><small>Connect one of the three supported providers below.</small></div>
       <section class="ai-settings-section" aria-labelledby="ai-provider-heading">
         <div class="ai-section-title"><div><span class="eyebrow">AI providers</span><h3 id="ai-provider-heading">Customer-owned intelligence engines</h3><p>Add your own API key and choose the model. Connected means the API key is verified. Main engine means LeadIntel uses that provider for normal AI generation. Connected Gemini can separately review research/contact evidence, supply grounded search when primary evidence is missing, and read sparse or scanned source PDFs. Specialist use consumes that provider’s API credits.</p></div></div>
         <div class="ai-provider-grid" id="ai-provider-grid"></div>
