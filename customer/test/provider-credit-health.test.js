@@ -8,8 +8,8 @@ const source=fs.readFileSync(path.join(__dirname,'..','ai-settings.js'),'utf8');
 const apolloFunction=source.slice(source.indexOf('async function checkApolloStatus(){'),source.indexOf('async function checkFirecrawlStatus(){'));
 const cardFunction=source.slice(source.indexOf('function providerCard(config,current){'),source.indexOf('function formatDate(value){'));
 
-async function apollo({usage={daily:0,monthly:0},policy={daily_credit_limit:10,monthly_credit_limit:100},provider={provider:'apollo',source:'managed',state:'good'}}={}){
-  const context={api:async route=>route==='/api/enrichment-policy'?{response:{ok:true},payload:{configured:true,usage,policy}}:{response:{ok:true},payload:{providers:[provider]}}};
+async function apollo({usage={daily:0,monthly:0},policy={daily_credit_limit:10,monthly_credit_limit:100},provider={provider:'apollo',configured:true,source:'customer',state:'good'}}={}){
+  const context={api:async route=>route==='/api/enrichment-policy'?{response:{ok:true},payload:{configured:true,usage,policy}}:{response:{ok:true},payload:{providers:[{configured:provider.source==='customer',...provider}]}}};
   vm.runInNewContext(`${apolloFunction}\nglobalThis.run=checkApolloStatus`,context);
   return context.run();
 }
@@ -23,7 +23,7 @@ test('Apollo workspace daily or monthly credit limits turn its card red',async()
 
 test('confirmed upstream Apollo billing failures identify who must restore credits',async()=>{
   const managed=await apollo({provider:{provider:'apollo',source:'managed',credit_issue:{code:'credits_exhausted',source:'managed'}}});
-  assert.equal(managed.label,'Credits exhausted');assert.match(managed.detail,/LeadIntel must restore/);
+  assert.equal(managed.label,'Not connected');assert.match(managed.detail,/Connect your own Apollo/);
   const customer=await apollo({provider:{provider:'apollo',source:'customer',credit_issue:{code:'credits_exhausted',source:'customer'}}});
   assert.match(customer.detail,/Your Apollo account/);
 });

@@ -5,6 +5,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 let DatabaseSync=null;
 try{({DatabaseSync}=await import('node:sqlite'));}catch{}
+import {importAesKey,encryptSecret} from '../src/oauth.js';
 import {sha256} from '../src/security.js';
 import {handleServiceIntegrationRoute,resolveWorkspaceServiceCredential,withWorkspaceServiceCredentials} from '../src/service-integrations.js';
 
@@ -44,6 +45,10 @@ async function fixture(role='owner'){
   DB.raw.prepare(`INSERT INTO workspace_members VALUES(?,?,?)`).run('w1','u1',role);
   const encryption=Buffer.alloc(32,7).toString('base64');
   return {DB,token,env:{DB,OAUTH_TOKEN_ENCRYPTION_KEY:encryption,APOLLO_API_KEY:'managed-apollo-key',APOLLO_WEBHOOK_SECRET:'stable-webhook-secret',FIRECRAWL_PROXY_URL:'https://managed.example.test'}};
+}
+async function connectFirecrawl(env){
+ const encrypted=await encryptSecret('fc-customer-test',await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY));
+ env.DB.raw.prepare("INSERT OR REPLACE INTO workspace_service_integrations(workspace_id,provider,encrypted_api_key,key_hint) VALUES('w1','firecrawl',?,'test')").run(encrypted);
 }
 function req(pathname,{method='GET',token,body}={}){return new Request(`https://api.example.test${pathname}`,{method,headers:{...(token?{Cookie:`leadintel_session=${token}`}:{...{}}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});}
 
@@ -101,7 +106,7 @@ sqliteTest('owner save encrypts Apollo key, returns only a hint, and authenticat
     const resolved=await resolveWorkspaceServiceCredential(env,'w1','apollo');assert.equal(resolved.source,'customer');assert.equal(resolved.apiKey,'apollo-customer-secret-ABCD');
     const runtime=await withWorkspaceServiceCredentials(req('/api/crm/companies?workspace_id=w1',{token}),env);
     assert.equal(runtime.APOLLO_API_KEY,'apollo-customer-secret-ABCD');assert.equal(runtime.APOLLO_WEBHOOK_SECRET,'stable-webhook-secret');
-    const anonymous=await withWorkspaceServiceCredentials(req('/api/crm/companies?workspace_id=w1'),env);assert.equal(anonymous,env);
+    const anonymous=await withWorkspaceServiceCredentials(req('/api/crm/companies?workspace_id=w1'),env);assert.equal(anonymous.APOLLO_API_KEY,'');assert.equal(env.APOLLO_API_KEY,'managed-apollo-key');
   }finally{globalThis.fetch=originalFetch;}
 });
 
@@ -210,17 +215,13 @@ sqliteTest('customer Firecrawl key is verified, used for signed-in research, and
   }finally{globalThis.fetch=originalFetch;}
 });
 
-sqliteTest('Firecrawl research falls back to managed proxy when customer key is absent',async()=>{
-  const {env,token}=await fixture('owner');const originalFetch=globalThis.fetch;const calls=[];
-  globalThis.fetch=async (url,options={})=>{calls.push({url:String(url),options});return new Response(JSON.stringify({success:true,data:[{url:'https://fallback.example'}]}),{status:200,headers:{'Content-Type':'application/json'}});};
-  try{
-    const response=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/search?workspace_id=w1',{method:'POST',token,body:{query:'expansion',limit:3}}),env,{});
-    assert.equal(response.status,200);assert.equal(calls.length,1);assert.equal(calls[0].url,'https://managed.example.test/firecrawl-search');assert.equal(Boolean(calls[0].options.headers.Authorization),false);
-  }finally{globalThis.fetch=originalFetch;}
+sqliteTest('Firecrawl rejects an empty workspace instead of billing the platform',async()=>{
+ const {env,token}=await fixture();const original=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;return new Response('{}');};
+ try{const r=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/search?workspace_id=w1',{method:'POST',token,body:{query:'expansion'}}),env,{});assert.equal(r.status,409);assert.equal(calls,0);}finally{globalThis.fetch=original;}
 });
 
 sqliteTest('signed-in Company Discovery keeps its first search pass metadata-only',async()=>{
-  const {env,token}=await fixture('owner');const originalFetch=globalThis.fetch;const calls=[];
+  const {env,token}=await fixture('owner');await connectFirecrawl(env);const originalFetch=globalThis.fetch;const calls=[];
   globalThis.fetch=async (url,options={})=>{calls.push({url:String(url),options});return new Response(JSON.stringify({success:true,data:[{url:'https://fallback.example',title:'Fallback company',description:'Company description'}]}),{status:200,headers:{'Content-Type':'application/json'}});};
   try{
     const response=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/search?workspace_id=w1',{method:'POST',token,body:{query:'Latvian companies expanding offices',limit:4}}),env,{});
@@ -230,7 +231,7 @@ sqliteTest('signed-in Company Discovery keeps its first search pass metadata-onl
 });
 
 sqliteTest('signed-in deeper research preserves explicitly requested Markdown extraction',async()=>{
-  const {env,token}=await fixture('owner');const originalFetch=globalThis.fetch;const calls=[];
+  const {env,token}=await fixture('owner');await connectFirecrawl(env);const originalFetch=globalThis.fetch;const calls=[];
   globalThis.fetch=async (url,options={})=>{calls.push({url:String(url),options});return new Response(JSON.stringify({success:true,data:[{url:'https://evidence.example',title:'Evidence'}]}),{status:200,headers:{'Content-Type':'application/json'}});};
   try{
     const response=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/search?workspace_id=w1',{method:'POST',token,body:{query:'Latvian expansion evidence',limit:4,scrapeOptions:{formats:['markdown']}}}),env,{});
@@ -239,11 +240,11 @@ sqliteTest('signed-in deeper research preserves explicitly requested Markdown ex
   }finally{globalThis.fetch=originalFetch;}
 });
 
-sqliteTest('website scrape survives a dead managed Firecrawl route by using a bounded direct public-page fallback',async()=>{
-  const {env,token}=await fixture('owner');const originalFetch=globalThis.fetch;const calls=[];
+sqliteTest('website scrape survives a customer Firecrawl outage by using a bounded direct public-page fallback',async()=>{
+  const {env,token}=await fixture('owner');await connectFirecrawl(env);const originalFetch=globalThis.fetch;const calls=[];
   globalThis.fetch=async (url,options={})=>{
     const target=String(url);calls.push({url:target,options});
-    if(target==='https://managed.example.test/firecrawl-scrape')return new Response(JSON.stringify({error:'Route not found'}),{status:404,headers:{'Content-Type':'application/json'}});
+    if(target==='https://api.firecrawl.dev/v2/scrape')return new Response(JSON.stringify({error:'Route not found'}),{status:503,headers:{'Content-Type':'application/json'}});
     if(target==='https://www.ajprodukti.lv/')return new Response('<!doctype html><html><head><title>AJ Produkti</title><meta name="description" content="Workplace equipment"></head><body><h1>AJ Produkti</h1><p>Biroja mēbeles un darba vides aprīkojums.</p></body></html>',{status:200,headers:{'Content-Type':'text/html; charset=utf-8','Content-Length':'208'}});
     throw new Error(`Unexpected fetch ${target}`);
   };
@@ -252,12 +253,12 @@ sqliteTest('website scrape survives a dead managed Firecrawl route by using a bo
     assert.equal(response.status,200);const result=await payload(response);
     assert.equal(result.success,true);assert.match(result.data.markdown,/AJ Produkti/);assert.match(result.data.markdown,/Biroja mēbeles/);
     assert.equal(result.data.metadata.title,'AJ Produkti');assert.equal(result.data.metadata.source,'direct-fallback');
-    assert.deepEqual(calls.map(row=>row.url),['https://managed.example.test/firecrawl-scrape','https://www.ajprodukti.lv/']);
+    assert.deepEqual(calls.map(row=>row.url),['https://api.firecrawl.dev/v2/scrape','https://www.ajprodukti.lv/']);
   }finally{globalThis.fetch=originalFetch;}
 });
 
 sqliteTest('first-party research forwards link extraction without accepting arbitrary formats',async()=>{
-  const {env,token}=await fixture('owner');const originalFetch=globalThis.fetch;let forwarded;
+  const {env,token}=await fixture('owner');await connectFirecrawl(env);const originalFetch=globalThis.fetch;let forwarded;
   globalThis.fetch=async(_,options)=>{forwarded=JSON.parse(options.body);return new Response(JSON.stringify({success:true,data:{markdown:'Readable company evidence',links:['/products']}}),{status:200,headers:{'Content-Type':'application/json'}});};
   try{
     const response=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/scrape?workspace_id=w1',{method:'POST',token,body:{url:'https://company.se/',formats:['markdown','links','executeJavascript']}}),env,{});
@@ -266,7 +267,7 @@ sqliteTest('first-party research forwards link extraction without accepting arbi
 });
 
 sqliteTest('direct website fallback refuses local or private-network targets',async()=>{
-  const {env,token}=await fixture('owner');const originalFetch=globalThis.fetch;const calls=[];
+  const {env,token}=await fixture('owner');await connectFirecrawl(env);const originalFetch=globalThis.fetch;const calls=[];
   globalThis.fetch=async (url,options={})=>{calls.push({url:String(url),options});return new Response(JSON.stringify({error:'Route not found'}),{status:404,headers:{'Content-Type':'application/json'}});};
   try{
     const response=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/scrape?workspace_id=w1',{method:'POST',token,body:{url:'http://127.0.0.1/admin',formats:['markdown']}}),env,{});
@@ -275,21 +276,9 @@ sqliteTest('direct website fallback refuses local or private-network targets',as
   }finally{globalThis.fetch=originalFetch;}
 });
 
-sqliteTest('billing failure falls through direct extraction to Scrapling and records actual provenance',async()=>{
-  const {env,token,DB}=await fixture('owner');env.SCRAPLING_SERVICE_URL='https://scrapling.example/api/scrapling';env.SCRAPLING_SERVICE_TOKEN='protected';
-  const original=globalThis.fetch;const calls=[];
-  globalThis.fetch=async(url,options={})=>{
-    calls.push(String(url));
-    if(String(url).includes('firecrawl-scrape'))return new Response(JSON.stringify({error:'Credits exhausted'}),{status:402});
-    if(String(url)==='https://company.se/')return new Response('Blocked',{status:403});
-    assert.equal(options.headers.Authorization,'Bearer protected');
-    return new Response(JSON.stringify({success:true,data:{markdown:'Verified company evidence '.repeat(10),links:['https://company.se/team'],metadata:{source:'scrapling-fallback',sourceURL:'https://company.se/',statusCode:200}}}));
-  };
-  try{
-    const response=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/scrape?workspace_id=w1',{method:'POST',token,body:{url:'https://company.se/'}}),env,{});
-    assert.equal(response.status,200);const result=await payload(response);assert.equal(result.data.metadata.source,'scrapling-fallback');assert.deepEqual(result.data.links,['https://company.se/team']);assert.equal(calls.length,3);
-    const events=DB.raw.prepare('SELECT metadata_json FROM audit_events WHERE event_type=?').all('service.firecrawl_scrape');assert.ok(events.some(row=>JSON.parse(row.metadata_json).source==='scrapling-fallback'));
-  }finally{globalThis.fetch=original;}
+sqliteTest('missing customer key never invokes the shared Scrapling service',async()=>{
+ const {env,token}=await fixture();env.SCRAPLING_SERVICE_URL='https://scrapling.example/api/scrapling';env.SCRAPLING_SERVICE_TOKEN='owner-secret';const original=globalThis.fetch;let calls=0;globalThis.fetch=async()=>{calls++;return new Response('{}');};
+ try{const r=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/scrape?workspace_id=w1',{method:'POST',token,body:{url:'https://company.se/'}}),env,{});assert.equal(r.status,409);assert.equal(calls,0);}finally{globalThis.fetch=original;}
 });
 sqliteTest('Hunter remains off after connecting and explicit owner opt-in survives connection checks',async()=>{
  const {env,token,DB}=await fixture();const original=globalThis.fetch;let verifications=0;
@@ -303,5 +292,30 @@ sqliteTest('Hunter remains off after connecting and explicit owner opt-in surviv
   assert.equal(JSON.parse(DB.raw.prepare("SELECT metadata_json FROM workspace_service_integrations WHERE workspace_id='w1' AND provider='hunter'").get().metadata_json).additional_verification_enabled,true);
   assert.equal((await handleServiceIntegrationRoute(req('/api/integrations/services/hunter/verify-email?workspace_id=w1',{method:'POST',token,body:{email:'marta@example.com'}}),env,{})).status,200);assert.equal(verifications,1);
   DB.raw.exec("UPDATE workspace_members SET role='sales' WHERE workspace_id='w1'");assert.equal((await handleServiceIntegrationRoute(req('/api/integrations/services/hunter/settings?workspace_id=w1',{method:'PUT',token,body:{enabled:false}}),env,{})).status,403);
+ }finally{globalThis.fetch=original;}
+});
+
+sqliteTest('customer-only billing never resolves platform keys for an empty workspace',async()=>{
+ const {env}=await fixture();
+ for(const provider of ['apollo','firecrawl','hunter']){
+  const credential=await resolveWorkspaceServiceCredential(env,'w1',provider);
+  assert.equal(credential.source,'none');assert.equal(credential.configured,false);assert.equal(credential.apiKey,'');
+ }
+});
+sqliteTest('empty workspace service checks make no platform provider calls',async()=>{
+ const {env,token}=await fixture(),original=globalThis.fetch,calls=[];globalThis.fetch=async url=>{calls.push(String(url));return new Response('{}');};
+ try{const r=await handleServiceIntegrationRoute(req('/api/integrations/services/status?workspace_id=w1&verify=1',{token}),env,{});assert.equal(r.status,200);
+ for(const row of (await r.json()).providers){assert.equal(row.source,'none');assert.equal(row.configured,false);assert.equal(row.state,'neutral');}assert.deepEqual(calls,[]);
+ }finally{globalThis.fetch=original;}
+});
+sqliteTest('legacy CRM runtime cannot inherit the platform Apollo key without a workspace key',async()=>{
+ const {env,token}=await fixture();
+ for(const request of [req('/api/crm/companies?workspace_id=w1',{token}),req('/api/crm/companies?workspace_id=w1'),req('/api/enrichment-policy',{token})]){
+  const runtime=await withWorkspaceServiceCredentials(request,env);assert.equal(runtime.APOLLO_API_KEY,'');assert.equal(env.APOLLO_API_KEY,'managed-apollo-key');
+ }
+});
+sqliteTest('missing Firecrawl key blocks search and scrape without outbound paid calls',async()=>{
+ const {env,token}=await fixture(),original=globalThis.fetch,calls=[];globalThis.fetch=async url=>{calls.push(String(url));return new Response('{}');};
+ try{for(const kind of ['search','scrape']){const r=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/'+kind+'?workspace_id=w1',{token,method:'POST',body:kind==='search'?{query:'expansion'}:{url:'https://example.com'}}),env,{});assert.equal(r.status,409);assert.match((await r.json()).error,/Connect your own Firecrawl/);}assert.deepEqual(calls,[]);
  }finally{globalThis.fetch=original;}
 });

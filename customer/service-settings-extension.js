@@ -27,8 +27,8 @@ async function api(path,options={}){
   const payload=await response.json().catch(()=>({}));return {response,payload};
 }
 function providerState(provider){return serviceStatus.providers.find(row=>row.provider===provider)||null;}
-function sourceLabel(row){return row?.source==='customer'?'Customer key':row?.source==='managed'?'LeadIntel managed fallback':'Not connected';}
-function statusLabel(row){if(row?.state==='bad')return row.label||'Connection error';if(row?.source==='customer')return 'Connected';if(row?.source==='managed')return 'Fallback active';return 'Not connected';}
+function sourceLabel(row){return row?.source==='customer'?'Your account · billed by provider':'Not connected';}
+function statusLabel(row){if(row?.state==='bad')return row.label||'Connection error';if(row?.source==='customer')return 'Connected';return 'Not connected';}
 function shortDate(value){if(!value)return '';const date=new Date(value);return Number.isNaN(date.getTime())?'':new Intl.DateTimeFormat(undefined,{dateStyle:'medium'}).format(date);}
 function injectCss(){
   if(document.querySelector('link[data-leadintel-asset="service-settings-css"]'))return;
@@ -61,7 +61,7 @@ function calendlyCard(){
   </div>${window.LeadIntelToolAccountLinks?.html('calendly')||''}</article>`;
 }
 function serviceDetail(config,row,current){
-  if(config.provider==='apollo')return `${row?.source==='customer'?'Your Apollo account':'Managed Apollo discovery'} · credit reservations ${apolloUsage.daily}/${Number(apolloBudget.daily_credit_limit)||0} today · ${apolloUsage.monthly}/${Number(apolloBudget.monthly_credit_limit)||0} this month`;
+  if(config.provider==='apollo')return `${row?.source==='customer'?'Your Apollo account':'Connect your own Apollo key'} · credit reservations ${apolloUsage.daily}/${Number(apolloBudget.daily_credit_limit)||0} today · ${apolloUsage.monthly}/${Number(apolloBudget.monthly_credit_limit)||0} this month`;
   if(row?.source!=='customer')return current;
   if(config.provider==='firecrawl'&&Number.isFinite(Number(row?.metadata?.remaining_credits)))return `Customer-owned credential · ${Number(row.metadata.remaining_credits)} Firecrawl credits remaining${row.last_used_at?` · last used ${shortDate(row.last_used_at)}`:''}`;
   if(config.provider==='hunter')return `Customer-owned credential${Number.isFinite(Number(row?.metadata?.remaining_verifications))&&row.metadata.remaining_verifications!==null?` · ${Number(row.metadata.remaining_verifications)} verifications remaining`:''}${row.verified_at?` · checked ${shortDate(row.verified_at)}`:''}`;
@@ -102,13 +102,13 @@ function decorateCards(){
   if(!settingsDrawerOpen())return;
   const grid=document.getElementById('integration-platform-grid');if(!grid)return;
   const section=document.getElementById('platform-integration-heading')?.closest('.ai-settings-section');
-  if(section){const heading=section.querySelector('#platform-integration-heading');if(heading)heading.textContent='Data & intelligence integrations';const intro=section.querySelector('.ai-section-title p');if(intro)intro.textContent='Connect Apollo, Firecrawl or Hunter with your own API key. Managed fallback is available for Apollo and Firecrawl. Saved keys are encrypted on the backend.';}
+  if(section){const heading=section.querySelector('#platform-integration-heading');if(heading)heading.textContent='Data & intelligence integrations';const intro=section.querySelector('.ai-section-title p');if(intro)intro.textContent='Connect Apollo, Firecrawl or Hunter with your own API key. Each user pays their provider directly. No shared paid-service fallback is available. Saved keys are encrypted on the backend.';}
   for(const config of SERVICE_PROVIDERS){
     const card=grid.querySelector(`[data-integration="${config.provider}"]`);if(!card)continue;
     const row=providerState(config.provider);
     const observed=window.LeadIntelIntegrationHealth?.[config.provider];
     card.classList.add('customer-service-card');
-    const purpose=card.querySelector('.integration-purpose');if(purpose)purpose.textContent=`${config.purpose}. ${config.provider==='hunter'?'Connect your own key.':'Add your own key or use the managed fallback.'}`;
+    const purpose=card.querySelector('.integration-purpose');if(purpose)purpose.textContent=`${config.purpose}. Connect your own key. Each user pays their provider directly.`;
     const payment=Boolean(observed?.creditIssue||(row?.credit_issue?.code==='credits_exhausted'&&row.credit_issue.source===row.source));
     const tone=payment?'bad':observed?.state==='bad'||row?.state==='bad'?'warn':observed?.state|| (row?.source&&row.source!=='none'?'good':'neutral');
     const badge=card.querySelector('.integration-status');if(badge){badge.textContent=payment?'Credits exhausted':observed?.label||statusLabel(row);badge.className=`integration-status ${tone}`;}
@@ -156,7 +156,7 @@ async function disconnectCalendly(){
   catch(cause){errors.calendly=String(cause?.message||cause);}finally{busy='';queueDecorate(true);}
 }
 async function disconnectService(provider){
-  if(!window.confirm(`Disconnect your ${SERVICE_PROVIDERS.find(row=>row.provider===provider)?.name||provider} key?${provider==='hunter'?' Email verification through Hunter will be unavailable.':' LeadIntel will return to the managed fallback when available.'}`))return;
+  if(!window.confirm(`Disconnect your ${SERVICE_PROVIDERS.find(row=>row.provider===provider)?.name||provider} key? This provider will be unavailable until you connect your own key again.`))return;
   busy=provider;queueDecorate(true);
   try{const {response,payload}=await api('/api/integrations/services/provider',{method:'DELETE',body:JSON.stringify({provider})});if(!response.ok)throw new Error(payload.error||'Unable to disconnect provider');errors[provider]='';await refreshServiceStatus(false);}catch(cause){errors[provider]=String(cause?.message||cause);}finally{busy='';queueDecorate(true);}
 }

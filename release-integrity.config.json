@@ -1858,11 +1858,10 @@
       "url": "/customer/ai-settings.js",
       "status": 200,
       "contains": [
-        "label:source==='customer'?'Connected':'Managed access'",
-        "Enrichment \u00b7 LeadIntel managed access",
-        "CREDITS UNVERIFIED",
-        "generation!==integrationStatusGeneration",
-        "window.LeadIntelIntegrationHealth={apollo:null,firecrawl:null}"
+        "source:'none'",
+        "Connect your own Apollo API key",
+        "Connect your own Firecrawl API key",
+        "generation!==integrationStatusGeneration"
       ]
     },
     {
@@ -1872,6 +1871,39 @@
       "status": 200,
       "contains": [
         "tool-ownership=20261012-v1"
+      ]
+    },
+    {
+      "id": "customer-only-provider-router",
+      "type": "text",
+      "url": "/customer/firecrawl-workspace-router.js",
+      "status": 200,
+      "contains": [
+        "CUSTOMER_ONLY_BILLING",
+        "CUSTOMER_SERVICE_KEY_REQUIRED"
+      ]
+    },
+    {
+      "id": "customer-only-settings-copy",
+      "type": "text",
+      "url": "/customer/service-settings-extension.js",
+      "status": 200,
+      "contains": [
+        "Each user pays their provider directly.",
+        "No shared paid-service fallback is available."
+      ],
+      "notContains": [
+        "use the managed fallback",
+        "return to the managed fallback"
+      ]
+    },
+    {
+      "id": "legacy-proxy-billing-disabled",
+      "type": "text",
+      "url": "https://apollo-proxy.edgars-7e7.workers.dev/api/health",
+      "status": 200,
+      "contains": [
+        "\"billing\":\"customer_only\""
       ]
     }
   ],

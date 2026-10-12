@@ -48,34 +48,15 @@ function tagExtractor(response,extractor){
   catch{return response;}
 }
 async function routedFetch(input,options={}){
-  const target=rewriteTarget(input);if(!target)return originalFetch(input,options);
+  const raw=typeof input==='string'?input:input?.url;
+  let legacy=false;try{legacy=new URL(raw,window.location.href).origin===MANAGED_FIRECRAWL_ORIGIN;}catch{}
+  const target=rewriteTarget(input);
+  if(legacy&&!target)return new Response(JSON.stringify({error:'Sign in and connect your own provider API key in Settings.',code:'CUSTOMER_SERVICE_KEY_REQUIRED'}),{status:401,headers:{'Content-Type':'application/json'}});
+  if(!target)return originalFetch(input,options);
   const kind=target.includes('/firecrawl/scrape')?'scrape':'search';
   if(kind==='search')options=sanitizeSearchRequestOptions(options);
-  const mode=options.headers instanceof Headers?options.headers.get('X-LeadIntel-Research-Mode'):options.headers?.['X-LeadIntel-Research-Mode'];
-  try{
-    const response=await originalFetch(target,{...options,credentials:'include',headers:{Accept:'application/json',...(options.headers||{})}});
-    if(!retryableStatus(response.status)&&!await weakScrapeResponse(response,kind))return response;
-    if(options?.signal?.aborted)return response;
-    const scrapling=scraplingTarget(kind);const url=extractScrapeUrl(options);
-    if(scrapling&&url){
-      try{
-        const fallback=await originalFetch(scrapling,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({url}),signal:options?.signal});
-        if(fallback.ok)return fallback&&tagExtractor(fallback,'scrapling');
-      }catch{}
-    }
-    return mode==='saving'?response:originalFetch(input,options);
-  }catch(error){
-    if(error?.name==="AbortError"||options?.signal?.aborted)throw error;
-    const scrapling=scraplingTarget(kind);const url=extractScrapeUrl(options);
-    if(scrapling&&url){
-      try{
-        const fallback=await originalFetch(scrapling,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({url}),signal:options?.signal});
-        if(fallback.ok)return fallback&&tagExtractor(fallback,'scrapling');
-      }catch{}
-    }
-    if(mode==='saving')throw error;
-    return originalFetch(input,options);
-  }
+  try{return await originalFetch(target,{...options,credentials:'include',headers:{Accept:'application/json',...(options.headers||{})},signal:options?.signal});}
+  catch(error){if(error?.name==="AbortError"||options?.signal?.aborted)throw error;throw error;} // CUSTOMER_ONLY_BILLING: never retry owner-funded services.
 }
 if(!window.__leadintelFirecrawlWorkspaceRouterInstalled){window.__leadintelFirecrawlWorkspaceRouterInstalled=true;window.fetch=routedFetch;}
 window.LeadIntelFirecrawlRouter={rewriteTarget,workspaceContext,retryableStatus,scraplingTarget,extractScrapeUrl,compactSearchQuery,sanitizeSearchRequestOptions};

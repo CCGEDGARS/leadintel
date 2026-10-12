@@ -84,8 +84,8 @@ test('Apollo and Firecrawl use owner-controlled workspace service routes and edi
   assert.match(extension,/data-service-key="\$\{config\.provider\}"/);
   assert.match(extension,/provider:'apollo'/);
   assert.match(extension,/provider:'firecrawl'/);
-  assert.match(extension,/Customer key/);
-  assert.match(extension,/LeadIntel managed fallback/);
+  assert.match(extension,/Your account · billed by provider/);
+  assert.doesNotMatch(extension,/LeadIntel managed fallback/);
   assert.match(extension,/Replace key/);
   assert.match(extension,/Disconnect/);
 });
@@ -158,10 +158,10 @@ test('signed-out Settings exposes Google and Microsoft onboarding while retainin
   assert.match(extension,/bridge\(\)\?\.signIn\?\.\(\)/,'Google connection must reuse the secure server bridge OAuth flow');
 });
 
-test('Settings clearly changes data integrations from platform-only to customer-owned with managed fallback',()=>{
+test('Settings clearly changes data integrations from platform-only to customer-owned without managed fallback',()=>{
   assert.match(extension,/Data & intelligence integrations/);
   assert.match(extension,/Connect Apollo, Firecrawl or Hunter with your own API key/);
-  assert.match(extension,/Managed fallback is available for Apollo and Firecrawl/);
+  assert.match(extension,/No shared paid-service fallback is available/);
   assert.match(extension,/Customer-owned credential/);
   assert.match(extension,/serviceDetail/);
   assert.match(extension,/meta\.textContent=observed\?\.detail\|\|serviceDetail/,'live Firecrawl failures must take precedence over the saved credential metadata');
