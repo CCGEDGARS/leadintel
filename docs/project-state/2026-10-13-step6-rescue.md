@@ -59,3 +59,9 @@ Validation:39 layout/workspace checks,73 combined assistant/release checks and10
 ## Writing Assistant moved into the left sidebar — 11:45 Riga
 
 Per the owner's explicit instruction, the existing Writing Assistant now sits directly below style choices in the left rail. Its single book/material facility and attachment button move with it. Sidebar controls wrap to available width; native upload inputs are constrained without stretching activation checkboxes. Expanded mode keeps the full dialog layout and returns to the same sidebar position. The editor and saved text are not changed by this presentation update.
+
+## Sidebar action-row correction — 12:05 Riga
+
+The customer screenshot showed an actual CSS defect: the long attachment label wrapped into a narrow column and stretched Ask/Expand to the same tall row. The intended attachment flex-basis lost to the more specific button flex shorthand. Replace the row with an explicit two-column grid: attachment spans the first row, Ask and Expand occupy the second, cancellation has its own row, and controls align to their own compact height.
+
+69 focused layout, attachment and release-contract tests pass, including actual loaded stylesheet assertions for grid placement and non-stretch alignment at desktop and narrow widths. Static build and diff check pass. This fixes the supplied visual failure without changing the writing session or message contents. These assertions do not constitute browser pixel verification.
