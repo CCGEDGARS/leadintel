@@ -37,7 +37,10 @@ export async function handleStorageRoute(request,env,cors={},options={}){
   const member=await authorize(request,env,workspace,action!=='status');
   const status=await getStorageStatus(env,workspace,{role:member.role});
   if(action==='status'){
-   if(status.billing.checkout_ready)status.upgrade.price=await catalogue(env,options.stripe||client(env));
+   if(status.billing.checkout_ready){
+    try{status.upgrade.price=await catalogue(env,options.stripe||client(env));status.billing.available=true;}
+    catch{status.billing.available=false;status.billing.checkout_ready=false;status.billing.can_upgrade=false;status.billing.can_manage=false;status.billing.message='Storage billing is temporarily unavailable. Your storage usage and saved data remain available.';}
+   }
    return json(status,200,cors);
   }
   if(!status.billing.checkout_ready)throw fail('Storage payments are not enabled yet. Your included storage and saved data remain available.');

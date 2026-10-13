@@ -30,3 +30,20 @@ test('AI failure saves evidence and its reason without inventing commercial answ
 test('late support-module loading still prepares a fresh already-opened Profile',async()=>{const r=runtime({step:2});await flush();assert.equal(r.state().answers.value_proposition,'Help operations teams streamline inventory work');assert.equal(r.calls.filter(url=>url.includes('/api/ai/generate')).length,1);});
 
 test("an existing saved profile opens without rerunning research when browser research metadata is missing",async()=>{const r=runtime({profile:{website:"https://sample.example/",companyName:"Saved company"},step:2});assert.equal(r.click(),false);await flush();assert.equal(r.calls.length,0);assert.equal(r.state().profile.companyName,"Saved company");});
+
+for(const [label,change] of [
+  ['documents',state=>{state.documents=[{name:'new.pdf',text:'Newly uploaded customer document'}];}],
+  ['target markets',state=>{state.targetMarkets=['France'];}],
+  ['answers',state=>{state.answers.priority_offers='New customer-confirmed offer';}]
+])test(`research does not commit or navigate after ${label} change during the request`,async()=>{
+  const r=runtime();r.click();const next=r.state();change(next);r.storage.set('leadintel_customer_v2_state',JSON.stringify(next));await flush();
+  assert.deepEqual(r.state(),next);assert.equal(r.storage.has('leadintel_customer_v2_research_meta_v1'),false);
+});
+test('research preserves unrelated live workspace changes rather than restoring its old snapshot',async()=>{
+  const r=runtime();r.click();const next=r.state();next.brandIdentity={companyName:'Customer branding edited during research'};r.storage.set('leadintel_customer_v2_state',JSON.stringify(next));await flush();
+  assert.deepEqual(r.state().brandIdentity,next.brandIdentity);assert.equal(r.state().step,2);
+});
+test('a late result cannot write into another workspace researching the same website',async()=>{
+  const r=runtime();r.click();r.context.window.LeadIntelServerBridge.workspace={id:'w2'};const next=r.state();r.storage.set('leadintel_account_context_v1','new-account-context');await flush();
+  assert.deepEqual(r.state(),next);assert.equal(r.storage.has('leadintel_customer_v2_research_meta_v1'),false);
+});

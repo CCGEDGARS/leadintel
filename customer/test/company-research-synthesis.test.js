@@ -132,3 +132,13 @@ test('credit exhaustion is retained as the workspace health reason until synthes
   assert.equal(runtime.getState().scrapedSources.length,3);
   assert.equal(runtime.getState().answers.ideal_customer,'Manufacturing');
 });
+
+for(const change of ['account','documents','evidence'])test(`AI synthesis rejects a late result after ${change} changes and preserves both state and metadata`,async()=>{
+  let finish;
+  const runtime=createRuntime({fetchImpl:()=>new Promise(resolve=>{finish=()=>resolve({ok:true,status:200,json:async()=>({text:JSON.stringify({fields:{ideal_customer:{value:'Stale AI result',confidence:'medium',draft_type:'evidence',source_ids:['S1']}}})})});})});
+  const pending=runtime.hooks.runAiSynthesis();for(let i=0;i<10&&!finish;i++)await Promise.resolve();assert.ok(finish);
+  if(change==='account')runtime.saved.set('leadintel_account_context_v1','another-account');
+  else{const state=runtime.getState();if(change==='documents')state.documents=[{name:'new.pdf',text:'Fresh customer material'}];else state.scrapedSources[0].text='Updated source evidence';runtime.saved.set('leadintel_customer_v2_state',JSON.stringify(state));}
+  const beforeState=runtime.saved.get('leadintel_customer_v2_state'),beforeMeta=runtime.saved.get('leadintel_customer_v2_research_meta_v1');
+  finish();assert.equal(await pending,false);assert.equal(runtime.saved.get('leadintel_customer_v2_state'),beforeState);assert.equal(runtime.saved.get('leadintel_customer_v2_research_meta_v1'),beforeMeta);assert.equal(runtime.saves,0);
+});

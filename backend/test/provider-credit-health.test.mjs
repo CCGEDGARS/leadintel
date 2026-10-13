@@ -37,3 +37,22 @@ test('explicit payment failures are red evidence while expired credentials and r
  for(const detail of ['payment failed','subscription expired','billing limit reached'])assert.equal(creditFailure(403,detail),true,detail);
  for(const detail of ['API token expired','invalid API key','rate_limit_exceeded','connection timeout'])assert.equal(creditFailure(429,detail),false,detail);
 });
+
+test('provider status uses its scoped index without sorting the workspace audit history',async()=>{
+ const {DatabaseSync}=await import('node:sqlite');const {readFileSync}=await import('node:fs');
+ const db=new DatabaseSync(':memory:');
+ try{
+  db.exec('CREATE TABLE audit_events(id TEXT PRIMARY KEY,workspace_id TEXT,event_type TEXT,entity_type TEXT,entity_id TEXT,metadata_json TEXT,created_at TEXT);CREATE INDEX audit_workspace_created_idx ON audit_events(workspace_id,created_at DESC);');
+  const query="SELECT event_type,metadata_json FROM audit_events WHERE workspace_id=? AND entity_type='provider_credit' AND entity_id=? ORDER BY rowid DESC LIMIT 1";
+  const plan=()=>db.prepare('EXPLAIN QUERY PLAN '+query).all('w1','apollo').map(row=>row.detail).join('\n');
+  assert.match(plan(),/TEMP B-TREE/,'the regression fixture must reproduce the previous workspace-wide ordering');
+  db.exec(readFileSync(new URL('../migrations/0033_provider_credit_lookup_index.sql',import.meta.url),'utf8'));
+  assert.match(plan(),/audit_provider_health_idx.*workspace_id=.*entity_type=.*entity_id=/);assert.doesNotMatch(plan(),/TEMP B-TREE|SCAN audit_events/);
+  const insert=db.prepare('INSERT INTO audit_events(id,workspace_id,event_type,entity_type,entity_id,metadata_json) VALUES(?,?,?,?,?,?)');
+  insert.run('old','w1','provider.credit_exhausted','provider_credit','apollo','{"source":"customer"}');
+  insert.run('other','w2','provider.credit_exhausted','provider_credit','apollo','{"source":"customer"}');
+  insert.run('new','w1','provider.credit_recovered','provider_credit','apollo','{"source":"customer"}');
+  assert.equal(db.prepare(query).get('w1','apollo').event_type,'provider.credit_recovered');
+  assert.equal(db.prepare(query).get('w2','apollo').event_type,'provider.credit_exhausted');
+ }finally{db.close();}
+});

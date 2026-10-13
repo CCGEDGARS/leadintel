@@ -74,3 +74,16 @@ test('webhook body is bounded before signature parsing even without Content-Leng
  const request=new Request('https://api.test/api/webhooks/stripe/storage',{method:'POST',headers:{'Stripe-Signature':'invalid'},body:stream,duplex:'half'});
  const response=await f.mod.handleStorageWebhook(request,f.env,{stripe:f.stripe});assert.equal(response.status,413);assert.equal(canceled,true);
 });
+
+test('billing outage preserves the scoped storage status and paid capacity without a payment alert',async()=>{
+ const f=await fixture();const until=Math.floor(Date.now()/1000)+3600;
+ f.DB.raw.prepare("UPDATE workspace_storage_accounts SET plan_key='plus',paid_until=?,billing_status='active',records_bytes=1234 WHERE workspace_id='storage-w1'").run(until);
+ f.stripe.accounts.retrieve=async()=>{throw Error('Network timeout');};
+ const response=await f.mod.handleStorageRoute(f.request('status'),f.env,{}, {stripe:f.stripe});
+ assert.equal(response.status,200);const status=await response.json();
+ assert.equal(status.workspace_id,'storage-w1');assert.equal(status.plan.key,'plus');assert.equal(status.records.used_bytes,1234);assert.equal(status.records.limit_bytes,500000000);
+ assert.equal(status.billing.payment_issue,false);assert.equal(status.billing.available,false);assert.equal(status.billing.checkout_ready,false);assert.equal(status.billing.can_upgrade,false);
+ assert.match(status.billing.message,/temporarily unavailable/);
+ f.DB.raw.exec("DELETE FROM workspace_members WHERE workspace_id='storage-w2'");
+ assert.equal((await f.mod.handleStorageRoute(f.request('status','storage-w2'),f.env,{}, {stripe:f.stripe})).status,403);
+});

@@ -14,6 +14,8 @@ const DNS_DOMAIN=/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0
 const json=(value,status=200,headers={})=>new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store',...headers}});
 const error=(message,status,headers,code)=>json({error:message,...(code?{code}:{})},status,headers);
 const uuid=()=>crypto.randomUUID();
+const providerSignal=(request,timeout=30000)=>AbortSignal.any([request.signal,AbortSignal.timeout(timeout)]);
+const cancelledResponse=(signal,cors)=>error(signal.reason?.name==='TimeoutError'?'Provider request timed out':'Provider request was cancelled',signal.reason?.name==='TimeoutError'?504:499,cors,'SERVICE_REQUEST_CANCELLED');
 const clean=(value,max=1000)=>String(value??'').replace(/\s+/g,' ').trim().slice(0,max);
 const keyHint=apiKey=>`••••${String(apiKey||'').slice(-4)}`;
 
@@ -96,6 +98,21 @@ function htmlMeta(html,name){
   }
   return '';
 }
+async function boundedPageText(response,signal){
+  if(!response.body)return '';
+  const reader=response.body.getReader(),decoder=new TextDecoder();let bytes=0,text='';
+  try{
+    for(;;){
+      signal?.throwIfAborted();
+      const {done,value}=await reader.read();if(done)break;
+      bytes+=value.byteLength;
+      if(bytes>MAX_DIRECT_PAGE_BYTES)throw new Error('Website page is too large to read safely');
+      text+=decoder.decode(value,{stream:true});
+    }
+    signal?.throwIfAborted();return text+decoder.decode();
+  }catch(cause){await reader.cancel().catch(()=>{});throw cause;}
+  finally{reader.releaseLock();}
+}
 export async function fetchDirectPublicPage(value,{signal=AbortSignal.timeout(10000)}={}){
   let current=publicResearchUrl(value);if(!current)throw new Error('A valid public research URL is required');
   for(let redirects=0;redirects<=MAX_DIRECT_REDIRECTS;redirects++){
@@ -109,7 +126,7 @@ export async function fetchDirectPublicPage(value,{signal=AbortSignal.timeout(10
     const contentType=(response.headers.get('content-type')||'').toLowerCase();
     if(contentType&&!contentType.includes('text/html')&&!contentType.includes('application/xhtml+xml')&&!contentType.includes('text/plain'))throw new Error('Website did not return readable text');
     const declared=Number(response.headers.get('content-length')||0);if(declared>MAX_DIRECT_PAGE_BYTES)throw new Error('Website page is too large to read safely');
-    const raw=await response.text();if(new TextEncoder().encode(raw).byteLength>MAX_DIRECT_PAGE_BYTES)throw new Error('Website page is too large to read safely');
+    const raw=await boundedPageText(response,signal);
     const text=contentType.includes('text/plain')?clean(raw,MAX_DIRECT_PAGE_CHARS):htmlText(raw);if(!text)throw new Error('No readable website content was returned');
     const title=contentType.includes('text/plain')?'':htmlMeta(raw,'title');const description=contentType.includes('text/plain')?'':htmlMeta(raw,'description');
     return {success:true,data:{markdown:text,metadata:{title:title||current.hostname,description,sourceURL:current.href,url:current.href,statusCode:response.status,source:'direct-fallback'}}};
@@ -173,8 +190,8 @@ async function providerStatus(env,workspaceId,provider,{verify=false}={}){
 }
 
 function workspaceIdFrom(url){return clean(url.searchParams.get('workspace_id')||'',120);}
-async function extractionFallback(env,url,access,workspaceId,credential,status){
-  const direct=await fetchDirectPublicPage(url);
+async function extractionFallback(env,url,access,workspaceId,credential,status,signal){
+  const direct=await fetchDirectPublicPage(url,{signal:AbortSignal.any([signal,AbortSignal.timeout(10000)])});
   await audit(env,{workspaceId,userId:access.user.id,type:'service.firecrawl_scrape',provider:'firecrawl',metadata:{source:direct.data.metadata.source,upstream_source:'customer',upstream_status:status}});
   return direct;
 }
@@ -195,18 +212,22 @@ async function forwardFirecrawl(request,env,cors,workspaceId,kind){
     target='https://api.firecrawl.dev/v2/search';
   }
   const headers={'Content-Type':'application/json',Accept:'application/json'};if(credential.source==='customer')headers.Authorization=`Bearer ${credential.apiKey}`;
-  let response;try{response=await fetch(target,{method:'POST',headers,body:JSON.stringify(payload)});}catch(cause){
+  const signal=providerSignal(request,kind==='scrape'?Math.min(65000,payload.timeout+5000):30000);
+  if(signal.aborted)return cancelledResponse(signal,cors);
+  let response;try{response=await fetch(target,{method:'POST',headers,body:JSON.stringify(payload),signal});}catch(cause){
+    if(signal.aborted)return cancelledResponse(signal,cors);
     if(kind==='scrape'&&researchUrl){
-      try{const direct=await extractionFallback(env,researchUrl.href,access,workspaceId,credential,0);return json(direct,200,cors);}catch{}
+      try{const direct=await extractionFallback(env,researchUrl.href,access,workspaceId,credential,0,signal);return json(direct,200,cors);}catch{if(signal.aborted)return cancelledResponse(signal,cors);}
     }
     return error(`Firecrawl ${kind} is temporarily unavailable`,502,cors);
   }
   const upstream=await response.json().catch(()=>({}));
+  if(signal.aborted)return cancelledResponse(signal,cors);
   if(!response.ok){
     if(creditFailure(response.status,upstream?.error||upstream?.message))await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:'firecrawl',kind:'failed',source:credential.source});
     const canFallback=kind==='scrape'&&researchUrl&&retryableFirecrawlStatus(response.status);
     if(canFallback){
-      try{const direct=await extractionFallback(env,researchUrl.href,access,workspaceId,credential,response.status);return json(direct,200,cors);}catch{}
+      try{const direct=await extractionFallback(env,researchUrl.href,access,workspaceId,credential,response.status,signal);return json(direct,200,cors);}catch{if(signal.aborted)return cancelledResponse(signal,cors);}
     }
     return error(upstream.error||`Firecrawl ${kind} failed (${response.status})`,response.status>=400&&response.status<600?response.status:502,cors);
   }

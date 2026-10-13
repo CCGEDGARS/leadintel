@@ -176,3 +176,14 @@ test('an empty latest search acknowledges previously saved companies without cla
  const companies=stage.steps.find(step=>step.id==='companies');
  assert.equal(companies.complete,false);assert.equal(companies.label,'No new qualified companies · saved companies retained');assert.equal(companies.action,'Review saved companies or broaden the search');
 });
+
+test('approved profile may finish without optional paid market research',()=>{
+ const answers={priority_offers:'Offer',ideal_customer:'Customer',buyer_roles:'CEO',exclusions:'None'};
+ const main={website:'https://example.com',targetMarkets:['Sweden'],answers,profile:{companyName:'Example'},approved:true,market:{researchStatus:'idle'}};
+ main.targetingConfirmation=require('../targeting-policy.js').confirm(main);
+ const profileStage=Journey.buildJourneyModel({main,currentStep:4,availability:{1:true,2:true,3:true,4:true}})[1];
+ const research=profileStage.steps.find(item=>item.id==='research');
+ assert.equal(research.optional,true);assert.equal(research.complete,false);
+ assert.equal(profileStage.requiredCompleted,profileStage.requiredTotal);
+ assert.equal(profileStage.status,'complete');
+});

@@ -301,3 +301,14 @@ test('normalizing a strategy preserves a stale research-context gate',()=>{
  const opportunities=Market.buildMarketOpportunities(profile,[],[],results);
  assert.notEqual(opportunities.find(x=>x.market==='Germany').confidence,'High');
  });
+
+test('lookalike commercial anchors come from activated reference profiles across customer industries',()=>{
+ for(const names of [['Clinic North','Hospital South'],['Auto Parts West','Machine Works East']]){
+  const model={active:true,dna:{referenceProfiles:names.map(companyName=>({companyName}))}};
+  const generated=Market.buildIcpCandidates({...profile,lookalikeCustomers:''},'en',model).find(item=>item.type==='lookalike');
+  assert.match(generated.rationale,new RegExp(names.join('; ')));
+  assert.match(generated.description,new RegExp(names[0]));
+ }
+ const unavailable=Market.buildIcpCandidates({...profile,lookalikeCustomers:''},'en',{active:false,dna:{referenceProfiles:[{companyName:'Inactive Customer'}]}}).find(item=>item.type==='lookalike');
+ assert.equal(unavailable.active,false);assert.doesNotMatch(unavailable.rationale,/Inactive Customer|Use  as/);
+});

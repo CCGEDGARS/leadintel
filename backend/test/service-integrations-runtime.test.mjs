@@ -7,7 +7,7 @@ let DatabaseSync=null;
 try{({DatabaseSync}=await import('node:sqlite'));}catch{}
 import {importAesKey,encryptSecret} from '../src/oauth.js';
 import {sha256} from '../src/security.js';
-import {handleServiceIntegrationRoute,resolveWorkspaceServiceCredential,withWorkspaceServiceCredentials} from '../src/service-integrations.js';
+import {fetchDirectPublicPage,handleServiceIntegrationRoute,resolveWorkspaceServiceCredential,withWorkspaceServiceCredentials} from '../src/service-integrations.js';
 
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
 const migration=fs.readFileSync(path.join(__dirname,'..','migrations','0013_workspace_service_integrations.sql'),'utf8');
@@ -318,4 +318,31 @@ sqliteTest('missing Firecrawl key blocks search and scrape without outbound paid
  const {env,token}=await fixture(),original=globalThis.fetch,calls=[];globalThis.fetch=async url=>{calls.push(String(url));return new Response('{}');};
  try{for(const kind of ['search','scrape']){const r=await handleServiceIntegrationRoute(req('/api/integrations/services/firecrawl/'+kind+'?workspace_id=w1',{token,method:'POST',body:kind==='search'?{query:'expansion'}:{url:'https://example.com'}}),env,{});assert.equal(r.status,409);assert.match((await r.json()).error,/Connect your own Firecrawl/);}assert.deepEqual(calls,[]);
  }finally{globalThis.fetch=original;}
+});
+
+sqliteTest('cancelled Firecrawl requests never start extraction fallback or another provider call',async()=>{
+ const {env,token}=await fixture();await connectFirecrawl(env);const original=globalThis.fetch,controller=new AbortController();let calls=0,forwarded;
+ globalThis.fetch=async(url,options)=>{calls++;forwarded=options.signal;controller.abort();throw new DOMException('Cancelled','AbortError');};
+ try{
+  const request=new Request('https://api.example.test/api/integrations/services/firecrawl/scrape?workspace_id=w1',{method:'POST',headers:{Cookie:`leadintel_session=${token}`,'Content-Type':'application/json'},body:JSON.stringify({url:'https://example.com'}),signal:controller.signal});
+  const r=await handleServiceIntegrationRoute(request,env,{});assert.equal(r.status,499);assert.equal(calls,1);assert.equal(forwarded.aborted,true);assert.equal((await r.json()).code,'SERVICE_REQUEST_CANCELLED');
+ }finally{globalThis.fetch=original;}
+});
+
+sqliteTest('Firecrawl search propagates a bounded signal and skips already cancelled requests',async()=>{
+ const {env,token}=await fixture();await connectFirecrawl(env);const original=globalThis.fetch,controller=new AbortController();let calls=0,signal;
+ globalThis.fetch=async(url,options)=>{calls++;signal=options.signal;return new Response(JSON.stringify({success:true,data:{web:[]}}));};
+ try{
+  const request=()=>new Request('https://api.example.test/api/integrations/services/firecrawl/search?workspace_id=w1',{method:'POST',headers:{Cookie:`leadintel_session=${token}`,'Content-Type':'application/json'},body:JSON.stringify({query:'company expansion'}),signal:controller.signal});
+  assert.equal((await handleServiceIntegrationRoute(request(),env,{})).status,200);assert.ok(signal instanceof AbortSignal);assert.notEqual(signal,controller.signal);
+  controller.abort();assert.equal((await handleServiceIntegrationRoute(request(),env,{})).status,499);assert.equal(calls,1);
+ }finally{globalThis.fetch=original;}
+});
+
+
+test('direct website fallback bounds streamed bytes before buffering a complete oversized page',async()=>{
+ const original=globalThis.fetch;let cancelled=false,read=0;
+ globalThis.fetch=async()=>new Response(new ReadableStream({pull(controller){read++;controller.enqueue(new Uint8Array(600000));},cancel(){cancelled=true;}}),{headers:{'Content-Type':'text/html'}});
+ try{await assert.rejects(fetchDirectPublicPage('https://example.com/'),/too large/);assert.equal(cancelled,true);assert.ok(read<=5,'must stop the stream promptly');}
+ finally{globalThis.fetch=original;}
 });

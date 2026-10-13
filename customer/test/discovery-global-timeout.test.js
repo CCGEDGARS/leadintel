@@ -1371,3 +1371,25 @@ test('a qualified first pass checks purchasing fit before broadening and does no
   const restored=Discovery.normalizeDiscoveryState(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_discovery')));
   assert.equal(restored.candidates[0].domain,candidate.domain);assert.ok(Discovery.verifiedBuyerFit(restored.candidates[0],{...JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state')).profile,...Targeting.profileFields(JSON.parse(context.localStorage.getItem('leadintel_customer_v2_state')))}));
 });
+
+test('zero-result search clearly retains selected companies for Buyers without claiming a new match',()=>{
+ const context=loadDiscoveryRunner({renderNodes:true});
+ context.__setDiscovery({status:'no_results',latestRunCandidateCount:0,funnel:{qualifiedCompanies:4},candidates:[],selectedProspects:[{company:'Saved Buyer',domain:'saved.example',website:'https://saved.example',buyerSearchMode:'user_selected_target'}],lastRunAt:'2026-10-13T00:00:00Z'});
+ context.__renderCandidates();
+ assert.match(context.__elements.get('company-candidates').innerHTML,/1 previously selected company remains available in Buyers/);
+ assert.doesNotMatch(context.__elements.get('company-candidates').innerHTML,/found 4 new companies/);
+ assert.equal(context.__discoveryState().selectedProspects.length,1);
+});
+
+test('finished shortfall does not promise a background search that is no longer active',()=>{
+ const context=loadDiscoveryRunner({renderNodes:true});
+ context.__setDiscovery({status:'partial',latestRunCandidateCount:1,candidates:[{company:'Buyer',domain:'buyer.example',website:'https://buyer.example',evidence:[],matchedSignals:[],fitReasons:[],buyerFit:{}}],lastRunAt:'2026-10-13T00:00:00Z'});
+ context.LeadIntelDiscovery={...context.LeadIntelDiscovery,rankQualifiedCompanies:items=>items,companyQualificationPresentation:()=>({routeLabel:'Test',referenceScore:null,explanation:'Test'})};
+ vm.runInNewContext('qualificationAssessment=()=>({eligible:true,score:80});discovery.candidates=[{company:"Buyer",domain:"buyer.example",website:"https://buyer.example",evidence:[],matchedSignals:[],fitReasons:[],buyerFit:{}}];',context);
+ context.__renderCandidates();
+ const html=context.__elements.get('company-candidates').innerHTML;
+ assert.match(html,/This search has finished/);assert.doesNotMatch(html,/will continue broadening the search automatically/);
+ context.localStorage.setItem('leadintel_customer_v2_discovery_meta',JSON.stringify({autonomousDiscovery:{active:true}}));
+ context.__renderCandidates();
+ assert.match(context.__elements.get('company-candidates').innerHTML,/is broadening the search automatically/);
+});

@@ -16,6 +16,7 @@
   if(status&&(status.records.state==='full'||status.files.state==='full'||blockedContext===context()))items.push({id:'storage-full',severity:'error',title:'Storage limit needs attention',detail:'New storage growth is paused. Open Settings → Storage to upgrade or reduce stored content.',target:{type:'settings'}});
   else if(status&&(status.records.state==='warning'||status.files.state==='warning'))items.push({id:'storage-warning',severity:'recommendation',title:'Storage is nearing its allowance',detail:'At least 80% is used. Review your allowance in Settings → Storage.',target:{type:'settings'}});
   if(error)items.push({id:'storage-connection',severity:'recommendation',title:'Storage status needs a recheck',detail:'The usage check could not connect. Retry in Settings → Storage.',target:{type:'settings'}});
+  if(status?.billing?.available===false)items.push({id:'storage-billing-connection',severity:'recommendation',title:'Storage billing is temporarily unavailable',detail:'Usage and saved data remain available. Retry billing in Settings → Storage.',target:{type:'settings'}});
   return items;
  }
  function meter(label,m){const used=bytes(m.used_bytes),limit=bytes(m.limit_bytes);return `<div class="storage-meter"><div><strong>${label}</strong><span>${m.measured===false?'Calculating existing usage…':`${used} / ${limit}`}</span></div>${m.measured===false?'':`<progress max="${Number(m.limit_bytes)}" value="${Math.min(Number(m.used_bytes),Number(m.limit_bytes))}" aria-label="${label}: ${used} of ${limit}"></progress>`}</div>`;}
@@ -33,6 +34,7 @@
    <div class="storage-upgrade"><strong>Storage Plus</strong><span>${bytes(status?.upgrade?.records_limit_bytes||500000000)} of CRM/workspace data + ${bytes(status?.upgrade?.files_limit_bytes||10000000000)} of files</span><small>${esc(status?priceLabel(status):'Checking upgrade availability…')}</small></div>
    <p class="storage-note">Pay securely through Stripe. Extra capacity starts after payment is confirmed. AI and research credits are separate.</p>
    ${status?.billing?.setup_required?'<p class="storage-setup">Billing setup is in progress. Included storage is available.</p>':''}
+   ${status?.billing?.available===false?`<p class="storage-setup is-warning" role="status">${esc(status.billing.message||'Storage billing is temporarily unavailable. Your usage and saved data remain available.')}</p>`:''}
    <div class="storage-actions"><button class="ai-settings-btn primary" data-storage-action="checkout" type="button" ${busy||!status?.billing?.can_upgrade?'disabled':''}>${busy?'Opening…':'Upgrade storage'}</button><button class="ai-settings-btn" data-storage-action="portal" type="button" ${busy||!status?.billing?.can_manage?'disabled':''}>Manage billing</button><button class="ai-settings-btn" data-storage-action="refresh" type="button">Refresh usage</button></div>
    ${bridge()?.workspace?.role!=='owner'?'<small>Only the workspace owner can change its storage plan.</small>':''}`;
  }

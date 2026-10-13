@@ -2,7 +2,7 @@ import './company-brain.js?v=20261001-adaptive-business-context-v1&strategy=2026
 import './content-language.js?v=20260924-workspace-content-english-v1';
 import './content-variants.js?v=20260929-public-first-email-v1';
 import './business-identity.js?v=20260924-workspace-profile-english-v1';
-import './evidence-view.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&reference-interface=20260923&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&map-activation-guide=1&reference-discovery=5&reference-similarity=20260930-v1&reference-activation=6&company-workflow=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1&actual-themes=20261001-v1&adaptive-context=20261001-v1&profile-review=20261001-v2&profile-repair=20261002-v1';
+import './evidence-view.js?v=20260924-friendly-workflow-labels-v1&profile-overview-hygiene=1&reference-interface=20260923&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&map-activation-guide=1&reference-discovery=5&reference-similarity=20260930-v1&reference-activation=6&company-workflow=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1&actual-themes=20261001-v1&adaptive-context=20261001-v1&profile-review=20261001-v2&profile-repair=20261002-v1&rescue=20261013-v1';
 import './profile-approval-ui.js?v=20260924-friendly-workflow-labels-v1';
 import './state-budget.js?v=20261009-workspace-section-sync-v1&lossless-recovery=20261009-v1&my-flows=20261010-v1&capacity-diagnostics=20261011-v1&bundle-sync=20261011-v1&text-compression=20261011-v3&codec-loader=20261011-v1&snapshot-quota=20261011-v1';
 import './workspace-persistence.js?v=20260928-sync-timeout-v1&refresh-protection=1&auto-save=1&research-sync=20261002-v1&sync-recovery=20261004-v2&nested-research-sync=20261005-v3&sync-baseline=20261005-v3&section-capability=20261009-v1&sync-contention=20261011-v1&capacity-diagnostics=20261011-v1&bundle-sync=20261011-v1&text-compression=20261011-v3&snapshot-quota=20261011-v1&indexed-snapshot=20261011-v1';
@@ -429,14 +429,15 @@ function icpActivationRequirement(icp={}){
   if(icp.type==="lookalike"||icp.type==="lookalike-led"||icp.id==="icp-reference-lookalike"){
     // Reference Customers saves independently of this module's in-memory state.
     // Read the persisted model so an already activated customer is never shown as locked.
-    let available=false;
+    let available=false,model=null;
     try{
       const saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}");
       const portfolio=globalThis.LeadIntelReferenceCustomerPortfolio;
-      available=Boolean(portfolio?.getCombinedActiveModel?.(portfolio.migrateLegacy(saved))
-        ||globalThis.LeadIntelReferenceCustomers?.getActiveReferenceModel?.(saved.referenceCustomers||{}));
+      model=portfolio?.getCombinedActiveModel?.(portfolio.migrateLegacy(saved))
+        ||globalThis.LeadIntelReferenceCustomers?.getActiveReferenceModel?.(saved.referenceCustomers||{});
+      available=Boolean(model);
     }catch{available=false;}
-    return {available,reason:"In Profile, open Reference Companies, analyze a customer example, review the suggested profile and activate it. Opportunity Map is optional.",action:"Go to Reference Companies",target:"reference-customers"};
+    return {available,model,reason:"In Profile, open Reference Companies, analyze a customer example, review the suggested profile and activate it. Opportunity Map is optional.",action:"Go to Reference Companies",target:"reference-customers"};
   }
   return {available:true,reason:""};
 }
@@ -463,8 +464,25 @@ function renderIcps(){
   const candidates=LeadIntelMarket.buildIcpCandidates(state.profile,state.market.contentLanguage||"en");
   for(const candidate of candidates){if(!state.market.icps.some(item=>item.type===candidate.type||(candidate.type==="lookalike"&&item.type==="lookalike-led")))state.market.icps.push({...candidate,active:false});}
   enforceIcpActivationRequirements();
-  const cards=state.market.icps.map((icp,index)=>{
-    const requirement=icpActivationRequirement(icp);
+  const legacyLookalike=candidates.find(item=>item.type==="lookalike");
+  const hasReferenceLens=state.market.icps.some(item=>item.id==="icp-reference-lookalike");
+  const cards=state.market.icps.map((savedIcp,index)=>{
+    // The activated reference lens supersedes the old generic lookalike card.
+    // Keep its saved data intact for compatibility rather than destroying edits.
+    if(hasReferenceLens&&savedIcp.type==="lookalike")return "";
+    const requirement=icpActivationRequirement(savedIcp);
+    let icp=savedIcp;
+    if(savedIcp.type==="lookalike"){
+      const generated=LeadIntelMarket.buildIcpCandidates(state.profile,state.market.contentLanguage||"en",requirement.model).find(item=>item.type==="lookalike");
+      icp={...savedIcp};
+      for(const field of ["description","rationale"]){
+        const oldEmptyRationale=field==="rationale"&&!String(state.profile?.lookalikeCustomers||"").trim()&&[
+          `Use  as commercial anchors, then look for similar organizations in ${legacyLookalike?.targetMarkets}.`,
+          `Izmantot  kā komerciālos atskaites punktus un meklēt līdzīgas organizācijas tirgos: ${legacyLookalike?.targetMarkets}.`
+        ].includes(savedIcp[field]);
+        if(!savedIcp[field]||savedIcp[field]===legacyLookalike?.[field]||oldEmptyRationale)icp[field]=generated[field];
+      }
+    }
     return `<article class="icp-card ${icp.active?"active":""} ${requirement.available?"":"unavailable"}">
     <div class="icp-card-head"><label class="market-toggle" ${requirement.available?"":`title="${esc(requirement.reason)}"`}><input type="checkbox" data-icp-field="active" data-index="${index}" ${icp.active?"checked":""} ${requirement.available?"":"disabled"}><span></span></label><div><span class="icp-type">${esc(icp.type)}</span><input class="market-inline-title" data-icp-field="name" data-index="${index}" value="${esc(icp.name)}"></div></div>
     ${requirement.available?"":`<div class="icp-unlock-hint" role="status"><strong>Why is this off?</strong><span>${esc(requirement.reason)}</span><button type="button" data-icp-unlock="${esc(requirement.target)}">${esc(requirement.action)} →</button></div>`}

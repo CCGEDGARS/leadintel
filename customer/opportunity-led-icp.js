@@ -70,8 +70,8 @@
     const originalNormalize=Market.normalizeMarketState.bind(Market);
     const originalLocalize=Market.localizeGeneratedState.bind(Market);
 
-    Market.buildIcpCandidates=(profile={},language="en")=>{
-      const base=originalBuild(profile,language).filter(item=>item?.type!==TYPE&&item?.id!==ID);
+    Market.buildIcpCandidates=(profile={},language="en",referenceModel=null)=>{
+      const base=originalBuild(profile,language,referenceModel).filter(item=>item?.type!==TYPE&&item?.id!==ID);
       return [...base,buildOpportunityIcp(profile,language)].slice(0,4);
     };
 
