@@ -8,7 +8,7 @@ if(typeof window!=="undefined"){
     .then(()=>import('./reference-customer-ui.js?v=20260927-opportunity-map-durable-v1&opportunity-context=1&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&inline-activate=1&target-research=1&saving-mode=1&map-activation-guide=1&target-controls=1&target-save=1&target-status=1&reference-discovery=5&reference-similarity=20260930-v1&reference-activation=6&profile-market=20261001-v1&guidance-copy=20261001-v1'))
     .then(()=>import('./intelligence-profile-runtime.js?v=20260924-friendly-workflow-labels-v1&target-segments=1&profile-ux=1&target-list-edit=1&opportunity-map=1&profile-source=1&inline-activate=1&target-research=1&saving-mode=1&reference-discovery=5&company-workflow=20261001-v2&profile-market=20261001-v1&guidance-copy=20261001-v1&profile-review=20261001-v2&profile-repair=20261002-v1'))
     .catch(error=>console.error('LeadIntel intelligence runtime failed to load',error));
-  void import('./opportunity-led-icp.js?v=20260907-opportunity-led-v1');
+  void import('./opportunity-led-icp.js?v=20260907-opportunity-led-v1&rescue=20261013-v1');
   void import('./market-research-ux.js?v=20260915-research-source-text-v1');
   void import('./market-research-guard.js?v=20260908-render-loop-v1');
   void import('./market-research-review-ux.js?v=20261001-actual-plan-themes-v1');

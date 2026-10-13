@@ -22,6 +22,22 @@ function readState(){return readJson(MAIN_STORAGE_KEY,{});}
 function writeState(value){localStorage.setItem(MAIN_STORAGE_KEY,JSON.stringify(value));}
 function readMeta(){return readJson(RESEARCH_META_KEY,{});}
 function writeMeta(value){localStorage.setItem(RESEARCH_META_KEY,JSON.stringify(value));}
+// Async provider responses must belong to the same account and input evidence.
+// Unrelated live settings may still change; commits merge into the latest state.
+function captureResearchContext(state){return {
+  account:localStorage.getItem('leadintel_account_context_v1'),
+  workspaceId:window.LeadIntelServerBridge?.workspace?.id||'',
+  inputs:researchInputs(state),meta:localStorage.getItem(RESEARCH_META_KEY)
+};}
+function researchInputs(state){return JSON.stringify([state.website,state.targetMarkets||[],state.additionalLinks||[],state.documents||[],state.scrapedSources||[],state.answers||{},state.answerStatus||{},state.profile||null,Boolean(state.approved),state.market||{}]);}
+function researchContextCurrent(context,state=readState()){
+  return (!window.LeadIntelAccountCache||window.LeadIntelAccountCache.current())&&
+    context.account===localStorage.getItem('leadintel_account_context_v1')&&
+    context.workspaceId===(window.LeadIntelServerBridge?.workspace?.id||'')&&
+    context.inputs===researchInputs(state)&&context.meta===localStorage.getItem(RESEARCH_META_KEY);
+}
+function assertResearchContext(context,state){if(!researchContextCurrent(context,state))throw new Error('Workspace changed during research. Your edits were preserved; rerun when ready.');}
+
 function normalizeUrl(value){return engine()?.safeUrl(value)||'';}
 function selectedMarkets(state){return Array.isArray(state?.targetMarkets)?state.targetMarkets.map(value=>String(value||'').trim()).filter(Boolean):[];}
 function companyResearchReady(state=readState()){return Boolean(normalizeUrl(state.website)&&selectedMarkets(state).length);}
@@ -198,7 +214,7 @@ function combineDrafts(fallback,ai){
 async function runAiSynthesis(){
   if(running)return false;
   const researchEngine=engine();if(!researchEngine){toast('Research engine is still loading. Try again.');return false;}
-  const state=readState();const meta=metaForCurrentState();const website=normalizeUrl(state.website);
+  const state=readState();const context=captureResearchContext(state);const meta=metaForCurrentState();const website=normalizeUrl(state.website);
   if(!website||!meta.generatedAt){toast('Run company research before synthesizing evidence.');return false;}
   const savedSources=[...sourceMap(state).values()].filter(source=>source.type!=='document'&&String(source.text||'').trim());
   const primarySources=savedSources.filter(source=>source.role==='primary');const sources=primarySources.length?primarySources:savedSources;
@@ -208,7 +224,7 @@ async function runAiSynthesis(){
   try{
     setProgress('Synthesizing saved evidence…',`Interpreting ${sources.length} primary company sources for commercial fit, buyers and buying triggers.`);
     const ai=await aiDraftFor({website,targetMarkets:selectedMarkets(state),sources,documents:state.documents||[],uiLanguage:'en'},controller.signal);
-    const latest=readState();const latestMeta=metaForCurrentState();
+    const latest=readState();assertResearchContext(context,latest);const latestMeta=metaForCurrentState();
     if(normalizeUrl(latest.website)!==website||normalizeUrl(latestMeta.website)!==website)throw new Error('Workspace changed during AI synthesis. Your edits were preserved; try again when ready.');
     if(ai.mode!=='ai'||!ai.draft){
       writeMeta({...latestMeta,mode:'evidence',provider:'',model:'',reason:ai.reason||'AI returned no additional evidence-backed fields.'});
@@ -229,14 +245,14 @@ async function runAiSynthesis(){
     renderResearchReview();await saveWorkspaceBestEffort();toast('AI synthesis complete. Review the updated commercial brief.');return true;
   }catch(error){
     const reason=controller.signal.aborted?'AI synthesis stopped after 60 seconds.':(error.message||'AI synthesis is temporarily unavailable.');
-    const latestMeta=metaForCurrentState();if(normalizeUrl(latestMeta.website)===website){writeMeta({...latestMeta,mode:'evidence',provider:'',model:'',reason});window.dispatchEvent(new CustomEvent('leadintel:company-research-updated',{detail:{website,synthesisFailed:true}}));renderResearchReview();}
+    const latestMeta=metaForCurrentState();if(researchContextCurrent(context)&&normalizeUrl(latestMeta.website)===website){writeMeta({...latestMeta,mode:'evidence',provider:'',model:'',reason});window.dispatchEvent(new CustomEvent('leadintel:company-research-updated',{detail:{website,synthesisFailed:true}}));renderResearchReview();}
     toast(reason);return false;
   }finally{clearTimeout(timer);running=false;}
 }
 
 async function runCompanyResearch({rerun=false}={}){
   if(running)return;const researchEngine=engine();if(!researchEngine){toast('Research engine is still loading. Try again.');return;}
-  const state=readState();const researchLanguage='en';const website=normalizeUrl($('company-website')?.value||state.website);const markets=selectedMarkets(state);const additionalLinks=String($('additional-links')?.value||'').split(/\n/).map(normalizeUrl).filter(Boolean).slice(0,8);
+  const state=readState();const context=captureResearchContext(state);const researchLanguage='en';const website=normalizeUrl($('company-website')?.value||state.website);const markets=selectedMarkets(state);const additionalLinks=String($('additional-links')?.value||'').split(/\n/).map(normalizeUrl).filter(Boolean).slice(0,8);
   const error=$('step1-error');if(!website){if(error)error.textContent='Enter a valid company website.';return;}if(!markets.length){if(error)error.textContent='Choose at least one target market.';return;}if(error)error.textContent='';
   running=true;setResearchButtonBusy(true);const rerunButton=$('rerun-company-research');if(rerunButton)rerunButton.disabled=true;
   const runController=new AbortController();const runTimer=setTimeout(()=>runController.abort(),COMPANY_RESEARCH_RUN_TIMEOUT_MS);const taskId=`company-research:${Date.now()}`;const taskCentre=window.LeadIntelTaskCentre;
@@ -272,8 +288,8 @@ async function runCompanyResearch({rerun=false}={}){
     setProgress('Building evidence-backed context…',`${research.primary.length} primary and ${research.supporting.length} supporting sources passed the quality check.`);
     taskCentre?.update(taskId,{stage:'Building evidence-backed context',completed:3,resultCount:sources.length});
     const fallback=researchEngine.buildEvidenceDraft({sources:research.primary,targetMarkets:markets,uiLanguage:researchLanguage});const ai=await aiDraftFor({website,targetMarkets:markets,sources:research.primary,documents:state.documents||[],uiLanguage:researchLanguage},runController.signal);const draft=researchEngine.capDraftConfidence(combineDrafts(fallback,ai.draft),quality.coverage);const merged=researchEngine.mergeDraft(state.answers||{},draft,readMeta().fields||{});
-    const latest=readState();if(JSON.stringify(latest.answers||{})!==JSON.stringify(state.answers||{})||latest.website!==state.website)throw new Error('Workspace changed during research. Your edits were preserved; rerun when ready.');
-    const next={...state};next.uiLanguage='en';next.website=website;next.targetMarkets=markets;next.additionalLinks=additionalLinks;next.answers=merged.answers;
+    const latest=readState();assertResearchContext(context,latest);
+    const next={...latest};next.uiLanguage='en';next.website=website;next.targetMarkets=markets;next.additionalLinks=additionalLinks;next.answers=merged.answers;
     next.scrapedSources=sources.map(source=>({type:source.type==='public'?'link':source.type,url:source.url,title:source.title,text:source.text,extracted:source.extracted,status:'ready',role:source.role||'supporting',pageCategory:source.pageCategory||researchEngine.classifyPageCategory(source,website)}));
     next.answerStatus={...(state.answerStatus||{})};for(const [id,row] of Object.entries(merged.meta)){next.answerStatus[id]=row.origin==='user'?'user':row.reviewed?'accepted':merged.answers[id]?'draft':'missing';}
     next.profile=null;next.approved=false;next.market={};next.step=2;writeState(next);
@@ -292,7 +308,7 @@ async function runCompanyResearch({rerun=false}={}){
     setProgress('Research could not complete',message);toast('Company research stopped safely. Your existing workspace data is safe.');
     if(taskCentre?.get(taskId)?.status!=='canceled')taskCentre?.fail(taskId,message,{canRetry:true});
     const latest=readState();
-    if(normalizeUrl(latest.website||'')===website){
+    if(researchContextCurrent(context,latest)&&normalizeUrl(latest.website||'')===website){
       const now=new Date().toISOString();const existing=readMeta();const previous=normalizeUrl(existing.website)===website?existing:{};
       writeMeta(previous.generatedAt?{...previous,lastFailureAt:now,lastFailure:message}:{...previous,website,failureAt:now,error:message,generatedAt:'',mode:'failed',fields:previous.fields||{}});
       latest.website=website;latest.targetMarkets=markets;latest.additionalLinks=additionalLinks;latest.step=2;writeState(latest);setTimeout(()=>location.reload(),180);

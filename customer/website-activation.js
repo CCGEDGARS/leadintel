@@ -46,6 +46,9 @@
     const activation=state?.websiteActivation||{};const target=normalizeUrl(website||state.website);
     return Boolean(target&&activation.status==="active"&&sameUrl(activation.url,target)&&getActivatedSource(state,target));
   }
+  function isSameCompanyActivation(state={},url=''){
+    return sameCompanyWebsite(state.companyContextWebsite||state.websiteActivation?.url||state.profile?.website||state.website||'',url);
+  }
   function buildActivatedState(state={},source={},activatedAt=new Date().toISOString()){
     const base=state&&typeof state==="object"&&!Array.isArray(state)?state:{};const websiteSource=normalizedSource(source);
     if(!websiteSource)return {...base};
@@ -54,8 +57,7 @@
     // cannot prove which company's context is currently loaded. Compare the new
     // source with the last activated/canonical company first so changing the input
     // cannot carry answers and documents into another company's workspace.
-    const activeCompanyWebsite=base.companyContextWebsite||base.websiteActivation?.url||base.profile?.website||base.website||"";
-    const sameCompany=sameCompanyWebsite(activeCompanyWebsite,url);
+    const sameCompany=isSameCompanyActivation(base,url);
     const isolatedContext=sameCompany?{}:{
       additionalLinks:[],
       documents:[],
@@ -71,11 +73,17 @@
       website:url,
       companyContextWebsite:url,
       websiteActivation:{status:"active",url,title,description,activatedAt:clean(activatedAt),contentChars:text.length},
-      scrapedSources:[{type:"website",url,title,text,status:"ready"}],
-      profile:null,
-      approved:false,
-      market:{}
+      scrapedSources:sameCompany?refreshWebsiteSources(base.scrapedSources,websiteSource):[{type:"website",url,title,text,status:"ready"}],
+      profile:sameCompany?base.profile||null:null,
+      approved:sameCompany?Boolean(base.approved):false,
+      market:sameCompany?{...(base.market||{}),...(base.profile?{researchContextStale:true}:{})}:{}
     };
+  }
+  function refreshWebsiteSources(sources,source){
+    const rows=Array.isArray(sources)?sources:[];
+    const index=rows.findIndex(row=>row?.type==='website'&&sameCompanyWebsite(row.url,source.url));
+    // Preserve evidence positions: saved answer citations use S1, S2, etc.
+    return index<0?[...rows,source]:rows.map((row,i)=>i===index?{...row,...source}:row);
   }
   function buildActivationRecord(source={},activatedAt=new Date().toISOString()){
     const websiteSource=normalizedSource(source);if(!websiteSource)return {status:"inactive",url:"",source:null};
@@ -178,12 +186,27 @@
   async function activateWebsite(){
     if(running)return false;const url=visibleWebsite(),button=root?.document?.getElementById("activate-website");
     if(!url){activationError="Enter a valid website URL first.";setStatus("error",activationError);return false;}
+    const accountContext=root.localStorage.getItem('leadintel_account_context_v1');
+    const workspaceId=root.LeadIntelServerBridge?.workspace?.id||'';
     activationError="";running=true;if(button){button.disabled=true;button.textContent="Activating…";}setStatus("loading","Connecting to the website and loading public company evidence…");
     try{
-      const source=await scrapeWebsite(url),at=new Date().toISOString(),record=buildActivationRecord(source,at),next=buildActivatedState(readState(),source,at);
-      clearDerivedWorkspaceData();
+      const source=await scrapeWebsite(url);
+      // A response for the previous URL/account must never clear the current workspace.
+      if(!sameUrl(visibleWebsite(),url)||accountContext!==root.localStorage.getItem('leadintel_account_context_v1')||workspaceId!==(root.LeadIntelServerBridge?.workspace?.id||'')||(root.LeadIntelAccountCache&&!root.LeadIntelAccountCache.current()))throw new Error('Workspace or website changed while loading. Your saved work was preserved; activate the current website again.');
+      const current=readState(),sameCompany=isSameCompanyActivation(current,source.url);
+      const at=new Date().toISOString(),record=buildActivationRecord(source,at),next=buildActivatedState(current,source,at);
+      if(!sameCompany)clearDerivedWorkspaceData();
       writeActivationRecord(record);writeState(next);
-      try{root.dispatchEvent(new CustomEvent("leadintel:website-activated",{detail:{website:record.url,activation:record}}));}catch{}
+      try{
+        const detail={website:record.url,activation:record,evidenceRefreshedAt:at};
+        if(sameCompany){
+          // website-activated listeners deliberately delete old-company records.
+          // Refresh uses the non-destructive state hydration and autosave events.
+          root.dispatchEvent(new CustomEvent('leadintel:company-research-updated',{detail:{...detail,evidenceRefreshed:true}}));
+          root.dispatchEvent(new CustomEvent('leadintel:website-synced',{detail}));
+          root.dispatchEvent(new CustomEvent('leadintel:workspace-dirty',{detail:{source:'website-evidence-refresh'}}));
+        }else root.dispatchEvent(new CustomEvent("leadintel:website-activated",{detail}));
+      }catch{}
       returnToWebsiteStep();
       try{await savePersistenceWithTimeout();}catch{}
       activationError="";setStatus("active",`✓ Website active · ${record.title||new URL(record.url).hostname} · ${formatChars(record.contentChars)} loaded`);return true;

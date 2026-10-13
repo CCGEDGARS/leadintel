@@ -1927,6 +1927,106 @@
       "contains": [
         "mailbox-controls=20261012-v1"
       ]
+    },
+    {
+      "id": "rescue-website-race",
+      "type": "text",
+      "url": "/customer/website-activation.js",
+      "status": 200,
+      "contains": [
+        "accountContext!==root.localStorage",
+        "Workspace or website changed while loading."
+      ]
+    },
+    {
+      "id": "rescue-profile-race",
+      "type": "text",
+      "url": "/customer/company-research-ui.js",
+      "status": 200,
+      "contains": [
+        "captureResearchContext",
+        "assertResearchContext(context,latest)",
+        "const next={...latest}"
+      ]
+    },
+    {
+      "id": "rescue-saved-message",
+      "type": "text",
+      "url": "/customer/message-editor.js",
+      "status": 200,
+      "contains": [
+        "info.scriptSavedAt||info.savePending",
+        "style:options.style||info.mode"
+      ]
+    },
+    {
+      "id": "rescue-message-reset",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "originalStyle ||= item.messageStudioDraft?.mode",
+        "validateWritingDraft(draft,current.context)"
+      ]
+    },
+    {
+      "id": "rescue-draft-provenance",
+      "type": "text",
+      "url": "/customer/message-workspace.js",
+      "status": 200,
+      "contains": [
+        "mw-draft-provenance",
+        "Edited working copy \u00b7 originals preserved"
+      ]
+    },
+    {
+      "id": "rescue-writing-safety",
+      "type": "text",
+      "url": "/customer/writing-assistant-context.js",
+      "status": 200,
+      "contains": [
+        "function validateWritingDraft",
+        "Writing Assistant added an unapproved link"
+      ]
+    },
+    {
+      "id": "rescue-storage-outage",
+      "type": "text",
+      "url": "/customer/workspace-storage-ui.js",
+      "status": 200,
+      "contains": [
+        "storage-billing-connection",
+        "status?.billing?.available===false"
+      ]
+    },
+    {
+      "id": "rescue-lookalike",
+      "type": "text",
+      "url": "/customer/market-engine.js",
+      "status": 200,
+      "contains": [
+        "referenceModel=null",
+        "Activate a reference customer to establish commercial anchors."
+      ]
+    },
+    {
+      "id": "rescue-retained-companies",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "A new search does not replace your saved selections.",
+        "This search has finished."
+      ]
+    },
+    {
+      "id": "rescue-cache-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "rescue=20261013-v1"
+      ]
     }
   ],
   "retry": {

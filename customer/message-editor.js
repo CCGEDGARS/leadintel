@@ -201,7 +201,7 @@
  }
  function repairSubject(item,studio,context={}){
   const info=item?.messageStudioDraft,subject=item?.drafts?.emailSubject;
-  if(!info||info.eventSnapshot||JSON.stringify(info.essentials)!==JSON.stringify(studio.essentials)||item.channel==='linkedin'||item.approved||info.editorOrigin==='manual'||info.mode!==studio.mode||subject!==info.selectedSubject||S.validSubject(subject)||!S.subjectsFor(studio.mode).length)return item;
+  if(!info||info.scriptSavedAt||info.savePending||['manual','rewrite'].includes(info.editorOrigin)||info.languageVersions?.activeLanguage&&info.languageVersions.activeLanguage!=='en'||info.eventSnapshot||JSON.stringify(info.essentials)!==JSON.stringify(studio.essentials)||item.channel==='linkedin'||item.approved||info.editorOrigin==='manual'||info.mode!==studio.mode||subject!==info.selectedSubject||S.validSubject(subject)||!S.subjectsFor(studio.mode).length)return item;
   const language=info.languageVersions?.activeLanguage||context.subjectLanguage||studio.essentials?.language||'en';
   const next=S.resolvedSubject(studio,{...context,subjectLanguage:language},studio.essentials);
   if(!S.validSubject(next))return item;
@@ -296,7 +296,7 @@
    delete info.scriptSavedAt;delete info.savedDraft;
   }
   if(options.clearEvent){delete info.eventSnapshot;delete info.eventStyle;}
-  if(options.original&&(!info.tailoredOriginal||info.tailoredOriginal.key!==options.key)){if(info.tailoredOriginal)info.originalHistory=[...(info.originalHistory||[]),copy(info.tailoredOriginal)];info.tailoredOriginal={key:options.key,draft:copy(draft)};}
+  if(options.original&&(!info.tailoredOriginal||info.tailoredOriginal.key!==options.key)){if(info.tailoredOriginal)info.originalHistory=[...(info.originalHistory||[]),copy(info.tailoredOriginal)];info.tailoredOriginal={key:options.key,draft:copy(draft),style:options.style||info.mode||'',triggerUrl:options.triggerUrl??info.triggerSourceUrl??'',essentials:copy(options.essentials||info.essentials||{})};}
   if(options.style)info.mode=options.style;
   if(options.essentials)info.essentials=copy(options.essentials);
   info.generatedAt=new Date().toISOString();info.selectedSubject=draft.subject;info.triggerSourceUrl=options.triggerUrl??info.triggerSourceUrl??'';info.editorOrigin=options.origin||'manual';

@@ -6,5 +6,18 @@
   const sourceRefs=refs?.workspaceId===workspace?refs.sourceRefs||[]:[],referenceRevision=refs?.workspaceId===workspace?refs.referenceRevision:null;
   return {scope:JSON.stringify([workspace,item?.domain,item?.selectedPersonId,context.channel]),fingerprint:JSON.stringify(context),context,sourceRefs,referenceRevision,usable:Boolean(usable&&workspace&&person?.name&&referenceRevision!==null)};
  }
- const api={captureWritingContext};if(typeof module==='object'&&module.exports)module.exports=api;else root.LeadIntelWritingAssistantContext=api;
+ function validateWritingDraft(draft,context={}){
+  if(!draft||typeof draft.subject!=='string'||typeof draft.message!=='string'||!draft.message.trim()||draft.message.length>12000||/\{\{|\}\}/.test(draft.message))throw Error('Writing Assistant returned an invalid or unfilled draft. Your message is preserved.');
+  if(context.channel!=='linkedin'&&(!draft.subject.trim()||[...draft.subject].length>60||/[\r\n]|https?:|^Subject:/i.test(draft.subject)))throw Error('Writing Assistant returned an invalid subject. Your message is preserved.');
+  const links=text=>(String(text||'').match(/https?:\/\/[^\s<>"\])]+/g)||[]).map(url=>url.replace(/[.,;!?]+$/,''));
+  const prior=context.currentDraft?.message||'',existing=links(prior),proposed=links(draft.message);
+  const supplied=Object.values(context.seller||{}).filter(value=>typeof value==='string'&&/^https?:\/\//i.test(value.trim()));
+  const allowed=new Set([...existing,...supplied.flatMap(links)]);
+  if(existing.some(link=>!proposed.includes(link)))throw Error('Writing Assistant omitted an existing link. Your message is preserved.');
+  if(proposed.some(link=>!allowed.has(link)))throw Error('Writing Assistant added an unapproved link. Your message is preserved.');
+  const sender=context.seller?.sender;if(sender&&!draft.message.includes(sender))throw Error('Writing Assistant omitted the sender identity. Your message is preserved.');
+  if(/20[ -]minute/i.test(prior)&&!/20[ -]minute/i.test(draft.message))throw Error('Writing Assistant changed the meeting duration. Your message is preserved.');
+  return draft;
+ }
+ const api={captureWritingContext,validateWritingDraft};if(typeof module==='object'&&module.exports)module.exports=api;else root.LeadIntelWritingAssistantContext=api;
 })(typeof window==='object'?window:globalThis);

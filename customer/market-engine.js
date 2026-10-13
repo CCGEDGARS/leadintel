@@ -72,7 +72,9 @@
 
   function isLv(language){return String(language||'en').toLowerCase()==='lv';}
 
-  function buildIcpCandidates(profile={},language='en'){
+  function buildIcpCandidates(profile={},language='en',referenceModel=null){
+    const activeReferences=referenceModel?.active?(referenceModel.dna?.referenceProfiles||referenceModel.referenceProfiles||[]).map(item=>clean(item.companyName)).filter(Boolean):[];
+    const anchors=[...new Set(activeReferences)].join('; ')||clean(profile.lookalikeCustomers);
     const lv=isLv(language);
     const targetMarkets=clean(profile.targetMarkets)||splitList(profile.currentMarkets).join("; ")||"Priority markets not yet defined";
     const common={
@@ -89,9 +91,9 @@
       rationale:lv?`Tieši atspoguļo apstiprināto ideālā klienta profilu, pircēju lomas, prioritāros piedāvājumus un komerciālo vērtību tirgos: ${targetMarkets}.`:`Directly reflects the approved ideal customer, buying roles, priority offers and commercial value for ${targetMarkets}.`
     }];
     result.push({
-      id:"icp-lookalike",type:"lookalike",name:lv?"Līdzīgo uzņēmumu profils":"Lookalike ICP",...common,active:Boolean(clean(profile.lookalikeCustomers)),
-      description:!clean(profile.lookalikeCustomers)?(lv?"Pievienojiet un aktivizējiet atsauces klientu, lai meklētu līdzīgus uzņēmumus.":"Add and activate a reference customer to find similar companies."):lv?`Uzņēmumi ar līdzīgām darbības pazīmēm kā ${clean(profile.lookalikeCustomers)}.`:`Companies with business characteristics similar to ${clean(profile.lookalikeCustomers)}.`,
-      rationale:lv?`Izmantot ${clean(profile.lookalikeCustomers)} kā komerciālos atskaites punktus un meklēt līdzīgas organizācijas tirgos: ${targetMarkets}.`:`Use ${clean(profile.lookalikeCustomers)} as commercial anchors, then look for similar organizations in ${targetMarkets}.`
+      id:"icp-lookalike",type:"lookalike",name:lv?"Līdzīgo uzņēmumu profils":"Lookalike ICP",...common,active:Boolean(anchors),
+      description:!anchors?(lv?"Pievienojiet un aktivizējiet atsauces klientu, lai meklētu līdzīgus uzņēmumus.":"Add and activate a reference customer to find similar companies."):lv?`Uzņēmumi ar līdzīgām darbības pazīmēm kā ${anchors}.`:`Companies with business characteristics similar to ${anchors}.`,
+      rationale:!anchors?(lv?"Aktivizējiet atsauces klientu, lai noteiktu komerciālos atskaites punktus.":"Activate a reference customer to establish commercial anchors."):lv?`Izmantot ${anchors} kā komerciālos atskaites punktus un meklēt līdzīgas organizācijas tirgos: ${targetMarkets}.`:`Use ${anchors} as commercial anchors, then look for similar organizations in ${targetMarkets}.`
     });
     result.push({
       id:"icp-trigger-led",type:"trigger-led",name:lv?"Pirkšanas signālos balstīts profils":"Trigger-led ICP",...common,
