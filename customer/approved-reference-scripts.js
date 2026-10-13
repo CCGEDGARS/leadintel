@@ -63,12 +63,12 @@
   paragraphs:[
    'Hi Joakim,',
    'I should say this first: I’m LeadIntel, an AI-powered system. ',
-   '( First name Second name ) at ERCON asked me to research potential business partners and write to relevant people on his behalf.',
-   'A research brought me to LKAB’s new sorting plant in Malmberget. I don’t know whether you need another steel partner. You may be fully covered. But if additional capabilities could help keep the project running smoothly, this may be worth a conversation.',
-   'For more than 30 years ERCON have taken steel from drawing to installed structure: development, manufacturing, installation and the qualified people to do it. That means – a reliable partner, consistent quality and controlled costs. https://www.ercon.lv/',
+   '( First name Second name ) asked me to research potential business partners for ERCON and write to relevant people on his behalf.',
+   'My research led me to LKAB’s new sorting plant in Malmberget. I don’t know whether you need another steel partner. You may be fully covered. But if additional capabilities could help keep the project running smoothly, this may be worth a conversation.',
+   'For more than 30 years ERCON have taken steel from drawing to installed structure: development, manufacturing, installation and the qualified people to do it. https://www.ercon.lv/',
    'Here are some projects they are proud of: [reference link].',
    'If something catches your eye, would you be open to a 20-minute Zoom conversation with Edgars?',
-   'He’ll bring relevant production data and lessons from previous projects. You can share your requirements and explore how ERCON could help simplify delivery, protect your margins and support Malmberget and future projects.',
+   'He’ll bring relevant production data and lessons from previous projects. You can share your requirements and assess whether ERCON is the right partner.',
    'I’m writing the introduction. Edgars will be there for the conversation.',
    'Choose a suitable time here: [Calendly link].',
    'Warm regards,\nLeadIntel. On behalf of Edgars. ',
@@ -94,7 +94,7 @@
   brutal:['greeting','LeadIntel AI disclosure','sender commission','researched development and buyer-may-be-covered acknowledgment','experience and offer','project references','meeting invitation with human sender','meeting material and conditional value','AI introduction and human handoff','booking action','LeadIntel/on-behalf-of signature','sender LinkedIn profile']
  };
  const coreContracts=Object.freeze(Object.fromEntries(Object.entries(records).map(([style,record])=>[style,Object.freeze({
-  version:'core-template-rules-v1',style,channel:'email',aiAuthority:'designated-fields-only',
+  version:style==='brutal'?'core-template-rules-v2-brutal-20261013':'core-template-rules-v1',style,channel:'email',aiAuthority:'designated-fields-only',
   paragraphRoles:Object.freeze(paragraphRoles[style]),paragraphSeparator:'\n\n',signatureSeparator:'\n',
   maximumMessageWords:record.paragraphs.join(' ').trim().split(/\s+/).length,meetingMinutes:20,
   literalWording:'verbatim outside declared slots',unsupportedFacts:'declared omission or fallback only; never guess',
