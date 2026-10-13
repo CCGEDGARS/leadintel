@@ -1,0 +1,18 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs');
+const {mounted}=require('./helpers/message-runtime.js');
+const settle=()=>new Promise(r=>setImmediate(r));
+test('actual outreach follow-up adapter uses sent history and saves separately without reading or replacing first contact',async()=>{
+ const h=mounted({runtimeSetup:"window.__initializeFollowUp=()=>{handoffContact.contact={id:'contact-one',company_id:'company-one',work_email:'alex@buyer.example'};installFollowUpAssistant();};"});try{
+  for(const name of ['follow-up-assistant.js','follow-up-assistant-ui.js'])h.w.eval(fs.readFileSync(require.resolve('../'+name),'utf8'));
+  h.w.__initializeFollowUp();
+  const host=h.q('mw-follow-up-host'),details=host.querySelector('details'),before=JSON.stringify(h.item());assert.equal(h.requests.length,0);
+  details.open=true;details.dispatchEvent(new h.w.Event('toggle'));await settle();
+  const contextRequest=h.requests.at(-1);assert.match(contextRequest.url,/follow-up-assistant\/context/);assert.equal(new URL(contextRequest.url).searchParams.get('companyId'),'company-one');assert.equal(contextRequest.options.method,'GET');
+  contextRequest.resolve({ok:true,json:async()=>({previousSent:{id:'sent-one',subject:'Previously sent subject',body:'A historical sent message',sentAt:'2026-09-01T10:00:00Z',source:'crm_sent'},history:[],suppression:{suppressed:false,optedOut:false},frequency:{eligible:true},contextVersion:'revision-one'})});await settle();await settle();
+  host.querySelector('[data-fu-inbound]').value='Yes, please tell me more.';host.querySelector('[data-fu-analyze]').click();await settle();
+  const analysis=h.requests.at(-1),payload=JSON.parse(analysis.options.body);assert.match(analysis.url,/follow-up-assistant\/analyze/);assert.equal(payload.previousSentId,'sent-one');assert.equal(payload.companyId,'company-one');assert.equal(payload.recipient,'alex@buyer.example');assert.equal(payload.currentDraft,undefined);assert.equal(JSON.stringify(payload).includes(h.before.message),false);
+  analysis.resolve({ok:true,json:async()=>({intent:{label:'interested',confidence:0.9,evidence:['tell me more']},nextAction:'Answer their question.',draft:{subject:'Following our conversation',message:'Here is a separate follow-up draft.'},canSave:true,analysisId:'analysis-one',contextVersion:'revision-one',warnings:[]})});await settle();await settle();host.querySelector('[data-fu-save]').click();await settle();
+  const save=h.requests.at(-1);assert.match(save.url,/follow-up-assistant\/save/);assert.equal(JSON.parse(save.options.body).draft.message,'Here is a separate follow-up draft.');save.resolve({ok:true,json:async()=>({saved:true})});await settle();await settle();assert.equal(JSON.stringify(h.item()),before);assert.match(host.textContent,/saved separately in CRM/);
+  assert.equal(h.requests.some(r=>/gmail\/send|delivery|sequence/.test(r.url)),false);
+ }finally{h.w.close();}
+});

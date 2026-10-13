@@ -451,3 +451,70 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #message-studio .mw-preparing-editor[hidden]{display:none}
 #message-studio .mw-preparing-editor label{display:grid;gap:8px}
 #message-studio .mw-preparing-editor input,#message-studio .mw-preparing-editor textarea{width:100%;box-sizing:border-box}
+
+/* Message-first composer: the draft owns the width, setup stays compact. */
+#message-studio .mw-layout{display:flex;flex-direction:column;gap:12px}
+#message-studio .mw-layout>.mw-rail,#message-studio .mw-layout>.mw-editor{width:100%;min-width:0;padding:0}
+#message-studio .mw-rail{display:flex;flex-direction:column;gap:10px}
+#message-studio .mw-recipient{padding:12px 16px;margin-bottom:12px;border-radius:12px;gap:12px}
+#message-studio .mw-recipient #message-recipient{font-size:16px}
+#message-studio .mw-recipient .mw-avatar{width:34px;height:34px;flex:none}
+#message-studio #mw-sender-line{font-size:12px;line-height:1.5;margin-top:3px}
+#message-studio .mw-rail>.mw-section{padding:12px 16px;margin:0}
+#message-studio .mw-section-heading{margin-bottom:8px;gap:8px}
+#message-studio .mw-rail .mw-step-number{display:none}
+#message-studio .mw-rail h3{font-size:13px;margin:0}
+#message-studio #mw-trigger-context{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px 14px;align-items:center}
+#message-studio #mw-trigger-context .mw-section-heading{margin:0}
+#message-studio #mw-trigger-summary{grid-column:2;margin:0;font-size:11px;color:#687c6e}
+#message-studio #mw-trigger-options{grid-column:2;grid-row:1;min-width:0}
+#message-studio .mw-trigger-choice{margin:0;padding:0;border:0;background:transparent}
+#message-studio .mw-trigger-choice p{margin:0;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+#message-studio .mw-trigger-actions{flex-wrap:wrap;gap:4px 10px;margin-top:3px}
+#message-studio .mw-trigger-choice small{margin:0;font-size:11px}
+#message-studio .mw-trigger-review{grid-column:3;grid-row:1/3;padding:0;margin:0;border:0;background:transparent;min-width:0;font-size:12px}
+#message-studio .mw-trigger-review[open]{grid-column:1/-1;grid-row:auto;padding-top:8px;border-top:1px solid #dce5df}
+#message-studio .mw-trigger-review>summary{font-size:12px;cursor:pointer}
+#message-studio .mw-styles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+#message-studio .mw-style,#message-studio .mw-style:last-child{grid-column:auto;min-height:42px;padding:10px 8px;text-align:center;margin:0}
+#message-studio .mw-style strong{font-size:12px;line-height:1.4}
+#message-studio .mw-style span{display:none}
+#message-studio #mw-style-help{font-size:12px;margin:3px 0 0;line-height:1.45}
+#message-studio .mw-sender-card{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0 0 12px;padding:0;border:0;background:transparent;box-shadow:none}
+#message-studio .mw-sender-heading,#message-studio #mw-sender-details,#message-studio #mw-sender-card>#mw-edit-sender{display:none}
+#message-studio .mw-sender-card>#mw-settings,#message-studio .mw-sender-card>.mw-language-tools{margin:0;padding:11px 14px;border-radius:9px;min-height:44px;align-self:start}
+#message-studio .mw-sender-card>#mw-settings>summary,#message-studio .mw-sender-card>.mw-language-tools>summary{font:600 13px/20px 'DM Sans',sans-serif}
+#message-studio .mw-sender-card>details[open]{grid-column:1/-1}
+#message-studio .mw-sender-card>.mw-language-quick{grid-column:1/-1;padding:0}
+#message-studio .mw-editor .outreach-drafts{margin:0;padding:20px}
+#message-studio .mw-editor .script-grid{display:block;min-width:0}
+#message-studio .mw-editor .script-grid>.draft-card{width:100%;min-width:0;box-sizing:border-box}
+#message-studio .mw-editor #outreach-email-body,#message-studio .mw-editor #outreach-linkedin{box-sizing:border-box;width:100%;min-height:340px;max-height:none;height:auto;overflow-y:hidden;resize:none;font-size:15px;line-height:1.7;padding:16px}
+#message-studio .mw-editor .mw-subject-options{padding:0;border:0;background:transparent;margin:12px 0}
+#message-studio .mw-subject-picker{margin:4px 0 0}
+#message-studio .mw-editor-head{margin-bottom:8px}
+#message-studio .mw-editor-head h3{font-size:18px}
+#message-studio #mw-draft-provenance{font-size:11px;line-height:1.4;margin:3px 0 0}
+#message-studio #mw-header-actions .mw-update-help{display:none}
+#message-studio .mw-editor-actions{margin:8px 0}
+#message-studio .mw-writing-assistant{margin:12px 0 0;padding:16px}
+#message-studio .mw-follow-up-host:empty{display:none}
+#message-studio .mw-tools-drawer{margin:12px 0 0;padding:12px 16px;border:1px solid #dce5df;border-radius:10px;background:#fafcfb}
+#message-studio .mw-tools-drawer>summary{font-size:13px;font-weight:600;cursor:pointer;line-height:1.5}
+#message-studio .mw-tools-drawer>summary span{display:inline;margin-left:8px;font-size:12px;font-weight:400;color:#687c6e}
+#message-studio .mw-tools-drawer:not([open])>.mw-tools-content{display:none}
+#message-studio .mw-tools-content{padding-top:12px}
+#message-studio .mw-tools-content>.message-advanced{padding:12px;margin:0 0 10px;border:1px solid #dce5df;border-radius:9px;font-size:12px}
+#message-studio .mw-tools-content>.mw-default-template{margin:0 0 12px;padding:12px}
+#message-studio .mw-tools-content>button{margin:4px 6px 0 0}
+@media(max-width:720px){
+ #message-studio .mw-styles{grid-template-columns:repeat(3,minmax(0,1fr))}
+ #message-studio #mw-trigger-context{grid-template-columns:minmax(0,1fr);gap:6px}
+ #message-studio #mw-trigger-options,#message-studio #mw-trigger-summary,#message-studio .mw-trigger-review{grid-column:1;grid-row:auto}
+ #message-studio .mw-editor .outreach-drafts{padding:16px}
+ #message-studio .mw-recipient>.mw-channel{margin-left:0}
+ #message-studio .mw-sender-card>#mw-settings,#message-studio .mw-sender-card>.mw-language-tools{padding:10px;font-size:12px}
+ #message-studio .mw-tools-drawer>summary span{display:block;margin:3px 0 0}
+ #message-studio .mw-editor #outreach-email-body,#message-studio .mw-editor #outreach-linkedin{padding:14px;font-size:14px;min-height:300px}
+}
+@media(max-width:400px){#message-studio .mw-styles{grid-template-columns:repeat(2,minmax(0,1fr))}}

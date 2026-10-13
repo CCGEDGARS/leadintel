@@ -22,7 +22,7 @@
    finally{if(alive&&token===owner){clearTimeout(timer);timer=null;controller=null;busy=false;changed();}}
   }
   async function applyPreview(){if(!alive||busy||!preview)return false;const c=syncContext();if(stale||!c?.usable||baseline!==stamp(c))return false;const token=++owner;busy=true;applying=true;changed();try{const accepted=await apply(clone(preview));if(token!==owner||accepted===false)return false;preview=null;stale=false;baseline=stamp(capture());error='Applied as an edited draft. Review, then Save.';return true;}catch(cause){if(token===owner)error=cause.message;return false;}finally{if(token===owner){applying=false;busy=false;changed();}}}
-  function discardPreview(){preview=null;stale=false;error='';baseline=stamp(capture());changed();}
+  function discardPreview(){if(busy)return false;preview=null;stale=false;error='';baseline=stamp(capture());changed();}
   function cancel(){stop();error='Cancelled. Your draft is preserved.';changed();}
   function destroy(){stop();alive=false;preview=null;messages=[];}
   return {state,ask,applyPreview,discardPreview,syncContext,cancel,destroy};
