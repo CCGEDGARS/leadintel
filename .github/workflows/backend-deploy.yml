@@ -48,7 +48,7 @@ jobs:
         run: npx wrangler deploy --config proxy.wrangler.toml --var "BACKEND_RELEASE_SHA:${{ github.event.workflow_run.head_sha }}"
       - name: Verify legacy proxy customer-only billing
         run: |
-          curl --fail --silent --show-error https://apollo-proxy.edgars-7e7.workers.dev/api/health | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const p=JSON.parse(s);if(p.billing!=="customer_only"||p.release_sha!==process.env.EXPECTED_SHA)process.exit(1)})'
+          node ../scripts/verify-worker-propagation.mjs https://apollo-proxy.edgars-7e7.workers.dev/api/health "$EXPECTED_SHA"
         env:
           EXPECTED_SHA: ${{ github.event.workflow_run.head_sha }}
       - name: Verify production health
