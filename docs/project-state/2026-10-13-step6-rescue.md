@@ -47,3 +47,11 @@ Corrected order is editor → Writing Assistant (one visible Add a book or mater
 Historical working content is preserved on reopen. The editor now compares English core working copy to canonical assembly and offers explicit Restore approved [style], without claiming historical metadata proves manual editing. Restore clears a personal/default selection, reassembles the protected core, retains prior text in Undo/history and archives a corrupted same-scope original before establishing the canonical Reset baseline. Save remains explicit. Events, LinkedIn and translations retain their own boundaries.
 
 No stronger model was needed for these corrections: the failures concerned presentation, existing saved state, original-snapshot recovery and premature acceptance reporting. Final review found no remaining critical/important defect in this corrective scope. Browser verification was retried and remains blocked by the same protocol timeout; no authenticated customer screenshot is represented as verified.
+
+## Split-screen preference restored — 10:51 Riga
+
+The owner explicitly requested the previous split screen with styles in the left sidebar. Desktop CSS restores a 280px trigger/style rail and right editor; narrow screens stack. The approved email recovery and current settings/book/writer/follow-up order are retained.
+
+Writing Assistant now has a visible Attach book or material button beside Ask/Expand. It opens the one existing private upload facility and focuses its file input; it neither uploads nor invokes a provider automatically. In the expanded assistant the canonical in-panel book library remains in the same dialog; legacy external locations fall back inline. Conversation and instruction state are preserved.
+
+Validation:39 layout/workspace checks,73 combined assistant/release checks and10 final attachment UI tests pass; static build and diff check pass. This is a presentation correction; protected master scripts and saved email text are unchanged. Authenticated browser pixels remain outside these DOM/CSS assertions. Exact production status requires the new SHA proof.
