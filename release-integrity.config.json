@@ -2050,7 +2050,8 @@
       "contains": [
         "overflow-y:hidden;resize:none",
         "grid-template-columns:280px minmax(0,1fr)",
-        "text-align:left"
+        "text-align:left",
+        ".wa-actions>[data-wa-attach]{grid-column:1/-1;grid-row:1"
       ]
     },
     {
@@ -2130,7 +2131,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "step6-rescue=20261013-v5"
+        "step6-rescue=20261013-v6"
       ]
     }
   ],

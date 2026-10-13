@@ -103,3 +103,16 @@ test('the explicit approved-template recovery stays visible and compact while hi
  installViewportStyles(document,1440);assert.equal(w.getComputedStyle(panel).display,'flex');assert.equal(w.getComputedStyle(panel).padding,'12px 14px');assert.equal(panel.querySelector('button').type,'button');
  panel.hidden=true;assert.equal(w.getComputedStyle(panel).display,'none');w.close();
 });
+
+for(const width of [1440,390])test(`sidebar writer actions do not stretch into equal-height attachment towers at ${width}px`,()=>{
+ const {document,w}=mounted();w.eval(read('writing-assistant-ui.js'));
+ const controller={state:()=>({messages:[],busy:false}),ask(){},applyPreview(){},discardPreview(){},cancel(){}};
+ const view=w.LeadIntelWritingAssistantUI.mountWritingAssistant(document,controller);
+ const styles=document.createElement('style');styles.textContent=read('writing-assistant.css');document.head.append(styles);installViewportStyles(document,width);
+ const css=node=>w.getComputedStyle(node),actions=document.querySelector('.wa-question-footer .wa-actions');
+ assert.equal(css(actions).display,'grid');assert.equal(css(actions).gridTemplateColumns,'repeat(2,minmax(0,1fr))');assert.equal(css(actions).alignItems,'start');
+ const attach=document.querySelector('[data-wa-attach]'),ask=document.querySelector('[data-wa-ask]'),expand=document.querySelector('[data-wa-expand]');
+ assert.equal(css(attach).gridColumn,'1/-1');assert.equal(css(attach).gridRow,'1');assert.equal(css(ask).gridRow,'2');assert.equal(css(expand).gridRow,'2');
+ for(const button of [attach,ask,expand]){assert.equal(css(button).height,'auto');assert.equal(css(button).alignSelf,'start');assert.equal(css(button).minHeight,'36px');}
+ view.destroy();w.close();
+});

@@ -535,8 +535,11 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 /* Compact inline writer in the style sidebar; expanded dialog keeps its full layout. */
 #message-studio .mw-rail .mw-writing-assistant{margin:0;min-width:0}
 #message-studio .mw-rail .wa-question{padding:10px;min-width:0}
-#message-studio .mw-rail .wa-question-footer .wa-actions{width:100%;margin-left:0}
-#message-studio .mw-rail .wa-question-footer .wa-actions button{flex:1;min-width:0}
-#message-studio .mw-rail .wa-question-footer [data-wa-attach]{flex-basis:100%;order:-1}
+#message-studio .mw-rail .wa-question-footer .wa-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:8px;width:100%;margin-left:0}
+#message-studio .mw-rail .wa-question-footer .wa-actions button{box-sizing:border-box;width:100%;min-width:0;min-height:36px;height:auto;align-self:start;padding:8px 10px;line-height:20px}
+#message-studio .mw-rail .wa-question-footer .wa-actions>[data-wa-attach]{grid-column:1/-1;grid-row:1;order:0}
+#message-studio .mw-rail .wa-question-footer .wa-actions>[data-wa-ask]{grid-column:1;grid-row:2}
+#message-studio .mw-rail .wa-question-footer .wa-actions>[data-wa-expand]{grid-column:2;grid-row:2}
+#message-studio .mw-rail .wa-question-footer .wa-actions>[data-wa-cancel]{grid-column:1/-1;grid-row:3}
 #message-studio .mw-rail .wa-source-choice,#message-studio .mw-rail .wa-source-choice select{max-width:100%;min-width:0}
 #message-studio .mw-rail .writing-reference-grid input[type=file],#message-studio .mw-rail .writing-reference-grid input[type=text],#message-studio .mw-rail .writing-reference-grid textarea,#message-studio .mw-rail .writing-reference-grid select{box-sizing:border-box;max-width:100%;min-width:0;width:100%}
