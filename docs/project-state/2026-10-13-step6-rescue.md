@@ -65,3 +65,11 @@ Per the owner's explicit instruction, the existing Writing Assistant now sits di
 The customer screenshot showed an actual CSS defect: the long attachment label wrapped into a narrow column and stretched Ask/Expand to the same tall row. The intended attachment flex-basis lost to the more specific button flex shorthand. Replace the row with an explicit two-column grid: attachment spans the first row, Ask and Expand occupy the second, cancellation has its own row, and controls align to their own compact height.
 
 69 focused layout, attachment and release-contract tests pass, including actual loaded stylesheet assertions for grid placement and non-stretch alignment at desktop and narrow widths. Static build and diff check pass. This fixes the supplied visual failure without changing the writing session or message contents. These assertions do not constitute browser pixel verification.
+
+## Launcher-only Writing Assistant — 12:24 Riga
+
+The owner approved a compact sidebar launcher only: Writing Assistant / Want to improve this message? / Open assistant. Books, upload buttons, chat fields and editing controls are not presented in the sidebar.
+
+The existing complete session now lives in one closed dialog, opened by the launcher. Closing/Escape returns focus to the launcher while retaining typed instructions, conversation, proposal and the same book/material DOM/handlers. Reopening starts no generation. If a request completes while the dialog is closed, it does not steal focus. The expanded session uses available width for conversation and shows a side-by-side proposed draft on desktop when one exists; narrow layouts stack.
+
+The static launcher starts disabled until the UI binds; the preparation panel remains hidden during initialization to prevent flashing the old full sidebar. Existing upload storage and protected master wording are preserved. 30 writing-assistant tests and 82 initial workspace/adjustment/release checks passed; the final full customer suite passes 2,564/2,564 including actual mounted launcher checks. Independent final review found no critical or important defect. Browser pixels remain a separate acceptance boundary.

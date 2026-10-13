@@ -17,3 +17,23 @@
 .wa-dialog .wa-question-footer{align-items:flex-start}
 @media(max-width:480px){.wa-source-choice{width:100%}.wa-source-choice select{flex:1;max-width:100%}.wa-question-footer .wa-actions{width:100%}.wa-question-footer .wa-actions button{flex:1}}
 .wa-question-footer [data-wa-attach]{white-space:normal;min-width:0}
+/* Sidebar entry opens the one permanently mounted assistant window. */
+.wa-launcher h3{margin:0;font-size:15px;color:#243b30}
+.wa-launcher p{margin:8px 0 13px;color:#62776a;font-size:13px;line-height:1.5}
+.wa-launcher button{width:100%;min-height:38px;text-align:left;border-radius:8px}
+.wa-dialog:not([open]){display:none}
+.wa-dialog{width:min(1120px,calc(100vw - 48px));box-sizing:border-box;max-height:90vh;padding:24px}
+.wa-dialog .wa-session{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+.wa-dialog .wa-session>*{grid-column:1;grid-row:auto}
+.wa-dialog .wa-transcript{min-height:80px;max-height:36vh}
+.wa-dialog .wa-question textarea{min-height:128px}
+.wa-dialog .wa-question,.wa-dialog .wa-preview{min-width:0}
+.wa-dialog .wa-session.wa-has-preview{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr)}
+.wa-dialog .wa-has-preview .wa-context{grid-column:1/-1;grid-row:1}
+.wa-dialog .wa-has-preview .wa-transcript{grid-column:1;grid-row:2}
+.wa-dialog .wa-has-preview .wa-question{grid-column:1;grid-row:3}
+.wa-dialog .wa-has-preview [data-wa-status]{grid-column:1;grid-row:4}
+.wa-dialog .wa-has-preview .wa-preview{grid-column:2;grid-row:2/5;align-self:start}
+.wa-dialog .wa-has-preview .wa-session-note{grid-column:1/-1;grid-row:5}
+.wa-dialog #mw-writing-references{margin-top:18px}
+@media(max-width:720px){.wa-dialog{width:calc(100vw - 24px);padding:16px}.wa-dialog .wa-session.wa-has-preview{grid-template-columns:minmax(0,1fr)}.wa-dialog .wa-session.wa-has-preview>*{grid-column:1;grid-row:auto}.wa-dialog .wa-question textarea{min-height:104px}}
