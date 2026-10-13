@@ -453,7 +453,7 @@
       "url": "/customer/writing-references-ui.js",
       "status": 200,
       "contains": [
-        "Writing References",
+        "One optional book or material",
         "What AI learned",
         "Retry analysis"
       ]
@@ -2158,6 +2158,53 @@
       ],
       "notContains": [
         ".mw-style[aria-pressed=true]:after"
+      ]
+    },
+    {
+      "id": "assistant-conversation-first",
+      "type": "text",
+      "url": "/customer/writing-assistant-ui.js",
+      "status": 200,
+      "contains": [
+        "sourcePanel.open=false;panel.append(sourcePanel)",
+        "Apply to message",
+        "controller.setInstruction",
+        "controller.syncContext?.();render()"
+      ]
+    },
+    {
+      "id": "assistant-single-material",
+      "type": "text",
+      "url": "/customer/writing-references-ui.js",
+      "status": 200,
+      "contains": [
+        "One optional book or material",
+        "Ready \u00b7 Not in use",
+        "wr-options"
+      ],
+      "notContains": [
+        "[1,2,3].map(slot=>"
+      ]
+    },
+    {
+      "id": "assistant-window-assets",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "assistant-window=20261013-v1",
+        "single-material=20261013-v1"
+      ]
+    },
+    {
+      "id": "assistant-scoped-history",
+      "type": "text",
+      "url": "/customer/writing-assistant.js",
+      "status": 200,
+      "contains": [
+        "leadintel_writing_sessions_v1",
+        "scope===scope",
+        "function persist()"
       ]
     }
   ],
