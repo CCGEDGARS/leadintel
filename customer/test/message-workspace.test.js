@@ -241,6 +241,8 @@ test('a failed style change identifies the displayed draft rather than claiming 
  const base={ready:true,authenticated:true,hasDraft:true,channel:'email',senderIdentityReady:true,selectedStyle:'curiosity',appliedStyle:'professional',pendingSelections:true};
  w.LeadIntelMessageWorkspace.render(document,{...base,generationError:true});
  assert.equal(document.getElementById('mw-applied-style').textContent,'Style: Professional');assert.match(document.getElementById('mw-style-help').textContent,/NLP has not been applied/);assert.match(document.getElementById('mw-style-help').textContent,/Preparation failed/);assert.doesNotMatch(document.getElementById('mw-style-help').textContent,/is preparing/);assert.equal(document.getElementById('outreach-email-body').value,'Earlier Professional email');
+ assert.equal(document.querySelector('[data-writing-style="curiosity"]').dataset.applied,'false');
+ assert.equal(document.querySelector('[data-writing-style="professional"]').dataset.applied,'true');
  w.LeadIntelMessageWorkspace.render(document,{...base,busy:true});assert.match(document.getElementById('mw-style-help').textContent,/Preparing NLP/);
 });
 

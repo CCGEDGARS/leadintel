@@ -36,7 +36,7 @@ body:has(#step-6.active) .journey-stage-guide,body:has(#step-6.active) .stage-mi
 .mw-style strong{font-size:13px}.mw-style span{font-size:11px;color:#768278;line-height:1.4}
 .mw-style:hover{background:#f7faf7;border-color:#9ab6a6}
 .mw-style[aria-pressed=true]{background:#edf6ef;border-color:#3e8766;box-shadow:inset 3px 0 #3e8766}
-.mw-style[aria-pressed=true]:after{content:'✓';position:absolute;right:10px;top:12px;color:#276349;font-weight:700}
+.mw-style[data-applied=true]:after{content:'✓';position:absolute;right:10px;top:12px;color:#276349;font-weight:700}
 #message-mode-label{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 .mw-style:focus-visible,#message-studio button:focus-visible,#message-studio summary:focus-visible{outline:3px solid #9ebca8;outline-offset:3px}
 #mw-reference-count{display:block;font-size:11px;color:#78877d;font-weight:400;margin:6px 0 0 15px}

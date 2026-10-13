@@ -2133,7 +2133,31 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "step6-rescue=20261013-v7"
+        "step6-rescue=20261013-v8"
+      ]
+    },
+    {
+      "id": "step6-bounded-generation-context",
+      "type": "text",
+      "url": "/customer/message-studio.js",
+      "status": 200,
+      "contains": [
+        "function generationContext(context)",
+        "remaining=36000",
+        "Do not repeat the same benefit",
+        "same event terminology"
+      ]
+    },
+    {
+      "id": "step6-applied-style-indicator",
+      "type": "text",
+      "url": "/customer/message-workspace.css",
+      "status": 200,
+      "contains": [
+        ".mw-style[data-applied=true]:after"
+      ],
+      "notContains": [
+        ".mw-style[aria-pressed=true]:after"
       ]
     }
   ],
