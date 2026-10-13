@@ -138,7 +138,7 @@ test('message-first workspace places core decisions above editor and reusable to
  const tools=editor.querySelector('#mw-tools-drawer');
  assert.equal(tools.open,false);
  assert.ok(editor.querySelector('#mw-follow-up-host'));
- for(const id of ['message-template-editor','message-my-templates','mw-writing-references'])
+ for(const id of ['message-template-editor','message-my-templates'])
    assert.equal(tools.querySelectorAll('#'+id).length,1,id);
  assert.equal(document.querySelectorAll('#message-generate').length,1);
  assert.equal(document.querySelectorAll('#outreach-email-subject').length,1);
@@ -166,7 +166,7 @@ test('single strongest buying trigger replaces multi-option picker without losin
 test('tools group reusable custom styles below the library without duplicated shortcuts',()=>{
  const {document}=mounted(),tools=document.getElementById('mw-tools-drawer');
  assert.equal(document.querySelector('.mw-library-shortcuts'),null);
- for(const id of ['message-my-templates','mw-style-manager','mw-content-materials','mw-original-peek','mw-writing-references','mw-default-template'])assert.equal(tools.querySelectorAll('#'+id).length,1,id);
+ for(const id of ['message-my-templates','mw-style-manager','mw-content-materials','mw-original-peek','mw-default-template'])assert.equal(tools.querySelectorAll('#'+id).length,1,id);
  assert.ok(tools.querySelector('#mw-style-manager #mw-use-my-style'));
  assert.ok(document.querySelector('#mw-writing-assistant #mw-rewrite-message'));
  assert.ok(document.querySelector('#mw-writing-assistant #mw-shorten-message'));

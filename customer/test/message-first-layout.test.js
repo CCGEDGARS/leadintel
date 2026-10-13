@@ -21,19 +21,20 @@ function installViewportStyles(document,width){
  const resolved=resolve(source.sheet.cssRules);source.remove();const applied=document.createElement('style');applied.textContent=resolved;document.head.append(applied);
 }
 
-test('message-first mounted workspace puts optional setup below its single editor and reserves immediate follow-up host',()=>{
+test('message-first mounted workspace puts optional setup below its single editor and keeps material controls in Writing Assistant above follow-up',()=>{
  const {document,w}=mounted();const drafts=document.querySelector('.mw-editor .outreach-drafts'),tools=document.getElementById('mw-tools-drawer');
- assert.equal(drafts.nextElementSibling.id,'mw-follow-up-host');
- assert.equal(drafts.nextElementSibling.nextElementSibling.id,'mw-writing-assistant');
+ assert.equal(drafts.nextElementSibling.id,'mw-writing-assistant');
+ assert.equal(drafts.nextElementSibling.nextElementSibling.id,'mw-follow-up-host');
  assert.ok(drafts.compareDocumentPosition(tools)&4);assert.equal(tools.open,false);
  assert.ok(tools.contains(document.getElementById('mw-default-template')));
  assert.ok(tools.contains(document.querySelector('.message-advanced')));
  assert.equal(document.querySelector('#step-6 > .message-advanced'),null);
- for(const id of ['mw-writing-references','mw-content-materials']){
+ for(const id of ['mw-content-materials']){
   assert.ok(tools.contains(document.getElementById(id)));assert.equal(document.getElementById(id).open,false);
   assert.equal(document.getElementById('mw-writing-assistant').contains(document.getElementById(id)),false);
  }
  for(const id of ['outreach-email-subject','outreach-email-body','message-mode','message-calendly','mw-rewrite-message','mw-shorten-message','mw-restore-original'])assert.equal(document.querySelectorAll('#'+id).length,1,id);
+ const references=document.getElementById('mw-writing-references');assert.ok(document.getElementById('mw-writing-assistant').contains(references));assert.equal(document.querySelectorAll('#mw-writing-references').length,1);assert.match(references.querySelector('summary').textContent,/Add a book or material/);assert.ok(references.querySelector('#mw-writing-reference-host'));assert.equal(references.open,false);
  let actions=0;document.getElementById('message-save-as-template').addEventListener('click',()=>actions++);tools.open=true;document.getElementById('message-save-as-template').click();assert.equal(actions,1);
  w.close();
 });
@@ -62,4 +63,40 @@ test('mounted canonical email grows with draft changes, shrinks after Reset-size
  measured=380;body.dispatchEvent(new w.Event('input'));assert.equal(body.style.height,'382px');assert.equal(body.value,exact);assert.equal(changes,2);
  assert.equal(w.LeadIntelMessageWorkspace.mount(document),false);body.dispatchEvent(new w.Event('input'));assert.equal(changes,3);
  w.close();
+});
+
+test('the one Writing Assistant material host retains upload, activation, role and instruction handlers',async()=>{
+ const {document,w}=mounted(),root=document.getElementById('mw-writing-reference-host');
+ const {mountWritingReferences}=require('../writing-references-ui.js');let card={slot:1,id:'book',filename:'guide.txt',status:'Ready',active:false,revision:1,summary:'Ask useful questions',instruction:'',role:'guidance'},changes=[];
+ const api={list:async()=>({cards:[card],referenceRevision:1}),patch:async(id,change)=>{changes.push(change);card={...card,...change};return {cards:[card],referenceRevision:2};}};
+ const app=mountWritingReferences({root,api});await app.refresh();
+ const refs=document.getElementById('mw-writing-references');refs.open=true;
+ assert.equal(root.closest('#mw-writing-assistant')?.id,'mw-writing-assistant');assert.equal(document.querySelectorAll('#mw-writing-reference-host').length,1);
+ assert.equal(root.querySelectorAll('[data-upload]').length,3);assert.ok(root.querySelector('[data-role]'));assert.ok(root.querySelector('[data-instruction]'));
+ const active=root.querySelector('[data-active]');active.checked=true;active.dispatchEvent(new w.Event('change',{bubbles:true}));await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(changes[0].active,true);
+ const instruction=root.querySelector('[data-instruction]');instruction.value='Use concise questions';instruction.dispatchEvent(new w.Event('change',{bubbles:true}));await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(changes.at(-1).instruction,'Use concise questions');
+ assert.ok(document.getElementById('mw-tools-drawer').contains(document.getElementById('mw-book-controls')));assert.equal(refs.contains(document.getElementById('mw-book-controls')),false);
+ app.destroy();w.close();
+});
+
+for(const width of [1440,390])test(`mounted Follow-Up Assistant disclosure has consistent host-scoped padding at ${width}px`,()=>{
+ const {document,w}=mounted();const {mountFollowUpAssistant}=require('../follow-up-assistant-ui.js');
+ const view=mountFollowUpAssistant(document,{capture:()=>({})});
+ const source=document.createElement('style');source.textContent=read('follow-up-assistant.css');document.head.append(source);
+ const matches=condition=>[...condition.matchAll(/\((min|max)-width:\s*(\d+)px\)/g)].every(([,bound,size])=>bound==='min'?width>=Number(size):width<=Number(size));
+ const resolve=rules=>[...rules].map(rule=>rule.conditionText?matches(rule.conditionText)?resolve(rule.cssRules):'':rule.cssText).join('\n');const cssText=resolve(source.sheet.cssRules);source.remove();
+ installViewportStyles(document,width);const applied=document.createElement('style');applied.textContent=cssText;document.head.append(applied);
+ const details=document.querySelector('#mw-follow-up-host>.fu-assistant'),summary=details.querySelector('summary'),content=details.querySelector('.fu-content');
+ assert.equal(w.getComputedStyle(details).padding,'0px');assert.equal(w.getComputedStyle(summary).padding,width===390?'12px 14px':'14px 16px');
+ assert.equal(w.getComputedStyle(content).padding,width===390?'0px 14px 14px':'0px 16px 16px');assert.equal(w.getComputedStyle(content).display,'none');assert.equal(details.open,false);
+ assert.ok(document.getElementById('mw-writing-assistant').compareDocumentPosition(document.getElementById('mw-follow-up-host'))&4);
+ view.destroy();w.close();
+});
+
+test('the explicit approved-template recovery stays visible and compact while hidden recovery takes no space',()=>{
+ const {document,w}=mounted(),panel=document.createElement('section');panel.id='mw-approved-recovery';panel.className='mw-section';panel.innerHTML='<p id="mw-approved-recovery-copy">Working copy differs. Previous text stays recoverable.</p><button id="mw-restore-approved" class="secondary-btn" type="button">Restore approved Professional</button>';document.getElementById('mw-subject-options').before(panel);
+ installViewportStyles(document,1440);assert.equal(w.getComputedStyle(panel).display,'flex');assert.equal(w.getComputedStyle(panel).padding,'12px 14px');assert.equal(panel.querySelector('button').type,'button');
+ panel.hidden=true;assert.equal(w.getComputedStyle(panel).display,'none');w.close();
 });
