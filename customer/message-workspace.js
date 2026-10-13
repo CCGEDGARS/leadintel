@@ -26,7 +26,7 @@
   const senderCard=node('section','mw-sender-card');senderCard.id='mw-sender-card';senderCard.setAttribute('aria-label','Sending as');senderCard.innerHTML='<div class="mw-sender-heading"><h3>Sending as</h3><button id="mw-edit-sender" type="button" class="secondary-btn small" hidden>Complete sender details</button></div><dl id="mw-sender-details"></dl>';senderCard.append(settings);
   const source=q('message-pitch-preview').closest('details');source.querySelector('summary').textContent='Your reviewed business information';settings.append(source);
   const layout=node('div','mw-layout'),rail=node('aside','mw-rail'),editor=node('div','mw-editor');rail.setAttribute('aria-label','Message preparation');layout.append(rail,editor);studio.append(layout);
-  const preparation=node('section','mw-section');preparation.innerHTML='<div class="mw-section-heading"><span class="mw-step-number">1</span><div><h3>Strongest Buying Trigger</h3><p>A verified company event used to personalise your message.</p></div></div><p id="mw-trigger-summary"></p>';
+  const preparation=node('section','mw-section');preparation.id='mw-trigger-context';preparation.innerHTML='<div class="mw-section-heading"><span class="mw-step-number">1</span><div><h3>Buying trigger</h3></div></div><p id="mw-trigger-summary"></p>';
   const triggerList=node('div','mw-trigger-options');triggerList.id='mw-trigger-options';preparation.append(triggerList);
   const trigger=step.querySelector('.trigger-script-panel');const review=node('details','mw-trigger-review');review.innerHTML='<summary>Review external source · optional</summary>';review.open=false;review.append(trigger);preparation.append(review);rail.append(preparation);
   trigger.querySelector('h3').hidden=true;trigger.querySelector(':scope > p').hidden=true;trigger.querySelector(':scope > small').hidden=true;
@@ -73,24 +73,37 @@
   q('message-evidence').hidden=true;
   const oldBar=q('message-generation-status').parentElement===notice?studio.querySelector(':scope > .draft-controls'):null;if(oldBar)oldBar.remove();
   const evidence=step.querySelector('.message-advanced');evidence.querySelector('summary').textContent='Advanced research & campaign settings';evidence.open=false;
-  const libraryTools=node('details','mw-tools-drawer');libraryTools.id='mw-tools-drawer';libraryTools.open=true;libraryTools.innerHTML='<summary>Outreach Tools <span>Reusable templates, content and references</span></summary>';
+  const libraryTools=node('details','mw-tools-drawer');libraryTools.id='mw-tools-drawer';libraryTools.open=false;libraryTools.innerHTML='<summary>Tools <span>Templates, materials & advanced settings</span></summary>';
   const libraryContent=node('div','mw-tools-content');libraryTools.append(libraryContent);
   const styleManager=node('details','mw-style-manager');styleManager.id='mw-style-manager';styleManager.innerHTML='<summary>Custom style settings</summary><p>Save your own subject and message for each of the four styles. Approved originals stay protected.</p><label>Style <select id="mw-style-edit-choice"><option value="professional">Professional</option><option value="curiosity">NLP</option><option value="friendly">Friendly</option><option value="brutal">Brutal Honesty</option></select></label><label>Reusable subject <input id="mw-style-edit-subject" maxlength="500"></label><label>Reusable message <textarea id="mw-style-edit-body" rows="13" maxlength="12000"></textarea></label><label class="mw-style-reviewed"><input type="checkbox" id="mw-style-review-confirm"> I checked this version for recipient-specific names, dates, projects, unsupported claims, and links.</label><div class="mw-draft-toolbar"><button id="mw-style-load-draft" type="button" class="secondary-btn small">Copy current email to editor</button><button id="mw-style-save" type="button" class="secondary-btn">Save & activate my version</button><button id="mw-style-restore" type="button" class="secondary-btn small">Restore previous revision</button></div><p id="mw-style-save-status" role="status"></p>';
 
   styleManager.insertBefore(personalStatus,styleManager.querySelector('label'));references.querySelector('summary').after(bookControls);
   settings.append(q('mw-value-proof'));
-  const contentMaterials=node('details','mw-content-materials');contentMaterials.id='mw-content-materials';contentMaterials.open=true;contentMaterials.innerHTML='<summary>My content <span id="mw-content-count">0/50 · 0 selected</span></summary>';
+  const contentMaterials=node('details','mw-content-materials');contentMaterials.id='mw-content-materials';contentMaterials.open=false;contentMaterials.innerHTML='<summary>My content <span id="mw-content-count">0/50 · 0 selected</span></summary>';
   const templateLibrary=q('message-my-templates');templateLibrary.querySelector('summary').textContent='Template library · 0/20';
   const selectedPattern=q('message-template-editor');selectedPattern.querySelector('summary').textContent='Selected custom template';templateLibrary.append(selectedPattern);
   styleManager.querySelector('summary').textContent='My style templates';
   libraryContent.append(templateLibrary,styleManager,contentMaterials,originalPeek,references);
-  rail.append(libraryTools);
-  studio.after(evidence);
-  const assistant=node('section','mw-section mw-writing-assistant');assistant.id='mw-writing-assistant';assistant.innerHTML='<div class="mw-section-heading"><span class="mw-step-number">3</span><div><h3>Writing Assistant</h3><p>Write with your customer context and sources. Review, then save.</p></div></div><div class="mw-assistant-actions"></div><small>Originals stay protected. Review your changes, then save.</small>';
+  const assistant=node('section','mw-section mw-writing-assistant');assistant.id='mw-writing-assistant';assistant.innerHTML='<div class="mw-section-heading"><span class="mw-step-number">3</span><div><h3>Writing Assistant</h3><p>Write with your customer context and sources. Review, then save.</p></div></div><div id="mw-adjust-actions" class="mw-assistant-actions"></div>';
   const improve=q('mw-rewrite-message');improve.textContent='Rewrite';improve.title='Create a fresh version of this working draft using your selected content';assistant.querySelector('.mw-assistant-actions').append(improve);
   for(const [id,label] of [['mw-shorten-message','Shorten'],['mw-improve-subject','Improve subject']]){const button=node('button','secondary-btn',label);button.id=id;button.type='button';assistant.querySelector('.mw-assistant-actions').append(button);}
   assistant.querySelector('.mw-assistant-actions').append(improve,q('mw-restore-original'));
-  styleSection.after(assistant);
+  // Put the canonical composer first; secondary work stays below the message.
+  const followUpHost=node('div','mw-follow-up-host');followUpHost.id='mw-follow-up-host';
+  drafts.after(followUpHost,assistant);
+  editor.append(libraryTools);
+  libraryContent.prepend(defaultCard);
+  libraryContent.append(evidence);
+  libraryContent.append(q('message-save-as-template'),defaultButton);
+  // Research operations remain explicit, available inside the one Tools entry.
+  triggerTools.prepend(findFact,factStatus);
+  preparation.append(review);
+  senderCard.querySelector('h3').textContent='Sender';
+  settings.querySelector('summary').innerHTML='Sender & settings';
+  q('mw-edit-sender').hidden=true;
+  settings.append(q('mw-edit-sender'));
+  installEditorSizing(document);
+
   q('mw-shorten-message').title='Make the current draft shorter';q('mw-rewrite-message').title='Create a fresh variation of the current draft';
 
   q('mw-browse-templates').addEventListener('click',()=>{q('mw-tools-drawer').open=true;q('message-my-templates').open=true;q('message-my-templates').scrollIntoView?.({block:'center',behavior:'smooth'});});
@@ -104,6 +117,26 @@
   q('message-mode').addEventListener('change',()=>paintStyles(document));
   q('mw-style-options').addEventListener('click',event=>{const button=event.target.closest('[data-writing-style]');if(!button)return;const select=q('message-mode');select.value=button.dataset.writingStyle;select.dispatchEvent(new document.defaultView.Event('change',{bubbles:true}));});
   return true;
+ }
+ // The fields keep their identity, draft value and input listeners. Only height changes.
+ function resizeEditors(document){
+  for(const id of ['outreach-email-body','outreach-linkedin']){
+   const field=document.getElementById(id);if(!field)continue;
+   field.style.overflowY='hidden';field.style.height='auto';
+   const css=document.defaultView.getComputedStyle(field);
+   const border=(parseFloat(css.borderTopWidth)||0)+(parseFloat(css.borderBottomWidth)||0);
+   // A hidden step has no measured height; a later render/resize retries it.
+   if(field.scrollHeight)field.style.height=Math.ceil(field.scrollHeight+border)+'px';
+  }
+ }
+ function installEditorSizing(document){
+  const fields=['outreach-email-body','outreach-linkedin'].map(id=>document.getElementById(id)).filter(Boolean);
+  const resize=()=>resizeEditors(document);
+  for(const field of fields)field.addEventListener('input',resize);
+  document.defaultView.addEventListener('resize',resize);
+  const Observer=document.defaultView.ResizeObserver;
+  if(Observer){let width;const observer=new Observer(entries=>{const next=entries[0]?.contentRect.width;if(next!==width){width=next;resize();}});observer.observe(document.querySelector('.mw-editor'));}
+  document.fonts?.ready.then(resize);resize();
  }
  function paintStyles(document){const select=document.getElementById('message-mode'),host=document.getElementById('mw-style-options');if(!select||!host)return;host.replaceChildren();for(const option of select.options){const info=styles.find(s=>s[0]===option.value);if(!info)continue;const button=document.createElement('button');button.type='button';button.className='mw-style';button.dataset.writingStyle=option.value;button.setAttribute('aria-pressed',String(select.value===option.value));const title=document.createElement('strong'),description=document.createElement('span');title.textContent=info?.[1]||option.textContent;description.textContent=info?.[2]||'Your saved template';button.append(title,description);host.append(button);}}
  function renderMandatoryScripts(document,context={}){
@@ -121,7 +154,7 @@
  function render(document,context){if(!document.getElementById('mw-readiness-text'))return;renderMandatoryScripts(document,context);const q=id=>document.getElementById(id),view=state(context),linkedin=context.channel==='linkedin',preparing=Boolean(context.messagePreparing&&!linkedin),person=context.person;
   const identity=context.senderIdentity||{};const senderDetails=q('mw-sender-details');senderDetails.replaceChildren();for(const [label,value,required] of [['Sender',identity.senderName||context.sender,true],['Company',identity.companyDisplayName||context.senderCompany,true],['Booking link',context.calendly,false],['Meeting platform',root.LeadIntelMessageStudio?.meetingLabel(identity),false]]){const row=document.createElement('div'),term=document.createElement('dt'),description=document.createElement('dd');term.textContent=label;description.textContent=value||(required?'Add in Sender & settings':'Add when ready');row.dataset.missing=String(!value);row.dataset.required=String(required);row.append(term,description);senderDetails.append(row);}
   q('mw-edit-sender').hidden=false;q('mw-edit-sender').textContent=(identity.senderName||context.sender)&&(identity.companyDisplayName||context.senderCompany)?'Edit sender details':'Complete sender details';
-  const name=person?.publicName||person?.name||context.contact?.name||'No recipient selected';q('message-recipient').textContent=name;q('mw-recipient-detail').textContent=[context.company,person?.title].filter(Boolean).join(' · ');q('mw-sender-line').textContent=[context.sender?('From '+context.sender):'Sender not configured',context.senderCompany].filter(Boolean).join(' · ');q('mw-channel').textContent=linkedin?'LinkedIn · manual':'Email';q('mw-editor-title').firstChild.textContent=linkedin?'Your LinkedIn message ':'Your email ';q('mw-draft-badge').textContent=context.approved?'Approved':context.hasDraft?'Draft':'Not generated';const styleNames={professional:'Professional',curiosity:'NLP',friendly:'Friendly',brutal:'Brutal Honesty',original:'AI Generated'},appliedName=styleNames[context.appliedStyle]||'Saved message',selectedName=styleNames[context.selectedStyle]||'Selected style';q('mw-applied-style').textContent=context.hasDraft?'Style: '+appliedName:'';const provenance=q('mw-draft-provenance');if(provenance){provenance.hidden=!context.hasDraft||preparing;provenance.textContent=['manual','rewrite'].includes(context.draftOrigin)?'Edited working copy · originals preserved':context.appliedStyle==='original'?'AI generated working copy':context.draftOrigin==='tailored'?'Personalized template':'Saved working copy';}
+  const name=person?.publicName||person?.name||context.contact?.name||'No recipient selected';q('message-recipient').textContent=name;q('mw-recipient-detail').textContent=[context.company,person?.title].filter(Boolean).join(' · ');q('mw-sender-line').textContent=[(identity.senderName||context.sender)?('From '+(identity.senderName||context.sender)):'Sender not configured',identity.companyDisplayName||context.senderCompany].filter(Boolean).join(' · ');q('mw-channel').textContent=linkedin?'LinkedIn · manual':'Email';q('mw-editor-title').firstChild.textContent=linkedin?'Your LinkedIn message ':'Your email ';q('mw-draft-badge').textContent=context.approved?'Approved':context.hasDraft?'Draft':'Not generated';const styleNames={professional:'Professional',curiosity:'NLP',friendly:'Friendly',brutal:'Brutal Honesty',original:'AI Generated'},appliedName=styleNames[context.appliedStyle]||'Saved message',selectedName=styleNames[context.selectedStyle]||'Selected style';q('mw-applied-style').textContent=context.hasDraft?'Style: '+appliedName:'';const provenance=q('mw-draft-provenance');if(provenance){provenance.hidden=!context.hasDraft||preparing;provenance.textContent=['manual','rewrite'].includes(context.draftOrigin)?'Edited working copy · originals preserved':context.appliedStyle==='original'?'AI generated working copy':context.draftOrigin==='tailored'?'Personalized template':'Saved working copy';}
   q('mw-readiness-text').textContent=context.pendingSelections?(context.busy?'Preparing your updated message…':context.automaticUpdate?'Update available — your current message is preserved.':'Your current message is preserved.'):context.unpersonalizedDraft&&context.hasDraft?'Original script loaded — personalize before approval.':view.text;q('mw-readiness-detail').textContent=context.pendingSelections?(context.busy?'Using the selected verified facts and approved wording.':context.automaticUpdate?'Click Update message to apply, then review and save.':'Click Update message to apply, then review and save.'):context.unpersonalizedDraft&&context.hasDraft?'This is an editable reference, not a personalized message. Sender placeholders and project claims must be reviewed before sending.':view.detail||'';q('mw-readiness').dataset.state=context.pendingSelections?'pending':view.kind;
   if(context.channel==='email'&&context.hasDraft&&!context.senderIdentityReady){q('mw-readiness-text').textContent='Sender full name required.';q('mw-readiness-detail').textContent='Open Sender & settings and save the sender’s first and last name before personalizing or approving this email.';q('mw-readiness').dataset.state='blocked';}
   if(context.outdatedDraft){q('mw-readiness-text').textContent='Outdated draft — regenerate from the approved 20-minute script.';q('mw-readiness-detail').textContent='Your previous draft is preserved, but its 30-minute meeting invitation no longer matches the mandatory originals. Choose a style and click Update message.';q('mw-readiness').dataset.state='blocked';}
@@ -201,7 +234,7 @@
   if(context.pendingSelections&&!context.busy&&!noticeBlocked)q('mw-readiness-text').textContent='Update available. Your current message is preserved.';
   q('approve-outreach').disabled=Boolean(context.approved||blocked||context.approvalBlocked||context.missing?.length||context.unconfirmed?.length||context.outdatedDraft||context.pendingSelections||context.unpersonalizedDraft||!context.senderIdentityReady||editor.editing||editor.busy||editor.saving||editor.preview);
   for(const id of ['message-mode','message-subject-choice','message-ai-subject-choice'])q(id).disabled=Boolean(blocked||editor.editing||editor.busy||editor.saving||editor.preview);
-  renderSubjects(document);paintStyles(document);for(const button of document.querySelectorAll('[data-writing-style]'))button.disabled=Boolean(editor.editing||editor.busy||editor.saving||editor.preview||context.assistantBusy||!context.authenticated||!context.ready||context.syncConflict||context.pending||context.subjectBusy||context.translationBusy);return view;
+  resizeEditors(document);renderSubjects(document);paintStyles(document);for(const button of document.querySelectorAll('[data-writing-style]'))button.disabled=Boolean(editor.editing||editor.busy||editor.saving||editor.preview||context.assistantBusy||!context.authenticated||!context.ready||context.syncConflict||context.pending||context.subjectBusy||context.translationBusy);return view;
  }
  function renderSubjects(document){
   const q=id=>document.getElementById(id),host=q('mw-subject-choices');if(!host)return;const state=host._subjectState||{},previous=new Map([...host.querySelectorAll('[data-subject-edit]')].map(input=>[input.dataset.subjectEdit,input.value]));

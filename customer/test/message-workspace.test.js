@@ -121,7 +121,7 @@ test('buying triggers are visible before collapsed legacy source review and unpe
  assert.equal(document.getElementById('approve-outreach').disabled,true);
 });
 
-test('balanced workspace puts style decisions and reusable tools left, email composition right',()=>{
+test('message-first workspace places core decisions above editor and reusable tools below assistants',()=>{
  const {document}=mounted();
  const rail=document.querySelector('.mw-rail'),editor=document.querySelector('.mw-editor');
  assert.ok(rail.querySelector('#mw-trigger-options'));
@@ -135,8 +135,9 @@ test('balanced workspace puts style decisions and reusable tools left, email com
  const generate=editor.querySelector('.mw-update-status');
  assert.ok(generate.compareDocumentPosition(options)&4);
  assert.ok(generate.compareDocumentPosition(editor.querySelector('.script-grid'))&4);
- const tools=rail.querySelector('#mw-tools-drawer');
- assert.equal(tools.open,true);
+ const tools=editor.querySelector('#mw-tools-drawer');
+ assert.equal(tools.open,false);
+ assert.ok(editor.querySelector('#mw-follow-up-host'));
  for(const id of ['message-template-editor','message-my-templates','mw-writing-references'])
    assert.equal(tools.querySelectorAll('#'+id).length,1,id);
  assert.equal(document.querySelectorAll('#message-generate').length,1);
@@ -145,7 +146,7 @@ test('balanced workspace puts style decisions and reusable tools left, email com
  assert.ok(document.querySelector('#mw-settings #mw-value-proof'));assert.equal(tools.querySelector('#mw-value-proof'),null);
  assert.ok(document.querySelector('#mw-sender-line'));
  document.getElementById('mw-edit-sender').click();
- assert.equal(tools.open,true);
+ assert.equal(tools.open,false);
  assert.ok(document.querySelector('#mw-sender-card #mw-settings'));
  assert.equal(document.getElementById('mw-settings').open,true);
 });
@@ -165,13 +166,14 @@ test('single strongest buying trigger replaces multi-option picker without losin
 test('tools group reusable custom styles below the library without duplicated shortcuts',()=>{
  const {document}=mounted(),tools=document.getElementById('mw-tools-drawer');
  assert.equal(document.querySelector('.mw-library-shortcuts'),null);
- assert.deepEqual([...tools.querySelector('.mw-tools-content').children].map(e=>e.id),['message-my-templates','mw-style-manager','mw-content-materials','mw-original-peek','mw-writing-references']);
+ for(const id of ['message-my-templates','mw-style-manager','mw-content-materials','mw-original-peek','mw-writing-references','mw-default-template'])assert.equal(tools.querySelectorAll('#'+id).length,1,id);
  assert.ok(tools.querySelector('#mw-style-manager #mw-use-my-style'));
  assert.ok(document.querySelector('#mw-writing-assistant #mw-rewrite-message'));
  assert.ok(document.querySelector('#mw-writing-assistant #mw-shorten-message'));
  assert.ok(document.querySelector('#mw-writing-assistant #mw-improve-subject'));
  assert.equal(document.querySelector('.mw-editor-actions #mw-rewrite-message'),null);
- assert.equal(tools.querySelector('.message-advanced'),null);
+ assert.ok(tools.querySelector('.message-advanced'));
+ assert.equal(tools.querySelector('.message-advanced').open,false);
 });
 
 test('email action centre shows one named Save as Template and gates direct send and flow by approval',()=>{

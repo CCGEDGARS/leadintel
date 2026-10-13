@@ -15,7 +15,8 @@
       "saved_flows_version": "my-flows-v1",
       "payment_alerts_version": "payment-connection-v1",
       "writing_assistant_version": "writing-assistant-v1",
-      "ai_task_routing_version": "ai-task-routing-v1"
+      "ai_task_routing_version": "ai-task-routing-v1",
+      "follow_up_assistant_version": "follow-up-assistant-v1"
     }
   },
   "smokeChecks": [
@@ -1048,7 +1049,7 @@
         "Writing Assistant",
         "Rewrite",
         "Shorten",
-        "styleSection.after(assistant)",
+        "drafts.after(followUpHost,assistant)",
         "append(improve,q('mw-restore-original'))",
         "editor.busyAction==='shorten'",
         "Shortening\u2026",
@@ -2026,6 +2027,103 @@
       "status": 200,
       "contains": [
         "rescue=20261013-v1"
+      ]
+    },
+    {
+      "id": "step6-message-first-runtime",
+      "type": "text",
+      "url": "/customer/message-workspace.js",
+      "status": 200,
+      "contains": [
+        "drafts.after(followUpHost,assistant)",
+        "libraryTools.open=false",
+        "function resizeEditors(document)"
+      ]
+    },
+    {
+      "id": "step6-message-first-style",
+      "type": "text",
+      "url": "/customer/message-workspace.css",
+      "status": 200,
+      "contains": [
+        "flex-direction:column;gap:12px",
+        "overflow-y:hidden;resize:none",
+        "repeat(5,minmax(0,1fr))"
+      ]
+    },
+    {
+      "id": "step6-integrated-writing-ui",
+      "type": "text",
+      "url": "/customer/writing-assistant-ui.js",
+      "status": 200,
+      "contains": [
+        "view.querySelector('.wa-question').prepend(quickActions)",
+        "All active materials"
+      ]
+    },
+    {
+      "id": "step6-safe-legacy-guards",
+      "type": "text",
+      "url": "/customer/outreach-ui.js",
+      "status": 200,
+      "contains": [
+        "function auxiliaryResearchDrafts(",
+        "requiresAiLocalization:false",
+        "function installFollowUpAssistant()"
+      ]
+    },
+    {
+      "id": "step6-followup-controller",
+      "type": "text",
+      "url": "/customer/follow-up-assistant.js",
+      "status": 200,
+      "contains": [
+        "scopeKey",
+        "validateInput",
+        "This contact is suppressed."
+      ]
+    },
+    {
+      "id": "step6-followup-ui",
+      "type": "text",
+      "url": "/customer/follow-up-assistant-ui.js",
+      "status": 200,
+      "contains": [
+        "Follow-Up Assistant",
+        "Save separate CRM follow-up",
+        "confirmedLastContactDate"
+      ]
+    },
+    {
+      "id": "step6-followup-style",
+      "type": "text",
+      "url": "/customer/follow-up-assistant.css",
+      "status": 200,
+      "contains": [
+        ".fu-assistant"
+      ]
+    },
+    {
+      "id": "step6-followup-private-context",
+      "type": "text",
+      "url": "/api/follow-up-assistant/context?workspace_id=release-check",
+      "status": 401,
+      "contains": []
+    },
+    {
+      "id": "step6-followup-private-save",
+      "type": "text",
+      "url": "/api/follow-up-assistant/save?workspace_id=release-check",
+      "status": 401,
+      "contains": []
+    },
+    {
+      "id": "step6-new-cache-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "step6-rescue=20261013-v2"
       ]
     }
   ],

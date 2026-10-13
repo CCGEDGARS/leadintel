@@ -1,3 +1,4 @@
+import {followUpContext,prepareFollowUp,validateFollowUp,followUpToken,saveFollowUp} from './follow-up-assistant.js';
 import {searchWorkspaceResearch} from './ai-task-routing.js';
 import {prepareAssistantRequest,validateAssistantReply,assertAssistantCurrent} from './writing-assistant.js';
 import {prepareContentGeneration,resolveContentMaterials} from './content-materials.js';
@@ -54,8 +55,35 @@ async function geminiIntegration(env,workspaceId){return env.DB.prepare(`SELECT 
 
 export async function handleAiRoute(request,env,cors={}){
   const url=new URL(request.url);const path=url.pathname;
-  const known=path==='/api/writing-assistant/reply'||path.startsWith('/api/integrations/ai/')||path==='/api/ai/generate'||path==='/api/ai/web-search'||path==='/api/ai/research-verification'||path==='/api/ai/contact-evidence-review'||path==='/api/ai/grounded-contact-search';if(!known)return null;
+  const known=path.startsWith('/api/follow-up-assistant/')||path==='/api/writing-assistant/reply'||path.startsWith('/api/integrations/ai/')||path==='/api/ai/generate'||path==='/api/ai/web-search'||path==='/api/ai/research-verification'||path==='/api/ai/contact-evidence-review'||path==='/api/ai/grounded-contact-search';if(!known)return null;
   const workspaceId=String(url.searchParams.get('workspace_id')||'').trim();if(!workspaceId)return error('workspace_id is required',400,cors);
+
+  if(path.startsWith('/api/follow-up-assistant/')){
+    const access=await requireMember(request,env,workspaceId,['owner','researcher','sales']);if(access.error)return error(access.error,access.status,cors);
+    const scope={workspaceId,userId:access.user.id,role:access.member.role};
+    try{
+      if(path==='/api/follow-up-assistant/context'&&request.method==='GET')return json(await followUpContext(env,scope,Object.fromEntries(url.searchParams)),200,cors);
+      if(request.method!=='POST'||!['/api/follow-up-assistant/analyze','/api/follow-up-assistant/save'].includes(path))return error('Method not allowed',405,cors);
+      const body=await request.json().catch(()=>null);if(!body)return error('Follow-up payload required',400,cors);
+      if(!encryptionConfigured(env))return error('AI credential encryption is not configured',503,cors);
+      if(path.endsWith('/save'))return json(await saveFollowUp(env,scope,body),200,cors);
+      const prepared=await prepareFollowUp(env,scope,body);
+      // Suppressed contacts and clear declines never consume a paid provider call.
+      if(prepared.blockReason)return json({intent:{label:'decline_opt_out',confidence:1,evidence:[]},nextAction:prepared.blockReason,draft:null,canSave:false,blockReason:prepared.blockReason,contextVersion:prepared.context.contextVersion,warnings:['Respect the contact preference. Nothing is sent automatically.']},200,cors);
+      const integration=await activeIntegration(env,workspaceId);if(!integration)return error('No active AI provider is configured for this workspace',409,cors);
+      const key=await importAesKey(env.OAUTH_TOKEN_ENCRYPTION_KEY),apiKey=await decryptSecret(integration.encrypted_api_key,key);
+      if(request.signal?.aborted)return error('Follow-up analysis was canceled',409,cors);
+      const controller=new AbortController(),cancel=()=>controller.abort(),timer=setTimeout(()=>controller.abort(),55000);request.signal?.addEventListener('abort',cancel,{once:true});
+      let output;try{output=await generateText({provider:integration.provider,apiKey,model:integration.model,system:prepared.system,prompt:prepared.prompt,maxOutputTokens:2200,signal:controller.signal});}catch(cause){if(creditFailure(0,cause?.message))await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:integration.provider,kind:'failed'});throw cause;}finally{clearTimeout(timer);request.signal?.removeEventListener('abort',cancel);}
+      if(controller.signal.aborted)throw Object.assign(new Error('Follow-up analysis was canceled or timed out'),{status:409});
+      const current=await followUpContext(env,scope,body);if(current.contextVersion!==prepared.context.contextVersion)return error('Contact history changed. Analyze again.',409,cors);
+      const result=validateFollowUp(output.text,prepared);
+      await recordProviderCredit(env,{workspaceId,userId:access.user.id,provider:integration.provider,kind:'recovered'});
+      await env.DB.prepare('UPDATE workspace_ai_integrations SET last_used_at=CURRENT_TIMESTAMP WHERE workspace_id=? AND provider=?').bind(workspaceId,integration.provider).run();
+      await audit(env,{workspaceId,userId:access.user.id,type:'ai.generation_completed',provider:integration.provider,metadata:{task:'follow-up-assistant',model:output.model||integration.model,input_tokens:output.usage?.input_tokens||0,output_tokens:output.usage?.output_tokens||0,fallback_used:false}});
+      result.analysisId=await followUpToken(env,scope,prepared,result);return json(result,200,cors);
+    }catch(cause){return error(String(cause?.message||'Follow-up request failed').slice(0,180),cause.status||502,cors);}
+  }
 
   if(path==='/api/integrations/ai/status'&&request.method==='GET'){
     const access=await requireMember(request,env,workspaceId);if(access.error)return error(access.error,access.status,cors);

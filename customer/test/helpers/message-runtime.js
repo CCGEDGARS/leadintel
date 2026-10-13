@@ -1,7 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{JSDOM}=require('jsdom');
 const S=require('../../message-studio.js'),E=require('../../message-editor.js'),O=require('../../outreach-engine.js');
 const read=name=>fs.readFileSync(path.join(__dirname,'..','..',name),'utf8');
-function mounted({selected='curiosity',outreachSnapshot=null,mainSnapshot=null}={}){
+function mounted({selected='curiosity',outreachSnapshot=null,mainSnapshot=null,runtimeSetup=''}={}){
  const w=new JSDOM(read('index.html'),{url:'https://example.test/customer/',runScripts:'outside-only'}).window;
  const essentials={sender:'Robin Lane',company:'North Works',offer:'steel and installation',target:'industrial teams',problem:'supplier handoffs',value:'simplify project delivery',difference:'Our team supports industrial projects.',approach:'Project delivery to EN 1090 requirements',meetingValue:'relevant project lessons',calendly:'https://calendly.com/north/intro',nextAction:'Choose a suitable time here: {{calendly}}'};
  const main={step:1,website:'https://north.example',brandIdentity:{senderName:essentials.sender,companyDisplayName:essentials.company},profile:{companyName:essentials.company,priorityOffers:essentials.offer,idealCustomer:essentials.target,customerProblem:essentials.problem,valueProposition:essentials.value,differentiation:essentials.difference,deliveryApproach:essentials.approach,meetingValue:essentials.meetingValue}};
@@ -14,7 +14,7 @@ function mounted({selected='curiosity',outreachSnapshot=null,mainSnapshot=null}=
  Object.assign(w,{LeadIntelSubjectEditor:require('../../subject-editor.js'),LeadIntelMessageStudio:S,LeadIntelMessageEditor:E,LeadIntelOutreach:O,LeadIntelDiscovery:require('../../discovery-engine.js'),LeadIntelMessageFacts:require('../../message-facts.js'),LeadIntelMessageTranslations:require('../../message-translations.js'),LeadIntelMessageEvidence:require('../../message-evidence.js'),LeadIntelTriggerPreview:require('../../trigger-preview.js'),LeadIntelContentLanguage:{workspaceContentLanguage:()=> 'en'},LeadIntelServerBridge:{ready:true,session:{authenticated:true,user:{name:essentials.sender}},workspace:{id:'w1'}}});
  w.eval(read('message-workspace.js'));w.eval(read('message-translation-ui.js'));w.eval(read('sender-identity-location.js'));
  const requests=[];w.fetch=(url,options)=>new Promise(resolve=>requests.push({url,options,resolve}));
- w.eval(read('outreach-ui.js').replace(/^import .*;\s*$/gm,'')+"\nhandoffContact={domain:'buyer.example',personId:'p1',channel:'email',contact:{work_email:'alex@buyer.example'}};renderAll();");
+ w.eval(read('outreach-ui.js').replace(/^import .*;\s*$/gm,'')+"\nhandoffContact={domain:'buyer.example',personId:'p1',channel:'email',contact:{work_email:'alex@buyer.example'}};renderAll();\n"+runtimeSetup);
  return {w,q:id=>w.document.getElementById(id),requests,item:()=>JSON.parse(w.localStorage.getItem('leadintel_customer_v2_outreach')).items[0],before:E.workingDraft(item)};
 }
 module.exports={mounted};
