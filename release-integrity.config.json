@@ -2133,7 +2133,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "step6-rescue=20261013-v8"
+        "step6-rescue=20261013-v9"
       ]
     },
     {
@@ -2158,6 +2158,22 @@
       ],
       "notContains": [
         ".mw-style[aria-pressed=true]:after"
+      ]
+    },
+    {
+      "id": "approved-brutal-copy-20261013",
+      "type": "text",
+      "url": "/customer/approved-reference-scripts.js",
+      "status": 200,
+      "contains": [
+        "My research led me to",
+        "business partners for ERCON",
+        "assess whether ERCON is the right partner",
+        "core-template-rules-v2-brutal-20261013"
+      ],
+      "notContains": [
+        "A research brought me to",
+        "at ERCON asked me to research"
       ]
     }
   ],

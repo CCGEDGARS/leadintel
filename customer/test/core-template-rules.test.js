@@ -4,10 +4,16 @@ const A=require('../approved-reference-scripts.js'),E=require('../message-editor
 const essentials={sender:'Alex Lane',company:'SellerCo',offer:'manufacturing',value:'simplify delivery',difference:'Our team has manufacturing experience.',approach:'We support installation.',meetingValue:'project data',calendly:'https://calendly.com/alex/intro',language:'en'};
 const context={channel:'email',buyerCompany:'BuyerCo',buyerName:'Robin',firstName:'Robin',trigger:{summary:'BuyerCo’s plant expansion',url:'https://buyer.test/news',verification:'source_verified'}};
 test('all approved master paragraphs and subjects retain the exact recorded text',()=>{
- assert.deepEqual(A.records,require('./fixtures/approved-core-masters-2026-10-09.json'));
+ assert.deepEqual(A.records,require('./fixtures/approved-core-masters-2026-10-13.json'));
+});
+test('approved Brutal correction also reaches the default working pattern',()=>{
+ const body=S.defaults.find(row=>row.id==='brutal').body;
+ assert.match(body,/\{\{sender\}\} asked me to research potential business partners for \{\{company\}\}/);
+ assert.match(body,/assess whether \{\{company\}\} is the right partner/);
+ assert.doesNotMatch(body,/explore where \{\{company\}\} could \{\{value\}\}/);
 });
 test('each core contract publishes its own immutable sequence and measured body ceiling',()=>{
- for(const [style,counts] of Object.entries({professional:[12,185],curiosity:[13,219],friendly:[11,200],brutal:[12,199]})){
+ for(const [style,counts] of Object.entries({professional:[12,185],curiosity:[13,219],friendly:[11,200],brutal:[12,179]})){
   const c=A.coreContract(style);assert.equal(c.paragraphRoles.length,counts[0]);assert.equal(c.maximumMessageWords,counts[1]);
   assert.equal(c.paragraphSeparator,'\n\n');assert.equal(c.meetingMinutes,20);assert.equal(c.aiAuthority,'designated-fields-only');
   assert.ok(Object.isFrozen(c));assert.ok(Object.isFrozen(c.paragraphRoles));assert.throws(()=>{c.paragraphRoles.reverse();});

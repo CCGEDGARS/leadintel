@@ -61,12 +61,12 @@ const expectedBodies={
  brutal:[
   'Hi Robin,',
   'I should say this first: I’m LeadIntel, an AI-powered system.',
-  'Alex Lane at North Works asked me to research potential business partners and write to relevant people on his behalf.',
-  'A research brought me to Buyer’s investment in a new sorting plant at Northport. I don’t know whether you need another steel partner. You may be fully covered. But if additional capabilities could simplify delivery and control costs, this may be worth a conversation.',
-  'For more than 30 years North Works have taken steel from drawing to installed structure: development, manufacturing, installation and the qualified people to do it. That means – simplifying delivery and controlling costs. https://north.example/',
+  'Alex Lane asked me to research potential business partners for North Works and write to relevant people on his behalf.',
+  'My research led me to Buyer’s investment in a new sorting plant at Northport. I don’t know whether you need another steel partner. You may be fully covered. But if additional capabilities could simplify delivery and control costs, this may be worth a conversation.',
+  'For more than 30 years North Works have taken steel from drawing to installed structure: development, manufacturing, installation and the qualified people to do it. https://north.example/',
   'Here are some projects they are proud of: https://north.example/projects/tower.',
   'If something catches your eye, would you be open to a 20-minute Zoom conversation with Alex Lane?',
-  'Alex Lane will bring relevant production data and lessons. You can share your requirements and explore how North Works could help simplify delivery and control costs.',
+  'Alex Lane will bring relevant production data and lessons. You can share your requirements and assess whether North Works is the right partner.',
   'I’m writing the introduction. Alex Lane will be there for the conversation.',
   'Choose a suitable time here: https://calendly.com/north/intro.',
   'Warm regards,\nLeadIntel. On behalf of Alex Lane.',
@@ -113,20 +113,20 @@ test('mounted incomplete update cannot overwrite the working copy or report comp
  }finally{h.w.close();}
 });
 
-test('restored Brutal wording budgets repeated factual fields before reporting an update ready',()=>{
+test('approved Brutal wording budgets factual fields and uses the benefit once',()=>{
  const raw={...essentials,sender:'Edgars Untals',company:'ERCON',offer:'drawing development, metal manufacturing, installation and qualified workforce solutions',difference:'Our team brings more than 30 years of metalworking experience, including international projects in Scandinavia.',value:'reduce coordination burden through one full-service industrial project partner',meetingValue:'relevant production data and lessons from previous projects'};
  const studio=S.normalize({mode:'brutal',essentials:raw}),c={...context(),sellerEvidence:[{url:'https://north.example/projects/tower',text:'We manufacture steel structures and provide installation for industrial projects.'}],trigger:{...context().trigger,summary:'Buyer is investing six billion kronor in a new sorting plant at Northport.'}};
  assert.equal(E.needsPreparation(studio,c),true);
- const limits=E.preparationWordLimits(studio,c);assert.ok(limits.value<E.fieldWords.value);
+ const limits=E.preparationWordLimits(studio,c);assert.ok(limits.value<=E.fieldWords.value);
  const prepared=E.preparedResponse({triggerSummary:'Buyer’s investment in a sorting plant at Northport',offer:'metal manufacturing and installation',value:'reduce coordination burden',difference:'Our team has more than 30 years of experience.',approach:'Project delivery',meetingValue:'relevant production data and lessons'},studio,c);
  const ctx=E.preparedContext(studio,c,prepared),draft=E.tailor(studio,ctx);E.validateCoreDraft(studio,ctx,draft);
- assert.ok(draft.message.split(/\s+/).length<=199);assert.match(draft.message,/For more than 30 years ERCON have taken steel/);
+ assert.ok(draft.message.split(/\s+/).length<=179);assert.equal(draft.message.split('reduce coordination burden').length-1,1);assert.match(draft.message,/For more than 30 years ERCON have taken steel/);
  assert.equal(prepared.fields.difference,raw.difference);assert.equal(prepared.fields.approach,raw.approach);
 });
 
 test('investing a supported quantity becomes a grammatical event noun without dropping its facts',()=>{
  for(const mode of ['professional','friendly','brutal']){
-  const studio=S.normalize({mode,essentials}),ctx={...context(),trigger:{...context().trigger,summary:'Buyer is investing six billion kronor in a plant at Northport.'}};
+  const studio=S.normalize({mode,essentials:{...essentials,meetingValue:'project data'}}),ctx={...context(),trigger:{...context().trigger,summary:'Buyer is investing six billion kronor in a plant at Northport.'}};
   const draft=E.tailor(studio,ctx);assert.match(draft.message,/Buyer’s investment of six billion kronor/);assert.doesNotMatch(draft.message,/investment six/);
  }
 });
@@ -144,4 +144,12 @@ test('Professional combined budget can shorten one otherwise-valid field for a g
  assert.equal(E.needsPreparation(studio,ctx),true);const limits=E.preparationWordLimits(studio,ctx);assert.ok(limits.difference<15);
  const sources=E.fieldSources(studio,ctx),prepared=E.preparedResponse({...sources,difference:'Our team brings more than 30 years of metalworking experience, including projects in Scandinavia.'},studio,ctx),draft=E.tailor(studio,E.preparedContext(studio,ctx,prepared));
  assert.match(draft.message,/investment of six billion kronor/);assert.ok(draft.message.split(/\s+/).length<=185);assert.equal(prepared.fields.offer,sources.offer);assert.equal(prepared.fields.triggerSummary,sources.triggerSummary.replace(/[.!?]+$/,''));
+});
+
+test('approved shorter Brutal master preserves the investment quantity through field preparation',()=>{
+ const studio=S.normalize({mode:'brutal',essentials}),ctx={...context(),trigger:{...context().trigger,summary:'Buyer is investing six billion kronor in a plant at Northport.'}};
+ assert.equal(E.needsPreparation(studio,ctx),true);
+ const prepared=E.preparedResponse({...E.fieldSources(studio,ctx),triggerSummary:'Buyer’s investment of six billion kronor at Northport',value:'simplify delivery',meetingValue:'project data'},studio,ctx);
+ const next=E.preparedContext(studio,ctx,prepared),draft=E.tailor(studio,next);
+ E.validateCoreDraft(studio,next,draft);assert.match(draft.message,/investment of six billion kronor/);assert.ok(draft.message.split(/\s+/).length<=179);
 });

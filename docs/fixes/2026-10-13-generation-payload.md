@@ -6,8 +6,8 @@ AI Generated serialized complete scraped records and repeated evidence collectio
 ## Change
 Generation receives deduplicated, bounded excerpts with source metadata. Selected identity and trigger fields precede supplementary research. Raw HTML and binary representations are excluded. A failed style change retains the previous draft; the checkmark identifies its applied style while the selection highlight identifies the next requested style. AI Generated instructions prohibit repetitive benefit clauses and unsupported identity inference and require consistent terminology with the selected trigger. Parent module and stylesheet versions are refreshed. Release checks inspect both changes.
 
-## Protected copy requiring exact approval
-The core-template policy requires explicit approval of exact replacement wording; these proposed corrections are not applied to the canonical master or saved drafts:
+## Protected copy approved 13 October 2026
+The core-template policy requires explicit approval of exact replacement wording; the owner approved all corrections with “approve all” on 13 October 2026. The corrections below are applied to the canonical master and renderer; saved drafts remain unchanged until an explicit Update message:
 
 1. `A research brought me to {{development}}.` → `My research led me to {{development}}.`
 2. `{{sender}} at {{company}} asked me to research potential business partners and write to relevant people on his behalf.` → `{{sender}} asked me to research potential business partners for {{company}} and write to relevant people on his behalf.`
