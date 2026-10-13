@@ -1,13 +1,22 @@
 (function(root){
  'use strict';
- function createWritingAssistant({capture,request,apply,onChange=()=>{}}){
-  let alive=true,owner=0,controller=null,timer=null,scope=null,baseline='',busy=false,applying=false,error='',preview=null,stale=false,messages=[];
+ function browserSessions(){
+  const key='leadintel_writing_sessions_v1';
+  const usable=()=>root.LeadIntelAccountCache?.current?.()!==false;
+  const read=()=>{if(!usable())return [];try{const value=JSON.parse(root.localStorage?.getItem(key)||'[]');return Array.isArray(value)?value:[];}catch{return [];}};
+  return {load:scope=>read().find(row=>row.scope===scope)?.value,save(scope,value){if(!usable())return;const rows=read().filter(row=>row.scope!==scope);const messages=value.messages.slice(-20);while(JSON.stringify(messages).length>20000)messages.shift();rows.push({scope,value:{messages,instruction:value.instruction}});root.localStorage?.setItem(key,JSON.stringify(rows.slice(-6)));}};
+ }
+ function createWritingAssistant({capture,request,apply,onChange=()=>{},sessionStore=browserSessions()}){
+  let alive=true,owner=0,controller=null,timer=null,scope=null,baseline='',busy=false,applying=false,error='',preview=null,stale=false,messages=[],instruction='';
   const clone=v=>JSON.parse(JSON.stringify(v));
   const stamp=c=>JSON.stringify([c.fingerprint,c.referenceRevision,c.sourceRefs||[]]);
-  function state(){return clone({busy,applying,error,preview,stale,messages});}
-  function changed(){if(alive)onChange(state());}
+  function state(){return clone({busy,applying,error,preview,stale,messages,instruction,scope});}
+  function persist(){if(!scope||!sessionStore)return;try{sessionStore.save(scope,{messages:messages.slice(-20),instruction});}catch{}}
+  function restore(){messages=[];instruction='';try{const saved=sessionStore?.load(scope);if(!saved)return;messages=(Array.isArray(saved.messages)?saved.messages:[]).filter(m=>['user','assistant'].includes(m.role)&&typeof m.content==='string').slice(-20).map(m=>({role:m.role,content:m.content.slice(0,12000),citations:(Array.isArray(m.citations)?m.citations:[]).filter(c=>c&&typeof c.filename==='string'&&typeof c.location==='string').slice(0,8).map(c=>({filename:c.filename.slice(0,256),location:c.location.slice(0,80),role:String(c.role||'guidance').slice(0,30)})),warnings:(Array.isArray(m.warnings)?m.warnings:[]).filter(w=>typeof w==='string').slice(0,8).map(w=>w.slice(0,500))}));instruction=typeof saved.instruction==='string'?saved.instruction.slice(0,4000):'';}catch{}}
+  function setInstruction(value){instruction=String(value||'').slice(0,4000);persist();}
+  function changed(){if(alive){persist();onChange(state());}}
   function stop(){owner++;controller?.abort();controller=null;clearTimeout(timer);timer=null;busy=false;applying=false;}
-  function syncContext(){if(!alive)return;const c=capture();if(scope!==c.scope){stop();scope=c.scope;preview=null;messages=[];stale=false;error='';baseline=stamp(c);changed();}else if(baseline!==stamp(c)){if(!applying)stop();stale=Boolean(preview);error=stale?'Context changed. Discard this proposal and ask again.':'';if(!preview)baseline=stamp(c);changed();}return c;}
+  function syncContext(){if(!alive)return;const c=capture();if(scope!==c.scope){persist();stop();scope=c.scope;preview=null;restore();stale=false;error='';baseline=stamp(c);changed();}else if(baseline!==stamp(c)){if(!applying)stop();stale=Boolean(preview);error=stale?'Context changed. Discard this proposal and ask again.':'';if(!preview)baseline=stamp(c);changed();}return c;}
   async function ask(instruction){if(!alive||busy)return false;const c=syncContext();if(!c?.usable){error='Choose a confirmed buyer and finish pending message operations first.';changed();return false;}if(typeof instruction!=='string'||!instruction.trim()||instruction.length>4000){error='Enter a question of up to 4,000 characters.';changed();return false;}
    preview=null;stale=false;error='';baseline=stamp(c);const token=++owner,capturedScope=c.scope;controller=new AbortController();const signal=controller.signal;busy=true;changed();
    const history=messages.map(m=>({role:m.role,content:m.content})).slice(-10);while(history.reduce((n,m)=>n+m.content.length,0)>12000)history.shift();
@@ -24,8 +33,8 @@
   async function applyPreview(){if(!alive||busy||!preview)return false;const c=syncContext();if(stale||!c?.usable||baseline!==stamp(c))return false;const token=++owner;busy=true;applying=true;changed();try{const accepted=await apply(clone(preview));if(token!==owner||accepted===false)return false;preview=null;stale=false;baseline=stamp(capture());error='Applied as an edited draft. Review, then Save.';return true;}catch(cause){if(token===owner)error=cause.message;return false;}finally{if(token===owner){applying=false;busy=false;changed();}}}
   function discardPreview(){if(busy)return false;preview=null;stale=false;error='';baseline=stamp(capture());changed();}
   function cancel(){stop();error='Cancelled. Your draft is preserved.';changed();}
-  function destroy(){stop();alive=false;preview=null;messages=[];}
-  return {state,ask,applyPreview,discardPreview,syncContext,cancel,destroy};
+  function destroy(){persist();stop();alive=false;preview=null;messages=[];}
+  return {state,ask,applyPreview,discardPreview,syncContext,cancel,destroy,setInstruction};
  }
  const api={createWritingAssistant};if(typeof module==='object'&&module.exports)module.exports=api;else root.LeadIntelWritingAssistant=api;
 })(typeof window==='object'?window:globalThis);

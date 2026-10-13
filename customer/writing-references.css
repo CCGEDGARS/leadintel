@@ -1,1 +1,21 @@
 .writing-reference-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.writing-reference-grid section{border:1px solid #dce4df;border-radius:12px;padding:18px;overflow-wrap:anywhere;background:#fff}.writing-reference-grid label{display:block;margin:12px 0}.writing-reference-grid input[type=file]{max-width:100%;display:block;margin-top:8px}.writing-reference-grid textarea{width:100%;min-height:80px;box-sizing:border-box}.writing-reference-grid button{margin:8px 0}.writing-references [role=status]{min-height:1.4em}.writing-reference-grid :focus-visible{outline:2px solid #136b57;outline-offset:3px}@media(max-width:850px){.writing-reference-grid{grid-template-columns:1fr}}
+/* A single optional material; settings stay behind a compact disclosure. */
+.writing-reference-grid{grid-template-columns:minmax(0,1fr);gap:10px}
+.writing-references{font-size:13px;line-height:1.6;color:#304e3c}
+.wr-intro{color:#62776a;font-size:12px;max-width:72ch;margin:12px 0}
+.writing-reference-grid section{padding:16px}
+.writing-reference-grid h4{margin:0 0 8px;font-size:14px}
+.writing-reference-grid p{margin:6px 0}
+.writing-reference-grid button{font:inherit;font-weight:600;padding:8px 12px;background:#fff;color:#304e3c;border:1px solid #c8dacf;border-radius:8px;cursor:pointer;margin:6px 8px 6px 0}
+.writing-reference-grid button:disabled{opacity:.5;cursor:not-allowed}
+.writing-reference-grid input[type=file]{width:100%;padding:8px;background:#f8fbf9;border:1px dashed #bfd3c6;border-radius:8px;box-sizing:border-box;font:inherit}
+.writing-reference-grid input[type=file]::file-selector-button{padding:7px 10px;border:0;border-radius:6px;background:#e3eee7;color:#244e38;font:inherit;margin-right:10px;cursor:pointer}
+.writing-reference-grid select,.writing-reference-grid textarea{padding:9px 10px;border:1px solid #c8dacf;border-radius:8px;font:inherit;color:#304e3c;background:#fff;box-sizing:border-box;width:100%}
+.writing-reference-grid textarea{resize:vertical;min-height:72px}
+.writing-reference-grid .wr-activation{display:inline-flex;align-items:center;gap:8px;margin:8px 14px 8px 0;font-weight:600}
+.writing-reference-grid input[type=checkbox]{accent-color:#286a4a;width:16px;height:16px}
+.writing-reference-grid details{border-top:1px solid #e1eae5;margin-top:10px;padding-top:10px}
+.writing-reference-grid summary{cursor:pointer;font-weight:600}
+.writing-reference-grid small{display:block;color:#62776a;font-size:12px}
+.writing-reference-grid [role=alert]{color:#a83a32}
+.writing-references [role=status]:empty{display:none}

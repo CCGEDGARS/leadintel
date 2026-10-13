@@ -30,7 +30,7 @@
    bookApi=api;renderBookSwitches();instance=root.LeadIntelWritingReferences.mountWritingReferences({root:host,api,onChange:()=>indicator()});instance.refresh();pollAt=Date.now();
    if(!root.document.getElementById('writing-reference-indicator')){const p=root.document.createElement('p');p.id='writing-reference-indicator';p.setAttribute('role','status');studio.querySelector('#message-mode-label')?.after(p);}
   }else if(processing&&!host.contains(root.document.activeElement)&&Date.now()-pollAt>5000){pollAt=Date.now();instance.refresh();}
-  const summary=root.document.getElementById('mw-reference-count');if(summary)summary.textContent=activeNames.length?activeNames.length+' active':'Optional · 3 slots';indicator();
+  const summary=root.document.getElementById('mw-reference-count');if(summary)summary.textContent=activeNames.length?activeNames.length+' active':'Optional · 1 material';indicator();
  }
  root.LeadIntelWritingReferenceSelection={snapshot:()=>({workspaceId:workspace,referenceRevision,sourceRefs:bookCards.filter(c=>c.active&&c.status==='Ready').map(c=>({id:c.id,revision:c.revision})),cards:bookCards.map(c=>({id:c.id,filename:c.filename,active:c.active,status:c.status}))})};
  root.setInterval(sync,2500);root.addEventListener('focus',()=>{instance?.refresh();});root.document.addEventListener('change',indicator);sync();
