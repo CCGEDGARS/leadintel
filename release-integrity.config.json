@@ -744,7 +744,7 @@
         "Writing Assistant",
         "My content",
         "Approved originals",
-        "Writing references",
+        "Add a book or material",
         "Add to templates",
         "Set as default",
         "Add to flow",
@@ -1049,7 +1049,7 @@
         "Writing Assistant",
         "Rewrite",
         "Shorten",
-        "drafts.after(followUpHost,assistant)",
+        "drafts.after(assistant,followUpHost)",
         "append(improve,q('mw-restore-original'))",
         "editor.busyAction==='shorten'",
         "Shortening\u2026",
@@ -1977,7 +1977,7 @@
       "status": 200,
       "contains": [
         "mw-draft-provenance",
-        "Edited working copy \u00b7 originals preserved"
+        "Working copy \u00b7 originals preserved"
       ]
     },
     {
@@ -2035,9 +2035,11 @@
       "url": "/customer/message-workspace.js",
       "status": 200,
       "contains": [
-        "drafts.after(followUpHost,assistant)",
+        "drafts.after(assistant,followUpHost)",
         "libraryTools.open=false",
-        "function resizeEditors(document)"
+        "function resizeEditors(document)",
+        "Add a book or material",
+        "assistant.append(references)"
       ]
     },
     {
@@ -2069,7 +2071,9 @@
       "contains": [
         "function auxiliaryResearchDrafts(",
         "requiresAiLocalization:false",
-        "function installFollowUpAssistant()"
+        "function installFollowUpAssistant()",
+        "function restoreApprovedCoreMessage()",
+        "Restore approved ${name}"
       ]
     },
     {
@@ -2100,7 +2104,8 @@
       "url": "/customer/follow-up-assistant.css",
       "status": 200,
       "contains": [
-        ".fu-assistant"
+        ".fu-assistant",
+        "#mw-follow-up-host>.fu-assistant>summary"
       ]
     },
     {
@@ -2123,7 +2128,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "step6-rescue=20261013-v2"
+        "step6-rescue=20261013-v3"
       ]
     }
   ],

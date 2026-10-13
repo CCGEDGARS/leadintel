@@ -104,3 +104,47 @@ test('rescue explicit core click disables personal override without deleting its
   assert.deepEqual(E.workingDraft(reopened.item()),original);
  }finally{reopened?.w.close();h.w.close();}
 });
+
+for(const style of ['professional','curiosity','friendly','brutal'])test(`rescue explicit approved ${style} recovery archives a corrupted original and fixes Reset without reopening mutation`,()=>{
+ const h=mounted({selected:style});try{
+  h.w.document.querySelector(`[data-writing-style="${style}"]`).click();
+  const canonical=E.workingDraft(h.item()),item=h.item(),legacy={subject:canonical.subject,message:'Legacy automatically generated shortened copy\n\nUnchanged historical spacing.'};
+  // Same scope, corrupt original: ordinary original:true must not silently repair it.
+  item.drafts.emailBody=legacy.message;item.messageStudioDraft.tailoredOriginal.draft=legacy;
+  item.messageStudioDraft.editorOrigin='manual';item.messageStudioDraft.scriptSavedAt='historical';item.messageStudioDraft.savedDraft=legacy;
+  h.w.upsertItem(item);h.w.renderAll();h.w.renderAll();
+  assert.deepEqual(E.workingDraft(h.item()),legacy);
+  assert.equal(h.q('mw-approved-recovery').hidden,false);
+  assert.match(h.q('mw-draft-provenance').textContent,/Working copy/);
+  assert.doesNotMatch(h.q('mw-draft-provenance').textContent,/Edited/);
+  assert.match(h.q('mw-restore-approved').textContent,/Restore approved/);
+  h.q('mw-restore-approved').click();
+  const restored=h.item();assert.deepEqual(E.workingDraft(restored),canonical);
+  assert.deepEqual(E.updateUndo(restored),legacy);
+  assert.deepEqual(restored.messageStudioDraft.tailoredOriginal.draft,canonical);
+  assert.ok(restored.messageStudioDraft.originalHistory.some(row=>row.draft.message===legacy.message));
+  assert.equal(E.savedDraft(restored),false);assert.equal(h.q('mw-approved-recovery').hidden,true);
+  h.w.upsertItem(E.apply(restored,{subject:'Different subject',message:'Different working copy'},{origin:'manual'}));h.w.renderAll();h.w.restorePrePersonalizationDraft();
+  assert.deepEqual(E.workingDraft(h.item()),canonical);
+ }finally{h.w.close();}
+});
+
+test('rescue recovery stays unavailable for event, LinkedIn and translated copies',()=>{
+ const h=mounted({selected:'professional'});try{
+  const studio=h.w.studioState(),context=h.w.studioMessageContext(),item=h.item();
+  for(const copy of [{...item,channel:'linkedin'},{...item,messageStudioDraft:{...item.messageStudioDraft,eventSnapshot:{id:'event'}}},{...item,messageStudioDraft:{...item.messageStudioDraft,languageVersions:{activeLanguage:'lv'}}}])assert.equal(E.coreWorkingStatus(copy,studio,context).applicable,false);
+ }finally{h.w.close();}
+});
+
+test('rescue core status cannot treat an active personal copy as canonical and never mutates saved defaults',()=>{
+ const h=mounted({selected:'professional'});try{
+  let studio=S.savePersonalStyle(h.w.studioState(),'professional',{subject:'Saved subject',body:'Saved shortened personal copy'});
+  studio=S.saveMyTemplate(studio,'template-1',{name:'Saved default',subject:'Default subject',body:'Saved default body'});
+  studio=S.markDefault(studio,'template-1','email');studio=S.applyDefault(studio,'email');
+  const item=h.item();item.messageStudioDraft.mode='professional';item.drafts.emailBody='Saved shortened personal copy';
+  const before=JSON.stringify(studio),status=E.coreWorkingStatus(item,studio,h.w.studioMessageContext());
+  assert.equal(status.matches,false);assert.equal(JSON.stringify(studio),before);
+  h.w.persistStudio(studio);h.w.upsertItem(item);h.w.renderAll();
+  assert.equal(h.q('mw-approved-recovery').hidden,false);
+ }finally{h.w.close();}
+});

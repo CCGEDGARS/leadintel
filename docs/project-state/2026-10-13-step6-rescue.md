@@ -37,3 +37,13 @@ Responsive layout/autoheight is tested with mounted DOM/CSS rules. Cloud-browser
 Release checks require the new entrypoint/cache versions, message-first assets, integrated assistant, follow-up assets, private endpoint denial and backend follow-up version. Production status still requires both exact-SHA CI suites, deployment success, matching release manifests/health, every mandatory smoke gate and a PROVEN proof artifact.
 
 Local verification completed before publication: full customer suite 2,549/2,549; governed Step 6 checks 373/373; combined assistant tests 46/46; backend suite 593/593 plus final combined-size/Unicode regression checks; Python extraction checks 4/4. Static build, Worker bundle dry-run and dependency audits passed with zero vulnerabilities. Follow-up history tests cover actual stored replies, earlier opt-outs outside the AI window, combined-size token save and Unicode byte limits. Release-contract tests pass 47/47; exact-SHA release evidence is recorded in CI/release proof.
+
+## Customer screenshot acceptance correction — 10:12 Riga
+
+The owner rejected the initial rescue presentation: the previous incorrect Professional working copy remained visible, the main book upload facility was buried in Tools, and Follow-Up was above Writing Assistant with inconsistent padding. Technical production proof did not establish customer acceptance. The earlier completion statement was premature.
+
+Corrected order is editor → Writing Assistant (one visible Add a book or material disclosure with the existing private upload/activation/role/instruction facility) → Follow-Up Assistant → Tools. Duplicate book guidance controls remain inside optional custom-style settings. Follow-Up styles are scoped to the actual host so global summary styles cannot remove the intended padding.
+
+Historical working content is preserved on reopen. The editor now compares English core working copy to canonical assembly and offers explicit Restore approved [style], without claiming historical metadata proves manual editing. Restore clears a personal/default selection, reassembles the protected core, retains prior text in Undo/history and archives a corrupted same-scope original before establishing the canonical Reset baseline. Save remains explicit. Events, LinkedIn and translations retain their own boundaries.
+
+No stronger model was needed for these corrections: the failures concerned presentation, existing saved state, original-snapshot recovery and premature acceptance reporting. Final review found no remaining critical/important defect in this corrective scope. Browser verification was retried and remains blocked by the same protocol timeout; no authenticated customer screenshot is represented as verified.

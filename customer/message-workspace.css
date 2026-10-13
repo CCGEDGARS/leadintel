@@ -518,3 +518,15 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
  #message-studio .mw-editor #outreach-email-body,#message-studio .mw-editor #outreach-linkedin{padding:14px;font-size:14px;min-height:300px}
 }
 @media(max-width:400px){#message-studio .mw-styles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* One material facility travels with the assistant, including its expanded view. */
+#mw-writing-assistant>#mw-writing-references{margin:12px 0 0;padding:12px 14px;border:1px solid #dce5df;border-radius:9px;background:#fff}
+#mw-writing-assistant>#mw-writing-references>summary{cursor:pointer;font-size:13px;font-weight:600;line-height:1.5;color:#315d4c}
+#mw-writing-assistant>#mw-writing-references>summary span{font-size:11px;font-weight:400;margin-left:8px;color:#687c6e}
+#mw-writing-assistant>#mw-writing-references:not([open])>#mw-book-controls,#mw-writing-assistant>#mw-writing-references:not([open])>#mw-writing-reference-host{display:none}
+
+#message-studio #mw-approved-recovery{display:flex;align-items:center;gap:12px;margin:12px 0;padding:12px 14px;border:1px solid #e5cf9a;border-radius:9px;background:#fff8e9}
+#message-studio #mw-approved-recovery[hidden]{display:none}
+#message-studio #mw-approved-recovery-copy{flex:1;min-width:0;margin:0;font-size:12px;line-height:1.6;color:#705a30}
+#message-studio #mw-restore-approved{flex:none;margin:0;padding:9px 12px;font-size:12px;line-height:20px;min-height:40px}
+@media(max-width:720px){#message-studio #mw-approved-recovery{align-items:flex-start;flex-direction:column}#message-studio #mw-restore-approved{width:100%}}
