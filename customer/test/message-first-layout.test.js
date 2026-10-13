@@ -21,10 +21,11 @@ function installViewportStyles(document,width){
  const resolved=resolve(source.sheet.cssRules);source.remove();const applied=document.createElement('style');applied.textContent=resolved;document.head.append(applied);
 }
 
-test('message-first mounted workspace puts optional setup below its single editor and keeps material controls in Writing Assistant above follow-up',()=>{
+test('split workspace places Writing Assistant directly below styles in the left sidebar with its material controls',()=>{
  const {document,w}=mounted();const drafts=document.querySelector('.mw-editor .outreach-drafts'),tools=document.getElementById('mw-tools-drawer');
- assert.equal(drafts.nextElementSibling.id,'mw-writing-assistant');
- assert.equal(drafts.nextElementSibling.nextElementSibling.id,'mw-follow-up-host');
+ assert.equal(document.getElementById('mw-style-options').closest('section').nextElementSibling.id,'mw-writing-assistant');
+ assert.ok(document.querySelector('.mw-rail').contains(document.getElementById('mw-writing-assistant')));
+ assert.equal(drafts.nextElementSibling.id,'mw-follow-up-host');
  assert.ok(drafts.compareDocumentPosition(tools)&4);assert.equal(tools.open,false);
  assert.ok(tools.contains(document.getElementById('mw-default-template')));
  assert.ok(tools.contains(document.querySelector('.message-advanced')));
