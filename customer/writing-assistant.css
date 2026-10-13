@@ -37,3 +37,23 @@
 .wa-dialog .wa-has-preview .wa-session-note{grid-column:1/-1;grid-row:5}
 .wa-dialog #mw-writing-references{margin-top:18px}
 @media(max-width:720px){.wa-dialog{width:calc(100vw - 24px);padding:16px}.wa-dialog .wa-session.wa-has-preview{grid-template-columns:minmax(0,1fr)}.wa-dialog .wa-session.wa-has-preview>*{grid-column:1;grid-row:auto}.wa-dialog .wa-question textarea{min-height:104px}}
+/* Conversation-first assistant window. All controls are styled inside the dialog. */
+.wa-dialog{font-family:inherit;color:#243b30;font-size:14px;line-height:1.55}
+.wa-dialog-header{padding-bottom:16px;border-bottom:1px solid #dce7df;margin-bottom:18px}
+.wa-dialog-header strong{font-size:20px;letter-spacing:-.3px}
+.wa-dialog button{font:inherit;font-size:13px;font-weight:600;padding:10px 16px;border:1px solid #cbdcd2;border-radius:9px;background:#fff;color:#243b30;cursor:pointer}
+.wa-dialog button.primary-btn{background:#18382c;color:#fff;border-color:#18382c}
+.wa-dialog button:hover:not(:disabled){filter:brightness(.96)}
+.wa-dialog button:disabled{opacity:.5;cursor:not-allowed}
+.wa-dialog [hidden]{display:none!important}
+.wa-dialog .wa-transcript{min-height:110px;max-height:30vh;padding:2px}
+.wa-empty{padding:20px;border:1px dashed #cbdcd2;border-radius:12px;background:#fff;font-size:14px}
+.wa-dialog .wa-question{padding:16px;background:#fff}
+.wa-dialog .wa-question textarea{min-height:116px;font-size:14px}
+.wa-dialog .wa-preview{padding:18px;background:#fff}
+.wa-dialog .wa-preview [data-wa-body]{font-size:14px;line-height:1.75}
+.wa-dialog #mw-writing-references{margin-top:18px;padding:14px 16px;border:1px solid #d5e3da;border-radius:12px;background:#f0f6f2}
+.wa-dialog #mw-writing-references>summary{font-size:13px;font-weight:600;cursor:pointer}
+.wa-dialog #mw-reference-count{float:right;font-size:12px;font-weight:400;color:#62776a}
+.wa-dialog .wa-session-note{color:#62776a}
+@media(max-width:720px){.wa-dialog{max-height:94dvh}.wa-dialog #mw-reference-count{float:none;display:block;margin:4px 0 0 16px}.wa-dialog .wa-transcript{max-height:24vh}}
