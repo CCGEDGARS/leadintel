@@ -88,9 +88,9 @@
   const improve=q('mw-rewrite-message');improve.textContent='Rewrite';improve.title='Create a fresh version of this working draft using your selected content';assistant.querySelector('.mw-assistant-actions').append(improve);
   for(const [id,label] of [['mw-shorten-message','Shorten'],['mw-improve-subject','Improve subject']]){const button=node('button','secondary-btn',label);button.id=id;button.type='button';assistant.querySelector('.mw-assistant-actions').append(button);}
   assistant.querySelector('.mw-assistant-actions').append(improve,q('mw-restore-original'));
-  // Put the canonical composer first; secondary work stays below the message.
+  // Keep the writing session directly below styles in the preparation sidebar.
   const followUpHost=node('div','mw-follow-up-host');followUpHost.id='mw-follow-up-host';
-  drafts.after(assistant,followUpHost);
+  styleSection.after(assistant);drafts.after(followUpHost);
   references.querySelector('summary').innerHTML='Add a book or material <span id="mw-reference-count">Optional · 3 books</span>';
   assistant.append(references);
   editor.append(libraryTools);

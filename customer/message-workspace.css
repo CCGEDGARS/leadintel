@@ -531,3 +531,12 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #message-studio #mw-approved-recovery-copy{flex:1;min-width:0;margin:0;font-size:12px;line-height:1.6;color:#705a30}
 #message-studio #mw-restore-approved{flex:none;margin:0;padding:9px 12px;font-size:12px;line-height:20px;min-height:40px}
 @media(max-width:720px){#message-studio #mw-approved-recovery{align-items:flex-start;flex-direction:column}#message-studio #mw-restore-approved{width:100%}}
+
+/* Compact inline writer in the style sidebar; expanded dialog keeps its full layout. */
+#message-studio .mw-rail .mw-writing-assistant{margin:0;min-width:0}
+#message-studio .mw-rail .wa-question{padding:10px;min-width:0}
+#message-studio .mw-rail .wa-question-footer .wa-actions{width:100%;margin-left:0}
+#message-studio .mw-rail .wa-question-footer .wa-actions button{flex:1;min-width:0}
+#message-studio .mw-rail .wa-question-footer [data-wa-attach]{flex-basis:100%;order:-1}
+#message-studio .mw-rail .wa-source-choice,#message-studio .mw-rail .wa-source-choice select{max-width:100%;min-width:0}
+#message-studio .mw-rail .writing-reference-grid input[type=file],#message-studio .mw-rail .writing-reference-grid input[type=text],#message-studio .mw-rail .writing-reference-grid textarea,#message-studio .mw-rail .writing-reference-grid select{box-sizing:border-box;max-width:100%;min-width:0;width:100%}

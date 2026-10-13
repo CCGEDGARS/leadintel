@@ -55,3 +55,7 @@ The owner explicitly requested the previous split screen with styles in the left
 Writing Assistant now has a visible Attach book or material button beside Ask/Expand. It opens the one existing private upload facility and focuses its file input; it neither uploads nor invokes a provider automatically. In the expanded assistant the canonical in-panel book library remains in the same dialog; legacy external locations fall back inline. Conversation and instruction state are preserved.
 
 Validation:39 layout/workspace checks,73 combined assistant/release checks and10 final attachment UI tests pass; static build and diff check pass. This is a presentation correction; protected master scripts and saved email text are unchanged. Authenticated browser pixels remain outside these DOM/CSS assertions. Exact production status requires the new SHA proof.
+
+## Writing Assistant moved into the left sidebar — 11:45 Riga
+
+Per the owner's explicit instruction, the existing Writing Assistant now sits directly below style choices in the left rail. Its single book/material facility and attachment button move with it. Sidebar controls wrap to available width; native upload inputs are constrained without stretching activation checkboxes. Expanded mode keeps the full dialog layout and returns to the same sidebar position. The editor and saved text are not changed by this presentation update.
