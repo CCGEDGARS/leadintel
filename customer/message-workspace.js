@@ -88,9 +88,9 @@
   const improve=q('mw-rewrite-message');improve.textContent='Rewrite';improve.title='Create a fresh version of this working draft using your selected content';assistant.querySelector('.mw-assistant-actions').append(improve);
   for(const [id,label] of [['mw-shorten-message','Shorten'],['mw-improve-subject','Improve subject']]){const button=node('button','secondary-btn',label);button.id=id;button.type='button';assistant.querySelector('.mw-assistant-actions').append(button);}
   assistant.querySelector('.mw-assistant-actions').append(improve,q('mw-restore-original'));
-  // Keep the writing session directly below styles in the preparation sidebar.
+  // The sidebar exposes only a launcher; the writing session lives in its dialog.
   const followUpHost=node('div','mw-follow-up-host');followUpHost.id='mw-follow-up-host';
-  styleSection.after(assistant);drafts.after(followUpHost);
+  const launcher=node('section','mw-section wa-launcher');launcher.id='mw-writing-assistant-launcher';launcher.innerHTML='<h3>Writing Assistant</h3><p>Want to improve this message?</p><button type="button" class="primary-btn" data-wa-open data-wa-expand aria-haspopup="dialog" disabled>Open assistant →</button>';styleSection.after(launcher);assistant.hidden=true;studio.append(assistant);drafts.after(followUpHost);
   references.querySelector('summary').innerHTML='Add a book or material <span id="mw-reference-count">Optional · 3 books</span>';
   assistant.append(references);
   editor.append(libraryTools);

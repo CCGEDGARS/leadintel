@@ -532,14 +532,8 @@ body:has(#step-6.active) .process-map{padding-bottom:12px;margin-bottom:20px}
 #message-studio #mw-restore-approved{flex:none;margin:0;padding:9px 12px;font-size:12px;line-height:20px;min-height:40px}
 @media(max-width:720px){#message-studio #mw-approved-recovery{align-items:flex-start;flex-direction:column}#message-studio #mw-restore-approved{width:100%}}
 
-/* Compact inline writer in the style sidebar; expanded dialog keeps its full layout. */
-#message-studio .mw-rail .mw-writing-assistant{margin:0;min-width:0}
-#message-studio .mw-rail .wa-question{padding:10px;min-width:0}
-#message-studio .mw-rail .wa-question-footer .wa-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:8px;width:100%;margin-left:0}
-#message-studio .mw-rail .wa-question-footer .wa-actions button{box-sizing:border-box;width:100%;min-width:0;min-height:36px;height:auto;align-self:start;padding:8px 10px;line-height:20px}
-#message-studio .mw-rail .wa-question-footer .wa-actions>[data-wa-attach]{grid-column:1/-1;grid-row:1;order:0}
-#message-studio .mw-rail .wa-question-footer .wa-actions>[data-wa-ask]{grid-column:1;grid-row:2}
-#message-studio .mw-rail .wa-question-footer .wa-actions>[data-wa-expand]{grid-column:2;grid-row:2}
-#message-studio .mw-rail .wa-question-footer .wa-actions>[data-wa-cancel]{grid-column:1/-1;grid-row:3}
-#message-studio .mw-rail .wa-source-choice,#message-studio .mw-rail .wa-source-choice select{max-width:100%;min-width:0}
-#message-studio .mw-rail .writing-reference-grid input[type=file],#message-studio .mw-rail .writing-reference-grid input[type=text],#message-studio .mw-rail .writing-reference-grid textarea,#message-studio .mw-rail .writing-reference-grid select{box-sizing:border-box;max-width:100%;min-width:0;width:100%}
+/* The sidebar is a launcher, never a second editing surface. */
+#message-studio .mw-rail .wa-launcher{margin:0;padding:14px 16px;min-width:0}
+#message-studio .mw-rail .wa-launcher h3{margin:0;font-size:14px;line-height:1.4}
+#message-studio .mw-rail .wa-launcher p{margin:6px 0 12px;font-size:12px;line-height:1.6;color:#687c6e}
+#message-studio .mw-rail .wa-launcher button{box-sizing:border-box;width:100%;min-height:40px;padding:10px 12px;font-size:13px;line-height:20px}

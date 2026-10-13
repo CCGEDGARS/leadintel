@@ -1049,7 +1049,7 @@
         "Writing Assistant",
         "Rewrite",
         "Shorten",
-        "styleSection.after(assistant);drafts.after(followUpHost)",
+        "styleSection.after(launcher)",
         "append(improve,q('mw-restore-original'))",
         "editor.busyAction==='shorten'",
         "Shortening\u2026",
@@ -2035,11 +2035,13 @@
       "url": "/customer/message-workspace.js",
       "status": 200,
       "contains": [
-        "styleSection.after(assistant);drafts.after(followUpHost)",
+        "styleSection.after(launcher)",
         "libraryTools.open=false",
         "function resizeEditors(document)",
         "Add a book or material",
-        "assistant.append(references)"
+        "assistant.append(references)",
+        "Want to improve this message?",
+        "Open assistant"
       ]
     },
     {
@@ -2051,7 +2053,7 @@
         "overflow-y:hidden;resize:none",
         "grid-template-columns:280px minmax(0,1fr)",
         "text-align:left",
-        ".wa-actions>[data-wa-attach]{grid-column:1/-1;grid-row:1"
+        ".wa-launcher"
       ]
     },
     {
@@ -2131,7 +2133,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "step6-rescue=20261013-v6"
+        "step6-rescue=20261013-v7"
       ]
     }
   ],

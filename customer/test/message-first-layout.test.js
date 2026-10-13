@@ -21,10 +21,10 @@ function installViewportStyles(document,width){
  const resolved=resolve(source.sheet.cssRules);source.remove();const applied=document.createElement('style');applied.textContent=resolved;document.head.append(applied);
 }
 
-test('split workspace places Writing Assistant directly below styles in the left sidebar with its material controls',()=>{
+test('split workspace places only the Writing Assistant launcher directly below styles',()=>{
  const {document,w}=mounted();const drafts=document.querySelector('.mw-editor .outreach-drafts'),tools=document.getElementById('mw-tools-drawer');
- assert.equal(document.getElementById('mw-style-options').closest('section').nextElementSibling.id,'mw-writing-assistant');
- assert.ok(document.querySelector('.mw-rail').contains(document.getElementById('mw-writing-assistant')));
+ assert.equal(document.getElementById('mw-style-options').closest('section').nextElementSibling.id,'mw-writing-assistant-launcher');
+ assert.ok(document.querySelector('.mw-rail').contains(document.getElementById('mw-writing-assistant-launcher')));assert.equal(document.getElementById('mw-writing-assistant').hidden,true);
  assert.equal(drafts.nextElementSibling.id,'mw-follow-up-host');
  assert.ok(drafts.compareDocumentPosition(tools)&4);assert.equal(tools.open,false);
  assert.ok(tools.contains(document.getElementById('mw-default-template')));
@@ -94,7 +94,7 @@ for(const width of [1440,390])test(`mounted Follow-Up Assistant disclosure has c
  const details=document.querySelector('#mw-follow-up-host>.fu-assistant'),summary=details.querySelector('summary'),content=details.querySelector('.fu-content');
  assert.equal(w.getComputedStyle(details).padding,'0px');assert.equal(w.getComputedStyle(summary).padding,width===390?'12px 14px':'14px 16px');
  assert.equal(w.getComputedStyle(content).padding,width===390?'0px 14px 14px':'0px 16px 16px');assert.equal(w.getComputedStyle(content).display,'none');assert.equal(details.open,false);
- assert.ok(document.getElementById('mw-writing-assistant').compareDocumentPosition(document.getElementById('mw-follow-up-host'))&4);
+ assert.ok(document.getElementById('mw-writing-assistant-launcher').compareDocumentPosition(document.getElementById('mw-follow-up-host'))&4);
  view.destroy();w.close();
 });
 
@@ -104,15 +104,17 @@ test('the explicit approved-template recovery stays visible and compact while hi
  panel.hidden=true;assert.equal(w.getComputedStyle(panel).display,'none');w.close();
 });
 
-for(const width of [1440,390])test(`sidebar writer actions do not stretch into equal-height attachment towers at ${width}px`,()=>{
+test('opening the sidebar launcher reveals the single dialog session and closing preserves it',()=>{
  const {document,w}=mounted();w.eval(read('writing-assistant-ui.js'));
- const controller={state:()=>({messages:[],busy:false}),ask(){},applyPreview(){},discardPreview(){},cancel(){}};
+ const controller={state:()=>({messages:[{role:'assistant',content:'Existing conversation'}],busy:false}),ask(){throw Error('opening must not generate')},applyPreview(){},discardPreview(){},cancel(){}};
+ const panel=document.getElementById('mw-writing-assistant'),refs=document.getElementById('mw-writing-references');
  const view=w.LeadIntelWritingAssistantUI.mountWritingAssistant(document,controller);
- const styles=document.createElement('style');styles.textContent=read('writing-assistant.css');document.head.append(styles);installViewportStyles(document,width);
- const css=node=>w.getComputedStyle(node),actions=document.querySelector('.wa-question-footer .wa-actions');
- assert.equal(css(actions).display,'grid');assert.equal(css(actions).gridTemplateColumns,'repeat(2,minmax(0,1fr))');assert.equal(css(actions).alignItems,'start');
- const attach=document.querySelector('[data-wa-attach]'),ask=document.querySelector('[data-wa-ask]'),expand=document.querySelector('[data-wa-expand]');
- assert.equal(css(attach).gridColumn,'1/-1');assert.equal(css(attach).gridRow,'1');assert.equal(css(ask).gridRow,'2');assert.equal(css(expand).gridRow,'2');
- for(const button of [attach,ask,expand]){assert.equal(css(button).height,'auto');assert.equal(css(button).alignSelf,'start');assert.equal(css(button).minHeight,'36px');}
- view.destroy();w.close();
+ const launcher=document.getElementById('mw-writing-assistant-launcher');
+ assert.equal(launcher.parentElement.className,'mw-rail');assert.equal(launcher.querySelectorAll('textarea,input,details,[data-wa-attach],.mw-assistant-actions').length,0);
+ assert.equal(document.querySelector('.mw-rail #mw-writing-assistant'),null);assert.equal(panel.closest('dialog'),document.querySelector('.wa-dialog'));
+ launcher.querySelector('[data-wa-open]').click();assert.equal(document.querySelector('.wa-dialog').hasAttribute('open'),true);assert.equal(panel.hidden,false);
+ const instruction=document.querySelector('[data-wa-instruction]');instruction.value='Keep my instruction';document.querySelector('[data-wa-close]').click();
+ assert.equal(document.querySelector('.wa-dialog').hasAttribute('open'),false);assert.equal(instruction.value,'Keep my instruction');
+ launcher.querySelector('[data-wa-open]').click();assert.equal(document.getElementById('mw-writing-references'),refs);assert.match(document.querySelector('[data-wa-transcript]').textContent,/Existing conversation/);
+ assert.equal(document.querySelectorAll('#mw-writing-assistant-launcher').length,1);assert.equal(document.querySelectorAll('#mw-writing-assistant').length,1);view.destroy();w.close();
 });
