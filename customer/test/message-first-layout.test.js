@@ -39,12 +39,14 @@ test('message-first mounted workspace puts optional setup below its single edito
  w.close();
 });
 
-for(const [width,columns] of [[1440,5],[768,5],[600,3],[390,2]])test(`mounted composer at ${width}px keeps draft dominant and setup controls aligned`,()=>{
+for(const [width,columns] of [[1440,1],[768,3],[600,3],[390,2]])test(`mounted composer at ${width}px keeps draft dominant and setup controls aligned`,()=>{
  const {document,w}=mounted();w.LeadIntelMessageTranslations=require('../message-translations.js');w.eval(read('message-translation-ui.js'));w.LeadIntelMessageTranslationUI.mount(document,{save(){},target(){},activate(){},restore(){},translate(){}});
- installViewportStyles(document,width);
+ w.LeadIntelMessageWorkspace.paintStyles(document);installViewportStyles(document,width);
  const css=node=>w.getComputedStyle(node);
- assert.equal(css(document.querySelector('.mw-layout')).display,'flex');assert.equal(css(document.querySelector('.mw-layout')).flexDirection,'column');
- assert.equal(css(document.getElementById('mw-style-options')).gridTemplateColumns,`repeat(${columns},minmax(0,1fr))`);
+ assert.equal(css(document.querySelector('.mw-layout')).display,'grid');assert.equal(css(document.querySelector('.mw-layout')).gridTemplateColumns,width>900?'280px minmax(0,1fr)':'minmax(0,1fr)');
+ assert.ok(document.querySelector('.mw-rail').contains(document.getElementById('mw-style-options')));assert.ok(document.querySelector('.mw-editor').contains(document.getElementById('outreach-email-body')));
+ assert.equal(css(document.getElementById('mw-style-options')).gridTemplateColumns,columns===1?'minmax(0,1fr)':`repeat(${columns},minmax(0,1fr))`);
+ assert.equal(css(document.querySelector('.mw-style')).textAlign,width>900?'left':'center');
  const settings=css(document.getElementById('mw-settings')),languages=css(document.getElementById('mw-language-tools'));
  assert.equal(settings.minHeight,languages.minHeight);assert.equal(settings.padding,languages.padding);assert.equal(settings.margin,languages.margin);
  assert.equal(css(document.getElementById('mw-sender-card')).gridTemplateColumns,'repeat(2,minmax(0,1fr))');

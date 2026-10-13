@@ -2048,9 +2048,9 @@
       "url": "/customer/message-workspace.css",
       "status": 200,
       "contains": [
-        "flex-direction:column;gap:12px",
         "overflow-y:hidden;resize:none",
-        "repeat(5,minmax(0,1fr))"
+        "grid-template-columns:280px minmax(0,1fr)",
+        "text-align:left"
       ]
     },
     {
@@ -2060,7 +2060,9 @@
       "status": 200,
       "contains": [
         "view.querySelector('.wa-question').prepend(quickActions)",
-        "All active materials"
+        "All active materials",
+        "Attach book or material",
+        "data-wa-attach"
       ]
     },
     {
@@ -2128,7 +2130,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "step6-rescue=20261013-v3"
+        "step6-rescue=20261013-v4"
       ]
     }
   ],

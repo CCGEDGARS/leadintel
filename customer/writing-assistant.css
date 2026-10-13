@@ -16,3 +16,4 @@
 .wa-session [data-wa-status]{color:#536f5f}
 .wa-dialog .wa-question-footer{align-items:flex-start}
 @media(max-width:480px){.wa-source-choice{width:100%}.wa-source-choice select{flex:1;max-width:100%}.wa-question-footer .wa-actions{width:100%}.wa-question-footer .wa-actions button{flex:1}}
+.wa-question-footer [data-wa-attach]{white-space:normal;min-width:0}
