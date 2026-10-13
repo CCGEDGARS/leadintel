@@ -12,6 +12,13 @@ test('approved Brutal correction also reaches the default working pattern',()=>{
  assert.match(body,/assess whether \{\{company\}\} is the right partner/);
  assert.doesNotMatch(body,/explore where \{\{company\}\} could \{\{value\}\}/);
 });
+test('the approved master revision invalidates only Brutal factual preparation',()=>{
+ for(const mode of ['professional','curiosity','friendly','brutal']){
+  const studio=S.normalize({mode,essentials}),prepared=E.preparedResponse(E.fieldSources(studio,context),studio,context),stamp=JSON.parse(prepared.source);
+  if(mode==='brutal')assert.equal(stamp.masterVersion,'core-template-rules-v2-brutal-20261013');
+  else assert.equal(Object.hasOwn(stamp,'masterVersion'),false);
+ }
+});
 test('each core contract publishes its own immutable sequence and measured body ceiling',()=>{
  for(const [style,counts] of Object.entries({professional:[12,185],curiosity:[13,219],friendly:[11,200],brutal:[12,179]})){
   const c=A.coreContract(style);assert.equal(c.paragraphRoles.length,counts[0]);assert.equal(c.maximumMessageWords,counts[1]);
