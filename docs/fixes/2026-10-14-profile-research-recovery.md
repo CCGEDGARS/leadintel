@@ -9,3 +9,5 @@ Source coverage names missing categories separately from actual unanswered profi
 No provider timeout, account credentials, evidence confidence, approval requirements, or sending permissions were changed. This fixes recovery guidance and usability; it does not establish why a particular provider request timed out.
 
 Regression coverage includes timeout and temporary-error guidance, configuration routing, saved-evidence retry without web research, preservation of customer-confirmed answers, stale account/evidence/document responses, safe links, field navigation, and successful-AI states. Customer dependencies and the production build are checked before release; exact-SHA release proof is required to claim production completion.
+
+Spacing adjustment: the retry action group has 16px above and 18px below, preserving separation from missing-source guidance on desktop and mobile. CSS and loader versions are updated together.
