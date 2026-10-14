@@ -12,3 +12,10 @@
 #event-campaign-panel>summary .feature-title,#email-campaign-panel>summary .feature-title{display:block;grid-column:2;grid-row:1;margin:0;font-size:18px;font-weight:750;line-height:25px;color:#164e40}
 #event-campaign-panel>summary .feature-subtitle,#email-campaign-panel>summary .feature-subtitle{display:block;grid-column:1/-1;grid-row:2;margin:0;font-size:13px;font-weight:400;line-height:18px;color:#66756d}
 #event-campaign-panel>summary:focus-visible,#email-campaign-panel>summary:focus-visible{outline:2px solid #43866b;outline-offset:6px;border-radius:4px}
+
+/* Reserve matching text rows so the two purpose cards stay equal when copy wraps. */
+#event-campaign-panel>summary .feature-title,#email-campaign-panel>summary .feature-title{min-height:25px}
+#event-campaign-panel>summary .feature-subtitle,#email-campaign-panel>summary .feature-subtitle{min-height:36px}
+#event-campaign-panel .feature-subtitle strong,#email-campaign-panel .feature-subtitle strong{font-weight:700;color:#164e40}
+@media(max-width:480px){#event-campaign-panel>summary .feature-title,#email-campaign-panel>summary .feature-title{min-height:50px}#event-campaign-panel>summary .feature-subtitle,#email-campaign-panel>summary .feature-subtitle{min-height:54px}}
+@media(max-width:360px){#event-campaign-panel>summary .feature-subtitle,#email-campaign-panel>summary .feature-subtitle{min-height:72px}}
