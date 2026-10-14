@@ -3,23 +3,6 @@
 
 .event-setup-dialog{width:calc(100% - 32px);max-width:900px;max-height:85vh;overflow:auto;box-sizing:border-box;padding:22px;border:1px solid #b7d8cb;border-radius:16px;color:#203d32;background:#fff}.event-setup-dialog::backdrop{background:#18382b80}.event-setup-dialog>header{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}.event-setup-dialog h2{margin:0}.event-setup-dialog header p{margin:8px 0;color:#66756d}@media(max-width:480px){.event-setup-dialog{padding:14px}.event-setup-dialog>header{gap:10px}}
 
-/* Setup cards share the same geometry; only expanded content changes their height. */
-#event-campaign-panel,#email-campaign-panel{box-sizing:border-box;width:100%;padding:16px;margin:16px 0;border:1px solid #b7d8cb;border-left:4px solid #0f6557;border-radius:12px;background:linear-gradient(120deg,#f0f8f4,#fff)}
-#event-campaign-panel>summary,#email-campaign-panel>summary{display:grid;grid-template-columns:14px minmax(0,1fr);column-gap:10px;row-gap:5px;align-content:center;min-height:46px;padding:0;list-style:none;cursor:pointer}
-#event-campaign-panel>summary::-webkit-details-marker,#email-campaign-panel>summary::-webkit-details-marker{display:none}
-#event-campaign-panel>summary::before,#email-campaign-panel>summary::before{content:"▶";grid-column:1;grid-row:1;font-size:12px;line-height:25px;color:#203d32}
-#event-campaign-panel[open]>summary::before,#email-campaign-panel[open]>summary::before{content:"▼"}
-#event-campaign-panel>summary .feature-title,#email-campaign-panel>summary .feature-title{display:block;grid-column:2;grid-row:1;margin:0;font-size:18px;font-weight:750;line-height:25px;color:#164e40}
-#event-campaign-panel>summary .feature-subtitle,#email-campaign-panel>summary .feature-subtitle{display:block;grid-column:1/-1;grid-row:2;margin:0;font-size:13px;font-weight:400;line-height:18px;color:#66756d}
-#event-campaign-panel>summary:focus-visible,#email-campaign-panel>summary:focus-visible{outline:2px solid #43866b;outline-offset:6px;border-radius:4px}
-
-/* Reserve matching text rows so the two purpose cards stay equal when copy wraps. */
-#event-campaign-panel>summary .feature-title,#email-campaign-panel>summary .feature-title{min-height:25px}
-#event-campaign-panel>summary .feature-subtitle,#email-campaign-panel>summary .feature-subtitle{min-height:36px}
-#event-campaign-panel .feature-subtitle strong,#email-campaign-panel .feature-subtitle strong{font-weight:700;color:#164e40}
-@media(max-width:480px){#event-campaign-panel>summary .feature-title,#email-campaign-panel>summary .feature-title{min-height:50px}#event-campaign-panel>summary .feature-subtitle,#email-campaign-panel>summary .feature-subtitle{min-height:54px}}
-@media(max-width:360px){#event-campaign-panel>summary .feature-subtitle,#email-campaign-panel>summary .feature-subtitle{min-height:72px}}
-
 #campaign-planning-host{margin:24px 0}.event-plan-controls{padding:14px;background:#fff;border:1px solid #dce5df;border-radius:10px;margin:14px 0}.event-plan-controls h3{margin:0 0 10px}.event-secondary-actions{padding:10px;border:1px solid #dce5df;border-radius:8px}.event-secondary-actions button{margin:8px 5px 0 0}#event-campaign-form label[hidden]{display:none}
 
 #event-invitation-details{grid-column:1/-1;padding:14px;margin:12px 0;border:1px solid #dce5df;border-radius:10px;background:#fff}.ec-event-evidence{padding:12px;border:1px solid #dce5df;border-radius:10px;background:#f6faf8;margin:10px 0}.ec-event-evidence p{margin:6px 0;font-size:13px}
