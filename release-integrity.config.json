@@ -2349,7 +2349,10 @@
       "status": 200,
       "contains": [
         "delivery-settings-footer",
-        "Review and approve the workflow separately before activation."
+        "Review and approve the workflow separately before activation.",
+        "delivery-setup-auto-limits",
+        "if(mode==='automatic'&&",
+        "mailboxDailyLimit:mode==='automatic'?value:Number(p.mailboxDailyLimit||limit)"
       ],
       "notContains": [
         "Automatically verify emails before sending",

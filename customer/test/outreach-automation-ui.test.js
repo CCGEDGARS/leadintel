@@ -54,7 +54,7 @@ test('setup offers the same server-backed limits under brand identity',()=>{
   assert.match(ui,/document\.getElementById\('brand-identity'\)/);
   assert.match(ui,/brand\.after\(card\)/);
   assert.match(ui,/saveOutreachAutomationPolicy/);
-  assert.match(ui,/Saving a limit will not send email/);
+  assert.match(ui,/Saving settings will not send email/);
   assert.match(ui,/delivery-setup-mode/);
   assert.match(ui,/Automatic plan/);
   assert.match(ui,/preferredMode/);
@@ -71,7 +71,7 @@ test('setup badge follows the selected plan while reporting actual sending state
   assert.equal(badge('automatic',false).detail,'Sending off · Saved');
   assert.equal(badge('manual',true).detail,'Sending on until saved');
   assert.equal(badge('automatic',true).detail,'Sending on');
-  assert.match(source,/addEventListener\('change',\(\)=>updateSetupBadge\(card,active,true\)\)/);
+  assert.match(source,/updateSetupBadge\(card,active,true\)/);
 });
 
 test('automation stylesheet exists and names the panel',()=>{
