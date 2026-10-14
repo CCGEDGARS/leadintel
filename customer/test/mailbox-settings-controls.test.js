@@ -53,8 +53,14 @@ test('popup continuation rejects an account or workspace change',async()=>{
 });
 test('Microsoft guide gives action-specific steps, approval request and a usable support handoff',async()=>{
  const {w,calls}=await mount();try{
- w.document.querySelector('[data-settings-switch="microsoft"]').click();const dialog=w.document.getElementById('microsoft-connection-help');assert.equal(dialog.querySelector('#microsoft-help-steps').children.length,4);assert.match(dialog.querySelector('#microsoft-help-steps').textContent,/Selected/);assert.equal(dialog.querySelector('details').open,false);
+ w.document.querySelector('[data-settings-switch="microsoft"]').click();const dialog=w.document.getElementById('microsoft-connection-help');assert.equal(dialog.querySelector('#microsoft-help-steps').children.length,6);assert.match(dialog.querySelector('#microsoft-help-steps').textContent,/Selected/);assert.equal(dialog.querySelector('details').open,false);
  assert.match(dialog.textContent,/Request approval/);assert.match(dialog.textContent,/Copy to clipboard/);assert.match(dialog.querySelector('#microsoft-admin-request').value,/review the requested permissions/);dialog.querySelector('details').open=true;dialog.querySelector('[data-select-microsoft-message]').click();const request=dialog.querySelector('#microsoft-admin-request');assert.equal(request.selectionStart,0);assert.equal(request.selectionEnd,request.value.length);const tab=new w.KeyboardEvent('keydown',{key:'Tab',bubbles:true,cancelable:true});request.dispatchEvent(tab);assert.equal(tab.defaultPrevented,false);const support=dialog.querySelector('[data-microsoft-support-email]');assert.ok(support.getAttribute('href').startsWith('mailto:'));assert.match(decodeURIComponent(support.href),/AADSTS700016/);
  dialog.querySelector('[data-close-microsoft-help]').click();w.document.querySelector('[data-microsoft-mail-action="connect"]').click();assert.match(dialog.querySelector('#microsoft-help-steps').textContent,/Connected/);assert.match(dialog.querySelector('#microsoft-help-steps').textContent,/send/);assert.doesNotMatch(dialog.querySelector('#microsoft-help-steps').textContent,/Selected/);assert.deepEqual(calls,[]);
+ }finally{w.close();}
+});
+test('complete Microsoft popup includes both setup flows and official clickable password recovery links',async()=>{
+ const {w}=await mount({authenticated:false});try{
+ w.document.querySelector('[data-settings-signin="microsoft"]').click();const dialog=w.document.getElementById('microsoft-connection-help');assert.match(dialog.querySelector('#microsoft-help-other-steps').textContent,/Microsoft 365/);
+ const urls=[...dialog.querySelectorAll('a[href]')].map(a=>a.href);assert.ok(urls.includes('https://account.live.com/ResetPassword.aspx'));assert.ok(urls.includes('https://passwordreset.microsoftonline.com/'));assert.match(dialog.textContent,/self-service recovery/);assert.match(dialog.textContent,/cannot be bypassed/);
  }finally{w.close();}
 });
