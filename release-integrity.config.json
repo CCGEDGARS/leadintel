@@ -1743,8 +1743,8 @@
         "event-active",
         "event-setup-dialog",
         "Your current step and messages stay in place.",
-        "Going to an exhibition or conference?",
-        "<strong>Optional</strong>"
+        "Events &amp; Meeting Invitations",
+        "<span class=\"planning-optional\">Optional</span>"
       ]
     },
     {
@@ -2243,12 +2243,12 @@
       "url": "/customer/email-campaign-ui.js",
       "status": 200,
       "contains": [
-        "Want to email a selected group of customers?",
+        "Email Campaigns",
         "data-campaign-reviewed",
         "data-campaign-delivery-approved",
         "Save your edited messages and approve them again before delivery",
         "Return held message to review",
-        "<strong>Optional</strong>"
+        "<span class=\"planning-optional\">Optional</span>"
       ]
     },
     {

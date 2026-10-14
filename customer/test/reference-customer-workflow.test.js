@@ -25,7 +25,7 @@ test('customer boot loads reference engine, AI client, UI, AI runtime and lookal
 test('reference customer card explains customer context and market research',()=>{
   assert.match(boot,/Find more companies like your best customers/i);
   assert.match(boot,/Market Research/i);
-  assert.match(boot,/Explore customers &amp; market/i);
+  assert.match(boot,/Explore companies &amp; market/i);
   assert.match(css,/reference-customer-summary/);
   assert.match(css,/reference-customer-manage/);
 });
