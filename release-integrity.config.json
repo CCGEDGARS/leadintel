@@ -16,7 +16,8 @@
       "payment_alerts_version": "payment-connection-v1",
       "writing_assistant_version": "writing-assistant-v1",
       "ai_task_routing_version": "ai-task-routing-v1",
-      "follow_up_assistant_version": "follow-up-assistant-v1"
+      "follow_up_assistant_version": "follow-up-assistant-v1",
+      "email_campaign_setup_version": "campaign-setup-v2"
     }
   },
   "smokeChecks": [
@@ -2284,6 +2285,38 @@
       "contains": [
         "function campaignModuleAllowed",
         "await window.LeadIntelCampaignModuleLoader(target)"
+      ]
+    },
+    {
+      "id": "campaign-brief-and-writer-routes",
+      "type": "text",
+      "url": "/customer/email-campaign-ui.js",
+      "status": 200,
+      "contains": [
+        "Go straight to campaign writer",
+        "Campaign writer",
+        "Research recipients first",
+        "sourceCompanyIds",
+        "canWrite:"
+      ]
+    },
+    {
+      "id": "campaign-audience-private-api",
+      "type": "text",
+      "url": "/api/email-campaigns/companies?workspace_id=release-check",
+      "status": 401,
+      "contains": [
+        "Authentication required"
+      ]
+    },
+    {
+      "id": "campaign-research-batching",
+      "type": "text",
+      "url": "/customer/campaign-research.js",
+      "status": 200,
+      "contains": [
+        "createRunner",
+        "Workspace changed. Campaign research stopped."
       ]
     }
   ],

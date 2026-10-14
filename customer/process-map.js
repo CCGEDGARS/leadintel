@@ -112,7 +112,7 @@ function stageAvailability(){
     3:ready,
     4:ready&&profile,
     5:ready&&(savedTargets||previousDiscovery||profile&&approved&&strategy),
-    6:ready&&profile&&approved&&(strategy||handoff)&&pipeline||Boolean(window.LeadIntelEmailCampaignUI?.hasRecipients?.()),
+    6:ready&&profile&&approved&&(strategy||handoff)&&pipeline||Boolean(window.LeadIntelEmailCampaignUI?.canWrite?.()||window.LeadIntelEmailCampaignUI?.hasRecipients?.()),
     7:ready&&profile&&approved&&(strategy||approvedHandoff)&&pipeline&&content||Boolean(window.LeadIntelEmailCampaignUI?.hasApproved?.())
   };
 }

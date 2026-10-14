@@ -91,7 +91,7 @@ function observeNavigation(){
   const observer=new MutationObserver(()=>updateNavigationAvailability());
   observer.observe(steps,{childList:true});
 }
-function campaignModuleAllowed(step){return Number(step)===6?Boolean(window.LeadIntelEmailCampaignUI?.hasRecipients?.()):Number(step)===7?Boolean(window.LeadIntelEmailCampaignUI?.hasApproved?.()):false;}
+function campaignModuleAllowed(step){return Number(step)===6?Boolean(window.LeadIntelEmailCampaignUI?.canWrite?.()||window.LeadIntelEmailCampaignUI?.hasRecipients?.()):Number(step)===7?Boolean(window.LeadIntelEmailCampaignUI?.hasApproved?.()):false;}
 function setStep(step){
   if(Number(step)>=4&&!campaignModuleAllowed(step)&&!LeadIntelTargeting.isConfirmed(state)){LeadIntelTargeting.focusRequired(window,state);return false;}
   state.step=step;saveState();
