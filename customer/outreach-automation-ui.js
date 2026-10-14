@@ -52,8 +52,6 @@ function renderSetup(){
     <div class="delivery-setup-controls"><label for="delivery-setup-limit">Daily email limit</label><select id="delivery-setup-limit" ${!ready||!owner?'disabled':''}><option value="5" ${preset==='5'?'selected':''}>5 emails</option><option value="10" ${preset==='10'?'selected':''}>10 emails</option><option value="20" ${preset==='20'?'selected':''}>20 emails</option><option value="custom" ${preset==='custom'?'selected':''}>Custom</option></select><input id="delivery-setup-custom" type="number" min="1" max="500" value="${esc(limit)}" aria-label="Custom daily email limit" ${preset==='custom'?'':'hidden'} ${!ready||!owner?'disabled':''}><button id="delivery-setup-save" class="primary-btn" type="button" ${!ready||!owner?'disabled':''}>Save settings</button></div>
     <p class="delivery-setup-note">${!authenticated?'Sign in to save this preference to your workspace.':!ready?esc(policyLoadError||'Loading delivery settings…'):!owner?'Only the workspace owner can change delivery settings.':active?'Automatic sending is active. Manage its schedule, pause and stop controls in Delivery.':'Saving a limit will not send email. Automatic sending requires a connected mailbox, approved messages and a separate activation in Delivery.'}</p><p id="delivery-setup-message" role="status" aria-live="polite">${esc(policyLoadError)}</p>${authenticated&&(!ready||policyLoadError)?'<button id="delivery-setup-retry" class="secondary-btn" type="button">Retry delivery settings</button>':''}`;
   root.LeadIntelQualificationSettings?.mount(card);
-  const verification=document.createElement('div');verification.className='delivery-email-verification';verification.innerHTML='<label><input type="checkbox" checked disabled aria-label="Automatically verify emails before sending, required"><span><strong>Automatically verify emails before sending <small>Required</small></strong><span>Only verified addresses can receive messages. Failed or inconclusive checks hold the contact for review.</span></span></label>';
-  card.appendChild(verification);
   const footer=document.createElement('div');footer.className='delivery-settings-footer';footer.appendChild(card.querySelector('#delivery-setup-save'));card.appendChild(footer);
   card.querySelector('#delivery-setup-retry')?.addEventListener('click',()=>refresh());
   const choice=card.querySelector('#delivery-setup-limit'),custom=card.querySelector('#delivery-setup-custom');
@@ -70,7 +68,7 @@ function renderSetup(){
       await root.LeadIntelQualificationSettings?.saveFromCard(card);
       const result=await b.saveOutreachAutomationPolicy({...p,mode,enabled:active&&mode==='automatic',workspaceDailyLimit:value,mailboxDailyLimit:value});
       if(!result.ok)throw new Error(result.error||'Delivery settings could not be saved. Qualification rules may have saved; retry.');
-      await refresh();document.getElementById('delivery-setup-message').textContent='Settings saved. Automatic email verification is required. Review and approve the workflow separately before activation.';
+      await refresh();document.getElementById('delivery-setup-message').textContent='Settings saved. Review and approve the workflow separately before activation.';
     }catch(error){(document.getElementById('delivery-setup-message')||notice).textContent=error.message||'Settings could not be saved. Retry.';}finally{button.disabled=false;}
   });
 }

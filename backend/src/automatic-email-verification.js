@@ -1,7 +1,7 @@
 import {loadConfirmationLevel} from './public-email-confirmation.js';
 import '../../customer/contact-confirmation-policy.js';
 import {resolveWorkspaceServiceCredential,hunterVerificationPolicy} from './service-integrations.js';
-// Mailbox validity is separate from CRM identity verification. Both must pass.
+// Official-source identity confirmation is the default; mailbox verification is an optional customer check.
 export async function verifyAutomaticEmail(env,workspaceId,email,{fetcher=fetch,resolveCredential=resolveWorkspaceServiceCredential,readPolicy=hunterVerificationPolicy,companyDomain='',confirmationLevel}={}){
   const address=String(email||'').trim().toLowerCase();
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address))return {verified:false,status:'not_found',reason:'Email not found'};
@@ -15,7 +15,7 @@ export async function verifyAutomaticEmail(env,workspaceId,email,{fetcher=fetch,
       const minimum=confirmationLevel||await loadConfirmationLevel(env,workspaceId);
       const verified=attributable&&globalThis.LeadIntelContactPolicy.accepted({...contact,normalized_email:address},companyDomain,minimum);
       if(verified&&contact.email_status==='public_confirmed')return {verified:true,status:'public_confirmed',provider:'Public source',mailbox_verified:false};
-      return {verified,status:verified?'verified':'needs_review',reason:verified?'':'An attributable provider-verified company email is required',provider:provider==='apollo'?'Apollo':provider==='hunter'?'Hunter':'CRM'};
+      return {verified,status:verified?'verified':'needs_review',reason:verified?'':minimum==='provider_verified'?'An attributable provider-verified company email is required':'An official-source-confirmed company email is required',provider:provider==='apollo'?'Apollo':provider==='hunter'?'Hunter':'CRM'};
     }
     if(companyDomain){
       const cached=await env.DB.prepare("SELECT name,email_status,public_email_url,verification_provider,verified_at FROM crm_contacts WHERE workspace_id=? AND normalized_email=? AND LOWER(email_status) IN ('verified','public_confirmed') AND archived_at IS NULL AND company_id IN (SELECT id FROM crm_companies WHERE workspace_id=? AND normalized_domain=? AND deleted_at IS NULL AND lifecycle_status!='suppressed') LIMIT 1").bind(workspaceId,address,workspaceId,String(companyDomain).toLowerCase()).first();

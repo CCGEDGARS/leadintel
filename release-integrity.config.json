@@ -2341,6 +2341,21 @@
         "https://passwordreset.microsoftonline.com/",
         "microsoft-help-other-steps"
       ]
+    },
+    {
+      "id": "optional-email-verification-setup",
+      "type": "text",
+      "url": "/customer/outreach-automation-ui.js",
+      "status": 200,
+      "contains": [
+        "delivery-settings-footer",
+        "Review and approve the workflow separately before activation."
+      ],
+      "notContains": [
+        "Automatically verify emails before sending",
+        "Automatic email verification is required",
+        "delivery-email-verification"
+      ]
     }
   ],
   "retry": {
