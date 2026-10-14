@@ -27,6 +27,9 @@ release_sha="${VERCEL_GIT_COMMIT_SHA:-${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/
 release_ref="${VERCEL_GIT_COMMIT_REF:-${GITHUB_REF_NAME:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null || printf 'unknown')}}"
 node - "$release_sha" "$release_ref" > .vercel-static/release.json <<'NODE'
 const [commit, ref] = process.argv.slice(2);
+const fs = require('node:fs');
+const customerHtml = '.vercel-static/customer/index.html';
+fs.writeFileSync(customerHtml, fs.readFileSync(customerHtml, 'utf8').replace('__LEADINTEL_RELEASE_SHA__', commit));
 const manifest = {
   service: 'leadintel-customer',
   commit,
