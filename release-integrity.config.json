@@ -1577,7 +1577,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "ai-settings.js?v=20261014-microsoft-popup-v2&tool-links=20261011-v1&personal-linkedin=20261009-v1&meeting-platform=20261009-v1&section-sync=20261009-v1&alert-colours=20261011-v1&uniform-actions=20261012-v1&storage=20261012-v1",
+        "ai-settings.js?v=20261014-microsoft-guide-v3&tool-links=20261011-v1&personal-linkedin=20261009-v1&meeting-platform=20261009-v1&section-sync=20261009-v1&alert-colours=20261011-v1&uniform-actions=20261012-v1&storage=20261012-v1",
         "attention-centre.js?v=20261003-workspace-status-v1&optional-hunter=20261004-v1&workspace-activity=20261011-v1&storage=20261012-v1",
         "api-transport.js?v=20261004-first-party-session-v1&storage=20261012-v1"
       ]
@@ -2330,7 +2330,10 @@
         "do not need to create an app registration",
         "settingsDrawer.dataset.eventsBound",
         "data-continue-microsoft",
-        "Trouble signing in?"
+        "Trouble signing in?",
+        "microsoft-help-steps",
+        "microsoft-admin-request",
+        "data-microsoft-support-email"
       ]
     }
   ],
