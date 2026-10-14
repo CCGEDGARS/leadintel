@@ -91,8 +91,9 @@ function observeNavigation(){
   const observer=new MutationObserver(()=>updateNavigationAvailability());
   observer.observe(steps,{childList:true});
 }
+function campaignModuleAllowed(step){return Number(step)===6?Boolean(window.LeadIntelEmailCampaignUI?.hasRecipients?.()):Number(step)===7?Boolean(window.LeadIntelEmailCampaignUI?.hasApproved?.()):false;}
 function setStep(step){
-  if(Number(step)>=4&&!LeadIntelTargeting.isConfirmed(state)){LeadIntelTargeting.focusRequired(window,state);return false;}
+  if(Number(step)>=4&&!campaignModuleAllowed(step)&&!LeadIntelTargeting.isConfirmed(state)){LeadIntelTargeting.focusRequired(window,state);return false;}
   state.step=step;saveState();
   document.querySelectorAll(".step-view").forEach(el=>el.classList.toggle("active",Number(el.dataset.step)===step));
   document.querySelectorAll("[data-step-marker]").forEach(el=>{const n=Number(el.dataset.stepMarker);el.classList.toggle("active",n===step);el.classList.toggle("complete",n<step);});
@@ -406,6 +407,7 @@ function ensureMarketStrategySeeded(){
 }
 async function openModule(step){
   const target=Number(step)||1;readSources();
+  if(campaignModuleAllowed(target)){try{if(typeof window.LeadIntelCampaignModuleLoader!=='function')throw Error('Messages are still loading. Your campaign is saved; retry in a moment.');await window.LeadIntelCampaignModuleLoader(target);if(!campaignModuleAllowed(target))return false;setStep(target);return true;}catch(error){showToast(error.message||'Campaign workspace could not load. Retry.');return false;}}
   if(target>=4&&!requireConfirmedTargeting())return false;
   if(!LeadIntelProfile.canAccessModule(state,target)){LeadIntelTargeting.focusControl(window,{step:1,id:state.website?"custom-target-market":"company-website",message:state.website?"Choose a target market before continuing.":"Add your company website before continuing."});return false;}
   if(target<=2){setStep(target);return true;}

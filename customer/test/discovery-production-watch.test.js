@@ -27,7 +27,7 @@ function productionFetch({ customerHtml, discoveryUi, sessionStatus=401, private
   return async url => {
     const parsed = new URL(String(url));
     if(parsed.hostname==='apollo-proxy.edgars-7e7.workers.dev'&&parsed.pathname==='/api/health')return response({json:{billing:'customer_only'}});
-    if(parsed.pathname==='/customer/firecrawl-workspace-router.js')return response({text:fs.readFileSync(path.join(root,'customer/firecrawl-workspace-router.js'),'utf8')});
+    if(['/customer/email-campaign-ui.js','/customer/email-campaigns.js','/customer/app.js'].includes(parsed.pathname))return response({text:fs.readFileSync(path.join(root,parsed.pathname.slice(1)),'utf8')});if(parsed.pathname==='/api/email-campaigns')return response({status:401,json:{error:'Authentication required'}});if(parsed.pathname==='/customer/firecrawl-workspace-router.js')return response({text:fs.readFileSync(path.join(root,'customer/firecrawl-workspace-router.js'),'utf8')});
     if(parsed.pathname==='/api/storage/status')return response({status:storageStatus,json:{error:'Authentication required'}});
     if(['/api/storage/checkout','/api/webhooks/stripe/storage'].includes(parsed.pathname))return response({status:405,json:{error:'Method not allowed'}});
     if (['/api/customer/state','/api/integrations/calendly/status'].includes(parsed.pathname)) return response({status:privateSettingsStatus,json:{error:'Authentication required'}});
@@ -64,10 +64,10 @@ function productionFetch({ customerHtml, discoveryUi, sessionStatus=401, private
 }
 
 const storageEntries=['account-cache.js','ai-settings.js','attention-centre.js','api-transport.js'].map(name=>fs.readFileSync(path.join(root,'customer/index.html'),'utf8').match(new RegExp('src="('+name.replaceAll('.','\\.')+'[^"]+)'))[1]).join('\n');
-const shell = 'assistant-window=20261013-v1 single-material=20261013-v1 step6-rescue=20261013-v11\n'+storageEntries+'\n'+'event-flow=20261012-v1 feature-focus monitoring-feature '+'id="account-recovery" Try again startup-recovery=20261011-v1 archive-storage=20261011-v2 indexed-snapshot=20261011-v1 id="account-recovery-message" placeholder="Your first and last name" sharing-privacy=20261011-v1 codec-loader=20261011-v1&snapshot-quota=20261011-v1 text-compression=20261011-v3 bundle-sync=20261011-v1 <script defer src="message-evidence.js?v=20261010-evidence-v3"></script> subject-evidence=20261010-v5 LeadIntel — Build Your Commercial Intelligence Strategy id="company-website" <script defer src="page-quality.js?v=20261010-v1"></script><script defer src="page-quality-ui.js?v=20261010-v1"></script> page-procedures=20261010-v1';
+const shell = 'email-campaign-ui.js?v=20261014-v1 email-campaigns.css?v=20261014-v1 email-campaigns=20261014-v1\nassistant-window=20261013-v1 single-material=20261013-v1 step6-rescue=20261013-v11\n'+storageEntries+'\n'+'event-flow=20261012-v1 feature-focus monitoring-feature '+'id="account-recovery" Try again startup-recovery=20261011-v1 archive-storage=20261011-v2 indexed-snapshot=20261011-v1 id="account-recovery-message" placeholder="Your first and last name" sharing-privacy=20261011-v1 codec-loader=20261011-v1&snapshot-quota=20261011-v1 text-compression=20261011-v3 bundle-sync=20261011-v1 <script defer src="message-evidence.js?v=20261010-evidence-v3"></script> subject-evidence=20261010-v5 LeadIntel — Build Your Commercial Intelligence Strategy id="company-website" <script defer src="page-quality.js?v=20261010-v1"></script><script defer src="page-quality-ui.js?v=20261010-v1"></script> page-procedures=20261010-v1';
 const boundedDiscoveryRuntime = [
   'A new search does not replace your saved selections. This search has finished.',
-  'outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&style-application=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&writing-assistant=20261012-v1',
+  'window.LeadIntelCampaignModuleLoader=async step outreach-ui.js?v=${OUTREACH_ASSET_VERSION}&style-application=20261011-v1&step6-recovery=20261011-v1&step6-subject=20261011-v1&writing-assistant=20261012-v1',
   'const DISCOVERY_REQUEST_TIMEOUT_MS=25000;',
   'const DISCOVERY_RUN_TIMEOUT_MIN_MS=120000;',
   'function discoveryRunTimeoutMs(',

@@ -1,3 +1,4 @@
+import {handleEmailCampaignRoute} from './email-campaign-routes.js';
 import {storageErrorResponse} from './workspace-storage.js';
 import {withWorkspaceStorage,reconcileStorageObjects} from './workspace-storage-objects.js';
 import {handleStorageRoute,handleStorageWebhook} from './workspace-storage-billing.js';
@@ -64,6 +65,7 @@ export default {
     }
     try{
       const storage=await handleStorageRoute(request,env,cors);if(storage)return storage;
+      const campaigns=await handleEmailCampaignRoute(request,env,cors);if(campaigns)return campaigns;
       const flows=await handleSavedFlowRoute(request,env,cors);if(flows)return flows;
       const materials=await handleContentMaterialsRoute(request,env,cors);if(materials)return materials;
       const writing=await handleWritingReferenceRoute(request,env,cors,ctx);if(writing)return writing;
