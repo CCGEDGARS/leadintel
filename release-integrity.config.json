@@ -1577,7 +1577,7 @@
       "url": "/customer/",
       "status": 200,
       "contains": [
-        "ai-settings.js?v=20261014-microsoft-complete-v4&tool-links=20261011-v1&personal-linkedin=20261009-v1&meeting-platform=20261009-v1&section-sync=20261009-v1&alert-colours=20261011-v1&uniform-actions=20261012-v1&storage=20261012-v1",
+        "ai-settings.js?v=20261014-microsoft-all-entrypoints-v5&tool-links=20261011-v1&personal-linkedin=20261009-v1&meeting-platform=20261009-v1&section-sync=20261009-v1&alert-colours=20261011-v1&uniform-actions=20261012-v1&storage=20261012-v1",
         "attention-centre.js?v=20261003-workspace-status-v1&optional-hunter=20261004-v1&workspace-activity=20261011-v1&storage=20261012-v1",
         "api-transport.js?v=20261004-first-party-session-v1&storage=20261012-v1"
       ]
@@ -2371,6 +2371,32 @@
         "persistence.hasUnsavedChanges()",
         "leadintel:settings-opened",
         "pageshow"
+      ]
+    },
+    {
+      "id": "microsoft-header-guide",
+      "type": "text",
+      "url": "/customer/server-bridge.js",
+      "status": 200,
+      "contains": [
+        "LeadIntelMicrosoftConnection.openSignIn(event.currentTarget)",
+        "Microsoft sign-in instructions are loading."
+      ],
+      "notContains": [
+        "document.getElementById('server-microsoft-signin')?.addEventListener('click',()=>signIn('microsoft'))"
+      ]
+    },
+    {
+      "id": "microsoft-shared-guide-entrypoint",
+      "type": "text",
+      "url": "/customer/ai-settings.js",
+      "status": 200,
+      "contains": [
+        "SETTINGS_VERSION='20261014-microsoft-all-entrypoints-v5'",
+        "window.LeadIntelMicrosoftConnection=",
+        "openSignIn(trigger){openDrawer();openMicrosoftHelp(trigger,'signin');}",
+        "https://passwordreset.microsoftonline.com/",
+        "Next: connect your sending mailbox"
       ]
     }
   ],
