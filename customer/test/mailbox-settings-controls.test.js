@@ -29,3 +29,13 @@ test('non-owner connected cards do not offer destructive disconnect',async()=>{
 test('unavailable mailbox configuration keeps a visible disabled Connect action',async()=>{
  const {w}=await mount({configured:false});try{assert.equal(w.document.querySelector('[data-gmail-action="connect"]').disabled,true);assert.equal(w.document.querySelector('[data-microsoft-mail-action="connect"]').disabled,true);}finally{w.close();}
 });
+
+ test('Microsoft help opens without authentication redirects and closes back to its trigger',async()=>{
+ const {w,calls}=await mount();try{
+ for(const id of ['microsoft-account','microsoft-mail']){
+ const trigger=w.document.querySelector(`[data-integration="${id}"] [data-microsoft-help]`);assert.ok(trigger,'Microsoft cards need connection help');trigger.focus();trigger.click();
+ const dialog=w.document.getElementById('microsoft-connection-help');assert.equal(dialog.hidden,false);assert.match(dialog.textContent,/AADSTS700016/);assert.match(dialog.textContent,/LeadIntel support/);assert.match(dialog.textContent,/IT administrator/);assert.match(dialog.textContent,/do not need to create an app registration/);
+ w.document.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert.equal(dialog.hidden,true);assert.equal(w.document.getElementById('ai-settings-drawer').hidden,false);assert.equal(w.document.activeElement,trigger);
+ }assert.deepEqual(calls,[]);
+ }finally{w.close();}
+ });

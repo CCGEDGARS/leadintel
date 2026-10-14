@@ -36,3 +36,11 @@ npx wrangler secret put MICROSOFT_OAUTH_CLIENT_SECRET
 6. Confirm the customer activity feed identifies the provider as Microsoft and the shared Gmail/Microsoft daily remaining count decreases once.
 
 Microsoft Graph returns `202 Accepted` for a successful `sendMail` request. This confirms acceptance for processing, not final recipient delivery.
+
+## Customer connection help
+
+Settings exposes Microsoft connection help on both the Microsoft Account and Microsoft 365 Mail cards, including when the customer is signed out or mail configuration is unavailable. The popup separates normal account consent, organisation administrator approval and AADSTS700016 configuration failures. Customers use their own accounts; they do not create app registrations or supply client secrets.
+
+For AADSTS700016, LeadIntel support must verify the Worker client ID against the existing Entra app registration, the supported account types and registration availability. The customer's administrator may need to approve the enterprise application. The help popup does not repair or prove the external registration. Capture the error code, timestamp, Request ID and Correlation ID; never collect passwords or tokens.
+
+Regression coverage: `node --test customer/test/mailbox-settings-controls.test.js customer/test/ai-settings.test.js customer/test/settings-tool-links.test.js`. Checks cover popup access, no authentication side effects, Escape dismissal, focus return, unchanged mailbox actions and Settings reopen behavior.
