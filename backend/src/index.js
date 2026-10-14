@@ -30,7 +30,7 @@ async function router(request,env) {
   if(request.method==="OPTIONS")return new Response(null,{status:204,headers:cors});
   if(request.headers.get("Origin")&&!origin)return error("Origin not allowed",403,cors);
 
-  if(url.pathname==="/api/health")return json({status:"ok",service:"leadintel-api",workflow_version:"approved-workflow-v1",saved_flows_version:"my-flows-v1",payment_alerts_version:"payment-connection-v1",writing_assistant_version:"writing-assistant-v1",follow_up_assistant_version:"follow-up-assistant-v1",ai_task_routing_version:"ai-task-routing-v1",release_sha:env.BACKEND_RELEASE_SHA||""},200,cors);
+  if(url.pathname==="/api/health")return json({status:"ok",service:"leadintel-api",workflow_version:"approved-workflow-v1",saved_flows_version:"my-flows-v1",payment_alerts_version:"payment-connection-v1",writing_assistant_version:"writing-assistant-v1",follow_up_assistant_version:"follow-up-assistant-v1",email_campaign_setup_version:"campaign-setup-v2",ai_task_routing_version:"ai-task-routing-v1",release_sha:env.BACKEND_RELEASE_SHA||""},200,cors);
   if(!url.pathname.startsWith("/api/"))return env.ASSETS.fetch(request);
 
   if(url.pathname==="/api/login"&&request.method==="POST") {
