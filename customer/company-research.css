@@ -17,3 +17,14 @@
 .brief-group-header [data-brief-progress]{white-space:nowrap;font:700 12px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;padding:7px 10px;border:1px solid #cfe0d8;border-radius:999px;color:#2f6d5c;background:#eef7f3}
 .research-origin.hypothesis{color:#865c18;background:#fff4df;border-color:#efd4a0}
 @media(max-width:760px){.brief-question-group{padding:18px}.brief-group-header{align-items:flex-start;flex-direction:column;gap:8px}}
+
+/* Saved research recovery stays compact; evidence and refresh controls expand on demand. */
+.research-summary-main{flex:1}.research-summary-actions{align-self:flex-start}
+.research-saved-evidence,.research-more-options{margin-top:12px;font-size:12px;color:var(--muted)}
+.research-saved-evidence summary,.research-more-options summary{cursor:pointer;font-weight:600;color:#0d5d4f;line-height:1.5}
+.research-saved-evidence summary:focus-visible,.research-more-options summary:focus-visible,.research-field-link:focus-visible{outline:3px solid rgba(13,93,79,.22);outline-offset:3px}
+.research-saved-evidence ul{padding-left:20px;margin:8px 0;max-height:240px;overflow:auto}.research-saved-evidence li{margin:8px 0;overflow-wrap:anywhere}.research-saved-evidence a{color:#0d5d4f}
+.research-more-options .research-rerun{margin-top:8px}.research-missing-fields{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}.research-missing-fields small{flex-basis:100%}
+.research-field-link{border:1px solid #d8e2dc;background:#fff;border-radius:7px;padding:6px 9px;font-family:inherit;font-size:12px;font-weight:600;line-height:1.3;color:#0d5d4f;cursor:pointer}
+
+.research-saved-extract{font-size:12px;line-height:1.5;margin:6px 0;color:var(--muted);white-space:pre-wrap;overflow-wrap:anywhere}

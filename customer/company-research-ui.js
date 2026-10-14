@@ -11,7 +11,7 @@ const MAX_RESULTS_PER_QUERY=4;
 const COMPANY_RESEARCH_REQUEST_TIMEOUT_MS=25000;
 const COMPANY_RESEARCH_RUN_TIMEOUT_MS=60000;
 const COMPANY_RESEARCH_SAVE_TIMEOUT_MS=10000;
-const RELEASE='20260926-research-coverage-status-v1';
+const RELEASE='20261014-profile-research-status-v1';
 let running=false;
 
 const engine=()=>window.LeadIntelCompanyResearch;
@@ -75,7 +75,7 @@ function setProgress(title,detail,{done=false}={}){
 function setResearchButtonBusy(busy){const button=$('rerun-company-research');if(!button)return;button.disabled=busy;button.textContent=busy?'Researching company…':'Rerun company research';}
 function sourceMap(state){
   const map=new Map();(state.scrapedSources||[]).forEach((source,index)=>map.set(`S${index+1}`,{...source,id:`S${index+1}`}));
-  (state.documents||[]).filter(doc=>String(doc?.text||'').trim()).forEach((doc,index)=>map.set(`D${index+1}`,{id:`D${index+1}`,type:'document',title:doc.name||`Document ${index+1}`}));
+  (state.documents||[]).filter(doc=>String(doc?.text||'').trim()).forEach((doc,index)=>map.set(`D${index+1}`,{id:`D${index+1}`,type:'document',title:doc.name||`Document ${index+1}`,text:doc.text}));
   return map;
 }
 function metaForCurrentState(){const state=readState(),meta=readMeta();if(!meta?.website||normalizeUrl(meta.website)!==normalizeUrl(state.website))return {};return meta;}
@@ -89,6 +89,29 @@ function repairResearchHandoff(state,meta){
   window.dispatchEvent(new CustomEvent('leadintel:company-research-updated',{detail:{website:state.website,recovered:true}}));
   return true;
 }
+// Legacy saved failures contain only a reason; classify conservatively for recovery UI.
+function synthesisRecovery(reason=''){
+  const text=String(reason);
+  if(/timed? out|timeout|stopped after \d+ seconds/i.test(text))return {title:'Research saved. AI profile preparation timed out.',settings:false};
+  if(/no active AI provider|not configured|invalid.*(?:key|credential)|(?:key|credential).*invalid|unauthori[sz]ed|authentication|credit_balance_exhausted|insufficient_quota|credit balance|billing/i.test(text))return {title:'Research saved. AI connection needs attention.',settings:true};
+  if(/sign in|signed out/i.test(text))return {title:'Research saved. Sign in to prepare your AI profile.',settings:false};
+  return {title:'Research saved. AI profile preparation did not complete.',settings:false};
+}
+function researchReviewDetails(state,meta,map){
+  const areaLabels={company:'Company identity',offers:'Products & services',proof:'Projects & references',delivery:'Delivery',contact:'Contact information'};
+  const coverage=meta.quality?.coverage||{};
+  const missing=Array.isArray(coverage.missing)?coverage.missing:Object.keys(areaLabels).filter(id=>Array.isArray(coverage.categories)&&!coverage.categories.includes(id));
+  const gaps=missing.filter(id=>areaLabels[id]).map(id=>areaLabels[id]);
+  const gapNote=gaps.length?`<small class="research-coverage partial">Missing source areas: ${esc(gaps.join(' · '))}. These describe source coverage, not completed profile answers.</small>`:'';
+  const fields=Array.from(document.querySelectorAll('[data-question]')).filter(field=>!String(state.answers?.[field.dataset.question]||field.value||'').trim());
+  const fieldLinks=fields.length?`<div class="research-missing-fields"><small>Complete these profile fields:</small>${fields.map(field=>`<button type="button" class="research-field-link" data-research-focus="${esc(field.dataset.question)}">${esc(field.closest('.question-card')?.querySelector('h3')?.textContent||field.dataset.question.replaceAll('_',' '))}</button>`).join('')}</div>`:'';
+  const sources=[...map.values()];
+  const evidence=`<details class="research-saved-evidence"><summary>Review saved sources (${sources.length})</summary><ul>${sources.map(source=>{
+    const url=normalizeUrl(source.url);const label=esc(source.title||source.url||'Uploaded document');
+    return `<li>${url?`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${label}</a>`:`<span>${label}</span>`}${source.type==='document'?'<small>Uploaded document</small>':`<small>${esc(source.role==='primary'?'Company source':'Supporting source')}${source.pageCategory&&areaLabels[source.pageCategory]?` · ${esc(areaLabels[source.pageCategory])}`:''}</small>`}${source.text?`<p class="research-saved-extract">${esc(String(source.text).slice(0,400))}${String(source.text).length>400?'…':''}</p>`:''}</li>`;
+  }).join('')||'<li>No readable saved sources. Collect sources again to refresh the evidence.</li>'}</ul></details>`;
+  return gapNote+fieldLinks+evidence;
+}
 function renderResearchReview(){
   const state=readState();const meta=metaForCurrentState();repairResearchHandoff(state,meta);const map=sourceMap(state);const summary=$('research-summary');
   if(summary){
@@ -96,13 +119,11 @@ function renderResearchReview(){
     summary.classList.remove('research-summary-failed');
     if(meta.generatedAt){
       const aiAvailable=meta.mode==='ai';
-      const aiNote=aiAvailable?`AI synthesis complete · ${esc(modeLabel(meta))}`:`Why AI synthesis did not complete: ${esc(meta.reason||'No AI-generated fields were returned.')}`;
+      const recovery=synthesisRecovery(meta.reason);
       const coverage=meta.quality?.coverage||{};const covered=Array.isArray(coverage.categories)?coverage.categories.length:0;const total=Number(coverage.total)||5;
-      const coverageNote=coverage.minimumMet
-        ?`Research finished · source coverage: ${covered} of ${total} areas. Review the evidence against the profile before approval.`
-        :`Research finished successfully · sources support ${covered} of ${total} areas. Review and complete profile fields that lack evidence; confidence remains limited.`;
-      const noAiActions=aiAvailable?'':`<small class="research-synthesis-note">Your ${Number(meta.sourceCount)||0} evidence sources are saved. Resolve the AI provider issue in Settings, then synthesize these sources without repeating research.</small><div class="research-summary-followup"><button class="research-rerun research-primary" id="synthesize-company-research" type="button">Synthesize saved evidence</button><button class="research-rerun" id="open-ai-settings-from-research" type="button">Open AI settings</button></div>`;
-      summary.innerHTML=`<div class="research-summary-main"><div class="research-summary-icon">✦</div><div><strong>${aiAvailable?'Research and AI synthesis complete':'Evidence collected · AI synthesis did not complete'} · ${Number(meta.sourceCount)||0} source${Number(meta.sourceCount)===1?'':'s'}</strong><small class="${aiAvailable?'':'research-no-ai'}">${aiNote}${meta.failures?` · ${Number(meta.failures)} source/search request${Number(meta.failures)===1?'':'s'} unavailable`:''}</small><small class="research-coverage ${coverage.minimumMet?'complete':'partial'}">${esc(coverageNote)}</small>${noAiActions}</div></div><div class="research-summary-actions"><span class="research-mode">${esc(aiAvailable?modeLabel(meta):'Evidence only')}</span><button class="research-rerun" id="rerun-company-research" type="button">Refresh company research</button></div>`;
+      const coverageNote=`Source coverage: ${covered} of ${total} areas. Review the evidence and profile answers before approval.`;
+      const followup=aiAvailable?'':`<small>Your ${Number(meta.sourceCount)||0} sources are saved. Retry using saved evidence without collecting sources again, or complete the profile yourself.</small><div class="research-summary-followup"><button class="research-rerun research-primary" id="synthesize-company-research" type="button">Retry AI profile preparation</button>${recovery.settings?'<button class="research-rerun" id="open-ai-settings-from-research" type="button">Open AI settings</button>':''}</div>`;
+      summary.innerHTML=`<div class="research-summary-main"><div class="research-summary-icon" aria-hidden="true">✦</div><div><strong>${aiAvailable?'Research and AI profile preparation complete':recovery.title}</strong>${aiAvailable?`<small>${esc(modeLabel(meta))} · ${Number(meta.sourceCount)||0} sources saved</small>`:''}<small class="research-coverage ${covered===total?'complete':'partial'}">${esc(coverageNote)}</small>${followup}${researchReviewDetails(state,meta,map)}<details class="research-more-options"><summary>More research options</summary>${!aiAvailable?`<small>Last AI result: ${esc(meta.reason||'No evidence-backed profile fields were returned.')}</small>`:''}${meta.failures?`<small>${Number(meta.failures)} source/search requests were unavailable.</small>`:''}<small>Refresh collects sources again. Use this when your website or company information has changed.</small><button class="research-rerun" id="rerun-company-research" type="button">Refresh company research</button></details></div></div><div class="research-summary-actions"><span class="research-mode">${state.approved?'Profile approved':'Profile needs review'}</span></div>`;
     } else if(meta.failureAt){
       summary.classList.add('research-summary-failed');
       summary.innerHTML='<div class="research-summary-main"><div class="research-summary-icon">!</div><div><strong>Research could not complete.</strong><small>'+esc(meta.error||'The company research request did not finish.')+'</small><small class="research-retry-note">Your website and target market were preserved. Try again when ready.</small></div></div><div class="research-summary-actions"><span class="research-mode">Retry available</span><button class="research-rerun research-primary" id="rerun-company-research" type="button">Try research again <span aria-hidden="true">→</span></button></div>';
@@ -114,6 +135,10 @@ function renderResearchReview(){
       const step1Action=ready?'':' data-go-step1="true"';const primaryClass=ready?' research-primary':'';
       summary.innerHTML='<div class="research-summary-main"><div class="research-summary-icon">✦</div><div><strong>'+title+'</strong><small>'+detail+'</small></div></div><div class="research-summary-actions"><span class="research-mode">'+badge+'</span><button class="research-rerun'+primaryClass+'" id="rerun-company-research" type="button"'+step1Action+'>'+label+'</button></div>';
     }
+    summary.querySelectorAll?.('[data-research-focus]').forEach(button=>button.addEventListener('click',()=>{
+      const field=Array.from(document.querySelectorAll('[data-question]')).find(node=>node.dataset.question===button.dataset.researchFocus);
+      field?.scrollIntoView?.({behavior:'smooth',block:'center'});field?.focus();
+    }));
     const synthesis=summary.querySelector('#synthesize-company-research');
     synthesis?.addEventListener('click',()=>runAiSynthesis());
     const openSettings=summary.querySelector('#open-ai-settings-from-research');
@@ -219,7 +244,7 @@ async function runAiSynthesis(){
   const savedSources=[...sourceMap(state).values()].filter(source=>source.type!=='document'&&String(source.text||'').trim());
   const primarySources=savedSources.filter(source=>source.role==='primary');const sources=primarySources.length?primarySources:savedSources;
   if(!sources.length){toast('Saved evidence is missing. Refresh company research before trying AI synthesis.');return false;}
-  running=true;const button=$('synthesize-company-research');if(button){button.disabled=true;button.textContent='Synthesizing saved evidence…';}
+  running=true;const button=$('synthesize-company-research');if(button){button.disabled=true;button.textContent='Preparing AI profile…';}
   const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),COMPANY_RESEARCH_RUN_TIMEOUT_MS);
   try{
     setProgress('Synthesizing saved evidence…',`Interpreting ${sources.length} primary company sources for commercial fit, buyers and buying triggers.`);

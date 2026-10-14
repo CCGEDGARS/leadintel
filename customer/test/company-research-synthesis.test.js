@@ -8,7 +8,7 @@ const source=fs.readFileSync(path.join(__dirname,'..','company-research-ui.js'),
   .replace(/^import .*?;\s*/gm,'')
   +'\nglobalThis.__researchUi={renderResearchReview,runAiSynthesis:typeof runAiSynthesis==="function"?runAiSynthesis:null};';
 
-function createRuntime({fetchImpl}={}){
+function createRuntime({fetchImpl,dom}={}){
   const saved=new Map();
   const events=[];
   const fetchCalls=[];
@@ -31,7 +31,7 @@ function createRuntime({fetchImpl}={}){
   saved.set('leadintel_customer_v2_research_meta_v1',JSON.stringify(meta));
   const settingsButton={clicks:0,click(){this.clicks++;}};
   controls.set('#open-ai-settings-from-research',{});
-  const summary={innerHTML:'',classList:{add(){},remove(){},toggle(){}},querySelector(selector){return controls.get(selector)||null;}};
+  const summary=dom?.window.document.getElementById('research-summary')||{innerHTML:'',classList:{add(){},remove(){},toggle(){}},querySelector(selector){return controls.get(selector)||null;}};
   const makeControl=()=>({listener:null,addEventListener(type,listener){if(type==='click')this.listener=listener;}});
   controls.set('#open-ai-settings-from-research',makeControl());
   controls.set('#synthesize-company-research',makeControl());
@@ -51,7 +51,7 @@ function createRuntime({fetchImpl}={}){
     dispatchEvent(event){events.push(event.type);for(const listener of listeners.get(event.type)||[])listener(event);}
   };
   const context={
-    window,document,localStorage:{getItem(key){return saved.get(key)||null;},setItem(key,value){saved.set(key,value);}},
+    window,document:dom?.window.document||document,localStorage:{getItem(key){return saved.get(key)||null;},setItem(key,value){saved.set(key,value);}},
     fetch:async(...args)=>{fetchCalls.push(args);return fetchImpl?fetchImpl(...args):{ok:false,status:409,async json(){return {error:'No active AI provider is configured for this workspace'};}};},
     CustomEvent:class{constructor(type,options){this.type=type;this.detail=options?.detail;}},
     URL,URLSearchParams,AbortController,Event,Map,Date,JSON,String,Boolean,Array,Number,Math,Promise,
@@ -76,9 +76,9 @@ test('an evidence-only result shows the saved AI failure reason and routes to se
   const runtime=createRuntime();
   runtime.hooks.renderResearchReview();
 
-  assert.match(runtime.summary.innerHTML,/AI synthesis did not complete/);
+  assert.match(runtime.summary.innerHTML,/AI connection needs attention/);
   assert.match(runtime.summary.innerHTML,/No active AI provider configured/);
-  assert.match(runtime.summary.innerHTML,/Synthesize saved evidence/);
+  assert.match(runtime.summary.innerHTML,/Retry AI profile preparation/);
   assert.match(runtime.summary.innerHTML,/Open AI settings/);
   runtime.summary.querySelector('#open-ai-settings-from-research').listener();
   assert.equal(runtime.settingsButton.clicks,1);
@@ -141,4 +141,54 @@ for(const change of ['account','documents','evidence'])test(`AI synthesis reject
   else{const state=runtime.getState();if(change==='documents')state.documents=[{name:'new.pdf',text:'Fresh customer material'}];else state.scrapedSources[0].text='Updated source evidence';runtime.saved.set('leadintel_customer_v2_state',JSON.stringify(state));}
   const beforeState=runtime.saved.get('leadintel_customer_v2_state'),beforeMeta=runtime.saved.get('leadintel_customer_v2_research_meta_v1');
   finish();assert.equal(await pending,false);assert.equal(runtime.saved.get('leadintel_customer_v2_state'),beforeState);assert.equal(runtime.saved.get('leadintel_customer_v2_research_meta_v1'),beforeMeta);assert.equal(runtime.saves,0);
+});
+
+
+test('timeout recovery retries saved evidence without incorrectly directing customers to settings',()=>{
+  const runtime=createRuntime();
+  const meta=runtime.getMeta();meta.reason='AI synthesis stopped after 60 seconds.';
+  runtime.saved.set('leadintel_customer_v2_research_meta_v1',JSON.stringify(meta));
+  runtime.hooks.renderResearchReview();
+  assert.match(runtime.summary.innerHTML,/Research saved. AI profile preparation timed out/);
+  assert.match(runtime.summary.innerHTML,/Retry AI profile preparation/);
+  assert.match(runtime.summary.innerHTML,/without collecting sources again/);
+  assert.doesNotMatch(runtime.summary.innerHTML,/Open AI settings|Resolve the AI provider/);
+  assert.match(runtime.summary.innerHTML,/Review saved sources/);
+  assert.match(runtime.summary.innerHTML,/More research options/);
+});
+
+test('saved evidence and incomplete profile controls are usable and do not expose unsafe source links',()=>{
+  const {JSDOM}=require('jsdom');
+  const dom=new JSDOM('<div id="research-summary"></div><div class="question-card"><h3>Proof points</h3><textarea data-question="proof_points"></textarea></div>');
+  const runtime=createRuntime({dom});const state=runtime.getState();state.answers.proof_points='';
+  state.scrapedSources.push({url:'javascript:alert(1)',title:'Untrusted source',text:'Evidence'});
+  runtime.saved.set('leadintel_customer_v2_state',JSON.stringify(state));
+  const meta=runtime.getMeta();meta.fields.proof_points={origin:'needs-input'};meta.quality.coverage.missing=['delivery','contact'];
+  runtime.saved.set('leadintel_customer_v2_research_meta_v1',JSON.stringify(meta));
+  const field=dom.window.document.querySelector('textarea');field.scrollIntoView=()=>{};
+  runtime.hooks.renderResearchReview();
+  assert.match(runtime.summary.textContent,/Delivery.*Contact/);
+  assert.match(runtime.summary.textContent,/Proof points/);
+  assert.match(runtime.summary.textContent,/Custom industrial engineering/);
+  assert.ok(runtime.summary.querySelector('details.research-saved-evidence a[href="https://www.ercon.lv/services"]'));
+  assert.equal(runtime.summary.querySelector('a[href^="javascript:"]'),null);
+  runtime.summary.querySelector('[data-research-focus="proof_points"]').click();
+  assert.equal(dom.window.document.activeElement,field);
+  assert.equal(runtime.fetchCalls.length,0);
+  dom.window.close();
+});
+
+for(const reason of ['Failed to fetch','AI unavailable (503)','Too many requests (429)'])test(`temporary AI failure avoids configuration advice: ${reason}`,()=>{
+  const runtime=createRuntime();const meta=runtime.getMeta();meta.reason=reason;
+  runtime.saved.set('leadintel_customer_v2_research_meta_v1',JSON.stringify(meta));runtime.hooks.renderResearchReview();
+  assert.doesNotMatch(runtime.summary.innerHTML,/Open AI settings/);
+  assert.match(runtime.summary.innerHTML,/Retry AI profile preparation/);
+});
+
+test('successful AI preparation keeps evidence accessible and removes the recovery controls',()=>{
+  const runtime=createRuntime();const meta=runtime.getMeta();meta.mode='ai';meta.provider='OpenAI';meta.reason='';
+  runtime.saved.set('leadintel_customer_v2_research_meta_v1',JSON.stringify(meta));runtime.hooks.renderResearchReview();
+  assert.match(runtime.summary.innerHTML,/AI profile preparation complete/);
+  assert.match(runtime.summary.innerHTML,/Review saved sources/);
+  assert.doesNotMatch(runtime.summary.innerHTML,/Retry AI profile preparation|Open AI settings/);
 });

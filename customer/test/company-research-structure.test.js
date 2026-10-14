@@ -68,9 +68,9 @@ test('company research discovers and scrapes authoritative internal pages before
 
 test('research summary exposes authoritative coverage instead of relying on source count alone',()=>{
   assert.match(ui,/quality\?\.coverage/);
-  assert.match(ui,/source coverage/);
-  assert.match(ui,/Research finished successfully/);
-  assert.match(ui,/profile fields that lack evidence/);
+  assert.match(ui,/Source coverage/);
+  assert.match(ui,/Missing source areas/);
+  assert.match(ui,/Complete these profile fields/);
 });
 
 test('signed-in research transparently routes legacy Firecrawl calls through authenticated workspace endpoints',()=>{
