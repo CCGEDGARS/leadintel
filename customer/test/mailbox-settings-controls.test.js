@@ -64,3 +64,20 @@ test('complete Microsoft popup includes both setup flows and official clickable 
  const urls=[...dialog.querySelectorAll('a[href]')].map(a=>a.href);assert.ok(urls.includes('https://account.live.com/ResetPassword.aspx'));assert.ok(urls.includes('https://passwordreset.microsoftonline.com/'));assert.match(dialog.textContent,/self-service recovery/);assert.match(dialog.textContent,/cannot be bypassed/);
  }finally{w.close();}
 });
+
+test('header Microsoft sign-in uses the complete Settings popup before OAuth navigation',async()=>{
+ const {w,calls}=await mount({authenticated:false});try{
+ const source=read('server-bridge.js'),start=source.indexOf('  function injectAccountUi('),end=source.indexOf('  function renderAccount(',start);
+ w.root=w;w.signIn=provider=>calls.push('direct-'+provider);for(const name of ['signOut','selectWorkspace','downloadSyncRecovery','resolveConflictUseServer','resolveConflictKeepLocal'])w[name]=()=>{};
+ w.eval(source.slice(start,end)+'\ninjectAccountUi();');w.document.getElementById('close-settings').click();
+ w.document.getElementById('server-microsoft-signin').click();assert.deepEqual(calls,[]);const popup=w.document.getElementById('microsoft-connection-help');assert.ok(popup);assert.equal(popup.hidden,false);assert.equal(w.document.getElementById('ai-settings-drawer').hidden,false);assert.match(popup.textContent,/Reset a work or school account password/);
+ await settle();assert.equal(w.document.activeElement,popup.querySelector('[data-continue-microsoft]'));popup.querySelector('[data-continue-microsoft]').click();assert.deepEqual(calls,['signin-microsoft']);
+ }finally{w.close();}
+});
+test('Microsoft header does not bypass its guide while Settings is still loading',async()=>{
+ const {w,calls}=await mount({authenticated:false});try{
+ const source=read('server-bridge.js'),start=source.indexOf('  function injectAccountUi('),end=source.indexOf('  function renderAccount(',start);
+ w.root=w;w.signIn=provider=>calls.push('direct-'+provider);for(const name of ['signOut','selectWorkspace','downloadSyncRecovery','resolveConflictUseServer','resolveConflictKeepLocal'])w[name]=()=>{};
+ w.eval(source.slice(start,end)+'\ninjectAccountUi();');delete w.LeadIntelMicrosoftConnection;w.document.getElementById('server-microsoft-signin').click();assert.deepEqual(calls,[]);assert.match(w.document.getElementById('toast').textContent,/loading/i);
+ }finally{w.close();}
+});
