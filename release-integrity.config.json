@@ -2222,6 +2222,69 @@
         "A research brought me to",
         "at ERCON asked me to research"
       ]
+    },
+    {
+      "id": "email-campaign-entry",
+      "type": "text",
+      "url": "/customer/",
+      "status": 200,
+      "contains": [
+        "email-campaign-ui.js?v=20261014-v1",
+        "email-campaigns.css?v=20261014-v1",
+        "email-campaigns=20261014-v1"
+      ]
+    },
+    {
+      "id": "email-campaign-ui",
+      "type": "text",
+      "url": "/customer/email-campaign-ui.js",
+      "status": 200,
+      "contains": [
+        "Prepare a campaign",
+        "data-campaign-reviewed",
+        "data-campaign-delivery-approved",
+        "Save your edited messages and approve them again before delivery",
+        "Return held message to review"
+      ]
+    },
+    {
+      "id": "email-campaign-client",
+      "type": "text",
+      "url": "/customer/email-campaigns.js",
+      "status": 200,
+      "contains": [
+        "Workspace or account changed. Response discarded.",
+        "parseCsv",
+        "defaultSelection"
+      ]
+    },
+    {
+      "id": "email-campaign-private-api",
+      "type": "text",
+      "url": "/api/email-campaigns?workspace_id=release-check",
+      "status": 401,
+      "contains": [
+        "Authentication required"
+      ]
+    },
+    {
+      "id": "email-campaign-lazy-workspace",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "window.LeadIntelCampaignModuleLoader=async step"
+      ]
+    },
+    {
+      "id": "email-campaign-navigation",
+      "type": "text",
+      "url": "/customer/app.js",
+      "status": 200,
+      "contains": [
+        "function campaignModuleAllowed",
+        "await window.LeadIntelCampaignModuleLoader(target)"
+      ]
     }
   ],
   "retry": {
