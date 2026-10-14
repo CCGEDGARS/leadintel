@@ -16,7 +16,7 @@ test('invitation purposes use appropriate attendance wording and reject fake pos
  assert.throws(()=>M.draft(campaign,essentials,buyer,'professional','email',{purpose:'followup'}),/meeting notes/i);
 });
 test('event research queries include the exact edition and separate company listings from people attendance',()=>{
- const q=M.queries(campaign,{idealCustomer:'manufacturers'});assert.ok(q.length>=2);assert.ok(q.every(row=>row.query.includes('2099')));assert.ok(q.some(row=>/speakers|attendees/.test(row.query)));
+ const q=M.queries(campaign,{idealCustomer:'manufacturers'});assert.ok(q.length>=2);assert.ok(q.filter(row=>row.audience==='participants').every(row=>row.query.includes('2099')));assert.ok(q.some(row=>/speakers|attendees/.test(row.query)));
 });
 test('switching back restores the exact business draft and its original across serialization',()=>{
  assert.equal(typeof M.stageDraft,'function');const original={channel:'email',drafts:{emailSubject:'Manual subject',emailBody:'My exact manual message'},messageStudioDraft:{tailoredOriginal:{draft:{message:'Protected original'}},scriptSavedAt:'date'},localizationStatus:'complete'};

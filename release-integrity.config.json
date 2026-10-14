@@ -1736,7 +1736,7 @@
       "status": 200,
       "contains": [
         "Prepare for an event",
-        "Save & activate event",
+        "Save & use event",
         "Generate tailored invitation",
         "event-message-reopen",
         "Create invitation",
@@ -2397,6 +2397,53 @@
         "openSignIn(trigger){openDrawer();openMicrosoftHelp(trigger,'signin');}",
         "https://passwordreset.microsoftonline.com/",
         "Next: connect your sending mailbox"
+      ]
+    },
+    {
+      "id": "profile-campaign-planning",
+      "type": "text",
+      "url": "/customer/event-campaign-ui.js",
+      "status": 200,
+      "contains": [
+        "campaign-planning-host",
+        "event-plan-recipients",
+        "sourceChoice",
+        "Desired companies",
+        "People per company"
+      ]
+    },
+    {
+      "id": "shared-campaign-plan",
+      "type": "text",
+      "url": "/customer/campaign-plan.js",
+      "status": 200,
+      "contains": [
+        "contactsPerCompany",
+        "sourceChoice",
+        "qualified!==true"
+      ]
+    },
+    {
+      "id": "campaign-discovery-route",
+      "type": "text",
+      "url": "/customer/discovery-ui.js",
+      "status": 200,
+      "contains": [
+        "async function discoverCampaign",
+        "leadIntelScopeValid",
+        "campaignPlan.results=runCandidates"
+      ]
+    },
+    {
+      "id": "event-linked-writer",
+      "type": "text",
+      "url": "/customer/email-campaign-ui.js",
+      "status": 200,
+      "contains": [
+        "openEvent:async",
+        "Review attendance source",
+        "data-campaign-plan",
+        "Shortfall:"
       ]
     }
   ],

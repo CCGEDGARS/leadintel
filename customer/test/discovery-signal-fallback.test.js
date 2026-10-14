@@ -50,7 +50,7 @@ test('target research stays scoped to selected companies and reports recovered c
   const fs=require('node:fs');const path=require('node:path');
   const ui=fs.readFileSync(path.join(__dirname,'..','discovery-ui.js'),'utf8');
   assert.match(ui,/runCompanyDiscovery\(\{targetOnly:targetListHandoff,savingMode:/);
-  assert.match(ui,/targetOnly\?targetEvidenceQueries\(researchTargets/);
+  assert.match(ui,/targetOnly\?\[\.\.\.targetEvidenceQueries\(researchTargets/);
   assert.match(ui,/if\(!savingMode&&!targetOnly&&firstPassSucceeded/);
   assert.match(ui,/providerFallbacks\.push\(\{queryId:queryMeta\.id,status:/);
   assert.match(ui,/HTTP 402: check Firecrawl credits or billing/);

@@ -1,0 +1,6 @@
+(function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.LeadIntelCampaignPlan=api;})(typeof globalThis==='object'?globalThis:this,()=>{
+'use strict';
+function normalize(x={}){return {sourceChoice:['provided','discover','mixed'].includes(x.sourceChoice)?x.sourceChoice:'provided',targetCount:Math.max(1,Math.min(50,Number(x.targetCount)||10)),contactsPerCompany:Math.max(1,Math.min(4,Number(x.contactsPerCompany)||1)),researchDepth:['quick','basic','deep'].includes(x.researchDepth)?x.researchDepth:'basic',eventCampaignId:String(x.eventCampaignId||'').slice(0,100)};}
+function contacts(rows,limit=1){const counts=new Map(),emails=new Set();return rows.filter(r=>{const email=String(r.email||'').toLowerCase();if(!r.name||(email&&emails.has(email))||(counts.get(r.companyId)||0)>=limit)return false;counts.set(r.companyId,(counts.get(r.companyId)||0)+1);if(email)emails.add(email);return true;}).map(r=>r.contactId);}
+function merge(provided,found,count){const rows=[],seen=new Set();for(const c of [...provided,...found]){const key=String(c.domain||c.website||c.companyId||'').toLowerCase();if(!key||seen.has(key))continue;if(!provided.includes(c)&&c.qualified!==true)continue;seen.add(key);rows.push(c);if(rows.length>=Math.max(provided.length,count))break;}return rows;}
+return {normalize,contacts,merge};});

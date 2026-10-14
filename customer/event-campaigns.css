@@ -19,3 +19,7 @@
 #event-campaign-panel .feature-subtitle strong,#email-campaign-panel .feature-subtitle strong{font-weight:700;color:#164e40}
 @media(max-width:480px){#event-campaign-panel>summary .feature-title,#email-campaign-panel>summary .feature-title{min-height:50px}#event-campaign-panel>summary .feature-subtitle,#email-campaign-panel>summary .feature-subtitle{min-height:54px}}
 @media(max-width:360px){#event-campaign-panel>summary .feature-subtitle,#email-campaign-panel>summary .feature-subtitle{min-height:72px}}
+
+#campaign-planning-host{margin:24px 0}.event-plan-controls{padding:14px;background:#fff;border:1px solid #dce5df;border-radius:10px;margin:14px 0}.event-plan-controls h3{margin:0 0 10px}.event-secondary-actions{padding:10px;border:1px solid #dce5df;border-radius:8px}.event-secondary-actions button{margin:8px 5px 0 0}#event-campaign-form label[hidden]{display:none}
+
+#event-invitation-details{grid-column:1/-1;padding:14px;margin:12px 0;border:1px solid #dce5df;border-radius:10px;background:#fff}.ec-event-evidence{padding:12px;border:1px solid #dce5df;border-radius:10px;background:#f6faf8;margin:10px 0}.ec-event-evidence p{margin:6px 0;font-size:13px}
