@@ -3,7 +3,9 @@
 <head>
   <script src="api-transport.js?v=20261004-first-party-session-v1&storage=20261012-v1"></script>
   <meta charset="utf-8">
+  <meta name="leadintel-release" content="__LEADINTEL_RELEASE_SHA__">
   <script src="account-cache.js?v=20261011-account-isolation-v1&startup-recovery=20261011-v1&archive-storage=20261011-v2&workspace-auth=20261012-v1" onerror="document.documentElement.setAttribute('data-account-check','error')"></script>
+  <script defer src="release-freshness.js?v=20261014-v1"></script>
   <style>
     html[data-account-check] body{visibility:hidden;pointer-events:none}
     html[data-account-check]::after{content:"Loading your workspace…";position:fixed;inset:0;display:grid;place-items:center;background:#f5f7fa;color:#243247;font:16px system-ui;z-index:99999}
