@@ -95,3 +95,5 @@ test('manual Delivery keeps workspace-wide do-not-contact controls visible',()=>
   assert.match(ui,/listSuppressedContacts/);
   assert.match(bridge,/api\/outreach-automation\/suppression/);
 });
+
+test('setup removes mandatory paid email verification and retains delivery settings save',()=>{const ui=read('outreach-automation-ui.js');assert.doesNotMatch(ui,/Automatically verify emails before sending|Automatic email verification is required|delivery-email-verification/);assert.match(ui,/delivery-settings-footer/);assert.match(ui,/delivery-setup-save/);});

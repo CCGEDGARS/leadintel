@@ -14,12 +14,6 @@
 .delivery-setup .delivery-setup-controls select{max-width:none;min-width:180px;min-height:44px;font:inherit}
 .delivery-setup [data-qualification-settings] select{width:100%;min-width:0;box-sizing:border-box}
 .delivery-setup [data-qualification-settings] p{font-size:12px;line-height:1.5;color:#526159;margin:12px 0}
-.delivery-email-verification{margin-top:20px;padding:16px;background:#eef7f2;border:1px solid #ceddd4;border-radius:12px}
-.delivery-email-verification label{display:flex;gap:12px;align-items:flex-start}
-.delivery-email-verification input{accent-color:#0d5d4f;margin:4px 0 0;flex-shrink:0}
-.delivery-email-verification strong{display:block;font-size:14px;line-height:1.5}
-.delivery-email-verification strong small{display:inline-block;margin-left:8px;font-size:11px;color:#0d5d4f}
-.delivery-email-verification label>span>span{display:block;font-size:12px;line-height:1.5;color:#526159;margin-top:4px}
 .delivery-settings-footer{display:flex;justify-content:flex-end;margin-top:20px}
 .delivery-settings-footer .primary-btn{min-height:44px;padding:12px 24px}
 .delivery-setup button[hidden]{display:none!important}

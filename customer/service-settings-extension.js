@@ -125,7 +125,7 @@ async function refreshServiceStatus(verify=false){
   try{
     const [services,calendly,workflow,budget]=await Promise.all([api(`/api/integrations/services/status${verify?'?verify=1':''}`),api('/api/integrations/calendly/status'),api('/api/approved-workflow'),api('/api/enrichment-policy')]);
     if(workspace()?.id!==requestedWorkspace)return serviceStatus;if(!services.response.ok)throw new Error(services.payload.error||'Unable to load service integrations');serviceStatus={...services.payload,workspace_id:requestedWorkspace};window.LeadIntelServiceIntegrationStatus=serviceStatus;window.dispatchEvent(new CustomEvent('leadintel:service-status'));
-    if(workflow.response.ok)confirmationLevel=workflow.payload.config?.buyers?.confirmationLevel||'provider_verified';
+    if(workflow.response.ok)confirmationLevel=workflow.payload.config?.buyers?.confirmationLevel||'public_confirmed';
     if(budget.response.ok&&budget.payload.policy){apolloBudget=budget.payload.policy;apolloUsage=budget.payload.usage||{daily:0,monthly:0};}
     window.dispatchEvent(new CustomEvent('leadintel:contact-policy-changed'));
     if(calendly.response.ok)calendlyStatus=calendly.payload;else errors.calendly=calendly.payload.error||'Unable to load Calendly status';

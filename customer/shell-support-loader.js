@@ -3,7 +3,7 @@ const SUPPORT_MODULES=[
   './custom-market-input-hygiene.js?v=20260903-password-manager-isolation-v5',
   './crm-engine.js?v=20260828-master-crm-v1&commercial-evidence=20261002-v2&buyer-quality=20261002-v5&buyer-research=20261004-v3&public-contacts=20261004-v2',
   './sync-conflict-hygiene.js?v=20260901-stale-blank-conflict-v1',
-  './service-settings-extension.js?v=20260925-provider-credit-health-v1&tool-links=20261011-v1&optional-hunter=20261004-v1&contact-policy=20261004-v3&sharing-privacy=20261011-v1&alert-colours=20261011-v1&compact-apollo=20261012-v3-visible-key&workspace-auth=20261012-v1&customer-only-billing=20261012-v1',
+  './service-settings-extension.js?v=20260925-provider-credit-health-v1&tool-links=20261011-v1&optional-hunter=20261004-v1&contact-policy=20261004-v3&sharing-privacy=20261011-v1&alert-colours=20261011-v1&compact-apollo=20261012-v3-visible-key&workspace-auth=20261012-v1&customer-only-billing=20261012-v1&optional-verification=20261014-v1',
   './step2-readiness-engine.js?v=20260924-friendly-workflow-labels-v1&profile-review=20261001-v2&profile-repair=20261002-v1',
   './company-brain.js?v=20261001-adaptive-business-context-v1&profile-review=20261001-v2&profile-repair=20261002-v1',
   './step2-first-party-intelligence.js?v=20260909-first-party-step2-v1',
@@ -24,7 +24,7 @@ const SUPPORT_MODULES=[
   './lookalike-discovery.js?v=20260930-contact-suppression-v1&opportunity-context=1&reference-discovery=5&reference-similarity=20260930-v1&company-evidence=20261002-v1&commercial-evidence=20261002-v2&buyer-quality=20261002-v5&qualification=20261003-qualified-v2',
   './intelligence-sources-ui.js?v=20260924-friendly-workflow-labels-v1&reset-center=1&strategy=20261001-v2',
   './profile-action-runtime.js?v=20260924-friendly-workflow-labels-v1',
-  './outreach-automation-loader.js?v=20261002-settings-v5&delivery-policy-recovery=1&approved-workflow=20261001-v1&qualification=20261003-qualified-v2&contact-policy=20261004-v3&sender-identity=20261006-v2&materials-order=20261012-v1'
+  './outreach-automation-loader.js?v=20261002-settings-v5&delivery-policy-recovery=1&approved-workflow=20261001-v1&qualification=20261003-qualified-v2&contact-policy=20261004-v3&sender-identity=20261006-v2&materials-order=20261012-v1&optional-verification=20261014-v1'
 ];
 
 async function loadSupportModules(){
