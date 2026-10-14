@@ -18,3 +18,5 @@
 .delivery-settings-footer .primary-btn{min-height:44px;padding:12px 24px}
 .delivery-setup button[hidden]{display:none!important}
 @media(max-width:680px){.delivery-setup [data-qualification-settings] .delivery-setup-controls{grid-template-columns:1fr}.delivery-settings-footer .primary-btn{width:100%}.delivery-setup .delivery-setup-controls select{min-width:0;max-width:100%}}
+
+.delivery-setup #delivery-setup-auto-limits[hidden]{display:none}
