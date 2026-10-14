@@ -39,7 +39,7 @@ Microsoft Graph returns `202 Accepted` for a successful `sendMail` request. This
 
 ## Customer connection help
 
-Settings exposes Microsoft connection help on both the Microsoft Account and Microsoft 365 Mail cards, including when the customer is signed out or mail configuration is unavailable. The popup separates normal account consent, organisation administrator approval and AADSTS700016 configuration failures. Customers use their own accounts; they do not create app registrations or supply client secrets.
+Settings keeps one primary Microsoft sign-in or mailbox connection action on each card. Clicking a sign-in, account-switch or configured mailbox-connect action opens concise guidance with a Continue to Microsoft button. Troubleshooting is collapsed under Trouble signing in?. Cancel or Escape returns focus without redirecting; only explicit Continue starts the requested Microsoft operation. An account/workspace change blocks stale continuation. Unavailable mailbox connections stay disabled. The popup separates normal account consent, organisation administrator approval and AADSTS700016 configuration failures. Customers use their own accounts; they do not create app registrations or supply client secrets.
 
 For AADSTS700016, LeadIntel support must verify the Worker client ID against the existing Entra app registration, the supported account types and registration availability. The customer's administrator may need to approve the enterprise application. The help popup does not repair or prove the external registration. Capture the error code, timestamp, Request ID and Correlation ID; never collect passwords or tokens.
 

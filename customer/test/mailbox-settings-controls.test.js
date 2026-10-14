@@ -1,18 +1,18 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{JSDOM}=require('jsdom');
 const read=name=>fs.readFileSync(path.join(__dirname,'..',name),'utf8');
 const settle=()=>new Promise(r=>setTimeout(r,30));
-async function mount({connected=false,role='owner',configured=true}={}){
+async function mount({connected=false,role='owner',configured=true,authenticated=true}={}){
  const w=new JSDOM('<div class="top-actions"></div><div id="toast"></div>',{url:'https://example.test/customer/',runScripts:'outside-only'}).window;
  const calls=[];let gmail={configured,connected,email:connected?'mailbox@example.com':'',role},microsoft={...gmail};
  w.confirm=()=>true;w.eval(read('personal-linkedin.js'));w.eval(read('tool-account-links.js'));
- w.LeadIntelServerBridge={session:{authenticated:true,user:{email:'login@example.com'}},workspace:{id:'w1',role},gmail,microsoftMail:microsoft,connectGmail:()=>calls.push('gmail-connect'),connectMicrosoftMail:()=>calls.push('microsoft-connect'),disconnectGmail:async()=>{calls.push('gmail-disconnect');gmail={...gmail,connected:false,email:''};w.LeadIntelServerBridge.gmail=gmail;return {ok:true};},disconnectMicrosoftMail:async()=>{calls.push('microsoft-disconnect');w.LeadIntelServerBridge.microsoftMail={...microsoft,connected:false,email:''};return {ok:true};}};
+ w.LeadIntelServerBridge={session:{authenticated,user:{email:'login@example.com'}},workspace:{id:'w1',role},gmail,microsoftMail:microsoft,signIn:provider=>calls.push('signin-'+provider),switchProvider:provider=>calls.push('switch-'+provider),connectGmail:()=>calls.push('gmail-connect'),connectMicrosoftMail:()=>calls.push('microsoft-connect'),disconnectGmail:async()=>{calls.push('gmail-disconnect');gmail={...gmail,connected:false,email:''};w.LeadIntelServerBridge.gmail=gmail;return {ok:true};},disconnectMicrosoftMail:async()=>{calls.push('microsoft-disconnect');w.LeadIntelServerBridge.microsoftMail={...microsoft,connected:false,email:''};return {ok:true};}};
  w.fetch=async input=>({ok:true,json:async()=>new URL(input).pathname.endsWith('/gmail/status')?gmail:{role,providers:[]}});
  w.eval(read('ai-settings.js').replace(/^import .*;\s*$/gm,''));w.document.getElementById('open-settings').click();await settle();return {w,calls};
 }
 test('mailbox cards expose connection buttons instead of account creation or provider links on reopen',async()=>{
  const {w,calls}=await mount();try{for(let i=0;i<2;i++){
   for(const id of ['gmail','microsoft-mail']){const card=w.document.querySelector(`[data-integration="${id}"]`);assert.equal(card.querySelector('a'),null);assert.doesNotMatch(card.textContent,/Create account|Open Gmail|Open Microsoft 365/);assert.match(card.textContent,/Connect/);}
-  w.document.querySelector('[data-gmail-action="connect"]').click();w.document.querySelector('[data-microsoft-mail-action="connect"]').click();w.document.getElementById('close-settings').click();w.document.getElementById('open-settings').click();await settle();
+  w.document.querySelector('[data-gmail-action="connect"]').click();w.document.querySelector('[data-microsoft-mail-action="connect"]').click();assert.equal(calls.at(-1),'gmail-connect');w.document.querySelector('[data-continue-microsoft]').click();w.document.getElementById('close-settings').click();w.document.getElementById('open-settings').click();await settle();
  }assert.deepEqual(calls,['gmail-connect','microsoft-connect','gmail-connect','microsoft-connect']);}finally{w.close();}
 });
 test('connected cards show the mailbox email and owner disconnect works without signing out',async()=>{
@@ -30,12 +30,24 @@ test('unavailable mailbox configuration keeps a visible disabled Connect action'
  const {w}=await mount({configured:false});try{assert.equal(w.document.querySelector('[data-gmail-action="connect"]').disabled,true);assert.equal(w.document.querySelector('[data-microsoft-mail-action="connect"]').disabled,true);}finally{w.close();}
 });
 
- test('Microsoft help opens without authentication redirects and closes back to its trigger',async()=>{
+test('one Microsoft action opens guidance before continuing, with collapsed troubleshooting and safe cancel',async()=>{
  const {w,calls}=await mount();try{
- for(const id of ['microsoft-account','microsoft-mail']){
- const trigger=w.document.querySelector(`[data-integration="${id}"] [data-microsoft-help]`);assert.ok(trigger,'Microsoft cards need connection help');trigger.focus();trigger.click();
- const dialog=w.document.getElementById('microsoft-connection-help');assert.equal(dialog.hidden,false);assert.match(dialog.textContent,/AADSTS700016/);assert.match(dialog.textContent,/LeadIntel support/);assert.match(dialog.textContent,/IT administrator/);assert.match(dialog.textContent,/do not need to create an app registration/);
+ const card=w.document.querySelector('[data-integration="microsoft-account"]');assert.equal(card.querySelector('[data-microsoft-help]'),null);const trigger=card.querySelector('[data-settings-switch="microsoft"]');assert.ok(trigger);trigger.focus();trigger.click();
+ const dialog=w.document.getElementById('microsoft-connection-help');assert.equal(dialog.hidden,false);assert.equal(dialog.querySelector('details').open,false);assert.match(dialog.textContent,/AADSTS700016/);assert.match(dialog.textContent,/LeadIntel support/);assert.deepEqual(calls,[]);
  w.document.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert.equal(dialog.hidden,true);assert.equal(w.document.getElementById('ai-settings-drawer').hidden,false);assert.equal(w.document.activeElement,trigger);
- }assert.deepEqual(calls,[]);
+ const mail=w.document.querySelector('[data-microsoft-mail-action="connect"]');mail.click();assert.deepEqual(calls,[]);dialog.querySelector('[data-continue-microsoft]').click();assert.deepEqual(calls,['microsoft-connect']);assert.equal(dialog.hidden,true);
  }finally{w.close();}
- });
+});
+
+test('signed-out Microsoft sign-in waits for explicit popup confirmation',async()=>{
+ const {w,calls}=await mount({authenticated:false});try{
+ const card=w.document.querySelector('[data-integration="microsoft-account"]');assert.equal(card.querySelectorAll('button').length,1);assert.match(card.textContent,/Sign in with Microsoft/);card.querySelector('[data-settings-signin]').click();assert.deepEqual(calls,[]);
+ const dialog=w.document.getElementById('microsoft-connection-help');dialog.querySelector('[data-continue-microsoft]').click();assert.deepEqual(calls,['signin-microsoft']);assert.equal(dialog.hidden,true);
+ }finally{w.close();}
+});
+test('popup continuation rejects an account or workspace change',async()=>{
+ const {w,calls}=await mount();try{
+ w.document.querySelector('[data-settings-switch="microsoft"]').click();w.document.querySelector('[data-continue-microsoft]').click();assert.deepEqual(calls,['switch-microsoft']);
+ w.document.querySelector('[data-microsoft-mail-action="connect"]').click();w.LeadIntelServerBridge.workspace={id:'w2',role:'owner'};w.document.querySelector('[data-continue-microsoft]').click();assert.deepEqual(calls,['switch-microsoft']);assert.match(w.document.getElementById('toast').textContent,/account changed/);
+ }finally{w.close();}
+});

@@ -104,7 +104,7 @@ test('raw API keys are transient browser values and never persisted by either se
 });
 
 test('settings assets are cache-busted and controls have individual borders and focus treatment',()=>{
-  assert.match(js,/SETTINGS_VERSION='20261014-microsoft-help-v1'/);
+  assert.match(js,/SETTINGS_VERSION='20261014-microsoft-popup-v2'/);
   assert.match(js,/provider:'openai',name:'OpenAI',model:'gpt-6\.1-sol'/);
   assert.match(extension,/SETTINGS_VERSION='20261012-visible-apollo-key-v1'/);
   assert.match(js,/link\.href=`ai-settings\.css\?v=\$\{SETTINGS_VERSION\}&tool-links=20261011-v1&alert-colours=20261011-v1&uniform-actions=20261012-v1&account-layout=20261012-v1`/);
@@ -149,7 +149,7 @@ test('AI Settings supports a direct ?settings=ai deep link that opens the drawer
 test('signed-out Settings exposes Google and Microsoft onboarding while retaining the Google Account card',()=>{
   assert.match(js,/id="ai-settings-signin"/,'signed-out summary must render direct sign-in choices');
   assert.match(js,/Continue with Google/);
-  assert.match(js,/Continue with Microsoft/);
+  assert.match(js,/Sign in with Microsoft/);
   assert.match(extension,/function connectGoogle\(\)/);
   assert.match(extension,/data-service-action="google-signin"/);
   assert.match(extension,/Connect with Google/);
